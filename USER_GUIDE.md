@@ -129,6 +129,10 @@ Edit Mode allows you to modify your dashboards. To enter Edit Mode:
    - **Name**: Group display name
    - **Color**: Custom color (optional)
    - **Opacity**: Background opacity (optional)
+   - **Text Color**: Choose Auto (smart contrast), Light, or Dark
+     - **Auto** (recommended): Automatically determines light or dark text based on background color for optimal readability
+     - **Light**: Force white text
+     - **Dark**: Force black text
 
 ### Reordering Groups
 
@@ -154,6 +158,9 @@ Edit Mode allows you to modify your dashboards. To enter Edit Mode:
    - **Name**: Display name
    - **URL**: Target URL
    - **Icon**: Choose from 150,000+ icons via Iconify
+     - Type an icon name directly (e.g., `mdi:docker`, `simple-icons:plex`)
+     - OR click "Browse" to open the **Icon Picker** with 128+ curated homelab icons
+     - Search by name or browse by category (Containers, Media, Monitoring, etc.)
    - **Description**: Optional subtitle
    - **Size**: Small, Medium, or Large
    - **Open Mode**: How the link opens (New Tab, Same Tab, iFrame, Modal)
@@ -243,9 +250,11 @@ Child levels inherit parent colors/opacity unless overridden.
    - **Slideshow**: Multiple rotating images
 
 For slideshows:
-- Add multiple images
-- Set rotation interval (seconds)
+- Add multiple images from the **64 curated backgrounds** (8 categories: Network, Servers, Docker, Homelab, Smart Home, Tech, Space, Minimal)
+- OR add custom image URLs
+- Set rotation interval (seconds) - default is 30s
 - Choose fit mode (Cover, Contain, Fill)
+- **Preview**: Live animated preview shows smooth crossfade transition (1.5s professional fade)
 
 #### Tab Background
 1. Enter Edit Mode
@@ -341,9 +350,11 @@ Colors cascade down the hierarchy!
 ### Visual Design
 
 1. **Theme Consistency**: Set colors at the Group or Tab level for consistent look
-2. **Slideshow Backgrounds**: Use slow rotation (60-120s) for subtle ambiance
+2. **Slideshow Backgrounds**: Use slow rotation (60-120s) for subtle ambiance with smooth crossfade transitions
 3. **Opacity Layering**: Reduce tile opacity slightly to let background show through
-4. **Icon Variety**: Use Iconify to find perfect icons - search by name or keyword
+4. **Icon Variety**: Use the Icon Picker to browse 128+ curated homelab icons, or search from 150,000+ Iconify icons
+5. **Text Readability**: Use Auto text color mode on group headers for optimal contrast on any background color
+6. **Background Library**: Explore the 64 curated backgrounds across 8 categories for quick setup
 
 ## Troubleshooting
 
