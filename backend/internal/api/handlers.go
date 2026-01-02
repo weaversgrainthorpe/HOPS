@@ -4,8 +4,10 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 
+	"github.com/yourusername/hops/internal/converters"
 	"github.com/yourusername/hops/internal/version"
 )
 
@@ -241,7 +243,7 @@ func (r *Router) handleExportConfig(w http.ResponseWriter, req *http.Request) {
 	w.Write([]byte(configData))
 }
 
-// handleImportConfig imports configuration from YAML/JSON
+// handleImportConfig imports configuration from YAML/JSON (supports HOPS, Homer, Dashy formats)
 func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -261,23 +263,63 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 	}
 	defer file.Close()
 
-	// Read file contents
-	var configData map[string]interface{}
-	if err := json.NewDecoder(file).Decode(&configData); err != nil {
-		http.Error(w, "Invalid JSON file", http.StatusBadRequest)
-		return
-	}
-
-	// Validate that it has the expected structure
-	if _, ok := configData["dashboards"]; !ok {
-		http.Error(w, "Invalid config file: missing 'dashboards' field", http.StatusBadRequest)
-		return
-	}
-
-	// Convert back to JSON string for storage
-	configJSON, err := json.Marshal(configData)
+	// Read entire file into memory
+	fileData, err := io.ReadAll(file)
 	if err != nil {
-		http.Error(w, "Failed to encode config", http.StatusInternalServerError)
+		http.Error(w, "Failed to read file", http.StatusInternalServerError)
+		return
+	}
+
+	var configJSON []byte
+	var importFormat string
+
+	// Detect the format
+	format, err := converters.DetectFormat(fileData)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Unable to detect format: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	// Convert based on detected format
+	switch format {
+	case "hops":
+		configJSON = fileData
+		importFormat = "HOPS JSON"
+
+	case "homer":
+		configJSON, err = converters.ConvertFromHomer(fileData)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Failed to convert Homer config: %v", err), http.StatusBadRequest)
+			return
+		}
+		importFormat = "Homer YAML"
+
+	case "dashy":
+		configJSON, err = converters.ConvertFromDashy(fileData)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Failed to convert Dashy config: %v", err), http.StatusBadRequest)
+			return
+		}
+		importFormat = "Dashy YAML"
+
+	case "heimdall":
+		http.Error(w, "Heimdall JSON import not yet implemented - coming soon!", http.StatusNotImplemented)
+		return
+
+	default:
+		http.Error(w, "Unsupported file format", http.StatusBadRequest)
+		return
+	}
+
+	// Validate the resulting JSON has the expected structure
+	var configData map[string]interface{}
+	if err := json.Unmarshal(configJSON, &configData); err != nil {
+		http.Error(w, "Invalid configuration after conversion", http.StatusInternalServerError)
+		return
+	}
+
+	if _, ok := configData["dashboards"]; !ok {
+		http.Error(w, "Invalid config: missing 'dashboards' field", http.StatusInternalServerError)
 		return
 	}
 
@@ -294,7 +336,7 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
-		"message": "Configuration imported successfully",
+		"message": fmt.Sprintf("Configuration imported successfully from %s format", importFormat),
 	})
 }
 

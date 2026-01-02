@@ -256,9 +256,9 @@ sudo systemctl start hops
 - [x] Comprehensive theme system (8 presets with light/dark modes)
 
 ### Phase 3: Advanced Features (In Progress)
-- [ ] Keyboard shortcuts (Ctrl+C/Ctrl+X/Ctrl+V)
+- [x] Keyboard shortcuts (Ctrl+C/Ctrl+X for copy/cut)
+- [x] Multiple open modes (iframe, modal, new tab, same tab)
 - [ ] Drag tiles between groups
-- [ ] Multiple open modes (iframe, modal, new tab, same tab)
 - [ ] Status checks (HTTP/ICMP)
 - [ ] Global search with "/" hotkey
 - [ ] Custom CSS option
@@ -271,10 +271,12 @@ sudo systemctl start hops
 - [ ] System stats
 - [ ] Service integrations (Pi-hole, Proxmox, etc.)
 
-### Phase 5: Polish
+### Phase 5: Polish (In Progress)
+- [x] Import/export (JSON)
+- [x] Import from Homer (YAML config.yml)
+- [x] Import from Dashy (YAML conf.yml)
+- [ ] Import from Heimdall (JSON)
 - [ ] Multi-select and bulk operations
-- [ ] Import/export (YAML/JSON)
-- [ ] Import from Heimdall/Homer/Dashy
 - [ ] Secret URLs
 - [ ] Background images/slideshow
 
