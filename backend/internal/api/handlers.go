@@ -248,8 +248,54 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// TODO: Implement import from Heimdall/Homer/Dashy
-	http.Error(w, "Not implemented yet", http.StatusNotImplemented)
+	// Parse multipart form (for file uploads)
+	if err := req.ParseMultipartForm(10 << 20); err != nil { // 10 MB max
+		http.Error(w, "Failed to parse form", http.StatusBadRequest)
+		return
+	}
+
+	file, _, err := req.FormFile("file")
+	if err != nil {
+		http.Error(w, "No file provided", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	// Read file contents
+	var configData map[string]interface{}
+	if err := json.NewDecoder(file).Decode(&configData); err != nil {
+		http.Error(w, "Invalid JSON file", http.StatusBadRequest)
+		return
+	}
+
+	// Validate that it has the expected structure
+	if _, ok := configData["dashboards"]; !ok {
+		http.Error(w, "Invalid config file: missing 'dashboards' field", http.StatusBadRequest)
+		return
+	}
+
+	// Convert back to JSON string for storage
+	configJSON, err := json.Marshal(configData)
+	if err != nil {
+		http.Error(w, "Failed to encode config", http.StatusInternalServerError)
+		return
+	}
+
+	// Save to database
+	_, err = r.db.Exec(
+		"INSERT OR REPLACE INTO config (id, data, updated_at) VALUES (1, ?, CURRENT_TIMESTAMP)",
+		string(configJSON),
+	)
+	if err != nil {
+		http.Error(w, "Failed to save config", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Configuration imported successfully",
+	})
 }
 
 // handleIntegrations proxies requests to external services

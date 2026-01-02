@@ -6,10 +6,12 @@
   import { editMode, toggleEditMode } from '$lib/stores/editMode';
   import Icon from '@iconify/svelte';
   import ThemePickerModal from './admin/ThemePickerModal.svelte';
+  import ImportExportModal from './admin/ImportExportModal.svelte';
 
   let currentPath = $derived($page.url.pathname);
   let isDashboardPage = $derived(currentPath !== '/' && currentPath !== '/admin');
   let showThemePicker = $state(false);
+  let showImportExport = $state(false);
 
   let themeIcon = $derived(
     $theme === 'dark' ? 'mdi:weather-night' :
@@ -63,6 +65,12 @@
     </div>
 
     <div class="nav-right">
+      {#if $isAuthenticated}
+        <button onclick={() => showImportExport = true} class="import-export-btn" title="Import / Export">
+          <Icon icon="mdi:database-import-export" width="24" height="24" />
+        </button>
+      {/if}
+
       <button onclick={() => showThemePicker = true} class="theme-toggle" title="Theme Settings">
         <span class="icon-wrapper">
           <Icon icon={themeIcon} width="32" height="32" />
@@ -90,6 +98,10 @@
 
 {#if showThemePicker}
   <ThemePickerModal onClose={() => showThemePicker = false} />
+{/if}
+
+{#if showImportExport}
+  <ImportExportModal onClose={() => showImportExport = false} />
 {/if}
 
 <style>
@@ -186,7 +198,7 @@
     gap: 1rem;
   }
 
-  .theme-toggle, .admin-link, .edit-toggle {
+  .theme-toggle, .admin-link, .edit-toggle, .import-export-btn {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -212,7 +224,7 @@
     height: 32px;
   }
 
-  .theme-toggle:hover, .admin-link:hover, .edit-toggle:hover {
+  .theme-toggle:hover, .admin-link:hover, .edit-toggle:hover, .import-export-btn:hover {
     background: var(--accent);
     color: white;
   }

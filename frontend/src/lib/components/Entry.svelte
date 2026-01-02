@@ -3,7 +3,10 @@
   import Icon from '@iconify/svelte';
   import { editMode } from '$lib/stores/editMode';
   import EntryEditModal from './admin/EntryEditModal.svelte';
+  import IframeModal from './IframeModal.svelte';
+  import PopupModal from './PopupModal.svelte';
   import { copyEntry, cutEntry } from '$lib/stores/clipboard';
+  import { selectEntry } from '$lib/stores/selection';
 
   interface Props {
     entry: Entry;
@@ -15,6 +18,8 @@
 
   let { entry, onUpdate, onDelete, tabId, groupId }: Props = $props();
   let showEditModal = $state(false);
+  let showIframeModal = $state(false);
+  let showPopupModal = $state(false);
   let showContextMenu = $state(false);
   let contextMenuX = $state(0);
   let contextMenuY = $state(0);
@@ -34,11 +39,13 @@
         window.location.href = entry.url;
         break;
       case 'iframe':
-        // TODO: Open in modal iframe
-        window.open(entry.url, '_blank');
+        showIframeModal = true;
         break;
       case 'modal':
-        // TODO: Open in popup modal
+        showPopupModal = true;
+        break;
+      default:
+        // Default to new tab if no mode specified
         window.open(entry.url, '_blank');
         break;
     }
@@ -49,6 +56,12 @@
 
     e.preventDefault();
     e.stopPropagation();
+
+    // Store this entry as the currently selected one for keyboard shortcuts
+    if (tabId && groupId) {
+      selectEntry(entry, tabId, groupId);
+    }
+
     contextMenuX = e.clientX;
     contextMenuY = e.clientY;
     showContextMenu = true;
@@ -142,6 +155,14 @@
 
 {#if showEditModal}
   <EntryEditModal entry={entry} onSave={handleSave} onCancel={() => showEditModal = false} onDelete={onDelete} />
+{/if}
+
+{#if showIframeModal}
+  <IframeModal url={entry.url} title={entry.name} onClose={() => showIframeModal = false} />
+{/if}
+
+{#if showPopupModal}
+  <PopupModal url={entry.url} title={entry.name} onClose={() => showPopupModal = false} />
 {/if}
 
 {#if showContextMenu}
