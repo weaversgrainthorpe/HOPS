@@ -149,7 +149,7 @@
         <div class="file-input-container">
           <input
             type="file"
-            accept=".json"
+            accept=".json,.yml,.yaml"
             bind:this={fileInput}
             style="display: none;"
           />
@@ -160,6 +160,15 @@
           {#if fileInput?.files?.[0]}
             <span class="file-name">{fileInput.files[0].name}</span>
           {/if}
+        </div>
+
+        <div class="supported-formats">
+          <p class="formats-title">Supported formats:</p>
+          <ul>
+            <li><strong>HOPS JSON</strong> - Native format</li>
+            <li><strong>Homer YAML</strong> - config.yml from Homer dashboard</li>
+            <li><strong>Dashy YAML</strong> - conf.yml from Dashy dashboard</li>
+          </ul>
         </div>
 
         <button
@@ -361,6 +370,37 @@
     margin: 0;
     font-size: 0.875rem;
     color: var(--text-secondary);
+  }
+
+  .supported-formats {
+    margin: 1rem 0;
+    padding: 1rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+  }
+
+  .formats-title {
+    margin: 0 0 0.5rem 0;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  .supported-formats ul {
+    margin: 0;
+    padding-left: 1.5rem;
+    list-style: disc;
+  }
+
+  .supported-formats li {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.25rem;
+  }
+
+  .supported-formats li:last-child {
+    margin-bottom: 0;
   }
 
   .spin {
