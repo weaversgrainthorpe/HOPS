@@ -5,14 +5,24 @@ export interface Dashboard {
   name: string;
   path: string;
   background?: Background;
+  header?: HeaderConfig;
   tabs: Tab[];
   order: number;
+}
+
+export interface HeaderConfig {
+  leftText?: string;
+  centerTitle?: string;
+  showLeft?: boolean;
+  showCenter?: boolean;
 }
 
 export interface Tab {
   id: string;
   name: string;
   background?: Background;
+  color?: string;
+  opacity?: number;
   groups: Group[];
   order: number;
 }
@@ -21,6 +31,8 @@ export interface Group {
   id: string;
   name: string;
   collapsed: boolean;
+  color?: string;
+  opacity?: number;
   entries: Entry[];
   order: number;
 }
@@ -35,6 +47,8 @@ export interface Entry {
   openMode: 'iframe' | 'newtab' | 'sametab' | 'modal';
   statusCheck?: StatusCheck;
   size: 'small' | 'medium' | 'large';
+  color?: string;
+  opacity?: number;
   order: number;
 }
 

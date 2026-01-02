@@ -53,8 +53,18 @@ button {
   transition: background-color 0.2s;
 }
 
+[data-gradient-theme="true"] button {
+  background-image: var(--accent);
+  background-color: transparent;
+}
+
 button:hover {
   background: var(--accent-hover);
+}
+
+[data-gradient-theme="true"] button:hover {
+  background-image: var(--accent-hover);
+  background-color: transparent;
 }
 
 button:disabled {
