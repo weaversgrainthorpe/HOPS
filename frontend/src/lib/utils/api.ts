@@ -101,7 +101,7 @@ export async function exportConfig(format: 'json' | 'yaml' = 'json'): Promise<Bl
   return response.blob();
 }
 
-export async function importConfig(file: File): Promise<void> {
+export async function importConfig(file: File): Promise<{ success: boolean; message: string }> {
   const token = getSessionToken();
   const formData = new FormData();
   formData.append('file', file);
@@ -113,6 +113,9 @@ export async function importConfig(file: File): Promise<void> {
   });
 
   if (!response.ok) {
-    throw new Error(`Import failed: ${response.statusText}`);
+    const errorText = await response.text();
+    throw new Error(errorText || `Import failed: ${response.statusText}`);
   }
+
+  return response.json();
 }
