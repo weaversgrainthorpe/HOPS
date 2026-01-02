@@ -35,5 +35,6 @@ export async function logout() {
     console.error('Logout error:', error);
   } finally {
     isAuthenticated.set(false);
+    // Edit mode will automatically disable via its subscription to isAuthenticated
   }
 }

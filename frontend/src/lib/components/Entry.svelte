@@ -103,7 +103,7 @@
 
   function handleDeleteClick(e: MouseEvent) {
     e.stopPropagation();
-    if (onDelete) {
+    if (onDelete && confirm(`Delete "${entry.name}"?`)) {
       onDelete();
     }
   }
@@ -121,51 +121,53 @@
 
 <svelte:window onclick={handleWindowClick} />
 
-<button
-  class="entry {sizeClass}"
-  class:edit-mode={$editMode}
-  class:custom-color={entry.color}
-  class:selected={isSelected}
-  style:background-color={entry.color}
-  style:opacity={entry.opacity !== undefined ? entry.opacity : 0.95}
-  onclick={handleClick}
-  oncontextmenu={handleContextMenu}
-  title={entry.description || entry.name}
->
-  {#if $editMode}
-    <div class="edit-overlay">
-      <Icon icon="mdi:pencil" width="24" />
-    </div>
-  {/if}
-
-  <div class="title">{entry.name}</div>
-
-  <div class="icon">
-    {#if entry.iconUrl}
-      <img src={entry.iconUrl} alt={entry.name} />
-    {:else if entry.icon}
-      <Icon icon={entry.icon} width="48" />
-    {:else}
-      <Icon icon="mdi:application" width="48" />
+<div class="entry-container">
+  <button
+    class="entry {sizeClass}"
+    class:edit-mode={$editMode}
+    class:custom-color={entry.color}
+    class:selected={isSelected}
+    style:background-color={entry.color}
+    style:opacity={entry.opacity !== undefined ? entry.opacity : 0.95}
+    onclick={handleClick}
+    oncontextmenu={handleContextMenu}
+    title={entry.description || entry.name}
+  >
+    {#if $editMode}
+      <div class="edit-overlay">
+        <Icon icon="mdi:pencil" width="24" />
+      </div>
     {/if}
-  </div>
 
-  {#if entry.description}
-    <div class="subtitle">{entry.description}</div>
-  {/if}
+    <div class="title">{entry.name}</div>
 
-  {#if entry.statusCheck?.enabled}
-    <div class="status-indicator">
-      <span class="status-dot unknown" title="Status check pending"></span>
+    <div class="icon">
+      {#if entry.iconUrl}
+        <img src={entry.iconUrl} alt={entry.name} />
+      {:else if entry.icon}
+        <Icon icon={entry.icon} width="48" />
+      {:else}
+        <Icon icon="mdi:application" width="48" />
+      {/if}
     </div>
-  {/if}
+
+    {#if entry.description}
+      <div class="subtitle">{entry.description}</div>
+    {/if}
+
+    {#if entry.statusCheck?.enabled}
+      <div class="status-indicator">
+        <span class="status-dot unknown" title="Status check pending"></span>
+      </div>
+    {/if}
+  </button>
 
   {#if $editMode && onDelete}
     <button class="delete-btn" onclick={handleDeleteClick} title="Delete tile">
       <Icon icon="mdi:close" width="16" />
     </button>
   {/if}
-</button>
+</div>
 
 {#if showEditModal}
   <EntryEditModal entry={entry} onSave={handleSave} onCancel={() => showEditModal = false} onDelete={onDelete} />
@@ -200,6 +202,12 @@
 {/if}
 
 <style>
+  .entry-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+  }
+
   .entry {
     display: flex;
     flex-direction: column;
@@ -216,6 +224,7 @@
     color: var(--text-primary);
     position: relative;
     min-height: 120px;
+    width: 100%;
   }
 
   .entry:hover {
@@ -405,9 +414,10 @@
     opacity: 0;
     transition: all 0.2s;
     padding: 0;
+    z-index: 10;
   }
 
-  .entry.edit-mode:hover .delete-btn {
+  .entry-container:hover .delete-btn {
     opacity: 1;
   }
 

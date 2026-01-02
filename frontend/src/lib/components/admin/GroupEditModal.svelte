@@ -7,19 +7,21 @@
     groupName: string;
     groupColor?: string;
     groupOpacity?: number;
-    onSave: (name: string, color?: string, opacity?: number) => void;
+    groupTextColor?: 'auto' | 'light' | 'dark';
+    onSave: (name: string, color?: string, opacity?: number, textColor?: 'auto' | 'light' | 'dark') => void;
     onCancel: () => void;
     onDelete?: () => void;
   }
 
-  let { groupName, groupColor, groupOpacity, onSave, onCancel, onDelete }: Props = $props();
+  let { groupName, groupColor, groupOpacity, groupTextColor, onSave, onCancel, onDelete }: Props = $props();
   let name = $state(groupName);
   let color = $state(groupColor);
   let opacity = $state(groupOpacity);
+  let textColor = $state<'auto' | 'light' | 'dark'>(groupTextColor || 'auto');
 
   function handleSave() {
     if (name.trim()) {
-      onSave(name.trim(), color, opacity);
+      onSave(name.trim(), color, opacity, textColor);
     }
   }
 
@@ -63,6 +65,40 @@
         opacity={opacity}
         onSelect={(o) => opacity = o}
       />
+
+      <div class="form-group">
+        <label>Text Color</label>
+        <div class="text-color-options">
+          <button
+            type="button"
+            class="text-color-btn"
+            class:active={textColor === 'auto'}
+            onclick={() => textColor = 'auto'}
+          >
+            <Icon icon="mdi:auto-fix" width="20" />
+            Auto
+          </button>
+          <button
+            type="button"
+            class="text-color-btn"
+            class:active={textColor === 'light'}
+            onclick={() => textColor = 'light'}
+          >
+            <Icon icon="mdi:weather-sunny" width="20" />
+            Light
+          </button>
+          <button
+            type="button"
+            class="text-color-btn"
+            class:active={textColor === 'dark'}
+            onclick={() => textColor = 'dark'}
+          >
+            <Icon icon="mdi:weather-night" width="20" />
+            Dark
+          </button>
+        </div>
+        <small>Auto determines text color based on background</small>
+      </div>
 
       <div class="modal-actions">
         {#if groupName && onDelete}
@@ -215,5 +251,40 @@
 
   .btn-danger:hover {
     background: #b91c1c;
+  }
+
+  .text-color-options {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+  }
+
+  .text-color-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.75rem;
+    background: var(--bg-tertiary);
+    border: 2px solid var(--border);
+    border-radius: 0.5rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 0.875rem;
+    font-weight: 500;
+  }
+
+  .text-color-btn:hover {
+    background: var(--bg-primary);
+    border-color: var(--accent);
+    color: var(--text-primary);
+  }
+
+  .text-color-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: white;
   }
 </style>

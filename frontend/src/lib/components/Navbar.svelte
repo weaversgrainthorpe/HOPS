@@ -9,7 +9,7 @@
   import ImportExportModal from './admin/ImportExportModal.svelte';
 
   let currentPath = $derived($page.url.pathname);
-  let isDashboardPage = $derived(currentPath !== '/' && currentPath !== '/admin');
+  let isDashboardPage = $derived(currentPath !== '/');
   let showThemePicker = $state(false);
   let showImportExport = $state(false);
 
@@ -93,7 +93,7 @@
         </button>
       {/if}
 
-      <a href="/admin" class="admin-link" title="Admin Panel">
+      <a href="/" class="admin-link" title="Admin Panel">
         <Icon icon="mdi:cog" width="32" height="32" />
         {#if $isAuthenticated}
           <span class="admin-badge"></span>

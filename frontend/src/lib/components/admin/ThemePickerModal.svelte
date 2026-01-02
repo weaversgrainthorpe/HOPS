@@ -137,18 +137,18 @@
       description: 'Cool water gradients',
       gradient: true,
       dark: {
-        primary: '#0c4a6e',
-        secondary: '#075985',
-        tertiary: '#0369a1',
-        accent: 'linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%)',
-        accentHover: 'linear-gradient(135deg, #0891b2 0%, #2563eb 100%)'
+        primary: '#0a1929',
+        secondary: '#0c2942',
+        tertiary: '#0f3a5c',
+        accent: 'linear-gradient(135deg, #06b6d4 0%, #3b82f6 50%, #8b5cf6 100%)',
+        accentHover: 'linear-gradient(135deg, #0891b2 0%, #2563eb 50%, #7c3aed 100%)'
       },
       light: {
         primary: '#e0f2fe',
         secondary: '#bae6fd',
         tertiary: '#7dd3fc',
-        accent: 'linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%)',
-        accentHover: 'linear-gradient(135deg, #0891b2 0%, #2563eb 100%)'
+        accent: 'linear-gradient(135deg, #06b6d4 0%, #3b82f6 50%, #8b5cf6 100%)',
+        accentHover: 'linear-gradient(135deg, #0891b2 0%, #2563eb 50%, #7c3aed 100%)'
       }
     },
     {
@@ -157,18 +157,18 @@
       description: 'Natural green gradients',
       gradient: true,
       dark: {
-        primary: '#14532d',
-        secondary: '#166534',
-        tertiary: '#15803d',
-        accent: 'linear-gradient(135deg, #22c55e 0%, #84cc16 100%)',
-        accentHover: 'linear-gradient(135deg, #16a34a 0%, #65a30d 100%)'
+        primary: '#0a1f0f',
+        secondary: '#0e3018',
+        tertiary: '#134124',
+        accent: 'linear-gradient(135deg, #14b8a6 0%, #10b981 50%, #84cc16 100%)',
+        accentHover: 'linear-gradient(135deg, #0d9488 0%, #059669 50%, #65a30d 100%)'
       },
       light: {
         primary: '#f0fdf4',
         secondary: '#dcfce7',
         tertiary: '#bbf7d0',
-        accent: 'linear-gradient(135deg, #22c55e 0%, #84cc16 100%)',
-        accentHover: 'linear-gradient(135deg, #16a34a 0%, #65a30d 100%)'
+        accent: 'linear-gradient(135deg, #14b8a6 0%, #10b981 50%, #84cc16 100%)',
+        accentHover: 'linear-gradient(135deg, #0d9488 0%, #059669 50%, #65a30d 100%)'
       }
     }
   ];

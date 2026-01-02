@@ -329,18 +329,36 @@
 
   async function handleUpdateBackground(background: Background | undefined) {
     if (!requireAuth()) return;
-    const updatedDashboard = { ...dashboard, background };
-    await updateDashboard(updatedDashboard);
-    showBackgroundConfig = false;
+    try {
+      const updatedDashboard = { ...dashboard, background };
+      await updateDashboard(updatedDashboard);
+      showBackgroundConfig = false;
+    } catch (error) {
+      console.error('Failed to save background:', error);
+      if (error instanceof Error && error.message.includes('401')) {
+        alert('Session expired. Please login again at /admin');
+      } else {
+        alert('Failed to save background. Please try again.');
+      }
+    }
   }
 
   async function handleUpdateTabBackground(tabId: string, background: Background | undefined) {
     if (!requireAuth()) return;
-    const updatedDashboard = { ...dashboard };
-    const tab = updatedDashboard.tabs.find(t => t.id === tabId);
-    if (tab) {
-      tab.background = background;
-      await updateDashboard(updatedDashboard);
+    try {
+      const updatedDashboard = { ...dashboard };
+      const tab = updatedDashboard.tabs.find(t => t.id === tabId);
+      if (tab) {
+        tab.background = background;
+        await updateDashboard(updatedDashboard);
+      }
+    } catch (error) {
+      console.error('Failed to save tab background:', error);
+      if (error instanceof Error && error.message.includes('401')) {
+        alert('Session expired. Please login again at /admin');
+      } else {
+        alert('Failed to save background. Please try again.');
+      }
     }
   }
 

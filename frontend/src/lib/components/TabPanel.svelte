@@ -8,6 +8,7 @@
   import BackgroundConfigModal from './admin/BackgroundConfigModal.svelte';
   import { dndzone } from 'svelte-dnd-action';
   import type { DndEvent } from 'svelte-dnd-action';
+  import { getTextColorValue } from '$lib/utils/colorContrast';
 
   interface Props {
     tab: Tab;

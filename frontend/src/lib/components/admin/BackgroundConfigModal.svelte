@@ -28,6 +28,11 @@
   let selectedCategory = $state('network');
   let customImageUrl = $state('');
 
+  // Animation preview state
+  let previewIndex = $state(0);
+  let previewLayer1Visible = $state(true);
+  let previewIntervalId: number | undefined;
+
   function handleSave() {
     if (backgroundType === 'none') {
       onSave(undefined);
@@ -89,6 +94,33 @@
   const categoryPresets = $derived(
     BACKGROUND_PRESETS.filter(p => p.category === selectedCategory)
   );
+
+  // Slideshow preview animation
+  $effect(() => {
+    // Clear any existing interval
+    if (previewIntervalId) {
+      clearInterval(previewIntervalId);
+      previewIntervalId = undefined;
+    }
+
+    // Only animate if we have multiple images in slideshow mode
+    if (backgroundType === 'slideshow' && slideshowImages.length > 1) {
+      // Use faster interval for preview (5 seconds instead of configured interval)
+      const previewInterval = 5000;
+
+      previewIntervalId = setInterval(() => {
+        previewIndex = (previewIndex + 1) % slideshowImages.length;
+        previewLayer1Visible = !previewLayer1Visible;
+      }, previewInterval) as any;
+    }
+
+    // Cleanup
+    return () => {
+      if (previewIntervalId) {
+        clearInterval(previewIntervalId);
+      }
+    };
+  });
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
@@ -250,6 +282,27 @@
                 </div>
               {/each}
             </div>
+
+            {#if slideshowImages.length > 1}
+              <div class="transition-preview">
+                <label>
+                  <Icon icon="mdi:eye" width="16" />
+                  Transition Preview (crossfade)
+                </label>
+                <div class="preview-container">
+                  <div
+                    class="preview-layer"
+                    class:visible={previewLayer1Visible}
+                    style:background-image="url({slideshowImages[previewIndex % slideshowImages.length]})"
+                  ></div>
+                  <div
+                    class="preview-layer"
+                    class:visible={!previewLayer1Visible}
+                    style:background-image="url({slideshowImages[(previewIndex + 1) % slideshowImages.length]})"
+                  ></div>
+                </div>
+              </div>
+            {/if}
           {:else}
             <p class="empty-message">No images added yet. Select from presets below or add a custom URL.</p>
           {/if}
@@ -516,6 +569,50 @@
   }
 
   .image-item:hover .remove-btn {
+    opacity: 1;
+  }
+
+  .transition-preview {
+    margin-top: 1.5rem;
+    padding: 1rem;
+    background: var(--bg-primary);
+    border-radius: 0.5rem;
+    border: 1px solid var(--border);
+  }
+
+  .transition-preview label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: 0.75rem;
+  }
+
+  .preview-container {
+    position: relative;
+    width: 100%;
+    height: 200px;
+    border-radius: 0.375rem;
+    overflow: hidden;
+    border: 2px solid var(--border);
+  }
+
+  .preview-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: cover;
+    opacity: 0;
+    transition: opacity 1.5s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .preview-layer.visible {
     opacity: 1;
   }
 

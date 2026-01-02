@@ -27,6 +27,7 @@ export interface Tab {
   background?: Background;
   color?: string;
   opacity?: number;
+  textColor?: 'auto' | 'light' | 'dark'; // Auto determines based on background color
   groups: Group[];
   order: number;
 }
@@ -37,6 +38,7 @@ export interface Group {
   collapsed: boolean;
   color?: string;
   opacity?: number;
+  textColor?: 'auto' | 'light' | 'dark'; // Auto determines based on background color
   entries: Entry[];
   order: number;
 }
@@ -54,6 +56,8 @@ export interface Entry {
   color?: string;
   opacity?: number;
   order: number;
+  showStatus?: boolean;
+  fetchFavicon?: boolean;
 }
 
 export interface Background {

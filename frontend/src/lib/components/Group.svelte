@@ -8,6 +8,7 @@
   import { dndzone } from 'svelte-dnd-action';
   import type { DndEvent } from 'svelte-dnd-action';
   import { clipboard, clearClipboard } from '$lib/stores/clipboard';
+  import { getTextColorValue } from '$lib/utils/colorContrast';
 
   interface Props {
     group: Group;
@@ -27,6 +28,13 @@
   let showAddModal = $state(false);
   let showEditModal = $state(false);
 
+  // Compute text color based on background color
+  const headerTextColor = $derived(
+    group.color
+      ? getTextColorValue(group.textColor || 'auto', group.color)
+      : 'inherit'
+  );
+
   function toggleCollapse(e: MouseEvent) {
     // In edit mode, don't toggle - allow editing instead
     if ($editMode) {
@@ -37,9 +45,9 @@
     collapsed = !collapsed;
   }
 
-  function handleSaveGroup(groupName: string, groupColor?: string, groupOpacity?: number) {
+  function handleSaveGroup(groupName: string, groupColor?: string, groupOpacity?: number, groupTextColor?: 'auto' | 'light' | 'dark') {
     if (onUpdateGroup) {
-      onUpdateGroup({ ...group, name: groupName, color: groupColor, opacity: groupOpacity });
+      onUpdateGroup({ ...group, name: groupName, color: groupColor, opacity: groupOpacity, textColor: groupTextColor });
     }
     showEditModal = false;
   }
@@ -158,6 +166,7 @@
     class:custom-color={group.color}
     style:background-color={group.color}
     style:opacity={group.opacity !== undefined ? group.opacity : 0.95}
+    style:color={headerTextColor}
     onclick={toggleCollapse}
   >
     <h3>{group.name}</h3>
@@ -217,6 +226,7 @@
     groupName={group.name}
     groupColor={group.color}
     groupOpacity={group.opacity}
+    groupTextColor={group.textColor}
     onSave={handleSaveGroup}
     onCancel={() => showEditModal = false}
     onDelete={handleDeleteGroup}
