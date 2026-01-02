@@ -3,6 +3,7 @@
   import Icon from '@iconify/svelte';
   import ColorPicker from './ColorPicker.svelte';
   import OpacitySlider from './OpacitySlider.svelte';
+  import IconPickerModal from './IconPickerModal.svelte';
 
   interface Props {
     entry: Entry;
@@ -15,6 +16,7 @@
 
   let editedEntry = $state<Entry>({ ...entry });
   let iconSearch = $state(entry.icon || '');
+  let showIconPicker = $state(false);
 
   // Update editedEntry when entry prop changes
   $effect(() => {
@@ -32,10 +34,20 @@
     }
   }
 
+  function handleIconSelect(icon: string) {
+    editedEntry.icon = icon;
+    iconSearch = icon;
+    showIconPicker = false;
+  }
+
   // Close modal on escape key
   function handleKeydown(e: KeyboardEvent) {
     if (e.key === 'Escape') {
-      onCancel();
+      if (showIconPicker) {
+        showIconPicker = false;
+      } else {
+        onCancel();
+      }
     }
   }
 </script>
@@ -87,21 +99,32 @@
 
         <div class="form-group">
           <label for="icon">Icon</label>
-          <div class="icon-input">
-            <input
-              id="icon"
-              type="text"
-              bind:value={iconSearch}
-              oninput={() => editedEntry.icon = iconSearch}
-              placeholder="mdi:server"
-            />
-            {#if editedEntry.icon}
-              <div class="icon-preview">
-                <Icon icon={editedEntry.icon} width="32" />
-              </div>
-            {/if}
+          <div class="icon-input-wrapper">
+            <div class="icon-input">
+              <input
+                id="icon"
+                type="text"
+                bind:value={iconSearch}
+                oninput={() => editedEntry.icon = iconSearch}
+                placeholder="mdi:server"
+              />
+              {#if editedEntry.icon}
+                <div class="icon-preview">
+                  <Icon icon={editedEntry.icon} width="32" />
+                </div>
+              {/if}
+            </div>
+            <button
+              type="button"
+              class="browse-btn"
+              onclick={() => showIconPicker = true}
+              title="Browse icon presets"
+            >
+              <Icon icon="mdi:apps" width="20" />
+              Browse
+            </button>
           </div>
-          <small>Search at <a href="https://icon-sets.iconify.design/" target="_blank">iconify.design</a></small>
+          <small>Browse presets or search at <a href="https://icon-sets.iconify.design/" target="_blank">iconify.design</a></small>
         </div>
 
         <div class="form-group">
@@ -392,4 +415,37 @@
       width: 100%;
     }
   }
+
+  .icon-input-wrapper {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .browse-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 0.375rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+
+  .browse-btn:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+  }
 </style>
+
+{#if showIconPicker}
+  <IconPickerModal
+    currentIcon={editedEntry.icon}
+    onSelect={handleIconSelect}
+    onCancel={() => showIconPicker = false}
+  />
+{/if}

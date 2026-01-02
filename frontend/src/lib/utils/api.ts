@@ -24,9 +24,9 @@ export function getSessionToken(): string | null {
 // Helper to make authenticated requests
 async function fetchAPI(endpoint: string, options: RequestInit = {}) {
   const token = getSessionToken();
-  const headers: HeadersInit = {
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...options.headers,
+    ...(options.headers as Record<string, string> || {}),
   };
 
   if (token) {

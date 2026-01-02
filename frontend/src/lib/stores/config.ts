@@ -1,4 +1,4 @@
-import { writable, derived } from 'svelte/store';
+import { writable, derived, get } from 'svelte/store';
 import type { Config, Dashboard } from '$lib/types';
 import { getConfig, updateConfig as apiUpdateConfig } from '$lib/utils/api';
 import { page } from '$app/stores';
@@ -61,9 +61,7 @@ export function findDashboard(pathOrId: string, cfg: Config): Dashboard | undefi
 
 // Update a specific dashboard
 export async function updateDashboard(updatedDashboard: Dashboard) {
-  let currentConfig: Config | null = null;
-  const unsubscribe = config.subscribe(c => currentConfig = c);
-  unsubscribe();
+  const currentConfig = get(config);
 
   if (!currentConfig) {
     throw new Error('No configuration loaded');
@@ -74,7 +72,7 @@ export async function updateDashboard(updatedDashboard: Dashboard) {
     throw new Error('Dashboard not found');
   }
 
-  const newConfig = {
+  const newConfig: Config = {
     ...currentConfig,
     dashboards: [
       ...currentConfig.dashboards.slice(0, dashboardIndex),

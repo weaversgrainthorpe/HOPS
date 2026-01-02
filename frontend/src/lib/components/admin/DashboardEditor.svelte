@@ -5,7 +5,7 @@
 
   let { dashboard, onClose }: { dashboard: Dashboard; onClose: () => void } = $props();
 
-  let editedDashboard = $state<Dashboard>(JSON.parse(JSON.stringify(dashboard)));
+  let editedDashboard: Dashboard = JSON.parse(JSON.stringify(dashboard));
 
   async function handleSave() {
     if ($config) {

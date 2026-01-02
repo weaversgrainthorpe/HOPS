@@ -86,7 +86,7 @@ func runMigrations(db *sql.DB) error {
 	if count == 0 {
 		// Default password: "admin" - should be changed on first login
 		// This is bcrypt hash of "admin"
-		defaultHash := "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy"
+		defaultHash := "$2a$10$trkEbQD4PIkE23o.7Gn4TOBCOYo48m70IlqFpJZH98JcIi1s6oeTG"
 		_, err := db.Exec("INSERT INTO users (username, password_hash) VALUES (?, ?)", "admin", defaultHash)
 		if err != nil {
 			return fmt.Errorf("failed to create default admin user: %w", err)
