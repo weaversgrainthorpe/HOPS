@@ -1,16 +1,13 @@
 <script lang="ts">
-  import { isAuthenticated, login, isLoggingIn } from '$lib/stores/auth';
-  import { goto } from '$app/navigation';
-  import { onMount } from 'svelte';
+  import { isAuthenticated, login, logout, isLoggingIn } from '$lib/stores/auth';
+  import DashboardList from '$lib/components/admin/DashboardList.svelte';
+  import DashboardEditor from '$lib/components/admin/DashboardEditor.svelte';
+  import type { Dashboard } from '$lib/types';
 
   let username = 'admin';
   let password = '';
   let error = '';
-
-  onMount(() => {
-    // If already authenticated, could show admin panel
-    // For now, just allow re-login
-  });
+  let editingDashboard = $state<Dashboard | null>(null);
 
   async function handleLogin(e: Event) {
     e.preventDefault();
@@ -18,17 +15,21 @@
 
     const success = await login(username, password);
 
-    if (success) {
-      // Successfully logged in
-      // For now, just show a message
-      // Later we'll show the admin interface
-    } else {
+    if (!success) {
       error = 'Invalid credentials. Default is admin/admin';
     }
   }
 
-  function handleLogout() {
-    // Will implement logout
+  async function handleLogout() {
+    await logout();
+  }
+
+  function handleEdit(dashboard: Dashboard) {
+    editingDashboard = dashboard;
+  }
+
+  function handleCloseEditor() {
+    editingDashboard = null;
   }
 </script>
 
@@ -38,7 +39,7 @@
       <h1>HOPS Admin</h1>
       <p>Login to manage your dashboards</p>
 
-      <form on:submit={handleLogin}>
+      <form onsubmit={handleLogin}>
         <div class="form-group">
           <label for="username">Username</label>
           <input
@@ -74,23 +75,23 @@
     </div>
   {:else}
     <div class="admin-panel">
-      <h1>HOPS Admin Panel</h1>
-      <p>You are logged in!</p>
-      <p class="hint">Admin interface coming soon...</p>
-      <div class="actions">
-        <a href="/" class="button">View Dashboards</a>
-        <button on:click={handleLogout}>Logout</button>
+      <div class="admin-header">
+        <h1>HOPS Admin Panel</h1>
+        <button onclick={handleLogout} class="btn-secondary">Logout</button>
       </div>
+
+      <DashboardList onEdit={handleEdit} />
     </div>
   {/if}
 </div>
 
+{#if editingDashboard}
+  <DashboardEditor dashboard={editingDashboard} onClose={handleCloseEditor} />
+{/if}
+
 <style>
   .admin-container {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 100vh;
+    min-height: calc(100vh - 60px);
     padding: 2rem;
   }
 
@@ -148,26 +149,31 @@
   }
 
   .admin-panel {
-    text-align: center;
+    max-width: 1200px;
+    margin: 0 auto;
   }
 
-  .actions {
+  .admin-header {
     display: flex;
-    gap: 1rem;
-    justify-content: center;
-    margin-top: 2rem;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 2rem;
   }
 
-  .button {
-    display: inline-block;
+  .admin-header h1 {
+    margin: 0;
+  }
+
+  .btn-secondary {
     padding: 0.5rem 1rem;
-    background: var(--accent);
-    color: white;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: none;
     border-radius: 0.375rem;
-    text-decoration: none;
+    cursor: pointer;
   }
 
-  .button:hover {
-    background: var(--accent-hover);
+  .btn-secondary:hover {
+    background: var(--bg-secondary);
   }
 </style>

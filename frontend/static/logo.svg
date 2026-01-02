@@ -1,29 +1,58 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none">
+  <!-- Gradient definitions -->
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:0.15" />
+      <stop offset="100%" style="stop-color:#2563eb;stop-opacity:0.05" />
+    </linearGradient>
+    <linearGradient id="iconGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#2563eb;stop-opacity:1" />
+    </linearGradient>
+    <radialGradient id="glowGradient">
+      <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:0.3" />
+      <stop offset="100%" style="stop-color:#3b82f6;stop-opacity:0" />
+    </radialGradient>
+  </defs>
+
+  <!-- Glow effect -->
+  <circle cx="100" cy="100" r="85" fill="url(#glowGradient)"/>
+
   <!-- Background circle -->
-  <circle cx="100" cy="100" r="95" fill="#3b82f6" opacity="0.1"/>
+  <circle cx="100" cy="100" r="90" fill="url(#bgGradient)"/>
 
-  <!-- House/Portal shape -->
-  <path d="M100 40 L160 85 L160 150 L40 150 L40 85 Z" fill="#3b82f6" opacity="0.2"/>
-
-  <!-- Dashboard grid (3x3 tiles) -->
-  <g transform="translate(60, 75)">
+  <!-- Modern dashboard grid (3x3) -->
+  <g transform="translate(52, 52)">
     <!-- Row 1 -->
-    <rect x="0" y="0" width="22" height="22" rx="4" fill="#3b82f6"/>
-    <rect x="29" y="0" width="22" height="22" rx="4" fill="#3b82f6" opacity="0.8"/>
-    <rect x="58" y="0" width="22" height="22" rx="4" fill="#3b82f6" opacity="0.6"/>
+    <rect x="0" y="0" width="28" height="28" rx="6" fill="url(#iconGradient)" opacity="0.9">
+      <animate attributeName="opacity" values="0.9;1;0.9" dur="3s" repeatCount="indefinite"/>
+    </rect>
+    <rect x="34" y="0" width="28" height="28" rx="6" fill="url(#iconGradient)" opacity="0.65"/>
+    <rect x="68" y="0" width="28" height="28" rx="6" fill="url(#iconGradient)" opacity="0.45"/>
 
     <!-- Row 2 -->
-    <rect x="0" y="29" width="22" height="22" rx="4" fill="#3b82f6" opacity="0.8"/>
-    <rect x="29" y="29" width="22" height="22" rx="4" fill="#3b82f6"/>
-    <rect x="58" y="29" width="22" height="22" rx="4" fill="#3b82f6" opacity="0.8"/>
+    <rect x="0" y="34" width="28" height="28" rx="6" fill="url(#iconGradient)" opacity="0.65"/>
+    <rect x="34" y="34" width="28" height="28" rx="6" fill="url(#iconGradient)" opacity="1">
+      <animate attributeName="opacity" values="1;0.8;1" dur="2s" repeatCount="indefinite"/>
+    </rect>
+    <rect x="68" y="34" width="28" height="28" rx="6" fill="url(#iconGradient)" opacity="0.65"/>
 
     <!-- Row 3 -->
-    <rect x="0" y="58" width="22" height="22" rx="4" fill="#3b82f6" opacity="0.6"/>
-    <rect x="29" y="58" width="22" height="22" rx="4" fill="#3b82f6" opacity="0.8"/>
-    <rect x="58" y="58" width="22" height="22" rx="4" fill="#3b82f6"/>
+    <rect x="0" y="68" width="28" height="28" rx="6" fill="url(#iconGradient)" opacity="0.45"/>
+    <rect x="34" y="68" width="28" height="28" rx="6" fill="url(#iconGradient)" opacity="0.65"/>
+    <rect x="68" y="68" width="28" height="28" rx="6" fill="url(#iconGradient)" opacity="0.9">
+      <animate attributeName="opacity" values="0.9;1;0.9" dur="2.5s" repeatCount="indefinite"/>
+    </rect>
   </g>
 
-  <!-- Hop plant decoration (stylized leaf) -->
-  <path d="M170 60 Q180 50 175 40 Q170 35 165 40 Q160 45 165 55 Z" fill="#10b981" opacity="0.6"/>
-  <path d="M175 65 Q185 55 180 45 Q175 40 170 45 Q165 50 170 60 Z" fill="#10b981" opacity="0.4"/>
+  <!-- Hop plant accent (modern hop cone) -->
+  <g transform="translate(158, 48)">
+    <ellipse cx="0" cy="0" rx="11" ry="15" fill="#10b981" opacity="0.85"/>
+    <ellipse cx="0" cy="0" rx="7" ry="11" fill="#34d399" opacity="0.65"/>
+    <ellipse cx="0" cy="0" rx="4" ry="7" fill="#6ee7b7" opacity="0.45"/>
+    <!-- Stem -->
+    <line x1="0" y1="-15" x2="0" y2="-22" stroke="#10b981" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="0" y1="-18" x2="-4" y2="-22" stroke="#10b981" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="0" y1="-18" x2="4" y2="-22" stroke="#10b981" stroke-width="1.5" stroke-linecap="round"/>
+  </g>
 </svg>
