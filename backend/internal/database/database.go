@@ -101,7 +101,136 @@ func runMigrations(db *sql.DB) error {
 	}
 
 	if configCount == 0 {
-		defaultConfig := `{"dashboards":[]}`
+		defaultConfig := `{
+  "dashboards": [
+    {
+      "id": "home",
+      "name": "Home",
+      "path": "/home",
+      "order": 0,
+      "tabs": [
+        {
+          "id": "main",
+          "name": "Main",
+          "color": "#3b82f6",
+          "opacity": 0.95,
+          "order": 0,
+          "groups": [
+            {
+              "id": "services",
+              "name": "Services",
+              "color": "#8b5cf6",
+              "opacity": 0.95,
+              "collapsed": false,
+              "order": 0,
+              "entries": [
+                {
+                  "id": "google",
+                  "name": "Google",
+                  "url": "https://google.com",
+                  "icon": "mdi:google",
+                  "description": "Search Engine",
+                  "openMode": "newtab",
+                  "size": "medium",
+                  "order": 0
+                },
+                {
+                  "id": "github",
+                  "name": "GitHub",
+                  "url": "https://github.com",
+                  "icon": "mdi:github",
+                  "description": "Code Repository",
+                  "openMode": "newtab",
+                  "size": "medium",
+                  "order": 1
+                },
+                {
+                  "id": "youtube",
+                  "name": "YouTube",
+                  "url": "https://youtube.com",
+                  "icon": "mdi:youtube",
+                  "description": "Video Platform",
+                  "openMode": "newtab",
+                  "size": "medium",
+                  "order": 2
+                }
+              ]
+            },
+            {
+              "id": "tools",
+              "name": "Development Tools",
+              "color": "#10b981",
+              "opacity": 0.95,
+              "collapsed": false,
+              "order": 1,
+              "entries": [
+                {
+                  "id": "stackoverflow",
+                  "name": "Stack Overflow",
+                  "url": "https://stackoverflow.com",
+                  "icon": "mdi:stack-overflow",
+                  "description": "Q&A for Developers",
+                  "openMode": "newtab",
+                  "size": "medium",
+                  "order": 0
+                },
+                {
+                  "id": "mdn",
+                  "name": "MDN Web Docs",
+                  "url": "https://developer.mozilla.org",
+                  "icon": "mdi:firefox",
+                  "description": "Web Development Documentation",
+                  "openMode": "newtab",
+                  "size": "medium",
+                  "order": 1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "media",
+          "name": "Media",
+          "color": "#f59e0b",
+          "opacity": 0.95,
+          "order": 1,
+          "groups": [
+            {
+              "id": "streaming",
+              "name": "Streaming Services",
+              "color": "#ef4444",
+              "opacity": 0.95,
+              "collapsed": false,
+              "order": 0,
+              "entries": [
+                {
+                  "id": "netflix",
+                  "name": "Netflix",
+                  "url": "https://netflix.com",
+                  "icon": "mdi:netflix",
+                  "description": "Streaming Service",
+                  "openMode": "newtab",
+                  "size": "large",
+                  "order": 0
+                },
+                {
+                  "id": "spotify",
+                  "name": "Spotify",
+                  "url": "https://spotify.com",
+                  "icon": "mdi:spotify",
+                  "description": "Music Streaming",
+                  "openMode": "newtab",
+                  "size": "medium",
+                  "order": 1
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}`
 		_, err := db.Exec("INSERT INTO config (id, data) VALUES (1, ?)", defaultConfig)
 		if err != nil {
 			return fmt.Errorf("failed to create default config: %w", err)

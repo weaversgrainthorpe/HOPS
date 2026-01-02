@@ -6,6 +6,10 @@ export interface Dashboard {
   path: string;
   background?: Background;
   header?: HeaderConfig;
+  theme?: {
+    color?: string;
+    opacity?: number;
+  };
   tabs: Tab[];
   order: number;
 }
@@ -56,7 +60,8 @@ export interface Background {
   type: 'image' | 'slideshow' | 'color';
   value?: string;
   images?: string[];
-  interval?: number;
+  interval?: number; // Duration in seconds
+  fit?: 'cover' | 'contain' | 'fill'; // How to fit the image
 }
 
 export interface StatusCheck {

@@ -1,9 +1,11 @@
 <script lang="ts">
-  import type { Tab, Entry, Group as GroupType } from '$lib/types';
+  import type { Tab, Entry, Group as GroupType, Background } from '$lib/types';
   import Group from './Group.svelte';
+  import BackgroundSlideshow from './BackgroundSlideshow.svelte';
   import Icon from '@iconify/svelte';
   import { editMode } from '$lib/stores/editMode';
   import GroupEditModal from './admin/GroupEditModal.svelte';
+  import BackgroundConfigModal from './admin/BackgroundConfigModal.svelte';
   import { dndzone } from 'svelte-dnd-action';
   import type { DndEvent } from 'svelte-dnd-action';
 
@@ -14,13 +16,17 @@
     onAddEntry?: (groupId: string, newEntry: Entry) => void;
     onAddGroup?: (groupName: string) => void;
     onReorderEntries?: (groupId: string, reorderedEntries: Entry[]) => void;
+    onMoveEntry?: (fromGroupId: string, toGroupId: string, entryId: string, newIndex: number) => void;
     onReorderGroups?: (reorderedGroups: GroupType[]) => void;
     onUpdateGroup?: (groupId: string, updatedGroup: GroupType) => void;
     onDeleteGroup?: (groupId: string) => void;
+    onUpdateTabBackground?: (background: Background | undefined) => void;
+    onGroupFocus?: (groupId: string) => void;
   }
 
-  let { tab, onUpdateEntry, onDeleteEntry, onAddEntry, onAddGroup, onReorderEntries, onReorderGroups, onUpdateGroup, onDeleteGroup }: Props = $props();
+  let { tab, onUpdateEntry, onDeleteEntry, onAddEntry, onAddGroup, onReorderEntries, onMoveEntry, onReorderGroups, onUpdateGroup, onDeleteGroup, onUpdateTabBackground, onGroupFocus }: Props = $props();
   let showAddGroupModal = $state(false);
+  let showBackgroundConfig = $state(false);
 
   // Drag and drop handling for groups
   let groupItems = $state([...tab.groups]);
@@ -72,6 +78,14 @@
     };
   }
 
+  function handleMoveEntry(toGroupId: string) {
+    return (fromGroupId: string, _toGroupId: string, entryId: string, newIndex: number) => {
+      if (onMoveEntry) {
+        onMoveEntry(fromGroupId, toGroupId, entryId, newIndex);
+      }
+    };
+  }
+
   function handleUpdateGroup(groupId: string) {
     return (updatedGroup: GroupType) => {
       if (onUpdateGroup) {
@@ -103,9 +117,17 @@
       onReorderGroups(reorderedGroups);
     }
   }
+
+  function handleUpdateBackground(background: Background | undefined) {
+    if (onUpdateTabBackground) {
+      onUpdateTabBackground(background);
+    }
+    showBackgroundConfig = false;
+  }
 </script>
 
-<div class="tab-panel" style:background-image={tab.background?.type === 'image' ? `url(${tab.background.value})` : 'none'}>
+<div class="tab-panel">
+  <BackgroundSlideshow background={tab.background} />
   <div
     class="tab-content"
     use:dndzone={{items: groupItems, dragDisabled: !$editMode, dropTargetStyle: {}}}
@@ -119,8 +141,10 @@
         onDeleteEntry={handleDeleteEntry(group.id)}
         onAddEntry={handleAddEntry(group.id)}
         onReorderEntries={handleReorderEntries(group.id)}
+        onMoveEntry={handleMoveEntry(group.id)}
         onUpdateGroup={handleUpdateGroup(group.id)}
         onDeleteGroup={handleDeleteGroup(group.id)}
+        onFocus={() => onGroupFocus?.(group.id)}
         tabId={tab.id}
       />
     {/each}
@@ -137,6 +161,13 @@
         <span>Add Group</span>
       </button>
     {/if}
+
+    {#if $editMode && onUpdateTabBackground}
+      <button class="tab-background-btn" onclick={() => showBackgroundConfig = true}>
+        <Icon icon="mdi:image-multiple" width="24" />
+        <span>Tab Background</span>
+      </button>
+    {/if}
   </div>
 </div>
 
@@ -145,6 +176,15 @@
     groupName=""
     onSave={handleSaveGroup}
     onCancel={() => showAddGroupModal = false}
+  />
+{/if}
+
+{#if showBackgroundConfig}
+  <BackgroundConfigModal
+    background={tab.background}
+    level="tab"
+    onSave={handleUpdateBackground}
+    onCancel={() => showBackgroundConfig = false}
   />
 {/if}
 
@@ -190,6 +230,29 @@
     background: var(--bg-tertiary);
     border-color: var(--accent);
     color: var(--accent);
+    transform: translateY(-2px);
+  }
+
+  .tab-background-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 1rem 1.5rem;
+    background: var(--bg-secondary);
+    border: 2px dashed var(--border);
+    border-radius: 0.5rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-top: 2rem;
+    font-size: 1rem;
+    font-weight: 500;
+  }
+
+  .tab-background-btn:hover {
+    background: var(--bg-tertiary);
+    border-color: #3b82f6;
+    color: #3b82f6;
     transform: translateY(-2px);
   }
 </style>

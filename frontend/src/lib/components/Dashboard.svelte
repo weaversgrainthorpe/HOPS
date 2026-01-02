@@ -1,10 +1,14 @@
 <script lang="ts">
-  import type { Dashboard, Entry, HeaderConfig, Tab } from '$lib/types';
+  import type { Dashboard, Entry, HeaderConfig, Tab, Background } from '$lib/types';
   import TabPanel from './TabPanel.svelte';
+  import BackgroundSlideshow from './BackgroundSlideshow.svelte';
   import { updateDashboard } from '$lib/stores/config';
   import { editMode } from '$lib/stores/editMode';
+  import { isAuthenticated } from '$lib/stores/auth';
+  import { clipboard } from '$lib/stores/clipboard';
   import TabEditModal from './admin/TabEditModal.svelte';
   import HeaderConfigModal from './admin/HeaderConfigModal.svelte';
+  import BackgroundConfigModal from './admin/BackgroundConfigModal.svelte';
   import Icon from '@iconify/svelte';
   import { dndzone } from 'svelte-dnd-action';
   import type { DndEvent } from 'svelte-dnd-action';
@@ -13,11 +17,55 @@
   let activeTabIndex = $state(0);
   let editingTabIndex = $state<number | null>(null);
   let showHeaderConfig = $state(false);
+  let showBackgroundConfig = $state(false);
   let draggedTabs = $state<Tab[]>([]);
+  let focusedGroupId = $state<string | null>(null); // Track which group has focus for paste
 
   $effect(() => {
     draggedTabs = dashboard.tabs.map(tab => ({ ...tab }));
   });
+
+  // Helper to check authentication before edit operations
+  function requireAuth(): boolean {
+    if (!$isAuthenticated) {
+      console.error('Edit operation requires authentication');
+      return false;
+    }
+    return true;
+  }
+
+  // Global keyboard shortcuts
+  function handleKeyboard(e: KeyboardEvent) {
+    // Only handle shortcuts in edit mode
+    if (!$editMode || !$isAuthenticated) return;
+
+    // Ctrl+V or Cmd+V - Paste
+    if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
+      // Don't interfere with text input paste
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+
+      const clipboardItem = $clipboard;
+      if (!clipboardItem || clipboardItem.type !== 'entry') return;
+
+      e.preventDefault();
+
+      // Determine target group
+      const activeTab = dashboard.tabs[activeTabIndex];
+      if (!activeTab || activeTab.groups.length === 0) return;
+
+      // Use focused group or first group
+      let targetGroupId = focusedGroupId || activeTab.groups[0].id;
+
+      // Paste the entry
+      handleAddEntry(activeTab.id, targetGroupId, {
+        ...clipboardItem.data,
+        id: '', // Will be generated
+        order: 0 // Will be set correctly
+      });
+    }
+  }
 
   function setActiveTab(index: number) {
     activeTabIndex = index;
@@ -33,6 +81,7 @@
   }
 
   async function handleUpdateEntry(tabId: string, groupId: string, entryId: string, updatedEntry: Entry) {
+    if (!requireAuth()) return;
     // Find and update the entry in the dashboard structure
     const updatedDashboard = { ...dashboard };
     const tab = updatedDashboard.tabs.find(t => t.id === tabId);
@@ -50,6 +99,7 @@
   }
 
   async function handleDeleteEntry(tabId: string, groupId: string, entryId: string) {
+    if (!requireAuth()) return;
     // Find and delete the entry in the dashboard structure
     const updatedDashboard = { ...dashboard };
     const tab = updatedDashboard.tabs.find(t => t.id === tabId);
@@ -64,6 +114,7 @@
   }
 
   async function handleAddEntry(tabId: string, groupId: string, newEntry: Entry) {
+    if (!requireAuth()) return;
     // Find and add the entry to the dashboard structure
     const updatedDashboard = { ...dashboard };
     const tab = updatedDashboard.tabs.find(t => t.id === tabId);
@@ -81,6 +132,7 @@
   }
 
   async function handleAddGroup(tabId: string, groupName: string) {
+    if (!requireAuth()) return;
     // Find and add the group to the dashboard structure
     const updatedDashboard = { ...dashboard };
     const tab = updatedDashboard.tabs.find(t => t.id === tabId);
@@ -125,6 +177,7 @@
   }
 
   async function handleReorderEntries(tabId: string, groupId: string, reorderedEntries: Entry[]) {
+    if (!requireAuth()) return;
     // Find and update the entries in the dashboard structure
     const updatedDashboard = { ...dashboard };
     const tab = updatedDashboard.tabs.find(t => t.id === tabId);
@@ -144,7 +197,55 @@
     };
   }
 
+  async function handleMoveEntry(
+    tabId: string,
+    fromGroupId: string,
+    toGroupId: string,
+    entryId: string,
+    newIndex: number
+  ) {
+    if (!requireAuth()) return;
+
+    const updatedDashboard = { ...dashboard };
+    const tab = updatedDashboard.tabs.find(t => t.id === tabId);
+    if (!tab) return;
+
+    const fromGroup = tab.groups.find(g => g.id === fromGroupId);
+    const toGroup = tab.groups.find(g => g.id === toGroupId);
+    if (!fromGroup || !toGroup) return;
+
+    // Find and remove entry from source group
+    const entryIndex = fromGroup.entries.findIndex(e => e.id === entryId);
+    if (entryIndex === -1) return;
+
+    const [movedEntry] = fromGroup.entries.splice(entryIndex, 1);
+
+    // Insert into target group at specified index
+    toGroup.entries.splice(newIndex, 0, { ...movedEntry, order: newIndex });
+
+    // Reorder entries in target group
+    toGroup.entries = toGroup.entries.map((entry, idx) => ({
+      ...entry,
+      order: idx
+    }));
+
+    // Reorder remaining entries in source group
+    fromGroup.entries = fromGroup.entries.map((entry, idx) => ({
+      ...entry,
+      order: idx
+    }));
+
+    await updateDashboard(updatedDashboard);
+  }
+
+  function makeMoveEntryHandler(tabId: string) {
+    return (fromGroupId: string, toGroupId: string, entryId: string, newIndex: number) => {
+      handleMoveEntry(tabId, fromGroupId, toGroupId, entryId, newIndex);
+    };
+  }
+
   async function handleReorderGroups(tabId: string, reorderedGroups: any[]) {
+    if (!requireAuth()) return;
     const updatedDashboard = { ...dashboard };
     const tab = updatedDashboard.tabs.find(t => t.id === tabId);
     if (tab) {
@@ -160,6 +261,7 @@
   }
 
   async function handleUpdateGroup(tabId: string, groupId: string, updatedGroup: any) {
+    if (!requireAuth()) return;
     const updatedDashboard = { ...dashboard };
     const tab = updatedDashboard.tabs.find(t => t.id === tabId);
     if (tab) {
@@ -178,6 +280,7 @@
   }
 
   async function handleDeleteGroup(tabId: string, groupId: string) {
+    if (!requireAuth()) return;
     const updatedDashboard = { ...dashboard };
     const tab = updatedDashboard.tabs.find(t => t.id === tabId);
     if (tab) {
@@ -193,6 +296,7 @@
   }
 
   async function handleUpdateTab(tabId: string, newName: string, newColor?: string, newOpacity?: number) {
+    if (!requireAuth()) return;
     const updatedDashboard = { ...dashboard };
     const tabIndex = updatedDashboard.tabs.findIndex(t => t.id === tabId);
     if (tabIndex !== -1) {
@@ -203,6 +307,7 @@
   }
 
   async function handleDeleteTab(tabId: string) {
+    if (!requireAuth()) return;
     const updatedDashboard = { ...dashboard };
     updatedDashboard.tabs = updatedDashboard.tabs.filter(t => t.id !== tabId);
 
@@ -216,12 +321,37 @@
   }
 
   async function handleUpdateHeader(headerConfig: HeaderConfig) {
+    if (!requireAuth()) return;
     const updatedDashboard = { ...dashboard, header: headerConfig };
     await updateDashboard(updatedDashboard);
     showHeaderConfig = false;
   }
 
+  async function handleUpdateBackground(background: Background | undefined) {
+    if (!requireAuth()) return;
+    const updatedDashboard = { ...dashboard, background };
+    await updateDashboard(updatedDashboard);
+    showBackgroundConfig = false;
+  }
+
+  async function handleUpdateTabBackground(tabId: string, background: Background | undefined) {
+    if (!requireAuth()) return;
+    const updatedDashboard = { ...dashboard };
+    const tab = updatedDashboard.tabs.find(t => t.id === tabId);
+    if (tab) {
+      tab.background = background;
+      await updateDashboard(updatedDashboard);
+    }
+  }
+
+  function makeUpdateTabBackgroundHandler(tabId: string) {
+    return (background: Background | undefined) => {
+      handleUpdateTabBackground(tabId, background);
+    };
+  }
+
   async function handleAddTab() {
+    if (!requireAuth()) return;
     const updatedDashboard = { ...dashboard };
     const newId = `tab-${Date.now()}-${Math.random().toString(36).substring(7)}`;
     const newTab: Tab = {
@@ -245,6 +375,7 @@
   }
 
   async function handleTabsFinalize(e: CustomEvent<DndEvent<Tab>>) {
+    if (!requireAuth()) return;
     draggedTabs = e.detail.items;
     const updatedDashboard = { ...dashboard };
     updatedDashboard.tabs = draggedTabs.map((tab, index) => ({ ...tab, order: index }));
@@ -260,13 +391,21 @@
   }
 </script>
 
-<div class="dashboard" style:background-image={dashboard.background?.type === 'image' ? `url(${dashboard.background.value})` : 'none'}>
+<svelte:window onkeydown={handleKeyboard} />
+
+<div class="dashboard">
+  <BackgroundSlideshow background={dashboard.background} />
+
   <div class="dashboard-header">
     {#if $editMode}
       <div class="header-actions">
+        <button class="header-config-btn" onclick={() => showBackgroundConfig = true} title="Configure Background">
+          <Icon icon="mdi:image-multiple" width="20" />
+          Background
+        </button>
         <button class="header-config-btn" onclick={() => showHeaderConfig = true} title="Configure Header">
           <Icon icon="mdi:tune" width="20" />
-          Configure Header
+          Header
         </button>
         <button class="new-tab-btn" onclick={handleAddTab} title="Add New Tab">
           <Icon icon="mdi:plus" width="20" />
@@ -315,9 +454,12 @@
       onAddEntry={makeAddHandler(dashboard.tabs[activeTabIndex].id)}
       onAddGroup={makeAddGroupHandler(dashboard.tabs[activeTabIndex].id)}
       onReorderEntries={makeReorderHandler(dashboard.tabs[activeTabIndex].id)}
+      onMoveEntry={makeMoveEntryHandler(dashboard.tabs[activeTabIndex].id)}
       onReorderGroups={makeReorderGroupsHandler(dashboard.tabs[activeTabIndex].id)}
       onUpdateGroup={makeUpdateGroupHandler(dashboard.tabs[activeTabIndex].id)}
       onDeleteGroup={makeDeleteGroupHandler(dashboard.tabs[activeTabIndex].id)}
+      onUpdateTabBackground={makeUpdateTabBackgroundHandler(dashboard.tabs[activeTabIndex].id)}
+      onGroupFocus={(groupId) => focusedGroupId = groupId}
     />
   {:else}
     <div class="empty-dashboard">
@@ -347,6 +489,15 @@
     header={dashboard.header}
     onSave={handleUpdateHeader}
     onCancel={() => showHeaderConfig = false}
+  />
+{/if}
+
+{#if showBackgroundConfig}
+  <BackgroundConfigModal
+    background={dashboard.background}
+    level="dashboard"
+    onSave={handleUpdateBackground}
+    onCancel={() => showBackgroundConfig = false}
   />
 {/if}
 
