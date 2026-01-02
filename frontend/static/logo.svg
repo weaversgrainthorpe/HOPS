@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none">
+  <!-- Background circle -->
+  <circle cx="100" cy="100" r="95" fill="#3b82f6" opacity="0.1"/>
+
+  <!-- House/Portal shape -->
+  <path d="M100 40 L160 85 L160 150 L40 150 L40 85 Z" fill="#3b82f6" opacity="0.2"/>
+
+  <!-- Dashboard grid (3x3 tiles) -->
+  <g transform="translate(60, 75)">
+    <!-- Row 1 -->
+    <rect x="0" y="0" width="22" height="22" rx="4" fill="#3b82f6"/>
+    <rect x="29" y="0" width="22" height="22" rx="4" fill="#3b82f6" opacity="0.8"/>
+    <rect x="58" y="0" width="22" height="22" rx="4" fill="#3b82f6" opacity="0.6"/>
+
+    <!-- Row 2 -->
+    <rect x="0" y="29" width="22" height="22" rx="4" fill="#3b82f6" opacity="0.8"/>
+    <rect x="29" y="29" width="22" height="22" rx="4" fill="#3b82f6"/>
+    <rect x="58" y="29" width="22" height="22" rx="4" fill="#3b82f6" opacity="0.8"/>
+
+    <!-- Row 3 -->
+    <rect x="0" y="58" width="22" height="22" rx="4" fill="#3b82f6" opacity="0.6"/>
+    <rect x="29" y="58" width="22" height="22" rx="4" fill="#3b82f6" opacity="0.8"/>
+    <rect x="58" y="58" width="22" height="22" rx="4" fill="#3b82f6"/>
+  </g>
+
+  <!-- Hop plant decoration (stylized leaf) -->
+  <path d="M170 60 Q180 50 175 40 Q170 35 165 40 Q160 45 165 55 Z" fill="#10b981" opacity="0.6"/>
+  <path d="M175 65 Q185 55 180 45 Q175 40 170 45 Q165 50 170 60 Z" fill="#10b981" opacity="0.4"/>
+</svg>
