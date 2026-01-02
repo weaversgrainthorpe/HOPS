@@ -1,28 +1,306 @@
 <script lang="ts">
-  import type { Dashboard } from '$lib/types';
+  import type { Dashboard, Entry, HeaderConfig, Tab } from '$lib/types';
   import TabPanel from './TabPanel.svelte';
+  import { updateDashboard } from '$lib/stores/config';
+  import { editMode } from '$lib/stores/editMode';
+  import TabEditModal from './admin/TabEditModal.svelte';
+  import HeaderConfigModal from './admin/HeaderConfigModal.svelte';
+  import Icon from '@iconify/svelte';
+  import { dndzone } from 'svelte-dnd-action';
+  import type { DndEvent } from 'svelte-dnd-action';
 
   let { dashboard }: { dashboard: Dashboard } = $props();
   let activeTabIndex = $state(0);
+  let editingTabIndex = $state<number | null>(null);
+  let showHeaderConfig = $state(false);
+  let draggedTabs = $state<Tab[]>([]);
+
+  $effect(() => {
+    draggedTabs = dashboard.tabs.map(tab => ({ ...tab }));
+  });
 
   function setActiveTab(index: number) {
     activeTabIndex = index;
+  }
+
+  function handleTabClick(index: number, e: MouseEvent) {
+    if ($editMode) {
+      e.stopPropagation();
+      editingTabIndex = index;
+    } else {
+      setActiveTab(index);
+    }
+  }
+
+  async function handleUpdateEntry(tabId: string, groupId: string, entryId: string, updatedEntry: Entry) {
+    // Find and update the entry in the dashboard structure
+    const updatedDashboard = { ...dashboard };
+    const tab = updatedDashboard.tabs.find(t => t.id === tabId);
+    if (tab) {
+      const group = tab.groups.find(g => g.id === groupId);
+      if (group) {
+        const entryIndex = group.entries.findIndex(e => e.id === entryId);
+        if (entryIndex !== -1) {
+          group.entries[entryIndex] = { ...updatedEntry, id: entryId };
+          // Save to backend
+          await updateDashboard(updatedDashboard);
+        }
+      }
+    }
+  }
+
+  async function handleDeleteEntry(tabId: string, groupId: string, entryId: string) {
+    // Find and delete the entry in the dashboard structure
+    const updatedDashboard = { ...dashboard };
+    const tab = updatedDashboard.tabs.find(t => t.id === tabId);
+    if (tab) {
+      const group = tab.groups.find(g => g.id === groupId);
+      if (group) {
+        group.entries = group.entries.filter(e => e.id !== entryId);
+        // Save to backend
+        await updateDashboard(updatedDashboard);
+      }
+    }
+  }
+
+  async function handleAddEntry(tabId: string, groupId: string, newEntry: Entry) {
+    // Find and add the entry to the dashboard structure
+    const updatedDashboard = { ...dashboard };
+    const tab = updatedDashboard.tabs.find(t => t.id === tabId);
+    if (tab) {
+      const group = tab.groups.find(g => g.id === groupId);
+      if (group) {
+        // Generate a unique ID for the new entry
+        const newId = `entry-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+        const entryWithId = { ...newEntry, id: newId, order: group.entries.length };
+        group.entries.push(entryWithId);
+        // Save to backend
+        await updateDashboard(updatedDashboard);
+      }
+    }
+  }
+
+  async function handleAddGroup(tabId: string, groupName: string) {
+    // Find and add the group to the dashboard structure
+    const updatedDashboard = { ...dashboard };
+    const tab = updatedDashboard.tabs.find(t => t.id === tabId);
+    if (tab) {
+      // Generate a unique ID for the new group
+      const newId = `group-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+      const newGroup = {
+        id: newId,
+        name: groupName,
+        collapsed: false,
+        entries: [],
+        order: tab.groups.length
+      };
+      tab.groups.push(newGroup);
+      // Save to backend
+      await updateDashboard(updatedDashboard);
+    }
+  }
+
+  function makeUpdateHandler(tabId: string) {
+    return (groupId: string, entryId: string, updatedEntry: Entry) => {
+      handleUpdateEntry(tabId, groupId, entryId, updatedEntry);
+    };
+  }
+
+  function makeDeleteHandler(tabId: string) {
+    return (groupId: string, entryId: string) => {
+      handleDeleteEntry(tabId, groupId, entryId);
+    };
+  }
+
+  function makeAddHandler(tabId: string) {
+    return (groupId: string, newEntry: Entry) => {
+      handleAddEntry(tabId, groupId, newEntry);
+    };
+  }
+
+  function makeAddGroupHandler(tabId: string) {
+    return (groupName: string) => {
+      handleAddGroup(tabId, groupName);
+    };
+  }
+
+  async function handleReorderEntries(tabId: string, groupId: string, reorderedEntries: Entry[]) {
+    // Find and update the entries in the dashboard structure
+    const updatedDashboard = { ...dashboard };
+    const tab = updatedDashboard.tabs.find(t => t.id === tabId);
+    if (tab) {
+      const group = tab.groups.find(g => g.id === groupId);
+      if (group) {
+        group.entries = reorderedEntries;
+        // Save to backend
+        await updateDashboard(updatedDashboard);
+      }
+    }
+  }
+
+  function makeReorderHandler(tabId: string) {
+    return (groupId: string, reorderedEntries: Entry[]) => {
+      handleReorderEntries(tabId, groupId, reorderedEntries);
+    };
+  }
+
+  async function handleReorderGroups(tabId: string, reorderedGroups: any[]) {
+    const updatedDashboard = { ...dashboard };
+    const tab = updatedDashboard.tabs.find(t => t.id === tabId);
+    if (tab) {
+      tab.groups = reorderedGroups;
+      await updateDashboard(updatedDashboard);
+    }
+  }
+
+  function makeReorderGroupsHandler(tabId: string) {
+    return (reorderedGroups: any[]) => {
+      handleReorderGroups(tabId, reorderedGroups);
+    };
+  }
+
+  async function handleUpdateGroup(tabId: string, groupId: string, updatedGroup: any) {
+    const updatedDashboard = { ...dashboard };
+    const tab = updatedDashboard.tabs.find(t => t.id === tabId);
+    if (tab) {
+      const groupIndex = tab.groups.findIndex(g => g.id === groupId);
+      if (groupIndex !== -1) {
+        tab.groups[groupIndex] = { ...tab.groups[groupIndex], ...updatedGroup };
+        await updateDashboard(updatedDashboard);
+      }
+    }
+  }
+
+  function makeUpdateGroupHandler(tabId: string) {
+    return (groupId: string, updatedGroup: any) => {
+      handleUpdateGroup(tabId, groupId, updatedGroup);
+    };
+  }
+
+  async function handleDeleteGroup(tabId: string, groupId: string) {
+    const updatedDashboard = { ...dashboard };
+    const tab = updatedDashboard.tabs.find(t => t.id === tabId);
+    if (tab) {
+      tab.groups = tab.groups.filter(g => g.id !== groupId);
+      await updateDashboard(updatedDashboard);
+    }
+  }
+
+  function makeDeleteGroupHandler(tabId: string) {
+    return (groupId: string) => {
+      handleDeleteGroup(tabId, groupId);
+    };
+  }
+
+  async function handleUpdateTab(tabId: string, newName: string, newColor?: string, newOpacity?: number) {
+    const updatedDashboard = { ...dashboard };
+    const tabIndex = updatedDashboard.tabs.findIndex(t => t.id === tabId);
+    if (tabIndex !== -1) {
+      updatedDashboard.tabs[tabIndex] = { ...updatedDashboard.tabs[tabIndex], name: newName, color: newColor, opacity: newOpacity };
+      await updateDashboard(updatedDashboard);
+    }
+    editingTabIndex = null;
+  }
+
+  async function handleDeleteTab(tabId: string) {
+    const updatedDashboard = { ...dashboard };
+    updatedDashboard.tabs = updatedDashboard.tabs.filter(t => t.id !== tabId);
+
+    // Adjust active tab if needed
+    if (activeTabIndex >= updatedDashboard.tabs.length) {
+      activeTabIndex = Math.max(0, updatedDashboard.tabs.length - 1);
+    }
+
+    await updateDashboard(updatedDashboard);
+    editingTabIndex = null;
+  }
+
+  async function handleUpdateHeader(headerConfig: HeaderConfig) {
+    const updatedDashboard = { ...dashboard, header: headerConfig };
+    await updateDashboard(updatedDashboard);
+    showHeaderConfig = false;
+  }
+
+  async function handleAddTab() {
+    const updatedDashboard = { ...dashboard };
+    const newId = `tab-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+    const newTab: Tab = {
+      id: newId,
+      name: 'New Tab',
+      groups: [],
+      order: updatedDashboard.tabs.length
+    };
+    updatedDashboard.tabs.push(newTab);
+    await updateDashboard(updatedDashboard);
+
+    // Switch to the new tab
+    activeTabIndex = updatedDashboard.tabs.length - 1;
+
+    // Open edit modal for the new tab
+    editingTabIndex = updatedDashboard.tabs.length - 1;
+  }
+
+  function handleTabsConsider(e: CustomEvent<DndEvent<Tab>>) {
+    draggedTabs = e.detail.items;
+  }
+
+  async function handleTabsFinalize(e: CustomEvent<DndEvent<Tab>>) {
+    draggedTabs = e.detail.items;
+    const updatedDashboard = { ...dashboard };
+    updatedDashboard.tabs = draggedTabs.map((tab, index) => ({ ...tab, order: index }));
+
+    // Adjust active tab index if needed
+    const activeTab = dashboard.tabs[activeTabIndex];
+    const newActiveIndex = draggedTabs.findIndex(tab => tab.id === activeTab?.id);
+    if (newActiveIndex !== -1) {
+      activeTabIndex = newActiveIndex;
+    }
+
+    await updateDashboard(updatedDashboard);
   }
 </script>
 
 <div class="dashboard" style:background-image={dashboard.background?.type === 'image' ? `url(${dashboard.background.value})` : 'none'}>
   <div class="dashboard-header">
-    <h1>{dashboard.name}</h1>
+    {#if $editMode}
+      <div class="header-actions">
+        <button class="header-config-btn" onclick={() => showHeaderConfig = true} title="Configure Header">
+          <Icon icon="mdi:tune" width="20" />
+          Configure Header
+        </button>
+        <button class="new-tab-btn" onclick={handleAddTab} title="Add New Tab">
+          <Icon icon="mdi:plus" width="20" />
+          New Tab
+        </button>
+      </div>
+    {/if}
 
     {#if dashboard.tabs.length > 1}
-      <div class="tabs">
-        {#each dashboard.tabs as tab, index (tab.id)}
+      <div
+        class="tabs"
+        use:dndzone={{
+          items: draggedTabs,
+          flipDurationMs: 200,
+          dragDisabled: !$editMode,
+          dropTargetStyle: {}
+        }}
+        onconsider={handleTabsConsider}
+        onfinalize={handleTabsFinalize}
+      >
+        {#each draggedTabs as tab, index (tab.id)}
           <button
             class="tab"
             class:active={activeTabIndex === index}
-            onclick={() => setActiveTab(index)}
+            class:custom-color={tab.color}
+            class:draggable={$editMode}
+            style:background-color={tab.color}
+            style:opacity={tab.opacity !== undefined ? tab.opacity : 0.95}
+            onclick={(e) => handleTabClick(index, e)}
           >
             {tab.name}
+            {#if $editMode}
+              <Icon icon="mdi:drag" width="16" class="drag-icon" />
+            {/if}
           </button>
         {/each}
       </div>
@@ -30,7 +308,17 @@
   </div>
 
   {#if dashboard.tabs.length > 0}
-    <TabPanel tab={dashboard.tabs[activeTabIndex]} />
+    <TabPanel
+      tab={dashboard.tabs[activeTabIndex]}
+      onUpdateEntry={makeUpdateHandler(dashboard.tabs[activeTabIndex].id)}
+      onDeleteEntry={makeDeleteHandler(dashboard.tabs[activeTabIndex].id)}
+      onAddEntry={makeAddHandler(dashboard.tabs[activeTabIndex].id)}
+      onAddGroup={makeAddGroupHandler(dashboard.tabs[activeTabIndex].id)}
+      onReorderEntries={makeReorderHandler(dashboard.tabs[activeTabIndex].id)}
+      onReorderGroups={makeReorderGroupsHandler(dashboard.tabs[activeTabIndex].id)}
+      onUpdateGroup={makeUpdateGroupHandler(dashboard.tabs[activeTabIndex].id)}
+      onDeleteGroup={makeDeleteGroupHandler(dashboard.tabs[activeTabIndex].id)}
+    />
   {:else}
     <div class="empty-dashboard">
       <p>No tabs configured for this dashboard</p>
@@ -38,6 +326,29 @@
     </div>
   {/if}
 </div>
+
+{#if editingTabIndex !== null && dashboard.tabs[editingTabIndex]}
+  <TabEditModal
+    tabName={dashboard.tabs[editingTabIndex].name}
+    tabColor={dashboard.tabs[editingTabIndex].color}
+    tabOpacity={dashboard.tabs[editingTabIndex].opacity}
+    onSave={(newName, newColor, newOpacity) => handleUpdateTab(dashboard.tabs[editingTabIndex].id, newName, newColor, newOpacity)}
+    onCancel={() => editingTabIndex = null}
+    onDelete={() => {
+      if (confirm(`Are you sure you want to delete the tab "${dashboard.tabs[editingTabIndex].name}" and all its contents?`)) {
+        handleDeleteTab(dashboard.tabs[editingTabIndex].id);
+      }
+    }}
+  />
+{/if}
+
+{#if showHeaderConfig}
+  <HeaderConfigModal
+    header={dashboard.header}
+    onSave={handleUpdateHeader}
+    onCancel={() => showHeaderConfig = false}
+  />
+{/if}
 
 <style>
   .dashboard {
@@ -48,32 +359,82 @@
   }
 
   .dashboard-header {
-    padding: 1.5rem 2rem;
+    padding: 1rem 2rem;
     background: rgba(15, 23, 42, 0.8);
     backdrop-filter: blur(10px);
     border-bottom: 1px solid var(--border);
   }
 
-  h1 {
-    margin: 0 0 1rem 0;
-    font-size: 1.75rem;
-    font-weight: 600;
+  .header-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    margin-bottom: 1rem;
+  }
+
+  .header-config-btn,
+  .new-tab-btn {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 0.875rem;
+    font-weight: 500;
+  }
+
+  .header-config-btn:hover,
+  .new-tab-btn:hover {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+  }
+
+  .new-tab-btn {
+    background: #10b981;
+    border-color: #10b981;
+    color: white;
+  }
+
+  .new-tab-btn:hover {
+    background: #059669;
+    border-color: #059669;
   }
 
   .tabs {
     display: flex;
-    gap: 0.5rem;
+    gap: 0.25rem;
     flex-wrap: wrap;
+    margin-bottom: -1px;
   }
 
   .tab {
     padding: 0.75rem 1.5rem;
     background: var(--bg-secondary);
     border: 1px solid var(--border);
-    border-radius: 0.5rem;
+    border-bottom: none;
+    border-radius: 0.5rem 0.5rem 0 0;
     color: var(--text-secondary);
     font-weight: 500;
     transition: all 0.2s;
+    position: relative;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .tab.draggable {
+    cursor: grab;
+  }
+
+  .tab.draggable:active {
+    cursor: grabbing;
   }
 
   .tab:hover {
@@ -81,10 +442,44 @@
     color: var(--text-primary);
   }
 
+  .drag-icon {
+    opacity: 0.5;
+  }
+
   .tab.active {
-    background: var(--accent);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border-color: var(--border);
+    border-bottom-color: transparent;
+    z-index: 1;
+  }
+
+  .tab.active::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: var(--bg-primary);
+  }
+
+  .tab.custom-color {
     color: white;
-    border-color: var(--accent);
+    border-color: rgba(255, 255, 255, 0.3);
+  }
+
+  .tab.custom-color:hover {
+    filter: brightness(1.1);
+  }
+
+  .tab.custom-color.active {
+    filter: brightness(1.2);
+    border-bottom-color: transparent;
+  }
+
+  .tab.custom-color.active::after {
+    background: currentColor;
   }
 
   .empty-dashboard {

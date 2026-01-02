@@ -1,50 +1,77 @@
 <script lang="ts">
-  import { dashboards } from '$lib/stores/config';
+  import { dashboards, currentDashboard } from '$lib/stores/config';
   import { page } from '$app/stores';
   import { isAuthenticated } from '$lib/stores/auth';
   import { theme, toggleTheme } from '$lib/stores/theme';
   import { editMode, toggleEditMode } from '$lib/stores/editMode';
   import Icon from '@iconify/svelte';
+  import ThemePickerModal from './admin/ThemePickerModal.svelte';
 
   let currentPath = $derived($page.url.pathname);
   let isDashboardPage = $derived(currentPath !== '/' && currentPath !== '/admin');
+  let showThemePicker = $state(false);
 
   let themeIcon = $derived(
     $theme === 'dark' ? 'mdi:weather-night' :
     $theme === 'light' ? 'mdi:weather-sunny' :
     'mdi:theme-light-dark'
   );
+
+  // Get header config from current dashboard or use defaults
+  let headerConfig = $derived($currentDashboard?.header);
+  let showLeft = $derived(headerConfig?.showLeft !== false); // Default true
+  let showCenter = $derived(headerConfig?.showCenter !== false); // Default true
+  let leftText = $derived(headerConfig?.leftText);
+  let centerTitle = $derived(headerConfig?.centerTitle);
 </script>
 
 <nav class="navbar">
   <div class="nav-content">
     <div class="nav-left">
-      <a href="/" class="logo">
-        <img src="/logo.svg" alt="HOPS" />
-        <span>HOPS</span>
-      </a>
-
-      <div class="nav-links">
-        {#each $dashboards as dashboard (dashboard.id)}
-          <a
-            href={dashboard.path}
-            class="nav-link"
-            class:active={currentPath === dashboard.path}
-          >
-            {dashboard.name}
+      {#if showLeft}
+        {#if leftText}
+          <div class="custom-text">{leftText}</div>
+        {:else}
+          <a href="/" class="logo">
+            <img src="/logo.svg" alt="HOPS" />
+            <span>HOPS</span>
           </a>
-        {/each}
-      </div>
+
+          <div class="nav-links">
+            {#each $dashboards as dashboard (dashboard.id)}
+              <a
+                href={dashboard.path}
+                class="nav-link"
+                class:active={currentPath === dashboard.path}
+              >
+                {dashboard.name}
+              </a>
+            {/each}
+          </div>
+        {/if}
+      {/if}
+    </div>
+
+    <div class="nav-center">
+      {#if showCenter}
+        {#if centerTitle}
+          <h1 class="center-title">{centerTitle}</h1>
+        {:else if $currentDashboard}
+          <h1 class="center-title">{$currentDashboard.name}</h1>
+        {/if}
+      {/if}
     </div>
 
     <div class="nav-right">
-      <button onclick={toggleTheme} class="theme-toggle" title={`Theme: ${$theme}`}>
-        <Icon icon={themeIcon} width="24" />
+      <button onclick={() => showThemePicker = true} class="theme-toggle" title="Theme Settings">
+        <span class="icon-wrapper">
+          <Icon icon={themeIcon} width="32" height="32" />
+        </span>
       </button>
 
       {#if $isAuthenticated && isDashboardPage}
         <button onclick={toggleEditMode} class="edit-toggle" class:active={$editMode} title="Edit Mode">
-          <Icon icon={$editMode ? 'mdi:pencil-off' : 'mdi:pencil'} width="24" />
+          <Icon icon={$editMode ? 'mdi:pencil-off' : 'mdi:pencil'} width="24" height="24" />
           {#if $editMode}
             <span class="edit-label">Editing</span>
           {/if}
@@ -52,7 +79,7 @@
       {/if}
 
       <a href="/admin" class="admin-link" title="Admin Panel">
-        <Icon icon="mdi:cog" width="24" />
+        <Icon icon="mdi:cog" width="32" height="32" />
         {#if $isAuthenticated}
           <span class="admin-badge"></span>
         {/if}
@@ -60,6 +87,10 @@
     </div>
   </div>
 </nav>
+
+{#if showThemePicker}
+  <ThemePickerModal onClose={() => showThemePicker = false} />
+{/if}
 
 <style>
   .navbar {
@@ -75,16 +106,38 @@
     max-width: 1400px;
     margin: 0 auto;
     padding: 0 1rem;
-    display: flex;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
     align-items: center;
-    justify-content: space-between;
-    height: 60px;
+    gap: 2rem;
+    height: 70px;
   }
 
   .nav-left {
     display: flex;
     align-items: center;
     gap: 2rem;
+    justify-content: flex-start;
+  }
+
+  .nav-center {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .center-title {
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+  }
+
+  .custom-text {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text-primary);
   }
 
   .logo {
@@ -98,8 +151,8 @@
   }
 
   .logo img {
-    width: 32px;
-    height: 32px;
+    width: 52px;
+    height: 52px;
   }
 
   .nav-links {
@@ -129,6 +182,7 @@
   .nav-right {
     display: flex;
     align-items: center;
+    justify-content: flex-end;
     gap: 1rem;
   }
 
@@ -137,8 +191,8 @@
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
-    width: 40px;
-    height: 40px;
+    width: 44px;
+    height: 44px;
     border-radius: 50%;
     background: var(--bg-tertiary);
     color: var(--text-secondary);
@@ -147,6 +201,15 @@
     cursor: pointer;
     transition: all 0.2s;
     position: relative;
+    font-size: 32px;
+  }
+
+  .icon-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
   }
 
   .theme-toggle:hover, .admin-link:hover, .edit-toggle:hover {

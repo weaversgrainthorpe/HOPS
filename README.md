@@ -14,22 +14,28 @@ A self-hosted dashboard application that combines the best features of Heimdall,
 - Multiple dashboards (e.g., /home, /network, /media)
 - Tabs within each dashboard
 - Collapsible groups within tabs
-- Drag-and-drop everything (Coming Soon)
+- Drag-and-drop for tabs and tiles
+- Copy/cut/paste for tiles between groups and tabs
 - Global search with "/" hotkey (Coming Soon)
 
 ### Visual Customization
 - Per-dashboard and per-tab backgrounds (Coming Soon)
 - Background rotation/slideshow (Coming Soon)
-- 10K+ built-in icons (Coming Soon)
-- Multiple tile sizes
-- Dark/light themes
-- Custom CSS option
+- 150,000+ built-in icons via Iconify
+- Multiple tile sizes (small, medium, large)
+- 8 theme presets with light/dark modes
+- Gradient theme support
+- Auto mode (follows system theme)
+- Custom colors and opacity for tiles and tabs
+- Custom CSS option (Coming Soon)
 
 ### Entries/Tiles
 - Open modes: iframe, new tab, same tab, popup modal (Coming Soon)
 - HTTP + ICMP status checks with response time (Coming Soon)
-- Hover hints/tooltips
-- Copy/move entries between groups, tabs, dashboards (Coming Soon)
+- Subtitles/descriptions on tiles
+- Custom tile colors and opacity
+- Copy/cut/paste entries between groups and tabs
+- Right-click context menu
 
 ### Widgets (Coming Soon)
 - Weather, calendar, system stats
@@ -238,19 +244,25 @@ sudo systemctl start hops
 - [x] Basic API routes
 - [x] Config storage
 
-### Phase 2: Core Dashboard (In Progress)
-- [ ] Dashboard viewer
-- [ ] Tabs and groups
-- [ ] Tile display
-- [ ] Icon system
-- [ ] Visual editor
+### Phase 2: Core Dashboard ✅
+- [x] Dashboard viewer
+- [x] Tabs and groups
+- [x] Tile display
+- [x] Icon system (150,000+ icons via Iconify)
+- [x] Visual editor
+- [x] Tab drag-and-drop
+- [x] Tile drag-and-drop within groups
+- [x] Copy/cut/paste for tiles
+- [x] Comprehensive theme system (8 presets with light/dark modes)
 
-### Phase 3: Advanced Features
-- [ ] Drag-and-drop
-- [ ] Multiple open modes
+### Phase 3: Advanced Features (In Progress)
+- [ ] Keyboard shortcuts (Ctrl+C/Ctrl+X/Ctrl+V)
+- [ ] Drag tiles between groups
+- [ ] Multiple open modes (iframe, modal, new tab, same tab)
 - [ ] Status checks (HTTP/ICMP)
-- [ ] Global search
-- [ ] Themes and custom CSS
+- [ ] Global search with "/" hotkey
+- [ ] Custom CSS option
+- [ ] Background images for dashboards and tabs
 
 ### Phase 4: Widgets & Integrations
 - [ ] Widget framework
