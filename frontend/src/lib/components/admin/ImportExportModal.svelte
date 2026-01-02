@@ -1,6 +1,6 @@
 <script lang="ts">
   import Icon from '@iconify/svelte';
-  import { getAuthToken } from '$lib/utils/api';
+  import { exportConfig, importConfig } from '$lib/utils/api';
 
   interface Props {
     onClose: () => void;
@@ -24,18 +24,7 @@
     error = null;
 
     try {
-      const token = getAuthToken();
-      const response = await fetch('/api/config/export', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error('Export failed');
-      }
-
-      const blob = await response.blob();
+      const blob = await exportConfig('json');
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -64,25 +53,8 @@
     success = null;
 
     try {
-      const formData = new FormData();
-      formData.append('file', fileInput.files[0]);
-
-      const token = getAuthToken();
-      const response = await fetch('/api/config/import', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
-        body: formData
-      });
-
-      if (!response.ok) {
-        const data = await response.text();
-        throw new Error(data || 'Import failed');
-      }
-
-      const data = await response.json();
-      success = data.message || 'Configuration imported successfully!';
+      const result = await importConfig(fileInput.files[0]);
+      success = result.message || 'Configuration imported successfully!';
 
       // Reload page after successful import
       setTimeout(() => {
