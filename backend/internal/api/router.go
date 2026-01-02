@@ -3,6 +3,8 @@ package api
 import (
 	"database/sql"
 	"net/http"
+	"os"
+	"path/filepath"
 
 	"github.com/yourusername/hops/internal/auth"
 	"github.com/yourusername/hops/internal/config"
@@ -47,9 +49,35 @@ func (r *Router) setupRoutes() {
 	// Widget/integration routes
 	r.mux.HandleFunc("/api/integrations/", r.handleIntegrations)
 
-	// Static file serving (frontend)
-	fs := http.FileServer(http.Dir(r.config.FrontendDir))
-	r.mux.Handle("/", fs)
+	// Static file serving (frontend) with SPA support
+	r.mux.HandleFunc("/", r.serveSPA)
+}
+
+// serveSPA serves the Single Page Application with fallback to index.html
+func (r *Router) serveSPA(w http.ResponseWriter, req *http.Request) {
+	// Get the absolute path to prevent directory traversal
+	path := filepath.Join(r.config.FrontendDir, req.URL.Path)
+
+	// Check if path is a file
+	fi, err := os.Stat(path)
+	if err == nil && !fi.IsDir() {
+		// File exists, serve it
+		http.ServeFile(w, req, path)
+		return
+	}
+
+	// Check if it's a directory and index.html exists
+	if err == nil && fi.IsDir() {
+		indexPath := filepath.Join(path, "index.html")
+		if _, err := os.Stat(indexPath); err == nil {
+			http.ServeFile(w, req, indexPath)
+			return
+		}
+	}
+
+	// File doesn't exist or it's a SPA route, serve index.html
+	indexPath := filepath.Join(r.config.FrontendDir, "index.html")
+	http.ServeFile(w, req, indexPath)
 }
 
 // loggingMiddleware logs all HTTP requests

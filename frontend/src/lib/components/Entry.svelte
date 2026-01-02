@@ -6,7 +6,7 @@
   import IframeModal from './IframeModal.svelte';
   import PopupModal from './PopupModal.svelte';
   import { copyEntry, cutEntry } from '$lib/stores/clipboard';
-  import { selectEntry } from '$lib/stores/selection';
+  import { selectEntry, toggleEntrySelection, isEntrySelected, selectedEntries } from '$lib/stores/selection';
 
   interface Props {
     entry: Entry;
@@ -24,9 +24,22 @@
   let contextMenuX = $state(0);
   let contextMenuY = $state(0);
 
-  function handleClick() {
-    // In edit mode, open edit modal instead of navigating
+  // Check if this entry is selected
+  let isSelected = $derived(
+    tabId && groupId ? isEntrySelected(entry.id, tabId, groupId) : false
+  );
+
+  function handleClick(e: MouseEvent) {
+    // In edit mode, handle multi-select with Ctrl/Cmd key
     if ($editMode) {
+      if (e.ctrlKey || e.metaKey) {
+        // Toggle multi-selection
+        if (tabId && groupId) {
+          toggleEntrySelection(entry, tabId, groupId);
+        }
+        return;
+      }
+      // Regular click - open edit modal
       showEditModal = true;
       return;
     }
@@ -112,6 +125,7 @@
   class="entry {sizeClass}"
   class:edit-mode={$editMode}
   class:custom-color={entry.color}
+  class:selected={isSelected}
   style:background-color={entry.color}
   style:opacity={entry.opacity !== undefined ? entry.opacity : 0.95}
   onclick={handleClick}

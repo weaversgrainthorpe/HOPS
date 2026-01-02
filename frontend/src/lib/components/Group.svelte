@@ -15,12 +15,14 @@
     onDeleteEntry?: (entryId: string) => void;
     onAddEntry?: (newEntry: EntryType) => void;
     onReorderEntries?: (reorderedEntries: EntryType[]) => void;
+    onMoveEntry?: (fromGroupId: string, toGroupId: string, entryId: string, newIndex: number) => void;
     onUpdateGroup?: (updatedGroup: Group) => void;
     onDeleteGroup?: () => void;
+    onFocus?: () => void;
     tabId?: string;
   }
 
-  let { group, onUpdateEntry, onDeleteEntry, onAddEntry, onReorderEntries, onUpdateGroup, onDeleteGroup, tabId }: Props = $props();
+  let { group, onUpdateEntry, onDeleteEntry, onAddEntry, onReorderEntries, onMoveEntry, onUpdateGroup, onDeleteGroup, onFocus, tabId }: Props = $props();
   let collapsed = $state(group.collapsed || false);
   let showAddModal = $state(false);
   let showEditModal = $state(false);
@@ -95,18 +97,36 @@
   });
 
   function handleDndConsider(e: CustomEvent<DndEvent<EntryType>>) {
-    items = e.detail.items;
+    // Tag entries with source group ID for cross-group detection
+    items = e.detail.items.map(entry => ({
+      ...entry,
+      _sourceGroupId: group.id
+    } as any));
   }
 
   function handleDndFinalize(e: CustomEvent<DndEvent<EntryType>>) {
-    items = e.detail.items;
-    // Update order property for each entry
-    const reorderedEntries = items.map((entry, index) => ({
-      ...entry,
-      order: index
-    }));
-    if (onReorderEntries) {
-      onReorderEntries(reorderedEntries);
+    const newItems = e.detail.items;
+
+    // Check if this is a cross-group drop (item with different groupId appeared)
+    const foreignEntries = newItems.filter(item =>
+      !group.entries.find(existing => existing.id === item.id)
+    );
+
+    if (foreignEntries.length > 0 && onMoveEntry) {
+      // Cross-group move detected
+      const movedEntry = foreignEntries[0];
+      const newIndex = newItems.indexOf(movedEntry);
+
+      // Extract source group from entry metadata (if available)
+      const sourceGroupId = (movedEntry as any)._sourceGroupId || '';
+
+      onMoveEntry(sourceGroupId, group.id, movedEntry.id, newIndex);
+    } else {
+      // Regular reorder within same group
+      items = newItems.map((entry, index) => ({ ...entry, order: index }));
+      if (onReorderEntries) {
+        onReorderEntries(items);
+      }
     }
   }
 
@@ -132,7 +152,7 @@
   }
 </script>
 
-<div class="group">
+<div class="group" onclick={() => onFocus?.()}>
   <button
     class="group-header"
     class:custom-color={group.color}
@@ -147,7 +167,13 @@
   {#if !collapsed}
     <div
       class="entries-grid"
-      use:dndzone={{items, dragDisabled: !$editMode, dropTargetStyle: {}}}
+      use:dndzone={{
+        items,
+        dragDisabled: !$editMode,
+        dropFromOthersDisabled: false,
+        type: 'entry',
+        dropTargetStyle: { outline: '2px dashed var(--accent)' }
+      }}
       onconsider={handleDndConsider}
       onfinalize={handleDndFinalize}
     >

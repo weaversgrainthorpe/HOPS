@@ -37,6 +37,7 @@
           <a href="/" class="logo">
             <img src="/logo.svg" alt="HOPS" />
             <span>HOPS</span>
+            <span class="version">v0.3.0</span>
           </a>
 
           <div class="nav-links">
@@ -65,12 +66,6 @@
     </div>
 
     <div class="nav-right">
-      {#if $isAuthenticated}
-        <button onclick={() => showImportExport = true} class="import-export-btn" title="Import / Export">
-          <Icon icon="mdi:database-import-export" width="24" height="24" />
-        </button>
-      {/if}
-
       <button onclick={() => showThemePicker = true} class="theme-toggle" title="Theme Settings">
         <span class="icon-wrapper">
           <Icon icon={themeIcon} width="32" height="32" />
@@ -78,7 +73,19 @@
       </button>
 
       {#if $isAuthenticated && isDashboardPage}
-        <button onclick={toggleEditMode} class="edit-toggle" class:active={$editMode} title="Edit Mode">
+        <button onclick={() => showImportExport = true} class="import-export-btn" title="Import / Export">
+          <Icon icon="mdi:database-import-export" width="24" height="24" />
+        </button>
+
+      {/if}
+
+      {#if $isAuthenticated && isDashboardPage}
+        <button
+          onclick={toggleEditMode}
+          class="edit-toggle"
+          class:active={$editMode}
+          title={$editMode ? "Exit Edit Mode" : "Enter Edit Mode (Authentication Required)"}
+        >
           <Icon icon={$editMode ? 'mdi:pencil-off' : 'mdi:pencil'} width="24" height="24" />
           {#if $editMode}
             <span class="edit-label">Editing</span>
@@ -165,6 +172,17 @@
   .logo img {
     width: 52px;
     height: 52px;
+  }
+
+  .version {
+    font-size: 0.625rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    background: var(--bg-tertiary);
+    padding: 0.125rem 0.375rem;
+    border-radius: 0.25rem;
+    margin-left: 0.25rem;
+    opacity: 0.8;
   }
 
   .nav-links {
