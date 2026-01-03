@@ -164,7 +164,7 @@
       </button>
       {#if onDelete}
         <button class="control-btn delete-btn" onclick={handleDeleteClick} title="Delete tile">
-          <Icon icon="mdi:close" width="16" />
+          <Icon icon="mdi:trash-can" width="16" />
         </button>
       {/if}
     </div>
@@ -196,7 +196,7 @@
     {#if onDelete}
       <div class="context-menu-divider"></div>
       <button class="context-menu-item danger" onclick={handleDeleteClick}>
-        <Icon icon="mdi:delete" width="18" />
+        <Icon icon="mdi:trash-can" width="18" />
         Delete
       </button>
     {/if}
