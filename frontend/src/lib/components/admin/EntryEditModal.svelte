@@ -180,7 +180,7 @@
       <div class="modal-actions">
         {#if onDelete}
           <button type="button" class="btn-danger" onclick={handleDelete}>
-            <Icon icon="mdi:delete" width="20" />
+            <Icon icon="mdi:trash-can" width="20" />
             Delete
           </button>
         {/if}

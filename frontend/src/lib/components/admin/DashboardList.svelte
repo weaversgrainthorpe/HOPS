@@ -136,7 +136,7 @@
                 <Icon icon="mdi:open-in-new" width="20" />
               </a>
               <button onclick={() => handleDelete(dashboard)} class="btn-danger" title="Delete">
-                <Icon icon="mdi:delete" width="20" />
+                <Icon icon="mdi:trash-can" width="20" />
               </button>
             </div>
           {/if}

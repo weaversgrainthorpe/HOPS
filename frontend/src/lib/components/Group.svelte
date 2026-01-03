@@ -193,7 +193,7 @@
             }}
             title="Delete group"
           >
-            <Icon icon="mdi:close" width="16" />
+            <Icon icon="mdi:trash-can" width="16" />
           </button>
         </div>
       {/if}

@@ -103,7 +103,7 @@
       <div class="modal-actions">
         {#if groupName && onDelete}
           <button type="button" class="btn-danger" onclick={onDelete}>
-            <Icon icon="mdi:delete" width="20" />
+            <Icon icon="mdi:trash-can" width="20" />
             Delete
           </button>
         {/if}

@@ -114,7 +114,7 @@
               </div>
             </div>
             <div class="feature">
-              <Icon icon="mdi:delete" width="24" />
+              <Icon icon="mdi:trash-can" width="24" />
               <div>
                 <strong>Delete Items</strong>
                 <p>Click the trash icon to remove tabs, groups, or tiles.</p>
