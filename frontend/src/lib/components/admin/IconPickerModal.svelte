@@ -1,5 +1,6 @@
 <script lang="ts">
   import Icon from '@iconify/svelte';
+  import ColoredIcon from '../ColoredIcon.svelte';
   import { ICON_PRESETS, ICON_CATEGORIES } from '$lib/constants/iconPresets';
 
   interface Props {
@@ -86,7 +87,7 @@
             title={preset.name}
           >
             <div class="icon-preview">
-              <Icon icon={preset.icon} width="48" />
+              <ColoredIcon icon={preset.icon} width="48" />
             </div>
             <div class="icon-name">{preset.name}</div>
           </button>

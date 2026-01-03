@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Entry } from '$lib/types';
   import Icon from '@iconify/svelte';
+  import ColoredIcon from '../ColoredIcon.svelte';
   import ColorPicker from './ColorPicker.svelte';
   import OpacitySlider from './OpacitySlider.svelte';
   import IconPickerModal from './IconPickerModal.svelte';
@@ -110,7 +111,7 @@
               />
               {#if editedEntry.icon}
                 <div class="icon-preview">
-                  <Icon icon={editedEntry.icon} width="32" />
+                  <ColoredIcon icon={editedEntry.icon} width="32" />
                 </div>
               {/if}
             </div>

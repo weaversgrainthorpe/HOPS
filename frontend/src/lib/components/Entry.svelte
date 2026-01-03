@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Entry } from '$lib/types';
   import Icon from '@iconify/svelte';
+  import ColoredIcon from './ColoredIcon.svelte';
   import { editMode } from '$lib/stores/editMode';
   import EntryEditModal from './admin/EntryEditModal.svelte';
   import IframeModal from './IframeModal.svelte';
@@ -145,9 +146,9 @@
       {#if entry.iconUrl}
         <img src={entry.iconUrl} alt={entry.name} />
       {:else if entry.icon}
-        <Icon icon={entry.icon} width="48" />
+        <ColoredIcon icon={entry.icon} width="48" />
       {:else}
-        <Icon icon="mdi:application" width="48" />
+        <ColoredIcon icon="mdi:application" width="48" />
       {/if}
     </div>
 
