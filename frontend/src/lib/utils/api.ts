@@ -119,3 +119,73 @@ export async function importConfig(file: File): Promise<{ success: boolean; mess
 
   return response.json();
 }
+
+// Icon API calls
+
+export interface IconCategory {
+  id: string;
+  name: string;
+  icon: string;
+  order: number;
+  isPreset: boolean;
+  createdAt: string;
+}
+
+export interface Icon {
+  id: string;
+  name: string;
+  icon: string;
+  categoryId: string;
+  color?: string;
+  isPreset: boolean;
+  createdAt: string;
+}
+
+export async function getIconCategories(): Promise<IconCategory[]> {
+  return fetchAPI('/icon-categories');
+}
+
+export async function getIcons(categoryId?: string): Promise<Icon[]> {
+  const query = categoryId ? `?category=${categoryId}` : '';
+  return fetchAPI(`/icons${query}`);
+}
+
+export async function createIcon(icon: Omit<Icon, 'isPreset' | 'createdAt'>): Promise<void> {
+  await fetchAPI('/icons', {
+    method: 'POST',
+    body: JSON.stringify(icon),
+  });
+}
+
+export async function updateIcon(id: string, icon: Partial<Omit<Icon, 'id' | 'isPreset' | 'createdAt'>>): Promise<void> {
+  await fetchAPI(`/icons/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(icon),
+  });
+}
+
+export async function deleteIcon(id: string): Promise<void> {
+  await fetchAPI(`/icons/${id}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function createIconCategory(category: Omit<IconCategory, 'isPreset' | 'createdAt'>): Promise<void> {
+  await fetchAPI('/icon-categories', {
+    method: 'POST',
+    body: JSON.stringify(category),
+  });
+}
+
+export async function updateIconCategory(id: string, category: Partial<Omit<IconCategory, 'id' | 'isPreset' | 'createdAt'>>): Promise<void> {
+  await fetchAPI(`/icon-categories/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(category),
+  });
+}
+
+export async function deleteIconCategory(id: string): Promise<void> {
+  await fetchAPI(`/icon-categories/${id}`, {
+    method: 'DELETE',
+  });
+}

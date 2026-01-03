@@ -1,13 +1,23 @@
 // Bundled royalty-free background images
 // These are placeholder URLs - in production, these would be local files in /backgrounds/
 
-export interface BackgroundPreset {
+export interface BackgroundImage {
   id: string;
   name: string;
   category: string;
   url: string;
+  source: 'preset' | 'uploaded';
   thumbnail?: string;
 }
+
+export interface BackgroundCategory {
+  id: string;
+  name: string;
+  icon: string;
+}
+
+// Alias for backwards compatibility
+export type BackgroundPreset = BackgroundImage;
 
 export const BACKGROUND_PRESETS: BackgroundPreset[] = [
   // Network themed

@@ -2,16 +2,20 @@
   import type { Dashboard, Entry, HeaderConfig, Tab, Background } from '$lib/types';
   import TabPanel from './TabPanel.svelte';
   import BackgroundSlideshow from './BackgroundSlideshow.svelte';
+  import PartyMode from './PartyMode.svelte';
+  import HopAnimation from './HopAnimation.svelte';
   import { updateDashboard } from '$lib/stores/config';
   import { editMode } from '$lib/stores/editMode';
   import { isAuthenticated } from '$lib/stores/auth';
   import { clipboard } from '$lib/stores/clipboard';
+  import { initEasterEggs, destroyEasterEggs, partyModeActive } from '$lib/stores/easterEggs';
   import TabEditModal from './admin/TabEditModal.svelte';
   import HeaderConfigModal from './admin/HeaderConfigModal.svelte';
   import BackgroundConfigModal from './admin/BackgroundConfigModal.svelte';
   import Icon from '@iconify/svelte';
   import { dndzone } from 'svelte-dnd-action';
   import type { DndEvent } from 'svelte-dnd-action';
+  import { onMount, onDestroy } from 'svelte';
 
   let { dashboard }: { dashboard: Dashboard } = $props();
   let activeTabIndex = $state(0);
@@ -20,6 +24,15 @@
   let showBackgroundConfig = $state(false);
   let draggedTabs = $state<Tab[]>([]);
   let focusedGroupId = $state<string | null>(null); // Track which group has focus for paste
+
+  // Initialize Easter eggs
+  onMount(() => {
+    initEasterEggs();
+  });
+
+  onDestroy(() => {
+    destroyEasterEggs();
+  });
 
   $effect(() => {
     draggedTabs = dashboard.tabs.map(tab => ({ ...tab }));
@@ -411,8 +424,10 @@
 
 <svelte:window onkeydown={handleKeyboard} />
 
-<div class="dashboard">
+<div class="dashboard" class:party-mode={$partyModeActive}>
   <BackgroundSlideshow background={dashboard.background} />
+  <PartyMode />
+  <HopAnimation />
 
   <div class="dashboard-header">
     {#if $editMode}
@@ -425,14 +440,10 @@
           <Icon icon="mdi:tune" width="20" />
           Header
         </button>
-        <button class="new-tab-btn" onclick={handleAddTab} title="Add New Tab">
-          <Icon icon="mdi:plus" width="20" />
-          New Tab
-        </button>
       </div>
     {/if}
 
-    {#if dashboard.tabs.length > 1}
+    {#if dashboard.tabs.length > 1 || $editMode}
       <div
         class="tabs"
         use:dndzone={{
@@ -445,21 +456,50 @@
         onfinalize={handleTabsFinalize}
       >
         {#each draggedTabs as tab, index (tab.id)}
-          <button
+          <div
             class="tab"
             class:active={activeTabIndex === index}
             class:custom-color={tab.color}
             class:draggable={$editMode}
-            style:background-color={tab.color}
-            style:opacity={tab.opacity !== undefined ? tab.opacity : 0.95}
+            style:--tab-bg={tab.color || 'var(--bg-secondary)'}
+            style:--tab-opacity={tab.opacity !== undefined ? tab.opacity : 0.95}
+            role="tab"
+            tabindex="0"
             onclick={(e) => handleTabClick(index, e)}
+            onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleTabClick(index, e as unknown as MouseEvent); }}
           >
-            {tab.name}
+            <span class="tab-name">{tab.name}</span>
             {#if $editMode}
-              <Icon icon="mdi:drag" width="16" class="drag-icon" />
+              <div class="tab-controls">
+                <button
+                  class="tab-control-btn"
+                  onclick={(e) => { e.stopPropagation(); editingTabIndex = index; }}
+                  title="Edit tab"
+                >
+                  <Icon icon="mdi:pencil" width="16" />
+                </button>
+                <button
+                  class="tab-control-btn delete-btn"
+                  onclick={(e) => {
+                    e.stopPropagation();
+                    if (confirm(`Delete tab "${tab.name}" and all its contents?`)) {
+                      handleDeleteTab(tab.id);
+                    }
+                  }}
+                  title="Delete tab"
+                >
+                  <Icon icon="mdi:close" width="16" />
+                </button>
+              </div>
             {/if}
-          </button>
+          </div>
         {/each}
+        {#if $editMode}
+          <button class="add-tab-btn" onclick={handleAddTab} title="Add New Tab">
+            <Icon icon="mdi:plus" width="24" />
+            <span>Add Tab</span>
+          </button>
+        {/if}
       </div>
     {/if}
   </div>
@@ -492,7 +532,9 @@
     tabName={dashboard.tabs[editingTabIndex].name}
     tabColor={dashboard.tabs[editingTabIndex].color}
     tabOpacity={dashboard.tabs[editingTabIndex].opacity}
+    tabBackground={dashboard.tabs[editingTabIndex].background}
     onSave={(newName, newColor, newOpacity) => handleUpdateTab(dashboard.tabs[editingTabIndex].id, newName, newColor, newOpacity)}
+    onSaveBackground={(background) => handleUpdateTabBackground(dashboard.tabs[editingTabIndex].id, background)}
     onCancel={() => editingTabIndex = null}
     onDelete={() => {
       if (confirm(`Are you sure you want to delete the tab "${dashboard.tabs[editingTabIndex].name}" and all its contents?`)) {
@@ -541,8 +583,7 @@
     margin-bottom: 1rem;
   }
 
-  .header-config-btn,
-  .new-tab-btn {
+  .header-config-btn {
     background: var(--bg-tertiary);
     border: 1px solid var(--border);
     color: var(--text-secondary);
@@ -557,22 +598,33 @@
     font-weight: 500;
   }
 
-  .header-config-btn:hover,
-  .new-tab-btn:hover {
+  .header-config-btn:hover {
     background: var(--accent);
     color: white;
     border-color: var(--accent);
   }
 
-  .new-tab-btn {
-    background: #10b981;
-    border-color: #10b981;
-    color: white;
+  .add-tab-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0 1.5rem;
+    height: 48px;
+    background: var(--bg-secondary);
+    border: 2px dashed var(--border);
+    border-radius: 0.5rem 0.5rem 0 0;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 0.875rem;
+    font-weight: 500;
   }
 
-  .new-tab-btn:hover {
-    background: #059669;
-    border-color: #059669;
+  .add-tab-btn:hover {
+    background: var(--bg-tertiary);
+    border-color: var(--accent);
+    color: var(--accent);
   }
 
   .tabs {
@@ -583,8 +635,9 @@
   }
 
   .tab {
-    padding: 0.75rem 1.5rem;
-    background: var(--bg-secondary);
+    padding: 0 1.5rem;
+    height: 48px;
+    background: transparent;
     border: 1px solid var(--border);
     border-bottom: none;
     border-radius: 0.5rem 0.5rem 0 0;
@@ -598,6 +651,16 @@
     gap: 0.5rem;
   }
 
+  .tab::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--tab-bg, var(--bg-secondary));
+    opacity: var(--tab-opacity, 0.95);
+    border-radius: inherit;
+    z-index: -1;
+  }
+
   .tab.draggable {
     cursor: grab;
   }
@@ -607,8 +670,12 @@
   }
 
   .tab:hover {
-    background: var(--bg-tertiary);
     color: var(--text-primary);
+  }
+
+  .tab:hover::before {
+    background: var(--tab-bg, var(--bg-tertiary));
+    opacity: 1;
   }
 
   .drag-icon {
@@ -616,11 +683,15 @@
   }
 
   .tab.active {
-    background: var(--bg-primary);
     color: var(--text-primary);
     border-color: var(--border);
     border-bottom-color: transparent;
     z-index: 1;
+  }
+
+  .tab.active::before {
+    background: var(--tab-bg, var(--bg-primary));
+    opacity: 1;
   }
 
   .tab.active::after {
@@ -651,6 +722,48 @@
     background: currentColor;
   }
 
+  .tab-name {
+    display: block;
+  }
+
+  .tab-controls {
+    display: flex;
+    gap: 0.25rem;
+    opacity: 0;
+    transition: opacity 0.2s;
+    margin-left: 0.5rem;
+  }
+
+  .tab:hover .tab-controls {
+    opacity: 1;
+  }
+
+  .tab-control-btn {
+    padding: 0;
+    background: var(--bg-tertiary);
+    border: none;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .tab-control-btn:hover {
+    background: #f59e0b;
+    color: white;
+    transform: scale(1.1);
+  }
+
+  .tab-control-btn.delete-btn:hover {
+    background: #dc2626;
+    color: white;
+  }
+
   .empty-dashboard {
     display: flex;
     flex-direction: column;
@@ -675,5 +788,31 @@
 
   .empty-dashboard a:hover {
     background: var(--accent-hover);
+  }
+
+  /* Party mode wiggle effect */
+  .dashboard.party-mode :global(.entry),
+  .dashboard.party-mode :global(.tab),
+  .dashboard.party-mode :global(.group-header) {
+    animation: party-wiggle 0.3s ease-in-out infinite alternate;
+  }
+
+  .dashboard.party-mode :global(.entry:nth-child(2n)),
+  .dashboard.party-mode :global(.tab:nth-child(2n)) {
+    animation-delay: 0.1s;
+  }
+
+  .dashboard.party-mode :global(.entry:nth-child(3n)),
+  .dashboard.party-mode :global(.tab:nth-child(3n)) {
+    animation-delay: 0.2s;
+  }
+
+  @keyframes party-wiggle {
+    0% {
+      transform: rotate(-2deg) scale(1);
+    }
+    100% {
+      transform: rotate(2deg) scale(1.02);
+    }
   }
 </style>

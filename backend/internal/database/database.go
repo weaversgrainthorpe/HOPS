@@ -68,6 +68,32 @@ func runMigrations(db *sql.DB) error {
 			dashboard_id TEXT NOT NULL,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
+
+		// Icon categories table
+		`CREATE TABLE IF NOT EXISTS icon_categories (
+			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL,
+			icon TEXT NOT NULL,
+			order_num INTEGER NOT NULL,
+			is_preset BOOLEAN NOT NULL DEFAULT 0,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+
+		// Icons table
+		`CREATE TABLE IF NOT EXISTS icons (
+			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL,
+			icon TEXT NOT NULL,
+			category_id TEXT NOT NULL,
+			color TEXT,
+			is_preset BOOLEAN NOT NULL DEFAULT 0,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (category_id) REFERENCES icon_categories(id) ON DELETE CASCADE
+		)`,
+
+		// Index for faster category lookups
+		`CREATE INDEX IF NOT EXISTS idx_icons_category ON icons(category_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_icons_preset ON icons(is_preset)`,
 	}
 
 	for _, migration := range migrations {
@@ -91,6 +117,11 @@ func runMigrations(db *sql.DB) error {
 		if err != nil {
 			return fmt.Errorf("failed to create default admin user: %w", err)
 		}
+	}
+
+	// Seed icon categories if none exist
+	if err := seedIconData(db); err != nil {
+		return fmt.Errorf("failed to seed icon data: %w", err)
 	}
 
 	// Initialize empty config if none exists

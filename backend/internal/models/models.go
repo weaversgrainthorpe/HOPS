@@ -117,3 +117,24 @@ type Position struct {
 	Width  int `json:"width"`
 	Height int `json:"height"`
 }
+
+// IconCategory represents a category for organizing icons
+type IconCategory struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	Icon      string    `json:"icon"`
+	OrderNum  int       `json:"order"`
+	IsPreset  bool      `json:"isPreset"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+// Icon represents an icon in the library
+type Icon struct {
+	ID         string    `json:"id"`
+	Name       string    `json:"name"`
+	Icon       string    `json:"icon"`
+	CategoryID string    `json:"categoryId"`
+	Color      *string   `json:"color,omitempty"`
+	IsPreset   bool      `json:"isPreset"`
+	CreatedAt  time.Time `json:"createdAt"`
+}

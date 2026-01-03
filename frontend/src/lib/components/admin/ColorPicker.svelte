@@ -29,16 +29,16 @@
 </script>
 
 <div class="color-picker">
-  <div class="color-label">Color Theme</div>
+  <div class="color-label">Background Color</div>
   <div class="color-grid">
     <button
       type="button"
-      class="color-swatch default"
+      class="color-swatch none"
       class:selected={!selectedColor}
       onclick={() => onSelect(undefined)}
-      title="Default"
+      title="None (use theme default)"
     >
-      <span class="default-icon">×</span>
+      <span class="none-icon">—</span>
     </button>
     {#each colorPalette as color}
       <button
@@ -82,21 +82,18 @@
     position: relative;
   }
 
-  .color-swatch.default {
-    background: linear-gradient(135deg,
-      #ef4444 0%, #f97316 10%, #f59e0b 20%, #eab308 30%,
-      #84cc16 40%, #22c55e 50%, #14b8a6 60%, #0ea5e9 70%,
-      #3b82f6 80%, #8b5cf6 90%, #ec4899 100%);
+  .color-swatch.none {
+    background: var(--bg-tertiary);
+    border: 2px dashed var(--border);
     display: flex;
     align-items: center;
     justify-content: center;
   }
 
-  .default-icon {
-    color: white;
-    font-size: 1.5rem;
+  .none-icon {
+    color: var(--text-secondary);
+    font-size: 1.25rem;
     font-weight: bold;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
   }
 
   .color-swatch:hover {
@@ -109,7 +106,9 @@
     box-shadow: 0 0 0 2px var(--bg-primary), 0 0 0 4px var(--accent);
   }
 
-  .color-swatch.default.selected {
+  .color-swatch.none.selected {
+    border-style: solid;
+    border-color: var(--accent);
     box-shadow: 0 0 0 2px var(--bg-primary), 0 0 0 4px var(--accent);
   }
 </style>

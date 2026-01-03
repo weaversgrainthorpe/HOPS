@@ -161,17 +161,45 @@
 </script>
 
 <div class="group" onclick={() => onFocus?.()}>
-  <button
+  <div
     class="group-header"
     class:custom-color={group.color}
-    style:background-color={group.color}
-    style:opacity={group.opacity !== undefined ? group.opacity : 0.95}
+    style:--group-bg={group.color || 'var(--bg-secondary)'}
+    style:--group-opacity={group.opacity !== undefined ? group.opacity : 0.95}
     style:color={headerTextColor}
+    role="button"
+    tabindex="0"
     onclick={toggleCollapse}
+    onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleCollapse(e as unknown as MouseEvent); }}
   >
     <h3>{group.name}</h3>
-    <Icon icon={collapsed ? 'mdi:chevron-down' : 'mdi:chevron-up'} width="24" />
-  </button>
+    <div class="group-header-right">
+      {#if $editMode}
+        <div class="group-controls">
+          <button
+            class="group-control-btn"
+            onclick={(e) => { e.stopPropagation(); showEditModal = true; }}
+            title="Edit group"
+          >
+            <Icon icon="mdi:pencil" width="16" />
+          </button>
+          <button
+            class="group-control-btn delete-btn"
+            onclick={(e) => {
+              e.stopPropagation();
+              if (confirm(`Delete group "${group.name}" and all its entries?`)) {
+                handleDeleteGroup();
+              }
+            }}
+            title="Delete group"
+          >
+            <Icon icon="mdi:close" width="16" />
+          </button>
+        </div>
+      {/if}
+      <Icon icon={collapsed ? 'mdi:chevron-down' : 'mdi:chevron-up'} width="24" />
+    </div>
+  </div>
 
   {#if !collapsed}
     <div
@@ -244,16 +272,28 @@
     justify-content: space-between;
     width: 100%;
     padding: 1rem;
-    background: var(--bg-secondary);
+    background: transparent;
     border: 1px solid var(--border);
     border-radius: 0.5rem;
     cursor: pointer;
     margin-bottom: 1rem;
-    transition: background 0.2s;
+    transition: all 0.2s;
+    position: relative;
   }
 
-  .group-header:hover {
-    background: var(--bg-tertiary);
+  .group-header::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--group-bg, var(--bg-secondary));
+    opacity: var(--group-opacity, 0.95);
+    border-radius: inherit;
+    z-index: -1;
+  }
+
+  .group-header:hover::before {
+    background: var(--group-bg, var(--bg-tertiary));
+    opacity: 1;
   }
 
   .group-header.custom-color {
@@ -262,7 +302,7 @@
   }
 
   .group-header.custom-color h3 {
-    color: white;
+    color: inherit;
   }
 
   .group-header.custom-color:hover {
@@ -274,6 +314,50 @@
     margin: 0;
     font-size: 1.25rem;
     font-weight: 600;
+    flex: 1;
+  }
+
+  .group-header-right {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .group-controls {
+    display: flex;
+    gap: 0.25rem;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .group-header:hover .group-controls {
+    opacity: 1;
+  }
+
+  .group-control-btn {
+    padding: 0;
+    background: var(--bg-tertiary);
+    border: none;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .group-control-btn:hover {
+    background: #f59e0b;
+    color: white;
+    transform: scale(1.1);
+  }
+
+  .group-control-btn.delete-btn:hover {
+    background: #dc2626;
+    color: white;
   }
 
   .entries-grid {

@@ -740,26 +740,8 @@ export const ICON_PRESETS: IconPreset[] = [
     category: 'media',
     icon: 'simple-icons:subsonic'
   },
-  {
-    id: 'kodi',
-    name: 'Kodi',
-    category: 'media',
-    icon: 'simple-icons:kodi'
-  },
 
   // More Download Clients
-  {
-    id: 'qbittorrent-alt',
-    name: 'qBittorrent',
-    category: 'downloads',
-    icon: 'simple-icons:qbittorrent'
-  },
-  {
-    id: 'deluge-alt',
-    name: 'Deluge',
-    category: 'downloads',
-    icon: 'simple-icons:deluge'
-  },
   {
     id: 'utorrent',
     name: 'uTorrent',
@@ -816,12 +798,6 @@ export const ICON_PRESETS: IconPreset[] = [
     category: 'monitoring',
     icon: 'simple-icons:splunk'
   },
-  {
-    id: 'telegraf',
-    name: 'Telegraf',
-    category: 'monitoring',
-    icon: 'simple-icons:influxdb'
-  },
 
   // More Storage & File Management
   {
@@ -861,12 +837,6 @@ export const ICON_PRESETS: IconPreset[] = [
     icon: 'simple-icons:seafile'
   },
   {
-    id: 'syncthing-alt',
-    name: 'Syncthing',
-    category: 'storage',
-    icon: 'simple-icons:syncthing'
-  },
-  {
     id: 'filezilla',
     name: 'FileZilla',
     category: 'storage',
@@ -881,34 +851,10 @@ export const ICON_PRESETS: IconPreset[] = [
     icon: 'simple-icons:cloudflare'
   },
   {
-    id: 'wireguard-alt',
-    name: 'WireGuard',
-    category: 'networking',
-    icon: 'simple-icons:wireguard'
-  },
-  {
-    id: 'openvpn-alt',
-    name: 'OpenVPN',
-    category: 'networking',
-    icon: 'simple-icons:openvpn'
-  },
-  {
-    id: 'tailscale-alt',
-    name: 'Tailscale',
-    category: 'networking',
-    icon: 'simple-icons:tailscale'
-  },
-  {
     id: 'zerotier',
     name: 'ZeroTier',
     category: 'networking',
     icon: 'simple-icons:zerotier'
-  },
-  {
-    id: 'ubiquiti-alt',
-    name: 'Ubiquiti',
-    category: 'networking',
-    icon: 'simple-icons:ubiquiti'
   },
   {
     id: 'mikrotik',
@@ -924,36 +870,6 @@ export const ICON_PRESETS: IconPreset[] = [
   },
 
   // More Databases
-  {
-    id: 'postgresql-alt',
-    name: 'PostgreSQL',
-    category: 'databases',
-    icon: 'simple-icons:postgresql'
-  },
-  {
-    id: 'mysql-alt',
-    name: 'MySQL',
-    category: 'databases',
-    icon: 'simple-icons:mysql'
-  },
-  {
-    id: 'mariadb-alt',
-    name: 'MariaDB',
-    category: 'databases',
-    icon: 'simple-icons:mariadb'
-  },
-  {
-    id: 'mongodb-alt',
-    name: 'MongoDB',
-    category: 'databases',
-    icon: 'simple-icons:mongodb'
-  },
-  {
-    id: 'redis-alt',
-    name: 'Redis',
-    category: 'databases',
-    icon: 'simple-icons:redis'
-  },
   {
     id: 'cassandra',
     name: 'Cassandra',
@@ -978,49 +894,13 @@ export const ICON_PRESETS: IconPreset[] = [
     category: 'databases',
     icon: 'simple-icons:oracle'
   },
-  {
-    id: 'sqlite-alt',
-    name: 'SQLite',
-    category: 'databases',
-    icon: 'simple-icons:sqlite'
-  },
 
   // More Development Tools
-  {
-    id: 'github-alt',
-    name: 'GitHub',
-    category: 'development',
-    icon: 'simple-icons:github'
-  },
-  {
-    id: 'gitlab-alt',
-    name: 'GitLab',
-    category: 'development',
-    icon: 'simple-icons:gitlab'
-  },
   {
     id: 'bitbucket',
     name: 'Bitbucket',
     category: 'development',
     icon: 'simple-icons:bitbucket'
-  },
-  {
-    id: 'jenkins-alt',
-    name: 'Jenkins',
-    category: 'development',
-    icon: 'simple-icons:jenkins'
-  },
-  {
-    id: 'gitea-alt',
-    name: 'Gitea',
-    category: 'development',
-    icon: 'simple-icons:gitea'
-  },
-  {
-    id: 'vscode',
-    name: 'VS Code',
-    category: 'development',
-    icon: 'simple-icons:visualstudiocode'
   },
   {
     id: 'intellij',
@@ -1072,18 +952,6 @@ export const ICON_PRESETS: IconPreset[] = [
   },
 
   // More Communication Tools
-  {
-    id: 'discord-alt',
-    name: 'Discord',
-    category: 'communication',
-    icon: 'simple-icons:discord'
-  },
-  {
-    id: 'slack-alt',
-    name: 'Slack',
-    category: 'communication',
-    icon: 'simple-icons:slack'
-  },
   {
     id: 'telegram',
     name: 'Telegram',
@@ -1141,60 +1009,6 @@ export const ICON_PRESETS: IconPreset[] = [
 
   // More Operating Systems
   {
-    id: 'ubuntu-alt',
-    name: 'Ubuntu',
-    category: 'os',
-    icon: 'simple-icons:ubuntu'
-  },
-  {
-    id: 'debian-alt',
-    name: 'Debian',
-    category: 'os',
-    icon: 'simple-icons:debian'
-  },
-  {
-    id: 'fedora-alt',
-    name: 'Fedora',
-    category: 'os',
-    icon: 'simple-icons:fedora'
-  },
-  {
-    id: 'centos-alt',
-    name: 'CentOS',
-    category: 'os',
-    icon: 'simple-icons:centos'
-  },
-  {
-    id: 'redhat',
-    name: 'Red Hat',
-    category: 'os',
-    icon: 'simple-icons:redhat'
-  },
-  {
-    id: 'archlinux-alt',
-    name: 'Arch Linux',
-    category: 'os',
-    icon: 'simple-icons:archlinux'
-  },
-  {
-    id: 'alpine-alt',
-    name: 'Alpine Linux',
-    category: 'os',
-    icon: 'simple-icons:alpinelinux'
-  },
-  {
-    id: 'freebsd-alt',
-    name: 'FreeBSD',
-    category: 'os',
-    icon: 'simple-icons:freebsd'
-  },
-  {
-    id: 'windows-alt',
-    name: 'Windows',
-    category: 'os',
-    icon: 'simple-icons:windows'
-  },
-  {
     id: 'macos',
     name: 'macOS',
     category: 'os',
@@ -1215,12 +1029,6 @@ export const ICON_PRESETS: IconPreset[] = [
 
   // More Security Tools
   {
-    id: 'bitwarden-alt',
-    name: 'Bitwarden',
-    category: 'security',
-    icon: 'simple-icons:bitwarden'
-  },
-  {
     id: 'onepassword',
     name: '1Password',
     category: 'security',
@@ -1231,12 +1039,6 @@ export const ICON_PRESETS: IconPreset[] = [
     name: 'LastPass',
     category: 'security',
     icon: 'simple-icons:lastpass'
-  },
-  {
-    id: 'keepass',
-    name: 'KeePass',
-    category: 'security',
-    icon: 'simple-icons:keepass'
   },
   {
     id: 'authy',
@@ -1325,24 +1127,6 @@ export const ICON_PRESETS: IconPreset[] = [
     name: 'Dell',
     category: 'hardware',
     icon: 'simple-icons:dell'
-  },
-  {
-    id: 'intel',
-    name: 'Intel',
-    category: 'hardware',
-    icon: 'simple-icons:intel'
-  },
-  {
-    id: 'amd',
-    name: 'AMD',
-    category: 'hardware',
-    icon: 'simple-icons:amd'
-  },
-  {
-    id: 'nvidia',
-    name: 'NVIDIA',
-    category: 'hardware',
-    icon: 'simple-icons:nvidia'
   },
   {
     id: 'supermicro',

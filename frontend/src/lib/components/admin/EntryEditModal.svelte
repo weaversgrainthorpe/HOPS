@@ -125,7 +125,8 @@
               Browse
             </button>
           </div>
-          <small>Browse presets or search at <a href="https://icon-sets.iconify.design/" target="_blank">iconify.design</a></small>
+          <small>Browse presets or find custom icons at <a href="https://icon-sets.iconify.design/" target="_blank" rel="noopener">iconify.design</a></small>
+          <small class="help-text">💡 To use a custom icon: search on Iconify, click an icon, copy the full name (e.g., "mdi:home" or "simple-icons:docker"), and paste it above</small>
         </div>
 
         <div class="form-group">
@@ -440,6 +441,17 @@
   .browse-btn:hover {
     opacity: 0.9;
     transform: translateY(-1px);
+  }
+
+  .help-text {
+    display: block;
+    margin-top: 0.5rem;
+    padding: 0.75rem;
+    background: var(--bg-tertiary);
+    border-left: 3px solid var(--accent);
+    border-radius: 0.375rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
   }
 </style>
 
