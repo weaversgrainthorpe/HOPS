@@ -1,6 +1,6 @@
 # HOPS - Home Operations Portal System
 
-**Version 0.3.0**
+**Version 0.6.0**
 
 A self-hosted dashboard application that combines the best features of Heimdall, Homer, Dashy, Homepage, Organizr, and Homarr.
 
@@ -11,6 +11,7 @@ A self-hosted dashboard application that combines the best features of Heimdall,
 - **File-Friendly**: Config stored as JSON for easy backup/versioning
 - **No Login for Viewers**: Just share a URL, it works
 - **Admin Mode**: Separate login for editing
+- **Built-in Help**: Context-sensitive help system in edit mode
 
 ### Navigation
 - Multiple dashboards (e.g., /home, /network, /media)
@@ -24,16 +25,27 @@ A self-hosted dashboard application that combines the best features of Heimdall,
 - Global search with "/" hotkey (Coming Soon)
 
 ### Visual Customization
-- Per-dashboard and per-tab backgrounds with slideshow support
-- Background rotation/slideshow with customizable intervals
-- Theme hierarchy: Dashboard → Tab → Group → Tile (color & opacity cascade)
+- Per-dashboard and per-tab backgrounds
+- Background slideshow with 8 transition effects:
+  - Crossfade, Slide, Zoom, Fade to Black
+  - Blur, Flip, Ken Burns (cinematic pan/zoom), Instant
+- Customizable transition duration and slide intervals
+- Upload custom background images
+- Curated preset backgrounds by category
+- Theme hierarchy: Dashboard -> Tab -> Group -> Tile (color & opacity cascade)
 - 150,000+ built-in icons via Iconify
-- Multiple tile sizes (small, medium, large)
+- Multiple tile sizes (small, medium, large, wide)
 - 8 theme presets with light/dark modes
 - Gradient theme support
 - Auto mode (follows system theme)
 - Custom colors and opacity for tiles, groups, tabs, and dashboards
 - Custom CSS option (Coming Soon)
+
+### Admin Panel
+- Create, rename, and delete dashboards
+- Open dashboards directly in edit mode
+- Import/export configuration (JSON, YAML)
+- Import from Homer and Dashy
 
 ### Entries/Tiles
 - Open modes: iframe, new tab, same tab, popup modal
@@ -52,7 +64,7 @@ A self-hosted dashboard application that combines the best features of Heimdall,
 
 ## Tech Stack
 
-- **Frontend**: SvelteKit 2 + TypeScript
+- **Frontend**: SvelteKit 2 + Svelte 5 + TypeScript
 - **Backend**: Go (single binary)
 - **Database**: SQLite
 - **Icons**: Iconify
@@ -83,7 +95,7 @@ pnpm dev
 
 3. **Access the application:**
 - Viewer: http://localhost:5173
-- Admin: http://localhost:5173/admin
+- Admin: http://localhost:5173 (login page)
 
 ### Default Credentials
 - Username: `admin`
@@ -140,8 +152,8 @@ hops/
 │   │       ├── admin/       # Admin panel route
 │   │       ├── [dashboard]/ # Dynamic dashboard routes
 │   │       └── d/[secret]/  # Secret URL dashboards
-│   └── package.json
 ├── data/                  # SQLite database and uploads
+│   └── backgrounds/       # Uploaded background images
 └── docs/                  # Documentation
 ```
 
@@ -151,6 +163,7 @@ hops/
 - `GET /api/config` - Get dashboard configuration
 - `GET /api/status/:entryId` - Get status for an entry
 - `POST /api/auth/login` - Admin login
+- `GET /api/backgrounds` - List background images and categories
 
 ### Admin (Authenticated)
 - `PUT /api/config/update` - Update configuration
@@ -158,6 +171,11 @@ hops/
 - `POST /api/auth/change-password` - Change password
 - `GET /api/config/export` - Export configuration
 - `POST /api/config/import` - Import configuration
+- `POST /api/backgrounds` - Upload background image
+- `PUT /api/backgrounds/:id` - Update background metadata
+- `DELETE /api/backgrounds/:id` - Delete background image
+- `GET /api/backgrounds/categories` - List background categories
+- `POST /api/backgrounds/categories` - Create background category
 
 ## Configuration
 
@@ -170,21 +188,33 @@ The configuration is stored in SQLite as JSON. Example structure:
       "id": "home",
       "name": "Home",
       "path": "/home",
+      "background": {
+        "type": "slideshow",
+        "images": ["https://example.com/bg1.jpg", "/backgrounds/custom.jpg"],
+        "interval": 30,
+        "transition": "kenburns",
+        "transitionDuration": 2.5,
+        "fit": "cover"
+      },
       "tabs": [
         {
           "id": "services",
           "name": "Services",
+          "color": "#3b82f6",
+          "opacity": 0.95,
           "groups": [
             {
               "id": "media",
               "name": "Media",
               "collapsed": false,
+              "color": "#8b5cf6",
+              "opacity": 0.9,
               "entries": [
                 {
                   "id": "plex",
                   "name": "Plex",
                   "url": "https://plex.local",
-                  "icon": "plex",
+                  "icon": "simple-icons:plex",
                   "openMode": "newtab",
                   "size": "medium"
                 }
@@ -210,7 +240,7 @@ The configuration is stored in SQLite as JSON. Example structure:
 Example Caddyfile for reverse proxy:
 
 ```
-hops.weaversgrainthorpe.uk {
+hops.example.com {
     reverse_proxy localhost:8080
 }
 ```
@@ -242,9 +272,21 @@ sudo systemctl enable hops
 sudo systemctl start hops
 ```
 
+## Keyboard Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+C` | Copy selected tile |
+| `Ctrl+X` | Cut selected tile |
+| `Ctrl+V` | Paste tile into focused group |
+| `Escape` | Close modal / Cancel edit |
+| `Ctrl+Enter` | Save and close modal |
+
+*Shortcuts work when edit mode is enabled.*
+
 ## Roadmap
 
-### Phase 1: Foundation ✅
+### Phase 1: Foundation
 - [x] Project structure
 - [x] Go backend with SQLite
 - [x] SvelteKit frontend
@@ -252,7 +294,7 @@ sudo systemctl start hops
 - [x] Basic API routes
 - [x] Config storage
 
-### Phase 2: Core Dashboard ✅
+### Phase 2: Core Dashboard
 - [x] Dashboard viewer
 - [x] Tabs and groups
 - [x] Tile display
@@ -263,12 +305,14 @@ sudo systemctl start hops
 - [x] Copy/cut/paste for tiles
 - [x] Comprehensive theme system (8 presets with light/dark modes)
 
-### Phase 3: Advanced Features ✅
+### Phase 3: Advanced Features
 - [x] Keyboard shortcuts (Ctrl+C/Ctrl+X/Ctrl+V for copy/cut/paste)
 - [x] Multiple open modes (iframe, modal, new tab, same tab)
 - [x] Drag tiles between groups (cross-group drag & drop)
 - [x] Background images/slideshow for dashboards and tabs
-- [x] Theme hierarchy (Dashboard → Tab → Group → Tile)
+- [x] 8 slideshow transition effects including Ken Burns
+- [x] Theme hierarchy (Dashboard -> Tab -> Group -> Tile)
+- [x] Built-in help system
 - [ ] Status checks (HTTP/ICMP)
 - [ ] Global search with "/" hotkey
 - [ ] Custom CSS option
@@ -280,14 +324,22 @@ sudo systemctl start hops
 - [ ] System stats
 - [ ] Service integrations (Pi-hole, Proxmox, etc.)
 
-### Phase 5: Polish (In Progress)
+### Phase 5: Polish
 - [x] Import/export (JSON)
 - [x] Import from Homer (YAML config.yml)
 - [x] Import from Dashy (YAML conf.yml)
-- [x] Background images/slideshow
+- [x] Background image management with categories
+- [x] Upload custom backgrounds
+- [x] Streamlined admin panel
 - [ ] Import from Heimdall (JSON)
 - [ ] Multi-select and bulk operations
 - [ ] Secret URLs
+
+## Tips
+
+- Click the **?** icon in the navbar (when in edit mode) for help
+- Triple-click the HOPS logo when editing for a surprise
+- The classics never go out of style: try the Konami code
 
 ## Contributing
 

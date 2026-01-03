@@ -64,8 +64,10 @@ export interface Background {
   type: 'image' | 'slideshow' | 'color';
   value?: string;
   images?: string[];
-  interval?: number; // Duration in seconds
+  interval?: number; // Duration in seconds between slides
   fit?: 'cover' | 'contain' | 'fill'; // How to fit the image
+  transition?: 'crossfade' | 'slide' | 'zoom' | 'fade-black' | 'blur' | 'flip' | 'kenburns' | 'none'; // Transition effect
+  transitionDuration?: number; // Duration in seconds (0.5 to 5)
 }
 
 export interface StatusCheck {

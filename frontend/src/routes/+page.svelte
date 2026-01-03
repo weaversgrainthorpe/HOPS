@@ -1,13 +1,10 @@
 <script lang="ts">
   import { isAuthenticated, login, logout, isLoggingIn } from '$lib/stores/auth';
   import DashboardList from '$lib/components/admin/DashboardList.svelte';
-  import DashboardEditor from '$lib/components/admin/DashboardEditor.svelte';
-  import type { Dashboard } from '$lib/types';
 
   let username = 'admin';
   let password = '';
   let error = '';
-  let editingDashboard: Dashboard | null = null;
 
   async function handleLogin(e: Event) {
     e.preventDefault();
@@ -22,14 +19,6 @@
 
   async function handleLogout() {
     await logout();
-  }
-
-  function handleEdit(dashboard: Dashboard) {
-    editingDashboard = dashboard;
-  }
-
-  function handleCloseEditor() {
-    editingDashboard = null;
   }
 </script>
 
@@ -80,14 +69,10 @@
         <button onclick={handleLogout} class="btn-secondary">Logout</button>
       </div>
 
-      <DashboardList onEdit={handleEdit} />
+      <DashboardList />
     </div>
   {/if}
 </div>
-
-{#if editingDashboard}
-  <DashboardEditor dashboard={editingDashboard} onClose={handleCloseEditor} />
-{/if}
 
 <style>
   .admin-container {

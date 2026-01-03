@@ -134,12 +134,6 @@
     oncontextmenu={handleContextMenu}
     title={entry.description || entry.name}
   >
-    {#if $editMode}
-      <div class="edit-overlay">
-        <Icon icon="mdi:pencil" width="24" />
-      </div>
-    {/if}
-
     <div class="title">{entry.name}</div>
 
     <div class="icon">
@@ -163,10 +157,17 @@
     {/if}
   </button>
 
-  {#if $editMode && onDelete}
-    <button class="delete-btn" onclick={handleDeleteClick} title="Delete tile">
-      <Icon icon="mdi:close" width="16" />
-    </button>
+  {#if $editMode}
+    <div class="hover-controls">
+      <button class="control-btn edit-btn" onclick={(e) => { e.stopPropagation(); showEditModal = true; }} title="Edit tile">
+        <Icon icon="mdi:pencil" width="16" />
+      </button>
+      {#if onDelete}
+        <button class="control-btn delete-btn" onclick={handleDeleteClick} title="Delete tile">
+          <Icon icon="mdi:close" width="16" />
+        </button>
+      {/if}
+    </div>
   {/if}
 </div>
 
@@ -377,33 +378,24 @@
     border-color: rgba(255, 255, 255, 0.4);
   }
 
-  .edit-overlay {
-    position: absolute;
-    top: 0.5rem;
-    left: 0.5rem;
-    background: #f59e0b;
-    color: white;
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    opacity: 0;
-    transition: opacity 0.2s;
-    pointer-events: none;
-  }
-
-  .entry.edit-mode:hover .edit-overlay {
-    opacity: 1;
-  }
-
-  .delete-btn {
+  .hover-controls {
     position: absolute;
     top: 0.5rem;
     right: 0.5rem;
-    background: #dc2626;
-    color: white;
+    display: flex;
+    gap: 0.25rem;
+    opacity: 0;
+    transition: opacity 0.2s;
+    z-index: 10;
+  }
+
+  .entry-container:hover .hover-controls {
+    opacity: 1;
+  }
+
+  .control-btn {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
     border: none;
     width: 24px;
     height: 24px;
@@ -412,18 +404,19 @@
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    opacity: 0;
     transition: all 0.2s;
     padding: 0;
-    z-index: 10;
   }
 
-  .entry-container:hover .delete-btn {
-    opacity: 1;
+  .control-btn.edit-btn:hover {
+    background: #f59e0b;
+    color: white;
+    transform: scale(1.1);
   }
 
-  .delete-btn:hover {
-    background: #b91c1c;
+  .control-btn.delete-btn:hover {
+    background: #dc2626;
+    color: white;
     transform: scale(1.1);
   }
 

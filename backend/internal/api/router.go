@@ -49,8 +49,60 @@ func (r *Router) setupRoutes() {
 	// Widget/integration routes
 	r.mux.HandleFunc("/api/integrations/", r.handleIntegrations)
 
+	// Icon management routes
+	r.mux.HandleFunc("/api/icon-categories", r.handleGetIconCategories)
+	r.mux.HandleFunc("/api/icon-categories/", r.handleIconCategoryActions)
+	r.mux.HandleFunc("/api/icons", r.handleGetIcons)
+	r.mux.HandleFunc("/api/icons/", r.handleIconActions)
+
+	// Background image routes
+	r.mux.HandleFunc("/api/backgrounds", r.handleBackgrounds)
+	r.mux.HandleFunc("/api/backgrounds/categories", r.authMiddleware(r.handleBackgroundCategories))
+	r.mux.HandleFunc("/api/backgrounds/categories/", r.authMiddleware(r.handleBackgroundCategoryActions))
+	r.mux.HandleFunc("/api/backgrounds/", r.authMiddleware(r.handleBackgroundActions))
+
+	// Serve uploaded backgrounds from data directory
+	r.mux.HandleFunc("/backgrounds/", r.serveBackgrounds)
+
 	// Static file serving (frontend) with SPA support
 	r.mux.HandleFunc("/", r.serveSPA)
+}
+
+// handleBackgrounds routes GET and POST requests for backgrounds
+func (r *Router) handleBackgrounds(w http.ResponseWriter, req *http.Request) {
+	switch req.Method {
+	case http.MethodGet:
+		r.handleListBackgrounds(w, req)
+	case http.MethodPost:
+		r.authMiddleware(r.handleUploadBackground)(w, req)
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+// handleBackgroundActions routes PUT and DELETE for individual backgrounds
+func (r *Router) handleBackgroundActions(w http.ResponseWriter, req *http.Request) {
+	switch req.Method {
+	case http.MethodPut:
+		r.handleUpdateBackgroundImage(w, req)
+	case http.MethodDelete:
+		r.handleDeleteBackground(w, req)
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+// serveBackgrounds serves uploaded background images from the data directory
+func (r *Router) serveBackgrounds(w http.ResponseWriter, req *http.Request) {
+	// Extract filename from path
+	filename := filepath.Base(req.URL.Path)
+
+	// Construct path to backgrounds directory
+	backgroundsDir := filepath.Join(r.config.DataDir, "backgrounds")
+	filePath := filepath.Join(backgroundsDir, filename)
+
+	// Serve the file
+	http.ServeFile(w, req, filePath)
 }
 
 // serveSPA serves the Single Page Application with fallback to index.html

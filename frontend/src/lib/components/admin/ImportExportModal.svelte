@@ -140,6 +140,7 @@
             <li><strong>HOPS JSON</strong> - Native format</li>
             <li><strong>Homer YAML</strong> - config.yml from Homer dashboard</li>
             <li><strong>Dashy YAML</strong> - conf.yml from Dashy dashboard</li>
+            <li><strong>Heimdall JSON</strong> - Export from Heimdall dashboard</li>
           </ul>
         </div>
 

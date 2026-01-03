@@ -5,7 +5,6 @@
   import Icon from '@iconify/svelte';
   import { editMode } from '$lib/stores/editMode';
   import GroupEditModal from './admin/GroupEditModal.svelte';
-  import BackgroundConfigModal from './admin/BackgroundConfigModal.svelte';
   import { dndzone } from 'svelte-dnd-action';
   import type { DndEvent } from 'svelte-dnd-action';
   import { getTextColorValue } from '$lib/utils/colorContrast';
@@ -27,7 +26,6 @@
 
   let { tab, onUpdateEntry, onDeleteEntry, onAddEntry, onAddGroup, onReorderEntries, onMoveEntry, onReorderGroups, onUpdateGroup, onDeleteGroup, onUpdateTabBackground, onGroupFocus }: Props = $props();
   let showAddGroupModal = $state(false);
-  let showBackgroundConfig = $state(false);
 
   // Drag and drop handling for groups
   let groupItems = $state([...tab.groups]);
@@ -118,13 +116,6 @@
       onReorderGroups(reorderedGroups);
     }
   }
-
-  function handleUpdateBackground(background: Background | undefined) {
-    if (onUpdateTabBackground) {
-      onUpdateTabBackground(background);
-    }
-    showBackgroundConfig = false;
-  }
 </script>
 
 <div class="tab-panel">
@@ -162,13 +153,6 @@
         <span>Add Group</span>
       </button>
     {/if}
-
-    {#if $editMode && onUpdateTabBackground}
-      <button class="tab-background-btn" onclick={() => showBackgroundConfig = true}>
-        <Icon icon="mdi:image-multiple" width="24" />
-        <span>Tab Background</span>
-      </button>
-    {/if}
   </div>
 </div>
 
@@ -177,15 +161,6 @@
     groupName=""
     onSave={handleSaveGroup}
     onCancel={() => showAddGroupModal = false}
-  />
-{/if}
-
-{#if showBackgroundConfig}
-  <BackgroundConfigModal
-    background={tab.background}
-    level="tab"
-    onSave={handleUpdateBackground}
-    onCancel={() => showBackgroundConfig = false}
   />
 {/if}
 
@@ -231,29 +206,6 @@
     background: var(--bg-tertiary);
     border-color: var(--accent);
     color: var(--accent);
-    transform: translateY(-2px);
-  }
-
-  .tab-background-btn {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 1rem 1.5rem;
-    background: var(--bg-secondary);
-    border: 2px dashed var(--border);
-    border-radius: 0.5rem;
-    color: var(--text-secondary);
-    cursor: pointer;
-    transition: all 0.2s;
-    margin-top: 2rem;
-    font-size: 1rem;
-    font-weight: 500;
-  }
-
-  .tab-background-btn:hover {
-    background: var(--bg-tertiary);
-    border-color: #3b82f6;
-    color: #3b82f6;
     transform: translateY(-2px);
   }
 </style>

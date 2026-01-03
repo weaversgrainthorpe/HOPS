@@ -4,14 +4,44 @@
   import { isAuthenticated } from '$lib/stores/auth';
   import { theme, toggleTheme } from '$lib/stores/theme';
   import { editMode, toggleEditMode } from '$lib/stores/editMode';
+  import { triggerHopAnimation } from '$lib/stores/easterEggs';
   import Icon from '@iconify/svelte';
   import ThemePickerModal from './admin/ThemePickerModal.svelte';
   import ImportExportModal from './admin/ImportExportModal.svelte';
+  import HelpModal from './HelpModal.svelte';
 
   let currentPath = $derived($page.url.pathname);
+
+  // Easter egg: Triple-click logo in edit mode to trigger hop animation
+  let logoClickCount = $state(0);
+  let logoClickTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function handleLogoClick(e: MouseEvent) {
+    // Only intercept clicks in edit mode
+    if (!$editMode) return;
+
+    // Prevent navigation while counting clicks
+    e.preventDefault();
+
+    logoClickCount++;
+
+    if (logoClickTimer) {
+      clearTimeout(logoClickTimer);
+    }
+
+    if (logoClickCount >= 3) {
+      triggerHopAnimation();
+      logoClickCount = 0;
+    } else {
+      logoClickTimer = setTimeout(() => {
+        logoClickCount = 0;
+      }, 500);
+    }
+  }
   let isDashboardPage = $derived(currentPath !== '/');
   let showThemePicker = $state(false);
   let showImportExport = $state(false);
+  let showHelp = $state(false);
 
   let themeIcon = $derived(
     $theme === 'dark' ? 'mdi:weather-night' :
@@ -34,10 +64,10 @@
         {#if leftText}
           <div class="custom-text">{leftText}</div>
         {:else}
-          <a href="/" class="logo">
+          <a href="/" class="logo" onclick={handleLogoClick}>
             <img src="/logo.svg" alt="HOPS" />
             <span>HOPS</span>
-            <span class="version">v0.3.0</span>
+            <span class="version">v0.6.0</span>
           </a>
 
           <div class="nav-links">
@@ -74,7 +104,9 @@
 
       {#if $isAuthenticated && isDashboardPage}
         <button onclick={() => showImportExport = true} class="import-export-btn" title="Import / Export">
-          <Icon icon="mdi:database-import-export" width="24" height="24" />
+          <span class="icon-wrapper">
+            <Icon icon="mdi:swap-vertical" width="32" height="32" />
+          </span>
         </button>
 
       {/if}
@@ -90,6 +122,12 @@
           {#if $editMode}
             <span class="edit-label">Editing</span>
           {/if}
+        </button>
+      {/if}
+
+      {#if $editMode}
+        <button onclick={() => showHelp = true} class="help-btn" title="Help">
+          <Icon icon="mdi:help-circle-outline" width="24" height="24" />
         </button>
       {/if}
 
@@ -109,6 +147,10 @@
 
 {#if showImportExport}
   <ImportExportModal onClose={() => showImportExport = false} />
+{/if}
+
+{#if showHelp}
+  <HelpModal onClose={() => showHelp = false} />
 {/if}
 
 <style>
@@ -216,7 +258,7 @@
     gap: 1rem;
   }
 
-  .theme-toggle, .admin-link, .edit-toggle, .import-export-btn {
+  .theme-toggle, .admin-link, .edit-toggle, .import-export-btn, .help-btn {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -242,7 +284,7 @@
     height: 32px;
   }
 
-  .theme-toggle:hover, .admin-link:hover, .edit-toggle:hover, .import-export-btn:hover {
+  .theme-toggle:hover, .admin-link:hover, .edit-toggle:hover, .import-export-btn:hover, .help-btn:hover {
     background: var(--accent);
     color: white;
   }

@@ -1,9 +1,13 @@
 <script lang="ts">
   import { config, updateConfig } from '$lib/stores/config';
+  import { editMode, enableEditMode } from '$lib/stores/editMode';
+  import { goto } from '$app/navigation';
   import type { Dashboard } from '$lib/types';
   import Icon from '@iconify/svelte';
 
-  let { onEdit }: { onEdit: (dashboard: Dashboard) => void } = $props();
+  let editingId = $state<string | null>(null);
+  let editName = $state('');
+  let editPath = $state('');
 
   function handleNew() {
     const newDashboard: Dashboard = {
@@ -34,6 +38,38 @@
       await updateConfig(updatedConfig);
     }
   }
+
+  function startEdit(dashboard: Dashboard) {
+    editingId = dashboard.id;
+    editName = dashboard.name;
+    editPath = dashboard.path;
+  }
+
+  function cancelEdit() {
+    editingId = null;
+    editName = '';
+    editPath = '';
+  }
+
+  async function saveEdit(dashboard: Dashboard) {
+    if (!$config) return;
+
+    const updatedConfig = {
+      ...$config,
+      dashboards: $config.dashboards.map(d =>
+        d.id === dashboard.id
+          ? { ...d, name: editName, path: editPath }
+          : d
+      )
+    };
+    await updateConfig(updatedConfig);
+    editingId = null;
+  }
+
+  async function openDashboard(dashboard: Dashboard) {
+    enableEditMode();
+    await goto(dashboard.path);
+  }
 </script>
 
 <div class="dashboard-list">
@@ -49,24 +85,61 @@
     <div class="dashboards">
       {#each $config.dashboards as dashboard (dashboard.id)}
         <div class="dashboard-item card">
-          <div class="dashboard-info">
-            <h3>{dashboard.name}</h3>
-            <p class="path">{dashboard.path}</p>
-            <p class="meta">{dashboard.tabs.length} tabs</p>
-          </div>
+          {#if editingId === dashboard.id}
+            <div class="dashboard-edit-form">
+              <div class="edit-fields">
+                <div class="field">
+                  <label for="name-{dashboard.id}">Name</label>
+                  <input
+                    id="name-{dashboard.id}"
+                    type="text"
+                    bind:value={editName}
+                    placeholder="Dashboard name"
+                  />
+                </div>
+                <div class="field">
+                  <label for="path-{dashboard.id}">URL Path</label>
+                  <input
+                    id="path-{dashboard.id}"
+                    type="text"
+                    bind:value={editPath}
+                    placeholder="/my-dashboard"
+                  />
+                </div>
+              </div>
+              <div class="edit-actions">
+                <button onclick={() => saveEdit(dashboard)} class="btn-primary btn-sm">
+                  <Icon icon="mdi:check" width="18" />
+                  Save
+                </button>
+                <button onclick={cancelEdit} class="btn-secondary btn-sm">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          {:else}
+            <div class="dashboard-info">
+              <h3>{dashboard.name}</h3>
+              <p class="path">{dashboard.path}</p>
+              <p class="meta">{dashboard.tabs.length} tabs</p>
+            </div>
 
-          <div class="dashboard-actions">
-            <button onclick={() => onEdit(dashboard)} class="btn-secondary">
-              <Icon icon="mdi:pencil" width="20" />
-              Edit
-            </button>
-            <a href={dashboard.path} target="_blank" class="btn-secondary">
-              <Icon icon="mdi:open-in-new" width="20" />
-            </a>
-            <button onclick={() => handleDelete(dashboard)} class="btn-danger">
-              <Icon icon="mdi:delete" width="20" />
-            </button>
-          </div>
+            <div class="dashboard-actions">
+              <button onclick={() => openDashboard(dashboard)} class="btn-primary">
+                <Icon icon="mdi:open-in-app" width="20" />
+                Open
+              </button>
+              <button onclick={() => startEdit(dashboard)} class="btn-secondary" title="Rename">
+                <Icon icon="mdi:pencil" width="20" />
+              </button>
+              <a href={dashboard.path} target="_blank" class="btn-secondary" title="Open in new tab">
+                <Icon icon="mdi:open-in-new" width="20" />
+              </a>
+              <button onclick={() => handleDelete(dashboard)} class="btn-danger" title="Delete">
+                <Icon icon="mdi:delete" width="20" />
+              </button>
+            </div>
+          {/if}
         </div>
       {/each}
     </div>
@@ -137,6 +210,45 @@
     gap: 0.5rem;
   }
 
+  .dashboard-edit-form {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .edit-fields {
+    display: flex;
+    gap: 1rem;
+  }
+
+  .field {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .field label {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+  }
+
+  .field input {
+    width: 100%;
+    padding: 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: 0.375rem;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+  }
+
+  .edit-actions {
+    display: flex;
+    gap: 0.5rem;
+  }
+
   .btn-primary, .btn-secondary, .btn-danger {
     display: inline-flex;
     align-items: center;
@@ -147,6 +259,11 @@
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s;
+  }
+
+  .btn-sm {
+    padding: 0.375rem 0.75rem;
+    font-size: 0.875rem;
   }
 
   .btn-primary {
@@ -190,5 +307,21 @@
 
   .empty-state p {
     margin: 1rem 0 1.5rem 0;
+  }
+
+  @media (max-width: 640px) {
+    .dashboard-item {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
+    .dashboard-actions {
+      width: 100%;
+      justify-content: flex-start;
+    }
+
+    .edit-fields {
+      flex-direction: column;
+    }
   }
 </style>

@@ -2,20 +2,25 @@
   import Icon from '@iconify/svelte';
   import ColorPicker from './ColorPicker.svelte';
   import OpacitySlider from './OpacitySlider.svelte';
+  import BackgroundConfigModal from './BackgroundConfigModal.svelte';
+  import type { Background } from '$lib/types';
 
   interface Props {
     tabName: string;
     tabColor?: string;
     tabOpacity?: number;
+    tabBackground?: Background;
     onSave: (name: string, color?: string, opacity?: number) => void;
+    onSaveBackground?: (background: Background | undefined) => void;
     onCancel: () => void;
     onDelete?: () => void;
   }
 
-  let { tabName, tabColor, tabOpacity, onSave, onCancel, onDelete }: Props = $props();
+  let { tabName, tabColor, tabOpacity, tabBackground, onSave, onSaveBackground, onCancel, onDelete }: Props = $props();
   let name = $state(tabName);
   let color = $state(tabColor);
   let opacity = $state(tabOpacity);
+  let showBackgroundConfig = $state(false);
 
   function handleSave() {
     if (name.trim()) {
@@ -24,9 +29,16 @@
   }
 
   function handleKeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape') {
+    if (e.key === 'Escape' && !showBackgroundConfig) {
       onCancel();
     }
+  }
+
+  function handleBackgroundSave(background: Background | undefined) {
+    if (onSaveBackground) {
+      onSaveBackground(background);
+    }
+    showBackgroundConfig = false;
   }
 </script>
 
@@ -64,6 +76,22 @@
         onSelect={(o) => opacity = o}
       />
 
+      {#if onSaveBackground}
+        <div class="form-group">
+          <button type="button" class="btn-background" onclick={() => showBackgroundConfig = true}>
+            <Icon icon="mdi:image-multiple" width="20" />
+            Configure Tab Background
+          </button>
+          {#if tabBackground}
+            <small class="background-status">
+              {tabBackground.type === 'color' ? `Color: ${tabBackground.value}` : ''}
+              {tabBackground.type === 'image' ? 'Image background set' : ''}
+              {tabBackground.type === 'slideshow' ? `Slideshow (${tabBackground.images?.length || 0} images)` : ''}
+            </small>
+          {/if}
+        </div>
+      {/if}
+
       <div class="modal-actions">
         {#if tabName && onDelete}
           <button type="button" class="btn-danger" onclick={onDelete}>
@@ -84,6 +112,15 @@
     </form>
   </div>
 </div>
+
+{#if showBackgroundConfig}
+  <BackgroundConfigModal
+    background={tabBackground}
+    level="tab"
+    onSave={handleBackgroundSave}
+    onCancel={() => showBackgroundConfig = false}
+  />
+{/if}
 
 <style>
   .modal-backdrop {
@@ -215,5 +252,29 @@
 
   .btn-danger:hover {
     background: #b91c1c;
+  }
+
+  .btn-background {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    width: 100%;
+    justify-content: center;
+  }
+
+  .btn-background:hover {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+  }
+
+  .background-status {
+    display: block;
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    margin-top: 0.5rem;
+    padding: 0.5rem;
+    background: var(--bg-tertiary);
+    border-radius: 0.25rem;
   }
 </style>
