@@ -2,6 +2,8 @@
   import Icon from '@iconify/svelte';
   import { theme, setTheme, applyThemePreset } from '$lib/stores/theme';
   import { browser } from '$app/environment';
+  import { focusTrap } from '$lib/utils/focusTrap';
+  import { createGridKeyboardHandler } from '$lib/utils/gridKeyboardNav';
 
   interface Props {
     onClose: () => void;
@@ -9,7 +11,9 @@
 
   let { onClose }: Props = $props();
 
-  const modes = [
+  type Theme = 'light' | 'dark' | 'auto';
+
+  const modes: { id: Theme; name: string; icon: string; description: string }[] = [
     { id: 'dark', name: 'Dark', icon: 'mdi:weather-night', description: 'Classic dark theme' },
     { id: 'light', name: 'Light', icon: 'mdi:weather-sunny', description: 'Bright light theme' },
     { id: 'auto', name: 'Auto', icon: 'mdi:theme-light-dark', description: 'Follow system preference' }
@@ -204,14 +208,44 @@
       selectedPreset = savedPreset;
     }
   }
+
+  // Keyboard navigation for mode grid (1 column layout)
+  const handleModeKeydown = createGridKeyboardHandler(
+    () => modes.findIndex(m => m.id === selectedMode),
+    {
+      columns: 1,
+      itemCount: modes.length,
+      onSelect: (index) => { selectedMode = modes[index].id; }
+    }
+  );
+
+  // Keyboard navigation for preset grid (2 columns)
+  const handlePresetKeydown = createGridKeyboardHandler(
+    () => themePresets.findIndex(p => p.id === selectedPreset),
+    {
+      columns: 2,
+      itemCount: themePresets.length,
+      onSelect: (index) => { selectedPreset = themePresets[index].id; }
+    }
+  );
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
 
-<div class="modal-backdrop" onclick={onClose}>
-  <div class="modal-content" onclick={(e) => e.stopPropagation()}>
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div class="modal-backdrop" onclick={onClose} onkeydown={(e) => e.key === 'Escape' && onClose()}>
+  <div
+    class="modal-content"
+    onclick={(e) => e.stopPropagation()}
+    onkeydown={(e) => e.stopPropagation()}
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="theme-settings-title"
+    tabindex="-1"
+    use:focusTrap
+  >
     <div class="modal-header">
-      <h2>Theme Settings</h2>
+      <h2 id="theme-settings-title">Theme Settings</h2>
       <button class="close-btn" onclick={onClose}>
         <Icon icon="mdi:close" width="24" />
       </button>
@@ -219,13 +253,21 @@
 
     <div class="modal-body">
       <section class="section">
-        <h3>Brightness Mode</h3>
-        <div class="mode-grid">
-          {#each modes as mode}
+        <h3 id="mode-label">Brightness Mode</h3>
+        <div
+          class="mode-grid"
+          role="radiogroup"
+          aria-labelledby="mode-label"
+          onkeydown={handleModeKeydown}
+        >
+          {#each modes as mode, index}
             <button
               class="mode-card"
               class:selected={selectedMode === mode.id}
               onclick={() => selectedMode = mode.id}
+              role="radio"
+              aria-checked={selectedMode === mode.id}
+              tabindex={selectedMode === mode.id ? 0 : -1}
             >
               <Icon icon={mode.icon} width="32" />
               <div class="mode-info">
@@ -241,14 +283,22 @@
       </section>
 
       <section class="section">
-        <h3>Theme Preset</h3>
-        <div class="preset-grid">
+        <h3 id="preset-label">Theme Preset</h3>
+        <div
+          class="preset-grid"
+          role="radiogroup"
+          aria-labelledby="preset-label"
+          onkeydown={handlePresetKeydown}
+        >
           {#each themePresets as preset}
             <button
               class="preset-card"
               class:selected={selectedPreset === preset.id}
               class:gradient={preset.gradient}
               onclick={() => selectedPreset = preset.id}
+              role="radio"
+              aria-checked={selectedPreset === preset.id}
+              tabindex={selectedPreset === preset.id ? 0 : -1}
             >
               <div class="preset-preview">
                 {#if preset.gradient}
@@ -415,7 +465,7 @@
     color: var(--text-secondary);
   }
 
-  .check-icon {
+  :global(.check-icon) {
     color: var(--accent);
   }
 
@@ -492,7 +542,7 @@
     color: var(--text-secondary);
   }
 
-  .preset-card .check-icon {
+  .preset-card :global(.check-icon) {
     position: absolute;
     top: 0.75rem;
     right: 0.75rem;

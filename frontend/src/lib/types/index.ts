@@ -5,6 +5,7 @@ export interface Dashboard {
   name: string;
   path: string;
   background?: Background;
+  perTabBackgrounds?: boolean; // When true, each tab can have its own background
   header?: HeaderConfig;
   theme?: {
     color?: string;
@@ -78,7 +79,7 @@ export interface StatusCheck {
 
 export interface StatusResult {
   entryId: string;
-  status: 'online' | 'offline' | 'unknown';
+  status: 'up' | 'down' | 'error' | 'unknown';
   responseTime?: number;
   lastChecked: Date;
 }

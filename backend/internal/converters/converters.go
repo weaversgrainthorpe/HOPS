@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/yourusername/hops/internal/models"
+	"github.com/jmagar/hops/internal/models"
 	"gopkg.in/yaml.v3"
 )
 

@@ -86,10 +86,14 @@ func runMigrations(db *sql.DB) error {
 			icon TEXT NOT NULL,
 			category_id TEXT NOT NULL,
 			color TEXT,
+			image_url TEXT,
 			is_preset BOOLEAN NOT NULL DEFAULT 0,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			FOREIGN KEY (category_id) REFERENCES icon_categories(id) ON DELETE CASCADE
 		)`,
+
+		// Migration: Add image_url column if it doesn't exist
+		`ALTER TABLE icons ADD COLUMN image_url TEXT`,
 
 		// Index for faster category lookups
 		`CREATE INDEX IF NOT EXISTS idx_icons_category ON icons(category_id)`,

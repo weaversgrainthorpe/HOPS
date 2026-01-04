@@ -1,6 +1,8 @@
 <script lang="ts">
   import Icon from '@iconify/svelte';
   import { exportConfig, importConfig } from '$lib/utils/api';
+  import { toast } from '$lib/stores/toast';
+  import { focusTrap } from '$lib/utils/focusTrap';
 
   interface Props {
     onClose: () => void;
@@ -35,8 +37,10 @@
       document.body.removeChild(a);
 
       success = 'Configuration exported successfully!';
+      toast.success('Configuration exported');
     } catch (err) {
       error = err instanceof Error ? err.message : 'Failed to export configuration';
+      toast.error('Export failed');
     } finally {
       exporting = false;
     }
@@ -45,6 +49,7 @@
   async function handleImport() {
     if (!fileInput?.files?.[0]) {
       error = 'Please select a file to import';
+      toast.warning('Please select a file first');
       return;
     }
 
@@ -55,6 +60,7 @@
     try {
       const result = await importConfig(fileInput.files[0]);
       success = result.message || 'Configuration imported successfully!';
+      toast.success('Configuration imported');
 
       // Reload page after successful import
       setTimeout(() => {
@@ -62,6 +68,7 @@
       }, 1500);
     } catch (err) {
       error = err instanceof Error ? err.message : 'Failed to import configuration';
+      toast.error('Import failed');
     } finally {
       importing = false;
     }
@@ -74,10 +81,20 @@
 
 <svelte:window onkeydown={handleKeydown} />
 
-<div class="modal-backdrop" onclick={onClose}>
-  <div class="modal-content" onclick={(e) => e.stopPropagation()}>
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div class="modal-backdrop" onclick={onClose} onkeydown={(e) => e.key === 'Escape' && onClose()}>
+  <div
+    class="modal-content"
+    onclick={(e) => e.stopPropagation()}
+    onkeydown={(e) => e.stopPropagation()}
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="import-export-title"
+    tabindex="-1"
+    use:focusTrap
+  >
     <div class="modal-header">
-      <h2>Import / Export Configuration</h2>
+      <h2 id="import-export-title">Import / Export Configuration</h2>
       <button class="close-btn" onclick={onClose}>
         <Icon icon="mdi:close" width="24" />
       </button>
@@ -116,7 +133,7 @@
 
       <section class="section">
         <h3>Import Configuration</h3>
-        <p class="description">Upload a HOPS configuration file to replace your current configuration. This will overwrite all existing dashboards.</p>
+        <p class="description">Upload a configuration file to add dashboards. Imported dashboards will be added alongside your existing ones.</p>
 
         <div class="file-input-container">
           <input
@@ -162,7 +179,7 @@
       <div class="info-box">
         <Icon icon="mdi:information" width="20" />
         <div>
-          <p><strong>Note:</strong> Importing a configuration will completely replace your current setup. Make sure to export your current configuration first if you want to keep a backup.</p>
+          <p><strong>Note:</strong> Imported dashboards are added to your existing configuration. If a dashboard path already exists, the imported one will be renamed with a suffix (e.g., /home becomes /home-1).</p>
         </div>
       </div>
     </div>
@@ -376,7 +393,7 @@
     margin-bottom: 0;
   }
 
-  .spin {
+  :global(.spin) {
     animation: spin 1s linear infinite;
   }
 

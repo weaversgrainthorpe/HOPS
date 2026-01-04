@@ -1,5 +1,6 @@
 <script lang="ts">
   import Icon from '@iconify/svelte';
+  import { focusTrap } from '$lib/utils/focusTrap';
 
   interface Props {
     onClose: () => void;
@@ -7,7 +8,8 @@
 
   let { onClose }: Props = $props();
 
-  let activeTab = $state<'shortcuts' | 'editing' | 'features' | 'easter'>('shortcuts');
+  const appVersion = __APP_VERSION__;
+  let activeTab = $state<'shortcuts' | 'editing' | 'features'>('shortcuts');
 
   function handleKeydown(e: KeyboardEvent) {
     if (e.key === 'Escape') {
@@ -18,10 +20,20 @@
 
 <svelte:window onkeydown={handleKeydown} />
 
-<div class="modal-backdrop" onclick={onClose}>
-  <div class="modal-content" onclick={(e) => e.stopPropagation()}>
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div class="modal-backdrop" onclick={onClose} onkeydown={(e) => e.key === 'Escape' && onClose()}>
+  <div
+    class="modal-content"
+    onclick={(e) => e.stopPropagation()}
+    onkeydown={(e) => e.stopPropagation()}
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="help-modal-title"
+    tabindex="-1"
+    use:focusTrap
+  >
     <div class="modal-header">
-      <h2><Icon icon="mdi:help-circle" width="28" /> Help</h2>
+      <h2 id="help-modal-title"><Icon icon="mdi:help-circle" width="28" /> Help</h2>
       <button class="close-btn" onclick={onClose}>
         <Icon icon="mdi:close" width="24" />
       </button>
@@ -39,10 +51,6 @@
       <button class="tab" class:active={activeTab === 'features'} onclick={() => activeTab = 'features'}>
         <Icon icon="mdi:star" width="18" />
         Features
-      </button>
-      <button class="tab" class:active={activeTab === 'easter'} onclick={() => activeTab = 'easter'}>
-        <Icon icon="mdi:egg-easter" width="18" />
-        Secrets
       </button>
     </div>
 
@@ -242,42 +250,11 @@
             </div>
           </div>
         </div>
-
-      {:else if activeTab === 'easter'}
-        <div class="help-section">
-          <h3>Easter Eggs</h3>
-          <p class="section-desc">Hidden surprises in HOPS (requires edit mode).</p>
-
-          <div class="easter-list">
-            <div class="easter-egg">
-              <div class="easter-trigger">
-                <Icon icon="mdi:gamepad-variant" width="24" />
-                <div class="keys small">
-                  <kbd>↑</kbd><kbd>↑</kbd><kbd>↓</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd><kbd>←</kbd><kbd>→</kbd><kbd>B</kbd><kbd>A</kbd>
-                </div>
-              </div>
-              <div class="easter-desc">
-                <strong>Party Mode</strong>
-                <p>Enter the Konami Code to trigger disco lights and dancing tiles!</p>
-              </div>
-            </div>
-            <div class="easter-egg">
-              <div class="easter-trigger">
-                <Icon icon="mdi:rabbit" width="24" />
-                <span class="trigger-text">Triple-click HOPS logo</span>
-              </div>
-              <div class="easter-desc">
-                <strong>Hop Animation</strong>
-                <p>Triple-click the HOPS logo in the navbar to make everything hop!</p>
-              </div>
-            </div>
-          </div>
-        </div>
       {/if}
     </div>
 
     <div class="modal-footer">
-      <span class="version">HOPS v0.6.0</span>
+      <span class="version">HOPS v{appVersion}</span>
       <button class="btn-primary" onclick={onClose}>Got it!</button>
     </div>
   </div>
@@ -486,51 +463,6 @@
     font-size: 0.875rem;
     color: var(--text-secondary);
     line-height: 1.4;
-  }
-
-  .easter-list {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-  }
-
-  .easter-egg {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-    padding: 1rem;
-    background: var(--bg-tertiary);
-    border-radius: 0.5rem;
-    border: 1px solid var(--border);
-  }
-
-  .easter-trigger {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    flex-wrap: wrap;
-  }
-
-  .easter-trigger > :global(svg) {
-    color: var(--accent);
-  }
-
-  .trigger-text {
-    font-size: 0.875rem;
-    color: var(--text-secondary);
-    font-style: italic;
-  }
-
-  .easter-desc strong {
-    display: block;
-    margin-bottom: 0.25rem;
-    color: var(--text-primary);
-  }
-
-  .easter-desc p {
-    margin: 0;
-    font-size: 0.875rem;
-    color: var(--text-secondary);
   }
 
   .modal-footer {

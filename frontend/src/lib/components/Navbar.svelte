@@ -9,6 +9,9 @@
   import ThemePickerModal from './admin/ThemePickerModal.svelte';
   import ImportExportModal from './admin/ImportExportModal.svelte';
   import HelpModal from './HelpModal.svelte';
+  import AboutModal from './AboutModal.svelte';
+
+  const appVersion = __APP_VERSION__;
 
   let currentPath = $derived($page.url.pathname);
 
@@ -42,6 +45,7 @@
   let showThemePicker = $state(false);
   let showImportExport = $state(false);
   let showHelp = $state(false);
+  let showAbout = $state(false);
 
   let themeIcon = $derived(
     $theme === 'dark' ? 'mdi:weather-night' :
@@ -67,7 +71,7 @@
           <a href="/" class="logo" onclick={handleLogoClick}>
             <img src="/logo.svg" alt="HOPS" />
             <span>HOPS</span>
-            <span class="version">v0.6.0</span>
+            <span class="version">v{appVersion}</span>
           </a>
 
           <div class="nav-links">
@@ -125,9 +129,19 @@
         </button>
       {/if}
 
-      {#if $editMode}
+      {#if $isAuthenticated}
         <button onclick={() => showHelp = true} class="help-btn" title="Help">
-          <Icon icon="mdi:help-circle-outline" width="24" height="24" />
+          <span class="icon-wrapper">
+            <Icon icon="mdi:help-circle-outline" width="32" height="32" />
+          </span>
+        </button>
+      {/if}
+
+      {#if $isAuthenticated}
+        <button onclick={() => showAbout = true} class="about-btn" title="About HOPS">
+          <span class="icon-wrapper">
+            <Icon icon="mdi:information-outline" width="32" height="32" />
+          </span>
         </button>
       {/if}
 
@@ -151,6 +165,10 @@
 
 {#if showHelp}
   <HelpModal onClose={() => showHelp = false} />
+{/if}
+
+{#if showAbout}
+  <AboutModal onClose={() => showAbout = false} />
 {/if}
 
 <style>
@@ -258,7 +276,7 @@
     gap: 1rem;
   }
 
-  .theme-toggle, .admin-link, .edit-toggle, .import-export-btn, .help-btn {
+  .theme-toggle, .admin-link, .edit-toggle, .import-export-btn, .help-btn, .about-btn {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -284,7 +302,7 @@
     height: 32px;
   }
 
-  .theme-toggle:hover, .admin-link:hover, .edit-toggle:hover, .import-export-btn:hover, .help-btn:hover {
+  .theme-toggle:hover, .admin-link:hover, .edit-toggle:hover, .import-export-btn:hover, .help-btn:hover, .about-btn:hover {
     background: var(--accent);
     color: white;
   }

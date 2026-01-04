@@ -2,6 +2,7 @@ import { writable, derived, get } from 'svelte/store';
 import type { Config, Dashboard } from '$lib/types';
 import { getConfig, updateConfig as apiUpdateConfig } from '$lib/utils/api';
 import { page } from '$app/stores';
+import { toast } from './toast';
 
 // Create a writable store for the config
 export const config = writable<Config | null>(null);
@@ -42,12 +43,16 @@ export async function loadConfig() {
 }
 
 // Update configuration (admin only)
-export async function updateConfig(newConfig: Config) {
+export async function updateConfig(newConfig: Config, showToast = true) {
   try {
     await apiUpdateConfig(newConfig);
     config.set(newConfig);
+    if (showToast) {
+      toast.success('Changes saved');
+    }
   } catch (error) {
     console.error('Failed to update config:', error);
+    toast.error('Failed to save changes');
     throw error;
   }
 }

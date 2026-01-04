@@ -1,11 +1,14 @@
 package api
 
 import (
+	"bytes"
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"image"
+	"image/png"
 	"io"
 	"log"
 	"net/http"
@@ -13,9 +16,26 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/yourusername/hops/internal/converters"
-	"github.com/yourusername/hops/internal/version"
+	_ "image/gif"
+	_ "image/jpeg"
+
+	"github.com/jmagar/hops/internal/converters"
+	"github.com/jmagar/hops/internal/version"
+	"golang.org/x/image/draw"
+	_ "golang.org/x/image/webp"
 )
+
+const bearerPrefix = "Bearer "
+
+// extractSessionID extracts the session ID from the Authorization header,
+// removing the "Bearer " prefix if present
+func extractSessionID(req *http.Request) string {
+	sessionID := req.Header.Get("Authorization")
+	if strings.HasPrefix(sessionID, bearerPrefix) {
+		return sessionID[len(bearerPrefix):]
+	}
+	return sessionID
+}
 
 // handleGetVersion returns version information
 func (r *Router) handleGetVersion(w http.ResponseWriter, req *http.Request) {
@@ -88,10 +108,17 @@ func (r *Router) handleUpdateConfig(w http.ResponseWriter, req *http.Request) {
 	json.NewEncoder(w).Encode(map[string]bool{"success": true})
 }
 
-// handleLogin authenticates a user
+// handleLogin authenticates a user with rate limiting
 func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Get client IP for rate limiting
+	clientIP := getClientIP(req)
+	if !r.rateLimiter.Allow(clientIP) {
+		http.Error(w, "Too many login attempts. Please try again later.", http.StatusTooManyRequests)
 		return
 	}
 
@@ -117,6 +144,29 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 	})
 }
 
+// getClientIP extracts the client IP address from the request
+func getClientIP(req *http.Request) string {
+	// Check X-Forwarded-For header first (for reverse proxies)
+	if xff := req.Header.Get("X-Forwarded-For"); xff != "" {
+		// Take the first IP in the list
+		if idx := strings.Index(xff, ","); idx != -1 {
+			return strings.TrimSpace(xff[:idx])
+		}
+		return strings.TrimSpace(xff)
+	}
+
+	// Check X-Real-IP header
+	if xri := req.Header.Get("X-Real-IP"); xri != "" {
+		return xri
+	}
+
+	// Fall back to RemoteAddr
+	if idx := strings.LastIndex(req.RemoteAddr, ":"); idx != -1 {
+		return req.RemoteAddr[:idx]
+	}
+	return req.RemoteAddr
+}
+
 // handleLogout logs out a user
 func (r *Router) handleLogout(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodPost {
@@ -124,11 +174,7 @@ func (r *Router) handleLogout(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	sessionID := req.Header.Get("Authorization")
-	if len(sessionID) > 7 && sessionID[:7] == "Bearer " {
-		sessionID = sessionID[7:]
-	}
-
+	sessionID := extractSessionID(req)
 	r.authService.Logout(sessionID)
 
 	w.Header().Set("Content-Type", "application/json")
@@ -153,11 +199,7 @@ func (r *Router) handleChangePassword(w http.ResponseWriter, req *http.Request) 
 	}
 
 	// Get userID from session (simplified - would normally come from context)
-	sessionID := req.Header.Get("Authorization")
-	if len(sessionID) > 7 && sessionID[:7] == "Bearer " {
-		sessionID = sessionID[7:]
-	}
-
+	sessionID := extractSessionID(req)
 	userID, err := r.authService.ValidateSession(sessionID)
 	if err != nil {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
@@ -322,21 +364,99 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// Validate the resulting JSON has the expected structure
-	var configData map[string]interface{}
-	if err := json.Unmarshal(configJSON, &configData); err != nil {
+	var importedConfig map[string]interface{}
+	if err := json.Unmarshal(configJSON, &importedConfig); err != nil {
 		http.Error(w, "Invalid configuration after conversion", http.StatusInternalServerError)
 		return
 	}
 
-	if _, ok := configData["dashboards"]; !ok {
-		http.Error(w, "Invalid config: missing 'dashboards' field", http.StatusInternalServerError)
+	importedDashboards, ok := importedConfig["dashboards"].([]interface{})
+	if !ok {
+		http.Error(w, "Invalid config: missing 'dashboards' field", http.StatusBadRequest)
+		return
+	}
+
+	// Load existing config to merge with
+	var existingJSON string
+	err = r.db.QueryRow("SELECT data FROM config WHERE id = 1").Scan(&existingJSON)
+
+	var existingConfig map[string]interface{}
+	if err == nil && existingJSON != "" {
+		if err := json.Unmarshal([]byte(existingJSON), &existingConfig); err != nil {
+			existingConfig = make(map[string]interface{})
+		}
+	} else {
+		existingConfig = make(map[string]interface{})
+	}
+
+	// Get existing dashboards
+	existingDashboards, _ := existingConfig["dashboards"].([]interface{})
+
+	// Build a map of existing dashboard paths to avoid duplicates
+	existingPaths := make(map[string]bool)
+	for _, d := range existingDashboards {
+		if dashboard, ok := d.(map[string]interface{}); ok {
+			if path, ok := dashboard["path"].(string); ok {
+				existingPaths[path] = true
+			}
+		}
+	}
+
+	// Append imported dashboards, renaming paths if they conflict
+	importedCount := 0
+	for _, d := range importedDashboards {
+		if dashboard, ok := d.(map[string]interface{}); ok {
+			path, _ := dashboard["path"].(string)
+			originalPath := path
+
+			// If path already exists, add a suffix
+			suffix := 1
+			for existingPaths[path] {
+				path = fmt.Sprintf("%s-%d", originalPath, suffix)
+				suffix++
+			}
+
+			// Update the path and id if changed
+			if path != originalPath {
+				dashboard["path"] = path
+				dashboard["id"] = strings.TrimPrefix(path, "/")
+				if name, ok := dashboard["name"].(string); ok {
+					dashboard["name"] = fmt.Sprintf("%s (Imported)", name)
+				}
+			}
+
+			existingDashboards = append(existingDashboards, dashboard)
+			existingPaths[path] = true
+			importedCount++
+		}
+	}
+
+	// Update the config with merged dashboards
+	existingConfig["dashboards"] = existingDashboards
+
+	// Preserve theme and settings from existing config, or use imported if not present
+	if _, ok := existingConfig["theme"]; !ok {
+		if theme, ok := importedConfig["theme"]; ok {
+			existingConfig["theme"] = theme
+		}
+	}
+	if _, ok := existingConfig["settings"]; !ok {
+		if settings, ok := importedConfig["settings"]; ok {
+			existingConfig["settings"] = settings
+		}
+	}
+
+	// Serialize merged config
+	mergedJSON, err := json.Marshal(existingConfig)
+	if err != nil {
+		http.Error(w, "Failed to serialize merged config", http.StatusInternalServerError)
 		return
 	}
 
 	// Save to database
 	_, err = r.db.Exec(
 		"INSERT OR REPLACE INTO config (id, data, updated_at) VALUES (1, ?, CURRENT_TIMESTAMP)",
-		string(configJSON),
+		string(mergedJSON),
 	)
 	if err != nil {
 		http.Error(w, "Failed to save config", http.StatusInternalServerError)
@@ -345,8 +465,9 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"success": true,
-		"message": fmt.Sprintf("Configuration imported successfully from %s format", importFormat),
+		"success":  true,
+		"message":  fmt.Sprintf("Imported %d dashboard(s) from %s format", importedCount, importFormat),
+		"imported": importedCount,
 	})
 }
 
@@ -446,14 +567,14 @@ func (r *Router) handleGetIcons(w http.ResponseWriter, req *http.Request) {
 
 	if categoryID != "" {
 		rows, err = r.db.Query(`
-			SELECT id, name, icon, category_id, color, is_preset, created_at
+			SELECT id, name, icon, category_id, color, image_url, is_preset, created_at
 			FROM icons
 			WHERE category_id = ?
 			ORDER BY name ASC
 		`, categoryID)
 	} else {
 		rows, err = r.db.Query(`
-			SELECT id, name, icon, category_id, color, is_preset, created_at
+			SELECT id, name, icon, category_id, color, image_url, is_preset, created_at
 			FROM icons
 			ORDER BY name ASC
 		`)
@@ -468,10 +589,10 @@ func (r *Router) handleGetIcons(w http.ResponseWriter, req *http.Request) {
 	icons := []map[string]interface{}{}
 	for rows.Next() {
 		var id, name, icon, categoryID, createdAt string
-		var color sql.NullString
+		var color, imageURL sql.NullString
 		var isPreset bool
 
-		if err := rows.Scan(&id, &name, &icon, &categoryID, &color, &isPreset, &createdAt); err != nil {
+		if err := rows.Scan(&id, &name, &icon, &categoryID, &color, &imageURL, &isPreset, &createdAt); err != nil {
 			http.Error(w, "Failed to scan icon", http.StatusInternalServerError)
 			return
 		}
@@ -487,6 +608,10 @@ func (r *Router) handleGetIcons(w http.ResponseWriter, req *http.Request) {
 
 		if color.Valid {
 			iconData["color"] = color.String
+		}
+
+		if imageURL.Valid {
+			iconData["imageUrl"] = imageURL.String
 		}
 
 		icons = append(icons, iconData)
@@ -508,6 +633,7 @@ func (r *Router) handleCreateIcon(w http.ResponseWriter, req *http.Request) {
 		Icon       string  `json:"icon"`
 		CategoryID string  `json:"categoryId"`
 		Color      *string `json:"color"`
+		ImageURL   *string `json:"imageUrl"`
 	}
 
 	if err := json.NewDecoder(req.Body).Decode(&iconData); err != nil {
@@ -515,9 +641,15 @@ func (r *Router) handleCreateIcon(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Validate required fields
-	if iconData.ID == "" || iconData.Name == "" || iconData.Icon == "" || iconData.CategoryID == "" {
+	// Validate required fields - icon is optional if imageUrl is provided
+	if iconData.ID == "" || iconData.Name == "" || iconData.CategoryID == "" {
 		http.Error(w, "Missing required fields", http.StatusBadRequest)
+		return
+	}
+
+	// Must have either icon or imageUrl
+	if iconData.Icon == "" && (iconData.ImageURL == nil || *iconData.ImageURL == "") {
+		http.Error(w, "Either icon or imageUrl is required", http.StatusBadRequest)
 		return
 	}
 
@@ -526,9 +658,14 @@ func (r *Router) handleCreateIcon(w http.ResponseWriter, req *http.Request) {
 		color = sql.NullString{String: *iconData.Color, Valid: true}
 	}
 
+	var imageURL sql.NullString
+	if iconData.ImageURL != nil && *iconData.ImageURL != "" {
+		imageURL = sql.NullString{String: *iconData.ImageURL, Valid: true}
+	}
+
 	_, err := r.db.Exec(
-		"INSERT INTO icons (id, name, icon, category_id, color, is_preset) VALUES (?, ?, ?, ?, ?, 0)",
-		iconData.ID, iconData.Name, iconData.Icon, iconData.CategoryID, color,
+		"INSERT INTO icons (id, name, icon, category_id, color, image_url, is_preset) VALUES (?, ?, ?, ?, ?, ?, 0)",
+		iconData.ID, iconData.Name, iconData.Icon, iconData.CategoryID, color, imageURL,
 	)
 	if err != nil {
 		http.Error(w, "Failed to create icon", http.StatusInternalServerError)
@@ -737,6 +874,10 @@ var defaultCategories = []BackgroundCategory{
 	{ID: "docker", Name: "Docker", Icon: "mdi:docker"},
 	{ID: "homelab", Name: "Homelab", Icon: "mdi:raspberry-pi"},
 	{ID: "smarthome", Name: "Smart Home", Icon: "mdi:home-automation"},
+	{ID: "apps", Name: "Applications", Icon: "mdi:application"},
+	{ID: "multimedia", Name: "Multimedia", Icon: "mdi:multimedia"},
+	{ID: "weather", Name: "Weather", Icon: "mdi:weather-partly-cloudy"},
+	{ID: "storage", Name: "Storage", Icon: "mdi:harddisk"},
 	{ID: "tech", Name: "Technology", Icon: "mdi:chip"},
 	{ID: "space", Name: "Space", Icon: "mdi:space-station"},
 	{ID: "minimal", Name: "Minimal", Icon: "mdi:palette-outline"},
@@ -893,6 +1034,143 @@ func (r *Router) handleUploadBackground(w http.ResponseWriter, req *http.Request
 	})
 }
 
+// handleUploadIcon handles icon image uploads with automatic resizing
+func (r *Router) handleUploadIcon(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Parse multipart form (max 5 MB for icons)
+	if err := req.ParseMultipartForm(5 << 20); err != nil {
+		http.Error(w, "Failed to parse form", http.StatusBadRequest)
+		return
+	}
+
+	file, header, err := req.FormFile("file")
+	if err != nil {
+		http.Error(w, "No file provided", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	// Validate file type
+	contentType := header.Header.Get("Content-Type")
+	validTypes := map[string]bool{
+		"image/jpeg": true,
+		"image/png":  true,
+		"image/gif":  true,
+		"image/webp": true,
+		"image/svg+xml": true,
+	}
+
+	if !validTypes[contentType] {
+		http.Error(w, "Invalid file type. Allowed: JPEG, PNG, GIF, WebP, SVG", http.StatusBadRequest)
+		return
+	}
+
+	// Create icons directory if it doesn't exist
+	iconsDir := filepath.Join(r.config.DataDir, "icons")
+	if err := os.MkdirAll(iconsDir, 0755); err != nil {
+		http.Error(w, "Failed to create icons directory", http.StatusInternalServerError)
+		return
+	}
+
+	// Generate unique filename
+	randomBytes := make([]byte, 16)
+	if _, err := rand.Read(randomBytes); err != nil {
+		http.Error(w, "Failed to generate filename", http.StatusInternalServerError)
+		return
+	}
+	iconID := hex.EncodeToString(randomBytes)
+
+	// Read file into buffer
+	fileData, err := io.ReadAll(file)
+	if err != nil {
+		http.Error(w, "Failed to read file", http.StatusInternalServerError)
+		return
+	}
+
+	var filename string
+	var destPath string
+
+	// Handle SVG separately (no resizing needed)
+	if contentType == "image/svg+xml" {
+		filename = iconID + ".svg"
+		destPath = filepath.Join(iconsDir, filename)
+		if err := os.WriteFile(destPath, fileData, 0644); err != nil {
+			http.Error(w, "Failed to save file", http.StatusInternalServerError)
+			return
+		}
+	} else {
+		// Decode and resize raster images
+		img, _, err := image.Decode(bytes.NewReader(fileData))
+		if err != nil {
+			http.Error(w, "Failed to decode image: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		// Resize to 128x128 (good size for icons)
+		targetSize := 128
+		resized := resizeImage(img, targetSize, targetSize)
+
+		// Save as PNG for best quality with transparency
+		filename = iconID + ".png"
+		destPath = filepath.Join(iconsDir, filename)
+		destFile, err := os.Create(destPath)
+		if err != nil {
+			http.Error(w, "Failed to create file", http.StatusInternalServerError)
+			return
+		}
+		defer destFile.Close()
+
+		if err := png.Encode(destFile, resized); err != nil {
+			http.Error(w, "Failed to encode image", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	// Return the URL path for the uploaded icon
+	urlPath := "/icons/" + filename
+
+	writeJSON(w, map[string]interface{}{
+		"success": true,
+		"id":      iconID,
+		"url":     urlPath,
+	})
+}
+
+// resizeImage resizes an image to fit within maxWidth x maxHeight while preserving aspect ratio
+func resizeImage(src image.Image, maxWidth, maxHeight int) image.Image {
+	srcBounds := src.Bounds()
+	srcWidth := srcBounds.Dx()
+	srcHeight := srcBounds.Dy()
+
+	// Calculate scale to fit within bounds
+	scaleX := float64(maxWidth) / float64(srcWidth)
+	scaleY := float64(maxHeight) / float64(srcHeight)
+	scale := scaleX
+	if scaleY < scaleX {
+		scale = scaleY
+	}
+
+	// Don't upscale small images
+	if scale > 1 {
+		scale = 1
+	}
+
+	newWidth := int(float64(srcWidth) * scale)
+	newHeight := int(float64(srcHeight) * scale)
+
+	// Create destination image
+	dst := image.NewRGBA(image.Rect(0, 0, newWidth, newHeight))
+
+	// Use high-quality resampling
+	draw.CatmullRom.Scale(dst, dst.Bounds(), src, srcBounds, draw.Over, nil)
+
+	return dst
+}
+
 // handleListBackgrounds returns all background images and categories
 func (r *Router) handleListBackgrounds(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodGet {
@@ -1021,7 +1299,7 @@ func (r *Router) handleDeleteBackground(w http.ResponseWriter, req *http.Request
 		return
 	}
 
-	// Find the image
+	// Find the image in metadata
 	var imageToDelete *BackgroundImage
 	imageIndex := -1
 	for i, img := range bgData.Images {
@@ -1032,7 +1310,21 @@ func (r *Router) handleDeleteBackground(w http.ResponseWriter, req *http.Request
 		}
 	}
 
+	// If not in metadata, check for orphan file on disk (file exists but not tracked)
 	if imageToDelete == nil {
+		backgroundsDir := filepath.Join(r.config.DataDir, "backgrounds")
+		extensions := []string{".png", ".jpg", ".jpeg", ".gif", ".webp"}
+		for _, ext := range extensions {
+			filePath := filepath.Join(backgroundsDir, imageID+ext)
+			if _, err := os.Stat(filePath); err == nil {
+				if err := os.Remove(filePath); err != nil {
+					http.Error(w, "Failed to delete file", http.StatusInternalServerError)
+					return
+				}
+				writeJSON(w, map[string]bool{"success": true})
+				return
+			}
+		}
 		http.Error(w, "Image not found", http.StatusNotFound)
 		return
 	}
@@ -1080,7 +1372,10 @@ func (r *Router) handleBackgroundCategories(w http.ResponseWriter, req *http.Req
 		// Generate ID if not provided
 		if newCat.ID == "" {
 			randomBytes := make([]byte, 8)
-			rand.Read(randomBytes)
+			if _, err := rand.Read(randomBytes); err != nil {
+				http.Error(w, "Failed to generate ID", http.StatusInternalServerError)
+				return
+			}
 			newCat.ID = hex.EncodeToString(randomBytes)
 		}
 
@@ -1149,7 +1444,8 @@ func (r *Router) handleBackgroundCategoryActions(w http.ResponseWriter, req *htt
 		// Don't allow deleting default categories
 		defaultIDs := map[string]bool{
 			"network": true, "servers": true, "docker": true, "homelab": true,
-			"smarthome": true, "tech": true, "space": true, "minimal": true, "uploaded": true,
+			"smarthome": true, "apps": true, "multimedia": true, "weather": true,
+			"storage": true, "tech": true, "space": true, "minimal": true, "uploaded": true,
 		}
 		if defaultIDs[categoryID] {
 			http.Error(w, "Cannot delete default category", http.StatusBadRequest)

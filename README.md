@@ -1,8 +1,24 @@
 # HOPS - Home Operations Portal System
 
-**Version 0.6.0**
+**Version 0.9.0**
 
-A self-hosted dashboard application that combines the best features of Heimdall, Homer, Dashy, Homepage, Organizr, and Homarr.
+A modern, self-hosted homepage dashboard for the homelab community.
+
+## Why Another Dashboard?
+
+Yes, there are already plenty of homelab dashboard and bookmark applications out there: Homer, Dashy, Heimdall, Homepage, Organizr, Homarr, and more. If you're using one and happy with it, stick with it. Seriously.
+
+I created HOPS because none of the existing options matched what I wanted:
+
+- **100% GUI-based editing** - I wanted to click, drag, and configure everything visually. No YAML files. No JSON editing. No "simple" configuration files that inevitably become not-so-simple. If you enjoy hand-crafting configuration files, HOPS isn't for you. Close this tab. Now.
+
+- **Native installation** - I have no experience with Docker or containers, and I didn't want to learn just to run a dashboard. HOPS is a single Go binary with a SQLite database. Download, run, done.
+
+- **Power features without complexity** - Drag-and-drop everything. Multiple dashboards. Tabs. Groups. Background slideshows. Theme customization. Status monitoring. All configurable through the UI.
+
+HOPS won't be for everyone. That's fine. But if you've been frustrated editing YAML indentation at 11pm, or wished you could just *click* to add a new bookmark, maybe give it a try.
+
+Already using Homer, Dashy, or Heimdall? HOPS can import your existing configuration, so you can try it without starting from scratch.
 
 ## Features
 
@@ -101,7 +117,7 @@ pnpm dev
 - Username: `admin`
 - Password: `admin`
 
-**Important**: Change the default password after first login!
+**Important:** Change the default password after first login via the "Change Password" button in the admin panel.
 
 ## Building for Production
 
@@ -235,15 +251,9 @@ The configuration is stored in SQLite as JSON. Example structure:
 }
 ```
 
-## Deployment with Caddy
+## Reverse Proxy
 
-Example Caddyfile for reverse proxy:
-
-```
-hops.example.com {
-    reverse_proxy localhost:8080
-}
-```
+HOPS has no special reverse proxy requirements. Simply proxy to the backend port (default 8080) with your preferred solution (Caddy, nginx, Traefik, etc.).
 
 ## Systemd Service
 
@@ -256,9 +266,9 @@ After=network.target
 
 [Service]
 Type=simple
-User=jonathan
-WorkingDirectory=/home/jonathan/hops/backend
-ExecStart=/home/jonathan/hops/backend/hops --port 8080 --data /home/jonathan/hops/data --frontend /home/jonathan/hops/frontend/build
+User=your-username
+WorkingDirectory=/path/to/hops/backend
+ExecStart=/path/to/hops/backend/hops --port 8080 --data /path/to/hops/data --frontend /path/to/hops/frontend/build
 Restart=always
 RestartSec=5
 
@@ -274,70 +284,35 @@ sudo systemctl start hops
 
 ## Keyboard Shortcuts
 
-| Shortcut | Action |
-|----------|--------|
-| `Ctrl+C` | Copy selected tile |
-| `Ctrl+X` | Cut selected tile |
-| `Ctrl+V` | Paste tile into focused group |
-| `Escape` | Close modal / Cancel edit |
-| `Ctrl+Enter` | Save and close modal |
+| Shortcut       | Action                        |
+|----------------|-------------------------------|
+| `Ctrl+C`       | Copy selected tile            |
+| `Ctrl+X`       | Cut selected tile             |
+| `Ctrl+V`       | Paste tile into focused group |
+| `Escape`       | Close modal / Cancel edit     |
+| `Ctrl+Enter`   | Save and close modal          |
 
 *Shortcuts work when edit mode is enabled.*
 
 ## Roadmap
 
-### Phase 1: Foundation
-- [x] Project structure
-- [x] Go backend with SQLite
-- [x] SvelteKit frontend
-- [x] Authentication system
-- [x] Basic API routes
-- [x] Config storage
+Future improvements under consideration:
 
-### Phase 2: Core Dashboard
-- [x] Dashboard viewer
-- [x] Tabs and groups
-- [x] Tile display
-- [x] Icon system (150,000+ icons via Iconify)
-- [x] Visual editor
-- [x] Tab drag-and-drop
-- [x] Tile drag-and-drop within groups
-- [x] Copy/cut/paste for tiles
-- [x] Comprehensive theme system (8 presets with light/dark modes)
-
-### Phase 3: Advanced Features
-- [x] Keyboard shortcuts (Ctrl+C/Ctrl+X/Ctrl+V for copy/cut/paste)
-- [x] Multiple open modes (iframe, modal, new tab, same tab)
-- [x] Drag tiles between groups (cross-group drag & drop)
-- [x] Background images/slideshow for dashboards and tabs
-- [x] 8 slideshow transition effects including Ken Burns
-- [x] Theme hierarchy (Dashboard -> Tab -> Group -> Tile)
-- [x] Built-in help system
-- [ ] Status checks (HTTP/ICMP)
-- [ ] Global search with "/" hotkey
-- [ ] Custom CSS option
-
-### Phase 4: Widgets & Integrations
-- [ ] Widget framework
-- [ ] Weather widget
-- [ ] Calendar widget
-- [ ] System stats
-- [ ] Service integrations (Pi-hole, Proxmox, etc.)
-
-### Phase 5: Polish
-- [x] Import/export (JSON)
-- [x] Import from Homer (YAML config.yml)
-- [x] Import from Dashy (YAML conf.yml)
-- [x] Background image management with categories
-- [x] Upload custom backgrounds
-- [x] Streamlined admin panel
-- [ ] Import from Heimdall (JSON)
-- [ ] Multi-select and bulk operations
-- [ ] Secret URLs
+- Multi-column group layouts (1/2/3 columns per row)
+- Global search with "/" hotkey
+- Custom CSS option
+- Widget framework (weather, calendar, system stats)
+- Service integrations (Pi-hole, Proxmox, etc.)
+- Multi-select and bulk operations
+- Secret/shareable dashboard URLs
+- HTTP/ICMP status checks with response time
+- Undo/Redo for accidental changes
+- Keyboard navigation (arrow keys)
+- PWA support (install as mobile app)
 
 ## Tips
 
-- Click the **?** icon in the navbar (when in edit mode) for help
+- Click the **?** icon in the navbar (when logged in) for help
 - Triple-click the HOPS logo when editing for a surprise
 - The classics never go out of style: try the Konami code
 

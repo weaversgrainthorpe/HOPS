@@ -7,6 +7,7 @@
   let { opacity, onSelect }: Props = $props();
 
   // Convert opacity (0-1) to percentage (0-100)
+  // svelte-ignore state_referenced_locally
   let opacityPercent = $state((opacity ?? 0.95) * 100);
 
   $effect(() => {

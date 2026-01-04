@@ -5,9 +5,11 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync"
+	"time"
 
-	"github.com/yourusername/hops/internal/auth"
-	"github.com/yourusername/hops/internal/config"
+	"github.com/jmagar/hops/internal/auth"
+	"github.com/jmagar/hops/internal/config"
 )
 
 // Router holds all dependencies for the API
@@ -16,15 +18,65 @@ type Router struct {
 	authService *auth.Service
 	config      *config.Config
 	mux         *http.ServeMux
+	rateLimiter *RateLimiter
+}
+
+// RateLimiter provides simple rate limiting for login attempts
+type RateLimiter struct {
+	mu       sync.Mutex
+	attempts map[string][]time.Time
+	limit    int
+	window   time.Duration
+}
+
+// NewRateLimiter creates a rate limiter
+func NewRateLimiter(limit int, window time.Duration) *RateLimiter {
+	return &RateLimiter{
+		attempts: make(map[string][]time.Time),
+		limit:    limit,
+		window:   window,
+	}
+}
+
+// Allow checks if a request from the given IP should be allowed
+func (rl *RateLimiter) Allow(ip string) bool {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+
+	now := time.Now()
+	windowStart := now.Add(-rl.window)
+
+	// Filter out old attempts
+	var recent []time.Time
+	for _, t := range rl.attempts[ip] {
+		if t.After(windowStart) {
+			recent = append(recent, t)
+		}
+	}
+
+	if len(recent) >= rl.limit {
+		rl.attempts[ip] = recent
+		return false
+	}
+
+	rl.attempts[ip] = append(recent, now)
+	return true
 }
 
 // NewRouter creates a new API router with all routes configured
 func NewRouter(db *sql.DB, authService *auth.Service, cfg *config.Config) http.Handler {
+	// Use configured rate limit or default to 20 per minute
+	rateLimit := cfg.LoginRateLimitPerMin
+	if rateLimit <= 0 {
+		rateLimit = 20
+	}
+
 	r := &Router{
 		db:          db,
 		authService: authService,
 		config:      cfg,
 		mux:         http.NewServeMux(),
+		rateLimiter: NewRateLimiter(rateLimit, time.Minute),
 	}
 
 	r.setupRoutes()
@@ -53,7 +105,11 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/icon-categories", r.handleGetIconCategories)
 	r.mux.HandleFunc("/api/icon-categories/", r.handleIconCategoryActions)
 	r.mux.HandleFunc("/api/icons", r.handleGetIcons)
+	r.mux.HandleFunc("/api/icons/upload", r.authMiddleware(r.handleUploadIcon))
 	r.mux.HandleFunc("/api/icons/", r.handleIconActions)
+
+	// Serve uploaded icons from data directory
+	r.mux.HandleFunc("/icons/", r.serveIcons)
 
 	// Background image routes
 	r.mux.HandleFunc("/api/backgrounds", r.handleBackgrounds)
@@ -63,6 +119,9 @@ func (r *Router) setupRoutes() {
 
 	// Serve uploaded backgrounds from data directory
 	r.mux.HandleFunc("/backgrounds/", r.serveBackgrounds)
+
+	// Serve preset background images from data/presets directory
+	r.mux.HandleFunc("/presets/", r.servePresets)
 
 	// Static file serving (frontend) with SPA support
 	r.mux.HandleFunc("/", r.serveSPA)
@@ -105,6 +164,38 @@ func (r *Router) serveBackgrounds(w http.ResponseWriter, req *http.Request) {
 	http.ServeFile(w, req, filePath)
 }
 
+// servePresets serves preset background images from the data/presets directory
+func (r *Router) servePresets(w http.ResponseWriter, req *http.Request) {
+	// Extract filename from path
+	filename := filepath.Base(req.URL.Path)
+
+	// Construct path to presets directory
+	presetsDir := filepath.Join(r.config.DataDir, "presets")
+	filePath := filepath.Join(presetsDir, filename)
+
+	// Set cache headers - presets are static
+	w.Header().Set("Cache-Control", "public, max-age=31536000")
+
+	// Serve the file
+	http.ServeFile(w, req, filePath)
+}
+
+// serveIcons serves uploaded icon images from the data/icons directory
+func (r *Router) serveIcons(w http.ResponseWriter, req *http.Request) {
+	// Extract filename from path
+	filename := filepath.Base(req.URL.Path)
+
+	// Construct path to icons directory
+	iconsDir := filepath.Join(r.config.DataDir, "icons")
+	filePath := filepath.Join(iconsDir, filename)
+
+	// Set cache headers for uploaded icons
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+
+	// Serve the file
+	http.ServeFile(w, req, filePath)
+}
+
 // serveSPA serves the Single Page Application with fallback to index.html
 func (r *Router) serveSPA(w http.ResponseWriter, req *http.Request) {
 	// Get the absolute path to prevent directory traversal
@@ -140,12 +231,30 @@ func (r *Router) loggingMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// corsMiddleware adds CORS headers
+// corsMiddleware adds CORS headers with proper origin validation
 func (r *Router) corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		origin := req.Header.Get("Origin")
+
+		// If allowed origins are configured, validate against them
+		// Otherwise, only allow same-origin requests (no CORS headers)
+		if len(r.config.AllowedOrigins) > 0 && origin != "" {
+			allowed := false
+			for _, allowedOrigin := range r.config.AllowedOrigins {
+				if origin == allowedOrigin {
+					allowed = true
+					break
+				}
+			}
+
+			if allowed {
+				w.Header().Set("Access-Control-Allow-Origin", origin)
+				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+				w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-CSRF-Token")
+				w.Header().Set("Access-Control-Allow-Credentials", "true")
+				w.Header().Set("Vary", "Origin")
+			}
+		}
 
 		if req.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusOK)
@@ -156,28 +265,20 @@ func (r *Router) corsMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// authMiddleware validates session token
+// authMiddleware validates session token for protected routes
 func (r *Router) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
-		sessionID := req.Header.Get("Authorization")
+		sessionID := extractSessionID(req)
 		if sessionID == "" {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
 
-		// Remove "Bearer " prefix if present
-		if len(sessionID) > 7 && sessionID[:7] == "Bearer " {
-			sessionID = sessionID[7:]
-		}
-
-		userID, err := r.authService.ValidateSession(sessionID)
+		_, err := r.authService.ValidateSession(sessionID)
 		if err != nil {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
-
-		// Add userID to context if needed
-		_ = userID
 
 		next(w, req)
 	}

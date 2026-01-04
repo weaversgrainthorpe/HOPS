@@ -8,6 +8,7 @@
   import { editMode } from '$lib/stores/editMode';
   import { isAuthenticated } from '$lib/stores/auth';
   import { clipboard } from '$lib/stores/clipboard';
+  import { confirm } from '$lib/stores/confirmModal';
   import { initEasterEggs, destroyEasterEggs, partyModeActive } from '$lib/stores/easterEggs';
   import TabEditModal from './admin/TabEditModal.svelte';
   import HeaderConfigModal from './admin/HeaderConfigModal.svelte';
@@ -24,6 +25,16 @@
   let showBackgroundConfig = $state(false);
   let draggedTabs = $state<Tab[]>([]);
   let focusedGroupId = $state<string | null>(null); // Track which group has focus for paste
+
+  // Determine the effective background based on perTabBackgrounds setting
+  const effectiveBackground = $derived(() => {
+    if (dashboard.perTabBackgrounds) {
+      const activeTab = dashboard.tabs[activeTabIndex];
+      // Use tab background if available, otherwise fall back to dashboard background
+      return activeTab?.background || dashboard.background;
+    }
+    return dashboard.background;
+  });
 
   // Initialize Easter eggs
   onMount(() => {
@@ -356,6 +367,16 @@
     }
   }
 
+  async function handlePerTabBackgroundsChange(enabled: boolean) {
+    if (!requireAuth()) return;
+    try {
+      const updatedDashboard = { ...dashboard, perTabBackgrounds: enabled };
+      await updateDashboard(updatedDashboard);
+    } catch (error) {
+      console.error('Failed to update perTabBackgrounds setting:', error);
+    }
+  }
+
   async function handleUpdateTabBackground(tabId: string, background: Background | undefined) {
     if (!requireAuth()) return;
     try {
@@ -425,7 +446,7 @@
 <svelte:window onkeydown={handleKeyboard} />
 
 <div class="dashboard" class:party-mode={$partyModeActive}>
-  <BackgroundSlideshow background={dashboard.background} />
+  <BackgroundSlideshow background={effectiveBackground()} />
   <PartyMode />
   <HopAnimation />
 
@@ -456,19 +477,21 @@
         onfinalize={handleTabsFinalize}
       >
         {#each draggedTabs as tab, index (tab.id)}
-          <div
-            class="tab"
-            class:active={activeTabIndex === index}
-            class:custom-color={tab.color}
-            class:draggable={$editMode}
-            style:--tab-bg={tab.color || 'var(--bg-secondary)'}
-            style:--tab-opacity={tab.opacity !== undefined ? tab.opacity : 0.95}
-            role="tab"
-            tabindex="0"
-            onclick={(e) => handleTabClick(index, e)}
-            onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleTabClick(index, e as unknown as MouseEvent); }}
-          >
-            <span class="tab-name">{tab.name}</span>
+          <div class="tab-container">
+            <div
+              class="tab"
+              class:active={activeTabIndex === index}
+              class:custom-color={tab.color}
+              class:draggable={$editMode}
+              style:--tab-bg={tab.color || 'var(--bg-secondary)'}
+              style:--tab-opacity={tab.opacity !== undefined ? tab.opacity : 0.95}
+              role="tab"
+              tabindex="0"
+              onclick={(e) => handleTabClick(index, e)}
+              onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleTabClick(index, e as unknown as MouseEvent); }}
+            >
+              <span class="tab-name">{tab.name}</span>
+            </div>
             {#if $editMode}
               <div class="tab-controls">
                 <button
@@ -480,9 +503,15 @@
                 </button>
                 <button
                   class="tab-control-btn delete-btn"
-                  onclick={(e) => {
+                  onclick={async (e) => {
                     e.stopPropagation();
-                    if (confirm(`Delete tab "${tab.name}" and all its contents?`)) {
+                    const confirmed = await confirm({
+                      title: 'Delete Tab',
+                      message: `Are you sure you want to delete "${tab.name}" and all its contents?`,
+                      confirmText: 'Delete',
+                      confirmStyle: 'danger'
+                    });
+                    if (confirmed) {
                       handleDeleteTab(tab.id);
                     }
                   }}
@@ -533,12 +562,19 @@
     tabColor={dashboard.tabs[editingTabIndex].color}
     tabOpacity={dashboard.tabs[editingTabIndex].opacity}
     tabBackground={dashboard.tabs[editingTabIndex].background}
-    onSave={(newName, newColor, newOpacity) => handleUpdateTab(dashboard.tabs[editingTabIndex].id, newName, newColor, newOpacity)}
-    onSaveBackground={(background) => handleUpdateTabBackground(dashboard.tabs[editingTabIndex].id, background)}
+    perTabBackgrounds={dashboard.perTabBackgrounds}
+    onSave={(newName, newColor, newOpacity) => handleUpdateTab(dashboard.tabs[editingTabIndex!].id, newName, newColor, newOpacity)}
+    onSaveBackground={(background) => handleUpdateTabBackground(dashboard.tabs[editingTabIndex!].id, background)}
     onCancel={() => editingTabIndex = null}
-    onDelete={() => {
-      if (confirm(`Are you sure you want to delete the tab "${dashboard.tabs[editingTabIndex].name}" and all its contents?`)) {
-        handleDeleteTab(dashboard.tabs[editingTabIndex].id);
+    onDelete={async () => {
+      const confirmed = await confirm({
+        title: 'Delete Tab',
+        message: `Are you sure you want to delete "${dashboard.tabs[editingTabIndex!].name}" and all its contents?`,
+        confirmText: 'Delete',
+        confirmStyle: 'danger'
+      });
+      if (confirmed) {
+        handleDeleteTab(dashboard.tabs[editingTabIndex!].id);
       }
     }}
   />
@@ -556,6 +592,8 @@
   <BackgroundConfigModal
     background={dashboard.background}
     level="dashboard"
+    perTabBackgrounds={dashboard.perTabBackgrounds}
+    onPerTabBackgroundsChange={handlePerTabBackgroundsChange}
     onSave={handleUpdateBackground}
     onCancel={() => showBackgroundConfig = false}
   />
@@ -634,6 +672,12 @@
     margin-bottom: -1px;
   }
 
+  .tab-container {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
   .tab {
     padding: 0 1.5rem;
     height: 48px;
@@ -676,10 +720,6 @@
   .tab:hover::before {
     background: var(--tab-bg, var(--bg-tertiary));
     opacity: 1;
-  }
-
-  .drag-icon {
-    opacity: 0.5;
   }
 
   .tab.active {
@@ -727,14 +767,18 @@
   }
 
   .tab-controls {
+    position: absolute;
+    right: -0.5rem;
+    top: 50%;
+    transform: translateY(-50%);
     display: flex;
     gap: 0.25rem;
     opacity: 0;
     transition: opacity 0.2s;
-    margin-left: 0.5rem;
+    z-index: 10;
   }
 
-  .tab:hover .tab-controls {
+  .tab-container:hover .tab-controls {
     opacity: 1;
   }
 

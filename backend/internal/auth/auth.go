@@ -141,3 +141,28 @@ func (s *Service) CleanupExpiredSessions() error {
 	_, err := s.db.Exec("DELETE FROM sessions WHERE expires_at < ?", time.Now())
 	return err
 }
+
+// StartCleanupRoutine starts a background goroutine that periodically cleans up expired sessions
+func (s *Service) StartCleanupRoutine(interval time.Duration, stop <-chan struct{}) {
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+
+		// Run cleanup immediately on start
+		if err := s.CleanupExpiredSessions(); err != nil {
+			// Log error but don't fail
+			fmt.Printf("Session cleanup error: %v\n", err)
+		}
+
+		for {
+			select {
+			case <-ticker.C:
+				if err := s.CleanupExpiredSessions(); err != nil {
+					fmt.Printf("Session cleanup error: %v\n", err)
+				}
+			case <-stop:
+				return
+			}
+		}
+	}()
+}

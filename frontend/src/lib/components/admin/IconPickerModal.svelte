@@ -1,16 +1,25 @@
 <script lang="ts">
   import Icon from '@iconify/svelte';
   import ColoredIcon from '../ColoredIcon.svelte';
-  import { getIconCategories, getIcons, createIcon, createIconCategory, deleteIcon, deleteIconCategory, type IconCategory, type Icon as IconType } from '$lib/utils/api';
+  import { getIconCategories, getIcons, createIcon, createIconCategory, deleteIcon, deleteIconCategory, uploadIconImage, type IconCategory, type Icon as IconType } from '$lib/utils/api';
+  import { confirm } from '$lib/stores/confirmModal';
+  import { toast } from '$lib/stores/toast';
   import { onMount } from 'svelte';
+  import { focusTrap } from '$lib/utils/focusTrap';
+
+  interface IconSelection {
+    icon: string;
+    imageUrl?: string;
+  }
 
   interface Props {
     currentIcon?: string;
-    onSelect: (iconName: string) => void;
+    currentImageUrl?: string;
+    onSelect: (selection: IconSelection) => void;
     onCancel: () => void;
   }
 
-  let { currentIcon, onSelect, onCancel }: Props = $props();
+  let { currentIcon, currentImageUrl, onSelect, onCancel }: Props = $props();
 
   let selectedCategory = $state('containers');
   let searchQuery = $state('');
@@ -25,10 +34,14 @@
   let newIconName = $state('');
   let newIconIcon = $state('');
   let newIconColor = $state('');
+  let newIconImageUrl = $state('');
+  let newIconUseUpload = $state(false);
+  let uploadingIcon = $state(false);
   let newCategoryId = $state('');
   let newCategoryName = $state('');
   let newCategoryIcon = $state('');
   let saving = $state(false);
+  let fileInput: HTMLInputElement;
 
   onMount(async () => {
     await loadData();
@@ -70,22 +83,66 @@
     }
   }
 
-  function handleSelectIcon(iconName: string) {
-    onSelect(iconName);
+  function handleSelectIcon(iconData: IconType) {
+    onSelect({
+      icon: iconData.icon,
+      imageUrl: iconData.imageUrl
+    });
+  }
+
+  async function handleFileUpload(event: Event) {
+    const target = event.target as HTMLInputElement;
+    const file = target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'];
+    if (!validTypes.includes(file.type)) {
+      toast.error('Invalid file type. Use PNG, JPG, GIF, WebP, or SVG.');
+      return;
+    }
+
+    // Validate file size (5MB max)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('File too large. Maximum size is 5MB.');
+      return;
+    }
+
+    try {
+      uploadingIcon = true;
+      const result = await uploadIconImage(file);
+      newIconImageUrl = result.url;
+      toast.success('Image uploaded!');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Upload failed');
+    } finally {
+      uploadingIcon = false;
+    }
   }
 
   async function handleAddIcon() {
-    if (!newIconName || !newIconIcon) return;
+    if (!newIconName) return;
+
+    // Must have either iconify icon or uploaded image
+    if (!newIconUseUpload && !newIconIcon) {
+      toast.error('Please enter an Iconify icon name');
+      return;
+    }
+    if (newIconUseUpload && !newIconImageUrl) {
+      toast.error('Please upload an image');
+      return;
+    }
 
     try {
       saving = true;
-      const iconId = newIconName.toLowerCase().replace(/\s+/g, '-');
+      const iconId = newIconName.toLowerCase().replace(/\s+/g, '-') + '-' + Date.now();
       await createIcon({
         id: iconId,
         name: newIconName,
-        icon: newIconIcon,
+        icon: newIconUseUpload ? '' : newIconIcon,
         categoryId: selectedCategory,
-        color: newIconColor || undefined
+        color: newIconColor || undefined,
+        imageUrl: newIconUseUpload ? newIconImageUrl : undefined
       });
 
       // Reload icons
@@ -95,9 +152,12 @@
       newIconName = '';
       newIconIcon = '';
       newIconColor = '';
+      newIconImageUrl = '';
+      newIconUseUpload = false;
       showAddIcon = false;
+      toast.success('Icon added!');
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to add icon');
+      toast.error(err instanceof Error ? err.message : 'Failed to add icon');
     } finally {
       saving = false;
     }
@@ -133,44 +193,66 @@
 
   async function handleDeleteIcon(iconId: string, isPreset: boolean) {
     if (isPreset) {
-      alert('Cannot delete preset icons');
+      toast.warning('Cannot delete preset icons');
       return;
     }
 
-    if (!confirm('Delete this icon?')) return;
+    const confirmed = await confirm({
+      title: 'Delete Icon',
+      message: 'Are you sure you want to delete this icon?',
+      confirmText: 'Delete',
+      confirmStyle: 'danger'
+    });
+    if (!confirmed) return;
 
     try {
       await deleteIcon(iconId);
       await loadData();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to delete icon');
+      toast.error(err instanceof Error ? err.message : 'Failed to delete icon');
     }
   }
 
   async function handleDeleteCategory(categoryId: string, isPreset: boolean) {
     if (isPreset) {
-      alert('Cannot delete preset categories');
+      toast.warning('Cannot delete preset categories');
       return;
     }
 
-    if (!confirm('Delete this category and all its icons?')) return;
+    const confirmed = await confirm({
+      title: 'Delete Category',
+      message: 'Delete this category and all its icons?',
+      confirmText: 'Delete',
+      confirmStyle: 'danger'
+    });
+    if (!confirmed) return;
 
     try {
       await deleteIconCategory(categoryId);
       await loadData();
       selectedCategory = 'containers';
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to delete category');
+      toast.error(err instanceof Error ? err.message : 'Failed to delete category');
     }
   }
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
 
-<div class="modal-backdrop" onclick={onCancel}>
-  <div class="modal-content" onclick={(e) => e.stopPropagation()}>
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div class="modal-backdrop" onclick={onCancel} onkeydown={(e) => e.key === 'Escape' && onCancel()}>
+  <div
+    class="modal-content"
+    onclick={(e) => e.stopPropagation()}
+    onkeydown={(e) => e.stopPropagation()}
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="icon-picker-title"
+    tabindex="-1"
+    use:focusTrap
+  >
     <div class="modal-header">
-      <h2>Choose an Icon</h2>
+      <h2 id="icon-picker-title">Choose an Icon</h2>
       <button class="close-btn" onclick={onCancel}>
         <Icon icon="mdi:close" width="24" />
       </button>
@@ -287,28 +369,82 @@
                 class="form-input"
               />
             </div>
-            <div class="form-row">
-              <input
-                type="text"
-                bind:value={newIconIcon}
-                placeholder="Iconify Icon (e.g., mdi:server or simple-icons:docker)"
-                class="form-input"
-              />
+
+            <!-- Icon Type Toggle -->
+            <div class="icon-type-toggle">
+              <button
+                class="toggle-btn"
+                class:active={!newIconUseUpload}
+                onclick={() => newIconUseUpload = false}
+              >
+                <Icon icon="mdi:palette" width="16" />
+                Iconify
+              </button>
+              <button
+                class="toggle-btn"
+                class:active={newIconUseUpload}
+                onclick={() => newIconUseUpload = true}
+              >
+                <Icon icon="mdi:upload" width="16" />
+                Upload Image
+              </button>
             </div>
-            <div class="form-row">
-              <input
-                type="text"
-                bind:value={newIconColor}
-                placeholder="Color (optional, e.g., #FF5733)"
-                class="form-input"
-              />
-            </div>
-            <small class="help-text-inline">
-              Find icons at <a href="https://icon-sets.iconify.design/" target="_blank" rel="noopener">iconify.design</a>
-            </small>
+
+            {#if newIconUseUpload}
+              <!-- Upload Image -->
+              <div class="upload-section">
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml"
+                  onchange={handleFileUpload}
+                  bind:this={fileInput}
+                  class="file-input"
+                  id="icon-upload"
+                />
+                <label for="icon-upload" class="upload-btn">
+                  {#if uploadingIcon}
+                    <Icon icon="mdi:loading" width="20" class="spin" />
+                    Uploading...
+                  {:else if newIconImageUrl}
+                    <img src={newIconImageUrl} alt="Uploaded icon" class="upload-preview" />
+                    <span>Change Image</span>
+                  {:else}
+                    <Icon icon="mdi:cloud-upload" width="24" />
+                    <span>Choose PNG, SVG, or JPG</span>
+                  {/if}
+                </label>
+                <small class="help-text-inline">Max 5MB. Will be resized to 128x128.</small>
+              </div>
+            {:else}
+              <!-- Iconify Input -->
+              <div class="form-row">
+                <input
+                  type="text"
+                  bind:value={newIconIcon}
+                  placeholder="Iconify Icon (e.g., mdi:server or simple-icons:docker)"
+                  class="form-input"
+                />
+              </div>
+              <div class="form-row">
+                <input
+                  type="text"
+                  bind:value={newIconColor}
+                  placeholder="Color (optional, e.g., #FF5733)"
+                  class="form-input"
+                />
+              </div>
+              <small class="help-text-inline">
+                Find icons at <a href="https://icon-sets.iconify.design/" target="_blank" rel="noopener">iconify.design</a>
+              </small>
+            {/if}
+
             <div class="form-actions">
-              <button class="btn-secondary" onclick={() => showAddIcon = false}>Cancel</button>
-              <button class="btn-primary" onclick={handleAddIcon} disabled={saving || !newIconName || !newIconIcon}>
+              <button class="btn-secondary" onclick={() => { showAddIcon = false; newIconUseUpload = false; newIconImageUrl = ''; }}>Cancel</button>
+              <button
+                class="btn-primary"
+                onclick={handleAddIcon}
+                disabled={saving || !newIconName || (newIconUseUpload ? !newIconImageUrl : !newIconIcon)}
+              >
                 {saving ? 'Adding...' : 'Add Icon'}
               </button>
             </div>
@@ -320,8 +456,8 @@
           {#each filteredIcons as iconData}
             <button
               class="icon-card"
-              class:selected={currentIcon === iconData.icon}
-              onclick={() => handleSelectIcon(iconData.icon)}
+              class:selected={currentIcon === iconData.icon || currentImageUrl === iconData.imageUrl}
+              onclick={() => handleSelectIcon(iconData)}
               title={iconData.name}
             >
               {#if !iconData.isPreset}
@@ -334,7 +470,11 @@
                 </button>
               {/if}
               <div class="icon-preview">
-                <ColoredIcon icon={iconData.icon} width="48" color={iconData.color} />
+                {#if iconData.imageUrl}
+                  <img src={iconData.imageUrl} alt={iconData.name} class="icon-image" />
+                {:else}
+                  <ColoredIcon icon={iconData.icon} width="48" color={iconData.color} />
+                {/if}
               </div>
               <div class="icon-name">{iconData.name}</div>
             </button>
@@ -766,5 +906,94 @@
 
   .icon-card {
     position: relative;
+  }
+
+  .icon-image {
+    width: 48px;
+    height: 48px;
+    object-fit: contain;
+    border-radius: 0.25rem;
+  }
+
+  .icon-type-toggle {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+  }
+
+  .toggle-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1rem;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 0.375rem;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .toggle-btn:hover {
+    border-color: var(--accent);
+    color: var(--text-primary);
+  }
+
+  .toggle-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: white;
+  }
+
+  .upload-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .file-input {
+    display: none;
+  }
+
+  .upload-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 1.5rem;
+    background: var(--bg-primary);
+    border: 2px dashed var(--border);
+    border-radius: 0.5rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s;
+    min-height: 100px;
+  }
+
+  .upload-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .upload-preview {
+    width: 64px;
+    height: 64px;
+    object-fit: contain;
+    border-radius: 0.375rem;
+  }
+
+  :global(.spin) {
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
   }
 </style>

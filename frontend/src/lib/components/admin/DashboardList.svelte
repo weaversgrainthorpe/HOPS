@@ -1,6 +1,7 @@
 <script lang="ts">
   import { config, updateConfig } from '$lib/stores/config';
   import { editMode, enableEditMode } from '$lib/stores/editMode';
+  import { confirm } from '$lib/stores/confirmModal';
   import { goto } from '$app/navigation';
   import type { Dashboard } from '$lib/types';
   import Icon from '@iconify/svelte';
@@ -28,7 +29,13 @@
   }
 
   async function handleDelete(dashboard: Dashboard) {
-    if (!confirm(`Delete dashboard "${dashboard.name}"?`)) return;
+    const confirmed = await confirm({
+      title: 'Delete Dashboard',
+      message: `Are you sure you want to delete "${dashboard.name}"? This action cannot be undone.`,
+      confirmText: 'Delete',
+      confirmStyle: 'danger'
+    });
+    if (!confirmed) return;
 
     if ($config) {
       const updatedConfig = {
@@ -118,17 +125,13 @@
               </div>
             </div>
           {:else}
-            <div class="dashboard-info">
+            <button class="dashboard-info" onclick={() => openDashboard(dashboard)} title="Open dashboard">
               <h3>{dashboard.name}</h3>
               <p class="path">{dashboard.path}</p>
               <p class="meta">{dashboard.tabs.length} tabs</p>
-            </div>
+            </button>
 
             <div class="dashboard-actions">
-              <button onclick={() => openDashboard(dashboard)} class="btn-primary">
-                <Icon icon="mdi:open-in-app" width="20" />
-                Open
-              </button>
               <button onclick={() => startEdit(dashboard)} class="btn-secondary" title="Rename">
                 <Icon icon="mdi:pencil" width="20" />
               </button>
@@ -185,11 +188,24 @@
 
   .dashboard-info {
     flex: 1;
+    text-align: left;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 0.5rem;
+    margin: -0.5rem;
+    border-radius: 0.5rem;
+    transition: background 0.2s;
+  }
+
+  .dashboard-info:hover {
+    background: var(--bg-tertiary);
   }
 
   .dashboard-info h3 {
     margin: 0 0 0.25rem 0;
     font-size: 1.125rem;
+    color: var(--text-primary);
   }
 
   .path {

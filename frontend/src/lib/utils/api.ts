@@ -137,6 +137,7 @@ export interface Icon {
   icon: string;
   categoryId: string;
   color?: string;
+  imageUrl?: string;
   isPreset: boolean;
   createdAt: string;
 }
@@ -168,6 +169,27 @@ export async function deleteIcon(id: string): Promise<void> {
   await fetchAPI(`/icons/${id}`, {
     method: 'DELETE',
   });
+}
+
+export async function uploadIconImage(file: File): Promise<{ url: string; id: string }> {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const token = getSessionToken();
+  const response = await fetch('/api/icons/upload', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`
+    },
+    body: formData
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || 'Upload failed');
+  }
+
+  return response.json();
 }
 
 export async function createIconCategory(category: Omit<IconCategory, 'isPreset' | 'createdAt'>): Promise<void> {

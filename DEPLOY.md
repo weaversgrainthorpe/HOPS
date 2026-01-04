@@ -1,169 +1,126 @@
-# HOPS Deployment Guide
+# HOPS Deployment Guide (v0.9.0)
 
-## Version: 0.1.0
+## Quick Start
 
-## What's Complete
+### Development Mode
 
-✅ **Phase 1 - Foundation (100%)**
-- Go backend with REST API
-- SQLite database with migrations
-- Authentication system
-- SvelteKit frontend framework
-- Configuration storage
-- Logo and favicon
-- Semantic versioning
-- Documentation
+**Terminal 1 - Backend:**
+```bash
+cd backend
+go run cmd/hops/main.go --port 8080 --data ../data
+```
 
-## Current Status
+**Terminal 2 - Frontend:**
+```bash
+cd frontend
+pnpm install
+pnpm dev
+```
 
-**Running Services:**
-- Backend: http://10.10.0.9:8080
-- Frontend: http://10.10.0.9:5173
-- Admin: http://10.10.0.9:5173/admin
+**Access:**
+- Frontend: http://localhost:5173
+- Admin: http://localhost:5173 (login page)
+- API: http://localhost:8080/api
 
-**Credentials:**
+**Default Credentials:**
 - Username: `admin`
 - Password: `admin`
 
-**API Endpoints:**
-- `GET /api/version` - Version information
-- `GET /api/config` - Dashboard configuration
-- `POST /api/auth/login` - Admin login
-- And more...
-
-## GitHub Setup
-
-The project is initialized with Git and ready to push to:
-https://github.com/weaversgrainthorpe/HOPS
-
-### To push to GitHub:
-
-**Option 1: SSH (Recommended)**
-```bash
-cd /home/jonathan/hops
-git remote set-url origin git@github.com:weaversgrainthorpe/HOPS.git
-git push -u origin main
-```
-
-**Option 2: HTTPS with Token**
-```bash
-cd /home/jonathan/hops
-git push -u origin main
-# Enter username: weaversgrainthorpe
-# Enter password: <your GitHub Personal Access Token>
-```
-
-**Option 3: GitHub CLI**
-```bash
-gh auth login
-git push -u origin main
-```
-
-## Next Development Steps
-
-### Phase 2 - Core Dashboard (Next)
-
-1. **Dashboard Viewer** (`frontend/src/lib/components/Dashboard.svelte`)
-   - Display dashboards with tabs
-   - Render groups and entries as tiles
-   - Handle navigation
-
-2. **Entry/Tile Component** (`frontend/src/lib/components/Entry.svelte`)
-   - Display service tiles with icons
-   - Handle click actions (open modes)
-   - Show status indicators
-
-3. **Admin Editor** (`frontend/src/routes/admin/+page.svelte`)
-   - Visual dashboard editor
-   - Add/edit/delete dashboards, tabs, groups, entries
-   - Real-time preview
-
-4. **Icon Integration**
-   - Integrate @iconify/svelte for 10K+ icons
-   - Implement favicon auto-fetch
-   - Custom icon upload
-
-### Phase 3 - Advanced Features
-
-- Drag-and-drop (svelte-dnd-action)
-- Multiple open modes (iframe, modal, new tab)
-- HTTP/ICMP status checks
-- Global search with "/" hotkey
-- Theme switcher (dark/light)
-- Custom CSS support
-
-### Phase 4 - Widgets & Integrations
-
-- Widget framework
-- Weather widget
-- Calendar widget
-- System stats
-- Service integrations (Pi-hole, Proxmox, *arr apps)
-
 ## Production Deployment
 
-### Build for Production
+### 1. Build for Production
 
+**Backend:**
 ```bash
-cd /home/jonathan/hops
-./scripts/build.sh
+cd backend
+go build -ldflags="-s -w" -o hops ./cmd/hops
 ```
 
-### Install as System Service
+**Frontend:**
+```bash
+cd frontend
+pnpm build
+```
+
+### 2. Run Production Build
 
 ```bash
-sudo ./scripts/install-service.sh
+./backend/hops --port 8080 --data ./data --frontend ./frontend/build
+```
+
+The Go backend serves both the API and the built frontend files. Only one port needed.
+
+### 3. Install as System Service
+
+Create `/etc/systemd/system/hops.service`:
+
+```ini
+[Unit]
+Description=HOPS - Home Operations Portal System
+After=network.target
+
+[Service]
+Type=simple
+User=your-username
+WorkingDirectory=/path/to/hops/backend
+ExecStart=/path/to/hops/backend/hops --port 8080 --data /path/to/hops/data --frontend /path/to/hops/frontend/build
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Enable and start:
+```bash
+sudo systemctl enable hops
 sudo systemctl start hops
 sudo systemctl status hops
 ```
 
-### Configure Caddy Reverse Proxy
+### 4. Reverse Proxy (Optional)
 
-Copy the included Caddyfile:
-```bash
-sudo cp Caddyfile /etc/caddy/Caddyfile.d/hops
-sudo systemctl reload caddy
+HOPS has no special reverse proxy requirements. Simply proxy to the backend port with your preferred solution (Caddy, nginx, Traefik, etc.).
+
+Example with Caddy:
+```
+hops.example.com {
+    reverse_proxy localhost:8080
+}
 ```
 
-Access at: https://hops.weaversgrainthorpe.uk
+Example with nginx:
+```nginx
+server {
+    listen 80;
+    server_name hops.example.com;
 
-## Project Files
+    location / {
+        proxy_pass http://localhost:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+```
 
-### Key Backend Files
-- `backend/cmd/hops/main.go` - Main application
-- `backend/internal/api/` - API routes and handlers
-- `backend/internal/database/` - SQLite schema and migrations
-- `backend/internal/auth/` - Authentication service
-- `backend/internal/version/` - Version information
+## Command-Line Options
 
-### Key Frontend Files
-- `frontend/src/routes/+page.svelte` - Homepage
-- `frontend/src/routes/admin/+page.svelte` - Admin interface
-- `frontend/src/lib/stores/` - State management
-- `frontend/src/lib/utils/api.ts` - API client
-- `frontend/static/` - Logo, favicon, assets
-
-### Documentation
-- `README.md` - Project overview
-- `GETTING_STARTED.md` - Development guide
-- `DEPLOY.md` - This file
-- `VERSION` - Current version number
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--port` | 8080 | HTTP port |
+| `--data` | ../data | Data directory (SQLite database, uploads) |
+| `--frontend` | (none) | Path to frontend build directory |
 
 ## Troubleshooting
 
 ### Backend won't start
 ```bash
-cd /home/jonathan/hops/backend
+cd backend
 go build -o hops ./cmd/hops
 ./hops --port 8080 --data ../data
 ```
 
-### Frontend can't connect
-Check that `.env` has the correct API URL:
-```bash
-cat frontend/.env
-# Should be: VITE_API_BASE=http://10.10.0.9:8080/api
-```
+Check that the data directory exists and is writable.
 
 ### Database issues
 Delete and recreate:
@@ -181,20 +138,12 @@ sudo journalctl -u hops -f
 # Check the terminal where you started the backend
 ```
 
+## Security
+
+- Change the default admin password immediately after first login
+- Use HTTPS in production (via reverse proxy)
+- Consider firewall rules if not using a reverse proxy
+
 ## Version History
 
-### v0.1.0 (2026-01-02)
-- Initial release
-- Backend foundation with Go + SQLite
-- Frontend foundation with SvelteKit
-- Authentication system
-- Basic API endpoints
-- Documentation and deployment scripts
-
-## Contributing
-
-This is a personal project for weaversgrainthorpe.uk infrastructure.
-
-## License
-
-MIT
+See [CHANGELOG.md](CHANGELOG.md) for detailed release notes.

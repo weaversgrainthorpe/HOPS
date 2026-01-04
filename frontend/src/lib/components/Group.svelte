@@ -3,6 +3,7 @@
   import Entry from './Entry.svelte';
   import Icon from '@iconify/svelte';
   import { editMode } from '$lib/stores/editMode';
+  import { confirm } from '$lib/stores/confirmModal';
   import EntryEditModal from './admin/EntryEditModal.svelte';
   import GroupEditModal from './admin/GroupEditModal.svelte';
   import { dndzone } from 'svelte-dnd-action';
@@ -24,6 +25,7 @@
   }
 
   let { group, onUpdateEntry, onDeleteEntry, onAddEntry, onReorderEntries, onMoveEntry, onUpdateGroup, onDeleteGroup, onFocus, tabId }: Props = $props();
+  // svelte-ignore state_referenced_locally
   let collapsed = $state(group.collapsed || false);
   let showAddModal = $state(false);
   let showEditModal = $state(false);
@@ -52,8 +54,16 @@
     showEditModal = false;
   }
 
-  function handleDeleteGroup() {
-    if (onDeleteGroup && confirm(`Are you sure you want to delete the group "${group.name}" and all its entries?`)) {
+  async function handleDeleteGroup() {
+    if (!onDeleteGroup) return;
+
+    const confirmed = await confirm({
+      title: 'Delete Group',
+      message: `Are you sure you want to delete "${group.name}" and all its entries?`,
+      confirmText: 'Delete',
+      confirmStyle: 'danger'
+    });
+    if (confirmed) {
       onDeleteGroup();
     }
     showEditModal = false;
@@ -87,6 +97,7 @@
   }
 
   // Create empty entry template for new tiles
+  // svelte-ignore state_referenced_locally
   const emptyEntry: EntryType = {
     id: '', // Will be generated on save
     name: '',
@@ -98,6 +109,7 @@
   };
 
   // Drag and drop handling
+  // svelte-ignore state_referenced_locally
   let items = $state([...group.entries]);
 
   $effect(() => {
@@ -161,44 +173,44 @@
 </script>
 
 <div class="group" onclick={() => onFocus?.()}>
-  <div
-    class="group-header"
-    class:custom-color={group.color}
-    style:--group-bg={group.color || 'var(--bg-secondary)'}
-    style:--group-opacity={group.opacity !== undefined ? group.opacity : 0.95}
-    style:color={headerTextColor}
-    role="button"
-    tabindex="0"
-    onclick={toggleCollapse}
-    onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleCollapse(e as unknown as MouseEvent); }}
-  >
-    <h3>{group.name}</h3>
-    <div class="group-header-right">
-      {#if $editMode}
-        <div class="group-controls">
-          <button
-            class="group-control-btn"
-            onclick={(e) => { e.stopPropagation(); showEditModal = true; }}
-            title="Edit group"
-          >
-            <Icon icon="mdi:pencil" width="16" />
-          </button>
-          <button
-            class="group-control-btn delete-btn"
-            onclick={(e) => {
-              e.stopPropagation();
-              if (confirm(`Delete group "${group.name}" and all its entries?`)) {
-                handleDeleteGroup();
-              }
-            }}
-            title="Delete group"
-          >
-            <Icon icon="mdi:trash-can" width="16" />
-          </button>
-        </div>
-      {/if}
-      <Icon icon={collapsed ? 'mdi:chevron-down' : 'mdi:chevron-up'} width="24" />
+  <div class="group-header-container">
+    <div
+      class="group-header"
+      class:custom-color={group.color}
+      style:--group-bg={group.color || 'var(--bg-secondary)'}
+      style:--group-opacity={group.opacity !== undefined ? group.opacity : 0.95}
+      style:color={headerTextColor}
+      role="button"
+      tabindex="0"
+      onclick={toggleCollapse}
+      onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleCollapse(e as unknown as MouseEvent); }}
+    >
+      <h3>{group.name}</h3>
+      <div class="group-header-right">
+        <Icon icon={collapsed ? 'mdi:chevron-down' : 'mdi:chevron-up'} width="24" />
+      </div>
     </div>
+    {#if $editMode}
+      <div class="group-controls">
+        <button
+          class="group-control-btn"
+          onclick={(e) => { e.stopPropagation(); showEditModal = true; }}
+          title="Edit group"
+        >
+          <Icon icon="mdi:pencil" width="16" />
+        </button>
+        <button
+          class="group-control-btn delete-btn"
+          onclick={(e) => {
+            e.stopPropagation();
+            handleDeleteGroup();
+          }}
+          title="Delete group"
+        >
+          <Icon icon="mdi:trash-can" width="16" />
+        </button>
+      </div>
+    {/if}
   </div>
 
   {#if !collapsed}
@@ -266,6 +278,11 @@
     margin-bottom: 2rem;
   }
 
+  .group-header-container {
+    position: relative;
+    margin-bottom: 1rem;
+  }
+
   .group-header {
     display: flex;
     align-items: center;
@@ -276,7 +293,6 @@
     border: 1px solid var(--border);
     border-radius: 0.5rem;
     cursor: pointer;
-    margin-bottom: 1rem;
     transition: all 0.2s;
     position: relative;
   }
@@ -324,13 +340,18 @@
   }
 
   .group-controls {
+    position: absolute;
+    right: 3rem;
+    top: 50%;
+    transform: translateY(-50%);
     display: flex;
     gap: 0.25rem;
     opacity: 0;
     transition: opacity 0.2s;
+    z-index: 10;
   }
 
-  .group-header:hover .group-controls {
+  .group-header-container:hover .group-controls {
     opacity: 1;
   }
 

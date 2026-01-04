@@ -1,5 +1,6 @@
 <script lang="ts">
   import Icon from '@iconify/svelte';
+  import { focusTrap } from '$lib/utils/focusTrap';
 
   interface Props {
     url: string;
@@ -18,10 +19,20 @@
 
 <svelte:window onkeydown={handleKeydown} />
 
-<div class="modal-backdrop" onclick={onClose}>
-  <div class="modal-content" onclick={(e) => e.stopPropagation()}>
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div class="modal-backdrop" onclick={onClose} onkeydown={(e) => e.key === 'Escape' && onClose()}>
+  <div
+    class="modal-content"
+    onclick={(e) => e.stopPropagation()}
+    onkeydown={(e) => e.stopPropagation()}
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="iframe-modal-title"
+    tabindex="-1"
+    use:focusTrap
+  >
     <div class="modal-header">
-      <h2>{title}</h2>
+      <h2 id="iframe-modal-title">{title}</h2>
       <button class="close-btn" onclick={onClose} title="Close (Esc)">
         <Icon icon="mdi:close" width="24" />
       </button>

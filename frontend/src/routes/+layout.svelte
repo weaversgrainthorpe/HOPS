@@ -3,6 +3,8 @@
 	import { loadConfig } from '$lib/stores/config';
 	import { initAuth } from '$lib/stores/auth';
 	import Navbar from '$lib/components/Navbar.svelte';
+	import Toast from '$lib/components/Toast.svelte';
+	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import { selectedEntry } from '$lib/stores/selection';
 	import { copyEntry, cutEntry, clipboard } from '$lib/stores/clipboard';
 	import { editMode } from '$lib/stores/editMode';
@@ -29,7 +31,6 @@
 
 				e.preventDefault();
 				copyEntry(selected.entry, selected.tabId, selected.groupId);
-				console.log('Copied entry via keyboard shortcut:', selected.entry.name);
 			}
 		}
 
@@ -43,7 +44,6 @@
 
 				e.preventDefault();
 				cutEntry(selected.entry, selected.tabId, selected.groupId);
-				console.log('Cut entry via keyboard shortcut:', selected.entry.name);
 			}
 		}
 
@@ -61,3 +61,6 @@
 <Navbar />
 
 {@render children()}
+
+<Toast />
+<ConfirmModal />

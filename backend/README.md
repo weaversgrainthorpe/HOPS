@@ -1,4 +1,4 @@
-# HOPS Backend
+# HOPS Backend (v0.9.0)
 
 The backend for HOPS (Home Operations Portal System) - a lightweight Go server with SQLite database.
 
@@ -372,9 +372,9 @@ After=network.target
 
 [Service]
 Type=simple
-User=jonathan
-WorkingDirectory=/home/jonathan/hops/backend
-ExecStart=/home/jonathan/hops/backend/hops --port 8080 --data /home/jonathan/hops/data --frontend /home/jonathan/hops/frontend/build
+User=your-username
+WorkingDirectory=/path/to/hops/backend
+ExecStart=/path/to/hops/backend/hops --port 8080 --data /path/to/hops/data --frontend /path/to/hops/frontend/build
 Restart=always
 RestartSec=5
 
@@ -444,16 +444,6 @@ Enhance logging as needed for your deployment.
 - Proxmox VE stats
 - Docker container status
 - *arr apps integration (Sonarr, Radarr, etc.)
-
-### Import/Export
-- JSON export endpoint
-- YAML import/export
-- Import from Heimdall, Homer, Dashy
-
-### Caching
-- Configuration caching in memory
-- ETag support for static files
-- Conditional requests
 
 ## Contributing
 

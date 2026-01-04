@@ -135,4 +135,4 @@ sqlite3 "$DB_PATH" "UPDATE config SET data = '$(cat /tmp/hops-demo-config.json |
 rm /tmp/hops-demo-config.json
 
 echo "Demo data added successfully!"
-echo "Visit http://10.10.0.9:5173/home to see it"
+echo "Restart the backend and visit /home to see the demo dashboard"

@@ -7,12 +7,14 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
-	"github.com/yourusername/hops/internal/api"
-	"github.com/yourusername/hops/internal/auth"
-	"github.com/yourusername/hops/internal/config"
-	"github.com/yourusername/hops/internal/database"
-	"github.com/yourusername/hops/internal/version"
+	"github.com/jmagar/hops/internal/api"
+	"github.com/jmagar/hops/internal/auth"
+	"github.com/jmagar/hops/internal/config"
+	"github.com/jmagar/hops/internal/database"
+	"github.com/jmagar/hops/internal/status"
+	"github.com/jmagar/hops/internal/version"
 )
 
 func main() {
@@ -24,9 +26,10 @@ func main() {
 
 	// Initialize configuration
 	cfg := &config.Config{
-		Port:        *port,
-		DataDir:     *dataDir,
-		FrontendDir: *frontendDir,
+		Port:                 *port,
+		DataDir:              *dataDir,
+		FrontendDir:          *frontendDir,
+		LoginRateLimitPerMin: 20, // 20 login attempts per minute
 	}
 
 	// Ensure data directory exists
@@ -44,6 +47,16 @@ func main() {
 
 	// Initialize auth service
 	authService := auth.NewService(db)
+
+	// Start session cleanup routine (every hour)
+	sessionCleanupStop := make(chan struct{})
+	authService.StartCleanupRoutine(1*time.Hour, sessionCleanupStop)
+	defer close(sessionCleanupStop)
+
+	// Initialize status checker (checks every 5 minutes)
+	statusChecker := status.NewChecker(db, 5*time.Minute)
+	statusChecker.Start()
+	defer statusChecker.Stop()
 
 	// Initialize API router
 	router := api.NewRouter(db, authService, cfg)
