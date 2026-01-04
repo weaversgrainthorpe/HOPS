@@ -5,6 +5,9 @@
   import ColorPicker from './ColorPicker.svelte';
   import OpacitySlider from './OpacitySlider.svelte';
   import IconPickerModal from './IconPickerModal.svelte';
+  import { confirm } from '$lib/stores/confirmModal';
+  import { focusTrap } from '$lib/utils/focusTrap';
+  import { getSessionToken } from '$lib/stores/auth';
 
   interface Props {
     entry: Entry;
@@ -15,9 +18,15 @@
 
   let { entry, onSave, onCancel, onDelete }: Props = $props();
 
+  // Form state initialized from props (intentionally captures initial values)
+  // svelte-ignore state_referenced_locally
   let editedEntry = $state<Entry>({ ...entry });
+  // svelte-ignore state_referenced_locally
   let iconSearch = $state(entry.icon || '');
   let showIconPicker = $state(false);
+  let iconFileInput: HTMLInputElement;
+  let isUploadingIcon = $state(false);
+  let uploadError = $state('');
 
   // Update editedEntry when entry prop changes
   $effect(() => {
@@ -29,16 +38,83 @@
     onSave(editedEntry);
   }
 
-  function handleDelete() {
-    if (onDelete && confirm('Are you sure you want to delete this tile?')) {
+  async function handleDelete() {
+    if (!onDelete) return;
+
+    const confirmed = await confirm({
+      title: 'Delete Tile',
+      message: 'Are you sure you want to delete this tile?',
+      confirmText: 'Delete',
+      confirmStyle: 'danger'
+    });
+    if (confirmed) {
       onDelete();
     }
   }
 
-  function handleIconSelect(icon: string) {
-    editedEntry.icon = icon;
-    iconSearch = icon;
+  function handleIconSelect(selection: { icon: string; imageUrl?: string }) {
+    editedEntry.icon = selection.icon;
+    editedEntry.iconUrl = selection.imageUrl;
+    iconSearch = selection.icon || '';
     showIconPicker = false;
+  }
+
+  async function handleIconUpload(e: Event) {
+    const input = e.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    const validTypes = ['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/svg+xml'];
+    if (!validTypes.includes(file.type)) {
+      uploadError = 'Invalid file type. Allowed: PNG, JPEG, GIF, WebP, SVG';
+      return;
+    }
+
+    // Validate file size (5MB max)
+    if (file.size > 5 * 1024 * 1024) {
+      uploadError = 'File too large. Maximum size is 5MB';
+      return;
+    }
+
+    isUploadingIcon = true;
+    uploadError = '';
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const token = getSessionToken();
+      const response = await fetch('/api/icons/upload', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      });
+
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || 'Upload failed');
+      }
+
+      const result = await response.json();
+      // Set the uploaded icon URL
+      editedEntry.iconUrl = result.url;
+      // Clear the iconify icon since we're using a custom image
+      editedEntry.icon = '';
+      iconSearch = '';
+    } catch (err) {
+      uploadError = err instanceof Error ? err.message : 'Upload failed';
+    } finally {
+      isUploadingIcon = false;
+      // Reset file input
+      input.value = '';
+    }
+  }
+
+  function clearCustomIcon() {
+    editedEntry.iconUrl = undefined;
   }
 
   // Close modal on escape key
@@ -55,10 +131,20 @@
 
 <svelte:window onkeydown={handleKeydown} />
 
-<div class="modal-backdrop" onclick={onCancel}>
-  <div class="modal-content" onclick={(e) => e.stopPropagation()}>
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div class="modal-backdrop" onclick={onCancel} onkeydown={(e) => e.key === 'Escape' && onCancel()}>
+  <div
+    class="modal-content"
+    onclick={(e) => e.stopPropagation()}
+    onkeydown={(e) => e.stopPropagation()}
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="entry-edit-title"
+    tabindex="-1"
+    use:focusTrap
+  >
     <div class="modal-header">
-      <h2>Edit Tile</h2>
+      <h2 id="entry-edit-title">Edit Tile</h2>
       <button class="close-btn" onclick={onCancel}>
         <Icon icon="mdi:close" width="24" />
       </button>
@@ -100,16 +186,30 @@
 
         <div class="form-group">
           <label for="icon">Icon</label>
+
+          {#if editedEntry.iconUrl}
+            <!-- Custom uploaded icon -->
+            <div class="custom-icon-display">
+              <img src={editedEntry.iconUrl} alt="Custom icon" class="custom-icon-preview" />
+              <span class="custom-icon-label">Custom icon uploaded</span>
+              <button type="button" class="clear-icon-btn" onclick={clearCustomIcon} title="Remove custom icon">
+                <Icon icon="mdi:close" width="18" />
+              </button>
+            </div>
+            <small>Or use an Iconify icon instead:</small>
+          {/if}
+
           <div class="icon-input-wrapper">
             <div class="icon-input">
               <input
                 id="icon"
                 type="text"
                 bind:value={iconSearch}
-                oninput={() => editedEntry.icon = iconSearch}
+                oninput={() => { editedEntry.icon = iconSearch; editedEntry.iconUrl = undefined; }}
                 placeholder="mdi:server"
+                disabled={isUploadingIcon}
               />
-              {#if editedEntry.icon}
+              {#if editedEntry.icon && !editedEntry.iconUrl}
                 <div class="icon-preview">
                   <ColoredIcon icon={editedEntry.icon} width="32" />
                 </div>
@@ -120,13 +220,39 @@
               class="browse-btn"
               onclick={() => showIconPicker = true}
               title="Browse icon presets"
+              disabled={isUploadingIcon}
             >
               <Icon icon="mdi:apps" width="20" />
               Browse
             </button>
+            <button
+              type="button"
+              class="upload-btn"
+              onclick={() => iconFileInput?.click()}
+              title="Upload custom icon"
+              disabled={isUploadingIcon}
+            >
+              {#if isUploadingIcon}
+                <Icon icon="mdi:loading" width="20" class="spin" />
+              {:else}
+                <Icon icon="mdi:upload" width="20" />
+              {/if}
+              Upload
+            </button>
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml"
+              onchange={handleIconUpload}
+              bind:this={iconFileInput}
+              style="display: none;"
+            />
           </div>
-          <small>Browse presets or find custom icons at <a href="https://icon-sets.iconify.design/" target="_blank" rel="noopener">iconify.design</a></small>
-          <small class="help-text">💡 To use a custom icon: search on Iconify, click an icon, copy the full name (e.g., "mdi:home" or "simple-icons:docker"), and paste it above</small>
+
+          {#if uploadError}
+            <small class="error-text">{uploadError}</small>
+          {/if}
+
+          <small>Browse presets, find icons at <a href="https://icon-sets.iconify.design/" target="_blank" rel="noopener">iconify.design</a>, or upload your own (PNG, SVG, etc.)</small>
         </div>
 
         <div class="form-group">
@@ -164,8 +290,17 @@
 
         <div class="form-group checkbox-group">
           <label>
-            <input type="checkbox" bind:checked={editedEntry.showStatus} />
-            Show Status Indicator
+            <input
+              type="checkbox"
+              checked={editedEntry.statusCheck?.enabled ?? false}
+              onchange={(e) => {
+                if (!editedEntry.statusCheck) {
+                  editedEntry.statusCheck = { type: 'http', enabled: false, interval: 60 };
+                }
+                editedEntry.statusCheck.enabled = (e.target as HTMLInputElement).checked;
+              }}
+            />
+            Enable Status Check
           </label>
         </div>
 
@@ -443,6 +578,76 @@
     transform: translateY(-1px);
   }
 
+  .browse-btn:disabled,
+  .upload-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .upload-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    border-radius: 0.375rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+
+  .upload-btn:hover:not(:disabled) {
+    background: var(--bg-secondary);
+    border-color: var(--accent);
+  }
+
+  .custom-icon-display {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: 0.375rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .custom-icon-preview {
+    width: 48px;
+    height: 48px;
+    object-fit: contain;
+    border-radius: 0.25rem;
+    background: var(--bg-secondary);
+  }
+
+  .custom-icon-label {
+    flex: 1;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+  }
+
+  .clear-icon-btn {
+    padding: 0.375rem;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border-radius: 0.25rem;
+  }
+
+  .clear-icon-btn:hover {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+  }
+
+  .error-text {
+    color: #ef4444;
+  }
+
   .help-text {
     display: block;
     margin-top: 0.5rem;
@@ -453,11 +658,21 @@
     color: var(--text-secondary);
     line-height: 1.5;
   }
+
+  :global(.spin) {
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
 </style>
 
 {#if showIconPicker}
   <IconPickerModal
     currentIcon={editedEntry.icon}
+    currentImageUrl={editedEntry.iconUrl}
     onSelect={handleIconSelect}
     onCancel={() => showIconPicker = false}
   />

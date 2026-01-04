@@ -1,5 +1,6 @@
 import { writable } from 'svelte/store';
 import type { Entry } from '$lib/types';
+import { toast } from './toast';
 
 interface ClipboardItem {
   type: 'entry';
@@ -19,6 +20,7 @@ export function copyEntry(entry: Entry, tabId: string, groupId: string) {
     sourceTabId: tabId,
     sourceGroupId: groupId
   });
+  toast.info(`Copied "${entry.name}"`);
 }
 
 export function cutEntry(entry: Entry, tabId: string, groupId: string) {
@@ -29,6 +31,7 @@ export function cutEntry(entry: Entry, tabId: string, groupId: string) {
     sourceTabId: tabId,
     sourceGroupId: groupId
   });
+  toast.info(`Cut "${entry.name}"`);
 }
 
 export function clearClipboard() {

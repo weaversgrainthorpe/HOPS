@@ -3,9 +3,11 @@
   import Icon from '@iconify/svelte';
   import ColoredIcon from './ColoredIcon.svelte';
   import { editMode } from '$lib/stores/editMode';
+  import { confirm } from '$lib/stores/confirmModal';
   import EntryEditModal from './admin/EntryEditModal.svelte';
   import IframeModal from './IframeModal.svelte';
   import PopupModal from './PopupModal.svelte';
+  import StatusIndicator from './StatusIndicator.svelte';
   import { copyEntry, cutEntry } from '$lib/stores/clipboard';
   import { selectEntry, toggleEntrySelection, isEntrySelected, selectedEntries } from '$lib/stores/selection';
 
@@ -102,9 +104,17 @@
     showEditModal = false;
   }
 
-  function handleDeleteClick(e: MouseEvent) {
+  async function handleDeleteClick(e: MouseEvent) {
     e.stopPropagation();
-    if (onDelete && confirm(`Delete "${entry.name}"?`)) {
+    if (!onDelete) return;
+
+    const confirmed = await confirm({
+      title: 'Delete Tile',
+      message: `Are you sure you want to delete "${entry.name}"?`,
+      confirmText: 'Delete',
+      confirmStyle: 'danger'
+    });
+    if (confirmed) {
       onDelete();
     }
   }
@@ -117,6 +127,7 @@
   }
 
   // Get size classes
+  // svelte-ignore state_referenced_locally
   const sizeClass = entry.size || 'medium';
 </script>
 
@@ -151,8 +162,8 @@
     {/if}
 
     {#if entry.statusCheck?.enabled}
-      <div class="status-indicator">
-        <span class="status-dot unknown" title="Status check pending"></span>
+      <div class="status-badge">
+        <StatusIndicator entryId={entry.id} />
       </div>
     {/if}
   </button>
@@ -258,29 +269,13 @@
     object-fit: contain;
   }
 
-  .status-indicator {
+  .status-badge {
     position: absolute;
-    top: 0.5rem;
-    right: 0.5rem;
-  }
-
-  .status-dot {
-    display: inline-block;
-    width: 8px;
-    height: 8px;
+    top: 0.375rem;
+    right: 0.375rem;
+    background: rgba(0, 0, 0, 0.4);
     border-radius: 50%;
-  }
-
-  .status-dot.online {
-    background: #10b981;
-  }
-
-  .status-dot.offline {
-    background: #ef4444;
-  }
-
-  .status-dot.unknown {
-    background: #6b7280;
+    padding: 2px;
   }
 
   .subtitle {

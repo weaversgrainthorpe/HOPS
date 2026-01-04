@@ -1,5 +1,5 @@
 // Bundled royalty-free background images
-// These are placeholder URLs - in production, these would be local files in /backgrounds/
+// These are served from /presets/ directory by the backend
 
 export interface BackgroundImage {
   id: string;
@@ -25,49 +25,57 @@ export const BACKGROUND_PRESETS: BackgroundPreset[] = [
     id: 'network-1',
     name: 'Network Grid',
     category: 'network',
-    url: 'https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=1920&q=80'
+    url: '/presets/network-grid.jpg',
+    source: 'preset'
   },
   {
     id: 'network-2',
     name: 'Data Center',
     category: 'network',
-    url: 'https://images.unsplash.com/photo-1544197150-b99a580bb7a8?w=1920&q=80'
+    url: '/presets/data-center.jpg',
+    source: 'preset'
   },
   {
     id: 'network-3',
     name: 'Fiber Optics',
     category: 'network',
-    url: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=1920&q=80'
+    url: '/presets/fiber-optics.jpg',
+    source: 'preset'
   },
   {
     id: 'network-4',
     name: 'Network Cables',
     category: 'network',
-    url: 'https://images.unsplash.com/photo-1606904825846-647eb07f5be2?w=1920&q=80'
+    url: '/presets/network-cables.jpg',
+    source: 'preset'
   },
   {
     id: 'network-5',
     name: 'Switch Panel',
     category: 'network',
-    url: 'https://images.unsplash.com/photo-1590859808308-3d2d9c515b1a?w=1920&q=80'
+    url: '/presets/switch-panel.jpg',
+    source: 'preset'
   },
   {
     id: 'network-6',
     name: 'Blue Cables',
     category: 'network',
-    url: 'https://images.unsplash.com/photo-1551808525-51a94da548ce?w=1920&q=80'
+    url: '/presets/blue-cables.jpg',
+    source: 'preset'
   },
   {
     id: 'network-7',
     name: 'Abstract Network',
     category: 'network',
-    url: 'https://images.unsplash.com/photo-1558346490-a72e53ae2d4f?w=1920&q=80'
+    url: '/presets/abstract-network.jpg',
+    source: 'preset'
   },
   {
     id: 'network-8',
     name: 'Tech Lines',
     category: 'network',
-    url: 'https://images.unsplash.com/photo-1563206767-5b18f218e8de?w=1920&q=80'
+    url: '/presets/tech-lines.jpg',
+    source: 'preset'
   },
 
   // Server / Infrastructure themed
@@ -75,49 +83,57 @@ export const BACKGROUND_PRESETS: BackgroundPreset[] = [
     id: 'server-1',
     name: 'Server Room',
     category: 'servers',
-    url: 'https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=1920&q=80'
+    url: '/presets/network-grid.jpg',
+    source: 'preset'
   },
   {
     id: 'server-2',
     name: 'Data Center Aisle',
     category: 'servers',
-    url: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=1920&q=80'
+    url: '/presets/data-center-aisle.jpg',
+    source: 'preset'
   },
   {
     id: 'server-3',
     name: 'Cloud Infrastructure',
     category: 'servers',
-    url: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=1920&q=80'
+    url: '/presets/fiber-optics.jpg',
+    source: 'preset'
   },
   {
     id: 'server-4',
     name: 'Rack Servers',
     category: 'servers',
-    url: 'https://images.unsplash.com/photo-1597733336794-12d05021d510?w=1920&q=80'
+    url: '/presets/rack-servers.jpg',
+    source: 'preset'
   },
   {
     id: 'server-5',
     name: 'Server Hardware',
     category: 'servers',
-    url: 'https://images.unsplash.com/photo-1591799265444-d66432b91588?w=1920&q=80'
+    url: '/presets/server-hardware.jpg',
+    source: 'preset'
   },
   {
     id: 'server-6',
     name: 'Blue Server Lights',
     category: 'servers',
-    url: 'https://images.unsplash.com/photo-1544197150-b99a580bb7a8?w=1920&q=80'
+    url: '/presets/data-center.jpg',
+    source: 'preset'
   },
   {
     id: 'server-7',
     name: 'Modern Data Center',
     category: 'servers',
-    url: 'https://images.unsplash.com/photo-1518770660439-4636190af475?w=1920&q=80'
+    url: '/presets/circuit-board.jpg',
+    source: 'preset'
   },
   {
     id: 'server-8',
     name: 'Server Closeup',
     category: 'servers',
-    url: 'https://images.unsplash.com/photo-1580584126903-c17d41830450?w=1920&q=80'
+    url: '/presets/server-closeup.jpg',
+    source: 'preset'
   },
 
   // Docker / Containers
@@ -125,49 +141,57 @@ export const BACKGROUND_PRESETS: BackgroundPreset[] = [
     id: 'docker-1',
     name: 'Container Ship',
     category: 'docker',
-    url: 'https://images.unsplash.com/photo-1494412651409-8963ce7935a7?w=1920&q=80'
+    url: '/presets/container-ship.jpg',
+    source: 'preset'
   },
   {
     id: 'docker-2',
     name: 'Shipping Containers',
     category: 'docker',
-    url: 'https://images.unsplash.com/photo-1578575437130-527eed3abbec?w=1920&q=80'
+    url: '/presets/shipping-containers.jpg',
+    source: 'preset'
   },
   {
     id: 'docker-3',
     name: 'Container Stack',
     category: 'docker',
-    url: 'https://images.unsplash.com/photo-1566576912321-d58ddd7a6088?w=1920&q=80'
+    url: '/presets/container-stack.jpg',
+    source: 'preset'
   },
   {
     id: 'docker-4',
     name: 'Blue Containers',
     category: 'docker',
-    url: 'https://images.unsplash.com/photo-1605745341112-85968b19335b?w=1920&q=80'
+    url: '/presets/blue-containers.jpg',
+    source: 'preset'
   },
   {
     id: 'docker-5',
     name: 'Container Port',
     category: 'docker',
-    url: 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=1920&q=80'
+    url: '/presets/container-port.jpg',
+    source: 'preset'
   },
   {
     id: 'docker-6',
     name: 'Red Containers',
     category: 'docker',
-    url: 'https://images.unsplash.com/photo-1580674684081-7617fbf3d745?w=1920&q=80'
+    url: '/presets/red-containers.jpg',
+    source: 'preset'
   },
   {
     id: 'docker-7',
     name: 'Container Yard',
     category: 'docker',
-    url: 'https://images.unsplash.com/photo-1583537206542-f992c9c94066?w=1920&q=80'
+    url: '/presets/container-yard.jpg',
+    source: 'preset'
   },
   {
     id: 'docker-8',
     name: 'Ship Deck',
     category: 'docker',
-    url: 'https://images.unsplash.com/photo-1585555603918-b3bc7e87dedd?w=1920&q=80'
+    url: '/presets/ship-deck.jpg',
+    source: 'preset'
   },
 
   // Homelab
@@ -175,49 +199,57 @@ export const BACKGROUND_PRESETS: BackgroundPreset[] = [
     id: 'homelab-1',
     name: 'Home Server Rack',
     category: 'homelab',
-    url: 'https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=1920&q=80'
+    url: '/presets/network-grid.jpg',
+    source: 'preset'
   },
   {
     id: 'homelab-2',
     name: 'Raspberry Pi Cluster',
     category: 'homelab',
-    url: 'https://images.unsplash.com/photo-1629654297299-c8506221ca97?w=1920&q=80'
+    url: '/presets/raspberry-pi.jpg',
+    source: 'preset'
   },
   {
     id: 'homelab-3',
     name: 'Electronics Workbench',
     category: 'homelab',
-    url: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=1920&q=80'
+    url: '/presets/electronics-workbench.jpg',
+    source: 'preset'
   },
   {
     id: 'homelab-4',
     name: 'Tech Desk Setup',
     category: 'homelab',
-    url: 'https://images.unsplash.com/photo-1587202372775-e229f172b9d7?w=1920&q=80'
+    url: '/presets/tech-desk.jpg',
+    source: 'preset'
   },
   {
     id: 'homelab-5',
     name: 'PC Hardware',
     category: 'homelab',
-    url: 'https://images.unsplash.com/photo-1591238371080-7b7cc5be7324?w=1920&q=80'
+    url: '/presets/pc-hardware.jpg',
+    source: 'preset'
   },
   {
     id: 'homelab-6',
     name: 'LED Gaming Setup',
     category: 'homelab',
-    url: 'https://images.unsplash.com/photo-1593640408182-31c70c8268f5?w=1920&q=80'
+    url: '/presets/led-gaming.jpg',
+    source: 'preset'
   },
   {
     id: 'homelab-7',
     name: 'Network Equipment',
     category: 'homelab',
-    url: 'https://images.unsplash.com/photo-1623857503831-e8da7c92da85?w=1920&q=80'
+    url: '/presets/network-equipment.jpg',
+    source: 'preset'
   },
   {
     id: 'homelab-8',
     name: 'Home Office Tech',
     category: 'homelab',
-    url: 'https://images.unsplash.com/photo-1620188467120-5042ed1eb5da?w=1920&q=80'
+    url: '/presets/home-office.jpg',
+    source: 'preset'
   },
 
   // Smart Home themed
@@ -225,49 +257,57 @@ export const BACKGROUND_PRESETS: BackgroundPreset[] = [
     id: 'smarthome-1',
     name: 'Modern Smart Home',
     category: 'smarthome',
-    url: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=1920&q=80'
+    url: '/presets/data-center-aisle.jpg',
+    source: 'preset'
   },
   {
     id: 'smarthome-2',
     name: 'Home Automation',
     category: 'smarthome',
-    url: 'https://images.unsplash.com/photo-1556912173-46c336c7fd55?w=1920&q=80'
+    url: '/presets/home-automation.jpg',
+    source: 'preset'
   },
   {
     id: 'smarthome-3',
     name: 'Connected Living',
     category: 'smarthome',
-    url: 'https://images.unsplash.com/photo-1580508174046-170816f65662?w=1920&q=80'
+    url: '/presets/connected-living.jpg',
+    source: 'preset'
   },
   {
     id: 'smarthome-4',
     name: 'Smart Lighting',
     category: 'smarthome',
-    url: 'https://images.unsplash.com/photo-1585316143267-4c0c3f0ecb36?w=1920&q=80'
+    url: '/presets/smart-lighting.jpg',
+    source: 'preset'
   },
   {
     id: 'smarthome-5',
     name: 'Modern Interior',
     category: 'smarthome',
-    url: 'https://images.unsplash.com/photo-1556912167-f556f1f39faa?w=1920&q=80'
+    url: '/presets/modern-interior.jpg',
+    source: 'preset'
   },
   {
     id: 'smarthome-6',
     name: 'Cozy Tech Home',
     category: 'smarthome',
-    url: 'https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?w=1920&q=80'
+    url: '/presets/cozy-home.jpg',
+    source: 'preset'
   },
   {
     id: 'smarthome-7',
     name: 'Smart Device',
     category: 'smarthome',
-    url: 'https://images.unsplash.com/photo-1558089687-23d8fcd7a2f1?w=1920&q=80'
+    url: '/presets/smart-device.jpg',
+    source: 'preset'
   },
   {
     id: 'smarthome-8',
     name: 'Voice Assistant',
     category: 'smarthome',
-    url: 'https://images.unsplash.com/photo-1543512214-318c7553f230?w=1920&q=80'
+    url: '/presets/voice-assistant.jpg',
+    source: 'preset'
   },
 
   // Tech / Abstract themed
@@ -275,49 +315,57 @@ export const BACKGROUND_PRESETS: BackgroundPreset[] = [
     id: 'tech-1',
     name: 'Circuit Board',
     category: 'tech',
-    url: 'https://images.unsplash.com/photo-1518770660439-4636190af475?w=1920&q=80'
+    url: '/presets/circuit-board.jpg',
+    source: 'preset'
   },
   {
     id: 'tech-2',
     name: 'Digital Matrix',
     category: 'tech',
-    url: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=1920&q=80'
+    url: '/presets/digital-matrix.jpg',
+    source: 'preset'
   },
   {
     id: 'tech-3',
     name: 'Code Background',
     category: 'tech',
-    url: 'https://images.unsplash.com/photo-1542831371-29b0f74f9713?w=1920&q=80'
+    url: '/presets/code-background.jpg',
+    source: 'preset'
   },
   {
     id: 'tech-4',
     name: 'Green Circuit',
     category: 'tech',
-    url: 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=1920&q=80'
+    url: '/presets/green-circuit.jpg',
+    source: 'preset'
   },
   {
     id: 'tech-5',
     name: 'Digital Code',
     category: 'tech',
-    url: 'https://images.unsplash.com/photo-1555949963-ff9fe0c870eb?w=1920&q=80'
+    url: '/presets/digital-code.jpg',
+    source: 'preset'
   },
   {
     id: 'tech-6',
     name: 'Binary Code',
     category: 'tech',
-    url: 'https://images.unsplash.com/photo-1510519138101-570d1dca3d66?w=1920&q=80'
+    url: '/presets/binary-code.jpg',
+    source: 'preset'
   },
   {
     id: 'tech-7',
     name: 'Motherboard',
     category: 'tech',
-    url: 'https://images.unsplash.com/photo-1591489378542-0dd1db315c3a?w=1920&q=80'
+    url: '/presets/motherboard.jpg',
+    source: 'preset'
   },
   {
     id: 'tech-8',
     name: 'Tech Abstract',
     category: 'tech',
-    url: 'https://images.unsplash.com/photo-1535223289827-42f1e9919769?w=1920&q=80'
+    url: '/presets/tech-abstract.jpg',
+    source: 'preset'
   },
 
   // Space / Futuristic themed
@@ -325,49 +373,57 @@ export const BACKGROUND_PRESETS: BackgroundPreset[] = [
     id: 'space-1',
     name: 'Starfield',
     category: 'space',
-    url: 'https://images.unsplash.com/photo-1419242902214-272b3f66ee7a?w=1920&q=80'
+    url: '/presets/starfield.jpg',
+    source: 'preset'
   },
   {
     id: 'space-2',
     name: 'Galaxy',
     category: 'space',
-    url: 'https://images.unsplash.com/photo-1462331940025-496dfbfc7564?w=1920&q=80'
+    url: '/presets/galaxy.jpg',
+    source: 'preset'
   },
   {
     id: 'space-3',
     name: 'Nebula',
     category: 'space',
-    url: 'https://images.unsplash.com/photo-1502134249126-9f3755a50d78?w=1920&q=80'
+    url: '/presets/nebula.jpg',
+    source: 'preset'
   },
   {
     id: 'space-4',
     name: 'Milky Way',
     category: 'space',
-    url: 'https://images.unsplash.com/photo-1506443432602-ac2fcd6f54e0?w=1920&q=80'
+    url: '/presets/milky-way.jpg',
+    source: 'preset'
   },
   {
     id: 'space-5',
     name: 'Purple Nebula',
     category: 'space',
-    url: 'https://images.unsplash.com/photo-1543722530-d2c3201371e7?w=1920&q=80'
+    url: '/presets/purple-nebula.jpg',
+    source: 'preset'
   },
   {
     id: 'space-6',
     name: 'Earth from Space',
     category: 'space',
-    url: 'https://images.unsplash.com/photo-1446776653964-20c1d3a81b06?w=1920&q=80'
+    url: '/presets/earth-from-space.jpg',
+    source: 'preset'
   },
   {
     id: 'space-7',
     name: 'Cosmic Clouds',
     category: 'space',
-    url: 'https://images.unsplash.com/photo-1464802686167-b939a6910659?w=1920&q=80'
+    url: '/presets/cosmic-clouds.jpg',
+    source: 'preset'
   },
   {
     id: 'space-8',
     name: 'Deep Space',
     category: 'space',
-    url: 'https://images.unsplash.com/photo-1608178398319-48f814d0750c?w=1920&q=80'
+    url: '/presets/deep-space.jpg',
+    source: 'preset'
   },
 
   // Minimal / Clean themed
@@ -375,49 +431,289 @@ export const BACKGROUND_PRESETS: BackgroundPreset[] = [
     id: 'minimal-1',
     name: 'Dark Gradient',
     category: 'minimal',
-    url: 'https://images.unsplash.com/photo-1557683316-973673baf926?w=1920&q=80'
+    url: '/presets/dark-gradient.jpg',
+    source: 'preset'
   },
   {
     id: 'minimal-2',
     name: 'Blue Abstract',
     category: 'minimal',
-    url: 'https://images.unsplash.com/photo-1557682224-5b8590cd9ec5?w=1920&q=80'
+    url: '/presets/blue-abstract.jpg',
+    source: 'preset'
   },
   {
     id: 'minimal-3',
     name: 'Purple Waves',
     category: 'minimal',
-    url: 'https://images.unsplash.com/photo-1557682250-33bd709cbe85?w=1920&q=80'
+    url: '/presets/purple-waves.jpg',
+    source: 'preset'
   },
   {
     id: 'minimal-4',
     name: 'Soft Gradient',
     category: 'minimal',
-    url: 'https://images.unsplash.com/photo-1557682268-e3955fed4d24?w=1920&q=80'
+    url: '/presets/soft-gradient.jpg',
+    source: 'preset'
   },
   {
     id: 'minimal-5',
     name: 'Pink Gradient',
     category: 'minimal',
-    url: 'https://images.unsplash.com/photo-1557682204-e53bb269ae87?w=1920&q=80'
+    url: '/presets/pink-gradient.jpg',
+    source: 'preset'
   },
   {
     id: 'minimal-6',
     name: 'Teal Flow',
     category: 'minimal',
-    url: 'https://images.unsplash.com/photo-1557683311-eac922347aa1?w=1920&q=80'
+    url: '/presets/teal-flow.jpg',
+    source: 'preset'
   },
   {
     id: 'minimal-7',
     name: 'Orange Glow',
     category: 'minimal',
-    url: 'https://images.unsplash.com/photo-1557672172-298e090bd0f1?w=1920&q=80'
+    url: '/presets/orange-glow.jpg',
+    source: 'preset'
   },
   {
     id: 'minimal-8',
     name: 'Smooth Blue',
     category: 'minimal',
-    url: 'https://images.unsplash.com/photo-1557682260-96773eb01377?w=1920&q=80'
+    url: '/presets/smooth-blue.jpg',
+    source: 'preset'
+  },
+
+  // Applications / Services themed
+  {
+    id: 'apps-1',
+    name: 'Cloud Services',
+    category: 'apps',
+    url: '/presets/apps-cloud-services.jpg',
+    source: 'preset'
+  },
+  {
+    id: 'apps-2',
+    name: 'Mobile Apps',
+    category: 'apps',
+    url: '/presets/apps-mobile.jpg',
+    source: 'preset'
+  },
+  {
+    id: 'apps-3',
+    name: 'Dashboard',
+    category: 'apps',
+    url: '/presets/apps-dashboard.jpg',
+    source: 'preset'
+  },
+  {
+    id: 'apps-4',
+    name: 'Coding',
+    category: 'apps',
+    url: '/presets/apps-coding.jpg',
+    source: 'preset'
+  },
+  {
+    id: 'apps-5',
+    name: 'API Services',
+    category: 'apps',
+    url: '/presets/apps-api.jpg',
+    source: 'preset'
+  },
+  {
+    id: 'apps-6',
+    name: 'Microservices',
+    category: 'apps',
+    url: '/presets/apps-microservices.jpg',
+    source: 'preset'
+  },
+  {
+    id: 'apps-7',
+    name: 'DevOps',
+    category: 'apps',
+    url: '/presets/apps-devops.jpg',
+    source: 'preset'
+  },
+  {
+    id: 'apps-8',
+    name: 'Terminal',
+    category: 'apps',
+    url: '/presets/apps-terminal.jpg',
+    source: 'preset'
+  },
+
+  // Multimedia themed
+  {
+    id: 'media-1',
+    name: 'Vinyl Records',
+    category: 'multimedia',
+    url: '/presets/media-vinyl.jpg',
+    source: 'preset'
+  },
+  {
+    id: 'media-2',
+    name: 'Speakers',
+    category: 'multimedia',
+    url: '/presets/media-speakers.jpg',
+    source: 'preset'
+  },
+  {
+    id: 'media-3',
+    name: 'Headphones',
+    category: 'multimedia',
+    url: '/presets/media-headphones.jpg',
+    source: 'preset'
+  },
+  {
+    id: 'media-4',
+    name: 'Cinema',
+    category: 'multimedia',
+    url: '/presets/media-cinema.jpg',
+    source: 'preset'
+  },
+  {
+    id: 'media-5',
+    name: 'Streaming',
+    category: 'multimedia',
+    url: '/presets/media-streaming.jpg',
+    source: 'preset'
+  },
+  {
+    id: 'media-6',
+    name: 'Audio Waves',
+    category: 'multimedia',
+    url: '/presets/media-audio-waves.jpg',
+    source: 'preset'
+  },
+  {
+    id: 'media-7',
+    name: 'Studio',
+    category: 'multimedia',
+    url: '/presets/media-studio.jpg',
+    source: 'preset'
+  },
+  {
+    id: 'media-8',
+    name: 'TV Screen',
+    category: 'multimedia',
+    url: '/presets/media-tv.jpg',
+    source: 'preset'
+  },
+
+  // Weather themed
+  {
+    id: 'weather-1',
+    name: 'Clouds',
+    category: 'weather',
+    url: '/presets/weather-clouds.jpg',
+    source: 'preset'
+  },
+  {
+    id: 'weather-2',
+    name: 'Storm',
+    category: 'weather',
+    url: '/presets/weather-storm.jpg',
+    source: 'preset'
+  },
+  {
+    id: 'weather-3',
+    name: 'Sunset',
+    category: 'weather',
+    url: '/presets/weather-sunset.jpg',
+    source: 'preset'
+  },
+  {
+    id: 'weather-4',
+    name: 'Rain',
+    category: 'weather',
+    url: '/presets/weather-rain.jpg',
+    source: 'preset'
+  },
+  {
+    id: 'weather-5',
+    name: 'Lightning',
+    category: 'weather',
+    url: '/presets/weather-lightning.jpg',
+    source: 'preset'
+  },
+  {
+    id: 'weather-6',
+    name: 'Snow',
+    category: 'weather',
+    url: '/presets/weather-snow.jpg',
+    source: 'preset'
+  },
+  {
+    id: 'weather-7',
+    name: 'Fog',
+    category: 'weather',
+    url: '/presets/weather-fog.jpg',
+    source: 'preset'
+  },
+  {
+    id: 'weather-8',
+    name: 'Aurora',
+    category: 'weather',
+    url: '/presets/weather-aurora.jpg',
+    source: 'preset'
+  },
+
+  // Storage themed
+  {
+    id: 'storage-1',
+    name: 'Hard Drives',
+    category: 'storage',
+    url: '/presets/storage-hard-drives.jpg',
+    source: 'preset'
+  },
+  {
+    id: 'storage-2',
+    name: 'SSD',
+    category: 'storage',
+    url: '/presets/storage-ssd.jpg',
+    source: 'preset'
+  },
+  {
+    id: 'storage-3',
+    name: 'Server Rack',
+    category: 'storage',
+    url: '/presets/storage-server-rack.jpg',
+    source: 'preset'
+  },
+  {
+    id: 'storage-4',
+    name: 'Data Center',
+    category: 'storage',
+    url: '/presets/storage-data-center.jpg',
+    source: 'preset'
+  },
+  {
+    id: 'storage-5',
+    name: 'NAS',
+    category: 'storage',
+    url: '/presets/storage-nas.jpg',
+    source: 'preset'
+  },
+  {
+    id: 'storage-6',
+    name: 'Cloud Storage',
+    category: 'storage',
+    url: '/presets/storage-cloud.jpg',
+    source: 'preset'
+  },
+  {
+    id: 'storage-7',
+    name: 'Storage Cables',
+    category: 'storage',
+    url: '/presets/storage-cables.jpg',
+    source: 'preset'
+  },
+  {
+    id: 'storage-8',
+    name: 'Backup Systems',
+    category: 'storage',
+    url: '/presets/storage-backup.jpg',
+    source: 'preset'
   }
 ];
 
@@ -427,6 +723,10 @@ export const BACKGROUND_CATEGORIES = [
   { id: 'docker', name: 'Docker', icon: 'mdi:docker' },
   { id: 'homelab', name: 'Homelab', icon: 'mdi:raspberry-pi' },
   { id: 'smarthome', name: 'Smart Home', icon: 'mdi:home-automation' },
+  { id: 'apps', name: 'Applications', icon: 'mdi:application' },
+  { id: 'multimedia', name: 'Multimedia', icon: 'mdi:multimedia' },
+  { id: 'weather', name: 'Weather', icon: 'mdi:weather-partly-cloudy' },
+  { id: 'storage', name: 'Storage', icon: 'mdi:harddisk' },
   { id: 'tech', name: 'Technology', icon: 'mdi:chip' },
   { id: 'space', name: 'Space', icon: 'mdi:space-station' },
   { id: 'minimal', name: 'Minimal', icon: 'mdi:palette-outline' }

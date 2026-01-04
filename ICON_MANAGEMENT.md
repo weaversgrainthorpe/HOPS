@@ -1,8 +1,8 @@
-# Icon Management System - HOPS v0.4.0
+# HOPS Icon Management (v0.9.0)
 
 ## Overview
 
-HOPS v0.4.0 introduces a complete database-backed icon management system that allows users to manage icons directly from the icon picker without interrupting their workflow.
+HOPS v0.9.0 introduces a complete database-backed icon management system that allows users to manage icons directly from the icon picker without interrupting their workflow.
 
 ## Key Features
 
@@ -118,12 +118,6 @@ Browse 200,000+ icons at [iconify.design](https://icon-sets.iconify.design/):
 2. Click the icon you want
 3. Copy the full name (e.g., "simple-icons:docker")
 4. Paste into HOPS icon form
-
-## Migration from v0.3.x
-
-- **Automatic**: Preset icons automatically seeded from hardcoded data
-- **No action required**: First run creates tables and populates presets
-- **Backward compatible**: Custom icons still work via direct Iconify names
 
 ## Technical Details
 

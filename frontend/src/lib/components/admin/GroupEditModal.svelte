@@ -2,6 +2,7 @@
   import Icon from '@iconify/svelte';
   import ColorPicker from './ColorPicker.svelte';
   import OpacitySlider from './OpacitySlider.svelte';
+  import { focusTrap } from '$lib/utils/focusTrap';
 
   interface Props {
     groupName: string;
@@ -14,9 +15,14 @@
   }
 
   let { groupName, groupColor, groupOpacity, groupTextColor, onSave, onCancel, onDelete }: Props = $props();
+  // Form state initialized from props (intentionally captures initial values)
+  // svelte-ignore state_referenced_locally
   let name = $state(groupName);
+  // svelte-ignore state_referenced_locally
   let color = $state(groupColor);
+  // svelte-ignore state_referenced_locally
   let opacity = $state(groupOpacity);
+  // svelte-ignore state_referenced_locally
   let textColor = $state<'auto' | 'light' | 'dark'>(groupTextColor || 'auto');
 
   function handleSave() {
@@ -34,10 +40,20 @@
 
 <svelte:window onkeydown={handleKeydown} />
 
-<div class="modal-backdrop" onclick={onCancel}>
-  <div class="modal-content" onclick={(e) => e.stopPropagation()}>
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div class="modal-backdrop" onclick={onCancel} onkeydown={(e) => e.key === 'Escape' && onCancel()}>
+  <div
+    class="modal-content"
+    onclick={(e) => e.stopPropagation()}
+    onkeydown={(e) => e.stopPropagation()}
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="group-edit-title"
+    tabindex="-1"
+    use:focusTrap
+  >
     <div class="modal-header">
-      <h2>{groupName ? 'Edit Group' : 'New Group'}</h2>
+      <h2 id="group-edit-title">{groupName ? 'Edit Group' : 'New Group'}</h2>
       <button class="close-btn" onclick={onCancel}>
         <Icon icon="mdi:close" width="24" />
       </button>

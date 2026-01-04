@@ -2,6 +2,7 @@
   import { page } from '$app/stores';
   import { config, configLoading, configError } from '$lib/stores/config';
   import Dashboard from '$lib/components/Dashboard.svelte';
+  import DashboardSkeleton from '$lib/components/DashboardSkeleton.svelte';
   import { findDashboard } from '$lib/stores/config';
 
   let dashboard = $derived($config && $page.params.dashboard ? findDashboard($page.params.dashboard, $config) : undefined);
@@ -11,9 +12,7 @@
 </script>
 
 {#if $configLoading}
-  <div class="loading">
-    <p>Loading dashboard...</p>
-  </div>
+  <DashboardSkeleton />
 {:else if $configError}
   <div class="error">
     <h1>Error</h1>
@@ -32,7 +31,6 @@
 {/if}
 
 <style>
-  .loading,
   .error,
   .not-found {
     display: flex;

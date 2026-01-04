@@ -4,21 +4,27 @@
   import OpacitySlider from './OpacitySlider.svelte';
   import BackgroundConfigModal from './BackgroundConfigModal.svelte';
   import type { Background } from '$lib/types';
+  import { focusTrap } from '$lib/utils/focusTrap';
 
   interface Props {
     tabName: string;
     tabColor?: string;
     tabOpacity?: number;
     tabBackground?: Background;
+    perTabBackgrounds?: boolean; // Whether per-tab backgrounds are enabled at dashboard level
     onSave: (name: string, color?: string, opacity?: number) => void;
     onSaveBackground?: (background: Background | undefined) => void;
     onCancel: () => void;
     onDelete?: () => void;
   }
 
-  let { tabName, tabColor, tabOpacity, tabBackground, onSave, onSaveBackground, onCancel, onDelete }: Props = $props();
+  let { tabName, tabColor, tabOpacity, tabBackground, perTabBackgrounds = false, onSave, onSaveBackground, onCancel, onDelete }: Props = $props();
+  // Form state initialized from props (intentionally captures initial values)
+  // svelte-ignore state_referenced_locally
   let name = $state(tabName);
+  // svelte-ignore state_referenced_locally
   let color = $state(tabColor);
+  // svelte-ignore state_referenced_locally
   let opacity = $state(tabOpacity);
   let showBackgroundConfig = $state(false);
 
@@ -44,10 +50,20 @@
 
 <svelte:window onkeydown={handleKeydown} />
 
-<div class="modal-backdrop" onclick={onCancel}>
-  <div class="modal-content" onclick={(e) => e.stopPropagation()}>
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div class="modal-backdrop" onclick={onCancel} onkeydown={(e) => e.key === 'Escape' && !showBackgroundConfig && onCancel()}>
+  <div
+    class="modal-content"
+    onclick={(e) => e.stopPropagation()}
+    onkeydown={(e) => e.stopPropagation()}
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="tab-edit-title"
+    tabindex="-1"
+    use:focusTrap
+  >
     <div class="modal-header">
-      <h2>{tabName ? 'Edit Tab' : 'New Tab'}</h2>
+      <h2 id="tab-edit-title">{tabName ? 'Edit Tab' : 'New Tab'}</h2>
       <button class="close-btn" onclick={onCancel}>
         <Icon icon="mdi:close" width="24" />
       </button>
@@ -76,7 +92,7 @@
         onSelect={(o) => opacity = o}
       />
 
-      {#if onSaveBackground}
+      {#if onSaveBackground && perTabBackgrounds}
         <div class="form-group">
           <button type="button" class="btn-background" onclick={() => showBackgroundConfig = true}>
             <Icon icon="mdi:image-multiple" width="20" />
@@ -88,7 +104,16 @@
               {tabBackground.type === 'image' ? 'Image background set' : ''}
               {tabBackground.type === 'slideshow' ? `Slideshow (${tabBackground.images?.length || 0} images)` : ''}
             </small>
+          {:else}
+            <small class="background-status">Using dashboard background</small>
           {/if}
+        </div>
+      {:else if onSaveBackground}
+        <div class="form-group">
+          <small class="background-hint">
+            <Icon icon="mdi:information-outline" width="16" />
+            Enable "Individual backgrounds per tab" in dashboard background settings to set a custom background for this tab.
+          </small>
         </div>
       {/if}
 
@@ -276,5 +301,17 @@
     padding: 0.5rem;
     background: var(--bg-tertiary);
     border-radius: 0.25rem;
+  }
+
+  .background-hint {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    padding: 0.75rem;
+    background: var(--bg-tertiary);
+    border-radius: 0.375rem;
+    border: 1px dashed var(--border);
   }
 </style>

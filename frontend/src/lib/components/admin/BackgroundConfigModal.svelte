@@ -3,30 +3,46 @@
   import Icon from '@iconify/svelte';
   import { BACKGROUND_PRESETS, BACKGROUND_CATEGORIES, type BackgroundImage, type BackgroundCategory } from '$lib/constants/backgrounds';
   import { getSessionToken } from '$lib/utils/api';
+  import { confirm } from '$lib/stores/confirmModal';
+  import { focusTrap } from '$lib/utils/focusTrap';
 
   interface Props {
     background?: Background;
     onSave: (background: Background | undefined) => void;
     onCancel: () => void;
     level: 'dashboard' | 'tab';
+    perTabBackgrounds?: boolean;
+    onPerTabBackgroundsChange?: (enabled: boolean) => void;
   }
 
-  let { background, onSave, onCancel, level }: Props = $props();
+  let { background, onSave, onCancel, level, perTabBackgrounds = false, onPerTabBackgroundsChange }: Props = $props();
 
-  // State for background configuration
+  // Local state for the toggle (intentionally captures initial value)
+  // svelte-ignore state_referenced_locally
+  let perTabEnabled = $state(perTabBackgrounds);
+
+  // Form state initialized from props (intentionally captures initial values)
+  // svelte-ignore state_referenced_locally
   let backgroundType = $state<'none' | 'color' | 'image' | 'slideshow'>(
     background?.type || 'none'
   );
+  // svelte-ignore state_referenced_locally
   let backgroundFit = $state<'cover' | 'contain' | 'fill'>(
     background?.fit || 'cover'
   );
+  // svelte-ignore state_referenced_locally
   let colorValue = $state(background?.type === 'color' ? background.value || '#1e293b' : '#1e293b');
+  // svelte-ignore state_referenced_locally
   let singleImageUrl = $state(background?.type === 'image' ? background.value || '' : '');
+  // svelte-ignore state_referenced_locally
   let slideshowImages = $state<string[]>(
     background?.type === 'slideshow' && background.images ? [...background.images] : []
   );
+  // svelte-ignore state_referenced_locally
   let slideshowInterval = $state(background?.interval || 30);
+  // svelte-ignore state_referenced_locally
   let transitionEffect = $state<'crossfade' | 'slide' | 'zoom' | 'fade-black' | 'blur' | 'flip' | 'kenburns' | 'none'>(background?.transition || 'crossfade');
+  // svelte-ignore state_referenced_locally
   let transitionDuration = $state(background?.transitionDuration || 1.5);
   let selectedCategory = $state('all');
   let customImageUrl = $state('');
@@ -47,6 +63,15 @@
   let isUploading = $state(false);
   let uploadError = $state('');
   let fileInput: HTMLInputElement;
+
+  // Hover preview state
+  let hoverPreviewUrl = $state<string | null>(null);
+  let hoverPreviewPosition = $state({ x: 0, y: 0 });
+
+  // Category management
+  let showNewCategoryInput = $state(false);
+  let newCategoryName = $state('');
+  let newCategoryIcon = $state('mdi:folder-image');
 
   // Load data on mount
   $effect(() => {
@@ -170,10 +195,20 @@
       return;
     }
 
-    if (!confirm('Delete this uploaded background image?')) return;
+    const confirmed = await confirm({
+      title: 'Delete Background',
+      message: 'Delete this uploaded background image?',
+      confirmText: 'Delete',
+      confirmStyle: 'danger'
+    });
+    if (!confirmed) return;
 
     try {
       const token = getSessionToken();
+      if (!token) {
+        uploadError = 'Session expired. Please log in again at /admin';
+        return;
+      }
       const response = await fetch(`/api/backgrounds/${image.id}`, {
         method: 'DELETE',
         headers: {
@@ -187,15 +222,25 @@
         if (singleImageUrl === image.url) {
           singleImageUrl = '';
         }
+      } else if (response.status === 401) {
+        uploadError = 'Session expired. Please log in again at /admin';
+      } else {
+        const errorText = await response.text();
+        console.error('Failed to delete image:', response.status, errorText);
+        uploadError = `Failed to delete: ${errorText}`;
       }
     } catch (error) {
       console.error('Failed to delete image:', error);
+      uploadError = 'Failed to delete image';
     }
   }
 
-  function handleAddImage(image: BackgroundImage) {
+  function handleToggleImage(image: BackgroundImage) {
     if (backgroundType === 'slideshow') {
-      if (!slideshowImages.includes(image.url)) {
+      // Toggle: add if not present, remove if present
+      if (slideshowImages.includes(image.url)) {
+        slideshowImages = slideshowImages.filter(url => url !== image.url);
+      } else {
         slideshowImages = [...slideshowImages, image.url];
       }
     } else if (backgroundType === 'image') {
@@ -220,7 +265,82 @@
     customImageUrl = '';
   }
 
+  async function handleCreateCategory() {
+    if (!newCategoryName.trim()) return;
+
+    const categoryId = newCategoryName.trim().toLowerCase().replace(/\s+/g, '-');
+
+    try {
+      const token = getSessionToken();
+      const response = await fetch('/api/backgrounds/categories', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          id: categoryId,
+          name: newCategoryName.trim(),
+          icon: newCategoryIcon
+        })
+      });
+
+      if (response.ok) {
+        const newCategory: BackgroundCategory = {
+          id: categoryId,
+          name: newCategoryName.trim(),
+          icon: newCategoryIcon
+        };
+        categories = [...categories, newCategory];
+        newCategoryName = '';
+        newCategoryIcon = 'mdi:folder-image';
+        showNewCategoryInput = false;
+        selectedCategory = categoryId;
+      } else {
+        const errorText = await response.text();
+        uploadError = `Failed to create category: ${errorText}`;
+      }
+    } catch (error) {
+      uploadError = 'Failed to create category';
+    }
+  }
+
+  function handleImageHover(e: MouseEvent, imageUrl: string) {
+    hoverPreviewUrl = imageUrl;
+    // Position preview to the left or right of the thumbnail, whichever fits better
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const previewWidth = 300;
+    const previewHeight = 200;
+    const gap = 20;
+
+    // Try left side first, if not enough space use right side
+    let x = rect.left - previewWidth - gap;
+    if (x < 10) {
+      // Not enough space on left, try right side
+      x = rect.right + gap;
+      // If still off-screen, clamp to viewport
+      if (x + previewWidth > window.innerWidth - 10) {
+        x = window.innerWidth - previewWidth - 10;
+      }
+    }
+
+    // Vertical: center on thumbnail, but keep within viewport
+    let y = rect.top + (rect.height / 2) - (previewHeight / 2);
+    y = Math.max(10, Math.min(y, window.innerHeight - previewHeight - 10));
+
+    hoverPreviewPosition = { x, y };
+  }
+
+  function handleImageHoverEnd() {
+    hoverPreviewUrl = null;
+  }
+
   function handleSave() {
+    // Save perTabBackgrounds setting if changed (dashboard level only)
+    if (level === 'dashboard' && onPerTabBackgroundsChange && perTabEnabled !== perTabBackgrounds) {
+      onPerTabBackgroundsChange(perTabEnabled);
+    }
+
     if (backgroundType === 'none') {
       onSave(undefined);
       return;
@@ -295,19 +415,53 @@
 
 <svelte:window onkeydown={handleKeydown} />
 
-<div class="modal-backdrop" onclick={onCancel}>
-  <div class="modal-content" onclick={(e) => e.stopPropagation()}>
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div class="modal-backdrop" onclick={onCancel} onkeydown={(e) => e.key === 'Escape' && onCancel()}>
+  <div
+    class="modal-content"
+    onclick={(e) => e.stopPropagation()}
+    onkeydown={(e) => e.stopPropagation()}
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="background-config-title"
+    tabindex="-1"
+    use:focusTrap
+  >
     <div class="modal-header">
-      <h2>Configure {level === 'dashboard' ? 'Dashboard' : 'Tab'} Background</h2>
+      <h2 id="background-config-title">Configure {level === 'dashboard' ? 'Dashboard' : 'Tab'} Background</h2>
       <button class="close-btn" onclick={onCancel}>
         <Icon icon="mdi:close" width="24" />
       </button>
     </div>
 
     <div class="modal-body">
+      <!-- Per-Tab Backgrounds Toggle (dashboard level only) - shown first -->
+      {#if level === 'dashboard'}
+        <div class="form-group toggle-group">
+          <label class="toggle-label">
+            <span class="toggle-switch" class:enabled={perTabEnabled}>
+              <span class="toggle-knob"></span>
+            </span>
+            <span class="toggle-text">Individual backgrounds per tab</span>
+            <input
+              type="checkbox"
+              bind:checked={perTabEnabled}
+              class="toggle-checkbox"
+            />
+          </label>
+          <p class="toggle-hint">
+            {#if perTabEnabled}
+              Each tab can have its own background. Edit a tab to configure it.
+            {:else}
+              All tabs share this dashboard background.
+            {/if}
+          </p>
+        </div>
+      {/if}
+
       <!-- Background Type Selection -->
       <div class="form-group">
-        <label>Background Type</label>
+        <label>Background Type {#if level === 'dashboard' && perTabEnabled}<span class="label-hint">(default for tabs without custom background)</span>{/if}</label>
         <div class="type-buttons">
           <button class="type-btn" class:active={backgroundType === 'none'} onclick={() => backgroundType = 'none'}>
             <Icon icon="mdi:close-circle-outline" width="24" />
@@ -534,7 +688,45 @@
                 {/if}
               </button>
             {/each}
+            <button
+              class="category-tab add-category-btn"
+              onclick={() => showNewCategoryInput = !showNewCategoryInput}
+              title="Add custom category"
+            >
+              <Icon icon={showNewCategoryInput ? "mdi:close" : "mdi:plus"} width="18" />
+            </button>
           </div>
+
+          <!-- New Category Form -->
+          {#if showNewCategoryInput}
+            <div class="new-category-form">
+              <input
+                type="text"
+                bind:value={newCategoryName}
+                placeholder="Category name"
+                class="new-category-input"
+                onkeydown={(e) => e.key === 'Enter' && handleCreateCategory()}
+              />
+              <select bind:value={newCategoryIcon} class="icon-select">
+                <option value="mdi:folder-image">Folder</option>
+                <option value="mdi:image-multiple">Images</option>
+                <option value="mdi:camera">Camera</option>
+                <option value="mdi:landscape">Landscape</option>
+                <option value="mdi:city">City</option>
+                <option value="mdi:nature">Nature</option>
+                <option value="mdi:water">Water</option>
+                <option value="mdi:weather-night">Night</option>
+                <option value="mdi:palette">Art</option>
+                <option value="mdi:heart">Favorites</option>
+                <option value="mdi:star">Featured</option>
+                <option value="mdi:briefcase">Work</option>
+              </select>
+              <button onclick={handleCreateCategory} class="create-category-btn">
+                <Icon icon="mdi:check" width="18" />
+                Create
+              </button>
+            </div>
+          {/if}
 
           <!-- Image Grid -->
           {#if isLoading}
@@ -548,12 +740,18 @@
                 <button
                   class="image-card"
                   class:selected={backgroundType === 'image' ? singleImageUrl === image.url : slideshowImages.includes(image.url)}
-                  onclick={() => handleAddImage(image)}
+                  onclick={() => handleToggleImage(image)}
+                  onmouseenter={(e) => handleImageHover(e, image.url)}
+                  onmouseleave={handleImageHoverEnd}
                   title={image.name}
                 >
                   <img src={image.url} alt={image.name} loading="lazy" />
                   <div class="image-overlay">
-                    <Icon icon="mdi:plus-circle" width="32" />
+                    {#if backgroundType === 'slideshow' && slideshowImages.includes(image.url)}
+                      <Icon icon="mdi:minus-circle" width="32" />
+                    {:else}
+                      <Icon icon="mdi:plus-circle" width="32" />
+                    {/if}
                     <span class="image-name">{image.name}</span>
                   </div>
                   {#if image.source === 'preset'}
@@ -589,6 +787,17 @@
     </div>
   </div>
 </div>
+
+<!-- Hover preview -->
+{#if hoverPreviewUrl}
+  <div
+    class="hover-preview"
+    style:left="{hoverPreviewPosition.x}px"
+    style:top="{hoverPreviewPosition.y}px"
+  >
+    <img src={hoverPreviewUrl} alt="Preview" />
+  </div>
+{/if}
 
 <style>
   .modal-backdrop {
@@ -661,6 +870,83 @@
     margin-bottom: 0.5rem;
     font-weight: 500;
     color: var(--text-primary);
+  }
+
+  /* Toggle switch styles */
+  .toggle-group {
+    padding: 1rem 1.25rem;
+    background: var(--bg-tertiary);
+    border-radius: 0.5rem;
+    border: 1px solid var(--border);
+  }
+
+  .toggle-group .toggle-label {
+    display: flex !important;
+    align-items: center;
+    gap: 1rem;
+    cursor: pointer;
+    margin-bottom: 0;
+  }
+
+  .toggle-checkbox {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+  }
+
+  .toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 48px;
+    min-width: 48px;
+    height: 26px;
+    background: var(--bg-secondary);
+    border-radius: 13px;
+    transition: background 0.2s, border-color 0.2s;
+    flex-shrink: 0;
+    border: 1px solid var(--border);
+  }
+
+  .toggle-knob {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 18px;
+    height: 18px;
+    background: var(--text-secondary);
+    border-radius: 50%;
+    transition: transform 0.2s, background 0.2s;
+  }
+
+  .toggle-switch.enabled {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+
+  .toggle-switch.enabled .toggle-knob {
+    transform: translateX(22px);
+    background: white;
+  }
+
+  .toggle-text {
+    font-weight: 500;
+    color: var(--text-primary);
+    line-height: 1.4;
+  }
+
+  .toggle-hint {
+    margin: 0.75rem 0 0 0;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    padding-left: calc(48px + 1rem);
+  }
+
+  .label-hint {
+    font-weight: 400;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
   }
 
   .form-group input[type="text"],
@@ -948,6 +1234,77 @@
   .category-tab .count {
     opacity: 0.7;
     font-size: 0.7rem;
+  }
+
+  .add-category-btn {
+    padding: 0.5rem 0.625rem;
+    background: transparent;
+    border-style: dashed;
+  }
+
+  .add-category-btn:hover {
+    background: var(--bg-primary);
+    border-style: solid;
+  }
+
+  .new-category-form {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    padding: 0.75rem;
+    background: var(--bg-tertiary);
+    border-radius: 0.375rem;
+    border: 1px solid var(--border);
+  }
+
+  .new-category-input {
+    flex: 1;
+    min-width: 150px;
+    padding: 0.5rem 0.75rem;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 0.375rem;
+    color: var(--text-primary);
+    font-size: 0.875rem;
+  }
+
+  .new-category-input:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  .icon-select {
+    padding: 0.5rem 0.75rem;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 0.375rem;
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    cursor: pointer;
+  }
+
+  .icon-select:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  .create-category-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.5rem 0.75rem;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 0.375rem;
+    cursor: pointer;
+    font-weight: 500;
+    font-size: 0.875rem;
+    transition: all 0.2s;
+  }
+
+  .create-category-btn:hover {
+    background: var(--accent-hover);
   }
 
   .loading {
@@ -1297,5 +1654,25 @@
       flex-wrap: nowrap;
       -webkit-overflow-scrolling: touch;
     }
+  }
+
+  /* Hover preview */
+  .hover-preview {
+    position: fixed;
+    z-index: 2000;
+    width: 300px;
+    height: 200px;
+    background: var(--bg-primary);
+    border: 2px solid var(--accent);
+    border-radius: 0.5rem;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  .hover-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
   }
 </style>

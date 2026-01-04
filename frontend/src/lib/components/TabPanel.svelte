@@ -28,6 +28,7 @@
   let showAddGroupModal = $state(false);
 
   // Drag and drop handling for groups
+  // svelte-ignore state_referenced_locally
   let groupItems = $state([...tab.groups]);
 
   $effect(() => {

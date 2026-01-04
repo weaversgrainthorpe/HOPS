@@ -1,4 +1,4 @@
-# HOPS User Guide
+# HOPS User Guide (v0.9.0)
 
 Welcome to HOPS (Home Operations Portal System)! This guide will help you get started and make the most of your dashboard.
 
@@ -380,7 +380,6 @@ Colors cascade down the hierarchy!
 
 ## Getting Help
 
-- **GitHub Issues**: [Report bugs or request features](https://github.com/yourusername/hops/issues)
 - **Documentation**: Check the [README](README.md) for technical details
 - **Changelog**: See [CHANGELOG](CHANGELOG.md) for version history
 
@@ -401,9 +400,3 @@ Colors cascade down the hierarchy!
 | Change Theme | Click theme icon in header |
 | Import/Export | Click database icon (requires login) |
 
----
-
-**Version**: 0.3.0
-**Last Updated**: 2026-01-02
-
-Happy organizing! 🚀
