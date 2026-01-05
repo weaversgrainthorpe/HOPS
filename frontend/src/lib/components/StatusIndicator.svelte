@@ -1,5 +1,6 @@
 <script lang="ts">
   import { statusStore, subscribeToStatus, type StatusInfo } from '$lib/stores/status';
+  import { COLORS } from '$lib/constants/colors';
   import Icon from '@iconify/svelte';
   import { onMount, onDestroy } from 'svelte';
 
@@ -34,11 +35,11 @@
 
   function getStatusColor(s: StatusInfo['status']) {
     switch (s) {
-      case 'up': return '#10b981';
-      case 'down': return '#ef4444';
-      case 'error': return '#f59e0b';
-      case 'loading': return '#6b7280';
-      default: return '#6b7280';
+      case 'up': return COLORS.success.DEFAULT;
+      case 'down': return COLORS.error.DEFAULT;
+      case 'error': return COLORS.warning.DEFAULT;
+      case 'loading': return COLORS.neutral.gray[500];
+      default: return COLORS.neutral.gray[500];
     }
   }
 

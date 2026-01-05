@@ -272,7 +272,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 1000;
+    z-index: var(--z-modal);
     padding: 1rem;
   }
 
@@ -399,16 +399,6 @@
     align-items: center;
     gap: 0.25rem;
     flex-wrap: wrap;
-  }
-
-  .keys.small {
-    gap: 0.125rem;
-  }
-
-  .keys.small kbd {
-    padding: 0.125rem 0.375rem;
-    font-size: 0.625rem;
-    min-width: 1.25rem;
   }
 
   kbd {

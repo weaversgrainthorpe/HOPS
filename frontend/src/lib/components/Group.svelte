@@ -11,6 +11,9 @@
   import { clipboard, clearClipboard } from '$lib/stores/clipboard';
   import { getTextColorValue } from '$lib/utils/colorContrast';
 
+  // Extended entry type with drag-and-drop metadata
+  type DraggableEntry = EntryType & { _sourceGroupId?: string };
+
   interface Props {
     group: Group;
     onUpdateEntry?: (entryId: string, updatedEntry: EntryType) => void;
@@ -47,9 +50,9 @@
     collapsed = !collapsed;
   }
 
-  function handleSaveGroup(groupName: string, groupColor?: string, groupOpacity?: number, groupTextColor?: 'auto' | 'light' | 'dark') {
+  function handleSaveGroup(groupName: string, groupIcon?: string, groupColor?: string, groupOpacity?: number, groupTextColor?: 'auto' | 'light' | 'dark') {
     if (onUpdateGroup) {
-      onUpdateGroup({ ...group, name: groupName, color: groupColor, opacity: groupOpacity, textColor: groupTextColor });
+      onUpdateGroup({ ...group, name: groupName, icon: groupIcon, color: groupColor, opacity: groupOpacity, textColor: groupTextColor });
     }
     showEditModal = false;
   }
@@ -110,21 +113,21 @@
 
   // Drag and drop handling
   // svelte-ignore state_referenced_locally
-  let items = $state([...group.entries]);
+  let items = $state<DraggableEntry[]>([...group.entries]);
 
   $effect(() => {
     items = [...group.entries];
   });
 
-  function handleDndConsider(e: CustomEvent<DndEvent<EntryType>>) {
+  function handleDndConsider(e: CustomEvent<DndEvent<DraggableEntry>>) {
     // Tag entries with source group ID for cross-group detection
     items = e.detail.items.map(entry => ({
       ...entry,
       _sourceGroupId: group.id
-    } as any));
+    }));
   }
 
-  function handleDndFinalize(e: CustomEvent<DndEvent<EntryType>>) {
+  function handleDndFinalize(e: CustomEvent<DndEvent<DraggableEntry>>) {
     const newItems = e.detail.items;
 
     // Check if this is a cross-group drop (item with different groupId appeared)
@@ -138,7 +141,7 @@
       const newIndex = newItems.indexOf(movedEntry);
 
       // Extract source group from entry metadata (if available)
-      const sourceGroupId = (movedEntry as any)._sourceGroupId || '';
+      const sourceGroupId = movedEntry._sourceGroupId || '';
 
       onMoveEntry(sourceGroupId, group.id, movedEntry.id, newIndex);
     } else {
@@ -184,18 +187,26 @@
       tabindex="0"
       onclick={toggleCollapse}
       onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleCollapse(e as unknown as MouseEvent); }}
+      aria-expanded={!collapsed}
+      aria-label={$editMode ? `Edit ${group.name} group` : `${collapsed ? 'Expand' : 'Collapse'} ${group.name} group`}
     >
-      <h3>{group.name}</h3>
+      <div class="group-title">
+        {#if group.icon}
+          <Icon icon={group.icon} width="20" />
+        {/if}
+        <h3>{group.name}</h3>
+      </div>
       <div class="group-header-right">
         <Icon icon={collapsed ? 'mdi:chevron-down' : 'mdi:chevron-up'} width="24" />
       </div>
     </div>
     {#if $editMode}
-      <div class="group-controls">
+      <div class="group-controls" role="group" aria-label="Group actions">
         <button
           class="group-control-btn"
           onclick={(e) => { e.stopPropagation(); showEditModal = true; }}
           title="Edit group"
+          aria-label="Edit {group.name} group"
         >
           <Icon icon="mdi:pencil" width="16" />
         </button>
@@ -206,6 +217,7 @@
             handleDeleteGroup();
           }}
           title="Delete group"
+          aria-label="Delete {group.name} group"
         >
           <Icon icon="mdi:trash-can" width="16" />
         </button>
@@ -237,13 +249,13 @@
       {/each}
 
       {#if $editMode && onAddEntry}
-        <button class="add-tile-btn" onclick={handleAddClick} title="Add new tile">
+        <button class="add-tile-btn" onclick={handleAddClick} title="Add new tile" aria-label="Add new tile to {group.name}">
           <Icon icon="mdi:plus" width="48" />
           <span>Add Tile</span>
         </button>
 
         {#if $clipboard?.type === 'entry'}
-          <button class="paste-btn" onclick={handlePaste} title="Paste tile">
+          <button class="paste-btn" onclick={handlePaste} title="Paste tile" aria-label="Paste tile into {group.name}">
             <Icon icon="mdi:content-paste" width="48" />
             <span>Paste</span>
           </button>
@@ -264,6 +276,7 @@
 {#if showEditModal}
   <GroupEditModal
     groupName={group.name}
+    groupIcon={group.icon}
     groupColor={group.color}
     groupOpacity={group.opacity}
     groupTextColor={group.textColor}
@@ -326,6 +339,12 @@
     border-color: rgba(255, 255, 255, 0.4);
   }
 
+  .group-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
   h3 {
     margin: 0;
     font-size: 1.25rem;
@@ -377,7 +396,7 @@
   }
 
   .group-control-btn.delete-btn:hover {
-    background: #dc2626;
+    background: var(--color-error-dark);
     color: white;
   }
 

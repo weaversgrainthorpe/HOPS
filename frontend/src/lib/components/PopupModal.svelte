@@ -1,6 +1,7 @@
 <script lang="ts">
   import Icon from '@iconify/svelte';
   import { focusTrap } from '$lib/utils/focusTrap';
+  import { safeOpenUrl } from '$lib/utils/url';
 
   interface Props {
     url: string;
@@ -17,7 +18,7 @@
   }
 
   function openInNewTab() {
-    window.open(url, '_blank');
+    safeOpenUrl(url, '_blank');
     onClose();
   }
 </script>
@@ -82,7 +83,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 9999;
+    z-index: var(--z-modal-overlay);
     padding: 1rem;
   }
 

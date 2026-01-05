@@ -291,6 +291,171 @@ func (r *Router) handleExportConfig(w http.ResponseWriter, req *http.Request) {
 	w.Write([]byte(configData))
 }
 
+// IconMatch holds the result of an icon lookup
+type IconMatch struct {
+	Icon     string
+	ImageURL string
+	Color    string
+}
+
+// matchIconForName searches the icons database for a matching icon based on the service name
+func (r *Router) matchIconForName(name string) (match IconMatch, found bool) {
+	if name == "" {
+		return IconMatch{}, false
+	}
+
+	// Normalize the name for matching (lowercase, trim)
+	normalizedName := strings.ToLower(strings.TrimSpace(name))
+
+	// Also create a version without spaces (for matching "HomeAssistant" to "Home Assistant")
+	noSpaceName := strings.ReplaceAll(normalizedName, " ", "")
+	noSpaceName = strings.ReplaceAll(noSpaceName, "-", "")
+	noSpaceName = strings.ReplaceAll(noSpaceName, "_", "")
+
+	// Helper to scan a row into IconMatch
+	scanMatch := func(row *sql.Row) (IconMatch, bool) {
+		var iconVal, imageURLVal, colorVal sql.NullString
+		err := row.Scan(&iconVal, &imageURLVal, &colorVal)
+		if err != nil {
+			return IconMatch{}, false
+		}
+		// Return if we have either icon or image_url
+		if (iconVal.Valid && iconVal.String != "") || (imageURLVal.Valid && imageURLVal.String != "") {
+			return IconMatch{
+				Icon:     iconVal.String,
+				ImageURL: imageURLVal.String,
+				Color:    colorVal.String,
+			}, true
+		}
+		return IconMatch{}, false
+	}
+
+	// Try exact match first
+	row := r.db.QueryRow(
+		"SELECT icon, image_url, color FROM icons WHERE LOWER(name) = ? OR LOWER(id) = ? LIMIT 1",
+		normalizedName, normalizedName,
+	)
+	if m, ok := scanMatch(row); ok {
+		return m, true
+	}
+
+	// Try matching without spaces (handles "HomeAssistant" matching "homeassistant" or "Home Assistant")
+	row = r.db.QueryRow(
+		"SELECT icon, image_url, color FROM icons WHERE REPLACE(REPLACE(REPLACE(LOWER(name), ' ', ''), '-', ''), '_', '') = ? OR LOWER(id) = ? LIMIT 1",
+		noSpaceName, noSpaceName,
+	)
+	if m, ok := scanMatch(row); ok {
+		return m, true
+	}
+
+	// Try partial match - but only if icon name appears as a word/prefix in the search term
+	// This prevents "Conservatory" from matching "Tor"
+	row = r.db.QueryRow(
+		`SELECT icon, image_url, color FROM icons
+		 WHERE LOWER(name) LIKE ?
+		 AND LENGTH(name) >= 4
+		 ORDER BY LENGTH(name) DESC LIMIT 1`,
+		"%"+normalizedName+"%",
+	)
+	if m, ok := scanMatch(row); ok {
+		return m, true
+	}
+
+	// Try word-based matching: split the search term and try each word
+	words := strings.FieldsFunc(normalizedName, func(c rune) bool {
+		return c == ' ' || c == '-' || c == '_'
+	})
+	for _, word := range words {
+		if len(word) < 3 {
+			continue
+		}
+		row = r.db.QueryRow(
+			"SELECT icon, image_url, color FROM icons WHERE LOWER(name) = ? OR LOWER(id) = ? LIMIT 1",
+			word, word,
+		)
+		if m, ok := scanMatch(row); ok {
+			return m, true
+		}
+	}
+
+	return IconMatch{}, false
+}
+
+// applyIconMatching recursively searches through the config and matches icons for entries
+func (r *Router) applyIconMatching(config map[string]interface{}) int {
+	matchCount := 0
+
+	dashboards, ok := config["dashboards"].([]interface{})
+	if !ok {
+		return 0
+	}
+
+	for _, d := range dashboards {
+		dashboard, ok := d.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		tabs, ok := dashboard["tabs"].([]interface{})
+		if !ok {
+			continue
+		}
+
+		for _, t := range tabs {
+			tab, ok := t.(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			groups, ok := tab["groups"].([]interface{})
+			if !ok {
+				continue
+			}
+
+			for _, g := range groups {
+				group, ok := g.(map[string]interface{})
+				if !ok {
+					continue
+				}
+
+				entries, ok := group["entries"].([]interface{})
+				if !ok {
+					continue
+				}
+
+				for _, e := range entries {
+					entry, ok := e.(map[string]interface{})
+					if !ok {
+						continue
+					}
+
+					// Check if entry already has an icon (and it's not a generic one)
+					existingIcon, _ := entry["icon"].(string)
+					existingIconUrl, _ := entry["iconUrl"].(string)
+					if existingIconUrl != "" || (existingIcon != "" && existingIcon != "mdi:application" && existingIcon != "mdi:link" && !strings.HasPrefix(existingIcon, "mdi:help")) {
+						continue
+					}
+
+					// Try to match based on name
+					name, _ := entry["name"].(string)
+					if match, found := r.matchIconForName(name); found {
+						// Prefer image_url (local SVG) over iconify icon
+						if match.ImageURL != "" {
+							entry["iconUrl"] = match.ImageURL
+							entry["icon"] = "" // Clear iconify reference
+						} else if match.Icon != "" {
+							entry["icon"] = match.Icon
+						}
+						matchCount++
+					}
+				}
+			}
+		}
+	}
+
+	return matchCount
+}
+
 // handleImportConfig imports configuration from YAML/JSON (supports HOPS, Homer, Dashy formats)
 func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodPost {
@@ -303,6 +468,9 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, "Failed to parse form", http.StatusBadRequest)
 		return
 	}
+
+	// Check if auto-match icons is requested
+	autoMatchIcons := req.FormValue("autoMatchIcons") == "true"
 
 	file, _, err := req.FormFile("file")
 	if err != nil {
@@ -434,6 +602,35 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 	// Update the config with merged dashboards
 	existingConfig["dashboards"] = existingDashboards
 
+	// Apply icon matching if requested
+	iconMatchCount := 0
+	if autoMatchIcons {
+		log.Printf("[Import] Applying icon matching to config...")
+		iconMatchCount = r.applyIconMatching(existingConfig)
+		log.Printf("[Import] Icon matching complete: %d icons matched", iconMatchCount)
+
+		// Debug: Log a sample entry after matching
+		if dashboards, ok := existingConfig["dashboards"].([]interface{}); ok && len(dashboards) > 0 {
+			if dash, ok := dashboards[len(dashboards)-1].(map[string]interface{}); ok {
+				if tabs, ok := dash["tabs"].([]interface{}); ok && len(tabs) > 0 {
+					if tab, ok := tabs[0].(map[string]interface{}); ok {
+						if groups, ok := tab["groups"].([]interface{}); ok && len(groups) > 0 {
+							if group, ok := groups[0].(map[string]interface{}); ok {
+								if entries, ok := group["entries"].([]interface{}); ok && len(entries) > 0 {
+									if entry, ok := entries[0].(map[string]interface{}); ok {
+										log.Printf("[Import] Sample entry after matching: name=%v, icon=%v", entry["name"], entry["icon"])
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	} else {
+		log.Printf("[Import] autoMatchIcons is false, skipping icon matching")
+	}
+
 	// Preserve theme and settings from existing config, or use imported if not present
 	if _, ok := existingConfig["theme"]; !ok {
 		if theme, ok := importedConfig["theme"]; ok {
@@ -464,10 +661,18 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
+
+	// Build response message
+	message := fmt.Sprintf("Imported %d dashboard(s) from %s format", importedCount, importFormat)
+	if iconMatchCount > 0 {
+		message += fmt.Sprintf(", matched %d icon(s)", iconMatchCount)
+	}
+
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"success":  true,
-		"message":  fmt.Sprintf("Imported %d dashboard(s) from %s format", importedCount, importFormat),
-		"imported": importedCount,
+		"success":      true,
+		"message":      message,
+		"imported":     importedCount,
+		"iconsMatched": iconMatchCount,
 	})
 }
 

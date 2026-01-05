@@ -2,6 +2,7 @@
   import { isAuthenticated, login, logout, isLoggingIn } from '$lib/stores/auth';
   import DashboardList from '$lib/components/admin/DashboardList.svelte';
   import ChangePasswordModal from '$lib/components/admin/ChangePasswordModal.svelte';
+  import BackendStatus from '$lib/components/BackendStatus.svelte';
   import Icon from '@iconify/svelte';
 
   let username = 'admin';
@@ -64,6 +65,8 @@
       </form>
 
       <p class="hint">Default credentials: admin / admin</p>
+
+      <BackendStatus />
     </div>
   {:else}
     <div class="admin-panel">
@@ -82,6 +85,10 @@
       </div>
 
       <DashboardList />
+
+      <div class="status-section">
+        <BackendStatus />
+      </div>
     </div>
   {/if}
 </div>
@@ -189,5 +196,10 @@
 
   .btn-secondary:hover {
     background: var(--bg-secondary);
+  }
+
+  .status-section {
+    margin-top: 2rem;
+    max-width: 300px;
   }
 </style>

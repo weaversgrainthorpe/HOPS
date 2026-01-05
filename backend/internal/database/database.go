@@ -92,9 +92,6 @@ func runMigrations(db *sql.DB) error {
 			FOREIGN KEY (category_id) REFERENCES icon_categories(id) ON DELETE CASCADE
 		)`,
 
-		// Migration: Add image_url column if it doesn't exist
-		`ALTER TABLE icons ADD COLUMN image_url TEXT`,
-
 		// Index for faster category lookups
 		`CREATE INDEX IF NOT EXISTS idx_icons_category ON icons(category_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_icons_preset ON icons(is_preset)`,

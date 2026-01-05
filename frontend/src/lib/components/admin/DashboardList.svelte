@@ -2,13 +2,18 @@
   import { config, updateConfig } from '$lib/stores/config';
   import { editMode, enableEditMode } from '$lib/stores/editMode';
   import { confirm } from '$lib/stores/confirmModal';
+  import { toast } from '$lib/stores/toast';
   import { goto } from '$app/navigation';
+  import { exportConfig, importConfig } from '$lib/utils/api';
   import type { Dashboard } from '$lib/types';
   import Icon from '@iconify/svelte';
+  import ImportModal from './ImportModal.svelte';
 
   let editingId = $state<string | null>(null);
   let editName = $state('');
   let editPath = $state('');
+  let showImport = $state(false);
+  let exportingId = $state<string | null>(null);
 
   function handleNew() {
     const newDashboard: Dashboard = {
@@ -77,15 +82,42 @@
     enableEditMode();
     await goto(dashboard.path);
   }
+
+  async function handleExport(dashboard: Dashboard) {
+    exportingId = dashboard.id;
+    try {
+      const blob = await exportConfig('json');
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const dashboardName = dashboard.name.toLowerCase().replace(/\s+/g, '-');
+      a.download = `hops-${dashboardName}-${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      toast.success(`Exported ${dashboard.name}`);
+    } catch (err) {
+      toast.error('Export failed');
+    } finally {
+      exportingId = null;
+    }
+  }
 </script>
 
 <div class="dashboard-list">
   <div class="list-header">
     <h2>Dashboards</h2>
-    <button onclick={handleNew} class="btn-primary">
-      <Icon icon="mdi:plus" width="20" />
-      New Dashboard
-    </button>
+    <div class="header-actions">
+      <button onclick={() => showImport = true} class="btn-secondary">
+        <Icon icon="mdi:upload" width="20" />
+        Import
+      </button>
+      <button onclick={handleNew} class="btn-primary">
+        <Icon icon="mdi:plus" width="20" />
+        New Dashboard
+      </button>
+    </div>
   </div>
 
   {#if $config?.dashboards && $config.dashboards.length > 0}
@@ -135,6 +167,13 @@
               <button onclick={() => startEdit(dashboard)} class="btn-secondary" title="Rename">
                 <Icon icon="mdi:pencil" width="20" />
               </button>
+              <button onclick={() => handleExport(dashboard)} class="btn-secondary" title="Export" disabled={exportingId === dashboard.id}>
+                {#if exportingId === dashboard.id}
+                  <Icon icon="mdi:loading" width="20" class="spin" />
+                {:else}
+                  <Icon icon="mdi:download" width="20" />
+                {/if}
+              </button>
               <a href={dashboard.path} target="_blank" class="btn-secondary" title="Open in new tab">
                 <Icon icon="mdi:open-in-new" width="20" />
               </a>
@@ -155,6 +194,10 @@
   {/if}
 </div>
 
+{#if showImport}
+  <ImportModal onClose={() => showImport = false} />
+{/if}
+
 <style>
   .dashboard-list {
     width: 100%;
@@ -170,6 +213,11 @@
   h2 {
     margin: 0;
     font-size: 1.5rem;
+  }
+
+  .header-actions {
+    display: flex;
+    gap: 0.75rem;
   }
 
   .dashboards {
@@ -303,12 +351,13 @@
   }
 
   .btn-danger {
-    background: transparent;
-    color: #ef4444;
+    background: var(--bg-tertiary);
+    color: var(--color-error);
   }
 
   .btn-danger:hover {
-    background: #fee2e2;
+    background: color-mix(in srgb, var(--color-error) 10%, var(--bg-tertiary));
+    color: var(--color-error-dark);
   }
 
   .empty-state {
@@ -339,5 +388,14 @@
     .edit-fields {
       flex-direction: column;
     }
+  }
+
+  :global(.spin) {
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
   }
 </style>

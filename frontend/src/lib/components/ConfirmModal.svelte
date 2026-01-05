@@ -1,10 +1,16 @@
 <script lang="ts">
-  import { confirmModalState, closeConfirmModal } from '$lib/stores/confirmModal';
+  import { confirmModalState, closeConfirmModal, type ConfirmOptions } from '$lib/stores/confirmModal';
   import { focusTrap } from '$lib/utils/focusTrap';
+  import { COLORS } from '$lib/constants/colors';
   import Icon from '@iconify/svelte';
 
-  let state = $state({ isOpen: false, options: null as any, resolve: null as any });
-  let confirmButtonRef: HTMLButtonElement;
+  interface ConfirmState {
+    isOpen: boolean;
+    options: ConfirmOptions | null;
+    resolve: ((value: boolean) => void) | null;
+  }
+
+  let state = $state<ConfirmState>({ isOpen: false, options: null, resolve: null });
 
   $effect(() => {
     const unsubscribe = confirmModalState.subscribe(value => {
@@ -33,8 +39,8 @@
 
   function getIconColor(style: string | undefined) {
     switch (style) {
-      case 'danger': return '#ef4444';
-      case 'warning': return '#f59e0b';
+      case 'danger': return COLORS.error.DEFAULT;
+      case 'warning': return COLORS.warning.DEFAULT;
       default: return 'var(--accent)';
     }
   }
@@ -96,7 +102,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 10000;
+    z-index: var(--z-modal-critical);
     padding: 1rem;
   }
 
@@ -175,20 +181,20 @@
   }
 
   .btn-danger {
-    background: #ef4444;
+    background: var(--color-error, #ef4444);
     color: white;
   }
 
   .btn-danger:hover {
-    background: #dc2626;
+    background: var(--color-error-dark, #dc2626);
   }
 
   .btn-warning {
-    background: #f59e0b;
+    background: var(--color-warning, #f59e0b);
     color: white;
   }
 
   .btn-warning:hover {
-    background: #d97706;
+    background: var(--color-warning-dark, #d97706);
   }
 </style>

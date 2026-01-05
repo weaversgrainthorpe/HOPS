@@ -1,7 +1,8 @@
 <script lang="ts">
   import Icon from '@iconify/svelte';
+  import Modal from '$lib/components/shared/Modal.svelte';
   import { changePassword } from '$lib/utils/api';
-  import { focusTrap } from '$lib/utils/focusTrap';
+  import { validatePassword, validateMatch } from '$lib/utils/validation';
 
   interface Props {
     onClose: () => void;
@@ -16,26 +17,27 @@
   let success = $state(false);
   let isSubmitting = $state(false);
 
-  function handleKeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape') {
-      onClose();
-    }
-  }
+  // Derived validation states
+  let newPasswordValidation = $derived(validatePassword(newPassword, { minLength: 4 }));
+  let confirmValidation = $derived(validateMatch(newPassword, confirmPassword, 'passwords'));
 
   async function handleSubmit(e: Event) {
     e.preventDefault();
     error = '';
 
-    if (newPassword !== confirmPassword) {
-      error = 'New passwords do not match';
+    // Validate new password
+    if (!newPasswordValidation.valid) {
+      error = newPasswordValidation.message || 'Invalid password';
       return;
     }
 
-    if (newPassword.length < 4) {
-      error = 'New password must be at least 4 characters';
+    // Validate passwords match
+    if (!confirmValidation.valid) {
+      error = confirmValidation.message || 'Passwords do not match';
       return;
     }
 
+    // Check new password is different
     if (newPassword === currentPassword) {
       error = 'New password must be different from current password';
       return;
@@ -57,160 +59,89 @@
   }
 </script>
 
-<svelte:window onkeydown={handleKeydown} />
-
-<!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="modal-backdrop" onclick={onClose} onkeydown={(e) => e.key === 'Escape' && onClose()}>
-  <div
-    class="modal-content"
-    onclick={(e) => e.stopPropagation()}
-    onkeydown={(e) => e.stopPropagation()}
-    role="dialog"
-    aria-modal="true"
-    aria-labelledby="change-password-title"
-    tabindex="-1"
-    use:focusTrap
-  >
-    <div class="modal-header">
-      <h2 id="change-password-title">
-        <Icon icon="mdi:key" width="24" />
-        Change Password
-      </h2>
-      <button class="close-btn" onclick={onClose}>
-        <Icon icon="mdi:close" width="24" />
-      </button>
+<Modal
+  id="change-password"
+  title="Change Password"
+  titleIcon="mdi:key"
+  onClose={onClose}
+  maxWidth="400px"
+>
+  {#if success}
+    <div class="success-message">
+      <Icon icon="mdi:check-circle" width="48" />
+      <p>Password changed successfully!</p>
     </div>
+  {:else}
+    <form onsubmit={handleSubmit}>
+      <div class="form-group">
+        <label for="current-password">Current Password</label>
+        <input
+          id="current-password"
+          type="password"
+          bind:value={currentPassword}
+          required
+          autocomplete="current-password"
+          disabled={isSubmitting}
+        />
+      </div>
 
-    <div class="modal-body">
-      {#if success}
-        <div class="success-message">
-          <Icon icon="mdi:check-circle" width="48" />
-          <p>Password changed successfully!</p>
+      <div class="form-group">
+        <label for="new-password">New Password</label>
+        <input
+          id="new-password"
+          type="password"
+          bind:value={newPassword}
+          required
+          autocomplete="new-password"
+          disabled={isSubmitting}
+          class:invalid={newPassword && !newPasswordValidation.valid}
+        />
+        {#if newPassword && !newPasswordValidation.valid}
+          <span class="field-error">{newPasswordValidation.message}</span>
+        {/if}
+      </div>
+
+      <div class="form-group">
+        <label for="confirm-password">Confirm New Password</label>
+        <input
+          id="confirm-password"
+          type="password"
+          bind:value={confirmPassword}
+          required
+          autocomplete="new-password"
+          disabled={isSubmitting}
+          class:invalid={confirmPassword && !confirmValidation.valid}
+        />
+        {#if confirmPassword && !confirmValidation.valid}
+          <span class="field-error">{confirmValidation.message}</span>
+        {/if}
+      </div>
+
+      {#if error}
+        <div class="error-message">
+          <Icon icon="mdi:alert-circle" width="18" />
+          {error}
         </div>
-      {:else}
-        <form onsubmit={handleSubmit}>
-          <div class="form-group">
-            <label for="current-password">Current Password</label>
-            <input
-              id="current-password"
-              type="password"
-              bind:value={currentPassword}
-              required
-              autocomplete="current-password"
-              disabled={isSubmitting}
-            />
-          </div>
-
-          <div class="form-group">
-            <label for="new-password">New Password</label>
-            <input
-              id="new-password"
-              type="password"
-              bind:value={newPassword}
-              required
-              autocomplete="new-password"
-              disabled={isSubmitting}
-            />
-          </div>
-
-          <div class="form-group">
-            <label for="confirm-password">Confirm New Password</label>
-            <input
-              id="confirm-password"
-              type="password"
-              bind:value={confirmPassword}
-              required
-              autocomplete="new-password"
-              disabled={isSubmitting}
-            />
-          </div>
-
-          {#if error}
-            <div class="error-message">
-              <Icon icon="mdi:alert-circle" width="18" />
-              {error}
-            </div>
-          {/if}
-
-          <div class="form-actions">
-            <button type="button" class="btn-secondary" onclick={onClose} disabled={isSubmitting}>
-              Cancel
-            </button>
-            <button type="submit" class="btn-primary" disabled={isSubmitting}>
-              {#if isSubmitting}
-                <Icon icon="mdi:loading" width="18" class="spin" />
-                Changing...
-              {:else}
-                Change Password
-              {/if}
-            </button>
-          </div>
-        </form>
       {/if}
-    </div>
-  </div>
-</div>
+
+      <div class="form-actions">
+        <button type="button" class="btn-secondary" onclick={onClose} disabled={isSubmitting}>
+          Cancel
+        </button>
+        <button type="submit" class="btn-primary" disabled={isSubmitting}>
+          {#if isSubmitting}
+            <Icon icon="mdi:loading" width="18" class="spin" />
+            Changing...
+          {:else}
+            Change Password
+          {/if}
+        </button>
+      </div>
+    </form>
+  {/if}
+</Modal>
 
 <style>
-  .modal-backdrop {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.7);
-    backdrop-filter: blur(4px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-    padding: 1rem;
-  }
-
-  .modal-content {
-    background: var(--bg-secondary);
-    border-radius: 0.75rem;
-    width: 100%;
-    max-width: 400px;
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3);
-  }
-
-  .modal-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 1.25rem 1.5rem;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .modal-header h2 {
-    margin: 0;
-    font-size: 1.25rem;
-    font-weight: 600;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
-
-  .close-btn {
-    background: none;
-    border: none;
-    color: var(--text-secondary);
-    cursor: pointer;
-    padding: 0.5rem;
-    border-radius: 0.375rem;
-    transition: all 0.2s;
-  }
-
-  .close-btn:hover {
-    background: var(--bg-tertiary);
-    color: var(--text-primary);
-  }
-
-  .modal-body {
-    padding: 1.5rem;
-  }
-
   form {
     display: flex;
     flex-direction: column;
@@ -248,6 +179,15 @@
   input:disabled {
     opacity: 0.6;
     cursor: not-allowed;
+  }
+
+  input.invalid {
+    border-color: var(--color-error, #ef4444);
+  }
+
+  .field-error {
+    font-size: 0.75rem;
+    color: var(--color-error, #ef4444);
   }
 
   .error-message {

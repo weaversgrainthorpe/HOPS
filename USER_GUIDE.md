@@ -1,4 +1,4 @@
-# HOPS User Guide (v0.9.0)
+# HOPS User Guide (v0.10.0)
 
 Welcome to HOPS (Home Operations Portal System)! This guide will help you get started and make the most of your dashboard.
 
@@ -295,41 +295,40 @@ Colors cascade down the hierarchy!
 
 ### Exporting Configuration
 
-1. Login to admin panel
-2. Navigate to any dashboard
-3. Click the **Import/Export icon** (database icon) in the header
-4. Click "Export Configuration"
-5. Your configuration downloads as `hops-config.json`
+There are two ways to export your configuration:
+
+**From the Admin Page:**
+1. Go to the Admin page (`/`)
+2. Find the dashboard you want to export
+3. Click the **download icon** next to that dashboard
+4. Your configuration downloads as a JSON file
+
+**From a Dashboard (Edit Mode):**
+1. Enter Edit Mode on any dashboard
+2. Click the **download icon** in the header
+3. Your configuration downloads as a JSON file
 
 ### Importing Configuration
 
-#### From HOPS JSON
-1. Click **Import/Export icon**
-2. Select "HOPS JSON" format
-3. Paste your configuration or upload the file
-4. Click "Import"
+Import is done from the Admin page:
 
-#### From Homer
-1. Click **Import/Export icon**
-2. Select "Homer YAML" format
-3. Paste your Homer `config.yml` contents
-4. Click "Import"
+1. Go to the Admin page (`/`)
+2. Click the **Import** button next to "New Dashboard"
+3. Select your configuration file
+4. Click "Import Configuration"
 
-**Note**: Homer import converts your Homer dashboard to HOPS format.
-
-#### From Dashy
-1. Click **Import/Export icon**
-2. Select "Dashy YAML" format
-3. Paste your Dashy `conf.yml` contents
-4. Click "Import"
-
-**Note**: Dashy import converts your Dashy dashboard to HOPS format.
+#### Supported Formats
+- **HOPS JSON** - Native format (exported from HOPS)
+- **Homer YAML** - config.yml from Homer dashboard
+- **Dashy YAML** - conf.yml from Dashy dashboard
+- **Heimdall JSON** - Export from Heimdall dashboard
 
 ### Import Notes
 
+- **Merges with existing**: Imported dashboards are added alongside your existing ones
+- **Path conflicts**: If a dashboard path already exists, the imported one gets a suffix (e.g., /home becomes /home-1)
 - **Backup first**: Always export your current config before importing
 - **Authentication required**: Import/Export requires admin login
-- **Overwrites data**: Import replaces current configuration
 - **Format conversion**: Import from other tools is best-effort
 
 ## Tips and Tricks
@@ -398,5 +397,6 @@ Colors cascade down the hierarchy!
 | Add Group | Click "+ Add Group" (in Edit Mode) |
 | Add Tile | Click "+ Add Entry" (in Edit Mode) |
 | Change Theme | Click theme icon in header |
-| Import/Export | Click database icon (requires login) |
+| Export Dashboard | Click download icon in header (Edit Mode) |
+| Import Config | Click Import button on Admin page |
 

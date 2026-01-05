@@ -10,6 +10,7 @@
   import StatusIndicator from './StatusIndicator.svelte';
   import { copyEntry, cutEntry } from '$lib/stores/clipboard';
   import { selectEntry, toggleEntrySelection, isEntrySelected, selectedEntries } from '$lib/stores/selection';
+  import { safeOpenUrl, isValidUrl } from '$lib/utils/url';
 
   interface Props {
     entry: Entry;
@@ -49,10 +50,10 @@
 
     switch (entry.openMode) {
       case 'newtab':
-        window.open(entry.url, '_blank');
+        safeOpenUrl(entry.url, '_blank');
         break;
       case 'sametab':
-        window.location.href = entry.url;
+        safeOpenUrl(entry.url, '_self');
         break;
       case 'iframe':
         showIframeModal = true;
@@ -62,7 +63,7 @@
         break;
       default:
         // Default to new tab if no mode specified
-        window.open(entry.url, '_blank');
+        safeOpenUrl(entry.url, '_blank');
         break;
     }
   }
@@ -144,6 +145,8 @@
     onclick={handleClick}
     oncontextmenu={handleContextMenu}
     title={entry.description || entry.name}
+    aria-label={$editMode ? `Edit ${entry.name}` : `Open ${entry.name}`}
+    aria-pressed={isSelected}
   >
     <div class="title">{entry.name}</div>
 
@@ -195,18 +198,23 @@
 {/if}
 
 {#if showContextMenu}
-  <div class="context-menu" style="left: {contextMenuX}px; top: {contextMenuY}px;">
-    <button class="context-menu-item" onclick={handleCopy}>
+  <div
+    class="context-menu"
+    style="left: {contextMenuX}px; top: {contextMenuY}px;"
+    role="menu"
+    aria-label="Tile actions"
+  >
+    <button class="context-menu-item" onclick={handleCopy} role="menuitem" aria-label="Copy tile">
       <Icon icon="mdi:content-copy" width="18" />
       Copy
     </button>
-    <button class="context-menu-item" onclick={handleCut}>
+    <button class="context-menu-item" onclick={handleCut} role="menuitem" aria-label="Cut tile">
       <Icon icon="mdi:content-cut" width="18" />
       Cut
     </button>
     {#if onDelete}
-      <div class="context-menu-divider"></div>
-      <button class="context-menu-item danger" onclick={handleDeleteClick}>
+      <div class="context-menu-divider" role="separator"></div>
+      <button class="context-menu-item danger" onclick={handleDeleteClick} role="menuitem" aria-label="Delete tile">
         <Icon icon="mdi:trash-can" width="18" />
         Delete
       </button>
@@ -410,7 +418,7 @@
   }
 
   .control-btn.delete-btn:hover {
-    background: #dc2626;
+    background: var(--color-error-dark);
     color: white;
     transform: scale(1.1);
   }
@@ -422,7 +430,7 @@
     border: 1px solid var(--border);
     border-radius: 0.5rem;
     box-shadow: 0 4px 12px var(--shadow);
-    z-index: 1000;
+    z-index: var(--z-context-menu);
     min-width: 150px;
     padding: 0.5rem 0;
   }
@@ -448,11 +456,11 @@
   }
 
   .context-menu-item.danger {
-    color: #dc2626;
+    color: var(--color-error-dark);
   }
 
   .context-menu-item.danger:hover {
-    background: rgba(220, 38, 38, 0.1);
+    background: color-mix(in srgb, var(--color-error-dark) 10%, transparent);
   }
 
   .context-menu-divider {

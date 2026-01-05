@@ -7,7 +7,7 @@
   import { triggerHopAnimation } from '$lib/stores/easterEggs';
   import Icon from '@iconify/svelte';
   import ThemePickerModal from './admin/ThemePickerModal.svelte';
-  import ImportExportModal from './admin/ImportExportModal.svelte';
+  import ExportModal from './admin/ExportModal.svelte';
   import HelpModal from './HelpModal.svelte';
   import AboutModal from './AboutModal.svelte';
 
@@ -43,7 +43,7 @@
   }
   let isDashboardPage = $derived(currentPath !== '/');
   let showThemePicker = $state(false);
-  let showImportExport = $state(false);
+  let showExport = $state(false);
   let showHelp = $state(false);
   let showAbout = $state(false);
 
@@ -74,17 +74,19 @@
             <span class="version">v{appVersion}</span>
           </a>
 
-          <div class="nav-links">
-            {#each $dashboards as dashboard (dashboard.id)}
-              <a
-                href={dashboard.path}
-                class="nav-link"
-                class:active={currentPath === dashboard.path}
-              >
-                {dashboard.name}
-              </a>
-            {/each}
-          </div>
+          {#if $isAuthenticated}
+            <div class="nav-links">
+              {#each $dashboards as dashboard (dashboard.id)}
+                <a
+                  href={dashboard.path}
+                  class="nav-link"
+                  class:active={currentPath === dashboard.path}
+                >
+                  {dashboard.name}
+                </a>
+              {/each}
+            </div>
+          {/if}
         {/if}
       {/if}
     </div>
@@ -106,13 +108,12 @@
         </span>
       </button>
 
-      {#if $isAuthenticated && isDashboardPage}
-        <button onclick={() => showImportExport = true} class="import-export-btn" title="Import / Export">
+      {#if $editMode && isDashboardPage}
+        <button onclick={() => showExport = true} class="export-btn" title="Export Dashboard">
           <span class="icon-wrapper">
-            <Icon icon="mdi:swap-vertical" width="32" height="32" />
+            <Icon icon="mdi:download" width="32" height="32" />
           </span>
         </button>
-
       {/if}
 
       {#if $isAuthenticated && isDashboardPage}
@@ -159,8 +160,8 @@
   <ThemePickerModal onClose={() => showThemePicker = false} />
 {/if}
 
-{#if showImportExport}
-  <ImportExportModal onClose={() => showImportExport = false} />
+{#if showExport}
+  <ExportModal onClose={() => showExport = false} />
 {/if}
 
 {#if showHelp}
@@ -177,7 +178,7 @@
     border-bottom: 1px solid var(--border);
     position: sticky;
     top: 0;
-    z-index: 100;
+    z-index: var(--z-navbar);
     backdrop-filter: blur(10px);
   }
 
@@ -276,7 +277,7 @@
     gap: 1rem;
   }
 
-  .theme-toggle, .admin-link, .edit-toggle, .import-export-btn, .help-btn, .about-btn {
+  .theme-toggle, .admin-link, .edit-toggle, .export-btn, .help-btn, .about-btn {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -302,7 +303,7 @@
     height: 32px;
   }
 
-  .theme-toggle:hover, .admin-link:hover, .edit-toggle:hover, .import-export-btn:hover, .help-btn:hover, .about-btn:hover {
+  .theme-toggle:hover, .admin-link:hover, .edit-toggle:hover, .export-btn:hover, .help-btn:hover, .about-btn:hover {
     background: var(--accent);
     color: white;
   }

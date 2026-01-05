@@ -111,6 +111,9 @@ func (r *Router) setupRoutes() {
 	// Serve uploaded icons from data directory
 	r.mux.HandleFunc("/icons/", r.serveIcons)
 
+	// Serve dashboard icons (from homarr-labs/dashboard-icons)
+	r.mux.HandleFunc("/api/icons/dashboard/", r.serveDashboardIcons)
+
 	// Background image routes
 	r.mux.HandleFunc("/api/backgrounds", r.handleBackgrounds)
 	r.mux.HandleFunc("/api/backgrounds/categories", r.authMiddleware(r.handleBackgroundCategories))
@@ -191,6 +194,27 @@ func (r *Router) serveIcons(w http.ResponseWriter, req *http.Request) {
 
 	// Set cache headers for uploaded icons
 	w.Header().Set("Cache-Control", "public, max-age=86400")
+
+	// Serve the file
+	http.ServeFile(w, req, filePath)
+}
+
+// serveDashboardIcons serves SVG icons from the dashboard-icons collection
+func (r *Router) serveDashboardIcons(w http.ResponseWriter, req *http.Request) {
+	// Extract filename from path: /api/icons/dashboard/proxmox.svg -> proxmox.svg
+	filename := filepath.Base(req.URL.Path)
+
+	// Construct path to dashboard-icons directory
+	iconsDir := filepath.Join(r.config.DataDir, "icons", "dashboard-icons")
+	filePath := filepath.Join(iconsDir, filename)
+
+	// Set appropriate content type for SVG
+	if filepath.Ext(filename) == ".svg" {
+		w.Header().Set("Content-Type", "image/svg+xml")
+	}
+
+	// Set long cache headers - these are static icons
+	w.Header().Set("Cache-Control", "public, max-age=31536000")
 
 	// Serve the file
 	http.ServeFile(w, req, filePath)

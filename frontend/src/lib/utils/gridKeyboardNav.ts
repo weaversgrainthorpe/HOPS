@@ -99,10 +99,10 @@ export function createGridKeyboardHandler(
  * Svelte action for grid keyboard navigation
  * Usage: use:gridNav={{ items, selectedIndex, onSelect, columns }}
  */
-export function gridNav(
+export function gridNav<T>(
   node: HTMLElement,
   params: {
-    items: any[];
+    items: T[];
     selectedIndex: number;
     onSelect: (index: number) => void;
     columns?: number;

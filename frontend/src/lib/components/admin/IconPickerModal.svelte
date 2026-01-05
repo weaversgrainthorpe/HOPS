@@ -72,6 +72,12 @@
       : categoryIcons
   );
 
+  // Helper to get category name from ID
+  function getCategoryName(categoryId: string): string {
+    const category = categories.find(c => c.id === categoryId);
+    return category?.name || categoryId;
+  }
+
   function handleKeydown(e: KeyboardEvent) {
     if (e.key === 'Escape') {
       if (showAddIcon || showAddCategory) {
@@ -458,7 +464,7 @@
               class="icon-card"
               class:selected={currentIcon === iconData.icon || currentImageUrl === iconData.imageUrl}
               onclick={() => handleSelectIcon(iconData)}
-              title={iconData.name}
+              title={searchQuery.trim() ? `${iconData.name} (${getCategoryName(iconData.categoryId)})` : iconData.name}
             >
               {#if !iconData.isPreset}
                 <button
@@ -511,7 +517,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 1000;
+    z-index: var(--z-modal);
     padding: 1rem;
   }
 
@@ -669,6 +675,14 @@
 
   .icon-card.selected .icon-preview {
     color: white;
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: 0.5rem;
+    padding: 0.25rem;
+  }
+
+  .icon-card.selected .icon-preview :global(svg) {
+    /* Ensure SVG icons are visible on the white background */
+    color: var(--accent);
   }
 
   .icon-name {
@@ -701,7 +715,7 @@
   }
 
   .error-message {
-    color: var(--error, #ef4444);
+    color: var(--color-error);
   }
 
   .modal-footer {
@@ -766,8 +780,8 @@
   }
 
   .delete-category-btn:hover {
-    background: rgba(239, 68, 68, 0.1);
-    color: #ef4444;
+    background: color-mix(in srgb, var(--color-error) 10%, transparent);
+    color: var(--color-error);
   }
 
   .delete-icon-btn {
@@ -789,8 +803,8 @@
   }
 
   .delete-icon-btn:hover {
-    background: #ef4444;
-    border-color: #ef4444;
+    background: var(--color-error);
+    border-color: var(--color-error);
     color: white;
   }
 
@@ -913,6 +927,12 @@
     height: 48px;
     object-fit: contain;
     border-radius: 0.25rem;
+  }
+
+  .icon-card.selected .icon-image {
+    background: rgba(255, 255, 255, 0.9);
+    padding: 0.25rem;
+    border-radius: 0.375rem;
   }
 
   .icon-type-toggle {

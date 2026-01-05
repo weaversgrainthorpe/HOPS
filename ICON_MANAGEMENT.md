@@ -1,8 +1,8 @@
-# HOPS Icon Management (v0.9.0)
+# HOPS Icon Management (v0.10.0)
 
 ## Overview
 
-HOPS v0.9.0 introduces a complete database-backed icon management system that allows users to manage icons directly from the icon picker without interrupting their workflow.
+HOPS features a complete database-backed icon management system that allows users to manage icons directly from the icon picker without interrupting their workflow.
 
 ## Key Features
 

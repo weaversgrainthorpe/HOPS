@@ -41,7 +41,7 @@
   // svelte-ignore state_referenced_locally
   let slideshowInterval = $state(background?.interval || 30);
   // svelte-ignore state_referenced_locally
-  let transitionEffect = $state<'crossfade' | 'slide' | 'zoom' | 'fade-black' | 'blur' | 'flip' | 'kenburns' | 'none'>(background?.transition || 'crossfade');
+  let transitionEffect = $state<'crossfade' | 'slide' | 'slide-up' | 'slide-down' | 'zoom' | 'zoom-out' | 'fade-black' | 'blur' | 'flip' | 'swirl' | 'wipe' | 'curtain' | 'circle' | 'diamond' | 'dissolve' | 'flash' | 'glitch' | 'kenburns' | 'random' | 'none'>(background?.transition || 'crossfade');
   // svelte-ignore state_referenced_locally
   let transitionDuration = $state(background?.transitionDuration || 1.5);
   let selectedCategory = $state('all');
@@ -52,7 +52,7 @@
   let previewLayer1Visible = $state(true);
   let previewLayer1Image = $state('');
   let previewLayer2Image = $state('');
-  let previewIntervalId: number | undefined;
+  let previewIntervalId: ReturnType<typeof setInterval> | undefined;
   let previewLayer1KenBurns = $state(0);
   let previewLayer2KenBurns = $state(1);
 
@@ -399,7 +399,7 @@
         }
 
         previewLayer1Visible = !previewLayer1Visible;
-      }, previewInterval) as any;
+      }, previewInterval);
     } else if (backgroundType === 'slideshow' && slideshowImages.length === 1) {
       previewLayer1Image = slideshowImages[0];
       previewLayer1Visible = true;
@@ -542,13 +542,25 @@
               <Icon icon="mdi:blur" width="20" />
               <span>Crossfade</span>
             </button>
-            <button class="transition-btn" class:active={transitionEffect === 'slide'} onclick={() => transitionEffect = 'slide'} title="Slide">
+            <button class="transition-btn" class:active={transitionEffect === 'slide'} onclick={() => transitionEffect = 'slide'} title="Slide Right">
               <Icon icon="mdi:arrow-right-bold" width="20" />
               <span>Slide</span>
             </button>
-            <button class="transition-btn" class:active={transitionEffect === 'zoom'} onclick={() => transitionEffect = 'zoom'} title="Zoom">
+            <button class="transition-btn" class:active={transitionEffect === 'slide-up'} onclick={() => transitionEffect = 'slide-up'} title="Slide Up">
+              <Icon icon="mdi:arrow-up-bold" width="20" />
+              <span>Slide Up</span>
+            </button>
+            <button class="transition-btn" class:active={transitionEffect === 'slide-down'} onclick={() => transitionEffect = 'slide-down'} title="Slide Down">
+              <Icon icon="mdi:arrow-down-bold" width="20" />
+              <span>Slide Down</span>
+            </button>
+            <button class="transition-btn" class:active={transitionEffect === 'zoom'} onclick={() => transitionEffect = 'zoom'} title="Zoom In">
               <Icon icon="mdi:magnify-plus" width="20" />
-              <span>Zoom</span>
+              <span>Zoom In</span>
+            </button>
+            <button class="transition-btn" class:active={transitionEffect === 'zoom-out'} onclick={() => transitionEffect = 'zoom-out'} title="Zoom Out">
+              <Icon icon="mdi:magnify-minus" width="20" />
+              <span>Zoom Out</span>
             </button>
             <button class="transition-btn" class:active={transitionEffect === 'fade-black'} onclick={() => transitionEffect = 'fade-black'} title="Fade to Black">
               <Icon icon="mdi:circle" width="20" />
@@ -562,13 +574,49 @@
               <Icon icon="mdi:rotate-3d-variant" width="20" />
               <span>Flip</span>
             </button>
+            <button class="transition-btn" class:active={transitionEffect === 'swirl'} onclick={() => transitionEffect = 'swirl'} title="Swirl">
+              <Icon icon="mdi:rotate-right" width="20" />
+              <span>Swirl</span>
+            </button>
+            <button class="transition-btn" class:active={transitionEffect === 'wipe'} onclick={() => transitionEffect = 'wipe'} title="Wipe">
+              <Icon icon="mdi:chevron-double-right" width="20" />
+              <span>Wipe</span>
+            </button>
+            <button class="transition-btn" class:active={transitionEffect === 'curtain'} onclick={() => transitionEffect = 'curtain'} title="Curtain">
+              <Icon icon="mdi:curtains" width="20" />
+              <span>Curtain</span>
+            </button>
+            <button class="transition-btn" class:active={transitionEffect === 'circle'} onclick={() => transitionEffect = 'circle'} title="Circle Reveal">
+              <Icon icon="mdi:circle-outline" width="20" />
+              <span>Circle</span>
+            </button>
+            <button class="transition-btn" class:active={transitionEffect === 'diamond'} onclick={() => transitionEffect = 'diamond'} title="Diamond Reveal">
+              <Icon icon="mdi:rhombus-outline" width="20" />
+              <span>Diamond</span>
+            </button>
+            <button class="transition-btn" class:active={transitionEffect === 'dissolve'} onclick={() => transitionEffect = 'dissolve'} title="Dissolve">
+              <Icon icon="mdi:grain" width="20" />
+              <span>Dissolve</span>
+            </button>
+            <button class="transition-btn" class:active={transitionEffect === 'flash'} onclick={() => transitionEffect = 'flash'} title="Flash">
+              <Icon icon="mdi:white-balance-sunny" width="20" />
+              <span>Flash</span>
+            </button>
+            <button class="transition-btn" class:active={transitionEffect === 'glitch'} onclick={() => transitionEffect = 'glitch'} title="Glitch">
+              <Icon icon="mdi:television-classic" width="20" />
+              <span>Glitch</span>
+            </button>
             <button class="transition-btn" class:active={transitionEffect === 'kenburns'} onclick={() => transitionEffect = 'kenburns'} title="Ken Burns">
               <Icon icon="mdi:movie" width="20" />
               <span>Ken Burns</span>
             </button>
             <button class="transition-btn" class:active={transitionEffect === 'none'} onclick={() => transitionEffect = 'none'} title="Instant">
-              <Icon icon="mdi:flash" width="20" />
+              <Icon icon="mdi:flash-off" width="20" />
               <span>Instant</span>
+            </button>
+            <button class="transition-btn special" class:active={transitionEffect === 'random'} onclick={() => transitionEffect = 'random'} title="Random - picks a different transition each time">
+              <Icon icon="mdi:shuffle-variant" width="20" />
+              <span>Random</span>
             </button>
           </div>
         </div>
@@ -811,7 +859,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 1000;
+    z-index: var(--z-modal);
     padding: 1rem;
   }
 
@@ -997,6 +1045,24 @@
     color: white;
   }
 
+  /* Special styling for Random transition button */
+  .transition-btn.special {
+    background: linear-gradient(135deg, var(--bg-tertiary) 0%, rgba(139, 92, 246, 0.1) 100%);
+    border-style: dashed;
+  }
+
+  .transition-btn.special:hover {
+    background: linear-gradient(135deg, var(--bg-primary) 0%, rgba(139, 92, 246, 0.2) 100%);
+    border-color: #8b5cf6;
+    border-style: solid;
+  }
+
+  .transition-btn.special.active {
+    background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+    border-color: #8b5cf6;
+    border-style: solid;
+  }
+
   .color-row {
     display: flex;
     gap: 0.5rem;
@@ -1095,7 +1161,7 @@
     position: absolute;
     top: 0.25rem;
     right: 0.25rem;
-    background: rgba(239, 68, 68, 0.9);
+    background: color-mix(in srgb, var(--color-error) 90%, transparent);
     color: white;
     border: none;
     border-radius: 0.25rem;
@@ -1193,7 +1259,7 @@
   }
 
   .upload-error {
-    color: #ef4444;
+    color: var(--color-error);
     font-size: 0.875rem;
     margin-bottom: 1rem;
   }
@@ -1404,7 +1470,7 @@
     border-radius: 50%;
     border: 2px solid white;
     cursor: pointer;
-    background: #ef4444;
+    background: var(--color-error);
     color: white;
     opacity: 0;
     transition: all 0.2s;
@@ -1417,7 +1483,7 @@
   }
 
   .delete-btn:hover {
-    background: #dc2626;
+    background: var(--color-error-dark);
     transform: scale(1.15);
   }
 
@@ -1659,7 +1725,7 @@
   /* Hover preview */
   .hover-preview {
     position: fixed;
-    z-index: 2000;
+    z-index: var(--z-modal-critical);
     width: 300px;
     height: 200px;
     background: var(--bg-primary);

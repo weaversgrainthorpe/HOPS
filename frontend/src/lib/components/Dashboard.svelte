@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Dashboard, Entry, HeaderConfig, Tab, Background } from '$lib/types';
+  import type { Dashboard, Entry, HeaderConfig, Tab, Background, Group } from '$lib/types';
   import TabPanel from './TabPanel.svelte';
   import BackgroundSlideshow from './BackgroundSlideshow.svelte';
   import PartyMode from './PartyMode.svelte';
@@ -268,7 +268,7 @@
     };
   }
 
-  async function handleReorderGroups(tabId: string, reorderedGroups: any[]) {
+  async function handleReorderGroups(tabId: string, reorderedGroups: Group[]) {
     if (!requireAuth()) return;
     const updatedDashboard = { ...dashboard };
     const tab = updatedDashboard.tabs.find(t => t.id === tabId);
@@ -279,12 +279,12 @@
   }
 
   function makeReorderGroupsHandler(tabId: string) {
-    return (reorderedGroups: any[]) => {
+    return (reorderedGroups: Group[]) => {
       handleReorderGroups(tabId, reorderedGroups);
     };
   }
 
-  async function handleUpdateGroup(tabId: string, groupId: string, updatedGroup: any) {
+  async function handleUpdateGroup(tabId: string, groupId: string, updatedGroup: Partial<Group>) {
     if (!requireAuth()) return;
     const updatedDashboard = { ...dashboard };
     const tab = updatedDashboard.tabs.find(t => t.id === tabId);
@@ -298,7 +298,7 @@
   }
 
   function makeUpdateGroupHandler(tabId: string) {
-    return (groupId: string, updatedGroup: any) => {
+    return (groupId: string, updatedGroup: Partial<Group>) => {
       handleUpdateGroup(tabId, groupId, updatedGroup);
     };
   }
@@ -319,12 +319,12 @@
     };
   }
 
-  async function handleUpdateTab(tabId: string, newName: string, newColor?: string, newOpacity?: number) {
+  async function handleUpdateTab(tabId: string, newName: string, newIcon?: string, newColor?: string, newOpacity?: number) {
     if (!requireAuth()) return;
     const updatedDashboard = { ...dashboard };
     const tabIndex = updatedDashboard.tabs.findIndex(t => t.id === tabId);
     if (tabIndex !== -1) {
-      updatedDashboard.tabs[tabIndex] = { ...updatedDashboard.tabs[tabIndex], name: newName, color: newColor, opacity: newOpacity };
+      updatedDashboard.tabs[tabIndex] = { ...updatedDashboard.tabs[tabIndex], name: newName, icon: newIcon, color: newColor, opacity: newOpacity };
       await updateDashboard(updatedDashboard);
     }
     editingTabIndex = null;
@@ -464,9 +464,11 @@
       </div>
     {/if}
 
-    {#if dashboard.tabs.length > 1 || $editMode}
+    {#if dashboard.tabs.length >= 1}
       <div
         class="tabs"
+        role="tablist"
+        aria-label="Dashboard tabs"
         use:dndzone={{
           items: draggedTabs,
           flipDurationMs: 200,
@@ -487,17 +489,23 @@
               style:--tab-opacity={tab.opacity !== undefined ? tab.opacity : 0.95}
               role="tab"
               tabindex="0"
+              aria-selected={activeTabIndex === index}
+              aria-label={$editMode ? `Edit ${tab.name} tab` : `Switch to ${tab.name} tab`}
               onclick={(e) => handleTabClick(index, e)}
               onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleTabClick(index, e as unknown as MouseEvent); }}
             >
+              {#if tab.icon}
+                <Icon icon={tab.icon} width="16" />
+              {/if}
               <span class="tab-name">{tab.name}</span>
             </div>
             {#if $editMode}
-              <div class="tab-controls">
+              <div class="tab-controls" role="group" aria-label="Tab actions">
                 <button
                   class="tab-control-btn"
                   onclick={(e) => { e.stopPropagation(); editingTabIndex = index; }}
                   title="Edit tab"
+                  aria-label="Edit {tab.name} tab"
                 >
                   <Icon icon="mdi:pencil" width="16" />
                 </button>
@@ -516,6 +524,7 @@
                     }
                   }}
                   title="Delete tab"
+                  aria-label="Delete {tab.name} tab"
                 >
                   <Icon icon="mdi:trash-can" width="16" />
                 </button>
@@ -524,7 +533,7 @@
           </div>
         {/each}
         {#if $editMode}
-          <button class="add-tab-btn" onclick={handleAddTab} title="Add New Tab">
+          <button class="add-tab-btn" onclick={handleAddTab} title="Add New Tab" aria-label="Add new tab to dashboard">
             <Icon icon="mdi:plus" width="24" />
             <span>Add Tab</span>
           </button>
@@ -559,11 +568,12 @@
 {#if editingTabIndex !== null && dashboard.tabs[editingTabIndex]}
   <TabEditModal
     tabName={dashboard.tabs[editingTabIndex].name}
+    tabIcon={dashboard.tabs[editingTabIndex].icon}
     tabColor={dashboard.tabs[editingTabIndex].color}
     tabOpacity={dashboard.tabs[editingTabIndex].opacity}
     tabBackground={dashboard.tabs[editingTabIndex].background}
     perTabBackgrounds={dashboard.perTabBackgrounds}
-    onSave={(newName, newColor, newOpacity) => handleUpdateTab(dashboard.tabs[editingTabIndex!].id, newName, newColor, newOpacity)}
+    onSave={(newName, newIcon, newColor, newOpacity) => handleUpdateTab(dashboard.tabs[editingTabIndex!].id, newName, newIcon, newColor, newOpacity)}
     onSaveBackground={(background) => handleUpdateTabBackground(dashboard.tabs[editingTabIndex!].id, background)}
     onCancel={() => editingTabIndex = null}
     onDelete={async () => {
@@ -804,7 +814,7 @@
   }
 
   .tab-control-btn.delete-btn:hover {
-    background: #dc2626;
+    background: var(--color-error-dark);
     color: white;
   }
 

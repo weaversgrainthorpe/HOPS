@@ -43,7 +43,7 @@
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
-    z-index: 9999;
+    z-index: var(--z-toast);
     max-width: 400px;
   }
 
@@ -70,19 +70,19 @@
   }
 
   .toast-success {
-    background: #10b981;
+    background: var(--color-success, #10b981);
   }
 
   .toast-error {
-    background: #ef4444;
+    background: var(--color-error, #ef4444);
   }
 
   .toast-warning {
-    background: #f59e0b;
+    background: var(--color-warning, #f59e0b);
   }
 
   .toast-info {
-    background: #3b82f6;
+    background: var(--color-primary, #3b82f6);
   }
 
   .toast-message {
