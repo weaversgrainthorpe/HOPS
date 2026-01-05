@@ -1,7 +1,7 @@
 <script lang="ts">
   import Icon from '@iconify/svelte';
   import { exportConfig } from '$lib/utils/api';
-  import { currentDashboard } from '$lib/stores/config';
+  import { config } from '$lib/stores/config';
   import { toast } from '$lib/stores/toast';
   import { focusTrap } from '$lib/utils/focusTrap';
 
@@ -11,6 +11,7 @@
 
   let { onClose }: Props = $props();
   let exporting = $state(false);
+  let exportingId = $state<string | null>(null);
 
   function handleKeydown(e: KeyboardEvent) {
     if (e.key === 'Escape') {
@@ -18,28 +19,45 @@
     }
   }
 
-  async function handleExport() {
+  async function handleExportAll() {
     exporting = true;
 
     try {
       const blob = await exportConfig('json');
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      const dashboardName = $currentDashboard?.name?.toLowerCase().replace(/\s+/g, '-') || 'config';
-      a.download = `hops-${dashboardName}-${new Date().toISOString().split('T')[0]}.json`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-
-      toast.success('Configuration exported');
+      downloadBlob(blob, `hops-all-dashboards-${new Date().toISOString().split('T')[0]}.json`);
+      toast.success('All dashboards exported');
       onClose();
     } catch (err) {
       toast.error('Export failed');
     } finally {
       exporting = false;
     }
+  }
+
+  async function handleExportSingle(dashboardId: string, dashboardName: string) {
+    exportingId = dashboardId;
+
+    try {
+      const blob = await exportConfig('json', dashboardId);
+      const safeName = dashboardName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+      downloadBlob(blob, `hops-${safeName}-${new Date().toISOString().split('T')[0]}.json`);
+      toast.success(`Exported "${dashboardName}"`);
+    } catch (err) {
+      toast.error('Export failed');
+    } finally {
+      exportingId = null;
+    }
+  }
+
+  function downloadBlob(blob: Blob, filename: string) {
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
   }
 </script>
 
@@ -65,24 +83,57 @@
     </div>
 
     <div class="modal-body">
-      <p class="description">Download your current dashboard configuration as a JSON file. This includes all dashboards, tabs, groups, and tiles.</p>
+      <p class="description">Export your HOPS configuration as JSON. You can export all dashboards or individual dashboards.</p>
+
+      <div class="export-section">
+        <h3>Export All Dashboards</h3>
+        <p class="section-description">Download your complete configuration including all dashboards, tabs, groups, and tiles.</p>
+        <button class="btn-primary" onclick={handleExportAll} disabled={exporting}>
+          {#if exporting}
+            <Icon icon="mdi:loading" width="20" class="spin" />
+            Exporting...
+          {:else}
+            <Icon icon="mdi:download-multiple" width="20" />
+            Export All ({$config?.dashboards.length || 0} dashboards)
+          {/if}
+        </button>
+      </div>
+
+      {#if $config?.dashboards && $config.dashboards.length > 0}
+        <div class="export-section">
+          <h3>Export Individual Dashboard</h3>
+          <p class="section-description">Export a single dashboard. This can be imported into another HOPS instance and will be added alongside existing dashboards.</p>
+          <div class="dashboard-list">
+            {#each $config.dashboards as dashboard (dashboard.id)}
+              <div class="dashboard-item">
+                <div class="dashboard-info">
+                  <span class="dashboard-name">{dashboard.name}</span>
+                  <span class="dashboard-path">{dashboard.path}</span>
+                </div>
+                <button
+                  class="btn-secondary btn-sm"
+                  onclick={() => handleExportSingle(dashboard.id, dashboard.name)}
+                  disabled={exportingId === dashboard.id}
+                >
+                  {#if exportingId === dashboard.id}
+                    <Icon icon="mdi:loading" width="18" class="spin" />
+                  {:else}
+                    <Icon icon="mdi:download" width="18" />
+                  {/if}
+                  Export
+                </button>
+              </div>
+            {/each}
+          </div>
+        </div>
+      {/if}
 
       <div class="info-box">
         <Icon icon="mdi:information" width="20" />
         <div>
-          <p>The export includes your complete HOPS configuration. You can import this file on the Admin page to restore or migrate your setup.</p>
+          <p><strong>Tip:</strong> Individual dashboard exports can be imported into any HOPS instance. The dashboard will be added alongside existing dashboards, with paths automatically adjusted if needed.</p>
         </div>
       </div>
-
-      <button class="btn-primary" onclick={handleExport} disabled={exporting}>
-        {#if exporting}
-          <Icon icon="mdi:loading" width="20" class="spin" />
-          Exporting...
-        {:else}
-          <Icon icon="mdi:download" width="20" />
-          Export as JSON
-        {/if}
-      </button>
     </div>
   </div>
 </div>
@@ -107,7 +158,9 @@
     border-radius: 0.75rem;
     box-shadow: 0 10px 40px var(--shadow);
     width: 100%;
-    max-width: 450px;
+    max-width: 550px;
+    max-height: 80vh;
+    overflow-y: auto;
   }
 
   .modal-header {
@@ -116,6 +169,10 @@
     justify-content: space-between;
     padding: 1rem 1.5rem;
     border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    background: var(--bg-primary);
+    z-index: 1;
   }
 
   .modal-header h2 {
@@ -144,10 +201,65 @@
   }
 
   .description {
-    margin: 0 0 1rem 0;
+    margin: 0 0 1.5rem 0;
     font-size: 0.875rem;
     color: var(--text-secondary);
     line-height: 1.5;
+  }
+
+  .export-section {
+    padding: 1rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    margin-bottom: 1rem;
+  }
+
+  .export-section h3 {
+    margin: 0 0 0.5rem 0;
+    font-size: 1rem;
+    color: var(--text-primary);
+  }
+
+  .section-description {
+    margin: 0 0 1rem 0;
+    font-size: 0.8125rem;
+    color: var(--text-secondary);
+  }
+
+  .dashboard-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .dashboard-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.75rem;
+    background: var(--bg-tertiary);
+    border-radius: 0.375rem;
+  }
+
+  .dashboard-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+    min-width: 0;
+  }
+
+  .dashboard-name {
+    font-weight: 500;
+    color: var(--text-primary);
+    font-size: 0.875rem;
+  }
+
+  .dashboard-path {
+    font-size: 0.75rem;
+    color: var(--accent);
+    font-family: monospace;
   }
 
   .info-box {
@@ -157,16 +269,16 @@
     background: var(--bg-secondary);
     border: 1px solid var(--border);
     border-radius: 0.5rem;
-    margin-bottom: 1.5rem;
+    margin-top: 0.5rem;
   }
 
   .info-box p {
     margin: 0;
-    font-size: 0.875rem;
+    font-size: 0.8125rem;
     color: var(--text-secondary);
   }
 
-  .btn-primary {
+  .btn-primary, .btn-secondary {
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
@@ -176,6 +288,9 @@
     transition: all 0.2s;
     border: none;
     cursor: pointer;
+  }
+
+  .btn-primary {
     background: var(--accent);
     color: white;
   }
@@ -184,7 +299,25 @@
     background: var(--accent-hover);
   }
 
-  .btn-primary:disabled {
+  .btn-secondary {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+  }
+
+  .btn-secondary:hover:not(:disabled) {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+  }
+
+  .btn-sm {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8125rem;
+  }
+
+  .btn-primary:disabled,
+  .btn-secondary:disabled {
     opacity: 0.5;
     cursor: not-allowed;
   }

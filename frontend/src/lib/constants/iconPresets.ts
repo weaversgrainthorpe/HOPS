@@ -11,6 +11,12 @@ export interface IconPreset {
 export const ICON_PRESETS: IconPreset[] = [
   // Container & Orchestration
   {
+    id: 'containers-generic',
+    name: 'Containers',
+    category: 'containers',
+    icon: 'mdi:package-variant-closed'
+  },
+  {
     id: 'docker',
     name: 'Docker',
     category: 'containers',
@@ -42,6 +48,24 @@ export const ICON_PRESETS: IconPreset[] = [
   },
 
   // Media Servers
+  {
+    id: 'media-generic',
+    name: 'Media',
+    category: 'media',
+    icon: 'mdi:filmstrip'
+  },
+  {
+    id: 'media-play',
+    name: 'Media Player',
+    category: 'media',
+    icon: 'mdi:play-circle'
+  },
+  {
+    id: 'media-library',
+    name: 'Media Library',
+    category: 'media',
+    icon: 'mdi:movie-open'
+  },
   {
     id: 'plex',
     name: 'Plex',
@@ -105,6 +129,18 @@ export const ICON_PRESETS: IconPreset[] = [
 
   // Download Clients
   {
+    id: 'downloads-generic',
+    name: 'Downloads',
+    category: 'downloads',
+    icon: 'mdi:download'
+  },
+  {
+    id: 'downloads-arrow',
+    name: 'Download Arrow',
+    category: 'downloads',
+    icon: 'mdi:arrow-down-bold-circle'
+  },
+  {
     id: 'transmission',
     name: 'Transmission',
     category: 'downloads',
@@ -136,6 +172,24 @@ export const ICON_PRESETS: IconPreset[] = [
   },
 
   // Home Automation
+  {
+    id: 'automation-generic',
+    name: 'Automation',
+    category: 'automation',
+    icon: 'mdi:home-automation'
+  },
+  {
+    id: 'automation-robot',
+    name: 'Robot',
+    category: 'automation',
+    icon: 'mdi:robot'
+  },
+  {
+    id: 'automation-cog',
+    name: 'Automation Cog',
+    category: 'automation',
+    icon: 'mdi:cog-transfer'
+  },
   {
     id: 'homeassistant',
     name: 'Home Assistant',
@@ -174,6 +228,30 @@ export const ICON_PRESETS: IconPreset[] = [
   },
 
   // Monitoring & Dashboards
+  {
+    id: 'monitoring-generic',
+    name: 'Monitoring',
+    category: 'monitoring',
+    icon: 'mdi:chart-line'
+  },
+  {
+    id: 'monitoring-pulse',
+    name: 'Pulse',
+    category: 'monitoring',
+    icon: 'mdi:pulse'
+  },
+  {
+    id: 'monitoring-gauge',
+    name: 'Gauge',
+    category: 'monitoring',
+    icon: 'mdi:gauge'
+  },
+  {
+    id: 'monitoring-eye',
+    name: 'Eye Monitor',
+    category: 'monitoring',
+    icon: 'mdi:eye'
+  },
   {
     id: 'grafana',
     name: 'Grafana',
@@ -218,6 +296,30 @@ export const ICON_PRESETS: IconPreset[] = [
   },
 
   // Storage & NAS
+  {
+    id: 'storage-generic',
+    name: 'Storage',
+    category: 'storage',
+    icon: 'mdi:nas'
+  },
+  {
+    id: 'storage-hdd',
+    name: 'Hard Drive',
+    category: 'storage',
+    icon: 'mdi:harddisk'
+  },
+  {
+    id: 'storage-folder',
+    name: 'Folder Network',
+    category: 'storage',
+    icon: 'mdi:folder-network'
+  },
+  {
+    id: 'storage-database',
+    name: 'Database Storage',
+    category: 'storage',
+    icon: 'mdi:database'
+  },
   {
     id: 'truenas',
     name: 'TrueNAS',
@@ -269,6 +371,24 @@ export const ICON_PRESETS: IconPreset[] = [
 
   // Virtualization
   {
+    id: 'virtualization-generic',
+    name: 'Virtualization',
+    category: 'virtualization',
+    icon: 'mdi:server-plus'
+  },
+  {
+    id: 'virtualization-vm',
+    name: 'Virtual Machine',
+    category: 'virtualization',
+    icon: 'mdi:laptop'
+  },
+  {
+    id: 'virtualization-layers',
+    name: 'Layers',
+    category: 'virtualization',
+    icon: 'mdi:layers-triple'
+  },
+  {
     id: 'proxmox',
     name: 'Proxmox',
     category: 'virtualization',
@@ -294,6 +414,54 @@ export const ICON_PRESETS: IconPreset[] = [
   },
 
   // Networking
+  {
+    id: 'networking-generic',
+    name: 'Network',
+    category: 'networking',
+    icon: 'mdi:network'
+  },
+  {
+    id: 'networking-lan',
+    name: 'LAN',
+    category: 'networking',
+    icon: 'mdi:lan'
+  },
+  {
+    id: 'networking-router',
+    name: 'Router',
+    category: 'networking',
+    icon: 'mdi:router'
+  },
+  {
+    id: 'networking-ethernet',
+    name: 'Ethernet',
+    category: 'networking',
+    icon: 'mdi:ethernet'
+  },
+  {
+    id: 'networking-wifi',
+    name: 'WiFi',
+    category: 'networking',
+    icon: 'mdi:wifi'
+  },
+  {
+    id: 'networking-firewall',
+    name: 'Firewall',
+    category: 'networking',
+    icon: 'mdi:wall-fire'
+  },
+  {
+    id: 'networking-switch',
+    name: 'Network Switch',
+    category: 'networking',
+    icon: 'mdi:switch'
+  },
+  {
+    id: 'networking-vpn',
+    name: 'VPN',
+    category: 'networking',
+    icon: 'mdi:vpn'
+  },
   {
     id: 'pfsense',
     name: 'pfSense',
@@ -363,6 +531,24 @@ export const ICON_PRESETS: IconPreset[] = [
 
   // Databases
   {
+    id: 'databases-generic',
+    name: 'Database',
+    category: 'databases',
+    icon: 'mdi:database'
+  },
+  {
+    id: 'databases-table',
+    name: 'Database Table',
+    category: 'databases',
+    icon: 'mdi:table'
+  },
+  {
+    id: 'databases-search',
+    name: 'Database Search',
+    category: 'databases',
+    icon: 'mdi:database-search'
+  },
+  {
     id: 'postgres',
     name: 'PostgreSQL',
     category: 'databases',
@@ -400,6 +586,24 @@ export const ICON_PRESETS: IconPreset[] = [
   },
 
   // Development Tools
+  {
+    id: 'development-generic',
+    name: 'Development',
+    category: 'development',
+    icon: 'mdi:code-tags'
+  },
+  {
+    id: 'development-code',
+    name: 'Code',
+    category: 'development',
+    icon: 'mdi:code-braces'
+  },
+  {
+    id: 'development-console',
+    name: 'Console',
+    category: 'development',
+    icon: 'mdi:console'
+  },
   {
     id: 'git',
     name: 'Git',
@@ -439,6 +643,24 @@ export const ICON_PRESETS: IconPreset[] = [
 
   // Backup & Recovery
   {
+    id: 'backup-generic',
+    name: 'Backup',
+    category: 'backup',
+    icon: 'mdi:backup-restore'
+  },
+  {
+    id: 'backup-cloud',
+    name: 'Cloud Backup',
+    category: 'backup',
+    icon: 'mdi:cloud-upload'
+  },
+  {
+    id: 'backup-sync',
+    name: 'Sync',
+    category: 'backup',
+    icon: 'mdi:sync'
+  },
+  {
     id: 'duplicati',
     name: 'Duplicati',
     category: 'backup',
@@ -464,6 +686,24 @@ export const ICON_PRESETS: IconPreset[] = [
   },
 
   // Communication
+  {
+    id: 'communication-generic',
+    name: 'Communication',
+    category: 'communication',
+    icon: 'mdi:message'
+  },
+  {
+    id: 'communication-chat',
+    name: 'Chat',
+    category: 'communication',
+    icon: 'mdi:chat'
+  },
+  {
+    id: 'communication-forum',
+    name: 'Forum',
+    category: 'communication',
+    icon: 'mdi:forum'
+  },
   {
     id: 'discord',
     name: 'Discord',
@@ -491,6 +731,30 @@ export const ICON_PRESETS: IconPreset[] = [
 
   // Password Managers
   {
+    id: 'security-generic',
+    name: 'Security',
+    category: 'security',
+    icon: 'mdi:shield'
+  },
+  {
+    id: 'security-lock',
+    name: 'Lock',
+    category: 'security',
+    icon: 'mdi:lock'
+  },
+  {
+    id: 'security-key',
+    name: 'Key',
+    category: 'security',
+    icon: 'mdi:key'
+  },
+  {
+    id: 'security-password',
+    name: 'Password',
+    category: 'security',
+    icon: 'mdi:form-textbox-password'
+  },
+  {
     id: 'vaultwarden',
     name: 'Vaultwarden',
     category: 'security',
@@ -516,6 +780,30 @@ export const ICON_PRESETS: IconPreset[] = [
   },
 
   // Hardware
+  {
+    id: 'hardware-generic',
+    name: 'Hardware',
+    category: 'hardware',
+    icon: 'mdi:chip'
+  },
+  {
+    id: 'hardware-server',
+    name: 'Server',
+    category: 'hardware',
+    icon: 'mdi:server'
+  },
+  {
+    id: 'hardware-cpu',
+    name: 'CPU',
+    category: 'hardware',
+    icon: 'mdi:cpu-64-bit'
+  },
+  {
+    id: 'hardware-memory',
+    name: 'Memory',
+    category: 'hardware',
+    icon: 'mdi:memory'
+  },
   {
     id: 'raspberrypi',
     name: 'Raspberry Pi',
@@ -548,6 +836,24 @@ export const ICON_PRESETS: IconPreset[] = [
   },
 
   // Operating Systems
+  {
+    id: 'os-generic',
+    name: 'Operating System',
+    category: 'os',
+    icon: 'mdi:linux'
+  },
+  {
+    id: 'os-desktop',
+    name: 'Desktop',
+    category: 'os',
+    icon: 'mdi:desktop-classic'
+  },
+  {
+    id: 'os-terminal',
+    name: 'Terminal',
+    category: 'os',
+    icon: 'mdi:console-line'
+  },
   {
     id: 'ubuntu',
     name: 'Ubuntu',

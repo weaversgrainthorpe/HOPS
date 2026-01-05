@@ -26,6 +26,7 @@ export interface Tab {
   id: string;
   name: string;
   icon?: string; // Optional Iconify icon name (e.g., 'mdi:home')
+  iconUrl?: string; // Optional image URL for SVG icons
   background?: Background;
   color?: string;
   opacity?: number;
@@ -38,10 +39,12 @@ export interface Group {
   id: string;
   name: string;
   icon?: string; // Optional Iconify icon name (e.g., 'mdi:folder')
+  iconUrl?: string; // Optional image URL for SVG icons
   collapsed: boolean;
   color?: string;
   opacity?: number;
   textColor?: 'auto' | 'light' | 'dark'; // Auto determines based on background color
+  displayStyle?: 'header' | 'folder'; // header = full width bar, folder = tab style
   entries: Entry[];
   order: number;
 }

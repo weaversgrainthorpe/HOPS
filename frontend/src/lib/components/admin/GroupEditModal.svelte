@@ -5,34 +5,71 @@
   import IconPickerModal from './IconPickerModal.svelte';
   import { focusTrap } from '$lib/utils/focusTrap';
 
+  interface TabInfo {
+    id: string;
+    name: string;
+  }
+
   interface Props {
     groupName: string;
     groupIcon?: string;
+    groupIconUrl?: string;
     groupColor?: string;
     groupOpacity?: number;
     groupTextColor?: 'auto' | 'light' | 'dark';
-    onSave: (name: string, icon?: string, color?: string, opacity?: number, textColor?: 'auto' | 'light' | 'dark') => void;
+    groupDisplayStyle?: 'header' | 'folder';
+    currentTabId?: string;
+    availableTabs?: TabInfo[];
+    onSave: (name: string, icon?: string, iconUrl?: string, color?: string, opacity?: number, textColor?: 'auto' | 'light' | 'dark', displayStyle?: 'header' | 'folder') => void;
     onCancel: () => void;
     onDelete?: () => void;
+    onDuplicate?: () => void;
+    onMoveToTab?: (targetTabId: string) => void;
   }
 
-  let { groupName, groupIcon, groupColor, groupOpacity, groupTextColor, onSave, onCancel, onDelete }: Props = $props();
+  let { groupName, groupIcon, groupIconUrl, groupColor, groupOpacity, groupTextColor, groupDisplayStyle, currentTabId = '', availableTabs = [], onSave, onCancel, onDelete, onDuplicate, onMoveToTab }: Props = $props();
   // Form state initialized from props (intentionally captures initial values)
   // svelte-ignore state_referenced_locally
   let name = $state(groupName);
   // svelte-ignore state_referenced_locally
   let icon = $state(groupIcon || '');
   // svelte-ignore state_referenced_locally
+  let iconUrl = $state(groupIconUrl || '');
+  // svelte-ignore state_referenced_locally
   let color = $state(groupColor);
   // svelte-ignore state_referenced_locally
   let opacity = $state(groupOpacity);
   // svelte-ignore state_referenced_locally
   let textColor = $state<'auto' | 'light' | 'dark'>(groupTextColor || 'auto');
+  // svelte-ignore state_referenced_locally
+  let displayStyle = $state<'header' | 'folder'>(groupDisplayStyle || 'header');
   let showIconPicker = $state(false);
+
+  // Move to tab state
+  let showMoveSection = $state(false);
+  let selectedMoveTabId = $state('');
+
+  // Can only move if there are other tabs to move to
+  const canMove = $derived(
+    groupName && // Only for existing groups
+    availableTabs.length > 1 &&
+    onMoveToTab !== undefined
+  );
+
+  // Filter out current tab from available targets
+  const moveTargetTabs = $derived(
+    availableTabs.filter(t => t.id !== currentTabId)
+  );
+
+  function handleMove() {
+    if (selectedMoveTabId && onMoveToTab) {
+      onMoveToTab(selectedMoveTabId);
+    }
+  }
 
   function handleSave() {
     if (name.trim()) {
-      onSave(name.trim(), icon || undefined, color, opacity, textColor);
+      onSave(name.trim(), icon || undefined, iconUrl || undefined, color, opacity, textColor, displayStyle);
     }
   }
 
@@ -47,12 +84,14 @@
   }
 
   function handleIconSelect(selection: { icon: string; imageUrl?: string }) {
-    icon = selection.icon;
+    icon = selection.icon || '';
+    iconUrl = selection.imageUrl || '';
     showIconPicker = false;
   }
 
   function clearIcon() {
     icon = '';
+    iconUrl = '';
   }
 </script>
 
@@ -94,15 +133,22 @@
         <label>Icon (optional)</label>
         <div class="icon-input-wrapper">
           <div class="icon-input">
-            <input
-              type="text"
-              bind:value={icon}
-              placeholder="mdi:folder"
-            />
-            {#if icon}
-              <div class="icon-preview">
-                <Icon icon={icon} width="24" />
+            {#if iconUrl}
+              <div class="selected-icon-display">
+                <img src={iconUrl} alt="Selected icon" class="icon-image" />
+                <span class="icon-name">Image icon selected</span>
               </div>
+            {:else}
+              <input
+                type="text"
+                bind:value={icon}
+                placeholder="mdi:folder"
+              />
+              {#if icon}
+                <div class="icon-preview">
+                  <Icon icon={icon} width="24" />
+                </div>
+              {/if}
             {/if}
           </div>
           <button
@@ -114,7 +160,7 @@
             <Icon icon="mdi:apps" width="18" />
             Browse
           </button>
-          {#if icon}
+          {#if icon || iconUrl}
             <button
               type="button"
               class="clear-btn"
@@ -172,13 +218,87 @@
         <small>Auto determines text color based on background</small>
       </div>
 
-      <div class="modal-actions">
-        {#if groupName && onDelete}
-          <button type="button" class="btn-danger" onclick={onDelete}>
-            <Icon icon="mdi:trash-can" width="20" />
-            Delete
+      <div class="form-group">
+        <label>Display Style</label>
+        <div class="display-style-options">
+          <button
+            type="button"
+            class="display-style-btn"
+            class:active={displayStyle === 'header'}
+            onclick={() => displayStyle = 'header'}
+          >
+            <Icon icon="mdi:page-layout-header" width="20" />
+            Full Header
           </button>
-        {/if}
+          <button
+            type="button"
+            class="display-style-btn"
+            class:active={displayStyle === 'folder'}
+            onclick={() => displayStyle = 'folder'}
+          >
+            <Icon icon="mdi:folder" width="20" />
+            Folder Tab
+          </button>
+        </div>
+        <small>Full header spans width, folder tab is compact</small>
+      </div>
+
+      {#if canMove}
+        <div class="form-group move-section">
+          <button
+            type="button"
+            class="btn-move-toggle"
+            onclick={() => showMoveSection = !showMoveSection}
+          >
+            <Icon icon="mdi:folder-move" width="20" />
+            Move to Another Tab
+            <Icon icon={showMoveSection ? 'mdi:chevron-up' : 'mdi:chevron-down'} width="20" />
+          </button>
+
+          {#if showMoveSection}
+            <div class="move-controls">
+              <div class="move-row">
+                <label for="move-tab">Move to:</label>
+                <select
+                  id="move-tab"
+                  bind:value={selectedMoveTabId}
+                >
+                  <option value="">Select a tab...</option>
+                  {#each moveTargetTabs as tab}
+                    <option value={tab.id}>{tab.name}</option>
+                  {/each}
+                </select>
+              </div>
+
+              <button
+                type="button"
+                class="btn-move"
+                onclick={handleMove}
+                disabled={!selectedMoveTabId}
+              >
+                <Icon icon="mdi:check" width="18" />
+                Move Group
+              </button>
+            </div>
+          {/if}
+        </div>
+      {/if}
+
+      <div class="modal-actions">
+        <div class="actions-left">
+          {#if groupName && onDelete}
+            <button type="button" class="btn-danger" onclick={onDelete}>
+              <Icon icon="mdi:trash-can" width="20" />
+              Delete
+            </button>
+          {/if}
+          {#if groupName && onDuplicate}
+            <button type="button" class="btn-duplicate" onclick={onDuplicate}>
+              <Icon icon="mdi:content-copy" width="20" />
+              Duplicate
+            </button>
+          {/if}
+        </div>
         <div class="actions-right">
           <button type="button" class="btn-secondary" onclick={onCancel}>
             Cancel
@@ -196,6 +316,7 @@
 {#if showIconPicker}
   <IconPickerModal
     currentIcon={icon}
+    currentImageUrl={iconUrl}
     onSelect={handleIconSelect}
     onCancel={() => showIconPicker = false}
   />
@@ -289,6 +410,11 @@
     align-items: center;
   }
 
+  .actions-left {
+    display: flex;
+    gap: 0.75rem;
+  }
+
   .actions-right {
     display: flex;
     gap: 0.75rem;
@@ -333,6 +459,15 @@
     background: color-mix(in srgb, var(--color-error-dark) 80%, black);
   }
 
+  .btn-duplicate {
+    background: #10b981;
+    color: white;
+  }
+
+  .btn-duplicate:hover {
+    background: #059669;
+  }
+
   .text-color-options {
     display: flex;
     gap: 0.5rem;
@@ -363,6 +498,41 @@
   }
 
   .text-color-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: white;
+  }
+
+  .display-style-options {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+  }
+
+  .display-style-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.75rem;
+    background: var(--bg-tertiary);
+    border: 2px solid var(--border);
+    border-radius: 0.5rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 0.875rem;
+    font-weight: 500;
+  }
+
+  .display-style-btn:hover {
+    background: var(--bg-primary);
+    border-color: var(--accent);
+    color: var(--text-primary);
+  }
+
+  .display-style-btn.active {
     background: var(--accent);
     border-color: var(--accent);
     color: white;
@@ -415,5 +585,101 @@
   .clear-btn:hover {
     background: var(--color-error);
     color: white;
+  }
+
+  .selected-icon-display {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: 0.375rem;
+    flex: 1;
+  }
+
+  .selected-icon-display .icon-image {
+    width: 32px;
+    height: 32px;
+    object-fit: contain;
+  }
+
+  .selected-icon-display .icon-name {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+  }
+
+  /* Move to tab section */
+  .move-section {
+    border-top: 1px solid var(--border);
+    padding-top: 1rem;
+    margin-top: 0.5rem;
+  }
+
+  .btn-move-toggle {
+    width: 100%;
+    justify-content: center;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px dashed var(--border);
+  }
+
+  .btn-move-toggle:hover {
+    background: var(--bg-secondary);
+    border-color: var(--accent);
+  }
+
+  .move-controls {
+    margin-top: 1rem;
+    padding: 1rem;
+    background: var(--bg-tertiary);
+    border-radius: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .move-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .move-row label {
+    flex-shrink: 0;
+    min-width: 60px;
+    font-size: 0.875rem;
+  }
+
+  .move-row select {
+    flex: 1;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 0.375rem;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 0.875rem;
+  }
+
+  .move-row select:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  .btn-move {
+    align-self: flex-end;
+    padding: 0.5rem 1rem;
+    background: var(--accent);
+    color: white;
+    font-size: 0.875rem;
+  }
+
+  .btn-move:hover:not(:disabled) {
+    background: var(--accent-hover);
+  }
+
+  .btn-move:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 </style>

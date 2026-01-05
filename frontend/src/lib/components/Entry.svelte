@@ -12,15 +12,25 @@
   import { selectEntry, toggleEntrySelection, isEntrySelected, selectedEntries } from '$lib/stores/selection';
   import { safeOpenUrl, isValidUrl } from '$lib/utils/url';
 
+  interface TabInfo {
+    id: string;
+    name: string;
+    groups: { id: string; name: string }[];
+  }
+
   interface Props {
     entry: Entry;
+    currentTabId?: string;
+    currentGroupId?: string;
+    availableTabs?: TabInfo[];
     onUpdate?: (entry: Entry) => void;
     onDelete?: () => void;
+    onMoveToTab?: (targetTabId: string, targetGroupId: string) => void;
     tabId?: string;
     groupId?: string;
   }
 
-  let { entry, onUpdate, onDelete, tabId, groupId }: Props = $props();
+  let { entry, currentTabId = '', currentGroupId = '', availableTabs = [], onUpdate, onDelete, onMoveToTab, tabId, groupId }: Props = $props();
   let showEditModal = $state(false);
   let showIframeModal = $state(false);
   let showPopupModal = $state(false);
@@ -186,7 +196,16 @@
 </div>
 
 {#if showEditModal}
-  <EntryEditModal entry={entry} onSave={handleSave} onCancel={() => showEditModal = false} onDelete={onDelete} />
+  <EntryEditModal
+    entry={entry}
+    currentTabId={currentTabId}
+    currentGroupId={currentGroupId}
+    availableTabs={availableTabs}
+    onSave={handleSave}
+    onCancel={() => showEditModal = false}
+    onDelete={onDelete}
+    onMoveToTab={onMoveToTab ? (targetTabId, targetGroupId) => { onMoveToTab(targetTabId, targetGroupId); showEditModal = false; } : undefined}
+  />
 {/if}
 
 {#if showIframeModal}

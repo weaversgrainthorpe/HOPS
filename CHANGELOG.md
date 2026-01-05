@@ -5,6 +5,34 @@ All notable changes to HOPS (Home Operations Portal System) will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] - 2026-01-05
+
+### Added
+
+#### Group Display Styles
+- New **Display Style** option for groups: choose between "Full Header" (default full-width bar) or "Folder Tab" (compact folder-style tab)
+- Folder Tab style provides a compact, Windows Explorer-like folder tab appearance
+
+#### Group & Tab Customization
+- Added icon support for groups (Iconify icons or custom image URLs)
+- Added icon support for tabs (Iconify icons or custom image URLs)
+- Added color, opacity, and text color options for tabs
+- Backend models now persist all group/tab styling options
+
+### Changed
+
+#### Drag and Drop
+- Reverted group drag/drop to use svelte-dnd-action library for smoother animations
+- Groups now animate and separate properly during drag operations
+- Drag available on entire group header (no separate drag handle needed)
+- Grab cursor now shows on group headers in edit mode
+
+### Fixed
+- Fixed group icons not persisting (backend model was missing icon fields)
+- Fixed tab icons not persisting (backend model was missing icon fields)
+
+---
+
 ## [0.10.0] - 2026-01-05
 
 ### Changed
@@ -92,5 +120,6 @@ HOPS is a modern, self-hosted homepage dashboard for organizing and accessing yo
 ### Credits
 Created by Jonathan Brown with Claude (Anthropic)
 
+[0.11.0]: https://github.com/jmagar/hops/releases/tag/v0.11.0
 [0.10.0]: https://github.com/jmagar/hops/releases/tag/v0.10.0
 [0.9.0]: https://github.com/jmagar/hops/releases/tag/v0.9.0

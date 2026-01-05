@@ -1,4 +1,4 @@
-# HOPS User Guide (v0.10.0)
+# HOPS User Guide (v0.11.0)
 
 Welcome to HOPS (Home Operations Portal System)! This guide will help you get started and make the most of your dashboard.
 
@@ -127,12 +127,16 @@ Edit Mode allows you to modify your dashboards. To enter Edit Mode:
 2. Click the "Edit Group" button on the group header
 3. Edit the following:
    - **Name**: Group display name
+   - **Icon**: Optional icon for the group header
    - **Color**: Custom color (optional)
    - **Opacity**: Background opacity (optional)
    - **Text Color**: Choose Auto (smart contrast), Light, or Dark
      - **Auto** (recommended): Automatically determines light or dark text based on background color for optimal readability
      - **Light**: Force white text
      - **Dark**: Force black text
+   - **Display Style**: Choose how the group header appears
+     - **Full Header** (default): Full-width header bar spanning the entire group width
+     - **Folder Tab**: Compact folder-style tab at the top-left, similar to file folder tabs
 
 ### Reordering Groups
 

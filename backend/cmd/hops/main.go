@@ -45,6 +45,12 @@ func main() {
 	}
 	defer db.Close()
 
+	// Create automatic backup on startup
+	backupManager := database.NewBackupManager(dbPath)
+	if _, err := backupManager.CreateBackupWithDB(db, "startup"); err != nil {
+		log.Printf("[Backup] Warning: failed to create startup backup: %v", err)
+	}
+
 	// Initialize auth service
 	authService := auth.NewService(db)
 

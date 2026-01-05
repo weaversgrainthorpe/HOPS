@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	_ "image/gif"
 	_ "image/jpeg"
@@ -87,6 +88,14 @@ func (r *Router) handleUpdateConfig(w http.ResponseWriter, req *http.Request) {
 	if err := json.NewDecoder(req.Body).Decode(&configData); err != nil {
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
+	}
+
+	// Create automatic backup before modifying config
+	if r.backupManager != nil {
+		if _, err := r.backupManager.CreateBackupWithDB(r.db, "pre-config-update"); err != nil {
+			log.Printf("[Backup] Warning: failed to create pre-update backup: %v", err)
+			// Continue anyway - don't block the update
+		}
 	}
 
 	configJSON, err := json.Marshal(configData)
@@ -265,6 +274,7 @@ func (r *Router) handleGetStatus(w http.ResponseWriter, req *http.Request) {
 }
 
 // handleExportConfig exports configuration as YAML/JSON
+// Supports optional dashboardId query parameter to export a single dashboard
 func (r *Router) handleExportConfig(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -278,14 +288,74 @@ func (r *Router) handleExportConfig(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	dashboardId := req.URL.Query().Get("dashboardId")
 	format := req.URL.Query().Get("format")
+	filename := "hops-config"
+
+	// If a specific dashboard is requested, filter the config
+	if dashboardId != "" {
+		var cfg map[string]interface{}
+		if err := json.Unmarshal([]byte(configData), &cfg); err != nil {
+			http.Error(w, "Failed to parse config", http.StatusInternalServerError)
+			return
+		}
+
+		// Find the specific dashboard
+		dashboards, ok := cfg["dashboards"].([]interface{})
+		if !ok {
+			http.Error(w, "Invalid config structure", http.StatusInternalServerError)
+			return
+		}
+
+		var targetDashboard interface{}
+		var dashboardName string
+		for _, d := range dashboards {
+			dashboard, ok := d.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if id, ok := dashboard["id"].(string); ok && id == dashboardId {
+				targetDashboard = dashboard
+				if name, ok := dashboard["name"].(string); ok {
+					dashboardName = name
+				}
+				break
+			}
+		}
+
+		if targetDashboard == nil {
+			http.Error(w, "Dashboard not found", http.StatusNotFound)
+			return
+		}
+
+		// Create a new config with only this dashboard
+		// Mark it as a single-dashboard export so import can handle it appropriately
+		singleExport := map[string]interface{}{
+			"exportType":  "single-dashboard",
+			"exportedAt":  time.Now().Format(time.RFC3339),
+			"dashboards":  []interface{}{targetDashboard},
+		}
+
+		exportData, err := json.MarshalIndent(singleExport, "", "  ")
+		if err != nil {
+			http.Error(w, "Failed to serialize config", http.StatusInternalServerError)
+			return
+		}
+		configData = string(exportData)
+
+		// Use dashboard name for filename
+		if dashboardName != "" {
+			filename = "hops-" + strings.ToLower(strings.ReplaceAll(dashboardName, " ", "-"))
+		}
+	}
+
 	if format == "yaml" {
 		// TODO: Convert JSON to YAML
 		w.Header().Set("Content-Type", "application/x-yaml")
-		w.Header().Set("Content-Disposition", "attachment; filename=hops-config.yaml")
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s.yaml", filename))
 	} else {
 		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("Content-Disposition", "attachment; filename=hops-config.json")
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s.json", filename))
 	}
 
 	w.Write([]byte(configData))
@@ -298,7 +368,92 @@ type IconMatch struct {
 	Color    string
 }
 
+// Brand aliases - maps sub-brands or alternative names to their parent/canonical icon
+var brandAliases = map[string]string{
+	// TP-Link family
+	"deco":   "tp-link",
+	"tapo":   "tp-link",
+	"kasa":   "tp-link",
+	"omada":  "tp-link",
+	"archer": "tp-link",
+	"tplink": "tp-link",
+
+	// Ubiquiti family
+	"ubnt":       "ubiquiti",
+	"edgemax":    "ubiquiti",
+	"edgerouter": "ubiquiti",
+	"amplifi":    "ubiquiti",
+
+	// Netgear family
+	"orbi":      "netgear",
+	"nighthawk": "netgear",
+
+	// Google family
+	"nest":       "google-home",
+	"chromecast": "google-chrome",
+
+	// Amazon family
+	"echo":   "alexa",
+	"ring":   "amazon",
+	"kindle": "amazon",
+	"firetv": "amazon",
+
+	// Home Assistant
+	"hass":          "home-assistant",
+	"hassio":        "home-assistant",
+	"homeassistant": "home-assistant",
+
+	// Smart displays/clocks (Ulanzi runs AWTRIX/ESPHome)
+	"ulanzi": "esphome",
+	"awtrix": "esphome",
+
+	// Pi-hole / AdGuard
+	"pihole":  "pi-hole",
+	"adguard": "adguard-home",
+
+	// NAS brands
+	"dsm":       "synology",
+	"freenas":   "truenas-core",
+	"truenas":   "truenas-scale",
+	"xpenology": "synology",
+
+	// Virtualization
+	"pve":     "proxmox",
+	"esxi":    "vmware-esxi",
+	"vcenter": "vmware",
+	"vsphere": "vmware",
+
+	// Container orchestration
+	"k8s":      "kubernetes",
+	"kubectl":  "kubernetes",
+	"microk8s": "kubernetes",
+	"swarm":    "docker",
+
+	// Networking/Firewall
+	"fortigate": "fortinet",
+
+	// VPN
+	"wg": "wireguard",
+
+	// Password managers
+	"keepass": "keepassxc",
+
+	// Reverse proxy
+	"npm": "nginx-proxy-manager",
+
+	// Monitoring
+	"influx": "influxdb",
+
+	// Cloudflare
+	"cloudflared": "cloudflare",
+
+	// Databases
+	"postgres": "postgresql",
+	"mongo":    "mongodb",
+}
+
 // matchIconForName searches the icons database for a matching icon based on the service name
+// Prioritizes icons with image_url (dashboard SVGs) over MDI-only icons
 func (r *Router) matchIconForName(name string) (match IconMatch, found bool) {
 	if name == "" {
 		return IconMatch{}, false
@@ -306,6 +461,30 @@ func (r *Router) matchIconForName(name string) (match IconMatch, found bool) {
 
 	// Normalize the name for matching (lowercase, trim)
 	normalizedName := strings.ToLower(strings.TrimSpace(name))
+
+	// Check brand aliases first - look for alias keywords in the name
+	for alias, canonical := range brandAliases {
+		if strings.Contains(normalizedName, alias) {
+			// Try to find the canonical icon
+			row := r.db.QueryRow(
+				`SELECT icon, image_url, color FROM icons
+				 WHERE LOWER(id) = ? OR LOWER(name) = ?
+				 ORDER BY (image_url IS NOT NULL AND image_url != '') DESC
+				 LIMIT 1`,
+				canonical, canonical,
+			)
+			var iconVal, imageURLVal, colorVal sql.NullString
+			if err := row.Scan(&iconVal, &imageURLVal, &colorVal); err == nil {
+				if (iconVal.Valid && iconVal.String != "") || (imageURLVal.Valid && imageURLVal.String != "") {
+					return IconMatch{
+						Icon:     iconVal.String,
+						ImageURL: imageURLVal.String,
+						Color:    colorVal.String,
+					}, true
+				}
+			}
+		}
+	}
 
 	// Also create a version without spaces (for matching "HomeAssistant" to "Home Assistant")
 	noSpaceName := strings.ReplaceAll(normalizedName, " ", "")
@@ -330,9 +509,12 @@ func (r *Router) matchIconForName(name string) (match IconMatch, found bool) {
 		return IconMatch{}, false
 	}
 
-	// Try exact match first
+	// Try exact match first - prioritize icons with image_url (dashboard SVGs)
 	row := r.db.QueryRow(
-		"SELECT icon, image_url, color FROM icons WHERE LOWER(name) = ? OR LOWER(id) = ? LIMIT 1",
+		`SELECT icon, image_url, color FROM icons
+		 WHERE LOWER(name) = ? OR LOWER(id) = ?
+		 ORDER BY (image_url IS NOT NULL AND image_url != '') DESC
+		 LIMIT 1`,
 		normalizedName, normalizedName,
 	)
 	if m, ok := scanMatch(row); ok {
@@ -341,21 +523,25 @@ func (r *Router) matchIconForName(name string) (match IconMatch, found bool) {
 
 	// Try matching without spaces (handles "HomeAssistant" matching "homeassistant" or "Home Assistant")
 	row = r.db.QueryRow(
-		"SELECT icon, image_url, color FROM icons WHERE REPLACE(REPLACE(REPLACE(LOWER(name), ' ', ''), '-', ''), '_', '') = ? OR LOWER(id) = ? LIMIT 1",
+		`SELECT icon, image_url, color FROM icons
+		 WHERE REPLACE(REPLACE(REPLACE(LOWER(name), ' ', ''), '-', ''), '_', '') = ?
+		    OR REPLACE(REPLACE(REPLACE(LOWER(id), ' ', ''), '-', ''), '_', '') = ?
+		 ORDER BY (image_url IS NOT NULL AND image_url != '') DESC
+		 LIMIT 1`,
 		noSpaceName, noSpaceName,
 	)
 	if m, ok := scanMatch(row); ok {
 		return m, true
 	}
 
-	// Try partial match - but only if icon name appears as a word/prefix in the search term
-	// This prevents "Conservatory" from matching "Tor"
+	// Try partial match on name - prioritize dashboard icons and longer matches
 	row = r.db.QueryRow(
 		`SELECT icon, image_url, color FROM icons
-		 WHERE LOWER(name) LIKE ?
+		 WHERE (LOWER(name) LIKE ? OR LOWER(id) LIKE ?)
 		 AND LENGTH(name) >= 4
-		 ORDER BY LENGTH(name) DESC LIMIT 1`,
-		"%"+normalizedName+"%",
+		 ORDER BY (image_url IS NOT NULL AND image_url != '') DESC, LENGTH(name) DESC
+		 LIMIT 1`,
+		"%"+normalizedName+"%", "%"+normalizedName+"%",
 	)
 	if m, ok := scanMatch(row); ok {
 		return m, true
@@ -365,13 +551,68 @@ func (r *Router) matchIconForName(name string) (match IconMatch, found bool) {
 	words := strings.FieldsFunc(normalizedName, func(c rune) bool {
 		return c == ' ' || c == '-' || c == '_'
 	})
+
+	// Try individual words first
 	for _, word := range words {
 		if len(word) < 3 {
 			continue
 		}
 		row = r.db.QueryRow(
-			"SELECT icon, image_url, color FROM icons WHERE LOWER(name) = ? OR LOWER(id) = ? LIMIT 1",
+			`SELECT icon, image_url, color FROM icons
+			 WHERE LOWER(name) = ? OR LOWER(id) = ?
+			 ORDER BY (image_url IS NOT NULL AND image_url != '') DESC
+			 LIMIT 1`,
 			word, word,
+		)
+		if m, ok := scanMatch(row); ok {
+			return m, true
+		}
+	}
+
+	// Try combining adjacent words (e.g., "TP Link" -> "tp-link", "tplink")
+	for i := 0; i < len(words)-1; i++ {
+		combined := words[i] + "-" + words[i+1]
+		combinedNoHyphen := words[i] + words[i+1]
+
+		// Try hyphenated version (e.g., "tp-link")
+		row = r.db.QueryRow(
+			`SELECT icon, image_url, color FROM icons
+			 WHERE LOWER(name) = ? OR LOWER(id) = ?
+			 ORDER BY (image_url IS NOT NULL AND image_url != '') DESC
+			 LIMIT 1`,
+			combined, combined,
+		)
+		if m, ok := scanMatch(row); ok {
+			return m, true
+		}
+
+		// Try without hyphen (e.g., "tplink")
+		row = r.db.QueryRow(
+			`SELECT icon, image_url, color FROM icons
+			 WHERE LOWER(name) = ? OR LOWER(id) = ?
+			    OR REPLACE(REPLACE(REPLACE(LOWER(name), ' ', ''), '-', ''), '_', '') = ?
+			    OR REPLACE(REPLACE(REPLACE(LOWER(id), ' ', ''), '-', ''), '_', '') = ?
+			 ORDER BY (image_url IS NOT NULL AND image_url != '') DESC
+			 LIMIT 1`,
+			combinedNoHyphen, combinedNoHyphen, combinedNoHyphen, combinedNoHyphen,
+		)
+		if m, ok := scanMatch(row); ok {
+			return m, true
+		}
+	}
+
+	// Final fallback: try LIKE match on any word >= 4 chars to find partial matches
+	for _, word := range words {
+		if len(word) < 4 {
+			continue
+		}
+		row = r.db.QueryRow(
+			`SELECT icon, image_url, color FROM icons
+			 WHERE (LOWER(name) LIKE ? OR LOWER(id) LIKE ?)
+			 AND LENGTH(name) >= 4
+			 ORDER BY (image_url IS NOT NULL AND image_url != '') DESC, LENGTH(name) DESC
+			 LIMIT 1`,
+			"%"+word+"%", "%"+word+"%",
 		)
 		if m, ok := scanMatch(row); ok {
 			return m, true
@@ -1684,6 +1925,79 @@ func (r *Router) handleBackgroundCategoryActions(w http.ResponseWriter, req *htt
 		}
 
 		writeJSON(w, map[string]bool{"success": true})
+
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+// handleBackups handles listing backups and creating new ones
+func (r *Router) handleBackups(w http.ResponseWriter, req *http.Request) {
+	switch req.Method {
+	case http.MethodGet:
+		// List all backups
+		backups, err := r.backupManager.ListBackups()
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Failed to list backups: %v", err), http.StatusInternalServerError)
+			return
+		}
+		writeJSON(w, map[string]interface{}{
+			"backups": backups,
+		})
+
+	case http.MethodPost:
+		// Create a manual backup
+		var reqData struct {
+			Reason string `json:"reason"`
+		}
+		if err := json.NewDecoder(req.Body).Decode(&reqData); err != nil {
+			reqData.Reason = "manual"
+		}
+		if reqData.Reason == "" {
+			reqData.Reason = "manual"
+		}
+
+		backupPath, err := r.backupManager.CreateBackupWithDB(r.db, reqData.Reason)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Failed to create backup: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		writeJSON(w, map[string]interface{}{
+			"success": true,
+			"path":    backupPath,
+			"message": "Backup created successfully",
+		})
+
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+// handleBackupActions handles restore and delete operations on individual backups
+func (r *Router) handleBackupActions(w http.ResponseWriter, req *http.Request) {
+	backupName := filepath.Base(req.URL.Path)
+	if backupName == "" || backupName == "backups" {
+		http.Error(w, "Backup name required", http.StatusBadRequest)
+		return
+	}
+
+	switch req.Method {
+	case http.MethodPost:
+		// Restore from backup
+		if err := r.backupManager.RestoreBackup(backupName); err != nil {
+			http.Error(w, fmt.Sprintf("Failed to restore backup: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		writeJSON(w, map[string]interface{}{
+			"success": true,
+			"message": "Backup restored successfully. Please restart the server.",
+		})
+
+	case http.MethodDelete:
+		// Delete a backup - not implemented for safety
+		http.Error(w, "Backup deletion not allowed for safety", http.StatusForbidden)
 
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)

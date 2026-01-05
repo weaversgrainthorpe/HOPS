@@ -319,12 +319,144 @@
     };
   }
 
-  async function handleUpdateTab(tabId: string, newName: string, newIcon?: string, newColor?: string, newOpacity?: number) {
+  async function handleDuplicateGroup(tabId: string, groupId: string) {
+    if (!requireAuth()) return;
+    const updatedDashboard = { ...dashboard };
+    const tab = updatedDashboard.tabs.find(t => t.id === tabId);
+    if (!tab) return;
+
+    const sourceGroup = tab.groups.find(g => g.id === groupId);
+    if (!sourceGroup) return;
+
+    // Deep clone the group with new IDs
+    const newGroupId = `group-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+    const newGroup: Group = {
+      ...sourceGroup,
+      id: newGroupId,
+      name: `${sourceGroup.name} (Copy)`,
+      order: tab.groups.length,
+      entries: sourceGroup.entries.map(entry => ({
+        ...entry,
+        id: `entry-${Date.now()}-${Math.random().toString(36).substring(7)}`
+      }))
+    };
+
+    tab.groups.push(newGroup);
+    await updateDashboard(updatedDashboard);
+  }
+
+  function makeDuplicateGroupHandler(tabId: string) {
+    return (groupId: string) => {
+      handleDuplicateGroup(tabId, groupId);
+    };
+  }
+
+  // Move entry to a different tab/group
+  async function handleMoveEntryToTab(
+    sourceTabId: string,
+    sourceGroupId: string,
+    entryId: string,
+    targetTabId: string,
+    targetGroupId: string
+  ) {
+    if (!requireAuth()) return;
+
+    const updatedDashboard = { ...dashboard };
+
+    // Find source and target
+    const sourceTab = updatedDashboard.tabs.find(t => t.id === sourceTabId);
+    const targetTab = updatedDashboard.tabs.find(t => t.id === targetTabId);
+    if (!sourceTab || !targetTab) return;
+
+    const sourceGroup = sourceTab.groups.find(g => g.id === sourceGroupId);
+    const targetGroup = targetTab.groups.find(g => g.id === targetGroupId);
+    if (!sourceGroup || !targetGroup) return;
+
+    // Find and remove entry from source
+    const entryIndex = sourceGroup.entries.findIndex(e => e.id === entryId);
+    if (entryIndex === -1) return;
+
+    const [movedEntry] = sourceGroup.entries.splice(entryIndex, 1);
+
+    // Add to target group
+    targetGroup.entries.push({ ...movedEntry, order: targetGroup.entries.length });
+
+    // Reorder source group entries
+    sourceGroup.entries = sourceGroup.entries.map((entry, idx) => ({
+      ...entry,
+      order: idx
+    }));
+
+    await updateDashboard(updatedDashboard);
+  }
+
+  function makeMoveEntryToTabHandler(sourceTabId: string) {
+    return (sourceGroupId: string, entryId: string, targetTabId: string, targetGroupId: string) => {
+      handleMoveEntryToTab(sourceTabId, sourceGroupId, entryId, targetTabId, targetGroupId);
+    };
+  }
+
+  // Move group to a different tab
+  async function handleMoveGroupToTab(
+    sourceTabId: string,
+    groupId: string,
+    targetTabId: string
+  ) {
+    if (!requireAuth()) return;
+
+    const updatedDashboard = { ...dashboard };
+
+    // Find source and target tabs
+    const sourceTab = updatedDashboard.tabs.find(t => t.id === sourceTabId);
+    const targetTab = updatedDashboard.tabs.find(t => t.id === targetTabId);
+    if (!sourceTab || !targetTab) return;
+
+    // Find and remove group from source
+    const groupIndex = sourceTab.groups.findIndex(g => g.id === groupId);
+    if (groupIndex === -1) return;
+
+    const [movedGroup] = sourceTab.groups.splice(groupIndex, 1);
+
+    // Add to target tab
+    targetTab.groups.push({ ...movedGroup, order: targetTab.groups.length });
+
+    // Reorder source tab groups
+    sourceTab.groups = sourceTab.groups.map((group, idx) => ({
+      ...group,
+      order: idx
+    }));
+
+    await updateDashboard(updatedDashboard);
+  }
+
+  function makeMoveGroupToTabHandler(sourceTabId: string) {
+    return (groupId: string, targetTabId: string) => {
+      handleMoveGroupToTab(sourceTabId, groupId, targetTabId);
+    };
+  }
+
+  // Get tab info for move dropdowns
+  function getAvailableTabsForEntry() {
+    return dashboard.tabs.map(tab => ({
+      id: tab.id,
+      name: tab.name,
+      groups: tab.groups.map(g => ({ id: g.id, name: g.name }))
+    }));
+  }
+
+  function getAvailableTabsForGroup() {
+    return dashboard.tabs.map(tab => ({
+      id: tab.id,
+      name: tab.name
+    }));
+  }
+
+  async function handleUpdateTab(tabId: string, newName: string, newIcon?: string, newIconUrl?: string, newColor?: string, newOpacity?: number) {
     if (!requireAuth()) return;
     const updatedDashboard = { ...dashboard };
     const tabIndex = updatedDashboard.tabs.findIndex(t => t.id === tabId);
     if (tabIndex !== -1) {
-      updatedDashboard.tabs[tabIndex] = { ...updatedDashboard.tabs[tabIndex], name: newName, icon: newIcon, color: newColor, opacity: newOpacity };
+      updatedDashboard.tabs[tabIndex] = { ...updatedDashboard.tabs[tabIndex], name: newName, icon: newIcon, iconUrl: newIconUrl, color: newColor, opacity: newOpacity };
       await updateDashboard(updatedDashboard);
     }
     editingTabIndex = null;
@@ -422,6 +554,40 @@
     editingTabIndex = updatedDashboard.tabs.length - 1;
   }
 
+  async function handleDuplicateTab(tabId: string) {
+    if (!requireAuth()) return;
+    const updatedDashboard = { ...dashboard };
+    const sourceTab = updatedDashboard.tabs.find(t => t.id === tabId);
+    if (!sourceTab) return;
+
+    // Deep clone the tab with new IDs
+    const newTabId = `tab-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+    const newTab: Tab = {
+      ...sourceTab,
+      id: newTabId,
+      name: `${sourceTab.name} (Copy)`,
+      order: updatedDashboard.tabs.length,
+      groups: sourceTab.groups.map(group => {
+        const newGroupId = `group-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+        return {
+          ...group,
+          id: newGroupId,
+          entries: group.entries.map(entry => ({
+            ...entry,
+            id: `entry-${Date.now()}-${Math.random().toString(36).substring(7)}`
+          }))
+        };
+      })
+    };
+
+    updatedDashboard.tabs.push(newTab);
+    await updateDashboard(updatedDashboard);
+
+    // Switch to the new tab
+    activeTabIndex = updatedDashboard.tabs.length - 1;
+    editingTabIndex = null;
+  }
+
   function handleTabsConsider(e: CustomEvent<DndEvent<Tab>>) {
     draggedTabs = e.detail.items;
   }
@@ -494,7 +660,9 @@
               onclick={(e) => handleTabClick(index, e)}
               onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleTabClick(index, e as unknown as MouseEvent); }}
             >
-              {#if tab.icon}
+              {#if tab.iconUrl}
+                <img src={tab.iconUrl} alt="" class="tab-icon-img" />
+              {:else if tab.icon}
                 <Icon icon={tab.icon} width="16" />
               {/if}
               <span class="tab-name">{tab.name}</span>
@@ -508,6 +676,14 @@
                   aria-label="Edit {tab.name} tab"
                 >
                   <Icon icon="mdi:pencil" width="16" />
+                </button>
+                <button
+                  class="tab-control-btn duplicate-btn"
+                  onclick={(e) => { e.stopPropagation(); handleDuplicateTab(tab.id); }}
+                  title="Duplicate tab"
+                  aria-label="Duplicate {tab.name} tab"
+                >
+                  <Icon icon="mdi:content-copy" width="16" />
                 </button>
                 <button
                   class="tab-control-btn delete-btn"
@@ -545,15 +721,21 @@
   {#if dashboard.tabs.length > 0}
     <TabPanel
       tab={dashboard.tabs[activeTabIndex]}
+      currentTabId={dashboard.tabs[activeTabIndex].id}
+      availableTabsForEntry={getAvailableTabsForEntry()}
+      availableTabsForGroup={getAvailableTabsForGroup()}
       onUpdateEntry={makeUpdateHandler(dashboard.tabs[activeTabIndex].id)}
       onDeleteEntry={makeDeleteHandler(dashboard.tabs[activeTabIndex].id)}
       onAddEntry={makeAddHandler(dashboard.tabs[activeTabIndex].id)}
       onAddGroup={makeAddGroupHandler(dashboard.tabs[activeTabIndex].id)}
       onReorderEntries={makeReorderHandler(dashboard.tabs[activeTabIndex].id)}
       onMoveEntry={makeMoveEntryHandler(dashboard.tabs[activeTabIndex].id)}
+      onMoveEntryToTab={makeMoveEntryToTabHandler(dashboard.tabs[activeTabIndex].id)}
+      onMoveGroupToTab={makeMoveGroupToTabHandler(dashboard.tabs[activeTabIndex].id)}
       onReorderGroups={makeReorderGroupsHandler(dashboard.tabs[activeTabIndex].id)}
       onUpdateGroup={makeUpdateGroupHandler(dashboard.tabs[activeTabIndex].id)}
       onDeleteGroup={makeDeleteGroupHandler(dashboard.tabs[activeTabIndex].id)}
+      onDuplicateGroup={makeDuplicateGroupHandler(dashboard.tabs[activeTabIndex].id)}
       onUpdateTabBackground={makeUpdateTabBackgroundHandler(dashboard.tabs[activeTabIndex].id)}
       onGroupFocus={(groupId) => focusedGroupId = groupId}
     />
@@ -569,11 +751,12 @@
   <TabEditModal
     tabName={dashboard.tabs[editingTabIndex].name}
     tabIcon={dashboard.tabs[editingTabIndex].icon}
+    tabIconUrl={dashboard.tabs[editingTabIndex].iconUrl}
     tabColor={dashboard.tabs[editingTabIndex].color}
     tabOpacity={dashboard.tabs[editingTabIndex].opacity}
     tabBackground={dashboard.tabs[editingTabIndex].background}
     perTabBackgrounds={dashboard.perTabBackgrounds}
-    onSave={(newName, newIcon, newColor, newOpacity) => handleUpdateTab(dashboard.tabs[editingTabIndex!].id, newName, newIcon, newColor, newOpacity)}
+    onSave={(newName, newIcon, newIconUrl, newColor, newOpacity) => handleUpdateTab(dashboard.tabs[editingTabIndex!].id, newName, newIcon, newIconUrl, newColor, newOpacity)}
     onSaveBackground={(background) => handleUpdateTabBackground(dashboard.tabs[editingTabIndex!].id, background)}
     onCancel={() => editingTabIndex = null}
     onDelete={async () => {
@@ -587,6 +770,7 @@
         handleDeleteTab(dashboard.tabs[editingTabIndex!].id);
       }
     }}
+    onDuplicate={() => handleDuplicateTab(dashboard.tabs[editingTabIndex!].id)}
   />
 {/if}
 
@@ -776,6 +960,12 @@
     display: block;
   }
 
+  .tab-icon-img {
+    width: 16px;
+    height: 16px;
+    object-fit: contain;
+  }
+
   .tab-controls {
     position: absolute;
     right: -0.5rem;
@@ -811,6 +1001,11 @@
     background: #f59e0b;
     color: white;
     transform: scale(1.1);
+  }
+
+  .tab-control-btn.duplicate-btn:hover {
+    background: #10b981;
+    color: white;
   }
 
   .tab-control-btn.delete-btn:hover {
