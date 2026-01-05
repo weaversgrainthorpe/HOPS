@@ -14,20 +14,38 @@
   // Extended entry type with drag-and-drop metadata
   type DraggableEntry = EntryType & { _sourceGroupId?: string };
 
+  interface TabInfoForEntry {
+    id: string;
+    name: string;
+    groups: { id: string; name: string }[];
+  }
+
+  interface TabInfoForGroup {
+    id: string;
+    name: string;
+  }
+
   interface Props {
     group: Group;
+    currentTabId?: string;
+    currentGroupId?: string;
+    availableTabsForEntry?: TabInfoForEntry[];
+    availableTabsForGroup?: TabInfoForGroup[];
     onUpdateEntry?: (entryId: string, updatedEntry: EntryType) => void;
     onDeleteEntry?: (entryId: string) => void;
     onAddEntry?: (newEntry: EntryType) => void;
     onReorderEntries?: (reorderedEntries: EntryType[]) => void;
     onMoveEntry?: (fromGroupId: string, toGroupId: string, entryId: string, newIndex: number) => void;
+    onMoveEntryToTab?: (entryId: string, targetTabId: string, targetGroupId: string) => void;
+    onMoveGroupToTab?: (targetTabId: string) => void;
     onUpdateGroup?: (updatedGroup: Group) => void;
     onDeleteGroup?: () => void;
+    onDuplicateGroup?: () => void;
     onFocus?: () => void;
     tabId?: string;
   }
 
-  let { group, onUpdateEntry, onDeleteEntry, onAddEntry, onReorderEntries, onMoveEntry, onUpdateGroup, onDeleteGroup, onFocus, tabId }: Props = $props();
+  let { group, currentTabId = '', currentGroupId = '', availableTabsForEntry = [], availableTabsForGroup = [], onUpdateEntry, onDeleteEntry, onAddEntry, onReorderEntries, onMoveEntry, onMoveEntryToTab, onMoveGroupToTab, onUpdateGroup, onDeleteGroup, onDuplicateGroup, onFocus, tabId }: Props = $props();
   // svelte-ignore state_referenced_locally
   let collapsed = $state(group.collapsed || false);
   let showAddModal = $state(false);
@@ -50,9 +68,9 @@
     collapsed = !collapsed;
   }
 
-  function handleSaveGroup(groupName: string, groupIcon?: string, groupColor?: string, groupOpacity?: number, groupTextColor?: 'auto' | 'light' | 'dark') {
+  function handleSaveGroup(groupName: string, groupIcon?: string, groupIconUrl?: string, groupColor?: string, groupOpacity?: number, groupTextColor?: 'auto' | 'light' | 'dark', displayStyle?: 'header' | 'folder') {
     if (onUpdateGroup) {
-      onUpdateGroup({ ...group, name: groupName, icon: groupIcon, color: groupColor, opacity: groupOpacity, textColor: groupTextColor });
+      onUpdateGroup({ ...group, name: groupName, icon: groupIcon, iconUrl: groupIconUrl, color: groupColor, opacity: groupOpacity, textColor: groupTextColor, displayStyle });
     }
     showEditModal = false;
   }
@@ -175,7 +193,7 @@
   }
 </script>
 
-<div class="group" onclick={() => onFocus?.()}>
+<div class="group" class:edit-mode={$editMode} class:folder-style={group.displayStyle === 'folder'} onclick={() => onFocus?.()}>
   <div class="group-header-container">
     <div
       class="group-header"
@@ -191,7 +209,9 @@
       aria-label={$editMode ? `Edit ${group.name} group` : `${collapsed ? 'Expand' : 'Collapse'} ${group.name} group`}
     >
       <div class="group-title">
-        {#if group.icon}
+        {#if group.iconUrl}
+          <img src={group.iconUrl} alt="" class="group-icon-img" />
+        {:else if group.icon}
           <Icon icon={group.icon} width="20" />
         {/if}
         <h3>{group.name}</h3>
@@ -209,6 +229,14 @@
           aria-label="Edit {group.name} group"
         >
           <Icon icon="mdi:pencil" width="16" />
+        </button>
+        <button
+          class="group-control-btn duplicate-btn"
+          onclick={(e) => { e.stopPropagation(); onDuplicateGroup?.(); }}
+          title="Duplicate group"
+          aria-label="Duplicate {group.name} group"
+        >
+          <Icon icon="mdi:content-copy" width="16" />
         </button>
         <button
           class="group-control-btn delete-btn"
@@ -241,8 +269,12 @@
       {#each items as entry (entry.id)}
         <Entry
           {entry}
+          currentTabId={currentTabId}
+          currentGroupId={currentGroupId}
+          availableTabs={availableTabsForEntry}
           onUpdate={handleUpdateEntry(entry.id)}
           onDelete={handleDeleteEntry(entry.id)}
+          onMoveToTab={onMoveEntryToTab ? (targetTabId, targetGroupId) => onMoveEntryToTab(entry.id, targetTabId, targetGroupId) : undefined}
           {tabId}
           groupId={group.id}
         />
@@ -277,23 +309,37 @@
   <GroupEditModal
     groupName={group.name}
     groupIcon={group.icon}
+    groupIconUrl={group.iconUrl}
     groupColor={group.color}
     groupOpacity={group.opacity}
     groupTextColor={group.textColor}
+    groupDisplayStyle={group.displayStyle}
+    currentTabId={currentTabId}
+    availableTabs={availableTabsForGroup}
     onSave={handleSaveGroup}
     onCancel={() => showEditModal = false}
     onDelete={handleDeleteGroup}
+    onDuplicate={() => { onDuplicateGroup?.(); showEditModal = false; }}
+    onMoveToTab={onMoveGroupToTab ? (targetTabId) => { onMoveGroupToTab(targetTabId); showEditModal = false; } : undefined}
   />
 {/if}
 
 <style>
   .group {
-    margin-bottom: 2rem;
+    /* margin handled by parent grid gap */
   }
 
   .group-header-container {
     position: relative;
     margin-bottom: 1rem;
+  }
+
+  .group.edit-mode .group-header-container {
+    cursor: grab;
+  }
+
+  .group.edit-mode .group-header-container:active {
+    cursor: grabbing;
   }
 
   .group-header {
@@ -305,7 +351,7 @@
     background: transparent;
     border: 1px solid var(--border);
     border-radius: 0.5rem;
-    cursor: pointer;
+    cursor: default;
     transition: all 0.2s;
     position: relative;
   }
@@ -339,10 +385,46 @@
     border-color: rgba(255, 255, 255, 0.4);
   }
 
+  /* Folder style - compact tab look */
+  .group.folder-style .group-header-container {
+    margin-bottom: 0;
+  }
+
+  .group.folder-style .group-header {
+    width: auto;
+    display: inline-flex;
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem 0.5rem 0 0;
+    border-bottom: none;
+  }
+
+  .group.folder-style .group-header h3 {
+    font-size: 1rem;
+  }
+
+  .group.folder-style .entries-grid {
+    border: 1px solid var(--border);
+    border-radius: 0 0.5rem 0.5rem 0.5rem;
+    padding: 1rem;
+    background: rgba(var(--bg-secondary-rgb, 30, 41, 59), 0.5);
+  }
+
+  .group.folder-style .group-controls {
+    position: static;
+    transform: none;
+    margin-left: 0.5rem;
+  }
+
   .group-title {
     display: flex;
     align-items: center;
     gap: 0.5rem;
+  }
+
+  .group-icon-img {
+    width: 20px;
+    height: 20px;
+    object-fit: contain;
   }
 
   h3 {
@@ -393,6 +475,11 @@
     background: #f59e0b;
     color: white;
     transform: scale(1.1);
+  }
+
+  .group-control-btn.duplicate-btn:hover {
+    background: #10b981;
+    color: white;
   }
 
   .group-control-btn.delete-btn:hover {

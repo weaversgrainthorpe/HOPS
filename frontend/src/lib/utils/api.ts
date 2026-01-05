@@ -92,9 +92,14 @@ export async function updateConfig(config: Config): Promise<void> {
   });
 }
 
-export async function exportConfig(format: 'json' | 'yaml' = 'json'): Promise<Blob> {
+export async function exportConfig(format: 'json' | 'yaml' = 'json', dashboardId?: string): Promise<Blob> {
   const token = getSessionToken();
-  const response = await fetch(`${API_BASE}/config/export?format=${format}`, {
+  let url = `${API_BASE}/config/export?format=${format}`;
+  if (dashboardId) {
+    url += `&dashboardId=${encodeURIComponent(dashboardId)}`;
+  }
+
+  const response = await fetch(url, {
     headers: token ? { 'Authorization': `Bearer ${token}` } : {},
   });
 

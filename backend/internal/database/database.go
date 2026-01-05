@@ -3,6 +3,7 @@ package database
 import (
 	"database/sql"
 	"fmt"
+	"path/filepath"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -19,9 +20,34 @@ func Initialize(dbPath string) (*sql.DB, error) {
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
+	// Enable WAL mode for better concurrency (allows concurrent reads during writes)
+	if _, err := db.Exec("PRAGMA journal_mode=WAL"); err != nil {
+		return nil, fmt.Errorf("failed to set WAL mode: %w", err)
+	}
+
+	// Set busy timeout to wait up to 5 seconds if database is locked
+	if _, err := db.Exec("PRAGMA busy_timeout=5000"); err != nil {
+		return nil, fmt.Errorf("failed to set busy timeout: %w", err)
+	}
+
+	// Set synchronous mode to NORMAL for better performance with WAL
+	if _, err := db.Exec("PRAGMA synchronous=NORMAL"); err != nil {
+		return nil, fmt.Errorf("failed to set synchronous mode: %w", err)
+	}
+
+	// Set connection pool settings - SQLite works best with single writer
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+
 	// Run migrations
 	if err := runMigrations(db); err != nil {
 		return nil, fmt.Errorf("failed to run migrations: %w", err)
+	}
+
+	// Import dashboard icons from dashboard-icons directory
+	dataDir := filepath.Dir(dbPath)
+	if err := ImportDashboardIcons(db, dataDir); err != nil {
+		return nil, fmt.Errorf("failed to import dashboard icons: %w", err)
 	}
 
 	return db, nil
@@ -136,9 +162,9 @@ func runMigrations(db *sql.DB) error {
 		defaultConfig := `{
   "dashboards": [
     {
-      "id": "home",
-      "name": "Home",
-      "path": "/home",
+      "id": "sample",
+      "name": "Sample",
+      "path": "/sample",
       "order": 0,
       "tabs": [
         {

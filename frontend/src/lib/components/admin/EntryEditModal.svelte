@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Entry } from '$lib/types';
+  import type { Entry, Tab } from '$lib/types';
   import Icon from '@iconify/svelte';
   import ColoredIcon from '../ColoredIcon.svelte';
   import ColorPicker from './ColorPicker.svelte';
@@ -9,14 +9,24 @@
   import { focusTrap } from '$lib/utils/focusTrap';
   import { getSessionToken } from '$lib/stores/auth';
 
+  interface TabInfo {
+    id: string;
+    name: string;
+    groups: { id: string; name: string }[];
+  }
+
   interface Props {
     entry: Entry;
+    currentTabId?: string;
+    currentGroupId?: string;
+    availableTabs?: TabInfo[];
     onSave: (entry: Entry) => void;
     onCancel: () => void;
     onDelete?: () => void;
+    onMoveToTab?: (targetTabId: string, targetGroupId: string) => void;
   }
 
-  let { entry, onSave, onCancel, onDelete }: Props = $props();
+  let { entry, currentTabId, currentGroupId, availableTabs = [], onSave, onCancel, onDelete, onMoveToTab }: Props = $props();
 
   // Form state initialized from props (intentionally captures initial values)
   // svelte-ignore state_referenced_locally
@@ -28,6 +38,24 @@
   let isUploadingIcon = $state(false);
   let uploadError = $state('');
 
+  // Move to tab state
+  let showMoveSection = $state(false);
+  let selectedMoveTabId = $state('');
+  let selectedMoveGroupId = $state('');
+
+  // Get groups for the selected tab (for move dropdown)
+  const moveTargetGroups = $derived(
+    availableTabs.find(t => t.id === selectedMoveTabId)?.groups || []
+  );
+
+  // Check if move is available (has other tabs/groups to move to)
+  const canMove = $derived(
+    availableTabs.length > 0 && onMoveToTab && (
+      availableTabs.length > 1 || // Multiple tabs
+      availableTabs.some(t => t.groups.length > 1) // Or current tab has multiple groups
+    )
+  );
+
   // Update editedEntry when entry prop changes
   $effect(() => {
     editedEntry = { ...entry };
@@ -36,6 +64,19 @@
 
   function handleSave() {
     onSave(editedEntry);
+  }
+
+  async function handleMove() {
+    if (!onMoveToTab || !selectedMoveTabId || !selectedMoveGroupId) return;
+
+    // Don't move if target is same as current location
+    if (selectedMoveTabId === currentTabId && selectedMoveGroupId === currentGroupId) {
+      showMoveSection = false;
+      return;
+    }
+
+    onMoveToTab(selectedMoveTabId, selectedMoveGroupId);
+    onCancel(); // Close modal after move
   }
 
   async function handleDelete() {
@@ -310,6 +351,53 @@
             Auto-fetch Favicon
           </label>
         </div>
+
+        {#if canMove}
+          <div class="form-group full-width move-section">
+            {#if !showMoveSection}
+              <button type="button" class="btn-move-toggle" onclick={() => showMoveSection = true}>
+                <Icon icon="mdi:folder-move" width="18" />
+                Move to Different Tab/Group
+              </button>
+            {:else}
+              <div class="move-controls">
+                <label>Move to:</label>
+                <div class="move-selects">
+                  <select bind:value={selectedMoveTabId} onchange={() => selectedMoveGroupId = ''}>
+                    <option value="">Select Tab...</option>
+                    {#each availableTabs as tab}
+                      <option value={tab.id}>{tab.name} {tab.id === currentTabId ? '(current)' : ''}</option>
+                    {/each}
+                  </select>
+                  {#if selectedMoveTabId}
+                    <select bind:value={selectedMoveGroupId}>
+                      <option value="">Select Group...</option>
+                      {#each moveTargetGroups as group}
+                        <option value={group.id}>
+                          {group.name} {selectedMoveTabId === currentTabId && group.id === currentGroupId ? '(current)' : ''}
+                        </option>
+                      {/each}
+                    </select>
+                  {/if}
+                </div>
+                <div class="move-actions">
+                  <button type="button" class="btn-secondary btn-sm" onclick={() => { showMoveSection = false; selectedMoveTabId = ''; selectedMoveGroupId = ''; }}>
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    class="btn-move btn-sm"
+                    onclick={handleMove}
+                    disabled={!selectedMoveTabId || !selectedMoveGroupId || (selectedMoveTabId === currentTabId && selectedMoveGroupId === currentGroupId)}
+                  >
+                    <Icon icon="mdi:check" width="16" />
+                    Move
+                  </button>
+                </div>
+              </div>
+            {/if}
+          </div>
+        {/if}
       </div>
 
       <div class="modal-actions">
@@ -655,6 +743,102 @@
   @keyframes spin {
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
+  }
+
+  /* Move section styles */
+  .move-section {
+    margin-top: 0.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+  }
+
+  .btn-move-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.75rem 1rem;
+    background: var(--bg-tertiary);
+    border: 1px dashed var(--border);
+    border-radius: 0.375rem;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn-move-toggle:hover {
+    background: var(--bg-secondary);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .move-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 1rem;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: 0.375rem;
+  }
+
+  .move-controls label {
+    font-weight: 500;
+    font-size: 0.875rem;
+    color: var(--text-primary);
+  }
+
+  .move-selects {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .move-selects select {
+    flex: 1;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 0.375rem;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 0.875rem;
+  }
+
+  .move-actions {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: flex-end;
+  }
+
+  .btn-sm {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8rem;
+  }
+
+  .btn-move {
+    background: #10b981;
+    color: white;
+    border: none;
+    border-radius: 0.375rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
+  .btn-move:hover:not(:disabled) {
+    background: #059669;
+  }
+
+  .btn-move:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  @media (max-width: 640px) {
+    .move-selects {
+      flex-direction: column;
+    }
   }
 </style>
 

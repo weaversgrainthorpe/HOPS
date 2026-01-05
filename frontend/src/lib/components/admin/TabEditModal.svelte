@@ -10,22 +10,26 @@
   interface Props {
     tabName: string;
     tabIcon?: string;
+    tabIconUrl?: string;
     tabColor?: string;
     tabOpacity?: number;
     tabBackground?: Background;
     perTabBackgrounds?: boolean; // Whether per-tab backgrounds are enabled at dashboard level
-    onSave: (name: string, icon?: string, color?: string, opacity?: number) => void;
+    onSave: (name: string, icon?: string, iconUrl?: string, color?: string, opacity?: number) => void;
     onSaveBackground?: (background: Background | undefined) => void;
     onCancel: () => void;
     onDelete?: () => void;
+    onDuplicate?: () => void;
   }
 
-  let { tabName, tabIcon, tabColor, tabOpacity, tabBackground, perTabBackgrounds = false, onSave, onSaveBackground, onCancel, onDelete }: Props = $props();
+  let { tabName, tabIcon, tabIconUrl, tabColor, tabOpacity, tabBackground, perTabBackgrounds = false, onSave, onSaveBackground, onCancel, onDelete, onDuplicate }: Props = $props();
   // Form state initialized from props (intentionally captures initial values)
   // svelte-ignore state_referenced_locally
   let name = $state(tabName);
   // svelte-ignore state_referenced_locally
   let icon = $state(tabIcon || '');
+  // svelte-ignore state_referenced_locally
+  let iconUrl = $state(tabIconUrl || '');
   // svelte-ignore state_referenced_locally
   let color = $state(tabColor);
   // svelte-ignore state_referenced_locally
@@ -35,7 +39,7 @@
 
   function handleSave() {
     if (name.trim()) {
-      onSave(name.trim(), icon || undefined, color, opacity);
+      onSave(name.trim(), icon || undefined, iconUrl || undefined, color, opacity);
     }
   }
 
@@ -58,12 +62,14 @@
   }
 
   function handleIconSelect(selection: { icon: string; imageUrl?: string }) {
-    icon = selection.icon;
+    icon = selection.icon || '';
+    iconUrl = selection.imageUrl || '';
     showIconPicker = false;
   }
 
   function clearIcon() {
     icon = '';
+    iconUrl = '';
   }
 </script>
 
@@ -105,15 +111,22 @@
         <label>Icon (optional)</label>
         <div class="icon-input-wrapper">
           <div class="icon-input">
-            <input
-              type="text"
-              bind:value={icon}
-              placeholder="mdi:home"
-            />
-            {#if icon}
-              <div class="icon-preview">
-                <Icon icon={icon} width="24" />
+            {#if iconUrl}
+              <div class="selected-icon-display">
+                <img src={iconUrl} alt="Selected icon" class="icon-image" />
+                <span class="icon-name">Image icon selected</span>
               </div>
+            {:else}
+              <input
+                type="text"
+                bind:value={icon}
+                placeholder="mdi:home"
+              />
+              {#if icon}
+                <div class="icon-preview">
+                  <Icon icon={icon} width="24" />
+                </div>
+              {/if}
             {/if}
           </div>
           <button
@@ -125,7 +138,7 @@
             <Icon icon="mdi:apps" width="18" />
             Browse
           </button>
-          {#if icon}
+          {#if icon || iconUrl}
             <button
               type="button"
               class="clear-btn"
@@ -175,12 +188,20 @@
       {/if}
 
       <div class="modal-actions">
-        {#if tabName && onDelete}
-          <button type="button" class="btn-danger" onclick={onDelete}>
-            <Icon icon="mdi:trash-can" width="20" />
-            Delete
-          </button>
-        {/if}
+        <div class="actions-left">
+          {#if tabName && onDelete}
+            <button type="button" class="btn-danger" onclick={onDelete}>
+              <Icon icon="mdi:trash-can" width="20" />
+              Delete
+            </button>
+          {/if}
+          {#if tabName && onDuplicate}
+            <button type="button" class="btn-duplicate" onclick={onDuplicate}>
+              <Icon icon="mdi:content-copy" width="20" />
+              Duplicate
+            </button>
+          {/if}
+        </div>
         <div class="actions-right">
           <button type="button" class="btn-secondary" onclick={onCancel}>
             Cancel
@@ -207,6 +228,7 @@
 {#if showIconPicker}
   <IconPickerModal
     currentIcon={icon}
+    currentImageUrl={iconUrl}
     onSelect={handleIconSelect}
     onCancel={() => showIconPicker = false}
   />
@@ -300,6 +322,11 @@
     align-items: center;
   }
 
+  .actions-left {
+    display: flex;
+    gap: 0.75rem;
+  }
+
   .actions-right {
     display: flex;
     gap: 0.75rem;
@@ -342,6 +369,15 @@
 
   .btn-danger:hover {
     background: color-mix(in srgb, var(--color-error-dark) 80%, black);
+  }
+
+  .btn-duplicate {
+    background: #10b981;
+    color: white;
+  }
+
+  .btn-duplicate:hover {
+    background: #059669;
   }
 
   .btn-background {
@@ -427,5 +463,27 @@
   .clear-btn:hover {
     background: var(--color-error);
     color: white;
+  }
+
+  .selected-icon-display {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: 0.375rem;
+    flex: 1;
+  }
+
+  .selected-icon-display .icon-image {
+    width: 32px;
+    height: 32px;
+    object-fit: contain;
+  }
+
+  .selected-icon-display .icon-name {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
   }
 </style>

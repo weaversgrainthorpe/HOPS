@@ -1,95 +1,64 @@
 <script lang="ts">
   import Icon from '@iconify/svelte';
   import { onMount, onDestroy } from 'svelte';
-  import { getBackendVersion } from '$lib/utils/api';
+  import { backendStatus } from '$lib/stores/backendStatus';
   import { COLORS } from '$lib/constants/colors';
 
-  type Status = 'checking' | 'online' | 'offline' | 'error';
-
-  let status = $state<Status>('checking');
-  let version = $state<string | null>(null);
-  let responseTime = $state<number | null>(null);
-  let lastCheck = $state<Date | null>(null);
-  let intervalId: ReturnType<typeof setInterval> | undefined;
-
-  async function checkStatus() {
-    const startTime = performance.now();
-
-    try {
-      const result = await getBackendVersion();
-      const endTime = performance.now();
-
-      status = 'online';
-      version = result.version || 'unknown';
-      responseTime = Math.round(endTime - startTime);
-      lastCheck = new Date();
-    } catch (err) {
-      status = 'offline';
-      version = null;
-      responseTime = null;
-      lastCheck = new Date();
-    }
-  }
-
   onMount(() => {
-    checkStatus();
-    // Check every 30 seconds
-    intervalId = setInterval(checkStatus, 30000);
+    backendStatus.startPolling(30000);
   });
 
   onDestroy(() => {
-    if (intervalId) {
-      clearInterval(intervalId);
-    }
+    backendStatus.stopPolling();
   });
 
   const statusIcon = $derived(
-    status === 'checking' ? 'mdi:loading' :
-    status === 'online' ? 'mdi:check-circle' :
-    status === 'offline' ? 'mdi:close-circle' :
+    $backendStatus.status === 'checking' ? 'mdi:loading' :
+    $backendStatus.status === 'online' ? 'mdi:check-circle' :
+    $backendStatus.status === 'offline' ? 'mdi:close-circle' :
     'mdi:alert-circle'
   );
 
   const statusColor = $derived(
-    status === 'checking' ? 'var(--text-secondary)' :
-    status === 'online' ? COLORS.success.alt :
-    status === 'offline' ? COLORS.error.DEFAULT :
+    $backendStatus.status === 'checking' ? 'var(--text-secondary)' :
+    $backendStatus.status === 'online' ? COLORS.success.alt :
+    $backendStatus.status === 'offline' ? COLORS.error.DEFAULT :
     COLORS.warning.DEFAULT
   );
 
   const statusText = $derived(
-    status === 'checking' ? 'Backend: Checking...' :
-    status === 'online' ? 'Backend: Online' :
-    status === 'offline' ? 'Backend: Offline' :
+    $backendStatus.status === 'checking' ? 'Backend: Checking...' :
+    $backendStatus.status === 'online' ? 'Backend: Online' :
+    $backendStatus.status === 'offline' ? 'Backend: Offline' :
     'Backend: Error'
   );
 </script>
 
 <div class="backend-status">
   <div class="status-indicator" style:--status-color={statusColor}>
-    <Icon icon={statusIcon} width="20" class={status === 'checking' ? 'spin' : ''} />
+    <Icon icon={statusIcon} width="20" class={$backendStatus.status === 'checking' ? 'spin' : ''} />
     <span class="status-text">{statusText}</span>
   </div>
 
-  {#if status === 'online'}
+  {#if $backendStatus.status === 'online'}
     <div class="status-details">
-      {#if version}
+      {#if $backendStatus.version}
         <span class="detail">
           <Icon icon="mdi:tag" width="14" />
-          v{version}
+          v{$backendStatus.version}
         </span>
       {/if}
-      {#if responseTime !== null}
+      {#if $backendStatus.responseTime !== null}
         <span class="detail">
           <Icon icon="mdi:clock-fast" width="14" />
-          {responseTime}ms
+          {$backendStatus.responseTime}ms
         </span>
       {/if}
     </div>
-  {:else if status === 'offline'}
+  {:else if $backendStatus.status === 'offline'}
     <div class="status-error">
       <span>Backend unreachable at :8080</span>
-      <button class="retry-btn" onclick={checkStatus}>
+      <button class="retry-btn" onclick={() => backendStatus.check()}>
         <Icon icon="mdi:refresh" width="14" />
         Retry
       </button>

@@ -1,4 +1,4 @@
-# HOPS Deployment Guide (v0.10.0)
+# HOPS Deployment Guide (v0.11.0)
 
 ## Quick Start
 

@@ -10,15 +10,17 @@ import (
 
 	"github.com/jmagar/hops/internal/auth"
 	"github.com/jmagar/hops/internal/config"
+	"github.com/jmagar/hops/internal/database"
 )
 
 // Router holds all dependencies for the API
 type Router struct {
-	db          *sql.DB
-	authService *auth.Service
-	config      *config.Config
-	mux         *http.ServeMux
-	rateLimiter *RateLimiter
+	db            *sql.DB
+	authService   *auth.Service
+	config        *config.Config
+	mux           *http.ServeMux
+	rateLimiter   *RateLimiter
+	backupManager *database.BackupManager
 }
 
 // RateLimiter provides simple rate limiting for login attempts
@@ -71,12 +73,17 @@ func NewRouter(db *sql.DB, authService *auth.Service, cfg *config.Config) http.H
 		rateLimit = 20
 	}
 
+	// Initialize backup manager
+	dbPath := filepath.Join(cfg.DataDir, "hops.db")
+	backupManager := database.NewBackupManager(dbPath)
+
 	r := &Router{
-		db:          db,
-		authService: authService,
-		config:      cfg,
-		mux:         http.NewServeMux(),
-		rateLimiter: NewRateLimiter(rateLimit, time.Minute),
+		db:            db,
+		authService:   authService,
+		config:        cfg,
+		mux:           http.NewServeMux(),
+		rateLimiter:   NewRateLimiter(rateLimit, time.Minute),
+		backupManager: backupManager,
 	}
 
 	r.setupRoutes()
@@ -97,6 +104,10 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/config/update", r.authMiddleware(r.handleUpdateConfig))
 	r.mux.HandleFunc("/api/config/export", r.authMiddleware(r.handleExportConfig))
 	r.mux.HandleFunc("/api/config/import", r.authMiddleware(r.handleImportConfig))
+
+	// Backup management routes
+	r.mux.HandleFunc("/api/backups", r.authMiddleware(r.handleBackups))
+	r.mux.HandleFunc("/api/backups/", r.authMiddleware(r.handleBackupActions))
 
 	// Widget/integration routes
 	r.mux.HandleFunc("/api/integrations/", r.handleIntegrations)

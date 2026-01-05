@@ -7,7 +7,7 @@ import re
 
 # Paths
 ICONS_DIR = "/home/jonathan/data/icons/dashboard-icons"
-DB_PATH = "/home/jonathan/data/hops.db"
+DB_PATH = "/home/jonathan/HOPS/data/hops.db"
 
 # Category mappings based on keywords in icon names
 CATEGORY_KEYWORDS = {
@@ -154,35 +154,46 @@ CATEGORY_KEYWORDS = {
 
     # Hardware & IoT
     "hardware": [
-        "raspberry", "pi", "arduino", "esp", "esphome", "tasmota",
-        "home-assistant", "openhab", "domoticz", "homebridge", "hubitat", "smartthings",
-        "zigbee", "z-wave", "mqtt", "mosquitto", "node-red", "iot",
+        "raspberry", "pi", "arduino", "esp",
         "nvidia", "amd", "intel", "asus", "msi", "gigabyte", "asrock",
         "hp", "dell", "lenovo", "thinkpad", "macbook", "imac",
         "cpu", "gpu", "ram", "ssd", "hdd", "nvme", "usb", "thunderbolt",
         "printer", "scanner", "ups", "apc", "cyberpower", "tripplite",
         "ipmi", "ilo", "idrac", "bmc", "ikvm", "pikvm"
+    ],
+
+    # Automation & Smart Home
+    "automation": [
+        "home-assistant", "homeassistant", "hass", "openhab", "domoticz", "homebridge",
+        "hubitat", "smartthings", "node-red", "nodered", "n8n", "huginn", "activepieces",
+        "zigbee", "z-wave", "mqtt", "mosquitto", "esphome", "tasmota", "iot",
+        "frigate", "scrypted", "wyze", "ring", "nest", "ecobee", "sonoff", "shelly", "tuya",
+        "zigbee2mqtt", "zwave-js", "zwavejs", "deconz", "conbee", "double-take", "compreface"
     ]
 }
 
 # Additional specific app categorizations
 SPECIFIC_APPS = {
     # Specific popular apps that might be miscategorized
-    "home-assistant": "hardware",
-    "homeassistant": "hardware",
-    "hass": "hardware",
-    "frigate": "hardware",
-    "scrypted": "hardware",
-    "wyze": "hardware",
-    "ring": "hardware",
-    "nest": "hardware",
-    "ecobee": "hardware",
-    "sonoff": "hardware",
-    "shelly": "hardware",
-    "tuya": "hardware",
-    "zigbee2mqtt": "hardware",
-    "zwave-js": "hardware",
-    "zwavejs": "hardware",
+    "home-assistant": "automation",
+    "homeassistant": "automation",
+    "hass": "automation",
+    "frigate": "automation",
+    "scrypted": "automation",
+    "wyze": "automation",
+    "ring": "automation",
+    "nest": "automation",
+    "ecobee": "automation",
+    "sonoff": "automation",
+    "shelly": "automation",
+    "tuya": "automation",
+    "zigbee2mqtt": "automation",
+    "zwave-js": "automation",
+    "zwavejs": "automation",
+    "node-red": "automation",
+    "nodered": "automation",
+    "n8n": "automation",
+    "mosquitto": "automation",
 
     # Game servers
     "minecraft": "media",

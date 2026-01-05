@@ -16,18 +16,29 @@ type Dashboard struct {
 type Tab struct {
 	ID         string      `json:"id"`
 	Name       string      `json:"name"`
+	Icon       string      `json:"icon,omitempty"`
+	IconURL    string      `json:"iconUrl,omitempty"`
 	Background *Background `json:"background,omitempty"`
+	Color      string      `json:"color,omitempty"`
+	Opacity    float64     `json:"opacity,omitempty"`
+	TextColor  string      `json:"textColor,omitempty"`
 	Groups     []Group     `json:"groups"`
 	Order      int         `json:"order"`
 }
 
 // Group represents a collapsible group of entries
 type Group struct {
-	ID        string  `json:"id"`
-	Name      string  `json:"name"`
-	Collapsed bool    `json:"collapsed"`
-	Entries   []Entry `json:"entries"`
-	Order     int     `json:"order"`
+	ID           string  `json:"id"`
+	Name         string  `json:"name"`
+	Icon         string  `json:"icon,omitempty"`
+	IconURL      string  `json:"iconUrl,omitempty"`
+	Collapsed    bool    `json:"collapsed"`
+	Color        string  `json:"color,omitempty"`
+	Opacity      float64 `json:"opacity,omitempty"`
+	TextColor    string  `json:"textColor,omitempty"`
+	DisplayStyle string  `json:"displayStyle,omitempty"`
+	Entries      []Entry `json:"entries"`
+	Order        int     `json:"order"`
 }
 
 // Entry represents a tile/link on the dashboard

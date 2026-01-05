@@ -86,17 +86,18 @@
   async function handleExport(dashboard: Dashboard) {
     exportingId = dashboard.id;
     try {
-      const blob = await exportConfig('json');
+      // Export only this specific dashboard
+      const blob = await exportConfig('json', dashboard.id);
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      const dashboardName = dashboard.name.toLowerCase().replace(/\s+/g, '-');
-      a.download = `hops-${dashboardName}-${new Date().toISOString().split('T')[0]}.json`;
+      const safeName = dashboard.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+      a.download = `hops-${safeName}-${new Date().toISOString().split('T')[0]}.json`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-      toast.success(`Exported ${dashboard.name}`);
+      toast.success(`Exported "${dashboard.name}"`);
     } catch (err) {
       toast.error('Export failed');
     } finally {
