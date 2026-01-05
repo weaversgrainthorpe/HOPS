@@ -341,7 +341,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 1000;
+    z-index: var(--z-modal);
     padding: 1rem;
   }
 
@@ -507,7 +507,7 @@
   }
 
   .btn-primary:hover {
-    background: #2563eb;
+    background: var(--accent-hover);
   }
 
   .btn-secondary {
@@ -520,12 +520,12 @@
   }
 
   .btn-danger {
-    background: #dc2626;
+    background: var(--color-error-dark);
     color: white;
   }
 
   .btn-danger:hover {
-    background: #b91c1c;
+    background: color-mix(in srgb, var(--color-error-dark) 80%, black);
   }
 
   @media (max-width: 640px) {
@@ -645,18 +645,7 @@
   }
 
   .error-text {
-    color: #ef4444;
-  }
-
-  .help-text {
-    display: block;
-    margin-top: 0.5rem;
-    padding: 0.75rem;
-    background: var(--bg-tertiary);
-    border-left: 3px solid var(--accent);
-    border-radius: 0.375rem;
-    color: var(--text-secondary);
-    line-height: 1.5;
+    color: var(--color-error);
   }
 
   :global(.spin) {

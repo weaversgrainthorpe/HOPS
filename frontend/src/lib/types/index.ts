@@ -25,6 +25,7 @@ export interface HeaderConfig {
 export interface Tab {
   id: string;
   name: string;
+  icon?: string; // Optional Iconify icon name (e.g., 'mdi:home')
   background?: Background;
   color?: string;
   opacity?: number;
@@ -36,6 +37,7 @@ export interface Tab {
 export interface Group {
   id: string;
   name: string;
+  icon?: string; // Optional Iconify icon name (e.g., 'mdi:folder')
   collapsed: boolean;
   color?: string;
   opacity?: number;
@@ -67,7 +69,7 @@ export interface Background {
   images?: string[];
   interval?: number; // Duration in seconds between slides
   fit?: 'cover' | 'contain' | 'fill'; // How to fit the image
-  transition?: 'crossfade' | 'slide' | 'zoom' | 'fade-black' | 'blur' | 'flip' | 'kenburns' | 'none'; // Transition effect
+  transition?: 'crossfade' | 'slide' | 'slide-up' | 'slide-down' | 'zoom' | 'zoom-out' | 'fade-black' | 'blur' | 'flip' | 'swirl' | 'wipe' | 'curtain' | 'circle' | 'diamond' | 'dissolve' | 'flash' | 'glitch' | 'kenburns' | 'none' | 'random'; // Transition effect
   transitionDuration?: number; // Duration in seconds (0.5 to 5)
 }
 

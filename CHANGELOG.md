@@ -5,6 +5,32 @@ All notable changes to HOPS (Home Operations Portal System) will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2026-01-05
+
+### Changed
+
+#### Code Quality & Consistency
+- Standardized z-index values with CSS custom properties (`--z-navbar`, `--z-modal`, `--z-toast`, etc.)
+- Replaced hardcoded button hover colors with `var(--accent-hover)` across all admin modals
+- Standardized error/danger colors to use CSS variables (`--color-error`, `--color-error-dark`)
+- Added design tokens for border-radius, spacing, shadows, and transitions in `app.css`
+- Created TypeScript constants for design tokens (`designTokens.ts`, `zIndex.ts`)
+
+#### API & Utilities
+- Added background image API functions (`getBackgrounds`, `uploadBackground`, `deleteBackground`, `createBackgroundCategory`)
+- Cleaned up unused utility exports from `utils/index.ts`
+- Removed unused error handling, loading state, and validation utilities
+
+#### Modal System
+- Updated shared Modal component to use CSS z-index variables
+- Standardized modal backdrop and content styling
+
+### Fixed
+- Fixed incorrect exports in `utils/index.ts` (theme and gridKeyboardNav functions)
+- Fixed TypeScript errors from non-existent function exports
+
+---
+
 ## [0.9.0] - 2026-01-04
 
 ### Pre-release
@@ -66,4 +92,5 @@ HOPS is a modern, self-hosted homepage dashboard for organizing and accessing yo
 ### Credits
 Created by Jonathan Brown with Claude (Anthropic)
 
+[0.10.0]: https://github.com/jmagar/hops/releases/tag/v0.10.0
 [0.9.0]: https://github.com/jmagar/hops/releases/tag/v0.9.0

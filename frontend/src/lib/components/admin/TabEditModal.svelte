@@ -3,40 +3,50 @@
   import ColorPicker from './ColorPicker.svelte';
   import OpacitySlider from './OpacitySlider.svelte';
   import BackgroundConfigModal from './BackgroundConfigModal.svelte';
+  import IconPickerModal from './IconPickerModal.svelte';
   import type { Background } from '$lib/types';
   import { focusTrap } from '$lib/utils/focusTrap';
 
   interface Props {
     tabName: string;
+    tabIcon?: string;
     tabColor?: string;
     tabOpacity?: number;
     tabBackground?: Background;
     perTabBackgrounds?: boolean; // Whether per-tab backgrounds are enabled at dashboard level
-    onSave: (name: string, color?: string, opacity?: number) => void;
+    onSave: (name: string, icon?: string, color?: string, opacity?: number) => void;
     onSaveBackground?: (background: Background | undefined) => void;
     onCancel: () => void;
     onDelete?: () => void;
   }
 
-  let { tabName, tabColor, tabOpacity, tabBackground, perTabBackgrounds = false, onSave, onSaveBackground, onCancel, onDelete }: Props = $props();
+  let { tabName, tabIcon, tabColor, tabOpacity, tabBackground, perTabBackgrounds = false, onSave, onSaveBackground, onCancel, onDelete }: Props = $props();
   // Form state initialized from props (intentionally captures initial values)
   // svelte-ignore state_referenced_locally
   let name = $state(tabName);
+  // svelte-ignore state_referenced_locally
+  let icon = $state(tabIcon || '');
   // svelte-ignore state_referenced_locally
   let color = $state(tabColor);
   // svelte-ignore state_referenced_locally
   let opacity = $state(tabOpacity);
   let showBackgroundConfig = $state(false);
+  let showIconPicker = $state(false);
 
   function handleSave() {
     if (name.trim()) {
-      onSave(name.trim(), color, opacity);
+      onSave(name.trim(), icon || undefined, color, opacity);
     }
   }
 
   function handleKeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape' && !showBackgroundConfig) {
-      onCancel();
+    if (e.key === 'Escape') {
+      if (showBackgroundConfig || showIconPicker) {
+        showBackgroundConfig = false;
+        showIconPicker = false;
+      } else {
+        onCancel();
+      }
     }
   }
 
@@ -46,12 +56,21 @@
     }
     showBackgroundConfig = false;
   }
+
+  function handleIconSelect(selection: { icon: string; imageUrl?: string }) {
+    icon = selection.icon;
+    showIconPicker = false;
+  }
+
+  function clearIcon() {
+    icon = '';
+  }
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="modal-backdrop" onclick={onCancel} onkeydown={(e) => e.key === 'Escape' && !showBackgroundConfig && onCancel()}>
+<div class="modal-backdrop" onclick={onCancel} onkeydown={(e) => e.key === 'Escape' && !showBackgroundConfig && !showIconPicker && onCancel()}>
   <div
     class="modal-content"
     onclick={(e) => e.stopPropagation()}
@@ -80,6 +99,43 @@
           placeholder="e.g., Home, Work, Media"
           autofocus
         />
+      </div>
+
+      <div class="form-group">
+        <label>Icon (optional)</label>
+        <div class="icon-input-wrapper">
+          <div class="icon-input">
+            <input
+              type="text"
+              bind:value={icon}
+              placeholder="mdi:home"
+            />
+            {#if icon}
+              <div class="icon-preview">
+                <Icon icon={icon} width="24" />
+              </div>
+            {/if}
+          </div>
+          <button
+            type="button"
+            class="browse-btn"
+            onclick={() => showIconPicker = true}
+            title="Browse icons"
+          >
+            <Icon icon="mdi:apps" width="18" />
+            Browse
+          </button>
+          {#if icon}
+            <button
+              type="button"
+              class="clear-btn"
+              onclick={clearIcon}
+              title="Clear icon"
+            >
+              <Icon icon="mdi:close" width="18" />
+            </button>
+          {/if}
+        </div>
       </div>
 
       <ColorPicker
@@ -147,6 +203,14 @@
   />
 {/if}
 
+{#if showIconPicker}
+  <IconPickerModal
+    currentIcon={icon}
+    onSelect={handleIconSelect}
+    onCancel={() => showIconPicker = false}
+  />
+{/if}
+
 <style>
   .modal-backdrop {
     position: fixed;
@@ -155,7 +219,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 1000;
+    z-index: var(--z-modal);
     padding: 1rem;
   }
 
@@ -258,7 +322,7 @@
   }
 
   .btn-primary:hover {
-    background: #2563eb;
+    background: var(--accent-hover);
   }
 
   .btn-secondary {
@@ -271,12 +335,12 @@
   }
 
   .btn-danger {
-    background: #dc2626;
+    background: var(--color-error-dark);
     color: white;
   }
 
   .btn-danger:hover {
-    background: #b91c1c;
+    background: color-mix(in srgb, var(--color-error-dark) 80%, black);
   }
 
   .btn-background {
@@ -313,5 +377,54 @@
     background: var(--bg-tertiary);
     border-radius: 0.375rem;
     border: 1px dashed var(--border);
+  }
+
+  .icon-input-wrapper {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .icon-input {
+    flex: 1;
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  .icon-input input {
+    width: 100%;
+    padding-right: 2.5rem;
+  }
+
+  .icon-preview {
+    position: absolute;
+    right: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-primary);
+  }
+
+  .browse-btn {
+    padding: 0.5rem 0.75rem;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    font-size: 0.875rem;
+  }
+
+  .browse-btn:hover {
+    background: var(--accent);
+    color: white;
+  }
+
+  .clear-btn {
+    padding: 0.5rem;
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+  }
+
+  .clear-btn:hover {
+    background: var(--color-error);
+    color: white;
   }
 </style>

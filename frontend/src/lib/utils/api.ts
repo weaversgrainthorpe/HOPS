@@ -47,6 +47,10 @@ async function fetchAPI(endpoint: string, options: RequestInit = {}) {
 
 // Public API calls
 
+export async function getBackendVersion(): Promise<{ version: string }> {
+  return fetchAPI('/version');
+}
+
 export async function getConfig(): Promise<Config> {
   return fetchAPI('/config');
 }
@@ -101,10 +105,13 @@ export async function exportConfig(format: 'json' | 'yaml' = 'json'): Promise<Bl
   return response.blob();
 }
 
-export async function importConfig(file: File): Promise<{ success: boolean; message: string }> {
+export async function importConfig(file: File, options?: { autoMatchIcons?: boolean }): Promise<{ success: boolean; message: string }> {
   const token = getSessionToken();
   const formData = new FormData();
   formData.append('file', file);
+  if (options?.autoMatchIcons) {
+    formData.append('autoMatchIcons', 'true');
+  }
 
   const response = await fetch(`${API_BASE}/config/import`, {
     method: 'POST',
@@ -209,5 +216,63 @@ export async function updateIconCategory(id: string, category: Partial<Omit<Icon
 export async function deleteIconCategory(id: string): Promise<void> {
   await fetchAPI(`/icon-categories/${id}`, {
     method: 'DELETE',
+  });
+}
+
+// Background API calls
+
+export interface BackgroundImage {
+  id: string;
+  name: string;
+  url: string;
+  category: string;
+  source: 'preset' | 'uploaded';
+}
+
+export interface BackgroundCategory {
+  id: string;
+  name: string;
+  icon: string;
+}
+
+export interface BackgroundsResponse {
+  categories: BackgroundCategory[];
+  images: BackgroundImage[];
+}
+
+export async function getBackgrounds(): Promise<BackgroundsResponse> {
+  return fetchAPI('/backgrounds');
+}
+
+export async function uploadBackground(file: File, category: string): Promise<BackgroundImage> {
+  const token = getSessionToken();
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('category', category);
+
+  const response = await fetch(`${API_BASE}/backgrounds`, {
+    method: 'POST',
+    headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText || `Upload failed: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+export async function deleteBackground(id: string): Promise<void> {
+  await fetchAPI(`/backgrounds/${id}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function createBackgroundCategory(category: BackgroundCategory): Promise<void> {
+  await fetchAPI('/backgrounds/categories', {
+    method: 'POST',
+    body: JSON.stringify(category),
   });
 }

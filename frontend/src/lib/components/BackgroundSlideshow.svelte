@@ -9,7 +9,7 @@
   let { background }: Props = $props();
 
   let currentIndex = $state(0);
-  let intervalId: number | undefined;
+  let intervalId: ReturnType<typeof setInterval> | undefined;
 
   // Dual-layer system for smooth transitions
   let layer1Visible = $state(true);
@@ -20,9 +20,26 @@
   let layer1KenBurnsVariant = $state(0);
   let layer2KenBurnsVariant = $state(1);
 
+  // Available transitions for random selection (excluding 'random' and 'none')
+  const availableTransitions = [
+    'crossfade', 'slide', 'slide-up', 'slide-down', 'zoom', 'zoom-out',
+    'fade-black', 'blur', 'flip', 'kenburns', 'wipe', 'swirl',
+    'dissolve', 'flash', 'glitch', 'curtain', 'circle', 'diamond'
+  ];
+
+  // Current random transition (changes each slide)
+  let currentRandomTransition = $state(availableTransitions[Math.floor(Math.random() * availableTransitions.length)]);
+
   // Get transition settings with defaults
-  let transitionEffect = $derived(background?.transition || 'crossfade');
+  let configuredTransition = $derived(background?.transition || 'crossfade');
+  let transitionEffect = $derived(configuredTransition === 'random' ? currentRandomTransition : configuredTransition);
   let transitionDuration = $derived(background?.transitionDuration || 1.5);
+
+  // Function to pick a new random transition
+  function pickRandomTransition() {
+    const newTransition = availableTransitions[Math.floor(Math.random() * availableTransitions.length)];
+    currentRandomTransition = newTransition;
+  }
 
   // Compute current image URL
   let currentImageUrl = $derived(
@@ -73,6 +90,11 @@
       layer1Visible = true;
 
       intervalId = setInterval(() => {
+        // Pick a new random transition if configured
+        if (configuredTransition === 'random') {
+          pickRandomTransition();
+        }
+
         // Move to next image
         currentIndex = (currentIndex + 1) % background.images!.length;
         const nextImage = background.images![currentIndex];
@@ -90,7 +112,7 @@
 
         // Swap visibility to trigger crossfade
         layer1Visible = !layer1Visible;
-      }, interval) as any;
+      }, interval);
     }
 
     // Cleanup on unmount or when background changes
@@ -322,6 +344,167 @@
 
   .background-layer.transition-none.visible {
     opacity: 1;
+  }
+
+  /* Wipe transition - horizontal wipe reveal */
+  .background-layer.transition-wipe {
+    transition: opacity 0.01s ease-in-out;
+    clip-path: inset(0 100% 0 0);
+  }
+
+  .background-layer.transition-wipe.visible {
+    opacity: 1;
+    animation: wipe var(--transition-duration, 1.5s) ease-in-out forwards;
+  }
+
+  @keyframes wipe {
+    0% { clip-path: inset(0 100% 0 0); }
+    100% { clip-path: inset(0 0 0 0); }
+  }
+
+  /* Swirl/Rotate transition */
+  .background-layer.transition-swirl {
+    transition: opacity var(--transition-duration, 1.5s) ease-in-out,
+                transform var(--transition-duration, 1.5s) ease-in-out;
+    transform: scale(0.8) rotate(-10deg);
+    transform-origin: center center;
+  }
+
+  .background-layer.transition-swirl.visible {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+
+  /* Pixelate/Dissolve transition (simulated with blur and scale) */
+  .background-layer.transition-dissolve {
+    transition: opacity var(--transition-duration, 1.5s) ease-in-out,
+                filter var(--transition-duration, 1.5s) ease-in-out;
+    filter: grayscale(1) contrast(2) blur(5px);
+  }
+
+  .background-layer.transition-dissolve.visible {
+    opacity: 1;
+    filter: grayscale(0) contrast(1) blur(0px);
+  }
+
+  /* Slide up transition */
+  .background-layer.transition-slide-up {
+    transition: opacity var(--transition-duration, 1.5s) ease-in-out,
+                transform var(--transition-duration, 1.5s) ease-in-out;
+    transform: translateY(100%);
+  }
+
+  .background-layer.transition-slide-up.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* Slide down transition */
+  .background-layer.transition-slide-down {
+    transition: opacity var(--transition-duration, 1.5s) ease-in-out,
+                transform var(--transition-duration, 1.5s) ease-in-out;
+    transform: translateY(-100%);
+  }
+
+  .background-layer.transition-slide-down.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* Zoom out transition (opposite of zoom) */
+  .background-layer.transition-zoom-out {
+    transition: opacity var(--transition-duration, 1.5s) ease-in-out,
+                transform var(--transition-duration, 1.5s) ease-in-out;
+    transform: scale(0.5);
+  }
+
+  .background-layer.transition-zoom-out.visible {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  /* Flash/Blink transition */
+  .background-layer.transition-flash {
+    transition: none;
+  }
+
+  .background-layer.transition-flash.visible {
+    animation: flash var(--transition-duration, 1.5s) ease-in-out forwards;
+  }
+
+  @keyframes flash {
+    0% { opacity: 0; filter: brightness(1); }
+    30% { opacity: 1; filter: brightness(3); }
+    60% { opacity: 1; filter: brightness(2); }
+    100% { opacity: 1; filter: brightness(1); }
+  }
+
+  /* Glitch transition */
+  .background-layer.transition-glitch {
+    transition: none;
+  }
+
+  .background-layer.transition-glitch.visible {
+    animation: glitch var(--transition-duration, 1.5s) ease-in-out forwards;
+  }
+
+  @keyframes glitch {
+    0% { opacity: 0; transform: translate(0); filter: hue-rotate(0deg); }
+    10% { opacity: 1; transform: translate(-5px, 2px); filter: hue-rotate(90deg); }
+    20% { opacity: 1; transform: translate(3px, -3px); filter: hue-rotate(180deg); }
+    30% { opacity: 1; transform: translate(-2px, 1px); filter: hue-rotate(270deg); }
+    40% { opacity: 1; transform: translate(4px, -1px); filter: hue-rotate(360deg); }
+    50% { opacity: 1; transform: translate(-1px, 2px); filter: hue-rotate(0deg); }
+    60% { opacity: 1; transform: translate(0); filter: hue-rotate(0deg); }
+    100% { opacity: 1; transform: translate(0); filter: hue-rotate(0deg); }
+  }
+
+  /* Curtain transition (vertical wipe from center) */
+  .background-layer.transition-curtain {
+    transition: opacity 0.01s ease-in-out;
+    clip-path: inset(0 50% 0 50%);
+  }
+
+  .background-layer.transition-curtain.visible {
+    opacity: 1;
+    animation: curtain var(--transition-duration, 1.5s) ease-in-out forwards;
+  }
+
+  @keyframes curtain {
+    0% { clip-path: inset(0 50% 0 50%); }
+    100% { clip-path: inset(0 0 0 0); }
+  }
+
+  /* Circle reveal transition */
+  .background-layer.transition-circle {
+    transition: opacity 0.01s ease-in-out;
+    clip-path: circle(0% at 50% 50%);
+  }
+
+  .background-layer.transition-circle.visible {
+    opacity: 1;
+    animation: circle-reveal var(--transition-duration, 1.5s) ease-in-out forwards;
+  }
+
+  @keyframes circle-reveal {
+    0% { clip-path: circle(0% at 50% 50%); }
+    100% { clip-path: circle(100% at 50% 50%); }
+  }
+
+  /* Diamond reveal transition */
+  .background-layer.transition-diamond {
+    transition: opacity 0.01s ease-in-out;
+    clip-path: polygon(50% 50%, 50% 50%, 50% 50%, 50% 50%);
+  }
+
+  .background-layer.transition-diamond.visible {
+    opacity: 1;
+    animation: diamond-reveal var(--transition-duration, 1.5s) ease-in-out forwards;
+  }
+
+  @keyframes diamond-reveal {
+    0% { clip-path: polygon(50% 50%, 50% 50%, 50% 50%, 50% 50%); }
+    100% { clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%); }
   }
 
   /* Layer 2 sits on top for transitions */

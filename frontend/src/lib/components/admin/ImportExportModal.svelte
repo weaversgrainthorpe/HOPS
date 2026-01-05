@@ -197,7 +197,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 9999;
+    z-index: var(--z-modal);
     padding: 1rem;
   }
 
@@ -335,15 +335,15 @@
   }
 
   .alert-error {
-    background: rgba(220, 38, 38, 0.1);
-    color: #dc2626;
-    border: 1px solid rgba(220, 38, 38, 0.2);
+    background: color-mix(in srgb, var(--color-error-dark) 10%, transparent);
+    color: var(--color-error-dark);
+    border: 1px solid color-mix(in srgb, var(--color-error-dark) 20%, transparent);
   }
 
   .alert-success {
-    background: rgba(16, 185, 129, 0.1);
-    color: #10b981;
-    border: 1px solid rgba(16, 185, 129, 0.2);
+    background: color-mix(in srgb, var(--color-success) 10%, transparent);
+    color: var(--color-success);
+    border: 1px solid color-mix(in srgb, var(--color-success) 20%, transparent);
   }
 
   .info-box {

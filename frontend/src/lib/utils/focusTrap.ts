@@ -1,6 +1,10 @@
-// Focus trap utility for modals and dialogs
-// Ensures keyboard focus stays within the modal when open
+/**
+ * Focus trap utility for modals and dialogs
+ * Ensures keyboard focus stays within the modal when open
+ * @module focusTrap
+ */
 
+/** CSS selectors for focusable elements */
 const FOCUSABLE_SELECTORS = [
   'button:not([disabled])',
   'input:not([disabled])',
@@ -10,7 +14,32 @@ const FOCUSABLE_SELECTORS = [
   '[tabindex]:not([tabindex="-1"])'
 ].join(', ');
 
-export function createFocusTrap(container: HTMLElement) {
+/**
+ * Focus trap controller interface
+ */
+export interface FocusTrapController {
+  /** Activates the focus trap */
+  activate: () => void;
+  /** Deactivates the focus trap and restores previous focus */
+  deactivate: () => void;
+}
+
+/**
+ * Creates a focus trap for a container element.
+ * The trap keeps keyboard focus within the container when using Tab/Shift+Tab.
+ *
+ * @param container - The HTML element to trap focus within
+ * @returns A controller object with activate and deactivate methods
+ *
+ * @example
+ * ```ts
+ * const trap = createFocusTrap(modalElement);
+ * trap.activate(); // Start trapping focus
+ * // ... later
+ * trap.deactivate(); // Stop trapping and restore previous focus
+ * ```
+ */
+export function createFocusTrap(container: HTMLElement): FocusTrapController {
   let previouslyFocused: HTMLElement | null = null;
 
   function getFocusableElements(): HTMLElement[] {
@@ -79,8 +108,21 @@ export function createFocusTrap(container: HTMLElement) {
   };
 }
 
-// Svelte action for focus trapping
-export function focusTrap(node: HTMLElement) {
+/**
+ * Svelte action for focus trapping.
+ * Automatically activates on mount and deactivates on destroy.
+ *
+ * @param node - The HTML element to apply the focus trap to
+ * @returns Svelte action return object with destroy method
+ *
+ * @example
+ * ```svelte
+ * <div class="modal" use:focusTrap>
+ *   <!-- Modal content -->
+ * </div>
+ * ```
+ */
+export function focusTrap(node: HTMLElement): { destroy: () => void } {
   const trap = createFocusTrap(node);
   trap.activate();
 

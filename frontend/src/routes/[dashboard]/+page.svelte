@@ -43,7 +43,7 @@
   }
 
   .error {
-    color: #ef4444;
+    color: var(--color-error);
   }
 
   .not-found a {

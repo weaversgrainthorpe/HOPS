@@ -1,4 +1,4 @@
-# HOPS Frontend (v0.9.0)
+# HOPS Frontend (v0.10.0)
 
 The frontend for HOPS (Home Operations Portal System) - built with SvelteKit 2, TypeScript, and Svelte 5.
 

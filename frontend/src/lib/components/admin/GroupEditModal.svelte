@@ -2,39 +2,57 @@
   import Icon from '@iconify/svelte';
   import ColorPicker from './ColorPicker.svelte';
   import OpacitySlider from './OpacitySlider.svelte';
+  import IconPickerModal from './IconPickerModal.svelte';
   import { focusTrap } from '$lib/utils/focusTrap';
 
   interface Props {
     groupName: string;
+    groupIcon?: string;
     groupColor?: string;
     groupOpacity?: number;
     groupTextColor?: 'auto' | 'light' | 'dark';
-    onSave: (name: string, color?: string, opacity?: number, textColor?: 'auto' | 'light' | 'dark') => void;
+    onSave: (name: string, icon?: string, color?: string, opacity?: number, textColor?: 'auto' | 'light' | 'dark') => void;
     onCancel: () => void;
     onDelete?: () => void;
   }
 
-  let { groupName, groupColor, groupOpacity, groupTextColor, onSave, onCancel, onDelete }: Props = $props();
+  let { groupName, groupIcon, groupColor, groupOpacity, groupTextColor, onSave, onCancel, onDelete }: Props = $props();
   // Form state initialized from props (intentionally captures initial values)
   // svelte-ignore state_referenced_locally
   let name = $state(groupName);
+  // svelte-ignore state_referenced_locally
+  let icon = $state(groupIcon || '');
   // svelte-ignore state_referenced_locally
   let color = $state(groupColor);
   // svelte-ignore state_referenced_locally
   let opacity = $state(groupOpacity);
   // svelte-ignore state_referenced_locally
   let textColor = $state<'auto' | 'light' | 'dark'>(groupTextColor || 'auto');
+  let showIconPicker = $state(false);
 
   function handleSave() {
     if (name.trim()) {
-      onSave(name.trim(), color, opacity, textColor);
+      onSave(name.trim(), icon || undefined, color, opacity, textColor);
     }
   }
 
   function handleKeydown(e: KeyboardEvent) {
     if (e.key === 'Escape') {
-      onCancel();
+      if (showIconPicker) {
+        showIconPicker = false;
+      } else {
+        onCancel();
+      }
     }
+  }
+
+  function handleIconSelect(selection: { icon: string; imageUrl?: string }) {
+    icon = selection.icon;
+    showIconPicker = false;
+  }
+
+  function clearIcon() {
+    icon = '';
   }
 </script>
 
@@ -70,6 +88,43 @@
           placeholder="e.g., Services, Media, Tools"
           autofocus
         />
+      </div>
+
+      <div class="form-group">
+        <label>Icon (optional)</label>
+        <div class="icon-input-wrapper">
+          <div class="icon-input">
+            <input
+              type="text"
+              bind:value={icon}
+              placeholder="mdi:folder"
+            />
+            {#if icon}
+              <div class="icon-preview">
+                <Icon icon={icon} width="24" />
+              </div>
+            {/if}
+          </div>
+          <button
+            type="button"
+            class="browse-btn"
+            onclick={() => showIconPicker = true}
+            title="Browse icons"
+          >
+            <Icon icon="mdi:apps" width="18" />
+            Browse
+          </button>
+          {#if icon}
+            <button
+              type="button"
+              class="clear-btn"
+              onclick={clearIcon}
+              title="Clear icon"
+            >
+              <Icon icon="mdi:close" width="18" />
+            </button>
+          {/if}
+        </div>
       </div>
 
       <ColorPicker
@@ -137,6 +192,14 @@
   </div>
 </div>
 
+{#if showIconPicker}
+  <IconPickerModal
+    currentIcon={icon}
+    onSelect={handleIconSelect}
+    onCancel={() => showIconPicker = false}
+  />
+{/if}
+
 <style>
   .modal-backdrop {
     position: fixed;
@@ -145,7 +208,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 1000;
+    z-index: var(--z-modal);
     padding: 1rem;
   }
 
@@ -248,7 +311,7 @@
   }
 
   .btn-primary:hover {
-    background: #2563eb;
+    background: var(--accent-hover);
   }
 
   .btn-secondary {
@@ -261,12 +324,12 @@
   }
 
   .btn-danger {
-    background: #dc2626;
+    background: var(--color-error-dark);
     color: white;
   }
 
   .btn-danger:hover {
-    background: #b91c1c;
+    background: color-mix(in srgb, var(--color-error-dark) 80%, black);
   }
 
   .text-color-options {
@@ -301,6 +364,55 @@
   .text-color-btn.active {
     background: var(--accent);
     border-color: var(--accent);
+    color: white;
+  }
+
+  .icon-input-wrapper {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .icon-input {
+    flex: 1;
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  .icon-input input {
+    width: 100%;
+    padding-right: 2.5rem;
+  }
+
+  .icon-preview {
+    position: absolute;
+    right: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-primary);
+  }
+
+  .browse-btn {
+    padding: 0.5rem 0.75rem;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    font-size: 0.875rem;
+  }
+
+  .browse-btn:hover {
+    background: var(--accent);
+    color: white;
+  }
+
+  .clear-btn {
+    padding: 0.5rem;
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+  }
+
+  .clear-btn:hover {
+    background: var(--color-error);
     color: white;
   }
 </style>

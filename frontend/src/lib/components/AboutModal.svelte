@@ -100,7 +100,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 1000;
+    z-index: var(--z-modal);
     padding: 1rem;
   }
 
@@ -282,6 +282,6 @@
   }
 
   .credits :global(.heart) {
-    color: #ef4444;
+    color: var(--color-error);
   }
 </style>
