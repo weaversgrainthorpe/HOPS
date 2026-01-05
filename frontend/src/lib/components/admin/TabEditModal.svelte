@@ -136,6 +136,7 @@
             </button>
           {/if}
         </div>
+        <small>Browse presets or find icons at <a href="https://icon-sets.iconify.design/" target="_blank" rel="noopener">iconify.design</a></small>
       </div>
 
       <ColorPicker
