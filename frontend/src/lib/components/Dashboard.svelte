@@ -663,7 +663,7 @@
               {#if tab.iconUrl}
                 <img src={tab.iconUrl} alt="" class="tab-icon-img" />
               {:else if tab.icon}
-                <Icon icon={tab.icon} width="20" />
+                <Icon icon={tab.icon} width="24" />
               {/if}
               <span class="tab-name">{tab.name}</span>
             </div>
@@ -961,8 +961,8 @@
   }
 
   .tab-icon-img {
-    width: 20px;
-    height: 20px;
+    width: 24px;
+    height: 24px;
     object-fit: contain;
   }
 
