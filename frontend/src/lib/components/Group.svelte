@@ -212,7 +212,7 @@
         {#if group.iconUrl}
           <img src={group.iconUrl} alt="" class="group-icon-img" />
         {:else if group.icon}
-          <Icon icon={group.icon} width="20" />
+          <Icon icon={group.icon} width="24" />
         {/if}
         <h3>{group.name}</h3>
       </div>
@@ -427,8 +427,8 @@
   }
 
   .group-icon-img {
-    width: 20px;
-    height: 20px;
+    width: 24px;
+    height: 24px;
     object-fit: contain;
   }
 
