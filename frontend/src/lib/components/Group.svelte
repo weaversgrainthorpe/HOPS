@@ -387,7 +387,7 @@
 
   /* Folder style - compact tab look */
   .group.folder-style .group-header-container {
-    margin-bottom: 0;
+    margin-bottom: 0 !important;
   }
 
   .group.folder-style .group-header {
@@ -396,6 +396,9 @@
     padding: 0.5rem 1rem;
     border-radius: 0.5rem 0.5rem 0 0;
     border-bottom: none;
+    margin-bottom: -1px;
+    position: relative;
+    z-index: 1;
   }
 
   .group.folder-style .group-header h3 {
@@ -407,12 +410,14 @@
     border-radius: 0 0.5rem 0.5rem 0.5rem;
     padding: 1rem;
     background: rgba(var(--bg-secondary-rgb, 30, 41, 59), 0.5);
+    margin-top: 0 !important;
   }
 
   .group.folder-style .group-controls {
     position: static;
     transform: none;
     margin-left: 0.5rem;
+    opacity: 1;
   }
 
   .group-title {
