@@ -396,9 +396,9 @@
     padding: 0.5rem 1rem;
     border-radius: 0.5rem 0.5rem 0 0;
     border-bottom: none;
-    margin-bottom: -1px;
+    margin-bottom: 0;
     position: relative;
-    z-index: 1;
+    z-index: 2;
   }
 
   .group.folder-style .group-header h3 {
@@ -410,7 +410,9 @@
     border-radius: 0 0.5rem 0.5rem 0.5rem;
     padding: 1rem;
     background: rgba(var(--bg-secondary-rgb, 30, 41, 59), 0.5);
-    margin-top: 0 !important;
+    margin-top: -1px !important;
+    position: relative;
+    z-index: 1;
   }
 
   .group.folder-style .group-controls {

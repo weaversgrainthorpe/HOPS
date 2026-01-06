@@ -918,7 +918,8 @@
 
   .tab.active {
     color: var(--text-primary);
-    border-color: var(--border);
+    border-color: var(--accent);
+    border-width: 2px;
     border-bottom-color: transparent;
     z-index: 1;
   }
@@ -931,11 +932,12 @@
   .tab.active::after {
     content: '';
     position: absolute;
-    bottom: -1px;
+    top: -2px;
     left: 0;
     right: 0;
-    height: 2px;
-    background: var(--bg-primary);
+    height: 3px;
+    background: var(--accent);
+    border-radius: 0.25rem 0.25rem 0 0;
   }
 
   .tab.custom-color {
@@ -949,11 +951,13 @@
 
   .tab.custom-color.active {
     filter: brightness(1.2);
+    border-color: white;
+    border-width: 2px;
     border-bottom-color: transparent;
   }
 
   .tab.custom-color.active::after {
-    background: currentColor;
+    background: white;
   }
 
   .tab-name {
