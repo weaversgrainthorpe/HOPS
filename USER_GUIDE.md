@@ -261,7 +261,7 @@ Child levels inherit parent colors/opacity unless overridden.
    - **Slideshow**: Multiple rotating images
 
 For slideshows:
-- Add multiple images from the **64 curated backgrounds** (8 categories: Network, Servers, Docker, Homelab, Smart Home, Tech, Space, Minimal)
+- Add multiple images from the **64 curated backgrounds across 12 categories (Network, Servers, Docker, Homelab, Smart Home, Apps, Multimedia, Weather, Storage, Tech, Space, Minimal)
 - OR add custom image URLs
 - Set rotation interval (seconds) - default is 30s
 - Choose fit mode (Cover, Contain, Fill)
@@ -364,7 +364,7 @@ Import is done from the Admin page:
 3. **Opacity Layering**: Reduce tile opacity slightly to let background show through
 4. **Icon Variety**: Use the Icon Picker to browse 1,900+ curated homelab icons, or search from 150,000+ Iconify icons
 5. **Text Readability**: Use Auto text color mode on group headers for optimal contrast on any background color
-6. **Background Library**: Explore the 64 curated backgrounds across 8 categories for quick setup
+6. **Background Library**: Explore the 64 curated backgrounds across 12 categories for quick setup
 
 ## Troubleshooting
 
