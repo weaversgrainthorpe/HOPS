@@ -6,8 +6,11 @@
   import OpacitySlider from './OpacitySlider.svelte';
   import IconPickerModal from './IconPickerModal.svelte';
   import { confirm } from '$lib/stores/confirmModal';
+  import { toast } from '$lib/stores/toast';
   import { focusTrap } from '$lib/utils/focusTrap';
   import { getSessionToken } from '$lib/stores/auth';
+  import { editMode } from '$lib/stores/editMode';
+  import { createIcon } from '$lib/utils/api';
 
   interface TabInfo {
     id: string;
@@ -62,6 +65,13 @@
     iconSearch = entry.icon || '';
   });
 
+  // Close modal when edit mode is turned off
+  $effect(() => {
+    if (!$editMode) {
+      onCancel();
+    }
+  });
+
   function handleSave() {
     onSave(editedEntry);
   }
@@ -108,13 +118,13 @@
     // Validate file type
     const validTypes = ['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/svg+xml'];
     if (!validTypes.includes(file.type)) {
-      uploadError = 'Invalid file type. Allowed: PNG, JPEG, GIF, WebP, SVG';
+      uploadError = 'Invalid file type. Use PNG, JPG, GIF, WebP, or SVG.';
       return;
     }
 
     // Validate file size (5MB max)
     if (file.size > 5 * 1024 * 1024) {
-      uploadError = 'File too large. Maximum size is 5MB';
+      uploadError = 'File too large. Maximum size is 5MB.';
       return;
     }
 
@@ -145,6 +155,25 @@
       // Clear the iconify icon since we're using a custom image
       editedEntry.icon = '';
       iconSearch = '';
+
+      // Also create an icon record so it appears in "My Uploads"
+      // Use file name (without extension) as the icon name
+      const fileName = file.name.replace(/\.[^/.]+$/, '');
+      const iconName = fileName.charAt(0).toUpperCase() + fileName.slice(1).replace(/[-_]/g, ' ');
+
+      try {
+        await createIcon({
+          id: result.id,
+          name: iconName,
+          icon: '', // No iconify icon, we're using imageUrl
+          categoryId: 'containers', // Category doesn't matter - My Uploads filters by imageUrl presence
+          imageUrl: result.url
+        });
+        toast.success(`Icon saved to "My Uploads"`);
+      } catch {
+        // Non-critical error - icon still works on the tile, just won't appear in My Uploads
+        console.warn('Could not save icon to database');
+      }
     } catch (err) {
       uploadError = err instanceof Error ? err.message : 'Upload failed';
     } finally {
@@ -185,7 +214,7 @@
     use:focusTrap
   >
     <div class="modal-header">
-      <h2 id="entry-edit-title">Edit Tile</h2>
+      <h2 id="entry-edit-title">{entry.id ? 'Edit Tile' : 'New Tile'}</h2>
       <button class="close-btn" onclick={onCancel}>
         <Icon icon="mdi:close" width="24" />
       </button>
@@ -260,7 +289,7 @@
               type="button"
               class="browse-btn"
               onclick={() => showIconPicker = true}
-              title="Browse icon presets"
+              title="Browse icon library"
               disabled={isUploadingIcon}
             >
               <Icon icon="mdi:apps" width="20" />
@@ -293,7 +322,7 @@
             <small class="error-text">{uploadError}</small>
           {/if}
 
-          <small>Browse presets, find icons at <a href="https://icon-sets.iconify.design/" target="_blank" rel="noopener">iconify.design</a>, or upload your own (PNG, SVG, etc.)</small>
+          <small>Browse the icon library, enter an icon name from <a href="https://icon-sets.iconify.design/" target="_blank" rel="noopener">iconify.design</a>, or upload your own</small>
         </div>
 
         <div class="form-group">
@@ -413,7 +442,7 @@
           </button>
           <button type="submit" class="btn-primary">
             <Icon icon="mdi:content-save" width="20" />
-            Save
+            {entry.id ? 'Save' : 'Create'}
           </button>
         </div>
       </div>

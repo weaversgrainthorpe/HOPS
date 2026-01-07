@@ -8,9 +8,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jmagar/hops/internal/auth"
-	"github.com/jmagar/hops/internal/config"
-	"github.com/jmagar/hops/internal/database"
+	"github.com/weaversgrainthorpe/HOPS/internal/auth"
+	"github.com/weaversgrainthorpe/HOPS/internal/config"
+	"github.com/weaversgrainthorpe/HOPS/internal/database"
 )
 
 // Router holds all dependencies for the API
@@ -109,8 +109,8 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/backups", r.authMiddleware(r.handleBackups))
 	r.mux.HandleFunc("/api/backups/", r.authMiddleware(r.handleBackupActions))
 
-	// Widget/integration routes
-	r.mux.HandleFunc("/api/integrations/", r.handleIntegrations)
+	// Widget/integration routes (reserved for future use)
+	// r.mux.HandleFunc("/api/integrations/", r.handleIntegrations)
 
 	// Icon management routes
 	r.mux.HandleFunc("/api/icon-categories", r.handleGetIconCategories)

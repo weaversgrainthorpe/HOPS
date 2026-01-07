@@ -6,9 +6,10 @@
 
   interface Props {
     onClose: () => void;
+    onImportSuccess?: () => void;
   }
 
-  let { onClose }: Props = $props();
+  let { onClose, onImportSuccess }: Props = $props();
   let importing = $state(false);
   let error = $state<string | null>(null);
   let success = $state<string | null>(null);
@@ -43,9 +44,10 @@
       success = result.message || 'Configuration imported successfully!';
       toast.success('Configuration imported');
 
-      // Reload page after successful import
+      // Close and notify parent after successful import
       setTimeout(() => {
-        window.location.reload();
+        onClose();
+        onImportSuccess?.();
       }, 1500);
     } catch (err) {
       error = err instanceof Error ? err.message : 'Failed to import configuration';

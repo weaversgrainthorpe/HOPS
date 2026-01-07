@@ -1,4 +1,4 @@
-module github.com/jmagar/hops
+module github.com/weaversgrainthorpe/HOPS
 
 go 1.24.0
 

@@ -88,7 +88,7 @@ func runMigrations(db *sql.DB) error {
 			last_checked DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
 
-		// Secrets table for secret dashboard URLs
+		// Secrets table for secret dashboard URLs (reserved for future use)
 		`CREATE TABLE IF NOT EXISTS secrets (
 			id TEXT PRIMARY KEY,
 			dashboard_id TEXT NOT NULL,

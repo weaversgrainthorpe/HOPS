@@ -201,30 +201,3 @@ func (c *Checker) checkEntry(entry Entry) {
 	}
 }
 
-// CheckSingle performs an immediate check on a single entry
-func (c *Checker) CheckSingle(entryID string, url string) StatusResult {
-	entry := Entry{ID: entryID, URL: url}
-	c.checkEntry(entry)
-
-	// Fetch the result
-	var result StatusResult
-	var responseTime sql.NullInt64
-
-	err := c.db.QueryRow(`
-		SELECT entry_id, status, response_time, last_checked
-		FROM status_cache WHERE entry_id = ?
-	`, entryID).Scan(&result.EntryID, &result.Status, &responseTime, &result.LastChecked)
-
-	if err != nil {
-		return StatusResult{
-			EntryID: entryID,
-			Status:  "unknown",
-		}
-	}
-
-	if responseTime.Valid {
-		result.ResponseTime = responseTime.Int64
-	}
-
-	return result
-}

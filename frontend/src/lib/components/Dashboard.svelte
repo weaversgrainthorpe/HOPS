@@ -155,7 +155,7 @@
     }
   }
 
-  async function handleAddGroup(tabId: string, groupName: string) {
+  async function handleAddGroup(tabId: string, groupName: string, icon?: string, iconUrl?: string, color?: string, opacity?: number, textColor?: 'auto' | 'light' | 'dark', displayStyle?: 'header' | 'folder') {
     if (!requireAuth()) return;
     // Find and add the group to the dashboard structure
     const updatedDashboard = { ...dashboard };
@@ -163,9 +163,15 @@
     if (tab) {
       // Generate a unique ID for the new group
       const newId = `group-${Date.now()}-${Math.random().toString(36).substring(7)}`;
-      const newGroup = {
+      const newGroup: Group = {
         id: newId,
         name: groupName,
+        icon,
+        iconUrl,
+        color,
+        opacity,
+        textColor,
+        displayStyle,
         collapsed: false,
         entries: [],
         order: tab.groups.length
@@ -195,8 +201,8 @@
   }
 
   function makeAddGroupHandler(tabId: string) {
-    return (groupName: string) => {
-      handleAddGroup(tabId, groupName);
+    return (groupName: string, icon?: string, iconUrl?: string, color?: string, opacity?: number, textColor?: 'auto' | 'light' | 'dark', displayStyle?: 'header' | 'folder') => {
+      handleAddGroup(tabId, groupName, icon, iconUrl, color, opacity, textColor, displayStyle);
     };
   }
 
@@ -325,8 +331,10 @@
     const tab = updatedDashboard.tabs.find(t => t.id === tabId);
     if (!tab) return;
 
-    const sourceGroup = tab.groups.find(g => g.id === groupId);
-    if (!sourceGroup) return;
+    const sourceGroupIndex = tab.groups.findIndex(g => g.id === groupId);
+    if (sourceGroupIndex === -1) return;
+
+    const sourceGroup = tab.groups[sourceGroupIndex];
 
     // Deep clone the group with new IDs
     const newGroupId = `group-${Date.now()}-${Math.random().toString(36).substring(7)}`;
@@ -334,14 +342,20 @@
       ...sourceGroup,
       id: newGroupId,
       name: `${sourceGroup.name} (Copy)`,
-      order: tab.groups.length,
+      order: sourceGroupIndex + 1,
       entries: sourceGroup.entries.map(entry => ({
         ...entry,
         id: `entry-${Date.now()}-${Math.random().toString(36).substring(7)}`
       }))
     };
 
-    tab.groups.push(newGroup);
+    // Insert right after the source group
+    tab.groups.splice(sourceGroupIndex + 1, 0, newGroup);
+
+    // Update order values for all subsequent groups
+    for (let i = sourceGroupIndex + 2; i < tab.groups.length; i++) {
+      tab.groups[i].order = i;
+    }
     await updateDashboard(updatedDashboard);
   }
 
@@ -802,10 +816,9 @@
   }
 
   .dashboard-header {
-    padding: 1rem 2rem;
+    padding: 1rem 2rem 0;
     background: rgba(15, 23, 42, 0.8);
     backdrop-filter: blur(10px);
-    border-bottom: 1px solid var(--border);
   }
 
   .header-actions {
@@ -863,7 +876,8 @@
     display: flex;
     gap: 0.25rem;
     flex-wrap: wrap;
-    margin-bottom: -1px;
+    position: relative;
+    z-index: 1;
   }
 
   .tab-container {
@@ -920,8 +934,9 @@
     color: var(--text-primary);
     border-color: var(--accent);
     border-width: 2px;
-    border-bottom-color: transparent;
-    z-index: 1;
+    border-bottom: 2px solid var(--bg-primary);
+    margin-bottom: -1px;
+    z-index: 2;
   }
 
   .tab.active::before {
@@ -953,7 +968,8 @@
     filter: brightness(1.2);
     border-color: white;
     border-width: 2px;
-    border-bottom-color: transparent;
+    border-bottom: 2px solid var(--bg-primary);
+    margin-bottom: -1px;
   }
 
   .tab.custom-color.active::after {

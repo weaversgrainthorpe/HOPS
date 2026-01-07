@@ -21,12 +21,47 @@
 
   let { currentIcon, currentImageUrl, onSelect, onCancel }: Props = $props();
 
-  let selectedCategory = $state('containers');
+  let selectedCategory = $state('my-uploads');
   let searchQuery = $state('');
   let categories = $state<IconCategory[]>([]);
   let icons = $state<IconType[]>([]);
   let loading = $state(true);
   let error = $state<string | null>(null);
+
+  // Special virtual categories
+  const SPECIAL_CATEGORIES = {
+    'my-uploads': { id: 'my-uploads', name: 'My Uploads', icon: 'mdi:cloud-upload', isPreset: true },
+    'recently-used': { id: 'recently-used', name: 'Recently Used', icon: 'mdi:history', isPreset: true }
+  };
+
+  // Recently used icons (stored in localStorage)
+  let recentlyUsedIds = $state<string[]>([]);
+
+  // Load recently used from localStorage
+  function loadRecentlyUsed(): string[] {
+    try {
+      const stored = localStorage.getItem('hops-recently-used-icons');
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  // Save recently used to localStorage
+  function saveRecentlyUsed(ids: string[]) {
+    try {
+      localStorage.setItem('hops-recently-used-icons', JSON.stringify(ids.slice(0, 20)));
+    } catch {
+      // Ignore localStorage errors
+    }
+  }
+
+  // Add icon to recently used
+  function addToRecentlyUsed(iconId: string) {
+    const updated = [iconId, ...recentlyUsedIds.filter(id => id !== iconId)].slice(0, 20);
+    recentlyUsedIds = updated;
+    saveRecentlyUsed(updated);
+  }
 
   // Add icon/category forms
   let showAddIcon = $state(false);
@@ -41,9 +76,10 @@
   let newCategoryName = $state('');
   let newCategoryIcon = $state('');
   let saving = $state(false);
-  let fileInput: HTMLInputElement;
+  let fileInput = $state<HTMLInputElement | null>(null);
 
   onMount(async () => {
+    recentlyUsedIds = loadRecentlyUsed();
     await loadData();
   });
 
@@ -59,17 +95,37 @@
     }
   }
 
-  const categoryIcons = $derived(
-    icons.filter(icon => icon.categoryId === selectedCategory)
+  // Get uploaded icons (icons with imageUrl that are not presets)
+  const uploadedIcons = $derived(
+    icons.filter(icon => icon.imageUrl && !icon.isPreset)
   );
+
+  // Get recently used icons
+  const recentIcons = $derived(
+    recentlyUsedIds
+      .map(id => icons.find(icon => icon.id === id))
+      .filter((icon): icon is IconType => icon !== undefined)
+  );
+
+  // Get icons for current category (handles special and regular categories)
+  const categoryIcons = $derived(() => {
+    if (selectedCategory === 'my-uploads') {
+      return uploadedIcons;
+    }
+    if (selectedCategory === 'recently-used') {
+      return recentIcons;
+    }
+    return icons.filter(icon => icon.categoryId === selectedCategory);
+  });
 
   const filteredIcons = $derived(
     searchQuery.trim()
       ? icons.filter(icon =>
           icon.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          icon.id.toLowerCase().includes(searchQuery.toLowerCase())
+          icon.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          (icon.imageUrl && icon.imageUrl.toLowerCase().includes(searchQuery.toLowerCase()))
         )
-      : categoryIcons
+      : categoryIcons()
   );
 
   // Helper to get category name from ID
@@ -90,6 +146,9 @@
   }
 
   function handleSelectIcon(iconData: IconType) {
+    // Add to recently used
+    addToRecentlyUsed(iconData.id);
+
     onSelect({
       icon: iconData.icon,
       imageUrl: iconData.imageUrl
@@ -118,7 +177,7 @@
       uploadingIcon = true;
       const result = await uploadIconImage(file);
       newIconImageUrl = result.url;
-      toast.success('Image uploaded!');
+      toast.success('Image uploaded');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Upload failed');
     } finally {
@@ -161,7 +220,7 @@
       newIconImageUrl = '';
       newIconUseUpload = false;
       showAddIcon = false;
-      toast.success('Icon added!');
+      toast.success('Icon added');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to add icon');
     } finally {
@@ -288,6 +347,33 @@
         <!-- Category Tabs (hidden when searching) -->
         {#if !searchQuery.trim()}
           <div class="category-tabs">
+            <!-- Special Categories First -->
+            <button
+              class="category-tab special-tab"
+              class:active={selectedCategory === 'my-uploads'}
+              onclick={() => selectedCategory = 'my-uploads'}
+            >
+              <Icon icon={SPECIAL_CATEGORIES['my-uploads'].icon} width="20" />
+              <span>{SPECIAL_CATEGORIES['my-uploads'].name}</span>
+              {#if uploadedIcons.length > 0}
+                <span class="badge">{uploadedIcons.length}</span>
+              {/if}
+            </button>
+            <button
+              class="category-tab special-tab"
+              class:active={selectedCategory === 'recently-used'}
+              onclick={() => selectedCategory = 'recently-used'}
+            >
+              <Icon icon={SPECIAL_CATEGORIES['recently-used'].icon} width="20" />
+              <span>{SPECIAL_CATEGORIES['recently-used'].name}</span>
+              {#if recentIcons.length > 0}
+                <span class="badge">{recentIcons.length}</span>
+              {/if}
+            </button>
+
+            <div class="category-divider"></div>
+
+            <!-- Regular Categories -->
             {#each categories as category}
               <button
                 class="category-tab"
@@ -297,13 +383,16 @@
                 <Icon icon={category.icon} width="20" />
                 <span>{category.name}</span>
                 {#if !category.isPreset}
-                  <button
+                  <span
                     class="delete-category-btn"
+                    role="button"
+                    tabindex="0"
                     onclick={(e) => { e.stopPropagation(); handleDeleteCategory(category.id, category.isPreset); }}
+                    onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); e.preventDefault(); handleDeleteCategory(category.id, category.isPreset); } }}
                     title="Delete category"
                   >
                     <Icon icon="mdi:close" width="14" />
-                  </button>
+                  </span>
                 {/if}
               </button>
             {/each}
@@ -353,8 +442,8 @@
           </div>
         {/if}
 
-        <!-- Add Icon Button -->
-        {#if !searchQuery.trim() && !showAddCategory}
+        <!-- Add Icon Button (only for regular categories, not special ones) -->
+        {#if !searchQuery.trim() && !showAddCategory && selectedCategory !== 'my-uploads' && selectedCategory !== 'recently-used'}
           <div class="toolbar">
             <button class="btn-add-icon" onclick={() => showAddIcon = !showAddIcon}>
               <Icon icon="mdi:plus" width="18" />
@@ -440,7 +529,7 @@
                 />
               </div>
               <small class="help-text-inline">
-                Find icons at <a href="https://icon-sets.iconify.design/" target="_blank" rel="noopener">iconify.design</a>
+                Enter an icon name from <a href="https://icon-sets.iconify.design/" target="_blank" rel="noopener">iconify.design</a>
               </small>
             {/if}
 
@@ -467,13 +556,16 @@
               title={searchQuery.trim() ? `${iconData.name} (${getCategoryName(iconData.categoryId)})` : iconData.name}
             >
               {#if !iconData.isPreset}
-                <button
+                <span
                   class="delete-icon-btn"
+                  role="button"
+                  tabindex="0"
                   onclick={(e) => { e.stopPropagation(); handleDeleteIcon(iconData.id, iconData.isPreset); }}
+                  onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); e.preventDefault(); handleDeleteIcon(iconData.id, iconData.isPreset); } }}
                   title="Delete icon"
                 >
                   <Icon icon="mdi:close" width="12" />
-                </button>
+                </span>
               {/if}
               <div class="icon-preview">
                 {#if iconData.imageUrl}
@@ -489,7 +581,19 @@
 
         {#if filteredIcons.length === 0}
           <div class="empty-message">
-            No icons found matching "{searchQuery}"
+            {#if searchQuery.trim()}
+              No icons found matching "{searchQuery}"
+            {:else if selectedCategory === 'my-uploads'}
+              <Icon icon="mdi:cloud-upload-outline" width="48" />
+              <p class="empty-title">No uploaded icons yet</p>
+              <p class="empty-hint">Upload custom icons when adding entries. They'll appear here for easy reuse!</p>
+            {:else if selectedCategory === 'recently-used'}
+              <Icon icon="mdi:history" width="48" />
+              <p class="empty-title">No recently used icons</p>
+              <p class="empty-hint">Icons you select will appear here for quick access.</p>
+            {:else}
+              No icons in this category
+            {/if}
           </div>
         {/if}
       {/if}
@@ -701,6 +805,23 @@
     padding: 3rem;
     color: var(--text-secondary);
     font-size: 0.875rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .empty-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0.5rem 0 0 0;
+  }
+
+  .empty-hint {
+    margin: 0;
+    max-width: 300px;
+    line-height: 1.4;
   }
 
   .loading-message,
@@ -761,6 +882,39 @@
     background: var(--accent);
     border-color: var(--accent);
     color: white;
+  }
+
+  .special-tab {
+    background: color-mix(in srgb, var(--accent) 10%, var(--bg-tertiary));
+    border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
+  }
+
+  .special-tab:hover {
+    background: color-mix(in srgb, var(--accent) 20%, var(--bg-primary));
+  }
+
+  .badge {
+    background: var(--accent);
+    color: white;
+    font-size: 0.7rem;
+    padding: 0.125rem 0.375rem;
+    border-radius: 9999px;
+    font-weight: 600;
+    min-width: 1.25rem;
+    text-align: center;
+  }
+
+  .category-tab.active .badge {
+    background: white;
+    color: var(--accent);
+  }
+
+  .category-divider {
+    width: 1px;
+    height: 24px;
+    background: var(--border);
+    margin: 0 0.25rem;
+    align-self: center;
   }
 
   .delete-category-btn {

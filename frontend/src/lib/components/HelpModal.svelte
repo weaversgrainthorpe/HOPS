@@ -223,8 +223,8 @@
             <div class="feature">
               <Icon icon="mdi:apps" width="24" />
               <div>
-                <strong>6000+ Icons</strong>
-                <p>Choose from Material Design Icons, Simple Icons, and more.</p>
+                <strong>150,000+ Icons</strong>
+                <p>Choose from Material Design Icons, Simple Icons, and more via Iconify.</p>
               </div>
             </div>
           </div>
@@ -246,6 +246,13 @@
               <div>
                 <strong>Themes</strong>
                 <p>Switch between dark, light, and auto themes.</p>
+              </div>
+            </div>
+            <div class="feature">
+              <Icon icon="mdi:format-size" width="24" />
+              <div>
+                <strong>Text Size</strong>
+                <p>Adjust text size with navbar controls (persists in browser).</p>
               </div>
             </div>
           </div>

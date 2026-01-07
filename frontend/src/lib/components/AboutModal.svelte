@@ -33,7 +33,8 @@
 
 <svelte:window onkeydown={handleKeydown} />
 
-<div class="modal-overlay" onclick={onClose} role="dialog" aria-modal="true" aria-labelledby="about-title">
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div class="modal-overlay" onclick={onClose} onkeydown={(e) => e.key === 'Escape' && onClose()} role="dialog" aria-modal="true" aria-labelledby="about-title" tabindex="-1">
   <div class="modal-content" onclick={(e) => e.stopPropagation()} use:focusTrap>
     <button class="close-btn" onclick={onClose} aria-label="Close">
       <Icon icon="mdi:close" width="24" />
@@ -70,15 +71,16 @@
         <li><Icon icon="mdi:heart-pulse" width="18" /> Status monitoring</li>
         <li><Icon icon="mdi:upload" width="18" /> Custom icons</li>
         <li><Icon icon="mdi:import" width="18" /> Homer/Dashy import</li>
+        <li><Icon icon="mdi:format-size" width="18" /> Text size controls</li>
       </ul>
     </div>
 
     <div class="links">
-      <a href="https://github.com/jmagar/hops" target="_blank" rel="noopener noreferrer" class="link-btn">
+      <a href="https://github.com/weaversgrainthorpe/HOPS" target="_blank" rel="noopener noreferrer" class="link-btn">
         <Icon icon="mdi:github" width="20" />
         GitHub
       </a>
-      <a href="https://github.com/jmagar/hops/issues" target="_blank" rel="noopener noreferrer" class="link-btn">
+      <a href="https://github.com/weaversgrainthorpe/HOPS/issues" target="_blank" rel="noopener noreferrer" class="link-btn">
         <Icon icon="mdi:bug" width="20" />
         Report Issue
       </a>

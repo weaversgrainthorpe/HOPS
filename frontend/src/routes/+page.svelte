@@ -6,9 +6,9 @@
   import BackendStatus from '$lib/components/BackendStatus.svelte';
   import Icon from '@iconify/svelte';
 
-  let username = 'admin';
-  let password = '';
-  let error = '';
+  let username = $state('admin');
+  let password = $state('');
+  let error = $state('');
   let showChangePassword = $state(false);
 
   async function handleLogin(e: Event) {
@@ -170,8 +170,8 @@
 
   .error-message {
     padding: 0.75rem;
-    background: #fee2e2;
-    color: #991b1b;
+    background: color-mix(in srgb, var(--color-error) 15%, transparent);
+    color: var(--color-error);
     border-radius: 0.375rem;
     font-size: 0.875rem;
   }

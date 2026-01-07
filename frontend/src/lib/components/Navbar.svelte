@@ -4,6 +4,7 @@
   import { isAuthenticated } from '$lib/stores/auth';
   import { theme, toggleTheme } from '$lib/stores/theme';
   import { editMode, toggleEditMode } from '$lib/stores/editMode';
+  import { textSize, increaseTextSize, decreaseTextSize, canIncrease, canDecrease, textSizeConfigs } from '$lib/stores/textSize';
   import { triggerHopAnimation } from '$lib/stores/easterEggs';
   import Icon from '@iconify/svelte';
   import ThemePickerModal from './admin/ThemePickerModal.svelte';
@@ -102,6 +103,27 @@
     </div>
 
     <div class="nav-right">
+      <div class="text-size-controls" title="Text Size: {textSizeConfigs[$textSize].label}">
+        <button
+          onclick={decreaseTextSize}
+          class="text-size-btn"
+          disabled={!canDecrease($textSize)}
+          title="Decrease text size"
+        >
+          <span class="text-size-icon small">A</span>
+          <Icon icon="mdi:arrow-down" width="10" height="10" class="text-size-arrow" />
+        </button>
+        <button
+          onclick={increaseTextSize}
+          class="text-size-btn"
+          disabled={!canIncrease($textSize)}
+          title="Increase text size"
+        >
+          <span class="text-size-icon large">A</span>
+          <Icon icon="mdi:arrow-up" width="10" height="10" class="text-size-arrow" />
+        </button>
+      </div>
+
       <button onclick={() => showThemePicker = true} class="theme-toggle" title="Theme Settings">
         <span class="icon-wrapper">
           <Icon icon={themeIcon} width="32" height="32" />
@@ -335,12 +357,70 @@
     border: 2px solid var(--bg-secondary);
   }
 
+  .text-size-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    background: var(--bg-tertiary);
+    border-radius: 1.5rem;
+    padding: 0.25rem;
+  }
+
+  .text-size-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--text-secondary);
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+  }
+
+  .text-size-btn:hover:not(:disabled) {
+    background: var(--accent);
+    color: white;
+  }
+
+  .text-size-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+
+  .text-size-icon {
+    font-weight: 700;
+    font-family: serif;
+    line-height: 1;
+  }
+
+  .text-size-icon.large {
+    font-size: 16px;
+  }
+
+  .text-size-icon.small {
+    font-size: 12px;
+  }
+
+  .text-size-btn :global(.text-size-arrow) {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+  }
+
   @media (max-width: 768px) {
     .nav-links {
       display: none;
     }
 
     .logo span {
+      display: none;
+    }
+
+    .text-size-controls {
       display: none;
     }
   }

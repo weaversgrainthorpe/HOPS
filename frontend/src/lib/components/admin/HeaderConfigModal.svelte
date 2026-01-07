@@ -107,7 +107,7 @@
         <Icon icon="mdi:information" width="20" />
         <div>
           <strong>Right Section (Fixed)</strong>
-          <p>Theme toggle, edit mode, and admin link always visible</p>
+          <p>Text size controls, theme toggle, edit mode, help, about, and admin link always visible</p>
         </div>
       </div>
 

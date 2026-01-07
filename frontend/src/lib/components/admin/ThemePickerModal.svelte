@@ -259,6 +259,7 @@
           role="radiogroup"
           aria-labelledby="mode-label"
           onkeydown={handleModeKeydown}
+          tabindex="-1"
         >
           {#each modes as mode, index}
             <button
@@ -289,6 +290,7 @@
           role="radiogroup"
           aria-labelledby="preset-label"
           onkeydown={handlePresetKeydown}
+          tabindex="-1"
         >
           {#each themePresets as preset}
             <button
