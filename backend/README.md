@@ -418,10 +418,6 @@ server {
 }
 ```
 
-### Docker
-
-Coming soon - Dockerfile and docker-compose.yml
-
 ## Logging
 
 Current logging includes:
