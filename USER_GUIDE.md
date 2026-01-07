@@ -163,7 +163,7 @@ Edit Mode allows you to modify your dashboards. To enter Edit Mode:
    - **URL**: Target URL
    - **Icon**: Choose from 150,000+ icons via Iconify
      - Type an icon name directly (e.g., `mdi:docker`, `simple-icons:plex`)
-     - OR click "Browse" to open the **Icon Picker** with 128+ curated homelab icons
+     - OR click "Browse" to open the **Icon Picker** with 1,900+ curated homelab icons
      - Search by name or browse by category (Containers, Media, Monitoring, etc.)
    - **Description**: Optional subtitle
    - **Size**: Small, Medium, or Large
@@ -362,7 +362,7 @@ Import is done from the Admin page:
 1. **Theme Consistency**: Set colors at the Group or Tab level for consistent look
 2. **Slideshow Backgrounds**: Use slow rotation (60-120s) for subtle ambiance with smooth crossfade transitions
 3. **Opacity Layering**: Reduce tile opacity slightly to let background show through
-4. **Icon Variety**: Use the Icon Picker to browse 128+ curated homelab icons, or search from 150,000+ Iconify icons
+4. **Icon Variety**: Use the Icon Picker to browse 1,900+ curated homelab icons, or search from 150,000+ Iconify icons
 5. **Text Readability**: Use Auto text color mode on group headers for optimal contrast on any background color
 6. **Background Library**: Explore the 64 curated backgrounds across 8 categories for quick setup
 

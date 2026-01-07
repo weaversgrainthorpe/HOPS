@@ -134,7 +134,7 @@ API base URL is configured in `src/lib/utils/api.ts`.
 
 - **Tab Reordering**: Drag tabs to reorder them (edit mode)
 - **Tile Reordering**: Drag tiles within groups (edit mode)
-- **Group Reordering**: Coming soon
+- **Group Reordering: Drag groups by their header to reorder
 
 ### 3. Theme System
 

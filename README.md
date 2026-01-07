@@ -42,9 +42,10 @@ Already using Homer, Dashy, or Heimdall? HOPS can import your existing configura
 
 ### Visual Customization
 - Per-dashboard and per-tab backgrounds
-- Background slideshow with 8 transition effects:
-  - Crossfade, Slide, Zoom, Fade to Black
-  - Blur, Flip, Ken Burns (cinematic pan/zoom), Instant
+- Background slideshow with 18 transition effects:
+  - Crossfade, Slide (up/down/left/right), Zoom (in/out)
+  - Fade to Black, Blur, Flip, Ken Burns (cinematic pan/zoom)
+  - Swirl, Wipe, Circle, Curtain, Diamond, Dissolve, Flash, Glitch, Random
 - Customizable transition duration and slide intervals
 - Upload custom background images
 - Curated preset backgrounds by category
