@@ -9,12 +9,12 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/jmagar/hops/internal/api"
-	"github.com/jmagar/hops/internal/auth"
-	"github.com/jmagar/hops/internal/config"
-	"github.com/jmagar/hops/internal/database"
-	"github.com/jmagar/hops/internal/status"
-	"github.com/jmagar/hops/internal/version"
+	"github.com/weaversgrainthorpe/HOPS/internal/api"
+	"github.com/weaversgrainthorpe/HOPS/internal/auth"
+	"github.com/weaversgrainthorpe/HOPS/internal/config"
+	"github.com/weaversgrainthorpe/HOPS/internal/database"
+	"github.com/weaversgrainthorpe/HOPS/internal/status"
+	"github.com/weaversgrainthorpe/HOPS/internal/version"
 )
 
 func main() {

@@ -193,6 +193,7 @@
   }
 </script>
 
+<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
 <div class="group" class:edit-mode={$editMode} class:folder-style={group.displayStyle === 'folder'} onclick={() => onFocus?.()}>
   <div class="group-header-container">
     <div
@@ -325,10 +326,6 @@
 {/if}
 
 <style>
-  .group {
-    /* margin handled by parent grid gap */
-  }
-
   .group-header-container {
     position: relative;
     margin-bottom: 1rem;

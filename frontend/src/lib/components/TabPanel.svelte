@@ -28,7 +28,7 @@
     onUpdateEntry?: (groupId: string, entryId: string, updatedEntry: Entry) => void;
     onDeleteEntry?: (groupId: string, entryId: string) => void;
     onAddEntry?: (groupId: string, newEntry: Entry) => void;
-    onAddGroup?: (groupName: string) => void;
+    onAddGroup?: (groupName: string, icon?: string, iconUrl?: string, color?: string, opacity?: number, textColor?: 'auto' | 'light' | 'dark', displayStyle?: 'header' | 'folder') => void;
     onReorderEntries?: (groupId: string, reorderedEntries: Entry[]) => void;
     onMoveEntry?: (fromGroupId: string, toGroupId: string, entryId: string, newIndex: number) => void;
     onMoveEntryToTab?: (sourceGroupId: string, entryId: string, targetTabId: string, targetGroupId: string) => void;
@@ -111,9 +111,9 @@
     showAddGroupModal = true;
   }
 
-  function handleSaveGroup(groupName: string) {
+  function handleSaveGroup(groupName: string, icon?: string, iconUrl?: string, color?: string, opacity?: number, textColor?: 'auto' | 'light' | 'dark', displayStyle?: 'header' | 'folder') {
     if (onAddGroup) {
-      onAddGroup(groupName);
+      onAddGroup(groupName, icon, iconUrl, color, opacity, textColor, displayStyle);
     }
     showAddGroupModal = false;
   }
@@ -275,6 +275,7 @@
     background: rgba(15, 23, 42, 0.7);
     backdrop-filter: blur(10px);
     min-height: 400px;
+    border-top: 1px solid var(--border);
   }
 
   /* Simple vertical list layout */

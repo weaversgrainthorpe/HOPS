@@ -2,7 +2,7 @@
   import type { Background } from '$lib/types';
   import Icon from '@iconify/svelte';
   import { BACKGROUND_PRESETS, BACKGROUND_CATEGORIES, type BackgroundImage, type BackgroundCategory } from '$lib/constants/backgrounds';
-  import { getSessionToken } from '$lib/utils/api';
+  import { getBackgrounds, uploadBackground, deleteBackground, createBackgroundCategory } from '$lib/utils/api';
   import { confirm } from '$lib/stores/confirmModal';
   import { focusTrap } from '$lib/utils/focusTrap';
 
@@ -55,6 +55,9 @@
   let previewIntervalId: ReturnType<typeof setInterval> | undefined;
   let previewLayer1KenBurns = $state(0);
   let previewLayer2KenBurns = $state(1);
+  // For curtain effect - track the previous image for the splitting overlay
+  let curtainPreviousImage = $state('');
+  let curtainAnimating = $state(false);
 
   // Unified image data
   let categories = $state<BackgroundCategory[]>([]);
@@ -62,7 +65,7 @@
   let isLoading = $state(true);
   let isUploading = $state(false);
   let uploadError = $state('');
-  let fileInput: HTMLInputElement;
+  let fileInput = $state<HTMLInputElement | null>(null);
 
   // Hover preview state
   let hoverPreviewUrl = $state<string | null>(null);
@@ -81,28 +84,22 @@
   async function loadBackgroundData() {
     isLoading = true;
     try {
-      const response = await fetch('/api/backgrounds');
-      if (response.ok) {
-        const data = await response.json();
-        categories = data.categories || BACKGROUND_CATEGORIES;
+      const data = await getBackgrounds();
+      categories = data.categories || BACKGROUND_CATEGORIES;
 
-        // Merge server images with presets
-        const serverImages: BackgroundImage[] = data.images || [];
-        const serverUrls = new Set(serverImages.map((img: BackgroundImage) => img.url));
+      // Merge server images with presets
+      const serverImages: BackgroundImage[] = data.images || [];
+      const serverUrls = new Set(serverImages.map((img: BackgroundImage) => img.url));
 
-        // Add presets that aren't already in server data
-        const presetsToAdd = BACKGROUND_PRESETS
-          .filter(p => !serverUrls.has(p.url))
-          .map(p => ({ ...p, source: 'preset' as const }));
+      // Add presets that aren't already in server data
+      const presetsToAdd = BACKGROUND_PRESETS
+        .filter(p => !serverUrls.has(p.url))
+        .map(p => ({ ...p, source: 'preset' as const }));
 
-        allImages = [...serverImages, ...presetsToAdd];
-      } else {
-        // Fallback to local presets
-        categories = BACKGROUND_CATEGORIES;
-        allImages = BACKGROUND_PRESETS.map(p => ({ ...p, source: 'preset' as const }));
-      }
+      allImages = [...serverImages, ...presetsToAdd];
     } catch (error) {
       console.error('Failed to load backgrounds:', error);
+      // Fallback to local presets
       categories = BACKGROUND_CATEGORIES;
       allImages = BACKGROUND_PRESETS.map(p => ({ ...p, source: 'preset' as const }));
     }
@@ -141,43 +138,27 @@
         continue;
       }
 
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('category', selectedCategory === 'all' ? 'uploaded' : selectedCategory);
-
       try {
-        const token = getSessionToken();
-        const response = await fetch('/api/backgrounds', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`
-          },
-          body: formData
-        });
+        const category = selectedCategory === 'all' ? 'uploaded' : selectedCategory;
+        const result = await uploadBackground(file, category);
 
-        if (response.ok) {
-          const result = await response.json();
-          // Add to local state immediately
-          const newImage: BackgroundImage = {
-            id: result.id,
-            name: result.name,
-            url: result.url,
-            category: result.category,
-            source: 'uploaded'
-          };
-          allImages = [...allImages, newImage];
+        // Add to local state immediately
+        const newImage: BackgroundImage = {
+          id: result.id,
+          name: result.name,
+          url: result.url,
+          category: result.category,
+          source: 'uploaded'
+        };
+        allImages = [...allImages, newImage];
 
-          // Auto-add to selection
-          if (backgroundType === 'slideshow') {
-            if (!slideshowImages.includes(result.url)) {
-              slideshowImages = [...slideshowImages, result.url];
-            }
-          } else if (backgroundType === 'image') {
-            singleImageUrl = result.url;
+        // Auto-add to selection
+        if (backgroundType === 'slideshow') {
+          if (!slideshowImages.includes(result.url)) {
+            slideshowImages = [...slideshowImages, result.url];
           }
-        } else {
-          const error = await response.text();
-          uploadError = error || 'Upload failed';
+        } else if (backgroundType === 'image') {
+          singleImageUrl = result.url;
         }
       } catch (error) {
         uploadError = 'Upload failed: ' + (error as Error).message;
@@ -204,34 +185,20 @@
     if (!confirmed) return;
 
     try {
-      const token = getSessionToken();
-      if (!token) {
-        uploadError = 'Session expired. Please log in again at /admin';
-        return;
-      }
-      const response = await fetch(`/api/backgrounds/${image.id}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (response.ok) {
-        allImages = allImages.filter(img => img.id !== image.id);
-        slideshowImages = slideshowImages.filter(url => url !== image.url);
-        if (singleImageUrl === image.url) {
-          singleImageUrl = '';
-        }
-      } else if (response.status === 401) {
-        uploadError = 'Session expired. Please log in again at /admin';
-      } else {
-        const errorText = await response.text();
-        console.error('Failed to delete image:', response.status, errorText);
-        uploadError = `Failed to delete: ${errorText}`;
+      await deleteBackground(image.id);
+      allImages = allImages.filter(img => img.id !== image.id);
+      slideshowImages = slideshowImages.filter(url => url !== image.url);
+      if (singleImageUrl === image.url) {
+        singleImageUrl = '';
       }
     } catch (error) {
       console.error('Failed to delete image:', error);
-      uploadError = 'Failed to delete image';
+      const message = (error as Error).message;
+      if (message.includes('401')) {
+        uploadError = 'Session expired. Please log in again at /admin';
+      } else {
+        uploadError = `Failed to delete: ${message}`;
+      }
     }
   }
 
@@ -271,37 +238,19 @@
     const categoryId = newCategoryName.trim().toLowerCase().replace(/\s+/g, '-');
 
     try {
-      const token = getSessionToken();
-      const response = await fetch('/api/backgrounds/categories', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          id: categoryId,
-          name: newCategoryName.trim(),
-          icon: newCategoryIcon
-        })
-      });
-
-      if (response.ok) {
-        const newCategory: BackgroundCategory = {
-          id: categoryId,
-          name: newCategoryName.trim(),
-          icon: newCategoryIcon
-        };
-        categories = [...categories, newCategory];
-        newCategoryName = '';
-        newCategoryIcon = 'mdi:folder-image';
-        showNewCategoryInput = false;
-        selectedCategory = categoryId;
-      } else {
-        const errorText = await response.text();
-        uploadError = `Failed to create category: ${errorText}`;
-      }
+      const newCategory: BackgroundCategory = {
+        id: categoryId,
+        name: newCategoryName.trim(),
+        icon: newCategoryIcon
+      };
+      await createBackgroundCategory(newCategory);
+      categories = [...categories, newCategory];
+      newCategoryName = '';
+      newCategoryIcon = 'mdi:folder-image';
+      showNewCategoryInput = false;
+      selectedCategory = categoryId;
     } catch (error) {
-      uploadError = 'Failed to create category';
+      uploadError = `Failed to create category: ${(error as Error).message}`;
     }
   }
 
@@ -384,9 +333,13 @@
       previewIndex = 0;
       previewLayer1Image = slideshowImages[0];
       previewLayer1Visible = true;
+      curtainPreviousImage = slideshowImages[0];
 
       const previewInterval = 5000;
       previewIntervalId = setInterval(() => {
+        // For curtain effect, capture the current image before switching
+        const currentImage = previewLayer1Visible ? previewLayer1Image : previewLayer2Image;
+
         previewIndex = (previewIndex + 1) % slideshowImages.length;
         const nextImage = slideshowImages[previewIndex];
 
@@ -396,6 +349,16 @@
         } else {
           previewLayer1Image = nextImage;
           previewLayer1KenBurns = (previewLayer1KenBurns + 2) % 4;
+        }
+
+        // Trigger curtain animation if curtain effect is selected
+        if (transitionEffect === 'curtain') {
+          curtainPreviousImage = currentImage;
+          curtainAnimating = true;
+          // Reset animation state after transition completes
+          setTimeout(() => {
+            curtainAnimating = false;
+          }, transitionDuration * 1000);
         }
 
         previewLayer1Visible = !previewLayer1Visible;
@@ -630,6 +593,51 @@
           </div>
         </div>
 
+        <!-- Transition Preview - positioned right after effect selection -->
+        {#if slideshowImages.length > 1}
+          <div class="transition-preview">
+            <label><Icon icon="mdi:eye" width="16" /> Transition Preview ({transitionEffect})</label>
+            <div class="preview-container">
+              <div
+                class="preview-layer layer-1 transition-{transitionEffect}"
+                class:visible={previewLayer1Visible}
+                class:kenburns-0={transitionEffect === 'kenburns' && previewLayer1KenBurns === 0}
+                class:kenburns-1={transitionEffect === 'kenburns' && previewLayer1KenBurns === 1}
+                class:kenburns-2={transitionEffect === 'kenburns' && previewLayer1KenBurns === 2}
+                class:kenburns-3={transitionEffect === 'kenburns' && previewLayer1KenBurns === 3}
+                style:background-image={previewLayer1Image ? `url(${previewLayer1Image})` : 'none'}
+                style:--transition-duration="{transitionDuration}s"
+              ></div>
+              <div
+                class="preview-layer layer-2 transition-{transitionEffect}"
+                class:visible={!previewLayer1Visible}
+                class:kenburns-0={transitionEffect === 'kenburns' && previewLayer2KenBurns === 0}
+                class:kenburns-1={transitionEffect === 'kenburns' && previewLayer2KenBurns === 1}
+                class:kenburns-2={transitionEffect === 'kenburns' && previewLayer2KenBurns === 2}
+                class:kenburns-3={transitionEffect === 'kenburns' && previewLayer2KenBurns === 3}
+                style:background-image={previewLayer2Image ? `url(${previewLayer2Image})` : 'none'}
+                style:--transition-duration="{transitionDuration}s"
+              ></div>
+              <!-- Curtain overlay: shows the previous image splitting apart -->
+              {#if transitionEffect === 'curtain' && curtainAnimating}
+                <div
+                  class="curtain-overlay"
+                  style:--transition-duration="{transitionDuration}s"
+                >
+                  <div
+                    class="curtain-half curtain-left"
+                    style:background-image={curtainPreviousImage ? `url(${curtainPreviousImage})` : 'none'}
+                  ></div>
+                  <div
+                    class="curtain-half curtain-right"
+                    style:background-image={curtainPreviousImage ? `url(${curtainPreviousImage})` : 'none'}
+                  ></div>
+                </div>
+              {/if}
+            </div>
+          </div>
+        {/if}
+
         <div class="form-group">
           <label>Selected Images ({slideshowImages.length})</label>
           {#if slideshowImages.length > 0}
@@ -644,34 +652,6 @@
                 </div>
               {/each}
             </div>
-
-            {#if slideshowImages.length > 1}
-              <div class="transition-preview">
-                <label><Icon icon="mdi:eye" width="16" /> Transition Preview ({transitionEffect})</label>
-                <div class="preview-container">
-                  <div
-                    class="preview-layer layer-1 transition-{transitionEffect}"
-                    class:visible={previewLayer1Visible}
-                    class:kenburns-0={transitionEffect === 'kenburns' && previewLayer1KenBurns === 0}
-                    class:kenburns-1={transitionEffect === 'kenburns' && previewLayer1KenBurns === 1}
-                    class:kenburns-2={transitionEffect === 'kenburns' && previewLayer1KenBurns === 2}
-                    class:kenburns-3={transitionEffect === 'kenburns' && previewLayer1KenBurns === 3}
-                    style:background-image={previewLayer1Image ? `url(${previewLayer1Image})` : 'none'}
-                    style:--transition-duration="{transitionDuration}s"
-                  ></div>
-                  <div
-                    class="preview-layer layer-2 transition-{transitionEffect}"
-                    class:visible={!previewLayer1Visible}
-                    class:kenburns-0={transitionEffect === 'kenburns' && previewLayer2KenBurns === 0}
-                    class:kenburns-1={transitionEffect === 'kenburns' && previewLayer2KenBurns === 1}
-                    class:kenburns-2={transitionEffect === 'kenburns' && previewLayer2KenBurns === 2}
-                    class:kenburns-3={transitionEffect === 'kenburns' && previewLayer2KenBurns === 3}
-                    style:background-image={previewLayer2Image ? `url(${previewLayer2Image})` : 'none'}
-                    style:--transition-duration="{transitionDuration}s"
-                  ></div>
-                </div>
-              </div>
-            {/if}
           {:else}
             <p class="empty-message">No images selected. Choose from the gallery below or upload your own.</p>
           {/if}
@@ -808,13 +788,16 @@
                     </span>
                   {/if}
                   {#if image.source === 'uploaded'}
-                    <button
+                    <span
                       class="delete-btn"
+                      role="button"
+                      tabindex="0"
                       onclick={(e) => { e.stopPropagation(); handleDeleteImage(image); }}
+                      onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); e.preventDefault(); handleDeleteImage(image); } }}
                       title="Delete"
                     >
                       <Icon icon="mdi:trash-can" width="16" />
-                    </button>
+                    </span>
                   {/if}
                   {#if (backgroundType === 'image' && singleImageUrl === image.url) || (backgroundType === 'slideshow' && slideshowImages.includes(image.url))}
                     <span class="selected-badge">
@@ -1598,12 +1581,42 @@
     transform: translateX(0);
   }
 
+  .preview-layer.transition-slide-up {
+    transition: opacity var(--transition-duration, 1.5s) ease-in-out, transform var(--transition-duration, 1.5s) ease-in-out;
+    transform: translateY(100%);
+  }
+
+  .preview-layer.transition-slide-up.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .preview-layer.transition-slide-down {
+    transition: opacity var(--transition-duration, 1.5s) ease-in-out, transform var(--transition-duration, 1.5s) ease-in-out;
+    transform: translateY(-100%);
+  }
+
+  .preview-layer.transition-slide-down.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
   .preview-layer.transition-zoom {
     transition: opacity var(--transition-duration, 1.5s) ease-in-out, transform var(--transition-duration, 1.5s) ease-in-out;
     transform: scale(1.2);
   }
 
   .preview-layer.transition-zoom.visible {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  .preview-layer.transition-zoom-out {
+    transition: opacity var(--transition-duration, 1.5s) ease-in-out, transform var(--transition-duration, 1.5s) ease-in-out;
+    transform: scale(0.8);
+  }
+
+  .preview-layer.transition-zoom-out.visible {
     opacity: 1;
     transform: scale(1);
   }
@@ -1642,6 +1655,156 @@
   .preview-layer.transition-flip.visible {
     opacity: 1;
     transform: perspective(1000px) rotateY(0deg);
+  }
+
+  .preview-layer.transition-swirl {
+    transition: opacity var(--transition-duration, 1.5s) ease-in-out, transform var(--transition-duration, 1.5s) ease-in-out;
+    transform: rotate(180deg) scale(0);
+  }
+
+  .preview-layer.transition-swirl.visible {
+    opacity: 1;
+    transform: rotate(0deg) scale(1);
+  }
+
+  .preview-layer.transition-wipe {
+    opacity: 1;
+    clip-path: inset(0 100% 0 0);
+    transition: clip-path var(--transition-duration, 1.5s) ease-in-out;
+  }
+
+  .preview-layer.transition-wipe.visible {
+    opacity: 1;
+    clip-path: inset(0 0 0 0);
+  }
+
+  /* Curtain: The actual transition is handled by the curtain overlay */
+  /* Both layers just show fully - the overlay does the split animation */
+  .preview-layer.transition-curtain {
+    opacity: 1;
+    transition: none;
+  }
+
+  .preview-layer.transition-curtain.visible {
+    z-index: 2 !important;
+  }
+
+  .preview-layer.transition-curtain:not(.visible) {
+    z-index: 1 !important;
+  }
+
+  /* Curtain overlay - two halves that slide apart */
+  .curtain-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 100;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  .curtain-half {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+  }
+
+  .curtain-left {
+    left: 0;
+    width: 100%;
+    clip-path: inset(0 50% 0 0);
+    animation: curtainSlideLeft var(--transition-duration, 1.5s) ease-in-out forwards;
+  }
+
+  .curtain-right {
+    left: 0;
+    width: 100%;
+    clip-path: inset(0 0 0 50%);
+    animation: curtainSlideRight var(--transition-duration, 1.5s) ease-in-out forwards;
+  }
+
+  @keyframes curtainSlideLeft {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
+
+  @keyframes curtainSlideRight {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(50%); }
+  }
+
+  .preview-layer.transition-circle {
+    opacity: 1;
+    clip-path: circle(0% at 50% 50%);
+    transition: clip-path var(--transition-duration, 1.5s) ease-in-out;
+  }
+
+  .preview-layer.transition-circle.visible {
+    clip-path: circle(150% at 50% 50%);
+  }
+
+  .preview-layer.transition-diamond {
+    opacity: 1;
+    clip-path: polygon(50% 50%, 50% 50%, 50% 50%, 50% 50%);
+    transition: clip-path var(--transition-duration, 1.5s) ease-in-out;
+  }
+
+  .preview-layer.transition-diamond.visible {
+    /* Extend far beyond viewport to ensure full coverage on any aspect ratio */
+    clip-path: polygon(50% -100%, 200% 50%, 50% 200%, -100% 50%);
+  }
+
+  .preview-layer.transition-dissolve {
+    transition: opacity var(--transition-duration, 1.5s) ease-in-out, filter var(--transition-duration, 1.5s) ease-in-out;
+    filter: grayscale(100%) contrast(200%);
+  }
+
+  .preview-layer.transition-dissolve.visible {
+    opacity: 1;
+    filter: grayscale(0%) contrast(100%);
+  }
+
+  .preview-layer.transition-flash {
+    transition: opacity calc(var(--transition-duration, 1.5s) / 2) ease-in-out;
+  }
+
+  .preview-layer.transition-flash.visible {
+    opacity: 1;
+    animation: flashPreview var(--transition-duration, 1.5s) ease-in-out;
+  }
+
+  @keyframes flashPreview {
+    0% { opacity: 0; filter: brightness(1); }
+    30% { opacity: 1; filter: brightness(3); }
+    100% { opacity: 1; filter: brightness(1); }
+  }
+
+  .preview-layer.transition-glitch {
+    transition: opacity var(--transition-duration, 1.5s) ease-in-out;
+  }
+
+  .preview-layer.transition-glitch.visible {
+    opacity: 1;
+    animation: glitchPreview var(--transition-duration, 1.5s) ease-in-out;
+  }
+
+  @keyframes glitchPreview {
+    0% { opacity: 0; transform: translate(0); filter: hue-rotate(0deg); }
+    20% { opacity: 0.5; transform: translate(-5px, 3px); filter: hue-rotate(90deg); }
+    40% { opacity: 0.7; transform: translate(5px, -3px); filter: hue-rotate(180deg); }
+    60% { opacity: 0.9; transform: translate(-3px, 5px); filter: hue-rotate(270deg); }
+    80% { opacity: 1; transform: translate(3px, -5px); filter: hue-rotate(360deg); }
+    100% { opacity: 1; transform: translate(0); filter: hue-rotate(0deg); }
+  }
+
+  .preview-layer.transition-random {
+    transition: opacity var(--transition-duration, 1.5s) ease-in-out;
+  }
+
+  .preview-layer.transition-random.visible {
+    opacity: 1;
   }
 
   .preview-layer.transition-kenburns {

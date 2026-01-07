@@ -195,8 +195,8 @@
     align-items: center;
     gap: 0.5rem;
     padding: 0.75rem;
-    background: #fee2e2;
-    color: #991b1b;
+    background: color-mix(in srgb, var(--color-error) 15%, transparent);
+    color: var(--color-error);
     border-radius: 0.375rem;
     font-size: 0.875rem;
   }
@@ -207,7 +207,7 @@
     align-items: center;
     gap: 1rem;
     padding: 2rem;
-    color: #10b981;
+    color: var(--color-success);
     text-align: center;
   }
 

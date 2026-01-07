@@ -25,14 +25,16 @@
     variant = 'rect'
   }: Props = $props();
 
-  const variantStyles = {
-    text: { height: '1em', radius: '0.25rem' },
-    rect: { height, radius },
-    circle: { height, radius: '50%' },
-    tile: { height: '150px', radius: '0.5rem' }
-  };
-
-  const style = variantStyles[variant];
+  // Use $derived to create reactive variant styles
+  const style = $derived(() => {
+    const variantStyles = {
+      text: { height: '1em', radius: '0.25rem' },
+      rect: { height, radius },
+      circle: { height, radius: '50%' },
+      tile: { height: '150px', radius: '0.5rem' }
+    };
+    return variantStyles[variant];
+  });
 </script>
 
 {#if lines > 1}
@@ -41,8 +43,8 @@
       <div
         class="skeleton"
         style:width={i === lines - 1 ? '70%' : width}
-        style:height={style.height}
-        style:border-radius={style.radius}
+        style:height={style().height}
+        style:border-radius={style().radius}
       ></div>
     {/each}
   </div>

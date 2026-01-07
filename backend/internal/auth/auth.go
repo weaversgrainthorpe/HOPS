@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"fmt"
+	"log"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -151,14 +152,14 @@ func (s *Service) StartCleanupRoutine(interval time.Duration, stop <-chan struct
 		// Run cleanup immediately on start
 		if err := s.CleanupExpiredSessions(); err != nil {
 			// Log error but don't fail
-			fmt.Printf("Session cleanup error: %v\n", err)
+			log.Printf("Session cleanup error: %v", err)
 		}
 
 		for {
 			select {
 			case <-ticker.C:
 				if err := s.CleanupExpiredSessions(); err != nil {
-					fmt.Printf("Session cleanup error: %v\n", err)
+					log.Printf("Session cleanup error: %v", err)
 				}
 			case <-stop:
 				return

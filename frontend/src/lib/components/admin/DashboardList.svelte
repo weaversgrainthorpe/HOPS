@@ -1,10 +1,10 @@
 <script lang="ts">
-  import { config, updateConfig } from '$lib/stores/config';
+  import { config, updateConfig, loadConfig } from '$lib/stores/config';
   import { editMode, enableEditMode } from '$lib/stores/editMode';
   import { confirm } from '$lib/stores/confirmModal';
   import { toast } from '$lib/stores/toast';
   import { goto } from '$app/navigation';
-  import { exportConfig, importConfig } from '$lib/utils/api';
+  import { exportConfig } from '$lib/utils/api';
   import type { Dashboard } from '$lib/types';
   import Icon from '@iconify/svelte';
   import ImportModal from './ImportModal.svelte';
@@ -196,7 +196,7 @@
 </div>
 
 {#if showImport}
-  <ImportModal onClose={() => showImport = false} />
+  <ImportModal onClose={() => showImport = false} onImportSuccess={loadConfig} />
 {/if}
 
 <style>

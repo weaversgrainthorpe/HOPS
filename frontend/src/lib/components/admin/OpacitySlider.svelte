@@ -100,9 +100,10 @@
     width: 18px;
     height: 18px;
     border-radius: 50%;
-    background: var(--accent);
+    background: white;
+    border: 3px solid var(--accent);
     cursor: pointer;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
   }
 
   .slider::-webkit-slider-thumb:hover {
@@ -113,10 +114,10 @@
     width: 18px;
     height: 18px;
     border-radius: 50%;
-    background: var(--accent);
+    background: white;
     cursor: pointer;
-    border: none;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    border: 3px solid var(--accent);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
   }
 
   .slider::-moz-range-thumb:hover {

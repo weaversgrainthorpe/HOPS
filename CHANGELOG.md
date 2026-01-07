@@ -5,65 +5,11 @@ All notable changes to HOPS (Home Operations Portal System) will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.11.0] - 2026-01-05
+## [1.0.0] - 2026-01-07
 
-### Added
+### 🎉 First Public Release
 
-#### Group Display Styles
-- New **Display Style** option for groups: choose between "Full Header" (default full-width bar) or "Folder Tab" (compact folder-style tab)
-- Folder Tab style provides a compact, Windows Explorer-like folder tab appearance
-
-#### Group & Tab Customization
-- Added icon support for groups (Iconify icons or custom image URLs)
-- Added icon support for tabs (Iconify icons or custom image URLs)
-- Added color, opacity, and text color options for tabs
-- Backend models now persist all group/tab styling options
-
-### Changed
-
-#### Drag and Drop
-- Reverted group drag/drop to use svelte-dnd-action library for smoother animations
-- Groups now animate and separate properly during drag operations
-- Drag available on entire group header (no separate drag handle needed)
-- Grab cursor now shows on group headers in edit mode
-
-### Fixed
-- Fixed group icons not persisting (backend model was missing icon fields)
-- Fixed tab icons not persisting (backend model was missing icon fields)
-
----
-
-## [0.10.0] - 2026-01-05
-
-### Changed
-
-#### Code Quality & Consistency
-- Standardized z-index values with CSS custom properties (`--z-navbar`, `--z-modal`, `--z-toast`, etc.)
-- Replaced hardcoded button hover colors with `var(--accent-hover)` across all admin modals
-- Standardized error/danger colors to use CSS variables (`--color-error`, `--color-error-dark`)
-- Added design tokens for border-radius, spacing, shadows, and transitions in `app.css`
-- Created TypeScript constants for design tokens (`designTokens.ts`, `zIndex.ts`)
-
-#### API & Utilities
-- Added background image API functions (`getBackgrounds`, `uploadBackground`, `deleteBackground`, `createBackgroundCategory`)
-- Cleaned up unused utility exports from `utils/index.ts`
-- Removed unused error handling, loading state, and validation utilities
-
-#### Modal System
-- Updated shared Modal component to use CSS z-index variables
-- Standardized modal backdrop and content styling
-
-### Fixed
-- Fixed incorrect exports in `utils/index.ts` (theme and gridKeyboardNav functions)
-- Fixed TypeScript errors from non-existent function exports
-
----
-
-## [0.9.0] - 2026-01-04
-
-### Pre-release
-
-HOPS is a modern, self-hosted homepage dashboard for organizing and accessing your services.
+HOPS (Home Operations Portal System) is now ready for public use! A modern, self-hosted homepage dashboard for organizing and accessing your homelab services.
 
 ### Features
 
@@ -71,7 +17,8 @@ HOPS is a modern, self-hosted homepage dashboard for organizing and accessing yo
 - Multiple dashboards with unique URLs (/home, /work, etc.)
 - Tabbed organization within dashboards
 - Collapsible groups within tabs
-- Drag-and-drop for tiles, tabs, and cross-group movement
+- Drag-and-drop for tiles, groups, tabs, and cross-group movement
+- Group duplication with immediate insertion after source
 
 #### Visual Customization
 - 8 built-in theme presets (Ocean, Forest, Sunset, etc.)
@@ -79,21 +26,29 @@ HOPS is a modern, self-hosted homepage dashboard for organizing and accessing yo
 - Custom colors and opacity at dashboard, tab, group, and tile levels
 - Theme hierarchy system with cascading styles
 - Automatic text contrast based on WCAG 2.0 guidelines
+- Text size controls in navbar (increase/decrease)
+
+#### Group & Tab Customization
+- **Display Style** option for groups: "Full Header" or "Folder Tab" (compact Windows Explorer-style)
+- Icon support for groups (Iconify icons or custom image URLs)
+- Icon support for tabs (Iconify icons or custom image URLs)
+- Color, opacity, and text color options for tabs
 
 #### Background System
 - Single image, slideshow, or solid color backgrounds
 - 64 curated background images across 8 categories
-- Smooth crossfade transitions for slideshows
+- 18 slideshow transition effects (crossfade, slide, zoom, curtain, diamond, dissolve, glitch, ken burns, random, and more)
 - Custom URL support for personal images
 - Per-tab background customization
 - Upload your own background images
 
 #### Icon System
 - 150,000+ icons via Iconify integration
-- 280+ curated homelab application presets
-- 16 preset categories (Containers, Media, Monitoring, etc.)
+- 1,900+ curated homelab application presets across 15 categories
+- **"My Uploads"** category - automatically shows all uploaded custom icons for easy reuse
+- **"Recently Used"** category - tracks last 20 selected icons with localStorage persistence
 - Custom icon upload support (PNG, JPG, SVG, WebP)
-- Icon search functionality
+- Icon search functionality with filename matching
 - Inline icon management from the picker
 
 #### Entry/Tile Features
@@ -103,23 +58,26 @@ HOPS is a modern, self-hosted homepage dashboard for organizing and accessing yo
 - Copy/cut/paste with keyboard shortcuts
 
 #### Admin Features
-- Secure authentication system
-- Session management with automatic cleanup
-- Import from Homer and Dashy configurations
-- JSON import/export for backup
-- Rate-limited login attempts
+- Secure authentication system with bcrypt password hashing
+- Session management with automatic cleanup (24-hour expiry)
+- Rate-limited login attempts (20/minute per IP)
+- Import from Homer, Dashy, and Heimdall configurations
+- JSON/YAML import/export for backup
+- Auto-match icons feature during import
 - Help and About modals
+- Change password functionality
 
 #### Technical
-- Go backend with SQLite database
+- Go backend with SQLite database (WAL mode for performance)
 - SvelteKit 5 frontend with runes
-- RESTful API
-- Session-based authentication
+- RESTful API with centralized error handling
+- Session-based authentication with Bearer tokens
 - Configurable via environment variables
+- Automatic database backups on startup and config changes
+- CSS design tokens for consistent styling
+- TypeScript throughout frontend
 
 ### Credits
 Created by Jonathan Brown with Claude (Anthropic)
 
-[0.11.0]: https://github.com/jmagar/hops/releases/tag/v0.11.0
-[0.10.0]: https://github.com/jmagar/hops/releases/tag/v0.10.0
-[0.9.0]: https://github.com/jmagar/hops/releases/tag/v0.9.0
+[1.0.0]: https://github.com/weaversgrainthorpe/HOPS/releases/tag/v1.0.0

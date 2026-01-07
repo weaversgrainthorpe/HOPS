@@ -20,8 +20,8 @@ import (
 	_ "image/gif"
 	_ "image/jpeg"
 
-	"github.com/jmagar/hops/internal/converters"
-	"github.com/jmagar/hops/internal/version"
+	"github.com/weaversgrainthorpe/HOPS/internal/converters"
+	"github.com/weaversgrainthorpe/HOPS/internal/version"
 	"golang.org/x/image/draw"
 	_ "golang.org/x/image/webp"
 )
@@ -917,11 +917,10 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 	})
 }
 
-// handleIntegrations proxies requests to external services
-func (r *Router) handleIntegrations(w http.ResponseWriter, req *http.Request) {
-	// TODO: Implement service integrations (Pi-hole, Proxmox, etc.)
-	http.Error(w, "Not implemented yet", http.StatusNotImplemented)
-}
+// handleIntegrations proxies requests to external services (reserved for future use)
+// func (r *Router) handleIntegrations(w http.ResponseWriter, req *http.Request) {
+// 	http.Error(w, "Not implemented yet", http.StatusNotImplemented)
+// }
 
 // handleIconActions routes icon CRUD operations based on HTTP method
 func (r *Router) handleIconActions(w http.ResponseWriter, req *http.Request) {

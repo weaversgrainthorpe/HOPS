@@ -1,4 +1,4 @@
-# HOPS User Guide (v0.11.0)
+# HOPS User Guide (v0.9.2)
 
 Welcome to HOPS (Home Operations Portal System)! This guide will help you get started and make the most of your dashboard.
 
@@ -229,6 +229,13 @@ Click the **theme icon** in the header to open theme settings:
 - **8 Theme Presets**: Slate, Gray, Zinc, Stone, Red, Orange, Blue, Green
 - **Light/Dark Mode**: Each theme has light and dark variants
 - **Auto Mode**: Automatically follows your system theme preference
+
+### Text Size
+
+Adjust the text size using the **A buttons** in the navbar:
+- **A↑** - Increase text size
+- **A↓** - Decrease text size
+- Text size preference is saved in your browser
 
 ### Theme Hierarchy
 

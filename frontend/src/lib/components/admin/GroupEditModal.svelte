@@ -4,6 +4,14 @@
   import OpacitySlider from './OpacitySlider.svelte';
   import IconPickerModal from './IconPickerModal.svelte';
   import { focusTrap } from '$lib/utils/focusTrap';
+  import { editMode } from '$lib/stores/editMode';
+
+  // Close modal when edit mode is turned off
+  $effect(() => {
+    if (!$editMode) {
+      onCancel();
+    }
+  });
 
   interface TabInfo {
     id: string;
@@ -155,7 +163,7 @@
             type="button"
             class="browse-btn"
             onclick={() => showIconPicker = true}
-            title="Browse icons"
+            title="Browse icon library"
           >
             <Icon icon="mdi:apps" width="18" />
             Browse
@@ -171,7 +179,7 @@
             </button>
           {/if}
         </div>
-        <small>Browse presets or find icons at <a href="https://icon-sets.iconify.design/" target="_blank" rel="noopener">iconify.design</a></small>
+        <small>Browse the icon library or enter an icon name from <a href="https://icon-sets.iconify.design/" target="_blank" rel="noopener">iconify.design</a></small>
       </div>
 
       <ColorPicker

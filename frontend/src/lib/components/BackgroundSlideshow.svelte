@@ -20,6 +20,10 @@
   let layer1KenBurnsVariant = $state(0);
   let layer2KenBurnsVariant = $state(1);
 
+  // Curtain effect state
+  let curtainPreviousImage = $state('');
+  let curtainAnimating = $state(false);
+
   // Available transitions for random selection (excluding 'random' and 'none')
   const availableTransitions = [
     'crossfade', 'slide', 'slide-up', 'slide-down', 'zoom', 'zoom-out',
@@ -95,6 +99,9 @@
           pickRandomTransition();
         }
 
+        // For curtain effect, capture the current visible image
+        const currentVisibleImage = layer1Visible ? layer1Image : layer2Image;
+
         // Move to next image
         currentIndex = (currentIndex + 1) % background.images!.length;
         const nextImage = background.images![currentIndex];
@@ -108,6 +115,15 @@
           layer1Image = nextImage;
           // Cycle Ken Burns variant for layer 1
           layer1KenBurnsVariant = (layer1KenBurnsVariant + 2) % 4;
+        }
+
+        // Trigger curtain animation if curtain effect is selected
+        if (transitionEffect === 'curtain') {
+          curtainPreviousImage = currentVisibleImage;
+          curtainAnimating = true;
+          setTimeout(() => {
+            curtainAnimating = false;
+          }, transitionDuration * 1000);
         }
 
         // Swap visibility to trigger crossfade
@@ -167,6 +183,21 @@
       style:background-size={backgroundSize}
       style:--transition-duration="{transitionDuration}s"
     ></div>
+    <!-- Curtain overlay: shows the previous image splitting apart -->
+    {#if transitionEffect === 'curtain' && curtainAnimating}
+      <div class="curtain-overlay" style:--transition-duration="{transitionDuration}s">
+        <div
+          class="curtain-half curtain-left"
+          style:background-image={curtainPreviousImage ? `url(${curtainPreviousImage})` : 'none'}
+          style:background-size={backgroundSize}
+        ></div>
+        <div
+          class="curtain-half curtain-right"
+          style:background-image={curtainPreviousImage ? `url(${curtainPreviousImage})` : 'none'}
+          style:background-size={backgroundSize}
+        ></div>
+      </div>
+    {/if}
   {/if}
 {/if}
 
@@ -459,52 +490,86 @@
     100% { opacity: 1; transform: translate(0); filter: hue-rotate(0deg); }
   }
 
-  /* Curtain transition (vertical wipe from center) */
+  /* Curtain transition - handled by overlay, layers just show */
   .background-layer.transition-curtain {
-    transition: opacity 0.01s ease-in-out;
-    clip-path: inset(0 50% 0 50%);
+    transition: none;
+    opacity: 1;
   }
 
   .background-layer.transition-curtain.visible {
-    opacity: 1;
-    animation: curtain var(--transition-duration, 1.5s) ease-in-out forwards;
+    z-index: -1 !important;
   }
 
-  @keyframes curtain {
-    0% { clip-path: inset(0 50% 0 50%); }
-    100% { clip-path: inset(0 0 0 0); }
+  .background-layer.transition-curtain:not(.visible) {
+    z-index: -2 !important;
+  }
+
+  /* Curtain overlay - two halves that slide apart */
+  .curtain-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  .curtain-half {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+  }
+
+  .curtain-left {
+    left: 0;
+    width: 100%;
+    clip-path: inset(0 50% 0 0);
+    animation: curtainSlideLeft var(--transition-duration, 1.5s) ease-in-out forwards;
+  }
+
+  .curtain-right {
+    left: 0;
+    width: 100%;
+    clip-path: inset(0 0 0 50%);
+    animation: curtainSlideRight var(--transition-duration, 1.5s) ease-in-out forwards;
+  }
+
+  @keyframes curtainSlideLeft {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
+
+  @keyframes curtainSlideRight {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(50%); }
   }
 
   /* Circle reveal transition */
   .background-layer.transition-circle {
-    transition: opacity 0.01s ease-in-out;
+    opacity: 1;
     clip-path: circle(0% at 50% 50%);
+    transition: clip-path var(--transition-duration, 1.5s) ease-in-out;
   }
 
   .background-layer.transition-circle.visible {
-    opacity: 1;
-    animation: circle-reveal var(--transition-duration, 1.5s) ease-in-out forwards;
-  }
-
-  @keyframes circle-reveal {
-    0% { clip-path: circle(0% at 50% 50%); }
-    100% { clip-path: circle(100% at 50% 50%); }
+    clip-path: circle(150% at 50% 50%);
   }
 
   /* Diamond reveal transition */
   .background-layer.transition-diamond {
-    transition: opacity 0.01s ease-in-out;
+    opacity: 1;
     clip-path: polygon(50% 50%, 50% 50%, 50% 50%, 50% 50%);
+    transition: clip-path var(--transition-duration, 1.5s) ease-in-out;
   }
 
   .background-layer.transition-diamond.visible {
-    opacity: 1;
-    animation: diamond-reveal var(--transition-duration, 1.5s) ease-in-out forwards;
-  }
-
-  @keyframes diamond-reveal {
-    0% { clip-path: polygon(50% 50%, 50% 50%, 50% 50%, 50% 50%); }
-    100% { clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%); }
+    /* Extend far beyond viewport to ensure full coverage on any aspect ratio */
+    clip-path: polygon(50% -100%, 200% 50%, 50% 200%, -100% 50%);
   }
 
   /* Layer 2 sits on top for transitions */
