@@ -7,7 +7,7 @@ HOPS features a complete database-backed icon management system that allows user
 ## Key Features
 
 ### 1. Database Storage
-- **All icons stored in SQLite database** - including 280+ curated presets
+- **All icons stored in SQLite database** - including 1,900+ curated presets
 - **`is_preset` column** - distinguishes preset icons from user-created icons
 - **Categories table** - organize icons into categories
 - **Automatic seeding** - presets automatically loaded on first run
@@ -69,7 +69,7 @@ CREATE TABLE icons (
 - `PUT /api/icons/:id` - Update icon (admin)
 - `DELETE /api/icons/:id` - Delete user icon (admin)
 
-## Preset Categories (14)
+## Preset Categories (15)
 
 1. **Containers** - Docker, Kubernetes, Portainer, Podman, Rancher
 2. **Media & Streaming** - Plex, Jellyfin, Spotify, YouTube, Kodi
@@ -80,11 +80,12 @@ CREATE TABLE icons (
 7. **Databases** - PostgreSQL, MySQL, MongoDB, Redis, SQLite
 8. **Development** - GitHub, GitLab, Jenkins, VS Code, Gitea
 9. **Communication** - Discord, Slack, Telegram, Matrix, Zoom
-10. **Operating Systems** - Ubuntu, Debian, TrueNAS, Windows, macOS
-11. **Security** - Bitwarden, Vaultwarden, Authelia, Let's Encrypt
-12. **Cloud Providers** - AWS, Azure, Google Cloud, DigitalOcean
-13. **Hardware** - Raspberry Pi, Synology, QNAP, HP, Dell
-14. **Virtualization** - Proxmox, VMware, ESXi, VirtualBox
+10. **Automation** - Home Assistant, Node-RED, n8n, Ansible, Cron
+11. **Operating Systems** - Ubuntu, Debian, TrueNAS, Windows, macOS
+12. **Security** - Bitwarden, Vaultwarden, Authelia, Let's Encrypt
+13. **Cloud Providers** - AWS, Azure, Google Cloud, DigitalOcean
+14. **Hardware** - Raspberry Pi, Synology, QNAP, HP, Dell
+15. **Virtualization** - Proxmox, VMware, ESXi, VirtualBox
 
 ## Usage Guide
 
@@ -129,7 +130,7 @@ Browse 200,000+ icons at [iconify.design](https://icon-sets.iconify.design/):
 
 ### Backend
 - [database.go](backend/internal/database/database.go) - Schema and migrations
-- [icon_seeds.go](backend/internal/database/icon_seeds.go) - 280+ preset icons
+- [icon_seeds.go](backend/internal/database/icon_seeds.go) - 1,900+ preset icons
 - [handlers.go](backend/internal/api/handlers.go) - API endpoints
 - Cascading deletes for categories
 - Protection for preset data
