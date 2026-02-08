@@ -52,7 +52,13 @@ export async function updateConfig(newConfig: Config, showToast = true) {
     }
   } catch (error) {
     console.error('Failed to update config:', error);
-    toast.error('Failed to save changes');
+
+    // Check if it's a session expiration error
+    if (error instanceof Error && error.message === 'SESSION_EXPIRED') {
+      toast.error('Your session has expired. Please refresh the page and log in again.');
+    } else {
+      toast.error('Failed to save changes');
+    }
     throw error;
   }
 }

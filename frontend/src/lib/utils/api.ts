@@ -39,6 +39,12 @@ async function fetchAPI(endpoint: string, options: RequestInit = {}) {
   });
 
   if (!response.ok) {
+    // Handle session expiration specifically
+    if (response.status === 401) {
+      // Clear the expired session token
+      setSessionToken(null);
+      throw new Error('SESSION_EXPIRED');
+    }
     throw new Error(`API error: ${response.status} ${response.statusText}`);
   }
 
