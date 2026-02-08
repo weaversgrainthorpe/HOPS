@@ -14,7 +14,7 @@
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover">
-		<script>if(location.pathname.startsWith('/dev/')||location.hostname==='localhost'){var d=document.createElement('div');d.style.cssText='background:#f59e0b;color:#000;text-align:center;padding:4px 0;font-weight:bold;font-size:13px;position:sticky;top:0;z-index:9999';d.textContent='DEV ENVIRONMENT';document.body.prepend(d)}</script>
+		<script>if(location.pathname.startsWith('/dev/')||location.hostname==='localhost'){document.body.style.borderTop='4px solid #f59e0b';var b=document.createElement('div');b.style.cssText='position:fixed;bottom:8px;right:8px;background:#f59e0b;color:#000;font-weight:bold;font-size:11px;padding:2px 8px;border-radius:4px;z-index:9999;opacity:0.8';b.textContent='DEV';document.body.appendChild(b)}</script>
 		<div style="display: contents">%sveltekit.body%</div>
 	</body>
 </html>
