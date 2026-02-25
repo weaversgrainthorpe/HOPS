@@ -2,9 +2,11 @@ package api
 
 import (
 	"database/sql"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -21,6 +23,7 @@ type Router struct {
 	mux           *http.ServeMux
 	rateLimiter   *RateLimiter
 	backupManager *database.BackupManager
+	startTime     time.Time
 }
 
 // RateLimiter provides simple rate limiting for login attempts
@@ -66,7 +69,7 @@ func (rl *RateLimiter) Allow(ip string) bool {
 }
 
 // NewRouter creates a new API router with all routes configured
-func NewRouter(db *sql.DB, authService *auth.Service, cfg *config.Config) http.Handler {
+func NewRouter(db *sql.DB, authService *auth.Service, cfg *config.Config, startTime time.Time) http.Handler {
 	// Use configured rate limit or default to 20 per minute
 	rateLimit := cfg.LoginRateLimitPerMin
 	if rateLimit <= 0 {
@@ -84,6 +87,7 @@ func NewRouter(db *sql.DB, authService *auth.Service, cfg *config.Config) http.H
 		mux:           http.NewServeMux(),
 		rateLimiter:   NewRateLimiter(rateLimit, time.Minute),
 		backupManager: backupManager,
+		startTime:     startTime,
 	}
 
 	r.setupRoutes()
@@ -93,6 +97,7 @@ func NewRouter(db *sql.DB, authService *auth.Service, cfg *config.Config) http.H
 // setupRoutes configures all API routes
 func (r *Router) setupRoutes() {
 	// Public API routes
+	r.mux.HandleFunc("/api/health", r.handleGetHealth)
 	r.mux.HandleFunc("/api/version", r.handleGetVersion)
 	r.mux.HandleFunc("/api/config", r.handleGetConfig)
 	r.mux.HandleFunc("/api/status/", r.handleGetStatus)
@@ -104,6 +109,7 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/config/update", r.authMiddleware(r.handleUpdateConfig))
 	r.mux.HandleFunc("/api/config/export", r.authMiddleware(r.handleExportConfig))
 	r.mux.HandleFunc("/api/config/import", r.authMiddleware(r.handleImportConfig))
+	r.mux.HandleFunc("/api/config/reset", r.authMiddleware(r.handleResetConfig))
 
 	// Backup management routes
 	r.mux.HandleFunc("/api/backups", r.authMiddleware(r.handleBackups))
@@ -258,11 +264,36 @@ func (r *Router) serveSPA(w http.ResponseWriter, req *http.Request) {
 	http.ServeFile(w, req, indexPath)
 }
 
+// statusWriter wraps http.ResponseWriter to capture the status code
+type statusWriter struct {
+	http.ResponseWriter
+	status int
+}
+
+func (sw *statusWriter) WriteHeader(code int) {
+	sw.status = code
+	sw.ResponseWriter.WriteHeader(code)
+}
+
 // loggingMiddleware logs all HTTP requests
 func (r *Router) loggingMiddleware(next http.Handler) http.Handler {
+	// Static file extensions to skip logging
+	staticExts := []string{".js", ".css", ".svg", ".png", ".jpg", ".jpeg", ".gif", ".ico", ".woff", ".woff2", ".ttf", ".map"}
+
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		// TODO: Implement proper logging
-		next.ServeHTTP(w, req)
+		// Skip logging for static assets
+		path := req.URL.Path
+		for _, ext := range staticExts {
+			if strings.HasSuffix(path, ext) {
+				next.ServeHTTP(w, req)
+				return
+			}
+		}
+
+		start := time.Now()
+		sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
+		next.ServeHTTP(sw, req)
+		log.Printf("%s %s %d %s", req.Method, path, sw.status, time.Since(start).Round(time.Millisecond))
 	})
 }
 

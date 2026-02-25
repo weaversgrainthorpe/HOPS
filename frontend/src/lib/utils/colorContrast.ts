@@ -3,6 +3,9 @@
  * Automatically determines if text should be light or dark based on background color
  */
 
+const TEXT_WHITE = '#ffffff';
+const TEXT_BLACK = '#000000';
+
 /**
  * Calculate relative luminance of a color
  * Based on WCAG 2.0 guidelines
@@ -68,9 +71,9 @@ export function getAutoTextColor(backgroundColor: string): 'light' | 'dark' {
 export function getTextColorValue(mode: 'light' | 'dark' | 'auto', backgroundColor?: string): string {
   if (mode === 'auto' && backgroundColor) {
     const autoMode = getAutoTextColor(backgroundColor);
-    return autoMode === 'light' ? '#ffffff' : '#000000';
+    return autoMode === 'light' ? TEXT_WHITE : TEXT_BLACK;
   }
-  return mode === 'light' ? '#ffffff' : '#000000';
+  return mode === 'light' ? TEXT_WHITE : TEXT_BLACK;
 }
 
 /**

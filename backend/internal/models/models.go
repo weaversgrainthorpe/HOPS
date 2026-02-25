@@ -4,12 +4,29 @@ import "time"
 
 // Dashboard represents a complete dashboard configuration
 type Dashboard struct {
-	ID         string       `json:"id"`
-	Name       string       `json:"name"`
-	Path       string       `json:"path"`
-	Background *Background  `json:"background,omitempty"`
-	Tabs       []Tab        `json:"tabs"`
-	Order      int          `json:"order"`
+	ID                string          `json:"id"`
+	Name              string          `json:"name"`
+	Path              string          `json:"path"`
+	Background        *Background     `json:"background,omitempty"`
+	PerTabBackgrounds bool            `json:"perTabBackgrounds,omitempty"`
+	Header            *HeaderConfig   `json:"header,omitempty"`
+	Theme             *DashboardTheme `json:"theme,omitempty"`
+	Tabs              []Tab           `json:"tabs"`
+	Order             int             `json:"order"`
+}
+
+// HeaderConfig controls the dashboard header display
+type HeaderConfig struct {
+	LeftText    string `json:"leftText,omitempty"`
+	CenterTitle string `json:"centerTitle,omitempty"`
+	ShowLeft    bool   `json:"showLeft,omitempty"`
+	ShowCenter  bool   `json:"showCenter,omitempty"`
+}
+
+// DashboardTheme holds dashboard-level colour/opacity overrides
+type DashboardTheme struct {
+	Color   string  `json:"color,omitempty"`
+	Opacity float64 `json:"opacity,omitempty"`
 }
 
 // Tab represents a tab within a dashboard
@@ -43,24 +60,31 @@ type Group struct {
 
 // Entry represents a tile/link on the dashboard
 type Entry struct {
-	ID          string       `json:"id"`
-	Name        string       `json:"name"`
-	URL         string       `json:"url"`
-	Icon        string       `json:"icon"`
-	IconURL     string       `json:"iconUrl,omitempty"`
-	Description string       `json:"description,omitempty"`
-	OpenMode    string       `json:"openMode"` // iframe, newtab, sametab, modal
-	StatusCheck *StatusCheck `json:"statusCheck,omitempty"`
-	Size        string       `json:"size"` // small, medium, large
-	Order       int          `json:"order"`
+	ID           string       `json:"id"`
+	Name         string       `json:"name"`
+	URL          string       `json:"url"`
+	Icon         string       `json:"icon"`
+	IconURL      string       `json:"iconUrl,omitempty"`
+	Description  string       `json:"description,omitempty"`
+	OpenMode     string       `json:"openMode"`              // iframe, newtab, sametab, modal
+	StatusCheck  *StatusCheck `json:"statusCheck,omitempty"`
+	Size         string       `json:"size"`                  // small, medium, large
+	Color        string       `json:"color,omitempty"`
+	Opacity      float64      `json:"opacity,omitempty"`
+	ShowStatus   bool         `json:"showStatus,omitempty"`
+	FetchFavicon bool         `json:"fetchFavicon,omitempty"`
+	Order        int          `json:"order"`
 }
 
 // Background configuration
 type Background struct {
-	Type     string   `json:"type"` // image, slideshow, color
-	Value    string   `json:"value,omitempty"`
-	Images   []string `json:"images,omitempty"`
-	Interval int      `json:"interval,omitempty"` // seconds for slideshow
+	Type               string   `json:"type"`                         // image, slideshow, color
+	Value              string   `json:"value,omitempty"`
+	Images             []string `json:"images,omitempty"`
+	Interval           int      `json:"interval,omitempty"`           // seconds for slideshow
+	Fit                string   `json:"fit,omitempty"`                // cover, contain, fill
+	Transition         string   `json:"transition,omitempty"`         // crossfade, slide, zoom, etc.
+	TransitionDuration float64  `json:"transitionDuration,omitempty"` // seconds (0.5 to 5)
 }
 
 // StatusCheck configuration

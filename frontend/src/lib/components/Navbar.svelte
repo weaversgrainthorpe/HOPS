@@ -13,6 +13,7 @@
   import AboutModal from './AboutModal.svelte';
 
   const appVersion = __APP_VERSION__;
+  const isDev = typeof window !== 'undefined' && (location.pathname.startsWith('/dev/') || location.port === '5174' || location.hostname === 'localhost');
 
   let currentPath = $derived($page.url.pathname);
 
@@ -73,6 +74,7 @@
             <img src="/logo.svg" alt="HOPS" />
             <span>HOPS</span>
             <span class="version">v{appVersion}</span>
+            {#if isDev}<span class="dev-badge">DEV</span>{/if}
           </a>
 
           {#if $isAuthenticated}
@@ -268,6 +270,16 @@
     opacity: 0.8;
   }
 
+  .dev-badge {
+    font-size: 11px;
+    font-weight: bold;
+    background: var(--color-warning);
+    color: #000;
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-left: 6px;
+  }
+
   .nav-links {
     display: flex;
     gap: 0.5rem;
@@ -337,7 +349,7 @@
   }
 
   .edit-toggle.active {
-    background: #f59e0b;
+    background: var(--color-warning);
     color: white;
   }
 
@@ -352,7 +364,7 @@
     right: 8px;
     width: 8px;
     height: 8px;
-    background: #10b981;
+    background: var(--color-success);
     border-radius: 50%;
     border: 2px solid var(--bg-secondary);
   }

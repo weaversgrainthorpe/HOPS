@@ -4,8 +4,8 @@
   import OpacitySlider from './OpacitySlider.svelte';
   import BackgroundConfigModal from './BackgroundConfigModal.svelte';
   import IconPickerModal from './IconPickerModal.svelte';
+  import Modal from '../shared/Modal.svelte';
   import type { Background } from '$lib/types';
-  import { focusTrap } from '$lib/utils/focusTrap';
   import { editMode } from '$lib/stores/editMode';
 
   // Close modal when edit mode is turned off
@@ -45,20 +45,21 @@
   let showBackgroundConfig = $state(false);
   let showIconPicker = $state(false);
 
+  function handleBeforeClose(): boolean {
+    if (showBackgroundConfig) {
+      showBackgroundConfig = false;
+      return false;
+    }
+    if (showIconPicker) {
+      showIconPicker = false;
+      return false;
+    }
+    return true;
+  }
+
   function handleSave() {
     if (name.trim()) {
       onSave(name.trim(), icon || undefined, iconUrl || undefined, color, opacity);
-    }
-  }
-
-  function handleKeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape') {
-      if (showBackgroundConfig || showIconPicker) {
-        showBackgroundConfig = false;
-        showIconPicker = false;
-      } else {
-        onCancel();
-      }
     }
   }
 
@@ -81,148 +82,133 @@
   }
 </script>
 
-<svelte:window onkeydown={handleKeydown} />
-
-<!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="modal-backdrop" onclick={onCancel} onkeydown={(e) => e.key === 'Escape' && !showBackgroundConfig && !showIconPicker && onCancel()}>
-  <div
-    class="modal-content"
-    onclick={(e) => e.stopPropagation()}
-    onkeydown={(e) => e.stopPropagation()}
-    role="dialog"
-    aria-modal="true"
-    aria-labelledby="tab-edit-title"
-    tabindex="-1"
-    use:focusTrap
-  >
-    <div class="modal-header">
-      <h2 id="tab-edit-title">{tabName ? 'Edit Tab' : 'New Tab'}</h2>
-      <button class="close-btn" onclick={onCancel}>
-        <Icon icon="mdi:close" width="24" />
-      </button>
+<Modal
+  id="tab-edit"
+  title={tabName ? 'Edit Tab' : 'New Tab'}
+  onClose={onCancel}
+  onBeforeClose={handleBeforeClose}
+  maxWidth="400px"
+>
+  <form onsubmit={(e) => { e.preventDefault(); handleSave(); }}>
+    <div class="form-group">
+      <label for="name">Tab Name *</label>
+      <input
+        id="name"
+        type="text"
+        bind:value={name}
+        required
+        placeholder="e.g., Home, Work, Media"
+      />
     </div>
 
-    <form onsubmit={(e) => { e.preventDefault(); handleSave(); }}>
-      <div class="form-group">
-        <label for="name">Tab Name *</label>
-        <input
-          id="name"
-          type="text"
-          bind:value={name}
-          required
-          placeholder="e.g., Home, Work, Media"
-          autofocus
-        />
-      </div>
-
-      <div class="form-group">
-        <label>Icon (optional)</label>
-        <div class="icon-input-wrapper">
-          <div class="icon-input">
-            {#if iconUrl}
-              <div class="selected-icon-display">
-                <img src={iconUrl} alt="Selected icon" class="icon-image" />
-                <span class="icon-name">Image icon selected</span>
+    <div class="form-group">
+      <label for="tab-icon">Icon (optional)</label>
+      <div class="icon-input-wrapper">
+        <div class="icon-input">
+          {#if iconUrl}
+            <div class="selected-icon-display">
+              <img src={iconUrl} alt="Selected icon" class="icon-image" />
+              <span class="icon-name">Image icon selected</span>
+            </div>
+          {:else}
+            <input
+              id="tab-icon"
+              type="text"
+              bind:value={icon}
+              placeholder="mdi:home"
+            />
+            {#if icon}
+              <div class="icon-preview">
+                <Icon icon={icon} width="24" />
               </div>
-            {:else}
-              <input
-                type="text"
-                bind:value={icon}
-                placeholder="mdi:home"
-              />
-              {#if icon}
-                <div class="icon-preview">
-                  <Icon icon={icon} width="24" />
-                </div>
-              {/if}
             {/if}
-          </div>
+          {/if}
+        </div>
+        <button
+          type="button"
+          class="browse-btn"
+          onclick={() => showIconPicker = true}
+          title="Browse icon library"
+        >
+          <Icon icon="mdi:apps" width="18" />
+          Browse
+        </button>
+        {#if icon || iconUrl}
           <button
             type="button"
-            class="browse-btn"
-            onclick={() => showIconPicker = true}
-            title="Browse icon library"
+            class="clear-btn"
+            onclick={clearIcon}
+            title="Clear icon"
           >
-            <Icon icon="mdi:apps" width="18" />
-            Browse
+            <Icon icon="mdi:close" width="18" />
           </button>
-          {#if icon || iconUrl}
-            <button
-              type="button"
-              class="clear-btn"
-              onclick={clearIcon}
-              title="Clear icon"
-            >
-              <Icon icon="mdi:close" width="18" />
-            </button>
-          {/if}
-        </div>
-        <small>Browse the icon library or enter an icon name from <a href="https://icon-sets.iconify.design/" target="_blank" rel="noopener">iconify.design</a></small>
+        {/if}
       </div>
+      <small>Browse the icon library or enter an icon name from <a href="https://icon-sets.iconify.design/" target="_blank" rel="noopener">iconify.design</a></small>
+    </div>
 
-      <ColorPicker
-        selectedColor={color}
-        onSelect={(c) => color = c}
-      />
+    <ColorPicker
+      selectedColor={color}
+      onSelect={(c) => color = c}
+    />
 
-      <OpacitySlider
-        opacity={opacity}
-        onSelect={(o) => opacity = o}
-      />
+    <OpacitySlider
+      opacity={opacity}
+      onSelect={(o) => opacity = o}
+    />
 
-      {#if onSaveBackground && perTabBackgrounds}
-        <div class="form-group">
-          <button type="button" class="btn-background" onclick={() => showBackgroundConfig = true}>
-            <Icon icon="mdi:image-multiple" width="20" />
-            Configure Tab Background
-          </button>
-          {#if tabBackground}
-            <small class="background-status">
-              {tabBackground.type === 'color' ? `Color: ${tabBackground.value}` : ''}
-              {tabBackground.type === 'image' ? 'Image background set' : ''}
-              {tabBackground.type === 'slideshow' ? `Slideshow (${tabBackground.images?.length || 0} images)` : ''}
-            </small>
-          {:else}
-            <small class="background-status">Using dashboard background</small>
-          {/if}
-        </div>
-      {:else if onSaveBackground}
-        <div class="form-group">
-          <small class="background-hint">
-            <Icon icon="mdi:information-outline" width="16" />
-            Enable "Individual backgrounds per tab" in dashboard background settings to set a custom background for this tab.
+    {#if onSaveBackground && perTabBackgrounds}
+      <div class="form-group">
+        <button type="button" class="btn-background" onclick={() => showBackgroundConfig = true}>
+          <Icon icon="mdi:image-multiple" width="20" />
+          Configure Tab Background
+        </button>
+        {#if tabBackground}
+          <small class="background-status">
+            {tabBackground.type === 'color' ? `Color: ${tabBackground.value}` : ''}
+            {tabBackground.type === 'image' ? 'Image background set' : ''}
+            {tabBackground.type === 'slideshow' ? `Slideshow (${tabBackground.images?.length || 0} images)` : ''}
           </small>
-        </div>
-      {/if}
-
-      <div class="modal-actions">
-        <div class="actions-left">
-          {#if tabName && onDelete}
-            <button type="button" class="btn-danger" onclick={onDelete}>
-              <Icon icon="mdi:trash-can" width="20" />
-              Delete
-            </button>
-          {/if}
-          {#if tabName && onDuplicate}
-            <button type="button" class="btn-duplicate" onclick={onDuplicate}>
-              <Icon icon="mdi:content-copy" width="20" />
-              Duplicate
-            </button>
-          {/if}
-        </div>
-        <div class="actions-right">
-          <button type="button" class="btn-secondary" onclick={onCancel}>
-            Cancel
-          </button>
-          <button type="submit" class="btn-primary">
-            <Icon icon="mdi:content-save" width="20" />
-            {tabName ? 'Save' : 'Create'}
-          </button>
-        </div>
+        {:else}
+          <small class="background-status">Using dashboard background</small>
+        {/if}
       </div>
-    </form>
-  </div>
-</div>
+    {:else if onSaveBackground}
+      <div class="form-group">
+        <small class="background-hint">
+          <Icon icon="mdi:information-outline" width="16" />
+          Enable "Individual backgrounds per tab" in dashboard background settings to set a custom background for this tab.
+        </small>
+      </div>
+    {/if}
+
+    <div class="modal-actions">
+      <div class="actions-left">
+        {#if tabName && onDelete}
+          <button type="button" class="btn-danger" onclick={onDelete}>
+            <Icon icon="mdi:trash-can" width="20" />
+            Delete
+          </button>
+        {/if}
+        {#if tabName && onDuplicate}
+          <button type="button" class="btn-duplicate" onclick={onDuplicate}>
+            <Icon icon="mdi:content-copy" width="20" />
+            Duplicate
+          </button>
+        {/if}
+      </div>
+      <div class="actions-right">
+        <button type="button" class="btn-secondary" onclick={onCancel}>
+          Cancel
+        </button>
+        <button type="submit" class="btn-primary">
+          <Icon icon="mdi:content-save" width="20" />
+          {tabName ? 'Save' : 'Create'}
+        </button>
+      </div>
+    </div>
+  </form>
+</Modal>
 
 {#if showBackgroundConfig}
   <BackgroundConfigModal
@@ -243,55 +229,6 @@
 {/if}
 
 <style>
-  .modal-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.7);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: var(--z-modal);
-    padding: 1rem;
-  }
-
-  .modal-content {
-    background: var(--bg-primary);
-    border-radius: 0.75rem;
-    width: 100%;
-    max-width: 400px;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-  }
-
-  .modal-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 1.5rem;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .modal-header h2 {
-    margin: 0;
-    font-size: 1.5rem;
-  }
-
-  .close-btn {
-    background: none;
-    border: none;
-    color: var(--text-secondary);
-    cursor: pointer;
-    padding: 0.5rem;
-    border-radius: 0.375rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .close-btn:hover {
-    background: var(--bg-tertiary);
-    color: var(--text-primary);
-  }
-
   form {
     padding: 1.5rem;
   }
@@ -380,12 +317,12 @@
   }
 
   .btn-duplicate {
-    background: #10b981;
+    background: var(--color-success);
     color: white;
   }
 
   .btn-duplicate:hover {
-    background: #059669;
+    background: var(--color-success-dark);
   }
 
   .btn-background {

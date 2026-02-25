@@ -1,6 +1,7 @@
 import { writable } from 'svelte/store';
 import { login as apiLogin, logout as apiLogout, getSessionToken as apiGetSessionToken } from '$lib/utils/api';
 import { toast } from './toast';
+import { logError } from '$lib/utils/errors';
 
 // Re-export getSessionToken for components that need it
 export const getSessionToken = apiGetSessionToken;
@@ -25,7 +26,7 @@ export async function login(username: string, password: string) {
     toast.success('Logged in successfully');
     return true;
   } catch (error) {
-    console.error('Login failed:', error);
+    logError('Login', error);
     toast.error('Invalid username or password');
     return false;
   } finally {
@@ -39,7 +40,7 @@ export async function logout() {
     await apiLogout();
     toast.info('Logged out');
   } catch (error) {
-    console.error('Logout error:', error);
+    logError('Logout', error);
   } finally {
     isAuthenticated.set(false);
     // Edit mode will automatically disable via its subscription to isAuthenticated

@@ -17,6 +17,7 @@
   import { dndzone } from 'svelte-dnd-action';
   import type { DndEvent } from 'svelte-dnd-action';
   import { onMount, onDestroy } from 'svelte';
+  import { logError } from '$lib/utils/errors';
 
   let { dashboard }: { dashboard: Dashboard } = $props();
   let activeTabIndex = $state(0);
@@ -52,7 +53,7 @@
   // Helper to check authentication before edit operations
   function requireAuth(): boolean {
     if (!$isAuthenticated) {
-      console.error('Edit operation requires authentication');
+      logError('Dashboard', 'Edit operation requires authentication');
       return false;
     }
     return true;
@@ -504,7 +505,7 @@
       await updateDashboard(updatedDashboard);
       showBackgroundConfig = false;
     } catch (error) {
-      console.error('Failed to save background:', error);
+      logError('Background save', error);
       if (error instanceof Error && error.message.includes('401')) {
         alert('Session expired. Please login again at /admin');
       } else {
@@ -519,7 +520,7 @@
       const updatedDashboard = { ...dashboard, perTabBackgrounds: enabled };
       await updateDashboard(updatedDashboard);
     } catch (error) {
-      console.error('Failed to update perTabBackgrounds setting:', error);
+      logError('Background settings', error);
     }
   }
 
@@ -533,7 +534,7 @@
         await updateDashboard(updatedDashboard);
       }
     } catch (error) {
-      console.error('Failed to save tab background:', error);
+      logError('Tab background', error);
       if (error instanceof Error && error.message.includes('401')) {
         alert('Session expired. Please login again at /admin');
       } else {
@@ -1018,13 +1019,13 @@
   }
 
   .tab-control-btn:hover {
-    background: #f59e0b;
+    background: var(--color-warning);
     color: white;
     transform: scale(1.1);
   }
 
   .tab-control-btn.duplicate-btn:hover {
-    background: #10b981;
+    background: var(--color-success);
     color: white;
   }
 

@@ -5,12 +5,13 @@
   import ColorPicker from './ColorPicker.svelte';
   import OpacitySlider from './OpacitySlider.svelte';
   import IconPickerModal from './IconPickerModal.svelte';
+  import Modal from '../shared/Modal.svelte';
   import { confirm } from '$lib/stores/confirmModal';
   import { toast } from '$lib/stores/toast';
-  import { focusTrap } from '$lib/utils/focusTrap';
   import { getSessionToken } from '$lib/stores/auth';
   import { editMode } from '$lib/stores/editMode';
   import { createIcon } from '$lib/utils/api';
+  import { logWarn } from '$lib/utils/errors';
 
   interface TabInfo {
     id: string;
@@ -71,6 +72,14 @@
       onCancel();
     }
   });
+
+  function handleBeforeClose(): boolean {
+    if (showIconPicker) {
+      showIconPicker = false;
+      return false;
+    }
+    return true;
+  }
 
   function handleSave() {
     onSave(editedEntry);
@@ -172,7 +181,7 @@
         toast.success(`Icon saved to "My Uploads"`);
       } catch {
         // Non-critical error - icon still works on the tile, just won't appear in My Uploads
-        console.warn('Could not save icon to database');
+        logWarn('Could not save icon to database');
       }
     } catch (err) {
       uploadError = err instanceof Error ? err.message : 'Upload failed';
@@ -186,322 +195,245 @@
   function clearCustomIcon() {
     editedEntry.iconUrl = undefined;
   }
-
-  // Close modal on escape key
-  function handleKeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape') {
-      if (showIconPicker) {
-        showIconPicker = false;
-      } else {
-        onCancel();
-      }
-    }
-  }
 </script>
 
-<svelte:window onkeydown={handleKeydown} />
+<Modal
+  id="entry-edit"
+  title={entry.id ? 'Edit Tile' : 'New Tile'}
+  onClose={onCancel}
+  onBeforeClose={handleBeforeClose}
+>
+  <form onsubmit={(e) => { e.preventDefault(); handleSave(); }}>
+    <div class="form-grid">
+      <div class="form-group">
+        <label for="name">Name *</label>
+        <input
+          id="name"
+          type="text"
+          bind:value={editedEntry.name}
+          required
+          placeholder="Service Name"
+        />
+      </div>
 
-<!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="modal-backdrop" onclick={onCancel} onkeydown={(e) => e.key === 'Escape' && onCancel()}>
-  <div
-    class="modal-content"
-    onclick={(e) => e.stopPropagation()}
-    onkeydown={(e) => e.stopPropagation()}
-    role="dialog"
-    aria-modal="true"
-    aria-labelledby="entry-edit-title"
-    tabindex="-1"
-    use:focusTrap
-  >
-    <div class="modal-header">
-      <h2 id="entry-edit-title">{entry.id ? 'Edit Tile' : 'New Tile'}</h2>
-      <button class="close-btn" onclick={onCancel}>
-        <Icon icon="mdi:close" width="24" />
-      </button>
-    </div>
+      <div class="form-group">
+        <label for="description">Subtitle/Description</label>
+        <input
+          id="description"
+          type="text"
+          bind:value={editedEntry.description}
+          placeholder="Optional subtitle"
+        />
+      </div>
 
-    <form onsubmit={(e) => { e.preventDefault(); handleSave(); }}>
-      <div class="form-grid">
-        <div class="form-group">
-          <label for="name">Name *</label>
-          <input
-            id="name"
-            type="text"
-            bind:value={editedEntry.name}
-            required
-            placeholder="Service Name"
-          />
-        </div>
+      <div class="form-group">
+        <label for="url">URL *</label>
+        <input
+          id="url"
+          type="url"
+          bind:value={editedEntry.url}
+          required
+          placeholder="https://example.com"
+        />
+      </div>
 
-        <div class="form-group">
-          <label for="description">Subtitle/Description</label>
-          <input
-            id="description"
-            type="text"
-            bind:value={editedEntry.description}
-            placeholder="Optional subtitle"
-          />
-        </div>
+      <div class="form-group">
+        <label for="icon">Icon</label>
 
-        <div class="form-group">
-          <label for="url">URL *</label>
-          <input
-            id="url"
-            type="url"
-            bind:value={editedEntry.url}
-            required
-            placeholder="https://example.com"
-          />
-        </div>
-
-        <div class="form-group">
-          <label for="icon">Icon</label>
-
-          {#if editedEntry.iconUrl}
-            <!-- Custom uploaded icon -->
-            <div class="custom-icon-display">
-              <img src={editedEntry.iconUrl} alt="Custom icon" class="custom-icon-preview" />
-              <span class="custom-icon-label">Custom icon uploaded</span>
-              <button type="button" class="clear-icon-btn" onclick={clearCustomIcon} title="Remove custom icon">
-                <Icon icon="mdi:close" width="18" />
-              </button>
-            </div>
-            <small>Or use an Iconify icon instead:</small>
-          {/if}
-
-          <div class="icon-input-wrapper">
-            <div class="icon-input">
-              <input
-                id="icon"
-                type="text"
-                bind:value={iconSearch}
-                oninput={() => { editedEntry.icon = iconSearch; editedEntry.iconUrl = undefined; }}
-                placeholder="mdi:server"
-                disabled={isUploadingIcon}
-              />
-              {#if editedEntry.icon && !editedEntry.iconUrl}
-                <div class="icon-preview">
-                  <ColoredIcon icon={editedEntry.icon} width="32" />
-                </div>
-              {/if}
-            </div>
-            <button
-              type="button"
-              class="browse-btn"
-              onclick={() => showIconPicker = true}
-              title="Browse icon library"
-              disabled={isUploadingIcon}
-            >
-              <Icon icon="mdi:apps" width="20" />
-              Browse
+        {#if editedEntry.iconUrl}
+          <!-- Custom uploaded icon -->
+          <div class="custom-icon-display">
+            <img src={editedEntry.iconUrl} alt="Custom icon" class="custom-icon-preview" />
+            <span class="custom-icon-label">Custom icon uploaded</span>
+            <button type="button" class="clear-icon-btn" onclick={clearCustomIcon} title="Remove custom icon">
+              <Icon icon="mdi:close" width="18" />
             </button>
-            <button
-              type="button"
-              class="upload-btn"
-              onclick={() => iconFileInput?.click()}
-              title="Upload custom icon"
-              disabled={isUploadingIcon}
-            >
-              {#if isUploadingIcon}
-                <Icon icon="mdi:loading" width="20" class="spin" />
-              {:else}
-                <Icon icon="mdi:upload" width="20" />
-              {/if}
-              Upload
-            </button>
-            <input
-              type="file"
-              accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml"
-              onchange={handleIconUpload}
-              bind:this={iconFileInput}
-              style="display: none;"
-            />
           </div>
+          <small>Or use an Iconify icon instead:</small>
+        {/if}
 
-          {#if uploadError}
-            <small class="error-text">{uploadError}</small>
-          {/if}
-
-          <small>Browse the icon library, enter an icon name from <a href="https://icon-sets.iconify.design/" target="_blank" rel="noopener">iconify.design</a>, or upload your own</small>
-        </div>
-
-        <div class="form-group">
-          <label for="size">Size</label>
-          <select id="size" bind:value={editedEntry.size}>
-            <option value="small">Small</option>
-            <option value="medium">Medium</option>
-            <option value="large">Large</option>
-          </select>
-        </div>
-
-        <div class="form-group">
-          <label for="openMode">Open Mode</label>
-          <select id="openMode" bind:value={editedEntry.openMode}>
-            <option value="newtab">New Tab</option>
-            <option value="sametab">Same Tab</option>
-            <option value="iframe">iFrame Modal</option>
-            <option value="popup">Popup Modal</option>
-          </select>
-        </div>
-
-        <div class="form-group full-width">
-          <ColorPicker
-            selectedColor={editedEntry.color}
-            onSelect={(color) => editedEntry.color = color}
-          />
-        </div>
-
-        <div class="form-group full-width">
-          <OpacitySlider
-            opacity={editedEntry.opacity}
-            onSelect={(opacity) => editedEntry.opacity = opacity}
-          />
-        </div>
-
-        <div class="form-group checkbox-group">
-          <label>
+        <div class="icon-input-wrapper">
+          <div class="icon-input">
             <input
-              type="checkbox"
-              checked={editedEntry.statusCheck?.enabled ?? false}
-              onchange={(e) => {
-                if (!editedEntry.statusCheck) {
-                  editedEntry.statusCheck = { type: 'http', enabled: false, interval: 60 };
-                }
-                editedEntry.statusCheck.enabled = (e.target as HTMLInputElement).checked;
-              }}
+              id="icon"
+              type="text"
+              bind:value={iconSearch}
+              oninput={() => { editedEntry.icon = iconSearch; editedEntry.iconUrl = undefined; }}
+              placeholder="mdi:server"
+              disabled={isUploadingIcon}
             />
-            Enable Status Check
-          </label>
-        </div>
-
-        <div class="form-group checkbox-group">
-          <label>
-            <input type="checkbox" bind:checked={editedEntry.fetchFavicon} />
-            Auto-fetch Favicon
-          </label>
-        </div>
-
-        {#if canMove}
-          <div class="form-group full-width move-section">
-            {#if !showMoveSection}
-              <button type="button" class="btn-move-toggle" onclick={() => showMoveSection = true}>
-                <Icon icon="mdi:folder-move" width="18" />
-                Move to Different Tab/Group
-              </button>
-            {:else}
-              <div class="move-controls">
-                <label>Move to:</label>
-                <div class="move-selects">
-                  <select bind:value={selectedMoveTabId} onchange={() => selectedMoveGroupId = ''}>
-                    <option value="">Select Tab...</option>
-                    {#each availableTabs as tab}
-                      <option value={tab.id}>{tab.name} {tab.id === currentTabId ? '(current)' : ''}</option>
-                    {/each}
-                  </select>
-                  {#if selectedMoveTabId}
-                    <select bind:value={selectedMoveGroupId}>
-                      <option value="">Select Group...</option>
-                      {#each moveTargetGroups as group}
-                        <option value={group.id}>
-                          {group.name} {selectedMoveTabId === currentTabId && group.id === currentGroupId ? '(current)' : ''}
-                        </option>
-                      {/each}
-                    </select>
-                  {/if}
-                </div>
-                <div class="move-actions">
-                  <button type="button" class="btn-secondary btn-sm" onclick={() => { showMoveSection = false; selectedMoveTabId = ''; selectedMoveGroupId = ''; }}>
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    class="btn-move btn-sm"
-                    onclick={handleMove}
-                    disabled={!selectedMoveTabId || !selectedMoveGroupId || (selectedMoveTabId === currentTabId && selectedMoveGroupId === currentGroupId)}
-                  >
-                    <Icon icon="mdi:check" width="16" />
-                    Move
-                  </button>
-                </div>
+            {#if editedEntry.icon && !editedEntry.iconUrl}
+              <div class="icon-preview">
+                <ColoredIcon icon={editedEntry.icon} width="32" />
               </div>
             {/if}
           </div>
+          <button
+            type="button"
+            class="browse-btn"
+            onclick={() => showIconPicker = true}
+            title="Browse icon library"
+            disabled={isUploadingIcon}
+          >
+            <Icon icon="mdi:apps" width="20" />
+            Browse
+          </button>
+          <button
+            type="button"
+            class="upload-btn"
+            onclick={() => iconFileInput?.click()}
+            title="Upload custom icon"
+            disabled={isUploadingIcon}
+          >
+            {#if isUploadingIcon}
+              <Icon icon="mdi:loading" width="20" class="spin" />
+            {:else}
+              <Icon icon="mdi:upload" width="20" />
+            {/if}
+            Upload
+          </button>
+          <input
+            type="file"
+            accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml"
+            onchange={handleIconUpload}
+            bind:this={iconFileInput}
+            style="display: none;"
+          />
+        </div>
+
+        {#if uploadError}
+          <small class="error-text">{uploadError}</small>
         {/if}
+
+        <small>Browse the icon library, enter an icon name from <a href="https://icon-sets.iconify.design/" target="_blank" rel="noopener">iconify.design</a>, or upload your own</small>
       </div>
 
-      <div class="modal-actions">
-        {#if onDelete}
-          <button type="button" class="btn-danger" onclick={handleDelete}>
-            <Icon icon="mdi:trash-can" width="20" />
-            Delete
-          </button>
-        {/if}
-        <div class="action-right">
-          <button type="button" class="btn-secondary" onclick={onCancel}>
-            Cancel
-          </button>
-          <button type="submit" class="btn-primary">
-            <Icon icon="mdi:content-save" width="20" />
-            {entry.id ? 'Save' : 'Create'}
-          </button>
-        </div>
+      <!-- Color and Opacity grouped after Icon for consistency with Tab/Group editors -->
+      <div class="form-group full-width">
+        <ColorPicker
+          selectedColor={editedEntry.color}
+          onSelect={(color) => editedEntry.color = color}
+        />
       </div>
-    </form>
-  </div>
-</div>
+
+      <div class="form-group full-width">
+        <OpacitySlider
+          opacity={editedEntry.opacity}
+          onSelect={(opacity) => editedEntry.opacity = opacity}
+        />
+      </div>
+
+      <div class="form-group">
+        <label for="size">Size</label>
+        <select id="size" bind:value={editedEntry.size}>
+          <option value="small">Small</option>
+          <option value="medium">Medium</option>
+          <option value="large">Large</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="openMode">Open Mode</label>
+        <select id="openMode" bind:value={editedEntry.openMode}>
+          <option value="newtab">New Tab</option>
+          <option value="sametab">Same Tab</option>
+          <option value="iframe">iFrame Modal</option>
+          <option value="popup">Popup Modal</option>
+        </select>
+      </div>
+
+      <div class="form-group checkbox-group">
+        <label>
+          <input
+            type="checkbox"
+            checked={editedEntry.statusCheck?.enabled ?? false}
+            onchange={(e) => {
+              if (!editedEntry.statusCheck) {
+                editedEntry.statusCheck = { type: 'http', enabled: false, interval: 60 };
+              }
+              editedEntry.statusCheck.enabled = (e.target as HTMLInputElement).checked;
+            }}
+          />
+          Enable Status Check
+        </label>
+      </div>
+
+      <div class="form-group checkbox-group">
+        <label>
+          <input type="checkbox" bind:checked={editedEntry.fetchFavicon} />
+          Auto-fetch Favicon
+        </label>
+      </div>
+
+      {#if canMove}
+        <div class="form-group full-width move-section">
+          {#if !showMoveSection}
+            <button type="button" class="btn-move-toggle" onclick={() => showMoveSection = true}>
+              <Icon icon="mdi:folder-move" width="18" />
+              Move to Different Tab/Group
+            </button>
+          {:else}
+            <div class="move-controls">
+              <label for="move-tab-select">Move to:</label>
+              <div class="move-selects">
+                <select id="move-tab-select" bind:value={selectedMoveTabId} onchange={() => selectedMoveGroupId = ''}>
+                  <option value="">Select Tab...</option>
+                  {#each availableTabs as tab}
+                    <option value={tab.id}>{tab.name} {tab.id === currentTabId ? '(current)' : ''}</option>
+                  {/each}
+                </select>
+                {#if selectedMoveTabId}
+                  <select bind:value={selectedMoveGroupId}>
+                    <option value="">Select Group...</option>
+                    {#each moveTargetGroups as group}
+                      <option value={group.id}>
+                        {group.name} {selectedMoveTabId === currentTabId && group.id === currentGroupId ? '(current)' : ''}
+                      </option>
+                    {/each}
+                  </select>
+                {/if}
+              </div>
+              <div class="move-actions">
+                <button type="button" class="btn-secondary btn-sm" onclick={() => { showMoveSection = false; selectedMoveTabId = ''; selectedMoveGroupId = ''; }}>
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  class="btn-move btn-sm"
+                  onclick={handleMove}
+                  disabled={!selectedMoveTabId || !selectedMoveGroupId || (selectedMoveTabId === currentTabId && selectedMoveGroupId === currentGroupId)}
+                >
+                  <Icon icon="mdi:check" width="16" />
+                  Move
+                </button>
+              </div>
+            </div>
+          {/if}
+        </div>
+      {/if}
+    </div>
+
+    <div class="modal-actions">
+      {#if onDelete}
+        <button type="button" class="btn-danger" onclick={handleDelete}>
+          <Icon icon="mdi:trash-can" width="20" />
+          Delete
+        </button>
+      {/if}
+      <div class="action-right">
+        <button type="button" class="btn-secondary" onclick={onCancel}>
+          Cancel
+        </button>
+        <button type="submit" class="btn-primary">
+          <Icon icon="mdi:content-save" width="20" />
+          {entry.id ? 'Save' : 'Create'}
+        </button>
+      </div>
+    </div>
+  </form>
+</Modal>
 
 <style>
-  .modal-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.7);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: var(--z-modal);
-    padding: 1rem;
-  }
-
-  .modal-content {
-    background: var(--bg-primary);
-    border-radius: 0.75rem;
-    width: 100%;
-    max-width: 600px;
-    max-height: 90vh;
-    overflow: auto;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-  }
-
-  .modal-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 1.5rem;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .modal-header h2 {
-    margin: 0;
-    font-size: 1.5rem;
-  }
-
-  .close-btn {
-    background: none;
-    border: none;
-    color: var(--text-secondary);
-    cursor: pointer;
-    padding: 0.5rem;
-    border-radius: 0.375rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .close-btn:hover {
-    background: var(--bg-tertiary);
-    color: var(--text-primary);
-  }
-
   form {
     padding: 1.5rem;
   }
@@ -845,7 +777,7 @@
   }
 
   .btn-move {
-    background: #10b981;
+    background: var(--color-success);
     color: white;
     border: none;
     border-radius: 0.375rem;
@@ -856,7 +788,7 @@
   }
 
   .btn-move:hover:not(:disabled) {
-    background: #059669;
+    background: var(--color-success-dark);
   }
 
   .btn-move:disabled {

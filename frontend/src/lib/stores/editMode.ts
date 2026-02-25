@@ -1,5 +1,6 @@
 import { writable, get } from 'svelte/store';
 import { isAuthenticated } from './auth';
+import { logWarn } from '$lib/utils/errors';
 
 // Global edit mode state
 export const editMode = writable(false);
@@ -7,7 +8,7 @@ export const editMode = writable(false);
 export function toggleEditMode() {
   // Only allow toggle if authenticated
   if (!get(isAuthenticated)) {
-    console.warn('Edit mode requires authentication');
+    logWarn('Edit mode requires authentication');
     editMode.set(false);
     return false;
   }
@@ -18,7 +19,7 @@ export function toggleEditMode() {
 export function enableEditMode() {
   // Only allow enabling if authenticated
   if (!get(isAuthenticated)) {
-    console.warn('Edit mode requires authentication');
+    logWarn('Edit mode requires authentication');
     editMode.set(false);
     return false;
   }

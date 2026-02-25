@@ -35,7 +35,7 @@
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="modal-overlay" onclick={onClose} onkeydown={(e) => e.key === 'Escape' && onClose()} role="dialog" aria-modal="true" aria-labelledby="about-title" tabindex="-1">
-  <div class="modal-content" onclick={(e) => e.stopPropagation()} use:focusTrap>
+  <div class="modal-content" onclick={(e) => e.stopPropagation()} role="presentation" use:focusTrap>
     <button class="close-btn" onclick={onClose} aria-label="Close">
       <Icon icon="mdi:close" width="24" />
     </button>

@@ -159,7 +159,24 @@ func runMigrations(db *sql.DB) error {
 	}
 
 	if configCount == 0 {
-		defaultConfig := `{
+		defaultConfig := DefaultConfig
+		_, err := db.Exec("INSERT INTO config (id, data) VALUES (1, ?)", defaultConfig)
+		if err != nil {
+			return fmt.Errorf("failed to create default config: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// ResetConfig resets the configuration to the default state
+func ResetConfig(db *sql.DB) error {
+	_, err := db.Exec("UPDATE config SET data = ? WHERE id = 1", DefaultConfig)
+	return err
+}
+
+// DefaultConfig is the initial configuration for a fresh HOPS installation
+const DefaultConfig = `{
   "dashboards": [
     {
       "id": "sample",
@@ -289,11 +306,3 @@ func runMigrations(db *sql.DB) error {
     }
   ]
 }`
-		_, err := db.Exec("INSERT INTO config (id, data) VALUES (1, ?)", defaultConfig)
-		if err != nil {
-			return fmt.Errorf("failed to create default config: %w", err)
-		}
-	}
-
-	return nil
-}

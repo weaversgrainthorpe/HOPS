@@ -7,7 +7,7 @@ interface SelectedEntry {
   groupId: string;
 }
 
-// Legacy single selection (kept for compatibility)
+// Primary/focused entry for keyboard actions (Ctrl+C, Ctrl+X)
 export const selectedEntry = writable<SelectedEntry | null>(null);
 
 export function selectEntry(entry: Entry, tabId: string, groupId: string) {

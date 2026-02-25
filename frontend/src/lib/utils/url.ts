@@ -1,4 +1,5 @@
 // URL validation and safe opening utilities
+import { logWarn } from '$lib/utils/errors';
 
 /**
  * Validates a URL string and returns whether it's safe to open.
@@ -95,7 +96,7 @@ export function normalizeUrl(url: string): string {
  */
 export function safeOpenUrl(url: string, target: '_blank' | '_self' = '_blank'): boolean {
   if (!isValidUrl(url)) {
-    console.warn('Attempted to open invalid URL:', url);
+    logWarn('Attempted to open invalid URL: ' + url);
     return false;
   }
 

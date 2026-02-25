@@ -5,6 +5,15 @@ All notable changes to HOPS (Home Operations Portal System) will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] - 2026-02-25
+
+### Changed
+- Dev environment banner: uses border + badge instead of overlay that blocked nav
+- Updated frontend config and API utilities
+
+### Fixed
+- Dev banner no longer blocks navigation elements
+
 ## [1.0.0] - 2026-01-07
 
 ### 🎉 First Public Release
@@ -80,4 +89,5 @@ HOPS (Home Operations Portal System) is now ready for public use! A modern, self
 ### Credits
 Created by Jonathan Brown with Claude (Anthropic)
 
+[1.0.1]: https://github.com/weaversgrainthorpe/HOPS/releases/tag/v1.0.1
 [1.0.0]: https://github.com/weaversgrainthorpe/HOPS/releases/tag/v1.0.0
