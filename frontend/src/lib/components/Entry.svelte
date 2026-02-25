@@ -372,12 +372,17 @@
   /* Edit mode styles */
   .entry.edit-mode {
     cursor: pointer;
-    border-color: #f59e0b;
+    border-color: var(--color-warning);
   }
 
   .entry.edit-mode:hover {
-    border-color: #f59e0b;
+    border-color: var(--color-warning);
     box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2);
+  }
+
+  .entry.selected {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent);
   }
 
   /* Custom color styles */
@@ -431,7 +436,7 @@
   }
 
   .control-btn.edit-btn:hover {
-    background: #f59e0b;
+    background: var(--color-warning);
     color: white;
     transform: scale(1.1);
   }

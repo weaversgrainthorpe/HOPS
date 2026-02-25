@@ -26,6 +26,8 @@
     children: Snippet;
     /** Footer slot content */
     footer?: Snippet;
+    /** Called before close - return false to prevent closing (e.g. to close a nested modal first) */
+    onBeforeClose?: () => boolean;
   }
 
   let {
@@ -39,18 +41,24 @@
     contentClass = '',
     header,
     children,
-    footer
+    footer,
+    onBeforeClose
   }: Props = $props();
+
+  function tryClose() {
+    if (onBeforeClose && onBeforeClose() === false) return;
+    onClose();
+  }
 
   function handleKeydown(e: KeyboardEvent) {
     if (e.key === 'Escape') {
-      onClose();
+      tryClose();
     }
   }
 
   function handleBackdropClick(e: MouseEvent) {
     if (e.target === e.currentTarget) {
-      onClose();
+      tryClose();
     }
   }
 </script>
@@ -61,7 +69,7 @@
 <div
   class="modal-backdrop"
   onclick={handleBackdropClick}
-  onkeydown={(e) => e.key === 'Escape' && onClose()}
+  onkeydown={(e) => e.key === 'Escape' && tryClose()}
   style:--modal-z-index={zIndex}
 >
   <div
@@ -88,7 +96,7 @@
           {title}
         </h2>
         {#if showCloseButton}
-          <button class="close-btn" onclick={onClose} title="Close (Esc)">
+          <button class="close-btn" onclick={tryClose} title="Close (Esc)">
             <Icon icon="mdi:close" width="24" />
           </button>
         {/if}

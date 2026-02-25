@@ -5,6 +5,7 @@
   import { getBackgrounds, uploadBackground, deleteBackground, createBackgroundCategory } from '$lib/utils/api';
   import { confirm } from '$lib/stores/confirmModal';
   import { focusTrap } from '$lib/utils/focusTrap';
+  import { logError } from '$lib/utils/errors';
 
   interface Props {
     background?: Background;
@@ -98,7 +99,7 @@
 
       allImages = [...serverImages, ...presetsToAdd];
     } catch (error) {
-      console.error('Failed to load backgrounds:', error);
+      logError('Background load', error);
       // Fallback to local presets
       categories = BACKGROUND_CATEGORIES;
       allImages = BACKGROUND_PRESETS.map(p => ({ ...p, source: 'preset' as const }));
@@ -192,7 +193,7 @@
         singleImageUrl = '';
       }
     } catch (error) {
-      console.error('Failed to delete image:', error);
+      logError('Background delete', error);
       const message = (error as Error).message;
       if (message.includes('401')) {
         uploadError = 'Session expired. Please log in again at /admin';
@@ -424,8 +425,9 @@
 
       <!-- Background Type Selection -->
       <div class="form-group">
-        <label>Background Type {#if level === 'dashboard' && perTabEnabled}<span class="label-hint">(default for tabs without custom background)</span>{/if}</label>
-        <div class="type-buttons">
+        <!-- svelte-ignore a11y_label_has_associated_control -->
+        <label id="bg-type-label">Background Type {#if level === 'dashboard' && perTabEnabled}<span class="label-hint">(default for tabs without custom background)</span>{/if}</label>
+        <div class="type-buttons" role="group" aria-labelledby="bg-type-label">
           <button class="type-btn" class:active={backgroundType === 'none'} onclick={() => backgroundType = 'none'}>
             <Icon icon="mdi:close-circle-outline" width="24" />
             <span>None</span>
@@ -459,8 +461,9 @@
       <!-- Image Fit Option -->
       {#if backgroundType === 'image' || backgroundType === 'slideshow'}
         <div class="form-group">
-          <label>Image Fit</label>
-          <div class="fit-buttons">
+          <!-- svelte-ignore a11y_label_has_associated_control -->
+          <label id="image-fit-label">Image Fit</label>
+          <div class="fit-buttons" role="group" aria-labelledby="image-fit-label">
             <button class="fit-btn" class:active={backgroundFit === 'cover'} onclick={() => backgroundFit = 'cover'} title="Cover - Image covers entire area (may crop)">
               <Icon icon="mdi:arrow-expand-all" width="20" />
               <span>Cover</span>
@@ -499,8 +502,9 @@
         </div>
 
         <div class="form-group">
-          <label>Transition Effect</label>
-          <div class="transition-buttons">
+          <!-- svelte-ignore a11y_label_has_associated_control -->
+          <label id="transition-effect-label">Transition Effect</label>
+          <div class="transition-buttons" role="group" aria-labelledby="transition-effect-label">
             <button class="transition-btn" class:active={transitionEffect === 'crossfade'} onclick={() => transitionEffect = 'crossfade'} title="Crossfade">
               <Icon icon="mdi:blur" width="20" />
               <span>Crossfade</span>
@@ -639,9 +643,10 @@
         {/if}
 
         <div class="form-group">
-          <label>Selected Images ({slideshowImages.length})</label>
+          <!-- svelte-ignore a11y_label_has_associated_control -->
+          <label id="selected-images-label">Selected Images ({slideshowImages.length})</label>
           {#if slideshowImages.length > 0}
-            <div class="selected-images">
+            <div class="selected-images" aria-labelledby="selected-images-label">
               {#each slideshowImages as imageUrl, index}
                 <div class="selected-image">
                   <img src={imageUrl} alt="Slide {index + 1}" />
@@ -659,9 +664,9 @@
 
         <!-- Custom URL Input -->
         <div class="form-group">
-          <label>Add Custom Image URL</label>
+          <label for="custom-image-url">Add Custom Image URL</label>
           <div class="url-input-group">
-            <input type="text" bind:value={customImageUrl} placeholder="https://example.com/image.jpg" onkeydown={(e) => e.key === 'Enter' && handleAddCustomUrl()} />
+            <input id="custom-image-url" type="text" bind:value={customImageUrl} placeholder="https://example.com/image.jpg" onkeydown={(e) => e.key === 'Enter' && handleAddCustomUrl()} />
             <button onclick={handleAddCustomUrl} class="add-btn">
               <Icon icon="mdi:plus" width="20" />
               Add
@@ -1036,13 +1041,13 @@
 
   .transition-btn.special:hover {
     background: linear-gradient(135deg, var(--bg-primary) 0%, rgba(139, 92, 246, 0.2) 100%);
-    border-color: #8b5cf6;
+    border-color: var(--color-accent-violet);
     border-style: solid;
   }
 
   .transition-btn.special.active {
-    background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
-    border-color: #8b5cf6;
+    background: linear-gradient(135deg, var(--color-accent-violet) 0%, var(--color-accent-indigo) 100%);
+    border-color: var(--color-accent-violet);
     border-style: solid;
   }
 
@@ -1389,7 +1394,7 @@
   }
 
   .image-card.selected {
-    border-color: #22c55e;
+    border-color: var(--color-success-alt);
     box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.3);
   }
 
@@ -1432,7 +1437,7 @@
     position: absolute;
     top: 0.25rem;
     left: 0.25rem;
-    background: #f59e0b;
+    background: var(--color-warning);
     color: white;
     padding: 0.125rem 0.25rem;
     border-radius: 0.25rem;
@@ -1474,7 +1479,7 @@
     position: absolute;
     bottom: 0.25rem;
     right: 0.25rem;
-    background: #22c55e;
+    background: var(--color-success-alt);
     color: white;
     width: 22px;
     height: 22px;

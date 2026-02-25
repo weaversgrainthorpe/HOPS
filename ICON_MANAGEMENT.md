@@ -1,4 +1,4 @@
-# HOPS Icon Management (v1.0.0)
+# HOPS Icon Management (v1.0.1)
 
 ## Overview
 

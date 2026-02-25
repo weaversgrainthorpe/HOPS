@@ -137,6 +137,15 @@ export function logError(context: string, error: unknown): void {
 }
 
 /**
+ * Logs a warning for debugging (only in development)
+ */
+export function logWarn(message: string): void {
+  if (import.meta.env.DEV) {
+    console.warn(message);
+  }
+}
+
+/**
  * Wraps an async function with standardized error handling
  */
 export async function handleAsync<T>(

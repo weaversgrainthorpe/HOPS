@@ -65,7 +65,8 @@ func main() {
 	defer statusChecker.Stop()
 
 	// Initialize API router
-	router := api.NewRouter(db, authService, cfg)
+	startTime := time.Now()
+	router := api.NewRouter(db, authService, cfg, startTime)
 
 	// Start server
 	addr := fmt.Sprintf(":%s", cfg.Port)

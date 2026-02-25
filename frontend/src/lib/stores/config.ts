@@ -3,6 +3,7 @@ import type { Config, Dashboard } from '$lib/types';
 import { getConfig, updateConfig as apiUpdateConfig } from '$lib/utils/api';
 import { page } from '$app/stores';
 import { toast } from './toast';
+import { logError } from '$lib/utils/errors';
 
 // Create a writable store for the config
 export const config = writable<Config | null>(null);
@@ -35,7 +36,7 @@ export async function loadConfig() {
     const data = await getConfig();
     config.set(data);
   } catch (error) {
-    console.error('Failed to load config:', error);
+    logError('Config load', error);
     configError.set(error instanceof Error ? error.message : 'Failed to load configuration');
   } finally {
     configLoading.set(false);
@@ -51,7 +52,7 @@ export async function updateConfig(newConfig: Config, showToast = true) {
       toast.success('Changes saved');
     }
   } catch (error) {
-    console.error('Failed to update config:', error);
+    logError('Config update', error);
 
     // Check if it's a session expiration error
     if (error instanceof Error && error.message === 'SESSION_EXPIRED') {

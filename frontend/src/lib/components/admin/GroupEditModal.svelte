@@ -3,7 +3,7 @@
   import ColorPicker from './ColorPicker.svelte';
   import OpacitySlider from './OpacitySlider.svelte';
   import IconPickerModal from './IconPickerModal.svelte';
-  import { focusTrap } from '$lib/utils/focusTrap';
+  import Modal from '../shared/Modal.svelte';
   import { editMode } from '$lib/stores/editMode';
 
   // Close modal when edit mode is turned off
@@ -69,6 +69,14 @@
     availableTabs.filter(t => t.id !== currentTabId)
   );
 
+  function handleBeforeClose(): boolean {
+    if (showIconPicker) {
+      showIconPicker = false;
+      return false;
+    }
+    return true;
+  }
+
   function handleMove() {
     if (selectedMoveTabId && onMoveToTab) {
       onMoveToTab(selectedMoveTabId);
@@ -78,16 +86,6 @@
   function handleSave() {
     if (name.trim()) {
       onSave(name.trim(), icon || undefined, iconUrl || undefined, color, opacity, textColor, displayStyle);
-    }
-  }
-
-  function handleKeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape') {
-      if (showIconPicker) {
-        showIconPicker = false;
-      } else {
-        onCancel();
-      }
     }
   }
 
@@ -103,223 +101,210 @@
   }
 </script>
 
-<svelte:window onkeydown={handleKeydown} />
-
-<!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="modal-backdrop" onclick={onCancel} onkeydown={(e) => e.key === 'Escape' && onCancel()}>
-  <div
-    class="modal-content"
-    onclick={(e) => e.stopPropagation()}
-    onkeydown={(e) => e.stopPropagation()}
-    role="dialog"
-    aria-modal="true"
-    aria-labelledby="group-edit-title"
-    tabindex="-1"
-    use:focusTrap
-  >
-    <div class="modal-header">
-      <h2 id="group-edit-title">{groupName ? 'Edit Group' : 'New Group'}</h2>
-      <button class="close-btn" onclick={onCancel}>
-        <Icon icon="mdi:close" width="24" />
-      </button>
+<Modal
+  id="group-edit"
+  title={groupName ? 'Edit Group' : 'New Group'}
+  onClose={onCancel}
+  onBeforeClose={handleBeforeClose}
+  maxWidth="400px"
+>
+  <form onsubmit={(e) => { e.preventDefault(); handleSave(); }}>
+    <div class="form-group">
+      <label for="name">Group Name *</label>
+      <input
+        id="name"
+        type="text"
+        bind:value={name}
+        required
+        placeholder="e.g., Services, Media, Tools"
+      />
     </div>
 
-    <form onsubmit={(e) => { e.preventDefault(); handleSave(); }}>
-      <div class="form-group">
-        <label for="name">Group Name *</label>
-        <input
-          id="name"
-          type="text"
-          bind:value={name}
-          required
-          placeholder="e.g., Services, Media, Tools"
-          autofocus
-        />
-      </div>
-
-      <div class="form-group">
-        <label>Icon (optional)</label>
-        <div class="icon-input-wrapper">
-          <div class="icon-input">
-            {#if iconUrl}
-              <div class="selected-icon-display">
-                <img src={iconUrl} alt="Selected icon" class="icon-image" />
-                <span class="icon-name">Image icon selected</span>
+    <div class="form-group">
+      <label for="group-icon">Icon (optional)</label>
+      <div class="icon-input-wrapper">
+        <div class="icon-input">
+          {#if iconUrl}
+            <div class="selected-icon-display">
+              <img src={iconUrl} alt="Selected icon" class="icon-image" />
+              <span class="icon-name">Image icon selected</span>
+            </div>
+          {:else}
+            <input
+              id="group-icon"
+              type="text"
+              bind:value={icon}
+              placeholder="mdi:folder"
+            />
+            {#if icon}
+              <div class="icon-preview">
+                <Icon icon={icon} width="24" />
               </div>
-            {:else}
-              <input
-                type="text"
-                bind:value={icon}
-                placeholder="mdi:folder"
-              />
-              {#if icon}
-                <div class="icon-preview">
-                  <Icon icon={icon} width="24" />
-                </div>
-              {/if}
             {/if}
-          </div>
+          {/if}
+        </div>
+        <button
+          type="button"
+          class="browse-btn"
+          onclick={() => showIconPicker = true}
+          title="Browse icon library"
+        >
+          <Icon icon="mdi:apps" width="18" />
+          Browse
+        </button>
+        {#if icon || iconUrl}
           <button
             type="button"
-            class="browse-btn"
-            onclick={() => showIconPicker = true}
-            title="Browse icon library"
+            class="clear-btn"
+            onclick={clearIcon}
+            title="Clear icon"
           >
-            <Icon icon="mdi:apps" width="18" />
-            Browse
+            <Icon icon="mdi:close" width="18" />
           </button>
-          {#if icon || iconUrl}
+        {/if}
+      </div>
+      <small>Browse the icon library or enter an icon name from <a href="https://icon-sets.iconify.design/" target="_blank" rel="noopener">iconify.design</a></small>
+    </div>
+
+    <ColorPicker
+      selectedColor={color}
+      onSelect={(c) => color = c}
+    />
+
+    <OpacitySlider
+      opacity={opacity}
+      onSelect={(o) => opacity = o}
+    />
+
+    <div class="form-group">
+      <!-- svelte-ignore a11y_label_has_associated_control -->
+      <label id="text-color-label">Text Color</label>
+      <div class="text-color-options" role="group" aria-labelledby="text-color-label">
+        <button
+          type="button"
+          class="text-color-btn"
+          class:active={textColor === 'auto'}
+          onclick={() => textColor = 'auto'}
+        >
+          <Icon icon="mdi:auto-fix" width="20" />
+          Auto
+        </button>
+        <button
+          type="button"
+          class="text-color-btn"
+          class:active={textColor === 'light'}
+          onclick={() => textColor = 'light'}
+        >
+          <Icon icon="mdi:weather-sunny" width="20" />
+          Light
+        </button>
+        <button
+          type="button"
+          class="text-color-btn"
+          class:active={textColor === 'dark'}
+          onclick={() => textColor = 'dark'}
+        >
+          <Icon icon="mdi:weather-night" width="20" />
+          Dark
+        </button>
+      </div>
+      <small>Auto determines text color based on background</small>
+    </div>
+
+    <div class="form-group">
+      <!-- svelte-ignore a11y_label_has_associated_control -->
+      <label id="display-style-label">Display Style</label>
+      <div class="display-style-options" role="group" aria-labelledby="display-style-label">
+        <button
+          type="button"
+          class="display-style-btn"
+          class:active={displayStyle === 'header'}
+          onclick={() => displayStyle = 'header'}
+        >
+          <Icon icon="mdi:page-layout-header" width="20" />
+          Full Header
+        </button>
+        <button
+          type="button"
+          class="display-style-btn"
+          class:active={displayStyle === 'folder'}
+          onclick={() => displayStyle = 'folder'}
+        >
+          <Icon icon="mdi:folder" width="20" />
+          Folder Tab
+        </button>
+      </div>
+      <small>Full header spans width, folder tab is compact</small>
+    </div>
+
+    {#if canMove}
+      <div class="form-group move-section">
+        <button
+          type="button"
+          class="btn-move-toggle"
+          onclick={() => showMoveSection = !showMoveSection}
+        >
+          <Icon icon="mdi:folder-move" width="20" />
+          Move to Another Tab
+          <Icon icon={showMoveSection ? 'mdi:chevron-up' : 'mdi:chevron-down'} width="20" />
+        </button>
+
+        {#if showMoveSection}
+          <div class="move-controls">
+            <div class="move-row">
+              <label for="move-tab">Move to:</label>
+              <select
+                id="move-tab"
+                bind:value={selectedMoveTabId}
+              >
+                <option value="">Select a tab...</option>
+                {#each moveTargetTabs as tab}
+                  <option value={tab.id}>{tab.name}</option>
+                {/each}
+              </select>
+            </div>
+
             <button
               type="button"
-              class="clear-btn"
-              onclick={clearIcon}
-              title="Clear icon"
+              class="btn-move"
+              onclick={handleMove}
+              disabled={!selectedMoveTabId}
             >
-              <Icon icon="mdi:close" width="18" />
+              <Icon icon="mdi:check" width="18" />
+              Move Group
             </button>
-          {/if}
-        </div>
-        <small>Browse the icon library or enter an icon name from <a href="https://icon-sets.iconify.design/" target="_blank" rel="noopener">iconify.design</a></small>
+          </div>
+        {/if}
       </div>
+    {/if}
 
-      <ColorPicker
-        selectedColor={color}
-        onSelect={(c) => color = c}
-      />
-
-      <OpacitySlider
-        opacity={opacity}
-        onSelect={(o) => opacity = o}
-      />
-
-      <div class="form-group">
-        <label>Text Color</label>
-        <div class="text-color-options">
-          <button
-            type="button"
-            class="text-color-btn"
-            class:active={textColor === 'auto'}
-            onclick={() => textColor = 'auto'}
-          >
-            <Icon icon="mdi:auto-fix" width="20" />
-            Auto
+    <div class="modal-actions">
+      <div class="actions-left">
+        {#if groupName && onDelete}
+          <button type="button" class="btn-danger" onclick={onDelete}>
+            <Icon icon="mdi:trash-can" width="20" />
+            Delete
           </button>
-          <button
-            type="button"
-            class="text-color-btn"
-            class:active={textColor === 'light'}
-            onclick={() => textColor = 'light'}
-          >
-            <Icon icon="mdi:weather-sunny" width="20" />
-            Light
+        {/if}
+        {#if groupName && onDuplicate}
+          <button type="button" class="btn-duplicate" onclick={onDuplicate}>
+            <Icon icon="mdi:content-copy" width="20" />
+            Duplicate
           </button>
-          <button
-            type="button"
-            class="text-color-btn"
-            class:active={textColor === 'dark'}
-            onclick={() => textColor = 'dark'}
-          >
-            <Icon icon="mdi:weather-night" width="20" />
-            Dark
-          </button>
-        </div>
-        <small>Auto determines text color based on background</small>
+        {/if}
       </div>
-
-      <div class="form-group">
-        <label>Display Style</label>
-        <div class="display-style-options">
-          <button
-            type="button"
-            class="display-style-btn"
-            class:active={displayStyle === 'header'}
-            onclick={() => displayStyle = 'header'}
-          >
-            <Icon icon="mdi:page-layout-header" width="20" />
-            Full Header
-          </button>
-          <button
-            type="button"
-            class="display-style-btn"
-            class:active={displayStyle === 'folder'}
-            onclick={() => displayStyle = 'folder'}
-          >
-            <Icon icon="mdi:folder" width="20" />
-            Folder Tab
-          </button>
-        </div>
-        <small>Full header spans width, folder tab is compact</small>
+      <div class="actions-right">
+        <button type="button" class="btn-secondary" onclick={onCancel}>
+          Cancel
+        </button>
+        <button type="submit" class="btn-primary">
+          <Icon icon="mdi:content-save" width="20" />
+          {groupName ? 'Save' : 'Create'}
+        </button>
       </div>
-
-      {#if canMove}
-        <div class="form-group move-section">
-          <button
-            type="button"
-            class="btn-move-toggle"
-            onclick={() => showMoveSection = !showMoveSection}
-          >
-            <Icon icon="mdi:folder-move" width="20" />
-            Move to Another Tab
-            <Icon icon={showMoveSection ? 'mdi:chevron-up' : 'mdi:chevron-down'} width="20" />
-          </button>
-
-          {#if showMoveSection}
-            <div class="move-controls">
-              <div class="move-row">
-                <label for="move-tab">Move to:</label>
-                <select
-                  id="move-tab"
-                  bind:value={selectedMoveTabId}
-                >
-                  <option value="">Select a tab...</option>
-                  {#each moveTargetTabs as tab}
-                    <option value={tab.id}>{tab.name}</option>
-                  {/each}
-                </select>
-              </div>
-
-              <button
-                type="button"
-                class="btn-move"
-                onclick={handleMove}
-                disabled={!selectedMoveTabId}
-              >
-                <Icon icon="mdi:check" width="18" />
-                Move Group
-              </button>
-            </div>
-          {/if}
-        </div>
-      {/if}
-
-      <div class="modal-actions">
-        <div class="actions-left">
-          {#if groupName && onDelete}
-            <button type="button" class="btn-danger" onclick={onDelete}>
-              <Icon icon="mdi:trash-can" width="20" />
-              Delete
-            </button>
-          {/if}
-          {#if groupName && onDuplicate}
-            <button type="button" class="btn-duplicate" onclick={onDuplicate}>
-              <Icon icon="mdi:content-copy" width="20" />
-              Duplicate
-            </button>
-          {/if}
-        </div>
-        <div class="actions-right">
-          <button type="button" class="btn-secondary" onclick={onCancel}>
-            Cancel
-          </button>
-          <button type="submit" class="btn-primary">
-            <Icon icon="mdi:content-save" width="20" />
-            {groupName ? 'Save' : 'Create'}
-          </button>
-        </div>
-      </div>
-    </form>
-  </div>
-</div>
+    </div>
+  </form>
+</Modal>
 
 {#if showIconPicker}
   <IconPickerModal
@@ -331,55 +316,6 @@
 {/if}
 
 <style>
-  .modal-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.7);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: var(--z-modal);
-    padding: 1rem;
-  }
-
-  .modal-content {
-    background: var(--bg-primary);
-    border-radius: 0.75rem;
-    width: 100%;
-    max-width: 400px;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-  }
-
-  .modal-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 1.5rem;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .modal-header h2 {
-    margin: 0;
-    font-size: 1.5rem;
-  }
-
-  .close-btn {
-    background: none;
-    border: none;
-    color: var(--text-secondary);
-    cursor: pointer;
-    padding: 0.5rem;
-    border-radius: 0.375rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .close-btn:hover {
-    background: var(--bg-tertiary);
-    color: var(--text-primary);
-  }
-
   form {
     padding: 1.5rem;
   }
@@ -468,12 +404,12 @@
   }
 
   .btn-duplicate {
-    background: #10b981;
+    background: var(--color-success);
     color: white;
   }
 
   .btn-duplicate:hover {
-    background: #059669;
+    background: var(--color-success-dark);
   }
 
   .text-color-options {

@@ -3,6 +3,7 @@ package converters
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/weaversgrainthorpe/HOPS/internal/models"
 	"gopkg.in/yaml.v3"
@@ -167,12 +168,14 @@ func ConvertFromDashy(yamlData []byte) ([]byte, error) {
 
 		// Convert each item to an entry
 		for j, item := range section.Items {
+			icon, iconURL := convertDashyIcon(item.Icon)
 			entry := models.Entry{
 				ID:          fmt.Sprintf("entry-%d-%d", i, j),
 				Name:        item.Title,
 				Description: item.Description,
 				URL:         item.URL,
-				Icon:        convertDashyIcon(item.Icon),
+				Icon:        icon,
+				IconURL:     iconURL,
 				OpenMode:    "newtab",
 				Size:        "medium",
 				Order:       j,
@@ -194,20 +197,32 @@ func ConvertFromDashy(yamlData []byte) ([]byte, error) {
 	return json.Marshal(config)
 }
 
-// convertDashyIcon converts Dashy icon format to Iconify format
-func convertDashyIcon(icon string) string {
+// convertDashyIcon converts Dashy icon format to Iconify format.
+// Returns (icon, iconURL) - one will be empty.
+func convertDashyIcon(icon string) (string, string) {
 	if icon == "" {
-		return "mdi:application"
+		return "mdi:application", ""
 	}
 
-	// Dashy uses various icon formats:
-	// - "fas fa-rocket" -> Font Awesome
-	// - "hl-plex" -> Homer/Dashy custom
-	// - URL to image
+	// Pass through image URLs as iconUrl
+	if strings.HasPrefix(icon, "http://") || strings.HasPrefix(icon, "https://") {
+		return "", icon
+	}
 
-	// For now, default to mdi icons
-	// TODO: Implement more sophisticated icon mapping
-	return "mdi:application"
+	// Pass through icons already in Iconify format (e.g., "mdi:home", "si:github")
+	if strings.Contains(icon, ":") {
+		return icon, ""
+	}
+
+	// Font Awesome icons (fas/far/fab fa-xxx) -> try mdi equivalent
+	if strings.HasPrefix(icon, "fa") && strings.Contains(icon, " fa-") {
+		parts := strings.SplitN(icon, " fa-", 2)
+		if len(parts) == 2 {
+			return "mdi:" + parts[1], ""
+		}
+	}
+
+	return "mdi:application", ""
 }
 
 // HeimdallItem represents a Heimdall dashboard item

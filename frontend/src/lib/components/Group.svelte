@@ -193,8 +193,9 @@
   }
 </script>
 
-<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-<div class="group" class:edit-mode={$editMode} class:folder-style={group.displayStyle === 'folder'} onclick={() => onFocus?.()}>
+<!-- svelte-ignore a11y_click_events_have_key_events -->
+<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+<div class="group" class:edit-mode={$editMode} class:folder-style={group.displayStyle === 'folder'} onclick={() => onFocus?.()} role="group" aria-label="{group.name} group">
   <div class="group-header-container">
     <div
       class="group-header"
@@ -476,13 +477,13 @@
   }
 
   .group-control-btn:hover {
-    background: #f59e0b;
+    background: var(--color-warning);
     color: white;
     transform: scale(1.1);
   }
 
   .group-control-btn.duplicate-btn:hover {
-    background: #10b981;
+    background: var(--color-success);
     color: white;
   }
 
@@ -533,9 +534,9 @@
     gap: 0.5rem;
     padding: 1.5rem;
     background: var(--bg-secondary);
-    border: 2px dashed #10b981;
+    border: 2px dashed var(--color-success);
     border-radius: 0.5rem;
-    color: #10b981;
+    color: var(--color-success);
     cursor: pointer;
     transition: all 0.2s;
     min-height: 150px;
@@ -543,8 +544,8 @@
 
   .paste-btn:hover {
     background: rgba(16, 185, 129, 0.1);
-    border-color: #059669;
-    color: #059669;
+    border-color: var(--color-success-dark);
+    color: var(--color-success-dark);
     transform: scale(1.02);
   }
 

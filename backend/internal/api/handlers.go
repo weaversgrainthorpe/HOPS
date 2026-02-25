@@ -21,8 +21,10 @@ import (
 	_ "image/jpeg"
 
 	"github.com/weaversgrainthorpe/HOPS/internal/converters"
+	"github.com/weaversgrainthorpe/HOPS/internal/database"
 	"github.com/weaversgrainthorpe/HOPS/internal/version"
 	"golang.org/x/image/draw"
+	"gopkg.in/yaml.v3"
 	_ "golang.org/x/image/webp"
 )
 
@@ -51,6 +53,30 @@ func (r *Router) handleGetVersion(w http.ResponseWriter, req *http.Request) {
 		"major":   version.Major,
 		"minor":   version.Minor,
 		"patch":   version.Patch,
+	})
+}
+
+// handleGetHealth returns application health status
+func (r *Router) handleGetHealth(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	dbConnected := r.db.Ping() == nil
+	status := "ok"
+	if !dbConnected {
+		status = "degraded"
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":  status,
+		"version": version.String(),
+		"uptime":  time.Since(r.startTime).Seconds(),
+		"database": map[string]interface{}{
+			"connected": dbConnected,
+		},
 	})
 }
 
@@ -350,15 +376,48 @@ func (r *Router) handleExportConfig(w http.ResponseWriter, req *http.Request) {
 	}
 
 	if format == "yaml" {
-		// TODO: Convert JSON to YAML
+		var jsonObj interface{}
+		if err := json.Unmarshal([]byte(configData), &jsonObj); err != nil {
+			http.Error(w, "Failed to parse config for YAML conversion", http.StatusInternalServerError)
+			return
+		}
+		yamlBytes, err := yaml.Marshal(jsonObj)
+		if err != nil {
+			http.Error(w, "Failed to convert config to YAML", http.StatusInternalServerError)
+			return
+		}
 		w.Header().Set("Content-Type", "application/x-yaml")
 		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s.yaml", filename))
+		w.Write(yamlBytes)
 	} else {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s.json", filename))
+		w.Write([]byte(configData))
+	}
+}
+
+// handleResetConfig resets the configuration to factory defaults
+func (r *Router) handleResetConfig(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
 	}
 
-	w.Write([]byte(configData))
+	// Create a backup before resetting
+	if r.backupManager != nil {
+		if _, err := r.backupManager.CreateBackupWithDB(r.db, "pre-factory-reset"); err != nil {
+			log.Printf("Warning: failed to create backup before reset: %v", err)
+		}
+	}
+
+	if err := database.ResetConfig(r.db); err != nil {
+		http.Error(w, "Failed to reset configuration", http.StatusInternalServerError)
+		return
+	}
+
+	// Return the new default config
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(database.DefaultConfig))
 }
 
 // IconMatch holds the result of an icon lookup

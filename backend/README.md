@@ -1,4 +1,4 @@
-# HOPS Backend (v1.0.0)
+# HOPS Backend (v1.0.1)
 
 The backend for HOPS (Home Operations Portal System) - a lightweight Go server with SQLite database.
 
