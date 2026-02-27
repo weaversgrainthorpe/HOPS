@@ -2,6 +2,7 @@
   import Icon from '@iconify/svelte';
   import { onMount } from 'svelte';
   import { focusTrap } from '$lib/utils/focusTrap';
+  import { getBackendVersion } from '$lib/utils/api';
 
   interface Props {
     onClose: () => void;
@@ -14,11 +15,8 @@
 
   onMount(async () => {
     try {
-      const response = await fetch('/api/version');
-      if (response.ok) {
-        const data = await response.json();
-        backendVersion = data.version;
-      }
+      const data = await getBackendVersion();
+      backendVersion = data.version;
     } catch (e) {
       backendVersion = 'Error';
     }

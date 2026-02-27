@@ -104,17 +104,3 @@ export interface Settings {
   searchHotkey: string;
   defaultView: string;
 }
-
-export interface Widget {
-  id: string;
-  type: string;
-  config: Record<string, any>;
-  position: Position;
-}
-
-export interface Position {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}

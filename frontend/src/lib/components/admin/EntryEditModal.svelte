@@ -8,9 +8,8 @@
   import Modal from '../shared/Modal.svelte';
   import { confirm } from '$lib/stores/confirmModal';
   import { toast } from '$lib/stores/toast';
-  import { getSessionToken } from '$lib/stores/auth';
   import { editMode } from '$lib/stores/editMode';
-  import { createIcon } from '$lib/utils/api';
+  import { createIcon, uploadIconImage } from '$lib/utils/api';
   import { logWarn } from '$lib/utils/errors';
 
   interface TabInfo {
@@ -141,24 +140,7 @@
     uploadError = '';
 
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-
-      const token = getSessionToken();
-      const response = await fetch('/api/icons/upload', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
-        body: formData
-      });
-
-      if (!response.ok) {
-        const text = await response.text();
-        throw new Error(text || 'Upload failed');
-      }
-
-      const result = await response.json();
+      const result = await uploadIconImage(file);
       // Set the uploaded icon URL
       editedEntry.iconUrl = result.url;
       // Clear the iconify icon since we're using a custom image

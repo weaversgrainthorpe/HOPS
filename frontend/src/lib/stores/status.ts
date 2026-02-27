@@ -1,4 +1,5 @@
 import { writable, get } from 'svelte/store';
+import { getStatus as apiGetStatus } from '$lib/utils/api';
 
 export interface StatusInfo {
   status: 'up' | 'down' | 'error' | 'unknown' | 'loading';
@@ -16,11 +17,7 @@ const activeEntries = new Set<string>();
 
 export async function fetchStatus(entryId: string): Promise<StatusInfo> {
   try {
-    const response = await fetch(`/api/status/${entryId}`);
-    if (!response.ok) {
-      return { status: 'unknown' };
-    }
-    const data = await response.json();
+    const data = await apiGetStatus(entryId);
     return {
       status: data.status || 'unknown',
       responseTime: data.responseTime,
