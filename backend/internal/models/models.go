@@ -97,7 +97,7 @@ type StatusCheck struct {
 // StatusResult represents the result of a status check
 type StatusResult struct {
 	EntryID      string    `json:"entryId"`
-	Status       string    `json:"status"` // online, offline, unknown
+	Status       string    `json:"status"` // up, down, error, unknown
 	ResponseTime int       `json:"responseTime,omitempty"`
 	LastChecked  time.Time `json:"lastChecked"`
 }
@@ -170,6 +170,7 @@ type Icon struct {
 	Icon       string    `json:"icon"`
 	CategoryID string    `json:"categoryId"`
 	Color      *string   `json:"color,omitempty"`
+	ImageURL   *string   `json:"imageUrl,omitempty"`
 	IsPreset   bool      `json:"isPreset"`
 	CreatedAt  time.Time `json:"createdAt"`
 }

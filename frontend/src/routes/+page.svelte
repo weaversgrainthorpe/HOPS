@@ -1,15 +1,21 @@
 <script lang="ts">
   import { isAuthenticated, login, logout, isLoggingIn } from '$lib/stores/auth';
   import { isBackendOffline, backendStatus } from '$lib/stores/backendStatus';
+  import { confirm } from '$lib/stores/confirmModal';
+  import { toast } from '$lib/stores/toast';
+  import { loadConfig } from '$lib/stores/config';
   import DashboardList from '$lib/components/admin/DashboardList.svelte';
   import ChangePasswordModal from '$lib/components/admin/ChangePasswordModal.svelte';
+  import BackupModal from '$lib/components/admin/BackupModal.svelte';
   import BackendStatus from '$lib/components/BackendStatus.svelte';
   import Icon from '@iconify/svelte';
+  import { resetConfig } from '$lib/utils/api';
 
   let username = $state('admin');
   let password = $state('');
   let error = $state('');
   let showChangePassword = $state(false);
+  let showBackupModal = $state(false);
 
   async function handleLogin(e: Event) {
     e.preventDefault();
@@ -24,6 +30,25 @@
 
   async function handleLogout() {
     await logout();
+  }
+
+  async function handleFactoryReset() {
+    const confirmed = await confirm({
+      title: 'Factory Reset',
+      message: 'This will permanently delete all dashboards, tabs, groups, and entries, resetting everything to defaults. A backup will be created automatically. This action cannot be undone.',
+      confirmText: 'Reset Everything',
+      confirmStyle: 'danger',
+    });
+
+    if (!confirmed) return;
+
+    try {
+      await resetConfig();
+      await loadConfig();
+      toast.success('Configuration reset to factory defaults.');
+    } catch (err) {
+      toast.error('Failed to reset configuration.');
+    }
   }
 </script>
 
@@ -88,9 +113,17 @@
       <div class="admin-header">
         <h1>HOPS Admin Panel</h1>
         <div class="header-actions">
+          <button onclick={() => showBackupModal = true} class="btn-secondary" disabled={$isBackendOffline}>
+            <Icon icon="mdi:backup-restore" width="18" />
+            Backups
+          </button>
           <button onclick={() => showChangePassword = true} class="btn-secondary" disabled={$isBackendOffline}>
             <Icon icon="mdi:key" width="18" />
             Change Password
+          </button>
+          <button onclick={handleFactoryReset} class="btn-danger" disabled={$isBackendOffline}>
+            <Icon icon="mdi:delete-forever" width="18" />
+            Factory Reset
           </button>
           <button onclick={handleLogout} class="btn-secondary">
             <Icon icon="mdi:logout" width="18" />
@@ -112,6 +145,10 @@
 
 {#if showChangePassword}
   <ChangePasswordModal onClose={() => showChangePassword = false} />
+{/if}
+
+{#if showBackupModal}
+  <BackupModal onClose={() => showBackupModal = false} />
 {/if}
 
 <style>
@@ -221,6 +258,28 @@
   }
 
   .btn-secondary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .btn-danger {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: color-mix(in srgb, var(--color-error, #ef4444) 15%, var(--bg-tertiary));
+    color: var(--color-error, #ef4444);
+    border: 1px solid color-mix(in srgb, var(--color-error, #ef4444) 30%, transparent);
+    border-radius: 0.375rem;
+    cursor: pointer;
+    margin: 0;
+  }
+
+  .btn-danger:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--color-error, #ef4444) 25%, var(--bg-tertiary));
+  }
+
+  .btn-danger:disabled {
     opacity: 0.5;
     cursor: not-allowed;
   }
