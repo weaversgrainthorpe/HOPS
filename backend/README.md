@@ -44,8 +44,6 @@ backend/
 ### Prerequisites
 
 - Go 1.24 or higher
-- SQLite 3
-- gcc (for CGO support needed by go-sqlite3)
 
 ### Installation
 
@@ -321,11 +319,14 @@ curl -b cookies.txt -X POST http://localhost:8080/api/auth/logout
 
 ### Unit Tests
 
-Coming soon - add tests for:
-- Authentication service
-- Configuration management
-- Session validation
-- Route handlers
+```bash
+go test ./...
+```
+
+Tests cover:
+- Authentication service (login, logout, session validation, password change)
+- API endpoints (health, version, config, auth, rate limiting)
+- Cookie-based session management
 
 ## Security Considerations
 

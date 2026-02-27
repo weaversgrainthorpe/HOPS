@@ -91,7 +91,7 @@ func NewRouter(db *sql.DB, authService *auth.Service, cfg *config.Config, startT
 	}
 
 	r.setupRoutes()
-	return r.corsMiddleware(r.loggingMiddleware(r.mux))
+	return r.securityHeadersMiddleware(r.corsMiddleware(r.loggingMiddleware(r.mux)))
 }
 
 // setupRoutes configures all API routes
@@ -102,6 +102,7 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/config", r.handleGetConfig)
 	r.mux.HandleFunc("/api/status/", r.handleGetStatus)
 	r.mux.HandleFunc("/api/auth/login", r.handleLogin)
+	r.mux.HandleFunc("/api/auth/check", r.handleAuthCheck)
 
 	// Protected API routes (require authentication)
 	r.mux.HandleFunc("/api/auth/logout", r.authMiddleware(r.handleLogout))
@@ -327,6 +328,18 @@ func (r *Router) corsMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
+		next.ServeHTTP(w, req)
+	})
+}
+
+// securityHeadersMiddleware adds standard security headers to all responses
+func (r *Router) securityHeadersMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "SAMEORIGIN")
+		w.Header().Set("X-XSS-Protection", "0")
+		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
 		next.ServeHTTP(w, req)
 	})
 }

@@ -1,6 +1,6 @@
 # HOPS - Home Operations Portal System
 
-**Version 1.0.1**
+**Version 1.1.0**
 
 A modern, self-hosted homepage dashboard for the homelab community.
 
@@ -319,9 +319,11 @@ Future improvements under consideration:
 
 ## Contributing
 
-This is a personal project, but feel free to fork and customize for your needs!
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and guidelines.
 
 **Found a bug or have an idea?** Please report issues, bugs, or suggestions for improvements via [GitHub Issues](https://github.com/weaversgrainthorpe/HOPS/issues). I maintain this project in my limited spare time, so while I'll do my best to review and consider all feedback, I can't guarantee when (or if) I'll be able to address them. Your patience is appreciated!
+
+**Security issues?** Please see [SECURITY.md](SECURITY.md) for responsible disclosure instructions. Do not open public issues for vulnerabilities.
 
 ## License
 

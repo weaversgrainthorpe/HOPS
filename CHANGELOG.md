@@ -5,6 +5,29 @@ All notable changes to HOPS (Home Operations Portal System) will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-02-27
+
+### Added
+- Docker support with Dockerfile and docker-compose.yml
+- GitHub Actions CI workflow (build, test, Windows cross-compile)
+- GitHub Actions release workflow (multi-platform binaries on tag push)
+- Comprehensive test suite for auth service and API handlers
+- HttpOnly cookie-based session authentication
+- `/api/auth/check` endpoint for verifying auth status
+- Security headers middleware (X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy)
+- CONTRIBUTING.md, SECURITY.md, and GitHub issue/PR templates
+- `.env.example` for environment variable reference
+
+### Changed
+- Swapped `mattn/go-sqlite3` (CGO) for `modernc.org/sqlite` (pure Go) for cross-platform compatibility
+- Backend builds with `CGO_ENABLED=0` — no C compiler required
+- Frontend auth uses HttpOnly cookies instead of localStorage
+- Windows `.exe` builds now supported
+
+### Fixed
+- Missing `import os` in `fix_icon_categories.py` script
+- Python scripts use relative paths instead of hardcoded absolute paths
+
 ## [1.0.1] - 2026-02-25
 
 ### Changed
@@ -89,5 +112,6 @@ HOPS (Home Operations Portal System) is now ready for public use! A modern, self
 ### Credits
 Created by Jonathan Brown with Claude (Anthropic)
 
+[1.1.0]: https://github.com/weaversgrainthorpe/HOPS/releases/tag/v1.1.0
 [1.0.1]: https://github.com/weaversgrainthorpe/HOPS/releases/tag/v1.0.1
 [1.0.0]: https://github.com/weaversgrainthorpe/HOPS/releases/tag/v1.0.0

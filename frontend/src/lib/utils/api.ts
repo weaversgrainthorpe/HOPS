@@ -2,47 +2,21 @@ import type { Config } from '$lib/types';
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 
-// Store session token
-let sessionToken: string | null = null;
-
-export function setSessionToken(token: string | null) {
-  sessionToken = token;
-  if (token) {
-    localStorage.setItem('hops_session', token);
-  } else {
-    localStorage.removeItem('hops_session');
-  }
-}
-
-export function getSessionToken(): string | null {
-  if (!sessionToken && typeof localStorage !== 'undefined') {
-    sessionToken = localStorage.getItem('hops_session');
-  }
-  return sessionToken;
-}
-
-// Helper to make authenticated requests
+// Helper to make API requests. Session auth is handled via HttpOnly cookies.
 async function fetchAPI(endpoint: string, options: RequestInit = {}) {
-  const token = getSessionToken();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(options.headers as Record<string, string> || {}),
   };
 
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-
   const response = await fetch(`${API_BASE}${endpoint}`, {
     ...options,
     headers,
+    credentials: 'same-origin',
   });
 
   if (!response.ok) {
-    // Handle session expiration specifically
     if (response.status === 401) {
-      // Clear the expired session token
-      setSessionToken(null);
       throw new Error('SESSION_EXPIRED');
     }
     throw new Error(`API error: ${response.status} ${response.statusText}`);
@@ -67,19 +41,24 @@ export async function getStatus(entryId: string) {
 
 // Auth API calls
 
-export async function login(username: string, password: string): Promise<{ sessionId: string }> {
-  const response = await fetchAPI('/auth/login', {
+export async function checkAuth(): Promise<boolean> {
+  try {
+    const resp = await fetchAPI('/auth/check');
+    return resp.authenticated === true;
+  } catch {
+    return false;
+  }
+}
+
+export async function login(username: string, password: string): Promise<void> {
+  await fetchAPI('/auth/login', {
     method: 'POST',
     body: JSON.stringify({ username, password }),
   });
-
-  setSessionToken(response.sessionId);
-  return response;
 }
 
 export async function logout(): Promise<void> {
   await fetchAPI('/auth/logout', { method: 'POST' });
-  setSessionToken(null);
 }
 
 export async function changePassword(oldPassword: string, newPassword: string): Promise<void> {
@@ -99,14 +78,13 @@ export async function updateConfig(config: Config): Promise<void> {
 }
 
 export async function exportConfig(format: 'json' | 'yaml' = 'json', dashboardId?: string): Promise<Blob> {
-  const token = getSessionToken();
   let url = `${API_BASE}/config/export?format=${format}`;
   if (dashboardId) {
     url += `&dashboardId=${encodeURIComponent(dashboardId)}`;
   }
 
   const response = await fetch(url, {
-    headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+    credentials: 'same-origin',
   });
 
   if (!response.ok) {
@@ -117,7 +95,6 @@ export async function exportConfig(format: 'json' | 'yaml' = 'json', dashboardId
 }
 
 export async function importConfig(file: File, options?: { autoMatchIcons?: boolean }): Promise<{ success: boolean; message: string }> {
-  const token = getSessionToken();
   const formData = new FormData();
   formData.append('file', file);
   if (options?.autoMatchIcons) {
@@ -126,7 +103,7 @@ export async function importConfig(file: File, options?: { autoMatchIcons?: bool
 
   const response = await fetch(`${API_BASE}/config/import`, {
     method: 'POST',
-    headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+    credentials: 'same-origin',
     body: formData,
   });
 
@@ -193,13 +170,10 @@ export async function uploadIconImage(file: File): Promise<{ url: string; id: st
   const formData = new FormData();
   formData.append('file', file);
 
-  const token = getSessionToken();
-  const response = await fetch('/api/icons/upload', {
+  const response = await fetch(`${API_BASE}/icons/upload`, {
     method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${token}`
-    },
-    body: formData
+    credentials: 'same-origin',
+    body: formData,
   });
 
   if (!response.ok) {
@@ -256,14 +230,13 @@ export async function getBackgrounds(): Promise<BackgroundsResponse> {
 }
 
 export async function uploadBackground(file: File, category: string): Promise<BackgroundImage> {
-  const token = getSessionToken();
   const formData = new FormData();
   formData.append('file', file);
   formData.append('category', category);
 
   const response = await fetch(`${API_BASE}/backgrounds`, {
     method: 'POST',
-    headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+    credentials: 'same-origin',
     body: formData,
   });
 
@@ -281,9 +254,67 @@ export async function deleteBackground(id: string): Promise<void> {
   });
 }
 
+export async function updateBackground(id: string, updates: { name?: string; category?: string }): Promise<void> {
+  await fetchAPI(`/backgrounds/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(updates),
+  });
+}
+
 export async function createBackgroundCategory(category: BackgroundCategory): Promise<void> {
   await fetchAPI('/backgrounds/categories', {
     method: 'POST',
     body: JSON.stringify(category),
+  });
+}
+
+export async function updateBackgroundCategory(id: string, updates: { name?: string; icon?: string }): Promise<void> {
+  await fetchAPI(`/backgrounds/categories/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(updates),
+  });
+}
+
+export async function deleteBackgroundCategory(id: string): Promise<void> {
+  await fetchAPI(`/backgrounds/categories/${id}`, {
+    method: 'DELETE',
+  });
+}
+
+// Config reset
+
+export async function resetConfig(): Promise<Config> {
+  return fetchAPI('/config/reset', { method: 'POST' });
+}
+
+// Backup API calls
+
+export interface BackupInfo {
+  name: string;
+  path: string;
+  size: number;
+  createdAt: string;
+}
+
+export async function listBackups(): Promise<{ backups: BackupInfo[] }> {
+  return fetchAPI('/backups');
+}
+
+export async function createBackup(reason?: string): Promise<{ success: boolean; path: string; message: string }> {
+  return fetchAPI('/backups', {
+    method: 'POST',
+    body: JSON.stringify({ reason: reason || 'manual' }),
+  });
+}
+
+export async function restoreBackup(backupName: string): Promise<{ success: boolean; message: string }> {
+  return fetchAPI(`/backups/${encodeURIComponent(backupName)}`, {
+    method: 'POST',
+  });
+}
+
+export async function deleteBackup(backupName: string): Promise<void> {
+  await fetchAPI(`/backups/${encodeURIComponent(backupName)}`, {
+    method: 'DELETE',
   });
 }

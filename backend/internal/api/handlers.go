@@ -30,9 +30,12 @@ import (
 
 const bearerPrefix = "Bearer "
 
-// extractSessionID extracts the session ID from the Authorization header,
-// removing the "Bearer " prefix if present
+// extractSessionID extracts the session ID from the request.
+// Checks the HttpOnly cookie first, then falls back to the Authorization header.
 func extractSessionID(req *http.Request) string {
+	if cookie, err := req.Cookie("hops_session"); err == nil && cookie.Value != "" {
+		return cookie.Value
+	}
 	sessionID := req.Header.Get("Authorization")
 	if strings.HasPrefix(sessionID, bearerPrefix) {
 		return sessionID[len(bearerPrefix):]
@@ -173,6 +176,15 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	http.SetCookie(w, &http.Cookie{
+		Name:     "hops_session",
+		Value:    sessionID,
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   86400, // 24 hours
+	})
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{
 		"sessionId": sessionID,
@@ -212,8 +224,36 @@ func (r *Router) handleLogout(w http.ResponseWriter, req *http.Request) {
 	sessionID := extractSessionID(req)
 	r.authService.Logout(sessionID)
 
+	http.SetCookie(w, &http.Cookie{
+		Name:     "hops_session",
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   -1, // Delete cookie
+	})
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]bool{"success": true})
+}
+
+// handleAuthCheck returns whether the current session is valid
+func (r *Router) handleAuthCheck(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	sessionID := extractSessionID(req)
+	authenticated := false
+	if sessionID != "" {
+		if _, err := r.authService.ValidateSession(sessionID); err == nil {
+			authenticated = true
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]bool{"authenticated": authenticated})
 }
 
 // handleChangePassword changes a user's password
