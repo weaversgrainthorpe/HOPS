@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 """Fix icon categorization for miscategorized dashboard icons."""
 
+import os
 import sqlite3
 
-DB_PATH = "/home/jonathan/data/hops.db"
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
+DB_PATH = os.path.join(PROJECT_ROOT, "data", "hops.db")
 
 # Recategorization rules using EXACT ID matches or controlled patterns
 EXACT_RECATEGORIZE = {
@@ -159,7 +162,7 @@ def main():
 
     # Import the categorization function
     import sys
-    sys.path.insert(0, '/home/jonathan/HOPS/scripts')
+    sys.path.insert(0, SCRIPT_DIR)
     from import_dashboard_icons import categorize_icon
 
     # Reset all dashboard icons to their calculated categories

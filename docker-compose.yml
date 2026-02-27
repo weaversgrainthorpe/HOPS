@@ -1,0 +1,12 @@
+services:
+  hops:
+    build: .
+    container_name: hops
+    ports:
+      - "8080:8080"
+    volumes:
+      - hops-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  hops-data:

@@ -1,0 +1,79 @@
+# Contributing to HOPS
+
+Thanks for your interest in contributing to HOPS! This document covers the guidelines for contributing to the project.
+
+## Ways to Contribute
+
+- **Bug Reports** — Found something broken? [Open an issue](https://github.com/weaversgrainthorpe/HOPS/issues/new) with steps to reproduce.
+- **Feature Requests** — Have an idea? Open an issue describing what you'd like and why.
+- **Pull Requests** — Bug fixes and improvements are welcome. For larger changes, please open an issue first to discuss.
+
+## Development Setup
+
+### Prerequisites
+
+- Go 1.24+
+- Node.js 24+
+- pnpm
+- SQLite3
+
+### Getting Started
+
+1. Fork and clone the repository
+2. Start the backend:
+   ```bash
+   cd backend
+   go run cmd/hops/main.go --port 8080 --data ../data
+   ```
+3. Start the frontend:
+   ```bash
+   cd frontend
+   pnpm install
+   pnpm dev
+   ```
+4. Open http://localhost:5173 (default credentials: `admin` / `admin`)
+
+### Project Structure
+
+- `backend/` — Go API server and SQLite database
+- `frontend/` — SvelteKit 2 + Svelte 5 + TypeScript
+- `scripts/` — Build, dev, and deployment helper scripts
+- `data/` — Runtime data directory (not checked in)
+
+## Pull Request Guidelines
+
+1. **One concern per PR** — Keep changes focused. A bug fix and a new feature should be separate PRs.
+2. **Test your changes** — Make sure the app builds and runs correctly with your changes.
+3. **Follow existing patterns** — Match the code style and conventions already in the project.
+4. **Update documentation** — If your change affects user-facing behavior, update the relevant docs (README, USER_GUIDE, DEPLOY, etc.).
+5. **Write clear commit messages** — Describe *what* changed and *why*.
+
+### Building for Production
+
+```bash
+# Backend
+cd backend
+go build -o hops ./cmd/hops
+
+# Frontend
+cd frontend
+pnpm build
+```
+
+## Code Style
+
+- **Go** — Standard `gofmt` formatting. Keep dependencies minimal.
+- **Svelte/TypeScript** — Follow existing component patterns. Use TypeScript types for all data structures.
+- **CSS** — Scoped component styles. Use the existing design token system in `frontend/src/lib/constants/`.
+
+## Reporting Security Issues
+
+Please do **not** open public issues for security vulnerabilities. See [SECURITY.md](SECURITY.md) for responsible disclosure instructions.
+
+## Code of Conduct
+
+This project follows the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code.
+
+## License
+
+By contributing to HOPS, you agree that your contributions will be licensed under the [MIT License](LICENSE).

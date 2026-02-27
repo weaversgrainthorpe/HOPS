@@ -13,7 +13,7 @@ cd ..
 # Build backend
 echo "Building backend..."
 cd backend
-go build -o hops ./cmd/hops
+CGO_ENABLED=0 go build -o hops ./cmd/hops
 cd ..
 
 echo "Build complete!"

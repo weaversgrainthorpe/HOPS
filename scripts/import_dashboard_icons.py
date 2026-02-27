@@ -5,9 +5,11 @@ import os
 import sqlite3
 import re
 
-# Paths
-ICONS_DIR = "/home/jonathan/data/icons/dashboard-icons"
-DB_PATH = "/home/jonathan/HOPS/data/hops.db"
+# Paths (relative to project root)
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
+ICONS_DIR = os.path.join(PROJECT_ROOT, "data", "icons", "dashboard-icons")
+DB_PATH = os.path.join(PROJECT_ROOT, "data", "hops.db")
 
 # Category mappings based on keywords in icon names
 CATEGORY_KEYWORDS = {

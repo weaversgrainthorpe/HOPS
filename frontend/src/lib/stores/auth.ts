@@ -1,19 +1,16 @@
 import { writable } from 'svelte/store';
-import { login as apiLogin, logout as apiLogout, getSessionToken as apiGetSessionToken } from '$lib/utils/api';
+import { login as apiLogin, logout as apiLogout, checkAuth } from '$lib/utils/api';
 import { toast } from './toast';
 import { logError } from '$lib/utils/errors';
-
-// Re-export getSessionToken for components that need it
-export const getSessionToken = apiGetSessionToken;
 
 // Auth state
 export const isAuthenticated = writable(false);
 export const isLoggingIn = writable(false);
 
 // Check if user has a valid session on app load
-export function initAuth() {
-  const token = apiGetSessionToken();
-  isAuthenticated.set(!!token);
+export async function initAuth() {
+  const authenticated = await checkAuth();
+  isAuthenticated.set(authenticated);
 }
 
 // Login

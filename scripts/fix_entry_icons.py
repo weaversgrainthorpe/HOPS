@@ -6,8 +6,10 @@ import sqlite3
 import json
 import re
 
-DB_PATH = "/home/jonathan/HOPS/data/hops.db"
-ICONS_DIR = "/home/jonathan/HOPS/data/icons/dashboard-icons"
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
+DB_PATH = os.path.join(PROJECT_ROOT, "data", "hops.db")
+ICONS_DIR = os.path.join(PROJECT_ROOT, "data", "icons", "dashboard-icons")
 
 def get_dashboard_icons():
     """Get list of available dashboard icons."""
