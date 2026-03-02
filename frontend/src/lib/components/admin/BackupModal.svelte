@@ -39,10 +39,10 @@
     creating = true;
     try {
       await createBackup('manual');
-      toast.success('Backup created.');
+      toast.success('Backup created');
       await loadBackups();
     } catch (err) {
-      toast.error('Failed to create backup.');
+      toast.error('Failed to create backup');
     } finally {
       creating = false;
     }
@@ -64,7 +64,7 @@
       toast.success(result.message || 'Backup restored. Please restart the server.');
       await loadBackups();
     } catch (err) {
-      toast.error('Failed to restore backup.');
+      toast.error('Failed to restore backup');
     } finally {
       actionInProgress = null;
     }
@@ -83,10 +83,10 @@
     actionInProgress = backup.name;
     try {
       await deleteBackup(backup.name);
-      toast.success('Backup deleted.');
+      toast.success('Backup deleted');
       await loadBackups();
     } catch (err) {
-      toast.error('Failed to delete backup.');
+      toast.error('Failed to delete backup');
     } finally {
       actionInProgress = null;
     }

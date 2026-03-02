@@ -45,6 +45,10 @@
   let transitionEffect = $state<'crossfade' | 'slide' | 'slide-up' | 'slide-down' | 'zoom' | 'zoom-out' | 'fade-black' | 'blur' | 'flip' | 'swirl' | 'wipe' | 'curtain' | 'circle' | 'diamond' | 'dissolve' | 'flash' | 'glitch' | 'kenburns' | 'random' | 'none'>(background?.transition || 'crossfade');
   // svelte-ignore state_referenced_locally
   let transitionDuration = $state(background?.transitionDuration || 1.5);
+  // svelte-ignore state_referenced_locally
+  let overlayOpacity = $state(background?.overlayOpacity ?? 0.7);
+  // svelte-ignore state_referenced_locally
+  let overlayBlur = $state(background?.overlayBlur ?? 10);
   let selectedCategory = $state('all');
   let customImageUrl = $state('');
 
@@ -305,11 +309,15 @@
       newBackground.value = colorValue;
     } else if (backgroundType === 'image') {
       newBackground.value = singleImageUrl;
+      newBackground.overlayOpacity = overlayOpacity;
+      newBackground.overlayBlur = overlayBlur;
     } else if (backgroundType === 'slideshow') {
       newBackground.images = slideshowImages;
       newBackground.interval = slideshowInterval;
       newBackground.transition = transitionEffect;
       newBackground.transitionDuration = transitionDuration;
+      newBackground.overlayOpacity = overlayOpacity;
+      newBackground.overlayBlur = overlayBlur;
     }
 
     onSave(newBackground);
@@ -476,6 +484,35 @@
               <Icon icon="mdi:arrow-expand" width="20" />
               <span>Fill</span>
             </button>
+          </div>
+        </div>
+      {/if}
+
+      <!-- Overlay Controls -->
+      {#if backgroundType === 'image' || backgroundType === 'slideshow'}
+        <div class="form-group">
+          <div class="slider-header">
+            <!-- svelte-ignore a11y_label_has_associated_control -->
+            <label>Overlay Darkness: {Math.round(overlayOpacity * 100)}%</label>
+            <button class="reset-link" onclick={() => overlayOpacity = 0.7}>Reset</button>
+          </div>
+          <input type="range" min="0" max="1" step="0.05" bind:value={overlayOpacity} />
+          <div class="slider-labels">
+            <span>Clear</span>
+            <span>Dark</span>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <div class="slider-header">
+            <!-- svelte-ignore a11y_label_has_associated_control -->
+            <label>Overlay Blur: {overlayBlur}px</label>
+            <button class="reset-link" onclick={() => overlayBlur = 10}>Reset</button>
+          </div>
+          <input type="range" min="0" max="20" step="1" bind:value={overlayBlur} />
+          <div class="slider-labels">
+            <span>None</span>
+            <span>Heavy</span>
           </div>
         </div>
       {/if}
@@ -1908,5 +1945,57 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
+  }
+
+  .slider-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .slider-header label {
+    font-weight: 500;
+    font-size: 0.875rem;
+    color: var(--text-primary);
+  }
+
+  .reset-link {
+    background: none;
+    border: none;
+    color: var(--accent);
+    cursor: pointer;
+    font-size: 0.8rem;
+    padding: 0;
+  }
+
+  .reset-link:hover {
+    text-decoration: underline;
+  }
+
+  input[type="range"] {
+    width: 100%;
+    height: 8px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+    outline: none;
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+  }
+
+  .slider-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-top: 0.25rem;
   }
 </style>

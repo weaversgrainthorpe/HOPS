@@ -72,7 +72,7 @@
       <p>Password changed successfully!</p>
     </div>
   {:else}
-    <form onsubmit={handleSubmit}>
+    <form id="change-password-form" onsubmit={handleSubmit}>
       <div class="form-group">
         <label for="current-password">Current Password</label>
         <input
@@ -123,12 +123,16 @@
           {error}
         </div>
       {/if}
+    </form>
+  {/if}
 
-      <div class="form-actions">
+  {#snippet footer()}
+    {#if !success}
+      <div class="modal-actions">
         <button type="button" class="btn-secondary" onclick={onClose} disabled={isSubmitting}>
           Cancel
         </button>
-        <button type="submit" class="btn-primary" disabled={isSubmitting}>
+        <button type="submit" form="change-password-form" class="btn-primary" disabled={isSubmitting}>
           {#if isSubmitting}
             <Icon icon="mdi:loading" width="18" class="spin" />
             Changing...
@@ -137,8 +141,8 @@
           {/if}
         </button>
       </div>
-    </form>
-  {/if}
+    {/if}
+  {/snippet}
 </Modal>
 
 <style>
@@ -218,11 +222,11 @@
     color: var(--text-primary);
   }
 
-  .form-actions {
+  .modal-actions {
     display: flex;
     gap: 0.75rem;
     justify-content: flex-end;
-    margin-top: 0.5rem;
+    width: 100%;
   }
 
   .btn-primary, .btn-secondary {

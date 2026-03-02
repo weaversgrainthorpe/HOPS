@@ -74,6 +74,8 @@ export interface Background {
   fit?: 'cover' | 'contain' | 'fill'; // How to fit the image
   transition?: 'crossfade' | 'slide' | 'slide-up' | 'slide-down' | 'zoom' | 'zoom-out' | 'fade-black' | 'blur' | 'flip' | 'swirl' | 'wipe' | 'curtain' | 'circle' | 'diamond' | 'dissolve' | 'flash' | 'glitch' | 'kenburns' | 'none' | 'random'; // Transition effect
   transitionDuration?: number; // Duration in seconds (0.5 to 5)
+  overlayOpacity?: number; // 0-1, darkness of overlay on content area (default 0.7)
+  overlayBlur?: number; // 0-20, blur in px on content area (default 10)
 }
 
 export interface StatusCheck {

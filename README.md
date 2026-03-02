@@ -1,6 +1,6 @@
 # HOPS - Home Operations Portal System
 
-**Version 1.1.0**
+**Version 1.2.0**
 
 A modern, self-hosted homepage dashboard for the homelab community.
 
@@ -66,7 +66,7 @@ Already using Homer, Dashy, or Heimdall? HOPS can import your existing configura
 
 ### Entries/Tiles
 - Open modes: iframe, new tab, same tab, popup modal
-- HTTP + ICMP status checks with response time (Coming Soon)
+- HTTP + ICMP status checks with response time
 - Subtitles/descriptions on tiles
 - Custom tile colors and opacity
 - Copy/cut/paste entries between groups and tabs
@@ -306,7 +306,6 @@ Future improvements under consideration:
 - Service integrations (Pi-hole, Proxmox, etc.)
 - Multi-select and bulk operations
 - Secret/shareable dashboard URLs
-- HTTP/ICMP status checks with response time
 - Undo/Redo for accidental changes
 - Keyboard navigation (arrow keys)
 - PWA support (install as mobile app)

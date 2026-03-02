@@ -39,9 +39,13 @@
     onDuplicateGroup?: (groupId: string) => void;
     onUpdateTabBackground?: (background: Background | undefined) => void;
     onGroupFocus?: (groupId: string) => void;
+    /** Effective background (may come from dashboard level when per-tab backgrounds are off) */
+    effectiveBackground?: Background;
+    /** Delete an entry from any tab/group (used for cut-paste source cleanup) */
+    onDeleteEntryFromSource?: (tabId: string, groupId: string, entryId: string) => void;
   }
 
-  let { tab, currentTabId = '', availableTabsForEntry = [], availableTabsForGroup = [], onUpdateEntry, onDeleteEntry, onAddEntry, onAddGroup, onReorderEntries, onMoveEntry, onMoveEntryToTab, onMoveGroupToTab, onReorderGroups, onUpdateGroup, onDeleteGroup, onDuplicateGroup, onUpdateTabBackground, onGroupFocus }: Props = $props();
+  let { tab, currentTabId = '', availableTabsForEntry = [], availableTabsForGroup = [], onUpdateEntry, onDeleteEntry, onAddEntry, onAddGroup, onReorderEntries, onMoveEntry, onMoveEntryToTab, onMoveGroupToTab, onReorderGroups, onUpdateGroup, onDeleteGroup, onDuplicateGroup, onUpdateTabBackground, onGroupFocus, effectiveBackground, onDeleteEntryFromSource }: Props = $props();
   let showAddGroupModal = $state(false);
 
   // Local groups state for drag operations
@@ -199,7 +203,11 @@
 
 <div class="tab-panel">
   <BackgroundSlideshow background={tab.background} />
-  <div class="tab-content-wrapper">
+  <div
+    class="tab-content-wrapper"
+    style:--overlay-opacity={(effectiveBackground ?? tab.background)?.overlayOpacity ?? 0.7}
+    style:--overlay-blur="{(effectiveBackground ?? tab.background)?.overlayBlur ?? 10}px"
+  >
     <div
       class="tab-content groups-list"
       use:dndzone={{
@@ -232,6 +240,7 @@
             onDuplicateGroup={handleDuplicateGroup(group.id)}
             onFocus={() => onGroupFocus?.(group.id)}
             tabId={tab.id}
+            {onDeleteEntryFromSource}
           />
         </div>
       {/each}
@@ -272,8 +281,8 @@
   .tab-content-wrapper {
     position: relative;
     padding: 2rem;
-    background: rgba(15, 23, 42, 0.7);
-    backdrop-filter: blur(10px);
+    background: rgba(15, 23, 42, var(--overlay-opacity, 0.7));
+    backdrop-filter: blur(var(--overlay-blur, 10px));
     min-height: 400px;
     border-top: 1px solid var(--border);
   }

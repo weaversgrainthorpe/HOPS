@@ -76,18 +76,3 @@ export function getTextColorValue(mode: 'light' | 'dark' | 'auto', backgroundCol
   return mode === 'light' ? TEXT_WHITE : TEXT_BLACK;
 }
 
-/**
- * Check if contrast ratio meets WCAG AA standard (4.5:1 for normal text)
- */
-export function meetsContrastStandard(textColor: string, backgroundColor: string): boolean {
-  const ratio = getContrastRatio(textColor, backgroundColor);
-  return ratio >= 4.5;
-}
-
-/**
- * Get contrast ratio as a readable string
- */
-export function getContrastRatioString(textColor: string, backgroundColor: string): string {
-  const ratio = getContrastRatio(textColor, backgroundColor);
-  return `${ratio.toFixed(2)}:1`;
-}

@@ -81,7 +81,9 @@ func (s *Service) ValidateSession(sessionID string) (int, error) {
 
 	if time.Now().After(expiresAt) {
 		// Clean up expired session
-		s.db.Exec("DELETE FROM sessions WHERE id = ?", sessionID)
+		if _, err := s.db.Exec("DELETE FROM sessions WHERE id = ?", sessionID); err != nil {
+			log.Printf("[Auth] Warning: failed to delete expired session %s: %v", sessionID, err)
+		}
 		return 0, fmt.Errorf("session expired")
 	}
 

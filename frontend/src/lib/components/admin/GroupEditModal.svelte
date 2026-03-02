@@ -106,9 +106,9 @@
   title={groupName ? 'Edit Group' : 'New Group'}
   onClose={onCancel}
   onBeforeClose={handleBeforeClose}
-  maxWidth="400px"
+  maxWidth="480px"
 >
-  <form onsubmit={(e) => { e.preventDefault(); handleSave(); }}>
+  <form id="group-edit-form" onsubmit={(e) => { e.preventDefault(); handleSave(); }}>
     <div class="form-group">
       <label for="name">Group Name *</label>
       <input
@@ -278,6 +278,9 @@
       </div>
     {/if}
 
+  </form>
+
+  {#snippet footer()}
     <div class="modal-actions">
       <div class="actions-left">
         {#if groupName && onDelete}
@@ -297,13 +300,13 @@
         <button type="button" class="btn-secondary" onclick={onCancel}>
           Cancel
         </button>
-        <button type="submit" class="btn-primary">
+        <button type="submit" form="group-edit-form" class="btn-primary">
           <Icon icon="mdi:content-save" width="20" />
           {groupName ? 'Save' : 'Create'}
         </button>
       </div>
     </div>
-  </form>
+  {/snippet}
 </Modal>
 
 {#if showIconPicker}
@@ -352,6 +355,7 @@
     gap: 0.75rem;
     justify-content: space-between;
     align-items: center;
+    width: 100%;
   }
 
   .actions-left {

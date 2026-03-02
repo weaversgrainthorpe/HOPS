@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"database/sql"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -46,12 +47,11 @@ func extractSessionID(req *http.Request) string {
 // handleGetVersion returns version information
 func (r *Router) handleGetVersion(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, map[string]interface{}{
 		"version": version.String(),
 		"major":   version.Major,
 		"minor":   version.Minor,
@@ -62,7 +62,7 @@ func (r *Router) handleGetVersion(w http.ResponseWriter, req *http.Request) {
 // handleGetHealth returns application health status
 func (r *Router) handleGetHealth(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
@@ -72,8 +72,7 @@ func (r *Router) handleGetHealth(w http.ResponseWriter, req *http.Request) {
 		status = "degraded"
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	writeJSON(w, map[string]interface{}{
 		"status":  status,
 		"version": version.String(),
 		"uptime":  time.Since(r.startTime).Seconds(),
@@ -86,7 +85,7 @@ func (r *Router) handleGetHealth(w http.ResponseWriter, req *http.Request) {
 // handleGetConfig returns the dashboard configuration
 func (r *Router) handleGetConfig(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
@@ -97,7 +96,7 @@ func (r *Router) handleGetConfig(w http.ResponseWriter, req *http.Request) {
 			// Return empty config
 			configData = `{"dashboards":[],"theme":{"mode":"dark"},"settings":{"searchHotkey":"/","defaultView":"/"}}`
 		} else {
-			http.Error(w, "Failed to load config", http.StatusInternalServerError)
+			writeJSONError(w, "Failed to load config", http.StatusInternalServerError)
 			return
 		}
 	}
@@ -109,13 +108,13 @@ func (r *Router) handleGetConfig(w http.ResponseWriter, req *http.Request) {
 // handleUpdateConfig updates the dashboard configuration (admin only)
 func (r *Router) handleUpdateConfig(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodPut && req.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
 	var configData map[string]interface{}
 	if err := json.NewDecoder(req.Body).Decode(&configData); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONError(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
 
@@ -129,7 +128,7 @@ func (r *Router) handleUpdateConfig(w http.ResponseWriter, req *http.Request) {
 
 	configJSON, err := json.Marshal(configData)
 	if err != nil {
-		http.Error(w, "Failed to encode config", http.StatusInternalServerError)
+		writeJSONError(w, "Failed to encode config", http.StatusInternalServerError)
 		return
 	}
 
@@ -138,25 +137,24 @@ func (r *Router) handleUpdateConfig(w http.ResponseWriter, req *http.Request) {
 		string(configJSON),
 	)
 	if err != nil {
-		http.Error(w, "Failed to save config", http.StatusInternalServerError)
+		writeJSONError(w, "Failed to save config", http.StatusInternalServerError)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]bool{"success": true})
+	writeJSON(w, map[string]bool{"success": true})
 }
 
 // handleLogin authenticates a user with rate limiting
 func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
 	// Get client IP for rate limiting
 	clientIP := getClientIP(req)
 	if !r.rateLimiter.Allow(clientIP) {
-		http.Error(w, "Too many login attempts. Please try again later.", http.StatusTooManyRequests)
+		writeJSONError(w, "Too many login attempts. Please try again later.", http.StatusTooManyRequests)
 		return
 	}
 
@@ -166,13 +164,13 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 	}
 
 	if err := json.NewDecoder(req.Body).Decode(&credentials); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONError(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
 
 	sessionID, err := r.authService.Login(credentials.Username, credentials.Password)
 	if err != nil {
-		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+		writeJSONError(w, "Invalid credentials", http.StatusUnauthorized)
 		return
 	}
 
@@ -185,8 +183,7 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 		MaxAge:   86400, // 24 hours
 	})
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
+	writeJSON(w, map[string]string{
 		"sessionId": sessionID,
 	})
 }
@@ -217,7 +214,7 @@ func getClientIP(req *http.Request) string {
 // handleLogout logs out a user
 func (r *Router) handleLogout(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
@@ -233,14 +230,13 @@ func (r *Router) handleLogout(w http.ResponseWriter, req *http.Request) {
 		MaxAge:   -1, // Delete cookie
 	})
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]bool{"success": true})
+	writeJSON(w, map[string]bool{"success": true})
 }
 
 // handleAuthCheck returns whether the current session is valid
 func (r *Router) handleAuthCheck(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
@@ -252,14 +248,13 @@ func (r *Router) handleAuthCheck(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]bool{"authenticated": authenticated})
+	writeJSON(w, map[string]bool{"authenticated": authenticated})
 }
 
 // handleChangePassword changes a user's password
 func (r *Router) handleChangePassword(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
@@ -269,7 +264,7 @@ func (r *Router) handleChangePassword(w http.ResponseWriter, req *http.Request) 
 	}
 
 	if err := json.NewDecoder(req.Body).Decode(&data); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONError(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
 
@@ -277,30 +272,29 @@ func (r *Router) handleChangePassword(w http.ResponseWriter, req *http.Request) 
 	sessionID := extractSessionID(req)
 	userID, err := r.authService.ValidateSession(sessionID)
 	if err != nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		writeJSONError(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
 	if err := r.authService.ChangePassword(userID, data.OldPassword, data.NewPassword); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeJSONError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]bool{"success": true})
+	writeJSON(w, map[string]bool{"success": true})
 }
 
 // handleGetStatus returns status check results
 func (r *Router) handleGetStatus(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
 	// Extract entry ID from URL path
 	entryID := req.URL.Path[len("/api/status/"):]
 	if entryID == "" {
-		http.Error(w, "Entry ID required", http.StatusBadRequest)
+		writeJSONError(w, "Entry ID required", http.StatusBadRequest)
 		return
 	}
 
@@ -315,15 +309,14 @@ func (r *Router) handleGetStatus(w http.ResponseWriter, req *http.Request) {
 
 	if err == sql.ErrNoRows {
 		// No cached status
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{
+		writeJSON(w, map[string]string{
 			"status": "unknown",
 		})
 		return
 	}
 
 	if err != nil {
-		http.Error(w, "Database error", http.StatusInternalServerError)
+		writeJSONError(w, "Database error", http.StatusInternalServerError)
 		return
 	}
 
@@ -335,22 +328,254 @@ func (r *Router) handleGetStatus(w http.ResponseWriter, req *http.Request) {
 		result["responseTime"] = responseTime.Int64
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
+	writeJSON(w, result)
+}
+
+// EmbeddedAsset represents a file embedded in an export for portability
+type EmbeddedAsset struct {
+	ContentType string `json:"contentType"`
+	Data        string `json:"data"` // base64-encoded
+}
+
+// isLocalAssetRef returns true if the URL is a local file path that should be embedded in exports.
+func isLocalAssetRef(url string) bool {
+	if url == "" {
+		return false
+	}
+	if strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "https://") {
+		return false
+	}
+	return strings.HasPrefix(url, "/")
+}
+
+// resolveAssetPath maps a URL path to the filesystem path under dataDir.
+// Returns ("", false) if the URL pattern is not recognized.
+func resolveAssetPath(urlPath string, dataDir string) (string, bool) {
+	switch {
+	case strings.HasPrefix(urlPath, "/api/icons/dashboard/"):
+		filename := filepath.Base(urlPath)
+		return filepath.Join(dataDir, "icons", "dashboard-icons", filename), true
+	case strings.HasPrefix(urlPath, "/icons/"):
+		filename := filepath.Base(urlPath)
+		return filepath.Join(dataDir, "icons", filename), true
+	case strings.HasPrefix(urlPath, "/backgrounds/"):
+		filename := filepath.Base(urlPath)
+		return filepath.Join(dataDir, "backgrounds", filename), true
+	case strings.HasPrefix(urlPath, "/presets/"):
+		filename := filepath.Base(urlPath)
+		return filepath.Join(dataDir, "presets", filename), true
+	default:
+		return "", false
+	}
+}
+
+// contentTypeFromPath infers MIME type from file extension.
+func contentTypeFromPath(path string) string {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".svg":
+		return "image/svg+xml"
+	case ".png":
+		return "image/png"
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".gif":
+		return "image/gif"
+	case ".webp":
+		return "image/webp"
+	default:
+		return "application/octet-stream"
+	}
+}
+
+// collectBackgroundRefs extracts local file URLs from a background object.
+func collectBackgroundRefs(bg interface{}, refs map[string]bool) {
+	bgMap, ok := bg.(map[string]interface{})
+	if !ok {
+		return
+	}
+	bgType, _ := bgMap["type"].(string)
+	if bgType == "image" {
+		if val, ok := bgMap["value"].(string); ok && isLocalAssetRef(val) {
+			refs[val] = true
+		}
+	} else if bgType == "slideshow" {
+		if images, ok := bgMap["images"].([]interface{}); ok {
+			for _, img := range images {
+				if s, ok := img.(string); ok && isLocalAssetRef(s) {
+					refs[s] = true
+				}
+			}
+		}
+	}
+}
+
+// collectLocalAssetRefs walks the config and returns all local file URL paths
+// that need to be embedded (iconUrl fields and background image references).
+func collectLocalAssetRefs(cfg map[string]interface{}) []string {
+	refs := make(map[string]bool)
+
+	dashboards, _ := cfg["dashboards"].([]interface{})
+	for _, d := range dashboards {
+		dashboard, ok := d.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		if bg, ok := dashboard["background"]; ok {
+			collectBackgroundRefs(bg, refs)
+		}
+
+		tabs, _ := dashboard["tabs"].([]interface{})
+		for _, t := range tabs {
+			tab, ok := t.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if iconURL, ok := tab["iconUrl"].(string); ok && isLocalAssetRef(iconURL) {
+				refs[iconURL] = true
+			}
+			if bg, ok := tab["background"]; ok {
+				collectBackgroundRefs(bg, refs)
+			}
+
+			groups, _ := tab["groups"].([]interface{})
+			for _, g := range groups {
+				group, ok := g.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				if iconURL, ok := group["iconUrl"].(string); ok && isLocalAssetRef(iconURL) {
+					refs[iconURL] = true
+				}
+
+				entries, _ := group["entries"].([]interface{})
+				for _, e := range entries {
+					entry, ok := e.(map[string]interface{})
+					if !ok {
+						continue
+					}
+					if iconURL, ok := entry["iconUrl"].(string); ok && isLocalAssetRef(iconURL) {
+						refs[iconURL] = true
+					}
+				}
+			}
+		}
+	}
+
+	result := make([]string, 0, len(refs))
+	for ref := range refs {
+		result = append(result, ref)
+	}
+	return result
+}
+
+// embedAssets reads local files referenced in the config and adds them as base64 data
+// to the cfg["assets"] map. Returns the number of assets embedded.
+func (r *Router) embedAssets(cfg map[string]interface{}) int {
+	refs := collectLocalAssetRefs(cfg)
+	if len(refs) == 0 {
+		return 0
+	}
+
+	assets := make(map[string]EmbeddedAsset)
+	for _, urlPath := range refs {
+		diskPath, ok := resolveAssetPath(urlPath, r.config.DataDir)
+		if !ok {
+			continue
+		}
+		data, err := os.ReadFile(diskPath)
+		if err != nil {
+			log.Printf("[Export] Warning: could not read asset %s: %v", diskPath, err)
+			continue
+		}
+		assets[urlPath] = EmbeddedAsset{
+			ContentType: contentTypeFromPath(diskPath),
+			Data:        base64.StdEncoding.EncodeToString(data),
+		}
+	}
+
+	if len(assets) > 0 {
+		cfg["assets"] = assets
+	}
+	return len(assets)
+}
+
+// restoreAssets extracts embedded assets from an imported config and writes them to disk.
+// Returns the number of assets restored.
+func (r *Router) restoreAssets(importedConfig map[string]interface{}) int {
+	assetsRaw, ok := importedConfig["assets"]
+	if !ok {
+		return 0
+	}
+	assetsMap, ok := assetsRaw.(map[string]interface{})
+	if !ok {
+		return 0
+	}
+
+	restored := 0
+	for urlPath, assetRaw := range assetsMap {
+		assetMap, ok := assetRaw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		dataStr, _ := assetMap["data"].(string)
+		if dataStr == "" {
+			continue
+		}
+
+		diskPath, ok := resolveAssetPath(urlPath, r.config.DataDir)
+		if !ok {
+			log.Printf("[Import] Skipping unrecognized asset path: %s", urlPath)
+			continue
+		}
+
+		// Skip if file already exists
+		if _, err := os.Stat(diskPath); err == nil {
+			log.Printf("[Import] Asset already exists, skipping: %s", diskPath)
+			continue
+		}
+
+		fileData, err := base64.StdEncoding.DecodeString(dataStr)
+		if err != nil {
+			log.Printf("[Import] Failed to decode asset %s: %v", urlPath, err)
+			continue
+		}
+
+		if err := os.MkdirAll(filepath.Dir(diskPath), 0755); err != nil {
+			log.Printf("[Import] Failed to create directory for %s: %v", diskPath, err)
+			continue
+		}
+
+		if err := os.WriteFile(diskPath, fileData, 0644); err != nil {
+			log.Printf("[Import] Failed to write asset %s: %v", diskPath, err)
+			continue
+		}
+
+		restored++
+		log.Printf("[Import] Restored asset: %s -> %s", urlPath, diskPath)
+	}
+	return restored
 }
 
 // handleExportConfig exports configuration as YAML/JSON
 // Supports optional dashboardId query parameter to export a single dashboard
 func (r *Router) handleExportConfig(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
 	var configData string
 	err := r.db.QueryRow("SELECT data FROM config WHERE id = 1").Scan(&configData)
 	if err != nil {
-		http.Error(w, "Failed to load config", http.StatusInternalServerError)
+		writeJSONError(w, "Failed to load config", http.StatusInternalServerError)
+		return
+	}
+
+	// Parse config into a map so we can embed assets
+	var cfg map[string]interface{}
+	if err := json.Unmarshal([]byte(configData), &cfg); err != nil {
+		writeJSONError(w, "Failed to parse config", http.StatusInternalServerError)
 		return
 	}
 
@@ -360,16 +585,9 @@ func (r *Router) handleExportConfig(w http.ResponseWriter, req *http.Request) {
 
 	// If a specific dashboard is requested, filter the config
 	if dashboardId != "" {
-		var cfg map[string]interface{}
-		if err := json.Unmarshal([]byte(configData), &cfg); err != nil {
-			http.Error(w, "Failed to parse config", http.StatusInternalServerError)
-			return
-		}
-
-		// Find the specific dashboard
 		dashboards, ok := cfg["dashboards"].([]interface{})
 		if !ok {
-			http.Error(w, "Invalid config structure", http.StatusInternalServerError)
+			writeJSONError(w, "Invalid config structure", http.StatusInternalServerError)
 			return
 		}
 
@@ -390,40 +608,44 @@ func (r *Router) handleExportConfig(w http.ResponseWriter, req *http.Request) {
 		}
 
 		if targetDashboard == nil {
-			http.Error(w, "Dashboard not found", http.StatusNotFound)
+			writeJSONError(w, "Dashboard not found", http.StatusNotFound)
 			return
 		}
 
-		// Create a new config with only this dashboard
-		// Mark it as a single-dashboard export so import can handle it appropriately
-		singleExport := map[string]interface{}{
-			"exportType":  "single-dashboard",
-			"exportedAt":  time.Now().Format(time.RFC3339),
-			"dashboards":  []interface{}{targetDashboard},
+		// Replace cfg with single-dashboard export
+		cfg = map[string]interface{}{
+			"exportType": "single-dashboard",
+			"exportedAt": time.Now().Format(time.RFC3339),
+			"dashboards": []interface{}{targetDashboard},
 		}
 
-		exportData, err := json.MarshalIndent(singleExport, "", "  ")
-		if err != nil {
-			http.Error(w, "Failed to serialize config", http.StatusInternalServerError)
-			return
-		}
-		configData = string(exportData)
-
-		// Use dashboard name for filename
 		if dashboardName != "" {
 			filename = "hops-" + strings.ToLower(strings.ReplaceAll(dashboardName, " ", "-"))
 		}
 	}
 
+	// Embed local asset files (icons, backgrounds) as base64 for portability
+	assetCount := r.embedAssets(cfg)
+	if assetCount > 0 {
+		log.Printf("[Export] Embedded %d asset(s) in export", assetCount)
+	}
+
+	// Serialize the final config
+	exportData, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		writeJSONError(w, "Failed to serialize config", http.StatusInternalServerError)
+		return
+	}
+
 	if format == "yaml" {
 		var jsonObj interface{}
-		if err := json.Unmarshal([]byte(configData), &jsonObj); err != nil {
-			http.Error(w, "Failed to parse config for YAML conversion", http.StatusInternalServerError)
+		if err := json.Unmarshal(exportData, &jsonObj); err != nil {
+			writeJSONError(w, "Failed to parse config for YAML conversion", http.StatusInternalServerError)
 			return
 		}
 		yamlBytes, err := yaml.Marshal(jsonObj)
 		if err != nil {
-			http.Error(w, "Failed to convert config to YAML", http.StatusInternalServerError)
+			writeJSONError(w, "Failed to convert config to YAML", http.StatusInternalServerError)
 			return
 		}
 		w.Header().Set("Content-Type", "application/x-yaml")
@@ -432,14 +654,14 @@ func (r *Router) handleExportConfig(w http.ResponseWriter, req *http.Request) {
 	} else {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s.json", filename))
-		w.Write([]byte(configData))
+		w.Write(exportData)
 	}
 }
 
 // handleResetConfig resets the configuration to factory defaults
 func (r *Router) handleResetConfig(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
@@ -451,7 +673,7 @@ func (r *Router) handleResetConfig(w http.ResponseWriter, req *http.Request) {
 	}
 
 	if err := database.ResetConfig(r.db); err != nil {
-		http.Error(w, "Failed to reset configuration", http.StatusInternalServerError)
+		writeJSONError(w, "Failed to reset configuration", http.StatusInternalServerError)
 		return
 	}
 
@@ -799,13 +1021,13 @@ func (r *Router) applyIconMatching(config map[string]interface{}) int {
 // handleImportConfig imports configuration from YAML/JSON (supports HOPS, Homer, Dashy formats)
 func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
 	// Parse multipart form (for file uploads)
-	if err := req.ParseMultipartForm(10 << 20); err != nil { // 10 MB max
-		http.Error(w, "Failed to parse form", http.StatusBadRequest)
+	if err := req.ParseMultipartForm(50 << 20); err != nil { // 50 MB max (exports may contain embedded assets)
+		writeJSONError(w, "Failed to parse form", http.StatusBadRequest)
 		return
 	}
 
@@ -814,7 +1036,7 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 
 	file, _, err := req.FormFile("file")
 	if err != nil {
-		http.Error(w, "No file provided", http.StatusBadRequest)
+		writeJSONError(w, "No file provided", http.StatusBadRequest)
 		return
 	}
 	defer file.Close()
@@ -822,7 +1044,7 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 	// Read entire file into memory
 	fileData, err := io.ReadAll(file)
 	if err != nil {
-		http.Error(w, "Failed to read file", http.StatusInternalServerError)
+		writeJSONError(w, "Failed to read file", http.StatusInternalServerError)
 		return
 	}
 
@@ -832,7 +1054,7 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 	// Detect the format
 	format, err := converters.DetectFormat(fileData)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Unable to detect format: %v", err), http.StatusBadRequest)
+		writeJSONError(w, fmt.Sprintf("Unable to detect format: %v", err), http.StatusBadRequest)
 		return
 	}
 
@@ -845,7 +1067,7 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 	case "homer":
 		configJSON, err = converters.ConvertFromHomer(fileData)
 		if err != nil {
-			http.Error(w, fmt.Sprintf("Failed to convert Homer config: %v", err), http.StatusBadRequest)
+			writeJSONError(w, fmt.Sprintf("Failed to convert Homer config: %v", err), http.StatusBadRequest)
 			return
 		}
 		importFormat = "Homer YAML"
@@ -853,7 +1075,7 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 	case "dashy":
 		configJSON, err = converters.ConvertFromDashy(fileData)
 		if err != nil {
-			http.Error(w, fmt.Sprintf("Failed to convert Dashy config: %v", err), http.StatusBadRequest)
+			writeJSONError(w, fmt.Sprintf("Failed to convert Dashy config: %v", err), http.StatusBadRequest)
 			return
 		}
 		importFormat = "Dashy YAML"
@@ -861,26 +1083,26 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 	case "heimdall":
 		configJSON, err = converters.ConvertFromHeimdall(fileData)
 		if err != nil {
-			http.Error(w, fmt.Sprintf("Failed to convert Heimdall config: %v", err), http.StatusBadRequest)
+			writeJSONError(w, fmt.Sprintf("Failed to convert Heimdall config: %v", err), http.StatusBadRequest)
 			return
 		}
 		importFormat = "Heimdall JSON"
 
 	default:
-		http.Error(w, "Unsupported file format", http.StatusBadRequest)
+		writeJSONError(w, "Unsupported file format", http.StatusBadRequest)
 		return
 	}
 
 	// Validate the resulting JSON has the expected structure
 	var importedConfig map[string]interface{}
 	if err := json.Unmarshal(configJSON, &importedConfig); err != nil {
-		http.Error(w, "Invalid configuration after conversion", http.StatusInternalServerError)
+		writeJSONError(w, "Invalid configuration after conversion", http.StatusInternalServerError)
 		return
 	}
 
 	importedDashboards, ok := importedConfig["dashboards"].([]interface{})
 	if !ok {
-		http.Error(w, "Invalid config: missing 'dashboards' field", http.StatusBadRequest)
+		writeJSONError(w, "Invalid config: missing 'dashboards' field", http.StatusBadRequest)
 		return
 	}
 
@@ -983,10 +1205,16 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
+	// Restore embedded assets (icons, backgrounds) from import
+	assetsRestored := r.restoreAssets(importedConfig)
+
+	// Remove assets from config before saving — transport-only field
+	delete(existingConfig, "assets")
+
 	// Serialize merged config
 	mergedJSON, err := json.Marshal(existingConfig)
 	if err != nil {
-		http.Error(w, "Failed to serialize merged config", http.StatusInternalServerError)
+		writeJSONError(w, "Failed to serialize merged config", http.StatusInternalServerError)
 		return
 	}
 
@@ -996,7 +1224,7 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 		string(mergedJSON),
 	)
 	if err != nil {
-		http.Error(w, "Failed to save config", http.StatusInternalServerError)
+		writeJSONError(w, "Failed to save config", http.StatusInternalServerError)
 		return
 	}
 
@@ -1007,19 +1235,18 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 	if iconMatchCount > 0 {
 		message += fmt.Sprintf(", matched %d icon(s)", iconMatchCount)
 	}
+	if assetsRestored > 0 {
+		message += fmt.Sprintf(", restored %d asset file(s)", assetsRestored)
+	}
 
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"success":      true,
-		"message":      message,
-		"imported":     importedCount,
-		"iconsMatched": iconMatchCount,
+	writeJSON(w, map[string]interface{}{
+		"success":        true,
+		"message":        message,
+		"imported":       importedCount,
+		"iconsMatched":   iconMatchCount,
+		"assetsRestored": assetsRestored,
 	})
 }
-
-// handleIntegrations proxies requests to external services (reserved for future use)
-// func (r *Router) handleIntegrations(w http.ResponseWriter, req *http.Request) {
-// 	http.Error(w, "Not implemented yet", http.StatusNotImplemented)
-// }
 
 // handleIconActions routes icon CRUD operations based on HTTP method
 func (r *Router) handleIconActions(w http.ResponseWriter, req *http.Request) {
@@ -1029,7 +1256,7 @@ func (r *Router) handleIconActions(w http.ResponseWriter, req *http.Request) {
 	case http.MethodDelete:
 		r.authMiddleware(r.handleDeleteIcon)(w, req)
 	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
 }
 
@@ -1041,7 +1268,7 @@ func (r *Router) handleIconCategoryActions(w http.ResponseWriter, req *http.Requ
 	case http.MethodDelete:
 		r.authMiddleware(r.handleDeleteIconCategory)(w, req)
 	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
 }
 
@@ -1053,7 +1280,7 @@ func (r *Router) handleGetIconCategories(w http.ResponseWriter, req *http.Reques
 	}
 
 	if req.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
@@ -1063,7 +1290,7 @@ func (r *Router) handleGetIconCategories(w http.ResponseWriter, req *http.Reques
 		ORDER BY order_num ASC
 	`)
 	if err != nil {
-		http.Error(w, "Failed to load icon categories", http.StatusInternalServerError)
+		writeJSONError(w, "Failed to load icon categories", http.StatusInternalServerError)
 		return
 	}
 	defer rows.Close()
@@ -1075,7 +1302,7 @@ func (r *Router) handleGetIconCategories(w http.ResponseWriter, req *http.Reques
 		var isPreset bool
 
 		if err := rows.Scan(&id, &name, &icon, &orderNum, &isPreset, &createdAt); err != nil {
-			http.Error(w, "Failed to scan category", http.StatusInternalServerError)
+			writeJSONError(w, "Failed to scan category", http.StatusInternalServerError)
 			return
 		}
 
@@ -1100,7 +1327,7 @@ func (r *Router) handleGetIcons(w http.ResponseWriter, req *http.Request) {
 	}
 
 	if req.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
@@ -1125,7 +1352,7 @@ func (r *Router) handleGetIcons(w http.ResponseWriter, req *http.Request) {
 	}
 
 	if err != nil {
-		http.Error(w, "Failed to load icons", http.StatusInternalServerError)
+		writeJSONError(w, "Failed to load icons", http.StatusInternalServerError)
 		return
 	}
 	defer rows.Close()
@@ -1137,7 +1364,7 @@ func (r *Router) handleGetIcons(w http.ResponseWriter, req *http.Request) {
 		var isPreset bool
 
 		if err := rows.Scan(&id, &name, &icon, &categoryID, &color, &imageURL, &isPreset, &createdAt); err != nil {
-			http.Error(w, "Failed to scan icon", http.StatusInternalServerError)
+			writeJSONError(w, "Failed to scan icon", http.StatusInternalServerError)
 			return
 		}
 
@@ -1167,7 +1394,7 @@ func (r *Router) handleGetIcons(w http.ResponseWriter, req *http.Request) {
 // handleCreateIcon creates a new icon (admin only)
 func (r *Router) handleCreateIcon(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
@@ -1181,19 +1408,19 @@ func (r *Router) handleCreateIcon(w http.ResponseWriter, req *http.Request) {
 	}
 
 	if err := json.NewDecoder(req.Body).Decode(&iconData); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONError(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
 
 	// Validate required fields - icon is optional if imageUrl is provided
 	if iconData.ID == "" || iconData.Name == "" || iconData.CategoryID == "" {
-		http.Error(w, "Missing required fields", http.StatusBadRequest)
+		writeJSONError(w, "Missing required fields", http.StatusBadRequest)
 		return
 	}
 
 	// Must have either icon or imageUrl
 	if iconData.Icon == "" && (iconData.ImageURL == nil || *iconData.ImageURL == "") {
-		http.Error(w, "Either icon or imageUrl is required", http.StatusBadRequest)
+		writeJSONError(w, "Either icon or imageUrl is required", http.StatusBadRequest)
 		return
 	}
 
@@ -1212,7 +1439,7 @@ func (r *Router) handleCreateIcon(w http.ResponseWriter, req *http.Request) {
 		iconData.ID, iconData.Name, iconData.Icon, iconData.CategoryID, color, imageURL,
 	)
 	if err != nil {
-		http.Error(w, "Failed to create icon", http.StatusInternalServerError)
+		writeJSONError(w, "Failed to create icon", http.StatusInternalServerError)
 		return
 	}
 
@@ -1222,13 +1449,13 @@ func (r *Router) handleCreateIcon(w http.ResponseWriter, req *http.Request) {
 // handleUpdateIcon updates an existing icon (admin only)
 func (r *Router) handleUpdateIcon(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodPut {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
 	iconID := req.URL.Path[len("/api/icons/"):]
 	if iconID == "" {
-		http.Error(w, "Icon ID required", http.StatusBadRequest)
+		writeJSONError(w, "Icon ID required", http.StatusBadRequest)
 		return
 	}
 
@@ -1240,7 +1467,7 @@ func (r *Router) handleUpdateIcon(w http.ResponseWriter, req *http.Request) {
 	}
 
 	if err := json.NewDecoder(req.Body).Decode(&iconData); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONError(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
 
@@ -1254,7 +1481,7 @@ func (r *Router) handleUpdateIcon(w http.ResponseWriter, req *http.Request) {
 		iconData.Name, iconData.Icon, iconData.CategoryID, color, iconID,
 	)
 	if err != nil {
-		http.Error(w, "Failed to update icon", http.StatusInternalServerError)
+		writeJSONError(w, "Failed to update icon", http.StatusInternalServerError)
 		return
 	}
 
@@ -1264,20 +1491,20 @@ func (r *Router) handleUpdateIcon(w http.ResponseWriter, req *http.Request) {
 // handleDeleteIcon deletes an icon (admin only, only user-created icons)
 func (r *Router) handleDeleteIcon(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodDelete {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
 	iconID := req.URL.Path[len("/api/icons/"):]
 	if iconID == "" {
-		http.Error(w, "Icon ID required", http.StatusBadRequest)
+		writeJSONError(w, "Icon ID required", http.StatusBadRequest)
 		return
 	}
 
 	// Only allow deletion of user-created icons (not presets)
 	_, err := r.db.Exec("DELETE FROM icons WHERE id = ? AND is_preset = 0", iconID)
 	if err != nil {
-		http.Error(w, "Failed to delete icon", http.StatusInternalServerError)
+		writeJSONError(w, "Failed to delete icon", http.StatusInternalServerError)
 		return
 	}
 
@@ -1287,7 +1514,7 @@ func (r *Router) handleDeleteIcon(w http.ResponseWriter, req *http.Request) {
 // handleCreateIconCategory creates a new icon category (admin only)
 func (r *Router) handleCreateIconCategory(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
@@ -1299,13 +1526,13 @@ func (r *Router) handleCreateIconCategory(w http.ResponseWriter, req *http.Reque
 	}
 
 	if err := json.NewDecoder(req.Body).Decode(&categoryData); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONError(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
 
 	// Validate required fields
 	if categoryData.ID == "" || categoryData.Name == "" || categoryData.Icon == "" {
-		http.Error(w, "Missing required fields", http.StatusBadRequest)
+		writeJSONError(w, "Missing required fields", http.StatusBadRequest)
 		return
 	}
 
@@ -1314,7 +1541,7 @@ func (r *Router) handleCreateIconCategory(w http.ResponseWriter, req *http.Reque
 		categoryData.ID, categoryData.Name, categoryData.Icon, categoryData.Order,
 	)
 	if err != nil {
-		http.Error(w, "Failed to create category", http.StatusInternalServerError)
+		writeJSONError(w, "Failed to create category", http.StatusInternalServerError)
 		return
 	}
 
@@ -1324,13 +1551,13 @@ func (r *Router) handleCreateIconCategory(w http.ResponseWriter, req *http.Reque
 // handleUpdateIconCategory updates an existing icon category (admin only)
 func (r *Router) handleUpdateIconCategory(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodPut {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
 	categoryID := req.URL.Path[len("/api/icon-categories/"):]
 	if categoryID == "" {
-		http.Error(w, "Category ID required", http.StatusBadRequest)
+		writeJSONError(w, "Category ID required", http.StatusBadRequest)
 		return
 	}
 
@@ -1341,7 +1568,7 @@ func (r *Router) handleUpdateIconCategory(w http.ResponseWriter, req *http.Reque
 	}
 
 	if err := json.NewDecoder(req.Body).Decode(&categoryData); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONError(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
 
@@ -1350,7 +1577,7 @@ func (r *Router) handleUpdateIconCategory(w http.ResponseWriter, req *http.Reque
 		categoryData.Name, categoryData.Icon, categoryData.Order, categoryID,
 	)
 	if err != nil {
-		http.Error(w, "Failed to update category", http.StatusInternalServerError)
+		writeJSONError(w, "Failed to update category", http.StatusInternalServerError)
 		return
 	}
 
@@ -1360,13 +1587,13 @@ func (r *Router) handleUpdateIconCategory(w http.ResponseWriter, req *http.Reque
 // handleDeleteIconCategory deletes a category (admin only, only user-created categories)
 func (r *Router) handleDeleteIconCategory(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodDelete {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
 	categoryID := req.URL.Path[len("/api/icon-categories/"):]
 	if categoryID == "" {
-		http.Error(w, "Category ID required", http.StatusBadRequest)
+		writeJSONError(w, "Category ID required", http.StatusBadRequest)
 		return
 	}
 
@@ -1374,7 +1601,7 @@ func (r *Router) handleDeleteIconCategory(w http.ResponseWriter, req *http.Reque
 	// This will also cascade delete all icons in the category
 	_, err := r.db.Exec("DELETE FROM icon_categories WHERE id = ? AND is_preset = 0", categoryID)
 	if err != nil {
-		http.Error(w, "Failed to delete category", http.StatusInternalServerError)
+		writeJSONError(w, "Failed to delete category", http.StatusInternalServerError)
 		return
 	}
 
@@ -1385,8 +1612,18 @@ func (r *Router) handleDeleteIconCategory(w http.ResponseWriter, req *http.Reque
 func writeJSON(w http.ResponseWriter, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(data); err != nil {
-		http.Error(w, fmt.Sprintf("Failed to encode response: %v", err), http.StatusInternalServerError)
+		log.Printf("[API] Failed to encode JSON response: %v", err)
 	}
+}
+
+// writeJSONError writes a JSON error response with consistent format
+func writeJSONError(w http.ResponseWriter, message string, statusCode int) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"error":  message,
+		"status": statusCode,
+	})
 }
 
 // BackgroundImage represents a background image with metadata
@@ -1472,19 +1709,19 @@ func (r *Router) saveBackgroundData(data *BackgroundData) error {
 // handleUploadBackground handles background image uploads
 func (r *Router) handleUploadBackground(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
 	// Parse multipart form (max 50 MB)
 	if err := req.ParseMultipartForm(50 << 20); err != nil {
-		http.Error(w, "Failed to parse form", http.StatusBadRequest)
+		writeJSONError(w, "Failed to parse form", http.StatusBadRequest)
 		return
 	}
 
 	file, header, err := req.FormFile("file")
 	if err != nil {
-		http.Error(w, "No file provided", http.StatusBadRequest)
+		writeJSONError(w, "No file provided", http.StatusBadRequest)
 		return
 	}
 	defer file.Close()
@@ -1507,21 +1744,21 @@ func (r *Router) handleUploadBackground(w http.ResponseWriter, req *http.Request
 
 	ext, ok := validTypes[contentType]
 	if !ok {
-		http.Error(w, "Invalid file type. Allowed: JPEG, PNG, GIF, WebP", http.StatusBadRequest)
+		writeJSONError(w, "Invalid file type. Allowed: JPEG, PNG, GIF, WebP", http.StatusBadRequest)
 		return
 	}
 
 	// Create backgrounds directory if it doesn't exist
 	backgroundsDir := filepath.Join(r.config.DataDir, "backgrounds")
 	if err := os.MkdirAll(backgroundsDir, 0755); err != nil {
-		http.Error(w, "Failed to create backgrounds directory", http.StatusInternalServerError)
+		writeJSONError(w, "Failed to create backgrounds directory", http.StatusInternalServerError)
 		return
 	}
 
 	// Generate unique filename
 	randomBytes := make([]byte, 16)
 	if _, err := rand.Read(randomBytes); err != nil {
-		http.Error(w, "Failed to generate filename", http.StatusInternalServerError)
+		writeJSONError(w, "Failed to generate filename", http.StatusInternalServerError)
 		return
 	}
 	filename := hex.EncodeToString(randomBytes) + ext
@@ -1531,13 +1768,13 @@ func (r *Router) handleUploadBackground(w http.ResponseWriter, req *http.Request
 	destPath := filepath.Join(backgroundsDir, filename)
 	destFile, err := os.Create(destPath)
 	if err != nil {
-		http.Error(w, "Failed to create file", http.StatusInternalServerError)
+		writeJSONError(w, "Failed to create file", http.StatusInternalServerError)
 		return
 	}
 	defer destFile.Close()
 
 	if _, err := io.Copy(destFile, file); err != nil {
-		http.Error(w, "Failed to save file", http.StatusInternalServerError)
+		writeJSONError(w, "Failed to save file", http.StatusInternalServerError)
 		return
 	}
 
@@ -1581,19 +1818,19 @@ func (r *Router) handleUploadBackground(w http.ResponseWriter, req *http.Request
 // handleUploadIcon handles icon image uploads with automatic resizing
 func (r *Router) handleUploadIcon(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
 	// Parse multipart form (max 5 MB for icons)
 	if err := req.ParseMultipartForm(5 << 20); err != nil {
-		http.Error(w, "Failed to parse form", http.StatusBadRequest)
+		writeJSONError(w, "Failed to parse form", http.StatusBadRequest)
 		return
 	}
 
 	file, header, err := req.FormFile("file")
 	if err != nil {
-		http.Error(w, "No file provided", http.StatusBadRequest)
+		writeJSONError(w, "No file provided", http.StatusBadRequest)
 		return
 	}
 	defer file.Close()
@@ -1609,21 +1846,21 @@ func (r *Router) handleUploadIcon(w http.ResponseWriter, req *http.Request) {
 	}
 
 	if !validTypes[contentType] {
-		http.Error(w, "Invalid file type. Allowed: JPEG, PNG, GIF, WebP, SVG", http.StatusBadRequest)
+		writeJSONError(w, "Invalid file type. Allowed: JPEG, PNG, GIF, WebP, SVG", http.StatusBadRequest)
 		return
 	}
 
 	// Create icons directory if it doesn't exist
 	iconsDir := filepath.Join(r.config.DataDir, "icons")
 	if err := os.MkdirAll(iconsDir, 0755); err != nil {
-		http.Error(w, "Failed to create icons directory", http.StatusInternalServerError)
+		writeJSONError(w, "Failed to create icons directory", http.StatusInternalServerError)
 		return
 	}
 
 	// Generate unique filename
 	randomBytes := make([]byte, 16)
 	if _, err := rand.Read(randomBytes); err != nil {
-		http.Error(w, "Failed to generate filename", http.StatusInternalServerError)
+		writeJSONError(w, "Failed to generate filename", http.StatusInternalServerError)
 		return
 	}
 	iconID := hex.EncodeToString(randomBytes)
@@ -1631,7 +1868,7 @@ func (r *Router) handleUploadIcon(w http.ResponseWriter, req *http.Request) {
 	// Read file into buffer
 	fileData, err := io.ReadAll(file)
 	if err != nil {
-		http.Error(w, "Failed to read file", http.StatusInternalServerError)
+		writeJSONError(w, "Failed to read file", http.StatusInternalServerError)
 		return
 	}
 
@@ -1643,14 +1880,14 @@ func (r *Router) handleUploadIcon(w http.ResponseWriter, req *http.Request) {
 		filename = iconID + ".svg"
 		destPath = filepath.Join(iconsDir, filename)
 		if err := os.WriteFile(destPath, fileData, 0644); err != nil {
-			http.Error(w, "Failed to save file", http.StatusInternalServerError)
+			writeJSONError(w, "Failed to save file", http.StatusInternalServerError)
 			return
 		}
 	} else {
 		// Decode and resize raster images
 		img, _, err := image.Decode(bytes.NewReader(fileData))
 		if err != nil {
-			http.Error(w, "Failed to decode image: "+err.Error(), http.StatusBadRequest)
+			writeJSONError(w, "Failed to decode image: "+err.Error(), http.StatusBadRequest)
 			return
 		}
 
@@ -1663,13 +1900,13 @@ func (r *Router) handleUploadIcon(w http.ResponseWriter, req *http.Request) {
 		destPath = filepath.Join(iconsDir, filename)
 		destFile, err := os.Create(destPath)
 		if err != nil {
-			http.Error(w, "Failed to create file", http.StatusInternalServerError)
+			writeJSONError(w, "Failed to create file", http.StatusInternalServerError)
 			return
 		}
 		defer destFile.Close()
 
 		if err := png.Encode(destFile, resized); err != nil {
-			http.Error(w, "Failed to encode image", http.StatusInternalServerError)
+			writeJSONError(w, "Failed to encode image", http.StatusInternalServerError)
 			return
 		}
 	}
@@ -1718,13 +1955,13 @@ func resizeImage(src image.Image, maxWidth, maxHeight int) image.Image {
 // handleListBackgrounds returns all background images and categories
 func (r *Router) handleListBackgrounds(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
 	bgData, err := r.loadBackgroundData()
 	if err != nil {
-		http.Error(w, "Failed to load background data", http.StatusInternalServerError)
+		writeJSONError(w, "Failed to load background data", http.StatusInternalServerError)
 		return
 	}
 
@@ -1772,13 +2009,13 @@ func (r *Router) handleListBackgrounds(w http.ResponseWriter, req *http.Request)
 // handleUpdateBackgroundImage updates metadata for a background image
 func (r *Router) handleUpdateBackgroundImage(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodPut {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
 	imageID := req.URL.Path[len("/api/backgrounds/"):]
 	if imageID == "" {
-		http.Error(w, "Image ID required", http.StatusBadRequest)
+		writeJSONError(w, "Image ID required", http.StatusBadRequest)
 		return
 	}
 
@@ -1787,13 +2024,13 @@ func (r *Router) handleUpdateBackgroundImage(w http.ResponseWriter, req *http.Re
 		Category string `json:"category"`
 	}
 	if err := json.NewDecoder(req.Body).Decode(&update); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		writeJSONError(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
 
 	bgData, err := r.loadBackgroundData()
 	if err != nil {
-		http.Error(w, "Failed to load background data", http.StatusInternalServerError)
+		writeJSONError(w, "Failed to load background data", http.StatusInternalServerError)
 		return
 	}
 
@@ -1812,12 +2049,12 @@ func (r *Router) handleUpdateBackgroundImage(w http.ResponseWriter, req *http.Re
 	}
 
 	if !found {
-		http.Error(w, "Image not found", http.StatusNotFound)
+		writeJSONError(w, "Image not found", http.StatusNotFound)
 		return
 	}
 
 	if err := r.saveBackgroundData(bgData); err != nil {
-		http.Error(w, "Failed to save background data", http.StatusInternalServerError)
+		writeJSONError(w, "Failed to save background data", http.StatusInternalServerError)
 		return
 	}
 
@@ -1827,19 +2064,19 @@ func (r *Router) handleUpdateBackgroundImage(w http.ResponseWriter, req *http.Re
 // handleDeleteBackground deletes an uploaded background image
 func (r *Router) handleDeleteBackground(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodDelete {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
 	imageID := req.URL.Path[len("/api/backgrounds/"):]
 	if imageID == "" {
-		http.Error(w, "Image ID required", http.StatusBadRequest)
+		writeJSONError(w, "Image ID required", http.StatusBadRequest)
 		return
 	}
 
 	bgData, err := r.loadBackgroundData()
 	if err != nil {
-		http.Error(w, "Failed to load background data", http.StatusInternalServerError)
+		writeJSONError(w, "Failed to load background data", http.StatusInternalServerError)
 		return
 	}
 
@@ -1862,14 +2099,14 @@ func (r *Router) handleDeleteBackground(w http.ResponseWriter, req *http.Request
 			filePath := filepath.Join(backgroundsDir, imageID+ext)
 			if _, err := os.Stat(filePath); err == nil {
 				if err := os.Remove(filePath); err != nil {
-					http.Error(w, "Failed to delete file", http.StatusInternalServerError)
+					writeJSONError(w, "Failed to delete file", http.StatusInternalServerError)
 					return
 				}
 				writeJSON(w, map[string]bool{"success": true})
 				return
 			}
 		}
-		http.Error(w, "Image not found", http.StatusNotFound)
+		writeJSONError(w, "Image not found", http.StatusNotFound)
 		return
 	}
 
@@ -1887,7 +2124,7 @@ func (r *Router) handleDeleteBackground(w http.ResponseWriter, req *http.Request
 	// Remove from metadata
 	bgData.Images = append(bgData.Images[:imageIndex], bgData.Images[imageIndex+1:]...)
 	if err := r.saveBackgroundData(bgData); err != nil {
-		http.Error(w, "Failed to save background data", http.StatusInternalServerError)
+		writeJSONError(w, "Failed to save background data", http.StatusInternalServerError)
 		return
 	}
 
@@ -1898,7 +2135,7 @@ func (r *Router) handleDeleteBackground(w http.ResponseWriter, req *http.Request
 func (r *Router) handleBackgroundCategories(w http.ResponseWriter, req *http.Request) {
 	bgData, err := r.loadBackgroundData()
 	if err != nil {
-		http.Error(w, "Failed to load background data", http.StatusInternalServerError)
+		writeJSONError(w, "Failed to load background data", http.StatusInternalServerError)
 		return
 	}
 
@@ -1909,7 +2146,7 @@ func (r *Router) handleBackgroundCategories(w http.ResponseWriter, req *http.Req
 	case http.MethodPost:
 		var newCat BackgroundCategory
 		if err := json.NewDecoder(req.Body).Decode(&newCat); err != nil {
-			http.Error(w, "Invalid JSON", http.StatusBadRequest)
+			writeJSONError(w, "Invalid JSON", http.StatusBadRequest)
 			return
 		}
 
@@ -1917,7 +2154,7 @@ func (r *Router) handleBackgroundCategories(w http.ResponseWriter, req *http.Req
 		if newCat.ID == "" {
 			randomBytes := make([]byte, 8)
 			if _, err := rand.Read(randomBytes); err != nil {
-				http.Error(w, "Failed to generate ID", http.StatusInternalServerError)
+				writeJSONError(w, "Failed to generate ID", http.StatusInternalServerError)
 				return
 			}
 			newCat.ID = hex.EncodeToString(randomBytes)
@@ -1925,14 +2162,14 @@ func (r *Router) handleBackgroundCategories(w http.ResponseWriter, req *http.Req
 
 		bgData.Categories = append(bgData.Categories, newCat)
 		if err := r.saveBackgroundData(bgData); err != nil {
-			http.Error(w, "Failed to save background data", http.StatusInternalServerError)
+			writeJSONError(w, "Failed to save background data", http.StatusInternalServerError)
 			return
 		}
 
 		writeJSON(w, newCat)
 
 	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
 }
 
@@ -1940,13 +2177,13 @@ func (r *Router) handleBackgroundCategories(w http.ResponseWriter, req *http.Req
 func (r *Router) handleBackgroundCategoryActions(w http.ResponseWriter, req *http.Request) {
 	categoryID := req.URL.Path[len("/api/backgrounds/categories/"):]
 	if categoryID == "" {
-		http.Error(w, "Category ID required", http.StatusBadRequest)
+		writeJSONError(w, "Category ID required", http.StatusBadRequest)
 		return
 	}
 
 	bgData, err := r.loadBackgroundData()
 	if err != nil {
-		http.Error(w, "Failed to load background data", http.StatusInternalServerError)
+		writeJSONError(w, "Failed to load background data", http.StatusInternalServerError)
 		return
 	}
 
@@ -1954,7 +2191,7 @@ func (r *Router) handleBackgroundCategoryActions(w http.ResponseWriter, req *htt
 	case http.MethodPut:
 		var update BackgroundCategory
 		if err := json.NewDecoder(req.Body).Decode(&update); err != nil {
-			http.Error(w, "Invalid JSON", http.StatusBadRequest)
+			writeJSONError(w, "Invalid JSON", http.StatusBadRequest)
 			return
 		}
 
@@ -1973,12 +2210,12 @@ func (r *Router) handleBackgroundCategoryActions(w http.ResponseWriter, req *htt
 		}
 
 		if !found {
-			http.Error(w, "Category not found", http.StatusNotFound)
+			writeJSONError(w, "Category not found", http.StatusNotFound)
 			return
 		}
 
 		if err := r.saveBackgroundData(bgData); err != nil {
-			http.Error(w, "Failed to save background data", http.StatusInternalServerError)
+			writeJSONError(w, "Failed to save background data", http.StatusInternalServerError)
 			return
 		}
 
@@ -1992,7 +2229,7 @@ func (r *Router) handleBackgroundCategoryActions(w http.ResponseWriter, req *htt
 			"storage": true, "tech": true, "space": true, "minimal": true, "uploaded": true,
 		}
 		if defaultIDs[categoryID] {
-			http.Error(w, "Cannot delete default category", http.StatusBadRequest)
+			writeJSONError(w, "Cannot delete default category", http.StatusBadRequest)
 			return
 		}
 
@@ -2006,7 +2243,7 @@ func (r *Router) handleBackgroundCategoryActions(w http.ResponseWriter, req *htt
 		}
 
 		if !found {
-			http.Error(w, "Category not found", http.StatusNotFound)
+			writeJSONError(w, "Category not found", http.StatusNotFound)
 			return
 		}
 
@@ -2018,14 +2255,14 @@ func (r *Router) handleBackgroundCategoryActions(w http.ResponseWriter, req *htt
 		}
 
 		if err := r.saveBackgroundData(bgData); err != nil {
-			http.Error(w, "Failed to save background data", http.StatusInternalServerError)
+			writeJSONError(w, "Failed to save background data", http.StatusInternalServerError)
 			return
 		}
 
 		writeJSON(w, map[string]bool{"success": true})
 
 	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
 }
 
@@ -2036,7 +2273,7 @@ func (r *Router) handleBackups(w http.ResponseWriter, req *http.Request) {
 		// List all backups
 		backups, err := r.backupManager.ListBackups()
 		if err != nil {
-			http.Error(w, fmt.Sprintf("Failed to list backups: %v", err), http.StatusInternalServerError)
+			writeJSONError(w, fmt.Sprintf("Failed to list backups: %v", err), http.StatusInternalServerError)
 			return
 		}
 		writeJSON(w, map[string]interface{}{
@@ -2057,7 +2294,7 @@ func (r *Router) handleBackups(w http.ResponseWriter, req *http.Request) {
 
 		backupPath, err := r.backupManager.CreateBackupWithDB(r.db, reqData.Reason)
 		if err != nil {
-			http.Error(w, fmt.Sprintf("Failed to create backup: %v", err), http.StatusInternalServerError)
+			writeJSONError(w, fmt.Sprintf("Failed to create backup: %v", err), http.StatusInternalServerError)
 			return
 		}
 
@@ -2068,7 +2305,7 @@ func (r *Router) handleBackups(w http.ResponseWriter, req *http.Request) {
 		})
 
 	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
 }
 
@@ -2076,7 +2313,7 @@ func (r *Router) handleBackups(w http.ResponseWriter, req *http.Request) {
 func (r *Router) handleBackupActions(w http.ResponseWriter, req *http.Request) {
 	backupName := filepath.Base(req.URL.Path)
 	if backupName == "" || backupName == "backups" {
-		http.Error(w, "Backup name required", http.StatusBadRequest)
+		writeJSONError(w, "Backup name required", http.StatusBadRequest)
 		return
 	}
 
@@ -2084,7 +2321,7 @@ func (r *Router) handleBackupActions(w http.ResponseWriter, req *http.Request) {
 	case http.MethodPost:
 		// Restore from backup
 		if err := r.backupManager.RestoreBackup(backupName); err != nil {
-			http.Error(w, fmt.Sprintf("Failed to restore backup: %v", err), http.StatusInternalServerError)
+			writeJSONError(w, fmt.Sprintf("Failed to restore backup: %v", err), http.StatusInternalServerError)
 			return
 		}
 
@@ -2094,10 +2331,24 @@ func (r *Router) handleBackupActions(w http.ResponseWriter, req *http.Request) {
 		})
 
 	case http.MethodDelete:
-		// Delete a backup - not implemented for safety
-		http.Error(w, "Backup deletion not allowed for safety", http.StatusForbidden)
+		// Delete a backup
+		if err := r.backupManager.DeleteBackup(backupName); err != nil {
+			if strings.Contains(err.Error(), "not found") {
+				writeJSONError(w, err.Error(), http.StatusNotFound)
+			} else if strings.Contains(err.Error(), "invalid") {
+				writeJSONError(w, err.Error(), http.StatusBadRequest)
+			} else {
+				writeJSONError(w, fmt.Sprintf("Failed to delete backup: %v", err), http.StatusInternalServerError)
+			}
+			return
+		}
+
+		writeJSON(w, map[string]interface{}{
+			"success": true,
+			"message": "Backup deleted successfully",
+		})
 
 	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
 }

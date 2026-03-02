@@ -116,9 +116,6 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/backups", r.authMiddleware(r.handleBackups))
 	r.mux.HandleFunc("/api/backups/", r.authMiddleware(r.handleBackupActions))
 
-	// Widget/integration routes (reserved for future use)
-	// r.mux.HandleFunc("/api/integrations/", r.handleIntegrations)
-
 	// Icon management routes
 	r.mux.HandleFunc("/api/icon-categories", r.handleGetIconCategories)
 	r.mux.HandleFunc("/api/icon-categories/", r.handleIconCategoryActions)

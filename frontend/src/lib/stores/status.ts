@@ -1,5 +1,6 @@
 import { writable, get } from 'svelte/store';
 import { getStatus as apiGetStatus } from '$lib/utils/api';
+import { logError } from '$lib/utils/errors';
 
 export interface StatusInfo {
   status: 'up' | 'down' | 'error' | 'unknown' | 'loading';
@@ -24,6 +25,7 @@ export async function fetchStatus(entryId: string): Promise<StatusInfo> {
       lastChecked: data.lastChecked
     };
   } catch (error) {
+    logError('Status fetch', error);
     return { status: 'unknown' };
   }
 }

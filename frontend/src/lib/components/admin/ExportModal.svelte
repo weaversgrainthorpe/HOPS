@@ -1,9 +1,9 @@
 <script lang="ts">
   import Icon from '@iconify/svelte';
+  import Modal from '$lib/components/shared/Modal.svelte';
   import { exportConfig } from '$lib/utils/api';
   import { config } from '$lib/stores/config';
   import { toast } from '$lib/stores/toast';
-  import { focusTrap } from '$lib/utils/focusTrap';
 
   interface Props {
     onClose: () => void;
@@ -12,12 +12,6 @@
   let { onClose }: Props = $props();
   let exporting = $state(false);
   let exportingId = $state<string | null>(null);
-
-  function handleKeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape') {
-      onClose();
-    }
-  }
 
   async function handleExportAll() {
     exporting = true;
@@ -61,145 +55,67 @@
   }
 </script>
 
-<svelte:window onkeydown={handleKeydown} />
+<Modal
+  id="export-config"
+  title="Export Configuration"
+  titleIcon="mdi:download"
+  onClose={onClose}
+  maxWidth="550px"
+>
+  <p class="description">Export your HOPS configuration as JSON. You can export all dashboards or individual dashboards.</p>
 
-<!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="modal-backdrop" onclick={onClose} onkeydown={(e) => e.key === 'Escape' && onClose()}>
-  <div
-    class="modal-content"
-    onclick={(e) => e.stopPropagation()}
-    onkeydown={(e) => e.stopPropagation()}
-    role="dialog"
-    aria-modal="true"
-    aria-labelledby="export-title"
-    tabindex="-1"
-    use:focusTrap
-  >
-    <div class="modal-header">
-      <h2 id="export-title">Export Configuration</h2>
-      <button class="close-btn" onclick={onClose}>
-        <Icon icon="mdi:close" width="24" />
-      </button>
-    </div>
-
-    <div class="modal-body">
-      <p class="description">Export your HOPS configuration as JSON. You can export all dashboards or individual dashboards.</p>
-
-      <div class="export-section">
-        <h3>Export All Dashboards</h3>
-        <p class="section-description">Download your complete configuration including all dashboards, tabs, groups, and tiles.</p>
-        <button class="btn-primary" onclick={handleExportAll} disabled={exporting}>
-          {#if exporting}
-            <Icon icon="mdi:loading" width="20" class="spin" />
-            Exporting...
-          {:else}
-            <Icon icon="mdi:download-multiple" width="20" />
-            Export All ({$config?.dashboards.length || 0} dashboards)
-          {/if}
-        </button>
-      </div>
-
-      {#if $config?.dashboards && $config.dashboards.length > 0}
-        <div class="export-section">
-          <h3>Export Individual Dashboard</h3>
-          <p class="section-description">Export a single dashboard. This can be imported into another HOPS instance and will be added alongside existing dashboards.</p>
-          <div class="dashboard-list">
-            {#each $config.dashboards as dashboard (dashboard.id)}
-              <div class="dashboard-item">
-                <div class="dashboard-info">
-                  <span class="dashboard-name">{dashboard.name}</span>
-                  <span class="dashboard-path">{dashboard.path}</span>
-                </div>
-                <button
-                  class="btn-secondary btn-sm"
-                  onclick={() => handleExportSingle(dashboard.id, dashboard.name)}
-                  disabled={exportingId === dashboard.id}
-                >
-                  {#if exportingId === dashboard.id}
-                    <Icon icon="mdi:loading" width="18" class="spin" />
-                  {:else}
-                    <Icon icon="mdi:download" width="18" />
-                  {/if}
-                  Export
-                </button>
-              </div>
-            {/each}
-          </div>
-        </div>
+  <div class="export-section">
+    <h3>Export All Dashboards</h3>
+    <p class="section-description">Download your complete configuration including all dashboards, tabs, groups, and tiles.</p>
+    <button class="btn-primary" onclick={handleExportAll} disabled={exporting}>
+      {#if exporting}
+        <Icon icon="mdi:loading" width="20" class="spin" />
+        Exporting...
+      {:else}
+        <Icon icon="mdi:download-multiple" width="20" />
+        Export All ({$config?.dashboards.length || 0} dashboards)
       {/if}
+    </button>
+  </div>
 
-      <div class="info-box">
-        <Icon icon="mdi:information" width="20" />
-        <div>
-          <p><strong>Tip:</strong> Individual dashboard exports can be imported into any HOPS instance. The dashboard will be added alongside existing dashboards, with paths automatically adjusted if needed.</p>
-        </div>
+  {#if $config?.dashboards && $config.dashboards.length > 0}
+    <div class="export-section">
+      <h3>Export Individual Dashboard</h3>
+      <p class="section-description">Export a single dashboard. This can be imported into another HOPS instance and will be added alongside existing dashboards.</p>
+      <div class="dashboard-list">
+        {#each $config.dashboards as dashboard (dashboard.id)}
+          <div class="dashboard-item">
+            <div class="dashboard-info">
+              <span class="dashboard-name">{dashboard.name}</span>
+              <span class="dashboard-path">{dashboard.path}</span>
+            </div>
+            <button
+              class="btn-secondary btn-sm"
+              onclick={() => handleExportSingle(dashboard.id, dashboard.name)}
+              disabled={exportingId === dashboard.id}
+            >
+              {#if exportingId === dashboard.id}
+                <Icon icon="mdi:loading" width="18" class="spin" />
+              {:else}
+                <Icon icon="mdi:download" width="18" />
+              {/if}
+              Export
+            </button>
+          </div>
+        {/each}
       </div>
+    </div>
+  {/if}
+
+  <div class="info-box">
+    <Icon icon="mdi:information" width="20" />
+    <div>
+      <p><strong>Tip:</strong> Individual dashboard exports can be imported into any HOPS instance. The dashboard will be added alongside existing dashboards, with paths automatically adjusted if needed.</p>
     </div>
   </div>
-</div>
+</Modal>
 
 <style>
-  .modal-backdrop {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.7);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: var(--z-modal);
-    padding: 1rem;
-  }
-
-  .modal-content {
-    background: var(--bg-primary);
-    border-radius: 0.75rem;
-    box-shadow: 0 10px 40px var(--shadow);
-    width: 100%;
-    max-width: 550px;
-    max-height: 80vh;
-    overflow-y: auto;
-  }
-
-  .modal-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 1rem 1.5rem;
-    border-bottom: 1px solid var(--border);
-    position: sticky;
-    top: 0;
-    background: var(--bg-primary);
-    z-index: 1;
-  }
-
-  .modal-header h2 {
-    margin: 0;
-    font-size: 1.25rem;
-    color: var(--text-primary);
-  }
-
-  .close-btn {
-    background: none;
-    border: none;
-    color: var(--text-secondary);
-    cursor: pointer;
-    padding: 0.5rem;
-    border-radius: 0.375rem;
-    transition: all 0.2s;
-  }
-
-  .close-btn:hover {
-    background: var(--bg-tertiary);
-    color: var(--text-primary);
-  }
-
-  .modal-body {
-    padding: 1.5rem;
-  }
-
   .description {
     margin: 0 0 1.5rem 0;
     font-size: 0.875rem;
@@ -282,8 +198,8 @@
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
-    padding: 0.75rem 1.5rem;
-    border-radius: 0.5rem;
+    padding: 0.625rem 1.25rem;
+    border-radius: 0.375rem;
     font-weight: 500;
     transition: all 0.2s;
     border: none;
