@@ -81,7 +81,9 @@ func (bm *BackupManager) CreateBackupWithDB(db *sql.DB, reason string) (string, 
 	backupPath := filepath.Join(bm.backupDir, backupName)
 
 	// Use SQLite's backup API via VACUUM INTO (SQLite 3.27+)
-	_, err := db.Exec(fmt.Sprintf("VACUUM INTO '%s'", backupPath))
+	// Sanitize path to prevent SQL injection via single quotes
+	sanitizedPath := strings.ReplaceAll(backupPath, "'", "''")
+	_, err := db.Exec(fmt.Sprintf("VACUUM INTO '%s'", sanitizedPath))
 	if err != nil {
 		// Fallback to file copy if VACUUM INTO is not supported
 		log.Printf("[Backup] VACUUM INTO not supported, falling back to file copy")
@@ -162,6 +164,27 @@ func (bm *BackupManager) RestoreBackup(backupName string) error {
 	}
 
 	log.Printf("[Backup] Restored from backup: %s", backupName)
+	return nil
+}
+
+// DeleteBackup removes a specific backup file
+func (bm *BackupManager) DeleteBackup(backupName string) error {
+	// Verify it's a valid backup file name
+	if !strings.HasPrefix(backupName, BackupPrefix) || !strings.HasSuffix(backupName, BackupSuffix) {
+		return fmt.Errorf("invalid backup name: %s", backupName)
+	}
+
+	backupPath := filepath.Join(bm.backupDir, backupName)
+
+	if _, err := os.Stat(backupPath); os.IsNotExist(err) {
+		return fmt.Errorf("backup not found: %s", backupName)
+	}
+
+	if err := os.Remove(backupPath); err != nil {
+		return fmt.Errorf("failed to delete backup: %w", err)
+	}
+
+	log.Printf("[Backup] Deleted backup: %s", backupName)
 	return nil
 }
 

@@ -85,6 +85,8 @@ type Background struct {
 	Fit                string   `json:"fit,omitempty"`                // cover, contain, fill
 	Transition         string   `json:"transition,omitempty"`         // crossfade, slide, zoom, etc.
 	TransitionDuration float64  `json:"transitionDuration,omitempty"` // seconds (0.5 to 5)
+	OverlayOpacity     *float64 `json:"overlayOpacity,omitempty"`     // 0-1, darkness of content overlay
+	OverlayBlur        *float64 `json:"overlayBlur,omitempty"`        // 0-20, blur in px
 }
 
 // StatusCheck configuration

@@ -7,7 +7,7 @@
   import { updateDashboard } from '$lib/stores/config';
   import { editMode } from '$lib/stores/editMode';
   import { isAuthenticated } from '$lib/stores/auth';
-  import { clipboard } from '$lib/stores/clipboard';
+  import { clipboard, clearClipboard } from '$lib/stores/clipboard';
   import { confirm } from '$lib/stores/confirmModal';
   import { initEasterEggs, destroyEasterEggs, partyModeActive } from '$lib/stores/easterEggs';
   import TabEditModal from './admin/TabEditModal.svelte';
@@ -89,6 +89,12 @@
         id: '', // Will be generated
         order: 0 // Will be set correctly
       });
+
+      // For cut operations, delete the source entry
+      if (clipboardItem.operation === 'cut' && clipboardItem.sourceTabId && clipboardItem.sourceGroupId) {
+        handleDeleteEntry(clipboardItem.sourceTabId, clipboardItem.sourceGroupId, clipboardItem.data.id);
+        clearClipboard();
+      }
     }
   }
 
@@ -736,6 +742,7 @@
   {#if dashboard.tabs.length > 0}
     <TabPanel
       tab={dashboard.tabs[activeTabIndex]}
+      effectiveBackground={effectiveBackground()}
       currentTabId={dashboard.tabs[activeTabIndex].id}
       availableTabsForEntry={getAvailableTabsForEntry()}
       availableTabsForGroup={getAvailableTabsForGroup()}
@@ -753,6 +760,7 @@
       onDuplicateGroup={makeDuplicateGroupHandler(dashboard.tabs[activeTabIndex].id)}
       onUpdateTabBackground={makeUpdateTabBackgroundHandler(dashboard.tabs[activeTabIndex].id)}
       onGroupFocus={(groupId) => focusedGroupId = groupId}
+      onDeleteEntryFromSource={handleDeleteEntry}
     />
   {:else}
     <div class="empty-dashboard">

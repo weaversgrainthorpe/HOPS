@@ -5,6 +5,33 @@ All notable changes to HOPS (Home Operations Portal System) will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-03-02
+
+### Added
+- Configurable background overlay opacity and blur (per-background sliders in Background Config modal)
+- Self-contained export/import with base64-embedded assets (icons, backgrounds, presets)
+- Backup deletion from the admin Backup modal
+- `DeleteBackup()` method on BackupManager
+
+### Changed
+- All API error responses now return consistent JSON format (`{"error": "...", "status": 400}`)
+- All JSON responses use `writeJSON()` helper consistently
+- Edit modals (Entry, Tab, Group, ChangePassword) use Modal footer snippet for pinned action buttons
+- Import and Export modals migrated to shared Modal component
+- Toast messages standardized (no trailing periods on short phrases)
+- Dev mode detection uses hostname instead of hardcoded port number
+- Removed dead code: unused `theme.ts`, `designTokens.ts`, unused validation/color functions
+- Removed unused `secrets` database table
+- Removed commented-out `handleIntegrations` code
+
+### Fixed
+- Cut/paste now correctly deletes source entry (was behaving as copy)
+- Modal save buttons no longer overflow off-screen on smaller viewports
+- SQL injection vulnerability in `VACUUM INTO` backup path (single-quote escaping)
+- Silent error swallowing in status polling store (now logs via `logError`)
+- Swallowed error in expired session cleanup (now logged)
+- README "Coming Soon" removed from status checks (already implemented)
+
 ## [1.1.0] - 2026-02-27
 
 ### Added
@@ -112,6 +139,7 @@ HOPS (Home Operations Portal System) is now ready for public use! A modern, self
 ### Credits
 Created by Jonathan Brown with Claude (Anthropic)
 
+[1.2.0]: https://github.com/weaversgrainthorpe/HOPS/releases/tag/v1.2.0
 [1.1.0]: https://github.com/weaversgrainthorpe/HOPS/releases/tag/v1.1.0
 [1.0.1]: https://github.com/weaversgrainthorpe/HOPS/releases/tag/v1.0.1
 [1.0.0]: https://github.com/weaversgrainthorpe/HOPS/releases/tag/v1.0.0

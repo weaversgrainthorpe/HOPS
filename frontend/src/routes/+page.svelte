@@ -45,9 +45,9 @@
     try {
       await resetConfig();
       await loadConfig();
-      toast.success('Configuration reset to factory defaults.');
+      toast.success('Configuration reset to factory defaults');
     } catch (err) {
-      toast.error('Failed to reset configuration.');
+      toast.error('Failed to reset configuration');
     }
   }
 </script>

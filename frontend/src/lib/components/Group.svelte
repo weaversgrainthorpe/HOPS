@@ -43,9 +43,11 @@
     onDuplicateGroup?: () => void;
     onFocus?: () => void;
     tabId?: string;
+    /** Delete an entry from any tab/group (used for cut-paste source cleanup) */
+    onDeleteEntryFromSource?: (tabId: string, groupId: string, entryId: string) => void;
   }
 
-  let { group, currentTabId = '', currentGroupId = '', availableTabsForEntry = [], availableTabsForGroup = [], onUpdateEntry, onDeleteEntry, onAddEntry, onReorderEntries, onMoveEntry, onMoveEntryToTab, onMoveGroupToTab, onUpdateGroup, onDeleteGroup, onDuplicateGroup, onFocus, tabId }: Props = $props();
+  let { group, currentTabId = '', currentGroupId = '', availableTabsForEntry = [], availableTabsForGroup = [], onUpdateEntry, onDeleteEntry, onAddEntry, onReorderEntries, onMoveEntry, onMoveEntryToTab, onMoveGroupToTab, onUpdateGroup, onDeleteGroup, onDuplicateGroup, onFocus, tabId, onDeleteEntryFromSource }: Props = $props();
   // svelte-ignore state_referenced_locally
   let collapsed = $state(group.collapsed || false);
   let showAddModal = $state(false);
@@ -186,8 +188,11 @@
       onAddEntry(newEntry);
     }
 
-    // Clear clipboard after paste for cut operations
+    // For cut operations, delete the source entry and clear clipboard
     if (clipboardItem.operation === 'cut') {
+      if (onDeleteEntryFromSource && clipboardItem.sourceTabId && clipboardItem.sourceGroupId) {
+        onDeleteEntryFromSource(clipboardItem.sourceTabId, clipboardItem.sourceGroupId, clipboardItem.data.id);
+      }
       clearClipboard();
     }
   }

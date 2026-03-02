@@ -13,7 +13,7 @@
   import AboutModal from './AboutModal.svelte';
 
   const appVersion = __APP_VERSION__;
-  const isDev = typeof window !== 'undefined' && (location.pathname.startsWith('/dev/') || location.port === '5174' || location.hostname === 'localhost');
+  const isDev = typeof window !== 'undefined' && (location.pathname.startsWith('/dev/') || location.hostname === 'localhost' || location.hostname === '127.0.0.1');
 
   let currentPath = $derived($page.url.pathname);
 

@@ -185,7 +185,7 @@
   onClose={onCancel}
   onBeforeClose={handleBeforeClose}
 >
-  <form onsubmit={(e) => { e.preventDefault(); handleSave(); }}>
+  <form id="entry-edit-form" onsubmit={(e) => { e.preventDefault(); handleSave(); }}>
     <div class="form-grid">
       <div class="form-group">
         <label for="name">Name *</label>
@@ -395,6 +395,9 @@
       {/if}
     </div>
 
+  </form>
+
+  {#snippet footer()}
     <div class="modal-actions">
       {#if onDelete}
         <button type="button" class="btn-danger" onclick={handleDelete}>
@@ -406,13 +409,13 @@
         <button type="button" class="btn-secondary" onclick={onCancel}>
           Cancel
         </button>
-        <button type="submit" class="btn-primary">
+        <button type="submit" form="entry-edit-form" class="btn-primary">
           <Icon icon="mdi:content-save" width="20" />
           {entry.id ? 'Save' : 'Create'}
         </button>
       </div>
     </div>
-  </form>
+  {/snippet}
 </Modal>
 
 <style>
@@ -509,9 +512,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 1rem;
-    margin-top: 1.5rem;
-    padding-top: 1.5rem;
-    border-top: 1px solid var(--border);
+    width: 100%;
   }
 
   .action-right {

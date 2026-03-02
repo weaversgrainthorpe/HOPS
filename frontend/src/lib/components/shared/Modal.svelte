@@ -125,10 +125,10 @@
     background: rgba(0, 0, 0, 0.7);
     backdrop-filter: blur(4px);
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
     z-index: var(--modal-z-index, var(--z-modal));
-    padding: 1rem;
+    padding: 2rem 1rem;
   }
 
   .modal-content {
@@ -139,6 +139,7 @@
     max-height: 85vh;
     display: flex;
     flex-direction: column;
+    overflow: hidden;
     box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3);
     animation: modalSlideIn 0.2s ease-out;
   }
