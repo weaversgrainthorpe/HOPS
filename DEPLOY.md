@@ -71,33 +71,26 @@ HOPS is a single binary with no runtime dependencies. No database server, no run
 
 ### 1. Download
 
-Go to the [Releases](https://github.com/weaversgrainthorpe/HOPS/releases) page and download:
+Go to the [Releases](https://github.com/weaversgrainthorpe/HOPS/releases) page and download the package for your platform:
 
-- The **binary** for your platform:
-  - `hops-linux-amd64` — Linux x86-64
-  - `hops-linux-arm64` — Linux ARM64 (Raspberry Pi 3B+/4/5/Zero 2 W)
-  - `hops-darwin-amd64` — macOS Intel
-  - `hops-darwin-arm64` — macOS Apple Silicon
-  - `hops-windows-amd64.exe` — Windows x86-64
-- The **frontend**: `hops-frontend.tar.gz`
+- `hops-linux-amd64.tar.gz` — Linux x86-64
+- `hops-linux-arm64.tar.gz` — Linux ARM64 (Raspberry Pi 3B+/4/5/Zero 2 W)
+- `hops-darwin-amd64.tar.gz` — macOS Intel
+- `hops-darwin-arm64.tar.gz` — macOS Apple Silicon
+- `hops-windows-amd64.zip` — Windows x86-64
 
-### 2. Set Up
+Each package contains the binary and the web interface — everything you need in a single file.
+
+### 2. Extract and Run
 
 ```bash
-# Make executable (Linux/macOS)
-chmod +x hops-linux-amd64
-
-# Extract the frontend
-mkdir -p frontend/build
-tar -xzf hops-frontend.tar.gz -C frontend/build
+# Extract the package
+tar -xzf hops-linux-amd64.tar.gz
 
 # Create a data directory
 mkdir -p data
-```
 
-### 3. Run
-
-```bash
+# Start HOPS
 ./hops-linux-amd64 --port 8080 --data ./data --frontend ./frontend/build
 ```
 
@@ -105,13 +98,13 @@ Open **http://localhost:8080** in your browser. Log in with `admin` / `admin` an
 
 ### Directory Layout
 
-After setup, your directory should look like this:
+After extracting, your directory should look like this:
 
 ```
 hops/
 ├── hops-linux-amd64      # The binary
 ├── frontend/
-│   └── build/            # Frontend files (extracted from tar.gz)
+│   └── build/            # Web interface
 └── data/
     ├── hops.db           # SQLite database (created on first run)
     ├── backups/          # Automatic backups
