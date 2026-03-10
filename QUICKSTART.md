@@ -64,6 +64,11 @@ Skip to [Step 2](#step-2-log-in).
    - `hops-darwin-arm64.tar.gz` — macOS Apple Silicon
    - `hops-windows-amd64.zip` — Windows x86-64
 
+   Or download directly from the command line (replace the filename with your platform):
+   ```bash
+   curl -LO https://github.com/weaversgrainthorpe/HOPS/releases/download/v1.2.0/hops-linux-amd64.tar.gz
+   ```
+
 3. Extract and run:
 
 **Linux / macOS:**
@@ -96,11 +101,15 @@ Data directory: ./data
 Frontend directory: ./frontend/build
 ```
 
+> **Note:** You may see a message about "Dashboard icons directory not found" on first run. This is normal — the directory is created automatically when you upload your first custom icon.
+
+> **Note:** This runs HOPS in the foreground — it will stop when you close the terminal. To run HOPS as a background service, see the [Installation & Deployment Guide](DEPLOY.md).
+
 ## Step 2: Log In
 
-1. Open your browser and go to **http://localhost:8080**
+1. Open your browser and go to **http://\<your-server-ip\>:8080** (or **http://localhost:8080** if running on the same machine)
 2. You'll see the HOPS interface — it's empty for now, that's fine
-3. Click the **Admin** link or go to **http://localhost:8080/admin**
+3. Click the **Admin** link or go to **http://\<your-server-ip\>:8080/admin**
 4. Log in with the default credentials:
    - Username: `admin`
    - Password: `admin`
@@ -115,24 +124,25 @@ Do this now, before anything else.
 
 ## Step 4: Create Your First Dashboard
 
-1. On the Admin page, click **Create New Dashboard**
+1. On the Admin page, click **+ New Dashboard**
 2. Enter a name, for example: `Home`
-3. Enter a path, for example: `/home`
+3. The URL path is auto-generated — change it if you like (e.g., `/home`)
 4. Click **Save**
-5. Click the dashboard name to open it
+5. Click the dashboard name to open it — this also enables Edit Mode automatically
 
-## Step 5: Enter Edit Mode
+> **Tip:** You can rename a dashboard or change its path later by clicking the **pencil icon** next to it in the Admin page.
 
-You should now be looking at your empty dashboard.
+## Step 5: Edit Mode
 
-1. Click the **pencil icon** in the header bar — this toggles Edit Mode
-2. You'll see editing controls appear throughout the interface
+You should now be looking at your empty dashboard with Edit Mode already enabled — you'll see an orange **Editing** indicator in the top bar.
+
+You can toggle Edit Mode on and off at any time using the **pencil icon** in the navbar.
 
 ## Step 6: Add a Tab
 
-1. Click **+ New Tab**
+1. Click **Add Tab** at the end of the tab bar
 2. Enter a name, for example: `Services`
-3. Click **Save**
+3. Click **Create**
 
 Your tab appears at the top of the dashboard.
 
@@ -140,20 +150,20 @@ Your tab appears at the top of the dashboard.
 
 Groups organize your tiles within a tab.
 
-1. Click **+ Add Group** (at the bottom of the tab area)
+1. Click **Add Group** (at the bottom of the tab area)
 2. Enter a name, for example: `Media`
-3. Click **Save**
+3. Click **Create**
 
 ## Step 8: Add Your First Tile
 
-1. Click **+ Add Entry** inside the group you just created
+1. Click **Add Tile** inside the group you just created
 2. Fill in the details:
    - **Name**: the display name (e.g., `Plex`)
    - **URL**: the address of the service (e.g., `http://plex.local:32400`)
    - **Icon**: type an icon name like `simple-icons:plex`, or click **Browse** to search through 150,000+ icons
    - **Size**: pick Small, Medium, or Large
    - **Open Mode**: how the link opens — New Tab is usually the best choice
-3. Click **Save**
+3. Click **Create**
 
 Your first tile appears in the group. Click it to make sure the link works.
 

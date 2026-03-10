@@ -14,23 +14,41 @@
   let editPath = $state('');
   let showImport = $state(false);
   let exportingId = $state<string | null>(null);
+  let creatingNew = $state(false);
+  let newName = $state('');
+  let newPath = $state('');
 
   function handleNew() {
+    creatingNew = true;
+    newName = '';
+    newPath = `/dashboard-${Date.now()}`;
+  }
+
+  function cancelNew() {
+    creatingNew = false;
+    newName = '';
+    newPath = '';
+  }
+
+  async function saveNew() {
+    if (!$config || !newName.trim()) return;
+
     const newDashboard: Dashboard = {
       id: `dashboard-${Date.now()}`,
-      name: 'New Dashboard',
-      path: `/dashboard-${Date.now()}`,
+      name: newName.trim(),
+      path: newPath.trim() || `/dashboard-${Date.now()}`,
       tabs: [],
       order: $config?.dashboards.length || 0
     };
 
-    if ($config) {
-      const updatedConfig = {
-        ...$config,
-        dashboards: [...$config.dashboards, newDashboard]
-      };
-      updateConfig(updatedConfig);
-    }
+    const updatedConfig = {
+      ...$config,
+      dashboards: [...$config.dashboards, newDashboard]
+    };
+    await updateConfig(updatedConfig);
+    creatingNew = false;
+    newName = '';
+    newPath = '';
   }
 
   async function handleDelete(dashboard: Dashboard) {
@@ -120,6 +138,43 @@
       </button>
     </div>
   </div>
+
+  {#if creatingNew}
+    <div class="dashboard-item card new-dashboard-form">
+      <div class="dashboard-edit-form">
+        <div class="edit-fields">
+          <div class="field">
+            <label for="new-name">Name</label>
+            <input
+              id="new-name"
+              type="text"
+              bind:value={newName}
+              placeholder="e.g., Home"
+              autofocus
+            />
+          </div>
+          <div class="field">
+            <label for="new-path">URL Path <span class="optional">(auto-generated, change if needed)</span></label>
+            <input
+              id="new-path"
+              type="text"
+              bind:value={newPath}
+              placeholder="/my-dashboard"
+            />
+          </div>
+        </div>
+        <div class="edit-actions">
+          <button onclick={saveNew} class="btn-primary btn-sm" disabled={!newName.trim()}>
+            <Icon icon="mdi:check" width="18" />
+            Save
+          </button>
+          <button onclick={cancelNew} class="btn-secondary btn-sm">
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  {/if}
 
   {#if $config?.dashboards && $config.dashboards.length > 0}
     <div class="dashboards">
@@ -298,6 +353,11 @@
     font-size: 0.75rem;
     font-weight: 500;
     color: var(--text-secondary);
+  }
+
+  .field label .optional {
+    font-weight: 400;
+    opacity: 0.7;
   }
 
   .field input {
