@@ -35,10 +35,37 @@ Thanks for your interest in contributing to HOPS! This document covers the guide
 
 ### Project Structure
 
-- `backend/` — Go API server and SQLite database
-- `frontend/` — SvelteKit 2 + Svelte 5 + TypeScript
-- `scripts/` — Build, dev, and deployment helper scripts
-- `data/` — Runtime data directory (not checked in)
+```
+hops/
+├── backend/
+│   ├── cmd/
+│   │   └── hops/              # Main application entry point
+│   ├── internal/
+│   │   ├── api/               # HTTP handlers and routing
+│   │   ├── auth/              # Authentication service
+│   │   ├── config/            # Configuration management
+│   │   ├── converters/        # Format converters (Homer, Dashy, etc.)
+│   │   ├── database/          # SQLite setup, migrations, backups
+│   │   ├── models/            # Data models
+│   │   ├── status/            # Status checking (HTTP/ICMP)
+│   │   └── version/           # Version information
+│   └── go.mod
+├── frontend/
+│   ├── src/
+│   │   ├── lib/
+│   │   │   ├── components/    # Svelte components
+│   │   │   ├── stores/        # Svelte stores (state management)
+│   │   │   ├── types/         # TypeScript type definitions
+│   │   │   └── utils/         # Utility functions (API client, etc.)
+│   │   └── routes/
+│   │       ├── admin/         # Admin panel route
+│   │       └── [dashboard]/   # Dynamic dashboard routes
+│   └── package.json
+├── scripts/                   # Build, dev, and deployment scripts
+├── data/                      # Runtime data directory (not checked in)
+├── Dockerfile
+└── docker-compose.yml
+```
 
 ## Pull Request Guidelines
 
@@ -47,6 +74,13 @@ Thanks for your interest in contributing to HOPS! This document covers the guide
 3. **Follow existing patterns** — Match the code style and conventions already in the project.
 4. **Update documentation** — If your change affects user-facing behavior, update the relevant docs (README, USER_GUIDE, DEPLOY, etc.).
 5. **Write clear commit messages** — Describe *what* changed and *why*.
+
+### Running Tests
+
+```bash
+cd backend
+go test ./...
+```
 
 ### Building for Production
 

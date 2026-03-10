@@ -1,4 +1,4 @@
-# HOPS Backend (v1.0.1)
+# HOPS Backend (v1.2.0)
 
 The backend for HOPS (Home Operations Portal System) - a lightweight Go server with SQLite database.
 
@@ -34,7 +34,7 @@ backend/
 │   ├── models/
 │   │   └── models.go            # Data models
 │   └── status/
-│       └── checker.go           # Status checking (HTTP/ICMP) [Coming Soon]
+│       └── checker.go           # Status checking (HTTP/ICMP)
 ├── go.mod
 └── go.sum
 ```
@@ -88,94 +88,64 @@ Flags:
 
 ### Public Endpoints
 
-#### GET `/api/config`
-Get the current dashboard configuration.
-
-**Response:**
-```json
-{
-  "dashboards": [
-    {
-      "id": "home",
-      "name": "Home",
-      "path": "/home",
-      "tabs": [...],
-      "order": 0
-    }
-  ]
-}
-```
-
-#### POST `/api/auth/login`
-Authenticate as admin user.
-
-**Request:**
-```json
-{
-  "username": "admin",
-  "password": "admin"
-}
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": "Login successful"
-}
-```
-
-Sets session cookie: `hops_session`
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/health` | Health check with database status |
+| `GET` | `/api/version` | Version information |
+| `GET` | `/api/config` | Dashboard configuration |
+| `GET` | `/api/status/{id}` | Status check result for an entry |
+| `POST` | `/api/auth/login` | Admin login (rate-limited: 20/min/IP) |
+| `GET` | `/api/auth/check` | Verify authentication status |
+| `GET` | `/api/icon-categories` | List icon categories |
+| `GET` | `/api/icons` | List icons |
+| `GET` | `/api/icons/dashboard/{filename}` | Serve dashboard icon collection |
+| `GET` | `/api/backgrounds` | List background images |
+| `GET` | `/icons/{filename}` | Serve uploaded icon file |
+| `GET` | `/backgrounds/{filename}` | Serve uploaded background file |
+| `GET` | `/presets/{filename}` | Serve preset background image |
 
 ### Protected Endpoints (Require Authentication)
 
-#### PUT `/api/config/update`
-Update the entire dashboard configuration.
+Authentication is via the `hops_session` HttpOnly cookie, set on login.
 
-**Headers:**
-- `Cookie: hops_session=<session-token>`
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/auth/logout` | Log out current session |
+| `POST` | `/api/auth/change-password` | Change admin password |
+| `PUT` | `/api/config/update` | Update dashboard configuration |
+| `GET` | `/api/config/export` | Export configuration (with embedded assets) |
+| `POST` | `/api/config/import` | Import configuration (HOPS, Homer, Dashy, Heimdall) |
+| `POST` | `/api/config/reset` | Reset to default configuration |
+| `GET` | `/api/backups` | List available backups |
+| `POST` | `/api/backups/{id}` | Restore a backup |
+| `DELETE` | `/api/backups/{id}` | Delete a backup |
+| `POST` | `/api/icons/upload` | Upload a custom icon |
+| `PUT` | `/api/icons/{id}` | Update icon metadata |
+| `DELETE` | `/api/icons/{id}` | Delete an icon |
+| `POST` | `/api/icon-categories` | Create an icon category |
+| `PUT` | `/api/icon-categories/{id}` | Update an icon category |
+| `DELETE` | `/api/icon-categories/{id}` | Delete an icon category |
+| `POST` | `/api/backgrounds` | Upload a background image |
+| `PUT` | `/api/backgrounds/{id}` | Update background metadata |
+| `DELETE` | `/api/backgrounds/{id}` | Delete a background image |
+| `GET` | `/api/backgrounds/categories` | List background categories |
+| `POST` | `/api/backgrounds/categories` | Create a background category |
+| `PUT` | `/api/backgrounds/categories/{id}` | Update a background category |
+| `DELETE` | `/api/backgrounds/categories/{id}` | Delete a background category |
 
-**Request:**
-```json
-{
-  "dashboards": [...]
-}
-```
+### Authentication Example
 
-**Response:**
-```json
-{
-  "success": true
-}
-```
+```bash
+# Login (sets hops_session cookie)
+curl -c cookies.txt -X POST http://localhost:8080/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"admin"}'
 
-#### POST `/api/auth/logout`
-Log out current session.
+# Authenticated request
+curl -b cookies.txt http://localhost:8080/api/config/export
 
-**Response:**
-```json
-{
-  "success": true
-}
-```
-
-#### POST `/api/auth/change-password`
-Change admin password.
-
-**Request:**
-```json
-{
-  "currentPassword": "oldpassword",
-  "newPassword": "newpassword"
-}
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": "Password changed successfully"
-}
+# Logout
+curl -b cookies.txt -X POST http://localhost:8080/api/auth/logout
 ```
 
 ## Database Schema
@@ -268,21 +238,12 @@ GET /assets/app.js  -> static file
 
 ## Error Handling
 
-All API responses follow a consistent format:
+All API error responses use a consistent JSON format:
 
-**Success:**
 ```json
 {
-  "success": true,
-  "data": {...}
-}
-```
-
-**Error:**
-```json
-{
-  "success": false,
-  "error": "Error message"
+  "error": "Error message",
+  "status": 400
 }
 ```
 
@@ -294,30 +255,6 @@ HTTP status codes:
 - `500` - Internal server error
 
 ## Testing
-
-### Manual API Testing
-
-Using curl:
-
-```bash
-# Login
-curl -c cookies.txt -X POST http://localhost:8080/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"admin"}'
-
-# Get config (public)
-curl http://localhost:8080/api/config
-
-# Update config (requires auth)
-curl -b cookies.txt -X PUT http://localhost:8080/api/config/update \
-  -H "Content-Type: application/json" \
-  -d '{"dashboards":[...]}'
-
-# Logout
-curl -b cookies.txt -X POST http://localhost:8080/api/auth/logout
-```
-
-### Unit Tests
 
 ```bash
 go test ./...
@@ -427,20 +364,6 @@ Current logging includes:
 - Error logging for failed operations
 
 Enhance logging as needed for your deployment.
-
-## Future Features
-
-### Status Checking
-- HTTP health checks for services
-- ICMP ping support
-- Response time tracking
-- Status caching
-
-### Widgets & Integrations
-- Pi-hole API integration
-- Proxmox VE stats
-- Docker container status
-- *arr apps integration (Sonarr, Radarr, etc.)
 
 ## Contributing
 
