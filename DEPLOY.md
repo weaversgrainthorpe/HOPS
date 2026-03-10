@@ -81,6 +81,11 @@ Go to the [Releases](https://github.com/weaversgrainthorpe/HOPS/releases) page a
 
 Each package contains the binary and the web interface — everything you need in a single file.
 
+Or download directly from the command line (replace the filename with your platform):
+```bash
+curl -LO https://github.com/weaversgrainthorpe/HOPS/releases/download/v1.2.0/hops-linux-amd64.tar.gz
+```
+
 ### 2. Extract and Run
 
 ```bash
