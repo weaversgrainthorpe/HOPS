@@ -54,23 +54,22 @@ docker compose up -d
 
 Skip to [Step 2](#step-2-log-in).
 
-### Option B: Download the Binary
+### Option B: Download
 
 1. Go to the [Releases](https://github.com/weaversgrainthorpe/HOPS/releases) page
-2. Download two files:
-   - The binary for your platform (e.g., `hops-linux-amd64`, `hops-darwin-arm64`, `hops-windows-amd64.exe`)
-   - `hops-frontend.tar.gz` (the web interface)
+2. Download the package for your platform:
+   - `hops-linux-amd64.tar.gz` — Linux x86-64
+   - `hops-linux-arm64.tar.gz` — Linux ARM64 (Raspberry Pi 3B+/4/5/Zero 2 W)
+   - `hops-darwin-amd64.tar.gz` — macOS Intel
+   - `hops-darwin-arm64.tar.gz` — macOS Apple Silicon
+   - `hops-windows-amd64.zip` — Windows x86-64
 
-3. Set up and run:
+3. Extract and run:
 
 **Linux / macOS:**
 ```bash
-# Make the binary executable
-chmod +x hops-linux-amd64
-
-# Extract the frontend
-mkdir -p frontend/build
-tar -xzf hops-frontend.tar.gz -C frontend/build
+# Extract the package
+tar -xzf hops-linux-amd64.tar.gz
 
 # Create a data directory
 mkdir -p data
@@ -81,7 +80,7 @@ mkdir -p data
 
 **Windows:**
 ```powershell
-# Extract hops-frontend.tar.gz into a frontend\build folder (use 7-Zip or similar)
+# Extract hops-windows-amd64.zip (right-click → Extract All, or use 7-Zip)
 
 # Create a data directory
 mkdir data
