@@ -12,7 +12,7 @@ I created HOPS because none of the existing options matched what I wanted:
 
 - **100% GUI-based editing** - I wanted to click, drag, and configure everything visually. No YAML files. No JSON editing. No "simple" configuration files that inevitably become not-so-simple. If you enjoy hand-crafting configuration files, HOPS isn't for you. Close this tab. Now.
 
-- **Native installation** - I have no experience with Docker or containers, and I didn't want to learn just to run a dashboard. HOPS is a single Go binary with a SQLite database. Download, run, done.
+- **Native installation** - HOPS is a single binary with a SQLite database. Download, run, done. Docker is available too if that's your thing.
 
 - **Power features without complexity** - Drag-and-drop everything. Multiple dashboards. Tabs. Groups. Background slideshows. Theme customization. Status monitoring. All configurable through the UI.
 
@@ -20,11 +20,33 @@ HOPS won't be for everyone. That's fine. But if you've been frustrated editing Y
 
 Already using Homer, Dashy, or Heimdall? HOPS can import your existing configuration, so you can try it without starting from scratch.
 
+## Quick Start
+
+HOPS runs on **Linux**, **macOS**, and **Windows** with no dependencies. It works on anything from a Raspberry Pi to a full server.
+
+**Docker:**
+```bash
+docker compose up -d
+```
+
+**Binary:**
+```bash
+./hops-linux-amd64 --port 8080 --data ./data --frontend ./frontend/build
+```
+
+Default login: `admin` / `admin` — change this immediately after first login.
+
+**New to HOPS?** Follow the **[Zero to Dashboard Hero](QUICKSTART.md)** guide for a complete walkthrough from installation to your first dashboard.
+
+For full deployment options (systemd, reverse proxy, backups), see the **[Installation & Deployment Guide](DEPLOY.md)**.
+
 ## Features
 
-### Core Features
-- **GUI-First**: Full visual editor, no YAML editing required
-- **File-Friendly**: Config stored as JSON for easy backup/versioning
+### Core
+- **GUI-First**: Full visual editor — no YAML, no config files, no CLI required
+- **Single Binary**: One executable + SQLite database, no runtime dependencies
+- **Multi-Platform**: Linux, macOS, Windows — x86-64 and ARM64
+- **Docker Support**: Dockerfile and docker-compose.yml included
 - **No Login for Viewers**: Just share a URL, it works
 - **Admin Mode**: Separate login for editing
 - **Built-in Help**: Context-sensitive help system in edit mode
@@ -38,250 +60,42 @@ Already using Homer, Dashy, or Heimdall? HOPS can import your existing configura
 - Copy/cut/paste for tiles between groups and tabs
 - Keyboard shortcuts (Ctrl+C, Ctrl+X, Ctrl+V)
 - Right-click context menu
-- Global search with "/" hotkey (Coming Soon)
 
 ### Visual Customization
 - Per-dashboard and per-tab backgrounds
-- Background slideshow with 18 transition effects:
-  - Crossfade, Slide (up/down/left/right), Zoom (in/out)
-  - Fade to Black, Blur, Flip, Ken Burns (cinematic pan/zoom)
-  - Swirl, Wipe, Circle, Curtain, Diamond, Dissolve, Flash, Glitch, Random
-- Customizable transition duration and slide intervals
-- Upload custom background images
-- Curated preset backgrounds by category
-- Theme hierarchy: Dashboard -> Tab -> Group -> Tile (color & opacity cascade)
-- 150,000+ built-in icons via Iconify
+- Background slideshow with 18 transition effects (crossfade, slide, zoom, Ken Burns, and more)
+- Configurable background overlay opacity and blur
+- Upload custom background images or choose from 64 curated presets
+- Theme hierarchy: Dashboard → Tab → Group → Tile (colour and opacity cascade)
+- 150,000+ built-in icons via Iconify, plus custom icon uploads
+- "My Uploads" and "Recently Used" icon categories
 - Multiple tile sizes (small, medium, large, wide)
-- 8 theme presets with light/dark modes
-- Gradient theme support
-- Auto mode (follows system theme)
-- Custom colors and opacity for tiles, groups, tabs, and dashboards
-- Custom CSS option (Coming Soon)
-
-### Admin Panel
-- Create, rename, and delete dashboards
-- Open dashboards directly in edit mode
-- Import/export configuration (JSON, YAML)
-- Import from Homer and Dashy
+- 8 theme presets with light/dark/auto modes
+- Custom colours and opacity at every level
 
 ### Entries/Tiles
 - Open modes: iframe, new tab, same tab, popup modal
-- HTTP + ICMP status checks with response time
+- HTTP and ICMP status monitoring with response time
 - Subtitles/descriptions on tiles
-- Custom tile colors and opacity
-- Copy/cut/paste entries between groups and tabs
+- Custom tile colours and opacity
 - Cross-group drag & drop
 - Right-click context menu
-- Multi-select for bulk operations (Coming Soon)
 
-### Widgets (Coming Soon)
-- Weather, calendar, system stats
-- 50+ service integrations (Pi-hole, Proxmox, *arr apps, etc.)
-- Custom HTML/iframe widgets
+### Admin Panel
+- Create, rename, and delete dashboards
+- Self-contained export/import with embedded assets
+- Single-dashboard export
+- Import from Homer, Dashy, and Heimdall
+- Automatic database backups on startup
+- Backup management (restore and delete)
 
 ## Tech Stack
 
 - **Frontend**: SvelteKit 2 + Svelte 5 + TypeScript
-- **Backend**: Go (single binary)
-- **Database**: SQLite
-- **Icons**: Iconify
+- **Backend**: Go (single binary, pure Go, no CGO)
+- **Database**: SQLite (pure Go implementation via modernc.org/sqlite)
+- **Icons**: Iconify (150,000+ icons)
 - **Drag & Drop**: svelte-dnd-action
-
-## Quick Start
-
-### Prerequisites
-- Node.js 24+
-- Go 1.24+
-- pnpm
-- SQLite3
-
-### Development
-
-1. **Start the backend:**
-```bash
-cd backend
-go run cmd/hops/main.go --port 8080 --data ../data
-```
-
-2. **Start the frontend:**
-```bash
-cd frontend
-pnpm install
-pnpm dev
-```
-
-3. **Access the application:**
-- Viewer: http://localhost:5173
-- Admin: http://localhost:5173 (login page)
-
-### Default Credentials
-- Username: `admin`
-- Password: `admin`
-
-**Important:** Change the default password after first login via the "Change Password" button in the admin panel.
-
-## Building for Production
-
-### Build Backend
-```bash
-cd backend
-go build -o hops ./cmd/hops
-```
-
-### Build Frontend
-```bash
-cd frontend
-pnpm build
-```
-
-The backend will serve the static frontend files from `../frontend/build`.
-
-### Run Production Build
-```bash
-cd backend
-./hops --port 8080 --data ../data --frontend ../frontend/build
-```
-
-## Project Structure
-
-```
-hops/
-├── backend/
-│   ├── cmd/
-│   │   └── hops/          # Main application
-│   ├── internal/
-│   │   ├── api/           # HTTP handlers and routing
-│   │   ├── auth/          # Authentication service
-│   │   ├── config/        # Configuration management
-│   │   ├── database/      # SQLite setup and migrations
-│   │   ├── models/        # Data models
-│   │   ├── status/        # Status checking (HTTP/ICMP)
-│   │   └── integrations/  # External service integrations
-│   └── go.mod
-├── frontend/
-│   ├── src/
-│   │   ├── lib/
-│   │   │   ├── components/  # Reusable Svelte components
-│   │   │   ├── stores/      # Svelte stores (state management)
-│   │   │   ├── types/       # TypeScript type definitions
-│   │   │   └── utils/       # Utility functions (API client, etc.)
-│   │   └── routes/
-│   │       ├── admin/       # Admin panel route
-│   │       ├── [dashboard]/ # Dynamic dashboard routes
-│   │       └── d/[secret]/  # Secret URL dashboards
-├── data/                  # SQLite database and uploads
-│   └── backgrounds/       # Uploaded background images
-└── docs/                  # Documentation
-```
-
-## API Endpoints
-
-### Public
-- `GET /api/config` - Get dashboard configuration
-- `GET /api/status/:entryId` - Get status for an entry
-- `POST /api/auth/login` - Admin login
-- `GET /api/backgrounds` - List background images and categories
-
-### Admin (Authenticated)
-- `PUT /api/config/update` - Update configuration
-- `POST /api/auth/logout` - Logout
-- `POST /api/auth/change-password` - Change password
-- `GET /api/config/export` - Export configuration
-- `POST /api/config/import` - Import configuration
-- `POST /api/backgrounds` - Upload background image
-- `PUT /api/backgrounds/:id` - Update background metadata
-- `DELETE /api/backgrounds/:id` - Delete background image
-- `GET /api/backgrounds/categories` - List background categories
-- `POST /api/backgrounds/categories` - Create background category
-
-## Configuration
-
-The configuration is stored in SQLite as JSON. Example structure:
-
-```json
-{
-  "dashboards": [
-    {
-      "id": "home",
-      "name": "Home",
-      "path": "/home",
-      "background": {
-        "type": "slideshow",
-        "images": ["https://example.com/bg1.jpg", "/backgrounds/custom.jpg"],
-        "interval": 30,
-        "transition": "kenburns",
-        "transitionDuration": 2.5,
-        "fit": "cover"
-      },
-      "tabs": [
-        {
-          "id": "services",
-          "name": "Services",
-          "color": "#3b82f6",
-          "opacity": 0.95,
-          "groups": [
-            {
-              "id": "media",
-              "name": "Media",
-              "collapsed": false,
-              "color": "#8b5cf6",
-              "opacity": 0.9,
-              "entries": [
-                {
-                  "id": "plex",
-                  "name": "Plex",
-                  "url": "https://plex.local",
-                  "icon": "simple-icons:plex",
-                  "openMode": "newtab",
-                  "size": "medium"
-                }
-              ]
-            }
-          ]
-        }
-      ]
-    }
-  ],
-  "theme": {
-    "mode": "dark"
-  },
-  "settings": {
-    "searchHotkey": "/",
-    "defaultView": "/home"
-  }
-}
-```
-
-## Reverse Proxy
-
-HOPS has no special reverse proxy requirements. Simply proxy to the backend port (default 8080) with your preferred solution (Caddy, nginx, Traefik, etc.).
-
-## Systemd Service
-
-Create `/etc/systemd/system/hops.service`:
-
-```ini
-[Unit]
-Description=HOPS - Home Operations Portal System
-After=network.target
-
-[Service]
-Type=simple
-User=your-username
-WorkingDirectory=/path/to/hops/backend
-ExecStart=/path/to/hops/backend/hops --port 8080 --data /path/to/hops/data --frontend /path/to/hops/frontend/build
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Enable and start:
-```bash
-sudo systemctl enable hops
-sudo systemctl start hops
-```
 
 ## Keyboard Shortcuts
 
@@ -299,16 +113,21 @@ sudo systemctl start hops
 
 Future improvements under consideration:
 
-- Multi-column group layouts (1/2/3 columns per row)
 - Global search with "/" hotkey
-- Custom CSS option
+- Custom CSS injection
 - Widget framework (weather, calendar, system stats)
-- Service integrations (Pi-hole, Proxmox, etc.)
+- Service integrations (Pi-hole, Proxmox, *arr apps, etc.)
 - Multi-select and bulk operations
-- Secret/shareable dashboard URLs
+- Multi-column group layouts
 - Undo/Redo for accidental changes
 - Keyboard navigation (arrow keys)
 - PWA support (install as mobile app)
+
+## Documentation
+
+- **[Zero to Dashboard Hero](QUICKSTART.md)** — Get up and running in 5 minutes
+- **[User Guide](USER_GUIDE.md)** — Full feature reference
+- **[Installation & Deployment Guide](DEPLOY.md)** — Reverse proxy, systemd, backups
 
 ## Tips
 

@@ -1,4 +1,4 @@
-# HOPS User Guide (v1.0.0)
+# HOPS User Guide (v1.2.0)
 
 Welcome to HOPS (Home Operations Portal System)! This guide will help you get started and make the most of your dashboard.
 
@@ -165,6 +165,8 @@ Edit Mode allows you to modify your dashboards. To enter Edit Mode:
      - Type an icon name directly (e.g., `mdi:docker`, `simple-icons:plex`)
      - OR click "Browse" to open the **Icon Picker** with 1,900+ curated homelab icons
      - Search by name or browse by category (Containers, Media, Monitoring, etc.)
+     - **My Uploads**: Previously uploaded custom icons appear here for easy reuse
+     - **Recently Used**: Your last 20 selected icons are tracked for quick access
    - **Description**: Optional subtitle
    - **Size**: Small, Medium, or Large
    - **Open Mode**: How the link opens (New Tab, Same Tab, iFrame, Modal)
@@ -261,10 +263,12 @@ Child levels inherit parent colors/opacity unless overridden.
    - **Slideshow**: Multiple rotating images
 
 For slideshows:
-- Add multiple images from the **64 curated backgrounds across 12 categories (Network, Servers, Docker, Homelab, Smart Home, Apps, Multimedia, Weather, Storage, Tech, Space, Minimal)
+- Add multiple images from the **64 curated backgrounds** across 12 categories (Network, Servers, Docker, Homelab, Smart Home, Apps, Multimedia, Weather, Storage, Tech, Space, Minimal)
+- OR upload your own images (they appear in a "My Uploads" category for reuse)
 - OR add custom image URLs
-- Set rotation interval (seconds) - default is 30s
+- Set rotation interval (seconds) — default is 30s
 - Choose fit mode (Cover, Contain, Fill)
+- **Overlay**: Adjust overlay opacity and blur to improve text readability over busy backgrounds
 - **Preview**: Live animated preview shows smooth crossfade transition (1.5s professional fade)
 
 #### Tab Background
@@ -278,7 +282,7 @@ Tab backgrounds override dashboard backgrounds when set.
 
 You can set custom colors at multiple levels:
 
-- **Dashboard**: (Coming soon)
+- **Dashboard**: Set via dashboard background settings
 - **Tab**: Edit tab → Set color and opacity
 - **Group**: Edit group → Set color and opacity
 - **Tile**: Edit tile → Set color and opacity
@@ -288,7 +292,6 @@ Colors cascade down the hierarchy!
 ## Keyboard Shortcuts
 
 ### Global Shortcuts
-- **/** - Open search (Coming soon)
 - **Esc** - Close modals and dialogs
 
 ### Edit Mode Shortcuts
@@ -306,18 +309,18 @@ Colors cascade down the hierarchy!
 
 ### Exporting Configuration
 
-There are two ways to export your configuration:
+Exports are **self-contained** — all uploaded assets (icons, backgrounds) are embedded in the export file as base64 data. This means you can import on a different server without losing any custom images.
 
-**From the Admin Page:**
+**Export everything (from the Admin Page):**
 1. Go to the Admin page (`/`)
 2. Find the dashboard you want to export
 3. Click the **download icon** next to that dashboard
-4. Your configuration downloads as a JSON file
+4. Your configuration downloads as a JSON file with embedded assets
 
-**From a Dashboard (Edit Mode):**
+**Export a single dashboard (from Edit Mode):**
 1. Enter Edit Mode on any dashboard
 2. Click the **download icon** in the header
-3. Your configuration downloads as a JSON file
+3. Only that dashboard's configuration and assets are exported
 
 ### Importing Configuration
 
@@ -390,8 +393,8 @@ Import is done from the Admin page:
 
 ## Getting Help
 
-- **Documentation**: Check the [README](README.md) for technical details
-- **Changelog**: See [CHANGELOG](CHANGELOG.md) for version history
+- **Quick Start**: See [Zero to Dashboard Hero](QUICKSTART.md) for first-time setup
+- **Deployment**: See [Installation & Deployment Guide](DEPLOY.md) for setup and configuration
 
 ## Quick Reference
 

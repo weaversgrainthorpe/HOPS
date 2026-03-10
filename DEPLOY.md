@@ -1,58 +1,169 @@
-# HOPS Deployment Guide (v1.1.0)
+# HOPS Installation & Deployment Guide
 
-## Quick Start
+**Version 1.2.0**
 
-### Development Mode
+This guide covers installing and running HOPS. For a quick first-time walkthrough, see the [Zero to Dashboard Hero](QUICKSTART.md) guide.
 
-**Terminal 1 - Backend:**
-```bash
-cd backend
-go run cmd/hops/main.go --port 8080 --data ../data
+## Installation Methods
+
+| Method | Best For |
+|--------|----------|
+| [Docker](#docker) | Easiest setup, automatic updates |
+| [Binary download](#binary-download) | No Docker needed, minimal footprint |
+| [Build from source](#build-from-source) | Contributors and custom builds |
+
+---
+
+## Docker
+
+The simplest way to run HOPS. Requires Docker and Docker Compose.
+
+### 1. Create a docker-compose.yml
+
+```yaml
+services:
+  hops:
+    build: .
+    container_name: hops
+    ports:
+      - "8080:8080"
+    volumes:
+      - hops-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  hops-data:
 ```
 
-**Terminal 2 - Frontend:**
+### 2. Start HOPS
+
 ```bash
-cd frontend
-pnpm install
-pnpm dev
+docker compose up -d
 ```
 
-**Access:**
-- Frontend: http://localhost:5173
-- Admin: http://localhost:5173 (login page)
-- API: http://localhost:8080/api
+### 3. Access HOPS
 
-**Default Credentials:**
-- Username: `admin`
-- Password: `admin`
+Open **http://localhost:8080** in your browser. Log in with `admin` / `admin` and change the password immediately.
 
-## Production Deployment
+### Customising the Port
 
-### 1. Build for Production
+Change the port mapping in `docker-compose.yml`:
 
-**Backend:**
-```bash
-cd backend
-go build -ldflags="-s -w" -o hops ./cmd/hops
+```yaml
+ports:
+  - "3000:8080"  # Access on port 3000 instead
 ```
 
-**Frontend:**
+### Data Persistence
+
+Your database, uploaded backgrounds, and icons are stored in the `hops-data` Docker volume. This persists across container restarts and updates.
+
+To back up the volume:
 ```bash
-cd frontend
-pnpm build
+docker run --rm -v hops-data:/data -v $(pwd):/backup alpine tar czf /backup/hops-backup.tar.gz -C /data .
 ```
 
-### 2. Run Production Build
+---
+
+## Binary Download
+
+HOPS is a single binary with no runtime dependencies. No database server, no runtime environment, nothing to install.
+
+### 1. Download
+
+Go to the [Releases](https://github.com/weaversgrainthorpe/HOPS/releases) page and download:
+
+- The **binary** for your platform:
+  - `hops-linux-amd64` — Linux x86-64
+  - `hops-linux-arm64` — Linux ARM64 (Raspberry Pi 3B+/4/5/Zero 2 W)
+  - `hops-darwin-amd64` — macOS Intel
+  - `hops-darwin-arm64` — macOS Apple Silicon
+  - `hops-windows-amd64.exe` — Windows x86-64
+- The **frontend**: `hops-frontend.tar.gz`
+
+### 2. Set Up
+
+```bash
+# Make executable (Linux/macOS)
+chmod +x hops-linux-amd64
+
+# Extract the frontend
+mkdir -p frontend/build
+tar -xzf hops-frontend.tar.gz -C frontend/build
+
+# Create a data directory
+mkdir -p data
+```
+
+### 3. Run
+
+```bash
+./hops-linux-amd64 --port 8080 --data ./data --frontend ./frontend/build
+```
+
+Open **http://localhost:8080** in your browser. Log in with `admin` / `admin` and change the password immediately.
+
+### Directory Layout
+
+After setup, your directory should look like this:
+
+```
+hops/
+├── hops-linux-amd64      # The binary
+├── frontend/
+│   └── build/            # Frontend files (extracted from tar.gz)
+└── data/
+    ├── hops.db           # SQLite database (created on first run)
+    ├── backups/          # Automatic backups
+    ├── backgrounds/      # Uploaded background images
+    └── icons/            # Uploaded custom icons
+```
+
+---
+
+## Build from Source
+
+Requires Go 1.24+, Node.js 24+, and pnpm.
+
+```bash
+git clone https://github.com/weaversgrainthorpe/HOPS.git
+cd HOPS
+./scripts/build.sh
+```
+
+This builds the frontend and backend. Run with:
 
 ```bash
 ./backend/hops --port 8080 --data ./data --frontend ./frontend/build
 ```
 
-The Go backend serves both the API and the built frontend files. Only one port needed.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for full development setup instructions.
 
-### 3. Install as System Service
+---
 
-Create `/etc/systemd/system/hops.service`:
+## Command-Line Options
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--port` | `8080` | Port the server listens on |
+| `--data` | `../data` | Data directory for SQLite database, backups, and uploads |
+| `--frontend` | `../frontend/build` | Path to the frontend build directory |
+
+All configuration is via command-line flags. There are no configuration files or environment variables.
+
+---
+
+## Running as a System Service
+
+### Systemd (Linux)
+
+HOPS includes an install script:
+
+```bash
+sudo ./scripts/install-service.sh
+```
+
+Or create the service file manually at `/etc/systemd/system/hops.service`:
 
 ```ini
 [Unit]
@@ -61,9 +172,9 @@ After=network.target
 
 [Service]
 Type=simple
-User=your-username
-WorkingDirectory=/path/to/hops/backend
-ExecStart=/path/to/hops/backend/hops --port 8080 --data /path/to/hops/data --frontend /path/to/hops/frontend/build
+User=hops
+WorkingDirectory=/opt/hops
+ExecStart=/opt/hops/hops-linux-amd64 --port 8080 --data /opt/hops/data --frontend /opt/hops/frontend/build
 Restart=always
 RestartSec=5
 
@@ -72,24 +183,37 @@ WantedBy=multi-user.target
 ```
 
 Enable and start:
+
 ```bash
 sudo systemctl enable hops
 sudo systemctl start hops
 sudo systemctl status hops
 ```
 
-### 4. Reverse Proxy (Optional)
+View logs:
 
-HOPS has no special reverse proxy requirements. Simply proxy to the backend port with your preferred solution (Caddy, nginx, Traefik, etc.).
+```bash
+sudo journalctl -u hops -f
+```
 
-Example with Caddy:
+---
+
+## Reverse Proxy
+
+HOPS has no special reverse proxy requirements. Proxy to the backend port (default 8080) with your preferred solution.
+
+### Caddy
+
 ```
 hops.example.com {
     reverse_proxy localhost:8080
 }
 ```
 
-Example with nginx:
+Caddy handles HTTPS automatically with Let's Encrypt.
+
+### nginx
+
 ```nginx
 server {
     listen 80;
@@ -99,51 +223,110 @@ server {
         proxy_pass http://localhost:8080;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
     }
 }
 ```
 
-## Command-Line Options
+### Traefik
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--port` | 8080 | HTTP port |
-| `--data` | ../data | Data directory (SQLite database, uploads) |
-| `--frontend` | (none) | Path to frontend build directory |
+Add labels to your `docker-compose.yml`:
+
+```yaml
+services:
+  hops:
+    # ... existing config ...
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.hops.rule=Host(`hops.example.com`)"
+      - "traefik.http.services.hops.loadbalancer.server.port=8080"
+```
+
+### HTTPS
+
+HOPS does not handle SSL/TLS directly. Use a reverse proxy (Caddy, nginx, Traefik) to terminate HTTPS. This is strongly recommended for any deployment exposed beyond your local network.
+
+---
+
+## Backup & Restore
+
+### Automatic Backups
+
+HOPS creates an automatic backup of the database every time the server starts. Backups are stored in your data directory under `backups/`.
+
+### Managing Backups
+
+From the Admin panel, click **Backups** to:
+- View all available backups
+- Restore a previous backup
+- Delete old backups
+
+### Manual Backup
+
+The simplest manual backup is to copy the data directory:
+
+```bash
+cp -r /opt/hops/data /opt/hops/data-backup-$(date +%Y%m%d)
+```
+
+### Export/Import
+
+HOPS supports self-contained exports that bundle your configuration with all uploaded assets (icons, backgrounds) into a single JSON file. This is useful for:
+
+- Migrating to a new server
+- Sharing a dashboard setup
+- Creating a portable backup
+
+Export from the Admin panel or from Edit Mode (click the download icon in the header for single-dashboard export).
+
+
+---
 
 ## Troubleshooting
 
-### Backend won't start
-```bash
-cd backend
-go build -o hops ./cmd/hops
-./hops --port 8080 --data ../data
-```
+### HOPS won't start
 
-Check that the data directory exists and is writable.
+- Check the data directory exists and is writable
+- Check the frontend build directory exists and contains `index.html`
+- Check the port isn't already in use: `lsof -i :8080` or `ss -tlnp | grep 8080`
+
+### Can't access the web interface
+
+- Verify the port: HOPS logs its port on startup
+- Check firewall rules: `sudo ufw allow 8080` (if using UFW)
+- If using Docker, check port mapping in `docker-compose.yml`
 
 ### Database issues
-Delete and recreate:
-```bash
-rm data/hops.db
-# Restart backend to recreate with migrations
-```
+
+If the database becomes corrupted:
+
+1. Stop HOPS
+2. Check for backups in `data/backups/`
+3. Replace `data/hops.db` with a backup file
+4. Restart HOPS
+
+As a last resort, delete `data/hops.db` and restart — HOPS will create a fresh database.
 
 ### Check logs
+
 ```bash
-# If running as systemd service
+# Systemd service
 sudo journalctl -u hops -f
 
-# If running manually
-# Check the terminal where you started the backend
+# Docker
+docker compose logs -f
+
+# Manual run — logs print to the terminal
 ```
+
+---
 
 ## Security
 
-- Change the default admin password immediately after first login
-- Use HTTPS in production (via reverse proxy)
-- Consider firewall rules if not using a reverse proxy
+- **Change the default password** immediately after first login
+- **Use HTTPS** via a reverse proxy if exposed beyond your local network
+- **Restrict access** with firewall rules if not behind a reverse proxy
+- **Back up regularly** — HOPS backs up on startup, but keep off-site copies too
 
-## Version History
-
-See [CHANGELOG.md](CHANGELOG.md) for detailed release notes.
+See [SECURITY.md](SECURITY.md) for the full security policy and responsible disclosure instructions.

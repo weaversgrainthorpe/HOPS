@@ -22,7 +22,7 @@ This policy applies to the HOPS application code in this repository. It does not
 ## Security Best Practices for Users
 
 - **Change the default admin password** immediately after first login
-- **Use HTTPS** in production via a reverse proxy (Caddy, nginx, Traefik, etc.)
+- **Use HTTPS** via a reverse proxy (Caddy, nginx, Traefik, etc.) if exposed beyond your local network
 - **Restrict network access** if HOPS is only needed on your local network
 - **Keep HOPS updated** to the latest release
 - **Back up your data** regularly (HOPS creates automatic backups, but keep off-site copies too)
@@ -31,4 +31,4 @@ This policy applies to the HOPS application code in this repository. It does not
 
 | Version | Supported |
 |---------|-----------|
-| 1.0.x   | Yes       |
+| 1.2.x   | Yes       |
