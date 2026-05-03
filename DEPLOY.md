@@ -121,7 +121,7 @@ hops/
 
 ## Build from Source
 
-Requires Go 1.24+, Node.js 24+, and pnpm.
+Requires Go 1.24+ and Node.js 24+ (with npm).
 
 ```bash
 git clone https://github.com/weaversgrainthorpe/HOPS.git

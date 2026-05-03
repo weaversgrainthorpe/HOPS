@@ -11,7 +11,7 @@ The frontend for HOPS (Home Operations Portal System) - built with SvelteKit 2, 
 - **Drag & Drop**: svelte-dnd-action
 - **Search**: Fuse.js (fuzzy search)
 - **Build Tool**: Vite 7
-- **Package Manager**: pnpm
+- **Package Manager**: npm
 
 ## Project Structure
 
@@ -70,19 +70,19 @@ frontend/
 ### Prerequisites
 
 - Node.js 24+
-- pnpm (install via `npm install -g pnpm`)
+- npm
 
 ### Installation
 
 ```bash
 cd frontend
-pnpm install
+npm install
 ```
 
 ### Development
 
 ```bash
-pnpm dev
+npm run dev
 ```
 
 The dev server will start at `http://localhost:5173`
@@ -90,18 +90,24 @@ The dev server will start at `http://localhost:5173`
 ### Type Checking
 
 ```bash
-pnpm check
+npm run check
 ```
 
 Watch mode:
 ```bash
-pnpm check:watch
+npm run check:watch
+```
+
+### Testing
+
+```bash
+npm test
 ```
 
 ### Building for Production
 
 ```bash
-pnpm build
+npm run build
 ```
 
 The production build will be output to the `build/` directory.
@@ -109,7 +115,7 @@ The production build will be output to the `build/` directory.
 ### Preview Production Build
 
 ```bash
-pnpm preview
+npm run preview
 ```
 
 ## Environment Configuration
@@ -340,7 +346,7 @@ The frontend is deployed as static files served by the Go backend.
 
 1. Build the frontend:
 ```bash
-pnpm build
+npm run build
 ```
 
 2. The backend will serve files from `../frontend/build`

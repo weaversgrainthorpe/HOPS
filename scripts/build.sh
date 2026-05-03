@@ -6,8 +6,8 @@ echo "Building HOPS..."
 # Build frontend
 echo "Building frontend..."
 cd frontend
-pnpm install
-pnpm build
+npm install
+npm run build
 cd ..
 
 # Build backend
