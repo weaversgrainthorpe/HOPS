@@ -9,6 +9,7 @@
   import { dndzone } from 'svelte-dnd-action';
   import type { DndEvent } from 'svelte-dnd-action';
   import { clipboard, clearClipboard } from '$lib/stores/clipboard';
+  import { toast } from '$lib/stores/toast';
   import { getTextColorValue } from '$lib/utils/colorContrast';
 
   // Extended entry type with drag-and-drop metadata
@@ -194,6 +195,9 @@
         onDeleteEntryFromSource(clipboardItem.sourceTabId, clipboardItem.sourceGroupId, clipboardItem.data.id);
       }
       clearClipboard();
+      toast.success(`Moved "${clipboardItem.data.name}" to ${group.name}`);
+    } else {
+      toast.success(`Pasted "${clipboardItem.data.name}" into ${group.name}`);
     }
   }
 </script>
@@ -559,9 +563,27 @@
     font-size: 0.875rem;
   }
 
+  /* Tablet: slightly smaller tiles, denser grid */
+  @media (max-width: 1024px) {
+    .entries-grid {
+      grid-template-columns: repeat(auto-fill, minmax(135px, 1fr));
+      gap: 0.875rem;
+    }
+  }
+
+  /* Mobile landscape / small tablet */
   @media (max-width: 768px) {
     .entries-grid {
       grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: 0.75rem;
+    }
+  }
+
+  /* Mobile portrait — fit at least 2 columns even on tiny screens */
+  @media (max-width: 480px) {
+    .entries-grid {
+      grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+      gap: 0.5rem;
     }
   }
 </style>

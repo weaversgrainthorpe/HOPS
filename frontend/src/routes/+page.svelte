@@ -8,6 +8,7 @@
   import ChangePasswordModal from '$lib/components/admin/ChangePasswordModal.svelte';
   import BackupModal from '$lib/components/admin/BackupModal.svelte';
   import BackendStatus from '$lib/components/BackendStatus.svelte';
+  import Button from '$lib/components/shared/Button.svelte';
   import Icon from '@iconify/svelte';
   import { resetConfig } from '$lib/utils/api';
 
@@ -85,9 +86,15 @@
           <div class="error-message">{error}</div>
         {/if}
 
-        <button type="submit" disabled={$isLoggingIn || $isBackendOffline}>
+        <Button
+          type="submit"
+          variant="primary"
+          fullWidth
+          loading={$isLoggingIn}
+          disabled={$isBackendOffline}
+        >
           {$isLoggingIn ? 'Logging in...' : 'Login'}
-        </button>
+        </Button>
       </form>
 
       <p class="hint">Default credentials: admin / admin</p>
@@ -113,22 +120,37 @@
       <div class="admin-header">
         <h1>HOPS Admin Panel</h1>
         <div class="header-actions">
-          <button onclick={() => showBackupModal = true} class="btn-secondary" disabled={$isBackendOffline}>
-            <Icon icon="mdi:backup-restore" width="18" />
+          <Button
+            variant="secondary"
+            icon="mdi:backup-restore"
+            onclick={() => showBackupModal = true}
+            disabled={$isBackendOffline}
+          >
             Backups
-          </button>
-          <button onclick={() => showChangePassword = true} class="btn-secondary" disabled={$isBackendOffline}>
-            <Icon icon="mdi:key" width="18" />
+          </Button>
+          <Button
+            variant="secondary"
+            icon="mdi:key"
+            onclick={() => showChangePassword = true}
+            disabled={$isBackendOffline}
+          >
             Change Password
-          </button>
-          <button onclick={handleFactoryReset} class="btn-danger" disabled={$isBackendOffline}>
-            <Icon icon="mdi:delete-forever" width="18" />
+          </Button>
+          <Button
+            variant="danger"
+            icon="mdi:delete-forever"
+            onclick={handleFactoryReset}
+            disabled={$isBackendOffline}
+          >
             Factory Reset
-          </button>
-          <button onclick={handleLogout} class="btn-secondary">
-            <Icon icon="mdi:logout" width="18" />
+          </Button>
+          <Button
+            variant="secondary"
+            icon="mdi:logout"
+            onclick={handleLogout}
+          >
             Logout
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -240,49 +262,7 @@
     gap: 0.75rem;
   }
 
-  .btn-secondary {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem 1rem;
-    background: var(--bg-tertiary);
-    color: var(--text-primary);
-    border: none;
-    border-radius: 0.375rem;
-    cursor: pointer;
-    margin: 0;
-  }
-
-  .btn-secondary:hover:not(:disabled) {
-    background: var(--bg-secondary);
-  }
-
-  .btn-secondary:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  .btn-danger {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem 1rem;
-    background: color-mix(in srgb, var(--color-error, #ef4444) 15%, var(--bg-tertiary));
-    color: var(--color-error, #ef4444);
-    border: 1px solid color-mix(in srgb, var(--color-error, #ef4444) 30%, transparent);
-    border-radius: 0.375rem;
-    cursor: pointer;
-    margin: 0;
-  }
-
-  .btn-danger:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--color-error, #ef4444) 25%, var(--bg-tertiary));
-  }
-
-  .btn-danger:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
+  /* All button styling now comes from the shared Button component */
 
   .status-section {
     margin-top: 2rem;
@@ -344,5 +324,60 @@
     pointer-events: none;
     user-select: none;
     filter: grayscale(50%);
+  }
+
+  /* Tablet: tighter padding, allow header to wrap */
+  @media (max-width: 1024px) {
+    .admin-container {
+      padding: 1.5rem;
+    }
+
+    .admin-header {
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+  }
+
+  /* Mobile landscape */
+  @media (max-width: 768px) {
+    .admin-container {
+      padding: 1rem;
+    }
+
+    .admin-header {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
+    .header-actions {
+      width: 100%;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+    }
+  }
+
+  /* Mobile portrait: stack header buttons full-width */
+  @media (max-width: 480px) {
+    .admin-container {
+      padding: 0.75rem;
+    }
+
+    .header-actions {
+      flex-direction: column;
+    }
+
+    .header-actions :global(.btn) {
+      width: 100%;
+    }
+
+    .offline-banner {
+      flex-direction: column;
+      align-items: flex-start;
+      padding: 0.75rem 1rem;
+    }
   }
 </style>

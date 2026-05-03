@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"database/sql"
 	"encoding/base64"
@@ -11,7 +12,7 @@ import (
 	"image"
 	"image/png"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -66,7 +67,9 @@ func (r *Router) handleGetHealth(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	dbConnected := r.db.Ping() == nil
+	ctx, cancel := context.WithTimeout(req.Context(), 3*time.Second)
+	defer cancel()
+	dbConnected := r.db.PingContext(ctx) == nil
 	status := "ok"
 	if !dbConnected {
 		status = "degraded"
@@ -80,6 +83,20 @@ func (r *Router) handleGetHealth(w http.ResponseWriter, req *http.Request) {
 			"connected": dbConnected,
 		},
 	})
+}
+
+// handleConfig routes /api/config requests by HTTP method:
+//   GET → public config read
+//   PUT → authenticated config update (requires CSRF token)
+func (r *Router) handleConfig(w http.ResponseWriter, req *http.Request) {
+	switch req.Method {
+	case http.MethodGet:
+		r.handleGetConfig(w, req)
+	case http.MethodPut:
+		r.protected(r.handleUpdateConfig)(w, req)
+	default:
+		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
 }
 
 // handleGetConfig returns the dashboard configuration
@@ -107,7 +124,7 @@ func (r *Router) handleGetConfig(w http.ResponseWriter, req *http.Request) {
 
 // handleUpdateConfig updates the dashboard configuration (admin only)
 func (r *Router) handleUpdateConfig(w http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodPut && req.Method != http.MethodPost {
+	if req.Method != http.MethodPut {
 		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
@@ -121,7 +138,7 @@ func (r *Router) handleUpdateConfig(w http.ResponseWriter, req *http.Request) {
 	// Create automatic backup before modifying config
 	if r.backupManager != nil {
 		if _, err := r.backupManager.CreateBackupWithDB(r.db, "pre-config-update"); err != nil {
-			log.Printf("[Backup] Warning: failed to create pre-update backup: %v", err)
+			slog.Warn("failed to create pre-update backup", "component", "backup", "error", err)
 			// Continue anyway - don't block the update
 		}
 	}
@@ -141,7 +158,7 @@ func (r *Router) handleUpdateConfig(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	writeJSON(w, map[string]bool{"success": true})
+	writeJSONSuccess(w)
 }
 
 // handleLogin authenticates a user with rate limiting
@@ -168,7 +185,7 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	sessionID, err := r.authService.Login(credentials.Username, credentials.Password)
+	result, err := r.authService.Login(credentials.Username, credentials.Password)
 	if err != nil {
 		writeJSONError(w, "Invalid credentials", http.StatusUnauthorized)
 		return
@@ -176,15 +193,24 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 
 	http.SetCookie(w, &http.Cookie{
 		Name:     "hops_session",
-		Value:    sessionID,
+		Value:    result.SessionID,
 		Path:     "/",
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   86400, // 24 hours
 	})
 
-	writeJSON(w, map[string]string{
-		"sessionId": sessionID,
+	// Issue a fresh CSRF token paired with this session.
+	csrfToken, err := generateCSRFToken()
+	if err != nil {
+		writeJSONError(w, "Failed to issue CSRF token", http.StatusInternalServerError)
+		return
+	}
+	setCSRFCookie(w, csrfToken)
+
+	writeJSON(w, map[string]interface{}{
+		"sessionId":          result.SessionID,
+		"mustChangePassword": result.MustChangePassword,
 	})
 }
 
@@ -229,11 +255,14 @@ func (r *Router) handleLogout(w http.ResponseWriter, req *http.Request) {
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   -1, // Delete cookie
 	})
+	clearCSRFCookie(w)
 
-	writeJSON(w, map[string]bool{"success": true})
+	writeJSONSuccess(w)
 }
 
-// handleAuthCheck returns whether the current session is valid
+// handleAuthCheck returns whether the current session is valid.
+// If the session is valid but no CSRF cookie exists (e.g. after a server
+// restart or upgrade), a fresh one is issued so the SPA can make mutations.
 func (r *Router) handleAuthCheck(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodGet {
 		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -242,13 +271,29 @@ func (r *Router) handleAuthCheck(w http.ResponseWriter, req *http.Request) {
 
 	sessionID := extractSessionID(req)
 	authenticated := false
+	mustChangePassword := false
 	if sessionID != "" {
-		if _, err := r.authService.ValidateSession(sessionID); err == nil {
+		if userID, err := r.authService.ValidateSession(sessionID); err == nil {
 			authenticated = true
+			if mustChange, err := r.authService.MustChangePassword(userID); err == nil {
+				mustChangePassword = mustChange
+			}
+
+			// Ensure the authenticated client has a CSRF token. If the cookie
+			// is missing (session pre-dates CSRF, or browser cleared it),
+			// issue a fresh one paired with this session.
+			if cookie, err := req.Cookie(csrfCookieName); err != nil || cookie.Value == "" {
+				if token, err := generateCSRFToken(); err == nil {
+					setCSRFCookie(w, token)
+				}
+			}
 		}
 	}
 
-	writeJSON(w, map[string]bool{"authenticated": authenticated})
+	writeJSON(w, map[string]bool{
+		"authenticated":      authenticated,
+		"mustChangePassword": mustChangePassword,
+	})
 }
 
 // handleChangePassword changes a user's password
@@ -281,7 +326,7 @@ func (r *Router) handleChangePassword(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
-	writeJSON(w, map[string]bool{"success": true})
+	writeJSONSuccess(w)
 }
 
 // handleGetStatus returns status check results
@@ -485,7 +530,7 @@ func (r *Router) embedAssets(cfg map[string]interface{}) int {
 		}
 		data, err := os.ReadFile(diskPath)
 		if err != nil {
-			log.Printf("[Export] Warning: could not read asset %s: %v", diskPath, err)
+			slog.Warn("could not read asset for export", "component", "export", "path", diskPath, "error", err)
 			continue
 		}
 		assets[urlPath] = EmbeddedAsset{
@@ -525,34 +570,34 @@ func (r *Router) restoreAssets(importedConfig map[string]interface{}) int {
 
 		diskPath, ok := resolveAssetPath(urlPath, r.config.DataDir)
 		if !ok {
-			log.Printf("[Import] Skipping unrecognized asset path: %s", urlPath)
+			slog.Warn("skipping unrecognized asset path", "component", "import", "path", urlPath)
 			continue
 		}
 
 		// Skip if file already exists
 		if _, err := os.Stat(diskPath); err == nil {
-			log.Printf("[Import] Asset already exists, skipping: %s", diskPath)
+			slog.Debug("asset already exists, skipping", "component", "import", "path", diskPath)
 			continue
 		}
 
 		fileData, err := base64.StdEncoding.DecodeString(dataStr)
 		if err != nil {
-			log.Printf("[Import] Failed to decode asset %s: %v", urlPath, err)
+			slog.Warn("failed to decode asset", "component", "import", "path", urlPath, "error", err)
 			continue
 		}
 
 		if err := os.MkdirAll(filepath.Dir(diskPath), 0755); err != nil {
-			log.Printf("[Import] Failed to create directory for %s: %v", diskPath, err)
+			slog.Warn("failed to create directory for asset", "component", "import", "path", diskPath, "error", err)
 			continue
 		}
 
 		if err := os.WriteFile(diskPath, fileData, 0644); err != nil {
-			log.Printf("[Import] Failed to write asset %s: %v", diskPath, err)
+			slog.Warn("failed to write asset", "component", "import", "path", diskPath, "error", err)
 			continue
 		}
 
 		restored++
-		log.Printf("[Import] Restored asset: %s -> %s", urlPath, diskPath)
+		slog.Debug("restored asset", "component", "import", "url", urlPath, "path", diskPath)
 	}
 	return restored
 }
@@ -627,7 +672,7 @@ func (r *Router) handleExportConfig(w http.ResponseWriter, req *http.Request) {
 	// Embed local asset files (icons, backgrounds) as base64 for portability
 	assetCount := r.embedAssets(cfg)
 	if assetCount > 0 {
-		log.Printf("[Export] Embedded %d asset(s) in export", assetCount)
+		slog.Info("embedded assets in export", "component", "export", "count", assetCount)
 	}
 
 	// Serialize the final config
@@ -668,7 +713,7 @@ func (r *Router) handleResetConfig(w http.ResponseWriter, req *http.Request) {
 	// Create a backup before resetting
 	if r.backupManager != nil {
 		if _, err := r.backupManager.CreateBackupWithDB(r.db, "pre-factory-reset"); err != nil {
-			log.Printf("Warning: failed to create backup before reset: %v", err)
+			slog.Warn("failed to create backup before reset", "component", "backup", "error", err)
 		}
 	}
 
@@ -773,169 +818,196 @@ var brandAliases = map[string]string{
 	"mongo":    "mongodb",
 }
 
-// matchIconForName searches the icons database for a matching icon based on the service name
-// Prioritizes icons with image_url (dashboard SVGs) over MDI-only icons
-func (r *Router) matchIconForName(name string) (match IconMatch, found bool) {
+// iconRecord holds a pre-loaded icon from the database for in-memory matching
+type iconRecord struct {
+	Name       string // lowercase
+	ID         string // lowercase
+	Normalized string // lowercase with spaces/hyphens/underscores removed
+	Icon       string
+	ImageURL   string
+	Color      string
+	HasImage   bool // true if image_url is non-empty (prioritized in matching)
+}
+
+// loadAllIcons loads all icons from the database into memory for batch matching
+func (r *Router) loadAllIcons() ([]iconRecord, error) {
+	rows, err := r.db.Query(`SELECT id, name, icon, COALESCE(image_url, ''), COALESCE(color, '') FROM icons`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var icons []iconRecord
+	for rows.Next() {
+		var id, name, icon, imageURL, color string
+		if err := rows.Scan(&id, &name, &icon, &imageURL, &color); err != nil {
+			return nil, err
+		}
+		lowerName := strings.ToLower(name)
+		lowerID := strings.ToLower(id)
+		normalized := strings.ReplaceAll(lowerName, " ", "")
+		normalized = strings.ReplaceAll(normalized, "-", "")
+		normalized = strings.ReplaceAll(normalized, "_", "")
+		icons = append(icons, iconRecord{
+			Name:       lowerName,
+			ID:         lowerID,
+			Normalized: normalized,
+			Icon:       icon,
+			ImageURL:   imageURL,
+			Color:      color,
+			HasImage:   imageURL != "",
+		})
+	}
+	return icons, rows.Err()
+}
+
+// bestMatch returns the icon preferring those with image_url (dashboard SVGs)
+func bestMatch(candidates []iconRecord) (IconMatch, bool) {
+	if len(candidates) == 0 {
+		return IconMatch{}, false
+	}
+	// Prefer icons with image_url
+	for _, c := range candidates {
+		if c.HasImage {
+			return IconMatch{Icon: c.Icon, ImageURL: c.ImageURL, Color: c.Color}, true
+		}
+	}
+	c := candidates[0]
+	if c.Icon != "" || c.ImageURL != "" {
+		return IconMatch{Icon: c.Icon, ImageURL: c.ImageURL, Color: c.Color}, true
+	}
+	return IconMatch{}, false
+}
+
+// matchIconForName searches pre-loaded icons for a matching icon based on the service name.
+// Falls back to database query if icons is nil (backward compatibility).
+func (r *Router) matchIconForName(name string) (IconMatch, bool) {
+	icons, err := r.loadAllIcons()
+	if err != nil {
+		return IconMatch{}, false
+	}
+	return matchIconInMemory(name, icons)
+}
+
+// matchIconInMemory performs icon matching against a pre-loaded icon slice.
+// This avoids N+1 database queries when called in a loop.
+func matchIconInMemory(name string, icons []iconRecord) (IconMatch, bool) {
 	if name == "" {
 		return IconMatch{}, false
 	}
 
-	// Normalize the name for matching (lowercase, trim)
 	normalizedName := strings.ToLower(strings.TrimSpace(name))
 
-	// Check brand aliases first - look for alias keywords in the name
+	// Check brand aliases first
 	for alias, canonical := range brandAliases {
 		if strings.Contains(normalizedName, alias) {
-			// Try to find the canonical icon
-			row := r.db.QueryRow(
-				`SELECT icon, image_url, color FROM icons
-				 WHERE LOWER(id) = ? OR LOWER(name) = ?
-				 ORDER BY (image_url IS NOT NULL AND image_url != '') DESC
-				 LIMIT 1`,
-				canonical, canonical,
-			)
-			var iconVal, imageURLVal, colorVal sql.NullString
-			if err := row.Scan(&iconVal, &imageURLVal, &colorVal); err == nil {
-				if (iconVal.Valid && iconVal.String != "") || (imageURLVal.Valid && imageURLVal.String != "") {
-					return IconMatch{
-						Icon:     iconVal.String,
-						ImageURL: imageURLVal.String,
-						Color:    colorVal.String,
-					}, true
+			var candidates []iconRecord
+			for _, ic := range icons {
+				if ic.ID == canonical || ic.Name == canonical {
+					candidates = append(candidates, ic)
 				}
+			}
+			if m, ok := bestMatch(candidates); ok {
+				return m, true
 			}
 		}
 	}
 
-	// Also create a version without spaces (for matching "HomeAssistant" to "Home Assistant")
 	noSpaceName := strings.ReplaceAll(normalizedName, " ", "")
 	noSpaceName = strings.ReplaceAll(noSpaceName, "-", "")
 	noSpaceName = strings.ReplaceAll(noSpaceName, "_", "")
 
-	// Helper to scan a row into IconMatch
-	scanMatch := func(row *sql.Row) (IconMatch, bool) {
-		var iconVal, imageURLVal, colorVal sql.NullString
-		err := row.Scan(&iconVal, &imageURLVal, &colorVal)
-		if err != nil {
-			return IconMatch{}, false
+	// Try exact match on name or id
+	var candidates []iconRecord
+	for _, ic := range icons {
+		if ic.Name == normalizedName || ic.ID == normalizedName {
+			candidates = append(candidates, ic)
 		}
-		// Return if we have either icon or image_url
-		if (iconVal.Valid && iconVal.String != "") || (imageURLVal.Valid && imageURLVal.String != "") {
-			return IconMatch{
-				Icon:     iconVal.String,
-				ImageURL: imageURLVal.String,
-				Color:    colorVal.String,
-			}, true
+	}
+	if m, ok := bestMatch(candidates); ok {
+		return m, true
+	}
+
+	// Try normalized match (without spaces/hyphens/underscores)
+	candidates = nil
+	for _, ic := range icons {
+		if ic.Normalized == noSpaceName {
+			candidates = append(candidates, ic)
 		}
-		return IconMatch{}, false
 	}
-
-	// Try exact match first - prioritize icons with image_url (dashboard SVGs)
-	row := r.db.QueryRow(
-		`SELECT icon, image_url, color FROM icons
-		 WHERE LOWER(name) = ? OR LOWER(id) = ?
-		 ORDER BY (image_url IS NOT NULL AND image_url != '') DESC
-		 LIMIT 1`,
-		normalizedName, normalizedName,
-	)
-	if m, ok := scanMatch(row); ok {
+	if m, ok := bestMatch(candidates); ok {
 		return m, true
 	}
 
-	// Try matching without spaces (handles "HomeAssistant" matching "homeassistant" or "Home Assistant")
-	row = r.db.QueryRow(
-		`SELECT icon, image_url, color FROM icons
-		 WHERE REPLACE(REPLACE(REPLACE(LOWER(name), ' ', ''), '-', ''), '_', '') = ?
-		    OR REPLACE(REPLACE(REPLACE(LOWER(id), ' ', ''), '-', ''), '_', '') = ?
-		 ORDER BY (image_url IS NOT NULL AND image_url != '') DESC
-		 LIMIT 1`,
-		noSpaceName, noSpaceName,
-	)
-	if m, ok := scanMatch(row); ok {
+	// Try partial match (name contains search term)
+	candidates = nil
+	for _, ic := range icons {
+		if len(ic.Name) >= 4 && (strings.Contains(ic.Name, normalizedName) || strings.Contains(ic.ID, normalizedName)) {
+			candidates = append(candidates, ic)
+		}
+	}
+	// Sort by longest name first (more specific match)
+	if len(candidates) > 1 {
+		for i := 0; i < len(candidates)-1; i++ {
+			for j := i + 1; j < len(candidates); j++ {
+				if len(candidates[j].Name) > len(candidates[i].Name) {
+					candidates[i], candidates[j] = candidates[j], candidates[i]
+				}
+			}
+		}
+	}
+	if m, ok := bestMatch(candidates); ok {
 		return m, true
 	}
 
-	// Try partial match on name - prioritize dashboard icons and longer matches
-	row = r.db.QueryRow(
-		`SELECT icon, image_url, color FROM icons
-		 WHERE (LOWER(name) LIKE ? OR LOWER(id) LIKE ?)
-		 AND LENGTH(name) >= 4
-		 ORDER BY (image_url IS NOT NULL AND image_url != '') DESC, LENGTH(name) DESC
-		 LIMIT 1`,
-		"%"+normalizedName+"%", "%"+normalizedName+"%",
-	)
-	if m, ok := scanMatch(row); ok {
-		return m, true
-	}
-
-	// Try word-based matching: split the search term and try each word
+	// Try word-based matching
 	words := strings.FieldsFunc(normalizedName, func(c rune) bool {
 		return c == ' ' || c == '-' || c == '_'
 	})
 
-	// Try individual words first
 	for _, word := range words {
 		if len(word) < 3 {
 			continue
 		}
-		row = r.db.QueryRow(
-			`SELECT icon, image_url, color FROM icons
-			 WHERE LOWER(name) = ? OR LOWER(id) = ?
-			 ORDER BY (image_url IS NOT NULL AND image_url != '') DESC
-			 LIMIT 1`,
-			word, word,
-		)
-		if m, ok := scanMatch(row); ok {
+		candidates = nil
+		for _, ic := range icons {
+			if ic.Name == word || ic.ID == word {
+				candidates = append(candidates, ic)
+			}
+		}
+		if m, ok := bestMatch(candidates); ok {
 			return m, true
 		}
 	}
 
-	// Try combining adjacent words (e.g., "TP Link" -> "tp-link", "tplink")
+	// Try combining adjacent words
 	for i := 0; i < len(words)-1; i++ {
 		combined := words[i] + "-" + words[i+1]
 		combinedNoHyphen := words[i] + words[i+1]
 
-		// Try hyphenated version (e.g., "tp-link")
-		row = r.db.QueryRow(
-			`SELECT icon, image_url, color FROM icons
-			 WHERE LOWER(name) = ? OR LOWER(id) = ?
-			 ORDER BY (image_url IS NOT NULL AND image_url != '') DESC
-			 LIMIT 1`,
-			combined, combined,
-		)
-		if m, ok := scanMatch(row); ok {
-			return m, true
+		candidates = nil
+		for _, ic := range icons {
+			if ic.Name == combined || ic.ID == combined || ic.Name == combinedNoHyphen || ic.ID == combinedNoHyphen || ic.Normalized == combinedNoHyphen {
+				candidates = append(candidates, ic)
+			}
 		}
-
-		// Try without hyphen (e.g., "tplink")
-		row = r.db.QueryRow(
-			`SELECT icon, image_url, color FROM icons
-			 WHERE LOWER(name) = ? OR LOWER(id) = ?
-			    OR REPLACE(REPLACE(REPLACE(LOWER(name), ' ', ''), '-', ''), '_', '') = ?
-			    OR REPLACE(REPLACE(REPLACE(LOWER(id), ' ', ''), '-', ''), '_', '') = ?
-			 ORDER BY (image_url IS NOT NULL AND image_url != '') DESC
-			 LIMIT 1`,
-			combinedNoHyphen, combinedNoHyphen, combinedNoHyphen, combinedNoHyphen,
-		)
-		if m, ok := scanMatch(row); ok {
+		if m, ok := bestMatch(candidates); ok {
 			return m, true
 		}
 	}
 
-	// Final fallback: try LIKE match on any word >= 4 chars to find partial matches
+	// Final fallback: partial match on individual words
 	for _, word := range words {
 		if len(word) < 4 {
 			continue
 		}
-		row = r.db.QueryRow(
-			`SELECT icon, image_url, color FROM icons
-			 WHERE (LOWER(name) LIKE ? OR LOWER(id) LIKE ?)
-			 AND LENGTH(name) >= 4
-			 ORDER BY (image_url IS NOT NULL AND image_url != '') DESC, LENGTH(name) DESC
-			 LIMIT 1`,
-			"%"+word+"%", "%"+word+"%",
-		)
-		if m, ok := scanMatch(row); ok {
+		candidates = nil
+		for _, ic := range icons {
+			if len(ic.Name) >= 4 && (strings.Contains(ic.Name, word) || strings.Contains(ic.ID, word)) {
+				candidates = append(candidates, ic)
+			}
+		}
+		if m, ok := bestMatch(candidates); ok {
 			return m, true
 		}
 	}
@@ -943,8 +1015,16 @@ func (r *Router) matchIconForName(name string) (match IconMatch, found bool) {
 	return IconMatch{}, false
 }
 
-// applyIconMatching recursively searches through the config and matches icons for entries
+// applyIconMatching recursively searches through the config and matches icons for entries.
+// Pre-loads all icons once to avoid N+1 database queries.
 func (r *Router) applyIconMatching(config map[string]interface{}) int {
+	// Pre-load all icons into memory for batch matching
+	icons, err := r.loadAllIcons()
+	if err != nil {
+		slog.Error("failed to load icons for matching", "component", "icons", "error", err)
+		return 0
+	}
+
 	matchCount := 0
 
 	dashboards, ok := config["dashboards"].([]interface{})
@@ -998,9 +1078,9 @@ func (r *Router) applyIconMatching(config map[string]interface{}) int {
 						continue
 					}
 
-					// Try to match based on name
+					// Try to match based on name using pre-loaded icons
 					name, _ := entry["name"].(string)
-					if match, found := r.matchIconForName(name); found {
+					if match, found := matchIconInMemory(name, icons); found {
 						// Prefer image_url (local SVG) over iconify icon
 						if match.ImageURL != "" {
 							entry["iconUrl"] = match.ImageURL
@@ -1167,9 +1247,9 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 	// Apply icon matching if requested
 	iconMatchCount := 0
 	if autoMatchIcons {
-		log.Printf("[Import] Applying icon matching to config...")
+		slog.Info("applying icon matching to config", "component", "import")
 		iconMatchCount = r.applyIconMatching(existingConfig)
-		log.Printf("[Import] Icon matching complete: %d icons matched", iconMatchCount)
+		slog.Info("icon matching complete", "component", "import", "matched", iconMatchCount)
 
 		// Debug: Log a sample entry after matching
 		if dashboards, ok := existingConfig["dashboards"].([]interface{}); ok && len(dashboards) > 0 {
@@ -1180,7 +1260,7 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 							if group, ok := groups[0].(map[string]interface{}); ok {
 								if entries, ok := group["entries"].([]interface{}); ok && len(entries) > 0 {
 									if entry, ok := entries[0].(map[string]interface{}); ok {
-										log.Printf("[Import] Sample entry after matching: name=%v, icon=%v", entry["name"], entry["icon"])
+										slog.Debug("sample entry after icon matching", "component", "import", "name", entry["name"], "icon", entry["icon"])
 									}
 								}
 							}
@@ -1190,7 +1270,7 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 			}
 		}
 	} else {
-		log.Printf("[Import] autoMatchIcons is false, skipping icon matching")
+		slog.Debug("autoMatchIcons is false, skipping icon matching", "component", "import")
 	}
 
 	// Preserve theme and settings from existing config, or use imported if not present
@@ -1252,9 +1332,9 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 func (r *Router) handleIconActions(w http.ResponseWriter, req *http.Request) {
 	switch req.Method {
 	case http.MethodPut:
-		r.authMiddleware(r.handleUpdateIcon)(w, req)
+		r.handleUpdateIcon(w, req)
 	case http.MethodDelete:
-		r.authMiddleware(r.handleDeleteIcon)(w, req)
+		r.handleDeleteIcon(w, req)
 	default:
 		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
@@ -1264,9 +1344,9 @@ func (r *Router) handleIconActions(w http.ResponseWriter, req *http.Request) {
 func (r *Router) handleIconCategoryActions(w http.ResponseWriter, req *http.Request) {
 	switch req.Method {
 	case http.MethodPut:
-		r.authMiddleware(r.handleUpdateIconCategory)(w, req)
+		r.handleUpdateIconCategory(w, req)
 	case http.MethodDelete:
-		r.authMiddleware(r.handleDeleteIconCategory)(w, req)
+		r.handleDeleteIconCategory(w, req)
 	default:
 		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
@@ -1275,7 +1355,7 @@ func (r *Router) handleIconCategoryActions(w http.ResponseWriter, req *http.Requ
 // handleGetIconCategories returns all icon categories or creates a new one
 func (r *Router) handleGetIconCategories(w http.ResponseWriter, req *http.Request) {
 	if req.Method == http.MethodPost {
-		r.authMiddleware(r.handleCreateIconCategory)(w, req)
+		r.protected(r.handleCreateIconCategory)(w, req)
 		return
 	}
 
@@ -1288,6 +1368,7 @@ func (r *Router) handleGetIconCategories(w http.ResponseWriter, req *http.Reques
 		SELECT id, name, icon, order_num, is_preset, created_at
 		FROM icon_categories
 		ORDER BY order_num ASC
+		LIMIT 500
 	`)
 	if err != nil {
 		writeJSONError(w, "Failed to load icon categories", http.StatusInternalServerError)
@@ -1322,7 +1403,7 @@ func (r *Router) handleGetIconCategories(w http.ResponseWriter, req *http.Reques
 // handleGetIcons returns all icons, optionally filtered by category, or creates a new icon
 func (r *Router) handleGetIcons(w http.ResponseWriter, req *http.Request) {
 	if req.Method == http.MethodPost {
-		r.authMiddleware(r.handleCreateIcon)(w, req)
+		r.protected(r.handleCreateIcon)(w, req)
 		return
 	}
 
@@ -1342,12 +1423,14 @@ func (r *Router) handleGetIcons(w http.ResponseWriter, req *http.Request) {
 			FROM icons
 			WHERE category_id = ?
 			ORDER BY name ASC
+			LIMIT 10000
 		`, categoryID)
 	} else {
 		rows, err = r.db.Query(`
 			SELECT id, name, icon, category_id, color, image_url, is_preset, created_at
 			FROM icons
 			ORDER BY name ASC
+			LIMIT 10000
 		`)
 	}
 
@@ -1443,7 +1526,7 @@ func (r *Router) handleCreateIcon(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	writeJSON(w, map[string]bool{"success": true})
+	writeJSONSuccess(w)
 }
 
 // handleUpdateIcon updates an existing icon (admin only)
@@ -1485,7 +1568,7 @@ func (r *Router) handleUpdateIcon(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	writeJSON(w, map[string]bool{"success": true})
+	writeJSONSuccess(w)
 }
 
 // handleDeleteIcon deletes an icon (admin only, only user-created icons)
@@ -1508,7 +1591,7 @@ func (r *Router) handleDeleteIcon(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	writeJSON(w, map[string]bool{"success": true})
+	writeJSONSuccess(w)
 }
 
 // handleCreateIconCategory creates a new icon category (admin only)
@@ -1545,7 +1628,7 @@ func (r *Router) handleCreateIconCategory(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	writeJSON(w, map[string]bool{"success": true})
+	writeJSONSuccess(w)
 }
 
 // handleUpdateIconCategory updates an existing icon category (admin only)
@@ -1581,7 +1664,7 @@ func (r *Router) handleUpdateIconCategory(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	writeJSON(w, map[string]bool{"success": true})
+	writeJSONSuccess(w)
 }
 
 // handleDeleteIconCategory deletes a category (admin only, only user-created categories)
@@ -1605,14 +1688,19 @@ func (r *Router) handleDeleteIconCategory(w http.ResponseWriter, req *http.Reque
 		return
 	}
 
+	writeJSONSuccess(w)
+}
+
+// writeJSONSuccess writes a standard {"success": true} response for mutations
+func writeJSONSuccess(w http.ResponseWriter) {
 	writeJSON(w, map[string]bool{"success": true})
 }
 
-// Helper function to write JSON responses
+// writeJSON writes a JSON response
 func writeJSON(w http.ResponseWriter, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(data); err != nil {
-		log.Printf("[API] Failed to encode JSON response: %v", err)
+		slog.Error("failed to encode JSON response", "error", err)
 	}
 }
 
@@ -1620,10 +1708,12 @@ func writeJSON(w http.ResponseWriter, data interface{}) {
 func writeJSONError(w http.ResponseWriter, message string, statusCode int) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{
 		"error":  message,
 		"status": statusCode,
-	})
+	}); err != nil {
+		slog.Error("failed to encode error response", "error", err)
+	}
 }
 
 // BackgroundImage represents a background image with metadata
@@ -1790,7 +1880,7 @@ func (r *Router) handleUploadBackground(w http.ResponseWriter, req *http.Request
 	bgData, err := r.loadBackgroundData()
 	if err != nil {
 		// Log error but continue - file was uploaded successfully
-		log.Printf("Warning: Failed to load background data: %v", err)
+		slog.Warn("failed to load background data", "component", "backgrounds", "error", err)
 	} else {
 		newImage := BackgroundImage{
 			ID:       imageID,
@@ -1801,7 +1891,7 @@ func (r *Router) handleUploadBackground(w http.ResponseWriter, req *http.Request
 		}
 		bgData.Images = append(bgData.Images, newImage)
 		if err := r.saveBackgroundData(bgData); err != nil {
-			log.Printf("Warning: Failed to save background data: %v", err)
+			slog.Warn("failed to save background data", "component", "backgrounds", "error", err)
 		}
 	}
 
@@ -2058,7 +2148,7 @@ func (r *Router) handleUpdateBackgroundImage(w http.ResponseWriter, req *http.Re
 		return
 	}
 
-	writeJSON(w, map[string]bool{"success": true})
+	writeJSONSuccess(w)
 }
 
 // handleDeleteBackground deletes an uploaded background image
@@ -2102,7 +2192,7 @@ func (r *Router) handleDeleteBackground(w http.ResponseWriter, req *http.Request
 					writeJSONError(w, "Failed to delete file", http.StatusInternalServerError)
 					return
 				}
-				writeJSON(w, map[string]bool{"success": true})
+				writeJSONSuccess(w)
 				return
 			}
 		}
@@ -2117,7 +2207,7 @@ func (r *Router) handleDeleteBackground(w http.ResponseWriter, req *http.Request
 		filePath := filepath.Join(backgroundsDir, filename)
 
 		if err := os.Remove(filePath); err != nil && !os.IsNotExist(err) {
-			log.Printf("Warning: Failed to delete file %s: %v", filePath, err)
+			slog.Warn("failed to delete file", "component", "backgrounds", "path", filePath, "error", err)
 		}
 	}
 
@@ -2128,7 +2218,7 @@ func (r *Router) handleDeleteBackground(w http.ResponseWriter, req *http.Request
 		return
 	}
 
-	writeJSON(w, map[string]bool{"success": true})
+	writeJSONSuccess(w)
 }
 
 // handleBackgroundCategories handles category CRUD operations
@@ -2219,7 +2309,7 @@ func (r *Router) handleBackgroundCategoryActions(w http.ResponseWriter, req *htt
 			return
 		}
 
-		writeJSON(w, map[string]bool{"success": true})
+		writeJSONSuccess(w)
 
 	case http.MethodDelete:
 		// Don't allow deleting default categories
@@ -2259,7 +2349,7 @@ func (r *Router) handleBackgroundCategoryActions(w http.ResponseWriter, req *htt
 			return
 		}
 
-		writeJSON(w, map[string]bool{"success": true})
+		writeJSONSuccess(w)
 
 	default:
 		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)

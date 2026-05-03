@@ -293,32 +293,7 @@
     transition: all 0.2s;
   }
 
-  .btn-primary {
-    background: var(--accent);
-    color: white;
-  }
-
-  .btn-primary:hover {
-    background: var(--accent-hover);
-  }
-
-  .btn-secondary {
-    background: var(--bg-tertiary);
-    color: var(--text-primary);
-  }
-
-  .btn-secondary:hover {
-    background: var(--bg-secondary);
-  }
-
-  .btn-danger {
-    background: var(--color-error-dark);
-    color: white;
-  }
-
-  .btn-danger:hover {
-    background: color-mix(in srgb, var(--color-error-dark) 80%, black);
-  }
+  /* .btn-primary, .btn-secondary, .btn-danger styles are defined globally in app.css */
 
   .btn-duplicate {
     background: var(--color-success);

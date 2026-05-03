@@ -76,6 +76,8 @@
   let newCategoryName = $state('');
   let newCategoryIcon = $state('');
   let saving = $state(false);
+  let deletingIconId = $state<string | null>(null);
+  let deletingCategoryId = $state<string | null>(null);
   let fileInput = $state<HTMLInputElement | null>(null);
 
   onMount(async () => {
@@ -270,11 +272,14 @@
     });
     if (!confirmed) return;
 
+    deletingIconId = iconId;
     try {
       await deleteIcon(iconId);
       await loadData();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to delete icon');
+    } finally {
+      deletingIconId = null;
     }
   }
 
@@ -292,12 +297,15 @@
     });
     if (!confirmed) return;
 
+    deletingCategoryId = categoryId;
     try {
       await deleteIconCategory(categoryId);
       await loadData();
       selectedCategory = 'containers';
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to delete category');
+    } finally {
+      deletingCategoryId = null;
     }
   }
 </script>
@@ -326,7 +334,8 @@
     <div class="modal-body">
       {#if loading}
         <div class="loading-message">
-          Loading icons...
+          <Icon icon="mdi:loading" width="32" class="spin" />
+          <span>Loading icons...</span>
         </div>
       {:else if error}
         <div class="error-message">
@@ -391,7 +400,11 @@
                     onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); e.preventDefault(); handleDeleteCategory(category.id, category.isPreset); } }}
                     title="Delete category"
                   >
-                    <Icon icon="mdi:close" width="14" />
+                    {#if deletingCategoryId === category.id}
+                      <Icon icon="mdi:loading" width="14" class="spin" />
+                    {:else}
+                      <Icon icon="mdi:close" width="14" />
+                    {/if}
                   </span>
                 {/if}
               </button>
@@ -460,7 +473,7 @@
               <input
                 type="text"
                 bind:value={newIconName}
-                placeholder="Name (e.g., My Service)"
+                placeholder="Name (e.g., My Tile)"
                 class="form-input"
               />
             </div>
@@ -564,7 +577,11 @@
                   onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); e.preventDefault(); handleDeleteIcon(iconData.id, iconData.isPreset); } }}
                   title="Delete icon"
                 >
-                  <Icon icon="mdi:close" width="12" />
+                  {#if deletingIconId === iconData.id}
+                    <Icon icon="mdi:loading" width="12" class="spin" />
+                  {:else}
+                    <Icon icon="mdi:close" width="12" />
+                  {/if}
                 </span>
               {/if}
               <div class="icon-preview">
@@ -586,7 +603,7 @@
             {:else if selectedCategory === 'my-uploads'}
               <Icon icon="mdi:cloud-upload-outline" width="48" />
               <p class="empty-title">No uploaded icons yet</p>
-              <p class="empty-hint">Upload custom icons when adding entries. They'll appear here for easy reuse!</p>
+              <p class="empty-hint">Upload custom icons when adding tiles. They'll appear here for easy reuse!</p>
             {:else if selectedCategory === 'recently-used'}
               <Icon icon="mdi:history" width="48" />
               <p class="empty-title">No recently used icons</p>
@@ -833,6 +850,10 @@
 
   .loading-message {
     color: var(--text-secondary);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
   }
 
   .error-message {
@@ -856,21 +877,7 @@
     font-size: 0.75rem;
   }
 
-  .btn-secondary {
-    padding: 0.75rem 1.5rem;
-    background: var(--bg-tertiary);
-    border: 1px solid var(--border);
-    border-radius: 0.5rem;
-    color: var(--text-primary);
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-
-  .btn-secondary:hover {
-    background: var(--bg-primary);
-    border-color: var(--accent);
-  }
+  /* .btn-secondary styles are defined globally in app.css */
 
   .add-category-tab {
     background: var(--bg-tertiary);
@@ -1052,25 +1059,7 @@
     margin-top: 1rem;
   }
 
-  .btn-primary {
-    padding: 0.75rem 1.5rem;
-    background: var(--accent);
-    border: none;
-    border-radius: 0.375rem;
-    color: white;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-
-  .btn-primary:hover:not(:disabled) {
-    opacity: 0.9;
-  }
-
-  .btn-primary:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
+  /* .btn-primary styles are defined globally in app.css */
 
   .icon-card {
     position: relative;

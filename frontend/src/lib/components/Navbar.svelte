@@ -126,14 +126,14 @@
         </button>
       </div>
 
-      <button onclick={() => showThemePicker = true} class="theme-toggle" title="Theme Settings">
+      <button onclick={() => showThemePicker = true} class="theme-toggle" title="Theme Settings" aria-label="Theme Settings">
         <span class="icon-wrapper">
           <Icon icon={themeIcon} width="32" height="32" />
         </span>
       </button>
 
       {#if $editMode && isDashboardPage}
-        <button onclick={() => showExport = true} class="export-btn" title="Export Dashboard">
+        <button onclick={() => showExport = true} class="export-btn" title="Export Dashboard" aria-label="Export Dashboard">
           <span class="icon-wrapper">
             <Icon icon="mdi:download" width="32" height="32" />
           </span>
@@ -155,7 +155,7 @@
       {/if}
 
       {#if $isAuthenticated}
-        <button onclick={() => showHelp = true} class="help-btn" title="Help">
+        <button onclick={() => showHelp = true} class="help-btn" title="Help" aria-label="Help">
           <span class="icon-wrapper">
             <Icon icon="mdi:help-circle-outline" width="32" height="32" />
           </span>
@@ -163,14 +163,14 @@
       {/if}
 
       {#if $isAuthenticated}
-        <button onclick={() => showAbout = true} class="about-btn" title="About HOPS">
+        <button onclick={() => showAbout = true} class="about-btn" title="About HOPS" aria-label="About HOPS">
           <span class="icon-wrapper">
             <Icon icon="mdi:information-outline" width="32" height="32" />
           </span>
         </button>
       {/if}
 
-      <a href="/" class="admin-link" title="Admin Panel">
+      <a href="/" class="admin-link" title="Admin Panel" aria-label="Admin Panel">
         <Icon icon="mdi:cog" width="32" height="32" />
         {#if $isAuthenticated}
           <span class="admin-badge"></span>
@@ -260,7 +260,7 @@
   }
 
   .version {
-    font-size: 0.625rem;
+    font-size: 0.75rem;
     font-weight: 500;
     color: var(--text-secondary);
     background: var(--bg-tertiary);
@@ -273,8 +273,8 @@
   .dev-badge {
     font-size: 11px;
     font-weight: bold;
-    background: var(--color-warning);
-    color: #000;
+    background: #b45309;
+    color: #fff;
     padding: 2px 8px;
     border-radius: 4px;
     margin-left: 6px;
@@ -423,16 +423,85 @@
     right: 4px;
   }
 
+  /* Tablet: tighten gaps and shrink the dashboard center title */
+  @media (max-width: 1024px) {
+    .nav-content {
+      gap: 1rem;
+      padding: 0 0.75rem;
+    }
+
+    .nav-left {
+      gap: 1rem;
+    }
+
+    .center-title {
+      font-size: 1.25rem;
+    }
+
+    .nav-right {
+      gap: 0.5rem;
+    }
+  }
+
+  /* Mobile landscape / small tablet: hide nav links + text-size controls,
+     keep the logo wordmark */
   @media (max-width: 768px) {
     .nav-links {
       display: none;
+    }
+
+    .text-size-controls {
+      display: none;
+    }
+
+    .center-title {
+      font-size: 1.125rem;
+    }
+
+    .nav-content {
+      height: 60px;
+    }
+
+    .logo img {
+      width: 40px;
+      height: 40px;
+    }
+  }
+
+  /* Mobile portrait: collapse non-essential nav, hide logo wordmark and version
+     so the navbar still fits on a 360-wide phone */
+  @media (max-width: 480px) {
+    .nav-content {
+      padding: 0 0.5rem;
+      gap: 0.5rem;
     }
 
     .logo span {
       display: none;
     }
 
-    .text-size-controls {
+    .version,
+    .dev-badge {
+      display: none;
+    }
+
+    .center-title {
+      font-size: 1rem;
+    }
+
+    .theme-toggle,
+    .admin-link,
+    .edit-toggle,
+    .export-btn,
+    .help-btn,
+    .about-btn {
+      width: 40px;
+      height: 40px;
+    }
+
+    /* Hide help/about on tiny screens to make room for essentials */
+    .help-btn,
+    .about-btn {
       display: none;
     }
   }

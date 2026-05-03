@@ -2,12 +2,42 @@ import type { Config } from '$lib/types';
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 
-// Helper to make API requests. Session auth is handled via HttpOnly cookies.
+// Methods that require a CSRF token (state-changing operations)
+const MUTATION_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
+/**
+ * Reads the CSRF token from the hops_csrf cookie. The backend sets this
+ * cookie on login and on /api/auth/check; the frontend echoes it back in
+ * the X-CSRF-Token header for mutation requests (double-submit pattern).
+ */
+export function getCSRFToken(): string {
+  if (typeof document === 'undefined') return '';
+  const match = document.cookie.match(/(?:^|;\s*)hops_csrf=([^;]+)/);
+  return match ? decodeURIComponent(match[1]) : '';
+}
+
+/**
+ * Adds the X-CSRF-Token header to a header object if the request method
+ * is a mutation (POST/PUT/PATCH/DELETE) and a token is available.
+ */
+export function withCSRFHeader(headers: Record<string, string>, method?: string): Record<string, string> {
+  if (method && MUTATION_METHODS.has(method.toUpperCase())) {
+    const token = getCSRFToken();
+    if (token) {
+      return { ...headers, 'X-CSRF-Token': token };
+    }
+  }
+  return headers;
+}
+
+// Helper to make API requests. Session auth is handled via HttpOnly cookies,
+// CSRF protection via the double-submit cookie pattern.
 async function fetchAPI(endpoint: string, options: RequestInit = {}) {
-  const headers: Record<string, string> = {
+  const baseHeaders: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(options.headers as Record<string, string> || {}),
   };
+  const headers = withCSRFHeader(baseHeaders, options.method);
 
   const response = await fetch(`${API_BASE}${endpoint}`, {
     ...options,
@@ -41,20 +71,29 @@ export async function getStatus(entryId: string) {
 
 // Auth API calls
 
-export async function checkAuth(): Promise<boolean> {
+export interface AuthStatus {
+  authenticated: boolean;
+  mustChangePassword: boolean;
+}
+
+export async function checkAuth(): Promise<AuthStatus> {
   try {
     const resp = await fetchAPI('/auth/check');
-    return resp.authenticated === true;
+    return {
+      authenticated: resp.authenticated === true,
+      mustChangePassword: resp.mustChangePassword === true,
+    };
   } catch {
-    return false;
+    return { authenticated: false, mustChangePassword: false };
   }
 }
 
-export async function login(username: string, password: string): Promise<void> {
-  await fetchAPI('/auth/login', {
+export async function login(username: string, password: string): Promise<{ mustChangePassword: boolean }> {
+  const resp = await fetchAPI('/auth/login', {
     method: 'POST',
     body: JSON.stringify({ username, password }),
   });
+  return { mustChangePassword: resp.mustChangePassword === true };
 }
 
 export async function logout(): Promise<void> {
@@ -71,7 +110,7 @@ export async function changePassword(oldPassword: string, newPassword: string): 
 // Admin API calls
 
 export async function updateConfig(config: Config): Promise<void> {
-  await fetchAPI('/config/update', {
+  await fetchAPI('/config', {
     method: 'PUT',
     body: JSON.stringify(config),
   });
@@ -104,6 +143,7 @@ export async function importConfig(file: File, options?: { autoMatchIcons?: bool
   const response = await fetch(`${API_BASE}/config/import`, {
     method: 'POST',
     credentials: 'same-origin',
+    headers: withCSRFHeader({}, 'POST'),
     body: formData,
   });
 
@@ -173,6 +213,7 @@ export async function uploadIconImage(file: File): Promise<{ url: string; id: st
   const response = await fetch(`${API_BASE}/icons/upload`, {
     method: 'POST',
     credentials: 'same-origin',
+    headers: withCSRFHeader({}, 'POST'),
     body: formData,
   });
 
@@ -237,6 +278,7 @@ export async function uploadBackground(file: File, category: string): Promise<Ba
   const response = await fetch(`${API_BASE}/backgrounds`, {
     method: 'POST',
     credentials: 'same-origin',
+    headers: withCSRFHeader({}, 'POST'),
     body: formData,
   });
 

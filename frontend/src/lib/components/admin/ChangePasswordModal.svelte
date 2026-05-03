@@ -3,12 +3,15 @@
   import Modal from '$lib/components/shared/Modal.svelte';
   import { changePassword } from '$lib/utils/api';
   import { validatePassword, validateMatch } from '$lib/utils/validation';
+  import { clearMustChangePassword } from '$lib/stores/auth';
 
   interface Props {
     onClose: () => void;
+    /** When true, the modal cannot be dismissed and shows a forced-change message */
+    forced?: boolean;
   }
 
-  let { onClose }: Props = $props();
+  let { onClose, forced = false }: Props = $props();
 
   let currentPassword = $state('');
   let newPassword = $state('');
@@ -48,6 +51,7 @@
     try {
       await changePassword(currentPassword, newPassword);
       success = true;
+      clearMustChangePassword();
       setTimeout(() => {
         onClose();
       }, 1500);
@@ -61,9 +65,11 @@
 
 <Modal
   id="change-password"
-  title="Change Password"
+  title={forced ? 'Set a New Password' : 'Change Password'}
   titleIcon="mdi:key"
   onClose={onClose}
+  onBeforeClose={() => !forced || success}
+  showCloseButton={!forced || success}
   maxWidth="400px"
 >
   {#if success}
@@ -72,6 +78,12 @@
       <p>Password changed successfully!</p>
     </div>
   {:else}
+    {#if forced}
+      <div class="forced-notice">
+        <Icon icon="mdi:shield-alert" width="20" />
+        <span>You're using the default password. Please set a new password to continue.</span>
+      </div>
+    {/if}
     <form id="change-password-form" onsubmit={handleSubmit}>
       <div class="form-group">
         <label for="current-password">Current Password</label>
@@ -129,15 +141,17 @@
   {#snippet footer()}
     {#if !success}
       <div class="modal-actions">
-        <button type="button" class="btn-secondary" onclick={onClose} disabled={isSubmitting}>
-          Cancel
-        </button>
+        {#if !forced}
+          <button type="button" class="btn-secondary" onclick={onClose} disabled={isSubmitting}>
+            Cancel
+          </button>
+        {/if}
         <button type="submit" form="change-password-form" class="btn-primary" disabled={isSubmitting}>
           {#if isSubmitting}
             <Icon icon="mdi:loading" width="18" class="spin" />
             Changing...
           {:else}
-            Change Password
+            {forced ? 'Set Password' : 'Change Password'}
           {/if}
         </button>
       </div>
@@ -205,6 +219,19 @@
     font-size: 0.875rem;
   }
 
+  .forced-notice {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem;
+    margin-bottom: 1rem;
+    background: color-mix(in srgb, var(--color-warning) 15%, transparent);
+    color: var(--text-primary);
+    border-left: 3px solid var(--color-warning);
+    border-radius: 0.375rem;
+    font-size: 0.875rem;
+  }
+
   .success-message {
     display: flex;
     flex-direction: column;
@@ -229,48 +256,6 @@
     width: 100%;
   }
 
-  .btn-primary, .btn-secondary {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-    padding: 0.625rem 1.25rem;
-    border: none;
-    border-radius: 0.375rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-
-  .btn-primary {
-    background: var(--accent);
-    color: white;
-  }
-
-  .btn-primary:hover:not(:disabled) {
-    background: var(--accent-hover);
-  }
-
-  .btn-secondary {
-    background: var(--bg-tertiary);
-    color: var(--text-primary);
-  }
-
-  .btn-secondary:hover:not(:disabled) {
-    background: var(--bg-primary);
-  }
-
-  .btn-primary:disabled, .btn-secondary:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-
-  :global(.spin) {
-    animation: spin 1s linear infinite;
-  }
-
-  @keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
-  }
+  /* .btn-primary, .btn-secondary styles are defined globally in app.css */
+  /* .spin animation is defined globally in app.css */
 </style>

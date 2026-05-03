@@ -194,7 +194,7 @@
           type="text"
           bind:value={editedEntry.name}
           required
-          placeholder="Service Name"
+          placeholder="Tile name"
         />
       </div>
 
@@ -280,6 +280,7 @@
             onchange={handleIconUpload}
             bind:this={iconFileInput}
             style="display: none;"
+            aria-label="Upload custom icon image"
           />
         </div>
 
@@ -365,7 +366,7 @@
                   {/each}
                 </select>
                 {#if selectedMoveTabId}
-                  <select bind:value={selectedMoveGroupId}>
+                  <select id="move-group-select" bind:value={selectedMoveGroupId} aria-label="Select target group">
                     <option value="">Select Group...</option>
                     {#each moveTargetGroups as group}
                       <option value={group.id}>
@@ -533,32 +534,7 @@
     transition: all 0.2s;
   }
 
-  .btn-primary {
-    background: var(--accent);
-    color: white;
-  }
-
-  .btn-primary:hover {
-    background: var(--accent-hover);
-  }
-
-  .btn-secondary {
-    background: var(--bg-tertiary);
-    color: var(--text-primary);
-  }
-
-  .btn-secondary:hover {
-    background: var(--bg-secondary);
-  }
-
-  .btn-danger {
-    background: var(--color-error-dark);
-    color: white;
-  }
-
-  .btn-danger:hover {
-    background: color-mix(in srgb, var(--color-error-dark) 80%, black);
-  }
+  /* .btn-primary, .btn-secondary, .btn-danger styles are defined globally in app.css */
 
   @media (max-width: 640px) {
     .form-grid {

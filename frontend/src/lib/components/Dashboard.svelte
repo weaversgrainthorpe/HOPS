@@ -765,6 +765,7 @@
   {:else}
     <div class="empty-dashboard">
       <p>No tabs configured for this dashboard</p>
+      <p class="hint">Tabs let you organize groups of tiles by purpose (e.g. Media, Tools, Networking).</p>
       <a href="/admin">Go to Admin Panel</a>
     </div>
   {/if}
@@ -1050,10 +1051,18 @@
     min-height: 400px;
     gap: 1rem;
     padding: 2rem;
+    text-align: center;
   }
 
   .empty-dashboard p {
     color: var(--text-secondary);
+    margin: 0;
+  }
+
+  .empty-dashboard .hint {
+    font-size: 0.875rem;
+    opacity: 0.8;
+    max-width: 32rem;
   }
 
   .empty-dashboard a {

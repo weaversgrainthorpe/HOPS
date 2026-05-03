@@ -1,4 +1,4 @@
-import { writable, derived, get } from 'svelte/store';
+import { writable, get } from 'svelte/store';
 import type { Entry } from '$lib/types';
 
 interface SelectedEntry {
@@ -14,15 +14,8 @@ export function selectEntry(entry: Entry, tabId: string, groupId: string) {
   selectedEntry.set({ entry, tabId, groupId });
 }
 
-export function clearSelection() {
-  selectedEntry.set(null);
-  selectedEntries.set([]);
-}
-
 // Multi-selection support
 export const selectedEntries = writable<SelectedEntry[]>([]);
-
-export const selectionCount = derived(selectedEntries, $selectedEntries => $selectedEntries.length);
 
 export function toggleEntrySelection(entry: Entry, tabId: string, groupId: string) {
   selectedEntries.update(items => {
@@ -40,41 +33,9 @@ export function toggleEntrySelection(entry: Entry, tabId: string, groupId: strin
   });
 }
 
-export function addToSelection(entry: Entry, tabId: string, groupId: string) {
-  selectedEntries.update(items => {
-    const exists = items.some(
-      item => item.entry.id === entry.id && item.tabId === tabId && item.groupId === groupId
-    );
-
-    if (!exists) {
-      return [...items, { entry, tabId, groupId }];
-    }
-    return items;
-  });
-}
-
-export function removeFromSelection(entryId: string, tabId: string, groupId: string) {
-  selectedEntries.update(items => items.filter(
-    item => !(item.entry.id === entryId && item.tabId === tabId && item.groupId === groupId)
-  ));
-}
-
 export function isEntrySelected(entryId: string, tabId: string, groupId: string): boolean {
   const items = get(selectedEntries);
   return items.some(
     item => item.entry.id === entryId && item.tabId === tabId && item.groupId === groupId
   );
-}
-
-export function clearMultiSelection() {
-  selectedEntries.set([]);
-}
-
-export function selectAll(entries: Entry[], tabId: string, groupId: string) {
-  const selections = entries.map(entry => ({ entry, tabId, groupId }));
-  selectedEntries.set(selections);
-}
-
-export function getSelectedEntries() {
-  return get(selectedEntries);
 }

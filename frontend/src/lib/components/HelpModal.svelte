@@ -475,20 +475,7 @@
     color: var(--text-secondary);
   }
 
-  .btn-primary {
-    padding: 0.625rem 1.25rem;
-    background: var(--accent);
-    color: white;
-    border: none;
-    border-radius: 0.375rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-
-  .btn-primary:hover {
-    background: var(--accent-hover);
-  }
+  /* .btn-primary styles are defined globally in app.css */
 
   @media (max-width: 640px) {
     .modal-content {

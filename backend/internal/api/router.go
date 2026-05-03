@@ -2,7 +2,7 @@ package api
 
 import (
 	"database/sql"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -32,15 +32,60 @@ type RateLimiter struct {
 	attempts map[string][]time.Time
 	limit    int
 	window   time.Duration
+	stopCh   chan struct{}
 }
 
-// NewRateLimiter creates a rate limiter
+// NewRateLimiter creates a rate limiter with periodic cleanup of stale entries
 func NewRateLimiter(limit int, window time.Duration) *RateLimiter {
-	return &RateLimiter{
+	rl := &RateLimiter{
 		attempts: make(map[string][]time.Time),
 		limit:    limit,
 		window:   window,
+		stopCh:   make(chan struct{}),
 	}
+	go rl.cleanupLoop()
+	return rl
+}
+
+// cleanupLoop periodically removes stale IP entries to prevent unbounded memory growth
+func (rl *RateLimiter) cleanupLoop() {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			rl.cleanup()
+		case <-rl.stopCh:
+			return
+		}
+	}
+}
+
+// cleanup removes IPs with no recent attempts
+func (rl *RateLimiter) cleanup() {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+
+	now := time.Now()
+	windowStart := now.Add(-rl.window)
+	for ip, times := range rl.attempts {
+		var recent []time.Time
+		for _, t := range times {
+			if t.After(windowStart) {
+				recent = append(recent, t)
+			}
+		}
+		if len(recent) == 0 {
+			delete(rl.attempts, ip)
+		} else {
+			rl.attempts[ip] = recent
+		}
+	}
+}
+
+// Stop shuts down the cleanup goroutine
+func (rl *RateLimiter) Stop() {
+	close(rl.stopCh)
 }
 
 // Allow checks if a request from the given IP should be allowed
@@ -94,34 +139,41 @@ func NewRouter(db *sql.DB, authService *auth.Service, cfg *config.Config, startT
 	return r.securityHeadersMiddleware(r.corsMiddleware(r.loggingMiddleware(r.mux)))
 }
 
+// protected wraps a handler with auth + CSRF middleware. Use this for any
+// route that requires an authenticated session and accepts state-changing
+// HTTP methods. CSRF middleware safely skips GET/HEAD/OPTIONS so it's safe
+// to use on read-only handlers too.
+func (r *Router) protected(h http.HandlerFunc) http.HandlerFunc {
+	return r.authMiddleware(r.csrfMiddleware(h))
+}
+
 // setupRoutes configures all API routes
 func (r *Router) setupRoutes() {
 	// Public API routes
 	r.mux.HandleFunc("/api/health", r.handleGetHealth)
 	r.mux.HandleFunc("/api/version", r.handleGetVersion)
-	r.mux.HandleFunc("/api/config", r.handleGetConfig)
+	r.mux.HandleFunc("/api/config", r.handleConfig)
 	r.mux.HandleFunc("/api/status/", r.handleGetStatus)
 	r.mux.HandleFunc("/api/auth/login", r.handleLogin)
 	r.mux.HandleFunc("/api/auth/check", r.handleAuthCheck)
 
-	// Protected API routes (require authentication)
-	r.mux.HandleFunc("/api/auth/logout", r.authMiddleware(r.handleLogout))
-	r.mux.HandleFunc("/api/auth/change-password", r.authMiddleware(r.handleChangePassword))
-	r.mux.HandleFunc("/api/config/update", r.authMiddleware(r.handleUpdateConfig))
-	r.mux.HandleFunc("/api/config/export", r.authMiddleware(r.handleExportConfig))
-	r.mux.HandleFunc("/api/config/import", r.authMiddleware(r.handleImportConfig))
-	r.mux.HandleFunc("/api/config/reset", r.authMiddleware(r.handleResetConfig))
+	// Protected API routes (require authentication + CSRF token for mutations)
+	r.mux.HandleFunc("/api/auth/logout", r.protected(r.handleLogout))
+	r.mux.HandleFunc("/api/auth/change-password", r.protected(r.handleChangePassword))
+	r.mux.HandleFunc("/api/config/export", r.protected(r.handleExportConfig))
+	r.mux.HandleFunc("/api/config/import", r.protected(r.handleImportConfig))
+	r.mux.HandleFunc("/api/config/reset", r.protected(r.handleResetConfig))
 
 	// Backup management routes
-	r.mux.HandleFunc("/api/backups", r.authMiddleware(r.handleBackups))
-	r.mux.HandleFunc("/api/backups/", r.authMiddleware(r.handleBackupActions))
+	r.mux.HandleFunc("/api/backups", r.protected(r.handleBackups))
+	r.mux.HandleFunc("/api/backups/", r.protected(r.handleBackupActions))
 
 	// Icon management routes
 	r.mux.HandleFunc("/api/icon-categories", r.handleGetIconCategories)
-	r.mux.HandleFunc("/api/icon-categories/", r.handleIconCategoryActions)
+	r.mux.HandleFunc("/api/icon-categories/", r.protected(r.handleIconCategoryActions))
 	r.mux.HandleFunc("/api/icons", r.handleGetIcons)
-	r.mux.HandleFunc("/api/icons/upload", r.authMiddleware(r.handleUploadIcon))
-	r.mux.HandleFunc("/api/icons/", r.handleIconActions)
+	r.mux.HandleFunc("/api/icons/upload", r.protected(r.handleUploadIcon))
+	r.mux.HandleFunc("/api/icons/", r.protected(r.handleIconActions))
 
 	// Serve uploaded icons from data directory
 	r.mux.HandleFunc("/icons/", r.serveIcons)
@@ -129,12 +181,11 @@ func (r *Router) setupRoutes() {
 	// Serve dashboard icons (from homarr-labs/dashboard-icons)
 	r.mux.HandleFunc("/api/icons/dashboard/", r.serveDashboardIcons)
 
-	// Background image routes
+	// Background image routes (GET is public, POST/PUT/DELETE require auth inline)
 	r.mux.HandleFunc("/api/backgrounds", r.handleBackgrounds)
-	r.mux.HandleFunc("/api/backgrounds/categories", r.authMiddleware(r.handleBackgroundCategories))
-	r.mux.HandleFunc("/api/backgrounds/categories/", r.authMiddleware(r.handleBackgroundCategoryActions))
-	r.mux.HandleFunc("/api/backgrounds/", r.authMiddleware(r.handleBackgroundActions))
-
+	r.mux.HandleFunc("/api/backgrounds/categories", r.protected(r.handleBackgroundCategories))
+	r.mux.HandleFunc("/api/backgrounds/categories/", r.protected(r.handleBackgroundCategoryActions))
+	r.mux.HandleFunc("/api/backgrounds/", r.protected(r.handleBackgroundActions))
 	// Serve uploaded backgrounds from data directory
 	r.mux.HandleFunc("/backgrounds/", r.serveBackgrounds)
 
@@ -151,9 +202,9 @@ func (r *Router) handleBackgrounds(w http.ResponseWriter, req *http.Request) {
 	case http.MethodGet:
 		r.handleListBackgrounds(w, req)
 	case http.MethodPost:
-		r.authMiddleware(r.handleUploadBackground)(w, req)
+		r.protected(r.handleUploadBackground)(w, req)
 	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
 }
 
@@ -165,7 +216,7 @@ func (r *Router) handleBackgroundActions(w http.ResponseWriter, req *http.Reques
 	case http.MethodDelete:
 		r.handleDeleteBackground(w, req)
 	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
 }
 
@@ -291,7 +342,12 @@ func (r *Router) loggingMiddleware(next http.Handler) http.Handler {
 		start := time.Now()
 		sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(sw, req)
-		log.Printf("%s %s %d %s", req.Method, path, sw.status, time.Since(start).Round(time.Millisecond))
+		slog.Info("http request",
+			"method", req.Method,
+			"path", path,
+			"status", sw.status,
+			"duration_ms", time.Since(start).Milliseconds(),
+		)
 	})
 }
 
@@ -321,7 +377,12 @@ func (r *Router) corsMiddleware(next http.Handler) http.Handler {
 		}
 
 		if req.Method == "OPTIONS" {
-			w.WriteHeader(http.StatusOK)
+			// Only return 200 for preflight if CORS headers were set (origin is allowed)
+			if w.Header().Get("Access-Control-Allow-Origin") != "" {
+				w.WriteHeader(http.StatusOK)
+			} else {
+				w.WriteHeader(http.StatusForbidden)
+			}
 			return
 		}
 
@@ -346,13 +407,13 @@ func (r *Router) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		sessionID := extractSessionID(req)
 		if sessionID == "" {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			writeJSONError(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
 
 		_, err := r.authService.ValidateSession(sessionID)
 		if err != nil {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			writeJSONError(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
 

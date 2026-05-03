@@ -1,10 +1,11 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { loadConfig } from '$lib/stores/config';
-	import { initAuth } from '$lib/stores/auth';
+	import { initAuth, mustChangePassword } from '$lib/stores/auth';
 	import Navbar from '$lib/components/Navbar.svelte';
 	import Toast from '$lib/components/Toast.svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
+	import ChangePasswordModal from '$lib/components/admin/ChangePasswordModal.svelte';
 	import { selectedEntry } from '$lib/stores/selection';
 	import { copyEntry, cutEntry, clipboard } from '$lib/stores/clipboard';
 	import { editMode } from '$lib/stores/editMode';
@@ -61,6 +62,10 @@
 <Navbar />
 
 {@render children()}
+
+{#if $mustChangePassword}
+	<ChangePasswordModal forced={true} onClose={() => {}} />
+{/if}
 
 <Toast />
 <ConfirmModal />

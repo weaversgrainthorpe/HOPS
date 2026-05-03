@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"fmt"
-	"log"
+	"log/slog"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -21,32 +21,39 @@ func NewService(db *sql.DB) *Service {
 	return &Service{db: db}
 }
 
+// LoginResult holds the result of a successful login
+type LoginResult struct {
+	SessionID          string
+	MustChangePassword bool
+}
+
 // Login authenticates a user and creates a session
-func (s *Service) Login(username, password string) (string, error) {
+func (s *Service) Login(username, password string) (LoginResult, error) {
 	var userID int
 	var passwordHash string
+	var mustChange int
 
 	err := s.db.QueryRow(
-		"SELECT id, password_hash FROM users WHERE username = ?",
+		"SELECT id, password_hash, must_change_password FROM users WHERE username = ?",
 		username,
-	).Scan(&userID, &passwordHash)
+	).Scan(&userID, &passwordHash, &mustChange)
 
 	if err == sql.ErrNoRows {
-		return "", fmt.Errorf("invalid credentials")
+		return LoginResult{}, fmt.Errorf("invalid credentials")
 	}
 	if err != nil {
-		return "", fmt.Errorf("database error: %w", err)
+		return LoginResult{}, fmt.Errorf("database error: %w", err)
 	}
 
 	// Verify password
 	if err := bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(password)); err != nil {
-		return "", fmt.Errorf("invalid credentials")
+		return LoginResult{}, fmt.Errorf("invalid credentials")
 	}
 
 	// Create session
 	sessionID, err := generateSessionID()
 	if err != nil {
-		return "", fmt.Errorf("failed to generate session: %w", err)
+		return LoginResult{}, fmt.Errorf("failed to generate session: %w", err)
 	}
 
 	expiresAt := time.Now().Add(24 * time.Hour)
@@ -56,10 +63,26 @@ func (s *Service) Login(username, password string) (string, error) {
 		sessionID, userID, expiresAt,
 	)
 	if err != nil {
-		return "", fmt.Errorf("failed to create session: %w", err)
+		return LoginResult{}, fmt.Errorf("failed to create session: %w", err)
 	}
 
-	return sessionID, nil
+	return LoginResult{
+		SessionID:          sessionID,
+		MustChangePassword: mustChange == 1,
+	}, nil
+}
+
+// MustChangePassword returns true if the user is required to change their password
+func (s *Service) MustChangePassword(userID int) (bool, error) {
+	var mustChange int
+	err := s.db.QueryRow(
+		"SELECT must_change_password FROM users WHERE id = ?",
+		userID,
+	).Scan(&mustChange)
+	if err != nil {
+		return false, err
+	}
+	return mustChange == 1, nil
 }
 
 // ValidateSession checks if a session is valid
@@ -82,7 +105,7 @@ func (s *Service) ValidateSession(sessionID string) (int, error) {
 	if time.Now().After(expiresAt) {
 		// Clean up expired session
 		if _, err := s.db.Exec("DELETE FROM sessions WHERE id = ?", sessionID); err != nil {
-			log.Printf("[Auth] Warning: failed to delete expired session %s: %v", sessionID, err)
+			slog.Warn("failed to delete expired session", "component", "auth", "session_id", sessionID, "error", err)
 		}
 		return 0, fmt.Errorf("session expired")
 	}
@@ -120,7 +143,7 @@ func (s *Service) ChangePassword(userID int, oldPassword, newPassword string) er
 	}
 
 	_, err = s.db.Exec(
-		"UPDATE users SET password_hash = ? WHERE id = ?",
+		"UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ?",
 		newHash, userID,
 	)
 	if err != nil {
@@ -154,14 +177,14 @@ func (s *Service) StartCleanupRoutine(interval time.Duration, stop <-chan struct
 		// Run cleanup immediately on start
 		if err := s.CleanupExpiredSessions(); err != nil {
 			// Log error but don't fail
-			log.Printf("Session cleanup error: %v", err)
+			slog.Error("session cleanup error", "component", "auth", "error", err)
 		}
 
 		for {
 			select {
 			case <-ticker.C:
 				if err := s.CleanupExpiredSessions(); err != nil {
-					log.Printf("Session cleanup error: %v", err)
+					slog.Error("session cleanup error", "component", "auth", "error", err)
 				}
 			case <-stop:
 				return

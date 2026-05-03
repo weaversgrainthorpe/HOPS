@@ -15,6 +15,8 @@ const statusStore = writable<Map<string, StatusInfo>>(new Map());
 const POLL_INTERVAL = 30000;
 let pollInterval: ReturnType<typeof setInterval> | null = null;
 const activeEntries = new Set<string>();
+let subscriberCount = 0;
+let isPolling = false;
 
 export async function fetchStatus(entryId: string): Promise<StatusInfo> {
   try {
@@ -32,6 +34,7 @@ export async function fetchStatus(entryId: string): Promise<StatusInfo> {
 
 export function subscribeToStatus(entryId: string) {
   activeEntries.add(entryId);
+  subscriberCount++;
 
   // Set initial loading state
   statusStore.update(store => {
@@ -51,31 +54,49 @@ export function subscribeToStatus(entryId: string) {
     });
   });
 
-  // Start polling if not already running
-  if (!pollInterval) {
+  // Start polling if not already running (guarded by flag to prevent races)
+  if (!isPolling) {
+    isPolling = true;
     pollInterval = setInterval(pollAllStatuses, POLL_INTERVAL);
   }
 
   return {
     unsubscribe: () => {
+      subscriberCount--;
       activeEntries.delete(entryId);
-      if (activeEntries.size === 0 && pollInterval) {
+
+      // Only stop polling when all subscribers have unsubscribed
+      if (subscriberCount <= 0 && pollInterval) {
         clearInterval(pollInterval);
         pollInterval = null;
+        isPolling = false;
+        subscriberCount = 0;
       }
     }
   };
 }
 
 async function pollAllStatuses() {
-  for (const entryId of activeEntries) {
-    const status = await fetchStatus(entryId);
-    statusStore.update(store => {
-      const newStore = new Map(store);
-      newStore.set(entryId, status);
-      return newStore;
-    });
-  }
+  // Snapshot active entries to avoid mutation during iteration
+  const entries = [...activeEntries];
+
+  // Fetch all statuses concurrently instead of sequentially
+  const results = await Promise.allSettled(
+    entries.map(async (entryId) => {
+      const status = await fetchStatus(entryId);
+      return { entryId, status };
+    })
+  );
+
+  statusStore.update(store => {
+    const newStore = new Map(store);
+    for (const result of results) {
+      if (result.status === 'fulfilled') {
+        newStore.set(result.value.entryId, result.value.status);
+      }
+    }
+    return newStore;
+  });
 }
 
 export function getStatus(entryId: string): StatusInfo | undefined {
