@@ -46,7 +46,7 @@ fi
 # Start frontend dev server
 echo "Starting frontend on :5173..."
 cd "$HOPS_DIR/frontend"
-pnpm dev --host --port 5173 &
+npm run dev -- --host --port 5173 &
 FRONTEND_PID=$!
 
 echo ""

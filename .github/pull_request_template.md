@@ -15,5 +15,7 @@
 ## Checklist
 
 - [ ] Backend builds (`go build ./cmd/hops`)
-- [ ] Frontend builds (`pnpm build`)
+- [ ] Frontend builds (`npm run build`)
+- [ ] Backend tests pass (`go test ./...`)
+- [ ] Frontend tests pass (`npm test`)
 - [ ] Tested manually in the browser

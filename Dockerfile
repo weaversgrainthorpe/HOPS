@@ -1,11 +1,10 @@
 # Stage 1: Build frontend
 FROM node:24-alpine AS frontend-builder
-RUN corepack enable
 WORKDIR /app/frontend
-COPY frontend/package.json frontend/pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
 COPY frontend/ ./
-RUN pnpm build
+RUN npm run build
 
 # Stage 2: Build backend
 FROM golang:1.24-alpine AS backend-builder

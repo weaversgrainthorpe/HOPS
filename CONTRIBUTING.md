@@ -14,7 +14,7 @@ Thanks for your interest in contributing to HOPS! This document covers the guide
 
 - Go 1.24+
 - Node.js 24+
-- pnpm
+- npm
 - SQLite3
 
 ### Getting Started
@@ -28,8 +28,8 @@ Thanks for your interest in contributing to HOPS! This document covers the guide
 3. Start the frontend:
    ```bash
    cd frontend
-   pnpm install
-   pnpm dev
+   npm install
+   npm run dev
    ```
 4. Open http://localhost:5173 (default credentials: `admin` / `admin`)
 
@@ -78,8 +78,13 @@ hops/
 ### Running Tests
 
 ```bash
+# Backend
 cd backend
 go test ./...
+
+# Frontend
+cd frontend
+npm test
 ```
 
 ### Building for Production
@@ -91,7 +96,7 @@ go build -o hops ./cmd/hops
 
 # Frontend
 cd frontend
-pnpm build
+npm run build
 ```
 
 ## Code Style
