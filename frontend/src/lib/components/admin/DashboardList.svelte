@@ -8,12 +8,14 @@
   import type { Dashboard } from '$lib/types';
   import Icon from '@iconify/svelte';
   import ImportModal from './ImportModal.svelte';
+  import QRCodeModal from './QRCodeModal.svelte';
 
   let editingId = $state<string | null>(null);
   let editName = $state('');
   let editPath = $state('');
   let showImport = $state(false);
   let exportingId = $state<string | null>(null);
+  let qrDashboard = $state<Dashboard | null>(null);
   let creatingNew = $state(false);
   let newName = $state('');
   let newPath = $state('');
@@ -230,6 +232,14 @@
                   <Icon icon="mdi:download" width="20" />
                 {/if}
               </button>
+              <button
+                onclick={() => (qrDashboard = dashboard)}
+                class="btn-secondary"
+                title="Show QR code (scan with phone)"
+                aria-label="Show QR code for {dashboard.name}"
+              >
+                <Icon icon="mdi:qrcode" width="20" />
+              </button>
               <a href={dashboard.path} target="_blank" class="btn-secondary" title="Open in new tab">
                 <Icon icon="mdi:open-in-new" width="20" />
               </a>
@@ -252,6 +262,10 @@
 
 {#if showImport}
   <ImportModal onClose={() => showImport = false} onImportSuccess={loadConfig} />
+{/if}
+
+{#if qrDashboard}
+  <QRCodeModal dashboard={qrDashboard} onClose={() => (qrDashboard = null)} />
 {/if}
 
 <style>

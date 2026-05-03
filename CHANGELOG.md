@@ -5,6 +5,14 @@ All notable changes to HOPS (Home Operations Portal System) will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-04-12
+
+### Added
+- **QR code generation** for dashboards, accessible from each row in the admin panel. Click the new QR button to open a modal showing a scannable code, the full URL (with copy-to-clipboard), and a "Download SVG" option. Useful for sharing dashboard URLs with phones/tablets without typing.
+  - URL is generated from `window.location.origin + dashboard.path` so it works for any deployment topology (local IP, mDNS, reverse proxy, port forwarding) without configuration
+  - QR is rendered in the browser as scalable SVG (no backend changes; lazy-loaded so it doesn't bloat the initial bundle)
+  - 9 new component tests cover URL generation, copy/download actions, error states, and modal lifecycle
+
 ## [1.3.0] - 2026-04-12
 
 ### Security
@@ -202,6 +210,7 @@ HOPS (Home Operations Portal System) is now ready for public use! A modern, self
 ### Credits
 Created by Jonathan Brown with Claude (Anthropic)
 
+[1.4.0]: https://github.com/weaversgrainthorpe/HOPS/releases/tag/v1.4.0
 [1.3.0]: https://github.com/weaversgrainthorpe/HOPS/releases/tag/v1.3.0
 [1.2.0]: https://github.com/weaversgrainthorpe/HOPS/releases/tag/v1.2.0
 [1.1.0]: https://github.com/weaversgrainthorpe/HOPS/releases/tag/v1.1.0
