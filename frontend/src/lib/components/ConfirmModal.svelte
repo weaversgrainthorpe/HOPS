@@ -152,41 +152,11 @@
     justify-content: center;
   }
 
-  .btn-secondary, .btn-confirm {
-    padding: 0.625rem 1.25rem;
-    border: none;
-    border-radius: 0.375rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s;
+  /* .btn-primary, .btn-secondary, .btn-danger styles are defined globally in app.css */
+
+  /* Confirm dialog buttons get a min-width for visual balance */
+  .btn-secondary, .btn-confirm, .btn-primary, .btn-danger, .btn-warning {
     min-width: 100px;
-  }
-
-  .btn-secondary {
-    background: var(--bg-tertiary);
-    color: var(--text-primary);
-  }
-
-  .btn-secondary:hover {
-    background: var(--bg-primary);
-  }
-
-  .btn-primary {
-    background: var(--accent);
-    color: white;
-  }
-
-  .btn-primary:hover {
-    background: var(--accent-hover);
-  }
-
-  .btn-danger {
-    background: var(--color-error, #ef4444);
-    color: white;
-  }
-
-  .btn-danger:hover {
-    background: var(--color-error-dark, #dc2626);
   }
 
   .btn-warning {

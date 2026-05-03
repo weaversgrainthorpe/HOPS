@@ -585,21 +585,5 @@
     transition: all 0.2s;
   }
 
-  .btn-primary {
-    background: var(--accent);
-    color: white;
-  }
-
-  .btn-primary:hover {
-    background: var(--accent-hover);
-  }
-
-  .btn-secondary {
-    background: var(--bg-tertiary);
-    color: var(--text-primary);
-  }
-
-  .btn-secondary:hover {
-    background: var(--bg-secondary);
-  }
+  /* .btn-primary, .btn-secondary styles are defined globally in app.css */
 </style>

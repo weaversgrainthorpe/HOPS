@@ -252,13 +252,23 @@ if (browser) {
   applyTheme(initialTheme);
   applyThemePreset(savedPreset, getEffectiveMode(initialTheme));
 
-  // Listen for system theme changes when in auto mode
-  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+  // Listen for system theme changes when in auto mode.
+  // Store reference to the query and handler so it can be cleaned up if needed.
+  const darkModeQuery = window.matchMedia('(prefers-color-scheme: dark)');
+  const handleSystemThemeChange = () => {
     theme.update(($theme) => {
       if ($theme === 'auto') {
         applyTheme('auto');
       }
       return $theme;
     });
-  });
+  };
+  darkModeQuery.addEventListener('change', handleSystemThemeChange);
+
+  // Cleanup on HMR dispose (prevents listener accumulation during development)
+  if (import.meta.hot) {
+    import.meta.hot.dispose(() => {
+      darkModeQuery.removeEventListener('change', handleSystemThemeChange);
+    });
+  }
 }

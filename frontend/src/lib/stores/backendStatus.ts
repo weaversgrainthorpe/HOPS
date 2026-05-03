@@ -61,12 +61,17 @@ function createBackendStatusStore() {
     }
   }
 
+  // Auto-cleanup if the page is unloaded (safety net for missed stopPolling calls)
+  if (typeof window !== 'undefined') {
+    window.addEventListener('beforeunload', stopPolling);
+  }
+
   return {
     subscribe,
     check,
     startPolling,
     stopPolling,
-    reset: () => set(initialState)
+    reset: () => { stopPolling(); set(initialState); }
   };
 }
 

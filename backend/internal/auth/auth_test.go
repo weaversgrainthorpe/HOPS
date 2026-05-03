@@ -22,6 +22,7 @@ func setupTestDB(t *testing.T) *sql.DB {
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			username TEXT UNIQUE NOT NULL,
 			password_hash TEXT NOT NULL,
+			must_change_password INTEGER NOT NULL DEFAULT 0,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
 		`CREATE TABLE sessions (
@@ -51,12 +52,15 @@ func TestLoginSuccess(t *testing.T) {
 	db := setupTestDB(t)
 	svc := NewService(db)
 
-	sessionID, err := svc.Login("admin", "testpass")
+	result, err := svc.Login("admin", "testpass")
 	if err != nil {
 		t.Fatalf("expected successful login, got: %v", err)
 	}
-	if sessionID == "" {
+	if result.SessionID == "" {
 		t.Fatal("expected non-empty session ID")
+	}
+	if result.MustChangePassword {
+		t.Fatal("test user should not require password change")
 	}
 }
 
@@ -84,9 +88,9 @@ func TestValidateSession(t *testing.T) {
 	db := setupTestDB(t)
 	svc := NewService(db)
 
-	sessionID, _ := svc.Login("admin", "testpass")
+	result, _ := svc.Login("admin", "testpass")
 
-	userID, err := svc.ValidateSession(sessionID)
+	userID, err := svc.ValidateSession(result.SessionID)
 	if err != nil {
 		t.Fatalf("expected valid session, got: %v", err)
 	}
@@ -125,13 +129,13 @@ func TestLogout(t *testing.T) {
 	db := setupTestDB(t)
 	svc := NewService(db)
 
-	sessionID, _ := svc.Login("admin", "testpass")
+	result, _ := svc.Login("admin", "testpass")
 
-	if err := svc.Logout(sessionID); err != nil {
+	if err := svc.Logout(result.SessionID); err != nil {
 		t.Fatalf("logout failed: %v", err)
 	}
 
-	_, err := svc.ValidateSession(sessionID)
+	_, err := svc.ValidateSession(result.SessionID)
 	if err == nil {
 		t.Fatal("expected error after logout")
 	}
@@ -168,12 +172,72 @@ func TestChangePasswordWrongOld(t *testing.T) {
 	}
 }
 
+func TestLoginReturnsMustChangePasswordFlag(t *testing.T) {
+	db := setupTestDB(t)
+	svc := NewService(db)
+
+	// Mark user as needing password change
+	if _, err := db.Exec("UPDATE users SET must_change_password = 1 WHERE id = 1"); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := svc.Login("admin", "testpass")
+	if err != nil {
+		t.Fatalf("login failed: %v", err)
+	}
+	if !result.MustChangePassword {
+		t.Fatal("expected MustChangePassword to be true")
+	}
+}
+
+func TestChangePasswordClearsMustChangeFlag(t *testing.T) {
+	db := setupTestDB(t)
+	svc := NewService(db)
+
+	// Mark user as needing password change
+	if _, err := db.Exec("UPDATE users SET must_change_password = 1 WHERE id = 1"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := svc.ChangePassword(1, "testpass", "newpass"); err != nil {
+		t.Fatalf("change password failed: %v", err)
+	}
+
+	mustChange, err := svc.MustChangePassword(1)
+	if err != nil {
+		t.Fatalf("MustChangePassword failed: %v", err)
+	}
+	if mustChange {
+		t.Fatal("expected must_change_password to be cleared after change")
+	}
+
+	// Subsequent login should not require password change
+	result, _ := svc.Login("admin", "newpass")
+	if result.MustChangePassword {
+		t.Fatal("expected fresh login to not require password change")
+	}
+}
+
+func TestMustChangePasswordDefault(t *testing.T) {
+	db := setupTestDB(t)
+	svc := NewService(db)
+
+	// Default test user shouldn't need password change
+	mustChange, err := svc.MustChangePassword(1)
+	if err != nil {
+		t.Fatalf("MustChangePassword failed: %v", err)
+	}
+	if mustChange {
+		t.Fatal("default test user should not require password change")
+	}
+}
+
 func TestCleanupExpiredSessions(t *testing.T) {
 	db := setupTestDB(t)
 	svc := NewService(db)
 
 	// Create a valid session
-	validID, _ := svc.Login("admin", "testpass")
+	valid, _ := svc.Login("admin", "testpass")
 
 	// Insert an expired session
 	expired := time.Now().Add(-1 * time.Hour)
@@ -186,7 +250,7 @@ func TestCleanupExpiredSessions(t *testing.T) {
 	}
 
 	// Valid session should still work
-	if _, err := svc.ValidateSession(validID); err != nil {
+	if _, err := svc.ValidateSession(valid.SessionID); err != nil {
 		t.Fatal("valid session should survive cleanup")
 	}
 

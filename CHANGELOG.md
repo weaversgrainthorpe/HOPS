@@ -5,6 +5,69 @@ All notable changes to HOPS (Home Operations Portal System) will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-04-12
+
+### Security
+- **CSRF protection** via double-submit cookie pattern: server issues a `hops_csrf` cookie on login (and on `/api/auth/check` for sessions that pre-date this version), frontend echoes it back in the `X-CSRF-Token` header on all mutation requests, server validates with constant-time comparison
+- **Forced password change on first login**: default `admin/admin` user now has `must_change_password=1`; the SPA shows a non-dismissible password change modal until the flag is cleared
+- **SQLite foreign keys enabled** (`PRAGMA foreign_keys=ON`) — were silently disabled before, meaning `ON DELETE CASCADE` was never enforced
+- **`ON DELETE CASCADE`** added to sessions FK so deleting a user properly cleans up their sessions
+- **Path traversal hardening** on backup `RestoreBackup` and `DeleteBackup` (now use `filepath.Base()` to strip directory components)
+- Auth middleware moved from inline to route-level registration for icon and category mutation endpoints (consistent auditability)
+- Rate limiter no longer leaks memory: stale IP entries pruned every 5 minutes via background goroutine
+
+### Performance
+- **N+1 query eliminated** in icon matching: `applyIconMatching` (called during config import) now pre-loads all icons into memory once instead of issuing 7+ SQL queries per entry. Importing 100 entries went from ~500+ queries to 1.
+- Status checker batches all per-entry writes into a single transaction with a prepared statement (no longer contends with config reads on the single SQLite writer connection)
+- Added missing indexes: `idx_sessions_expires_at`, `idx_sessions_user_id`
+- Added `LIMIT` clauses to icon and category queries (was unbounded)
+
+### Robustness
+- HTTP server now uses graceful shutdown: `http.Server` with read/write/idle timeouts, listens for `SIGINT`/`SIGTERM`, drains in-flight requests up to 30s before exit
+- Database initialization uses `PingContext` with a 5s timeout — startup fails fast instead of hanging on a stuck filesystem
+- Health check endpoint's `db.Ping` now uses a 3s context timeout
+- Frontend directory existence is verified at startup with a clear warning if missing
+- Theme store's media query listener is now properly cleaned up on HMR (no listener accumulation in dev)
+- Status store polling guarded with `isPolling` flag and ref-counted subscribers — no more duplicate intervals
+- Backend status store has a `beforeunload` cleanup safety net
+
+### Added
+- **Config validation** (`Config.Validate()`): port required + numeric + 1-65535, data dir required, frontend dir required, rate limit non-negative, allowed origins non-empty when listed. Wired into `main.go` so config errors fail fast at startup.
+- **Test infrastructure for the frontend**: Vitest + jsdom + svelte-testing-library + user-event. New `npm test`, `test:watch`, `test:ui`, `test:coverage` scripts.
+- **Comprehensive test suite** added across the codebase:
+  - **Backend: ~80 new Go tests** covering CSRF (8 dedicated), auth flows including must-change-password, database schema/migrations/cascades, backup operations including path traversal, dashboard icon import, config validation
+  - **Frontend: 154 Vitest tests** covering utility functions (validation, URL safety incl. XSS vectors, color contrast, CSRF helpers), all stores (auth with mocked API, toast, textSize, selection, clipboard, confirmModal), and component tests (Button, Toast)
+- Empty states now include actionable hints (e.g. "Click Add Group below to organize tiles" instead of just "No groups yet")
+- Loading states added to icon picker (initial load shows spinner, delete buttons show spinner) and backup modal (delete button now shows spinner; restore was already correct)
+- Toast feedback for copy/paste operations in edit mode
+
+### Changed
+- **`POST /api/config/update` → `PUT /api/config`** (the `/api/config` route now dispatches by method: `GET` for public read, `PUT` for authenticated update). Old endpoint removed; frontend updated atomically.
+- **`log` → `log/slog` migration** across the backend (~50 call sites in 7 files). Output is now structured key=value text by default with timestamps and levels. New `LOG_LEVEL` env var (`debug|info|warn|error`).
+- **Button styles consolidated** into global `app.css` and removed from 16 modal components — `.btn-primary`, `.btn-secondary`, `.btn-danger`, `.btn-sm` now have a single source of truth (~250 lines of duplicated CSS removed)
+- **Admin page buttons** migrated to the shared `<Button>` component
+- **Secondary text contrast** bumped to clear WCAG AAA (8:1+) on all background tones, both themes
+- **Three responsive breakpoints** (480px / 768px / 1024px) replace the single 768px breakpoint across navbar, group grid, tab panel, and admin page — proper mobile/tablet adaptation
+- **Aria labels** added to all icon-only navbar buttons (theme, export, help, about, admin)
+- **Form labels**: hidden file input and select dropdowns in EntryEditModal now have explicit `aria-label`s
+- Dev badge color contrast fixed: was `#000` on `#f59e0b` (~2.5:1, fails WCAG AA), now `#fff` on `#b45309` (~4.8:1)
+- Version text size bumped from 10px → 12px (was below readability minimum)
+- Terminology standardized to "Tile" in user-facing strings (`placeholder="Service Name"` → `"Tile name"`, etc.); internal code keeps `Entry` types
+- Default `writeJSONSuccess()` helper for the 14+ mutation endpoints that return `{"success": true}`
+- All error responses use `writeJSONError` (no remaining `http.Error` plain-text responses)
+- CORS preflight (OPTIONS) returns 403 for disallowed origins instead of 200
+
+### Removed
+- **Dead code files**: `frontend/src/lib/utils/loading.ts`, `frontend/src/lib/constants/{ui,iconPresets,zIndex}.ts` — all four had zero references
+- **Unused exports** trimmed from `errors.ts` (kept `logError`, `logWarn`; removed `ApiError`, `NetworkError`, `handleAsync`, `handleApiResponse`, `showError`, `showSuccess`, `parseError`, `getErrorMessage`)
+- **Unused exports** trimmed from `selection.ts` (7 of 12)
+- **Unused** `setTextSize` from `textSize.ts`, `normalizeUrl` made private in `url.ts`
+- **`fuse.js`** removed from `package.json` (declared but never imported)
+
+### Fixed
+- `writeJSON` and `writeJSONError` now check and log `json.Encode` errors instead of silently swallowing them
+- `handleUpdateConfig` now requires `PUT` (was accepting both `PUT` and `POST`)
+
 ## [1.2.0] - 2026-03-02
 
 ### Added
@@ -139,6 +202,7 @@ HOPS (Home Operations Portal System) is now ready for public use! A modern, self
 ### Credits
 Created by Jonathan Brown with Claude (Anthropic)
 
+[1.3.0]: https://github.com/weaversgrainthorpe/HOPS/releases/tag/v1.3.0
 [1.2.0]: https://github.com/weaversgrainthorpe/HOPS/releases/tag/v1.2.0
 [1.1.0]: https://github.com/weaversgrainthorpe/HOPS/releases/tag/v1.1.0
 [1.0.1]: https://github.com/weaversgrainthorpe/HOPS/releases/tag/v1.0.1

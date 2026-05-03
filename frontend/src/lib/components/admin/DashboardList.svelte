@@ -374,49 +374,14 @@
     gap: 0.5rem;
   }
 
-  .btn-primary, .btn-secondary, .btn-danger {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem 1rem;
-    border: none;
-    border-radius: 0.375rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-
-  .btn-sm {
-    padding: 0.375rem 0.75rem;
-    font-size: 0.875rem;
-  }
-
-  .btn-primary {
-    background: var(--accent);
-    color: white;
-  }
-
-  .btn-primary:hover {
-    background: var(--accent-hover);
-  }
-
-  .btn-secondary {
-    background: var(--bg-tertiary);
-    color: var(--text-primary);
-    text-decoration: none;
-  }
-
-  .btn-secondary:hover {
-    background: var(--accent);
-    color: white;
-  }
-
+  /* Base .btn-primary, .btn-secondary, .btn-danger and .btn-sm styles are in app.css */
+  /* DashboardList uses an outline-style danger button (softer for list rows) */
   .btn-danger {
     background: var(--bg-tertiary);
     color: var(--color-error);
   }
 
-  .btn-danger:hover {
+  .btn-danger:hover:not(:disabled) {
     background: color-mix(in srgb, var(--color-error) 10%, var(--bg-tertiary));
     color: var(--color-error-dark);
   }

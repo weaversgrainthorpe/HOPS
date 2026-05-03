@@ -112,7 +112,7 @@
       <Icon icon="mdi:auto-fix" width="18" />
       Auto-match icons
     </span>
-    <span class="checkbox-description">Search for matching icons based on service names</span>
+    <span class="checkbox-description">Search for matching icons based on tile names</span>
   </label>
 
   <div class="info-box">
@@ -171,43 +171,7 @@
     width: 100%;
   }
 
-  .btn-primary,
-  .btn-secondary {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.625rem 1.25rem;
-    border-radius: 0.375rem;
-    font-weight: 500;
-    transition: all 0.2s;
-    border: none;
-    cursor: pointer;
-  }
-
-  .btn-primary {
-    background: var(--accent);
-    color: white;
-  }
-
-  .btn-primary:hover:not(:disabled) {
-    background: var(--accent-hover);
-  }
-
-  .btn-primary:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  .btn-secondary {
-    background: var(--bg-secondary);
-    color: var(--text-primary);
-    border: 1px solid var(--border);
-  }
-
-  .btn-secondary:hover {
-    background: var(--bg-tertiary);
-    border-color: var(--accent);
-  }
+  /* .btn-primary, .btn-secondary styles are defined globally in app.css */
 
   .alert {
     display: flex;

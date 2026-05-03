@@ -3,7 +3,7 @@ package database
 import (
 	"database/sql"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -134,7 +134,7 @@ func ImportDashboardIcons(db *sql.DB, dataDir string) error {
 
 	// Check if directory exists
 	if _, err := os.Stat(iconsDir); os.IsNotExist(err) {
-		log.Printf("[Icons] Dashboard icons directory not found: %s", iconsDir)
+		slog.Info("dashboard icons directory not found", "component", "icons", "path", iconsDir)
 		return nil // Not an error - just skip if not present
 	}
 
@@ -146,7 +146,7 @@ func ImportDashboardIcons(db *sql.DB, dataDir string) error {
 	}
 
 	if dashboardIconCount > 0 {
-		log.Printf("[Icons] Dashboard icons already imported (%d icons)", dashboardIconCount)
+		slog.Info("dashboard icons already imported", "component", "icons", "count", dashboardIconCount)
 		return nil
 	}
 
@@ -156,7 +156,7 @@ func ImportDashboardIcons(db *sql.DB, dataDir string) error {
 		return fmt.Errorf("failed to read dashboard icons directory: %w", err)
 	}
 
-	log.Printf("[Icons] Found %d files in dashboard-icons directory", len(entries))
+	slog.Info("found files in dashboard-icons directory", "component", "icons", "count", len(entries))
 
 	// Begin transaction for import
 	tx, err := db.Begin()
@@ -206,7 +206,7 @@ func ImportDashboardIcons(db *sql.DB, dataDir string) error {
 			iconID, displayName, "", categoryID, imageURL,
 		)
 		if err != nil {
-			log.Printf("[Icons] Warning: failed to insert icon %s: %v", baseName, err)
+			slog.Warn("failed to insert icon", "component", "icons", "name", baseName, "error", err)
 			continue
 		}
 
@@ -218,7 +218,7 @@ func ImportDashboardIcons(db *sql.DB, dataDir string) error {
 		return fmt.Errorf("failed to commit dashboard icons: %w", err)
 	}
 
-	log.Printf("[Icons] Imported %d dashboard icons (%d variants skipped)", imported, skipped)
+	slog.Info("imported dashboard icons", "component", "icons", "imported", imported, "skipped", skipped)
 	return nil
 }
 

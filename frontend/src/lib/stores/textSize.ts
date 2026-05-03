@@ -72,10 +72,6 @@ export function decreaseTextSize() {
   });
 }
 
-export function setTextSize(size: TextSize) {
-  textSize.set(size);
-}
-
 export function canIncrease(current: TextSize): boolean {
   return textSizeOrder.indexOf(current) < textSizeOrder.length - 1;
 }

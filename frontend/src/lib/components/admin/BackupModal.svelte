@@ -17,6 +17,7 @@
   let error = $state('');
   let creating = $state(false);
   let actionInProgress = $state<string | null>(null);
+  let actionType = $state<'restore' | 'delete' | null>(null);
 
   onMount(() => {
     loadBackups();
@@ -59,6 +60,7 @@
     if (!confirmed) return;
 
     actionInProgress = backup.name;
+    actionType = 'restore';
     try {
       const result = await restoreBackup(backup.name);
       toast.success(result.message || 'Backup restored. Please restart the server.');
@@ -67,6 +69,7 @@
       toast.error('Failed to restore backup');
     } finally {
       actionInProgress = null;
+      actionType = null;
     }
   }
 
@@ -81,6 +84,7 @@
     if (!confirmed) return;
 
     actionInProgress = backup.name;
+    actionType = 'delete';
     try {
       await deleteBackup(backup.name);
       toast.success('Backup deleted');
@@ -89,6 +93,7 @@
       toast.error('Failed to delete backup');
     } finally {
       actionInProgress = null;
+      actionType = null;
     }
   }
 
@@ -145,7 +150,8 @@
     {:else if backups.length === 0}
       <div class="empty-state">
         <Icon icon="mdi:database-off-outline" width="32" />
-        <p>No backups found.</p>
+        <p>No backups found</p>
+        <p class="hint">Backups are created automatically before configuration changes. Use the button above to create one manually.</p>
       </div>
     {:else}
       <div class="backup-list">
@@ -163,9 +169,9 @@
                 class="btn-icon"
                 title="Restore"
                 onclick={() => handleRestore(backup)}
-                disabled={busy || !!actionInProgress}
+                disabled={!!actionInProgress}
               >
-                {#if busy}
+                {#if busy && actionType === 'restore'}
                   <Icon icon="mdi:loading" width="18" class="spin" />
                 {:else}
                   <Icon icon="mdi:restore" width="18" />
@@ -175,9 +181,13 @@
                 class="btn-icon btn-icon-danger"
                 title="Delete"
                 onclick={() => handleDelete(backup)}
-                disabled={busy || !!actionInProgress}
+                disabled={!!actionInProgress}
               >
-                <Icon icon="mdi:delete-outline" width="18" />
+                {#if busy && actionType === 'delete'}
+                  <Icon icon="mdi:loading" width="18" class="spin" />
+                {:else}
+                  <Icon icon="mdi:delete-outline" width="18" />
+                {/if}
               </button>
             </div>
           </div>
@@ -218,29 +228,7 @@
     justify-content: flex-end;
   }
 
-  .btn-primary {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem 1rem;
-    background: var(--accent);
-    color: white;
-    border: none;
-    border-radius: 0.375rem;
-    font-weight: 500;
-    font-size: 0.875rem;
-    cursor: pointer;
-    transition: background 0.2s;
-  }
-
-  .btn-primary:hover:not(:disabled) {
-    background: var(--accent-hover);
-  }
-
-  .btn-primary:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
+  /* .btn-primary styles are defined globally in app.css */
 
   .loading-state, .empty-state {
     display: flex;
@@ -249,6 +237,14 @@
     gap: 0.75rem;
     padding: 2rem;
     color: var(--text-secondary);
+    text-align: center;
+  }
+
+  .empty-state .hint {
+    font-size: 0.875rem;
+    opacity: 0.8;
+    max-width: 28rem;
+    margin: 0;
   }
 
   .error-message {

@@ -177,39 +177,30 @@
     gap: 0.75rem;
   }
 
+  /* PopupModal uses larger buttons with rounded corners for prominent popup actions.
+     Base .btn-primary, .btn-secondary styles are defined globally in app.css. */
   .btn-primary,
   .btn-secondary {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
     padding: 0.875rem 1.5rem;
     border-radius: 0.5rem;
-    font-weight: 500;
-    text-decoration: none;
-    transition: all 0.2s;
     border: 1px solid;
+    text-decoration: none;
   }
 
   .btn-primary {
-    background: var(--accent);
-    color: white;
     border-color: var(--accent);
   }
 
   .btn-primary:hover {
-    background: var(--accent-hover);
     border-color: var(--accent-hover);
   }
 
   .btn-secondary {
     background: var(--bg-secondary);
-    color: var(--text-primary);
     border-color: var(--border);
   }
 
   .btn-secondary:hover {
-    background: var(--bg-tertiary);
     border-color: var(--accent);
   }
 </style>

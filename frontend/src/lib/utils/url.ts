@@ -61,7 +61,7 @@ export function isValidUrl(url: string): boolean {
 /**
  * Normalizes a URL for opening, adding https:// if no protocol is specified.
  */
-export function normalizeUrl(url: string): string {
+function normalizeUrl(url: string): string {
   if (!url || typeof url !== 'string') {
     return '';
   }

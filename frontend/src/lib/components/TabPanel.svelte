@@ -248,6 +248,11 @@
       {#if localGroups.length === 0}
         <div class="empty-state">
           <p>No groups in this tab yet</p>
+          {#if $editMode}
+            <p class="hint">Click <strong>Add Group</strong> below to organize tiles into a group.</p>
+          {:else}
+            <p class="hint">Enable edit mode in the navbar to add a group.</p>
+          {/if}
         </div>
       {/if}
     </div>
@@ -302,10 +307,19 @@
 
   .empty-state {
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
+    gap: 0.5rem;
     min-height: 300px;
     color: var(--text-secondary);
+    text-align: center;
+  }
+
+  .empty-state .hint {
+    font-size: 0.875rem;
+    opacity: 0.8;
+    max-width: 32rem;
   }
 
   .add-group-btn {
@@ -331,5 +345,36 @@
     border-color: var(--accent);
     color: var(--accent);
     transform: translateY(-2px);
+  }
+
+  /* Tablet: tighter padding */
+  @media (max-width: 1024px) {
+    .tab-content-wrapper {
+      padding: 1.5rem;
+    }
+  }
+
+  /* Mobile landscape */
+  @media (max-width: 768px) {
+    .tab-content-wrapper {
+      padding: 1rem;
+    }
+
+    .groups-list {
+      gap: 0.75rem;
+      padding-bottom: 80px;
+    }
+  }
+
+  /* Mobile portrait */
+  @media (max-width: 480px) {
+    .tab-content-wrapper {
+      padding: 0.75rem;
+    }
+
+    .add-group-btn {
+      padding: 0.75rem 1rem;
+      font-size: 0.875rem;
+    }
   }
 </style>

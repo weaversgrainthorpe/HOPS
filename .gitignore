@@ -1,5 +1,8 @@
 # Backend
 hops
+hops-linux-*
+hops-darwin-*
+hops-windows-*
 backend/hops
 backend/*.db
 *.exe

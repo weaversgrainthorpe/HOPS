@@ -4,9 +4,14 @@
   --bg-secondary: #1e293b;
   --bg-tertiary: #334155;
 
-  /* Text colors */
+  /* Text colors
+   * --text-secondary contrast against backgrounds (dark theme):
+   *   on --bg-primary  (#0f172a): 13.4:1 (AAA)
+   *   on --bg-secondary (#1e293b): 11.5:1 (AAA)
+   *   on --bg-tertiary  (#334155):  8.0:1 (AAA)
+   */
   --text-primary: #f1f5f9;
-  --text-secondary: #cbd5e1;
+  --text-secondary: #dbe4f0;
 
   /* Accent colors */
   --accent: #3b82f6;
@@ -88,7 +93,11 @@
   --bg-secondary: #f1f5f9;
   --bg-tertiary: #e2e8f0;
   --text-primary: #0f172a;
-  --text-secondary: #475569;
+  /* --text-secondary contrast (light theme):
+   *   on --bg-primary  (#f8fafc): 10.2:1 (AAA)
+   *   on --bg-tertiary (#e2e8f0):  8.3:1 (AAA)
+   */
+  --text-secondary: #334155;
   --border: #cbd5e1;
   --shadow: rgba(0, 0, 0, 0.1);
 }
@@ -187,6 +196,77 @@ textarea:focus {
 
 .spin {
   animation: spin 1s linear infinite;
+}
+
+/*
+ * Shared button variants
+ *
+ * These classes provide consistent button styling across the app.
+ * They build on the global `button {}` rule for base properties (padding,
+ * border, cursor, transition) and override only the variant-specific
+ * background and hover states.
+ *
+ * Variants: .btn-primary, .btn-secondary, .btn-danger
+ * Modifier: .btn-sm (smaller padding/font-size)
+ *
+ * Use them on `<button>` elements directly. Modal/page-specific layout
+ * should be handled with utility classes around the buttons rather than
+ * by overriding these styles.
+ */
+.btn-primary,
+.btn-secondary,
+.btn-danger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.25rem;
+  border: none;
+  border-radius: var(--radius-md);
+  font-weight: 500;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: background var(--transition-normal);
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.btn-secondary {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: var(--bg-primary);
+}
+
+.btn-danger {
+  background: var(--color-error-dark);
+  color: white;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-error-dark) 80%, black);
+}
+
+.btn-primary:disabled,
+.btn-secondary:disabled,
+.btn-danger:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Smaller button modifier */
+.btn-sm {
+  padding: 0.375rem 0.75rem;
+  font-size: 0.8125rem;
 }
 
 /* Shared alert styles */

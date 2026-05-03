@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
@@ -55,11 +55,11 @@ func (bm *BackupManager) CreateBackup(reason string) (string, error) {
 		return "", fmt.Errorf("failed to copy database: %w", err)
 	}
 
-	log.Printf("[Backup] Created backup: %s", backupName)
+	slog.Info("created backup", "component", "backup", "name", backupName)
 
 	// Cleanup old backups
 	if err := bm.CleanupOldBackups(); err != nil {
-		log.Printf("[Backup] Warning: failed to cleanup old backups: %v", err)
+		slog.Warn("failed to cleanup old backups", "component", "backup", "error", err)
 	}
 
 	return backupPath, nil
@@ -86,17 +86,17 @@ func (bm *BackupManager) CreateBackupWithDB(db *sql.DB, reason string) (string, 
 	_, err := db.Exec(fmt.Sprintf("VACUUM INTO '%s'", sanitizedPath))
 	if err != nil {
 		// Fallback to file copy if VACUUM INTO is not supported
-		log.Printf("[Backup] VACUUM INTO not supported, falling back to file copy")
+		slog.Warn("VACUUM INTO not supported, falling back to file copy", "component", "backup")
 		if err := copyFile(bm.dbPath, backupPath); err != nil {
 			return "", fmt.Errorf("failed to copy database: %w", err)
 		}
 	}
 
-	log.Printf("[Backup] Created backup: %s", backupName)
+	slog.Info("created backup", "component", "backup", "name", backupName)
 
 	// Cleanup old backups
 	if err := bm.CleanupOldBackups(); err != nil {
-		log.Printf("[Backup] Warning: failed to cleanup old backups: %v", err)
+		slog.Warn("failed to cleanup old backups", "component", "backup", "error", err)
 	}
 
 	return backupPath, nil
@@ -145,6 +145,8 @@ func (bm *BackupManager) ListBackups() ([]BackupInfo, error) {
 
 // RestoreBackup restores the database from a backup file
 func (bm *BackupManager) RestoreBackup(backupName string) error {
+	// Sanitize to prevent path traversal (e.g., "../../secret.db")
+	backupName = filepath.Base(backupName)
 	backupPath := filepath.Join(bm.backupDir, backupName)
 
 	// Verify backup exists
@@ -155,7 +157,7 @@ func (bm *BackupManager) RestoreBackup(backupName string) error {
 	// Create a backup of current state before restoring
 	_, err := bm.CreateBackup("pre-restore")
 	if err != nil {
-		log.Printf("[Backup] Warning: failed to create pre-restore backup: %v", err)
+		slog.Warn("failed to create pre-restore backup", "component", "backup", "error", err)
 	}
 
 	// Copy backup to database path
@@ -163,12 +165,15 @@ func (bm *BackupManager) RestoreBackup(backupName string) error {
 		return fmt.Errorf("failed to restore backup: %w", err)
 	}
 
-	log.Printf("[Backup] Restored from backup: %s", backupName)
+	slog.Info("restored from backup", "component", "backup", "name", backupName)
 	return nil
 }
 
 // DeleteBackup removes a specific backup file
 func (bm *BackupManager) DeleteBackup(backupName string) error {
+	// Sanitize to prevent path traversal
+	backupName = filepath.Base(backupName)
+
 	// Verify it's a valid backup file name
 	if !strings.HasPrefix(backupName, BackupPrefix) || !strings.HasSuffix(backupName, BackupSuffix) {
 		return fmt.Errorf("invalid backup name: %s", backupName)
@@ -184,7 +189,7 @@ func (bm *BackupManager) DeleteBackup(backupName string) error {
 		return fmt.Errorf("failed to delete backup: %w", err)
 	}
 
-	log.Printf("[Backup] Deleted backup: %s", backupName)
+	slog.Info("deleted backup", "component", "backup", "name", backupName)
 	return nil
 }
 
@@ -202,9 +207,9 @@ func (bm *BackupManager) CleanupOldBackups() error {
 	// Remove oldest backups
 	for _, backup := range backups[MaxBackups:] {
 		if err := os.Remove(backup.Path); err != nil {
-			log.Printf("[Backup] Warning: failed to remove old backup %s: %v", backup.Name, err)
+			slog.Warn("failed to remove old backup", "component", "backup", "name", backup.Name, "error", err)
 		} else {
-			log.Printf("[Backup] Removed old backup: %s", backup.Name)
+			slog.Info("removed old backup", "component", "backup", "name", backup.Name)
 		}
 	}
 

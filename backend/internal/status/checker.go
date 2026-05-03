@@ -3,7 +3,7 @@ package status
 import (
 	"database/sql"
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
 	"sync"
 	"time"
@@ -64,7 +64,7 @@ func (c *Checker) Start() {
 	c.mu.Unlock()
 
 	go c.runLoop()
-	log.Printf("Status checker started with interval: %v", c.checkInterval)
+	slog.Info("status checker started", "component", "status", "interval", c.checkInterval)
 }
 
 // Stop halts the status checking loop
@@ -77,7 +77,7 @@ func (c *Checker) Stop() {
 	c.running = false
 	close(c.stopChan)
 	c.mu.Unlock()
-	log.Println("Status checker stopped")
+	slog.Info("status checker stopped", "component", "status")
 }
 
 func (c *Checker) runLoop() {
@@ -135,69 +135,106 @@ func (c *Checker) getEntriesFromConfig() ([]Entry, error) {
 	return entries, nil
 }
 
+// statusCheckResult holds the result of a single HTTP check
+type statusCheckResult struct {
+	entryID      string
+	status       string
+	responseTime int64
+}
+
 func (c *Checker) checkAllEntries() {
 	entries, err := c.getEntriesFromConfig()
 	if err != nil {
-		log.Printf("Failed to get entries for status check: %v", err)
+		slog.Error("failed to get entries for status check", "component", "status", "error", err)
 		return
 	}
 
-	log.Printf("Checking status for %d entries...", len(entries))
+	slog.Debug("checking status for entries", "component", "status", "count", len(entries))
+
+	// Collect results from concurrent HTTP checks
+	results := make([]statusCheckResult, len(entries))
 
 	// Use a semaphore to limit concurrent requests
 	sem := make(chan struct{}, 5)
 	var wg sync.WaitGroup
 
-	for _, entry := range entries {
+	for i, entry := range entries {
 		wg.Add(1)
-		go func(e Entry) {
+		go func(idx int, e Entry) {
 			defer wg.Done()
 			sem <- struct{}{}        // acquire
 			defer func() { <-sem }() // release
 
-			c.checkEntry(e)
-		}(entry)
+			results[idx] = c.checkEntry(e)
+		}(i, entry)
 	}
 
 	wg.Wait()
+
+	// Batch write all results in a single transaction to avoid contention
+	c.saveResults(results)
 }
 
-func (c *Checker) checkEntry(entry Entry) {
+func (c *Checker) checkEntry(entry Entry) statusCheckResult {
+	result := statusCheckResult{entryID: entry.ID, status: "up"}
+
 	start := time.Now()
-	status := "up"
-	var responseTime int64
 
 	req, err := http.NewRequest("HEAD", entry.URL, nil)
 	if err != nil {
-		status = "error"
+		result.status = "error"
+		return result
+	}
+
+	req.Header.Set("User-Agent", "HOPS-StatusChecker/1.0")
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		result.status = "down"
+		return result
+	}
+	defer resp.Body.Close()
+
+	result.responseTime = time.Since(start).Milliseconds()
+
+	if resp.StatusCode >= 200 && resp.StatusCode < 400 {
+		result.status = "up"
+	} else if resp.StatusCode >= 400 && resp.StatusCode < 500 {
+		result.status = "error"
 	} else {
-		req.Header.Set("User-Agent", "HOPS-StatusChecker/1.0")
+		result.status = "down"
+	}
 
-		resp, err := c.client.Do(req)
-		if err != nil {
-			status = "down"
-		} else {
-			defer resp.Body.Close()
-			responseTime = time.Since(start).Milliseconds()
+	return result
+}
 
-			if resp.StatusCode >= 200 && resp.StatusCode < 400 {
-				status = "up"
-			} else if resp.StatusCode >= 400 && resp.StatusCode < 500 {
-				status = "error"
-			} else {
-				status = "down"
-			}
+// saveResults writes all status check results in a single transaction
+func (c *Checker) saveResults(results []statusCheckResult) {
+	tx, err := c.db.Begin()
+	if err != nil {
+		slog.Error("failed to begin status cache transaction", "component", "status", "error", err)
+		return
+	}
+
+	stmt, err := tx.Prepare(`
+		INSERT OR REPLACE INTO status_cache (entry_id, status, response_time, last_checked)
+		VALUES (?, ?, ?, datetime('now'))
+	`)
+	if err != nil {
+		tx.Rollback()
+		slog.Error("failed to prepare status cache statement", "component", "status", "error", err)
+		return
+	}
+	defer stmt.Close()
+
+	for _, r := range results {
+		if _, err := stmt.Exec(r.entryID, r.status, r.responseTime); err != nil {
+			slog.Error("failed to update status cache", "component", "status", "entry_id", r.entryID, "error", err)
 		}
 	}
 
-	// Update the cache
-	_, err = c.db.Exec(`
-		INSERT OR REPLACE INTO status_cache (entry_id, status, response_time, last_checked)
-		VALUES (?, ?, ?, datetime('now'))
-	`, entry.ID, status, responseTime)
-
-	if err != nil {
-		log.Printf("Failed to update status cache for %s: %v", entry.ID, err)
+	if err := tx.Commit(); err != nil {
+		slog.Error("failed to commit status cache transaction", "component", "status", "error", err)
 	}
 }
 
