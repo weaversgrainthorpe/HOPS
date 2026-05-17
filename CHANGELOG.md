@@ -5,6 +5,12 @@ All notable changes to HOPS (Home Operations Portal System) will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.2] - 2026-05-03
+
+### Fixed
+- **Mobile navbar regression**: the 480px breakpoint added in v1.3.0 was hiding the Help icon, About icon, and version chip on phones — too aggressive. Now keeps all action icons visible on phones (~360-480px wide), just with smaller 36×36px buttons and 24px icons. Only the HOPS wordmark and dev badge drop at this size. The dropping of secondary icons and the version chip is now reserved for tiny screens (<360px) where horizontal overflow is a real concern.
+- SVG icons inside navbar buttons now actually scale with their wrapper on mobile (their inline `width="32" height="32"` was overriding CSS).
+
 ## [1.4.1] - 2026-05-03
 
 ### Fixed
@@ -222,6 +228,7 @@ HOPS (Home Operations Portal System) is now ready for public use! A modern, self
 ### Credits
 Created by Jonathan Brown with Claude (Anthropic)
 
+[1.4.2]: https://github.com/weaversgrainthorpe/HOPS/releases/tag/v1.4.2
 [1.4.1]: https://github.com/weaversgrainthorpe/HOPS/releases/tag/v1.4.1
 [1.4.0]: https://github.com/weaversgrainthorpe/HOPS/releases/tag/v1.4.0
 [1.3.0]: https://github.com/weaversgrainthorpe/HOPS/releases/tag/v1.3.0

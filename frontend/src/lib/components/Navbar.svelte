@@ -468,8 +468,9 @@
     }
   }
 
-  /* Mobile portrait: collapse non-essential nav, hide logo wordmark and version
-     so the navbar still fits on a 360-wide phone */
+  /* Mobile portrait: tighten layout but keep all action icons visible.
+     The HOPS wordmark drops (logo image is still there for branding),
+     and the dev badge drops (it's a dev-only indicator anyway). */
   @media (max-width: 480px) {
     .nav-content {
       padding: 0 0.5rem;
@@ -480,7 +481,6 @@
       display: none;
     }
 
-    .version,
     .dev-badge {
       display: none;
     }
@@ -489,17 +489,38 @@
       font-size: 1rem;
     }
 
+    /* Shrink action buttons + icons so all 5 fit comfortably on ~360-440px phones */
     .theme-toggle,
     .admin-link,
     .edit-toggle,
     .export-btn,
     .help-btn,
     .about-btn {
-      width: 40px;
-      height: 40px;
+      width: 36px;
+      height: 36px;
+      font-size: 24px;
     }
 
-    /* Hide help/about on tiny screens to make room for essentials */
+    .icon-wrapper {
+      width: 24px;
+      height: 24px;
+    }
+
+    /* Force the SVG (which has hardcoded width/height="32") to scale
+       down to the wrapper's size on mobile */
+    .icon-wrapper :global(svg) {
+      width: 100% !important;
+      height: 100% !important;
+    }
+  }
+
+  /* Tiny phones (<360px): drop the version chip and the secondary action icons
+     to avoid horizontal overflow */
+  @media (max-width: 360px) {
+    .version {
+      display: none;
+    }
+
     .help-btn,
     .about-btn {
       display: none;
