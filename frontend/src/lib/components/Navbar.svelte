@@ -72,7 +72,7 @@
         {:else}
           <a href="/" class="logo" onclick={handleLogoClick}>
             <img src="/logo.svg" alt="HOPS" />
-            <span>HOPS</span>
+            <span class="wordmark">HOPS</span>
             <span class="version">v{appVersion}</span>
             {#if isDev}<span class="dev-badge">DEV</span>{/if}
           </a>
@@ -468,19 +468,16 @@
     }
   }
 
-  /* Mobile portrait: tighten layout but keep all action icons visible.
-     The HOPS wordmark drops (logo image is still there for branding),
-     and the dev badge drops (it's a dev-only indicator anyway). */
+  /* Mobile portrait: tighten layout but keep all icons + version visible.
+     Only the HOPS wordmark drops (logo image is still there for branding),
+     and the dev badge drops (it's dev-only). */
   @media (max-width: 480px) {
     .nav-content {
       padding: 0 0.5rem;
       gap: 0.5rem;
     }
 
-    .logo span {
-      display: none;
-    }
-
+    .wordmark,
     .dev-badge {
       display: none;
     }
@@ -489,28 +486,17 @@
       font-size: 1rem;
     }
 
-    /* Shrink action buttons + icons so all 5 fit comfortably on ~360-440px phones */
+    /* Slightly smaller buttons (40px vs 44px default) so all 5 icons fit
+       on ~400px phones. Icons stay at their native 32px — leaves a clean
+       4px ring of padding inside each button. */
     .theme-toggle,
     .admin-link,
     .edit-toggle,
     .export-btn,
     .help-btn,
     .about-btn {
-      width: 36px;
-      height: 36px;
-      font-size: 24px;
-    }
-
-    .icon-wrapper {
-      width: 24px;
-      height: 24px;
-    }
-
-    /* Force the SVG (which has hardcoded width/height="32") to scale
-       down to the wrapper's size on mobile */
-    .icon-wrapper :global(svg) {
-      width: 100% !important;
-      height: 100% !important;
+      width: 40px;
+      height: 40px;
     }
   }
 
