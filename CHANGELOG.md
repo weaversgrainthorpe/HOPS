@@ -5,6 +5,12 @@ All notable changes to HOPS (Home Operations Portal System) will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.4] - 2026-05-17
+
+### Fixed
+- Edit-toggle pencil icon was rendering at 24px while every other navbar icon was 32px — visibly smaller on mobile. Bumped to 32px to match.
+- Added missing `aria-label` to the edit-toggle button (only had `title` before).
+
 ## [1.4.3] - 2026-05-17
 
 ### Fixed
@@ -234,6 +240,7 @@ HOPS (Home Operations Portal System) is now ready for public use! A modern, self
 ### Credits
 Created by Jonathan Brown with Claude (Anthropic)
 
+[1.4.4]: https://github.com/weaversgrainthorpe/HOPS/releases/tag/v1.4.4
 [1.4.3]: https://github.com/weaversgrainthorpe/HOPS/releases/tag/v1.4.3
 [1.4.2]: https://github.com/weaversgrainthorpe/HOPS/releases/tag/v1.4.2
 [1.4.1]: https://github.com/weaversgrainthorpe/HOPS/releases/tag/v1.4.1
