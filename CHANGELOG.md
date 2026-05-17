@@ -5,6 +5,11 @@ All notable changes to HOPS (Home Operations Portal System) will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.5] - 2026-05-17
+
+### Changed
+- **Hide edit and export controls on phones (≤480px).** Drag-and-drop editing on a touchscreen is awkward, and the edit-toggle's `padding: 0 1rem` combined with `box-sizing: border-box` was squeezing its inner icon down to ~8px AND pushing the admin gear off-screen on narrow phones. Removing it both improves mobile UX and restores the admin gear icon's visibility. Editing remains available on tablet/desktop.
+
 ## [1.4.4] - 2026-05-17
 
 ### Fixed
@@ -240,6 +245,7 @@ HOPS (Home Operations Portal System) is now ready for public use! A modern, self
 ### Credits
 Created by Jonathan Brown with Claude (Anthropic)
 
+[1.4.5]: https://github.com/weaversgrainthorpe/HOPS/releases/tag/v1.4.5
 [1.4.4]: https://github.com/weaversgrainthorpe/HOPS/releases/tag/v1.4.4
 [1.4.3]: https://github.com/weaversgrainthorpe/HOPS/releases/tag/v1.4.3
 [1.4.2]: https://github.com/weaversgrainthorpe/HOPS/releases/tag/v1.4.2
