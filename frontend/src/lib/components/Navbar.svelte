@@ -483,17 +483,23 @@
       display: none;
     }
 
+    /* Editing dashboards on a touchscreen is awkward (drag-and-drop, dense
+       modals). Hide the edit + export controls on phones — admin can still
+       reach the full panel via the gear icon. */
+    .edit-toggle,
+    .export-btn {
+      display: none;
+    }
+
     .center-title {
       font-size: 1rem;
     }
 
-    /* Slightly smaller buttons (40px vs 44px default) so all 5 icons fit
+    /* Slightly smaller buttons (40px vs 44px default) so all icons fit
        on ~400px phones. Icons stay at their native 32px — leaves a clean
        4px ring of padding inside each button. */
     .theme-toggle,
     .admin-link,
-    .edit-toggle,
-    .export-btn,
     .help-btn,
     .about-btn {
       width: 40px;
