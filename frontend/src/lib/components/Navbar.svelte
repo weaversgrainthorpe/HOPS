@@ -146,8 +146,9 @@
           class="edit-toggle"
           class:active={$editMode}
           title={$editMode ? "Exit Edit Mode" : "Enter Edit Mode (Authentication Required)"}
+          aria-label={$editMode ? "Exit Edit Mode" : "Enter Edit Mode"}
         >
-          <Icon icon={$editMode ? 'mdi:pencil-off' : 'mdi:pencil'} width="24" height="24" />
+          <Icon icon={$editMode ? 'mdi:pencil-off' : 'mdi:pencil'} width="32" height="32" />
           {#if $editMode}
             <span class="edit-label">Editing</span>
           {/if}
