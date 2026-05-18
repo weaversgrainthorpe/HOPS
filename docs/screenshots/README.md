@@ -10,9 +10,11 @@ Drop PNG files matching these exact names into this directory. The main README a
 |------|-----------------|--------|----------------|
 | `dashboard-hero.png` | A polished dashboard view — multiple tabs visible, a few groups with a healthy mix of tile sizes, a nice background. The "marketing money shot." | 16:9 or 16:10, landscape | 1600–1920px |
 | `admin.png` | Admin page with 2–3 dashboards listed in the dashboard list, QR icons visible, header showing the version chip. | 16:9, landscape | 1400–1600px |
-| `edit-mode.png` | A dashboard in **edit mode** — the orange **Editing** indicator visible in the navbar, ideally with an edit affordance shown (e.g. a tile edit modal open, or hover state revealing the edit pencil on a tile). | 16:9 or 16:10, landscape | 1400–1600px |
-| `icon-picker.png` | The icon picker modal open, showing a category tab with a grid of icons. Search bar visible if possible. | Roughly 4:3, the modal is usually portrait-ish | 1000–1200px |
-| `mobile.png` | A dashboard rendered at phone width (≤480px). Use Chrome/Firefox DevTools device emulation — iPhone 12 Pro or Pixel 5 work well. Show the responsive layout with collapsed navbar icons. | 9:19 portrait (phone) | 400–600px |
+| `admin1.png` | QR code modal open over the admin page, showing a real dashboard URL encoded into the QR. Shows off a feature unique to HOPS. | 16:9, landscape | 1100–1400px |
+| `edit-mode.png` | A dashboard in **edit mode** — the orange **Editing** indicator visible in the navbar, with the **+ Add Tab** and per-row **+ Add Tile** affordances visible. Use a different tab/background from the hero so it doesn't look redundant. | 16:9 or 16:10, landscape | 1400–1600px |
+| `edit-tile.png` | The Tile editor modal open over a dashboard, showing all fields (Name, URL, Icon with custom/Iconify options, Background Color, Opacity, Delete/Cancel/Save). | Portrait-ish (modal) | 450–700px |
+| `icon-picker.png` | The icon picker modal open, with the search bar populated (e.g. "prox") and a grid of filtered matches visible. | Roughly 3:2, modal is wider than tall | 700–1200px |
+| `mobile.png` | A dashboard rendered at phone width (≤480px). Use Chrome/Firefox DevTools device emulation — iPhone 12 Pro or Pixel 5 work well. Show the responsive layout with collapsed navbar icons. | 9:19 portrait (phone) | 300–600px |
 
 ## Redaction checklist
 
