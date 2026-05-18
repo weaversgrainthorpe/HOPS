@@ -5,6 +5,11 @@ All notable changes to HOPS (Home Operations Portal System) will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.15] - 2026-05-18
+
+### Fixed
+- **Background config modal: "Random" transition preview now actually animates randomly.** The preview was applying `transition-{transitionEffect}` directly to the layer divs, so when the user picked **Random** the class became `transition-random` — which has no CSS rule, so nothing animated. The actual slideshow on the page worked correctly (it resolves random to a concrete transition each cycle); only the in-modal preview was broken. Now the preview resolves `random` to a fresh concrete transition each cycle and the label shows `random → <rolled>` so you can see what's about to happen.
+
 ## [1.4.14] - 2026-05-18
 
 ### Added
