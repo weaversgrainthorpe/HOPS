@@ -92,6 +92,7 @@
 
   function handleSave() {
     if (name.trim()) {
+      console.log('[HOPS:GroupEditModal] handleSave', { name: name.trim(), displayStyle, textColor });
       onSave(name.trim(), icon || undefined, iconUrl || undefined, color, opacity, textColor, displayStyle);
     }
   }

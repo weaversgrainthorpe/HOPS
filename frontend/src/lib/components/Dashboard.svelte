@@ -304,7 +304,9 @@
     if (tab) {
       const groupIndex = tab.groups.findIndex(g => g.id === groupId);
       if (groupIndex !== -1) {
-        tab.groups[groupIndex] = { ...tab.groups[groupIndex], ...updatedGroup };
+        const merged = { ...tab.groups[groupIndex], ...updatedGroup };
+        console.log('[HOPS:Dashboard] handleUpdateGroup', { incomingDisplayStyle: updatedGroup.displayStyle, mergedDisplayStyle: merged.displayStyle, fullMerged: merged });
+        tab.groups[groupIndex] = merged;
         await updateDashboard(updatedDashboard);
       }
     }
