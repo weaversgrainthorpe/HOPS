@@ -1,17 +1,19 @@
-# HOPS Frontend (v1.2.0)
+# HOPS Frontend (v1.4.5)
 
-The frontend for HOPS (Home Operations Portal System) - built with SvelteKit 2, TypeScript, and Svelte 5.
+The frontend for HOPS (Home Operations Portal System) — a SvelteKit 2 + Svelte 5 SPA, built as static files and served by the Go backend.
 
 ## Tech Stack
 
-- **Framework**: SvelteKit 2
+- **Framework**: SvelteKit 2 with `@sveltejs/adapter-static`
+- **UI Library**: Svelte 5 (using runes: `$state`, `$derived`, `$effect`, `$props`)
 - **Language**: TypeScript
-- **UI Library**: Svelte 5 (with runes: `$state`, `$derived`, `$effect`, `$props`)
-- **Icons**: Iconify (@iconify/svelte)
-- **Drag & Drop**: svelte-dnd-action
-- **Search**: Fuse.js (fuzzy search)
 - **Build Tool**: Vite 7
-- **Package Manager**: npm
+- **Package Manager**: npm (NOT pnpm — both were present before v1.4.1, leading to drift)
+- **Icons**: `@iconify/svelte` (150,000+ icons via Iconify)
+- **Drag & Drop**: `svelte-dnd-action`
+- **QR Codes**: `qrcode` (browser-side SVG generation; added in v1.4.0)
+- **Favicons (build-time only)**: `sharp`
+- **Testing**: Vitest 4 + `@testing-library/svelte` + `@testing-library/user-event` + `jsdom`
 
 ## Project Structure
 
@@ -19,49 +21,71 @@ The frontend for HOPS (Home Operations Portal System) - built with SvelteKit 2, 
 frontend/
 ├── src/
 │   ├── routes/
-│   │   ├── +page.svelte                # Homepage (redirects to first dashboard)
-│   │   ├── +layout.svelte              # Root layout with navbar
-│   │   ├── admin/
-│   │   │   ├── +page.svelte            # Admin login page
-│   │   │   └── +layout.svelte          # Admin layout
-│   │   ├── [dashboard]/
-│   │   │   └── +page.svelte            # Dynamic dashboard routes
-│   │   └── d/[secret]/
-│   │       └── +page.svelte            # Secret URL dashboards (future)
+│   │   ├── +layout.svelte                  # Root layout: navbar, toasts, confirm modal, forced password change
+│   │   ├── +page.svelte                    # Admin landing page (login form + dashboard list)
+│   │   └── [dashboard]/
+│   │       └── +page.svelte                # Dynamic dashboard routes (e.g. /home, /media)
 │   ├── lib/
 │   │   ├── components/
-│   │   │   ├── Dashboard.svelte        # Main dashboard component
-│   │   │   ├── TabPanel.svelte         # Tab content panel
-│   │   │   ├── Group.svelte            # Group (collapsible section)
-│   │   │   ├── Entry.svelte            # Individual tile/entry
-│   │   │   ├── NavBar.svelte           # Navigation bar
-│   │   │   ├── modals/
-│   │   │   │   ├── EntryModal.svelte   # Add/edit tile modal
-│   │   │   │   ├── GroupModal.svelte   # Edit group modal
-│   │   │   │   ├── TabModal.svelte     # Add/edit tab modal
-│   │   │   │   └── DashboardModal.svelte # Add/edit dashboard modal
-│   │   │   └── admin/
-│   │   │       ├── ThemePickerModal.svelte # Theme customization
-│   │   │       └── HeaderConfigModal.svelte # Header settings
+│   │   │   ├── shared/                     # Button, Modal, AsyncContent, ErrorBoundary
+│   │   │   ├── admin/                      # All admin modals (EntryEdit, TabEdit, GroupEdit,
+│   │   │   │                                #   IconPicker, BackgroundConfig, Theme, Backup,
+│   │   │   │                                #   ChangePassword, Import, Export, QRCode, etc.)
+│   │   │   ├── Dashboard.svelte            # Top-level dashboard view
+│   │   │   ├── TabPanel.svelte             # Tab content
+│   │   │   ├── Group.svelte                # Collapsible group of tiles
+│   │   │   ├── Entry.svelte                # Single tile
+│   │   │   ├── Navbar.svelte               # Top navbar
+│   │   │   ├── ConfirmModal.svelte         # Singleton confirm dialog (store-driven)
+│   │   │   ├── Toast.svelte                # Toast notification rendering
+│   │   │   ├── PopupModal.svelte           # Iframe/popup open-mode for tiles
+│   │   │   ├── HelpModal.svelte            # In-app help
+│   │   │   ├── AboutModal.svelte           # In-app about
+│   │   │   ├── BackendStatus.svelte        # Live backend connectivity indicator
+│   │   │   ├── ColoredIcon.svelte          # Iconify wrapper with theming
+│   │   │   ├── StatusIndicator.svelte      # Up/down dot for tiles with status checks
+│   │   │   └── DashboardSkeleton.svelte    # Loading skeleton
 │   │   ├── stores/
-│   │   │   ├── config.ts               # Dashboard configuration store
-│   │   │   ├── theme.ts                # Theme system with 8 presets
-│   │   │   ├── clipboard.ts            # Copy/cut/paste functionality
-│   │   │   ├── editMode.ts             # Edit mode toggle
-│   │   │   ├── auth.ts                 # Authentication state
-│   │   │   └── headerConfig.ts         # Header visibility settings
+│   │   │   ├── auth.ts                     # Login/logout + mustChangePassword flag
+│   │   │   ├── config.ts                   # Dashboard configuration (synced with backend)
+│   │   │   ├── theme.ts                    # 8 theme presets + light/dark/auto
+│   │   │   ├── clipboard.ts                # Copy/cut/paste for tiles
+│   │   │   ├── editMode.ts                 # Edit mode toggle
+│   │   │   ├── selection.ts                # Single + multi-tile selection
+│   │   │   ├── confirmModal.ts             # Promise-based confirm dialog
+│   │   │   ├── toast.ts                    # Toast notifications (4 types, auto-dismiss)
+│   │   │   ├── textSize.ts                 # Text size preference (persisted)
+│   │   │   ├── backendStatus.ts            # Live backend health polling
+│   │   │   ├── status.ts                   # Tile status check polling
+│   │   │   └── easterEggs.ts               # 🐰
+│   │   ├── utils/
+│   │   │   ├── api.ts                      # API client + CSRF helpers (getCSRFToken, withCSRFHeader)
+│   │   │   ├── url.ts                      # URL validation + safeOpenUrl (XSS guard)
+│   │   │   ├── validation.ts               # Form validation (password, match)
+│   │   │   ├── colorContrast.ts            # WCAG contrast → auto light/dark text
+│   │   │   ├── focusTrap.ts                # Modal focus trapping
+│   │   │   ├── iconColors.ts               # Iconify color helpers
+│   │   │   ├── gridKeyboardNav.ts          # Keyboard nav for icon grids
+│   │   │   └── errors.ts                   # Dev-only logging helpers
+│   │   ├── constants/
+│   │   │   ├── colors.ts                   # Color palette constants
+│   │   │   └── backgrounds.ts              # Preset background metadata
 │   │   ├── types/
-│   │   │   └── index.ts                # TypeScript type definitions
-│   │   └── utils/
-│   │       └── api.ts                  # API client functions
-│   ├── app.css                          # Global styles and CSS variables
-│   └── app.html                         # HTML template
-├── static/
-│   ├── favicon.svg                      # Favicon (hopping bunny)
-│   ├── logo.svg                         # Animated logo
-│   └── favicon-*.png                    # Generated favicon PNGs
+│   │   │   └── index.ts                    # Shared TypeScript types
+│   │   └── index.ts
+│   ├── test/                               # Test infrastructure
+│   │   ├── setup.ts                        # Vitest setup (jest-dom matchers, cleanup, matchMedia polyfill)
+│   │   ├── smoke.test.ts
+│   │   └── mocks/app/                      # $app/environment + $app/stores mocks for SvelteKit imports
+│   ├── app.css                             # Global styles + design tokens (CSS custom properties)
+│   ├── app.html                            # HTML template
+│   └── app.d.ts                            # SvelteKit type augmentation
+├── static/                                 # Favicons, logo
 ├── scripts/
-│   └── generate-favicons.js             # Favicon generator script
+│   └── generate-favicons.js                # Favicon generation (sharp)
+├── vite.config.ts                          # Vite dev server + build config
+├── vitest.config.ts                        # Vitest test runner config
+├── tsconfig.json
 └── package.json
 ```
 
@@ -85,7 +109,7 @@ npm install
 npm run dev
 ```
 
-The dev server will start at `http://localhost:5173`
+The dev server starts at `http://localhost:5173` and proxies `/api`, `/icons`, `/backgrounds`, `/presets` to `http://localhost:8080` (the Go backend). Start the backend separately.
 
 ### Type Checking
 
@@ -94,6 +118,7 @@ npm run check
 ```
 
 Watch mode:
+
 ```bash
 npm run check:watch
 ```
@@ -101,8 +126,16 @@ npm run check:watch
 ### Testing
 
 ```bash
-npm test
+npm test              # one-shot run
+npm run test:watch    # watch mode
+npm run test:ui       # browser-based test UI
+npm run test:coverage # with HTML coverage report
 ```
+
+The test suite (163 tests across 14 files as of v1.4.5) covers:
+- **Utilities**: `validation`, `url` (incl. XSS vector blocking), `colorContrast`, `api` (incl. CSRF helpers)
+- **Stores**: `auth` (with mocked API), `toast`, `textSize`, `selection`, `clipboard`, `confirmModal`
+- **Components**: `Button`, `Toast`, `QRCodeModal`
 
 ### Building for Production
 
@@ -110,7 +143,7 @@ npm test
 npm run build
 ```
 
-The production build will be output to the `build/` directory.
+Output goes to `build/`. The Go backend serves these files when run with `--frontend ./frontend/build`.
 
 ### Preview Production Build
 
@@ -118,115 +151,34 @@ The production build will be output to the `build/` directory.
 npm run preview
 ```
 
-## Environment Configuration
+## API Integration
 
-The frontend expects the backend API to be available at:
+API calls go through `src/lib/utils/api.ts`. Two important helpers:
 
-- **Development**: `http://localhost:8080/api`
-- **Production**: `/api` (same origin)
+- **`fetchAPI(endpoint, options)`** — wraps `fetch` with the API base URL, JSON content type, and automatic CSRF header injection for mutation methods
+- **`getCSRFToken()`** / **`withCSRFHeader(headers, method)`** — reads `hops_csrf` cookie and adds the `X-CSRF-Token` header. Exported so FormData uploads (`importConfig`, `uploadIconImage`, `uploadBackground`) can include it too
 
-API base URL is configured in `src/lib/utils/api.ts`.
-
-## Key Features
-
-### 1. Dashboard System
-
-- **Multiple Dashboards**: Create unlimited dashboards with custom paths (e.g., `/home`, `/media`)
-- **Tabs**: Organize content into tabs within each dashboard
-- **Groups**: Collapsible groups within tabs
-- **Tiles**: Individual links/widgets with icons
-
-### 2. Drag and Drop
-
-- **Tab Reordering**: Drag tabs to reorder them (edit mode)
-- **Tile Reordering**: Drag tiles within groups (edit mode)
-- **Group Reordering: Drag groups by their header to reorder
-
-### 3. Theme System
-
-8 beautiful theme presets with light/dark variants:
-
-1. **Default** - Blue theme
-2. **Metallic** - Chrome/silver tones
-3. **Modern** - Indigo minimal
-4. **Subtle** - Muted pastels
-5. **Cyberpunk** - Neon pink
-6. **Sunset** - Orange-pink gradient ⚡
-7. **Ocean** - Cyan-blue gradient ⚡
-8. **Forest** - Green-lime gradient ⚡
-
-Features:
-- Three brightness modes: Dark, Light, Auto (follows system)
-- Gradient theme support with `background-image`
-- Each preset adapts to light/dark mode
-- Preferences saved in localStorage
-
-### 4. Copy/Cut/Paste
-
-- Right-click context menu on tiles
-- Copy/cut tiles and paste them into different groups or tabs
-- Clipboard state managed via Svelte store
-
-### 5. Icon System
-
-- 150,000+ icons via Iconify
-- Common prefixes: `mdi:`, `fa:`, `simple-icons:`, `logos:`
-- Icons load on-demand from CDN
-
-### 6. Edit Mode
-
-- Toggle edit mode to show/hide editing controls
-- Admin-only feature (requires authentication)
-- Enables drag-and-drop, delete buttons, and modals
-
-## Svelte 5 Runes
-
-This project uses Svelte 5 with modern runes syntax:
-
-```typescript
-// State
-let count = $state(0);
-
-// Derived state
-let doubled = $derived(count * 2);
-
-// Props
-let { name, age = 18 }: Props = $props();
-
-// Effects
-$effect(() => {
-  console.log(`Count is ${count}`);
-});
-```
+The CSRF token is set by the backend on `/api/auth/login` as a non-HttpOnly cookie. The frontend reads it from `document.cookie` and echoes it back. This is the double-submit cookie pattern — the Same-Origin Policy prevents cross-origin scripts from reading the cookie, so attackers can't forge a matching header.
 
 ## State Management
 
-The app uses Svelte stores for global state:
+Svelte stores for global state:
 
-- `config` - Dashboard configuration (synced with backend)
-- `theme` - Current theme and preset
-- `clipboard` - Copy/cut/paste state
-- `editMode` - Edit mode toggle
-- `auth` - Authentication state
-- `headerConfig` - Header visibility settings
-
-## API Integration
-
-API calls are made through `src/lib/utils/api.ts`:
-
-```typescript
-import { getConfig, updateConfig } from '$lib/utils/api';
-
-// Fetch configuration
-const config = await getConfig();
-
-// Update configuration
-await updateConfig(updatedConfig);
-```
+- **`auth`** — `isAuthenticated`, `isLoggingIn`, `mustChangePassword`, plus `login()`, `logout()`, `initAuth()`
+- **`config`** — full dashboard configuration; synced with backend
+- **`theme`** — 8 presets + light/dark/auto mode + animated CSS gradients for some
+- **`clipboard`** — copy/cut a tile, paste into a group; survives navigation within a session
+- **`editMode`** — toggle; resets to off on logout
+- **`selection`** — primary focused tile + multi-select
+- **`toast`** — fire-and-forget notifications (`toast.success`, `toast.error`, `toast.warning`, `toast.info`)
+- **`confirmModal`** — promise-based confirm dialog (`await confirm({title, message, ...})`)
+- **`backendStatus`** — polls `/api/health` every 30s; shows live indicator
+- **`status`** — polls `/api/status/{id}` for each subscribed tile (ref-counted)
+- **`textSize`** — 4 size presets, persisted to `localStorage`
 
 ## Styling
 
-Global styles use CSS custom properties (variables) for theming:
+Design tokens live as CSS custom properties at `:root` in `src/app.css`:
 
 ```css
 :root {
@@ -234,164 +186,88 @@ Global styles use CSS custom properties (variables) for theming:
   --bg-secondary: #1e293b;
   --bg-tertiary: #334155;
   --text-primary: #f1f5f9;
-  --text-secondary: #cbd5e1;
+  --text-secondary: #dbe4f0;  /* WCAG AAA on all backgrounds */
   --accent: #3b82f6;
   --accent-hover: #2563eb;
-  --border: #475569;
-  --shadow: rgba(0, 0, 0, 0.3);
+  --radius-md: 0.375rem;
+  --space-4: 1rem;
+  /* etc. */
 }
 ```
 
-Component-specific styles are scoped within each `.svelte` file.
+Light theme overrides via `[data-theme="light"]`.
+
+Shared button classes (`.btn-primary`, `.btn-secondary`, `.btn-danger`, `.btn-sm`) are global in `app.css` — components shouldn't redefine them. Component-specific styles use Svelte's scoped `<style>` blocks.
+
+## Responsive Breakpoints
+
+Three breakpoints used consistently across components:
+
+- **`max-width: 1024px`** — tablet: tighter padding, slightly denser grids
+- **`max-width: 768px`** — mobile landscape: hide nav-links and text-size controls
+- **`max-width: 480px`** — mobile portrait: compact icons, hide edit/export buttons (editing on touch is awkward), hide wordmark and dev badge
+
+There's also a `max-width: 360px` fallback for tiny phones that hides the version chip and secondary action icons to prevent navbar overflow.
+
+## Svelte 5 Runes
+
+This project uses Svelte 5 with runes:
+
+```svelte
+<script lang="ts">
+  // State
+  let count = $state(0);
+
+  // Derived
+  let doubled = $derived(count * 2);
+
+  // Props
+  interface Props {
+    title: string;
+    onSave: (value: string) => void;
+  }
+  let { title, onSave }: Props = $props();
+
+  // Effects (with cleanup)
+  $effect(() => {
+    const interval = setInterval(() => count++, 1000);
+    return () => clearInterval(interval);
+  });
+</script>
+```
 
 ## Adding a New Component
 
-1. Create the component in `src/lib/components/`
-2. Use TypeScript for props:
-
-```svelte
-<script lang="ts">
-  interface Props {
-    title: string;
-    count?: number;
-  }
-
-  let { title, count = 0 }: Props = $props();
-</script>
-
-<div>
-  <h2>{title}</h2>
-  <p>Count: {count}</p>
-</div>
-
-<style>
-  div {
-    padding: 1rem;
-  }
-</style>
-```
-
-3. Import and use:
-
-```svelte
-<script lang="ts">
-  import MyComponent from '$lib/components/MyComponent.svelte';
-</script>
-
-<MyComponent title="Hello" count={42} />
-```
-
-## TypeScript Types
-
-Main types are defined in `src/lib/types/index.ts`:
-
-```typescript
-export interface Dashboard {
-  id: string;
-  name: string;
-  path: string;
-  tabs: Tab[];
-  order: number;
-}
-
-export interface Tab {
-  id: string;
-  name: string;
-  groups: Group[];
-  order: number;
-  color?: string;
-  opacity?: number;
-}
-
-export interface Group {
-  id: string;
-  name: string;
-  collapsed: boolean;
-  entries: Entry[];
-  order: number;
-}
-
-export interface Entry {
-  id: string;
-  name: string;
-  subtitle?: string;
-  url: string;
-  icon: string;
-  openMode?: 'newtab' | 'sametab' | 'iframe' | 'modal';
-  size?: 'small' | 'medium' | 'large';
-  color?: string;
-  opacity?: number;
-  order: number;
-}
-```
+1. Create the file under `src/lib/components/` (or `components/admin/` for admin-only)
+2. Use TypeScript for props via an `interface` + `$props()`
+3. Use scoped styles; pull from CSS custom properties for design tokens
+4. If it imports stores or utilities, add a test in `*.test.ts` alongside it
+5. For modals, use the shared `Modal` component to get focus trap + close-button + Esc handling for free
 
 ## Scripts
 
 ### Generate Favicons
 
-Generate PNG favicons from the SVG source:
-
 ```bash
 node scripts/generate-favicons.js
 ```
 
-Generates:
+Produces:
 - `favicon-16x16.png`
 - `favicon-32x32.png`
 - `apple-touch-icon.png` (180x180)
-
-## Deployment
-
-The frontend is deployed as static files served by the Go backend.
-
-1. Build the frontend:
-```bash
-npm run build
-```
-
-2. The backend will serve files from `../frontend/build`
-
-3. Configure the backend to point to the build directory:
-```bash
-./hops --frontend ../frontend/build
-```
-
-## Development Tips
-
-### Hot Module Replacement (HMR)
-
-Vite provides instant HMR during development. Changes to `.svelte` files will update in the browser without a full page reload.
-
-### Debugging
-
-1. Use browser DevTools (F12)
-2. Install [Svelte DevTools](https://chrome.google.com/webstore/detail/svelte-devtools/ckolcbmkjpjmangdbmnkpjigpkddpogn) extension
-3. Add `console.log()` statements in reactive blocks:
-
-```typescript
-$effect(() => {
-  console.log('Count changed:', count);
-});
-```
-
-### Performance
-
-- Use `$derived` for computed values (more efficient than recreating in render)
-- Avoid unnecessary reactivity by using `$state.raw()` for non-reactive objects
-- Use `{#key}` blocks sparingly
-- Lazy-load heavy components with dynamic imports
 
 ## Contributing
 
 When adding new features:
 
-1. Follow existing code style
+1. Follow existing component patterns
 2. Use TypeScript for all new code
-3. Add proper types for props and state
+3. Add tests in `*.test.ts` files alongside the code (utilities and stores especially)
 4. Use Svelte 5 runes (`$state`, `$derived`, `$props`, `$effect`)
-5. Keep components small and focused
-6. Test in both light and dark themes
-7. Ensure responsive design
+5. Use CSS custom properties from `app.css` for design tokens — don't hardcode colors/spacing
+6. Use the shared `<Button>` and `<Modal>` components — don't reimplement
+7. Test in both light and dark themes, and at all three responsive breakpoints
 
 ## License
 

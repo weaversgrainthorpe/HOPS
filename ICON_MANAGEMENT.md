@@ -1,4 +1,4 @@
-# HOPS Icon Management (v1.2.0)
+# HOPS Icon Management (v1.4.5)
 
 ## Overview
 
@@ -56,18 +56,25 @@ CREATE TABLE icons (
 
 ## API Endpoints
 
+All write operations (POST/PUT/DELETE) require:
+- a valid `hops_session` cookie (admin login), AND
+- a matching `X-CSRF-Token` header (value from the `hops_csrf` cookie — issued at login).
+
+Read operations (GET) are public — no auth required.
+
 ### Icon Categories
 - `GET /api/icon-categories` - List all categories
-- `POST /api/icon-categories` - Create category (admin)
-- `PUT /api/icon-categories/:id` - Update category (admin)
-- `DELETE /api/icon-categories/:id` - Delete user category (admin)
+- `POST /api/icon-categories` - Create category (admin + CSRF)
+- `PUT /api/icon-categories/{id}` - Update category (admin + CSRF)
+- `DELETE /api/icon-categories/{id}` - Delete user category (admin + CSRF; presets are protected)
 
 ### Icons
 - `GET /api/icons` - List all icons
 - `GET /api/icons?category=<id>` - List icons in category
-- `POST /api/icons` - Create icon (admin)
-- `PUT /api/icons/:id` - Update icon (admin)
-- `DELETE /api/icons/:id` - Delete user icon (admin)
+- `POST /api/icons` - Create icon (admin + CSRF)
+- `PUT /api/icons/{id}` - Update icon (admin + CSRF)
+- `DELETE /api/icons/{id}` - Delete user icon (admin + CSRF; presets are protected)
+- `POST /api/icons/upload` - Upload a custom icon image (admin + CSRF; multipart/form-data, max 5MB)
 
 ## Preset Categories (15)
 

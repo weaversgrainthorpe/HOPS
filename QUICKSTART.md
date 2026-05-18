@@ -66,7 +66,7 @@ Skip to [Step 2](#step-2-log-in).
 
    Or download directly from the command line (replace the filename with your platform):
    ```bash
-   curl -LO https://github.com/weaversgrainthorpe/HOPS/releases/download/v1.2.0/hops-linux-amd64.tar.gz
+   curl -LO https://github.com/weaversgrainthorpe/HOPS/releases/latest/download/hops-linux-amd64.tar.gz
    ```
 
 3. Extract and run:
@@ -94,12 +94,12 @@ mkdir data
 .\hops-windows-amd64.exe --port 8080 --data .\data --frontend .\frontend\build
 ```
 
-You should see output like:
+You should see structured-log output like:
 ```
-HOPS v1.2.0 starting on :8080
-Data directory: ./data
-Frontend directory: ./frontend/build
+time=2026-05-18T10:00:00.000Z level=INFO msg="server starting" version="HOPS v1.4.5" addr=:8080 data_dir=./data frontend_dir=./frontend/build
 ```
+
+> **Tip:** Set `LOG_LEVEL=debug` for verbose output, or `warn`/`error` for quieter logs.
 
 > **Note:** You may see a message about "Dashboard icons directory not found" on first run. This is normal — the directory is created automatically when you upload your first custom icon.
 
@@ -116,11 +116,9 @@ Frontend directory: ./frontend/build
 
 ## Step 3: Change Your Password
 
-Do this now, before anything else.
+On first login with the default `admin`/`admin` credentials, HOPS will **automatically prompt you to set a new password** — the modal can't be dismissed until you do. Type your new password and click **Set Password**.
 
-1. On the Admin page, click **Change Password**
-2. Enter the current password (`admin`) and your new password
-3. Click **Save**
+> If you ever want to change it later, click the **Change Password** button on the Admin page.
 
 ## Step 4: Create Your First Dashboard
 
@@ -176,6 +174,7 @@ Now that you have the basics, try a few things:
 - **Set a background**: click the **Background** button in Edit Mode and choose from the preset library or upload your own
 - **Try a theme**: click the **theme icon** in the header to switch between light/dark modes and colour presets
 - **Right-click a tile** for copy, cut, and paste options
+- **Open on your phone via QR**: on the Admin page, click the **QR icon** next to any dashboard to get a scannable code — point your phone camera at it to open the dashboard without typing the URL
 
 ## What's Next?
 

@@ -1,4 +1,4 @@
-# HOPS User Guide (v1.2.0)
+# HOPS User Guide (v1.4.5)
 
 Welcome to HOPS (Home Operations Portal System)! This guide will help you get started and make the most of your dashboard.
 
@@ -6,14 +6,16 @@ Welcome to HOPS (Home Operations Portal System)! This guide will help you get st
 
 1. [Getting Started](#getting-started)
 2. [Navigation](#navigation)
-3. [Edit Mode](#edit-mode)
-4. [Working with Dashboards](#working-with-dashboards)
-5. [Working with Tabs](#working-with-tabs)
-6. [Working with Groups](#working-with-groups)
-7. [Working with Tiles](#working-with-tiles)
-8. [Theming and Customization](#theming-and-customization)
-9. [Keyboard Shortcuts](#keyboard-shortcuts)
-10. [Import/Export](#importexport)
+3. [Mobile Experience](#mobile-experience)
+4. [Edit Mode](#edit-mode)
+5. [Working with Dashboards](#working-with-dashboards)
+6. [QR Codes (open on phone/tablet)](#qr-codes)
+7. [Working with Tabs](#working-with-tabs)
+8. [Working with Groups](#working-with-groups)
+9. [Working with Tiles](#working-with-tiles)
+10. [Theming and Customization](#theming-and-customization)
+11. [Keyboard Shortcuts](#keyboard-shortcuts)
+12. [Import/Export](#importexport)
 
 ## Getting Started
 
@@ -23,7 +25,7 @@ Welcome to HOPS (Home Operations Portal System)! This guide will help you get st
 2. Login with default credentials:
    - Username: `admin`
    - Password: `admin`
-3. **Important**: Change your password immediately after first login!
+3. **HOPS will force you to change your password** before doing anything else — a non-dismissible modal appears immediately after the first login with the default credentials. Set a new password to continue.
 
 ### Interface Overview
 
@@ -49,11 +51,34 @@ Each dashboard can have multiple tabs to organize your content. Click on a tab n
 
 Within each tab, content is organized into collapsible groups. Click a group header to expand/collapse it.
 
+## Mobile Experience
+
+HOPS is mobile-friendly with responsive layouts that adapt at three breakpoints:
+
+- **Desktop / large tablet (≥1024px)**: full layout with all controls
+- **Tablet portrait / mobile landscape (768–1024px)**: tighter spacing; the per-dashboard nav links collapse but everything else remains
+- **Mobile portrait (≤480px)**: compact icons; editing is **disabled**
+
+### Why no editing on phones?
+
+Editing involves drag-and-drop, dense modals, and small targets — all of which are awkward on a touchscreen. To avoid frustration, the **Edit** and **Export** buttons are hidden on phones. You can still:
+
+- Browse any dashboard
+- Click/tap tiles to open services
+- Switch between dashboards via the tabs
+- Reach the admin panel (the gear icon stays visible)
+
+To edit dashboards, switch to a tablet or desktop browser. The forced-password-change modal works on mobile.
+
+### Sharing a dashboard URL with a phone
+
+See [QR Codes](#qr-codes) below — the admin panel can generate a scannable QR for any dashboard URL, so users don't have to type it.
+
 ## Edit Mode
 
 Edit Mode allows you to modify your dashboards. To enter Edit Mode:
 1. Ensure you're logged in (visit `/admin` to login)
-2. Navigate to any dashboard
+2. Navigate to any dashboard on **desktop or tablet** (editing is hidden on phones)
 3. Click the **pencil icon** in the header
 
 ### What You Can Do in Edit Mode
@@ -80,6 +105,29 @@ Edit Mode allows you to modify your dashboards. To enter Edit Mode:
 - **Path**: URL path (e.g., `/home`)
 - **Background**: Set dashboard-wide background (image, slideshow, or color)
 - **Header Configuration**: Customize header text and visibility
+
+## QR Codes
+
+You can share any dashboard with a phone or tablet by generating a QR code — useful when you don't want to type the URL on a small keyboard.
+
+### How to generate a QR code
+
+1. Go to the Admin page (`/`)
+2. Find the dashboard you want to share
+3. Click the **QR icon** (next to the export and "open in new tab" buttons on that dashboard's row)
+4. A modal opens showing:
+   - The QR code itself (scannable with any phone camera)
+   - The full URL as text (with a **copy** button)
+   - A **Download SVG** button to save it for printing or embedding elsewhere
+
+### How it works
+
+The QR encodes `<current site URL>` + the dashboard's path. Because it uses your browser's current URL, it works correctly for any deployment topology — local IP, mDNS hostname (`hops.local`), reverse proxy (`hops.example.com`), port-forwarding — without any configuration. Whatever URL the admin is using is the URL the phone needs.
+
+### Tips
+
+- Generate the QR from the SAME network the phone will use. A QR generated while you're connected to your home WiFi will encode the LAN URL — your phone needs to be on the same network for it to resolve.
+- Print or download the SVG and stick it on a fridge/wall for guests to scan.
 
 ## Working with Tabs
 
@@ -157,7 +205,7 @@ Edit Mode allows you to modify your dashboards. To enter Edit Mode:
 ### Adding a Tile
 
 1. Enter Edit Mode
-2. Click "+ Add Entry" in the group
+2. Click "**Add Tile**" in the group
 3. Fill in the tile details:
    - **Name**: Display name
    - **URL**: Target URL
@@ -228,9 +276,10 @@ Method 3: Context Menu
 
 Click the **theme icon** in the header to open theme settings:
 
-- **8 Theme Presets**: Slate, Gray, Zinc, Stone, Red, Orange, Blue, Green
+- **8 Theme Presets**: Default (Blue), Metallic, Modern (Indigo), Subtle, Cyberpunk, Sunset, Ocean, Forest
 - **Light/Dark Mode**: Each theme has light and dark variants
 - **Auto Mode**: Automatically follows your system theme preference
+- **Gradient themes**: Sunset, Ocean, and Forest use animated CSS gradients
 
 ### Text Size
 
@@ -409,8 +458,9 @@ Import is done from the Admin page:
 | Move Between Groups | Drag to other group (in Edit Mode) |
 | Add Tab | Click "+ New Tab" (in Edit Mode) |
 | Add Group | Click "+ Add Group" (in Edit Mode) |
-| Add Tile | Click "+ Add Entry" (in Edit Mode) |
+| Add Tile | Click "Add Tile" (in Edit Mode) |
 | Change Theme | Click theme icon in header |
 | Export Dashboard | Click download icon in header (Edit Mode) |
 | Import Config | Click Import button on Admin page |
+| Generate QR code | Click QR icon next to a dashboard on Admin page |
 

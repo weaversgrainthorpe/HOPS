@@ -1,6 +1,6 @@
 # HOPS Installation & Deployment Guide
 
-**Version 1.2.0**
+**Version 1.4.5**
 
 This guide covers installing and running HOPS. For a quick first-time walkthrough, see the [Zero to Dashboard Hero](QUICKSTART.md) guide.
 
@@ -83,7 +83,7 @@ Each package contains the binary and the web interface — everything you need i
 
 Or download directly from the command line (replace the filename with your platform):
 ```bash
-curl -LO https://github.com/weaversgrainthorpe/HOPS/releases/download/v1.2.0/hops-linux-amd64.tar.gz
+curl -LO https://github.com/weaversgrainthorpe/HOPS/releases/latest/download/hops-linux-amd64.tar.gz
 ```
 
 ### 2. Extract and Run
@@ -147,7 +147,11 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for full development setup instructions.
 | `--data` | `../data` | Data directory for SQLite database, backups, and uploads |
 | `--frontend` | `../frontend/build` | Path to the frontend build directory |
 
-All configuration is via command-line flags. There are no configuration files or environment variables.
+## Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `LOG_LEVEL` | `info` | Log verbosity. One of `debug`, `info`, `warn`, `error`. HOPS uses structured logging via `log/slog` — output is key=value format with a timestamp and level. |
 
 ---
 
@@ -322,9 +326,25 @@ docker compose logs -f
 
 ## Security
 
-- **Change the default password** immediately after first login
+### Built-in protections
+
+HOPS ships with several security mechanisms enabled by default:
+
+- **Forced password change on first login** — the default `admin/admin` account must set a new password before any other action. A non-dismissible modal blocks the UI until done.
+- **Bcrypt password hashing** — passwords are never stored or logged in plaintext.
+- **HttpOnly session cookies** — `hops_session` cannot be read by JavaScript, mitigating XSS-based session theft.
+- **CSRF protection** — double-submit cookie pattern. The server issues a `hops_csrf` cookie on login; the frontend echoes it back in the `X-CSRF-Token` header for all mutation requests. The server validates with constant-time comparison.
+- **Per-IP login rate limiting** — 20 attempts per minute by default, with automatic cleanup of stale entries.
+- **Path-traversal hardening** — backup restore/delete sanitize user-supplied filenames with `filepath.Base`.
+- **Graceful shutdown** — `SIGINT`/`SIGTERM` drain in-flight requests for up to 30s; HTTP server has read/write/idle timeouts (slow-loris mitigation).
+- **Security headers** — `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`.
+- **SQLite foreign keys enabled** with `ON DELETE CASCADE` where appropriate (sessions, icons).
+
+### Operational recommendations
+
 - **Use HTTPS** via a reverse proxy if exposed beyond your local network
 - **Restrict access** with firewall rules if not behind a reverse proxy
 - **Back up regularly** — HOPS backs up on startup, but keep off-site copies too
+- **Keep HOPS updated** — patch releases ship through the same GitHub Releases pipeline
 
 See [SECURITY.md](SECURITY.md) for the full security policy and responsible disclosure instructions.

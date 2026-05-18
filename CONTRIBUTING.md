@@ -103,7 +103,7 @@ npm run build
 
 - **Go** — Standard `gofmt` formatting. Keep dependencies minimal.
 - **Svelte/TypeScript** — Follow existing component patterns. Use TypeScript types for all data structures.
-- **CSS** — Scoped component styles. Use the existing design token system in `frontend/src/lib/constants/`.
+- **CSS** — Scoped component styles per Svelte convention. Design tokens (colors, spacing, radii, shadows, transitions, z-index layers) are CSS custom properties defined at `:root` in `frontend/src/app.css` — reference them as `var(--accent)`, `var(--radius-md)`, etc. instead of hardcoded values. Shared button classes (`.btn-primary`, `.btn-secondary`, `.btn-danger`, `.btn-sm`) live in `app.css` too — don't redefine them per-component.
 
 ## Reporting Security Issues
 

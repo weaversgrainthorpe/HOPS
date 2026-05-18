@@ -63,12 +63,15 @@
       <ul>
         <li><Icon icon="mdi:view-dashboard" width="18" /> Multiple dashboards</li>
         <li><Icon icon="mdi:tab" width="18" /> Tabbed organization</li>
-        <li><Icon icon="mdi:drag" width="18" /> Drag-and-drop</li>
-        <li><Icon icon="mdi:image" width="18" /> Custom backgrounds</li>
-        <li><Icon icon="mdi:palette" width="18" /> Theme customization</li>
+        <li><Icon icon="mdi:drag" width="18" /> Drag-and-drop editing</li>
+        <li><Icon icon="mdi:image" width="18" /> Backgrounds & slideshows</li>
+        <li><Icon icon="mdi:palette" width="18" /> 8 theme presets</li>
         <li><Icon icon="mdi:heart-pulse" width="18" /> Status monitoring</li>
-        <li><Icon icon="mdi:upload" width="18" /> Custom icons</li>
-        <li><Icon icon="mdi:import" width="18" /> Homer/Dashy import</li>
+        <li><Icon icon="mdi:upload" width="18" /> Custom icon uploads</li>
+        <li><Icon icon="mdi:import" width="18" /> Homer / Dashy / Heimdall import</li>
+        <li><Icon icon="mdi:qrcode" width="18" /> Dashboard QR codes</li>
+        <li><Icon icon="mdi:backup-restore" width="18" /> Automatic backups</li>
+        <li><Icon icon="mdi:shield-key" width="18" /> CSRF + bcrypt security</li>
         <li><Icon icon="mdi:format-size" width="18" /> Text size controls</li>
       </ul>
     </div>
@@ -86,7 +89,7 @@
 
     <div class="credits">
       <p class="authors">Created by Jonathan Brown with Claude (Anthropic)</p>
-      <p>Built with SvelteKit, Go, SQLite</p>
+      <p>Built with SvelteKit 2, Svelte 5, Go, and SQLite</p>
       <p class="heart-text">Made with <Icon icon="mdi:heart" width="14" class="heart" /> for the self-hosted community</p>
     </div>
   </div>

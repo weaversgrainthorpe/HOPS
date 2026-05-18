@@ -5,6 +5,27 @@ All notable changes to HOPS (Home Operations Portal System) will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.6] - 2026-05-18
+
+### Documentation
+Full refresh of all documentation — most had been stale since v1.2.0.
+
+- **Version numbers** updated everywhere (was `1.2.0` in 9 places)
+- **Download URLs** in QUICKSTART and DEPLOY now point at `/latest/` instead of a hardcoded version tag
+- **README.md**: added QR codes, mobile experience section, and built-in security features
+- **QUICKSTART.md**: rewrote "Change Your Password" step to reflect the forced password change on first login (auto-prompted now); added QR mention; updated log output sample to the new slog format
+- **DEPLOY.md**: added `LOG_LEVEL` env var section, rewrote Security section to document built-in protections (CSRF, forced password change, rate limiting, path-traversal hardening, security headers, graceful shutdown, FK enforcement)
+- **USER_GUIDE.md**: new sections for **Mobile Experience** (editing hidden on phones, why) and **QR Codes** (admin panel feature); fixed "Add Entry" → "Add Tile" terminology; corrected theme preset names
+- **ICON_MANAGEMENT.md**: documented CSRF requirement on mutation endpoints; added missing upload endpoint
+- **SECURITY.md**: new "Built-in Security Features" section; updated supported versions table (was stuck on `1.2.x`)
+- **CONTRIBUTING.md**: fixed dead reference to deleted `frontend/src/lib/constants/` design-token files (they're CSS custom properties in `app.css` now)
+- **backend/README.md**: full rewrite — corrected the wrong API endpoint (`PUT /api/config/update` → `PUT /api/config`), wrong sessions schema (`token` → `id`), missing `must_change_password` column, ghost file references; added CSRF middleware section, slog logging, graceful shutdown, backup manager, full test coverage summary
+- **frontend/README.md**: full rewrite — removed Fuse.js reference (we deleted it in v1.3.0), added Vitest test infrastructure, added `qrcode` dep, modernized project structure listing, added CSS design tokens and responsive breakpoints sections
+
+### In-app help/about modals
+- **HelpModal**: added QR codes, automatic backups, security overview, and Heimdall to the import list. New "On Mobile" section explains editing is desktop/tablet only. Tile features now mention popup open mode and 1,900+ curated icon presets.
+- **AboutModal**: feature list now includes QR codes, automatic backups, CSRF/bcrypt security, and Heimdall import. Updated tech-stack line to mention Svelte 5 explicitly.
+
 ## [1.4.5] - 2026-05-17
 
 ### Changed
@@ -245,6 +266,7 @@ HOPS (Home Operations Portal System) is now ready for public use! A modern, self
 ### Credits
 Created by Jonathan Brown with Claude (Anthropic)
 
+[1.4.6]: https://github.com/weaversgrainthorpe/HOPS/releases/tag/v1.4.6
 [1.4.5]: https://github.com/weaversgrainthorpe/HOPS/releases/tag/v1.4.5
 [1.4.4]: https://github.com/weaversgrainthorpe/HOPS/releases/tag/v1.4.4
 [1.4.3]: https://github.com/weaversgrainthorpe/HOPS/releases/tag/v1.4.3
