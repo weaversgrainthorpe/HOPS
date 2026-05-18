@@ -1,0 +1,80 @@
+version: 2
+updates:
+  # Go modules in backend/
+  - package-ecosystem: gomod
+    directory: /backend
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/London
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps(go)"
+    labels:
+      - dependencies
+      - go
+
+  # npm packages in frontend/
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/London
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps(npm)"
+    labels:
+      - dependencies
+      - javascript
+    groups:
+      # Bundle minor/patch updates so we don't get 20 PRs for Svelte ecosystem bumps
+      sveltekit:
+        patterns:
+          - "@sveltejs/*"
+          - "svelte"
+          - "svelte-*"
+        update-types:
+          - minor
+          - patch
+      vitest:
+        patterns:
+          - "vitest"
+          - "@vitest/*"
+          - "@testing-library/*"
+          - "jsdom"
+        update-types:
+          - minor
+          - patch
+
+  # GitHub Actions in .github/workflows/
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/London
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "deps(actions)"
+    labels:
+      - dependencies
+      - github-actions
+
+  # Docker base images in Dockerfile
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/London
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "deps(docker)"
+    labels:
+      - dependencies
+      - docker
