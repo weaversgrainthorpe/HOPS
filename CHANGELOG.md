@@ -5,6 +5,11 @@ All notable changes to HOPS (Home Operations Portal System) will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.11] - 2026-05-18
+
+### Fixed
+- **Deleting a group, deleting a tile, and other edits that mutated nested data now actually persist visually.** The handlers in `Dashboard.svelte` were doing a shallow copy (`{ ...dashboard }`) before mutating tabs/groups/tiles inside it — the nested tab/group references were still shared with the old dashboard, so Svelte saw the same prop references and didn't re-render the affected children. Previously hidden by the forced `{#key}` remount removed in v1.4.10. Switched all 18 affected handlers to `structuredClone(dashboard)` for proper immutable updates. Edits now re-render correctly *and* keep the active-tab-on-delete fix from v1.4.10.
+
 ## [1.4.10] - 2026-05-18
 
 ### Fixed

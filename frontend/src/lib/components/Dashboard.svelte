@@ -114,7 +114,7 @@
   async function handleUpdateEntry(tabId: string, groupId: string, entryId: string, updatedEntry: Entry) {
     if (!requireAuth()) return;
     // Find and update the entry in the dashboard structure
-    const updatedDashboard = { ...dashboard };
+    const updatedDashboard = structuredClone(dashboard);
     const tab = updatedDashboard.tabs.find(t => t.id === tabId);
     if (tab) {
       const group = tab.groups.find(g => g.id === groupId);
@@ -132,7 +132,7 @@
   async function handleDeleteEntry(tabId: string, groupId: string, entryId: string) {
     if (!requireAuth()) return;
     // Find and delete the entry in the dashboard structure
-    const updatedDashboard = { ...dashboard };
+    const updatedDashboard = structuredClone(dashboard);
     const tab = updatedDashboard.tabs.find(t => t.id === tabId);
     if (tab) {
       const group = tab.groups.find(g => g.id === groupId);
@@ -147,7 +147,7 @@
   async function handleAddEntry(tabId: string, groupId: string, newEntry: Entry) {
     if (!requireAuth()) return;
     // Find and add the entry to the dashboard structure
-    const updatedDashboard = { ...dashboard };
+    const updatedDashboard = structuredClone(dashboard);
     const tab = updatedDashboard.tabs.find(t => t.id === tabId);
     if (tab) {
       const group = tab.groups.find(g => g.id === groupId);
@@ -165,7 +165,7 @@
   async function handleAddGroup(tabId: string, groupName: string, icon?: string, iconUrl?: string, color?: string, opacity?: number, textColor?: 'auto' | 'light' | 'dark', displayStyle?: 'header' | 'folder') {
     if (!requireAuth()) return;
     // Find and add the group to the dashboard structure
-    const updatedDashboard = { ...dashboard };
+    const updatedDashboard = structuredClone(dashboard);
     const tab = updatedDashboard.tabs.find(t => t.id === tabId);
     if (tab) {
       // Generate a unique ID for the new group
@@ -216,7 +216,7 @@
   async function handleReorderEntries(tabId: string, groupId: string, reorderedEntries: Entry[]) {
     if (!requireAuth()) return;
     // Find and update the entries in the dashboard structure
-    const updatedDashboard = { ...dashboard };
+    const updatedDashboard = structuredClone(dashboard);
     const tab = updatedDashboard.tabs.find(t => t.id === tabId);
     if (tab) {
       const group = tab.groups.find(g => g.id === groupId);
@@ -243,7 +243,7 @@
   ) {
     if (!requireAuth()) return;
 
-    const updatedDashboard = { ...dashboard };
+    const updatedDashboard = structuredClone(dashboard);
     const tab = updatedDashboard.tabs.find(t => t.id === tabId);
     if (!tab) return;
 
@@ -283,7 +283,7 @@
 
   async function handleReorderGroups(tabId: string, reorderedGroups: Group[]) {
     if (!requireAuth()) return;
-    const updatedDashboard = { ...dashboard };
+    const updatedDashboard = structuredClone(dashboard);
     const tab = updatedDashboard.tabs.find(t => t.id === tabId);
     if (tab) {
       tab.groups = reorderedGroups;
@@ -299,7 +299,7 @@
 
   async function handleUpdateGroup(tabId: string, groupId: string, updatedGroup: Partial<Group>) {
     if (!requireAuth()) return;
-    const updatedDashboard = { ...dashboard };
+    const updatedDashboard = structuredClone(dashboard);
     const tab = updatedDashboard.tabs.find(t => t.id === tabId);
     if (tab) {
       const groupIndex = tab.groups.findIndex(g => g.id === groupId);
@@ -318,7 +318,7 @@
 
   async function handleDeleteGroup(tabId: string, groupId: string) {
     if (!requireAuth()) return;
-    const updatedDashboard = { ...dashboard };
+    const updatedDashboard = structuredClone(dashboard);
     const tab = updatedDashboard.tabs.find(t => t.id === tabId);
     if (tab) {
       tab.groups = tab.groups.filter(g => g.id !== groupId);
@@ -334,7 +334,7 @@
 
   async function handleDuplicateGroup(tabId: string, groupId: string) {
     if (!requireAuth()) return;
-    const updatedDashboard = { ...dashboard };
+    const updatedDashboard = structuredClone(dashboard);
     const tab = updatedDashboard.tabs.find(t => t.id === tabId);
     if (!tab) return;
 
@@ -382,7 +382,7 @@
   ) {
     if (!requireAuth()) return;
 
-    const updatedDashboard = { ...dashboard };
+    const updatedDashboard = structuredClone(dashboard);
 
     // Find source and target
     const sourceTab = updatedDashboard.tabs.find(t => t.id === sourceTabId);
@@ -425,7 +425,7 @@
   ) {
     if (!requireAuth()) return;
 
-    const updatedDashboard = { ...dashboard };
+    const updatedDashboard = structuredClone(dashboard);
 
     // Find source and target tabs
     const sourceTab = updatedDashboard.tabs.find(t => t.id === sourceTabId);
@@ -474,7 +474,7 @@
 
   async function handleUpdateTab(tabId: string, newName: string, newIcon?: string, newIconUrl?: string, newColor?: string, newOpacity?: number) {
     if (!requireAuth()) return;
-    const updatedDashboard = { ...dashboard };
+    const updatedDashboard = structuredClone(dashboard);
     const tabIndex = updatedDashboard.tabs.findIndex(t => t.id === tabId);
     if (tabIndex !== -1) {
       updatedDashboard.tabs[tabIndex] = { ...updatedDashboard.tabs[tabIndex], name: newName, icon: newIcon, iconUrl: newIconUrl, color: newColor, opacity: newOpacity };
@@ -485,7 +485,7 @@
 
   async function handleDeleteTab(tabId: string) {
     if (!requireAuth()) return;
-    const updatedDashboard = { ...dashboard };
+    const updatedDashboard = structuredClone(dashboard);
     updatedDashboard.tabs = updatedDashboard.tabs.filter(t => t.id !== tabId);
 
     // Adjust active tab if needed
@@ -533,7 +533,7 @@
   async function handleUpdateTabBackground(tabId: string, background: Background | undefined) {
     if (!requireAuth()) return;
     try {
-      const updatedDashboard = { ...dashboard };
+      const updatedDashboard = structuredClone(dashboard);
       const tab = updatedDashboard.tabs.find(t => t.id === tabId);
       if (tab) {
         tab.background = background;
@@ -569,7 +569,7 @@
     color?: string,
     opacity?: number
   ) {
-    const updatedDashboard = { ...dashboard };
+    const updatedDashboard = structuredClone(dashboard);
     const newId = `tab-${Date.now()}-${Math.random().toString(36).substring(7)}`;
     const newTab: Tab = {
       id: newId,
@@ -590,7 +590,7 @@
 
   async function handleDuplicateTab(tabId: string) {
     if (!requireAuth()) return;
-    const updatedDashboard = { ...dashboard };
+    const updatedDashboard = structuredClone(dashboard);
     const sourceTab = updatedDashboard.tabs.find(t => t.id === tabId);
     if (!sourceTab) return;
 
@@ -629,7 +629,7 @@
   async function handleTabsFinalize(e: CustomEvent<DndEvent<Tab>>) {
     if (!requireAuth()) return;
     draggedTabs = e.detail.items;
-    const updatedDashboard = { ...dashboard };
+    const updatedDashboard = structuredClone(dashboard);
     updatedDashboard.tabs = draggedTabs.map((tab, index) => ({ ...tab, order: index }));
 
     // Adjust active tab index if needed

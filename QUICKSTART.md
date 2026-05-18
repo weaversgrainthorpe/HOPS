@@ -54,7 +54,7 @@ docker compose up -d
 
 The image is multi-arch (linux/amd64 + linux/arm64), so the same tag works on x86-64 servers and Raspberry Pi 3B+/4/5/Zero 2 W.
 
-> **Pin a version instead of `:latest`?** Use `ghcr.io/weaversgrainthorpe/hops:v1.4.10` (or any tagged release).
+> **Pin a version instead of `:latest`?** Use `ghcr.io/weaversgrainthorpe/hops:v1.4.11` (or any tagged release).
 
 Skip to [Step 2](#step-2-log-in).
 
@@ -100,7 +100,7 @@ mkdir data
 
 You should see structured-log output like:
 ```
-time=2026-05-18T10:00:00.000Z level=INFO msg="server starting" version="HOPS v1.4.10" addr=:8080 data_dir=./data frontend_dir=./frontend/build
+time=2026-05-18T10:00:00.000Z level=INFO msg="server starting" version="HOPS v1.4.11" addr=:8080 data_dir=./data frontend_dir=./frontend/build
 ```
 
 > **Tip:** Set `LOG_LEVEL=debug` for verbose output, or `warn`/`error` for quieter logs.
