@@ -6,9 +6,6 @@
   import { findDashboard } from '$lib/stores/config';
 
   let dashboard = $derived($config && $page.params.dashboard ? findDashboard($page.params.dashboard, $config) : undefined);
-
-  // Create a reactive key based on the entire dashboard structure to force re-render on any change
-  let dashboardKey = $derived(dashboard ? JSON.stringify(dashboard) : '');
 </script>
 
 {#if $configLoading}
@@ -19,9 +16,7 @@
     <p>{$configError}</p>
   </div>
 {:else if dashboard}
-  {#key dashboardKey}
-    <Dashboard {dashboard} />
-  {/key}
+  <Dashboard {dashboard} />
 {:else}
   <div class="not-found">
     <h1>Dashboard Not Found</h1>
