@@ -4,6 +4,8 @@
 
 A modern, self-hosted homepage dashboard for the homelab community.
 
+![HOPS dashboard](docs/screenshots/dashboard-hero.png)
+
 ## Why Another Dashboard?
 
 Yes, there are already plenty of homelab dashboard and bookmark applications out there: Homer, Dashy, Heimdall, Homepage, Organizr, Homarr, and more. If you're using one and happy with it, stick with it. Seriously.
@@ -19,6 +21,31 @@ I created HOPS because none of the existing options matched what I wanted:
 HOPS won't be for everyone. That's fine. But if you've been frustrated editing YAML indentation at 11pm, or wished you could just *click* to add a new bookmark, maybe give it a try.
 
 Already using Homer, Dashy, or Heimdall? HOPS can import your existing configuration, so you can try it without starting from scratch.
+
+## Screenshots
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <a href="docs/screenshots/admin.png"><img src="docs/screenshots/admin.png" alt="Admin page — manage multiple dashboards" /></a>
+      <p align="center"><sub><b>Admin page</b> — manage multiple dashboards, generate QR codes</sub></p>
+    </td>
+    <td width="50%" valign="top">
+      <a href="docs/screenshots/edit-mode.png"><img src="docs/screenshots/edit-mode.png" alt="Edit mode — drag-and-drop, no YAML" /></a>
+      <p align="center"><sub><b>Edit mode</b> — drag-and-drop tiles, groups, and tabs; no YAML</sub></p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <a href="docs/screenshots/icon-picker.png"><img src="docs/screenshots/icon-picker.png" alt="Icon picker — thousands of icons" /></a>
+      <p align="center"><sub><b>Icon picker</b> — search across thousands of bundled icons, or upload your own</sub></p>
+    </td>
+    <td width="50%" valign="top">
+      <a href="docs/screenshots/mobile.png"><img src="docs/screenshots/mobile.png" alt="Responsive mobile layout" /></a>
+      <p align="center"><sub><b>Mobile</b> — responsive layout works on phones and tablets</sub></p>
+    </td>
+  </tr>
+</table>
 
 ## Quick Start
 
