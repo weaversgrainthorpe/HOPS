@@ -205,24 +205,26 @@
   .background-color,
   .background-image,
   .background-layer {
-    position: absolute;
+    /* Use position:fixed so the background stays put as the user scrolls
+       through a tall tab. background-attachment: fixed is unreliable in
+       the presence of transformed/filtered ancestors (e.g. backdrop-filter
+       on the tab content wrapper). */
+    position: fixed;
     top: 0;
     left: 0;
-    right: 0;
-    bottom: 0;
+    width: 100vw;
+    height: 100vh;
     z-index: -1;
   }
 
   .background-image {
     background-position: center;
     background-repeat: no-repeat;
-    background-attachment: fixed;
   }
 
   .background-layer {
     background-position: center;
     background-repeat: no-repeat;
-    background-attachment: fixed;
     opacity: 0;
   }
 
@@ -506,11 +508,11 @@
 
   /* Curtain overlay - two halves that slide apart */
   .curtain-overlay {
-    position: absolute;
+    position: fixed;
     top: 0;
     left: 0;
-    right: 0;
-    bottom: 0;
+    width: 100vw;
+    height: 100vh;
     z-index: 0;
     overflow: hidden;
     pointer-events: none;
@@ -522,7 +524,6 @@
     height: 100%;
     background-position: center;
     background-repeat: no-repeat;
-    background-attachment: fixed;
   }
 
   .curtain-left {

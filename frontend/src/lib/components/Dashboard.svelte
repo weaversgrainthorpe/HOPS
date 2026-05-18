@@ -417,6 +417,46 @@
     };
   }
 
+  // Copy entry to a different tab/group (deep-clone with fresh ID; source untouched).
+  async function handleCopyEntryToTab(
+    sourceTabId: string,
+    sourceGroupId: string,
+    entryId: string,
+    targetTabId: string,
+    targetGroupId: string
+  ) {
+    if (!requireAuth()) return;
+
+    const updatedDashboard = structuredClone(dashboard);
+
+    const sourceTab = updatedDashboard.tabs.find(t => t.id === sourceTabId);
+    const targetTab = updatedDashboard.tabs.find(t => t.id === targetTabId);
+    if (!sourceTab || !targetTab) return;
+
+    const sourceGroup = sourceTab.groups.find(g => g.id === sourceGroupId);
+    const targetGroup = targetTab.groups.find(g => g.id === targetGroupId);
+    if (!sourceGroup || !targetGroup) return;
+
+    const sourceEntry = sourceGroup.entries.find(e => e.id === entryId);
+    if (!sourceEntry) return;
+
+    const newEntry: Entry = {
+      ...sourceEntry,
+      id: `entry-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+      order: targetGroup.entries.length
+    };
+
+    targetGroup.entries.push(newEntry);
+
+    await updateDashboard(updatedDashboard);
+  }
+
+  function makeCopyEntryToTabHandler(sourceTabId: string) {
+    return (sourceGroupId: string, entryId: string, targetTabId: string, targetGroupId: string) => {
+      handleCopyEntryToTab(sourceTabId, sourceGroupId, entryId, targetTabId, targetGroupId);
+    };
+  }
+
   // Move group to a different tab
   async function handleMoveGroupToTab(
     sourceTabId: string,
@@ -453,6 +493,45 @@
   function makeMoveGroupToTabHandler(sourceTabId: string) {
     return (groupId: string, targetTabId: string) => {
       handleMoveGroupToTab(sourceTabId, groupId, targetTabId);
+    };
+  }
+
+  // Copy a group to another tab (deep-clone with fresh IDs; source untouched).
+  async function handleCopyGroupToTab(
+    sourceTabId: string,
+    groupId: string,
+    targetTabId: string
+  ) {
+    if (!requireAuth()) return;
+
+    const updatedDashboard = structuredClone(dashboard);
+
+    const sourceTab = updatedDashboard.tabs.find(t => t.id === sourceTabId);
+    const targetTab = updatedDashboard.tabs.find(t => t.id === targetTabId);
+    if (!sourceTab || !targetTab) return;
+
+    const sourceGroup = sourceTab.groups.find(g => g.id === groupId);
+    if (!sourceGroup) return;
+
+    const newGroupId = `group-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+    const newGroup: Group = {
+      ...sourceGroup,
+      id: newGroupId,
+      order: targetTab.groups.length,
+      entries: sourceGroup.entries.map(entry => ({
+        ...entry,
+        id: `entry-${Date.now()}-${Math.random().toString(36).substring(7)}`
+      }))
+    };
+
+    targetTab.groups.push(newGroup);
+
+    await updateDashboard(updatedDashboard);
+  }
+
+  function makeCopyGroupToTabHandler(sourceTabId: string) {
+    return (groupId: string, targetTabId: string) => {
+      handleCopyGroupToTab(sourceTabId, groupId, targetTabId);
     };
   }
 
@@ -766,7 +845,9 @@
       onReorderEntries={makeReorderHandler(dashboard.tabs[activeTabIndex].id)}
       onMoveEntry={makeMoveEntryHandler(dashboard.tabs[activeTabIndex].id)}
       onMoveEntryToTab={makeMoveEntryToTabHandler(dashboard.tabs[activeTabIndex].id)}
+      onCopyEntryToTab={makeCopyEntryToTabHandler(dashboard.tabs[activeTabIndex].id)}
       onMoveGroupToTab={makeMoveGroupToTabHandler(dashboard.tabs[activeTabIndex].id)}
+      onCopyGroupToTab={makeCopyGroupToTabHandler(dashboard.tabs[activeTabIndex].id)}
       onReorderGroups={makeReorderGroupsHandler(dashboard.tabs[activeTabIndex].id)}
       onUpdateGroup={makeUpdateGroupHandler(dashboard.tabs[activeTabIndex].id)}
       onDeleteGroup={makeDeleteGroupHandler(dashboard.tabs[activeTabIndex].id)}
