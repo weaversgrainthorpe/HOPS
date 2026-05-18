@@ -142,7 +142,7 @@ On a brand new dashboard you'll see a centred **"Add Your First Tab"** button. C
 
 1. Click **Add Your First Tab** (or **+ Add Tab** if you already have one)
 2. The **New Tab** modal opens. Enter a name, for example: `Services`
-3. Optionally pick an icon, colour, or background — these can all be changed later
+3. Optionally pick an icon and/or a background colour (with opacity) — both can be changed later
 4. Click **Create**
 
 Your tab appears at the top of the dashboard.
