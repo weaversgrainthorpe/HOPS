@@ -166,14 +166,20 @@ Groups organize your tiles within a tab.
 
 1. Click **Add Tile** inside the group you just created
 2. Fill in the details:
-   - **Name**: the display name (e.g., `Plex`)
-   - **URL**: the address of the service (e.g., `http://plex.local:32400`)
-   - **Icon**: type an icon name like `simple-icons:plex`, or click **Browse** to search through 150,000+ icons
-   - **Size**: pick Small, Medium, or Large
+   - **Name** *(required)*: the display name (e.g., `Plex`)
+   - **Subtitle/Description** *(optional)*: small text under the name
+   - **URL** *(required)*: the address of the service (e.g., `http://plex.local:32400`)
+   - **Icon**: type an icon name like `simple-icons:plex`, click **Browse** to search the Iconify library, or **Upload** your own image
+   - **Background Color** + opacity slider — leave blank to inherit the group's colour
+   - **Size**: Small, Medium, or Large
    - **Open Mode**: how the link opens — New Tab is usually the best choice
+   - **Enable Status Check**: HOPS will ping the URL and show an up/down indicator on the tile
+   - **Auto-fetch Favicon**: grabs the site's favicon to use as the tile icon (handy when no Iconify icon fits)
 3. Click **Create**
 
 Your first tile appears in the group. Click it to make sure the link works.
+
+> Only **Name** and **URL** are required — everything else can be added or changed later via the tile's edit button.
 
 ## Step 9: Make It Yours
 
