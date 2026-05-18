@@ -34,7 +34,7 @@ Create a `docker-compose.yml` file:
 ```yaml
 services:
   hops:
-    build: .
+    image: ghcr.io/weaversgrainthorpe/hops:latest
     container_name: hops
     ports:
       - "8080:8080"
@@ -51,6 +51,10 @@ Start it:
 ```bash
 docker compose up -d
 ```
+
+The image is multi-arch (linux/amd64 + linux/arm64), so the same tag works on x86-64 servers and Raspberry Pi 3B+/4/5/Zero 2 W.
+
+> **Pin a version instead of `:latest`?** Use `ghcr.io/weaversgrainthorpe/hops:v1.4.9` (or any tagged release).
 
 Skip to [Step 2](#step-2-log-in).
 
@@ -96,7 +100,7 @@ mkdir data
 
 You should see structured-log output like:
 ```
-time=2026-05-18T10:00:00.000Z level=INFO msg="server starting" version="HOPS v1.4.8" addr=:8080 data_dir=./data frontend_dir=./frontend/build
+time=2026-05-18T10:00:00.000Z level=INFO msg="server starting" version="HOPS v1.4.9" addr=:8080 data_dir=./data frontend_dir=./frontend/build
 ```
 
 > **Tip:** Set `LOG_LEVEL=debug` for verbose output, or `warn`/`error` for quieter logs.
