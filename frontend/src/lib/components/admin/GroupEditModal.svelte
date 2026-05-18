@@ -33,9 +33,10 @@
     onDelete?: () => void;
     onDuplicate?: () => void;
     onMoveToTab?: (targetTabId: string) => void;
+    onCopyToTab?: (targetTabId: string) => void;
   }
 
-  let { groupName, groupIcon, groupIconUrl, groupColor, groupOpacity, groupTextColor, groupDisplayStyle, currentTabId = '', availableTabs = [], onSave, onCancel, onDelete, onDuplicate, onMoveToTab }: Props = $props();
+  let { groupName, groupIcon, groupIconUrl, groupColor, groupOpacity, groupTextColor, groupDisplayStyle, currentTabId = '', availableTabs = [], onSave, onCancel, onDelete, onDuplicate, onMoveToTab, onCopyToTab }: Props = $props();
   // Form state initialized from props (intentionally captures initial values)
   // svelte-ignore state_referenced_locally
   let name = $state(groupName);
@@ -53,15 +54,15 @@
   let displayStyle = $state<'header' | 'folder'>(groupDisplayStyle || 'header');
   let showIconPicker = $state(false);
 
-  // Move to tab state
+  // Move/copy to tab state
   let showMoveSection = $state(false);
   let selectedMoveTabId = $state('');
 
-  // Can only move if there are other tabs to move to
-  const canMove = $derived(
+  // Can only move/copy if there are other tabs available
+  const canMoveOrCopy = $derived(
     groupName && // Only for existing groups
     availableTabs.length > 1 &&
-    onMoveToTab !== undefined
+    (onMoveToTab !== undefined || onCopyToTab !== undefined)
   );
 
   // Filter out current tab from available targets
@@ -80,6 +81,12 @@
   function handleMove() {
     if (selectedMoveTabId && onMoveToTab) {
       onMoveToTab(selectedMoveTabId);
+    }
+  }
+
+  function handleCopy() {
+    if (selectedMoveTabId && onCopyToTab) {
+      onCopyToTab(selectedMoveTabId);
     }
   }
 
@@ -237,7 +244,7 @@
       <small>Full header spans width, folder tab is compact</small>
     </div>
 
-    {#if canMove}
+    {#if canMoveOrCopy}
       <div class="form-group move-section">
         <button
           type="button"
@@ -245,14 +252,14 @@
           onclick={() => showMoveSection = !showMoveSection}
         >
           <Icon icon="mdi:folder-move" width="20" />
-          Move to Another Tab
+          Move or Copy to Another Tab
           <Icon icon={showMoveSection ? 'mdi:chevron-up' : 'mdi:chevron-down'} width="20" />
         </button>
 
         {#if showMoveSection}
           <div class="move-controls">
             <div class="move-row">
-              <label for="move-tab">Move to:</label>
+              <label for="move-tab">Target tab:</label>
               <select
                 id="move-tab"
                 bind:value={selectedMoveTabId}
@@ -264,15 +271,32 @@
               </select>
             </div>
 
-            <button
-              type="button"
-              class="btn-move"
-              onclick={handleMove}
-              disabled={!selectedMoveTabId}
-            >
-              <Icon icon="mdi:check" width="18" />
-              Move Group
-            </button>
+            <div class="move-actions">
+              {#if onMoveToTab}
+                <button
+                  type="button"
+                  class="btn-move"
+                  onclick={handleMove}
+                  disabled={!selectedMoveTabId}
+                  title="Move this group to the selected tab (removed from current tab)"
+                >
+                  <Icon icon="mdi:folder-move" width="18" />
+                  Move Group
+                </button>
+              {/if}
+              {#if onCopyToTab}
+                <button
+                  type="button"
+                  class="btn-copy"
+                  onclick={handleCopy}
+                  disabled={!selectedMoveTabId}
+                  title="Copy this group to the selected tab (original stays in place)"
+                >
+                  <Icon icon="mdi:content-copy" width="18" />
+                  Copy Group
+                </button>
+              {/if}
+            </div>
           </div>
         {/if}
       </div>
@@ -589,19 +613,37 @@
     border-color: var(--accent);
   }
 
-  .btn-move {
-    align-self: flex-end;
+  .move-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+  }
+
+  .btn-move,
+  .btn-copy {
     padding: 0.5rem 1rem;
-    background: var(--accent);
     color: white;
     font-size: 0.875rem;
+  }
+
+  .btn-move {
+    background: var(--accent);
   }
 
   .btn-move:hover:not(:disabled) {
     background: var(--accent-hover);
   }
 
-  .btn-move:disabled {
+  .btn-copy {
+    background: var(--color-success, #16a34a);
+  }
+
+  .btn-copy:hover:not(:disabled) {
+    background: var(--color-success-dark, #15803d);
+  }
+
+  .btn-move:disabled,
+  .btn-copy:disabled {
     opacity: 0.5;
     cursor: not-allowed;
   }

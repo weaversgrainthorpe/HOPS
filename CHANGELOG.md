@@ -5,6 +5,15 @@ All notable changes to HOPS (Home Operations Portal System) will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.12] - 2026-05-18
+
+### Added
+- **Copy a group to another tab.** Group editor's "Move to Another Tab" section is now "Move or Copy to Another Tab" with two action buttons — **Move** (relocates the group, original gone) and **Copy** (deep-clones the group with new IDs into the target tab, original untouched).
+- **Copy a tile to another tab/group.** Tile editor's "Move to Different Tab/Group" section is now "Move or Copy to Different Tab/Group" with the same Move/Copy button pair. Copy creates a fresh tile in the target with a new ID; original stays in place.
+
+### Fixed
+- **Background image no longer disappears in the lower parts of a tall dashboard.** The background element was using `position: absolute` + `background-attachment: fixed` to anchor the image to the viewport, but the fixed-attachment trick is unreliable when ancestors use `backdrop-filter` (which `.tab-content-wrapper` does for the overlay blur) and the absolute element could effectively run out of visible space below the fold. Switched to `position: fixed` directly on the background element with `100vw × 100vh` — the image now always covers the entire viewport, so the semi-transparent overlay reveals it everywhere on the page.
+
 ## [1.4.11] - 2026-05-18
 
 ### Fixed

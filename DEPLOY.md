@@ -1,6 +1,6 @@
 # HOPS Installation & Deployment Guide
 
-**Version 1.4.11**
+**Version 1.4.12**
 
 This guide covers installing and running HOPS. For a quick first-time walkthrough, see the [Zero to Dashboard Hero](QUICKSTART.md) guide.
 

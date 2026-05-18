@@ -26,11 +26,12 @@
     onUpdate?: (entry: Entry) => void;
     onDelete?: () => void;
     onMoveToTab?: (targetTabId: string, targetGroupId: string) => void;
+    onCopyToTab?: (targetTabId: string, targetGroupId: string) => void;
     tabId?: string;
     groupId?: string;
   }
 
-  let { entry, currentTabId = '', currentGroupId = '', availableTabs = [], onUpdate, onDelete, onMoveToTab, tabId, groupId }: Props = $props();
+  let { entry, currentTabId = '', currentGroupId = '', availableTabs = [], onUpdate, onDelete, onMoveToTab, onCopyToTab, tabId, groupId }: Props = $props();
   let showEditModal = $state(false);
   let showIframeModal = $state(false);
   let showPopupModal = $state(false);
@@ -205,6 +206,7 @@
     onCancel={() => showEditModal = false}
     onDelete={onDelete}
     onMoveToTab={onMoveToTab ? (targetTabId, targetGroupId) => { onMoveToTab(targetTabId, targetGroupId); showEditModal = false; } : undefined}
+    onCopyToTab={onCopyToTab ? (targetTabId, targetGroupId) => { onCopyToTab(targetTabId, targetGroupId); showEditModal = false; } : undefined}
   />
 {/if}
 

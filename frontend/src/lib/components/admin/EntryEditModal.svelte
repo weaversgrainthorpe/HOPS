@@ -27,9 +27,10 @@
     onCancel: () => void;
     onDelete?: () => void;
     onMoveToTab?: (targetTabId: string, targetGroupId: string) => void;
+    onCopyToTab?: (targetTabId: string, targetGroupId: string) => void;
   }
 
-  let { entry, currentTabId, currentGroupId, availableTabs = [], onSave, onCancel, onDelete, onMoveToTab }: Props = $props();
+  let { entry, currentTabId, currentGroupId, availableTabs = [], onSave, onCancel, onDelete, onMoveToTab, onCopyToTab }: Props = $props();
 
   // Form state initialized from props (intentionally captures initial values)
   // svelte-ignore state_referenced_locally
@@ -51,9 +52,9 @@
     availableTabs.find(t => t.id === selectedMoveTabId)?.groups || []
   );
 
-  // Check if move is available (has other tabs/groups to move to)
-  const canMove = $derived(
-    availableTabs.length > 0 && onMoveToTab && (
+  // Check if move/copy is available (has other tabs/groups to target)
+  const canMoveOrCopy = $derived(
+    availableTabs.length > 0 && (onMoveToTab || onCopyToTab) && (
       availableTabs.length > 1 || // Multiple tabs
       availableTabs.some(t => t.groups.length > 1) // Or current tab has multiple groups
     )
@@ -95,6 +96,13 @@
 
     onMoveToTab(selectedMoveTabId, selectedMoveGroupId);
     onCancel(); // Close modal after move
+  }
+
+  async function handleCopy() {
+    if (!onCopyToTab || !selectedMoveTabId || !selectedMoveGroupId) return;
+
+    onCopyToTab(selectedMoveTabId, selectedMoveGroupId);
+    onCancel(); // Close modal after copy
   }
 
   async function handleDelete() {
@@ -348,16 +356,16 @@
         </label>
       </div>
 
-      {#if canMove}
+      {#if canMoveOrCopy}
         <div class="form-group full-width move-section">
           {#if !showMoveSection}
             <button type="button" class="btn-move-toggle" onclick={() => showMoveSection = true}>
               <Icon icon="mdi:folder-move" width="18" />
-              Move to Different Tab/Group
+              Move or Copy to Different Tab/Group
             </button>
           {:else}
             <div class="move-controls">
-              <label for="move-tab-select">Move to:</label>
+              <label for="move-tab-select">Target:</label>
               <div class="move-selects">
                 <select id="move-tab-select" bind:value={selectedMoveTabId} onchange={() => selectedMoveGroupId = ''}>
                   <option value="">Select Tab...</option>
@@ -380,15 +388,30 @@
                 <button type="button" class="btn-secondary btn-sm" onclick={() => { showMoveSection = false; selectedMoveTabId = ''; selectedMoveGroupId = ''; }}>
                   Cancel
                 </button>
-                <button
-                  type="button"
-                  class="btn-move btn-sm"
-                  onclick={handleMove}
-                  disabled={!selectedMoveTabId || !selectedMoveGroupId || (selectedMoveTabId === currentTabId && selectedMoveGroupId === currentGroupId)}
-                >
-                  <Icon icon="mdi:check" width="16" />
-                  Move
-                </button>
+                {#if onMoveToTab}
+                  <button
+                    type="button"
+                    class="btn-move btn-sm"
+                    onclick={handleMove}
+                    disabled={!selectedMoveTabId || !selectedMoveGroupId || (selectedMoveTabId === currentTabId && selectedMoveGroupId === currentGroupId)}
+                    title="Move this tile to the selected target (removed from current location)"
+                  >
+                    <Icon icon="mdi:folder-move" width="16" />
+                    Move
+                  </button>
+                {/if}
+                {#if onCopyToTab}
+                  <button
+                    type="button"
+                    class="btn-copy btn-sm"
+                    onclick={handleCopy}
+                    disabled={!selectedMoveTabId || !selectedMoveGroupId}
+                    title="Copy this tile to the selected target (original stays in place)"
+                  >
+                    <Icon icon="mdi:content-copy" width="16" />
+                    Copy
+                  </button>
+                {/if}
               </div>
             </div>
           {/if}
@@ -735,8 +758,8 @@
     font-size: 0.8rem;
   }
 
-  .btn-move {
-    background: var(--color-success);
+  .btn-move,
+  .btn-copy {
     color: white;
     border: none;
     border-radius: 0.375rem;
@@ -746,11 +769,24 @@
     gap: 0.25rem;
   }
 
-  .btn-move:hover:not(:disabled) {
-    background: var(--color-success-dark);
+  .btn-move {
+    background: var(--accent);
   }
 
-  .btn-move:disabled {
+  .btn-move:hover:not(:disabled) {
+    background: var(--accent-hover);
+  }
+
+  .btn-copy {
+    background: var(--color-success, #16a34a);
+  }
+
+  .btn-copy:hover:not(:disabled) {
+    background: var(--color-success-dark, #15803d);
+  }
+
+  .btn-move:disabled,
+  .btn-copy:disabled {
     opacity: 0.5;
     cursor: not-allowed;
   }

@@ -38,7 +38,9 @@
     onReorderEntries?: (reorderedEntries: EntryType[]) => void;
     onMoveEntry?: (fromGroupId: string, toGroupId: string, entryId: string, newIndex: number) => void;
     onMoveEntryToTab?: (entryId: string, targetTabId: string, targetGroupId: string) => void;
+    onCopyEntryToTab?: (entryId: string, targetTabId: string, targetGroupId: string) => void;
     onMoveGroupToTab?: (targetTabId: string) => void;
+    onCopyGroupToTab?: (targetTabId: string) => void;
     onUpdateGroup?: (updatedGroup: Group) => void;
     onDeleteGroup?: () => void;
     onDuplicateGroup?: () => void;
@@ -48,7 +50,7 @@
     onDeleteEntryFromSource?: (tabId: string, groupId: string, entryId: string) => void;
   }
 
-  let { group, currentTabId = '', currentGroupId = '', availableTabsForEntry = [], availableTabsForGroup = [], onUpdateEntry, onDeleteEntry, onAddEntry, onReorderEntries, onMoveEntry, onMoveEntryToTab, onMoveGroupToTab, onUpdateGroup, onDeleteGroup, onDuplicateGroup, onFocus, tabId, onDeleteEntryFromSource }: Props = $props();
+  let { group, currentTabId = '', currentGroupId = '', availableTabsForEntry = [], availableTabsForGroup = [], onUpdateEntry, onDeleteEntry, onAddEntry, onReorderEntries, onMoveEntry, onMoveEntryToTab, onCopyEntryToTab, onMoveGroupToTab, onCopyGroupToTab, onUpdateGroup, onDeleteGroup, onDuplicateGroup, onFocus, tabId, onDeleteEntryFromSource }: Props = $props();
   // svelte-ignore state_referenced_locally
   let collapsed = $state(group.collapsed || false);
   let showAddModal = $state(false);
@@ -286,6 +288,7 @@
           onUpdate={handleUpdateEntry(entry.id)}
           onDelete={handleDeleteEntry(entry.id)}
           onMoveToTab={onMoveEntryToTab ? (targetTabId, targetGroupId) => onMoveEntryToTab(entry.id, targetTabId, targetGroupId) : undefined}
+          onCopyToTab={onCopyEntryToTab ? (targetTabId, targetGroupId) => onCopyEntryToTab(entry.id, targetTabId, targetGroupId) : undefined}
           {tabId}
           groupId={group.id}
         />
@@ -332,6 +335,7 @@
     onDelete={handleDeleteGroup}
     onDuplicate={() => { onDuplicateGroup?.(); showEditModal = false; }}
     onMoveToTab={onMoveGroupToTab ? (targetTabId) => { onMoveGroupToTab(targetTabId); showEditModal = false; } : undefined}
+    onCopyToTab={onCopyGroupToTab ? (targetTabId) => { onCopyGroupToTab(targetTabId); showEditModal = false; } : undefined}
   />
 {/if}
 

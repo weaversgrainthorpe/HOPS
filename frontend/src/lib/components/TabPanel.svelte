@@ -32,7 +32,9 @@
     onReorderEntries?: (groupId: string, reorderedEntries: Entry[]) => void;
     onMoveEntry?: (fromGroupId: string, toGroupId: string, entryId: string, newIndex: number) => void;
     onMoveEntryToTab?: (sourceGroupId: string, entryId: string, targetTabId: string, targetGroupId: string) => void;
+    onCopyEntryToTab?: (sourceGroupId: string, entryId: string, targetTabId: string, targetGroupId: string) => void;
     onMoveGroupToTab?: (groupId: string, targetTabId: string) => void;
+    onCopyGroupToTab?: (groupId: string, targetTabId: string) => void;
     onReorderGroups?: (reorderedGroups: GroupType[]) => void;
     onUpdateGroup?: (groupId: string, updatedGroup: GroupType) => void;
     onDeleteGroup?: (groupId: string) => void;
@@ -45,7 +47,7 @@
     onDeleteEntryFromSource?: (tabId: string, groupId: string, entryId: string) => void;
   }
 
-  let { tab, currentTabId = '', availableTabsForEntry = [], availableTabsForGroup = [], onUpdateEntry, onDeleteEntry, onAddEntry, onAddGroup, onReorderEntries, onMoveEntry, onMoveEntryToTab, onMoveGroupToTab, onReorderGroups, onUpdateGroup, onDeleteGroup, onDuplicateGroup, onUpdateTabBackground, onGroupFocus, effectiveBackground, onDeleteEntryFromSource }: Props = $props();
+  let { tab, currentTabId = '', availableTabsForEntry = [], availableTabsForGroup = [], onUpdateEntry, onDeleteEntry, onAddEntry, onAddGroup, onReorderEntries, onMoveEntry, onMoveEntryToTab, onCopyEntryToTab, onMoveGroupToTab, onCopyGroupToTab, onReorderGroups, onUpdateGroup, onDeleteGroup, onDuplicateGroup, onUpdateTabBackground, onGroupFocus, effectiveBackground, onDeleteEntryFromSource }: Props = $props();
   let showAddGroupModal = $state(false);
 
   // Local groups state for drag operations
@@ -170,10 +172,26 @@
     };
   }
 
+  function handleCopyEntryToTab(groupId: string) {
+    return (entryId: string, targetTabId: string, targetGroupId: string) => {
+      if (onCopyEntryToTab) {
+        onCopyEntryToTab(groupId, entryId, targetTabId, targetGroupId);
+      }
+    };
+  }
+
   function handleMoveGroupToTab(groupId: string) {
     return (targetTabId: string) => {
       if (onMoveGroupToTab) {
         onMoveGroupToTab(groupId, targetTabId);
+      }
+    };
+  }
+
+  function handleCopyGroupToTab(groupId: string) {
+    return (targetTabId: string) => {
+      if (onCopyGroupToTab) {
+        onCopyGroupToTab(groupId, targetTabId);
       }
     };
   }
@@ -234,7 +252,9 @@
             onReorderEntries={handleReorderEntries(group.id)}
             onMoveEntry={handleMoveEntry(group.id)}
             onMoveEntryToTab={handleMoveEntryToTab(group.id)}
+            onCopyEntryToTab={handleCopyEntryToTab(group.id)}
             onMoveGroupToTab={handleMoveGroupToTab(group.id)}
+            onCopyGroupToTab={handleCopyGroupToTab(group.id)}
             onUpdateGroup={handleUpdateGroup(group.id)}
             onDeleteGroup={handleDeleteGroup(group.id)}
             onDuplicateGroup={handleDuplicateGroup(group.id)}
