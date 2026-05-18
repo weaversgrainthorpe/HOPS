@@ -210,21 +210,21 @@
               <Icon icon="mdi:link-variant" width="24" />
               <div>
                 <strong>Open Modes</strong>
-                <p>Open links in new tab, same tab, or embedded iframe.</p>
+                <p>Open links in a new tab, the same tab, an embedded iframe, or a popup modal.</p>
               </div>
             </div>
             <div class="feature">
               <Icon icon="mdi:heart-pulse" width="24" />
               <div>
                 <strong>Status Checks</strong>
-                <p>Monitor service availability with automatic status indicators.</p>
+                <p>Optional HTTP monitoring shows up/down status and response time next to each tile.</p>
               </div>
             </div>
             <div class="feature">
               <Icon icon="mdi:apps" width="24" />
               <div>
                 <strong>150,000+ Icons</strong>
-                <p>Choose from Material Design Icons, Simple Icons, and more via Iconify.</p>
+                <p>Choose from Material Design Icons, Simple Icons, and more via Iconify — plus 1,900+ curated homelab presets and your own uploads.</p>
               </div>
             </div>
           </div>
@@ -235,17 +235,38 @@
 
           <div class="feature-list">
             <div class="feature">
+              <Icon icon="mdi:qrcode" width="24" />
+              <div>
+                <strong>QR Codes</strong>
+                <p>Generate a scannable QR for any dashboard from the admin panel — open it on a phone or tablet without typing the URL.</p>
+              </div>
+            </div>
+            <div class="feature">
+              <Icon icon="mdi:backup-restore" width="24" />
+              <div>
+                <strong>Automatic Backups</strong>
+                <p>HOPS backs up the database on startup and before config changes. Restore or delete from the Admin → Backups dialog.</p>
+              </div>
+            </div>
+            <div class="feature">
               <Icon icon="mdi:import" width="24" />
               <div>
-                <strong>Import/Export</strong>
-                <p>Backup your config or import from Homer/Dashy.</p>
+                <strong>Import / Export</strong>
+                <p>Self-contained export bundles all uploaded icons and backgrounds. Import from HOPS, Homer, Dashy, or Heimdall configs.</p>
+              </div>
+            </div>
+            <div class="feature">
+              <Icon icon="mdi:shield-key" width="24" />
+              <div>
+                <strong>Security</strong>
+                <p>Bcrypt password hashing, HttpOnly session cookies, CSRF protection, and forced password change on first login.</p>
               </div>
             </div>
             <div class="feature">
               <Icon icon="mdi:theme-light-dark" width="24" />
               <div>
                 <strong>Themes</strong>
-                <p>Switch between dark, light, and auto themes.</p>
+                <p>8 presets with dark, light, and auto modes — including animated gradient themes.</p>
               </div>
             </div>
             <div class="feature">
@@ -253,6 +274,27 @@
               <div>
                 <strong>Text Size</strong>
                 <p>Adjust text size with navbar controls (persists in browser).</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="help-section">
+          <h3>On Mobile</h3>
+
+          <div class="feature-list">
+            <div class="feature">
+              <Icon icon="mdi:cellphone" width="24" />
+              <div>
+                <strong>View only on phones</strong>
+                <p>Dashboards work great on phones, but editing is hidden — drag-and-drop and dense modals are awkward on touchscreens. Use a tablet or desktop to edit. The admin gear stays available so you can still reach Backups and Change Password.</p>
+              </div>
+            </div>
+            <div class="feature">
+              <Icon icon="mdi:qrcode-scan" width="24" />
+              <div>
+                <strong>Quick mobile access</strong>
+                <p>Use the QR code feature on the admin panel to open any dashboard on your phone — no URL typing required.</p>
               </div>
             </div>
           </div>

@@ -4,15 +4,15 @@ package version
 const (
 	Major = 1
 	Minor = 4
-	Patch = 5
+	Patch = 6
 )
 
 // String returns the version as a semantic version string
 func String() string {
-	return "1.4.5"
+	return "1.4.6"
 }
 
 // Full returns the full version string with build info
 func Full() string {
-	return "HOPS v1.4.5"
+	return "HOPS v1.4.6"
 }

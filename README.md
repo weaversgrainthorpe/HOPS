@@ -1,6 +1,6 @@
 # HOPS - Home Operations Portal System
 
-**Version 1.2.0**
+**Version 1.4.5**
 
 A modern, self-hosted homepage dashboard for the homelab community.
 
@@ -83,11 +83,25 @@ For full deployment options (systemd, reverse proxy, backups), see the **[Instal
 
 ### Admin Panel
 - Create, rename, and delete dashboards
+- **QR codes** — generate scannable codes for any dashboard URL (open the dashboard on a phone/tablet without typing)
 - Self-contained export/import with embedded assets
 - Single-dashboard export
 - Import from Homer, Dashy, and Heimdall
 - Automatic database backups on startup
 - Backup management (restore and delete)
+- Forced password change on first login (no more accidentally leaving the default `admin/admin` in production)
+
+### Mobile
+- Dashboards are mobile-friendly with responsive layouts (480px / 768px / 1024px breakpoints)
+- Editing is **disabled on phones** (touchscreen drag-and-drop is awkward) — manage your dashboards from desktop/tablet, view them anywhere
+
+### Security
+- Bcrypt password hashing with forced first-login password change
+- HttpOnly session cookies + CSRF protection (double-submit cookie pattern)
+- Per-IP rate limiting on login (20/min/IP)
+- Path-traversal hardening on backup/restore operations
+- SQLite foreign-key enforcement and cascading deletes
+- All admin endpoints behind authentication + CSRF middleware
 
 ## Tech Stack
 
