@@ -96,7 +96,7 @@ mkdir data
 
 You should see structured-log output like:
 ```
-time=2026-05-18T10:00:00.000Z level=INFO msg="server starting" version="HOPS v1.4.5" addr=:8080 data_dir=./data frontend_dir=./frontend/build
+time=2026-05-18T10:00:00.000Z level=INFO msg="server starting" version="HOPS v1.4.8" addr=:8080 data_dir=./data frontend_dir=./frontend/build
 ```
 
 > **Tip:** Set `LOG_LEVEL=debug` for verbose output, or `warn`/`error` for quieter logs.
