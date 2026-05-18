@@ -107,12 +107,12 @@ time=2026-05-18T10:00:00.000Z level=INFO msg="server starting" version="HOPS v1.
 
 ## Step 2: Log In
 
-1. Open your browser and go to **http://\<your-server-ip\>:8080** (or **http://localhost:8080** if running on the same machine)
-2. You'll see the HOPS interface — it's empty for now, that's fine
-3. Click the **Admin** link or go to **http://\<your-server-ip\>:8080/admin**
-4. Log in with the default credentials:
+1. Open your browser and go to **http://\<your-server-ip\>:8080** (or **http://localhost:8080** if running on the same machine). You'll land on the **admin login page** — that's HOPS's home screen until you've created some dashboards.
+2. Log in with the default credentials:
    - Username: `admin`
    - Password: `admin`
+
+> HOPS ships with a small "Sample" dashboard pre-installed so you can see what one looks like — visit `http://\<your-server-ip\>:8080/sample-1` to view it. The admin page (`/`) is where you create and manage dashboards.
 
 ## Step 3: Change Your Password
 
