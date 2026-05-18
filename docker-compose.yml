@@ -1,6 +1,9 @@
 services:
   hops:
-    build: .
+    # Pull the published image (recommended). For arm64/Raspberry Pi the same tag works — multi-arch.
+    image: ghcr.io/weaversgrainthorpe/hops:latest
+    # To build locally from source instead, comment out `image:` above and uncomment:
+    # build: .
     container_name: hops
     ports:
       - "8080:8080"

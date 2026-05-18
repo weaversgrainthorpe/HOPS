@@ -5,6 +5,13 @@ All notable changes to HOPS (Home Operations Portal System) will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.9] - 2026-05-18
+
+### Added
+- **Published multi-arch container image at `ghcr.io/weaversgrainthorpe/hops`** (tags: `:latest`, `:1.4.9`, `:v1.4.9`). Linux amd64 + arm64 (Raspberry Pi 3B+/4/5/Zero 2 W). The release workflow now builds and pushes on every tag.
+- `docker-compose.yml` updated to use the published image by default (`build: .` still works as a commented-out fallback for source builds).
+- QUICKSTART Docker section updated to point at the published image and mention multi-arch support.
+
 ## [1.4.8] - 2026-05-18
 
 ### Fixed
