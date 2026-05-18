@@ -81,6 +81,18 @@
 
     /* ----- Hero ----- */
     .hero { padding: 3.5rem 0 2rem; text-align: center; }
+    .hero .eyebrow {
+      display: inline-block;
+      font-size: 0.85rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--accent);
+      background: var(--accent-soft);
+      padding: 0.3rem 0.75rem;
+      border-radius: 999px;
+      margin-bottom: 1.2rem;
+    }
     .hero h1 {
       font-size: clamp(2rem, 5vw, 3.2rem);
       line-height: 1.15;
@@ -188,8 +200,9 @@
   <main>
     <section class="hero">
       <div class="container">
+        <div class="eyebrow">HOPS — Home Operations Portal System</div>
         <h1>A homelab dashboard without the YAML.</h1>
-        <p class="lede">HOPS is a self-hosted homepage dashboard. Drag-and-drop tiles, multiple dashboards, QR codes for phones — all configured through the UI, never through a config file.</p>
+        <p class="lede">A self-hosted homepage dashboard for your homelab. Drag-and-drop tiles, multiple dashboards, QR codes for phones — all configured through the UI, never through a config file.</p>
         <div class="cta-row">
           <a class="btn btn-primary" href="https://github.com/weaversgrainthorpe/HOPS/blob/main/QUICKSTART.md">Quick Start →</a>
           <a class="btn btn-ghost" href="https://github.com/weaversgrainthorpe/HOPS">View on GitHub</a>
