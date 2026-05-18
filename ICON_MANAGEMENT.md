@@ -1,4 +1,4 @@
-# HOPS Icon Management (v1.4.5)
+# HOPS Icon Management (v1.4.8)
 
 ## Overview
 
@@ -7,18 +7,25 @@ HOPS features a complete database-backed icon management system that allows user
 ## Key Features
 
 ### 1. Database Storage
-- **All icons stored in SQLite database** - including 1,900+ curated presets
-- **`is_preset` column** - distinguishes preset icons from user-created icons
-- **Categories table** - organize icons into categories
-- **Automatic seeding** - presets automatically loaded on first run
+- **All icons stored in SQLite database** — both preset icons (seeded on first run) and user-added icons live in the same `icons` table.
+- **Two preset sources** combine into the library you see in the picker:
+  - **15 categories + ~65 generic Iconify fallback icons** seeded from [`icon_seeds.go`](backend/internal/database/icon_seeds.go) — these are the category tabs and the generic icons that appear in each (e.g., `mdi:docker` for Containers, `mdi:play-circle` for Media).
+  - **Up to ~6,888 app-specific SVG icons** imported from the [homarr-labs/dashboard-icons](https://github.com/homarr-labs/dashboard-icons) collection — imported on first run if the `<data-dir>/icons/dashboard-icons` directory is present. See [`dashboard_icons.go`](backend/internal/database/dashboard_icons.go).
+- **`is_preset` column** — distinguishes preset icons from user-created icons (presets are protected from deletion).
+- **`image_url` column** — set for icons that resolve to an SVG file on disk (dashboard-icons and uploaded user icons); empty for pure Iconify-name icons.
+- **Categories table** — organizes icons into category tabs.
+- **Automatic seeding** — runs once on first start; subsequent starts skip re-seeding.
 
 ### 2. Inline Management
 Users can manage icons directly from the icon picker modal:
-- **Add icons** - Click "Add Icon to [Category]" button
-- **Add categories** - Click "Add Category" button
-- **Delete icons** - Hover over user icons to see delete button
-- **Delete categories** - Hover over user categories to see delete button
-- **Protected presets** - Preset icons and categories cannot be deleted
+- **Search bar** — case-insensitive search across icon name, ID, and `image_url`; filters the current category view.
+- **Recently Used tab** — your last 20 selected icons (stored in `localStorage`), so frequently-used picks are one click away.
+- **Add icons** — click "Add Icon to [Category]" button
+- **Add categories** — click "Add Category" button
+- **Upload custom icon image** — JPEG, PNG, GIF, WebP, or SVG (max 5 MB). Raster images are auto-resized to 128×128 PNG; SVG is kept as-is. See [Upload endpoint](#icons) below.
+- **Delete icons** — hover over user icons to see delete button
+- **Delete categories** — hover over user categories to see delete button
+- **Protected presets** — preset icons and categories cannot be deleted
 
 ### 3. Seamless Workflow
 - No need to leave the dashboard editor
@@ -45,14 +52,17 @@ CREATE TABLE icon_categories (
 CREATE TABLE icons (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
-  icon TEXT NOT NULL,  -- Iconify icon name (e.g., "mdi:docker")
+  icon TEXT NOT NULL,            -- Iconify icon name (e.g., "mdi:docker")
   category_id TEXT NOT NULL,
-  color TEXT,  -- Optional hex color (e.g., "#2496ED")
+  color TEXT,                    -- Optional hex color (e.g., "#2496ED")
+  image_url TEXT,                -- Path for SVG-on-disk icons (dashboard-icons / user uploads); NULL for pure Iconify icons
   is_preset BOOLEAN NOT NULL DEFAULT 0,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (category_id) REFERENCES icon_categories(id) ON DELETE CASCADE
 )
 ```
+
+Indexes: `idx_icons_category` on `category_id`, `idx_icons_preset` on `is_preset`.
 
 ## API Endpoints
 
@@ -74,7 +84,10 @@ Read operations (GET) are public — no auth required.
 - `POST /api/icons` - Create icon (admin + CSRF)
 - `PUT /api/icons/{id}` - Update icon (admin + CSRF)
 - `DELETE /api/icons/{id}` - Delete user icon (admin + CSRF; presets are protected)
-- `POST /api/icons/upload` - Upload a custom icon image (admin + CSRF; multipart/form-data, max 5MB)
+- `POST /api/icons/upload` - Upload a custom icon image (admin + CSRF; multipart/form-data, max 5 MB).
+  - Accepted formats: JPEG, PNG, GIF, WebP, SVG.
+  - Raster images are auto-resized to 128×128 PNG; SVG is stored verbatim.
+  - Stored under `<data-dir>/icons/<random-id>.png|svg`; the returned `image_url` is what gets written to the `icons.image_url` column.
 
 ## Preset Categories (15)
 
@@ -121,11 +134,17 @@ Read operations (GET) are public — no auth required.
 
 ### Finding Icons
 
-Browse 200,000+ icons at [iconify.design](https://icon-sets.iconify.design/):
+#### Inside HOPS
+
+The icon picker has a **Search bar** at the top — type any part of an icon's name or ID to filter the currently selected category. Tip: switch to the **Recently Used** tab first to see icons you've used in the last 20 picks.
+
+#### Browsing Iconify
+
+For icons not already in HOPS, browse 200,000+ at [iconify.design](https://icon-sets.iconify.design/):
 1. Search for your service/app
 2. Click the icon you want
-3. Copy the full name (e.g., "simple-icons:docker")
-4. Paste into HOPS icon form
+3. Copy the full name (e.g., `simple-icons:docker`)
+4. Paste into HOPS icon form (or directly into a tile's Icon field)
 
 ## Technical Details
 
@@ -157,10 +176,7 @@ The icon management system follows HOPS core principles:
 
 Potential additions for future versions:
 - Bulk import/export of custom icons
-- Icon preview when entering Iconify names
-- Search across all icons
-- Favorite icons
-- Recent icons
+- Favorite icons (pin specific icons above the Recently Used row)
 - Icon usage statistics
 - Duplicate icon detection
-- Icon color picker
+- Icon color picker (currently a plain text input for hex codes)
