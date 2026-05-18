@@ -138,16 +138,14 @@ You can toggle Edit Mode on and off at any time using the **pencil icon** in the
 
 ## Step 6: Add a Tab
 
-On a brand new dashboard you'll see a centred **"Add Your First Tab"** button. Click it.
+On a brand new dashboard you'll see a centred **"Add Your First Tab"** button. Click it. Once you have one tab, future tabs can be added via the **+ Add Tab** button at the end of the tab bar.
 
-A new tab named **"New Tab"** appears in the tab bar immediately, and an edit modal opens so you can customise it. (Tabs are created first then edited — different from Groups and Tiles, which prompt for details before creation.)
+1. Click **Add Your First Tab** (or **+ Add Tab** if you already have one)
+2. The **New Tab** modal opens. Enter a name, for example: `Services`
+3. Optionally pick an icon, colour, or background — these can all be changed later
+4. Click **Create**
 
-1. Click **Add Your First Tab** (or **+ Add Tab** at the end of the tab bar if you already have one)
-2. The tab is created instantly as `New Tab`. The edit modal opens — change the **Tab Name** to something like `Services`
-3. Optionally set an icon, colour, opacity, or a tab-specific background
-4. Click **Save**
-
-> **Closed the modal by accident?** The tab still exists as `New Tab`. To rename it, hover over the tab in the tab bar — a small pencil icon appears next to it. Click that to reopen the edit modal.
+Your tab appears at the top of the dashboard.
 
 ## Step 7: Add a Group
 
