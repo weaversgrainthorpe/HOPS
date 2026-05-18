@@ -152,8 +152,15 @@ Your tab appears at the top of the dashboard.
 Groups organize your tiles within a tab.
 
 1. Click **Add Group** (at the bottom of the tab area)
-2. Enter a name, for example: `Media`
-3. Click **Create**
+2. The **New Group** modal opens. Enter a name, for example: `Media`
+3. Optionally customise:
+   - **Icon** — type an icon name or click **Browse** to search the library
+   - **Background Color** + opacity slider
+   - **Text Color** — Auto picks light/dark based on the background, or force Light/Dark
+   - **Display Style** — **Full Header** spans the group's width, **Folder Tab** is a compact tab-style header
+4. Click **Create**
+
+> All of these can be changed later via the group's edit button.
 
 ## Step 8: Add Your First Tile
 
