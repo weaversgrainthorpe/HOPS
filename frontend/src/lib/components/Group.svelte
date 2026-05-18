@@ -75,7 +75,9 @@
 
   function handleSaveGroup(groupName: string, groupIcon?: string, groupIconUrl?: string, groupColor?: string, groupOpacity?: number, groupTextColor?: 'auto' | 'light' | 'dark', displayStyle?: 'header' | 'folder') {
     if (onUpdateGroup) {
-      onUpdateGroup({ ...group, name: groupName, icon: groupIcon, iconUrl: groupIconUrl, color: groupColor, opacity: groupOpacity, textColor: groupTextColor, displayStyle });
+      const updated = { ...group, name: groupName, icon: groupIcon, iconUrl: groupIconUrl, color: groupColor, opacity: groupOpacity, textColor: groupTextColor, displayStyle: displayStyle };
+      console.log('[HOPS:Group] handleSaveGroup', { receivedDisplayStyle: displayStyle, updatedDisplayStyle: updated.displayStyle, fullUpdated: updated });
+      onUpdateGroup(updated);
     }
     showEditModal = false;
   }
