@@ -4,7 +4,7 @@
   import BackgroundSlideshow from './BackgroundSlideshow.svelte';
   import PartyMode from './PartyMode.svelte';
   import HopAnimation from './HopAnimation.svelte';
-  import { updateDashboard } from '$lib/stores/config';
+  import { mutateDashboard } from '$lib/stores/config';
   import { editMode } from '$lib/stores/editMode';
   import { isAuthenticated } from '$lib/stores/auth';
   import { clipboard, clearClipboard } from '$lib/stores/clipboard';
@@ -47,8 +47,10 @@
     destroyEasterEggs();
   });
 
+  // svelte-dnd-action does an internal structuredClone() that fails on Svelte 5
+  // $state Proxies. $state.snapshot() returns a plain deep copy that's safe.
   $effect(() => {
-    draggedTabs = dashboard.tabs.map(tab => ({ ...tab }));
+    draggedTabs = $state.snapshot(dashboard.tabs) as Tab[];
   });
 
   // Helper to check authentication before edit operations
@@ -61,7 +63,7 @@
   }
 
   // Global keyboard shortcuts
-  function handleKeyboard(e: KeyboardEvent) {
+  async function handleKeyboard(e: KeyboardEvent) {
     // Only handle shortcuts in edit mode
     if (!$editMode || !$isAuthenticated) return;
 
@@ -84,8 +86,10 @@
       // Use focused group or first group
       let targetGroupId = focusedGroupId || activeTab.groups[0].id;
 
-      // Paste the entry
-      handleAddEntry(activeTab.id, targetGroupId, {
+      // Paste the entry — MUST await so the delete (cut case) sees the post-add
+      // state, otherwise both saves race against the same stale dashboard
+      // snapshot and the second write wins (potentially losing the new entry).
+      await handleAddEntry(activeTab.id, targetGroupId, {
         ...clipboardItem.data,
         id: '', // Will be generated
         order: 0 // Will be set correctly
@@ -93,7 +97,7 @@
 
       // For cut operations, delete the source entry
       if (clipboardItem.operation === 'cut' && clipboardItem.sourceTabId && clipboardItem.sourceGroupId) {
-        handleDeleteEntry(clipboardItem.sourceTabId, clipboardItem.sourceGroupId, clipboardItem.data.id);
+        await handleDeleteEntry(clipboardItem.sourceTabId, clipboardItem.sourceGroupId, clipboardItem.data.id);
         clearClipboard();
       }
     }
@@ -113,62 +117,46 @@
 
   async function handleUpdateEntry(tabId: string, groupId: string, entryId: string, updatedEntry: Entry) {
     if (!requireAuth()) return;
-    // Find and update the entry in the dashboard structure
-    const updatedDashboard = structuredClone(dashboard);
-    const tab = updatedDashboard.tabs.find(t => t.id === tabId);
-    if (tab) {
+    await mutateDashboard(dashboard.id, (dash) => {
+      const tab = dash.tabs.find(t => t.id === tabId);
+      if (!tab) return;
       const group = tab.groups.find(g => g.id === groupId);
-      if (group) {
-        const entryIndex = group.entries.findIndex(e => e.id === entryId);
-        if (entryIndex !== -1) {
-          group.entries[entryIndex] = { ...updatedEntry, id: entryId };
-          // Save to backend
-          await updateDashboard(updatedDashboard);
-        }
+      if (!group) return;
+      const entryIndex = group.entries.findIndex(e => e.id === entryId);
+      if (entryIndex !== -1) {
+        group.entries[entryIndex] = { ...updatedEntry, id: entryId };
       }
-    }
+    });
   }
 
   async function handleDeleteEntry(tabId: string, groupId: string, entryId: string) {
     if (!requireAuth()) return;
-    // Find and delete the entry in the dashboard structure
-    const updatedDashboard = structuredClone(dashboard);
-    const tab = updatedDashboard.tabs.find(t => t.id === tabId);
-    if (tab) {
+    await mutateDashboard(dashboard.id, (dash) => {
+      const tab = dash.tabs.find(t => t.id === tabId);
+      if (!tab) return;
       const group = tab.groups.find(g => g.id === groupId);
-      if (group) {
-        group.entries = group.entries.filter(e => e.id !== entryId);
-        // Save to backend
-        await updateDashboard(updatedDashboard);
-      }
-    }
+      if (!group) return;
+      group.entries = group.entries.filter(e => e.id !== entryId);
+    });
   }
 
   async function handleAddEntry(tabId: string, groupId: string, newEntry: Entry) {
     if (!requireAuth()) return;
-    // Find and add the entry to the dashboard structure
-    const updatedDashboard = structuredClone(dashboard);
-    const tab = updatedDashboard.tabs.find(t => t.id === tabId);
-    if (tab) {
+    await mutateDashboard(dashboard.id, (dash) => {
+      const tab = dash.tabs.find(t => t.id === tabId);
+      if (!tab) return;
       const group = tab.groups.find(g => g.id === groupId);
-      if (group) {
-        // Generate a unique ID for the new entry
-        const newId = `entry-${Date.now()}-${Math.random().toString(36).substring(7)}`;
-        const entryWithId = { ...newEntry, id: newId, order: group.entries.length };
-        group.entries.push(entryWithId);
-        // Save to backend
-        await updateDashboard(updatedDashboard);
-      }
-    }
+      if (!group) return;
+      const newId = `entry-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+      group.entries.push({ ...newEntry, id: newId, order: group.entries.length });
+    });
   }
 
   async function handleAddGroup(tabId: string, groupName: string, icon?: string, iconUrl?: string, color?: string, opacity?: number, textColor?: 'auto' | 'light' | 'dark', displayStyle?: 'header' | 'folder') {
     if (!requireAuth()) return;
-    // Find and add the group to the dashboard structure
-    const updatedDashboard = structuredClone(dashboard);
-    const tab = updatedDashboard.tabs.find(t => t.id === tabId);
-    if (tab) {
-      // Generate a unique ID for the new group
+    await mutateDashboard(dashboard.id, (dash) => {
+      const tab = dash.tabs.find(t => t.id === tabId);
+      if (!tab) return;
       const newId = `group-${Date.now()}-${Math.random().toString(36).substring(7)}`;
       const newGroup: Group = {
         id: newId,
@@ -184,9 +172,7 @@
         order: tab.groups.length
       };
       tab.groups.push(newGroup);
-      // Save to backend
-      await updateDashboard(updatedDashboard);
-    }
+    });
   }
 
   function makeUpdateHandler(tabId: string) {
@@ -197,13 +183,13 @@
 
   function makeDeleteHandler(tabId: string) {
     return (groupId: string, entryId: string) => {
-      handleDeleteEntry(tabId, groupId, entryId);
+      return handleDeleteEntry(tabId, groupId, entryId);
     };
   }
 
   function makeAddHandler(tabId: string) {
     return (groupId: string, newEntry: Entry) => {
-      handleAddEntry(tabId, groupId, newEntry);
+      return handleAddEntry(tabId, groupId, newEntry);
     };
   }
 
@@ -215,17 +201,13 @@
 
   async function handleReorderEntries(tabId: string, groupId: string, reorderedEntries: Entry[]) {
     if (!requireAuth()) return;
-    // Find and update the entries in the dashboard structure
-    const updatedDashboard = structuredClone(dashboard);
-    const tab = updatedDashboard.tabs.find(t => t.id === tabId);
-    if (tab) {
+    await mutateDashboard(dashboard.id, (dash) => {
+      const tab = dash.tabs.find(t => t.id === tabId);
+      if (!tab) return;
       const group = tab.groups.find(g => g.id === groupId);
-      if (group) {
-        group.entries = reorderedEntries;
-        // Save to backend
-        await updateDashboard(updatedDashboard);
-      }
-    }
+      if (!group) return;
+      group.entries = reorderedEntries;
+    });
   }
 
   function makeReorderHandler(tabId: string) {
@@ -242,37 +224,19 @@
     newIndex: number
   ) {
     if (!requireAuth()) return;
-
-    const updatedDashboard = structuredClone(dashboard);
-    const tab = updatedDashboard.tabs.find(t => t.id === tabId);
-    if (!tab) return;
-
-    const fromGroup = tab.groups.find(g => g.id === fromGroupId);
-    const toGroup = tab.groups.find(g => g.id === toGroupId);
-    if (!fromGroup || !toGroup) return;
-
-    // Find and remove entry from source group
-    const entryIndex = fromGroup.entries.findIndex(e => e.id === entryId);
-    if (entryIndex === -1) return;
-
-    const [movedEntry] = fromGroup.entries.splice(entryIndex, 1);
-
-    // Insert into target group at specified index
-    toGroup.entries.splice(newIndex, 0, { ...movedEntry, order: newIndex });
-
-    // Reorder entries in target group
-    toGroup.entries = toGroup.entries.map((entry, idx) => ({
-      ...entry,
-      order: idx
-    }));
-
-    // Reorder remaining entries in source group
-    fromGroup.entries = fromGroup.entries.map((entry, idx) => ({
-      ...entry,
-      order: idx
-    }));
-
-    await updateDashboard(updatedDashboard);
+    await mutateDashboard(dashboard.id, (dash) => {
+      const tab = dash.tabs.find(t => t.id === tabId);
+      if (!tab) return;
+      const fromGroup = tab.groups.find(g => g.id === fromGroupId);
+      const toGroup = tab.groups.find(g => g.id === toGroupId);
+      if (!fromGroup || !toGroup) return;
+      const entryIndex = fromGroup.entries.findIndex(e => e.id === entryId);
+      if (entryIndex === -1) return;
+      const [movedEntry] = fromGroup.entries.splice(entryIndex, 1);
+      toGroup.entries.splice(newIndex, 0, { ...movedEntry, order: newIndex });
+      toGroup.entries = toGroup.entries.map((entry, idx) => ({ ...entry, order: idx }));
+      fromGroup.entries = fromGroup.entries.map((entry, idx) => ({ ...entry, order: idx }));
+    });
   }
 
   function makeMoveEntryHandler(tabId: string) {
@@ -283,12 +247,10 @@
 
   async function handleReorderGroups(tabId: string, reorderedGroups: Group[]) {
     if (!requireAuth()) return;
-    const updatedDashboard = structuredClone(dashboard);
-    const tab = updatedDashboard.tabs.find(t => t.id === tabId);
-    if (tab) {
-      tab.groups = reorderedGroups;
-      await updateDashboard(updatedDashboard);
-    }
+    await mutateDashboard(dashboard.id, (dash) => {
+      const tab = dash.tabs.find(t => t.id === tabId);
+      if (tab) tab.groups = reorderedGroups;
+    });
   }
 
   function makeReorderGroupsHandler(tabId: string) {
@@ -299,17 +261,14 @@
 
   async function handleUpdateGroup(tabId: string, groupId: string, updatedGroup: Partial<Group>) {
     if (!requireAuth()) return;
-    const updatedDashboard = structuredClone(dashboard);
-    const tab = updatedDashboard.tabs.find(t => t.id === tabId);
-    if (tab) {
+    await mutateDashboard(dashboard.id, (dash) => {
+      const tab = dash.tabs.find(t => t.id === tabId);
+      if (!tab) return;
       const groupIndex = tab.groups.findIndex(g => g.id === groupId);
       if (groupIndex !== -1) {
-        const merged = { ...tab.groups[groupIndex], ...updatedGroup };
-        console.log('[HOPS:Dashboard] handleUpdateGroup', { incomingDisplayStyle: updatedGroup.displayStyle, mergedDisplayStyle: merged.displayStyle, fullMerged: merged });
-        tab.groups[groupIndex] = merged;
-        await updateDashboard(updatedDashboard);
+        tab.groups[groupIndex] = { ...tab.groups[groupIndex], ...updatedGroup };
       }
-    }
+    });
   }
 
   function makeUpdateGroupHandler(tabId: string) {
@@ -320,12 +279,10 @@
 
   async function handleDeleteGroup(tabId: string, groupId: string) {
     if (!requireAuth()) return;
-    const updatedDashboard = structuredClone(dashboard);
-    const tab = updatedDashboard.tabs.find(t => t.id === tabId);
-    if (tab) {
-      tab.groups = tab.groups.filter(g => g.id !== groupId);
-      await updateDashboard(updatedDashboard);
-    }
+    await mutateDashboard(dashboard.id, (dash) => {
+      const tab = dash.tabs.find(t => t.id === tabId);
+      if (tab) tab.groups = tab.groups.filter(g => g.id !== groupId);
+    });
   }
 
   function makeDeleteGroupHandler(tabId: string) {
@@ -336,36 +293,28 @@
 
   async function handleDuplicateGroup(tabId: string, groupId: string) {
     if (!requireAuth()) return;
-    const updatedDashboard = structuredClone(dashboard);
-    const tab = updatedDashboard.tabs.find(t => t.id === tabId);
-    if (!tab) return;
-
-    const sourceGroupIndex = tab.groups.findIndex(g => g.id === groupId);
-    if (sourceGroupIndex === -1) return;
-
-    const sourceGroup = tab.groups[sourceGroupIndex];
-
-    // Deep clone the group with new IDs
-    const newGroupId = `group-${Date.now()}-${Math.random().toString(36).substring(7)}`;
-    const newGroup: Group = {
-      ...sourceGroup,
-      id: newGroupId,
-      name: `${sourceGroup.name} (Copy)`,
-      order: sourceGroupIndex + 1,
-      entries: sourceGroup.entries.map(entry => ({
-        ...entry,
-        id: `entry-${Date.now()}-${Math.random().toString(36).substring(7)}`
-      }))
-    };
-
-    // Insert right after the source group
-    tab.groups.splice(sourceGroupIndex + 1, 0, newGroup);
-
-    // Update order values for all subsequent groups
-    for (let i = sourceGroupIndex + 2; i < tab.groups.length; i++) {
-      tab.groups[i].order = i;
-    }
-    await updateDashboard(updatedDashboard);
+    await mutateDashboard(dashboard.id, (dash) => {
+      const tab = dash.tabs.find(t => t.id === tabId);
+      if (!tab) return;
+      const sourceGroupIndex = tab.groups.findIndex(g => g.id === groupId);
+      if (sourceGroupIndex === -1) return;
+      const sourceGroup = tab.groups[sourceGroupIndex];
+      const newGroupId = `group-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+      const newGroup: Group = {
+        ...sourceGroup,
+        id: newGroupId,
+        name: `${sourceGroup.name} (Copy)`,
+        order: sourceGroupIndex + 1,
+        entries: sourceGroup.entries.map(entry => ({
+          ...entry,
+          id: `entry-${Date.now()}-${Math.random().toString(36).substring(7)}`
+        }))
+      };
+      tab.groups.splice(sourceGroupIndex + 1, 0, newGroup);
+      for (let i = sourceGroupIndex + 2; i < tab.groups.length; i++) {
+        tab.groups[i].order = i;
+      }
+    });
   }
 
   function makeDuplicateGroupHandler(tabId: string) {
@@ -383,34 +332,19 @@
     targetGroupId: string
   ) {
     if (!requireAuth()) return;
-
-    const updatedDashboard = structuredClone(dashboard);
-
-    // Find source and target
-    const sourceTab = updatedDashboard.tabs.find(t => t.id === sourceTabId);
-    const targetTab = updatedDashboard.tabs.find(t => t.id === targetTabId);
-    if (!sourceTab || !targetTab) return;
-
-    const sourceGroup = sourceTab.groups.find(g => g.id === sourceGroupId);
-    const targetGroup = targetTab.groups.find(g => g.id === targetGroupId);
-    if (!sourceGroup || !targetGroup) return;
-
-    // Find and remove entry from source
-    const entryIndex = sourceGroup.entries.findIndex(e => e.id === entryId);
-    if (entryIndex === -1) return;
-
-    const [movedEntry] = sourceGroup.entries.splice(entryIndex, 1);
-
-    // Add to target group
-    targetGroup.entries.push({ ...movedEntry, order: targetGroup.entries.length });
-
-    // Reorder source group entries
-    sourceGroup.entries = sourceGroup.entries.map((entry, idx) => ({
-      ...entry,
-      order: idx
-    }));
-
-    await updateDashboard(updatedDashboard);
+    await mutateDashboard(dashboard.id, (dash) => {
+      const sourceTab = dash.tabs.find(t => t.id === sourceTabId);
+      const targetTab = dash.tabs.find(t => t.id === targetTabId);
+      if (!sourceTab || !targetTab) return;
+      const sourceGroup = sourceTab.groups.find(g => g.id === sourceGroupId);
+      const targetGroup = targetTab.groups.find(g => g.id === targetGroupId);
+      if (!sourceGroup || !targetGroup) return;
+      const entryIndex = sourceGroup.entries.findIndex(e => e.id === entryId);
+      if (entryIndex === -1) return;
+      const [movedEntry] = sourceGroup.entries.splice(entryIndex, 1);
+      targetGroup.entries.push({ ...movedEntry, order: targetGroup.entries.length });
+      sourceGroup.entries = sourceGroup.entries.map((entry, idx) => ({ ...entry, order: idx }));
+    });
   }
 
   function makeMoveEntryToTabHandler(sourceTabId: string) {
@@ -428,29 +362,21 @@
     targetGroupId: string
   ) {
     if (!requireAuth()) return;
-
-    const updatedDashboard = structuredClone(dashboard);
-
-    const sourceTab = updatedDashboard.tabs.find(t => t.id === sourceTabId);
-    const targetTab = updatedDashboard.tabs.find(t => t.id === targetTabId);
-    if (!sourceTab || !targetTab) return;
-
-    const sourceGroup = sourceTab.groups.find(g => g.id === sourceGroupId);
-    const targetGroup = targetTab.groups.find(g => g.id === targetGroupId);
-    if (!sourceGroup || !targetGroup) return;
-
-    const sourceEntry = sourceGroup.entries.find(e => e.id === entryId);
-    if (!sourceEntry) return;
-
-    const newEntry: Entry = {
-      ...sourceEntry,
-      id: `entry-${Date.now()}-${Math.random().toString(36).substring(7)}`,
-      order: targetGroup.entries.length
-    };
-
-    targetGroup.entries.push(newEntry);
-
-    await updateDashboard(updatedDashboard);
+    await mutateDashboard(dashboard.id, (dash) => {
+      const sourceTab = dash.tabs.find(t => t.id === sourceTabId);
+      const targetTab = dash.tabs.find(t => t.id === targetTabId);
+      if (!sourceTab || !targetTab) return;
+      const sourceGroup = sourceTab.groups.find(g => g.id === sourceGroupId);
+      const targetGroup = targetTab.groups.find(g => g.id === targetGroupId);
+      if (!sourceGroup || !targetGroup) return;
+      const sourceEntry = sourceGroup.entries.find(e => e.id === entryId);
+      if (!sourceEntry) return;
+      targetGroup.entries.push({
+        ...sourceEntry,
+        id: `entry-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+        order: targetGroup.entries.length
+      });
+    });
   }
 
   function makeCopyEntryToTabHandler(sourceTabId: string) {
@@ -466,30 +392,16 @@
     targetTabId: string
   ) {
     if (!requireAuth()) return;
-
-    const updatedDashboard = structuredClone(dashboard);
-
-    // Find source and target tabs
-    const sourceTab = updatedDashboard.tabs.find(t => t.id === sourceTabId);
-    const targetTab = updatedDashboard.tabs.find(t => t.id === targetTabId);
-    if (!sourceTab || !targetTab) return;
-
-    // Find and remove group from source
-    const groupIndex = sourceTab.groups.findIndex(g => g.id === groupId);
-    if (groupIndex === -1) return;
-
-    const [movedGroup] = sourceTab.groups.splice(groupIndex, 1);
-
-    // Add to target tab
-    targetTab.groups.push({ ...movedGroup, order: targetTab.groups.length });
-
-    // Reorder source tab groups
-    sourceTab.groups = sourceTab.groups.map((group, idx) => ({
-      ...group,
-      order: idx
-    }));
-
-    await updateDashboard(updatedDashboard);
+    await mutateDashboard(dashboard.id, (dash) => {
+      const sourceTab = dash.tabs.find(t => t.id === sourceTabId);
+      const targetTab = dash.tabs.find(t => t.id === targetTabId);
+      if (!sourceTab || !targetTab) return;
+      const groupIndex = sourceTab.groups.findIndex(g => g.id === groupId);
+      if (groupIndex === -1) return;
+      const [movedGroup] = sourceTab.groups.splice(groupIndex, 1);
+      targetTab.groups.push({ ...movedGroup, order: targetTab.groups.length });
+      sourceTab.groups = sourceTab.groups.map((group, idx) => ({ ...group, order: idx }));
+    });
   }
 
   function makeMoveGroupToTabHandler(sourceTabId: string) {
@@ -505,30 +417,22 @@
     targetTabId: string
   ) {
     if (!requireAuth()) return;
-
-    const updatedDashboard = structuredClone(dashboard);
-
-    const sourceTab = updatedDashboard.tabs.find(t => t.id === sourceTabId);
-    const targetTab = updatedDashboard.tabs.find(t => t.id === targetTabId);
-    if (!sourceTab || !targetTab) return;
-
-    const sourceGroup = sourceTab.groups.find(g => g.id === groupId);
-    if (!sourceGroup) return;
-
-    const newGroupId = `group-${Date.now()}-${Math.random().toString(36).substring(7)}`;
-    const newGroup: Group = {
-      ...sourceGroup,
-      id: newGroupId,
-      order: targetTab.groups.length,
-      entries: sourceGroup.entries.map(entry => ({
-        ...entry,
-        id: `entry-${Date.now()}-${Math.random().toString(36).substring(7)}`
-      }))
-    };
-
-    targetTab.groups.push(newGroup);
-
-    await updateDashboard(updatedDashboard);
+    await mutateDashboard(dashboard.id, (dash) => {
+      const sourceTab = dash.tabs.find(t => t.id === sourceTabId);
+      const targetTab = dash.tabs.find(t => t.id === targetTabId);
+      if (!sourceTab || !targetTab) return;
+      const sourceGroup = sourceTab.groups.find(g => g.id === groupId);
+      if (!sourceGroup) return;
+      targetTab.groups.push({
+        ...sourceGroup,
+        id: `group-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+        order: targetTab.groups.length,
+        entries: sourceGroup.entries.map(entry => ({
+          ...entry,
+          id: `entry-${Date.now()}-${Math.random().toString(36).substring(7)}`
+        }))
+      });
+    });
   }
 
   function makeCopyGroupToTabHandler(sourceTabId: string) {
@@ -555,41 +459,43 @@
 
   async function handleUpdateTab(tabId: string, newName: string, newIcon?: string, newIconUrl?: string, newColor?: string, newOpacity?: number) {
     if (!requireAuth()) return;
-    const updatedDashboard = structuredClone(dashboard);
-    const tabIndex = updatedDashboard.tabs.findIndex(t => t.id === tabId);
-    if (tabIndex !== -1) {
-      updatedDashboard.tabs[tabIndex] = { ...updatedDashboard.tabs[tabIndex], name: newName, icon: newIcon, iconUrl: newIconUrl, color: newColor, opacity: newOpacity };
-      await updateDashboard(updatedDashboard);
-    }
+    await mutateDashboard(dashboard.id, (dash) => {
+      const tabIndex = dash.tabs.findIndex(t => t.id === tabId);
+      if (tabIndex !== -1) {
+        dash.tabs[tabIndex] = { ...dash.tabs[tabIndex], name: newName, icon: newIcon, iconUrl: newIconUrl, color: newColor, opacity: newOpacity };
+      }
+    });
     editingTabIndex = null;
   }
 
   async function handleDeleteTab(tabId: string) {
     if (!requireAuth()) return;
-    const updatedDashboard = structuredClone(dashboard);
-    updatedDashboard.tabs = updatedDashboard.tabs.filter(t => t.id !== tabId);
-
-    // Adjust active tab if needed
-    if (activeTabIndex >= updatedDashboard.tabs.length) {
-      activeTabIndex = Math.max(0, updatedDashboard.tabs.length - 1);
+    await mutateDashboard(dashboard.id, (dash) => {
+      dash.tabs = dash.tabs.filter(t => t.id !== tabId);
+    });
+    // Adjust active tab if it now points past the end. Reads the freshly-saved
+    // dashboard prop via Svelte 5 reactivity once mutateDashboard's
+    // config.set has propagated.
+    if (activeTabIndex >= dashboard.tabs.length) {
+      activeTabIndex = Math.max(0, dashboard.tabs.length - 1);
     }
-
-    await updateDashboard(updatedDashboard);
     editingTabIndex = null;
   }
 
   async function handleUpdateHeader(headerConfig: HeaderConfig) {
     if (!requireAuth()) return;
-    const updatedDashboard = { ...dashboard, header: headerConfig };
-    await updateDashboard(updatedDashboard);
+    await mutateDashboard(dashboard.id, (dash) => {
+      dash.header = headerConfig;
+    });
     showHeaderConfig = false;
   }
 
   async function handleUpdateBackground(background: Background | undefined) {
     if (!requireAuth()) return;
     try {
-      const updatedDashboard = { ...dashboard, background };
-      await updateDashboard(updatedDashboard);
+      await mutateDashboard(dashboard.id, (dash) => {
+        dash.background = background;
+      });
       showBackgroundConfig = false;
     } catch (error) {
       logError('Background save', error);
@@ -604,8 +510,9 @@
   async function handlePerTabBackgroundsChange(enabled: boolean) {
     if (!requireAuth()) return;
     try {
-      const updatedDashboard = { ...dashboard, perTabBackgrounds: enabled };
-      await updateDashboard(updatedDashboard);
+      await mutateDashboard(dashboard.id, (dash) => {
+        dash.perTabBackgrounds = enabled;
+      });
     } catch (error) {
       logError('Background settings', error);
     }
@@ -614,12 +521,10 @@
   async function handleUpdateTabBackground(tabId: string, background: Background | undefined) {
     if (!requireAuth()) return;
     try {
-      const updatedDashboard = structuredClone(dashboard);
-      const tab = updatedDashboard.tabs.find(t => t.id === tabId);
-      if (tab) {
-        tab.background = background;
-        await updateDashboard(updatedDashboard);
-      }
+      await mutateDashboard(dashboard.id, (dash) => {
+        const tab = dash.tabs.find(t => t.id === tabId);
+        if (tab) tab.background = background;
+      });
     } catch (error) {
       logError('Tab background', error);
       if (error instanceof Error && error.message.includes('401')) {
@@ -650,56 +555,47 @@
     color?: string,
     opacity?: number
   ) {
-    const updatedDashboard = structuredClone(dashboard);
-    const newId = `tab-${Date.now()}-${Math.random().toString(36).substring(7)}`;
-    const newTab: Tab = {
-      id: newId,
-      name,
-      icon,
-      iconUrl,
-      color,
-      opacity,
-      groups: [],
-      order: updatedDashboard.tabs.length
-    };
-    updatedDashboard.tabs.push(newTab);
-    await updateDashboard(updatedDashboard);
-
-    activeTabIndex = updatedDashboard.tabs.length - 1;
+    if (!requireAuth()) return;
+    await mutateDashboard(dashboard.id, (dash) => {
+      const newId = `tab-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+      dash.tabs.push({
+        id: newId,
+        name,
+        icon,
+        iconUrl,
+        color,
+        opacity,
+        groups: [],
+        order: dash.tabs.length
+      });
+    });
+    // Switch to the newly-saved tab — read from the freshly-updated dashboard prop.
+    activeTabIndex = dashboard.tabs.length - 1;
     showAddTabModal = false;
   }
 
   async function handleDuplicateTab(tabId: string) {
     if (!requireAuth()) return;
-    const updatedDashboard = structuredClone(dashboard);
-    const sourceTab = updatedDashboard.tabs.find(t => t.id === tabId);
-    if (!sourceTab) return;
-
-    // Deep clone the tab with new IDs
-    const newTabId = `tab-${Date.now()}-${Math.random().toString(36).substring(7)}`;
-    const newTab: Tab = {
-      ...sourceTab,
-      id: newTabId,
-      name: `${sourceTab.name} (Copy)`,
-      order: updatedDashboard.tabs.length,
-      groups: sourceTab.groups.map(group => {
-        const newGroupId = `group-${Date.now()}-${Math.random().toString(36).substring(7)}`;
-        return {
+    await mutateDashboard(dashboard.id, (dash) => {
+      const sourceTab = dash.tabs.find(t => t.id === tabId);
+      if (!sourceTab) return;
+      const newTab: Tab = {
+        ...sourceTab,
+        id: `tab-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+        name: `${sourceTab.name} (Copy)`,
+        order: dash.tabs.length,
+        groups: sourceTab.groups.map(group => ({
           ...group,
-          id: newGroupId,
+          id: `group-${Date.now()}-${Math.random().toString(36).substring(7)}`,
           entries: group.entries.map(entry => ({
             ...entry,
             id: `entry-${Date.now()}-${Math.random().toString(36).substring(7)}`
           }))
-        };
-      })
-    };
-
-    updatedDashboard.tabs.push(newTab);
-    await updateDashboard(updatedDashboard);
-
-    // Switch to the new tab
-    activeTabIndex = updatedDashboard.tabs.length - 1;
+        }))
+      };
+      dash.tabs.push(newTab);
+    });
+    activeTabIndex = dashboard.tabs.length - 1;
     editingTabIndex = null;
   }
 
@@ -710,17 +606,19 @@
   async function handleTabsFinalize(e: CustomEvent<DndEvent<Tab>>) {
     if (!requireAuth()) return;
     draggedTabs = e.detail.items;
-    const updatedDashboard = structuredClone(dashboard);
-    updatedDashboard.tabs = draggedTabs.map((tab, index) => ({ ...tab, order: index }));
-
-    // Adjust active tab index if needed
+    // Snapshot the dragged order at the moment of finalize — the closure
+    // applies this exact order against whatever the latest dashboard state
+    // is when the mutation runs.
+    const reordered = draggedTabs.map((tab, index) => ({ ...tab, order: index }));
+    await mutateDashboard(dashboard.id, (dash) => {
+      dash.tabs = reordered;
+    });
+    // Re-align activeTabIndex by id (the active tab might have moved).
     const activeTab = dashboard.tabs[activeTabIndex];
-    const newActiveIndex = draggedTabs.findIndex(tab => tab.id === activeTab?.id);
+    const newActiveIndex = reordered.findIndex(tab => tab.id === activeTab?.id);
     if (newActiveIndex !== -1) {
       activeTabIndex = newActiveIndex;
     }
-
-    await updateDashboard(updatedDashboard);
   }
 </script>
 

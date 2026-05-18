@@ -1,7 +1,6 @@
 <script lang="ts">
   import type { Tab, Entry, Group as GroupType, Background } from '$lib/types';
   import Group from './Group.svelte';
-  import BackgroundSlideshow from './BackgroundSlideshow.svelte';
   import Icon from '@iconify/svelte';
   import { editMode } from '$lib/stores/editMode';
   import GroupEditModal from './admin/GroupEditModal.svelte';
@@ -52,7 +51,9 @@
 
   // Local groups state for drag operations
   // svelte-ignore state_referenced_locally
-  let localGroups = $state<GroupType[]>([...(tab.groups || [])]);
+  // svelte-dnd-action does an internal structuredClone() which fails on Svelte 5
+  // $state Proxies. $state.snapshot() returns a plain deep copy that's safe.
+  let localGroups = $state<GroupType[]>(($state.snapshot(tab.groups) || []) as GroupType[]);
 
   // Track the expected group order after a local change
   let expectedGroupOrder = $state<string[] | null>(null);
@@ -78,14 +79,14 @@
 
       if (orderMatches) {
         expectedGroupOrder = null;
-        localGroups = [...serverGroups];
+        localGroups = $state.snapshot(serverGroups) as GroupType[];
         return;
       } else {
         return;
       }
     }
 
-    localGroups = [...serverGroups];
+    localGroups = $state.snapshot(serverGroups) as GroupType[];
   });
 
   // Event handlers
@@ -99,17 +100,13 @@
 
   function handleDeleteEntry(groupId: string) {
     return (entryId: string) => {
-      if (onDeleteEntry) {
-        onDeleteEntry(groupId, entryId);
-      }
+      return onDeleteEntry?.(groupId, entryId);
     };
   }
 
   function handleAddEntry(groupId: string) {
     return (newEntry: Entry) => {
-      if (onAddEntry) {
-        onAddEntry(groupId, newEntry);
-      }
+      return onAddEntry?.(groupId, newEntry);
     };
   }
 
@@ -220,7 +217,11 @@
 </script>
 
 <div class="tab-panel">
-  <BackgroundSlideshow background={tab.background} />
+  <!-- The per-tab background is rendered at the dashboard level via
+       Dashboard.svelte's effectiveBackground() (which routes to either
+       tab.background or dashboard.background depending on perTabBackgrounds).
+       Rendering an additional BackgroundSlideshow here would duplicate it
+       AND paint stale tab.background images when perTabBackgrounds is off. -->
   <div
     class="tab-content-wrapper"
     style:--overlay-opacity={(effectiveBackground ?? tab.background)?.overlayOpacity ?? 0.7}

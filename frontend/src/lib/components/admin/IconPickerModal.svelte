@@ -586,7 +586,7 @@
               {/if}
               <div class="icon-preview">
                 {#if iconData.imageUrl}
-                  <img src={iconData.imageUrl} alt={iconData.name} class="icon-image" />
+                  <img src={iconData.imageUrl} alt={iconData.name} class="icon-image" loading="lazy" decoding="async" />
                 {:else}
                   <ColoredIcon icon={iconData.icon} width="48" color={iconData.color} />
                 {/if}

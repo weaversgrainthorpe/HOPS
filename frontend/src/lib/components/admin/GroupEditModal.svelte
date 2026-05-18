@@ -57,6 +57,7 @@
   // Move/copy to tab state
   let showMoveSection = $state(false);
   let selectedMoveTabId = $state('');
+  let isMovingOrCopying = $state(false);
 
   // Can only move/copy if there are other tabs available
   const canMoveOrCopy = $derived(
@@ -79,20 +80,19 @@
   }
 
   function handleMove() {
-    if (selectedMoveTabId && onMoveToTab) {
-      onMoveToTab(selectedMoveTabId);
-    }
+    if (isMovingOrCopying || !selectedMoveTabId || !onMoveToTab) return;
+    isMovingOrCopying = true;
+    onMoveToTab(selectedMoveTabId);
   }
 
   function handleCopy() {
-    if (selectedMoveTabId && onCopyToTab) {
-      onCopyToTab(selectedMoveTabId);
-    }
+    if (isMovingOrCopying || !selectedMoveTabId || !onCopyToTab) return;
+    isMovingOrCopying = true;
+    onCopyToTab(selectedMoveTabId);
   }
 
   function handleSave() {
     if (name.trim()) {
-      console.log('[HOPS:GroupEditModal] handleSave', { name: name.trim(), displayStyle, textColor });
       onSave(name.trim(), icon || undefined, iconUrl || undefined, color, opacity, textColor, displayStyle);
     }
   }
@@ -278,7 +278,7 @@
                   type="button"
                   class="btn-move"
                   onclick={handleMove}
-                  disabled={!selectedMoveTabId}
+                  disabled={!selectedMoveTabId || isMovingOrCopying}
                   title="Move this group to the selected tab (removed from current tab)"
                 >
                   <Icon icon="mdi:folder-move" width="18" />
@@ -290,7 +290,7 @@
                   type="button"
                   class="btn-copy"
                   onclick={handleCopy}
-                  disabled={!selectedMoveTabId}
+                  disabled={!selectedMoveTabId || isMovingOrCopying}
                   title="Copy this group to the selected tab (original stays in place)"
                 >
                   <Icon icon="mdi:content-copy" width="18" />

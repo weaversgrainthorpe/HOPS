@@ -75,9 +75,7 @@
 
   function handleSaveGroup(groupName: string, groupIcon?: string, groupIconUrl?: string, groupColor?: string, groupOpacity?: number, groupTextColor?: 'auto' | 'light' | 'dark', displayStyle?: 'header' | 'folder') {
     if (onUpdateGroup) {
-      const updated = { ...group, name: groupName, icon: groupIcon, iconUrl: groupIconUrl, color: groupColor, opacity: groupOpacity, textColor: groupTextColor, displayStyle: displayStyle };
-      console.log('[HOPS:Group] handleSaveGroup', { receivedDisplayStyle: displayStyle, updatedDisplayStyle: updated.displayStyle, fullUpdated: updated });
-      onUpdateGroup(updated);
+      onUpdateGroup({ ...group, name: groupName, icon: groupIcon, iconUrl: groupIconUrl, color: groupColor, opacity: groupOpacity, textColor: groupTextColor, displayStyle });
     }
     showEditModal = false;
   }
@@ -136,20 +134,33 @@
     order: group.entries.length
   };
 
-  // Drag and drop handling
+  // Drag and drop handling.
+  //
+  // Every item carries a _sourceGroupId tag identifying the group it currently
+  // lives in. The tag is set HERE at items-sync time (not in handleDndConsider)
+  // because consider events from source and target zones can fire in either
+  // order during a cross-group drag — if target's consider fires before source
+  // has had a chance to tag, the moved entry would arrive in target untagged
+  // and handleDndFinalize wouldn't know where to move it from.
+  //
+  // $state.snapshot is needed because svelte-dnd-action does an internal
+  // structuredClone() and Svelte 5 Proxies don't always clone cleanly.
+  function tagItems(entries: readonly DraggableEntry[]): DraggableEntry[] {
+    return ($state.snapshot(entries) as DraggableEntry[]).map(e => ({ ...e, _sourceGroupId: group.id }));
+  }
   // svelte-ignore state_referenced_locally
-  let items = $state<DraggableEntry[]>([...group.entries]);
+  let items = $state<DraggableEntry[]>(tagItems(group.entries));
 
   $effect(() => {
-    items = [...group.entries];
+    items = tagItems(group.entries);
   });
 
   function handleDndConsider(e: CustomEvent<DndEvent<DraggableEntry>>) {
-    // Tag entries with source group ID for cross-group detection
-    items = e.detail.items.map(entry => ({
-      ...entry,
-      _sourceGroupId: group.id
-    }));
+    // Just accept the new items; tagging already happened at init/sync time.
+    // We MUST NOT re-tag here because target's consider could overwrite an
+    // arriving foreign entry's source tag with our own group.id, making the
+    // entry look like it came from us and breaking cross-group moves.
+    items = e.detail.items;
   }
 
   function handleDndFinalize(e: CustomEvent<DndEvent<DraggableEntry>>) {
@@ -160,15 +171,25 @@
       !group.entries.find(existing => existing.id === item.id)
     );
 
+    // Check if entries LEFT this group (cross-group drop from THIS group to another)
+    const lostEntries = group.entries.filter(existing =>
+      !newItems.find(item => item.id === existing.id)
+    );
+
     if (foreignEntries.length > 0 && onMoveEntry) {
-      // Cross-group move detected
+      // Cross-group move INTO this group — we own the save.
       const movedEntry = foreignEntries[0];
       const newIndex = newItems.indexOf(movedEntry);
-
-      // Extract source group from entry metadata (if available)
       const sourceGroupId = movedEntry._sourceGroupId || '';
-
       onMoveEntry(sourceGroupId, group.id, movedEntry.id, newIndex);
+    } else if (lostEntries.length > 0) {
+      // Cross-group move OUT of this group — the *target* group's finalize
+      // owns the save (it knows source + target + index). If we also saved
+      // here, we'd race: source's save (entry removed) could land before
+      // target's read of the dashboard prop, making target unable to find
+      // the entry → the entry disappears entirely. So we just update local
+      // state visually and skip onReorderEntries.
+      items = newItems.map((entry, index) => ({ ...entry, order: index }));
     } else {
       // Regular reorder within same group
       items = newItems.map((entry, index) => ({ ...entry, order: index }));
@@ -178,7 +199,7 @@
     }
   }
 
-  function handlePaste() {
+  async function handlePaste() {
     const clipboardItem = $clipboard;
     if (!clipboardItem || clipboardItem.type !== 'entry') return;
 
@@ -189,14 +210,17 @@
       order: group.entries.length
     };
 
+    // MUST await — otherwise the delete (cut case) races the add against the
+    // same stale dashboard snapshot in Dashboard.handleXxx, and one of the
+    // saves silently overwrites the other (potentially losing the new entry).
     if (onAddEntry) {
-      onAddEntry(newEntry);
+      await onAddEntry(newEntry);
     }
 
     // For cut operations, delete the source entry and clear clipboard
     if (clipboardItem.operation === 'cut') {
       if (onDeleteEntryFromSource && clipboardItem.sourceTabId && clipboardItem.sourceGroupId) {
-        onDeleteEntryFromSource(clipboardItem.sourceTabId, clipboardItem.sourceGroupId, clipboardItem.data.id);
+        await onDeleteEntryFromSource(clipboardItem.sourceTabId, clipboardItem.sourceGroupId, clipboardItem.data.id);
       }
       clearClipboard();
       toast.success(`Moved "${clipboardItem.data.name}" to ${group.name}`);

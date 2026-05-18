@@ -1,4 +1,4 @@
-# HOPS Icon Management (v1.4.12)
+# HOPS Icon Management (v1.4.14)
 
 ## Overview
 
@@ -9,7 +9,7 @@ HOPS features a complete database-backed icon management system that allows user
 ### 1. Database Storage
 - **All icons stored in SQLite database** — both preset icons (seeded on first run) and user-added icons live in the same `icons` table.
 - **Two preset sources** combine into the library you see in the picker:
-  - **15 categories + ~65 generic Iconify fallback icons** seeded from [`icon_seeds.go`](backend/internal/database/icon_seeds.go) — these are the category tabs and the generic icons that appear in each (e.g., `mdi:docker` for Containers, `mdi:play-circle` for Media).
+  - **18 categories + ~155 generic Iconify icons** seeded from [`icon_seeds.go`](backend/internal/database/icon_seeds.go) — these are the category tabs and the generic icons that appear in each (e.g., `mdi:docker` for Containers, `mdi:play-circle` for Media, `mdi:waveform` for Audio). The seed function is idempotent (`INSERT OR IGNORE`), so new bundled icons added in patch releases are picked up by existing installs on next startup, with no migration step.
   - **Up to ~6,888 app-specific SVG icons** imported from the [homarr-labs/dashboard-icons](https://github.com/homarr-labs/dashboard-icons) collection — imported on first run if the `<data-dir>/icons/dashboard-icons` directory is present. See [`dashboard_icons.go`](backend/internal/database/dashboard_icons.go).
 - **`is_preset` column** — distinguishes preset icons from user-created icons (presets are protected from deletion).
 - **`image_url` column** — set for icons that resolve to an SVG file on disk (dashboard-icons and uploaded user icons); empty for pure Iconify-name icons.
@@ -89,7 +89,7 @@ Read operations (GET) are public — no auth required.
   - Raster images are auto-resized to 128×128 PNG; SVG is stored verbatim.
   - Stored under `<data-dir>/icons/<random-id>.png|svg`; the returned `image_url` is what gets written to the `icons.image_url` column.
 
-## Preset Categories (15)
+## Preset Categories (18)
 
 1. **Containers** - Docker, Kubernetes, Portainer, Podman, Rancher
 2. **Media & Streaming** - Plex, Jellyfin, Spotify, YouTube, Kodi
@@ -106,6 +106,9 @@ Read operations (GET) are public — no auth required.
 13. **Cloud Providers** - AWS, Azure, Google Cloud, DigitalOcean
 14. **Hardware** - Raspberry Pi, Synology, QNAP, HP, Dell
 15. **Virtualization** - Proxmox, VMware, ESXi, VirtualBox
+16. **Audio** *(new in v1.4.14)* - speakers, microphones, soundwaves, music, podcasts, headphones, equalizer
+17. **Cameras & Surveillance** *(new in v1.4.14)* - CCTV, IP cameras, doorbells, motion sensors, NVR, monitors
+18. **Smart Home & Sensors** *(new in v1.4.14)* - thermostats, lights, switches, doors, windows, water, fire, fan, blinds
 
 ## Usage Guide
 

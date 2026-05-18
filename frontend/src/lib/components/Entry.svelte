@@ -69,7 +69,7 @@
       case 'iframe':
         showIframeModal = true;
         break;
-      case 'modal':
+      case 'popup':
         showPopupModal = true;
         break;
       default:

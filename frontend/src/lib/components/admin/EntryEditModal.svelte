@@ -42,10 +42,11 @@
   let isUploadingIcon = $state(false);
   let uploadError = $state('');
 
-  // Move to tab state
+  // Move/copy to tab state
   let showMoveSection = $state(false);
   let selectedMoveTabId = $state('');
   let selectedMoveGroupId = $state('');
+  let isMovingOrCopying = $state(false);
 
   // Get groups for the selected tab (for move dropdown)
   const moveTargetGroups = $derived(
@@ -86,7 +87,7 @@
   }
 
   async function handleMove() {
-    if (!onMoveToTab || !selectedMoveTabId || !selectedMoveGroupId) return;
+    if (isMovingOrCopying || !onMoveToTab || !selectedMoveTabId || !selectedMoveGroupId) return;
 
     // Don't move if target is same as current location
     if (selectedMoveTabId === currentTabId && selectedMoveGroupId === currentGroupId) {
@@ -94,13 +95,15 @@
       return;
     }
 
+    isMovingOrCopying = true;
     onMoveToTab(selectedMoveTabId, selectedMoveGroupId);
     onCancel(); // Close modal after move
   }
 
   async function handleCopy() {
-    if (!onCopyToTab || !selectedMoveTabId || !selectedMoveGroupId) return;
+    if (isMovingOrCopying || !onCopyToTab || !selectedMoveTabId || !selectedMoveGroupId) return;
 
+    isMovingOrCopying = true;
     onCopyToTab(selectedMoveTabId, selectedMoveGroupId);
     onCancel(); // Close modal after copy
   }
@@ -393,7 +396,7 @@
                     type="button"
                     class="btn-move btn-sm"
                     onclick={handleMove}
-                    disabled={!selectedMoveTabId || !selectedMoveGroupId || (selectedMoveTabId === currentTabId && selectedMoveGroupId === currentGroupId)}
+                    disabled={isMovingOrCopying || !selectedMoveTabId || !selectedMoveGroupId || (selectedMoveTabId === currentTabId && selectedMoveGroupId === currentGroupId)}
                     title="Move this tile to the selected target (removed from current location)"
                   >
                     <Icon icon="mdi:folder-move" width="16" />
@@ -405,7 +408,7 @@
                     type="button"
                     class="btn-copy btn-sm"
                     onclick={handleCopy}
-                    disabled={!selectedMoveTabId || !selectedMoveGroupId}
+                    disabled={isMovingOrCopying || !selectedMoveTabId || !selectedMoveGroupId}
                     title="Copy this tile to the selected target (original stays in place)"
                   >
                     <Icon icon="mdi:content-copy" width="16" />
