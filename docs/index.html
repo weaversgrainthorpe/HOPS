@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>HOPS — Home Operations Portal System</title>
+  <meta name="description" content="A modern, self-hosted homepage dashboard for the homelab community. GUI-first. No YAML. Single binary or Docker. Free and open source." />
+  <meta property="og:title" content="HOPS — Home Operations Portal System" />
+  <meta property="og:description" content="A modern, self-hosted homepage dashboard for the homelab community. GUI-first. No YAML. Single binary or Docker. Free and open source." />
+  <meta property="og:image" content="https://weaversgrainthorpe.github.io/HOPS/screenshots/dashboard-hero.png" />
+  <meta property="og:type" content="website" />
+  <meta name="theme-color" content="#0f172a" />
+  <link rel="icon" href="https://github.githubassets.com/favicons/favicon-dark.png" />
+  <style>
+    :root {
+      --bg: #0b1220;
+      --bg-elev: #131c2e;
+      --bg-card: #1a2438;
+      --border: #243149;
+      --text: #e6ecf6;
+      --text-muted: #9aa6bf;
+      --accent: #4f8cff;
+      --accent-strong: #2563eb;
+      --accent-soft: rgba(79, 140, 255, 0.12);
+      --orange: #f59e0b;
+      --max: 1100px;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.55;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code, pre {
+      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+      font-size: 0.92em;
+    }
+    code {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 0.1em 0.35em;
+    }
+    pre {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.2rem;
+      overflow-x: auto;
+      margin: 0;
+    }
+    pre code {
+      background: transparent;
+      border: none;
+      padding: 0;
+    }
+
+    .container { max-width: var(--max); margin: 0 auto; padding: 0 1.5rem; }
+
+    /* ----- Header ----- */
+    header {
+      border-bottom: 1px solid var(--border);
+      background: rgba(11, 18, 32, 0.85);
+      backdrop-filter: blur(8px);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .nav { display: flex; align-items: center; justify-content: space-between; padding: 0.85rem 0; }
+    .brand { display: flex; align-items: center; gap: 0.6rem; font-weight: 700; font-size: 1.15rem; letter-spacing: 0.02em; }
+    .brand .badge { background: var(--accent-soft); color: var(--accent); padding: 0.1rem 0.5rem; border-radius: 999px; font-size: 0.72rem; font-weight: 600; }
+    .nav-links { display: flex; gap: 1.4rem; align-items: center; }
+    .nav-links a { color: var(--text-muted); font-size: 0.95rem; }
+    .nav-links a:hover { color: var(--text); text-decoration: none; }
+
+    /* ----- Hero ----- */
+    .hero { padding: 3.5rem 0 2rem; text-align: center; }
+    .hero h1 {
+      font-size: clamp(2rem, 5vw, 3.2rem);
+      line-height: 1.15;
+      margin: 0 0 1rem;
+      letter-spacing: -0.02em;
+    }
+    .hero .lede {
+      font-size: clamp(1.05rem, 2.2vw, 1.25rem);
+      color: var(--text-muted);
+      max-width: 660px;
+      margin: 0 auto 1.8rem;
+    }
+    .cta-row { display: flex; gap: 0.85rem; justify-content: center; flex-wrap: wrap; }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      padding: 0.7rem 1.2rem;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 0.98rem;
+      transition: transform 0.12s ease, background 0.12s ease;
+      border: 1px solid transparent;
+    }
+    .btn:hover { transform: translateY(-1px); text-decoration: none; }
+    .btn-primary { background: var(--accent-strong); color: white; }
+    .btn-primary:hover { background: var(--accent); }
+    .btn-ghost { background: transparent; border-color: var(--border); color: var(--text); }
+    .btn-ghost:hover { background: var(--bg-card); }
+
+    .hero-shot {
+      max-width: var(--max);
+      margin: 2.5rem auto 0;
+      padding: 0 1.5rem;
+    }
+    .hero-shot img {
+      width: 100%;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      box-shadow: 0 20px 60px -20px rgba(0,0,0,0.6);
+      display: block;
+    }
+
+    /* ----- Sections ----- */
+    section { padding: 4rem 0; }
+    section h2 {
+      font-size: clamp(1.5rem, 3vw, 2rem);
+      margin: 0 0 0.5rem;
+      letter-spacing: -0.01em;
+    }
+    section .section-lede {
+      color: var(--text-muted);
+      max-width: 720px;
+      margin: 0 0 2.5rem;
+    }
+
+    /* ----- Why grid ----- */
+    .why-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.2rem; }
+    .why-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 1.4rem 1.4rem; }
+    .why-card h3 { margin: 0 0 0.4rem; font-size: 1.1rem; color: var(--accent); }
+    .why-card p { margin: 0; color: var(--text-muted); font-size: 0.96rem; }
+
+    /* ----- Screenshots grid ----- */
+    .shots { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.2rem; }
+    .shot { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; }
+    .shot img { width: 100%; display: block; }
+    .shot .shot-caption { padding: 0.9rem 1.1rem; }
+    .shot .shot-caption b { display: block; margin-bottom: 0.2rem; }
+    .shot .shot-caption span { color: var(--text-muted); font-size: 0.92rem; }
+
+    /* ----- Install ----- */
+    .install-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.2rem; }
+    .install-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 1.4rem; }
+    .install-card h3 { margin: 0 0 0.8rem; font-size: 1.05rem; display: flex; align-items: center; gap: 0.5rem; }
+    .install-card .login { color: var(--text-muted); font-size: 0.9rem; margin-top: 0.8rem; }
+
+    /* ----- Footer ----- */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 2rem 0 3rem;
+      color: var(--text-muted);
+      font-size: 0.93rem;
+    }
+    .footer-row { display: flex; flex-wrap: wrap; gap: 1.2rem; justify-content: space-between; align-items: center; }
+    .footer-links { display: flex; flex-wrap: wrap; gap: 1.2rem; }
+
+    /* ----- Subtle background polish ----- */
+    .hero { background: radial-gradient(1100px 460px at 50% -80px, rgba(79,140,255,0.10), transparent 60%); }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="container nav">
+      <div class="brand">HOPS <span class="badge">v1.4.9</span></div>
+      <nav class="nav-links">
+        <a href="#features">Features</a>
+        <a href="#screenshots">Screenshots</a>
+        <a href="#install">Install</a>
+        <a href="https://github.com/weaversgrainthorpe/HOPS">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="container">
+        <h1>A homelab dashboard without the YAML.</h1>
+        <p class="lede">HOPS is a self-hosted homepage dashboard. Drag-and-drop tiles, multiple dashboards, QR codes for phones — all configured through the UI, never through a config file.</p>
+        <div class="cta-row">
+          <a class="btn btn-primary" href="https://github.com/weaversgrainthorpe/HOPS/blob/main/QUICKSTART.md">Quick Start →</a>
+          <a class="btn btn-ghost" href="https://github.com/weaversgrainthorpe/HOPS">View on GitHub</a>
+        </div>
+      </div>
+      <div class="hero-shot">
+        <img src="screenshots/dashboard-hero.png" alt="HOPS dashboard with tabs, groups, and tiles" />
+      </div>
+    </section>
+
+    <section id="features">
+      <div class="container">
+        <h2>Why HOPS?</h2>
+        <p class="section-lede">There are already plenty of homelab dashboards out there. HOPS exists because none of them quite matched what I wanted.</p>
+        <div class="why-grid">
+          <div class="why-card">
+            <h3>100% GUI editing</h3>
+            <p>Click, drag, configure. No YAML files. No JSON editing. No "simple" config files that inevitably become not-so-simple.</p>
+          </div>
+          <div class="why-card">
+            <h3>Single binary</h3>
+            <p>One executable plus a SQLite database. No runtime dependencies. Download, run, done. Docker works too.</p>
+          </div>
+          <div class="why-card">
+            <h3>Multiple dashboards</h3>
+            <p>One install can host many dashboards at different URLs — <code>/home</code>, <code>/network</code>, <code>/media</code>. Each fully customisable.</p>
+          </div>
+          <div class="why-card">
+            <h3>Built-in QR codes</h3>
+            <p>Generate a scannable QR for any dashboard. Point your phone camera at it to open the dashboard — no typing URLs.</p>
+          </div>
+          <div class="why-card">
+            <h3>Status checks &amp; favicons</h3>
+            <p>HOPS can ping your tiles to show up/down indicators, and auto-fetch favicons from sites without bundled icons.</p>
+          </div>
+          <div class="why-card">
+            <h3>Imports your old dashboard</h3>
+            <p>Already on Homer, Dashy, or Heimdall? HOPS imports your existing config, so trying it doesn't mean starting over.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="screenshots">
+      <div class="container">
+        <h2>Screenshots</h2>
+        <p class="section-lede">A few of the interfaces you'll actually spend time in.</p>
+        <div class="shots">
+          <div class="shot">
+            <img src="screenshots/admin.png" alt="Admin page — manage multiple dashboards" />
+            <div class="shot-caption"><b>Admin page</b><span>Manage multiple dashboards from one place</span></div>
+          </div>
+          <div class="shot">
+            <img src="screenshots/admin1.png" alt="QR code modal for any dashboard" />
+            <div class="shot-caption"><b>QR codes</b><span>Share any dashboard with a phone, no typing</span></div>
+          </div>
+          <div class="shot">
+            <img src="screenshots/edit-mode.png" alt="Edit mode — drag-and-drop" />
+            <div class="shot-caption"><b>Edit mode</b><span>Drag-and-drop tiles, groups, and tabs</span></div>
+          </div>
+          <div class="shot">
+            <img src="screenshots/edit-tile.png" alt="Tile editor with all options" />
+            <div class="shot-caption"><b>Tile editor</b><span>Every option in one modal — nothing hidden in config files</span></div>
+          </div>
+          <div class="shot">
+            <img src="screenshots/icon-picker.png" alt="Icon picker — thousands of icons" />
+            <div class="shot-caption"><b>Icon picker</b><span>Search thousands of bundled icons, or upload your own</span></div>
+          </div>
+          <div class="shot">
+            <img src="screenshots/mobile.png" alt="Responsive mobile layout" />
+            <div class="shot-caption"><b>Mobile</b><span>Responsive layout works on phones and tablets</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="install">
+      <div class="container">
+        <h2>Install</h2>
+        <p class="section-lede">HOPS runs on Linux, macOS, and Windows — x86-64 and ARM64 (Raspberry Pi 3B+/4/5/Zero 2 W). No dependencies.</p>
+        <div class="install-grid">
+          <div class="install-card">
+            <h3>🐳 Docker</h3>
+<pre><code>services:
+  hops:
+    image: ghcr.io/weaversgrainthorpe/hops:latest
+    ports:
+      - "8080:8080"
+    volumes:
+      - hops-data:/app/data
+    restart: unless-stopped
+volumes:
+  hops-data:</code></pre>
+            <p class="login">Then <code>docker compose up -d</code> and open <code>http://localhost:8080</code>.</p>
+          </div>
+          <div class="install-card">
+            <h3>📦 Binary</h3>
+<pre><code># Download for your platform from Releases
+curl -LO https://github.com/weaversgrainthorpe/HOPS/releases/latest/download/hops-linux-amd64.tar.gz
+tar -xzf hops-linux-amd64.tar.gz
+mkdir -p data
+./hops-linux-amd64 --port 8080 --data ./data --frontend ./frontend/build</code></pre>
+            <p class="login">Default login: <code>admin</code> / <code>admin</code> (you'll be forced to change it on first login).</p>
+          </div>
+        </div>
+        <p style="margin-top: 2rem; color: var(--text-muted);">For the full walkthrough see the <a href="https://github.com/weaversgrainthorpe/HOPS/blob/main/QUICKSTART.md"><b>Quick Start guide</b></a>, or jump to the <a href="https://github.com/weaversgrainthorpe/HOPS/blob/main/DEPLOY.md"><b>Deployment guide</b></a> for systemd, reverse proxies, and backups.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container footer-row">
+      <div>HOPS is free and open source under the <a href="https://github.com/weaversgrainthorpe/HOPS/blob/main/LICENSE">MIT License</a>.</div>
+      <div class="footer-links">
+        <a href="https://github.com/weaversgrainthorpe/HOPS">GitHub</a>
+        <a href="https://github.com/weaversgrainthorpe/HOPS/blob/main/USER_GUIDE.md">User Guide</a>
+        <a href="https://github.com/weaversgrainthorpe/HOPS/blob/main/CHANGELOG.md">Changelog</a>
+        <a href="https://github.com/weaversgrainthorpe/HOPS/discussions">Discussions</a>
+      </div>
+    </div>
+  </footer>
+
+</body>
+</html>
