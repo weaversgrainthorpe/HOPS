@@ -5,21 +5,14 @@ import (
 	"fmt"
 )
 
-// seedIconData seeds the database with icon categories and generic category icons
-// App-specific icons are loaded from dashboard-icons directory by ImportDashboardIcons
+// seedIconData seeds the database with icon categories and generic category icons.
+// App-specific icons are loaded from dashboard-icons directory by ImportDashboardIcons.
+//
+// This is idempotent: each row is INSERT OR IGNORE'd by primary key (id), so re-running
+// on an existing install will pick up newly-added bundled icons without touching the
+// user's existing entries or duplicating anything. This is what lets us ship new
+// bundled icons in patch releases without a migration step.
 func seedIconData(db *sql.DB) error {
-	// Check if categories already exist
-	var categoryCount int
-	err := db.QueryRow("SELECT COUNT(*) FROM icon_categories").Scan(&categoryCount)
-	if err != nil {
-		return fmt.Errorf("failed to check icon categories: %w", err)
-	}
-
-	if categoryCount > 0 {
-		// Already seeded
-		return nil
-	}
-
 	// Begin transaction for seeding
 	tx, err := db.Begin()
 	if err != nil {
@@ -49,11 +42,14 @@ func seedIconData(db *sql.DB) error {
 		{"cloud", "Cloud Providers", "mdi:cloud-outline", 12},
 		{"hardware", "Hardware", "mdi:chip", 13},
 		{"virtualization", "Virtualization", "mdi:server", 14},
+		{"audio", "Audio", "mdi:waveform", 15},
+		{"cameras", "Cameras & Surveillance", "mdi:cctv", 16},
+		{"sensors", "Smart Home & Sensors", "mdi:home-thermometer", 17},
 	}
 
 	for _, cat := range categories {
 		_, err := tx.Exec(
-			"INSERT INTO icon_categories (id, name, icon, order_num, is_preset) VALUES (?, ?, ?, ?, 1)",
+			"INSERT OR IGNORE INTO icon_categories (id, name, icon, order_num, is_preset) VALUES (?, ?, ?, ?, 1)",
 			cat.ID, cat.Name, cat.Icon, cat.Order,
 		)
 		if err != nil {
@@ -135,11 +131,107 @@ func seedIconData(db *sql.DB) error {
 		{"virtualization-vm", "Virtual Machine", "mdi:virtual-server", "virtualization"},
 		{"virtualization-hypervisor", "Hypervisor", "mdi:layers", "virtualization"},
 		{"virtualization-cluster", "Cluster", "mdi:server-network-outline", "virtualization"},
+
+		// Audio - speakers, microphones, music, soundwaves
+		{"audio-waveform", "Soundwave", "mdi:waveform", "audio"},
+		{"audio-sine-wave", "Sine Wave", "mdi:sine-wave", "audio"},
+		{"audio-ear", "Ear", "mdi:ear-hearing", "audio"},
+		{"audio-music", "Music", "mdi:music", "audio"},
+		{"audio-music-note", "Music Note", "mdi:music-note", "audio"},
+		{"audio-music-circle", "Music Circle", "mdi:music-circle", "audio"},
+		{"audio-music-clef-treble", "Treble Clef", "mdi:music-clef-treble", "audio"},
+		{"audio-album", "Album", "mdi:album", "audio"},
+		{"audio-playlist", "Playlist", "mdi:playlist-music", "audio"},
+		{"audio-podcast", "Podcast", "mdi:podcast", "audio"},
+		{"audio-radio", "Radio", "mdi:radio", "audio"},
+		{"audio-radio-tower", "Radio Tower", "mdi:radio-tower", "audio"},
+		{"audio-speaker", "Speaker", "mdi:speaker", "audio"},
+		{"audio-speaker-wireless", "Wireless Speaker", "mdi:speaker-wireless", "audio"},
+		{"audio-speaker-multiple", "Multi-Room Speakers", "mdi:speaker-multiple", "audio"},
+		{"audio-microphone", "Microphone", "mdi:microphone", "audio"},
+		{"audio-microphone-variant", "Microphone Variant", "mdi:microphone-variant", "audio"},
+		{"audio-headphones", "Headphones", "mdi:headphones", "audio"},
+		{"audio-headset", "Headset", "mdi:headset", "audio"},
+		{"audio-volume-high", "Volume High", "mdi:volume-high", "audio"},
+		{"audio-volume-medium", "Volume Medium", "mdi:volume-medium", "audio"},
+		{"audio-volume-low", "Volume Low", "mdi:volume-low", "audio"},
+		{"audio-volume-mute", "Volume Mute", "mdi:volume-mute", "audio"},
+		{"audio-equalizer", "Equalizer", "mdi:equalizer", "audio"},
+		{"audio-surround-sound", "Surround Sound", "mdi:surround-sound", "audio"},
+		{"audio-bluetooth", "Bluetooth Audio", "mdi:bluetooth-audio", "audio"},
+		{"audio-cast", "Cast Audio", "mdi:cast-audio", "audio"},
+		{"audio-cassette", "Cassette", "mdi:cassette", "audio"},
+		{"audio-metronome", "Metronome", "mdi:metronome", "audio"},
+		{"audio-record-player", "Record Player", "mdi:record-player", "audio"},
+
+		// Cameras & Surveillance - CCTV, NVR, security cameras, motion
+		{"cameras-cctv", "CCTV Camera", "mdi:cctv", "cameras"},
+		{"cameras-cctv-off", "CCTV Off", "mdi:cctv-off", "cameras"},
+		{"cameras-video", "Video", "mdi:video", "cameras"},
+		{"cameras-video-outline", "Video Outline", "mdi:video-outline", "cameras"},
+		{"cameras-video-wireless", "Wireless Camera", "mdi:video-wireless", "cameras"},
+		{"cameras-camera", "Camera", "mdi:camera", "cameras"},
+		{"cameras-camera-outline", "Camera Outline", "mdi:camera-outline", "cameras"},
+		{"cameras-camera-iris", "Camera Iris", "mdi:camera-iris", "cameras"},
+		{"cameras-camera-front", "Front Camera", "mdi:camera-front", "cameras"},
+		{"cameras-camera-rear", "Rear Camera", "mdi:camera-rear", "cameras"},
+		{"cameras-doorbell", "Doorbell", "mdi:doorbell", "cameras"},
+		{"cameras-doorbell-video", "Video Doorbell", "mdi:doorbell-video", "cameras"},
+		{"cameras-webcam", "Webcam", "mdi:webcam", "cameras"},
+		{"cameras-motion-sensor", "Motion Sensor", "mdi:motion-sensor", "cameras"},
+		{"cameras-eye", "Eye / Watching", "mdi:eye", "cameras"},
+		{"cameras-eye-outline", "Eye Outline", "mdi:eye-outline", "cameras"},
+		{"cameras-eye-circle", "Eye Circle", "mdi:eye-circle", "cameras"},
+		{"cameras-monitor", "Monitor", "mdi:monitor", "cameras"},
+		{"cameras-monitor-multiple", "Multi-Monitor", "mdi:monitor-multiple", "cameras"},
+		{"cameras-monitor-eye", "Monitor Eye", "mdi:monitor-eye", "cameras"},
+		{"cameras-account-eye", "Watching Account", "mdi:account-eye", "cameras"},
+		{"cameras-shield-account", "Shielded Account", "mdi:shield-account", "cameras"},
+		{"cameras-shield-search", "Security Search", "mdi:shield-search", "cameras"},
+		{"cameras-record-rec", "Recording", "mdi:record-rec", "cameras"},
+		{"cameras-video-vintage", "Vintage Video", "mdi:video-vintage", "cameras"},
+		{"cameras-image", "Image", "mdi:image", "cameras"},
+		{"cameras-image-multiple", "Multiple Images", "mdi:image-multiple", "cameras"},
+		{"cameras-alarm-light", "Alarm Light", "mdi:alarm-light", "cameras"},
+		{"cameras-radar", "Radar", "mdi:radar", "cameras"},
+		{"cameras-magnify-scan", "Scan", "mdi:magnify-scan", "cameras"},
+
+		// Smart Home & Sensors - lights, switches, thermostats, doors, windows, env sensors
+		{"sensors-thermometer", "Thermometer", "mdi:thermometer", "sensors"},
+		{"sensors-thermostat", "Thermostat", "mdi:thermostat", "sensors"},
+		{"sensors-thermostat-box", "Thermostat Box", "mdi:thermostat-box", "sensors"},
+		{"sensors-home-thermometer", "Home Thermometer", "mdi:home-thermometer", "sensors"},
+		{"sensors-lightbulb", "Lightbulb", "mdi:lightbulb", "sensors"},
+		{"sensors-lightbulb-on", "Light On", "mdi:lightbulb-on", "sensors"},
+		{"sensors-lightbulb-off", "Light Off", "mdi:lightbulb-off", "sensors"},
+		{"sensors-light-switch", "Light Switch", "mdi:light-switch", "sensors"},
+		{"sensors-toggle-switch", "Toggle Switch", "mdi:toggle-switch", "sensors"},
+		{"sensors-ceiling-light", "Ceiling Light", "mdi:ceiling-light", "sensors"},
+		{"sensors-lamp", "Lamp", "mdi:lamp", "sensors"},
+		{"sensors-motion-sensor", "Motion Sensor", "mdi:motion-sensor", "sensors"},
+		{"sensors-door", "Door (closed)", "mdi:door", "sensors"},
+		{"sensors-door-open", "Door (open)", "mdi:door-open", "sensors"},
+		{"sensors-window-closed", "Window (closed)", "mdi:window-closed", "sensors"},
+		{"sensors-window-open", "Window (open)", "mdi:window-open", "sensors"},
+		{"sensors-garage", "Garage", "mdi:garage", "sensors"},
+		{"sensors-water", "Water", "mdi:water", "sensors"},
+		{"sensors-water-percent", "Humidity / Water %", "mdi:water-percent", "sensors"},
+		{"sensors-water-pump", "Water Pump", "mdi:water-pump", "sensors"},
+		{"sensors-fire", "Fire", "mdi:fire", "sensors"},
+		{"sensors-smoke-detector", "Smoke Detector", "mdi:smoke-detector", "sensors"},
+		{"sensors-gas-cylinder", "Gas", "mdi:gas-cylinder", "sensors"},
+		{"sensors-fan", "Fan", "mdi:fan", "sensors"},
+		{"sensors-air-conditioner", "Air Conditioner", "mdi:air-conditioner", "sensors"},
+		{"sensors-radiator", "Radiator", "mdi:radiator", "sensors"},
+		{"sensors-blinds", "Blinds", "mdi:blinds", "sensors"},
+		{"sensors-power-plug", "Power Plug", "mdi:power-plug", "sensors"},
+		{"sensors-leaf", "Leaf / Eco", "mdi:leaf", "sensors"},
+		{"sensors-weather-sunny", "Sunny", "mdi:weather-sunny", "sensors"},
 	}
 
 	for _, icon := range icons {
 		_, err := tx.Exec(
-			"INSERT INTO icons (id, name, icon, category_id, is_preset) VALUES (?, ?, ?, ?, 1)",
+			"INSERT OR IGNORE INTO icons (id, name, icon, category_id, is_preset) VALUES (?, ?, ?, ?, 1)",
 			icon.ID, icon.Name, icon.Icon, icon.Category,
 		)
 		if err != nil {

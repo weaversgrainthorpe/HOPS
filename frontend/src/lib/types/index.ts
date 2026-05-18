@@ -56,7 +56,7 @@ export interface Entry {
   icon: string;
   iconUrl?: string;
   description?: string;
-  openMode: 'iframe' | 'newtab' | 'sametab' | 'modal';
+  openMode: 'iframe' | 'newtab' | 'sametab' | 'popup';
   statusCheck?: StatusCheck;
   size: 'small' | 'medium' | 'large';
   color?: string;

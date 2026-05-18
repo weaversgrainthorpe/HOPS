@@ -5,6 +5,29 @@ All notable changes to HOPS (Home Operations Portal System) will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.14] - 2026-05-18
+
+### Added
+- **Three new bundled icon categories** in the picker: **Audio** (speakers, microphones, soundwaves, music, podcasts), **Cameras & Surveillance** (CCTV, doorbells, motion sensors, NVR), **Smart Home & Sensors** (thermostats, lights, switches, doors, windows, water/fire/fan/blinds). 90 new icons total. The seed function is now idempotent — bundled icons added in future patch releases will be picked up by existing installs on next startup without a migration.
+- **Copy a group to another tab.** The Group editor's "Move to Another Tab" section is now "Move or Copy to Another Tab" with two action buttons.
+- **Copy a tile to another tab/group.** Same pattern on the Tile editor.
+
+### Fixed
+- **All-class data-loss races eliminated by a save queue refactor.** Every mutation handler now goes through `mutateDashboard(dashboardId, mutator)` — the mutator runs against the *latest* dashboard state at execution time, and saves are serialized through a single queue. Previously each handler took a snapshot of the dashboard prop and called `updateDashboard` independently; if two mutations fired in quick succession, both snapshots predated the other's change → whichever PUT landed last silently overwrote the other. This was the root cause of the drag-then-delete tile-vanishing bug, and a class of similar races on rapid edits, cross-group drags, and cut-paste.
+- **Cross-group drag no longer silently loses tiles.** Two compounding bugs were fixed:
+  1. Source group's `handleDndConsider` was overwriting the `_sourceGroupId` tag on entries that had just arrived in the target zone, so `handleMoveEntry` was being called with `sourceGroupId == targetGroupId` and the splice silently failed. Now entries are pre-tagged at items-init/sync time and never re-tagged in consider events.
+  2. Source group's `handleDndFinalize` was also firing a "reorder" save (with the moved entry removed) while target's `handleMoveEntry` was still trying to splice the entry out of source. Source now detects "entry left this group" and skips saving — the target's `handleMoveEntry` owns the cross-group save.
+- **Tile `openMode` mismatch — popup tiles now actually open as popups.** The Tile editor was saving `openMode: 'popup'`, the TypeScript type union said `'modal'`, and `Entry.svelte`'s switch handled `'modal'` (not `'popup'`). Any tile configured as "Popup Modal" silently fell through to the default and opened in a new tab. Standardised on `'popup'` everywhere.
+- **Move and Copy buttons in the Tile/Group editors are now disabled during the in-flight save.** Previously a double-click could fire the operation twice against the same stale snapshot, with both PUTs racing and one silently overwriting the other.
+- **Cut + Paste (Ctrl+X / Ctrl+V) was racing.** The paste handler in `Dashboard.svelte` and `Group.svelte` was not awaiting the add before firing the delete; both saves went out in parallel against the same starting state and one silently won. Both flows now await properly.
+- **Removed the redundant per-tab `BackgroundSlideshow`** in `TabPanel.svelte`. The dashboard-level slideshow already routes via `effectiveBackground()` (picking the active tab's background when `perTabBackgrounds` is on); the second one in TabPanel was painting stale tab backgrounds on top when `perTabBackgrounds` was off.
+- **Icon picker no longer hangs the browser when opening a category with many icons.** The grid was loading all SVGs upfront, hitting browser concurrent-connection limits and flooding the console with `net::ERR_FAILED`. Added `loading="lazy"` and `decoding="async"` to icon `<img>` elements so they load as you scroll.
+- **`structuredClone` → `$state.snapshot` in all mutation handlers.** `structuredClone` was failing on Svelte 5 reactive Proxies, occasionally throwing `DataCloneError` (visible during drag operations). `$state.snapshot` is the Svelte-5-aware deep clone.
+- **Same `$state.snapshot` fix applied to svelte-dnd-action's `items` prop** in Group, TabPanel, and Dashboard. svelte-dnd-action does its own internal `structuredClone()` on items, which was throwing `DataCloneError` on Svelte 5 Proxies.
+
+### Internal
+- Added `scripts/deploy-local.sh` — local-only build + deploy without going through GitHub Releases. Useful during rapid iteration when the release workflow is disabled (or just slow due to multi-arch Docker build).
+
 ## [1.4.12] - 2026-05-18
 
 ### Added

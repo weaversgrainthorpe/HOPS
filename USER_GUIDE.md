@@ -1,4 +1,4 @@
-# HOPS User Guide (v1.4.12)
+# HOPS User Guide (v1.4.14)
 
 Welcome to HOPS (Home Operations Portal System)! This guide will help you get started and make the most of your dashboard.
 
@@ -224,6 +224,14 @@ All of these can be changed later from the group's edit modal.
 2. Drag the group by its header
 3. Drop it in the desired position
 
+### Moving or Copying a Group to Another Tab
+
+For across-tab moves (which can't be done by drag), open the group editor:
+1. Enter Edit Mode → click the group's pencil to open its editor
+2. Expand **"Move or Copy to Another Tab"**
+3. Pick a target tab
+4. Click **Move Group** (relocates everything, original gone) or **Copy Group** (deep-clones the group and all its tiles with fresh IDs; original stays)
+
 ### Deleting a Group
 
 1. Enter Edit Mode
@@ -275,6 +283,13 @@ Only **Name** and **URL** are required — everything else can be added or chang
 1. Enter Edit Mode
 2. Drag a tile from one group
 3. Drop it into another group
+
+#### Between Tabs (Move or Copy via the Tile editor)
+For moves across tabs (which can't be done by drag), open the tile editor:
+1. Enter Edit Mode → click the tile to open its editor
+2. Expand **"Move or Copy to Different Tab/Group"**
+3. Pick a target tab, then a target group
+4. Click **Move** (relocates the tile) or **Copy** (duplicates the tile, original stays)
 
 #### Copy, Cut, and Paste
 1. Enter Edit Mode
