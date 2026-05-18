@@ -1,4 +1,4 @@
-# HOPS User Guide (v1.4.5)
+# HOPS User Guide (v1.4.8)
 
 Welcome to HOPS (Home Operations Portal System)! This guide will help you get started and make the most of your dashboard.
 
@@ -151,9 +151,15 @@ The QR encodes `<current site URL>` + the dashboard's path. Because it uses your
 ### Adding a Tab
 
 1. Enter Edit Mode
-2. Click the "+ New Tab" button
-3. Enter tab name
-4. Click "Save"
+2. Click the **+ Add Tab** button at the end of the tab bar.
+   - On a brand-new dashboard with no tabs yet, a centred **"Add Your First Tab"** button appears instead — same flow.
+3. The **New Tab** modal opens. Fill in:
+   - **Name** *(required)*
+   - **Icon** *(optional)* — type an Iconify name or click **Browse**
+   - **Background Color** + **Opacity** slider *(optional)*
+4. Click **Create**.
+
+The tab is only created when you click Create — cancelling leaves nothing behind.
 
 ### Editing a Tab
 
@@ -161,9 +167,11 @@ The QR encodes `<current site URL>` + the dashboard's path. Because it uses your
 2. Click on the tab you want to edit
 3. Edit the following:
    - **Name**: Tab display name
-   - **Color**: Custom color (optional)
+   - **Icon**: Optional icon shown next to the tab name
+   - **Color**: Custom background color (optional)
    - **Opacity**: Background opacity (optional)
-   - **Background**: Tab-specific background
+   - **Background**: Tab-specific background image (only when **per-tab backgrounds** is enabled on the dashboard)
+4. Click **Save**.
 
 ### Reordering Tabs
 
@@ -182,9 +190,16 @@ The QR encodes `<current site URL>` + the dashboard's path. Because it uses your
 ### Adding a Group
 
 1. Enter Edit Mode
-2. Click "+ Add Group" at the bottom of the tab
-3. Enter group name
-4. Click "Save"
+2. Click **Add Group** at the bottom of the tab
+3. The **New Group** modal opens. Fill in:
+   - **Name** *(required)*
+   - **Icon** *(optional)* — type an Iconify name or click **Browse**
+   - **Background Color** + **Opacity** slider *(optional)*
+   - **Text Color**: Auto (recommended), Light, or Dark
+   - **Display Style**: Full Header (default) or Folder Tab
+4. Click **Create**.
+
+All of these can be changed later from the group's edit modal.
 
 ### Editing a Group
 
@@ -222,22 +237,25 @@ The QR encodes `<current site URL>` + the dashboard's path. Because it uses your
 ### Adding a Tile
 
 1. Enter Edit Mode
-2. Click "**Add Tile**" in the group
-3. Fill in the tile details:
-   - **Name**: Display name
-   - **URL**: Target URL
+2. Click **Add Tile** in the group
+3. The **New Tile** modal opens. Fill in:
+   - **Name** *(required)*: Display name
+   - **Subtitle/Description** *(optional)*: small text under the name
+   - **URL** *(required)*: Target URL
    - **Icon**: Choose from 150,000+ icons via Iconify
      - Type an icon name directly (e.g., `mdi:docker`, `simple-icons:plex`)
-     - OR click "Browse" to open the **Icon Picker** with 1,900+ curated homelab icons
-     - Search by name or browse by category (Containers, Media, Monitoring, etc.)
-     - **My Uploads**: Previously uploaded custom icons appear here for easy reuse
-     - **Recently Used**: Your last 20 selected icons are tracked for quick access
-   - **Description**: Optional subtitle
+     - OR click **Browse** to open the **Icon Picker** with 1,900+ curated homelab icons (search by name or browse by category — Containers, Media, Monitoring, etc.)
+     - OR click **Upload** to use your own image file
+     - **My Uploads**: previously uploaded custom icons appear here for easy reuse
+     - **Recently Used**: your last 20 selected icons are tracked for quick access
+   - **Background Color** + **Opacity** slider *(optional — leave blank to inherit the group's colour)*
    - **Size**: Small, Medium, or Large
-   - **Open Mode**: How the link opens (New Tab, Same Tab, iFrame, Modal)
-   - **Color**: Custom background color (optional)
-   - **Opacity**: Background opacity (optional)
-4. Click "Save"
+   - **Open Mode**: how the link opens (New Tab, Same Tab, iFrame, Modal)
+   - **Enable Status Check** *(optional)*: HOPS will ping the URL and show an up/down indicator on the tile
+   - **Auto-fetch Favicon** *(optional)*: grabs the site's favicon to use as the tile icon (handy when no Iconify icon fits)
+4. Click **Create**.
+
+Only **Name** and **URL** are required — everything else can be added or changed later via the tile's edit modal.
 
 ### Editing a Tile
 
@@ -473,7 +491,7 @@ Import is done from the Admin page:
 | Delete Tile | Right-click → Delete OR hover X button |
 | Reorder Tiles | Drag and drop (in Edit Mode) |
 | Move Between Groups | Drag to other group (in Edit Mode) |
-| Add Tab | Click "+ New Tab" (in Edit Mode) |
+| Add Tab | Click "+ Add Tab" (in Edit Mode) |
 | Add Group | Click "+ Add Group" (in Edit Mode) |
 | Add Tile | Click "Add Tile" (in Edit Mode) |
 | Change Theme | Click theme icon in header |

@@ -1,6 +1,6 @@
 # HOPS - Home Operations Portal System
 
-**Version 1.4.5**
+**Version 1.4.8**
 
 A modern, self-hosted homepage dashboard for the homelab community.
 
