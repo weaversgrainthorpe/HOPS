@@ -26,21 +26,29 @@ Already using Homer, Dashy, or Heimdall? HOPS can import your existing configura
 
 <table>
   <tr>
-    <td width="50%" valign="top">
+    <td width="33%" valign="top">
       <a href="docs/screenshots/admin.png"><img src="docs/screenshots/admin.png" alt="Admin page — manage multiple dashboards" /></a>
-      <p align="center"><sub><b>Admin page</b> — manage multiple dashboards, generate QR codes</sub></p>
+      <p align="center"><sub><b>Admin page</b> — manage multiple dashboards from one place</sub></p>
     </td>
-    <td width="50%" valign="top">
+    <td width="33%" valign="top">
+      <a href="docs/screenshots/admin1.png"><img src="docs/screenshots/admin1.png" alt="QR code modal for any dashboard" /></a>
+      <p align="center"><sub><b>QR codes</b> — share any dashboard with a phone, no typing</sub></p>
+    </td>
+    <td width="33%" valign="top">
       <a href="docs/screenshots/edit-mode.png"><img src="docs/screenshots/edit-mode.png" alt="Edit mode — drag-and-drop, no YAML" /></a>
       <p align="center"><sub><b>Edit mode</b> — drag-and-drop tiles, groups, and tabs; no YAML</sub></p>
     </td>
   </tr>
   <tr>
-    <td width="50%" valign="top">
-      <a href="docs/screenshots/icon-picker.png"><img src="docs/screenshots/icon-picker.png" alt="Icon picker — thousands of icons" /></a>
-      <p align="center"><sub><b>Icon picker</b> — search across thousands of bundled icons, or upload your own</sub></p>
+    <td width="33%" valign="top">
+      <a href="docs/screenshots/edit-tile.png"><img src="docs/screenshots/edit-tile.png" alt="Tile edit modal" /></a>
+      <p align="center"><sub><b>Tile editor</b> — every option in one modal; nothing hidden in config files</sub></p>
     </td>
-    <td width="50%" valign="top">
+    <td width="33%" valign="top">
+      <a href="docs/screenshots/icon-picker.png"><img src="docs/screenshots/icon-picker.png" alt="Icon picker — thousands of icons" /></a>
+      <p align="center"><sub><b>Icon picker</b> — search thousands of bundled icons, or upload your own</sub></p>
+    </td>
+    <td width="33%" valign="top">
       <a href="docs/screenshots/mobile.png"><img src="docs/screenshots/mobile.png" alt="Responsive mobile layout" /></a>
       <p align="center"><sub><b>Mobile</b> — responsive layout works on phones and tablets</sub></p>
     </td>
