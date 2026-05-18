@@ -651,7 +651,7 @@
       </div>
     {/if}
 
-    {#if dashboard.tabs.length >= 1}
+    {#if dashboard.tabs.length >= 1 || $editMode}
       <div
         class="tabs"
         role="tablist"
@@ -764,9 +764,16 @@
     />
   {:else}
     <div class="empty-dashboard">
-      <p>No tabs configured for this dashboard</p>
+      <p>No tabs yet on this dashboard</p>
       <p class="hint">Tabs let you organize groups of tiles by purpose (e.g. Media, Tools, Networking).</p>
-      <a href="/admin">Go to Admin Panel</a>
+      {#if $editMode}
+        <button class="add-first-tab-btn" onclick={handleAddTab}>
+          <Icon icon="mdi:plus" width="20" />
+          Add Your First Tab
+        </button>
+      {:else}
+        <a href="/">Go to Admin Panel</a>
+      {/if}
     </div>
   {/if}
 </div>
@@ -1065,15 +1072,25 @@
     max-width: 32rem;
   }
 
-  .empty-dashboard a {
+  .empty-dashboard a,
+  .add-first-tab-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
     padding: 0.75rem 1.5rem;
     background: var(--accent);
     color: white;
+    border: none;
     border-radius: 0.5rem;
     text-decoration: none;
+    font-size: 0.9375rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background var(--transition-normal);
   }
 
-  .empty-dashboard a:hover {
+  .empty-dashboard a:hover,
+  .add-first-tab-btn:hover {
     background: var(--accent-hover);
   }
 

@@ -138,7 +138,9 @@ You can toggle Edit Mode on and off at any time using the **pencil icon** in the
 
 ## Step 6: Add a Tab
 
-1. Click **Add Tab** at the end of the tab bar
+On a brand new dashboard you'll see a centred **"Add Your First Tab"** button — click it. Once you have at least one tab, future tabs can be added via the **+ Add Tab** button at the end of the tab bar.
+
+1. Click **Add Your First Tab** (or **+ Add Tab** if you already have one)
 2. Enter a name, for example: `Services`
 3. Click **Create**
 
