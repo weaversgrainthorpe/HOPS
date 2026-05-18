@@ -16,7 +16,7 @@
 		"test:coverage": "vitest run --coverage"
 	},
 	"devDependencies": {
-		"@iconify/svelte": "^5.1.0",
+		"@iconify/svelte": "^5.2.1",
 		"@sveltejs/adapter-auto": "^7.0.0",
 		"@sveltejs/adapter-static": "^3.0.10",
 		"@sveltejs/kit": "^2.49.1",
