@@ -43,6 +43,18 @@
   let slideshowInterval = $state(background?.interval || 30);
   // svelte-ignore state_referenced_locally
   let transitionEffect = $state<'crossfade' | 'slide' | 'slide-up' | 'slide-down' | 'zoom' | 'zoom-out' | 'fade-black' | 'blur' | 'flip' | 'swirl' | 'wipe' | 'curtain' | 'circle' | 'diamond' | 'dissolve' | 'flash' | 'glitch' | 'kenburns' | 'random' | 'none'>(background?.transition || 'crossfade');
+
+  // Same pool used by BackgroundSlideshow when 'random' is selected.
+  const availableTransitions = [
+    'crossfade', 'slide', 'slide-up', 'slide-down', 'zoom', 'zoom-out',
+    'fade-black', 'blur', 'flip', 'kenburns', 'wipe', 'swirl',
+    'dissolve', 'flash', 'glitch', 'curtain', 'circle', 'diamond'
+  ];
+  let currentRandomTransition = $state(availableTransitions[Math.floor(Math.random() * availableTransitions.length)]);
+  // Resolves 'random' to a concrete transition for the preview render.
+  // Without this the preview was applying class transition-random, which
+  // has no CSS rule, so nothing animated.
+  let effectiveTransition = $derived(transitionEffect === 'random' ? currentRandomTransition : transitionEffect);
   // svelte-ignore state_referenced_locally
   let transitionDuration = $state(background?.transitionDuration || 1.5);
   // svelte-ignore state_referenced_locally
@@ -349,6 +361,13 @@
         // For curtain effect, capture the current image before switching
         const currentImage = previewLayer1Visible ? previewLayer1Image : previewLayer2Image;
 
+        // If 'random' is selected, pick a new concrete transition for this cycle.
+        // Must do this BEFORE checking effectiveTransition below so the curtain
+        // detection picks up the freshly-rolled value.
+        if (transitionEffect === 'random') {
+          currentRandomTransition = availableTransitions[Math.floor(Math.random() * availableTransitions.length)];
+        }
+
         previewIndex = (previewIndex + 1) % slideshowImages.length;
         const nextImage = slideshowImages[previewIndex];
 
@@ -360,11 +379,11 @@
           previewLayer1KenBurns = (previewLayer1KenBurns + 2) % 4;
         }
 
-        // Trigger curtain animation if curtain effect is selected
-        if (transitionEffect === 'curtain') {
+        // Trigger curtain animation if curtain effect is currently in use
+        // (configured directly OR rolled by random this cycle).
+        if (effectiveTransition === 'curtain') {
           curtainPreviousImage = currentImage;
           curtainAnimating = true;
-          // Reset animation state after transition completes
           setTimeout(() => {
             curtainAnimating = false;
           }, transitionDuration * 1000);
@@ -637,30 +656,30 @@
         <!-- Transition Preview - positioned right after effect selection -->
         {#if slideshowImages.length > 1}
           <div class="transition-preview">
-            <label><Icon icon="mdi:eye" width="16" /> Transition Preview ({transitionEffect})</label>
+            <label><Icon icon="mdi:eye" width="16" /> Transition Preview ({transitionEffect}{transitionEffect === 'random' ? ` → ${effectiveTransition}` : ''})</label>
             <div class="preview-container">
               <div
-                class="preview-layer layer-1 transition-{transitionEffect}"
+                class="preview-layer layer-1 transition-{effectiveTransition}"
                 class:visible={previewLayer1Visible}
-                class:kenburns-0={transitionEffect === 'kenburns' && previewLayer1KenBurns === 0}
-                class:kenburns-1={transitionEffect === 'kenburns' && previewLayer1KenBurns === 1}
-                class:kenburns-2={transitionEffect === 'kenburns' && previewLayer1KenBurns === 2}
-                class:kenburns-3={transitionEffect === 'kenburns' && previewLayer1KenBurns === 3}
+                class:kenburns-0={effectiveTransition === 'kenburns' && previewLayer1KenBurns === 0}
+                class:kenburns-1={effectiveTransition === 'kenburns' && previewLayer1KenBurns === 1}
+                class:kenburns-2={effectiveTransition === 'kenburns' && previewLayer1KenBurns === 2}
+                class:kenburns-3={effectiveTransition === 'kenburns' && previewLayer1KenBurns === 3}
                 style:background-image={previewLayer1Image ? `url(${previewLayer1Image})` : 'none'}
                 style:--transition-duration="{transitionDuration}s"
               ></div>
               <div
-                class="preview-layer layer-2 transition-{transitionEffect}"
+                class="preview-layer layer-2 transition-{effectiveTransition}"
                 class:visible={!previewLayer1Visible}
-                class:kenburns-0={transitionEffect === 'kenburns' && previewLayer2KenBurns === 0}
-                class:kenburns-1={transitionEffect === 'kenburns' && previewLayer2KenBurns === 1}
-                class:kenburns-2={transitionEffect === 'kenburns' && previewLayer2KenBurns === 2}
-                class:kenburns-3={transitionEffect === 'kenburns' && previewLayer2KenBurns === 3}
+                class:kenburns-0={effectiveTransition === 'kenburns' && previewLayer2KenBurns === 0}
+                class:kenburns-1={effectiveTransition === 'kenburns' && previewLayer2KenBurns === 1}
+                class:kenburns-2={effectiveTransition === 'kenburns' && previewLayer2KenBurns === 2}
+                class:kenburns-3={effectiveTransition === 'kenburns' && previewLayer2KenBurns === 3}
                 style:background-image={previewLayer2Image ? `url(${previewLayer2Image})` : 'none'}
                 style:--transition-duration="{transitionDuration}s"
               ></div>
               <!-- Curtain overlay: shows the previous image splitting apart -->
-              {#if transitionEffect === 'curtain' && curtainAnimating}
+              {#if effectiveTransition === 'curtain' && curtainAnimating}
                 <div
                   class="curtain-overlay"
                   style:--transition-duration="{transitionDuration}s"
