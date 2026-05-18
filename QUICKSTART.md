@@ -138,6 +138,17 @@ Dashboard            (e.g. "Home")           — one URL like /home
 
 You'll create one of each as you work through the next steps.
 
+### URLs at a glance
+
+HOPS serves two kinds of URL on the same port:
+
+| URL                                        | Shows                              | Login required?                          |
+|--------------------------------------------|------------------------------------|------------------------------------------|
+| `http://<host>:8080/`                      | Admin page (manage dashboards)     | **Yes**                                  |
+| `http://<host>:8080/<dashboard-path>`      | A dashboard (e.g. `/home`)         | **No** — anyone on the network can view  |
+
+This means you can pin a dashboard URL on a phone or wall tablet (or share it with family) without exposing admin access. The admin page only needs to be reached when you're creating or changing things.
+
 ## Step 4: Create Your First Dashboard
 
 1. On the Admin page, click **+ New Dashboard**

@@ -21,7 +21,7 @@ Welcome to HOPS (Home Operations Portal System)! This guide will help you get st
 
 ### First Time Setup
 
-1. Navigate to `/admin` to access the admin panel
+1. Navigate to `/` (the root URL) to access the admin panel
 2. Login with default credentials:
    - Username: `admin`
    - Password: `admin`
@@ -35,12 +35,29 @@ Welcome to HOPS (Home Operations Portal System)! This guide will help you get st
 
 ## Navigation
 
+### URL structure
+
+HOPS exposes two kinds of URL on the same port:
+
+| URL                                   | Shows                          | Login required?                          |
+|---------------------------------------|--------------------------------|------------------------------------------|
+| `http://<host>:8080/`                 | Admin page                     | **Yes** — admin login                    |
+| `http://<host>:8080/<dashboard-path>` | A dashboard                    | **No** — public to anyone on the network |
+
+You define `<dashboard-path>` when you create the dashboard (e.g. `/home`, `/network`, `/media`). Because dashboard URLs are unauthenticated, you can:
+
+- Pin a dashboard URL on a wall-mounted tablet
+- Share a dashboard link with family or housemates
+- Use [QR Codes](#qr-codes) to open a dashboard on a phone without typing the URL
+
+The admin page (`/`) only needs to be reached when you're creating or changing things — day-to-day use goes straight to a dashboard URL.
+
 ### Multiple Dashboards
 
-HOPS supports multiple dashboards accessible via different URLs:
-- `/home` - Your home dashboard
-- `/network` - Network services dashboard
-- `/media` - Media services dashboard
+HOPS supports multiple dashboards, each with their own URL path. Examples:
+- `/home` — Your home dashboard
+- `/network` — Network services dashboard
+- `/media` — Media services dashboard
 - etc.
 
 ### Tabs
@@ -77,7 +94,7 @@ See [QR Codes](#qr-codes) below — the admin panel can generate a scannable QR 
 ## Edit Mode
 
 Edit Mode allows you to modify your dashboards. To enter Edit Mode:
-1. Ensure you're logged in (visit `/admin` to login)
+1. Ensure you're logged in (visit `/`, the admin page)
 2. Navigate to any dashboard on **desktop or tablet** (editing is hidden on phones)
 3. Click the **pencil icon** in the header
 
@@ -94,7 +111,7 @@ Edit Mode allows you to modify your dashboards. To enter Edit Mode:
 
 ### Creating a Dashboard
 
-1. Go to `/admin`
+1. Go to `/` (the admin page)
 2. Click "Create New Dashboard"
 3. Enter a name and URL path
 4. Click "Save"
@@ -421,8 +438,8 @@ Import is done from the Admin page:
 ## Troubleshooting
 
 ### Can't Enter Edit Mode
-- Ensure you're logged in (visit `/admin`)
-- Check you're on a dashboard page (not `/admin` or `/`)
+- Ensure you're logged in (visit `/`, the admin page)
+- Check you're on a dashboard page (not the admin page at `/`)
 - Click the pencil icon in the header
 
 ### Tiles Not Opening
