@@ -5,6 +5,11 @@ All notable changes to HOPS (Home Operations Portal System) will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.8] - 2026-05-18
+
+### Fixed
+- **Add Tab is now lazy**, matching the Add Group and Add Tile flows. Previously, clicking **+ Add Tab** eagerly created a tab named "New Tab" *then* opened the edit modal — so cancelling left an orphan tab behind, and the modal momentarily rendered against `dashboard.tabs[editingTabIndex]` which could be transiently undefined under the right race. Now the modal opens first with empty fields; the tab is only created when the user clicks **Create**. Cancelling leaves nothing behind.
+
 ## [1.4.7] - 2026-05-18
 
 ### Fixed

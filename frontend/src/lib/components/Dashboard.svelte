@@ -22,6 +22,7 @@
   let { dashboard }: { dashboard: Dashboard } = $props();
   let activeTabIndex = $state(0);
   let editingTabIndex = $state<number | null>(null);
+  let showAddTabModal = $state(false);
   let showHeaderConfig = $state(false);
   let showBackgroundConfig = $state(false);
   let draggedTabs = $state<Tab[]>([]);
@@ -555,24 +556,37 @@
     };
   }
 
-  async function handleAddTab() {
+  // Opens an empty TabEditModal. The tab is only created if the user
+  // hits "Create" — consistent with Add Group and Add Tile.
+  function handleAddTab() {
     if (!requireAuth()) return;
+    showAddTabModal = true;
+  }
+
+  async function handleSaveNewTab(
+    name: string,
+    icon?: string,
+    iconUrl?: string,
+    color?: string,
+    opacity?: number
+  ) {
     const updatedDashboard = { ...dashboard };
     const newId = `tab-${Date.now()}-${Math.random().toString(36).substring(7)}`;
     const newTab: Tab = {
       id: newId,
-      name: 'New Tab',
+      name,
+      icon,
+      iconUrl,
+      color,
+      opacity,
       groups: [],
       order: updatedDashboard.tabs.length
     };
     updatedDashboard.tabs.push(newTab);
     await updateDashboard(updatedDashboard);
 
-    // Switch to the new tab
     activeTabIndex = updatedDashboard.tabs.length - 1;
-
-    // Open edit modal for the new tab
-    editingTabIndex = updatedDashboard.tabs.length - 1;
+    showAddTabModal = false;
   }
 
   async function handleDuplicateTab(tabId: string) {
@@ -777,6 +791,14 @@
     </div>
   {/if}
 </div>
+
+{#if showAddTabModal}
+  <TabEditModal
+    tabName=""
+    onSave={handleSaveNewTab}
+    onCancel={() => (showAddTabModal = false)}
+  />
+{/if}
 
 {#if editingTabIndex !== null && dashboard.tabs[editingTabIndex]}
   <TabEditModal
