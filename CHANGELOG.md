@@ -5,6 +5,15 @@ All notable changes to HOPS (Home Operations Portal System) will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.7] - 2026-05-18
+
+### Fixed
+- **Brand-new dashboards were a UX dead-end**: the tab bar (which contains the **+ Add Tab** button) was only rendered when at least one tab existed, so a fresh dashboard had no visible way to add the first tab. The empty state then pointed users to "Go to Admin Panel" — useless guidance when they were already in edit mode having just come from admin. Now:
+  - The tab bar is rendered whenever **edit mode is on**, even with zero tabs, so the **+ Add Tab** button is always reachable.
+  - The empty-state CTA is context-aware: shows a prominent **"Add Your First Tab"** button when in edit mode, falls back to the "Go to Admin Panel" link only when viewing as a non-admin.
+  - Fixed the empty-state link to point at `/` instead of `/admin` (the admin page IS `/` — `/admin` doesn't exist as a route).
+- QUICKSTART Step 6 updated to mention the new **"Add Your First Tab"** button.
+
 ## [1.4.6] - 2026-05-18
 
 ### Documentation
@@ -266,6 +275,7 @@ HOPS (Home Operations Portal System) is now ready for public use! A modern, self
 ### Credits
 Created by Jonathan Brown with Claude (Anthropic)
 
+[1.4.7]: https://github.com/weaversgrainthorpe/HOPS/releases/tag/v1.4.7
 [1.4.6]: https://github.com/weaversgrainthorpe/HOPS/releases/tag/v1.4.6
 [1.4.5]: https://github.com/weaversgrainthorpe/HOPS/releases/tag/v1.4.5
 [1.4.4]: https://github.com/weaversgrainthorpe/HOPS/releases/tag/v1.4.4
