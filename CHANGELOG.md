@@ -5,6 +5,12 @@ All notable changes to HOPS (Home Operations Portal System) will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.10] - 2026-05-18
+
+### Fixed
+- **Tabs are now switchable while in edit mode.** Clicking a tab in edit mode was opening that tab's edit modal instead of switching to it, forcing you to exit edit mode just to move between tabs. The per-tab pencil button (already shown in edit mode) remains the way to edit a tab's name/icon/etc.; clicking the tab body now always switches.
+- **Deleting a group no longer jumps back to the first tab.** The route page was wrapping `<Dashboard>` in `{#key dashboardKey}` keyed on the full serialized dashboard, so every save destroyed and recreated the Dashboard component — wiping `activeTabIndex` and any other local UI state. Removed the wrapper; Svelte 5's reactivity handles prop updates without it. Bonus: edits are snappier (no full-DOM remount on every save).
+
 ## [1.4.9] - 2026-05-18 — First public release
 
 HOPS is a self-hosted homepage dashboard for your homelab, configured entirely through a GUI — no YAML or JSON files. v1.4.9 is the first release published for general use. Earlier versions (v1.0.0 through v1.4.8) are preserved on the [GitHub Releases page](https://github.com/weaversgrainthorpe/HOPS/releases) as pre-releases for reference but were not intended for wider audiences.

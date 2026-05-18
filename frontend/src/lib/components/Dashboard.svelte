@@ -103,13 +103,12 @@
     activeTabIndex = index;
   }
 
-  function handleTabClick(index: number, e: MouseEvent) {
-    if ($editMode) {
-      e.stopPropagation();
-      editingTabIndex = index;
-    } else {
-      setActiveTab(index);
-    }
+  // Clicking a tab always switches to it — even in edit mode. The per-tab
+  // pencil button (rendered in edit mode) is the entry point for editing
+  // the tab itself; conflating "click to switch" with "click to edit" made
+  // it impossible to move between tabs while editing.
+  function handleTabClick(index: number) {
+    setActiveTab(index);
   }
 
   async function handleUpdateEntry(tabId: string, groupId: string, entryId: string, updatedEntry: Entry) {
@@ -691,9 +690,9 @@
               role="tab"
               tabindex="0"
               aria-selected={activeTabIndex === index}
-              aria-label={$editMode ? `Edit ${tab.name} tab` : `Switch to ${tab.name} tab`}
-              onclick={(e) => handleTabClick(index, e)}
-              onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleTabClick(index, e as unknown as MouseEvent); }}
+              aria-label={`Switch to ${tab.name} tab`}
+              onclick={() => handleTabClick(index)}
+              onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleTabClick(index); }}
             >
               {#if tab.iconUrl}
                 <img src={tab.iconUrl} alt="" class="tab-icon-img" />
