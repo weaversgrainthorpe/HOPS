@@ -120,6 +120,24 @@ On first login with the default `admin`/`admin` credentials, HOPS will **automat
 
 > If you ever want to change it later, click the **Change Password** button on the Admin page.
 
+## A Quick Mental Model
+
+Before you start clicking, here's how HOPS organises things — four layers, each contained by the one above:
+
+```
+Dashboard            (e.g. "Home")           — one URL like /home
+└── Tab              (e.g. "Services")       — horizontal tab at the top
+    └── Group        (e.g. "Media")          — labelled section with a coloured header
+        └── Tile     (e.g. "Plex")           — the clickable link to a service
+```
+
+- A **Dashboard** is a single page with its own URL. You can have many — one for the family, one for admin tools, one for a project.
+- A **Tab** is a section within a dashboard. Click between tabs to switch views without changing pages.
+- A **Group** is a labelled cluster of tiles inside a tab. Use groups to categorise — e.g. *Media*, *Network*, *Smart Home*.
+- A **Tile** is one clickable link to a service. It has a name, a URL, and usually an icon.
+
+You'll create one of each as you work through the next steps.
+
 ## Step 4: Create Your First Dashboard
 
 1. On the Admin page, click **+ New Dashboard**
