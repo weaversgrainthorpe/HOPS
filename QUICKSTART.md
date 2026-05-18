@@ -177,9 +177,11 @@ Groups organize your tiles within a tab.
    - **Auto-fetch Favicon**: grabs the site's favicon to use as the tile icon (handy when no Iconify icon fits)
 3. Click **Create**
 
-Your first tile appears in the group. Click it to make sure the link works.
+Your first tile appears in the group.
 
 > Only **Name** and **URL** are required — everything else can be added or changed later via the tile's edit button.
+
+To test that the link works, **toggle Edit Mode off** first (click the orange **pencil icon** in the navbar — the **Editing** indicator should disappear). Now clicking the tile follows its URL instead of opening the edit modal.
 
 ## Step 9: Make It Yours
 
