@@ -47,9 +47,37 @@ Use any image editor (GIMP, Photopea, macOS Preview's Markup) — a Gaussian blu
 4. Pick a device — iPhone 12 Pro or Pixel 5
 5. Screenshot just the device viewport area
 
+## Demo recording (optional but high-impact)
+
+In addition to the still screenshots, a short looping clip of HOPS in action converts much better than any static shot. Used by both the README and the landing page.
+
+| File | What to capture | Format | Duration | Width |
+|------|-----------------|--------|----------|-------|
+| `demo.gif` | A 30–45s walkthrough: enter Edit Mode, drag a tile, switch tabs, open the icon picker and search, hit the QR code icon on the admin page. Keep it tight — no dead time. | GIF (no audio) | 30–45s | 800–1200px |
+| `demo.mp4` | Same recording as `.gif`, just exported as MP4 for the landing page's `<video>` element (autoplay, muted, loop). | MP4 (h.264, no audio) | 30–45s | 1280×720 or 1920×1080 |
+
+### Capture tips
+
+- **macOS**: `Cmd+Shift+5` → "Record Selected Portion" → drag, hit Record.
+- **Linux**: [Peek](https://github.com/phw/peek) for GIF (one-click), [OBS](https://obsproject.com) for MP4.
+- **Windows**: Xbox Game Bar (Win+G), or [ShareX](https://getsharex.com/).
+- Hide the mouse cursor when possible — most tools have an option.
+- Record at the largest size, then downscale + compress (the source quality matters more than you'd think).
+- For GIF, run through [gifski](https://gif.ski/) to keep file size manageable while preserving quality. Target: under 5 MB for a 30s loop.
+
+### Suggested 30-second storyboard
+
+1. **0–5s**: Land on a dashboard in view mode, click a tile (zoom out / bounce a little to show it's live)
+2. **5–10s**: Click the pencil icon → "Editing" chip appears → drag a tile to a new group
+3. **10–18s**: Click "+ Add Tile" → modal opens → type name + URL → click Browse on icon → search "proxmox" → pick one → Create
+4. **18–25s**: Switch tabs (show responsiveness) → resize browser to phone width to show responsive layout
+5. **25–30s**: Back to admin page → click QR icon → big QR code appears
+
+After recording, drop the file(s) into `docs/screenshots/` and uncomment the placeholder blocks in `README.md` and `docs/index.html`.
+
 ## File size
 
-GitHub renders inline images directly, so keep these reasonable — under ~500 KB each. Run through [TinyPNG](https://tinypng.com/) or `pngquant` if larger.
+GitHub renders inline images directly, so keep these reasonable — under ~500 KB each (the demo GIF can go up to ~5 MB). Run PNGs through [TinyPNG](https://tinypng.com/) or `pngquant`, GIFs through [gifski](https://gif.ski/).
 
 ## Commit
 

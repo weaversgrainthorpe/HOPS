@@ -6,6 +6,15 @@ A modern, self-hosted homepage dashboard for the homelab community.
 
 ![HOPS dashboard](docs/screenshots/dashboard-hero.png)
 
+<!--
+  When the demo recording exists at docs/screenshots/demo.gif,
+  replace the line above with:
+  ![HOPS demo — 30-second walkthrough](docs/screenshots/demo.gif)
+
+  GitHub renders animated GIFs inline; MP4s require linking to GitHub-hosted
+  user content (drag-drop in an issue first to get a URL).
+-->
+
 ## Why Another Dashboard?
 
 Yes, there are already plenty of homelab dashboard and bookmark applications out there: Homer, Dashy, Heimdall, Homepage, Organizr, Homarr, and more. If you're using one and happy with it, stick with it. Seriously.
