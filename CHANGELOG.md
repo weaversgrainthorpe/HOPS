@@ -5,6 +5,12 @@ All notable changes to HOPS (Home Operations Portal System) will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.2] - 2026-05-19 — Icon picker z-index fix
+
+### Fixed
+
+- **Icon picker modal rendering behind its parent edit modal.** When opening the icon picker from the Tile/Group/Tab edit modal via the Browse button, the picker's backdrop sat at the same z-index as the parent modal, causing the parent form to bleed through and intercept clicks. Bumped `IconPickerModal` to `--z-modal-overlay` (1100), the same tier used by `PopupModal` and `IframeModal`, so child icon pickers always paint on top of the modal that opened them.
+
 ## [1.5.1] - 2026-05-19 — Bundled assets + accurate docs
 
 This patch fixes a packaging gap in v1.5.0 where the bundled icons and background presets weren't actually shipped to end users, and corrects documentation claims that didn't match the running code.
