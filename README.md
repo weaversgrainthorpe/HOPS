@@ -1,19 +1,10 @@
 # HOPS - Home Operations Portal System
 
-**Version 1.4.15** · **[hops.weaversgrainthorpe.github.io →](https://weaversgrainthorpe.github.io/HOPS/)**
+**Version 1.5.0** · **[hops.weaversgrainthorpe.github.io →](https://weaversgrainthorpe.github.io/HOPS/)**
 
 A modern, self-hosted homepage dashboard for the homelab community.
 
-![HOPS dashboard](docs/screenshots/dashboard-hero.png)
-
-<!--
-  When the demo recording exists at docs/screenshots/demo.gif,
-  replace the line above with:
-  ![HOPS demo — 30-second walkthrough](docs/screenshots/demo.gif)
-
-  GitHub renders animated GIFs inline; MP4s require linking to GitHub-hosted
-  user content (drag-drop in an issue first to get a URL).
--->
+![HOPS demo — 45-second walkthrough](docs/screenshots/demo.gif)
 
 ## Why Another Dashboard?
 
