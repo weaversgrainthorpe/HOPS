@@ -1,6 +1,7 @@
 <script lang="ts">
   import { confirmModalState, closeConfirmModal, type ConfirmOptions } from '$lib/stores/confirmModal';
   import { focusTrap } from '$lib/utils/focusTrap';
+  import { portal } from '$lib/utils/portal';
   import { COLORS } from '$lib/constants/colors';
   import Icon from '@iconify/svelte';
 
@@ -51,6 +52,7 @@
 {#if state.isOpen && state.options}
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
+    use:portal
     class="modal-backdrop"
     onclick={() => closeConfirmModal(false)}
     onkeydown={(e) => e.key === 'Escape' && closeConfirmModal(false)}

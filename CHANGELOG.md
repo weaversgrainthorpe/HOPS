@@ -5,6 +5,13 @@ All notable changes to HOPS (Home Operations Portal System) will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.3] - 2026-05-19 — Modal backdrop escape via portal
+
+### Fixed
+
+- **Modal backdrops not covering the full viewport.** `TabPanel`'s `.tab-content-wrapper` uses `backdrop-filter: blur(...)` to dim the dashboard background, which CSS treats as a containing block for `position: fixed` descendants. Any modal opened from inside a tab (edit-tile, edit-group, icon picker, confirm dialogs) had its full-screen backdrop pinned to the tab content box instead of the viewport, leaving dashboard tiles visibly bleeding through on the sides. Fixed by adding a `portal` Svelte action ([`portal.ts`](frontend/src/lib/utils/portal.ts)) that mounts the modal backdrop directly onto `document.body`, escaping every ancestor stacking context. Applied to the shared `Modal` component, `IconPickerModal`, and `ConfirmModal`.
+- The z-index bump from 1.5.2 is retained; together with the portal fix, nested modals now layer cleanly over their parents.
+
 ## [1.5.2] - 2026-05-19 — Icon picker z-index fix
 
 ### Fixed

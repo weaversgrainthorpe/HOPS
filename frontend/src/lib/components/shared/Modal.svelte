@@ -1,6 +1,7 @@
 <script lang="ts">
   import Icon from '@iconify/svelte';
   import { focusTrap } from '$lib/utils/focusTrap';
+  import { portal } from '$lib/utils/portal';
   import type { Snippet } from 'svelte';
 
   interface Props {
@@ -67,6 +68,7 @@
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
+  use:portal
   class="modal-backdrop"
   onclick={handleBackdropClick}
   onkeydown={(e) => e.key === 'Escape' && tryClose()}
