@@ -72,7 +72,6 @@ type Entry struct {
 	Color        string       `json:"color,omitempty"`
 	Opacity      float64      `json:"opacity,omitempty"`
 	ShowStatus   bool         `json:"showStatus,omitempty"`
-	FetchFavicon bool         `json:"fetchFavicon,omitempty"`
 	Order        int          `json:"order"`
 }
 
@@ -91,7 +90,7 @@ type Background struct {
 
 // StatusCheck configuration
 type StatusCheck struct {
-	Type     string `json:"type"` // http, icmp
+	Type     string `json:"type"` // http
 	Enabled  bool   `json:"enabled"`
 	Interval int    `json:"interval"` // seconds
 }

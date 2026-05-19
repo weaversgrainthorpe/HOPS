@@ -9,7 +9,7 @@ The frontend for HOPS (Home Operations Portal System) — a SvelteKit 2 + Svelte
 - **Language**: TypeScript
 - **Build Tool**: Vite 7
 - **Package Manager**: npm (NOT pnpm — both were present before v1.4.1, leading to drift)
-- **Icons**: `@iconify/svelte` (150,000+ icons via Iconify)
+- **Icons**: `@iconify/svelte` (200,000+ icons via Iconify, lazy-loaded from iconify.design CDN) + ~2,300 bundled SVGs from homarr-labs/dashboard-icons stored locally
 - **Drag & Drop**: `svelte-dnd-action`
 - **QR Codes**: `qrcode` (browser-side SVG generation; added in v1.4.0)
 - **Favicons (build-time only)**: `sharp`

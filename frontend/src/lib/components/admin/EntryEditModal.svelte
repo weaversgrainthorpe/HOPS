@@ -352,13 +352,6 @@
         </label>
       </div>
 
-      <div class="form-group checkbox-group">
-        <label>
-          <input type="checkbox" bind:checked={editedEntry.fetchFavicon} />
-          Auto-fetch Favicon
-        </label>
-      </div>
-
       {#if canMoveOrCopy}
         <div class="form-group full-width move-section">
           {#if !showMoveSection}

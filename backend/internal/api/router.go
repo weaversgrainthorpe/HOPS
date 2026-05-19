@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/weaversgrainthorpe/HOPS/internal/assets"
 	"github.com/weaversgrainthorpe/HOPS/internal/auth"
 	"github.com/weaversgrainthorpe/HOPS/internal/config"
 	"github.com/weaversgrainthorpe/HOPS/internal/database"
@@ -233,20 +234,14 @@ func (r *Router) serveBackgrounds(w http.ResponseWriter, req *http.Request) {
 	http.ServeFile(w, req, filePath)
 }
 
-// servePresets serves preset background images from the data/presets directory
+// servePresets serves preset background images from the embedded filesystem
 func (r *Router) servePresets(w http.ResponseWriter, req *http.Request) {
-	// Extract filename from path
 	filename := filepath.Base(req.URL.Path)
-
-	// Construct path to presets directory
-	presetsDir := filepath.Join(r.config.DataDir, "presets")
-	filePath := filepath.Join(presetsDir, filename)
 
 	// Set cache headers - presets are static
 	w.Header().Set("Cache-Control", "public, max-age=31536000")
 
-	// Serve the file
-	http.ServeFile(w, req, filePath)
+	http.ServeFileFS(w, req, assets.Presets, "presets/"+filename)
 }
 
 // serveIcons serves uploaded icon images from the data/icons directory
@@ -265,14 +260,10 @@ func (r *Router) serveIcons(w http.ResponseWriter, req *http.Request) {
 	http.ServeFile(w, req, filePath)
 }
 
-// serveDashboardIcons serves SVG icons from the dashboard-icons collection
+// serveDashboardIcons serves SVG icons from the embedded dashboard-icons collection
 func (r *Router) serveDashboardIcons(w http.ResponseWriter, req *http.Request) {
 	// Extract filename from path: /api/icons/dashboard/proxmox.svg -> proxmox.svg
 	filename := filepath.Base(req.URL.Path)
-
-	// Construct path to dashboard-icons directory
-	iconsDir := filepath.Join(r.config.DataDir, "icons", "dashboard-icons")
-	filePath := filepath.Join(iconsDir, filename)
 
 	// Set appropriate content type for SVG
 	if filepath.Ext(filename) == ".svg" {
@@ -282,8 +273,7 @@ func (r *Router) serveDashboardIcons(w http.ResponseWriter, req *http.Request) {
 	// Set long cache headers - these are static icons
 	w.Header().Set("Cache-Control", "public, max-age=31536000")
 
-	// Serve the file
-	http.ServeFile(w, req, filePath)
+	http.ServeFileFS(w, req, assets.DashboardIcons, "dashboard-icons/"+filename)
 }
 
 // serveSPA serves the Single Page Application with fallback to index.html

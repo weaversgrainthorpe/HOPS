@@ -1,6 +1,6 @@
 # HOPS - Home Operations Portal System
 
-**Version 1.5.0** · **[hops.weaversgrainthorpe.github.io →](https://weaversgrainthorpe.github.io/HOPS/)**
+**Version 1.5.1** · **[hops.weaversgrainthorpe.github.io →](https://weaversgrainthorpe.github.io/HOPS/)**
 
 A modern, self-hosted homepage dashboard for the homelab community.
 
@@ -100,17 +100,17 @@ For full deployment options (systemd, reverse proxy, backups), see the **[Instal
 - Per-dashboard and per-tab backgrounds
 - Background slideshow with 18 transition effects (crossfade, slide, zoom, Ken Burns, and more)
 - Configurable background overlay opacity and blur
-- Upload custom background images or choose from 64 curated presets
+- Upload custom background images or choose from ~90 curated presets
 - Theme hierarchy: Dashboard → Tab → Group → Tile (colour and opacity cascade)
-- 150,000+ built-in icons via Iconify, plus custom icon uploads
+- ~2,300 bundled app/service icons (homarr-labs/dashboard-icons), plus access to 200,000+ Iconify icons by name (loaded on demand from iconify.design), plus custom icon uploads
 - "My Uploads" and "Recently Used" icon categories
-- Multiple tile sizes (small, medium, large, wide)
+- Multiple tile sizes (small, medium, large)
 - 8 theme presets with light/dark/auto modes
 - Custom colours and opacity at every level
 
 ### Entries/Tiles
 - Open modes: iframe, new tab, same tab, popup modal
-- HTTP and ICMP status monitoring with response time
+- HTTP status monitoring with response time
 - Subtitles/descriptions on tiles
 - Custom tile colours and opacity
 - Cross-group drag & drop
@@ -143,7 +143,7 @@ For full deployment options (systemd, reverse proxy, backups), see the **[Instal
 - **Frontend**: SvelteKit 2 + Svelte 5 + TypeScript
 - **Backend**: Go (single binary, pure Go, no CGO)
 - **Database**: SQLite (pure Go implementation via modernc.org/sqlite)
-- **Icons**: Iconify (150,000+ icons)
+- **Icons**: ~2,300 bundled SVGs (homarr-labs/dashboard-icons) + Iconify (200,000+ icons by name, on demand)
 - **Drag & Drop**: svelte-dnd-action
 
 ## Keyboard Shortcuts

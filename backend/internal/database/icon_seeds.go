@@ -6,7 +6,7 @@ import (
 )
 
 // seedIconData seeds the database with icon categories and generic category icons.
-// App-specific icons are loaded from dashboard-icons directory by ImportDashboardIcons.
+// App-specific icons are loaded from the embedded filesystem by ImportDashboardIcons.
 //
 // This is idempotent: each row is INSERT OR IGNORE'd by primary key (id), so re-running
 // on an existing install will pick up newly-added bundled icons without touching the
@@ -58,7 +58,7 @@ func seedIconData(db *sql.DB) error {
 	}
 
 	// Seed ONLY generic category icons (fallback icons for each category)
-	// App-specific icons come from dashboard-icons directory
+	// App-specific icons come from the embedded dashboard-icons filesystem
 	icons := []struct {
 		ID       string
 		Name     string

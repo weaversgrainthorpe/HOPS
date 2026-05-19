@@ -47,7 +47,7 @@ hops/
 │   │   ├── converters/        # Format converters (Homer, Dashy, etc.)
 │   │   ├── database/          # SQLite setup, migrations, backups
 │   │   ├── models/            # Data models
-│   │   ├── status/            # Status checking (HTTP/ICMP)
+│   │   ├── status/            # Status checking (HTTP)
 │   │   └── version/           # Version information
 │   └── go.mod
 ├── frontend/

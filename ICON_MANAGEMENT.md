@@ -1,4 +1,4 @@
-# HOPS Icon Management (v1.5.0)
+# HOPS Icon Management (v1.5.1)
 
 ## Overview
 
@@ -10,7 +10,7 @@ HOPS features a complete database-backed icon management system that allows user
 - **All icons stored in SQLite database** — both preset icons (seeded on first run) and user-added icons live in the same `icons` table.
 - **Two preset sources** combine into the library you see in the picker:
   - **18 categories + ~155 generic Iconify icons** seeded from [`icon_seeds.go`](backend/internal/database/icon_seeds.go) — these are the category tabs and the generic icons that appear in each (e.g., `mdi:docker` for Containers, `mdi:play-circle` for Media, `mdi:waveform` for Audio). The seed function is idempotent (`INSERT OR IGNORE`), so new bundled icons added in patch releases are picked up by existing installs on next startup, with no migration step.
-  - **Up to ~6,888 app-specific SVG icons** imported from the [homarr-labs/dashboard-icons](https://github.com/homarr-labs/dashboard-icons) collection — imported on first run if the `<data-dir>/icons/dashboard-icons` directory is present. See [`dashboard_icons.go`](backend/internal/database/dashboard_icons.go).
+  - **~2,300 app-specific SVG icons** imported from the [homarr-labs/dashboard-icons](https://github.com/homarr-labs/dashboard-icons) collection — bundled inside the HOPS binary via `//go:embed` ([`backend/internal/assets/`](backend/internal/assets/)) and seeded into the database on first run. See [`dashboard_icons.go`](backend/internal/database/dashboard_icons.go).
 - **`is_preset` column** — distinguishes preset icons from user-created icons (presets are protected from deletion).
 - **`image_url` column** — set for icons that resolve to an SVG file on disk (dashboard-icons and uploaded user icons); empty for pure Iconify-name icons.
 - **Categories table** — organizes icons into category tabs.
@@ -159,7 +159,7 @@ For icons not already in HOPS, browse 200,000+ at [iconify.design](https://icon-
 
 ### Backend
 - [database.go](backend/internal/database/database.go) - Schema and migrations
-- [icon_seeds.go](backend/internal/database/icon_seeds.go) - 1,900+ preset icons
+- [icon_seeds.go](backend/internal/database/icon_seeds.go) - ~170 generic Iconify icon seeds across 18 categories
 - [handlers.go](backend/internal/api/handlers.go) - API endpoints
 - Cascading deletes for categories
 - Protection for preset data
