@@ -638,7 +638,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: var(--z-modal);
+    z-index: var(--z-modal-overlay);
     padding: 1rem;
   }
 
