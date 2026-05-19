@@ -1,4 +1,4 @@
-# HOPS Icon Management (v1.4.15)
+# HOPS Icon Management (v1.5.0)
 
 ## Overview
 
@@ -106,9 +106,9 @@ Read operations (GET) are public — no auth required.
 13. **Cloud Providers** - AWS, Azure, Google Cloud, DigitalOcean
 14. **Hardware** - Raspberry Pi, Synology, QNAP, HP, Dell
 15. **Virtualization** - Proxmox, VMware, ESXi, VirtualBox
-16. **Audio** *(new in v1.4.14)* - speakers, microphones, soundwaves, music, podcasts, headphones, equalizer
-17. **Cameras & Surveillance** *(new in v1.4.14)* - CCTV, IP cameras, doorbells, motion sensors, NVR, monitors
-18. **Smart Home & Sensors** *(new in v1.4.14)* - thermostats, lights, switches, doors, windows, water, fire, fan, blinds
+16. **Audio** *(new in v1.5.0)* - speakers, microphones, soundwaves, music, podcasts, headphones, equalizer
+17. **Cameras & Surveillance** *(new in v1.5.0)* - CCTV, IP cameras, doorbells, motion sensors, NVR, monitors
+18. **Smart Home & Sensors** *(new in v1.5.0)* - thermostats, lights, switches, doors, windows, water, fire, fan, blinds
 
 ## Usage Guide
 
