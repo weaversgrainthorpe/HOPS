@@ -6,6 +6,7 @@
   import { toast } from '$lib/stores/toast';
   import { onMount } from 'svelte';
   import { focusTrap } from '$lib/utils/focusTrap';
+  import { portal } from '$lib/utils/portal';
 
   interface IconSelection {
     icon: string;
@@ -313,7 +314,7 @@
 <svelte:window onkeydown={handleKeydown} />
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="modal-backdrop" onclick={onCancel} onkeydown={(e) => e.key === 'Escape' && onCancel()}>
+<div use:portal class="modal-backdrop" onclick={onCancel} onkeydown={(e) => e.key === 'Escape' && onCancel()}>
   <div
     class="modal-content"
     onclick={(e) => e.stopPropagation()}
