@@ -22,6 +22,7 @@ import (
 	_ "image/gif"
 	_ "image/jpeg"
 
+	"github.com/weaversgrainthorpe/HOPS/internal/assets"
 	"github.com/weaversgrainthorpe/HOPS/internal/converters"
 	"github.com/weaversgrainthorpe/HOPS/internal/database"
 	"github.com/weaversgrainthorpe/HOPS/internal/version"
@@ -393,22 +394,54 @@ func isLocalAssetRef(url string) bool {
 	return strings.HasPrefix(url, "/")
 }
 
-// resolveAssetPath maps a URL path to the filesystem path under dataDir.
-// Returns ("", false) if the URL pattern is not recognized.
-func resolveAssetPath(urlPath string, dataDir string) (string, bool) {
+// readAsset reads the bytes of an asset referenced by URL path. Bundled assets
+// (dashboard icons, background presets) come from the embedded filesystem; user
+// uploads (icons, backgrounds) come from disk under dataDir.
+// Returns (nil, "", false) if the URL pattern is not recognized.
+func readAsset(urlPath string, dataDir string) ([]byte, string, bool) {
+	filename := filepath.Base(urlPath)
 	switch {
 	case strings.HasPrefix(urlPath, "/api/icons/dashboard/"):
-		filename := filepath.Base(urlPath)
-		return filepath.Join(dataDir, "icons", "dashboard-icons", filename), true
+		data, err := assets.DashboardIcons.ReadFile("dashboard-icons/" + filename)
+		if err != nil {
+			return nil, "", false
+		}
+		return data, contentTypeFromPath(filename), true
+	case strings.HasPrefix(urlPath, "/presets/"):
+		data, err := assets.Presets.ReadFile("presets/" + filename)
+		if err != nil {
+			return nil, "", false
+		}
+		return data, contentTypeFromPath(filename), true
 	case strings.HasPrefix(urlPath, "/icons/"):
-		filename := filepath.Base(urlPath)
+		path := filepath.Join(dataDir, "icons", filename)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return nil, "", false
+		}
+		return data, contentTypeFromPath(path), true
+	case strings.HasPrefix(urlPath, "/backgrounds/"):
+		path := filepath.Join(dataDir, "backgrounds", filename)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return nil, "", false
+		}
+		return data, contentTypeFromPath(path), true
+	default:
+		return nil, "", false
+	}
+}
+
+// userAssetWritePath returns the disk path to write a user-writable asset to
+// during config import. Bundled assets (dashboard icons, presets) return
+// ("", false) so the import skips them — they're already in the binary.
+func userAssetWritePath(urlPath string, dataDir string) (string, bool) {
+	filename := filepath.Base(urlPath)
+	switch {
+	case strings.HasPrefix(urlPath, "/icons/"):
 		return filepath.Join(dataDir, "icons", filename), true
 	case strings.HasPrefix(urlPath, "/backgrounds/"):
-		filename := filepath.Base(urlPath)
 		return filepath.Join(dataDir, "backgrounds", filename), true
-	case strings.HasPrefix(urlPath, "/presets/"):
-		filename := filepath.Base(urlPath)
-		return filepath.Join(dataDir, "presets", filename), true
 	default:
 		return "", false
 	}
@@ -522,27 +555,23 @@ func (r *Router) embedAssets(cfg map[string]interface{}) int {
 		return 0
 	}
 
-	assets := make(map[string]EmbeddedAsset)
+	embedded := make(map[string]EmbeddedAsset)
 	for _, urlPath := range refs {
-		diskPath, ok := resolveAssetPath(urlPath, r.config.DataDir)
+		data, contentType, ok := readAsset(urlPath, r.config.DataDir)
 		if !ok {
+			slog.Warn("could not read asset for export", "component", "export", "path", urlPath)
 			continue
 		}
-		data, err := os.ReadFile(diskPath)
-		if err != nil {
-			slog.Warn("could not read asset for export", "component", "export", "path", diskPath, "error", err)
-			continue
-		}
-		assets[urlPath] = EmbeddedAsset{
-			ContentType: contentTypeFromPath(diskPath),
+		embedded[urlPath] = EmbeddedAsset{
+			ContentType: contentType,
 			Data:        base64.StdEncoding.EncodeToString(data),
 		}
 	}
 
-	if len(assets) > 0 {
-		cfg["assets"] = assets
+	if len(embedded) > 0 {
+		cfg["assets"] = embedded
 	}
-	return len(assets)
+	return len(embedded)
 }
 
 // restoreAssets extracts embedded assets from an imported config and writes them to disk.
@@ -568,9 +597,10 @@ func (r *Router) restoreAssets(importedConfig map[string]interface{}) int {
 			continue
 		}
 
-		diskPath, ok := resolveAssetPath(urlPath, r.config.DataDir)
+		diskPath, ok := userAssetWritePath(urlPath, r.config.DataDir)
 		if !ok {
-			slog.Warn("skipping unrecognized asset path", "component", "import", "path", urlPath)
+			// Either an unrecognized path or a bundled asset that's already
+			// in the binary — nothing to write to disk.
 			continue
 		}
 

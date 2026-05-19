@@ -1,4 +1,4 @@
-# HOPS User Guide (v1.5.0)
+# HOPS User Guide (v1.5.1)
 
 Welcome to HOPS (Home Operations Portal System)! This guide will help you get started and make the most of your dashboard.
 
@@ -250,9 +250,9 @@ For across-tab moves (which can't be done by drag), open the group editor:
    - **Name** *(required)*: Display name
    - **Subtitle/Description** *(optional)*: small text under the name
    - **URL** *(required)*: Target URL
-   - **Icon**: Choose from 150,000+ icons via Iconify
-     - Type an icon name directly (e.g., `mdi:docker`, `simple-icons:plex`)
-     - OR click **Browse** to open the **Icon Picker** with 1,900+ curated homelab icons (search by name or browse by category — Containers, Media, Monitoring, etc.)
+   - **Icon**: Choose an icon
+     - Type an Iconify icon name directly (e.g., `mdi:docker`, `simple-icons:plex`) — loaded on demand from iconify.design (~200,000 icons available)
+     - OR click **Browse** to open the **Icon Picker** with ~2,300 bundled app/service icons (search by name or browse by category — Containers, Media, Monitoring, etc.)
      - OR click **Upload** to use your own image file
      - **My Uploads**: previously uploaded custom icons appear here for easy reuse
      - **Recently Used**: your last 20 selected icons are tracked for quick access
@@ -260,7 +260,6 @@ For across-tab moves (which can't be done by drag), open the group editor:
    - **Size**: Small, Medium, or Large
    - **Open Mode**: how the link opens (New Tab, Same Tab, iFrame, Modal)
    - **Enable Status Check** *(optional)*: HOPS will ping the URL and show an up/down indicator on the tile
-   - **Auto-fetch Favicon** *(optional)*: grabs the site's favicon to use as the tile icon (handy when no Iconify icon fits)
 4. Click **Create**.
 
 Only **Name** and **URL** are required — everything else can be added or changed later via the tile's edit modal.
@@ -362,7 +361,7 @@ Child levels inherit parent colors/opacity unless overridden.
    - **Slideshow**: Multiple rotating images
 
 For slideshows:
-- Add multiple images from the **64 curated backgrounds** across 12 categories (Network, Servers, Docker, Homelab, Smart Home, Apps, Multimedia, Weather, Storage, Tech, Space, Minimal)
+- Add multiple images from the **~90 curated backgrounds** across 12 categories (Network, Servers, Docker, Homelab, Smart Home, Apps, Multimedia, Weather, Storage, Tech, Space, Minimal)
 - OR upload your own images (they appear in a "My Uploads" category for reuse)
 - OR add custom image URLs
 - Set rotation interval (seconds) — default is 30s
@@ -464,9 +463,9 @@ Import is done from the Admin page:
 1. **Theme Consistency**: Set colors at the Group or Tab level for consistent look
 2. **Slideshow Backgrounds**: Use slow rotation (60-120s) for subtle ambiance with smooth crossfade transitions
 3. **Opacity Layering**: Reduce tile opacity slightly to let background show through
-4. **Icon Variety**: Use the Icon Picker to browse 1,900+ curated homelab icons, or search from 150,000+ Iconify icons
+4. **Icon Variety**: Use the Icon Picker to browse ~2,300 bundled app/service icons, or type any Iconify icon name (~200,000 available on demand via iconify.design)
 5. **Text Readability**: Use Auto text color mode on group headers for optimal contrast on any background color
-6. **Background Library**: Explore the 64 curated backgrounds across 12 categories for quick setup
+6. **Background Library**: Explore the ~90 curated backgrounds across 12 categories for quick setup
 
 ## Troubleshooting
 

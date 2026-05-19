@@ -45,5 +45,4 @@ HOPS ships with these protections enabled by default:
 
 | Version | Supported |
 |---------|-----------|
-| 1.4.x   | Yes       |
-| ≤ 1.3.x | No — please upgrade |
+| 1.5.x   | Yes       |

@@ -3,9 +3,8 @@ package database
 import (
 	"database/sql"
 	"fmt"
+	"io/fs"
 	"log/slog"
-	"os"
-	"path/filepath"
 	"strings"
 )
 
@@ -128,16 +127,10 @@ var SpecificApps = map[string]string{
 	"filebrowser": "storage",
 }
 
-// ImportDashboardIcons imports all SVG icons from the dashboard-icons directory
-func ImportDashboardIcons(db *sql.DB, dataDir string) error {
-	iconsDir := filepath.Join(dataDir, "icons", "dashboard-icons")
-
-	// Check if directory exists
-	if _, err := os.Stat(iconsDir); os.IsNotExist(err) {
-		slog.Info("dashboard icons directory not found", "component", "icons", "path", iconsDir)
-		return nil // Not an error - just skip if not present
-	}
-
+// ImportDashboardIcons imports all SVG icons from the supplied filesystem.
+// Pass an fs.FS rooted at the directory containing the .svg files (typically
+// the embedded dashboard-icons collection).
+func ImportDashboardIcons(db *sql.DB, iconsFS fs.FS) error {
 	// Check if dashboard icons have already been imported
 	var dashboardIconCount int
 	err := db.QueryRow("SELECT COUNT(*) FROM icons WHERE image_url LIKE '/api/icons/dashboard/%'").Scan(&dashboardIconCount)
@@ -150,13 +143,13 @@ func ImportDashboardIcons(db *sql.DB, dataDir string) error {
 		return nil
 	}
 
-	// Read all SVG files from the directory
-	entries, err := os.ReadDir(iconsDir)
+	// Read all SVG files from the filesystem
+	entries, err := fs.ReadDir(iconsFS, ".")
 	if err != nil {
-		return fmt.Errorf("failed to read dashboard icons directory: %w", err)
+		return fmt.Errorf("failed to read dashboard icons filesystem: %w", err)
 	}
 
-	slog.Info("found files in dashboard-icons directory", "component", "icons", "count", len(entries))
+	slog.Info("found files in dashboard-icons filesystem", "component", "icons", "count", len(entries))
 
 	// Begin transaction for import
 	tx, err := db.Begin()

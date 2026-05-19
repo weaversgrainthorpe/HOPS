@@ -4,8 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"path/filepath"
+	"io/fs"
 	"time"
+
+	"github.com/weaversgrainthorpe/HOPS/internal/assets"
 
 	_ "modernc.org/sqlite"
 )
@@ -54,9 +56,12 @@ func Initialize(dbPath string) (*sql.DB, error) {
 		return nil, fmt.Errorf("failed to run migrations: %w", err)
 	}
 
-	// Import dashboard icons from dashboard-icons directory
-	dataDir := filepath.Dir(dbPath)
-	if err := ImportDashboardIcons(db, dataDir); err != nil {
+	// Import dashboard icons from the embedded filesystem
+	iconsFS, err := fs.Sub(assets.DashboardIcons, "dashboard-icons")
+	if err != nil {
+		return nil, fmt.Errorf("failed to scope dashboard icons filesystem: %w", err)
+	}
+	if err := ImportDashboardIcons(db, iconsFS); err != nil {
 		return nil, fmt.Errorf("failed to import dashboard icons: %w", err)
 	}
 
@@ -91,7 +96,7 @@ func runMigrations(db *sql.DB) error {
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
 
-		// Status cache for HTTP/ICMP checks
+		// Status cache for HTTP checks
 		`CREATE TABLE IF NOT EXISTS status_cache (
 			entry_id TEXT PRIMARY KEY,
 			status TEXT NOT NULL,

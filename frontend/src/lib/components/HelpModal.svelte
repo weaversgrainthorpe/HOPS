@@ -160,7 +160,7 @@
               <Icon icon="mdi:resize" width="24" />
               <div>
                 <strong>Tile Sizes</strong>
-                <p>Choose from small, medium, large, or wide tile sizes.</p>
+                <p>Choose from small, medium, or large tile sizes.</p>
               </div>
             </div>
           </div>
@@ -223,8 +223,8 @@
             <div class="feature">
               <Icon icon="mdi:apps" width="24" />
               <div>
-                <strong>150,000+ Icons</strong>
-                <p>Choose from Material Design Icons, Simple Icons, and more via Iconify — plus 1,900+ curated homelab presets and your own uploads.</p>
+                <strong>Thousands of icons</strong>
+                <p>~2,300 bundled app/service icons (homarr-labs) plus access to 200,000+ icons by name via Iconify (loaded on demand from iconify.design), plus your own uploads.</p>
               </div>
             </div>
           </div>

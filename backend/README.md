@@ -38,7 +38,7 @@ backend/
 │   ├── models/
 │   │   └── models.go            # Shared data types
 │   ├── status/
-│   │   └── checker.go           # Background HTTP/ICMP status checker (batched DB writes)
+│   │   └── checker.go           # Background HTTP status checker (batched DB writes)
 │   └── version/
 │       └── version.go           # Version constants
 ├── go.mod

@@ -1,10 +1,33 @@
 package database
 
 import (
-	"os"
-	"path/filepath"
+	"database/sql"
 	"testing"
+	"testing/fstest"
 )
+
+// newSchemaDB opens an in-memory SQLite database with just the schema +
+// idempotent seeds run, but skips the auto-import of dashboard icons from the
+// embedded filesystem so tests can inject their own fs.FS.
+func newSchemaDB(t *testing.T) *sql.DB {
+	t.Helper()
+	db, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatalf("sql.Open failed: %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+
+	if _, err := db.Exec("PRAGMA foreign_keys=ON"); err != nil {
+		t.Fatalf("enable foreign keys: %v", err)
+	}
+	if err := runMigrations(db); err != nil {
+		t.Fatalf("runMigrations failed: %v", err)
+	}
+	return db
+}
 
 // --- formatDisplayName tests ---
 
@@ -78,58 +101,43 @@ func TestCategorizeIconCaseInsensitive(t *testing.T) {
 
 // --- ImportDashboardIcons tests ---
 
-func TestImportDashboardIconsMissingDirectory(t *testing.T) {
-	tmpDir := t.TempDir()
-	dbPath := filepath.Join(tmpDir, "test.db")
-	db, err := Initialize(dbPath)
-	if err != nil {
-		t.Fatalf("Initialize failed: %v", err)
-	}
-	defer db.Close()
+func TestImportDashboardIconsEmptyFilesystem(t *testing.T) {
+	db := newSchemaDB(t)
 
-	// dataDir doesn't have icons/dashboard-icons subdir — should be a no-op
-	err = ImportDashboardIcons(db, tmpDir)
-	if err != nil {
-		t.Errorf("ImportDashboardIcons should not fail when directory missing: %v", err)
+	// Empty fs — should be a no-op, not an error
+	if err := ImportDashboardIcons(db, fstest.MapFS{}); err != nil {
+		t.Errorf("ImportDashboardIcons should not fail on empty filesystem: %v", err)
+	}
+
+	var count int
+	if err := db.QueryRow(
+		"SELECT COUNT(*) FROM icons WHERE image_url LIKE '/api/icons/dashboard/%'",
+	).Scan(&count); err != nil {
+		t.Fatalf("count failed: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("expected 0 icons imported from empty fs, got %d", count)
 	}
 }
 
 func TestImportDashboardIcons(t *testing.T) {
-	tmpDir := t.TempDir()
-	dbPath := filepath.Join(tmpDir, "test.db")
+	db := newSchemaDB(t)
 
-	// Create the dashboard-icons directory with sample SVG files
-	iconsDir := filepath.Join(tmpDir, "icons", "dashboard-icons")
-	if err := os.MkdirAll(iconsDir, 0755); err != nil {
-		t.Fatalf("failed to create icons dir: %v", err)
+	// Sample icons - mix of known categories and a generic one. Variants
+	// (-dark/-light) are skipped by the importer.
+	iconsFS := fstest.MapFS{
+		"docker.svg":          {Data: []byte("<svg></svg>")},
+		"plex.svg":            {Data: []byte("<svg></svg>")},
+		"home-assistant.svg":  {Data: []byte("<svg></svg>")},
+		"unknown-app-xyz.svg": {Data: []byte("<svg></svg>")},
+		"docker-dark.svg":     {Data: []byte("<svg></svg>")}, // variant - skipped
+		"plex-light.svg":      {Data: []byte("<svg></svg>")}, // variant - skipped
 	}
 
-	// Sample icons - mix of known categories and a generic one
-	sampleIcons := []string{
-		"docker.svg",
-		"plex.svg",
-		"home-assistant.svg",
-		"unknown-app-xyz.svg",
-		"docker-dark.svg",  // should be skipped (variant)
-		"plex-light.svg",   // should be skipped (variant)
+	if err := ImportDashboardIcons(db, iconsFS); err != nil {
+		t.Fatalf("ImportDashboardIcons failed: %v", err)
 	}
 
-	for _, name := range sampleIcons {
-		path := filepath.Join(iconsDir, name)
-		if err := os.WriteFile(path, []byte("<svg></svg>"), 0644); err != nil {
-			t.Fatalf("failed to write %s: %v", name, err)
-		}
-	}
-
-	db, err := Initialize(dbPath)
-	if err != nil {
-		t.Fatalf("Initialize failed: %v", err)
-	}
-	defer db.Close()
-
-	// Initialize already calls ImportDashboardIcons via dataDir derived from dbPath.
-	// Since dbPath is in tmpDir, the icons should have been imported.
-	// Verify count = 4 (variants skipped)
 	var count int
 	if err := db.QueryRow(
 		"SELECT COUNT(*) FROM icons WHERE image_url LIKE '/api/icons/dashboard/%'",
@@ -165,33 +173,26 @@ func TestImportDashboardIcons(t *testing.T) {
 }
 
 func TestImportDashboardIconsIdempotent(t *testing.T) {
-	tmpDir := t.TempDir()
-	dbPath := filepath.Join(tmpDir, "test.db")
+	db := newSchemaDB(t)
 
-	iconsDir := filepath.Join(tmpDir, "icons", "dashboard-icons")
-	if err := os.MkdirAll(iconsDir, 0755); err != nil {
-		t.Fatalf("failed to create icons dir: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(iconsDir, "docker.svg"), []byte("<svg></svg>"), 0644); err != nil {
-		t.Fatalf("failed to write icon: %v", err)
+	iconsFS := fstest.MapFS{
+		"docker.svg": {Data: []byte("<svg></svg>")},
 	}
 
-	db, err := Initialize(dbPath)
-	if err != nil {
-		t.Fatalf("first Initialize failed: %v", err)
+	if err := ImportDashboardIcons(db, iconsFS); err != nil {
+		t.Fatalf("first ImportDashboardIcons failed: %v", err)
 	}
 
 	var count1 int
 	db.QueryRow("SELECT COUNT(*) FROM icons WHERE image_url LIKE '/api/icons/dashboard/%'").Scan(&count1)
 
-	// Re-import should be a no-op since icons already exist
-	if err := ImportDashboardIcons(db, tmpDir); err != nil {
+	// Second call should be a no-op since icons already exist
+	if err := ImportDashboardIcons(db, iconsFS); err != nil {
 		t.Fatalf("second ImportDashboardIcons failed: %v", err)
 	}
 
 	var count2 int
 	db.QueryRow("SELECT COUNT(*) FROM icons WHERE image_url LIKE '/api/icons/dashboard/%'").Scan(&count2)
-	db.Close()
 
 	if count1 != count2 {
 		t.Errorf("expected idempotent import, count went from %d to %d", count1, count2)

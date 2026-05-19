@@ -63,7 +63,6 @@ export interface Entry {
   opacity?: number;
   order: number;
   showStatus?: boolean;
-  fetchFavicon?: boolean;
 }
 
 export interface Background {
@@ -79,7 +78,7 @@ export interface Background {
 }
 
 export interface StatusCheck {
-  type: 'http' | 'icmp';
+  type: 'http';
   enabled: boolean;
   interval: number;
 }
