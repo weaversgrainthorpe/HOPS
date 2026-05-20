@@ -59,14 +59,14 @@ Already using Homer, Dashy, or Heimdall? HOPS can import your existing configura
 
 HOPS runs on **Linux**, **macOS**, and **Windows** with no dependencies. It works on anything from a Raspberry Pi to a full server.
 
-**Docker:**
-```bash
-docker compose up -d
-```
-
-**Binary:**
+**Binary** — download, extract, run:
 ```bash
 ./hops-linux-amd64 --port 8080 --data ./data --frontend ./frontend/build
+```
+
+**Docker** — if you'd rather, or already run a Compose stack:
+```bash
+docker compose up -d
 ```
 
 Default login: `admin` / `admin` — change this immediately after first login.

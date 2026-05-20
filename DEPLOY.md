@@ -8,66 +8,15 @@ This guide covers installing and running HOPS. For a quick first-time walkthroug
 
 | Method | Best For |
 |--------|----------|
-| [Docker](#docker) | Easiest setup, automatic updates |
-| [Binary download](#binary-download) | No Docker needed, minimal footprint |
+| [Binary download](#binary-download) | Most setups — one self-contained file, nothing to install |
+| [Docker](#docker) | If you already run a Docker / Compose stack |
 | [Build from source](#build-from-source) | Contributors and custom builds |
-
----
-
-## Docker
-
-The simplest way to run HOPS. Requires Docker and Docker Compose.
-
-### 1. Create a docker-compose.yml
-
-```yaml
-services:
-  hops:
-    build: .
-    container_name: hops
-    ports:
-      - "8080:8080"
-    volumes:
-      - hops-data:/app/data
-    restart: unless-stopped
-
-volumes:
-  hops-data:
-```
-
-### 2. Start HOPS
-
-```bash
-docker compose up -d
-```
-
-### 3. Access HOPS
-
-Open **http://localhost:8080** in your browser. Log in with `admin` / `admin` and change the password immediately.
-
-### Customising the Port
-
-Change the port mapping in `docker-compose.yml`:
-
-```yaml
-ports:
-  - "3000:8080"  # Access on port 3000 instead
-```
-
-### Data Persistence
-
-Your database, uploaded backgrounds, and icons are stored in the `hops-data` Docker volume. This persists across container restarts and updates.
-
-To back up the volume:
-```bash
-docker run --rm -v hops-data:/data -v $(pwd):/backup alpine tar czf /backup/hops-backup.tar.gz -C /data .
-```
 
 ---
 
 ## Binary Download
 
-HOPS is a single binary with no runtime dependencies. No database server, no runtime environment, nothing to install.
+HOPS is a single binary with no runtime dependencies. No database server, no runtime environment, nothing to install — download, extract, run.
 
 ### 1. Download
 
@@ -115,6 +64,57 @@ hops/
     ├── backups/          # Automatic backups
     ├── backgrounds/      # Uploaded background images
     └── icons/            # Uploaded custom icons
+```
+
+---
+
+## Docker
+
+Docker is entirely optional — the binary download above needs nothing installed. It's here for people who already run a Docker / Compose stack and would rather keep HOPS alongside it. Requires Docker and Docker Compose.
+
+### 1. Create a docker-compose.yml
+
+```yaml
+services:
+  hops:
+    build: .
+    container_name: hops
+    ports:
+      - "8080:8080"
+    volumes:
+      - hops-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  hops-data:
+```
+
+### 2. Start HOPS
+
+```bash
+docker compose up -d
+```
+
+### 3. Access HOPS
+
+Open **http://localhost:8080** in your browser. Log in with `admin` / `admin` and change the password immediately.
+
+### Customising the Port
+
+Change the port mapping in `docker-compose.yml`:
+
+```yaml
+ports:
+  - "3000:8080"  # Access on port 3000 instead
+```
+
+### Data Persistence
+
+Your database, uploaded backgrounds, and icons are stored in the `hops-data` Docker volume. This persists across container restarts and updates.
+
+To back up the volume:
+```bash
+docker run --rm -v hops-data:/data -v $(pwd):/backup alpine tar czf /backup/hops-backup.tar.gz -C /data .
 ```
 
 ---

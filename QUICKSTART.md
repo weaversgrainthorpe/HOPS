@@ -27,38 +27,7 @@ That's it. HOPS is a single binary with no dependencies — no database server, 
 
 Choose whichever method suits you best.
 
-### Option A: Docker
-
-Create a `docker-compose.yml` file:
-
-```yaml
-services:
-  hops:
-    image: ghcr.io/weaversgrainthorpe/hops:latest
-    container_name: hops
-    ports:
-      - "8080:8080"
-    volumes:
-      - hops-data:/app/data
-    restart: unless-stopped
-
-volumes:
-  hops-data:
-```
-
-Start it:
-
-```bash
-docker compose up -d
-```
-
-The image is multi-arch (linux/amd64 + linux/arm64), so the same tag works on x86-64 servers and Raspberry Pi 3B+/4/5/Zero 2 W.
-
-> **Pin a version instead of `:latest`?** Use `ghcr.io/weaversgrainthorpe/hops:v1.5.5` (or any tagged release).
-
-Skip to [Step 2](#step-2-log-in).
-
-### Option B: Download
+### Option A: Download
 
 1. Go to the [Releases](https://github.com/weaversgrainthorpe/HOPS/releases) page
 2. Download the package for your platform:
@@ -108,6 +77,37 @@ time=2026-05-19T10:00:00.000Z level=INFO msg="server starting" version="HOPS v1.
 > **Note:** You may see a message about "Dashboard icons directory not found" on first run. This is normal — the directory is created automatically when you upload your first custom icon.
 
 > **Note:** This runs HOPS in the foreground — it will stop when you close the terminal. To run HOPS as a background service, see the [Installation & Deployment Guide](DEPLOY.md).
+
+Once HOPS is running, continue to [Step 2](#step-2-log-in).
+
+### Option B: Docker
+
+Prefer Docker, or already running a Compose stack? Create a `docker-compose.yml` file:
+
+```yaml
+services:
+  hops:
+    image: ghcr.io/weaversgrainthorpe/hops:latest
+    container_name: hops
+    ports:
+      - "8080:8080"
+    volumes:
+      - hops-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  hops-data:
+```
+
+Start it:
+
+```bash
+docker compose up -d
+```
+
+The image is multi-arch (linux/amd64 + linux/arm64), so the same tag works on x86-64 servers and Raspberry Pi 3B+/4/5/Zero 2 W.
+
+> **Pin a version instead of `:latest`?** Use `ghcr.io/weaversgrainthorpe/hops:v1.5.5` (or any tagged release).
 
 ## Step 2: Log In
 
