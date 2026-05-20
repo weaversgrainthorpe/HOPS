@@ -38,6 +38,23 @@ func configureLogger() {
 	slog.SetDefault(slog.New(handler))
 }
 
+// parseTrustedProxies splits a comma-separated list of CIDR ranges from the
+// HOPS_TRUSTED_PROXIES env var. Set this to your reverse proxy's address
+// (e.g. "10.0.0.0/8" or "192.168.1.5/32") when running HOPS behind one, so
+// that X-Forwarded-For is honoured only from that proxy. Empty by default.
+func parseTrustedProxies(raw string) []string {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	var out []string
+	for _, part := range strings.Split(raw, ",") {
+		if p := strings.TrimSpace(part); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
 func main() {
 	configureLogger()
 
@@ -53,6 +70,7 @@ func main() {
 		DataDir:              *dataDir,
 		FrontendDir:          *frontendDir,
 		LoginRateLimitPerMin: 20, // 20 login attempts per minute
+		TrustedProxies:       parseTrustedProxies(os.Getenv("HOPS_TRUSTED_PROXIES")),
 	}
 
 	// Validate config before doing any work

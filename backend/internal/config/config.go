@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net"
 	"net/url"
 	"strconv"
 )
@@ -14,6 +15,12 @@ type Config struct {
 	FrontendDir          string
 	AllowedOrigins       []string // CORS allowed origins
 	LoginRateLimitPerMin int      // Rate limit login attempts per minute
+	// TrustedProxies is a list of CIDR ranges whose X-Forwarded-For /
+	// X-Real-IP headers are honoured when deriving the client IP. Empty
+	// (the default) means no proxy is trusted and the direct connection
+	// address is always used — so forwarded headers cannot be spoofed to
+	// defeat per-IP rate limiting.
+	TrustedProxies []string
 }
 
 // ErrInvalidConfig is returned when the configuration fails validation.
@@ -51,6 +58,12 @@ func (c *Config) Validate() error {
 		}
 		if _, err := url.Parse(origin); err != nil {
 			return fmt.Errorf("%w: allowed origin %q is not a valid URL: %v", ErrInvalidConfig, origin, err)
+		}
+	}
+
+	for _, cidr := range c.TrustedProxies {
+		if _, _, err := net.ParseCIDR(cidr); err != nil {
+			return fmt.Errorf("%w: trusted proxy %q is not a valid CIDR (e.g. 10.0.0.0/8 or 192.168.1.5/32): %v", ErrInvalidConfig, cidr, err)
 		}
 	}
 

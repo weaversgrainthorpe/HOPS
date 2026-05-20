@@ -13,6 +13,7 @@ import (
 	"image/png"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -170,7 +171,7 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// Get client IP for rate limiting
-	clientIP := getClientIP(req)
+	clientIP := r.clientIP(req)
 	if !r.rateLimiter.Allow(clientIP) {
 		writeJSONError(w, "Too many login attempts. Please try again later.", http.StatusTooManyRequests)
 		return
@@ -192,11 +193,13 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	secure := r.isSecureRequest(req)
 	http.SetCookie(w, &http.Cookie{
 		Name:     "hops_session",
 		Value:    result.SessionID,
 		Path:     "/",
 		HttpOnly: true,
+		Secure:   secure,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   86400, // 24 hours
 	})
@@ -207,7 +210,7 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 		writeJSONError(w, "Failed to issue CSRF token", http.StatusInternalServerError)
 		return
 	}
-	setCSRFCookie(w, csrfToken)
+	setCSRFCookie(w, csrfToken, secure)
 
 	writeJSON(w, map[string]interface{}{
 		"sessionId":          result.SessionID,
@@ -215,27 +218,73 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 	})
 }
 
-// getClientIP extracts the client IP address from the request
-func getClientIP(req *http.Request) string {
-	// Check X-Forwarded-For header first (for reverse proxies)
-	if xff := req.Header.Get("X-Forwarded-For"); xff != "" {
-		// Take the first IP in the list
-		if idx := strings.Index(xff, ","); idx != -1 {
-			return strings.TrimSpace(xff[:idx])
+// clientIP extracts the client IP address used for rate limiting.
+//
+// X-Forwarded-For / X-Real-IP are honoured ONLY when the direct connection
+// comes from a configured trusted proxy (config.TrustedProxies). Otherwise
+// the direct connection address is used — a client that is not behind a
+// trusted proxy cannot spoof those headers to get a fresh rate-limit bucket
+// per request and brute-force the login.
+func (r *Router) clientIP(req *http.Request) string {
+	remoteIP := remoteAddrIP(req.RemoteAddr)
+
+	if r.isTrustedProxy(remoteIP) {
+		// First entry of X-Forwarded-For is the original client.
+		if xff := req.Header.Get("X-Forwarded-For"); xff != "" {
+			first := xff
+			if idx := strings.Index(xff, ","); idx != -1 {
+				first = xff[:idx]
+			}
+			if ip := strings.TrimSpace(first); ip != "" {
+				return ip
+			}
 		}
-		return strings.TrimSpace(xff)
+		if xri := strings.TrimSpace(req.Header.Get("X-Real-IP")); xri != "" {
+			return xri
+		}
 	}
 
-	// Check X-Real-IP header
-	if xri := req.Header.Get("X-Real-IP"); xri != "" {
-		return xri
-	}
+	return remoteIP
+}
 
-	// Fall back to RemoteAddr
-	if idx := strings.LastIndex(req.RemoteAddr, ":"); idx != -1 {
-		return req.RemoteAddr[:idx]
+// remoteAddrIP strips the port from a "host:port" RemoteAddr.
+func remoteAddrIP(remoteAddr string) string {
+	if host, _, err := net.SplitHostPort(remoteAddr); err == nil {
+		return host
 	}
-	return req.RemoteAddr
+	return remoteAddr
+}
+
+// isTrustedProxy reports whether ip falls within any configured
+// trusted-proxy CIDR range.
+func (r *Router) isTrustedProxy(ip string) bool {
+	parsed := net.ParseIP(ip)
+	if parsed == nil {
+		return false
+	}
+	for _, network := range r.trustedProxies {
+		if network.Contains(parsed) {
+			return true
+		}
+	}
+	return false
+}
+
+// isSecureRequest reports whether the request reached HOPS over HTTPS —
+// either directly (req.TLS) or via a trusted reverse proxy that set
+// X-Forwarded-Proto: https. Used to decide whether to mark cookies Secure;
+// doing so unconditionally would break plain-HTTP LAN deployments by making
+// the browser withhold the cookie.
+func (r *Router) isSecureRequest(req *http.Request) bool {
+	if req.TLS != nil {
+		return true
+	}
+	if r.isTrustedProxy(remoteAddrIP(req.RemoteAddr)) {
+		if strings.EqualFold(req.Header.Get("X-Forwarded-Proto"), "https") {
+			return true
+		}
+	}
+	return false
 }
 
 // handleLogout logs out a user
@@ -248,15 +297,17 @@ func (r *Router) handleLogout(w http.ResponseWriter, req *http.Request) {
 	sessionID := extractSessionID(req)
 	r.authService.Logout(sessionID)
 
+	secure := r.isSecureRequest(req)
 	http.SetCookie(w, &http.Cookie{
 		Name:     "hops_session",
 		Value:    "",
 		Path:     "/",
 		HttpOnly: true,
+		Secure:   secure,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   -1, // Delete cookie
 	})
-	clearCSRFCookie(w)
+	clearCSRFCookie(w, secure)
 
 	writeJSONSuccess(w)
 }
@@ -285,7 +336,7 @@ func (r *Router) handleAuthCheck(w http.ResponseWriter, req *http.Request) {
 			// issue a fresh one paired with this session.
 			if cookie, err := req.Cookie(csrfCookieName); err != nil || cookie.Value == "" {
 				if token, err := generateCSRFToken(); err == nil {
-					setCSRFCookie(w, token)
+					setCSRFCookie(w, token, r.isSecureRequest(req))
 				}
 			}
 		}
@@ -325,6 +376,14 @@ func (r *Router) handleChangePassword(w http.ResponseWriter, req *http.Request) 
 	if err := r.authService.ChangePassword(userID, data.OldPassword, data.NewPassword); err != nil {
 		writeJSONError(w, err.Error(), http.StatusBadRequest)
 		return
+	}
+
+	// Revoke all other sessions for this user so a session stolen before the
+	// change cannot continue to be used. The current session is kept so the
+	// user stays logged in.
+	if err := r.authService.InvalidateOtherSessions(userID, sessionID); err != nil {
+		slog.Warn("failed to invalidate other sessions after password change",
+			"component", "auth", "user_id", userID, "error", err)
 	}
 
 	writeJSONSuccess(w)
