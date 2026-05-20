@@ -34,14 +34,16 @@ describe('QRCodeModal', () => {
 	});
 
 	it('renders an SVG QR code after generation', async () => {
-		const { container } = render(QRCodeModal, {
+		render(QRCodeModal, {
 			props: { dashboard, onClose: () => {} }
 		});
 
-		// QR generation is async; wait for the SVG to appear
+		// QR generation is async; wait for the SVG to appear. The Modal
+		// component portals its content to document.body, so the QR frame
+		// is queried from the document rather than the render container.
 		await waitFor(
 			() => {
-				const svg = container.querySelector('.qr-frame svg');
+				const svg = document.querySelector('.qr-frame svg');
 				expect(svg).not.toBeNull();
 			},
 			{ timeout: 2000 }
