@@ -1,6 +1,6 @@
 # HOPS - Home Operations Portal System
 
-**Version 1.5.4** · **[hops.weaversgrainthorpe.github.io →](https://weaversgrainthorpe.github.io/HOPS/)**
+**Version 1.5.5** · **[hops.weaversgrainthorpe.github.io →](https://weaversgrainthorpe.github.io/HOPS/)**
 
 A modern, self-hosted homepage dashboard for the homelab community.
 

@@ -1187,6 +1187,15 @@ func (r *Router) applyIconMatching(config map[string]interface{}) int {
 	return matchCount
 }
 
+// Upload size ceilings. http.MaxBytesReader enforces these as a hard cap on
+// the whole request body, so an oversized upload is rejected before it can be
+// buffered into memory or spilled to disk.
+const (
+	maxImportUploadBytes     = 50 << 20 // config import (may carry embedded assets)
+	maxBackgroundUploadBytes = 50 << 20 // background image upload
+	maxIconUploadBytes       = 8 << 20  // icon upload (5 MB image + multipart overhead)
+)
+
 // handleImportConfig imports configuration from YAML/JSON (supports HOPS, Homer, Dashy formats)
 func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodPost {
@@ -1194,9 +1203,10 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Parse multipart form (for file uploads)
-	if err := req.ParseMultipartForm(50 << 20); err != nil { // 50 MB max (exports may contain embedded assets)
-		writeJSONError(w, "Failed to parse form", http.StatusBadRequest)
+	// Cap the request body, then parse the multipart form.
+	req.Body = http.MaxBytesReader(w, req.Body, maxImportUploadBytes)
+	if err := req.ParseMultipartForm(maxImportUploadBytes); err != nil {
+		writeJSONError(w, "Upload too large or malformed (50 MB limit)", http.StatusBadRequest)
 		return
 	}
 
@@ -1223,7 +1233,8 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 	// Detect the format
 	format, err := converters.DetectFormat(fileData)
 	if err != nil {
-		writeJSONError(w, fmt.Sprintf("Unable to detect format: %v", err), http.StatusBadRequest)
+		slog.Warn("import: format detection failed", "component", "import", "error", err)
+		writeJSONError(w, "Could not detect the file format. Supported: HOPS, Homer, Dashy, Heimdall.", http.StatusBadRequest)
 		return
 	}
 
@@ -1236,7 +1247,8 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 	case "homer":
 		configJSON, err = converters.ConvertFromHomer(fileData)
 		if err != nil {
-			writeJSONError(w, fmt.Sprintf("Failed to convert Homer config: %v", err), http.StatusBadRequest)
+			slog.Warn("import: Homer conversion failed", "component", "import", "error", err)
+			writeJSONError(w, "Could not convert the Homer config — the file may be malformed.", http.StatusBadRequest)
 			return
 		}
 		importFormat = "Homer YAML"
@@ -1244,7 +1256,8 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 	case "dashy":
 		configJSON, err = converters.ConvertFromDashy(fileData)
 		if err != nil {
-			writeJSONError(w, fmt.Sprintf("Failed to convert Dashy config: %v", err), http.StatusBadRequest)
+			slog.Warn("import: Dashy conversion failed", "component", "import", "error", err)
+			writeJSONError(w, "Could not convert the Dashy config — the file may be malformed.", http.StatusBadRequest)
 			return
 		}
 		importFormat = "Dashy YAML"
@@ -1252,7 +1265,8 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 	case "heimdall":
 		configJSON, err = converters.ConvertFromHeimdall(fileData)
 		if err != nil {
-			writeJSONError(w, fmt.Sprintf("Failed to convert Heimdall config: %v", err), http.StatusBadRequest)
+			slog.Warn("import: Heimdall conversion failed", "component", "import", "error", err)
+			writeJSONError(w, "Could not convert the Heimdall config — the file may be malformed.", http.StatusBadRequest)
 			return
 		}
 		importFormat = "Heimdall JSON"
@@ -1892,9 +1906,10 @@ func (r *Router) handleUploadBackground(w http.ResponseWriter, req *http.Request
 		return
 	}
 
-	// Parse multipart form (max 50 MB)
-	if err := req.ParseMultipartForm(50 << 20); err != nil {
-		writeJSONError(w, "Failed to parse form", http.StatusBadRequest)
+	// Cap the request body, then parse the multipart form.
+	req.Body = http.MaxBytesReader(w, req.Body, maxBackgroundUploadBytes)
+	if err := req.ParseMultipartForm(maxBackgroundUploadBytes); err != nil {
+		writeJSONError(w, "Upload too large or malformed (50 MB limit)", http.StatusBadRequest)
 		return
 	}
 
@@ -2001,9 +2016,10 @@ func (r *Router) handleUploadIcon(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Parse multipart form (max 5 MB for icons)
-	if err := req.ParseMultipartForm(5 << 20); err != nil {
-		writeJSONError(w, "Failed to parse form", http.StatusBadRequest)
+	// Cap the request body, then parse the multipart form.
+	req.Body = http.MaxBytesReader(w, req.Body, maxIconUploadBytes)
+	if err := req.ParseMultipartForm(maxIconUploadBytes); err != nil {
+		writeJSONError(w, "Upload too large or malformed (5 MB image limit)", http.StatusBadRequest)
 		return
 	}
 
@@ -2066,7 +2082,8 @@ func (r *Router) handleUploadIcon(w http.ResponseWriter, req *http.Request) {
 		// Decode and resize raster images
 		img, _, err := image.Decode(bytes.NewReader(fileData))
 		if err != nil {
-			writeJSONError(w, "Failed to decode image: "+err.Error(), http.StatusBadRequest)
+			slog.Warn("icon upload: image decode failed", "component", "icons", "error", err)
+			writeJSONError(w, "Could not decode the image file. Supported: JPEG, PNG, GIF, WebP, SVG.", http.StatusBadRequest)
 			return
 		}
 
@@ -2452,7 +2469,8 @@ func (r *Router) handleBackups(w http.ResponseWriter, req *http.Request) {
 		// List all backups
 		backups, err := r.backupManager.ListBackups()
 		if err != nil {
-			writeJSONError(w, fmt.Sprintf("Failed to list backups: %v", err), http.StatusInternalServerError)
+			slog.Error("failed to list backups", "component", "backup", "error", err)
+			writeJSONError(w, "Failed to list backups", http.StatusInternalServerError)
 			return
 		}
 		writeJSON(w, map[string]interface{}{
@@ -2473,7 +2491,8 @@ func (r *Router) handleBackups(w http.ResponseWriter, req *http.Request) {
 
 		backupPath, err := r.backupManager.CreateBackupWithDB(r.db, reqData.Reason)
 		if err != nil {
-			writeJSONError(w, fmt.Sprintf("Failed to create backup: %v", err), http.StatusInternalServerError)
+			slog.Error("failed to create backup", "component", "backup", "error", err)
+			writeJSONError(w, "Failed to create backup", http.StatusInternalServerError)
 			return
 		}
 
@@ -2500,7 +2519,8 @@ func (r *Router) handleBackupActions(w http.ResponseWriter, req *http.Request) {
 	case http.MethodPost:
 		// Restore from backup
 		if err := r.backupManager.RestoreBackup(backupName); err != nil {
-			writeJSONError(w, fmt.Sprintf("Failed to restore backup: %v", err), http.StatusInternalServerError)
+			slog.Error("failed to restore backup", "component", "backup", "error", err)
+			writeJSONError(w, "Failed to restore backup", http.StatusInternalServerError)
 			return
 		}
 
@@ -2513,11 +2533,12 @@ func (r *Router) handleBackupActions(w http.ResponseWriter, req *http.Request) {
 		// Delete a backup
 		if err := r.backupManager.DeleteBackup(backupName); err != nil {
 			if strings.Contains(err.Error(), "not found") {
-				writeJSONError(w, err.Error(), http.StatusNotFound)
+				writeJSONError(w, "Backup not found", http.StatusNotFound)
 			} else if strings.Contains(err.Error(), "invalid") {
-				writeJSONError(w, err.Error(), http.StatusBadRequest)
+				writeJSONError(w, "Invalid backup name", http.StatusBadRequest)
 			} else {
-				writeJSONError(w, fmt.Sprintf("Failed to delete backup: %v", err), http.StatusInternalServerError)
+				slog.Error("failed to delete backup", "component", "backup", "error", err)
+				writeJSONError(w, "Failed to delete backup", http.StatusInternalServerError)
 			}
 			return
 		}

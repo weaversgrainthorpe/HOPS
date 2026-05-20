@@ -5,6 +5,23 @@ All notable changes to HOPS (Home Operations Portal System) will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.5] - 2026-05-20 — Hardening follow-up
+
+Low-severity hardening items from the v1.5.4 penetration test. No data
+migration is required.
+
+### Security
+
+- **Request bodies are capped before they are read.** Config import,
+  background upload, and icon upload now wrap the request body in
+  `http.MaxBytesReader` (50 MB / 50 MB / 8 MB), so an oversized upload is
+  rejected up front instead of being buffered into memory or spilled to
+  disk.
+- **Error messages no longer echo parser or filesystem internals.** The
+  config-import / converter failures, the image-decode failure, and the
+  backup list/create/restore/delete failures now return a generic message
+  to the client; the underlying error is logged server-side instead.
+
 ## [1.5.4] - 2026-05-20 — Security hardening
 
 A security-hardening release following a full penetration test of HOPS. No
