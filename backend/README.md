@@ -4,7 +4,7 @@ The backend for HOPS (Home Operations Portal System) — a single Go binary serv
 
 ## Tech Stack
 
-- **Language**: Go 1.24+
+- **Language**: Go 1.25+
 - **HTTP**: `net/http` stdlib only (no framework — `http.ServeMux` with method-aware handler dispatch)
 - **Database**: SQLite via `modernc.org/sqlite` (pure-Go, no CGO required); WAL mode, foreign keys enforced
 - **Auth**: Bcrypt password hashing + HttpOnly session cookies + CSRF double-submit cookies
@@ -49,7 +49,7 @@ backend/
 
 ### Prerequisites
 
-- Go 1.24 or higher
+- Go 1.25 or higher
 
 ### Installation
 

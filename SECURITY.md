@@ -39,7 +39,14 @@ HOPS ships with these protections enabled by default:
 - **Restrict network access** if HOPS is only needed on your local network
 - **Keep HOPS updated** to the latest release
 - **Back up your data** regularly (HOPS creates automatic backups, but keep off-site copies too)
-- **Don't expose HOPS to the public internet without an auth-aware reverse proxy** — HOPS authenticates the admin endpoints, but the public dashboard pages are intentionally accessible to anyone with the URL
+- **Don't expose HOPS to the public internet without an auth-aware reverse proxy** — HOPS authenticates the admin endpoints, but the dashboard pages are intentionally public
+- **All dashboards are public — there is no per-dashboard privacy.** Anyone who can reach a HOPS instance can view *every* dashboard and the tiles within it, regardless of which dashboard path they were given. The navigation switcher lists them all, and the dashboard configuration is served unauthenticated so the pages can render. Do not put anything you consider private on a HOPS dashboard, and put the whole instance behind an auth-aware reverse proxy or a restricted network if any of its contents are sensitive.
+
+## Reverse proxy configuration
+
+If you run HOPS behind a reverse proxy:
+
+- Set the **`HOPS_TRUSTED_PROXIES`** environment variable to the proxy's address as one or more comma-separated CIDR ranges (e.g. `HOPS_TRUSTED_PROXIES=10.0.0.0/8` or `192.168.1.5/32`). Only then will HOPS honour the `X-Forwarded-For` / `X-Forwarded-Proto` headers — for per-client login rate limiting and for marking cookies `Secure`. Left unset (the default), HOPS ignores those headers so they cannot be spoofed to bypass rate limiting.
 
 ## Supported Versions
 

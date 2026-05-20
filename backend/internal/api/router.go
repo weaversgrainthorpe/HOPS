@@ -3,6 +3,7 @@ package api
 import (
 	"database/sql"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -18,13 +19,14 @@ import (
 
 // Router holds all dependencies for the API
 type Router struct {
-	db            *sql.DB
-	authService   *auth.Service
-	config        *config.Config
-	mux           *http.ServeMux
-	rateLimiter   *RateLimiter
-	backupManager *database.BackupManager
-	startTime     time.Time
+	db             *sql.DB
+	authService    *auth.Service
+	config         *config.Config
+	mux            *http.ServeMux
+	rateLimiter    *RateLimiter
+	backupManager  *database.BackupManager
+	startTime      time.Time
+	trustedProxies []*net.IPNet // parsed config.TrustedProxies
 }
 
 // RateLimiter provides simple rate limiting for login attempts
@@ -126,14 +128,24 @@ func NewRouter(db *sql.DB, authService *auth.Service, cfg *config.Config, startT
 	dbPath := filepath.Join(cfg.DataDir, "hops.db")
 	backupManager := database.NewBackupManager(dbPath)
 
+	// Pre-parse trusted-proxy CIDRs once. Config.Validate has already
+	// rejected malformed entries, so ParseCIDR is not expected to fail here.
+	var trustedProxies []*net.IPNet
+	for _, cidr := range cfg.TrustedProxies {
+		if _, network, err := net.ParseCIDR(cidr); err == nil {
+			trustedProxies = append(trustedProxies, network)
+		}
+	}
+
 	r := &Router{
-		db:            db,
-		authService:   authService,
-		config:        cfg,
-		mux:           http.NewServeMux(),
-		rateLimiter:   NewRateLimiter(rateLimit, time.Minute),
-		backupManager: backupManager,
-		startTime:     startTime,
+		db:             db,
+		authService:    authService,
+		config:         cfg,
+		mux:            http.NewServeMux(),
+		rateLimiter:    NewRateLimiter(rateLimit, time.Minute),
+		backupManager:  backupManager,
+		startTime:      startTime,
+		trustedProxies: trustedProxies,
 	}
 
 	r.setupRoutes()
@@ -221,6 +233,15 @@ func (r *Router) handleBackgroundActions(w http.ResponseWriter, req *http.Reques
 	}
 }
 
+// setAssetCSP locks down an asset response so that an SVG (uploaded by a user
+// or imported from a third-party icon set) cannot execute script even when
+// navigated to directly. `<img>` embedding is unaffected — img never runs SVG
+// script. `sandbox` and `default-src 'none'` together neutralize scripts and
+// event handlers; inline styles are kept so icons still render correctly.
+func setAssetCSP(w http.ResponseWriter) {
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; sandbox")
+}
+
 // serveBackgrounds serves uploaded background images from the data directory
 func (r *Router) serveBackgrounds(w http.ResponseWriter, req *http.Request) {
 	// Extract filename from path
@@ -229,6 +250,8 @@ func (r *Router) serveBackgrounds(w http.ResponseWriter, req *http.Request) {
 	// Construct path to backgrounds directory
 	backgroundsDir := filepath.Join(r.config.DataDir, "backgrounds")
 	filePath := filepath.Join(backgroundsDir, filename)
+
+	setAssetCSP(w)
 
 	// Serve the file
 	http.ServeFile(w, req, filePath)
@@ -240,6 +263,7 @@ func (r *Router) servePresets(w http.ResponseWriter, req *http.Request) {
 
 	// Set cache headers - presets are static
 	w.Header().Set("Cache-Control", "public, max-age=31536000")
+	setAssetCSP(w)
 
 	http.ServeFileFS(w, req, assets.Presets, "presets/"+filename)
 }
@@ -255,6 +279,7 @@ func (r *Router) serveIcons(w http.ResponseWriter, req *http.Request) {
 
 	// Set cache headers for uploaded icons
 	w.Header().Set("Cache-Control", "public, max-age=86400")
+	setAssetCSP(w)
 
 	// Serve the file
 	http.ServeFile(w, req, filePath)
@@ -272,6 +297,7 @@ func (r *Router) serveDashboardIcons(w http.ResponseWriter, req *http.Request) {
 
 	// Set long cache headers - these are static icons
 	w.Header().Set("Cache-Control", "public, max-age=31536000")
+	setAssetCSP(w)
 
 	http.ServeFileFS(w, req, assets.DashboardIcons, "dashboard-icons/"+filename)
 }
@@ -381,6 +407,26 @@ func (r *Router) corsMiddleware(next http.Handler) http.Handler {
 }
 
 // securityHeadersMiddleware adds standard security headers to all responses
+// appContentSecurityPolicy is the CSP applied to the app's own pages and API
+// responses. 'unsafe-inline' is required for script (SvelteKit's hydration
+// bootstrap) and style (the app's pervasive inline `style:` theming), so this
+// is not a complete XSS seal — but it still blocks loading external scripts,
+// <object>/<embed> plugins, <base> hijacking, cross-origin form posts, and
+// data exfiltration to hosts other than the Iconify icon CDNs. Asset routes
+// (icons/backgrounds) override this with a much stricter policy via
+// setAssetCSP, so an uploaded SVG cannot execute script regardless.
+const appContentSecurityPolicy = "default-src 'self'; " +
+	"script-src 'self' 'unsafe-inline'; " +
+	"style-src 'self' 'unsafe-inline'; " +
+	"img-src 'self' data: blob: http: https:; " +
+	"font-src 'self' data:; " +
+	"connect-src 'self' https://api.iconify.design https://api.simplesvg.com https://api.unisvg.com; " +
+	"frame-src *; " +
+	"object-src 'none'; " +
+	"base-uri 'self'; " +
+	"form-action 'self'; " +
+	"frame-ancestors 'self'"
+
 func (r *Router) securityHeadersMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
@@ -388,6 +434,10 @@ func (r *Router) securityHeadersMiddleware(next http.Handler) http.Handler {
 		w.Header().Set("X-XSS-Protection", "0")
 		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
 		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+		// Default CSP for app pages and API responses. Asset handlers
+		// (serveIcons/serveBackgrounds/servePresets/serveDashboardIcons)
+		// overwrite this with the stricter setAssetCSP policy.
+		w.Header().Set("Content-Security-Policy", appContentSecurityPolicy)
 		next.ServeHTTP(w, req)
 	})
 }
@@ -401,12 +451,39 @@ func (r *Router) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		_, err := r.authService.ValidateSession(sessionID)
+		userID, err := r.authService.ValidateSession(sessionID)
 		if err != nil {
 			writeJSONError(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
 
+		// Enforce the forced-password-change gate server-side. While the
+		// account still owes a password change, every protected route is
+		// blocked except the ones needed to actually change it or log out —
+		// the frontend redirect alone is not a security control.
+		if !passwordChangeExemptPath(req.URL.Path) {
+			mustChange, err := r.authService.MustChangePassword(userID)
+			if err != nil {
+				writeJSONError(w, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
+			if mustChange {
+				writeJSONError(w, "Password change required", http.StatusForbidden)
+				return
+			}
+		}
+
 		next(w, req)
+	}
+}
+
+// passwordChangeExemptPath reports whether a protected route stays reachable
+// while the authenticated user still owes a forced password change.
+func passwordChangeExemptPath(path string) bool {
+	switch path {
+	case "/api/auth/change-password", "/api/auth/logout":
+		return true
+	default:
+		return false
 	}
 }

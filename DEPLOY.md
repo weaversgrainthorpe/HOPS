@@ -1,6 +1,6 @@
 # HOPS Installation & Deployment Guide
 
-**Version 1.5.3**
+**Version 1.5.4**
 
 This guide covers installing and running HOPS. For a quick first-time walkthrough, see the [Zero to Dashboard Hero](QUICKSTART.md) guide.
 
@@ -121,7 +121,7 @@ hops/
 
 ## Build from Source
 
-Requires Go 1.24+ and Node.js 24+ (with npm).
+Requires Go 1.25+ and Node.js 24+ (with npm).
 
 ```bash
 git clone https://github.com/weaversgrainthorpe/HOPS.git
@@ -152,6 +152,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for full development setup instructions.
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `LOG_LEVEL` | `info` | Log verbosity. One of `debug`, `info`, `warn`, `error`. HOPS uses structured logging via `log/slog` — output is key=value format with a timestamp and level. |
+| `HOPS_TRUSTED_PROXIES` | _(empty)_ | Comma-separated CIDR ranges of reverse proxies HOPS is behind, e.g. `10.0.0.0/8` or `192.168.1.5/32`. Only requests arriving from these ranges have their `X-Forwarded-For` / `X-Forwarded-Proto` headers honoured (for per-client login rate limiting and for marking cookies `Secure`). Left empty, those headers are ignored so they cannot be spoofed. Set this if you run HOPS behind a reverse proxy. |
 
 ---
 

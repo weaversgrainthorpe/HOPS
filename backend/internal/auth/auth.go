@@ -153,6 +153,18 @@ func (s *Service) ChangePassword(userID int, oldPassword, newPassword string) er
 	return nil
 }
 
+// InvalidateOtherSessions revokes every session belonging to a user except
+// the one supplied (typically the caller's current session). Use this after
+// a password change so that any session stolen beforehand stops working,
+// while the user who just changed their password stays logged in.
+func (s *Service) InvalidateOtherSessions(userID int, keepSessionID string) error {
+	_, err := s.db.Exec(
+		"DELETE FROM sessions WHERE user_id = ? AND id != ?",
+		userID, keepSessionID,
+	)
+	return err
+}
+
 // generateSessionID creates a random session ID
 func generateSessionID() (string, error) {
 	bytes := make([]byte, 32)

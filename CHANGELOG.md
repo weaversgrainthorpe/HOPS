@@ -5,6 +5,55 @@ All notable changes to HOPS (Home Operations Portal System) will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.4] - 2026-05-20 — Security hardening
+
+A security-hardening release following a full penetration test of HOPS. No
+data migration is required.
+
+### Security
+
+- **Forced password change is now enforced server-side.** Previously the
+  "change the default password" gate was a frontend redirect only — every
+  admin API endpoint was reachable while the flag was still set. The auth
+  middleware now blocks all protected routes (except change-password and
+  logout) until the password has actually been changed.
+- **Login rate limiting can no longer be bypassed with a spoofed
+  `X-Forwarded-For` header.** `X-Forwarded-For` / `X-Forwarded-Proto` are
+  now honoured only from configured trusted proxies (new
+  `HOPS_TRUSTED_PROXIES` environment variable — comma-separated CIDRs).
+  Left unset, the headers are ignored and the rate limiter keys on the
+  real connection address, so the 20/min login limit cannot be defeated.
+- **SSRF hardening on the status checker.** Status-check requests are
+  refused if the target resolves to a link-local address (the
+  `169.254.0.0/16` range where cloud-metadata endpoints live), to a
+  multicast or unspecified address, or uses a non-HTTP(S) scheme.
+  Validation is applied at connection time, so it also covers redirects
+  and DNS rebinding. LAN and loopback targets remain allowed — HOPS is a
+  homelab dashboard and those are its legitimate monitoring targets.
+- **Uploaded SVGs can no longer execute script.** Icon and background
+  responses are served with a strict `Content-Security-Policy`
+  (`default-src 'none'; sandbox`), so an SVG containing `<script>` cannot
+  run even when opened directly. `<img>` embedding is unaffected.
+- **A Content-Security-Policy is now sent on all app responses** —
+  blocking external script loading, `<object>`/`<embed>` plugins,
+  `<base>` hijacking, cross-origin form posts, and data exfiltration to
+  hosts other than the Iconify icon CDNs.
+- **Session cookies are marked `Secure`** when the request arrives over
+  HTTPS (directly or via a trusted proxy that sets `X-Forwarded-Proto`).
+- **All other sessions are invalidated when a password is changed**, so a
+  session captured beforehand stops working.
+- Bumped `golang.org/x/image` to v0.40.0, clearing a WEBP-decode panic
+  advisory (GO-2026-4961) that affected 32-bit builds.
+
+### Notes
+
+- **All HOPS dashboards are public** — there is no per-dashboard privacy
+  model. Anyone who can reach an instance can view every dashboard.
+  SECURITY.md now states this explicitly; put HOPS behind an auth-aware
+  reverse proxy or a restricted network if its contents are sensitive.
+- The backend now builds with **Go 1.25** (required by the updated
+  `golang.org/x/image`).
+
 ## [1.5.3] - 2026-05-19 — Modal backdrop escape via portal
 
 ### Fixed

@@ -3,11 +3,53 @@ package status
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
+	"net/url"
 	"sync"
+	"syscall"
 	"time"
 )
+
+// isBlockedIP reports whether an IP must not be reached by the status checker.
+//
+// HOPS is a homelab dashboard: tiles legitimately point at LAN services on
+// private (RFC1918) addresses and at services on the HOPS host itself
+// (loopback), so those are explicitly ALLOWED — blocking them would break the
+// core use case. What is blocked is the link-local range (169.254.0.0/16 and
+// IPv6 fe80::/10), which is where cloud-metadata endpoints such as
+// 169.254.169.254 live and is never a legitimate dashboard target, plus the
+// unspecified address and multicast. This keeps the high-value SSRF
+// escalation path closed without crippling LAN monitoring.
+func isBlockedIP(ip net.IP) bool {
+	return ip.IsLinkLocalUnicast() ||
+		ip.IsLinkLocalMulticast() ||
+		ip.IsInterfaceLocalMulticast() ||
+		ip.IsUnspecified() ||
+		ip.IsMulticast()
+}
+
+// ssrfSafeDialControl is a net.Dialer Control hook. It runs after DNS
+// resolution with the concrete IP about to be dialed, so it rejects the
+// connection if that IP is internal — for the initial request, for every
+// redirect hop (each dials anew), and for DNS-rebinding attempts (the real
+// resolved IP is checked, not a stale pre-validated one).
+func ssrfSafeDialControl(_, address string, _ syscall.RawConn) error {
+	host, _, err := net.SplitHostPort(address)
+	if err != nil {
+		return fmt.Errorf("status check: invalid dial address %q", address)
+	}
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return fmt.Errorf("status check: unresolved dial host %q", host)
+	}
+	if isBlockedIP(ip) {
+		return fmt.Errorf("status check: blocked internal/loopback/link-local target %s", ip)
+	}
+	return nil
+}
 
 // Entry represents a minimal entry for status checking
 type Entry struct {
@@ -36,15 +78,23 @@ type Checker struct {
 // NewChecker creates a new status checker
 func NewChecker(db *sql.DB, checkInterval time.Duration) *Checker {
 	return &Checker{
-		db:            db,
+		db: db,
 		client: &http.Client{
 			Timeout: 10 * time.Second,
 			CheckRedirect: func(req *http.Request, via []*http.Request) error {
-				// Allow redirects but cap at 10
+				// Cap redirects at 10. Each hop still dials through the
+				// SSRF-safe Control hook, so a redirect to an internal
+				// host is refused at connection time.
 				if len(via) >= 10 {
 					return http.ErrUseLastResponse
 				}
 				return nil
+			},
+			Transport: &http.Transport{
+				DialContext: (&net.Dialer{
+					Timeout: 10 * time.Second,
+					Control: ssrfSafeDialControl,
+				}).DialContext,
 			},
 		},
 		checkInterval: checkInterval,
@@ -177,6 +227,14 @@ func (c *Checker) checkAllEntries() {
 
 func (c *Checker) checkEntry(entry Entry) statusCheckResult {
 	result := statusCheckResult{entryID: entry.ID, status: "up"}
+
+	// Only http(s) URLs are checkable. Reject other schemes (file://,
+	// gopher://, etc.) outright rather than handing them to the client.
+	parsed, err := url.Parse(entry.URL)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+		result.status = "error"
+		return result
+	}
 
 	start := time.Now()
 
