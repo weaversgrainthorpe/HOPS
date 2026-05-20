@@ -33,6 +33,23 @@ HOPS ships with these protections enabled by default:
 - **Graceful shutdown** + HTTP timeouts (slow-loris mitigation)
 - **SQLite foreign-key enforcement** with `ON DELETE CASCADE` where appropriate
 
+## Security Testing
+
+HOPS undergoes internal security review. The v1.5.4 and v1.5.5 releases
+addressed findings from a structured assessment covering the common
+web-application vulnerability classes — authentication and session
+handling, injection, XSS, SSRF, path traversal, CSRF, and rate limiting —
+combining static source review with dynamic probing of a disposable local
+instance. The specific fixes are listed in the [CHANGELOG](CHANGELOG.md).
+
+The assessment is **repeatable** — the tooling lives in the repository at
+`.claude/skills/pentest/` and is re-run as the code changes.
+
+This is a self-performed, tooling-assisted review, **not an independent
+third-party audit**. It reduces risk; it does not guarantee the absence of
+vulnerabilities. Reports of anything it missed are very welcome — see
+[Reporting a Vulnerability](#reporting-a-vulnerability) above.
+
 ## Security Best Practices for Users
 
 - **Use HTTPS** via a reverse proxy (Caddy, nginx, Traefik, etc.) if exposed beyond your local network — HOPS does not terminate TLS itself
