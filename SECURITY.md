@@ -29,7 +29,7 @@ HOPS ships with these protections enabled by default:
 - **CSRF protection** via double-submit cookie pattern on all mutation endpoints
 - **Per-IP rate limiting** on login (20 attempts/minute)
 - **Path-traversal hardening** on backup operations
-- **Security headers**: `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`
+- **Browser hardening** — tells visitors' browsers to defend the page against common web attacks
 - **Graceful shutdown** + HTTP timeouts (slow-loris mitigation)
 - **SQLite foreign-key enforcement** with `ON DELETE CASCADE` where appropriate
 
@@ -41,9 +41,6 @@ web-application vulnerability classes — authentication and session
 handling, injection, XSS, SSRF, path traversal, CSRF, and rate limiting —
 combining static source review with dynamic probing of a disposable local
 instance. The specific fixes are listed in the [CHANGELOG](CHANGELOG.md).
-
-The assessment is **repeatable** — the tooling lives in the repository at
-`.claude/skills/pentest/` and is re-run as the code changes.
 
 This is a self-performed, tooling-assisted review, **not an independent
 third-party audit**. It reduces risk; it does not guarantee the absence of
