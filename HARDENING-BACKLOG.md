@@ -3,33 +3,21 @@
 Tracked security/robustness items not yet addressed. Sourced from the
 penetration test performed for the v1.5.4 release.
 
-The HIGH and MEDIUM findings were fixed in **v1.5.4** (see CHANGELOG). The
-items below are the remaining low-severity / hygiene work — none are
-exposed holes — deferred to a focused **v1.5.5 hardening pass**.
+The HIGH and MEDIUM findings were fixed in **v1.5.4**, and **LOW-3 + LOW-4
+in v1.5.5** (see CHANGELOG). The items below are the remaining
+low-severity / hygiene work — none are exposed holes — deferred to a
+focused **v1.5.6 hardening pass**.
 
-## v1.5.5 — planned
+## Done
 
-### LOW-3 — Generic error messages
+- **LOW-3 — Generic error messages** — fixed in v1.5.5. Config-import /
+  converter, image-decode, and backup handlers no longer echo parser or
+  filesystem internals; detail is logged server-side instead.
+- **LOW-4 — Cap request body sizes** — fixed in v1.5.5. Config import,
+  background upload, and icon upload wrap the request body in
+  `http.MaxBytesReader` (50 / 50 / 8 MB).
 
-Some handlers return parser/decoder internals to the caller, e.g.
-`fmt.Sprintf("...: %v", err)` in the config-import path and
-`"Failed to decode image: " + err.Error()`.
-
-- Where: `backend/internal/api/handlers.go` — import handler (~1167-1196),
-  image decode (~2010).
-- Fix: return generic messages to the client; log the detail server-side.
-- Impact: low — these are auth-gated admin routes.
-
-### LOW-4 — Cap request body sizes
-
-Config import and background upload read the whole body into memory
-(`io.ReadAll` after `ParseMultipartForm(50<<20)`); no global cap. Concurrent
-large uploads could pressure memory on a small device.
-
-- Where: `backend/internal/api/handlers.go` — import (~1139-1155),
-  background upload (~1837). Icon upload is already capped at 5 MB.
-- Fix: wrap request bodies in `http.MaxBytesReader`; stream to disk
-  rather than buffering.
+## v1.5.6 — planned
 
 ### LOW-5 — Validate tile URL scheme in PopupModal
 
