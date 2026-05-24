@@ -222,8 +222,8 @@
         <p class="section-lede">There are already plenty of homelab dashboards out there. HOPS exists because none of them quite matched what I wanted.</p>
         <div class="why-grid">
           <div class="why-card">
-            <h3>100% GUI editing</h3>
-            <p>Click, drag, configure. No YAML files. No JSON editing. No "simple" config files that inevitably become not-so-simple.</p>
+            <h3>100% GUI configuration</h3>
+            <p>Click, drag, configure. No YAML files. No JSON editing. No "simple" config files that inevitably become not-so-simple. Even the runtime settings — log level, rate limits, proxy trust — live in the admin GUI, not in env vars or flags.</p>
           </div>
           <div class="why-card">
             <h3>Single binary</h3>
@@ -242,7 +242,7 @@
             <p>HOPS can ping your tiles to show up/down indicators, so you can see at a glance which services are reachable.</p>
           </div>
           <div class="why-card">
-            <h3>Imports your old dashboard</h3>
+            <h3>Import your existing dashboard</h3>
             <p>Already on Homer, Dashy, or Heimdall? HOPS imports your existing config, so trying it doesn't mean starting over.</p>
           </div>
         </div>
@@ -288,7 +288,16 @@
         <p class="section-lede">HOPS runs on Linux, macOS, and Windows — x86-64 and ARM64 (Raspberry Pi 3B+/4/5/Zero 2 W). No dependencies.</p>
         <div class="install-grid">
           <div class="install-card">
-            <h3>🐳 Docker</h3>
+            <h3>📦 Binary</h3>
+<pre><code># Download for your platform from Releases
+curl -LO https://github.com/weaversgrainthorpe/HOPS/releases/latest/download/hops-linux-amd64.tar.gz
+tar -xzf hops-linux-amd64.tar.gz
+mkdir -p data
+./hops-linux-amd64 --data ./data --frontend ./frontend/build</code></pre>
+            <p class="login">Default login: <code>admin</code> / <code>admin</code> (you'll be forced to change it on first login).</p>
+          </div>
+          <div class="install-card">
+            <h3>🐳 Docker <span style="color: var(--text-muted); font-weight: 400; font-size: 0.85em;">— alternative</span></h3>
 <pre><code>services:
   hops:
     image: ghcr.io/weaversgrainthorpe/hops:latest
@@ -300,15 +309,6 @@
 volumes:
   hops-data:</code></pre>
             <p class="login">Then <code>docker compose up -d</code> and open <code>http://localhost:8080</code>.</p>
-          </div>
-          <div class="install-card">
-            <h3>📦 Binary</h3>
-<pre><code># Download for your platform from Releases
-curl -LO https://github.com/weaversgrainthorpe/HOPS/releases/latest/download/hops-linux-amd64.tar.gz
-tar -xzf hops-linux-amd64.tar.gz
-mkdir -p data
-./hops-linux-amd64 --data ./data --frontend ./frontend/build</code></pre>
-            <p class="login">Default login: <code>admin</code> / <code>admin</code> (you'll be forced to change it on first login).</p>
           </div>
         </div>
         <p style="margin-top: 2rem; color: var(--text-muted);">For the full walkthrough see the <a href="https://github.com/weaversgrainthorpe/HOPS/blob/main/QUICKSTART.md"><b>Quick Start guide</b></a>, or jump to the <a href="https://github.com/weaversgrainthorpe/HOPS/blob/main/DEPLOY.md"><b>Deployment guide</b></a> for systemd, reverse proxies, and backups.</p>
