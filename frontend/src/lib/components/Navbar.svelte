@@ -43,7 +43,11 @@
       }, 500);
     }
   }
-  let isDashboardPage = $derived(currentPath !== '/');
+  // True only when the current page is an actual dashboard (i.e. somewhere
+  // that has tiles to edit). The admin page (`/`) has its own controls, and
+  // the Settings page (`/settings`) has its own form UI — on neither does
+  // dashboard edit-mode make sense, so the navbar's Edit toggle hides there.
+  let isDashboardPage = $derived(currentPath !== '/' && !currentPath.startsWith('/settings'));
   let showThemePicker = $state(false);
   let showExport = $state(false);
   let showHelp = $state(false);
@@ -77,7 +81,7 @@
             {#if isDev}<span class="dev-badge">DEV</span>{/if}
           </a>
 
-          {#if $isAuthenticated}
+          {#if $isAuthenticated && isDashboardPage}
             <div class="nav-links">
               {#each $dashboards as dashboard (dashboard.id)}
                 <a
@@ -105,32 +109,34 @@
     </div>
 
     <div class="nav-right">
-      <div class="text-size-controls" title="Text Size: {textSizeConfigs[$textSize].label}">
-        <button
-          onclick={decreaseTextSize}
-          class="text-size-btn"
-          disabled={!canDecrease($textSize)}
-          title="Decrease text size"
-        >
-          <span class="text-size-icon small">A</span>
-          <Icon icon="mdi:arrow-down" width="10" height="10" class="text-size-arrow" />
-        </button>
-        <button
-          onclick={increaseTextSize}
-          class="text-size-btn"
-          disabled={!canIncrease($textSize)}
-          title="Increase text size"
-        >
-          <span class="text-size-icon large">A</span>
-          <Icon icon="mdi:arrow-up" width="10" height="10" class="text-size-arrow" />
-        </button>
-      </div>
+      {#if isDashboardPage}
+        <div class="text-size-controls" title="Text Size: {textSizeConfigs[$textSize].label}">
+          <button
+            onclick={decreaseTextSize}
+            class="text-size-btn"
+            disabled={!canDecrease($textSize)}
+            title="Decrease text size"
+          >
+            <span class="text-size-icon small">A</span>
+            <Icon icon="mdi:arrow-down" width="10" height="10" class="text-size-arrow" />
+          </button>
+          <button
+            onclick={increaseTextSize}
+            class="text-size-btn"
+            disabled={!canIncrease($textSize)}
+            title="Increase text size"
+          >
+            <span class="text-size-icon large">A</span>
+            <Icon icon="mdi:arrow-up" width="10" height="10" class="text-size-arrow" />
+          </button>
+        </div>
 
-      <button onclick={() => showThemePicker = true} class="theme-toggle" title="Theme Settings" aria-label="Theme Settings">
-        <span class="icon-wrapper">
-          <Icon icon={themeIcon} width="32" height="32" />
-        </span>
-      </button>
+        <button onclick={() => showThemePicker = true} class="theme-toggle" title="Theme Settings" aria-label="Theme Settings">
+          <span class="icon-wrapper">
+            <Icon icon={themeIcon} width="32" height="32" />
+          </span>
+        </button>
+      {/if}
 
       {#if $editMode && isDashboardPage}
         <button onclick={() => showExport = true} class="export-btn" title="Export Dashboard" aria-label="Export Dashboard">

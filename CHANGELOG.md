@@ -5,6 +5,35 @@ All notable changes to HOPS (Home Operations Portal System) will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.1] - 2026-05-24 — Settings page polish
+
+A small follow-up to v1.6.0 — UX polish on the new Settings page, plus a
+User Guide section. No data migration, no API or behaviour change.
+
+### Changed
+
+- **Navbar simplifies on `/settings`.** The dashboard tabs, font-size
+  controls, theme picker, export/download icon, and Edit-mode toggle
+  are hidden on the Settings page — none of them apply there. The
+  logo, Help, About, the Settings cog itself, and login/logout
+  remain. Normal full navbar returns the moment you navigate to an
+  actual dashboard.
+- **Reverse-proxy CIDR list is now a list-builder, not a JSON
+  textarea.** Each configured CIDR shows as a removable chip; an input
+  + Add button (or Enter) appends new entries. Client-side validation
+  catches obvious typos before they leave the browser; the server
+  still runs strict `net.ParseCIDR` on save. Empty state explains
+  itself ("No CIDRs configured — HOPS will not honour forwarded
+  headers"). The on-the-wire format is unchanged.
+
+### Documentation
+
+- New **Server Settings** section in [USER_GUIDE.md](USER_GUIDE.md)
+  describing what the Settings page is, how to reach it, live vs
+  restart-required, and the common reasons you might change a value
+  (debug logging, reverse-proxy CIDRs, port changes, larger backgrounds,
+  more aggressive status checks).
+
 ## [1.6.0] - 2026-05-24 — GUI-configurable runtime settings
 
 A meaningful step in HOPS's GUI-first principle: all admin-tunable runtime
