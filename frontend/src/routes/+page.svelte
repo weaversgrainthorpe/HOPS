@@ -11,6 +11,7 @@
   import Button from '$lib/components/shared/Button.svelte';
   import Icon from '@iconify/svelte';
   import { resetConfig } from '$lib/utils/api';
+  import { goto } from '$app/navigation';
 
   let username = $state('admin');
   let password = $state('');
@@ -120,6 +121,14 @@
       <div class="admin-header">
         <h1>HOPS Admin Panel</h1>
         <div class="header-actions">
+          <Button
+            variant="secondary"
+            icon="mdi:cog"
+            onclick={() => goto('/settings')}
+            disabled={$isBackendOffline}
+          >
+            Settings
+          </Button>
           <Button
             variant="secondary"
             icon="mdi:backup-restore"

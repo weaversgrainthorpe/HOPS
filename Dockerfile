@@ -30,4 +30,4 @@ EXPOSE 8080
 VOLUME ["/app/data"]
 
 ENTRYPOINT ["./hops"]
-CMD ["--port", "8080", "--data", "/app/data", "--frontend", "/app/frontend/build"]
+CMD ["--data", "/app/data", "--frontend", "/app/frontend/build"]

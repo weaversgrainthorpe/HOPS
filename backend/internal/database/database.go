@@ -127,6 +127,16 @@ func runMigrations(db *sql.DB) error {
 			FOREIGN KEY (category_id) REFERENCES icon_categories(id) ON DELETE CASCADE
 		)`,
 
+		// Application settings — single key/value table for all admin-configurable
+		// runtime settings (port, log level, rate limits, timeouts, upload caps, etc.).
+		// Values are stored as TEXT and parsed per-key by the settings package.
+		// Defaults are seeded by the settings service on first start.
+		`CREATE TABLE IF NOT EXISTS app_settings (
+			key TEXT PRIMARY KEY,
+			value TEXT NOT NULL,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+
 		// Indexes for faster lookups
 		`CREATE INDEX IF NOT EXISTS idx_icons_category ON icons(category_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_icons_preset ON icons(is_preset)`,

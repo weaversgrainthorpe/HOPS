@@ -1,6 +1,6 @@
 # HOPS Installation & Deployment Guide
 
-**Version 1.5.5**
+**Version 1.6.0**
 
 This guide covers installing and running HOPS. For a quick first-time walkthrough, see the [Zero to Dashboard Hero](QUICKSTART.md) guide.
 
@@ -45,7 +45,7 @@ tar -xzf hops-linux-amd64.tar.gz
 mkdir -p data
 
 # Start HOPS
-./hops-linux-amd64 --port 8080 --data ./data --frontend ./frontend/build
+./hops-linux-amd64 --data ./data --frontend ./frontend/build
 ```
 
 Open **http://localhost:8080** in your browser. Log in with `admin` / `admin` and change the password immediately.
@@ -132,7 +132,7 @@ cd HOPS
 This builds the frontend and backend. Run with:
 
 ```bash
-./backend/hops --port 8080 --data ./data --frontend ./frontend/build
+./backend/hops --data ./data --frontend ./frontend/build
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for full development setup instructions.
@@ -141,18 +141,38 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for full development setup instructions.
 
 ## Command-Line Options
 
+Only the two bootstrap-required paths are CLI flags. Everything else (port,
+log level, trusted proxies, rate limits, timeouts, upload caps, session
+lifetime) is configured at runtime via the admin **Settings** page in the
+GUI — see [Runtime Configuration](#runtime-configuration) below.
+
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--port` | `8080` | Port the server listens on |
 | `--data` | `../data` | Data directory for SQLite database, backups, and uploads |
 | `--frontend` | `../frontend/build` | Path to the frontend build directory |
+| `--host` | _(empty)_ | Interface to bind to. Empty = all interfaces (default). Set to `127.0.0.1` to bind loopback-only when HOPS sits behind a reverse proxy on the same host and shouldn't be reachable directly. |
 
-## Environment Variables
+## Runtime Configuration
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `LOG_LEVEL` | `info` | Log verbosity. One of `debug`, `info`, `warn`, `error`. HOPS uses structured logging via `log/slog` — output is key=value format with a timestamp and level. |
-| `HOPS_TRUSTED_PROXIES` | _(empty)_ | Comma-separated CIDR ranges of reverse proxies HOPS is behind, e.g. `10.0.0.0/8` or `192.168.1.5/32`. Only requests arriving from these ranges have their `X-Forwarded-For` / `X-Forwarded-Proto` headers honoured (for per-client login rate limiting and for marking cookies `Secure`). Left empty, those headers are ignored so they cannot be spoofed. Set this if you run HOPS behind a reverse proxy. |
+All other configuration is set through the GUI. Sign in to the admin
+panel and click **Settings** (top right) — `http://<host>:8080/settings`.
+Each setting carries inline help, its default value, validation
+constraints, and (where applicable) a **Restart required** badge.
+
+Available settings, grouped:
+
+- **Server** — Port (restart required)
+- **Logging** — Log level (debug / info / warn / error)
+- **Reverse proxy** — Trusted-proxy CIDRs (whose `X-Forwarded-For` /
+  `X-Forwarded-Proto` headers are honoured for client-IP attribution
+  and HTTPS detection; restart required)
+- **Authentication** — Login rate limit per IP per minute; session lifetime
+- **Status checks** — Polling interval; per-request timeout
+- **Uploads** — Per-endpoint body caps (config import / background / icon)
+- **HTTP server timeouts** — read-header / read / write / idle (restart required)
+
+The values persist in the SQLite database. Defaults are sensible for a
+typical homelab deployment.
 
 ---
 
@@ -177,7 +197,7 @@ After=network.target
 Type=simple
 User=hops
 WorkingDirectory=/opt/hops
-ExecStart=/opt/hops/hops-linux-amd64 --port 8080 --data /opt/hops/data --frontend /opt/hops/frontend/build
+ExecStart=/opt/hops/hops-linux-amd64 --data /opt/hops/data --frontend /opt/hops/frontend/build
 Restart=always
 RestartSec=5
 

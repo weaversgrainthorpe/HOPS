@@ -18,15 +18,21 @@ import (
 	"github.com/weaversgrainthorpe/HOPS/internal/auth"
 	"github.com/weaversgrainthorpe/HOPS/internal/config"
 	"github.com/weaversgrainthorpe/HOPS/internal/database"
+	"github.com/weaversgrainthorpe/HOPS/internal/settings"
 	"github.com/weaversgrainthorpe/HOPS/internal/status"
 	"github.com/weaversgrainthorpe/HOPS/internal/version"
 )
 
-// configureLogger sets up the global slog logger with text output and configurable level.
-// LOG_LEVEL env var accepts: debug, info, warn, error (default: info).
-func configureLogger() {
+// setLogLevel (re)installs the global slog logger at the given level.
+// Accepts: debug, info, warn, error (default on unknown: info).
+//
+// HOPS calls this twice: once at startup with "info" before the DB is open,
+// then again after the settings service loads with the persisted value from
+// `log.level`. It's also wired as a subscriber so admin changes take effect
+// immediately.
+func setLogLevel(name string) {
 	level := slog.LevelInfo
-	switch strings.ToLower(os.Getenv("LOG_LEVEL")) {
+	switch strings.ToLower(name) {
 	case "debug":
 		level = slog.LevelDebug
 	case "warn", "warning":
@@ -38,39 +44,27 @@ func configureLogger() {
 	slog.SetDefault(slog.New(handler))
 }
 
-// parseTrustedProxies splits a comma-separated list of CIDR ranges from the
-// HOPS_TRUSTED_PROXIES env var. Set this to your reverse proxy's address
-// (e.g. "10.0.0.0/8" or "192.168.1.5/32") when running HOPS behind one, so
-// that X-Forwarded-For is honoured only from that proxy. Empty by default.
-func parseTrustedProxies(raw string) []string {
-	if strings.TrimSpace(raw) == "" {
-		return nil
-	}
-	var out []string
-	for _, part := range strings.Split(raw, ",") {
-		if p := strings.TrimSpace(part); p != "" {
-			out = append(out, p)
-		}
-	}
-	return out
-}
-
 func main() {
-	configureLogger()
+	// Start with INFO; the level is reset to the persisted value once the
+	// settings service has loaded (a few lines below).
+	setLogLevel("info")
 
-	// Command line flags
-	port := flag.String("port", "8080", "Port to run the server on")
+	// Command line flags — only bootstrap-level options are CLI flags.
+	// Everything user-configurable (port, log level, rate limit, trusted
+	// proxies, timeouts, upload caps, etc.) is set in the admin GUI under
+	// /api/settings. --host is a flag because restricting the bind
+	// interface is an operator security decision, not a user preference,
+	// and it must be settable without first being able to reach the GUI.
 	dataDir := flag.String("data", "../data", "Data directory for SQLite database")
 	frontendDir := flag.String("frontend", "../frontend/build", "Frontend build directory")
+	host := flag.String("host", "", "Interface to bind to (e.g. 127.0.0.1 for loopback-only). Empty (default) binds all interfaces.")
 	flag.Parse()
 
 	// Initialize configuration
 	cfg := &config.Config{
-		Port:                 *port,
-		DataDir:              *dataDir,
-		FrontendDir:          *frontendDir,
-		LoginRateLimitPerMin: 20, // 20 login attempts per minute
-		TrustedProxies:       parseTrustedProxies(os.Getenv("HOPS_TRUSTED_PROXIES")),
+		BindHost:    *host,
+		DataDir:     *dataDir,
+		FrontendDir: *frontendDir,
 	}
 
 	// Validate config before doing any work
@@ -100,6 +94,20 @@ func main() {
 		slog.Warn("failed to create startup backup", "component", "backup", "error", err)
 	}
 
+	// Initialize the settings service (seeds defaults, loads into cache).
+	settingsSvc, err := settings.New(db)
+	if err != nil {
+		slog.Error("failed to initialize settings", "error", err)
+		os.Exit(1)
+	}
+
+	// Apply the persisted log level and subscribe to live changes.
+	setLogLevel(settingsSvc.Get(settings.KeyLogLevel))
+	settingsSvc.Subscribe(settings.KeyLogLevel, func(value string) {
+		setLogLevel(value)
+		slog.Info("log level updated", "component", "settings", "level", value)
+	})
+
 	// Initialize auth service
 	authService := auth.NewService(db)
 
@@ -108,8 +116,9 @@ func main() {
 	authService.StartCleanupRoutine(1*time.Hour, sessionCleanupStop)
 	defer close(sessionCleanupStop)
 
-	// Initialize status checker (checks every 5 minutes)
-	statusChecker := status.NewChecker(db, 5*time.Minute)
+	// Initialize status checker — interval/timeout come from settings, with
+	// live updates wired so changes apply without a restart.
+	statusChecker := status.NewChecker(db, settingsSvc)
 	statusChecker.Start()
 	defer statusChecker.Stop()
 
@@ -121,17 +130,20 @@ func main() {
 
 	// Initialize API router
 	startTime := time.Now()
-	router := api.NewRouter(db, authService, cfg, startTime)
+	router := api.NewRouter(db, authService, cfg, settingsSvc, startTime)
 
-	// Configure HTTP server with timeouts to prevent slow-loris attacks and hung connections
-	addr := fmt.Sprintf(":%s", cfg.Port)
+	// Configure HTTP server. Port + timeouts come from settings — changing
+	// them in the GUI requires a server restart (the server has already
+	// bound by the time a setting change would arrive). The bind host comes
+	// from the --host flag; empty means "all interfaces".
+	addr := fmt.Sprintf("%s:%d", cfg.BindHost, settingsSvc.GetInt(settings.KeyServerPort))
 	srv := &http.Server{
 		Addr:              addr,
 		Handler:           router,
-		ReadHeaderTimeout: 10 * time.Second,
-		ReadTimeout:       60 * time.Second,
-		WriteTimeout:      120 * time.Second,
-		IdleTimeout:       120 * time.Second,
+		ReadHeaderTimeout: time.Duration(settingsSvc.GetInt(settings.KeyHTTPReadHeaderTimeoutSeconds)) * time.Second,
+		ReadTimeout:       time.Duration(settingsSvc.GetInt(settings.KeyHTTPReadTimeoutSeconds)) * time.Second,
+		WriteTimeout:      time.Duration(settingsSvc.GetInt(settings.KeyHTTPWriteTimeoutSeconds)) * time.Second,
+		IdleTimeout:       time.Duration(settingsSvc.GetInt(settings.KeyHTTPIdleTimeoutSeconds)) * time.Second,
 	}
 
 	slog.Info("server starting",

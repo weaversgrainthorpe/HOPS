@@ -1,15 +1,15 @@
 #!/bin/bash
 
-# Start HOPS in production mode (requires build.sh to have been run first)
+# Start HOPS in production mode (requires build.sh to have been run first).
+# The TCP port HOPS listens on is configured in the admin GUI under Settings
+# (server.port, default 8080) — there is no --port CLI flag.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HOPS_DIR="$(dirname "$SCRIPT_DIR")"
 
-PORT="${1:-8080}"
-DATA_DIR="${2:-$HOPS_DIR/data}"
+DATA_DIR="${1:-$HOPS_DIR/data}"
 
 echo "Starting HOPS..."
 echo "Directory: $HOPS_DIR"
-echo "Port: $PORT"
 echo "Data: $DATA_DIR"
 
 # Check if backend binary exists
@@ -31,4 +31,4 @@ mkdir -p "$DATA_DIR"
 
 # Start backend (serves frontend from build directory)
 cd "$HOPS_DIR/backend"
-./hops --port $PORT --data "$DATA_DIR" --frontend "$HOPS_DIR/frontend/build"
+./hops --data "$DATA_DIR" --frontend "$HOPS_DIR/frontend/build"

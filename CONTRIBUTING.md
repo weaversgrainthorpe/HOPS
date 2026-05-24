@@ -23,7 +23,7 @@ Thanks for your interest in contributing to HOPS! This document covers the guide
 2. Start the backend:
    ```bash
    cd backend
-   go run cmd/hops/main.go --port 8080 --data ../data
+   go run cmd/hops/main.go --data ../data --frontend ../frontend/build
    ```
 3. Start the frontend:
    ```bash

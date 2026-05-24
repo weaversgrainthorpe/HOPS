@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"github.com/weaversgrainthorpe/HOPS/internal/auth"
 	"github.com/weaversgrainthorpe/HOPS/internal/config"
 	"github.com/weaversgrainthorpe/HOPS/internal/database"
+	"github.com/weaversgrainthorpe/HOPS/internal/settings"
 )
 
 // Router holds all dependencies for the API
@@ -22,11 +24,13 @@ type Router struct {
 	db             *sql.DB
 	authService    *auth.Service
 	config         *config.Config
+	settings       *settings.Service
 	mux            *http.ServeMux
 	rateLimiter    *RateLimiter
 	backupManager  *database.BackupManager
 	startTime      time.Time
-	trustedProxies []*net.IPNet // parsed config.TrustedProxies
+	mu             sync.RWMutex // guards trustedProxies (rebuilt on settings change requires restart, but the slice itself is accessed concurrently)
+	trustedProxies []*net.IPNet // parsed at construction from settings.proxy.trusted_cidrs
 }
 
 // RateLimiter provides simple rate limiting for login attempts
@@ -91,6 +95,17 @@ func (rl *RateLimiter) Stop() {
 	close(rl.stopCh)
 }
 
+// SetLimit updates the per-IP attempt limit at runtime. Existing recorded
+// attempts are unaffected; the new limit applies on the next Allow call.
+func (rl *RateLimiter) SetLimit(limit int) {
+	if limit <= 0 {
+		return
+	}
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	rl.limit = limit
+}
+
 // Allow checks if a request from the given IP should be allowed
 func (rl *RateLimiter) Allow(ip string) bool {
 	rl.mu.Lock()
@@ -116,10 +131,14 @@ func (rl *RateLimiter) Allow(ip string) bool {
 	return true
 }
 
-// NewRouter creates a new API router with all routes configured
-func NewRouter(db *sql.DB, authService *auth.Service, cfg *config.Config, startTime time.Time) http.Handler {
-	// Use configured rate limit or default to 20 per minute
-	rateLimit := cfg.LoginRateLimitPerMin
+// NewRouter creates a new API router with all routes configured. All
+// admin-tunable knobs (login rate limit, trusted proxies, etc.) come from
+// the settings service, not the static config — those are now configurable
+// via the GUI in /api/settings.
+func NewRouter(db *sql.DB, authService *auth.Service, cfg *config.Config, settingsSvc *settings.Service, startTime time.Time) http.Handler {
+	// Login rate limit comes from settings (default 20/min, validated by the
+	// settings service so it's always sane here).
+	rateLimit := settingsSvc.GetInt(settings.KeyAuthLoginRateLimitPerMin)
 	if rateLimit <= 0 {
 		rateLimit = 20
 	}
@@ -128,28 +147,40 @@ func NewRouter(db *sql.DB, authService *auth.Service, cfg *config.Config, startT
 	dbPath := filepath.Join(cfg.DataDir, "hops.db")
 	backupManager := database.NewBackupManager(dbPath)
 
-	// Pre-parse trusted-proxy CIDRs once. Config.Validate has already
-	// rejected malformed entries, so ParseCIDR is not expected to fail here.
-	var trustedProxies []*net.IPNet
-	for _, cidr := range cfg.TrustedProxies {
-		if _, network, err := net.ParseCIDR(cidr); err == nil {
-			trustedProxies = append(trustedProxies, network)
-		}
-	}
-
 	r := &Router{
 		db:             db,
 		authService:    authService,
 		config:         cfg,
+		settings:       settingsSvc,
 		mux:            http.NewServeMux(),
 		rateLimiter:    NewRateLimiter(rateLimit, time.Minute),
 		backupManager:  backupManager,
 		startTime:      startTime,
-		trustedProxies: trustedProxies,
+		trustedProxies: parseTrustedProxyCIDRs(settingsSvc.GetStringList(settings.KeyProxyTrustedCIDRs)),
 	}
+
+	// Live-update the rate limit when the admin changes it via Settings.
+	settingsSvc.Subscribe(settings.KeyAuthLoginRateLimitPerMin, func(value string) {
+		if n, err := strconv.Atoi(value); err == nil && n > 0 {
+			r.rateLimiter.SetLimit(n)
+		}
+	})
 
 	r.setupRoutes()
 	return r.securityHeadersMiddleware(r.corsMiddleware(r.loggingMiddleware(r.mux)))
+}
+
+// parseTrustedProxyCIDRs converts validated CIDR strings into IPNets. The
+// settings service has already rejected malformed entries via its validator,
+// so ParseCIDR is not expected to fail here.
+func parseTrustedProxyCIDRs(cidrs []string) []*net.IPNet {
+	var out []*net.IPNet
+	for _, cidr := range cidrs {
+		if _, network, err := net.ParseCIDR(cidr); err == nil {
+			out = append(out, network)
+		}
+	}
+	return out
 }
 
 // protected wraps a handler with auth + CSRF middleware. Use this for any
@@ -180,6 +211,11 @@ func (r *Router) setupRoutes() {
 	// Backup management routes
 	r.mux.HandleFunc("/api/backups", r.protected(r.handleBackups))
 	r.mux.HandleFunc("/api/backups/", r.protected(r.handleBackupActions))
+
+	// App settings routes (admin-only). GET lists every setting with its
+	// definition + current value; PUT /api/settings/{key} updates one.
+	r.mux.HandleFunc("/api/settings", r.protected(r.handleSettingsList))
+	r.mux.HandleFunc("/api/settings/", r.protected(r.handleSettingUpdate))
 
 	// Icon management routes
 	r.mux.HandleFunc("/api/icon-categories", r.handleGetIconCategories)
@@ -367,41 +403,18 @@ func (r *Router) loggingMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// corsMiddleware adds CORS headers with proper origin validation
+// corsMiddleware rejects cross-origin preflight requests. HOPS has no
+// cross-origin clients today — the SPA is served from the same origin as the
+// API — so preflight OPTIONS get a 403 and no Access-Control-* headers are
+// emitted. If cross-origin access is ever needed, this is the place to surface
+// it (likely as a new settings entry rather than re-introducing the dead
+// AllowedOrigins config field).
 func (r *Router) corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		origin := req.Header.Get("Origin")
-
-		// If allowed origins are configured, validate against them
-		// Otherwise, only allow same-origin requests (no CORS headers)
-		if len(r.config.AllowedOrigins) > 0 && origin != "" {
-			allowed := false
-			for _, allowedOrigin := range r.config.AllowedOrigins {
-				if origin == allowedOrigin {
-					allowed = true
-					break
-				}
-			}
-
-			if allowed {
-				w.Header().Set("Access-Control-Allow-Origin", origin)
-				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-				w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-CSRF-Token")
-				w.Header().Set("Access-Control-Allow-Credentials", "true")
-				w.Header().Set("Vary", "Origin")
-			}
-		}
-
-		if req.Method == "OPTIONS" {
-			// Only return 200 for preflight if CORS headers were set (origin is allowed)
-			if w.Header().Get("Access-Control-Allow-Origin") != "" {
-				w.WriteHeader(http.StatusOK)
-			} else {
-				w.WriteHeader(http.StatusForbidden)
-			}
+		if req.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusForbidden)
 			return
 		}
-
 		next.ServeHTTP(w, req)
 	})
 }
