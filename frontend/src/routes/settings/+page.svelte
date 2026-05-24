@@ -100,6 +100,65 @@
     const tail = key.split('.').slice(1).join('.');
     return tail.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
   }
+
+  // --- cidr_list list-builder ---
+
+  // Parse a JSON string array safely. Returns [] for empty/invalid input
+  // so the UI can always render a list rather than crash on bad state.
+  function parseCidrList(raw: string): string[] {
+    if (!raw) return [];
+    try {
+      const v = JSON.parse(raw);
+      return Array.isArray(v) ? v.filter((x) => typeof x === 'string') : [];
+    } catch {
+      return [];
+    }
+  }
+
+  // Permissive client-side CIDR check — IPv4 dotted-quad/prefix or
+  // IPv6-ish hex/colons/prefix. The server runs strict net.ParseCIDR on
+  // save, so this is just a quick UX gate to catch obvious typos.
+  function looksLikeCidr(s: string): boolean {
+    const v = s.trim();
+    if (!v) return false;
+    if (/^(\d{1,3}\.){3}\d{1,3}\/(3[0-2]|[12]?\d)$/.test(v)) return true;
+    if (/^[0-9a-fA-F:]+\/(12[0-8]|1[01]\d|\d{1,2})$/.test(v)) return true;
+    return false;
+  }
+
+  // Per-key state for the "add a CIDR" input field. Keyed by setting key so
+  // multiple cidr_list settings (currently just one) don't collide.
+  let cidrDrafts = $state<Record<string, string>>({});
+  let cidrInputErrors = $state<Record<string, string>>({});
+
+  function addCidr(s: SettingDef) {
+    const candidate = (cidrDrafts[s.key] ?? '').trim();
+    if (!candidate) return;
+    if (!looksLikeCidr(candidate)) {
+      cidrInputErrors[s.key] = 'Not a valid CIDR (e.g. 10.0.0.0/8 or 192.168.1.5/32).';
+      return;
+    }
+    const current = parseCidrList(drafts[s.key]);
+    if (current.includes(candidate)) {
+      cidrInputErrors[s.key] = 'Already in the list.';
+      return;
+    }
+    drafts[s.key] = JSON.stringify([...current, candidate]);
+    cidrDrafts[s.key] = '';
+    cidrInputErrors[s.key] = '';
+  }
+
+  function removeCidr(s: SettingDef, value: string) {
+    const current = parseCidrList(drafts[s.key]);
+    drafts[s.key] = JSON.stringify(current.filter((v) => v !== value));
+  }
+
+  function handleCidrKeydown(e: KeyboardEvent, s: SettingDef) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addCidr(s);
+    }
+  }
 </script>
 
 <div class="settings-page">
@@ -151,11 +210,39 @@
                     {/each}
                   </select>
                 {:else if s.type === 'cidr_list'}
-                  <textarea
-                    bind:value={drafts[s.key]}
-                    placeholder='e.g. ["10.0.0.0/8","192.168.1.5/32"] — JSON string array, empty array if no proxy'
-                    rows="3"
-                  ></textarea>
+                  <div class="cidr-builder">
+                    {#each parseCidrList(drafts[s.key]) as cidr (cidr)}
+                      <span class="cidr-chip">
+                        <code>{cidr}</code>
+                        <button
+                          type="button"
+                          class="cidr-remove"
+                          title="Remove {cidr}"
+                          aria-label="Remove {cidr}"
+                          onclick={() => removeCidr(s, cidr)}
+                        >
+                          <Icon icon="mdi:close" width="14" />
+                        </button>
+                      </span>
+                    {/each}
+                    {#if parseCidrList(drafts[s.key]).length === 0}
+                      <span class="cidr-empty">No CIDRs configured — HOPS will not honour forwarded headers.</span>
+                    {/if}
+                    <div class="cidr-add">
+                      <input
+                        type="text"
+                        bind:value={cidrDrafts[s.key]}
+                        placeholder="10.0.0.0/8 or 192.168.1.5/32"
+                        onkeydown={(e) => handleCidrKeydown(e, s)}
+                      />
+                      <Button variant="secondary" icon="mdi:plus" onclick={() => addCidr(s)}>
+                        Add
+                      </Button>
+                    </div>
+                    {#if cidrInputErrors[s.key]}
+                      <div class="error inline">{cidrInputErrors[s.key]}</div>
+                    {/if}
+                  </div>
                 {:else}
                   <input
                     type="number"
@@ -304,6 +391,66 @@
 
   .row-input textarea {
     resize: vertical;
+  }
+
+  /* --- cidr_list list-builder --- */
+  .cidr-builder {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .cidr-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: 0.375rem;
+    padding: 0.25rem 0.4rem 0.25rem 0.6rem;
+    font-size: 0.9rem;
+    align-self: flex-start;
+    max-width: 100%;
+  }
+
+  .cidr-chip code {
+    background: transparent;
+    padding: 0;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    color: var(--text-primary);
+  }
+
+  .cidr-remove {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 0.15rem;
+    border-radius: 0.25rem;
+    display: inline-flex;
+    align-items: center;
+    transition: all 0.15s;
+  }
+
+  .cidr-remove:hover {
+    background: rgba(239, 68, 68, 0.15);
+    color: var(--color-error, #ef4444);
+  }
+
+  .cidr-empty {
+    color: var(--text-secondary);
+    font-style: italic;
+    font-size: 0.88rem;
+  }
+
+  .cidr-add {
+    display: flex;
+    gap: 0.5rem;
+    align-items: stretch;
+  }
+
+  .cidr-add input {
+    flex: 1;
   }
 
   .row-actions {

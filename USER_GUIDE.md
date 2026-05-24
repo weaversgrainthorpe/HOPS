@@ -1,4 +1,4 @@
-# HOPS User Guide (v1.6.0)
+# HOPS User Guide (v1.6.1)
 
 Welcome to HOPS (Home Operations Portal System)! This guide will help you get started and make the most of your dashboard.
 
@@ -15,7 +15,8 @@ Welcome to HOPS (Home Operations Portal System)! This guide will help you get st
 9. [Working with Tiles](#working-with-tiles)
 10. [Theming and Customization](#theming-and-customization)
 11. [Keyboard Shortcuts](#keyboard-shortcuts)
-12. [Import/Export](#importexport)
+12. [Server Settings](#server-settings)
+13. [Import/Export](#importexport)
 
 ## Getting Started
 
@@ -402,6 +403,56 @@ Colors cascade down the hierarchy!
 ### Mouse Shortcuts
 - **Right-click** on tile (in Edit Mode) - Open context menu
 - **Click** on group - Focus group for paste operation
+
+## Server Settings
+
+Everything HOPS does at runtime — the port it listens on, how chatty the logs are, how quickly it status-checks tiles, how big an upload it will accept, how long a login session lasts — is configured in one place: the **Settings** page in the admin panel. There are no config files to edit and (as of v1.6.0) no environment variables to set.
+
+### Opening Settings
+
+From the Admin page (`/`), click the **Settings** button in the header (next to **Backups**). You can also navigate directly to `/settings`. The page is admin-only — you must be logged in.
+
+### What's there
+
+Settings are grouped into seven sections, each with inline help on every entry — there's no need to memorise the list below:
+
+- **Server** — TCP port HOPS listens on
+- **Logging** — log verbosity (debug / info / warn / error)
+- **Reverse proxy** — trusted-proxy IP ranges if HOPS sits behind nginx, Caddy, Traefik, etc.
+- **Authentication** — login rate limit per IP per minute; session lifetime
+- **Status checks** — how often tiles are pinged and the per-request timeout
+- **Uploads** — maximum file size for config import, background images, icons
+- **HTTP server timeouts** — read / write / idle timeouts on the underlying server
+
+Every entry shows its current value, default, valid range (where applicable), and a short description of what it does.
+
+### Live changes vs Restart required
+
+Most settings apply **immediately** — change them, hit Save, the running server picks up the new value on the next request. Things like log level, status-check interval, and rate limits work this way.
+
+A few are marked with an orange **Restart** pill next to their name. These (server port, reverse-proxy trusted ranges, HTTP server timeouts) are bound when HOPS first starts and can't be changed mid-flight. Saving them persists the value, but the change takes effect only when you restart HOPS — `sudo systemctl restart hops` on the prod box, or stop/start your container.
+
+### Editing a setting
+
+1. Find the setting you want to change.
+2. Type the new value (or pick from the dropdown for log level).
+3. Click **Save**. You'll see a green confirmation toast.
+
+The **Revert** button next to Save discards your unsaved change. **Reset to default** (visible when the current value isn't the default) restores HOPS's out-of-the-box setting for that entry.
+
+If you enter something invalid (out of range, malformed JSON for the trusted-proxy list, an unknown log level), Save will reject it with a specific error message; the running value is unchanged until validation passes.
+
+### Common things you might want to change
+
+- **Increase log verbosity to diagnose an issue** — set `log.level` to `debug` (live; no restart). Remember to set it back to `info` afterwards or your `journalctl` will get noisy.
+- **Run HOPS behind a reverse proxy** — set `proxy.trusted_cidrs` to a JSON array of CIDRs, e.g. `["10.0.0.0/8"]` or `["192.168.1.5/32"]`. Restart required. This lets HOPS honour `X-Forwarded-For` (so login rate limiting keys on the real client) and `X-Forwarded-Proto` (so cookies are marked Secure over HTTPS).
+- **Change the port** — set `server.port`. Restart required, and remember to update any reverse-proxy / firewall / port-forward that targets the old port.
+- **Allow larger background images** — bump `upload.max_bytes_background`. Live.
+- **Make the status checker more aggressive** — drop `status.check_interval_minutes` from 5 to 1. Live.
+
+### Defaults are sensible
+
+You should not need to touch the Settings page for a typical homelab install. The defaults are tuned for that. Open the page if you have a specific need — debugging, a reverse proxy in front, very large backgrounds, etc. — otherwise, leave it alone.
 
 ## Import/Export
 
