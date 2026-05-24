@@ -11,6 +11,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/weaversgrainthorpe/HOPS/internal/settings"
 )
 
 // isBlockedIP reports whether an IP must not be reached by the status checker.
@@ -65,41 +67,102 @@ type StatusResult struct {
 	LastChecked  string `json:"lastChecked"`
 }
 
-// Checker handles HTTP status checks for entries
+// Checker handles HTTP status checks for entries. Interval and per-request
+// timeout come from the settings service (status.check_interval_minutes,
+// status.check_timeout_seconds) and update live when an admin changes them.
 type Checker struct {
-	db             *sql.DB
-	client         *http.Client
-	checkInterval  time.Duration
-	stopChan       chan struct{}
-	running        bool
-	mu             sync.Mutex
+	db       *sql.DB
+	settings *settings.Service
+	stopChan chan struct{}
+	running  bool
+	mu       sync.Mutex
+
+	// Per-request HTTP client; rebuilt when status.check_timeout_seconds
+	// changes. clientMu guards swaps so concurrent checks see a coherent
+	// client value.
+	clientMu sync.RWMutex
+	client   *http.Client
+
+	// resetTicker signals the run loop to discard its current ticker and
+	// re-create one with the latest interval. Buffered so a settings change
+	// during a check isn't lost.
+	resetTicker chan struct{}
 }
 
-// NewChecker creates a new status checker
-func NewChecker(db *sql.DB, checkInterval time.Duration) *Checker {
-	return &Checker{
-		db: db,
-		client: &http.Client{
-			Timeout: 10 * time.Second,
-			CheckRedirect: func(req *http.Request, via []*http.Request) error {
-				// Cap redirects at 10. Each hop still dials through the
-				// SSRF-safe Control hook, so a redirect to an internal
-				// host is refused at connection time.
-				if len(via) >= 10 {
-					return http.ErrUseLastResponse
-				}
-				return nil
-			},
-			Transport: &http.Transport{
-				DialContext: (&net.Dialer{
-					Timeout: 10 * time.Second,
-					Control: ssrfSafeDialControl,
-				}).DialContext,
-			},
-		},
-		checkInterval: checkInterval,
-		stopChan:      make(chan struct{}),
+// NewChecker creates a new status checker driven by the settings service.
+func NewChecker(db *sql.DB, settingsSvc *settings.Service) *Checker {
+	c := &Checker{
+		db:          db,
+		settings:    settingsSvc,
+		stopChan:    make(chan struct{}),
+		resetTicker: make(chan struct{}, 1),
 	}
+	c.client = c.buildClient()
+
+	// Live-update the HTTP client (timeout) when the setting changes.
+	settingsSvc.Subscribe(settings.KeyStatusCheckTimeoutSeconds, func(string) {
+		newClient := c.buildClient()
+		c.clientMu.Lock()
+		c.client = newClient
+		c.clientMu.Unlock()
+		slog.Info("status checker timeout updated", "component", "status",
+			"timeout_seconds", settingsSvc.GetInt(settings.KeyStatusCheckTimeoutSeconds))
+	})
+
+	// Live-update the polling interval — signal the loop to rebuild its ticker.
+	settingsSvc.Subscribe(settings.KeyStatusCheckIntervalMinutes, func(string) {
+		select {
+		case c.resetTicker <- struct{}{}:
+		default: // a reset is already pending
+		}
+		slog.Info("status checker interval updated", "component", "status",
+			"interval_minutes", settingsSvc.GetInt(settings.KeyStatusCheckIntervalMinutes))
+	})
+
+	return c
+}
+
+// buildClient constructs an HTTP client whose timeout reflects the current
+// status.check_timeout_seconds setting.
+func (c *Checker) buildClient() *http.Client {
+	timeout := time.Duration(c.settings.GetInt(settings.KeyStatusCheckTimeoutSeconds)) * time.Second
+	if timeout <= 0 {
+		timeout = 10 * time.Second
+	}
+	return &http.Client{
+		Timeout: timeout,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			// Cap redirects at 10. Each hop still dials through the
+			// SSRF-safe Control hook, so a redirect to an internal
+			// host is refused at connection time.
+			if len(via) >= 10 {
+				return http.ErrUseLastResponse
+			}
+			return nil
+		},
+		Transport: &http.Transport{
+			DialContext: (&net.Dialer{
+				Timeout: timeout,
+				Control: ssrfSafeDialControl,
+			}).DialContext,
+		},
+	}
+}
+
+// httpClient returns the current HTTP client under a read lock.
+func (c *Checker) httpClient() *http.Client {
+	c.clientMu.RLock()
+	defer c.clientMu.RUnlock()
+	return c.client
+}
+
+// checkInterval returns the configured polling interval as a Duration.
+func (c *Checker) checkInterval() time.Duration {
+	mins := c.settings.GetInt(settings.KeyStatusCheckIntervalMinutes)
+	if mins <= 0 {
+		mins = 5
+	}
+	return time.Duration(mins) * time.Minute
 }
 
 // Start begins the background status checking loop
@@ -114,7 +177,7 @@ func (c *Checker) Start() {
 	c.mu.Unlock()
 
 	go c.runLoop()
-	slog.Info("status checker started", "component", "status", "interval", c.checkInterval)
+	slog.Info("status checker started", "component", "status", "interval", c.checkInterval())
 }
 
 // Stop halts the status checking loop
@@ -134,13 +197,17 @@ func (c *Checker) runLoop() {
 	// Run initial check
 	c.checkAllEntries()
 
-	ticker := time.NewTicker(c.checkInterval)
+	ticker := time.NewTicker(c.checkInterval())
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ticker.C:
 			c.checkAllEntries()
+		case <-c.resetTicker:
+			// Settings changed — rebuild the ticker with the new interval.
+			ticker.Stop()
+			ticker = time.NewTicker(c.checkInterval())
 		case <-c.stopChan:
 			return
 		}
@@ -246,7 +313,7 @@ func (c *Checker) checkEntry(entry Entry) statusCheckResult {
 
 	req.Header.Set("User-Agent", "HOPS-StatusChecker/1.0")
 
-	resp, err := c.client.Do(req)
+	resp, err := c.httpClient().Do(req)
 	if err != nil {
 		result.status = "down"
 		return result

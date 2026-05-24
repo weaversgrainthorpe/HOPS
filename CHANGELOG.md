@@ -5,6 +5,88 @@ All notable changes to HOPS (Home Operations Portal System) will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] - 2026-05-24 — GUI-configurable runtime settings
+
+A meaningful step in HOPS's GUI-first principle: all admin-tunable runtime
+knobs now live in one place — the admin **Settings** page — and are no
+longer scattered across CLI flags, environment variables, or hardcoded
+constants. This is a breaking release for operators who use environment
+variables or the `--port` flag.
+
+### Added
+
+- **Admin Settings page** at `/settings` (accessible from the Settings
+  button next to Backups in the admin header). Lists every runtime knob
+  with inline help, defaults, validation bounds, and a *Restart required*
+  badge where applicable. Saves are validated server-side and stored in
+  a new `app_settings` table in SQLite.
+- **Live updates** for knobs that don't need a restart — change the log
+  level, login rate limit, status-check interval/timeout, session
+  lifetime, or upload caps in the GUI and the running server picks up
+  the change immediately, no restart needed. Other knobs (port, trusted
+  proxies, HTTP server timeouts) are marked *Restart required*.
+- **Settings covered** (14 total): server port; log level; reverse-proxy
+  trusted CIDRs; login rate limit per IP per minute; session lifetime
+  hours; status-check interval and per-request timeout; per-endpoint
+  upload caps (config import / background / icon); the four HTTP server
+  timeouts (read-header / read / write / idle).
+- New `/api/settings` admin endpoints — `GET` returns the full schema
+  and current values; `PUT /api/settings/{key}` updates one with
+  validation.
+
+### Changed (breaking — operator-visible)
+
+- **Removed the `--port` CLI flag.** The port is now stored in settings
+  (default `8080`). Operators must remove `--port 8080` from their
+  systemd unit / docker-compose / startup script — the new binary
+  rejects the flag at startup. Change the port via the GUI thereafter.
+- **Removed the `LOG_LEVEL` environment variable.** Set the log level
+  via the GUI (Settings → Logging → Level).
+- **Removed the `HOPS_TRUSTED_PROXIES` environment variable.** Set the
+  trusted-proxy CIDR list via the GUI (Settings → Reverse proxy →
+  trusted_cidrs); the input is a JSON array.
+- The `config.Config` struct shrinks to just `DataDir` and `FrontendDir`
+  (the two genuine bootstrap flags). Everything else moved to the
+  settings service.
+
+### Hardening
+
+Also folded the remaining v1.5.6-planned hardening items into this release:
+
+- **PopupModal tile-URL scheme validation** (LOW-5). The two "Open in…"
+  anchors in the popup modal now route through `safeOpenUrl` and only
+  accept the rendered `href` if `isValidUrl` passes — `javascript:` /
+  `data:` / `vbscript:` schemes can no longer be opened from the popup,
+  matching `Entry.svelte`'s existing behaviour.
+- **Frontend dependency advisories** (LOW-6). Ran `npm audit fix` —
+  `@sveltejs/kit` moved from 2.49.1 → 2.61.1 (and transitive bumps).
+  Build + 163 test cases still pass. The remaining 4 low-severity
+  advisories chain from `cookie <0.7.0`, which `@sveltejs/kit` pins as
+  a sub-dependency; they are upstream-blocked until kit ships a release
+  that bumps it. `npm audit fix --force` is **not safe** here — it
+  proposes downgrading kit to a pre-release 0.0.30, which would nuke
+  the app.
+- **New `--host` CLI flag** for binding to a specific interface (e.g.
+  `--host 127.0.0.1` for loopback-only when HOPS sits behind a same-host
+  reverse proxy). Empty default preserves the historical "bind all"
+  behaviour. This is a flag, not a setting, because restricting the
+  bind interface must be possible without first reaching the GUI.
+
+### Upgrade notes
+
+For an existing v1.5.x install:
+
+1. Edit the HOPS systemd unit (or docker-compose, or any other launcher)
+   to remove the `--port 8080` argument from the ExecStart / command —
+   the new binary will refuse to parse it.
+2. If you had `LOG_LEVEL` or `HOPS_TRUSTED_PROXIES` set in the
+   environment, note their values; they are now ignored. Set them in
+   the GUI after the first boot.
+3. Defaults are seeded automatically on first start, so a fresh
+   `/api/settings` listing will already have sensible values.
+4. The `data/` SQLite database gains a single new table (`app_settings`).
+   The migration is idempotent; no manual step required.
+
 ## [1.5.5] - 2026-05-20 — Hardening follow-up
 
 Low-severity hardening items from the v1.5.4 penetration test. No data

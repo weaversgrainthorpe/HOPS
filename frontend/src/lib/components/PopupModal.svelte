@@ -1,7 +1,7 @@
 <script lang="ts">
   import Icon from '@iconify/svelte';
   import { focusTrap } from '$lib/utils/focusTrap';
-  import { safeOpenUrl } from '$lib/utils/url';
+  import { isValidUrl, safeOpenUrl } from '$lib/utils/url';
 
   interface Props {
     url: string;
@@ -11,6 +11,14 @@
 
   let { url, title, onClose }: Props = $props();
 
+  // Defence-in-depth: the rendered anchors' href is set only if the URL
+  // passes scheme validation (no javascript:/data:/vbscript:). If invalid,
+  // href falls back to "#" so a click can never navigate into a dangerous
+  // scheme even if the onclick handler somehow doesn't fire (right-click
+  // open-in-new-tab, ctrl-click, prefetch, etc.). The visible URL text in
+  // the modal still shows whatever the admin typed.
+  let safeHref = $derived(isValidUrl(url) ? url : '#');
+
   function handleKeydown(e: KeyboardEvent) {
     if (e.key === 'Escape') {
       onClose();
@@ -19,6 +27,12 @@
 
   function openInNewTab() {
     safeOpenUrl(url, '_blank');
+    onClose();
+  }
+
+  function open(target: '_blank' | '_self', e: MouseEvent) {
+    e.preventDefault();
+    safeOpenUrl(url, target);
     onClose();
   }
 </script>
@@ -59,11 +73,11 @@
       </div>
 
       <div class="action-buttons">
-        <a href={url} target="_blank" class="btn-primary" onclick={onClose}>
+        <a href={safeHref} target="_blank" class="btn-primary" onclick={(e) => open('_blank', e)}>
           <Icon icon="mdi:open-in-new" width="20" />
           Open in New Tab
         </a>
-        <a href={url} class="btn-secondary">
+        <a href={safeHref} class="btn-secondary" onclick={(e) => open('_self', e)}>
           <Icon icon="mdi:link" width="20" />
           Open in Same Tab
         </a>

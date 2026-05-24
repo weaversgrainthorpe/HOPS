@@ -360,3 +360,31 @@ export async function deleteBackup(backupName: string): Promise<void> {
     method: 'DELETE',
   });
 }
+
+// Admin settings — runtime-configurable values backed by the app_settings
+// table. The list is authoritative on the backend: each entry includes its
+// type ("int", "log_level", "cidr_list", "duration_seconds", ...), default,
+// min/max/enum bounds, and a restartRequired flag for the UI to display.
+
+export interface SettingDef {
+  key: string;
+  type: string;
+  value: string;
+  default: string;
+  restartRequired: boolean;
+  description: string;
+  min?: number;
+  max?: number;
+  enum?: string[];
+}
+
+export async function listSettings(): Promise<{ settings: SettingDef[] }> {
+  return fetchAPI('/settings');
+}
+
+export async function updateSetting(key: string, value: string): Promise<void> {
+  await fetchAPI(`/settings/${encodeURIComponent(key)}`, {
+    method: 'PUT',
+    body: JSON.stringify({ value }),
+  });
+}

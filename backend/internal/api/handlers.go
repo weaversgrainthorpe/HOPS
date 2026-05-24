@@ -26,6 +26,7 @@ import (
 	"github.com/weaversgrainthorpe/HOPS/internal/assets"
 	"github.com/weaversgrainthorpe/HOPS/internal/converters"
 	"github.com/weaversgrainthorpe/HOPS/internal/database"
+	"github.com/weaversgrainthorpe/HOPS/internal/settings"
 	"github.com/weaversgrainthorpe/HOPS/internal/version"
 	"golang.org/x/image/draw"
 	"gopkg.in/yaml.v3"
@@ -194,6 +195,7 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 	}
 
 	secure := r.isSecureRequest(req)
+	maxAge := r.sessionCookieMaxAge()
 	http.SetCookie(w, &http.Cookie{
 		Name:     "hops_session",
 		Value:    result.SessionID,
@@ -201,7 +203,7 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 		HttpOnly: true,
 		Secure:   secure,
 		SameSite: http.SameSiteLaxMode,
-		MaxAge:   86400, // 24 hours
+		MaxAge:   maxAge,
 	})
 
 	// Issue a fresh CSRF token paired with this session.
@@ -210,7 +212,7 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 		writeJSONError(w, "Failed to issue CSRF token", http.StatusInternalServerError)
 		return
 	}
-	setCSRFCookie(w, csrfToken, secure)
+	setCSRFCookie(w, csrfToken, secure, maxAge)
 
 	writeJSON(w, map[string]interface{}{
 		"sessionId":          result.SessionID,
@@ -268,6 +270,14 @@ func (r *Router) isTrustedProxy(ip string) bool {
 		}
 	}
 	return false
+}
+
+// sessionCookieMaxAge returns the cookie MaxAge (in seconds) derived from the
+// auth.session_lifetime_hours admin setting. New sessions and CSRF cookies
+// use this value; existing cookies keep their original expiry until they're
+// re-issued (on next login or via /api/auth/check).
+func (r *Router) sessionCookieMaxAge() int {
+	return r.settings.GetInt(settings.KeyAuthSessionLifetimeHours) * 3600
 }
 
 // isSecureRequest reports whether the request reached HOPS over HTTPS —
@@ -336,7 +346,7 @@ func (r *Router) handleAuthCheck(w http.ResponseWriter, req *http.Request) {
 			// issue a fresh one paired with this session.
 			if cookie, err := req.Cookie(csrfCookieName); err != nil || cookie.Value == "" {
 				if token, err := generateCSRFToken(); err == nil {
-					setCSRFCookie(w, token, r.isSecureRequest(req))
+					setCSRFCookie(w, token, r.isSecureRequest(req), r.sessionCookieMaxAge())
 				}
 			}
 		}
@@ -1187,15 +1197,6 @@ func (r *Router) applyIconMatching(config map[string]interface{}) int {
 	return matchCount
 }
 
-// Upload size ceilings. http.MaxBytesReader enforces these as a hard cap on
-// the whole request body, so an oversized upload is rejected before it can be
-// buffered into memory or spilled to disk.
-const (
-	maxImportUploadBytes     = 50 << 20 // config import (may carry embedded assets)
-	maxBackgroundUploadBytes = 50 << 20 // background image upload
-	maxIconUploadBytes       = 8 << 20  // icon upload (5 MB image + multipart overhead)
-)
-
 // handleImportConfig imports configuration from YAML/JSON (supports HOPS, Homer, Dashy formats)
 func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodPost {
@@ -1203,10 +1204,12 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Cap the request body, then parse the multipart form.
-	req.Body = http.MaxBytesReader(w, req.Body, maxImportUploadBytes)
-	if err := req.ParseMultipartForm(maxImportUploadBytes); err != nil {
-		writeJSONError(w, "Upload too large or malformed (50 MB limit)", http.StatusBadRequest)
+	// Cap the request body, then parse the multipart form. Limit comes from
+	// the upload.max_bytes_import admin setting.
+	limit := int64(r.settings.GetInt(settings.KeyUploadMaxBytesImport))
+	req.Body = http.MaxBytesReader(w, req.Body, limit)
+	if err := req.ParseMultipartForm(limit); err != nil {
+		writeJSONError(w, "Upload too large or malformed", http.StatusBadRequest)
 		return
 	}
 
@@ -1906,10 +1909,12 @@ func (r *Router) handleUploadBackground(w http.ResponseWriter, req *http.Request
 		return
 	}
 
-	// Cap the request body, then parse the multipart form.
-	req.Body = http.MaxBytesReader(w, req.Body, maxBackgroundUploadBytes)
-	if err := req.ParseMultipartForm(maxBackgroundUploadBytes); err != nil {
-		writeJSONError(w, "Upload too large or malformed (50 MB limit)", http.StatusBadRequest)
+	// Cap the request body, then parse the multipart form. Limit from the
+	// upload.max_bytes_background admin setting.
+	limit := int64(r.settings.GetInt(settings.KeyUploadMaxBytesBackground))
+	req.Body = http.MaxBytesReader(w, req.Body, limit)
+	if err := req.ParseMultipartForm(limit); err != nil {
+		writeJSONError(w, "Upload too large or malformed", http.StatusBadRequest)
 		return
 	}
 
@@ -2016,10 +2021,12 @@ func (r *Router) handleUploadIcon(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Cap the request body, then parse the multipart form.
-	req.Body = http.MaxBytesReader(w, req.Body, maxIconUploadBytes)
-	if err := req.ParseMultipartForm(maxIconUploadBytes); err != nil {
-		writeJSONError(w, "Upload too large or malformed (5 MB image limit)", http.StatusBadRequest)
+	// Cap the request body, then parse the multipart form. Limit from the
+	// upload.max_bytes_icon admin setting.
+	limit := int64(r.settings.GetInt(settings.KeyUploadMaxBytesIcon))
+	req.Body = http.MaxBytesReader(w, req.Body, limit)
+	if err := req.ParseMultipartForm(limit); err != nil {
+		writeJSONError(w, "Upload too large or malformed", http.StatusBadRequest)
 		return
 	}
 

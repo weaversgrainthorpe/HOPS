@@ -27,7 +27,9 @@ func generateCSRFToken() (string, error) {
 // setCSRFCookie writes a fresh CSRF token cookie. The cookie must be readable
 // by JavaScript so the SPA can echo it back in the X-CSRF-Token header. The
 // secure flag is set when the request arrived over HTTPS (see isSecureRequest).
-func setCSRFCookie(w http.ResponseWriter, token string, secure bool) {
+// maxAge matches the session lifetime, taken from the auth.session_lifetime_hours
+// admin setting.
+func setCSRFCookie(w http.ResponseWriter, token string, secure bool, maxAge int) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     csrfCookieName,
 		Value:    token,
@@ -35,7 +37,7 @@ func setCSRFCookie(w http.ResponseWriter, token string, secure bool) {
 		HttpOnly: false, // intentionally readable by JS for double-submit pattern
 		Secure:   secure,
 		SameSite: http.SameSiteStrictMode,
-		MaxAge:   86400, // matches session lifetime
+		MaxAge:   maxAge,
 	})
 }
 

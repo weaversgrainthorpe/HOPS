@@ -1,6 +1,6 @@
 # HOPS - Home Operations Portal System
 
-**Version 1.5.5** · **[hops.weaversgrainthorpe.github.io →](https://weaversgrainthorpe.github.io/HOPS/)**
+**Version 1.6.0** · **[hops.weaversgrainthorpe.github.io →](https://weaversgrainthorpe.github.io/HOPS/)**
 
 A modern, self-hosted homepage dashboard for the homelab community.
 
@@ -61,7 +61,7 @@ HOPS runs on **Linux**, **macOS**, and **Windows** with no dependencies. It work
 
 **Binary** — download, extract, run:
 ```bash
-./hops-linux-amd64 --port 8080 --data ./data --frontend ./frontend/build
+./hops-linux-amd64 --data ./data --frontend ./frontend/build
 ```
 
 **Docker** — if you'd rather, or already run a Compose stack:

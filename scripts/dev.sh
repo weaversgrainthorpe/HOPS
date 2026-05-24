@@ -21,7 +21,7 @@ cleanup() {
         kill $FRONTEND_PID 2>/dev/null
     fi
     # Also kill any orphaned processes
-    pkill -f "hops.*--port 8080" 2>/dev/null
+    pkill -f "hops .*--data .*hops/data" 2>/dev/null
     exit 0
 }
 
@@ -31,7 +31,7 @@ trap cleanup SIGINT SIGTERM
 echo "Building and starting backend on :8080..."
 cd "$HOPS_DIR/backend"
 go build -o hops ./cmd/hops
-./hops --port 8080 --data "$HOPS_DIR/data" --frontend "$HOPS_DIR/frontend/build" &
+./hops --data "$HOPS_DIR/data" --frontend "$HOPS_DIR/frontend/build" &
 BACKEND_PID=$!
 
 # Wait for backend to start

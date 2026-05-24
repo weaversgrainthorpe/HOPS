@@ -13,6 +13,7 @@ import (
 	_ "modernc.org/sqlite"
 	"github.com/weaversgrainthorpe/HOPS/internal/auth"
 	"github.com/weaversgrainthorpe/HOPS/internal/config"
+	"github.com/weaversgrainthorpe/HOPS/internal/settings"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -72,6 +73,11 @@ func setupTestRouter(t *testing.T) (http.Handler, *sql.DB) {
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			FOREIGN KEY (category_id) REFERENCES icon_categories(id) ON DELETE CASCADE
 		)`,
+		`CREATE TABLE app_settings (
+			key TEXT PRIMARY KEY,
+			value TEXT NOT NULL,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
 	}
 	for _, s := range schema {
 		if _, err := db.Exec(s); err != nil {
@@ -87,14 +93,17 @@ func setupTestRouter(t *testing.T) (http.Handler, *sql.DB) {
 	db.Exec(`INSERT INTO config (id, data) VALUES (1, '{"dashboards":[],"theme":{"mode":"dark"}}')`)
 
 	cfg := &config.Config{
-		Port:                 "8080",
-		DataDir:              t.TempDir(),
-		FrontendDir:          t.TempDir(),
-		LoginRateLimitPerMin: 20,
+		DataDir:     t.TempDir(),
+		FrontendDir: t.TempDir(),
+	}
+
+	settingsSvc, err := settings.New(db)
+	if err != nil {
+		t.Fatalf("settings.New: %v", err)
 	}
 
 	authService := auth.NewService(db)
-	router := NewRouter(db, authService, cfg, time.Now())
+	router := NewRouter(db, authService, cfg, settingsSvc, time.Now())
 
 	return router, db
 }

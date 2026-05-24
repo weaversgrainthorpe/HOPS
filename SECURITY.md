@@ -58,9 +58,7 @@ vulnerabilities. Reports of anything it missed are very welcome — see
 
 ## Reverse proxy configuration
 
-If you run HOPS behind a reverse proxy:
-
-- Set the **`HOPS_TRUSTED_PROXIES`** environment variable to the proxy's address as one or more comma-separated CIDR ranges (e.g. `HOPS_TRUSTED_PROXIES=10.0.0.0/8` or `192.168.1.5/32`). Only then will HOPS honour the `X-Forwarded-For` / `X-Forwarded-Proto` headers — for per-client login rate limiting and for marking cookies `Secure`. Left unset (the default), HOPS ignores those headers so they cannot be spoofed to bypass rate limiting.
+If you run HOPS behind a reverse proxy, configure its address in the admin **Settings** page under *Reverse proxy → trusted_cidrs* — a JSON array of CIDR ranges (e.g. `["10.0.0.0/8"]` or `["192.168.1.5/32"]`). Only then will HOPS honour the `X-Forwarded-For` / `X-Forwarded-Proto` headers — for per-client login rate limiting and for marking cookies `Secure`. Left empty (the default), HOPS ignores those headers so they cannot be spoofed to bypass rate limiting. The change takes effect on the next server restart.
 
 ## Supported Versions
 

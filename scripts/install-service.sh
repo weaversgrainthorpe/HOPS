@@ -25,7 +25,7 @@ After=network.target
 Type=simple
 User=$USER
 WorkingDirectory=$HOPS_DIR/backend
-ExecStart=$HOPS_DIR/backend/hops --port 8080 --data $HOPS_DIR/data --frontend $HOPS_DIR/frontend/build
+ExecStart=$HOPS_DIR/backend/hops --data $HOPS_DIR/data --frontend $HOPS_DIR/frontend/build
 Restart=always
 RestartSec=5
 
