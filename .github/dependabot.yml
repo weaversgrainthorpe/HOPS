@@ -30,13 +30,19 @@ updates:
       - dependencies
       - javascript
     groups:
-      # Bundle minor/patch updates so we don't get 20 PRs for Svelte ecosystem bumps
+      # Bundle Svelte ecosystem updates — including major bumps — into one PR.
+      # vite is included because it's peer-locked to @sveltejs/vite-plugin-svelte:
+      # bumping vite alone (e.g. 7 → 8) breaks CI because plugin-svelte's peer
+      # range hasn't moved yet. Keeping these in lockstep means a coordinated
+      # PR or none, never a single broken one.
       sveltekit:
         patterns:
           - "@sveltejs/*"
           - "svelte"
           - "svelte-*"
+          - "vite"
         update-types:
+          - major
           - minor
           - patch
       vitest:
