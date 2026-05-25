@@ -160,23 +160,17 @@ For full deployment options (systemd, reverse proxy, backups), see the **[Instal
 
 ## Roadmap
 
-Future improvements under consideration:
-
-- Global search with "/" hotkey
-- Custom CSS injection
-- Widget framework (weather, calendar, system stats)
-- Service integrations (Pi-hole, Proxmox, *arr apps, etc.)
-- Multi-select and bulk operations
-- Multi-column group layouts
-- Undo/Redo for accidental changes
-- Keyboard navigation (arrow keys)
-- PWA support (install as mobile app)
+Future improvements are tracked in **[ROADMAP.md](ROADMAP.md)** — a tiered
+wishlist (quick wins → architectural shifts) with effort/risk notes. Nothing
+on the list is committed work; HOPS is maintained in spare time and the
+CHANGELOG records what actually ships.
 
 ## Documentation
 
 - **[Zero to Dashboard Hero](QUICKSTART.md)** — Get up and running in 5 minutes
 - **[User Guide](USER_GUIDE.md)** — Full feature reference
 - **[Installation & Deployment Guide](DEPLOY.md)** — Reverse proxy, systemd, backups
+- **[Roadmap](ROADMAP.md)** — Future improvements under consideration
 
 ## Tips
 
