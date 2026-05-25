@@ -1,6 +1,6 @@
 # HOPS - Home Operations Portal System
 
-**Version 1.6.1** · **[hops.weaversgrainthorpe.github.io →](https://weaversgrainthorpe.github.io/HOPS/)**
+**Version 1.7.0** · **[hops.weaversgrainthorpe.github.io →](https://weaversgrainthorpe.github.io/HOPS/)**
 
 A modern, self-hosted homepage dashboard for the homelab community.
 
@@ -90,10 +90,12 @@ For full deployment options (systemd, reverse proxy, backups), see the **[Instal
 - Multiple dashboards (e.g., /home, /network, /media)
 - Tabs within each dashboard
 - Collapsible groups within tabs
+- Per-group row width (full / half / third) — multi-column group layouts
 - Drag-and-drop for tabs, groups, and tiles
 - Cross-group drag & drop for tiles
 - Copy/cut/paste for tiles between groups and tabs
-- Keyboard shortcuts (Ctrl+C, Ctrl+X, Ctrl+V)
+- Global search — press `/` to jump to any tile by name, URL, or description
+- Arrow-key navigation between tiles (browse mode)
 - Right-click context menu
 
 ### Visual Customization
@@ -109,6 +111,7 @@ For full deployment options (systemd, reverse proxy, backups), see the **[Instal
 - Custom colours and opacity at every level
 
 ### Entries/Tiles
+- Two tile types: **link** (default — opens a URL) and **note** (text-only, name + description, no click action)
 - Open modes: iframe, new tab, same tab, popup modal
 - HTTP status monitoring with response time
 - Subtitles/descriptions on tiles
@@ -148,15 +151,16 @@ For full deployment options (systemd, reverse proxy, backups), see the **[Instal
 
 ## Keyboard Shortcuts
 
-| Shortcut       | Action                        |
-|----------------|-------------------------------|
-| `Ctrl+C`       | Copy selected tile            |
-| `Ctrl+X`       | Cut selected tile             |
-| `Ctrl+V`       | Paste tile into focused group |
-| `Escape`       | Close modal / Cancel edit     |
-| `Ctrl+Enter`   | Save and close modal          |
-
-*Shortcuts work when edit mode is enabled.*
+| Shortcut       | Action                                      | Mode       |
+|----------------|---------------------------------------------|------------|
+| `/`            | Open global search                          | Anywhere   |
+| `↑ ↓ ← →`      | Move focus between tiles                    | Browse     |
+| `Enter`        | Activate focused tile                       | Browse     |
+| `Escape`       | Close modal / cancel edit / close search    | Anywhere   |
+| `Ctrl+C`       | Copy selected tile                          | Edit       |
+| `Ctrl+X`       | Cut selected tile                           | Edit       |
+| `Ctrl+V`       | Paste tile into focused group               | Edit       |
+| `Ctrl+Enter`   | Save and close modal                        | Edit       |
 
 ## Roadmap
 

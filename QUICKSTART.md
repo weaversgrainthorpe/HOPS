@@ -69,7 +69,7 @@ mkdir data
 
 You should see structured-log output like:
 ```
-time=2026-05-24T10:00:00.000Z level=INFO msg="server starting" version="HOPS v1.6.1" addr=:8080 data_dir=./data frontend_dir=./frontend/build
+time=2026-05-24T10:00:00.000Z level=INFO msg="server starting" version="HOPS v1.7.0" addr=:8080 data_dir=./data frontend_dir=./frontend/build
 ```
 
 > **Tip:** Once you're logged in to the admin panel, the log level is one of the runtime settings on the **Settings** page (`/settings`). Switch it to `debug` for verbose output or `warn`/`error` for quieter logs — no restart needed.
@@ -107,7 +107,7 @@ docker compose up -d
 
 The image is multi-arch (linux/amd64 + linux/arm64), so the same tag works on x86-64 servers and Raspberry Pi 3B+/4/5/Zero 2 W.
 
-> **Pin a version instead of `:latest`?** Use `ghcr.io/weaversgrainthorpe/hops:v1.6.1` (or any tagged release).
+> **Pin a version instead of `:latest`?** Use `ghcr.io/weaversgrainthorpe/hops:v1.7.0` (or any tagged release).
 
 ## Step 2: Log In
 
@@ -199,9 +199,10 @@ Groups organize your tiles within a tab.
 
 1. Click **Add Tile** inside the group you just created
 2. Fill in the details:
+   - **Tile type** *(default: Link)*: leave as **Link** for a clickable bookmark, or pick **Note** for a text-only tile (great for section headers or scratchpad text — no URL required)
    - **Name** *(required)*: the display name (e.g., `Plex`)
-   - **Subtitle/Description** *(optional)*: small text under the name
-   - **URL** *(required)*: the address of the service (e.g., `http://plex.local:32400`)
+   - **Subtitle/Description** *(optional)*: small text under the name (longer body text if this is a Note)
+   - **URL** *(required for Link)*: the address of the service (e.g., `http://plex.local:32400`)
    - **Icon**: type an icon name like `simple-icons:plex`, click **Browse** to search the Iconify library, or **Upload** your own image
    - **Background Color** + opacity slider — leave blank to inherit the group's colour
    - **Size**: Small, Medium, or Large
@@ -211,7 +212,7 @@ Groups organize your tiles within a tab.
 
 Your first tile appears in the group.
 
-> Only **Name** and **URL** are required — everything else can be added or changed later via the tile's edit button.
+> Only **Name** and **URL** are required for Link tiles (Notes need just a Name) — everything else can be added or changed later via the tile's edit button.
 
 To test that the link works, **toggle Edit Mode off** first (click the orange **pencil icon** in the navbar — the **Editing** indicator should disappear). Now clicking the tile follows its URL instead of opening the edit modal.
 
@@ -220,6 +221,9 @@ To test that the link works, **toggle Edit Mode off** first (click the orange **
 Now that you have the basics, try a few things:
 
 - **Add more tiles** to your group, or create new groups
+- **Press `/`** anywhere outside Edit Mode to open global search — type to find any tile across any dashboard
+- **Use arrow keys** to move focus between tiles in browse mode; **Enter** activates the focused tile
+- **Multi-column groups**: edit a group and set **Row Width** to **Half** or **Third** to put groups side-by-side instead of stacking
 - **Drag and drop** tiles to reorder them, or drag between groups
 - **Set a background**: click the **Background** button in Edit Mode and choose from the preset library or upload your own
 - **Try a theme**: click the **theme icon** in the header to switch between light/dark modes and colour presets

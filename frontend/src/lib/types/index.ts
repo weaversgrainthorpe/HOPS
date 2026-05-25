@@ -45,12 +45,18 @@ export interface Group {
   opacity?: number;
   textColor?: 'auto' | 'light' | 'dark'; // Auto determines based on background color
   displayStyle?: 'header' | 'folder'; // header = full width bar, folder = tab style
+  width?: 'full' | 'half' | 'third'; // Lay this group out as full/half/third row width (default 'full'). On narrow screens all groups become full.
   entries: Entry[];
   order: number;
 }
 
 export interface Entry {
   id: string;
+  // "link" (default; URL-opening tile) or "note" (text-only — name +
+  // description, no URL, no status check, no click action). Treated as
+  // "link" when undefined, so configs from older HOPS releases continue
+  // to load unchanged.
+  type?: 'link' | 'note';
   name: string;
   url: string;
   icon: string;

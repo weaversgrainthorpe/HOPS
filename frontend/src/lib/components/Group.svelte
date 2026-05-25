@@ -73,9 +73,9 @@
     collapsed = !collapsed;
   }
 
-  function handleSaveGroup(groupName: string, groupIcon?: string, groupIconUrl?: string, groupColor?: string, groupOpacity?: number, groupTextColor?: 'auto' | 'light' | 'dark', displayStyle?: 'header' | 'folder') {
+  function handleSaveGroup(groupName: string, groupIcon?: string, groupIconUrl?: string, groupColor?: string, groupOpacity?: number, groupTextColor?: 'auto' | 'light' | 'dark', displayStyle?: 'header' | 'folder', width?: 'full' | 'half' | 'third') {
     if (onUpdateGroup) {
-      onUpdateGroup({ ...group, name: groupName, icon: groupIcon, iconUrl: groupIconUrl, color: groupColor, opacity: groupOpacity, textColor: groupTextColor, displayStyle });
+      onUpdateGroup({ ...group, name: groupName, icon: groupIcon, iconUrl: groupIconUrl, color: groupColor, opacity: groupOpacity, textColor: groupTextColor, displayStyle, width });
     }
     showEditModal = false;
   }
@@ -354,6 +354,7 @@
     groupOpacity={group.opacity}
     groupTextColor={group.textColor}
     groupDisplayStyle={group.displayStyle}
+    groupWidth={group.width}
     currentTabId={currentTabId}
     availableTabs={availableTabsForGroup}
     onSave={handleSaveGroup}

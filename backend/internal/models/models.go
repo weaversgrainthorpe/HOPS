@@ -54,13 +54,20 @@ type Group struct {
 	Opacity      float64 `json:"opacity,omitempty"`
 	TextColor    string  `json:"textColor,omitempty"`
 	DisplayStyle string  `json:"displayStyle,omitempty"`
+	Width        string  `json:"width,omitempty"` // "full" (default), "half", "third"
 	Entries      []Entry `json:"entries"`
 	Order        int     `json:"order"`
 }
 
-// Entry represents a tile/link on the dashboard
+// Entry represents a tile on a dashboard. Two kinds:
+//   - "link" (the default; URL-opening tile — the historical behaviour)
+//   - "note" (text-only tile — name + description, no URL, no status check)
+//
+// Type is omitempty so configs from older HOPS releases continue to parse:
+// missing Type is treated as "link" by every consumer.
 type Entry struct {
 	ID           string       `json:"id"`
+	Type         string       `json:"type,omitempty"` // "link" (default) or "note"
 	Name         string       `json:"name"`
 	URL          string       `json:"url"`
 	Icon         string       `json:"icon"`
