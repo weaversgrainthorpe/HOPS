@@ -39,6 +39,12 @@
   let contextMenuX = $state(0);
   let contextMenuY = $state(0);
 
+  // Note tiles are text-only — name + description, no URL, no icon, no
+  // status, no click-to-open behaviour. Treated as "link" when type is
+  // undefined so configs from older HOPS releases keep their existing
+  // tile semantics.
+  let isNote = $derived(entry.type === 'note');
+
   // Check if this entry is selected
   let isSelected = $derived(
     tabId && groupId ? isEntrySelected(entry.id, tabId, groupId) : false
@@ -58,6 +64,9 @@
       showEditModal = true;
       return;
     }
+
+    // Note tiles are inert outside edit mode — no URL to open.
+    if (isNote) return;
 
     switch (entry.openMode) {
       case 'newtab':
@@ -151,34 +160,44 @@
     class:edit-mode={$editMode}
     class:custom-color={entry.color}
     class:selected={isSelected}
+    class:entry-note={isNote}
     style:background-color={entry.color}
     style:opacity={entry.opacity !== undefined ? entry.opacity : 0.95}
     onclick={handleClick}
     oncontextmenu={handleContextMenu}
     title={entry.description || entry.name}
-    aria-label={$editMode ? `Edit ${entry.name}` : `Open ${entry.name}`}
+    aria-label={isNote ? entry.name : ($editMode ? `Edit ${entry.name}` : `Open ${entry.name}`)}
     aria-pressed={isSelected}
   >
-    <div class="title">{entry.name}</div>
-
-    <div class="icon">
-      {#if entry.iconUrl}
-        <img src={entry.iconUrl} alt={entry.name} />
-      {:else if entry.icon}
-        <ColoredIcon icon={entry.icon} width="48" />
-      {:else}
-        <ColoredIcon icon="mdi:application" width="48" />
+    {#if isNote}
+      <!-- Note tile: just the name as a heading + description as body
+           text. No icon, no status badge, no click-to-open. -->
+      <div class="note-title">{entry.name}</div>
+      {#if entry.description}
+        <div class="note-body">{entry.description}</div>
       {/if}
-    </div>
+    {:else}
+      <div class="title">{entry.name}</div>
 
-    {#if entry.description}
-      <div class="subtitle">{entry.description}</div>
-    {/if}
-
-    {#if entry.statusCheck?.enabled}
-      <div class="status-badge">
-        <StatusIndicator entryId={entry.id} />
+      <div class="icon">
+        {#if entry.iconUrl}
+          <img src={entry.iconUrl} alt={entry.name} />
+        {:else if entry.icon}
+          <ColoredIcon icon={entry.icon} width="48" />
+        {:else}
+          <ColoredIcon icon="mdi:application" width="48" />
+        {/if}
       </div>
+
+      {#if entry.description}
+        <div class="subtitle">{entry.description}</div>
+      {/if}
+
+      {#if entry.statusCheck?.enabled}
+        <div class="status-badge">
+          <StatusIndicator entryId={entry.id} />
+        </div>
+      {/if}
     {/if}
   </button>
 
@@ -274,6 +293,56 @@
     border-color: var(--accent);
     transform: translateY(-2px);
     box-shadow: 0 4px 12px var(--shadow);
+  }
+
+  /* Keyboard focus ring — visible only for keyboard navigation (focus-visible),
+     not after a click. Two ring layers so it stands out on any background. */
+  .entry:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+    box-shadow: 0 0 0 4px rgba(79, 140, 255, 0.15);
+  }
+
+  /* Note tiles: text-only, no hover lift (they don't open anything), and a
+     left-aligned layout that reads more like a panel of text than a tile. */
+  .entry-note {
+    cursor: default;
+    align-items: flex-start;
+    justify-content: flex-start;
+    text-align: left;
+    padding: 1rem 1.25rem;
+  }
+
+  .entry-note:hover {
+    /* Suppress the link-tile hover effect entirely. */
+    background: var(--bg-secondary);
+    border-color: var(--border);
+    transform: none;
+    box-shadow: none;
+  }
+
+  .entry-note.edit-mode:hover,
+  .entry-note.edit-mode {
+    /* In edit mode the tile is still clickable (to open the edit modal),
+       so a subtle hover cue helps. */
+    cursor: pointer;
+    border-color: var(--accent);
+  }
+
+  .note-title {
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: var(--text-primary);
+    line-height: 1.3;
+  }
+
+  .note-body {
+    margin-top: 0.4rem;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    line-height: 1.45;
+    white-space: pre-wrap;
+    word-break: break-word;
   }
 
   .title {

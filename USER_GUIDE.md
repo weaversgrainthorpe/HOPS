@@ -1,4 +1,4 @@
-# HOPS User Guide (v1.6.1)
+# HOPS User Guide (v1.7.0)
 
 Welcome to HOPS (Home Operations Portal System)! This guide will help you get started and make the most of your dashboard.
 
@@ -198,6 +198,7 @@ The tab is only created when you click Create — cancelling leaves nothing behi
    - **Background Color** + **Opacity** slider *(optional)*
    - **Text Color**: Auto (recommended), Light, or Dark
    - **Display Style**: Full Header (default) or Folder Tab
+   - **Row Width**: Full (default), Half, or Third — see [Multi-column group layouts](#multi-column-group-layouts) below
 4. Click **Create**.
 
 All of these can be changed later from the group's edit modal.
@@ -218,6 +219,29 @@ All of these can be changed later from the group's edit modal.
    - **Display Style**: Choose how the group header appears
      - **Full Header** (default): Full-width header bar spanning the entire group width
      - **Folder Tab**: Compact folder-style tab at the top-left, similar to file folder tabs
+   - **Row Width**: how much of the row this group takes up — see below
+
+### Multi-column group layouts
+
+By default a group spans the full tab width. Set **Row Width** to **Half** or
+**Third** to put multiple groups side by side on the same row:
+
+- **Full** — the group spans the whole row (default).
+- **Half** — the group takes half a row. Two Half groups in a row sit
+  side-by-side.
+- **Third** — the group takes a third of a row. Up to three Third groups
+  fit in a single row.
+
+Groups flow left-to-right in their existing order, so to get a "Half + Half"
+row, put two Half groups consecutively. A row that doesn't fill cleanly
+(e.g., Half + Full) wraps the oversized group onto its own row.
+
+Width is a manual setting — drag-and-drop only reorders groups; it doesn't
+change widths. To rearrange a multi-column tab, set each group's width
+explicitly via its edit modal.
+
+On narrow screens (phones; width below ~768px), all groups collapse to full
+width regardless of setting, to keep the layout readable.
 
 ### Reordering Groups
 
@@ -243,15 +267,33 @@ For across-tab moves (which can't be done by drag), open the group editor:
 
 ## Working with Tiles
 
+### Tile types
+
+HOPS supports two kinds of tile, set via the **Tile type** dropdown at the
+top of the tile edit modal:
+
+- **Link** (default) — the classic HOPS tile. Opens a URL when clicked,
+  shows an icon, and can run status checks.
+- **Note** — a text-only tile. Renders a name and an optional longer
+  description, doesn't open anything when clicked, and doesn't run status
+  checks. Useful as a section header, a stand-in for a service you haven't
+  set up yet, or a small inline note.
+
+The fields shown in the edit modal change to match the tile type — Notes
+hide the URL, icon, open-mode and status-check sections, since none of
+those apply.
+
 ### Adding a Tile
 
 1. Enter Edit Mode
 2. Click **Add Tile** in the group
 3. The **New Tile** modal opens. Fill in:
+   - **Tile type**: **Link** (default) or **Note** — see above
    - **Name** *(required)*: Display name
-   - **Subtitle/Description** *(optional)*: small text under the name
-   - **URL** *(required)*: Target URL
-   - **Icon**: Choose an icon
+   - **Subtitle/Description** *(optional)*: small text under the name (for
+     Notes, this is the body text and renders as a larger paragraph)
+   - **URL** *(required for Link, hidden for Note)*: Target URL
+   - **Icon** *(Link only)*: Choose an icon
      - Type an Iconify icon name directly (e.g., `mdi:docker`, `simple-icons:plex`) — loaded on demand from iconify.design (~200,000 icons available)
      - OR click **Browse** to open the **Icon Picker** with ~2,300 bundled app/service icons (search by name or browse by category — Containers, Media, Monitoring, etc.)
      - OR click **Upload** to use your own image file
@@ -259,11 +301,13 @@ For across-tab moves (which can't be done by drag), open the group editor:
      - **Recently Used**: your last 20 selected icons are tracked for quick access
    - **Background Color** + **Opacity** slider *(optional — leave blank to inherit the group's colour)*
    - **Size**: Small, Medium, or Large
-   - **Open Mode**: how the link opens (New Tab, Same Tab, iFrame, Modal)
-   - **Enable Status Check** *(optional)*: HOPS will ping the URL and show an up/down indicator on the tile
+   - **Open Mode** *(Link only)*: how the link opens (New Tab, Same Tab, iFrame, Modal)
+   - **Enable Status Check** *(Link only, optional)*: HOPS will ping the URL and show an up/down indicator on the tile
 4. Click **Create**.
 
-Only **Name** and **URL** are required — everything else can be added or changed later via the tile's edit modal.
+For Link tiles, only **Name** and **URL** are required. For Note tiles,
+only **Name** is required. Everything else can be added or changed later
+via the tile's edit modal.
 
 ### Editing a Tile
 
@@ -390,8 +434,24 @@ Colors cascade down the hierarchy!
 
 ## Keyboard Shortcuts
 
-### Global Shortcuts
-- **Esc** - Close modals and dialogs
+### Global Shortcuts (any mode)
+- **/** - Open global search. Type to filter tiles across every dashboard by
+  name, URL, or description. Arrow keys to move through results, **Enter**
+  to open the highlighted tile, **Esc** to close. The hotkey doesn't fire
+  while you're typing into an input or textarea (so a literal `/` in your
+  data still works).
+- **Esc** - Close modals, dialogs, and the search modal
+
+### Browse-mode Tile Navigation
+- **↑ ↓ ← →** - Move focus between tiles. Navigation is spatial: it picks
+  the nearest tile in the direction you press, weighting off-axis distance
+  so up/down picks the tile above/below and left/right picks the row
+  neighbour. The focused tile gets a blue halo.
+- **Enter** - Activate the focused tile (open the link, or trigger the
+  tile's default action)
+
+Arrow-key navigation is disabled in Edit Mode so it doesn't interfere with
+selection and drag operations.
 
 ### Edit Mode Shortcuts
 - **Ctrl+C** / **Cmd+C** - Copy selected tile

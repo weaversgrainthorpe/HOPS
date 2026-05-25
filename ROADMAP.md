@@ -19,21 +19,9 @@ low-risk Tier 1 item may be more useful to you than a sprawling Tier 4 one.
 Frontend-mostly, low risk, days of work each. These make HOPS noticeably
 nicer for daily use without changing what it is.
 
-- **Global search with `/` hotkey.** Press `/` anywhere, type, jump to any
-  tile across any dashboard. Index tile names, URLs, and descriptions in
-  memory; render a dropdown.
-- **Multi-column group layouts.** Currently groups always stack vertically.
-  A per-group "columns" setting would let two or three groups sit
-  side-by-side, useful when you have many small groups.
-- **Keyboard navigation (arrow keys).** Move focus between tiles with the
-  arrow keys, open with Enter, close popups with Escape. Accessibility
-  win; pairs naturally with global search.
 - **PWA support.** Manifest, service worker, offline fallback. SvelteKit
   makes most of this near-free; the payoff is "install HOPS as an app" on
   a phone or tablet, which fits the wall-mounted-dashboard use case.
-- **Note tiles.** A non-link tile type that just renders text — a heading,
-  separator, or a small inline note. Removes the "every tile needs a URL"
-  constraint for layout breaks and labels.
 
 ## Tier 2 — Useful, modest scope
 
@@ -77,6 +65,15 @@ Several weeks. State management is the hard part.
 Months, and arguably "next-major-version" work. Each item turns HOPS into
 something meaningfully bigger.
 
+- **Network discovery + draft dashboard.** Scan the LAN (mDNS + targeted
+  port probes + HTTP fingerprint) for common homelab apps and present
+  findings as a reviewable draft — admin curates, then bulk-adds to a
+  dashboard. Always opt-in, CIDR-scoped, never auto-committed. Some
+  services need user-supplied keys or tokens to identify cleanly, hence
+  "first cut" rather than "fully configured". Includes a pluggable detector
+  registry so adding a new app is a one-file change. **Prerequisite for**
+  the widget framework and service integrations below — shared
+  identification and auth-handling primitives live here.
 - **Widget framework.** Tiles today launch URLs; widgets would render live
   content — weather, calendar, system stats, etc. Needs a widget API,
   registry, per-widget config, polling, and error handling. Every widget is

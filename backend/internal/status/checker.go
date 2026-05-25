@@ -55,8 +55,9 @@ func ssrfSafeDialControl(_, address string, _ syscall.RawConn) error {
 
 // Entry represents a minimal entry for status checking
 type Entry struct {
-	ID  string `json:"id"`
-	URL string `json:"url"`
+	ID   string `json:"id"`
+	Type string `json:"type"` // "link" (default) or "note" — notes are skipped
+	URL  string `json:"url"`
 }
 
 // StatusResult holds the result of a status check
@@ -241,6 +242,10 @@ func (c *Checker) getEntriesFromConfig() ([]Entry, error) {
 		for _, tab := range dashboard.Tabs {
 			for _, group := range tab.Groups {
 				for _, entry := range group.Entries {
+					// Skip note tiles entirely — they have no URL to check.
+					if entry.Type == "note" {
+						continue
+					}
 					if entry.URL != "" {
 						entries = append(entries, entry)
 					}

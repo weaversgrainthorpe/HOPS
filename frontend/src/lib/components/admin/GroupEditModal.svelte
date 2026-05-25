@@ -26,9 +26,10 @@
     groupOpacity?: number;
     groupTextColor?: 'auto' | 'light' | 'dark';
     groupDisplayStyle?: 'header' | 'folder';
+    groupWidth?: 'full' | 'half' | 'third';
     currentTabId?: string;
     availableTabs?: TabInfo[];
-    onSave: (name: string, icon?: string, iconUrl?: string, color?: string, opacity?: number, textColor?: 'auto' | 'light' | 'dark', displayStyle?: 'header' | 'folder') => void;
+    onSave: (name: string, icon?: string, iconUrl?: string, color?: string, opacity?: number, textColor?: 'auto' | 'light' | 'dark', displayStyle?: 'header' | 'folder', width?: 'full' | 'half' | 'third') => void;
     onCancel: () => void;
     onDelete?: () => void;
     onDuplicate?: () => void;
@@ -36,7 +37,7 @@
     onCopyToTab?: (targetTabId: string) => void;
   }
 
-  let { groupName, groupIcon, groupIconUrl, groupColor, groupOpacity, groupTextColor, groupDisplayStyle, currentTabId = '', availableTabs = [], onSave, onCancel, onDelete, onDuplicate, onMoveToTab, onCopyToTab }: Props = $props();
+  let { groupName, groupIcon, groupIconUrl, groupColor, groupOpacity, groupTextColor, groupDisplayStyle, groupWidth, currentTabId = '', availableTabs = [], onSave, onCancel, onDelete, onDuplicate, onMoveToTab, onCopyToTab }: Props = $props();
   // Form state initialized from props (intentionally captures initial values)
   // svelte-ignore state_referenced_locally
   let name = $state(groupName);
@@ -52,6 +53,8 @@
   let textColor = $state<'auto' | 'light' | 'dark'>(groupTextColor || 'auto');
   // svelte-ignore state_referenced_locally
   let displayStyle = $state<'header' | 'folder'>(groupDisplayStyle || 'header');
+  // svelte-ignore state_referenced_locally
+  let width = $state<'full' | 'half' | 'third'>(groupWidth || 'full');
   let showIconPicker = $state(false);
 
   // Move/copy to tab state
@@ -93,7 +96,7 @@
 
   function handleSave() {
     if (name.trim()) {
-      onSave(name.trim(), icon || undefined, iconUrl || undefined, color, opacity, textColor, displayStyle);
+      onSave(name.trim(), icon || undefined, iconUrl || undefined, color, opacity, textColor, displayStyle, width);
     }
   }
 
@@ -243,6 +246,44 @@
         </button>
       </div>
       <small>Full header spans width, folder tab is compact</small>
+    </div>
+
+    <div class="form-group">
+      <!-- svelte-ignore a11y_label_has_associated_control -->
+      <label id="width-label">Row Width</label>
+      <div class="width-options" role="group" aria-labelledby="width-label">
+        <button
+          type="button"
+          class="width-btn"
+          class:active={width === 'full'}
+          onclick={() => width = 'full'}
+          title="Full row width"
+        >
+          <span class="width-glyph width-glyph-full"></span>
+          Full
+        </button>
+        <button
+          type="button"
+          class="width-btn"
+          class:active={width === 'half'}
+          onclick={() => width = 'half'}
+          title="Half row width — sits beside another half group"
+        >
+          <span class="width-glyph width-glyph-half"></span>
+          Half
+        </button>
+        <button
+          type="button"
+          class="width-btn"
+          class:active={width === 'third'}
+          onclick={() => width = 'third'}
+          title="Third row width — three side-by-side"
+        >
+          <span class="width-glyph width-glyph-third"></span>
+          Third
+        </button>
+      </div>
+      <small>Groups flow left-to-right; narrow screens collapse to full width.</small>
     </div>
 
     {#if canMoveOrCopy}
@@ -485,6 +526,57 @@
     border-color: var(--accent);
     color: white;
   }
+
+  .width-options {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+  }
+
+  .width-btn {
+    flex: 1;
+    flex-direction: column;
+    gap: 0.4rem;
+    padding: 0.6rem 0.5rem;
+    background: var(--bg-tertiary);
+    border: 2px solid var(--border);
+    border-radius: 0.5rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 0.8rem;
+    font-weight: 500;
+  }
+
+  .width-btn:hover {
+    background: var(--bg-primary);
+    border-color: var(--accent);
+    color: var(--text-primary);
+  }
+
+  .width-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: white;
+  }
+
+  .width-glyph {
+    display: block;
+    height: 0.5rem;
+    width: 100%;
+    border-radius: 0.15rem;
+    background: linear-gradient(
+      to right,
+      currentColor 0%,
+      currentColor var(--seg, 100%),
+      transparent var(--seg, 100%),
+      transparent 100%
+    );
+    opacity: 0.85;
+  }
+  .width-glyph-full { --seg: 100%; }
+  .width-glyph-half { --seg: 50%; }
+  .width-glyph-third { --seg: 33.333%; }
 
   .icon-input-wrapper {
     display: flex;

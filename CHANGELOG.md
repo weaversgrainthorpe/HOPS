@@ -5,6 +5,60 @@ All notable changes to HOPS (Home Operations Portal System) will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0] - 2026-05-25 — Note tiles, global search, keyboard nav, multi-column groups
+
+Four roadmap Tier-1 features land together. All four are additive — existing
+dashboards load and behave exactly as before; the new capabilities only
+appear when you opt into them.
+
+### Added
+
+- **Note tiles.** A new tile *type* alongside the existing link tile,
+  picked via a **Tile type** dropdown at the top of the tile edit modal.
+  Notes render a name and an optional longer description, have no click
+  action, and are excluded from status checks. Useful as section
+  headings, layout breaks, scratchpad text, or stand-ins for services
+  you haven't set up yet. The edit modal hides URL / icon / open-mode /
+  status-check fields when **Note** is selected.
+- **Global search.** Press `/` anywhere (outside text inputs) to open a
+  search modal that indexes every tile across every dashboard. Filter
+  by tile name, URL, or description; arrow keys to move through the
+  result list, **Enter** to open the highlighted tile, **Esc** to close.
+  Results show the dashboard → tab → group breadcrumb so it's obvious
+  where each match lives. Notes jump to their parent dashboard since
+  they have no URL of their own.
+- **Keyboard tile navigation.** Arrow keys move focus between dashboard
+  tiles in browse mode using spatial nearest-neighbour selection
+  (off-axis distance weighted ×2, so up/down picks the column above and
+  left/right picks the row's neighbour). Focused tiles get a blue halo.
+  **Enter** activates the focused tile. Disabled in Edit Mode so it
+  doesn't fight selection and drag.
+- **Multi-column group layouts.** Each group has a new **Row Width**
+  setting (Full / Half / Third), set via the group edit modal. Two Half
+  groups sit side-by-side, three Third groups fit on a row, and any
+  combination that doesn't fit cleanly wraps the over-sized group onto
+  its own row. On narrow screens (below ~768 px) everything collapses
+  back to full width regardless of setting. Width is a manual choice —
+  drag-and-drop only reorders groups, it never changes widths.
+
+### Documentation
+
+- README, USER_GUIDE, QUICKSTART, DEPLOY, ICON_MANAGEMENT and the
+  GitHub Pages landing page all updated for the four new features and
+  bumped to v1.7.0. USER_GUIDE gains a dedicated **Tile types**
+  subsection, a **Multi-column group layouts** subsection, and an
+  expanded **Keyboard Shortcuts** chapter covering `/` search and
+  arrow-key navigation.
+- ROADMAP gained a new Tier 4 entry — **Network discovery + draft
+  dashboard** — as the prerequisite for the widget framework and
+  service-integration work that comes after it.
+
+### Notes
+
+No data migration needed. Configs from v1.6.x load as-is: tiles with no
+`type` field are treated as links, groups with no `width` field render at
+full width.
+
 ## [1.6.1] - 2026-05-24 — Settings page polish
 
 A small follow-up to v1.6.0 — UX polish on the new Settings page, plus a

@@ -152,7 +152,7 @@
     });
   }
 
-  async function handleAddGroup(tabId: string, groupName: string, icon?: string, iconUrl?: string, color?: string, opacity?: number, textColor?: 'auto' | 'light' | 'dark', displayStyle?: 'header' | 'folder') {
+  async function handleAddGroup(tabId: string, groupName: string, icon?: string, iconUrl?: string, color?: string, opacity?: number, textColor?: 'auto' | 'light' | 'dark', displayStyle?: 'header' | 'folder', width?: 'full' | 'half' | 'third') {
     if (!requireAuth()) return;
     await mutateDashboard(dashboard.id, (dash) => {
       const tab = dash.tabs.find(t => t.id === tabId);
@@ -167,6 +167,7 @@
         opacity,
         textColor,
         displayStyle,
+        width,
         collapsed: false,
         entries: [],
         order: tab.groups.length
@@ -194,8 +195,8 @@
   }
 
   function makeAddGroupHandler(tabId: string) {
-    return (groupName: string, icon?: string, iconUrl?: string, color?: string, opacity?: number, textColor?: 'auto' | 'light' | 'dark', displayStyle?: 'header' | 'folder') => {
-      handleAddGroup(tabId, groupName, icon, iconUrl, color, opacity, textColor, displayStyle);
+    return (groupName: string, icon?: string, iconUrl?: string, color?: string, opacity?: number, textColor?: 'auto' | 'light' | 'dark', displayStyle?: 'header' | 'folder', width?: 'full' | 'half' | 'third') => {
+      handleAddGroup(tabId, groupName, icon, iconUrl, color, opacity, textColor, displayStyle, width);
     };
   }
 

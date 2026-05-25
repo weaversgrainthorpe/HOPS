@@ -27,7 +27,7 @@
     onUpdateEntry?: (groupId: string, entryId: string, updatedEntry: Entry) => void;
     onDeleteEntry?: (groupId: string, entryId: string) => void;
     onAddEntry?: (groupId: string, newEntry: Entry) => void;
-    onAddGroup?: (groupName: string, icon?: string, iconUrl?: string, color?: string, opacity?: number, textColor?: 'auto' | 'light' | 'dark', displayStyle?: 'header' | 'folder') => void;
+    onAddGroup?: (groupName: string, icon?: string, iconUrl?: string, color?: string, opacity?: number, textColor?: 'auto' | 'light' | 'dark', displayStyle?: 'header' | 'folder', width?: 'full' | 'half' | 'third') => void;
     onReorderEntries?: (groupId: string, reorderedEntries: Entry[]) => void;
     onMoveEntry?: (fromGroupId: string, toGroupId: string, entryId: string, newIndex: number) => void;
     onMoveEntryToTab?: (sourceGroupId: string, entryId: string, targetTabId: string, targetGroupId: string) => void;
@@ -114,9 +114,9 @@
     showAddGroupModal = true;
   }
 
-  function handleSaveGroup(groupName: string, icon?: string, iconUrl?: string, color?: string, opacity?: number, textColor?: 'auto' | 'light' | 'dark', displayStyle?: 'header' | 'folder') {
+  function handleSaveGroup(groupName: string, icon?: string, iconUrl?: string, color?: string, opacity?: number, textColor?: 'auto' | 'light' | 'dark', displayStyle?: 'header' | 'folder', width?: 'full' | 'half' | 'third') {
     if (onAddGroup) {
-      onAddGroup(groupName, icon, iconUrl, color, opacity, textColor, displayStyle);
+      onAddGroup(groupName, icon, iconUrl, color, opacity, textColor, displayStyle, width);
     }
     showAddGroupModal = false;
   }
@@ -240,7 +240,11 @@
       onfinalize={handleDndFinalize}
     >
       {#each localGroups as group (group.id)}
-        <div class="group-wrapper">
+        <div
+          class="group-wrapper"
+          class:w-half={group.width === 'half'}
+          class:w-third={group.width === 'third'}
+        >
           <Group
             {group}
             currentTabId={currentTabId}
@@ -313,20 +317,27 @@
     border-top: 1px solid var(--border);
   }
 
-  /* Simple vertical list layout */
+  /* 6-col grid lets each group span a width bucket cleanly:
+       full = span 6, half = span 3, third = span 2. Groups still flow in
+       array order (no grid-auto-flow: dense), so drag-and-drop reorder via
+       svelte-dnd-action keeps array order authoritative. */
   .groups-list {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
     gap: 1rem;
     min-height: 150px;
     padding-bottom: 120px;
   }
 
   .group-wrapper {
-    width: 100%;
+    grid-column: span 6;
+    min-width: 0; /* prevent inner content from blowing out the cell */
   }
+  .group-wrapper.w-half { grid-column: span 3; }
+  .group-wrapper.w-third { grid-column: span 2; }
 
   .empty-state {
+    grid-column: span 6;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -384,6 +395,14 @@
     .groups-list {
       gap: 0.75rem;
       padding-bottom: 80px;
+    }
+
+    /* Below this breakpoint, half/third widths collapse to full so the
+       UI stays readable on phones. */
+    .group-wrapper,
+    .group-wrapper.w-half,
+    .group-wrapper.w-third {
+      grid-column: span 6;
     }
   }
 

@@ -82,7 +82,22 @@
     return true;
   }
 
+  // Derived: are we editing a note tile? Notes have no URL / open-mode /
+  // status check / icon, so the form hides those fields when this is true.
+  let isNote = $derived(editedEntry.type === 'note');
+
   function handleSave() {
+    // For note tiles, clear out the link-only fields so the saved record
+    // is clean (no stale URL / open mode / status check / icon left
+    // behind from a previous link form).
+    if (isNote) {
+      editedEntry.url = '';
+      editedEntry.icon = '';
+      editedEntry.iconUrl = '';
+      editedEntry.openMode = 'newtab';
+      editedEntry.statusCheck = undefined;
+      editedEntry.showStatus = false;
+    }
     onSave(editedEntry);
   }
 
@@ -198,6 +213,18 @@
 >
   <form id="entry-edit-form" onsubmit={(e) => { e.preventDefault(); handleSave(); }}>
     <div class="form-grid">
+      <div class="form-group full-width">
+        <label for="entry-type">Tile type</label>
+        <select
+          id="entry-type"
+          bind:value={editedEntry.type}
+          onchange={() => { if (editedEntry.type !== 'note' && editedEntry.type !== 'link') editedEntry.type = 'link'; }}
+        >
+          <option value="link">Link — opens a URL when clicked</option>
+          <option value="note">Note — text only, no link</option>
+        </select>
+      </div>
+
       <div class="form-group">
         <label for="name">Name *</label>
         <input
@@ -205,31 +232,43 @@
           type="text"
           bind:value={editedEntry.name}
           required
-          placeholder="Tile name"
+          placeholder={isNote ? 'Note heading' : 'Tile name'}
         />
       </div>
 
       <div class="form-group">
-        <label for="description">Subtitle/Description</label>
-        <input
-          id="description"
-          type="text"
-          bind:value={editedEntry.description}
-          placeholder="Optional subtitle"
-        />
+        <label for="description">{isNote ? 'Body text' : 'Subtitle/Description'}</label>
+        {#if isNote}
+          <textarea
+            id="description"
+            bind:value={editedEntry.description}
+            placeholder="Note text — appears under the heading"
+            rows="3"
+          ></textarea>
+        {:else}
+          <input
+            id="description"
+            type="text"
+            bind:value={editedEntry.description}
+            placeholder="Optional subtitle"
+          />
+        {/if}
       </div>
 
-      <div class="form-group">
-        <label for="url">URL *</label>
-        <input
-          id="url"
-          type="url"
-          bind:value={editedEntry.url}
-          required
-          placeholder="https://example.com"
-        />
-      </div>
+      {#if !isNote}
+        <div class="form-group">
+          <label for="url">URL *</label>
+          <input
+            id="url"
+            type="url"
+            bind:value={editedEntry.url}
+            required
+            placeholder="https://example.com"
+          />
+        </div>
+      {/if}
 
+      {#if !isNote}
       <div class="form-group">
         <label for="icon">Icon</label>
 
@@ -301,6 +340,7 @@
 
         <small>Browse the icon library, enter an icon name from <a href="https://icon-sets.iconify.design/" target="_blank" rel="noopener">iconify.design</a>, or upload your own</small>
       </div>
+      {/if}
 
       <!-- Color and Opacity grouped after Icon for consistency with Tab/Group editors -->
       <div class="form-group full-width">
@@ -326,31 +366,33 @@
         </select>
       </div>
 
-      <div class="form-group">
-        <label for="openMode">Open Mode</label>
-        <select id="openMode" bind:value={editedEntry.openMode}>
-          <option value="newtab">New Tab</option>
-          <option value="sametab">Same Tab</option>
-          <option value="iframe">iFrame Modal</option>
-          <option value="popup">Popup Modal</option>
-        </select>
-      </div>
+      {#if !isNote}
+        <div class="form-group">
+          <label for="openMode">Open Mode</label>
+          <select id="openMode" bind:value={editedEntry.openMode}>
+            <option value="newtab">New Tab</option>
+            <option value="sametab">Same Tab</option>
+            <option value="iframe">iFrame Modal</option>
+            <option value="popup">Popup Modal</option>
+          </select>
+        </div>
 
-      <div class="form-group checkbox-group">
-        <label>
-          <input
-            type="checkbox"
-            checked={editedEntry.statusCheck?.enabled ?? false}
-            onchange={(e) => {
-              if (!editedEntry.statusCheck) {
-                editedEntry.statusCheck = { type: 'http', enabled: false, interval: 60 };
-              }
-              editedEntry.statusCheck.enabled = (e.target as HTMLInputElement).checked;
-            }}
-          />
-          Enable Status Check
-        </label>
-      </div>
+        <div class="form-group checkbox-group">
+          <label>
+            <input
+              type="checkbox"
+              checked={editedEntry.statusCheck?.enabled ?? false}
+              onchange={(e) => {
+                if (!editedEntry.statusCheck) {
+                  editedEntry.statusCheck = { type: 'http', enabled: false, interval: 60 };
+                }
+                editedEntry.statusCheck.enabled = (e.target as HTMLInputElement).checked;
+              }}
+            />
+            Enable Status Check
+          </label>
+        </div>
+      {/if}
 
       {#if canMoveOrCopy}
         <div class="form-group full-width move-section">
