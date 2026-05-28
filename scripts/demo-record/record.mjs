@@ -167,7 +167,7 @@ try {
   console.log('▸ open dashboard');
   await page.goto(BASE + DASHBOARD_PATH);
   await page.waitForLoadState('networkidle');
-  await beat(4000); // long hold — first impression matters
+  await beat(2500); // first-impression hold
 
   // ===== 2. Enter Edit Mode =====
   console.log('▸ edit mode');
@@ -191,7 +191,7 @@ try {
   const to = await center(destTile);
   console.log(`  drag from (${Math.round(from.x)},${Math.round(from.y)}) to (${Math.round(to.x)},${Math.round(to.y)})`);
   await smoothDrag(page, from, to);
-  await beat(2500); // hold so viewer sees the new order
+  await beat(1500); // hold so viewer sees the new order
 
   // ===== 4. Add Tile =====
   console.log('▸ add tile');
@@ -199,7 +199,7 @@ try {
   await moveTo(addTileBtn);
   await addTileBtn.click();
   await page.waitForSelector('text=New Tile', { timeout: 5000 });
-  await beat(1000);
+  await beat(500);
 
   await slowType('input#name', 'Proxmox');
   await slowType('input#url', 'https://proxmox.example.com');
@@ -210,66 +210,75 @@ try {
   await moveTo(browseBtn);
   await browseBtn.click();
   await page.waitForSelector('text=Choose an Icon', { timeout: 5000 });
-  await beat(1200);
+  await beat(700);
 
-  await slowType('input[placeholder*="Search"]', 'proxmox', 90); // slower for emphasis
-  await beat(1500); // hold so filtered results register
+  await slowType('input[placeholder*="Search"]', 'proxmox', 70);
+  await beat(900); // hold so filtered results register
 
   const firstIcon = page.locator('.icon-grid .icon-card').first();
   await moveTo(firstIcon);
   await firstIcon.click();
-  await beat(1200);
+  await beat(700);
 
   // ===== 6. Create the tile =====
   console.log('▸ create');
   const createBtn = page.locator('button:has-text("Create")').last();
   await moveTo(createBtn);
   await createBtn.click();
-  await beat(1500); // brief hold while modal closes
-  // Scroll to the newly-added tile (it lands at the end of the first group).
-  // The new tile has name="Proxmox" — find the LAST entry in the page with
-  // that name (the existing Proxmox tile is earlier).
+  await beat(900); // brief hold while modal closes
   const newTile = page.locator('.entry:has-text("Proxmox")').last();
   await newTile.scrollIntoViewIfNeeded();
-  await beat(3000); // hold on new tile so viewer sees the result
+  await beat(1800); // hold on new tile
 
   // ===== 7. Exit edit mode =====
   console.log('▸ exit edit mode');
   const exitBtn = page.locator('[aria-label="Exit Edit Mode"]');
   await moveTo(exitBtn);
   await exitBtn.click();
-  await beat(1200);
+  await beat(700);
 
-  // ===== 8. Switch tabs =====
-  console.log('▸ switch tabs');
-  const tabs = page.locator('[role="tab"]');
-  if (await tabs.count() >= 2) {
-    const tab2 = tabs.nth(1);
-    await moveTo(tab2);
-    await tab2.click();
-    await beat(2500); // hold on second tab
-    const tab1 = tabs.nth(0);
-    await moveTo(tab1);
-    await tab1.click();
-    await beat(1500);
-  }
+  // (Tab-switch + mobile scenes removed — not 2.0.0-relevant. Discovery is
+  //  the new headline; give it the screen time.)
 
-  // (Mobile-view section removed — recording at 1280x720 but viewport at
-  // 400px looks awkward with the right side empty. The static mobile.png
-  // in the screenshots gallery already showcases responsive behaviour.)
-
-  // ===== 9. Admin page + QR =====
+  // ===== 8. Admin page + QR =====
   console.log('▸ qr code');
   const adminLink = page.locator('a.admin-link[aria-label="Admin Panel"]');
   await moveTo(adminLink);
   await adminLink.click();
   await page.waitForSelector('text=HOPS Admin Panel', { timeout: 5000 });
-  await beat(1500);
+  await beat(900);
   const qrBtn = page.locator('[aria-label^="Show QR code for"]').first();
   await moveTo(qrBtn);
   await qrBtn.click();
   await page.waitForSelector('text=QR Code', { timeout: 5000 });
-  await beat(4500); // hold on QR for emphasis
+  await beat(2200); // hold on QR
+  const qrClose = page.locator('button.close-btn').last();
+  await moveTo(qrClose, 100);
+  await qrClose.click();
+  await beat(500);
+
+  // ===== 9. Network Discovery (the 2.0.0 headline) =====
+  console.log('▸ discovery');
+  const discoveryBtn = page.locator('button:has-text("Discovery")').first();
+  await moveTo(discoveryBtn);
+  await discoveryBtn.click();
+  await page.waitForURL('**/admin/discovery', { timeout: 5000 });
+  await page.waitForLoadState('networkidle');
+  await beat(1800); // hold on scan list
+
+  const openDraft = page.locator('button[title="Open draft"]').first();
+  await moveTo(openDraft);
+  await openDraft.click();
+  await page.waitForURL(/\/admin\/discovery\/[a-f0-9]+/, { timeout: 5000 });
+  await page.waitForLoadState('networkidle');
+  await beat(2800); // hold on populated curate grid
+
+  const selectHighBtn = page.locator('button:has-text("Select all high-confidence")');
+  if (await selectHighBtn.count() > 0) {
+    await moveTo(selectHighBtn);
+    await selectHighBtn.click();
+    await beat(2000); // hold on selected rows
+  }
 
   console.log('▸ done');
 } catch (err) {
