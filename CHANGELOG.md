@@ -5,14 +5,24 @@ All notable changes to HOPS (Home Operations Portal System) will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.0.1] - 2026-05-28 — Frontend version chip fix
+## [2.0.2] - 2026-05-28 — Frontend version chip fix (take two)
 
-Tiny follow-up to 2.0.0. The frontend `package.json` was not bumped in
-the 2.0.0 release, so the navbar version chip read `v1.7.0` even though
-the backend reported `2.0.0`. Cosmetic only — no functional impact.
+The 2.0.1 release bumped the frontend `package.json` from `1.7.0` to
+`2.0.0` instead of all the way to `2.0.1`, so the navbar chip still
+read one version behind the backend. 2.0.2 brings VERSION, the Go
+constants, and `frontend/package.json` into alignment for real.
 
 ### Fixed
-- Frontend version chip now correctly shows the current release.
+- Frontend version chip now actually matches the running release.
+
+## [2.0.1] - 2026-05-28 — Frontend version chip fix (partial)
+
+The frontend `package.json` was not bumped in the 2.0.0 release, so the
+navbar version chip read `v1.7.0`. 2.0.1 bumped it but to the wrong
+value (`2.0.0`); see 2.0.2 for the proper fix.
+
+### Fixed
+- Frontend version chip bumped (incorrectly — superseded by 2.0.2).
 
 ## [2.0.0] - 2026-05-28 — Network Discovery, GUI-managed detectors, diagnostics
 
