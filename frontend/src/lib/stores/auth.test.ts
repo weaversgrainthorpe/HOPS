@@ -6,7 +6,10 @@ import { get } from 'svelte/store';
 vi.mock('$lib/utils/api', () => ({
 	login: vi.fn(),
 	logout: vi.fn(),
-	checkAuth: vi.fn()
+	checkAuth: vi.fn(),
+	// Added to api.ts in v2.0; auth store registers a handler at module
+	// load time, so this mock must accept the call or the import explodes.
+	setSessionExpiredHandler: vi.fn()
 }));
 
 import {
