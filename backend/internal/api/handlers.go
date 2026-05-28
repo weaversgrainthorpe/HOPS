@@ -138,11 +138,16 @@ func (r *Router) handleUpdateConfig(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Create automatic backup before modifying config
+	// Create automatic backup before modifying config. If it fails,
+	// don't block the update — the admin chose to save — but surface
+	// the warning in the response so the UI can flag it. A silent
+	// backup failure means the admin trusts a safety-net that didn't
+	// fire next time they roll back.
+	var backupWarning string
 	if r.backupManager != nil {
 		if _, err := r.backupManager.CreateBackupWithDB(r.db, "pre-config-update"); err != nil {
 			slog.Warn("failed to create pre-update backup", "component", "backup", "error", err)
-			// Continue anyway - don't block the update
+			backupWarning = "Pre-update backup failed: " + err.Error() + ". Config saved anyway."
 		}
 	}
 
@@ -161,7 +166,11 @@ func (r *Router) handleUpdateConfig(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	writeJSONSuccess(w)
+	resp := map[string]interface{}{"status": "ok"}
+	if backupWarning != "" {
+		resp["warning"] = backupWarning
+	}
+	writeJSON(w, resp)
 }
 
 // handleLogin authenticates a user with rate limiting
@@ -2532,9 +2541,25 @@ func (r *Router) handleBackupActions(w http.ResponseWriter, req *http.Request) {
 		}
 
 		writeJSON(w, map[string]interface{}{
-			"success": true,
-			"message": "Backup restored successfully. Please restart the server.",
+			"success":    true,
+			"restarting": true,
+			"message":    "Backup restored. The server is restarting — it should be back in a few seconds.",
 		})
+
+		// Restoring a SQLite file under an open connection leaves the
+		// running process with a stale view (the WAL/shm files no
+		// longer match the new main file). Schedule a graceful
+		// shutdown 1 s after the response flushes; the service manager
+		// (systemd / docker compose / launchd) auto-restarts the
+		// process, which re-runs runMigrations() on the now-restored
+		// DB and resumes cleanly. Documented requirement: the unit /
+		// compose service has Restart=on-failure or similar.
+		go func() {
+			time.Sleep(1 * time.Second)
+			slog.Info("triggering shutdown after backup restore",
+				"component", "backup", "name", backupName)
+			r.RequestShutdown()
+		}()
 
 	case http.MethodDelete:
 		// Delete a backup

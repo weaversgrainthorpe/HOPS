@@ -1,6 +1,6 @@
 # HOPS Installation & Deployment Guide
 
-**Version 1.7.0**
+**Version 2.0.0**
 
 This guide covers installing and running HOPS. For a quick first-time walkthrough, see the [Zero to Dashboard Hero](QUICKSTART.md) guide.
 
@@ -116,6 +116,31 @@ To back up the volume:
 ```bash
 docker run --rm -v hops-data:/data -v $(pwd):/backup alpine tar czf /backup/hops-backup.tar.gz -C /data .
 ```
+
+### Network Discovery on Docker — important
+
+If you plan to use the **Network Discovery** feature (v2.0+) from inside a container, be aware of a Docker networking limitation that's beyond HOPS's control:
+
+By default, Docker puts containers on a **bridge network** behind NAT. Bridge networks **don't pass multicast traffic** to or from the host LAN, and the container's ARP table reflects its bridge, not your physical network. This means:
+
+- **mDNS / Bonjour, UPnP / SSDP, and ARP-table sweeps return empty** when HOPS runs in a default-bridge container. Smart TVs, AirPlay receivers, Sonos speakers, HomeKit devices, and IGD routers won't appear from those sources.
+- **Active TCP/HTTP scanning, forward DNS, and SNMP still work** — they're unicast and traverse NAT normally.
+
+If you want full discovery coverage from Docker, switch the container to **host networking** (Linux):
+
+```yaml
+services:
+  hops:
+    image: ghcr.io/weaversgrainthorpe/hops:latest
+    network_mode: host
+    # remove the `ports:` block — host mode binds directly on the host
+    volumes:
+      - hops-data:/data
+```
+
+Host mode shares the host's network stack: multicast works, ARP works, IPs match. On Docker Desktop (macOS / Windows) `network_mode: host` exists but works differently — Docker Desktop runs Docker in a VM, so "host" is the VM, not your machine. Native binary installation is the cleaner option there.
+
+The active-scan and DNS-based parts of Discovery still work on a default-bridge container, so the feature isn't "broken" — just thinner. Most homelab services (Pi-hole, Plex, *arr, NAS GUIs) are HTTP-on-known-port and will still be found. See the [Network Discovery chapter in the User Guide](USER_GUIDE.md#network-discovery) for the full picture.
 
 ---
 

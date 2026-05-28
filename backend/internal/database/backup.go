@@ -143,9 +143,14 @@ func (bm *BackupManager) ListBackups() ([]BackupInfo, error) {
 	return backups, nil
 }
 
-// RestoreBackup restores the database from a backup file
+// RestoreBackup restores the database from a backup file.
+//
+// The filepath.Base call below is intentional defense-in-depth
+// alongside the API-layer sanitization in handleBackupActions —
+// both layers strip path components so any caller (HTTP, future CLI,
+// or a unit test wiring this up directly) can't smuggle in a
+// "../../etc/shadow"-style traversal.
 func (bm *BackupManager) RestoreBackup(backupName string) error {
-	// Sanitize to prevent path traversal (e.g., "../../secret.db")
 	backupName = filepath.Base(backupName)
 	backupPath := filepath.Join(bm.backupDir, backupName)
 

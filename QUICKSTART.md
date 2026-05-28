@@ -69,7 +69,7 @@ mkdir data
 
 You should see structured-log output like:
 ```
-time=2026-05-24T10:00:00.000Z level=INFO msg="server starting" version="HOPS v1.7.0" addr=:8080 data_dir=./data frontend_dir=./frontend/build
+time=2026-05-28T10:00:00.000Z level=INFO msg="server starting" version="HOPS v2.0.0" addr=:8080 data_dir=./data frontend_dir=./frontend/build
 ```
 
 > **Tip:** Once you're logged in to the admin panel, the log level is one of the runtime settings on the **Settings** page (`/settings`). Switch it to `debug` for verbose output or `warn`/`error` for quieter logs — no restart needed.
@@ -107,7 +107,7 @@ docker compose up -d
 
 The image is multi-arch (linux/amd64 + linux/arm64), so the same tag works on x86-64 servers and Raspberry Pi 3B+/4/5/Zero 2 W.
 
-> **Pin a version instead of `:latest`?** Use `ghcr.io/weaversgrainthorpe/hops:v1.7.0` (or any tagged release).
+> **Pin a version instead of `:latest`?** Use `ghcr.io/weaversgrainthorpe/hops:v2.0.0` (or any tagged release).
 
 ## Step 2: Log In
 
@@ -230,8 +230,14 @@ Now that you have the basics, try a few things:
 - **Right-click a tile** for copy, cut, and paste options
 - **Open on your phone via QR**: on the Admin page, click the **QR icon** next to any dashboard to get a scannable code — point your phone camera at it to open the dashboard without typing the URL
 
+## Got a homelab full of stuff already?
+
+Skip the manual tile-by-tile setup. **Admin → Network Discovery → New Scan** scans your LAN, identifies common services (Pi-hole, Plex, Proxmox, *arr, Home Assistant, NAS GUIs, and dozens more), and bulk-promotes the ones you want into dashboard tiles — auto-grouped by category.
+
+A few honest caveats: discovery is a head-start, not a magic wand. Results depend on your network (firewalls, VLAN segmentation, host AV) and whether services actually respond to unauthenticated probes. Expect some false positives and some legitimate services that don't show up. That's why every scan is a reviewable draft — nothing lands on your dashboard without your tick. See the [User Guide's Network Discovery chapter](USER_GUIDE.md#network-discovery) for the full walkthrough.
+
 ## What's Next?
 
-- **[User Guide](USER_GUIDE.md)** — Full feature reference: themes, backgrounds, slideshows, import/export, keyboard shortcuts, and more
+- **[User Guide](USER_GUIDE.md)** — Full feature reference: themes, backgrounds, slideshows, import/export, keyboard shortcuts, network discovery, and more
 - **[Installation & Deployment Guide](DEPLOY.md)** — Permanent setup: systemd services, reverse proxies, and backups
 - **[README](README.md)** — Project overview and feature list

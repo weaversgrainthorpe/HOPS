@@ -133,6 +133,7 @@
         bind:value={query}
         type="text"
         placeholder="Search tiles by name, URL, or description…"
+        aria-label="Search tiles by name, URL, or description"
         onkeydown={handleKeydown}
       />
       <kbd>Esc</kbd>

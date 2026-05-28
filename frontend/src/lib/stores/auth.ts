@@ -1,5 +1,5 @@
 import { writable } from 'svelte/store';
-import { login as apiLogin, logout as apiLogout, checkAuth } from '$lib/utils/api';
+import { login as apiLogin, logout as apiLogout, checkAuth, setSessionExpiredHandler } from '$lib/utils/api';
 import { toast } from './toast';
 import { logError } from '$lib/utils/errors';
 
@@ -8,6 +8,21 @@ export const isAuthenticated = writable(false);
 export const isLoggingIn = writable(false);
 // True when the current user must change their password before doing anything else
 export const mustChangePassword = writable(false);
+
+// Register the global session-expired handler with the API layer.
+// Fires when any fetchAPI call hits 401 — clears auth state, toasts
+// once, and (if in the browser) sends the user to the login page so
+// they don't sit on a broken protected page after their cookie expires.
+setSessionExpiredHandler(() => {
+  isAuthenticated.set(false);
+  mustChangePassword.set(false);
+  toast.error('Your session has expired. Please log in again.');
+  if (typeof window !== 'undefined' && window.location.pathname !== '/') {
+    // Defer slightly so any pending per-page error handling can show
+    // its own context before we redirect.
+    setTimeout(() => { window.location.href = '/'; }, 300);
+  }
+});
 
 // Check if user has a valid session on app load
 export async function initAuth() {

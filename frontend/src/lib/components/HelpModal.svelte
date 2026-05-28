@@ -235,6 +235,14 @@
 
           <div class="feature-list">
             <div class="feature">
+              <Icon icon="mdi:radar" width="24" />
+              <div>
+                <strong>Network Discovery</strong>
+                <p>Scan your LAN (by CIDR, range, single IP, or any combination — with per-target exclusions). HOPS identifies common services and presents them as a reviewable draft for bulk-promotion to dashboard tiles. Open Admin → Network Discovery. Discovery is a head-start, not a magic wand — results vary with your network and firewalls; every scan is a reviewable draft.</p>
+                <p><em>Running HOPS in Docker with default bridge networking? Multicast-based discovery (mDNS / UPnP / ARP) won't work — that's a Docker constraint, not HOPS. Use <code>network_mode: host</code> on Linux for full coverage. Active port scans and DNS-based discovery still work either way. See the User Guide → Network Discovery for the full picture.</em></p>
+              </div>
+            </div>
+            <div class="feature">
               <Icon icon="mdi:qrcode" width="24" />
               <div>
                 <strong>QR Codes</strong>

@@ -1,6 +1,6 @@
 # HOPS - Home Operations Portal System
 
-**Version 1.7.0** · **[hops.weaversgrainthorpe.github.io →](https://weaversgrainthorpe.github.io/HOPS/)**
+**Version 2.0.0** · **[hops.weaversgrainthorpe.github.io →](https://weaversgrainthorpe.github.io/HOPS/)**
 
 A modern, self-hosted homepage dashboard for the homelab community.
 
@@ -16,7 +16,7 @@ I created HOPS because none of the existing options matched what I wanted:
 
 - **Native installation** - HOPS is a single binary with a SQLite database. Download, run, done. Docker is available too if that's your thing.
 
-- **Power features without complexity** - Drag-and-drop everything. Multiple dashboards. Tabs. Groups. Background slideshows. Theme customization. Status monitoring. All configurable through the UI.
+- **Power features without complexity** - Drag-and-drop everything. Multiple dashboards. Tabs. Groups. Background slideshows. Theme customization. Status monitoring. Network discovery that scans your LAN and bulk-adds tiles for the services you already run. All configurable through the UI.
 
 HOPS won't be for everyone. That's fine. But if you've been frustrated editing YAML indentation at 11pm, or wished you could just *click* to add a new bookmark, maybe give it a try.
 
@@ -119,14 +119,36 @@ For full deployment options (systemd, reverse proxy, backups), see the **[Instal
 - Cross-group drag & drop
 - Right-click context menu
 
+### Network Discovery (v2.0)
+- **Flexible targets** — scan a CIDR (`10.10.0.0/24`), an IP range (`10.10.0.1-50` or full pair), a single IP, or any comma-separated combination — with per-target `!`/`NOT ` exclusions
+- **Three intensities** — passive (mDNS / ARP / DNS / UPnP / SNMP only), light (~40 well-known homelab ports, default), full (~60 ports)
+- **70 bundled fingerprint detectors** out of the box — Pi-hole, Proxmox, Home Assistant, Plex, Jellyfin, every *arr, NPM, Portainer, UniFi, OPNsense/pfSense, Frigate, TrueNAS/QNAP/Synology, Vaultwarden, Immich, Audiobookshelf, Grafana, Prometheus, Loki, Traefik, MinIO, Jenkins, GitLab, n8n, Guacamole, Netdata, ViewPower, pgAdmin/phpMyAdmin/Adminer, and many more
+- **Passive sources** alongside active probing: ARP, mDNS / Bonjour, DNS PTR + AXFR, UPnP/SSDP (smart TVs, Sonos, IGD routers), SNMP v2c (printers, switches, UPSes)
+- **Forward DNS enumeration** of a user-supplied internal domain — reverse-proxy-fronted services (NPM, Traefik) finally show up
+- **Curate before promote** — every scan produces a reviewable draft; confidence-tiered, inline editing of name / URL / category, bulk select, auto-grouping by category on promote (Sonarr → "Downloads", Pi-hole → "Network", etc.)
+- **Phase-4 GUI-managed detectors** — add your own via the admin UI; bundled detectors are customizable with one-click "Reset to bundled" undo; signatures support body / title / header / favicon-hash matching
+- **Diagnostics view** — every HTTP service from past scans that no detector matched, with one-click "Create detector from this" bootstrap
+
+> **What to expect**: Discovery is a head-start, not a magic wand. Results
+> depend on your network (switched vs Wi-Fi, VLAN segmentation), what's
+> blocking probes (firewalls, host-based AV, services bound to localhost),
+> and whether services even respond to unauthenticated requests. Expect
+> some false positives and some legitimate services that don't appear —
+> that's why **every scan is a reviewable draft you curate before
+> promoting to dashboard tiles**, and why the diagnostics view exists to
+> turn "I see something HOPS missed" into a new detector in two clicks.
+> Coverage will keep improving release-over-release as bundled detectors
+> grow, but Discovery is meant to bootstrap a dashboard, not replace
+> knowing your own homelab.
+
 ### Admin Panel
 - Create, rename, and delete dashboards
 - **QR codes** — generate scannable codes for any dashboard URL (open the dashboard on a phone/tablet without typing)
 - Self-contained export/import with embedded assets
 - Single-dashboard export
 - Import from Homer, Dashy, and Heimdall
-- Automatic database backups on startup
-- Backup management (restore and delete)
+- Automatic database backups on startup (async — doesn't block boot)
+- Backup management (restore and delete) with auto-restart after restore
 - Forced password change on first login (no more accidentally leaving the default `admin/admin` in production)
 
 ### Mobile

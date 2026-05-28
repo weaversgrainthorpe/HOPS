@@ -59,7 +59,7 @@
 <Modal
   id="import-config"
   title="Import Configuration"
-  titleIcon="mdi:upload"
+  titleIcon="mdi:tray-arrow-down"
   onClose={onClose}
   maxWidth="550px"
 >

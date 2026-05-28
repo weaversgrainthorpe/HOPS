@@ -131,7 +131,7 @@
     <h2>Dashboards</h2>
     <div class="header-actions">
       <button onclick={() => showImport = true} class="btn-secondary">
-        <Icon icon="mdi:upload" width="20" />
+        <Icon icon="mdi:tray-arrow-down" width="20" />
         Import
       </button>
       <button onclick={handleNew} class="btn-primary">
@@ -229,7 +229,7 @@
                 {#if exportingId === dashboard.id}
                   <Icon icon="mdi:loading" width="20" class="spin" />
                 {:else}
-                  <Icon icon="mdi:download" width="20" />
+                  <Icon icon="mdi:tray-arrow-up" width="20" />
                 {/if}
               </button>
               <button

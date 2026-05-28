@@ -58,7 +58,7 @@
 <Modal
   id="export-config"
   title="Export Configuration"
-  titleIcon="mdi:download"
+  titleIcon="mdi:tray-arrow-up"
   onClose={onClose}
   maxWidth="550px"
 >

@@ -14,6 +14,29 @@ low-risk Tier 1 item may be more useful to you than a sprawling Tier 4 one.
 
 ---
 
+## Shipped
+
+These were on the roadmap as Tier 4 ambitions and are now live in
+released code. Kept here briefly for the historical paper trail; see
+the [CHANGELOG](CHANGELOG.md) for full release notes.
+
+- **Network Discovery + draft dashboard** *(v2.0.0)*. Scan a CIDR,
+  IP range, or specific IP (any combination, with per-target
+  exclusions) at three intensity levels; passive sources (ARP, mDNS, DNS PTR
+  +AXFR, UPnP/SSDP, SNMP) plus active port + HTTP fingerprinting;
+  forward DNS enumeration of an internal domain for reverse-proxy-
+  fronted services; 70 bundled detectors; curate-before-promote;
+  auto-grouping by category on promote; Phase-4 GUI-managed user
+  detectors with one-click bundled-detector overrides and reset; a
+  diagnostics view that surfaces every unidentified service as a
+  promotion candidate. SQLite-backed, no YAML, never auto-committed.
+  Discovery is intentionally a starting point — results depend on
+  network topology, firewall/AV interference, and whether services
+  respond to unauthenticated probes; every scan is a reviewable
+  draft. Coverage continues to improve release-over-release.
+
+---
+
 ## Tier 1 — Quick wins
 
 Frontend-mostly, low risk, days of work each. These make HOPS noticeably
@@ -65,15 +88,18 @@ Several weeks. State management is the hard part.
 Months, and arguably "next-major-version" work. Each item turns HOPS into
 something meaningfully bigger.
 
-- **Network discovery + draft dashboard.** Scan the LAN (mDNS + targeted
-  port probes + HTTP fingerprint) for common homelab apps and present
-  findings as a reviewable draft — admin curates, then bulk-adds to a
-  dashboard. Always opt-in, CIDR-scoped, never auto-committed. Some
-  services need user-supplied keys or tokens to identify cleanly, hence
-  "first cut" rather than "fully configured". Includes a pluggable detector
-  registry so adding a new app is a one-file change. **Prerequisite for**
-  the widget framework and service integrations below — shared
-  identification and auth-handling primitives live here.
+- **Local launcher agent + per-device tiles.** A small companion binary the
+  user runs on each daily-driver machine (Mac / Linux / Windows) that
+  enumerates installed URL protocol handlers — Obsidian, VS Code, Steam,
+  Spotify, Slack desktop, 1Password, etc. — and reports them to HOPS. The
+  dashboard then renders a per-device set of "quick launcher" tiles so an
+  `obsidian://` link only shows up on devices where Obsidian is installed.
+  Real cost is the surrounding plumbing, not the agent: per-user device
+  registry, device-token issuance, per-device tile filtering in the
+  frontend, signed multi-platform binary distribution, refresh cadence
+  (manual re-run vs LaunchAgent / cron / Task Scheduler). Distinct from
+  Network Discovery — that asks "what's on the wire"; this asks "what's
+  installed on this endpoint".
 - **Widget framework.** Tiles today launch URLs; widgets would render live
   content — weather, calendar, system stats, etc. Needs a widget API,
   registry, per-widget config, polling, and error handling. Every widget is

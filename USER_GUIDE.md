@@ -1,4 +1,4 @@
-# HOPS User Guide (v1.7.0)
+# HOPS User Guide (v2.0.0)
 
 Welcome to HOPS (Home Operations Portal System)! This guide will help you get started and make the most of your dashboard.
 
@@ -17,6 +17,7 @@ Welcome to HOPS (Home Operations Portal System)! This guide will help you get st
 11. [Keyboard Shortcuts](#keyboard-shortcuts)
 12. [Server Settings](#server-settings)
 13. [Import/Export](#importexport)
+14. [Network Discovery](#network-discovery)
 
 ## Getting Started
 
@@ -553,6 +554,124 @@ Import is done from the Admin page:
 - **Backup first**: Always export your current config before importing
 - **Authentication required**: Import/Export requires admin login
 - **Format conversion**: Import from other tools is best-effort
+
+## Network Discovery
+
+*(new in v2.0)* HOPS can scan your LAN for services and bulk-add the ones you want as dashboard tiles. Open **Admin → Network Discovery** from the navbar.
+
+### What to expect first
+
+Discovery is **a head-start, not a magic wand**. Real-world results depend on:
+
+- **Network topology** — switched vs Wi-Fi, VLAN segmentation, isolated guest networks
+- **Firewalls and host-based AV** — Windows Defender, ufw, iptables, Norton/AVAST etc. can silently block probes
+- **Service configuration** — apps bound to `localhost` aren't reachable from another host; apps behind reverse proxies look like the proxy until you tell HOPS about your internal domain
+- **Whether the service responds to unauthenticated requests** — some services 401 immediately and never reveal their identity to a probe
+- **Where HOPS is running** — see the Docker note immediately below
+
+You'll likely see:
+- **False positives** — a probe that matches a body string in something unrelated
+- **Missing services** — apps on unusual ports, apps that don't speak HTTP, apps that aggressively rate-limit
+- **Generic "Web service on X" rows** — HOPS saw something but doesn't have a fingerprint for it yet
+
+That's why every scan is a **reviewable draft you curate** before any tile lands on a dashboard, and why the **Diagnostics** view exists to turn "I see something HOPS missed" into a new detector in two clicks. Coverage grows release-over-release as the bundled detector set expands.
+
+### Running HOPS in Docker?
+
+**This is a Docker networking constraint, not a HOPS limitation, and it's beyond our control.** Worth understanding before you wonder why a scan from a containerised HOPS looks thin.
+
+By default, Docker puts containers on a **bridge network** — a private virtual network behind NAT, with no direct view of the host's physical LAN. The container's ARP table is its own bridge, multicast frames (mDNS, SSDP) stop at the bridge boundary, and outbound packets get NAT'd so the destination sees the host's IP rather than the container's.
+
+What this means for Network Discovery on a default-bridge container:
+
+| Source | Works? | Why |
+| --- | --- | --- |
+| Active TCP port scan (light / full) | ✅ Mostly | NAT routes unicast TCP fine; some services that filter by source IP may behave differently |
+| HTTP fingerprint detectors | ✅ Yes | Standard outbound TCP, no multicast involved |
+| Forward DNS enumeration | ✅ Yes | Standard DNS lookups via the container's resolver |
+| SNMP v2c | ✅ Yes | Unicast UDP, works through NAT |
+| **mDNS** (HomeKit / AirPlay / Chromecast) | ❌ Silently empty | Multicast traffic doesn't cross the bridge boundary |
+| **UPnP / SSDP** (smart TVs / Sonos / Roku / routers) | ❌ Silently empty | Same multicast limitation |
+| **ARP table sweep** | ❌ Empty | The container's ARP table reflects its bridge, not the host LAN |
+| **DNS PTR enrichment** | ⚠ Depends | Works if the container's resolver knows your LAN; not if it's a default `8.8.8.8` |
+
+The scan-level warnings panel will surface mDNS / SSDP / ARP failures when they happen, so you'll see *that* they didn't work — but the underlying reason is Docker's bridge, not HOPS.
+
+**Two options if you want full discovery coverage**:
+
+1. **Use host networking** (Linux only). Edit your `docker-compose.yml`:
+   ```yaml
+   services:
+     hops:
+       image: ghcr.io/weaversgrainthorpe/hops:latest
+       network_mode: host
+       # Remove the `ports:` block — host mode doesn't use it.
+   ```
+   The container shares the host's network stack: same ARP table, multicast works, IP visibility identical to running natively. Docker Desktop on Mac and Windows technically support `network_mode: host` but have known limitations (Mac in particular runs Docker in a VM, so "host" isn't really host) — your mileage will vary.
+
+2. **Run HOPS natively** (binary or systemd service, no Docker). Simplest path on a Linux box; the binary is a single file with no runtime dependencies.
+
+The active-scan and DNS-based parts of Discovery still work on a default-bridge container, so it's not "broken" — just thinner. If your homelab is mostly HTTP services on known ports (the typical *arr / NAS / Pi-hole / Proxmox setup), the default bridge gets you most of the way there. The multicast-only devices (TVs, speakers, IoT) are the ones you'd miss.
+
+### Running a scan
+
+1. **Admin → Network Discovery → New Scan**
+2. Specify your scan targets. HOPS suggests a CIDR based on your network interface; you can override. Targets can be any combination of:
+   - **CIDRs** — `10.10.0.0/24`, `192.168.1.0/24` (anything /16 to /32)
+   - **Ranges** — `10.10.0.1-50` (octet shorthand) or `10.10.0.1-10.10.0.50` (full pair)
+   - **Single IPs** — `10.10.0.5`
+   - **Exclusions** — prefix any of the above with `!` or `NOT ` to skip those addresses, e.g. `10.10.0.0/24, !10.10.0.50`. Useful for skipping a printer that hangs on probes, a known-flaky IoT device, or anything you don't want scanned.
+   - The form shows the **effective host count** live (post-exclusion) so you can see what the scan will actually probe before clicking Start
+3. Optional: enter an **Internal domain** (e.g. `home.arpa`) if you run internal DNS — HOPS will probe ~80 common subdomains (`sonarr.home.arpa`, `plex.home.arpa`, …) to catch services behind reverse proxies
+4. Pick an **intensity**:
+   - **Passive** — no port probes at all. ARP / mDNS / DNS / UPnP / SNMP only. Quiet and quick; finds broadcast services, misses everything else
+   - **Light** (default) — passive plus active probes on ~40 well-known homelab ports. The right choice for most users
+   - **Full** — light plus a wider port sweep (~60 ports). Slower and noisier; may spook IoT firmware
+5. Click **Start scan**
+
+### Watching it run
+
+The progress bar shows current phase: *Passive discovery → Probing X hosts → Forward DNS enumeration → Finalising*. A list of in-flight host addresses scrolls below.
+
+If passive sources fail (commonly: mDNS blocked by managed switches, SSDP filtered by Wi-Fi APs), you'll see an **amber warning panel** at the top of the draft after the scan completes. The active probe still ran; you just won't have broadcast-discovered services in this scan.
+
+### Curating results
+
+Each row shows: confidence (high / medium / low), category, suggested name, suggested URL. The favicon thumbnail comes from the discovered service itself. Inline-edit any name, URL, or category before promoting.
+
+**Bulk actions** at the top:
+- **Select all** / **Select none**
+- **Select all high-confidence** — usually the right starting point
+- **Promote N to dashboard** — opens the promote modal
+
+In the promote modal, pick an existing dashboard or create a new one on the fly. Tiles distribute into groups by their category — Sonarr lands in *Downloads*, Pi-hole in *Network*, and so on. No manual group-picking required.
+
+### The Diagnostics view
+
+**Admin → Network Discovery → Diagnostics** shows every HTTP service across all your past scans that no specific detector matched, deduplicated by `(host, port)`. Plus a **detection summary** counting how many results each detector produced.
+
+Click **+ Create detector** on any unidentified row — the detector form opens pre-populated with the port, title, server header, and favicon hash. Adjust signatures (the body or title string that uniquely identifies the service), save, and re-scan. The next scan recognises it natively.
+
+### Custom and customized detectors
+
+**Admin → Network Discovery → Manage detectors** lists every detector — both bundled (shipped with HOPS) and your own.
+
+- **Bundled detectors are customizable.** Click the tune icon on any bundled row to open its definition pre-filled. Save your edits — they create an **override** that supersedes the bundled definition on the next scan. The row gets a "modified" badge. Click **Reset to bundled defaults** to drop the override; the shipped definition takes over again. There's also a header button to **Reset all customizations** in bulk.
+- **Add your own detectors** with the **+ Add detector** button. The four signature types are:
+  - **Body contains** — case-sensitive substring of the response body (min 4 chars)
+  - **Title contains** — case-insensitive substring of the HTML `<title>` (min 3 chars)
+  - **Header keys** — any response header whose presence alone identifies the service
+  - **Favicon hashes** — Shodan-compatible signed-int32 MMH3 hashes (most stable; survives version bumps)
+
+You can declare any one or any combination. A detector whose only signature is a favicon hash is valid.
+
+### Re-scanning with tweaks
+
+On any past draft, **Re-scan** clones the targets and runs fresh; **Edit & re-scan** opens the New Scan form pre-filled with the old targets so you can add an exclusion (for that printer that hangs on probes, etc.) or change intensity before launching again.
+
+### Upgrading from older versions
+
+Discovery is brand-new in v2.0. Existing v1.x installs upgrade seamlessly — the new tables (`scans`, `scan_results`, `user_detectors`) are created on first boot of the v2.0 binary. No data migration steps, no scan history loss (there was none), no impact on your existing dashboards.
 
 ## Tips and Tricks
 

@@ -30,6 +30,18 @@ export function withCSRFHeader(headers: Record<string, string>, method?: string)
   return headers;
 }
 
+// Session-expired callback. fetchAPI fires this BEFORE throwing
+// SESSION_EXPIRED so the app can react globally (clear auth state,
+// toast, redirect to login) without every per-page try/catch having
+// to remember to special-case the magic error string. Registered
+// once in the auth store at module load.
+let sessionExpiredHandler: (() => void) | null = null;
+let sessionExpiredFiring = false; // re-entrancy guard
+
+export function setSessionExpiredHandler(fn: () => void) {
+  sessionExpiredHandler = fn;
+}
+
 // Helper to make API requests. Session auth is handled via HttpOnly cookies,
 // CSRF protection via the double-submit cookie pattern.
 async function fetchAPI(endpoint: string, options: RequestInit = {}) {
@@ -47,12 +59,37 @@ async function fetchAPI(endpoint: string, options: RequestInit = {}) {
 
   if (!response.ok) {
     if (response.status === 401) {
+      // Fire the registered global handler (clears auth state, toasts,
+      // redirects to login) at most once per cascade — many in-flight
+      // fetches can all 401 simultaneously when a session expires; we
+      // only want one toast + one navigation.
+      if (sessionExpiredHandler && !sessionExpiredFiring) {
+        sessionExpiredFiring = true;
+        try {
+          sessionExpiredHandler();
+        } finally {
+          // Reset on next tick so a future fresh-session 401 still fires.
+          setTimeout(() => { sessionExpiredFiring = false; }, 1000);
+        }
+      }
       throw new Error('SESSION_EXPIRED');
     }
     throw new Error(`API error: ${response.status} ${response.statusText}`);
   }
 
-  return response.json();
+  // 204 No Content — no body to parse.
+  if (response.status === 204) return null;
+  // Read the body as text first, then attempt JSON parse. Content-Type
+  // is unreliable in HOPS because some handlers write the status line
+  // before writeJSON sets the header, so Content-Type ends up sniffed
+  // as text/plain even though the body is JSON. Try-parse is safer.
+  const text = await response.text();
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
 }
 
 // Public API calls
@@ -109,11 +146,16 @@ export async function changePassword(oldPassword: string, newPassword: string): 
 
 // Admin API calls
 
-export async function updateConfig(config: Config): Promise<void> {
-  await fetchAPI('/config', {
+// updateConfig PUTs the config and returns any warnings the server
+// attached (e.g. "pre-update backup failed: ... — config saved anyway").
+// Callers should surface non-empty warnings to the user so silent
+// degradation of the safety-net is visible.
+export async function updateConfig(config: Config): Promise<{ warning?: string }> {
+  const resp = await fetchAPI('/config', {
     method: 'PUT',
     body: JSON.stringify(config),
   });
+  return resp ?? {};
 }
 
 export async function exportConfig(format: 'json' | 'yaml' = 'json', dashboardId?: string): Promise<Blob> {
@@ -387,4 +429,263 @@ export async function updateSetting(key: string, value: string): Promise<void> {
     method: 'PUT',
     body: JSON.stringify({ value }),
   });
+}
+
+// Network discovery — Phase 1.
+
+export type ScanState =
+  | 'pending' | 'running' | 'complete'
+  | 'cancelled' | 'failed' | 'promoted';
+export type ScanIntensity = 'passive' | 'light' | 'full';
+export type CurateState = 'pending' | 'selected' | 'ignored' | 'promoted';
+
+export interface DiscoveryScan {
+  id: string;
+  createdAt: string;
+  createdBy?: number;
+  cidr: string;
+  intensity: ScanIntensity;
+  state: ScanState;
+  progressTotal: number;
+  progressDone: number;
+  startedAt?: string;
+  finishedAt?: string;
+  errorMessage?: string;
+  label?: string;
+  internalDomain?: string;
+}
+
+// Category slugs match the backend categoryCatalogue in
+// backend/internal/discovery/categories.go. Keep in sync — server-side
+// validation rejects anything not in this set.
+export type DiscoveryCategory =
+  | 'network' | 'automation' | 'media' | 'downloads' | 'storage'
+  | 'surveillance' | 'monitoring' | 'virtualization' | 'photos'
+  | 'documents' | 'code' | 'auth' | 'notifications' | 'iot' | 'other';
+
+// CATEGORY_LIST mirrors the backend catalogue order + display name + icon.
+// Alphabetical by label so the dropdown is scan-able. Used by the curate
+// table's per-row category picker and the promote modal's group preview.
+export const CATEGORY_LIST: { slug: DiscoveryCategory; label: string; icon: string }[] = [
+  { slug: 'auth',           label: 'Authentication', icon: 'mdi:lock' },
+  { slug: 'code',           label: 'Code',           icon: 'mdi:source-branch' },
+  { slug: 'documents',      label: 'Documents',      icon: 'mdi:file-document' },
+  { slug: 'downloads',      label: 'Downloads',      icon: 'mdi:download' },
+  { slug: 'iot',            label: 'IoT',            icon: 'mdi:chip' },
+  { slug: 'media',          label: 'Media',          icon: 'mdi:play-circle' },
+  { slug: 'monitoring',     label: 'Monitoring',     icon: 'mdi:monitor-dashboard' },
+  { slug: 'network',        label: 'Network',        icon: 'mdi:lan' },
+  { slug: 'notifications',  label: 'Notifications',  icon: 'mdi:bell' },
+  { slug: 'other',          label: 'Other',          icon: 'mdi:application' },
+  { slug: 'photos',         label: 'Photos',         icon: 'mdi:image-multiple' },
+  { slug: 'automation',     label: 'Smart Home',     icon: 'mdi:home-automation' },
+  { slug: 'storage',        label: 'Storage',        icon: 'mdi:nas' },
+  { slug: 'surveillance',   label: 'Surveillance',   icon: 'mdi:cctv' },
+  { slug: 'virtualization', label: 'Virtualization', icon: 'mdi:server' },
+];
+
+export function categoryLabel(slug: string): string {
+  return CATEGORY_LIST.find((c) => c.slug === slug)?.label ?? 'Other';
+}
+export function categoryIcon(slug: string): string {
+  return CATEGORY_LIST.find((c) => c.slug === slug)?.icon ?? 'mdi:application';
+}
+
+export interface DiscoveryResult {
+  id: string;
+  scanId: string;
+  host: string;
+  hostname?: string;
+  port: number;
+  detectorId: string;
+  confidence: 'high' | 'medium' | 'low';
+  category: DiscoveryCategory;
+  suggestedName: string;
+  suggestedIcon?: string;
+  suggestedUrl: string;
+  suggestedDesc?: string;
+  rawFingerprint?: Record<string, unknown>;
+  curateState: CurateState;
+  curateOverrides?: Record<string, unknown>;
+  createdAt: string;
+}
+
+export async function listScans(): Promise<{ scans: DiscoveryScan[] }> {
+  return fetchAPI('/discovery/scans');
+}
+
+export async function createScan(input: {
+  cidr: string;
+  intensity?: ScanIntensity;
+  label?: string;
+  internalDomain?: string;
+}): Promise<DiscoveryScan> {
+  return fetchAPI('/discovery/scans', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export async function getScan(id: string, resultsSince?: string): Promise<{
+  scan: DiscoveryScan;
+  results: DiscoveryResult[];
+  recentHosts?: string[];
+  phase?: string;
+  warnings?: string[];
+}> {
+  // Pass resultsSince as a cursor so the server only returns rows
+  // newer than what we've already loaded. The first call passes
+  // nothing and gets the full set; subsequent polls during a running
+  // scan get only the delta.
+  const q = resultsSince ? `?resultsSince=${encodeURIComponent(resultsSince)}` : '';
+  return fetchAPI(`/discovery/scans/${encodeURIComponent(id)}${q}`);
+}
+
+export async function cancelScan(id: string): Promise<void> {
+  await fetchAPI(`/discovery/scans/${encodeURIComponent(id)}/cancel`, { method: 'POST' });
+}
+
+export async function deleteScan(id: string): Promise<void> {
+  await fetchAPI(`/discovery/scans/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+export async function updateScanResult(
+  scanId: string,
+  resultId: string,
+  patch: {
+    curateState?: CurateState;
+    overrides?: Record<string, unknown>;
+    category?: DiscoveryCategory;
+  }
+): Promise<void> {
+  await fetchAPI(
+    `/discovery/scans/${encodeURIComponent(scanId)}/results/${encodeURIComponent(resultId)}`,
+    { method: 'PATCH', body: JSON.stringify(patch) }
+  );
+}
+
+// PromoteTarget describes where promoted tiles should land. The admin
+// picks dashboard + tab; the server distributes tiles across groups by
+// their category (one group per unique category, find-or-create by
+// category display name). New-dashboard implies new-tab.
+export interface PromoteTarget {
+  dashboardId?: string;
+  newDashboard?: { name: string; path?: string };
+  tabId?: string;
+  newTab?: { name: string };
+}
+
+export async function promoteScan(
+  scanId: string,
+  target: PromoteTarget,
+  resultIds: string[]
+): Promise<{ promoted: number; dashboardPath?: string }> {
+  return fetchAPI(`/discovery/scans/${encodeURIComponent(scanId)}/promote`, {
+    method: 'POST',
+    body: JSON.stringify({ target, resultIds }),
+  });
+}
+
+export async function suggestDiscoveryCIDR(): Promise<{ cidr: string }> {
+  return fetchAPI('/discovery/suggest-cidr');
+}
+
+// ---- Phase 4: admin-defined detectors ----
+
+export interface DiscoveryDetector {
+  id: string;
+  name: string;
+  icon: string;
+  category: DiscoveryCategory;
+  description: string;
+  ports: number[];
+  paths: string[];
+  urlPath: string;
+  bodyContains: string[];
+  titleContains: string[];
+  headerKeys: string[];
+  // Shodan-style signed-int32 MurmurHash3 hashes of the favicon. Most
+  // stable signature type — survives version bumps where titles/body
+  // change. Matched after body/title/header signals.
+  faviconHashes: number[];
+  confidence: 'high' | 'medium';
+  enabled: boolean;
+  source: 'bundled' | 'user';
+  // True for bundled rows whose fields reflect a saved override (the
+  // admin customized this detector). UI shows a "modified" badge and
+  // a Reset button. Always false for `user` rows.
+  overridden?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface DiscoveryDetectorInput {
+  name: string;
+  icon?: string;
+  category?: DiscoveryCategory;
+  description?: string;
+  ports: number[];
+  paths?: string[];
+  urlPath?: string;
+  bodyContains?: string[];
+  titleContains?: string[];
+  headerKeys?: string[];
+  faviconHashes?: number[];
+  confidence?: 'high' | 'medium';
+  enabled?: boolean;
+}
+
+export async function listDetectors(): Promise<{ detectors: DiscoveryDetector[] }> {
+  return fetchAPI('/discovery/detectors');
+}
+
+export async function getDetector(id: string): Promise<DiscoveryDetector> {
+  return fetchAPI(`/discovery/detectors/${encodeURIComponent(id)}`);
+}
+
+export async function createDetector(input: DiscoveryDetectorInput): Promise<DiscoveryDetector> {
+  return fetchAPI('/discovery/detectors', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export async function updateDetector(
+  id: string,
+  input: DiscoveryDetectorInput
+): Promise<DiscoveryDetector> {
+  return fetchAPI(`/discovery/detectors/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
+}
+
+export async function deleteDetector(id: string): Promise<void> {
+  await fetchAPI(`/discovery/detectors/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+// resetAllOverrides removes every customization of a bundled detector,
+// restoring the shipped defaults on the next scan. Returns the number
+// of overrides removed. User-defined detectors are untouched.
+export async function resetAllOverrides(): Promise<{ resetCount: number }> {
+  return fetchAPI('/discovery/detectors/reset-bundled', { method: 'POST' });
+}
+
+export interface DetectionSummaryEntry {
+  detectorId: string;
+  count: number;
+  distinctHosts: number;
+  lastSeen: string;
+}
+
+// getDiagnostics returns the deduplicated list of HTTP services across
+// every past scan that no specific detector matched (promotion
+// candidates) plus a summary of how many results each detector has
+// produced across all scans (helps the admin see which detectors are
+// active even when nothing is unidentified).
+export async function getDiagnostics(): Promise<{
+  unidentified: DiscoveryResult[];
+  summary: DetectionSummaryEntry[];
+}> {
+  return fetchAPI('/discovery/diagnostics');
 }

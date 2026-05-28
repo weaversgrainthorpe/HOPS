@@ -5,6 +5,214 @@ All notable changes to HOPS (Home Operations Portal System) will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-05-28 — Network Discovery, GUI-managed detectors, diagnostics
+
+The largest release since 1.0. HOPS now actively discovers services on your
+LAN and lets you bulk-promote them into dashboard tiles. A full Phase-4
+detector framework with GUI-managed user detectors and bundled-detector
+overrides closes the long tail without code changes. The release also
+ships substantial reliability, observability, and accessibility
+improvements from a pre-release audit.
+
+The 2.0 major bump signals the scope of the change, not breaking
+compatibility — **upgrade from any v1.x release is automated**: drop in
+the new binary + restart. Schema migrations run on first boot, JSON
+config exports from any v1.x version still import cleanly, and existing
+SQLite backups can be restored at any time.
+
+### Added — Network Discovery
+
+- **Active LAN scan.** Admin-initiated scan (`/admin/discovery`)
+  with three intensity levels (passive / light / full). Targets accept
+  CIDRs (`10.10.0.0/24`), ranges (`10.10.0.1-50` or
+  `10.10.0.1-10.10.0.50`), single IPs (`10.10.0.5`), comma-separated
+  combinations, and per-target exclusions with `!` or `NOT`. The light
+  default
+  probes ~40 well-known homelab ports per host with a 15-second per-host
+  budget; full extends to ~60 ports for broader coverage. SSRF-safe
+  dialer enforced everywhere, with IP-range guards rejecting link-local,
+  multicast, and unspecified addresses.
+- **70 bundled HTTP fingerprint detectors** across 15 categories —
+  Pi-hole, Proxmox, Home Assistant, Plex, Jellyfin, every *arr,
+  Nginx Proxy Manager, Portainer, UniFi, OPNsense, pfSense, Frigate,
+  TrueNAS/QNAP/Synology, Vaultwarden, Immich, Audiobookshelf, Mealie,
+  Grafana, Prometheus, Alertmanager, Loki, Traefik, MinIO, Jenkins,
+  GitLab, n8n, Apache Guacamole, File Browser, Netdata, ViewPower
+  (UPS), pgAdmin / phpMyAdmin / Adminer, and more.
+- **Passive discovery sources.** ARP table sweep, mDNS / Bonjour
+  broadcast listener (catches HomeKit / AirPlay / Chromecast / Plex
+  announcement), DNS PTR reverse-lookup enrichment, opportunistic
+  AXFR (zone transfer attempt against the LAN resolver), UPnP/SSDP
+  multicast (smart TVs, Sonos, Roku, IGD routers), and SNMP v2c
+  (printers, managed switches, UPS units, BMCs).
+- **Forward DNS enumeration.** When you supply an "internal domain"
+  (e.g. `home.arpa`), HOPS queries a curated set of ~80 common
+  subdomains (`sonarr.<domain>`, `proxmox.<domain>`, …) against the
+  system resolver. Reverse-proxy-fronted services finally show up.
+  Each forward-enum hit follows up to 5 same-host redirects, runs the
+  bundled detectors against the final response, and the result wins
+  over a direct-IP match for the same service (proxy URLs are usually
+  the canonical dashboard tile).
+- **Target exclusions.** Targets accept `!` or `NOT ` prefixes to
+  exclude a CIDR, range, or single IP from a scan — e.g.
+  `10.10.0.0/24, !10.10.0.50`. The form computes effective host count
+  live and blocks submission when exclusions cover the whole include
+  set.
+- **Curate UI.** Reviewable draft per scan, per-result confidence and
+  category, inline name / URL / category editing, select-all-high-
+  confidence, bulk promote.
+- **Auto-grouping on promote.** Selected results distribute into
+  dashboard groups by category — Sonarr lands in "Downloads",
+  Pi-hole in "Network", and so on. New dashboards and tabs can be
+  created on the fly from the promote modal.
+- **Live phase indicator** and recent-hosts feed on the draft page so
+  the progress bar's non-linear pace ("0 / 254 for 8 seconds" while
+  passive runs, then a sudden jump) is intelligible.
+- **Edit & re-scan flow.** A draft's targets / intensity / domain can
+  be cloned into a fresh scan with one click, pre-filled in the New
+  Scan form so the admin can tweak (add an exclusion, change
+  intensity) before launching the next pass.
+- **Scan-level warnings** surface non-fatal passive-discovery failures
+  (ARP / mDNS / SSDP / forward-enum) instead of silently completing.
+
+> **Expectation-setting**: Discovery is a head-start, not a magic wand.
+> Success depends on network topology (switched vs Wi-Fi, VLAN
+> segmentation), what's blocking probes (firewalls, host-based AV,
+> services bound to localhost), and whether services respond to
+> unauthenticated requests. Some false positives and some missing
+> services are normal — every scan is a reviewable draft you curate
+> before promoting to tiles, and the diagnostics view turns "I see
+> something HOPS missed" into a new detector in two clicks. Coverage
+> grows release-over-release; Discovery is meant to bootstrap a
+> dashboard, not replace knowing your own LAN.
+
+### Added — Phase 4: GUI-managed user detectors
+
+- **`/admin/discovery/detectors`** — list every detector (bundled +
+  user), filter by source, sortable columns. Each user detector has
+  enable/disable toggle, edit, and delete. Bundled detectors have a
+  **Customize** action that creates an override.
+- **Override system.** Customizing a bundled detector saves an
+  override row that shadows the shipped definition on the next scan.
+  A "modified" badge surfaces overridden bundles; **Reset to bundled
+  defaults** removes the override. **Reset all customizations** in the
+  page header bulk-clears every override at once.
+- **Four-way match grammar.** Body substrings (case-sensitive), HTML
+  title substrings (case-insensitive), HTTP header keys, and favicon
+  MMH3 hashes (Shodan-compatible signed-int32). Any one match
+  category satisfies the "at least one signature" rule — a detector
+  declaring only a favicon hash is valid.
+- **Bootstrap-from-result.** Any unidentified HTTP service in a scan
+  (the generic `core/http-fallback` rows) and any unidentified row
+  in the **Diagnostics** view gets a **+ Create detector** button that
+  opens the detector form pre-filled with port + title + server
+  header + favicon hash. Two clicks turn "I see something I don't
+  recognise" into a working user detector.
+- **Auto-extending port set.** Adding a user detector that targets
+  port 8003 automatically gets 8003 probed on every host in the next
+  scan — no need to also edit a bundled allowlist.
+- **200-detector cap** (only counts `user/*` detectors; overrides are
+  unlimited).
+
+### Added — Diagnostics view
+
+- **`/admin/discovery/diagnostics`** surfaces every HTTP service from
+  past scans that no specific detector matched, deduplicated by
+  `(host, port)`. Each row shows the favicon thumbnail, host, port,
+  extracted title, server header, HTTP status, last-seen timestamp,
+  and the favicon MMH3 hash.
+- **Detection summary** above the unidentified table — count of
+  detections grouped by detector, distinct hosts, and last seen.
+  Useful for confirming "HOPS is finding what I expect" even when
+  the unidentified table is empty.
+
+### Added — Reliability / observability
+
+- **SESSION_EXPIRED global interceptor.** Any 401 fires a single
+  toast and redirects to login, instead of stranding the admin on a
+  protected page with a raw "SESSION_EXPIRED" error.
+- **Global panic-recover middleware.** Any panic in a handler logs
+  `method + path + traceback` at ERROR and emits a clean JSON 500.
+  Before this, a panic killed the goroutine silently.
+- **Route-walker smoke tests** added to the Go test suite.
+  `TestSmokeRoutesNoFiveHundred` hits every registered route as an
+  authenticated admin; `TestSmokeUnauthenticatedRoutesReject`
+  confirms protected routes 401 anonymously.
+- **Cursor-based discovery polling.** `GET /api/discovery/scans/{id}`
+  accepts a `resultsSince` cursor; the curate UI tracks the last
+  observed timestamp and only fetches deltas during a running scan.
+  Polling bandwidth drops ~95 % on large scans.
+- **Status-checker exponential backoff.** An entry that fails 3
+  consecutive HEAD checks backs off to 2× the interval, then 4×, 8×,
+  16×, 32× (capped). On a successful check, the backoff clears. Down
+  services stop hammering the network without forfeiting status
+  monitoring entirely.
+- **Async startup backup.** Server boot no longer blocks on the
+  pre-flight backup — it runs in a background goroutine. Faster
+  start on installs with large databases or slow disks.
+- **Clean shutdown.** Session-cleanup and rate-limiter goroutines now
+  exit gracefully on process stop instead of leaking past the DB
+  close.
+
+### Changed
+
+- **HTTP fallback detector** now iterates every open port (not just
+  80 / 443) and follows same-host redirects before deciding whether
+  a response is noise. Services whose root `/` returns a 302 to
+  `/dashboard` (Uptime Kuma, GitLab, …) now land in the unidentified
+  table with their actual content, not the redirect stub.
+- **Per-host probe budget** of 15× the per-request timeout (default
+  15 seconds) added to the active probe pipeline. A single slow host
+  can no longer drag scan completion out to minutes.
+- **Backup-failure surfacing.** `PUT /api/config` returns a
+  `warning` field when the pre-update backup fails, and the UI
+  toasts it. Silent failures of the rollback safety-net are
+  user-visible now.
+- **Discovery target range validator** now requires `end ≥ start` —
+  `10.0.0.50-10.0.0.10` is rejected at the API edge instead of
+  silently producing an empty target list.
+
+### Accessibility
+
+- Global search input gets an explicit `aria-label`.
+- Small badges (icon picker, background category counts) bumped from
+  0.7 rem → 0.75 rem to meet the 12 px minimum readability target.
+
+### Removed (internal)
+
+- `Store.MigrateLegacyPromotedScans()` — a one-time helper for
+  reopening pre-1.7.5 internal-development scans. Never present in
+  any tagged release; safe deletion.
+- `AsyncContent.svelte` component — declared but never imported.
+
+### Migration notes
+
+- **Upgrading from any v1.x → v2.0.0 is automated.** Schema
+  migrations run on first boot via `CREATE TABLE IF NOT EXISTS` +
+  idempotent `ALTER TABLE` helpers; no manual SQL or version-skip
+  restrictions.
+- **SQLite backups from any v1.x release are forward-compatible.**
+  Restoring an old backup into the v2.0 binary triggers a graceful
+  process exit (the running connection becomes stale against the
+  newly-restored file); systemd / docker-compose auto-restart picks
+  it back up and re-runs migrations on the restored DB.
+- **JSON config exports from any v1.x version still import cleanly.**
+  Exports never carried a HOPS version stamp; the importer parses
+  whatever's there and merges with existing dashboards by path.
+- Network Discovery data is naturally absent from old exports — run a
+  fresh scan after import to populate it.
+
+### Documentation
+
+- README, USER_GUIDE, QUICKSTART, DEPLOY all updated for Network
+  Discovery, Phase 4 detectors, Diagnostics view, target exclusions,
+  and the v2.0 release framing.
+- ROADMAP moves Network Discovery from Tier 4 wishlist to **Done**.
+  Tier 4 retains widget framework and service-integration items.
+- Landing page at `docs/index.html` updated with v2.0 capabilities.
+- A new `Local launcher agent + per-device tiles` Tier 4 entry
+  captures the post-2.0 product direction we discussed.
+
 ## [1.7.0] - 2026-05-25 — Note tiles, global search, keyboard nav, multi-column groups
 
 Four roadmap Tier-1 features land together. All four are additive — existing

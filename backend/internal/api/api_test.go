@@ -13,6 +13,8 @@ import (
 	_ "modernc.org/sqlite"
 	"github.com/weaversgrainthorpe/HOPS/internal/auth"
 	"github.com/weaversgrainthorpe/HOPS/internal/config"
+	"github.com/weaversgrainthorpe/HOPS/internal/database"
+	"github.com/weaversgrainthorpe/HOPS/internal/discovery"
 	"github.com/weaversgrainthorpe/HOPS/internal/settings"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -24,6 +26,16 @@ func setupTestRouter(t *testing.T) (http.Handler, *sql.DB) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { db.Close() })
+
+	// Pin to a single connection. With an in-memory SQLite the
+	// connection pool can hand a goroutine a fresh empty DB because
+	// each new `:memory:` connection opens its own database. The
+	// discovery orchestrator fires a background goroutine on Submit
+	// that hits a different pooled connection — without this cap it
+	// sees "no such table: scans" intermittently. Production uses a
+	// file path so the pool is safe; tests are the only place this
+	// matters.
+	db.SetMaxOpenConns(1)
 
 	// Enable foreign keys
 	db.Exec("PRAGMA foreign_keys=ON")
@@ -85,9 +97,30 @@ func setupTestRouter(t *testing.T) (http.Handler, *sql.DB) {
 		}
 	}
 
-	// Create test user
+	// Run the production migrations on top of the hand-rolled minimal
+	// schema. CREATE TABLE IF NOT EXISTS is idempotent so this is
+	// safe; the migrations add discovery tables (scans, scan_results,
+	// user_detectors) that the hand-rolled list above doesn't cover.
+	// Without this, smoke tests against discovery routes would 500
+	// because the tables don't exist.
+	//
+	// Migrations also seed a default `admin` user with
+	// must_change_password=1 — we override that here so test logins
+	// don't have to go through the password-change flow first.
+	if err := database.RunMigrations(db); err != nil {
+		t.Fatalf("database.RunMigrations: %v", err)
+	}
+
+	// Replace the migration-seeded admin's bcrypt hash with one we
+	// know the password for ("admin") and clear must_change_password
+	// so login succeeds without the password-change ceremony.
 	hash, _ := bcrypt.GenerateFromPassword([]byte("admin"), bcrypt.MinCost)
-	db.Exec("INSERT INTO users (username, password_hash) VALUES (?, ?)", "admin", string(hash))
+	if _, err := db.Exec(
+		"UPDATE users SET password_hash = ?, must_change_password = 0 WHERE username = ?",
+		string(hash), "admin",
+	); err != nil {
+		t.Fatalf("update test admin: %v", err)
+	}
 
 	// Create default config
 	db.Exec(`INSERT INTO config (id, data) VALUES (1, '{"dashboards":[],"theme":{"mode":"dark"}}')`)
@@ -103,7 +136,9 @@ func setupTestRouter(t *testing.T) (http.Handler, *sql.DB) {
 	}
 
 	authService := auth.NewService(db)
-	router := NewRouter(db, authService, cfg, settingsSvc, time.Now())
+	discoveryStore := discovery.NewStore(db)
+	discoveryOrch := discovery.NewOrchestrator(discoveryStore, settingsSvc)
+	_, router := NewRouter(db, authService, cfg, settingsSvc, time.Now(), discoveryStore, discoveryOrch)
 
 	return router, db
 }

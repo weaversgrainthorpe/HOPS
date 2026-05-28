@@ -4,9 +4,9 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>HOPS — Home Operations Portal System</title>
-  <meta name="description" content="A modern, self-hosted homepage dashboard for the homelab community. GUI-first. No YAML. Single binary or Docker. Free and open source." />
+  <meta name="description" content="A modern, self-hosted homepage dashboard for the homelab community. GUI-first, single binary, network discovery built in. No YAML, no complexity. Free and open source." />
   <meta property="og:title" content="HOPS — Home Operations Portal System" />
-  <meta property="og:description" content="A modern, self-hosted homepage dashboard for the homelab community. GUI-first. No YAML. Single binary or Docker. Free and open source." />
+  <meta property="og:description" content="A modern, self-hosted homepage dashboard for the homelab community. GUI-first, single binary, network discovery built in. No YAML, no complexity. Free and open source." />
   <meta property="og:image" content="https://weaversgrainthorpe.github.io/HOPS/screenshots/dashboard-hero.png" />
   <meta property="og:type" content="website" />
   <meta name="theme-color" content="#0f172a" />
@@ -187,7 +187,7 @@
 
   <header>
     <div class="container nav">
-      <div class="brand">HOPS <span class="badge">v1.7.0</span></div>
+      <div class="brand">HOPS <span class="badge">v2.0.0</span></div>
       <nav class="nav-links">
         <a href="#features">Features</a>
         <a href="#screenshots">Screenshots</a>
@@ -201,8 +201,8 @@
     <section class="hero">
       <div class="container">
         <div class="eyebrow">HOPS — Home Operations Portal System</div>
-        <h1>A homelab dashboard without the YAML.</h1>
-        <p class="lede">A self-hosted homepage dashboard for your homelab. Drag-and-drop tiles, multiple dashboards, QR codes for phones — all configured through the UI, never through a config file.</p>
+        <h1>A homelab dashboard without the complexity.</h1>
+        <p class="lede">A self-hosted homepage dashboard for your homelab. Drag-and-drop tiles, multiple dashboards, QR codes for phones, and a network scanner that bulk-adds the services you already run — all configured through the UI, never through a config file.</p>
         <div class="cta-row">
           <a class="btn btn-primary" href="https://github.com/weaversgrainthorpe/HOPS/blob/main/QUICKSTART.md">Quick Start →</a>
           <a class="btn btn-ghost" href="https://github.com/weaversgrainthorpe/HOPS">View on GitHub</a>
@@ -219,7 +219,7 @@
     <section id="features">
       <div class="container">
         <h2>Why HOPS?</h2>
-        <p class="section-lede">There are already plenty of homelab dashboards out there. HOPS exists because none of them quite matched what I wanted.</p>
+        <p class="section-lede">There are already plenty of homelab dashboards out there. HOPS exists because none of them quite matched what I wanted: full GUI configuration, a single binary, multiple dashboards, and (as of v2.0) a network scanner that gets a new install useful in minutes instead of an evening.</p>
         <div class="why-grid">
           <div class="why-card">
             <h3>100% GUI configuration</h3>
@@ -252,6 +252,10 @@
           <div class="why-card">
             <h3>Flexible layouts</h3>
             <p>Mix full-, half- and third-width groups in any tab for true multi-column dashboards. Add note tiles for headings or scratchpad text alongside your links.</p>
+          </div>
+          <div class="why-card">
+            <h3>Network discovery <span class="badge" style="font-size:0.65rem">v2.0</span></h3>
+            <p>Scan your LAN — by CIDR, IP range, single IP, or any combination — and HOPS identifies common homelab services (Pi-hole, Proxmox, Plex, every *arr, NAS GUIs, and 60+ more), passive sources (mDNS, UPnP, SNMP) included. Review the draft, bulk-promote tiles auto-grouped by category. Bundled detectors are customizable and you can add your own through the GUI. Discovery is a head-start, not a magic wand — results depend on your network and firewalls, every scan is a reviewable draft.</p>
           </div>
         </div>
       </div>

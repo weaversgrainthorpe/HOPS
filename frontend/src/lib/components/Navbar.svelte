@@ -141,7 +141,7 @@
       {#if $editMode && isDashboardPage}
         <button onclick={() => showExport = true} class="export-btn" title="Export Dashboard" aria-label="Export Dashboard">
           <span class="icon-wrapper">
-            <Icon icon="mdi:download" width="32" height="32" />
+            <Icon icon="mdi:tray-arrow-up" width="32" height="32" />
           </span>
         </button>
       {/if}
