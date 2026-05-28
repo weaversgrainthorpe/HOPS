@@ -50,6 +50,25 @@ nicer for daily use without changing what it is.
 
 A week or two each. Higher value but more state to wrangle.
 
+- **Discovery follow-ons.** v2.0 shipped the framework; these extend its
+  reach without changing what it is.
+  - **Regex signatures.** Today's body / title / header matches are
+    literal substrings. Adding a regex variant (with a sane safety cap
+    on backtracking) closes the gap for services whose response text
+    drifts version-to-version.
+  - **TLS certificate subject as a signature type.** HOPS already
+    captures leaf-cert CN + SANs on every HTTPS probe (and uses them
+    as a name hint). Promoting them to a first-class signature
+    category is the natural next signal — especially for self-signed
+    homelab services whose response bodies are anonymous.
+  - **GUI for the bundled favicon-hash corpus.** The seed table in
+    `backend/internal/discovery/favicon_table.go` is empty by design
+    (a public Shodan corpus is too noisy for default-on). A "manage
+    bundled favicon hashes" admin page would let users opt into
+    curated subsets without rebuilding.
+  - **Bulk favicon-hash import.** Paste-a-list / upload-a-CSV affordance
+    so a Shodan-style corpus can be onboarded into a single user
+    detector without 200 form fills.
 - **Multi-select and bulk operations.** Checkbox-select multiple tiles to
   delete, move between groups, or edit common properties in one go. Scales
   with how many tiles you maintain.
