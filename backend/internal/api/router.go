@@ -2,11 +2,13 @@ package api
 
 import (
 	"database/sql"
+	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -16,6 +18,7 @@ import (
 	"github.com/weaversgrainthorpe/HOPS/internal/auth"
 	"github.com/weaversgrainthorpe/HOPS/internal/config"
 	"github.com/weaversgrainthorpe/HOPS/internal/database"
+	"github.com/weaversgrainthorpe/HOPS/internal/discovery"
 	"github.com/weaversgrainthorpe/HOPS/internal/settings"
 )
 
@@ -29,8 +32,42 @@ type Router struct {
 	rateLimiter    *RateLimiter
 	backupManager  *database.BackupManager
 	startTime      time.Time
+	discoveryStore *discovery.Store
+	discoveryOrch  *discovery.Orchestrator
+	// shutdownReq is closed by handlers that want to trigger a graceful
+	// server restart (most notably backup-restore — restoring a SQLite
+	// file under an open connection leaves the running process with a
+	// stale view). main.go selects on it alongside SIGTERM.
+	shutdownReq    chan struct{}
 	mu             sync.RWMutex // guards trustedProxies (rebuilt on settings change requires restart, but the slice itself is accessed concurrently)
 	trustedProxies []*net.IPNet // parsed at construction from settings.proxy.trusted_cidrs
+}
+
+// RequestShutdown is the API-side handle for the shutdown channel.
+// Idempotent — calling it twice is harmless. Used after operations
+// that leave the running process with a stale DB connection.
+func (r *Router) RequestShutdown() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	select {
+	case <-r.shutdownReq:
+		// already closed
+	default:
+		close(r.shutdownReq)
+	}
+}
+
+// ShutdownRequested returns the channel main.go selects on.
+func (r *Router) ShutdownRequested() <-chan struct{} { return r.shutdownReq }
+
+// Stop tears down router-owned background goroutines. Currently just
+// the rate-limiter's cleanup loop; future singletons live here too.
+// Defer-friendly: callers wire `defer router.Stop()` in main alongside
+// the other component teardowns.
+func (r *Router) Stop() {
+	if r.rateLimiter != nil {
+		r.rateLimiter.Stop()
+	}
 }
 
 // RateLimiter provides simple rate limiting for login attempts
@@ -135,7 +172,7 @@ func (rl *RateLimiter) Allow(ip string) bool {
 // admin-tunable knobs (login rate limit, trusted proxies, etc.) come from
 // the settings service, not the static config — those are now configurable
 // via the GUI in /api/settings.
-func NewRouter(db *sql.DB, authService *auth.Service, cfg *config.Config, settingsSvc *settings.Service, startTime time.Time) http.Handler {
+func NewRouter(db *sql.DB, authService *auth.Service, cfg *config.Config, settingsSvc *settings.Service, startTime time.Time, discoveryStore *discovery.Store, discoveryOrch *discovery.Orchestrator) (*Router, http.Handler) {
 	// Login rate limit comes from settings (default 20/min, validated by the
 	// settings service so it's always sane here).
 	rateLimit := settingsSvc.GetInt(settings.KeyAuthLoginRateLimitPerMin)
@@ -156,6 +193,9 @@ func NewRouter(db *sql.DB, authService *auth.Service, cfg *config.Config, settin
 		rateLimiter:    NewRateLimiter(rateLimit, time.Minute),
 		backupManager:  backupManager,
 		startTime:      startTime,
+		discoveryStore: discoveryStore,
+		discoveryOrch:  discoveryOrch,
+		shutdownReq:    make(chan struct{}),
 		trustedProxies: parseTrustedProxyCIDRs(settingsSvc.GetStringList(settings.KeyProxyTrustedCIDRs)),
 	}
 
@@ -167,7 +207,7 @@ func NewRouter(db *sql.DB, authService *auth.Service, cfg *config.Config, settin
 	})
 
 	r.setupRoutes()
-	return r.securityHeadersMiddleware(r.corsMiddleware(r.loggingMiddleware(r.mux)))
+	return r, r.securityHeadersMiddleware(r.corsMiddleware(r.recoverMiddleware(r.loggingMiddleware(r.mux))))
 }
 
 // parseTrustedProxyCIDRs converts validated CIDR strings into IPNets. The
@@ -216,6 +256,15 @@ func (r *Router) setupRoutes() {
 	// definition + current value; PUT /api/settings/{key} updates one.
 	r.mux.HandleFunc("/api/settings", r.protected(r.handleSettingsList))
 	r.mux.HandleFunc("/api/settings/", r.protected(r.handleSettingUpdate))
+
+	// Network discovery routes (admin-only). The collection handler
+	// dispatches by method; the item handler parses /{id}/...
+	r.mux.HandleFunc("/api/discovery/scans", r.protected(r.handleDiscoveryScansCollection))
+	r.mux.HandleFunc("/api/discovery/scans/", r.protected(r.handleDiscoveryScansItem))
+	r.mux.HandleFunc("/api/discovery/detectors", r.protected(r.handleDiscoveryDetectorsCollection))
+	r.mux.HandleFunc("/api/discovery/detectors/", r.protected(r.handleDiscoveryDetectorsItem))
+	r.mux.HandleFunc("/api/discovery/diagnostics", r.protected(r.handleDiscoveryDiagnostics))
+	r.mux.HandleFunc("/api/discovery/suggest-cidr", r.protected(r.handleSuggestCIDR))
 
 	// Icon management routes
 	r.mux.HandleFunc("/api/icon-categories", r.handleGetIconCategories)
@@ -374,6 +423,42 @@ type statusWriter struct {
 func (sw *statusWriter) WriteHeader(code int) {
 	sw.status = code
 	sw.ResponseWriter.WriteHeader(code)
+}
+
+// recoverMiddleware catches panics that escape handlers and logs them
+// with method + path + traceback before emitting a generic 500. Without
+// this, a panic in any handler kills the goroutine, leaves the client
+// hanging, and produces zero log output — the worst kind of "what
+// happened?" production bug. The traceback is captured via
+// runtime/debug.Stack() and logged at ERROR; the client never sees it.
+//
+// Ordering matters: this runs BEFORE the logging middleware so the
+// 500 response still gets logged with its proper status code by the
+// outer logger.
+func (r *Router) recoverMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		defer func() {
+			if rec := recover(); rec != nil {
+				slog.Error("panic in handler",
+					"component", "http",
+					"method", req.Method,
+					"path", req.URL.Path,
+					"panic", fmt.Sprintf("%v", rec),
+					"stack", string(debug.Stack()),
+				)
+				// Use writeJSONError if response not started; otherwise
+				// the client already has partial bytes and we just log.
+				// http.ResponseWriter has no "headersSent" check, so
+				// attempt the write and ignore "already wrote" failures
+				// (the existing logging middleware records the final
+				// status either way).
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusInternalServerError)
+				_, _ = w.Write([]byte(`{"error":"Internal server error","status":500}`))
+			}
+		}()
+		next.ServeHTTP(w, req)
+	})
 }
 
 // loggingMiddleware logs all HTTP requests

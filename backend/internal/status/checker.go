@@ -88,6 +88,13 @@ type Checker struct {
 	// re-create one with the latest interval. Buffered so a settings change
 	// during a check isn't lost.
 	resetTicker chan struct{}
+
+	// backoff tracks consecutive-failure counts per entry so a
+	// repeatedly-down service backs off exponentially instead of
+	// hammering its endpoint every interval forever. Cleared on
+	// success.
+	backoffMu sync.Mutex
+	backoff   map[string]*entryBackoff
 }
 
 // NewChecker creates a new status checker driven by the settings service.
@@ -97,6 +104,7 @@ func NewChecker(db *sql.DB, settingsSvc *settings.Service) *Checker {
 		settings:    settingsSvc,
 		stopChan:    make(chan struct{}),
 		resetTicker: make(chan struct{}, 1),
+		backoff:     make(map[string]*entryBackoff),
 	}
 	c.client = c.buildClient()
 
@@ -262,6 +270,19 @@ type statusCheckResult struct {
 	entryID      string
 	status       string
 	responseTime int64
+	// skipped is true when the entry was inside its backoff window
+	// and the check was deliberately not performed. The previous
+	// stored status (if any) stays in scan_cache; the saver skips it.
+	skipped bool
+}
+
+// entryBackoff tracks how many consecutive failures an entry has had
+// and when it's eligible to be re-probed. Exponential backoff caps at
+// 32× the base interval so a definitely-down service eventually only
+// gets hit a couple of times an hour instead of every interval.
+type entryBackoff struct {
+	consecutiveFailures int
+	skipUntil           time.Time
 }
 
 func (c *Checker) checkAllEntries() {
@@ -280,14 +301,23 @@ func (c *Checker) checkAllEntries() {
 	sem := make(chan struct{}, 5)
 	var wg sync.WaitGroup
 
+	now := time.Now()
 	for i, entry := range entries {
+		// Honour the per-entry backoff window — if a previous check
+		// failed enough times in a row, we wait before retrying.
+		if c.shouldSkip(entry.ID, now) {
+			results[i] = statusCheckResult{entryID: entry.ID, skipped: true}
+			continue
+		}
 		wg.Add(1)
 		go func(idx int, e Entry) {
 			defer wg.Done()
 			sem <- struct{}{}        // acquire
 			defer func() { <-sem }() // release
 
-			results[idx] = c.checkEntry(e)
+			res := c.checkEntry(e)
+			c.recordOutcome(e.ID, res.status, now)
+			results[idx] = res
 		}(i, entry)
 	}
 
@@ -295,6 +325,50 @@ func (c *Checker) checkAllEntries() {
 
 	// Batch write all results in a single transaction to avoid contention
 	c.saveResults(results)
+}
+
+// shouldSkip returns true if the entry's backoff window hasn't
+// expired. Called before each check pass; failures that are still
+// within their cooldown are skipped without making an HTTP request.
+func (c *Checker) shouldSkip(entryID string, now time.Time) bool {
+	c.backoffMu.Lock()
+	defer c.backoffMu.Unlock()
+	b := c.backoff[entryID]
+	if b == nil {
+		return false
+	}
+	return now.Before(b.skipUntil)
+}
+
+// recordOutcome updates the per-entry backoff state after a check.
+// Success clears the state. Failure (down / error) extends the cooldown
+// using exponential backoff: 0, 1×, 2×, 4×, 8×, 16×, 32× the current
+// check interval. Capped at 32× to avoid waits longer than ~3 hours
+// at the default 5-minute interval.
+func (c *Checker) recordOutcome(entryID, status string, now time.Time) {
+	c.backoffMu.Lock()
+	defer c.backoffMu.Unlock()
+	if status == "up" {
+		// Recovered — drop any cooldown state.
+		delete(c.backoff, entryID)
+		return
+	}
+	b := c.backoff[entryID]
+	if b == nil {
+		b = &entryBackoff{}
+		c.backoff[entryID] = b
+	}
+	b.consecutiveFailures++
+	// Exponent grows with failures, capped at 5 → 32×.
+	exp := b.consecutiveFailures - 1
+	if exp < 0 {
+		exp = 0
+	}
+	if exp > 5 {
+		exp = 5
+	}
+	mult := 1 << exp
+	b.skipUntil = now.Add(time.Duration(mult) * c.checkInterval())
 }
 
 func (c *Checker) checkEntry(entry Entry) statusCheckResult {
@@ -358,6 +432,12 @@ func (c *Checker) saveResults(results []statusCheckResult) {
 	defer stmt.Close()
 
 	for _, r := range results {
+		// Backoff-skipped entries: leave the stale row in place. The
+		// dashboard keeps showing the last known status until the
+		// cooldown ends and a fresh check runs.
+		if r.skipped {
+			continue
+		}
 		if _, err := stmt.Exec(r.entryID, r.status, r.responseTime); err != nil {
 			slog.Error("failed to update status cache", "component", "status", "entry_id", r.entryID, "error", err)
 		}

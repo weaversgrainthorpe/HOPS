@@ -70,6 +70,8 @@ const (
 	KeyHTTPReadTimeoutSeconds       = "http.read_timeout_seconds"
 	KeyHTTPWriteTimeoutSeconds      = "http.write_timeout_seconds"
 	KeyHTTPIdleTimeoutSeconds       = "http.idle_timeout_seconds"
+	KeyDiscoveryMaxParallelProbes   = "discovery.max_parallel_probes"
+	KeyDiscoveryPerHostTimeoutSecs  = "discovery.per_host_timeout_seconds"
 )
 
 // Definitions is the authoritative list of every setting HOPS exposes.
@@ -142,6 +144,16 @@ var Definitions = []Definition{
 		Key: KeyHTTPIdleTimeoutSeconds, Type: "duration_seconds", Default: "120", RestartRequired: true,
 		Description: "Server timeout for keep-alive idle connections.",
 		Min:         1, Max: 3600,
+	},
+	{
+		Key: KeyDiscoveryMaxParallelProbes, Type: "int", Default: "128",
+		Description: "Maximum concurrent hosts in flight during a discovery scan. Higher values finish a /24 faster but spike CPU and network use. 64–256 is sensible for homelab LANs.",
+		Min:         1, Max: 1024,
+	},
+	{
+		Key: KeyDiscoveryPerHostTimeoutSecs, Type: "duration_seconds", Default: "1",
+		Description: "Per-port TCP/HTTP timeout. 1s is enough on LANs (a port that's going to answer answers in milliseconds). Bump to 2–3s on slow or congested networks where you're seeing missed services.",
+		Min:         1, Max: 60,
 	},
 }
 

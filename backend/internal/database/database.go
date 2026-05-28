@@ -68,6 +68,12 @@ func Initialize(dbPath string) (*sql.DB, error) {
 	return db, nil
 }
 
+// RunMigrations is the exported entry point so test scaffolding can
+// initialise a test database against the same schema production uses,
+// instead of hand-rolling a partial CREATE TABLE list that drifts as
+// new tables are added.
+func RunMigrations(db *sql.DB) error { return runMigrations(db) }
+
 // runMigrations executes database migrations
 func runMigrations(db *sql.DB) error {
 	migrations := []string{
@@ -137,11 +143,82 @@ func runMigrations(db *sql.DB) error {
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
 
+		// Network discovery — admin-initiated LAN scans for homelab apps.
+		// A scan produces a draft (rows in scan_results); the admin curates
+		// the draft and promotes selections to real dashboard tiles. Drafts
+		// persist between sessions; deleting a scan cascades to its results.
+		`CREATE TABLE IF NOT EXISTS scans (
+			id              TEXT PRIMARY KEY,
+			created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			created_by      INTEGER,
+			cidr            TEXT NOT NULL,
+			intensity       TEXT NOT NULL,
+			state           TEXT NOT NULL,
+			progress_total  INTEGER NOT NULL DEFAULT 0,
+			progress_done   INTEGER NOT NULL DEFAULT 0,
+			started_at      DATETIME,
+			finished_at     DATETIME,
+			error_message   TEXT NOT NULL DEFAULT '',
+			label           TEXT NOT NULL DEFAULT '',
+			internal_domain TEXT NOT NULL DEFAULT '',
+			FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+		)`,
+
+		`CREATE TABLE IF NOT EXISTS scan_results (
+			id               TEXT PRIMARY KEY,
+			scan_id          TEXT NOT NULL,
+			host             TEXT NOT NULL,
+			hostname         TEXT NOT NULL DEFAULT '',
+			port             INTEGER NOT NULL,
+			detector_id      TEXT NOT NULL,
+			confidence       TEXT NOT NULL,
+			category         TEXT NOT NULL DEFAULT 'other',
+			suggested_name   TEXT NOT NULL,
+			suggested_icon   TEXT NOT NULL DEFAULT '',
+			suggested_url    TEXT NOT NULL,
+			suggested_desc   TEXT NOT NULL DEFAULT '',
+			raw_fingerprint  TEXT NOT NULL DEFAULT '{}',
+			curate_state     TEXT NOT NULL DEFAULT 'pending',
+			curate_overrides TEXT NOT NULL DEFAULT '{}',
+			created_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (scan_id) REFERENCES scans(id) ON DELETE CASCADE
+		)`,
+
+		// Phase 4: admin-defined detectors. Same matching grammar as the
+		// bundled httpFingerprintDetector. Stored with JSON-encoded array
+		// columns (ports / paths / signatures) because the admin never
+		// edits this table directly — the GUI form translates between
+		// structured fields and the JSON encoding.
+		`CREATE TABLE IF NOT EXISTS user_detectors (
+			id              TEXT PRIMARY KEY,
+			name            TEXT NOT NULL,
+			icon            TEXT NOT NULL DEFAULT '',
+			category        TEXT NOT NULL DEFAULT 'other',
+			description     TEXT NOT NULL DEFAULT '',
+			ports           TEXT NOT NULL DEFAULT '[]',
+			paths           TEXT NOT NULL DEFAULT '[]',
+			url_path        TEXT NOT NULL DEFAULT '',
+			body_contains   TEXT NOT NULL DEFAULT '[]',
+			title_contains  TEXT NOT NULL DEFAULT '[]',
+			header_keys     TEXT NOT NULL DEFAULT '[]',
+			favicon_hashes  TEXT NOT NULL DEFAULT '[]',
+			confidence      TEXT NOT NULL DEFAULT 'medium',
+			enabled         INTEGER NOT NULL DEFAULT 1,
+			created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			created_by      INTEGER,
+			FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+		)`,
+
 		// Indexes for faster lookups
 		`CREATE INDEX IF NOT EXISTS idx_icons_category ON icons(category_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_icons_preset ON icons(is_preset)`,
 		`CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at)`,
 		`CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_scans_created_at ON scans(created_at)`,
+		`CREATE INDEX IF NOT EXISTS idx_scans_state ON scans(state)`,
+		`CREATE INDEX IF NOT EXISTS idx_scan_results_scan_id ON scan_results(scan_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_user_detectors_enabled ON user_detectors(enabled)`,
 	}
 
 	for _, migration := range migrations {
@@ -150,9 +227,27 @@ func runMigrations(db *sql.DB) error {
 		}
 	}
 
+	// Additive column migrations for user_detectors that landed after
+	// the initial schema. addColumnIfMissing is idempotent: a no-op on
+	// fresh installs (CREATE TABLE could have declared the column,
+	// but we keep the migration here so older installs upgrade).
+	if err := addColumnIfMissing(db, "user_detectors", "favicon_hashes", "TEXT NOT NULL DEFAULT '[]'"); err != nil {
+		return fmt.Errorf("failed to add user_detectors.favicon_hashes column: %w", err)
+	}
+
 	// Add must_change_password column to existing users tables (idempotent upgrade)
 	if err := addColumnIfMissing(db, "users", "must_change_password", "INTEGER NOT NULL DEFAULT 0"); err != nil {
 		return fmt.Errorf("failed to add must_change_password column: %w", err)
+	}
+
+	// Discovery feature additive columns. Each is a fresh-install no-op
+	// (CREATE TABLE already declares it) and an upgrade-only ALTER for
+	// existing databases.
+	if err := addColumnIfMissing(db, "scan_results", "category", "TEXT NOT NULL DEFAULT 'other'"); err != nil {
+		return fmt.Errorf("failed to add scan_results.category column: %w", err)
+	}
+	if err := addColumnIfMissing(db, "scans", "internal_domain", "TEXT NOT NULL DEFAULT ''"); err != nil {
+		return fmt.Errorf("failed to add scans.internal_domain column: %w", err)
 	}
 
 	// Create default admin user if none exists

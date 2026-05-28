@@ -131,6 +131,14 @@
           </Button>
           <Button
             variant="secondary"
+            icon="mdi:radar"
+            onclick={() => goto('/admin/discovery')}
+            disabled={$isBackendOffline}
+          >
+            Discovery
+          </Button>
+          <Button
+            variant="secondary"
             icon="mdi:backup-restore"
             onclick={() => showBackupModal = true}
             disabled={$isBackendOffline}

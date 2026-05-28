@@ -61,9 +61,12 @@
     )
   );
 
-  // Update editedEntry when entry prop changes
+  // Update editedEntry when entry prop changes. Normalise `type` to
+  // 'link' when the incoming entry has no value, so the Tile type
+  // dropdown's bind:value matches a real <option> (configs from
+  // pre-v1.7.0 don't carry a `type` field).
   $effect(() => {
-    editedEntry = { ...entry };
+    editedEntry = { ...entry, type: entry.type ?? 'link' };
     iconSearch = entry.icon || '';
   });
 
@@ -225,7 +228,7 @@
         </select>
       </div>
 
-      <div class="form-group">
+      <div class="form-group full-width">
         <label for="name">Name *</label>
         <input
           id="name"
@@ -236,7 +239,7 @@
         />
       </div>
 
-      <div class="form-group">
+      <div class="form-group full-width">
         <label for="description">{isNote ? 'Body text' : 'Subtitle/Description'}</label>
         {#if isNote}
           <textarea
@@ -256,7 +259,7 @@
       </div>
 
       {#if !isNote}
-        <div class="form-group">
+        <div class="form-group full-width">
           <label for="url">URL *</label>
           <input
             id="url"
@@ -269,7 +272,7 @@
       {/if}
 
       {#if !isNote}
-      <div class="form-group">
+      <div class="form-group full-width">
         <label for="icon">Icon</label>
 
         {#if editedEntry.iconUrl}
@@ -497,9 +500,10 @@
     gap: 0.5rem;
   }
 
-  .form-group:nth-child(1),
-  .form-group:nth-child(3),
-  .form-group:nth-child(4) {
+  /* Authoritative full-width marker: any form-group with this class spans
+     the whole row. Replaces the old positional nth-child trick which
+     silently broke whenever a field was added or removed. */
+  .form-group.full-width {
     grid-column: 1 / -1;
   }
 
@@ -600,12 +604,6 @@
   @media (max-width: 640px) {
     .form-grid {
       grid-template-columns: 1fr;
-    }
-
-    .form-group:nth-child(1),
-    .form-group:nth-child(3),
-    .form-group:nth-child(4) {
-      grid-column: 1;
     }
 
     .modal-actions {

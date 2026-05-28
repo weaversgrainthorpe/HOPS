@@ -1343,7 +1343,7 @@
 
   .category-tab .count {
     opacity: 0.7;
-    font-size: 0.7rem;
+    font-size: 0.75rem;
   }
 
   .add-category-btn {

@@ -181,8 +181,15 @@ func (s *Service) CleanupExpiredSessions() error {
 }
 
 // StartCleanupRoutine starts a background goroutine that periodically cleans up expired sessions
-func (s *Service) StartCleanupRoutine(interval time.Duration, stop <-chan struct{}) {
+// StartCleanupRoutine launches the session-expiry sweeper and returns
+// a wait function the caller MUST invoke after closing `stop` and
+// before closing the database. Without that wait, a cleanup tick
+// in-flight when the process exits would issue a DELETE against an
+// already-closed db.
+func (s *Service) StartCleanupRoutine(interval time.Duration, stop <-chan struct{}) (wait func()) {
+	done := make(chan struct{})
 	go func() {
+		defer close(done)
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 
@@ -203,4 +210,5 @@ func (s *Service) StartCleanupRoutine(interval time.Duration, stop <-chan struct
 			}
 		}
 	}()
+	return func() { <-done }
 }

@@ -46,10 +46,16 @@ export async function loadConfig() {
 // Update configuration (admin only)
 export async function updateConfig(newConfig: Config, showToast = true) {
   try {
-    await apiUpdateConfig(newConfig);
+    const resp = await apiUpdateConfig(newConfig);
     config.set(newConfig);
     if (showToast) {
       toast.success('Changes saved');
+    }
+    // Server may attach a warning when the pre-update backup failed
+    // but the config was saved anyway. Surface it so the admin knows
+    // the rollback safety-net didn't fire this time.
+    if (resp.warning) {
+      toast.warning(resp.warning);
     }
   } catch (error) {
     logError('Config update', error);

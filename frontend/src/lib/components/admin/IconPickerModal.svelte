@@ -904,8 +904,8 @@
   .badge {
     background: var(--accent);
     color: white;
-    font-size: 0.7rem;
-    padding: 0.125rem 0.375rem;
+    font-size: 0.75rem;
+    padding: 0.125rem 0.4rem;
     border-radius: 9999px;
     font-weight: 600;
     min-width: 1.25rem;
