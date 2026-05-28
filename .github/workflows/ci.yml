@@ -7,6 +7,14 @@ on:
     branches: [main]
 
 jobs:
+  versions:
+    name: Version alignment
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check VERSION / version.go / package.json agree
+        run: ./scripts/check-versions.sh
+
   backend:
     name: Backend
     runs-on: ubuntu-latest

@@ -22,6 +22,8 @@ REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
 cd "$REPO_DIR"
 
+"$REPO_DIR/scripts/check-versions.sh"
+
 echo "▸ Building backend (linux/amd64)"
 (cd backend && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o /tmp/hops-linux-amd64 ./cmd/hops)
 
