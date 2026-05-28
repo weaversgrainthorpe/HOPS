@@ -54,3 +54,8 @@ logs/
 .env
 .env.local
 .env.*.local
+tests/prerelease/node_modules/
+tests/prerelease/test-results/
+tests/prerelease/playwright-report/
+tests/prerelease/auth.json
+test-results/
