@@ -4,7 +4,7 @@
   import Icon from '@iconify/svelte';
   import Button from '$lib/components/shared/Button.svelte';
   import { toast } from '$lib/stores/toast';
-  import { isAuthenticated } from '$lib/stores/auth';
+  import { isAuthenticated, waitForAuthChecked } from '$lib/stores/auth';
   import { listSettings, updateSetting, type SettingDef } from '$lib/utils/api';
 
   // Settings are grouped by the dotted prefix of their key — server.*, log.*,
@@ -39,7 +39,10 @@
   );
 
   onMount(async () => {
-    // The page is admin-only — bounce to the admin login if not signed in.
+    // Wait for the layout's initAuth() to resolve before checking
+    // isAuthenticated — otherwise we race the first /api/auth/check and
+    // bounce a freshly-logged-in user straight back to the admin index.
+    await waitForAuthChecked();
     if (!$isAuthenticated) {
       goto('/');
       return;

@@ -1,4 +1,4 @@
-# HOPS User Guide (v2.0.2)
+# HOPS User Guide (v2.1.0)
 
 Welcome to HOPS (Home Operations Portal System)! This guide will help you get started and make the most of your dashboard.
 
@@ -561,45 +561,44 @@ Import is done from the Admin page:
 
 ### What to expect first
 
-Discovery is **a head-start, not a magic wand**. Real-world results depend on:
+Discovery is **a head start, not magic**. What it finds in practice depends on a few things:
 
-- **Network topology** — switched vs Wi-Fi, VLAN segmentation, isolated guest networks
-- **Firewalls and host-based AV** — Windows Defender, ufw, iptables, Norton/AVAST etc. can silently block probes
-- **Service configuration** — apps bound to `localhost` aren't reachable from another host; apps behind reverse proxies look like the proxy until you tell HOPS about your internal domain
-- **Whether the service responds to unauthenticated requests** — some services 401 immediately and never reveal their identity to a probe
-- **Where HOPS is running** — see the Docker note immediately below
+- **What your network looks like** — Wi-Fi vs wired, guest networks that isolate devices, gear that blocks certain kinds of traffic
+- **What's blocking it** — firewalls and antivirus software (Windows Defender, ufw, Norton, AVAST, etc.) can silently shut probes out
+- **How your services are set up** — apps that only answer on `localhost` can't be reached from another machine; apps behind a reverse proxy look like the proxy until you tell HOPS about your internal domain
+- **Whether each service answers polite "are you there?" questions at all** — some services slam the door (`401 Unauthorized`) before HOPS sees enough to identify them
+- **Where HOPS itself is running** — see the Docker note below
 
-You'll likely see:
-- **False positives** — a probe that matches a body string in something unrelated
-- **Missing services** — apps on unusual ports, apps that don't speak HTTP, apps that aggressively rate-limit
-- **Generic "Web service on X" rows** — HOPS saw something but doesn't have a fingerprint for it yet
+You'll likely run into:
+- **A few false matches** — HOPS thought it spotted Plex but it was actually something else with a similar response
+- **A few missing services** — apps on unusual ports, apps that don't speak HTTP, or apps that aggressively rate-limit anything that pokes them
+- **A few generic "Web service on …" rows** — HOPS saw a webpage but doesn't yet know which app it is
 
-That's why every scan is a **reviewable draft you curate** before any tile lands on a dashboard, and why the **Diagnostics** view exists to turn "I see something HOPS missed" into a new detector in two clicks. Coverage grows release-over-release as the bundled detector set expands.
+That's exactly why every scan is a **draft you review before anything lands on your dashboard**, and why the **Diagnostics** view exists to turn *"HOPS missed this"* into a working detector in two clicks. Coverage keeps growing with each release.
 
 ### Running HOPS in Docker?
 
-**This is a Docker networking constraint, not a HOPS limitation, and it's beyond our control.** Worth understanding before you wonder why a scan from a containerised HOPS looks thin.
+**This is a Docker quirk, not a HOPS limitation, and it's beyond our control.** Worth knowing about so you're not surprised when a scan from inside a container comes back thinner than you expected.
 
-By default, Docker puts containers on a **bridge network** — a private virtual network behind NAT, with no direct view of the host's physical LAN. The container's ARP table is its own bridge, multicast frames (mDNS, SSDP) stop at the bridge boundary, and outbound packets get NAT'd so the destination sees the host's IP rather than the container's.
+By default, Docker puts each container on its own private virtual network. The container can talk to your real home network, but it doesn't *see* it the same way your other machines do — the kinds of broadcasts that smart TVs, Sonos speakers, and AirPlay receivers use to announce themselves don't reach the container at all.
 
-What this means for Network Discovery on a default-bridge container:
+Here's what works and what doesn't from inside a default Docker container:
 
 | Source | Works? | Why |
 | --- | --- | --- |
-| Active TCP port scan (light / full) | ✅ Mostly | NAT routes unicast TCP fine; some services that filter by source IP may behave differently |
-| HTTP fingerprint detectors | ✅ Yes | Standard outbound TCP, no multicast involved |
-| Forward DNS enumeration | ✅ Yes | Standard DNS lookups via the container's resolver |
-| SNMP v2c | ✅ Yes | Unicast UDP, works through NAT |
-| **mDNS** (HomeKit / AirPlay / Chromecast) | ❌ Silently empty | Multicast traffic doesn't cross the bridge boundary |
-| **UPnP / SSDP** (smart TVs / Sonos / Roku / routers) | ❌ Silently empty | Same multicast limitation |
-| **ARP table sweep** | ❌ Empty | The container's ARP table reflects its bridge, not the host LAN |
-| **DNS PTR enrichment** | ⚠ Depends | Works if the container's resolver knows your LAN; not if it's a default `8.8.8.8` |
+| Port scanning | ✅ Mostly | Normal connections work through Docker's network just fine |
+| Recognising web services | ✅ Yes | Same — these are normal connections |
+| Subdomain lookups | ✅ Yes | DNS lookups work as usual |
+| SNMP (printers, switches, UPSes) | ✅ Yes | Normal connection |
+| **mDNS** (AirPlay, Chromecast, HomeKit) | ❌ Won't see them | These rely on broadcasts that don't cross Docker's network boundary |
+| **UPnP / SSDP** (smart TVs, Sonos, Roku, routers) | ❌ Won't see them | Same broadcast limitation |
+| **Neighbour-table sweep** | ❌ Empty | The container's address book is its own private network, not your home LAN |
 
-The scan-level warnings panel will surface mDNS / SSDP / ARP failures when they happen, so you'll see *that* they didn't work — but the underlying reason is Docker's bridge, not HOPS.
+If a passive source comes back empty, HOPS will flag it in a warning panel on the draft so you can see *what* fell short — but the underlying reason is Docker, not HOPS.
 
-**Two options if you want full discovery coverage**:
+**Two options if you want full coverage**:
 
-1. **Use host networking** (Linux only). Edit your `docker-compose.yml`:
+1. **Switch to host networking** (Linux only). Edit your `docker-compose.yml`:
    ```yaml
    services:
      hops:
@@ -607,11 +606,11 @@ The scan-level warnings panel will surface mDNS / SSDP / ARP failures when they 
        network_mode: host
        # Remove the `ports:` block — host mode doesn't use it.
    ```
-   The container shares the host's network stack: same ARP table, multicast works, IP visibility identical to running natively. Docker Desktop on Mac and Windows technically support `network_mode: host` but have known limitations (Mac in particular runs Docker in a VM, so "host" isn't really host) — your mileage will vary.
+   This puts the container directly on your home network, so it sees broadcasts and your real LAN exactly like any other machine. Docker Desktop on Mac and Windows technically supports `network_mode: host` but the Mac version runs Docker inside a VM, so "host" isn't really your machine — results vary.
 
-2. **Run HOPS natively** (binary or systemd service, no Docker). Simplest path on a Linux box; the binary is a single file with no runtime dependencies.
+2. **Run HOPS without Docker**. The binary is a single file with no dependencies; on Linux it's a `systemctl start hops` job. Simplest path if you care about full discovery coverage and you're not committed to Docker.
 
-The active-scan and DNS-based parts of Discovery still work on a default-bridge container, so it's not "broken" — just thinner. If your homelab is mostly HTTP services on known ports (the typical *arr / NAS / Pi-hole / Proxmox setup), the default bridge gets you most of the way there. The multicast-only devices (TVs, speakers, IoT) are the ones you'd miss.
+If your homelab is mostly things like Pi-hole, the *arr stack, a NAS UI, and Proxmox — the default Docker setup will find all of those without trouble. The things you'd miss are the broadcast-discovered ones (TVs, speakers, some IoT).
 
 ### Running a scan
 
@@ -631,9 +630,9 @@ The active-scan and DNS-based parts of Discovery still work on a default-bridge 
 
 ### Watching it run
 
-The progress bar shows current phase: *Passive discovery → Probing X hosts → Forward DNS enumeration → Finalising*. A list of in-flight host addresses scrolls below.
+The progress bar shows what HOPS is doing right now: *Listening for announcements → Checking X hosts → Looking up subdomains → Finishing up*. The addresses currently being checked scroll below.
 
-If passive sources fail (commonly: mDNS blocked by managed switches, SSDP filtered by Wi-Fi APs), you'll see an **amber warning panel** at the top of the draft after the scan completes. The active probe still ran; you just won't have broadcast-discovered services in this scan.
+If a passive source fails (a common one: mDNS being blocked by a managed switch, or SSDP filtered by a Wi-Fi access point), you'll see an **amber warning panel** at the top of the draft once the scan finishes. The active port-checking part still ran fine — you just won't have any of the broadcast-discovered services in this particular scan.
 
 ### Curating results
 
@@ -657,13 +656,13 @@ Click **+ Create detector** on any unidentified row — the detector form opens 
 **Admin → Network Discovery → Manage detectors** lists every detector — both bundled (shipped with HOPS) and your own.
 
 - **Bundled detectors are customizable.** Click the tune icon on any bundled row to open its definition pre-filled. Save your edits — they create an **override** that supersedes the bundled definition on the next scan. The row gets a "modified" badge. Click **Reset to bundled defaults** to drop the override; the shipped definition takes over again. There's also a header button to **Reset all customizations** in bulk.
-- **Add your own detectors** with the **+ Add detector** button. The four signature types are:
-  - **Body contains** — case-sensitive substring of the response body (min 4 chars)
-  - **Title contains** — case-insensitive substring of the HTML `<title>` (min 3 chars)
-  - **Header keys** — any response header whose presence alone identifies the service
-  - **Favicon hashes** — Shodan-compatible signed-int32 MMH3 hashes (most stable; survives version bumps)
+- **Add your own detectors** with the **+ Add detector** button. There are four ways to recognise a service, and you can use any one or any mix:
+  - **Body contains** — a snippet that appears in the page's HTML and is unique to that service (case-sensitive, at least 4 characters)
+  - **Title contains** — text from the page's browser-tab title (case-insensitive, at least 3 characters)
+  - **Header keys** — a response header that's distinctive on its own (e.g. some services advertise themselves in custom `X-…` headers)
+  - **Favicon hashes** — the number that identifies the page's favicon (the little browser-tab icon). The most reliable signal because favicons rarely change between versions
 
-You can declare any one or any combination. A detector whose only signature is a favicon hash is valid.
+A detector whose only signature is a favicon number is perfectly valid.
 
 ### Re-scanning with tweaks
 

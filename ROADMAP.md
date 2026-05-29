@@ -1,140 +1,110 @@
 # HOPS Roadmap
 
-Future improvements under consideration. **Nothing here is committed work** —
-no dates, no priorities beyond the rough sequencing below, no SLAs. HOPS is
-maintained in limited spare time; this is a living wishlist used to think
-about what comes next, not a schedule.
+A wishlist of what might come next. **Nothing here is promised** — HOPS
+is a side project, so nothing on the list has a date and anything could
+get bumped by a real-world bug or a change of mind.
 
-Items are grouped by effort and architectural risk, not by user value. A
-low-risk Tier 1 item may be more useful to you than a sprawling Tier 4 one.
+Items are grouped by rough size, not by importance. A small item near
+the top might matter more to you than a sprawling one near the bottom.
 
 > Bug reports and feature suggestions are welcome via
 > [GitHub Issues](https://github.com/weaversgrainthorpe/HOPS/issues).
-> Security-sensitive items go through [SECURITY.md](SECURITY.md) instead.
+> Security issues go through [SECURITY.md](SECURITY.md) instead.
 
 ---
 
-## Shipped
+## Already shipped
 
-These were on the roadmap as Tier 4 ambitions and are now live in
-released code. Kept here briefly for the historical paper trail; see
-the [CHANGELOG](CHANGELOG.md) for full release notes.
+What was on the list and is now in released code. Full release notes
+live in the [CHANGELOG](CHANGELOG.md).
 
-- **Network Discovery + draft dashboard** *(v2.0.0)*. Scan a CIDR,
-  IP range, or specific IP (any combination, with per-target
-  exclusions) at three intensity levels; passive sources (ARP, mDNS, DNS PTR
-  +AXFR, UPnP/SSDP, SNMP) plus active port + HTTP fingerprinting;
-  forward DNS enumeration of an internal domain for reverse-proxy-
-  fronted services; 70 bundled detectors; curate-before-promote;
-  auto-grouping by category on promote; Phase-4 GUI-managed user
-  detectors with one-click bundled-detector overrides and reset; a
-  diagnostics view that surfaces every unidentified service as a
-  promotion candidate. SQLite-backed, no YAML, never auto-committed.
-  Discovery is intentionally a starting point — results depend on
-  network topology, firewall/AV interference, and whether services
-  respond to unauthenticated probes; every scan is a reviewable
-  draft. Coverage continues to improve release-over-release.
+- **Network Discovery** *(v2.0.0)*. Point HOPS at your home network and
+  let it find what's already running — about 70 common homelab services
+  recognised out of the box, plus a draft + curate flow so nothing
+  lands on your dashboard until you tick it.
+- **Install on a phone or tablet** *(in the next release)*. HOPS now
+  works as a web-app: use your browser's "Add to Home Screen" and you
+  get a full-screen icon that opens HOPS without any browser tabs or
+  address bar around it — handy for a wall-mounted tablet. There's a
+  small banner if you go offline, and tile status colours hold their
+  last known state rather than turning everything red, so a Wi-Fi
+  blip doesn't look like an outage.
 
 ---
 
-## Tier 1 — Quick wins
+## Small things — could happen soon
 
-Frontend-mostly, low risk, days of work each. These make HOPS noticeably
-nicer for daily use without changing what it is.
+A few days of work each. Quality-of-life improvements that don't change
+what HOPS is.
 
-- **PWA support.** Manifest, service worker, offline fallback. SvelteKit
-  makes most of this near-free; the payoff is "install HOPS as an app" on
-  a phone or tablet, which fits the wall-mounted-dashboard use case.
+*(Nothing on this list right now — the PWA work that lived here
+just shipped. Suggestions welcome via GitHub Issues.)*
 
-## Tier 2 — Useful, modest scope
+## Medium things — would take a couple of weeks
 
-A week or two each. Higher value but more state to wrangle.
+Bigger, but each one is self-contained.
 
-- **Discovery follow-ons.** v2.0 shipped the framework; these extend its
-  reach without changing what it is.
-  - **Regex signatures.** Today's body / title / header matches are
-    literal substrings. Adding a regex variant (with a sane safety cap
-    on backtracking) closes the gap for services whose response text
-    drifts version-to-version.
-  - **TLS certificate subject as a signature type.** HOPS already
-    captures leaf-cert CN + SANs on every HTTPS probe (and uses them
-    as a name hint). Promoting them to a first-class signature
-    category is the natural next signal — especially for self-signed
-    homelab services whose response bodies are anonymous.
-  - **GUI for the bundled favicon-hash corpus.** The seed table in
-    `backend/internal/discovery/favicon_table.go` is empty by design
-    (a public Shodan corpus is too noisy for default-on). A "manage
-    bundled favicon hashes" admin page would let users opt into
-    curated subsets without rebuilding.
-  - **Bulk favicon-hash import.** Paste-a-list / upload-a-CSV affordance
-    so a Shodan-style corpus can be onboarded into a single user
-    detector without 200 form fills.
-- **Multi-select and bulk operations.** Checkbox-select multiple tiles to
-  delete, move between groups, or edit common properties in one go. Scales
-  with how many tiles you maintain.
-- **Custom CSS injection.** Admin-pastes-CSS-in-Settings, injected as a
-  `<style>` tag. Powerful but introduces a "user broke their own UI" mode;
-  needs a reset-CSS escape hatch and probably a preview/confirm step.
-- **Richer status checks.** Today's HTTP HEAD treats only 2xx/3xx as up.
-  Configurable expected status codes (so 401 from a service requiring auth
-  reads as up), per-tile timeout overrides, and an optional response-body
-  substring match would catch the cases where HEAD's verdict is misleading.
-- **Per-tile status history.** A small sparkline or 24-hour heatmap on each
-  tile showing recent up/down/error. The data is already collected —
-  extending `status_cache` from latest-only to a small ring buffer and
-  rendering a tiny chart per tile is modest work.
-- **Scheduled / off-site backup.** HOPS already writes a startup backup
-  into `data/backups/`. Add a configurable schedule and an off-site
-  destination (S3-compatible / SFTP / rclone-style) so the "I lost the SD
-  card" failure mode doesn't take the whole install with it. Aligns with
-  the "config = one SQLite file" pitch.
-- **TOTP / 2FA on admin login.** A standard TOTP flow (authenticator app,
-  recovery codes) layered on top of the existing bcrypt + rate-limit +
-  Secure cookies. The pentest flagged the admin login as the high-value
-  target; MFA is the next defensive step.
+- **More ways to recognise a service** (extending Network Discovery):
+  - **Pattern matching** instead of literal text matching, so a
+    detector keeps working when a service's response wording drifts
+    between versions.
+  - **TLS certificate names**. HOPS already reads the certificate when
+    it probes an HTTPS service — using the name on the certificate as
+    a recognition signal is the next obvious thing to add.
+  - **Manage the bundled favicon list**. There's a (currently empty)
+    table of well-known favicon fingerprints HOPS could lean on. An
+    admin page to add to it would help.
+  - **Bulk-import favicon numbers** so you can paste a list rather
+    than typing them one at a time.
+- **Select several tiles at once** to delete, move, or edit in one go.
+  Useful once a dashboard gets big.
+- **Custom CSS**. Paste-your-own-styles in Settings, with a one-click
+  reset for the "I broke it" case.
+- **Smarter status checks**. Today HOPS treats only the usual "200 OK"
+  family as up. Adding configurable expected codes (so a login page
+  that returns "401" reads as up rather than down), per-tile timeouts,
+  and an optional "the page must contain this text" check would cover
+  the awkward cases.
+- **A small status history on each tile** — a sparkline or a
+  twenty-four-hour heatmap. HOPS already records the data; this just
+  shows it.
+- **Scheduled and off-site backups**. HOPS makes a backup every time
+  it starts; adding a schedule and an off-site destination
+  (S3-compatible, SFTP, rclone-style) means a dead SD card doesn't
+  take everything with it.
+- **A second login factor** (authenticator-app style). The pentest
+  flagged the admin login as the highest-value target, and a TOTP
+  flow with recovery codes is the standard next step.
 
-## Tier 3 — Real complexity, state-heavy
+## Bigger things — multiple weeks
 
-Several weeks. State management is the hard part.
+These are still self-contained but a bit harder to get right.
 
-- **Undo / Redo.** Keep an action history with reversible mutations.
-  Tractable as in-session-only first, much harder as a persistent feature.
-  Best tackled after iteration patterns on the save pipeline have stabilised
-  so the action model doesn't churn.
+- **Undo and redo**. Keep a history of recent changes so you can step
+  backwards. Easier as a "this session only" feature first; tricker
+  if it has to survive a reload.
 
-## Tier 4 — Major architectural shift
+## Stretch things — much bigger jobs
 
-Months, and arguably "next-major-version" work. Each item turns HOPS into
-something meaningfully bigger.
+These would each turn HOPS into something a bit different. Worth
+thinking about, not necessarily planning around.
 
-- **Local launcher agent + per-device tiles.** A small companion binary the
-  user runs on each daily-driver machine (Mac / Linux / Windows) that
-  enumerates installed URL protocol handlers — Obsidian, VS Code, Steam,
-  Spotify, Slack desktop, 1Password, etc. — and reports them to HOPS. The
-  dashboard then renders a per-device set of "quick launcher" tiles so an
-  `obsidian://` link only shows up on devices where Obsidian is installed.
-  Real cost is the surrounding plumbing, not the agent: per-user device
-  registry, device-token issuance, per-device tile filtering in the
-  frontend, signed multi-platform binary distribution, refresh cadence
-  (manual re-run vs LaunchAgent / cron / Task Scheduler). Distinct from
-  Network Discovery — that asks "what's on the wire"; this asks "what's
-  installed on this endpoint".
-- **Widget framework.** Tiles today launch URLs; widgets would render live
-  content — weather, calendar, system stats, etc. Needs a widget API,
-  registry, per-widget config, polling, and error handling. Every widget is
-  a new failure surface and a new ongoing maintenance commitment.
-- **Service integrations (Pi-hole, Proxmox, \*arr apps, etc.).** Natural
-  extension of widgets but each integration is its own ongoing work — APIs
-  change, auth schemes vary, breakage in any one can affect every user.
-  Best deferred until the widget framework above is mature enough to host
-  them as plugins rather than core code.
+- **A small helper that runs on each computer** in your house,
+  reporting which apps are installed — so a tile for "Obsidian" only
+  appears on the laptops that actually have Obsidian. Separate from
+  Network Discovery: that asks "what's running on the network",
+  this asks "what's installed on this machine".
+- **Widgets** — tiles that show live content (weather, calendar,
+  system stats) instead of just linking somewhere. Each widget is its
+  own ongoing maintenance commitment.
+- **First-class integrations** with specific apps (Pi-hole, Proxmox,
+  the *arr stack, etc.). Each one is its own moving target, so this
+  only makes sense once the widgets idea above has settled.
 
 ---
 
 ## Why no dates?
 
-HOPS is a side project maintained alongside everything else. The roadmap is
-a thinking tool, not a contract. Tier 1 items will probably ship sooner
-than Tier 4, but anything could be pre-empted by a real-world bug,
-security finding, or shift in personal priorities. The CHANGELOG records
-what actually shipped.
+HOPS is maintained in spare time. The roadmap is a way to think out
+loud about what's worth doing next, not a schedule. The CHANGELOG
+is what's actually shipped.

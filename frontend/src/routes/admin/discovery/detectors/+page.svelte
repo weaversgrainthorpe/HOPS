@@ -3,7 +3,7 @@
   import { goto } from '$app/navigation';
   import Icon from '@iconify/svelte';
   import Button from '$lib/components/shared/Button.svelte';
-  import { isAuthenticated } from '$lib/stores/auth';
+  import { isAuthenticated, waitForAuthChecked } from '$lib/stores/auth';
   import { toast } from '$lib/stores/toast';
   import {
     listDetectors, createDetector, updateDetector, deleteDetector,
@@ -67,6 +67,7 @@
   const overrideCount = $derived(detectors.filter((d) => d.overridden).length);
 
   onMount(async () => {
+    await waitForAuthChecked();
     if (!$isAuthenticated) {
       goto('/');
       return;
@@ -257,13 +258,12 @@
   </header>
 
   <p class="lede">
-    Bundled detectors ship with HOPS; you can customize any of them
-    (your edits become an override that supersedes the shipped definition,
-    and you can reset to bundled defaults at any time). Add your own user
-    detectors to recognize services HOPS doesn't yet know about. Changes
-    take effect on the <em>next</em> scan you start — an in-flight scan
-    locks its detector set + port list at launch and won't pick up edits
-    mid-run.
+    HOPS comes with detectors for ~70 common homelab services. You can
+    tweak any of them, and any tweak you make can be undone in one click
+    ("reset to bundled"). Add your own to recognise things HOPS doesn't
+    ship support for yet. Changes apply to the <em>next</em> scan you
+    start — if a scan is already running, let it finish (or cancel it)
+    first.
   </p>
 
   <div class="filter-bar">

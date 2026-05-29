@@ -1,6 +1,6 @@
 # HOPS - Home Operations Portal System
 
-**Version 2.0.2** · **[hops.weaversgrainthorpe.github.io →](https://weaversgrainthorpe.github.io/HOPS/)**
+**Version 2.1.0** · **[hops.weaversgrainthorpe.github.io →](https://weaversgrainthorpe.github.io/HOPS/)**
 
 A modern, self-hosted homepage dashboard for the homelab community.
 
@@ -51,6 +51,20 @@ Already using Homer, Dashy, or Heimdall? HOPS can import your existing configura
     <td width="33%" valign="top">
       <a href="docs/screenshots/mobile.png"><img src="docs/screenshots/mobile.png" alt="Responsive mobile layout" /></a>
       <p align="center"><sub><b>Mobile</b> — responsive layout works on phones and tablets</sub></p>
+    </td>
+  </tr>
+  <tr>
+    <td width="33%" valign="top">
+      <a href="docs/screenshots/admin-discovery.png"><img src="docs/screenshots/admin-discovery.png" alt="Network Discovery — list of scans" /></a>
+      <p align="center"><sub><b>Network Discovery</b> — scan your network for services already running</sub></p>
+    </td>
+    <td width="33%" valign="top">
+      <a href="docs/screenshots/admin-discovery-draft.png"><img src="docs/screenshots/admin-discovery-draft.png" alt="Curate scan results before promoting to dashboard" /></a>
+      <p align="center"><sub><b>Curate before promoting</b> — review what was found, tick the ones you want</sub></p>
+    </td>
+    <td width="33%" valign="top">
+      <a href="docs/screenshots/admin-discovery-detectors.png"><img src="docs/screenshots/admin-discovery-detectors.png" alt="Discovery detectors — bundled and custom" /></a>
+      <p align="center"><sub><b>Detectors</b> — ~70 services recognised out of the box, tweak any of them</sub></p>
     </td>
   </tr>
 </table>
@@ -120,26 +134,25 @@ For full deployment options (systemd, reverse proxy, backups), see the **[Instal
 - Right-click context menu
 
 ### Network Discovery (v2.0)
-- **Flexible targets** — scan a CIDR (`10.10.0.0/24`), an IP range (`10.10.0.1-50` or full pair), a single IP, or any comma-separated combination — with per-target `!`/`NOT ` exclusions
-- **Three intensities** — passive (mDNS / ARP / DNS / UPnP / SNMP only), light (~40 well-known homelab ports, default), full (~60 ports)
-- **70 bundled fingerprint detectors** out of the box — Pi-hole, Proxmox, Home Assistant, Plex, Jellyfin, every *arr, NPM, Portainer, UniFi, OPNsense/pfSense, Frigate, TrueNAS/QNAP/Synology, Vaultwarden, Immich, Audiobookshelf, Grafana, Prometheus, Loki, Traefik, MinIO, Jenkins, GitLab, n8n, Guacamole, Netdata, ViewPower, pgAdmin/phpMyAdmin/Adminer, and many more
-- **Passive sources** alongside active probing: ARP, mDNS / Bonjour, DNS PTR + AXFR, UPnP/SSDP (smart TVs, Sonos, IGD routers), SNMP v2c (printers, switches, UPSes)
-- **Forward DNS enumeration** of a user-supplied internal domain — reverse-proxy-fronted services (NPM, Traefik) finally show up
-- **Curate before promote** — every scan produces a reviewable draft; confidence-tiered, inline editing of name / URL / category, bulk select, auto-grouping by category on promote (Sonarr → "Downloads", Pi-hole → "Network", etc.)
-- **Phase-4 GUI-managed detectors** — add your own via the admin UI; bundled detectors are customizable with one-click "Reset to bundled" undo; signatures support body / title / header / favicon-hash matching
-- **Diagnostics view** — every HTTP service from past scans that no detector matched, with one-click "Create detector from this" bootstrap
+- **Scan your network** — give it an IP range (`10.10.0.0/24`, `10.10.0.1-50`, individual addresses, or any mix). Skip the things you don't want scanned with a `!` prefix
+- **Recognises ~70 common homelab services out of the box** — Pi-hole, Plex, Proxmox, Home Assistant, every *arr, NPM, UniFi, OPNsense/pfSense, Frigate, TrueNAS/QNAP/Synology, Vaultwarden, Immich, Audiobookshelf, Grafana, Traefik, MinIO, pgAdmin/phpMyAdmin/Adminer, Guacamole, Netdata, and many more
+- **Three intensities** — *Passive* listens for services that announce themselves (mDNS, UPnP, etc.) without touching any ports. *Light* (default) adds a quick check of ~40 well-known homelab ports. *Full* sweeps ~60. Start with Light
+- **Finds things without scanning too** — picks up mDNS announcements (smart TVs, AirPlay, Sonos), router neighbour tables, your network's DNS, and SNMP from printers/switches/UPSes
+- **Knows about subdomains** — give it your internal domain (the one your reverse proxy serves under) and it'll try common names like `sonarr.yourdomain` so services hidden behind a reverse proxy aren't missed
+- **Review before adding** — every scan produces a draft you tick through. Confidence indicators on each row, edit the name / URL / icon inline, bulk-select, and tiles automatically slot into sensible groups when you accept (Sonarr → *Downloads*, Pi-hole → *Network*)
+- **Add or tweak the recognisers yourself** — through the admin UI, no config files. Customise any built-in recogniser; if you change your mind, one click puts it back
+- **Find what didn't match** — a Diagnostics view shows every service HOPS spotted but couldn't put a name to. One click bootstraps a new detector with everything HOPS already knows about it
 
-> **What to expect**: Discovery is a head-start, not a magic wand. Results
-> depend on your network (switched vs Wi-Fi, VLAN segmentation), what's
-> blocking probes (firewalls, host-based AV, services bound to localhost),
-> and whether services even respond to unauthenticated requests. Expect
-> some false positives and some legitimate services that don't appear —
-> that's why **every scan is a reviewable draft you curate before
-> promoting to dashboard tiles**, and why the diagnostics view exists to
-> turn "I see something HOPS missed" into a new detector in two clicks.
-> Coverage will keep improving release-over-release as bundled detectors
-> grow, but Discovery is meant to bootstrap a dashboard, not replace
-> knowing your own homelab.
+> **A reality check.** Discovery is a head start, not magic. What it
+> finds depends on your network (Wi-Fi vs wired, guest networks that
+> isolate devices), what's blocking it (firewalls, antivirus software,
+> services that only answer on localhost), and whether each service
+> answers polite "are you there?" questions to begin with. So expect a
+> few false matches and a few things it just doesn't catch. That's why
+> every scan is a **draft** — you tick through what's actually wanted
+> before anything lands on your dashboard — and why the Diagnostics
+> view turns *"HOPS missed this"* into a working detector in two
+> clicks. Coverage keeps improving with each release.
 
 ### Admin Panel
 - Create, rename, and delete dashboards

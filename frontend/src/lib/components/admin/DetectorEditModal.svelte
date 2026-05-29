@@ -286,12 +286,12 @@
         <label for="d-favicons">Favicon hashes (one per line)</label>
         <textarea id="d-favicons" bind:value={faviconHashesText} rows="2" placeholder="1866999254&#10;-1338575550"></textarea>
         <p class="hint">
-          Shodan-style signed-int32 MurmurHash3 of the favicon — the most
-          stable signature type (survives version bumps). Get one from
-          the Diagnostics view's "hash:" column, or shodan.io's
-          <code>http.favicon.hash</code> search. A match here wins over
-          HOPS's bundled favicon-hash corpus, so this is the right place
-          to override a misidentification.
+          The favicon (the small icon that shows in a browser tab) is a
+          great way to spot a service — it rarely changes between versions.
+          Paste the number from the Diagnostics view's "hash" column, or
+          from a Shodan <code>http.favicon.hash</code> search. If HOPS
+          already recognises a service by its favicon but gets it wrong,
+          add the right number here — your detector wins out.
         </p>
       </div>
     </fieldset>

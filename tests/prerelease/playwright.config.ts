@@ -32,6 +32,11 @@ export default defineConfig({
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
     ignoreHTTPSErrors: true,
+    // Block PWA service-worker registration in tests. With the SW on,
+    // each test inherits whatever cache earlier tests populated, which
+    // hides regressions and randomly serves stale shells. The SW is
+    // covered by its own dedicated specs; for general E2E, block it.
+    serviceWorkers: 'block',
   },
 
   projects: [

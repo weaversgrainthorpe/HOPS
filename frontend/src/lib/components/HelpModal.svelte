@@ -238,8 +238,8 @@
               <Icon icon="mdi:radar" width="24" />
               <div>
                 <strong>Network Discovery</strong>
-                <p>Scan your LAN (by CIDR, range, single IP, or any combination — with per-target exclusions). HOPS identifies common services and presents them as a reviewable draft for bulk-promotion to dashboard tiles. Open Admin → Network Discovery. Discovery is a head-start, not a magic wand — results vary with your network and firewalls; every scan is a reviewable draft.</p>
-                <p><em>Running HOPS in Docker with default bridge networking? Multicast-based discovery (mDNS / UPnP / ARP) won't work — that's a Docker constraint, not HOPS. Use <code>network_mode: host</code> on Linux for full coverage. Active port scans and DNS-based discovery still work either way. See the User Guide → Network Discovery for the full picture.</em></p>
+                <p>Point HOPS at your home network and let it find what's already running. Tell it which addresses to look at (a range, a CIDR, or individual IPs, in any mix), pick how thorough to be, and it comes back with a draft of everything it spotted. Tick through what you actually want and HOPS adds them to your dashboard, grouped sensibly. Open <strong>Admin → Network Discovery</strong>. It's a head start, not magic — what it finds depends on your network and what's blocking it, so expect a few misses and a few false matches. Nothing lands on your dashboard until you accept it.</p>
+                <p><em>Running HOPS in Docker? By default, Docker containers can't "see" the kinds of broadcasts smart TVs, Sonos, and AirPlay use to announce themselves — that's a Docker quirk, not a HOPS one. Port scanning and subdomain lookups still work fine. For full coverage on Linux, run with <code>network_mode: host</code>. The User Guide → Network Discovery chapter has the full picture.</em></p>
               </div>
             </div>
             <div class="feature">

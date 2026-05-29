@@ -102,9 +102,9 @@ var Definitions = []Definition{
 	},
 	{
 		Key: KeyStatusCheckIntervalMinutes, Type: "duration_minutes", Default: "5",
-		Description: "How often the status checker probes each tile. " +
-			"Tiles that fail back off exponentially (2× → 4× → 8× → 16× → 32× this interval) " +
-			"so a dead service doesn't dominate the probe budget. A successful check clears the backoff.",
+		Description: "How often HOPS checks whether each tile's service is up. " +
+			"Tiles that keep failing get checked less often automatically, so a service that's stuck broken " +
+			"doesn't slow everything else down. The moment a failing tile responds again, it goes back to normal.",
 		Min:         1, Max: 60 * 24,
 	},
 	{
@@ -154,9 +154,10 @@ var Definitions = []Definition{
 	},
 	{
 		Key: KeyDiscoveryPerHostTimeoutSecs, Type: "duration_seconds", Default: "1",
-		Description: "Per-port TCP/HTTP timeout. 1s is enough on LANs (a port that's going to answer answers in milliseconds). " +
-			"Bump to 2–3s on slow or congested networks where you're seeing missed services. " +
-			"The total per-host probe budget is max(15s, 15× this value), so raising this also raises how long the scanner waits on a slow host overall.",
+		Description: "How long to wait for each port on each host to answer. 1 second is plenty on a normal home network — " +
+			"a service that's going to respond responds almost instantly. Try 2 or 3 if you're on Wi-Fi or a slow network " +
+			"and seeing things you know are running get missed. Raising this also makes scans take longer overall, " +
+			"because the scanner waits this long on every host that isn't responding.",
 		Min:         1, Max: 60,
 	},
 }

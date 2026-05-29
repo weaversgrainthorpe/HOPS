@@ -8,6 +8,36 @@ export const isAuthenticated = writable(false);
 export const isLoggingIn = writable(false);
 // True when the current user must change their password before doing anything else
 export const mustChangePassword = writable(false);
+// True once initAuth() has resolved at least once. Protected pages should
+// wait for this before deciding to redirect on !isAuthenticated — otherwise
+// they race the initial /api/auth/check call and bounce the user back to / .
+export const authChecked = writable(false);
+
+/**
+ * Block until initAuth() has resolved. Protected pages call this at the
+ * top of their onMount before they read isAuthenticated, so a freshly
+ * loaded page doesn't redirect to / while the initial /api/auth/check
+ * is still in flight.
+ */
+export async function waitForAuthChecked(): Promise<void> {
+  if (authCheckedValue) return;
+  await new Promise<void>((resolve) => {
+    const unsubscribe = authChecked.subscribe((v) => {
+      if (v) {
+        // Defer unsubscribe so we don't tear down inside the subscribe
+        // callback itself (Svelte fires it synchronously with the current
+        // value when you subscribe).
+        setTimeout(() => unsubscribe(), 0);
+        resolve();
+      }
+    });
+  });
+}
+
+// Mirror the latest value of `authChecked` into a plain variable so the
+// fast path in waitForAuthChecked() doesn't have to spin up a subscriber.
+let authCheckedValue = false;
+authChecked.subscribe((v) => { authCheckedValue = v; });
 
 // Register the global session-expired handler with the API layer.
 // Fires when any fetchAPI call hits 401 — clears auth state, toasts
@@ -26,9 +56,15 @@ setSessionExpiredHandler(() => {
 
 // Check if user has a valid session on app load
 export async function initAuth() {
-  const status = await checkAuth();
-  isAuthenticated.set(status.authenticated);
-  mustChangePassword.set(status.mustChangePassword);
+  try {
+    const status = await checkAuth();
+    isAuthenticated.set(status.authenticated);
+    mustChangePassword.set(status.mustChangePassword);
+  } finally {
+    // Whether the call succeeded or failed, the check has resolved —
+    // protected pages can stop waiting and act on isAuthenticated now.
+    authChecked.set(true);
+  }
 }
 
 // Login
