@@ -11,33 +11,27 @@ Feature ideas live in [ROADMAP.md](ROADMAP.md), not here.
 
 ### Discovery — invariants worth surfacing in help text or tooltips
 
-These don't need new doc sections; they need a `title=` tooltip or a
-hint paragraph in the relevant admin page so admins find them at the
-moment of confusion rather than by spelunking the source.
+All seven items landed in v2.0.3. Kept here as a paper trail in case
+the surfaces drift again.
 
-- **Scan port set is frozen at scan start.** Adding a user detector
-  with a new port while a scan is running won't extend the port set in
-  that scan. Surface near the "Add detector" button.
-- **Forward-enum follows up to 5 redirect hops per FQDN with a 60 s
-  overall budget.** If a service hides behind a longer chain, configure
-  shorter redirects or shorter chains.
-- **Per-host probe budget is 15 s** (or 15× the
-  `discovery.per_host_timeout_seconds` setting, whichever is greater).
-  Surface near that setting.
-- **Override semantics**: customizing a bundled detector creates an
-  override that shadows the shipped definition. Deleting the override
-  "resets to bundled". Worth explaining on the Manage detectors page.
-- **Favicon-hash priority**: a user detector's favicon-hash match wins
-  over the bundled favicon corpus when both fire. Tooltip on the
-  favicon-hash form field.
-- **HTTP fallback follows same-host redirects**: services whose root
-  `/` 302s to `/dashboard` show up in unidentified-services with the
-  dashboard's title, not the redirect stub. Tooltip near unidentified
-  rows.
-- **Status checker exponential backoff**: a failing entry skips
-  progressively more polls (2× → 4× → 8× → 16× → 32× the interval).
-  On a successful check, the backoff clears. Help text near
-  `status.check_interval_seconds` in Settings.
+- ✅ **Scan port set is frozen at scan start** — covered by the
+  strengthened lede on the Manage detectors page.
+- ✅ **Forward-enum follows up to 5 redirect hops per FQDN with a 60 s
+  overall budget** — added to the new-scan page's internal-domain hint.
+- ✅ **Per-host probe budget is max(15 s, 15× the per-host timeout)** —
+  appended to the `discovery.per_host_timeout_seconds` setting
+  description (visible inline in the Settings page).
+- ✅ **Override semantics** (customizing → override; delete → reset to
+  bundled) — already covered by the detectors page lede.
+- ✅ **Favicon-hash priority** (user detector wins over bundled corpus)
+  — appended to the favicon-hashes field hint in the detector edit
+  modal.
+- ✅ **HTTP fallback follows same-host redirects** — added as a
+  highlighted aside above the unidentified-services table on the
+  Diagnostics page.
+- ✅ **Status checker exponential backoff** (2× → 32×, clears on
+  success) — appended to the `status.check_interval_minutes` setting
+  description.
 
 ### Screenshots — Discovery feature is not in the README grid
 
