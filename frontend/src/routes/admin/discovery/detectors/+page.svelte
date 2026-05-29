@@ -260,8 +260,10 @@
     Bundled detectors ship with HOPS; you can customize any of them
     (your edits become an override that supersedes the shipped definition,
     and you can reset to bundled defaults at any time). Add your own user
-    detectors to recognize services HOPS doesn't yet know about — all
-    changes take effect on the next scan, no restart needed.
+    detectors to recognize services HOPS doesn't yet know about. Changes
+    take effect on the <em>next</em> scan you start — an in-flight scan
+    locks its detector set + port list at launch and won't pick up edits
+    mid-run.
   </p>
 
   <div class="filter-bar">

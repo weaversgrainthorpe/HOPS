@@ -289,7 +289,9 @@
           Shodan-style signed-int32 MurmurHash3 of the favicon — the most
           stable signature type (survives version bumps). Get one from
           the Diagnostics view's "hash:" column, or shodan.io's
-          <code>http.favicon.hash</code> search.
+          <code>http.favicon.hash</code> search. A match here wins over
+          HOPS's bundled favicon-hash corpus, so this is the right place
+          to override a misidentification.
         </p>
       </div>
     </fieldset>

@@ -136,6 +136,13 @@
     promotion candidate; click <b>+ Create detector</b> to bootstrap a
     new detector from what HOPS saw.
   </p>
+  <p class="lede-aside">
+    <b>Heads-up about titles below:</b> when a service's root <code>/</code>
+    redirects (e.g. Uptime Kuma <code>/</code> → <code>/dashboard</code>),
+    HOPS follows up to 5 same-host redirects and shows the title of the
+    final page, not the redirect stub. So an unidentified row labelled
+    "Dashboard" might be a service whose home page lives behind a redirect.
+  </p>
 
   {#if loading}
     <p class="muted">Loading…</p>
