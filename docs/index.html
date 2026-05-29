@@ -187,7 +187,7 @@
 
   <header>
     <div class="container nav">
-      <div class="brand">HOPS <span class="badge">v2.0.2</span></div>
+      <div class="brand">HOPS <span class="badge">v2.1.0</span></div>
       <nav class="nav-links">
         <a href="#features">Features</a>
         <a href="#screenshots">Screenshots</a>
@@ -255,7 +255,11 @@
           </div>
           <div class="why-card">
             <h3>Network discovery <span class="badge" style="font-size:0.65rem">v2.0</span></h3>
-            <p>Scan your LAN — by CIDR, IP range, single IP, or any combination — and HOPS identifies common homelab services (Pi-hole, Proxmox, Plex, every *arr, NAS GUIs, and 60+ more), passive sources (mDNS, UPnP, SNMP) included. Review the draft, bulk-promote tiles auto-grouped by category. Bundled detectors are customizable and you can add your own through the GUI. Discovery is a head-start, not a magic wand — results depend on your network and firewalls, every scan is a reviewable draft.</p>
+            <p>Point HOPS at your home network and it finds what's already running. Pi-hole, Proxmox, Plex, the *arr stack, NAS UIs and ~70 other common services recognised out of the box. You review what was found, tick what you want, and HOPS adds them to your dashboard grouped sensibly. It's a head start, not magic — results depend on your network and what's blocking it — so nothing lands on your dashboard until you accept it.</p>
+          </div>
+          <div class="why-card">
+            <h3>Install on a phone or tablet <span class="badge" style="font-size:0.65rem">v2.1</span></h3>
+            <p>Use your browser's "Add to Home Screen" and HOPS opens like a real app — full screen, no browser tabs or address bar in the way. Handy for a wall-mounted tablet. If Wi-Fi blips, the dashboard stays visible with an "offline" banner, and tile colours hold their last-known state rather than turning everything red.</p>
           </div>
         </div>
       </div>
@@ -289,6 +293,22 @@
           <div class="shot">
             <img src="screenshots/mobile.png" alt="Responsive mobile layout" />
             <div class="shot-caption"><b>Mobile</b><span>Responsive layout works on phones and tablets</span></div>
+          </div>
+          <div class="shot">
+            <img src="screenshots/admin-discovery.png" alt="Network Discovery — list of scans" />
+            <div class="shot-caption"><b>Network Discovery</b><span>Scan your network for services already running</span></div>
+          </div>
+          <div class="shot">
+            <img src="screenshots/admin-discovery-draft.png" alt="Curate scan results before promoting" />
+            <div class="shot-caption"><b>Curate before promoting</b><span>Review what was found, tick the ones you want</span></div>
+          </div>
+          <div class="shot">
+            <img src="screenshots/admin-discovery-detectors.png" alt="Discovery detectors — bundled and custom" />
+            <div class="shot-caption"><b>Detectors</b><span>~70 services recognised out of the box, tweak any of them</span></div>
+          </div>
+          <div class="shot">
+            <img src="screenshots/admin-discovery-diagnostics.png" alt="Diagnostics — find what wasn't recognised" />
+            <div class="shot-caption"><b>Diagnostics</b><span>Find what HOPS missed and turn it into a detector in two clicks</span></div>
           </div>
         </div>
       </div>

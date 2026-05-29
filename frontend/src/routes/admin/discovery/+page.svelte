@@ -3,7 +3,7 @@
   import { goto } from '$app/navigation';
   import Icon from '@iconify/svelte';
   import Button from '$lib/components/shared/Button.svelte';
-  import { isAuthenticated } from '$lib/stores/auth';
+  import { isAuthenticated, waitForAuthChecked } from '$lib/stores/auth';
   import { toast } from '$lib/stores/toast';
   import {
     listScans, deleteScan, cancelScan,
@@ -15,6 +15,7 @@
   let loadError = $state('');
 
   onMount(async () => {
+    await waitForAuthChecked();
     if (!$isAuthenticated) {
       goto('/');
       return;

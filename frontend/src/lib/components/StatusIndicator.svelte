@@ -1,5 +1,6 @@
 <script lang="ts">
   import { statusStore, subscribeToStatus, type StatusInfo } from '$lib/stores/status';
+  import { isOffline } from '$lib/stores/network';
   import { COLORS } from '$lib/constants/colors';
   import Icon from '@iconify/svelte';
   import { onMount, onDestroy } from 'svelte';
@@ -66,14 +67,23 @@
   }
 </script>
 
-<div
-  class="status-indicator"
-  class:loading={status.status === 'loading'}
-  style:--status-color={getStatusColor(status.status)}
-  title={getStatusTitle(status)}
->
-  <Icon icon={getStatusIcon(status.status)} width="12" />
-</div>
+<!-- When the browser/HOPS server is offline, freeze the per-tile indicator:
+     show a neutral "we can't tell right now" icon instead of letting every
+     tile turn red. The actual status colour returns the moment we're back. -->
+{#if $isOffline}
+  <div class="status-indicator offline" title="We can't reach the HOPS server right now — last known status unchanged.">
+    <Icon icon="mdi:cloud-off-outline" width="12" />
+  </div>
+{:else}
+  <div
+    class="status-indicator"
+    class:loading={status.status === 'loading'}
+    style:--status-color={getStatusColor(status.status)}
+    title={getStatusTitle(status)}
+  >
+    <Icon icon={getStatusIcon(status.status)} width="12" />
+  </div>
+{/if}
 
 <style>
   .status-indicator {
@@ -88,6 +98,13 @@
 
   .loading {
     animation: spin 1s linear infinite;
+  }
+
+  /* Frozen / "we don't know" look while the HOPS server is unreachable.
+     Desaturated grey signals "this isn't fresh data" without competing
+     visually with an actual server-down state. */
+  .status-indicator.offline {
+    color: rgba(148, 163, 184, 0.85);
   }
 
   @keyframes spin {

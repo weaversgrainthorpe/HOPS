@@ -2,7 +2,9 @@
 	import { onMount } from 'svelte';
 	import { loadConfig } from '$lib/stores/config';
 	import { initAuth, mustChangePassword } from '$lib/stores/auth';
+	import { initNetworkWatcher } from '$lib/stores/network';
 	import Navbar from '$lib/components/Navbar.svelte';
+	import OfflineBanner from '$lib/components/OfflineBanner.svelte';
 	import Toast from '$lib/components/Toast.svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import ChangePasswordModal from '$lib/components/admin/ChangePasswordModal.svelte';
@@ -19,6 +21,7 @@
 	onMount(() => {
 		initAuth();
 		loadConfig();
+		initNetworkWatcher();
 	});
 
 	// True when the user is typing into a real input — search hotkey must
@@ -164,6 +167,7 @@
 <svelte:window onkeydown={handleKeyDown} />
 
 <Navbar />
+<OfflineBanner />
 
 {@render children()}
 

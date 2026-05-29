@@ -4,7 +4,7 @@
   import { page } from '$app/state';
   import Icon from '@iconify/svelte';
   import Button from '$lib/components/shared/Button.svelte';
-  import { isAuthenticated } from '$lib/stores/auth';
+  import { isAuthenticated, waitForAuthChecked } from '$lib/stores/auth';
   import { toast } from '$lib/stores/toast';
   import { createScan, suggestDiscoveryCIDR } from '$lib/utils/api';
 
@@ -20,6 +20,7 @@
   let formError = $state('');
 
   onMount(async () => {
+    await waitForAuthChecked();
     if (!$isAuthenticated) {
       goto('/');
       return;
@@ -375,16 +376,16 @@
         class:invalid={!!domainError}
       />
       <div class="hint">
-        If you run internal DNS (NPM / Traefik with subdomain routing,
-        pi-hole local DNS records, etc.), HOPS will look up
+        If you run your own DNS at home — Pi-hole local records, or a
+        reverse proxy like NPM or Traefik with subdomains pointed at
+        services — HOPS will try common names like
         <code>sonarr.&lt;domain&gt;</code>, <code>plex.&lt;domain&gt;</code>,
-        and ~50 other common homelab subdomains against your system
-        resolver. Each one that resolves gets added as a draft tile —
-        so reverse-proxy-fronted services finally show up. Each subdomain
-        is probed with up to 5 same-host redirect hops and the whole
-        enumeration is capped at 60s total, so a misconfigured wildcard
-        DNS record can't stall the scan. Leave blank if you don't run
-        internal DNS.
+        and ~50 others. Anything that resolves gets added as a draft
+        tile, so services tucked behind a reverse proxy don't get
+        missed. This step has a built-in safety net: HOPS won't chase
+        endless redirects, and gives up the whole step after about a
+        minute so a wildcard DNS record that "answers" for everything
+        can't stall a scan. Leave blank if you don't run your own DNS.
         {#if domainError}<span class="err">{domainError}</span>{/if}
       </div>
     </div>

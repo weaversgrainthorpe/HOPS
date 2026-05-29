@@ -4,7 +4,7 @@
   import { page } from '$app/state';
   import Icon from '@iconify/svelte';
   import Button from '$lib/components/shared/Button.svelte';
-  import { isAuthenticated } from '$lib/stores/auth';
+  import { isAuthenticated, waitForAuthChecked } from '$lib/stores/auth';
   import { toast } from '$lib/stores/toast';
   import { config as configStore, loadConfig } from '$lib/stores/config';
   import {
@@ -59,6 +59,7 @@
   let rescanning = $state(false);
 
   onMount(async () => {
+    await waitForAuthChecked();
     if (!$isAuthenticated) {
       goto('/');
       return;

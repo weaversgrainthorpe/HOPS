@@ -5,6 +5,92 @@ All notable changes to HOPS (Home Operations Portal System) will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-05-29 — Install as an app, plain-English pass, polish
+
+The headline addition is **Progressive Web App support**: visit HOPS
+on a phone or tablet, "Add to Home Screen", and you get a full-screen
+icon that opens HOPS without any browser tabs or address bar in the
+way — ideal for wall-mounted dashboards. The release also includes a
+broad plain-English pass across the docs and in-product help, a real
+fix for a long-standing auth-state race in protected pages, the four
+Discovery screenshots the marketing surfaces were missing, and a
+fistful of small bug fixes.
+
+### Added
+- **Install as an app (PWA).** Web App Manifest, service worker that
+  pre-caches the SPA shell, and selective runtime caching of the
+  dashboard config + icons so the last-loaded dashboard keeps
+  rendering when Wi-Fi blips. Includes iOS meta tags so Safari's
+  "Add to Home Screen" gets the same full-screen treatment.
+- **"You're offline" banner** that appears below the navbar when the
+  HOPS server is unreachable (combines `navigator.onLine` with a 30 s
+  heartbeat to `/api/version`). Shows how long since HOPS was last
+  reachable.
+- **Frozen status indicators when offline.** Tile status icons hold
+  their last-known state rather than every tile turning red the
+  moment Wi-Fi drops. A small "we can't tell right now" cloud-off
+  icon signals the indicator isn't fresh.
+- **Discovery screenshots in the README + landing page.** The scan
+  list, curate UI, detector manager, and diagnostics view all now
+  have a place in the marketing surfaces. A `scripts/demo-record/screenshots.mjs`
+  generator script lives next to `record.mjs` so they can be
+  refreshed alongside the demo video.
+- **In-product help tooltips** for several Discovery invariants that
+  previously required reading the source: status-checker backoff
+  behaviour (on the Settings page), per-host probe budget (likewise),
+  what "next scan" means for detector edits (Manage detectors lede),
+  favicon-hash priority over the bundled corpus (DetectorEditModal),
+  same-host-redirect handling (Diagnostics aside), and the
+  forward-enum redirect/time budget (new-scan internal-domain hint).
+
+### Changed
+- **Plain-English pass.** README's Network Discovery section, the
+  USER_GUIDE Discovery chapter, the in-app HelpModal card, six
+  Settings descriptions, and the docs/index.html landing-page why-grid
+  card all rewritten to drop jargon (no more "back off exponentially",
+  "in-flight scan", "favicon-hash corpus", "5 same-host redirect
+  hops", "deployment topology", "switched vs Wi-Fi VLAN segmentation").
+  HOPS is for homelab users, not network engineers.
+- **ROADMAP simplified.** Tier 1/2/3/4 jargon replaced with "Small
+  things — could happen soon", "Medium things — would take a couple
+  of weeks", "Bigger things", "Stretch things". Engineer-speak
+  descriptions softened throughout.
+- **DOCS-TODO retired.** Items that were done are not to-dos. The
+  remaining outstanding work (API quirks worth flagging,
+  test-scaffolding gotchas) is now inline as comments at the point
+  someone refactoring would actually see it.
+
+### Fixed
+- **Auth-state race on protected pages.** `initAuth()` runs async at
+  layout mount; protected pages were reading `$isAuthenticated` in
+  their own `onMount` before that resolved, seeing the default
+  `false`, and bouncing freshly-logged-in users back to the admin
+  index. Affected all six protected routes (`/settings` and every
+  `/admin/discovery/*` page). A new `waitForAuthChecked()` helper in
+  the auth store gives pages a single line to block on.
+- **`/api/icons` response shape pinned** by a new pre-release contract
+  test. The bare-array vs `{icons: [...]}` shape mismatch had been
+  causing intermittent breakage.
+
+### Internal
+- **Pre-release test suite expanded** with a Playwright `serviceWorkers: 'block'`
+  setting so cross-test cache pollution from the new service worker
+  can't poison E2E results.
+- **API quirk comments** inlined at the affected routes in
+  `backend/internal/api/router.go` — the deliberate restore-via-POST
+  asymmetry on `/api/backups/{name}`, the `reset-bundled` sentinel
+  inside `/api/discovery/detectors/`, the intentional public
+  `/api/status/{id}` path, and the `?resultsSince` polling cursor on
+  scan results.
+
+### Migration notes
+- **Clean upgrade from any v2.0.x.** No schema migrations beyond the
+  additive ones the new release does on first boot. Existing
+  dashboards, detectors, scans, settings — all preserved.
+- **Service worker activates on first load** of v2.1.0; users who had
+  v2.0.x open in another tab might need one reload to pick it up.
+  No data implication.
+
 ## [2.0.2] - 2026-05-28 — Frontend version chip fix (take two)
 
 The 2.0.1 release bumped the frontend `package.json` from `1.7.0` to

@@ -11,6 +11,17 @@
 		<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
 		<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
 
+		<!-- PWA: install to home screen, full-screen kiosk on wall tablets -->
+		<link rel="manifest" href="/manifest.webmanifest" />
+		<meta name="theme-color" content="#1e293b" />
+		<meta name="application-name" content="HOPS" />
+		<!-- iOS PWA support — Safari doesn't honour the manifest's display
+		     mode; these meta tags are how you get full-screen on iPhone/iPad
+		     after "Add to Home Screen". -->
+		<meta name="apple-mobile-web-app-capable" content="yes" />
+		<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+		<meta name="apple-mobile-web-app-title" content="HOPS" />
+
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover">

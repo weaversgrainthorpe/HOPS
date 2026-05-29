@@ -237,6 +237,11 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/health", r.handleGetHealth)
 	r.mux.HandleFunc("/api/version", r.handleGetVersion)
 	r.mux.HandleFunc("/api/config", r.handleConfig)
+	// Intentionally public — the SPA polls this for tile colour indicators
+	// before login so a viewer landing on a public dashboard sees status
+	// dots immediately. Entry IDs are random UUIDs from the user's own
+	// config, so this is not a data-leak surface. Don't "tighten" it
+	// without re-reading the dashboard-render path.
 	r.mux.HandleFunc("/api/status/", r.handleGetStatus)
 	r.mux.HandleFunc("/api/auth/login", r.handleLogin)
 	r.mux.HandleFunc("/api/auth/check", r.handleAuthCheck)
@@ -248,7 +253,11 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/config/import", r.protected(r.handleImportConfig))
 	r.mux.HandleFunc("/api/config/reset", r.protected(r.handleResetConfig))
 
-	// Backup management routes
+	// Backup management routes. Note the asymmetry, kept deliberately:
+	//   POST /api/backups            → create a new backup
+	//   POST /api/backups/{name}     → RESTORE the named backup
+	// Splitting the restore into /api/backups/{name}/restore is the kind
+	// of "tidy" that breaks every client. Leave it alone.
 	r.mux.HandleFunc("/api/backups", r.protected(r.handleBackups))
 	r.mux.HandleFunc("/api/backups/", r.protected(r.handleBackupActions))
 
@@ -258,7 +267,21 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/settings/", r.protected(r.handleSettingUpdate))
 
 	// Network discovery routes (admin-only). The collection handler
-	// dispatches by method; the item handler parses /{id}/...
+	// dispatches by method; the item handler parses /{id}/... .
+	//
+	// Two quirks worth flagging for anyone refactoring:
+	//
+	// 1. GET /api/discovery/scans/{id} accepts ?resultsSince=<rfc3339>
+	//    as a polling cursor. The first call should pass nothing
+	//    (returns the full result set); subsequent polls pass the
+	//    max createdAt the client has seen, and the server returns
+	//    only newer rows. Don't replace this with a bare GET — the
+	//    frontend's delta polling depends on the cursor.
+	//
+	// 2. POST /api/discovery/detectors/reset-bundled looks like a
+	//    detector ID but isn't — it's a sentinel that resets every
+	//    override at once. handleDiscoveryDetectorsItem peels off
+	//    that literal before treating the path segment as an ID.
 	r.mux.HandleFunc("/api/discovery/scans", r.protected(r.handleDiscoveryScansCollection))
 	r.mux.HandleFunc("/api/discovery/scans/", r.protected(r.handleDiscoveryScansItem))
 	r.mux.HandleFunc("/api/discovery/detectors", r.protected(r.handleDiscoveryDetectorsCollection))

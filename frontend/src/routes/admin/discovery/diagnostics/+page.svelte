@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import Icon from '@iconify/svelte';
-  import { isAuthenticated } from '$lib/stores/auth';
+  import { isAuthenticated, waitForAuthChecked } from '$lib/stores/auth';
   import { toast } from '$lib/stores/toast';
   import {
     getDiagnostics, createDetector,
@@ -22,6 +22,7 @@
   const distinctDetectors = $derived(summary.length);
 
   onMount(async () => {
+    await waitForAuthChecked();
     if (!$isAuthenticated) {
       goto('/');
       return;
@@ -137,11 +138,12 @@
     new detector from what HOPS saw.
   </p>
   <p class="lede-aside">
-    <b>Heads-up about titles below:</b> when a service's root <code>/</code>
-    redirects (e.g. Uptime Kuma <code>/</code> → <code>/dashboard</code>),
-    HOPS follows up to 5 same-host redirects and shows the title of the
-    final page, not the redirect stub. So an unidentified row labelled
-    "Dashboard" might be a service whose home page lives behind a redirect.
+    <b>A note about titles:</b> some services (Uptime Kuma is the classic)
+    send you on to a different page when you visit the bare address.
+    HOPS follows those redirects so the title you see below is from the
+    page the service actually lands on — not whatever sat at the original
+    URL. So a row labelled "Dashboard" might be a service whose home page
+    is one redirect away.
   </p>
 
   {#if loading}
