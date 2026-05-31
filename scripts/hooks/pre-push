@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Pre-push smoke gate — catch a broken Go build or version-source drift before
+# the push (and well before the tag-driven release workflow runs the full
+# scripts/test-prerelease.sh suite).
+#
+# Enable once per clone:  git config core.hooksPath scripts/hooks
+set -euo pipefail
+
+REPO_DIR="$(git rev-parse --show-toplevel)"
+cd "$REPO_DIR"
+
+echo "[pre-push] version-source check..."
+scripts/check-versions.sh
+
+echo "[pre-push] go build..."
+( cd backend && go build -o /dev/null ./cmd/hops )
+
+echo "[pre-push] OK"

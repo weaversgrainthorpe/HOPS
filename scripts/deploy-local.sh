@@ -3,21 +3,23 @@
 # and mirror the source tree to the user's dev workstation.
 #
 # Two distinct operations in one invocation:
-#   1. PROD_HOST (10.10.0.9 by default) — full deploy: build backend + frontend,
+#   1. PROD_HOST (10.10.0.9) — full deploy: build backend + frontend,
 #      SCP artifacts, stop hops, swap binary/frontend, start hops, health-check.
-#   2. MIRROR_HOST (10.10.0.50 by default) — rsync the source tree only.
+#   2. MIRROR_HOST (10.10.0.50) — rsync the source tree only.
 #      No systemd, no restart — this host has no HOPS service; the user
-#      occasionally develops there and wants the latest source. Disable with
-#      MIRROR_HOST= (empty).
+#      occasionally develops there and wants the latest source. Disable by
+#      setting MIRROR_HOST="" below.
 #
 # Use this during rapid iteration when the release workflow is disabled.
 # Re-enable the workflow and use ~/deploy-hops.sh <tag> on prod for proper releases.
 set -euo pipefail
 
-PROD_HOST="${PROD_HOST:-jonathan@10.10.0.9}"
-PROD_DIR="${PROD_DIR:-/home/jonathan/HOPS}"
-MIRROR_HOST="${MIRROR_HOST-jonathan@10.10.0.50}"      # empty disables the mirror
-MIRROR_DIR="${MIRROR_DIR:-/home/jonathan/dev/hops}"
+# Hardcoded targets — no env-var overrides (family convention: picking the wrong
+# host should be an explicit edit here, not a shell knob).
+PROD_HOST="jonathan@10.10.0.9"
+PROD_DIR="/home/jonathan/HOPS"
+MIRROR_HOST="jonathan@10.10.0.50"      # set "" to disable the source mirror
+MIRROR_DIR="/home/jonathan/dev/hops"
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
 cd "$REPO_DIR"
