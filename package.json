@@ -1,0 +1,12 @@
+{
+  "name": "hops-frontend-lint",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Dev-only tooling for hops's no-build frontend. Not a build step — just a CSS lint guardrail (see scripts/lint-css.sh).",
+  "scripts": {
+    "lint:css": "stylelint \"frontend/src/**/*.css\""
+  },
+  "devDependencies": {
+    "stylelint": "^16.10.0"
+  }
+}

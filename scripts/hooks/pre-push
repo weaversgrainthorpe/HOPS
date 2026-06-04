@@ -15,4 +15,13 @@ scripts/check-versions.sh
 echo "[pre-push] go build..."
 ( cd backend && go build -o /dev/null ./cmd/hops )
 
+# CSS lint guardrail (stylelint). Error-severity rules block the push; warnings
+# are informational. No-build frontend: skips if the dev tooling isn't installed.
+if [ -x "$REPO_DIR/node_modules/.bin/stylelint" ]; then
+    echo "[pre-push] css lint..."
+    node_modules/.bin/stylelint "frontend/src/**/*.css"
+else
+    echo "[pre-push] css lint skipped (run 'npm install' to enable)"
+fi
+
 echo "[pre-push] OK"
