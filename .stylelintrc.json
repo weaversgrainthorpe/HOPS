@@ -1,0 +1,16 @@
+{
+  "//": "HALo CSS guardrail. Lean, problem-focused — NOT stylistic. Targets the recurring real bugs: duplicate selectors (silent overrides), duplicate/overridden properties, invalid props, // comments (invalid in CSS), malformed hex. The hardcoded-hex -> var migration is tracked separately; once done, enable color-no-hex (scoped) to forbid NEW raw colours.",
+  "rules": {
+    "no-duplicate-selectors": [true, { "severity": "warning" }],
+    "no-duplicate-at-import-rules": true,
+    "declaration-block-no-duplicate-properties": [true, { "ignore": ["consecutive-duplicates-with-different-values"] }],
+    "declaration-block-no-shorthand-property-overrides": true,
+    "property-no-unknown": true,
+    "color-no-invalid-hex": true,
+    "no-invalid-double-slash-comments": true,
+    "block-no-empty": true,
+    "font-family-no-duplicate-names": true,
+    "keyframe-declaration-no-important": true,
+    "no-irregular-whitespace": true
+  }
+}
