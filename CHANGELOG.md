@@ -5,6 +5,78 @@ All notable changes to HOPS (Home Operations Portal System) will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.1] - 2026-06-06 — UI/UX cleanup pass
+
+A focused interior-design release: no new features, but the frontend
+is meaningfully tidier underneath. Several months of small UI/UX
+audit findings closed in one pass — shared table/empty/badge/lede
+utilities replace per-page reimplementations, the shared `<Button>`
+component reaches more sites, the Toast component now meets WCAG
+2.2.1, and a long-running idle-mode papercut (lose your edits because
+edit mode timed out while you were thinking) is finally fixed at the
+session-watcher layer.
+
+### Added
+- **authWatcher proactive session check.** A new `authWatcher.ts`
+  store revalidates the session whenever the tab regains visibility,
+  regains focus, or every 5 minutes — and clears edit mode if the
+  session has expired. Previously, leaving HOPS in edit mode for hours
+  meant your eventual save attempt logged you out and threw away your
+  in-flight edits. Now the timeout fires before you start editing,
+  not after.
+- **Shared `.data-table` utility** in `app.css` — replaces five
+  near-identical per-page table chrome blocks across Discovery
+  (scans, summary, detectors, diag, results). Pages keep their
+  size-specific tweaks; the shared shell handles surface, border,
+  radius, header row, and last-row border.
+- **Toast pause/resume API** (`toast.pause(id)` / `toast.resume(id)`)
+  wired to the Toast component's hover and focus handlers — meets
+  WCAG 2.2.1 (Timing Adjustable).
+
+### Changed
+- **Reverse-proxy setting merged into Authentication.** The single
+  `proxy.trusted_cidrs` setting didn't earn its own group heading and
+  is conceptually an auth concern (it decides which X-Forwarded-For
+  hops to trust during login). The "Reverse proxy" section heading
+  is gone.
+- **Group edit modal trimmed.** Text Color, Display Style, and Row
+  Width collapsed into an `<details>Advanced</details>` disclosure so
+  the primary fields (Name, Icon, Color, Opacity) breathe.
+- **Discovery empty states** unified — every empty list/table now
+  uses the `.empty-state` utility with a consistent icon size, dashed
+  border, and centred layout. The shared rule drives the icon size
+  via `--icon-empty`, eliminating the per-page `width="40"` vs `"48"`
+  inconsistency.
+- **Lede paragraphs** standardised. Local `.lede` / `.lede-aside`
+  duplicates removed from three Discovery pages; the shared
+  utilities in `app.css` own the styling now.
+- **Restart-pill consolidated** with the badge taxonomy
+  (`.badge.badge--warning.badge--pill`) — no more bespoke
+  amber-on-amber pill CSS.
+- **Discovery border-radius literals** (`0.25rem` → `0.75rem`)
+  migrated to `var(--radius-{sm,md,lg,xl})` tokens.
+- **Discovery bulk-action buttons** ("Select all", "Select none",
+  "Select all high-confidence") use the shared `<Button>` component
+  in ghost/small variant instead of bespoke `.bulk button` CSS.
+
+### Fixed
+- **Dev-badge contrast.** Navbar's "DEV" badge background moved from
+  amber-700 (`#b45309`, 3.69:1 with white text — fails WCAG AA) to
+  amber-800 (`#92400e`, 5.12:1 — passes).
+- **aria-labels on icon-only action buttons** across Discovery (scan
+  list, detector list) and IconPicker close button — screen readers
+  now announce "Delete scan draft" instead of "button".
+
+### Internal
+- **Pre-push gate** runs version-source check + `go build` + CSS
+  lint on every push (catches mismatched VERSION / `version.go` /
+  `package.json` / doc surfaces before they ship — the failure mode
+  that ate v2.0.0 and v2.0.1).
+
+### Migration notes
+- No schema changes, no config changes. Drop in the new binary +
+  restart.
+
 ## [2.1.0] - 2026-05-29 — Install as an app, plain-English pass, polish
 
 The headline addition is **Progressive Web App support**: visit HOPS
