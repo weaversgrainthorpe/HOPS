@@ -1,4 +1,4 @@
-# HOPS User Guide (v2.1.0)
+# HOPS User Guide (v2.1.1)
 
 Welcome to HOPS (Home Operations Portal System)! This guide will help you get started and make the most of your dashboard.
 

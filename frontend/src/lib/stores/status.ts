@@ -18,7 +18,15 @@ const activeEntries = new Set<string>();
 let subscriberCount = 0;
 let isPolling = false;
 
-export async function fetchStatus(entryId: string): Promise<StatusInfo> {
+/**
+ * Sentinel returned by fetchStatus when the previous status should be
+ * kept (e.g. server unreachable, or session expired — global handlers
+ * cover both). The poller drops these instead of writing them into the
+ * store so tiles don't all flip to a misleading "unknown".
+ */
+const KEEP_PREVIOUS = Symbol('keep-previous');
+
+export async function fetchStatus(entryId: string): Promise<StatusInfo | typeof KEEP_PREVIOUS> {
   try {
     const data = await apiGetStatus(entryId);
     return {
@@ -27,8 +35,14 @@ export async function fetchStatus(entryId: string): Promise<StatusInfo> {
       lastChecked: data.lastChecked
     };
   } catch (error) {
+    // SESSION_EXPIRED → the global session-expired handler is already
+    //   clearing auth + redirecting. Don't touch the status.
+    // Network errors → the offline watcher in network.ts is already
+    //   surfacing the outage via the banner + StatusIndicator's offline
+    //   icon. Freezing the per-tile status at its last known value
+    //   reads better than flipping every tile to "unknown".
     logError('Status fetch', error);
-    return { status: 'unknown' };
+    return KEEP_PREVIOUS;
   }
 }
 
@@ -47,6 +61,7 @@ export function subscribeToStatus(entryId: string) {
 
   // Fetch immediately
   fetchStatus(entryId).then(status => {
+    if (status === KEEP_PREVIOUS) return;
     statusStore.update(store => {
       const newStore = new Map(store);
       newStore.set(entryId, status);
@@ -91,8 +106,8 @@ async function pollAllStatuses() {
   statusStore.update(store => {
     const newStore = new Map(store);
     for (const result of results) {
-      if (result.status === 'fulfilled') {
-        newStore.set(result.value.entryId, result.value.status);
+      if (result.status === 'fulfilled' && result.value.status !== KEEP_PREVIOUS) {
+        newStore.set(result.value.entryId, result.value.status as StatusInfo);
       }
     }
     return newStore;

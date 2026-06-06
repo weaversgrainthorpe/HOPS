@@ -18,6 +18,7 @@
   import type { DndEvent } from 'svelte-dnd-action';
   import { onMount, onDestroy } from 'svelte';
   import { logError } from '$lib/utils/errors';
+  import { toast } from '$lib/stores/toast';
 
   let { dashboard }: { dashboard: Dashboard } = $props();
   let activeTabIndex = $state(0);
@@ -152,7 +153,7 @@
     });
   }
 
-  async function handleAddGroup(tabId: string, groupName: string, icon?: string, iconUrl?: string, color?: string, opacity?: number, textColor?: 'auto' | 'light' | 'dark', displayStyle?: 'header' | 'folder', width?: 'full' | 'half' | 'third') {
+  async function handleAddGroup(tabId: string, groupName: string, icon?: string, iconUrl?: string, iconBgColor?: string, color?: string, opacity?: number, textColor?: 'auto' | 'light' | 'dark', displayStyle?: 'header' | 'folder', width?: 'full' | 'half' | 'third') {
     if (!requireAuth()) return;
     await mutateDashboard(dashboard.id, (dash) => {
       const tab = dash.tabs.find(t => t.id === tabId);
@@ -163,6 +164,7 @@
         name: groupName,
         icon,
         iconUrl,
+        iconBgColor,
         color,
         opacity,
         textColor,
@@ -195,8 +197,8 @@
   }
 
   function makeAddGroupHandler(tabId: string) {
-    return (groupName: string, icon?: string, iconUrl?: string, color?: string, opacity?: number, textColor?: 'auto' | 'light' | 'dark', displayStyle?: 'header' | 'folder', width?: 'full' | 'half' | 'third') => {
-      handleAddGroup(tabId, groupName, icon, iconUrl, color, opacity, textColor, displayStyle, width);
+    return (groupName: string, icon?: string, iconUrl?: string, iconBgColor?: string, color?: string, opacity?: number, textColor?: 'auto' | 'light' | 'dark', displayStyle?: 'header' | 'folder', width?: 'full' | 'half' | 'third') => {
+      handleAddGroup(tabId, groupName, icon, iconUrl, iconBgColor, color, opacity, textColor, displayStyle, width);
     };
   }
 
@@ -458,12 +460,12 @@
     }));
   }
 
-  async function handleUpdateTab(tabId: string, newName: string, newIcon?: string, newIconUrl?: string, newColor?: string, newOpacity?: number) {
+  async function handleUpdateTab(tabId: string, newName: string, newIcon?: string, newIconUrl?: string, newIconBgColor?: string, newColor?: string, newOpacity?: number) {
     if (!requireAuth()) return;
     await mutateDashboard(dashboard.id, (dash) => {
       const tabIndex = dash.tabs.findIndex(t => t.id === tabId);
       if (tabIndex !== -1) {
-        dash.tabs[tabIndex] = { ...dash.tabs[tabIndex], name: newName, icon: newIcon, iconUrl: newIconUrl, color: newColor, opacity: newOpacity };
+        dash.tabs[tabIndex] = { ...dash.tabs[tabIndex], name: newName, icon: newIcon, iconUrl: newIconUrl, iconBgColor: newIconBgColor, color: newColor, opacity: newOpacity };
       }
     });
     editingTabIndex = null;
@@ -500,10 +502,11 @@
       showBackgroundConfig = false;
     } catch (error) {
       logError('Background save', error);
-      if (error instanceof Error && error.message.includes('401')) {
-        alert('Session expired. Please login again at /admin');
-      } else {
-        alert('Failed to save background. Please try again.');
+      // 401s are handled by the global session-expired handler
+      // (toast + redirect). For other failures, surface a friendly
+      // toast instead of a blocking native alert().
+      if (!(error instanceof Error && error.message.includes('401'))) {
+        toast.error("Couldn't save the background — please try again.");
       }
     }
   }
@@ -528,10 +531,8 @@
       });
     } catch (error) {
       logError('Tab background', error);
-      if (error instanceof Error && error.message.includes('401')) {
-        alert('Session expired. Please login again at /admin');
-      } else {
-        alert('Failed to save background. Please try again.');
+      if (!(error instanceof Error && error.message.includes('401'))) {
+        toast.error("Couldn't save the tab background — please try again.");
       }
     }
   }
@@ -553,6 +554,7 @@
     name: string,
     icon?: string,
     iconUrl?: string,
+    iconBgColor?: string,
     color?: string,
     opacity?: number
   ) {
@@ -564,6 +566,7 @@
         name,
         icon,
         iconUrl,
+        iconBgColor,
         color,
         opacity,
         groups: [],
@@ -674,10 +677,16 @@
               onclick={() => handleTabClick(index)}
               onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleTabClick(index); }}
             >
-              {#if tab.iconUrl}
-                <img src={tab.iconUrl} alt="" class="tab-icon-img" />
-              {:else if tab.icon}
-                <Icon icon={tab.icon} width="24" />
+              {#if tab.iconUrl || tab.icon}
+                <span class="tab-icon-backing"
+                      class:has-bg={tab.iconBgColor}
+                      style:background-color={tab.iconBgColor}>
+                  {#if tab.iconUrl}
+                    <img src={tab.iconUrl} alt="" class="tab-icon-img" />
+                  {:else if tab.icon}
+                    <Icon icon={tab.icon} width="24" />
+                  {/if}
+                </span>
               {/if}
               <span class="tab-name">{tab.name}</span>
             </div>
@@ -786,11 +795,12 @@
     tabName={dashboard.tabs[editingTabIndex].name}
     tabIcon={dashboard.tabs[editingTabIndex].icon}
     tabIconUrl={dashboard.tabs[editingTabIndex].iconUrl}
+    tabIconBgColor={dashboard.tabs[editingTabIndex].iconBgColor}
     tabColor={dashboard.tabs[editingTabIndex].color}
     tabOpacity={dashboard.tabs[editingTabIndex].opacity}
     tabBackground={dashboard.tabs[editingTabIndex].background}
     perTabBackgrounds={dashboard.perTabBackgrounds}
-    onSave={(newName, newIcon, newIconUrl, newColor, newOpacity) => handleUpdateTab(dashboard.tabs[editingTabIndex!].id, newName, newIcon, newIconUrl, newColor, newOpacity)}
+    onSave={(newName, newIcon, newIconUrl, newIconBgColor, newColor, newOpacity) => handleUpdateTab(dashboard.tabs[editingTabIndex!].id, newName, newIcon, newIconUrl, newIconBgColor, newColor, newOpacity)}
     onSaveBackground={(background) => handleUpdateTabBackground(dashboard.tabs[editingTabIndex!].id, background)}
     onCancel={() => editingTabIndex = null}
     onDelete={async () => {
@@ -900,6 +910,22 @@
     z-index: 1;
   }
 
+  /* On phones, stop wrapping tabs to multiple rows (which can push
+     the whole dashboard below the fold). Scroll them horizontally
+     instead — the tab strip becomes a single row the user can swipe
+     through. */
+  @media (max-width: 768px) {
+    .tabs {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: thin;
+    }
+    .tab-container {
+      flex-shrink: 0;
+    }
+  }
+
   .tab-container {
     position: relative;
     display: flex;
@@ -1006,6 +1032,19 @@
     object-fit: contain;
   }
 
+  /* Optional coloured backing behind the tab icon. Same pattern as
+     tile / group — invisible until iconBgColor is set. */
+  .tab-icon-backing {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .tab-icon-backing.has-bg {
+    padding: 0.25rem;
+    border-radius: 0.3rem;
+  }
+
   .tab-controls {
     position: absolute;
     right: -0.5rem;
@@ -1018,8 +1057,18 @@
     z-index: 10;
   }
 
-  .tab-container:hover .tab-controls {
+  .tab-container:hover .tab-controls,
+  .tab-container:focus-within .tab-controls {
     opacity: 1;
+  }
+
+  /* Touch devices have no hover, so the edit/duplicate/delete tab buttons
+     would be unreachable without this — only entry to those actions on
+     a tablet. */
+  @media (hover: none) {
+    .tab-controls {
+      opacity: 1;
+    }
   }
 
   .tab-control-btn {

@@ -74,7 +74,28 @@ async function fetchAPI(endpoint: string, options: RequestInit = {}) {
       }
       throw new Error('SESSION_EXPIRED');
     }
-    throw new Error(`API error: ${response.status} ${response.statusText}`);
+    // Try to surface the server's own error message — HOPS handlers
+    // write `{"error": "..."}` JSON on failure. Falls back to a
+    // friendly status-class message so users never see raw HTTP
+    // text like "API error: 500 Internal Server Error".
+    let serverMsg = '';
+    try {
+      const text = await response.text();
+      if (text) {
+        try {
+          const parsed = JSON.parse(text);
+          if (parsed && typeof parsed.error === 'string') serverMsg = parsed.error;
+        } catch { /* not JSON — leave serverMsg empty */ }
+      }
+    } catch { /* body unreadable */ }
+    if (serverMsg) throw new Error(serverMsg);
+    if (response.status === 403) throw new Error("You don't have permission to do that.");
+    if (response.status === 404) throw new Error("Couldn't find what you were looking for.");
+    if (response.status === 409) throw new Error("That conflicts with the server's current state — try refreshing.");
+    if (response.status === 413) throw new Error("That upload is too big.");
+    if (response.status === 429) throw new Error("Too many requests — slow down and try again in a moment.");
+    if (response.status >= 500) throw new Error("HOPS hit an error — check the server logs for details.");
+    throw new Error("Something went wrong with that request. Try again.");
   }
 
   // 204 No Content — no body to parse.
@@ -125,11 +146,38 @@ export async function checkAuth(): Promise<AuthStatus> {
   }
 }
 
+export class LoginError extends Error {
+  constructor(public reason: 'unauthorized' | 'network' | 'rate-limited' | 'unknown', message: string) {
+    super(message);
+    this.name = 'LoginError';
+  }
+}
+
 export async function login(username: string, password: string): Promise<{ mustChangePassword: boolean }> {
-  const resp = await fetchAPI('/auth/login', {
-    method: 'POST',
-    body: JSON.stringify({ username, password }),
-  });
+  // Don't go through fetchAPI — a 401 here means "wrong password", not
+  // "session expired", and we don't want the global session-expired
+  // handler to fire on every failed login attempt.
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+      credentials: 'same-origin',
+    });
+  } catch {
+    throw new LoginError('network', "Couldn't reach the HOPS server. Check that it's running and your network is up.");
+  }
+  if (response.status === 401) {
+    throw new LoginError('unauthorized', 'Sign-in failed — check your username and password.');
+  }
+  if (response.status === 429) {
+    throw new LoginError('rate-limited', 'Too many sign-in attempts. Wait a minute and try again.');
+  }
+  if (!response.ok) {
+    throw new LoginError('unknown', `Sign-in failed (${response.status}). Check the server logs.`);
+  }
+  const resp = await response.json();
   return { mustChangePassword: resp.mustChangePassword === true };
 }
 

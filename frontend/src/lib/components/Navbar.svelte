@@ -115,6 +115,7 @@
             onclick={decreaseTextSize}
             class="text-size-btn"
             disabled={!canDecrease($textSize)}
+            aria-label="Decrease text size"
             title="Decrease text size"
           >
             <span class="text-size-icon small">A</span>
@@ -124,6 +125,7 @@
             onclick={increaseTextSize}
             class="text-size-btn"
             disabled={!canIncrease($textSize)}
+            aria-label="Increase text size"
             title="Increase text size"
           >
             <span class="text-size-icon large">A</span>
@@ -211,12 +213,17 @@
     top: 0;
     z-index: var(--z-navbar);
     backdrop-filter: blur(10px);
+    /* On iOS standalone PWA the notch sits over the top of the navbar.
+       Add the safe-area inset so brand + actions stay clear. */
+    padding-top: env(safe-area-inset-top, 0);
   }
 
   .nav-content {
     max-width: 1400px;
     margin: 0 auto;
-    padding: 0 1rem;
+    /* Match the navbar safe-area on the sides too, so the brand/actions
+       don't sit under the rounded screen corners in landscape. */
+    padding: 0 max(1rem, env(safe-area-inset-left, 0)) 0 max(1rem, env(safe-area-inset-right, 0));
     display: grid;
     grid-template-columns: 1fr auto 1fr;
     align-items: center;
@@ -280,7 +287,9 @@
   .dev-badge {
     font-size: 11px;
     font-weight: bold;
-    background: #b45309;
+    /* amber-800 hits 5.12:1 with white text — amber-700 only managed 3.69:1
+       which is below WCAG AA (4.5:1 for body text). */
+    background: #92400e;
     color: #fff;
     padding: 2px 8px;
     border-radius: 4px;

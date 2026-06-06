@@ -21,6 +21,8 @@
     type?: 'button' | 'submit' | 'reset';
     /** Additional CSS class */
     class?: string;
+    /** Accessible name — required for icon-only buttons (no children). */
+    ariaLabel?: string;
     /** Click handler */
     onclick?: (e: MouseEvent) => void;
     /** Button content */
@@ -37,6 +39,7 @@
     loading = false,
     type = 'button',
     class: className = '',
+    ariaLabel,
     onclick,
     children
   }: Props = $props();
@@ -57,6 +60,7 @@
   class:full-width={fullWidth}
   class:loading
   disabled={isDisabled}
+  aria-label={ariaLabel}
   onclick={onclick}
 >
   {#if loading}

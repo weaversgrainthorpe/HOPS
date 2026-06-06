@@ -253,7 +253,7 @@
       showAddCategory = false;
       selectedCategory = newCategoryId;
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to add category');
+      toast.error(err instanceof Error ? err.message : 'Failed to add category');
     } finally {
       saving = false;
     }
@@ -327,7 +327,7 @@
   >
     <div class="modal-header">
       <h2 id="icon-picker-title">Choose an Icon</h2>
-      <button class="close-btn" onclick={onCancel}>
+      <button class="close-btn" onclick={onCancel} aria-label="Close icon picker">
         <Icon icon="mdi:close" width="24" />
       </button>
     </div>
@@ -858,7 +858,7 @@
   }
 
   .error-message {
-    color: var(--color-error);
+    color: var(--color-error-text);
   }
 
   .modal-footer {
@@ -943,7 +943,7 @@
 
   .delete-category-btn:hover {
     background: color-mix(in srgb, var(--color-error) 10%, transparent);
-    color: var(--color-error);
+    color: var(--color-error-text);
   }
 
   .delete-icon-btn {
@@ -966,7 +966,7 @@
 
   .delete-icon-btn:hover {
     background: var(--color-error);
-    border-color: var(--color-error);
+    border-color: var(--color-error-text);
     color: white;
   }
 

@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import Icon from '@iconify/svelte';
+  import Button from '$lib/components/shared/Button.svelte';
   import { isAuthenticated, waitForAuthChecked } from '$lib/stores/auth';
   import { toast } from '$lib/stores/toast';
   import {
@@ -122,9 +123,7 @@
 <div class="page">
   <header class="header">
     <div class="title-row">
-      <button class="back" onclick={() => goto('/admin/discovery')} title="Back to Discovery">
-        <Icon icon="mdi:arrow-left" width="20" />
-      </button>
+      <Button variant="ghost" icon="mdi:arrow-left" onclick={() => goto('/admin/discovery')} ariaLabel="Back to Discovery" />
       <h1>Discovery diagnostics</h1>
     </div>
   </header>
@@ -155,8 +154,8 @@
     <section class="section">
       <h2>Detection summary</h2>
       {#if summary.length === 0}
-        <div class="empty">
-          <Icon icon="mdi:radar" width="40" />
+        <div class="empty-state">
+          <Icon icon="mdi:radar" width="48" />
           <p>No scan results yet. Run a scan to populate this view.</p>
         </div>
       {:else}
@@ -164,7 +163,7 @@
           {totalDetections.toLocaleString()} total detection{totalDetections === 1 ? '' : 's'}
           across {distinctDetectors} distinct detector{distinctDetectors === 1 ? '' : 's'}.
         </p>
-        <table class="summary">
+        <div class="table-scroll"><table class="data-table summary">
           <thead>
             <tr>
               <th>Detector</th>
@@ -183,7 +182,7 @@
               </tr>
             {/each}
           </tbody>
-        </table>
+        </table></div>
       {/if}
     </section>
 
@@ -191,8 +190,8 @@
     <section class="section">
       <h2>Unidentified services</h2>
       {#if unidentified.length === 0}
-        <div class="empty">
-          <Icon icon="mdi:check-circle-outline" width="40" />
+        <div class="empty-state">
+          <Icon icon="mdi:check-circle-outline" width="48" />
           <p>
             Every HTTP service in your past scans matched a specific detector.
             This view will fill up if a future scan finds an app HOPS doesn't
@@ -201,7 +200,7 @@
         </div>
       {:else}
         <p class="count">{unidentified.length} unidentified service{unidentified.length === 1 ? '' : 's'} across all scans.</p>
-        <table class="diag">
+        <div class="table-scroll"><table class="data-table diag">
       <thead>
         <tr>
           <th>Icon</th>
@@ -249,7 +248,7 @@
           </tr>
         {/each}
       </tbody>
-    </table>
+    </table></div>
       {/if}
     </section>
   {/if}
@@ -272,66 +271,31 @@
   }
   .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; gap: 1rem; }
   .title-row { display: flex; align-items: center; gap: 0.75rem; }
-  .title-row h1 { margin: 0; font-size: 1.5rem; }
-  .back {
-    background: transparent; border: 1px solid var(--border);
-    border-radius: 0.4rem; color: var(--text-primary);
-    padding: 0.4rem 0.55rem; cursor: pointer;
-  }
-  .back:hover { background: var(--bg-tertiary); }
-  .lede { color: var(--text-secondary); margin: 0 0 1.5rem; max-width: 80ch; }
+  .title-row h1 { margin: 0; font-size: var(--font-h1); }
+  /* .lede ships from app.css */
   .muted { color: var(--text-secondary); }
   .small { font-size: 0.82rem; }
   .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
   .hostname { color: var(--text-secondary); font-size: 0.8rem; }
   .count { color: var(--text-secondary); margin: 0 0 0.5rem; font-size: 0.9rem; }
 
-  .error { background: var(--bg-tertiary); border: 1px solid var(--color-error, #b00); border-radius: 0.4rem; padding: 0.8rem 1rem; }
-  .empty {
-    text-align: center; padding: 3rem 1rem;
-    color: var(--text-secondary);
-    border: 1px dashed var(--border);
-    border-radius: 0.6rem;
-  }
-  .empty p { margin-top: 0.5rem; max-width: 50ch; margin-left: auto; margin-right: auto; }
+  .error { background: var(--bg-tertiary); border: 1px solid var(--color-error, #b00); border-radius: var(--radius-md); padding: 0.8rem 1rem; }
 
   .section { margin-bottom: 2rem; }
-  .section h2 { font-size: 1.1rem; margin: 0 0 0.5rem; }
+  .section h2 { font-size: var(--font-h2); margin: 0 0 0.5rem; }
 
-  table.summary {
-    width: 100%; border-collapse: separate; border-spacing: 0;
-    background: var(--bg-secondary); border: 1px solid var(--border);
-    border-radius: 0.5rem; overflow: hidden;
-  }
-  table.summary th, table.summary td {
-    text-align: left; padding: 0.5rem 0.7rem;
-    border-bottom: 1px solid var(--border);
-    font-size: 0.9rem;
-  }
-  table.summary thead th { background: var(--bg-tertiary); font-weight: 600; }
-  table.summary tbody tr:last-child td { border-bottom: none; }
+  /* table.summary and table.diag chrome ship from .data-table in app.css.
+     Only the size-specific tweaks remain. */
+  table.summary th, table.summary td { padding: var(--space-2) var(--space-3); font-size: 0.9rem; }
+  table.diag th, table.diag td { padding: 0.6rem var(--space-3); font-size: 0.9rem; vertical-align: middle; }
   .num { font-variant-numeric: tabular-nums; }
-
-  table.diag {
-    width: 100%; border-collapse: separate; border-spacing: 0;
-    background: var(--bg-secondary); border: 1px solid var(--border);
-    border-radius: 0.5rem; overflow: hidden;
-  }
-  table.diag th, table.diag td {
-    text-align: left; padding: 0.6rem 0.7rem;
-    border-bottom: 1px solid var(--border);
-    font-size: 0.9rem;
-    vertical-align: middle;
-  }
-  table.diag thead th { background: var(--bg-tertiary); font-weight: 600; }
-  table.diag tbody tr:last-child td { border-bottom: none; }
 
   .icon-cell { width: 36px; text-align: center; }
   .actions-col { width: 1%; white-space: nowrap; }
   .actions { display: flex; gap: 0.5rem; align-items: center; }
   .action {
     background: transparent; border: 1px solid var(--border);
-    border-radius: 0.35rem; padding: 0.3rem 0.6rem;
+    border-radius: var(--radius-md); padding: 0.3rem 0.6rem;
     color: var(--text-primary); cursor: pointer;
     display: inline-flex; align-items: center; gap: 0.3rem;
     font-size: 0.85rem;
@@ -340,7 +304,7 @@
   .action.primary {
     background: rgba(79,140,255,0.15);
     border-color: rgba(79,140,255,0.35);
-    color: #4f8cff;
+    color: var(--accent);
   }
   .action.primary:hover { background: rgba(79,140,255,0.25); }
   .hash { font-size: 0.72rem; color: var(--text-secondary); }

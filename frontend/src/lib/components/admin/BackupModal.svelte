@@ -253,7 +253,7 @@
     gap: 0.5rem;
     padding: 0.75rem;
     background: color-mix(in srgb, var(--color-error) 15%, transparent);
-    color: var(--color-error);
+    color: var(--color-error-text);
     border-radius: 0.375rem;
     font-size: 0.875rem;
   }
@@ -332,7 +332,7 @@
 
   .btn-icon-danger:hover:not(:disabled) {
     background: color-mix(in srgb, var(--color-error) 15%, transparent);
-    color: var(--color-error);
+    color: var(--color-error-text);
   }
 
   .btn-icon:disabled {

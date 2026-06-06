@@ -5,6 +5,7 @@
   import Button from '$lib/components/shared/Button.svelte';
   import { isAuthenticated, waitForAuthChecked } from '$lib/stores/auth';
   import { toast } from '$lib/stores/toast';
+  import { confirm } from '$lib/stores/confirmModal';
   import {
     listDetectors, createDetector, updateDetector, deleteDetector,
     resetAllOverrides,
@@ -116,7 +117,13 @@
 
   async function handleDelete(d: DiscoveryDetector) {
     if (d.source !== 'user') return;
-    if (!confirm(`Delete user detector "${d.name}"?\n\nExisting scan results that already used this detector stay intact; only new scans are affected.`)) return;
+    const ok = await confirm({
+      title: `Delete detector "${d.name}"?`,
+      message: 'Existing scan results that already used this detector stay intact — only new scans are affected.',
+      confirmText: 'Delete',
+      confirmStyle: 'danger',
+    });
+    if (!ok) return;
     try {
       await deleteDetector(d.id);
       detectors = detectors.filter((x) => x.id !== d.id);
@@ -131,7 +138,13 @@
   // next scan. We refresh after so the UI shows the original fields.
   async function handleResetOverride(d: DiscoveryDetector) {
     if (d.source !== 'bundled' || !d.overridden) return;
-    if (!confirm(`Reset "${d.name}" to bundled defaults?\n\nYour customizations to this detector will be discarded.`)) return;
+    const ok = await confirm({
+      title: `Reset "${d.name}" to defaults?`,
+      message: 'Your changes to this detector will be discarded.',
+      confirmText: 'Reset',
+      confirmStyle: 'warning',
+    });
+    if (!ok) return;
     try {
       await deleteDetector(d.id);
       await refresh();
@@ -144,7 +157,13 @@
   // Bulk reset every bundled override. Leaves user/ customs alone.
   async function handleResetAll() {
     if (overrideCount === 0) return;
-    if (!confirm(`Reset all ${overrideCount} customized bundled detector${overrideCount === 1 ? '' : 's'} to defaults?\n\nYour user-defined detectors are untouched.`)) return;
+    const ok = await confirm({
+      title: `Reset all ${overrideCount} customisation${overrideCount === 1 ? '' : 's'}?`,
+      message: 'Every bundled detector you have customised will go back to its shipped defaults. Your own detectors are untouched.',
+      confirmText: 'Reset all',
+      confirmStyle: 'warning',
+    });
+    if (!ok) return;
     try {
       const { resetCount } = await resetAllOverrides();
       await refresh();
@@ -240,9 +259,7 @@
 <div class="page">
   <header class="header">
     <div class="title-row">
-      <button class="back" onclick={() => goto('/admin/discovery')} title="Back to Discovery">
-        <Icon icon="mdi:arrow-left" width="20" />
-      </button>
+      <Button variant="ghost" icon="mdi:arrow-left" onclick={() => goto('/admin/discovery')} ariaLabel="Back to Discovery" />
       <h1>Discovery detectors</h1>
     </div>
     <div class="header-actions">
@@ -283,7 +300,7 @@
   {:else if loadError}
     <div class="error">{loadError}</div>
   {:else if filtered.length === 0}
-    <div class="empty">
+    <div class="empty-state">
       <Icon icon="mdi:radar-scan" width="48" />
       {#if filter === 'user'}
         <p>No user detectors yet. Press <b>Add detector</b> to define one.</p>
@@ -292,7 +309,7 @@
       {/if}
     </div>
   {:else}
-    <table class="detectors">
+    <div class="table-scroll"><table class="data-table detectors">
       <thead>
         <tr>
           <th>Icon</th>
@@ -344,34 +361,34 @@
             <td class="mono">{portsSummary(d.ports)}</td>
             <td class="muted">{signatureSummary(d)}</td>
             <td>
-              <span class="badge badge-{d.source}">{d.source}</span>
+              <span class="badge badge--{d.source === 'user' ? 'success' : 'info'}">{d.source}</span>
               {#if d.source === 'bundled' && d.overridden}
-                <span class="badge badge-modified" title="You've customized this bundled detector">modified</span>
+                <span class="badge badge--warning badge--pill" title="You've customized this bundled detector">modified</span>
               {/if}
               {#if d.source === 'user' && !d.enabled}
-                <span class="badge badge-disabled">disabled</span>
+                <span class="badge badge--neutral badge--pill">disabled</span>
               {/if}
             </td>
             <td class="actions">
               {#if d.source === 'user'}
-                <button class="action" onclick={() => handleToggle(d)} title={d.enabled ? 'Disable' : 'Enable'}>
+                <button class="action" onclick={() => handleToggle(d)} title={d.enabled ? 'Disable' : 'Enable'} aria-label={(d.enabled ? 'Disable detector ' : 'Enable detector ') + d.name}>
                   <Icon icon={d.enabled ? 'mdi:eye' : 'mdi:eye-off'} width="18" />
                 </button>
-                <button class="action" onclick={() => openEdit(d)} title="Edit">
+                <button class="action" onclick={() => openEdit(d)} title="Edit" aria-label="Edit detector {d.name}">
                   <Icon icon="mdi:pencil" width="18" />
                 </button>
-                <button class="action danger" onclick={() => handleDelete(d)} title="Delete">
+                <button class="action danger" onclick={() => handleDelete(d)} title="Delete" aria-label="Delete detector {d.name}">
                   <Icon icon="mdi:trash-can" width="18" />
                 </button>
               {:else if d.overridden}
-                <button class="action" onclick={() => openEdit(d)} title="Edit your override">
+                <button class="action" onclick={() => openEdit(d)} aria-label="Edit {d.name}" title="Edit">
                   <Icon icon="mdi:pencil" width="18" />
                 </button>
-                <button class="action" onclick={() => handleResetOverride(d)} title="Reset to bundled defaults">
+                <button class="action" onclick={() => handleResetOverride(d)} aria-label="Reset {d.name} to bundled defaults" title="Reset to bundled defaults">
                   <Icon icon="mdi:restart" width="18" />
                 </button>
               {:else}
-                <button class="action" onclick={() => openEdit(d)} title="Customize this bundled detector">
+                <button class="action" onclick={() => openEdit(d)} aria-label="Edit {d.name}" title="Edit">
                   <Icon icon="mdi:tune" width="18" />
                 </button>
               {/if}
@@ -379,7 +396,7 @@
           </tr>
         {/each}
       </tbody>
-    </table>
+    </table></div>
   {/if}
 </div>
 
@@ -404,65 +421,42 @@
   }
   .header-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
   .title-row { display: flex; align-items: center; gap: 0.75rem; }
-  .title-row h1 { margin: 0; font-size: 1.5rem; }
-  .back {
-    background: transparent; border: 1px solid var(--border);
-    border-radius: 0.4rem; color: var(--text-primary);
-    padding: 0.4rem 0.55rem; cursor: pointer;
-  }
-  .back:hover { background: var(--bg-tertiary); }
-  .lede { color: var(--text-secondary); margin: 0 0 1.5rem; max-width: 80ch; }
+  .title-row h1 { margin: 0; font-size: var(--font-h1); }
+  /* .lede ships from app.css */
   .muted { color: var(--text-secondary); }
   .muted.small { font-size: 0.82rem; }
 
   .filter-bar { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
   .filter-bar button {
     background: var(--bg-secondary); color: var(--text-primary);
-    border: 1px solid var(--border); border-radius: 0.4rem;
+    border: 1px solid var(--border); border-radius: var(--radius-md);
     padding: 0.35rem 0.9rem; font-size: 0.9rem; cursor: pointer;
   }
   .filter-bar button:hover { background: var(--bg-tertiary); }
   .filter-bar button.active { background: var(--bg-tertiary); border-color: var(--text-primary); }
 
-  .error { background: var(--bg-tertiary); border: 1px solid var(--color-error, #b00); border-radius: 0.4rem; padding: 0.8rem 1rem; }
-  .empty {
-    text-align: center; padding: 3rem 1rem;
-    color: var(--text-secondary);
-    border: 1px dashed var(--border);
-    border-radius: 0.6rem;
-  }
-  .empty p { margin-top: 0.5rem; }
+  .error { background: var(--bg-tertiary); border: 1px solid var(--color-error, #b00); border-radius: var(--radius-md); padding: 0.8rem 1rem; }
 
-  table.detectors {
-    width: 100%; border-collapse: separate; border-spacing: 0;
-    background: var(--bg-secondary); border: 1px solid var(--border);
-    border-radius: 0.5rem; overflow: hidden;
-  }
-  table.detectors th, table.detectors td {
-    text-align: left; padding: 0.6rem 0.9rem;
-    border-bottom: 1px solid var(--border);
-    font-size: 0.92rem;
-    vertical-align: middle;
-  }
-  table.detectors thead th { background: var(--bg-tertiary); font-weight: 600; }
+  /* table.detectors chrome ships from .data-table. Only sort-header
+     + disabled-row tweaks specific to this page remain. */
+  table.detectors th, table.detectors td { padding: 0.6rem var(--space-3); font-size: 0.92rem; vertical-align: middle; }
   table.detectors thead th.sortable { padding: 0; }
   table.detectors thead th.sortable button {
     width: 100%;
     text-align: left;
     background: transparent;
     border: 0;
-    padding: 0.6rem 0.9rem;
+    padding: 0.6rem var(--space-3);
     font: inherit;
     font-weight: 600;
     color: var(--text-primary);
     cursor: pointer;
     display: flex;
     align-items: center;
-    gap: 0.3rem;
+    gap: var(--space-1);
   }
   table.detectors thead th.sortable button:hover { background: var(--bg-secondary); }
   table.detectors thead th.sortable .arrow { font-size: 0.7rem; color: var(--text-secondary); }
-  table.detectors tbody tr:last-child td { border-bottom: none; }
   table.detectors tbody tr.disabled { opacity: 0.55; }
   .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 
@@ -470,21 +464,17 @@
   .name { font-weight: 500; }
   .desc { color: var(--text-secondary); font-size: 0.82rem; margin-top: 0.1rem; }
 
-  .badge {
-    display: inline-block; font-size: 0.72rem; padding: 0.1rem 0.5rem;
-    border-radius: 999px; font-weight: 600; border: 1px solid transparent;
-    text-transform: uppercase; letter-spacing: 0.04em;
-  }
-  .badge-bundled { background: rgba(79,140,255,0.15); color: #4f8cff; border-color: rgba(79,140,255,0.35); }
-  .badge-user    { background: rgba(34,197,94,0.15);  color: #22c55e; border-color: rgba(34,197,94,0.35); }
-  .badge-modified{ background: rgba(245,158,11,0.15); color: #f59e0b; border-color: rgba(245,158,11,0.35); margin-left: 0.3rem; }
-  .badge-disabled{ background: var(--bg-tertiary); color: var(--text-secondary); border-color: var(--border); margin-left: 0.3rem; }
+  /* .badge / .badge--{tone} live in app.css. The page-local "source"
+     badge stays uppercase via .badge--pill applied as needed. */
+  .badge { text-transform: uppercase; letter-spacing: 0.04em; }
+  .badge--warning.badge--pill,
+  .badge--neutral.badge--pill { margin-left: 0.3rem; }
 
   .actions-col { width: 1%; white-space: nowrap; }
   .actions { display: flex; gap: 0.3rem; align-items: center; }
   .action {
     background: transparent; border: 1px solid var(--border);
-    border-radius: 0.35rem; padding: 0.3rem 0.45rem;
+    border-radius: var(--radius-md); padding: 0.3rem 0.45rem;
     color: var(--text-primary); cursor: pointer;
     display: inline-flex; align-items: center;
   }

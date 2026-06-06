@@ -1,9 +1,10 @@
 <script lang="ts">
   import Icon from '@iconify/svelte';
+  import ColoredIcon from '../ColoredIcon.svelte';
   import ColorPicker from './ColorPicker.svelte';
   import OpacitySlider from './OpacitySlider.svelte';
   import BackgroundConfigModal from './BackgroundConfigModal.svelte';
-  import IconPickerModal from './IconPickerModal.svelte';
+  import IconEditModal from './IconEditModal.svelte';
   import Modal from '../shared/Modal.svelte';
   import type { Background } from '$lib/types';
   import { editMode } from '$lib/stores/editMode';
@@ -19,18 +20,19 @@
     tabName: string;
     tabIcon?: string;
     tabIconUrl?: string;
+    tabIconBgColor?: string;
     tabColor?: string;
     tabOpacity?: number;
     tabBackground?: Background;
     perTabBackgrounds?: boolean; // Whether per-tab backgrounds are enabled at dashboard level
-    onSave: (name: string, icon?: string, iconUrl?: string, color?: string, opacity?: number) => void;
+    onSave: (name: string, icon?: string, iconUrl?: string, iconBgColor?: string, color?: string, opacity?: number) => void;
     onSaveBackground?: (background: Background | undefined) => void;
     onCancel: () => void;
     onDelete?: () => void;
     onDuplicate?: () => void;
   }
 
-  let { tabName, tabIcon, tabIconUrl, tabColor, tabOpacity, tabBackground, perTabBackgrounds = false, onSave, onSaveBackground, onCancel, onDelete, onDuplicate }: Props = $props();
+  let { tabName, tabIcon, tabIconUrl, tabIconBgColor, tabColor, tabOpacity, tabBackground, perTabBackgrounds = false, onSave, onSaveBackground, onCancel, onDelete, onDuplicate }: Props = $props();
   // Form state initialized from props (intentionally captures initial values)
   // svelte-ignore state_referenced_locally
   let name = $state(tabName);
@@ -39,19 +41,21 @@
   // svelte-ignore state_referenced_locally
   let iconUrl = $state(tabIconUrl || '');
   // svelte-ignore state_referenced_locally
+  let iconBgColor = $state<string | undefined>(tabIconBgColor);
+  // svelte-ignore state_referenced_locally
   let color = $state(tabColor);
   // svelte-ignore state_referenced_locally
   let opacity = $state(tabOpacity);
   let showBackgroundConfig = $state(false);
-  let showIconPicker = $state(false);
+  let showIconEditor = $state(false);
 
   function handleBeforeClose(): boolean {
     if (showBackgroundConfig) {
       showBackgroundConfig = false;
       return false;
     }
-    if (showIconPicker) {
-      showIconPicker = false;
+    if (showIconEditor) {
+      showIconEditor = false;
       return false;
     }
     return true;
@@ -59,7 +63,7 @@
 
   function handleSave() {
     if (name.trim()) {
-      onSave(name.trim(), icon || undefined, iconUrl || undefined, color, opacity);
+      onSave(name.trim(), icon || undefined, iconUrl || undefined, iconBgColor, color, opacity);
     }
   }
 
@@ -70,16 +74,7 @@
     showBackgroundConfig = false;
   }
 
-  function handleIconSelect(selection: { icon: string; imageUrl?: string }) {
-    icon = selection.icon || '';
-    iconUrl = selection.imageUrl || '';
-    showIconPicker = false;
-  }
-
-  function clearIcon() {
-    icon = '';
-    iconUrl = '';
-  }
+  // Icon picking and clearing live in IconEditModal now.
 </script>
 
 <Modal
@@ -101,50 +96,35 @@
       />
     </div>
 
+    <!-- Icon: small preview + button to open the icon sub-modal. -->
     <div class="form-group">
-      <label for="tab-icon">Icon (optional)</label>
-      <div class="icon-input-wrapper">
-        <div class="icon-input">
+      <label>Icon (optional)</label>
+      <button type="button" class="icon-summary" onclick={() => showIconEditor = true}>
+        <span class="icon-preview-tile"
+              class:has-bg={iconBgColor}
+              style:background-color={iconBgColor}>
           {#if iconUrl}
-            <div class="selected-icon-display">
-              <img src={iconUrl} alt="Selected icon" class="icon-image" />
-              <span class="icon-name">Image icon selected</span>
-            </div>
+            <img src={iconUrl} alt="" />
+          {:else if icon}
+            <ColoredIcon {icon} width="28" />
           {:else}
-            <input
-              id="tab-icon"
-              type="text"
-              bind:value={icon}
-              placeholder="mdi:home"
-            />
-            {#if icon}
-              <div class="icon-preview">
-                <Icon icon={icon} width="24" />
-              </div>
-            {/if}
+            <ColoredIcon icon="mdi:home-outline" width="28" />
           {/if}
-        </div>
-        <button
-          type="button"
-          class="browse-btn"
-          onclick={() => showIconPicker = true}
-          title="Browse icon library"
-        >
-          <Icon icon="mdi:apps" width="18" />
-          Browse
-        </button>
-        {#if icon || iconUrl}
-          <button
-            type="button"
-            class="clear-btn"
-            onclick={clearIcon}
-            title="Clear icon"
-          >
-            <Icon icon="mdi:close" width="18" />
-          </button>
-        {/if}
-      </div>
-      <small>Browse the icon library or enter an icon name from <a href="https://icon-sets.iconify.design/" target="_blank" rel="noopener">iconify.design</a></small>
+        </span>
+        <span class="icon-summary-text">
+          {#if iconUrl}
+            Custom icon
+          {:else if icon}
+            <code>{icon}</code>
+          {:else}
+            No icon
+          {/if}
+        </span>
+        <span class="edit-cta">
+          <Icon icon="mdi:pencil" width="16" />
+          Edit icon
+        </span>
+      </button>
     </div>
 
     <ColorPicker
@@ -222,18 +202,85 @@
   />
 {/if}
 
-{#if showIconPicker}
-  <IconPickerModal
-    currentIcon={icon}
-    currentImageUrl={iconUrl}
-    onSelect={handleIconSelect}
-    onCancel={() => showIconPicker = false}
+{#if showIconEditor}
+  <IconEditModal
+    {icon}
+    {iconUrl}
+    {iconBgColor}
+    onIconChange={(v) => icon = v ?? ''}
+    onIconUrlChange={(v) => iconUrl = v ?? ''}
+    onIconBgColorChange={(v) => iconBgColor = v}
+    onClose={() => showIconEditor = false}
   />
 {/if}
 
 <style>
+  /* Modal body already pads — see GroupEditModal note. */
   form {
-    padding: 1.5rem;
+    padding: 0;
+  }
+
+  /* Icon summary row — clickable button that opens the icon sub-modal. */
+  .icon-summary {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+    padding: 0.6rem 0.85rem;
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 0.15s, background 0.15s;
+  }
+
+  .icon-summary:hover {
+    border-color: var(--accent);
+    background: var(--bg-tertiary);
+  }
+
+  .icon-preview-tile {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 0.4rem;
+    color: var(--accent);
+    flex-shrink: 0;
+  }
+
+  .icon-preview-tile.has-bg {
+    padding: 0.25rem;
+  }
+
+  .icon-preview-tile img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  .icon-summary-text {
+    flex: 1;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+  }
+
+  .icon-summary-text code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.85em;
+    color: var(--text-primary);
+  }
+
+  .edit-cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    color: var(--accent);
+    font-size: 0.875rem;
+    font-weight: 500;
   }
 
   .form-group {
@@ -340,74 +387,5 @@
     border: 1px dashed var(--border);
   }
 
-  .icon-input-wrapper {
-    display: flex;
-    gap: 0.5rem;
-  }
-
-  .icon-input {
-    flex: 1;
-    position: relative;
-    display: flex;
-    align-items: center;
-  }
-
-  .icon-input input {
-    width: 100%;
-    padding-right: 2.5rem;
-  }
-
-  .icon-preview {
-    position: absolute;
-    right: 0.5rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--text-primary);
-  }
-
-  .browse-btn {
-    padding: 0.5rem 0.75rem;
-    background: var(--bg-tertiary);
-    color: var(--text-primary);
-    font-size: 0.875rem;
-  }
-
-  .browse-btn:hover {
-    background: var(--accent);
-    color: white;
-  }
-
-  .clear-btn {
-    padding: 0.5rem;
-    background: var(--bg-tertiary);
-    color: var(--text-secondary);
-  }
-
-  .clear-btn:hover {
-    background: var(--color-error);
-    color: white;
-  }
-
-  .selected-icon-display {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 0.5rem 0.75rem;
-    background: var(--bg-tertiary);
-    border: 1px solid var(--border);
-    border-radius: 0.375rem;
-    flex: 1;
-  }
-
-  .selected-icon-display .icon-image {
-    width: 32px;
-    height: 32px;
-    object-fit: contain;
-  }
-
-  .selected-icon-display .icon-name {
-    color: var(--text-secondary);
-    font-size: 0.875rem;
-  }
+  /* Old inline-icon CSS removed — IconEditModal owns the picker UI now. */
 </style>

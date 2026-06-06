@@ -27,6 +27,7 @@ export interface Tab {
   name: string;
   icon?: string; // Optional Iconify icon name (e.g., 'mdi:home')
   iconUrl?: string; // Optional image URL for SVG icons
+  iconBgColor?: string; // Optional coloured backing behind the icon (for dark icons on dark tabs)
   background?: Background;
   color?: string;
   opacity?: number;
@@ -40,6 +41,7 @@ export interface Group {
   name: string;
   icon?: string; // Optional Iconify icon name (e.g., 'mdi:folder')
   iconUrl?: string; // Optional image URL for SVG icons
+  iconBgColor?: string; // Optional coloured backing behind the icon (for dark icons on dark groups)
   collapsed: boolean;
   color?: string;
   opacity?: number;
@@ -67,6 +69,10 @@ export interface Entry {
   size: 'small' | 'medium' | 'large';
   color?: string;
   opacity?: number;
+  // Optional coloured backing behind the icon graphic — useful for dark
+  // logos (e.g. GitHub's octocat) on dark tiles where they'd otherwise
+  // vanish. Undefined means "no backing, icon sits directly on the tile".
+  iconBgColor?: string;
   order: number;
   showStatus?: boolean;
 }

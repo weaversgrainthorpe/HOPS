@@ -8,12 +8,13 @@
   import { listSettings, updateSetting, type SettingDef } from '$lib/utils/api';
 
   // Settings are grouped by the dotted prefix of their key — server.*, log.*,
-  // proxy.*, auth.*, status.*, upload.*, http.*. The labels here drive the
-  // section headings rendered below.
+  // auth.*, status.*, upload.*, http.*. The labels here drive the section
+  // headings rendered below. proxy.* keys roll up into Authentication (the
+  // proxy.trusted_cidrs setting is auth-adjacent and doesn't earn its own
+  // single-row group).
   const groupLabels: Record<string, string> = {
     server: 'Server',
     log: 'Logging',
-    proxy: 'Reverse proxy',
     auth: 'Authentication',
     status: 'Status checks',
     upload: 'Uploads',
@@ -28,10 +29,15 @@
   let loading = $state(true);
 
   // Group settings by the prefix before the first '.'.
+  // proxy.* rolls up into auth — a single trusted_cidrs setting doesn't
+  // earn its own group, and reverse-proxy context is naturally an
+  // authentication concern (it's about deciding which X-Forwarded-For
+  // hops to trust during login).
   let grouped = $derived(
     Object.entries(
       settings.reduce<Record<string, SettingDef[]>>((acc, s) => {
-        const group = s.key.split('.')[0];
+        const prefix = s.key.split('.')[0];
+        const group = prefix === 'proxy' ? 'auth' : prefix;
         (acc[group] ??= []).push(s);
         return acc;
       }, {})
@@ -62,6 +68,13 @@
     return drafts[s.key] !== s.value;
   }
 
+  // Restart-required tracking. We remember every key the user has saved
+  // a value for during this session that requires a restart, so the
+  // aggregate banner at the top of the page persists across multiple
+  // saves instead of relying on per-key toasts that disappear after a
+  // few seconds. Cleared on page reload (server restart clears it too).
+  let pendingRestartKeys = $state<string[]>([]);
+
   async function save(s: SettingDef) {
     const value = drafts[s.key];
     perKeyError[s.key] = '';
@@ -70,11 +83,10 @@
       await updateSetting(s.key, value);
       // Update the in-memory record so the dirty indicator clears.
       settings = settings.map((x) => (x.key === s.key ? { ...x, value } : x));
-      toast.success(
-        s.restartRequired
-          ? `Saved — restart HOPS for ${formatKey(s.key)} to take effect.`
-          : `Saved ${formatKey(s.key)}.`
-      );
+      if (s.restartRequired && !pendingRestartKeys.includes(s.key)) {
+        pendingRestartKeys = [...pendingRestartKeys, s.key];
+      }
+      toast.success(`Saved ${formatKey(s.key)}.`);
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Save failed';
       perKeyError[s.key] = msg;
@@ -172,10 +184,24 @@
     </div>
     <p class="lede">
       Configure HOPS at runtime. Most settings apply immediately; a few are
-      marked <span class="restart-pill">Restart required</span> — they only
+      marked <span class="badge badge--warning badge--pill">Restart required</span> — they only
       take effect after the server restarts.
     </p>
   </header>
+
+  {#if pendingRestartKeys.length > 0}
+    <div class="restart-banner" role="status">
+      <Icon icon="mdi:restart" width="20" />
+      <div class="restart-banner-text">
+        <strong>{pendingRestartKeys.length} setting{pendingRestartKeys.length === 1 ? '' : 's'} need{pendingRestartKeys.length === 1 ? 's' : ''} a HOPS restart to take effect.</strong>
+        <div class="restart-banner-keys">
+          {#each pendingRestartKeys as key (key)}
+            <code>{key}</code>
+          {/each}
+        </div>
+      </div>
+    </div>
+  {/if}
 
   {#if loading}
     <p class="muted">Loading…</p>
@@ -189,25 +215,23 @@
           {#each items as s (s.key)}
             <div class="row" class:dirty={isDirty(s)}>
               <div class="row-label">
-                <div class="label-text">
+                <label class="label-text" for={`setting-${s.key}`}>
                   {labelFor(s.key)}
                   {#if s.restartRequired}
-                    <span class="restart-pill" title="Takes effect on next restart">
+                    <span class="badge badge--warning badge--pill" title="Takes effect on next restart">
                       <Icon icon="mdi:restart" width="12" /> Restart
                     </span>
                   {/if}
-                </div>
+                </label>
                 <div class="desc">{s.description}</div>
                 <div class="meta">
-                  <code>{s.key}</code>
-                  · default <code>{s.default}</code>
-                  {#if s.min !== undefined && s.min !== 0}· min {s.min}{/if}
-                  {#if s.max !== undefined && s.max !== 0}· max {s.max}{/if}
+                  <span class="meta-defaults">Default <code>{s.default}</code>{#if s.min !== undefined && s.min !== 0} · min {s.min}{/if}{#if s.max !== undefined && s.max !== 0} · max {s.max}{/if}</span>
+                  <code class="meta-key" title="Internal setting key — used in scripts and the API">{s.key}</code>
                 </div>
               </div>
               <div class="row-input">
                 {#if s.type === 'log_level' && s.enum}
-                  <select bind:value={drafts[s.key]}>
+                  <select id={`setting-${s.key}`} bind:value={drafts[s.key]}>
                     {#each s.enum as opt (opt)}
                       <option value={opt}>{opt}</option>
                     {/each}
@@ -233,6 +257,7 @@
                     {/if}
                     <div class="cidr-add">
                       <input
+                        id={`setting-${s.key}`}
                         type="text"
                         bind:value={cidrDrafts[s.key]}
                         placeholder="10.0.0.0/8 or 192.168.1.5/32"
@@ -248,6 +273,7 @@
                   </div>
                 {:else}
                   <input
+                    id={`setting-${s.key}`}
                     type="number"
                     bind:value={drafts[s.key]}
                     min={s.min || undefined}
@@ -308,7 +334,7 @@
 
   h1 {
     margin: 0;
-    font-size: 1.75rem;
+    font-size: var(--font-h1);
   }
 
   .lede {
@@ -366,11 +392,26 @@
   .meta {
     color: var(--text-tertiary, var(--text-secondary));
     font-size: 0.78rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
   }
   .meta code {
     background: var(--bg-tertiary);
     padding: 0 0.3em;
     border-radius: 3px;
+  }
+  /* Raw setting key is an implementation detail — keep it accessible
+     (for scripting / API users) but visually demote it so the panel
+     reads less like sysadmin tooling at a glance. */
+  .meta-key {
+    opacity: 0.35;
+    transition: opacity 0.15s;
+  }
+  .row:hover .meta-key,
+  .row:focus-within .meta-key {
+    opacity: 0.8;
   }
 
   .row-input {
@@ -462,20 +503,44 @@
     flex-wrap: wrap;
   }
 
-  .restart-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.25rem;
-    background: rgba(245, 158, 11, 0.15);
-    color: #f59e0b;
-    border: 1px solid rgba(245, 158, 11, 0.4);
-    padding: 0.1rem 0.5rem;
-    border-radius: 999px;
-    font-size: 0.72rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
+  /* Aggregate "you need to restart" banner. Appears at the top of the
+     page once a restart-required setting has been saved, and stays
+     visible across further edits — the page-level signal is more
+     useful than per-key toasts that vanish after a few seconds. */
+  .restart-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.85rem 1.1rem;
+    margin: 0 0 1.5rem;
+    background: rgba(245, 158, 11, 0.1);
+    border: 1px solid var(--color-warning);
+    border-radius: var(--radius-lg);
+    color: var(--text-primary);
   }
+  .restart-banner :global(svg) {
+    color: var(--color-warning);
+    flex-shrink: 0;
+    margin-top: 0.1rem;
+  }
+  .restart-banner-text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+  .restart-banner-keys {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+  .restart-banner-keys code {
+    background: rgba(245, 158, 11, 0.15);
+    padding: 0.05rem 0.45rem;
+    border-radius: var(--radius-md);
+    font-size: 0.8rem;
+  }
+
+  /* Restart-pill is now .badge.badge--warning.badge--pill — see app.css */
 
   .error {
     color: var(--color-error, #ef4444);

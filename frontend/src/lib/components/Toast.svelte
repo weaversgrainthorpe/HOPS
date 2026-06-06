@@ -24,7 +24,14 @@
 {#if toasts.length > 0}
   <div class="toast-container">
     {#each toasts as t (t.id)}
-      <div class="toast toast-{t.type}" role="alert">
+      <div
+        class="toast toast-{t.type}"
+        role="alert"
+        onmouseenter={() => toast.pause(t.id)}
+        onmouseleave={() => toast.resume(t.id)}
+        onfocusin={() => toast.pause(t.id)}
+        onfocusout={() => toast.resume(t.id)}
+      >
         <Icon icon={getIcon(t.type)} width="20" />
         <span class="toast-message">{t.message}</span>
         <button class="toast-close" onclick={() => toast.remove(t.id)} aria-label="Dismiss">
@@ -38,8 +45,9 @@
 <style>
   .toast-container {
     position: fixed;
-    bottom: 1.5rem;
-    right: 1.5rem;
+    /* Keep toasts above the iOS home indicator on standalone PWA installs. */
+    bottom: max(1.5rem, env(safe-area-inset-bottom, 0));
+    right: max(1.5rem, env(safe-area-inset-right, 0));
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
