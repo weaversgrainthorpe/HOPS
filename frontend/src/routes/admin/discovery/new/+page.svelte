@@ -281,9 +281,7 @@
 
 <div class="page">
   <header class="header">
-    <button class="back" onclick={() => goto('/admin/discovery')} title="Back">
-      <Icon icon="mdi:arrow-left" width="20" />
-    </button>
+    <Button variant="ghost" icon="mdi:arrow-left" onclick={() => goto('/admin/discovery')} ariaLabel="Back to Discovery" />
     <h1>New Discovery Scan</h1>
   </header>
 
@@ -376,16 +374,17 @@
         class:invalid={!!domainError}
       />
       <div class="hint">
-        If you run your own DNS at home — Pi-hole local records, or a
-        reverse proxy like NPM or Traefik with subdomains pointed at
-        services — HOPS will try common names like
-        <code>sonarr.&lt;domain&gt;</code>, <code>plex.&lt;domain&gt;</code>,
-        and ~50 others. Anything that resolves gets added as a draft
-        tile, so services tucked behind a reverse proxy don't get
-        missed. This step has a built-in safety net: HOPS won't chase
-        endless redirects, and gives up the whole step after about a
-        minute so a wildcard DNS record that "answers" for everything
-        can't stall a scan. Leave blank if you don't run your own DNS.
+        Leave blank unless you run your own DNS at home (Pi-hole, NPM, Traefik).
+        When set, HOPS tries common names like <code>sonarr.&lt;domain&gt;</code>
+        so reverse-proxy-fronted services get picked up.
+        <details>
+          <summary>How this works</summary>
+          HOPS looks up ~50 well-known homelab subdomains against your
+          system resolver. Anything that resolves is added as a draft
+          tile. Built-in safety nets: limited redirects per name, and
+          the whole step gives up after about a minute so a wildcard
+          DNS record can't stall a scan.
+        </details>
         {#if domainError}<span class="err">{domainError}</span>{/if}
       </div>
     </div>
@@ -443,16 +442,7 @@
     color: var(--text-primary);
   }
   .header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.5rem; }
-  .header h1 { margin: 0; font-size: 1.5rem; }
-  .back {
-    background: transparent;
-    border: 1px solid var(--border);
-    border-radius: 0.4rem;
-    color: var(--text-primary);
-    padding: 0.4rem 0.55rem;
-    cursor: pointer;
-  }
-  .back:hover { background: var(--bg-tertiary); }
+  .header h1 { margin: 0; font-size: var(--font-h1); }
 
   .form { display: flex; flex-direction: column; gap: 1.2rem; }
   .field { display: flex; flex-direction: column; gap: 0.4rem; }
@@ -461,7 +451,7 @@
     background: var(--bg-secondary);
     color: var(--text-primary);
     border: 1px solid var(--border);
-    border-radius: 0.4rem;
+    border-radius: var(--radius-md);
     padding: 0.55rem 0.7rem;
     font-size: 1rem;
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -471,7 +461,7 @@
   .hint code {
     background: var(--bg-tertiary);
     padding: 0.05rem 0.3rem;
-    border-radius: 0.25rem;
+    border-radius: var(--radius-sm);
     font-size: 0.83rem;
   }
   .err { color: var(--color-error, #ef4444); margin-left: 0.5rem; }
@@ -491,7 +481,7 @@
   .chips {
     background: var(--bg-secondary);
     border: 1px solid var(--border);
-    border-radius: 0.4rem;
+    border-radius: var(--radius-md);
     padding: 0.5rem;
     min-height: 2.4rem;
     display: flex;
@@ -564,7 +554,7 @@
   .intensity-card {
     background: var(--bg-secondary);
     border: 1px solid var(--border);
-    border-radius: 0.5rem;
+    border-radius: var(--radius-lg);
     padding: 0.7rem 0.85rem;
     cursor: pointer;
     transition: border-color 0.12s ease, background 0.12s ease;
@@ -590,15 +580,15 @@
     line-height: 1.35;
   }
   .intensity-card.active {
-    border-color: var(--accent, #4f8cff);
+    border-color: var(--accent, var(--accent));
     background: rgba(79,140,255,0.06);
   }
-  .intensity-card:hover { border-color: var(--accent, #4f8cff); }
+  .intensity-card:hover { border-color: var(--accent, var(--accent)); }
   .error {
     background: rgba(239,68,68,0.1);
     border: 1px solid rgba(239,68,68,0.3);
     color: #ef4444;
-    border-radius: 0.4rem;
+    border-radius: var(--radius-md);
     padding: 0.6rem 0.8rem;
   }
   .actions { display: flex; gap: 0.6rem; justify-content: flex-end; margin-top: 0.5rem; }

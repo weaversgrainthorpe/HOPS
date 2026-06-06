@@ -79,7 +79,7 @@
     </div>
   {:else}
     {#if forced}
-      <div class="forced-notice">
+      <div class="forced-notice" role="alert">
         <Icon icon="mdi:shield-alert" width="20" />
         <span>You're using the default password. Please set a new password to continue.</span>
       </div>
@@ -214,7 +214,7 @@
     gap: 0.5rem;
     padding: 0.75rem;
     background: color-mix(in srgb, var(--color-error) 15%, transparent);
-    color: var(--color-error);
+    color: var(--color-error-text);
     border-radius: 0.375rem;
     font-size: 0.875rem;
   }

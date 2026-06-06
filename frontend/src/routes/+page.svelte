@@ -25,8 +25,11 @@
 
     const success = await login(username, password);
 
+    // The login() store function already toasts a friendly + context-
+    // appropriate error (wrong password vs. server-unreachable vs.
+    // rate-limited). We just need to surface a brief inline note too.
     if (!success) {
-      error = 'Invalid credentials. Default is admin/admin';
+      error = 'Sign-in failed — see the message at the top of the page.';
     }
   }
 
@@ -118,6 +121,15 @@
         </div>
       {/if}
 
+      <!-- Phone-only note: editing is hidden under 480px because
+           touchscreen drag-and-drop is awkward. Without this banner a
+           phone user has no idea why the edit pencil is missing from
+           the navbar — and might think it's broken. -->
+      <div class="phone-edit-note">
+        <Icon icon="mdi:tablet" width="18" />
+        <span>Editing dashboards needs a tablet or desktop — drag-and-drop is awkward on a phone. You can still manage Settings, Backups, Change Password, and Discovery from here.</span>
+      </div>
+
       <div class="admin-header">
         <h1>HOPS Admin Panel</h1>
         <div class="header-actions">
@@ -207,7 +219,7 @@
 
   h1 {
     margin-bottom: 0.5rem;
-    font-size: 2rem;
+    font-size: var(--font-h1);
   }
 
   p {
@@ -247,7 +259,7 @@
   .error-message {
     padding: 0.75rem;
     background: color-mix(in srgb, var(--color-error) 15%, transparent);
-    color: var(--color-error);
+    color: var(--color-error-text);
     border-radius: 0.375rem;
     font-size: 0.875rem;
   }
@@ -261,6 +273,33 @@
   .admin-panel {
     max-width: 1200px;
     margin: 0 auto;
+  }
+
+  /* Phone-only banner explaining the missing edit pencil. The 480px
+     breakpoint matches the navbar rule that hides .edit-toggle. */
+  .phone-edit-note {
+    display: none;
+  }
+  @media (max-width: 480px) {
+    .phone-edit-note {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.6rem;
+      padding: 0.7rem 0.9rem;
+      margin: 0 0 1.5rem;
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      border-radius: 0.4rem;
+      background: rgba(79, 140, 255, 0.07);
+      color: var(--text-secondary);
+      font-size: 0.85rem;
+      line-height: 1.45;
+    }
+    .phone-edit-note :global(svg) {
+      flex-shrink: 0;
+      color: var(--accent);
+      margin-top: 0.1rem;
+    }
   }
 
   .admin-header {

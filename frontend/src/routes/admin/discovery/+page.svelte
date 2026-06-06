@@ -5,6 +5,7 @@
   import Button from '$lib/components/shared/Button.svelte';
   import { isAuthenticated, waitForAuthChecked } from '$lib/stores/auth';
   import { toast } from '$lib/stores/toast';
+  import { confirm } from '$lib/stores/confirmModal';
   import {
     listScans, deleteScan, cancelScan,
     type DiscoveryScan, type ScanState,
@@ -47,7 +48,13 @@
   }
 
   async function handleDelete(id: string) {
-    if (!confirm('Delete this draft and all its results?')) return;
+    const ok = await confirm({
+      title: 'Delete scan draft',
+      message: 'Delete this draft and all its results?',
+      confirmText: 'Delete',
+      confirmStyle: 'danger',
+    });
+    if (!ok) return;
     try {
       await deleteScan(id);
       toast.success('Draft deleted');
@@ -59,12 +66,12 @@
 
   function stateBadge(state: ScanState): { label: string; class: string } {
     switch (state) {
-      case 'running':  return { label: 'Running',   class: 'badge-running' };
-      case 'pending':  return { label: 'Pending',   class: 'badge-pending' };
-      case 'complete': return { label: 'Complete',  class: 'badge-complete' };
-      case 'promoted': return { label: 'Promoted',  class: 'badge-promoted' };
-      case 'cancelled':return { label: 'Cancelled', class: 'badge-cancelled' };
-      case 'failed':   return { label: 'Failed',    class: 'badge-failed' };
+      case 'running':  return { label: 'Running',   class: 'badge--info' };
+      case 'pending':  return { label: 'Pending',   class: 'badge--warning' };
+      case 'complete': return { label: 'Complete',  class: 'badge--success' };
+      case 'promoted': return { label: 'Promoted',  class: 'badge--accent' };
+      case 'cancelled':return { label: 'Cancelled', class: 'badge--neutral' };
+      case 'failed':   return { label: 'Failed',    class: 'badge--danger' };
     }
   }
 
@@ -83,9 +90,7 @@
 <div class="page">
   <header class="header">
     <div class="title-row">
-      <button class="back" onclick={() => goto('/')} title="Back to Admin">
-        <Icon icon="mdi:arrow-left" width="20" />
-      </button>
+      <Button variant="ghost" icon="mdi:arrow-left" onclick={() => goto('/')} ariaLabel="Back to admin" />
       <h1>Network Discovery</h1>
     </div>
     <div class="header-actions">
@@ -120,12 +125,12 @@
   {:else if loadError}
     <div class="error">{loadError}</div>
   {:else if scans.length === 0}
-    <div class="empty">
+    <div class="empty-state">
       <Icon icon="mdi:radar" width="48" />
       <p>No scans yet. Press <b>New Scan</b> to discover services on your LAN.</p>
     </div>
   {:else}
-    <table class="scans">
+    <div class="table-scroll"><table class="data-table scans">
       <thead>
         <tr>
           <th>Created</th>
@@ -152,22 +157,22 @@
             </td>
             <td>{scan.label ?? ''}</td>
             <td class="actions">
-              <button class="action" onclick={() => goto(`/admin/discovery/${scan.id}`)} title="Open draft">
+              <button class="action" onclick={() => goto(`/admin/discovery/${scan.id}`)} title="Open draft" aria-label="Open scan draft">
                 <Icon icon="mdi:open-in-app" width="18" />
               </button>
               {#if scan.state === 'running' || scan.state === 'pending'}
-                <button class="action" onclick={() => handleCancel(scan.id)} title="Cancel scan">
+                <button class="action" onclick={() => handleCancel(scan.id)} title="Cancel scan" aria-label="Cancel scan">
                   <Icon icon="mdi:stop" width="18" />
                 </button>
               {/if}
-              <button class="action danger" onclick={() => handleDelete(scan.id)} title="Delete draft">
+              <button class="action danger" onclick={() => handleDelete(scan.id)} title="Delete draft" aria-label="Delete scan draft">
                 <Icon icon="mdi:trash-can" width="18" />
               </button>
             </td>
           </tr>
         {/each}
       </tbody>
-    </table>
+    </table></div>
   {/if}
 </div>
 
@@ -187,82 +192,27 @@
   }
   .header-actions { display: flex; gap: 0.5rem; }
   .title-row { display: flex; align-items: center; gap: 0.75rem; }
-  .title-row h1 { margin: 0; font-size: 1.5rem; }
-  .back {
-    background: transparent;
-    border: 1px solid var(--border);
-    border-radius: 0.4rem;
-    color: var(--text-primary);
-    padding: 0.4rem 0.55rem;
-    cursor: pointer;
-  }
-  .back:hover { background: var(--bg-tertiary); }
-  .lede { color: var(--text-secondary); margin: 0 0 0.8rem; max-width: 70ch; }
-  .lede-aside {
-    color: var(--text-secondary);
-    margin: 0 0 1.5rem;
-    max-width: 70ch;
-    font-size: 0.88rem;
-    border-left: 3px solid rgba(245, 158, 11, 0.4);
-    padding: 0.1rem 0 0.1rem 0.8rem;
-    opacity: 0.85;
-  }
+  .title-row h1 { margin: 0; font-size: var(--font-h1); }
+  /* .lede and .lede-aside ship from app.css */
   .muted { color: var(--text-secondary); }
   .error {
     background: var(--bg-tertiary);
     border: 1px solid var(--color-error, #b00);
-    border-radius: 0.4rem;
+    border-radius: var(--radius-md);
     padding: 0.8rem 1rem;
   }
-  .empty {
-    text-align: center;
-    padding: 3rem 1rem;
-    color: var(--text-secondary);
-    border: 1px dashed var(--border);
-    border-radius: 0.6rem;
-  }
-  .empty p { margin-top: 0.5rem; }
 
-  table.scans {
-    width: 100%;
-    border-collapse: separate;
-    border-spacing: 0;
-    background: var(--bg-secondary);
-    border: 1px solid var(--border);
-    border-radius: 0.5rem;
-    overflow: hidden;
-  }
-  table.scans th, table.scans td {
-    text-align: left;
-    padding: 0.7rem 0.9rem;
-    border-bottom: 1px solid var(--border);
-    font-size: 0.95rem;
-  }
-  table.scans thead th { background: var(--bg-tertiary); font-weight: 600; }
-  table.scans tbody tr:last-child td { border-bottom: none; }
+  /* table.scans chrome ships from .data-table in app.css */
   .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 
-  .badge {
-    display: inline-block;
-    font-size: 0.78rem;
-    padding: 0.15rem 0.55rem;
-    border-radius: 999px;
-    font-weight: 600;
-    border: 1px solid transparent;
-  }
-  .badge-running   { background: rgba(79,140,255,0.15); color: #4f8cff; border-color: rgba(79,140,255,0.35); }
-  .badge-pending   { background: rgba(245,158,11,0.15); color: #f59e0b; border-color: rgba(245,158,11,0.35); }
-  .badge-complete  { background: rgba(34,197,94,0.15);  color: #22c55e; border-color: rgba(34,197,94,0.35); }
-  .badge-promoted  { background: rgba(168,85,247,0.15); color: #a855f7; border-color: rgba(168,85,247,0.35); }
-  .badge-cancelled { background: var(--bg-tertiary); color: var(--text-secondary); border-color: var(--border); }
-  .badge-failed    { background: rgba(239,68,68,0.15);  color: #ef4444; border-color: rgba(239,68,68,0.35); }
+  /* .badge + .badge--{tone} now live in app.css — see the badge taxonomy. */
 
   .actions-col { width: 1%; white-space: nowrap; }
   .actions { display: flex; gap: 0.35rem; }
   .action {
     background: transparent;
     border: 1px solid var(--border);
-    border-radius: 0.35rem;
+    border-radius: var(--radius-md);
     padding: 0.3rem 0.45rem;
     color: var(--text-primary);
     cursor: pointer;

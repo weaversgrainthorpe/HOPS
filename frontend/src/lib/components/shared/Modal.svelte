@@ -98,7 +98,7 @@
           {title}
         </h2>
         {#if showCloseButton}
-          <button class="close-btn" onclick={tryClose} title="Close (Esc)">
+          <button class="close-btn" onclick={tryClose} aria-label="Close" title="Close (Esc)">
             <Icon icon="mdi:close" width="24" />
           </button>
         {/if}

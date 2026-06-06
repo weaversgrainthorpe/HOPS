@@ -43,12 +43,21 @@ echo "▸ Copying artifacts to prod"
 scp -q /tmp/hops-linux-amd64 "$PROD_HOST:/tmp/hops-new"
 rsync -aq --delete frontend/build/ "$PROD_HOST:/tmp/hops-frontend-new/"
 
-echo "▸ Stopping hops, swapping binary + frontend, starting hops"
-ssh "$PROD_HOST" "sudo systemctl stop hops && \
-  cp /tmp/hops-new $PROD_DIR/backend/hops && \
-  chmod +x $PROD_DIR/backend/hops && \
+echo "▸ Swapping binary + frontend, restarting hops"
+# Stage the new binary as a sibling file, then atomically rename it onto
+# the running one. cp would hit "Text file busy" because the kernel
+# refuses to open the in-use executable for writing; mv (rename(2))
+# leaves the running process holding the old inode and replaces the
+# directory entry only. The same-filesystem requirement is why we
+# stage inside PROD_DIR rather than /tmp.
+#
+# Only the systemctl restart needs sudo, which fits a NOPASSWD line
+# scoped to "restart hops".
+ssh "$PROD_HOST" "cp /tmp/hops-new $PROD_DIR/backend/hops.new && \
+  chmod +x $PROD_DIR/backend/hops.new && \
+  mv $PROD_DIR/backend/hops.new $PROD_DIR/backend/hops && \
   rsync -a --delete /tmp/hops-frontend-new/ $PROD_DIR/frontend/build/ && \
-  sudo systemctl start hops"
+  sudo systemctl restart hops"
 
 echo "▸ Health check"
 sleep 1

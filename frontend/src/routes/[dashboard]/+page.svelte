@@ -38,7 +38,7 @@
   }
 
   .error {
-    color: var(--color-error);
+    color: var(--color-error-text);
   }
 
   .not-found a {

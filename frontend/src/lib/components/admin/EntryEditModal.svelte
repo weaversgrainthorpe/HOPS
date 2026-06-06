@@ -4,13 +4,10 @@
   import ColoredIcon from '../ColoredIcon.svelte';
   import ColorPicker from './ColorPicker.svelte';
   import OpacitySlider from './OpacitySlider.svelte';
-  import IconPickerModal from './IconPickerModal.svelte';
+  import IconEditModal from './IconEditModal.svelte';
   import Modal from '../shared/Modal.svelte';
   import { confirm } from '$lib/stores/confirmModal';
-  import { toast } from '$lib/stores/toast';
   import { editMode } from '$lib/stores/editMode';
-  import { createIcon, uploadIconImage } from '$lib/utils/api';
-  import { logWarn } from '$lib/utils/errors';
 
   interface TabInfo {
     id: string;
@@ -35,12 +32,7 @@
   // Form state initialized from props (intentionally captures initial values)
   // svelte-ignore state_referenced_locally
   let editedEntry = $state<Entry>({ ...entry });
-  // svelte-ignore state_referenced_locally
-  let iconSearch = $state(entry.icon || '');
-  let showIconPicker = $state(false);
-  let iconFileInput: HTMLInputElement;
-  let isUploadingIcon = $state(false);
-  let uploadError = $state('');
+  let showIconEditor = $state(false);
 
   // Move/copy to tab state
   let showMoveSection = $state(false);
@@ -67,7 +59,6 @@
   // pre-v1.7.0 don't carry a `type` field).
   $effect(() => {
     editedEntry = { ...entry, type: entry.type ?? 'link' };
-    iconSearch = entry.icon || '';
   });
 
   // Close modal when edit mode is turned off
@@ -78,8 +69,8 @@
   });
 
   function handleBeforeClose(): boolean {
-    if (showIconPicker) {
-      showIconPicker = false;
+    if (showIconEditor) {
+      showIconEditor = false;
       return false;
     }
     return true;
@@ -129,9 +120,10 @@
   async function handleDelete() {
     if (!onDelete) return;
 
+    const tileName = editedEntry.name?.trim() || 'this tile';
     const confirmed = await confirm({
-      title: 'Delete Tile',
-      message: 'Are you sure you want to delete this tile?',
+      title: `Delete "${tileName}"?`,
+      message: 'This tile will be removed from the dashboard. You can undo this only by re-creating it.',
       confirmText: 'Delete',
       confirmStyle: 'danger'
     });
@@ -140,72 +132,7 @@
     }
   }
 
-  function handleIconSelect(selection: { icon: string; imageUrl?: string }) {
-    editedEntry.icon = selection.icon;
-    editedEntry.iconUrl = selection.imageUrl;
-    iconSearch = selection.icon || '';
-    showIconPicker = false;
-  }
-
-  async function handleIconUpload(e: Event) {
-    const input = e.target as HTMLInputElement;
-    const file = input.files?.[0];
-    if (!file) return;
-
-    // Validate file type
-    const validTypes = ['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/svg+xml'];
-    if (!validTypes.includes(file.type)) {
-      uploadError = 'Invalid file type. Use PNG, JPG, GIF, WebP, or SVG.';
-      return;
-    }
-
-    // Validate file size (5MB max)
-    if (file.size > 5 * 1024 * 1024) {
-      uploadError = 'File too large. Maximum size is 5MB.';
-      return;
-    }
-
-    isUploadingIcon = true;
-    uploadError = '';
-
-    try {
-      const result = await uploadIconImage(file);
-      // Set the uploaded icon URL
-      editedEntry.iconUrl = result.url;
-      // Clear the iconify icon since we're using a custom image
-      editedEntry.icon = '';
-      iconSearch = '';
-
-      // Also create an icon record so it appears in "My Uploads"
-      // Use file name (without extension) as the icon name
-      const fileName = file.name.replace(/\.[^/.]+$/, '');
-      const iconName = fileName.charAt(0).toUpperCase() + fileName.slice(1).replace(/[-_]/g, ' ');
-
-      try {
-        await createIcon({
-          id: result.id,
-          name: iconName,
-          icon: '', // No iconify icon, we're using imageUrl
-          categoryId: 'containers', // Category doesn't matter - My Uploads filters by imageUrl presence
-          imageUrl: result.url
-        });
-        toast.success(`Icon saved to "My Uploads"`);
-      } catch {
-        // Non-critical error - icon still works on the tile, just won't appear in My Uploads
-        logWarn('Could not save icon to database');
-      }
-    } catch (err) {
-      uploadError = err instanceof Error ? err.message : 'Upload failed';
-    } finally {
-      isUploadingIcon = false;
-      // Reset file input
-      input.value = '';
-    }
-  }
-
-  function clearCustomIcon() {
-    editedEntry.iconUrl = undefined;
-  }
+  // Icon picking, uploading, and clearing all live in IconEditModal now.
 </script>
 
 <Modal
@@ -272,80 +199,41 @@
       {/if}
 
       {#if !isNote}
+      <!-- Icon: small preview + one button to open the icon sub-modal,
+           which handles picking / uploading / Iconify name / icon background. -->
       <div class="form-group full-width">
-        <label for="icon">Icon</label>
-
-        {#if editedEntry.iconUrl}
-          <!-- Custom uploaded icon -->
-          <div class="custom-icon-display">
-            <img src={editedEntry.iconUrl} alt="Custom icon" class="custom-icon-preview" />
-            <span class="custom-icon-label">Custom icon uploaded</span>
-            <button type="button" class="clear-icon-btn" onclick={clearCustomIcon} title="Remove custom icon">
-              <Icon icon="mdi:close" width="18" />
-            </button>
-          </div>
-          <small>Or use an Iconify icon instead:</small>
-        {/if}
-
-        <div class="icon-input-wrapper">
-          <div class="icon-input">
-            <input
-              id="icon"
-              type="text"
-              bind:value={iconSearch}
-              oninput={() => { editedEntry.icon = iconSearch; editedEntry.iconUrl = undefined; }}
-              placeholder="mdi:server"
-              disabled={isUploadingIcon}
-            />
-            {#if editedEntry.icon && !editedEntry.iconUrl}
-              <div class="icon-preview">
-                <ColoredIcon icon={editedEntry.icon} width="32" />
-              </div>
-            {/if}
-          </div>
-          <button
-            type="button"
-            class="browse-btn"
-            onclick={() => showIconPicker = true}
-            title="Browse icon library"
-            disabled={isUploadingIcon}
-          >
-            <Icon icon="mdi:apps" width="20" />
-            Browse
-          </button>
-          <button
-            type="button"
-            class="upload-btn"
-            onclick={() => iconFileInput?.click()}
-            title="Upload custom icon"
-            disabled={isUploadingIcon}
-          >
-            {#if isUploadingIcon}
-              <Icon icon="mdi:loading" width="20" class="spin" />
+        <label>Icon</label>
+        <button type="button" class="icon-summary" onclick={() => showIconEditor = true}>
+          <span class="icon-preview-tile"
+                class:has-bg={editedEntry.iconBgColor}
+                style:background-color={editedEntry.iconBgColor}>
+            {#if editedEntry.iconUrl}
+              <img src={editedEntry.iconUrl} alt="" />
+            {:else if editedEntry.icon}
+              <ColoredIcon icon={editedEntry.icon} width="32" />
             {:else}
-              <Icon icon="mdi:upload" width="20" />
+              <ColoredIcon icon="mdi:application-outline" width="32" />
             {/if}
-            Upload
-          </button>
-          <input
-            type="file"
-            accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml"
-            onchange={handleIconUpload}
-            bind:this={iconFileInput}
-            style="display: none;"
-            aria-label="Upload custom icon image"
-          />
-        </div>
-
-        {#if uploadError}
-          <small class="error-text">{uploadError}</small>
-        {/if}
-
-        <small>Browse the icon library, enter an icon name from <a href="https://icon-sets.iconify.design/" target="_blank" rel="noopener">iconify.design</a>, or upload your own</small>
+          </span>
+          <span class="icon-summary-text">
+            {#if editedEntry.iconUrl}
+              Custom uploaded icon
+            {:else if editedEntry.icon}
+              <code>{editedEntry.icon}</code>
+            {:else}
+              No icon
+            {/if}
+          </span>
+          <span class="edit-cta">
+            <Icon icon="mdi:pencil" width="16" />
+            Edit icon
+          </span>
+        </button>
       </div>
       {/if}
 
-      <!-- Color and Opacity grouped after Icon for consistency with Tab/Group editors -->
+      <!-- Tile background colour + opacity — inline, no sub-modal. They
+           belong to the tile itself, not to the icon. -->
       <div class="form-group full-width">
         <ColorPicker
           selectedColor={editedEntry.color}
@@ -531,16 +419,69 @@
     border-color: var(--accent);
   }
 
-  .icon-input {
-    position: relative;
+  /* Compact "Edit icon" summary row — clickable button that opens the
+     icon sub-modal. Shows a preview + the current icon name / "Custom
+     uploaded" / "No icon". */
+  .icon-summary {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+    padding: 0.6rem 0.85rem;
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 0.15s, background 0.15s;
   }
 
-  .icon-preview {
-    position: absolute;
-    right: 0.75rem;
-    top: 50%;
-    transform: translateY(-50%);
+  .icon-summary:hover {
+    border-color: var(--accent);
+    background: var(--bg-tertiary);
+  }
+
+  .icon-preview-tile {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 0.4rem;
+    color: var(--accent);
+    flex-shrink: 0;
+  }
+
+  .icon-preview-tile.has-bg {
+    padding: 0.25rem;
+  }
+
+  .icon-preview-tile img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  .icon-summary-text {
+    flex: 1;
     color: var(--text-secondary);
+    font-size: 0.875rem;
+  }
+
+  .icon-summary-text code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.85em;
+    color: var(--text-primary);
+  }
+
+  .edit-cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    color: var(--accent);
+    font-size: 0.875rem;
+    font-weight: 500;
   }
 
   small {
@@ -620,100 +561,9 @@
     }
   }
 
-  .icon-input-wrapper {
-    display: flex;
-    gap: 0.5rem;
-  }
-
-  .browse-btn {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.75rem 1rem;
-    background: var(--accent);
-    color: white;
-    border: none;
-    border-radius: 0.375rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s;
-    white-space: nowrap;
-  }
-
-  .browse-btn:hover {
-    opacity: 0.9;
-    transform: translateY(-1px);
-  }
-
-  .browse-btn:disabled,
-  .upload-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    transform: none;
-  }
-
-  .upload-btn {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.75rem 1rem;
-    background: var(--bg-tertiary);
-    color: var(--text-primary);
-    border: 1px solid var(--border);
-    border-radius: 0.375rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s;
-    white-space: nowrap;
-  }
-
-  .upload-btn:hover:not(:disabled) {
-    background: var(--bg-secondary);
-    border-color: var(--accent);
-  }
-
-  .custom-icon-display {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 0.75rem;
-    background: var(--bg-tertiary);
-    border: 1px solid var(--border);
-    border-radius: 0.375rem;
-    margin-bottom: 0.5rem;
-  }
-
-  .custom-icon-preview {
-    width: 48px;
-    height: 48px;
-    object-fit: contain;
-    border-radius: 0.25rem;
-    background: var(--bg-secondary);
-  }
-
-  .custom-icon-label {
-    flex: 1;
-    font-size: 0.875rem;
-    color: var(--text-secondary);
-  }
-
-  .clear-icon-btn {
-    padding: 0.375rem;
-    background: transparent;
-    border: none;
-    color: var(--text-secondary);
-    cursor: pointer;
-    border-radius: 0.25rem;
-  }
-
-  .clear-icon-btn:hover {
-    background: var(--bg-secondary);
-    color: var(--text-primary);
-  }
-
-  .error-text {
-    color: var(--color-error);
-  }
+  /* Icon-controls CSS (input wrapper, browse/upload buttons, custom-icon
+     display, clear button, error text) lives in IconEditModal now —
+     they were used only by the icon section we just lifted out. */
 
   :global(.spin) {
     animation: spin 1s linear infinite;
@@ -834,11 +684,14 @@
   }
 </style>
 
-{#if showIconPicker}
-  <IconPickerModal
-    currentIcon={editedEntry.icon}
-    currentImageUrl={editedEntry.iconUrl}
-    onSelect={handleIconSelect}
-    onCancel={() => showIconPicker = false}
+{#if showIconEditor}
+  <IconEditModal
+    icon={editedEntry.icon}
+    iconUrl={editedEntry.iconUrl}
+    iconBgColor={editedEntry.iconBgColor}
+    onIconChange={(v) => editedEntry.icon = v ?? ''}
+    onIconUrlChange={(v) => editedEntry.iconUrl = v}
+    onIconBgColorChange={(v) => editedEntry.iconBgColor = v}
+    onClose={() => showIconEditor = false}
   />
 {/if}

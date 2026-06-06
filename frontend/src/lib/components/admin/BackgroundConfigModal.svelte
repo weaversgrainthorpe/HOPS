@@ -193,9 +193,10 @@
       return;
     }
 
+    const displayName = image.name?.trim() || 'this background';
     const confirmed = await confirm({
-      title: 'Delete Background',
-      message: 'Delete this uploaded background image?',
+      title: `Delete "${displayName}"?`,
+      message: 'The image will be removed from your library and from any dashboards or tabs that use it.',
       confirmText: 'Delete',
       confirmStyle: 'danger'
     });
@@ -1303,7 +1304,7 @@
   }
 
   .upload-error {
-    color: var(--color-error);
+    color: var(--color-error-text);
     font-size: 0.875rem;
     margin-bottom: 1rem;
   }

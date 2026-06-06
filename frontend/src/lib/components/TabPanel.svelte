@@ -3,6 +3,7 @@
   import Group from './Group.svelte';
   import Icon from '@iconify/svelte';
   import { editMode } from '$lib/stores/editMode';
+  import { isAuthenticated } from '$lib/stores/auth';
   import GroupEditModal from './admin/GroupEditModal.svelte';
   import { untrack } from 'svelte';
   import { dndzone } from 'svelte-dnd-action';
@@ -27,7 +28,7 @@
     onUpdateEntry?: (groupId: string, entryId: string, updatedEntry: Entry) => void;
     onDeleteEntry?: (groupId: string, entryId: string) => void;
     onAddEntry?: (groupId: string, newEntry: Entry) => void;
-    onAddGroup?: (groupName: string, icon?: string, iconUrl?: string, color?: string, opacity?: number, textColor?: 'auto' | 'light' | 'dark', displayStyle?: 'header' | 'folder', width?: 'full' | 'half' | 'third') => void;
+    onAddGroup?: (groupName: string, icon?: string, iconUrl?: string, iconBgColor?: string, color?: string, opacity?: number, textColor?: 'auto' | 'light' | 'dark', displayStyle?: 'header' | 'folder', width?: 'full' | 'half' | 'third') => void;
     onReorderEntries?: (groupId: string, reorderedEntries: Entry[]) => void;
     onMoveEntry?: (fromGroupId: string, toGroupId: string, entryId: string, newIndex: number) => void;
     onMoveEntryToTab?: (sourceGroupId: string, entryId: string, targetTabId: string, targetGroupId: string) => void;
@@ -114,9 +115,9 @@
     showAddGroupModal = true;
   }
 
-  function handleSaveGroup(groupName: string, icon?: string, iconUrl?: string, color?: string, opacity?: number, textColor?: 'auto' | 'light' | 'dark', displayStyle?: 'header' | 'folder', width?: 'full' | 'half' | 'third') {
+  function handleSaveGroup(groupName: string, icon?: string, iconUrl?: string, iconBgColor?: string, color?: string, opacity?: number, textColor?: 'auto' | 'light' | 'dark', displayStyle?: 'header' | 'folder', width?: 'full' | 'half' | 'third') {
     if (onAddGroup) {
-      onAddGroup(groupName, icon, iconUrl, color, opacity, textColor, displayStyle, width);
+      onAddGroup(groupName, icon, iconUrl, iconBgColor, color, opacity, textColor, displayStyle, width);
     }
     showAddGroupModal = false;
   }
@@ -275,8 +276,10 @@
           <p>No groups in this tab yet</p>
           {#if $editMode}
             <p class="hint">Click <strong>Add Group</strong> below to organize tiles into a group.</p>
-          {:else}
+          {:else if $isAuthenticated}
             <p class="hint">Enable edit mode in the navbar to add a group.</p>
+          {:else}
+            <p class="hint">Sign in at <a href="/">the admin page</a> to start adding tiles.</p>
           {/if}
         </div>
       {/if}

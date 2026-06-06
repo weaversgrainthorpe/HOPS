@@ -73,9 +73,9 @@
     collapsed = !collapsed;
   }
 
-  function handleSaveGroup(groupName: string, groupIcon?: string, groupIconUrl?: string, groupColor?: string, groupOpacity?: number, groupTextColor?: 'auto' | 'light' | 'dark', displayStyle?: 'header' | 'folder', width?: 'full' | 'half' | 'third') {
+  function handleSaveGroup(groupName: string, groupIcon?: string, groupIconUrl?: string, groupIconBgColor?: string, groupColor?: string, groupOpacity?: number, groupTextColor?: 'auto' | 'light' | 'dark', displayStyle?: 'header' | 'folder', width?: 'full' | 'half' | 'third') {
     if (onUpdateGroup) {
-      onUpdateGroup({ ...group, name: groupName, icon: groupIcon, iconUrl: groupIconUrl, color: groupColor, opacity: groupOpacity, textColor: groupTextColor, displayStyle, width });
+      onUpdateGroup({ ...group, name: groupName, icon: groupIcon, iconUrl: groupIconUrl, iconBgColor: groupIconBgColor, color: groupColor, opacity: groupOpacity, textColor: groupTextColor, displayStyle, width });
     }
     showEditModal = false;
   }
@@ -248,10 +248,16 @@
       aria-label={$editMode ? `Edit ${group.name} group` : `${collapsed ? 'Expand' : 'Collapse'} ${group.name} group`}
     >
       <div class="group-title">
-        {#if group.iconUrl}
-          <img src={group.iconUrl} alt="" class="group-icon-img" />
-        {:else if group.icon}
-          <Icon icon={group.icon} width="24" />
+        {#if group.iconUrl || group.icon}
+          <span class="group-icon-backing"
+                class:has-bg={group.iconBgColor}
+                style:background-color={group.iconBgColor}>
+            {#if group.iconUrl}
+              <img src={group.iconUrl} alt="" class="group-icon-img" />
+            {:else if group.icon}
+              <Icon icon={group.icon} width="24" />
+            {/if}
+          </span>
         {/if}
         <h3>{group.name}</h3>
       </div>
@@ -332,6 +338,11 @@
             <span>Paste</span>
           </button>
         {/if}
+      {:else if items.length === 0}
+        <!-- View mode + zero tiles: without this the group renders as a
+             clickable header with literally nothing beneath, which reads
+             as a rendering bug rather than an empty group. -->
+        <p class="group-empty-note">No tiles in this group.</p>
       {/if}
     </div>
   {/if}
@@ -350,6 +361,7 @@
     groupName={group.name}
     groupIcon={group.icon}
     groupIconUrl={group.iconUrl}
+    groupIconBgColor={group.iconBgColor}
     groupColor={group.color}
     groupOpacity={group.opacity}
     groupTextColor={group.textColor}
@@ -472,6 +484,19 @@
     object-fit: contain;
   }
 
+  /* Optional coloured backing behind the group header's icon. Invisible
+     until iconBgColor is set — same pattern as tile's icon-backing. */
+  .group-icon-backing {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .group-icon-backing.has-bg {
+    padding: 0.3rem;
+    border-radius: 0.35rem;
+  }
+
   h3 {
     margin: 0;
     font-size: 1.25rem;
@@ -497,8 +522,17 @@
     z-index: 10;
   }
 
-  .group-header-container:hover .group-controls {
+  .group-header-container:hover .group-controls,
+  .group-header-container:focus-within .group-controls {
     opacity: 1;
+  }
+
+  /* Touch — no hover, so the edit/duplicate/delete group buttons would
+     be unreachable from a tablet. Always visible. */
+  @media (hover: none) {
+    .group-controls {
+      opacity: 1;
+    }
   }
 
   .group-control-btn {
@@ -536,6 +570,14 @@
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
     gap: 1rem;
+  }
+
+  .group-empty-note {
+    grid-column: 1 / -1;
+    color: var(--text-secondary);
+    font-style: italic;
+    margin: 0.25rem 0 0;
+    font-size: 0.9rem;
   }
 
   .add-tile-btn {

@@ -71,7 +71,12 @@
      show a neutral "we can't tell right now" icon instead of letting every
      tile turn red. The actual status colour returns the moment we're back. -->
 {#if $isOffline}
-  <div class="status-indicator offline" title="We can't reach the HOPS server right now — last known status unchanged.">
+  <div
+    class="status-indicator offline"
+    role="img"
+    aria-label="Status unknown — HOPS server unreachable"
+    title="We can't reach the HOPS server right now — last known status unchanged."
+  >
     <Icon icon="mdi:cloud-off-outline" width="12" />
   </div>
 {:else}
@@ -79,6 +84,8 @@
     class="status-indicator"
     class:loading={status.status === 'loading'}
     style:--status-color={getStatusColor(status.status)}
+    role="img"
+    aria-label={getStatusTitle(status)}
     title={getStatusTitle(status)}
   >
     <Icon icon={getStatusIcon(status.status)} width="12" />

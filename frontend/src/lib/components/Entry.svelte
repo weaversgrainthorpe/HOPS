@@ -180,13 +180,22 @@
       <div class="title">{entry.name}</div>
 
       <div class="icon">
+        <!-- icon-backing exists on every tile so layout doesn't shift when
+             the optional background is added/removed. It's only visually
+             present (padding + rounding + bg) when entry.iconBgColor is set. -->
+        <div
+          class="icon-backing"
+          class:has-bg={entry.iconBgColor}
+          style:background-color={entry.iconBgColor}
+        >
         {#if entry.iconUrl}
-          <img src={entry.iconUrl} alt={entry.name} />
+          <img src={entry.iconUrl} alt="" />
         {:else if entry.icon}
           <ColoredIcon icon={entry.icon} width="48" />
         {:else}
           <ColoredIcon icon="mdi:application" width="48" />
         {/if}
+        </div>
       </div>
 
       {#if entry.description}
@@ -203,11 +212,11 @@
 
   {#if $editMode}
     <div class="hover-controls">
-      <button class="control-btn edit-btn" onclick={(e) => { e.stopPropagation(); showEditModal = true; }} title="Edit tile">
+      <button class="control-btn edit-btn" onclick={(e) => { e.stopPropagation(); showEditModal = true; }} aria-label="Edit {entry.name}" title="Edit tile">
         <Icon icon="mdi:pencil" width="16" />
       </button>
       {#if onDelete}
-        <button class="control-btn delete-btn" onclick={handleDeleteClick} title="Delete tile">
+        <button class="control-btn delete-btn" onclick={handleDeleteClick} aria-label="Delete {entry.name}" title="Delete tile">
           <Icon icon="mdi:trash-can" width="16" />
         </button>
       {/if}
@@ -361,6 +370,21 @@
     flex: 1;
   }
 
+  /* Wrapper around the icon graphic. Invisible by default — only takes on
+     padding + rounded corners + a background when the user has set
+     iconBgColor (giving a "logo badge" look that rescues dark logos on
+     dark tiles). */
+  .icon-backing {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .icon-backing.has-bg {
+    padding: 0.5rem;
+    border-radius: 0.5rem;
+  }
+
   .icon img {
     width: 48px;
     height: 48px;
@@ -487,8 +511,19 @@
     z-index: 10;
   }
 
-  .entry-container:hover .hover-controls {
+  .entry-container:hover .hover-controls,
+  .entry-container:focus-within .hover-controls {
     opacity: 1;
+  }
+
+  /* Touch devices have no hover — keep the edit/delete buttons always
+     visible so they can actually be tapped. Without this, the documented
+     "edit on a tablet" flow is broken because the affordance only appears
+     to a mouse. */
+  @media (hover: none) {
+    .hover-controls {
+      opacity: 1;
+    }
   }
 
   .control-btn {

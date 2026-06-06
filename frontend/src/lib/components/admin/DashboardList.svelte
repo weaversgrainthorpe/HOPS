@@ -6,6 +6,7 @@
   import { goto } from '$app/navigation';
   import { exportConfig } from '$lib/utils/api';
   import type { Dashboard } from '$lib/types';
+  import { tick } from 'svelte';
   import Icon from '@iconify/svelte';
   import ImportModal from './ImportModal.svelte';
   import QRCodeModal from './QRCodeModal.svelte';
@@ -20,10 +21,14 @@
   let newName = $state('');
   let newPath = $state('');
 
-  function handleNew() {
+  async function handleNew() {
     creatingNew = true;
     newName = '';
     newPath = `/dashboard-${Date.now()}`;
+    // Programmatic focus after the next render — friendlier than `autofocus`
+    // which steals focus mid-page-read for screen-reader users (WCAG 2.4.3).
+    await tick();
+    document.getElementById('new-name')?.focus();
   }
 
   function cancelNew() {
@@ -152,7 +157,6 @@
               type="text"
               bind:value={newName}
               placeholder="e.g., Home"
-              autofocus
             />
           </div>
           <div class="field">
@@ -222,10 +226,10 @@
             </button>
 
             <div class="dashboard-actions">
-              <button onclick={() => startEdit(dashboard)} class="btn-secondary" title="Rename">
+              <button onclick={() => startEdit(dashboard)} class="btn-secondary" aria-label="Rename {dashboard.name}" title="Rename">
                 <Icon icon="mdi:pencil" width="20" />
               </button>
-              <button onclick={() => handleExport(dashboard)} class="btn-secondary" title="Export" disabled={exportingId === dashboard.id}>
+              <button onclick={() => handleExport(dashboard)} class="btn-secondary" aria-label="Export {dashboard.name}" title="Export" disabled={exportingId === dashboard.id}>
                 {#if exportingId === dashboard.id}
                   <Icon icon="mdi:loading" width="20" class="spin" />
                 {:else}
@@ -240,10 +244,10 @@
               >
                 <Icon icon="mdi:qrcode" width="20" />
               </button>
-              <a href={dashboard.path} target="_blank" class="btn-secondary" title="Open in new tab">
+              <a href={dashboard.path} target="_blank" class="btn-secondary" aria-label="Open {dashboard.name} in a new tab" title="Open in new tab">
                 <Icon icon="mdi:open-in-new" width="20" />
               </a>
-              <button onclick={() => handleDelete(dashboard)} class="btn-danger" title="Delete">
+              <button onclick={() => handleDelete(dashboard)} class="btn-danger" aria-label="Delete {dashboard.name}" title="Delete">
                 <Icon icon="mdi:trash-can" width="20" />
               </button>
             </div>
@@ -392,7 +396,7 @@
   /* DashboardList uses an outline-style danger button (softer for list rows) */
   .btn-danger {
     background: var(--bg-tertiary);
-    color: var(--color-error);
+    color: var(--color-error-text);
   }
 
   .btn-danger:hover:not(:disabled) {

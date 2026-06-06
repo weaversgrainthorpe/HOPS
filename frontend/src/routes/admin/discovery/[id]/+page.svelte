@@ -6,6 +6,7 @@
   import Button from '$lib/components/shared/Button.svelte';
   import { isAuthenticated, waitForAuthChecked } from '$lib/stores/auth';
   import { toast } from '$lib/stores/toast';
+  import { confirm } from '$lib/stores/confirmModal';
   import { config as configStore, loadConfig } from '$lib/stores/config';
   import {
     getScan, cancelScan, deleteScan, updateScanResult, promoteScan, createScan,
@@ -32,6 +33,10 @@
   let loadError = $state('');
   let pollTimer: ReturnType<typeof setTimeout> | null = null;
   let stopped = false;
+  // Count of consecutive failed polls. Resets on success. Drives the
+  // exponential backoff so a flaky network doesn't hammer the API and
+  // doesn't freeze the live progress UI either.
+  let pollFailCount = 0;
 
   // Curate state — selected IDs + per-row override drafts (name, url).
   // We sync to the server via PATCH on blur so a half-curated draft
@@ -175,6 +180,7 @@
       }
 
       loadError = '';
+      pollFailCount = 0;
       // If still running, schedule another poll. Short-poll every 1s
       // while running, matches what the plan committed to. The
       // scanId-equality recheck below is belt-and-braces against a
@@ -185,7 +191,23 @@
       }
     } catch (e) {
       if (inflightScanId !== scanId) return; // navigation already moved on
-      loadError = e instanceof Error ? e.message : 'Failed to load scan';
+      // Don't freeze the progress UI on a single network blip. Keep
+      // the last known scan + results visible, count the failure, and
+      // retry with exponential backoff (1s, 2s, 4s, 8s, 15s cap)
+      // instead of giving up. The user sees the previous progress bar
+      // until a successful poll arrives.
+      pollFailCount++;
+      if (pollFailCount <= 1) {
+        // First failure — don't even mention it; could be a one-off.
+      } else {
+        loadError = e instanceof Error
+          ? `${e.message} (reconnecting…)`
+          : 'Reconnecting to HOPS…';
+      }
+      if (!stopped && scan && (scan.state === 'running' || scan.state === 'pending')) {
+        const backoffMs = Math.min(15000, 1000 * Math.pow(2, pollFailCount - 1));
+        pollTimer = setTimeout(refresh, backoffMs);
+      }
     } finally {
       if (inflightScanId === scanId) loading = false;
     }
@@ -352,7 +374,13 @@
 
   async function handleDelete() {
     if (!scan) return;
-    if (!confirm('Delete this draft and all its results?')) return;
+    const ok = await confirm({
+      title: 'Delete scan draft',
+      message: 'Delete this draft and all its results?',
+      confirmText: 'Delete',
+      confirmStyle: 'danger',
+    });
+    if (!ok) return;
     try {
       await deleteScan(scan.id);
       toast.success('Draft deleted');
@@ -502,7 +530,7 @@
 
     try {
       const { promoted, dashboardPath } = await promoteScan(scan.id, target, ids);
-      toast.success(`${promoted} tile(s) added to the dashboard`);
+      toast.success(`${promoted} tile${promoted === 1 ? '' : 's'} added to the dashboard`);
       // Take the user to where their new tiles now live — prefer the
       // path the server tells us, fall back to the picked dashboard.
       if (dashboardPath) {
@@ -554,9 +582,7 @@
 <div class="page">
   <header class="header">
     <div class="title-row">
-      <button class="back" onclick={() => goto('/admin/discovery')} title="Back">
-        <Icon icon="mdi:arrow-left" width="20" />
-      </button>
+      <Button variant="ghost" icon="mdi:arrow-left" onclick={() => goto('/admin/discovery')} ariaLabel="Back to Discovery" />
       <div>
         <h1>Discovery draft</h1>
         {#if scan}
@@ -624,8 +650,13 @@
     {/if}
 
     {#if results.length === 0}
-      {#if scan.state === 'complete' || scan.state === 'cancelled'}
-        <div class="empty">
+      {#if scan.state === 'cancelled'}
+        <div class="empty-state">
+          <Icon icon="mdi:cancel" width="48" />
+          <p>Scan cancelled before any services were found. Start a new scan when you're ready.</p>
+        </div>
+      {:else if scan.state === 'complete'}
+        <div class="empty-state">
           <Icon icon="mdi:magnify-close" width="48" />
           <p>Scan finished — nothing detected on the requested range.</p>
         </div>
@@ -635,9 +666,9 @@
     {:else}
       <div class="curate-toolbar">
         <div class="bulk">
-          <button onclick={() => toggleAll(true)}>Select all</button>
-          <button onclick={() => toggleAll(false)}>Select none</button>
-          <button onclick={selectAllHigh}>Select all high-confidence</button>
+          <Button variant="ghost" size="small" onclick={() => toggleAll(true)}>Select all</Button>
+          <Button variant="ghost" size="small" onclick={() => toggleAll(false)}>Select none</Button>
+          <Button variant="ghost" size="small" onclick={selectAllHigh}>Select all high-confidence</Button>
         </div>
         <div class="bulk">
           {#if promotedCount > 0}
@@ -655,7 +686,7 @@
         </div>
       </div>
 
-      <table class="results">
+      <div class="table-scroll"><table class="data-table results">
         <thead>
           <tr>
             <th class="check-col"></th>
@@ -713,9 +744,9 @@
               <td class="mono">{r.port}</td>
               <td>
                 {#if isPromoted}
-                  <span class="conf conf-promoted">promoted</span>
+                  <span class="badge badge--accent" title="This service is already a tile on one of your dashboards — it won't be added again.">promoted</span>
                 {:else}
-                  <span class="conf conf-{r.confidence}">{r.confidence}</span>
+                  <span class="badge badge--{r.confidence === 'high' ? 'success' : r.confidence === 'medium' ? 'warning' : 'neutral'}">{r.confidence}</span>
                 {/if}
               </td>
               <td class="cat-cell">
@@ -791,7 +822,7 @@
             </tr>
           {/each}
         </tbody>
-      </table>
+      </table></div>
     {/if}
   {/if}
 </div>
@@ -815,6 +846,7 @@
             type="text"
             placeholder="New dashboard name (e.g. Media)"
             bind:value={newDashName}
+            aria-label="New dashboard name"
             autocomplete="off"
           />
           <div class="hint">A URL path will be auto-generated from the name.</div>
@@ -828,6 +860,7 @@
             type="text"
             placeholder="New tab name"
             bind:value={newTabName}
+            aria-label="New tab name"
             autocomplete="off"
           />
           {#if dashIsNew}
@@ -903,18 +936,8 @@
     margin-bottom: 1rem;
   }
   .title-row { display: flex; gap: 0.75rem; align-items: flex-start; }
-  .title-row h1 { margin: 0; font-size: 1.5rem; }
+  .title-row h1 { margin: 0; font-size: var(--font-h1); }
   .sub { color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.2rem; }
-  .back {
-    background: transparent;
-    border: 1px solid var(--border);
-    border-radius: 0.4rem;
-    color: var(--text-primary);
-    padding: 0.4rem 0.55rem;
-    cursor: pointer;
-    margin-top: 0.15rem;
-  }
-  .back:hover { background: var(--bg-tertiary); }
   .header-actions { display: flex; gap: 0.5rem; }
 
   .muted { color: var(--text-secondary); }
@@ -924,32 +947,23 @@
     background: rgba(239,68,68,0.1);
     border: 1px solid rgba(239,68,68,0.3);
     color: #ef4444;
-    border-radius: 0.4rem;
+    border-radius: var(--radius-md);
     padding: 0.6rem 0.8rem;
     margin-bottom: 1rem;
   }
   .note {
     background: var(--bg-tertiary);
     border: 1px solid var(--border);
-    border-radius: 0.4rem;
+    border-radius: var(--radius-md);
     padding: 0.6rem 0.8rem;
     margin-bottom: 1rem;
     color: var(--text-secondary);
   }
-  .empty {
-    text-align: center;
-    padding: 3rem 1rem;
-    color: var(--text-secondary);
-    border: 1px dashed var(--border);
-    border-radius: 0.6rem;
-    margin-top: 1rem;
-  }
-  .empty p { margin-top: 0.5rem; }
 
   .progress {
     background: var(--bg-secondary);
     border: 1px solid var(--border);
-    border-radius: 0.5rem;
+    border-radius: var(--radius-lg);
     padding: 0.8rem 1rem;
     margin-bottom: 1.2rem;
   }
@@ -970,7 +984,7 @@
     background: rgba(245, 158, 11, 0.08);
     border: 1px solid rgba(245, 158, 11, 0.4);
     color: var(--text-primary);
-    border-radius: 0.4rem;
+    border-radius: var(--radius-md);
     padding: 0.6rem 0.9rem;
     margin: 0 0 1rem;
   }
@@ -986,7 +1000,7 @@
   .warnings ul { margin: 0; padding-left: 1.4rem; font-size: 0.88rem; }
   .warnings li { margin: 0.15rem 0; }
   .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
-  .dot-running { background: #4f8cff; animation: pulse 1.2s infinite; }
+  .dot-running { background: var(--accent); animation: pulse 1.2s infinite; }
   @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
   .bar {
     width: 100%;
@@ -997,7 +1011,7 @@
   }
   .bar-fill {
     height: 100%;
-    background: #4f8cff;
+    background: var(--accent);
     transition: width 0.3s ease;
   }
 
@@ -1008,36 +1022,11 @@
     gap: 1rem;
     margin: 1rem 0;
   }
-  .bulk { display: flex; align-items: center; gap: 0.4rem; }
-  .bulk button {
-    background: transparent;
-    color: var(--text-primary);
-    border: 1px solid var(--border);
-    border-radius: 0.4rem;
-    padding: 0.35rem 0.7rem;
-    cursor: pointer;
-    font-size: 0.88rem;
-  }
-  .bulk button:hover { background: var(--bg-tertiary); }
+  .bulk { display: flex; align-items: center; gap: var(--space-2); }
 
-  table.results {
-    width: 100%;
-    border-collapse: separate;
-    border-spacing: 0;
-    background: var(--bg-secondary);
-    border: 1px solid var(--border);
-    border-radius: 0.5rem;
-    overflow: hidden;
-  }
-  table.results th, table.results td {
-    text-align: left;
-    padding: 0.55rem 0.8rem;
-    border-bottom: 1px solid var(--border);
-    font-size: 0.95rem;
-    vertical-align: top;
-  }
-  table.results thead th { background: var(--bg-tertiary); font-weight: 600; }
-  table.results tbody tr:last-child td { border-bottom: none; }
+  /* table.results chrome ships from .data-table. Only padding +
+     row-state tweaks specific to the curate view remain. */
+  table.results th, table.results td { padding: 0.55rem 0.8rem; vertical-align: top; }
   table.results tr.selected { background: rgba(79,140,255,0.05); }
   .check-col { width: 1%; }
   .icon-col { width: 1%; }
@@ -1076,19 +1065,10 @@
     font-size: 0.95rem;
   }
   .inline-input:hover:not(:disabled) { border-color: var(--border); }
-  .inline-input:focus { border-color: var(--accent, #4f8cff); outline: none; background: var(--bg-tertiary); }
+  .inline-input:focus { border-color: var(--accent, var(--accent)); outline: none; background: var(--bg-tertiary); }
 
-  .conf {
-    display: inline-block;
-    font-size: 0.78rem;
-    padding: 0.1rem 0.5rem;
-    border-radius: 999px;
-    font-weight: 600;
-  }
-  .conf-high   { background: rgba(34,197,94,0.15);  color: #22c55e; }
-  .conf-medium { background: rgba(245,158,11,0.15); color: #f59e0b; }
-  .conf-low    { background: var(--bg-tertiary); color: var(--text-secondary); }
-  .conf-promoted { background: rgba(168,85,247,0.15); color: #a855f7; }
+  /* Confidence + promoted badges now use the shared .badge / .badge--{tone}
+     taxonomy in app.css. No page-local CSS needed. */
 
   .cat-cell { vertical-align: middle; }
   .cat-select {
@@ -1100,7 +1080,7 @@
     font-size: 0.88rem;
     max-width: 9rem;
   }
-  .cat-select:focus { outline: none; border-color: var(--accent, #4f8cff); }
+  .cat-select:focus { outline: none; border-color: var(--accent, var(--accent)); }
   .cat-static {
     display: inline-flex;
     align-items: center;
@@ -1115,7 +1095,7 @@
     gap: 0.4rem;
     padding: 0.5rem;
     border: 1px solid var(--border);
-    border-radius: 0.4rem;
+    border-radius: var(--radius-md);
     background: var(--bg-secondary);
     min-height: 2.2rem;
     align-items: center;
@@ -1131,7 +1111,7 @@
     font-size: 0.85rem;
   }
   .cat-count {
-    background: var(--accent, #4f8cff);
+    background: var(--accent, var(--accent));
     color: white;
     border-radius: 999px;
     padding: 0 0.45rem;
@@ -1164,13 +1144,13 @@
   .modal {
     background: var(--bg-secondary);
     border: 1px solid var(--border);
-    border-radius: 0.6rem;
+    border-radius: var(--radius-xl);
     padding: 1.2rem 1.4rem;
     width: 100%;
     max-width: 460px;
     box-shadow: 0 20px 60px rgba(0,0,0,0.4);
   }
-  .modal h2 { margin: 0 0 0.4rem; font-size: 1.2rem; }
+  .modal h2 { margin: 0 0 0.4rem; font-size: var(--font-h2); }
   .modal .field { display: flex; flex-direction: column; gap: 0.3rem; margin-top: 0.9rem; }
   .modal .field label { font-weight: 600; font-size: 0.88rem; }
   .modal .field select,
@@ -1178,7 +1158,7 @@
     background: var(--bg-secondary);
     color: var(--text-primary);
     border: 1px solid var(--border);
-    border-radius: 0.4rem;
+    border-radius: var(--radius-md);
     padding: 0.45rem 0.6rem;
     font-size: 0.95rem;
   }

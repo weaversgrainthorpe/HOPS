@@ -1,5 +1,5 @@
 import { writable } from 'svelte/store';
-import { login as apiLogin, logout as apiLogout, checkAuth, setSessionExpiredHandler } from '$lib/utils/api';
+import { login as apiLogin, logout as apiLogout, checkAuth, setSessionExpiredHandler, LoginError } from '$lib/utils/api';
 import { toast } from './toast';
 import { logError } from '$lib/utils/errors';
 
@@ -83,7 +83,11 @@ export async function login(username: string, password: string) {
     return true;
   } catch (error) {
     logError('Login', error);
-    toast.error('Invalid username or password');
+    if (error instanceof LoginError) {
+      toast.error(error.message);
+    } else {
+      toast.error('Sign-in failed. Try again.');
+    }
     return false;
   } finally {
     isLoggingIn.set(false);
