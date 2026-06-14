@@ -9,7 +9,18 @@ vi.mock('$lib/utils/api', () => ({
 	checkAuth: vi.fn(),
 	// Added to api.ts in v2.0; auth store registers a handler at module
 	// load time, so this mock must accept the call or the import explodes.
-	setSessionExpiredHandler: vi.fn()
+	setSessionExpiredHandler: vi.fn(),
+	// auth store does `error instanceof LoginError`, so the mock must export
+	// a real class — mirror the shape of the one in api.ts.
+	LoginError: class LoginError extends Error {
+		constructor(
+			public reason: 'unauthorized' | 'network' | 'rate-limited' | 'unknown',
+			message: string
+		) {
+			super(message);
+			this.name = 'LoginError';
+		}
+	}
 }));
 
 import {
