@@ -39,17 +39,29 @@ export async function waitForAuthChecked(): Promise<void> {
 let authCheckedValue = false;
 authChecked.subscribe((v) => { authCheckedValue = v; });
 
+// Paths that require an authenticated admin. If the session expires
+// while the user is on one of these, we redirect them to the dashboard
+// root — sitting on a broken settings page with all API calls 401-ing
+// is a worse experience than seeing the public dashboard with the
+// navbar flipped to "Sign in". From any non-admin path (the dashboards
+// themselves) we just clear state and let the navbar reflect it — the
+// user keeps seeing their dashboard in anonymous read-only mode.
+function isAdminOnlyPath(path: string): boolean {
+  return path === '/settings' || path.startsWith('/settings/') || path === '/admin' || path.startsWith('/admin/');
+}
+
 // Register the global session-expired handler with the API layer.
 // Fires when any fetchAPI call hits 401 — clears auth state, toasts
-// once, and (if in the browser) sends the user to the login page so
-// they don't sit on a broken protected page after their cookie expires.
+// once. We do NOT pull the user away from a dashboard they're viewing;
+// HOPS dashboards work fine anonymously.
 setSessionExpiredHandler(() => {
   isAuthenticated.set(false);
   mustChangePassword.set(false);
-  toast.error('Your session has expired. Please log in again.');
-  if (typeof window !== 'undefined' && window.location.pathname !== '/') {
+  toast.info('You’ve been signed out — dashboards are still browseable. Click Sign in when you want to make changes.');
+  if (typeof window !== 'undefined' && isAdminOnlyPath(window.location.pathname)) {
+    // The current page genuinely requires auth (settings, admin tools).
     // Defer slightly so any pending per-page error handling can show
-    // its own context before we redirect.
+    // its own context before we move.
     setTimeout(() => { window.location.href = '/'; }, 300);
   }
 });

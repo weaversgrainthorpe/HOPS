@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { loadConfig } from '$lib/stores/config';
 	import { initAuth, mustChangePassword } from '$lib/stores/auth';
-	import { initAuthWatcher } from '$lib/stores/authWatcher';
+	import { initEditModeIdleWatcher } from '$lib/stores/editModeIdleWatcher';
 	import { initNetworkWatcher } from '$lib/stores/network';
 	import Navbar from '$lib/components/Navbar.svelte';
 	import OfflineBanner from '$lib/components/OfflineBanner.svelte';
@@ -23,7 +23,7 @@
 		initAuth();
 		loadConfig();
 		initNetworkWatcher();
-		initAuthWatcher();
+		initEditModeIdleWatcher();
 	});
 
 	// True when the user is typing into a real input — search hotkey must
