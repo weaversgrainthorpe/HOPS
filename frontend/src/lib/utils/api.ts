@@ -472,10 +472,17 @@ export async function listSettings(): Promise<{ settings: SettingDef[] }> {
   return fetchAPI('/settings');
 }
 
-export async function updateSetting(key: string, value: string): Promise<void> {
+export async function updateSetting(key: string, value: string | number): Promise<void> {
+  // Coerce to string at the boundary. Svelte's `bind:value` on
+  // <input type="number"> writes a JS number (or null) into the bound
+  // store regardless of TypeScript annotations, so without this guard
+  // numeric settings serialise as {"value":28} (JSON number) and the
+  // server's `Value string` decoder rejects them with "Invalid JSON body".
+  // String(null) becomes "null" which fails server-side validation with
+  // a real "not an integer" message instead of the cryptic decode error.
   await fetchAPI(`/settings/${encodeURIComponent(key)}`, {
     method: 'PUT',
-    body: JSON.stringify({ value }),
+    body: JSON.stringify({ value: String(value) }),
   });
 }
 
