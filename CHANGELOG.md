@@ -5,6 +5,33 @@ All notable changes to HOPS (Home Operations Portal System) will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.3] - 2026-06-14 — Fix "Invalid JSON body" on every numeric setting
+
+Hotfix for a latent bug surfaced as soon as anyone tried to actually
+change a numeric setting via the GUI: every save attempt returned a
+red "Invalid JSON body" error and the value never persisted. The
+non-numeric settings (log level dropdown, proxy.trusted_cidrs chip
+builder) were unaffected, which is why nobody noticed until now —
+homelab setups generally don't tune the numeric defaults.
+
+### Fixed
+- **Numeric settings save failed with "Invalid JSON body".** Svelte's
+  `bind:value` on `<input type="number">` writes a JavaScript number
+  (or `null`) into the bound store regardless of TypeScript
+  annotations, so `JSON.stringify({ value })` was serialising
+  numeric settings as `{"value":28}` (JSON number) instead of
+  `{"value":"28"}` (JSON string). The server's setting-update handler
+  declares `Value string` and the JSON decoder refuses to coerce a
+  number into a string field, returning a 400 with the confusing
+  "Invalid JSON body" error. `updateSetting()` in the API client now
+  coerces to string at the boundary via `String(value)` — also gives
+  the empty-input case a sensible server-side validation error
+  ("not an integer") instead of the cryptic decode failure.
+
+### Migration notes
+- Pure frontend fix. No schema or behaviour changes. Drop in the new
+  binary + restart (or just deploy the new frontend bundle).
+
 ## [2.1.2] - 2026-06-14 — Session lifetime + edit-mode idle timeout
 
 A focused bug-fix release addressing three related session/edit-mode
