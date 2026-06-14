@@ -27,8 +27,14 @@ type LoginResult struct {
 	MustChangePassword bool
 }
 
-// Login authenticates a user and creates a session
-func (s *Service) Login(username, password string) (LoginResult, error) {
+// Login authenticates a user and creates a session.
+//
+// lifetimeHours controls how long the session row stays valid in the DB —
+// it must match the cookie MaxAge the caller sets, otherwise a long-lived
+// cookie can outlive its DB row (or vice versa) and the user gets kicked
+// out at the shorter of the two. The caller derives this from the
+// auth.session_lifetime_hours admin setting.
+func (s *Service) Login(username, password string, lifetimeHours int) (LoginResult, error) {
 	var userID int
 	var passwordHash string
 	var mustChange int
@@ -56,7 +62,13 @@ func (s *Service) Login(username, password string) (LoginResult, error) {
 		return LoginResult{}, fmt.Errorf("failed to generate session: %w", err)
 	}
 
-	expiresAt := time.Now().Add(24 * time.Hour)
+	// Belt-and-braces: if a caller passes 0 or negative we still produce
+	// a sane non-immediate-expiry row rather than handing back a session
+	// the DB will reject on the very next request.
+	if lifetimeHours <= 0 {
+		lifetimeHours = 24
+	}
+	expiresAt := time.Now().Add(time.Duration(lifetimeHours) * time.Hour)
 
 	_, err = s.db.Exec(
 		"INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)",

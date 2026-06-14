@@ -52,7 +52,7 @@ func TestLoginSuccess(t *testing.T) {
 	db := setupTestDB(t)
 	svc := NewService(db)
 
-	result, err := svc.Login("admin", "testpass")
+	result, err := svc.Login("admin", "testpass", 24)
 	if err != nil {
 		t.Fatalf("expected successful login, got: %v", err)
 	}
@@ -68,7 +68,7 @@ func TestLoginWrongPassword(t *testing.T) {
 	db := setupTestDB(t)
 	svc := NewService(db)
 
-	_, err := svc.Login("admin", "wrong")
+	_, err := svc.Login("admin", "wrong", 24)
 	if err == nil {
 		t.Fatal("expected error for wrong password")
 	}
@@ -78,7 +78,7 @@ func TestLoginUnknownUser(t *testing.T) {
 	db := setupTestDB(t)
 	svc := NewService(db)
 
-	_, err := svc.Login("nobody", "testpass")
+	_, err := svc.Login("nobody", "testpass", 24)
 	if err == nil {
 		t.Fatal("expected error for unknown user")
 	}
@@ -88,7 +88,7 @@ func TestValidateSession(t *testing.T) {
 	db := setupTestDB(t)
 	svc := NewService(db)
 
-	result, _ := svc.Login("admin", "testpass")
+	result, _ := svc.Login("admin", "testpass", 24)
 
 	userID, err := svc.ValidateSession(result.SessionID)
 	if err != nil {
@@ -129,7 +129,7 @@ func TestLogout(t *testing.T) {
 	db := setupTestDB(t)
 	svc := NewService(db)
 
-	result, _ := svc.Login("admin", "testpass")
+	result, _ := svc.Login("admin", "testpass", 24)
 
 	if err := svc.Logout(result.SessionID); err != nil {
 		t.Fatalf("logout failed: %v", err)
@@ -150,13 +150,13 @@ func TestChangePassword(t *testing.T) {
 	}
 
 	// Old password should fail
-	_, err := svc.Login("admin", "testpass")
+	_, err := svc.Login("admin", "testpass", 24)
 	if err == nil {
 		t.Fatal("expected old password to fail")
 	}
 
 	// New password should work
-	_, err = svc.Login("admin", "newpass")
+	_, err = svc.Login("admin", "newpass", 24)
 	if err != nil {
 		t.Fatalf("expected new password to work, got: %v", err)
 	}
@@ -181,7 +181,7 @@ func TestLoginReturnsMustChangePasswordFlag(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	result, err := svc.Login("admin", "testpass")
+	result, err := svc.Login("admin", "testpass", 24)
 	if err != nil {
 		t.Fatalf("login failed: %v", err)
 	}
@@ -212,7 +212,7 @@ func TestChangePasswordClearsMustChangeFlag(t *testing.T) {
 	}
 
 	// Subsequent login should not require password change
-	result, _ := svc.Login("admin", "newpass")
+	result, _ := svc.Login("admin", "newpass", 24)
 	if result.MustChangePassword {
 		t.Fatal("expected fresh login to not require password change")
 	}
@@ -237,7 +237,7 @@ func TestCleanupExpiredSessions(t *testing.T) {
 	svc := NewService(db)
 
 	// Create a valid session
-	valid, _ := svc.Login("admin", "testpass")
+	valid, _ := svc.Login("admin", "testpass", 24)
 
 	// Insert an expired session
 	expired := time.Now().Add(-1 * time.Hour)

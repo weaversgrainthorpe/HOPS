@@ -16,6 +16,7 @@
     server: 'Server',
     log: 'Logging',
     auth: 'Authentication',
+    editmode: 'Edit mode',
     status: 'Status checks',
     upload: 'Uploads',
     http: 'HTTP server timeouts',

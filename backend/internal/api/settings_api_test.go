@@ -199,7 +199,7 @@ func TestSettingsPUTRejects_outOfRange(t *testing.T) {
 		{settings.KeyServerPort, "70000", "maximum"},
 		{settings.KeyServerPort, "abc", "integer"},
 		{settings.KeyAuthLoginRateLimitPerMin, "0", "minimum"},
-		{settings.KeyAuthSessionLifetimeHours, "9999", "maximum"},
+		{settings.KeyAuthSessionLifetimeHours, "999999", "maximum"},
 		{settings.KeyHTTPReadTimeoutSeconds, "-5", "minimum"},
 	}
 	for _, tt := range tests {

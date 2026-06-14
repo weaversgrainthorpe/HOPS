@@ -5,6 +5,87 @@ All notable changes to HOPS (Home Operations Portal System) will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.2] - 2026-06-14 — Session lifetime + edit-mode idle timeout
+
+A focused bug-fix release addressing three related session/edit-mode
+papercuts that came out of post-2.1.1 use:
+
+1. **Frequent logouts that didn't match the Session Lifetime setting.**
+2. **Logging in as admin landed you straight into edit mode.**
+3. **Session-expiry bounced you all the way to the login screen, even
+   though HOPS dashboards work fine anonymously.**
+
+The underlying model has been simplified: **the login session no longer
+auto-expires on a short timer — by default it lasts a full year and
+HOPS keeps you signed in until you click Logout.** What auto-times-out
+is **edit mode**, on its own idle clock, so leaving HOPS in edit mode
+for hours no longer means losing unsaved work when you start typing
+again.
+
+### Added
+- **New setting `editmode.idle_timeout_minutes`** (default 15) — how
+  long edit mode stays on without activity before it switches itself
+  back to view-only. You stay signed in; just the Edit toggle flips
+  off. Set to 0 to disable the idle timer entirely. Lives in its own
+  "Edit mode" group on the Settings page.
+- **New frontend store `editModeIdleWatcher.ts`** listens for
+  mouse / keyboard / scroll / touch events across the page. Activity
+  resets the idle clock; only genuine inactivity for the configured
+  window triggers the auto-flip. A toast explains what happened so
+  you're not left wondering why your changes stopped saving.
+
+### Changed
+- **`auth.session_lifetime_hours` default raised from 24 to 8760**
+  (1 year). The setting was already there but the description has been
+  rewritten to make the intent explicit: "HOPS keeps you signed in
+  until you click Logout. Lower this if you want signed-in admins to
+  re-authenticate periodically." Maximum raised from 720 (30 days) to
+  43800 (5 years).
+- **Login as admin no longer auto-enables edit mode.** Opening a
+  dashboard from the admin index used to silently flip edit mode on
+  before navigating; that's gone. You land in view mode and toggle
+  Edit from the navbar when you actually want to make changes — a
+  stray click on a tile can't accidentally rewrite your dashboard.
+- **Session-expiry no longer bounces you to `/`.** When a session does
+  end (explicit logout, cookie cleared, server-side expiry), the
+  current page stays in place if it works for anonymous users
+  (dashboards), and the navbar flips to "Sign in". Only the genuinely
+  admin-only paths (`/settings`, `/admin/*`) redirect to the dashboard
+  root — sitting on a broken settings page with every API call 401-ing
+  is a worse experience than dropping to read-only.
+- **Toast wording softened** for sign-out scenarios: "You've been
+  signed out — dashboards are still browseable. Click Sign in when
+  you want to make changes" instead of the previous "Your session has
+  expired" alarm.
+- **The proactive auth-watcher (`authWatcher.ts`) is gone** — it
+  existed to drop edit mode when a 24h session silently expired
+  underneath the user. With sessions effectively persistent, that
+  protection is moot; the new edit-mode idle watcher serves the same
+  "don't let stale edit mode bite you" goal at a more useful layer.
+
+### Fixed
+- **Session lifetime setting was ignored by the server-side session
+  row.** `auth.Service.Login` hardcoded a 24-hour DB expiry regardless
+  of the `auth.session_lifetime_hours` admin setting. The cookie
+  honoured the setting, the DB row didn't — so if you bumped the
+  slider to 168 hours, the cookie lived a week but the server killed
+  the session at 24h, kicking you out. Login now takes a
+  `lifetimeHours` argument that the API layer derives from the
+  setting; cookie MaxAge and DB `expires_at` are derived from the
+  same value and can never drift again.
+
+### Migration notes
+- **Existing rows are preserved on upgrade** — if you already have
+  `auth.session_lifetime_hours = 24` in your database, it stays at 24.
+  The new 8760 default only applies to fresh installs. To pick up the
+  new "stay signed in for a year" behaviour, bump the slider on the
+  Settings page yourself (or run `sqlite3 ... "UPDATE app_settings
+  SET value = '8760' WHERE key = 'auth.session_lifetime_hours'"` and
+  log in again).
+- **Currently-issued session cookies have the OLD lifetime baked in.**
+  Log out and log back in once to pick up a new cookie with the
+  configured lifetime.
+
 ## [2.1.1] - 2026-06-06 — UI/UX cleanup pass
 
 A focused interior-design release: no new features, but the frontend

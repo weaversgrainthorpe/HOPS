@@ -1,6 +1,6 @@
 <script lang="ts">
   import { config, updateConfig, loadConfig } from '$lib/stores/config';
-  import { editMode, enableEditMode } from '$lib/stores/editMode';
+  import { editMode } from '$lib/stores/editMode';
   import { confirm } from '$lib/stores/confirmModal';
   import { toast } from '$lib/stores/toast';
   import { goto } from '$app/navigation';
@@ -104,7 +104,10 @@
   }
 
   async function openDashboard(dashboard: Dashboard) {
-    enableEditMode();
+    // Land on the dashboard in view mode. Admins toggle edit mode from the
+    // navbar when they actually want to make changes — auto-enabling it on
+    // arrival meant a stray click could change tiles before the admin had
+    // even looked at the dashboard.
     await goto(dashboard.path);
   }
 

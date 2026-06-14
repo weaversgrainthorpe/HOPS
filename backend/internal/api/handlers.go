@@ -197,14 +197,15 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	result, err := r.authService.Login(credentials.Username, credentials.Password)
+	lifetimeHours := r.settings.GetInt(settings.KeyAuthSessionLifetimeHours)
+	result, err := r.authService.Login(credentials.Username, credentials.Password, lifetimeHours)
 	if err != nil {
 		writeJSONError(w, "Invalid credentials", http.StatusUnauthorized)
 		return
 	}
 
 	secure := r.isSecureRequest(req)
-	maxAge := r.sessionCookieMaxAge()
+	maxAge := lifetimeHours * 3600
 	http.SetCookie(w, &http.Cookie{
 		Name:     "hops_session",
 		Value:    result.SessionID,

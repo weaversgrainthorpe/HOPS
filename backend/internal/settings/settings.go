@@ -61,6 +61,7 @@ const (
 	KeyProxyTrustedCIDRs            = "proxy.trusted_cidrs"
 	KeyAuthLoginRateLimitPerMin     = "auth.login_rate_limit_per_min"
 	KeyAuthSessionLifetimeHours     = "auth.session_lifetime_hours"
+	KeyEditModeIdleTimeoutMinutes   = "editmode.idle_timeout_minutes"
 	KeyStatusCheckIntervalMinutes   = "status.check_interval_minutes"
 	KeyStatusCheckTimeoutSeconds    = "status.check_timeout_seconds"
 	KeyUploadMaxBytesImport         = "upload.max_bytes_import"
@@ -96,9 +97,14 @@ var Definitions = []Definition{
 		Min:         1, Max: 1000,
 	},
 	{
-		Key: KeyAuthSessionLifetimeHours, Type: "duration_hours", Default: "24",
-		Description: "How long an admin login session lasts before it must be renewed.",
-		Min:         1, Max: 24 * 30,
+		Key: KeyAuthSessionLifetimeHours, Type: "duration_hours", Default: "8760",
+		Description: "How long to stay signed in after logging in (hours). Defaults to one year — HOPS keeps you signed in until you click Logout. Lower this if you want signed-in admins to re-authenticate periodically.",
+		Min:         1, Max: 24 * 365 * 5,
+	},
+	{
+		Key: KeyEditModeIdleTimeoutMinutes, Type: "duration_minutes", Default: "15",
+		Description: "How long edit mode stays on without activity before it switches itself off (minutes). You stay signed in — just the edit toggle flips back to view-only so you don't accidentally make changes hours later. Set to 0 to disable the idle timeout.",
+		Min:         0, Max: 60 * 24,
 	},
 	{
 		Key: KeyStatusCheckIntervalMinutes, Type: "duration_minutes", Default: "5",
