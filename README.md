@@ -1,6 +1,6 @@
 # HOPS - Home Operations Portal System
 
-**Version 2.1.3** · **[hops.weaversgrainthorpe.github.io →](https://weaversgrainthorpe.github.io/HOPS/)**
+**Version 2.2.0** · **[hops.weaversgrainthorpe.github.io →](https://weaversgrainthorpe.github.io/HOPS/)**
 
 A modern, self-hosted homepage dashboard for the homelab community.
 
@@ -73,9 +73,10 @@ Already using Homer, Dashy, or Heimdall? HOPS can import your existing configura
 
 HOPS runs on **Linux**, **macOS**, and **Windows** with no dependencies. It works on anything from a Raspberry Pi to a full server.
 
-**Binary** — download, extract, run:
+**Binary** — download one file, run it (the web UI is built in):
 ```bash
-./hops-linux-amd64 --data ./data --frontend ./frontend/build
+chmod +x hops-linux-amd64
+./hops-linux-amd64 --data ./data
 ```
 
 **Docker** — if you'd rather, or already run a Compose stack:
@@ -118,7 +119,7 @@ For full deployment options (systemd, reverse proxy, backups), see the **[Instal
 - Configurable background overlay opacity and blur
 - Upload custom background images or choose from ~90 curated presets
 - Theme hierarchy: Dashboard → Tab → Group → Tile (colour and opacity cascade)
-- ~2,300 bundled app/service icons (homarr-labs/dashboard-icons), plus access to 200,000+ Iconify icons by name (loaded on demand from iconify.design), plus custom icon uploads
+- ~2,300 bundled app/service icons (homarr-labs/dashboard-icons), plus access to 200,000+ Iconify icons by name (the ones the UI uses are embedded for offline use; an uncommon name you type is fetched on demand), plus custom icon uploads
 - "My Uploads" and "Recently Used" icon categories
 - Multiple tile sizes (small, medium, large)
 - 8 theme presets with light/dark/auto modes
@@ -181,7 +182,7 @@ For full deployment options (systemd, reverse proxy, backups), see the **[Instal
 - **Frontend**: SvelteKit 2 + Svelte 5 + TypeScript
 - **Backend**: Go (single binary, pure Go, no CGO)
 - **Database**: SQLite (pure Go implementation via modernc.org/sqlite)
-- **Icons**: ~2,300 bundled SVGs (homarr-labs/dashboard-icons) + Iconify (200,000+ icons by name, on demand)
+- **Icons**: ~2,300 bundled SVGs (homarr-labs/dashboard-icons) + Iconify (200,000+ by name; the icons the UI uses are embedded for offline rendering, uncommon names fetched on demand)
 - **Drag & Drop**: svelte-dnd-action
 
 ## Keyboard Shortcuts

@@ -224,7 +224,7 @@
               <Icon icon="mdi:apps" width="24" />
               <div>
                 <strong>Thousands of icons</strong>
-                <p>~2,300 bundled app/service icons (homarr-labs) plus access to 200,000+ icons by name via Iconify (loaded on demand from iconify.design), plus your own uploads.</p>
+                <p>~2,300 bundled app/service icons (homarr-labs) plus access to 200,000+ icons by name via Iconify (the ones HOPS uses are embedded for offline rendering; an uncommon name you type is fetched on demand), plus your own uploads.</p>
               </div>
             </div>
           </div>

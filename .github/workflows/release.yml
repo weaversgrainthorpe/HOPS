@@ -10,9 +10,39 @@ permissions:
   packages: write
 
 jobs:
+  build-frontend:
+    name: Build Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install and build
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Archive frontend build
+        run: tar -czf hops-frontend.tar.gz -C frontend/build .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hops-frontend
+          path: hops-frontend.tar.gz
+
   build:
     name: Build ${{ matrix.os }}-${{ matrix.arch }}
     runs-on: ubuntu-latest
+    # The UI is embedded into the binary via //go:embed, so the frontend build
+    # must exist before `go build`. Reuse the single build-frontend artifact
+    # across the matrix rather than rebuilding the SPA five times.
+    needs: build-frontend
     strategy:
       matrix:
         include:
@@ -39,6 +69,16 @@ jobs:
           go-version: '1.25'
           cache-dependency-path: backend/go.sum
 
+      - name: Download frontend build
+        uses: actions/download-artifact@v4
+        with:
+          name: hops-frontend
+
+      - name: Stage frontend for embedding
+        run: |
+          mkdir -p backend/internal/web/build
+          tar -xzf hops-frontend.tar.gz -C backend/internal/web/build
+
       - name: Build backend
         working-directory: backend
         env:
@@ -51,32 +91,6 @@ jobs:
         with:
           name: hops-${{ matrix.os }}-${{ matrix.arch }}
           path: hops-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.ext }}
-
-  build-frontend:
-    name: Build Frontend
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-          cache: 'npm'
-          cache-dependency-path: frontend/package-lock.json
-
-      - name: Install and build
-        working-directory: frontend
-        run: |
-          npm ci
-          npm run build
-
-      - name: Archive frontend build
-        run: tar -czf hops-frontend.tar.gz -C frontend/build .
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: hops-frontend
-          path: hops-frontend.tar.gz
 
   docker-publish:
     name: Publish Docker image to GHCR
@@ -121,7 +135,7 @@ jobs:
 
   release:
     name: Create Release
-    needs: [build, build-frontend]
+    needs: [build]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -131,50 +145,26 @@ jobs:
           path: artifacts
           merge-multiple: true
 
-      - name: Bundle platform packages
+      - name: Assemble release assets
         run: |
           mkdir -p packages
 
-          # Extract frontend build into a reusable directory
-          mkdir -p frontend-build
-          tar -xzf artifacts/hops-frontend.tar.gz -C frontend-build
-
-          # Bundle each platform binary with the frontend
+          # The UI is embedded in each binary, so every platform binary is a
+          # complete, single-file download. Attach them directly (no folder,
+          # no archive to unpack) and publish a checksums file alongside.
           for binary in artifacts/hops-*; do
-            # Skip the frontend tarball
+            # Skip the intermediate frontend tarball if present.
             [[ "$binary" == *"frontend"* ]] && continue
-
             filename=$(basename "$binary")
-
-            # Parse platform info from filename (e.g., hops-linux-amd64, hops-windows-amd64.exe)
-            name_no_ext="${filename%.exe}"
-            platform="${name_no_ext#hops-}"  # e.g., linux-amd64, darwin-arm64
-
-            # Create staging directory
-            staging="staging-${platform}"
-            mkdir -p "${staging}/frontend/build"
-
-            # Copy binary and frontend
-            cp "$binary" "${staging}/"
-            cp -r frontend-build/* "${staging}/frontend/build/"
-
-            # Make binary executable
-            chmod +x "${staging}/${filename}"
-
-            # Create tarball
-            if [[ "$filename" == *".exe" ]]; then
-              # Windows: create zip
-              (cd "${staging}" && zip -r "../packages/hops-${platform}.zip" .)
-            else
-              # Linux/macOS: create tar.gz
-              tar -czf "packages/hops-${platform}.tar.gz" -C "${staging}" .
-            fi
-
-            rm -rf "${staging}"
+            cp "$binary" "packages/${filename}"
+            [[ "$filename" != *.exe ]] && chmod +x "packages/${filename}"
           done
 
-          # Also include Docker compose file
+          # Docker users still get the compose file.
           cp docker-compose.yml packages/
+
+          # Checksums for integrity verification of the bare binaries.
+          (cd packages && sha256sum hops-* > SHA256SUMS.txt)
 
           ls -la packages/
 

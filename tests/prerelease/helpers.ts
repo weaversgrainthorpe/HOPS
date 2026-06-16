@@ -66,11 +66,20 @@ export async function createDashboardViaUI(page: Page, name: string, urlPath?: s
   // an <h3> inside a `button.dashboard-info`, so role=heading is the
   // cleanest target.
   await expect(page.getByRole('heading', { name, level: 3 })).toBeVisible({ timeout: 5_000 });
-  // Click the row to open + enter edit mode (clicking the heading hits the
-  // surrounding button's onclick).
+  // Click the row to open the dashboard.
   await page.getByRole('heading', { name, level: 3 }).click();
-  // Wait for editing chip
-  await expect(page.getByText('Editing')).toBeVisible({ timeout: 5_000 });
+  await page.waitForLoadState('networkidle');
+  // Ensure edit mode is ON. Opening a dashboard doesn't always enter edit
+  // mode, so click the Navbar toggle if it's still showing "Enter Edit Mode".
+  // Don't gate on getByText('Editing'): that also matches the CSS-hidden
+  // phone-only banner ("Editing dashboards needs a tablet or desktop…"), which
+  // makes the wait flaky. The "Exit Edit Mode" aria-label is the unambiguous
+  // in-edit-mode signal.
+  const enterEdit = page.locator('[aria-label="Enter Edit Mode"]');
+  if (await enterEdit.isVisible().catch(() => false)) {
+    await enterEdit.click();
+  }
+  await expect(page.locator('[aria-label="Exit Edit Mode"]')).toBeVisible({ timeout: 5_000 });
   return urlPath ?? `/${name.toLowerCase().replace(/\s+/g, '-')}`;
 }
 

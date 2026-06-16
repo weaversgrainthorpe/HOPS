@@ -54,6 +54,9 @@ conn.close()
 EOF
 
 log "Starting hops on port $PORT"
+# The UI is embedded in the binary, but the harness serves it from disk via
+# the --frontend dev override so the frontend can be rebuilt without rebuilding
+# the Go binary. This is intentional — don't drop the flag.
 exec "$BIN" \
   --data "$DATA_DIR" \
   --frontend "$FRONTEND_BUILD" \

@@ -1,4 +1,8 @@
 <script lang="ts">
+	// Register the embedded Iconify icons before anything renders, so the UI
+	// (and every bundled service icon) draws with no calls to api.iconify.design.
+	// See scripts/generate-icon-bundle.mjs and TENETS.md #10.
+	import '$lib/icons/offline-bundle';
 	import { onMount } from 'svelte';
 	import { loadConfig } from '$lib/stores/config';
 	import { initAuth, mustChangePassword } from '$lib/stores/auth';

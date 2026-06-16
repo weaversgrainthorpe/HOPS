@@ -411,7 +411,7 @@
         </label>
         <label class="intensity-card" class:active={intensity === 'full'}>
           <input type="radio" bind:group={intensity} value="full" />
-          <div class="card-title"><Icon icon="mdi:radar-scan" width="18" /> Full active</div>
+          <div class="card-title"><Icon icon="mdi:radar" width="18" /> Full active</div>
           <div class="card-body">
             Light plus a wider port sweep + banner grabs. Slower and
             noisier; can spook IoT firmware. Use when you suspect there's

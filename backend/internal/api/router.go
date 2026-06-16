@@ -3,10 +3,12 @@ package api
 import (
 	"database/sql"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"net"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime/debug"
 	"strconv"
@@ -20,7 +22,20 @@ import (
 	"github.com/weaversgrainthorpe/HOPS/internal/database"
 	"github.com/weaversgrainthorpe/HOPS/internal/discovery"
 	"github.com/weaversgrainthorpe/HOPS/internal/settings"
+	"github.com/weaversgrainthorpe/HOPS/internal/web"
 )
+
+// spaFS is the embedded SvelteKit SPA, rooted so request "/" maps to
+// "index.html" and "/_app/..." to "_app/...". fs.Sub can only fail if the
+// embedded "build" directory is absent, which embed guarantees at compile
+// time — so a failure here is a build-time bug, not a runtime condition.
+var spaFS = func() fs.FS {
+	sub, err := fs.Sub(web.BuildFS, "build")
+	if err != nil {
+		panic(fmt.Sprintf("embedded frontend missing build/: %v", err))
+	}
+	return sub
+}()
 
 // Router holds all dependencies for the API
 type Router struct {
@@ -410,22 +425,38 @@ func (r *Router) serveDashboardIcons(w http.ResponseWriter, req *http.Request) {
 	http.ServeFileFS(w, req, assets.DashboardIcons, "dashboard-icons/"+filename)
 }
 
-// serveSPA serves the Single Page Application with fallback to index.html
+// serveSPA serves the Single Page Application with fallback to index.html.
+//
+// The UI is embedded into the binary, so the default path serves from the
+// embedded filesystem. As a dev convenience, if --frontend points at a real
+// directory on disk we serve from there instead — letting the UI be iterated
+// (npm run build) without rebuilding the Go binary.
 func (r *Router) serveSPA(w http.ResponseWriter, req *http.Request) {
+	if r.config.FrontendDir != "" {
+		if fi, err := os.Stat(r.config.FrontendDir); err == nil && fi.IsDir() {
+			r.serveSPADisk(w, req)
+			return
+		}
+	}
+	serveSPAFromFS(w, req, spaFS)
+}
+
+// serveSPADisk serves the SPA from r.config.FrontendDir on disk (dev override).
+func (r *Router) serveSPADisk(w http.ResponseWriter, req *http.Request) {
 	// Get the absolute path to prevent directory traversal
-	path := filepath.Join(r.config.FrontendDir, req.URL.Path)
+	p := filepath.Join(r.config.FrontendDir, req.URL.Path)
 
 	// Check if path is a file
-	fi, err := os.Stat(path)
+	fi, err := os.Stat(p)
 	if err == nil && !fi.IsDir() {
 		// File exists, serve it
-		http.ServeFile(w, req, path)
+		http.ServeFile(w, req, p)
 		return
 	}
 
 	// Check if it's a directory and index.html exists
 	if err == nil && fi.IsDir() {
-		indexPath := filepath.Join(path, "index.html")
+		indexPath := filepath.Join(p, "index.html")
 		if _, err := os.Stat(indexPath); err == nil {
 			http.ServeFile(w, req, indexPath)
 			return
@@ -433,8 +464,32 @@ func (r *Router) serveSPA(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// File doesn't exist or it's a SPA route, serve index.html
-	indexPath := filepath.Join(r.config.FrontendDir, "index.html")
-	http.ServeFile(w, req, indexPath)
+	http.ServeFile(w, req, filepath.Join(r.config.FrontendDir, "index.html"))
+}
+
+// serveSPAFromFS serves the SPA from an io/fs filesystem (the embedded build),
+// falling back to index.html for unknown paths so the browser-side router can
+// take over.
+func serveSPAFromFS(w http.ResponseWriter, req *http.Request, fsys fs.FS) {
+	// io/fs paths are slash-separated and must not begin with "/".
+	name := strings.TrimPrefix(path.Clean(req.URL.Path), "/")
+	if name == "" || name == "." {
+		name = "index.html"
+	}
+
+	if fi, err := fs.Stat(fsys, name); err == nil && !fi.IsDir() {
+		// SvelteKit content-hashes everything under _app/immutable/, so those
+		// are safe to cache forever; index.html, the manifest and the service
+		// worker must stay fresh.
+		if strings.HasPrefix(name, "_app/immutable/") {
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		}
+		http.ServeFileFS(w, req, fsys, name)
+		return
+	}
+
+	// Unknown path → SPA client-side route. Serve index.html.
+	http.ServeFileFS(w, req, fsys, "index.html")
 }
 
 // statusWriter wraps http.ResponseWriter to capture the status code

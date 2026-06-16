@@ -57,7 +57,10 @@ func main() {
 	// interface is an operator security decision, not a user preference,
 	// and it must be settable without first being able to reach the GUI.
 	dataDir := flag.String("data", "../data", "Data directory for SQLite database")
-	frontendDir := flag.String("frontend", "../frontend/build", "Frontend build directory")
+	// The UI is embedded in the binary; this flag is an optional dev override
+	// that serves the SPA from a build directory on disk instead (so the UI
+	// can be rebuilt without rebuilding the binary). Empty = use embedded UI.
+	frontendDir := flag.String("frontend", "", "Optional: serve the UI from this build directory on disk instead of the embedded copy")
 	host := flag.String("host", "", "Interface to bind to (e.g. 127.0.0.1 for loopback-only). Empty (default) binds all interfaces.")
 	flag.Parse()
 
@@ -144,10 +147,15 @@ func main() {
 	discoveryOrch.Start()
 	defer discoveryOrch.Stop()
 
-	// Validate frontend directory
-	indexPath := filepath.Join(cfg.FrontendDir, "index.html")
-	if _, err := os.Stat(indexPath); os.IsNotExist(err) {
-		slog.Warn("frontend not found, UI will not be served", "path", cfg.FrontendDir)
+	// The UI is embedded in the binary, so it's always available. Only when a
+	// dev override (--frontend) is given do we sanity-check that the directory
+	// actually has a build in it; if not, serveSPA falls back to the embedded
+	// copy, so warn rather than fail.
+	if cfg.FrontendDir != "" {
+		indexPath := filepath.Join(cfg.FrontendDir, "index.html")
+		if _, err := os.Stat(indexPath); os.IsNotExist(err) {
+			slog.Warn("--frontend dir has no index.html, using embedded UI", "path", cfg.FrontendDir)
+		}
 	}
 
 	// Initialize API router
