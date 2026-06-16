@@ -37,17 +37,12 @@ func TestValidateRequiresDataDir(t *testing.T) {
 	}
 }
 
-func TestValidateRequiresFrontendDir(t *testing.T) {
+// FrontendDir is optional now that the UI is embedded in the binary — an
+// empty value means "serve the embedded UI", so it must still validate.
+func TestValidateAllowsEmptyFrontendDir(t *testing.T) {
 	cfg := validConfig()
 	cfg.FrontendDir = ""
-	err := cfg.Validate()
-	if err == nil {
-		t.Fatal("expected error for empty frontend dir")
-	}
-	if !errors.Is(err, ErrInvalidConfig) {
-		t.Errorf("expected ErrInvalidConfig, got %v", err)
-	}
-	if !strings.Contains(err.Error(), "frontend directory") {
-		t.Errorf("error should mention frontend directory, got: %v", err)
+	if err := cfg.Validate(); err != nil {
+		t.Errorf("expected empty frontend dir to be valid, got: %v", err)
 	}
 }

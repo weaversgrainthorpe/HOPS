@@ -13,7 +13,6 @@
   import AboutModal from './AboutModal.svelte';
 
   const appVersion = __APP_VERSION__;
-  const isDev = typeof window !== 'undefined' && (location.pathname.startsWith('/dev/') || location.hostname === 'localhost' || location.hostname === '127.0.0.1');
 
   let currentPath = $derived($page.url.pathname);
 
@@ -78,7 +77,6 @@
             <img src="/logo.svg" alt="HOPS" />
             <span class="wordmark">HOPS</span>
             <span class="version">v{appVersion}</span>
-            {#if isDev}<span class="dev-badge">DEV</span>{/if}
           </a>
 
           {#if $isAuthenticated && isDashboardPage}
@@ -284,18 +282,6 @@
     opacity: 0.8;
   }
 
-  .dev-badge {
-    font-size: 11px;
-    font-weight: bold;
-    /* amber-800 hits 5.12:1 with white text — amber-700 only managed 3.69:1
-       which is below WCAG AA (4.5:1 for body text). */
-    background: #92400e;
-    color: #fff;
-    padding: 2px 8px;
-    border-radius: 4px;
-    margin-left: 6px;
-  }
-
   .nav-links {
     display: flex;
     gap: 0.5rem;
@@ -493,8 +479,7 @@
       gap: 0.5rem;
     }
 
-    .wordmark,
-    .dev-badge {
+    .wordmark {
       display: none;
     }
 

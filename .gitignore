@@ -25,6 +25,11 @@ frontend/.env.local
 frontend/.env.*.local
 frontend/dist/
 
+# Embedded frontend: generated copy of frontend/build staged for go:embed.
+# Only the .gitkeep placeholder is tracked so the package always compiles.
+backend/internal/web/build/*
+!backend/internal/web/build/.gitkeep
+
 # Data directory
 data/
 *.db

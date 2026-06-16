@@ -9,7 +9,6 @@ export const ICON_COLORS: Record<string, string> = {
   'simple-icons:emby': '#52B54B',
   'simple-icons:youtube': '#FF0000',
   'simple-icons:twitch': '#9146FF',
-  'simple-icons:subsonic': '#3793FF',
   'simple-icons:kodi': '#17B2E7',
 
   // Containers
@@ -39,7 +38,7 @@ export const ICON_COLORS: Record<string, string> = {
   'simple-icons:nextcloud': '#0082C9',
   'simple-icons:dropbox': '#0061FF',
   'simple-icons:googledrive': '#4285F4',
-  'simple-icons:onedrive': '#0078D4',
+  'simple-icons:microsoftonedrive': '#0078D4',
   'simple-icons:box': '#0061D5',
   'simple-icons:mega': '#D9272E',
   'simple-icons:seafile': '#E49F3D',
@@ -49,7 +48,7 @@ export const ICON_COLORS: Record<string, string> = {
   // Networking
   'simple-icons:cloudflare': '#F38020',
   'simple-icons:nginx': '#009639',
-  'simple-icons:traefik': '#24A1C1',
+  'simple-icons:traefikproxy': '#24A1C1',
   'simple-icons:wireguard': '#88171A',
   'simple-icons:openvpn': '#EA7E20',
   'simple-icons:tailscale': '#000000',
@@ -116,7 +115,7 @@ export const ICON_COLORS: Record<string, string> = {
   'simple-icons:bitwarden': '#175DDC',
   'simple-icons:1password': '#0094F5',
   'simple-icons:lastpass': '#D32D27',
-  'simple-icons:keepass': '#6CAC4D',
+  'simple-icons:keepassxc': '#6CAC4D',
   'simple-icons:authy': '#EC1C24',
   'simple-icons:letsencrypt': '#003A70',
 
@@ -125,7 +124,6 @@ export const ICON_COLORS: Record<string, string> = {
   'simple-icons:microsoftazure': '#0078D4',
   'simple-icons:googlecloud': '#4285F4',
   'simple-icons:digitalocean': '#0080FF',
-  'simple-icons:linode': '#00A95C',
   'simple-icons:vultr': '#007BFC',
   'simple-icons:ovh': '#123F6D',
   'simple-icons:hetzner': '#D50C2D',

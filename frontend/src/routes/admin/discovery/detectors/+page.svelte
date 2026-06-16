@@ -301,7 +301,7 @@
     <div class="error">{loadError}</div>
   {:else if filtered.length === 0}
     <div class="empty-state">
-      <Icon icon="mdi:radar-scan" width="48" />
+      <Icon icon="mdi:radar" width="48" />
       {#if filter === 'user'}
         <p>No user detectors yet. Press <b>Add detector</b> to define one.</p>
       {:else}

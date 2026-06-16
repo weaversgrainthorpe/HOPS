@@ -5,6 +5,61 @@ All notable changes to HOPS (Home Operations Portal System) will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-06-16 — One file, as promised: the web UI now ships inside the binary
+
+HOPS has always billed itself as a "single binary — download, run, done."
+For the web UI, that was never actually true: every public release
+(v1.5.0 onward) shipped the executable **plus** a `frontend/` folder of
+static files that had to sit beside it, which the server read from disk at
+startup. Miss the folder and you got a working API with no interface.
+
+This release makes the promise real. The entire web UI is now compiled into
+the binary with `//go:embed` — the same mechanism that has carried the
+bundled icons and background presets since v1.5.1. Each platform download is
+now a single self-contained executable: nothing to extract, no companion
+folder, no `--frontend` path to get right.
+
+**An apology.** We're sorry. "Single file" was a core promise of HOPS and a
+reason people chose it — and for the web UI we didn't keep it. The claim sat
+in our README and deploy docs across every public release while the actual
+download was a binary plus a folder. That's on us. It's fixed now, and we've
+written our principles down ([TENETS.md](TENETS.md)) with checks so the gap
+between what we promise and what we ship gets caught deliberately, not by
+accident.
+
+### Changed
+- **The web UI is embedded in the binary.** Releases are now single
+  per-platform executables (`hops-linux-amd64`, `hops-windows-amd64.exe`, …)
+  attached directly to the release — no `.tar.gz`/`.zip` to unpack, no
+  `frontend/build` folder. A `SHA256SUMS.txt` is published alongside.
+- **`--frontend` is now an optional dev override** (defaults to empty = serve
+  the embedded UI). Point it at a build dir only when iterating on the UI
+  without rebuilding the binary.
+- **The UI now renders fully offline.** The Iconify icons HOPS uses for its own
+  chrome and for suggested service logos are embedded at build time, so the
+  interface draws with no calls to `api.iconify.design`. (Manually typing an
+  arbitrary Iconify icon name not in the bundled set still fetches that one icon
+  on demand — the only piece that touches the internet.) Adds ~176 KB to the
+  binary.
+- Docker image and all install/run docs updated to the single-binary flow.
+
+### Fixed
+- The discovery UI referenced a non-existent `mdi:radar-scan` icon (it silently
+  failed to render); corrected to `mdi:radar`.
+
+### Removed
+- The navbar **"DEV" badge**. It keyed off the browser hostname
+  (`localhost`/`127.0.0.1`), so it mislabelled a production instance accessed
+  locally as "DEV" — more misleading than useful.
+
+### Migration notes
+- **Drop-in.** Replace the old `hops-<platform>` binary and restart; you can
+  delete the now-unused `frontend/` folder beside it. Running via systemd?
+  Remove the `--frontend …` argument from your unit (harmless if left — it
+  falls back to the embedded UI when the path is missing).
+- Binary grows by the UI bundle size (a few hundred KB). No data, schema, or
+  settings changes.
+
 ## [2.1.3] - 2026-06-14 — Fix "Invalid JSON body" on every numeric setting
 
 Hotfix for a latent bug surfaced as soon as anyone tried to actually

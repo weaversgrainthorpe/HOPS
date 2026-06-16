@@ -97,7 +97,7 @@
       <Button variant="secondary" icon="mdi:magnify-scan" onclick={() => goto('/admin/discovery/diagnostics')}>
         Diagnostics
       </Button>
-      <Button variant="secondary" icon="mdi:radar-scan" onclick={() => goto('/admin/discovery/detectors')}>
+      <Button variant="secondary" icon="mdi:radar" onclick={() => goto('/admin/discovery/detectors')}>
         Manage detectors
       </Button>
       <Button variant="primary" icon="mdi:radar" onclick={() => goto('/admin/discovery/new')}>

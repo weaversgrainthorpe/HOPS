@@ -30,46 +30,44 @@ Choose whichever method suits you best.
 ### Option A: Download
 
 1. Go to the [Releases](https://github.com/weaversgrainthorpe/HOPS/releases) page
-2. Download the package for your platform:
-   - `hops-linux-amd64.tar.gz` — Linux x86-64
-   - `hops-linux-arm64.tar.gz` — Linux ARM64 (Raspberry Pi 3B+/4/5/Zero 2 W)
-   - `hops-darwin-amd64.tar.gz` — macOS Intel
-   - `hops-darwin-arm64.tar.gz` — macOS Apple Silicon
-   - `hops-windows-amd64.zip` — Windows x86-64
+2. Download the single binary for your platform (the web UI is built in — there's nothing to extract):
+   - `hops-linux-amd64` — Linux x86-64
+   - `hops-linux-arm64` — Linux ARM64 (Raspberry Pi 3B+/4/5/Zero 2 W)
+   - `hops-darwin-amd64` — macOS Intel
+   - `hops-darwin-arm64` — macOS Apple Silicon
+   - `hops-windows-amd64.exe` — Windows x86-64
 
    Or download directly from the command line (replace the filename with your platform):
    ```bash
-   curl -LO https://github.com/weaversgrainthorpe/HOPS/releases/latest/download/hops-linux-amd64.tar.gz
+   curl -LO https://github.com/weaversgrainthorpe/HOPS/releases/latest/download/hops-linux-amd64
    ```
 
-3. Extract and run:
+3. Run it:
 
 **Linux / macOS:**
 ```bash
-# Extract the package
-tar -xzf hops-linux-amd64.tar.gz
+# Make it executable
+chmod +x hops-linux-amd64
 
 # Create a data directory
 mkdir -p data
 
 # Start HOPS
-./hops-linux-amd64 --data ./data --frontend ./frontend/build
+./hops-linux-amd64 --data ./data
 ```
 
 **Windows:**
 ```powershell
-# Extract hops-windows-amd64.zip (right-click → Extract All, or use 7-Zip)
-
 # Create a data directory
 mkdir data
 
 # Start HOPS
-.\hops-windows-amd64.exe --data .\data --frontend .\frontend\build
+.\hops-windows-amd64.exe --data .\data
 ```
 
 You should see structured-log output like:
 ```
-time=2026-05-29T10:00:00.000Z level=INFO msg="server starting" version="HOPS v2.1.3" addr=:8080 data_dir=./data frontend_dir=./frontend/build
+time=2026-05-29T10:00:00.000Z level=INFO msg="server starting" version="HOPS v2.2.0" addr=:8080 data_dir=./data frontend_dir=""
 ```
 
 > **Tip:** Once you're logged in to the admin panel, the log level is one of the runtime settings on the **Settings** page (`/settings`). Switch it to `debug` for verbose output or `warn`/`error` for quieter logs — no restart needed.
@@ -107,7 +105,7 @@ docker compose up -d
 
 The image is multi-arch (linux/amd64 + linux/arm64), so the same tag works on x86-64 servers and Raspberry Pi 3B+/4/5/Zero 2 W.
 
-> **Pin a version instead of `:latest`?** Use `ghcr.io/weaversgrainthorpe/hops:v2.1.3` (or any tagged release).
+> **Pin a version instead of `:latest`?** Use `ghcr.io/weaversgrainthorpe/hops:v2.2.0` (or any tagged release).
 
 ## Step 2: Log In
 

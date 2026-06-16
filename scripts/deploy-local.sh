@@ -26,11 +26,18 @@ cd "$REPO_DIR"
 
 "$REPO_DIR/scripts/check-versions.sh"
 
-echo "▸ Building backend (linux/amd64)"
-(cd backend && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o /tmp/hops-linux-amd64 ./cmd/hops)
-
+# Frontend first: it gets embedded into the binary, so it must be built and
+# staged inside the backend module before `go build` runs.
 echo "▸ Building frontend"
 (cd frontend && npm run build >/dev/null)
+
+echo "▸ Embedding frontend into backend module"
+rm -rf backend/internal/web/build
+mkdir -p backend/internal/web/build
+cp -r frontend/build/. backend/internal/web/build/
+
+echo "▸ Building backend (linux/amd64, UI embedded)"
+(cd backend && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o /tmp/hops-linux-amd64 ./cmd/hops)
 
 VERSION=$(cat VERSION)
 echo "▸ Local build version: $VERSION"
@@ -39,11 +46,11 @@ echo "▸ Currently running on $PROD_HOST:"
 CURRENT=$(ssh "$PROD_HOST" "curl -s http://localhost:8080/api/health" | python3 -c "import json,sys; print(json.load(sys.stdin)['version'])")
 echo "  $CURRENT"
 
-echo "▸ Copying artifacts to prod"
+echo "▸ Copying artifact to prod"
+# The UI is embedded in the binary now, so the binary is the only artifact.
 scp -q /tmp/hops-linux-amd64 "$PROD_HOST:/tmp/hops-new"
-rsync -aq --delete frontend/build/ "$PROD_HOST:/tmp/hops-frontend-new/"
 
-echo "▸ Swapping binary + frontend, restarting hops"
+echo "▸ Swapping binary, restarting hops"
 # Stage the new binary as a sibling file, then atomically rename it onto
 # the running one. cp would hit "Text file busy" because the kernel
 # refuses to open the in-use executable for writing; mv (rename(2))
@@ -56,7 +63,6 @@ echo "▸ Swapping binary + frontend, restarting hops"
 ssh "$PROD_HOST" "cp /tmp/hops-new $PROD_DIR/backend/hops.new && \
   chmod +x $PROD_DIR/backend/hops.new && \
   mv $PROD_DIR/backend/hops.new $PROD_DIR/backend/hops && \
-  rsync -a --delete /tmp/hops-frontend-new/ $PROD_DIR/frontend/build/ && \
   sudo systemctl restart hops"
 
 echo "▸ Health check"
@@ -85,6 +91,7 @@ if [[ -n "$MIRROR_HOST" ]]; then
     --exclude '/frontend/node_modules/' \
     --exclude '/frontend/build/' \
     --exclude '/frontend/.svelte-kit/' \
+    --exclude '/backend/internal/web/build/' \
     --exclude '/.claude/' \
     "$REPO_DIR/" "$MIRROR_HOST:$MIRROR_DIR/"
   echo "✓ Source mirrored ($(git -C "$REPO_DIR" rev-parse --short HEAD 2>/dev/null || echo 'no git')) to $MIRROR_HOST"

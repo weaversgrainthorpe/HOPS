@@ -69,3 +69,62 @@ jobs:
       - name: Build
         working-directory: frontend
         run: npm run build
+
+  tenets:
+    name: Tenet guards
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache-dependency-path: backend/go.sum
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm ci
+
+      - name: Offline icon bundle is current (TENET 10)
+        # The committed Iconify bundle must cover every icon the app references,
+        # so the UI renders with no calls to api.iconify.design. Run before the
+        # build (which would otherwise regenerate it and mask staleness).
+        working-directory: frontend
+        run: npm run icons:check
+
+      - name: Build frontend and stage for embedding
+        run: |
+          (cd frontend && npm run build)
+          rm -rf backend/internal/web/build
+          mkdir -p backend/internal/web/build
+          cp -r frontend/build/. backend/internal/web/build/
+
+      - name: Static tenet guards
+        run: ./scripts/check-tenets.sh
+
+      - name: Single-file binary serves the embedded UI (no --frontend)
+        # The regression guard for TENET 2: the binary alone — with no
+        # frontend/ folder on disk and no --frontend flag — must serve the UI.
+        run: |
+          (cd backend && CGO_ENABLED=0 go build -o /tmp/hops ./cmd/hops)
+          /tmp/hops --data /tmp/hops-ci-data --host 127.0.0.1 &
+          pid=$!
+          trap 'kill $pid 2>/dev/null || true' EXIT
+          for _ in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:8080/api/health >/dev/null 2>&1 && break
+            sleep 0.5
+          done
+          body=$(curl -fsS http://127.0.0.1:8080/)
+          echo "$body" | grep -qi '<!doctype html>' \
+            || { echo "✗ / did not serve the embedded UI shell"; exit 1; }
+          asset=$(printf '%s' "$body" | grep -oE '/_app/[^"]+\.js' | head -1)
+          [ -n "$asset" ] || { echo "✗ no /_app asset referenced — UI not embedded"; exit 1; }
+          curl -fsS -o /dev/null "http://127.0.0.1:8080${asset}" \
+            || { echo "✗ embedded _app asset 404 — UI bundle not embedded"; exit 1; }
+          echo "✓ single binary serves the UI with no companion folder"

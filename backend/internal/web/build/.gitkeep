@@ -1,0 +1,3 @@
+# This placeholder keeps the embedded-frontend package compiling on a fresh
+# checkout, before `npm run build` + copy populates this directory with the
+# real SvelteKit output. Do not delete. See backend/internal/web/web.go.

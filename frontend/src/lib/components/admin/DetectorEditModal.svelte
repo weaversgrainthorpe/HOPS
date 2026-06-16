@@ -198,7 +198,7 @@
 <Modal
   id="detector-edit-modal"
   title={modalTitle}
-  titleIcon="mdi:radar-scan"
+  titleIcon="mdi:radar"
   onClose={onCancel}
   onBeforeClose={handleBeforeClose}
   maxWidth="720px"

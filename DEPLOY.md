@@ -1,6 +1,6 @@
 # HOPS Installation & Deployment Guide
 
-**Version 2.1.3**
+**Version 2.2.0**
 
 This guide covers installing and running HOPS. For a quick first-time walkthrough, see the [Zero to Dashboard Hero](QUICKSTART.md) guide.
 
@@ -16,49 +16,47 @@ This guide covers installing and running HOPS. For a quick first-time walkthroug
 
 ## Binary Download
 
-HOPS is a single binary with no runtime dependencies. No database server, no runtime environment, nothing to install — download, extract, run.
+HOPS is a single binary with no runtime dependencies. No database server, no runtime environment, nothing to install — download and run.
 
 ### 1. Download
 
-Go to the [Releases](https://github.com/weaversgrainthorpe/HOPS/releases) page and download the package for your platform:
+Go to the [Releases](https://github.com/weaversgrainthorpe/HOPS/releases) page and download the binary for your platform:
 
-- `hops-linux-amd64.tar.gz` — Linux x86-64
-- `hops-linux-arm64.tar.gz` — Linux ARM64 (Raspberry Pi 3B+/4/5/Zero 2 W)
-- `hops-darwin-amd64.tar.gz` — macOS Intel
-- `hops-darwin-arm64.tar.gz` — macOS Apple Silicon
-- `hops-windows-amd64.zip` — Windows x86-64
+- `hops-linux-amd64` — Linux x86-64
+- `hops-linux-arm64` — Linux ARM64 (Raspberry Pi 3B+/4/5/Zero 2 W)
+- `hops-darwin-amd64` — macOS Intel
+- `hops-darwin-arm64` — macOS Apple Silicon
+- `hops-windows-amd64.exe` — Windows x86-64
 
-Each package contains the binary and the web interface — everything you need in a single file.
+Each download is a single self-contained binary with the web interface built in — there's nothing to extract. (A `SHA256SUMS.txt` is published alongside the binaries if you want to verify the download.)
 
 Or download directly from the command line (replace the filename with your platform):
 ```bash
-curl -LO https://github.com/weaversgrainthorpe/HOPS/releases/latest/download/hops-linux-amd64.tar.gz
+curl -LO https://github.com/weaversgrainthorpe/HOPS/releases/latest/download/hops-linux-amd64
 ```
 
-### 2. Extract and Run
+### 2. Run
 
 ```bash
-# Extract the package
-tar -xzf hops-linux-amd64.tar.gz
+# Make it executable
+chmod +x hops-linux-amd64
 
 # Create a data directory
 mkdir -p data
 
 # Start HOPS
-./hops-linux-amd64 --data ./data --frontend ./frontend/build
+./hops-linux-amd64 --data ./data
 ```
 
 Open **http://localhost:8080** in your browser. Log in with `admin` / `admin` and change the password immediately.
 
 ### Directory Layout
 
-After extracting, your directory should look like this:
+The binary is fully self-contained; the only thing it creates on disk is your data directory:
 
 ```
 hops/
-├── hops-linux-amd64      # The binary
-├── frontend/
-│   └── build/            # Web interface
+├── hops-linux-amd64      # The binary (web UI embedded)
 └── data/
     ├── hops.db           # SQLite database (created on first run)
     ├── backups/          # Automatic backups
@@ -72,12 +70,14 @@ hops/
 
 Docker is entirely optional — the binary download above needs nothing installed. It's here for people who already run a Docker / Compose stack and would rather keep HOPS alongside it. Requires Docker and Docker Compose.
 
-### 1. Create a docker-compose.yml
+### 1. Get the compose file
+
+A ready-to-use `docker-compose.yml` ships with each release. It pulls the published multi-arch image (works on both x86-64 and ARM64 / Raspberry Pi):
 
 ```yaml
 services:
   hops:
-    build: .
+    image: ghcr.io/weaversgrainthorpe/hops:latest
     container_name: hops
     ports:
       - "8080:8080"
@@ -88,6 +88,8 @@ services:
 volumes:
   hops-data:
 ```
+
+To build the image locally from source instead, replace the `image:` line with `build: .`.
 
 ### 2. Start HOPS
 
@@ -135,7 +137,7 @@ services:
     network_mode: host
     # remove the `ports:` block — host mode binds directly on the host
     volumes:
-      - hops-data:/data
+      - hops-data:/app/data
 ```
 
 Host mode shares the host's network stack: multicast works, ARP works, IPs match. On Docker Desktop (macOS / Windows) `network_mode: host` exists but works differently — Docker Desktop runs Docker in a VM, so "host" is the VM, not your machine. Native binary installation is the cleaner option there.
@@ -146,6 +148,15 @@ The active-scan and DNS-based parts of Discovery still work on a default-bridge 
 
 ## Build from Source
 
+Most people should use the [binary download](#binary-download) — it needs nothing
+installed and is the same artifact built here. Build from source only if you specifically
+need to:
+
+- **Run unreleased changes** — a fix or feature on `main` that hasn't shipped in a tagged release yet.
+- **Target a platform or architecture not in [Releases](https://github.com/weaversgrainthorpe/HOPS/releases)** — the prebuilt binaries cover Linux, macOS, and Windows on x86-64 and ARM64; anything else (other OSes/arches) you build yourself.
+- **Apply your own modifications** — a fork or a local patch.
+- **Compile it yourself** rather than trust a prebuilt binary, as a supply-chain / audit preference.
+
 Requires Go 1.25+ and Node.js 24+ (with npm).
 
 ```bash
@@ -154,10 +165,10 @@ cd HOPS
 ./scripts/build.sh
 ```
 
-This builds the frontend and backend. Run with:
+This builds the frontend, embeds it into the backend binary, and compiles it. Run with:
 
 ```bash
-./backend/hops --data ./data --frontend ./frontend/build
+./backend/hops --data ./data
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for full development setup instructions.
@@ -166,7 +177,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for full development setup instructions.
 
 ## Command-Line Options
 
-Only the two bootstrap-required paths are CLI flags. Everything else (port,
+Only the bootstrap paths are CLI flags. Everything else (port,
 log level, trusted proxies, rate limits, timeouts, upload caps, session
 lifetime) is configured at runtime via the admin **Settings** page in the
 GUI — see [Runtime Configuration](#runtime-configuration) below.
@@ -174,8 +185,8 @@ GUI — see [Runtime Configuration](#runtime-configuration) below.
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--data` | `../data` | Data directory for SQLite database, backups, and uploads |
-| `--frontend` | `../frontend/build` | Path to the frontend build directory |
 | `--host` | _(empty)_ | Interface to bind to. Empty = all interfaces (default). Set to `127.0.0.1` to bind loopback-only when HOPS sits behind a reverse proxy on the same host and shouldn't be reachable directly. |
+| `--frontend` | _(empty)_ | Optional dev override: serve the UI from this build directory on disk instead of the copy embedded in the binary. Leave unset for normal use. |
 
 ## Runtime Configuration
 
@@ -192,6 +203,7 @@ Available settings, grouped:
   `X-Forwarded-Proto` headers are honoured for client-IP attribution
   and HTTPS detection; restart required)
 - **Authentication** — Login rate limit per IP per minute; session lifetime
+- **Edit mode** — Idle timeout before edit mode switches itself back to view-only
 - **Status checks** — Polling interval; per-request timeout
 - **Uploads** — Per-endpoint body caps (config import / background / icon)
 - **HTTP server timeouts** — read-header / read / write / idle (restart required)
@@ -222,7 +234,7 @@ After=network.target
 Type=simple
 User=hops
 WorkingDirectory=/opt/hops
-ExecStart=/opt/hops/hops-linux-amd64 --data /opt/hops/data --frontend /opt/hops/frontend/build
+ExecStart=/opt/hops/hops-linux-amd64 --data /opt/hops/data
 Restart=always
 RestartSec=5
 
@@ -243,6 +255,46 @@ View logs:
 ```bash
 sudo journalctl -u hops -f
 ```
+
+### Windows (NSSM)
+
+HOPS is a console application, not a native Windows service, so the Service
+Control Manager can't run `hops-windows-amd64.exe` directly. [NSSM](https://nssm.cc/)
+(the Non-Sucking Service Manager) is a small, free wrapper that runs it as a
+proper auto-restarting service.
+
+Assuming HOPS lives in `C:\hops` (the binary plus a `data` folder):
+
+1. Download NSSM from [nssm.cc/download](https://nssm.cc/download), unzip it, and
+   put the `win64\nssm.exe` somewhere handy — e.g. `C:\hops`.
+
+2. From an **Administrator** PowerShell, create and configure the service:
+
+   ```powershell
+   C:\hops\nssm.exe install HOPS C:\hops\hops-windows-amd64.exe
+   C:\hops\nssm.exe set HOPS AppParameters "--data C:\hops\data"
+   C:\hops\nssm.exe set HOPS AppDirectory C:\hops
+   C:\hops\nssm.exe set HOPS Start SERVICE_AUTO_START
+   ```
+
+3. (Optional) Capture HOPS's log output to a file:
+
+   ```powershell
+   C:\hops\nssm.exe set HOPS AppStdout C:\hops\logs\hops.log
+   C:\hops\nssm.exe set HOPS AppStderr C:\hops\logs\hops.log
+   ```
+
+4. Start it:
+
+   ```powershell
+   C:\hops\nssm.exe start HOPS
+   ```
+
+HOPS now starts automatically at boot and restarts if it crashes. Manage it with
+`nssm stop HOPS` / `nssm restart HOPS` / `nssm status HOPS`, or from the **Services**
+app (`services.msc`). To remove the service later: `nssm remove HOPS confirm`.
+
+Then open **http://localhost:8080** to confirm it's running.
 
 ---
 
@@ -336,8 +388,8 @@ Export from the Admin panel or from Edit Mode (click the download icon in the he
 ### HOPS won't start
 
 - Check the data directory exists and is writable
-- Check the frontend build directory exists and contains `index.html`
 - Check the port isn't already in use: `lsof -i :8080` or `ss -tlnp | grep 8080`
+- Check HOPS's startup log — it prints the bind address (`addr=...`) and the resolved data directory
 
 ### Can't access the web interface
 

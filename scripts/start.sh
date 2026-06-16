@@ -19,16 +19,9 @@ if [ ! -f "$HOPS_DIR/backend/hops" ]; then
     exit 1
 fi
 
-# Check if frontend build exists
-if [ ! -d "$HOPS_DIR/frontend/build" ]; then
-    echo "ERROR: Frontend build not found!"
-    echo "Run ./scripts/build.sh first"
-    exit 1
-fi
-
 # Ensure data directory exists
 mkdir -p "$DATA_DIR"
 
-# Start backend (serves frontend from build directory)
+# Start backend (the web UI is embedded in the binary).
 cd "$HOPS_DIR/backend"
-./hops --data "$DATA_DIR" --frontend "$HOPS_DIR/frontend/build"
+./hops --data "$DATA_DIR"

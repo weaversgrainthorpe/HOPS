@@ -6,16 +6,16 @@ package version
 // runtime.
 const (
 	Major = 2
-	Minor = 1
-	Patch = 3
+	Minor = 2
+	Patch = 0
 )
 
 // String returns the version as a semantic version string
 func String() string {
-	return "2.1.3"
+	return "2.2.0"
 }
 
 // Full returns the full version string with build info
 func Full() string {
-	return "HOPS v2.1.3"
+	return "HOPS v2.2.0"
 }
