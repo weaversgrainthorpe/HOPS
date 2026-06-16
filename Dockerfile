@@ -18,7 +18,7 @@ COPY --from=frontend-builder /app/frontend/build ./internal/web/build
 RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o hops ./cmd/hops
 
 # Stage 3: Runtime — just the self-contained binary.
-FROM alpine:3.21
+FROM alpine:3.24
 RUN apk add --no-cache ca-certificates
 RUN adduser -D -h /app hops
 WORKDIR /app
