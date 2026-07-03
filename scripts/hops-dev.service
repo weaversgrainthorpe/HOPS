@@ -1,0 +1,33 @@
+# HOPS DEV backend — persistent service on the dev box (10.10.0.50).
+#
+# HOPS is Go (compiled) + SvelteKit, so the "hot-reload" half of CONVENTIONS §8
+# works differently from the interpreter apps:
+#   - Backend (Go): compiled, so it can't --reload. Apply a backend change with
+#     `go build -o backend/hops ./cmd/hops` then `sudo systemctl restart
+#     hops-dev` — i.e. a change is a rebuild+restart, which fits the "brought
+#     down for upgrades" model.
+#   - Frontend (Svelte/Vite): the binary serves the built SPA from
+#     frontend/build via --frontend, so a `cd frontend && npm run build`
+#     refreshes it live. For frontend HMR use ~/hops_dev (scripts/dev.sh), which
+#     runs the Vite dev server on :5173 and transiently takes over :8080.
+#
+# Mirrors prod (scripts/install-service.sh generates /etc/systemd/system/
+# hops.service on .9) but points at the dev tree/data/build. Always on,
+# autostarts on boot. Install:
+#   sudo cp scripts/hops-dev.service /etc/systemd/system/hops-dev.service
+#   sudo systemctl daemon-reload && sudo systemctl enable --now hops-dev
+[Unit]
+Description=HOPS DEV (10.10.0.50, port 8080 — Go binary serving dev build)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=jonathan
+WorkingDirectory=/home/jonathan/dev/hops/backend
+ExecStart=/home/jonathan/dev/hops/backend/hops --data /home/jonathan/dev/hops/data --frontend /home/jonathan/dev/hops/frontend/build
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
