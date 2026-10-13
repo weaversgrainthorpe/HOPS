@@ -36,7 +36,7 @@
 		"svelte": "^5.45.6",
 		"svelte-check": "^4.3.4",
 		"svelte-dnd-action": "^0.9.69",
-		"typescript": "^5.9.3",
+		"typescript": "^6.0.3",
 		"vite": "^7.2.6",
 		"vitest": "^4.1.4"
 	},
