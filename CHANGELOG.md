@@ -43,7 +43,16 @@ accident.
   binary.
 - Docker image and all install/run docs updated to the single-binary flow.
 
+### Added
+- **Master switch for status checks** (Settings → Status checks → *Checks
+  Enabled*). Off = HOPS contacts nothing and every status badge shows that
+  checks are turned off, rather than a stale result.
+
 ### Fixed
+- **Tiles without "Enable Status Check" ticked were still being checked.** The
+  background checker ignored the per-tile setting and sent a `HEAD` request to
+  every tile with a URL each interval. It now only checks ticked tiles, and
+  drops the stored result for a tile whose check is switched off.
 - The discovery UI referenced a non-existent `mdi:radar-scan` icon (it silently
   failed to render); corrected to `mdi:radar`.
 
@@ -55,8 +64,10 @@ accident.
 ### Migration notes
 - **Drop-in.** Replace the old `hops-<platform>` binary and restart; you can
   delete the now-unused `frontend/` folder beside it. Running via systemd?
-  Remove the `--frontend …` argument from your unit (harmless if left — it
-  falls back to the embedded UI when the path is missing).
+  **Remove the `--frontend …` argument from your unit.** If it's left in
+  while the old `frontend/build` folder still exists, HOPS serves that *old*
+  UI instead of the new embedded one. HOPS now flags this: a red banner in the
+  UI when its version doesn't match the server's, plus a startup warning.
 - Binary grows by the UI bundle size (a few hundred KB). No data, schema, or
   settings changes.
 

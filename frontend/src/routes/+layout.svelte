@@ -10,6 +10,7 @@
 	import { initNetworkWatcher } from '$lib/stores/network';
 	import Navbar from '$lib/components/Navbar.svelte';
 	import OfflineBanner from '$lib/components/OfflineBanner.svelte';
+	import VersionMismatchBanner from '$lib/components/VersionMismatchBanner.svelte';
 	import Toast from '$lib/components/Toast.svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import ChangePasswordModal from '$lib/components/admin/ChangePasswordModal.svelte';
@@ -174,6 +175,7 @@
 
 <Navbar />
 <OfflineBanner />
+<VersionMismatchBanner />
 
 {@render children()}
 

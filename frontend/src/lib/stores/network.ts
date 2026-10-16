@@ -22,6 +22,18 @@ export const isOffline = writable(false);
 /** When did we first detect we were offline? Resets to null when we recover. */
 export const offlineSince = writable<Date | null>(null);
 
+/**
+ * Version the server reports (from the heartbeat), or null until known.
+ * Compared against the version baked into this UI bundle so a stale UI
+ * (e.g. an old on-disk build served via --frontend) is surfaced, not silent.
+ */
+export const serverVersion = writable<string | null>(null);
+
+/** The server version when it differs from this UI's build, else null. */
+export const uiVersionMismatch = derived(serverVersion, ($v) =>
+  $v && $v !== __APP_VERSION__ ? $v : null
+);
+
 let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 
 async function probeServer(): Promise<boolean> {
@@ -30,6 +42,14 @@ async function probeServer(): Promise<boolean> {
     const timeout = setTimeout(() => controller.abort(), HEARTBEAT_TIMEOUT_MS);
     const resp = await fetch('/api/version', { signal: controller.signal, cache: 'no-store' });
     clearTimeout(timeout);
+    if (resp.ok) {
+      try {
+        const data = await resp.json();
+        if (typeof data?.version === 'string') serverVersion.set(data.version);
+      } catch {
+        // Reachable but unparsable — reachability is what we report here.
+      }
+    }
     return resp.ok;
   } catch {
     return false;
@@ -75,7 +95,8 @@ export function initNetworkWatcher() {
   });
   window.addEventListener('offline', () => setOffline());
 
-  // Periodic confirmation
+  // Probe once now (also learns the server version), then periodically.
+  heartbeat();
   heartbeatTimer = setInterval(heartbeat, HEARTBEAT_INTERVAL_MS);
 }
 

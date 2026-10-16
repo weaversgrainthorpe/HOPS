@@ -155,6 +155,12 @@ func main() {
 		indexPath := filepath.Join(cfg.FrontendDir, "index.html")
 		if _, err := os.Stat(indexPath); os.IsNotExist(err) {
 			slog.Warn("--frontend dir has no index.html, using embedded UI", "path", cfg.FrontendDir)
+		} else {
+			// Not the normal mode: a leftover --frontend in a service unit
+			// silently pins an old UI on top of a new binary. Say so.
+			slog.Warn("serving UI from disk (--frontend), NOT the copy embedded in this binary — "+
+				"it may be older than the server; remove --frontend unless you are developing the UI",
+				"path", cfg.FrontendDir)
 		}
 	}
 

@@ -423,6 +423,13 @@ func (r *Router) handleGetStatus(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// Checks globally switched off: say so explicitly rather than
+	// "unknown", so the badge shows "checks off", not "something's wrong".
+	if !r.settings.GetBool(settings.KeyStatusChecksEnabled) {
+		writeJSON(w, map[string]string{"status": "disabled"})
+		return
+	}
+
 	var status string
 	var responseTime sql.NullInt64
 	var lastChecked string
