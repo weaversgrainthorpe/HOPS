@@ -3,7 +3,7 @@ import { getStatus as apiGetStatus } from '$lib/utils/api';
 import { logError } from '$lib/utils/errors';
 
 export interface StatusInfo {
-  status: 'up' | 'down' | 'error' | 'unknown' | 'loading';
+  status: 'up' | 'down' | 'error' | 'unknown' | 'loading' | 'disabled';
   responseTime?: number;
   lastChecked?: string;
 }

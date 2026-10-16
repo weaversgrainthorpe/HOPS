@@ -453,7 +453,7 @@ export async function deleteBackup(backupName: string): Promise<void> {
 
 // Admin settings — runtime-configurable values backed by the app_settings
 // table. The list is authoritative on the backend: each entry includes its
-// type ("int", "log_level", "cidr_list", "duration_seconds", ...), default,
+// type ("int", "bool", "log_level", "cidr_list", "duration_seconds", ...), default,
 // min/max/enum bounds, and a restartRequired flag for the UI to display.
 
 export interface SettingDef {

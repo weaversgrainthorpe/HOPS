@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -55,9 +56,12 @@ func ssrfSafeDialControl(_, address string, _ syscall.RawConn) error {
 
 // Entry represents a minimal entry for status checking
 type Entry struct {
-	ID   string `json:"id"`
-	Type string `json:"type"` // "link" (default) or "note" — notes are skipped
-	URL  string `json:"url"`
+	ID          string `json:"id"`
+	Type        string `json:"type"` // "link" (default) or "note" — notes are skipped
+	URL         string `json:"url"`
+	StatusCheck *struct {
+		Enabled bool `json:"enabled"`
+	} `json:"statusCheck"` // nil or Enabled=false → never checked
 }
 
 // StatusResult holds the result of a status check
@@ -77,6 +81,10 @@ type Checker struct {
 	stopChan chan struct{}
 	running  bool
 	mu       sync.Mutex
+
+	// passMu serialises check passes so a pass triggered by toggling
+	// status.checks_enabled can't interleave with a ticker pass.
+	passMu sync.Mutex
 
 	// Per-request HTTP client; rebuilt when status.check_timeout_seconds
 	// changes. clientMu guards swaps so concurrent checks see a coherent
@@ -126,6 +134,15 @@ func NewChecker(db *sql.DB, settingsSvc *settings.Service) *Checker {
 		}
 		slog.Info("status checker interval updated", "component", "status",
 			"interval_minutes", settingsSvc.GetInt(settings.KeyStatusCheckIntervalMinutes))
+	})
+
+	// Master on/off switch. Run a pass straight away so turning checks off
+	// clears cached results immediately (no stale badges) and turning them
+	// on doesn't leave every tile "unknown" for a whole interval.
+	settingsSvc.Subscribe(settings.KeyStatusChecksEnabled, func(string) {
+		slog.Info("status checks toggled", "component", "status",
+			"enabled", settingsSvc.GetBool(settings.KeyStatusChecksEnabled))
+		go c.checkAllEntries()
 	})
 
 	return c
@@ -223,7 +240,8 @@ func (c *Checker) runLoop() {
 	}
 }
 
-// getEntriesFromConfig extracts all entries from the config
+// getEntriesFromConfig extracts the entries that should be status-checked:
+// link tiles with a URL whose "Enable Status Check" box is ticked.
 func (c *Checker) getEntriesFromConfig() ([]Entry, error) {
 	var configData string
 	err := c.db.QueryRow("SELECT data FROM config WHERE id = 1").Scan(&configData)
@@ -252,6 +270,10 @@ func (c *Checker) getEntriesFromConfig() ([]Entry, error) {
 				for _, entry := range group.Entries {
 					// Skip note tiles entirely — they have no URL to check.
 					if entry.Type == "note" {
+						continue
+					}
+					// Only tiles whose own status check is switched on.
+					if entry.StatusCheck == nil || !entry.StatusCheck.Enabled {
 						continue
 					}
 					if entry.URL != "" {
@@ -286,6 +308,22 @@ type entryBackoff struct {
 }
 
 func (c *Checker) checkAllEntries() {
+	c.passMu.Lock()
+	defer c.passMu.Unlock()
+
+	if !c.settings.GetBool(settings.KeyStatusChecksEnabled) {
+		// Checks globally off: contact nothing, and drop every cached
+		// result so no tile shows a stale "up"/"down" as if it were live.
+		slog.Debug("status checks disabled; skipping pass", "component", "status")
+		if _, err := c.db.Exec("DELETE FROM status_cache"); err != nil {
+			slog.Error("failed to clear status cache", "component", "status", "error", err)
+		}
+		c.backoffMu.Lock()
+		c.backoff = make(map[string]*entryBackoff)
+		c.backoffMu.Unlock()
+		return
+	}
+
 	entries, err := c.getEntriesFromConfig()
 	if err != nil {
 		slog.Error("failed to get entries for status check", "component", "status", "error", err)
@@ -417,6 +455,23 @@ func (c *Checker) saveResults(results []statusCheckResult) {
 	tx, err := c.db.Begin()
 	if err != nil {
 		slog.Error("failed to begin status cache transaction", "component", "status", "error", err)
+		return
+	}
+
+	// Drop rows for tiles that are no longer checked (check switched off,
+	// tile deleted) so their last result can't resurface as current.
+	// Backoff-skipped entries are still in results, so they keep theirs.
+	ids := make([]any, len(results))
+	for i, r := range results {
+		ids[i] = r.entryID
+	}
+	prune := "DELETE FROM status_cache"
+	if len(ids) > 0 {
+		prune += " WHERE entry_id NOT IN (?" + strings.Repeat(",?", len(ids)-1) + ")"
+	}
+	if _, err := tx.Exec(prune, ids...); err != nil {
+		tx.Rollback()
+		slog.Error("failed to prune status cache", "component", "status", "error", err)
 		return
 	}
 

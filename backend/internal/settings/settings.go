@@ -32,7 +32,7 @@ type Definition struct {
 
 	// Type is a hint used by the API and frontend to render the right input.
 	// One of: "int", "duration_seconds", "duration_minutes", "duration_hours",
-	// "bytes", "log_level", "cidr_list".
+	// "bytes", "log_level", "cidr_list", "bool".
 	Type string
 
 	// Default is the seeded value used when no row exists for this key.
@@ -62,6 +62,7 @@ const (
 	KeyAuthLoginRateLimitPerMin     = "auth.login_rate_limit_per_min"
 	KeyAuthSessionLifetimeHours     = "auth.session_lifetime_hours"
 	KeyEditModeIdleTimeoutMinutes   = "editmode.idle_timeout_minutes"
+	KeyStatusChecksEnabled          = "status.checks_enabled"
 	KeyStatusCheckIntervalMinutes   = "status.check_interval_minutes"
 	KeyStatusCheckTimeoutSeconds    = "status.check_timeout_seconds"
 	KeyUploadMaxBytesImport         = "upload.max_bytes_import"
@@ -105,6 +106,12 @@ var Definitions = []Definition{
 		Key: KeyEditModeIdleTimeoutMinutes, Type: "duration_minutes", Default: "15",
 		Description: "How long edit mode stays on without activity before it switches itself off (minutes). You stay signed in — just the edit toggle flips back to view-only so you don't accidentally make changes hours later. Set to 0 to disable the idle timeout.",
 		Min:         0, Max: 60 * 24,
+	},
+	{
+		Key: KeyStatusChecksEnabled, Type: "bool", Default: "true",
+		Description: "Master switch for tile status checks. When on, HOPS checks only the tiles that have " +
+			"\"Enable Status Check\" ticked — tiles without it ticked are never contacted. " +
+			"When off, HOPS checks nothing at all and every status badge shows that checks are turned off.",
 	},
 	{
 		Key: KeyStatusCheckIntervalMinutes, Type: "duration_minutes", Default: "5",
@@ -314,6 +321,19 @@ func (s *Service) GetInt(key string) int {
 	return 0
 }
 
+// GetBool parses a bool setting ("true"/"false"). Returns the Definition
+// default on parse failure (shouldn't happen — Set validates).
+func (s *Service) GetBool(key string) bool {
+	if v, err := strconv.ParseBool(s.Get(key)); err == nil {
+		return v
+	}
+	if d, ok := defByKey[key]; ok {
+		v, _ := strconv.ParseBool(d.Default)
+		return v
+	}
+	return false
+}
+
 // GetStringList parses a JSON string array setting (e.g. trusted CIDRs).
 func (s *Service) GetStringList(key string) []string {
 	raw := s.Get(key)
@@ -341,6 +361,10 @@ func validate(def Definition, value string) error {
 		}
 		if def.Max != 0 && v > def.Max {
 			return fmt.Errorf("%s: %d is above maximum %d", def.Key, v, def.Max)
+		}
+	case "bool":
+		if value != "true" && value != "false" {
+			return fmt.Errorf("%s: %q must be \"true\" or \"false\"", def.Key, value)
 		}
 	case "log_level":
 		if !containsString(def.Enum, strings.ToLower(value)) {

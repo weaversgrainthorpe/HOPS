@@ -50,6 +50,7 @@
       case 'down': return 'mdi:alert-circle';
       case 'error': return 'mdi:alert';
       case 'loading': return 'mdi:loading';
+      case 'disabled': return 'mdi:pause-circle-outline';
       default: return 'mdi:help-circle';
     }
   }
@@ -59,6 +60,7 @@
                  s.status === 'down' ? 'Offline' :
                  s.status === 'error' ? 'Error' :
                  s.status === 'loading' ? 'Checking...' :
+                 s.status === 'disabled' ? 'Status checks are turned off in Settings' :
                  'Unknown';
     if (s.responseTime && s.status === 'up') {
       return `${base} (${s.responseTime}ms)`;

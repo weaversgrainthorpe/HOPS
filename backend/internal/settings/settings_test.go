@@ -45,7 +45,7 @@ func TestEveryKeyHasADefinition(t *testing.T) {
 		KeyServerPort, KeyLogLevel, KeyProxyTrustedCIDRs,
 		KeyAuthLoginRateLimitPerMin, KeyAuthSessionLifetimeHours,
 		KeyEditModeIdleTimeoutMinutes,
-		KeyStatusCheckIntervalMinutes, KeyStatusCheckTimeoutSeconds,
+		KeyStatusChecksEnabled, KeyStatusCheckIntervalMinutes, KeyStatusCheckTimeoutSeconds,
 		KeyUploadMaxBytesImport, KeyUploadMaxBytesBackground, KeyUploadMaxBytesIcon,
 		KeyHTTPReadHeaderTimeoutSeconds, KeyHTTPReadTimeoutSeconds,
 		KeyHTTPWriteTimeoutSeconds, KeyHTTPIdleTimeoutSeconds,
@@ -336,4 +336,22 @@ func TestConcurrentReadsAndWrites(t *testing.T) {
 		}(i)
 	}
 	wg.Wait()
+}
+
+func TestBoolSetting(t *testing.T) {
+	s := newTestService(t)
+	if !s.GetBool(KeyStatusChecksEnabled) {
+		t.Fatal("status.checks_enabled should default to true")
+	}
+	for _, bad := range []string{"", "yes", "1", "TRUE", "on"} {
+		if err := s.Set(KeyStatusChecksEnabled, bad); err == nil {
+			t.Errorf("Set(%q) should be rejected", bad)
+		}
+	}
+	if err := s.Set(KeyStatusChecksEnabled, "false"); err != nil {
+		t.Fatalf("Set(false): %v", err)
+	}
+	if s.GetBool(KeyStatusChecksEnabled) {
+		t.Error("GetBool should be false after Set(false)")
+	}
 }

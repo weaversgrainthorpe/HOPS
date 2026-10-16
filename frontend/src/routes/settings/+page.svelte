@@ -237,6 +237,16 @@
                       <option value={opt}>{opt}</option>
                     {/each}
                   </select>
+                {:else if s.type === 'bool'}
+                  <label class="bool-toggle">
+                    <input
+                      id={`setting-${s.key}`}
+                      type="checkbox"
+                      checked={drafts[s.key] === 'true'}
+                      onchange={(e) => (drafts[s.key] = (e.currentTarget as HTMLInputElement).checked ? 'true' : 'false')}
+                    />
+                    {drafts[s.key] === 'true' ? 'On' : 'Off'}
+                  </label>
                 {:else if s.type === 'cidr_list'}
                   <div class="cidr-builder">
                     {#each parseCidrList(drafts[s.key]) as cidr (cidr)}
@@ -436,6 +446,21 @@
 
   .row-input textarea {
     resize: vertical;
+  }
+
+  .row-input .bool-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .row-input .bool-toggle input {
+    width: 1.1rem;
+    height: 1.1rem;
+    padding: 0;
+    margin: 0;
   }
 
   /* --- cidr_list list-builder --- */
