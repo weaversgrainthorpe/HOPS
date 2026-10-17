@@ -5,6 +5,57 @@ All notable changes to HOPS (Home Operations Portal System) will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.1] - 2026-10-17 — Status checks only go where you asked them to
+
+A tile's **Enable Status Check** box did not do what it said. The tick decided
+whether the tile *showed* a status badge, but the background checker never
+read it: every tile with a URL got an HTTP `HEAD` request every check
+interval, ticked or not. If you left a tile unticked precisely because you
+didn't want HOPS touching that service, HOPS touched it anyway, every five
+minutes, and gave you nothing on screen to connect the traffic back to it.
+That is a real fault in a dashboard that sits on your LAN, and we're sorry.
+
+This release makes the tick mean what it says, adds a master switch for all
+status checks, and closes a trap in the v2.2.0 upgrade notes.
+
+### Fixed
+- **Tiles without "Enable Status Check" ticked are no longer contacted.** The
+  checker now probes only ticked tiles. When a tile's check is switched off,
+  or the tile is deleted, its last stored result is dropped too, so an old
+  "up"/"down" can never resurface later as if it were current.
+- **A stale web UI no longer passes silently.** v2.2.0 embeds the UI in the
+  binary, but a service unit still carrying the pre-2.2.0 `--frontend …`
+  argument kept serving the *old* UI from disk over the new binary, with no
+  warning. The version chip showed the old version and newer settings rendered
+  wrongly. HOPS now shows a red banner whenever the page's version doesn't
+  match the server's, and logs a startup warning whenever it is serving the UI
+  from disk.
+
+### Added
+- **Master switch for status checks** — Settings → Status checks →
+  **Checks Enabled** (on by default). On: only ticked tiles are checked. Off:
+  HOPS contacts nothing at all, stored results are cleared, and every status
+  badge shows a grey "checks turned off" icon instead of a stale result.
+  Toggling it takes effect immediately.
+- Settings can now be simple On/Off switches (the first of these is the one
+  above).
+
+### Changed
+- The v2.2.0 migration note about `--frontend` has been corrected (see below).
+
+### Internal
+- `scripts/deploy-local.sh` now also updates the persistent dev instance
+  (same binary and UI build as prod, against dev's own data), and fails loudly
+  if it doesn't come back healthy.
+
+### Migration notes
+- **Drop-in.** Replace the binary and restart. The new setting defaults to On,
+  so behaviour is unchanged except that unticked tiles stop being contacted.
+- **Upgrading from 2.1.x or earlier?** Remove `--frontend …` from your systemd
+  unit (or start command) and delete the old `frontend/` folder. If you don't,
+  2.2.1 will now tell you with a red banner rather than quietly serving the old
+  interface.
+
 ## [2.2.0] - 2026-06-16 — One file, as promised: the web UI now ships inside the binary
 
 HOPS has always billed itself as a "single binary — download, run, done."
@@ -43,16 +94,7 @@ accident.
   binary.
 - Docker image and all install/run docs updated to the single-binary flow.
 
-### Added
-- **Master switch for status checks** (Settings → Status checks → *Checks
-  Enabled*). Off = HOPS contacts nothing and every status badge shows that
-  checks are turned off, rather than a stale result.
-
 ### Fixed
-- **Tiles without "Enable Status Check" ticked were still being checked.** The
-  background checker ignored the per-tile setting and sent a `HEAD` request to
-  every tile with a URL each interval. It now only checks ticked tiles, and
-  drops the stored result for a tile whose check is switched off.
 - The discovery UI referenced a non-existent `mdi:radar-scan` icon (it silently
   failed to render); corrected to `mdi:radar`.
 
@@ -64,10 +106,10 @@ accident.
 ### Migration notes
 - **Drop-in.** Replace the old `hops-<platform>` binary and restart; you can
   delete the now-unused `frontend/` folder beside it. Running via systemd?
-  **Remove the `--frontend …` argument from your unit.** If it's left in
-  while the old `frontend/build` folder still exists, HOPS serves that *old*
-  UI instead of the new embedded one. HOPS now flags this: a red banner in the
-  UI when its version doesn't match the server's, plus a startup warning.
+  **Remove the `--frontend …` argument from your unit.** *(Corrected in
+  2.2.1 — this note originally said leaving it was harmless. It isn't: while
+  the old `frontend/build` folder still exists, HOPS serves that old UI
+  instead of the new embedded one.)*
 - Binary grows by the UI bundle size (a few hundred KB). No data, schema, or
   settings changes.
 
