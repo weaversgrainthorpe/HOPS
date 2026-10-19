@@ -307,9 +307,21 @@ func ConvertFromHeimdall(jsonData []byte) ([]byte, error) {
 
 // DetectFormat attempts to detect the dashboard format
 func DetectFormat(data []byte) (string, error) {
-	// Try to parse as YAML first
+	// A v3 export envelope as JSON (checked first: YAML rejects tab indentation).
+	var envMap map[string]interface{}
+	if err := json.Unmarshal(data, &envMap); err == nil &&
+		envMap["format"] == "hops-export" && isVersion3(envMap["schemaVersion"]) {
+		return "hops-v3", nil
+	}
+
+	// Try to parse as YAML first (JSON is a subset, so this covers both
+	// encodings of a v3 export envelope).
 	var yamlMap map[string]interface{}
 	if err := yaml.Unmarshal(data, &yamlMap); err == nil {
+		// v3 export envelope: {format: hops-export, schemaVersion: 3, config}.
+		if yamlMap["format"] == "hops-export" && isVersion3(yamlMap["schemaVersion"]) {
+			return "hops-v3", nil
+		}
 		// Check for Homer-specific fields
 		if _, hasServices := yamlMap["services"]; hasServices {
 			return "homer", nil
@@ -345,4 +357,16 @@ func DetectFormat(data []byte) (string, error) {
 	}
 
 	return "", fmt.Errorf("unknown dashboard format")
+}
+
+// isVersion3 reports whether a decoded schemaVersion value is 3 (YAML decodes
+// it as int, JSON as float64).
+func isVersion3(v interface{}) bool {
+	switch n := v.(type) {
+	case int:
+		return n == 3
+	case float64:
+		return n == 3
+	}
+	return false
 }

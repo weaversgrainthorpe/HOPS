@@ -153,3 +153,17 @@ func TestVerify_RequiresOwnedDashboardKeys(t *testing.T) {
 	delete(list(t, doc, "dashboards")[0]["settings"].(Obj), "statusChecksEnabled")
 	wantProblem(t, Verify(v2, doc), "d1", "statusChecksEnabled")
 }
+
+func TestVerifyIDs(t *testing.T) {
+	good := Obj{"schemaVersion": 3, "dashboards": []any{Obj{"id": "d", "tabs": []any{Obj{"id": "t", "root": Obj{"children": []any{
+		Obj{"id": "f", "kind": "folder", "content": Obj{"children": []any{Obj{"id": "e", "kind": "tile"}}}},
+	}}}}}}}
+	if err := VerifyIDs(good); err != nil {
+		t.Fatalf("good doc: %v", err)
+	}
+	bad := Obj{"schemaVersion": 3, "dashboards": []any{Obj{"id": "d", "tabs": []any{Obj{"id": "d", "root": Obj{"children": []any{}}}}}}}
+	var ve *VerifyError
+	if err := VerifyIDs(bad); !errors.As(err, &ve) {
+		t.Fatalf("duplicate id not reported: %v", err)
+	}
+}

@@ -129,6 +129,12 @@ func normalizedWithoutRevision(d configdoc.Obj) ([]byte, error) {
 // updateDoc runs fn on the stored config inside one transaction. fn returns
 // the new document and the response body; any error rolls everything back.
 func (r *Router) updateDoc(w http.ResponseWriter, fn func(stored configdoc.Obj) (configdoc.Obj, interface{}, error)) {
+	r.updateDocWithLoadErr(w, loadErr, fn)
+}
+
+// updateDocWithLoadErr is updateDoc with a caller-chosen mapping for a failure
+// to load the stored config (e.g. import's "refused so nothing is overwritten").
+func (r *Router) updateDocWithLoadErr(w http.ResponseWriter, onLoadErr func(error) *apiError, fn func(stored configdoc.Obj) (configdoc.Obj, interface{}, error)) {
 	tx, err := r.db.Begin()
 	if err != nil {
 		writeAPIError(w, newAPIError(http.StatusInternalServerError, "Failed to start save: "+err.Error()))
@@ -138,7 +144,7 @@ func (r *Router) updateDoc(w http.ResponseWriter, fn func(stored configdoc.Obj) 
 
 	stored, err := configdoc.Load(tx)
 	if err != nil {
-		writeAPIError(w, loadErr(err))
+		writeAPIError(w, onLoadErr(err))
 		return
 	}
 	next, resp, err := fn(stored)

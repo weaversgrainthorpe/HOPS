@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"image"
 	"image/png"
@@ -635,6 +636,17 @@ func collectLocalAssetRefs(cfg map[string]interface{}) []string {
 		}
 	}
 
+	// v3 documents: folders and tiles nest arbitrarily deep.
+	configdoc.Walk(cfg, func(_, _ configdoc.Obj, _ []configdoc.Obj, node configdoc.Obj) bool {
+		if iconURL, ok := node["iconUrl"].(string); ok && isLocalAssetRef(iconURL) {
+			refs[iconURL] = true
+		}
+		if bg, ok := node["background"]; ok {
+			collectBackgroundRefs(bg, refs)
+		}
+		return true
+	})
+
 	result := make([]string, 0, len(refs))
 	for ref := range refs {
 		result = append(result, ref)
@@ -727,70 +739,42 @@ func (r *Router) restoreAssets(importedConfig map[string]interface{}) int {
 	return restored
 }
 
-// handleExportConfig exports configuration as YAML/JSON
-// Supports optional dashboardId query parameter to export a single dashboard
+// handleExportConfig exports configuration as YAML/JSON inside the v3 export
+// envelope. The envelope has no top-level "dashboards" key on purpose, so an
+// older (v2.x) HOPS rejects the file instead of misreading v3 data as v2.
+// Supports optional dashboardId query parameter to export a single dashboard.
 func (r *Router) handleExportConfig(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodGet {
 		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-
-	var configData string
-	err := r.db.QueryRow("SELECT data FROM config WHERE id = 1").Scan(&configData)
-	if err != nil {
-		writeJSONError(w, "Failed to load config", http.StatusInternalServerError)
+	if !r.migrationGuard(w) {
 		return
 	}
 
-	// Parse config into a map so we can embed assets
-	var cfg map[string]interface{}
-	if err := json.Unmarshal([]byte(configData), &cfg); err != nil {
-		writeJSONError(w, "Failed to parse config", http.StatusInternalServerError)
+	cfg, err := configdoc.Load(r.db)
+	if err != nil {
+		slog.Error("export: stored config unreadable", "component", "export", "error", err)
+		writeJSONError(w, "Stored configuration could not be read, so nothing was exported: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	dashboardId := req.URL.Query().Get("dashboardId")
 	format := req.URL.Query().Get("format")
 	filename := "hops-config"
+	exportType := "full"
 
 	// If a specific dashboard is requested, filter the config
 	if dashboardId != "" {
-		dashboards, ok := cfg["dashboards"].([]interface{})
+		target, ok := storedDashboards(cfg)[dashboardId]
 		if !ok {
-			writeJSONError(w, "Invalid config structure", http.StatusInternalServerError)
-			return
-		}
-
-		var targetDashboard interface{}
-		var dashboardName string
-		for _, d := range dashboards {
-			dashboard, ok := d.(map[string]interface{})
-			if !ok {
-				continue
-			}
-			if id, ok := dashboard["id"].(string); ok && id == dashboardId {
-				targetDashboard = dashboard
-				if name, ok := dashboard["name"].(string); ok {
-					dashboardName = name
-				}
-				break
-			}
-		}
-
-		if targetDashboard == nil {
 			writeJSONError(w, "Dashboard not found", http.StatusNotFound)
 			return
 		}
-
-		// Replace cfg with single-dashboard export
-		cfg = map[string]interface{}{
-			"exportType": "single-dashboard",
-			"exportedAt": time.Now().Format(time.RFC3339),
-			"dashboards": []interface{}{targetDashboard},
-		}
-
-		if dashboardName != "" {
-			filename = "hops-" + strings.ToLower(strings.ReplaceAll(dashboardName, " ", "-"))
+		cfg = configdoc.Obj{"dashboards": []interface{}{target}}
+		exportType = "single-dashboard"
+		if name, _ := target["name"].(string); name != "" {
+			filename = "hops-" + strings.ToLower(strings.ReplaceAll(name, " ", "-"))
 		}
 	}
 
@@ -800,8 +784,16 @@ func (r *Router) handleExportConfig(w http.ResponseWriter, req *http.Request) {
 		slog.Info("embedded assets in export", "component", "export", "count", assetCount)
 	}
 
+	envelope := map[string]interface{}{
+		"format":        "hops-export",
+		"schemaVersion": configdoc.SchemaVersion,
+		"exportedAt":    time.Now().Format(time.RFC3339),
+		"exportType":    exportType,
+		"config":        cfg,
+	}
+
 	// Serialize the final config
-	exportData, err := json.MarshalIndent(cfg, "", "  ")
+	exportData, err := json.MarshalIndent(envelope, "", "  ")
 	if err != nil {
 		writeJSONError(w, "Failed to serialize config", http.StatusInternalServerError)
 		return
@@ -1140,93 +1132,145 @@ func matchIconInMemory(name string, icons []iconRecord) (IconMatch, bool) {
 	return IconMatch{}, false
 }
 
-// applyIconMatching recursively searches through the config and matches icons for entries.
+// applyIconMatching matches icons for the tiles of the given (v3) dashboards.
 // Pre-loads all icons once to avoid N+1 database queries.
-func (r *Router) applyIconMatching(config map[string]interface{}) int {
-	// Pre-load all icons into memory for batch matching
+func (r *Router) applyIconMatching(dashboards []configdoc.Obj) int {
 	icons, err := r.loadAllIcons()
 	if err != nil {
 		slog.Error("failed to load icons for matching", "component", "icons", "error", err)
 		return 0
 	}
-
+	list := make([]any, len(dashboards))
+	for i, d := range dashboards {
+		list[i] = d
+	}
 	matchCount := 0
-
-	dashboards, ok := config["dashboards"].([]interface{})
-	if !ok {
-		return 0
-	}
-
-	for _, d := range dashboards {
-		dashboard, ok := d.(map[string]interface{})
-		if !ok {
-			continue
+	configdoc.Walk(configdoc.Obj{"dashboards": list}, func(_, _ configdoc.Obj, _ []configdoc.Obj, entry configdoc.Obj) bool {
+		if entry["kind"] != "tile" {
+			return true
 		}
-
-		tabs, ok := dashboard["tabs"].([]interface{})
-		if !ok {
-			continue
+		// Skip tiles that already have a non-generic icon.
+		existingIcon, _ := entry["icon"].(string)
+		existingIconUrl, _ := entry["iconUrl"].(string)
+		if existingIconUrl != "" || (existingIcon != "" && existingIcon != "mdi:application" && existingIcon != "mdi:link" && !strings.HasPrefix(existingIcon, "mdi:help")) {
+			return true
 		}
-
-		for _, t := range tabs {
-			tab, ok := t.(map[string]interface{})
-			if !ok {
-				continue
+		name, _ := entry["name"].(string)
+		if match, found := matchIconInMemory(name, icons); found {
+			// Prefer image_url (local SVG) over iconify icon
+			if match.ImageURL != "" {
+				entry["iconUrl"] = match.ImageURL
+				entry["icon"] = "" // Clear iconify reference
+			} else if match.Icon != "" {
+				entry["icon"] = match.Icon
 			}
-
-			groups, ok := tab["groups"].([]interface{})
-			if !ok {
-				continue
-			}
-
-			for _, g := range groups {
-				group, ok := g.(map[string]interface{})
-				if !ok {
-					continue
-				}
-
-				entries, ok := group["entries"].([]interface{})
-				if !ok {
-					continue
-				}
-
-				for _, e := range entries {
-					entry, ok := e.(map[string]interface{})
-					if !ok {
-						continue
-					}
-
-					// Check if entry already has an icon (and it's not a generic one)
-					existingIcon, _ := entry["icon"].(string)
-					existingIconUrl, _ := entry["iconUrl"].(string)
-					if existingIconUrl != "" || (existingIcon != "" && existingIcon != "mdi:application" && existingIcon != "mdi:link" && !strings.HasPrefix(existingIcon, "mdi:help")) {
-						continue
-					}
-
-					// Try to match based on name using pre-loaded icons
-					name, _ := entry["name"].(string)
-					if match, found := matchIconInMemory(name, icons); found {
-						// Prefer image_url (local SVG) over iconify icon
-						if match.ImageURL != "" {
-							entry["iconUrl"] = match.ImageURL
-							entry["icon"] = "" // Clear iconify reference
-						} else if match.Icon != "" {
-							entry["icon"] = match.Icon
-						}
-						matchCount++
-					}
-				}
-			}
+			matchCount++
 		}
-	}
-
+		return true
+	})
 	return matchCount
 }
 
-// handleImportConfig imports configuration from YAML/JSON (supports HOPS, Homer, Dashy formats)
+const importUnreadableMsg = "Existing configuration could not be read — import refused so nothing is overwritten"
+
+// decodeEnvelopeConfig decodes a v3 export envelope (JSON or YAML) and
+// returns its "config" object.
+func decodeEnvelopeConfig(data []byte) (configdoc.Obj, error) {
+	var env struct {
+		Config configdoc.Obj `json:"config"`
+	}
+	if err := json.Unmarshal(data, &env); err != nil {
+		var generic interface{}
+		if yerr := yaml.Unmarshal(data, &generic); yerr != nil {
+			return nil, fmt.Errorf("could not parse the export file: %w", yerr)
+		}
+		b, jerr := json.Marshal(generic)
+		if jerr != nil {
+			return nil, fmt.Errorf("could not read the export file: %w", jerr)
+		}
+		env.Config = nil
+		if jerr := json.Unmarshal(b, &env); jerr != nil {
+			return nil, fmt.Errorf("could not read the export file: %w", jerr)
+		}
+	}
+	if env.Config == nil {
+		return nil, fmt.Errorf("the export file has no \"config\" object")
+	}
+	return env.Config, nil
+}
+
+// collectIDs returns every node id (dashboards, tabs, folders, tiles) in doc.
+func collectIDs(doc configdoc.Obj) map[string]bool {
+	used := map[string]bool{}
+	note := func(o configdoc.Obj) {
+		if id, ok := o["id"].(string); ok && id != "" {
+			used[id] = true
+		}
+	}
+	for _, d := range storedDashboards(doc) {
+		note(d)
+		tabs, _ := d["tabs"].([]any)
+		for _, t := range tabs {
+			if tm, ok := t.(configdoc.Obj); ok {
+				note(tm)
+			}
+		}
+	}
+	configdoc.Walk(doc, func(_, _ configdoc.Obj, _ []configdoc.Obj, n configdoc.Obj) bool {
+		note(n)
+		return true
+	})
+	return used
+}
+
+// makeIDsUnique renames, with a numeric suffix, every id in dashboard d that is
+// already in used (or repeats within d), and records all of d's ids in used.
+// Ids are unique across the whole document, so a re-import must not collide.
+func makeIDsUnique(d configdoc.Obj, used map[string]bool) {
+	uniq := func(o configdoc.Obj) {
+		id, ok := o["id"].(string)
+		if !ok || id == "" {
+			return // the final structural check reports it
+		}
+		cand := id
+		for n := 1; used[cand]; n++ {
+			cand = fmt.Sprintf("%s-%d", id, n)
+		}
+		o["id"] = cand
+		used[cand] = true
+	}
+	uniq(d)
+	tabs, _ := d["tabs"].([]any)
+	for _, t := range tabs {
+		if tm, ok := t.(configdoc.Obj); ok {
+			uniq(tm)
+		}
+	}
+	configdoc.Walk(configdoc.Obj{"dashboards": []any{d}}, func(_, _ configdoc.Obj, _ []configdoc.Obj, n configdoc.Obj) bool {
+		uniq(n)
+		return true
+	})
+}
+
+func dashboardLabel(d configdoc.Obj) string {
+	if n, _ := d["name"].(string); n != "" {
+		return n
+	}
+	if id, _ := d["id"].(string); id != "" {
+		return id
+	}
+	return "(unnamed)"
+}
+
+// handleImportConfig imports configuration from YAML/JSON (supports HOPS v2
+// and v3 exports, Homer, Dashy and Heimdall). Imported dashboards are appended
+// to the stored v3 document in one transaction.
 func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodPost {
 		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !r.migrationGuard(w) {
 		return
 	}
 
@@ -1256,9 +1300,6 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	var configJSON []byte
-	var importFormat string
-
 	// Detect the format
 	format, err := converters.DetectFormat(fileData)
 	if err != nil {
@@ -1267,196 +1308,201 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Convert based on detected format
-	switch format {
-	case "hops":
-		configJSON = fileData
-		importFormat = "HOPS JSON"
+	var importedConfig configdoc.Obj // top level of the imported data (theme, settings, assets)
+	var importFormat string
 
-	case "homer":
-		configJSON, err = converters.ConvertFromHomer(fileData)
+	if format == "hops-v3" {
+		importedConfig, err = decodeEnvelopeConfig(fileData)
 		if err != nil {
-			slog.Warn("import: Homer conversion failed", "component", "import", "error", err)
-			writeJSONError(w, "Could not convert the Homer config — the file may be malformed.", http.StatusBadRequest)
+			slog.Warn("import: v3 export unreadable", "component", "import", "error", err)
+			writeJSONError(w, "Invalid HOPS export: "+err.Error(), http.StatusBadRequest)
 			return
 		}
-		importFormat = "Homer YAML"
-
-	case "dashy":
-		configJSON, err = converters.ConvertFromDashy(fileData)
-		if err != nil {
-			slog.Warn("import: Dashy conversion failed", "component", "import", "error", err)
-			writeJSONError(w, "Could not convert the Dashy config — the file may be malformed.", http.StatusBadRequest)
+		importFormat = "HOPS v3 export"
+	} else {
+		var configJSON []byte
+		switch format {
+		case "hops":
+			configJSON = fileData
+			importFormat = "HOPS JSON"
+		case "homer":
+			configJSON, err = converters.ConvertFromHomer(fileData)
+			if err != nil {
+				slog.Warn("import: Homer conversion failed", "component", "import", "error", err)
+				writeJSONError(w, "Could not convert the Homer config — the file may be malformed.", http.StatusBadRequest)
+				return
+			}
+			importFormat = "Homer YAML"
+		case "dashy":
+			configJSON, err = converters.ConvertFromDashy(fileData)
+			if err != nil {
+				slog.Warn("import: Dashy conversion failed", "component", "import", "error", err)
+				writeJSONError(w, "Could not convert the Dashy config — the file may be malformed.", http.StatusBadRequest)
+				return
+			}
+			importFormat = "Dashy YAML"
+		case "heimdall":
+			configJSON, err = converters.ConvertFromHeimdall(fileData)
+			if err != nil {
+				slog.Warn("import: Heimdall conversion failed", "component", "import", "error", err)
+				writeJSONError(w, "Could not convert the Heimdall config — the file may be malformed.", http.StatusBadRequest)
+				return
+			}
+			importFormat = "Heimdall JSON"
+		default:
+			writeJSONError(w, "Unsupported file format", http.StatusBadRequest)
 			return
 		}
-		importFormat = "Dashy YAML"
-
-	case "heimdall":
-		configJSON, err = converters.ConvertFromHeimdall(fileData)
-		if err != nil {
-			slog.Warn("import: Heimdall conversion failed", "component", "import", "error", err)
-			writeJSONError(w, "Could not convert the Heimdall config — the file may be malformed.", http.StatusBadRequest)
+		if err := json.Unmarshal(configJSON, &importedConfig); err != nil {
+			writeJSONError(w, "Invalid configuration after conversion: "+err.Error(), http.StatusBadRequest)
 			return
 		}
-		importFormat = "Heimdall JSON"
-
-	default:
-		writeJSONError(w, "Unsupported file format", http.StatusBadRequest)
-		return
 	}
 
-	// Validate the resulting JSON has the expected structure
-	var importedConfig map[string]interface{}
-	if err := json.Unmarshal(configJSON, &importedConfig); err != nil {
-		writeJSONError(w, "Invalid configuration after conversion", http.StatusInternalServerError)
-		return
-	}
-
-	importedDashboards, ok := importedConfig["dashboards"].([]interface{})
+	rawDashboards, ok := importedConfig["dashboards"].([]interface{})
 	if !ok {
 		writeJSONError(w, "Invalid config: missing 'dashboards' field", http.StatusBadRequest)
 		return
 	}
 
-	// Load existing config to merge with
-	var existingJSON string
-	err = r.db.QueryRow("SELECT data FROM config WHERE id = 1").Scan(&existingJSON)
-
-	var existingConfig map[string]interface{}
-	if err == nil && existingJSON != "" {
-		if err := json.Unmarshal([]byte(existingJSON), &existingConfig); err != nil {
-			existingConfig = make(map[string]interface{})
+	// Bring every imported dashboard to the v3 shape.
+	var imported []configdoc.Obj
+	var skipped []string
+	for i, raw := range rawDashboards {
+		d, ok := raw.(configdoc.Obj)
+		if !ok {
+			skipped = append(skipped, fmt.Sprintf("dashboards[%d] is not an object", i))
+			continue
 		}
-	} else {
-		existingConfig = make(map[string]interface{})
+		if format == "hops-v3" {
+			// New to this install: revision restarts at 1; settings are kept.
+			d["revision"] = 1
+			imported = append(imported, d)
+			continue
+		}
+		v3, err := configdoc.ConvertDashboardV2(d)
+		if err != nil {
+			writeJSONError(w, fmt.Sprintf("Import refused — dashboard %q could not be converted: %v", dashboardLabel(d), err), http.StatusBadRequest)
+			return
+		}
+		verr := configdoc.Verify(
+			configdoc.Obj{"dashboards": []any{d}},
+			configdoc.Obj{"schemaVersion": configdoc.SchemaVersion, "dashboards": []any{v3}},
+		)
+		if verr != nil {
+			var ve *configdoc.VerifyError
+			msg := verr.Error()
+			if errors.As(verr, &ve) {
+				msg = strings.Join(ve.Problems, "; ")
+			}
+			writeJSONError(w, fmt.Sprintf("Import refused — dashboard %q did not convert cleanly: %s", dashboardLabel(d), msg), http.StatusBadRequest)
+			return
+		}
+		imported = append(imported, v3)
+	}
+	if len(imported) == 0 {
+		msg := "No dashboards found in the import file"
+		if len(skipped) > 0 {
+			msg += " (skipped: " + strings.Join(skipped, "; ") + ")"
+		}
+		writeJSONError(w, msg, http.StatusBadRequest)
+		return
 	}
 
-	// Get existing dashboards
-	existingDashboards, _ := existingConfig["dashboards"].([]interface{})
+	warning := r.preUpdateBackup()
 
-	// Build a map of existing dashboard paths to avoid duplicates
-	existingPaths := make(map[string]bool)
-	for _, d := range existingDashboards {
-		if dashboard, ok := d.(map[string]interface{}); ok {
-			if path, ok := dashboard["path"].(string); ok {
-				existingPaths[path] = true
+	var iconMatchCount, assetsRestored int
+	var names []string
+	r.updateDocWithLoadErr(w, func(err error) *apiError {
+		slog.Error("import: stored config unreadable", "component", "import", "error", err)
+		return newAPIError(http.StatusInternalServerError, importUnreadableMsg)
+	}, func(stored configdoc.Obj) (configdoc.Obj, interface{}, error) {
+		existing, _ := stored["dashboards"].([]any)
+		existingPaths := map[string]bool{}
+		for _, d := range existing {
+			if dm, ok := d.(configdoc.Obj); ok {
+				if p, ok := dm["path"].(string); ok {
+					existingPaths[p] = true
+				}
 			}
 		}
-	}
+		used := collectIDs(stored)
 
-	// Append imported dashboards, renaming paths if they conflict
-	importedCount := 0
-	for _, d := range importedDashboards {
-		if dashboard, ok := d.(map[string]interface{}); ok {
-			path, _ := dashboard["path"].(string)
+		// Append imported dashboards, renaming paths (and ids) if they conflict
+		for _, d := range imported {
+			path, _ := d["path"].(string)
 			originalPath := path
-
-			// If path already exists, add a suffix
 			suffix := 1
 			for existingPaths[path] {
 				path = fmt.Sprintf("%s-%d", originalPath, suffix)
 				suffix++
 			}
-
-			// Update the path and id if changed
 			if path != originalPath {
-				dashboard["path"] = path
-				dashboard["id"] = strings.TrimPrefix(path, "/")
-				if name, ok := dashboard["name"].(string); ok {
-					dashboard["name"] = fmt.Sprintf("%s (Imported)", name)
+				d["path"] = path
+				d["id"] = strings.TrimPrefix(path, "/")
+				if name, ok := d["name"].(string); ok {
+					d["name"] = fmt.Sprintf("%s (Imported)", name)
 				}
 			}
-
-			existingDashboards = append(existingDashboards, dashboard)
 			existingPaths[path] = true
-			importedCount++
+			makeIDsUnique(d, used)
+			existing = append(existing, d)
+			names = append(names, dashboardLabel(d))
 		}
-	}
+		stored["dashboards"] = existing
 
-	// Update the config with merged dashboards
-	existingConfig["dashboards"] = existingDashboards
+		if autoMatchIcons {
+			iconMatchCount = r.applyIconMatching(imported)
+			slog.Info("icon matching complete", "component", "import", "matched", iconMatchCount)
+		}
 
-	// Apply icon matching if requested
-	iconMatchCount := 0
-	if autoMatchIcons {
-		slog.Info("applying icon matching to config", "component", "import")
-		iconMatchCount = r.applyIconMatching(existingConfig)
-		slog.Info("icon matching complete", "component", "import", "matched", iconMatchCount)
-
-		// Debug: Log a sample entry after matching
-		if dashboards, ok := existingConfig["dashboards"].([]interface{}); ok && len(dashboards) > 0 {
-			if dash, ok := dashboards[len(dashboards)-1].(map[string]interface{}); ok {
-				if tabs, ok := dash["tabs"].([]interface{}); ok && len(tabs) > 0 {
-					if tab, ok := tabs[0].(map[string]interface{}); ok {
-						if groups, ok := tab["groups"].([]interface{}); ok && len(groups) > 0 {
-							if group, ok := groups[0].(map[string]interface{}); ok {
-								if entries, ok := group["entries"].([]interface{}); ok && len(entries) > 0 {
-									if entry, ok := entries[0].(map[string]interface{}); ok {
-										slog.Debug("sample entry after icon matching", "component", "import", "name", entry["name"], "icon", entry["icon"])
-									}
-								}
-							}
-						}
-					}
+		// Preserve theme and settings from existing config, or use imported if not present
+		for _, k := range []string{"theme", "settings"} {
+			if _, has := stored[k]; !has {
+				if v, ok := importedConfig[k]; ok {
+					stored[k] = v
 				}
 			}
 		}
-	} else {
-		slog.Debug("autoMatchIcons is false, skipping icon matching", "component", "import")
-	}
+		delete(stored, "assets") // transport-only field
 
-	// Preserve theme and settings from existing config, or use imported if not present
-	if _, ok := existingConfig["theme"]; !ok {
-		if theme, ok := importedConfig["theme"]; ok {
-			existingConfig["theme"] = theme
+		// The merged document must be well-formed with document-wide unique ids.
+		stored["schemaVersion"] = configdoc.SchemaVersion
+		if err := configdoc.VerifyIDs(stored); err != nil {
+			var ve *configdoc.VerifyError
+			msg := err.Error()
+			if errors.As(err, &ve) {
+				msg = strings.Join(ve.Problems, "; ")
+			}
+			return nil, nil, newAPIError(http.StatusBadRequest, "Import refused — the merged configuration would be invalid: "+msg)
 		}
-	}
-	if _, ok := existingConfig["settings"]; !ok {
-		if settings, ok := importedConfig["settings"]; ok {
-			existingConfig["settings"] = settings
+
+		// Restore embedded assets (icons, backgrounds) from import
+		assetsRestored = r.restoreAssets(importedConfig)
+
+		message := fmt.Sprintf("Imported %d dashboard(s) from %s format: %s", len(names), importFormat, strings.Join(names, ", "))
+		if len(skipped) > 0 {
+			message += fmt.Sprintf(". Skipped %d item(s): %s", len(skipped), strings.Join(skipped, "; "))
 		}
-	}
-
-	// Restore embedded assets (icons, backgrounds) from import
-	assetsRestored := r.restoreAssets(importedConfig)
-
-	// Remove assets from config before saving — transport-only field
-	delete(existingConfig, "assets")
-
-	// Serialize merged config
-	mergedJSON, err := json.Marshal(existingConfig)
-	if err != nil {
-		writeJSONError(w, "Failed to serialize merged config", http.StatusInternalServerError)
-		return
-	}
-
-	// Save to database
-	_, err = r.db.Exec(
-		"INSERT OR REPLACE INTO config (id, data, updated_at) VALUES (1, ?, CURRENT_TIMESTAMP)",
-		string(mergedJSON),
-	)
-	if err != nil {
-		writeJSONError(w, "Failed to save config", http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-
-	// Build response message
-	message := fmt.Sprintf("Imported %d dashboard(s) from %s format", importedCount, importFormat)
-	if iconMatchCount > 0 {
-		message += fmt.Sprintf(", matched %d icon(s)", iconMatchCount)
-	}
-	if assetsRestored > 0 {
-		message += fmt.Sprintf(", restored %d asset file(s)", assetsRestored)
-	}
-
-	writeJSON(w, map[string]interface{}{
-		"success":        true,
-		"message":        message,
-		"imported":       importedCount,
-		"iconsMatched":   iconMatchCount,
-		"assetsRestored": assetsRestored,
+		if iconMatchCount > 0 {
+			message += fmt.Sprintf(", matched %d icon(s)", iconMatchCount)
+		}
+		if assetsRestored > 0 {
+			message += fmt.Sprintf(", restored %d asset file(s)", assetsRestored)
+		}
+		resp := map[string]interface{}{
+			"success":        true,
+			"message":        message,
+			"imported":       len(names),
+			"dashboards":     names,
+			"skipped":        skipped,
+			"iconsMatched":   iconMatchCount,
+			"assetsRestored": assetsRestored,
+		}
+		if warning != "" {
+			resp["warning"] = warning
+		}
+		return stored, resp, nil
 	})
 }
 

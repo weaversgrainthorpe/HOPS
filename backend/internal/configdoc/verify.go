@@ -25,6 +25,21 @@ func (v *verifier) add(format string, args ...any) {
 	}
 }
 
+// VerifyIDs checks a v3 document on its own: it is schemaVersion 3, its tree
+// is well-formed, and every dashboard/tab/folder/tile id is non-empty and
+// unique document-wide. It returns a *VerifyError listing up to 20 problems.
+func VerifyIDs(doc Obj) error {
+	v := &verifier{}
+	if !IsV3(doc) {
+		v.add("document: schemaVersion is %s, want %d", show(doc["schemaVersion"]), SchemaVersion)
+	}
+	v.checkIDs(doc)
+	if len(v.problems) > 0 {
+		return &VerifyError{Problems: v.problems}
+	}
+	return nil
+}
+
 // Verify proves v3 is a faithful conversion of v2:
 //   - every v2 dashboard/tab/group/entry ID appears exactly once at the
 //     matching level, under the matching parent, in the same order;
