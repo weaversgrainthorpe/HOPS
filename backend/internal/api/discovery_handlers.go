@@ -13,6 +13,7 @@ import (
 
 	"database/sql"
 
+	"github.com/weaversgrainthorpe/HOPS/internal/configdoc"
 	"github.com/weaversgrainthorpe/HOPS/internal/discovery"
 )
 
@@ -387,6 +388,9 @@ type newNamedInput struct {
 // Body: { target: promoteTarget, resultIds: [...] }
 // All-or-nothing inside a single transaction that mutates the config JSON.
 func (r *Router) handlePromoteScan(w http.ResponseWriter, req *http.Request, scanID string) {
+	if !r.migrationGuard(w) {
+		return
+	}
 	var body struct {
 		Target    promoteTarget `json:"target"`
 		ResultIDs []string      `json:"resultIds"`
@@ -447,14 +451,17 @@ func (r *Router) handlePromoteScan(w http.ResponseWriter, req *http.Request, sca
 	}
 	defer tx.Rollback() //nolint:errcheck
 
-	var configJSON string
-	if err := tx.QueryRow(`SELECT data FROM config WHERE id = 1`).Scan(&configJSON); err != nil {
-		writeJSONError(w, "Failed to load config", http.StatusInternalServerError)
+	// The stored doc is v3; the promote logic below works on the v2-shaped
+	// view, so convert in, mutate, and convert back (FromLegacy carries the
+	// settings, revisions and layouts of everything that already existed).
+	stored, err := configdoc.Load(tx)
+	if err != nil {
+		writeAPIError(w, loadErr(err))
 		return
 	}
-	var cfg map[string]interface{}
-	if err := json.Unmarshal([]byte(configJSON), &cfg); err != nil {
-		writeJSONError(w, "Config is corrupt; promotion aborted", http.StatusInternalServerError)
+	cfg, err := configdoc.ToLegacy(stored)
+	if err != nil {
+		writeAPIError(w, newAPIError(http.StatusInternalServerError, "Config cannot be shown for promotion; promotion aborted: "+err.Error()))
 		return
 	}
 
@@ -493,16 +500,37 @@ func (r *Router) handlePromoteScan(w http.ResponseWriter, req *http.Request, sca
 		promoted++
 	}
 
-	newConfigJSON, err := json.Marshal(cfg)
+	next, err := configdoc.FromLegacy(cfg, stored)
 	if err != nil {
-		writeJSONError(w, "Failed to encode config", http.StatusInternalServerError)
+		writeAPIError(w, newAPIError(http.StatusInternalServerError, "Failed to convert config: "+err.Error()))
 		return
 	}
-	if _, err := tx.Exec(
-		`UPDATE config SET data = ?, updated_at = CURRENT_TIMESTAMP WHERE id = 1`,
-		string(newConfigJSON),
-	); err != nil {
-		writeJSONError(w, "Failed to save config", http.StatusInternalServerError)
+	// Only the target dashboard changed: bump its revision (a new dashboard
+	// starts at 1). An unreadable stored revision is a visible 500.
+	targetID, _ := dashboard["id"].(string)
+	nextRev := 1
+	if prev, existed := storedDashboards(stored)[targetID]; existed {
+		cur, rerr := storedRevision(targetID, prev)
+		if rerr != nil {
+			writeAPIError(w, rerr)
+			return
+		}
+		nextRev = cur + 1
+	}
+	bumped := false
+	nextDashes, _ := next["dashboards"].([]any)
+	for _, d := range nextDashes {
+		if nd, ok := d.(configdoc.Obj); ok && nd["id"] == targetID {
+			nd["revision"] = nextRev
+			bumped = true
+		}
+	}
+	if !bumped {
+		writeAPIError(w, newAPIError(http.StatusInternalServerError, "Target dashboard missing after conversion; promotion aborted"))
+		return
+	}
+	if err := configdoc.Save(tx, next); err != nil {
+		writeAPIError(w, newAPIError(http.StatusInternalServerError, "Failed to save config: "+err.Error()))
 		return
 	}
 	// Mark the promoted results so they can't be promoted again. The
