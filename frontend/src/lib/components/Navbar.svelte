@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { dashboards, currentDashboard } from '$lib/stores/config';
+  import { config, dashboards, currentDashboard, currentV3OnlyDashboard, dashboardHref } from '$lib/stores/config';
   import { page } from '$app/stores';
+  import type { HeaderConfig } from '$lib/types';
   import { isAuthenticated } from '$lib/stores/auth';
   import { theme, toggleTheme } from '$lib/stores/theme';
   import { editMode, toggleEditMode } from '$lib/stores/editMode';
@@ -58,8 +59,21 @@
     'mdi:theme-light-dark'
   );
 
+  // v3-only dashboards are view-only until the new editor arrives.
+  const V3_ONLY_TOOLTIP = 'This dashboard uses v3 layout features and is view-only until the new editor arrives';
+  let viewOnlyV3 = $derived($currentV3OnlyDashboard !== null);
+  // Every dashboard for the nav links: legacy ones, then v3-only ones.
+  let navDashboards = $derived([
+    ...$dashboards.map((d) => ({ id: d.id, name: d.name, path: dashboardHref(d.path) })),
+    ...($config?.v3OnlyDashboards ?? []).map((d) => ({ id: d.id, name: d.name, path: dashboardHref(d.path) }))
+  ]);
+
   // Get header config from current dashboard or use defaults
-  let headerConfig = $derived($currentDashboard?.header);
+  let pageDashboard = $derived($currentDashboard ?? $currentV3OnlyDashboard);
+  // A v3 dashboard keeps the same header object as its legacy form.
+  let headerConfig = $derived(
+    $currentDashboard ? $currentDashboard.header : ($currentV3OnlyDashboard?.header as HeaderConfig | undefined)
+  );
   let showLeft = $derived(headerConfig?.showLeft !== false); // Default true
   let showCenter = $derived(headerConfig?.showCenter !== false); // Default true
   let leftText = $derived(headerConfig?.leftText);
@@ -81,7 +95,7 @@
 
           {#if $isAuthenticated && isDashboardPage}
             <div class="nav-links">
-              {#each $dashboards as dashboard (dashboard.id)}
+              {#each navDashboards as dashboard (dashboard.id)}
                 <a
                   href={dashboard.path}
                   class="nav-link"
@@ -100,8 +114,8 @@
       {#if showCenter}
         {#if centerTitle}
           <h1 class="center-title">{centerTitle}</h1>
-        {:else if $currentDashboard}
-          <h1 class="center-title">{$currentDashboard.name}</h1>
+        {:else if pageDashboard}
+          <h1 class="center-title">{pageDashboard.name}</h1>
         {/if}
       {/if}
     </div>
@@ -151,7 +165,8 @@
           onclick={toggleEditMode}
           class="edit-toggle"
           class:active={$editMode}
-          title={$editMode ? "Exit Edit Mode" : "Enter Edit Mode (Authentication Required)"}
+          disabled={viewOnlyV3}
+          title={viewOnlyV3 ? V3_ONLY_TOOLTIP : $editMode ? "Exit Edit Mode" : "Enter Edit Mode (Authentication Required)"}
           aria-label={$editMode ? "Exit Edit Mode" : "Enter Edit Mode"}
         >
           <Icon icon={$editMode ? 'mdi:pencil-off' : 'mdi:pencil'} width="32" height="32" />
@@ -342,6 +357,14 @@
   .theme-toggle:hover, .admin-link:hover, .edit-toggle:hover, .export-btn:hover, .help-btn:hover, .about-btn:hover {
     background: var(--accent);
     color: white;
+  }
+
+  .edit-toggle:disabled,
+  .edit-toggle:disabled:hover {
+    opacity: 0.45;
+    cursor: not-allowed;
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
   }
 
   .edit-toggle {

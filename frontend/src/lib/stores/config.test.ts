@@ -10,7 +10,8 @@ vi.mock('$lib/utils/api', async () => {
     getConfig: vi.fn(),
     updateConfig: vi.fn(),
     saveDashboard: vi.fn(),
-    saveDashboardSettings: vi.fn()
+    saveDashboardSettings: vi.fn(),
+    deleteDashboard: vi.fn()
   };
 });
 
@@ -25,7 +26,10 @@ import {
   showMigrationFailedPage,
   saveDashboardSettingsChanges,
   layoutDoc,
-  layoutStale
+  layoutStale,
+  resolveDashboardRoute,
+  deleteDashboard,
+  dashboardHref
 } from './config';
 import { toast } from './toast';
 
@@ -329,5 +333,121 @@ describe('write responses refresh the layout', () => {
     await vi.waitFor(() => expect(api.getConfig).toHaveBeenCalled());
     await new Promise((r) => setTimeout(r, 10));
     expect(get(layoutStale)).toBe(true);
+  });
+});
+
+describe('resolveDashboardRoute (path first, then id)', () => {
+  const lay = (id: string, path: string, revision = 1) => ({ id, name: id.toUpperCase(), path, revision, tabs: [] });
+  function cfgWith(): Config {
+    return {
+      ...makeConfig(),
+      // legacy 'a' has id "a"; legacy 'b' has path "/b". v3-only 'v' lives at "/a-v3".
+      dashboards: [{ ...dash('a', 3), path: '/alpha' }, { ...dash('zed', 1), path: '/a' }],
+      layout: { schemaVersion: 3, dashboards: [lay('a', '/alpha', 3), lay('zed', '/a'), lay('v', '/v3home', 9), lay('home', '/other', 2)] },
+      v3OnlyDashboards: [
+        { id: 'v', name: 'V', path: '/v3home', reason: 'x' },
+        { id: 'home', name: 'Home', path: '/other', reason: 'x' }
+      ]
+    };
+  }
+
+  it('a path match beats an id match (legacy)', () => {
+    const r = resolveDashboardRoute('a', cfgWith());
+    expect(r?.kind).toBe('legacy');
+    expect(r && r.kind === 'legacy' && r.dashboard.id).toBe('zed');
+  });
+
+  it('resolves a v3-only dashboard by path from the layout doc', () => {
+    const r = resolveDashboardRoute('v3home', cfgWith());
+    expect(r?.kind).toBe('v3only');
+    expect(r && r.kind === 'v3only' && r.dashboard.revision).toBe(9);
+  });
+
+  it('a v3-only path match beats a legacy id match, and vice versa', () => {
+    const c = cfgWith();
+    // Give v3-only 'v' the path "/zed", which is also legacy dashboard zed's id.
+    c.v3OnlyDashboards![0].path = '/zed';
+    (c.layout!.dashboards[2] as any).path = '/zed';
+    const r = resolveDashboardRoute('zed', c);
+    expect(r?.kind).toBe('v3only');
+    // No dashboard has path "/home", so the v3-only dashboard with id "home" is found by id.
+    const r2 = resolveDashboardRoute('home', c);
+    expect(r2?.kind).toBe('v3only');
+    expect(r2 && r2.kind === 'v3only' && r2.dashboard.id).toBe('home');
+  });
+
+  it('falls back to id when no path matches; accepts a leading slash', () => {
+    const r = resolveDashboardRoute('/a', { ...cfgWith(), dashboards: [{ ...dash('a', 3), path: '/alpha' }] });
+    expect(r && r.kind === 'legacy' && r.dashboard.id).toBe('a');
+  });
+
+  it('reports a v3-only dashboard whose layout is missing', () => {
+    const c = cfgWith();
+    c.layout!.dashboards = c.layout!.dashboards.filter((d) => d.id !== 'v');
+    expect(resolveDashboardRoute('v3home', c)).toEqual({ kind: 'missing-layout', id: 'v', name: 'V' });
+  });
+
+  it('returns undefined when nothing matches', () => {
+    expect(resolveDashboardRoute('nope', cfgWith())).toBeUndefined();
+  });
+});
+
+describe('deleteDashboard', () => {
+  const docWith = (...ids: string[]) => ({
+    schemaVersion: 3 as const,
+    dashboards: ids.map((id) => ({ id, name: id, path: `/${id}`, revision: 5, tabs: [] }))
+  });
+
+  it('deletes a v3-only dashboard with its layout revision and applies the response layout', async () => {
+    config.set({ ...makeConfig(), layout: docWith('a', 'b', 'v'), v3OnlyDashboards: [{ id: 'v', name: 'v', path: '/v', reason: 'x' }] });
+    vi.mocked(api.deleteDashboard).mockResolvedValue({ layout: docWith('a', 'b'), v3OnlyDashboards: [] });
+    await deleteDashboard('v');
+    expect(api.deleteDashboard).toHaveBeenCalledWith('v', 5);
+    expect(get(config)!.v3OnlyDashboards).toEqual([]);
+    expect(get(layoutDoc)).toEqual(docWith('a', 'b'));
+  });
+
+  it('deletes a legacy dashboard with the store revision and drops it from the legacy view', async () => {
+    config.set({ ...makeConfig(), layout: docWith('a', 'b') });
+    vi.mocked(api.deleteDashboard).mockResolvedValue({ layout: docWith('b'), v3OnlyDashboards: [] });
+    await deleteDashboard('a');
+    expect(api.deleteDashboard).toHaveBeenCalledWith('a', 3);
+    expect(get(config)!.dashboards.map((d) => d.id)).toEqual(['b']);
+    expect(get(config)!.dashboardRevisions).toEqual({ b: 7 });
+  });
+
+  it('a 409 raises the conflict banner, leaves the store untouched and rethrows', async () => {
+    config.set({ ...makeConfig(), layout: docWith('a', 'b', 'v'), v3OnlyDashboards: [{ id: 'v', name: 'v', path: '/v', reason: 'x' }] });
+    const before = get(config);
+    vi.mocked(api.deleteDashboard).mockRejectedValue(new api.ConflictError('v', 6));
+    await expect(deleteDashboard('v')).rejects.toBeInstanceOf(api.ConflictError);
+    expect(get(saveConflict)).toEqual({ dashboardId: 'v' });
+    expect(get(config)).toBe(before);
+  });
+
+  it('refuses (visibly) when the dashboard is unknown', async () => {
+    await expect(deleteDashboard('ghost')).rejects.toThrow(/not found/i);
+    expect(api.deleteDashboard).not.toHaveBeenCalled();
+  });
+});
+
+describe('saveDashboardSettingsChanges on a v3-only dashboard', () => {
+  it('uses the layout revision and applies the response layout', async () => {
+    const doc = { schemaVersion: 3 as const, dashboards: [{ id: 'v', name: 'v', path: '/v', revision: 8, tabs: [] }] };
+    config.set({ ...makeConfig(), layout: doc, v3OnlyDashboards: [{ id: 'v', name: 'v', path: '/v', reason: 'x' }] });
+    const fresh = { schemaVersion: 3 as const, dashboards: [{ id: 'v', name: 'v', path: '/v', revision: 9, tabs: [] }] };
+    vi.mocked(api.saveDashboardSettings).mockResolvedValue({ revision: 9, layout: fresh, v3OnlyDashboards: [{ id: 'v', name: 'v', path: '/v', reason: 'x' }] });
+    await saveDashboardSettingsChanges('v', { statusChecksEnabled: false });
+    expect(vi.mocked(api.saveDashboardSettings).mock.calls[0][2]).toBe(8);
+    expect(get(layoutDoc)).toEqual(fresh);
+  });
+});
+
+describe('dashboardHref', () => {
+  it('always yields a same-origin path', () => {
+    expect(dashboardHref('home')).toBe('/home');
+    expect(dashboardHref('/home')).toBe('/home');
+    expect(dashboardHref('//evil.test/x')).toBe('/evil.test/x');
+    expect(dashboardHref('javascript:alert(1)')).toBe('/javascript:alert(1)');
   });
 });

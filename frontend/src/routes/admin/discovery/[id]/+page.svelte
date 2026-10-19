@@ -531,12 +531,13 @@
     try {
       const { promoted, dashboardPath } = await promoteScan(scan.id, target, ids);
       toast.success(`${promoted} tile${promoted === 1 ? '' : 's'} added to the dashboard`);
+      // Reload the config before going anywhere — for a new AND an existing
+      // dashboard — so the store never shows the pre-promote tiles/layout as
+      // current. A failed reload is surfaced by loadConfig (configError).
+      await loadConfig();
       // Take the user to where their new tiles now live — prefer the
       // path the server tells us, fall back to the picked dashboard.
       if (dashboardPath) {
-        // Reload the config first so the new dashboard appears in the
-        // navbar and elsewhere.
-        await loadConfig();
         goto(dashboardPath);
       } else if (!dashIsNew) {
         const dash = dashboards.find((d) => d.id === promoteDashId);

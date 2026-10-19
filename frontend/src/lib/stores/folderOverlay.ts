@@ -50,3 +50,18 @@ export function reconcile(doc: LayoutDoc | null, dashboardId: string, tabId?: st
   stack.set(current.slice(0, firstMissing));
   return current.slice(firstMissing);
 }
+
+/**
+ * A request (from search) to show one tile: switch to its tab, open each
+ * collapsed folder on its path (outermost first), then focus it. The Dashboard
+ * showing `dashboardId` consumes and clears it, so it also survives the
+ * navigation to another dashboard.
+ */
+export interface RevealRequest {
+  dashboardId: string;
+  tabId: string;
+  /** Collapsed folders enclosing the tile, outermost first. */
+  folderIds: string[];
+  tileId: string;
+}
+export const revealRequest = writable<RevealRequest | null>(null);

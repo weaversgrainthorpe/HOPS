@@ -1,10 +1,13 @@
 <script lang="ts">
   import type { Dashboard, Entry, HeaderConfig, Tab, Background, Group } from '$lib/types';
+  import type { LayoutDashboard } from '$lib/types/layout';
   import TabPanel from './TabPanel.svelte';
+  import TabCanvas from './layout/TabCanvas.svelte';
   import BackgroundSlideshow from './BackgroundSlideshow.svelte';
   import PartyMode from './PartyMode.svelte';
   import HopAnimation from './HopAnimation.svelte';
-  import { mutateDashboard } from '$lib/stores/config';
+  import { mutateDashboard, layoutDoc, layoutStale, findLayoutDashboard, loadConfig } from '$lib/stores/config';
+  import { closeAll, openFolder, revealRequest, type RevealRequest } from '$lib/stores/folderOverlay';
   import { editMode } from '$lib/stores/editMode';
   import { isAuthenticated } from '$lib/stores/auth';
   import { clipboard, clearClipboard } from '$lib/stores/clipboard';
@@ -17,12 +20,89 @@
   import Icon from '@iconify/svelte';
   import { dndzone } from 'svelte-dnd-action';
   import type { DndEvent } from 'svelte-dnd-action';
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy, tick, untrack } from 'svelte';
   import { logError } from '$lib/utils/errors';
   import { toast } from '$lib/stores/toast';
 
-  let { dashboard }: { dashboard: Dashboard } = $props();
+  // A v3-only dashboard arrives here as its LayoutDashboard (header, background,
+  // tabs and name keys match); with v3Only set it is view-only, so the
+  // legacy-only (edit-mode) code paths below never see it.
+  let { dashboard, v3Only = false }: { dashboard: Dashboard; v3Only?: boolean } = $props();
   let activeTabIndex = $state(0);
+
+  // Edit mode applies only to legacy-editable dashboards.
+  const editing = $derived($editMode && !v3Only);
+  $effect(() => {
+    if (v3Only && $editMode) editMode.set(false);
+  });
+
+  // View mode renders through the layout engine. The tab is matched by id
+  // (legacy and layout tab order may differ).
+  const layoutDash = $derived<LayoutDashboard | undefined>(
+    findLayoutDashboard(dashboard.id, $layoutDoc) ?? (v3Only ? (dashboard as unknown as LayoutDashboard) : undefined)
+  );
+  const activeTabId = $derived(dashboard.tabs[activeTabIndex]?.id);
+  const layoutTab = $derived(layoutDash?.tabs.find((t) => t.id === activeTabId));
+
+  // Keep the active index in range when tabs disappear (e.g. a reload).
+  $effect(() => {
+    const n = dashboard.tabs.length;
+    if (n > 0 && activeTabIndex >= n) untrack(() => (activeTabIndex = n - 1));
+  });
+
+  // Search asked to show a tile on this dashboard: switch tab, open the
+  // collapsed folders on its path (outermost first), then focus the tile.
+  $effect(() => {
+    const req = $revealRequest;
+    if (!req || req.dashboardId !== dashboard.id) return;
+    untrack(() => {
+      revealRequest.set(null);
+      void reveal(req);
+    });
+  });
+
+  const nextFrame = () =>
+    new Promise<void>((r) =>
+      typeof requestAnimationFrame === 'function' ? requestAnimationFrame(() => r()) : setTimeout(r, 16)
+    );
+
+  function findTileEl(tileId: string): HTMLElement | null {
+    // The last match wins: open overlays are portalled after the canvas.
+    const all = Array.from(document.querySelectorAll<HTMLElement>('[data-node-id]')).filter(
+      (el) => el.getAttribute('data-node-id') === tileId && !el.closest('[inert]')
+    );
+    return all[all.length - 1] ?? null;
+  }
+
+  async function reveal(req: RevealRequest) {
+    const idx = dashboard.tabs.findIndex((t) => t.id === req.tabId);
+    if (idx === -1) {
+      toast.error("Couldn't show that tile: its tab is no longer on this dashboard");
+      return;
+    }
+    activeTabIndex = idx;
+    await tick(); // let the canvas switch tab (which closes any open folders) first
+    if (editing) return; // the legacy editor has no folders to open; the tab switch is the reveal
+    closeAll();
+    for (const id of req.folderIds) openFolder(id);
+    let el: HTMLElement | null = null;
+    for (let i = 0; i < 60 && !el; i++) {
+      await tick();
+      el = findTileEl(req.tileId);
+      if (!el) await nextFrame();
+    }
+    if (!el) {
+      toast.error("Couldn't show that tile: it may have been moved or removed \u2014 reload and try again");
+      return;
+    }
+    // After the overlay's own focus-on-open (next frame), focus the tile.
+    await nextFrame();
+    const target =
+      el.querySelector<HTMLElement>('a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])') ?? el;
+    if (target === el && !el.hasAttribute('tabindex')) el.setAttribute('tabindex', '-1');
+    target.focus();
+    target.scrollIntoView?.({ block: 'nearest' });
+  }
   let editingTabIndex = $state<number | null>(null);
   let showAddTabModal = $state(false);
   let showHeaderConfig = $state(false);
@@ -68,7 +148,7 @@
   // Global keyboard shortcuts
   async function handleKeyboard(e: KeyboardEvent) {
     // Only handle shortcuts in edit mode
-    if (!$editMode || !$isAuthenticated) return;
+    if (!editing || !$isAuthenticated) return;
 
     // Ctrl+V or Cmd+V - Paste
     if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
@@ -636,7 +716,7 @@
   <HopAnimation />
 
   <div class="dashboard-header">
-    {#if $editMode}
+    {#if editing}
       <div class="header-actions">
         <button class="header-config-btn" onclick={() => showBackgroundConfig = true} title="Configure Background">
           <Icon icon="mdi:image-multiple" width="20" />
@@ -651,9 +731,17 @@
           Settings
         </button>
       </div>
+    {:else if v3Only && $isAuthenticated}
+      <!-- View-only (v3): no editor yet, but per-dashboard settings use their own endpoint. -->
+      <div class="header-actions">
+        <button class="header-config-btn" onclick={() => showDashboardSettings = true} title="Dashboard settings">
+          <Icon icon="mdi:cog-outline" width="20" />
+          Settings
+        </button>
+      </div>
     {/if}
 
-    {#if dashboard.tabs.length >= 1 || $editMode}
+    {#if dashboard.tabs.length >= 1 || editing}
       <div
         class="tabs"
         role="tablist"
@@ -661,7 +749,7 @@
         use:dndzone={{
           items: draggedTabs,
           flipDurationMs: 200,
-          dragDisabled: !$editMode,
+          dragDisabled: !editing,
           dropTargetStyle: {}
         }}
         onconsider={handleTabsConsider}
@@ -673,7 +761,7 @@
               class="tab"
               class:active={activeTabIndex === index}
               class:custom-color={tab.color}
-              class:draggable={$editMode}
+              class:draggable={editing}
               style:--tab-bg={tab.color || 'var(--bg-secondary)'}
               style:--tab-opacity={tab.opacity !== undefined ? tab.opacity : 0.95}
               role="tab"
@@ -696,7 +784,7 @@
               {/if}
               <span class="tab-name">{tab.name}</span>
             </div>
-            {#if $editMode}
+            {#if editing}
               <div class="tab-controls" role="group" aria-label="Tab actions">
                 <button
                   class="tab-control-btn"
@@ -737,7 +825,7 @@
             {/if}
           </div>
         {/each}
-        {#if $editMode}
+        {#if editing}
           <button class="add-tab-btn" onclick={handleAddTab} title="Add New Tab" aria-label="Add new tab to dashboard">
             <Icon icon="mdi:plus" width="24" />
             <span>Add Tab</span>
@@ -747,7 +835,20 @@
     {/if}
   </div>
 
-  {#if dashboard.tabs.length > 0}
+  {#if dashboard.tabs.length > 0 && !editing}
+    {#if layoutDash && layoutTab}
+      <div class="canvas-panel">
+        <TabCanvas dashboard={layoutDash} tab={layoutTab} />
+      </div>
+    {:else if $layoutStale}
+      <div role="status" class="layout-refreshing">Refreshing layout…</div>
+    {:else}
+      <div role="alert" class="layout-missing">
+        <span>{layoutDash ? 'Layout data missing for this tab — reload' : 'Layout data missing for this dashboard — reload'}</span>
+        <button type="button" onclick={() => loadConfig()}>Reload</button>
+      </div>
+    {/if}
+  {:else if dashboard.tabs.length > 0}
     <TabPanel
       tab={dashboard.tabs[activeTabIndex]}
       effectiveBackground={effectiveBackground()}
@@ -776,7 +877,7 @@
     <div class="empty-dashboard">
       <p>No tabs yet on this dashboard</p>
       <p class="hint">Tabs let you organize groups of tiles by purpose (e.g. Media, Tools, Networking).</p>
-      {#if $editMode}
+      {#if editing}
         <button class="add-first-tab-btn" onclick={handleAddTab}>
           <Icon icon="mdi:plus" width="20" />
           Add Your First Tab
@@ -853,6 +954,44 @@
     background-size: cover;
     background-position: center;
     background-attachment: fixed;
+  }
+
+  .canvas-panel {
+    position: relative;
+    padding: 2rem;
+    background: rgba(15, 23, 42, var(--overlay-opacity, 0.7));
+    backdrop-filter: blur(var(--overlay-blur, 10px));
+    min-height: 400px;
+    border-top: 1px solid var(--border);
+  }
+
+  .layout-missing,
+  .layout-refreshing {
+    margin: 2rem;
+    padding: 1rem 1.25rem;
+    border-radius: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .layout-missing {
+    background: color-mix(in srgb, var(--color-error) 15%, transparent);
+    color: var(--color-error-text);
+    border: 1px solid var(--color-error);
+  }
+
+  .layout-missing button {
+    padding: 0.4rem 0.9rem;
+    border-radius: 0.375rem;
+    border: 1px solid currentColor;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+  }
+
+  .layout-refreshing {
+    color: var(--text-secondary);
   }
 
   .dashboard-header {

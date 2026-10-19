@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { config, updateConfig, loadConfig } from '$lib/stores/config';
+  import { config, updateConfig, loadConfig, deleteDashboard, dashboardHref } from '$lib/stores/config';
   import { editMode } from '$lib/stores/editMode';
   import { confirm } from '$lib/stores/confirmModal';
   import { toast } from '$lib/stores/toast';
@@ -81,6 +81,23 @@
       } catch {
         // not deleted; the store already raised a toast/banner.
       }
+    }
+  }
+
+  // v3-only dashboards have no legacy view: they are deleted through the
+  // revision-checked DELETE endpoint (the store applies the fresh layout).
+  async function handleDeleteV3Only(d: { id: string; name: string }) {
+    const confirmed = await confirm({
+      title: 'Delete Dashboard',
+      message: `Are you sure you want to delete "${d.name}"? This action cannot be undone.`,
+      confirmText: 'Delete',
+      confirmStyle: 'danger'
+    });
+    if (!confirmed) return;
+    try {
+      await deleteDashboard(d.id);
+    } catch {
+      // not deleted; the store already raised a toast/banner.
     }
   }
 
@@ -197,9 +214,9 @@
     </div>
   {/if}
 
-  {#if $config?.dashboards && $config.dashboards.length > 0}
+  {#if (($config?.dashboards?.length ?? 0) + ($config?.v3OnlyDashboards?.length ?? 0)) > 0}
     <div class="dashboards">
-      {#each $config.dashboards as dashboard (dashboard.id)}
+      {#each $config?.dashboards ?? [] as dashboard (dashboard.id)}
         <div class="dashboard-item card">
           {#if editingId === dashboard.id}
             <div class="dashboard-edit-form">
@@ -269,6 +286,20 @@
           {/if}
         </div>
       {/each}
+      {#each $config?.v3OnlyDashboards ?? [] as d (d.id)}
+        <div class="dashboard-item card v3-only">
+          <button class="dashboard-info" onclick={() => goto(dashboardHref(d.path))} title="Open dashboard (view-only)">
+            <h3>{d.name}</h3>
+            <p class="path">{d.path}</p>
+            <p class="meta"><span class="badge-v3" title={d.reason}>View-only (v3)</span></p>
+          </button>
+          <div class="dashboard-actions">
+            <button onclick={() => handleDeleteV3Only(d)} class="btn-danger" aria-label="Delete {d.name}" title="Delete">
+              <Icon icon="mdi:trash-can" width="20" />
+            </button>
+          </div>
+        </div>
+      {/each}
     </div>
   {:else}
     <div class="empty-state">
@@ -321,6 +352,16 @@
     justify-content: space-between;
     padding: 1.5rem;
     gap: 1rem;
+  }
+
+  .badge-v3 {
+    display: inline-block;
+    padding: 0.1rem 0.5rem;
+    border-radius: 999px;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    font-size: 0.75rem;
+    font-weight: 600;
   }
 
   .dashboard-info {

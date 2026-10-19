@@ -1,0 +1,124 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/svelte';
+import { tick } from 'svelte';
+import { get } from 'svelte/store';
+
+vi.mock('$app/navigation', () => ({ goto: vi.fn(async () => {}) }));
+
+import { goto } from '$app/navigation';
+import SearchModal from './SearchModal.svelte';
+import Dashboard from './Dashboard.svelte';
+import { config } from '$lib/stores/config';
+import { editMode } from '$lib/stores/editMode';
+import { closeAll, overlayStack, revealRequest } from '$lib/stores/folderOverlay';
+import type { Config, Dashboard as DashboardT } from '$lib/types';
+import type { LayoutDashboard } from '$lib/types/layout';
+
+class FakeRO {
+  cb: ResizeObserverCallback;
+  constructor(cb: ResizeObserverCallback) { this.cb = cb; }
+  observe(el: Element) {
+    this.cb([{ target: el, contentRect: { width: 1440 } } as unknown as ResizeObserverEntry], this as unknown as ResizeObserver);
+  }
+  unobserve() {}
+  disconnect() {}
+}
+
+const tile = (id: string, name: string, extra: any = {}): any => ({
+  kind: 'tile', id, name, url: 'http://deep.test/' + id, icon: '', openMode: 'newtab', size: 'medium', order: 0,
+  placement: { x: 0, y: 0, w: 1, h: 1 }, ...extra
+});
+const folder = (id: string, name: string, display: string, children: any[]): any => ({
+  kind: 'folder', id, name, display, placement: { x: 0, y: 1, w: 4, h: 3 }, content: { columns: 4, children }
+});
+
+// Tab "Second" > Outer (collapsed) > Mid (expanded) > Inner (collapsed) > "Deep Thing"
+const layoutD1: LayoutDashboard = {
+  id: 'd1', name: 'Home', path: '/home', revision: 1,
+  tabs: [
+    { id: 't1', name: 'Main', root: { columns: 12, children: [tile('top', 'Top Tile')] } },
+    {
+      id: 't2', name: 'Second',
+      root: { columns: 12, children: [
+        folder('outer', 'Outer', 'collapsed', [
+          folder('mid', 'Mid', 'expanded', [
+            folder('inner', 'Inner', 'collapsed', [tile('deep', 'Deep Thing')])
+          ])
+        ])
+      ] }
+    }
+  ]
+};
+const legacy: DashboardT = {
+  id: 'd1', name: 'Home', path: '/home', order: 0, revision: 1,
+  tabs: [
+    { id: 't1', name: 'Main', order: 0, groups: [] },
+    { id: 't2', name: 'Second', order: 1, groups: [] }
+  ]
+};
+
+beforeEach(() => {
+  vi.stubGlobal('ResizeObserver', FakeRO);
+  vi.clearAllMocks();
+  closeAll();
+  revealRequest.set(null);
+  editMode.set(false);
+  config.set({
+    dashboards: [legacy],
+    theme: { mode: 'auto' },
+    settings: { searchHotkey: '/', defaultView: 'd1' },
+    layout: { schemaVersion: 3, dashboards: [layoutD1] },
+    v3OnlyDashboards: []
+  } as Config);
+});
+afterEach(() => {
+  vi.unstubAllGlobals();
+  closeAll();
+  revealRequest.set(null);
+  config.set(null);
+});
+
+describe('SearchModal recursive search', () => {
+  it('SearchModal: finds a tile 3 levels deep, shows its path, opens the collapsed folders on select', async () => {
+    const { container } = render(Dashboard, { dashboard: legacy });
+    await tick();
+    expect(container.querySelector('.tab-canvas[data-tab-id="t1"]')).not.toBeNull();
+
+    const onClose = vi.fn();
+    render(SearchModal, { onClose });
+    await tick();
+    const input = screen.getByRole('textbox', { name: /search tiles/i });
+    await fireEvent.input(input, { target: { value: 'deep' } });
+    await tick();
+
+    const result = screen.getByRole('button', { name: /Deep Thing/ });
+    expect(result).toHaveTextContent('Second › Outer › Mid › Inner');
+
+    await fireEvent.click(result);
+    expect(onClose).toHaveBeenCalled();
+    // Switched to the tile's tab, opened the collapsed folders outermost first.
+    await vi.waitFor(() => expect(container.querySelector('.tab-canvas[data-tab-id="t2"]')).not.toBeNull());
+    await vi.waitFor(() => expect(get(overlayStack)).toEqual(['outer', 'inner']));
+    // ...and focused the tile (inside the top overlay).
+    await vi.waitFor(() => {
+      const active = document.activeElement as HTMLElement | null;
+      expect(active?.closest('[data-node-id="deep"]')).not.toBeNull();
+    });
+    // Navigation only when the tile is on another dashboard (the page here is "/").
+    expect(goto).toHaveBeenCalledWith('/home');
+  });
+
+  it('result names and paths are text, never markup', async () => {
+    const evil = '<img src=x onerror=alert(1)>';
+    config.update((c) => ({
+      ...c!,
+      layout: { schemaVersion: 3, dashboards: [{ ...layoutD1, tabs: [{ id: 't1', name: evil, root: { columns: 12, children: [tile('x', 'Evil ' + evil)] } }] }] }
+    }));
+    render(SearchModal, { onClose: () => {} });
+    await tick();
+    await fireEvent.input(screen.getByRole('textbox', { name: /search tiles/i }), { target: { value: 'evil' } });
+    await tick();
+    expect(document.querySelector('.search-results img')).toBeNull();
+    expect(screen.getByRole('button', { name: /Evil/ })).toHaveTextContent(evil);
+  });
+});

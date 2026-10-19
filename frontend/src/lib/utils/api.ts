@@ -121,6 +121,11 @@ async function fetchAPI(endpoint: string, options: RequestInit = {}) {
         typeof parsedBody.detail === 'string' ? parsedBody.detail : undefined
       );
     }
+    // v3_only: the dashboard is view-only until the new editor arrives; show
+    // the server's sentence rather than the bare error code.
+    if (response.status === 409 && parsedBody?.error === 'v3_only') {
+      throw new Error(typeof parsedBody.detail === 'string' && parsedBody.detail ? parsedBody.detail : 'This dashboard is view-only (v3).');
+    }
     if (response.status === 503 && parsedBody?.error === 'migration_failed') {
       throw new MigrationFailedError(typeof parsedBody.detail === 'string' ? parsedBody.detail : '');
     }
@@ -267,6 +272,27 @@ export async function saveDashboard(
   const out: { revision: number; warning?: string } & FreshLayout = { revision: resp.revision };
   if (typeof resp.warning === 'string' && resp.warning) out.warning = resp.warning;
   if (resp.layout) {
+    out.layout = resp.layout;
+    out.v3OnlyDashboards = resp.v3OnlyDashboards ?? [];
+  }
+  return out;
+}
+
+/**
+ * Revision-checked delete of one dashboard (legacy-editable or v3-only):
+ * DELETE /api/dashboards/{id}?revision=n. Returns the fresh layout fields.
+ */
+export async function deleteDashboard(
+  id: string,
+  revision: number
+): Promise<{ warning?: string } & FreshLayout> {
+  const resp = await fetchAPI(
+    `/dashboards/${encodeURIComponent(id)}?revision=${encodeURIComponent(String(revision))}`,
+    { method: 'DELETE' }
+  );
+  const out: { warning?: string } & FreshLayout = {};
+  if (resp && typeof resp.warning === 'string' && resp.warning) out.warning = resp.warning;
+  if (resp && resp.layout) {
     out.layout = resp.layout;
     out.v3OnlyDashboards = resp.v3OnlyDashboards ?? [];
   }

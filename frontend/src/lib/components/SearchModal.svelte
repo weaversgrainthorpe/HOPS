@@ -1,11 +1,15 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
+  import { get } from 'svelte/store';
   import { goto } from '$app/navigation';
+  import { page } from '$app/stores';
   import Icon from '@iconify/svelte';
-  import { config } from '$lib/stores/config';
-  import { safeOpenUrl } from '$lib/utils/url';
+  import { config, layoutDoc, resolveDashboardRoute, dashboardHref } from '$lib/stores/config';
+  import { revealRequest } from '$lib/stores/folderOverlay';
+  import { toast } from '$lib/stores/toast';
   import { portal } from '$lib/utils/portal';
-  import type { Entry, Config } from '$lib/types';
+  import type { Entry } from '$lib/types';
+  import type { Container, FolderNode, LayoutDoc } from '$lib/types/layout';
 
   interface Props {
     onClose: () => void;
@@ -13,33 +17,46 @@
 
   let { onClose }: Props = $props();
 
-  // Flatten the config into one list-per-tile, with the breadcrumb of where
-  // the tile lives. Built once on open (config doesn't mutate while the
-  // modal is open in any meaningful way), filtered on every keystroke.
+  // Every tile at any depth in the layout document (all dashboards,
+  // including v3-only ones), with the folder path where it lives. Built once
+  // on open, filtered on every keystroke.
   type Result = {
     entry: Entry;
+    dashboardId: string;
     dashboardPath: string;
     dashboardName: string;
-    tabName: string;
-    groupName: string;
+    tabId: string;
+    /** "Tab › Folder › Sub" */
+    path: string;
+    /** Collapsed folders enclosing the tile, outermost first. */
+    collapsedFolderIds: string[];
   };
 
-  function buildIndex(cfg: Config | null): Result[] {
-    if (!cfg) return [];
+  function walk(c: Container | undefined, chain: FolderNode[], visit: (e: Entry, chain: FolderNode[]) => void) {
+    const kids = Array.isArray(c?.children) ? c!.children : [];
+    for (const n of kids) {
+      if (!n || typeof n !== 'object') continue;
+      if (n.kind === 'folder') walk(n.content, [...chain, n], visit);
+      else if (n.kind === 'tile' && typeof n.id === 'string') visit(n, chain);
+    }
+  }
+
+  function buildIndex(doc: LayoutDoc | null): Result[] {
+    if (!doc) return [];
     const out: Result[] = [];
-    for (const d of cfg.dashboards ?? []) {
+    for (const d of doc.dashboards ?? []) {
       for (const t of d.tabs ?? []) {
-        for (const g of t.groups ?? []) {
-          for (const e of g.entries ?? []) {
-            out.push({
-              entry: e,
-              dashboardPath: d.path,
-              dashboardName: d.name,
-              tabName: t.name,
-              groupName: g.name,
-            });
-          }
-        }
+        walk(t.root, [], (e, chain) => {
+          out.push({
+            entry: e,
+            dashboardId: d.id,
+            dashboardPath: d.path,
+            dashboardName: d.name,
+            tabId: t.id,
+            path: [t.name, ...chain.map((f) => f.name)].join(' \u203a '),
+            collapsedFolderIds: chain.filter((f) => f.display === 'collapsed').map((f) => f.id)
+          });
+        });
       }
     }
     return out;
@@ -49,7 +66,9 @@
   let selectedIndex = $state(0);
   let inputEl: HTMLInputElement | undefined = $state();
 
-  const index = buildIndex($config);
+  // No layout document held (failed load): say so instead of "no matches".
+  const layoutMissing = !$layoutDoc;
+  const index = buildIndex($layoutDoc);
 
   let results = $derived.by<Result[]>(() => {
     const q = query.trim().toLowerCase();
@@ -77,12 +96,24 @@
     inputEl?.focus();
   });
 
+  // Show the tile where it lives: the Dashboard switches to its tab, opens the
+  // collapsed folders on its path (outermost first) and focuses it. Navigate
+  // first when it lives on another dashboard.
   function openResult(r: Result) {
-    if (r.entry.type === 'note') {
-      // Notes have no URL — jump to the dashboard where the note lives.
-      goto(r.dashboardPath);
-    } else {
-      safeOpenUrl(r.entry.url, '_blank');
+    revealRequest.set({
+      dashboardId: r.dashboardId,
+      tabId: r.tabId,
+      folderIds: r.collapsedFolderIds,
+      tileId: r.entry.id
+    });
+    const cfg = get(config);
+    const here = cfg ? resolveDashboardRoute(get(page).url.pathname, cfg) : undefined;
+    const hereId = here && here.kind !== 'missing-layout' ? here.dashboard.id : undefined;
+    if (hereId !== r.dashboardId) {
+      goto(dashboardHref(r.dashboardPath)).catch((e) => {
+        revealRequest.set(null);
+        toast.error(`Couldn't open "${r.dashboardName}": ${e instanceof Error ? e.message : 'navigation failed'}`);
+      });
     }
     onClose();
   }
@@ -139,28 +170,30 @@
       <kbd>Esc</kbd>
     </div>
 
-    {#if !query.trim()}
+    {#if layoutMissing}
+      <div class="search-no-results" role="alert">Search unavailable: the dashboard layout hasn't loaded — reload the page.</div>
+    {:else if !query.trim()}
       <div class="search-empty-hint">
-        Start typing to search across all dashboards. <kbd>↑</kbd><kbd>↓</kbd> to navigate, <kbd>Enter</kbd> to open.
+        Start typing to search across all dashboards. <kbd>↑</kbd><kbd>↓</kbd> to navigate, <kbd>Enter</kbd> to show the tile.
       </div>
     {:else if results.length === 0}
       <div class="search-no-results">No tiles match <code>{query}</code></div>
     {:else}
       <ul class="search-results">
-        {#each results as r, i (r.dashboardPath + '·' + r.entry.id)}
+        {#each results as r, i (r.dashboardId + '·' + r.tabId + '·' + r.entry.id)}
           <li class:selected={i === selectedIndex}>
             <button type="button" onclick={() => openResult(r)} onmouseenter={() => selectedIndex = i}>
               <div class="result-icon">
                 {#if r.entry.type === 'note'}
                   <Icon icon="mdi:note-text-outline" width="20" />
                 {:else}
-                  <Icon icon="mdi:open-in-new" width="20" />
+                  <Icon icon="mdi:application-outline" width="20" />
                 {/if}
               </div>
               <div class="result-text">
                 <div class="result-name">{r.entry.name}</div>
                 <div class="result-meta">
-                  {r.dashboardName} · {r.tabName} · {r.groupName}
+                  {r.dashboardName} · <span class="result-path">{r.path}</span>
                   {#if r.entry.type !== 'note' && r.entry.url}
                     <span class="result-url">— {r.entry.url}</span>
                   {/if}

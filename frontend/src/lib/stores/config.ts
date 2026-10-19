@@ -7,6 +7,7 @@ import {
   updateConfig as apiUpdateConfig,
   saveDashboard,
   saveDashboardSettings,
+  deleteDashboard as apiDeleteDashboard,
   ConflictError,
   MigrationFailedError
 } from '$lib/utils/api';
@@ -20,15 +21,18 @@ export const config = writable<Config | null>(null);
 // Derived store for dashboards
 export const dashboards = derived(config, ($config) => $config?.dashboards || []);
 
-// Derived store for current dashboard based on the current page path
-export const currentDashboard = derived(
-  [config, page],
-  ([$config, $page]) => {
-    if (!$config) return null;
-    const currentPath = $page.url.pathname;
-    return findDashboard(currentPath, $config);
-  }
+// The current page's dashboard, resolved exactly as the [dashboard] route
+// resolves it (path first, then id, across legacy and v3-only dashboards).
+const currentRoute = derived([config, page], ([$config, $page]) =>
+  $config ? resolveDashboardRoute($page.url.pathname, $config) : undefined
 );
+
+// The current page's LEGACY dashboard (null on a v3-only dashboard, which
+// legacy-only code must never see).
+export const currentDashboard = derived(currentRoute, (r) => (r?.kind === 'legacy' ? r.dashboard : null));
+
+// The current page's v3-only dashboard (view-only; no legacy view exists).
+export const currentV3OnlyDashboard = derived(currentRoute, (r) => (r?.kind === 'v3only' ? r.dashboard : null));
 
 // The stored v3 layout document (null until the config has loaded or when the
 // server sent none).
@@ -228,6 +232,66 @@ async function saveOneDashboard(updated: Dashboard): Promise<void> {
   }
 }
 
+function isV3Only(cfg: Config, id: string): boolean {
+  return (cfg.v3OnlyDashboards ?? []).some((d) => d.id === id);
+}
+
+/**
+ * Delete one dashboard (legacy or v3-only), revision-checked against the
+ * revision THIS STORE holds (the legacy view's, or for a v3-only dashboard the
+ * held layout's). Runs in the save queue. On success the store drops the
+ * dashboard and takes the response's fresh layout atomically; on failure the
+ * store is untouched, the failure is recorded (conflict banner / migration
+ * page) and toasted, and the error is rethrown.
+ */
+export async function deleteDashboard(id: string): Promise<void> {
+  return enqueueSave(async () => {
+    const cfg = get(config);
+    if (!cfg) throw new Error('No configuration loaded');
+    const legacy = cfg.dashboards.some((d) => d.id === id);
+    const revision = legacy
+      ? storeRevision(cfg, id)
+      : isV3Only(cfg, id)
+        ? findLayoutDashboard(id, cfg.layout ?? null)?.revision
+        : undefined;
+    if (!legacy && !isV3Only(cfg, id)) {
+      const err = new Error('Dashboard not found');
+      toast.error(`Not deleted: ${err.message}`);
+      throw err;
+    }
+    if (typeof revision !== 'number') {
+      const err = new Error('Dashboard has no known revision \u2014 reload and try again');
+      toast.error(`Not deleted: ${err.message}`);
+      throw err;
+    }
+    try {
+      const resp = await apiDeleteDashboard(id, revision);
+      const latest = get(config) ?? cfg;
+      const revs = { ...(latest.dashboardRevisions ?? {}) };
+      delete revs[id];
+      config.set({
+        ...latest,
+        dashboards: latest.dashboards.filter((d) => d.id !== id),
+        dashboardRevisions: revs,
+        ...freshLayoutPatch(resp)
+      });
+      toast.success('Dashboard deleted');
+      if (resp.warning) toast.warning(resp.warning);
+    } catch (error) {
+      logError('Dashboard delete', error);
+      noteSaveFailure(error);
+      if (error instanceof Error && error.message === 'SESSION_EXPIRED') {
+        toast.error('Your session has expired. Please refresh the page and log in again.');
+      } else if (error instanceof ConflictError) {
+        toast.error('Not deleted \u2014 changed somewhere else');
+      } else {
+        toast.error(error instanceof Error && error.message ? `Not deleted: ${error.message}` : 'Failed to delete the dashboard');
+      }
+      throw error;
+    }
+  });
+}
+
 // Revision the store holds for a dashboard (what the client last saw).
 function storeRevision(cfg: Config, id: string): number | undefined {
   const d = cfg.dashboards.find((x) => x.id === id);
@@ -252,7 +316,22 @@ export async function saveDashboardSettingsChanges(
     const cfg = get(config);
     if (!cfg) throw new Error('No configuration loaded');
     const dash = cfg.dashboards.find((d) => d.id === id);
-    if (!dash) throw new Error('Dashboard not found');
+    if (!dash) {
+      // A v3-only dashboard has no legacy view: check against the revision
+      // the held layout carries and take the fresh layout from the response.
+      const ld = isV3Only(cfg, id) ? findLayoutDashboard(id, cfg.layout ?? null) : undefined;
+      if (!ld) throw new Error('Dashboard not found');
+      try {
+        const resp = await saveDashboardSettings(id, changes, ld.revision);
+        const latest = get(config) ?? cfg;
+        config.set({ ...latest, ...freshLayoutPatch(resp) });
+      } catch (error) {
+        logError('Dashboard settings save', error);
+        noteSaveFailure(error);
+        throw error;
+      }
+      return;
+    }
     const revision = storeRevision(cfg, id);
     if (revision === undefined) {
       throw new Error('Dashboard has no known revision \u2014 reload and try again');
@@ -290,11 +369,56 @@ export function applyDashboardSettings(
   });
 }
 
-// Helper to find a dashboard by path or ID
+// "/home" and "home" route to the same dashboard.
+function normPath(p: string): string {
+  return '/' + String(p ?? '').replace(/^\/+/, '');
+}
+
+/**
+ * Same-origin href for a dashboard path: always a single leading "/", so a
+ * stored path can never become a scheme ("javascript:") or protocol-relative
+ * ("//host") URL when used as a link or navigation target.
+ */
+export function dashboardHref(path: string): string {
+  return normPath(path);
+}
+
+// Helper to find a LEGACY dashboard by path or id. A path match always wins
+// over an id match.
 export function findDashboard(pathOrId: string, cfg: Config): Dashboard | undefined {
-  // Handle both "/home" and "home" formats
-  const normalizedPath = pathOrId.startsWith('/') ? pathOrId : `/${pathOrId}`;
-  return cfg.dashboards.find((d) => d.path === normalizedPath || d.id === pathOrId || d.path === pathOrId);
+  const r = resolveDashboardRoute(pathOrId, cfg);
+  return r?.kind === 'legacy' ? r.dashboard : undefined;
+}
+
+export type RouteDashboard =
+  | { kind: 'legacy'; dashboard: Dashboard }
+  | { kind: 'v3only'; dashboard: LayoutDashboard }
+  /** A v3-only dashboard is listed but its layout is absent: an error, never a blank page. */
+  | { kind: 'missing-layout'; id: string; name: string };
+
+/**
+ * Resolve a route segment ("home", "/home" or an id) to a dashboard: by path
+ * FIRST across legacy and v3-only dashboards, and only when no path matches,
+ * by id. A path match always wins over an id match.
+ */
+export function resolveDashboardRoute(pathOrId: string, cfg: Config): RouteDashboard | undefined {
+  const legacy = cfg.dashboards ?? [];
+  const v3 = cfg.v3OnlyDashboards ?? [];
+  const asV3 = (d: { id: string; name: string }): RouteDashboard => {
+    const ld = findLayoutDashboard(d.id, cfg.layout ?? null);
+    return ld ? { kind: 'v3only', dashboard: ld } : { kind: 'missing-layout', id: d.id, name: d.name };
+  };
+  const path = normPath(pathOrId);
+  const lp = legacy.find((d) => normPath(d.path) === path);
+  if (lp) return { kind: 'legacy', dashboard: lp };
+  const vp = v3.find((d) => normPath(d.path) === path);
+  if (vp) return asV3(vp);
+  const id = String(pathOrId ?? '').replace(/^\/+/, '');
+  const li = legacy.find((d) => d.id === id);
+  if (li) return { kind: 'legacy', dashboard: li };
+  const vi = v3.find((d) => d.id === id);
+  if (vi) return asV3(vi);
+  return undefined;
 }
 
 // Update a specific dashboard.
