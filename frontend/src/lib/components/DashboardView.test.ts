@@ -123,7 +123,7 @@ describe('Dashboard view/edit rendering', () => {
     applyThemePreset('default', 'dark');
     render(Dashboard, { dashboard: legacy });
     await tick();
-    await fireEvent.click(screen.getByRole('button', { name: 'Box' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Box, folder with 1 item' }));
     await tick();
     expect(get(overlayStack)).toEqual(['box']);
     const panel = document.body.querySelector('.overlay-panel') as HTMLElement;
@@ -157,6 +157,28 @@ describe('v3-only dashboards', () => {
     // Header comes from the v3 dashboard.
     expect(nav.getByText('Fancy Header')).toBeInTheDocument();
     pageStore.set!({ url: new URL('http://localhost/'), params: {}, route: { id: '/' }, status: 200, error: null, data: {}, form: undefined });
+  });
+
+  it('a v3-only dashboard shows why it is view-only as visible text, tied to the disabled toggle', async () => {
+    isAuthenticated.set(true);
+    pageStore.set!({ url: new URL('http://localhost/fancy'), params: { dashboard: 'fancy' }, route: { id: '/[dashboard]' }, status: 200, error: null, data: {}, form: undefined });
+    const nav = render(Navbar);
+    render(Dashboard, { dashboard: v3d as unknown as DashboardT, v3Only: true });
+    await tick();
+    const note = screen.getByText(/View-only until the new editor arrives/);
+    expect(note).toBeVisible();
+    expect(note.closest('[id]')!.textContent).toContain('free layout'); // the server's reason
+    const toggle = nav.container.querySelector('.edit-toggle') as HTMLButtonElement;
+    const describedBy = toggle.getAttribute('aria-describedby');
+    expect(describedBy).toBeTruthy();
+    expect(document.getElementById(describedBy!)!.textContent).toMatch(/View-only until the new editor arrives/);
+    pageStore.set!({ url: new URL('http://localhost/'), params: {}, route: { id: '/' }, status: 200, error: null, data: {}, form: undefined });
+  });
+
+  it('anonymous viewers of a v3-only dashboard get no editor notice', async () => {
+    render(Dashboard, { dashboard: v3d as unknown as DashboardT, v3Only: true });
+    await tick();
+    expect(screen.queryByText(/View-only until the new editor arrives/)).toBeNull();
   });
 
   it('a v3-only dashboard never renders TabPanel even if edit mode is switched on', async () => {

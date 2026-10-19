@@ -31,9 +31,16 @@
     groupId?: string;
     /** Render as a plain tile: edit mode is ignored (no edit controls, selection, context menu or modal). */
     viewOnly?: boolean;
+    /**
+     * Layout renderer only: the tile fills its cell exactly (no min-height of its own);
+     * 'compact' also drops the description and shrinks padding/icon for small cells.
+     * Unset (legacy TabPanel) keeps the v2 sizing untouched.
+     */
+    fit?: 'fill' | 'compact';
   }
 
-  let { entry, currentTabId = '', currentGroupId = '', availableTabs = [], onUpdate, onDelete, onMoveToTab, onCopyToTab, tabId, groupId, viewOnly = false }: Props = $props();
+  let { entry, currentTabId = '', currentGroupId = '', availableTabs = [], onUpdate, onDelete, onMoveToTab, onCopyToTab, tabId, groupId, viewOnly = false, fit }: Props = $props();
+  const compact = $derived(fit === 'compact');
   const inEdit = $derived($editMode && !viewOnly);
   let showEditModal = $state(false);
   let showIframeModal = $state(false);
@@ -157,9 +164,15 @@
 
 <svelte:window onclick={handleWindowClick} />
 
-<div class="entry-container">
+<div class="entry-container" style:height={fit ? '100%' : undefined}>
   <button
     class="entry {sizeClass}"
+    class:fill={!!fit}
+    class:compact
+    style:height={fit ? '100%' : undefined}
+    style:min-height={fit ? '0px' : undefined}
+    style:box-sizing={fit ? 'border-box' : undefined}
+    style:overflow={fit ? 'hidden' : undefined}
     class:edit-mode={inEdit}
     class:custom-color={entry.color}
     class:selected={isSelected}
@@ -176,7 +189,7 @@
       <!-- Note tile: just the name as a heading + description as body
            text. No icon, no status badge, no click-to-open. -->
       <div class="note-title">{entry.name}</div>
-      {#if entry.description}
+      {#if entry.description && !compact}
         <div class="note-body">{entry.description}</div>
       {/if}
     {:else}
@@ -201,7 +214,7 @@
         </div>
       </div>
 
-      {#if entry.description}
+      {#if entry.description && !compact}
         <div class="subtitle">{entry.description}</div>
       {/if}
 
@@ -465,6 +478,43 @@
 
   .large .subtitle {
     font-size: 0.875rem;
+  }
+
+  /* Layout renderer fit (Ruling 22): the cell sets the size (inline height/min-height),
+     so content shrinks to it rather than spilling into the next row. */
+  .entry.fill {
+    padding: 0.6rem 0.75rem;
+    gap: 0.3rem;
+  }
+  .entry.fill .title,
+  .entry.fill .subtitle {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .entry.fill .icon {
+    min-height: 0;
+  }
+  .entry.fill .icon :global(svg),
+  .entry.fill .icon img {
+    max-height: 100%;
+  }
+  .entry.compact {
+    padding: 0.35rem 0.4rem;
+    gap: 0.2rem;
+    justify-content: center;
+  }
+  .entry.compact .title {
+    font-size: 0.7rem;
+    order: 1;
+  }
+  .entry.compact .icon :global(svg),
+  .entry.compact .icon img {
+    width: 28px;
+    height: 28px;
+  }
+  .entry.compact .icon-backing.has-bg {
+    padding: 0.25rem;
   }
 
   /* Edit mode styles */

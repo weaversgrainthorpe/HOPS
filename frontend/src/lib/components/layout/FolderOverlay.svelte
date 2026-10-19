@@ -2,7 +2,7 @@
   import Icon from '@iconify/svelte';
   import type { Container, FolderNode, LayoutDashboard, LayoutTab } from '$lib/types/layout';
   import type { CanvasPlan } from '$lib/layout/geometry';
-  import { resolveMode } from '$lib/layout/geometry';
+  import { folderInnerColumns, overlayUnitPx, resolveMode } from '$lib/layout/geometry';
   import { focusTrap } from '$lib/utils/focusTrap';
   import { overlayStack, closeTop, closeTo } from '$lib/stores/folderOverlay';
   import { tick } from 'svelte';
@@ -14,9 +14,26 @@
     plan: CanvasPlan;
   }
   let { dashboard, tab, plan }: Props = $props();
-  let winWidth = $state(1280);
-  // Overlay panel content width: panel max 1100px, minus backdrop/panel/body padding.
-  const bodyPx = $derived(Math.max(1, Math.min(winWidth - 32, 1100) - 34));
+  // Viewport content width (excludes a page scrollbar); measured on mount and resize only.
+  let vw = $state(1280);
+  function measureViewport() {
+    const cw = document.documentElement.clientWidth;
+    vw = cw > 0 ? cw : window.innerWidth;
+  }
+  $effect(() => measureViewport());
+  // Widest content box the viewport allows: minus backdrop padding (32) and panel chrome (34).
+  const PANEL_CHROME_PX = 34; // body padding 2 × 16 + border 2 × 1
+  const bodyPx = $derived(Math.max(1, vw - 32 - PANEL_CHROME_PX));
+  const px = (v: number) => `${Math.round(v * 100) / 100}px`;
+
+  /** Content sizing for one panel (Ruling 23): cells keep the dashboard's size, capped by the viewport. */
+  function sizing(chain: FolderNode[]) {
+    const folder = chain[chain.length - 1];
+    const mode = resolveMode(dashboard, tab, chain);
+    const columns = folderInnerColumns(folder);
+    const unit = overlayUnitPx(plan, tab, mode, columns, bodyPx);
+    return { mode, box: columns * unit, rowPx: mode === 'grid' ? unit : undefined };
+  }
 
   /** Outermost-first chain of folders ending at `id`, or null when not in this tab. */
   function findChain(c: Container | undefined, id: string): FolderNode[] | null {
@@ -74,12 +91,13 @@
   }
 </script>
 
-<svelte:window onkeydown={onWindowKey} bind:innerWidth={winWidth} />
+<svelte:window onkeydown={onWindowKey} onresize={measureViewport} />
 
 <div class="overlay-host" use:portal>
 {#each panels as p, i (p.id)}
   {@const folder = p.chain[p.chain.length - 1]}
   {@const isTop = i === panels.length - 1}
+  {@const size = sizing(p.chain)}
   <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
   <div
     class="overlay-backdrop"
@@ -94,9 +112,11 @@
       aria-modal="true"
       aria-label={folder.name}
       tabindex="-1"
+      style:width={px(size.box + PANEL_CHROME_PX)}
+      style:max-width="100%"
       use:inertUnless={isTop}
       use:restoreFocus
-      use:focusTrap
+      use:focusTrap={{ initialFocus: '.close-btn' }}
     >
       <header class="overlay-header">
         <nav aria-label="Folder path" class="crumbs">
@@ -123,15 +143,18 @@
         </button>
       </header>
       <div class="overlay-body">
-        <ContainerView
-          container={folder.content}
-          mode={resolveMode(dashboard, tab, p.chain)}
-          {plan}
-          {dashboard}
-          {tab}
-          folderChain={p.chain}
-          boxPx={bodyPx}
-        />
+        <div class="overlay-content" style:width={px(size.box)}>
+          <ContainerView
+            container={{ columns: folderInnerColumns(folder), children: folder.content?.children }}
+            mode={size.mode}
+            {plan}
+            {dashboard}
+            {tab}
+            folderChain={p.chain}
+            boxPx={size.box}
+            rowPx={size.rowPx}
+          />
+        </div>
       </div>
     </div>
   </div>
@@ -154,8 +177,9 @@
     border: 1px solid var(--border);
     border-radius: 0.75rem;
     box-shadow: 0 10px 40px var(--shadow);
-    width: 100%;
-    max-width: 1100px;
+    /* Width is set inline: content (columns × cell) + chrome, capped at the viewport. */
+    min-width: min(320px, 100%);
+    box-sizing: border-box;
     max-height: 90vh;
     display: flex;
     flex-direction: column;
@@ -203,6 +227,11 @@
   }
   .overlay-body {
     padding: 1rem;
-    overflow: auto;
+    overflow-y: auto;
+    overflow-x: auto;
+  }
+  .overlay-content {
+    margin: 0 auto;
+    max-width: 100%;
   }
 </style>

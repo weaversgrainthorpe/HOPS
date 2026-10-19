@@ -67,6 +67,19 @@ describe('collapsed folder preview', () => {
     const { container } = await renderTab([folder('f1', 'Box', kids)]);
     expect(container.querySelectorAll('[data-node-id="f1"] .preview-cell').length).toBe(4);
   });
+  it('a folder whose children all cannot be displayed says so, never "Empty folder"', async () => {
+    const { container } = await renderTab([folder('f1', 'Box', [{ kind: 'tile', id: 'x1' }, { kind: 'widget', id: 'x2' }])]);
+    expect(screen.queryByText('Empty folder')).toBeNull();
+    const note = container.querySelector('[data-node-id="f1"] .empty-note') as HTMLElement;
+    expect(note.textContent).toBe("Can't display this folder's contents");
+    expect(screen.getByRole('button', { name: "Box, folder with 2 items (can't display its contents)" })).toBeInTheDocument();
+  });
+  it('aria-label names the folder and its item count', async () => {
+    await renderTab([folder('f1', 'Box', [tile('a', 'A'), tile('b', 'B', 1), tile('c', 'C', 2)]), folder('f2', 'One', [tile('d', 'D')], { placement: { x: 2, y: 0, w: 2, h: 2 } }), folder('f3', 'None', [], { placement: { x: 4, y: 0, w: 2, h: 2 } })]);
+    expect(screen.getByRole('button', { name: 'Box, folder with 3 items' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'One, folder with 1 item' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'None, folder with 0 items' })).toBeInTheDocument();
+  });
   it('is a button that announces a dialog', async () => {
     await renderTab([folder('f1', 'Box', [])]);
     const b = screen.getByRole('button', { name: /Box/ });
@@ -143,6 +156,56 @@ describe('overlay', () => {
     expect(readFileSync(resolve(process.cwd(), 'src/lib/components/layout/FolderOverlay.svelte'), 'utf8')).toContain('var(--z-folder-overlay)');
     await fireEvent.keyDown(modal.querySelector('[role="dialog"]')!, { key: 'Escape' });
     expect(get(overlayStack)).toEqual(['f1']);
+  });
+});
+
+describe('overlay sizing (Ruling 23)', () => {
+  for (const cols of [1, 3]) {
+    it(`a ${cols}-column folder's overlay cells equal the dashboard cell (120px at 1440), not bodyPx/columns`, async () => {
+      const kids = [0, 1, 2].map((i) => tile('k' + i, 'K' + i, i % cols, Math.floor(i / cols)));
+      await renderTab([folder('f1', 'Box', kids, { content: { columns: cols, children: kids } })]);
+      await fireEvent.click(screen.getByRole('button', { name: /^Box/ }));
+      const panel = screen.getByRole('dialog');
+      const cell = panel.querySelector('[data-node-id="k0"]') as HTMLElement;
+      const grid = cell.parentElement as HTMLElement;
+      expect(grid.getAttribute('style')).toMatch(/grid-auto-rows:\s*120px/);
+      // The content box is exactly columns x cell, so each 1fr column is 120px too.
+      const box = panel.querySelector('.overlay-content') as HTMLElement;
+      expect(box.style.width).toBe(`${cols * 120}px`);
+      // The panel fits its content (+ chrome), capped at the viewport.
+      expect((panel as HTMLElement).style.width).toBe(`${cols * 120 + 34}px`);
+      expect((panel as HTMLElement).style.maxWidth).toBe('100%');
+    });
+  }
+  it('a narrow viewport shrinks the overlay cell below the dashboard cell', async () => {
+    const prev = window.innerWidth;
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 400 });
+    try {
+      const kids = [tile('a', 'A', 0, 0), tile('b', 'B', 1, 0), tile('c', 'C', 2, 0), tile('d', 'D', 3, 0)];
+      await renderTab([folder('f1', 'Box', kids)]);
+      await fireEvent.click(screen.getByRole('button', { name: /^Box/ }));
+      const grid = (screen.getByRole('dialog').querySelector('[data-node-id="a"]') as HTMLElement).parentElement as HTMLElement;
+      const row = Number(/grid-auto-rows:\s*([\d.]+)px/.exec(grid.getAttribute('style') ?? '')![1]);
+      expect(row).toBeCloseTo((400 - 32 - 34) / 4, 1);
+    } finally {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: prev });
+    }
+  });
+});
+
+describe('overlay focus and lifetime', () => {
+  it('initial focus goes to the close button, not the breadcrumb root', async () => {
+    await renderTab([folder('f1', 'Box', [tile('a', 'Alpha')])]);
+    await fireEvent.click(screen.getByRole('button', { name: /^Box/ }));
+    await new Promise((r) => requestAnimationFrame(() => r(null)));
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Close folder' }));
+  });
+  it('the overlay stack is cleared when the canvas unmounts', async () => {
+    const { unmount } = await renderTab([folder('f1', 'Box', [tile('a', 'Alpha')])]);
+    await fireEvent.click(screen.getByRole('button', { name: /^Box/ }));
+    expect(get(overlayStack)).toEqual(['f1']);
+    unmount();
+    expect(get(overlayStack)).toEqual([]);
   });
 });
 

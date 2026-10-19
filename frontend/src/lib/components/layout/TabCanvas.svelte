@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
+  import { onDestroy, untrack } from 'svelte';
   import type { LayoutDashboard, LayoutTab } from '$lib/types/layout';
   import { planCanvas, resolveMode } from '$lib/layout/geometry';
   import { layoutDoc, layoutStale } from '$lib/stores/config';
@@ -32,6 +32,10 @@
   $effect(() => {
     el?.toggleAttribute('inert', $overlayStack.length > 0);
   });
+
+  // Leaving the canvas (e.g. browser Back with an overlay open) closes every overlay:
+  // the stack is global, and a stale entry would block arrow-key navigation.
+  onDestroy(() => closeAll());
 
   // Switching tab closes every open folder overlay.
   $effect(() => {

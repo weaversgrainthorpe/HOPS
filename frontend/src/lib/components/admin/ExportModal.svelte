@@ -12,6 +12,11 @@
   let { onClose }: Props = $props();
   let exporting = $state(false);
   let exportingId = $state<string | null>(null);
+  // Every dashboard the server exports: legacy ones, then v3-only (view-only) ones.
+  const allDashboards = $derived([
+    ...($config?.dashboards ?? []).map((d) => ({ id: d.id, name: d.name, path: d.path, viewOnly: false })),
+    ...($config?.v3OnlyDashboards ?? []).map((d) => ({ id: d.id, name: d.name, path: d.path, viewOnly: true }))
+  ]);
 
   async function handleExportAll() {
     exporting = true;
@@ -73,21 +78,24 @@
         Exporting...
       {:else}
         <Icon icon="mdi:download-multiple" width="20" />
-        Export All ({$config?.dashboards.length || 0} dashboards)
+        Export All ({allDashboards.length} dashboards)
       {/if}
     </button>
   </div>
 
-  {#if $config?.dashboards && $config.dashboards.length > 0}
+  {#if allDashboards.length > 0}
     <div class="export-section">
       <h3>Export Individual Dashboard</h3>
       <p class="section-description">Export a single dashboard. This can be imported into another HOPS instance and will be added alongside existing dashboards.</p>
       <div class="dashboard-list">
-        {#each $config.dashboards as dashboard (dashboard.id)}
+        {#each allDashboards as dashboard (dashboard.id)}
           <div class="dashboard-item">
             <div class="dashboard-info">
               <span class="dashboard-name">{dashboard.name}</span>
               <span class="dashboard-path">{dashboard.path}</span>
+              {#if dashboard.viewOnly}
+                <span class="dashboard-badge">View-only (v3)</span>
+              {/if}
             </div>
             <button
               class="btn-secondary btn-sm"
@@ -176,6 +184,11 @@
     font-size: 0.75rem;
     color: var(--accent);
     font-family: monospace;
+  }
+
+  .dashboard-badge {
+    font-size: 0.7rem;
+    color: var(--text-secondary);
   }
 
   .info-box {

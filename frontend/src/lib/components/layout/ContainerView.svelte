@@ -2,8 +2,10 @@
   import type { Container, FolderNode, LayoutDashboard, LayoutMode, LayoutNode, LayoutTab } from '$lib/types/layout';
   import type { CanvasPlan } from '$lib/layout/geometry';
   import {
-    clampPlacement, FOLDER_CHROME_PX, FOLDER_TITLE_PX, folderInnerColumns, FREE_UNIT_PX, isRenderable, readingOrder, resolveMode
+    clampPlacement, FOLDER_CHROME_PX, FOLDER_TITLE_PX, folderInnerColumns, FREE_UNIT_PX, hasPosition, isRenderable,
+    readingOrder, resolveMode, tileFit
   } from '$lib/layout/geometry';
+  import type { Placement } from '$lib/types/layout';
   import Entry from '../Entry.svelte';
   import FolderView from './FolderView.svelte';
   import NodePlaceholder from './NodePlaceholder.svelte';
@@ -103,13 +105,49 @@
     return `grid-column: ${p.x + 1} / span ${p.w}; grid-row: ${p.y + 1} / span ${p.h};` +
       (p.z !== undefined ? ` z-index: ${p.z};` : '');
   }
+
+  /** How a tile fits its box (Ruling 22): the box is the tile's cell span, in px. */
+  function fitOf(n: LayoutNode): 'fill' | 'compact' | undefined {
+    if (effective === 'stacked') return undefined; // phone stacking keeps the v2 tile sizes
+    const p = clampPlacement(n.placement, columns);
+    if (effective === 'free') {
+      const u = FREE_UNIT_PX * freeScale;
+      return tileFit(p.w * u, p.h * u);
+    }
+    return tileFit(p.w * unitPx, p.h * (rowPx ?? cellPx));
+  }
+
+  // Placeholders (unrenderable nodes, m3): one that has a position keeps it, drawn
+  // above its siblings so a tile can never hide it; the rest stack after every
+  // positioned item, in array order.
+  const unplaced = $derived(kids.filter((k) => !isRenderable(k) && !hasPosition(k)));
+  const topZ = $derived(
+    kids.reduce((m: number, k) => {
+      if (!isRenderable(k)) return m;
+      const z = clampPlacement(k.placement, columns).z;
+      return z !== undefined && z > m ? z : m;
+    }, 0) + 1
+  );
+  /** A placement with numeric x/y (w/h default to 1 via clampPlacement). */
+  function rawPlacement(n: unknown): Placement {
+    return (n as { placement: Placement }).placement;
+  }
+  function placeholderStyle(n: unknown): string {
+    const p = clampPlacement(rawPlacement(n), columns);
+    if (effective === 'free') {
+      const u = FREE_UNIT_PX * freeScale;
+      return `position:absolute;left:${px(p.x * u)};top:${px(p.y * u)};width:${px(p.w * u)};` +
+        `height:${px(p.h * u)};z-index:${topZ};`;
+    }
+    return `grid-column: ${p.x + 1} / span ${p.w}; grid-row: ${p.y + 1} / span ${p.h}; z-index: ${topZ};`;
+  }
   function nodeId(n: unknown): string {
     const id = (n as { id?: unknown } | null)?.id;
     return typeof id === 'string' && id ? id : '(no id)';
   }
 </script>
 
-{#snippet nodes(list: unknown[], styleOf: (n: LayoutNode) => string, folderStyle: (n: LayoutNode) => string)}
+{#snippet nodes(list: unknown[], styleOf: (n: LayoutNode) => string, folderStyle: (n: LayoutNode) => string, inPlace: boolean)}
   {#each list as node, i (nodeId(node) + ':' + i)}
     {#if isRenderable(node)}
       {#if node.kind === 'tile'}
@@ -121,6 +159,7 @@
             tabId={tab.id}
             groupId={parentId}
             viewOnly
+            fit={fitOf(node)}
           />
         </div>
       {:else}
@@ -135,27 +174,42 @@
           {unitPx}
         />
       {/if}
-    {:else}
+    {:else if !inPlace}
       <NodePlaceholder id={nodeId(node)} reason="missing or invalid placement/content" />
+    {:else if hasPosition(node)}
+      <NodePlaceholder id={nodeId(node)} reason="missing or invalid placement/content" style={placeholderStyle(node)} />
     {/if}
   {/each}
 {/snippet}
 
+{#snippet stackedPlaceholders()}
+  {#if unplaced.length > 0}
+    <div class="placeholder-stack">
+      {#each unplaced as node, i (nodeId(node) + ':' + i)}
+        <NodePlaceholder id={nodeId(node)} reason="missing or invalid placement/content" />
+      {/each}
+    </div>
+  {/if}
+{/snippet}
+
 {#if effective === 'grid'}
   <div class="container-grid" style={gridStyle}>
-    {@render nodes(ordered, cellStyle, cellStyle)}
+    {@render nodes(ordered, cellStyle, cellStyle, true)}
   </div>
+  {@render stackedPlaceholders()}
 {:else if effective === 'free'}
   <div class="container-free" style={freeStyle}>
-    {@render nodes(kids, freeCellStyle, freeCellStyle)}
+    {@render nodes(kids, freeCellStyle, freeCellStyle, true)}
   </div>
+  {@render stackedPlaceholders()}
 {:else}
   <!-- Phone stacking: reading order, tiles wrap at today's phone sizes, expanded folders full width. -->
   <div class="container-stacked">
     {@render nodes(
       ordered,
       () => '',
-      (n) => (n.kind === 'folder' && n.display === 'collapsed' ? '' : 'grid-column: 1 / -1;')
+      (n) => (n.kind === 'folder' && n.display === 'collapsed' ? '' : 'grid-column: 1 / -1;'),
+      false
     )}
   </div>
 {/if}
@@ -167,6 +221,12 @@
   .cell {
     min-width: 0;
     min-height: 0;
+  }
+  .placeholder-stack {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
   }
   .container-stacked {
     display: grid;

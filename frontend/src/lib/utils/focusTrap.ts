@@ -14,6 +14,12 @@ const FOCUSABLE_SELECTORS = [
   '[tabindex]:not([tabindex="-1"])'
 ].join(', ');
 
+/** Options for a focus trap. */
+export interface FocusTrapOptions {
+  /** Selector (inside the container) of the element to focus first; default: the first focusable one. */
+  initialFocus?: string;
+}
+
 /**
  * Focus trap controller interface
  */
@@ -39,7 +45,7 @@ export interface FocusTrapController {
  * trap.deactivate(); // Stop trapping and restore previous focus
  * ```
  */
-export function createFocusTrap(container: HTMLElement): FocusTrapController {
+export function createFocusTrap(container: HTMLElement, options: FocusTrapOptions = {}): FocusTrapController {
   let previouslyFocused: HTMLElement | null = null;
 
   function getFocusableElements(): HTMLElement[] {
@@ -82,7 +88,10 @@ export function createFocusTrap(container: HTMLElement): FocusTrapController {
     if (focusableElements.length > 0) {
       // Delay focus slightly to allow modal animation to complete
       requestAnimationFrame(() => {
-        focusableElements[0].focus();
+        const preferred = options.initialFocus
+          ? container.querySelector<HTMLElement>(options.initialFocus)
+          : null;
+        (preferred ?? focusableElements[0]).focus();
       });
     } else {
       // If no focusable elements, make container focusable and focus it
@@ -122,8 +131,8 @@ export function createFocusTrap(container: HTMLElement): FocusTrapController {
  * </div>
  * ```
  */
-export function focusTrap(node: HTMLElement): { destroy: () => void } {
-  const trap = createFocusTrap(node);
+export function focusTrap(node: HTMLElement, options: FocusTrapOptions = {}): { destroy: () => void } {
+  const trap = createFocusTrap(node, options);
   trap.activate();
 
   return {

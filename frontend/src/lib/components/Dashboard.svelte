@@ -6,7 +6,7 @@
   import BackgroundSlideshow from './BackgroundSlideshow.svelte';
   import PartyMode from './PartyMode.svelte';
   import HopAnimation from './HopAnimation.svelte';
-  import { mutateDashboard, layoutDoc, layoutStale, findLayoutDashboard, loadConfig } from '$lib/stores/config';
+  import { config, mutateDashboard, layoutDoc, layoutStale, findLayoutDashboard, loadConfig } from '$lib/stores/config';
   import { closeAll, openFolder, revealRequest, takeReveal, type RevealRequest } from '$lib/stores/folderOverlay';
   import { editMode } from '$lib/stores/editMode';
   import { isAuthenticated } from '$lib/stores/auth';
@@ -32,6 +32,10 @@
 
   // Edit mode applies only to legacy-editable dashboards.
   const editing = $derived($editMode && !v3Only);
+  // Why a v3-only dashboard is view-only, as the server reported it.
+  const v3OnlyReason = $derived(
+    v3Only ? ($config?.v3OnlyDashboards ?? []).find((d) => d.id === dashboard.id)?.reason ?? '' : ''
+  );
   $effect(() => {
     if (v3Only && $editMode) editMode.set(false);
   });
@@ -734,6 +738,12 @@
     {:else if v3Only && $isAuthenticated}
       <!-- View-only (v3): no editor yet, but per-dashboard settings use their own endpoint. -->
       <div class="header-actions">
+        <!-- Visible reason (the Navbar's disabled edit toggle points here via aria-describedby). -->
+        <p class="view-only-note" id="v3-view-only-reason">
+          <Icon icon="mdi:eye-outline" width="18" />
+          <span>View-only until the new editor arrives</span>
+          {#if v3OnlyReason}<span class="view-only-why">({v3OnlyReason})</span>{/if}
+        </p>
         <button class="header-config-btn" onclick={() => showDashboardSettings = true} title="Dashboard settings">
           <Icon icon="mdi:cog-outline" width="20" />
           Settings
@@ -1005,6 +1015,23 @@
     align-items: center;
     justify-content: flex-end;
     margin-bottom: 1rem;
+  }
+
+  .view-only-note {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin: 0 auto 0 0;
+    padding: 0.3rem 0.65rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+  }
+  .view-only-why {
+    opacity: 0.85;
   }
 
   .header-config-btn {

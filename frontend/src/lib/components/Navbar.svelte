@@ -175,6 +175,7 @@
           class:active={$editMode}
           disabled={viewOnlyV3}
           title={viewOnlyV3 ? V3_ONLY_TOOLTIP : $editMode ? "Exit Edit Mode" : "Enter Edit Mode (Authentication Required)"}
+          aria-describedby={viewOnlyV3 ? 'v3-view-only-reason' : undefined}
           aria-label={$editMode ? "Exit Edit Mode" : "Enter Edit Mode"}
         >
           <Icon icon={$editMode ? 'mdi:pencil-off' : 'mdi:pencil'} width="32" height="32" />

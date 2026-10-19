@@ -55,6 +55,13 @@
   );
   const innerBoxPx = $derived(unitPx > 0 ? Math.max(1, Math.floor(folder.placement.w)) * unitPx : undefined);
   const previews = $derived(previewChildren(folder));
+  const itemCount = $derived(Array.isArray(folder.content?.children) ? folder.content.children.length : 0);
+  // Children exist but none can be drawn: say so, never "Empty folder" (no silent failures).
+  const unreadable = $derived(previews.length === 0 && itemCount > 0);
+  const collapsedLabel = $derived(
+    `${folder.name}, folder with ${itemCount} ${itemCount === 1 ? 'item' : 'items'}` +
+      (unreadable ? " (can't display its contents)" : '')
+  );
 
   function onKey(e: KeyboardEvent) {
     if (e.key === 'Enter' || e.key === ' ') {
@@ -72,7 +79,7 @@
     role="button"
     tabindex="0"
     aria-haspopup="dialog"
-    aria-label={folder.name}
+    aria-label={collapsedLabel}
     {style}
     style:--group-bg={folder.color || 'var(--bg-secondary)'}
     style:--group-opacity={folder.opacity !== undefined ? folder.opacity : 0.95}
@@ -80,7 +87,9 @@
     onclick={() => openFolder(folder.id)}
     onkeydown={onKey}
   >
-    {#if previews.length === 0}
+    {#if unreadable}
+      <span class="empty-note unreadable">Can't display this folder's contents</span>
+    {:else if previews.length === 0}
       <span class="empty-note">Empty folder</span>
     {:else}
       <div class="preview-grid">
@@ -256,6 +265,10 @@
   .empty-note {
     font-size: 0.75rem;
     color: var(--text-secondary);
+  }
+  .empty-note.unreadable {
+    color: var(--color-error, #dc2626);
+    text-align: center;
   }
   .collapsed-name {
     font-weight: 600;

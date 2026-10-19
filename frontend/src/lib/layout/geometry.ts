@@ -27,6 +27,11 @@ export function resolveMode(dash: LayoutDashboard, tab: LayoutTab, folderChain: 
   return 'grid';
 }
 
+/** True when c is an object whose placement has finite numeric x and y (it has a position). */
+export function hasPosition(c: unknown): boolean {
+  return hasPos(c);
+}
+
 function hasPos(c: unknown): boolean {
   if (!c || typeof c !== 'object') return false;
   const p = (c as { placement?: unknown }).placement as Record<string, unknown> | undefined;
@@ -76,6 +81,16 @@ export function folderInnerColumns(folder: FolderNode): number {
   return isNum(w) && w >= 1 ? Math.floor(w) : 1;
 }
 
+/** A tile box narrower or shorter than this renders compact (icon + name). Ruling 22. */
+export const COMPACT_TILE_PX = 110;
+export type TileFit = 'fill' | 'compact';
+
+/** How a tile in the layout renderer fits its box of wPx × hPx: always fills it; compact when small. */
+export function tileFit(wPx: number, hPx: number): TileFit {
+  const m = Math.min(wPx, hPx);
+  return isNum(m) && m < COMPACT_TILE_PX ? 'compact' : 'fill';
+}
+
 export const FOLDER_CHROME_PX = 18; // body padding (16) + border (2)
 export const FOLDER_TITLE_PX = TITLE_BAR_PX;
 
@@ -96,6 +111,30 @@ export function planCanvas(mode: LayoutMode, widthPx: number, tab: LayoutTab): C
   // epsilon guards float error exactly at the 0.6 boundary
   if (scale < MIN_FREE_SCALE - 1e-9) return { kind: 'stacked' };
   return { kind: 'free', scale: Math.max(scale, MIN_FREE_SCALE) };
+}
+
+/**
+ * Overlay content unit (Ruling 23): min(the dashboard's own unit for this mode, bodyPx / columns),
+ * so tiles in a folder overlay keep their size on the canvas and only shrink when the
+ * viewport is too narrow. Grid: one cell; free: one 8 px design unit × scale.
+ */
+export function overlayUnitPx(plan: CanvasPlan, tab: LayoutTab, mode: LayoutMode, columns: number, bodyPx: number): number {
+  const cols = isNum(columns) && columns >= 1 ? Math.floor(columns) : 1;
+  const fit = Math.max(1, isNum(bodyPx) ? bodyPx : 1) / cols;
+  const canvas = canvasUnitPx(plan, tab, mode);
+  return canvas > 0 ? Math.min(canvas, fit) : fit;
+}
+
+function canvasUnitPx(plan: CanvasPlan, tab: LayoutTab, mode: LayoutMode): number {
+  if (plan.kind === 'stacked') return 0; // phone stacking ignores sizes
+  const rc = tab.root?.columns;
+  const dw = tab.designWidth;
+  const canvasW =
+    plan.kind === 'grid'
+      ? plan.cellPx * (isNum(rc) && rc > 0 ? rc : ROOT_COLUMNS)
+      : plan.scale * (isNum(dw) && dw > 0 ? dw : DEFAULT_DESIGN_WIDTH);
+  if (mode === 'grid') return plan.kind === 'grid' ? plan.cellPx : canvasW / ROOT_COLUMNS;
+  return FREE_UNIT_PX * (plan.kind === 'free' ? plan.scale : canvasW / DEFAULT_DESIGN_WIDTH);
 }
 
 /** Height of one content row inside an expanded folder of folderHeightCells rows. */

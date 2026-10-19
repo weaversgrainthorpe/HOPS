@@ -93,6 +93,48 @@ describe('TabCanvas', () => {
     expect(screen.getByText(/nested-bad/)).toBeInTheDocument();
   });
 
+  it('a placeholder keeps its node position when it has one, else stacks after positioned items (grid)', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const posBad: any = { kind: 'tile', id: 'pos-bad', name: 'x', placement: { x: 4, y: 2, w: 'wide', h: 1 } };
+    const noPos: any = { kind: 'tile', id: 'no-pos', name: 'y' };
+    const noPos2: any = { kind: 'widget', id: 'no-pos2' };
+    const { dash, tab } = mk([noPos, tile('a', 'A', 0, 0), posBad, tile('b', 'B', 1, 3), noPos2]);
+    const { container } = render(TabCanvas, { dashboard: dash, tab });
+    await tick();
+    const pos = container.querySelector('.node-placeholder[data-node-id="pos-bad"]') as HTMLElement;
+    expect(pos.getAttribute('style')).toContain('grid-column: 5 / span 1');
+    expect(pos.getAttribute('style')).toContain('grid-row: 3 / span 1');
+    // Unpositioned placeholders stack, in array order, after every positioned item.
+    const grid = container.querySelector('.container-grid') as HTMLElement;
+    const stack = container.querySelector('.placeholder-stack') as HTMLElement;
+    expect(stack).not.toBeNull();
+    expect(grid.contains(stack)).toBe(false);
+    expect(grid.compareDocumentPosition(stack) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect([...stack.querySelectorAll('.node-placeholder')].map((e) => e.getAttribute('data-node-id'))).toEqual(['no-pos', 'no-pos2']);
+    expect(grid.querySelector('[data-node-id="no-pos"]')).toBeNull();
+  });
+
+  it('a positioned placeholder in a free container sits at its position above its siblings', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const posBad: any = { kind: 'tile', id: 'pos-bad', name: 'x', placement: { x: 2, y: 3, h: 4 } };
+    const noPos: any = { kind: 'tile', id: 'no-pos', name: 'y' };
+    const tab: LayoutTab = { id: 't1', name: 'Free', layout: 'free', designWidth: 1280, root: { columns: 160, children: [
+      { ...tile('a', 'A', 0, 0, 20, 20), placement: { x: 0, y: 0, w: 20, h: 20, z: 7 } }, posBad, noPos
+    ] } } as any;
+    width = 1280;
+    const dash: LayoutDashboard = { id: 'd1', name: 'Home', path: '/home', revision: 1, tabs: [tab] };
+    const { container } = render(TabCanvas, { dashboard: dash, tab });
+    await tick();
+    const st = (container.querySelector('.node-placeholder[data-node-id="pos-bad"]') as HTMLElement).style;
+    expect(st.position).toBe('absolute');
+    expect(st.left).toBe('16px');
+    expect(st.top).toBe('24px');
+    expect(st.zIndex).toBe('8');
+    const stack = container.querySelector('.placeholder-stack') as HTMLElement;
+    expect(stack.querySelector('[data-node-id="no-pos"]')).not.toBeNull();
+    expect((container.querySelector('.container-free') as HTMLElement).querySelector('[data-node-id="no-pos"]')).toBeNull();
+  });
+
   it('clamps an out-of-range placement instead of dropping it', async () => {
     const { dash, tab } = mk([tile('e1', 'Edge', 40, 0, 9)]);
     const { container } = render(TabCanvas, { dashboard: dash, tab });
