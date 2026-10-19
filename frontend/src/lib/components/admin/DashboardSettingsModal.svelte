@@ -81,6 +81,17 @@
     return String(v);
   }
 
+  // An overridden number field must hold a whole number >= its minimum.
+  function invalid(r: { key: Key; kind: Kind; min?: number }): string | null {
+    if (r.kind !== 'int' || !enabled[r.key]) return null;
+    const v = values[r.key];
+    if (typeof v !== 'number' || !Number.isInteger(v) || v < (r.min ?? 0)) {
+      return `Enter a whole number of at least ${r.min ?? 0}.`;
+    }
+    return null;
+  }
+  let hasInvalid = $derived(ROWS.some((r) => invalid(r) !== null));
+
   function toggle(key: Key, on: boolean) {
     enabled[key] = on;
     if (on && effective) {
@@ -107,7 +118,7 @@
   }
 
   async function handleSave() {
-    if (!original || saving) return;
+    if (!original || saving || hasInvalid) return;
     saveError = null;
     const changes = buildChanges();
     saving = true;
@@ -202,7 +213,7 @@
                   min={row.min}
                   aria-labelledby={`lbl-${row.key}`}
                   value={values[row.key]}
-                  oninput={(e) => (values[row.key] = Number(e.currentTarget.value))}
+                  oninput={(e) => (values[row.key] = e.currentTarget.value.trim() === '' ? NaN : Number(e.currentTarget.value))}
                 />
               {:else}
                 <select
@@ -224,6 +235,9 @@
                 Reset to inherit
               </button>
             </div>
+            {#if invalid(row)}
+              <small class="row-error" role="alert">{invalid(row)}</small>
+            {/if}
           </div>
         {/each}
 
@@ -233,7 +247,7 @@
 
         <div class="modal-actions">
           <button type="button" class="btn-secondary" onclick={onClose}>Cancel</button>
-          <button type="submit" class="btn-primary" disabled={saving}>
+          <button type="submit" class="btn-primary" disabled={saving || hasInvalid}>
             <Icon icon="mdi:content-save" width="20" />
             Save
           </button>
@@ -312,6 +326,7 @@
     cursor: pointer;
   }
   .reset-btn:disabled { opacity: 0.4; cursor: default; }
+  .row-error { display: block; margin-top: 0.25rem; color: var(--error, #c0392b); font-size: 0.8rem; }
   .error-box {
     margin: 1rem 0 0;
     padding: 0.75rem 1rem;

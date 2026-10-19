@@ -64,14 +64,20 @@ async function refreshFromGlobalSetting(): Promise<void> {
   try {
     const { settings: list } = await listSettings();
     const def = list.find((s) => s.key === 'editmode.idle_timeout_minutes');
-    if (!def) return;
+    if (!def) {
+      console.warn('Global edit-mode idle timeout setting is missing; keeping the previous timeout');
+      return;
+    }
     const minutes = Number(def.value);
-    if (!Number.isFinite(minutes) || minutes < 0) return;
+    if (!Number.isFinite(minutes) || minutes < 0) {
+      console.warn('Global edit-mode idle timeout is not a valid number; keeping the previous timeout');
+      return;
+    }
     idleTimeoutMs = minutes * 60 * 1000;
-  } catch {
-    // Settings unreachable — keep whatever value we last had. Default is
-    // already a sane 15 min so unauthenticated callers still get reasonable
-    // behaviour if they somehow flip edit mode on.
+  } catch (e) {
+    // Settings unreachable — keep whatever value we last had (default is a
+    // sane 15 min), but say so.
+    console.warn('Could not load the global edit-mode idle timeout; keeping the previous timeout', e);
   }
 }
 
@@ -115,6 +121,20 @@ export function initEditModeIdleWatcher(): void {
       void refreshTimeoutFromSettings().then(armIdleTimer);
     } else {
       clearIdleTimer();
+    }
+  });
+
+  // Re-resolve the timeout while in edit mode when the current dashboard
+  // changes, or its settings are saved (applyDashboardSettings replaces them).
+  let lastKey: string | null = null;
+  currentDashboard.subscribe((d) => {
+    const key = d ? `${d.id}:${JSON.stringify(d.settings ?? null)}` : null;
+    const changed = key !== lastKey;
+    lastKey = key;
+    if (changed && get(editMode)) {
+      void refreshTimeoutFromSettings().then(() => {
+        if (get(editMode)) armIdleTimer();
+      });
     }
   });
 }

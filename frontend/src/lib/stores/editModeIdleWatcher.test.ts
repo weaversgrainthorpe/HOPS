@@ -13,7 +13,8 @@ vi.mock('$lib/utils/api', async () => ({
 }));
 
 import * as api from '$lib/utils/api';
-import { refreshTimeoutFromSettings, getIdleTimeoutMs } from './editModeIdleWatcher';
+import { refreshTimeoutFromSettings, getIdleTimeoutMs, initEditModeIdleWatcher } from './editModeIdleWatcher';
+import { editMode } from './editMode';
 
 const globalList = { settings: [{ key: 'editmode.idle_timeout_minutes', value: '15' }] };
 
@@ -56,5 +57,35 @@ describe('refreshTimeoutFromSettings', () => {
 		await refreshTimeoutFromSettings();
 		expect(warn).toHaveBeenCalled();
 		expect(getIdleTimeoutMs()).toBe(9 * 60 * 1000);
+	});
+});
+
+describe('re-resolving while in edit mode', () => {
+	it('refreshes when the dashboard changes or its settings are saved', async () => {
+		vi.mocked(api.getDashboardSettings).mockImplementation(async (id: string) => ({
+			overrides: {}, revision: 1,
+			effective: { editIdleTimeoutMinutes: id === 'd1' ? 4 : 6 }
+		}) as never);
+		cur().set({ id: 'd1' });
+		initEditModeIdleWatcher();
+		editMode.set(true);
+		await vi.waitFor(() => expect(getIdleTimeoutMs()).toBe(4 * 60 * 1000));
+
+		cur().set({ id: 'd2' });
+		await vi.waitFor(() => expect(getIdleTimeoutMs()).toBe(6 * 60 * 1000));
+
+		vi.mocked(api.getDashboardSettings).mockResolvedValue({
+			overrides: {}, revision: 2, effective: { editIdleTimeoutMinutes: 9 }
+		} as never);
+		cur().set({ id: 'd2', settings: { editIdleTimeoutMinutes: 9 } } as never);
+		await vi.waitFor(() => expect(getIdleTimeoutMs()).toBe(9 * 60 * 1000));
+		editMode.set(false);
+	});
+
+	it('warns when the global setting is missing', async () => {
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		vi.mocked(api.listSettings).mockResolvedValue({ settings: [] } as never);
+		await refreshTimeoutFromSettings();
+		expect(warn).toHaveBeenCalled();
 	});
 });

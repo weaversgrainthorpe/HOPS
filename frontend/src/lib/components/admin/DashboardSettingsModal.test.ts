@@ -157,4 +157,15 @@ describe('DashboardSettingsModal', () => {
 		expect(await screen.findByRole('alert')).toHaveTextContent('nope');
 		expect(screen.queryByText('Check timeout (seconds)')).not.toBeInTheDocument();
 	});
+
+	it('rejects an emptied number field inline and disables Save', async () => {
+		vi.mocked(api.getDashboardSettings).mockResolvedValue(serverSettings());
+		render(DashboardSettingsModal, { props: { dashboardId: 'd1', onClose: () => {} } });
+		await screen.findByText('Check timeout (seconds)');
+		await fireEvent.click(screen.getByLabelText('Override for this dashboard: Edit mode idle timeout (minutes)'));
+		await fireEvent.input(screen.getByLabelText('Edit mode idle timeout (minutes)'), { target: { value: '' } });
+		expect(await screen.findByText(/whole number/i)).toBeInTheDocument();
+		expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+		expect(api.saveDashboardSettings).not.toHaveBeenCalled();
+	});
 });
