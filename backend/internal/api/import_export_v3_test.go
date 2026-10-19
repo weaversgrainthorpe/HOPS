@@ -540,3 +540,32 @@ func TestImport_HeimdallTwiceOverSeededDefault(t *testing.T) {
 	}
 	assertUniqueIDs(t, doc)
 }
+
+func TestImport_V3Showcase(t *testing.T) {
+	data, err := os.ReadFile("../configdoc/testdata/v3_showcase_export.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	router, db := setupTestRouter(t)
+	c := newClient(t, router)
+	code, resp := c.importFile(data)
+	if code != 200 {
+		t.Fatalf("import showcase: %d %v", code, resp)
+	}
+	doc := storedDoc(t, db)
+	assertUniqueIDs(t, doc)
+	dash := storedDash(t, db, "sc-dash")
+	if ok, reason := configdoc.LegacyEditable(dash); ok || reason == "" {
+		t.Errorf("LegacyEditable = %v %q, want false with a reason", ok, reason)
+	}
+	only, _ := getView(t, c)["v3OnlyDashboards"].([]interface{})
+	found := false
+	for _, o := range only {
+		if o.(map[string]interface{})["id"] == "sc-dash" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("sc-dash not in v3OnlyDashboards: %v", only)
+	}
+}

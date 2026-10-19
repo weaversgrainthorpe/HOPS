@@ -1,0 +1,671 @@
+{
+  "format": "hops-export",
+  "schemaVersion": 3,
+  "exportedAt": "2026-10-19T00:00:00Z",
+  "exportType": "single-dashboard",
+  "config": {
+    "dashboards": [
+      {
+        "id": "sc-dash",
+        "name": "v3 Showcase",
+        "order": 0,
+        "path": "/v3-showcase",
+        "revision": 1,
+        "settings": {
+          "statusChecksEnabled": null,
+          "statusCheckIntervalMinutes": null,
+          "statusCheckTimeoutSeconds": null,
+          "editIdleTimeoutMinutes": null,
+          "animatedFolderBackgrounds": null,
+          "defaultLayout": null
+        },
+        "defaultLayout": "grid",
+        "tabs": [
+          {
+            "id": "sc-tab-grid",
+            "name": "Grid",
+            "order": 0,
+            "layout": "inherit",
+            "root": {
+              "columns": 12,
+              "children": [
+                {
+                  "id": "sc-r1",
+                  "kind": "tile",
+                  "type": "link",
+                  "name": "Router",
+                  "url": "https://router.example.lan/",
+                  "icon": "mdi:lan",
+                  "openMode": "newtab",
+                  "size": "medium",
+                  "order": 0,
+                  "placement": {
+                    "x": 0,
+                    "y": 0,
+                    "w": 1,
+                    "h": 1
+                  }
+                },
+                {
+                  "id": "sc-r2",
+                  "kind": "tile",
+                  "type": "link",
+                  "name": "NAS",
+                  "url": "https://nas.example.lan/",
+                  "icon": "mdi:nas",
+                  "openMode": "newtab",
+                  "size": "medium",
+                  "order": 1,
+                  "placement": {
+                    "x": 1,
+                    "y": 0,
+                    "w": 1,
+                    "h": 1
+                  }
+                },
+                {
+                  "id": "sc-r3",
+                  "kind": "tile",
+                  "type": "link",
+                  "name": "Example",
+                  "url": "https://example.com/",
+                  "icon": "mdi:link",
+                  "openMode": "newtab",
+                  "size": "medium",
+                  "order": 2,
+                  "placement": {
+                    "x": 2,
+                    "y": 0,
+                    "w": 1,
+                    "h": 1
+                  }
+                },
+                {
+                  "id": "sc-f-l1",
+                  "kind": "folder",
+                  "name": "Level 1",
+                  "layout": "inherit",
+                  "display": "expanded",
+                  "shape": "rounded",
+                  "showTitle": true,
+                  "placement": {
+                    "x": 0,
+                    "y": 1,
+                    "w": 12,
+                    "h": 5
+                  },
+                  "content": {
+                    "columns": 12,
+                    "children": [
+                      {
+                        "id": "sc-f-l2",
+                        "kind": "folder",
+                        "name": "Level 2",
+                        "layout": "inherit",
+                        "display": "expanded",
+                        "shape": "rounded",
+                        "showTitle": true,
+                        "placement": {
+                          "x": 0,
+                          "y": 0,
+                          "w": 6,
+                          "h": 3
+                        },
+                        "content": {
+                          "columns": 6,
+                          "children": [
+                            {
+                              "id": "sc-f-l3",
+                              "kind": "folder",
+                              "name": "Level 3 (collapsed)",
+                              "layout": "inherit",
+                              "display": "collapsed",
+                              "shape": "rounded",
+                              "showTitle": true,
+                              "placement": {
+                                "x": 0,
+                                "y": 0,
+                                "w": 3,
+                                "h": 2
+                              },
+                              "content": {
+                                "columns": 3,
+                                "children": [
+                                  {
+                                    "id": "sc-deep-1",
+                                    "kind": "tile",
+                                    "type": "link",
+                                    "name": "Deep 1",
+                                    "url": "https://deep1.example.lan/",
+                                    "icon": "mdi:docker",
+                                    "openMode": "newtab",
+                                    "size": "medium",
+                                    "order": 0,
+                                    "placement": {
+                                      "x": 0,
+                                      "y": 0,
+                                      "w": 1,
+                                      "h": 1
+                                    }
+                                  },
+                                  {
+                                    "id": "sc-deep-2",
+                                    "kind": "tile",
+                                    "type": "link",
+                                    "name": "Deep 2",
+                                    "url": "https://deep2.example.lan/",
+                                    "icon": "mdi:nas",
+                                    "openMode": "iframe",
+                                    "size": "medium",
+                                    "order": 1,
+                                    "placement": {
+                                      "x": 1,
+                                      "y": 0,
+                                      "w": 1,
+                                      "h": 1
+                                    }
+                                  },
+                                  {
+                                    "id": "sc-deep-3",
+                                    "kind": "tile",
+                                    "type": "link",
+                                    "name": "Deep 3",
+                                    "url": "https://deep3.example.lan/",
+                                    "icon": "mdi:lan",
+                                    "openMode": "newtab",
+                                    "size": "medium",
+                                    "order": 2,
+                                    "placement": {
+                                      "x": 2,
+                                      "y": 0,
+                                      "w": 1,
+                                      "h": 1
+                                    }
+                                  },
+                                  {
+                                    "id": "sc-deep-4",
+                                    "kind": "tile",
+                                    "type": "link",
+                                    "name": "Deep 4",
+                                    "url": "https://example.com/",
+                                    "icon": "mdi:camera",
+                                    "openMode": "newtab",
+                                    "size": "medium",
+                                    "order": 3,
+                                    "placement": {
+                                      "x": 0,
+                                      "y": 1,
+                                      "w": 1,
+                                      "h": 1
+                                    }
+                                  },
+                                  {
+                                    "id": "sc-deep-5",
+                                    "kind": "tile",
+                                    "type": "link",
+                                    "name": "Deep 5",
+                                    "url": "https://deep5.example.lan/",
+                                    "icon": "mdi:database",
+                                    "openMode": "newtab",
+                                    "size": "medium",
+                                    "order": 4,
+                                    "placement": {
+                                      "x": 1,
+                                      "y": 1,
+                                      "w": 1,
+                                      "h": 1
+                                    }
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "id": "sc-f-six",
+                  "kind": "folder",
+                  "name": "Six tiles (collapsed)",
+                  "layout": "inherit",
+                  "display": "collapsed",
+                  "shape": "rounded",
+                  "showTitle": true,
+                  "placement": {
+                    "x": 0,
+                    "y": 6,
+                    "w": 6,
+                    "h": 3
+                  },
+                  "content": {
+                    "columns": 3,
+                    "children": [
+                      {
+                        "id": "sc-six-1",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Six 1",
+                        "url": "https://six1.example.lan/",
+                        "icon": "mdi:docker",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 0,
+                        "placement": {
+                          "x": 0,
+                          "y": 0,
+                          "w": 1,
+                          "h": 1
+                        }
+                      },
+                      {
+                        "id": "sc-six-2",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Six 2",
+                        "url": "https://six2.example.lan/",
+                        "icon": "mdi:nas",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 1,
+                        "placement": {
+                          "x": 1,
+                          "y": 0,
+                          "w": 1,
+                          "h": 1
+                        }
+                      },
+                      {
+                        "id": "sc-six-3",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Six 3",
+                        "url": "https://six3.example.lan/",
+                        "icon": "mdi:lan",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 2,
+                        "placement": {
+                          "x": 2,
+                          "y": 0,
+                          "w": 1,
+                          "h": 1
+                        }
+                      },
+                      {
+                        "id": "sc-six-4",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Six 4",
+                        "url": "https://six4.example.lan/",
+                        "icon": "mdi:camera",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 3,
+                        "placement": {
+                          "x": 0,
+                          "y": 1,
+                          "w": 1,
+                          "h": 1
+                        }
+                      },
+                      {
+                        "id": "sc-six-5",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Six 5",
+                        "url": "https://six5.example.lan/",
+                        "icon": "mdi:database",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 4,
+                        "placement": {
+                          "x": 1,
+                          "y": 1,
+                          "w": 1,
+                          "h": 1
+                        }
+                      },
+                      {
+                        "id": "sc-six-6",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Six 6",
+                        "url": "https://six6.example.lan/",
+                        "icon": "mdi:home",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 5,
+                        "placement": {
+                          "x": 2,
+                          "y": 1,
+                          "w": 1,
+                          "h": 1
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "id": "sc-f-empty",
+                  "kind": "folder",
+                  "name": "Empty (collapsed)",
+                  "layout": "inherit",
+                  "display": "collapsed",
+                  "shape": "rounded",
+                  "showTitle": true,
+                  "placement": {
+                    "x": 6,
+                    "y": 6,
+                    "w": 3,
+                    "h": 2
+                  },
+                  "content": {
+                    "columns": 3,
+                    "children": []
+                  }
+                },
+                {
+                  "id": "sc-note",
+                  "kind": "tile",
+                  "type": "note",
+                  "name": "Remember",
+                  "url": "",
+                  "icon": "mdi:note-text-outline",
+                  "openMode": "newtab",
+                  "size": "medium",
+                  "order": 0,
+                  "placement": {
+                    "x": 9,
+                    "y": 6,
+                    "w": 3,
+                    "h": 2
+                  },
+                  "description": "A note tile with text only."
+                }
+              ]
+            }
+          },
+          {
+            "id": "sc-tab-free",
+            "name": "Free",
+            "order": 1,
+            "layout": "free",
+            "designWidth": 1280,
+            "root": {
+              "columns": 160,
+              "children": [
+                {
+                  "id": "sc-fa",
+                  "kind": "tile",
+                  "type": "link",
+                  "name": "Free A",
+                  "url": "https://freea.example.lan/",
+                  "icon": "mdi:docker",
+                  "openMode": "newtab",
+                  "size": "medium",
+                  "order": 0,
+                  "placement": {
+                    "x": 4,
+                    "y": 4,
+                    "w": 16,
+                    "h": 10,
+                    "z": 1
+                  }
+                },
+                {
+                  "id": "sc-fb",
+                  "kind": "tile",
+                  "type": "link",
+                  "name": "Free B",
+                  "url": "https://freeb.example.lan/",
+                  "icon": "mdi:database",
+                  "openMode": "newtab",
+                  "size": "medium",
+                  "order": 1,
+                  "placement": {
+                    "x": 12,
+                    "y": 8,
+                    "w": 16,
+                    "h": 10,
+                    "z": 2
+                  }
+                },
+                {
+                  "id": "sc-ff",
+                  "kind": "folder",
+                  "name": "Free folder",
+                  "layout": "inherit",
+                  "display": "expanded",
+                  "shape": "rounded",
+                  "showTitle": true,
+                  "placement": {
+                    "x": 50,
+                    "y": 3,
+                    "w": 40,
+                    "h": 26,
+                    "z": 1
+                  },
+                  "content": {
+                    "columns": 40,
+                    "children": [
+                      {
+                        "id": "sc-ff-1",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Inside",
+                        "url": "https://inside.example.lan/",
+                        "icon": "mdi:home",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 0,
+                        "placement": {
+                          "x": 0,
+                          "y": 0,
+                          "w": 1,
+                          "h": 1
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "id": "sc-big",
+                  "kind": "tile",
+                  "type": "link",
+                  "name": "Big tile",
+                  "url": "https://big.example.lan/",
+                  "icon": "mdi:camera",
+                  "openMode": "newtab",
+                  "size": "medium",
+                  "order": 2,
+                  "placement": {
+                    "x": 5,
+                    "y": 32,
+                    "w": 30,
+                    "h": 20,
+                    "z": 1
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "id": "sc-tab-mixed",
+            "name": "Mixed",
+            "order": 2,
+            "layout": "inherit",
+            "root": {
+              "columns": 12,
+              "children": [
+                {
+                  "id": "sc-mf",
+                  "kind": "folder",
+                  "name": "Free folder",
+                  "layout": "free",
+                  "display": "expanded",
+                  "shape": "rounded",
+                  "showTitle": true,
+                  "placement": {
+                    "x": 0,
+                    "y": 0,
+                    "w": 6,
+                    "h": 4
+                  },
+                  "content": {
+                    "columns": 6,
+                    "children": [
+                      {
+                        "id": "sc-mf-1",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Mixed 1",
+                        "url": "https://mixed1.example.lan/",
+                        "icon": "mdi:docker",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 0,
+                        "placement": {
+                          "x": 2,
+                          "y": 2,
+                          "w": 16,
+                          "h": 10,
+                          "z": 1
+                        }
+                      },
+                      {
+                        "id": "sc-mf-2",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Mixed 2",
+                        "url": "https://mixed2.example.lan/",
+                        "icon": "mdi:nas",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 1,
+                        "placement": {
+                          "x": 10,
+                          "y": 6,
+                          "w": 16,
+                          "h": 10,
+                          "z": 2
+                        }
+                      },
+                      {
+                        "id": "sc-mf-3",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Mixed 3",
+                        "url": "https://mixed3.example.lan/",
+                        "icon": "mdi:lan",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 2,
+                        "placement": {
+                          "x": 30,
+                          "y": 3,
+                          "w": 12,
+                          "h": 8,
+                          "z": 1
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "id": "sc-mg",
+                  "kind": "folder",
+                  "name": "Grid folder",
+                  "layout": "inherit",
+                  "display": "expanded",
+                  "shape": "rounded",
+                  "showTitle": true,
+                  "placement": {
+                    "x": 6,
+                    "y": 0,
+                    "w": 6,
+                    "h": 3
+                  },
+                  "content": {
+                    "columns": 3,
+                    "children": [
+                      {
+                        "id": "sc-mg-1",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Grid 1",
+                        "url": "https://grid1.example.lan/",
+                        "icon": "mdi:docker",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 0,
+                        "placement": {
+                          "x": 0,
+                          "y": 0,
+                          "w": 1,
+                          "h": 1
+                        }
+                      },
+                      {
+                        "id": "sc-mg-2",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Grid 2",
+                        "url": "https://grid2.example.lan/",
+                        "icon": "mdi:nas",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 1,
+                        "placement": {
+                          "x": 1,
+                          "y": 0,
+                          "w": 1,
+                          "h": 1
+                        }
+                      },
+                      {
+                        "id": "sc-mg-3",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Grid 3",
+                        "url": "https://grid3.example.lan/",
+                        "icon": "mdi:lan",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 2,
+                        "placement": {
+                          "x": 2,
+                          "y": 0,
+                          "w": 1,
+                          "h": 1
+                        }
+                      },
+                      {
+                        "id": "sc-mg-4",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Grid 4",
+                        "url": "https://grid4.example.lan/",
+                        "icon": "mdi:camera",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 3,
+                        "placement": {
+                          "x": 0,
+                          "y": 1,
+                          "w": 1,
+                          "h": 1
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
