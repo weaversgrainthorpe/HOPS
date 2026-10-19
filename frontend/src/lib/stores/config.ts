@@ -1,5 +1,6 @@
 import { writable, derived, get } from 'svelte/store';
 import type { Config, Dashboard, DashboardSettings } from '$lib/types';
+import type { LayoutDoc, LayoutDashboard } from '$lib/types/layout';
 import {
   getConfig,
   updateConfig as apiUpdateConfig,
@@ -27,6 +28,20 @@ export const currentDashboard = derived(
     return findDashboard(currentPath, $config);
   }
 );
+
+// The stored v3 layout document (null until the config has loaded or when the
+// server sent none).
+export const layoutDoc = derived(config, ($config): LayoutDoc | null => $config?.layout ?? null);
+
+// Ids of dashboards that exist only in v3 (no legacy view).
+export const v3OnlyDashboardIds = derived(
+  config,
+  ($config) => new Set(($config?.v3OnlyDashboards ?? []).map((d) => d.id))
+);
+
+export function findLayoutDashboard(id: string, doc: LayoutDoc | null): LayoutDashboard | undefined {
+  return doc?.dashboards.find((d) => d.id === id);
+}
 
 // Loading state
 export const configLoading = writable(true);
@@ -112,7 +127,10 @@ function withRevisions(cfg: Config, revisions: Record<string, number>): Config {
 // server confirms; on any failure it is left untouched.
 export async function updateConfig(newConfig: Config, showToast = true) {
   try {
-    const resp = await apiUpdateConfig(newConfig);
+    // layout / v3OnlyDashboards are view-only server fields; never send them back.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { layout: _layout, v3OnlyDashboards: _v3Only, ...putBody } = newConfig;
+    const resp = await apiUpdateConfig(putBody);
     config.set(resp.revisions ? withRevisions(newConfig, resp.revisions) : newConfig);
     if (showToast) {
       toast.success('Changes saved');

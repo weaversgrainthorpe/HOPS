@@ -240,3 +240,34 @@ describe('save failure messages (I5)', () => {
     err.mockRestore();
   });
 });
+
+describe('layout fields', () => {
+  it('layoutDoc follows config.layout and v3OnlyDashboardIds follows v3OnlyDashboards', async () => {
+    const { layoutDoc, v3OnlyDashboardIds, findLayoutDashboard } = await import('./config');
+    expect(get(layoutDoc)).toBeNull();
+    const doc = {
+      schemaVersion: 3 as const,
+      dashboards: [{ id: 'a', name: 'a', path: '/a', revision: 1, tabs: [] }]
+    };
+    config.set({ ...makeConfig(), layout: doc, v3OnlyDashboards: [{ id: 'z', name: 'z', path: '/z', reason: 'r' }] });
+    expect(get(layoutDoc)).toEqual(doc);
+    expect(get(v3OnlyDashboardIds).has('z')).toBe(true);
+    expect(findLayoutDashboard('a', get(layoutDoc))?.id).toBe('a');
+    expect(findLayoutDashboard('nope', get(layoutDoc))).toBeUndefined();
+    expect(findLayoutDashboard('a', null)).toBeUndefined();
+  });
+
+  it('updateConfig PUT body has no layout or v3OnlyDashboards', async () => {
+    vi.mocked(api.updateConfig).mockResolvedValue({});
+    const cfg: Config = {
+      ...makeConfig(),
+      layout: { schemaVersion: 3, dashboards: [] },
+      v3OnlyDashboards: [{ id: 'z', name: 'z', path: '/z', reason: 'r' }]
+    };
+    await updateConfig(cfg);
+    const sent = vi.mocked(api.updateConfig).mock.calls[0][0] as unknown as Record<string, unknown>;
+    expect('layout' in sent).toBe(false);
+    expect('v3OnlyDashboards' in sent).toBe(false);
+    expect(sent.dashboards).toBeDefined();
+  });
+});

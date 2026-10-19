@@ -1,3 +1,4 @@
+import type { LayoutDoc } from './layout';
 // Type definitions matching the backend models
 
 export interface Dashboard {
@@ -123,6 +124,10 @@ export interface Config {
   dashboardRevisions?: Record<string, number>;
   /** Ids the startup v2→v3 migration renamed (view-only; the server strips it on PUT). */
   migrationNotices?: string[];
+  /** The stored v3 layout document (view-only; the server strips it on PUT). */
+  layout?: LayoutDoc;
+  /** Dashboards that exist only in v3 and have no legacy view (view-only; stripped on PUT). */
+  v3OnlyDashboards?: { id: string; name: string; path: string; reason: string }[];
 }
 
 export interface Theme {
