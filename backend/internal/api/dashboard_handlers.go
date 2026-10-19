@@ -90,11 +90,24 @@ func storedDashboards(doc configdoc.Obj) map[string]configdoc.Obj {
 	return out
 }
 
+// storedRevision reads a stored dashboard's revision; a missing or
+// non-numeric one is a visible 500, never silently 0.
+func storedRevision(id string, d configdoc.Obj) (int, *apiError) {
+	n, ok := intRevision(d["revision"])
+	if !ok {
+		return 0, newAPIError(http.StatusInternalServerError, "stored revision unreadable for dashboard "+id)
+	}
+	return n, nil
+}
+
 // checkRevision returns a 409 unless the incoming revision (as decoded from
 // the request; nil when absent) equals the stored dashboard's revision. A
 // missing or non-numeric revision on an existing dashboard is a conflict too.
 func checkRevision(id string, stored configdoc.Obj, incoming any) *apiError {
-	cur, _ := intRevision(stored["revision"])
+	cur, serr := storedRevision(id, stored)
+	if serr != nil {
+		return serr
+	}
 	in, ok := intRevision(incoming)
 	if !ok || in != cur {
 		return conflictError(id, cur)
@@ -164,7 +177,20 @@ func (r *Router) preUpdateBackup() string {
 // and bumping the revision of changed dashboards.
 func applyLegacyView(stored configdoc.Obj, body configdoc.Obj) (configdoc.Obj, map[string]int, error) {
 	prev := storedDashboards(stored)
+	seen, _ := body["dashboardRevisions"].(map[string]interface{})
+	delete(body, "dashboardRevisions") // view-only; never stored
 	bodyDashes, _ := body["dashboards"].([]any)
+	inBody := map[string]bool{}
+	for _, d := range bodyDashes {
+		if dm, ok := d.(map[string]interface{}); ok {
+			if id, _ := dm["id"].(string); id != "" {
+				if inBody[id] {
+					return nil, nil, newAPIError(http.StatusBadRequest, "Invalid config: duplicate dashboard id "+id)
+				}
+				inBody[id] = true
+			}
+		}
+	}
 	for _, d := range bodyDashes {
 		dm, ok := d.(map[string]interface{})
 		if !ok {
@@ -175,6 +201,22 @@ func applyLegacyView(stored configdoc.Obj, body configdoc.Obj) (configdoc.Obj, m
 			if ce := checkRevision(id, p, dm["revision"]); ce != nil {
 				return nil, nil, ce
 			}
+		}
+	}
+	// A stored dashboard absent from the body is a deletion; allow it only if
+	// the client saw it at its current revision.
+	ids := make([]string, 0, len(prev))
+	for id := range prev {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	for _, id := range ids {
+		p := prev[id]
+		if inBody[id] {
+			continue
+		}
+		if ce := checkRevision(id, p, seen[id]); ce != nil {
+			return nil, nil, ce
 		}
 	}
 	next, err := configdoc.FromLegacy(body, stored)
@@ -195,7 +237,10 @@ func applyLegacyView(stored configdoc.Obj, body configdoc.Obj) (configdoc.Obj, m
 			revs[id] = 1
 			continue
 		}
-		cur, _ := intRevision(p["revision"])
+		cur, rerr := storedRevision(id, p)
+		if rerr != nil {
+			return nil, nil, rerr
+		}
 		a, err1 := normalizedWithoutRevision(p)
 		b, err2 := normalizedWithoutRevision(nd)
 		if err1 != nil || err2 != nil {
@@ -267,7 +312,10 @@ func (r *Router) handlePutDashboard(w http.ResponseWriter, req *http.Request, id
 			return nil, nil, newAPIError(http.StatusBadRequest, "Invalid dashboard: "+err.Error())
 		}
 		nd := one["dashboards"].([]any)[0].(configdoc.Obj)
-		cur, _ := intRevision(prev["revision"])
+		cur, rerr := storedRevision(id, prev)
+		if rerr != nil {
+			return nil, nil, rerr
+		}
 		nd["revision"] = cur + 1
 		next := replaceDashboard(stored, id, nd)
 		resp := map[string]interface{}{"revision": cur + 1}
@@ -316,7 +364,11 @@ func (r *Router) handleGetDashboardSettings(w http.ResponseWriter, id string) {
 		overrides[k] = ov[k] // nil when absent
 	}
 	eff := configdoc.Resolve(r.settings, d)
-	rev, _ := intRevision(d["revision"])
+	rev, rerr := storedRevision(id, d)
+	if rerr != nil {
+		writeAPIError(w, rerr)
+		return
+	}
 	writeJSON(w, map[string]interface{}{
 		"overrides": overrides,
 		"effective": map[string]interface{}{
@@ -352,12 +404,18 @@ func (r *Router) handlePutDashboardSettings(w http.ResponseWriter, req *http.Req
 		if ce := checkRevision(id, d, body.Revision); ce != nil {
 			return nil, nil, ce
 		}
+		// Merge: absent key keeps its stored value; explicit null resets it.
+		old, _ := d["settings"].(configdoc.Obj)
 		full := configdoc.Obj{}
 		for _, k := range settingJSONKeys() {
-			full[k] = body.Overrides[k] // nil (null) when absent
+			if v, present := body.Overrides[k]; present {
+				full[k] = v
+			} else {
+				full[k] = old[k]
+			}
 		}
 		d["settings"] = full
-		cur, _ := intRevision(d["revision"])
+		cur, _ := intRevision(d["revision"]) // validated by checkRevision above
 		d["revision"] = cur + 1
 		return stored, map[string]interface{}{"revision": cur + 1}, nil
 	})

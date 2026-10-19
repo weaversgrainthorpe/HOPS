@@ -123,6 +123,24 @@ func (r *Router) handleGetConfig(w http.ResponseWriter, req *http.Request) {
 		writeAPIError(w, newAPIError(http.StatusInternalServerError, err.Error()))
 		return
 	}
+	// dashboardRevisions lets a client prove which dashboards it has seen, so
+	// a whole-config PUT can only delete dashboards it saw at their current
+	// revision. The UI clones and PUTs the view back, so this round-trips.
+	revs := map[string]interface{}{}
+	dashes, _ := view["dashboards"].([]any)
+	for _, d := range dashes {
+		if m, ok := d.(configdoc.Obj); ok {
+			if id, ok := m["id"].(string); ok {
+				rev, rerr := storedRevision(id, m)
+				if rerr != nil {
+					writeAPIError(w, rerr)
+					return
+				}
+				revs[id] = rev
+			}
+		}
+	}
+	view["dashboardRevisions"] = revs
 	writeJSON(w, view)
 }
 

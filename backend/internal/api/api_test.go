@@ -490,6 +490,12 @@ func TestUpdateConfig(t *testing.T) {
 		"dashboards": []interface{}{},
 		"theme":      map[string]string{"mode": "light"},
 	}
+	// Deleting the seeded dashboards requires proving they were seen.
+	cw := httptest.NewRecorder()
+	router.ServeHTTP(cw, httptest.NewRequest("GET", "/api/config", nil))
+	var cur map[string]interface{}
+	json.Unmarshal(cw.Body.Bytes(), &cur)
+	newConfig["dashboardRevisions"] = cur["dashboardRevisions"]
 	body, _ := json.Marshal(newConfig)
 
 	req := authedRequest("PUT", "/api/config", bytes.NewReader(body), token, csrf)
