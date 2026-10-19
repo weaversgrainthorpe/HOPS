@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Container, FolderNode, LayoutDashboard, LayoutMode, LayoutNode, LayoutTab } from '$lib/types/layout';
   import type { CanvasPlan } from '$lib/layout/geometry';
-  import { clampPlacement, isRenderable, readingOrder } from '$lib/layout/geometry';
+  import { clampPlacement, FREE_UNIT_PX, isRenderable, readingOrder } from '$lib/layout/geometry';
   import Entry from '../Entry.svelte';
   import FolderView from './FolderView.svelte';
   import NodePlaceholder from './NodePlaceholder.svelte';
@@ -29,10 +29,59 @@
   const ordered = $derived(readingOrder(kids) as unknown[]);
 
   const isRoot = $derived(folderChain.length === 0);
-  const cellPx = $derived(plan.kind === 'grid' ? plan.cellPx : 0);
+
+  // Measured content width: only nested free/grid containers outside a grid plan need it.
+  let host = $state<HTMLElement | null>(null);
+  let measured = $state(0);
+  $effect(() => {
+    if (!host) return;
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width;
+      if (typeof w === 'number' && Number.isFinite(w)) measured = w;
+    });
+    ro.observe(host);
+    return () => ro.disconnect();
+  });
+
+  // Phone/narrow plans stack every container, whatever its own mode.
+  const effective = $derived<'grid' | 'free' | 'stacked'>(
+    plan.kind === 'stacked' ? 'stacked' : mode === 'free' ? 'free' : 'grid'
+  );
+  const cellPx = $derived(
+    plan.kind === 'grid' ? plan.cellPx : measured > 0 ? measured / columns : 48
+  );
+
+  // Free: columns is the design extent in 8 px units. The root uses the tab scale;
+  // nested containers scale to their own measured box.
+  const freeScale = $derived.by(() => {
+    if (isRoot && plan.kind === 'free') return plan.scale;
+    if (measured > 0) return measured / (columns * FREE_UNIT_PX);
+    return plan.kind === 'free' ? plan.scale : 1;
+  });
+  const px = (v: number) => `${Math.round(v * 100) / 100}px`;
+  const freeHeight = $derived.by(() => {
+    let bottom = 0;
+    for (const n of ordered) {
+      if (!isRenderable(n)) continue;
+      const p = clampPlacement(n.placement, columns);
+      bottom = Math.max(bottom, p.y + p.h);
+    }
+    return bottom * FREE_UNIT_PX * freeScale;
+  });
+  const freeStyle = $derived(
+    `position:relative;height:${px(freeHeight)};` +
+      (isRoot && plan.kind === 'free' ? `width:${px(columns * FREE_UNIT_PX * freeScale)};` : 'width:100%;')
+  );
+  function freeCellStyle(n: LayoutNode): string {
+    const p = clampPlacement(n.placement, columns);
+    const u = FREE_UNIT_PX * freeScale;
+    // Folders grow past their box (min-height) rather than clip their content.
+    return `position:absolute;left:${px(p.x * u)};top:${px(p.y * u)};width:${px(p.w * u)};` +
+      `${n.kind === 'folder' ? 'min-height' : 'height'}:${px(p.h * u)};z-index:${p.z ?? 0};`;
+  }
   const gridStyle = $derived(
     `display:grid;grid-template-columns:${
-      isRoot ? `repeat(${columns}, ${cellPx}px)` : `repeat(${columns}, minmax(0, 1fr))`
+      isRoot && plan.kind === 'grid' ? `repeat(${columns}, ${cellPx}px)` : `repeat(${columns}, minmax(0, 1fr))`
     };grid-auto-rows:${rowPx ?? cellPx}px;`
   );
 
@@ -47,41 +96,52 @@
   }
 </script>
 
-{#if mode === 'grid' && plan.kind === 'grid'}
-  <div class="container-grid" style={gridStyle}>
-    {#each ordered as node, i (nodeId(node) + ':' + i)}
-      {#if isRenderable(node)}
-        {#if node.kind === 'tile'}
-          <div class="cell" data-node-id={node.id} style={cellStyle(node)}>
-            <Entry
-              entry={node}
-              currentTabId={tab.id}
-              currentGroupId={parentId}
-              tabId={tab.id}
-              groupId={parentId}
-              viewOnly
-            />
-          </div>
-        {:else}
-          <FolderView
-            folder={node}
-            style={cellStyle(node)}
-            {plan}
-            {dashboard}
-            {tab}
-            {folderChain}
-            parentRowPx={rowPx ?? cellPx}
+{#snippet nodes(styleOf: (n: LayoutNode) => string, folderStyle: (n: LayoutNode) => string)}
+  {#each ordered as node, i (nodeId(node) + ':' + i)}
+    {#if isRenderable(node)}
+      {#if node.kind === 'tile'}
+        <div class="cell" data-node-id={node.id} style={styleOf(node)}>
+          <Entry
+            entry={node}
+            currentTabId={tab.id}
+            currentGroupId={parentId}
+            tabId={tab.id}
+            groupId={parentId}
+            viewOnly
           />
-        {/if}
+        </div>
       {:else}
-        <NodePlaceholder id={nodeId(node)} reason="missing or invalid placement/content" />
+        <FolderView
+          folder={node}
+          style={folderStyle(node)}
+          {plan}
+          {dashboard}
+          {tab}
+          {folderChain}
+          parentRowPx={rowPx ?? cellPx}
+        />
       {/if}
-    {/each}
+    {:else}
+      <NodePlaceholder id={nodeId(node)} reason="missing or invalid placement/content" />
+    {/if}
+  {/each}
+{/snippet}
+
+{#if effective === 'grid'}
+  <div class="container-grid" style={gridStyle} bind:this={host}>
+    {@render nodes(cellStyle, cellStyle)}
+  </div>
+{:else if effective === 'free'}
+  <div class="container-free" style={freeStyle} bind:this={host}>
+    {@render nodes(freeCellStyle, freeCellStyle)}
   </div>
 {:else}
-  <!-- Free and stacked layouts arrive in a later task; never render nothing. -->
-  <div class="unsupported" role="status">
-    Can't display this layout yet ({mode}/{plan.kind} is not supported).
+  <!-- Phone stacking: reading order, tiles wrap at today's phone sizes, expanded folders full width. -->
+  <div class="container-stacked">
+    {@render nodes(
+      () => '',
+      (n) => (n.kind === 'folder' && n.display === 'collapsed' ? '' : 'grid-column: 1 / -1;')
+    )}
   </div>
 {/if}
 
@@ -93,10 +153,27 @@
     min-width: 0;
     min-height: 0;
   }
-  .unsupported {
-    padding: 1rem;
-    border: 2px dashed var(--border);
-    border-radius: 0.5rem;
-    color: var(--text-secondary);
+  .container-free {
+    max-width: 100%;
+  }
+  .container-stacked {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(135px, 1fr));
+    gap: 0.875rem;
+    width: 100%;
+  }
+  .container-stacked :global(.folder.collapsed) {
+    min-height: 7rem;
+  }
+  @media (max-width: 768px) {
+    .container-stacked {
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: 0.75rem;
+    }
+  }
+  @media (max-width: 480px) {
+    .container-stacked {
+      grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    }
   }
 </style>

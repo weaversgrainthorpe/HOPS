@@ -29,9 +29,12 @@
   const textColor = $derived(
     folder.color ? getTextColorValue(folder.textColor || 'auto', folder.color) : 'inherit'
   );
-  const innerColumns = $derived(
-    Number.isFinite(folder.placement.w) && folder.placement.w >= 1 ? Math.floor(folder.placement.w) : 1
-  );
+  const innerColumns = $derived.by(() => {
+    // A free folder's columns is its design extent in 8 px units (Ruling 9).
+    const cc = folder.content.columns;
+    if (innerMode === 'free' && plan.kind !== 'stacked' && Number.isFinite(cc) && cc >= 1) return Math.floor(cc);
+    return Number.isFinite(folder.placement.w) && folder.placement.w >= 1 ? Math.floor(folder.placement.w) : 1;
+  });
   // Content rows = max(h-1, deepest child bottom), so a child below the folder's
   // nominal height still has a row and is shrunk-to-fit, never clipped.
   const contentRows = $derived.by(() => {
