@@ -2,6 +2,7 @@ package configdoc
 
 import (
 	"errors"
+	"math"
 	"strings"
 	"testing"
 )
@@ -166,7 +167,8 @@ func TestVerify_RequiresOwnedDashboardKeys(t *testing.T) {
 
 func TestVerifyIDs(t *testing.T) {
 	good := Obj{"schemaVersion": 3, "dashboards": []any{Obj{"id": "d", "tabs": []any{Obj{"id": "t", "root": Obj{"children": []any{
-		Obj{"id": "f", "kind": "folder", "content": Obj{"children": []any{Obj{"id": "e", "kind": "tile"}}}},
+		Obj{"id": "f", "kind": "folder", "placement": Obj{"x": 0, "y": 0, "w": 4, "h": 2},
+			"content": Obj{"children": []any{Obj{"id": "e", "kind": "tile", "placement": Obj{"x": 0.0, "y": 1.0, "w": 1.0, "h": 1.0}}}}},
 	}}}}}}}
 	if err := VerifyIDs(good); err != nil {
 		t.Fatalf("good doc: %v", err)
@@ -197,8 +199,39 @@ func TestVerifyIDs_AcceptsAnyDepth(t *testing.T) {
 	_, _, _, nf := findNode(doc, "nf")
 	inner := nf["content"].(Obj)
 	inner["children"] = append(inner["children"].([]any),
-		Obj{"id": "e1", "kind": "tile"},
-		Obj{"id": "w1", "kind": "widget"},
-		Obj{"id": "nf2", "kind": "folder", "content": "oops"})
+		Obj{"id": "e1", "kind": "tile", "placement": Obj{"x": 0, "y": 1, "w": 1, "h": 1}},
+		Obj{"id": "w1", "kind": "widget", "placement": Obj{"x": 0, "y": 2, "w": 1, "h": 1}},
+		Obj{"id": "nf2", "kind": "folder", "placement": Obj{"x": 0, "y": 3, "w": 1, "h": 1}, "content": "oops"})
 	wantProblem(t, VerifyIDs(doc), `duplicate id "e1"`, `"w1": kind is "widget"`, `"nf2": content is string`)
+}
+
+// Every node needs a finite numeric placement {x,y,w,h} (Ruling 24), so no
+// writer or import can store a node the legacy view and renderer cannot place.
+func TestVerifyIDs_RequiresPlacement(t *testing.T) {
+	cases := map[string]func(n Obj){
+		"missing":    func(n Obj) { delete(n, "placement") },
+		"not object": func(n Obj) { n["placement"] = "top" },
+		"x string":   func(n Obj) { n["placement"].(Obj)["x"] = "left" },
+		"w missing":  func(n Obj) { delete(n["placement"].(Obj), "w") },
+		"h null":     func(n Obj) { n["placement"].(Obj)["h"] = nil },
+		"y infinite": func(n Obj) { n["placement"].(Obj)["y"] = math.Inf(1) },
+		"x NaN":      func(n Obj) { n["placement"].(Obj)["x"] = math.NaN() },
+		"y bool":     func(n Obj) { n["placement"].(Obj)["y"] = true },
+	}
+	for name, mutate := range cases {
+		for _, id := range []string{"g1", "e2"} { // a folder and a tile
+			doc := migrated(t, loadJSON(t, "testdata/v2_basic.json"))
+			if err := VerifyIDs(doc); err != nil {
+				t.Fatalf("baseline: %v", err)
+			}
+			_, _, _, n := findNode(doc, id)
+			mutate(n)
+			err := VerifyIDs(doc)
+			if err == nil {
+				t.Errorf("%s on %s: accepted", name, id)
+				continue
+			}
+			wantProblem(t, err, `"`+id+`"`, "placement")
+		}
+	}
 }

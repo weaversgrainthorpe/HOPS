@@ -181,11 +181,11 @@ func v3OnlyPathClash(stored configdoc.Obj, v3Only map[string]bool, body map[stri
 }
 
 // v3OnlyIDs returns the ids of the stored dashboards that are not
-// LegacyEditable (never in the legacy view).
-func v3OnlyIDs(stored configdoc.Obj) map[string]bool {
+// LegacyEditable (never in the legacy view). lc is the request's cache.
+func v3OnlyIDs(stored configdoc.Obj, lc *configdoc.LegacyCache) map[string]bool {
 	out := map[string]bool{}
 	for id, d := range storedDashboards(stored) {
-		if ok, _ := configdoc.LegacyEditable(d); !ok {
+		if ok, _ := lc.Editable(d); !ok {
 			out[id] = true
 		}
 	}
@@ -194,7 +194,7 @@ func v3OnlyIDs(stored configdoc.Obj) map[string]bool {
 
 // v3OnlyDashboards lists the stored dashboards left out of the legacy view,
 // in document order, as [{id, name, path, reason}] (never null).
-func v3OnlyDashboards(stored configdoc.Obj) []map[string]interface{} {
+func v3OnlyDashboards(stored configdoc.Obj, lc *configdoc.LegacyCache) []map[string]interface{} {
 	out := []map[string]interface{}{}
 	l, _ := stored["dashboards"].([]any)
 	for _, d := range l {
@@ -202,7 +202,7 @@ func v3OnlyDashboards(stored configdoc.Obj) []map[string]interface{} {
 		if !ok {
 			continue
 		}
-		if editable, reason := configdoc.LegacyEditable(m); !editable {
+		if editable, reason := lc.Editable(m); !editable {
 			out = append(out, map[string]interface{}{"id": m["id"], "name": m["name"], "path": m["path"], "reason": reason})
 		}
 	}
@@ -212,10 +212,11 @@ func v3OnlyDashboards(stored configdoc.Obj) []map[string]interface{} {
 // attachLayout adds the view-only `layout` (the stored v3 document) and
 // `v3OnlyDashboards` to a write response, computed from the committed
 // document, so a client never keeps a layout older than its own save. Shared
-// with GET /api/config.
-func attachLayout(view map[string]interface{}, stored configdoc.Obj) {
+// with GET /api/config. lc is the request's cache (unchanged dashboards are
+// not recomputed).
+func attachLayout(view map[string]interface{}, stored configdoc.Obj, lc *configdoc.LegacyCache) {
 	view["layout"] = stored
-	view["v3OnlyDashboards"] = v3OnlyDashboards(stored)
+	view["v3OnlyDashboards"] = v3OnlyDashboards(stored, lc)
 }
 
 // storedRevision reads a stored dashboard's revision; a missing or
@@ -256,25 +257,27 @@ func normalizedWithoutRevision(d configdoc.Obj) ([]byte, error) {
 
 // docUpdateFn computes the new document and the response body from the stored
 // one. It must be repeatable (it may run twice, see updateDocWithBackup): no
-// side effects beyond mutating the stored doc it is handed.
-type docUpdateFn func(stored configdoc.Obj) (configdoc.Obj, interface{}, error)
+// side effects beyond mutating the stored doc it is handed. lc is the
+// request's LegacyCache (shared by the dry run, the real run and the
+// response), so each dashboard's legacy form is computed once per request.
+type docUpdateFn func(stored configdoc.Obj, lc *configdoc.LegacyCache) (configdoc.Obj, interface{}, error)
 
 // updateDoc runs fn on the stored config inside one transaction. fn returns
 // the new document and the response body; any error rolls everything back.
 func (r *Router) updateDoc(w http.ResponseWriter, fn docUpdateFn) {
-	r.updateDocWithLoadErr(w, loadErr, fn)
+	r.updateDocCached(w, loadErr, configdoc.NewLegacyCache(), fn)
 }
 
 // computeDoc loads the stored config through tx, runs fn, and verifies the
 // result has a well-formed tree with non-empty, document-wide unique ids, so
 // no writer can store a document that import, FindTile or conflict checks
 // would trip over.
-func computeDoc(tx *sql.Tx, onLoadErr func(error) *apiError, fn docUpdateFn) (configdoc.Obj, interface{}, error) {
+func computeDoc(tx *sql.Tx, onLoadErr func(error) *apiError, lc *configdoc.LegacyCache, fn docUpdateFn) (configdoc.Obj, interface{}, error) {
 	stored, err := configdoc.Load(tx)
 	if err != nil {
 		return nil, nil, onLoadErr(err)
 	}
-	next, resp, err := fn(stored)
+	next, resp, err := fn(stored, lc)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -287,6 +290,11 @@ func computeDoc(tx *sql.Tx, onLoadErr func(error) *apiError, fn docUpdateFn) (co
 // updateDocWithLoadErr is updateDoc with a caller-chosen mapping for a failure
 // to load the stored config (e.g. import's "refused so nothing is overwritten").
 func (r *Router) updateDocWithLoadErr(w http.ResponseWriter, onLoadErr func(error) *apiError, fn docUpdateFn) {
+	r.updateDocCached(w, onLoadErr, configdoc.NewLegacyCache(), fn)
+}
+
+// updateDocCached is updateDocWithLoadErr with the request's LegacyCache.
+func (r *Router) updateDocCached(w http.ResponseWriter, onLoadErr func(error) *apiError, lc *configdoc.LegacyCache, fn docUpdateFn) {
 	tx, err := r.db.Begin()
 	if err != nil {
 		writeAPIError(w, newAPIError(http.StatusInternalServerError, "Failed to start save: "+err.Error()))
@@ -294,7 +302,7 @@ func (r *Router) updateDocWithLoadErr(w http.ResponseWriter, onLoadErr func(erro
 	}
 	defer tx.Rollback() //nolint:errcheck // no-op after Commit
 
-	next, resp, err := computeDoc(tx, onLoadErr, fn)
+	next, resp, err := computeDoc(tx, onLoadErr, lc, fn)
 	if err != nil {
 		writeAPIError(w, err)
 		return
@@ -319,7 +327,7 @@ func (r *Router) updateDocWithLoadErr(w http.ResponseWriter, onLoadErr func(erro
 		return
 	}
 	if m, ok := resp.(map[string]interface{}); ok {
-		attachLayout(m, committed)
+		attachLayout(m, committed, lc)
 	}
 	writeJSON(w, resp)
 }
@@ -333,13 +341,14 @@ func (r *Router) updateDocWithLoadErr(w http.ResponseWriter, onLoadErr func(erro
 // backup failure never blocks the save; it is attached to a map response as
 // "warning" so the UI shows it.
 func (r *Router) updateDocWithBackup(w http.ResponseWriter, fn docUpdateFn) {
-	if err := r.dryRunDoc(fn); err != nil {
+	lc := configdoc.NewLegacyCache()
+	if err := r.dryRunDoc(lc, fn); err != nil {
 		writeAPIError(w, err)
 		return
 	}
 	warning := r.preUpdateBackup()
-	r.updateDoc(w, func(stored configdoc.Obj) (configdoc.Obj, interface{}, error) {
-		next, resp, err := fn(stored)
+	r.updateDocCached(w, loadErr, lc, func(stored configdoc.Obj, lc *configdoc.LegacyCache) (configdoc.Obj, interface{}, error) {
+		next, resp, err := fn(stored, lc)
 		if err == nil && warning != "" {
 			if m, ok := resp.(map[string]interface{}); ok {
 				m["warning"] = warning
@@ -351,13 +360,13 @@ func (r *Router) updateDocWithBackup(w http.ResponseWriter, fn docUpdateFn) {
 
 // dryRunDoc runs fn (and the id check) against the stored config in a
 // transaction that is always rolled back.
-func (r *Router) dryRunDoc(fn docUpdateFn) error {
+func (r *Router) dryRunDoc(lc *configdoc.LegacyCache, fn docUpdateFn) error {
 	tx, err := r.db.Begin()
 	if err != nil {
 		return newAPIError(http.StatusInternalServerError, "Failed to start save: "+err.Error())
 	}
 	defer tx.Rollback() //nolint:errcheck // read-only check
-	_, _, err = computeDoc(tx, loadErr, fn)
+	_, _, err = computeDoc(tx, loadErr, lc, fn)
 	return err
 }
 
@@ -379,9 +388,9 @@ func (r *Router) preUpdateBackup() string {
 // checking every body dashboard's revision against stored FIRST (FromLegacy
 // overwrites revision with the stored one, so a later check would never fire)
 // and bumping the revision of changed dashboards.
-func applyLegacyView(stored configdoc.Obj, in configdoc.Obj) (configdoc.Obj, map[string]int, error) {
+func applyLegacyView(stored configdoc.Obj, in configdoc.Obj, lc *configdoc.LegacyCache) (configdoc.Obj, map[string]int, error) {
 	prev := storedDashboards(stored)
-	v3Only := v3OnlyIDs(stored)
+	v3Only := v3OnlyIDs(stored, lc)
 	seen, _ := in["dashboardRevisions"].(map[string]interface{})
 	// Shallow copy so the caller's body is untouched (updateDocWithBackup
 	// runs this twice).
@@ -467,7 +476,7 @@ func applyLegacyView(stored configdoc.Obj, in configdoc.Obj) (configdoc.Obj, map
 			return nil, nil, ce
 		}
 	}
-	next, err := configdoc.FromLegacy(body, stored)
+	next, err := lc.FromLegacy(body, stored)
 	if err != nil {
 		return nil, nil, newAPIError(http.StatusBadRequest, "Invalid config: "+err.Error())
 	}
@@ -547,12 +556,12 @@ func (r *Router) handlePutDashboard(w http.ResponseWriter, req *http.Request, id
 		writeJSONError(w, "Dashboard id in body does not match the URL", http.StatusBadRequest)
 		return
 	}
-	r.updateDocWithBackup(w, func(stored configdoc.Obj) (configdoc.Obj, interface{}, error) {
+	r.updateDocWithBackup(w, func(stored configdoc.Obj, lc *configdoc.LegacyCache) (configdoc.Obj, interface{}, error) {
 		prev, ok := storedDashboards(stored)[id]
 		if !ok {
 			return nil, nil, newAPIError(http.StatusNotFound, "Dashboard not found: "+id)
 		}
-		if editable, _ := configdoc.LegacyEditable(prev); !editable {
+		if editable, _ := lc.Editable(prev); !editable {
 			return nil, nil, v3OnlyError(id)
 		}
 		if pathChanged(prev, body.Dashboard) {
@@ -560,7 +569,7 @@ func (r *Router) handlePutDashboard(w http.ResponseWriter, req *http.Request, id
 				return nil, nil, pe
 			}
 		}
-		if pe := v3OnlyPathClash(stored, v3OnlyIDs(stored), body.Dashboard); pe != nil {
+		if pe := v3OnlyPathClash(stored, v3OnlyIDs(stored, lc), body.Dashboard); pe != nil {
 			return nil, nil, pe
 		}
 		if ce := checkRevision(id, prev, body.Revision); ce != nil {
@@ -568,7 +577,7 @@ func (r *Router) handlePutDashboard(w http.ResponseWriter, req *http.Request, id
 		}
 		// Convert just this dashboard; FromLegacy carries settings, layouts
 		// and defaultLayout from prev.
-		one, err := configdoc.FromLegacy(
+		one, err := lc.FromLegacy(
 			configdoc.Obj{"dashboards": []any{map[string]interface{}(body.Dashboard)}},
 			configdoc.Obj{"schemaVersion": configdoc.SchemaVersion, "dashboards": []any{prev}},
 		)
@@ -600,7 +609,7 @@ func (r *Router) handleDeleteDashboard(w http.ResponseWriter, req *http.Request,
 		writeJSONError(w, "revision must be an integer", http.StatusBadRequest)
 		return
 	}
-	r.updateDocWithBackup(w, func(stored configdoc.Obj) (configdoc.Obj, interface{}, error) {
+	r.updateDocWithBackup(w, func(stored configdoc.Obj, _ *configdoc.LegacyCache) (configdoc.Obj, interface{}, error) {
 		prev, ok := storedDashboards(stored)[id]
 		if !ok {
 			return nil, nil, newAPIError(http.StatusNotFound, "Dashboard not found: "+id)
@@ -691,7 +700,7 @@ func (r *Router) handlePutDashboardSettings(w http.ResponseWriter, req *http.Req
 		writeJSONError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	r.updateDoc(w, func(stored configdoc.Obj) (configdoc.Obj, interface{}, error) {
+	r.updateDoc(w, func(stored configdoc.Obj, _ *configdoc.LegacyCache) (configdoc.Obj, interface{}, error) {
 		d, ok := storedDashboards(stored)[id]
 		if !ok {
 			return nil, nil, newAPIError(http.StatusNotFound, "Dashboard not found: "+id)

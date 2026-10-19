@@ -459,7 +459,8 @@ func (r *Router) handlePromoteScan(w http.ResponseWriter, req *http.Request, sca
 		writeAPIError(w, loadErr(err))
 		return
 	}
-	cfg, err := configdoc.ToLegacy(stored)
+	lc := configdoc.NewLegacyCache()
+	cfg, err := lc.ToLegacy(stored)
 	if err != nil {
 		writeAPIError(w, newAPIError(http.StatusInternalServerError, "Config cannot be shown for promotion; promotion aborted: "+err.Error()))
 		return
@@ -467,14 +468,14 @@ func (r *Router) handlePromoteScan(w http.ResponseWriter, req *http.Request, sca
 
 	// A v3-only dashboard is not in the legacy view; refuse it visibly
 	// rather than as "not found".
-	if body.Target.NewDashboard == nil && v3OnlyIDs(stored)[body.Target.DashboardID] {
+	if body.Target.NewDashboard == nil && v3OnlyIDs(stored, lc)[body.Target.DashboardID] {
 		writeAPIError(w, v3OnlyError(body.Target.DashboardID))
 		return
 	}
 
 	// v3-only dashboards are not in cfg; their paths are taken all the same.
 	var reserved []interface{}
-	v3Only := v3OnlyIDs(stored)
+	v3Only := v3OnlyIDs(stored, lc)
 	for id, d := range storedDashboards(stored) {
 		if v3Only[id] {
 			reserved = append(reserved, d)
@@ -515,7 +516,7 @@ func (r *Router) handlePromoteScan(w http.ResponseWriter, req *http.Request, sca
 		promoted++
 	}
 
-	next, err := configdoc.FromLegacy(cfg, stored)
+	next, err := lc.FromLegacy(cfg, stored)
 	if err != nil {
 		writeAPIError(w, newAPIError(http.StatusInternalServerError, "Failed to convert config: "+err.Error()))
 		return
@@ -574,7 +575,7 @@ func (r *Router) handlePromoteScan(w http.ResponseWriter, req *http.Request, sca
 		"promoted":      promoted,
 		"dashboardPath": dashboardPath,
 	}
-	attachLayout(resp, committed)
+	attachLayout(resp, committed, lc)
 	writeJSON(w, resp)
 }
 

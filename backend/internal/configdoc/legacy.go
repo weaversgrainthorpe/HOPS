@@ -20,29 +20,113 @@ var ErrV3OnlyDashboard = errors.New("configdoc: dashboard uses v3 layout feature
 // entries, children are ordered by (placement.y, placement.x), and all v3-only
 // keys are removed EXCEPT dashboard `revision` and `settings`, which pass
 // through. Dashboards that are not LegacyEditable are left out (FromLegacy
-// carries them over); a malformed dashboard is an error. The input is not
-// modified.
-func ToLegacy(v3 Obj) (Obj, error) {
+// carries them over), including one that cannot be read (a malformed tree or
+// placement): LegacyEditable reports it as "it cannot be read: ..." so the API
+// lists it as view-only with that reason, and one bad dashboard never takes
+// the whole view down. The input is not modified.
+func ToLegacy(v3 Obj) (Obj, error) { return (*LegacyCache)(nil).ToLegacy(v3) }
+
+// LegacyCache memoises each dashboard's legacy form (or the reason it has
+// none) by the dashboard's content, for the life of one request, so a request
+// that asks about the same dashboard several times (GET: view + v3-only list;
+// a legacy write: dry run, real run, and the committed response) computes it
+// once. Keying by content means a dashboard changed in between is simply a
+// new entry, never a stale answer. A nil *LegacyCache computes every time.
+// Not safe for concurrent use.
+type LegacyCache struct {
+	m        map[string]legacyResult
+	computed int
+}
+
+type legacyResult struct {
+	legacyJSON []byte // the legacy form, when editable
+	reason     string // why not editable ("" when editable)
+}
+
+// NewLegacyCache returns an empty request-scoped cache.
+func NewLegacyCache() *LegacyCache { return &LegacyCache{m: map[string]legacyResult{}} }
+
+// Computed reports how many legacy forms this cache has computed (tests).
+func (c *LegacyCache) Computed() int {
+	if c == nil {
+		return 0
+	}
+	return c.computed
+}
+
+// lookup returns the dashboard's legacy form (a fresh copy the caller may
+// mutate) and "" when it is LegacyEditable, or nil and the reason when not.
+// An unreadable dashboard's reason starts "it cannot be read: ".
+func (c *LegacyCache) lookup(dash Obj) (Obj, string) {
+	var key string
+	if c != nil {
+		b, err := json.Marshal(dash)
+		if err == nil {
+			key = string(b)
+			if r, ok := c.m[key]; ok {
+				if r.reason != "" {
+					return nil, r.reason
+				}
+				var legacy Obj
+				if err := json.Unmarshal(r.legacyJSON, &legacy); err == nil {
+					return legacy, ""
+				}
+				// Unreachable (we marshalled it); fall through and recompute.
+			}
+		}
+	}
+	legacy, reason, err := legacyForm(dash)
+	if err != nil {
+		legacy, reason = nil, "it cannot be read: "+err.Error()
+	}
+	if c != nil {
+		c.computed++
+		if key != "" {
+			r := legacyResult{reason: reason}
+			if reason == "" {
+				b, merr := json.Marshal(legacy)
+				if merr != nil {
+					return legacy, reason // not cached; still correct
+				}
+				r.legacyJSON = b
+			}
+			c.m[key] = r
+		}
+	}
+	return legacy, reason
+}
+
+// Editable is LegacyEditable through the cache.
+func (c *LegacyCache) Editable(dash Obj) (ok bool, reason string) {
+	_, reason = c.lookup(dash)
+	return reason == "", reason
+}
+
+// ToLegacy is the package ToLegacy through the cache.
+func (c *LegacyCache) ToLegacy(v3 Obj) (Obj, error) {
 	if !IsV3(v3) {
 		return nil, ErrNotV3
 	}
-	out, err := deepCopy(v3)
-	if err != nil {
-		return nil, fmt.Errorf("configdoc: copy v3 document: %w", err)
-	}
-	delete(out, "schemaVersion")
-	dashes, err := objList(out, "dashboards")
+	dashes, err := objList(v3, "dashboards")
 	if err != nil {
 		return nil, err
 	}
+	out := make(Obj, len(v3))
+	for k, v := range v3 {
+		if k == "dashboards" || k == "schemaVersion" {
+			continue
+		}
+		out[k] = v
+	}
+	out, err = deepCopy(out)
+	if err != nil {
+		return nil, fmt.Errorf("configdoc: copy v3 document: %w", err)
+	}
 	kept := make([]any, 0, len(dashes))
 	for _, d := range dashes {
-		legacy, reason, err := legacyForm(d)
-		if err != nil {
-			return nil, err
-		}
+		legacy, reason := c.lookup(d)
 		if reason != "" {
-			continue // v3-only: never in the view
+			continue // v3-only (or unreadable): never in the view
 		}
 		kept = append(kept, legacy)
 	}
@@ -85,11 +169,7 @@ func dashToLegacy(d Obj) error {
 // with designWidth, or any placement/columns differing from what
 // ConvertDashboardV2 would produce for the same order. reason names the first cause.
 func LegacyEditable(dash Obj) (ok bool, reason string) {
-	_, reason, err := legacyForm(dash)
-	if err != nil {
-		return false, "it cannot be read: " + err.Error()
-	}
-	return reason == "", reason
+	return (*LegacyCache)(nil).Editable(dash)
 }
 
 // legacyForm returns the dashboard's legacy rendering when it is
@@ -415,6 +495,11 @@ func objList(o Obj, key string) ([]Obj, error) {
 // holds such a dashboard's id is refused with ErrV3OnlyDashboard. It does not
 // check revisions; callers must do that first.
 func FromLegacy(view Obj, prev Obj) (Obj, error) {
+	return (*LegacyCache)(nil).FromLegacy(view, prev)
+}
+
+// FromLegacy is the package FromLegacy through the cache.
+func (c *LegacyCache) FromLegacy(view Obj, prev Obj) (Obj, error) {
 	if len(prev) > 0 && !IsV3(prev) {
 		return nil, ErrNotV3
 	}
@@ -453,7 +538,7 @@ func FromLegacy(view Obj, prev Obj) (Obj, error) {
 	anchor := ""
 	for _, pd := range prevDashes {
 		id, _ := pd["id"].(string)
-		if ok, _ := LegacyEditable(pd); !ok {
+		if ok, _ := c.Editable(pd); !ok {
 			if inView[id] {
 				return nil, fmt.Errorf("%w: %s", ErrV3OnlyDashboard, id)
 			}

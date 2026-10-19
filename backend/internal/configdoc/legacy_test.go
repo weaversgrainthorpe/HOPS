@@ -154,7 +154,10 @@ func TestFromLegacy_NotV3Prev(t *testing.T) {
 	}
 }
 
-func TestToLegacy_FailsLoudlyOnMalformedNodes(t *testing.T) {
+// An unreadable dashboard (malformed tree or placement) is treated as v3-only
+// (Ruling 24): it is left out of the legacy view, LegacyEditable names why,
+// and every other dashboard is still served. It never fails the whole view.
+func TestToLegacy_TreatsUnreadableAsV3Only(t *testing.T) {
 	cases := map[string]struct {
 		mutate func(doc Obj)
 		id     string
@@ -175,13 +178,73 @@ func TestToLegacy_FailsLoudlyOnMalformedNodes(t *testing.T) {
 			g["placement"].(Obj)["x"] = "left"
 		}, "g2"},
 	}
+	healthy, err := ConvertDashboardV2(Obj{"id": "ok", "name": "OK", "tabs": []any{
+		Obj{"id": "ok-t1", "name": "T", "groups": []any{Obj{"id": "ok-g1", "name": "G", "entries": []any{Obj{"id": "ok-e1", "name": "E"}}}}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
 	for name, c := range cases {
 		doc := migrated(t, loadJSON(t, "testdata/v2_basic.json"))
+		doc["dashboards"] = append(doc["dashboards"].([]any), healthy)
+		doc = norm(t, doc).(Obj)
 		c.mutate(doc)
-		_, err := ToLegacy(doc)
-		if err == nil || !strings.Contains(err.Error(), c.id) {
-			t.Errorf("%s: err = %v, want error mentioning %s", name, err, c.id)
+		view, err := ToLegacy(doc)
+		if err != nil {
+			t.Errorf("%s: ToLegacy failed the whole view: %v", name, err)
+			continue
 		}
+		ds := list(t, view, "dashboards")
+		if len(ds) != 1 || ds[0]["id"] != "ok" {
+			t.Errorf("%s: view dashboards = %v, want only the healthy one", name, snapshot2(view["dashboards"]))
+		}
+		ok, reason := LegacyEditable(list(t, doc, "dashboards")[0])
+		if ok || !strings.Contains(reason, "cannot be read") || !strings.Contains(reason, c.id) {
+			t.Errorf("%s: LegacyEditable = %v, %q; want not editable, unreadable, naming %s", name, ok, reason, c.id)
+		}
+	}
+}
+
+// LegacyCache gives the same answers as the uncached functions and computes
+// each dashboard's legacy form once, however often it is asked (m1).
+func TestLegacyCache_ComputesOncePerDashboard(t *testing.T) {
+	doc := migrated(t, loadJSON(t, "testdata/v2_basic.json"))
+	doc["dashboards"] = append(doc["dashboards"].([]any), showcaseDash(t, "s1"))
+	doc = norm(t, doc).(Obj)
+	lc := NewLegacyCache()
+	want, err := ToLegacy(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 3; i++ {
+		got, err := lc.ToLegacy(doc)
+		if err != nil {
+			t.Fatal(err)
+		}
+		eq(t, got, want, "cached ToLegacy")
+		got["dashboards"].([]any)[0].(Obj)["name"] = "mutated" // callers may mutate the view
+		for _, d := range list(t, doc, "dashboards") {
+			ok1, r1 := LegacyEditable(d)
+			ok2, r2 := lc.Editable(d)
+			if ok1 != ok2 || r1 != r2 {
+				t.Fatalf("cached Editable(%v) = %v %q, want %v %q", d["id"], ok2, r2, ok1, r1)
+			}
+		}
+		if _, err := lc.FromLegacy(want, doc); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n := lc.Computed(); n != 2 {
+		t.Fatalf("legacy forms computed %d times, want 2 (one per dashboard)", n)
+	}
+	// A changed dashboard is a different key: recomputed, never a stale answer.
+	_, _, _, e := findNode(doc, "e2")
+	delete(e, "placement")
+	if ok, _ := lc.Editable(list(t, doc, "dashboards")[0]); ok {
+		t.Fatal("changed dashboard answered from the cache as editable")
+	}
+	if n := lc.Computed(); n != 3 {
+		t.Fatalf("computed %d, want 3 after a change", n)
 	}
 }
 

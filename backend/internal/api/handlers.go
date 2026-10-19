@@ -120,7 +120,10 @@ func (r *Router) handleGetConfig(w http.ResponseWriter, req *http.Request) {
 		writeAPIError(w, loadErr(err))
 		return
 	}
-	view, err := configdoc.ToLegacy(stored)
+	// One cache for the view and the v3-only list: each dashboard's legacy
+	// form is computed once per request.
+	lc := configdoc.NewLegacyCache()
+	view, err := lc.ToLegacy(stored)
 	if err != nil {
 		writeAPIError(w, newAPIError(http.StatusInternalServerError, err.Error()))
 		return
@@ -147,7 +150,7 @@ func (r *Router) handleGetConfig(w http.ResponseWriter, req *http.Request) {
 	// legacy view leaves out (so the UI can say why) and any migration
 	// notices. All view-only like dashboardRevisions: stripped on PUT, never
 	// stored.
-	attachLayout(view, stored)
+	attachLayout(view, stored, lc)
 	if len(r.migration.Renames) > 0 {
 		view["migrationNotices"] = migrationNotices(r.migration.Renames, stored)
 	}
@@ -177,8 +180,8 @@ func (r *Router) handleUpdateConfig(w http.ResponseWriter, req *http.Request) {
 	// chose to save — but the response carries a warning the UI shows: a
 	// silent backup failure means the admin trusts a safety-net that didn't
 	// fire next time they roll back.
-	r.updateDocWithBackup(w, func(stored configdoc.Obj) (configdoc.Obj, interface{}, error) {
-		next, revs, err := applyLegacyView(stored, configData)
+	r.updateDocWithBackup(w, func(stored configdoc.Obj, lc *configdoc.LegacyCache) (configdoc.Obj, interface{}, error) {
+		next, revs, err := applyLegacyView(stored, configData, lc)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -1475,7 +1478,7 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 	r.updateDocWithLoadErr(w, func(err error) *apiError {
 		slog.Error("import: stored config unreadable", "component", "import", "error", err)
 		return newAPIError(http.StatusInternalServerError, importUnreadableMsg)
-	}, func(stored configdoc.Obj) (configdoc.Obj, interface{}, error) {
+	}, func(stored configdoc.Obj, _ *configdoc.LegacyCache) (configdoc.Obj, interface{}, error) {
 		existing, _ := stored["dashboards"].([]any)
 		existingPaths := map[string]bool{}
 		for _, d := range existing {

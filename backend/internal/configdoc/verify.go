@@ -3,6 +3,7 @@ package configdoc
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"strings"
 )
 
@@ -367,6 +368,7 @@ func (v *verifier) checkContainer(owner string, c Obj, note func(string, Obj) st
 			continue
 		}
 		n := note(fmt.Sprintf("%s child[%d]", owner, i), km)
+		v.checkPlacement(n, km["placement"])
 		switch km["kind"] {
 		case "tile":
 		case "folder":
@@ -380,6 +382,34 @@ func (v *verifier) checkContainer(owner string, c Obj, note func(string, Obj) st
 			v.add("%s: kind is %s, want \"tile\" or \"folder\"", n, show(km["kind"]))
 		}
 	}
+}
+
+// checkPlacement requires a placement object with finite numeric x, y, w and
+// h: the legacy view orders by it and the renderer positions by it, so a node
+// without one could not be shown (Ruling 24).
+func (v *verifier) checkPlacement(n string, p any) {
+	pm, ok := p.(Obj)
+	if !ok {
+		v.add("%s: placement is %s, want an object with numeric x, y, w, h", n, trunc(show(p)))
+		return
+	}
+	for _, k := range []string{"x", "y", "w", "h"} {
+		if !finiteNumber(pm[k]) {
+			v.add("%s: placement.%s is %s, want a finite number", n, k, trunc(show(pm[k])))
+		}
+	}
+}
+
+// finiteNumber reports whether x is a finite JSON number (float64 as decoded,
+// or a Go int as the converter builds it).
+func finiteNumber(x any) bool {
+	switch n := x.(type) {
+	case float64:
+		return !math.IsNaN(n) && !math.IsInf(n, 0)
+	case int, int64:
+		return true
+	}
+	return false
 }
 
 // asList treats a missing/null list as empty; any other non-array is not ok.
