@@ -147,8 +147,7 @@ func (r *Router) handleGetConfig(w http.ResponseWriter, req *http.Request) {
 	// legacy view leaves out (so the UI can say why) and any migration
 	// notices. All view-only like dashboardRevisions: stripped on PUT, never
 	// stored.
-	view["layout"] = stored
-	view["v3OnlyDashboards"] = v3OnlyDashboards(stored)
+	attachLayout(view, stored)
 	if len(r.migration.Renames) > 0 {
 		view["migrationNotices"] = migrationNotices(r.migration.Renames, stored)
 	}

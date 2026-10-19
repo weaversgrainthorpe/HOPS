@@ -560,15 +560,22 @@ func (r *Router) handlePromoteScan(w http.ResponseWriter, req *http.Request, sca
 		writeJSONError(w, "Failed to mark results as promoted", http.StatusInternalServerError)
 		return
 	}
+	committed, err := configdoc.Load(tx)
+	if err != nil {
+		writeAPIError(w, newAPIError(http.StatusInternalServerError, "Failed to read back saved config: "+err.Error()))
+		return
+	}
 	if err := tx.Commit(); err != nil {
 		writeJSONError(w, "Failed to commit promotion", http.StatusInternalServerError)
 		return
 	}
 
-	writeJSON(w, map[string]interface{}{
+	resp := map[string]interface{}{
 		"promoted":      promoted,
 		"dashboardPath": dashboardPath,
-	})
+	}
+	attachLayout(resp, committed)
+	writeJSON(w, resp)
 }
 
 // validatePromoteTarget enforces the "exactly one of ID-or-new" rule for

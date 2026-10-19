@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import TabCanvas from './TabCanvas.svelte';
+import { layoutStale } from '$lib/stores/config';
+import { editMode } from '$lib/stores/editMode';
 import type { LayoutDashboard, LayoutTab } from '$lib/types/layout';
 
 let width = 1440;
@@ -98,5 +100,58 @@ describe('TabCanvas', () => {
     expect(screen.getByText('Edge')).toBeInTheDocument();
     const el = container.querySelector('[data-node-id="e1"]') as HTMLElement;
     expect(el.getAttribute('style')).toContain('grid-column: 12 / span 1');
+  });
+
+  it('renders a child below the folder height instead of clipping it', async () => {
+    const { dash, tab } = mk([folder('f1', 'Short', 0, 0, 6, 2, [tile('low', 'LowTile', 0, 3)])]);
+    const { container } = render(TabCanvas, { dashboard: dash, tab });
+    await tick();
+    expect(screen.getByText('LowTile')).toBeInTheDocument();
+    const cell = container.querySelector('[data-node-id="low"]') as HTMLElement;
+    expect(cell.getAttribute('style')).toContain('grid-row: 4 / span 1');
+    const inner = cell.parentElement as HTMLElement;
+    // 4 content rows must fit the folder body: (2*120 - 56) / 4 = 46px each
+    const m = /grid-auto-rows:\s*([\d.]+)px/.exec(inner.getAttribute('style') ?? '');
+    expect(Number(m![1])).toBeCloseTo(46, 1);
+    let el: HTMLElement | null = cell;
+    while (el && el !== container) {
+      expect(getComputedStyle(el).overflow).not.toBe('hidden');
+      el = el.parentElement;
+    }
+  });
+
+  it("sizes a nested folder's rows from its parent's cell size", async () => {
+    const { dash, tab } = mk([
+      folder('f1', 'Outer', 0, 0, 12, 8, [folder('f2', 'Inner', 0, 0, 8, 6, [tile('t', 'T', 0, 0)])])
+    ]);
+    const { container } = render(TabCanvas, { dashboard: dash, tab });
+    await tick();
+    const outerRow = (8 * 120 - 56) / 7;
+    const expected = (6 * outerRow - 56) / 5;
+    const innerGrid = (container.querySelector('[data-node-id="t"]') as HTMLElement).parentElement as HTMLElement;
+    const m = /grid-auto-rows:\s*([\d.]+)px/.exec(innerGrid.getAttribute('style') ?? '');
+    expect(Number(m![1])).toBeCloseTo(expected, 1);
+    expect(Math.abs(Number(m![1]) - (6 * 120 - 56) / 5)).toBeGreaterThan(5);
+  });
+
+  it('tiles are view-only even when edit mode is on', async () => {
+    editMode.set(true);
+    const { dash, tab } = mk([tile('e1', 'Solo', 0, 0)]);
+    const { container } = render(TabCanvas, { dashboard: dash, tab });
+    await tick();
+    expect(container.querySelector('.edit-mode')).toBeNull();
+    editMode.set(false);
+  });
+
+  it('shows a refreshing state instead of the old tree while the layout is stale', async () => {
+    const { dash, tab } = mk([tile('e1', 'Solo', 0, 0)]);
+    layoutStale.set(true);
+    render(TabCanvas, { dashboard: dash, tab });
+    await tick();
+    expect(screen.getByRole('status')).toHaveTextContent('Refreshing layout');
+    expect(screen.queryByText('Solo')).toBeNull();
+    layoutStale.set(false);
+    await tick();
+    expect(screen.getByText('Solo')).toBeInTheDocument();
   });
 });

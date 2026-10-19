@@ -1,4 +1,5 @@
 import type { Config, Dashboard, DashboardSettings } from '$lib/types';
+import type { LayoutDoc } from '$lib/types/layout';
 import type { ImportResult } from './importResult';
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api';
@@ -233,9 +234,15 @@ export async function changePassword(oldPassword: string, newPassword: string): 
 // attached (e.g. "pre-update backup failed: ... — config saved anyway").
 // Callers should surface non-empty warnings to the user so silent
 // degradation of the safety-net is visible.
+/** Fresh view-only layout fields every successful config write returns. */
+export interface FreshLayout {
+  layout?: LayoutDoc;
+  v3OnlyDashboards?: { id: string; name: string; path: string; reason: string }[];
+}
+
 export async function updateConfig(
   config: Config
-): Promise<{ warning?: string; revisions?: Record<string, number> }> {
+): Promise<{ warning?: string; revisions?: Record<string, number> } & FreshLayout> {
   const resp = await fetchAPI('/config', {
     method: 'PUT',
     body: JSON.stringify(config),
@@ -248,7 +255,7 @@ export async function saveDashboard(
   id: string,
   dashboard: Dashboard,
   revision: number
-): Promise<{ revision: number; warning?: string }> {
+): Promise<{ revision: number; warning?: string } & FreshLayout> {
   const resp = await fetchAPI(`/dashboards/${encodeURIComponent(id)}`, {
     method: 'PUT',
     body: JSON.stringify({ dashboard, revision }),
@@ -257,9 +264,13 @@ export async function saveDashboard(
     throw new Error('The server did not confirm the new dashboard revision.');
   }
   // `warning`: the pre-update backup failed but the save went through.
-  return typeof resp.warning === 'string' && resp.warning
-    ? { revision: resp.revision, warning: resp.warning }
-    : { revision: resp.revision };
+  const out: { revision: number; warning?: string } & FreshLayout = { revision: resp.revision };
+  if (typeof resp.warning === 'string' && resp.warning) out.warning = resp.warning;
+  if (resp.layout) {
+    out.layout = resp.layout;
+    out.v3OnlyDashboards = resp.v3OnlyDashboards ?? [];
+  }
+  return out;
 }
 
 /** Resolved per-dashboard settings (what actually applies). */
@@ -295,7 +306,7 @@ export async function saveDashboardSettings(
   id: string,
   overrides: Partial<Record<keyof DashboardSettings, string | number | boolean | null>>,
   revision: number
-): Promise<{ revision: number }> {
+): Promise<{ revision: number } & FreshLayout> {
   const resp = await fetchAPI(`/dashboards/${encodeURIComponent(id)}/settings`, {
     method: 'PUT',
     body: JSON.stringify({ overrides, revision }),
@@ -303,7 +314,9 @@ export async function saveDashboardSettings(
   if (!resp || typeof resp.revision !== 'number') {
     throw new Error('The server did not confirm the new settings revision.');
   }
-  return { revision: resp.revision };
+  return resp.layout
+    ? { revision: resp.revision, layout: resp.layout, v3OnlyDashboards: resp.v3OnlyDashboards ?? [] }
+    : { revision: resp.revision };
 }
 
 export async function exportConfig(format: 'json' | 'yaml' = 'json', dashboardId?: string): Promise<Blob> {

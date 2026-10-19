@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { FolderNode, LayoutDashboard, LayoutTab } from '$lib/types/layout';
   import type { CanvasPlan } from '$lib/layout/geometry';
-  import { folderContentRowPx, resolveMode } from '$lib/layout/geometry';
+  import { clampPlacement, folderContentRowPx, isRenderable, resolveMode } from '$lib/layout/geometry';
   import { getTextColorValue } from '$lib/utils/colorContrast';
   import Icon from '@iconify/svelte';
   import ContainerView from './ContainerView.svelte';
@@ -15,8 +15,10 @@
     tab: LayoutTab;
     /** Folders enclosing this one (outermost first); does not include `folder`. */
     folderChain: FolderNode[];
+    /** Row height (px) of the container this folder sits in; sizes this folder's own rows. */
+    parentRowPx: number;
   }
-  let { folder, style = '', plan, dashboard, tab, folderChain }: Props = $props();
+  let { folder, style = '', plan, dashboard, tab, folderChain, parentRowPx }: Props = $props();
 
   const chain = $derived([...folderChain, folder]);
   const innerMode = $derived(resolveMode(dashboard, tab, chain));
@@ -28,8 +30,26 @@
   const innerColumns = $derived(
     Number.isFinite(folder.placement.w) && folder.placement.w >= 1 ? Math.floor(folder.placement.w) : 1
   );
+  // Content rows = max(h-1, deepest child bottom), so a child below the folder's
+  // nominal height still has a row and is shrunk-to-fit, never clipped.
+  const contentRows = $derived.by(() => {
+    let rows = Math.max(1, Math.floor(folder.placement.h) - 1);
+    for (const c of folder.content.children) {
+      if (!isRenderable(c)) continue;
+      const p = clampPlacement(c.placement, innerColumns);
+      rows = Math.max(rows, p.y + p.h);
+    }
+    return rows;
+  });
   const innerRowPx = $derived(
-    plan.kind === 'grid' ? folderContentRowPx(folder.placement.h, plan.cellPx, showTitle) : undefined
+    plan.kind === 'grid'
+      ? Math.round(
+          ((folderContentRowPx(folder.placement.h, parentRowPx, showTitle) *
+            Math.max(1, Math.floor(folder.placement.h) - 1)) /
+            contentRows) *
+            100
+        ) / 100
+      : undefined
   );
   const inner = $derived({ columns: innerColumns, children: folder.content.children });
 </script>
@@ -86,7 +106,6 @@
     flex-direction: column;
     min-width: 0;
     min-height: 0;
-    overflow: hidden;
     border: 1px solid var(--border);
     border-radius: 0.5rem;
     isolation: isolate;

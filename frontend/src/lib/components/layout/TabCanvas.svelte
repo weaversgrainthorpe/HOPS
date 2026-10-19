@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { LayoutDashboard, LayoutTab } from '$lib/types/layout';
   import { planCanvas, resolveMode } from '$lib/layout/geometry';
+  import { layoutStale } from '$lib/stores/config';
   import ContainerView from './ContainerView.svelte';
 
   interface Props {
@@ -28,7 +29,9 @@
 </script>
 
 <div class="tab-canvas" bind:this={el} data-tab-id={tab.id}>
-  {#if width > 0}
+  {#if $layoutStale}
+    <div role="status" class="refreshing">Refreshing layout…</div>
+  {:else if width > 0}
     <ContainerView container={tab.root} {mode} {plan} {dashboard} {tab} folderChain={[]} />
   {/if}
 </div>
@@ -36,5 +39,9 @@
 <style>
   .tab-canvas {
     width: 100%;
+  }
+.refreshing {
+    padding: 1rem;
+    color: var(--text-secondary);
   }
 </style>

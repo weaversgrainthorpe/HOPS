@@ -29,9 +29,12 @@
     onCopyToTab?: (targetTabId: string, targetGroupId: string) => void;
     tabId?: string;
     groupId?: string;
+    /** Render as a plain tile: edit mode is ignored (no edit controls, selection, context menu or modal). */
+    viewOnly?: boolean;
   }
 
-  let { entry, currentTabId = '', currentGroupId = '', availableTabs = [], onUpdate, onDelete, onMoveToTab, onCopyToTab, tabId, groupId }: Props = $props();
+  let { entry, currentTabId = '', currentGroupId = '', availableTabs = [], onUpdate, onDelete, onMoveToTab, onCopyToTab, tabId, groupId, viewOnly = false }: Props = $props();
+  const inEdit = $derived($editMode && !viewOnly);
   let showEditModal = $state(false);
   let showIframeModal = $state(false);
   let showPopupModal = $state(false);
@@ -47,12 +50,12 @@
 
   // Check if this entry is selected
   let isSelected = $derived(
-    tabId && groupId ? isEntrySelected(entry.id, tabId, groupId) : false
+    !viewOnly && tabId && groupId ? isEntrySelected(entry.id, tabId, groupId) : false
   );
 
   function handleClick(e: MouseEvent) {
     // In edit mode, handle multi-select with Ctrl/Cmd key
-    if ($editMode) {
+    if (inEdit) {
       if (e.ctrlKey || e.metaKey) {
         // Toggle multi-selection
         if (tabId && groupId) {
@@ -89,7 +92,7 @@
   }
 
   function handleContextMenu(e: MouseEvent) {
-    if (!$editMode) return;
+    if (!inEdit) return;
 
     e.preventDefault();
     e.stopPropagation();
@@ -157,7 +160,7 @@
 <div class="entry-container">
   <button
     class="entry {sizeClass}"
-    class:edit-mode={$editMode}
+    class:edit-mode={inEdit}
     class:custom-color={entry.color}
     class:selected={isSelected}
     class:entry-note={isNote}
@@ -166,7 +169,7 @@
     onclick={handleClick}
     oncontextmenu={handleContextMenu}
     title={entry.description || entry.name}
-    aria-label={isNote ? entry.name : ($editMode ? `Edit ${entry.name}` : `Open ${entry.name}`)}
+    aria-label={isNote ? entry.name : (inEdit ? `Edit ${entry.name}` : `Open ${entry.name}`)}
     aria-pressed={isSelected}
   >
     {#if isNote}
@@ -210,7 +213,7 @@
     {/if}
   </button>
 
-  {#if $editMode}
+  {#if inEdit}
     <div class="hover-controls">
       <button class="control-btn edit-btn" onclick={(e) => { e.stopPropagation(); showEditModal = true; }} aria-label="Edit {entry.name}" title="Edit tile">
         <Icon icon="mdi:pencil" width="16" />

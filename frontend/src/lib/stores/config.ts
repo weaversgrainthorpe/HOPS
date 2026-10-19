@@ -1,6 +1,7 @@
 import { writable, derived, get } from 'svelte/store';
 import type { Config, Dashboard, DashboardSettings } from '$lib/types';
 import type { LayoutDoc, LayoutDashboard } from '$lib/types/layout';
+import type { FreshLayout } from '$lib/utils/api';
 import {
   getConfig,
   updateConfig as apiUpdateConfig,
@@ -41,6 +42,24 @@ export const v3OnlyDashboardIds = derived(
 
 export function findLayoutDashboard(id: string, doc: LayoutDoc | null): LayoutDashboard | undefined {
   return doc?.dashboards.find((d) => d.id === id);
+}
+
+// True while the held `layout` is known to be older than the legacy data (a
+// write response did not carry a fresh one and a reload is in flight/failed).
+// The renderer shows a refreshing state instead of the old tree. loadConfig
+// clears it once a fresh config has landed.
+export const layoutStale = writable(false);
+
+// The layout fields to merge into the config in the SAME config.set as a
+// legacy update. A response without `layout` leaves the old one unusable: flag
+// it stale and reload, never present it as current.
+function freshLayoutPatch(resp: FreshLayout | undefined): Pick<Config, 'layout' | 'v3OnlyDashboards'> | {} {
+  if (resp && resp.layout) {
+    return { layout: resp.layout, v3OnlyDashboards: resp.v3OnlyDashboards ?? [] };
+  }
+  layoutStale.set(true);
+  void loadConfig();
+  return {};
 }
 
 // Loading state
@@ -96,6 +115,7 @@ export async function loadConfig() {
   try {
     const data = await getConfig();
     config.set(data);
+    layoutStale.set(false);
     migrationFailure.set(null);
     saveConflict.set(null);
   } catch (error) {
@@ -131,7 +151,8 @@ export async function updateConfig(newConfig: Config, showToast = true) {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { layout: _layout, v3OnlyDashboards: _v3Only, ...putBody } = newConfig;
     const resp = await apiUpdateConfig(putBody);
-    config.set(resp.revisions ? withRevisions(newConfig, resp.revisions) : newConfig);
+    const patch = freshLayoutPatch(resp);
+    config.set({ ...(resp.revisions ? withRevisions(newConfig, resp.revisions) : newConfig), ...patch });
     if (showToast) {
       toast.success('Changes saved');
     }
@@ -184,7 +205,8 @@ async function saveOneDashboard(updated: Dashboard): Promise<void> {
         saved,
         ...currentConfig.dashboards.slice(index + 1)
       ],
-      dashboardRevisions: { ...(currentConfig.dashboardRevisions ?? {}), [updated.id]: resp.revision }
+      dashboardRevisions: { ...(currentConfig.dashboardRevisions ?? {}), [updated.id]: resp.revision },
+      ...freshLayoutPatch(resp)
     });
     toast.success('Changes saved');
     // The save went through but its pre-update backup failed: say so, so
@@ -238,7 +260,7 @@ export async function saveDashboardSettingsChanges(
     try {
       const resp = await saveDashboardSettings(id, changes, revision);
       const merged = { ...(dash.settings ?? {}), ...changes } as DashboardSettings;
-      applyDashboardSettings(id, merged, resp.revision);
+      applyDashboardSettings(id, merged, resp.revision, resp);
     } catch (error) {
       logError('Dashboard settings save', error);
       noteSaveFailure(error);
@@ -252,13 +274,19 @@ export async function saveDashboardSettingsChanges(
 // spuriously conflict (and so the UI reflects what the server holds). Only
 // call it with a revision the server returned for a save that was checked
 // against this store's own revision (see saveDashboardSettingsChanges).
-export function applyDashboardSettings(id: string, settings: DashboardSettings, revision: number): void {
+export function applyDashboardSettings(
+  id: string,
+  settings: DashboardSettings,
+  revision: number,
+  fresh?: FreshLayout
+): void {
   const cfg = get(config);
   if (!cfg) return;
   config.set({
     ...cfg,
     dashboards: cfg.dashboards.map((d) => (d.id === id ? { ...d, settings, revision } : d)),
-    dashboardRevisions: { ...(cfg.dashboardRevisions ?? {}), [id]: revision }
+    dashboardRevisions: { ...(cfg.dashboardRevisions ?? {}), [id]: revision },
+    ...freshLayoutPatch(fresh)
   });
 }
 

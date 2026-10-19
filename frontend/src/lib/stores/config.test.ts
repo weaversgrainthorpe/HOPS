@@ -23,9 +23,14 @@ import {
   saveConflict,
   migrationFailure,
   showMigrationFailedPage,
-  saveDashboardSettingsChanges
+  saveDashboardSettingsChanges,
+  layoutDoc,
+  layoutStale
 } from './config';
 import { toast } from './toast';
+
+// A write response always carries the fresh layout (else the store reloads).
+const FL = { layout: { schemaVersion: 3 as const, dashboards: [] }, v3OnlyDashboards: [] };
 
 function dash(id: string, revision: number): Dashboard {
   return { id, name: id, path: `/${id}`, tabs: [], order: 0, revision };
@@ -49,7 +54,7 @@ beforeEach(() => {
 
 describe('mutateDashboard', () => {
   it('sends the current revision and stores the returned one', async () => {
-    vi.mocked(api.saveDashboard).mockResolvedValue({ revision: 4 });
+    vi.mocked(api.saveDashboard).mockResolvedValue({ revision: 4, ...FL });
     await mutateDashboard('a', (d) => {
       d.name = 'renamed';
     });
@@ -66,8 +71,8 @@ describe('mutateDashboard', () => {
 
   it('chains revisions across successive saves', async () => {
     vi.mocked(api.saveDashboard)
-      .mockResolvedValueOnce({ revision: 4 })
-      .mockResolvedValueOnce({ revision: 5 });
+      .mockResolvedValueOnce({ revision: 4, ...FL })
+      .mockResolvedValueOnce({ revision: 5, ...FL });
     await mutateDashboard('a', (d) => { d.name = 'one'; });
     await mutateDashboard('a', (d) => { d.name = 'two'; });
     expect(vi.mocked(api.saveDashboard).mock.calls[1][2]).toBe(4);
@@ -93,7 +98,7 @@ describe('mutateDashboard', () => {
 
 describe('updateConfig', () => {
   it('applies returned revisions to the store', async () => {
-    vi.mocked(api.updateConfig).mockResolvedValue({ revisions: { a: 4, b: 8 } });
+    vi.mocked(api.updateConfig).mockResolvedValue({ revisions: { a: 4, b: 8 }, ...FL });
     await updateConfig(makeConfig(), false);
     const cfg = get(config)!;
     expect(cfg.dashboardRevisions).toEqual({ a: 4, b: 8 });
@@ -101,10 +106,10 @@ describe('updateConfig', () => {
   });
 
   it('a delete after an edit sends the up-to-date revision', async () => {
-    vi.mocked(api.saveDashboard).mockResolvedValue({ revision: 4 });
+    vi.mocked(api.saveDashboard).mockResolvedValue({ revision: 4, ...FL });
     await mutateDashboard('a', (d) => { d.name = 'edited'; });
 
-    vi.mocked(api.updateConfig).mockResolvedValue({ revisions: { b: 7 } });
+    vi.mocked(api.updateConfig).mockResolvedValue({ revisions: { b: 7 }, ...FL });
     const cur = get(config)!;
     await updateConfig({ ...cur, dashboards: cur.dashboards.filter((d) => d.id !== 'b') }, false);
     const sent = vi.mocked(api.updateConfig).mock.calls[0][0];
@@ -114,9 +119,9 @@ describe('updateConfig', () => {
   });
 
   it('a delete after another delete-free edit uses the edit revision (a only)', async () => {
-    vi.mocked(api.saveDashboard).mockResolvedValue({ revision: 4 });
+    vi.mocked(api.saveDashboard).mockResolvedValue({ revision: 4, ...FL });
     await mutateDashboard('a', (d) => { d.name = 'edited'; });
-    vi.mocked(api.updateConfig).mockResolvedValue({ revisions: { b: 7 } });
+    vi.mocked(api.updateConfig).mockResolvedValue({ revisions: { b: 7 }, ...FL });
     const cur = get(config)!;
     await updateConfig({ ...cur, dashboards: cur.dashboards.filter((d) => d.id !== 'a') }, false);
     expect(vi.mocked(api.updateConfig).mock.calls[0][0].dashboardRevisions!.a).toBe(4);
@@ -167,7 +172,7 @@ function fakeServer(revisions: Record<string, number>) {
   const check = (id: string, rev: number) => {
     if (rev !== revisions[id]) throw new api.ConflictError(id, revisions[id]);
     revisions[id] += 1;
-    return { revision: revisions[id] };
+    return { revision: revisions[id], ...FL };
   };
   vi.mocked(api.saveDashboard).mockImplementation(async (id, _d, rev) => check(id, rev));
   vi.mocked(api.saveDashboardSettings).mockImplementation(async (id, _o, rev) => check(id, rev));
@@ -215,7 +220,7 @@ describe('saveDashboardSettingsChanges (C1)', () => {
 describe('saveOneDashboard backup warning (I4)', () => {
   it('surfaces the server warning when the pre-update backup failed', async () => {
     const warn = vi.spyOn(toast, 'warning');
-    vi.mocked(api.saveDashboard).mockResolvedValue({ revision: 4, warning: 'Pre-update backup failed: disk full. Config saved anyway.' });
+    vi.mocked(api.saveDashboard).mockResolvedValue({ revision: 4, warning: 'Pre-update backup failed: disk full. Config saved anyway.', ...FL });
     await mutateDashboard('a', (d) => { d.name = 'x'; });
     expect(warn).toHaveBeenCalledWith('Pre-update backup failed: disk full. Config saved anyway.');
     expect(get(config)!.dashboards[0].revision).toBe(4);
@@ -258,7 +263,7 @@ describe('layout fields', () => {
   });
 
   it('updateConfig PUT body has no layout or v3OnlyDashboards', async () => {
-    vi.mocked(api.updateConfig).mockResolvedValue({});
+    vi.mocked(api.updateConfig).mockResolvedValue({ ...FL });
     const cfg: Config = {
       ...makeConfig(),
       layout: { schemaVersion: 3, dashboards: [] },
@@ -269,5 +274,60 @@ describe('layout fields', () => {
     expect('layout' in sent).toBe(false);
     expect('v3OnlyDashboards' in sent).toBe(false);
     expect(sent.dashboards).toBeDefined();
+  });
+});
+
+describe('write responses refresh the layout', () => {
+  const docWith = (name: string) => ({
+    schemaVersion: 3 as const,
+    dashboards: [{ id: 'a', name, path: '/a', revision: 9, tabs: [] }]
+  });
+  const old = docWith('old');
+
+  beforeEach(() => {
+    layoutStale.set(false);
+    config.set({ ...makeConfig(), layout: old, v3OnlyDashboards: [] });
+  });
+
+  it('updateConfig takes the response layout', async () => {
+    vi.mocked(api.updateConfig).mockResolvedValue({ layout: docWith('fresh'), v3OnlyDashboards: [] });
+    await updateConfig({ ...makeConfig(), layout: old });
+    expect(get(layoutDoc)).toEqual(docWith('fresh'));
+    expect(get(layoutStale)).toBe(false);
+  });
+
+  it('mutateDashboard (dashboard save, also covers delete-by-save paths) takes the response layout', async () => {
+    vi.mocked(api.saveDashboard).mockResolvedValue({ revision: 4, layout: docWith('fresh2'), v3OnlyDashboards: [] });
+    await mutateDashboard('a', (d) => { d.name = 'x'; });
+    expect(get(layoutDoc)).toEqual(docWith('fresh2'));
+  });
+
+  it('settings save takes the response layout', async () => {
+    vi.mocked(api.saveDashboardSettings).mockResolvedValue({ revision: 4, layout: docWith('fresh3'), v3OnlyDashboards: [] });
+    await saveDashboardSettingsChanges('a', { statusChecksEnabled: false });
+    expect(get(layoutDoc)).toEqual(docWith('fresh3'));
+  });
+
+  it('a response without layout marks it stale and reloads', async () => {
+    let release!: () => void;
+    vi.mocked(api.getConfig).mockImplementation(
+      () => new Promise((res) => { release = () => res({ ...makeConfig(), layout: docWith('reloaded') }); })
+    );
+    vi.mocked(api.updateConfig).mockResolvedValue({});
+    await updateConfig(makeConfig());
+    expect(get(layoutStale)).toBe(true);
+    expect(api.getConfig).toHaveBeenCalled();
+    release();
+    await vi.waitFor(() => expect(get(layoutStale)).toBe(false));
+    expect(get(layoutDoc)).toEqual(docWith('reloaded'));
+  });
+
+  it('stays stale (visibly) when the reload fails', async () => {
+    vi.mocked(api.getConfig).mockRejectedValue(new Error('down'));
+    vi.mocked(api.saveDashboard).mockResolvedValue({ revision: 4 });
+    await mutateDashboard('a', (d) => { d.name = 'x'; });
+    await vi.waitFor(() => expect(api.getConfig).toHaveBeenCalled());
+    await new Promise((r) => setTimeout(r, 10));
+    expect(get(layoutStale)).toBe(true);
   });
 });

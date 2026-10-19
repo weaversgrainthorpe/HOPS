@@ -59,6 +59,7 @@
               currentGroupId={parentId}
               tabId={tab.id}
               groupId={parentId}
+              viewOnly
             />
           </div>
         {:else}
@@ -69,6 +70,7 @@
             {dashboard}
             {tab}
             {folderChain}
+            parentRowPx={rowPx ?? cellPx}
           />
         {/if}
       {:else}
@@ -90,7 +92,6 @@
   .cell {
     min-width: 0;
     min-height: 0;
-    overflow: hidden;
   }
   .unsupported {
     padding: 1rem;

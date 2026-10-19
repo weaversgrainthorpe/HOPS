@@ -165,6 +165,15 @@ func v3OnlyDashboards(stored configdoc.Obj) []map[string]interface{} {
 	return out
 }
 
+// attachLayout adds the view-only `layout` (the stored v3 document) and
+// `v3OnlyDashboards` to a write response, computed from the committed
+// document, so a client never keeps a layout older than its own save. Shared
+// with GET /api/config.
+func attachLayout(view map[string]interface{}, stored configdoc.Obj) {
+	view["layout"] = stored
+	view["v3OnlyDashboards"] = v3OnlyDashboards(stored)
+}
+
 // storedRevision reads a stored dashboard's revision; a missing or
 // non-numeric one is a visible 500, never silently 0.
 func storedRevision(id string, d configdoc.Obj) (int, *apiError) {
@@ -250,9 +259,23 @@ func (r *Router) updateDocWithLoadErr(w http.ResponseWriter, onLoadErr func(erro
 		writeAPIError(w, newAPIError(http.StatusInternalServerError, "Failed to save config: "+err.Error()))
 		return
 	}
+	// Re-read what was just written (same transaction) so the response carries
+	// exactly the committed document.
+	var committed configdoc.Obj
+	if _, ok := resp.(map[string]interface{}); ok {
+		c, lerr := configdoc.Load(tx)
+		if lerr != nil {
+			writeAPIError(w, newAPIError(http.StatusInternalServerError, "Failed to read back saved config: "+lerr.Error()))
+			return
+		}
+		committed = c
+	}
 	if err := tx.Commit(); err != nil {
 		writeAPIError(w, newAPIError(http.StatusInternalServerError, "Failed to commit config: "+err.Error()))
 		return
+	}
+	if m, ok := resp.(map[string]interface{}); ok {
+		attachLayout(m, committed)
 	}
 	writeJSON(w, resp)
 }
