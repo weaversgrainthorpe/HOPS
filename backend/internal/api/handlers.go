@@ -143,12 +143,12 @@ func (r *Router) handleGetConfig(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 	view["dashboardRevisions"] = revs
-	// The stored v3 document as-is, for the new renderer, and the dashboards
-	// the legacy view leaves out (so the UI can say why). View-only like
-	// dashboardRevisions: stripped on PUT, never stored.
+	// The stored v3 document as-is, for the new renderer, the dashboards the
+	// legacy view leaves out (so the UI can say why) and any migration
+	// notices. All view-only like dashboardRevisions: stripped on PUT, never
+	// stored.
 	view["layout"] = stored
 	view["v3OnlyDashboards"] = v3OnlyDashboards(stored)
-	// Also view-only: stripped on PUT, never stored.
 	if len(r.migration.Renames) > 0 {
 		view["migrationNotices"] = migrationNotices(r.migration.Renames, stored)
 	}
@@ -1476,7 +1476,7 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 		for _, d := range existing {
 			if dm, ok := d.(configdoc.Obj); ok {
 				if p, ok := dm["path"].(string); ok {
-					existingPaths[p] = true
+					existingPaths[normPath(p)] = true // "x" and "/x" route alike
 				}
 			}
 		}
@@ -1487,7 +1487,7 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 			path, _ := d["path"].(string)
 			originalPath := path
 			suffix := 1
-			for existingPaths[path] {
+			for existingPaths[normPath(path)] {
 				path = fmt.Sprintf("%s-%d", originalPath, suffix)
 				suffix++
 			}
@@ -1498,7 +1498,7 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 					d["name"] = fmt.Sprintf("%s (Imported)", name)
 				}
 			}
-			existingPaths[path] = true
+			existingPaths[normPath(path)] = true
 			makeIDsUnique(d, used)
 			existing = append(existing, d)
 			names = append(names, dashboardLabel(d))

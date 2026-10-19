@@ -128,7 +128,7 @@ func TestPutConfig_CarriesV3OnlyDashboardsUntouched(t *testing.T) {
 	if strings.Join(ids, ",") != "d1,s1" {
 		t.Fatalf("stored order = %v", ids)
 	}
-	if r := resp["revisions"].(map[string]interface{}); r["s1"] != float64(3) {
+	if r := storedDash(t, db, "s1")["revision"]; r != float64(3) {
 		t.Fatalf("s1 revision changed: %v", r)
 	}
 
@@ -298,5 +298,158 @@ func TestDeleteDashboard_RequiresAuth(t *testing.T) {
 	anon := &apiClient{t: t, h: router}
 	if code, _ := anon.do("DELETE", "/api/dashboards/d1?revision=1", nil); code != 401 && code != 403 {
 		t.Fatalf("anonymous delete: %d", code)
+	}
+}
+
+func wantPathTaken(t *testing.T, what string, code int, resp map[string]interface{}, id, path string) {
+	t.Helper()
+	if code != 409 || resp["error"] != "path_taken" || resp["dashboardId"] != id || resp["path"] != path ||
+		resp["detail"] != "Path "+path+" is already used by the view-only dashboard Showcase" {
+		t.Fatalf("%s: %d %v, want 409 path_taken for %s %s", what, code, resp, id, path)
+	}
+}
+
+func TestPutConfig_PathOfV3OnlyIs409(t *testing.T) {
+	router, db := setupTestRouter(t)
+	c := newClient(t, router)
+	seed(t, c)
+	addShowcase(t, db)
+	before := storedRaw(db)
+	n := backupCount(t, c)
+
+	// A new dashboard taking the path, with or without the leading slash.
+	for _, p := range []string{"/showcase", "showcase"} {
+		v := getView(t, c)
+		nd := legacyDashWithID("d2", "Second")
+		nd["path"] = p
+		v["dashboards"] = append(v["dashboards"].([]interface{}), nd)
+		code, resp := c.do("PUT", "/api/config", v)
+		wantPathTaken(t, "new dashboard "+p, code, resp, "d2", p)
+	}
+	// An existing dashboard renamed onto it, via both legacy writers.
+	v := getView(t, c)
+	v["dashboards"].([]interface{})[0].(map[string]interface{})["path"] = "/showcase"
+	code, resp := c.do("PUT", "/api/config", v)
+	wantPathTaken(t, "renamed d1", code, resp, "d1", "/showcase")
+	d1 := legacyDash("First")
+	d1["path"] = "/showcase"
+	code, resp = c.do("PUT", "/api/dashboards/d1", map[string]interface{}{"dashboard": d1, "revision": 1})
+	wantPathTaken(t, "PUT /api/dashboards/d1", code, resp, "d1", "/showcase")
+
+	if storedRaw(db) != before {
+		t.Fatal("rejected saves changed the stored doc")
+	}
+	if backupCount(t, c) != n {
+		t.Fatal("rejected saves took a backup")
+	}
+}
+
+func TestPromote_NewDashboardAvoidsV3OnlyPath(t *testing.T) {
+	router, db := setupTestRouter(t)
+	c := newClient(t, router)
+	seed(t, c)
+	addShowcase(t, db)
+	scanID, rid := seedScan(t, db)
+	body := promoteBody(rid)
+	body["target"] = map[string]interface{}{
+		"newDashboard": map[string]interface{}{"name": "Showcase", "path": "/showcase"},
+		"newTab":       map[string]interface{}{"name": "Found"},
+	}
+	code, resp := c.do("POST", "/api/discovery/scans/"+scanID+"/promote", body)
+	if code != 200 {
+		t.Fatalf("promote: %d %v", code, resp)
+	}
+	if resp["dashboardPath"] != "/showcase-2" {
+		t.Fatalf("dashboardPath = %v, want /showcase-2", resp["dashboardPath"])
+	}
+	paths := map[string]int{}
+	for _, d := range dashList(storedDoc(t, db)) {
+		paths[d["path"].(string)]++
+	}
+	if paths["/showcase"] != 1 || paths["/showcase-2"] != 1 {
+		t.Fatalf("stored paths = %v", paths)
+	}
+}
+
+// The server-side import already renames any path clash against every stored
+// dashboard (v3-only included) and reports the renamed dashboard by label.
+func TestImport_PathOfV3OnlyIsRenamed(t *testing.T) {
+	router, db := setupTestRouter(t)
+	c := newClient(t, router)
+	seed(t, c)
+	addShowcase(t, db)
+	s1 := storedDash(t, db, "s1")
+	settings := map[string]interface{}{}
+	for _, k := range settingJSONKeys() {
+		settings[k] = nil
+	}
+	s1["settings"] = settings
+	code, resp := c.importFile(v3ExportOf(t, map[string]interface{}{"dashboards": []interface{}{s1}}))
+	if code != 200 {
+		t.Fatalf("import: %d %v", code, resp)
+	}
+	if msg, _ := resp["message"].(string); !strings.Contains(msg, "Showcase (Imported)") {
+		t.Fatalf("message does not report the rename: %q", msg)
+	}
+	doc := storedDoc(t, db)
+	paths := map[string]int{}
+	for _, d := range dashList(doc) {
+		paths[d["path"].(string)]++
+	}
+	if paths["/showcase"] != 1 || paths["/showcase-1"] != 1 {
+		t.Fatalf("stored paths = %v", paths)
+	}
+	assertUniqueIDs(t, doc)
+
+	// The same path without its leading slash routes to the same dashboard,
+	// so it is renamed too.
+	s1["path"] = "showcase"
+	if code, resp = c.importFile(v3ExportOf(t, map[string]interface{}{"dashboards": []interface{}{s1}})); code != 200 {
+		t.Fatalf("second import: %d %v", code, resp)
+	}
+	for _, d := range dashList(storedDoc(t, db)) {
+		if d["path"] == "showcase" {
+			t.Fatalf("import kept a path that duplicates /showcase: %v", d["id"])
+		}
+	}
+}
+
+// A client whose stale view still listed a now v3-only dashboard, and dropped
+// it, is refused rather than having the drop silently ignored.
+func TestPutConfig_V3OnlySeenButAbsent409(t *testing.T) {
+	router, db := setupTestRouter(t)
+	c := newClient(t, router)
+	seed(t, c)
+	addShowcase(t, db)
+	before := storedRaw(db)
+	v := getView(t, c)
+	v["dashboardRevisions"].(map[string]interface{})["s1"] = 3
+	code, resp := c.do("PUT", "/api/config", v)
+	wantV3Only409(t, "seen-but-absent s1", code, resp)
+	if storedRaw(db) != before {
+		t.Fatal("rejected save changed the stored doc")
+	}
+}
+
+// The UI replaces dashboardRevisions with the PUT response's revisions, so
+// they must never name a v3-only dashboard; two saves in a row succeed.
+func TestPutConfig_ResponseRevisionsOmitV3Only(t *testing.T) {
+	router, db := setupTestRouter(t)
+	c := newClient(t, router)
+	seed(t, c)
+	addShowcase(t, db)
+	v := getView(t, c)
+	code, resp := c.do("PUT", "/api/config", v)
+	if code != 200 {
+		t.Fatalf("first save: %d %v", code, resp)
+	}
+	revs := resp["revisions"].(map[string]interface{})
+	if _, has := revs["s1"]; has {
+		t.Fatalf("revisions name the v3-only dashboard: %v", revs)
+	}
+	v["dashboardRevisions"] = revs
+	v["dashboards"].([]interface{})[0].(map[string]interface{})["name"] = "Again"
+	if code, resp := c.do("PUT", "/api/config", v); code != 200 {
+		t.Fatalf("second save: %d %v", code, resp)
 	}
 }

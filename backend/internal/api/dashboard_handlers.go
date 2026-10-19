@@ -110,6 +110,32 @@ func v3OnlyError(dashboardID string) *apiError {
 	return e
 }
 
+// normPath compares dashboard paths the way the UI routes them ("x" and "/x"
+// reach the same dashboard).
+func normPath(p string) string { return "/" + strings.TrimPrefix(p, "/") }
+
+// v3OnlyPathClash returns the 409 path_taken when a legacy-written dashboard
+// (body, by its id) would take the path of a stored v3-only dashboard.
+func v3OnlyPathClash(stored configdoc.Obj, v3Only map[string]bool, body map[string]interface{}) *apiError {
+	p, _ := body["path"].(string)
+	if p == "" {
+		return nil
+	}
+	for id, d := range storedDashboards(stored) {
+		if !v3Only[id] {
+			continue
+		}
+		if sp, _ := d["path"].(string); sp != "" && normPath(sp) == normPath(p) {
+			e := newAPIError(http.StatusConflict, "path_taken")
+			e.body["dashboardId"] = body["id"]
+			e.body["path"] = p
+			e.body["detail"] = fmt.Sprintf("Path %s is already used by the view-only dashboard %s", p, dashboardLabel(d))
+			return e
+		}
+	}
+	return nil
+}
+
 // v3OnlyIDs returns the ids of the stored dashboards that are not
 // LegacyEditable (never in the legacy view).
 func v3OnlyIDs(stored configdoc.Obj) map[string]bool {
@@ -321,6 +347,9 @@ func applyLegacyView(stored configdoc.Obj, in configdoc.Obj) (configdoc.Obj, map
 		if v3Only[id] {
 			return nil, nil, v3OnlyError(id)
 		}
+		if pe := v3OnlyPathClash(stored, v3Only, dm); pe != nil {
+			return nil, nil, pe
+		}
 		if p, exists := prev[id]; exists {
 			if ce := checkRevision(id, p, dm["revision"]); ce != nil {
 				return nil, nil, ce
@@ -337,7 +366,9 @@ func applyLegacyView(stored configdoc.Obj, in configdoc.Obj) (configdoc.Obj, map
 	}
 	// A stored dashboard absent from the body is a deletion; allow it only if
 	// the client saw it at its current revision. v3-only dashboards are never
-	// in the view: FromLegacy carries them over unchanged.
+	// in the view: FromLegacy carries them over unchanged. One the client
+	// claims to have seen (a stale view from before it became v3-only) was
+	// dropped on purpose; refuse that rather than silently keep it.
 	ids := make([]string, 0, len(prev))
 	for id := range prev {
 		if !v3Only[id] {
@@ -345,6 +376,16 @@ func applyLegacyView(stored configdoc.Obj, in configdoc.Obj) (configdoc.Obj, map
 		}
 	}
 	sort.Strings(ids)
+	v3Seen := make([]string, 0)
+	for id := range v3Only {
+		if _, wasSeen := seen[id]; wasSeen && !inBody[id] {
+			v3Seen = append(v3Seen, id)
+		}
+	}
+	sort.Strings(v3Seen)
+	if len(v3Seen) > 0 {
+		return nil, nil, v3OnlyError(v3Seen[0])
+	}
 	for _, id := range ids {
 		p := prev[id]
 		if inBody[id] {
@@ -385,7 +426,11 @@ func applyLegacyView(stored configdoc.Obj, in configdoc.Obj) (configdoc.Obj, map
 			cur++
 		}
 		nd["revision"] = cur
-		revs[id] = cur
+		// The UI adopts this map as its dashboardRevisions, which only ever
+		// names legacy-editable dashboards.
+		if !v3Only[id] {
+			revs[id] = cur
+		}
 	}
 	return next, revs, nil
 }
@@ -437,6 +482,9 @@ func (r *Router) handlePutDashboard(w http.ResponseWriter, req *http.Request, id
 		}
 		if editable, _ := configdoc.LegacyEditable(prev); !editable {
 			return nil, nil, v3OnlyError(id)
+		}
+		if pe := v3OnlyPathClash(stored, v3OnlyIDs(stored), body.Dashboard); pe != nil {
+			return nil, nil, pe
 		}
 		if ce := checkRevision(id, prev, body.Revision); ce != nil {
 			return nil, nil, ce

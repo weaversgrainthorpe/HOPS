@@ -472,7 +472,15 @@ func (r *Router) handlePromoteScan(w http.ResponseWriter, req *http.Request, sca
 		return
 	}
 
-	dashboard, dashboardPath, err := resolveDashboard(cfg, &body.Target)
+	// v3-only dashboards are not in cfg; their paths are taken all the same.
+	var reserved []interface{}
+	v3Only := v3OnlyIDs(stored)
+	for id, d := range storedDashboards(stored) {
+		if v3Only[id] {
+			reserved = append(reserved, d)
+		}
+	}
+	dashboard, dashboardPath, err := resolveDashboard(cfg, &body.Target, reserved)
 	if err != nil {
 		writeJSONError(w, err.Error(), http.StatusBadRequest)
 		return
@@ -592,15 +600,16 @@ func validatePromoteTarget(t *promoteTarget) error {
 
 // resolveDashboard returns the target dashboard map (creating it if the
 // target asks for one) and the dashboard's path so the handler can send
-// the user there on success.
-func resolveDashboard(cfg map[string]interface{}, t *promoteTarget) (map[string]interface{}, string, error) {
+// the user there on success. A new dashboard's path is made unique against
+// cfg's dashboards and reserved (dashboards outside the legacy view).
+func resolveDashboard(cfg map[string]interface{}, t *promoteTarget, reserved []interface{}) (map[string]interface{}, string, error) {
 	dashboards, _ := cfg["dashboards"].([]interface{})
 	if t.NewDashboard != nil {
 		path := strings.TrimSpace(t.NewDashboard.Path)
 		if path == "" {
 			path = slugifyDashboardPath(t.NewDashboard.Name)
 		}
-		path = ensureUniqueDashboardPath(dashboards, path)
+		path = ensureUniqueDashboardPath(append(append([]interface{}{}, dashboards...), reserved...), path)
 		dash := map[string]interface{}{
 			"id":    discovery.NewID(),
 			"name":  strings.TrimSpace(t.NewDashboard.Name),
@@ -715,16 +724,16 @@ func ensureUniqueDashboardPath(dashboards []interface{}, candidate string) strin
 	for _, d := range dashboards {
 		if dm, ok := d.(map[string]interface{}); ok {
 			if p, ok := dm["path"].(string); ok {
-				taken[p] = true
+				taken[normPath(p)] = true
 			}
 		}
 	}
-	if !taken[candidate] {
+	if !taken[normPath(candidate)] {
 		return candidate
 	}
 	for i := 2; ; i++ {
 		c := fmt.Sprintf("%s-%d", candidate, i)
-		if !taken[c] {
+		if !taken[normPath(c)] {
 			return c
 		}
 	}
