@@ -193,3 +193,45 @@ func TestSaveLoad_RoundTrip(t *testing.T) {
 		t.Fatalf("doc = %v", doc)
 	}
 }
+
+func TestMigrateWithBackup_V2BacksUpFirst(t *testing.T) {
+	db := newStoreDB(t)
+	seed(t, db, v2Bytes(t))
+	var sawV2 bool
+	res, backedUp, err := MigrateWithBackup(db, func() error {
+		_, lerr := Load(db)
+		sawV2 = errors.Is(lerr, ErrNotV3) // backup must see pre-migration data
+		return nil
+	})
+	if err != nil || !res.Migrated || !backedUp || !sawV2 {
+		t.Fatalf("res=%+v backedUp=%v sawV2=%v err=%v", res, backedUp, sawV2, err)
+	}
+}
+
+func TestMigrateWithBackup_BackupFailureBlocksMigration(t *testing.T) {
+	db := newStoreDB(t)
+	orig := v2Bytes(t)
+	seed(t, db, orig)
+	res, backedUp, err := MigrateWithBackup(db, func() error { return errors.New("disk full") })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.Failed || backedUp || !strings.Contains(res.Detail, "backup") || !strings.Contains(res.Detail, "disk full") {
+		t.Fatalf("res=%+v backedUp=%v", res, backedUp)
+	}
+	if rawRow(t, db) != orig || archiveCount(t, db) != 0 {
+		t.Fatal("state changed despite backup failure")
+	}
+}
+
+func TestMigrateWithBackup_V3NoSyncBackup(t *testing.T) {
+	db := newStoreDB(t)
+	if err := Save(db, Obj{"dashboards": []any{}}); err != nil {
+		t.Fatal(err)
+	}
+	called := false
+	res, backedUp, err := MigrateWithBackup(db, func() error { called = true; return nil })
+	if err != nil || called || backedUp || res.Migrated || res.Failed {
+		t.Fatalf("res=%+v called=%v backedUp=%v err=%v", res, called, backedUp, err)
+	}
+}

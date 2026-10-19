@@ -3,6 +3,7 @@ package configdoc
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 )
@@ -104,4 +105,20 @@ func MigrateOnStartup(db *sql.DB) (MigrationResult, error) {
 func failed(detail string) MigrationResult {
 	slog.Error("config v2→v3 migration FAILED; stored config left untouched", "component", "configdoc", "detail", detail)
 	return MigrationResult{Failed: true, Detail: detail}
+}
+
+// MigrateWithBackup runs MigrateOnStartup, but when the stored document is
+// still v2 it first calls backup synchronously so the safety backup holds the
+// pre-migration data. If that backup fails the migration is NOT attempted and
+// a Failed result is returned. backedUp reports whether backup was called
+// (and succeeded); when false the caller may take its backup asynchronously.
+func MigrateWithBackup(db *sql.DB, backup func() error) (res MigrationResult, backedUp bool, err error) {
+	if _, lerr := Load(db); errors.Is(lerr, ErrNotV3) {
+		if berr := backup(); berr != nil {
+			return failed(fmt.Sprintf("pre-migration backup failed: %v", berr)), false, nil
+		}
+		backedUp = true
+	}
+	res, err = MigrateOnStartup(db)
+	return res, backedUp, err
 }

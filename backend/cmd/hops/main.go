@@ -99,28 +99,37 @@ func main() {
 	// a slog warning; success is logged at INFO so admins can confirm
 	// the rotation worked.
 	backupManager := database.NewBackupManager(dbPath)
-	go func() {
+	startupBackup := func() error {
 		path, err := backupManager.CreateBackupWithDB(db, "startup")
 		if err != nil {
-			slog.Warn("failed to create startup backup", "component", "backup", "error", err)
-			return
+			return err
 		}
 		slog.Info("startup backup created", "component", "backup", "path", path)
-	}()
+		return nil
+	}
+
+	// Migrate a stored v2 config to v3 (archived + verified, all-or-nothing).
+	// If the config is still v2 the startup backup is taken synchronously
+	// first, so it holds the pre-migration data; if that backup fails the
+	// migration is not attempted. A bad document is NOT fatal: the failure is
+	// logged at ERROR and handed to the router so the UI can say so.
+	migration, backedUp, err := configdoc.MigrateWithBackup(db, startupBackup)
+	if err != nil {
+		slog.Error("config migration could not run", "error", err)
+		os.Exit(1)
+	}
+	if !backedUp {
+		go func() {
+			if err := startupBackup(); err != nil {
+				slog.Warn("failed to create startup backup", "component", "backup", "error", err)
+			}
+		}()
+	}
 
 	// Initialize the settings service (seeds defaults, loads into cache).
 	settingsSvc, err := settings.New(db)
 	if err != nil {
 		slog.Error("failed to initialize settings", "error", err)
-		os.Exit(1)
-	}
-
-	// Migrate a stored v2 config to v3 (archived + verified, all-or-nothing).
-	// A bad document is NOT fatal: the result is logged at ERROR by
-	// MigrateOnStartup and handed to the router so the UI can say so.
-	migration, err := configdoc.MigrateOnStartup(db)
-	if err != nil {
-		slog.Error("config migration could not run", "error", err)
 		os.Exit(1)
 	}
 
