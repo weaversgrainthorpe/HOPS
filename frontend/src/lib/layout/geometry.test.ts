@@ -33,7 +33,7 @@ describe('resolveMode', () => {
 });
 
 describe('readingOrder', () => {
-  it('(1,0),(0,1),(0,0) -> (0,0),(0,1),(1,0) by (y,x) means (0,0),(1,0),(0,1)', () => {
+  it('orders by y then x', () => {
     const r = readingOrder([{ placement: p(1, 0) }, { placement: p(0, 1) }, { placement: p(0, 0) }]);
     expect(r.map((n) => [n.placement.x, n.placement.y])).toEqual([[0, 0], [1, 0], [0, 1]]);
   });
@@ -97,5 +97,38 @@ describe('isRenderable', () => {
     expect(isRenderable({ kind: 'tile', placement: { x: 'a', y: 0, w: 1, h: 1 } })).toBe(false);
     expect(isRenderable({ kind: 'folder', placement: p(0, 0), content: {} })).toBe(false);
     expect(isRenderable(null)).toBe(false);
+  });
+});
+
+describe('robustness', () => {
+  it('planCanvas never returns an undrawable plan', () => {
+    for (const dw of [0, NaN, -5]) {
+      expect(planCanvas('free', 1280, tab({ designWidth: dw }))).toEqual({ kind: 'free', scale: 1 });
+    }
+    for (const w of [0, NaN, -10, Infinity]) {
+      expect(planCanvas('free', w, tab())).toEqual({ kind: 'stacked' });
+      expect(planCanvas('grid', w, tab())).toEqual({ kind: 'stacked' });
+    }
+    for (const columns of [0, -1, NaN]) {
+      expect(planCanvas('grid', 1440, tab({ root: { columns, children: [] } }))).toEqual({ kind: 'grid', cellPx: 120 });
+    }
+    expect(planCanvas('grid', 1440, { id: 't', name: 't' } as unknown as LayoutTab)).toEqual({ kind: 'grid', cellPx: 120 });
+  });
+  const bad = [null, 'str', { kind: 'tile', id: 'np' }] as unknown as { placement?: Placement }[];
+  it('readingOrder puts malformed children last, in array order, without throwing', () => {
+    const v1 = { placement: p(1, 0) }, v0 = { placement: p(0, 0) };
+    const r = readingOrder([bad[0], v1, bad[1], bad[2], v0]);
+    expect(r).toEqual([v0, v1, bad[0], bad[1], bad[2]]);
+  });
+  it('previewChildren skips non-renderable children', () => {
+    const f = folder('grid', [null, tile('a', p(1, 0)), 'x', tile('b', p(0, 0))] as unknown as LayoutNode[]);
+    expect(previewChildren(f).map((n) => n.id)).toEqual(['b', 'a']);
+  });
+  it('clampPlacement guards non-finite and fractional values', () => {
+    expect(clampPlacement({ x: NaN, y: Infinity, w: NaN, h: NaN }, NaN)).toEqual({ x: 0, y: 0, w: 1, h: 1 });
+    expect(clampPlacement({ x: 1.7, y: 2.9, w: 2.5, h: 1.2 }, 12)).toEqual({ x: 1, y: 2, w: 2, h: 1 });
+  });
+  it('folderContentRowPx treats height < 1 as 1', () => {
+    expect(folderContentRowPx(0, 120, true)).toBe(folderContentRowPx(1, 120, true));
   });
 });

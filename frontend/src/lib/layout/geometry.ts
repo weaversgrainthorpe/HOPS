@@ -27,31 +27,45 @@ export function resolveMode(dash: LayoutDashboard, tab: LayoutTab, folderChain: 
   return 'grid';
 }
 
-/** Stable sort by placement.y, then placement.x, then original index. Does not mutate. */
+function hasPos(c: unknown): boolean {
+  if (!c || typeof c !== 'object') return false;
+  const p = (c as { placement?: unknown }).placement as Record<string, unknown> | undefined;
+  return !!p && typeof p === 'object' && isNum(p.x) && isNum(p.y);
+}
+
+/**
+ * Stable sort by placement.y, then placement.x, then original index. Does not mutate.
+ * Never throws: anything that is not an object with finite numeric placement x/y
+ * sorts AFTER the valid children, in original array order.
+ */
 export function readingOrder<T extends { placement?: Placement }>(children: T[]): T[] {
-  return children
-    .map((c, i) => ({ c, i }))
-    .sort((a, b) => {
-      const ay = a.c.placement?.y ?? 0, by = b.c.placement?.y ?? 0;
-      if (ay !== by) return ay - by;
-      const ax = a.c.placement?.x ?? 0, bx = b.c.placement?.x ?? 0;
-      if (ax !== bx) return ax - bx;
-      return a.i - b.i;
-    })
-    .map((e) => e.c);
+  const valid: { c: T; i: number }[] = [];
+  const bad: T[] = [];
+  children.forEach((c, i) => (hasPos(c) ? valid.push({ c, i }) : bad.push(c)));
+  valid.sort((a, b) => {
+    const ap = a.c.placement as Placement, bp = b.c.placement as Placement;
+    return ap.y - bp.y || ap.x - bp.x || a.i - b.i;
+  });
+  return [...valid.map((e) => e.c), ...bad];
+}
+
+function fin(v: unknown, dflt: number): number {
+  return typeof v === 'number' && Number.isFinite(v) ? Math.floor(v) : dflt;
 }
 
 export function clampPlacement(p: Placement, columns: number): Placement {
-  const cols = Math.max(1, columns);
-  const x = Math.min(Math.max(p.x, 0), cols - 1);
-  const w = Math.min(Math.max(p.w, 1), cols - x);
-  const out: Placement = { x, y: Math.max(p.y, 0), w, h: Math.max(p.h, 1) };
+  const cols = Math.max(1, fin(columns, ROOT_COLUMNS));
+  const x = Math.min(Math.max(fin(p.x, 0), 0), cols - 1);
+  const w = Math.min(Math.max(fin(p.w, 1), 1), cols - x);
+  const out: Placement = { x, y: Math.max(fin(p.y, 0), 0), w, h: Math.max(fin(p.h, 1), 1) };
   if (p.z !== undefined) out.z = p.z;
   return out;
 }
 
+/** First PREVIEW_COUNT renderable children in reading order; non-renderable ones are skipped. */
 export function previewChildren(folder: FolderNode): LayoutNode[] {
-  return readingOrder(folder.content.children).slice(0, PREVIEW_COUNT);
+  const kids = Array.isArray(folder.content?.children) ? folder.content.children : [];
+  return readingOrder(kids.filter(isRenderable)).slice(0, PREVIEW_COUNT);
 }
 
 export type CanvasPlan =
@@ -60,11 +74,14 @@ export type CanvasPlan =
   | { kind: 'stacked' };
 
 export function planCanvas(mode: LayoutMode, widthPx: number, tab: LayoutTab): CanvasPlan {
+  if (!isNum(widthPx) || widthPx <= 0) return { kind: 'stacked' };
   if (mode === 'grid') {
     if (widthPx < PHONE_BREAKPOINT_PX) return { kind: 'stacked' };
-    return { kind: 'grid', cellPx: widthPx / (tab.root.columns || ROOT_COLUMNS) };
+    const c = tab.root?.columns;
+    return { kind: 'grid', cellPx: widthPx / (isNum(c) && c > 0 ? c : ROOT_COLUMNS) };
   }
-  const scale = widthPx / (tab.designWidth ?? DEFAULT_DESIGN_WIDTH);
+  const dw = tab.designWidth;
+  const scale = widthPx / (isNum(dw) && dw > 0 ? dw : DEFAULT_DESIGN_WIDTH);
   // epsilon guards float error exactly at the 0.6 boundary
   if (scale < MIN_FREE_SCALE - 1e-9) return { kind: 'stacked' };
   return { kind: 'free', scale: Math.max(scale, MIN_FREE_SCALE) };
@@ -72,9 +89,10 @@ export function planCanvas(mode: LayoutMode, widthPx: number, tab: LayoutTab): C
 
 /** Height of one content row inside an expanded folder of folderHeightCells rows. */
 export function folderContentRowPx(folderHeightCells: number, cellPx: number, showTitle: boolean): number {
-  const total = folderHeightCells * cellPx;
+  const h = isNum(folderHeightCells) && folderHeightCells >= 1 ? folderHeightCells : 1;
+  const total = h * cellPx;
   const chrome = (showTitle ? TITLE_BAR_PX : 0) + FOLDER_PADDING_PX;
-  const rows = Math.max(1, folderHeightCells - 1);
+  const rows = Math.max(1, h - 1);
   return (total - chrome) / rows;
 }
 
@@ -88,7 +106,10 @@ function validPlacement(p: unknown): p is Placement {
   return isNum(o.x) && isNum(o.y) && isNum(o.w) && isNum(o.h);
 }
 
-/** True only for nodes the renderer can draw; false => show a visible placeholder. */
+/**
+ * SHALLOW check: validates this node only (and that a folder's content.children is an array).
+ * Contract: the renderer calls it on every child at every container level.
+ * True only for nodes the renderer can draw; false => show a visible placeholder. */
 export function isRenderable(n: unknown): n is LayoutNode {
   if (!n || typeof n !== 'object') return false;
   const o = n as Record<string, unknown>;
