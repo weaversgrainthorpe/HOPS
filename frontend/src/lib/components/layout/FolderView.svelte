@@ -1,10 +1,12 @@
 <script lang="ts">
   import type { FolderNode, LayoutDashboard, LayoutTab } from '$lib/types/layout';
   import type { CanvasPlan } from '$lib/layout/geometry';
-  import { clampPlacement, folderContentRowPx, isRenderable, resolveMode } from '$lib/layout/geometry';
+  import { clampPlacement, folderContentRowPx, isRenderable, previewChildren, resolveMode } from '$lib/layout/geometry';
   import { getTextColorValue } from '$lib/utils/colorContrast';
   import Icon from '@iconify/svelte';
+  import ColoredIcon from '../ColoredIcon.svelte';
   import ContainerView from './ContainerView.svelte';
+  import { openFolder } from '$lib/stores/folderOverlay';
 
   interface Props {
     folder: FolderNode;
@@ -51,12 +53,49 @@
         ) / 100
       : undefined
   );
+  const previews = $derived(previewChildren(folder));
+
+  function onKey(e: KeyboardEvent) {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      openFolder(folder.id);
+    }
+  }
   const inner = $derived({ columns: innerColumns, children: folder.content.children });
 </script>
 
 {#if folder.display === 'collapsed'}
-  <!-- Collapsed rendering is added in a later task: a plain one-cell tile with the name. -->
-  <div class="folder collapsed" data-node-id={folder.id} role="group" aria-label={folder.name} {style}>
+  <div
+    class="folder collapsed"
+    data-node-id={folder.id}
+    role="button"
+    tabindex="0"
+    aria-haspopup="dialog"
+    aria-label={folder.name}
+    {style}
+    style:--group-bg={folder.color || 'var(--bg-secondary)'}
+    style:--group-opacity={folder.opacity !== undefined ? folder.opacity : 0.95}
+    style:color={textColor}
+    onclick={() => openFolder(folder.id)}
+    onkeydown={onKey}
+  >
+    {#if previews.length === 0}
+      <span class="empty-note">Empty folder</span>
+    {:else}
+      <div class="preview-grid">
+        {#each previews as p (p.id)}
+          <span class="preview-cell">
+            {#if p.iconUrl}
+              <img src={p.iconUrl} alt="" />
+            {:else if p.icon}
+              <ColoredIcon icon={p.icon} width="100%" />
+            {:else}
+              <ColoredIcon icon={p.kind === 'folder' ? 'mdi:folder' : 'mdi:application'} width="100%" />
+            {/if}
+          </span>
+        {/each}
+      </div>
+    {/if}
     <span class="collapsed-name">{folder.name}</span>
   </div>
 {:else}
@@ -189,10 +228,39 @@
   .collapsed {
     align-items: center;
     justify-content: center;
+    gap: 0.25rem;
     padding: 0.5rem;
+    cursor: pointer;
+  }
+  .preview-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.25rem;
+    width: 60%;
+    max-width: 64px;
+  }
+  .preview-cell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    aspect-ratio: 1;
+    min-width: 0;
+  }
+  .preview-cell img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+  .empty-note {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
   }
   .collapsed-name {
     font-weight: 600;
     text-align: center;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 </style>
