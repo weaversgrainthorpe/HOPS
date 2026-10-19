@@ -17,6 +17,7 @@ import (
 	"github.com/weaversgrainthorpe/HOPS/internal/api"
 	"github.com/weaversgrainthorpe/HOPS/internal/auth"
 	"github.com/weaversgrainthorpe/HOPS/internal/config"
+	"github.com/weaversgrainthorpe/HOPS/internal/configdoc"
 	"github.com/weaversgrainthorpe/HOPS/internal/database"
 	"github.com/weaversgrainthorpe/HOPS/internal/discovery"
 	"github.com/weaversgrainthorpe/HOPS/internal/settings"
@@ -114,6 +115,15 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Migrate a stored v2 config to v3 (archived + verified, all-or-nothing).
+	// A bad document is NOT fatal: the result is logged at ERROR by
+	// MigrateOnStartup and handed to the router so the UI can say so.
+	migration, err := configdoc.MigrateOnStartup(db)
+	if err != nil {
+		slog.Error("config migration could not run", "error", err)
+		os.Exit(1)
+	}
+
 	// Apply the persisted log level and subscribe to live changes.
 	setLogLevel(settingsSvc.Get(settings.KeyLogLevel))
 	settingsSvc.Subscribe(settings.KeyLogLevel, func(value string) {
@@ -166,7 +176,7 @@ func main() {
 
 	// Initialize API router
 	startTime := time.Now()
-	apiRouter, router := api.NewRouter(db, authService, cfg, settingsSvc, startTime, discoveryStore, discoveryOrch)
+	apiRouter, router := api.NewRouter(db, authService, cfg, settingsSvc, startTime, discoveryStore, discoveryOrch, migration)
 	defer apiRouter.Stop()
 
 	// Configure HTTP server. Port + timeouts come from settings — changing

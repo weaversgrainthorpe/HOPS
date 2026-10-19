@@ -19,6 +19,7 @@ import (
 	"github.com/weaversgrainthorpe/HOPS/internal/assets"
 	"github.com/weaversgrainthorpe/HOPS/internal/auth"
 	"github.com/weaversgrainthorpe/HOPS/internal/config"
+	"github.com/weaversgrainthorpe/HOPS/internal/configdoc"
 	"github.com/weaversgrainthorpe/HOPS/internal/database"
 	"github.com/weaversgrainthorpe/HOPS/internal/discovery"
 	"github.com/weaversgrainthorpe/HOPS/internal/settings"
@@ -40,6 +41,7 @@ var spaFS = func() fs.FS {
 // Router holds all dependencies for the API
 type Router struct {
 	db             *sql.DB
+	migration      configdoc.MigrationResult // startup v2→v3 outcome; Task 7 surfaces a failure
 	authService    *auth.Service
 	config         *config.Config
 	settings       *settings.Service
@@ -187,7 +189,7 @@ func (rl *RateLimiter) Allow(ip string) bool {
 // admin-tunable knobs (login rate limit, trusted proxies, etc.) come from
 // the settings service, not the static config — those are now configurable
 // via the GUI in /api/settings.
-func NewRouter(db *sql.DB, authService *auth.Service, cfg *config.Config, settingsSvc *settings.Service, startTime time.Time, discoveryStore *discovery.Store, discoveryOrch *discovery.Orchestrator) (*Router, http.Handler) {
+func NewRouter(db *sql.DB, authService *auth.Service, cfg *config.Config, settingsSvc *settings.Service, startTime time.Time, discoveryStore *discovery.Store, discoveryOrch *discovery.Orchestrator, migration configdoc.MigrationResult) (*Router, http.Handler) {
 	// Login rate limit comes from settings (default 20/min, validated by the
 	// settings service so it's always sane here).
 	rateLimit := settingsSvc.GetInt(settings.KeyAuthLoginRateLimitPerMin)
@@ -201,6 +203,7 @@ func NewRouter(db *sql.DB, authService *auth.Service, cfg *config.Config, settin
 
 	r := &Router{
 		db:             db,
+		migration:      migration,
 		authService:    authService,
 		config:         cfg,
 		settings:       settingsSvc,

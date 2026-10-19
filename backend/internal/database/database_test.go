@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/weaversgrainthorpe/HOPS/internal/configdoc"
 )
 
 // --- Initialize / schema tests ---
@@ -348,5 +350,26 @@ func TestConfigSingleRowConstraint(t *testing.T) {
 	_, err = db.Exec("INSERT INTO config (id, data) VALUES (2, '{}')")
 	if err == nil {
 		t.Error("expected CHECK constraint to prevent inserting config with id != 1")
+	}
+}
+
+func TestResetConfigWritesV3(t *testing.T) {
+	db, err := Initialize(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if _, err := db.Exec(`UPDATE config SET data = '{"custom":true}' WHERE id = 1`); err != nil {
+		t.Fatal(err)
+	}
+	if err := ResetConfig(db); err != nil {
+		t.Fatal(err)
+	}
+	doc, err := configdoc.Load(db)
+	if err != nil {
+		t.Fatalf("config after reset is not v3: %v", err)
+	}
+	if ds, _ := doc["dashboards"].([]any); len(ds) == 0 {
+		t.Fatal("reset config has no dashboards")
 	}
 }

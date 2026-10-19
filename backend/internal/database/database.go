@@ -3,11 +3,13 @@ package database
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"time"
 
 	"github.com/weaversgrainthorpe/HOPS/internal/assets"
+	"github.com/weaversgrainthorpe/HOPS/internal/configdoc"
 
 	_ "modernc.org/sqlite"
 )
@@ -100,6 +102,14 @@ func runMigrations(db *sql.DB) error {
 			id INTEGER PRIMARY KEY CHECK (id = 1),
 			data TEXT NOT NULL,
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+
+		// Archive of config documents replaced by a schema migration
+		`CREATE TABLE IF NOT EXISTS config_archive (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			schema INTEGER NOT NULL,
+			data TEXT NOT NULL,
+			archived_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
 
 		// Status cache for HTTP checks
@@ -295,8 +305,15 @@ func runMigrations(db *sql.DB) error {
 
 // ResetConfig resets the configuration to the default state
 func ResetConfig(db *sql.DB) error {
-	_, err := db.Exec("UPDATE config SET data = ? WHERE id = 1", DefaultConfig)
-	return err
+	var v2 map[string]any
+	if err := json.Unmarshal([]byte(DefaultConfig), &v2); err != nil {
+		return fmt.Errorf("default config is not valid JSON: %w", err)
+	}
+	v3, err := configdoc.MigrateV2(v2)
+	if err != nil {
+		return fmt.Errorf("failed to convert default config to v3: %w", err)
+	}
+	return configdoc.Save(db, v3)
 }
 
 // addColumnIfMissing adds a column to a table only if it doesn't already exist.

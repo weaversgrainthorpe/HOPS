@@ -13,6 +13,7 @@ import (
 	_ "modernc.org/sqlite"
 	"github.com/weaversgrainthorpe/HOPS/internal/auth"
 	"github.com/weaversgrainthorpe/HOPS/internal/config"
+	"github.com/weaversgrainthorpe/HOPS/internal/configdoc"
 	"github.com/weaversgrainthorpe/HOPS/internal/database"
 	"github.com/weaversgrainthorpe/HOPS/internal/discovery"
 	"github.com/weaversgrainthorpe/HOPS/internal/settings"
@@ -125,6 +126,11 @@ func setupTestRouter(t *testing.T) (http.Handler, *sql.DB) {
 	// Create default config
 	db.Exec(`INSERT INTO config (id, data) VALUES (1, '{"dashboards":[],"theme":{"mode":"dark"}}')`)
 
+	migration, err := configdoc.MigrateOnStartup(db)
+	if err != nil {
+		t.Fatalf("configdoc.MigrateOnStartup: %v", err)
+	}
+
 	cfg := &config.Config{
 		DataDir:     t.TempDir(),
 		FrontendDir: t.TempDir(),
@@ -138,7 +144,7 @@ func setupTestRouter(t *testing.T) (http.Handler, *sql.DB) {
 	authService := auth.NewService(db)
 	discoveryStore := discovery.NewStore(db)
 	discoveryOrch := discovery.NewOrchestrator(discoveryStore, settingsSvc)
-	_, router := NewRouter(db, authService, cfg, settingsSvc, time.Now(), discoveryStore, discoveryOrch)
+	_, router := NewRouter(db, authService, cfg, settingsSvc, time.Now(), discoveryStore, discoveryOrch, migration)
 
 	return router, db
 }
