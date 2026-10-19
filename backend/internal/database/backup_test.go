@@ -373,3 +373,63 @@ func TestCopyFile(t *testing.T) {
 		t.Errorf("expected %q, got %q", content, got)
 	}
 }
+
+// The pre-v3-migration backup is the only whole-DB copy of the v2 data, so
+// rotation must never delete it, however many newer backups pile up.
+func TestCleanupOldBackupsKeepsPreV3MigrationBackup(t *testing.T) {
+	bm, _ := setupBackupTest(t)
+	if err := os.MkdirAll(bm.backupDir, 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	pinned := filepath.Join(bm.backupDir, BackupPrefix+"2025-01-01_00-00-00_"+PreV3MigrationReason+BackupSuffix)
+	if err := os.WriteFile(pinned, []byte("v2"), 0644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	old := time.Now().Add(-24 * time.Hour)
+	if err := os.Chtimes(pinned, old, old); err != nil {
+		t.Fatalf("chtimes: %v", err)
+	}
+	for i := 0; i < MaxBackups+3; i++ {
+		name := filepath.Join(bm.backupDir, BackupPrefix+"2026-01-01_00-00-"+padZero(i)+"_pre-config-update"+BackupSuffix)
+		if err := os.WriteFile(name, []byte("dummy"), 0644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+		modTime := time.Now().Add(time.Duration(i) * time.Second)
+		if err := os.Chtimes(name, modTime, modTime); err != nil {
+			t.Fatalf("chtimes: %v", err)
+		}
+	}
+	if err := bm.CleanupOldBackups(); err != nil {
+		t.Fatalf("CleanupOldBackups failed: %v", err)
+	}
+	if _, err := os.Stat(pinned); err != nil {
+		t.Fatalf("pre-v3-migration backup was rotated away: %v", err)
+	}
+	backups, _ := bm.ListBackups()
+	if len(backups) != MaxBackups+1 {
+		t.Errorf("expected %d rotated backups + the pinned one, got %d", MaxBackups, len(backups))
+	}
+}
+
+// Two backups within the same second (e.g. two quick tile saves) must both
+// succeed: a name clash used to make the second VACUUM INTO fail, which the
+// save then reported as "pre-update backup failed".
+func TestCreateBackupWithDBSameSecondGetsDistinctNames(t *testing.T) {
+	bm, dbPath := setupBackupTest(t)
+	db, err := Initialize(dbPath)
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer db.Close()
+	seen := map[string]bool{}
+	for i := 0; i < 3; i++ {
+		p, err := bm.CreateBackupWithDB(db, "pre-config-update")
+		if err != nil {
+			t.Fatalf("backup %d: %v", i, err)
+		}
+		if seen[p] {
+			t.Fatalf("backup %d reused path %s", i, p)
+		}
+		seen[p] = true
+	}
+}

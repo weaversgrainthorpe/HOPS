@@ -355,6 +355,18 @@ HOPS does not handle SSL/TLS directly. Use a reverse proxy (Caddy, nginx, Traefi
 
 HOPS creates an automatic backup of the database every time the server starts. Backups are stored in your data directory under `backups/`.
 
+HOPS keeps the 10 most recent backups and deletes older ones, with one exception: the **pre-v3-migration** backup (`hops-backup-<date>_pre-v3-migration.db`). It is taken just before HOPS 3 converts a 2.x configuration and is never rotated away, because it is the only way back to 2.x.
+
+### Rolling back from 3.x to 2.2.1
+
+HOPS 3 stores the configuration in a new format that 2.x cannot read (2.x would show empty or broken dashboards). To go back:
+
+1. Stop HOPS.
+2. Copy `data/backups/hops-backup-<date>_pre-v3-migration.db` over `data/hops.db`.
+3. Install the v2.2.1 binary and start it.
+
+Changes made under 3.x are not carried back. Don't restore this backup from the 3.x Backups page: 3.x would simply migrate it again on its next start.
+
 ### Managing Backups
 
 From the Admin panel, click **Backups** to:

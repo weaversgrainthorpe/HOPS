@@ -109,11 +109,21 @@ func main() {
 	}
 
 	// Migrate a stored v2 config to v3 (archived + verified, all-or-nothing).
-	// If the config is still v2 the startup backup is taken synchronously
-	// first, so it holds the pre-migration data; if that backup fails the
-	// migration is not attempted. A bad document is NOT fatal: the failure is
-	// logged at ERROR and handed to the router so the UI can say so.
-	migration, backedUp, err := configdoc.MigrateWithBackup(db, startupBackup)
+	// If the config is still v2 a "pre-v3-migration" backup is taken
+	// synchronously first, so it holds the pre-migration data; rotation never
+	// deletes it (it is the rollback path to v2.2.1, see DEPLOY.md). If that
+	// backup fails the migration is not attempted. A bad document is NOT
+	// fatal: the failure is logged at ERROR and handed to the router so the UI
+	// can say so.
+	preMigrationBackup := func() error {
+		path, err := backupManager.CreateBackupWithDB(db, database.PreV3MigrationReason)
+		if err != nil {
+			return err
+		}
+		slog.Info("pre-v3-migration backup created (kept by rotation)", "component", "backup", "path", path)
+		return nil
+	}
+	migration, backedUp, err := configdoc.MigrateWithBackup(db, preMigrationBackup)
 	if err != nil {
 		slog.Error("config migration could not run", "error", err)
 		os.Exit(1)

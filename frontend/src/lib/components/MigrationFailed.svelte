@@ -11,7 +11,7 @@
 
 <!-- Full-page notice shown instead of the app while the stored config could
      not be migrated to v3. The server refuses config requests in this state;
-     the automatic startup backup is the remedy (Admin → Backups). -->
+     the automatic pre-v3-migration / startup backups are the remedy (Admin → Backups). -->
 <main class="migration-failed" role="alert">
   <Icon icon="mdi:database-alert-outline" width="48" />
   <h1>HOPS couldn't migrate your configuration</h1>
@@ -23,7 +23,7 @@
     <pre class="detail">{$migrationFailure}</pre>
   {/if}
   <p>
-    Admin → Backups holds the automatic startup backup.
+    Admin → Backups holds the automatic pre-v3-migration and startup backups.
     {#if onOpenBackups}
       <button type="button" class="open-backups" onclick={onOpenBackups}>Open Backups</button>
     {:else}

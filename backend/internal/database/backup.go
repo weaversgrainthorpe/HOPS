@@ -19,7 +19,17 @@ const (
 	BackupPrefix = "hops-backup-"
 	// BackupSuffix is the suffix for backup files
 	BackupSuffix = ".db"
+	// PreV3MigrationReason names the synchronous backup taken just before the
+	// one-way v2→v3 config migration. It is the only whole-DB copy of the v2
+	// data (the rollback path to v2.2.1), so rotation never deletes it.
+	PreV3MigrationReason = "pre-v3-migration"
 )
+
+// isPinnedBackup reports whether rotation must keep this backup regardless
+// of age (only the admin may delete it, from the Backups page).
+func isPinnedBackup(name string) bool {
+	return strings.HasSuffix(name, "_"+PreV3MigrationReason+BackupSuffix)
+}
 
 // BackupManager handles database backup operations
 type BackupManager struct {
@@ -36,6 +46,25 @@ func NewBackupManager(dbPath string) *BackupManager {
 	}
 }
 
+// newBackupPath names a new backup "hops-backup-<timestamp>[-n]_<reason>.db".
+// Timestamps have one-second resolution, so a second backup within the same
+// second gets a "-2", "-3"... suffix instead of clashing with (or, on the
+// file-copy path, overwriting) the first.
+func (bm *BackupManager) newBackupPath(reason string) (string, string) {
+	timestamp := time.Now().Format("2006-01-02_15-04-05")
+	safeReason := strings.ReplaceAll(reason, " ", "-")
+	safeReason = strings.ReplaceAll(safeReason, "/", "-")
+	stamp := timestamp
+	for n := 2; ; n++ {
+		name := fmt.Sprintf("%s%s_%s%s", BackupPrefix, stamp, safeReason, BackupSuffix)
+		path := filepath.Join(bm.backupDir, name)
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			return name, path
+		}
+		stamp = fmt.Sprintf("%s-%d", timestamp, n)
+	}
+}
+
 // CreateBackup creates a backup of the database with a timestamp
 func (bm *BackupManager) CreateBackup(reason string) (string, error) {
 	// Ensure backup directory exists
@@ -43,12 +72,7 @@ func (bm *BackupManager) CreateBackup(reason string) (string, error) {
 		return "", fmt.Errorf("failed to create backup directory: %w", err)
 	}
 
-	// Generate backup filename with timestamp and reason
-	timestamp := time.Now().Format("2006-01-02_15-04-05")
-	safeReason := strings.ReplaceAll(reason, " ", "-")
-	safeReason = strings.ReplaceAll(safeReason, "/", "-")
-	backupName := fmt.Sprintf("%s%s_%s%s", BackupPrefix, timestamp, safeReason, BackupSuffix)
-	backupPath := filepath.Join(bm.backupDir, backupName)
+	backupName, backupPath := bm.newBackupPath(reason)
 
 	// Copy the database file
 	if err := copyFile(bm.dbPath, backupPath); err != nil {
@@ -73,12 +97,7 @@ func (bm *BackupManager) CreateBackupWithDB(db *sql.DB, reason string) (string, 
 		return "", fmt.Errorf("failed to create backup directory: %w", err)
 	}
 
-	// Generate backup filename
-	timestamp := time.Now().Format("2006-01-02_15-04-05")
-	safeReason := strings.ReplaceAll(reason, " ", "-")
-	safeReason = strings.ReplaceAll(safeReason, "/", "-")
-	backupName := fmt.Sprintf("%s%s_%s%s", BackupPrefix, timestamp, safeReason, BackupSuffix)
-	backupPath := filepath.Join(bm.backupDir, backupName)
+	backupName, backupPath := bm.newBackupPath(reason)
 
 	// Use SQLite's backup API via VACUUM INTO (SQLite 3.27+)
 	// Sanitize path to prevent SQL injection via single quotes
@@ -198,11 +217,18 @@ func (bm *BackupManager) DeleteBackup(backupName string) error {
 	return nil
 }
 
-// CleanupOldBackups removes backups beyond MaxBackups limit
+// CleanupOldBackups removes backups beyond MaxBackups limit. Pinned backups
+// (the pre-v3-migration one) are neither counted nor removed.
 func (bm *BackupManager) CleanupOldBackups() error {
-	backups, err := bm.ListBackups()
+	all, err := bm.ListBackups()
 	if err != nil {
 		return err
+	}
+	backups := make([]BackupInfo, 0, len(all))
+	for _, b := range all {
+		if !isPinnedBackup(b.Name) {
+			backups = append(backups, b)
+		}
 	}
 
 	if len(backups) <= MaxBackups {
