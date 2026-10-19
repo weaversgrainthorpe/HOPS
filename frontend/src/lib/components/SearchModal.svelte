@@ -4,7 +4,7 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   import Icon from '@iconify/svelte';
-  import { config, layoutDoc, resolveDashboardRoute, dashboardHref } from '$lib/stores/config';
+  import { config, layoutDoc, resolveDashboardRoute, dashboardHref, currentRoute } from '$lib/stores/config';
   import { requestReveal, revealRequest } from '$lib/stores/folderOverlay';
   import { toast } from '$lib/stores/toast';
   import { portal } from '$lib/utils/portal';
@@ -41,10 +41,11 @@
     }
   }
 
-  function buildIndex(doc: LayoutDoc | null): Result[] {
+  function buildIndex(doc: LayoutDoc | null, onlyDashboardId?: string): Result[] {
     if (!doc) return [];
     const out: Result[] = [];
     for (const d of doc.dashboards ?? []) {
+      if (onlyDashboardId !== undefined && d.id !== onlyDashboardId) continue;
       for (const t of d.tabs ?? []) {
         walk(t.root, [], (e, chain) => {
           out.push({
@@ -66,9 +67,18 @@
   let selectedIndex = $state(0);
   let inputEl: HTMLInputElement | undefined = $state();
 
-  // No layout document held (failed load): say so instead of "no matches".
-  const layoutMissing = !$layoutDoc;
-  const index = buildIndex($layoutDoc);
+  // On a dashboard page (resolved by the same route resolver the page uses)
+  // search only that dashboard; anywhere else search them all.
+  const route = get(currentRoute);
+  const scopedId = route
+    ? route.kind === 'missing-layout' ? route.id : route.dashboard.id
+    : undefined;
+  const scoped = scopedId !== undefined;
+  const index = buildIndex($layoutDoc, scopedId);
+  // No layout held, or the current dashboard's layout is absent from it
+  // (failed load / stale): say so instead of "no matches".
+  const layoutMissing =
+    !$layoutDoc || (scoped && !($layoutDoc.dashboards ?? []).some((d) => d.id === scopedId));
 
   let results = $derived.by<Result[]>(() => {
     const q = query.trim().toLowerCase();
@@ -164,8 +174,8 @@
         bind:this={inputEl}
         bind:value={query}
         type="text"
-        placeholder="Search tiles by name, URL, or description…"
-        aria-label="Search tiles by name, URL, or description"
+        placeholder={scoped ? 'Search this dashboard' : 'Search all dashboards'}
+        aria-label={scoped ? 'Search tiles on this dashboard by name, URL, or description' : 'Search tiles on all dashboards by name, URL, or description'}
         onkeydown={handleKeydown}
       />
       <kbd>Esc</kbd>
@@ -175,7 +185,7 @@
       <div class="search-no-results" role="alert">Search unavailable: the dashboard layout hasn't loaded — reload the page.</div>
     {:else if !query.trim()}
       <div class="search-empty-hint">
-        Start typing to search across all dashboards. <kbd>↑</kbd><kbd>↓</kbd> to navigate, <kbd>Enter</kbd> to show the tile.
+        Start typing to search {scoped ? 'this dashboard' : 'across all dashboards'}. <kbd>↑</kbd><kbd>↓</kbd> to navigate, <kbd>Enter</kbd> to show the tile.
       </div>
     {:else if results.length === 0}
       <div class="search-no-results">No tiles match <code>{query}</code></div>
@@ -194,7 +204,7 @@
               <div class="result-text">
                 <div class="result-name">{r.entry.name}</div>
                 <div class="result-meta">
-                  {r.dashboardName} · <span class="result-path">{r.path}</span>
+                  {#if !scoped}{r.dashboardName} › {/if}<span class="result-path">{r.path}</span>
                   {#if r.entry.type !== 'note' && r.entry.url}
                     <span class="result-url">— {r.entry.url}</span>
                   {/if}

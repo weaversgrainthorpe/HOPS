@@ -25,7 +25,7 @@ export const dashboards = derived(config, ($config) => $config?.dashboards || []
 // resolves it (path first, then id, across legacy and v3-only dashboards).
 // Uses the route's DECODED param (as the route does), never the encoded
 // pathname, so "/my%20dash" resolves the dashboard at "/my dash".
-const currentRoute = derived([config, page], ([$config, $page]) => {
+export const currentRoute = derived([config, page], ([$config, $page]) => {
   const seg = ($page.params as Record<string, string | undefined> | undefined)?.dashboard;
   return $config && seg ? resolveDashboardRoute(seg, $config) : undefined;
 });

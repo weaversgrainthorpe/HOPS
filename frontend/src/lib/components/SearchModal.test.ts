@@ -4,6 +4,15 @@ import { tick } from 'svelte';
 import { get } from 'svelte/store';
 
 vi.mock('$app/navigation', () => ({ goto: vi.fn(async () => {}) }));
+const pageStore = vi.hoisted(() => ({ set: null as null | ((p: any) => void) }));
+vi.mock('$app/stores', async () => {
+  const { writable } = await import('svelte/store');
+  const page = writable({ url: new URL('http://localhost/'), params: {}, route: { id: '/' }, status: 200, error: null, data: {}, form: undefined });
+  pageStore.set = page.set;
+  return { page, navigating: writable(null), updated: writable(false) };
+});
+const setPage = (params: Record<string, string>) =>
+  pageStore.set!({ url: new URL('http://localhost/'), params, route: { id: '/' }, status: 200, error: null, data: {}, form: undefined });
 
 import { goto } from '$app/navigation';
 import SearchModal from './SearchModal.svelte';
@@ -60,6 +69,7 @@ const legacy: DashboardT = {
 beforeEach(() => {
   vi.stubGlobal('ResizeObserver', FakeRO);
   vi.clearAllMocks();
+  setPage({});
   closeAll();
   revealRequest.set(null);
   editMode.set(false);
@@ -120,5 +130,62 @@ describe('SearchModal recursive search', () => {
     await tick();
     expect(document.querySelector('.search-results img')).toBeNull();
     expect(screen.getByRole('button', { name: /Evil/ })).toHaveTextContent(evil);
+  });
+});
+
+describe('SearchModal scope', () => {
+  const layoutD2: LayoutDashboard = {
+    id: 'd2', name: 'Lab', path: '/lab', revision: 1,
+    tabs: [{ id: 'u1', name: 'Bench', root: { columns: 12, children: [tile('other', 'Other Dash Tile')] } }]
+  };
+  const twoDashboards = () =>
+    config.update((c) => ({ ...c!, layout: { schemaVersion: 3, dashboards: [layoutD1, layoutD2] } }));
+  const type = async (v: string) => {
+    await fireEvent.input(screen.getByRole('textbox', { name: /search/i }), { target: { value: v } });
+    await tick();
+  };
+
+  it('on a dashboard page: only that dashboard is searched, at any depth', async () => {
+    twoDashboards();
+    setPage({ dashboard: 'home' });
+    render(SearchModal, { onClose: () => {} });
+    await tick();
+    expect(screen.getByPlaceholderText(/search this dashboard/i)).toBeInTheDocument();
+    await type('other dash');
+    expect(screen.queryByRole('button', { name: /Other Dash Tile/ })).toBeNull();
+    await type('deep');
+    expect(screen.getByRole('button', { name: /Deep Thing/ })).toHaveTextContent('Second › Outer › Mid › Inner');
+  });
+
+  it('on a decoded multi-word dashboard path the scope still resolves', async () => {
+    config.update((c) => ({
+      ...c!, dashboards: [{ ...legacy, path: '/my dash' }],
+      layout: { schemaVersion: 3, dashboards: [{ ...layoutD1, path: '/my dash' }, layoutD2] }
+    }));
+    setPage({ dashboard: 'my dash' });
+    render(SearchModal, { onClose: () => {} });
+    await tick();
+    await type('other dash');
+    expect(screen.queryByRole('button', { name: /Other Dash Tile/ })).toBeNull();
+    await type('top');
+    expect(screen.getByRole('button', { name: /Top Tile/ })).toBeInTheDocument();
+  });
+
+  it('elsewhere: searches all dashboards and shows dashboard names', async () => {
+    twoDashboards();
+    render(SearchModal, { onClose: () => {} });
+    await tick();
+    expect(screen.getByPlaceholderText(/search all dashboards/i)).toBeInTheDocument();
+    await type('t');
+    expect(screen.getByRole('button', { name: /Other Dash Tile/ })).toHaveTextContent('Lab');
+    expect(screen.getByRole('button', { name: /Top Tile/ })).toHaveTextContent('Home');
+  });
+
+  it('dashboard page whose layout is absent keeps the visible alert', async () => {
+    config.update((c) => ({ ...c!, layout: { schemaVersion: 3, dashboards: [layoutD2] } }));
+    setPage({ dashboard: 'home' });
+    render(SearchModal, { onClose: () => {} });
+    await tick();
+    expect(screen.getByRole('alert')).toHaveTextContent(/unavailable/i);
   });
 });
