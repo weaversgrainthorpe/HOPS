@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { FolderNode, LayoutDashboard, LayoutTab } from '$lib/types/layout';
   import type { CanvasPlan } from '$lib/layout/geometry';
-  import { clampPlacement, folderContentRowPx, isRenderable, previewChildren, resolveMode } from '$lib/layout/geometry';
+  import { clampPlacement, folderContentRowPx, folderInnerColumns, isRenderable, previewChildren, resolveMode } from '$lib/layout/geometry';
   import { getTextColorValue } from '$lib/utils/colorContrast';
   import Icon from '@iconify/svelte';
   import ColoredIcon from '../ColoredIcon.svelte';
@@ -19,8 +19,10 @@
     folderChain: FolderNode[];
     /** Row height (px) of the container this folder sits in; sizes this folder's own rows. */
     parentRowPx: number;
+    /** Width in px of one column of the parent container (child box = w * unitPx). */
+    unitPx?: number;
   }
-  let { folder, style = '', plan, dashboard, tab, folderChain, parentRowPx }: Props = $props();
+  let { folder, style = '', plan, dashboard, tab, folderChain, parentRowPx, unitPx = 0 }: Props = $props();
 
   const chain = $derived([...folderChain, folder]);
   const innerMode = $derived(resolveMode(dashboard, tab, chain));
@@ -29,12 +31,7 @@
   const textColor = $derived(
     folder.color ? getTextColorValue(folder.textColor || 'auto', folder.color) : 'inherit'
   );
-  const innerColumns = $derived.by(() => {
-    // A free folder's columns is its design extent in 8 px units (Ruling 9).
-    const cc = folder.content.columns;
-    if (innerMode === 'free' && plan.kind !== 'stacked' && Number.isFinite(cc) && cc >= 1) return Math.floor(cc);
-    return Number.isFinite(folder.placement.w) && folder.placement.w >= 1 ? Math.floor(folder.placement.w) : 1;
-  });
+  const innerColumns = $derived(folderInnerColumns(folder));
   // Content rows = max(h-1, deepest child bottom), so a child below the folder's
   // nominal height still has a row and is shrunk-to-fit, never clipped.
   const contentRows = $derived.by(() => {
@@ -56,6 +53,7 @@
         ) / 100
       : undefined
   );
+  const innerBoxPx = $derived(unitPx > 0 ? Math.max(1, Math.floor(folder.placement.w)) * unitPx : undefined);
   const previews = $derived(previewChildren(folder));
 
   function onKey(e: KeyboardEvent) {
@@ -136,6 +134,7 @@
         {tab}
         folderChain={chain}
         rowPx={innerRowPx}
+        boxPx={innerBoxPx}
       />
     </div>
   </div>

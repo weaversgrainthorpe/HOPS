@@ -68,6 +68,17 @@ export function previewChildren(folder: FolderNode): LayoutNode[] {
   return readingOrder(kids.filter(isRenderable)).slice(0, PREVIEW_COUNT);
 }
 
+/** A folder's inner column count: its content.columns (design extent when free), else its placement width. */
+export function folderInnerColumns(folder: FolderNode): number {
+  const cc = folder.content?.columns;
+  if (isNum(cc) && cc >= 1) return Math.floor(cc);
+  const w = folder.placement?.w;
+  return isNum(w) && w >= 1 ? Math.floor(w) : 1;
+}
+
+export const FOLDER_CHROME_PX = 18; // body padding (16) + border (2)
+export const FOLDER_TITLE_PX = TITLE_BAR_PX;
+
 export type CanvasPlan =
   | { kind: 'grid'; cellPx: number }
   | { kind: 'free'; scale: number }

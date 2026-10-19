@@ -14,6 +14,9 @@
     plan: CanvasPlan;
   }
   let { dashboard, tab, plan }: Props = $props();
+  let winWidth = $state(1280);
+  // Overlay panel content width: panel max 1100px, minus backdrop/panel/body padding.
+  const bodyPx = $derived(Math.max(1, Math.min(winWidth - 32, 1100) - 34));
 
   /** Outermost-first chain of folders ending at `id`, or null when not in this tab. */
   function findChain(c: Container | undefined, id: string): FolderNode[] | null {
@@ -71,7 +74,7 @@
   }
 </script>
 
-<svelte:window onkeydown={onWindowKey} />
+<svelte:window onkeydown={onWindowKey} bind:innerWidth={winWidth} />
 
 <div class="overlay-host" use:portal>
 {#each panels as p, i (p.id)}
@@ -127,6 +130,7 @@
           {dashboard}
           {tab}
           folderChain={p.chain}
+          boxPx={bodyPx}
         />
       </div>
     </div>

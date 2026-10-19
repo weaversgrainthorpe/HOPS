@@ -64,7 +64,7 @@ describe('free placement', () => {
     expect(st.height).toBe('240px');
     const root = (container.querySelector('.container-free') as HTMLElement).style;
     expect(root.width).toBe('1920px');
-    expect(root.height).toBe('300px'); // (5+20)*8*1.5, never clipped
+    expect(root.minHeight).toBe('300px'); // (5+20)*8*1.5, never clipped
   });
 
   it('overlap respects z', async () => {
@@ -86,8 +86,8 @@ describe('free placement', () => {
     const { container } = render(TabCanvas, { dashboard: dash, tab });
     await tick();
     await tick();
-    // measured box 1200 / (75*8) = scale 2 -> child 160px wide
-    expect((container.querySelector('[data-node-id="c"]') as HTMLElement).style.width).toBe('160px');
+    // box = 6 cells * 100px = 600; scale = 600/(75*8) = 1 -> child 10*8*1 = 80px wide
+    expect((container.querySelector('[data-node-id="c"]') as HTMLElement).style.width).toBe('80px');
   });
 
   it('still shows a placeholder for an unrenderable child in free mode', async () => {
@@ -97,6 +97,59 @@ describe('free placement', () => {
     render(TabCanvas, { dashboard: dash, tab });
     await tick();
     expect(screen.getByText(/bad-free/)).toBeInTheDocument();
+  });
+});
+
+describe('fix round 1', () => {
+  it('free z ties follow ARRAY order, not reading order', async () => {
+    const { dash, tab } = mk([
+      tile('second-in-reading', 'S', { x: 5, y: 5, w: 10, h: 10 }),
+      tile('first-in-reading', 'F', { x: 0, y: 0, w: 10, h: 10 })
+    ], 'free', 160);
+    const { container } = render(TabCanvas, { dashboard: dash, tab });
+    await tick();
+    expect(order(container)).toEqual(['second-in-reading', 'first-in-reading']);
+    const z = (id: string) => (container.querySelector(`[data-node-id="${id}"]`) as HTMLElement).style.zIndex;
+    expect(z('second-in-reading')).toBe('0');
+    expect(z('first-in-reading')).toBe('0');
+  });
+
+  it('nested free container never undershoots a free folder that grows', async () => {
+    // inner folder box is 1 unit high but holds a tall tile: needs chrome + content
+    const inner = folder('in', 'Inner', { x: 0, y: 0, w: 40, h: 1 }, [tile('deep', 'Deep', { x: 0, y: 0, w: 10, h: 50 })], { layout: 'free', content: { columns: 40, children: [tile('deep', 'Deep', { x: 0, y: 0, w: 10, h: 50 })] } });
+    const { dash, tab } = mk([folder('out', 'Outer', { x: 0, y: 0, w: 80, h: 10 }, [inner], { layout: 'free', content: { columns: 80, children: [inner] } })], 'free', 160);
+    const { container } = render(TabCanvas, { dashboard: dash, tab });
+    await tick();
+    const frees = [...container.querySelectorAll('.container-free')] as HTMLElement[];
+    expect(frees.length).toBe(3);
+    for (const f of frees) expect(f.style.height).toBe('');
+    // inner folder box = 40*12 = 480px over 40 cols -> 12px/unit; 50 units tall -> 600px
+    const innermost = frees[2];
+    expect(parseFloat(innermost.style.minHeight)).toBeCloseTo(600, 1);
+    const outerMin = parseFloat(frees[1].style.minHeight);
+    expect(outerMin).toBeGreaterThanOrEqual(parseFloat(innermost.style.minHeight) + 18);
+    expect(parseFloat(frees[0].style.minHeight)).toBeGreaterThanOrEqual(outerMin);
+  });
+
+  it('constructs exactly one ResizeObserver for nested free and grid folders', async () => {
+    const { dash, tab } = mk([
+      folder('g', 'G', { x: 0, y: 0, w: 4, h: 3 }, [tile('a', 'A', { x: 0, y: 0, w: 1, h: 1 })]),
+      folder('f', 'F', { x: 4, y: 0, w: 4, h: 3 }, [tile('b', 'B', { x: 0, y: 0, w: 5, h: 5 })], { layout: 'free', content: { columns: 40, children: [tile('b', 'B', { x: 0, y: 0, w: 5, h: 5 })] } })
+    ], 'grid', 12);
+    width = 1200;
+    render(TabCanvas, { dashboard: dash, tab });
+    await tick();
+    expect(instances.length).toBe(1);
+  });
+
+  it('a grid folder uses content.columns, not placement.w, for its columns', async () => {
+    const { dash, tab } = mk([
+      folder('g', 'G', { x: 0, y: 0, w: 4, h: 3 }, [tile('a', 'A', { x: 5, y: 0, w: 1, h: 1 })], { content: { columns: 8, children: [tile('a', 'A', { x: 5, y: 0, w: 1, h: 1 })] } })
+    ], 'grid', 12);
+    width = 1200;
+    const { container } = render(TabCanvas, { dashboard: dash, tab });
+    await tick();
+    expect((container.querySelector('[data-node-id="a"]') as HTMLElement).style.gridColumn).toContain('6 / span 1');
   });
 });
 
