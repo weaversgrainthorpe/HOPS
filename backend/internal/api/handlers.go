@@ -168,23 +168,17 @@ func (r *Router) handleUpdateConfig(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Create automatic backup before modifying config. If it fails,
-	// don't block the update — the admin chose to save — but surface
-	// the warning in the response so the UI can flag it. A silent
-	// backup failure means the admin trusts a safety-net that didn't
-	// fire next time they roll back. (Taken before the transaction opens.)
-	backupWarning := r.preUpdateBackup()
-
-	r.updateDoc(w, func(stored configdoc.Obj) (configdoc.Obj, interface{}, error) {
+	// Back up before modifying config (only once the save is known to be
+	// accepted). If the backup fails, don't block the update — the admin
+	// chose to save — but the response carries a warning the UI shows: a
+	// silent backup failure means the admin trusts a safety-net that didn't
+	// fire next time they roll back.
+	r.updateDocWithBackup(w, func(stored configdoc.Obj) (configdoc.Obj, interface{}, error) {
 		next, revs, err := applyLegacyView(stored, configData)
 		if err != nil {
 			return nil, nil, err
 		}
-		resp := map[string]interface{}{"status": "ok", "revisions": revs}
-		if backupWarning != "" {
-			resp["warning"] = backupWarning
-		}
-		return next, resp, nil
+		return next, map[string]interface{}{"status": "ok", "revisions": revs}, nil
 	})
 }
 
@@ -448,8 +442,12 @@ func (r *Router) handleGetStatus(w http.ResponseWriter, req *http.Request) {
 		writeJSONError(w, "Config unavailable", http.StatusServiceUnavailable)
 		return
 	}
-	if dash, _, ok := configdoc.FindTile(doc, entryID); ok &&
-		!configdoc.Resolve(r.settings, dash).StatusChecksEnabled {
+	// The tile's resolved settings (global values when the tile isn't in
+	// the config). intervalMinutes lets the UI judge staleness against the
+	// real probe interval rather than a guessed default.
+	dash, _, _ := configdoc.FindTile(doc, entryID)
+	eff := configdoc.Resolve(r.settings, dash)
+	if dash != nil && !eff.StatusChecksEnabled {
 		writeJSON(w, map[string]string{"status": "disabled"})
 		return
 	}
@@ -465,8 +463,9 @@ func (r *Router) handleGetStatus(w http.ResponseWriter, req *http.Request) {
 
 	if err == sql.ErrNoRows {
 		// No cached status
-		writeJSON(w, map[string]string{
-			"status": "unknown",
+		writeJSON(w, map[string]interface{}{
+			"status":          "unknown",
+			"intervalMinutes": eff.StatusCheckIntervalMinutes,
 		})
 		return
 	}
@@ -477,8 +476,9 @@ func (r *Router) handleGetStatus(w http.ResponseWriter, req *http.Request) {
 	}
 
 	result := map[string]interface{}{
-		"status":      status,
-		"lastChecked": lastChecked,
+		"status":          status,
+		"lastChecked":     lastChecked,
+		"intervalMinutes": eff.StatusCheckIntervalMinutes,
 	}
 	if responseTime.Valid {
 		result["responseTime"] = responseTime.Int64
@@ -1552,6 +1552,9 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 			"skipped":        skipped,
 			"iconsMatched":   iconMatchCount,
 			"assetsRestored": assetsRestored,
+		}
+		if iconErr != nil {
+			resp["iconMatchError"] = iconErr.Error()
 		}
 		if warning != "" {
 			resp["warning"] = warning

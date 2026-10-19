@@ -461,6 +461,10 @@ func TestImport_IconMatchingFailureIsSurfaced(t *testing.T) {
 	if code != 200 || !strings.Contains(fmt.Sprint(resp["message"]), "Icon auto-matching skipped") {
 		t.Fatalf("got %d %v", code, resp)
 	}
+	// Structured too, so the UI can show a warning state without parsing text.
+	if e, _ := resp["iconMatchError"].(string); e == "" {
+		t.Fatalf("iconMatchError missing: %v", resp)
+	}
 }
 
 func TestImport_V3ShapeChecks(t *testing.T) {

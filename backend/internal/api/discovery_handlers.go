@@ -529,6 +529,11 @@ func (r *Router) handlePromoteScan(w http.ResponseWriter, req *http.Request, sca
 		writeAPIError(w, newAPIError(http.StatusInternalServerError, "Target dashboard missing after conversion; promotion aborted"))
 		return
 	}
+	// Same document-wide id check as every other config writer.
+	if err := configdoc.VerifyIDs(next); err != nil {
+		writeAPIError(w, newAPIError(http.StatusBadRequest, "Invalid config; promotion aborted: "+verifyProblems(err)))
+		return
+	}
 	if err := configdoc.Save(tx, next); err != nil {
 		writeAPIError(w, newAPIError(http.StatusInternalServerError, "Failed to save config: "+err.Error()))
 		return

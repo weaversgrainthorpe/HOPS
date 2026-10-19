@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,7 +14,7 @@ import (
 	"github.com/weaversgrainthorpe/HOPS/internal/configdoc"
 )
 
-const migrationBackupHint = "Admin → Backups holds the automatic startup backup"
+const migrationBackupHint = "Admin → Backups holds the automatic pre-v3-migration and startup backups"
 
 // apiError is an error that carries the HTTP status and JSON body to send.
 type apiError struct {
@@ -32,6 +33,15 @@ func conflictError(dashboardID string, current int) *apiError {
 	e.body["detail"] = "This dashboard was changed by someone else since you loaded it. Reload and re-apply your change."
 	e.body["dashboardId"] = dashboardID
 	e.body["currentRevision"] = current
+	return e
+}
+
+// deletedElsewhereError is the 409 for a save that still holds a dashboard
+// another client deleted.
+func deletedElsewhereError(dashboardID string) *apiError {
+	e := conflictError(dashboardID, 0)
+	e.body["detail"] = "A dashboard in your save was deleted somewhere else since you loaded it. Reload to see the current dashboards, then re-apply your change."
+	e.body["deleted"] = true
 	return e
 }
 
@@ -126,15 +136,39 @@ func normalizedWithoutRevision(d configdoc.Obj) ([]byte, error) {
 	return json.Marshal(cp) // map keys are sorted: stable
 }
 
+// docUpdateFn computes the new document and the response body from the stored
+// one. It must be repeatable (it may run twice, see updateDocWithBackup): no
+// side effects beyond mutating the stored doc it is handed.
+type docUpdateFn func(stored configdoc.Obj) (configdoc.Obj, interface{}, error)
+
 // updateDoc runs fn on the stored config inside one transaction. fn returns
 // the new document and the response body; any error rolls everything back.
-func (r *Router) updateDoc(w http.ResponseWriter, fn func(stored configdoc.Obj) (configdoc.Obj, interface{}, error)) {
+func (r *Router) updateDoc(w http.ResponseWriter, fn docUpdateFn) {
 	r.updateDocWithLoadErr(w, loadErr, fn)
+}
+
+// computeDoc loads the stored config through tx, runs fn, and verifies the
+// result has a well-formed tree with non-empty, document-wide unique ids, so
+// no writer can store a document that import, FindTile or conflict checks
+// would trip over.
+func computeDoc(tx *sql.Tx, onLoadErr func(error) *apiError, fn docUpdateFn) (configdoc.Obj, interface{}, error) {
+	stored, err := configdoc.Load(tx)
+	if err != nil {
+		return nil, nil, onLoadErr(err)
+	}
+	next, resp, err := fn(stored)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := configdoc.VerifyIDs(next); err != nil {
+		return nil, nil, newAPIError(http.StatusBadRequest, "Invalid config: "+verifyProblems(err))
+	}
+	return next, resp, nil
 }
 
 // updateDocWithLoadErr is updateDoc with a caller-chosen mapping for a failure
 // to load the stored config (e.g. import's "refused so nothing is overwritten").
-func (r *Router) updateDocWithLoadErr(w http.ResponseWriter, onLoadErr func(error) *apiError, fn func(stored configdoc.Obj) (configdoc.Obj, interface{}, error)) {
+func (r *Router) updateDocWithLoadErr(w http.ResponseWriter, onLoadErr func(error) *apiError, fn docUpdateFn) {
 	tx, err := r.db.Begin()
 	if err != nil {
 		writeAPIError(w, newAPIError(http.StatusInternalServerError, "Failed to start save: "+err.Error()))
@@ -142,12 +176,7 @@ func (r *Router) updateDocWithLoadErr(w http.ResponseWriter, onLoadErr func(erro
 	}
 	defer tx.Rollback() //nolint:errcheck // no-op after Commit
 
-	stored, err := configdoc.Load(tx)
-	if err != nil {
-		writeAPIError(w, onLoadErr(err))
-		return
-	}
-	next, resp, err := fn(stored)
+	next, resp, err := computeDoc(tx, onLoadErr, fn)
 	if err != nil {
 		writeAPIError(w, err)
 		return
@@ -161,6 +190,43 @@ func (r *Router) updateDocWithLoadErr(w http.ResponseWriter, onLoadErr func(erro
 		return
 	}
 	writeJSON(w, resp)
+}
+
+// updateDocWithBackup is updateDoc preceded by the pre-update backup, which is
+// taken only for a save that will be accepted: fn first runs in a rolled-back
+// dry run, so a 400/404/409 takes no backup (and so cannot rotate older
+// backups away). The backup runs outside any transaction (with one pooled
+// connection, VACUUM INTO would otherwise wait on the open tx), then the
+// update runs for real, re-checking everything against the stored doc. A
+// backup failure never blocks the save; it is attached to a map response as
+// "warning" so the UI shows it.
+func (r *Router) updateDocWithBackup(w http.ResponseWriter, fn docUpdateFn) {
+	if err := r.dryRunDoc(fn); err != nil {
+		writeAPIError(w, err)
+		return
+	}
+	warning := r.preUpdateBackup()
+	r.updateDoc(w, func(stored configdoc.Obj) (configdoc.Obj, interface{}, error) {
+		next, resp, err := fn(stored)
+		if err == nil && warning != "" {
+			if m, ok := resp.(map[string]interface{}); ok {
+				m["warning"] = warning
+			}
+		}
+		return next, resp, err
+	})
+}
+
+// dryRunDoc runs fn (and the id check) against the stored config in a
+// transaction that is always rolled back.
+func (r *Router) dryRunDoc(fn docUpdateFn) error {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return newAPIError(http.StatusInternalServerError, "Failed to start save: "+err.Error())
+	}
+	defer tx.Rollback() //nolint:errcheck // read-only check
+	_, _, err = computeDoc(tx, loadErr, fn)
+	return err
 }
 
 // preUpdateBackup takes the pre-update backup. A failure is returned as a
@@ -181,11 +247,17 @@ func (r *Router) preUpdateBackup() string {
 // checking every body dashboard's revision against stored FIRST (FromLegacy
 // overwrites revision with the stored one, so a later check would never fire)
 // and bumping the revision of changed dashboards.
-func applyLegacyView(stored configdoc.Obj, body configdoc.Obj) (configdoc.Obj, map[string]int, error) {
+func applyLegacyView(stored configdoc.Obj, in configdoc.Obj) (configdoc.Obj, map[string]int, error) {
 	prev := storedDashboards(stored)
-	seen, _ := body["dashboardRevisions"].(map[string]interface{})
-	delete(body, "dashboardRevisions") // view-only; never stored
-	delete(body, "migrationNotices")   // view-only; never stored
+	seen, _ := in["dashboardRevisions"].(map[string]interface{})
+	// Shallow copy so the caller's body is untouched (updateDocWithBackup
+	// runs this twice).
+	body := make(configdoc.Obj, len(in))
+	for k, v := range in {
+		if k != "dashboardRevisions" && k != "migrationNotices" { // view-only; never stored
+			body[k] = v
+		}
+	}
 	bodyDashes, _ := body["dashboards"].([]any)
 	inBody := map[string]bool{}
 	for _, d := range bodyDashes {
@@ -208,6 +280,14 @@ func applyLegacyView(stored configdoc.Obj, body configdoc.Obj) (configdoc.Obj, m
 			if ce := checkRevision(id, p, dm["revision"]); ce != nil {
 				return nil, nil, ce
 			}
+			continue
+		}
+		// Not stored, yet the client knew a revision for it: it was deleted
+		// somewhere else. Saving would silently bring it back.
+		_, hasRev := intRevision(dm["revision"])
+		_, wasSeen := seen[id]
+		if id != "" && (hasRev || wasSeen) {
+			return nil, nil, deletedElsewhereError(id)
 		}
 	}
 	// A stored dashboard absent from the body is a deletion; allow it only if
@@ -300,8 +380,7 @@ func (r *Router) handlePutDashboard(w http.ResponseWriter, req *http.Request, id
 		writeJSONError(w, "Dashboard id in body does not match the URL", http.StatusBadRequest)
 		return
 	}
-	warning := r.preUpdateBackup()
-	r.updateDoc(w, func(stored configdoc.Obj) (configdoc.Obj, interface{}, error) {
+	r.updateDocWithBackup(w, func(stored configdoc.Obj) (configdoc.Obj, interface{}, error) {
 		prev, ok := storedDashboards(stored)[id]
 		if !ok {
 			return nil, nil, newAPIError(http.StatusNotFound, "Dashboard not found: "+id)
@@ -325,11 +404,7 @@ func (r *Router) handlePutDashboard(w http.ResponseWriter, req *http.Request, id
 		}
 		nd["revision"] = cur + 1
 		next := replaceDashboard(stored, id, nd)
-		resp := map[string]interface{}{"revision": cur + 1}
-		if warning != "" {
-			resp["warning"] = warning
-		}
-		return next, resp, nil
+		return next, map[string]interface{}{"revision": cur + 1}, nil
 	})
 }
 

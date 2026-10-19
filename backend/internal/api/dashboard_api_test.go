@@ -109,7 +109,7 @@ func TestGetConfig_MigrationFailed503(t *testing.T) {
 	} {
 		code, resp := c.do(tc.m, tc.p, map[string]interface{}{"dashboards": []interface{}{}})
 		if code != 503 || resp["error"] != "migration_failed" || resp["detail"] != "boom" ||
-			resp["backupHint"] != "Admin → Backups holds the automatic startup backup" {
+			resp["backupHint"] != "Admin → Backups holds the automatic pre-v3-migration and startup backups" {
 			t.Fatalf("%s %s: %d %v", tc.m, tc.p, code, resp)
 		}
 	}
@@ -210,8 +210,7 @@ func TestPutConfig_RevisionBumpOnlyWhenChanged(t *testing.T) {
 	}
 	// A brand-new dashboard gets revision 1.
 	v = getView(t, c)
-	nd := legacyDash("New")
-	nd["id"], nd["path"] = "d2", "/d2"
+	nd := legacyDashWithID("d2", "New")
 	v["dashboards"] = append(v["dashboards"].([]interface{}), nd)
 	code, resp = c.do("PUT", "/api/config", v)
 	if code != 200 || resp["revisions"].(map[string]interface{})["d2"] != float64(1) {
@@ -304,8 +303,7 @@ func TestPutConfig_UnreadableStoredConfigIs500(t *testing.T) {
 func addD2(t *testing.T, c *apiClient) {
 	t.Helper()
 	v := getView(t, c)
-	nd := legacyDash("Second")
-	nd["id"], nd["path"] = "d2", "/d2"
+	nd := legacyDashWithID("d2", "Second")
 	v["dashboards"] = append(v["dashboards"].([]interface{}), nd)
 	if code, r := c.do("PUT", "/api/config", v); code != 200 {
 		t.Fatalf("%d %v", code, r)
