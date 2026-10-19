@@ -13,6 +13,8 @@
   import HelpModal from './HelpModal.svelte';
   import AboutModal from './AboutModal.svelte';
 
+  let { onSearch }: { onSearch?: () => void } = $props();
+
   const appVersion = __APP_VERSION__;
 
   let currentPath = $derived($page.url.pathname);
@@ -121,6 +123,12 @@
     </div>
 
     <div class="nav-right">
+      <button type="button" onclick={() => onSearch?.()} class="search-btn" title="Search (/)" aria-label="Search">
+        <span class="icon-wrapper">
+          <Icon icon="mdi:magnify" width="32" height="32" />
+        </span>
+      </button>
+
       {#if isDashboardPage}
         <div class="text-size-controls" title="Text Size: {textSizeConfigs[$textSize].label}">
           <button
@@ -328,7 +336,7 @@
     gap: 1rem;
   }
 
-  .theme-toggle, .admin-link, .edit-toggle, .export-btn, .help-btn, .about-btn {
+  .search-btn, .theme-toggle, .admin-link, .edit-toggle, .export-btn, .help-btn, .about-btn {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -354,7 +362,7 @@
     height: 32px;
   }
 
-  .theme-toggle:hover, .admin-link:hover, .edit-toggle:hover, .export-btn:hover, .help-btn:hover, .about-btn:hover {
+  .search-btn:hover, .theme-toggle:hover, .admin-link:hover, .edit-toggle:hover, .export-btn:hover, .help-btn:hover, .about-btn:hover {
     background: var(--accent);
     color: white;
   }
@@ -521,6 +529,7 @@
     /* Slightly smaller buttons (40px vs 44px default) so all icons fit
        on ~400px phones. Icons stay at their native 32px — leaves a clean
        4px ring of padding inside each button. */
+    .search-btn,
     .theme-toggle,
     .admin-link,
     .help-btn,

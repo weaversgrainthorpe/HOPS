@@ -602,11 +602,24 @@ func TestImport_V3Showcase(t *testing.T) {
 	if l1 == nil || l2 == nil || l3 == nil {
 		t.Fatal("missing nested folders sc-f-l1/l2/l3")
 	}
-	if got := childIDs(l1); len(got) != 1 || got[0] != "sc-f-l2" {
-		t.Errorf("l1 children = %v", got)
+	// Every folder in the chain holds visible tiles AND exactly one subfolder,
+	// so each level's content is obvious at a glance.
+	for _, f := range []configdoc.Obj{l1, l2, l3} {
+		tiles, folders := 0, 0
+		for _, id := range childIDs(f) {
+			if byID[id]["kind"] == "folder" {
+				folders++
+			} else {
+				tiles++
+			}
+		}
+		if tiles < 1 || folders != 1 {
+			t.Errorf("%v: %d tile children, %d folder children; want >=1 and exactly 1", f["id"], tiles, folders)
+		}
 	}
-	if got := childIDs(l2); len(got) != 1 || got[0] != "sc-f-l3" {
-		t.Errorf("l2 children = %v", got)
+	l4 := byID["sc-f-l4"]
+	if l4 == nil || l4["display"] != "collapsed" || len(childIDs(l4)) != 2 {
+		t.Errorf("sc-f-l4 should be a collapsed folder with 2 tiles: %v", l4)
 	}
 	if l3["display"] != "collapsed" {
 		t.Errorf("l3 display = %v", l3["display"])

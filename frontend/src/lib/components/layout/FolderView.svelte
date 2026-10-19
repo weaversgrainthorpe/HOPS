@@ -67,7 +67,7 @@
 
 {#if folder.display === 'collapsed'}
   <div
-    class="folder collapsed"
+    class="folder collapsed folder-collapsed-tile"
     data-node-id={folder.id}
     role="button"
     tabindex="0"

@@ -83,7 +83,7 @@
                 {
                   "id": "sc-f-l1",
                   "kind": "folder",
-                  "name": "Level 1",
+                  "name": "Level 1 folder (tiles + a subfolder)",
                   "layout": "inherit",
                   "display": "expanded",
                   "shape": "rounded",
@@ -98,35 +98,120 @@
                     "columns": 12,
                     "children": [
                       {
+                        "id": "sc-l1-t1",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "L1 tile 1",
+                        "url": "https://l1a.example.lan/",
+                        "icon": "mdi:docker",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 0,
+                        "placement": {
+                          "x": 0,
+                          "y": 0,
+                          "w": 1,
+                          "h": 1
+                        }
+                      },
+                      {
+                        "id": "sc-l1-t2",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "L1 tile 2",
+                        "url": "https://l1b.example.lan/",
+                        "icon": "mdi:nas",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 1,
+                        "placement": {
+                          "x": 1,
+                          "y": 0,
+                          "w": 1,
+                          "h": 1
+                        }
+                      },
+                      {
+                        "id": "sc-l1-t3",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "L1 tile 3",
+                        "url": "https://example.com/",
+                        "icon": "mdi:lan",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 2,
+                        "placement": {
+                          "x": 2,
+                          "y": 0,
+                          "w": 1,
+                          "h": 1
+                        }
+                      },
+                      {
                         "id": "sc-f-l2",
                         "kind": "folder",
-                        "name": "Level 2",
+                        "name": "Level 2 folder (tiles + a subfolder)",
                         "layout": "inherit",
                         "display": "expanded",
                         "shape": "rounded",
                         "showTitle": true,
                         "placement": {
                           "x": 0,
-                          "y": 0,
+                          "y": 1,
                           "w": 6,
-                          "h": 3
+                          "h": 4
                         },
                         "content": {
                           "columns": 6,
                           "children": [
                             {
+                              "id": "sc-l2-t1",
+                              "kind": "tile",
+                              "type": "link",
+                              "name": "L2 tile 1",
+                              "url": "https://l2a.example.lan/",
+                              "icon": "mdi:camera",
+                              "openMode": "newtab",
+                              "size": "medium",
+                              "order": 0,
+                              "placement": {
+                                "x": 0,
+                                "y": 0,
+                                "w": 1,
+                                "h": 1
+                              }
+                            },
+                            {
+                              "id": "sc-l2-t2",
+                              "kind": "tile",
+                              "type": "link",
+                              "name": "L2 tile 2",
+                              "url": "https://l2b.example.lan/",
+                              "icon": "mdi:harddisk",
+                              "openMode": "newtab",
+                              "size": "medium",
+                              "order": 1,
+                              "placement": {
+                                "x": 1,
+                                "y": 0,
+                                "w": 1,
+                                "h": 1
+                              }
+                            },
+                            {
                               "id": "sc-f-l3",
                               "kind": "folder",
-                              "name": "Level 3 (collapsed)",
+                              "name": "Level 3 folder (collapsed: tiles + a subfolder)",
                               "layout": "inherit",
                               "display": "collapsed",
                               "shape": "rounded",
                               "showTitle": true,
                               "placement": {
                                 "x": 0,
-                                "y": 0,
+                                "y": 1,
                                 "w": 3,
-                                "h": 2
+                                "h": 3
                               },
                               "content": {
                                 "columns": 3,
@@ -214,6 +299,60 @@
                                       "y": 1,
                                       "w": 1,
                                       "h": 1
+                                    }
+                                  },
+                                  {
+                                    "id": "sc-f-l4",
+                                    "kind": "folder",
+                                    "name": "Level 4 (collapsed)",
+                                    "layout": "inherit",
+                                    "display": "collapsed",
+                                    "shape": "rounded",
+                                    "showTitle": true,
+                                    "placement": {
+                                      "x": 2,
+                                      "y": 1,
+                                      "w": 1,
+                                      "h": 1
+                                    },
+                                    "content": {
+                                      "columns": 1,
+                                      "children": [
+                                        {
+                                          "id": "sc-l4-t1",
+                                          "kind": "tile",
+                                          "type": "link",
+                                          "name": "L4 tile 1",
+                                          "url": "https://l4a.example.lan/",
+                                          "icon": "mdi:docker",
+                                          "openMode": "newtab",
+                                          "size": "medium",
+                                          "order": 0,
+                                          "placement": {
+                                            "x": 0,
+                                            "y": 0,
+                                            "w": 1,
+                                            "h": 1
+                                          }
+                                        },
+                                        {
+                                          "id": "sc-l4-t2",
+                                          "kind": "tile",
+                                          "type": "link",
+                                          "name": "L4 tile 2",
+                                          "url": "https://l4b.example.lan/",
+                                          "icon": "mdi:lan",
+                                          "openMode": "newtab",
+                                          "size": "medium",
+                                          "order": 1,
+                                          "placement": {
+                                            "x": 0,
+                                            "y": 1,
+                                            "w": 1,
+                                            "h": 1
+                                          }
+                                        }
+                                      ]
                                     }
                                   }
                                 ]
