@@ -7,7 +7,7 @@
   import PartyMode from './PartyMode.svelte';
   import HopAnimation from './HopAnimation.svelte';
   import { mutateDashboard, layoutDoc, layoutStale, findLayoutDashboard, loadConfig } from '$lib/stores/config';
-  import { closeAll, openFolder, revealRequest, type RevealRequest } from '$lib/stores/folderOverlay';
+  import { closeAll, openFolder, revealRequest, takeReveal, type RevealRequest } from '$lib/stores/folderOverlay';
   import { editMode } from '$lib/stores/editMode';
   import { isAuthenticated } from '$lib/stores/auth';
   import { clipboard, clearClipboard } from '$lib/stores/clipboard';
@@ -56,8 +56,8 @@
     const req = $revealRequest;
     if (!req || req.dashboardId !== dashboard.id) return;
     untrack(() => {
-      revealRequest.set(null);
-      void reveal(req);
+      const taken = takeReveal(dashboard.id);
+      if (taken) void reveal(taken);
     });
   });
 

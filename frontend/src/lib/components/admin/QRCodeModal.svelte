@@ -4,6 +4,7 @@
   import Modal from '$lib/components/shared/Modal.svelte';
   import Button from '$lib/components/shared/Button.svelte';
   import { toast } from '$lib/stores/toast';
+  import { dashboardHref } from '$lib/stores/config';
 
   interface Props {
     /** The dashboard to generate a QR code for */
@@ -17,7 +18,7 @@
   // window.location.origin so it works for any deployment topology — local
   // IP, mDNS hostname, reverse proxy, port forward — without configuration.
   const fullUrl = $derived(
-    typeof window !== 'undefined' ? window.location.origin + dashboard.path : dashboard.path
+    typeof window !== 'undefined' ? window.location.origin + dashboardHref(dashboard.path) : dashboardHref(dashboard.path)
   );
 
   let qrSvg = $state('');

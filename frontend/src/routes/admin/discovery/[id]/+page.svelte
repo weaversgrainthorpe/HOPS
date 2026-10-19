@@ -7,7 +7,7 @@
   import { isAuthenticated, waitForAuthChecked } from '$lib/stores/auth';
   import { toast } from '$lib/stores/toast';
   import { confirm } from '$lib/stores/confirmModal';
-  import { config as configStore, loadConfig } from '$lib/stores/config';
+  import { config as configStore, loadConfig, dashboardHref } from '$lib/stores/config';
   import {
     getScan, cancelScan, deleteScan, updateScanResult, promoteScan, createScan,
     createDetector,
@@ -538,10 +538,10 @@
       // Take the user to where their new tiles now live — prefer the
       // path the server tells us, fall back to the picked dashboard.
       if (dashboardPath) {
-        goto(dashboardPath);
+        goto(dashboardHref(dashboardPath));
       } else if (!dashIsNew) {
         const dash = dashboards.find((d) => d.id === promoteDashId);
-        if (dash) goto(dash.path);
+        if (dash) goto(dashboardHref(dash.path));
         else goto('/admin/discovery');
       } else {
         goto('/admin/discovery');

@@ -23,9 +23,12 @@ export const dashboards = derived(config, ($config) => $config?.dashboards || []
 
 // The current page's dashboard, resolved exactly as the [dashboard] route
 // resolves it (path first, then id, across legacy and v3-only dashboards).
-const currentRoute = derived([config, page], ([$config, $page]) =>
-  $config ? resolveDashboardRoute($page.url.pathname, $config) : undefined
-);
+// Uses the route's DECODED param (as the route does), never the encoded
+// pathname, so "/my%20dash" resolves the dashboard at "/my dash".
+const currentRoute = derived([config, page], ([$config, $page]) => {
+  const seg = ($page.params as Record<string, string | undefined> | undefined)?.dashboard;
+  return $config && seg ? resolveDashboardRoute(seg, $config) : undefined;
+});
 
 // The current page's LEGACY dashboard (null on a v3-only dashboard, which
 // legacy-only code must never see).
@@ -369,18 +372,32 @@ export function applyDashboardSettings(
   });
 }
 
-// "/home" and "home" route to the same dashboard.
+// "/home", "home" and "//home" route to the same dashboard: every leading "/"
+// is dropped and one added back. The backend's normPath (dashboard_handlers.go)
+// uses the same rule.
 function normPath(p: string): string {
   return '/' + String(p ?? '').replace(/^\/+/, '');
 }
 
 /**
- * Same-origin href for a dashboard path: always a single leading "/", so a
- * stored path can never become a scheme ("javascript:") or protocol-relative
- * ("//host") URL when used as a link or navigation target.
+ * Same-origin href for a dashboard path. Built from the path's segments, each
+ * percent-encoded, so no stored character (backslash, tab, newline, "//",
+ * a scheme) can make a browser resolve it off-origin; the route receives the
+ * decoded segment back and resolves the same dashboard. If the result would
+ * still leave this origin, falls back to the whole path as ONE encoded segment.
  */
 export function dashboardHref(path: string): string {
-  return normPath(path);
+  const bare = String(path ?? '').replace(/^\/+/, '');
+  const href = '/' + bare.split('/').map(encodeURIComponent).join('/');
+  const origin = typeof location !== 'undefined' && location.origin && location.origin !== 'null'
+    ? location.origin
+    : 'http://localhost';
+  try {
+    if (new URL(href, origin).origin === origin) return href;
+  } catch {
+    // fall through to the single-segment form
+  }
+  return '/' + encodeURIComponent(bare);
 }
 
 // Helper to find a LEGACY dashboard by path or id. A path match always wins

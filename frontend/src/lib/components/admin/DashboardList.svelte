@@ -137,7 +137,7 @@
     // navbar when they actually want to make changes — auto-enabling it on
     // arrival meant a stray click could change tiles before the admin had
     // even looked at the dashboard.
-    await goto(dashboard.path);
+    await goto(dashboardHref(dashboard.path));
   }
 
   async function handleExport(dashboard: Dashboard) {
@@ -276,7 +276,7 @@
               >
                 <Icon icon="mdi:qrcode" width="20" />
               </button>
-              <a href={dashboard.path} target="_blank" class="btn-secondary" aria-label="Open {dashboard.name} in a new tab" title="Open in new tab">
+              <a href={dashboardHref(dashboard.path)} target="_blank" class="btn-secondary" aria-label="Open {dashboard.name} in a new tab" title="Open in new tab">
                 <Icon icon="mdi:open-in-new" width="20" />
               </a>
               <button onclick={() => handleDelete(dashboard)} class="btn-danger" aria-label="Delete {dashboard.name}" title="Delete">

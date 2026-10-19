@@ -589,6 +589,11 @@ func validatePromoteTarget(t *promoteTarget) error {
 	if dashNew && strings.TrimSpace(t.NewDashboard.Name) == "" {
 		return errors.New("newDashboard.name is required")
 	}
+	if dashNew && t.NewDashboard.Path != "" {
+		if why := dashboardPathProblem(t.NewDashboard.Path); why != "" {
+			return fmt.Errorf("invalid path for new dashboard %q: the path %s", strings.TrimSpace(t.NewDashboard.Name), why)
+		}
+	}
 	if tabNew && strings.TrimSpace(t.NewTab.Name) == "" {
 		return errors.New("newTab.name is required")
 	}

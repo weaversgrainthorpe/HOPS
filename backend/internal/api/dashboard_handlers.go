@@ -110,9 +110,53 @@ func v3OnlyError(dashboardID string) *apiError {
 	return e
 }
 
-// normPath compares dashboard paths the way the UI routes them ("x" and "/x"
-// reach the same dashboard).
-func normPath(p string) string { return "/" + strings.TrimPrefix(p, "/") }
+// normPath compares dashboard paths the way the UI routes them: every
+// leading "/" is dropped and one is added back ("x", "/x" and "//x" reach the
+// same dashboard). The frontend's normPath (stores/config.ts) uses the same rule.
+func normPath(p string) string { return "/" + strings.TrimLeft(p, "/") }
+
+// dashboardPathProblem says why p cannot be stored as a dashboard path, or ""
+// when it is fine. A backslash or an ASCII control character can make a
+// browser resolve the path off-origin; leading/trailing whitespace is
+// invisible and ambiguous.
+func dashboardPathProblem(p string) string {
+	if p != strings.TrimSpace(p) {
+		return "starts or ends with whitespace"
+	}
+	for _, r := range p {
+		if r == '\\' {
+			return `contains a backslash ("\")`
+		}
+		if r < 0x20 || r == 0x7f {
+			return "contains a control character"
+		}
+	}
+	return ""
+}
+
+// unsafePathError is the 400 for a write that would set an unsafe path on d.
+func unsafePathError(d map[string]interface{}) *apiError {
+	p, ok := d["path"].(string)
+	if !ok {
+		return nil
+	}
+	if why := dashboardPathProblem(p); why != "" {
+		return newAPIError(http.StatusBadRequest, fmt.Sprintf("Invalid path for dashboard %q: the path %s", dashboardLabel(d), why))
+	}
+	return nil
+}
+
+// pathChanged reports whether body sets a path different from prev's (or prev
+// is absent). Only a path being set is checked, so an older stored path never
+// blocks unrelated saves.
+func pathChanged(prev configdoc.Obj, body map[string]interface{}) bool {
+	if prev == nil {
+		return true
+	}
+	pp, _ := prev["path"].(string)
+	bp, _ := body["path"].(string)
+	return pp != bp
+}
 
 // v3OnlyPathClash returns the 409 path_taken when a legacy-written dashboard
 // (body, by its id) would take the path of a stored v3-only dashboard.
@@ -370,6 +414,11 @@ func applyLegacyView(stored configdoc.Obj, in configdoc.Obj) (configdoc.Obj, map
 		if v3Only[id] {
 			return nil, nil, v3OnlyError(id)
 		}
+		if pathChanged(prev[id], dm) {
+			if pe := unsafePathError(dm); pe != nil {
+				return nil, nil, pe
+			}
+		}
 		if pe := v3OnlyPathClash(stored, v3Only, dm); pe != nil {
 			return nil, nil, pe
 		}
@@ -505,6 +554,11 @@ func (r *Router) handlePutDashboard(w http.ResponseWriter, req *http.Request, id
 		}
 		if editable, _ := configdoc.LegacyEditable(prev); !editable {
 			return nil, nil, v3OnlyError(id)
+		}
+		if pathChanged(prev, body.Dashboard) {
+			if pe := unsafePathError(body.Dashboard); pe != nil {
+				return nil, nil, pe
+			}
 		}
 		if pe := v3OnlyPathClash(stored, v3OnlyIDs(stored), body.Dashboard); pe != nil {
 			return nil, nil, pe

@@ -5,7 +5,7 @@
   import { page } from '$app/stores';
   import Icon from '@iconify/svelte';
   import { config, layoutDoc, resolveDashboardRoute, dashboardHref } from '$lib/stores/config';
-  import { revealRequest } from '$lib/stores/folderOverlay';
+  import { requestReveal, revealRequest } from '$lib/stores/folderOverlay';
   import { toast } from '$lib/stores/toast';
   import { portal } from '$lib/utils/portal';
   import type { Entry } from '$lib/types';
@@ -100,14 +100,15 @@
   // collapsed folders on its path (outermost first) and focuses it. Navigate
   // first when it lives on another dashboard.
   function openResult(r: Result) {
-    revealRequest.set({
+    requestReveal({
       dashboardId: r.dashboardId,
       tabId: r.tabId,
       folderIds: r.collapsedFolderIds,
       tileId: r.entry.id
     });
     const cfg = get(config);
-    const here = cfg ? resolveDashboardRoute(get(page).url.pathname, cfg) : undefined;
+    const seg = get(page).params?.dashboard;
+    const here = cfg && seg ? resolveDashboardRoute(seg, cfg) : undefined;
     const hereId = here && here.kind !== 'missing-layout' ? here.dashboard.id : undefined;
     if (hereId !== r.dashboardId) {
       goto(dashboardHref(r.dashboardPath)).catch((e) => {

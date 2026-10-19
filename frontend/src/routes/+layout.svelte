@@ -4,7 +4,10 @@
 	// See scripts/generate-icon-bundle.mjs and TENETS.md #10.
 	import '$lib/icons/offline-bundle';
 	import { onMount } from 'svelte';
-	import { loadConfig, migrationFailure, showMigrationFailedPage } from '$lib/stores/config';
+	import { config, loadConfig, migrationFailure, resolveDashboardRoute, showMigrationFailedPage } from '$lib/stores/config';
+	import { beforeNavigate } from '$app/navigation';
+	import { get } from 'svelte/store';
+	import { revealNavigation } from '$lib/stores/folderOverlay';
 	import { page } from '$app/stores';
 	import { initAuth, mustChangePassword } from '$lib/stores/auth';
 	import { initEditModeIdleWatcher } from '$lib/stores/editModeIdleWatcher';
@@ -26,6 +29,14 @@
 	let { children } = $props();
 
 	let showSearch = $state(false);
+
+	// A pending search reveal survives only the navigation to its own dashboard.
+	beforeNavigate(({ to }) => {
+		const seg = to?.params?.dashboard;
+		const cfg = get(config);
+		const r = seg && cfg ? resolveDashboardRoute(seg, cfg) : undefined;
+		revealNavigation(r && r.kind !== 'missing-layout' ? r.dashboard.id : null);
+	});
 
 	onMount(() => {
 		initAuth();

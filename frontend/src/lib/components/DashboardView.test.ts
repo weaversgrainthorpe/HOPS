@@ -16,7 +16,7 @@ import Navbar from './Navbar.svelte';
 import { config } from '$lib/stores/config';
 import { editMode } from '$lib/stores/editMode';
 import { isAuthenticated } from '$lib/stores/auth';
-import { closeAll, overlayStack } from '$lib/stores/folderOverlay';
+import { closeAll, overlayStack, requestReveal, revealNavigation, revealRequest } from '$lib/stores/folderOverlay';
 import { applyThemePreset } from '$lib/stores/theme';
 import type { Config, Dashboard as DashboardT } from '$lib/types';
 import type { LayoutDashboard } from '$lib/types/layout';
@@ -166,5 +166,30 @@ describe('v3-only dashboards', () => {
     await tick();
     expect(container.querySelector('.tab-panel')).toBeNull();
     expect(container.querySelector('.tab-canvas')).not.toBeNull();
+  });
+});
+
+describe('route resolution and reveal lifetime', () => {
+  it('a v3-only dashboard at a path that needs encoding still disables the edit toggle', async () => {
+    const spaced: LayoutDashboard = { ...v3d, id: 'sp', name: 'Spaced', path: '/my dash' };
+    config.set({ ...cfg([layoutD1, spaced]), v3OnlyDashboards: [{ id: 'sp', name: 'Spaced', path: '/my dash', reason: 'x' }] } as Config);
+    isAuthenticated.set(true);
+    pageStore.set!({ url: new URL('http://localhost/my%20dash'), params: { dashboard: 'my dash' }, route: { id: '/[dashboard]' }, status: 200, error: null, data: {}, form: undefined });
+    const nav = render(Navbar);
+    await tick();
+    const toggle = nav.container.querySelector('.edit-toggle') as HTMLButtonElement;
+    expect(toggle.disabled).toBe(true);
+    expect(toggle.getAttribute('title')).toBe('This dashboard uses v3 layout features and is view-only until the new editor arrives');
+    pageStore.set!({ url: new URL('http://localhost/'), params: {}, route: { id: '/' }, status: 200, error: null, data: {}, form: undefined });
+  });
+
+  it('a reveal request cleared by navigating elsewhere does not fire on a later visit', async () => {
+    requestReveal({ dashboardId: 'd1', tabId: 't2', folderIds: [], tileId: 's1' });
+    revealNavigation('somewhere-else');
+    expect(get(revealRequest)).toBeNull();
+    const { container } = render(Dashboard, { dashboard: legacy });
+    await tick();
+    await new Promise((r) => setTimeout(r, 30));
+    expect(container.querySelector('.tab-canvas[data-tab-id="t1"]')).not.toBeNull();
   });
 });

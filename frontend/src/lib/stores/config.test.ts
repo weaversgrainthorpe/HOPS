@@ -444,10 +444,29 @@ describe('saveDashboardSettingsChanges on a v3-only dashboard', () => {
 });
 
 describe('dashboardHref', () => {
-  it('always yields a same-origin path', () => {
-    expect(dashboardHref('home')).toBe('/home');
-    expect(dashboardHref('/home')).toBe('/home');
-    expect(dashboardHref('//evil.test/x')).toBe('/evil.test/x');
-    expect(dashboardHref('javascript:alert(1)')).toBe('/javascript:alert(1)');
+  const tricky = [
+    '\\evil.test', '/a\\b', '\t/evil.test', '\n//evil.test', '//x', '/a%2Fb', '/caf\u00e9', '/my dash',
+    'javascript:alert(1)', 'home', '/home'
+  ];
+  for (const p of tricky) {
+    it(`keeps ${JSON.stringify(p)} same-origin and resolving to its dashboard`, () => {
+      const h = dashboardHref(p);
+      const u = new URL(h, 'https://hops.local/a/b');
+      expect(u.origin).toBe('https://hops.local');
+      expect(h.startsWith('/')).toBe(true);
+      expect(h.startsWith('//')).toBe(false);
+      expect(/[\s\\]/.test(h)).toBe(false);
+      // The route sees the decoded segment; it must find the same dashboard.
+      const cfg: Config = { ...makeConfig(), dashboards: [{ ...dash('target', 1), path: p }] };
+      const r = resolveDashboardRoute(decodeURIComponent(u.pathname.slice(1)), cfg);
+      expect(r && r.kind === 'legacy' && r.dashboard.id).toBe('target');
+    });
+  }
+
+  it('front and back normPath agree: every leading slash is stripped', () => {
+    const cfg: Config = { ...makeConfig(), dashboards: [{ ...dash('x', 1), path: '//x' }] };
+    const r = resolveDashboardRoute('x', cfg);
+    expect(r && r.kind === 'legacy' && r.dashboard.id).toBe('x');
+    expect(dashboardHref('///x')).toBe('/x');
   });
 });

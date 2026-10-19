@@ -1414,6 +1414,12 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 			skipped = append(skipped, fmt.Sprintf("dashboards[%d] is not an object", i))
 			continue
 		}
+		if p, ok := d["path"].(string); ok {
+			if why := dashboardPathProblem(p); why != "" {
+				writeJSONError(w, fmt.Sprintf("Import refused — dashboard %q has an unsafe path: the path %s", dashboardLabel(d), why), http.StatusBadRequest)
+				return
+			}
+		}
 		if format == "hops-v3" {
 			// New to this install: revision restarts at 1; settings are kept.
 			d["revision"] = 1
