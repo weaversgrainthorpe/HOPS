@@ -5,11 +5,6 @@ import (
 	"fmt"
 )
 
-var settingsKeys = []string{
-	"statusChecksEnabled", "statusCheckIntervalMinutes", "statusCheckTimeoutSeconds",
-	"editIdleTimeoutMinutes", "animatedFolderBackgrounds", "defaultLayout",
-}
-
 func deepCopy(o Obj) (Obj, error) {
 	b, err := json.Marshal(o)
 	if err != nil {

@@ -20,6 +20,8 @@
     status: 'Status checks',
     upload: 'Uploads',
     http: 'HTTP server timeouts',
+    folders: 'Folders',
+    layout: 'Layout',
   };
 
   let settings = $state<SettingDef[]>([]);
@@ -231,7 +233,7 @@
                 </div>
               </div>
               <div class="row-input">
-                {#if s.type === 'log_level' && s.enum}
+                {#if (s.type === 'log_level' || s.type === 'enum') && s.enum}
                   <select id={`setting-${s.key}`} bind:value={drafts[s.key]}>
                     {#each s.enum as opt (opt)}
                       <option value={opt}>{opt}</option>

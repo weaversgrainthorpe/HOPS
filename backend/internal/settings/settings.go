@@ -32,7 +32,7 @@ type Definition struct {
 
 	// Type is a hint used by the API and frontend to render the right input.
 	// One of: "int", "duration_seconds", "duration_minutes", "duration_hours",
-	// "bytes", "log_level", "cidr_list", "bool".
+	// "bytes", "log_level", "enum", "cidr_list", "bool".
 	Type string
 
 	// Default is the seeded value used when no row exists for this key.
@@ -74,6 +74,8 @@ const (
 	KeyHTTPIdleTimeoutSeconds       = "http.idle_timeout_seconds"
 	KeyDiscoveryMaxParallelProbes   = "discovery.max_parallel_probes"
 	KeyDiscoveryPerHostTimeoutSecs  = "discovery.per_host_timeout_seconds"
+	KeyFoldersAnimatedBackgrounds   = "folders.animated_backgrounds"
+	KeyLayoutDefaultMode            = "layout.default_mode"
 )
 
 // Definitions is the authoritative list of every setting HOPS exposes.
@@ -172,6 +174,15 @@ var Definitions = []Definition{
 			"and seeing things you know are running get missed. Raising this also makes scans take longer overall, " +
 			"because the scanner waits this long on every host that isn't responding.",
 		Min:         1, Max: 60,
+	},
+	{
+		Key: KeyFoldersAnimatedBackgrounds, Type: "bool", Default: "true",
+		Description: "Whether folders may show animated (video/GIF) backgrounds. Individual dashboards can override this.",
+	},
+	{
+		Key: KeyLayoutDefaultMode, Type: "enum", Default: "grid",
+		Description: "Default layout for dashboards: grid (snap to a grid) or free (place anywhere). Individual dashboards can override this.",
+		Enum:        []string{"grid", "free"},
 	},
 }
 
@@ -297,6 +308,16 @@ func (s *Service) Set(key, value string) error {
 	return nil
 }
 
+// Validate checks value against the definition for key without persisting it.
+// Returns an error for an unknown key or an invalid value.
+func (s *Service) Validate(key, value string) error {
+	def, ok := defByKey[key]
+	if !ok {
+		return fmt.Errorf("unknown setting key %q", key)
+	}
+	return validate(def, value)
+}
+
 // Subscribe registers a callback that is invoked synchronously after every
 // successful Set for the given key. Use this for live-applied settings (rate
 // limiter, status checker, log level).
@@ -368,6 +389,11 @@ func validate(def Definition, value string) error {
 		}
 	case "log_level":
 		if !containsString(def.Enum, strings.ToLower(value)) {
+			return fmt.Errorf("%s: %q is not one of %v", def.Key, value, def.Enum)
+		}
+	case "enum":
+		// Exact match: no trimming or case folding, so "grid " and "Grid" fail.
+		if !containsString(def.Enum, value) {
 			return fmt.Errorf("%s: %q is not one of %v", def.Key, value, def.Enum)
 		}
 	case "cidr_list":

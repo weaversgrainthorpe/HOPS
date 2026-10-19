@@ -50,6 +50,7 @@ func TestEveryKeyHasADefinition(t *testing.T) {
 		KeyHTTPReadHeaderTimeoutSeconds, KeyHTTPReadTimeoutSeconds,
 		KeyHTTPWriteTimeoutSeconds, KeyHTTPIdleTimeoutSeconds,
 		KeyDiscoveryMaxParallelProbes, KeyDiscoveryPerHostTimeoutSecs,
+		KeyFoldersAnimatedBackgrounds, KeyLayoutDefaultMode,
 	}
 	for _, k := range keys {
 		if _, ok := defByKey[k]; !ok {
@@ -353,5 +354,26 @@ func TestBoolSetting(t *testing.T) {
 	}
 	if s.GetBool(KeyStatusChecksEnabled) {
 		t.Error("GetBool should be false after Set(false)")
+	}
+}
+
+func TestEnumSetting(t *testing.T) {
+	s := newTestService(t)
+	if got := s.Get(KeyLayoutDefaultMode); got != "grid" {
+		t.Fatalf("default = %q, want grid", got)
+	}
+	for _, bad := range []string{"grid ", "tiles", "", "Grid"} {
+		if err := s.Set(KeyLayoutDefaultMode, bad); err == nil {
+			t.Errorf("Set(%q) should be rejected", bad)
+		}
+		if err := s.Validate(KeyLayoutDefaultMode, bad); err == nil {
+			t.Errorf("Validate(%q) should be rejected", bad)
+		}
+	}
+	if err := s.Set(KeyLayoutDefaultMode, "free"); err != nil {
+		t.Fatalf("Set(free): %v", err)
+	}
+	if err := s.Validate("no.such.key", "x"); err == nil {
+		t.Error("Validate of unknown key should error")
 	}
 }
