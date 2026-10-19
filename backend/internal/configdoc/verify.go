@@ -40,6 +40,24 @@ func VerifyIDs(doc Obj) error {
 	return nil
 }
 
+// VerifyImportedDashboard checks one dashboard of an imported v3 document on
+// its own: non-empty string path, the converter-owned keys (revision, the six
+// settings keys, defaultLayout) and a well-formed tree whose ids are non-empty
+// and unique within the dashboard. It returns a *VerifyError.
+func VerifyImportedDashboard(d Obj) error {
+	v := &verifier{}
+	id, _ := d["id"].(string)
+	if p, ok := d["path"].(string); !ok || p == "" {
+		v.add("dashboard %q: path is %s, want a non-empty string", id, show(d["path"]))
+	}
+	v.checkOwned(id, d)
+	v.checkIDs(Obj{"dashboards": []any{d}})
+	if len(v.problems) > 0 {
+		return &VerifyError{Problems: v.problems}
+	}
+	return nil
+}
+
 // Verify proves v3 is a faithful conversion of v2:
 //   - every v2 dashboard/tab/group/entry ID appears exactly once at the
 //     matching level, under the matching parent, in the same order;

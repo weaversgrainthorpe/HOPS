@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"mime/multipart"
-	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
@@ -64,8 +63,16 @@ func (c *apiClient) raw(method, path string, body []byte, contentType string) (i
 
 func (c *apiClient) importFile(data []byte) (int, map[string]interface{}) {
 	c.t.Helper()
+	return c.importFileWith(data, nil)
+}
+
+func (c *apiClient) importFileWith(data []byte, fields map[string]string) (int, map[string]interface{}) {
+	c.t.Helper()
 	var buf bytes.Buffer
 	mw := multipart.NewWriter(&buf)
+	for k, v := range fields {
+		mw.WriteField(k, v)
+	}
 	fw, _ := mw.CreateFormFile("file", "import.dat")
 	fw.Write(data)
 	mw.Close()
@@ -377,7 +384,9 @@ func TestImport_RefusesWhenStoredConfigUnreadable(t *testing.T) {
 			}
 			// Export refuses too, visibly.
 			code, body := c.raw("GET", "/api/config/export", nil, "")
-			if code != 500 || !strings.Contains(string(body), "error") {
+			var eb map[string]interface{}
+			_ = json.Unmarshal(body, &eb)
+			if code != 500 || !strings.HasPrefix(fmt.Sprint(eb["error"]), "Stored configuration could not be read, so nothing was exported: ") {
 				t.Errorf("export: %d %s", code, body)
 			}
 		})
@@ -404,4 +413,97 @@ func TestImport_VerifyFailureIs400AndWritesNothing(t *testing.T) {
 	}
 }
 
-var _ = http.StatusOK
+// v3ExportOf wraps a v3 config in an export envelope.
+func v3ExportOf(t *testing.T, cfg map[string]interface{}) []byte {
+	t.Helper()
+	b, err := json.Marshal(map[string]interface{}{
+		"format": "hops-export", "schemaVersion": 3, "exportType": "full", "config": cfg})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
+}
+
+func TestImport_AssetFailureIsSurfaced(t *testing.T) {
+	router, db := setupTestRouter(t)
+	c := newClient(t, router)
+	seed(t, c)
+	var env map[string]interface{}
+	json.Unmarshal(c.export(""), &env)
+	cfg := env["config"].(map[string]interface{})
+	cfg["assets"] = map[string]interface{}{
+		"/icons/broken.png": map[string]interface{}{"contentType": "image/png", "data": "!!!not base64!!!"},
+		"/icons/empty.png":  map[string]interface{}{"contentType": "image/png"},
+	}
+	before := len(dashList(storedDoc(t, db)))
+	code, resp := c.importFile(v3ExportOf(t, cfg))
+	if code != 200 {
+		t.Fatalf("import: %d %v", code, resp)
+	}
+	if len(dashList(storedDoc(t, db))) != before*2 {
+		t.Error("dashboards were not imported")
+	}
+	failed, _ := resp["assetsFailed"].([]interface{})
+	msg, _ := resp["message"].(string)
+	if len(failed) != 2 || !strings.Contains(msg, "could not be restored") || !strings.Contains(msg, "broken.png") {
+		t.Errorf("failure not surfaced: failed=%v message=%q", failed, msg)
+	}
+}
+
+func TestImport_IconMatchingFailureIsSurfaced(t *testing.T) {
+	router, db := setupTestRouter(t)
+	c := newClient(t, router)
+	if _, err := db.Exec("DROP TABLE icons"); err != nil {
+		t.Skipf("cannot break icons table: %v", err)
+	}
+	homer := []byte("title: X\nservices:\n  - name: A\n    items:\n      - name: B\n        url: https://b.example\n")
+	code, resp := c.importFileWith(homer, map[string]string{"autoMatchIcons": "true"})
+	if code != 200 || !strings.Contains(fmt.Sprint(resp["message"]), "Icon auto-matching skipped") {
+		t.Fatalf("got %d %v", code, resp)
+	}
+}
+
+func TestImport_V3ShapeChecks(t *testing.T) {
+	good := func() map[string]interface{} {
+		router, _ := setupTestRouter(t)
+		c := newClient(t, router)
+		seed(t, c)
+		var env map[string]interface{}
+		json.Unmarshal(c.export(""), &env)
+		return env["config"].(map[string]interface{})
+	}
+	cases := map[string]func(cfg map[string]interface{}){
+		"empty path":       func(c map[string]interface{}) { dashOf(c)["path"] = "" },
+		"no settings":      func(c map[string]interface{}) { delete(dashOf(c), "settings") },
+		"partial settings": func(c map[string]interface{}) { dashOf(c)["settings"] = map[string]interface{}{} },
+		"no defaultLayout": func(c map[string]interface{}) { delete(dashOf(c), "defaultLayout") },
+		"duplicate ids inside dashboard": func(c map[string]interface{}) {
+			tab := dashOf(c)["tabs"].([]interface{})[0].(map[string]interface{})
+			tab["id"] = dashOf(c)["id"]
+		},
+	}
+	for name, mutate := range cases {
+		t.Run(name, func(t *testing.T) {
+			router, db := setupTestRouter(t)
+			c := newClient(t, router)
+			seed(t, c)
+			cfg := good()
+			mutate(cfg)
+			var before string
+			db.QueryRow("SELECT data FROM config WHERE id = 1").Scan(&before)
+			code, resp := c.importFile(v3ExportOf(t, cfg))
+			if code != 400 {
+				t.Fatalf("got %d %v", code, resp)
+			}
+			var after string
+			db.QueryRow("SELECT data FROM config WHERE id = 1").Scan(&after)
+			if before != after {
+				t.Error("config row changed")
+			}
+		})
+	}
+}
+
+func dashOf(cfg map[string]interface{}) map[string]interface{} {
+	return cfg["dashboards"].([]interface{})[0].(map[string]interface{})
+}

@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -683,24 +684,39 @@ func (r *Router) embedAssets(cfg map[string]interface{}) int {
 
 // restoreAssets extracts embedded assets from an imported config and writes them to disk.
 // Returns the number of assets restored.
-func (r *Router) restoreAssets(importedConfig map[string]interface{}) int {
+func (r *Router) restoreAssets(importedConfig map[string]interface{}) (int, []string) {
 	assetsRaw, ok := importedConfig["assets"]
 	if !ok {
-		return 0
+		return 0, nil
 	}
 	assetsMap, ok := assetsRaw.(map[string]interface{})
 	if !ok {
-		return 0
+		return 0, []string{"assets: field is not an object, no assets restored"}
 	}
 
 	restored := 0
-	for urlPath, assetRaw := range assetsMap {
-		assetMap, ok := assetRaw.(map[string]interface{})
+	var failed []string
+	fail := func(urlPath, reason string, err error) {
+		slog.Warn("failed to restore asset", "component", "import", "path", urlPath, "reason", reason, "error", err)
+		if err != nil {
+			reason += ": " + err.Error()
+		}
+		failed = append(failed, urlPath+" ("+reason+")")
+	}
+	keys := make([]string, 0, len(assetsMap))
+	for k := range assetsMap {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, urlPath := range keys {
+		assetMap, ok := assetsMap[urlPath].(map[string]interface{})
 		if !ok {
+			fail(urlPath, "entry is not an object", nil)
 			continue
 		}
 		dataStr, _ := assetMap["data"].(string)
 		if dataStr == "" {
+			fail(urlPath, "no data", nil)
 			continue
 		}
 
@@ -719,24 +735,22 @@ func (r *Router) restoreAssets(importedConfig map[string]interface{}) int {
 
 		fileData, err := base64.StdEncoding.DecodeString(dataStr)
 		if err != nil {
-			slog.Warn("failed to decode asset", "component", "import", "path", urlPath, "error", err)
+			fail(urlPath, "invalid base64", err)
 			continue
 		}
-
 		if err := os.MkdirAll(filepath.Dir(diskPath), 0755); err != nil {
-			slog.Warn("failed to create directory for asset", "component", "import", "path", diskPath, "error", err)
+			fail(urlPath, "could not create directory", err)
 			continue
 		}
-
 		if err := os.WriteFile(diskPath, fileData, 0644); err != nil {
-			slog.Warn("failed to write asset", "component", "import", "path", diskPath, "error", err)
+			fail(urlPath, "could not write file", err)
 			continue
 		}
 
 		restored++
 		slog.Debug("restored asset", "component", "import", "url", urlPath, "path", diskPath)
 	}
-	return restored
+	return restored, failed
 }
 
 // handleExportConfig exports configuration as YAML/JSON inside the v3 export
@@ -1134,11 +1148,11 @@ func matchIconInMemory(name string, icons []iconRecord) (IconMatch, bool) {
 
 // applyIconMatching matches icons for the tiles of the given (v3) dashboards.
 // Pre-loads all icons once to avoid N+1 database queries.
-func (r *Router) applyIconMatching(dashboards []configdoc.Obj) int {
+func (r *Router) applyIconMatching(dashboards []configdoc.Obj) (int, error) {
 	icons, err := r.loadAllIcons()
 	if err != nil {
 		slog.Error("failed to load icons for matching", "component", "icons", "error", err)
-		return 0
+		return 0, err
 	}
 	list := make([]any, len(dashboards))
 	for i, d := range dashboards {
@@ -1168,7 +1182,7 @@ func (r *Router) applyIconMatching(dashboards []configdoc.Obj) int {
 		}
 		return true
 	})
-	return matchCount
+	return matchCount, nil
 }
 
 const importUnreadableMsg = "Existing configuration could not be read — import refused so nothing is overwritten"
@@ -1250,6 +1264,15 @@ func makeIDsUnique(d configdoc.Obj, used map[string]bool) {
 		uniq(n)
 		return true
 	})
+}
+
+// verifyProblems flattens a *VerifyError into one line.
+func verifyProblems(err error) string {
+	var ve *configdoc.VerifyError
+	if errors.As(err, &ve) {
+		return strings.Join(ve.Problems, "; ")
+	}
+	return err.Error()
 }
 
 func dashboardLabel(d configdoc.Obj) string {
@@ -1377,6 +1400,10 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 		if format == "hops-v3" {
 			// New to this install: revision restarts at 1; settings are kept.
 			d["revision"] = 1
+			if verr := configdoc.VerifyImportedDashboard(d); verr != nil {
+				writeJSONError(w, fmt.Sprintf("Import refused — dashboard %q is malformed: %s", dashboardLabel(d), verifyProblems(verr)), http.StatusBadRequest)
+				return
+			}
 			imported = append(imported, d)
 			continue
 		}
@@ -1412,7 +1439,16 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 	warning := r.preUpdateBackup()
 
 	var iconMatchCount, assetsRestored int
+	var iconErr error
+	var assetsFailed []string
 	var names []string
+	// Icon matching only touches the imported dashboards, so it runs before the
+	// transaction opens (it reads the icons table through r.db).
+	if autoMatchIcons {
+		iconMatchCount, iconErr = r.applyIconMatching(imported)
+		slog.Info("icon matching complete", "component", "import", "matched", iconMatchCount, "error", iconErr)
+	}
+
 	r.updateDocWithLoadErr(w, func(err error) *apiError {
 		slog.Error("import: stored config unreadable", "component", "import", "error", err)
 		return newAPIError(http.StatusInternalServerError, importUnreadableMsg)
@@ -1451,11 +1487,6 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 		}
 		stored["dashboards"] = existing
 
-		if autoMatchIcons {
-			iconMatchCount = r.applyIconMatching(imported)
-			slog.Info("icon matching complete", "component", "import", "matched", iconMatchCount)
-		}
-
 		// Preserve theme and settings from existing config, or use imported if not present
 		for _, k := range []string{"theme", "settings"} {
 			if _, has := stored[k]; !has {
@@ -1478,7 +1509,7 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 		}
 
 		// Restore embedded assets (icons, backgrounds) from import
-		assetsRestored = r.restoreAssets(importedConfig)
+		assetsRestored, assetsFailed = r.restoreAssets(importedConfig)
 
 		message := fmt.Sprintf("Imported %d dashboard(s) from %s format: %s", len(names), importFormat, strings.Join(names, ", "))
 		if len(skipped) > 0 {
@@ -1490,8 +1521,18 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 		if assetsRestored > 0 {
 			message += fmt.Sprintf(", restored %d asset file(s)", assetsRestored)
 		}
+		if iconErr != nil {
+			message += ". Icon auto-matching skipped: " + iconErr.Error()
+		}
+		if len(assetsFailed) > 0 {
+			message += fmt.Sprintf(". %d asset(s) could not be restored: %s", len(assetsFailed), strings.Join(assetsFailed, "; "))
+		}
+		if assetsFailed == nil {
+			assetsFailed = []string{}
+		}
 		resp := map[string]interface{}{
 			"success":        true,
+			"assetsFailed":   assetsFailed,
 			"message":        message,
 			"imported":       len(names),
 			"dashboards":     names,
