@@ -177,3 +177,28 @@ func TestVerifyIDs(t *testing.T) {
 		t.Fatalf("duplicate id not reported: %v", err)
 	}
 }
+
+// The v3 tree holds any mix of tiles and folders at any depth (spec); only
+// an unknown kind or a malformed node is a problem.
+func TestVerifyIDs_AcceptsAnyDepth(t *testing.T) {
+	doc := migrated(t, loadJSON(t, "testdata/v2_basic.json"))
+	doc["dashboards"] = append(doc["dashboards"].([]any), showcaseDash(t, "s1"))
+	_, _, _, g1 := findNode(doc, "g1")
+	content := g1["content"].(Obj)
+	content["children"] = append(content["children"].([]any), Obj{
+		"id": "nf", "kind": "folder", "placement": Obj{"x": 0, "y": 5, "w": 1, "h": 1},
+		"content": Obj{"columns": 1, "children": []any{
+			Obj{"id": "nf-e1", "kind": "tile", "placement": Obj{"x": 0, "y": 0, "w": 1, "h": 1}},
+		}}})
+	if err := VerifyIDs(doc); err != nil {
+		t.Fatalf("nested folder / root tile rejected: %v", err)
+	}
+	// Ids stay unique at depth, and unknown kinds / bad content are reported.
+	_, _, _, nf := findNode(doc, "nf")
+	inner := nf["content"].(Obj)
+	inner["children"] = append(inner["children"].([]any),
+		Obj{"id": "e1", "kind": "tile"},
+		Obj{"id": "w1", "kind": "widget"},
+		Obj{"id": "nf2", "kind": "folder", "content": "oops"})
+	wantProblem(t, VerifyIDs(doc), `duplicate id "e1"`, `"w1": kind is "widget"`, `"nf2": content is string`)
+}

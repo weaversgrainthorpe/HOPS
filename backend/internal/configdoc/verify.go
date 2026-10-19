@@ -347,19 +347,14 @@ func (v *verifier) checkIDs(doc Obj) {
 				v.add("%s: root is %T, want object", tn, tm["root"])
 				continue
 			}
-			v.checkContainer(tn, root, "folder", note, func(fn string, f Obj) {
-				content, ok := f["content"].(Obj)
-				if !ok {
-					v.add("%s: content is %T, want object", fn, f["content"])
-					return
-				}
-				v.checkContainer(fn, content, "tile", note, nil)
-			})
+			v.checkContainer(tn, root, note)
 		}
 	}
 }
 
-func (v *verifier) checkContainer(owner string, c Obj, kind string, note func(string, Obj) string, sub func(string, Obj)) {
+// checkContainer checks every child of c: each is a tile or a folder (any
+// mix, any depth, per the v3 tree), and a folder's content is checked in turn.
+func (v *verifier) checkContainer(owner string, c Obj, note func(string, Obj) string) {
 	kids, ok := asList(c["children"])
 	if !ok {
 		v.add("%s: children is %T, want array", owner, c["children"])
@@ -372,12 +367,17 @@ func (v *verifier) checkContainer(owner string, c Obj, kind string, note func(st
 			continue
 		}
 		n := note(fmt.Sprintf("%s child[%d]", owner, i), km)
-		if km["kind"] != kind {
-			v.add("%s: kind is %s, want %q", n, show(km["kind"]), kind)
-			continue
-		}
-		if sub != nil {
-			sub(n, km)
+		switch km["kind"] {
+		case "tile":
+		case "folder":
+			content, ok := km["content"].(Obj)
+			if !ok {
+				v.add("%s: content is %T, want object", n, km["content"])
+				continue
+			}
+			v.checkContainer(n, content, note)
+		default:
+			v.add("%s: kind is %s, want \"tile\" or \"folder\"", n, show(km["kind"]))
 		}
 	}
 }

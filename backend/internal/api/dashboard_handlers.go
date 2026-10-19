@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/weaversgrainthorpe/HOPS/internal/configdoc"
@@ -95,6 +96,44 @@ func storedDashboards(doc configdoc.Obj) map[string]configdoc.Obj {
 			if id, ok := m["id"].(string); ok {
 				out[id] = m
 			}
+		}
+	}
+	return out
+}
+
+// v3OnlyError is the 409 for a write that would change a dashboard the legacy
+// editor cannot represent.
+func v3OnlyError(dashboardID string) *apiError {
+	e := newAPIError(http.StatusConflict, "v3_only")
+	e.body["dashboardId"] = dashboardID
+	e.body["detail"] = "This dashboard uses v3 layout features and is view-only until the new editor arrives"
+	return e
+}
+
+// v3OnlyIDs returns the ids of the stored dashboards that are not
+// LegacyEditable (never in the legacy view).
+func v3OnlyIDs(stored configdoc.Obj) map[string]bool {
+	out := map[string]bool{}
+	for id, d := range storedDashboards(stored) {
+		if ok, _ := configdoc.LegacyEditable(d); !ok {
+			out[id] = true
+		}
+	}
+	return out
+}
+
+// v3OnlyDashboards lists the stored dashboards left out of the legacy view,
+// in document order, as [{id, name, path, reason}] (never null).
+func v3OnlyDashboards(stored configdoc.Obj) []map[string]interface{} {
+	out := []map[string]interface{}{}
+	l, _ := stored["dashboards"].([]any)
+	for _, d := range l {
+		m, ok := d.(configdoc.Obj)
+		if !ok {
+			continue
+		}
+		if editable, reason := configdoc.LegacyEditable(m); !editable {
+			out = append(out, map[string]interface{}{"id": m["id"], "name": m["name"], "path": m["path"], "reason": reason})
 		}
 	}
 	return out
@@ -249,12 +288,15 @@ func (r *Router) preUpdateBackup() string {
 // and bumping the revision of changed dashboards.
 func applyLegacyView(stored configdoc.Obj, in configdoc.Obj) (configdoc.Obj, map[string]int, error) {
 	prev := storedDashboards(stored)
+	v3Only := v3OnlyIDs(stored)
 	seen, _ := in["dashboardRevisions"].(map[string]interface{})
 	// Shallow copy so the caller's body is untouched (updateDocWithBackup
 	// runs this twice).
 	body := make(configdoc.Obj, len(in))
 	for k, v := range in {
-		if k != "dashboardRevisions" && k != "migrationNotices" { // view-only; never stored
+		switch k {
+		case "dashboardRevisions", "migrationNotices", "layout", "v3OnlyDashboards": // view-only; never stored
+		default:
 			body[k] = v
 		}
 	}
@@ -276,6 +318,9 @@ func applyLegacyView(stored configdoc.Obj, in configdoc.Obj) (configdoc.Obj, map
 			continue // MigrateV2 reports malformed dashboards
 		}
 		id, _ := dm["id"].(string)
+		if v3Only[id] {
+			return nil, nil, v3OnlyError(id)
+		}
 		if p, exists := prev[id]; exists {
 			if ce := checkRevision(id, p, dm["revision"]); ce != nil {
 				return nil, nil, ce
@@ -291,10 +336,13 @@ func applyLegacyView(stored configdoc.Obj, in configdoc.Obj) (configdoc.Obj, map
 		}
 	}
 	// A stored dashboard absent from the body is a deletion; allow it only if
-	// the client saw it at its current revision.
+	// the client saw it at its current revision. v3-only dashboards are never
+	// in the view: FromLegacy carries them over unchanged.
 	ids := make([]string, 0, len(prev))
 	for id := range prev {
-		ids = append(ids, id)
+		if !v3Only[id] {
+			ids = append(ids, id)
+		}
 	}
 	sort.Strings(ids)
 	for _, id := range ids {
@@ -356,6 +404,8 @@ func (r *Router) handleDashboards(w http.ResponseWriter, req *http.Request) {
 	switch {
 	case sub == "" && req.Method == http.MethodPut:
 		r.handlePutDashboard(w, req, id)
+	case sub == "" && req.Method == http.MethodDelete:
+		r.handleDeleteDashboard(w, req, id)
 	case sub == "settings" && req.Method == http.MethodGet:
 		r.handleGetDashboardSettings(w, id)
 	case sub == "settings" && req.Method == http.MethodPut:
@@ -385,6 +435,9 @@ func (r *Router) handlePutDashboard(w http.ResponseWriter, req *http.Request, id
 		if !ok {
 			return nil, nil, newAPIError(http.StatusNotFound, "Dashboard not found: "+id)
 		}
+		if editable, _ := configdoc.LegacyEditable(prev); !editable {
+			return nil, nil, v3OnlyError(id)
+		}
 		if ce := checkRevision(id, prev, body.Revision); ce != nil {
 			return nil, nil, ce
 		}
@@ -405,6 +458,41 @@ func (r *Router) handlePutDashboard(w http.ResponseWriter, req *http.Request, id
 		nd["revision"] = cur + 1
 		next := replaceDashboard(stored, id, nd)
 		return next, map[string]interface{}{"revision": cur + 1}, nil
+	})
+}
+
+// handleDeleteDashboard deletes one dashboard (legacy-editable or v3-only)
+// seen at ?revision=n. The pre-update backup is taken only once the checks
+// pass (updateDocWithBackup's dry run).
+func (r *Router) handleDeleteDashboard(w http.ResponseWriter, req *http.Request, id string) {
+	raw := req.URL.Query().Get("revision")
+	if raw == "" {
+		writeJSONError(w, "revision query parameter required: DELETE /api/dashboards/{id}?revision=n", http.StatusBadRequest)
+		return
+	}
+	rev, err := strconv.Atoi(raw)
+	if err != nil {
+		writeJSONError(w, "revision must be an integer", http.StatusBadRequest)
+		return
+	}
+	r.updateDocWithBackup(w, func(stored configdoc.Obj) (configdoc.Obj, interface{}, error) {
+		prev, ok := storedDashboards(stored)[id]
+		if !ok {
+			return nil, nil, newAPIError(http.StatusNotFound, "Dashboard not found: "+id)
+		}
+		if ce := checkRevision(id, prev, float64(rev)); ce != nil {
+			return nil, nil, ce
+		}
+		l, _ := stored["dashboards"].([]any)
+		kept := make([]any, 0, len(l))
+		for _, d := range l {
+			if m, ok := d.(configdoc.Obj); ok && m["id"] == id {
+				continue
+			}
+			kept = append(kept, d)
+		}
+		stored["dashboards"] = kept
+		return stored, map[string]interface{}{"status": "ok"}, nil
 	})
 }
 

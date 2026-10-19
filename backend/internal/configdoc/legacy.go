@@ -1,6 +1,8 @@
 package configdoc
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
@@ -9,11 +11,17 @@ import (
 // ErrNotLegacyRepresentable means the v3 layout cannot be shown in the v2 view.
 var ErrNotLegacyRepresentable = errors.New("configdoc: layout cannot be shown in the v2 view")
 
+// ErrV3OnlyDashboard means a legacy view holds the id of a stored dashboard
+// that is not LegacyEditable (it is never in the view, so it cannot be saved
+// through it).
+var ErrV3OnlyDashboard = errors.New("configdoc: dashboard uses v3 layout features and cannot be saved through the legacy view")
+
 // ToLegacy renders v3 as the v2 shape. Folders become groups, tiles become
 // entries, children are ordered by (placement.y, placement.x), and all v3-only
 // keys are removed EXCEPT dashboard `revision` and `settings`, which pass
-// through. It errors with ErrNotLegacyRepresentable if any tile sits at a tab
-// root or a folder contains a folder. The input is not modified.
+// through. Dashboards that are not LegacyEditable are left out (FromLegacy
+// carries them over); a malformed dashboard is an error. The input is not
+// modified.
 func ToLegacy(v3 Obj) (Obj, error) {
 	if !IsV3(v3) {
 		return nil, ErrNotV3
@@ -27,19 +35,272 @@ func ToLegacy(v3 Obj) (Obj, error) {
 	if err != nil {
 		return nil, err
 	}
+	kept := make([]any, 0, len(dashes))
 	for _, d := range dashes {
-		delete(d, "defaultLayout")
-		tabs, err := objList(d, "tabs")
+		legacy, reason, err := legacyForm(d)
 		if err != nil {
-			return nil, fmt.Errorf("dashboard %v: %w", d["id"], err)
+			return nil, err
 		}
-		for _, t := range tabs {
-			if err := tabToLegacy(t); err != nil {
-				return nil, fmt.Errorf("tab %v: %w", t["id"], err)
+		if reason != "" {
+			continue // v3-only: never in the view
+		}
+		kept = append(kept, legacy)
+	}
+	out["dashboards"] = kept
+	return out, nil
+}
+
+// DashboardToLegacy renders one v3 dashboard (a deep copy) in the v2 shape. It
+// errors with ErrNotLegacyRepresentable if any tile sits at a tab root or a
+// folder contains a folder. It does not check LegacyEditable.
+func DashboardToLegacy(dash Obj) (Obj, error) {
+	d, err := deepCopy(dash)
+	if err != nil {
+		return nil, fmt.Errorf("configdoc: copy dashboard: %w", err)
+	}
+	if err := dashToLegacy(d); err != nil {
+		return nil, err
+	}
+	return d, nil
+}
+
+// dashToLegacy converts an already-copied dashboard in place.
+func dashToLegacy(d Obj) error {
+	delete(d, "defaultLayout")
+	tabs, err := objList(d, "tabs")
+	if err != nil {
+		return fmt.Errorf("dashboard %v: %w", d["id"], err)
+	}
+	for _, t := range tabs {
+		if err := tabToLegacy(t); err != nil {
+			return fmt.Errorf("dashboard %v: tab %v: %w", d["id"], t["id"], err)
+		}
+	}
+	return nil
+}
+
+// LegacyEditable reports whether a legacy round trip (ToLegacy then FromLegacy)
+// reproduces the dashboard exactly. False when: any tile at a tab root, any
+// folder inside a folder, any tab or folder whose layout is "free", any tab
+// with designWidth, or any placement/columns differing from what
+// ConvertDashboardV2 would produce for the same order. reason names the first cause.
+func LegacyEditable(dash Obj) (ok bool, reason string) {
+	_, reason, err := legacyForm(dash)
+	if err != nil {
+		return false, "it cannot be read: " + err.Error()
+	}
+	return reason == "", reason
+}
+
+// legacyForm returns the dashboard's legacy rendering when it is
+// LegacyEditable, the reason when it is not, or an error when it is malformed.
+// The input is not modified.
+func legacyForm(dash Obj) (legacy Obj, reason string, err error) {
+	if reason := v3FeatureReason(dash); reason != "" {
+		return nil, reason, nil
+	}
+	legacy, err = DashboardToLegacy(dash)
+	if errors.Is(err, ErrNotLegacyRepresentable) {
+		return nil, err.Error(), nil
+	}
+	if err != nil {
+		return nil, "", err
+	}
+	back, err := ConvertDashboardV2(legacy)
+	if err != nil {
+		return nil, "", fmt.Errorf("dashboard %v: %w", dash["id"], err)
+	}
+	orig, err := canonicalForCompare(dash)
+	if err != nil {
+		return nil, "", fmt.Errorf("dashboard %v: %w", dash["id"], err)
+	}
+	conv, err := canonicalForCompare(back)
+	if err != nil {
+		return nil, "", fmt.Errorf("dashboard %v: %w", dash["id"], err)
+	}
+	if reason := firstDiff(orig, conv); reason != "" {
+		return nil, reason, nil
+	}
+	return legacy, "", nil
+}
+
+// v3FeatureReason names the first explicit v3-only feature: a tile at a tab
+// root, a folder inside a folder, a free tab or folder, or a tab designWidth.
+// Malformed shapes are ignored here (DashboardToLegacy reports them).
+func v3FeatureReason(dash Obj) string {
+	tabs, _ := dash["tabs"].([]any)
+	for _, x := range tabs {
+		t, _ := x.(Obj)
+		if t == nil {
+			continue
+		}
+		if t["layout"] == "free" {
+			return fmt.Sprintf("tab %v uses the free layout", t["id"])
+		}
+		if _, has := t["designWidth"]; has {
+			return fmt.Sprintf("tab %v has a designWidth (free layout)", t["id"])
+		}
+		root, _ := t["root"].(Obj)
+		kids, _ := root["children"].([]any)
+		for _, k := range kids {
+			n, _ := k.(Obj)
+			if n == nil {
+				continue
+			}
+			if n["kind"] == "tile" {
+				return fmt.Sprintf("tile %v sits at the root of tab %v, outside any folder", n["id"], t["id"])
+			}
+			if n["kind"] != "folder" {
+				continue
+			}
+			if n["layout"] == "free" {
+				return fmt.Sprintf("folder %v uses the free layout", n["id"])
+			}
+			content, _ := n["content"].(Obj)
+			inner, _ := content["children"].([]any)
+			for _, c := range inner {
+				if cn, _ := c.(Obj); cn != nil && cn["kind"] == "folder" {
+					return fmt.Sprintf("folder %v is nested inside folder %v", cn["id"], n["id"])
+				}
 			}
 		}
 	}
-	return out, nil
+	return ""
+}
+
+// canonicalForCompare deep-copies a v3 dashboard without the four things
+// FromLegacy carries from the stored one (revision, settings, defaultLayout,
+// tab layout) and with every container's children sorted by placement, the
+// order the legacy view shows them in.
+func canonicalForCompare(dash Obj) (Obj, error) {
+	d, err := deepCopy(dash)
+	if err != nil {
+		return nil, err
+	}
+	for _, k := range []string{"revision", "settings", "defaultLayout"} {
+		delete(d, k)
+	}
+	tabs, _ := d["tabs"].([]any)
+	for _, x := range tabs {
+		t, _ := x.(Obj)
+		if t == nil {
+			continue
+		}
+		delete(t, "layout")
+		if err := sortContainer(t["root"]); err != nil {
+			return nil, fmt.Errorf("tab %v: %w", t["id"], err)
+		}
+	}
+	return d, nil
+}
+
+func sortContainer(c any) error {
+	co, _ := c.(Obj)
+	if co == nil {
+		return nil
+	}
+	kids, err := objList(co, "children")
+	if err != nil {
+		return err
+	}
+	sorted, err := sortByPlacement(kids)
+	if err != nil {
+		return err
+	}
+	l := make([]any, len(sorted))
+	for i, k := range sorted {
+		l[i] = k
+		if k["kind"] == "folder" {
+			if err := sortContainer(k["content"]); err != nil {
+				return err
+			}
+		}
+	}
+	co["children"] = l
+	return nil
+}
+
+// firstDiff compares a canonical dashboard with its canonical legacy round
+// trip and names the first difference ("" when identical).
+func firstDiff(orig, conv Obj) string {
+	if k := diffKey(orig, conv, "tabs"); k != "" {
+		return fmt.Sprintf("dashboard %v: %s differs from what the legacy editor saves", orig["id"], k)
+	}
+	ot, _ := orig["tabs"].([]any)
+	ct, _ := conv["tabs"].([]any)
+	if len(ot) != len(ct) {
+		return fmt.Sprintf("dashboard %v: tabs differ from what the legacy editor saves", orig["id"])
+	}
+	for i := range ot {
+		a, _ := ot[i].(Obj)
+		b, _ := ct[i].(Obj)
+		if k := diffKey(a, b, "root"); k != "" {
+			return fmt.Sprintf("tab %v: %s differs from what the legacy editor saves", a["id"], k)
+		}
+		if r := containerDiff(fmt.Sprintf("tab %v", a["id"]), a["root"], b["root"]); r != "" {
+			return r
+		}
+	}
+	return ""
+}
+
+func containerDiff(where string, a, b any) string {
+	ac, _ := a.(Obj)
+	bc, _ := b.(Obj)
+	if k := diffKey(ac, bc, "children"); k != "" {
+		return fmt.Sprintf("%s: %s differs from the legacy grid", where, k)
+	}
+	ak, _ := ac["children"].([]any)
+	bk, _ := bc["children"].([]any)
+	if len(ak) != len(bk) {
+		return fmt.Sprintf("%s: children differ from the legacy grid", where)
+	}
+	for i := range ak {
+		an, _ := ak[i].(Obj)
+		bn, _ := bk[i].(Obj)
+		label := fmt.Sprintf("%v %v", an["kind"], an["id"])
+		if k := diffKey(an, bn, "content"); k != "" {
+			return fmt.Sprintf("%s: %s differs from the legacy grid", label, k)
+		}
+		if an["kind"] == "folder" {
+			if r := containerDiff(label, an["content"], bn["content"]); r != "" {
+				return r
+			}
+		}
+	}
+	return ""
+}
+
+// diffKey returns the first key (sorted) whose JSON differs between a and b,
+// ignoring skip; "" when none.
+func diffKey(a, b Obj, skip string) string {
+	keys := map[string]bool{}
+	for k := range a {
+		keys[k] = true
+	}
+	for k := range b {
+		keys[k] = true
+	}
+	sorted := make([]string, 0, len(keys))
+	for k := range keys {
+		if k != skip {
+			sorted = append(sorted, k)
+		}
+	}
+	sort.Strings(sorted)
+	for _, k := range sorted {
+		av, aok := a[k]
+		bv, bok := b[k]
+		if aok != bok {
+			return k
+		}
+		aj, err1 := json.Marshal(av)
+		bj, err2 := json.Marshal(bv)
+		if err1 != nil || err2 != nil || !bytes.Equal(aj, bj) {
+			return k
+		}
+	}
+	return ""
 }
 
 func tabToLegacy(t Obj) error {
@@ -92,6 +353,11 @@ func orderedChildren(container Obj, kind string) ([]Obj, error) {
 			return nil, fmt.Errorf("%w: %v is a %v where only %ss are allowed", ErrNotLegacyRepresentable, k["id"], k["kind"], kind)
 		}
 	}
+	return sortByPlacement(kids)
+}
+
+// sortByPlacement returns kids sorted by (placement.y, placement.x) (stable).
+func sortByPlacement(kids []Obj) ([]Obj, error) {
 	type pos struct{ x, y float64 }
 	ps := make([]pos, len(kids))
 	for i, k := range kids {
@@ -143,7 +409,10 @@ func objList(o Obj, key string) ([]Obj, error) {
 
 // FromLegacy converts a v2-shaped view back to v3 with ConvertDashboardV2. For
 // each dashboard whose id exists in prev, it carries prev's `settings`,
-// `revision` and `defaultLayout`, and each matching tab's `layout`. It does not
+// `revision` and `defaultLayout`, and each matching tab's `layout`. Every prev
+// dashboard that is not LegacyEditable (so never in the view) is carried over
+// unchanged, in its original position relative to the others; a view that
+// holds such a dashboard's id is refused with ErrV3OnlyDashboard. It does not
 // check revisions; callers must do that first.
 func FromLegacy(view Obj, prev Obj) (Obj, error) {
 	if len(prev) > 0 && !IsV3(prev) {
@@ -172,6 +441,29 @@ func FromLegacy(view Obj, prev Obj) (Obj, error) {
 		}
 	}
 	dashes, _ := out["dashboards"].([]any)
+	inView := map[string]bool{}
+	for _, d := range dashes {
+		if id, ok := d.(Obj)["id"].(string); ok {
+			inView[id] = true
+		}
+	}
+	// v3-only dashboards, grouped by the nearest preceding prev dashboard
+	// that is in the view ("" = before all of them).
+	carried := map[string][]any{}
+	anchor := ""
+	for _, pd := range prevDashes {
+		id, _ := pd["id"].(string)
+		if ok, _ := LegacyEditable(pd); !ok {
+			if inView[id] {
+				return nil, fmt.Errorf("%w: %s", ErrV3OnlyDashboard, id)
+			}
+			carried[anchor] = append(carried[anchor], pd)
+			continue
+		}
+		if inView[id] {
+			anchor = id
+		}
+	}
 	for _, d := range dashes {
 		nd := d.(Obj)
 		id, _ := nd["id"].(string)
@@ -206,5 +498,13 @@ func FromLegacy(view Obj, prev Obj) (Obj, error) {
 			}
 		}
 	}
+	merged := append([]any{}, carried[""]...)
+	for _, d := range dashes {
+		merged = append(merged, d)
+		if id, ok := d.(Obj)["id"].(string); ok && id != "" {
+			merged = append(merged, carried[id]...)
+		}
+	}
+	out["dashboards"] = merged
 	return out, nil
 }

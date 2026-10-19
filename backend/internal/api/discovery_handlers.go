@@ -465,6 +465,13 @@ func (r *Router) handlePromoteScan(w http.ResponseWriter, req *http.Request, sca
 		return
 	}
 
+	// A v3-only dashboard is not in the legacy view; refuse it visibly
+	// rather than as "not found".
+	if body.Target.NewDashboard == nil && v3OnlyIDs(stored)[body.Target.DashboardID] {
+		writeAPIError(w, v3OnlyError(body.Target.DashboardID))
+		return
+	}
+
 	dashboard, dashboardPath, err := resolveDashboard(cfg, &body.Target)
 	if err != nil {
 		writeJSONError(w, err.Error(), http.StatusBadRequest)

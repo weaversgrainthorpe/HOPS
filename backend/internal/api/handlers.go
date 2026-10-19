@@ -143,7 +143,12 @@ func (r *Router) handleGetConfig(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 	view["dashboardRevisions"] = revs
-	// View-only like dashboardRevisions: stripped on PUT, never stored.
+	// The stored v3 document as-is, for the new renderer, and the dashboards
+	// the legacy view leaves out (so the UI can say why). View-only like
+	// dashboardRevisions: stripped on PUT, never stored.
+	view["layout"] = stored
+	view["v3OnlyDashboards"] = v3OnlyDashboards(stored)
+	// Also view-only: stripped on PUT, never stored.
 	if len(r.migration.Renames) > 0 {
 		view["migrationNotices"] = migrationNotices(r.migration.Renames, stored)
 	}
