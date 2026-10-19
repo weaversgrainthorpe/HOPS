@@ -1,0 +1,637 @@
+{
+ "dashboards": [
+  {
+   "background": {
+    "fit": "cover",
+    "images": [
+     "/presets/data-center.jpg",
+     "/presets/fiber-optics.jpg",
+     "/presets/switch-panel.jpg",
+     "/presets/network-grid.jpg",
+     "/presets/rack-servers.jpg",
+     "/presets/circuit-board.jpg",
+     "/presets/digital-code.jpg",
+     "/presets/earth-from-space.jpg",
+     "/presets/media-tv.jpg",
+     "/presets/weather-lightning.jpg",
+     "/presets/weather-rain.jpg",
+     "/presets/weather-storm.jpg",
+     "/presets/storage-hard-drives.jpg"
+    ],
+    "interval": 120,
+    "overlayBlur": 5,
+    "overlayOpacity": 0,
+    "transition": "random",
+    "transitionDuration": 1.5,
+    "type": "slideshow"
+   },
+   "id": "Weavers-1",
+   "name": "Weavers",
+   "order": 0,
+   "path": "/Weavers",
+   "tabs": [
+    {
+     "groups": [
+      {
+       "collapsed": false,
+       "displayStyle": "folder",
+       "entries": [
+        {
+         "_sourceGroupId": "services",
+         "description": "",
+         "icon": "",
+         "iconUrl": "/api/icons/dashboard/proxmox.svg",
+         "id": "entry-0",
+         "name": "Proxmox",
+         "opacity": 0.95,
+         "openMode": "newtab",
+         "order": 0,
+         "size": "medium",
+         "url": "https://proxmox.example.lan"
+        },
+        {
+         "_sourceGroupId": "services",
+         "icon": "",
+         "iconUrl": "/api/icons/dashboard/proxmox.svg",
+         "id": "entry-1780366932638-qgp14a",
+         "name": "PBS",
+         "openMode": "newtab",
+         "order": 1,
+         "size": "medium",
+         "type": "link",
+         "url": "https://pbs.example.lan/#pbsDashboard"
+        },
+        {
+         "_sourceGroupId": "services",
+         "icon": "",
+         "iconUrl": "/api/icons/dashboard/tp-link.svg",
+         "id": "entry-2",
+         "name": "Deco Main",
+         "openMode": "newtab",
+         "order": 2,
+         "size": "medium",
+         "statusCheck": {
+          "enabled": true,
+          "interval": 60,
+          "type": "http"
+         },
+         "url": "https://decomain.example.lan"
+        },
+        {
+         "_sourceGroupId": "services",
+         "icon": "",
+         "iconUrl": "/api/icons/dashboard/tp-link.svg",
+         "id": "entry-3",
+         "name": "Deco Conservatory",
+         "openMode": "newtab",
+         "order": 3,
+         "size": "medium",
+         "url": "https://decosatellite.example.lan/webpages/index.html"
+        },
+        {
+         "_sourceGroupId": "services",
+         "icon": "",
+         "iconUrl": "/api/icons/dashboard/postgresql.svg",
+         "id": "entry-5",
+         "name": "Postgres",
+         "openMode": "newtab",
+         "order": 4,
+         "size": "medium",
+         "url": "https://postgres.example.lan/pgadmin4"
+        },
+        {
+         "_sourceGroupId": "services",
+         "icon": "",
+         "iconUrl": "/api/icons/dashboard/opnsense.svg",
+         "id": "entry-1774889264777-tnxjdn",
+         "name": "OPNSense",
+         "openMode": "newtab",
+         "order": 5,
+         "size": "medium",
+         "type": "link",
+         "url": "https://192.0.2.1:8443"
+        },
+        {
+         "_sourceGroupId": "services",
+         "description": "",
+         "icon": "",
+         "iconUrl": "/api/icons/dashboard/qnap.svg",
+         "id": "entry-6",
+         "name": "QNAP",
+         "openMode": "newtab",
+         "order": 6,
+         "size": "medium",
+         "url": "https://nas.example.lan/"
+        },
+        {
+         "_sourceGroupId": "services",
+         "icon": "mdi:switch",
+         "id": "entry-1776789889089-pd4wnr",
+         "name": "Study Switch",
+         "openMode": "newtab",
+         "order": 8,
+         "size": "medium",
+         "url": "http://192.0.2.200"
+        },
+        {
+         "_sourceGroupId": "services",
+         "icon": "mdi:switch",
+         "id": "entry-1776790005121-n0xmld",
+         "name": "Living Room Switch",
+         "openMode": "newtab",
+         "order": 9,
+         "size": "medium",
+         "url": "http://192.0.2.201"
+        },
+        {
+         "_sourceGroupId": "services",
+         "icon": "",
+         "iconUrl": "/icons/00000000000000000000000000000001.svg",
+         "id": "entry-1778908864715-3xsur",
+         "name": "NTFY",
+         "openMode": "newtab",
+         "order": 10,
+         "size": "medium",
+         "url": "https://ntfy.example.lan/"
+        }
+       ],
+       "icon": "mdi:lan",
+       "id": "services",
+       "name": "Network",
+       "opacity": 0.95,
+       "order": 0,
+       "textColor": "auto",
+       "width": "full"
+      },
+      {
+       "collapsed": false,
+       "displayStyle": "header",
+       "entries": [
+        {
+         "_sourceGroupId": "group-1767612160685-q9ezpf",
+         "description": "",
+         "icon": "",
+         "iconUrl": "/api/icons/dashboard/home-assistant.svg",
+         "id": "entry-7",
+         "name": "HomeAssistant",
+         "openMode": "newtab",
+         "order": 0,
+         "size": "medium",
+         "url": "https://ha.example.lan/"
+        },
+        {
+         "_sourceGroupId": "group-1767612160685-q9ezpf",
+         "icon": "",
+         "iconUrl": "/icons/00000000000000000000000000000002.svg",
+         "id": "entry-1780162177514-uljt2i",
+         "name": "WARP",
+         "openMode": "newtab",
+         "order": 1,
+         "size": "medium",
+         "type": "link",
+         "url": "http://192.0.2.9:8005/"
+        },
+        {
+         "_sourceGroupId": "group-1767612160685-q9ezpf",
+         "icon": "",
+         "iconUrl": "/icons/00000000000000000000000000000003.svg",
+         "id": "entry-8",
+         "name": "HALo",
+         "openMode": "newtab",
+         "order": 2,
+         "size": "medium",
+         "url": "http://halo.example.lan/#dashboard"
+        },
+        {
+         "_sourceGroupId": "group-1767612160685-q9ezpf",
+         "icon": "",
+         "iconUrl": "/icons/00000000000000000000000000000004.svg",
+         "id": "entry-9",
+         "name": "HAV5",
+         "openMode": "newtab",
+         "order": 3,
+         "size": "medium",
+         "url": "https://hav5.example.lan/"
+        },
+        {
+         "_sourceGroupId": "group-1767612160685-q9ezpf",
+         "description": "VISTA",
+         "icon": "",
+         "iconUrl": "/icons/00000000000000000000000000000005.svg",
+         "id": "entry-1770613910997-zscc3l",
+         "name": "VISTA",
+         "openMode": "newtab",
+         "order": 4,
+         "size": "medium",
+         "url": "https://vista.example.lan/"
+        },
+        {
+         "_sourceGroupId": "group-1767612160685-q9ezpf",
+         "icon": "",
+         "iconUrl": "/icons/00000000000000000000000000000006.png",
+         "id": "entry-14",
+         "name": "Ulanzi Living Room",
+         "openMode": "newtab",
+         "order": 5,
+         "size": "medium",
+         "url": "https://ullivingroom.example.lan/"
+        },
+        {
+         "_sourceGroupId": "group-1767612160685-q9ezpf",
+         "icon": "",
+         "iconUrl": "/icons/00000000000000000000000000000006.png",
+         "id": "entry-15",
+         "name": "Ulanzi Snug",
+         "openMode": "newtab",
+         "order": 6,
+         "size": "medium",
+         "url": "https://ulsnug.example.lan/"
+        },
+        {
+         "_sourceGroupId": "group-1767612160685-q9ezpf",
+         "icon": "",
+         "iconUrl": "/icons/00000000000000000000000000000006.png",
+         "id": "entry-16",
+         "name": "Ulanzi Study",
+         "openMode": "newtab",
+         "order": 7,
+         "size": "medium",
+         "url": "https://ulstudy.example.lan/"
+        },
+        {
+         "_sourceGroupId": "group-1767612160685-q9ezpf",
+         "icon": "",
+         "iconUrl": "/icons/00000000000000000000000000000006.png",
+         "id": "entry-1773122288337-1jp52d",
+         "name": "Ulanzi Kitchen",
+         "openMode": "newtab",
+         "order": 8,
+         "size": "medium",
+         "url": "https://ulkitchen.example.lan/"
+        },
+        {
+         "_sourceGroupId": "group-1767612160685-q9ezpf",
+         "description": "HA Node-RED",
+         "icon": "",
+         "iconUrl": "/api/icons/dashboard/node-red.svg",
+         "id": "entry-1767846615244-livvs8",
+         "name": "nodered",
+         "openMode": "newtab",
+         "order": 9,
+         "size": "medium",
+         "url": "https://ha.example.lan/a0d7b954_nodered/ingress"
+        }
+       ],
+       "iconUrl": "/api/icons/dashboard/home-assistant.svg",
+       "id": "group-1767612160685-q9ezpf",
+       "name": "Home Automation (Production)",
+       "order": 1,
+       "textColor": "auto",
+       "width": "full"
+      },
+      {
+       "collapsed": false,
+       "displayStyle": "folder",
+       "entries": [
+        {
+         "_sourceGroupId": "group-1767612221271-44nzth",
+         "description": "",
+         "icon": "",
+         "iconUrl": "/api/icons/dashboard/jellyfin.svg",
+         "id": "entry-12",
+         "name": "Jellyfin",
+         "openMode": "newtab",
+         "order": 0,
+         "size": "medium",
+         "url": "https://jellyfin.example.lan/"
+        },
+        {
+         "_sourceGroupId": "group-1767612221271-44nzth",
+         "description": "",
+         "icon": "",
+         "iconUrl": "/api/icons/dashboard/audiobookshelf.svg",
+         "id": "entry-1779143731177-eaz09",
+         "name": "Audiobookshelf",
+         "openMode": "newtab",
+         "order": 1,
+         "size": "medium",
+         "url": "https://books.example.lan"
+        }
+       ],
+       "icon": "mdi:filmstrip",
+       "id": "group-1767612221271-44nzth",
+       "name": "Video",
+       "order": 2,
+       "textColor": "auto",
+       "width": "full"
+      },
+      {
+       "collapsed": false,
+       "color": "#f97316",
+       "displayStyle": "header",
+       "entries": [
+        {
+         "_sourceGroupId": "group-1770649132865-g5tir",
+         "description": "Remeber to ~/dev/start-halogger.sh on dev (192.0.2.50)",
+         "icon": "",
+         "iconUrl": "/icons/00000000000000000000000000000003.svg",
+         "id": "entry-1770649335826-mhx2pa",
+         "name": "HAlo",
+         "openMode": "newtab",
+         "order": 0,
+         "size": "medium",
+         "type": "link",
+         "url": "http://192.0.2.50:9001/"
+        },
+        {
+         "_sourceGroupId": "group-1770649132865-g5tir",
+         "description": "Remeber to ~/dev/start-hav5-dev.sh on dev (192.0.2.50)",
+         "icon": "",
+         "iconUrl": "/icons/00000000000000000000000000000004.svg",
+         "id": "entry-1770649414028-z0fflj",
+         "name": "HAV5",
+         "openMode": "newtab",
+         "order": 1,
+         "size": "medium",
+         "type": "link",
+         "url": "https://hav5.example.lan/"
+        },
+        {
+         "description": "Remember to start ~/dev/start-vista-dev.sh on 192.0.2.50",
+         "icon": "",
+         "iconUrl": "/icons/00000000000000000000000000000005.svg",
+         "id": "entry-1770649600852-wag28d",
+         "name": "VISTA",
+         "openMode": "newtab",
+         "order": 2,
+         "size": "medium",
+         "url": "http://192.0.2.50:5173"
+        },
+        {
+         "_sourceGroupId": "group-1767612221271-44nzth",
+         "description": "",
+         "icon": "",
+         "iconUrl": "/api/icons/dashboard/audiobookshelf.svg",
+         "id": "entry-1779143723994-m01gyf",
+         "name": "Audiobookshelf",
+         "openMode": "newtab",
+         "order": 3,
+         "size": "medium",
+         "url": "https://books.example.lan"
+        },
+        {
+         "_sourceGroupId": "group-1767612160685-q9ezpf",
+         "icon": "",
+         "iconUrl": "/icons/00000000000000000000000000000002.svg",
+         "id": "entry-1780162136151-qgz0ac",
+         "name": "WARPD",
+         "openMode": "newtab",
+         "order": 4,
+         "size": "medium",
+         "type": "link",
+         "url": "http://192.0.2.50:9005/"
+        }
+       ],
+       "id": "group-1770649132865-g5tir",
+       "name": "Home Assitant Development",
+       "order": 3,
+       "textColor": "auto"
+      },
+      {
+       "collapsed": false,
+       "displayStyle": "header",
+       "entries": [
+        {
+         "_sourceGroupId": "services",
+         "icon": "",
+         "iconUrl": "/api/icons/dashboard/google.svg",
+         "id": "entry-11",
+         "name": "Google",
+         "openMode": "newtab",
+         "order": 0,
+         "size": "medium",
+         "url": "https://google.co.uk"
+        },
+        {
+         "_sourceGroupId": "services",
+         "description": "",
+         "icon": "",
+         "iconUrl": "/api/icons/dashboard/cloudflare.svg",
+         "id": "entry-10",
+         "name": "Cloudflare",
+         "openMode": "newtab",
+         "order": 1,
+         "size": "medium",
+         "url": "https://dash.cloudflare.com/"
+        },
+        {
+         "_sourceGroupId": "group-1767758203176-iysv2",
+         "icon": "",
+         "iconBgColor": "#ffffff",
+         "iconUrl": "/api/icons/dashboard/github.svg",
+         "id": "entry-1780284491482-a1v2nm",
+         "name": "Git-Hub",
+         "openMode": "newtab",
+         "order": 2,
+         "size": "medium",
+         "type": "link",
+         "url": "https://github.com/example?tab=repositories"
+        }
+       ],
+       "icon": "iconoir:internet",
+       "id": "group-1767758203176-iysv2",
+       "name": "internet",
+       "order": 4,
+       "textColor": "auto"
+      },
+      {
+       "collapsed": false,
+       "color": "#f97316",
+       "displayStyle": "header",
+       "entries": [
+        {
+         "_sourceGroupId": "group-1779143500733-vqnh18",
+         "description": "Raemember to start ~/dev/start-vista-dev.sh on 192.0.2.50",
+         "icon": "",
+         "iconUrl": "/icons/00000000000000000000000000000005.svg",
+         "id": "entry-1779144181277-8ayj3b",
+         "name": "VISTA",
+         "openMode": "newtab",
+         "order": 0,
+         "size": "medium",
+         "url": "http://192.0.2.50:5173"
+        },
+        {
+         "_sourceGroupId": "group-1779143500733-vqnh18",
+         "description": "Remeber to ~/dev/start-hav5-dev.sh on dev (192.0.2.50)",
+         "icon": "",
+         "iconUrl": "/icons/00000000000000000000000000000004.svg",
+         "id": "entry-1779144181277-tswr0s",
+         "name": "HAV5",
+         "openMode": "newtab",
+         "order": 1,
+         "size": "medium",
+         "url": "http://192.0.2.50/dev/hav5/"
+        }
+       ],
+       "id": "group-1779144181277-t0wjbf",
+       "name": "Home Assitant Development",
+       "order": 5,
+       "textColor": "auto"
+      }
+     ],
+     "id": "main",
+     "name": "Main",
+     "opacity": 1,
+     "order": 0
+    },
+    {
+     "groups": [
+      {
+       "collapsed": false,
+       "displayStyle": "folder",
+       "entries": [
+        {
+         "_sourceGroupId": "group-1767612221271-44nzth",
+         "description": "",
+         "icon": "",
+         "iconUrl": "/api/icons/dashboard/jellyfin.svg",
+         "id": "entry-1779126577608-6l40nw",
+         "name": "Jellyfin",
+         "openMode": "newtab",
+         "order": 0,
+         "size": "medium",
+         "url": "https://jellyfin.example.lan/"
+        },
+        {
+         "description": "",
+         "icon": "",
+         "iconUrl": "/api/icons/dashboard/audiobookshelf.svg",
+         "id": "entry-13",
+         "name": "Audiobookshelf",
+         "openMode": "newtab",
+         "order": 1,
+         "size": "medium",
+         "url": "https://books.example.lan"
+        }
+       ],
+       "icon": "mdi:filmstrip",
+       "id": "group-1779126577608-1n10aq",
+       "name": "Video (Copy)",
+       "order": 0,
+       "textColor": "auto"
+      }
+     ],
+     "icon": "mdi:filmstrip",
+     "id": "tab-1779120351971-8ycirtg",
+     "name": "Multimedia",
+     "opacity": 1,
+     "order": 2
+    },
+    {
+     "groups": [
+      {
+       "collapsed": false,
+       "displayStyle": "header",
+       "entries": [
+        {
+         "_sourceGroupId": "services",
+         "icon": "",
+         "iconUrl": "/api/icons/dashboard/google.svg",
+         "id": "entry-1779143500733-o02pxy",
+         "name": "Google",
+         "openMode": "newtab",
+         "order": 0,
+         "size": "medium",
+         "url": "https://google.co.uk"
+        },
+        {
+         "_sourceGroupId": "services",
+         "description": "",
+         "icon": "",
+         "iconUrl": "/api/icons/dashboard/cloudflare.svg",
+         "id": "entry-1779143500733-gqb4gl",
+         "name": "Cloudflare",
+         "openMode": "newtab",
+         "order": 1,
+         "size": "medium",
+         "url": "https://dash.cloudflare.com/"
+        },
+        {
+         "_sourceGroupId": "group-1779143500733-vqnh18",
+         "description": "Remeber to ~/dev/start-halaaogger.sh on dev (192.0.2.50)",
+         "icon": "",
+         "iconUrl": "/icons/00000000000000000000000000000003.svg",
+         "id": "entry-1779143500733-59pdij",
+         "name": "HAlo",
+         "openMode": "newtab",
+         "order": 2,
+         "size": "medium",
+         "url": " http://192.0.2.50/dev/halogger/"
+        }
+       ],
+       "icon": "iconoir:internet",
+       "id": "group-1779143500733-39emdd",
+       "name": "internet",
+       "order": 0,
+       "textColor": "auto"
+      },
+      {
+       "collapsed": false,
+       "displayStyle": "folder",
+       "entries": [
+        {
+         "_sourceGroupId": "group-1779143500733-adwj1",
+         "description": "",
+         "icon": "",
+         "iconUrl": "/api/icons/dashboard/jellyfin.svg",
+         "id": "entry-1779143500733-9fzsb",
+         "name": "Jellyfin",
+         "openMode": "newtab",
+         "order": 0,
+         "size": "medium",
+         "url": "https://jellyfin.example.lan/"
+        },
+        {
+         "_sourceGroupId": "group-1779143500733-adwj1",
+         "description": "HA Node-REDa",
+         "icon": "",
+         "iconUrl": "/api/icons/dashboard/node-red.svg",
+         "id": "entry-1779143500733-3nrsak",
+         "name": "nodered",
+         "openMode": "newtab",
+         "order": 1,
+         "size": "medium",
+         "url": "https://ha.example.lan/a0d7b954_nodered/ingress"
+        },
+        {
+         "_sourceGroupId": "group-1779143500733-adwj1",
+         "description": "",
+         "icon": "",
+         "iconUrl": "/api/icons/dashboard/audiobookshelf.svg",
+         "id": "entry-1779143500733-kr1u4",
+         "name": "Audiobookshelf",
+         "openMode": "newtab",
+         "order": 2,
+         "size": "medium",
+         "url": "https://books.example.lan"
+        }
+       ],
+       "icon": "mdi:filmstrip",
+       "id": "group-1779143500733-adwj1",
+       "name": "Video",
+       "order": 1,
+       "textColor": "auto"
+      }
+     ],
+     "id": "tab-1779143500733-btykc",
+     "name": "Main (Copy)",
+     "opacity": 1,
+     "order": 2
+    }
+   ]
+  }
+ ],
+ "exportType": "single-dashboard",
+ "exportedAt": "2026-10-19T02:24:16Z"
+}

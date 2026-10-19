@@ -1,0 +1,21 @@
+{
+  "unknownTop": {"keep": true},
+  "dashboards": [
+    {
+      "id": "d1", "name": "Messy", "revision": 99, "settings": {"x": 1}, "defaultLayout": "list", "weird": null,
+      "tabs": [
+        {"id": "t1", "name": "NullGroups", "groups": null, "tabExtra": "x"},
+        {"id": "t2", "name": "NoGroupsKey", "background": {"type": "image", "value": "u"}},
+        {"id": "t3", "name": "Mixed",
+         "groups": [
+           {"id": "g1", "name": "NoWidth", "order": 9, "entries": null},
+           {"id": "g2", "name": "BadWidth", "width": "huge", "collapsed": "yes", "displayStyle": "other"},
+           {"id": "g3", "name": "Third", "width": "third", "collapsed": false, "entries": [{"id": "e1", "name": "", "order": 5, "x-extra": [1, {"y": null}]}]},
+           {"id": "g4", "name": "OutOfOrder", "width": "half", "order": 0, "entries": [{"id": "e2", "order": 10}, {"id": "e3", "order": 1}]}
+         ]}
+      ]
+    },
+    {"id": "d2", "name": "NoTabs"},
+    {"id": "d3", "name": "NullTabs", "tabs": null}
+  ]
+}

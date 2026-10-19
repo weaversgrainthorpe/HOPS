@@ -1,0 +1,34 @@
+{
+  "theme": {"mode": "dark"},
+  "settings": {"searchHotkey": "/"},
+  "dashboards": [
+    {
+      "id": "d1", "name": "Home", "slug": "home", "perTabBackgrounds": true, "futureKey": {"a": [1, 2]},
+      "tabs": [
+        {
+          "id": "t1", "name": "Main", "order": 0, "background": {"type": "color", "value": "#112233"},
+          "groups": [
+            {"id": "g1", "name": "Full", "width": "full", "order": 3, "extra": "keep",
+             "entries": [
+               {"id": "e1", "name": "A", "url": "http://a", "order": 2, "statusCheck": {"type": "http", "enabled": true, "interval": 30}},
+               {"id": "e2", "name": "B", "url": "http://b", "order": 1},
+               {"id": "e3", "name": "C", "url": "http://c", "order": 0, "custom": 7}
+             ]},
+            {"id": "g2", "name": "Half1", "width": "half", "entries": [{"id": "e4", "name": "D"}]},
+            {"id": "g3", "name": "Half2", "width": "half", "entries": []}
+          ]
+        },
+        {
+          "id": "t2", "name": "Second", "order": 1,
+          "groups": [
+            {"id": "g4", "name": "Folder", "width": "third", "collapsed": true, "displayStyle": "folder",
+             "entries": [
+               {"id": "e5", "name": "E"}, {"id": "e6", "name": "F"}, {"id": "e7", "name": "G"},
+               {"id": "e8", "name": "H"}, {"id": "e9", "name": "I"}
+             ]}
+          ]
+        }
+      ]
+    }
+  ]
+}

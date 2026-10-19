@@ -1,0 +1,417 @@
+package configdoc
+
+import (
+	"encoding/json"
+	"os"
+	"reflect"
+	"testing"
+)
+
+func loadJSON(t *testing.T, path string) Obj {
+	t.Helper()
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var o Obj
+	if err := json.Unmarshal(b, &o); err != nil {
+		t.Fatal(err)
+	}
+	return o
+}
+
+func snapshot(t *testing.T, o Obj) string {
+	t.Helper()
+	b, err := json.Marshal(o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+// norm normalises a value through JSON so ints and float64s compare equal.
+func norm(t *testing.T, v any) any {
+	t.Helper()
+	b, err := json.Marshal(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out any
+	if err := json.Unmarshal(b, &out); err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+func eq(t *testing.T, got, want any, what string) {
+	t.Helper()
+	if !reflect.DeepEqual(norm(t, got), norm(t, want)) {
+		t.Errorf("%s: got %v, want %v", what, snapshot2(got), snapshot2(want))
+	}
+}
+
+func snapshot2(v any) string { b, _ := json.Marshal(v); return string(b) }
+
+func list(t *testing.T, o Obj, key string) []Obj {
+	t.Helper()
+	l, ok := o[key].([]any)
+	if !ok {
+		t.Fatalf("%s is %T, want array", key, o[key])
+	}
+	out := make([]Obj, len(l))
+	for i, x := range l {
+		out[i] = x.(Obj)
+	}
+	return out
+}
+
+func children(t *testing.T, container Obj) []Obj { return list(t, container, "children") }
+
+// withoutKeys returns a shallow copy of o minus the given keys.
+func withoutKeys(o Obj, keys ...string) Obj {
+	out := Obj{}
+	for k, v := range o {
+		out[k] = v
+	}
+	for _, k := range keys {
+		delete(out, k)
+	}
+	return out
+}
+
+// assertKeysPreserved checks every key of orig (minus skip) appears in got with
+// an equal value.
+func assertKeysPreserved(t *testing.T, orig, got Obj, what string, skip ...string) {
+	t.Helper()
+	for k, v := range withoutKeys(orig, skip...) {
+		gv, ok := got[k]
+		if !ok {
+			t.Errorf("%s: key %q lost", what, k)
+			continue
+		}
+		eq(t, gv, v, what+"."+k)
+	}
+}
+
+func TestPackRowMajor(t *testing.T) {
+	ws := []int{12, 6, 6, 4, 4, 4, 6}
+	hs := []int{2, 3, 2, 2, 2, 2, 2}
+	sizes := make([][2]int, len(ws))
+	for i := range ws {
+		sizes[i] = [2]int{ws[i], hs[i]}
+	}
+	got := packRowMajor(sizes, 12)
+	want := [][4]int{{0, 0, 12, 2}, {0, 2, 6, 3}, {6, 2, 6, 2}, {0, 5, 4, 2}, {4, 5, 4, 2}, {8, 5, 4, 2}, {0, 7, 6, 2}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+func TestMigrateV2_Basic(t *testing.T) {
+	v2 := loadJSON(t, "testdata/v2_basic.json")
+	before := snapshot(t, v2)
+	doc, err := MigrateV2(v2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after := snapshot(t, v2); after != before {
+		t.Fatal("MigrateV2 mutated its input")
+	}
+	if !IsV3(doc) {
+		t.Fatal("not v3")
+	}
+	eq(t, doc["schemaVersion"], 3, "schemaVersion")
+	eq(t, doc["theme"], v2["theme"], "theme")
+	eq(t, doc["settings"], v2["settings"], "settings")
+
+	v2d := list(t, v2, "dashboards")[0]
+	dashes := list(t, doc, "dashboards")
+	if len(dashes) != 1 {
+		t.Fatalf("dashboards = %d", len(dashes))
+	}
+	d := dashes[0]
+	assertKeysPreserved(t, v2d, d, "dashboard", "tabs")
+	eq(t, d["revision"], 1, "revision")
+	eq(t, d["defaultLayout"], "grid", "defaultLayout")
+	settings := d["settings"].(Obj)
+	if len(settings) != 6 {
+		t.Errorf("settings has %d keys", len(settings))
+	}
+	for _, k := range settingsKeys {
+		v, ok := settings[k]
+		if !ok || v != nil {
+			t.Errorf("settings.%s = %v (present=%v), want nil", k, v, ok)
+		}
+	}
+
+	tabs := list(t, d, "tabs")
+	v2tabs := list(t, v2d, "tabs")
+	if len(tabs) != 2 {
+		t.Fatalf("tabs = %d", len(tabs))
+	}
+	for i, tab := range tabs {
+		assertKeysPreserved(t, v2tabs[i], tab, "tab", "groups")
+		if _, has := tab["groups"]; has {
+			t.Error("tab still has groups")
+		}
+		eq(t, tab["layout"], "inherit", "tab.layout")
+		root := tab["root"].(Obj)
+		eq(t, root["columns"], 12, "root.columns")
+	}
+	eq(t, tabs[0]["backgroundEnabled"], true, "backgroundEnabled")
+	if _, has := tabs[1]["backgroundEnabled"]; has {
+		t.Error("tab without background got backgroundEnabled")
+	}
+
+	// Tab 1 folders.
+	folders := children(t, tabs[0]["root"].(Obj))
+	v2groups := list(t, v2tabs[0], "groups")
+	if len(folders) != 3 {
+		t.Fatalf("folders = %d", len(folders))
+	}
+	wantPl := []Obj{
+		{"x": 0, "y": 0, "w": 12, "h": 2}, // 3 entries at 12 wide: 1 row + 1
+		{"x": 0, "y": 2, "w": 6, "h": 2},
+		{"x": 6, "y": 2, "w": 6, "h": 2},
+	}
+	for i, f := range folders {
+		assertKeysPreserved(t, v2groups[i], f, "folder", "entries")
+		eq(t, f["kind"], "folder", "kind")
+		eq(t, f["layout"], "inherit", "folder.layout")
+		eq(t, f["display"], "expanded", "display")
+		eq(t, f["shape"], "rounded", "shape")
+		eq(t, f["showTitle"], true, "showTitle")
+		eq(t, f["placement"], wantPl[i], "placement")
+	}
+	eq(t, folders[0]["content"].(Obj)["columns"], 12, "content.columns")
+	eq(t, folders[1]["content"].(Obj)["columns"], 6, "content.columns")
+
+	tiles := children(t, folders[0]["content"].(Obj))
+	v2entries := list(t, v2groups[0], "entries")
+	if len(tiles) != 3 {
+		t.Fatalf("tiles = %d", len(tiles))
+	}
+	for i, tile := range tiles {
+		assertKeysPreserved(t, v2entries[i], tile, "tile")
+		eq(t, tile["kind"], "tile", "tile.kind")
+		eq(t, tile["placement"], Obj{"x": i, "y": 0, "w": 1, "h": 1}, "tile.placement")
+	}
+	// array order, not `order`, drives display: ids e1,e2,e3 despite order 2,1,0.
+	for i, id := range []string{"e1", "e2", "e3"} {
+		eq(t, tiles[i]["id"], id, "tile id")
+	}
+	if n := len(children(t, folders[2]["content"].(Obj))); n != 0 {
+		t.Errorf("empty group produced %d tiles", n)
+	}
+
+	// Tab 2: collapsed folder-style third with 5 entries.
+	f := children(t, tabs[1]["root"].(Obj))[0]
+	eq(t, f["display"], "collapsed", "display")
+	eq(t, f["shape"], "folder-tab", "shape")
+	eq(t, f["placement"], Obj{"x": 0, "y": 0, "w": 4, "h": 3}, "placement") // ceil(5/4)=2, +1
+	want := [][2]int{{0, 0}, {1, 0}, {2, 0}, {3, 0}, {0, 1}}
+	for i, tile := range children(t, f["content"].(Obj)) {
+		eq(t, tile["placement"], Obj{"x": want[i][0], "y": want[i][1], "w": 1, "h": 1}, "tile placement")
+	}
+}
+
+func TestMigrateV2_MessyInput(t *testing.T) {
+	v2 := loadJSON(t, "testdata/v2_messy.json")
+	before := snapshot(t, v2)
+	doc, err := MigrateV2(v2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshot(t, v2) != before {
+		t.Fatal("input mutated")
+	}
+	eq(t, doc["unknownTop"], v2["unknownTop"], "unknownTop")
+	dashes := list(t, doc, "dashboards")
+	if len(dashes) != 3 {
+		t.Fatalf("dashboards = %d", len(dashes))
+	}
+	d := dashes[0]
+	// Pre-existing v3 keys are overwritten.
+	eq(t, d["revision"], 1, "revision")
+	eq(t, d["defaultLayout"], "grid", "defaultLayout")
+	if len(d["settings"].(Obj)) != 6 {
+		t.Errorf("settings not replaced: %v", d["settings"])
+	}
+	if v, ok := d["weird"]; !ok || v != nil {
+		t.Error("null-valued extra key lost")
+	}
+	// Missing / null tabs -> empty list present.
+	for _, i := range []int{1, 2} {
+		if tabs := list(t, dashes[i], "tabs"); len(tabs) != 0 {
+			t.Errorf("dashboard %d tabs = %d", i, len(tabs))
+		}
+	}
+	tabs := list(t, d, "tabs")
+	for _, i := range []int{0, 1} {
+		if n := len(children(t, tabs[i]["root"].(Obj))); n != 0 {
+			t.Errorf("tab %d has %d folders", i, n)
+		}
+	}
+	eq(t, tabs[0]["tabExtra"], "x", "tabExtra")
+	// Background present, perTabBackgrounds missing -> false.
+	eq(t, tabs[1]["backgroundEnabled"], false, "backgroundEnabled")
+	if _, has := tabs[0]["backgroundEnabled"]; has {
+		t.Error("backgroundEnabled without background")
+	}
+
+	fs := children(t, tabs[2]["root"].(Obj))
+	if len(fs) != 4 {
+		t.Fatalf("folders = %d", len(fs))
+	}
+	eq(t, fs[0]["order"], 9, "order carried verbatim")
+	eq(t, fs[0]["placement"], Obj{"x": 0, "y": 0, "w": 12, "h": 2}, "NoWidth placement") // null entries
+	if n := len(children(t, fs[0]["content"].(Obj))); n != 0 {
+		t.Errorf("null entries -> %d tiles", n)
+	}
+	// Unknown width falls back to 12; non-bool collapsed is not collapsed.
+	eq(t, fs[1]["content"].(Obj)["columns"], 12, "bad width columns")
+	eq(t, fs[1]["display"], "expanded", "display")
+	eq(t, fs[1]["shape"], "rounded", "shape")
+	eq(t, fs[1]["collapsed"], "yes", "collapsed carried")
+	eq(t, fs[2]["placement"], Obj{"x": 0, "y": 4, "w": 4, "h": 2}, "third placement")
+	eq(t, fs[3]["placement"], Obj{"x": 4, "y": 4, "w": 6, "h": 2}, "half placement")
+
+	tile := children(t, fs[2]["content"].(Obj))[0]
+	eq(t, tile["x-extra"], []any{1, Obj{"y": nil}}, "tile extras")
+	eq(t, tile["name"], "", "empty name")
+	// Array order wins over `order`.
+	t2 := children(t, fs[3]["content"].(Obj))
+	eq(t, t2[0]["id"], "e2", "first tile")
+	eq(t, t2[1]["id"], "e3", "second tile")
+}
+
+func TestMigrateV2_BadShapes(t *testing.T) {
+	cases := map[string]Obj{
+		"dashboards string": {"dashboards": "x"},
+		"dashboard string":  {"dashboards": []any{"x"}},
+		"tabs object":       {"dashboards": []any{Obj{"tabs": Obj{}}}},
+		"group string":      {"dashboards": []any{Obj{"tabs": []any{Obj{"groups": []any{"x"}}}}}},
+		"entry string":      {"dashboards": []any{Obj{"tabs": []any{Obj{"groups": []any{Obj{"entries": []any{1}}}}}}}},
+	}
+	for name, in := range cases {
+		if _, err := MigrateV2(in); err == nil {
+			t.Errorf("%s: expected error", name)
+		}
+	}
+}
+
+func TestConvertDashboardV2_DoesNotMutate(t *testing.T) {
+	v2 := list(t, loadJSON(t, "testdata/v2_basic.json"), "dashboards")[0]
+	before := snapshot(t, v2)
+	if _, err := ConvertDashboardV2(v2); err != nil {
+		t.Fatal(err)
+	}
+	if snapshot(t, v2) != before {
+		t.Fatal("mutated")
+	}
+}
+
+func TestWalkAndFindTile(t *testing.T) {
+	doc, err := MigrateV2(loadJSON(t, "testdata/v2_basic.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ids []string
+	var depths []int
+	Walk(doc, func(d, tab Obj, path []Obj, n Obj) bool {
+		ids = append(ids, n["id"].(string))
+		depths = append(depths, len(path))
+		return true
+	})
+	wantIDs := []string{"g1", "e1", "e2", "e3", "g2", "e4", "g3", "g4", "e5", "e6", "e7", "e8", "e9"}
+	if !reflect.DeepEqual(ids, wantIDs) {
+		t.Errorf("order = %v", ids)
+	}
+	if depths[0] != 0 || depths[1] != 1 {
+		t.Errorf("depths = %v", depths)
+	}
+
+	var seen int
+	Walk(doc, func(_, _ Obj, _ []Obj, n Obj) bool {
+		seen++
+		return n["id"] != "e2"
+	})
+	if seen != 3 {
+		t.Errorf("walk did not stop: seen %d", seen)
+	}
+
+	d, tile, ok := FindTile(doc, "e8")
+	if !ok || tile["name"] != "H" || d["id"] != "d1" {
+		t.Errorf("FindTile = %v %v %v", d["id"], tile, ok)
+	}
+	if _, _, ok := FindTile(doc, "g1"); ok {
+		t.Error("FindTile matched a folder")
+	}
+	if _, _, ok := FindTile(doc, "nope"); ok {
+		t.Error("FindTile matched missing id")
+	}
+}
+
+func TestMigrateV2_RealExports(t *testing.T) {
+	cases := []struct {
+		file                          string
+		dashes, tabs, groups, entries int
+	}{
+		{"testdata/real_sample.json", 1, 2, 13, 24},
+		{"testdata/real_weavers.json", 1, 3, 9, 40},
+	}
+	for _, c := range cases {
+		t.Run(c.file, func(t *testing.T) {
+			env := loadJSON(t, c.file)
+			v2 := Obj{"dashboards": env["dashboards"]}
+			doc, err := MigrateV2(v2)
+			if err != nil {
+				t.Fatal(err)
+			}
+			eq(t, doc["schemaVersion"], 3, "schemaVersion")
+
+			var nd, nt, nf, nl int
+			for _, d := range list(t, doc, "dashboards") {
+				nd++
+				for _, tab := range list(t, d, "tabs") {
+					nt++
+					_ = tab
+				}
+			}
+			Walk(doc, func(_, _ Obj, _ []Obj, n Obj) bool {
+				if n["kind"] == "folder" {
+					nf++
+				} else {
+					nl++
+				}
+				return true
+			})
+			if nd != c.dashes || nt != c.tabs || nf != c.groups || nl != c.entries {
+				t.Errorf("counts d/t/f/l = %d/%d/%d/%d, want %d/%d/%d/%d", nd, nt, nf, nl, c.dashes, c.tabs, c.groups, c.entries)
+			}
+
+			// Every v2 entry survives unchanged on its tile.
+			found := 0
+			for _, d := range list(t, v2, "dashboards") {
+				for _, tab := range list(t, d, "tabs") {
+					for _, g := range list(t, tab, "groups") {
+						es, _ := g["entries"].([]any)
+						for _, e := range es {
+							entry := e.(Obj)
+							_, tile, ok := FindTile(doc, entry["id"].(string))
+							if !ok {
+								t.Errorf("entry %v not found", entry["id"])
+								continue
+							}
+							assertKeysPreserved(t, entry, tile, "entry "+entry["id"].(string))
+							found++
+						}
+					}
+				}
+			}
+			if found != c.entries {
+				t.Errorf("verified %d entries, want %d", found, c.entries)
+			}
+		})
+	}
+}

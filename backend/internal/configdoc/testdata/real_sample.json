@@ -1,0 +1,409 @@
+{
+ "dashboards": [
+  {
+   "id": "sample-1",
+   "name": "Sample (Imported)",
+   "order": 0,
+   "path": "/sample-1",
+   "tabs": [
+    {
+     "color": "#3b82f6",
+     "groups": [
+      {
+       "collapsed": false,
+       "color": "#8b5cf6",
+       "entries": [
+        {
+         "description": "Search Engine",
+         "icon": "mdi:google",
+         "id": "google",
+         "name": "Google",
+         "openMode": "newtab",
+         "order": 0,
+         "size": "medium",
+         "url": "https://google.com"
+        },
+        {
+         "description": "Code Repository",
+         "icon": "mdi:github",
+         "id": "github",
+         "name": "GitHub",
+         "openMode": "newtab",
+         "order": 1,
+         "size": "medium",
+         "url": "https://github.com"
+        },
+        {
+         "description": "Video Platform",
+         "icon": "mdi:youtube",
+         "id": "youtube",
+         "name": "YouTube",
+         "openMode": "newtab",
+         "order": 2,
+         "size": "medium",
+         "url": "https://youtube.com"
+        }
+       ],
+       "id": "services",
+       "name": "Services",
+       "opacity": 0.95,
+       "order": 0
+      },
+      {
+       "collapsed": false,
+       "color": "#10b981",
+       "entries": [
+        {
+         "description": "Q&A for Developers",
+         "icon": "mdi:stack-overflow",
+         "id": "stackoverflow",
+         "name": "Stack Overflow",
+         "openMode": "newtab",
+         "order": 0,
+         "size": "medium",
+         "url": "https://stackoverflow.com"
+        },
+        {
+         "description": "Web Development Documentation",
+         "icon": "mdi:firefox",
+         "id": "mdn",
+         "name": "MDN Web Docs",
+         "openMode": "newtab",
+         "order": 1,
+         "size": "medium",
+         "url": "https://developer.mozilla.org"
+        }
+       ],
+       "id": "tools",
+       "name": "Development Tools",
+       "opacity": 0.95,
+       "order": 1
+      },
+      {
+       "collapsed": false,
+       "entries": [
+        {
+         "description": "Self-hosted uptime monitor",
+         "iconUrl": "/api/icons/dashboard/uptime-kuma.svg",
+         "id": "entry-cb7bb6-7c496d",
+         "name": "Uptime Kuma",
+         "openMode": "newtab",
+         "order": 0,
+         "size": "medium",
+         "type": "link",
+         "url": "http://192.0.2.5:3001/"
+        },
+        {
+         "description": "ViewPower UPS monitoring (Voltronic / MUST)",
+         "iconUrl": "/api/icons/dashboard/ups.svg",
+         "id": "entry-cb7bb6-789237",
+         "name": "ViewPower",
+         "openMode": "newtab",
+         "order": 1,
+         "size": "medium",
+         "type": "link",
+         "url": "http://192.0.2.5:15178/"
+        },
+        {
+         "description": "Netdata real-time monitoring",
+         "iconUrl": "/api/icons/dashboard/netdata.svg",
+         "id": "entry-cb7bb6-4df709",
+         "name": "Netdata",
+         "openMode": "newtab",
+         "order": 2,
+         "size": "medium",
+         "type": "link",
+         "url": "http://192.0.2.5:19999/"
+        }
+       ],
+       "icon": "mdi:monitor-dashboard",
+       "id": "c7dbd78bd457b93c",
+       "name": "Monitoring",
+       "order": 2
+      },
+      {
+       "collapsed": false,
+       "entries": [
+        {
+         "description": "Reolink camera / NVR",
+         "iconUrl": "/api/icons/dashboard/reolink.svg",
+         "id": "entry-cb7bb6-95a0d2",
+         "name": "Reolink",
+         "openMode": "newtab",
+         "order": 0,
+         "size": "medium",
+         "type": "link",
+         "url": "https://192.0.2.11/"
+        }
+       ],
+       "icon": "mdi:cctv",
+       "id": "22d853a4eb7f0ff8",
+       "name": "Surveillance",
+       "order": 3
+      },
+      {
+       "collapsed": false,
+       "entries": [
+        {
+         "description": "QNAP NAS",
+         "iconUrl": "/api/icons/dashboard/qnap.svg",
+         "id": "entry-cb7bb6-bd1aac",
+         "name": "QNAP",
+         "openMode": "newtab",
+         "order": 0,
+         "size": "medium",
+         "type": "link",
+         "url": "https://192.0.2.13/"
+        }
+       ],
+       "icon": "mdi:nas",
+       "id": "9c498dc9924d5287",
+       "name": "Storage",
+       "order": 4
+      },
+      {
+       "collapsed": false,
+       "entries": [
+        {
+         "description": "Audiobook & podcast server",
+         "iconUrl": "/api/icons/dashboard/audiobookshelf.svg",
+         "id": "entry-cb7bb6-21e7b8",
+         "name": "Audiobookshelf",
+         "openMode": "newtab",
+         "order": 0,
+         "size": "medium",
+         "type": "link",
+         "url": "http://192.0.2.15:13378/"
+        },
+        {
+         "description": "Resolved from example.lan zone",
+         "iconUrl": "/api/icons/dashboard/jellyfin.svg",
+         "id": "entry-cb7bb6-961b84",
+         "name": "Jellyfin",
+         "openMode": "newtab",
+         "order": 1,
+         "size": "medium",
+         "type": "link",
+         "url": "https://jellyfin.example.lan/web/"
+        }
+       ],
+       "icon": "mdi:play-circle",
+       "id": "64228bae760235d5",
+       "name": "Media",
+       "order": 5
+      },
+      {
+       "collapsed": false,
+       "entries": [
+        {
+         "description": "Resolved from example.lan zone",
+         "iconUrl": "/api/icons/dashboard/nginx-proxy-manager.svg",
+         "id": "entry-cb7bb6-236ffb",
+         "name": "Nginx Proxy Manager",
+         "openMode": "newtab",
+         "order": 0,
+         "size": "medium",
+         "type": "link",
+         "url": "https://npm.example.lan/"
+        }
+       ],
+       "icon": "mdi:lan",
+       "id": "5c601862092c10a1",
+       "name": "Network",
+       "order": 6
+      },
+      {
+       "collapsed": false,
+       "entries": [
+        {
+         "description": "Resolved from example.lan zone",
+         "icon": "mdi:web",
+         "id": "entry-cb7bb6-db42e8",
+         "name": "Nas",
+         "openMode": "newtab",
+         "order": 0,
+         "size": "medium",
+         "type": "link",
+         "url": "https://nas.example.lan/"
+        },
+        {
+         "description": "Resolved from example.lan zone",
+         "iconUrl": "/api/icons/dashboard/pgadmin.svg",
+         "id": "entry-cb7bb6-156b08",
+         "name": "pgAdmin 4",
+         "openMode": "newtab",
+         "order": 1,
+         "size": "medium",
+         "type": "link",
+         "url": "https://postgres.example.lan/pgadmin4/"
+        }
+       ],
+       "icon": "mdi:application",
+       "id": "c33977b92e5b8643",
+       "name": "Other",
+       "order": 7
+      },
+      {
+       "collapsed": false,
+       "entries": [
+        {
+         "description": "Resolved from example.lan zone",
+         "iconUrl": "/api/icons/dashboard/home-assistant.svg",
+         "id": "entry-cb7bb6-689a18",
+         "name": "Home Assistant",
+         "openMode": "newtab",
+         "order": 0,
+         "size": "medium",
+         "type": "link",
+         "url": "https://ha.example.lan/"
+        }
+       ],
+       "icon": "mdi:home-automation",
+       "id": "daae152164465ebf",
+       "name": "Smart Home",
+       "order": 8
+      },
+      {
+       "collapsed": false,
+       "entries": [
+        {
+         "description": "Resolved from example.lan zone",
+         "iconUrl": "/api/icons/dashboard/ntfy.svg",
+         "id": "entry-cb7bb6-323be9",
+         "name": "ntfy",
+         "openMode": "newtab",
+         "order": 0,
+         "size": "medium",
+         "type": "link",
+         "url": "https://ntfy.example.lan/"
+        }
+       ],
+       "icon": "mdi:bell",
+       "id": "a09882eed42f0ccf",
+       "name": "Notifications",
+       "order": 9
+      },
+      {
+       "collapsed": false,
+       "entries": [
+        {
+         "description": "Resolved from example.lan zone",
+         "iconUrl": "/api/icons/dashboard/proxmox.svg",
+         "id": "entry-cb7bb6-4cf552",
+         "name": "Proxmox VE",
+         "openMode": "newtab",
+         "order": 0,
+         "size": "medium",
+         "type": "link",
+         "url": "https://proxmox.example.lan/"
+        }
+       ],
+       "icon": "mdi:server",
+       "id": "394b773560b5cf40",
+       "name": "Virtualization",
+       "order": 10
+      },
+      {
+       "collapsed": false,
+       "entries": [
+        {
+         "description": "TP-Link Deco mesh node",
+         "iconUrl": "/api/icons/dashboard/tp-link.svg",
+         "id": "entry-cb7bb6-00e22d",
+         "name": "TP-Link Deco",
+         "openMode": "newtab",
+         "order": 0,
+         "size": "medium",
+         "type": "link",
+         "url": "https://192.0.2.100/"
+        },
+        {
+         "description": "TP-Link Deco mesh node",
+         "iconUrl": "/api/icons/dashboard/tp-link.svg",
+         "id": "entry-cb7bb6-6c73c6",
+         "name": "TP-Link Deco",
+         "openMode": "newtab",
+         "order": 1,
+         "size": "medium",
+         "type": "link",
+         "url": "https://192.0.2.101/"
+        },
+        {
+         "description": "TP-Link Deco mesh node",
+         "iconUrl": "/api/icons/dashboard/tp-link.svg",
+         "id": "entry-cb7bb6-73299d",
+         "name": "TP-Link Deco",
+         "openMode": "newtab",
+         "order": 2,
+         "size": "medium",
+         "type": "link",
+         "url": "https://192.0.2.102/"
+        },
+        {
+         "description": "TP-Link Deco mesh node",
+         "iconUrl": "/api/icons/dashboard/tp-link.svg",
+         "id": "entry-cb7bb6-9ff931",
+         "name": "TP-Link Deco",
+         "openMode": "newtab",
+         "order": 3,
+         "size": "medium",
+         "type": "link",
+         "url": "https://192.0.2.104/"
+        }
+       ],
+       "icon": "mdi:chip",
+       "id": "01107ff3f1105d39",
+       "name": "IoT",
+       "order": 11
+      }
+     ],
+     "id": "main",
+     "name": "Main",
+     "opacity": 0.95,
+     "order": 0
+    },
+    {
+     "color": "#f59e0b",
+     "groups": [
+      {
+       "collapsed": false,
+       "color": "#ef4444",
+       "entries": [
+        {
+         "description": "Streaming Service",
+         "icon": "mdi:netflix",
+         "id": "netflix",
+         "name": "Netflix",
+         "openMode": "newtab",
+         "order": 0,
+         "size": "large",
+         "url": "https://netflix.com"
+        },
+        {
+         "description": "Music Streaming",
+         "icon": "mdi:spotify",
+         "id": "spotify",
+         "name": "Spotify",
+         "openMode": "newtab",
+         "order": 1,
+         "size": "medium",
+         "url": "https://spotify.com"
+        }
+       ],
+       "id": "streaming",
+       "name": "Streaming Services",
+       "opacity": 0.95,
+       "order": 0
+      }
+     ],
+     "id": "media",
+     "name": "Media",
+     "opacity": 0.95,
+     "order": 1
+    }
+   ]
+  }
+ ],
+ "exportType": "single-dashboard",
+ "exportedAt": "2026-10-19T02:24:13Z"
+}
