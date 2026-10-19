@@ -51,14 +51,17 @@ func Save(e Execer, doc Obj) error {
 
 // MigrationResult describes what MigrateOnStartup did.
 type MigrationResult struct {
-	Migrated bool   // true if a v2 doc was converted this start
-	Failed   bool   // true if the stored doc could not be migrated
-	Detail   string // human-readable failure reason
+	Migrated bool     // true if a v2 doc was converted this start
+	Failed   bool     // true if the stored doc could not be migrated
+	Detail   string   // human-readable failure reason
+	Renames  []Rename // duplicate ids renamed by this start's migration
 }
 
 // MigrateOnStartup converts a stored v2 document to v3. If the stored
 // document is already v3 it does nothing. Otherwise, in one transaction, it
-// archives the raw row, migrates, verifies and saves. Any problem with the
+// migrates (renaming duplicate ids), verifies against the renames, archives
+// the raw row with the renames as notes, clears status rows of renamed tiles
+// and saves; each rename is logged at WARN after the commit. Any problem with the
 // document rolls everything back (archive included) and is reported as
 // Failed with a Detail; only DB-level errors are returned as Go errors.
 func MigrateOnStartup(db *sql.DB) (MigrationResult, error) {
@@ -81,25 +84,51 @@ func MigrateOnStartup(db *sql.DB) (MigrationResult, error) {
 		return MigrationResult{}, nil
 	}
 
-	if _, err := tx.Exec("INSERT INTO config_archive (schema, data) VALUES (2, ?)", raw); err != nil {
-		return MigrationResult{}, fmt.Errorf("configdoc: archive v2 config: %w", err)
-	}
-
-	v3, err := MigrateV2(v2)
+	v3, renames, err := MigrateV2Renaming(v2)
 	if err != nil {
 		return failed(fmt.Sprintf("conversion failed: %v", err)), nil
 	}
-	if err := Verify(v2, v3); err != nil {
+	if err := VerifyMigration(v2, v3, renames); err != nil {
 		return failed(fmt.Sprintf("verification failed: %v", err)), nil
 	}
+
+	// The archive row carries the renames so the change is traceable later.
+	var notes any // NULL when nothing was renamed
+	if len(renames) > 0 {
+		b, err := json.Marshal(renames)
+		if err != nil {
+			return MigrationResult{}, fmt.Errorf("configdoc: encode renames: %w", err)
+		}
+		notes = string(b)
+	}
+	if _, err := tx.Exec("INSERT INTO config_archive (schema, data, notes) VALUES (2, ?, ?)", raw, notes); err != nil {
+		return MigrationResult{}, fmt.Errorf("configdoc: archive v2 config: %w", err)
+	}
+
+	// A cached status under a duplicated tile id may have come from either
+	// tile; drop it (and anything under the new id) so neither tile shows a
+	// result that is not its own. The next status check refills both.
+	for _, r := range renames {
+		if r.Kind != "tile" {
+			continue
+		}
+		if _, err := tx.Exec("DELETE FROM status_cache WHERE entry_id IN (?, ?)", r.OldID, r.NewID); err != nil {
+			return MigrationResult{}, fmt.Errorf("configdoc: clear status cache for renamed tile %q: %w", r.OldID, err)
+		}
+	}
+
 	if err := Save(tx, v3); err != nil {
 		return MigrationResult{}, err
 	}
 	if err := tx.Commit(); err != nil {
 		return MigrationResult{}, fmt.Errorf("configdoc: commit migration: %w", err)
 	}
-	slog.Info("config migrated from v2 to v3; original archived", "component", "configdoc")
-	return MigrationResult{Migrated: true}, nil
+	slog.Info("config migrated from v2 to v3; original archived", "component", "configdoc", "renamed", len(renames))
+	for _, r := range renames {
+		slog.Warn("renamed duplicate id during config migration", "component", "configdoc",
+			"kind", r.Kind, "dashboard", r.DashboardID, "old_id", r.OldID, "new_id", r.NewID, "path", r.Path)
+	}
+	return MigrationResult{Migrated: true, Renames: renames}, nil
 }
 
 func failed(detail string) MigrationResult {

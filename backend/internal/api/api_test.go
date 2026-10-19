@@ -29,6 +29,18 @@ func setupTestRouter(t *testing.T) (http.Handler, *sql.DB) {
 // startup migration outcome (to exercise the migration-failed state).
 func setupTestRouterWithMigration(t *testing.T, override *configdoc.MigrationResult) (http.Handler, *sql.DB) {
 	t.Helper()
+	return setupTestRouterFull(t, "", override)
+}
+
+// setupTestRouterSeeded is setupTestRouter with the stored config replaced by
+// storedConfig (e.g. a v2 document) before the startup migration runs.
+func setupTestRouterSeeded(t *testing.T, storedConfig string) (http.Handler, *sql.DB) {
+	t.Helper()
+	return setupTestRouterFull(t, storedConfig, nil)
+}
+
+func setupTestRouterFull(t *testing.T, storedConfig string, override *configdoc.MigrationResult) (http.Handler, *sql.DB) {
+	t.Helper()
 	db, err := sql.Open("sqlite", ":memory:")
 	if err != nil {
 		t.Fatal(err)
@@ -132,6 +144,11 @@ func setupTestRouterWithMigration(t *testing.T, override *configdoc.MigrationRes
 
 	// Create default config
 	db.Exec(`INSERT INTO config (id, data) VALUES (1, '{"dashboards":[],"theme":{"mode":"dark"}}')`)
+	if storedConfig != "" {
+		if _, err := db.Exec(`INSERT OR REPLACE INTO config (id, data) VALUES (1, ?)`, storedConfig); err != nil {
+			t.Fatalf("seed stored config: %v", err)
+		}
+	}
 
 	migration, err := configdoc.MigrateOnStartup(db)
 	if err != nil {

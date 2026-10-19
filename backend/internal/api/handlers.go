@@ -143,6 +143,10 @@ func (r *Router) handleGetConfig(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 	view["dashboardRevisions"] = revs
+	// View-only like dashboardRevisions: stripped on PUT, never stored.
+	if len(r.migration.Renames) > 0 {
+		view["migrationNotices"] = migrationNotices(r.migration.Renames, stored)
+	}
 	writeJSON(w, view)
 }
 

@@ -149,7 +149,8 @@ func FromLegacy(view Obj, prev Obj) (Obj, error) {
 	if len(prev) > 0 && !IsV3(prev) {
 		return nil, ErrNotV3
 	}
-	out, err := MigrateV2(view)
+	// Not MigrateV2: a client's ids are never silently rewritten here.
+	out, _, err := migrateV2(view, false)
 	if err != nil {
 		return nil, err
 	}

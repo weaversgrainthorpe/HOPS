@@ -17,7 +17,13 @@ func (e *VerifyError) Error() string {
 		len(e.Problems), strings.Join(e.Problems, "; "))
 }
 
-type verifier struct{ problems []string }
+type verifier struct {
+	problems []string
+	// Set by VerifyMigration only.
+	renames     map[string]Rename // by v2 path
+	usedRenames map[string]bool
+	first       map[string]string // v2 id -> path of its first occurrence
+}
 
 func (v *verifier) add(format string, args ...any) {
 	if len(v.problems) < maxProblems {
@@ -58,21 +64,40 @@ func VerifyImportedDashboard(d Obj) error {
 	return nil
 }
 
-// Verify proves v3 is a faithful conversion of v2:
-//   - every v2 dashboard/tab/group/entry ID appears exactly once at the
-//     matching level, under the matching parent, in the same order;
+// Verify proves v3 is a faithful conversion of v2 with no ids renamed; it is
+// VerifyMigration with an empty rename list, so a v3 document that kept a
+// duplicate id still fails.
+func Verify(v2, v3 Obj) error { return VerifyMigration(v2, v3, nil) }
+
+// VerifyMigration proves v3 is a faithful conversion of v2 given the renames
+// MigrateV2Renaming reported:
+//   - every v2 dashboard/tab/group/entry appears exactly once at the matching
+//     level, under the matching parent, in the same order, under its own id
+//     or — when a rename names its v2 path — under that rename's NewID;
+//   - each rename names a real v2 object of its kind whose id is OldID and
+//     repeats an id used earlier in the document;
 //   - counts match (nothing extra in v3);
-//   - every v2 key/value on each object equals the v3 object's (child lists
-//     excepted);
+//   - every other v2 key/value on each object equals the v3 object's (child
+//     lists excepted);
 //   - IDs are unique document-wide and the v3 tree is well-formed.
 //
 // It returns a *VerifyError listing up to 20 problems.
-func Verify(v2, v3 Obj) error {
+func VerifyMigration(v2, v3 Obj, renames []Rename) error {
 	v := &verifier{}
 	if !IsV3(v3) {
 		v.add("document: schemaVersion is %s, want %d", show(v3["schemaVersion"]), SchemaVersion)
 	}
 	v.checkIDs(v3)
+	v.renames = map[string]Rename{}
+	v.usedRenames = map[string]bool{}
+	for _, r := range renames {
+		if _, dup := v.renames[r.Path]; dup {
+			v.add("rename list names path %s twice", r.Path)
+			continue
+		}
+		v.renames[r.Path] = r
+	}
+	v.first = firstOccurrence(v2Nodes(v2))
 
 	v.compareKeys("document", v2, v3, "dashboards", "schemaVersion")
 	v2d, ok2 := asList(v2["dashboards"])
@@ -83,14 +108,19 @@ func Verify(v2, v3 Obj) error {
 	case !ok3:
 		v.add("document: v3 dashboards is %T, want array", v3["dashboards"])
 	default:
-		v.compareLevel("dashboard", "document", v2d, v3d, "", func(a, b Obj, id string) {
+		v.compareLevel("dashboard", "document", "dashboards", v2d, v3d, "", func(a, b Obj, id, path string) {
 			// revision, settings and defaultLayout are converter-owned:
 			// ConvertDashboardV2 deliberately overwrites any v2 value (Ruling 4),
 			// so skip the equality check but still require them well-formed.
 			v.compareKeys("dashboard "+id, a, b, "tabs", "revision", "settings", "defaultLayout")
 			v.checkOwned(id, b)
-			v.compareTabs(id, a, b)
+			v.compareTabs(id, path, a, b)
 		})
+	}
+	for _, r := range renames {
+		if !v.usedRenames[r.Path] {
+			v.add("rename %s (%q → %q) does not match any v2 object", r.Path, r.OldID, r.NewID)
+		}
 	}
 	if len(v.problems) == 0 {
 		return nil
@@ -98,14 +128,14 @@ func Verify(v2, v3 Obj) error {
 	return &VerifyError{Problems: v.problems}
 }
 
-func (v *verifier) compareTabs(dashID string, a, b Obj) {
+func (v *verifier) compareTabs(dashID, dashPath string, a, b Obj) {
 	v2t, _ := asList(a["tabs"])
 	v3t, ok := asList(b["tabs"])
 	if !ok {
 		v.add("dashboard %q: v3 tabs is %T, want array", dashID, b["tabs"])
 		return
 	}
-	v.compareLevel("tab", "dashboard "+dashID, v2t, v3t, "", func(ta, tb Obj, tid string) {
+	v.compareLevel("tab", "dashboard "+dashID, dashPath+".tabs", v2t, v3t, "", func(ta, tb Obj, tid, tpath string) {
 		v.compareKeys("tab "+tid, ta, tb, "groups")
 		v2g, _ := asList(ta["groups"])
 		root, _ := tb["root"].(Obj)
@@ -113,7 +143,7 @@ func (v *verifier) compareTabs(dashID string, a, b Obj) {
 		if !ok {
 			return // reported by checkIDs
 		}
-		v.compareLevel("group", "tab "+tid, v2g, v3g, "folder", func(ga, gb Obj, gid string) {
+		v.compareLevel("group", "tab "+tid, tpath+".groups", v2g, v3g, "folder", func(ga, gb Obj, gid, gpath string) {
 			v.compareKeys("group "+gid, ga, gb, "entries")
 			v2e, _ := asList(ga["entries"])
 			content, _ := gb["content"].(Obj)
@@ -121,7 +151,7 @@ func (v *verifier) compareTabs(dashID string, a, b Obj) {
 			if !ok {
 				return
 			}
-			v.compareLevel("entry", "group "+gid, v2e, v3e, "tile", func(ea, eb Obj, eid string) {
+			v.compareLevel("entry", "group "+gid, gpath+".entries", v2e, v3e, "tile", func(ea, eb Obj, eid, _ string) {
 				v.compareKeys("entry "+eid, ea, eb)
 			})
 		})
@@ -155,9 +185,40 @@ func (v *verifier) checkOwned(id string, d Obj) {
 	}
 }
 
-// compareLevel pairs v2 and v3 children by ID, reporting missing, unexpected
-// and reordered items, and calls each for every matched pair.
-func (v *verifier) compareLevel(level, parent string, v2l, v3l []any, wantKind string, each func(a, b Obj, id string)) {
+// levelKind maps a compareLevel level to the Rename.Kind for it.
+var levelKind = map[string]string{"dashboard": "dashboard", "tab": "tab", "group": "folder", "entry": "tile"}
+
+// expectedID returns the id the v3 counterpart of the v2 object a at path
+// must carry, and a (or, when renamed, a shallow copy whose id is the new
+// one, so compareKeys requires every other key unchanged).
+func (v *verifier) expectedID(level, path, id string, a Obj) (string, Obj) {
+	r, ok := v.renames[path]
+	if !ok {
+		return id, a
+	}
+	v.usedRenames[path] = true
+	if r.OldID != id {
+		v.add("rename %s: old id %q, but the v2 object there has id %q", path, r.OldID, id)
+	}
+	if want := levelKind[level]; r.Kind != want {
+		v.add("rename %s: kind %q, want %q", path, r.Kind, want)
+	}
+	if first, ok := v.first[id]; !ok || first == path {
+		v.add("rename %s: id %q is not duplicated by an earlier object (first at %s), so it must keep its id", path, id, first)
+	}
+	cp := make(Obj, len(a))
+	for k, val := range a {
+		cp[k] = val
+	}
+	cp["id"] = r.NewID
+	return r.NewID, cp
+}
+
+// compareLevel pairs v2 and v3 children — each v2 child under the id it must
+// have in v3 (its own, or its rename's NewID, looked up by the child's v2
+// path) — reporting missing, unexpected and reordered items, and calls each
+// for every matched pair with the v3 id and the v2 path.
+func (v *verifier) compareLevel(level, parent, seg string, v2l, v3l []any, wantKind string, each func(a, b Obj, id, path string)) {
 	byID := map[string]Obj{}
 	for _, x := range v3l {
 		if o, ok := x.(Obj); ok {
@@ -169,8 +230,10 @@ func (v *verifier) compareLevel(level, parent string, v2l, v3l []any, wantKind s
 		}
 	}
 	in2 := map[string]bool{}
+	want := make([]string, len(v2l))
 	clean := len(v2l) == len(v3l)
 	for i, x := range v2l {
+		path := fmt.Sprintf("%s[%d]", seg, i)
 		a, ok := x.(Obj)
 		id, _ := a["id"].(string)
 		if !ok || id == "" {
@@ -178,6 +241,8 @@ func (v *verifier) compareLevel(level, parent string, v2l, v3l []any, wantKind s
 			clean = false
 			continue
 		}
+		id, a = v.expectedID(level, path, id, a)
+		want[i] = id
 		in2[id] = true
 		b, found := byID[id]
 		if !found {
@@ -188,7 +253,7 @@ func (v *verifier) compareLevel(level, parent string, v2l, v3l []any, wantKind s
 		if wantKind != "" && b["kind"] != wantKind {
 			v.add("%s %q: kind is %s, want %q", level, id, show(b["kind"]), wantKind)
 		}
-		each(a, b, id)
+		each(a, b, id, path)
 	}
 	for _, x := range v3l {
 		if o, ok := x.(Obj); ok {
@@ -201,9 +266,9 @@ func (v *verifier) compareLevel(level, parent string, v2l, v3l []any, wantKind s
 	}
 	if clean {
 		for i := range v2l {
-			if v2l[i].(Obj)["id"] != v3l[i].(Obj)["id"] {
-				v.add("%s: %s order differs (position %d: v2 %s, v3 %s)", parent, level, i,
-					show(v2l[i].(Obj)["id"]), show(v3l[i].(Obj)["id"]))
+			if want[i] != v3l[i].(Obj)["id"] {
+				v.add("%s: %s order differs (position %d: want %s, v3 %s)", parent, level, i,
+					show(want[i]), show(v3l[i].(Obj)["id"]))
 				break
 			}
 		}
@@ -234,16 +299,21 @@ next:
 // reporting every malformed node instead of skipping it.
 func (v *verifier) checkIDs(doc Obj) {
 	seen := map[string]string{}
+	dash := "" // id of the dashboard being walked, named in duplicate reports
 	note := func(where string, o Obj) string {
 		id, ok := o["id"].(string)
 		if !ok || id == "" {
 			v.add("%s: id is %s, want non-empty string", where, show(o["id"]))
 			return where
 		}
+		loc := where
+		if dash != "" {
+			loc = fmt.Sprintf("%s in dashboard %q", where, dash)
+		}
 		if first, dup := seen[id]; dup {
-			v.add("duplicate id %q (at %s and %s)", id, first, where)
+			v.add("duplicate id %q (at %s and %s)", id, first, loc)
 		} else {
-			seen[id] = where
+			seen[id] = loc
 		}
 		return fmt.Sprintf("%s %q", where, id)
 	}
@@ -257,7 +327,9 @@ func (v *verifier) checkIDs(doc Obj) {
 			v.add("dashboards[%d] is %T, want object", i, d)
 			continue
 		}
+		dash = ""
 		dn := note(fmt.Sprintf("dashboard[%d]", i), dm)
+		dash, _ = dm["id"].(string)
 		tabs, ok := asList(dm["tabs"])
 		if !ok {
 			v.add("%s: tabs is %T, want array", dn, dm["tabs"])

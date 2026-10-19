@@ -17,36 +17,56 @@ func deepCopy(o Obj) (Obj, error) {
 	return out, nil
 }
 
-// MigrateV2 deep-copies v2 and returns the v3 document. It never mutates its
-// input and does not check ID uniqueness (Verify does).
+// MigrateV2 deep-copies v2 and returns the v3 document, renaming duplicate
+// ids exactly as MigrateV2Renaming does. It never mutates its input. Callers
+// that must report the renames use MigrateV2Renaming.
 func MigrateV2(v2 Obj) (Obj, error) {
+	doc, _, err := MigrateV2Renaming(v2)
+	return doc, err
+}
+
+// MigrateV2Renaming deep-copies v2, gives every repeated id a new
+// deterministic one (see renameDuplicates) and converts the result to v3. It
+// returns the renames in document order; VerifyMigration checks the result.
+// It never mutates its input.
+func MigrateV2Renaming(v2 Obj) (Obj, []Rename, error) {
+	return migrateV2(v2, true)
+}
+
+// migrateV2 converts a deep copy of v2; with rename=false ids are kept
+// exactly as given (FromLegacy: the client's ids are never rewritten).
+func migrateV2(v2 Obj, rename bool) (Obj, []Rename, error) {
 	cp, err := deepCopy(v2)
 	if err != nil {
-		return nil, fmt.Errorf("configdoc: copy v2 document: %w", err)
+		return nil, nil, fmt.Errorf("configdoc: copy v2 document: %w", err)
 	}
 	dashes, present := cp["dashboards"]
 	var in []any
 	if present && dashes != nil {
 		var ok bool
 		if in, ok = dashes.([]any); !ok {
-			return nil, fmt.Errorf("configdoc: dashboards is %T, want array", dashes)
+			return nil, nil, fmt.Errorf("configdoc: dashboards is %T, want array", dashes)
 		}
+	}
+	var renames []Rename
+	if rename {
+		renames = renameDuplicates(cp)
 	}
 	out := make([]any, 0, len(in))
 	for i, d := range in {
 		dm, ok := d.(Obj)
 		if !ok {
-			return nil, fmt.Errorf("configdoc: dashboards[%d] is %T, want object", i, d)
+			return nil, nil, fmt.Errorf("configdoc: dashboards[%d] is %T, want object", i, d)
 		}
 		nd, err := convertDashboard(dm)
 		if err != nil {
-			return nil, fmt.Errorf("configdoc: dashboards[%d]: %w", i, err)
+			return nil, nil, fmt.Errorf("configdoc: dashboards[%d]: %w", i, err)
 		}
 		out = append(out, nd)
 	}
 	cp["dashboards"] = out
 	cp["schemaVersion"] = SchemaVersion
-	return cp, nil
+	return cp, renames, nil
 }
 
 // ConvertDashboardV2 converts one v2 dashboard (deep copy) to v3 with revision 1

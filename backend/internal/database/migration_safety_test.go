@@ -171,3 +171,39 @@ func contains(s, sub string) bool {
 	}
 	return false
 }
+
+// TestMigrationSafety_ConfigArchiveNotes: a config_archive that pre-dates the
+// notes column gains it (existing rows kept, notes NULL), and re-running the
+// migrations is a no-op.
+func TestMigrationSafety_ConfigArchiveNotes(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "archive.db")
+	raw, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range []string{
+		`CREATE TABLE config_archive (id INTEGER PRIMARY KEY AUTOINCREMENT, schema INTEGER NOT NULL, data TEXT NOT NULL, archived_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
+		`INSERT INTO config_archive (schema, data) VALUES (2, '{"dashboards":[]}')`,
+	} {
+		if _, err := raw.Exec(s); err != nil {
+			t.Fatalf("seed: %v", err)
+		}
+	}
+	raw.Close()
+
+	for i := 0; i < 2; i++ {
+		db, err := Initialize(dbPath)
+		if err != nil {
+			t.Fatalf("init %d: %v", i, err)
+		}
+		var data string
+		var notes sql.NullString
+		if err := db.QueryRow(`SELECT data, notes FROM config_archive`).Scan(&data, &notes); err != nil {
+			t.Fatalf("init %d: read archive: %v", i, err)
+		}
+		if data != `{"dashboards":[]}` || notes.Valid {
+			t.Fatalf("init %d: data=%q notes=%v", i, data, notes)
+		}
+		db.Close()
+	}
+}

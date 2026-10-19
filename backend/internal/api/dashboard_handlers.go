@@ -185,6 +185,7 @@ func applyLegacyView(stored configdoc.Obj, body configdoc.Obj) (configdoc.Obj, m
 	prev := storedDashboards(stored)
 	seen, _ := body["dashboardRevisions"].(map[string]interface{})
 	delete(body, "dashboardRevisions") // view-only; never stored
+	delete(body, "migrationNotices")   // view-only; never stored
 	bodyDashes, _ := body["dashboards"].([]any)
 	inBody := map[string]bool{}
 	for _, d := range bodyDashes {
@@ -425,4 +426,59 @@ func (r *Router) handlePutDashboardSettings(w http.ResponseWriter, req *http.Req
 		d["revision"] = cur + 1
 		return stored, map[string]interface{}{"revision": cur + 1}, nil
 	})
+}
+
+// renameKindLabel is the user-facing word for a Rename.Kind (the admin UI
+// still shows the legacy groups/entries view).
+var renameKindLabel = map[string]string{"dashboard": "Dashboard", "tab": "Tab", "folder": "Group", "tile": "Entry"}
+
+// migrationNotices renders this start's migration renames for the user. The
+// dashboard is named by its current name, and the reason says whether the
+// clashing first occurrence (which kept the id) is in another dashboard.
+func migrationNotices(renames []configdoc.Rename, doc configdoc.Obj) []string {
+	owner := map[string]string{} // id -> owning dashboard id
+	names := map[string]string{} // dashboard id -> display name
+	for id, d := range storedDashboards(doc) {
+		names[id] = dashboardLabel(d)
+		owner[id] = id
+		tabs, _ := d["tabs"].([]any)
+		for _, t := range tabs {
+			if tm, ok := t.(configdoc.Obj); ok {
+				if tid, ok := tm["id"].(string); ok {
+					owner[tid] = id
+				}
+			}
+		}
+	}
+	configdoc.Walk(doc, func(d, _ configdoc.Obj, _ []configdoc.Obj, n configdoc.Obj) bool {
+		if id, ok := n["id"].(string); ok {
+			owner[id], _ = d["id"].(string)
+		}
+		return true
+	})
+	out := make([]string, 0, len(renames))
+	for _, rn := range renames {
+		label := renameKindLabel[rn.Kind]
+		if label == "" {
+			label = "Item"
+		}
+		dash := names[rn.DashboardID]
+		if dash == "" {
+			dash = rn.DashboardID
+		}
+		reason := "another item already used that id"
+		if o, ok := owner[rn.OldID]; ok {
+			if o == rn.DashboardID {
+				reason = "another item in the same dashboard already used that id"
+			} else {
+				reason = "another dashboard already used that id"
+			}
+		}
+		if rn.Kind == "dashboard" {
+			out = append(out, fmt.Sprintf("Dashboard %q had its id %q renamed to %q because %s", dash, rn.OldID, rn.NewID, reason))
+			continue
+		}
+		out = append(out, fmt.Sprintf("%s %q in dashboard %q was renamed to %q because %s", label, rn.OldID, dash, rn.NewID, reason))
+	}
+	return out
 }

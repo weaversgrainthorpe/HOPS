@@ -507,3 +507,32 @@ func TestImport_V3ShapeChecks(t *testing.T) {
 func dashOf(cfg map[string]interface{}) map[string]interface{} {
 	return cfg["dashboards"].([]interface{})[0].(map[string]interface{})
 }
+
+// The seeded default and the Heimdall converter both emit tab "main" and
+// group "services"; importing Heimdall twice on top of the seeded default
+// must still leave every id unique (makeIDsUnique covers converter output).
+func TestImport_HeimdallTwiceOverSeededDefault(t *testing.T) {
+	heimdall := []byte(`[{"title":"Plex","url":"http://plex.lan:32400"},{"title":"Sonarr","url":"http://sonarr.lan:8989"}]`)
+	router, db := setupTestRouter(t)
+	c := newClient(t, router)
+	before := storedDoc(t, db)
+	if ds := dashList(before); len(ds) != 1 || ds[0]["id"] != "sample" {
+		t.Fatalf("expected the seeded default dashboard, got %v", ds)
+	}
+	for i := 1; i <= 2; i++ {
+		if code, resp := c.importFile(heimdall); code != 200 {
+			t.Fatalf("import %d: %d %v", i, code, resp)
+		}
+	}
+	doc := storedDoc(t, db)
+	ds := dashList(doc)
+	if len(ds) != 3 {
+		t.Fatalf("dashboards = %d, want 3", len(ds))
+	}
+	for _, d := range ds[1:] {
+		if tabs, _, tiles := counts(d); tabs != 1 || tiles != 2 {
+			t.Errorf("dashboard %v: tabs=%d tiles=%d", d["id"], tabs, tiles)
+		}
+	}
+	assertUniqueIDs(t, doc)
+}

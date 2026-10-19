@@ -104,12 +104,14 @@ func runMigrations(db *sql.DB) error {
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
 
-		// Archive of config documents replaced by a schema migration
+		// Archive of config documents replaced by a schema migration.
+		// notes holds what the migration changed (renamed ids, as JSON).
 		`CREATE TABLE IF NOT EXISTS config_archive (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			schema INTEGER NOT NULL,
 			data TEXT NOT NULL,
-			archived_at DATETIME DEFAULT CURRENT_TIMESTAMP
+			archived_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			notes TEXT
 		)`,
 
 		// Status cache for HTTP checks
@@ -258,6 +260,11 @@ func runMigrations(db *sql.DB) error {
 	}
 	if err := addColumnIfMissing(db, "scans", "internal_domain", "TEXT NOT NULL DEFAULT ''"); err != nil {
 		return fmt.Errorf("failed to add scans.internal_domain column: %w", err)
+	}
+
+	// config_archive.notes (v3 migration renames). Nullable, no default.
+	if err := addColumnIfMissing(db, "config_archive", "notes", "TEXT"); err != nil {
+		return fmt.Errorf("failed to add config_archive.notes column: %w", err)
 	}
 
 	// Create default admin user if none exists

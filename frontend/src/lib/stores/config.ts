@@ -42,6 +42,11 @@ export const saveConflict = writable<{ dashboardId: string } | null>(null);
 // migrate to v3 and the server refuses config-touching requests (HTTP 503).
 export const migrationFailure = writable<string | null>(null);
 
+// The admin dismissed the "ids were renamed during migration" notice. Kept in
+// memory only, so it reappears on the next visit while the server still
+// reports the renames (i.e. until HOPS restarts).
+export const migrationNoticesDismissed = writable(false);
+
 /**
  * True when the layout should replace the page with the migration-failed
  * notice. The admin page ("/": login + Backups, the remedy) is exempt and

@@ -121,6 +121,8 @@ export interface Config {
   settings: Settings;
   /** Revision of every dashboard as last seen; sent back on whole-config PUTs. */
   dashboardRevisions?: Record<string, number>;
+  /** Ids the startup v2→v3 migration renamed (view-only; the server strips it on PUT). */
+  migrationNotices?: string[];
 }
 
 export interface Theme {

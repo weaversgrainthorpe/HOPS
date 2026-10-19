@@ -90,7 +90,17 @@ func TestVerify_DuplicateIDAcrossDashboards(t *testing.T) {
 		return Obj{"id": id, "tabs": []any{Obj{"id": tid, "groups": []any{grp(gid)}}}}
 	}
 	v2 := Obj{"dashboards": []any{dash("d1", "t1", "g1"), dash("d2", "t2", "g2")}}
-	wantProblem(t, Verify(v2, migrated(t, v2)), "e1")
+	// Build the v3 doc without MigrateV2's renaming so it keeps the duplicate.
+	var v3d []any
+	for _, d := range list(t, v2, "dashboards") {
+		nd, err := ConvertDashboardV2(d)
+		if err != nil {
+			t.Fatal(err)
+		}
+		v3d = append(v3d, nd)
+	}
+	wantProblem(t, Verify(v2, Obj{"schemaVersion": 3, "dashboards": v3d}),
+		`duplicate id "e1"`, `dashboard "d1"`, `dashboard "d2"`)
 }
 
 func TestVerify_ReportsMalformedV3(t *testing.T) {
