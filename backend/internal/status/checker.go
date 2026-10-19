@@ -1,8 +1,8 @@
 package status
 
 import (
+	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net"
@@ -13,8 +13,13 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/weaversgrainthorpe/HOPS/internal/configdoc"
 	"github.com/weaversgrainthorpe/HOPS/internal/settings"
 )
+
+// tickEvery is how often the loop wakes to look for due entries. Each entry
+// carries its own (per-dashboard) interval; a tick only probes those due.
+const tickEvery = time.Minute
 
 // isBlockedIP reports whether an IP must not be reached by the status checker.
 //
@@ -62,6 +67,11 @@ type Entry struct {
 	StatusCheck *struct {
 		Enabled bool `json:"enabled"`
 	} `json:"statusCheck"` // nil or Enabled=false → never checked
+
+	// Effective settings of the owning dashboard when the pass started.
+	DashboardID     string `json:"-"`
+	IntervalMinutes int    `json:"-"`
+	TimeoutSeconds  int    `json:"-"`
 }
 
 // StatusResult holds the result of a status check
@@ -72,9 +82,9 @@ type StatusResult struct {
 	LastChecked  string `json:"lastChecked"`
 }
 
-// Checker handles HTTP status checks for entries. Interval and per-request
-// timeout come from the settings service (status.check_interval_minutes,
-// status.check_timeout_seconds) and update live when an admin changes them.
+// Checker handles HTTP status checks for entries. Interval, timeout and the
+// on/off switch are resolved per dashboard (configdoc.Resolve): a dashboard's
+// own override wins, otherwise the global status.* setting applies.
 type Checker struct {
 	db       *sql.DB
 	settings *settings.Service
@@ -86,16 +96,17 @@ type Checker struct {
 	// status.checks_enabled can't interleave with a ticker pass.
 	passMu sync.Mutex
 
-	// Per-request HTTP client; rebuilt when status.check_timeout_seconds
-	// changes. clientMu guards swaps so concurrent checks see a coherent
-	// client value.
-	clientMu sync.RWMutex
-	client   *http.Client
+	// HTTP client shared by all probes. It has no Timeout of its own: each
+	// request carries its dashboard's timeout through its context.
+	client *http.Client
 
-	// resetTicker signals the run loop to discard its current ticker and
-	// re-create one with the latest interval. Buffered so a settings change
-	// during a check isn't lost.
-	resetTicker chan struct{}
+	// now is the clock; tests inject a fake one.
+	now func() time.Time
+
+	// lastChecked records when each entry was last probed (in memory only; an
+	// empty map means everything is due). Guarded by lastMu.
+	lastMu      sync.Mutex
+	lastChecked map[string]time.Time
 
 	// backoff tracks consecutive-failure counts per entry so a
 	// repeatedly-down service backs off exponentially instead of
@@ -111,34 +122,16 @@ func NewChecker(db *sql.DB, settingsSvc *settings.Service) *Checker {
 		db:          db,
 		settings:    settingsSvc,
 		stopChan:    make(chan struct{}),
-		resetTicker: make(chan struct{}, 1),
+		now:         time.Now,
+		lastChecked: make(map[string]time.Time),
 		backoff:     make(map[string]*entryBackoff),
 	}
 	c.client = c.buildClient()
 
-	// Live-update the HTTP client (timeout) when the setting changes.
-	settingsSvc.Subscribe(settings.KeyStatusCheckTimeoutSeconds, func(string) {
-		newClient := c.buildClient()
-		c.clientMu.Lock()
-		c.client = newClient
-		c.clientMu.Unlock()
-		slog.Info("status checker timeout updated", "component", "status",
-			"timeout_seconds", settingsSvc.GetInt(settings.KeyStatusCheckTimeoutSeconds))
-	})
-
-	// Live-update the polling interval — signal the loop to rebuild its ticker.
-	settingsSvc.Subscribe(settings.KeyStatusCheckIntervalMinutes, func(string) {
-		select {
-		case c.resetTicker <- struct{}{}:
-		default: // a reset is already pending
-		}
-		slog.Info("status checker interval updated", "component", "status",
-			"interval_minutes", settingsSvc.GetInt(settings.KeyStatusCheckIntervalMinutes))
-	})
-
-	// Master on/off switch. Run a pass straight away so turning checks off
-	// clears cached results immediately (no stale badges) and turning them
-	// on doesn't leave every tile "unknown" for a whole interval.
+	// Global default for dashboards that don't override it. Run a pass
+	// straight away so turning checks off prunes cached results of the
+	// dashboards that inherit it (no stale badges) and turning them on
+	// doesn't leave every tile "unknown" for a whole interval.
 	settingsSvc.Subscribe(settings.KeyStatusChecksEnabled, func(string) {
 		slog.Info("status checks toggled", "component", "status",
 			"enabled", settingsSvc.GetBool(settings.KeyStatusChecksEnabled))
@@ -148,15 +141,10 @@ func NewChecker(db *sql.DB, settingsSvc *settings.Service) *Checker {
 	return c
 }
 
-// buildClient constructs an HTTP client whose timeout reflects the current
-// status.check_timeout_seconds setting.
+// buildClient constructs the shared HTTP client. Per-request timeouts come
+// from context (each entry's dashboard setting), not from the client.
 func (c *Checker) buildClient() *http.Client {
-	timeout := time.Duration(c.settings.GetInt(settings.KeyStatusCheckTimeoutSeconds)) * time.Second
-	if timeout <= 0 {
-		timeout = 10 * time.Second
-	}
 	return &http.Client{
-		Timeout: timeout,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			// Cap redirects at 10. Each hop still dials through the
 			// SSRF-safe Control hook, so a redirect to an internal
@@ -168,27 +156,11 @@ func (c *Checker) buildClient() *http.Client {
 		},
 		Transport: &http.Transport{
 			DialContext: (&net.Dialer{
-				Timeout: timeout,
+				Timeout: 30 * time.Second,
 				Control: ssrfSafeDialControl,
 			}).DialContext,
 		},
 	}
-}
-
-// httpClient returns the current HTTP client under a read lock.
-func (c *Checker) httpClient() *http.Client {
-	c.clientMu.RLock()
-	defer c.clientMu.RUnlock()
-	return c.client
-}
-
-// checkInterval returns the configured polling interval as a Duration.
-func (c *Checker) checkInterval() time.Duration {
-	mins := c.settings.GetInt(settings.KeyStatusCheckIntervalMinutes)
-	if mins <= 0 {
-		mins = 5
-	}
-	return time.Duration(mins) * time.Minute
 }
 
 // Start begins the background status checking loop
@@ -203,7 +175,7 @@ func (c *Checker) Start() {
 	c.mu.Unlock()
 
 	go c.runLoop()
-	slog.Info("status checker started", "component", "status", "interval", c.checkInterval())
+	slog.Info("status checker started", "component", "status", "tick", tickEvery)
 }
 
 // Stop halts the status checking loop
@@ -223,17 +195,13 @@ func (c *Checker) runLoop() {
 	// Run initial check
 	c.checkAllEntries()
 
-	ticker := time.NewTicker(c.checkInterval())
+	ticker := time.NewTicker(tickEvery)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ticker.C:
 			c.checkAllEntries()
-		case <-c.resetTicker:
-			// Settings changed — rebuild the ticker with the new interval.
-			ticker.Stop()
-			ticker = time.NewTicker(c.checkInterval())
 		case <-c.stopChan:
 			return
 		}
@@ -241,49 +209,57 @@ func (c *Checker) runLoop() {
 }
 
 // getEntriesFromConfig extracts the entries that should be status-checked:
-// link tiles with a URL whose "Enable Status Check" box is ticked.
+// link tiles (at any folder depth) with a URL whose "Enable Status Check" box
+// is ticked, in a dashboard whose effective statusChecksEnabled is true. It
+// returns an error if the stored config cannot be loaded as a v3 document.
 func (c *Checker) getEntriesFromConfig() ([]Entry, error) {
-	var configData string
-	err := c.db.QueryRow("SELECT data FROM config WHERE id = 1").Scan(&configData)
+	doc, err := configdoc.Load(c.db)
 	if err != nil {
 		return nil, err
 	}
 
-	var config struct {
-		Dashboards []struct {
-			Tabs []struct {
-				Groups []struct {
-					Entries []Entry `json:"entries"`
-				} `json:"groups"`
-			} `json:"tabs"`
-		} `json:"dashboards"`
-	}
-
-	if err := json.Unmarshal([]byte(configData), &config); err != nil {
-		return nil, err
-	}
-
 	var entries []Entry
-	for _, dashboard := range config.Dashboards {
-		for _, tab := range dashboard.Tabs {
-			for _, group := range tab.Groups {
-				for _, entry := range group.Entries {
-					// Skip note tiles entirely — they have no URL to check.
-					if entry.Type == "note" {
-						continue
-					}
-					// Only tiles whose own status check is switched on.
-					if entry.StatusCheck == nil || !entry.StatusCheck.Enabled {
-						continue
-					}
-					if entry.URL != "" {
-						entries = append(entries, entry)
-					}
-				}
-			}
+	eff := map[string]configdoc.Effective{}
+	configdoc.Walk(doc, func(dash, _ configdoc.Obj, _ []configdoc.Obj, node configdoc.Obj) bool {
+		if node["kind"] != "tile" {
+			return true
 		}
-	}
-
+		// Skip note tiles entirely — they have no URL to check.
+		if t, _ := node["type"].(string); t == "note" {
+			return true
+		}
+		sc, _ := node["statusCheck"].(configdoc.Obj)
+		if on, _ := sc["enabled"].(bool); !on {
+			return true
+		}
+		id, _ := node["id"].(string)
+		u, _ := node["url"].(string)
+		if id == "" || u == "" {
+			return true
+		}
+		dashID, _ := dash["id"].(string)
+		e, ok := eff[dashID]
+		if !ok {
+			e = configdoc.Resolve(c.settings, dash)
+			eff[dashID] = e
+		}
+		if !e.StatusChecksEnabled {
+			return true
+		}
+		interval := e.StatusCheckIntervalMinutes
+		if interval <= 0 {
+			interval = 5
+		}
+		timeout := e.StatusCheckTimeoutSeconds
+		if timeout <= 0 {
+			timeout = 10
+		}
+		entries = append(entries, Entry{
+			ID: id, Type: "link", URL: u,
+			DashboardID: dashID, IntervalMinutes: interval, TimeoutSeconds: timeout,
+		})
+		return true
+	})
 	return entries, nil
 }
 
@@ -311,26 +287,19 @@ func (c *Checker) checkAllEntries() {
 	c.passMu.Lock()
 	defer c.passMu.Unlock()
 
-	if !c.settings.GetBool(settings.KeyStatusChecksEnabled) {
-		// Checks globally off: contact nothing, and drop every cached
-		// result so no tile shows a stale "up"/"down" as if it were live.
-		slog.Debug("status checks disabled; skipping pass", "component", "status")
-		if _, err := c.db.Exec("DELETE FROM status_cache"); err != nil {
-			slog.Error("failed to clear status cache", "component", "status", "error", err)
-		}
-		c.backoffMu.Lock()
-		c.backoff = make(map[string]*entryBackoff)
-		c.backoffMu.Unlock()
-		return
-	}
-
 	entries, err := c.getEntriesFromConfig()
 	if err != nil {
-		slog.Error("failed to get entries for status check", "component", "status", "error", err)
+		// The config can't be read (migration failed, unreadable, not v3).
+		// Probe nothing, but leave the cache alone: pruning on an unknown
+		// config would wipe results for tiles that may well still exist.
+		// The stored rows keep their own last_checked so consumers can see
+		// how old they are.
+		slog.Error("status check pass skipped: cannot load config", "component", "status", "error", err)
 		return
 	}
 
 	slog.Debug("checking status for entries", "component", "status", "count", len(entries))
+	c.forget(entries)
 
 	// Collect results from concurrent HTTP checks
 	results := make([]statusCheckResult, len(entries))
@@ -339,8 +308,13 @@ func (c *Checker) checkAllEntries() {
 	sem := make(chan struct{}, 5)
 	var wg sync.WaitGroup
 
-	now := time.Now()
+	now := c.now()
 	for i, entry := range entries {
+		// Not due yet: keep the cached row, make no request.
+		if !c.isDue(entry, now) {
+			results[i] = statusCheckResult{entryID: entry.ID, skipped: true}
+			continue
+		}
 		// Honour the per-entry backoff window — if a previous check
 		// failed enough times in a row, we wait before retrying.
 		if c.shouldSkip(entry.ID, now) {
@@ -354,7 +328,8 @@ func (c *Checker) checkAllEntries() {
 			defer func() { <-sem }() // release
 
 			res := c.checkEntry(e)
-			c.recordOutcome(e.ID, res.status, now)
+			c.markChecked(e.ID, now)
+			c.recordOutcome(e, res.status, now)
 			results[idx] = res
 		}(i, entry)
 	}
@@ -363,6 +338,48 @@ func (c *Checker) checkAllEntries() {
 
 	// Batch write all results in a single transaction to avoid contention
 	c.saveResults(results)
+}
+
+// isDue reports whether the entry has never been probed or its own interval
+// has elapsed since the last probe.
+func (c *Checker) isDue(e Entry, now time.Time) bool {
+	c.lastMu.Lock()
+	defer c.lastMu.Unlock()
+	last, ok := c.lastChecked[e.ID]
+	if !ok {
+		return true
+	}
+	return now.Sub(last) >= time.Duration(e.IntervalMinutes)*time.Minute
+}
+
+func (c *Checker) markChecked(id string, now time.Time) {
+	c.lastMu.Lock()
+	c.lastChecked[id] = now
+	c.lastMu.Unlock()
+}
+
+// forget drops per-entry state (last-checked time, backoff) for entries that
+// are no longer checked, so the maps don't grow and a re-enabled tile starts
+// fresh (due immediately).
+func (c *Checker) forget(entries []Entry) {
+	live := make(map[string]struct{}, len(entries))
+	for _, e := range entries {
+		live[e.ID] = struct{}{}
+	}
+	c.lastMu.Lock()
+	for id := range c.lastChecked {
+		if _, ok := live[id]; !ok {
+			delete(c.lastChecked, id)
+		}
+	}
+	c.lastMu.Unlock()
+	c.backoffMu.Lock()
+	for id := range c.backoff {
+		if _, ok := live[id]; !ok {
+			delete(c.backoff, id)
+		}
+	}
+	c.backoffMu.Unlock()
 }
 
 // shouldSkip returns true if the entry's backoff window hasn't
@@ -383,7 +400,8 @@ func (c *Checker) shouldSkip(entryID string, now time.Time) bool {
 // using exponential backoff: 0, 1×, 2×, 4×, 8×, 16×, 32× the current
 // check interval. Capped at 32× to avoid waits longer than ~3 hours
 // at the default 5-minute interval.
-func (c *Checker) recordOutcome(entryID, status string, now time.Time) {
+func (c *Checker) recordOutcome(e Entry, status string, now time.Time) {
+	entryID := e.ID
 	c.backoffMu.Lock()
 	defer c.backoffMu.Unlock()
 	if status == "up" {
@@ -406,7 +424,7 @@ func (c *Checker) recordOutcome(entryID, status string, now time.Time) {
 		exp = 5
 	}
 	mult := 1 << exp
-	b.skipUntil = now.Add(time.Duration(mult) * c.checkInterval())
+	b.skipUntil = now.Add(time.Duration(mult) * time.Duration(e.IntervalMinutes) * time.Minute)
 }
 
 func (c *Checker) checkEntry(entry Entry) statusCheckResult {
@@ -422,7 +440,13 @@ func (c *Checker) checkEntry(entry Entry) statusCheckResult {
 
 	start := time.Now()
 
-	req, err := http.NewRequest("HEAD", entry.URL, nil)
+	timeout := time.Duration(entry.TimeoutSeconds) * time.Second
+	if timeout <= 0 {
+		timeout = 10 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, "HEAD", entry.URL, nil)
 	if err != nil {
 		result.status = "error"
 		return result
@@ -430,7 +454,7 @@ func (c *Checker) checkEntry(entry Entry) statusCheckResult {
 
 	req.Header.Set("User-Agent", "HOPS-StatusChecker/1.0")
 
-	resp, err := c.httpClient().Do(req)
+	resp, err := c.client.Do(req)
 	if err != nil {
 		result.status = "down"
 		return result

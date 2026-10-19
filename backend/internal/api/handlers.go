@@ -434,9 +434,18 @@ func (r *Router) handleGetStatus(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Checks globally switched off: say so explicitly rather than
-	// "unknown", so the badge shows "checks off", not "something's wrong".
-	if !r.settings.GetBool(settings.KeyStatusChecksEnabled) {
+	// Checks switched off for the tile's dashboard: say so explicitly rather
+	// than "unknown", so the badge shows "checks off", not "something's
+	// wrong". The config must be readable to know that; if it isn't, say so
+	// instead of guessing.
+	doc, err := configdoc.Load(r.db)
+	if err != nil {
+		slog.Error("status lookup: cannot load config", "component", "api", "error", err)
+		writeJSONError(w, "Config unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	if dash, _, ok := configdoc.FindTile(doc, entryID); ok &&
+		!configdoc.Resolve(r.settings, dash).StatusChecksEnabled {
 		writeJSON(w, map[string]string{"status": "disabled"})
 		return
 	}
@@ -445,7 +454,7 @@ func (r *Router) handleGetStatus(w http.ResponseWriter, req *http.Request) {
 	var responseTime sql.NullInt64
 	var lastChecked string
 
-	err := r.db.QueryRow(
+	err = r.db.QueryRow(
 		"SELECT status, response_time, last_checked FROM status_cache WHERE entry_id = ?",
 		entryID,
 	).Scan(&status, &responseTime, &lastChecked)

@@ -425,3 +425,24 @@ func TestStoredRevisionUnreadableIs500(t *testing.T) {
 		}
 	}
 }
+
+func TestGetStatus_DisabledPerDashboard(t *testing.T) {
+	router, db := setupTestRouter(t)
+	c := newClient(t, router)
+	seed(t, c)
+	if _, err := db.Exec(`INSERT INTO status_cache (entry_id, status) VALUES ('e1','up')`); err != nil {
+		t.Fatal(err)
+	}
+	code, resp := c.do("GET", "/api/status/e1", nil)
+	if code != 200 || resp["status"] != "up" || resp["lastChecked"] == nil {
+		t.Fatalf("enabled: %d %v", code, resp)
+	}
+	if code, resp = c.do("PUT", "/api/dashboards/d1/settings", map[string]interface{}{
+		"overrides": map[string]interface{}{"statusChecksEnabled": false}, "revision": 1}); code != 200 {
+		t.Fatalf("%d %v", code, resp)
+	}
+	code, resp = c.do("GET", "/api/status/e1", nil)
+	if code != 200 || resp["status"] != "disabled" {
+		t.Fatalf("disabled: %d %v", code, resp)
+	}
+}
