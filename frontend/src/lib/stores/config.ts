@@ -1,6 +1,12 @@
 import { writable, derived, get } from 'svelte/store';
 import type { Config, Dashboard } from '$lib/types';
-import { getConfig, updateConfig as apiUpdateConfig } from '$lib/utils/api';
+import {
+  getConfig,
+  updateConfig as apiUpdateConfig,
+  saveDashboard,
+  ConflictError,
+  MigrationFailedError
+} from '$lib/utils/api';
 import { page } from '$app/stores';
 import { toast } from './toast';
 import { logError } from '$lib/utils/errors';
@@ -27,6 +33,25 @@ export const configLoading = writable(true);
 // Error state
 export const configError = writable<string | null>(null);
 
+// Set when a save was rejected because the dashboard changed elsewhere
+// (HTTP 409). Persistent: only loadConfig() (Reload) clears it, so a change
+// that was NOT saved can never look saved.
+export const saveConflict = writable<{ dashboardId: string } | null>(null);
+
+// Set (to the server's detail text) while the stored config failed to
+// migrate to v3 and the server refuses config-touching requests (HTTP 503).
+export const migrationFailure = writable<string | null>(null);
+
+// Record a failed save where the user can see it. Conflicts raise the
+// persistent banner; a migration failure swaps in the migration-failed page.
+function noteSaveFailure(error: unknown) {
+  if (error instanceof ConflictError) {
+    saveConflict.set({ dashboardId: error.dashboardId });
+  } else if (error instanceof MigrationFailedError) {
+    migrationFailure.set(error.detail);
+  }
+}
+
 // Load configuration from API
 export async function loadConfig() {
   configLoading.set(true);
@@ -35,7 +60,14 @@ export async function loadConfig() {
   try {
     const data = await getConfig();
     config.set(data);
+    migrationFailure.set(null);
+    saveConflict.set(null);
   } catch (error) {
+    if (error instanceof MigrationFailedError) {
+      // Never keep showing an old config as if it were current.
+      config.set(null);
+      migrationFailure.set(error.detail);
+    }
     logError('Config load', error);
     configError.set(error instanceof Error ? error.message : 'Failed to load configuration');
   } finally {
@@ -43,11 +75,24 @@ export async function loadConfig() {
   }
 }
 
-// Update configuration (admin only)
+// Apply server-assigned revisions onto a config: the top-level map and each
+// dashboard's own `revision` stay in sync.
+function withRevisions(cfg: Config, revisions: Record<string, number>): Config {
+  return {
+    ...cfg,
+    dashboards: cfg.dashboards.map((d) =>
+      revisions[d.id] !== undefined ? { ...d, revision: revisions[d.id] } : d
+    ),
+    dashboardRevisions: revisions
+  };
+}
+
+// Update configuration (admin only). The store is only updated after the
+// server confirms; on any failure it is left untouched.
 export async function updateConfig(newConfig: Config, showToast = true) {
   try {
     const resp = await apiUpdateConfig(newConfig);
-    config.set(newConfig);
+    config.set(resp.revisions ? withRevisions(newConfig, resp.revisions) : newConfig);
     if (showToast) {
       toast.success('Changes saved');
     }
@@ -59,10 +104,57 @@ export async function updateConfig(newConfig: Config, showToast = true) {
     }
   } catch (error) {
     logError('Config update', error);
+    noteSaveFailure(error);
 
     // Check if it's a session expiration error
     if (error instanceof Error && error.message === 'SESSION_EXPIRED') {
       toast.error('Your session has expired. Please refresh the page and log in again.');
+    } else if (error instanceof ConflictError) {
+      toast.error('Not saved \u2014 changed somewhere else');
+    } else {
+      toast.error('Failed to save changes');
+    }
+    throw error;
+  }
+}
+
+// Save one dashboard with its current revision (optimistic concurrency).
+// On success the store takes the returned revision; on failure the store is
+// untouched so the unsaved change never looks saved.
+async function saveOneDashboard(updated: Dashboard): Promise<void> {
+  const currentConfig = get(config);
+  if (!currentConfig) {
+    throw new Error('No configuration loaded');
+  }
+  const index = currentConfig.dashboards.findIndex((d) => d.id === updated.id);
+  if (index === -1) {
+    throw new Error('Dashboard not found');
+  }
+  const revision = currentConfig.dashboards[index].revision ?? currentConfig.dashboardRevisions?.[updated.id];
+  if (revision === undefined) {
+    throw new Error('Dashboard has no known revision \u2014 reload and try again');
+  }
+
+  try {
+    const resp = await saveDashboard(updated.id, updated, revision);
+    const saved: Dashboard = { ...updated, revision: resp.revision };
+    config.set({
+      ...currentConfig,
+      dashboards: [
+        ...currentConfig.dashboards.slice(0, index),
+        saved,
+        ...currentConfig.dashboards.slice(index + 1)
+      ],
+      dashboardRevisions: { ...(currentConfig.dashboardRevisions ?? {}), [updated.id]: resp.revision }
+    });
+    toast.success('Changes saved');
+  } catch (error) {
+    logError('Dashboard save', error);
+    noteSaveFailure(error);
+    if (error instanceof Error && error.message === 'SESSION_EXPIRED') {
+      toast.error('Your session has expired. Please refresh the page and log in again.');
+    } else if (error instanceof ConflictError) {
+      toast.error('Not saved \u2014 changed somewhere else');
     } else {
       toast.error('Failed to save changes');
     }
@@ -94,27 +186,7 @@ export async function updateDashboard(updatedDashboard: Dashboard) {
 }
 
 async function saveDashboardSnapshot(updatedDashboard: Dashboard): Promise<void> {
-  const currentConfig = get(config);
-  if (!currentConfig) {
-    throw new Error('No configuration loaded');
-  }
-
-  const dashboardIndex = currentConfig.dashboards.findIndex(d => d.id === updatedDashboard.id);
-  if (dashboardIndex === -1) {
-    throw new Error('Dashboard not found');
-  }
-
-  const newConfig: Config = {
-    ...currentConfig,
-    dashboards: [
-      ...currentConfig.dashboards.slice(0, dashboardIndex),
-      updatedDashboard,
-      ...currentConfig.dashboards.slice(dashboardIndex + 1)
-    ]
-  };
-
-  await updateConfig(newConfig);
-  config.set(newConfig);
+  return saveOneDashboard(updatedDashboard);
 }
 
 // ---------------------------------------------------------------------------
@@ -175,16 +247,6 @@ export async function mutateDashboard(
     const fresh: Dashboard = JSON.parse(JSON.stringify(currentConfig.dashboards[dashboardIndex]));
     const result = mutator(fresh) ?? fresh;
 
-    const newConfig: Config = {
-      ...currentConfig,
-      dashboards: [
-        ...currentConfig.dashboards.slice(0, dashboardIndex),
-        result,
-        ...currentConfig.dashboards.slice(dashboardIndex + 1)
-      ]
-    };
-
-    await updateConfig(newConfig);
-    config.set(newConfig);
+    await saveOneDashboard(result);
   });
 }

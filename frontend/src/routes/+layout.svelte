@@ -4,13 +4,16 @@
 	// See scripts/generate-icon-bundle.mjs and TENETS.md #10.
 	import '$lib/icons/offline-bundle';
 	import { onMount } from 'svelte';
-	import { loadConfig } from '$lib/stores/config';
+	import { loadConfig, migrationFailure } from '$lib/stores/config';
+	import { page } from '$app/stores';
 	import { initAuth, mustChangePassword } from '$lib/stores/auth';
 	import { initEditModeIdleWatcher } from '$lib/stores/editModeIdleWatcher';
 	import { initNetworkWatcher } from '$lib/stores/network';
 	import Navbar from '$lib/components/Navbar.svelte';
 	import OfflineBanner from '$lib/components/OfflineBanner.svelte';
 	import VersionMismatchBanner from '$lib/components/VersionMismatchBanner.svelte';
+	import ConflictBanner from '$lib/components/ConflictBanner.svelte';
+	import MigrationFailed from '$lib/components/MigrationFailed.svelte';
 	import Toast from '$lib/components/Toast.svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import ChangePasswordModal from '$lib/components/admin/ChangePasswordModal.svelte';
@@ -176,8 +179,15 @@
 <Navbar />
 <OfflineBanner />
 <VersionMismatchBanner />
+<ConflictBanner />
 
-{@render children()}
+<!-- While the config migration has failed, only the admin page ("/": login +
+     Backups, the remedy) stays reachable; everything else shows the notice. -->
+{#if $migrationFailure && $page.url.pathname !== '/'}
+	<MigrationFailed />
+{:else}
+	{@render children()}
+{/if}
 
 {#if $mustChangePassword}
 	<ChangePasswordModal forced={true} onClose={() => {}} />

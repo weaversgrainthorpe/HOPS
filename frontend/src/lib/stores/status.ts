@@ -6,6 +6,33 @@ export interface StatusInfo {
   status: 'up' | 'down' | 'error' | 'unknown' | 'loading' | 'disabled';
   responseTime?: number;
   lastChecked?: string;
+  /** Minutes between server-side probes, when the server reports it. */
+  intervalMinutes?: number;
+  /** Set when the last status fetch failed: the values above are old data. */
+  fetchError?: string;
+}
+
+/** Server-side default probe interval, used when the response has none. */
+export const DEFAULT_INTERVAL_MINUTES = 5;
+
+/**
+ * True when a status must NOT be rendered as fresh: the last fetch failed,
+ * or an "up" row's lastChecked is older than ~2x its probe interval. (Down
+ * rows are exempt from the age rule: the server backs them off up to 32x.)
+ */
+export function isStatusStale(info: StatusInfo, now: number = Date.now()): boolean {
+  if (info.fetchError) return true;
+  if (info.status !== 'up' || !info.lastChecked) return false;
+  const checked = Date.parse(info.lastChecked);
+  if (Number.isNaN(checked)) return false;
+  const interval = info.intervalMinutes ?? DEFAULT_INTERVAL_MINUTES;
+  return now - checked > 2 * interval * 60_000;
+}
+
+/** Human-readable reason a status is stale, for tooltips. */
+export function staleReason(info: StatusInfo): string {
+  if (info.fetchError) return `Status unavailable (${info.fetchError}) \u2014 showing the last known value.`;
+  return 'Status is out of date \u2014 the server has not re-checked this recently.';
 }
 
 // Store for all entry statuses
@@ -19,30 +46,24 @@ let subscriberCount = 0;
 let isPolling = false;
 
 /**
- * Sentinel returned by fetchStatus when the previous status should be
- * kept (e.g. server unreachable, or session expired — global handlers
- * cover both). The poller drops these instead of writing them into the
- * store so tiles don't all flip to a misleading "unknown".
+ * Fetch one entry's status. A failed fetch is NEVER hidden: it returns the
+ * previous value (if any) marked with `fetchError`, so tiles can show a
+ * degraded "unavailable/stale" state instead of last status posing as current.
  */
-const KEEP_PREVIOUS = Symbol('keep-previous');
-
-export async function fetchStatus(entryId: string): Promise<StatusInfo | typeof KEEP_PREVIOUS> {
+export async function fetchStatus(entryId: string, previous?: StatusInfo): Promise<StatusInfo> {
   try {
     const data = await apiGetStatus(entryId);
     return {
       status: data.status || 'unknown',
       responseTime: data.responseTime,
-      lastChecked: data.lastChecked
+      lastChecked: data.lastChecked,
+      intervalMinutes: data.intervalMinutes
     };
   } catch (error) {
-    // SESSION_EXPIRED → the global session-expired handler is already
-    //   clearing auth + redirecting. Don't touch the status.
-    // Network errors → the offline watcher in network.ts is already
-    //   surfacing the outage via the banner + StatusIndicator's offline
-    //   icon. Freezing the per-tile status at its last known value
-    //   reads better than flipping every tile to "unknown".
     logError('Status fetch', error);
-    return KEEP_PREVIOUS;
+    const message = error instanceof Error ? error.message : 'fetch failed';
+    const base: StatusInfo = previous && previous.status !== 'loading' ? previous : { status: 'unknown' };
+    return { ...base, fetchError: message };
   }
 }
 
@@ -60,8 +81,7 @@ export function subscribeToStatus(entryId: string) {
   });
 
   // Fetch immediately
-  fetchStatus(entryId).then(status => {
-    if (status === KEEP_PREVIOUS) return;
+  fetchStatus(entryId, getStatus(entryId)).then(status => {
     statusStore.update(store => {
       const newStore = new Map(store);
       newStore.set(entryId, status);
@@ -98,7 +118,7 @@ async function pollAllStatuses() {
   // Fetch all statuses concurrently instead of sequentially
   const results = await Promise.allSettled(
     entries.map(async (entryId) => {
-      const status = await fetchStatus(entryId);
+      const status = await fetchStatus(entryId, getStatus(entryId));
       return { entryId, status };
     })
   );
@@ -106,8 +126,8 @@ async function pollAllStatuses() {
   statusStore.update(store => {
     const newStore = new Map(store);
     for (const result of results) {
-      if (result.status === 'fulfilled' && result.value.status !== KEEP_PREVIOUS) {
-        newStore.set(result.value.entryId, result.value.status as StatusInfo);
+      if (result.status === 'fulfilled') {
+        newStore.set(result.value.entryId, result.value.status);
       }
     }
     return newStore;

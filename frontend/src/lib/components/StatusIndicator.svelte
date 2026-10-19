@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { statusStore, subscribeToStatus, type StatusInfo } from '$lib/stores/status';
+  import { statusStore, subscribeToStatus, isStatusStale, staleReason, type StatusInfo } from '$lib/stores/status';
   import { isOffline } from '$lib/stores/network';
   import { COLORS } from '$lib/constants/colors';
   import Icon from '@iconify/svelte';
@@ -33,6 +33,8 @@
     });
     return unsub;
   });
+
+  let stale = $derived(isStatusStale(status));
 
   function getStatusColor(s: StatusInfo['status']) {
     switch (s) {
@@ -85,12 +87,13 @@
   <div
     class="status-indicator"
     class:loading={status.status === 'loading'}
+    class:stale
     style:--status-color={getStatusColor(status.status)}
     role="img"
-    aria-label={getStatusTitle(status)}
-    title={getStatusTitle(status)}
+    aria-label={stale ? staleReason(status) : getStatusTitle(status)}
+    title={stale ? `${staleReason(status)} Last known: ${getStatusTitle(status)}` : getStatusTitle(status)}
   >
-    <Icon icon={getStatusIcon(status.status)} width="12" />
+    <Icon icon={stale ? 'mdi:clock-alert-outline' : getStatusIcon(status.status)} width="12" />
   </div>
 {/if}
 
@@ -113,6 +116,11 @@
      Desaturated grey signals "this isn't fresh data" without competing
      visually with an actual server-down state. */
   .status-indicator.offline {
+    color: rgba(148, 163, 184, 0.85);
+  }
+
+  /* Stale / fetch-failed: grey, so old data never reads as a live status. */
+  .status-indicator.stale {
     color: rgba(148, 163, 184, 0.85);
   }
 

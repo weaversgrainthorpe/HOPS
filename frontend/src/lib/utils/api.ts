@@ -1,4 +1,4 @@
-import type { Config } from '$lib/types';
+import type { Config, Dashboard } from '$lib/types';
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 
@@ -42,6 +42,28 @@ export function setSessionExpiredHandler(fn: () => void) {
   sessionExpiredHandler = fn;
 }
 
+/** 409 from a revision-checked save: the dashboard changed elsewhere. */
+export class ConflictError extends Error {
+  dashboardId: string;
+  currentRevision: number;
+  constructor(dashboardId: string, currentRevision: number, message?: string) {
+    super(message || 'This dashboard was changed somewhere else, so your last change was not saved.');
+    this.name = 'ConflictError';
+    this.dashboardId = dashboardId;
+    this.currentRevision = currentRevision;
+  }
+}
+
+/** 503 migration_failed: the stored config could not be migrated to v3. */
+export class MigrationFailedError extends Error {
+  detail: string;
+  constructor(detail: string) {
+    super(detail || 'Configuration migration failed');
+    this.name = 'MigrationFailedError';
+    this.detail = detail;
+  }
+}
+
 // Helper to make API requests. Session auth is handled via HttpOnly cookies,
 // CSRF protection via the double-submit cookie pattern.
 async function fetchAPI(endpoint: string, options: RequestInit = {}) {
@@ -79,15 +101,27 @@ async function fetchAPI(endpoint: string, options: RequestInit = {}) {
     // friendly status-class message so users never see raw HTTP
     // text like "API error: 500 Internal Server Error".
     let serverMsg = '';
+    let parsedBody: Record<string, unknown> | null = null;
     try {
       const text = await response.text();
       if (text) {
         try {
           const parsed = JSON.parse(text);
+          if (parsed && typeof parsed === 'object') parsedBody = parsed;
           if (parsed && typeof parsed.error === 'string') serverMsg = parsed.error;
         } catch { /* not JSON — leave serverMsg empty */ }
       }
     } catch { /* body unreadable */ }
+    if (response.status === 409 && parsedBody?.error === 'conflict') {
+      throw new ConflictError(
+        String(parsedBody.dashboardId ?? ''),
+        Number(parsedBody.currentRevision ?? 0),
+        typeof parsedBody.detail === 'string' ? parsedBody.detail : undefined
+      );
+    }
+    if (response.status === 503 && parsedBody?.error === 'migration_failed') {
+      throw new MigrationFailedError(typeof parsedBody.detail === 'string' ? parsedBody.detail : '');
+    }
     if (serverMsg) throw new Error(serverMsg);
     if (response.status === 403) throw new Error("You don't have permission to do that.");
     if (response.status === 404) throw new Error("Couldn't find what you were looking for.");
@@ -198,12 +232,30 @@ export async function changePassword(oldPassword: string, newPassword: string): 
 // attached (e.g. "pre-update backup failed: ... — config saved anyway").
 // Callers should surface non-empty warnings to the user so silent
 // degradation of the safety-net is visible.
-export async function updateConfig(config: Config): Promise<{ warning?: string }> {
+export async function updateConfig(
+  config: Config
+): Promise<{ warning?: string; revisions?: Record<string, number> }> {
   const resp = await fetchAPI('/config', {
     method: 'PUT',
     body: JSON.stringify(config),
   });
   return resp ?? {};
+}
+
+/** Revision-checked save of one dashboard (PUT /api/dashboards/{id}). */
+export async function saveDashboard(
+  id: string,
+  dashboard: Dashboard,
+  revision: number
+): Promise<{ revision: number }> {
+  const resp = await fetchAPI(`/dashboards/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    body: JSON.stringify({ dashboard, revision }),
+  });
+  if (!resp || typeof resp.revision !== 'number') {
+    throw new Error('The server did not confirm the new dashboard revision.');
+  }
+  return { revision: resp.revision };
 }
 
 export async function exportConfig(format: 'json' | 'yaml' = 'json', dashboardId?: string): Promise<Blob> {

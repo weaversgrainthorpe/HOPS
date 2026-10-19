@@ -13,6 +13,19 @@ export interface Dashboard {
   };
   tabs: Tab[];
   order: number;
+  /** Optimistic-concurrency revision (server-assigned). */
+  revision?: number;
+  settings?: DashboardSettings;
+}
+
+/** Per-dashboard overrides; null = inherit the global setting. */
+export interface DashboardSettings {
+  statusChecksEnabled: string | boolean | null;
+  statusCheckIntervalMinutes: string | number | null;
+  statusCheckTimeoutSeconds: string | number | null;
+  editIdleTimeoutMinutes: string | number | null;
+  animatedFolderBackgrounds: string | boolean | null;
+  defaultLayout: string | null;
 }
 
 export interface HeaderConfig {
@@ -106,6 +119,8 @@ export interface Config {
   dashboards: Dashboard[];
   theme: Theme;
   settings: Settings;
+  /** Revision of every dashboard as last seen; sent back on whole-config PUTs. */
+  dashboardRevisions?: Record<string, number>;
 }
 
 export interface Theme {
