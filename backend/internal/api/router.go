@@ -41,7 +41,7 @@ var spaFS = func() fs.FS {
 // Router holds all dependencies for the API
 type Router struct {
 	db             *sql.DB
-	migration      configdoc.MigrationResult // startup v2→v3 outcome; Task 7 surfaces a failure
+	migration      configdoc.MigrationResult // startup v2→v3 outcome; a failure makes config endpoints return 503
 	authService    *auth.Service
 	config         *config.Config
 	settings       *settings.Service
@@ -255,6 +255,7 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/health", r.handleGetHealth)
 	r.mux.HandleFunc("/api/version", r.handleGetVersion)
 	r.mux.HandleFunc("/api/config", r.handleConfig)
+	r.mux.HandleFunc("/api/dashboards/", r.protected(r.handleDashboards))
 	// Intentionally public — the SPA polls this for tile colour indicators
 	// before login so a viewer landing on a public dashboard sees status
 	// dots immediately. Entry IDs are random UUIDs from the user's own

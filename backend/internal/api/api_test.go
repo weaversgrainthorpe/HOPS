@@ -22,6 +22,13 @@ import (
 
 func setupTestRouter(t *testing.T) (http.Handler, *sql.DB) {
 	t.Helper()
+	return setupTestRouterWithMigration(t, nil)
+}
+
+// setupTestRouterWithMigration is setupTestRouter, optionally replacing the
+// startup migration outcome (to exercise the migration-failed state).
+func setupTestRouterWithMigration(t *testing.T, override *configdoc.MigrationResult) (http.Handler, *sql.DB) {
+	t.Helper()
 	db, err := sql.Open("sqlite", ":memory:")
 	if err != nil {
 		t.Fatal(err)
@@ -129,6 +136,9 @@ func setupTestRouter(t *testing.T) (http.Handler, *sql.DB) {
 	migration, err := configdoc.MigrateOnStartup(db)
 	if err != nil {
 		t.Fatalf("configdoc.MigrateOnStartup: %v", err)
+	}
+	if override != nil {
+		migration = *override
 	}
 
 	cfg := &config.Config{

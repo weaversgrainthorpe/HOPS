@@ -24,6 +24,7 @@ import (
 	_ "image/jpeg"
 
 	"github.com/weaversgrainthorpe/HOPS/internal/assets"
+	"github.com/weaversgrainthorpe/HOPS/internal/configdoc"
 	"github.com/weaversgrainthorpe/HOPS/internal/converters"
 	"github.com/weaversgrainthorpe/HOPS/internal/database"
 	"github.com/weaversgrainthorpe/HOPS/internal/settings"
@@ -102,37 +103,42 @@ func (r *Router) handleConfig(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-// handleGetConfig returns the dashboard configuration
+// handleGetConfig returns the dashboard configuration as the legacy (v2)
+// view of the stored v3 document.
 func (r *Router) handleGetConfig(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodGet {
 		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-
-	var configData string
-	err := r.db.QueryRow("SELECT data FROM config WHERE id = 1").Scan(&configData)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			// Return empty config
-			configData = `{"dashboards":[],"theme":{"mode":"dark"},"settings":{"searchHotkey":"/","defaultView":"/"}}`
-		} else {
-			writeJSONError(w, "Failed to load config", http.StatusInternalServerError)
-			return
-		}
+	if !r.migrationGuard(w) {
+		return
 	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Write([]byte(configData))
+	stored, err := configdoc.Load(r.db)
+	if err != nil {
+		writeAPIError(w, loadErr(err))
+		return
+	}
+	view, err := configdoc.ToLegacy(stored)
+	if err != nil {
+		writeAPIError(w, newAPIError(http.StatusInternalServerError, err.Error()))
+		return
+	}
+	writeJSON(w, view)
 }
 
-// handleUpdateConfig updates the dashboard configuration (admin only)
+// handleUpdateConfig updates the dashboard configuration (admin only). The
+// body is the legacy whole-config view; each existing dashboard's revision
+// must match the stored one (409 otherwise).
 func (r *Router) handleUpdateConfig(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodPut {
 		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	if !r.migrationGuard(w) {
+		return
+	}
 
-	var configData map[string]interface{}
+	var configData configdoc.Obj
 	if err := json.NewDecoder(req.Body).Decode(&configData); err != nil {
 		writeJSONError(w, "Invalid JSON", http.StatusBadRequest)
 		return
@@ -142,35 +148,20 @@ func (r *Router) handleUpdateConfig(w http.ResponseWriter, req *http.Request) {
 	// don't block the update — the admin chose to save — but surface
 	// the warning in the response so the UI can flag it. A silent
 	// backup failure means the admin trusts a safety-net that didn't
-	// fire next time they roll back.
-	var backupWarning string
-	if r.backupManager != nil {
-		if _, err := r.backupManager.CreateBackupWithDB(r.db, "pre-config-update"); err != nil {
-			slog.Warn("failed to create pre-update backup", "component", "backup", "error", err)
-			backupWarning = "Pre-update backup failed: " + err.Error() + ". Config saved anyway."
+	// fire next time they roll back. (Taken before the transaction opens.)
+	backupWarning := r.preUpdateBackup()
+
+	r.updateDoc(w, func(stored configdoc.Obj) (configdoc.Obj, interface{}, error) {
+		next, revs, err := applyLegacyView(stored, configData)
+		if err != nil {
+			return nil, nil, err
 		}
-	}
-
-	configJSON, err := json.Marshal(configData)
-	if err != nil {
-		writeJSONError(w, "Failed to encode config", http.StatusInternalServerError)
-		return
-	}
-
-	_, err = r.db.Exec(
-		"INSERT OR REPLACE INTO config (id, data, updated_at) VALUES (1, ?, CURRENT_TIMESTAMP)",
-		string(configJSON),
-	)
-	if err != nil {
-		writeJSONError(w, "Failed to save config", http.StatusInternalServerError)
-		return
-	}
-
-	resp := map[string]interface{}{"status": "ok"}
-	if backupWarning != "" {
-		resp["warning"] = backupWarning
-	}
-	writeJSON(w, resp)
+		resp := map[string]interface{}{"status": "ok", "revisions": revs}
+		if backupWarning != "" {
+			resp["warning"] = backupWarning
+		}
+		return next, resp, nil
+	})
 }
 
 // handleLogin authenticates a user with rate limiting
