@@ -2,6 +2,7 @@ package configdoc
 
 import (
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -84,7 +85,12 @@ func TestFromLegacy_PreservesV3OnlyFields(t *testing.T) {
 	v2 := loadJSON(t, "testdata/v2_basic.json")
 	prev := migrated(t, v2)
 	pd := list(t, prev, "dashboards")[0]
-	pd["settings"] = Obj{"statusChecksEnabled": false}
+	want := Obj{}
+	for _, k := range settingsKeys {
+		want[k] = nil
+	}
+	want["statusChecksEnabled"] = false
+	pd["settings"] = want
 	pd["revision"] = 7
 	pd["defaultLayout"] = "free"
 	list(t, pd, "tabs")[0]["layout"] = "free"
@@ -98,7 +104,7 @@ func TestFromLegacy_PreservesV3OnlyFields(t *testing.T) {
 		t.Fatal("not v3")
 	}
 	d := list(t, got, "dashboards")[0]
-	eq(t, d["settings"], Obj{"statusChecksEnabled": false}, "settings")
+	eq(t, d["settings"], want, "settings")
 	eq(t, d["revision"], 7, "revision")
 	eq(t, d["defaultLayout"], "free", "defaultLayout")
 	tabs := list(t, d, "tabs")
@@ -129,5 +135,36 @@ func TestFromLegacy_NotV3Prev(t *testing.T) {
 	v2 := loadJSON(t, "testdata/v2_basic.json")
 	if _, err := FromLegacy(v2, v2); !errors.Is(err, ErrNotV3) {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestToLegacy_FailsLoudlyOnMalformedNodes(t *testing.T) {
+	cases := map[string]struct {
+		mutate func(doc Obj)
+		id     string
+	}{
+		"root": {func(doc Obj) {
+			delete(list(t, list(t, doc, "dashboards")[0], "tabs")[0], "root")
+		}, "t1"},
+		"content": {func(doc Obj) {
+			_, _, _, g := findNode(doc, "g1")
+			g["content"] = "oops"
+		}, "g1"},
+		"placement missing": {func(doc Obj) {
+			_, _, _, e := findNode(doc, "e2")
+			delete(e, "placement")
+		}, "e2"},
+		"placement non-numeric": {func(doc Obj) {
+			_, _, _, g := findNode(doc, "g2")
+			g["placement"].(Obj)["x"] = "left"
+		}, "g2"},
+	}
+	for name, c := range cases {
+		doc := migrated(t, loadJSON(t, "testdata/v2_basic.json"))
+		c.mutate(doc)
+		_, err := ToLegacy(doc)
+		if err == nil || !strings.Contains(err.Error(), c.id) {
+			t.Errorf("%s: err = %v, want error mentioning %s", name, err, c.id)
+		}
 	}
 }

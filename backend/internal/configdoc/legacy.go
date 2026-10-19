@@ -43,14 +43,20 @@ func ToLegacy(v3 Obj) (Obj, error) {
 }
 
 func tabToLegacy(t Obj) error {
-	root, _ := t["root"].(Obj)
+	root, ok := t["root"].(Obj)
+	if !ok {
+		return fmt.Errorf("root is %T, want object", t["root"])
+	}
 	folders, err := orderedChildren(root, "folder")
 	if err != nil {
 		return err
 	}
 	groups := make([]any, 0, len(folders))
 	for _, f := range folders {
-		content, _ := f["content"].(Obj)
+		content, ok := f["content"].(Obj)
+		if !ok {
+			return fmt.Errorf("folder %v: content is %T, want object", f["id"], f["content"])
+		}
 		tiles, err := orderedChildren(content, "tile")
 		if err != nil {
 			return fmt.Errorf("folder %v: %w", f["id"], err)
@@ -86,20 +92,36 @@ func orderedChildren(container Obj, kind string) ([]Obj, error) {
 			return nil, fmt.Errorf("%w: %v is a %v where only %ss are allowed", ErrNotLegacyRepresentable, k["id"], k["kind"], kind)
 		}
 	}
-	sort.SliceStable(kids, func(i, j int) bool {
-		yi, yj := placementAxis(kids[i], "y"), placementAxis(kids[j], "y")
-		if yi != yj {
-			return yi < yj
+	type pos struct{ x, y float64 }
+	ps := make([]pos, len(kids))
+	for i, k := range kids {
+		p, ok := k["placement"].(Obj)
+		if !ok {
+			return nil, fmt.Errorf("%v: placement is %T, want object", k["id"], k["placement"])
 		}
-		return placementAxis(kids[i], "x") < placementAxis(kids[j], "x")
+		x, okx := p["x"].(float64)
+		y, oky := p["y"].(float64)
+		if !okx || !oky {
+			return nil, fmt.Errorf("%v: placement x/y are %s/%s, want numbers", k["id"], show(p["x"]), show(p["y"]))
+		}
+		ps[i] = pos{x, y}
+	}
+	idx := make([]int, len(kids))
+	for i := range idx {
+		idx[i] = i
+	}
+	sort.SliceStable(idx, func(a, b int) bool {
+		pa, pb := ps[idx[a]], ps[idx[b]]
+		if pa.y != pb.y {
+			return pa.y < pb.y
+		}
+		return pa.x < pb.x
 	})
-	return kids, nil
-}
-
-func placementAxis(n Obj, axis string) float64 {
-	p, _ := n["placement"].(Obj)
-	f, _ := p[axis].(float64)
-	return f
+	sorted := make([]Obj, len(kids))
+	for i, j := range idx {
+		sorted[i] = kids[j]
+	}
+	return sorted, nil
 }
 
 // objList reads o[key] as a list of objects; missing/null is empty.

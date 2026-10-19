@@ -51,7 +51,11 @@ func Verify(v2, v3 Obj) error {
 		v.add("document: v3 dashboards is %T, want array", v3["dashboards"])
 	default:
 		v.compareLevel("dashboard", "document", v2d, v3d, "", func(a, b Obj, id string) {
-			v.compareKeys("dashboard "+id, a, b, "tabs")
+			// revision, settings and defaultLayout are converter-owned:
+			// ConvertDashboardV2 deliberately overwrites any v2 value (Ruling 4),
+			// so skip the equality check but still require them well-formed.
+			v.compareKeys("dashboard "+id, a, b, "tabs", "revision", "settings", "defaultLayout")
+			v.checkOwned(id, b)
 			v.compareTabs(id, a, b)
 		})
 	}
@@ -89,6 +93,33 @@ func (v *verifier) compareTabs(dashID string, a, b Obj) {
 			})
 		})
 	})
+}
+
+func (v *verifier) checkOwned(id string, d Obj) {
+	switch r := d["revision"].(type) {
+	case int:
+		if r <= 0 {
+			v.add("dashboard %q: key \"revision\" is %d, want a positive number", id, r)
+		}
+	case float64:
+		if r <= 0 {
+			v.add("dashboard %q: key \"revision\" is %v, want a positive number", id, r)
+		}
+	default:
+		v.add("dashboard %q: key \"revision\" is %s, want a positive number", id, show(d["revision"]))
+	}
+	if s, ok := d["settings"].(Obj); !ok {
+		v.add("dashboard %q: key \"settings\" is %s, want an object", id, trunc(show(d["settings"])))
+	} else {
+		for _, k := range settingsKeys {
+			if _, has := s[k]; !has {
+				v.add("dashboard %q: settings is missing key %q", id, k)
+			}
+		}
+	}
+	if _, ok := d["defaultLayout"].(string); !ok {
+		v.add("dashboard %q: key \"defaultLayout\" is %s, want a string", id, show(d["defaultLayout"]))
+	}
 }
 
 // compareLevel pairs v2 and v3 children by ID, reporting missing, unexpected

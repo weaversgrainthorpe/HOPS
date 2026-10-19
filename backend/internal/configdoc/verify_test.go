@@ -38,6 +38,7 @@ func wantProblem(t *testing.T, err error, parts ...string) {
 func TestVerify_AcceptsMigration(t *testing.T) {
 	inputs := map[string]Obj{
 		"v2_basic":     loadJSON(t, "testdata/v2_basic.json"),
+		"v2_messy":     loadJSON(t, "testdata/v2_messy.json"),
 		"real_sample":  realV2(t, "testdata/real_sample.json"),
 		"real_weavers": realV2(t, "testdata/real_weavers.json"),
 	}
@@ -139,4 +140,16 @@ func findNode(doc Obj, id string) (Obj, Obj, []Obj, Obj) {
 		return true
 	})
 	return d, tb, p, nn
+}
+
+func TestVerify_RequiresOwnedDashboardKeys(t *testing.T) {
+	v2 := loadJSON(t, "testdata/v2_basic.json")
+	for key, bad := range map[string]any{"revision": 0, "settings": "x", "defaultLayout": 3} {
+		doc := migrated(t, v2)
+		list(t, doc, "dashboards")[0][key] = bad
+		wantProblem(t, Verify(v2, doc), "d1", key)
+	}
+	doc := migrated(t, v2)
+	delete(list(t, doc, "dashboards")[0]["settings"].(Obj), "statusChecksEnabled")
+	wantProblem(t, Verify(v2, doc), "d1", "statusChecksEnabled")
 }
