@@ -50,3 +50,28 @@ describe('isStatusStale', () => {
     expect(staleReason({ status: 'up', fetchError: 'Config unavailable' })).toContain('Config unavailable');
   });
 });
+
+describe('now tick store', () => {
+  it('ticks every 30s while subscribed and stops after unsubscribe', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-19T12:00:00Z'));
+    const { now, NOW_TICK_MS } = await import('./status');
+    const seen: number[] = [];
+    const unsub = now.subscribe((v) => seen.push(v));
+    const first = seen.length;
+    vi.advanceTimersByTime(NOW_TICK_MS * 2);
+    expect(seen.length).toBe(first + 2);
+    expect(seen[seen.length - 1]).toBeGreaterThan(seen[first - 1]);
+    unsub();
+    vi.advanceTimersByTime(NOW_TICK_MS * 2);
+    expect(seen.length).toBe(first + 2);
+    vi.useRealTimers();
+  });
+
+  it('an up row flips to stale once the clock passes 2x interval', () => {
+    const info = { status: 'up' as const, lastChecked: '2026-10-19T12:00:00Z' };
+    const t0 = Date.parse('2026-10-19T12:00:00Z');
+    expect(isStatusStale(info, t0 + 60_000)).toBe(false);
+    expect(isStatusStale(info, t0 + 11 * 60_000)).toBe(true);
+  });
+});

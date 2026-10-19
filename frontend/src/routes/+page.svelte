@@ -3,10 +3,11 @@
   import { isBackendOffline, backendStatus } from '$lib/stores/backendStatus';
   import { confirm } from '$lib/stores/confirmModal';
   import { toast } from '$lib/stores/toast';
-  import { loadConfig } from '$lib/stores/config';
+  import { loadConfig, migrationFailure } from '$lib/stores/config';
   import DashboardList from '$lib/components/admin/DashboardList.svelte';
   import ChangePasswordModal from '$lib/components/admin/ChangePasswordModal.svelte';
   import BackupModal from '$lib/components/admin/BackupModal.svelte';
+  import MigrationFailed from '$lib/components/MigrationFailed.svelte';
   import BackendStatus from '$lib/components/BackendStatus.svelte';
   import Button from '$lib/components/shared/Button.svelte';
   import Icon from '@iconify/svelte';
@@ -58,6 +59,10 @@
 </script>
 
 <div class="admin-container">
+  {#if $migrationFailure && !$isAuthenticated}
+    <!-- Login must stay usable; Backups needs a session. -->
+    <MigrationFailed />
+  {/if}
   {#if !$isAuthenticated}
     <div class="login-card card">
       <h1>HOPS Admin</h1>
@@ -183,9 +188,14 @@
         </div>
       </div>
 
-      <div class="admin-content" class:greyed-out={$isBackendOffline}>
-        <DashboardList />
-      </div>
+      {#if $migrationFailure}
+        <!-- Never show an empty DashboardList as if there were no dashboards. -->
+        <MigrationFailed onOpenBackups={() => showBackupModal = true} />
+      {:else}
+        <div class="admin-content" class:greyed-out={$isBackendOffline}>
+          <DashboardList />
+        </div>
+      {/if}
 
       <div class="status-section">
         <BackendStatus />

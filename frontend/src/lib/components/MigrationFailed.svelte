@@ -1,6 +1,12 @@
 <script lang="ts">
   import { migrationFailure } from '$lib/stores/config';
   import Icon from '@iconify/svelte';
+
+  interface Props {
+    /** When given (admin page), render a button that opens the backups UI instead of a link. */
+    onOpenBackups?: () => void;
+  }
+  let { onOpenBackups }: Props = $props();
 </script>
 
 <!-- Full-page notice shown instead of the app while the stored config could
@@ -17,8 +23,12 @@
     <pre class="detail">{$migrationFailure}</pre>
   {/if}
   <p>
-    The automatic startup backup holds your previous configuration. Sign in and restore it from
-    <a href="/">Admin → Backups</a>.
+    Admin → Backups holds the automatic startup backup.
+    {#if onOpenBackups}
+      <button type="button" class="open-backups" onclick={onOpenBackups}>Open Backups</button>
+    {:else}
+      Sign in and restore it from <a href="/">Admin → Backups</a>.
+    {/if}
   </p>
 </main>
 
@@ -47,6 +57,17 @@
     padding: 0.75rem;
     border-radius: 0.25rem;
     font-size: 0.85rem;
+  }
+
+  .open-backups {
+    margin-left: 0.5rem;
+    padding: 0.3rem 0.9rem;
+    border-radius: 0.25rem;
+    border: 1px solid #fecaca;
+    background: #fee2e2;
+    color: #7f1d1d;
+    font-weight: 600;
+    cursor: pointer;
   }
 
   a {

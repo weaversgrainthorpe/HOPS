@@ -4,7 +4,7 @@
 	// See scripts/generate-icon-bundle.mjs and TENETS.md #10.
 	import '$lib/icons/offline-bundle';
 	import { onMount } from 'svelte';
-	import { loadConfig, migrationFailure } from '$lib/stores/config';
+	import { loadConfig, migrationFailure, showMigrationFailedPage } from '$lib/stores/config';
 	import { page } from '$app/stores';
 	import { initAuth, mustChangePassword } from '$lib/stores/auth';
 	import { initEditModeIdleWatcher } from '$lib/stores/editModeIdleWatcher';
@@ -183,7 +183,7 @@
 
 <!-- While the config migration has failed, only the admin page ("/": login +
      Backups, the remedy) stays reachable; everything else shows the notice. -->
-{#if $migrationFailure && $page.url.pathname !== '/'}
+{#if showMigrationFailedPage($page.url.pathname, $migrationFailure)}
 	<MigrationFailed />
 {:else}
 	{@render children()}

@@ -20,7 +20,8 @@ import {
   updateConfig,
   loadConfig,
   saveConflict,
-  migrationFailure
+  migrationFailure,
+  showMigrationFailedPage
 } from './config';
 
 function dash(id: string, revision: number): Dashboard {
@@ -141,5 +142,17 @@ describe('loadConfig', () => {
     await loadConfig();
     expect(get(migrationFailure)).toBeNull();
     expect(get(config)!.dashboards).toHaveLength(2);
+  });
+});
+
+describe('showMigrationFailedPage', () => {
+  it('is true on a dashboard route when migration failed', () => {
+    expect(showMigrationFailedPage('/home', 'bad')).toBe(true);
+  });
+  it('is false on / (admin page shows its own banner)', () => {
+    expect(showMigrationFailedPage('/', 'bad')).toBe(false);
+  });
+  it('is false when there is no failure', () => {
+    expect(showMigrationFailedPage('/home', null)).toBe(false);
   });
 });

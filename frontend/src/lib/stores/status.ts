@@ -1,4 +1,4 @@
-import { writable, get } from 'svelte/store';
+import { writable, readable, get } from 'svelte/store';
 import { getStatus as apiGetStatus } from '$lib/utils/api';
 import { logError } from '$lib/utils/errors';
 
@@ -11,6 +11,17 @@ export interface StatusInfo {
   /** Set when the last status fetch failed: the values above are old data. */
   fetchError?: string;
 }
+
+/**
+ * Shared wall clock, ticking every 30s while anything subscribes, so
+ * staleness is re-evaluated even when polling has stopped or failed.
+ */
+export const NOW_TICK_MS = 30_000;
+export const now = readable(Date.now(), (set) => {
+  set(Date.now());
+  const id = setInterval(() => set(Date.now()), NOW_TICK_MS);
+  return () => clearInterval(id);
+});
 
 /** Server-side default probe interval, used when the response has none. */
 export const DEFAULT_INTERVAL_MINUTES = 5;

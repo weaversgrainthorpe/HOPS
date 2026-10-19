@@ -52,7 +52,11 @@
       ...$config,
       dashboards: [...$config.dashboards, newDashboard]
     };
-    await updateConfig(updatedConfig);
+    try {
+      await updateConfig(updatedConfig);
+    } catch {
+      return; // not saved; the store already raised a toast/banner. Keep the form as-is.
+    }
     creatingNew = false;
     newName = '';
     newPath = '';
@@ -72,7 +76,11 @@
         ...$config,
         dashboards: $config.dashboards.filter(d => d.id !== dashboard.id)
       };
-      await updateConfig(updatedConfig);
+      try {
+        await updateConfig(updatedConfig);
+      } catch {
+        // not deleted; the store already raised a toast/banner.
+      }
     }
   }
 
@@ -99,7 +107,11 @@
           : d
       )
     };
-    await updateConfig(updatedConfig);
+    try {
+      await updateConfig(updatedConfig);
+    } catch {
+      return; // not saved; keep the edit row open.
+    }
     editingId = null;
   }
 

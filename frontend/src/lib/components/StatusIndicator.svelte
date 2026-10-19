@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { statusStore, subscribeToStatus, isStatusStale, staleReason, type StatusInfo } from '$lib/stores/status';
+  import { statusStore, subscribeToStatus, isStatusStale, staleReason, now, type StatusInfo } from '$lib/stores/status';
   import { isOffline } from '$lib/stores/network';
   import { COLORS } from '$lib/constants/colors';
   import Icon from '@iconify/svelte';
@@ -34,7 +34,7 @@
     return unsub;
   });
 
-  let stale = $derived(isStatusStale(status));
+  let stale = $derived(isStatusStale(status, $now));
 
   function getStatusColor(s: StatusInfo['status']) {
     switch (s) {

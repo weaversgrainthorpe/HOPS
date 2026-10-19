@@ -42,6 +42,15 @@ export const saveConflict = writable<{ dashboardId: string } | null>(null);
 // migrate to v3 and the server refuses config-touching requests (HTTP 503).
 export const migrationFailure = writable<string | null>(null);
 
+/**
+ * True when the layout should replace the page with the migration-failed
+ * notice. The admin page ("/": login + Backups, the remedy) is exempt and
+ * shows its own persistent banner instead.
+ */
+export function showMigrationFailedPage(pathname: string, failure: string | null): boolean {
+  return failure !== null && pathname !== '/';
+}
+
 // Record a failed save where the user can see it. Conflicts raise the
 // persistent banner; a migration failure swaps in the migration-failed page.
 function noteSaveFailure(error: unknown) {
