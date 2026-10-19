@@ -132,3 +132,15 @@ describe('robustness', () => {
     expect(folderContentRowPx(0, 120, true)).toBe(folderContentRowPx(1, 120, true));
   });
 });
+
+describe('clampPlacement z validation', () => {
+  const base = { x: 0, y: 0, w: 1, h: 1 };
+  it('drops non-numeric and NaN z, truncates, and clamps', () => {
+    expect(clampPlacement({ ...base, z: '1;background:url(https://evil/x)' as any }, 12).z).toBeUndefined();
+    expect(clampPlacement({ ...base, z: NaN }, 12).z).toBeUndefined();
+    expect(clampPlacement({ ...base, z: Infinity }, 12).z).toBeUndefined();
+    expect(clampPlacement({ ...base, z: 2.7 }, 12).z).toBe(2);
+    expect(clampPlacement({ ...base, z: 1e9 }, 12).z).toBe(1000);
+    expect(clampPlacement({ ...base, z: -1e9 }, 12).z).toBe(-1000);
+  });
+});

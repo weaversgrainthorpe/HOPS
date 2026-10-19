@@ -58,7 +58,7 @@ export function clampPlacement(p: Placement, columns: number): Placement {
   const x = Math.min(Math.max(fin(p.x, 0), 0), cols - 1);
   const w = Math.min(Math.max(fin(p.w, 1), 1), cols - x);
   const out: Placement = { x, y: Math.max(fin(p.y, 0), 0), w, h: Math.max(fin(p.h, 1), 1) };
-  if (p.z !== undefined) out.z = p.z;
+  if (typeof p.z === 'number' && Number.isFinite(p.z)) out.z = Math.min(1000, Math.max(-1000, Math.trunc(p.z)));
   return out;
 }
 

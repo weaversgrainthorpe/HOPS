@@ -153,6 +153,19 @@ describe('fix round 1', () => {
   });
 });
 
+describe('z injection', () => {
+  it.each(['free', 'grid'] as const)('a malicious string z emits no injected CSS (%s)', async (layout) => {
+    const evil = '1;background:url(https://evil/x)';
+    const { dash, tab } = mk([tile('a', 'A', { x: 0, y: 0, w: 5, h: 5, z: evil })], layout, layout === 'free' ? 160 : 12);
+    const { container } = render(TabCanvas, { dashboard: dash, tab });
+    await tick();
+    const el = container.querySelector('[data-node-id="a"]') as HTMLElement;
+    expect(el.getAttribute('style')).not.toContain('evil');
+    expect(el.style.background).toBe('');
+    expect(el.style.zIndex === '' || el.style.zIndex === '0').toBe(true);
+  });
+});
+
 describe('phone stacking', () => {
   it('free tab at 700px renders stacked in reading order', async () => {
     width = 700; // scale 0.547 < 0.6
