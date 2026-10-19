@@ -205,7 +205,7 @@
                                     "type": "link",
                                     "name": "Deep 5",
                                     "url": "https://deep5.example.lan/",
-                                    "icon": "mdi:database",
+                                    "icon": "mdi:harddisk",
                                     "openMode": "newtab",
                                     "size": "medium",
                                     "order": 4,
@@ -316,7 +316,7 @@
                         "type": "link",
                         "name": "Six 5",
                         "url": "https://six5.example.lan/",
-                        "icon": "mdi:database",
+                        "icon": "mdi:harddisk",
                         "openMode": "newtab",
                         "size": "medium",
                         "order": 4,
@@ -420,7 +420,7 @@
                   "type": "link",
                   "name": "Free B",
                   "url": "https://freeb.example.lan/",
-                  "icon": "mdi:database",
+                  "icon": "mdi:harddisk",
                   "openMode": "newtab",
                   "size": "medium",
                   "order": 1,
@@ -463,8 +463,8 @@
                         "placement": {
                           "x": 0,
                           "y": 0,
-                          "w": 1,
-                          "h": 1
+                          "w": 16,
+                          "h": 10
                         }
                       }
                     ]
@@ -514,7 +514,7 @@
                     "h": 4
                   },
                   "content": {
-                    "columns": 6,
+                    "columns": 48,
                     "children": [
                       {
                         "id": "sc-mf-1",
@@ -588,7 +588,7 @@
                     "h": 3
                   },
                   "content": {
-                    "columns": 3,
+                    "columns": 6,
                     "children": [
                       {
                         "id": "sc-mg-1",

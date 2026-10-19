@@ -568,4 +568,100 @@ func TestImport_V3Showcase(t *testing.T) {
 	if !found {
 		t.Errorf("sc-dash not in v3OnlyDashboards: %v", only)
 	}
+
+	// Structure later tasks rely on.
+	tabs := dash["tabs"].([]any)
+	wantTabs := []string{"sc-tab-grid", "sc-tab-free", "sc-tab-mixed"}
+	if len(tabs) != 3 {
+		t.Fatalf("%d tabs, want 3", len(tabs))
+	}
+	for i, id := range wantTabs {
+		if tabs[i].(configdoc.Obj)["id"] != id {
+			t.Errorf("tab %d id = %v, want %s", i, tabs[i].(configdoc.Obj)["id"], id)
+		}
+	}
+	free := tabs[1].(configdoc.Obj)
+	if free["layout"] != "free" || free["designWidth"] != float64(1280) {
+		t.Errorf("free tab layout/designWidth = %v/%v", free["layout"], free["designWidth"])
+	}
+
+	// Depth 3 under the Grid tab, iframe tile inside the collapsed level-3 folder.
+	byID := map[string]configdoc.Obj{}
+	configdoc.Walk(configdoc.Obj{"dashboards": []any{dash}}, func(_, _ configdoc.Obj, _ []configdoc.Obj, n configdoc.Obj) bool {
+		byID[n["id"].(string)] = n
+		return true
+	})
+	childIDs := func(f configdoc.Obj) []string {
+		var out []string
+		for _, ch := range f["content"].(configdoc.Obj)["children"].([]any) {
+			out = append(out, ch.(configdoc.Obj)["id"].(string))
+		}
+		return out
+	}
+	l1, l2, l3 := byID["sc-f-l1"], byID["sc-f-l2"], byID["sc-f-l3"]
+	if l1 == nil || l2 == nil || l3 == nil {
+		t.Fatal("missing nested folders sc-f-l1/l2/l3")
+	}
+	if got := childIDs(l1); len(got) != 1 || got[0] != "sc-f-l2" {
+		t.Errorf("l1 children = %v", got)
+	}
+	if got := childIDs(l2); len(got) != 1 || got[0] != "sc-f-l3" {
+		t.Errorf("l2 children = %v", got)
+	}
+	if l3["display"] != "collapsed" {
+		t.Errorf("l3 display = %v", l3["display"])
+	}
+	iframeID := ""
+	for _, id := range childIDs(l3) {
+		if byID[id]["openMode"] == "iframe" {
+			iframeID = id
+		}
+	}
+	if iframeID == "" {
+		t.Error("no iframe tile under the collapsed level-3 folder")
+	}
+
+	// Every icon is in the offline bundle.
+	bundle, err := os.ReadFile("../../../frontend/src/lib/icons/offline-bundle.ts")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for id, n := range byID {
+		icon, _ := n["icon"].(string)
+		if icon == "" {
+			continue
+		}
+		name := strings.TrimPrefix(icon, "mdi:")
+		if name == icon || !strings.Contains(string(bundle), `"`+name+`":{"width"`) {
+			t.Errorf("%s: icon %q is not in the offline bundle", id, icon)
+		}
+	}
+
+	// Expanded grid folders: content columns == placement w. (Free tab and
+	// free folders use 8 px units, a different rule.)
+	for _, id := range []string{"sc-tab-grid", "sc-tab-mixed"} {
+		for _, tb := range tabs {
+			if tb.(configdoc.Obj)["id"] != id {
+				continue
+			}
+			var visit func(children []any)
+			visit = func(children []any) {
+				for _, ch := range children {
+					n := ch.(configdoc.Obj)
+					if n["kind"] != "folder" {
+						continue
+					}
+					content := n["content"].(configdoc.Obj)
+					if n["display"] == "expanded" && n["layout"] != "free" {
+						w := n["placement"].(configdoc.Obj)["w"]
+						if content["columns"] != w {
+							t.Errorf("%v: columns %v != w %v", n["id"], content["columns"], w)
+						}
+					}
+					visit(content["children"].([]any))
+				}
+			}
+			visit(tb.(configdoc.Obj)["root"].(configdoc.Obj)["children"].([]any))
+		}
+	}
 }
