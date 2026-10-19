@@ -1,7 +1,9 @@
 package configdoc
 
 import (
+	"bytes"
 	"database/sql"
+	"log/slog"
 	"strings"
 	"testing"
 
@@ -102,5 +104,47 @@ func TestValidateOverrides(t *testing.T) {
 		"defaultLayout": "free", "editIdleTimeoutMinutes": nil,
 	}); err != nil {
 		t.Errorf("valid overrides rejected: %v", err)
+	}
+}
+
+func captureLogs(t *testing.T) *bytes.Buffer {
+	t.Helper()
+	var buf bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+	return &buf
+}
+
+func TestResolve_WarnsOnBadOverrides(t *testing.T) {
+	svc := newSvc(t)
+	cases := []struct {
+		name string
+		dash Obj
+		want []string
+	}{
+		{"wrong type", Obj{"id": "dash-a", "settings": Obj{"statusCheckIntervalMinutes": "soon"}},
+			[]string{"level=WARN", "dash-a", "statusCheckIntervalMinutes"}},
+		{"out of range", Obj{"id": "dash-b", "settings": Obj{"statusCheckTimeoutSeconds": float64(0)}},
+			[]string{"level=WARN", "dash-b", "statusCheckTimeoutSeconds"}},
+		{"non-object settings", Obj{"id": "dash-c", "settings": "oops"},
+			[]string{"level=WARN", "dash-c", "not an object"}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			buf := captureLogs(t)
+			Resolve(svc, c.dash)
+			for _, w := range c.want {
+				if !strings.Contains(buf.String(), w) {
+					t.Errorf("log %q missing %q", buf.String(), w)
+				}
+			}
+		})
+	}
+	buf := captureLogs(t)
+	Resolve(svc, Obj{"id": "ok", "settings": Obj{"statusCheckIntervalMinutes": nil}})
+	Resolve(svc, Obj{"id": "ok"})
+	if buf.Len() != 0 {
+		t.Errorf("no warning expected for valid/absent settings, got %q", buf.String())
 	}
 }

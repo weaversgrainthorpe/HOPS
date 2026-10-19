@@ -78,11 +78,16 @@ func overrideString(svc *settings.Service, jsonKey string, v any) (string, bool)
 // stored override that is the wrong type or out of range is unexpected; it
 // falls back to the global and is logged at WARN (never silently coerced).
 func Resolve(svc *settings.Service, dash Obj) Effective {
-	var ov Obj
-	if m, ok := dash["settings"].(Obj); ok {
-		ov = m
-	}
 	id, _ := dash["id"].(string)
+	var ov Obj
+	if raw := dash["settings"]; raw != nil {
+		if m, ok := raw.(Obj); ok {
+			ov = m
+		} else {
+			slog.Warn("dashboard settings is not an object; using globals for every key",
+				"component", "configdoc", "dashboard", id, "type", fmt.Sprintf("%T", raw))
+		}
+	}
 
 	// pick returns the override as a validated string, or the global value.
 	pick := func(jsonKey string) string {
