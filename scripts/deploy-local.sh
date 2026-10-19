@@ -24,6 +24,29 @@ REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
 cd "$REPO_DIR"
 
+# --- Arguments --------------------------------------------------------------
+# --dev-only: build, then update ONLY the dev box (source mirror + hops-dev).
+# Never touches PROD_HOST. This is the only mode allowed off the main branch.
+DEV_ONLY=0
+for arg in "$@"; do
+  case "$arg" in
+    --dev-only) DEV_ONLY=1 ;;
+    *) echo "Usage: $0 [--dev-only]" >&2; exit 2 ;;
+  esac
+done
+
+if [[ "$DEV_ONLY" == 1 && -z "$MIRROR_HOST" ]]; then
+  echo "✗ --dev-only needs MIRROR_HOST set"
+  exit 1
+fi
+
+# Prod guard: only main may be deployed to prod. v3 work never goes to prod.
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+if [[ "$DEV_ONLY" == 0 && "$BRANCH" != "main" ]]; then
+  echo "✗ Refusing to deploy branch '$BRANCH' to prod. Use --dev-only (v3 work never goes to prod)."
+  exit 1
+fi
+
 "$REPO_DIR/scripts/check-versions.sh"
 
 # Frontend first: it gets embedded into the binary, so it must be built and
@@ -42,6 +65,7 @@ echo "▸ Building backend (linux/amd64, UI embedded)"
 VERSION=$(cat VERSION)
 echo "▸ Local build version: $VERSION"
 
+if [[ "$DEV_ONLY" == 0 ]]; then
 echo "▸ Currently running on $PROD_HOST:"
 CURRENT=$(ssh "$PROD_HOST" "curl -s http://localhost:8080/api/health" | python3 -c "import json,sys; print(json.load(sys.stdin)['version'])")
 echo "  $CURRENT"
@@ -76,6 +100,7 @@ else
   echo "✗ Version mismatch after deploy. Expected $VERSION, got $DEPLOYED"
   exit 1
 fi
+fi  # end prod-only section (skipped by --dev-only)
 
 # --- Dev box (172.16.0.50 by default): source mirror + hops-dev service -----
 # Source sync excludes generated/runtime/sensitive paths — notably /data/,

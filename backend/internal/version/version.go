@@ -5,17 +5,17 @@ package version
 // Go constant is what the health endpoint and About modal surface at
 // runtime.
 const (
-	Major = 2
-	Minor = 2
-	Patch = 1
+	Major = 3
+	Minor = 0
+	Patch = 0
 )
 
 // String returns the version as a semantic version string
 func String() string {
-	return "2.2.1"
+	return "3.0.0"
 }
 
 // Full returns the full version string with build info
 func Full() string {
-	return "HOPS v2.2.1"
+	return "HOPS v3.0.0"
 }
