@@ -2,6 +2,7 @@
   import Icon from '@iconify/svelte';
   import Modal from '$lib/components/shared/Modal.svelte';
   import { importConfig } from '$lib/utils/api';
+  import { importProblems } from '$lib/utils/importResult';
   import { toast } from '$lib/stores/toast';
 
   interface Props {
@@ -13,6 +14,9 @@
   let importing = $state(false);
   let error = $state<string | null>(null);
   let success = $state<string | null>(null);
+  // Set when the import was saved but part of it failed: shown as a warning
+  // that stays until the user closes the dialog.
+  let partial = $state<{ message: string; problems: string[] } | null>(null);
   let fileInput: HTMLInputElement;
   let selectedFile = $state<File | null>(null);
   let autoMatchIcons = $state(true);
@@ -32,9 +36,18 @@
     importing = true;
     error = null;
     success = null;
+    partial = null;
 
     try {
       const result = await importConfig(selectedFile, { autoMatchIcons });
+      const problems = importProblems(result);
+      if (problems.length > 0) {
+        // Saved, but not completely: never a green box that closes itself.
+        partial = { message: result.message || 'Configuration imported with problems.', problems };
+        toast.warning('Imported with problems \u2014 see the import dialog');
+        onImportSuccess?.(); // show what was saved
+        return;
+      }
       success = result.message || 'Configuration imported successfully!';
       toast.success('Configuration imported');
 
@@ -70,8 +83,23 @@
     </div>
   {/if}
 
+  {#if partial}
+    <div class="alert alert-warning" role="alert" data-testid="import-warning">
+      <Icon icon="mdi:alert" width="24" />
+      <div>
+        <p class="alert-title">Imported, but not everything succeeded</p>
+        <p>{partial.message}</p>
+        <ul>
+          {#each partial.problems as problem, i (i)}
+            <li>{problem}</li>
+          {/each}
+        </ul>
+      </div>
+    </div>
+  {/if}
+
   {#if success}
-    <div class="alert alert-success">
+    <div class="alert alert-success" data-testid="import-success">
       <Icon icon="mdi:check-circle" width="24" />
       <span>{success}</span>
     </div>
@@ -125,7 +153,7 @@
   {#snippet footer()}
     <div class="modal-actions">
       <button type="button" class="btn-secondary" onclick={onClose}>
-        Cancel
+        {partial ? 'Close' : 'Cancel'}
       </button>
       <button
         class="btn-primary"
@@ -186,6 +214,32 @@
     background: color-mix(in srgb, var(--color-error-dark) 10%, transparent);
     color: var(--color-error-dark);
     border: 1px solid color-mix(in srgb, var(--color-error-dark) 20%, transparent);
+  }
+
+  .alert-warning {
+    align-items: flex-start;
+    background: color-mix(in srgb, var(--color-warning) 12%, transparent);
+    color: var(--text-primary);
+    border: 1px solid var(--color-warning);
+  }
+
+  .alert-warning :global(svg) {
+    color: var(--color-warning);
+    flex-shrink: 0;
+  }
+
+  .alert-warning p {
+    margin: 0 0 0.25rem;
+  }
+
+  .alert-warning .alert-title {
+    font-weight: 600;
+  }
+
+  .alert-warning ul {
+    margin: 0.25rem 0 0;
+    padding-left: 1.25rem;
+    word-break: break-word;
   }
 
   .alert-success {

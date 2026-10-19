@@ -5,12 +5,11 @@
   import { focusTrap } from '$lib/utils/focusTrap';
   import {
     getDashboardSettings,
-    saveDashboardSettings,
     ConflictError,
     MigrationFailedError,
     type EffectiveDashboardSettings
   } from '$lib/utils/api';
-  import { applyDashboardSettings, migrationFailure } from '$lib/stores/config';
+  import { saveDashboardSettingsChanges, migrationFailure } from '$lib/stores/config';
 
   interface Props {
     dashboardId: string;
@@ -39,7 +38,6 @@
 
   let original = $state<DashboardSettings | null>(null);
   let effective = $state<EffectiveDashboardSettings | null>(null);
-  let revision = $state(0);
   let enabled = $state<Record<string, boolean>>({});
   let values = $state<Record<string, Value>>({});
 
@@ -56,7 +54,6 @@
       const resp = await getDashboardSettings(dashboardId);
       original = resp.overrides;
       effective = resp.effective;
-      revision = resp.revision;
       const en: Record<string, boolean> = {};
       const vals: Record<string, Value> = {};
       for (const r of ROWS) {
@@ -123,17 +120,17 @@
     const changes = buildChanges();
     saving = true;
     try {
+      // Revision-checked against the store's revision (not the one fetched
+      // above), so a stale page gets a 409 instead of being fast-forwarded.
+      // The store raises the conflict banner / migration page itself.
       if (Object.keys(changes).length > 0) {
-        const resp = await saveDashboardSettings(dashboardId, changes, revision);
-        const merged = { ...original, ...changes } as DashboardSettings;
-        applyDashboardSettings(dashboardId, merged, resp.revision);
+        await saveDashboardSettingsChanges(dashboardId, changes);
       }
       onClose();
     } catch (e) {
       if (e instanceof ConflictError) {
         saveError = 'Not saved — this dashboard was changed somewhere else. Close this dialog and reload to see the latest settings.';
       } else if (e instanceof MigrationFailedError) {
-        migrationFailure.set(e.detail);
         saveError = 'Not saved — the configuration failed to migrate. ' + e.message;
       } else {
         saveError = e instanceof Error ? e.message : 'Failed to save settings';

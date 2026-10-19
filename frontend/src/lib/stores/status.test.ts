@@ -24,6 +24,22 @@ describe('fetchStatus', () => {
     expect(isStatusStale(r)).toBe(true);
   });
 
+  it('keeps the server-reported check interval so a 60-minute dashboard is not falsely stale (I3)', async () => {
+    vi.mocked(apiGetStatus).mockResolvedValue({ status: 'up', lastChecked: '2026-10-19T11:00:00Z', intervalMinutes: 60 });
+    const r = await fetchStatus('e1');
+    expect(r.intervalMinutes).toBe(60);
+    // 40 minutes old: stale against the 5-minute default, fresh against 60.
+    expect(isStatusStale(r, Date.parse('2026-10-19T11:40:00Z'))).toBe(false);
+    expect(isStatusStale(r, Date.parse('2026-10-19T13:01:00Z'))).toBe(true);
+  });
+
+  it('ignores a missing or nonsensical interval and falls back to the default', async () => {
+    for (const bad of [undefined, 0, -3, 'x']) {
+      vi.mocked(apiGetStatus).mockResolvedValue({ status: 'up', lastChecked: 'x', intervalMinutes: bad });
+      expect((await fetchStatus('e1')).intervalMinutes).toBeUndefined();
+    }
+  });
+
   it('a failed first fetch yields unknown + fetchError, not loading', async () => {
     vi.mocked(apiGetStatus).mockRejectedValue(new Error('nope'));
     const r = await fetchStatus('e1', { status: 'loading' });

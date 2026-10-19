@@ -1,4 +1,5 @@
 import type { Config, Dashboard, DashboardSettings } from '$lib/types';
+import type { ImportResult } from './importResult';
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 
@@ -247,7 +248,7 @@ export async function saveDashboard(
   id: string,
   dashboard: Dashboard,
   revision: number
-): Promise<{ revision: number }> {
+): Promise<{ revision: number; warning?: string }> {
   const resp = await fetchAPI(`/dashboards/${encodeURIComponent(id)}`, {
     method: 'PUT',
     body: JSON.stringify({ dashboard, revision }),
@@ -255,7 +256,10 @@ export async function saveDashboard(
   if (!resp || typeof resp.revision !== 'number') {
     throw new Error('The server did not confirm the new dashboard revision.');
   }
-  return { revision: resp.revision };
+  // `warning`: the pre-update backup failed but the save went through.
+  return typeof resp.warning === 'string' && resp.warning
+    ? { revision: resp.revision, warning: resp.warning }
+    : { revision: resp.revision };
 }
 
 /** Resolved per-dashboard settings (what actually applies). */
@@ -319,7 +323,7 @@ export async function exportConfig(format: 'json' | 'yaml' = 'json', dashboardId
   return response.blob();
 }
 
-export async function importConfig(file: File, options?: { autoMatchIcons?: boolean }): Promise<{ success: boolean; message: string }> {
+export async function importConfig(file: File, options?: { autoMatchIcons?: boolean }): Promise<ImportResult> {
   const formData = new FormData();
   formData.append('file', file);
   if (options?.autoMatchIcons) {

@@ -9,7 +9,8 @@ vi.mock('$lib/utils/api', async () => {
     MigrationFailedError: actual.MigrationFailedError,
     getConfig: vi.fn(),
     updateConfig: vi.fn(),
-    saveDashboard: vi.fn()
+    saveDashboard: vi.fn(),
+    saveDashboardSettings: vi.fn()
   };
 });
 
@@ -21,8 +22,10 @@ import {
   loadConfig,
   saveConflict,
   migrationFailure,
-  showMigrationFailedPage
+  showMigrationFailedPage,
+  saveDashboardSettingsChanges
 } from './config';
+import { toast } from './toast';
 
 function dash(id: string, revision: number): Dashboard {
   return { id, name: id, path: `/${id}`, tabs: [], order: 0, revision };
@@ -154,5 +157,86 @@ describe('showMigrationFailedPage', () => {
   });
   it('is false when there is no failure', () => {
     expect(showMigrationFailedPage('/home', null)).toBe(false);
+  });
+});
+
+// A tiny in-memory server holding one revision per dashboard, enforcing the
+// same optimistic-concurrency rule as the backend (409 unless the sent
+// revision equals the stored one).
+function fakeServer(revisions: Record<string, number>) {
+  const check = (id: string, rev: number) => {
+    if (rev !== revisions[id]) throw new api.ConflictError(id, revisions[id]);
+    revisions[id] += 1;
+    return { revision: revisions[id] };
+  };
+  vi.mocked(api.saveDashboard).mockImplementation(async (id, _d, rev) => check(id, rev));
+  vi.mocked(api.saveDashboardSettings).mockImplementation(async (id, _o, rev) => check(id, rev));
+  return revisions;
+}
+
+describe('saveDashboardSettingsChanges (C1)', () => {
+  it('sends the store revision and applies the result on success', async () => {
+    fakeServer({ a: 3, b: 7 });
+    await saveDashboardSettingsChanges('a', { editIdleTimeoutMinutes: 30 });
+    expect(vi.mocked(api.saveDashboardSettings).mock.calls[0]).toEqual(['a', { editIdleTimeoutMinutes: 30 }, 3]);
+    const cfg = get(config)!;
+    expect(cfg.dashboards[0].revision).toBe(4);
+    expect(cfg.dashboardRevisions!.a).toBe(4);
+    expect(cfg.dashboards[0].settings?.editIdleTimeoutMinutes).toBe(30);
+  });
+
+  it('a stale store cannot be fast-forwarded: settings save and the next tile edit both conflict', async () => {
+    // Store holds a at 3; another browser already saved a (server at 4).
+    fakeServer({ a: 4, b: 7 });
+    const before = JSON.stringify(get(config));
+    await expect(saveDashboardSettingsChanges('a', { editIdleTimeoutMinutes: 30 })).rejects.toBeInstanceOf(
+      api.ConflictError
+    );
+    expect(vi.mocked(api.saveDashboardSettings).mock.calls[0][2]).toBe(3);
+    expect(get(saveConflict)).toEqual({ dashboardId: 'a' });
+    expect(JSON.stringify(get(config))).toBe(before);
+
+    // The stale store still says 3, so the next tile edit is refused too
+    // instead of overwriting the other browser's change.
+    await expect(mutateDashboard('a', (d) => { d.name = 'stale edit'; })).rejects.toBeInstanceOf(api.ConflictError);
+    expect(vi.mocked(api.saveDashboard).mock.calls[0][2]).toBe(3);
+    expect(JSON.stringify(get(config))).toBe(before);
+  });
+
+  it('routes a migration failure to migrationFailure and leaves the store alone', async () => {
+    vi.mocked(api.saveDashboardSettings).mockRejectedValue(new api.MigrationFailedError('boom'));
+    const before = JSON.stringify(get(config));
+    await expect(saveDashboardSettingsChanges('a', { statusChecksEnabled: false })).rejects.toThrow('boom');
+    expect(get(migrationFailure)).toBe('boom');
+    expect(JSON.stringify(get(config))).toBe(before);
+  });
+});
+
+describe('saveOneDashboard backup warning (I4)', () => {
+  it('surfaces the server warning when the pre-update backup failed', async () => {
+    const warn = vi.spyOn(toast, 'warning');
+    vi.mocked(api.saveDashboard).mockResolvedValue({ revision: 4, warning: 'Pre-update backup failed: disk full. Config saved anyway.' });
+    await mutateDashboard('a', (d) => { d.name = 'x'; });
+    expect(warn).toHaveBeenCalledWith('Pre-update backup failed: disk full. Config saved anyway.');
+    expect(get(config)!.dashboards[0].revision).toBe(4);
+    warn.mockRestore();
+  });
+});
+
+describe('save failure messages (I5)', () => {
+  it('a rejected tile save shows the server reason, not just "failed"', async () => {
+    const err = vi.spyOn(toast, 'error');
+    vi.mocked(api.saveDashboard).mockRejectedValue(new Error('Invalid config: duplicate id "t1"'));
+    await expect(mutateDashboard('a', (d) => { d.name = 'x'; })).rejects.toThrow();
+    expect(err).toHaveBeenCalledWith('Failed to save changes: Invalid config: duplicate id "t1"');
+    err.mockRestore();
+  });
+
+  it('a rejected whole-config save shows the server reason', async () => {
+    const err = vi.spyOn(toast, 'error');
+    vi.mocked(api.updateConfig).mockRejectedValue(new Error('Invalid config: dashboard id is empty'));
+    await expect(updateConfig(makeConfig(), false)).rejects.toThrow();
+    expect(err).toHaveBeenCalledWith('Failed to save changes: Invalid config: dashboard id is empty');
+    err.mockRestore();
   });
 });

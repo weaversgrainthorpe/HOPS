@@ -68,7 +68,10 @@ export async function fetchStatus(entryId: string, previous?: StatusInfo): Promi
       status: data.status || 'unknown',
       responseTime: data.responseTime,
       lastChecked: data.lastChecked,
-      intervalMinutes: data.intervalMinutes
+      // The tile's resolved probe interval from the server; anything that
+      // isn't a positive number falls back to the default in isStatusStale.
+      intervalMinutes:
+        typeof data.intervalMinutes === 'number' && data.intervalMinutes > 0 ? data.intervalMinutes : undefined
     };
   } catch (error) {
     logError('Status fetch', error);

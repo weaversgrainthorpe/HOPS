@@ -4,6 +4,7 @@ import {
   getConfig,
   updateConfig as apiUpdateConfig,
   saveDashboard,
+  saveDashboardSettings,
   ConflictError,
   MigrationFailedError
 } from '$lib/utils/api';
@@ -66,6 +67,12 @@ function noteSaveFailure(error: unknown) {
   }
 }
 
+// Toast text for a failed save: the server's reason when there is one (e.g.
+// "Invalid config: ..."), so the user can see why nothing was saved.
+function saveFailedMessage(error: unknown): string {
+  return error instanceof Error && error.message ? `Failed to save changes: ${error.message}` : 'Failed to save changes';
+}
+
 // Load configuration from API
 export async function loadConfig() {
   configLoading.set(true);
@@ -126,7 +133,7 @@ export async function updateConfig(newConfig: Config, showToast = true) {
     } else if (error instanceof ConflictError) {
       toast.error('Not saved \u2014 changed somewhere else');
     } else {
-      toast.error('Failed to save changes');
+      toast.error(saveFailedMessage(error));
     }
     throw error;
   }
@@ -144,7 +151,7 @@ async function saveOneDashboard(updated: Dashboard): Promise<void> {
   if (index === -1) {
     throw new Error('Dashboard not found');
   }
-  const revision = currentConfig.dashboards[index].revision ?? currentConfig.dashboardRevisions?.[updated.id];
+  const revision = storeRevision(currentConfig, updated.id);
   if (revision === undefined) {
     throw new Error('Dashboard has no known revision \u2014 reload and try again');
   }
@@ -162,6 +169,11 @@ async function saveOneDashboard(updated: Dashboard): Promise<void> {
       dashboardRevisions: { ...(currentConfig.dashboardRevisions ?? {}), [updated.id]: resp.revision }
     });
     toast.success('Changes saved');
+    // The save went through but its pre-update backup failed: say so, so
+    // the admin doesn't trust a rollback point that doesn't exist.
+    if (resp.warning) {
+      toast.warning(resp.warning);
+    }
   } catch (error) {
     logError('Dashboard save', error);
     noteSaveFailure(error);
@@ -170,15 +182,58 @@ async function saveOneDashboard(updated: Dashboard): Promise<void> {
     } else if (error instanceof ConflictError) {
       toast.error('Not saved \u2014 changed somewhere else');
     } else {
-      toast.error('Failed to save changes');
+      toast.error(saveFailedMessage(error));
     }
     throw error;
   }
 }
 
+// Revision the store holds for a dashboard (what the client last saw).
+function storeRevision(cfg: Config, id: string): number | undefined {
+  const d = cfg.dashboards.find((x) => x.id === id);
+  return d?.revision ?? cfg.dashboardRevisions?.[id];
+}
+
+/**
+ * Save per-dashboard settings overrides (absent key = unchanged, null = reset
+ * to inherit), revision-checked against the revision THIS STORE holds, not a
+ * freshly fetched one: if the store is stale the server answers 409, so a
+ * settings save can never fast-forward a stale store past someone else's
+ * change. Runs in the same save queue as mutateDashboard. On success the
+ * store takes the merged overrides and new revision; on failure it is left
+ * untouched and the failure is recorded (conflict banner / migration page)
+ * before being rethrown for the caller to show inline.
+ */
+export async function saveDashboardSettingsChanges(
+  id: string,
+  changes: Partial<Record<keyof DashboardSettings, string | number | boolean | null>>
+): Promise<void> {
+  return enqueueSave(async () => {
+    const cfg = get(config);
+    if (!cfg) throw new Error('No configuration loaded');
+    const dash = cfg.dashboards.find((d) => d.id === id);
+    if (!dash) throw new Error('Dashboard not found');
+    const revision = storeRevision(cfg, id);
+    if (revision === undefined) {
+      throw new Error('Dashboard has no known revision \u2014 reload and try again');
+    }
+    try {
+      const resp = await saveDashboardSettings(id, changes, revision);
+      const merged = { ...(dash.settings ?? {}), ...changes } as DashboardSettings;
+      applyDashboardSettings(id, merged, resp.revision);
+    } catch (error) {
+      logError('Dashboard settings save', error);
+      noteSaveFailure(error);
+      throw error;
+    }
+  });
+}
+
 // After a confirmed per-dashboard settings save: take the new revision and
 // merged overrides into the store so the next dashboard save does not
-// spuriously conflict (and so the UI reflects what the server holds).
+// spuriously conflict (and so the UI reflects what the server holds). Only
+// call it with a revision the server returned for a save that was checked
+// against this store's own revision (see saveDashboardSettingsChanges).
 export function applyDashboardSettings(id: string, settings: DashboardSettings, revision: number): void {
   const cfg = get(config);
   if (!cfg) return;

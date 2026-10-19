@@ -14,7 +14,7 @@ vi.mock('$lib/utils/api', async () => {
 
 import * as api from '$lib/utils/api';
 import DashboardSettingsModal from './DashboardSettingsModal.svelte';
-import { config, migrationFailure } from '$lib/stores/config';
+import { config, migrationFailure, saveConflict } from '$lib/stores/config';
 
 const allNull = {
 	statusChecksEnabled: null,
@@ -41,6 +41,7 @@ function serverSettings(overrides = {}, eff = effective) {
 beforeEach(() => {
 	vi.clearAllMocks();
 	migrationFailure.set(null);
+	saveConflict.set(null);
 	config.set({
 		dashboards: [{ id: 'd1', name: 'D', path: '/d', tabs: [], order: 0, revision: 4 }],
 		theme: { mode: 'auto' },
@@ -129,6 +130,22 @@ describe('DashboardSettingsModal', () => {
 		expect(await screen.findByRole('alert')).toHaveTextContent(/changed somewhere else/i);
 		expect(onClose).not.toHaveBeenCalled();
 		expect(get(config)!.dashboards[0].revision).toBe(4);
+	});
+
+	it('sends the store revision, not the freshly fetched one (C1)', async () => {
+		// The page's store is at 4; another browser has since moved the server to 6.
+		vi.mocked(api.getDashboardSettings).mockResolvedValue({ ...serverSettings(), revision: 6 });
+		vi.mocked(api.saveDashboardSettings).mockRejectedValue(new api.ConflictError('d1', 6));
+		const onClose = vi.fn();
+		render(DashboardSettingsModal, { props: { dashboardId: 'd1', onClose } });
+		await screen.findByText('Check timeout (seconds)');
+		await fireEvent.click(screen.getByLabelText('Override for this dashboard: Edit mode idle timeout (minutes)'));
+		await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+		expect(await screen.findByRole('alert')).toHaveTextContent(/changed somewhere else/i);
+		expect(vi.mocked(api.saveDashboardSettings).mock.calls[0][2]).toBe(4);
+		expect(get(saveConflict)).toEqual({ dashboardId: 'd1' });
+		expect(get(config)!.dashboards[0].revision).toBe(4);
+		expect(onClose).not.toHaveBeenCalled();
 	});
 
 	it('shows the server message on a 400', async () => {
