@@ -1,7 +1,8 @@
 import { get } from 'svelte/store';
 import { toast } from './toast';
 import { editMode } from './editMode';
-import { listSettings } from '$lib/utils/api';
+import { listSettings, getDashboardSettings } from '$lib/utils/api';
+import { currentDashboard } from './config';
 
 // Edit-mode idle timeout.
 //
@@ -54,7 +55,12 @@ function onActivity(): void {
   if (get(editMode)) armIdleTimer();
 }
 
-async function refreshTimeoutFromSettings(): Promise<void> {
+/** Current idle timeout in ms (exposed for tests). */
+export function getIdleTimeoutMs(): number {
+  return idleTimeoutMs;
+}
+
+async function refreshFromGlobalSetting(): Promise<void> {
   try {
     const { settings: list } = await listSettings();
     const def = list.find((s) => s.key === 'editmode.idle_timeout_minutes');
@@ -67,6 +73,27 @@ async function refreshTimeoutFromSettings(): Promise<void> {
     // already a sane 15 min so unauthenticated callers still get reasonable
     // behaviour if they somehow flip edit mode on.
   }
+}
+
+// The timeout is per dashboard (effective = override or inherited global).
+// With no current dashboard, or if the per-dashboard lookup fails, fall back
+// to the global setting; a failure is warned about, not silently swallowed.
+export async function refreshTimeoutFromSettings(): Promise<void> {
+  const dash = get(currentDashboard);
+  if (dash) {
+    try {
+      const resp = await getDashboardSettings(dash.id);
+      const minutes = Number(resp.effective.editIdleTimeoutMinutes);
+      if (Number.isFinite(minutes) && minutes >= 0) {
+        idleTimeoutMs = minutes * 60 * 1000;
+        return;
+      }
+      console.warn('Dashboard idle timeout was not a valid number; using the global setting');
+    } catch (e) {
+      console.warn('Could not load dashboard settings for the edit-mode idle timeout; using the global setting', e);
+    }
+  }
+  await refreshFromGlobalSetting();
 }
 
 /**

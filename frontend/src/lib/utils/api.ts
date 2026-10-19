@@ -1,4 +1,4 @@
-import type { Config, Dashboard } from '$lib/types';
+import type { Config, Dashboard, DashboardSettings } from '$lib/types';
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 
@@ -254,6 +254,50 @@ export async function saveDashboard(
   });
   if (!resp || typeof resp.revision !== 'number') {
     throw new Error('The server did not confirm the new dashboard revision.');
+  }
+  return { revision: resp.revision };
+}
+
+/** Resolved per-dashboard settings (what actually applies). */
+export interface EffectiveDashboardSettings {
+  statusChecksEnabled: boolean;
+  statusCheckIntervalMinutes: number;
+  statusCheckTimeoutSeconds: number;
+  editIdleTimeoutMinutes: number;
+  animatedFolderBackgrounds: boolean;
+  defaultLayout: string;
+}
+
+export interface DashboardSettingsResponse {
+  overrides: DashboardSettings;
+  effective: EffectiveDashboardSettings;
+  revision: number;
+}
+
+/** GET /api/dashboards/{id}/settings: overrides (null = inherit) + effective values. */
+export async function getDashboardSettings(id: string): Promise<DashboardSettingsResponse> {
+  const resp = await fetchAPI(`/dashboards/${encodeURIComponent(id)}/settings`);
+  if (!resp || typeof resp.overrides !== 'object' || typeof resp.effective !== 'object' || typeof resp.revision !== 'number') {
+    throw new Error('The server returned an unexpected settings response.');
+  }
+  return resp as DashboardSettingsResponse;
+}
+
+/**
+ * PUT /api/dashboards/{id}/settings. Merge semantics: absent key = unchanged,
+ * explicit null = reset to inherit.
+ */
+export async function saveDashboardSettings(
+  id: string,
+  overrides: Partial<Record<keyof DashboardSettings, string | number | boolean | null>>,
+  revision: number
+): Promise<{ revision: number }> {
+  const resp = await fetchAPI(`/dashboards/${encodeURIComponent(id)}/settings`, {
+    method: 'PUT',
+    body: JSON.stringify({ overrides, revision }),
+  });
+  if (!resp || typeof resp.revision !== 'number') {
+    throw new Error('The server did not confirm the new settings revision.');
   }
   return { revision: resp.revision };
 }

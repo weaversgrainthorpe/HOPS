@@ -12,6 +12,7 @@
   import { initEasterEggs, destroyEasterEggs, partyModeActive } from '$lib/stores/easterEggs';
   import TabEditModal from './admin/TabEditModal.svelte';
   import HeaderConfigModal from './admin/HeaderConfigModal.svelte';
+  import DashboardSettingsModal from './admin/DashboardSettingsModal.svelte';
   import BackgroundConfigModal from './admin/BackgroundConfigModal.svelte';
   import Icon from '@iconify/svelte';
   import { dndzone } from 'svelte-dnd-action';
@@ -25,6 +26,7 @@
   let editingTabIndex = $state<number | null>(null);
   let showAddTabModal = $state(false);
   let showHeaderConfig = $state(false);
+  let showDashboardSettings = $state(false);
   let showBackgroundConfig = $state(false);
   let draggedTabs = $state<Tab[]>([]);
   let focusedGroupId = $state<string | null>(null); // Track which group has focus for paste
@@ -644,6 +646,10 @@
           <Icon icon="mdi:tune" width="20" />
           Header
         </button>
+        <button class="header-config-btn" onclick={() => showDashboardSettings = true} title="Dashboard settings">
+          <Icon icon="mdi:cog-outline" width="20" />
+          Settings
+        </button>
       </div>
     {/if}
 
@@ -824,6 +830,10 @@
     onSave={handleUpdateHeader}
     onCancel={() => showHeaderConfig = false}
   />
+{/if}
+
+{#if showDashboardSettings}
+  <DashboardSettingsModal dashboardId={dashboard.id} onClose={() => showDashboardSettings = false} />
 {/if}
 
 {#if showBackgroundConfig}

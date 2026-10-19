@@ -1,5 +1,5 @@
 import { writable, derived, get } from 'svelte/store';
-import type { Config, Dashboard } from '$lib/types';
+import type { Config, Dashboard, DashboardSettings } from '$lib/types';
 import {
   getConfig,
   updateConfig as apiUpdateConfig,
@@ -169,6 +169,19 @@ async function saveOneDashboard(updated: Dashboard): Promise<void> {
     }
     throw error;
   }
+}
+
+// After a confirmed per-dashboard settings save: take the new revision and
+// merged overrides into the store so the next dashboard save does not
+// spuriously conflict (and so the UI reflects what the server holds).
+export function applyDashboardSettings(id: string, settings: DashboardSettings, revision: number): void {
+  const cfg = get(config);
+  if (!cfg) return;
+  config.set({
+    ...cfg,
+    dashboards: cfg.dashboards.map((d) => (d.id === id ? { ...d, settings, revision } : d)),
+    dashboardRevisions: { ...(cfg.dashboardRevisions ?? {}), [id]: revision }
+  });
 }
 
 // Helper to find a dashboard by path or ID
