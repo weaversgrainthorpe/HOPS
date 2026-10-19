@@ -7,7 +7,7 @@ const stack = writable<string[]>([]);
 export const overlayStack = readonly(stack);
 
 export function openFolder(id: string): void {
-  stack.update((s) => [...s, id]);
+  stack.update((s) => (s.includes(id) ? s : [...s, id]));
 }
 
 export function closeTop(): void {
@@ -37,12 +37,13 @@ function collectIds(c: Container | undefined, out: Set<string>): void {
 /**
  * Drop open ids whose folder no longer exists in the dashboard, from the
  * bottom-most missing one upward (everything above a vanished folder goes too).
+ * With `tabId`, only that tab counts (panels resolve in the current tab only).
  * Returns the dropped ids; a missing doc/dashboard drops everything.
  */
-export function reconcile(doc: LayoutDoc | null, dashboardId: string): string[] {
+export function reconcile(doc: LayoutDoc | null, dashboardId: string, tabId?: string): string[] {
   const ids = new Set<string>();
   const dash = findLayoutDashboard(dashboardId, doc);
-  for (const t of dash?.tabs ?? []) collectIds(t.root, ids);
+  for (const t of dash?.tabs ?? []) if (tabId === undefined || t.id === tabId) collectIds(t.root, ids);
   const current = get(stack);
   const firstMissing = current.findIndex((id) => !ids.has(id));
   if (firstMissing === -1) return [];

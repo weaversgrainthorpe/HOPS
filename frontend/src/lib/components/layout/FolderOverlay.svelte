@@ -5,6 +5,7 @@
   import { resolveMode } from '$lib/layout/geometry';
   import { focusTrap } from '$lib/utils/focusTrap';
   import { overlayStack, closeTop, closeTo } from '$lib/stores/folderOverlay';
+  import { tick } from 'svelte';
   import ContainerView from './ContainerView.svelte';
 
   interface Props {
@@ -36,8 +37,43 @@
       return chain ? [{ id, depth: i + 1, chain }] : [];
     })
   );
+
+  /** Move the node to <body> so no transformed/filtered ancestor can trap position:fixed. */
+  function portal(node: HTMLElement) {
+    document.body.appendChild(node);
+    return { destroy: () => node.remove() };
+  }
+
+  function inertUnless(node: HTMLElement, active: boolean) {
+    node.toggleAttribute('inert', !active);
+    return { update: (a: boolean) => node.toggleAttribute('inert', !a) };
+  }
+
+  /** Re-focus the opener after the DOM (and inert state) settle, if focus was lost. */
+  function restoreFocus(node: HTMLElement) {
+    const prev = document.activeElement as HTMLElement | null;
+    return {
+      destroy() {
+        tick().then(() => {
+          const a = document.activeElement;
+          if (prev && prev.isConnected && (!a || a === document.body)) prev.focus();
+        });
+      }
+    };
+  }
+
+  // Escape closes the top overlay wherever focus is, unless a tile modal is open
+  // above it (that modal handles its own Escape).
+  function onWindowKey(e: KeyboardEvent) {
+    if (e.key !== 'Escape' || panels.length === 0) return;
+    if (document.querySelector('[role="dialog"][aria-modal="true"]:not(.overlay-panel)')) return;
+    closeTop();
+  }
 </script>
 
+<svelte:window onkeydown={onWindowKey} />
+
+<div class="overlay-host" use:portal>
 {#each panels as p, i (p.id)}
   {@const folder = p.chain[p.chain.length - 1]}
   {@const isTop = i === panels.length - 1}
@@ -55,13 +91,9 @@
       aria-modal="true"
       aria-label={folder.name}
       tabindex="-1"
+      use:inertUnless={isTop}
+      use:restoreFocus
       use:focusTrap
-      onkeydown={(e) => {
-        if (e.key === 'Escape' && isTop) {
-          e.stopPropagation();
-          closeTop();
-        }
-      }}
     >
       <header class="overlay-header">
         <nav aria-label="Folder path" class="crumbs">
@@ -75,7 +107,10 @@
                 type="button"
                 class="crumb"
                 data-crumb={c.id}
-                onclick={() => closeTo($overlayStack.indexOf(c.id) + 1)}>{c.name}</button
+                onclick={() => {
+                  const idx = $overlayStack.indexOf(c.id);
+                  if (idx >= 0) closeTo(idx + 1);
+                }}>{c.name}</button
               >
             {/if}
           {/each}
@@ -97,6 +132,7 @@
     </div>
   </div>
 {/each}
+</div>
 
 <style>
   .overlay-backdrop {

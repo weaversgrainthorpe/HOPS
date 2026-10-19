@@ -57,13 +57,13 @@ export function createFocusTrap(container: HTMLElement): FocusTrapController {
 
     if (event.shiftKey) {
       // Shift + Tab: going backwards
-      if (document.activeElement === firstElement) {
+      if (document.activeElement === firstElement || document.activeElement === container) {
         event.preventDefault();
         lastElement.focus();
       }
     } else {
       // Tab: going forwards
-      if (document.activeElement === lastElement) {
+      if (document.activeElement === lastElement || document.activeElement === container) {
         event.preventDefault();
         firstElement.focus();
       }

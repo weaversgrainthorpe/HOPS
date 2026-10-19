@@ -5,8 +5,8 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { get } from 'svelte/store';
 import TabCanvas from './TabCanvas.svelte';
-import { config } from '$lib/stores/config';
-import { closeAll, overlayStack } from '$lib/stores/folderOverlay';
+import { config, layoutStale } from '$lib/stores/config';
+import { closeAll, openFolder, overlayStack } from '$lib/stores/folderOverlay';
 import { toast } from '$lib/stores/toast';
 import type { LayoutDashboard, LayoutTab } from '$lib/types/layout';
 
@@ -143,5 +143,83 @@ describe('overlay', () => {
     expect(readFileSync(resolve(process.cwd(), 'src/lib/components/layout/FolderOverlay.svelte'), 'utf8')).toContain('var(--z-folder-overlay)');
     await fireEvent.keyDown(modal.querySelector('[role="dialog"]')!, { key: 'Escape' });
     expect(get(overlayStack)).toEqual(['f1']);
+  });
+});
+
+describe('overlay robustness', () => {
+  it('Escape with focus on body closes the top overlay', async () => {
+    await renderTab([folder('f1', 'Box', [tile('a', 'Alpha')])]);
+    await fireEvent.click(screen.getByRole('button', { name: /Box/ }));
+    (document.activeElement as HTMLElement | null)?.blur();
+    await fireEvent.keyDown(document.body, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('with a tile modal open, Escape closes only the modal', async () => {
+    const { container } = await renderTab([folder('f1', 'Box', [tile('a', 'Alpha', 0, 0, { openMode: 'iframe' })])]);
+    await fireEvent.click(screen.getByRole('button', { name: /Box/ }));
+    await fireEvent.click(screen.getByRole('dialog').querySelector('[data-node-id="a"] [role="button"], [data-node-id="a"] a, [data-node-id="a"] button') as HTMLElement);
+    expect(container.ownerDocument.querySelector('.modal-backdrop')).not.toBeNull();
+    await fireEvent.keyDown(document.body, { key: 'Escape' });
+    await tick();
+    expect(container.ownerDocument.querySelector('.modal-backdrop')).toBeNull();
+    expect(get(overlayStack)).toEqual(['f1']);
+  });
+
+  it('background and lower panels are inert; Shift+Tab from the panel root stays inside', async () => {
+    const { container } = await renderTab([folder('fa', 'FolderA', [folder('fb', 'FolderB', [tile('a', 'Deep')])])]);
+    expect(container.querySelector('.tab-canvas')!.hasAttribute('inert')).toBe(false);
+    await fireEvent.click(screen.getByRole('button', { name: /FolderA/ }));
+    expect(container.querySelector('.tab-canvas')!.hasAttribute('inert')).toBe(true);
+    await fireEvent.click(screen.getByRole('button', { name: /FolderB/ }));
+    const [low, top] = screen.getAllByRole('dialog');
+    expect(low.hasAttribute('inert')).toBe(true);
+    expect(top.hasAttribute('inert')).toBe(false);
+    top.focus();
+    await fireEvent.keyDown(top, { key: 'Tab', shiftKey: true });
+    expect(top.contains(document.activeElement)).toBe(true);
+    expect(document.activeElement).not.toBe(top);
+  });
+
+  it('portals to body and survives a layoutStale flip with focus intact', async () => {
+    await renderTab([folder('f1', 'Box', [tile('a', 'Alpha')])]);
+    await fireEvent.click(screen.getByRole('button', { name: /Box/ }));
+    await new Promise((r) => requestAnimationFrame(() => r(null)));
+    const dlg = screen.getByRole('dialog');
+    expect(dlg.parentElement!.parentElement!.parentElement).toBe(document.body);
+    expect(dlg.contains(document.activeElement)).toBe(true);
+    layoutStale.set(true);
+    await tick();
+    expect(screen.getByRole('dialog')).toBe(dlg);
+    expect(dlg.contains(document.activeElement)).toBe(true);
+    layoutStale.set(false);
+  });
+
+  it('a folder moved to another tab is dropped with the toast', async () => {
+    const info = vi.spyOn(toast, 'info');
+    const { dash } = await renderTab([folder('f1', 'Box', [tile('a', 'Alpha')])]);
+    await fireEvent.click(screen.getByRole('button', { name: /Box/ }));
+    const other: LayoutTab = { id: 't2', name: 'Other', root: { columns: 12, children: [folder('f1', 'Box', [])] } };
+    setDoc({ ...dash, revision: 2, tabs: [{ ...dash.tabs[0], root: { columns: 12, children: [] } }, other] });
+    await tick();
+    expect(get(overlayStack)).toEqual([]);
+    expect(info).toHaveBeenCalledTimes(1);
+  });
+
+  it('a transient null layout keeps overlays open without a toast', async () => {
+    const info = vi.spyOn(toast, 'info');
+    const { dash } = await renderTab([folder('f1', 'Box', [tile('a', 'Alpha')])]);
+    await fireEvent.click(screen.getByRole('button', { name: /Box/ }));
+    config.set(null);
+    await tick();
+    setDoc(dash);
+    await tick();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(info).not.toHaveBeenCalled();
+  });
+
+  it('openFolder dedupes', () => {
+    openFolder('x'); openFolder('x');
+    expect(get(overlayStack)).toEqual(['x']);
   });
 });
