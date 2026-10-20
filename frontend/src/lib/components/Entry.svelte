@@ -37,9 +37,16 @@
      * Unset (legacy TabPanel) keeps the v2 sizing untouched.
      */
     fit?: 'fill' | 'compact';
+    /**
+     * v3 editor (with viewOnly): defined while editing — the tile is a
+     * selectable item (its container handles clicks) and this says whether
+     * it is selected. Undefined outside the editor.
+     */
+    editorSelected?: boolean;
   }
 
-  let { entry, currentTabId = '', currentGroupId = '', availableTabs = [], onUpdate, onDelete, onMoveToTab, onCopyToTab, tabId, groupId, viewOnly = false, fit }: Props = $props();
+  let { entry, currentTabId = '', currentGroupId = '', availableTabs = [], onUpdate, onDelete, onMoveToTab, onCopyToTab, tabId, groupId, viewOnly = false, fit, editorSelected }: Props = $props();
+  const inEditor = $derived(editorSelected !== undefined);
   const compact = $derived(fit === 'compact');
   const inEdit = $derived($editMode && !viewOnly);
   let showEditModal = $state(false);
@@ -175,15 +182,15 @@
     style:overflow={fit ? 'hidden' : undefined}
     class:edit-mode={inEdit}
     class:custom-color={entry.color}
-    class:selected={isSelected}
+    class:selected={isSelected || editorSelected === true}
     class:entry-note={isNote}
     style:background-color={entry.color}
     style:opacity={entry.opacity !== undefined ? entry.opacity : 0.95}
     onclick={handleClick}
     oncontextmenu={handleContextMenu}
     title={entry.description || entry.name}
-    aria-label={isNote ? entry.name : (inEdit ? `Edit ${entry.name}` : `Open ${entry.name}`)}
-    aria-pressed={isSelected}
+    aria-label={inEditor ? entry.name : isNote ? entry.name : (inEdit ? `Edit ${entry.name}` : `Open ${entry.name}`)}
+    aria-pressed={inEditor ? editorSelected : isSelected}
   >
     {#if isNote}
       <!-- Note tile: just the name as a heading + description as body

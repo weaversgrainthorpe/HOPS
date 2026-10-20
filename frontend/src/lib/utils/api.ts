@@ -307,6 +307,43 @@ export async function saveDashboardV3(
   return out;
 }
 
+export interface TransferRequest {
+  mode: 'move' | 'copy';
+  sourceId: string;
+  sourceRevision: number;
+  nodeIds: string[];
+  targetId: string;
+  targetRevision: number;
+  target: { tabId: string; folderId?: string };
+}
+
+/**
+ * Move or copy tiles/folders from one dashboard to ANOTHER in one server
+ * transaction: POST /api/dashboards/transfer. Both revisions are checked (a
+ * 409 surfaces as ConflictError); the server places the items at free cells
+ * of the target container. Returns both new revisions and, when present, the
+ * fresh layout.
+ */
+export async function transferNodes(
+  req: TransferRequest
+): Promise<{ sourceRevision: number; targetRevision: number } & FreshLayout> {
+  const body: TransferRequest = { ...req, target: { tabId: req.target.tabId } };
+  if (req.target.folderId) body.target.folderId = req.target.folderId;
+  const resp = await fetchAPI('/dashboards/transfer', { method: 'POST', body: JSON.stringify(body) });
+  if (!resp || typeof resp.sourceRevision !== 'number' || typeof resp.targetRevision !== 'number') {
+    throw new Error('The server did not confirm the new dashboard revisions.');
+  }
+  const out: { sourceRevision: number; targetRevision: number } & FreshLayout = {
+    sourceRevision: resp.sourceRevision,
+    targetRevision: resp.targetRevision
+  };
+  if (resp.layout && Array.isArray(resp.layout.dashboards)) {
+    out.layout = resp.layout;
+    out.v3OnlyDashboards = Array.isArray(resp.v3OnlyDashboards) ? resp.v3OnlyDashboards : [];
+  }
+  return out;
+}
+
 /**
  * Revision-checked delete of one dashboard (legacy-editable or v3-only):
  * DELETE /api/dashboards/{id}?revision=n. Returns the fresh layout fields.

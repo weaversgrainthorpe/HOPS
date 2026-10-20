@@ -25,14 +25,23 @@
     tabOpacity?: number;
     tabBackground?: Background;
     perTabBackgrounds?: boolean; // Whether per-tab backgrounds are enabled at dashboard level
-    onSave: (name: string, icon?: string, iconUrl?: string, iconBgColor?: string, color?: string, opacity?: number) => void;
+    /** v3: the tab's own layout ('inherit' / missing = the dashboard default). */
+    tabLayout?: 'inherit' | 'grid' | 'free';
+    /** v3: a free tab's design width in px. */
+    tabDesignWidth?: number;
+    /** v3: what 'inherit' resolves to (the dashboard default), so free-only fields show correctly. */
+    inheritedLayout?: 'grid' | 'free';
+    onSave: (
+      name: string, icon?: string, iconUrl?: string, iconBgColor?: string, color?: string, opacity?: number,
+      layout?: { layout: 'inherit' | 'grid' | 'free'; designWidth?: number }
+    ) => void;
     onSaveBackground?: (background: Background | undefined) => void;
     onCancel: () => void;
     onDelete?: () => void;
     onDuplicate?: () => void;
   }
 
-  let { tabName, tabIcon, tabIconUrl, tabIconBgColor, tabColor, tabOpacity, tabBackground, perTabBackgrounds = false, onSave, onSaveBackground, onCancel, onDelete, onDuplicate }: Props = $props();
+  let { tabName, tabIcon, tabIconUrl, tabIconBgColor, tabColor, tabOpacity, tabBackground, perTabBackgrounds = false, tabLayout, tabDesignWidth, inheritedLayout = 'grid', onSave, onSaveBackground, onCancel, onDelete, onDuplicate }: Props = $props();
   // Form state initialized from props (intentionally captures initial values)
   // svelte-ignore state_referenced_locally
   let name = $state(tabName);
@@ -46,6 +55,14 @@
   let color = $state(tabColor);
   // svelte-ignore state_referenced_locally
   let opacity = $state(tabOpacity);
+  // svelte-ignore state_referenced_locally
+  let layout = $state<'inherit' | 'grid' | 'free'>(tabLayout === 'grid' || tabLayout === 'free' ? tabLayout : 'inherit');
+  // svelte-ignore state_referenced_locally
+  let designWidth = $state<number | string>(tabDesignWidth ?? 1280);
+  let problem = $state('');
+  const isFree = $derived(layout === 'free' || (layout === 'inherit' && inheritedLayout === 'free'));
+  const MIN_DESIGN_WIDTH = 320;
+  const MAX_DESIGN_WIDTH = 7680;
   let showBackgroundConfig = $state(false);
   let showIconEditor = $state(false);
 
@@ -62,9 +79,17 @@
   }
 
   function handleSave() {
-    if (name.trim()) {
-      onSave(name.trim(), icon || undefined, iconUrl || undefined, iconBgColor, color, opacity);
+    if (!name.trim()) return;
+    let dw: number | undefined;
+    if (isFree) {
+      dw = Number(designWidth);
+      if (!Number.isInteger(dw) || dw < MIN_DESIGN_WIDTH || dw > MAX_DESIGN_WIDTH) {
+        problem = `The design width must be a whole number of pixels from ${MIN_DESIGN_WIDTH} to ${MAX_DESIGN_WIDTH}.`;
+        return;
+      }
     }
+    problem = '';
+    onSave(name.trim(), icon || undefined, iconUrl || undefined, iconBgColor, color, opacity, { layout, designWidth: dw });
   }
 
   function handleBackgroundSave(background: Background | undefined) {
@@ -136,6 +161,24 @@
       opacity={opacity}
       onSelect={(o) => opacity = o}
     />
+
+    <div class="form-group">
+      <label for="tab-layout">Layout</label>
+      <select id="tab-layout" bind:value={layout}>
+        <option value="inherit">Dashboard default ({inheritedLayout === 'free' ? 'free' : 'grid'})</option>
+        <option value="grid">Grid</option>
+        <option value="free">Free</option>
+      </select>
+    </div>
+
+    {#if isFree}
+      <div class="form-group">
+        <label for="tab-design-width">Design width (px)</label>
+        <input id="tab-design-width" type="number" min={MIN_DESIGN_WIDTH} max={MAX_DESIGN_WIDTH} step="1" bind:value={designWidth} />
+        <small class="background-hint">The screen width a free tab is laid out for; it scales to fit other screens.</small>
+      </div>
+    {/if}
+    {#if problem}<p class="problem" role="alert">{problem}</p>{/if}
 
     {#if onSaveBackground && perTabBackgrounds}
       <div class="form-group">
@@ -215,6 +258,20 @@
 {/if}
 
 <style>
+  .problem {
+    margin: 0 0 1rem;
+    color: var(--color-error, #dc2626);
+    font-size: 0.875rem;
+  }
+  select,
+  input[type='number'] {
+    padding: 0.625rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 0.375rem;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 0.95rem;
+  }
   /* Modal body already pads — see GroupEditModal note. */
   form {
     padding: 0;

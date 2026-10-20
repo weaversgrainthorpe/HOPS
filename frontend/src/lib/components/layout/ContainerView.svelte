@@ -9,6 +9,10 @@
   import Entry from '../Entry.svelte';
   import FolderView from './FolderView.svelte';
   import NodePlaceholder from './NodePlaceholder.svelte';
+  import { pointToCell } from '$lib/layout/geometry';
+  import { selectedNodes, toggleNode } from '$lib/stores/nodeSelection';
+  import { openDialog, openMenu, longPress, menuPointFor, ownsTarget } from '$lib/editor/editorUi';
+  import type { ContainerRef } from '$lib/editor/treeOps';
 
   interface Props {
     container: Container;
@@ -19,11 +23,46 @@
     tab: LayoutTab;
     /** Outermost-first chain of the folders enclosing this container. */
     folderChain: FolderNode[];
+    /** Edit mode: select (click / Ctrl-click), edit (double-click), item and container menus. */
+    editing?: boolean;
   }
-  let { container, metrics, plan, dashboard, tab, folderChain }: Props = $props();
+  let { container, metrics, plan, dashboard, tab, folderChain, editing = false }: Props = $props();
 
   const parent = $derived(folderChain[folderChain.length - 1]);
   const parentId = $derived(parent ? parent.id : tab.id);
+
+  // ---- editing: selection uses the RENDERED boxes; every edit goes through the editor (draft).
+  const ref = $derived<ContainerRef>(parent ? { tabId: tab.id, folderId: parent.id } : { tabId: tab.id });
+  function onNodeClick(e: MouseEvent, id: string) {
+    // Capture phase: the tile never sees the click, so it does not open its link while editing.
+    e.preventDefault();
+    e.stopPropagation();
+    toggleNode(id, e.ctrlKey || e.metaKey);
+  }
+  function onNodeMenu(e: MouseEvent, id: string) {
+    e.preventDefault();
+    e.stopPropagation();
+    const pt = menuPointFor(e, e.currentTarget as Element);
+    openMenu({ ...pt, target: { kind: 'node', id } });
+  }
+  function containerMenuAt(el: HTMLElement, x: number, y: number, fromPointer: boolean) {
+    let cell: { x: number; y: number } | undefined;
+    if (fromPointer && effective !== 'stacked') {
+      const r = el.getBoundingClientRect();
+      cell = pointToCell(metrics, x - r.left, y - r.top);
+    }
+    openMenu({ x, y, target: { kind: 'container', ref, ...(cell ? { cell } : {}) } });
+  }
+  let gridEl = $state<HTMLElement | null>(null);
+  let freeEl = $state<HTMLElement | null>(null);
+  function onContainerMenu(e: MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    const el = e.currentTarget as HTMLElement;
+    const pt = menuPointFor(e, el);
+    containerMenuAt(el, pt.x, pt.y, !!(e.clientX || e.clientY));
+  }
+
   const columns = $derived(metrics.columns);
   const kids = $derived(Array.isArray(container?.children) ? container.children : []);
   // Valid children in reading order, followed by unplaceable ones (readingOrder never throws).
@@ -99,7 +138,24 @@
   {#each list as node, i (nodeId(node) + ':' + i)}
     {#if isRenderable(node)}
       {#if node.kind === 'tile'}
-        <div class="cell" data-node-id={node.id} style={styleOf(node)}>
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div
+          class="cell"
+          class:selected={editing && $selectedNodes.has(node.id)}
+          data-node-id={node.id}
+          style={styleOf(node)}
+          onclickcapture={editing ? (e) => onNodeClick(e, node.id) : undefined}
+          ondblclick={editing
+            ? (e) => {
+                e.stopPropagation();
+                openDialog({ kind: 'tile', id: node.id });
+              }
+            : undefined}
+          oncontextmenu={editing ? (e) => onNodeMenu(e, node.id) : undefined}
+          use:longPress={(x, y) => {
+            if (editing) openMenu({ x, y, target: { kind: 'node', id: node.id } });
+          }}
+        >
           <Entry
             entry={node}
             currentTabId={tab.id}
@@ -108,6 +164,7 @@
             groupId={parentId}
             viewOnly
             fit={fitOf(node)}
+            editorSelected={editing ? $selectedNodes.has(node.id) : undefined}
           />
         </div>
       {:else}
@@ -119,6 +176,7 @@
           {tab}
           {folderChain}
           parent={metrics}
+          {editing}
         />
       {/if}
     {:else if !inPlace}
@@ -140,18 +198,39 @@
 {/snippet}
 
 {#if effective === 'grid'}
-  <div class="container-grid" style={gridStyle}>
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div
+    class="container-grid"
+    style={gridStyle}
+    data-container-id={parentId}
+    oncontextmenu={editing ? onContainerMenu : undefined}
+    use:longPress={(x, y, t) => {
+      if (editing && gridEl && ownsTarget(gridEl, t)) containerMenuAt(gridEl, x, y, true);
+    }}
+    bind:this={gridEl}
+  >
     {@render nodes(ordered, cellStyle, cellStyle, true)}
   </div>
   {@render stackedPlaceholders()}
 {:else if effective === 'free'}
-  <div class="container-free" style={freeStyle}>
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div
+    class="container-free"
+    style={freeStyle}
+    data-container-id={parentId}
+    oncontextmenu={editing ? onContainerMenu : undefined}
+    use:longPress={(x, y, t) => {
+      if (editing && freeEl && ownsTarget(freeEl, t)) containerMenuAt(freeEl, x, y, true);
+    }}
+    bind:this={freeEl}
+  >
     {@render nodes(kids, freeCellStyle, freeCellStyle, true)}
   </div>
   {@render stackedPlaceholders()}
 {:else}
   <!-- Phone stacking: reading order, tiles wrap at today's phone sizes, expanded folders full width. -->
-  <div class="container-stacked">
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div class="container-stacked" data-container-id={parentId} oncontextmenu={editing ? onContainerMenu : undefined}>
     {@render nodes(
       ordered,
       () => '',
@@ -168,6 +247,12 @@
   .cell {
     min-width: 0;
     min-height: 0;
+  }
+  /* Edit-mode selection: an outline on the rendered box (a collapsed folder = its one cell). */
+  .cell.selected {
+    outline: 3px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 0.75rem;
   }
   .placeholder-stack {
     display: flex;

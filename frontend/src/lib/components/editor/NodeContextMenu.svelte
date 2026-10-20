@@ -1,0 +1,270 @@
+<script lang="ts">
+  import { onMount, tick } from 'svelte';
+  import Icon from '@iconify/svelte';
+  import type { MenuRequest } from '$lib/editor/editorUi';
+  import { openDialog } from '$lib/editor/editorUi';
+  import type { ContainerRef } from '$lib/editor/treeOps';
+  import { locate, resolveContainer } from '$lib/editor/treeOps';
+  import {
+    containerOfNode, deleteWithConfirm, duplicate, findIn, setDisplay, zOrder
+  } from '$lib/editor/editorActions';
+  import { session } from '$lib/stores/editSession';
+  import { selectedNodes, toggleNode } from '$lib/stores/nodeSelection';
+  import { nodeClipboard, copySelection, cutSelection, pasteInto } from '$lib/stores/nodeClipboard';
+  import { openFolder } from '$lib/stores/folderOverlay';
+  import { portal } from '$lib/utils/portal';
+
+  interface Props {
+    request: MenuRequest;
+    onClose: () => void;
+  }
+  let { request, onClose }: Props = $props();
+
+  interface Item {
+    label: string;
+    icon: string;
+    run: () => unknown;
+    disabled?: boolean;
+    danger?: boolean;
+    separatorBefore?: boolean;
+  }
+
+  // Right-clicking an item outside the selection selects just it (as Explorer does).
+  // svelte-ignore state_referenced_locally
+  const initial = request.target;
+  if (initial.kind === 'node' && !$selectedNodes.has(initial.id)) {
+    if ($session && locate($session.draft, initial.id)) toggleNode(initial.id, false);
+  }
+
+  const draft = $derived($session?.draft ?? null);
+  const node = $derived(draft && request.target.kind === 'node' ? findIn(draft, request.target.id) : undefined);
+  /** The items an action applies to: the selection when the item is part of it, else the item. */
+  const targetIds = $derived.by(() => {
+    if (request.target.kind !== 'node') return [];
+    const id = request.target.id;
+    return $selectedNodes.has(id) && $selectedNodes.size > 1 ? [...$selectedNodes] : [id];
+  });
+  const many = $derived(targetIds.length > 1);
+  const containerMode = $derived.by(() => {
+    if (!draft) return 'grid';
+    const ref: ContainerRef | undefined =
+      request.target.kind === 'node' ? containerOfNode(draft, request.target.id) : request.target.ref;
+    try {
+      return ref ? resolveContainer(draft, ref).mode : 'grid';
+    } catch {
+      return 'grid';
+    }
+  });
+  const canPaste = $derived(!!$nodeClipboard && $nodeClipboard.nodes.length > 0);
+
+  const items = $derived.by((): Item[] => {
+    const t = request.target;
+    if (t.kind === 'container') {
+      return [
+        { label: 'Add tile here', icon: 'mdi:plus-box', run: () => openDialog({ kind: 'tile', to: t.ref, ...(t.cell ? { cell: t.cell } : {}) }) },
+        { label: 'Add folder here', icon: 'mdi:folder-plus', run: () => openDialog({ kind: 'folder', to: t.ref, ...(t.cell ? { cell: t.cell } : {}) }) },
+        { label: 'Paste here', icon: 'mdi:content-paste', disabled: !canPaste, run: () => pasteInto(t.ref, t.cell) }
+      ];
+    }
+    if (!node || !draft) return [];
+    const id = node.id;
+    const out: Item[] = [];
+    if (!many) out.push({ label: 'Edit', icon: 'mdi:pencil', run: () => openDialog({ kind: node.kind, id }) });
+    if (!many && node.kind === 'folder' && node.display === 'collapsed') {
+      out.push({ label: 'Open', icon: 'mdi:folder-open', run: () => openFolder(id) });
+    }
+    if (!many) out.push({ label: 'Duplicate', icon: 'mdi:content-duplicate', run: () => duplicate(id) });
+    out.push(
+      { label: 'Cut', icon: 'mdi:content-cut', run: () => cutSelection(), separatorBefore: true },
+      { label: 'Copy', icon: 'mdi:content-copy', run: () => copySelection() },
+      {
+        label: 'Paste here',
+        icon: 'mdi:content-paste',
+        disabled: !canPaste,
+        // Onto a folder: into it. Onto a tile: beside it, in the same container.
+        run: () => {
+          const to = node.kind === 'folder' ? { tabId: locate(draft, id)!.tabId, folderId: id } : containerOfNode(draft, id);
+          return to ? pasteInto(to) : undefined;
+        }
+      },
+      { label: 'Move/Copy to…', icon: 'mdi:folder-move', run: () => openDialog({ kind: 'movecopy', ids: targetIds }) }
+    );
+    if (!many && containerMode === 'free') {
+      out.push(
+        { label: 'Bring forward', icon: 'mdi:arrange-bring-forward', run: () => zOrder(id, 'forward'), separatorBefore: true },
+        { label: 'Send back', icon: 'mdi:arrange-send-backward', run: () => zOrder(id, 'back') }
+      );
+    }
+    if (!many && node.kind === 'folder') {
+      out.push(
+        node.display === 'collapsed'
+          ? { label: 'Start expanded', icon: 'mdi:arrow-expand', run: () => setDisplay(id, 'expanded'), separatorBefore: true }
+          : { label: 'Start collapsed', icon: 'mdi:arrow-collapse', run: () => setDisplay(id, 'collapsed'), separatorBefore: true }
+      );
+    }
+    out.push({
+      label: many ? `Delete ${targetIds.length} items` : 'Delete',
+      icon: 'mdi:trash-can',
+      danger: true,
+      separatorBefore: true,
+      run: () => deleteWithConfirm(targetIds)
+    });
+    return out;
+  });
+
+  const label = $derived(
+    request.target.kind === 'container'
+      ? 'Container actions'
+      : node
+        ? `${node.kind === 'folder' ? 'Folder' : 'Tile'} actions: ${node.name || 'Untitled'}`
+        : 'Item actions'
+  );
+
+  let menuEl = $state<HTMLElement | null>(null);
+  let left = $state(0);
+  let top = $state(0);
+  let opener: HTMLElement | null = null;
+
+  function enabledItems(): HTMLButtonElement[] {
+    return menuEl ? Array.from(menuEl.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not([disabled])')) : [];
+  }
+
+  onMount(() => {
+    opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    // Keep the menu on screen (measured once, on open).
+    left = request.x;
+    top = request.y;
+    void tick().then(() => {
+      if (!menuEl) return;
+      const r = menuEl.getBoundingClientRect();
+      const vw = window.innerWidth || 0;
+      const vh = window.innerHeight || 0;
+      if (vw && r.width && left + r.width > vw - 8) left = Math.max(8, vw - r.width - 8);
+      if (vh && r.height && top + r.height > vh - 8) top = Math.max(8, vh - r.height - 8);
+      enabledItems()[0]?.focus();
+    });
+  });
+
+  function close(restore = true) {
+    onClose();
+    if (restore && opener && document.contains(opener)) opener.focus();
+  }
+
+  async function choose(it: Item) {
+    if (it.disabled) return;
+    close(false);
+    await it.run();
+  }
+
+  function onKey(e: KeyboardEvent) {
+    const list = enabledItems();
+    const i = list.indexOf(document.activeElement as HTMLButtonElement);
+    const focusAt = (n: number) => list[(n + list.length) % list.length]?.focus();
+    switch (e.key) {
+      case 'ArrowDown': focusAt(i + 1); break;
+      case 'ArrowUp': focusAt(i < 0 ? list.length - 1 : i - 1); break;
+      case 'Home': focusAt(0); break;
+      case 'End': focusAt(list.length - 1); break;
+      case 'Escape': close(); break;
+      case 'Tab': close(); return; // let focus move on
+      default: return;
+    }
+    // Handled here: an open folder overlay or modal must not also act on it.
+    e.preventDefault();
+    e.stopPropagation();
+  }
+
+  function onWindowPointer(e: PointerEvent) {
+    if (menuEl && e.target instanceof Node && !menuEl.contains(e.target)) close(false);
+  }
+
+  const px = (v: number) => `${Math.round(v)}px`;
+</script>
+
+<svelte:window onpointerdowncapture={onWindowPointer} onresize={() => close(false)} />
+
+<div
+  class="node-menu"
+  role="menu"
+  tabindex="-1"
+  aria-label={label}
+  bind:this={menuEl}
+  use:portal
+  style:left={px(left)}
+  style:top={px(top)}
+  onkeydown={onKey}
+  oncontextmenu={(e) => e.preventDefault()}
+>
+  {#if items.length === 0}
+    <p class="gone" role="none">This item no longer exists.</p>
+  {/if}
+  {#each items as it (it.label)}
+    {#if it.separatorBefore}<div class="sep" role="separator"></div>{/if}
+    <button
+      type="button"
+      role="menuitem"
+      class="item"
+      class:danger={it.danger}
+      disabled={it.disabled}
+      tabindex="-1"
+      onclick={() => choose(it)}
+    >
+      <Icon icon={it.icon} width="18" />
+      {it.label}
+    </button>
+  {/each}
+</div>
+
+<style>
+  .node-menu {
+    position: fixed;
+    /* Above open folder overlays (--z-folder-overlay + depth), below modals. */
+    z-index: calc(var(--z-modal) - 10);
+    min-width: 12rem;
+    padding: 0.25rem;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    box-shadow: 0 8px 24px var(--shadow, rgba(0, 0, 0, 0.35));
+  }
+  .item {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border: none;
+    border-radius: 0.375rem;
+    background: transparent;
+    color: inherit;
+    font-size: 0.9rem;
+    text-align: left;
+    cursor: pointer;
+  }
+  .item:hover:not(:disabled),
+  .item:focus-visible {
+    background: var(--bg-tertiary);
+    outline: none;
+  }
+  .item:focus-visible {
+    box-shadow: inset 0 0 0 2px var(--accent);
+  }
+  .item:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+  .item.danger {
+    color: var(--color-error, #dc2626);
+  }
+  .sep {
+    height: 1px;
+    margin: 0.25rem 0.5rem;
+    background: var(--border);
+  }
+  .gone {
+    margin: 0.5rem 0.75rem;
+    color: var(--color-error, #dc2626);
+    font-size: 0.875rem;
+  }
+</style>

@@ -5,6 +5,7 @@
   import { isAuthenticated } from '$lib/stores/auth';
   import { theme, toggleTheme } from '$lib/stores/theme';
   import { editMode, toggleEditMode } from '$lib/stores/editMode';
+  import { session } from '$lib/stores/editSession';
   import { textSize, increaseTextSize, decreaseTextSize, canIncrease, canDecrease, textSizeConfigs } from '$lib/stores/textSize';
   import { triggerHopAnimation } from '$lib/stores/easterEggs';
   import Icon from '@iconify/svelte';
@@ -73,8 +74,11 @@
   // Get header config from current dashboard or use defaults
   let pageDashboard = $derived($currentDashboard ?? $currentV3OnlyDashboard);
   // A v3 dashboard keeps the same header object as its legacy form.
+  // While editing, the header shows the edit session's draft (the Header dialog edits the draft).
   let headerConfig = $derived(
-    $currentDashboard ? $currentDashboard.header : ($currentV3OnlyDashboard?.header as HeaderConfig | undefined)
+    $editMode && $session && pageDashboard && $session.dashboardId === pageDashboard.id
+      ? ($session.draft.header as HeaderConfig | undefined)
+      : $currentDashboard ? $currentDashboard.header : ($currentV3OnlyDashboard?.header as HeaderConfig | undefined)
   );
   let showLeft = $derived(headerConfig?.showLeft !== false); // Default true
   let showCenter = $derived(headerConfig?.showCenter !== false); // Default true

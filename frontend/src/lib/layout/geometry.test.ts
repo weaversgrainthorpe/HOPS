@@ -4,7 +4,7 @@ import {
 } from './geometry';
 import {
   containerMetrics, nodeBox, folderChrome, folderContentBox, folderInnerMetrics, requiredFolderHeightPx,
-  overlayBodyPx, scrollbarPx, ROOT_COLUMNS, overlayMetrics, OVERLAY_PANEL_CHROME_PX
+  overlayBodyPx, scrollbarPx, ROOT_COLUMNS, overlayMetrics, OVERLAY_PANEL_CHROME_PX, pointToCell
 } from './geometry';
 import type { Container } from '../types/layout';
 import type { FolderNode, LayoutDashboard, LayoutNode, LayoutTab, Placement } from '../types/layout';
@@ -293,5 +293,25 @@ describe('overlayMetrics (one source for overlay and maximised panels)', () => {
     expect(o.metrics.mode).toBe('free');
     expect(o.metrics.unitPx).toBe(8);
     expect(o.metrics.innerWidthPx).toBe(320);
+  });
+});
+
+describe('pointToCell (M3 Task 6: right-clicked cell)', () => {
+  it('maps a point inside the container to the cell under it, from the metrics', () => {
+    const m = containerMetrics({ columns: 12, children: [] }, 'grid', 1200);
+    expect(pointToCell(m, 0, 0)).toEqual({ x: 0, y: 0 });
+    expect(pointToCell(m, 250, 199)).toEqual({ x: 2, y: 1 });
+  });
+  it('clamps to the columns and never goes negative', () => {
+    const m = containerMetrics({ columns: 4, children: [] }, 'grid', 400);
+    expect(pointToCell(m, 5000, -20)).toEqual({ x: 3, y: 0 });
+  });
+  it('free containers use 8 px design units', () => {
+    const m = containerMetrics({ columns: 160, children: [] }, 'free', 1280);
+    expect(pointToCell(m, 81, 17)).toEqual({ x: 10, y: 2 });
+  });
+  it('degenerate metrics give the origin', () => {
+    const m = containerMetrics({ columns: 12, children: [] }, 'grid', 0);
+    expect(pointToCell(m, 50, 50)).toEqual({ x: 0, y: 0 });
   });
 });

@@ -1,0 +1,162 @@
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/svelte';
+import { get } from 'svelte/store';
+import { tick } from 'svelte';
+
+vi.mock('$lib/utils/api', async () => ({
+  ...(await vi.importActual<object>('$lib/utils/api')),
+  saveDashboardV3: vi.fn(),
+  transferNodes: vi.fn(),
+  getConfig: vi.fn(() => new Promise(() => {})) // a background reload never lands in these tests
+}));
+
+import * as api from '$lib/utils/api';
+import EditToolbar from './EditToolbar.svelte';
+import { apply, dirty } from '$lib/stores/editSession';
+import { updateNode } from '$lib/editor/treeOps';
+import { editorDialog } from '$lib/editor/editorUi';
+import { selectedNodes, toggleNode } from '$lib/stores/nodeSelection';
+import { nodeClipboard } from '$lib/stores/nodeClipboard';
+import { openFolder, closeAll } from '$lib/stores/folderOverlay';
+import { confirmModalState } from '$lib/stores/confirmModal';
+import { setLayout, resetEditor, startSession, draft, nodeIn, answerConfirm } from './editorTestKit';
+import type { FolderNode, LayoutNode } from '$lib/types/layout';
+
+const rename = (id: string, name: string) =>
+  apply('Rename', (d) => updateNode(d, id, { name } as Partial<LayoutNode>));
+const key = (k: string, mods: Partial<KeyboardEventInit> = {}) =>
+  fireEvent.keyDown(window, { key: k, ...mods });
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  resetEditor();
+  setLayout();
+  startSession();
+});
+
+describe('EditToolbar', () => {
+  it('has Save, Discard, Undo, Redo, Add tile, Add folder, Add tab; "Unsaved changes" only when dirty', async () => {
+    render(EditToolbar, { tabId: 't1', onAddTab: vi.fn() });
+    for (const n of ['Save', 'Discard', 'Undo', 'Redo', 'Add tile', 'Add folder', 'Add tab']) {
+      expect(screen.getByRole('button', { name: new RegExp(`^${n}`) })).toBeInTheDocument();
+    }
+    expect(screen.queryByText('Unsaved changes')).toBeNull();
+    expect((screen.getByRole('button', { name: /^Undo/ }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: /^Save/ }) as HTMLButtonElement).disabled).toBe(true);
+    rename('a', 'Changed');
+    await tick();
+    expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
+    expect((screen.getByRole('button', { name: /^Undo/ }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('Undo / Redo buttons step the draft', async () => {
+    render(EditToolbar, { tabId: 't1', onAddTab: vi.fn() });
+    rename('a', 'Changed');
+    await tick();
+    await fireEvent.click(screen.getByRole('button', { name: /^Undo/ }));
+    expect(nodeIn(draft(), 'a')!.name).toBe('A');
+    await fireEvent.click(screen.getByRole('button', { name: /^Redo/ }));
+    expect(nodeIn(draft(), 'a')!.name).toBe('Changed');
+  });
+
+  it('Ctrl+Z undoes; Ctrl+Shift+Z and Ctrl+Y redo; Cmd works too', async () => {
+    render(EditToolbar, { tabId: 't1', onAddTab: vi.fn() });
+    rename('a', 'One');
+    rename('a', 'Two');
+    await key('z', { ctrlKey: true });
+    expect(nodeIn(draft(), 'a')!.name).toBe('One');
+    await key('z', { metaKey: true });
+    expect(nodeIn(draft(), 'a')!.name).toBe('A');
+    await key('Z', { ctrlKey: true, shiftKey: true });
+    expect(nodeIn(draft(), 'a')!.name).toBe('One');
+    await key('y', { ctrlKey: true });
+    expect(nodeIn(draft(), 'a')!.name).toBe('Two');
+  });
+
+  it('Ctrl+S saves the draft (one v3 save), and the browser save dialog is suppressed', async () => {
+    vi.mocked(api.saveDashboardV3).mockResolvedValue({ revision: 6 });
+    render(EditToolbar, { tabId: 't1', onAddTab: vi.fn() });
+    rename('a', 'Changed');
+    const ev = new KeyboardEvent('keydown', { key: 's', ctrlKey: true, bubbles: true, cancelable: true });
+    window.dispatchEvent(ev);
+    expect(ev.defaultPrevented).toBe(true);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(api.saveDashboardV3).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(api.saveDashboardV3).mock.calls[0][0]).toBe('d1');
+    expect(get(dirty)).toBe(false);
+  });
+
+  it('shortcuts are ignored while typing in a field', async () => {
+    render(EditToolbar, { tabId: 't1', onAddTab: vi.fn() });
+    rename('a', 'Changed');
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    await fireEvent.keyDown(input, { key: 'z', ctrlKey: true });
+    expect(nodeIn(draft(), 'a')!.name).toBe('Changed');
+    input.remove();
+  });
+
+  it('Discard asks, then restores the saved dashboard', async () => {
+    render(EditToolbar, { tabId: 't1', onAddTab: vi.fn() });
+    rename('a', 'Changed');
+    await tick();
+    await fireEvent.click(screen.getByRole('button', { name: /^Discard/ }));
+    expect(get(confirmModalState).isOpen).toBe(true);
+    await answerConfirm(true);
+    expect(get(dirty)).toBe(false);
+    expect(nodeIn(draft(), 'a')!.name).toBe('A');
+  });
+
+  it('Add tile / Add folder open the new-item dialog for the tab root, or the open folder overlay', async () => {
+    render(EditToolbar, { tabId: 't1', onAddTab: vi.fn() });
+    await fireEvent.click(screen.getByRole('button', { name: /^Add tile/ }));
+    expect(get(editorDialog)).toEqual({ kind: 'tile', to: { tabId: 't1' } });
+    openFolder('c1');
+    await fireEvent.click(screen.getByRole('button', { name: /^Add folder/ }));
+    expect(get(editorDialog)).toEqual({ kind: 'folder', to: { tabId: 't1', folderId: 'c1' } });
+  });
+
+  it('Add tab calls its handler', async () => {
+    const onAddTab = vi.fn();
+    render(EditToolbar, { tabId: 't1', onAddTab });
+    await fireEvent.click(screen.getByRole('button', { name: /^Add tab/ }));
+    expect(onAddTab).toHaveBeenCalled();
+  });
+
+  it('Escape clears the selection', async () => {
+    render(EditToolbar, { tabId: 't1', onAddTab: vi.fn() });
+    toggleNode('a', false);
+    toggleNode('b', true);
+    await key('Escape');
+    expect(get(selectedNodes).size).toBe(0);
+  });
+
+  it('Ctrl+C / Ctrl+X / Ctrl+V copy, cut and paste the selection into the current container', async () => {
+    render(EditToolbar, { tabId: 't1', onAddTab: vi.fn() });
+    toggleNode('a', false);
+    await key('c', { ctrlKey: true });
+    expect(get(nodeClipboard)!.mode).toBe('copy');
+    openFolder('f1');
+    await key('v', { ctrlKey: true });
+    await tick();
+    expect((nodeIn(draft(), 'f1') as FolderNode).content.children).toHaveLength(2);
+    toggleNode('b', false);
+    await key('x', { ctrlKey: true });
+    expect(get(nodeClipboard)!.mode).toBe('cut');
+    closeAll();
+    toggleNode('x', false);
+    await key('v', { ctrlKey: true });
+    await tick();
+    // No overlay open: into the tab root. b was already there, so it moves to a free cell.
+    expect(nodeIn(draft(), 'b')).toBeDefined();
+    expect(get(nodeClipboard)).toBeNull();
+  });
+
+  it('Delete deletes the selection after asking', async () => {
+    render(EditToolbar, { tabId: 't1', onAddTab: vi.fn() });
+    toggleNode('a', false);
+    await key('Delete');
+    await answerConfirm(true);
+    expect(nodeIn(draft(), 'a')).toBeUndefined();
+  });
+});

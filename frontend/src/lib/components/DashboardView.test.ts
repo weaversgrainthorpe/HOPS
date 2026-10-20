@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/svelte';
+import { render, screen, fireEvent, within } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { get } from 'svelte/store';
 
@@ -20,6 +20,11 @@ import { closeAll, overlayStack, requestReveal, revealNavigation, revealRequest 
 import { applyThemePreset } from '$lib/stores/theme';
 import type { Config, Dashboard as DashboardT } from '$lib/types';
 import type { LayoutDashboard } from '$lib/types/layout';
+import { begin, session, resetEditSessionForTests, apply } from '$lib/stores/editSession';
+import { selectedNodes, clearSelection } from '$lib/stores/nodeSelection';
+import { editorMenu, editorDialog } from '$lib/editor/editorUi';
+import { updateNode } from '$lib/editor/treeOps';
+import type { LayoutNode } from '$lib/types/layout';
 
 
 class FakeRO {
@@ -70,7 +75,15 @@ function cfg(layoutDashes: LayoutDashboard[] = [layoutD1, v3d]): Config {
   } as Config;
 }
 
+function enterEdit(id = 'd1') {
+  isAuthenticated.set(true);
+  begin(id);
+  editMode.set(true);
+}
+
 beforeEach(() => {
+  resetEditSessionForTests();
+  clearSelection();
   vi.stubGlobal('ResizeObserver', FakeRO);
   closeAll();
   editMode.set(false);
@@ -86,18 +99,22 @@ afterEach(() => {
 });
 
 describe('Dashboard view/edit rendering', () => {
-  it('view mode renders TabCanvas; toggling edit mode renders TabPanel', async () => {
+  it('view mode renders TabCanvas; entering edit mode renders the editing canvas (no TabPanel) with the toolbar', async () => {
     const { container } = render(Dashboard, { dashboard: legacy });
     await tick();
     expect(container.querySelector('.tab-canvas[data-tab-id="t1"]')).not.toBeNull();
     expect(screen.getByText('MainTile')).toBeInTheDocument();
     expect(container.querySelector('.tab-panel')).toBeNull();
 
-    editMode.set(true);
+    enterEdit();
     await tick();
-    expect(container.querySelector('.tab-panel')).not.toBeNull();
-    expect(screen.getByText('LegacyTile')).toBeInTheDocument();
-    expect(container.querySelector('.tab-canvas')).toBeNull();
+    expect(container.querySelector('.tab-panel')).toBeNull();
+    // The draft (v3 tree) is what is rendered, editable: the legacy-only tile is not there.
+    expect(container.querySelector('.tab-canvas.editing[data-tab-id="t1"]')).not.toBeNull();
+    expect(screen.getByText('MainTile')).toBeInTheDocument();
+    expect(screen.queryByText('LegacyTile')).toBeNull();
+    expect(screen.getByRole('toolbar', { name: 'Editing' })).toBeInTheDocument();
+    expect(screen.queryByText('Unsaved changes')).toBeNull();
   });
 
   it('matches the active tab between legacy and layout by id, not index', async () => {
@@ -181,7 +198,7 @@ describe('v3-only dashboards', () => {
     expect(screen.queryByText(/View-only until the new editor arrives/)).toBeNull();
   });
 
-  it('a v3-only dashboard never renders TabPanel even if edit mode is switched on', async () => {
+  it('a v3-only dashboard never renders the editor even if edit mode is switched on', async () => {
     const { container } = render(Dashboard, { dashboard: v3d as unknown as DashboardT, v3Only: true });
     await tick();
     editMode.set(true);
@@ -238,5 +255,134 @@ describe('route resolution and reveal lifetime', () => {
     expect(screen.getByRole('tab', { name: 'Switch to Main tab' }).getAttribute('aria-selected')).toBe('true');
     expect(get(overlayStack)).toEqual(['box']);
     expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+});
+
+describe('Dashboard edit mode (M3 Task 6: the v3 editor shell)', () => {
+  let fetchSpy: ReturnType<typeof vi.fn>;
+  beforeEach(() => {
+    fetchSpy = vi.fn(() => Promise.reject(new Error('no network in tests')));
+    vi.stubGlobal('fetch', fetchSpy);
+    editorMenu.set(null);
+    editorDialog.set(null);
+  });
+  const draft = () => get(session)!.draft;
+  const cellOf = (c: HTMLElement, id: string) => c.querySelector(`.tab-canvas [data-node-id="${id}"]`) as HTMLElement;
+
+  it('a change shows "Unsaved changes"', async () => {
+    render(Dashboard, { dashboard: legacy });
+    enterEdit();
+    await tick();
+    apply('Rename', (d) => updateNode(d, 'm1', { name: 'Renamed' } as Partial<LayoutNode>));
+    await tick();
+    expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
+    expect(screen.getByText('Renamed')).toBeInTheDocument(); // the canvas shows the draft
+  });
+
+  it('a click selects one tile (and does not open it); Ctrl-click adds; Escape clears', async () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    const { container } = render(Dashboard, { dashboard: legacy });
+    enterEdit();
+    await tick();
+    await fireEvent.click(screen.getByRole('button', { name: 'MainTile' }));
+    expect([...get(selectedNodes)]).toEqual(['m1']);
+    expect(open).not.toHaveBeenCalled();
+    await fireEvent.click(screen.getByRole('button', { name: /^Box, folder/ }), { ctrlKey: true });
+    expect([...get(selectedNodes)].sort()).toEqual(['box', 'm1']);
+    await tick();
+    expect(cellOf(container, 'm1').classList.contains('selected')).toBe(true);
+    expect(cellOf(container, 'box').classList.contains('selected')).toBe(true);
+    await fireEvent.keyDown(window, { key: 'Escape' });
+    expect(get(selectedNodes).size).toBe(0);
+    await tick();
+    expect(cellOf(container, 'm1').classList.contains('selected')).toBe(false);
+    open.mockRestore();
+  });
+
+  it('right-click on a tile opens its menu; on empty grid space, the container menu at that cell', async () => {
+    const { container } = render(Dashboard, { dashboard: legacy });
+    enterEdit();
+    await tick();
+    await fireEvent.contextMenu(cellOf(container, 'm1'), { clientX: 30, clientY: 40 });
+    expect(get(editorMenu)).toEqual({ x: 30, y: 40, target: { kind: 'node', id: 'm1' } });
+    await tick();
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+    editorMenu.set(null);
+    const grid = container.querySelector('.tab-canvas [data-container-id="t1"]') as HTMLElement;
+    grid.getBoundingClientRect = () => ({ left: 0, top: 0, right: 1440, bottom: 600, width: 1440, height: 600, x: 0, y: 0, toJSON() {} }) as DOMRect;
+    await fireEvent.contextMenu(grid, { clientX: 5 * 120 + 10, clientY: 10 });
+    const req = get(editorMenu)!;
+    expect(req.target).toEqual({ kind: 'container', ref: { tabId: 't1' }, cell: { x: 5, y: 0 } });
+  });
+
+  it('the tab dialog edits the draft only (no request), and the tab bar shows the draft', async () => {
+    render(Dashboard, { dashboard: legacy });
+    enterEdit();
+    await tick();
+    await fireEvent.click(screen.getByRole('button', { name: 'Edit Main tab' }));
+    const name = screen.getByLabelText(/Tab Name/) as HTMLInputElement;
+    await fireEvent.input(name, { target: { value: 'Front' } });
+    await fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /^Save/ }));
+    expect(draft().tabs.find((t) => t.id === 't1')!.name).toBe('Front');
+    await tick();
+    expect(screen.getByRole('tab', { name: 'Switch to Front tab' })).toBeInTheDocument();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('Add tab creates the tab in the draft and switches to it', async () => {
+    const { container } = render(Dashboard, { dashboard: legacy });
+    enterEdit();
+    await tick();
+    await fireEvent.click(screen.getByRole('button', { name: /^Add tab/ }));
+    await fireEvent.input(screen.getByLabelText(/Tab Name/), { target: { value: 'Media' } });
+    await fireEvent.click(screen.getByRole('button', { name: /^Create/ }));
+    await tick();
+    await tick();
+    const added = draft().tabs[draft().tabs.length - 1];
+    expect(added.name).toBe('Media');
+    expect(screen.getByRole('tab', { name: 'Switch to Media tab' }).getAttribute('aria-selected')).toBe('true');
+    expect(container.querySelector(`.tab-canvas[data-tab-id="${added.id}"]`)).not.toBeNull();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('duplicating and deleting a tab edit the draft (delete asks first)', async () => {
+    render(Dashboard, { dashboard: legacy });
+    enterEdit();
+    await tick();
+    await fireEvent.click(screen.getByRole('button', { name: 'Duplicate Main tab' }));
+    await tick();
+    expect(draft().tabs.map((t) => t.name)).toEqual(['Second', 'Main', 'Main (Copy)']);
+    await fireEvent.click(screen.getByRole('button', { name: 'Delete Second tab' }));
+    await tick();
+    const { closeConfirmModal } = await import('$lib/stores/confirmModal');
+    closeConfirmModal(true);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(draft().tabs.map((t) => t.name)).toEqual(['Main', 'Main (Copy)']);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('tab reorder by drag (the tab bar finalize) reorders the draft and keeps the active tab', async () => {
+    render(Dashboard, { dashboard: legacy });
+    enterEdit();
+    await tick();
+    expect(screen.getByRole('tab', { name: 'Switch to Main tab' }).getAttribute('aria-selected')).toBe('true');
+    const bar = document.querySelector('[data-dashboard-tabs]') as HTMLElement;
+    const items = draft().tabs.map((t) => ({ id: t.id, name: t.name })).reverse();
+    bar.dispatchEvent(new CustomEvent('finalize', { detail: { items, info: { id: 't1', source: 'pointer', trigger: 'droppedIntoZone' } } }));
+    await tick();
+    expect(draft().tabs.map((t) => t.id)).toEqual(['t1', 't2']);
+    expect(screen.getByRole('tab', { name: 'Switch to Main tab' }).getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('the Header dialog edits the draft only; the Settings cog stays', async () => {
+    render(Dashboard, { dashboard: legacy });
+    enterEdit();
+    await tick();
+    expect(screen.getByTitle('Dashboard settings')).toBeInTheDocument();
+    await fireEvent.click(screen.getByTitle('Configure Header'));
+    await fireEvent.input(screen.getByLabelText(/Custom Title/), { target: { value: 'Draft title' } });
+    await fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /^Save/ }));
+    expect((draft().header as { centerTitle?: string }).centerTitle).toBe('Draft title');
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 });

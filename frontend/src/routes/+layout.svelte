@@ -25,8 +25,6 @@
 	import ChangePasswordModal from '$lib/components/admin/ChangePasswordModal.svelte';
 	import { navigateTiles } from '$lib/utils/tileNav';
 	import SearchModal from '$lib/components/SearchModal.svelte';
-	import { selectedEntry } from '$lib/stores/selection';
-	import { copyEntry, cutEntry, clipboard } from '$lib/stores/clipboard';
 	import { editMode, followRoute } from '$lib/stores/editMode';
 	import '../app.css';
 
@@ -99,37 +97,8 @@
 			}
 		}
 
-		// Only handle the other keyboard shortcuts in edit mode
-		if (!$editMode) return;
-
-		// Check for Ctrl+C (copy)
-		if ((e.ctrlKey || e.metaKey) && e.key === 'c' && !e.shiftKey && !e.altKey) {
-			const selected = $selectedEntry;
-			if (selected && selected.tabId && selected.groupId) {
-				// Don't prevent default if text is selected (allow normal copy)
-				const selection = window.getSelection();
-				if (selection && selection.toString().length > 0) return;
-
-				e.preventDefault();
-				copyEntry(selected.entry, selected.tabId, selected.groupId);
-			}
-		}
-
-		// Check for Ctrl+X (cut)
-		if ((e.ctrlKey || e.metaKey) && e.key === 'x' && !e.shiftKey && !e.altKey) {
-			const selected = $selectedEntry;
-			if (selected && selected.tabId && selected.groupId) {
-				// Don't prevent default if text is selected (allow normal cut)
-				const selection = window.getSelection();
-				if (selection && selection.toString().length > 0) return;
-
-				e.preventDefault();
-				cutEntry(selected.entry, selected.tabId, selected.groupId);
-			}
-		}
-
-		// Note: Ctrl+V for paste is handled by the Group component's paste button
-		// since we need to know which group to paste into
+		// Edit-mode shortcuts (undo/redo/save, copy/cut/paste, delete) live in the
+		// editor toolbar (EditToolbar), which is mounted only while editing.
 	}
 </script>
 

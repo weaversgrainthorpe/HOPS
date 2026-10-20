@@ -25,9 +25,15 @@
     onDelete?: () => void;
     onMoveToTab?: (targetTabId: string, targetGroupId: string) => void;
     onCopyToTab?: (targetTabId: string, targetGroupId: string) => void;
+    /**
+     * v3 editor: opens the Move/Copy dialog (any tab or folder) instead of the
+     * legacy tab/group selects. A v3 tile goes in and comes out with its
+     * kind, id and placement untouched (the editor never patches those).
+     */
+    onMoveCopy?: () => void;
   }
 
-  let { entry, currentTabId, currentGroupId, availableTabs = [], onSave, onCancel, onDelete, onMoveToTab, onCopyToTab }: Props = $props();
+  let { entry, currentTabId, currentGroupId, availableTabs = [], onSave, onCancel, onDelete, onMoveToTab, onCopyToTab, onMoveCopy }: Props = $props();
 
   // Form state initialized from props (intentionally captures initial values)
   // svelte-ignore state_referenced_locally
@@ -285,7 +291,14 @@
         </div>
       {/if}
 
-      {#if canMoveOrCopy}
+      {#if onMoveCopy && entry.id}
+        <div class="form-group full-width move-section">
+          <button type="button" class="btn-move-toggle" onclick={onMoveCopy}>
+            <Icon icon="mdi:folder-move" width="18" />
+            Move or copy to…
+          </button>
+        </div>
+      {:else if canMoveOrCopy}
         <div class="form-group full-width move-section">
           {#if !showMoveSection}
             <button type="button" class="btn-move-toggle" onclick={() => showMoveSection = true}>

@@ -192,6 +192,17 @@ export function nodeBox(p: Placement, m: ContainerMetrics): NodeBox {
   return { leftPx: c.x * m.unitPx, topPx: c.y * m.rowPx, widthPx: c.w * m.unitPx, heightPx: c.h * m.rowPx };
 }
 
+/**
+ * The cell under a point, given in px from the container's content-box origin (grid: a column and
+ * row; free: an 8 px design unit). Clamped to the columns and to x, y >= 0.
+ */
+export function pointToCell(m: ContainerMetrics, dxPx: number, dyPx: number): { x: number; y: number } {
+  if (!(m.unitPx > 0) || !(m.rowPx > 0)) return { x: 0, y: 0 };
+  const x = Math.floor((isNum(dxPx) ? dxPx : 0) / m.unitPx);
+  const y = Math.floor((isNum(dyPx) ? dyPx : 0) / m.rowPx);
+  return { x: Math.min(Math.max(x, 0), Math.max(0, m.columns - 1)), y: Math.max(y, 0) };
+}
+
 /** Space a folder's own chrome takes, per look. Mirrors FolderView's CSS (global border-box). */
 export interface FolderChrome { titlePx: number; padXPx: number; padYPx: number }
 

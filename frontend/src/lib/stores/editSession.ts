@@ -1,5 +1,5 @@
 import { writable, derived, get, type Readable } from 'svelte/store';
-import type { LayoutDashboard } from '$lib/types/layout';
+import type { LayoutDashboard, LayoutDoc } from '$lib/types/layout';
 import { saveDashboardV3, ConflictError, MigrationFailedError } from '$lib/utils/api';
 import { TreeOpError } from '$lib/editor/treeOps';
 import {
@@ -160,13 +160,13 @@ export function begin(dashboardId: string): void {
  * Apply one operation to the draft. The previous draft goes on the undo stack
  * (at most 100) and redo is cleared. A refused operation (TreeOpError) is
  * toasted with its message and leaves the draft unchanged; so does any other
- * failure.
+ * failure. Returns false when the operation was refused or failed.
  */
-export function apply(label: string, op: (d: LayoutDashboard) => LayoutDashboard): void {
+export function apply(label: string, op: (d: LayoutDashboard) => LayoutDashboard): boolean {
   const s = get(state);
   if (!s) {
     toast.error('Not editing: click Edit first.');
-    return;
+    return false;
   }
   let next: LayoutDashboard;
   try {
@@ -178,9 +178,9 @@ export function apply(label: string, op: (d: LayoutDashboard) => LayoutDashboard
       logError(`Edit "${label}"`, e);
       toast.error(e instanceof Error && e.message ? `That change failed: ${e.message}` : 'That change failed.');
     }
-    return;
+    return false;
   }
-  if (next === s.draft) return; // nothing changed: no undo step
+  if (next === s.draft) return true; // nothing changed: no undo step
   state.set({
     ...s,
     draft: next,
@@ -188,6 +188,24 @@ export function apply(label: string, op: (d: LayoutDashboard) => LayoutDashboard
     redo: [],
     lastLabel: label
   });
+  return true;
+}
+
+/**
+ * A change was written to the server outside the draft (a cross-dashboard
+ * transfer, only allowed while the session is clean). Restart the clean
+ * session from the fresh layout so its base revision is current. Returns
+ * false (and changes nothing) when the session is dirty or the dashboard is
+ * missing from the layout.
+ */
+export function rebaseCleanSession(layout: LayoutDoc | undefined): boolean {
+  const s = get(state);
+  if (!s || isDirty(s) || !layout) return false;
+  const d = findLayoutDashboard(s.dashboardId, layout);
+  if (!d || typeof d.revision !== 'number') return false;
+  const saved = clone(d);
+  state.set({ ...s, baseRevision: d.revision, saved, draft: saved, undo: [], redo: [], lastLabel: undefined });
+  return true;
 }
 
 export function undo(): void {

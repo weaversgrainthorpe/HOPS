@@ -11,6 +11,8 @@
   import { editMode } from '$lib/stores/editMode';
   import { FOLDER_VIEW_CONTEXT, differsFromSaved, type FolderViewContext } from '$lib/stores/folderView';
   import FolderControls from './FolderControls.svelte';
+  import { selectedNodes, toggleNode } from '$lib/stores/nodeSelection';
+  import { openDialog, openMenu, longPress, menuPointFor, ownsTarget } from '$lib/editor/editorUi';
 
   interface Props {
     folder: FolderNode;
@@ -23,8 +25,29 @@
     folderChain: FolderNode[];
     /** Metrics of the container this folder sits in; every inner size derives from them. */
     parent: ContainerMetrics;
+    /** Edit mode: click selects, double-click opens (collapsed) or edits (expanded), right-click = item menu. */
+    editing?: boolean;
   }
-  let { folder, style = '', plan, dashboard, tab, folderChain, parent }: Props = $props();
+  let { folder, style = '', plan, dashboard, tab, folderChain, parent, editing = false }: Props = $props();
+
+  const selected = $derived(editing && $selectedNodes.has(folder.id));
+  function select(e: MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation(); // an enclosing folder must not select itself too
+    toggleNode(folder.id, e.ctrlKey || e.metaKey);
+  }
+  function menu(e: MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    openMenu({ ...menuPointFor(e, e.currentTarget as Element), target: { kind: 'node', id: folder.id } });
+  }
+  function pressMenu(el: HTMLElement) {
+    return (x: number, y: number, t: EventTarget | null) => {
+      if (editing && ownsTarget(el, t)) openMenu({ x, y, target: { kind: 'node', id: folder.id } });
+    };
+  }
+  let slotEl = $state<HTMLElement | null>(null);
+  let folderEl = $state<HTMLElement | null>(null);
 
   // This viewer's remembered view and the saved default (TabCanvas has already applied the view).
   const views = getContext<FolderViewContext | undefined>(FOLDER_VIEW_CONTEXT);
@@ -59,17 +82,33 @@
 {#if folder.display === 'collapsed'}
   <!-- The positioned wrapper carries the node id and placement; the tile (role=button) and
        the restore control are siblings, never nested. -->
-  <div class="folder-slot collapsed" data-node-id={folder.id} {style}>
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div
+    class="folder-slot collapsed"
+    class:selected
+    data-node-id={folder.id}
+    {style}
+    bind:this={slotEl}
+    oncontextmenu={editing ? menu : undefined}
+    use:longPress={(x, y, t) => slotEl && pressMenu(slotEl)(x, y, t)}
+  >
   <div
     class="folder tile-face folder-collapsed-tile"
     role="button"
     tabindex="0"
     aria-haspopup="dialog"
     aria-label={collapsedLabel}
+    aria-pressed={editing ? selected : undefined}
     style:--group-bg={folder.color || 'var(--bg-secondary)'}
     style:--group-opacity={folder.opacity !== undefined ? folder.opacity : 0.95}
     style:color={textColor}
-    onclick={() => openFolder(folder.id)}
+    onclick={(e) => (editing ? select(e) : openFolder(folder.id))}
+    ondblclick={editing
+      ? (e) => {
+          e.stopPropagation();
+          openFolder(folder.id);
+        }
+      : undefined}
     onkeydown={onKey}
   >
     {#if unreadable}
@@ -100,13 +139,25 @@
   {/if}
   </div>
 {:else}
+  <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
   <div
     class="folder"
     class:folder-style={tabLook}
+    class:selected
     data-node-id={folder.id}
     role="group"
     aria-label="{folder.name} folder"
     {style}
+    bind:this={folderEl}
+    onclick={editing ? select : undefined}
+    ondblclick={editing
+      ? (e) => {
+          e.stopPropagation();
+          openDialog({ kind: 'folder', id: folder.id });
+        }
+      : undefined}
+    oncontextmenu={editing ? menu : undefined}
+    use:longPress={(x, y, t) => folderEl && pressMenu(folderEl)(x, y, t)}
     style:--group-bg={folder.color || 'var(--bg-secondary)'}
     style:--group-opacity={folder.opacity !== undefined ? folder.opacity : 0.95}
     style:color={textColor}
@@ -141,6 +192,7 @@
         {dashboard}
         {tab}
         folderChain={chain}
+        {editing}
       />
     </div>
   </div>
@@ -261,6 +313,12 @@
     width: 100%;
     height: 100%;
     object-fit: contain;
+  }
+  /* Edit-mode selection outline on the rendered box. */
+  .folder.selected,
+  .folder-slot.selected {
+    outline: 3px solid var(--accent);
+    outline-offset: 2px;
   }
   .folder-slot {
     position: relative;

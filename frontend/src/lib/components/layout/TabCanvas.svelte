@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy, setContext, untrack } from 'svelte';
-  import type { Container, FolderNode, LayoutDashboard, LayoutTab } from '$lib/types/layout';
+  import type { Container, FolderNode, LayoutDashboard, LayoutDoc, LayoutTab } from '$lib/types/layout';
   import { containerMetrics, planCanvas, resolveMode, rootBoxWidthPx } from '$lib/layout/geometry';
   import { layoutDoc, layoutStale } from '$lib/stores/config';
   import { closeAll, overlayStack, reconcile } from '$lib/stores/folderOverlay';
@@ -16,8 +16,10 @@
   interface Props {
     dashboard: LayoutDashboard;
     tab: LayoutTab;
+    /** Edit mode: `dashboard` is the session draft; items are selectable and have a menu. */
+    editing?: boolean;
   }
-  let { dashboard, tab }: Props = $props();
+  let { dashboard, tab, editing = false }: Props = $props();
 
   let el = $state<HTMLElement | null>(null);
   let width = $state(0);
@@ -47,19 +49,26 @@
   });
 
   // A config reload may remove a folder the user has open: close it and say so.
+  // In edit mode the tree is the session draft: an undo or delete there can remove an open folder.
   $effect(() => {
-    const doc = $layoutDoc;
+    const doc: LayoutDoc | null = editing ? { schemaVersion: 3, dashboards: [dashboard] } : $layoutDoc;
     // A transient reload gap (no layout held) must not close overlays or toast.
     if (!doc) return;
     untrack(() => {
       const dropped = reconcile(doc, dashboard.id, tab.id);
-      if (dropped.length > 0) toast.info('A folder you had open was changed elsewhere and has been closed');
+      if (dropped.length > 0) {
+        toast.info(
+          editing
+            ? 'A folder you had open is no longer there, so it has been closed'
+            : 'A folder you had open was changed elsewhere and has been closed'
+        );
+      }
     });
   });
 
   // This viewer's remembered folder views (per browser). Edit mode shows the saved layout.
   const viewStore = $derived(folderViewFor(dashboard.id));
-  const remembered = $derived($editMode ? {} : $viewStore);
+  const remembered = $derived($editMode || editing ? {} : $viewStore);
   // The tab as this viewer sees it; every size below derives from it (one geometry source).
   const viewTab = $derived(applyFolderViews(dashboard, tab, remembered));
   const savedDisplay = $derived.by(() => {
@@ -94,15 +103,15 @@
   const metrics = $derived(containerMetrics(viewTab.root, mode, rootBoxWidthPx(plan, viewTab)));
 </script>
 
-<div class="tab-canvas" bind:this={el} data-tab-id={tab.id}>
+<div class="tab-canvas" class:editing bind:this={el} data-tab-id={tab.id}>
   {#if $layoutStale}
     <div role="status" class="refreshing">Refreshing layout…</div>
   {:else if width > 0}
-    <ContainerView container={viewTab.root} {metrics} {plan} {dashboard} tab={viewTab} folderChain={[]} />
+    <ContainerView container={viewTab.root} {metrics} {plan} {dashboard} tab={viewTab} folderChain={[]} {editing} />
   {/if}
 </div>
 <!-- Outside the conditional above and portalled to <body>: survives stale flips. -->
-<FolderOverlay {dashboard} tab={viewTab} {plan} />
+<FolderOverlay {dashboard} tab={viewTab} {plan} {editing} />
 {#if maximisedId && !$layoutStale}
   <MaximisedFolder {dashboard} tab={viewTab} {plan} folderId={maximisedId} />
 {/if}

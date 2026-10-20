@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   TreeOpError, newNodeId, locate, isDescendant, moveNodes, copyNodes, mergeIntoNewFolder, insertNode,
   updateNode, deleteNodes, duplicateNode, resizeNode, setZ, reorderTabs, addTab, updateTab, deleteTab,
-  firstFreeCell, pushAside, assertGridNoOverlap
+  firstFreeCell, pushAside, assertGridNoOverlap, setFolderDisplay, duplicateTab, setTabLayout
 } from './treeOps';
 import type { Container, FolderNode, LayoutDashboard, LayoutNode, Placement } from '../types/layout';
 
@@ -418,5 +418,94 @@ describe('purity', () => {
     pushAside(d.tabs[0].root, new Set(), p(0, 0, 3, 3));
     expect(JSON.stringify(d)).toBe(before);
     expect(all.size).toBe(allNodeIds(d).length);
+  });
+});
+
+// ---------------------------------------------------------------- M3 Task 6 additions
+
+describe('setFolderDisplay', () => {
+  it("sets a folder's saved display and leaves everything else alone", () => {
+    const d = dash();
+    const out = setFolderDisplay(d, 'f2', 'collapsed');
+    const f1 = rootOf(out).find((n) => n.id === 'f1') as FolderNode;
+    const f2 = f1.content.children.find((n) => n.id === 'f2') as FolderNode;
+    expect(f2.display).toBe('collapsed');
+    expect(f2.placement).toEqual(p(2, 0, 2, 2));
+    expect(rootOf(out).find((n) => n.id === 'a')).toBe(rootOf(d).find((n) => n.id === 'a'));
+  });
+  it('returns the same dashboard when nothing changes (no undo step)', () => {
+    const d = dash();
+    expect(setFolderDisplay(d, 'f1', 'expanded')).toBe(d);
+  });
+  it('refuses tiles, unknown ids and bad values', () => {
+    const d = dash();
+    expect(() => setFolderDisplay(d, 'a', 'collapsed')).toThrow(TreeOpError);
+    expect(() => setFolderDisplay(d, 'nope', 'collapsed')).toThrow(TreeOpError);
+    expect(() => setFolderDisplay(d, 'f1', 'maximised' as never)).toThrow(TreeOpError);
+  });
+});
+
+describe('duplicateTab', () => {
+  it('appends a deep copy with new ids for the tab and every node, named "(Copy)"', () => {
+    const d = dash();
+    const all = new Set(allNodeIds(d));
+    const { dashboard, tabId } = duplicateTab(d, 't1', all);
+    expect(dashboard.tabs).toHaveLength(3);
+    const copy = dashboard.tabs[2];
+    expect(copy.id).toBe(tabId);
+    expect(copy.name).toBe('One (Copy)');
+    const ids = (c: LayoutNode[]): string[] =>
+      c.flatMap((n) => [n.id, ...(n.kind === 'folder' ? ids(n.content.children) : [])]);
+    const copied = ids(copy.root.children);
+    expect(copied).toHaveLength(ids(rootOf(d)).length);
+    for (const id of copied) expect(all.has(id)).toBe(false);
+    expect(new Set(copied).size).toBe(copied.length);
+    expect(d.tabs).toHaveLength(2);
+  });
+  it('refuses an unknown tab', () => {
+    expect(() => duplicateTab(dash(), 'nope', new Set())).toThrow(TreeOpError);
+  });
+});
+
+describe('setTabLayout', () => {
+  it('grid → free scales every placement by one column (designWidth / 12 / 8) and converts inheriting folders', () => {
+    const d = dash();
+    const out = setTabLayout(d, 't1', 'free', 960); // side = 10
+    const t = out.tabs[0];
+    expect(t.layout).toBe('free');
+    expect(t.designWidth).toBe(960);
+    expect(t.root.columns).toBe(120);
+    expect(rootOf(out).find((n) => n.id === 'b')!.placement).toEqual(p(30, 0, 10, 10));
+    const f1 = rootOf(out).find((n) => n.id === 'f1') as FolderNode;
+    expect(f1.placement).toEqual(p(0, 30, 40, 30));
+    expect(f1.content.columns).toBe(40);
+    expect(f1.content.children.find((n) => n.id === 'f2')!.placement).toEqual(p(20, 0, 20, 20));
+  });
+
+  it('free → grid divides back, tiles become one cell, collisions go to the first free cell', () => {
+    const d: LayoutDashboard = {
+      ...dash(),
+      tabs: [{ id: 'f', name: 'F', layout: 'free', designWidth: 960, root: { columns: 120, children: [
+        tile('a', p(0, 0, 10, 10)), tile('b', p(2, 1, 10, 10)), tile('c', p(115, 0, 10, 10))
+      ] } }]
+    };
+    const out = setTabLayout(d, 'f', 'grid');
+    const kids = out.tabs[0].root.children;
+    expect(out.tabs[0].root.columns).toBe(12);
+    expect(kids.map((n) => n.placement)).toEqual([p(0, 0), p(1, 0), p(11, 0)]);
+    expect(() => assertGridNoOverlap(out.tabs[0].root)).not.toThrow();
+  });
+
+  it('same mode: a new design width only updates the free root columns; unchanged → same object', () => {
+    const d: LayoutDashboard = { ...dash(), tabs: [{ id: 'f', name: 'F', layout: 'free', designWidth: 1280, root: { columns: 160, children: [] } }] };
+    expect(setTabLayout(d, 'f', 'free', 1280)).toBe(d);
+    const out = setTabLayout(d, 'f', 'free', 1600);
+    expect(out.tabs[0].designWidth).toBe(1600);
+    expect(out.tabs[0].root.columns).toBe(200);
+  });
+
+  it('refuses a bad layout or design width', () => {
+    expect(() => setTabLayout(dash(), 't1', 'free', 50)).toThrow(TreeOpError);
+    expect(() => setTabLayout(dash(), 't1', 'wavy' as never)).toThrow(TreeOpError);
   });
 });

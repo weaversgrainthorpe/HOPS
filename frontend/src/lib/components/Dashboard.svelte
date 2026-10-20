@@ -1,36 +1,41 @@
 <script lang="ts">
-  import type { Dashboard, Entry, HeaderConfig, Tab, Background, Group } from '$lib/types';
-  import type { LayoutDashboard } from '$lib/types/layout';
-  import TabPanel from './TabPanel.svelte';
+  import type { Dashboard, HeaderConfig, Background } from '$lib/types';
+  import type { LayoutDashboard, LayoutTab } from '$lib/types/layout';
   import TabCanvas from './layout/TabCanvas.svelte';
   import BackgroundSlideshow from './BackgroundSlideshow.svelte';
   import PartyMode from './PartyMode.svelte';
   import HopAnimation from './HopAnimation.svelte';
-  import { config, mutateDashboard, layoutDoc, layoutStale, findLayoutDashboard, loadConfig } from '$lib/stores/config';
+  import { config, layoutDoc, layoutStale, findLayoutDashboard, loadConfig } from '$lib/stores/config';
   import { closeAll, openFolder, revealRequest, takeReveal, type RevealRequest } from '$lib/stores/folderOverlay';
   import { editMode } from '$lib/stores/editMode';
   import { isAuthenticated } from '$lib/stores/auth';
-  import { clipboard, clearClipboard } from '$lib/stores/clipboard';
-  import { confirm } from '$lib/stores/confirmModal';
+  import { session, apply } from '$lib/stores/editSession';
   import { initEasterEggs, destroyEasterEggs, partyModeActive } from '$lib/stores/easterEggs';
   import TabEditModal from './admin/TabEditModal.svelte';
   import HeaderConfigModal from './admin/HeaderConfigModal.svelte';
   import DashboardSettingsModal from './admin/DashboardSettingsModal.svelte';
   import BackgroundConfigModal from './admin/BackgroundConfigModal.svelte';
+  import EditToolbar from './editor/EditToolbar.svelte';
+  import EditorDialogs from './editor/EditorDialogs.svelte';
+  import {
+    addTabWith, editTab, duplicateTabAction, deleteTabWithConfirm, setHeader, setBackground, setPerTabBackgrounds,
+    setTabBackground, type TabFields
+  } from '$lib/editor/editorActions';
+  import { reorderTabs } from '$lib/editor/treeOps';
   import Icon from '@iconify/svelte';
   import { dndzone } from 'svelte-dnd-action';
   import type { DndEvent } from 'svelte-dnd-action';
   import { onMount, onDestroy, tick, untrack } from 'svelte';
-  import { logError } from '$lib/utils/errors';
+  import { get } from 'svelte/store';
   import { toast } from '$lib/stores/toast';
 
   // A v3-only dashboard arrives here as its LayoutDashboard (header, background,
-  // tabs and name keys match); with v3Only set it is view-only, so the
-  // legacy-only (edit-mode) code paths below never see it.
+  // tabs and name keys match); with v3Only set it is view-only (the gate is
+  // removed when the legacy view retires, M3 Task 11).
   let { dashboard, v3Only = false }: { dashboard: Dashboard; v3Only?: boolean } = $props();
   let activeTabIndex = $state(0);
 
-  // Edit mode applies only to legacy-editable dashboards.
+  // Edit mode applies only to legacy-editable dashboards (for now).
   const editing = $derived($editMode && !v3Only);
   // Why a v3-only dashboard is view-only, as the server reported it.
   const v3OnlyReason = $derived(
@@ -40,22 +45,54 @@
     if (v3Only && $editMode) editMode.set(false);
   });
 
+  // Edit mode works on the edit session's DRAFT of this dashboard (Tenet 5):
+  // every change below goes through editSession.apply, and nothing is saved
+  // before Save.
+  const draft = $derived<LayoutDashboard | null>(
+    editing && $session && $session.dashboardId === dashboard.id ? $session.draft : null
+  );
+
+  /** What the tab bar needs from either shape (legacy tab or v3 draft tab). */
+  interface BarTab {
+    id: string;
+    name: string;
+    icon?: string;
+    iconUrl?: string;
+    iconBgColor?: string;
+    color?: string;
+    opacity?: number;
+    background?: Background;
+    layout?: 'inherit' | 'grid' | 'free';
+    designWidth?: number;
+  }
+  // The tabs shown: the draft's while editing (added/renamed/reordered tabs live there), else the saved ones.
+  const barTabs = $derived<BarTab[]>(
+    editing ? ((draft?.tabs ?? []) as unknown as BarTab[]) : (dashboard.tabs as unknown as BarTab[])
+  );
+  // The dashboard-level look (background, per-tab backgrounds) the page shows: the draft's while editing.
+  const look = $derived<{ background?: Background; perTabBackgrounds?: boolean; header?: HeaderConfig }>(
+    draft
+      ? (draft as unknown as { background?: Background; perTabBackgrounds?: boolean; header?: HeaderConfig })
+      : dashboard
+  );
+
   // View mode renders through the layout engine. The tab is matched by id
   // (legacy and layout tab order may differ).
   const layoutDash = $derived<LayoutDashboard | undefined>(
     findLayoutDashboard(dashboard.id, $layoutDoc) ?? (v3Only ? (dashboard as unknown as LayoutDashboard) : undefined)
   );
-  const activeTabId = $derived(dashboard.tabs[activeTabIndex]?.id);
+  const activeTabId = $derived(barTabs[activeTabIndex]?.id);
   const layoutTab = $derived(layoutDash?.tabs.find((t) => t.id === activeTabId));
+  const draftTab = $derived<LayoutTab | undefined>(draft?.tabs.find((t) => t.id === activeTabId));
 
-  // A reload (or any new tabs array) keeps the ACTIVE TAB ID, not its index:
-  // when the tab moved, follow it. An explicit index change (tab click, add,
-  // reveal) always wins, even when it lands in the same flush as new tabs.
+  // A reload, entering edit mode, or any new tabs array keeps the ACTIVE TAB
+  // ID, not its index: when the tab moved, follow it. An explicit index change
+  // (tab click, add, reveal) always wins, even in the same flush as new tabs.
   let heldTabs: unknown = undefined;
   let heldIndex = -1;
   let heldTabId: string | undefined = undefined;
   $effect.pre(() => {
-    const tabs = dashboard.tabs;
+    const tabs = barTabs;
     const idx = activeTabIndex;
     untrack(() => {
       if (tabs !== heldTabs && idx === heldIndex && heldTabId !== undefined && tabs[idx]?.id !== heldTabId) {
@@ -73,9 +110,9 @@
     });
   });
 
-  // Keep the active index in range when tabs disappear (e.g. a reload).
+  // Keep the active index in range when tabs disappear (e.g. a reload or a deleted tab).
   $effect(() => {
-    const n = dashboard.tabs.length;
+    const n = barTabs.length;
     if (n > 0 && activeTabIndex >= n) untrack(() => (activeTabIndex = n - 1));
   });
 
@@ -104,14 +141,13 @@
   }
 
   async function reveal(req: RevealRequest) {
-    const idx = dashboard.tabs.findIndex((t) => t.id === req.tabId);
+    const idx = barTabs.findIndex((t) => t.id === req.tabId);
     if (idx === -1) {
       toast.error("Couldn't show that tile: its tab is no longer on this dashboard");
       return;
     }
     activeTabIndex = idx;
     await tick(); // let the canvas switch tab (which closes any open folders) first
-    if (editing) return; // the legacy editor has no folders to open; the tab switch is the reveal
     closeAll();
     for (const id of req.folderIds) openFolder(id);
     let el: HTMLElement | null = null;
@@ -121,7 +157,7 @@
       if (!el) await nextFrame();
     }
     if (!el) {
-      toast.error("Couldn't show that tile: it may have been moved or removed \u2014 reload and try again");
+      toast.error("Couldn't show that tile: it may have been moved or removed — reload and try again");
       return;
     }
     // After the overlay's own focus-on-open (next frame), focus the tile.
@@ -137,20 +173,14 @@
   let showHeaderConfig = $state(false);
   let showDashboardSettings = $state(false);
   let showBackgroundConfig = $state(false);
-  let draggedTabs = $state<Tab[]>([]);
-  let focusedGroupId = $state<string | null>(null); // Track which group has focus for paste
+  let draggedTabs = $state<BarTab[]>([]);
 
-  // Determine the effective background based on perTabBackgrounds setting
-  const effectiveBackground = $derived(() => {
-    if (dashboard.perTabBackgrounds) {
-      const activeTab = dashboard.tabs[activeTabIndex];
-      // Use tab background if available, otherwise fall back to dashboard background
-      return activeTab?.background || dashboard.background;
-    }
-    return dashboard.background;
+  // The effective background: per-tab when enabled, else the dashboard's.
+  const effectiveBackground = $derived.by(() => {
+    if (look.perTabBackgrounds) return barTabs[activeTabIndex]?.background || look.background;
+    return look.background;
   });
 
-  // Initialize Easter eggs
   onMount(() => {
     initEasterEggs();
   });
@@ -162,585 +192,83 @@
   // svelte-dnd-action does an internal structuredClone() that fails on Svelte 5
   // $state Proxies. $state.snapshot() returns a plain deep copy that's safe.
   $effect(() => {
-    draggedTabs = $state.snapshot(dashboard.tabs) as Tab[];
+    draggedTabs = $state.snapshot(barTabs) as BarTab[];
   });
-
-  // Helper to check authentication before edit operations
-  function requireAuth(): boolean {
-    if (!$isAuthenticated) {
-      logError('Dashboard', 'Edit operation requires authentication');
-      return false;
-    }
-    return true;
-  }
-
-  // Global keyboard shortcuts
-  async function handleKeyboard(e: KeyboardEvent) {
-    // Only handle shortcuts in edit mode
-    if (!editing || !$isAuthenticated) return;
-
-    // Ctrl+V or Cmd+V - Paste
-    if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
-      // Don't interfere with text input paste
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
-        return;
-      }
-
-      const clipboardItem = $clipboard;
-      if (!clipboardItem || clipboardItem.type !== 'entry') return;
-
-      e.preventDefault();
-
-      // Determine target group
-      const activeTab = dashboard.tabs[activeTabIndex];
-      if (!activeTab || activeTab.groups.length === 0) return;
-
-      // Use focused group or first group
-      let targetGroupId = focusedGroupId || activeTab.groups[0].id;
-
-      // Paste the entry — MUST await so the delete (cut case) sees the post-add
-      // state, otherwise both saves race against the same stale dashboard
-      // snapshot and the second write wins (potentially losing the new entry).
-      await handleAddEntry(activeTab.id, targetGroupId, {
-        ...clipboardItem.data,
-        id: '', // Will be generated
-        order: 0 // Will be set correctly
-      });
-
-      // For cut operations, delete the source entry
-      if (clipboardItem.operation === 'cut' && clipboardItem.sourceTabId && clipboardItem.sourceGroupId) {
-        await handleDeleteEntry(clipboardItem.sourceTabId, clipboardItem.sourceGroupId, clipboardItem.data.id);
-        clearClipboard();
-      }
-    }
-  }
-
-  function setActiveTab(index: number) {
-    activeTabIndex = index;
-  }
 
   // Clicking a tab always switches to it — even in edit mode. The per-tab
   // pencil button (rendered in edit mode) is the entry point for editing
-  // the tab itself; conflating "click to switch" with "click to edit" made
-  // it impossible to move between tabs while editing.
+  // the tab itself.
   function handleTabClick(index: number) {
-    setActiveTab(index);
+    activeTabIndex = index;
   }
 
-  async function handleUpdateEntry(tabId: string, groupId: string, entryId: string, updatedEntry: Entry) {
-    if (!requireAuth()) return;
-    await mutateDashboard(dashboard.id, (dash) => {
-      const tab = dash.tabs.find(t => t.id === tabId);
-      if (!tab) return;
-      const group = tab.groups.find(g => g.id === groupId);
-      if (!group) return;
-      const entryIndex = group.entries.findIndex(e => e.id === entryId);
-      if (entryIndex !== -1) {
-        group.entries[entryIndex] = { ...updatedEntry, id: entryId };
-      }
-    });
+  /** Switch to a tab of the draft by id (after an add or duplicate). */
+  async function showDraftTab(tabId: string | null) {
+    if (!tabId) return;
+    await tick();
+    const i = (get(session)?.draft.tabs ?? []).findIndex((t) => t.id === tabId);
+    if (i !== -1) activeTabIndex = i;
   }
 
-  async function handleDeleteEntry(tabId: string, groupId: string, entryId: string) {
-    if (!requireAuth()) return;
-    await mutateDashboard(dashboard.id, (dash) => {
-      const tab = dash.tabs.find(t => t.id === tabId);
-      if (!tab) return;
-      const group = tab.groups.find(g => g.id === groupId);
-      if (!group) return;
-      group.entries = group.entries.filter(e => e.id !== entryId);
-    });
+  // ---- edit mode: every change edits the draft (editorActions → apply).
+
+  function tabFields(
+    name: string, icon?: string, iconUrl?: string, iconBgColor?: string, color?: string, opacity?: number,
+    layout?: { layout: 'inherit' | 'grid' | 'free'; designWidth?: number }
+  ): TabFields {
+    return { name, icon, iconUrl, iconBgColor, color, opacity, ...(layout ?? {}) };
   }
 
-  async function handleAddEntry(tabId: string, groupId: string, newEntry: Entry) {
-    if (!requireAuth()) return;
-    await mutateDashboard(dashboard.id, (dash) => {
-      const tab = dash.tabs.find(t => t.id === tabId);
-      if (!tab) return;
-      const group = tab.groups.find(g => g.id === groupId);
-      if (!group) return;
-      const newId = `entry-${Date.now()}-${Math.random().toString(36).substring(7)}`;
-      group.entries.push({ ...newEntry, id: newId, order: group.entries.length });
-    });
-  }
-
-  async function handleAddGroup(tabId: string, groupName: string, icon?: string, iconUrl?: string, iconBgColor?: string, color?: string, opacity?: number, textColor?: 'auto' | 'light' | 'dark', displayStyle?: 'header' | 'folder', width?: 'full' | 'half' | 'third') {
-    if (!requireAuth()) return;
-    await mutateDashboard(dashboard.id, (dash) => {
-      const tab = dash.tabs.find(t => t.id === tabId);
-      if (!tab) return;
-      const newId = `group-${Date.now()}-${Math.random().toString(36).substring(7)}`;
-      const newGroup: Group = {
-        id: newId,
-        name: groupName,
-        icon,
-        iconUrl,
-        iconBgColor,
-        color,
-        opacity,
-        textColor,
-        displayStyle,
-        width,
-        collapsed: false,
-        entries: [],
-        order: tab.groups.length
-      };
-      tab.groups.push(newGroup);
-    });
-  }
-
-  function makeUpdateHandler(tabId: string) {
-    return (groupId: string, entryId: string, updatedEntry: Entry) => {
-      handleUpdateEntry(tabId, groupId, entryId, updatedEntry);
-    };
-  }
-
-  function makeDeleteHandler(tabId: string) {
-    return (groupId: string, entryId: string) => {
-      return handleDeleteEntry(tabId, groupId, entryId);
-    };
-  }
-
-  function makeAddHandler(tabId: string) {
-    return (groupId: string, newEntry: Entry) => {
-      return handleAddEntry(tabId, groupId, newEntry);
-    };
-  }
-
-  function makeAddGroupHandler(tabId: string) {
-    return (groupName: string, icon?: string, iconUrl?: string, iconBgColor?: string, color?: string, opacity?: number, textColor?: 'auto' | 'light' | 'dark', displayStyle?: 'header' | 'folder', width?: 'full' | 'half' | 'third') => {
-      handleAddGroup(tabId, groupName, icon, iconUrl, iconBgColor, color, opacity, textColor, displayStyle, width);
-    };
-  }
-
-  async function handleReorderEntries(tabId: string, groupId: string, reorderedEntries: Entry[]) {
-    if (!requireAuth()) return;
-    await mutateDashboard(dashboard.id, (dash) => {
-      const tab = dash.tabs.find(t => t.id === tabId);
-      if (!tab) return;
-      const group = tab.groups.find(g => g.id === groupId);
-      if (!group) return;
-      group.entries = reorderedEntries;
-    });
-  }
-
-  function makeReorderHandler(tabId: string) {
-    return (groupId: string, reorderedEntries: Entry[]) => {
-      handleReorderEntries(tabId, groupId, reorderedEntries);
-    };
-  }
-
-  async function handleMoveEntry(
-    tabId: string,
-    fromGroupId: string,
-    toGroupId: string,
-    entryId: string,
-    newIndex: number
-  ) {
-    if (!requireAuth()) return;
-    await mutateDashboard(dashboard.id, (dash) => {
-      const tab = dash.tabs.find(t => t.id === tabId);
-      if (!tab) return;
-      const fromGroup = tab.groups.find(g => g.id === fromGroupId);
-      const toGroup = tab.groups.find(g => g.id === toGroupId);
-      if (!fromGroup || !toGroup) return;
-      const entryIndex = fromGroup.entries.findIndex(e => e.id === entryId);
-      if (entryIndex === -1) return;
-      const [movedEntry] = fromGroup.entries.splice(entryIndex, 1);
-      toGroup.entries.splice(newIndex, 0, { ...movedEntry, order: newIndex });
-      toGroup.entries = toGroup.entries.map((entry, idx) => ({ ...entry, order: idx }));
-      fromGroup.entries = fromGroup.entries.map((entry, idx) => ({ ...entry, order: idx }));
-    });
-  }
-
-  function makeMoveEntryHandler(tabId: string) {
-    return (fromGroupId: string, toGroupId: string, entryId: string, newIndex: number) => {
-      handleMoveEntry(tabId, fromGroupId, toGroupId, entryId, newIndex);
-    };
-  }
-
-  async function handleReorderGroups(tabId: string, reorderedGroups: Group[]) {
-    if (!requireAuth()) return;
-    await mutateDashboard(dashboard.id, (dash) => {
-      const tab = dash.tabs.find(t => t.id === tabId);
-      if (tab) tab.groups = reorderedGroups;
-    });
-  }
-
-  function makeReorderGroupsHandler(tabId: string) {
-    return (reorderedGroups: Group[]) => {
-      handleReorderGroups(tabId, reorderedGroups);
-    };
-  }
-
-  async function handleUpdateGroup(tabId: string, groupId: string, updatedGroup: Partial<Group>) {
-    if (!requireAuth()) return;
-    await mutateDashboard(dashboard.id, (dash) => {
-      const tab = dash.tabs.find(t => t.id === tabId);
-      if (!tab) return;
-      const groupIndex = tab.groups.findIndex(g => g.id === groupId);
-      if (groupIndex !== -1) {
-        tab.groups[groupIndex] = { ...tab.groups[groupIndex], ...updatedGroup };
-      }
-    });
-  }
-
-  function makeUpdateGroupHandler(tabId: string) {
-    return (groupId: string, updatedGroup: Partial<Group>) => {
-      handleUpdateGroup(tabId, groupId, updatedGroup);
-    };
-  }
-
-  async function handleDeleteGroup(tabId: string, groupId: string) {
-    if (!requireAuth()) return;
-    await mutateDashboard(dashboard.id, (dash) => {
-      const tab = dash.tabs.find(t => t.id === tabId);
-      if (tab) tab.groups = tab.groups.filter(g => g.id !== groupId);
-    });
-  }
-
-  function makeDeleteGroupHandler(tabId: string) {
-    return (groupId: string) => {
-      handleDeleteGroup(tabId, groupId);
-    };
-  }
-
-  async function handleDuplicateGroup(tabId: string, groupId: string) {
-    if (!requireAuth()) return;
-    await mutateDashboard(dashboard.id, (dash) => {
-      const tab = dash.tabs.find(t => t.id === tabId);
-      if (!tab) return;
-      const sourceGroupIndex = tab.groups.findIndex(g => g.id === groupId);
-      if (sourceGroupIndex === -1) return;
-      const sourceGroup = tab.groups[sourceGroupIndex];
-      const newGroupId = `group-${Date.now()}-${Math.random().toString(36).substring(7)}`;
-      const newGroup: Group = {
-        ...sourceGroup,
-        id: newGroupId,
-        name: `${sourceGroup.name} (Copy)`,
-        order: sourceGroupIndex + 1,
-        entries: sourceGroup.entries.map(entry => ({
-          ...entry,
-          id: `entry-${Date.now()}-${Math.random().toString(36).substring(7)}`
-        }))
-      };
-      tab.groups.splice(sourceGroupIndex + 1, 0, newGroup);
-      for (let i = sourceGroupIndex + 2; i < tab.groups.length; i++) {
-        tab.groups[i].order = i;
-      }
-    });
-  }
-
-  function makeDuplicateGroupHandler(tabId: string) {
-    return (groupId: string) => {
-      handleDuplicateGroup(tabId, groupId);
-    };
-  }
-
-  // Move entry to a different tab/group
-  async function handleMoveEntryToTab(
-    sourceTabId: string,
-    sourceGroupId: string,
-    entryId: string,
-    targetTabId: string,
-    targetGroupId: string
-  ) {
-    if (!requireAuth()) return;
-    await mutateDashboard(dashboard.id, (dash) => {
-      const sourceTab = dash.tabs.find(t => t.id === sourceTabId);
-      const targetTab = dash.tabs.find(t => t.id === targetTabId);
-      if (!sourceTab || !targetTab) return;
-      const sourceGroup = sourceTab.groups.find(g => g.id === sourceGroupId);
-      const targetGroup = targetTab.groups.find(g => g.id === targetGroupId);
-      if (!sourceGroup || !targetGroup) return;
-      const entryIndex = sourceGroup.entries.findIndex(e => e.id === entryId);
-      if (entryIndex === -1) return;
-      const [movedEntry] = sourceGroup.entries.splice(entryIndex, 1);
-      targetGroup.entries.push({ ...movedEntry, order: targetGroup.entries.length });
-      sourceGroup.entries = sourceGroup.entries.map((entry, idx) => ({ ...entry, order: idx }));
-    });
-  }
-
-  function makeMoveEntryToTabHandler(sourceTabId: string) {
-    return (sourceGroupId: string, entryId: string, targetTabId: string, targetGroupId: string) => {
-      handleMoveEntryToTab(sourceTabId, sourceGroupId, entryId, targetTabId, targetGroupId);
-    };
-  }
-
-  // Copy entry to a different tab/group (deep-clone with fresh ID; source untouched).
-  async function handleCopyEntryToTab(
-    sourceTabId: string,
-    sourceGroupId: string,
-    entryId: string,
-    targetTabId: string,
-    targetGroupId: string
-  ) {
-    if (!requireAuth()) return;
-    await mutateDashboard(dashboard.id, (dash) => {
-      const sourceTab = dash.tabs.find(t => t.id === sourceTabId);
-      const targetTab = dash.tabs.find(t => t.id === targetTabId);
-      if (!sourceTab || !targetTab) return;
-      const sourceGroup = sourceTab.groups.find(g => g.id === sourceGroupId);
-      const targetGroup = targetTab.groups.find(g => g.id === targetGroupId);
-      if (!sourceGroup || !targetGroup) return;
-      const sourceEntry = sourceGroup.entries.find(e => e.id === entryId);
-      if (!sourceEntry) return;
-      targetGroup.entries.push({
-        ...sourceEntry,
-        id: `entry-${Date.now()}-${Math.random().toString(36).substring(7)}`,
-        order: targetGroup.entries.length
-      });
-    });
-  }
-
-  function makeCopyEntryToTabHandler(sourceTabId: string) {
-    return (sourceGroupId: string, entryId: string, targetTabId: string, targetGroupId: string) => {
-      handleCopyEntryToTab(sourceTabId, sourceGroupId, entryId, targetTabId, targetGroupId);
-    };
-  }
-
-  // Move group to a different tab
-  async function handleMoveGroupToTab(
-    sourceTabId: string,
-    groupId: string,
-    targetTabId: string
-  ) {
-    if (!requireAuth()) return;
-    await mutateDashboard(dashboard.id, (dash) => {
-      const sourceTab = dash.tabs.find(t => t.id === sourceTabId);
-      const targetTab = dash.tabs.find(t => t.id === targetTabId);
-      if (!sourceTab || !targetTab) return;
-      const groupIndex = sourceTab.groups.findIndex(g => g.id === groupId);
-      if (groupIndex === -1) return;
-      const [movedGroup] = sourceTab.groups.splice(groupIndex, 1);
-      targetTab.groups.push({ ...movedGroup, order: targetTab.groups.length });
-      sourceTab.groups = sourceTab.groups.map((group, idx) => ({ ...group, order: idx }));
-    });
-  }
-
-  function makeMoveGroupToTabHandler(sourceTabId: string) {
-    return (groupId: string, targetTabId: string) => {
-      handleMoveGroupToTab(sourceTabId, groupId, targetTabId);
-    };
-  }
-
-  // Copy a group to another tab (deep-clone with fresh IDs; source untouched).
-  async function handleCopyGroupToTab(
-    sourceTabId: string,
-    groupId: string,
-    targetTabId: string
-  ) {
-    if (!requireAuth()) return;
-    await mutateDashboard(dashboard.id, (dash) => {
-      const sourceTab = dash.tabs.find(t => t.id === sourceTabId);
-      const targetTab = dash.tabs.find(t => t.id === targetTabId);
-      if (!sourceTab || !targetTab) return;
-      const sourceGroup = sourceTab.groups.find(g => g.id === groupId);
-      if (!sourceGroup) return;
-      targetTab.groups.push({
-        ...sourceGroup,
-        id: `group-${Date.now()}-${Math.random().toString(36).substring(7)}`,
-        order: targetTab.groups.length,
-        entries: sourceGroup.entries.map(entry => ({
-          ...entry,
-          id: `entry-${Date.now()}-${Math.random().toString(36).substring(7)}`
-        }))
-      });
-    });
-  }
-
-  function makeCopyGroupToTabHandler(sourceTabId: string) {
-    return (groupId: string, targetTabId: string) => {
-      handleCopyGroupToTab(sourceTabId, groupId, targetTabId);
-    };
-  }
-
-  // Get tab info for move dropdowns
-  function getAvailableTabsForEntry() {
-    return dashboard.tabs.map(tab => ({
-      id: tab.id,
-      name: tab.name,
-      groups: tab.groups.map(g => ({ id: g.id, name: g.name }))
-    }));
-  }
-
-  function getAvailableTabsForGroup() {
-    return dashboard.tabs.map(tab => ({
-      id: tab.id,
-      name: tab.name
-    }));
-  }
-
-  async function handleUpdateTab(tabId: string, newName: string, newIcon?: string, newIconUrl?: string, newIconBgColor?: string, newColor?: string, newOpacity?: number) {
-    if (!requireAuth()) return;
-    await mutateDashboard(dashboard.id, (dash) => {
-      const tabIndex = dash.tabs.findIndex(t => t.id === tabId);
-      if (tabIndex !== -1) {
-        dash.tabs[tabIndex] = { ...dash.tabs[tabIndex], name: newName, icon: newIcon, iconUrl: newIconUrl, iconBgColor: newIconBgColor, color: newColor, opacity: newOpacity };
-      }
-    });
-    editingTabIndex = null;
-  }
-
-  async function handleDeleteTab(tabId: string) {
-    if (!requireAuth()) return;
-    await mutateDashboard(dashboard.id, (dash) => {
-      dash.tabs = dash.tabs.filter(t => t.id !== tabId);
-    });
-    // Adjust active tab if it now points past the end. Reads the freshly-saved
-    // dashboard prop via Svelte 5 reactivity once mutateDashboard's
-    // config.set has propagated.
-    if (activeTabIndex >= dashboard.tabs.length) {
-      activeTabIndex = Math.max(0, dashboard.tabs.length - 1);
-    }
-    editingTabIndex = null;
-  }
-
-  async function handleUpdateHeader(headerConfig: HeaderConfig) {
-    if (!requireAuth()) return;
-    await mutateDashboard(dashboard.id, (dash) => {
-      dash.header = headerConfig;
-    });
-    showHeaderConfig = false;
-  }
-
-  async function handleUpdateBackground(background: Background | undefined) {
-    if (!requireAuth()) return;
-    try {
-      await mutateDashboard(dashboard.id, (dash) => {
-        dash.background = background;
-      });
-      showBackgroundConfig = false;
-    } catch (error) {
-      logError('Background save', error);
-      // 401s are handled by the global session-expired handler
-      // (toast + redirect). For other failures, surface a friendly
-      // toast instead of a blocking native alert().
-      if (!(error instanceof Error && error.message.includes('401'))) {
-        toast.error("Couldn't save the background — please try again.");
-      }
-    }
-  }
-
-  async function handlePerTabBackgroundsChange(enabled: boolean) {
-    if (!requireAuth()) return;
-    try {
-      await mutateDashboard(dashboard.id, (dash) => {
-        dash.perTabBackgrounds = enabled;
-      });
-    } catch (error) {
-      logError('Background settings', error);
-    }
-  }
-
-  async function handleUpdateTabBackground(tabId: string, background: Background | undefined) {
-    if (!requireAuth()) return;
-    try {
-      await mutateDashboard(dashboard.id, (dash) => {
-        const tab = dash.tabs.find(t => t.id === tabId);
-        if (tab) tab.background = background;
-      });
-    } catch (error) {
-      logError('Tab background', error);
-      if (!(error instanceof Error && error.message.includes('401'))) {
-        toast.error("Couldn't save the tab background — please try again.");
-      }
-    }
-  }
-
-  function makeUpdateTabBackgroundHandler(tabId: string) {
-    return (background: Background | undefined) => {
-      handleUpdateTabBackground(tabId, background);
-    };
-  }
-
-  // Opens an empty TabEditModal. The tab is only created if the user
-  // hits "Create" — consistent with Add Group and Add Tile.
   function handleAddTab() {
-    if (!requireAuth()) return;
     showAddTabModal = true;
   }
 
-  async function handleSaveNewTab(
-    name: string,
-    icon?: string,
-    iconUrl?: string,
-    iconBgColor?: string,
-    color?: string,
-    opacity?: number
-  ) {
-    if (!requireAuth()) return;
-    await mutateDashboard(dashboard.id, (dash) => {
-      const newId = `tab-${Date.now()}-${Math.random().toString(36).substring(7)}`;
-      dash.tabs.push({
-        id: newId,
-        name,
-        icon,
-        iconUrl,
-        iconBgColor,
-        color,
-        opacity,
-        groups: [],
-        order: dash.tabs.length
-      });
-    });
-    // Switch to the newly-saved tab — read from the freshly-updated dashboard prop.
-    activeTabIndex = dashboard.tabs.length - 1;
+  function handleSaveNewTab(...args: Parameters<typeof tabFields>) {
+    const id = addTabWith(tabFields(...args));
+    if (!id) return;
     showAddTabModal = false;
+    void showDraftTab(id);
   }
 
-  async function handleDuplicateTab(tabId: string) {
-    if (!requireAuth()) return;
-    await mutateDashboard(dashboard.id, (dash) => {
-      const sourceTab = dash.tabs.find(t => t.id === tabId);
-      if (!sourceTab) return;
-      const newTab: Tab = {
-        ...sourceTab,
-        id: `tab-${Date.now()}-${Math.random().toString(36).substring(7)}`,
-        name: `${sourceTab.name} (Copy)`,
-        order: dash.tabs.length,
-        groups: sourceTab.groups.map(group => ({
-          ...group,
-          id: `group-${Date.now()}-${Math.random().toString(36).substring(7)}`,
-          entries: group.entries.map(entry => ({
-            ...entry,
-            id: `entry-${Date.now()}-${Math.random().toString(36).substring(7)}`
-          }))
-        }))
-      };
-      dash.tabs.push(newTab);
-    });
-    activeTabIndex = dashboard.tabs.length - 1;
+  function handleUpdateTab(tabId: string, ...args: Parameters<typeof tabFields>) {
+    if (editTab(tabId, tabFields(...args))) editingTabIndex = null;
+  }
+
+  function handleDuplicateTab(tabId: string) {
+    const id = duplicateTabAction(tabId);
     editingTabIndex = null;
+    void showDraftTab(id);
   }
 
-  function handleTabsConsider(e: CustomEvent<DndEvent<Tab>>) {
+  async function handleDeleteTab(tabId: string) {
+    if (await deleteTabWithConfirm(tabId)) editingTabIndex = null;
+  }
+
+  function handleUpdateHeader(headerConfig: HeaderConfig) {
+    if (setHeader(headerConfig)) showHeaderConfig = false;
+  }
+
+  function handleUpdateBackground(background: Background | undefined) {
+    if (setBackground(background)) showBackgroundConfig = false;
+  }
+
+  function handleTabsConsider(e: CustomEvent<DndEvent<BarTab>>) {
     draggedTabs = e.detail.items;
   }
 
-  async function handleTabsFinalize(e: CustomEvent<DndEvent<Tab>>) {
-    if (!requireAuth()) return;
+  function handleTabsFinalize(e: CustomEvent<DndEvent<BarTab>>) {
     draggedTabs = e.detail.items;
-    // Snapshot the dragged order at the moment of finalize — the closure
-    // applies this exact order against whatever the latest dashboard state
-    // is when the mutation runs.
-    const reordered = draggedTabs.map((tab, index) => ({ ...tab, order: index }));
-    await mutateDashboard(dashboard.id, (dash) => {
-      dash.tabs = reordered;
-    });
-    // Re-align activeTabIndex by id (the active tab might have moved).
-    const activeTab = dashboard.tabs[activeTabIndex];
-    const newActiveIndex = reordered.findIndex(tab => tab.id === activeTab?.id);
-    if (newActiveIndex !== -1) {
-      activeTabIndex = newActiveIndex;
-    }
+    if (!editing) return;
+    const ids = e.detail.items.map((t) => t.id);
+    // The active tab is followed by id when the draft's tab order changes.
+    apply('Reorder tabs', (d) => reorderTabs(d, ids));
   }
+
+  const inheritedLayout = $derived<'grid' | 'free'>(draft?.defaultLayout === 'free' ? 'free' : 'grid');
 </script>
 
-<svelte:window onkeydown={handleKeyboard} />
-
 <div class="dashboard" class:party-mode={$partyModeActive}>
-  <BackgroundSlideshow background={effectiveBackground()} />
+  <BackgroundSlideshow background={effectiveBackground} />
   <PartyMode />
   <HopAnimation />
 
@@ -776,7 +304,7 @@
       </div>
     {/if}
 
-    {#if dashboard.tabs.length >= 1 || editing}
+    {#if barTabs.length >= 1 || editing}
       <div
         class="tabs"
         data-dashboard-tabs
@@ -840,18 +368,7 @@
                 </button>
                 <button
                   class="tab-control-btn delete-btn"
-                  onclick={async (e) => {
-                    e.stopPropagation();
-                    const confirmed = await confirm({
-                      title: 'Delete Tab',
-                      message: `Are you sure you want to delete "${tab.name}" and all its contents?`,
-                      confirmText: 'Delete',
-                      confirmStyle: 'danger'
-                    });
-                    if (confirmed) {
-                      handleDeleteTab(tab.id);
-                    }
-                  }}
+                  onclick={(e) => { e.stopPropagation(); void handleDeleteTab(tab.id); }}
                   title="Delete tab"
                   aria-label="Delete {tab.name} tab"
                 >
@@ -871,7 +388,31 @@
     {/if}
   </div>
 
-  {#if dashboard.tabs.length > 0 && !editing}
+  {#if editing}
+    {#if draft}
+      <div class="editor-shell">
+        <EditToolbar tabId={activeTabId ?? ''} onAddTab={handleAddTab} />
+      </div>
+      {#if draftTab}
+        <div class="canvas-panel editing">
+          <TabCanvas dashboard={draft} tab={draftTab} editing />
+        </div>
+      {:else}
+        <div class="empty-dashboard">
+          <p>No tabs yet on this dashboard</p>
+          <p class="hint">Tabs let you organize tiles and folders by purpose (e.g. Media, Tools, Networking).</p>
+          <button class="add-first-tab-btn" onclick={handleAddTab}>
+            <Icon icon="mdi:plus" width="20" />
+            Add Your First Tab
+          </button>
+        </div>
+      {/if}
+      <EditorDialogs tabId={activeTabId ?? ''} />
+    {:else}
+      <!-- Edit mode is on but no session is open for this dashboard yet (it follows the route). -->
+      <div role="status" class="layout-refreshing">Starting the edit session…</div>
+    {/if}
+  {:else if dashboard.tabs.length > 0}
     {#if layoutDash && layoutTab}
       <div class="canvas-panel">
         <TabCanvas dashboard={layoutDash} tab={layoutTab} />
@@ -884,86 +425,51 @@
         <button type="button" onclick={() => loadConfig()}>Reload</button>
       </div>
     {/if}
-  {:else if dashboard.tabs.length > 0}
-    <TabPanel
-      tab={dashboard.tabs[activeTabIndex]}
-      effectiveBackground={effectiveBackground()}
-      currentTabId={dashboard.tabs[activeTabIndex].id}
-      availableTabsForEntry={getAvailableTabsForEntry()}
-      availableTabsForGroup={getAvailableTabsForGroup()}
-      onUpdateEntry={makeUpdateHandler(dashboard.tabs[activeTabIndex].id)}
-      onDeleteEntry={makeDeleteHandler(dashboard.tabs[activeTabIndex].id)}
-      onAddEntry={makeAddHandler(dashboard.tabs[activeTabIndex].id)}
-      onAddGroup={makeAddGroupHandler(dashboard.tabs[activeTabIndex].id)}
-      onReorderEntries={makeReorderHandler(dashboard.tabs[activeTabIndex].id)}
-      onMoveEntry={makeMoveEntryHandler(dashboard.tabs[activeTabIndex].id)}
-      onMoveEntryToTab={makeMoveEntryToTabHandler(dashboard.tabs[activeTabIndex].id)}
-      onCopyEntryToTab={makeCopyEntryToTabHandler(dashboard.tabs[activeTabIndex].id)}
-      onMoveGroupToTab={makeMoveGroupToTabHandler(dashboard.tabs[activeTabIndex].id)}
-      onCopyGroupToTab={makeCopyGroupToTabHandler(dashboard.tabs[activeTabIndex].id)}
-      onReorderGroups={makeReorderGroupsHandler(dashboard.tabs[activeTabIndex].id)}
-      onUpdateGroup={makeUpdateGroupHandler(dashboard.tabs[activeTabIndex].id)}
-      onDeleteGroup={makeDeleteGroupHandler(dashboard.tabs[activeTabIndex].id)}
-      onDuplicateGroup={makeDuplicateGroupHandler(dashboard.tabs[activeTabIndex].id)}
-      onUpdateTabBackground={makeUpdateTabBackgroundHandler(dashboard.tabs[activeTabIndex].id)}
-      onGroupFocus={(groupId) => focusedGroupId = groupId}
-      onDeleteEntryFromSource={handleDeleteEntry}
-    />
   {:else}
     <div class="empty-dashboard">
       <p>No tabs yet on this dashboard</p>
-      <p class="hint">Tabs let you organize groups of tiles by purpose (e.g. Media, Tools, Networking).</p>
-      {#if editing}
-        <button class="add-first-tab-btn" onclick={handleAddTab}>
-          <Icon icon="mdi:plus" width="20" />
-          Add Your First Tab
-        </button>
-      {:else}
-        <a href="/">Go to Admin Panel</a>
-      {/if}
+      <p class="hint">Tabs let you organize tiles and folders by purpose (e.g. Media, Tools, Networking).</p>
+      <a href="/">Go to Admin Panel</a>
     </div>
   {/if}
 </div>
 
-{#if showAddTabModal}
+{#if editing && showAddTabModal}
   <TabEditModal
     tabName=""
+    {inheritedLayout}
     onSave={handleSaveNewTab}
     onCancel={() => (showAddTabModal = false)}
   />
 {/if}
 
-{#if editingTabIndex !== null && dashboard.tabs[editingTabIndex]}
-  <TabEditModal
-    tabName={dashboard.tabs[editingTabIndex].name}
-    tabIcon={dashboard.tabs[editingTabIndex].icon}
-    tabIconUrl={dashboard.tabs[editingTabIndex].iconUrl}
-    tabIconBgColor={dashboard.tabs[editingTabIndex].iconBgColor}
-    tabColor={dashboard.tabs[editingTabIndex].color}
-    tabOpacity={dashboard.tabs[editingTabIndex].opacity}
-    tabBackground={dashboard.tabs[editingTabIndex].background}
-    perTabBackgrounds={dashboard.perTabBackgrounds}
-    onSave={(newName, newIcon, newIconUrl, newIconBgColor, newColor, newOpacity) => handleUpdateTab(dashboard.tabs[editingTabIndex!].id, newName, newIcon, newIconUrl, newIconBgColor, newColor, newOpacity)}
-    onSaveBackground={(background) => handleUpdateTabBackground(dashboard.tabs[editingTabIndex!].id, background)}
-    onCancel={() => editingTabIndex = null}
-    onDelete={async () => {
-      const confirmed = await confirm({
-        title: 'Delete Tab',
-        message: `Are you sure you want to delete "${dashboard.tabs[editingTabIndex!].name}" and all its contents?`,
-        confirmText: 'Delete',
-        confirmStyle: 'danger'
-      });
-      if (confirmed) {
-        handleDeleteTab(dashboard.tabs[editingTabIndex!].id);
-      }
-    }}
-    onDuplicate={() => handleDuplicateTab(dashboard.tabs[editingTabIndex!].id)}
-  />
+{#if editing && editingTabIndex !== null && barTabs[editingTabIndex]}
+  {@const t = barTabs[editingTabIndex]}
+  {#key t.id}
+    <TabEditModal
+      tabName={t.name}
+      tabIcon={t.icon}
+      tabIconUrl={t.iconUrl}
+      tabIconBgColor={t.iconBgColor}
+      tabColor={t.color}
+      tabOpacity={t.opacity}
+      tabBackground={t.background}
+      tabLayout={t.layout}
+      tabDesignWidth={t.designWidth}
+      {inheritedLayout}
+      perTabBackgrounds={look.perTabBackgrounds}
+      onSave={(...args) => handleUpdateTab(t.id, ...args)}
+      onSaveBackground={(background) => setTabBackground(t.id, background)}
+      onCancel={() => (editingTabIndex = null)}
+      onDelete={() => handleDeleteTab(t.id)}
+      onDuplicate={() => handleDuplicateTab(t.id)}
+    />
+  {/key}
 {/if}
 
-{#if showHeaderConfig}
+{#if editing && showHeaderConfig}
   <HeaderConfigModal
-    header={dashboard.header}
+    header={look.header}
     onSave={handleUpdateHeader}
     onCancel={() => showHeaderConfig = false}
   />
@@ -973,12 +479,12 @@
   <DashboardSettingsModal dashboardId={dashboard.id} onClose={() => showDashboardSettings = false} />
 {/if}
 
-{#if showBackgroundConfig}
+{#if editing && showBackgroundConfig}
   <BackgroundConfigModal
-    background={dashboard.background}
+    background={look.background}
     level="dashboard"
-    perTabBackgrounds={dashboard.perTabBackgrounds}
-    onPerTabBackgroundsChange={handlePerTabBackgroundsChange}
+    perTabBackgrounds={look.perTabBackgrounds}
+    onPerTabBackgroundsChange={(on) => setPerTabBackgrounds(on)}
     onSave={handleUpdateBackground}
     onCancel={() => showBackgroundConfig = false}
   />
@@ -999,6 +505,10 @@
     backdrop-filter: blur(var(--overlay-blur, 10px));
     min-height: 400px;
     border-top: 1px solid var(--border);
+  }
+
+  .editor-shell {
+    padding: 0.75rem 2rem 0;
   }
 
   .layout-missing,

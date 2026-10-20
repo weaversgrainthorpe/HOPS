@@ -14,8 +14,9 @@
     dashboard: LayoutDashboard;
     tab: LayoutTab;
     plan: CanvasPlan;
+    editing?: boolean;
   }
-  let { dashboard, tab, plan }: Props = $props();
+  let { dashboard, tab, plan, editing = false }: Props = $props();
   // Widest content box the viewport allows (minus the measured page scrollbar,
   // backdrop padding and panel chrome); measured on mount and resize only.
   let bodyPx = $state(overlayBodyPx(1280, 0));
@@ -115,6 +116,7 @@
               {dashboard}
               {tab}
               folderChain={p.chain}
+              {editing}
             />
           {/if}
         </div>

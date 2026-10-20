@@ -10,7 +10,7 @@ import type {
   Container, FolderNode, LayoutDashboard, LayoutMode, LayoutNode, LayoutTab, Placement
 } from '../types/layout';
 import {
-  FREE_UNIT_PX, ROOT_COLUMNS, clampPlacement, containerColumns, containerMetrics, folderInnerMetrics,
+  DEFAULT_DESIGN_WIDTH, FREE_UNIT_PX, ROOT_COLUMNS, clampPlacement, containerColumns, containerMetrics, folderInnerMetrics,
   gridContentRows, isRenderable, readingOrder, requiredFolderHeightPx, resolveMode
 } from '../layout/geometry';
 
@@ -76,6 +76,14 @@ function resolveRef(d: LayoutDashboard, ref: ContainerRef): Resolved {
   if (!chain) throw new TreeOpError('That folder no longer exists.');
   const folder = chain[chain.length - 1];
   return { tab, chain, container: folder.content, folder, mode: resolveMode(d, tab, chain) };
+}
+
+/** The container a ref names, with its resolved mode and column count (throws TreeOpError if gone). */
+export function resolveContainer(
+  d: LayoutDashboard, ref: ContainerRef
+): { container: Container; mode: LayoutMode; columns: number; folder?: FolderNode } {
+  const r = resolveRef(d, ref);
+  return { container: r.container, mode: r.mode, columns: containerColumns(r.container, r.folder), folder: r.folder };
 }
 
 export function locate(d: LayoutDashboard, nodeId: string): NodeLocation | undefined {
@@ -200,6 +208,19 @@ export function assertGridNoOverlap(c: Container, only?: Set<string>): void {
       if (overlaps(nodes[i].p, nodes[j].p)) throw new TreeOpError('That space is taken');
     }
   }
+}
+
+/**
+ * True when `p` can go in `c` as it is: a grid needs it inside the columns and clear of every
+ * sibling's STORED footprint (a collapsed folder's reserved cells count, Ruling 13); free
+ * containers tolerate overlap, so any finite position is fine there.
+ */
+export function cellIsFree(c: Container, p: Placement, mode: LayoutMode): boolean {
+  if (![p.x, p.y, p.w, p.h].every((v) => typeof v === 'number' && Number.isFinite(v))) return false;
+  if (mode === 'free') return p.x >= 0 && p.y >= 0;
+  const cols = containerColumns(c);
+  if (p.x < 0 || p.y < 0 || p.w < 1 || p.h < 1 || p.x + p.w > cols) return false;
+  return !kids(c).filter(isRenderable).some((n) => overlaps(clampPlacement(n.placement, cols), p));
 }
 
 /** Apply a pushAside map to a children list (ids not present are ignored). */
@@ -389,6 +410,20 @@ export function updateNode(d: LayoutDashboard, id: string, patch: Partial<Layout
   return mapTabs(d, (n) => (n.id === id ? ({ ...n, ...patch } as LayoutNode) : n));
 }
 
+/**
+ * Set a folder's SAVED default display (what a browser with no remembered view shows).
+ * Unchanged → the same dashboard (no undo step).
+ */
+export function setFolderDisplay(
+  d: LayoutDashboard, id: string, display: FolderNode['display']
+): LayoutDashboard {
+  if (display !== 'expanded' && display !== 'collapsed') throw new TreeOpError('That folder display is not valid.');
+  const node = findNode(d, id);
+  if (node.kind !== 'folder') throw new TreeOpError('Only folders can start collapsed or expanded.');
+  if (node.display === display) return d;
+  return mapTabs(d, (n) => (n.id === id ? ({ ...n, display } as LayoutNode) : n));
+}
+
 export function deleteNodes(d: LayoutDashboard, ids: string[]): LayoutDashboard {
   mustFind(d, ids);
   return removeIds(d, new Set(ids));
@@ -469,6 +504,102 @@ export function updateTab(d: LayoutDashboard, tabId: string, patch: Partial<Layo
   findTab(d, tabId);
   if ('id' in patch && patch.id !== tabId) throw new TreeOpError('A tab id cannot be changed.');
   return { ...d, tabs: d.tabs.map((t) => (t.id === tabId ? { ...t, ...patch } : t)) };
+}
+
+/**
+ * Append a deep copy of a tab, named "<name> (Copy)", with a new tab id and new ids for every
+ * node. `allIds` is every id in the document (all dashboards + draft); new ids avoid it.
+ */
+export function duplicateTab(
+  d: LayoutDashboard, tabId: string, allIds: Set<string>
+): { dashboard: LayoutDashboard; tabId: string } {
+  const src = findTab(d, tabId);
+  const used = new Set(allIds);
+  for (const t of d.tabs) used.add(t.id);
+  let newId = newNodeId('tab');
+  for (let i = 0; used.has(newId) && i < 1000; i++) newId = newNodeId('tab');
+  if (used.has(newId)) throw new TreeOpError('Could not generate a unique id. Please try again.');
+  const copy: LayoutTab = {
+    ...structuredClone(src),
+    id: newId,
+    name: `${src.name} (Copy)`,
+    root: { ...src.root, children: kids(src.root).map((n) => cloneWithNewIds(n, used)) }
+  };
+  return { dashboard: { ...d, tabs: [...d.tabs, copy] }, tabId: newId };
+}
+
+/**
+ * Set a tab's layout ('inherit' | grid | free) and, for free tabs, its design width (px).
+ * When the tab's effective mode changes, the tab's content is converted so it looks the same:
+ * one grid cell = one dashboard column = round(designWidth / 12 / 8) free units ("side").
+ * Grid → free multiplies every placement by side (exact, no overlaps); free → grid divides and
+ * rounds (min 1 x 1; tiles become one cell), then any item that would overlap or fall outside the
+ * columns goes to the first free cell, in reading order. Folders that inherit the mode are
+ * converted with their content; folders with their own layout keep their content as is. The
+ * root's columns follow the mode (grid: 12; free: designWidth / 8).
+ */
+export function setTabLayout(
+  d: LayoutDashboard, tabId: string, layout: 'inherit' | LayoutMode, designWidth?: number
+): LayoutDashboard {
+  const tab = findTab(d, tabId);
+  if (layout !== 'inherit' && layout !== 'grid' && layout !== 'free') throw new TreeOpError('That layout is not valid.');
+  if (designWidth !== undefined && (!Number.isInteger(designWidth) || designWidth < 320 || designWidth > 7680)) {
+    throw new TreeOpError('The design width must be a whole number of pixels from 320 to 7680.');
+  }
+  const next: LayoutTab = { ...tab, layout };
+  if (designWidth !== undefined) next.designWidth = designWidth;
+  const before = resolveMode(d, tab, []);
+  const after = resolveMode(d, next, []);
+  const dw = typeof next.designWidth === 'number' && next.designWidth > 0 ? next.designWidth : DEFAULT_DESIGN_WIDTH;
+  const freeCols = Math.max(1, Math.round(dw / FREE_UNIT_PX));
+  if (before === after) {
+    if (after === 'free' && containerColumns(tab.root) !== freeCols) next.root = { ...tab.root, columns: freeCols };
+    if (next.layout === tab.layout && next.designWidth === tab.designWidth && next.root === tab.root) return d;
+    return { ...d, tabs: d.tabs.map((t) => (t.id === tabId ? next : t)) };
+  }
+  const side = Math.max(1, Math.round(dw / ROOT_COLUMNS / FREE_UNIT_PX));
+  next.root = convertContainer(tab.root, after, side, after === 'free' ? freeCols : ROOT_COLUMNS);
+  return { ...d, tabs: d.tabs.map((t) => (t.id === tabId ? next : t)) };
+}
+
+/** Convert a container's placements to `to` mode (see setTabLayout). `cols` = the result's columns. */
+function convertContainer(c: Container, to: LayoutMode, side: number, cols: number): Container {
+  const scaled = kids(c).map((n) => {
+    if (!isRenderable(n)) return n;
+    const p = n.placement;
+    let q: Placement;
+    if (to === 'free') {
+      q = { x: p.x * side, y: p.y * side, w: p.w * side, h: p.h * side };
+    } else {
+      const w = n.kind === 'tile' ? 1 : Math.max(1, Math.round(p.w / side));
+      const h = n.kind === 'tile' ? 1 : Math.max(1, Math.round(p.h / side));
+      const qw = Math.min(w, cols);
+      q = { x: Math.min(Math.max(0, Math.round(p.x / side)), cols - qw), y: Math.max(0, Math.round(p.y / side)), w: qw, h };
+    }
+    if (p.z !== undefined) q.z = p.z;
+    let out = { ...n, placement: q } as LayoutNode;
+    if (out.kind === 'folder' && (out.layout === undefined || out.layout === 'inherit')) {
+      const innerCols = to === 'free' ? Math.max(1, containerColumns(out.content, out) * side) : q.w;
+      out = { ...out, content: convertContainer(out.content, to, side, innerCols) };
+    }
+    return out;
+  });
+  if (to === 'free') return { ...c, columns: cols, children: scaled };
+  // Grid: settle collisions in reading order.
+  const placed: LayoutNode[] = [];
+  const work: Container = { columns: cols, children: placed };
+  const ordered = readingOrder(scaled.filter(isRenderable));
+  for (const n of ordered) {
+    const p = n.placement;
+    const fits = p.x + p.w <= cols && !placed.some((m) => overlaps(m.placement, p));
+    placed.push(fits ? n : ({ ...n, placement: { ...firstFreeCell(work, p.w, p.h), ...(p.z !== undefined ? { z: p.z } : {}) } } as LayoutNode));
+  }
+  const byId = new Map(placed.map((n) => [n.id, n]));
+  return {
+    ...c,
+    columns: cols,
+    children: scaled.map((n) => (isRenderable(n) ? byId.get(n.id)! : n))
+  };
 }
 
 export function deleteTab(d: LayoutDashboard, tabId: string): LayoutDashboard {
