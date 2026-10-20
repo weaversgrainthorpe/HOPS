@@ -18,7 +18,11 @@ import { render } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import TabCanvas from '$lib/components/layout/TabCanvas.svelte';
 import DragLayer from './DragLayer.svelte';
-import { drag, dragSource, resolveDrop, setDragEnv, resetDragForTests, type DragState } from './dragController';
+import {
+  drag, dragSource, resolveDrop, setDragEnv, resetDragForTests, setActiveTab, switchTabWithinDrag, type DragState
+} from './dragController';
+import * as api from '$lib/utils/api';
+import { save } from '$lib/stores/editSession';
 import { setLayout, resetEditor, startSession, draft, nodeIn, home, other, folder, p, FakeRO } from '$lib/components/editor/editorTestKit';
 
 // t1's root: 12 columns of 100 px (square rows); t2 (free): 160 units of 8 px.
@@ -412,5 +416,95 @@ describe('drag engine — through the real renderer', () => {
     x.dispatchEvent(pe('pointerdown', 10, 10));
     moveTo(20, 10);
     expect(get(drag)?.ids).toEqual(['x']);
+  });
+});
+
+describe('fix round 1', () => {
+  it('each item has a permanent non-passive touchmove listener that blocks scrolling only when drag-ready or dragging', () => {
+    vi.useFakeTimers();
+    const el = document.createElement('div');
+    el.setAttribute('data-node-id', 'a');
+    document.body.appendChild(el);
+    const spy = vi.spyOn(el, 'addEventListener');
+    const a = dragSource(el, { id: 'a', enabled: true });
+    sources.push({ el, destroy: () => a.destroy?.() });
+    const call = spy.mock.calls.find((c) => c[0] === 'touchmove');
+    expect(call).toBeTruthy();
+    expect((call![2] as AddEventListenerOptions).passive).toBe(false);
+    const tm = () => {
+      const ev = new Event('touchmove', { bubbles: true, cancelable: true });
+      el.dispatchEvent(ev);
+      return ev.defaultPrevented;
+    };
+    expect(tm()).toBe(false); // no press: ordinary scrolling over a tile
+    el.dispatchEvent(pe('pointerdown', 50, 50, { pointerType: 'touch' }));
+    vi.advanceTimersByTime(200);
+    expect(tm()).toBe(false); // held, not yet ready: the page may still scroll
+    vi.advanceTimersByTime(200);
+    expect(tm()).toBe(true); // drag-ready
+    moveTo(70, 50, { pointerType: 'touch' });
+    expect(get(drag)).not.toBeNull();
+    expect(tm()).toBe(true); // dragging
+    drop(70, 50, { pointerType: 'touch' });
+    expect(tm()).toBe(false);
+  });
+
+  it('a change of the active tab during a drag cancels it, visibly; a switch the drag asks for does not', () => {
+    setActiveTab('t1');
+    const { el } = source('a');
+    startMouseDrag(el, 50, 50);
+    flush();
+    setActiveTab('t2');
+    expect(get(drag)).toBeNull();
+    expect(get(toast).at(-1)?.message).toMatch(/tab changed/i);
+    setActiveTab('t1');
+    startMouseDrag(el, 50, 50);
+    flush();
+    switchTabWithinDrag(() => setActiveTab('t2'));
+    expect(get(drag)).not.toBeNull();
+  });
+
+  it('Escape during a bare press (no drag yet) is left alone; during a drag it is consumed', () => {
+    const { el } = source('a');
+    el.dispatchEvent(pe('pointerdown', 50, 50));
+    const esc1 = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+    window.dispatchEvent(esc1);
+    expect(esc1.defaultPrevented).toBe(false);
+    moveTo(60, 50);
+    expect(get(drag)).not.toBeNull();
+    const esc2 = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+    window.dispatchEvent(esc2);
+    expect(esc2.defaultPrevented).toBe(true);
+    expect(get(drag)).toBeNull();
+  });
+
+  it('the toast Undo still undoes the drop after a save replaced the draft', async () => {
+    vi.mocked(api.saveDashboardV3).mockResolvedValue({ revision: 6 } as never);
+    const { el } = source('a');
+    startMouseDrag(el, 50, 50);
+    moveTo(350, 50);
+    flush();
+    drop(350, 50);
+    const undoToast = get(toast).find((t) => t.action?.label === 'Undo')!;
+    const savedDraft = draft();
+    expect(await save()).toBe('saved');
+    expect(draft()).not.toBe(savedDraft); // the save swapped the draft reference
+    undoToast.action!.onClick();
+    expect(nodeIn(draft(), 'a')!.placement).toEqual(p(0, 0));
+  });
+
+  it('the toast Undo refuses (visibly) when another change came after the drop', async () => {
+    const { el } = source('a');
+    startMouseDrag(el, 50, 50);
+    moveTo(350, 50);
+    flush();
+    drop(350, 50);
+    const undoToast = get(toast).find((t) => t.action?.label === 'Undo')!;
+    const { apply } = await import('$lib/stores/editSession');
+    apply('Other', (d: LayoutDashboard) => ({ ...d, name: 'Renamed' }));
+    undoToast.action!.onClick();
+    expect(draft().name).toBe('Renamed');
+    expect(nodeIn(draft(), 'a')!.placement).toEqual(p(3, 0));
+    expect(get(toast).at(-1)?.message).toMatch(/Ctrl\+Z/);
   });
 });

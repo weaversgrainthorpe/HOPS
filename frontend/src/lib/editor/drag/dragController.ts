@@ -15,7 +15,7 @@
  * `merge`, `into-folder` (dwell into collapsed folders), `tab-append`, the breadcrumb and guides:
  * they extend resolveDrop's cases and commitDrop's switch; `dwell` is reserved for their timers.
  */
-import { writable, type Readable } from 'svelte/store';
+import { get, writable, type Readable } from 'svelte/store';
 import type { Container, LayoutDashboard, LayoutNode, Placement } from '$lib/types/layout';
 import type { ContainerMetrics } from '$lib/layout/geometry';
 import { clampPlacement, isRenderable } from '$lib/layout/geometry';
@@ -102,22 +102,6 @@ const sameRef = (a: ContainerRef | undefined, b: ContainerRef | undefined): bool
 
 function message(e: unknown, fallback: string): string {
   return e instanceof Error && e.message ? e.message : fallback;
-}
-
-function draftIds(d: LayoutDashboard): Set<string> {
-  const out = new Set<string>();
-  const walk = (c: Container | undefined) => {
-    for (const n of Array.isArray(c?.children) ? c!.children : []) {
-      if (!n || typeof n.id !== 'string') continue;
-      out.add(n.id);
-      if (n.kind === 'folder') walk(n.content);
-    }
-  };
-  for (const t of d.tabs) {
-    out.add(t.id);
-    walk(t.root);
-  }
-  return out;
 }
 
 /** One-entry memo of the validated result (inputs are immutable, so this is transparent). */
@@ -243,7 +227,7 @@ export function resolveDrop(state: DragState, hit: HitResult, draft: LayoutDashb
   // Trial-run the very op the commit will run (Ruling 11): a highlighted target never throws.
   let target: DropTarget = { kind: 'place', to, at, push };
   try {
-    if (state.copy) copyNodes(draft, ids, to, at, draftIds(draft), push);
+    if (state.copy) copyNodes(draft, ids, to, at, documentIds(), push); // the same id set as the commit
     else moveNodes(draft, ids, to, at, push);
   } catch (e) {
     target = invalid(e instanceof TreeOpError ? e.message : message(e, "That can't go there."));
@@ -307,12 +291,14 @@ export function commitDrop(state: DragState): void {
     newIds = r.newIds;
     return r.dashboard;
   });
+  // The draft this drop replaced: while it is still on top of the undo stack, the drop is the
+  // latest change (a save replaces the draft reference but keeps the stack, so Undo still works).
+  const before = d;
   if (!ok) return; // apply has already said why
   if (state.copy) {
     clearSelection();
     newIds.forEach((id) => toggleNode(id, true));
   }
-  const after = currentDraft();
   toast.add({
     type: 'success',
     message: label,
@@ -320,7 +306,8 @@ export function commitDrop(state: DragState): void {
     action: {
       label: 'Undo',
       onClick: () => {
-        if (currentDraft() === after) undo();
+        const st = get(session);
+        if (st && st.undo[st.undo.length - 1] === before) undo();
         else toast.info('Other changes were made after that drop. Use Undo in the toolbar (Ctrl+Z) to step back through them.');
       }
     }
@@ -516,6 +503,9 @@ function onUp(e: PointerEvent) {
   if (!p || e.pointerId !== p.pointerId) return;
   if (current) {
     const copy = e.ctrlKey || e.metaKey;
+    // Ctrl/Cmd changed without a key event we saw: re-resolve against the last hit (same resolver,
+    // no layout read). The cells are the same, but the push and any overflow can differ from the
+    // highlight, since a copy leaves the originals in place (Ruling 21).
     if (copy !== current.copy) reresolve(copy);
     const s = current;
     stopDrag();
@@ -545,7 +535,7 @@ function onBlur() {
 
 function onKeyDown(e: KeyboardEvent) {
   if (e.key === 'Escape') {
-    if (!current && !press) return;
+    if (!current) return; // a bare press leaves Escape to everyone else
     // Consumed: Escape ends the drag only (no overlay closes, no selection clears).
     e.preventDefault();
     e.stopImmediatePropagation();
@@ -662,6 +652,10 @@ export function dragSource(el: HTMLElement, params: DragSourceParams) {
   };
   el.addEventListener('pointerdown', down);
   el.addEventListener('dragstart', nativeDrag);
+  // Browsers only honour preventDefault on a touchmove whose listener was registered non-passive
+  // BEFORE the touch began, so this one is permanent on every item (it does nothing unless a touch
+  // press is drag-ready or a drag is live, so ordinary scrolling over items is unaffected).
+  el.addEventListener('touchmove', onTouchMove, { passive: false });
   return {
     update(next: DragSourceParams) {
       prm = next;
@@ -669,6 +663,7 @@ export function dragSource(el: HTMLElement, params: DragSourceParams) {
     destroy() {
       el.removeEventListener('pointerdown', down);
       el.removeEventListener('dragstart', nativeDrag);
+      el.removeEventListener('touchmove', onTouchMove);
       if (press && !current && press.id === prm.id) endPress();
     }
   };
@@ -701,6 +696,30 @@ export function pressMenu(el: HTMLElement, params: PressMenuParams) {
   };
 }
 
+// ---- the active tab: a drag is resolved against the tab it is shown on
+
+let activeTab: string | null = null;
+let deliberateSwitch = false;
+
+/** The editor's active tab (DragLayer reports it). A change during a drag cancels the drag. */
+export function setActiveTab(tabId: string | null): void {
+  const prev = activeTab;
+  activeTab = tabId;
+  if (current && prev !== tabId && !deliberateSwitch) {
+    cancelDrag('The tab changed during the drag, so nothing was dropped.');
+  }
+}
+
+/** For a tab switch the drag itself asks for (Task 8's tab dwell): the drag continues. */
+export function switchTabWithinDrag(fn: () => void): void {
+  deliberateSwitch = true;
+  try {
+    fn();
+  } finally {
+    deliberateSwitch = false;
+  }
+}
+
 // A drag never survives a change to the draft it was resolved against (an undo, a save
 // rebase, the session ending): its highlight would be stale, so it is cancelled.
 session.subscribe((s) => {
@@ -714,5 +733,7 @@ export function resetDragForTests(): void {
   endPress();
   memo = null;
   env = domEnv;
+  activeTab = null;
+  deliberateSwitch = false;
 }
 

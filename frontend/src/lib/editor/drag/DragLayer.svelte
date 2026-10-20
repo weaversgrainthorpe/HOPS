@@ -6,7 +6,14 @@
    * Every size comes from geometry.nodeBox with the target container's rendered metrics; a pushed
    * collapsed folder is drawn as the one cell it renders as (Ruling 13).
    */
-  import { drag } from './dragController';
+  import { drag, setActiveTab } from './dragController';
+
+  interface Props {
+    /** The editor's active tab: a change during a drag cancels it (unless the drag switched it). */
+    tabId?: string | null;
+  }
+  let { tabId = null }: Props = $props();
+  $effect(() => setActiveTab(tabId));
   import { session } from '$lib/stores/editSession';
   import { minimisedPlacement, nodeBox, type NodeBox } from '$lib/layout/geometry';
   import { portal } from '$lib/utils/overlayActions';

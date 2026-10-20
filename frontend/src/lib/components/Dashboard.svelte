@@ -409,7 +409,7 @@
         </div>
       {/if}
       <EditorDialogs tabId={activeTabId ?? ''} />
-      <DragLayer />
+      <DragLayer tabId={activeTabId ?? null} />
     {:else}
       <!-- Edit mode is on but no session is open for this dashboard yet (it follows the route). -->
       <div role="status" class="layout-refreshing">Starting the edit session…</div>
