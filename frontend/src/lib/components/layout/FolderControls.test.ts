@@ -194,4 +194,41 @@ describe('folder controls', () => {
     await tick();
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Minimise folder' }));
   });
+
+  describe('every collapsed folder is one cell', () => {
+    const big = (extra: any = {}) => folder('f1', [tile('a')], { display: 'collapsed', placement: { x: 0, y: 1, w: 12, h: 3 }, ...extra });
+    it('saved-collapsed grid folder: one cell, sibling unchanged, stored placement unchanged', async () => {
+      const { container, dash } = await renderTab([big(), tile('s', 5, 5)]);
+      const f = el(container, 'f1');
+      expect(f.style.gridColumn).toBe('1 / span 1');
+      expect(f.style.gridRow).toBe('2 / span 1');
+      expect(el(container, 's').style.gridColumn).toBe('6 / span 1');
+      expect((dash.tabs[0].root.children[0] as any).placement).toEqual({ x: 0, y: 1, w: 12, h: 3 });
+    });
+    it('remembered expanded renders the stored 12x3', async () => {
+      setFolderView('d1', 'f1', 'expanded');
+      const { container } = await renderTab([big()]);
+      expect(el(container, 'f1').style.gridColumn).toBe('1 / span 12');
+      expect(el(container, 'f1').style.gridRow).toBe('2 / span 3');
+    });
+    it('free mode: the minimised square, stored placement unchanged', async () => {
+      const { dash, tab } = mk([big({ placement: { x: 10, y: 20, w: 100, h: 60 } })]);
+      tab.layout = 'free'; tab.designWidth = 1280; tab.root.columns = 160;
+      config.set({ layout: { schemaVersion: 3, dashboards: [dash] } } as any);
+      const { container } = render(TabCanvas, { dashboard: dash, tab });
+      await tick();
+      expect(el(container, 'f1').style.width).toBe(`${Math.round(13 * 8 * (1440 / 1280) * 100) / 100}px`);
+      expect((dash.tabs[0].root.children[0] as any).placement.w).toBe(100);
+    });
+    it('edit mode shows the saved-collapsed folder as one cell too', async () => {
+      editMode.set(true);
+      const { container } = await renderTab([big()]);
+      expect(el(container, 'f1').style.gridColumn).toBe('1 / span 1');
+    });
+    it('the tile still opens its overlay', async () => {
+      await renderTab([big()]);
+      await fireEvent.click(screen.getByRole('button', { name: /^f1, folder with/ }));
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+  });
 });

@@ -115,15 +115,13 @@ export function findFolderChain(c: Container | undefined, id: string): FolderNod
 }
 
 /**
- * The tab as this viewer sees it: each remembered folder re-displayed. A minimised
- * folder (saved expanded) shrinks to its tile (geometry.minimisedPlacement) and keeps
+ * The tab as this viewer sees it: each remembered folder re-displayed. Every collapsed
+ * folder (saved or minimised) shrinks to its tile (geometry.minimisedPlacement) and keeps
  * its inner column count, so opening it shows the same content; nothing else moves.
  * Ids with no folder in the tab are ignored silently (a deleted folder's memory).
  * Returns the SAME tab object when nothing applies.
  */
 export function applyFolderViews(dash: LayoutDashboard, tab: LayoutTab, views: Views): LayoutTab {
-  if (Object.keys(views).length === 0) return tab;
-
   function walk(c: Container, chain: FolderNode[]): Container {
     const kids = Array.isArray(c?.children) ? c.children : [];
     const mode = resolveMode(dash, tab, chain);
@@ -134,7 +132,8 @@ export function applyFolderViews(dash: LayoutDashboard, tab: LayoutTab, views: V
       const inner = f.content ? walk(f.content, [...chain, f]) : f.content;
       const v = views[f.id];
       const display = v === undefined ? f.display : effectiveDisplay(f, v);
-      const shrink = v === 'collapsed' && f.display !== 'collapsed' && !!f.placement;
+      // Option A: ANY effectively collapsed folder (saved or remembered) is one cell; render-only.
+      const shrink = display === 'collapsed' && !!f.placement;
       let out = f;
       if (inner !== f.content || display !== f.display || shrink) {
         out = { ...f, display, ...(inner !== f.content ? { content: inner } : {}) } as FolderNode;

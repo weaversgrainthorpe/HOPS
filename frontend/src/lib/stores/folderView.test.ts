@@ -111,10 +111,13 @@ describe('applyFolderViews', () => {
     expect((t.root.children as any[]).map((c) => c.display)).toEqual(['expanded', 'expanded']);
     expect((t.root.children[0] as any).placement).toEqual({ x: 0, y: 0, w: 2, h: 2 });
   });
-  it('a remembered collapsed on a saved-collapsed folder keeps its size', () => {
-    const d = dash([f('a', { display: 'collapsed' })]);
-    const t = applyFolderViews(d, d.tabs[0], { a: 'collapsed' });
-    expect((t.root.children[0] as any).placement.w).toBe(2);
+  it('a saved-collapsed folder is one cell with no remembered view; stored data is untouched', () => {
+    const d = dash([f('a', { display: 'collapsed', placement: { x: 1, y: 2, w: 12, h: 3 } })]);
+    const orig = JSON.stringify(d);
+    const t = applyFolderViews(d, d.tabs[0], {});
+    expect((t.root.children[0] as any).placement).toMatchObject({ x: 1, y: 2, w: 1, h: 1 });
+    expect((t.root.children[0] as any).content.columns).toBe(4);
+    expect(JSON.stringify(d)).toBe(orig);
   });
   it('reaches nested folders', () => {
     const d = dash([f('o', { content: { columns: 4, children: [f('i')] } })]);
