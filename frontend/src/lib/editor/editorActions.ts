@@ -66,7 +66,7 @@ function tabOf(d: LayoutDashboard, tabId: string): LayoutTab | undefined {
  * The size an item takes in `mode`, from a node ALREADY converted for the target (adaptNode):
  * a grid tile is always one cell (parent spec §6.3); everything else keeps its size.
  */
-function sizeFor(n: Pick<LayoutNode, 'kind' | 'placement'>, mode: LayoutMode): { w: number; h: number } {
+export function sizeFor(n: Pick<LayoutNode, 'kind' | 'placement'>, mode: LayoutMode): { w: number; h: number } {
   if (mode === 'grid' && n.kind === 'tile') return { w: 1, h: 1 };
   return { w: Math.max(1, Math.floor(n.placement?.w ?? 1)), h: Math.max(1, Math.floor(n.placement?.h ?? 1)) };
 }

@@ -83,4 +83,19 @@ describe('Toast component', () => {
 		expect(screen.getByText('keep')).toBeInTheDocument();
 		expect(screen.queryByText('drop')).toBeNull();
 	});
+
+	it('renders an optional action as a button; clicking it runs the action and dismisses the toast (Ruling 3)', async () => {
+		render(Toast);
+		let ran = 0;
+		toast.add({ type: 'success', message: 'Moved "A" to Main', action: { label: 'Undo', onClick: () => ran++ } });
+		toast.info('plain');
+		await tick();
+		const btn = screen.getByRole('button', { name: 'Undo' });
+		expect(screen.getAllByRole('button', { name: 'Undo' })).toHaveLength(1);
+		await fireEvent.click(btn);
+		await tick();
+		expect(ran).toBe(1);
+		expect(screen.queryByText('Moved "A" to Main')).toBeNull();
+		expect(screen.getByText('plain')).toBeInTheDocument();
+	});
 });

@@ -17,6 +17,7 @@
   import BackgroundConfigModal from './admin/BackgroundConfigModal.svelte';
   import EditToolbar from './editor/EditToolbar.svelte';
   import EditorDialogs from './editor/EditorDialogs.svelte';
+  import DragLayer from '$lib/editor/drag/DragLayer.svelte';
   import {
     addTabWith, editTab, duplicateTabAction, deleteTabWithConfirm, setHeader, setBackground, setPerTabBackgrounds,
     setTabBackground, type TabFields
@@ -408,6 +409,7 @@
         </div>
       {/if}
       <EditorDialogs tabId={activeTabId ?? ''} />
+      <DragLayer />
     {:else}
       <!-- Edit mode is on but no session is open for this dashboard yet (it follows the route). -->
       <div role="status" class="layout-refreshing">Starting the edit session…</div>

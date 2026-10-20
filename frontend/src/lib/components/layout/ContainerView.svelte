@@ -11,8 +11,10 @@
   import NodePlaceholder from './NodePlaceholder.svelte';
   import { pointToCell } from '$lib/layout/geometry';
   import { selectedNodes, toggleNode } from '$lib/stores/nodeSelection';
-  import { openDialog, openMenu, longPress, menuPointFor, ownsTarget } from '$lib/editor/editorUi';
+  import { openDialog, openMenu, menuPointFor, ownsTarget } from '$lib/editor/editorUi';
   import type { ContainerRef } from '$lib/editor/treeOps';
+  import { drag, dragSource, pressMenu } from '$lib/editor/drag/dragController';
+  import { dropContainer } from '$lib/editor/drag/hitTest';
 
   interface Props {
     container: Container;
@@ -53,6 +55,14 @@
     }
     openMenu({ x, y, target: { kind: 'container', ref, ...(cell ? { cell } : {}) } });
   }
+  /** Touch long-press on this container's own empty space (not an item in it) opens its menu. */
+  function emptyPress(el: HTMLElement | null) {
+    return (x: number, y: number, t: EventTarget | null) => {
+      if (editing && el && ownsTarget(el, t)) containerMenuAt(el, x, y, true);
+    };
+  }
+  const nodeMenu = (id: string) => (x: number, y: number) => openMenu({ x, y, target: { kind: 'node', id } });
+  const dragging = $derived(new Set(editing ? ($drag?.ids ?? []) : []));
   let gridEl = $state<HTMLElement | null>(null);
   let freeEl = $state<HTMLElement | null>(null);
   function onContainerMenu(e: MouseEvent) {
@@ -142,6 +152,8 @@
         <div
           class="cell"
           class:selected={editing && $selectedNodes.has(node.id)}
+          class:editable={editing}
+          class:dragging={dragging.has(node.id)}
           data-node-id={node.id}
           style={styleOf(node)}
           onclickcapture={editing ? (e) => onNodeClick(e, node.id) : undefined}
@@ -152,9 +164,7 @@
               }
             : undefined}
           oncontextmenu={editing ? (e) => onNodeMenu(e, node.id) : undefined}
-          use:longPress={(x, y) => {
-            if (editing) openMenu({ x, y, target: { kind: 'node', id: node.id } });
-          }}
+          use:dragSource={{ id: node.id, enabled: editing, onMenu: nodeMenu(node.id) }}
         >
           <Entry
             entry={node}
@@ -204,9 +214,8 @@
     style={gridStyle}
     data-container-id={parentId}
     oncontextmenu={editing ? onContainerMenu : undefined}
-    use:longPress={(x, y, t) => {
-      if (editing && gridEl && ownsTarget(gridEl, t)) containerMenuAt(gridEl, x, y, true);
-    }}
+    use:pressMenu={{ enabled: editing, onMenu: emptyPress(gridEl) }}
+    use:dropContainer={{ ref, metrics, layout: 'grid' }}
     bind:this={gridEl}
   >
     {@render nodes(ordered, cellStyle, cellStyle, true)}
@@ -219,9 +228,8 @@
     style={freeStyle}
     data-container-id={parentId}
     oncontextmenu={editing ? onContainerMenu : undefined}
-    use:longPress={(x, y, t) => {
-      if (editing && freeEl && ownsTarget(freeEl, t)) containerMenuAt(freeEl, x, y, true);
-    }}
+    use:pressMenu={{ enabled: editing, onMenu: emptyPress(freeEl) }}
+    use:dropContainer={{ ref, metrics, layout: 'free' }}
     bind:this={freeEl}
   >
     {@render nodes(kids, freeCellStyle, freeCellStyle, true)}
@@ -230,7 +238,12 @@
 {:else}
   <!-- Phone stacking: reading order, tiles wrap at today's phone sizes, expanded folders full width. -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="container-stacked" data-container-id={parentId} oncontextmenu={editing ? onContainerMenu : undefined}>
+  <div
+    class="container-stacked"
+    data-container-id={parentId}
+    oncontextmenu={editing ? onContainerMenu : undefined}
+    use:dropContainer={{ ref, metrics, layout: 'stacked' }}
+  >
     {@render nodes(
       ordered,
       () => '',
@@ -253,6 +266,16 @@
     outline: 3px solid var(--accent);
     outline-offset: 2px;
     border-radius: 0.75rem;
+  }
+  /* Edit mode: items are dragged, so no text selection or touch callout on them. */
+  .cell.editable {
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
+  /* The originals stay in place, dimmed, while they are dragged. */
+  .cell.dragging {
+    opacity: 0.4;
   }
   .placeholder-stack {
     display: flex;

@@ -12,7 +12,8 @@
   import { FOLDER_VIEW_CONTEXT, differsFromSaved, type FolderViewContext } from '$lib/stores/folderView';
   import FolderControls from './FolderControls.svelte';
   import { selectedNodes, toggleNode } from '$lib/stores/nodeSelection';
-  import { openDialog, openMenu, longPress, menuPointFor, ownsTarget } from '$lib/editor/editorUi';
+  import { openDialog, openMenu, menuPointFor } from '$lib/editor/editorUi';
+  import { drag, dragSource } from '$lib/editor/drag/dragController';
 
   interface Props {
     folder: FolderNode;
@@ -41,13 +42,9 @@
     e.stopPropagation();
     openMenu({ ...menuPointFor(e, e.currentTarget as Element), target: { kind: 'node', id: folder.id } });
   }
-  function pressMenu(el: HTMLElement) {
-    return (x: number, y: number, t: EventTarget | null) => {
-      if (editing && ownsTarget(el, t)) openMenu({ x, y, target: { kind: 'node', id: folder.id } });
-    };
-  }
-  let slotEl = $state<HTMLElement | null>(null);
-  let folderEl = $state<HTMLElement | null>(null);
+  /** Touch long-press released without moving (Ruling 18(1)): the folder's menu. */
+  const pressed = (x: number, y: number) => openMenu({ x, y, target: { kind: 'node', id: folder.id } });
+  const dragging = $derived(editing && ($drag?.ids.includes(folder.id) ?? false));
 
   // This viewer's remembered view and the saved default (TabCanvas has already applied the view).
   const views = getContext<FolderViewContext | undefined>(FOLDER_VIEW_CONTEXT);
@@ -86,11 +83,12 @@
   <div
     class="folder-slot collapsed"
     class:selected
+    class:editable={editing}
+    class:dragging
     data-node-id={folder.id}
     {style}
-    bind:this={slotEl}
     oncontextmenu={editing ? menu : undefined}
-    use:longPress={(x, y, t) => slotEl && pressMenu(slotEl)(x, y, t)}
+    use:dragSource={{ id: folder.id, enabled: editing, onMenu: pressed }}
   >
   <div
     class="folder tile-face folder-collapsed-tile"
@@ -144,11 +142,12 @@
     class="folder"
     class:folder-style={tabLook}
     class:selected
+    class:editable={editing}
+    class:dragging
     data-node-id={folder.id}
     role="group"
     aria-label="{folder.name} folder"
     {style}
-    bind:this={folderEl}
     onclick={editing ? select : undefined}
     ondblclick={editing
       ? (e) => {
@@ -157,7 +156,7 @@
         }
       : undefined}
     oncontextmenu={editing ? menu : undefined}
-    use:longPress={(x, y, t) => folderEl && pressMenu(folderEl)(x, y, t)}
+    use:dragSource={{ id: folder.id, enabled: editing, onMenu: pressed }}
     style:--group-bg={folder.color || 'var(--bg-secondary)'}
     style:--group-opacity={folder.opacity !== undefined ? folder.opacity : 0.95}
     style:color={textColor}
@@ -319,6 +318,16 @@
   .folder-slot.selected {
     outline: 3px solid var(--accent);
     outline-offset: 2px;
+  }
+  .folder.editable,
+  .folder-slot.editable {
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
+  .folder.dragging,
+  .folder-slot.dragging {
+    opacity: 0.4;
   }
   .folder-slot {
     position: relative;

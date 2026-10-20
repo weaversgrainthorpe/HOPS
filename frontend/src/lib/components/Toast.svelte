@@ -34,6 +34,17 @@
       >
         <Icon icon={getIcon(t.type)} width="20" />
         <span class="toast-message">{t.message}</span>
+        {#if t.action}
+          {@const act = t.action}
+          <button
+            type="button"
+            class="toast-action"
+            onclick={() => {
+              toast.remove(t.id);
+              act.onClick();
+            }}>{act.label}</button
+          >
+        {/if}
         <button class="toast-close" onclick={() => toast.remove(t.id)} aria-label="Dismiss">
           <Icon icon="mdi:close" width="16" />
         </button>
@@ -110,6 +121,22 @@
     cursor: pointer;
     transition: background 0.2s;
     color: inherit;
+  }
+
+  .toast-action {
+    background: rgba(255, 255, 255, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    border-radius: 0.25rem;
+    padding: 0.2rem 0.6rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    cursor: pointer;
+    color: inherit;
+  }
+
+  .toast-action:hover,
+  .toast-action:focus-visible {
+    background: rgba(255, 255, 255, 0.4);
   }
 
   .toast-close:hover {
