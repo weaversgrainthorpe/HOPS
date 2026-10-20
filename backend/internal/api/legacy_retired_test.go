@@ -430,3 +430,30 @@ func TestNoLegacyReferencesInBackend(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// Promote input is bounded (security checklist: request size and count).
+func TestPromote_BoundedInput(t *testing.T) {
+	router, db := setupTestRouter(t)
+	c := newClient(t, router)
+	seed(t, db)
+	scanID, _ := seedScan(t, db)
+	before := storedRaw(db)
+	ids := make([]string, configdoc.MaxDashboardNodes+1)
+	for i := range ids {
+		ids[i] = "r"
+	}
+	code, resp := c.do("POST", "/api/discovery/scans/"+scanID+"/promote", map[string]interface{}{
+		"target": map[string]interface{}{"dashboardId": "d1", "tabId": "t1"}, "resultIds": ids})
+	if code != 400 || !strings.Contains(resp["error"].(string), "at most") {
+		t.Fatalf("too many results: %d %v", code, resp)
+	}
+	code, _ = c.do("POST", "/api/discovery/scans/"+scanID+"/promote", map[string]interface{}{
+		"target": map[string]interface{}{"dashboardId": "d1", "tabId": "t1", "newTab": map[string]interface{}{"name": strings.Repeat("x", 2<<20)}},
+		"resultIds": []string{"r"}})
+	if code != 413 {
+		t.Fatalf("oversized body: %d, want 413", code)
+	}
+	if storedRaw(db) != before {
+		t.Fatal("rejected promotes changed the stored doc")
+	}
+}

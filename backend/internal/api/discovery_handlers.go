@@ -397,8 +397,8 @@ func (r *Router) handlePromoteScan(w http.ResponseWriter, req *http.Request, sca
 		Target    promoteTarget `json:"target"`
 		ResultIDs []string      `json:"resultIds"`
 	}
-	if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
-		writeJSONError(w, "Invalid JSON", http.StatusBadRequest)
+	if ae := decodeBody(w, req, maxSmallBodyBytes, &body); ae != nil {
+		writeAPIError(w, ae)
 		return
 	}
 	if err := validatePromoteTarget(&body.Target); err != nil {
@@ -407,6 +407,10 @@ func (r *Router) handlePromoteScan(w http.ResponseWriter, req *http.Request, sca
 	}
 	if len(body.ResultIDs) == 0 {
 		writeJSONError(w, "At least one resultId is required", http.StatusBadRequest)
+		return
+	}
+	if len(body.ResultIDs) > configdoc.MaxDashboardNodes {
+		writeJSONError(w, fmt.Sprintf("A promote can add at most %d tiles at once", configdoc.MaxDashboardNodes), http.StatusBadRequest)
 		return
 	}
 
