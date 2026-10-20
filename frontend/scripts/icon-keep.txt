@@ -1,0 +1,10 @@
+# Icons that must stay in the offline bundle (src/lib/icons/offline-bundle.ts)
+# even when no frontend source file, backend testdata fixture or DB icon seed
+# references them. One `prefix:name` per line; `#` starts a comment.
+# Read by scripts/generate-icon-bundle.mjs — regenerate with: npm run icons:bundle
+#
+# Common user-chosen tile/tab icons (an offline host has no runtime API fallback).
+mdi:home
+mdi:chevron-up
+mdi:eye-outline
+mdi:page-layout-header

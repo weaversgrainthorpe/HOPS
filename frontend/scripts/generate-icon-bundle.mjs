@@ -8,13 +8,25 @@
 // external CDN" tenet (TENETS.md #10).
 //
 // This script scans the source for every `mdi:` / `simple-icons:` name actually
-// referenced, extracts just those icons from the full @iconify-json data
+// referenced — plus icons referenced only by DATA (see "Data sources" below) —
+// extracts just those icons from the full @iconify-json data
 // packages (devDependencies — never shipped), and writes a small module that
 // registers them via addCollection(). Only the used icons are embedded, so the
 // bundle stays tiny (~100 KB) instead of pulling the full 7.6 MB collections.
 //
 // Arbitrary Iconify names a user types by hand that aren't in this set still
 // fall back to the API — the one documented online-only nicety.
+//
+// Data sources (icons that appear in no frontend source file but that stored
+// content uses, so an offline host must still render them):
+//   - backend/internal/**/testdata/*.json — fixtures, incl. the v3 Showcase
+//     export (TestImport_V3Showcase asserts every icon in it is bundled);
+//   - backend/internal/database/*.go     — the DB icon seeds (icon_seeds.go);
+//   - scripts/icon-keep.txt              — an explicit keep-list, one
+//     `prefix:name` per line (`#` starts a comment). Add an icon there when
+//     it must stay bundled but nothing above references it (e.g. a very common
+//     user-chosen icon such as mdi:home). Never rely on a code comment to keep
+//     an icon in the bundle.
 //
 // Usage:
 //   node scripts/generate-icon-bundle.mjs           # (re)write the bundle
@@ -29,6 +41,9 @@ import { getIconData } from '@iconify/utils';
 const require = createRequire(import.meta.url);
 const here = dirname(fileURLToPath(import.meta.url));
 const SRC = join(here, '..', 'src');
+const BACKEND_INTERNAL = join(here, '..', '..', 'backend', 'internal');
+const SEEDS_DIR = join(BACKEND_INTERNAL, 'database');
+const KEEP_LIST = join(here, 'icon-keep.txt');
 const OUT_DIR = join(SRC, 'lib', 'icons');
 const OUT = join(OUT_DIR, 'offline-bundle.ts');
 
@@ -61,6 +76,48 @@ const used = new Set();
 for (const file of walk(SRC)) {
   const text = readFileSync(file, 'utf8');
   for (const m of text.matchAll(ICON_RE)) used.add(m[0]);
+}
+
+// 1b. Data-only references: backend testdata fixtures, DB icon seeds and the
+//     keep-list. A missing source is a hard failure, not a silently smaller
+//     bundle.
+function walkTestdata(dir, acc = []) {
+  for (const entry of readdirSync(dir)) {
+    const p = join(dir, entry);
+    if (!statSync(p).isDirectory()) continue;
+    if (entry === 'testdata') {
+      for (const f of readdirSync(p)) if (f.endsWith('.json')) acc.push(join(p, f));
+    } else {
+      walkTestdata(p, acc);
+    }
+  }
+  return acc;
+}
+for (const required of [BACKEND_INTERNAL, SEEDS_DIR, KEEP_LIST]) {
+  if (!existsSync(required)) {
+    console.error(`✗ icon data source missing: ${required}`);
+    process.exit(1);
+  }
+}
+const dataFiles = [
+  ...walkTestdata(BACKEND_INTERNAL),
+  ...readdirSync(SEEDS_DIR)
+    .filter((f) => f.endsWith('.go') && !f.endsWith('_test.go'))
+    .map((f) => join(SEEDS_DIR, f)),
+];
+for (const file of dataFiles) {
+  const text = readFileSync(file, 'utf8');
+  for (const m of text.matchAll(ICON_RE)) used.add(m[0]);
+}
+for (const raw of readFileSync(KEEP_LIST, 'utf8').split('\n')) {
+  const line = raw.replace(/#.*/, '').trim();
+  if (!line) continue;
+  const m = line.match(ICON_RE);
+  if (!m || m[0] !== line) {
+    console.error(`✗ icon-keep.txt: not a "prefix:name" icon (${PREFIXES.join('/')}): ${line}`);
+    process.exit(1);
+  }
+  used.add(line);
 }
 
 // 2. Resolve each against the full collection data, extracting just what's used.
