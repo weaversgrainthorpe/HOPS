@@ -246,10 +246,14 @@
   }
 
   /** A drag (the editor's drag engine) asks to show a tab: the drag continues there. */
-  function showTabForDrag(tabId: string) {
+  function showTabForDrag(tabId: string): boolean {
     const i = barTabs.findIndex((t) => t.id === tabId);
-    if (i !== -1) activeTabIndex = i;
-    else toast.error("That tab is no longer on this dashboard, so the drag stayed where it was.");
+    if (i === -1) {
+      toast.error("That tab is no longer on this dashboard, so the drag stayed where it was.");
+      return false;
+    }
+    activeTabIndex = i;
+    return true;
   }
 
   /** Keyboard tab reorder (edit mode): Alt+Left / Alt+Right moves the focused tab one place. */
@@ -261,12 +265,17 @@
     if (!editing || !e.altKey || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight')) return;
     e.preventDefault();
     const to = index + (e.key === 'ArrowLeft' ? -1 : 1);
-    if (to < 0 || to >= barTabs.length) return;
+    const name = barTabs[index]?.name || 'Tab';
+    if (to < 0 || to >= barTabs.length) {
+      toast.info(`"${name}" is already ${to < 0 ? 'first' : 'last'} (position ${index + 1} of ${barTabs.length}).`);
+      return;
+    }
     const ids = barTabs.map((t) => t.id);
     [ids[index], ids[to]] = [ids[to], ids[index]];
     const focusId = ids[to];
     // The active tab is followed by id when the draft's tab order changes.
     if (apply('Reorder tabs', (d) => reorderTabs(d, ids))) {
+      toast.info(`Moved "${name}" to position ${to + 1} of ${ids.length}.`);
       void tick().then(() => document.querySelector<HTMLElement>(`[data-drag-tab="${CSS.escape(focusId)}"]`)?.focus());
     }
   }
@@ -320,7 +329,7 @@
         data-drag-tabbar={editing ? '' : undefined}
       >
         {#each barTabs as tab, index (tab.id)}
-          <div class="tab-container">
+          <div class="tab-container" data-drag-tabbox={editing ? tab.id : undefined}>
             <div
               class="tab"
               class:active={activeTabIndex === index}

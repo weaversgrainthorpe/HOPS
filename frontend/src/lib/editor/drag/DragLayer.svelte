@@ -15,7 +15,7 @@
     /** The editor's active tab: a change during a drag cancels it (unless the drag switched it). */
     tabId?: string | null;
     /** Show a tab (the drag's tab dwell and the breadcrumb use it to continue on another tab). */
-    onSwitchTab?: (tabId: string) => void;
+    onSwitchTab?: (tabId: string) => boolean | void;
   }
   let { tabId = null, onSwitchTab }: Props = $props();
   $effect(() => setActiveTab(tabId));

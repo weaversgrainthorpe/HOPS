@@ -106,4 +106,24 @@ describe('hitTest', () => {
     reg(root, { ref: { tabId: 't1', folderId: 'c1' }, metrics: gridMetrics, layout: 'grid' });
     expect(hitTest(0, 0, new Set(), env(root)).scroller).toBe(body);
   });
+
+  it('inside the tab bar, reports every tab box in bar order; inside an overlay panel, its folder id', () => {
+    const b1 = el({ 'data-drag-tabbox': 't1' }, el({ 'data-drag-tab': 't1' }));
+    const ctl = el({ class: 'tab-controls' });
+    const b2 = el({ 'data-drag-tabbox': 't2' }, el({ 'data-drag-tab': 't2' }), ctl);
+    const bar = el({ 'data-drag-tabbar': '' }, b1, b2);
+    const root = el({ 'data-container-id': 'c1' });
+    const panel = el({ 'data-drag-panel': 'c1' }, el({ class: 'header' }), root);
+    document.body.append(bar, panel);
+    reg(root, { ref: { tabId: 't1', folderId: 'c1' }, metrics: gridMetrics, layout: 'grid' });
+    const rects = new Map<Element, { left: number; top: number; width: number; height: number }>([
+      [b1, { left: 0, top: 0, width: 150, height: 40 }],
+      [b2, { left: 160, top: 0, width: 150, height: 40 }]
+    ]);
+    const h = hitTest(300, 10, new Set(), { elementFromPoint: () => ctl, rectOf: (e) => rects.get(e) ?? { left: 0, top: 0 } });
+    expect(h.tabBar).toBe(true);
+    expect(h.tabBoxes?.map((b) => [b.id, b.left])).toEqual([['t1', 0], ['t2', 160]]);
+    expect(hitTest(0, 0, new Set(), env(root)).panel).toBe('c1');
+    expect(hitTest(0, 0, new Set(), env(panel.firstElementChild)).panel).toBe('c1'); // the header: no container, still the panel
+  });
 });

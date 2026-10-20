@@ -246,7 +246,7 @@ describe('into folders', () => {
 describe('across tabs', () => {
   it('600 ms over a tab switches to it and the drag continues; the drop lands in the new tab', () => {
     const switched: string[] = [];
-    setTabSwitcher((id) => switched.push(id));
+    setTabSwitcher((id) => { switched.push(id); });
     startMouseDrag(source('a'), 50, 50);
     flush();
     tabUnder = 't2';
@@ -376,23 +376,130 @@ describe('free alignment guides', () => {
 });
 
 describe('dragging out of an open overlay', () => {
-  it('holding over the backdrop closes the top overlay only', () => {
+  const stubHits = (fn: () => HitResult) =>
+    setDragEnv({
+      hitTest: fn,
+      raf: (cb) => { frames.push(cb); return frames.length; },
+      cancelRaf: () => { frames = []; }
+    });
+  const C1 = { ref: { tabId: 't1', folderId: 'c1' }, metrics: containerMetrics({ columns: 2, children: [] }, 'grid', 200), layout: 'grid' as const, left: 0, top: 0 };
+
+  it('an overlay the dwell opened under a pointer over its backdrop stays open (no open/close loop)', () => {
     startMouseDrag(source('a'), 50, 50);
     moveTo(550, 150);
     flush();
     vi.advanceTimersByTime(OPEN_DWELL_MS);
     expect(get(overlayStack)).toEqual(['c1']);
-    setDragEnv({
-      hitTest: () => ({ container: null, dx: 0, dy: 0, outside: true }),
-      raf: (cb) => { frames.push(cb); return frames.length; },
-      cancelRaf: () => { frames = []; }
-    });
+    stubHits(() => ({ container: null, dx: 0, dy: 0, outside: true }));
+    moveTo(551, 150);
+    flush();
+    vi.advanceTimersByTime(1200);
+    flush();
+    expect(get(overlayStack)).toEqual(['c1']);
+    expect(get(drag)).not.toBeNull();
+  });
+
+  it('after the pointer has been inside the panel, holding over the backdrop closes the top overlay only', () => {
+    startMouseDrag(source('a'), 50, 50);
+    moveTo(550, 150);
+    flush();
+    vi.advanceTimersByTime(OPEN_DWELL_MS);
+    expect(get(overlayStack)).toEqual(['c1']);
+    stubHits(() => ({ container: C1, dx: 10, dy: 10, panel: 'c1' }));
+    moveTo(560, 160);
+    flush();
+    stubHits(() => ({ container: null, dx: 0, dy: 0, outside: true }));
     moveTo(5, 5);
     flush();
     expect(get(drag)?.target?.kind).toBe('invalid');
-    vi.advanceTimersByTime(OPEN_DWELL_MS);
+    vi.advanceTimersByTime(OPEN_DWELL_MS - 1);
+    expect(get(overlayStack)).toEqual(['c1']);
+    vi.advanceTimersByTime(1);
     expect(get(overlayStack)).toEqual([]);
     expect(get(drag)).not.toBeNull();
+  });
+});
+
+describe('dwell edge cases', () => {
+  it('300 ms in the centre, out, 300 ms back is not a merge (the dwell restarts)', () => {
+    startMouseDrag(source('a'), 50, 50);
+    moveTo(150, 50);
+    flush();
+    vi.advanceTimersByTime(300);
+    moveTo(105, 50); // edge zone
+    flush();
+    moveTo(150, 50);
+    flush();
+    vi.advanceTimersByTime(300);
+    flush();
+    expect(get(drag)?.target?.kind).toBe('place');
+    vi.advanceTimersByTime(MERGE_DWELL_MS - 300);
+    flush();
+    expect(get(drag)?.target?.kind).toBe('merge');
+  });
+
+  it('Escape during a pending dwell: the timer never fires', () => {
+    startMouseDrag(source('a'), 50, 50);
+    moveTo(550, 150);
+    flush();
+    vi.advanceTimersByTime(300);
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    expect(get(drag)).toBeNull();
+    vi.advanceTimersByTime(5000);
+    expect(get(overlayStack)).toEqual([]);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('a hover left within the last frame never acts (ripen re-checks the latest pointer)', () => {
+    startMouseDrag(source('a'), 50, 50);
+    moveTo(550, 150);
+    flush();
+    vi.advanceTimersByTime(OPEN_DWELL_MS - 1);
+    moveTo(50, 350); // away from c1; no frame has run yet
+    vi.advanceTimersByTime(1);
+    expect(get(overlayStack)).toEqual([]);
+    expect(get(drag)).not.toBeNull();
+  });
+
+  it('merge then an immediate Undo restores the exact pre-merge draft', () => {
+    const before = draft();
+    startMouseDrag(source('a'), 50, 50);
+    moveTo(150, 50);
+    flush();
+    vi.advanceTimersByTime(MERGE_DWELL_MS);
+    flush();
+    drop(150, 50);
+    expect(draft()).not.toBe(before);
+    get(toast).find((t) => t.action?.label === 'Undo')!.action!.onClick();
+    expect(draft()).toBe(before);
+  });
+
+  it('a tab switch the drag asked for that did not happen pre-approves nothing', () => {
+    setTabSwitcher(() => false);
+    startMouseDrag(source('a'), 50, 50);
+    tabUnder = 't2';
+    moveTo(60, 10);
+    flush();
+    vi.advanceTimersByTime(OPEN_DWELL_MS);
+    expect(get(drag)).not.toBeNull();
+    setActiveTab('t2'); // an unrelated change later: cancels as any other tab change does
+    expect(get(drag)).toBeNull();
+  });
+});
+
+describe('free snap at normal scale', () => {
+  it('at 8 px per unit, an edge 7 px from a sibling\'s edge snaps (one design unit), changing the rounded position', () => {
+    where = { ref: { tabId: 't2' }, metrics: FREE, layout: 'free' };
+    nodes = [];
+    sourceRect = { left: 0, top: 0, width: 128, height: 128 };
+    startMouseDrag(source('fa'), 64, 64);
+    // fb's right edge: 36 units = 288 px. Ghost left at 295 px = 36.875 units → would round to 37.
+    moveTo(295 + 64, 400 + 64);
+    flush();
+    const t = get(drag)!.target!;
+    if (t.kind !== 'place') throw new Error('expected place');
+    expect(t.at[0].x).toBe(36);
+    expect(t.guides?.some((g) => g.axis === 'x' && g.at === 288)).toBe(true);
   });
 });
 

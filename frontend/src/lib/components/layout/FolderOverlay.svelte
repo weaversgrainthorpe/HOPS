@@ -70,6 +70,7 @@
   >
     <div
       class="overlay-panel"
+      data-drag-panel={editing ? p.id : undefined}
       role="dialog"
       aria-modal="true"
       aria-label={folder.name}

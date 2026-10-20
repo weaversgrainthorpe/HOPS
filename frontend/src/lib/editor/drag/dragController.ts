@@ -251,34 +251,58 @@ function resolveMerge(state: DragState, tileId: string, draft: LayoutDashboard):
   });
 }
 
-/** Tab reorder: before or after the tab under the pointer (by its half), or last over the bar's empty end. */
+/**
+ * Where a dragged tab would go: the tab box (button + its controls) nearest the pointer, and which
+ * side of it (by its x half). Gaps between tabs, the controls and the Add Tab button all resolve
+ * to a real slot, so the marker always shows exactly where the drop will land.
+ */
+function tabSlot(state: DragState, hit: HitResult): { id: string; box: Box; after: boolean } | null {
+  const { x, y } = state.pointer;
+  const boxes = hit.tabBoxes?.filter((b) => b.id) ?? [];
+  if (boxes.length === 0) {
+    return hit.tabId !== undefined && hit.tabRect
+      ? { id: hit.tabId, box: hit.tabRect, after: x >= hit.tabRect.left + hit.tabRect.width / 2 }
+      : null;
+  }
+  const dist = (b: Box) => {
+    const dx = x < b.left ? b.left - x : x > b.left + b.width ? x - (b.left + b.width) : 0;
+    const dy = y < b.top ? b.top - y : y > b.top + b.height ? y - (b.top + b.height) : 0;
+    return Math.hypot(dx, dy);
+  };
+  let best = boxes[0];
+  for (const b of boxes) if (dist(b) < dist(best)) best = b;
+  return { id: best.id, box: best, after: x >= best.left + best.width / 2 };
+}
+
+/** Tab reorder: the slot nearest the pointer in the tab bar (tabSlot). */
 function resolveTabOrder(state: DragState, hit: HitResult, draft: LayoutDashboard): DropTarget {
   const me = state.tab!;
   const ids = draft.tabs.map((t) => t.id);
   if (!ids.includes(me)) return invalid('That tab no longer exists.');
+  const slot = hit.tabId !== undefined || hit.tabBar ? tabSlot(state, hit) : null;
+  if (!slot) return invalid('Drop the tab on the tab bar to move it.');
+  if (slot.id === me) return { kind: 'tab-order', tabIds: ids };
   const rest = ids.filter((i) => i !== me);
-  if (hit.tabId !== undefined && hit.tabRect) {
-    if (hit.tabId === me) return { kind: 'tab-order', tabIds: ids };
-    const j = rest.indexOf(hit.tabId);
-    if (j === -1) return invalid('That tab no longer exists.');
-    rest.splice(tabAfter(state, hit.tabRect) ? j + 1 : j, 0, me);
-    return { kind: 'tab-order', tabIds: rest };
-  }
-  if (hit.tabBar) return { kind: 'tab-order', tabIds: [...rest, me] };
-  return invalid('Drop the tab on the tab bar to move it.');
+  const j = rest.indexOf(slot.id);
+  if (j === -1) return invalid('That tab no longer exists.');
+  rest.splice(slot.after ? j + 1 : j, 0, me);
+  return { kind: 'tab-order', tabIds: rest };
 }
 
-const tabAfter = (state: DragState, r: Box): boolean => state.pointer.x >= r.left + r.width / 2;
-
-/** The integer position within SNAP_PX (rendered) of a sibling line for any of this item's edges/centre. */
+/**
+ * The integer position within the snap distance of a sibling line for any of this item's
+ * edges/centre: max(SNAP_PX rendered px, one design unit) (Ruling 23), so snapping matters at
+ * every scale (at 8 px per unit plain rounding already lands within 4 px).
+ */
 function snapAxis(raw: number, size: number, lines: number[], unitPx: number): number {
+  const within = Math.max(SNAP_PX, unitPx);
   let best: { pos: number; d: number } | null = null;
   for (const off of [0, size / 2, size]) {
     for (const line of lines) {
       const pos = line - off;
       if (!Number.isInteger(pos)) continue;
       const d = Math.abs(raw - pos) * unitPx;
-      if (d <= SNAP_PX + 1e-9 && (!best || d < best.d)) best = { pos, d };
+      if (d <= within + 1e-9 && (!best || d < best.d)) best = { pos, d };
     }
   }
   return best ? best.pos : Math.round(raw);
@@ -615,6 +639,8 @@ let pending: { x: number; y: number } | null = null;
 let frameId = 0;
 let lastHit: HitResult | null = null;
 let dwellTimer: ReturnType<typeof setTimeout> | null = null;
+/** Overlays (folder ids) whose panel the pointer has been over during this drag. */
+const enteredPanels = new Set<string>();
 
 function setState(s: DragState | null) {
   current = s;
@@ -719,14 +745,11 @@ function frame() {
   next.target = resolveDrop(next, hit, d);
   next.view = hit.container ? { left: hit.container.left, top: hit.container.top, metrics: hit.container.metrics } : undefined;
   next.over = overFor(next.target, hit);
-  next.marker =
-    next.target.kind === 'tab-order' && hit.tabRect && hit.tabId !== s.tab
-      ? {
-          left: tabAfter(next, hit.tabRect) ? hit.tabRect.left + hit.tabRect.width : hit.tabRect.left,
-          top: hit.tabRect.top,
-          height: hit.tabRect.height
-        }
-      : undefined;
+  const slot = next.target.kind === 'tab-order' ? tabSlot(next, hit) : null;
+  next.marker = slot
+    ? { left: slot.after ? slot.box.left + slot.box.width : slot.box.left, top: slot.box.top, height: slot.box.height }
+    : undefined;
+  if (hit.panel !== undefined) enteredPanels.add(hit.panel);
   setState(next);
   autoScroll(at.x, at.y, hit.scroller);
 }
@@ -774,7 +797,12 @@ function dwellKey(s: DragState, hit: HitResult, d: LayoutDashboard): { key: stri
   if (s.tab !== undefined) return null;
   const stack = get(overlayStack);
   if (hit.crumb !== undefined) return crumbAction(hit.crumb) ? { key: `crumb:${hit.crumb}`, ms: OPEN_DWELL_MS } : null;
-  if (hit.outside) return stack.length ? { key: `out:${stack[stack.length - 1]}`, ms: OPEN_DWELL_MS } : null;
+  if (hit.outside) {
+    // Only once the pointer has been inside that overlay's panel during this drag: an overlay the
+    // dwell just opened under a pointer that is over its backdrop must not close (and reopen) itself.
+    const top = stack[stack.length - 1];
+    return top !== undefined && enteredPanels.has(top) ? { key: `out:${top}`, ms: OPEN_DWELL_MS } : null;
+  }
   if (hit.tabId !== undefined) return hit.tabId !== activeTab ? { key: `tab:${hit.tabId}`, ms: OPEN_DWELL_MS } : null;
   if (!hit.container || hit.container.layout === 'stacked') return null;
   const zone = zoneOf(s, hit);
@@ -805,15 +833,31 @@ function dwellFor(s: DragState, hit: HitResult, d: LayoutDashboard, prev: DragSt
   return { key: k.key, since: Date.now(), ripe: false };
 }
 
-/** The dwell's time is up: mark it ripe, do its navigation, and re-resolve on the next frame. */
+/**
+ * The dwell's time is up: mark it ripe, do its navigation, and re-resolve on the next frame. The
+ * pointer may have moved since the last frame (up to one frame ago): re-check the key against the
+ * latest pointer first, so a hover the user has already left never acts.
+ */
 function ripen(key: string) {
   dwellTimer = null;
   const s = current;
-  if (!s || s.dwell?.key !== key) return;
+  const d = currentDraft();
+  if (!s || !d || s.dwell?.key !== key) return;
+  if (pending) {
+    const at = { ...pending };
+    const latest = dwellKey({ ...s, pointer: at }, env.hitTest(at.x, at.y, new Set(s.ids)), d);
+    if (latest?.key !== key) {
+      schedule(); // the next frame starts the dwell for wherever the pointer is now
+      return;
+    }
+  }
   setState({ ...s, dwell: { ...s.dwell, ripe: true } });
   const [kind, ...rest] = key.split(':');
   const arg = rest.join(':');
-  if (kind === 'open') openFolder(arg);
+  if (kind === 'open') {
+    enteredPanels.delete(arg); // a freshly opened overlay: it closes on drag-out only after being entered
+    openFolder(arg);
+  }
   else if (kind === 'tab') switchDragTab(arg);
   else if (kind === 'crumb') crumbAction(arg)?.();
   else if (kind === 'out') {
@@ -866,6 +910,7 @@ function stopDrag() {
   frameId = 0;
   clearDwell();
   allowedTab = null;
+  enteredPanels.clear();
   pending = null;
   lastHit = null;
   draftAtStart = null;
@@ -1156,7 +1201,7 @@ let activeTab: string | null = null;
 let deliberateSwitch = false;
 /** The tab the drag itself asked to switch to (the switch reaches setActiveTab after a render). */
 let allowedTab: string | null = null;
-let tabSwitcher: ((tabId: string) => void) | null = null;
+let tabSwitcher: ((tabId: string) => boolean | void) | null = null;
 
 /** The editor's active tab (DragLayer reports it). A change during a drag cancels the drag, unless the drag asked for it. */
 export function setActiveTab(tabId: string | null): void {
@@ -1174,7 +1219,7 @@ export function setActiveTab(tabId: string | null): void {
 }
 
 /** Dashboard (through DragLayer) registers how to show a tab; the drag uses it for tab dwell and crumbs. */
-export function setTabSwitcher(fn: ((tabId: string) => void) | null): void {
+export function setTabSwitcher(fn: ((tabId: string) => boolean | void) | null): void {
   tabSwitcher = fn;
 }
 
@@ -1185,7 +1230,15 @@ function switchDragTab(tabId: string): void {
     return;
   }
   allowedTab = tabId;
-  tabSwitcher(tabId);
+  let ok: boolean | void = false;
+  try {
+    ok = tabSwitcher(tabId);
+  } catch (e) {
+    ok = false;
+    toast.error(`Couldn't switch tab during the drag: ${message(e, 'unknown error')}`);
+  }
+  // A switch that did not happen must not leave a later, unrelated tab change pre-approved.
+  if (ok === false && activeTab !== tabId) allowedTab = null;
 }
 
 /** For a tab switch the drag itself asks for (Task 8's tab dwell): the drag continues. */

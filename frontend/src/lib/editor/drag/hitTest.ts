@@ -33,6 +33,13 @@ export interface HitResult {
   tabRect?: { left: number; top: number; width: number; height: number };
   /** The tab bar itself (`data-drag-tabbar`) is under the pointer, between or after the tabs. */
   tabBar?: boolean;
+  /**
+   * Inside the tab bar: every tab's box (`data-drag-tabbox`: the tab button plus its controls), in
+   * bar order, viewport px. Tab reorder resolves to the nearest gap from these.
+   */
+  tabBoxes?: { id: string; left: number; top: number; width: number; height: number }[];
+  /** The open folder overlay whose panel is under the pointer (`data-drag-panel`). */
+  panel?: string;
   /** A drag-breadcrumb crumb under the pointer (`data-drag-crumb`: "tab:<id>" or "folder:<depth>"). */
   crumb?: string;
   /** An open folder overlay's backdrop (outside its panel) is under the pointer (`data-drag-outside`). */
@@ -83,16 +90,29 @@ export function hitTest(x: number, y: number, dragged: ReadonlySet<string>, env:
   // Navigation targets outside any container: a breadcrumb crumb, a tab button, the tab bar.
   const crumbEl = start.closest('[data-drag-crumb]');
   if (crumbEl) return { ...NO_HIT, crumb: crumbEl.getAttribute('data-drag-crumb') ?? '' };
+  const bar = start.closest('[data-drag-tabbar]');
   const tabEl = start.closest('[data-drag-tab]');
+  const boxes = (): Pick<HitResult, 'tabBoxes'> => {
+    if (!bar) return {};
+    return {
+      tabBoxes: Array.from(bar.querySelectorAll('[data-drag-tabbox]')).map((b) => {
+        const r = env.rectOf(b);
+        return { id: b.getAttribute('data-drag-tabbox') ?? '', left: r.left, top: r.top, width: r.width ?? 0, height: r.height ?? 0 };
+      })
+    };
+  };
   if (tabEl) {
     const r = env.rectOf(tabEl);
     return {
       ...NO_HIT,
       tabId: tabEl.getAttribute('data-drag-tab') ?? '',
-      tabRect: { left: r.left, top: r.top, width: r.width ?? 0, height: r.height ?? 0 }
+      tabRect: { left: r.left, top: r.top, width: r.width ?? 0, height: r.height ?? 0 },
+      ...boxes()
     };
   }
-  if (start.closest('[data-drag-tabbar]')) return { ...NO_HIT, tabBar: true };
+  if (bar) return { ...NO_HIT, tabBar: true, ...boxes() };
+  const panelId = start.closest('[data-drag-panel]')?.getAttribute('data-drag-panel') ?? undefined;
+  const withPanel = (h: HitResult): HitResult => (panelId !== undefined ? { ...h, panel: panelId } : h);
   // Climb out of the outermost dragged node: a dragged folder never targets its own content.
   for (let e: Element | null = start; e; e = e.parentElement) {
     const id = e.getAttribute('data-node-id');
@@ -104,7 +124,7 @@ export function hitTest(x: number, y: number, dragged: ReadonlySet<string>, env:
   if (!cEl || !info) {
     // Over an open overlay's backdrop (not its panel): "dragging out" of that folder.
     const back = start.closest('[data-drag-outside]');
-    return back && back === start ? { ...NO_HIT, outside: true } : NO_HIT;
+    return back && back === start ? { ...NO_HIT, outside: true } : withPanel(NO_HIT);
   }
   let nodeId: string | undefined;
   const nEl = start.closest('[data-node-id]');
@@ -118,5 +138,5 @@ export function hitTest(x: number, y: number, dragged: ReadonlySet<string>, env:
   }
   const scroller = cEl.closest('[data-drag-scroll]');
   if (scroller) out.scroller = scroller;
-  return out;
+  return withPanel(out);
 }
