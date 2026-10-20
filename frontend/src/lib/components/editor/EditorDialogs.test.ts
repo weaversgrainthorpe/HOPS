@@ -9,7 +9,7 @@ import { editorDialog, editorMenu } from '$lib/editor/editorUi';
 import { editMode } from '$lib/stores/editMode';
 import { dirty, session, undo } from '$lib/stores/editSession';
 import { toast } from '$lib/stores/toast';
-import { setLayout, resetEditor, startSession, draft, nodeIn, home, answerConfirm, p } from './editorTestKit';
+import { setLayout, resetEditor, startSession, draft, nodeIn, home, answerConfirm, p, noRequestsButSettingsRead } from './editorTestKit';
 import type { FolderNode, TileNode } from '$lib/types/layout';
 
 let fetchSpy: ReturnType<typeof vi.fn>;
@@ -34,17 +34,6 @@ async function show(d: Parameters<typeof editorDialog.set>[0]) {
 }
 
 
-/**
- * The dialogs edit the draft only: no request at all, except the status-check row's read of the
- * dashboard's settings (GET, M4 Task 7 / Ruling 3).
- */
-function noRequestsButSettingsRead(spy: ReturnType<typeof vi.fn>) {
-  const other = spy.mock.calls.filter(([url, init]) => {
-    const method = ((init as RequestInit | undefined)?.method ?? 'GET').toUpperCase();
-    return !(method === 'GET' && /\/api\/dashboards\/[^/]+\/settings$/.test(String(url)));
-  });
-  expect(other).toEqual([]);
-}
 
 describe('FolderEditModal', () => {
   it('shows the folder fields and returns them on Save', async () => {

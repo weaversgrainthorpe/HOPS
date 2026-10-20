@@ -4,6 +4,8 @@ import type { LayoutDoc, LayoutDashboard } from '$lib/types/layout';
 import type { FreshLayout } from '$lib/utils/api';
 import {
   getConfig,
+  dismissNotice,
+  updateSetting,
   saveDashboardV3,
   saveDashboardSettings,
   deleteDashboard as apiDeleteDashboard,
@@ -15,7 +17,8 @@ import {
 import { page } from '$app/stores';
 import { toast } from './toast';
 import { logError } from '$lib/utils/errors';
-import { refreshStatusBase } from './statusCheckBase';
+import { refreshStatusBase, refreshAllStatusBases } from './statusCheckBase';
+import { refreshAllStatuses } from './status';
 
 // The stored v3 document as GET /api/config serves it: {schemaVersion: 3,
 // dashboards, migrationNotices?}. null until it has loaded (or when it failed).
@@ -99,6 +102,28 @@ export const migrationFailure = writable<string | null>(null);
 export const migrationNoticesDismissed = writable(false);
 
 /**
+ * Set (to the reason) when the last re-read of the server notices failed: the held notices may
+ * no longer match the document, and the banner says so instead of presenting them as fresh.
+ */
+export const noticesStale = writable<string | null>(null);
+
+// Server notices dismissed in this page session. A re-read that began before the dismissal
+// succeeded must not bring one back.
+const dismissedNotices = new Set<string>();
+
+function withoutDismissed(c: Config): Config {
+  if (!c.notices || dismissedNotices.size === 0) return c;
+  return { ...c, notices: c.notices.filter((n) => !dismissedNotices.has(n.id)) };
+}
+
+/** Dismiss a server notice (stored on the server). Hidden only once the server agreed; rethrows on failure. */
+export async function dismissServerNotice(id: string): Promise<void> {
+  await dismissNotice(id);
+  dismissedNotices.add(id);
+  config.update((c) => (c?.notices ? { ...c, notices: c.notices.filter((n) => n.id !== id) } : c));
+}
+
+/**
  * True when the layout should replace the page with the migration-failed
  * notice. The admin page ("/": login + Backups, the remedy) is exempt and
  * shows its own persistent banner instead.
@@ -143,7 +168,8 @@ export async function loadConfig(opts: { background?: boolean } = {}) {
 
   try {
     const data = await getConfig();
-    config.set(data);
+    config.set(withoutDismissed(data));
+    noticesStale.set(null);
     layoutStale.set(false);
     migrationFailure.set(null);
     saveConflict.set(null);
@@ -176,11 +202,14 @@ export function applySavedLayout(fresh: FreshLayout | undefined): void {
       schemaVersion: 3,
       dashboards: layout.dashboards,
       ...(notices ? { migrationNotices: notices } : {}),
-      ...(serverNotices ? { notices: serverNotices } : {})
+      ...(serverNotices ? { notices: serverNotices } : {}),
+      ...(held?.noticesUnreadable ? { noticesUnreadable: held.noticesUnreadable } : {})
     });
-    // Server notices are computed per GET from the document (Ruling 13), so a write can change
-    // them (e.g. the dashboard they list was switched on or deleted): read them again.
-    if (serverNotices && serverNotices.length > 0) void refreshNotices();
+    // Server notices are computed per GET from the document (Ruling 13), so any write can
+    // change them (a listed dashboard switched on or deleted, or a new one): read them again.
+    void refreshNotices();
+    // Tile badges follow the saved levels: re-read the mounted tiles' status now, not in 30 s.
+    void refreshAllStatuses();
     return;
   }
   layoutStale.set(true);
@@ -189,20 +218,39 @@ export function applySavedLayout(fresh: FreshLayout | undefined): void {
 
 /**
  * Re-read the server notices after a write. Only the notices are taken from the response (the
- * document came with the write). A failed read keeps the held notices and is logged; the admin
- * page re-reads the whole config whenever it opens.
+ * document came with the write). A failed read is visible: a toast, and the held notices are
+ * marked "may be out of date" (noticesStale) until a later read succeeds.
  */
 async function refreshNotices(): Promise<void> {
   try {
     const fresh = await getConfig();
     config.update((c) => {
       if (!c) return c;
-      const { notices: _old, ...rest } = c;
-      return fresh.notices && fresh.notices.length > 0 ? { ...rest, notices: fresh.notices } : rest;
+      const { notices: _old, noticesUnreadable: _u, ...rest } = c;
+      const kept = (fresh.notices ?? []).filter((n) => !dismissedNotices.has(n.id));
+      return {
+        ...rest,
+        ...(kept.length > 0 ? { notices: kept } : {}),
+        ...(fresh.noticesUnreadable ? { noticesUnreadable: fresh.noticesUnreadable } : {})
+      };
     });
+    noticesStale.set(null);
   } catch (error) {
     logError('Notices refresh', error);
+    const why = error instanceof Error && error.message ? error.message : 'the request failed';
+    noticesStale.set(why);
+    toast.error(`Couldn't refresh the notices: ${why} (reload to update them).`);
   }
+}
+
+/**
+ * Save one global setting (the Settings page). Afterwards everything derived from the global
+ * values is re-read, so nothing shows the old value as current: the editing dialogs' dashboard
+ * levels (status checks inherit the global value), the notices and the mounted tiles' status.
+ */
+export async function saveGlobalSetting(key: string, value: string | number): Promise<void> {
+  await updateSetting(key, value);
+  await Promise.all([refreshAllStatusBases(), refreshNotices(), refreshAllStatuses()]);
 }
 
 // ---------------------------------------------------------------------------

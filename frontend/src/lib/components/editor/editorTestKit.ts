@@ -1,5 +1,6 @@
 // Shared fixtures for the editor component tests (not shipped: only *.test.ts import it).
 import { get } from 'svelte/store';
+import { expect, vi } from 'vitest';
 import { config, layoutStale } from '$lib/stores/config';
 import { begin, session, resetEditSessionForTests } from '$lib/stores/editSession';
 import { clearSelection } from '$lib/stores/nodeSelection';
@@ -104,4 +105,16 @@ export class FakeRO {
   }
   unobserve() {}
   disconnect() {}
+}
+
+/**
+ * The dialogs edit the draft only: no request at all, except the status-check row's read of the
+ * dashboard's settings (GET, M4 Task 7 / Ruling 3).
+ */
+export function noRequestsButSettingsRead(spy: ReturnType<typeof vi.fn>): void {
+  const other = spy.mock.calls.filter(([url, init]) => {
+    const method = ((init as RequestInit | undefined)?.method ?? 'GET').toUpperCase();
+    return !(method === 'GET' && /\/api\/dashboards\/[^/]+\/settings$/.test(String(url)));
+  });
+  expect(other).toEqual([]);
 }

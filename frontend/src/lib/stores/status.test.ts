@@ -91,3 +91,24 @@ describe('now tick store', () => {
     expect(isStatusStale(info, t0 + 11 * 60_000)).toBe(true);
   });
 });
+
+describe('refreshAllStatuses (M4 Task 7 fix round 1: no 30 s badge lag after a save)', () => {
+  it('re-reads every subscribed tile now, so a changed level shows at once', async () => {
+    const { subscribeToStatus, refreshAllStatuses, getStatus } = await import('./status');
+    vi.mocked(apiGetStatus).mockResolvedValue({ status: 'disabled', source: 'dashboard', sourceId: 'd' });
+    const sub = subscribeToStatus('t-refresh');
+    await new Promise((r) => setTimeout(r, 0));
+    expect(getStatus('t-refresh')?.status).toBe('disabled');
+    vi.mocked(apiGetStatus).mockResolvedValue({ status: 'up', source: 'tab', sourceId: 't' });
+    await refreshAllStatuses();
+    expect(getStatus('t-refresh')).toMatchObject({ status: 'up', source: 'tab', sourceId: 't' });
+    sub.unsubscribe();
+  });
+
+  it('nothing subscribed: no request', async () => {
+    const { refreshAllStatuses } = await import('./status');
+    vi.mocked(apiGetStatus).mockClear();
+    await refreshAllStatuses();
+    expect(apiGetStatus).not.toHaveBeenCalled();
+  });
+});

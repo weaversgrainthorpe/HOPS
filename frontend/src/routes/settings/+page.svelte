@@ -5,7 +5,8 @@
   import Button from '$lib/components/shared/Button.svelte';
   import { toast } from '$lib/stores/toast';
   import { isAuthenticated, waitForAuthChecked } from '$lib/stores/auth';
-  import { listSettings, updateSetting, type SettingDef } from '$lib/utils/api';
+  import { listSettings, type SettingDef } from '$lib/utils/api';
+  import { saveGlobalSetting } from '$lib/stores/config';
 
   // Settings are grouped by the dotted prefix of their key — server.*, log.*,
   // auth.*, status.*, upload.*, http.*. The labels here drive the section
@@ -83,7 +84,8 @@
     perKeyError[s.key] = '';
     savingKey = s.key;
     try {
-      await updateSetting(s.key, value);
+      // Also re-reads what depends on the global values (status-check levels, notices, badges).
+      await saveGlobalSetting(s.key, value);
       // Update the in-memory record so the dirty indicator clears.
       settings = settings.map((x) => (x.key === s.key ? { ...x, value } : x));
       if (s.restartRequired && !pendingRestartKeys.includes(s.key)) {

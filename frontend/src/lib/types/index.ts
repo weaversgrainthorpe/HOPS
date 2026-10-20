@@ -83,6 +83,8 @@ export interface Config extends LayoutDoc {
   migrationNotices?: string[];
   /** One-time notices the server computes per GET (M4 Task 6/7); dismissed via POST. Never stored. */
   notices?: ServerNotice[];
+  /** How many notices the server sent that this build could not read (shown, never dropped silently). */
+  noticesUnreadable?: number;
 }
 
 export interface ServerNotice {

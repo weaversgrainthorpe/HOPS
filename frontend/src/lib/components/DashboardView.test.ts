@@ -25,6 +25,7 @@ import { selectedNodes, clearSelection } from '$lib/stores/nodeSelection';
 import { editorMenu, editorDialog } from '$lib/editor/editorUi';
 import { updateNode } from '$lib/editor/treeOps';
 import type { LayoutNode } from '$lib/types/layout';
+import { noRequestsButSettingsRead } from './editor/editorTestKit';
 
 
 class FakeRO {
@@ -90,17 +91,6 @@ afterEach(() => {
 });
 
 
-/**
- * The dialogs edit the draft only: no request at all, except the status-check row's read of the
- * dashboard's settings (GET, M4 Task 7 / Ruling 3).
- */
-function noRequestsButSettingsRead(spy: ReturnType<typeof vi.fn>) {
-  const other = spy.mock.calls.filter(([url, init]) => {
-    const method = ((init as RequestInit | undefined)?.method ?? 'GET').toUpperCase();
-    return !(method === 'GET' && /\/api\/dashboards\/[^/]+\/settings$/.test(String(url)));
-  });
-  expect(other).toEqual([]);
-}
 
 describe('Dashboard view/edit rendering', () => {
   it('view mode renders TabCanvas; entering edit mode renders the editing canvas (no TabPanel) with the toolbar', async () => {

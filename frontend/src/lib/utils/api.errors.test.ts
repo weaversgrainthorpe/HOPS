@@ -57,11 +57,14 @@ describe('GET /api/config', () => {
     expect(await getConfig()).toEqual({ ...doc, migrationNotices: ['n'] });
   });
 
-  it('returns the server notices (M4 Task 7); a malformed notice is a visible error, never dropped silently', async () => {
+  it('returns the server notices (M4 Task 7); a malformed notice is dropped visibly, never failing the load', async () => {
     respond(200, { ...doc, notices: [{ id: 'n1', text: 'Hello' }] });
     expect(await getConfig()).toEqual({ ...doc, notices: [{ id: 'n1', text: 'Hello' }] });
-    respond(200, { ...doc, notices: [{ id: 'n1' }] });
-    await expect(getConfig()).rejects.toThrow(/notice/i);
+    // A malformed entry is dropped and COUNTED (the banner says so); the dashboards still load.
+    respond(200, { ...doc, notices: [{ id: 'n1' }, { id: 'n2', text: 'Ok' }, 'x'] });
+    expect(await getConfig()).toEqual({ ...doc, notices: [{ id: 'n2', text: 'Ok' }], noticesUnreadable: 2 });
+    respond(200, { ...doc, notices: 'nope' });
+    expect(await getConfig()).toEqual({ ...doc, notices: [], noticesUnreadable: 1 });
   });
 
   it('dismissNotice POSTs to /api/notices/{id}/dismiss (id encoded)', async () => {

@@ -264,11 +264,11 @@ describe('save', () => {
 		const sent = draft();
 		const fresh: LayoutDoc = { schemaVersion: 3, dashboards: [{ ...sent, revision: 8 }] };
 		vi.mocked(api.saveDashboardV3).mockResolvedValue({ revision: 8, layout: fresh });
-		vi.mocked(api.getConfig).mockResolvedValue(fresh);
+		// A follow-up GET refreshes only the notices (M4 Task 7); its document is never taken.
+		vi.mocked(api.getConfig).mockResolvedValue({ schemaVersion: 3, dashboards: [{ ...sent, name: 'from GET', revision: 99 }] });
 		expect(await save()).toBe('saved');
 		expect(api.saveDashboardV3).toHaveBeenCalledWith('d', sent, 7);
-		// The response's document is the store's: no whole-config reload follows.
-		expect(api.getConfig).not.toHaveBeenCalled();
+		await new Promise((r) => setTimeout(r, 0));
 		const s = get(session)!;
 		expect(s.baseRevision).toBe(8);
 		expect(get(dirty)).toBe(false);

@@ -13,7 +13,10 @@ vi.mock('$lib/utils/api', async () => {
     saveDashboardSettings: vi.fn(),
     deleteDashboard: vi.fn(),
     createDashboard: vi.fn(),
-    reorderDashboards: vi.fn()
+    reorderDashboards: vi.fn(),
+    dismissNotice: vi.fn(),
+    updateSetting: vi.fn(),
+    getDashboardSettings: vi.fn()
   };
 });
 
@@ -37,8 +40,12 @@ import {
   reorderDashboards,
   applySavedLayout,
   findLayoutDashboard,
-  dashboardHref
+  dashboardHref,
+  noticesStale,
+  dismissServerNotice,
+  saveGlobalSetting
 } from './config';
+import * as statusCheckBase from './statusCheckBase';
 import { toast } from './toast';
 
 function dash(id: string, revision: number, extra: Partial<LayoutDashboard> = {}): LayoutDashboard {
@@ -53,6 +60,8 @@ const doc = (...ds: LayoutDashboard[]) => ({ schemaVersion: 3 as const, dashboar
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.restoreAllMocks();
+  noticesStale.set(null);
   config.set(makeConfig());
   saveConflict.set(null);
   migrationFailure.set(null);
@@ -100,9 +109,67 @@ describe('server notices across writes (M4 Task 7)', () => {
     expect(get(config)).not.toHaveProperty('notices');
   });
 
-  it('no notices held: no extra read', () => {
+  it('no notices held: a write still re-reads them, so a notice the write created appears', async () => {
+    vi.mocked(api.getConfig).mockResolvedValue({ ...makeConfig(dash('a', 4)), notices: [{ id: 'n', text: 'new' }] });
     applySavedLayout({ layout: doc(dash('a', 4)) });
-    expect(api.getConfig).not.toHaveBeenCalled();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(api.getConfig).toHaveBeenCalledTimes(1);
+    expect(get(config)?.notices).toEqual([{ id: 'n', text: 'new' }]);
+  });
+
+  it('a failed re-read is visible: a toast, and the held notices are marked out of date', async () => {
+    const err = vi.spyOn(toast, 'error');
+    config.set({ ...makeConfig(), notices: [{ id: 'n', text: 'old' }] });
+    vi.mocked(api.getConfig).mockRejectedValue(new Error('HOPS hit an error'));
+    applySavedLayout({ layout: doc(dash('a', 4)) });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(err).toHaveBeenCalledWith(expect.stringMatching(/couldn't refresh the notices/i));
+    expect(get(noticesStale)).toMatch(/HOPS hit an error/);
+    expect(get(config)?.notices).toEqual([{ id: 'n', text: 'old' }]);
+    // A later successful read clears the mark.
+    vi.mocked(api.getConfig).mockResolvedValue(makeConfig(dash('a', 4)));
+    applySavedLayout({ layout: doc(dash('a', 4)) });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(get(noticesStale)).toBeNull();
+  });
+
+  it('a re-read begun before a Dismiss does not bring the dismissed notice back', async () => {
+    config.set({ ...makeConfig(), notices: [{ id: 'n', text: 'old' }] });
+    let answer!: (c: Config) => void;
+    vi.mocked(api.getConfig).mockReturnValue(new Promise<Config>((r) => (answer = r)));
+    vi.mocked(api.dismissNotice).mockResolvedValue(undefined);
+    applySavedLayout({ layout: doc(dash('a', 4)) });
+    await dismissServerNotice('n');
+    expect(get(config)?.notices ?? []).toEqual([]);
+    answer({ ...makeConfig(dash('a', 4)), notices: [{ id: 'n', text: 'old' }] });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(get(config)?.notices ?? []).toEqual([]);
+  });
+
+  it('a failed Dismiss keeps the notice and rethrows (the banner toasts)', async () => {
+    config.set({ ...makeConfig(), notices: [{ id: 'n', text: 'old' }] });
+    vi.mocked(api.dismissNotice).mockRejectedValue(new Error('nope'));
+    await expect(dismissServerNotice('n')).rejects.toThrow('nope');
+    expect(get(config)?.notices).toEqual([{ id: 'n', text: 'old' }]);
+  });
+});
+
+describe('global Settings save (M4 Task 7 fix round 1)', () => {
+  it('saves, then re-reads every cached dashboard status-check base and the notices', async () => {
+    vi.mocked(api.updateSetting).mockResolvedValue(undefined);
+    vi.mocked(api.getConfig).mockResolvedValue({ ...makeConfig(), notices: [{ id: 'g', text: 'fresh' }] });
+    const refresh = vi.spyOn(statusCheckBase, 'refreshAllStatusBases');
+    await saveGlobalSetting('status_checks.enabled', 'true');
+    expect(api.updateSetting).toHaveBeenCalledWith('status_checks.enabled', 'true');
+    expect(refresh).toHaveBeenCalled();
+    expect(get(config)?.notices).toEqual([{ id: 'g', text: 'fresh' }]);
+  });
+
+  it('a failed save rethrows and refreshes nothing', async () => {
+    vi.mocked(api.updateSetting).mockRejectedValue(new Error('bad value'));
+    const refresh = vi.spyOn(statusCheckBase, 'refreshAllStatusBases');
+    await expect(saveGlobalSetting('k', 'v')).rejects.toThrow('bad value');
+    expect(refresh).not.toHaveBeenCalled();
   });
 });
 
@@ -168,11 +235,14 @@ describe('showMigrationFailedPage', () => {
 });
 
 describe('write responses refresh the document', () => {
-  it('a session save (applySavedLayout) takes the response document and does NOT reload the whole config', () => {
+  it('a session save (applySavedLayout) takes the response document and does NOT reload the whole config', async () => {
+    // The follow-up GET only refreshes the notices (fix round 1); its document is never taken.
+    vi.mocked(api.getConfig).mockResolvedValue(makeConfig(dash('a', 9, { name: 'from GET' })));
     applySavedLayout({ layout: doc(dash('a', 4, { name: 'fresh' })) });
     expect(findLayoutDashboard('a', get(layoutDoc))?.name).toBe('fresh');
     expect(get(layoutStale)).toBe(false);
-    expect(api.getConfig).not.toHaveBeenCalled();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(get(layoutDoc)?.dashboards).toEqual([dash('a', 4, { name: 'fresh' })]);
   });
 
   it('a response without a document marks it stale and reloads', async () => {

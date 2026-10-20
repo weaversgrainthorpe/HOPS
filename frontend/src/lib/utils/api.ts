@@ -172,11 +172,19 @@ export async function getConfig(): Promise<Config> {
   const out: Config = { schemaVersion: 3, dashboards: resp.dashboards };
   if (Array.isArray(resp.migrationNotices)) out.migrationNotices = resp.migrationNotices;
   if (resp.notices !== undefined) {
-    const ok = Array.isArray(resp.notices) && resp.notices.every(
-      (n: unknown) => !!n && typeof (n as { id?: unknown }).id === 'string' && typeof (n as { text?: unknown }).text === 'string'
+    // A notice this build cannot read is dropped from the list but counted, so the banner
+    // says so; it never fails the whole load (the dashboards still show).
+    const list: unknown[] = Array.isArray(resp.notices) ? resp.notices : [resp.notices];
+    const good = list.filter(
+      (n): n is { id: string; text: string } =>
+        !!n && typeof (n as { id?: unknown }).id === 'string' && typeof (n as { text?: unknown }).text === 'string'
     );
-    if (!ok) throw new Error('The server sent notices this version of HOPS cannot read. Reload the page; if it persists, check the server.');
-    out.notices = (resp.notices as { id: string; text: string }[]).map((n) => ({ id: n.id, text: n.text }));
+    out.notices = good.map((n) => ({ id: n.id, text: n.text }));
+    const bad = list.length - good.length;
+    if (!Array.isArray(resp.notices) || bad > 0) {
+      out.noticesUnreadable = Array.isArray(resp.notices) ? bad : 1;
+      console.error('GET /api/config: unreadable notices', resp.notices);
+    }
   }
   return out;
 }

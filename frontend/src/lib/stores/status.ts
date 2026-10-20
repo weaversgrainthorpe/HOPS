@@ -131,6 +131,12 @@ export function subscribeToStatus(entryId: string) {
   };
 }
 
+/** Re-read every subscribed tile's status now (after a save changed the levels). */
+export function refreshAllStatuses(): Promise<void> {
+  if (activeEntries.size === 0) return Promise.resolve();
+  return pollAllStatuses();
+}
+
 async function pollAllStatuses() {
   // Snapshot active entries to avoid mutation during iteration
   const entries = [...activeEntries];

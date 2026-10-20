@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-vi.mock('$lib/utils/api', () => ({ dismissNotice: vi.fn() }));
+vi.mock('$lib/utils/api', () => ({ dismissNotice: vi.fn(), getConfig: vi.fn() }));
 vi.mock('$lib/utils/errors', () => ({ logError: vi.fn() }));
 import { render, screen, fireEvent } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { get } from 'svelte/store';
 import NoticesBanner from './NoticesBanner.svelte';
-import { config, migrationNoticesDismissed } from '$lib/stores/config';
+import { config, migrationNoticesDismissed, noticesStale } from '$lib/stores/config';
 import type { Config } from '$lib/types';
 import { dismissNotice } from '$lib/utils/api';
 import { toast } from '$lib/stores/toast';
@@ -67,6 +67,7 @@ describe('NoticesBanner: server notices (M4 Task 7)', () => {
   beforeEach(() => {
     vi.mocked(dismissNotice).mockReset();
     migrationNoticesDismissed.set(false);
+    noticesStale.set(null);
     config.set({ schemaVersion: 3, dashboards: [], notices: [{ id: 'layered-status-checks', text }] });
   });
 
@@ -107,5 +108,25 @@ describe('NoticesBanner: server notices (M4 Task 7)', () => {
     expect(screen.getByText('Hello')).toBeInTheDocument();
     expect(screen.getByText(notices[0])).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: /dismiss/i })).toHaveLength(2);
+  });
+});
+
+describe('NoticesBanner: never presents doubtful notices as fresh (fix round 1)', () => {
+  beforeEach(() => {
+    noticesStale.set(null);
+    migrationNoticesDismissed.set(false);
+  });
+
+  it('marks the notices "may be out of date" when the last re-read failed', () => {
+    config.set({ schemaVersion: 3, dashboards: [], notices: [{ id: 'n', text: 'Hello' }] });
+    noticesStale.set('HOPS hit an error');
+    render(NoticesBanner);
+    expect(screen.getByText(/may be out of date/i)).toBeInTheDocument();
+  });
+
+  it('says when notices from the server could not be read', () => {
+    config.set({ schemaVersion: 3, dashboards: [], notices: [], noticesUnreadable: 2 });
+    render(NoticesBanner);
+    expect(screen.getByRole('alert').textContent).toMatch(/2 notices from the server couldn't be read/i);
   });
 });

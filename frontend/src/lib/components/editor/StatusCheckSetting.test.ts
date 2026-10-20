@@ -178,6 +178,18 @@ describe('folder dialog: tri-state status checks', () => {
     expect(screen.queryByText(/Inherited from/)).toBeNull();
   });
 
+  it('Retry after a failed read fetches again and then shows the value', async () => {
+    base = 'fail';
+    withF1();
+    await show({ kind: 'folder', id: 'f1' });
+    await screen.findByRole('alert');
+    base = { override: false, effective: false };
+    await fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(await screen.findByText('Inherited from Home: off')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(settingsCalls()).toHaveLength(2);
+  });
+
   it('the dashboard settings are fetched once per dashboard, and again after a settings save', async () => {
     base = { override: null, effective: true };
     withF1();

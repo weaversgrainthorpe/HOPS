@@ -1,6 +1,5 @@
 <script lang="ts">
-  import { config, migrationNoticesDismissed } from '$lib/stores/config';
-  import { dismissNotice } from '$lib/utils/api';
+  import { config, migrationNoticesDismissed, noticesStale, dismissServerNotice } from '$lib/stores/config';
   import { toast } from '$lib/stores/toast';
   import { logError } from '$lib/utils/errors';
   import Icon from '@iconify/svelte';
@@ -11,17 +10,14 @@
   //   Dismiss is stored on the server (POST), so the notice hides only once that succeeded.
   let renames = $derived($config?.migrationNotices ?? []);
   let serverNotices = $derived($config?.notices ?? []);
+  let unreadable = $derived($config?.noticesUnreadable ?? 0);
   let dismissing = $state<Record<string, boolean>>({});
 
   async function dismiss(id: string) {
     if (dismissing[id]) return;
     dismissing[id] = true;
     try {
-      await dismissNotice(id);
-      config.update((c) => {
-        if (!c?.notices) return c;
-        return { ...c, notices: c.notices.filter((n) => n.id !== id) };
-      });
+      await dismissServerNotice(id);
     } catch (e) {
       logError('Dismiss notice', e);
       toast.error(`Couldn't dismiss the notice: ${e instanceof Error && e.message ? e.message : 'the request failed'}`);
@@ -35,7 +31,12 @@
   <div class="migration-notices server-notice" role="status">
     <Icon icon="mdi:information-outline" width="20" />
     <!-- Rendered as text: the server's notice text is never markup. -->
-    <div class="text">{notice.text}</div>
+    <div class="text">
+      {notice.text}
+      {#if $noticesStale}
+        <em class="stale">This notice may be out of date: it couldn't be refreshed after your last change ({$noticesStale}). Reload the page to update it.</em>
+      {/if}
+    </div>
     <button
       type="button"
       class="dismiss"
@@ -46,6 +47,16 @@
     </button>
   </div>
 {/each}
+
+{#if unreadable > 0}
+  <div class="migration-notices unreadable" role="alert">
+    <Icon icon="mdi:alert-outline" width="20" />
+    <div class="text">
+      {unreadable === 1 ? '1 notice' : `${unreadable} notices`} from the server couldn't be read by this page, so
+      {unreadable === 1 ? 'it is' : 'they are'} not shown. Reload the page; if it persists, check the server log.
+    </div>
+  </div>
+{/if}
 
 <!-- The startup migration renamed duplicate ids. Nothing was lost, but links or
      bookmarks to the old ids may need updating, so say exactly what changed. -->
@@ -101,6 +112,12 @@
     color: #1e3a8a;
     font-weight: 600;
     cursor: pointer;
+  }
+
+  .stale {
+    display: block;
+    margin-top: 0.3rem;
+    color: #fde68a;
   }
 
   .dismiss:disabled {

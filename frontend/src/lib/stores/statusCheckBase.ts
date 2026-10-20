@@ -56,7 +56,8 @@ export function refreshStatusBase(dashboardId: string): Promise<void> {
   const s = cache.get(dashboardId);
   if (!s) return Promise.resolve();
   s.set({ state: 'loading' });
-  // A fetch already running may have started before the save: wait for it, then read again.
+  // A fetch already running may have started before the save: wait for it, then read again
+  // (set 'loading' again, since that earlier fetch has just set its own, older, answer).
   const store = s;
   return (inflight.get(dashboardId) ?? Promise.resolve()).then(() => {
     store.set({ state: 'loading' });
@@ -64,7 +65,12 @@ export function refreshStatusBase(dashboardId: string): Promise<void> {
   });
 }
 
-/** Tests only. */
+/** Re-read every dashboard level held (after a global Settings save: they inherit from it). */
+export function refreshAllStatusBases(): Promise<void> {
+  return Promise.all([...cache.keys()].map((id) => refreshStatusBase(id))).then(() => undefined);
+}
+
+/** Forget everything (tests). */
 export function resetStatusBaseCache(): void {
   cache.clear();
   inflight.clear();
