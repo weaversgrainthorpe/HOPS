@@ -1,11 +1,16 @@
 <script lang="ts">
-  import { onDestroy, untrack } from 'svelte';
-  import type { LayoutDashboard, LayoutTab } from '$lib/types/layout';
+  import { onDestroy, setContext, untrack } from 'svelte';
+  import type { Container, FolderNode, LayoutDashboard, LayoutTab } from '$lib/types/layout';
   import { containerMetrics, planCanvas, resolveMode, rootBoxWidthPx } from '$lib/layout/geometry';
   import { layoutDoc, layoutStale } from '$lib/stores/config';
   import { closeAll, overlayStack, reconcile } from '$lib/stores/folderOverlay';
   import { toast } from '$lib/stores/toast';
+  import { editMode } from '$lib/stores/editMode';
+  import {
+    FOLDER_VIEW_CONTEXT, applyFolderViews, findFolderChain, folderViewFor, type FolderViewContext
+  } from '$lib/stores/folderView';
   import FolderOverlay from './FolderOverlay.svelte';
+  import MaximisedFolder from './MaximisedFolder.svelte';
   import ContainerView from './ContainerView.svelte';
 
   interface Props {
@@ -26,11 +31,6 @@
     });
     ro.observe(el);
     return () => ro.disconnect();
-  });
-
-  // Background is inert while any folder overlay is open (attribute set directly).
-  $effect(() => {
-    el?.toggleAttribute('inert', $overlayStack.length > 0);
   });
 
   // Leaving the canvas (e.g. browser Back with an overlay open) closes every overlay:
@@ -57,21 +57,55 @@
     });
   });
 
-  const mode = $derived(resolveMode(dashboard, tab, []));
-  const plan = $derived(planCanvas(mode, width, tab));
+  // This viewer's remembered folder views (per browser). Edit mode shows the saved layout.
+  const viewStore = $derived(folderViewFor(dashboard.id));
+  const remembered = $derived($editMode ? {} : $viewStore);
+  // The tab as this viewer sees it; every size below derives from it (one geometry source).
+  const viewTab = $derived(applyFolderViews(dashboard, tab, remembered));
+  const savedDisplay = $derived.by(() => {
+    const m = new Map<string, FolderNode['display']>();
+    const walk = (c: Container | undefined) => {
+      for (const n of Array.isArray(c?.children) ? c!.children : []) {
+        if (n && (n as { kind?: unknown }).kind === 'folder') {
+          m.set((n as FolderNode).id, (n as FolderNode).display);
+          walk((n as FolderNode).content);
+        }
+      }
+    };
+    walk(tab.root);
+    return m;
+  });
+  setContext<FolderViewContext>(FOLDER_VIEW_CONTEXT, {
+    get dashboardId() { return dashboard.id; },
+    remembered: (id) => remembered[id],
+    saved: (id) => savedDisplay.get(id)
+  });
+  // At most one maximised folder; one whose folder is not in this tab shows nothing (ignored silently).
+  const maximisedId = $derived(
+    Object.keys(remembered).find((id) => remembered[id] === 'maximised' && findFolderChain(viewTab.root, id)) ?? null
+  );
+  $effect(() => {
+    el?.toggleAttribute('inert', $overlayStack.length > 0 || maximisedId !== null);
+  });
+
+  const mode = $derived(resolveMode(dashboard, viewTab, []));
+  const plan = $derived(planCanvas(mode, width, viewTab));
   // The root's sizes: one source (geometry.containerMetrics), recomputed per width change only.
-  const metrics = $derived(containerMetrics(tab.root, mode, rootBoxWidthPx(plan, tab)));
+  const metrics = $derived(containerMetrics(viewTab.root, mode, rootBoxWidthPx(plan, viewTab)));
 </script>
 
 <div class="tab-canvas" bind:this={el} data-tab-id={tab.id}>
   {#if $layoutStale}
     <div role="status" class="refreshing">Refreshing layout…</div>
   {:else if width > 0}
-    <ContainerView container={tab.root} {metrics} {plan} {dashboard} {tab} folderChain={[]} />
+    <ContainerView container={viewTab.root} {metrics} {plan} {dashboard} tab={viewTab} folderChain={[]} />
   {/if}
 </div>
 <!-- Outside the conditional above and portalled to <body>: survives stale flips. -->
-<FolderOverlay {dashboard} {tab} {plan} />
+<FolderOverlay {dashboard} tab={viewTab} {plan} />
+{#if maximisedId && !$layoutStale}
+  <MaximisedFolder {dashboard} tab={viewTab} {plan} folderId={maximisedId} />
+{/if}
 
 <style>
   .tab-canvas {

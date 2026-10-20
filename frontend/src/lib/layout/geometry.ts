@@ -366,3 +366,19 @@ export function isRenderable(n: unknown): n is LayoutNode {
   }
   return true;
 }
+
+/**
+ * Placement of a folder minimised to its tile (per-browser view): a grid folder keeps its
+ * top-left cell (1 x 1); a free folder becomes a square one dashboard column wide
+ * (round(designWidth / 12 / 8) design units, at least 1) at the same x,y.
+ */
+export function minimisedPlacement(p: Placement, mode: LayoutMode, tab: LayoutTab): Placement {
+  const dw = tab.designWidth;
+  const side =
+    mode === 'free'
+      ? Math.max(1, Math.round((isNum(dw) && dw > 0 ? dw : DEFAULT_DESIGN_WIDTH) / ROOT_COLUMNS / FREE_UNIT_PX))
+      : 1;
+  const out: Placement = { x: p.x, y: p.y, w: side, h: side };
+  if (p.z !== undefined) out.z = p.z;
+  return out;
+}

@@ -7,6 +7,10 @@
   import ColoredIcon from '../ColoredIcon.svelte';
   import ContainerView from './ContainerView.svelte';
   import { openFolder } from '$lib/stores/folderOverlay';
+  import { getContext } from 'svelte';
+  import { editMode } from '$lib/stores/editMode';
+  import { FOLDER_VIEW_CONTEXT, type FolderViewContext } from '$lib/stores/folderView';
+  import FolderControls from './FolderControls.svelte';
 
   interface Props {
     folder: FolderNode;
@@ -22,6 +26,10 @@
   }
   let { folder, style = '', plan, dashboard, tab, folderChain, parent }: Props = $props();
 
+  // This viewer's remembered view and the saved default (TabCanvas has already applied the view).
+  const views = getContext<FolderViewContext | undefined>(FOLDER_VIEW_CONTEXT);
+  const remembered = $derived(views?.remembered(folder.id));
+  const saved = $derived(views?.saved(folder.id) ?? folder.display);
   const chain = $derived([...folderChain, folder]);
   const showTitle = $derived(folder.showTitle !== false);
   const tabLook = $derived(folder.shape === 'folder-tab');
@@ -83,6 +91,11 @@
       </div>
     {/if}
     <span class="collapsed-name">{folder.name}</span>
+    {#if views && !$editMode}
+      <span class="tile-restore">
+        <FolderControls dashboardId={views.dashboardId} folderId={folder.id} {remembered} {saved} variant="tile" />
+      </span>
+    {/if}
   </div>
 {:else}
   <div
@@ -108,6 +121,9 @@
           </span>
         {/if}
         <h3>{folder.name}</h3>
+        {#if views && !$editMode}
+          <FolderControls dashboardId={views.dashboardId} folderId={folder.id} {remembered} {saved} variant="bar" />
+        {/if}
       </div>
     {/if}
     <div class="folder-body">
@@ -238,6 +254,11 @@
     width: 100%;
     height: 100%;
     object-fit: contain;
+  }
+  .tile-restore {
+    position: absolute;
+    top: 0.15rem;
+    right: 0.15rem;
   }
   .empty-note {
     font-size: 0.75rem;

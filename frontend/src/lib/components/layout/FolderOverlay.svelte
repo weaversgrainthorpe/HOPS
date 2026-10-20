@@ -1,12 +1,13 @@
 <script lang="ts">
   import Icon from '@iconify/svelte';
-  import type { Container, FolderNode, LayoutDashboard, LayoutTab } from '$lib/types/layout';
+  import type { FolderNode, LayoutDashboard, LayoutTab } from '$lib/types/layout';
   import type { CanvasPlan } from '$lib/layout/geometry';
   import { overlayBodyPx, overlayMetrics, resolveMode } from '$lib/layout/geometry';
   import { layoutStale } from '$lib/stores/config';
   import { focusTrap } from '$lib/utils/focusTrap';
   import { overlayStack, closeTop, closeTo } from '$lib/stores/folderOverlay';
-  import { tick } from 'svelte';
+  import { portal, inertUnless, restoreFocus } from '$lib/utils/overlayActions';
+  import { findFolderChain } from '$lib/stores/folderView';
   import ContainerView from './ContainerView.svelte';
 
   interface Props {
@@ -29,52 +30,15 @@
     return overlayMetrics(plan, tab, resolveMode(dashboard, tab, chain), chain[chain.length - 1], bodyPx);
   }
 
-  /** Outermost-first chain of folders ending at `id`, or null when not in this tab. */
-  function findChain(c: Container | undefined, id: string): FolderNode[] | null {
-    const kids = Array.isArray(c?.children) ? c!.children : [];
-    for (const n of kids) {
-      if (!n || (n as { kind?: unknown }).kind !== 'folder') continue;
-      const f = n as FolderNode;
-      if (f.id === id) return [f];
-      const inner = findChain(f.content, id);
-      if (inner) return [f, ...inner];
-    }
-    return null;
-  }
-
   // Each open id resolved to its folder (and enclosing chain) from the live tab,
   // so a reload shows fresh content. Ids not in this tab render nothing; the
   // reconcile step in TabCanvas drops them from the stack with a notice.
   const panels = $derived(
     $overlayStack.flatMap((id, i) => {
-      const chain = findChain(tab.root, id);
+      const chain = findFolderChain(tab.root, id);
       return chain ? [{ id, depth: i + 1, chain }] : [];
     })
   );
-
-  /** Move the node to <body> so no transformed/filtered ancestor can trap position:fixed. */
-  function portal(node: HTMLElement) {
-    document.body.appendChild(node);
-    return { destroy: () => node.remove() };
-  }
-
-  function inertUnless(node: HTMLElement, active: boolean) {
-    node.toggleAttribute('inert', !active);
-    return { update: (a: boolean) => node.toggleAttribute('inert', !a) };
-  }
-
-  /** Re-focus the opener after the DOM (and inert state) settle, if focus was lost. */
-  function restoreFocus(node: HTMLElement) {
-    const prev = document.activeElement as HTMLElement | null;
-    return {
-      destroy() {
-        tick().then(() => {
-          const a = document.activeElement;
-          if (prev && prev.isConnected && (!a || a === document.body)) prev.focus();
-        });
-      }
-    };
-  }
 
   // Escape closes the top overlay wherever focus is, unless a tile modal is open
   // above it (that modal handles its own Escape).
@@ -82,6 +46,7 @@
     // Another handler (a menu, a picker, the editor) already dealt with this Escape.
     if (e.key !== 'Escape' || e.defaultPrevented || panels.length === 0) return;
     if (document.querySelector('[role="dialog"][aria-modal="true"]:not(.overlay-panel)')) return;
+    e.preventDefault(); // handled: a maximised panel below must not also close on this Escape
     closeTop();
   }
 </script>
