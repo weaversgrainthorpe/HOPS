@@ -56,8 +56,8 @@ func newNodeID(kind string) (string, *apiError) {
 	return kind + "-" + u, nil
 }
 
-// pathClash is the 409 path_taken when another stored dashboard (v3-only or
-// not) already serves path p. selfID is skipped (empty for a new dashboard).
+// pathClash is the 409 path_taken when another stored dashboard already
+// serves path p. selfID is skipped (empty for a new dashboard).
 func pathClash(stored configdoc.Obj, selfID, p string) *apiError {
 	for id, d := range storedDashboards(stored) {
 		if id == selfID {
@@ -79,19 +79,18 @@ func verifyErr(err error) *apiError {
 	return newAPIError(http.StatusBadRequest, "Invalid dashboard: "+verifyProblems(err))
 }
 
-// transientDashboardKeys are top-level keys of a GET /api/config response (or
-// the document) that a client may echo back inside a dashboard; they are never
-// dashboard content and are dropped rather than stored.
+// transientDashboardKeys are top-level keys of a GET /api/config or write
+// response (or the document) that a client may echo back inside a dashboard;
+// they are never dashboard content and are dropped rather than stored.
 var transientDashboardKeys = map[string]bool{
 	"schemaVersion": true, "layout": true, "migrationNotices": true,
-	"dashboardRevisions": true, "v3OnlyDashboards": true,
 }
 
 // handlePutDashboardV3 saves a dashboard written by the v3 editor. The body's
 // settings are ignored (they have their own endpoint) and so is its revision
 // beyond the conflict check: the stored one is bumped.
 func (r *Router) handlePutDashboardV3(w http.ResponseWriter, id string, in configdoc.Obj, revision any) {
-	r.updateDocWithBackup(w, func(stored configdoc.Obj, _ *configdoc.LegacyCache) (configdoc.Obj, interface{}, error) {
+	r.updateDocWithBackup(w, func(stored configdoc.Obj) (configdoc.Obj, interface{}, error) {
 		prev, ok := storedDashboards(stored)[id]
 		if !ok {
 			return nil, nil, newAPIError(http.StatusNotFound, "Dashboard not found: "+id)
@@ -178,7 +177,7 @@ func (r *Router) handleDashboardsRoot(w http.ResponseWriter, req *http.Request) 
 		writeAPIError(w, ae)
 		return
 	}
-	r.updateDocWithBackup(w, func(stored configdoc.Obj, _ *configdoc.LegacyCache) (configdoc.Obj, interface{}, error) {
+	r.updateDocWithBackup(w, func(stored configdoc.Obj) (configdoc.Obj, interface{}, error) {
 		if ce := pathClash(stored, id, body.Path); ce != nil {
 			return nil, nil, ce
 		}
@@ -226,7 +225,7 @@ func (r *Router) handleOrderDashboards(w http.ResponseWriter, req *http.Request)
 		writeAPIError(w, ae)
 		return
 	}
-	r.updateDocWithBackup(w, func(stored configdoc.Obj, _ *configdoc.LegacyCache) (configdoc.Obj, interface{}, error) {
+	r.updateDocWithBackup(w, func(stored configdoc.Obj) (configdoc.Obj, interface{}, error) {
 		all := storedDashboards(stored)
 		seen := map[string]bool{}
 		for _, id := range body.Order {
@@ -300,7 +299,7 @@ func (r *Router) handleTransferNodes(w http.ResponseWriter, req *http.Request) {
 		}
 		want[id] = true
 	}
-	r.updateDocWithBackup(w, func(stored configdoc.Obj, _ *configdoc.LegacyCache) (configdoc.Obj, interface{}, error) {
+	r.updateDocWithBackup(w, func(stored configdoc.Obj) (configdoc.Obj, interface{}, error) {
 		all := storedDashboards(stored)
 		src, ok := all[body.SourceID]
 		if !ok {
@@ -595,10 +594,17 @@ type freeSpace struct {
 }
 
 func newFreeSpace(c configdoc.Obj, budget int) *freeSpace {
-	fs := &freeSpace{cols: 12, budget: budget}
+	cols := 12.0
 	if n, ok := toFloat(c["columns"]); ok && math.Floor(n) >= 1 {
-		fs.cols = math.Floor(n)
+		cols = math.Floor(n)
 	}
+	return newFreeSpaceCols(c, cols, budget)
+}
+
+// newFreeSpaceCols is newFreeSpace with an explicit width (a free tab root's
+// extent is its design width, not its nominal columns).
+func newFreeSpaceCols(c configdoc.Obj, cols float64, budget int) *freeSpace {
+	fs := &freeSpace{cols: cols, budget: budget}
 	kids, _ := c["children"].([]any)
 	for _, k := range kids {
 		if km, ok := k.(configdoc.Obj); ok && renderableNode(km) {

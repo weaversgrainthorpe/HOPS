@@ -17,8 +17,7 @@ import (
 func v3Body(t *testing.T, c *apiClient, id string) map[string]interface{} {
 	t.Helper()
 	v := getView(t, c)
-	doc := v["layout"].(map[string]interface{})
-	for _, d := range doc["dashboards"].([]interface{}) {
+	for _, d := range v["dashboards"].([]interface{}) {
 		if dm := d.(map[string]interface{}); dm["id"] == id {
 			b, _ := json.Marshal(dm)
 			var out map[string]interface{}
@@ -26,7 +25,7 @@ func v3Body(t *testing.T, c *apiClient, id string) map[string]interface{} {
 			return out
 		}
 	}
-	t.Fatalf("dashboard %s not in layout", id)
+	t.Fatalf("dashboard %s not in GET /api/config", id)
 	return nil
 }
 
@@ -46,7 +45,7 @@ func rootOf(d map[string]interface{}) map[string]interface{} {
 func TestV3Put_RoundTripKeepsSettingsAndBumpsRevision(t *testing.T) {
 	router, db := setupTestRouter(t)
 	c := newClient(t, router)
-	seed(t, c)
+	seed(t, db)
 	// Give d1 a stored setting via the settings endpoint.
 	if code, r := c.do("PUT", "/api/dashboards/d1/settings", map[string]interface{}{
 		"overrides": map[string]interface{}{"statusChecksEnabled": false}, "revision": 1}); code != 200 {
@@ -62,8 +61,8 @@ func TestV3Put_RoundTripKeepsSettingsAndBumpsRevision(t *testing.T) {
 	if code != 200 || resp["revision"] != float64(3) {
 		t.Fatalf("put: %d %v", code, resp)
 	}
-	if resp["layout"] == nil || resp["v3OnlyDashboards"] == nil {
-		t.Fatalf("response lacks layout: %v", resp)
+	if lay, _ := resp["layout"].(map[string]interface{}); lay == nil || lay["schemaVersion"] != float64(3) || layoutDashName(resp, "d1") != "Renamed" {
+		t.Fatalf("response lacks the fresh layout: %v", resp)
 	}
 	if backupCount(t, c) != n+1 {
 		t.Fatal("accepted save took no backup")
@@ -83,7 +82,7 @@ func TestV3Put_RoundTripKeepsSettingsAndBumpsRevision(t *testing.T) {
 func TestV3Put_Rejections(t *testing.T) {
 	router, db := setupTestRouter(t)
 	c := newClient(t, router)
-	seed(t, c)
+	seed(t, db)
 	n := backupCount(t, c)
 	before := storedRaw(db)
 	base := func() map[string]interface{} { return v3Body(t, c, "d1") }
@@ -155,8 +154,8 @@ func TestV3Put_Rejections(t *testing.T) {
 func TestV3Put_DuplicateIDAcrossDashboards400(t *testing.T) {
 	router, db := setupTestRouter(t)
 	c := newClient(t, router)
-	seed(t, c)
-	addD2(t, c)
+	seed(t, db)
+	addD2(t, db)
 	d2 := v3Body(t, c, "d2")
 	d2["path"] = "/d2"
 	kids := rootOf(d2)["children"].([]interface{})
@@ -172,10 +171,10 @@ func TestV3Put_DuplicateIDAcrossDashboards400(t *testing.T) {
 }
 
 func TestV3Put_PathClash409AndSamePathOK(t *testing.T) {
-	router, _ := setupTestRouter(t)
+	router, db := setupTestRouter(t)
 	c := newClient(t, router)
-	seed(t, c)
-	addD2(t, c)
+	seed(t, db)
+	addD2(t, db)
 	d2 := v3Body(t, c, "d2")
 	d2["path"] = "d1" // normalises onto /d1
 	code, resp := v3Put(c, "d2", d2, 1)
@@ -188,21 +187,10 @@ func TestV3Put_PathClash409AndSamePathOK(t *testing.T) {
 	}
 }
 
-func TestV3Put_LegacyShapedBodyStillWorks(t *testing.T) {
-	router, _ := setupTestRouter(t)
-	c := newClient(t, router)
-	seed(t, c)
-	d := legacyDash("Legacy Renamed")
-	code, resp := c.do("PUT", "/api/dashboards/d1", map[string]interface{}{"dashboard": d, "revision": 1})
-	if code != 200 || resp["revision"] != float64(2) {
-		t.Fatalf("%d %v", code, resp)
-	}
-}
-
 func TestCreateDashboard(t *testing.T) {
 	router, db := setupTestRouter(t)
 	c := newClient(t, router)
-	seed(t, c)
+	seed(t, db)
 	n := backupCount(t, c)
 	code, resp := c.do("POST", "/api/dashboards", map[string]interface{}{"name": "Fresh", "path": "/fresh"})
 	if code != 200 || resp["revision"] != float64(1) || resp["id"] == nil || resp["id"] == "" {
@@ -228,7 +216,7 @@ func TestCreateDashboard(t *testing.T) {
 	}
 	// GET shows it.
 	found := false
-	for _, dd := range getView(t, c)["layout"].(map[string]interface{})["dashboards"].([]interface{}) {
+	for _, dd := range getView(t, c)["dashboards"].([]interface{}) {
 		if dd.(map[string]interface{})["id"] == id {
 			found = true
 		}
@@ -261,8 +249,8 @@ func TestCreateDashboard(t *testing.T) {
 func TestOrderDashboards(t *testing.T) {
 	router, db := setupTestRouter(t)
 	c := newClient(t, router)
-	seed(t, c)
-	addD2(t, c)
+	seed(t, db)
+	addD2(t, db)
 	revBefore := storedDashboards(storedDoc(t, db))["d1"]["revision"]
 	for _, bad := range [][]string{{"d1"}, {"d1", "d1"}, {"d1", "d2", "ghost"}, {"d2", "d2"}, {}} {
 		if code, resp := c.do("PUT", "/api/dashboards/order", map[string]interface{}{"order": bad}); code != 400 {
@@ -295,8 +283,8 @@ func transferBody(m map[string]interface{}) map[string]interface{} {
 func TestTransfer(t *testing.T) {
 	router, db := setupTestRouter(t)
 	c := newClient(t, router)
-	seed(t, c)
-	addD2(t, c) // d2 has tab t2 (legacyDashWithID)
+	seed(t, db)
+	addD2(t, db) // d2 has tab t2 (legacyDashWithID)
 	tabID := func() string {
 		return v3Body(t, c, "d2")["tabs"].([]interface{})[0].(map[string]interface{})["id"].(string)
 	}()
@@ -393,8 +381,8 @@ func findNode(d configdoc.Obj, id string) []configdoc.Obj {
 func TestTransfer_CopyFolderGetsFreshIDsForDescendants(t *testing.T) {
 	router, db := setupTestRouter(t)
 	c := newClient(t, router)
-	seed(t, c)
-	addD2(t, c)
+	seed(t, db)
+	addD2(t, db)
 	// Put a folder with a tile into d1 via a v3 save.
 	d := v3Body(t, c, "d1")
 	rootOf(d)["children"] = append(rootOf(d)["children"].([]interface{}), map[string]interface{}{
@@ -432,9 +420,9 @@ func TestTransfer_CopyFolderGetsFreshIDsForDescendants(t *testing.T) {
 // Route classification: every new route is protected (auth + CSRF) and the
 // literal segments order/transfer are not mistaken for dashboard ids.
 func TestV3Routes_AuthCSRFAndDispatch(t *testing.T) {
-	router, _ := setupTestRouter(t)
+	router, db := setupTestRouter(t)
 	c := newClient(t, router)
-	seed(t, c)
+	seed(t, db)
 	routes := []struct{ method, path, body string }{
 		{"PUT", "/api/dashboards/d1", `{"schema":3,"dashboard":{},"revision":1}`},
 		{"POST", "/api/dashboards", `{"name":"a","path":"/a"}`},
@@ -502,30 +490,10 @@ func merge(a, b map[string]interface{}) map[string]interface{} {
 
 // ---- fix round 1 ----
 
-func TestReservedIDs_LegacyWholeConfigRefusesNewOrderDashboard(t *testing.T) {
-	router, db := setupTestRouter(t)
-	c := newClient(t, router)
-	seed(t, c)
-	before := storedRaw(db)
-	for _, id := range []string{"order", "transfer"} {
-		v := getView(t, c)
-		nd := legacyDashWithID(id, "Reserved")
-		nd["path"] = "/" + id + "-path"
-		v["dashboards"] = append(v["dashboards"].([]interface{}), nd)
-		code, resp := c.do("PUT", "/api/config", v)
-		if code != 400 || !strings.Contains(fmt.Sprint(resp["error"]), "reserved") {
-			t.Fatalf("%s: %d %v", id, code, resp)
-		}
-	}
-	if storedRaw(db) != before {
-		t.Fatal("rejected write changed the document")
-	}
-}
-
 func TestReservedIDs_ImportRenames(t *testing.T) {
 	router, db := setupTestRouter(t)
 	c := newClient(t, router)
-	seed(t, c)
+	seed(t, db)
 	imp := []byte(`{"dashboards":[{"id":"order","name":"O","path":"/o","order":0,"tabs":[{"id":"t9","name":"T","order":0,
 	  "groups":[{"id":"g9","name":"G","order":0,"entries":[{"id":"e9","name":"A","url":"https://a","order":0}]}]}]},
 	  {"id":"transfer","name":"T","path":"/t","order":1,"tabs":[]}]}`)
@@ -567,10 +535,10 @@ func TestReservedIDs_MigrationRenamesWithNotice(t *testing.T) {
 // Pathological container: many small tiles, then big tiles covering the early
 // cells last in child order, then a large grid transfer. Must stay fast.
 func TestTransfer_PathologicalContainerIsBounded(t *testing.T) {
-	router, _ := setupTestRouter(t)
+	router, db := setupTestRouter(t)
 	c := newClient(t, router)
-	seed(t, c)
-	addD2(t, c)
+	seed(t, db)
+	addD2(t, db)
 	d := v3Body(t, c, "d1")
 	kids := []interface{}{}
 	for i := 0; i < 2500; i++ { // source: 2500 tiles to transfer
@@ -625,8 +593,8 @@ func TestFreeSpace_BudgetFallsBackBelowEverything(t *testing.T) {
 func TestTransfer_GridPlacementClampsSize(t *testing.T) {
 	router, db := setupTestRouter(t)
 	c := newClient(t, router)
-	seed(t, c)
-	addD2(t, c)
+	seed(t, db)
+	addD2(t, db)
 	d := v3Body(t, c, "d1")
 	rootOf(d)["children"] = []interface{}{
 		map[string]interface{}{"id": "odd1", "kind": "tile", "name": "a", "url": "http://a",
@@ -661,8 +629,8 @@ func TestTransfer_GridPlacementClampsSize(t *testing.T) {
 func TestV3Put_ClashChecksOnlyWhenPathChanged(t *testing.T) {
 	router, db := setupTestRouter(t)
 	c := newClient(t, router)
-	seed(t, c)
-	addD2(t, c)
+	seed(t, db)
+	addD2(t, db)
 	// Force a pre-existing clash directly in the store.
 	doc := storedDoc(t, db)
 	storedDashboards(doc)["d2"]["path"] = "/d1"
@@ -679,9 +647,9 @@ func TestV3Put_ClashChecksOnlyWhenPathChanged(t *testing.T) {
 func TestV3Put_StripsTransientKeysKeepsOthers(t *testing.T) {
 	router, db := setupTestRouter(t)
 	c := newClient(t, router)
-	seed(t, c)
+	seed(t, db)
 	d := v3Body(t, c, "d1")
-	for _, k := range []string{"schemaVersion", "layout", "migrationNotices", "dashboardRevisions", "v3OnlyDashboards"} {
+	for _, k := range []string{"schemaVersion", "layout", "migrationNotices"} {
 		d[k] = "junk"
 	}
 	d["customKey"] = "keep me"
@@ -689,7 +657,7 @@ func TestV3Put_StripsTransientKeysKeepsOthers(t *testing.T) {
 		t.Fatalf("%d %v", code, resp)
 	}
 	got := storedDashboards(storedDoc(t, db))["d1"]
-	for _, k := range []string{"schemaVersion", "layout", "migrationNotices", "dashboardRevisions", "v3OnlyDashboards"} {
+	for _, k := range []string{"schemaVersion", "layout", "migrationNotices"} {
 		if _, has := got[k]; has {
 			t.Errorf("transient key %s stored", k)
 		}
@@ -700,9 +668,9 @@ func TestV3Put_StripsTransientKeysKeepsOthers(t *testing.T) {
 }
 
 func TestV3Put_TabLimit(t *testing.T) {
-	router, _ := setupTestRouter(t)
+	router, db := setupTestRouter(t)
 	c := newClient(t, router)
-	seed(t, c)
+	seed(t, db)
 	d := v3Body(t, c, "d1")
 	tabs := []interface{}{}
 	for i := 0; i < 201; i++ {
@@ -721,9 +689,9 @@ func TestV3Put_TabLimit(t *testing.T) {
 }
 
 func TestV3Put_RootPathRefused(t *testing.T) {
-	router, _ := setupTestRouter(t)
+	router, db := setupTestRouter(t)
 	c := newClient(t, router)
-	seed(t, c)
+	seed(t, db)
 	for _, p := range []string{"/", "//", ""} {
 		d := v3Body(t, c, "d1")
 		d["path"] = p
@@ -736,7 +704,7 @@ func TestV3Put_RootPathRefused(t *testing.T) {
 func TestV3Routes_OversizedBody413(t *testing.T) {
 	router, db := setupTestRouter(t)
 	c := newClient(t, router)
-	seed(t, c)
+	seed(t, db)
 	before := storedRaw(db)
 	big := strings.Repeat("a", 2<<20) // over the 1 MiB small-body cap
 	if code, _ := c.do("POST", "/api/dashboards", map[string]interface{}{"name": big, "path": "/x"}); code != 413 {

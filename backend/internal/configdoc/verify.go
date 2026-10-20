@@ -449,7 +449,7 @@ func (v *verifier) checkContainer(owner string, c Obj, note func(string, Obj) st
 }
 
 // checkPlacement requires a placement object with finite numeric x, y, w and
-// h: the legacy view orders by it and the renderer positions by it, so a node
+// h: the editor and the renderer position by it, so a node
 // without one could not be shown (Ruling 24).
 func (v *verifier) checkPlacement(n string, p any) {
 	pm, ok := p.(Obj)

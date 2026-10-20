@@ -40,14 +40,16 @@ func TestGetConfig_MigrationNoticesAfterRenamingMigration(t *testing.T) {
 	v := getView(t, c)
 	want := []string{
 		`Tab "main" in dashboard "Heimdall Import" was renamed to "main-heimdall" because another dashboard already used that id`,
-		`Group "services" in dashboard "Heimdall Import" was renamed to "services-heimdall" because another dashboard already used that id`,
+		`Folder "services" in dashboard "Heimdall Import" was renamed to "services-heimdall" because another dashboard already used that id`,
 	}
 	if got := notices(t, v); !reflect.DeepEqual(got, want) {
 		t.Fatalf("notices:\n got %q\nwant %q", got, want)
 	}
 
-	// PUT strips it: the view round-trips and the notices are never stored.
-	if code, r := c.do("PUT", "/api/config", v); code != 200 {
+	// A dashboard save that echoes the notices strips them: never stored.
+	d := v["dashboards"].([]interface{})[0].(map[string]interface{})
+	d["migrationNotices"] = v["migrationNotices"]
+	if code, r := c.do("PUT", "/api/dashboards/"+d["id"].(string), map[string]interface{}{"schema": 3, "dashboard": d, "revision": d["revision"]}); code != 200 {
 		t.Fatalf("PUT: %d %v", code, r)
 	}
 	if strings.Contains(storedRaw(db), "migrationNotices") {
@@ -82,7 +84,7 @@ func TestMigrationNoticeText(t *testing.T) {
 	}
 	got := migrationNotices(renames, doc)
 	want := []string{
-		`Entry "e" in dashboard "Home" was renamed to "e-d" because another item in the same dashboard already used that id`,
+		`Tile "e" in dashboard "Home" was renamed to "e-d" because another item in the same dashboard already used that id`,
 		`Dashboard "d-2" had its id "d" renamed to "d-2" because another dashboard already used that id`,
 	}
 	if !reflect.DeepEqual(got, want) {

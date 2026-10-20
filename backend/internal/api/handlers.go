@@ -91,27 +91,24 @@ func (r *Router) handleGetHealth(w http.ResponseWriter, req *http.Request) {
 	})
 }
 
-// handleConfig routes /api/config requests by HTTP method:
-//   GET → public config read
-//   PUT → authenticated config update (requires CSRF token)
+// handleConfig serves GET /api/config (public). There is no whole-config
+// write: dashboards are written one at a time (PUT/POST/DELETE
+// /api/dashboards...), and import and restore have their own endpoints.
 func (r *Router) handleConfig(w http.ResponseWriter, req *http.Request) {
-	switch req.Method {
-	case http.MethodGet:
-		r.handleGetConfig(w, req)
-	case http.MethodPut:
-		r.protected(r.handleUpdateConfig)(w, req)
-	default:
-		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
-	}
-}
-
-// handleGetConfig returns the dashboard configuration as the legacy (v2)
-// view of the stored v3 document.
-func (r *Router) handleGetConfig(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodGet {
 		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	r.handleGetConfig(w, req)
+}
+
+// handleGetConfig returns the stored v3 document as {schemaVersion,
+// dashboards, migrationNotices?}. It is public (all dashboards are public,
+// SECURITY.md), so it carries the dashboards' own content and nothing else
+// from the stored document. Every dashboard's revision must be readable: a
+// client saves against it, so an unreadable one is a visible 500, never a
+// silent 0.
+func (r *Router) handleGetConfig(w http.ResponseWriter, _ *http.Request) {
 	if !r.migrationGuard(w) {
 		return
 	}
@@ -120,73 +117,17 @@ func (r *Router) handleGetConfig(w http.ResponseWriter, req *http.Request) {
 		writeAPIError(w, loadErr(err))
 		return
 	}
-	// One cache for the view and the v3-only list: each dashboard's legacy
-	// form is computed once per request.
-	lc := configdoc.NewLegacyCache()
-	view, err := lc.ToLegacy(stored)
-	if err != nil {
-		writeAPIError(w, newAPIError(http.StatusInternalServerError, err.Error()))
-		return
-	}
-	// dashboardRevisions lets a client prove which dashboards it has seen, so
-	// a whole-config PUT can only delete dashboards it saw at their current
-	// revision. The UI clones and PUTs the view back, so this round-trips.
-	revs := map[string]interface{}{}
-	dashes, _ := view["dashboards"].([]any)
-	for _, d := range dashes {
-		if m, ok := d.(configdoc.Obj); ok {
-			if id, ok := m["id"].(string); ok {
-				rev, rerr := storedRevision(id, m)
-				if rerr != nil {
-					writeAPIError(w, rerr)
-					return
-				}
-				revs[id] = rev
-			}
+	for id, d := range storedDashboards(stored) {
+		if _, rerr := storedRevision(id, d); rerr != nil {
+			writeAPIError(w, rerr)
+			return
 		}
 	}
-	view["dashboardRevisions"] = revs
-	// The stored v3 document as-is, for the new renderer, the dashboards the
-	// legacy view leaves out (so the UI can say why) and any migration
-	// notices. All view-only like dashboardRevisions: stripped on PUT, never
-	// stored.
-	attachLayout(view, stored, lc)
+	view := publicDoc(stored)
 	if len(r.migration.Renames) > 0 {
 		view["migrationNotices"] = migrationNotices(r.migration.Renames, stored)
 	}
 	writeJSON(w, view)
-}
-
-// handleUpdateConfig updates the dashboard configuration (admin only). The
-// body is the legacy whole-config view; each existing dashboard's revision
-// must match the stored one (409 otherwise).
-func (r *Router) handleUpdateConfig(w http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodPut {
-		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	if !r.migrationGuard(w) {
-		return
-	}
-
-	var configData configdoc.Obj
-	if err := json.NewDecoder(req.Body).Decode(&configData); err != nil {
-		writeJSONError(w, "Invalid JSON", http.StatusBadRequest)
-		return
-	}
-
-	// Back up before modifying config (only once the save is known to be
-	// accepted). If the backup fails, don't block the update — the admin
-	// chose to save — but the response carries a warning the UI shows: a
-	// silent backup failure means the admin trusts a safety-net that didn't
-	// fire next time they roll back.
-	r.updateDocWithBackup(w, func(stored configdoc.Obj, lc *configdoc.LegacyCache) (configdoc.Obj, interface{}, error) {
-		next, revs, err := applyLegacyView(stored, configData, lc)
-		if err != nil {
-			return nil, nil, err
-		}
-		return next, map[string]interface{}{"status": "ok", "revisions": revs}, nil
-	})
 }
 
 // handleLogin authenticates a user with rate limiting
@@ -1478,7 +1419,7 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 	r.updateDocWithLoadErr(w, func(err error) *apiError {
 		slog.Error("import: stored config unreadable", "component", "import", "error", err)
 		return newAPIError(http.StatusInternalServerError, importUnreadableMsg)
-	}, func(stored configdoc.Obj, _ *configdoc.LegacyCache) (configdoc.Obj, interface{}, error) {
+	}, func(stored configdoc.Obj) (configdoc.Obj, interface{}, error) {
 		existing, _ := stored["dashboards"].([]any)
 		existingPaths := map[string]bool{}
 		for _, d := range existing {

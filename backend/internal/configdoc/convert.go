@@ -30,12 +30,11 @@ func MigrateV2(v2 Obj) (Obj, error) {
 // returns the renames in document order; VerifyMigration checks the result.
 // It never mutates its input.
 func MigrateV2Renaming(v2 Obj) (Obj, []Rename, error) {
-	return migrateV2(v2, true)
+	return migrateV2(v2)
 }
 
-// migrateV2 converts a deep copy of v2; with rename=false ids are kept
-// exactly as given (FromLegacy: the client's ids are never rewritten).
-func migrateV2(v2 Obj, rename bool) (Obj, []Rename, error) {
+// migrateV2 converts a deep copy of v2, renaming repeated ids first.
+func migrateV2(v2 Obj) (Obj, []Rename, error) {
 	cp, err := deepCopy(v2)
 	if err != nil {
 		return nil, nil, fmt.Errorf("configdoc: copy v2 document: %w", err)
@@ -48,10 +47,7 @@ func migrateV2(v2 Obj, rename bool) (Obj, []Rename, error) {
 			return nil, nil, fmt.Errorf("configdoc: dashboards is %T, want array", dashes)
 		}
 	}
-	var renames []Rename
-	if rename {
-		renames = renameDuplicates(cp)
-	}
+	renames := renameDuplicates(cp)
 	out := make([]any, 0, len(in))
 	for i, d := range in {
 		dm, ok := d.(Obj)

@@ -5,8 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"net"
 	"net/http"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -361,18 +363,18 @@ func (r *Router) handlePatchResult(w http.ResponseWriter, req *http.Request, sca
 }
 
 // promoteTarget is the destination spec for a promote operation. The
-// dashboard and tab are admin-picked (either ID-of-existing or a "new"
-// block with a name). Groups are NO LONGER admin-picked — the promote
-// handler distributes the selected results across groups by their
-// `category` slug, finding-or-creating one group per category. This
-// turns "promote 20 tiles" from a single-group dump into a sensible
-// layout-on-arrival ("Sonarr into Downloads, Pi-hole into Network…").
-// Cascading rule retained: a new dashboard implies a new tab.
+// dashboard and tab are admin-picked (either the id of an existing one or a
+// "new" block with a name; a new dashboard implies a new tab). FolderID
+// optionally picks an existing folder (any depth) of an existing tab: every
+// promoted tile goes there. Without it, the tiles are distributed by their
+// `category`: one folder per category at the tab's root, reusing a root
+// folder with that category's name or creating it.
 type promoteTarget struct {
 	DashboardID  string             `json:"dashboardId"`
 	NewDashboard *newDashboardInput `json:"newDashboard"`
 	TabID        string             `json:"tabId"`
 	NewTab       *newNamedInput     `json:"newTab"`
+	FolderID     string             `json:"folderId"`
 }
 
 type newDashboardInput struct {
@@ -443,140 +445,366 @@ func (r *Router) handlePromoteScan(w http.ResponseWriter, req *http.Request, sca
 		resultsByID[rid] = res
 	}
 
-	// Load and mutate the config JSON inside a transaction.
-	tx, err := r.db.Begin()
-	if err != nil {
-		writeJSONError(w, "Failed to start transaction", http.StatusInternalServerError)
-		return
-	}
-	defer tx.Rollback() //nolint:errcheck
-
-	// The stored doc is v3; the promote logic below works on the v2-shaped
-	// view, so convert in, mutate, and convert back (FromLegacy carries the
-	// settings, revisions and layouts of everything that already existed).
-	stored, err := configdoc.Load(tx)
-	if err != nil {
-		writeAPIError(w, loadErr(err))
-		return
-	}
-	lc := configdoc.NewLegacyCache()
-	cfg, err := lc.ToLegacy(stored)
-	if err != nil {
-		writeAPIError(w, newAPIError(http.StatusInternalServerError, "Config cannot be shown for promotion; promotion aborted: "+err.Error()))
-		return
-	}
-
-	// A v3-only dashboard is not in the legacy view; refuse it visibly
-	// rather than as "not found".
-	if body.Target.NewDashboard == nil && v3OnlyIDs(stored, lc)[body.Target.DashboardID] {
-		writeAPIError(w, v3OnlyError(body.Target.DashboardID))
-		return
-	}
-
-	// v3-only dashboards are not in cfg; their paths are taken all the same.
-	var reserved []interface{}
-	v3Only := v3OnlyIDs(stored, lc)
-	for id, d := range storedDashboards(stored) {
-		if v3Only[id] {
-			reserved = append(reserved, d)
-		}
-	}
-	dashboard, dashboardPath, err := resolveDashboard(cfg, &body.Target, reserved)
-	if err != nil {
-		writeJSONError(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	tab, err := resolveTab(dashboard, &body.Target)
-	if err != nil {
-		writeJSONError(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	// Distribute results across groups by category. Each unique category
-	// becomes (or reuses) one group inside the target tab; the tile
-	// lands there. Tracks which groups were created so the response can
-	// echo a summary if the UI wants to show "added 5 tiles to 3
-	// groups: Network, Downloads, Media".
-	groupsByCategory := map[string]map[string]interface{}{}
-	promoted := 0
+	ordered := make([]*discovery.Result, 0, len(body.ResultIDs))
 	for _, rid := range body.ResultIDs {
-		res := resultsByID[rid]
-		cat := res.Category
-		if cat == "" || !discovery.IsValidCategory(cat) {
-			cat = discovery.CategoryOther
-		}
-		group, ok := groupsByCategory[cat]
-		if !ok {
-			group = findOrCreateGroupForCategory(tab, cat)
-			groupsByCategory[cat] = group
-		}
-		entries, _ := group["entries"].([]interface{})
-		entry := resultToEntry(res, len(entries))
-		group["entries"] = append(entries, entry)
-		promoted++
+		ordered = append(ordered, resultsByID[rid])
 	}
+	// The v3 document is written directly, through the same plumbing as every
+	// other dashboard write: checks first (a dry run), the pre-update backup
+	// only once they pass, then the write, with the results marked promoted
+	// in the same transaction. The target's revision is bumped, so an open
+	// edit session on it gets the conflict banner on Save.
+	r.updateDocWithBackupAfter(w, func(stored configdoc.Obj) (configdoc.Obj, interface{}, error) {
+		return promoteInto(stored, &body.Target, ordered)
+	}, func(tx *sql.Tx) error {
+		// The scan itself stays in StateComplete so the admin can come back
+		// and promote additional rows from the same draft later.
+		if err := r.discoveryStore.MarkResultsPromoted(tx, scanID, body.ResultIDs); err != nil {
+			return newAPIError(http.StatusInternalServerError, "Failed to mark results as promoted: "+err.Error())
+		}
+		return nil
+	})
+}
 
-	next, err := lc.FromLegacy(cfg, stored)
-	if err != nil {
-		writeAPIError(w, newAPIError(http.StatusInternalServerError, "Failed to convert config: "+err.Error()))
-		return
+// promoteInto adds one tile per result to the target in stored (in place) and
+// returns the response body. It is repeatable (no side effects beyond stored).
+func promoteInto(stored configdoc.Obj, t *promoteTarget, results []*discovery.Result) (configdoc.Obj, interface{}, error) {
+	bad := func(format string, a ...any) error {
+		return newAPIError(http.StatusBadRequest, fmt.Sprintf(format, a...))
 	}
-	// Only the target dashboard changed: bump its revision (a new dashboard
-	// starts at 1). An unreadable stored revision is a visible 500.
-	targetID, _ := dashboard["id"].(string)
-	nextRev := 1
-	if prev, existed := storedDashboards(stored)[targetID]; existed {
-		cur, rerr := storedRevision(targetID, prev)
+	var dash configdoc.Obj
+	isNew := t.NewDashboard != nil
+	if isNew {
+		name := strings.TrimSpace(t.NewDashboard.Name)
+		path := strings.TrimSpace(t.NewDashboard.Path)
+		if path == "" {
+			path = slugifyDashboardPath(name)
+		}
+		list, _ := stored["dashboards"].([]any)
+		path = ensureUniqueDashboardPath(list, path)
+		id, ae := newNodeID("dashboard")
+		if ae != nil {
+			return nil, nil, ae
+		}
+		settings := configdoc.Obj{}
+		for _, k := range settingJSONKeys() {
+			settings[k] = nil
+		}
+		dash = configdoc.Obj{
+			"id": id, "name": name, "path": path, "revision": 0, "order": nextOrder(stored),
+			"settings": settings, "defaultLayout": "grid", "tabs": []any{},
+		}
+		stored["dashboards"] = append(list, dash)
+	} else {
+		dash = storedDashboards(stored)[t.DashboardID]
+		if dash == nil {
+			return nil, nil, bad("Dashboard %q not found. Reload and try again.", t.DashboardID)
+		}
+	}
+	tabID := t.TabID
+	if t.NewTab != nil {
+		id, ae := newNodeID("tab")
+		if ae != nil {
+			return nil, nil, ae
+		}
+		tabs, _ := dash["tabs"].([]any)
+		dash["tabs"] = append(tabs, configdoc.Obj{
+			"id": id, "name": strings.TrimSpace(t.NewTab.Name), "layout": "inherit",
+			"root": configdoc.Obj{"columns": configdoc.RootColumns, "children": []any{}},
+		})
+		tabID = id
+	}
+	tab := findTab(dash, tabID)
+	if tab == nil {
+		return nil, nil, bad("Tab %q not found in dashboard %s. Reload and try again.", tabID, dashboardLabel(dash))
+	}
+	side := freeSideOf(tab)
+	var warnings []string
+	if t.FolderID != "" {
+		container, mode, ae := resolveTarget(dash, tabID, t.FolderID)
+		if ae != nil {
+			return nil, nil, bad("Folder %q not found in that tab. Reload and try again.", t.FolderID)
+		}
+		if ae := addTiles(container, mode, side, results); ae != nil {
+			return nil, nil, ae
+		}
+		if w := fitFolderChain(dash, tabID, t.FolderID, side); w != "" {
+			warnings = append(warnings, w)
+		}
+	} else {
+		root, rootMode, ae := resolveTarget(dash, tabID, "")
+		if ae != nil {
+			return nil, nil, ae
+		}
+		// Group by category, in the order each category first appears.
+		var cats []string
+		byCat := map[string][]*discovery.Result{}
+		for _, res := range results {
+			cat := res.Category
+			if cat == "" || !discovery.IsValidCategory(cat) {
+				cat = discovery.CategoryOther
+			}
+			if _, seen := byCat[cat]; !seen {
+				cats = append(cats, cat)
+			}
+			byCat[cat] = append(byCat[cat], res)
+		}
+		for _, cat := range cats {
+			info := discovery.CategoryInfoFor(cat)
+			if f := rootFolderNamed(root, info.DisplayName); f != nil {
+				fid, _ := f["id"].(string)
+				content, mode, ae := resolveTarget(dash, tabID, fid)
+				if ae != nil {
+					return nil, nil, ae
+				}
+				if ae := addTiles(content, mode, side, byCat[cat]); ae != nil {
+					return nil, nil, ae
+				}
+				if w := fitFolderChain(dash, tabID, fid, side); w != "" {
+					warnings = append(warnings, w)
+				}
+				continue
+			}
+			f, ae := newCategoryFolder(info, rootMode, side, byCat[cat])
+			if ae != nil {
+				return nil, nil, ae
+			}
+			fp, _ := f["placement"].(configdoc.Obj)
+			f["placement"] = newFreeSpaceCols(root, containerCols(root, rootMode, tab), freeCellBudget).place(fp, rootMode)
+			kids, _ := root["children"].([]any)
+			root["children"] = append(kids, f)
+		}
+	}
+	// Bump the target's revision (a new dashboard starts at 1).
+	cur := 0
+	if !isNew {
+		id, _ := dash["id"].(string)
+		n, rerr := storedRevision(id, dash)
 		if rerr != nil {
-			writeAPIError(w, rerr)
-			return
+			return nil, nil, rerr
 		}
-		nextRev = cur + 1
+		cur = n
 	}
-	bumped := false
-	nextDashes, _ := next["dashboards"].([]any)
-	for _, d := range nextDashes {
-		if nd, ok := d.(configdoc.Obj); ok && nd["id"] == targetID {
-			nd["revision"] = nextRev
-			bumped = true
-		}
+	dash["revision"] = cur + 1
+	if err := configdoc.VerifyDashboard(dash); err != nil {
+		return nil, nil, newAPIError(http.StatusBadRequest, "Promotion aborted, the result would be invalid: "+verifyProblems(err))
 	}
-	if !bumped {
-		writeAPIError(w, newAPIError(http.StatusInternalServerError, "Target dashboard missing after conversion; promotion aborted"))
-		return
+	path, _ := dash["path"].(string)
+	resp := map[string]interface{}{"promoted": len(results), "dashboardPath": path, "dashboardId": dash["id"]}
+	if len(warnings) > 0 {
+		resp["warning"] = strings.Join(warnings, " ")
 	}
-	// Same document-wide id check as every other config writer.
-	if err := configdoc.VerifyIDs(next); err != nil {
-		writeAPIError(w, newAPIError(http.StatusBadRequest, "Invalid config; promotion aborted: "+verifyProblems(err)))
-		return
-	}
-	if err := configdoc.Save(tx, next); err != nil {
-		writeAPIError(w, newAPIError(http.StatusInternalServerError, "Failed to save config: "+err.Error()))
-		return
-	}
-	// Mark the promoted results so they can't be promoted again. The
-	// scan itself stays in StateComplete so the admin can come back and
-	// promote additional rows from the same draft later.
-	if err := r.discoveryStore.MarkResultsPromoted(tx, scanID, body.ResultIDs); err != nil {
-		writeJSONError(w, "Failed to mark results as promoted", http.StatusInternalServerError)
-		return
-	}
-	committed, err := configdoc.Load(tx)
-	if err != nil {
-		writeAPIError(w, newAPIError(http.StatusInternalServerError, "Failed to read back saved config: "+err.Error()))
-		return
-	}
-	if err := tx.Commit(); err != nil {
-		writeJSONError(w, "Failed to commit promotion", http.StatusInternalServerError)
-		return
-	}
+	return stored, resp, nil
+}
 
-	resp := map[string]interface{}{
-		"promoted":      promoted,
-		"dashboardPath": dashboardPath,
+// findTab returns the tab with id in dashboard d, or nil.
+func findTab(d configdoc.Obj, id string) configdoc.Obj {
+	tabs, _ := d["tabs"].([]any)
+	for _, t := range tabs {
+		if tm, ok := t.(configdoc.Obj); ok && tm["id"] == id {
+			return tm
+		}
 	}
-	attachLayout(resp, committed, lc)
-	writeJSON(w, resp)
+	return nil
+}
+
+// freeSideOf is one dashboard column in free design units for a tab:
+// round(designWidth / 12 / 8), at least 1 (the frontend's freeSide).
+func freeSideOf(tab configdoc.Obj) float64 {
+	dw, ok := toFloat(tab["designWidth"])
+	if !ok || dw <= 0 {
+		dw = 1280
+	}
+	return math.Max(1, math.Round(dw/configdoc.RootColumns/8))
+}
+
+// containerCols is the width placements may use in a container: its columns,
+// except a free tab root, whose extent is the tab's design width in 8 px units.
+func containerCols(c configdoc.Obj, mode string, tab configdoc.Obj) float64 {
+	if root, _ := tab["root"].(configdoc.Obj); mode == "free" && isSameObj(root, c) {
+		dw, ok := toFloat(tab["designWidth"])
+		if !ok || dw <= 0 {
+			dw = 1280
+		}
+		return math.Max(1, math.Floor(dw/8))
+	}
+	if n, ok := toFloat(c["columns"]); ok && math.Floor(n) >= 1 {
+		return math.Floor(n)
+	}
+	return configdoc.RootColumns
+}
+
+// isSameObj reports whether a and b are the same map (not just equal).
+func isSameObj(a, b configdoc.Obj) bool {
+	if a == nil || b == nil {
+		return false
+	}
+	return reflect.ValueOf(a).UnsafePointer() == reflect.ValueOf(b).UnsafePointer()
+}
+
+// rootFolderNamed finds a folder among the root's direct children whose name
+// matches (case-insensitive, trimmed), or nil.
+func rootFolderNamed(root configdoc.Obj, name string) configdoc.Obj {
+	want := strings.ToLower(strings.TrimSpace(name))
+	kids, _ := root["children"].([]any)
+	for _, k := range kids {
+		km, ok := k.(configdoc.Obj)
+		if !ok || km["kind"] != "folder" || !renderableNode(km) {
+			continue
+		}
+		if n, _ := km["name"].(string); strings.ToLower(strings.TrimSpace(n)) == want {
+			return km
+		}
+	}
+	return nil
+}
+
+// addTiles appends one tile per result to a folder's content (in mode), each
+// at the first free cell: 1 x 1 in a grid, one dashboard column square (side
+// units) in a free container.
+func addTiles(container configdoc.Obj, mode string, side float64, results []*discovery.Result) *apiError {
+	size := 1.0
+	if mode == "free" {
+		size = side
+	}
+	space := newFreeSpace(container, freeCellBudget)
+	for _, res := range results {
+		tile, ae := resultToTile(res)
+		if ae != nil {
+			return ae
+		}
+		tile["placement"] = space.place(configdoc.Obj{"w": size, "h": size}, mode)
+		kids, _ := container["children"].([]any)
+		container["children"] = append(kids, tile)
+	}
+	return nil
+}
+
+// promoteFolderColumns is the content width of a folder promote creates.
+const promoteFolderColumns = 4
+
+// newCategoryFolder builds the folder for one category holding its tiles. In a
+// grid tab it inherits the layout; in a free tab it keeps its own grid layout
+// so its tiles stay one cell each. Its placement carries only the size (the
+// caller places it).
+func newCategoryFolder(info discovery.CategoryInfo, rootMode string, side float64, results []*discovery.Result) (configdoc.Obj, *apiError) {
+	id, ae := newNodeID("folder")
+	if ae != nil {
+		return nil, ae
+	}
+	layout := "inherit"
+	if rootMode == "free" {
+		layout = "grid"
+	}
+	content := configdoc.Obj{"columns": promoteFolderColumns, "children": []any{}}
+	if ae := addTiles(content, "grid", side, results); ae != nil {
+		return nil, ae
+	}
+	rows := math.Ceil(float64(len(results)) / promoteFolderColumns)
+	w, h := float64(promoteFolderColumns), rows+1 // +1: the title row
+	if rootMode == "free" {
+		w, h = w*side, h*side
+	}
+	return configdoc.Obj{
+		"id": id, "kind": "folder", "name": info.DisplayName, "icon": info.Icon,
+		"layout": layout, "display": "expanded", "shape": "rounded", "showTitle": true,
+		"placement": configdoc.Obj{"x": 0, "y": 0, "w": w, "h": h},
+		"content":   content,
+	}, nil
+}
+
+// fitFolderChain grows the folder folderID (and then each enclosing folder)
+// so it is tall enough for its content, moving the items below it in the same
+// container down by the same amount so nothing overlaps. Only a container
+// and its folder's content of the same mode can be sized this way; otherwise
+// a warning is returned for the response (never silently left too small).
+func fitFolderChain(dash configdoc.Obj, tabID, folderID string, side float64) string {
+	tab := findTab(dash, tabID)
+	root, _ := tab["root"].(configdoc.Obj)
+	_, rootMode, ae := resolveTarget(dash, tabID, "")
+	if ae != nil {
+		return ""
+	}
+	// The chain from the root to folderID: (container, mode) of each level.
+	type level struct {
+		folder     configdoc.Obj
+		parent     configdoc.Obj
+		parentMode string
+		mode       string
+	}
+	var chain []level
+	var walk func(c configdoc.Obj, mode string) bool
+	walk = func(c configdoc.Obj, mode string) bool {
+		kids, _ := c["children"].([]any)
+		for _, k := range kids {
+			km, ok := k.(configdoc.Obj)
+			if !ok || km["kind"] != "folder" {
+				continue
+			}
+			content, ok := km["content"].(configdoc.Obj)
+			if !ok {
+				continue
+			}
+			m := mode
+			if l, _ := km["layout"].(string); l == "grid" || l == "free" {
+				m = l
+			}
+			chain = append(chain, level{km, c, mode, m})
+			if km["id"] == folderID || walk(content, m) {
+				return true
+			}
+			chain = chain[:len(chain)-1]
+		}
+		return false
+	}
+	if !walk(root, rootMode) {
+		return ""
+	}
+	changed := true // the innermost folder's content just changed
+	for i := len(chain) - 1; i >= 0 && changed; i-- {
+		lv := chain[i]
+		changed = false
+		name, _ := lv.folder["name"].(string)
+		p, _ := lv.folder["placement"].(configdoc.Obj)
+		_, y, _, h, ok := rect(p)
+		if lv.parentMode != lv.mode || !ok {
+			return fmt.Sprintf("Folder %q may need resizing to show all its tiles.", name)
+		}
+		content, _ := lv.folder["content"].(configdoc.Obj)
+		bottom := 0.0
+		kids, _ := content["children"].([]any)
+		for _, k := range kids {
+			if km, ok := k.(configdoc.Obj); ok && renderableNode(km) {
+				_, ky, _, kh, _ := rect(km["placement"])
+				bottom = math.Max(bottom, ky+kh)
+			}
+		}
+		title := 1.0 // one row (grid) or one dashboard column (free) for the title bar
+		if lv.mode == "free" {
+			title = side
+		}
+		need := bottom + title
+		if need <= h {
+			continue
+		}
+		// Everything at or below the folder's old bottom moves down by the
+		// growth: nothing overlaps afterwards (whatever overlapped the grown
+		// rows started at or below the old bottom).
+		delta, oldBottom := need-h, y+h
+		sibs, _ := lv.parent["children"].([]any)
+		for _, k := range sibs {
+			km, ok := k.(configdoc.Obj)
+			if !ok || isSameObj(km, lv.folder) || !renderableNode(km) {
+				continue
+			}
+			if _, sy, _, _, _ := rect(km["placement"]); sy >= oldBottom {
+				km["placement"].(configdoc.Obj)["y"] = sy + delta
+			}
+		}
+		p["h"] = need
+		changed = true
+	}
+	return ""
 }
 
 // validatePromoteTarget enforces the "exactly one of ID-or-new" rule for
@@ -608,98 +836,10 @@ func validatePromoteTarget(t *promoteTarget) error {
 	if !tabNew && t.TabID == "" {
 		return errors.New("either target.tabId or target.newTab is required")
 	}
+	if tabNew && t.FolderID != "" {
+		return errors.New("a folder can only be picked in an existing tab")
+	}
 	return nil
-}
-
-// resolveDashboard returns the target dashboard map (creating it if the
-// target asks for one) and the dashboard's path so the handler can send
-// the user there on success. A new dashboard's path is made unique against
-// cfg's dashboards and reserved (dashboards outside the legacy view).
-func resolveDashboard(cfg map[string]interface{}, t *promoteTarget, reserved []interface{}) (map[string]interface{}, string, error) {
-	dashboards, _ := cfg["dashboards"].([]interface{})
-	if t.NewDashboard != nil {
-		path := strings.TrimSpace(t.NewDashboard.Path)
-		if path == "" {
-			path = slugifyDashboardPath(t.NewDashboard.Name)
-		}
-		path = ensureUniqueDashboardPath(append(append([]interface{}{}, dashboards...), reserved...), path)
-		dash := map[string]interface{}{
-			"id":    discovery.NewID(),
-			"name":  strings.TrimSpace(t.NewDashboard.Name),
-			"path":  path,
-			"tabs":  []interface{}{},
-			"order": len(dashboards),
-		}
-		dashboards = append(dashboards, dash)
-		cfg["dashboards"] = dashboards
-		return dash, path, nil
-	}
-	for _, d := range dashboards {
-		dm, ok := d.(map[string]interface{})
-		if ok && dm["id"] == t.DashboardID {
-			path, _ := dm["path"].(string)
-			return dm, path, nil
-		}
-	}
-	return nil, "", fmt.Errorf("dashboard %q not found", t.DashboardID)
-}
-
-func resolveTab(dashboard map[string]interface{}, t *promoteTarget) (map[string]interface{}, error) {
-	tabs, _ := dashboard["tabs"].([]interface{})
-	if t.NewTab != nil {
-		tab := map[string]interface{}{
-			"id":     discovery.NewID(),
-			"name":   strings.TrimSpace(t.NewTab.Name),
-			"groups": []interface{}{},
-			"order":  len(tabs),
-		}
-		tabs = append(tabs, tab)
-		dashboard["tabs"] = tabs
-		return tab, nil
-	}
-	for _, t2 := range tabs {
-		tm, ok := t2.(map[string]interface{})
-		if ok && tm["id"] == t.TabID {
-			return tm, nil
-		}
-	}
-	return nil, fmt.Errorf("tab %q not found in dashboard", t.TabID)
-}
-
-// findOrCreateGroupForCategory finds a group inside tab whose name
-// matches the category's display name (case-insensitive); if none
-// exists, creates a new one with that name + the category's icon, then
-// appends it to the tab. The returned group is a mutable handle into
-// the cfg blob — caller appends entries to its "entries" slice.
-func findOrCreateGroupForCategory(tab map[string]interface{}, category string) map[string]interface{} {
-	info := discovery.CategoryInfoFor(category)
-	target := strings.ToLower(info.DisplayName)
-
-	groups, _ := tab["groups"].([]interface{})
-	for _, g := range groups {
-		gm, ok := g.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		name, _ := gm["name"].(string)
-		if strings.ToLower(strings.TrimSpace(name)) == target {
-			if _, ok := gm["entries"].([]interface{}); !ok {
-				gm["entries"] = []interface{}{}
-			}
-			return gm
-		}
-	}
-
-	group := map[string]interface{}{
-		"id":        discovery.NewID(),
-		"name":      info.DisplayName,
-		"icon":      info.Icon,
-		"collapsed": false,
-		"entries":   []interface{}{},
-		"order":     len(groups),
-	}
-	tab["groups"] = append(groups, group)
-	return group
 }
 
 // slugifyDashboardPath converts a free-text dashboard name into a clean
@@ -973,9 +1113,8 @@ func isTerminalState(state string) bool {
 	return false
 }
 
-// resultToEntry constructs the JSON shape of an Entry (as used in the
-// existing config blob) from one scan result + any admin overrides.
-// Mirrors the Entry struct in internal/models/models.go.
+// resultToTile builds a v3 tile from one scan result + any admin overrides
+// (the caller sets its placement).
 //
 // Icon routing: HOPS tiles render icons from two fields. `icon` is an
 // Iconify name (`mdi:server`, `simple-icons:proxmox`); `iconUrl` is a
@@ -983,7 +1122,7 @@ func isTerminalState(state string) bool {
 // `/api/icons/dashboard/<file>.svg`). Detectors set SuggestedIcon to
 // either form; we discriminate on the presence of `:` — a bare slug
 // becomes a dashboard-icons URL, an Iconify-style name stays in `icon`.
-func resultToEntry(r *discovery.Result, order int) map[string]interface{} {
+func resultToTile(r *discovery.Result) (configdoc.Obj, *apiError) {
 	name := r.SuggestedName
 	icon := r.SuggestedIcon
 	url := r.SuggestedURL
@@ -1009,26 +1148,30 @@ func resultToEntry(r *discovery.Result, order int) map[string]interface{} {
 	if v, ok := r.CurateOverrides["size"].(string); ok && v != "" {
 		size = v
 	}
-
-	entry := map[string]interface{}{
-		"id":          fmt.Sprintf("entry-%s-%s", r.ScanID[:6], r.ID[:6]),
+	id, ae := newNodeID("tile")
+	if ae != nil {
+		return nil, ae
+	}
+	tile := configdoc.Obj{
+		"id":          id,
+		"kind":        "tile",
 		"type":        "link",
 		"name":        name,
 		"url":         url,
 		"description": desc,
 		"openMode":    openMode,
 		"size":        size,
-		"order":       order,
+		"order":       0,
 	}
 	switch {
 	case icon == "":
-		// no icon — Entry.svelte falls back to mdi:application
+		// no icon — the tile falls back to mdi:application
 	case strings.Contains(icon, ":"):
-		entry["icon"] = icon
+		tile["icon"] = icon
 	default:
-		entry["iconUrl"] = "/api/icons/dashboard/" + icon + ".svg"
+		tile["iconUrl"] = "/api/icons/dashboard/" + icon + ".svg"
 	}
-	return entry
+	return tile, nil
 }
 
 // newScanID is a thin wrapper so the API and the orchestrator both go

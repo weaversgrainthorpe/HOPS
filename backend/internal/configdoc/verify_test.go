@@ -310,3 +310,19 @@ func itoa(i int) string {
 	}
 	return string(b)
 }
+
+// showcaseDash is a Showcase-style dashboard: a free tab with a tile at its root.
+func showcaseDash(t *testing.T, id string) Obj {
+	t.Helper()
+	d := Obj{
+		"id": id, "name": "Showcase " + id, "path": "/" + id, "revision": 4,
+		"settings": Obj{"statusChecksEnabled": nil}, "defaultLayout": "grid",
+		"tabs": []any{Obj{
+			"id": id + "-t1", "name": "Free", "layout": "free", "designWidth": 1280,
+			"root": Obj{"columns": 12, "children": []any{
+				Obj{"id": id + "-e1", "kind": "tile", "name": "X", "placement": Obj{"x": 3, "y": 5, "w": 30, "h": 20, "z": 1}},
+			}},
+		}},
+	}
+	return norm(t, d).(Obj)
+}

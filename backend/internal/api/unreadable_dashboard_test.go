@@ -24,7 +24,7 @@ const unplacedDash = `{"id": "pz", "name": "Probe", "path": "/pz", "revision": 1
 func TestImport_V3NodeWithoutPlacementIs400(t *testing.T) {
 	router, db := setupTestRouter(t)
 	c := newClient(t, router)
-	seed(t, c)
+	seed(t, db)
 	var d map[string]interface{}
 	if err := json.Unmarshal([]byte(unplacedDash), &d); err != nil {
 		t.Fatal(err)
@@ -47,12 +47,13 @@ func TestImport_V3NodeWithoutPlacementIs400(t *testing.T) {
 }
 
 // Ruling 24: a stored document already holding such a dashboard (written
-// before the check existed) still serves GET /api/config: the dashboard is
-// listed as view-only with the reason, and every other dashboard is served.
-func TestGetConfig_UnreadableDashboardIsV3OnlyNot500(t *testing.T) {
+// before the check existed) still serves GET /api/config: every dashboard is
+// served as stored, the unplaced tile included (the renderer shows it as a
+// visible placeholder, never silently drops it).
+func TestGetConfig_UnplacedNodeIsServedNot500(t *testing.T) {
 	router, db := setupTestRouter(t)
 	c := newClient(t, router)
-	seed(t, c)
+	seed(t, db)
 	doc := storedDoc(t, db)
 	var d configdoc.Obj
 	if err := json.Unmarshal([]byte(unplacedDash), &d); err != nil {
@@ -68,20 +69,16 @@ func TestGetConfig_UnreadableDashboardIsV3OnlyNot500(t *testing.T) {
 		t.Fatalf("GET /api/config = %d %v, want 200", code, v)
 	}
 	dashes, _ := v["dashboards"].([]interface{})
-	if len(dashes) != 1 || dashes[0].(map[string]interface{})["id"] != "d1" {
-		t.Fatalf("legacy dashboards = %v, want only d1", dashes)
+	if len(dashes) != 2 || dashes[0].(map[string]interface{})["id"] != "d1" || dashes[1].(map[string]interface{})["id"] != "pz" {
+		t.Fatalf("dashboards = %v, want d1 and pz", dashes)
 	}
-	only, _ := v["v3OnlyDashboards"].([]interface{})
-	if len(only) != 1 {
-		t.Fatalf("v3OnlyDashboards = %v", v["v3OnlyDashboards"])
+	b, _ := json.Marshal(dashes[1])
+	if !strings.Contains(string(b), `"pz-a"`) {
+		t.Fatalf("pz served without its unplaced tile: %s", b)
 	}
-	o := only[0].(map[string]interface{})
-	reason := fmt.Sprint(o["reason"])
-	if o["id"] != "pz" || !strings.Contains(reason, "cannot be read") || !strings.Contains(reason, "pz-a") {
-		t.Fatalf("v3OnlyDashboards[0] = %v, want pz with an unreadable reason naming pz-a", o)
-	}
-	layout, _ := v["layout"].(map[string]interface{})
-	if n := len(layout["dashboards"].([]interface{})); n != 2 {
-		t.Fatalf("layout holds %d dashboards, want 2", n)
+	// Saving it as-is is refused visibly, naming the node.
+	code, resp := c.do("PUT", "/api/dashboards/pz", map[string]interface{}{"schema": 3, "dashboard": dashes[1], "revision": 1})
+	if msg := fmt.Sprint(resp["error"]); code != 400 || !strings.Contains(msg, "pz-a") || !strings.Contains(msg, "placement") {
+		t.Fatalf("save of unplaced tile: %d %v", code, resp)
 	}
 }

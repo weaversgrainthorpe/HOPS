@@ -150,9 +150,9 @@ func counts(d configdoc.Obj) (tabs, folders, tiles int) {
 }
 
 func TestExportEnvelope_RejectedByV2Detector(t *testing.T) {
-	router, _ := setupTestRouter(t)
+	router, db := setupTestRouter(t)
 	c := newClient(t, router)
-	seed(t, c)
+	seed(t, db)
 	for _, q := range []string{"", "?format=yaml", "?dashboardId=d1", "?dashboardId=d1&format=yaml"} {
 		data := c.export(q)
 		got, err := legacyDetect(data)
@@ -163,9 +163,9 @@ func TestExportEnvelope_RejectedByV2Detector(t *testing.T) {
 }
 
 func TestExportEnvelope_Shape(t *testing.T) {
-	router, _ := setupTestRouter(t)
+	router, db := setupTestRouter(t)
 	c := newClient(t, router)
-	seed(t, c)
+	seed(t, db)
 
 	var full map[string]interface{}
 	if err := json.Unmarshal(c.export(""), &full); err != nil {
@@ -224,7 +224,7 @@ func TestImport_V3RoundTrip(t *testing.T) {
 		t.Run("q"+q, func(t *testing.T) {
 			router, db := setupTestRouter(t)
 			c := newClient(t, router)
-			seed(t, c)
+			seed(t, db)
 			// Give d1 non-default settings and a bumped revision.
 			code, resp := c.do("PUT", "/api/dashboards/d1/settings", map[string]interface{}{
 				"overrides": map[string]interface{}{"statusChecksEnabled": false}, "revision": 1})
@@ -427,7 +427,7 @@ func v3ExportOf(t *testing.T, cfg map[string]interface{}) []byte {
 func TestImport_AssetFailureIsSurfaced(t *testing.T) {
 	router, db := setupTestRouter(t)
 	c := newClient(t, router)
-	seed(t, c)
+	seed(t, db)
 	var env map[string]interface{}
 	json.Unmarshal(c.export(""), &env)
 	cfg := env["config"].(map[string]interface{})
@@ -469,9 +469,9 @@ func TestImport_IconMatchingFailureIsSurfaced(t *testing.T) {
 
 func TestImport_V3ShapeChecks(t *testing.T) {
 	good := func() map[string]interface{} {
-		router, _ := setupTestRouter(t)
+		router, db := setupTestRouter(t)
 		c := newClient(t, router)
-		seed(t, c)
+		seed(t, db)
 		var env map[string]interface{}
 		json.Unmarshal(c.export(""), &env)
 		return env["config"].(map[string]interface{})
@@ -490,7 +490,7 @@ func TestImport_V3ShapeChecks(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			router, db := setupTestRouter(t)
 			c := newClient(t, router)
-			seed(t, c)
+			seed(t, db)
 			cfg := good()
 			mutate(cfg)
 			var before string
@@ -555,18 +555,18 @@ func TestImport_V3Showcase(t *testing.T) {
 	doc := storedDoc(t, db)
 	assertUniqueIDs(t, doc)
 	dash := storedDash(t, db, "sc-dash")
-	if ok, reason := configdoc.LegacyEditable(dash); ok || reason == "" {
-		t.Errorf("LegacyEditable = %v %q, want false with a reason", ok, reason)
+	// Served (and editable) like every other dashboard.
+	if err := configdoc.VerifyDashboard(dash); err != nil {
+		t.Errorf("imported Showcase does not verify: %v", err)
 	}
-	only, _ := getView(t, c)["v3OnlyDashboards"].([]interface{})
 	found := false
-	for _, o := range only {
-		if o.(map[string]interface{})["id"] == "sc-dash" {
+	for _, d := range getView(t, c)["dashboards"].([]interface{}) {
+		if d.(map[string]interface{})["id"] == "sc-dash" {
 			found = true
 		}
 	}
 	if !found {
-		t.Errorf("sc-dash not in v3OnlyDashboards: %v", only)
+		t.Error("sc-dash not served by GET /api/config")
 	}
 
 	// Structure later tasks rely on.

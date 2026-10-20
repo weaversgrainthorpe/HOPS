@@ -54,15 +54,9 @@ func storedDash(t *testing.T, db *sql.DB, id string) configdoc.Obj {
 func TestPromoteBumpsRevision(t *testing.T) {
 	router, db := setupTestRouter(t)
 	c := newClient(t, router)
-	seed(t, c)
+	seed(t, db)
 	// Add a second dashboard so we can prove its revision is untouched.
-	view := getView(t, c)
-	dashes := append(view["dashboards"].([]interface{}), map[string]interface{}{
-		"id": "d2", "name": "Second", "path": "/d2", "order": 1, "tabs": []interface{}{}})
-	if code, resp := c.do("PUT", "/api/config", map[string]interface{}{
-		"dashboards": dashes, "dashboardRevisions": view["dashboardRevisions"]}); code != 200 {
-		t.Fatalf("add d2: %d %v", code, resp)
-	}
+	addD2(t, db)
 	scanID, rid := seedScan(t, db)
 
 	code, resp := c.do("POST", "/api/discovery/scans/"+scanID+"/promote", promoteBody(rid))
@@ -120,7 +114,7 @@ func TestPromote_MigrationFailed503(t *testing.T) {
 func TestPromote_UnreadableRevisionIs500AndWritesNothing(t *testing.T) {
 	router, db := setupTestRouter(t)
 	c := newClient(t, router)
-	seed(t, c)
+	seed(t, db)
 	doc, err := configdoc.Load(db)
 	if err != nil {
 		t.Fatal(err)

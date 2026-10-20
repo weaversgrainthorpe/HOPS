@@ -38,42 +38,37 @@ func backupCount(t *testing.T, c *apiClient) int {
 
 // --- I1: a dashboard deleted elsewhere must not silently come back ---------
 
-func TestPutConfig_DashboardDeletedElsewhereConflicts(t *testing.T) {
+func TestDashboardDeletedElsewhereIsNotResurrected(t *testing.T) {
 	router, db := setupTestRouter(t)
 	c := newClient(t, router)
-	seed(t, c)
-	addD2(t, c)
-	stale := getView(t, c) // browser A: holds d1 and d2
+	seed(t, db)
+	addD2(t, db)
+	stale := v3Body(t, c, "d2") // browser A: holds d2 at revision 1
 
 	// Browser B deletes d2.
-	b := getView(t, c)
-	b["dashboards"] = b["dashboards"].([]interface{})[:1]
-	if code, r := c.do("PUT", "/api/config", b); code != 200 {
+	if code, r := c.do("DELETE", "/api/dashboards/d2?revision=1", nil); code != 200 {
 		t.Fatalf("B delete: %d %v", code, r)
 	}
 	before := storedRaw(db)
 
-	// A renames d1 from its stale view, which still carries d2 (with revision).
-	stale["dashboards"].([]interface{})[0].(map[string]interface{})["name"] = "Renamed by A"
-	code, resp := c.do("PUT", "/api/config", stale)
-	if code != 409 || resp["error"] != "conflict" || resp["dashboardId"] != "d2" || resp["deleted"] != true {
-		t.Fatalf("stale resurrect (revision): %d %v", code, resp)
-	}
-	// Without a revision on the dashboard, but listed in dashboardRevisions.
-	delete(stale["dashboards"].([]interface{})[1].(map[string]interface{}), "revision")
-	code, resp = c.do("PUT", "/api/config", stale)
-	if code != 409 || resp["dashboardId"] != "d2" || resp["deleted"] != true {
-		t.Fatalf("stale resurrect (map): %d %v", code, resp)
+	// A saves its stale copy of d2: refused, never brought back.
+	stale["name"] = "Renamed by A"
+	code, resp := v3Put(c, "d2", stale, 1)
+	if code != 404 {
+		t.Fatalf("stale resurrect: %d %v", code, resp)
 	}
 	if storedRaw(db) != before {
 		t.Fatal("rejected save changed the stored doc")
 	}
+	for _, d := range dashList(storedDoc(t, db)) {
+		if d["id"] == "d2" {
+			t.Fatal("d2 resurrected")
+		}
+	}
 
-	// A genuinely new dashboard (no revision, not in the map) is still created.
-	v := getView(t, c)
-	v["dashboards"] = append(v["dashboards"].([]interface{}), legacyDashWithID("d3", "Third"))
-	code, resp = c.do("PUT", "/api/config", v)
-	if code != 200 || resp["revisions"].(map[string]interface{})["d3"] != float64(1) {
+	// A genuinely new dashboard is still created.
+	code, resp = c.do("POST", "/api/dashboards", map[string]interface{}{"name": "Third", "path": "/d3"})
+	if code != 200 || resp["revision"] != float64(1) {
 		t.Fatalf("new dashboard: %d %v", code, resp)
 	}
 }
@@ -81,9 +76,9 @@ func TestPutConfig_DashboardDeletedElsewhereConflicts(t *testing.T) {
 // --- I2: rejected saves take no pre-update backup ---------------------------
 
 func TestRejectedSavesTakeNoBackup(t *testing.T) {
-	router, _ := setupTestRouter(t)
+	router, db := setupTestRouter(t)
 	c := newClient(t, router)
-	seed(t, c)
+	seed(t, db)
 	n := backupCount(t, c)
 
 	rejects := []struct {
@@ -91,11 +86,12 @@ func TestRejectedSavesTakeNoBackup(t *testing.T) {
 		body               interface{}
 		want               int
 	}{
-		{"stale dashboard", "PUT", "/api/dashboards/d1", map[string]interface{}{"dashboard": legacyDash("X"), "revision": 99}, 409},
-		{"unknown dashboard", "PUT", "/api/dashboards/nope", map[string]interface{}{"dashboard": map[string]interface{}{"id": "nope"}, "revision": 1}, 404},
-		{"stale config", "PUT", "/api/config", map[string]interface{}{"dashboards": []interface{}{legacyDash("X")}}, 409},
-		{"duplicate ids", "PUT", "/api/config", map[string]interface{}{
-			"dashboards": []interface{}{legacyDash("A"), legacyDash("B")}, "dashboardRevisions": map[string]interface{}{"d1": 1}}, 400},
+		{"stale dashboard", "PUT", "/api/dashboards/d1", map[string]interface{}{"schema": 3, "dashboard": v3Body(t, c, "d1"), "revision": 99}, 409},
+		{"unknown dashboard", "PUT", "/api/dashboards/nope", map[string]interface{}{"schema": 3, "dashboard": map[string]interface{}{"id": "nope"}, "revision": 1}, 404},
+		{"legacy shape", "PUT", "/api/dashboards/d1", map[string]interface{}{"dashboard": legacyDash("X"), "revision": 1}, 400},
+		{"path taken", "POST", "/api/dashboards", map[string]interface{}{"name": "Dup", "path": "/d1"}, 409},
+		{"bad order", "PUT", "/api/dashboards/order", map[string]interface{}{"order": []string{"nope"}}, 400},
+		{"stale delete", "DELETE", "/api/dashboards/d1?revision=99", nil, 409},
 	}
 	for _, rc := range rejects {
 		if code, resp := c.do(rc.method, rc.path, rc.body); code != rc.want {
@@ -107,7 +103,7 @@ func TestRejectedSavesTakeNoBackup(t *testing.T) {
 	}
 
 	// An accepted save still takes its backup before writing.
-	if code, resp := c.do("PUT", "/api/dashboards/d1", map[string]interface{}{"dashboard": legacyDash("Y"), "revision": 1}); code != 200 {
+	if code, resp := v3Put(c, "d1", v3Body(t, c, "d1"), 1); code != 200 {
 		t.Fatalf("accepted save: %d %v", code, resp)
 	}
 	if got := backupCount(t, c); got != n+1 {
@@ -120,7 +116,7 @@ func TestRejectedSavesTakeNoBackup(t *testing.T) {
 func TestGetStatus_ReportsResolvedInterval(t *testing.T) {
 	router, db := setupTestRouter(t)
 	c := newClient(t, router)
-	seed(t, c)
+	seed(t, db)
 	if _, err := db.Exec(`INSERT INTO status_cache (entry_id, status) VALUES ('e1','up')`); err != nil {
 		t.Fatal(err)
 	}
@@ -143,29 +139,28 @@ func TestGetStatus_ReportsResolvedInterval(t *testing.T) {
 func TestWriters_RefuseDuplicateOrMissingIDs(t *testing.T) {
 	router, db := setupTestRouter(t)
 	c := newClient(t, router)
-	seed(t, c)
-	addD2(t, c)
+	seed(t, db)
+	addD2(t, db)
 	before := storedRaw(db)
 
-	// PUT /api/config: d2's tab reuses d1's tab id.
-	v := getView(t, c)
-	v["dashboards"].([]interface{})[1].(map[string]interface{})["tabs"].([]interface{})[0].(map[string]interface{})["id"] = "t1"
-	code, resp := c.do("PUT", "/api/config", v)
+	// PUT /api/dashboards/d2: d2's tab reuses d1's tab id.
+	d2 := v3Body(t, c, "d2")
+	d2["tabs"].([]interface{})[0].(map[string]interface{})["id"] = "t1"
+	code, resp := v3Put(c, "d2", d2, 1)
 	if code != 400 || !strings.Contains(fmt.Sprint(resp["error"]), "t1") {
-		t.Fatalf("config dup: %d %v", code, resp)
+		t.Fatalf("tab dup: %d %v", code, resp)
 	}
-	// PUT /api/config: an id-less dashboard.
-	v = getView(t, c)
-	nd := legacyDashWithID("d3", "NoID")
-	delete(nd, "id")
-	v["dashboards"] = append(v["dashboards"].([]interface{}), nd)
-	if code, resp = c.do("PUT", "/api/config", v); code != 400 {
-		t.Fatalf("config id-less: %d %v", code, resp)
+	// PUT /api/dashboards/d1: an id-less tile.
+	d := v3Body(t, c, "d1")
+	rootOf(d)["children"] = append(rootOf(d)["children"].([]interface{}), map[string]interface{}{
+		"kind": "tile", "name": "NoID", "url": "http://x", "placement": map[string]interface{}{"x": 0, "y": 9, "w": 1, "h": 1}})
+	if code, resp = v3Put(c, "d1", d, 1); code != 400 {
+		t.Fatalf("id-less tile: %d %v", code, resp)
 	}
-	// PUT /api/dashboards/d1: a group reuses d2's group id.
-	d := legacyDash("Dup")
-	d["tabs"].([]interface{})[0].(map[string]interface{})["groups"].([]interface{})[0].(map[string]interface{})["id"] = "d2-g1"
-	code, resp = c.do("PUT", "/api/dashboards/d1", map[string]interface{}{"dashboard": d, "revision": 1})
+	// PUT /api/dashboards/d1: a folder reuses d2's folder id.
+	d = v3Body(t, c, "d1")
+	rootOf(d)["children"].([]interface{})[0].(map[string]interface{})["id"] = "d2-g1"
+	code, resp = v3Put(c, "d1", d, 1)
 	if code != 400 || !strings.Contains(fmt.Sprint(resp["error"]), "d2-g1") {
 		t.Fatalf("dashboard dup: %d %v", code, resp)
 	}
@@ -179,8 +174,8 @@ func TestWriters_RefuseDuplicateOrMissingIDs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	d2 := storedDashboards(doc)["d2"]
-	d2["tabs"].([]interface{})[0].(configdoc.Obj)["id"] = "t1"
+	sd2 := storedDashboards(doc)["d2"]
+	sd2["tabs"].([]interface{})[0].(configdoc.Obj)["id"] = "t1"
 	if err := configdoc.Save(db, doc); err != nil {
 		t.Fatal(err)
 	}

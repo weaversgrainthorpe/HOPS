@@ -498,33 +498,6 @@ func TestProtectedRouteWithAuth(t *testing.T) {
 	}
 }
 
-func TestUpdateConfig(t *testing.T) {
-	router, _ := setupTestRouter(t)
-
-	token, csrf := loginTestUserWithCSRF(t, router)
-
-	newConfig := map[string]interface{}{
-		"dashboards": []interface{}{},
-		"theme":      map[string]string{"mode": "light"},
-	}
-	// Deleting the seeded dashboards requires proving they were seen.
-	cw := httptest.NewRecorder()
-	router.ServeHTTP(cw, httptest.NewRequest("GET", "/api/config", nil))
-	var cur map[string]interface{}
-	json.Unmarshal(cw.Body.Bytes(), &cur)
-	newConfig["dashboardRevisions"] = cur["dashboardRevisions"]
-	body, _ := json.Marshal(newConfig)
-
-	req := authedRequest("PUT", "/api/config", bytes.NewReader(body), token, csrf)
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
-	}
-}
-
 func TestLoginRateLimit(t *testing.T) {
 	router, _ := setupTestRouter(t)
 
@@ -1046,17 +1019,25 @@ func TestRateLimiterCleanup(t *testing.T) {
 
 // --- Method Not Allowed Tests ---
 
-func TestUpdateConfigRequiresAuth(t *testing.T) {
+// The dashboard write routes (which replaced the whole-config PUT) are
+// protected.
+func TestDashboardWritesRequireAuth(t *testing.T) {
 	router, _ := setupTestRouter(t)
 
-	body, _ := json.Marshal(map[string]interface{}{"dashboards": []interface{}{}})
-	req := httptest.NewRequest("PUT", "/api/config", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-
-	if w.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401, got %d", w.Code)
+	for _, tc := range []struct{ method, path, body string }{
+		{"POST", "/api/dashboards", `{"name":"x","path":"/x"}`},
+		{"PUT", "/api/dashboards/order", `{"order":[]}`},
+		{"PUT", "/api/dashboards/d1", `{"schema":3,"dashboard":{"id":"d1"},"revision":1}`},
+		{"DELETE", "/api/dashboards/d1?revision=1", ``},
+		{"POST", "/api/dashboards/transfer", `{}`},
+	} {
+		req := httptest.NewRequest(tc.method, tc.path, bytes.NewReader([]byte(tc.body)))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		if w.Code != http.StatusUnauthorized {
+			t.Errorf("%s %s: expected 401, got %d", tc.method, tc.path, w.Code)
+		}
 	}
 }
 
@@ -1244,7 +1225,9 @@ func TestAllMutationMethodsRequireCSRF(t *testing.T) {
 	}{
 		{"POST", "/api/auth/logout", nil},
 		{"POST", "/api/config/reset", nil},
-		{"PUT", "/api/config", bytes.NewReader([]byte(`{"dashboards":[]}`))},
+		{"POST", "/api/dashboards", bytes.NewReader([]byte(`{"name":"x","path":"/x"}`))},
+		{"PUT", "/api/dashboards/order", bytes.NewReader([]byte(`{"order":[]}`))},
+		{"PUT", "/api/dashboards/d1", bytes.NewReader([]byte(`{"schema":3,"dashboard":{"id":"d1"},"revision":1}`))},
 		{"PUT", "/api/icons/csrf-icon", bytes.NewReader([]byte(`{"name":"x"}`))},
 		{"DELETE", "/api/icons/csrf-icon", nil},
 	}
@@ -1272,6 +1255,8 @@ func TestMethodNotAllowed(t *testing.T) {
 		{"DELETE", "/api/health"},
 		{"POST", "/api/version"},
 		{"DELETE", "/api/config"},
+		{"PUT", "/api/config"}, // no whole-config write (M3 Task 11)
+		{"POST", "/api/config"},
 	}
 
 	for _, tt := range tests {

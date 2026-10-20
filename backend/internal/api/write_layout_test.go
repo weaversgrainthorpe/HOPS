@@ -10,15 +10,12 @@ func sameAsStored(t *testing.T, what string, resp map[string]interface{}, c *api
 	t.Helper()
 	view := getView(t, c)
 	b1, _ := json.Marshal(resp["layout"])
-	b2, _ := json.Marshal(view["layout"])
+	b2, _ := json.Marshal(view)
 	var a, b interface{}
 	_ = json.Unmarshal(b1, &a)
 	_ = json.Unmarshal(b2, &b)
 	if resp["layout"] == nil || !reflect.DeepEqual(a, b) {
 		t.Fatalf("%s: response layout differs from stored layout\nresp: %s\nstored: %s", what, b1, b2)
-	}
-	if _, ok := resp["v3OnlyDashboards"].([]interface{}); !ok {
-		t.Fatalf("%s: v3OnlyDashboards missing/null: %v", what, resp["v3OnlyDashboards"])
 	}
 }
 
@@ -26,20 +23,27 @@ func TestWriteResponsesCarryFreshLayout(t *testing.T) {
 	router, db := setupTestRouter(t)
 	c := newClient(t, router)
 
-	// PUT /api/config (seed performs one).
-	view := getView(t, c)
-	code, resp := c.do("PUT", "/api/config", map[string]interface{}{
-		"dashboards": []interface{}{legacyDash("First")}, "dashboardRevisions": view["dashboardRevisions"]})
+	seed(t, db)
+
+	// POST /api/dashboards
+	code, resp := c.do("POST", "/api/dashboards", map[string]interface{}{"name": "Created", "path": "/created"})
 	if code != 200 {
-		t.Fatalf("put config: %d %v", code, resp)
+		t.Fatalf("create: %d %v", code, resp)
 	}
-	sameAsStored(t, "PUT /api/config", resp, c)
-	if resp["revisions"] == nil {
-		t.Fatal("PUT /api/config lost revisions")
+	sameAsStored(t, "POST /api/dashboards", resp, c)
+	created := resp["id"].(string)
+
+	// PUT /api/dashboards/order
+	code, resp = c.do("PUT", "/api/dashboards/order", map[string]interface{}{"order": []string{created, "d1"}})
+	if code != 200 {
+		t.Fatalf("order: %d %v", code, resp)
 	}
+	sameAsStored(t, "PUT /api/dashboards/order", resp, c)
 
 	// PUT /api/dashboards/{id}
-	code, resp = c.do("PUT", "/api/dashboards/d1", map[string]interface{}{"dashboard": legacyDash("Renamed"), "revision": 1})
+	d := v3Body(t, c, "d1")
+	d["name"] = "Renamed"
+	code, resp = v3Put(c, "d1", d, 1)
 	if code != 200 || resp["revision"] != float64(2) {
 		t.Fatalf("put dashboard: %d %v", code, resp)
 	}

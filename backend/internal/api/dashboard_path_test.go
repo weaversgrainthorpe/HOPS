@@ -34,42 +34,43 @@ func TestNormPath_StripsEveryLeadingSlash(t *testing.T) {
 	}
 }
 
-func TestPutConfig_RejectsUnsafePath(t *testing.T) {
+func TestCreateDashboard_RejectsUnsafePath(t *testing.T) {
+	router, db := setupTestRouter(t)
+	c := newClient(t, router)
+	seed(t, db)
+	before := storedRaw(db)
 	for _, p := range badDashboardPaths {
-		router, _ := setupTestRouter(t)
-		c := newClient(t, router)
-		seed(t, c)
-		view := getView(t, c)
-		d := legacyDash("Bad Dash")
-		d["path"] = p
-		d["revision"] = float64(1)
-		code, resp := c.do("PUT", "/api/config", map[string]interface{}{
-			"dashboards": []interface{}{d}, "dashboardRevisions": view["dashboardRevisions"]})
-		if code != 400 || !strings.Contains(resp["error"].(string), "Bad Dash") {
+		code, resp := c.do("POST", "/api/dashboards", map[string]interface{}{"name": "Bad Dash", "path": p})
+		if code != 400 || !strings.Contains(resp["error"].(string), "path") {
 			t.Errorf("%q: %d %v", p, code, resp)
 		}
-		if got := getView(t, c)["dashboards"].([]interface{})[0].(map[string]interface{})["path"]; got != "/d1" {
-			t.Errorf("%q: stored path changed to %v", p, got)
-		}
+	}
+	if storedRaw(db) != before {
+		t.Fatal("rejected creates changed the stored doc")
 	}
 }
 
 func TestPutDashboard_RejectsUnsafePath(t *testing.T) {
-	router, _ := setupTestRouter(t)
+	router, db := setupTestRouter(t)
 	c := newClient(t, router)
-	seed(t, c)
+	seed(t, db)
 	for _, p := range badDashboardPaths {
-		d := legacyDash("Bad Dash")
+		d := v3Body(t, c, "d1")
+		d["name"] = "Bad Dash"
 		d["path"] = p
-		code, resp := c.do("PUT", "/api/dashboards/d1", map[string]interface{}{"dashboard": d, "revision": 1})
+		code, resp := v3Put(c, "d1", d, 1)
 		if code != 400 || !strings.Contains(resp["error"].(string), "Bad Dash") {
 			t.Errorf("%q: %d %v", p, code, resp)
 		}
 	}
+	if got := getView(t, c)["dashboards"].([]interface{})[0].(map[string]interface{})["path"]; got != "/d1" {
+		t.Errorf("stored path changed to %v", got)
+	}
 	// A safe path still saves.
-	d := legacyDash("Fine")
+	d := v3Body(t, c, "d1")
+	d["name"] = "Fine"
 	d["path"] = "/my dash"
-	if code, resp := c.do("PUT", "/api/dashboards/d1", map[string]interface{}{"dashboard": d, "revision": 1}); code != 200 {
+	if code, resp := v3Put(c, "d1", d, 1); code != 200 {
 		t.Fatalf("safe path: %d %v", code, resp)
 	}
 }
@@ -77,7 +78,7 @@ func TestPutDashboard_RejectsUnsafePath(t *testing.T) {
 func TestImport_RejectsUnsafePath(t *testing.T) {
 	router, db := setupTestRouter(t)
 	c := newClient(t, router)
-	seed(t, c)
+	seed(t, db)
 	before := len(dashList(storedDoc(t, db)))
 	for _, p := range []string{`\evil.test`, "\n//evil.test", " /x"} {
 		var env map[string]interface{}
@@ -102,7 +103,7 @@ func TestImport_RejectsUnsafePath(t *testing.T) {
 func TestPromoteNewDashboard_RejectsUnsafePath(t *testing.T) {
 	router, db := setupTestRouter(t)
 	c := newClient(t, router)
-	seed(t, c)
+	seed(t, db)
 	scanID, rid := seedScan(t, db)
 	for _, p := range []string{`\evil.test`, "/x\n", " /x"} {
 		body := map[string]interface{}{

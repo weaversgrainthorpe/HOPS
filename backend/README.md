@@ -118,7 +118,7 @@ Mutation methods (POST/PUT/PATCH/DELETE) on protected routes require both:
 |--------|------|-------------|
 | `GET` | `/api/health` | Health check + version + uptime + DB connectivity |
 | `GET` | `/api/version` | Version info |
-| `GET` | `/api/config` | Public dashboard configuration |
+| `GET` | `/api/config` | The dashboards (v3 document): `{schemaVersion, dashboards, migrationNotices?}` |
 | `GET` | `/api/status/{entryId}` | Cached status check result for one tile |
 | `POST` | `/api/auth/login` | Admin login (rate-limited 20/min/IP). Sets `hops_session` + `hops_csrf` cookies. |
 | `GET` | `/api/auth/check` | Returns `{authenticated, mustChangePassword}`. Also re-issues a CSRF cookie if missing (handles upgrade path for old sessions). |
@@ -136,7 +136,12 @@ Mutation methods (POST/PUT/PATCH/DELETE) on protected routes require both:
 |--------|------|-------------|
 | `POST` | `/api/auth/logout` | Log out current session; clears both cookies |
 | `POST` | `/api/auth/change-password` | Change admin password; clears the `must_change_password` flag |
-| `PUT` | `/api/config` | Update dashboard configuration |
+| `POST` | `/api/dashboards` | Create a dashboard `{name, path}` |
+| `PUT` | `/api/dashboards/order` | Reorder dashboards `{order: [ids]}` |
+| `PUT` | `/api/dashboards/{id}` | Save one dashboard `{schema: 3, dashboard, revision}` (409 when changed elsewhere) |
+| `DELETE` | `/api/dashboards/{id}?revision=n` | Delete one dashboard |
+| `GET`/`PUT` | `/api/dashboards/{id}/settings` | Per-dashboard setting overrides |
+| `POST` | `/api/dashboards/transfer` | Move/copy tiles and folders to another dashboard |
 | `GET` | `/api/config/export` | Export configuration (with embedded assets as base64) |
 | `POST` | `/api/config/import` | Import configuration (HOPS JSON, Homer YAML, Dashy YAML, Heimdall JSON) |
 | `POST` | `/api/config/reset` | Reset to default configuration |
@@ -172,10 +177,10 @@ curl -b cookies.txt http://localhost:8080/api/config/export
 
 # Mutation endpoints need the CSRF header. Extract the cookie value first:
 CSRF=$(grep hops_csrf cookies.txt | awk '{print $7}')
-curl -b cookies.txt -X PUT http://localhost:8080/api/config \
+curl -b cookies.txt -X POST http://localhost:8080/api/dashboards \
   -H "Content-Type: application/json" \
   -H "X-CSRF-Token: $CSRF" \
-  -d '{"dashboards":[]}'
+  -d '{"name":"Media","path":"/media"}'
 
 # Logout — clears both cookies server-side
 curl -b cookies.txt -X POST http://localhost:8080/api/auth/logout \

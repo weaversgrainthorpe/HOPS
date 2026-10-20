@@ -57,19 +57,16 @@ func legacyDash(name string) map[string]interface{} {
 	}
 }
 
-// seed creates dashboard d1 (revision 1) through the legacy PUT.
-func seed(t *testing.T, c *apiClient) {
+// seed replaces the stored dashboards with d1 (revision 1): legacyDash
+// migrated to v3, written straight to the stored document.
+func seed(t *testing.T, db *sql.DB) {
 	t.Helper()
-	// The migrations seed a "sample" dashboard; delete it (seen at its current
-	// revision) while adding d1.
-	view := getView(t, c)
-	code, resp := c.do("PUT", "/api/config", map[string]interface{}{
-		"dashboards": []interface{}{legacyDash("First")}, "dashboardRevisions": view["dashboardRevisions"]})
-	if code != 200 {
-		t.Fatalf("seed: %d %v", code, resp)
+	doc, err := configdoc.MigrateV2(configdoc.Obj{"dashboards": []any{legacyDash("First")}})
+	if err != nil {
+		t.Fatal(err)
 	}
-	if resp["revisions"].(map[string]interface{})["d1"] != float64(1) {
-		t.Fatalf("seed revisions: %v", resp)
+	if err := configdoc.Save(db, doc); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -82,21 +79,26 @@ func getView(t *testing.T, c *apiClient) map[string]interface{} {
 	return v
 }
 
-func TestGetConfig_ReturnsLegacyView(t *testing.T) {
-	router, _ := setupTestRouter(t)
+func TestGetConfig_ReturnsV3Dashboards(t *testing.T) {
+	router, db := setupTestRouter(t)
 	c := newClient(t, router)
-	seed(t, c)
+	seed(t, db)
 	v := getView(t, c)
+	if v["schemaVersion"] != float64(3) {
+		t.Fatalf("schemaVersion = %v", v["schemaVersion"])
+	}
 	d := v["dashboards"].([]interface{})[0].(map[string]interface{})
 	if d["revision"] != float64(1) {
 		t.Fatalf("revision missing: %v", d)
 	}
-	g := d["tabs"].([]interface{})[0].(map[string]interface{})["groups"].([]interface{})
-	if len(g) != 1 || len(g[0].(map[string]interface{})["entries"].([]interface{})) != 1 {
-		t.Fatalf("groups/entries missing: %v", d)
+	kids := rootOf(d)["children"].([]interface{})
+	if len(kids) != 1 {
+		t.Fatalf("root children: %v", kids)
 	}
-	if _, has := v["schemaVersion"]; has {
-		t.Fatal("schemaVersion leaked into legacy view")
+	f := kids[0].(map[string]interface{})
+	tiles := f["content"].(map[string]interface{})["children"].([]interface{})
+	if f["kind"] != "folder" || f["id"] != "g1" || len(tiles) != 1 || tiles[0].(map[string]interface{})["id"] != "e1" {
+		t.Fatalf("folder/tile missing: %v", f)
 	}
 }
 
@@ -104,7 +106,7 @@ func TestGetConfig_MigrationFailed503(t *testing.T) {
 	router, _ := setupTestRouterWithMigration(t, &configdoc.MigrationResult{Failed: true, Detail: "boom"})
 	c := newClient(t, router)
 	for _, tc := range []struct{ m, p string }{
-		{"GET", "/api/config"}, {"PUT", "/api/config"},
+		{"GET", "/api/config"}, {"POST", "/api/dashboards"}, {"PUT", "/api/dashboards/order"},
 		{"GET", "/api/dashboards/d1/settings"}, {"PUT", "/api/dashboards/d1/settings"}, {"PUT", "/api/dashboards/d1"},
 	} {
 		code, resp := c.do(tc.m, tc.p, map[string]interface{}{"dashboards": []interface{}{}})
@@ -115,12 +117,12 @@ func TestGetConfig_MigrationFailed503(t *testing.T) {
 	}
 }
 
-func TestPutConfig_MigrationFailedLeavesRowUntouched(t *testing.T) {
+func TestPutDashboard_MigrationFailedLeavesRowUntouched(t *testing.T) {
 	router, db := setupTestRouterWithMigration(t, &configdoc.MigrationResult{Failed: true, Detail: "boom"})
 	var before string
 	db.QueryRow("SELECT data FROM config WHERE id = 1").Scan(&before)
 	c := newClient(t, router)
-	code, _ := c.do("PUT", "/api/config", map[string]interface{}{"dashboards": []interface{}{legacyDash("X")}})
+	code, _ := v3Put(c, "d1", map[string]interface{}{"id": "d1", "name": "X", "path": "/d1", "tabs": []interface{}{}}, 1)
 	if code != 503 {
 		t.Fatalf("want 503, got %d", code)
 	}
@@ -132,117 +134,56 @@ func TestPutConfig_MigrationFailedLeavesRowUntouched(t *testing.T) {
 }
 
 func TestPutDashboard_BumpsRevision(t *testing.T) {
-	router, _ := setupTestRouter(t)
+	router, db := setupTestRouter(t)
 	c := newClient(t, router)
-	seed(t, c)
-	code, resp := c.do("PUT", "/api/dashboards/d1", map[string]interface{}{"dashboard": legacyDash("Renamed"), "revision": 1})
+	seed(t, db)
+	d := v3Body(t, c, "d1")
+	d["name"] = "Renamed"
+	code, resp := v3Put(c, "d1", d, 1)
 	if code != 200 || resp["revision"] != float64(2) {
 		t.Fatalf("%d %v", code, resp)
 	}
-	d := getView(t, c)["dashboards"].([]interface{})[0].(map[string]interface{})
-	if d["name"] != "Renamed" || d["revision"] != float64(2) {
-		t.Fatalf("not saved: %v", d)
+	got := getView(t, c)["dashboards"].([]interface{})[0].(map[string]interface{})
+	if got["name"] != "Renamed" || got["revision"] != float64(2) {
+		t.Fatalf("not saved: %v", got)
 	}
-	code, resp = c.do("PUT", "/api/dashboards/nope", map[string]interface{}{"dashboard": map[string]interface{}{"id": "nope"}, "revision": 1})
+	code, resp = v3Put(c, "nope", map[string]interface{}{"id": "nope"}, 1)
 	if code != 404 {
 		t.Fatalf("unknown dashboard: %d %v", code, resp)
 	}
 }
 
 func TestPutDashboard_StaleRevisionConflicts(t *testing.T) {
-	router, _ := setupTestRouter(t)
+	router, db := setupTestRouter(t)
 	c := newClient(t, router)
-	seed(t, c)
-	if code, r := c.do("PUT", "/api/dashboards/d1", map[string]interface{}{"dashboard": legacyDash("First save"), "revision": 1}); code != 200 {
+	seed(t, db)
+	first := v3Body(t, c, "d1")
+	first["name"] = "First save"
+	if code, r := v3Put(c, "d1", first, 1); code != 200 {
 		t.Fatalf("%d %v", code, r)
 	}
-	code, resp := c.do("PUT", "/api/dashboards/d1", map[string]interface{}{"dashboard": legacyDash("Second save"), "revision": 1})
+	second := v3Body(t, c, "d1")
+	second["name"] = "Second save"
+	code, resp := v3Put(c, "d1", second, 1)
 	if code != 409 || resp["error"] != "conflict" || resp["dashboardId"] != "d1" || resp["currentRevision"] != float64(2) {
 		t.Fatalf("%d %v", code, resp)
 	}
-	d := getView(t, c)["dashboards"].([]interface{})[0].(map[string]interface{})
-	if d["name"] != "First save" || d["revision"] != float64(2) {
-		t.Fatalf("stored doc changed by conflicting save: %v", d)
-	}
-}
-
-func TestPutConfig_StaleOrMissingRevisionConflicts(t *testing.T) {
-	router, _ := setupTestRouter(t)
-	c := newClient(t, router)
-	seed(t, c)
-	c.do("PUT", "/api/dashboards/d1", map[string]interface{}{"dashboard": legacyDash("Bumped"), "revision": 1})
-
-	stale := legacyDash("Stale")
-	stale["revision"] = 1
-	code, resp := c.do("PUT", "/api/config", map[string]interface{}{"dashboards": []interface{}{stale}})
-	if code != 409 || resp["currentRevision"] != float64(2) {
-		t.Fatalf("stale: %d %v", code, resp)
-	}
-	for _, rev := range []interface{}{nil, "2"} { // Ruling 12: absent / non-numeric
-		d := legacyDash("NoRev")
-		if rev != nil {
-			d["revision"] = rev
-		}
-		code, resp = c.do("PUT", "/api/config", map[string]interface{}{"dashboards": []interface{}{d}})
-		if code != 409 {
+	// Absent and non-numeric revisions conflict too (Ruling 12).
+	for _, rev := range []interface{}{nil, "2"} {
+		if code, resp = v3Put(c, "d1", second, rev); code != 409 {
 			t.Fatalf("revision %v: want 409, got %d %v", rev, code, resp)
 		}
 	}
-	if n := getView(t, c)["dashboards"].([]interface{})[0].(map[string]interface{})["name"]; n != "Bumped" {
-		t.Fatalf("stored changed: %v", n)
-	}
-}
-
-func TestPutConfig_RevisionBumpOnlyWhenChanged(t *testing.T) {
-	router, _ := setupTestRouter(t)
-	c := newClient(t, router)
-	seed(t, c)
-	same := getView(t, c)
-	code, resp := c.do("PUT", "/api/config", same)
-	if code != 200 || resp["revisions"].(map[string]interface{})["d1"] != float64(1) {
-		t.Fatalf("unchanged resave must keep revision: %d %v", code, resp)
-	}
-	v := getView(t, c)
-	v["dashboards"].([]interface{})[0].(map[string]interface{})["name"] = "Changed"
-	code, resp = c.do("PUT", "/api/config", v)
-	if code != 200 || resp["revisions"].(map[string]interface{})["d1"] != float64(2) {
-		t.Fatalf("changed resave must bump: %d %v", code, resp)
-	}
-	// A brand-new dashboard gets revision 1.
-	v = getView(t, c)
-	nd := legacyDashWithID("d2", "New")
-	v["dashboards"] = append(v["dashboards"].([]interface{}), nd)
-	code, resp = c.do("PUT", "/api/config", v)
-	if code != 200 || resp["revisions"].(map[string]interface{})["d2"] != float64(1) {
-		t.Fatalf("new dashboard: %d %v", code, resp)
-	}
-}
-
-func TestPutConfig_KeepsDashboardSettings(t *testing.T) {
-	router, _ := setupTestRouter(t)
-	c := newClient(t, router)
-	seed(t, c)
-	code, resp := c.do("PUT", "/api/dashboards/d1/settings", map[string]interface{}{
-		"overrides": map[string]interface{}{"statusCheckIntervalMinutes": 7}, "revision": 1})
-	if code != 200 || resp["revision"] != float64(2) {
-		t.Fatalf("%d %v", code, resp)
-	}
-	v := getView(t, c)
-	d := v["dashboards"].([]interface{})[0].(map[string]interface{})
-	delete(d, "settings") // legacy client that doesn't know about settings
-	if code, resp := c.do("PUT", "/api/config", v); code != 200 {
-		t.Fatalf("%d %v", code, resp)
-	}
-	code, resp = c.do("GET", "/api/dashboards/d1/settings", nil)
-	if code != 200 || resp["overrides"].(map[string]interface{})["statusCheckIntervalMinutes"] != float64(7) {
-		t.Fatalf("overrides lost: %d %v", code, resp)
+	got := getView(t, c)["dashboards"].([]interface{})[0].(map[string]interface{})
+	if got["name"] != "First save" || got["revision"] != float64(2) {
+		t.Fatalf("stored doc changed by conflicting save: %v", got)
 	}
 }
 
 func TestDashboardSettings_RoundTripAndValidation(t *testing.T) {
 	router, db := setupTestRouter(t)
 	c := newClient(t, router)
-	seed(t, c)
+	seed(t, db)
 
 	code, resp := c.do("GET", "/api/dashboards/d1/settings", nil)
 	ov := resp["overrides"].(map[string]interface{})
@@ -283,14 +224,20 @@ func TestDashboardSettings_RoundTripAndValidation(t *testing.T) {
 	}
 }
 
-func TestPutConfig_UnreadableStoredConfigIs500(t *testing.T) {
+func TestUnreadableStoredConfigIs500(t *testing.T) {
 	router, db := setupTestRouter(t)
 	c := newClient(t, router)
 	db.Exec(`UPDATE config SET data = '{"dashboards":[]}' WHERE id = 1`) // v2 doc: not v3
-	for _, m := range []string{"GET", "PUT"} {
-		code, resp := c.do(m, "/api/config", map[string]interface{}{"dashboards": []interface{}{}})
+	for _, tc := range []struct {
+		m, p string
+		body interface{}
+	}{
+		{"GET", "/api/config", nil},
+		{"PUT", "/api/dashboards/d1", map[string]interface{}{"schema": 3, "dashboard": map[string]interface{}{"id": "d1"}, "revision": 1}},
+	} {
+		code, resp := c.do(tc.m, tc.p, tc.body)
 		if code != 500 || resp["error"] == nil {
-			t.Fatalf("%s: %d %v", m, code, resp)
+			t.Fatalf("%s %s: %d %v", tc.m, tc.p, code, resp)
 		}
 	}
 	var after string
@@ -300,13 +247,18 @@ func TestPutConfig_UnreadableStoredConfigIs500(t *testing.T) {
 	}
 }
 
-func addD2(t *testing.T, c *apiClient) {
+// addD2 appends dashboard d2 (legacyDashWithID migrated to v3, revision 1)
+// to the stored document.
+func addD2(t *testing.T, db *sql.DB) {
 	t.Helper()
-	v := getView(t, c)
-	nd := legacyDashWithID("d2", "Second")
-	v["dashboards"] = append(v["dashboards"].([]interface{}), nd)
-	if code, r := c.do("PUT", "/api/config", v); code != 200 {
-		t.Fatalf("%d %v", code, r)
+	conv, err := configdoc.ConvertDashboardV2(legacyDashWithID("d2", "Second"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc := storedDoc(t, db)
+	doc["dashboards"] = append(doc["dashboards"].([]any), conv)
+	if err := configdoc.Save(db, doc); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -318,73 +270,10 @@ func storedRaw(db interface {
 	return s
 }
 
-func TestPutConfig_DeletionRequiresSeenRevision(t *testing.T) {
-	router, db := setupTestRouter(t)
-	c := newClient(t, router)
-	seed(t, c)
-	addD2(t, c)
-
-	v := getView(t, c)
-	if r := v["dashboardRevisions"].(map[string]interface{}); r["d1"] != float64(1) || r["d2"] != float64(1) {
-		t.Fatalf("dashboardRevisions: %v", r)
-	}
-
-	// Browser B never saw d2 (absent from its map) -> 409, doc unchanged.
-	before := storedRaw(db)
-	stale := map[string]interface{}{
-		"dashboards":         []interface{}{v["dashboards"].([]interface{})[0]},
-		"dashboardRevisions": map[string]interface{}{"d1": 1},
-	}
-	code, resp := c.do("PUT", "/api/config", stale)
-	if code != 409 || resp["dashboardId"] != "d2" || resp["currentRevision"] != float64(1) {
-		t.Fatalf("unseen: %d %v", code, resp)
-	}
-	// No map at all -> 409 too.
-	code, _ = c.do("PUT", "/api/config", map[string]interface{}{"dashboards": []interface{}{v["dashboards"].([]interface{})[0]}})
-	if code != 409 {
-		t.Fatalf("no map: %d", code)
-	}
-	// Stale revision for d2 -> 409.
-	stale["dashboardRevisions"] = map[string]interface{}{"d1": 1, "d2": 0}
-	if code, _ = c.do("PUT", "/api/config", stale); code != 409 {
-		t.Fatalf("stale rev: %d", code)
-	}
-	if storedRaw(db) != before {
-		t.Fatal("rejected deletes changed the stored doc")
-	}
-
-	// Seen at the current revision -> deleted, and dashboardRevisions not stored.
-	stale["dashboardRevisions"] = map[string]interface{}{"d1": 1, "d2": 1}
-	if code, resp = c.do("PUT", "/api/config", stale); code != 200 {
-		t.Fatalf("seen delete: %d %v", code, resp)
-	}
-	if got := len(getView(t, c)["dashboards"].([]interface{})); got != 1 {
-		t.Fatalf("d2 not deleted: %d dashboards", got)
-	}
-	if strings.Contains(storedRaw(db), "dashboardRevisions") {
-		t.Fatal("dashboardRevisions leaked into stored doc")
-	}
-}
-
-func TestPutConfig_DuplicateDashboardIDs400(t *testing.T) {
-	router, db := setupTestRouter(t)
-	c := newClient(t, router)
-	seed(t, c)
-	before := storedRaw(db)
-	code, resp := c.do("PUT", "/api/config", map[string]interface{}{
-		"dashboards": []interface{}{legacyDash("A"), legacyDash("B")}, "dashboardRevisions": map[string]interface{}{"d1": 1}})
-	if code != 400 || !strings.Contains(fmt.Sprint(resp["error"]), "d1") {
-		t.Fatalf("%d %v", code, resp)
-	}
-	if storedRaw(db) != before {
-		t.Fatal("stored changed")
-	}
-}
-
 func TestDashboardSettings_MergeAndNullReset(t *testing.T) {
-	router, _ := setupTestRouter(t)
+	router, db := setupTestRouter(t)
 	c := newClient(t, router)
-	seed(t, c)
+	seed(t, db)
 	c.do("PUT", "/api/dashboards/d1/settings", map[string]interface{}{
 		"overrides": map[string]interface{}{"statusCheckIntervalMinutes": 7, "statusCheckTimeoutSeconds": 3}, "revision": 1})
 	code, resp := c.do("PUT", "/api/dashboards/d1/settings", map[string]interface{}{
@@ -409,14 +298,14 @@ func TestDashboardSettings_MergeAndNullReset(t *testing.T) {
 func TestStoredRevisionUnreadableIs500(t *testing.T) {
 	router, db := setupTestRouter(t)
 	c := newClient(t, router)
-	seed(t, c)
+	seed(t, db)
 	db.Exec(`UPDATE config SET data = json_remove(data, '$.dashboards[0].revision') WHERE id = 1`)
 	for _, tc := range []struct{ m, p string }{
 		{"GET", "/api/config"}, {"GET", "/api/dashboards/d1/settings"},
-		{"PUT", "/api/dashboards/d1/settings"}, {"PUT", "/api/dashboards/d1"}, {"PUT", "/api/config"},
+		{"PUT", "/api/dashboards/d1/settings"}, {"PUT", "/api/dashboards/d1"},
 	} {
-		body := map[string]interface{}{"overrides": map[string]interface{}{}, "revision": 1,
-			"dashboard": legacyDash("X"), "dashboards": []interface{}{legacyDash("X")}}
+		body := map[string]interface{}{"overrides": map[string]interface{}{}, "revision": 1, "schema": 3,
+			"dashboard": map[string]interface{}{"id": "d1", "name": "X", "path": "/d1", "tabs": []interface{}{}}}
 		code, resp := c.do(tc.m, tc.p, body)
 		if code != 500 || !strings.Contains(fmt.Sprint(resp["error"]), "stored revision unreadable for dashboard d1") {
 			t.Fatalf("%s %s: %d %v", tc.m, tc.p, code, resp)
@@ -427,7 +316,7 @@ func TestStoredRevisionUnreadableIs500(t *testing.T) {
 func TestGetStatus_DisabledPerDashboard(t *testing.T) {
 	router, db := setupTestRouter(t)
 	c := newClient(t, router)
-	seed(t, c)
+	seed(t, db)
 	if _, err := db.Exec(`INSERT INTO status_cache (entry_id, status) VALUES ('e1','up')`); err != nil {
 		t.Fatal(err)
 	}
