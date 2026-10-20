@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"sync"
 	"testing"
 
@@ -101,12 +102,13 @@ func configWith(base string) string {
 		{"id":"on","url":"` + base + `/on","statusCheck":{"type":"http","enabled":true,"interval":60}},
 		{"id":"off","url":"` + base + `/off","statusCheck":{"type":"http","enabled":false,"interval":60}},
 		{"id":"none","url":"` + base + `/none"},
+		{"id":"inh","url":"` + base + `/inh","statusCheck":{"type":"http","enabled":null}},
 		{"id":"note","type":"note","url":"` + base + `/note","statusCheck":{"enabled":true}}
 	]}]}]}]}`
 }
 
-// newTwoDash builds two dashboards (tiles a1, b1 inheriting the status-check
-// switch) through MigrateV2 and then sets d2's
+// newTwoDash builds two dashboards (tiles a1, b1 explicitly inheriting the
+// status-check switch: enabled null) through MigrateV2 and then sets d2's
 // per-dashboard overrides (MigrateV2 resets settings to all-null).
 func newTwoDash(t *testing.T, base, d2Settings string) (*Checker, *sql.DB, *settings.Service) {
 	t.Helper()
@@ -129,9 +131,9 @@ func newTwoDash(t *testing.T, base, d2Settings string) (*Checker, *sql.DB, *sett
 func twoDashConfig(base string) string {
 	return `{"dashboards":[
 	 {"id":"d1","name":"A","path":"/a","tabs":[{"id":"t1","groups":[{"id":"g1","entries":[
-	  {"id":"a1","url":"` + base + `/a1"}]}]}]},
+	  {"id":"a1","url":"` + base + `/a1","statusCheck":{"enabled":null}}]}]}]},
 	 {"id":"d2","name":"B","path":"/b","tabs":[{"id":"t2","groups":[{"id":"g2","entries":[
-	  {"id":"b1","url":"` + base + `/b1"}]}]}]}
+	  {"id":"b1","url":"` + base + `/b1","statusCheck":{"enabled":null}}]}]}]}
 	]}`
 }
 
@@ -153,27 +155,28 @@ func cachedIDs(t *testing.T, db *sql.DB) map[string]bool {
 	return out
 }
 
-// Layered status checks (M4 §4b): a tile is probed iff its effective setting
-// (most specific level that sets it) is on. "on" is explicitly on, "none"
-// inherits the global (on), "off" is explicitly off; a note tile is never
-// probed, even when ticked.
+// Layered status checks (M4 §4b, Ruling 12): a tile is probed iff its
+// effective setting (most specific level that sets it) is on. "on" is
+// explicitly on, "inh" inherits explicitly (enabled: null) the global (on),
+// "off" is explicitly off, "none" is unset and so off (v2.2.1: checks only
+// go where asked); a note tile is never probed, even when ticked.
 func TestCheckAllEntries_ProbesEffectivelyOnTilesOnly(t *testing.T) {
 	h := newHitCounter(t)
 	c, db, _ := newTestChecker(t, configWith(h.srv.URL))
 
 	c.checkAllEntries()
 
-	for _, p := range []string{"/on", "/none"} {
+	for _, p := range []string{"/on", "/inh"} {
 		if got := h.count(p); got != 1 {
 			t.Errorf("tile %s is effectively on: want 1 request, got %d", p, got)
 		}
 	}
-	for _, p := range []string{"/off", "/note"} {
+	for _, p := range []string{"/off", "/none", "/note"} {
 		if got := h.count(p); got != 0 {
-			t.Errorf("tile %s is off or a note but was probed %d time(s)", p, got)
+			t.Errorf("tile %s is off, unset or a note but was probed %d time(s)", p, got)
 		}
 	}
-	if ids := cachedIDs(t, db); !ids["on"] || !ids["none"] || len(ids) != 2 {
+	if ids := cachedIDs(t, db); !ids["on"] || !ids["inh"] || len(ids) != 2 {
 		t.Errorf("status_cache should hold only the effectively-on tiles, got %v", ids)
 	}
 }
@@ -200,7 +203,7 @@ func TestCheckAllEntries_DropsCacheRowsForTilesNoLongerChecked(t *testing.T) {
 func TestCheckAllEntries_GlobalSwitchOffChecksOnlyExplicitlyOnTiles(t *testing.T) {
 	h := newHitCounter(t)
 	c, db, svc := newTestChecker(t, configWith(h.srv.URL))
-	if _, err := db.Exec(`INSERT INTO status_cache (entry_id, status) VALUES ('none','up')`); err != nil {
+	if _, err := db.Exec(`INSERT INTO status_cache (entry_id, status) VALUES ('inh','up')`); err != nil {
 		t.Fatal(err)
 	}
 	if err := svc.Set(settings.KeyStatusChecksEnabled, "false"); err != nil {
@@ -209,7 +212,7 @@ func TestCheckAllEntries_GlobalSwitchOffChecksOnlyExplicitlyOnTiles(t *testing.T
 
 	c.checkAllEntries()
 
-	if got := h.count("/none"); got != 0 {
+	if got := h.count("/inh"); got != 0 {
 		t.Errorf("global checks off but inheriting tile was probed %d time(s)", got)
 	}
 	if got := h.count("/on"); got != 1 {
@@ -285,7 +288,7 @@ func TestCheckAllEntries_FolderOffBeatsDashboardOn(t *testing.T) {
 
 	c.checkAllEntries()
 
-	if got := h.count("/none"); got != 0 {
+	if got := h.count("/inh"); got != 0 {
 		t.Errorf("inheriting tile under an off folder probed %d time(s)", got)
 	}
 	if got := h.count("/on"); got != 1 {
@@ -478,5 +481,58 @@ func TestCheckAllEntries_ConfigLoadFailureKeepsCacheAndLogsError(t *testing.T) {
 				t.Errorf("expected ERROR log, got %q", out)
 			}
 		})
+	}
+}
+
+// Ruling 12 on real data: Jonathan's own config (39 unset tiles, 1 ticked)
+// probes exactly the tiles explicitly switched on: no mass enablement.
+func TestGetEntries_RealWeaversProbesOnlyExplicitlyEnabledTiles(t *testing.T) {
+	raw, err := os.ReadFile("../configdoc/testdata/real_weavers.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var v2 configdoc.Obj
+	if err := json.Unmarshal(raw, &v2); err != nil {
+		t.Fatal(err)
+	}
+	doc, err := configdoc.MigrateV2(v2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]bool{}
+	tiles := 0
+	configdoc.Walk(doc, func(_, _ configdoc.Obj, _ []configdoc.Obj, n configdoc.Obj) bool {
+		if n["kind"] != "tile" {
+			return true
+		}
+		tiles++
+		if typ, _ := n["type"].(string); typ == "note" {
+			return true
+		}
+		sc, _ := n["statusCheck"].(configdoc.Obj)
+		if u, _ := n["url"].(string); u != "" && sc["enabled"] == true {
+			want[n["id"].(string)] = true
+		}
+		return true
+	})
+	if len(want) == 0 || tiles <= len(want) {
+		t.Fatalf("fixture no longer exercises the case: %d tiles, %d enabled", tiles, len(want))
+	}
+	c, _, _ := newTestCheckerDoc(t, doc)
+	entries, err := c.getEntriesFromConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]bool{}
+	for _, e := range entries {
+		got[e.ID] = true
+	}
+	if len(got) != len(want) {
+		t.Fatalf("probed %d tiles %v, want exactly the %d explicitly enabled %v", len(got), got, len(want), want)
+	}
+	for id := range want {
+		if !got[id] {
+			t.Errorf("explicitly enabled tile %s not probed", id)
+		}
 	}
 }

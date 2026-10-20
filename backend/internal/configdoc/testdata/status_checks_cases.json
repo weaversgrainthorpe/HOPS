@@ -13,5 +13,9 @@
   {"name": "tab off overrides dashboard on", "global": false, "dashboardOverride": true, "tab": false, "folders": [], "tile": null, "want": {"on": false, "source": "tab"}},
   {"name": "folder beats tab", "global": true, "dashboardOverride": true, "tab": false, "folders": [true], "tile": null, "want": {"on": true, "source": "folder", "sourceIdx": 0}},
   {"name": "tile off under everything on -> off/tile", "global": true, "dashboardOverride": true, "tab": true, "folders": [true, true], "tile": false, "want": {"on": false, "source": "tile"}},
-  {"name": "tile on under everything off -> on/tile", "global": false, "dashboardOverride": false, "tab": false, "folders": [false, false], "tile": true, "want": {"on": true, "source": "tile"}}
+  {"name": "tile on under everything off -> on/tile", "global": false, "dashboardOverride": false, "tab": false, "folders": [false, false], "tile": true, "want": {"on": true, "source": "tile"}},
+  {"name": "tile unset (no statusCheck) under dashboard on -> off/tile", "global": true, "dashboardOverride": true, "tab": null, "folders": [], "tile": "absent", "want": {"on": false, "source": "tile"}},
+  {"name": "tile unset (statusCheck without enabled) under everything on -> off/tile", "global": true, "dashboardOverride": null, "tab": true, "folders": [true], "tile": "noEnabled", "want": {"on": false, "source": "tile"}},
+  {"name": "tile null under dashboard off -> off/dashboard", "global": true, "dashboardOverride": false, "tab": null, "folders": [], "tile": null, "want": {"on": false, "source": "dashboard"}},
+  {"name": "tile null under folder on -> on/folder", "global": false, "dashboardOverride": false, "tab": null, "folders": [true], "tile": null, "want": {"on": true, "source": "folder", "sourceIdx": 0}}
 ]

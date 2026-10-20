@@ -101,13 +101,15 @@ const layeredNoticeID = "layered-status-checks-v4"
 
 func layeredStatusFixture(t *testing.T) string {
 	on := map[string]interface{}{"type": "http", "enabled": true}
+	inherit := map[string]interface{}{"type": "http", "enabled": nil}
 	return statusDoc(t, []map[string]interface{}{
 		statusDash("da", "Alpha", on, ""),     // off + tile on: listed
-		statusDash("db", "Beta", nil, ""),     // off + tile inherits: not listed
+		statusDash("db", "Beta", inherit, ""), // off + tile inherits: not listed
+		statusDash("df", "Zeta", nil, ""),     // on + tile unset (off): not listed
 		statusDash("dc", "Gamma", on, ""),     // on + tile on: not listed
 		statusDash("dd", "Delta", on, "note"), // off + note tile ticked: notes are never checked
 		statusDash("de", "Epsilon", on, ""),   // off + tile on: listed
-	}, map[string]interface{}{"da": false, "db": false, "dc": true, "dd": false, "de": false})
+	}, map[string]interface{}{"da": false, "db": false, "df": true, "dc": true, "dd": false, "de": false})
 }
 
 func TestNotices_LayeredStatusChecksListsDashboardsAndDismissPersists(t *testing.T) {
@@ -258,10 +260,30 @@ func TestGetStatus_LayeredSource(t *testing.T) {
 		"da-e": {"up", "tile", "da-e"},          // tile on under dashboard off
 		"db-e": {"disabled", "dashboard", "db"}, // inherits the off dashboard
 		"dc-e": {"unknown", "tile", "dc-e"},     // tile on under dashboard on, no result yet
+		"df-e": {"disabled", "tile", "df-e"},    // unset tile under dashboard on: off (Ruling 12)
 	} {
 		got := get(id)
 		if fmt.Sprint(got["status"]) != want[0] || got["source"] != want[1] || got["sourceId"] != want[2] {
 			t.Errorf("%s: %v, want status=%s source=%s sourceId=%s", id, got, want[0], want[1], want[2])
 		}
+	}
+}
+
+// inheritTileCheck sets tile id's statusCheck.enabled to null (explicit
+// inherit, Ruling 12) in the stored document, so its checks follow the
+// dashboard. An unset tile is off.
+func inheritTileCheck(t *testing.T, db *sql.DB, id string) {
+	t.Helper()
+	doc, err := configdoc.Load(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, tile, ok := configdoc.FindTile(doc, id)
+	if !ok {
+		t.Fatalf("tile %s not found", id)
+	}
+	tile["statusCheck"] = configdoc.Obj{"type": "http", "enabled": nil}
+	if err := configdoc.Save(db, doc); err != nil {
+		t.Fatal(err)
 	}
 }

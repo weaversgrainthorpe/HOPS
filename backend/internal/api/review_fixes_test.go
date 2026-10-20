@@ -117,6 +117,7 @@ func TestGetStatus_ReportsResolvedInterval(t *testing.T) {
 	router, db := setupTestRouter(t)
 	c := newClient(t, router)
 	seed(t, db)
+	inheritTileCheck(t, db, "e1") // follow the dashboard (an unset tile is off)
 	if _, err := db.Exec(`INSERT INTO status_cache (entry_id, status) VALUES ('e1','up')`); err != nil {
 		t.Fatal(err)
 	}

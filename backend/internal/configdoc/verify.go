@@ -68,8 +68,9 @@ func VerifyImportedDashboard(d Obj) error {
 
 // checkStatusChecks requires every layered status-check setting below the
 // dashboard to be on, off or inherit: a tab's or folder's statusChecksEnabled
-// is true, false or absent/null, and a tile's statusCheck is an object (or
-// absent/null) whose enabled is true, false or absent/null. Run on saves and
+// is true, false or absent/null (inherit), and a tile's statusCheck is an
+// object (or absent/null: off) whose enabled is true, false, null (inherit)
+// or absent (off). Run on saves and
 // imports only (not on the whole stored document), so legacy stored data
 // never blocks unrelated writes.
 func (v *verifier) checkStatusChecks(d Obj) {
@@ -94,9 +95,9 @@ func (v *verifier) checkStatusChecks(d Obj) {
 			}
 			scm, ok := sc.(Obj)
 			if !ok {
-				v.add("tile %s: statusCheck is %s, want an object whose enabled is true or false", show(n["id"]), trunc(show(sc)))
+				v.add("tile %s: statusCheck is %s, want an object whose enabled is true, false or null", show(n["id"]), trunc(show(sc)))
 			} else if !triOK(scm["enabled"]) {
-				v.add("tile %s: statusCheck.enabled is %s, want true or false (or absent to inherit)", show(n["id"]), trunc(show(scm["enabled"])))
+				v.add("tile %s: statusCheck.enabled is %s, want true, false or null (null inherits)", show(n["id"]), trunc(show(scm["enabled"])))
 			}
 		}
 		return true
