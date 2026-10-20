@@ -10,6 +10,7 @@
   import { focusTrap } from '$lib/utils/focusTrap';
   import { portal, inertUnless, restoreFocus, focusFolderControl } from '$lib/utils/overlayActions';
   import ContainerView from './ContainerView.svelte';
+  import FolderSurface from '../background/FolderSurface.svelte';
 
   interface Props {
     dashboard: LayoutDashboard;
@@ -82,6 +83,13 @@
       use:restoreFocus
       use:focusTrap={{ initialFocus: '.restore-btn' }}
     >
+      <!-- The folder's own background (at its opacity) over the host backdrop; the panel colour otherwise. -->
+      <FolderSurface
+        background={folder.background}
+        color="var(--bg-primary)"
+        mode="animated"
+        dashboardId={dashboard.id}
+      />
       <header class="max-header">
         <h2>{folder.name}</h2>
         <span class="max-actions">
@@ -128,7 +136,9 @@
     display: flex;
     flex-direction: column;
     box-sizing: border-box;
-    background: var(--bg-primary);
+    /* The surface (FolderSurface) draws the panel colour or the folder's background. */
+    position: relative;
+    isolation: isolate;
     color: var(--text-primary);
     border: 1px solid var(--border);
     border-radius: 0.75rem;

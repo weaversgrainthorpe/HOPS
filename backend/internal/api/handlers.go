@@ -123,7 +123,7 @@ func (r *Router) handleGetConfig(w http.ResponseWriter, _ *http.Request) {
 			return
 		}
 	}
-	view := publicDoc(stored)
+	view := r.publicDoc(stored)
 	if len(r.migration.Renames) > 0 {
 		view["migrationNotices"] = migrationNotices(r.migration.Renames, stored)
 	}

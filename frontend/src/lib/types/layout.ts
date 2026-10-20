@@ -64,6 +64,8 @@ export interface LayoutDashboard {
   defaultLayout?: LayoutMode;
   /** Dashboard background (M4); missing or inherit form = the global one. */
   background?: Background;
+  /** Read-only, computed by GET /api/config from the effective settings (Ruling 9); never stored. */
+  display?: { animatedFolderBackgrounds?: boolean };
   tabs: LayoutTab[];
   [k: string]: unknown;
 }

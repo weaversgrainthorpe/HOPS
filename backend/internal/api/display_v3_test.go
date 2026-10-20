@@ -1,0 +1,69 @@
+package api
+
+import "testing"
+
+// displayOf returns dashboard id's read-only `display` block from a view.
+func displayOf(t *testing.T, view map[string]interface{}, id string) map[string]interface{} {
+	t.Helper()
+	for _, d := range view["dashboards"].([]interface{}) {
+		if dm := d.(map[string]interface{}); dm["id"] == id {
+			disp, ok := dm["display"].(map[string]interface{})
+			if !ok {
+				t.Fatalf("dashboard %s has no display block: %v", id, dm["display"])
+			}
+			return disp
+		}
+	}
+	t.Fatalf("dashboard %s not in view", id)
+	return nil
+}
+
+// Ruling 9: GET /api/config carries each dashboard's effective
+// animatedFolderBackgrounds (read-only, computed), and a save never stores it.
+func TestGetConfig_DisplayAnimatedFolderBackgrounds(t *testing.T) {
+	router, db := setupTestRouter(t)
+	c := newClient(t, router)
+	seed(t, db)
+
+	// Inherit: the global default (true).
+	if got := displayOf(t, getView(t, c), "d1")["animatedFolderBackgrounds"]; got != true {
+		t.Fatalf("inherit: animatedFolderBackgrounds = %v, want true", got)
+	}
+
+	// Override off.
+	if code, r := c.do("PUT", "/api/dashboards/d1/settings", map[string]interface{}{
+		"overrides": map[string]interface{}{"animatedFolderBackgrounds": false}, "revision": 1}); code != 200 {
+		t.Fatalf("settings: %d %v", code, r)
+	}
+	if got := displayOf(t, getView(t, c), "d1")["animatedFolderBackgrounds"]; got != false {
+		t.Fatalf("override off: animatedFolderBackgrounds = %v, want false", got)
+	}
+
+	// Echo the GET body (display included, and a forged value) back as a save.
+	d := v3Body(t, c, "d1")
+	d["display"] = map[string]interface{}{"animatedFolderBackgrounds": true}
+	code, resp := v3Put(c, "d1", d, 2)
+	if code != 200 {
+		t.Fatalf("put: %d %v", code, resp)
+	}
+	if _, has := storedDashboards(storedDoc(t, db))["d1"]["display"]; has {
+		t.Fatal("display was stored")
+	}
+	// The write response's layout carries display too (computed, not echoed).
+	lay, _ := resp["layout"].(map[string]interface{})
+	if lay == nil {
+		t.Fatalf("no layout in response: %v", resp)
+	}
+	if got := displayOf(t, lay, "d1")["animatedFolderBackgrounds"]; got != false {
+		t.Fatalf("layout display = %v, want false (computed, not the forged echo)", got)
+	}
+
+	// Override on.
+	if code, r := c.do("PUT", "/api/dashboards/d1/settings", map[string]interface{}{
+		"overrides": map[string]interface{}{"animatedFolderBackgrounds": true}, "revision": 3}); code != 200 {
+		t.Fatalf("settings on: %d %v", code, r)
+	}
+	if got := displayOf(t, getView(t, c), "d1")["animatedFolderBackgrounds"]; got != true {
+		t.Fatalf("override on: animatedFolderBackgrounds = %v, want true", got)
+	}
+}

@@ -1,4 +1,4 @@
-import { writable, derived, get } from 'svelte/store';
+import { writable, derived, get, type Readable } from 'svelte/store';
 import type { Config, DashboardSettings } from '$lib/types';
 import type { LayoutDoc, LayoutDashboard } from '$lib/types/layout';
 import type { FreshLayout } from '$lib/utils/api';
@@ -50,6 +50,25 @@ export const currentRoute = derived([config, page], ([$config, $page]) => {
 
 export function findLayoutDashboard(id: string, doc: LayoutDoc | null): LayoutDashboard | undefined {
   return doc?.dashboards.find((d) => d.id === id);
+}
+
+/**
+ * The dashboard's effective "animated folder backgrounds" setting, as the
+ * server computed it into GET /api/config's read-only `display` block
+ * (Ruling 9) — readable by every viewer. Until it is known it is false: a
+ * folder shows its first image still, never a guessed animation.
+ */
+const animatedSettingCache = new Map<string, Readable<boolean>>();
+export function animatedFolderBackgroundsFor(dashboardId: string): Readable<boolean> {
+  let r = animatedSettingCache.get(dashboardId);
+  if (!r) {
+    r = derived(config, ($config) => {
+      const d = $config?.dashboards.find((x) => x.id === dashboardId);
+      return d?.display?.animatedFolderBackgrounds === true;
+    });
+    animatedSettingCache.set(dashboardId, r);
+  }
+  return r;
 }
 
 // True while the held document is known to be older than a write that just

@@ -16,6 +16,7 @@
   import { drag, dragSource } from '$lib/editor/drag/dragController';
   import { COLLAPSED_HINT } from '$lib/editor/resize';
   import ResizeHandles from '../editor/ResizeHandles.svelte';
+  import FolderSurface from '../background/FolderSurface.svelte';
 
   interface Props {
     folder: FolderNode;
@@ -76,6 +77,9 @@
     }
   }
   const inner = $derived({ columns: innerMetrics.columns, children: folder.content.children });
+  // The folder's colour look applies to its SURFACE only (FolderSurface), never to the tiles inside.
+  const surfaceColor = $derived(folder.color || 'var(--bg-secondary)');
+  const surfaceOpacity = $derived(folder.opacity !== undefined ? folder.opacity : 0.95);
 </script>
 
 {#if folder.display === 'collapsed'}
@@ -101,8 +105,6 @@
     aria-label={collapsedLabel}
     aria-pressed={editing ? selected : undefined}
     aria-describedby={editing ? `resize-hint-${folder.id}` : undefined}
-    style:--group-bg={folder.color || 'var(--bg-secondary)'}
-    style:--group-opacity={folder.opacity !== undefined ? folder.opacity : 0.95}
     style:color={textColor}
     onclick={(e) => (editing ? select(e) : openFolder(folder.id))}
     ondblclick={editing
@@ -113,6 +115,15 @@
       : undefined}
     onkeydown={onKey}
   >
+    <!-- The first image, still, behind the mini preview. -->
+    <FolderSurface
+      background={folder.background}
+      color={surfaceColor}
+      colorOpacity={surfaceOpacity}
+      mode="still"
+      dashboardId={dashboard.id}
+      {editing}
+    />
     {#if unreadable}
       <span class="empty-note unreadable">Can't display this folder's contents</span>
     {:else if previews.length === 0}
@@ -166,9 +177,18 @@
     oncontextmenu={editing ? menu : undefined}
     use:dragSource={{ id: folder.id, enabled: editing, onMenu: pressed }}
     style:--group-bg={folder.color || 'var(--bg-secondary)'}
-    style:--group-opacity={folder.opacity !== undefined ? folder.opacity : 0.95}
     style:color={textColor}
   >
+    {#if !tabLook}
+      <FolderSurface
+        background={folder.background}
+        color={surfaceColor}
+        colorOpacity={surfaceOpacity}
+        mode="animated"
+        dashboardId={dashboard.id}
+        {editing}
+      />
+    {/if}
     {#if showTitle}
       <div class="folder-header" class:custom-color={folder.color}>
         {#if folder.iconUrl || folder.icon}
@@ -192,6 +212,16 @@
       </div>
     {/if}
     <div class="folder-body">
+      {#if tabLook}
+        <!-- Folder-tab look: the body is the surface (its own tint stays the colour look). -->
+        <FolderSurface
+          background={folder.background}
+          color="transparent"
+          mode="animated"
+          dashboardId={dashboard.id}
+          {editing}
+        />
+      {/if}
       <ContainerView
         container={inner}
         metrics={innerMetrics}
@@ -219,15 +249,6 @@
     border: 1px solid var(--border);
     border-radius: 0.5rem;
     isolation: isolate;
-  }
-  .folder::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: var(--group-bg, var(--bg-secondary));
-    opacity: var(--group-opacity, 0.95);
-    border-radius: inherit;
-    z-index: -1;
   }
   .folder-header {
     display: flex;
@@ -275,9 +296,6 @@
     border: none;
     overflow: visible;
   }
-  .folder.folder-style::before {
-    display: none;
-  }
   .folder.folder-style .folder-header {
     align-self: flex-start;
     position: relative;
@@ -293,6 +311,8 @@
     background: rgba(var(--bg-secondary-rgb, 30, 41, 59), 0.5);
     position: relative;
     z-index: 1;
+    /* Its own stacking context: the surface (z-index -1) stays inside it. */
+    isolation: isolate;
   }
   /* The body overlaps the tab's 1px edge (geometry.folderChrome: titlePx 39). */
   .folder.folder-style .folder-header + .folder-body {

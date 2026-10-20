@@ -27,7 +27,8 @@
   import { onMount, onDestroy, tick, untrack } from 'svelte';
   import { get } from 'svelte/store';
   import { toast } from '$lib/stores/toast';
-  import { reportBackgroundError } from '$lib/stores/backgroundErrors';
+  import { reportBackgroundError, markBackgroundLoaded, failedBackgroundUrls, failedFor } from '$lib/stores/backgroundErrors';
+  import { reducedMotion } from '$lib/stores/backgroundAnimation';
 
   // The route's dashboard: the stored v3 dashboard (every dashboard is editable).
   let { dashboard }: { dashboard: LayoutDashboard } = $props();
@@ -161,11 +162,33 @@
   let showDashboardSettings = $state(false);
   let showBackgroundConfig = $state(false);
 
-  // The effective background: per-tab when enabled, else the dashboard's.
-  const effectiveBackground = $derived.by(() => {
-    if (look.perTabBackgrounds) return barTabs[activeTabIndex]?.background || look.background;
-    return look.background;
-  });
+  // ---- background layers (M4 Task 4, design §4a calls 1–4) ----
+  // The dashboard's layer, then the active tab's own layer above it (at its
+  // opacity). The inherit form (or none) draws no layer at that level.
+  /** A level's own background, or undefined for none / the inherit form (a bare {inherit:true} included). */
+  const ownBackground = (bg: Background | undefined): Background | undefined =>
+    bg && typeof bg === 'object' && !bg.inherit && bg.type ? bg : undefined;
+  const dashboardBackground = $derived(ownBackground(look.background));
+  const tabBackground = $derived(ownBackground(barTabs[activeTabIndex]?.background));
+  const finite = (n: unknown): n is number => typeof n === 'number' && Number.isFinite(n);
+  /** The active tab's background is fully opaque: it hides the dashboard's entirely. */
+  const tabOpaque = $derived(!!tabBackground && (finite(tabBackground.opacity) ? tabBackground.opacity >= 1 : true));
+  // One canvas-level overlay: from the topmost FULLY OPAQUE layer — the tab
+  // when it is, else the dashboard. Values are clamped (security checklist).
+  const overlaySource = $derived(tabOpaque ? tabBackground : dashboardBackground);
+  const overlayOpacity = $derived(
+    finite(overlaySource?.overlayOpacity) ? Math.min(1, Math.max(0, overlaySource.overlayOpacity)) : 0.7
+  );
+  const overlayBlur = $derived(
+    finite(overlaySource?.overlayBlur) ? Math.min(20, Math.max(0, overlaySource.overlayBlur)) : 10
+  );
+  // Reduced motion freezes both slideshows; a fully opaque tab pauses the
+  // dashboard's (it stops loading further images).
+  const dashboardAnimates = $derived(!$reducedMotion && !tabOpaque);
+  const tabAnimates = $derived(!$reducedMotion);
+  // Edit mode: a visible indicator per level for its images that failed (Ruling 7).
+  const dashboardFailed = $derived(editing ? failedFor(dashboardBackground, $failedBackgroundUrls) : []);
+  const tabFailed = $derived(editing ? failedFor(tabBackground, $failedBackgroundUrls) : []);
 
   onMount(() => {
     initEasterEggs();
@@ -271,7 +294,24 @@
 </script>
 
 <div class="dashboard" class:party-mode={$partyModeActive}>
-  <BackgroundLayer background={effectiveBackground} scope="viewport" animate={true} onError={reportBackgroundError} fallbackColor="#1e293b" />
+  <BackgroundLayer
+    background={dashboardBackground}
+    scope="viewport"
+    level="dashboard"
+    animate={dashboardAnimates}
+    onError={reportBackgroundError}
+    onLoad={markBackgroundLoaded}
+    fallbackColor="#1e293b"
+  />
+  <BackgroundLayer
+    background={tabBackground}
+    scope="viewport"
+    level="tab"
+    animate={tabAnimates}
+    onError={reportBackgroundError}
+    onLoad={markBackgroundLoaded}
+    fallbackColor={barTabs[activeTabIndex]?.color || '#1e293b'}
+  />
   <PartyMode />
   <HopAnimation />
 
@@ -373,13 +413,24 @@
     {/if}
   </div>
 
+  {#if dashboardFailed.length > 0 || tabFailed.length > 0}
+    <div class="bg-failed-row">
+      {#if dashboardFailed.length > 0}
+        <span class="bg-failed-badge" data-bg-failed="dashboard" role="status">Background image couldn't be loaded (dashboard)</span>
+      {/if}
+      {#if tabFailed.length > 0}
+        <span class="bg-failed-badge" data-bg-failed="tab" role="status">Background image couldn't be loaded (this tab)</span>
+      {/if}
+    </div>
+  {/if}
+
   {#if editing}
     {#if draft}
       <div class="editor-shell">
         <EditToolbar tabId={activeTabId ?? ''} onAddTab={handleAddTab} />
       </div>
       {#if draftTab}
-        <div class="canvas-panel editing">
+        <div class="canvas-panel editing" style:--overlay-opacity={overlayOpacity} style:--overlay-blur="{overlayBlur}px">
           <TabCanvas dashboard={draft} tab={draftTab} editing />
         </div>
       {:else}
@@ -400,7 +451,7 @@
     {/if}
   {:else if dashboard.tabs.length > 0}
     {#if drawable(layoutTab)}
-      <div class="canvas-panel">
+      <div class="canvas-panel" style:--overlay-opacity={overlayOpacity} style:--overlay-blur="{overlayBlur}px">
         <TabCanvas {dashboard} tab={layoutTab} />
       </div>
     {:else if $layoutStale}
@@ -495,6 +546,21 @@
 
   .editor-shell {
     padding: 0.75rem 2rem 0;
+  }
+
+  .bg-failed-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding: 0.5rem 2rem 0;
+  }
+
+  .bg-failed-badge {
+    padding: 0.2rem 0.6rem;
+    border-radius: 0.25rem;
+    font-size: 0.8rem;
+    background: var(--color-error, #dc2626);
+    color: #fff;
   }
 
   .layout-missing,

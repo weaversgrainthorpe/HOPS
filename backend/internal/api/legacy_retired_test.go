@@ -47,8 +47,17 @@ func TestGetConfig_IsTheV3Document(t *testing.T) {
 	if !ids["d1"] || !ids["s1"] {
 		t.Fatalf("every dashboard (Showcase included) is served: %v", ids)
 	}
-	// Exactly the stored dashboards (nothing added or left out).
+	// Exactly the stored dashboards (nothing added or left out), apart from
+	// the computed read-only `display` block (Ruling 9), which every served
+	// dashboard carries.
 	stored, _ := json.Marshal(storedDoc(t, db)["dashboards"])
+	for _, d := range v["dashboards"].([]interface{}) {
+		dm := d.(map[string]interface{})
+		if _, ok := dm["display"].(map[string]interface{}); !ok {
+			t.Fatalf("dashboard %v lacks display", dm["id"])
+		}
+		delete(dm, "display")
+	}
 	served, _ := json.Marshal(v["dashboards"])
 	var a, bb interface{}
 	_ = json.Unmarshal(stored, &a)

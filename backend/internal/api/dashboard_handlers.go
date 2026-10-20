@@ -197,10 +197,27 @@ type docAfterFn func(tx *sql.Tx) error
 // publicDoc is what GET /api/config serves and every write response carries
 // as `layout`: the schema version and the dashboards, nothing else from the
 // stored document.
-func publicDoc(stored configdoc.Obj) map[string]interface{} {
-	dashes, _ := stored["dashboards"].([]any)
-	if dashes == nil {
-		dashes = []any{}
+//
+// Each dashboard also carries a read-only `display` block computed from its
+// effective settings (Ruling 9): what every viewer, signed in or not, needs to
+// render it (today only animatedFolderBackgrounds). It is never stored: a write
+// drops it (transientDashboardKeys).
+func (r *Router) publicDoc(stored configdoc.Obj) map[string]interface{} {
+	raw, _ := stored["dashboards"].([]any)
+	dashes := make([]any, 0, len(raw))
+	for _, d := range raw {
+		dm, ok := d.(configdoc.Obj)
+		if !ok {
+			dashes = append(dashes, d)
+			continue
+		}
+		out := make(configdoc.Obj, len(dm)+1)
+		for k, v := range dm {
+			out[k] = v
+		}
+		eff := configdoc.Resolve(r.settings, dm)
+		out["display"] = map[string]interface{}{"animatedFolderBackgrounds": eff.AnimatedFolderBackgrounds}
+		dashes = append(dashes, out)
 	}
 	return map[string]interface{}{"schemaVersion": configdoc.SchemaVersion, "dashboards": dashes}
 }
@@ -208,8 +225,8 @@ func publicDoc(stored configdoc.Obj) map[string]interface{} {
 // attachLayout adds `layout` (the committed document, as GET /api/config
 // serves it) to a write response, so a client never keeps a layout older
 // than its own save.
-func attachLayout(resp map[string]interface{}, committed configdoc.Obj) {
-	resp["layout"] = publicDoc(committed)
+func (r *Router) attachLayout(resp map[string]interface{}, committed configdoc.Obj) {
+	resp["layout"] = r.publicDoc(committed)
 }
 
 // updateDoc runs fn on the stored config inside one transaction. fn returns
@@ -285,7 +302,7 @@ func (r *Router) updateDocTx(w http.ResponseWriter, onLoadErr func(error) *apiEr
 		return
 	}
 	if m, ok := resp.(map[string]interface{}); ok {
-		attachLayout(m, committed)
+		r.attachLayout(m, committed)
 	}
 	writeJSON(w, resp)
 }

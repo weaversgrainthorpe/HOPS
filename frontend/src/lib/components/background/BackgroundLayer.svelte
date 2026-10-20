@@ -22,7 +22,11 @@
     /** false: the first image, still — no interval, no transitions. */
     animate?: boolean;
     onError?: (url: string) => void;
+    /** An image was shown (loaded); used to clear an earlier failure (Ruling 7). */
+    onLoad?: (url: string) => void;
     fallbackColor?: string;
+    /** Which level this layer draws (data-bg-level), for styling hooks and tests. */
+    level?: string;
   }
 
   let {
@@ -31,7 +35,9 @@
     opacity,
     animate = true,
     onError,
-    fallbackColor = '#1e293b'
+    onLoad,
+    fallbackColor = '#1e293b',
+    level
   }: Props = $props();
 
   // Available transitions for random selection (excluding 'random' and 'none').
@@ -114,6 +120,14 @@
     }
   }
 
+  function loaded(url: string) {
+    try {
+      onLoad?.(url);
+    } catch (e) {
+      console.error('BackgroundLayer onLoad handler threw', e);
+    }
+  }
+
   /** Load url off-screen; exactly one of ok/fail runs, and neither after a stop. */
   function preload(url: string, ok: () => void, fail: () => void) {
     const gen = generation;
@@ -175,6 +189,7 @@
           layer1Image = cssUrl(usable[i]);
           layer2Image = '';
           layer1Visible = true;
+          loaded(usable[i]);
           if (anim && slideshow && usable.length > 1) intervalId = setInterval(advance, every);
         }, () => {
           failed.add(i);
@@ -197,7 +212,10 @@
           intervalId = undefined;
           return;
         }
-        preload(usable[next], () => swapTo(next), () => {
+        preload(usable[next], () => {
+          swapTo(next);
+          loaded(usable[next]);
+        }, () => {
           failed.add(next);
           report(usable[next]);
           tryNext(next);
@@ -243,6 +261,8 @@
 {#if kind}
   <div
     class="background-root scope-{scope}"
+    data-bg-level={level}
+    data-animate={String(animate)}
     style:opacity={layerOpacity}
     aria-hidden="true"
   >
