@@ -84,6 +84,7 @@ export const sessionConflict = writable<{ dashboardId: string; currentRevision: 
  */
 const parkedState = writable<EditSession | null>(null);
 export const parkedDraft: Readable<EditSession | null> = { subscribe: parkedState.subscribe };
+export const hasParkedDraft: Readable<boolean> = derived(parkedState, (p) => p !== null);
 
 // Called when a session ends unexpectedly (a conflict reload that failed or
 // could not restart the session), so edit mode never stays on with no
@@ -448,9 +449,13 @@ export function guardNavigation(nav: NavigationLike, go: (href: string) => Promi
   return true;
 }
 
-/** beforeunload guard (native "leave site?" prompt while there are unsaved changes). */
+/**
+ * beforeunload guard: the native "leave site?" prompt while the live session
+ * is dirty OR a draft is parked (signed out) — a reload or tab close would
+ * lose either, since drafts live only in memory.
+ */
 export function guardUnload(e: BeforeUnloadEvent): void {
-  if (!get(dirty)) return;
+  if (!get(dirty) && !get(parkedState)) return;
   e.preventDefault();
   e.returnValue = '';
 }

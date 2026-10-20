@@ -30,7 +30,7 @@ import { confirmModalState, closeConfirmModal } from './confirmModal';
 import { toast } from './toast';
 import {
 	session, dirty, begin, apply, undo, redo, save, discard, end, sessionConflict,
-	keepEditingAfterConflict, reloadAfterConflict, guardNavigation, parkedDraft,
+	keepEditingAfterConflict, reloadAfterConflict, guardNavigation, guardUnload, parkedDraft,
 	resetEditSessionForTests
 } from './editSession';
 import {
@@ -517,6 +517,32 @@ describe('sign-out', () => {
 		expect(get(parkedDraft)).toBeNull();
 		await flush();
 		expect(screen.queryByRole('alert')).toBeNull();
+	});
+
+	it('the unload guard prompts while a draft is parked, and not when nothing is dirty or parked', () => {
+		const evt = () => {
+			const e = new Event('beforeunload', { cancelable: true }) as BeforeUnloadEvent;
+			const pd = vi.spyOn(e, 'preventDefault');
+			return { e, pd };
+		};
+		// Nothing dirty or parked: no prompt.
+		begin('d');
+		const a = evt();
+		guardUnload(a.e);
+		expect(a.pd).not.toHaveBeenCalled();
+		// Dirty live session: prompt.
+		enableEditMode();
+		apply('1', setName('mine'));
+		const b = evt();
+		guardUnload(b.e);
+		expect(b.pd).toHaveBeenCalled();
+		// Signed out: the draft is parked, the live session is gone, still prompt.
+		isAuthenticated.set(false);
+		expect(get(session)).toBeNull();
+		expect(get(parkedDraft)).not.toBeNull();
+		const c = evt();
+		guardUnload(c.e);
+		expect(c.pd).toHaveBeenCalled();
 	});
 
 	it('a clean session ends silently on sign-out', () => {
