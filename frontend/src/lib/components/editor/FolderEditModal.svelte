@@ -13,6 +13,8 @@
   import ColorPicker from '../admin/ColorPicker.svelte';
   import OpacitySlider from '../admin/OpacitySlider.svelte';
   import IconEditModal from '../admin/IconEditModal.svelte';
+  import BackgroundConfigModal from '../admin/BackgroundConfigModal.svelte';
+  import type { Background } from '$lib/types';
   import Modal from '../shared/Modal.svelte';
 
   interface Props {
@@ -24,8 +26,26 @@
     onDelete?: () => void;
     onDuplicate?: () => void;
     onMoveCopy?: () => void;
+    /**
+     * Apply the picker's background to the draft straight away (one undo step,
+     * editorActions.setFolderBackground) — like the tab dialog. Not offered for
+     * a folder that does not exist yet.
+     */
+    onSaveBackground?: (background: Background | undefined) => void;
   }
-  let { folder, isNew = false, onSave, onCancel, onDelete, onDuplicate, onMoveCopy }: Props = $props();
+  let { folder, isNew = false, onSave, onCancel, onDelete, onDuplicate, onMoveCopy, onSaveBackground }: Props = $props();
+  let showBackgroundConfig = $state(false);
+
+  /** What the folder shows, in words (the inherit form keeps its picture). */
+  function backgroundSummary(bg: Background | undefined): string {
+    if (!bg || !bg.type) return 'No background of its own';
+    const what =
+      bg.type === 'color' ? `Colour ${bg.value ?? ''}`.trim()
+      : bg.type === 'image' ? 'Image'
+      : `Slideshow (${bg.images?.length || 0} images)`;
+    const pct = typeof bg.opacity === 'number' && bg.opacity < 1 ? `, ${Math.round(Math.max(0, bg.opacity) * 100)}% opacity` : '';
+    return bg.inherit ? `No background of its own (${what.toLowerCase()} kept, switched off)` : what + pct;
+  }
 
   // Form state starts from the folder (intentionally captures the initial values).
   // svelte-ignore state_referenced_locally
@@ -65,6 +85,10 @@
   });
 
   function handleBeforeClose(): boolean {
+    if (showBackgroundConfig) {
+      showBackgroundConfig = false;
+      return false;
+    }
     if (showIconEditor) {
       showIconEditor = false;
       return false;
@@ -177,6 +201,15 @@
       <input type="checkbox" bind:checked={showTitle} /> Show title bar
     </label>
 
+    {#if onSaveBackground && !isNew}
+      <div class="form-group">
+        <button type="button" class="btn-secondary background-btn" onclick={() => (showBackgroundConfig = true)}>
+          <Icon icon="mdi:image-multiple" width="18" /> Background…
+        </button>
+        <small class="background-status">{backgroundSummary(folder.background)}</small>
+      </div>
+    {/if}
+
     {#if onMoveCopy && !isNew}
       <button type="button" class="btn-secondary move-btn" onclick={onMoveCopy}>
         <Icon icon="mdi:folder-move" width="18" /> Move or copy to…
@@ -203,6 +236,18 @@
     </div>
   {/snippet}
 </Modal>
+
+{#if showBackgroundConfig && onSaveBackground}
+  <BackgroundConfigModal
+    background={folder.background}
+    level="folder"
+    onSave={(bg) => {
+      onSaveBackground(bg);
+      showBackgroundConfig = false;
+    }}
+    onCancel={() => (showBackgroundConfig = false)}
+  />
+{/if}
 
 {#if showIconEditor}
   <IconEditModal
@@ -320,6 +365,15 @@
     gap: 0.3rem;
     color: var(--accent);
     font-size: 0.875rem;
+  }
+  .background-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    align-self: flex-start;
+  }
+  .background-status {
+    font-size: 0.8rem;
   }
   .move-btn {
     display: inline-flex;

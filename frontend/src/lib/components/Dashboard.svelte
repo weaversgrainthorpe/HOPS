@@ -19,7 +19,7 @@
   import DragLayer from '$lib/editor/drag/DragLayer.svelte';
   import { tabSource } from '$lib/editor/drag/dragController';
   import {
-    addTabWith, editTab, duplicateTabAction, deleteTabWithConfirm, setHeader, setBackground, setPerTabBackgrounds,
+    addTabWith, editTab, duplicateTabAction, deleteTabWithConfirm, setHeader, setBackground,
     setTabBackground, type TabFields
   } from '$lib/editor/editorActions';
   import { reorderTabs } from '$lib/editor/treeOps';
@@ -62,7 +62,7 @@
     editing ? ((draft?.tabs ?? []) as unknown as BarTab[]) : (dashboard.tabs as unknown as BarTab[])
   );
   // The dashboard-level look (background, per-tab backgrounds) the page shows: the draft's while editing.
-  type Look = { background?: Background; perTabBackgrounds?: boolean; header?: HeaderConfig };
+  type Look = { background?: Background; header?: HeaderConfig };
   const look = $derived<Look>((draft ?? dashboard) as unknown as Look);
 
   // View mode renders the saved dashboard through the layout engine; the tab
@@ -491,7 +491,6 @@
       tabLayout={t.layout}
       tabDesignWidth={t.designWidth}
       {inheritedLayout}
-      perTabBackgrounds={look.perTabBackgrounds}
       onSave={(...args) => handleUpdateTab(t.id, ...args)}
       onSaveBackground={(background) => setTabBackground(t.id, background)}
       onCancel={() => (editingTabIndex = null)}
@@ -517,8 +516,6 @@
   <BackgroundConfigModal
     background={look.background}
     level="dashboard"
-    perTabBackgrounds={look.perTabBackgrounds}
-    onPerTabBackgroundsChange={(on) => setPerTabBackgrounds(on)}
     onSave={handleUpdateBackground}
     onCancel={() => showBackgroundConfig = false}
   />

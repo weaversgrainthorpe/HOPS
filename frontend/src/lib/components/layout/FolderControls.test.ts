@@ -155,6 +155,15 @@ describe('folder controls', () => {
     expect(document.activeElement).toBe(min);
     expect(within(corner).getByRole('button', { name: 'Maximise folder' })).toBeInTheDocument();
   });
+  it('untitled corner controls sit outside the content: on the folder box, never inside its body (call 6)', async () => {
+    const { container } = await renderTab([folder('f1', [tile('a')], { showTitle: false })]);
+    const box = el(container, 'f1');
+    const corner = box.querySelector('.corner-controls') as HTMLElement;
+    expect(corner.parentElement).toBe(box);
+    expect(box.querySelector('.folder-body')!.contains(corner)).toBe(false);
+    // Placed as a tab above the top-right edge (geometry is checked in Playwright, m4-backgrounds.spec.ts).
+    expect(corner.dataset.placement).toBe('outside-top-right');
+  });
   it('the collapsed tile and its restore control are siblings under the positioned wrapper', async () => {
     setFolderView('d1', 'f1', 'collapsed');
     const { container } = await renderTab([folder('f1', [tile('a')])]);

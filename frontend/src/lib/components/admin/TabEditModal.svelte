@@ -24,7 +24,6 @@
     tabColor?: string;
     tabOpacity?: number;
     tabBackground?: Background;
-    perTabBackgrounds?: boolean; // Whether per-tab backgrounds are enabled at dashboard level
     /** v3: the tab's own layout ('inherit' / missing = the dashboard default). */
     tabLayout?: 'inherit' | 'grid' | 'free';
     /** v3: a free tab's design width in px. */
@@ -41,7 +40,7 @@
     onDuplicate?: () => void;
   }
 
-  let { tabName, tabIcon, tabIconUrl, tabIconBgColor, tabColor, tabOpacity, tabBackground, perTabBackgrounds = false, tabLayout, tabDesignWidth, inheritedLayout = 'grid', onSave, onSaveBackground, onCancel, onDelete, onDuplicate }: Props = $props();
+  let { tabName, tabIcon, tabIconUrl, tabIconBgColor, tabColor, tabOpacity, tabBackground, tabLayout, tabDesignWidth, inheritedLayout = 'grid', onSave, onSaveBackground, onCancel, onDelete, onDuplicate }: Props = $props();
   // Form state initialized from props (intentionally captures initial values)
   // svelte-ignore state_referenced_locally
   let name = $state(tabName);
@@ -64,6 +63,16 @@
   const MIN_DESIGN_WIDTH = 320;
   const MAX_DESIGN_WIDTH = 7680;
   let showBackgroundConfig = $state(false);
+
+  /** What the tab shows, in words (the inherit form keeps its picture). */
+  function backgroundSummary(bg: Background | undefined): string {
+    if (!bg || !bg.type) return 'Using the dashboard background';
+    const what =
+      bg.type === 'color' ? `Colour ${bg.value ?? ''}`.trim()
+      : bg.type === 'image' ? 'Image'
+      : `Slideshow (${bg.images?.length || 0} images)`;
+    return bg.inherit ? `Using the dashboard background (own ${what.toLowerCase()} kept)` : what;
+  }
   let showIconEditor = $state(false);
 
   function handleBeforeClose(): boolean {
@@ -180,28 +189,13 @@
     {/if}
     {#if problem}<p class="problem" role="alert">{problem}</p>{/if}
 
-    {#if onSaveBackground && perTabBackgrounds}
+    {#if onSaveBackground}
       <div class="form-group">
         <button type="button" class="btn-background" onclick={() => showBackgroundConfig = true}>
           <Icon icon="mdi:image-multiple" width="20" />
           Configure Tab Background
         </button>
-        {#if tabBackground}
-          <small class="background-status">
-            {tabBackground.type === 'color' ? `Color: ${tabBackground.value}` : ''}
-            {tabBackground.type === 'image' ? 'Image background set' : ''}
-            {tabBackground.type === 'slideshow' ? `Slideshow (${tabBackground.images?.length || 0} images)` : ''}
-          </small>
-        {:else}
-          <small class="background-status">Using dashboard background</small>
-        {/if}
-      </div>
-    {:else if onSaveBackground}
-      <div class="form-group">
-        <small class="background-hint">
-          <Icon icon="mdi:information-outline" width="16" />
-          Enable "Individual backgrounds per tab" in dashboard background settings to set a custom background for this tab.
-        </small>
+        <small class="background-status">{backgroundSummary(tabBackground)}</small>
       </div>
     {/if}
 

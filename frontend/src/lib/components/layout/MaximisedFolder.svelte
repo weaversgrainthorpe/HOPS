@@ -174,6 +174,8 @@
   }
   .max-body {
     padding: 1rem;
+    /* Room above a row-0 folder for its corner tab (controls / failure badge), M4 call 6. */
+    padding-top: 2rem;
     flex: 1;
     min-height: 0;
     overflow: auto;

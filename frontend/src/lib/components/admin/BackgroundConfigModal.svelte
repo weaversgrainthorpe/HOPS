@@ -5,22 +5,39 @@
   import { getBackgrounds, uploadBackground, deleteBackground, createBackgroundCategory } from '$lib/utils/api';
   import { confirm } from '$lib/stores/confirmModal';
   import { focusTrap } from '$lib/utils/focusTrap';
+  import { portal } from '$lib/utils/portal';
   import { logError } from '$lib/utils/errors';
+  import { isSafeBackgroundUrl, cssUrl } from '$lib/components/background/backgroundUrl';
 
   interface Props {
     background?: Background;
     onSave: (background: Background | undefined) => void;
     onCancel: () => void;
-    level: 'dashboard' | 'tab';
-    perTabBackgrounds?: boolean;
-    onPerTabBackgroundsChange?: (enabled: boolean) => void;
+    /** Which level this picker edits (design §4a): folders get no overlay or blur of their own. */
+    level: 'dashboard' | 'tab' | 'folder';
   }
 
-  let { background, onSave, onCancel, level, perTabBackgrounds = false, onPerTabBackgroundsChange }: Props = $props();
+  let { background, onSave, onCancel, level }: Props = $props();
 
-  // Local state for the toggle (intentionally captures initial value)
+  /** The slideshow limit the server's document rules enforce. */
+  const MAX_IMAGES = 200;
+  const LEVEL_TEXT = {
+    dashboard: { title: 'Dashboard background', inherit: 'Inherit the default background', from: 'the default background' },
+    tab: { title: 'Tab background', inherit: "Inherit the dashboard's background", from: "the dashboard's background" },
+    folder: { title: 'Folder background', inherit: 'Inherit (show what is behind the folder)', from: 'what is behind the folder' }
+  } as const;
+  const text = $derived(LEVEL_TEXT[level]);
+  const hasOverlay = $derived(level !== 'folder');
+
+  const clamp01 = (n: unknown, d: number) =>
+    typeof n === 'number' && Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : d;
+
+  // Inherit keeps the stored picture (call 5): the form below still holds it.
   // svelte-ignore state_referenced_locally
-  let perTabEnabled = $state(perTabBackgrounds);
+  let inheritOn = $state(background?.inherit === true);
+  // One show-through opacity per level (call 2), 0–1, default 1.
+  // svelte-ignore state_referenced_locally
+  let surfaceOpacity = $state(clamp01(background?.opacity, 1));
 
   // Form state initialized from props (intentionally captures initial values)
   // svelte-ignore state_referenced_locally
@@ -63,6 +80,12 @@
   let overlayBlur = $state(background?.overlayBlur ?? 10);
   let selectedCategory = $state('all');
   let customImageUrl = $state('');
+  // Visible problems (no silent failures): a refused custom URL, a refused Save, a failed library load.
+  let customUrlError = $state('');
+  let saveError = $state('');
+  let loadError = $state('');
+  const URL_RULE = "That URL can't be used as a background: use an http(s) address, or an uploaded or bundled image (/backgrounds/… or /presets/…).";
+  const singleUrlBad = $derived(singleImageUrl.trim() !== '' && !isSafeBackgroundUrl(singleImageUrl.trim()));
 
   // Animation preview state
   let previewIndex = $state(0);
@@ -116,7 +139,8 @@
       allImages = [...serverImages, ...presetsToAdd];
     } catch (error) {
       logError('Background load', error);
-      // Fallback to local presets
+      // Fallback to local presets, saying so (the user's uploads are missing from the gallery).
+      loadError = `Couldn't load your uploaded images (${(error as Error)?.message ?? 'unknown error'}); showing the bundled presets only.`;
       categories = BACKGROUND_CATEGORIES;
       allImages = BACKGROUND_PRESETS.map(p => ({ ...p, source: 'preset' as const }));
     }
@@ -238,14 +262,25 @@
   }
 
   function handleAddCustomUrl() {
-    if (!customImageUrl.trim()) return;
+    const url = customImageUrl.trim();
+    if (!url) return;
+    // The same rule the renderer uses: a URL it would refuse is never stored.
+    if (!isSafeBackgroundUrl(url)) {
+      customUrlError = URL_RULE;
+      return;
+    }
+    if (backgroundType === 'slideshow' && !slideshowImages.includes(url) && slideshowImages.length >= MAX_IMAGES) {
+      customUrlError = `A slideshow can have at most ${MAX_IMAGES} images.`;
+      return;
+    }
+    customUrlError = '';
 
     if (backgroundType === 'slideshow') {
-      if (!slideshowImages.includes(customImageUrl)) {
-        slideshowImages = [...slideshowImages, customImageUrl];
+      if (!slideshowImages.includes(url)) {
+        slideshowImages = [...slideshowImages, url];
       }
     } else if (backgroundType === 'image') {
-      singleImageUrl = customImageUrl;
+      singleImageUrl = url;
     }
     customImageUrl = '';
   }
@@ -302,38 +337,54 @@
     hoverPreviewUrl = null;
   }
 
-  function handleSave() {
-    // Save perTabBackgrounds setting if changed (dashboard level only)
-    if (level === 'dashboard' && onPerTabBackgroundsChange && perTabEnabled !== perTabBackgrounds) {
-      onPerTabBackgroundsChange(perTabEnabled);
-    }
-
-    if (backgroundType === 'none') {
-      onSave(undefined);
-      return;
-    }
+  /** The picture the form describes (undefined for None), or a reason it can't be saved. */
+  function buildPicture(): { bg?: Background; problem?: string } {
+    if (backgroundType === 'none') return {};
 
     const newBackground: Background = {
       type: backgroundType as 'color' | 'image' | 'slideshow',
-      fit: backgroundFit
+      fit: backgroundFit,
+      opacity: clamp01(Number(surfaceOpacity), 1)
     };
 
     if (backgroundType === 'color') {
       newBackground.value = colorValue;
     } else if (backgroundType === 'image') {
-      newBackground.value = singleImageUrl;
-      newBackground.overlayOpacity = overlayOpacity;
-      newBackground.overlayBlur = overlayBlur;
+      const url = singleImageUrl.trim();
+      if (!url) return { problem: 'Choose an image from the gallery, or enter its URL.' };
+      if (!isSafeBackgroundUrl(url)) return { problem: URL_RULE };
+      newBackground.value = url;
     } else if (backgroundType === 'slideshow') {
-      newBackground.images = slideshowImages;
+      if (slideshowImages.length === 0) return { problem: 'A slideshow needs at least one image.' };
+      if (slideshowImages.length > MAX_IMAGES) return { problem: `A slideshow can have at most ${MAX_IMAGES} images.` };
+      newBackground.images = [...slideshowImages];
       newBackground.interval = slideshowInterval;
       newBackground.transition = transitionEffect;
       newBackground.transitionDuration = transitionDuration;
+    }
+    // Folders have no overlay or blur of their own (call 1): never written there.
+    if (hasOverlay && (backgroundType === 'image' || backgroundType === 'slideshow')) {
       newBackground.overlayOpacity = overlayOpacity;
       newBackground.overlayBlur = overlayBlur;
     }
+    return { bg: newBackground };
+  }
 
-    onSave(newBackground);
+  function handleSave() {
+    // The kept picture is checked even while Inherit is on, so turning Inherit
+    // off later never brings back something unusable (and nothing is dropped silently).
+    const { bg, problem } = buildPicture();
+    if (problem) {
+      saveError = inheritOn ? `The kept picture can't be saved: ${problem}` : problem;
+      return;
+    }
+    saveError = '';
+    if (inheritOn) {
+      // Off but kept (call 5): { inherit: true, …picture }; None + Inherit = the bare inherit form.
+      onSave(bg ? { ...bg, inherit: true } : { inherit: true });
+      return;
+    }
+    onSave(bg);
   }
 
   function handleKeydown(e: KeyboardEvent) {
@@ -408,7 +459,8 @@
 <svelte:window onkeydown={handleKeydown} />
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="modal-backdrop" onclick={onCancel} onkeydown={(e) => e.key === 'Escape' && onCancel()}>
+<!-- Portalled above the dialog that opened it (tab/folder dialogs are portalled Modals too). -->
+<div class="modal-backdrop" use:portal onclick={onCancel} onkeydown={(e) => e.key === 'Escape' && onCancel()}>
   <div
     class="modal-content"
     onclick={(e) => e.stopPropagation()}
@@ -420,41 +472,42 @@
     use:focusTrap
   >
     <div class="modal-header">
-      <h2 id="background-config-title">Configure {level === 'dashboard' ? 'Dashboard' : 'Tab'} Background</h2>
-      <button class="close-btn" onclick={onCancel}>
+      <h2 id="background-config-title">{text.title}</h2>
+      <button class="close-btn" onclick={onCancel} aria-label="Close">
         <Icon icon="mdi:close" width="24" />
       </button>
     </div>
 
     <div class="modal-body">
-      <!-- Per-Tab Backgrounds Toggle (dashboard level only) - shown first -->
-      {#if level === 'dashboard'}
-        <div class="form-group toggle-group">
-          <label class="toggle-label">
-            <span class="toggle-switch" class:enabled={perTabEnabled}>
-              <span class="toggle-knob"></span>
-            </span>
-            <span class="toggle-text">Individual backgrounds per tab</span>
-            <input
-              type="checkbox"
-              bind:checked={perTabEnabled}
-              class="toggle-checkbox"
-            />
-          </label>
-          <p class="toggle-hint">
-            {#if perTabEnabled}
-              Each tab can have its own background. Edit a tab to configure it.
-            {:else}
-              All tabs share this dashboard background.
-            {/if}
-          </p>
-        </div>
-      {/if}
+      <!-- Inherit (call 5): off but kept — the picture below stays stored while the parent's shows. -->
+      <div class="form-group toggle-group">
+        <label class="toggle-label">
+          <span class="toggle-switch" class:enabled={inheritOn} aria-hidden="true">
+            <span class="toggle-knob"></span>
+          </span>
+          <span class="toggle-text">{text.inherit}</span>
+          <input
+            type="checkbox"
+            role="switch"
+            aria-checked={inheritOn}
+            aria-describedby="bg-inherit-hint"
+            bind:checked={inheritOn}
+            class="toggle-checkbox"
+          />
+        </label>
+        <p class="toggle-hint" id="bg-inherit-hint">
+          {#if inheritOn}
+            Showing {text.from}. The picture below is kept; turn Inherit off to use it again.
+          {:else}
+            This {level} uses the background below.
+          {/if}
+        </p>
+      </div>
 
       <!-- Background Type Selection -->
       <div class="form-group">
         <!-- svelte-ignore a11y_label_has_associated_control -->
-        <label id="bg-type-label">Background Type {#if level === 'dashboard' && perTabEnabled}<span class="label-hint">(default for tabs without custom background)</span>{/if}</label>
+        <label id="bg-type-label">Background Type {#if inheritOn}<span class="label-hint">(kept, not shown while inheriting)</span>{/if}</label>
         <div class="type-buttons" role="group" aria-labelledby="bg-type-label">
           <button class="type-btn" class:active={backgroundType === 'none'} onclick={() => backgroundType = 'none'}>
             <Icon icon="mdi:close-circle-outline" width="24" />
@@ -508,8 +561,24 @@
         </div>
       {/if}
 
-      <!-- Overlay Controls -->
-      {#if backgroundType === 'image' || backgroundType === 'slideshow'}
+      <!-- One show-through opacity for this level's surface (call 2). -->
+      {#if backgroundType !== 'none'}
+        <div class="form-group">
+          <div class="slider-header">
+            <label for="bg-opacity">Background opacity: {Math.round(Number(surfaceOpacity) * 100)}%</label>
+            <button class="reset-link" onclick={() => surfaceOpacity = 1}>Reset</button>
+          </div>
+          <input id="bg-opacity" type="range" min="0" max="1" step="0.05" bind:value={surfaceOpacity} aria-describedby="bg-opacity-hint" />
+          <div class="slider-labels">
+            <span>See-through</span>
+            <span>Solid</span>
+          </div>
+          <p class="slider-hint" id="bg-opacity-hint">Lower lets what is behind this {level} show through.</p>
+        </div>
+      {/if}
+
+      <!-- Overlay Controls (not for folders: one overlay, at canvas level — call 1) -->
+      {#if hasOverlay && (backgroundType === 'image' || backgroundType === 'slideshow')}
         <div class="form-group">
           <div class="slider-header">
             <!-- svelte-ignore a11y_label_has_associated_control -->
@@ -541,10 +610,20 @@
       {#if backgroundType === 'image'}
         <div class="form-group">
           <label for="imageUrl">Image URL</label>
-          <input id="imageUrl" type="text" bind:value={singleImageUrl} placeholder="https://example.com/image.jpg or /backgrounds/image.jpg" />
+          <input
+            id="imageUrl"
+            type="text"
+            bind:value={singleImageUrl}
+            placeholder="https://example.com/image.jpg or /backgrounds/image.jpg"
+            aria-invalid={singleUrlBad}
+            aria-describedby={singleUrlBad ? 'imageUrl-error' : undefined}
+          />
+          {#if singleUrlBad}
+            <p class="field-error" id="imageUrl-error" role="alert">{URL_RULE}</p>
+          {/if}
         </div>
 
-        {#if singleImageUrl}
+        {#if singleImageUrl && !singleUrlBad}
           <div class="preview">
             <img src={singleImageUrl} alt="Preview" />
           </div>
@@ -666,7 +745,7 @@
                 class:kenburns-1={effectiveTransition === 'kenburns' && previewLayer1KenBurns === 1}
                 class:kenburns-2={effectiveTransition === 'kenburns' && previewLayer1KenBurns === 2}
                 class:kenburns-3={effectiveTransition === 'kenburns' && previewLayer1KenBurns === 3}
-                style:background-image={previewLayer1Image ? `url(${previewLayer1Image})` : 'none'}
+                style:background-image={previewLayer1Image ? cssUrl(previewLayer1Image) : 'none'}
                 style:--transition-duration="{transitionDuration}s"
               ></div>
               <div
@@ -676,7 +755,7 @@
                 class:kenburns-1={effectiveTransition === 'kenburns' && previewLayer2KenBurns === 1}
                 class:kenburns-2={effectiveTransition === 'kenburns' && previewLayer2KenBurns === 2}
                 class:kenburns-3={effectiveTransition === 'kenburns' && previewLayer2KenBurns === 3}
-                style:background-image={previewLayer2Image ? `url(${previewLayer2Image})` : 'none'}
+                style:background-image={previewLayer2Image ? cssUrl(previewLayer2Image) : 'none'}
                 style:--transition-duration="{transitionDuration}s"
               ></div>
               <!-- Curtain overlay: shows the previous image splitting apart -->
@@ -687,11 +766,11 @@
                 >
                   <div
                     class="curtain-half curtain-left"
-                    style:background-image={curtainPreviousImage ? `url(${curtainPreviousImage})` : 'none'}
+                    style:background-image={curtainPreviousImage ? cssUrl(curtainPreviousImage) : 'none'}
                   ></div>
                   <div
                     class="curtain-half curtain-right"
-                    style:background-image={curtainPreviousImage ? `url(${curtainPreviousImage})` : 'none'}
+                    style:background-image={curtainPreviousImage ? cssUrl(curtainPreviousImage) : 'none'}
                   ></div>
                 </div>
               {/if}
@@ -723,12 +802,24 @@
         <div class="form-group">
           <label for="custom-image-url">Add Custom Image URL</label>
           <div class="url-input-group">
-            <input id="custom-image-url" type="text" bind:value={customImageUrl} placeholder="https://example.com/image.jpg" onkeydown={(e) => e.key === 'Enter' && handleAddCustomUrl()} />
+            <input
+              id="custom-image-url"
+              type="text"
+              bind:value={customImageUrl}
+              placeholder="https://example.com/image.jpg"
+              aria-invalid={customUrlError !== ''}
+              aria-describedby={customUrlError ? 'custom-image-url-error' : undefined}
+              oninput={() => (customUrlError = '')}
+              onkeydown={(e) => e.key === 'Enter' && handleAddCustomUrl()}
+            />
             <button onclick={handleAddCustomUrl} class="add-btn">
               <Icon icon="mdi:plus" width="20" />
               Add
             </button>
           </div>
+          {#if customUrlError}
+            <p class="field-error" id="custom-image-url-error" role="alert">{customUrlError}</p>
+          {/if}
         </div>
       {/if}
 
@@ -761,6 +852,9 @@
 
           {#if uploadError}
             <p class="upload-error">{uploadError}</p>
+          {/if}
+          {#if loadError}
+            <p class="upload-error" role="alert">{loadError}</p>
           {/if}
 
           <!-- Category Tabs -->
@@ -875,6 +969,9 @@
     </div>
 
     <div class="modal-footer">
+      {#if saveError}
+        <p class="field-error save-error" role="alert">{saveError}</p>
+      {/if}
       <button class="btn-secondary" onclick={onCancel}>Cancel</button>
       <button class="btn-primary" onclick={handleSave}>Save Background</button>
     </div>
@@ -904,7 +1001,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: var(--z-modal);
+    /* Above the tab/folder dialog that opens it; below confirm dialogs (critical). */
+    z-index: var(--z-modal-overlay);
     padding: 1rem;
   }
 
@@ -956,6 +1054,17 @@
 
   .form-group {
     margin-bottom: 1.5rem;
+  }
+
+  .field-error {
+    margin: 0.4rem 0 0;
+    color: var(--color-error, #dc2626);
+    font-size: 0.85rem;
+  }
+
+  .save-error {
+    margin: 0 auto 0 0;
+    align-self: center;
   }
 
   .form-group label {
@@ -1011,6 +1120,19 @@
     background: var(--text-secondary);
     border-radius: 50%;
     transition: transform 0.2s, background 0.2s;
+  }
+
+  /* Keyboard focus on the (visually hidden) switch shows on the drawn switch. */
+  .toggle-checkbox:focus-visible ~ .toggle-text,
+  .toggle-label:has(.toggle-checkbox:focus-visible) .toggle-switch {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .slider-hint {
+    margin: 0.4rem 0 0;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
   }
 
   .toggle-switch.enabled {

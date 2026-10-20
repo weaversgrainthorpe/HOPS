@@ -7,7 +7,7 @@ import EditorDialogs from './EditorDialogs.svelte';
 import FolderEditModal from './FolderEditModal.svelte';
 import { editorDialog, editorMenu } from '$lib/editor/editorUi';
 import { editMode } from '$lib/stores/editMode';
-import { dirty } from '$lib/stores/editSession';
+import { dirty, session, undo } from '$lib/stores/editSession';
 import { toast } from '$lib/stores/toast';
 import { setLayout, resetEditor, startSession, draft, nodeIn, home, answerConfirm, p } from './editorTestKit';
 import type { FolderNode, TileNode } from '$lib/types/layout';
@@ -214,5 +214,43 @@ describe('EditorDialogs (the dialogs edit the draft only)', () => {
       await answerConfirm(true);
       expect(nodeIn(draft(), 'b')).toBeUndefined();
     });
+  });
+});
+
+describe('FolderEditModal background (M4 Task 5)', () => {
+  it('a new folder has no Background button (it does not exist yet)', async () => {
+    await show({ kind: 'folder', to: { tabId: 't1' } });
+    expect(screen.queryByRole('button', { name: /Background/ })).toBeNull();
+  });
+
+  it('Background opens the folder-level picker; its Save is one undoable draft edit — no write request', async () => {
+    fetchSpy.mockImplementation(() =>
+      Promise.resolve(new Response(JSON.stringify({ categories: [], images: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    );
+    await show({ kind: 'folder', id: 'f1' });
+    expect(screen.getByText(/No background of its own/i)).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: /Background/ }));
+    expect(screen.getByRole('heading', { name: /Folder background/i })).toBeInTheDocument();
+    // Folder level: no overlay controls.
+    await fireEvent.click(screen.getByRole('button', { name: /^Color$/ }));
+    expect(screen.queryByText(/Overlay Darkness/i)).toBeNull();
+    await fireEvent.input(screen.getByLabelText(/^Background opacity/), { target: { value: '0.5' } });
+    await fireEvent.click(screen.getByRole('button', { name: /^Save Background/ }));
+    await tick();
+    const f = nodeIn(draft(), 'f1') as FolderNode;
+    expect(f.background).toMatchObject({ type: 'color', opacity: 0.5 });
+    expect(get(session)!.undo).toHaveLength(1);
+    expect(get(dirty)).toBe(true);
+    // The picker closed; the folder dialog is still open and says what is set.
+    expect(screen.queryByRole('heading', { name: /Folder background/i })).toBeNull();
+    expect(screen.getByText(/Colour/i, { selector: '.background-status' })).toBeInTheDocument();
+    // Only the picker's library GET went out: nothing was written to the server.
+    for (const [url, init] of fetchSpy.mock.calls) {
+      expect(String(url)).toMatch(/\/api\/backgrounds$/);
+      expect((init as RequestInit | undefined)?.method ?? 'GET').toBe('GET');
+    }
+    undo();
+    expect((nodeIn(draft(), 'f1') as FolderNode).background).toBeUndefined();
+    expect(get(dirty)).toBe(false);
   });
 });

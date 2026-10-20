@@ -14,6 +14,32 @@ const tile = (id: string, name: string) => ({
   openMode: 'newtab', size: 'medium', order: 0, placement: placement(0, 0)
 });
 
+/** Import one dashboard whose Main tab holds `children(id)`; returns its path and id maker. */
+async function importDash(page: Page, context: BrowserContext, children: (id: (s: string) => string) => unknown[]) {
+  const p = `m4b${Date.now().toString(36)}${(seq++).toString(36)}`;
+  const id = (s: string) => `${p}-${s}`;
+  const dash = {
+    id: id('dash'), name: `M4 backgrounds ${p}`, order: 0, path: `/${p}`, revision: 1,
+    settings: {
+      statusChecksEnabled: null, statusCheckIntervalMinutes: null, statusCheckTimeoutSeconds: null,
+      editIdleTimeoutMinutes: null, animatedFolderBackgrounds: null, defaultLayout: null
+    },
+    defaultLayout: 'grid',
+    tabs: [{ id: id('tab'), name: 'Main', order: 0, layout: 'inherit', root: { columns: 12, children: children(id) } }]
+  };
+  const doc = {
+    format: 'hops-export', schemaVersion: 3, exportedAt: new Date().toISOString(), exportType: 'single-dashboard',
+    config: { dashboards: [dash] }
+  };
+  const r = await page.request.post('/api/config/import', {
+    headers: { 'X-CSRF-Token': await getCsrfToken(context) },
+    multipart: { file: { name: 'm4.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(doc)) } }
+  });
+  expect(r.status(), await r.text()).toBe(200);
+  made = { id: id('dash') };
+  return { path: `/${p}`, id };
+}
+
 async function importFixture(page: Page, context: BrowserContext) {
   const p = `m4b${Date.now().toString(36)}${(seq++).toString(36)}`;
   const id = (s: string) => `${p}-${s}`;
@@ -124,5 +150,164 @@ test.describe('M4 backgrounds in a real browser', () => {
     // Leave the viewer's remembered view as it was.
     await host.getByRole('button', { name: 'Restore folder' }).click();
     await expect(host).toHaveCount(0);
+  });
+
+  // ---- M4 Task 5: the picker at folder level and the corner controls (call 6)
+
+  const PRESET = '/presets/network-grid.jpg';
+  const untitledAt = (id: (s: string) => string, key: string, x: number, y: number, extra: Record<string, unknown> = {}) => ({
+    id: id(key), kind: 'folder', name: `Folder ${key}`, layout: 'inherit', display: 'expanded', shape: 'rounded',
+    showTitle: false, placement: placement(x, y, 4, 3),
+    content: { columns: 4, children: [tile(id(`${key}-t`), `${key}Tile`)] }, ...extra
+  });
+
+  async function enterEdit(page: Page) {
+    await page.locator('[aria-label="Enter Edit Mode"]').click();
+    await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
+  }
+  async function saveDraft(page: Page) {
+    const save = page.getByRole('toolbar', { name: 'Editing' }).getByRole('button', { name: /Save/ });
+    await expect(save).toBeEnabled();
+    const saved = page.waitForResponse((r) => r.request().method() === 'PUT' && /\/api\/dashboards\//.test(r.url()));
+    await save.click();
+    const r = await saved;
+    expect(r.status(), await r.text()).toBe(200);
+  }
+  async function storedFolder(page: Page, dashId: string, folderId: string) {
+    const cfg = await (await page.request.get('/api/config')).json();
+    const d = cfg.dashboards.find((x: { id: string }) => x.id === dashId);
+    return d.tabs[0].root.children.find((n: { id: string }) => n.id === folderId);
+  }
+  /** Edit mode → double-click the folder → Background… → the folder-level picker. */
+  async function openFolderPicker(page: Page, folderSel: string) {
+    await page.locator(folderSel).dblclick({ position: { x: 20, y: 20 } });
+    const dlg = page.getByRole('dialog', { name: 'Edit Folder' });
+    await expect(dlg).toBeVisible();
+    await dlg.getByRole('button', { name: /^Background/ }).click();
+    const picker = page.getByRole('dialog', { name: 'Folder background' });
+    await expect(picker).toBeVisible();
+    return { dlg, picker };
+  }
+
+  test('folder picker: a preset picture at 50% opacity is saved, survives a reload and is drawn', async ({ page, context }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    const f = await importDash(page, context, (id) => [tile(id('anchor'), 'Anchor'), untitledAt(id, 'fp', 0, 1, { showTitle: true })]);
+    const sel = `[data-node-id="${f.id('fp')}"]`;
+    await page.goto(f.path);
+    await expect(page.locator(sel)).toBeVisible();
+    await enterEdit(page);
+    const { dlg, picker } = await openFolderPicker(page, sel);
+    // Folder level: no overlay or blur of its own (call 1).
+    await picker.getByRole('button', { name: /^Image$/ }).click();
+    await expect(picker.getByText(/Overlay Darkness/i)).toHaveCount(0);
+    await expect(picker.getByText(/Overlay Blur/i)).toHaveCount(0);
+    await picker.locator(`.image-card img[src="${PRESET}"]`).first().click();
+    await picker.getByLabel(/^Background opacity/).fill('0.5');
+    await picker.getByRole('button', { name: /^Save Background/ }).click();
+    await expect(picker).toBeHidden();
+    await expect(dlg.locator('.background-status')).toContainText(/Image, 50% opacity/);
+    await dlg.getByRole('button', { name: /^Save/ }).click();
+    await expect(dlg).toBeHidden();
+    await saveDraft(page);
+
+    const stored = await storedFolder(page, f.id('dash'), f.id('fp'));
+    expect(stored.background).toMatchObject({ type: 'image', value: PRESET, opacity: 0.5 });
+    expect(stored.background).not.toHaveProperty('overlayOpacity');
+    expect(stored.background.inherit).toBeFalsy();
+
+    await page.reload();
+    await expect(page.locator(sel)).toBeVisible();
+    const root = page.locator(`${sel} .folder-surface .background-root`);
+    await expect(root).toHaveCount(1);
+    await expect.poll(() => root.evaluate((el) => getComputedStyle(el).opacity)).toBe('0.5');
+    await expect
+      .poll(() => root.evaluate((el) => [...el.querySelectorAll('.background-layer')].map((l) => getComputedStyle(l).backgroundImage).join(' ')))
+      .toContain('network-grid.jpg');
+    // Once the picture is shown, the colour stand-in is gone (the image really loaded).
+    await expect(page.locator(`${sel} .folder-surface-color`)).toHaveCount(0);
+    expect(errors).toEqual([]);
+  });
+
+  test('Inherit keeps the folder picture: switched off, stored, and restored on un-inherit', async ({ page, context }) => {
+    const f = await importDash(page, context, (id) => [
+      tile(id('anchor'), 'Anchor'),
+      untitledAt(id, 'fi', 0, 1, { showTitle: true, background: { type: 'image', value: PRESET, opacity: 0.8 } })
+    ]);
+    const sel = `[data-node-id="${f.id('fi')}"]`;
+    await page.goto(f.path);
+    await expect(page.locator(`${sel} .folder-surface .background-root`)).toHaveCount(1);
+    await enterEdit(page);
+
+    let { dlg, picker } = await openFolderPicker(page, sel);
+    const sw = picker.getByRole('switch', { name: /Inherit/ });
+    await expect(sw).not.toBeChecked();
+    await picker.getByText(/^Inherit \(show what is behind the folder\)$/).click();
+    await expect(sw).toBeChecked();
+    await picker.getByRole('button', { name: /^Save Background/ }).click();
+    await expect(dlg.locator('.background-status')).toContainText(/kept/);
+    await dlg.getByRole('button', { name: /^Save/ }).click();
+    await saveDraft(page);
+    let stored = await storedFolder(page, f.id('dash'), f.id('fi'));
+    expect(stored.background).toMatchObject({ inherit: true, type: 'image', value: PRESET, opacity: 0.8 });
+    // Switched off: no picture drawn in the folder.
+    await expect(page.locator(`${sel} .folder-surface .background-root`)).toHaveCount(0);
+
+    ({ dlg, picker } = await openFolderPicker(page, sel));
+    await expect(picker.getByRole('switch', { name: /Inherit/ })).toBeChecked();
+    await picker.getByText(/^Inherit \(show what is behind the folder\)$/).click();
+    await picker.getByRole('button', { name: /^Save Background/ }).click();
+    await dlg.getByRole('button', { name: /^Save/ }).click();
+    await saveDraft(page);
+    stored = await storedFolder(page, f.id('dash'), f.id('fi'));
+    expect(stored.background).toMatchObject({ type: 'image', value: PRESET, opacity: 0.8 });
+    expect(stored.background.inherit).toBeFalsy();
+    await expect(page.locator(`${sel} .folder-surface .background-root`)).toHaveCount(1);
+  });
+
+  test('a row-0 untitled folder: corner controls sit outside the content, unclipped, clear of the badge tab', async ({ page, context }) => {
+    const f = await importDash(page, context, (id) => [
+      // Row 0, right-hand side; a broken picture so edit mode shows the failure tab too.
+      untitledAt(id, 'f0', 8, 0, { background: { type: 'image', value: `/backgrounds/${id('nope')}.jpg` } }),
+      tile(id('anchor'), 'Anchor')
+    ]);
+    const sel = `[data-node-id="${f.id('f0')}"]`;
+    await page.goto(f.path);
+    await expect(page.locator(sel)).toBeVisible();
+    await page.locator(`${sel} > .folder-body`).hover();
+    const controls = page.locator(`${sel} > .corner-controls`);
+    await expect(controls).toBeVisible();
+    await expect.poll(() => controls.evaluate((el) => getComputedStyle(el).opacity)).toBe('1');
+    const cb = (await controls.boundingBox())!;
+    const body = await boxOf(page, `${sel} > .folder-body`);
+    const folderBox = await boxOf(page, sel);
+    expect(intersects(cb, body), 'corner controls overlap the folder content').toBe(false);
+    // Just outside the top-right edge.
+    expect(cb.y + cb.height).toBeLessThanOrEqual(folderBox.y + 1);
+    expect(cb.x + cb.width).toBeLessThanOrEqual(folderBox.x + folderBox.width + 1);
+    expect(cb.x).toBeGreaterThan(folderBox.x + folderBox.width / 2);
+    // Not clipped: inside the viewport, and the button at its centre is what is hit there.
+    expect(cb.y).toBeGreaterThanOrEqual(0);
+    const max = controls.getByRole('button', { name: 'Maximise folder' });
+    const mb = (await max.boundingBox())!;
+    const hit = await page.evaluate(
+      ([x, y]) => (document.elementFromPoint(x, y)?.closest('button')?.getAttribute('aria-label') ?? null),
+      [mb.x + mb.width / 2, mb.y + mb.height / 2]
+    );
+    expect(hit).toBe('Maximise folder');
+    // And it works.
+    await max.click();
+    await expect(page.locator('.max-host')).toBeVisible();
+    await page.locator('.max-host').getByRole('button', { name: 'Restore folder' }).click();
+    await expect(page.locator('.max-host')).toHaveCount(0);
+
+    // Edit mode: the failure tab hangs off the top-LEFT edge — clear of where the controls sit.
+    await enterEdit(page);
+    const badge = page.locator(`${sel} [data-bg-failed="folder"]`);
+    await expect(badge).toBeVisible();
+    const bb = (await badge.boundingBox())!;
+    expect(intersects(bb, cb), 'failure tab and corner controls would collide').toBe(false);
+    expect(intersects(bb, await boxOf(page, `${sel} > .folder-body`))).toBe(false);
+    expect(bb.y).toBeGreaterThanOrEqual(0);
   });
 });

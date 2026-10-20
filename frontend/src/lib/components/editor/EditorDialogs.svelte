@@ -8,7 +8,7 @@
   import NodeContextMenu from './NodeContextMenu.svelte';
   import { editorDialog, editorMenu, openDialog } from '$lib/editor/editorUi';
   import {
-    addNode, blankFolder, blankTile, deleteWithConfirm, duplicate, editFolder, editNode, findIn
+    addNode, blankFolder, blankTile, deleteWithConfirm, duplicate, editFolder, editNode, findIn, setFolderBackground
   } from '$lib/editor/editorActions';
   import { session } from '$lib/stores/editSession';
   import { toast } from '$lib/stores/toast';
@@ -106,6 +106,7 @@
           if (duplicate(id)) close();
         }}
         onMoveCopy={() => openDialog({ kind: 'movecopy', ids: [id] })}
+        onSaveBackground={(bg) => setFolderBackground(id, bg)}
       />
     {/key}
   {:else if !dlg.id && newFolder}

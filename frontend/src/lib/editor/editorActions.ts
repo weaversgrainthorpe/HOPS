@@ -417,6 +417,39 @@ export function setTabBackground(tabId: string, background: Background | undefin
   return apply('Tab background', (dd) => updateTab(dd, tabId, { background: plain(background) } as Partial<LayoutTab>));
 }
 
+/**
+ * A folder's background (M4): one undoable draft edit. `undefined` removes the
+ * key (no background of its own); the inherit form keeps its stored picture.
+ * A missing id or a non-folder is refused (apply toasts the TreeOpError).
+ */
+export function setFolderBackground(folderId: string, background: Background | undefined): boolean {
+  return apply('Folder background', (dd) => {
+    const n = findIn(dd, folderId);
+    if (!n) throw new TreeOpError('That folder no longer exists.');
+    if (n.kind !== 'folder') throw new TreeOpError('Only folders have a background here.');
+    const bg = plain(background);
+    return mapNode(dd, folderId, (f) => {
+      const next = { ...f } as FolderNode;
+      if (bg === undefined) delete next.background;
+      else next.background = bg;
+      return next;
+    });
+  });
+}
+
+/** Replace one node anywhere in the draft (tabs and folders, any depth). */
+function mapNode(d: LayoutDashboard, id: string, fn: (n: LayoutNode) => LayoutNode): LayoutDashboard {
+  // A malformed container is passed through untouched (never emptied).
+  const walk = (c: Container): Container => !Array.isArray(c?.children) ? c : ({
+    ...c,
+    children: c.children.map((n) => {
+      if (n?.id === id) return fn(n);
+      return n?.kind === 'folder' && n.content ? { ...n, content: walk(n.content) } : n;
+    })
+  });
+  return { ...d, tabs: d.tabs.map((t) => ({ ...t, root: walk(t.root) })) };
+}
+
 // ---------------------------------------------------------------- dashboard-level (draft, parent spec §7.1)
 
 export function setHeader(header: HeaderConfig): boolean {
@@ -427,9 +460,6 @@ export function setBackground(background: Background | undefined): boolean {
   return apply('Edit background', (dd) => ({ ...dd, background: plain(background) }));
 }
 
-export function setPerTabBackgrounds(enabled: boolean): boolean {
-  return apply('Per-tab backgrounds', (dd) => (dd.perTabBackgrounds === enabled ? dd : { ...dd, perTabBackgrounds: enabled }));
-}
 
 // ---------------------------------------------------------------- cross-dashboard transfer
 

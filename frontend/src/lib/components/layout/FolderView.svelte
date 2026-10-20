@@ -212,7 +212,9 @@
       <BackgroundFailedBadge background={folder.background} {editing} level="folder" placement="corner" />
     {/if}
     {#if !showTitle && views && !$editMode}
-      <div class="corner-controls">
+      <!-- Call 6: a small tab just OUTSIDE the top-right edge (never on the content); the
+           edit-mode failure tab hangs off the top-LEFT edge, so the two never meet. -->
+      <div class="corner-controls" data-placement="outside-top-right">
         <FolderControls dashboardId={views.dashboardId} folderId={folder.id} {remembered} {saved} variant="bar" />
       </div>
     {/if}
@@ -380,12 +382,21 @@
     top: 0.15rem;
     right: 0.15rem;
   }
-  /* Untitled folders: a corner cluster, shown on hover or keyboard focus, always on touch. */
+  /* Untitled folders (call 6): a small tab hanging just outside the box's top-right
+     edge — it never covers the content and reserves no strip inside the folder.
+     Shown on hover or keyboard focus, always on touch. The canvas, overlay and
+     maximised bodies keep enough top padding that a row-0 folder's tab is not clipped. */
   .corner-controls {
     position: absolute;
-    top: 0.15rem;
-    right: 0.15rem;
+    right: 0.5rem;
+    bottom: 100%;
     z-index: 3;
+    display: flex;
+    padding: 0.05rem 0.2rem;
+    border: 1px solid var(--border);
+    border-bottom: none;
+    border-radius: 0.375rem 0.375rem 0 0;
+    background: var(--group-bg, var(--bg-secondary));
     opacity: 0;
     transition: opacity 0.15s;
   }

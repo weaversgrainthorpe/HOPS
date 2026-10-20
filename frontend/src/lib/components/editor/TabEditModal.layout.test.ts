@@ -42,3 +42,18 @@ describe('TabEditModal layout and design width (M3 Task 6)', () => {
     expect(screen.getByRole('alert').textContent).toMatch(/design width/i);
   });
 });
+
+describe('TabEditModal background (M4 Task 5)', () => {
+  it('always offers the background picker (no per-tab switch any more)', () => {
+    render(TabEditModal, { tabName: 'Media', onSave: vi.fn(), onSaveBackground: vi.fn(), onCancel: vi.fn() });
+    expect(screen.getByRole('button', { name: /Configure Tab Background/ })).toBeInTheDocument();
+    expect(screen.queryByText(/Individual backgrounds per tab/)).toBeNull();
+  });
+  it('says when a kept picture is switched off (inherit form)', () => {
+    render(TabEditModal, {
+      tabName: 'Media', tabBackground: { inherit: true, type: 'image', value: '/backgrounds/a.jpg' },
+      onSave: vi.fn(), onSaveBackground: vi.fn(), onCancel: vi.fn()
+    });
+    expect(screen.getByText(/dashboard background/i, { selector: '.background-status' }).textContent).toMatch(/kept/i);
+  });
+});

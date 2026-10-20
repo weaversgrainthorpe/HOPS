@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { get } from 'svelte/store';
 import {
-  documentIds, setBackground, setPerTabBackgrounds, setHeader, addNode, blankTile, blankFolder, placementsFor,
+  documentIds, setBackground, setFolderBackground, setHeader, addNode, blankTile, blankFolder, placementsFor,
   moveOrCopyTo, tileProblem, editNode, duplicate, editTab
 } from './editorActions';
 import { dirty, session, undo } from '$lib/stores/editSession';
@@ -38,13 +38,10 @@ describe('editorActions', () => {
   it('Header and Background edit the draft (parent spec §7.1) — no request, undoable', () => {
     setHeader({ centerTitle: 'Draft' });
     setBackground({ type: 'color', value: '#123456' });
-    setPerTabBackgrounds(true);
     expect(draft().header).toEqual({ centerTitle: 'Draft' });
     expect(draft().background).toEqual({ type: 'color', value: '#123456' });
-    expect(draft().perTabBackgrounds).toBe(true);
     expect(get(dirty)).toBe(true);
     expect(fetchSpy).not.toHaveBeenCalled();
-    undo();
     undo();
     undo();
     expect(get(dirty)).toBe(false);
@@ -106,5 +103,31 @@ describe('editorActions', () => {
     expect(t.root.columns).toBe(120);
     expect(nodeIn(draft(), 'b')!.placement).toEqual(p(10, 0, 10, 10));
     expect(get(session)!.undo).toHaveLength(1);
+  });
+
+  it('setFolderBackground is one undoable draft edit; undefined clears it (M4 Task 5)', () => {
+    const bg = { inherit: true, type: 'image' as const, value: '/backgrounds/a.jpg', opacity: 0.5 };
+    expect(setFolderBackground('f1', bg)).toBe(true);
+    expect((nodeIn(draft(), 'f1') as FolderNode).background).toEqual(bg);
+    expect(get(session)!.undo).toHaveLength(1);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(setFolderBackground('f1', undefined)).toBe(true);
+    expect(nodeIn(draft(), 'f1')).not.toHaveProperty('background');
+    expect(get(session)!.undo).toHaveLength(2);
+    undo();
+    expect((nodeIn(draft(), 'f1') as FolderNode).background).toEqual(bg);
+    undo();
+    expect((nodeIn(draft(), 'f1') as FolderNode).background).toBeUndefined();
+    expect(get(dirty)).toBe(false);
+  });
+
+  it('setFolderBackground refuses a tile or a missing id visibly, leaving the draft alone', () => {
+    const err = vi.spyOn(toast, 'error');
+    err.mockClear();
+    const before = draft();
+    expect(setFolderBackground('a', { type: 'color', value: '#000000' })).toBe(false);
+    expect(setFolderBackground('nope', { type: 'color', value: '#000000' })).toBe(false);
+    expect(draft()).toBe(before);
+    expect(err).toHaveBeenCalledTimes(2);
   });
 });
