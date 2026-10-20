@@ -19,7 +19,7 @@ import { tick } from 'svelte';
 import TabCanvas from '$lib/components/layout/TabCanvas.svelte';
 import DragLayer from './DragLayer.svelte';
 import {
-  drag, dragSource, resolveDrop, setDragEnv, resetDragForTests, setActiveTab, switchTabWithinDrag, type DragState
+  drag, dragSource, resizeSource, tabSource, resolveDrop, setDragEnv, resetDragForTests, setActiveTab, switchTabWithinDrag, type DragState
 } from './dragController';
 import * as api from '$lib/utils/api';
 import { save } from '$lib/stores/editSession';
@@ -420,7 +420,7 @@ describe('drag engine — through the real renderer', () => {
 });
 
 describe('fix round 1', () => {
-  it('each item has a permanent non-passive touchmove listener that blocks scrolling only when drag-ready or dragging', () => {
+  it('each enabled item has a non-passive touchmove listener that blocks scrolling only when drag-ready or dragging', () => {
     vi.useFakeTimers();
     const el = document.createElement('div');
     el.setAttribute('data-node-id', 'a');
@@ -506,5 +506,66 @@ describe('fix round 1', () => {
     expect(draft().name).toBe('Renamed');
     expect(nodeIn(draft(), 'a')!.placement).toEqual(p(3, 0));
     expect(get(toast).at(-1)?.message).toMatch(/Ctrl\+Z/);
+  });
+});
+
+describe('final fix I2: the non-passive touchmove guard exists only while editing', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  /** Live non-passive touchmove listeners per element, tracked through add/remove. */
+  function trackTouchmove() {
+    const live = new Map<EventTarget, number>();
+    const add = HTMLElement.prototype.addEventListener;
+    const rem = HTMLElement.prototype.removeEventListener;
+    vi.spyOn(HTMLElement.prototype, 'addEventListener').mockImplementation(function (
+      this: HTMLElement, type: string, fn: EventListenerOrEventListenerObject, opts?: boolean | AddEventListenerOptions
+    ) {
+      if (type === 'touchmove' && typeof opts === 'object' && opts.passive === false) live.set(this, (live.get(this) ?? 0) + 1);
+      return add.call(this, type, fn, opts);
+    });
+    vi.spyOn(HTMLElement.prototype, 'removeEventListener').mockImplementation(function (
+      this: HTMLElement, type: string, fn: EventListenerOrEventListenerObject, opts?: boolean | EventListenerOptions
+    ) {
+      if (type === 'touchmove' && live.has(this)) live.set(this, live.get(this)! - 1);
+      return rem.call(this, type, fn, opts);
+    });
+    return () => [...live.values()].reduce((n, v) => n + v, 0);
+  }
+
+  it('dragSource, resizeSource and tabSource add it on enable and remove it on disable/destroy', () => {
+    const count = trackTouchmove();
+    const el = () => document.body.appendChild(document.createElement('div'));
+    const d = dragSource(el(), { id: 'a', enabled: false });
+    const r = resizeSource(el(), { id: 'a', edge: 'corner', metrics: GRID, enabled: false });
+    const t = tabSource(el(), { tabId: 't1', enabled: false });
+    expect(count()).toBe(0); // view mode: none at all
+    d.update!({ id: 'a', enabled: true });
+    r.update!({ id: 'a', edge: 'corner', metrics: GRID, enabled: true });
+    t.update!({ tabId: 't1', enabled: true });
+    expect(count()).toBe(3);
+    d.update!({ id: 'a', enabled: true }); // re-enabling adds no duplicate
+    expect(count()).toBe(3);
+    d.update!({ id: 'a', enabled: false });
+    expect(count()).toBe(2);
+    r.destroy!();
+    t.destroy!();
+    d.destroy!();
+    expect(count()).toBe(0);
+  });
+
+  it('a view-mode canvas registers no non-passive touchmove listener; entering edit mode adds them', async () => {
+    vi.stubGlobal('ResizeObserver', FakeRO);
+    const count = trackTouchmove();
+    const d = draft();
+    const view = render(TabCanvas, { dashboard: d, tab: d.tabs[0], editing: false });
+    await tick();
+    expect(view.container.querySelector('[data-node-id="a"]')).toBeTruthy();
+    expect(count()).toBe(0);
+    await view.rerender({ dashboard: d, tab: d.tabs[0], editing: true });
+    await tick();
+    expect(count()).toBeGreaterThan(0);
   });
 });

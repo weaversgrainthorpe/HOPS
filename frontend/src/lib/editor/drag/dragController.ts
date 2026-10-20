@@ -1312,6 +1312,26 @@ function claimable(e: PointerEvent): boolean {
   return e.pointerType === 'touch' || e.button === 0;
 }
 
+/**
+ * The non-passive `touchmove` guard a drag source needs, present ONLY while editing is enabled.
+ * Browsers only honour preventDefault on a touchmove whose listener was registered non-passive
+ * BEFORE the touch began, so it is added as soon as the source is enabled (entering edit mode
+ * re-runs the action's update, well before any edit-mode touch). In view mode there is none: a
+ * non-passive touch listener makes the browser wait on the main thread before scrolling, which
+ * is jank on the low-end wall tablets (Tenet 4).
+ */
+function touchGuard(el: HTMLElement, enabled: boolean) {
+  let on = false;
+  const set = (want: boolean) => {
+    if (want === on) return;
+    on = want;
+    if (want) el.addEventListener('touchmove', onTouchMove, { passive: false });
+    else el.removeEventListener('touchmove', onTouchMove);
+  };
+  set(enabled);
+  return set;
+}
+
 export interface DragSourceParams {
   id: string;
   enabled: boolean;
@@ -1333,18 +1353,16 @@ export function dragSource(el: HTMLElement, params: DragSourceParams) {
   };
   el.addEventListener('pointerdown', down);
   el.addEventListener('dragstart', nativeDrag);
-  // Browsers only honour preventDefault on a touchmove whose listener was registered non-passive
-  // BEFORE the touch began, so this one is permanent on every item (it does nothing unless a touch
-  // press is drag-ready or a drag is live, so ordinary scrolling over items is unaffected).
-  el.addEventListener('touchmove', onTouchMove, { passive: false });
+  const guard = touchGuard(el, prm.enabled);
   return {
     update(next: DragSourceParams) {
       prm = next;
+      guard(prm.enabled);
     },
     destroy() {
       el.removeEventListener('pointerdown', down);
       el.removeEventListener('dragstart', nativeDrag);
-      el.removeEventListener('touchmove', onTouchMove);
+      guard(false);
       if (press && !current && press.id === prm.id) endPress();
     }
   };
@@ -1376,14 +1394,15 @@ export function resizeSource(el: HTMLElement, params: ResizeSourceParams) {
     }
   };
   el.addEventListener('pointerdown', down);
-  el.addEventListener('touchmove', onTouchMove, { passive: false });
+  const guard = touchGuard(el, prm.enabled);
   return {
     update(next: ResizeSourceParams) {
       prm = next;
+      guard(prm.enabled);
     },
     destroy() {
       el.removeEventListener('pointerdown', down);
-      el.removeEventListener('touchmove', onTouchMove);
+      guard(false);
       if (press && !current && press.resize?.id === prm.id) endPress();
     }
   };
@@ -1434,14 +1453,15 @@ export function tabSource(el: HTMLElement, params: TabSourceParams) {
     begin(e, el, undefined, undefined, prm.tabId);
   };
   el.addEventListener('pointerdown', down);
-  el.addEventListener('touchmove', onTouchMove, { passive: false });
+  const guard = touchGuard(el, prm.enabled);
   return {
     update(next: TabSourceParams) {
       prm = next;
+      guard(prm.enabled);
     },
     destroy() {
       el.removeEventListener('pointerdown', down);
-      el.removeEventListener('touchmove', onTouchMove);
+      guard(false);
       if (press && !current && press.tab === prm.tabId) endPress();
     }
   };
