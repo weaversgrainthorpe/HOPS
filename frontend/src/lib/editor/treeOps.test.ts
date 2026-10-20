@@ -311,6 +311,38 @@ describe('setZ', () => {
     expect(byId(rootOf(b), 'c').placement.z).toBe(-1);
     expect(() => setZ(d, 'nope', 'back')).toThrow(TreeOpError);
   });
+
+  const zDash = (zs: Record<string, number>): LayoutDashboard =>
+    deepFreeze({
+      id: 'd', name: 'D', path: '/d', revision: 1,
+      tabs: [{ id: 't1', name: 'One', layout: 'free', root: { columns: 160, children: Object.entries(zs).map(([id, z]) => tile(id, p(0, 0, 8, 8, z))) } }]
+    } as LayoutDashboard);
+  const zOf = (d: LayoutDashboard, id: string) => byId(rootOf(d), id).placement.z!;
+
+  it('reads stored z clamped to ±1000 (an out-of-range z does not block forward / back)', () => {
+    const d = zDash({ a: 0, b: 5000 });
+    const f = setZ(d, 'a', 'forward');
+    expect(zOf(f, 'a')).toBeGreaterThan(Math.min(1000, zOf(f, 'b')));
+    expect(zOf(f, 'a')).toBeLessThanOrEqual(1000);
+  });
+
+  it('at the +1000 limit with a tie, siblings are renumbered (stacking kept) so forward really moves past', () => {
+    const d = zDash({ a: 1000, b: 1000, c: 3 });
+    const f = setZ(d, 'a', 'forward'); // a ties b at the limit, below it in DOM order
+    expect(f).not.toBe(d);
+    expect(zOf(f, 'a')).toBeGreaterThan(zOf(f, 'b'));
+    expect(zOf(f, 'b')).toBeGreaterThan(zOf(f, 'c')); // the others keep their stacking
+    expect(zOf(f, 'a')).toBeLessThanOrEqual(1000);
+  });
+
+  it('at the -1000 limit with a tie, back renumbers and moves below', () => {
+    const d = zDash({ a: -1000, b: -1000, c: 7 });
+    const f = setZ(d, 'b', 'back');
+    expect(f).not.toBe(d);
+    expect(zOf(f, 'b')).toBeLessThan(zOf(f, 'a'));
+    expect(zOf(f, 'a')).toBeLessThan(zOf(f, 'c'));
+    expect(zOf(f, 'b')).toBeGreaterThanOrEqual(-1000);
+  });
 });
 
 describe('tabs', () => {

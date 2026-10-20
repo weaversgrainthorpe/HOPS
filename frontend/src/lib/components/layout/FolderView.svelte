@@ -100,6 +100,7 @@
     aria-haspopup="dialog"
     aria-label={collapsedLabel}
     aria-pressed={editing ? selected : undefined}
+    aria-describedby={editing ? `resize-hint-${folder.id}` : undefined}
     style:--group-bg={folder.color || 'var(--bg-secondary)'}
     style:--group-opacity={folder.opacity !== undefined ? folder.opacity : 0.95}
     style:color={textColor}
@@ -133,6 +134,10 @@
     {/if}
     <span class="collapsed-name">{folder.name}</span>
   </div>
+  {#if editing}
+    <!-- The tooltip's hint, also for touch and screen readers (no handles on a collapsed folder). -->
+    <span id="resize-hint-{folder.id}" class="sr-only">{COLLAPSED_HINT}</span>
+  {/if}
   {#if views && !$editMode && differsFromSaved(saved, remembered)}
     <span class="tile-restore">
       <FolderControls dashboardId={views.dashboardId} folderId={folder.id} {remembered} {saved} variant="tile" />

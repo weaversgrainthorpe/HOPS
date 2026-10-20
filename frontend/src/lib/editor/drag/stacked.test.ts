@@ -159,6 +159,25 @@ describe('stacked (phone) drag: reorder in reading order', () => {
     expect(get(session)!.undo.length).toBe(1);
   });
 
+  it('the first phone reorder in a session says it also moves items in the wide layout; once per session', async () => {
+    const { toast } = await import('$lib/stores/toast');
+    const { resetEditSessionForTests } = await import('$lib/stores/editSession');
+    const NOTICE = 'Reordering on a narrow screen also moves these items in the wide layout';
+    const spy = vi.spyOn(toast, 'info');
+    dragTo('a', [60, 60], [330, 60]);
+    drop(330, 60);
+    expect(spy.mock.calls.filter((c) => c[0] === NOTICE).length).toBe(1);
+    dragTo('b', [180, 60], [20, 60]);
+    drop(20, 60);
+    expect(spy.mock.calls.filter((c) => c[0] === NOTICE).length).toBe(1);
+    resetEditSessionForTests();
+    setLayout([phoneDash()]);
+    startSession('d1');
+    dragTo('a', [60, 60], [330, 60]);
+    drop(330, 60);
+    expect(spy.mock.calls.filter((c) => c[0] === NOTICE).length).toBe(2);
+  });
+
   it('dropping d on the left half of a puts it first', () => {
     dragTo('d', [60, 180], [20, 60]);
     drop(20, 60);

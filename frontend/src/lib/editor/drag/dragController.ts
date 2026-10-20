@@ -108,6 +108,10 @@ export interface DragState {
   resize?: {
     id: string; edge: ResizeEdge; startW: number; startH: number; storedH: number;
     x0: number; y0: number; metrics: ContainerMetrics;
+    /** Page scroll at the press and now: scrolling counts as travel (the content moved under the pointer). */
+    sx0: number; sy0: number; sx: number; sy: number;
+    /** The container's content origin (viewport px) at the press; the preview origin follows the scroll. */
+    view0?: { left: number; top: number };
   };
   /** Where the first item was grabbed, as a fraction of its rendered box (0..1). */
   grab?: { fx: number; fy: number };
@@ -127,6 +131,8 @@ export interface DragEnv {
   scrollBy(dx: number, dy: number): void;
   /** Scroll a panel (an overlay body) by dy px. */
   scrollElBy(el: Element, dy: number): void;
+  /** The page's scroll offset (no layout read). */
+  scroll(): { x: number; y: number };
 }
 
 const domEnv: DragEnv = {
@@ -138,7 +144,8 @@ const domEnv: DragEnv = {
   scrollBy: (dx, dy) => window.scrollBy(dx, dy),
   scrollElBy: (el, dy) => {
     (el as HTMLElement).scrollTop += dy;
-  }
+  },
+  scroll: () => ({ x: window.scrollX || 0, y: window.scrollY || 0 })
 };
 let env: DragEnv = domEnv;
 
@@ -598,8 +605,8 @@ export function resolveResize(state: DragState, draft: LayoutDashboard): DropTar
   if (!r) return invalid('Nothing is being resized.');
   const m = r.metrics;
   if (!(m.unitPx > 0) || !(m.rowPx > 0)) return invalid("That area can't be measured right now; try again.");
-  const dw = Math.round((state.pointer.x - r.x0) / m.unitPx);
-  const dh = Math.round((state.pointer.y - r.y0) / m.rowPx);
+  const dw = Math.round((state.pointer.x - r.x0 + (r.sx - r.sx0)) / m.unitPx);
+  const dh = Math.round((state.pointer.y - r.y0 + (r.sy - r.sy0)) / m.rowPx);
   const w = r.edge === 'bottom' ? r.startW : Math.max(1, r.startW + dw);
   const h = r.edge === 'right' ? r.storedH : Math.max(1, r.startH + dh);
   return memoised(JSON.stringify(['resize', r.id, w, h]), draft, () => resizeTarget(draft, r.id, w, h));
@@ -735,7 +742,17 @@ export function commitDrop(state: DragState): void {
     newIds.forEach((id) => toggleNode(id, true));
   }
   announce(label, before);
+  // Ruling 24: the first phone (stacked) reorder of a session says what else it changes.
+  if (t.kind === 'place' && t.marker && !phoneNoticeShown) {
+    phoneNoticeShown = true;
+    toast.info(PHONE_REORDER_NOTICE);
+  }
 }
+
+/** Shown once per edit session, on its first stacked (phone) reorder (Ruling 24). */
+export const PHONE_REORDER_NOTICE = 'Reordering on a narrow screen also moves these items in the wide layout';
+let phoneNoticeShown = false;
+let phoneNoticeSession: string | null = null;
 
 // ---------------------------------------------------------------- the store
 
@@ -755,7 +772,7 @@ interface Press {
   /** The tab pressed (tab reorder). */
   tab?: string;
   /** A resize handle pressed: its node, edge and the container's rendered metrics. */
-  resize?: { id: string; edge: ResizeEdge; metrics: ContainerMetrics };
+  resize?: { id: string; edge: ResizeEdge; metrics: ContainerMetrics; scroll: { x: number; y: number } };
   rect?: { left: number; top: number; width: number; height: number };
   onMenu?: (x: number, y: number, target: EventTarget | null) => void;
   ready: boolean;
@@ -806,7 +823,11 @@ function grabOf(p: Press, rect: { left: number; top: number; width: number; heig
 function beginDragging(d: LayoutDashboard, s: DragState) {
   draftAtStart = d;
   editorMenu.set(null);
-  if (typeof document !== 'undefined') document.body.classList.add('hops-dragging');
+  if (typeof document !== 'undefined') {
+    // A resize shows its edge's resize cursor; an item or tab drag shows "grabbing".
+    if (s.resize) document.body.classList.add('hops-resizing', `hops-resize-${s.resize.edge}`);
+    else document.body.classList.add('hops-dragging');
+  }
   setState(s);
   pending = { ...s.pointer };
   schedule();
@@ -852,6 +873,7 @@ function startResize(p: Press, x: number, y: number) {
   // A free folder can render taller than its stored height (content never clips): start from what is shown.
   const shownH = rect && rect.height > 0 ? Math.round(rect.height / m.rowPx) : 0;
   const b = nodeBox(stored, m);
+  const view0 = rect ? { left: rect.left - b.leftPx, top: rect.top - b.topPx } : undefined;
   beginDragging(d, {
     ids: [],
     copy: false,
@@ -859,9 +881,10 @@ function startResize(p: Press, x: number, y: number) {
     target: null,
     resize: {
       id: spec.id, edge: spec.edge, startW: stored.w, startH: Math.max(stored.h, shownH), storedH: stored.h,
-      x0: p.x, y0: p.y, metrics: m
+      x0: p.x, y0: p.y, metrics: m,
+      sx0: spec.scroll.x, sy0: spec.scroll.y, sx: spec.scroll.x, sy: spec.scroll.y, view0
     },
-    view: rect ? { left: rect.left - b.leftPx, top: rect.top - b.topPx, metrics: m } : undefined
+    view: view0 ? { ...view0, metrics: m } : undefined
   });
 }
 
@@ -906,8 +929,12 @@ function frame() {
   const at = pending ?? s.pointer;
   pending = null;
   if (s.resize) {
-    // A resize reads no layout: the size follows the pointer's travel (resolveResize).
-    const next: DragState = { ...s, pointer: { x: at.x, y: at.y } };
+    // A resize reads no layout: the size follows the pointer's travel plus any page scroll
+    // (resolveResize), and the preview's origin moves with the scrolled content.
+    const sc = env.scroll();
+    const r = { ...s.resize, sx: sc.x, sy: sc.y };
+    const next: DragState = { ...s, pointer: { x: at.x, y: at.y }, resize: r };
+    if (r.view0) next.view = { left: r.view0.left - (r.sx - r.sx0), top: r.view0.top - (r.sy - r.sy0), metrics: r.metrics };
     next.target = resolveResize(next, d);
     setState(next);
     return;
@@ -1092,7 +1119,9 @@ function stopDrag() {
   lastHit = null;
   draftAtStart = null;
   setState(null);
-  if (typeof document !== 'undefined') document.body.classList.remove('hops-dragging');
+  if (typeof document !== 'undefined') {
+    document.body.classList.remove('hops-dragging', 'hops-resizing', 'hops-resize-corner', 'hops-resize-right', 'hops-resize-bottom');
+  }
 }
 
 /** Cancel a drag in progress: nothing changes, and the user is told so. */
@@ -1193,6 +1222,11 @@ function onKeyUp(e: KeyboardEvent) {
   if (current && (e.key === 'Control' || e.key === 'Meta')) reresolve(e.ctrlKey || e.metaKey);
 }
 
+/** The page scrolled during a resize: re-resolve (the content moved under the pointer). */
+function onScroll() {
+  if (current?.resize) schedule();
+}
+
 /** A touch press owns the long-press: no native context menu (Android) while it is live. */
 function onContextMenu(e: Event) {
   if (press?.touch || current) {
@@ -1219,6 +1253,7 @@ function attach() {
   window.addEventListener('keyup', onKeyUp, { capture: true });
   window.addEventListener('contextmenu', onContextMenu, { capture: true });
   window.addEventListener('touchmove', onTouchMove, { passive: false });
+  window.addEventListener('scroll', onScroll, { passive: true });
 }
 function detach() {
   if (!attached || current) return;
@@ -1232,6 +1267,7 @@ function detach() {
   window.removeEventListener('keyup', onKeyUp, { capture: true });
   window.removeEventListener('contextmenu', onContextMenu, { capture: true });
   window.removeEventListener('touchmove', onTouchMove);
+  window.removeEventListener('scroll', onScroll);
 }
 
 function begin(e: PointerEvent, el: HTMLElement, id: string | undefined, onMenu: Press['onMenu'], tab?: string) {
@@ -1335,7 +1371,7 @@ export function resizeSource(el: HTMLElement, params: ResizeSourceParams) {
     const nodeEl = (el.closest('[data-node-id]') as HTMLElement | null) ?? el;
     begin(e, nodeEl, undefined, undefined);
     if (press) {
-      press.resize = { id: prm.id, edge: prm.edge, metrics: prm.metrics };
+      press.resize = { id: prm.id, edge: prm.edge, metrics: prm.metrics, scroll: env.scroll() };
       press.rect = env.measure(nodeEl); // measured on press, never in pointermove
     }
   };
@@ -1470,6 +1506,12 @@ export function switchTabWithinDrag(fn: () => void): void {
 // A drag never survives a change to the draft it was resolved against (an undo, a save
 // rebase, the session ending): its highlight would be stale, so it is cancelled.
 session.subscribe((s) => {
+  // A new session (none, or another dashboard) shows the phone reorder notice again.
+  const sid = s?.dashboardId ?? null;
+  if (sid !== phoneNoticeSession) {
+    phoneNoticeSession = sid;
+    phoneNoticeShown = false;
+  }
   if (current && s?.draft !== draftAtStart) {
     cancelDrag('The dashboard changed during the drag, so nothing was dropped.');
   }

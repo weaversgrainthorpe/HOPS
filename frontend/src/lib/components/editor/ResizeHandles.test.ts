@@ -32,6 +32,7 @@ class RO {
 }
 
 let frames: FrameRequestCallback[] = [];
+let scrollPos = { x: 0, y: 0 };
 let rects: Record<string, { left: number; top: number; width: number; height: number }> = {};
 function flush() {
   const f = frames;
@@ -50,7 +51,8 @@ function env() {
     },
     measure: (el) => rects[el.closest('[data-node-id]')?.getAttribute('data-node-id') ?? ''] ?? { left: 0, top: 0, width: 0, height: 0 },
     viewport: () => ({ width: 3000, height: 3000 }),
-    scrollBy: () => {}
+    scrollBy: () => {},
+    scroll: () => scrollPos
   });
 }
 const pe = (type: string, x: number, y: number) =>
@@ -84,6 +86,7 @@ beforeEach(() => {
   startSession();
   setActiveTab('t1');
   frames = [];
+  scrollPos = { x: 0, y: 0 };
   // t1 at 1440 px: 120 px cells. f1 sits at (0, 1) 4 × 3.
   rects = { f1: { left: 0, top: 120, width: 480, height: 360 }, fa: { left: 0, top: 0, width: 128, height: 128 } };
   env();
@@ -180,6 +183,59 @@ describe('resize handles', () => {
   });
 });
 
+describe('resize follow-ups (fix round 1)', () => {
+  it('scrolling during a resize counts as travel, and the preview origin follows the content', async () => {
+    const { container } = canvas();
+    await tick();
+    resizeDrag(handle(container, 'f1', 'bottom')!, 240, 478, 0, 6);
+    const v0 = get(drag)!.view!;
+    expect(v0.top).toBe(0);
+    scrollPos = { x: 0, y: 240 }; // the page scrolls two cells down, the pointer stays put
+    window.dispatchEvent(new Event('scroll'));
+    flush();
+    const s = get(drag)!;
+    expect(s.view!.top).toBe(-240); // the container moved up the screen with the page
+    const t = s.target;
+    if (t?.kind !== 'resize') throw new Error('not a resize');
+    expect(t.at.h).toBe(5);
+    document.body.dispatchEvent(pe('pointerup', 240, 478));
+    expect(nodeIn(draft(), 'f1')!.placement).toMatchObject({ w: 4, h: 5 });
+  });
+
+  it('the cursor follows the edge while resizing, never "grabbing"; it is cleared afterwards', async () => {
+    const { container } = canvas();
+    await tick();
+    for (const [edge, cls] of [['corner', 'hops-resize-corner'], ['right', 'hops-resize-right'], ['bottom', 'hops-resize-bottom']] as const) {
+      resizeDrag(handle(container, 'f1', edge)!, 400, 400, 10, 10);
+      expect(document.body.classList.contains(cls)).toBe(true);
+      expect(document.body.classList.contains('hops-dragging')).toBe(false);
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+      expect(document.body.classList.contains(cls)).toBe(false);
+      document.body.dispatchEvent(pe('pointerup', 410, 410));
+    }
+  });
+
+  it('Shift+Arrow is ignored while a pointer drag is live', async () => {
+    const { container } = canvas();
+    render(EditToolbar, { tabId: 't1', onAddTab: () => {} });
+    await tick();
+    toggleNode('f1', false);
+    resizeDrag(handle(container, 'f1', 'right')!, 478, 300, 130, 0);
+    const before = draft();
+    await fireEvent.keyDown(window, { key: 'ArrowRight', shiftKey: true });
+    expect(draft()).toBe(before);
+  });
+
+  it('a collapsed folder in edit mode describes the resize hint to screen readers', async () => {
+    const { container } = canvas();
+    await tick();
+    const tileEl = container.querySelector('[data-node-id="c1"] [role="button"]') as HTMLElement;
+    const ref = tileEl.getAttribute('aria-describedby');
+    expect(ref).toBeTruthy();
+    expect(document.getElementById(ref!)?.textContent).toMatch(/collapsed.*expand/i);
+  });
+});
+
 describe('keyboard resize and z-order', () => {
   it('Shift+Arrow grows / shrinks the selected folder by one cell (one undo step each)', async () => {
     render(EditToolbar, { tabId: 't1', onAddTab: () => {} });
@@ -235,6 +291,16 @@ describe('keyboard resize and z-order', () => {
     const before = draft();
     await fireEvent.keyDown(input, { key: ']', ctrlKey: true });
     expect(draft()).toBe(before);
+  });
+
+  it('Ctrl with a key that is not ] / [ (another layout\'s BracketRight key, e.g. "+") is left alone', async () => {
+    render(EditToolbar, { tabId: 't2', onAddTab: () => {} });
+    toggleNode('fa', false);
+    const before = draft();
+    const ev = new KeyboardEvent('keydown', { key: '+', code: 'BracketRight', ctrlKey: true, bubbles: true, cancelable: true });
+    window.dispatchEvent(ev);
+    expect(draft()).toBe(before);
+    expect(ev.defaultPrevented).toBe(false);
   });
 
   it('Ctrl+] in a grid container changes nothing and says z-order is for free layouts', async () => {

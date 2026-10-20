@@ -212,6 +212,22 @@
     color: white;
     font-size: 0.8125rem;
   }
+  :global(body.hops-resizing) {
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  :global(body.hops-resize-corner),
+  :global(body.hops-resize-corner *) {
+    cursor: nwse-resize !important;
+  }
+  :global(body.hops-resize-right),
+  :global(body.hops-resize-right *) {
+    cursor: ew-resize !important;
+  }
+  :global(body.hops-resize-bottom),
+  :global(body.hops-resize-bottom *) {
+    cursor: ns-resize !important;
+  }
   :global(body.hops-dragging) {
     user-select: none;
     -webkit-user-select: none;

@@ -506,17 +506,42 @@ export function resizeNode(
   });
 }
 
+const Z_LIMIT = 1000;
+/** A node's z as stored, read the way the renderer reads it: finite, truncated, within ±1000. */
+function zOf(n: LayoutNode | undefined): number {
+  const z = n?.placement?.z;
+  return typeof z === 'number' && Number.isFinite(z) ? Math.min(Z_LIMIT, Math.max(-Z_LIMIT, Math.trunc(z))) : 0;
+}
+
+/**
+ * Bring forward (above every sibling) / send back (below every sibling). Unchanged → the same
+ * dashboard. At the ±1000 limit the siblings are first renumbered 0..n-1 in their current stacking
+ * order (z, then document order, as rendered), so a tie at the limit still moves past.
+ */
 export function setZ(d: LayoutDashboard, id: string, dir: 'forward' | 'back'): LayoutDashboard {
   const node = findNode(d, id);
   const loc = locate(d, id)!;
-  const r = resolveRef(d, { tabId: loc.tabId, folderId: loc.folderChain[loc.folderChain.length - 1] });
-  const others = kids(r.container).filter((n) => n.id !== id).map((n) => n.placement?.z ?? 0);
-  const cur = node.placement.z ?? 0;
-  let z = cur;
-  if (dir === 'forward' && others.length && Math.max(...others) >= cur) z = Math.min(1000, Math.max(...others) + 1);
-  if (dir === 'back' && others.length && Math.min(...others) <= cur) z = Math.max(-1000, Math.min(...others) - 1);
-  if (z === cur) return d;
-  return mapTabs(d, (n) => (n.id === id ? ({ ...n, placement: { ...n.placement, z } } as LayoutNode) : n));
+  const ref: ContainerRef = { tabId: loc.tabId, folderId: loc.folderChain[loc.folderChain.length - 1] };
+  const r = resolveRef(d, ref);
+  const list = kids(r.container);
+  const others = list.filter((n) => n.id !== id).map(zOf);
+  const cur = zOf(node);
+  if (others.length === 0) return d;
+  const top = Math.max(...others);
+  const bottom = Math.min(...others);
+  if (dir === 'forward' ? top < cur : bottom > cur) return d; // already in front / behind
+  const want = dir === 'forward' ? top + 1 : bottom - 1;
+  if (want <= Z_LIMIT && want >= -Z_LIMIT) {
+    return mapTabs(d, (n) => (n.id === id ? ({ ...n, placement: { ...n.placement, z: want } } as LayoutNode) : n));
+  }
+  // At the limit: renumber in stacking order, then put this one past the end.
+  const stack = list.map((n, i) => ({ n, i })).filter((e) => e.n.id !== id).sort((a, b) => zOf(a.n) - zOf(b.n) || a.i - b.i);
+  const z = new Map<string, number>(stack.map((e, k) => [e.n.id, k]));
+  z.set(id, dir === 'forward' ? stack.length : -1);
+  return editContainer(d, ref, (c) => ({
+    ...c,
+    children: kids(c).map((n) => (z.has(n.id) && n.placement ? ({ ...n, placement: { ...n.placement, z: z.get(n.id) } } as LayoutNode) : n))
+  }));
 }
 
 // ---------------------------------------------------------------- tabs

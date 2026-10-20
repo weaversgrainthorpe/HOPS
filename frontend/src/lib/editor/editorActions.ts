@@ -286,8 +286,14 @@ export function setDisplay(id: string, display: FolderNode['display']): boolean 
   return apply(display === 'collapsed' ? 'Start collapsed' : 'Start expanded', (dd) => setFolderDisplay(dd, id, display));
 }
 
+/** Bring forward / Send back (menu and Ctrl+] / Ctrl+[): one undo step, or a toast when already there. */
 export function zOrder(id: string, dir: 'forward' | 'back'): boolean {
-  return apply(dir === 'forward' ? 'Bring forward' : 'Send back', (dd) => setZ(dd, id, dir));
+  const before = currentDraft();
+  const ok = apply(dir === 'forward' ? 'Bring forward' : 'Send back', (dd) => setZ(dd, id, dir));
+  if (ok && before && currentDraft() === before) {
+    toast.info(dir === 'forward' ? 'It is already in front of everything here.' : 'It is already behind everything here.');
+  }
+  return ok;
 }
 
 /**
@@ -316,12 +322,7 @@ export function zOrderSelection(ids: string[], dir: 'forward' | 'back'): boolean
     toast.info('Bring forward / Send back are for free layouts — items in a grid never overlap.');
     return false;
   }
-  const before = currentDraft();
-  const ok = zOrder(ids[0], dir);
-  if (ok && currentDraft() === before) {
-    toast.info(dir === 'forward' ? 'It is already in front of everything here.' : 'It is already behind everything here.');
-  }
-  return ok;
+  return zOrder(ids[0], dir);
 }
 
 /** Move or copy items to another container on THIS dashboard (first free cells). */

@@ -7,6 +7,8 @@
   import { deleteWithConfirm, zOrderSelection } from '$lib/editor/editorActions';
   import { NARROW_HINT, resizeBy } from '$lib/editor/resize';
   import { toast } from '$lib/stores/toast';
+  import { get } from 'svelte/store';
+  import { drag } from '$lib/editor/drag/dragController';
 
   interface Props {
     /** The active tab: adds and pastes without a target go to its root, or the open folder overlay. */
@@ -59,6 +61,7 @@
     // Shift+Arrow: resize the selected item by one cell (grid) or one 8 px unit (free).
     const grow = ARROWS[e.key];
     if (grow && e.shiftKey && !mod && !e.altKey) {
+      if (get(drag)) return; // a pointer drag or resize owns the item until it ends
       const ids = selectionInDraft();
       if (ids.length === 0) return; // nothing selected: leave Shift+Arrow to the page
       e.preventDefault();
@@ -72,7 +75,8 @@
       if (k === 's' && !e.shiftKey) { e.preventDefault(); void doSave(); return; }
       if (e.shiftKey) return;
       // Ctrl+] / Ctrl+[: bring forward / send back (free layouts).
-      const z = k === ']' || e.code === 'BracketRight' ? 'forward' : k === '[' || e.code === 'BracketLeft' ? 'back' : null;
+      // By the character typed (e.key), never e.code: on other layouts that key is e.g. "+" (zoom).
+      const z = k === ']' ? 'forward' : k === '[' ? 'back' : null;
       if (z) {
         const ids = selectionInDraft();
         if (ids.length === 0) return;
