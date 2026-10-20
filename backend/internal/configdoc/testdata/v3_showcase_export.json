@@ -522,6 +522,178 @@
                     "h": 2
                   },
                   "description": "A note tile with text only."
+                },
+                {
+                  "id": "sc-f-slide",
+                  "kind": "folder",
+                  "name": "Slideshow folder",
+                  "layout": "inherit",
+                  "display": "expanded",
+                  "shape": "rounded",
+                  "showTitle": true,
+                  "placement": {
+                    "x": 0,
+                    "y": 9,
+                    "w": 6,
+                    "h": 3
+                  },
+                  "content": {
+                    "columns": 6,
+                    "children": [
+                      {
+                        "id": "sc-slide-1",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Slide 1",
+                        "url": "https://sc-slide-1.example.lan/",
+                        "icon": "mdi:lan",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 0,
+                        "placement": {
+                          "x": 0,
+                          "y": 0,
+                          "w": 1,
+                          "h": 1
+                        }
+                      },
+                      {
+                        "id": "sc-slide-2",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Slide 2",
+                        "url": "https://sc-slide-2.example.lan/",
+                        "icon": "mdi:lan",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 1,
+                        "placement": {
+                          "x": 1,
+                          "y": 0,
+                          "w": 1,
+                          "h": 1
+                        }
+                      }
+                    ]
+                  },
+                  "background": {
+                    "type": "slideshow",
+                    "value": "",
+                    "images": [
+                      "/presets/apps-dashboard.jpg",
+                      "/presets/blue-abstract.jpg"
+                    ],
+                    "interval": 8,
+                    "fit": "cover",
+                    "transition": "fade",
+                    "transitionDuration": 1,
+                    "opacity": 1
+                  }
+                },
+                {
+                  "id": "sc-f-see",
+                  "kind": "folder",
+                  "name": "See-through folder (opacity 0)",
+                  "layout": "inherit",
+                  "display": "expanded",
+                  "shape": "rounded",
+                  "showTitle": true,
+                  "placement": {
+                    "x": 6,
+                    "y": 9,
+                    "w": 6,
+                    "h": 3
+                  },
+                  "content": {
+                    "columns": 6,
+                    "children": [
+                      {
+                        "id": "sc-see-1",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "See 1",
+                        "url": "https://sc-see-1.example.lan/",
+                        "icon": "mdi:lan",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 0,
+                        "placement": {
+                          "x": 0,
+                          "y": 0,
+                          "w": 1,
+                          "h": 1
+                        }
+                      }
+                    ]
+                  },
+                  "background": {
+                    "type": "image",
+                    "value": "/presets/cosmic-clouds.jpg",
+                    "images": [],
+                    "interval": 0,
+                    "fit": "cover",
+                    "transition": "fade",
+                    "transitionDuration": 0,
+                    "opacity": 0
+                  }
+                },
+                {
+                  "id": "sc-f-off",
+                  "kind": "folder",
+                  "name": "Checks off folder",
+                  "layout": "inherit",
+                  "display": "expanded",
+                  "shape": "rounded",
+                  "showTitle": true,
+                  "placement": {
+                    "x": 0,
+                    "y": 12,
+                    "w": 6,
+                    "h": 3
+                  },
+                  "content": {
+                    "columns": 6,
+                    "children": [
+                      {
+                        "id": "sc-off-on",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Checked tile (on)",
+                        "url": "https://sc-off-on.example.lan/",
+                        "icon": "mdi:lan",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 0,
+                        "placement": {
+                          "x": 0,
+                          "y": 0,
+                          "w": 1,
+                          "h": 1
+                        },
+                        "statusCheck": {
+                          "enabled": true
+                        }
+                      },
+                      {
+                        "id": "sc-off-plain",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Unset tile (off)",
+                        "url": "https://sc-off-plain.example.lan/",
+                        "icon": "mdi:lan",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 1,
+                        "placement": {
+                          "x": 1,
+                          "y": 0,
+                          "w": 1,
+                          "h": 1
+                        }
+                      }
+                    ]
+                  },
+                  "statusChecksEnabled": false
                 }
               ]
             }
@@ -628,6 +800,18 @@
                   }
                 }
               ]
+            },
+            "background": {
+              "type": "image",
+              "value": "/presets/galaxy.jpg",
+              "images": [],
+              "interval": 0,
+              "fit": "cover",
+              "transition": "fade",
+              "transitionDuration": 0,
+              "overlayOpacity": 0,
+              "overlayBlur": 0,
+              "opacity": 0.6
             }
           },
           {
@@ -803,7 +987,19 @@
               ]
             }
           }
-        ]
+        ],
+        "background": {
+          "type": "image",
+          "value": "/presets/dark-gradient.jpg",
+          "images": [],
+          "interval": 0,
+          "fit": "cover",
+          "transition": "fade",
+          "transitionDuration": 0,
+          "overlayOpacity": 0.3,
+          "overlayBlur": 0,
+          "opacity": 1
+        }
       }
     ]
   }

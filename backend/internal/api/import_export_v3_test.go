@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/weaversgrainthorpe/HOPS/internal/configdoc"
+	"github.com/weaversgrainthorpe/HOPS/internal/settings"
 	"gopkg.in/yaml.v3"
 )
 
@@ -635,6 +636,75 @@ func TestImport_V3Showcase(t *testing.T) {
 	}
 	if iframeID == "" {
 		t.Error("no iframe tile under the collapsed level-3 folder")
+	}
+
+	// Layered backgrounds (M4): every shape verifies, the M4 update is a no-op
+	// on them, and only bundled preset pictures are used.
+	if bg, _ := dash["background"].(configdoc.Obj); bg == nil || bg["type"] != "image" {
+		t.Errorf("dashboard background = %v, want an image", dash["background"])
+	}
+	if bg, _ := tabs[1].(configdoc.Obj)["background"].(configdoc.Obj); bg == nil || bg["opacity"] != 0.6 {
+		t.Errorf("free tab background = %v, want opacity 0.6", tabs[1].(configdoc.Obj)["background"])
+	}
+	slide, _ := byID["sc-f-slide"]["background"].(configdoc.Obj)
+	if slide == nil || slide["type"] != "slideshow" || len(slide["images"].([]any)) != 2 {
+		t.Errorf("sc-f-slide background = %v, want a 2-image slideshow", byID["sc-f-slide"]["background"])
+	}
+	if bg, _ := byID["sc-f-see"]["background"].(configdoc.Obj); bg == nil || bg["opacity"] != float64(0) {
+		t.Errorf("sc-f-see background = %v, want opacity 0", byID["sc-f-see"]["background"])
+	}
+	for id, n := range byID {
+		bg, _ := n["background"].(configdoc.Obj)
+		if bg == nil {
+			continue
+		}
+		pics := []string{}
+		if v, _ := bg["value"].(string); v != "" && bg["type"] != "color" {
+			pics = append(pics, v)
+		}
+		imgs, _ := bg["images"].([]any)
+		for _, im := range imgs {
+			pics = append(pics, im.(string))
+		}
+		for _, pic := range pics {
+			if !strings.HasPrefix(pic, "/presets/") {
+				t.Errorf("%s: background picture %q is not a bundled preset", id, pic)
+				continue
+			}
+			if _, err := os.Stat("../assets/presets/" + strings.TrimPrefix(pic, "/presets/")); err != nil {
+				t.Errorf("%s: preset %q does not exist: %v", id, pic, err)
+			}
+		}
+	}
+	if _, changed, err := configdoc.UpdateBackgroundsV4(doc); err != nil || changed {
+		t.Errorf("UpdateBackgroundsV4 on the Showcase: changed=%v err=%v, want a no-op", changed, err)
+	}
+
+	// Layered status checks: a folder with checks off still checks its tile
+	// that is explicitly on; the existing tiles stay unresolved-off.
+	scSvc, err := settings.New(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gridTab := tabs[0].(configdoc.Obj)
+	offFolder := byID["sc-f-off"]
+	if offFolder == nil || offFolder["statusChecksEnabled"] != false {
+		t.Fatalf("sc-f-off should be a folder with statusChecksEnabled false: %v", offFolder)
+	}
+	on, src, by := configdoc.EffectiveStatusChecks(scSvc, dash, gridTab, []configdoc.Obj{offFolder}, byID["sc-off-on"])
+	if !on || src != configdoc.SourceTile || by != "sc-off-on" {
+		t.Errorf("sc-off-on resolves to %v/%s/%s, want true/tile/sc-off-on", on, src, by)
+	}
+	on, src, _ = configdoc.EffectiveStatusChecks(scSvc, dash, gridTab, []configdoc.Obj{offFolder}, byID["sc-off-plain"])
+	if on || src != configdoc.SourceTile {
+		t.Errorf("sc-off-plain resolves to %v/%s, want false/tile (unset tile is off)", on, src)
+	}
+	// Unchanged: tiles with no statusCheck stay off, sourced to the tile.
+	for _, id := range []string{"sc-r1", "sc-r2", "sc-r3", "sc-l1-t1"} {
+		on, src, _ := configdoc.EffectiveStatusChecks(scSvc, dash, gridTab, nil, byID[id])
+		if on || src != configdoc.SourceTile {
+			t.Errorf("%s resolves to %v/%s, want false/tile", id, on, src)
+		}
 	}
 
 	// Every icon is in the offline bundle.
