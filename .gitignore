@@ -64,3 +64,6 @@ tests/prerelease/test-results/
 tests/prerelease/playwright-report/
 tests/prerelease/auth.json
 test-results/
+
+# superpowers scratch (brainstorm mockups, SDD ledgers)
+/.superpowers/
