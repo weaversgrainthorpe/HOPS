@@ -44,7 +44,7 @@
   // svelte-ignore state_referenced_locally
   let transitionEffect = $state<'crossfade' | 'slide' | 'slide-up' | 'slide-down' | 'zoom' | 'zoom-out' | 'fade-black' | 'blur' | 'flip' | 'swirl' | 'wipe' | 'curtain' | 'circle' | 'diamond' | 'dissolve' | 'flash' | 'glitch' | 'kenburns' | 'random' | 'none'>(background?.transition || 'crossfade');
 
-  // Same pool used by BackgroundSlideshow when 'random' is selected.
+  // Same pool used by BackgroundLayer when 'random' is selected.
   const availableTransitions = [
     'crossfade', 'slide', 'slide-up', 'slide-down', 'zoom', 'zoom-out',
     'fade-black', 'blur', 'flip', 'kenburns', 'wipe', 'swirl',

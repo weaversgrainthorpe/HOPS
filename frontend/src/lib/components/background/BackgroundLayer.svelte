@@ -1,214 +1,303 @@
 <script lang="ts">
+  // One background surface: a colour, an image, or a slideshow, drawn either
+  // behind the whole viewport (scope="viewport") or filling its positioned
+  // parent box (scope="box"). Decorative only.
+  //
+  // Tenet 4: no per-frame JS. Transitions are CSS; an animating layer owns at
+  // most ONE setInterval plus the short curtain timeout, and both are cleared
+  // when animate turns off, when the background changes and on unmount.
+  //
+  // No silent failures: every URL that is refused (validation) or fails to
+  // load (preload error) is passed to onError, and when nothing can be shown
+  // the fallback colour is drawn instead of a blank.
   import type { Background } from '$lib/types';
-  import { onMount, onDestroy } from 'svelte';
+  import { untrack } from 'svelte';
+  import { isSafeBackgroundUrl, cssUrl } from './backgroundUrl';
 
   interface Props {
     background?: Background;
+    scope?: 'viewport' | 'box';
+    /** 0–1 opacity of this whole layer; defaults to background.opacity, then 1. */
+    opacity?: number;
+    /** false: the first image, still — no interval, no transitions. */
+    animate?: boolean;
+    onError?: (url: string) => void;
+    fallbackColor?: string;
   }
 
-  let { background }: Props = $props();
+  let {
+    background,
+    scope = 'viewport',
+    opacity,
+    animate = true,
+    onError,
+    fallbackColor = '#1e293b'
+  }: Props = $props();
 
-  let currentIndex = $state(0);
-  let intervalId: ReturnType<typeof setInterval> | undefined;
-
-  // Dual-layer system for smooth transitions
-  let layer1Visible = $state(true);
-  let layer1Image = $state('');
-  let layer2Image = $state('');
-
-  // Ken Burns animation variation tracking
-  let layer1KenBurnsVariant = $state(0);
-  let layer2KenBurnsVariant = $state(1);
-
-  // Curtain effect state
-  let curtainPreviousImage = $state('');
-  let curtainAnimating = $state(false);
-
-  // Available transitions for random selection (excluding 'random' and 'none')
+  // Available transitions for random selection (excluding 'random' and 'none').
   const availableTransitions = [
     'crossfade', 'slide', 'slide-up', 'slide-down', 'zoom', 'zoom-out',
     'fade-black', 'blur', 'flip', 'kenburns', 'wipe', 'swirl',
     'dissolve', 'flash', 'glitch', 'curtain', 'circle', 'diamond'
   ];
+  const randomTransition = () => availableTransitions[Math.floor(Math.random() * availableTransitions.length)];
 
-  // Current random transition (changes each slide)
-  let currentRandomTransition = $state(availableTransitions[Math.floor(Math.random() * availableTransitions.length)]);
+  // Dual-layer system for smooth transitions.
+  let layer1Visible = $state(true);
+  let layer1Image = $state('');
+  let layer2Image = $state('');
+  let layer1KenBurnsVariant = $state(0);
+  let layer2KenBurnsVariant = $state(1);
+  let curtainPreviousImage = $state('');
+  let curtainAnimating = $state(false);
+  let currentRandomTransition = $state(randomTransition());
+  /** Every configured image was refused or failed to load. */
+  let allFailed = $state(false);
 
-  // Get transition settings with defaults
-  let configuredTransition = $derived(background?.transition || 'crossfade');
-  let transitionEffect = $derived(configuredTransition === 'random' ? currentRandomTransition : configuredTransition);
-  let transitionDuration = $derived(background?.transitionDuration || 1.5);
+  const kind = $derived(background && !background.inherit ? background.type : undefined);
+  const isPicture = $derived(kind === 'image' || kind === 'slideshow');
 
-  // Function to pick a new random transition
-  function pickRandomTransition() {
-    const newTransition = availableTransitions[Math.floor(Math.random() * availableTransitions.length)];
-    currentRandomTransition = newTransition;
-  }
+  /** The configured image URLs, in order (unvalidated). */
+  const configured = $derived.by<string[]>(() => {
+    if (kind === 'image') return background?.value ? [background.value] : [];
+    if (kind === 'slideshow') return background?.images ? [...background.images] : [];
+    return [];
+  });
 
-  // Compute current image URL
-  let currentImageUrl = $derived(
-    !background ? '' :
-    background.type === 'image' ? (background.value || '') :
-    background.type === 'slideshow' && background.images && background.images.length > 0 ? background.images[currentIndex] :
-    ''
+  const configuredTransition = $derived(background?.transition || 'crossfade');
+  const transitionEffect = $derived(
+    !animate || kind !== 'slideshow' ? 'none'
+      : configuredTransition === 'random' ? currentRandomTransition : configuredTransition
   );
+  const transitionDuration = $derived(background?.transitionDuration || 1.5);
+  const intervalMs = $derived((background?.interval || 30) * 1000);
 
-  // Compute background size style
-  let backgroundSize = $derived.by(() => {
+  const backgroundSize = $derived.by(() => {
     const fit = background?.fit || 'cover';
-    if (fit === 'cover') return 'cover';
     if (fit === 'contain') return 'contain';
     if (fit === 'fill') return '100% 100%';
     return 'cover';
   });
 
-  // Initialize layers when image changes
-  $effect(() => {
-    if (currentImageUrl) {
-      if (layer1Visible) {
-        layer1Image = currentImageUrl;
-      } else {
-        layer2Image = currentImageUrl;
-      }
-    }
+  const layerOpacity = $derived.by(() => {
+    const o = opacity ?? background?.opacity;
+    if (typeof o !== 'number' || !Number.isFinite(o)) return undefined;
+    return String(Math.min(1, Math.max(0, o)));
   });
 
-  // Handle slideshow rotation with smooth crossfade
-  $effect(() => {
-    // Clear any existing interval
-    if (intervalId) {
-      clearInterval(intervalId);
-      intervalId = undefined;
+  // ---- timers and preloads (plain variables: never reactive) ----
+  let intervalId: ReturnType<typeof setInterval> | undefined;
+  let curtainId: ReturnType<typeof setTimeout> | undefined;
+  let pending: HTMLImageElement | undefined;
+  let generation = 0;
+
+  function stopAll() {
+    generation++;
+    if (intervalId !== undefined) clearInterval(intervalId);
+    if (curtainId !== undefined) clearTimeout(curtainId);
+    intervalId = undefined;
+    curtainId = undefined;
+    if (pending) {
+      pending.onload = null;
+      pending.onerror = null;
+      pending = undefined;
     }
+    curtainAnimating = false;
+  }
 
-    // Only start rotation if it's a slideshow with multiple images
-    if (
-      background?.type === 'slideshow' &&
-      background.images &&
-      background.images.length > 1
-    ) {
-      const interval = (background.interval || 30) * 1000; // Convert to milliseconds
+  function report(url: string) {
+    try {
+      onError?.(url);
+    } catch (e) {
+      console.error('BackgroundLayer onError handler threw', e);
+    }
+  }
 
-      // Initialize first image
-      layer1Image = background.images[0];
-      layer1Visible = true;
+  /** Load url off-screen; exactly one of ok/fail runs, and neither after a stop. */
+  function preload(url: string, ok: () => void, fail: () => void) {
+    const gen = generation;
+    const img = new Image();
+    pending = img;
+    img.onload = () => {
+      if (gen !== generation) return;
+      pending = undefined;
+      ok();
+    };
+    img.onerror = () => {
+      if (gen !== generation) return;
+      pending = undefined;
+      fail();
+    };
+    img.src = url;
+  }
 
-      intervalId = setInterval(() => {
-        // Pick a new random transition if configured
-        if (configuredTransition === 'random') {
-          pickRandomTransition();
+  // (Re)start only when what is shown or its timing actually changes — a new
+  // background object with the same content (e.g. a draft edit elsewhere)
+  // must not restart the slideshow.
+  const restartKey = $derived(JSON.stringify([kind, configured, animate, intervalMs]));
+
+  $effect(() => {
+    void restartKey;
+
+    untrack(() => {
+      const urls = configured;
+      const anim = animate;
+      const every = intervalMs;
+      const slideshow = kind === 'slideshow';
+      stopAll();
+      allFailed = false;
+      if (urls.length === 0) {
+        layer1Image = '';
+        layer2Image = '';
+        return;
+      }
+      const usable: string[] = [];
+      for (const u of urls) {
+        if (isSafeBackgroundUrl(u)) usable.push(u);
+        else report(String(u));
+      }
+      const failed = new Set<number>();
+      let current = -1;
+
+      const giveUp = () => {
+        stopAll();
+        layer1Image = '';
+        layer2Image = '';
+        allFailed = true;
+      };
+
+      /** Show the first usable image that loads, from index i on. */
+      const showFirst = (i: number) => {
+        if (i >= usable.length) return giveUp();
+        preload(usable[i], () => {
+          current = i;
+          layer1Image = cssUrl(usable[i]);
+          layer2Image = '';
+          layer1Visible = true;
+          if (anim && slideshow && usable.length > 1) intervalId = setInterval(advance, every);
+        }, () => {
+          failed.add(i);
+          report(usable[i]);
+          showFirst(i + 1);
+        });
+      };
+
+      /** Preload the next good slide after `from`, then swap to it. */
+      const tryNext = (from: number) => {
+        let next = -1;
+        for (let step = 1; step < usable.length; step++) {
+          const j = (from + step) % usable.length;
+          if (j === current) break;
+          if (!failed.has(j)) { next = j; break; }
         }
+        if (next < 0) {
+          // Only the current slide still loads: keep it, stop rotating.
+          if (intervalId !== undefined) clearInterval(intervalId);
+          intervalId = undefined;
+          return;
+        }
+        preload(usable[next], () => swapTo(next), () => {
+          failed.add(next);
+          report(usable[next]);
+          tryNext(next);
+        });
+      };
 
-        // For curtain effect, capture the current visible image
-        const currentVisibleImage = layer1Visible ? layer1Image : layer2Image;
+      const advance = () => {
+        if (pending) return; // the previous preload is still in flight
+        tryNext(current);
+      };
 
-        // Move to next image
-        currentIndex = (currentIndex + 1) % background.images!.length;
-        const nextImage = background.images![currentIndex];
-
-        // Update the hidden layer with the next image
+      const swapTo = (next: number) => {
+        if (configuredTransition === 'random') currentRandomTransition = randomTransition();
+        const previous = layer1Visible ? layer1Image : layer2Image;
+        current = next;
         if (layer1Visible) {
-          layer2Image = nextImage;
-          // Cycle Ken Burns variant for layer 2
+          layer2Image = cssUrl(usable[next]);
           layer2KenBurnsVariant = (layer2KenBurnsVariant + 2) % 4;
         } else {
-          layer1Image = nextImage;
-          // Cycle Ken Burns variant for layer 1
+          layer1Image = cssUrl(usable[next]);
           layer1KenBurnsVariant = (layer1KenBurnsVariant + 2) % 4;
         }
-
-        // Trigger curtain animation if curtain effect is selected
         if (transitionEffect === 'curtain') {
-          curtainPreviousImage = currentVisibleImage;
+          if (curtainId !== undefined) clearTimeout(curtainId);
+          curtainPreviousImage = previous;
           curtainAnimating = true;
-          setTimeout(() => {
+          curtainId = setTimeout(() => {
+            curtainId = undefined;
             curtainAnimating = false;
           }, transitionDuration * 1000);
         }
-
-        // Swap visibility to trigger crossfade
         layer1Visible = !layer1Visible;
-      }, interval);
-    }
+      };
 
-    // Cleanup on unmount or when background changes
-    return () => {
-      if (intervalId) {
-        clearInterval(intervalId);
-      }
-    };
-  });
+      if (usable.length === 0) return giveUp();
+      showFirst(0);
+    });
 
-  // Reset index when background changes
-  $effect(() => {
-    if (background?.type === 'slideshow') {
-      currentIndex = 0;
-      layer1Visible = true;
-    }
+    return stopAll;
   });
 </script>
 
-{#if background}
-  {#if background.type === 'color'}
-    <div class="background-color" style:background-color={background.value || '#1e293b'}></div>
-  {:else if background.type === 'image'}
-    {#if currentImageUrl}
+{#if kind}
+  <div
+    class="background-root scope-{scope}"
+    style:opacity={layerOpacity}
+    aria-hidden="true"
+  >
+    {#if kind === 'color'}
+      <div class="background-color" style:background-color={background?.value || '#1e293b'}></div>
+    {:else if isPicture && allFailed}
+      <div class="background-color background-fallback" style:background-color={fallbackColor}></div>
+    {:else if isPicture}
+      <!-- Dual-layer transition system -->
       <div
-        class="background-image"
-        style:background-image="url({currentImageUrl})"
+        class="background-layer layer-1 transition-{transitionEffect}"
+        class:visible={layer1Visible}
+        class:kenburns-0={transitionEffect === 'kenburns' && layer1KenBurnsVariant === 0}
+        class:kenburns-1={transitionEffect === 'kenburns' && layer1KenBurnsVariant === 1}
+        class:kenburns-2={transitionEffect === 'kenburns' && layer1KenBurnsVariant === 2}
+        class:kenburns-3={transitionEffect === 'kenburns' && layer1KenBurnsVariant === 3}
+        style:background-image={layer1Image || 'none'}
         style:background-size={backgroundSize}
+        style:--transition-duration="{transitionDuration}s"
       ></div>
+      <div
+        class="background-layer layer-2 transition-{transitionEffect}"
+        class:visible={!layer1Visible}
+        class:kenburns-0={transitionEffect === 'kenburns' && layer2KenBurnsVariant === 0}
+        class:kenburns-1={transitionEffect === 'kenburns' && layer2KenBurnsVariant === 1}
+        class:kenburns-2={transitionEffect === 'kenburns' && layer2KenBurnsVariant === 2}
+        class:kenburns-3={transitionEffect === 'kenburns' && layer2KenBurnsVariant === 3}
+        style:background-image={layer2Image || 'none'}
+        style:background-size={backgroundSize}
+        style:--transition-duration="{transitionDuration}s"
+      ></div>
+      <!-- Curtain overlay: shows the previous image splitting apart -->
+      {#if transitionEffect === 'curtain' && curtainAnimating}
+        <div class="curtain-overlay" style:--transition-duration="{transitionDuration}s">
+          <div
+            class="curtain-half curtain-left"
+            style:background-image={curtainPreviousImage || 'none'}
+            style:background-size={backgroundSize}
+          ></div>
+          <div
+            class="curtain-half curtain-right"
+            style:background-image={curtainPreviousImage || 'none'}
+            style:background-size={backgroundSize}
+          ></div>
+        </div>
+      {/if}
     {/if}
-  {:else if background.type === 'slideshow'}
-    <!-- Dual-layer transition system -->
-    <div
-      class="background-layer layer-1 transition-{transitionEffect}"
-      class:visible={layer1Visible}
-      class:kenburns-0={transitionEffect === 'kenburns' && layer1KenBurnsVariant === 0}
-      class:kenburns-1={transitionEffect === 'kenburns' && layer1KenBurnsVariant === 1}
-      class:kenburns-2={transitionEffect === 'kenburns' && layer1KenBurnsVariant === 2}
-      class:kenburns-3={transitionEffect === 'kenburns' && layer1KenBurnsVariant === 3}
-      style:background-image={layer1Image ? `url(${layer1Image})` : 'none'}
-      style:background-size={backgroundSize}
-      style:--transition-duration="{transitionDuration}s"
-    ></div>
-    <div
-      class="background-layer layer-2 transition-{transitionEffect}"
-      class:visible={!layer1Visible}
-      class:kenburns-0={transitionEffect === 'kenburns' && layer2KenBurnsVariant === 0}
-      class:kenburns-1={transitionEffect === 'kenburns' && layer2KenBurnsVariant === 1}
-      class:kenburns-2={transitionEffect === 'kenburns' && layer2KenBurnsVariant === 2}
-      class:kenburns-3={transitionEffect === 'kenburns' && layer2KenBurnsVariant === 3}
-      style:background-image={layer2Image ? `url(${layer2Image})` : 'none'}
-      style:background-size={backgroundSize}
-      style:--transition-duration="{transitionDuration}s"
-    ></div>
-    <!-- Curtain overlay: shows the previous image splitting apart -->
-    {#if transitionEffect === 'curtain' && curtainAnimating}
-      <div class="curtain-overlay" style:--transition-duration="{transitionDuration}s">
-        <div
-          class="curtain-half curtain-left"
-          style:background-image={curtainPreviousImage ? `url(${curtainPreviousImage})` : 'none'}
-          style:background-size={backgroundSize}
-        ></div>
-        <div
-          class="curtain-half curtain-right"
-          style:background-image={curtainPreviousImage ? `url(${curtainPreviousImage})` : 'none'}
-          style:background-size={backgroundSize}
-        ></div>
-      </div>
-    {/if}
-  {/if}
+  </div>
 {/if}
 
 <style>
-  .background-color,
-  .background-image,
-  .background-layer {
-    /* Use position:fixed so the background stays put as the user scrolls
-       through a tall tab. background-attachment: fixed is unreliable in
-       the presence of transformed/filtered ancestors (e.g. backdrop-filter
-       on the tab content wrapper). */
+  /* viewport: fixed behind the whole page, so the background stays put as the
+     user scrolls through a tall tab (background-attachment: fixed is
+     unreliable under transformed/filtered ancestors such as backdrop-filter on
+     the tab content wrapper). */
+  .background-root.scope-viewport {
     position: fixed;
     top: 0;
     left: 0;
@@ -217,9 +306,24 @@
     z-index: -1;
   }
 
-  .background-image {
-    background-position: center;
-    background-repeat: no-repeat;
+  /* box: fills its positioned parent and is clipped by the parent's radius. */
+  .background-root.scope-box {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    border-radius: inherit;
+  }
+
+  .background-root {
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  .background-color,
+  .background-layer {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
   }
 
   .background-layer {
@@ -508,11 +612,8 @@
 
   /* Curtain overlay - two halves that slide apart */
   .curtain-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
+    position: absolute;
+    inset: 0;
     z-index: 0;
     overflow: hidden;
     pointer-events: none;
