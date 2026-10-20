@@ -43,7 +43,8 @@ import {
   dashboardHref,
   noticesStale,
   dismissServerNotice,
-  saveGlobalSetting
+  saveGlobalSetting,
+  animatedFolderBackgroundsFor
 } from './config';
 import * as statusCheckBase from './statusCheckBase';
 import { toast } from './toast';
@@ -146,6 +147,35 @@ describe('server notices across writes (M4 Task 7)', () => {
     expect(get(config)?.notices ?? []).toEqual([]);
   });
 
+  it('overlapping re-reads: an older response resolving last never overwrites the newer one', async () => {
+    config.set({ ...makeConfig(), notices: [{ id: 'n0', text: 'held' }] });
+    const answers: ((c: Config) => void)[] = [];
+    vi.mocked(api.getConfig).mockImplementation(() => new Promise<Config>((r) => answers.push(r)));
+    applySavedLayout({ layout: doc(dash('a', 4)) });
+    applySavedLayout({ layout: doc(dash('a', 5)) });
+    expect(answers.length).toBe(2);
+    answers[1]({ ...makeConfig(dash('a', 5)), notices: [{ id: 'new', text: 'newer' }] });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(get(config)?.notices).toEqual([{ id: 'new', text: 'newer' }]);
+    answers[0]({ ...makeConfig(dash('a', 4)), notices: [{ id: 'old', text: 'older' }] });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(get(config)?.notices).toEqual([{ id: 'new', text: 'newer' }]);
+  });
+
+  it('overlapping re-reads: an older failure after a newer success does not mark the notices stale', async () => {
+    config.set({ ...makeConfig(), notices: [{ id: 'n0', text: 'held' }] });
+    const settle: { ok: (c: Config) => void; fail: (e: Error) => void }[] = [];
+    vi.mocked(api.getConfig).mockImplementation(() => new Promise<Config>((ok, fail) => settle.push({ ok, fail })));
+    applySavedLayout({ layout: doc(dash('a', 4)) });
+    applySavedLayout({ layout: doc(dash('a', 5)) });
+    settle[1].ok({ ...makeConfig(dash('a', 5)), notices: [{ id: 'new', text: 'newer' }] });
+    await new Promise((r) => setTimeout(r, 0));
+    settle[0].fail(new Error('late failure'));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(get(noticesStale)).toBeNull();
+    expect(get(config)?.notices).toEqual([{ id: 'new', text: 'newer' }]);
+  });
+
   it('a failed Dismiss keeps the notice and rethrows (the banner toasts)', async () => {
     config.set({ ...makeConfig(), notices: [{ id: 'n', text: 'old' }] });
     vi.mocked(api.dismissNotice).mockRejectedValue(new Error('nope'));
@@ -163,6 +193,24 @@ describe('global Settings save (M4 Task 7 fix round 1)', () => {
     expect(api.updateSetting).toHaveBeenCalledWith('status_checks.enabled', 'true');
     expect(refresh).toHaveBeenCalled();
     expect(get(config)?.notices).toEqual([{ id: 'g', text: 'fresh' }]);
+  });
+
+  it('re-reads each dashboard\'s computed display block, so animated folder backgrounds follow the new global value', async () => {
+    config.set(makeConfig(dash('a', 3, { display: { animatedFolderBackgrounds: true } }), dash('b', 7)));
+    const a = animatedFolderBackgroundsFor('a');
+    const b = animatedFolderBackgroundsFor('b');
+    expect(get(a)).toBe(true);
+    expect(get(b)).toBe(false);
+    vi.mocked(api.updateSetting).mockResolvedValue(undefined);
+    // The GET's document is otherwise different (a newer name): only `display` is taken from it.
+    vi.mocked(api.getConfig).mockResolvedValue(makeConfig(
+      dash('a', 3, { name: 'from GET', display: { animatedFolderBackgrounds: false } }),
+      dash('b', 7, { display: { animatedFolderBackgrounds: true } })
+    ));
+    await saveGlobalSetting('folders.animated_backgrounds', 'false');
+    expect(get(a)).toBe(false);
+    expect(get(b)).toBe(true);
+    expect(findLayoutDashboard('a', get(layoutDoc))?.name).toBe('a');
   });
 
   it('a failed save rethrows and refreshes nothing', async () => {

@@ -11,6 +11,7 @@
   // load (preload error) is passed to onError, and when nothing can be shown
   // the fallback colour is drawn instead of a blank.
   import type { Background } from '$lib/types';
+  import { slideshowInterval, slideshowTransitionDuration } from './backgroundTiming';
   import { untrack } from 'svelte';
   import { isSafeBackgroundUrl, cssUrl } from './backgroundUrl';
 
@@ -78,8 +79,10 @@
     !animate || kind !== 'slideshow' ? 'none'
       : configuredTransition === 'random' ? currentRandomTransition : configuredTransition
   );
-  const transitionDuration = $derived(background?.transitionDuration || 1.5);
-  const intervalMs = $derived((background?.interval || 30) * 1000);
+  // Clamped (Ruling 14): stored timing is never rejected, so it is bounded here before it
+  // reaches a timer or a style.
+  const transitionDuration = $derived(slideshowTransitionDuration(background?.transitionDuration));
+  const intervalMs = $derived(slideshowInterval(background?.interval) * 1000);
 
   const backgroundSize = $derived.by(() => {
     const fit = background?.fit || 'cover';

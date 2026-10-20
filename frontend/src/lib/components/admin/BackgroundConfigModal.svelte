@@ -9,6 +9,14 @@
   import { untrack } from 'svelte';
   import { logError } from '$lib/utils/errors';
   import { isSafeBackgroundUrl, cssUrl } from '$lib/components/background/backgroundUrl';
+  import {
+    slideshowInterval as clampInterval,
+    slideshowTransitionDuration as clampDuration,
+    INTERVAL_MIN,
+    INTERVAL_MAX,
+    DURATION_MIN,
+    DURATION_MAX
+  } from '$lib/components/background/backgroundTiming';
 
   interface Props {
     background?: Background;
@@ -59,7 +67,7 @@
     background?.type === 'slideshow' && background.images ? [...background.images] : []
   );
   // svelte-ignore state_referenced_locally
-  let slideshowInterval = $state(background?.interval || 30);
+  let slideshowInterval = $state(clampInterval(background?.interval));
   // svelte-ignore state_referenced_locally
   let transitionEffect = $state<'crossfade' | 'slide' | 'slide-up' | 'slide-down' | 'zoom' | 'zoom-out' | 'fade-black' | 'blur' | 'flip' | 'swirl' | 'wipe' | 'curtain' | 'circle' | 'diamond' | 'dissolve' | 'flash' | 'glitch' | 'kenburns' | 'random' | 'none'>(background?.transition || 'crossfade');
 
@@ -75,7 +83,17 @@
   // has no CSS rule, so nothing animated.
   let effectiveTransition = $derived(transitionEffect === 'random' ? currentRandomTransition : transitionEffect);
   // svelte-ignore state_referenced_locally
-  let transitionDuration = $state(background?.transitionDuration || 1.5);
+  let transitionDuration = $state(clampDuration(background?.transitionDuration));
+  // Ruling 14: a stored timing outside the bounds is shown clamped and saved clamped — and the
+  // picker says so (never a silent change).
+  // svelte-ignore state_referenced_locally
+  const intervalNormalised =
+    background?.type === 'slideshow' && background.interval !== undefined && background.interval !== slideshowInterval
+      ? String(background.interval) : null;
+  // svelte-ignore state_referenced_locally
+  const durationNormalised =
+    background?.type === 'slideshow' && background.transitionDuration !== undefined && background.transitionDuration !== transitionDuration
+      ? String(background.transitionDuration) : null;
   // svelte-ignore state_referenced_locally
   let overlayOpacity = $state(background?.overlayOpacity ?? 0.7);
   // svelte-ignore state_referenced_locally
@@ -397,9 +415,14 @@
       const imagesChanged =
         slideshowImages.length !== initial.images.length || slideshowImages.some((u, i) => u !== initial.images[i]);
       if (owns(imagesChanged)) out.images = [...slideshowImages];
-      if (owns(slideshowInterval !== initial.interval)) out.interval = slideshowInterval;
+      // Clamped (Ruling 14); written when changed, or when the stored value needed clamping.
+      slideshowInterval = clampInterval(Number(slideshowInterval));
+      transitionDuration = clampDuration(Number(transitionDuration));
+      if (owns(slideshowInterval !== initial.interval) || intervalNormalised !== null) out.interval = slideshowInterval;
       if (owns(transitionEffect !== initial.transition)) out.transition = transitionEffect;
-      if (owns(transitionDuration !== initial.transitionDuration)) out.transitionDuration = transitionDuration;
+      if (owns(transitionDuration !== initial.transitionDuration) || durationNormalised !== null) {
+        out.transitionDuration = transitionDuration;
+      }
     }
     // Folders have no overlay or blur of their own (call 1): the picker never writes them there.
     if (hasOverlay && (backgroundType === 'image' || backgroundType === 'slideshow')) {
@@ -478,7 +501,7 @@
           curtainAnimating = true;
           setTimeout(() => {
             curtainAnimating = false;
-          }, transitionDuration * 1000);
+          }, clampDuration(transitionDuration) * 1000);
         }
 
         previewLayer1Visible = !previewLayer1Visible;
@@ -673,8 +696,21 @@
       <!-- Slideshow Configuration -->
       {#if backgroundType === 'slideshow'}
         <div class="form-group">
-          <label for="interval">Rotation Interval (seconds)</label>
-          <input id="interval" type="number" bind:value={slideshowInterval} min="5" max="300" step="5" />
+          <label for="interval">Rotation Interval (seconds, {INTERVAL_MIN}–{INTERVAL_MAX})</label>
+          <input
+            id="interval"
+            type="number"
+            bind:value={slideshowInterval}
+            min={INTERVAL_MIN}
+            max={INTERVAL_MAX}
+            step="5"
+            onchange={() => (slideshowInterval = clampInterval(Number(slideshowInterval)))}
+          />
+          {#if intervalNormalised !== null}
+            <p class="field-note" role="status">
+              The stored interval ({intervalNormalised}) is outside {INTERVAL_MIN}–{INTERVAL_MAX} s; it is used as {clampInterval(background?.interval)} s and saved that way.
+            </p>
+          {/if}
         </div>
 
         <div class="form-group">
@@ -766,11 +802,16 @@
 
         <div class="form-group">
           <label for="transitionDuration">Transition Duration ({transitionDuration}s)</label>
-          <input id="transitionDuration" type="range" bind:value={transitionDuration} min="0.5" max="5" step="0.5" class="range-input" disabled={transitionEffect === 'none'} />
+          <input id="transitionDuration" type="range" bind:value={transitionDuration} min={DURATION_MIN} max={DURATION_MAX} step="0.5" class="range-input" disabled={transitionEffect === 'none'} />
           <div class="range-labels">
-            <span>0.5s</span>
-            <span>5s</span>
+            <span>{DURATION_MIN}s</span>
+            <span>{DURATION_MAX}s</span>
           </div>
+          {#if durationNormalised !== null}
+            <p class="field-note" role="status">
+              The stored transition duration ({durationNormalised}) is outside {DURATION_MIN}–{DURATION_MAX} s; it is used as {clampDuration(background?.transitionDuration)} s and saved that way.
+            </p>
+          {/if}
         </div>
 
         <!-- Transition Preview - positioned right after effect selection -->
@@ -1117,6 +1158,12 @@
     font-size: 0.7rem;
     color: var(--color-error, #dc2626);
     text-align: center;
+  }
+
+  .field-note {
+    margin: 0.35rem 0 0;
+    font-size: 0.8rem;
+    color: var(--color-warning);
   }
 
   .field-error {

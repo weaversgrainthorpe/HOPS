@@ -352,3 +352,68 @@ func TestMigrateWithBackup_V2MigratesStraightToFinalForm(t *testing.T) {
 	}
 	assertNoLegacyKeys(t, doc)
 }
+
+// Ruling 14: a slideshow's interval and transitionDuration are clamped where they are used (the
+// renderer and the picker), never rejected by verification, import or migration — an odd timing
+// value must not block prod's v2→v3 migration or an import. The values are kept as stored.
+var oddTimings = map[string]any{
+	"huge":       1e9,
+	"negative":   -5.0,
+	"zero":       0.0,
+	"tiny":       0.1,
+	"string":     "30",
+	"null":       nil,
+	"bool":       true,
+	"object":     Obj{"s": 1.0},
+	"fractional": 7.25,
+}
+
+func TestBackgroundTiming_NeverRejected_Verify(t *testing.T) {
+	for _, level := range []string{"dashboard", "tab", "folder"} {
+		for name, val := range oddTimings {
+			bg := Obj{"type": "slideshow", "images": []any{"/presets/a.jpg", "/presets/b.jpg"},
+				"interval": val, "transitionDuration": val}
+			doc := bgDoc(level, bg)
+			if err := VerifyIDs(doc); err != nil {
+				t.Errorf("%s/%s: VerifyIDs rejected: %v", level, name, err)
+			}
+			if err := VerifyDashboard(dash0(doc)); err != nil {
+				t.Errorf("%s/%s: VerifyDashboard rejected: %v", level, name, err)
+			}
+			if err := VerifyImportedDashboard(dash0(doc)); err != nil {
+				t.Errorf("%s/%s: VerifyImportedDashboard rejected: %v", level, name, err)
+			}
+		}
+	}
+}
+
+func TestBackgroundTiming_NeverRejected_V2Migration(t *testing.T) {
+	for name, val := range oddTimings {
+		t.Run(name, func(t *testing.T) {
+			v2 := loadJSON(t, "testdata/v2_basic.json")
+			d := v2["dashboards"].([]any)[0].(Obj)
+			d["background"] = Obj{"type": "slideshow", "images": []any{"/presets/a.jpg"},
+				"interval": val, "transitionDuration": val}
+			d["tabs"].([]any)[0].(Obj)["background"] = Obj{"type": "slideshow",
+				"images": []any{"/presets/b.jpg"}, "interval": val, "transitionDuration": val}
+			doc, renames, err := MigrateV2Renaming(v2)
+			if err != nil {
+				t.Fatalf("MigrateV2Renaming: %v", err)
+			}
+			if err := VerifyMigration(v2, doc, renames); err != nil {
+				t.Fatalf("VerifyMigration rejected: %v", err)
+			}
+			out, _, err := UpdateBackgroundsV4(doc)
+			if err != nil {
+				t.Fatalf("UpdateBackgroundsV4: %v", err)
+			}
+			if err := VerifyBackgroundsV4(doc, out); err != nil {
+				t.Fatalf("VerifyBackgroundsV4 rejected: %v", err)
+			}
+			bg := dash0(out)["background"].(Obj)
+			if show(bg["interval"]) != show(val) || show(bg["transitionDuration"]) != show(val) {
+				t.Errorf("timing changed: got %s/%s, want %s", show(bg["interval"]), show(bg["transitionDuration"]), show(val))
+			}
+		})
+	}
+}

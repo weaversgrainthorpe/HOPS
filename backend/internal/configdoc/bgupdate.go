@@ -291,6 +291,11 @@ func (v *verifier) checkBackgroundKept(what string, before, after Obj, inactive 
 // slideshow or color — or which is the inherit form (inherit: true, type then
 // optional but valid if present); opacity a finite number in 0..1; images an
 // array of at most MaxBackgroundImages strings.
+//
+// A slideshow's interval and transitionDuration are deliberately NOT checked
+// (Ruling 14): the renderer and the picker clamp them where they are used, and
+// rejecting an odd timing value here would block an import or prod's v2→v3
+// migration over a cosmetic number. They are kept exactly as stored.
 func (v *verifier) checkBackground(where string, o Obj) {
 	raw, has := o["background"]
 	if !has {

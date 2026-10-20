@@ -140,6 +140,51 @@ describe('BackgroundLayer', () => {
     expect(vi.getTimerCount()).toBe(1);
   });
 
+  it('clamps slideshow timing (Ruling 14): a 0.1 s or negative interval ticks every 5 s, never faster', async () => {
+    for (const interval of [0.1, -5]) {
+      FakeImage.all = [];
+      const r = render(BackgroundLayer, {
+        background: slideshow(['/backgrounds/a.jpg', '/backgrounds/b.jpg'], { interval }),
+        scope: 'viewport',
+        animate: true
+      });
+      await settle();
+      img('/backgrounds/a.jpg').load();
+      await settle();
+      vi.advanceTimersByTime(4_999);
+      await settle();
+      expect(FakeImage.all.some((i) => i.src === '/backgrounds/b.jpg'), `interval ${interval}: no swap before 5 s`).toBe(false);
+      vi.advanceTimersByTime(1);
+      await settle();
+      expect(img('/backgrounds/b.jpg'), `interval ${interval}: swap at 5 s`).toBeTruthy();
+      r.unmount();
+    }
+  });
+
+  it('clamps slideshow timing (Ruling 14): a huge transitionDuration reaches the styles and the curtain timeout as 5 s', async () => {
+    const r = render(BackgroundLayer, {
+      background: slideshow(['/backgrounds/a.jpg', '/backgrounds/b.jpg'], { transition: 'curtain', transitionDuration: 1e9 }),
+      scope: 'viewport',
+      animate: true
+    });
+    await settle();
+    for (const l of r.container.querySelectorAll<HTMLElement>('.background-layer')) {
+      expect(l.style.getPropertyValue('--transition-duration')).toBe('5s');
+    }
+    img('/backgrounds/a.jpg').load();
+    await settle();
+    vi.advanceTimersByTime(10_000);
+    await settle();
+    img('/backgrounds/b.jpg').load();
+    await settle();
+    const curtain = r.container.querySelector<HTMLElement>('.curtain-overlay');
+    expect(curtain).not.toBeNull();
+    expect(curtain!.style.getPropertyValue('--transition-duration')).toBe('5s');
+    vi.advanceTimersByTime(5_000);
+    await settle();
+    expect(r.container.querySelector('.curtain-overlay')).toBeNull();
+  });
+
   it('toggling animate off clears every timer at once', async () => {
     const onError = vi.fn();
     const r = render(BackgroundLayer, {

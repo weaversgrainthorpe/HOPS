@@ -217,36 +217,55 @@ export function applySavedLayout(fresh: FreshLayout | undefined): void {
 }
 
 /**
- * Re-read the server notices after a write. Only the notices are taken from the response (the
- * document came with the write). A failed read is visible: a toast, and the held notices are
- * marked "may be out of date" (noticesStale) until a later read succeeds.
+ * Re-read the server-computed parts of the document after a write: the notices and each
+ * dashboard's read-only `display` block (computed from the global values when a dashboard has no
+ * override, Ruling 9 -- so a global Settings save changes it). The rest of the document came with
+ * the write and is not taken. A failed read is visible: a toast, and the held notices are marked
+ * "may be out of date" (noticesStale) until a later read succeeds.
+ *
+ * Reads can overlap (two quick saves); only the latest one started is applied, so an older
+ * response resolving last never overwrites a newer one.
  */
+let refreshSeq = 0;
 async function refreshNotices(): Promise<void> {
+  const mine = ++refreshSeq;
   try {
     const fresh = await getConfig();
+    if (mine !== refreshSeq) return; // superseded: a newer read owns the result
+    const freshDisplay = new Map((fresh.dashboards ?? []).map((d) => [d.id, d.display] as const));
     config.update((c) => {
       if (!c) return c;
       const { notices: _old, noticesUnreadable: _u, ...rest } = c;
       const kept = (fresh.notices ?? []).filter((n) => !dismissedNotices.has(n.id));
+      const dashboards = c.dashboards.map((d) => {
+        if (!freshDisplay.has(d.id)) return d;
+        const display = freshDisplay.get(d.id);
+        const { display: _d, ...dRest } = d;
+        return display ? { ...dRest, display } : dRest;
+      });
       return {
         ...rest,
+        dashboards,
         ...(kept.length > 0 ? { notices: kept } : {}),
         ...(fresh.noticesUnreadable ? { noticesUnreadable: fresh.noticesUnreadable } : {})
       };
     });
     noticesStale.set(null);
   } catch (error) {
+    if (mine !== refreshSeq) return; // superseded: the newer read reports its own outcome
     logError('Notices refresh', error);
     const why = error instanceof Error && error.message ? error.message : 'the request failed';
     noticesStale.set(why);
-    toast.error(`Couldn't refresh the notices: ${why} (reload to update them).`);
+    toast.error(`Couldn't refresh the notices and dashboard display settings: ${why} (reload to update them).`);
   }
 }
 
 /**
  * Save one global setting (the Settings page). Afterwards everything derived from the global
  * values is re-read, so nothing shows the old value as current: the editing dialogs' dashboard
- * levels (status checks inherit the global value), the notices and the mounted tiles' status.
+ * levels (status checks inherit the global value), the notices, each dashboard's computed
+ * `display` block (animated folder backgrounds inherit the global value) and the mounted tiles'
+ * status.
  */
 export async function saveGlobalSetting(key: string, value: string | number): Promise<void> {
   await updateSetting(key, value);

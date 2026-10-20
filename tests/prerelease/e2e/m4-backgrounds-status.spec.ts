@@ -252,6 +252,62 @@ test.describe('M4 layered backgrounds in a real browser', () => {
     await expect.poll(async () => (await animatingIds(page)).length).toBe(0);
   });
 
+  test('a large folder scrolled gradually into view takes a slot from smaller ones (area re-measured)', async ({ page, context }) => {
+    // Four small slideshow folders sit in the row just above one big slideshow folder. Scrolling
+    // slowly, the big one first appears as a sliver (smallest area, ranked last) and must win a
+    // slot once most of it is on screen while the small ones are still fully visible. With the
+    // observer's default [0] threshold its area was measured only at that first sliver.
+    const Y = 24;
+    const f = await importDash(page, context, (id) => {
+      const out: Child[] = [tile(id('anchor'), 'Anchor', 0, 0)];
+      for (let i = 0; i < 4; i++) {
+        out.push({ ...slideFolder(id, `small${i}`, 8 + i, Y - 2), placement: placement(8 + i, Y - 2, 1, 2),
+          content: { columns: 1, children: [tile(id(`small${i}-t`), `S${i}`)] } });
+      }
+      out.push({ ...slideFolder(id, 'big', 0, Y), placement: placement(0, Y, 8, 10),
+        content: { columns: 8, children: [tile(id('big-t'), 'BigT')] } });
+      return out;
+    }, { animated: true });
+    const smalls = Array.from({ length: 4 }, (_, i) => f.id(`small${i}`));
+    const big = f.id('big');
+    await page.goto(f.path);
+    await page.mouse.move(1, 1);
+    for (const id of [...smalls, big]) await expect(page.locator(`[data-node-id="${id}"]`)).toBeVisible();
+    const rect = (id: string) => page.evaluate((id) => {
+      const r = document.querySelector(`[data-node-id="${CSS.escape(id)}"]`)!.getBoundingClientRect();
+      return { top: r.top, bottom: r.bottom, vh: window.innerHeight };
+    }, id);
+    // Off screen at first.
+    expect((await rect(big)).top).toBeGreaterThan((await rect(big)).vh);
+
+    // Bring the big folder's top edge 4 px into view: a sliver. The small ones are fully visible.
+    const r0 = await rect(big);
+    await page.evaluate((dy) => window.scrollBy(0, dy), r0.top - r0.vh + 4);
+    await expect(folderLayer(page, big)).toHaveCount(1);
+    for (const id of smalls) {
+      const r = await rect(id);
+      expect(r.top, `${id} fully on screen`).toBeGreaterThanOrEqual(0);
+      expect(r.bottom, `${id} fully on screen`).toBeLessThanOrEqual(r.vh);
+    }
+    await expect.poll(async () => (await animatingIds(page)).sort()).toEqual([...smalls].sort());
+
+    // Scroll on gradually (small steps, one frame apart) until about half the viewport shows it.
+    for (;;) {
+      const r = await rect(big);
+      if (r.vh - r.top >= r.vh * 0.5) break;
+      await page.evaluate(() => new Promise<void>((res) => { window.scrollBy(0, 25); requestAnimationFrame(() => res()); }));
+    }
+    // The small ones are all still fully on screen: the big one must win on area, not visibility.
+    for (const id of smalls) {
+      const r = await rect(id);
+      expect(r.top, `${id} still fully on screen`).toBeGreaterThanOrEqual(0);
+    }
+    await expect
+      .poll(async () => (await animatingIds(page)).includes(big), { message: 'the big folder animates once mostly in view' })
+      .toBe(true);
+    expect((await animatingIds(page)).length).toBe(4);
+  });
+
   test('the dashboard\'s "animated folder backgrounds" off: no folder animates', async ({ page, context }) => {
     const f = await importDash(page, context, slideshowDash, { animated: false });
     const top = Array.from({ length: 10 }, (_, i) => f.id(`top${i}`));

@@ -7,8 +7,10 @@ class FakeIO {
   cb: IOCb;
   observed = new Set<Element>();
   disconnected = false;
-  constructor(cb: IOCb) {
+  options: IntersectionObserverInit | undefined;
+  constructor(cb: IOCb, options?: IntersectionObserverInit) {
     this.cb = cb;
+    this.options = options;
     ioInstances.push(this);
   }
   observe(el: Element) { this.observed.add(el); }
@@ -63,6 +65,32 @@ function countedStore(initial: boolean) {
 }
 
 describe('backgroundAnimation', () => {
+  it('observer re-measures visible area as a folder scrolls in (thresholds, not just 0)', async () => {
+    const m = await load();
+    const [el] = mk(1);
+    m.registerFolderBackground(el, { animatedSetting: writable(true) });
+    const th = ioInstances[0].options?.threshold;
+    expect(Array.isArray(th)).toBe(true);
+    const list = th as number[];
+    expect(list).toContain(0);
+    expect(list).toContain(1);
+    expect(list.filter((t) => t > 0 && t < 1).length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('a folder first seen with a sliver of area takes a slot once its area grows', async () => {
+    const m = await load();
+    const els = mk(5);
+    const regs = els.map((el) => m.registerFolderBackground(el, { animatedSetting: writable(true) }));
+    // The big folder enters first with a 1px sliver; four small folders are fully visible.
+    emit(els[0], 1);
+    for (const el of els.slice(1)) emit(el, 100);
+    expect(get(regs[0].animate)).toBe(false);
+    // Scrolling on: the observer reports the big folder's real area at the next threshold.
+    emit(els[0], 10000);
+    expect(get(regs[0].animate)).toBe(true);
+    expect(regs.filter((r) => get(r.animate)).length).toBe(m.MAX_ANIMATED_FOLDERS);
+  });
+
   it('unregister releases the setting subscription', async () => {
     const m = await load();
     const setting = countedStore(true);

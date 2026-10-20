@@ -15,6 +15,14 @@ import { readable, writable, type Readable, type Writable } from 'svelte/store';
 
 export const MAX_ANIMATED_FOLDERS = 4;
 
+/**
+ * Several thresholds, not the default [0]: with [0] the callback fires only when a folder
+ * crosses 0% visible, so its area would be measured once (often as a sliver while scrolling
+ * in) and never again. These re-measure it as it scrolls or resizes through each step,
+ * a handful of callbacks per scroll and no per-frame work.
+ */
+export const OBSERVER_THRESHOLDS = [0, 0.1, 0.25, 0.5, 0.75, 1];
+
 const REDUCED_QUERY = '(prefers-reduced-motion: reduce)';
 
 /** prefers-reduced-motion, live. SSR-safe: false when there is no window. */
@@ -79,7 +87,7 @@ function start() {
     });
   }
   if (!observer && typeof IntersectionObserver !== 'undefined') {
-    observer = new IntersectionObserver(onEntries);
+    observer = new IntersectionObserver(onEntries, { threshold: OBSERVER_THRESHOLDS });
   }
 }
 

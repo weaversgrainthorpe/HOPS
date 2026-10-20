@@ -232,4 +232,52 @@ describe('BackgroundConfigModal at every level', () => {
     open('tab', { type: 'image', value: '/presets/network-grid.jpg' });
     await waitFor(() => expect(screen.getByText(/couldn't load your uploaded images/i)).toBeInTheDocument());
   });
+
+  describe('slideshow timing is bounded (Ruling 14)', () => {
+    const imgs = ['/presets/network-grid.jpg', '/presets/dark-gradient.jpg'];
+    const interval = () => screen.getByLabelText(/^Rotation Interval/) as HTMLInputElement;
+    const duration = () => screen.getByLabelText(/^Transition Duration/) as HTMLInputElement;
+
+    it('the inputs carry the bounds', () => {
+      open('tab', { type: 'slideshow', images: imgs });
+      expect(interval().min).toBe('5');
+      expect(interval().max).toBe('3600');
+      expect(duration().min).toBe('0.5');
+      expect(duration().max).toBe('5');
+    });
+
+    it('a stored out-of-range value is shown clamped, says so, and is saved clamped (never refused)', async () => {
+      const { onSave } = open('tab', { type: 'slideshow', images: imgs, interval: 0.1, transitionDuration: 1e9 });
+      expect(interval().value).toBe('5');
+      expect(duration().value).toBe('5');
+      expect(screen.getByText(/stored interval \(0\.1\) is outside 5–3600 s; it is used as 5 s/i)).toBeInTheDocument();
+      expect(screen.getByText(/stored transition duration \(1000000000\) is outside 0\.5–5 s; it is used as 5 s/i)).toBeInTheDocument();
+      await save();
+      expect(onSave).toHaveBeenCalledTimes(1);
+      expect(onSave.mock.calls[0][0]).toEqual({ type: 'slideshow', images: imgs, interval: 5, transitionDuration: 5 });
+    });
+
+    it('a typed value outside the bounds is clamped in the input and on Save', async () => {
+      const { onSave } = open('tab', { type: 'slideshow', images: imgs, interval: 30 });
+      await fireEvent.input(interval(), { target: { value: '0.1' } });
+      await fireEvent.change(interval());
+      expect(interval().value).toBe('5');
+      await fireEvent.input(interval(), { target: { value: '99999' } });
+      await fireEvent.change(interval());
+      expect(interval().value).toBe('3600');
+      // Typed and saved without a change event: still clamped.
+      await fireEvent.input(interval(), { target: { value: '-5' } });
+      await save();
+      expect(onSave.mock.calls[0][0]).toEqual({ type: 'slideshow', images: imgs, interval: 5 });
+      expect(interval().value).toBe('5');
+    });
+
+    it('in-range values show no note and round-trip unchanged', async () => {
+      const bg: Background = { type: 'slideshow', images: imgs, interval: 120, transitionDuration: 1.5 };
+      const { onSave } = open('tab', structuredClone(bg));
+      expect(screen.queryByText(/is outside/i)).toBeNull();
+      await save();
+      expect(onSave.mock.calls[0][0]).toEqual(bg);
+    });
+  });
 });
