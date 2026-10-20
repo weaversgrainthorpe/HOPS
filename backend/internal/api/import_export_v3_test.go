@@ -481,6 +481,9 @@ func TestImport_V3ShapeChecks(t *testing.T) {
 		"no settings":      func(c map[string]interface{}) { delete(dashOf(c), "settings") },
 		"partial settings": func(c map[string]interface{}) { dashOf(c)["settings"] = map[string]interface{}{} },
 		"no defaultLayout": func(c map[string]interface{}) { delete(dashOf(c), "defaultLayout") },
+		"background opacity 2": func(c map[string]interface{}) {
+			dashOf(c)["background"] = map[string]interface{}{"type": "color", "value": "#000", "opacity": 2}
+		},
 		"duplicate ids inside dashboard": func(c map[string]interface{}) {
 			tab := dashOf(c)["tabs"].([]interface{})[0].(map[string]interface{})
 			tab["id"] = dashOf(c)["id"]
@@ -676,5 +679,40 @@ func TestImport_V3Showcase(t *testing.T) {
 			}
 			visit(tb.(configdoc.Obj)["root"].(configdoc.Obj)["children"].([]any))
 		}
+	}
+}
+
+// An export from a pre-M4 (M1–M3) build carries the retired per-tab background
+// switches; import brings it to the M4 form so an inactive tab picture is kept
+// as inherit, never imported as an active one.
+func TestImport_LegacyTabBackgroundSwitchBecomesInherit(t *testing.T) {
+	router, db := setupTestRouter(t)
+	c := newClient(t, router)
+	seed(t, db)
+	var env map[string]interface{}
+	json.Unmarshal(c.export(""), &env)
+	cfg := env["config"].(map[string]interface{})
+	d := dashOf(cfg)
+	d["perTabBackgrounds"] = false
+	tab := d["tabs"].([]interface{})[0].(map[string]interface{})
+	tab["background"] = map[string]interface{}{"type": "image", "value": "/x.jpg", "fit": "cover"}
+	tab["backgroundEnabled"] = false
+
+	code, resp := c.importFile(v3ExportOf(t, cfg))
+	if code != 200 {
+		t.Fatalf("import: %d %v", code, resp)
+	}
+	ds := dashList(storedDoc(t, db))
+	imp := ds[len(ds)-1]
+	if _, has := imp["perTabBackgrounds"]; has {
+		t.Error("imported dashboard kept perTabBackgrounds")
+	}
+	itab := imp["tabs"].([]interface{})[0].(map[string]interface{})
+	if _, has := itab["backgroundEnabled"]; has {
+		t.Error("imported tab kept backgroundEnabled")
+	}
+	got, _ := json.Marshal(itab["background"])
+	if want := `{"fit":"cover","inherit":true,"type":"image","value":"/x.jpg"}`; string(got) != want {
+		t.Errorf("tab background = %s, want %s", got, want)
 	}
 }

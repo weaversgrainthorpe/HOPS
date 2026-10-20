@@ -130,7 +130,10 @@ func TestMigrateV2_Basic(t *testing.T) {
 		t.Fatalf("dashboards = %d", len(dashes))
 	}
 	d := dashes[0]
-	assertKeysPreserved(t, v2d, d, "dashboard", "tabs")
+	assertKeysPreserved(t, v2d, d, "dashboard", "tabs", "perTabBackgrounds")
+	if _, has := d["perTabBackgrounds"]; has {
+		t.Error("converter kept perTabBackgrounds; M4 writes the final background form")
+	}
 	eq(t, d["revision"], 1, "revision")
 	eq(t, d["defaultLayout"], "grid", "defaultLayout")
 	settings := d["settings"].(Obj)
@@ -158,10 +161,13 @@ func TestMigrateV2_Basic(t *testing.T) {
 		root := tab["root"].(Obj)
 		eq(t, root["columns"], 12, "root.columns")
 	}
-	eq(t, tabs[0]["backgroundEnabled"], true, "backgroundEnabled")
-	if _, has := tabs[1]["backgroundEnabled"]; has {
-		t.Error("tab without background got backgroundEnabled")
+	// perTabBackgrounds was on: the tab background stays active, unchanged.
+	for i, tab := range tabs {
+		if _, has := tab["backgroundEnabled"]; has {
+			t.Errorf("tab %d got backgroundEnabled; M4 writes the final background form", i)
+		}
 	}
+	eq(t, tabs[0]["background"], v2tabs[0]["background"], "active tab background")
 
 	// Tab 1 folders.
 	folders := children(t, tabs[0]["root"].(Obj))
@@ -253,10 +259,13 @@ func TestMigrateV2_MessyInput(t *testing.T) {
 		}
 	}
 	eq(t, tabs[0]["tabExtra"], "x", "tabExtra")
-	// Background present, perTabBackgrounds missing -> false.
-	eq(t, tabs[1]["backgroundEnabled"], false, "backgroundEnabled")
-	if _, has := tabs[0]["backgroundEnabled"]; has {
-		t.Error("backgroundEnabled without background")
+	// Background present, perTabBackgrounds missing (off) -> the inherit form
+	// keeping the picture; no backgroundEnabled anywhere.
+	eq(t, tabs[1]["background"], Obj{"type": "image", "value": "u", "inherit": true}, "inactive tab background")
+	for i, tab := range tabs {
+		if _, has := tab["backgroundEnabled"]; has {
+			t.Errorf("tab %d got backgroundEnabled", i)
+		}
 	}
 
 	fs := children(t, tabs[2]["root"].(Obj))

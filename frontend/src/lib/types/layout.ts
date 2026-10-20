@@ -1,4 +1,4 @@
-import type { Entry } from './index';
+import type { Background, Entry } from './index';
 
 export type LayoutMode = 'grid' | 'free';
 
@@ -34,6 +34,8 @@ export interface FolderNode {
   display: 'expanded' | 'collapsed';
   shape?: string;
   showTitle?: boolean;
+  /** Folder background (M4); missing or inherit form = none of its own. */
+  background?: Background;
   placement: Placement;
   content: Container;
   [k: string]: unknown;
@@ -46,6 +48,8 @@ export interface LayoutTab {
   name: string;
   layout?: 'inherit' | LayoutMode;
   designWidth?: number;
+  /** Tab background (M4); missing or inherit form = the dashboard's shows. */
+  background?: Background;
   root: Container;
   [k: string]: unknown;
 }
@@ -58,6 +62,8 @@ export interface LayoutDashboard {
   /** Display position among the dashboards (PUT /api/dashboards/order). */
   order?: number;
   defaultLayout?: LayoutMode;
+  /** Dashboard background (M4); missing or inherit form = the global one. */
+  background?: Background;
   tabs: LayoutTab[];
   [k: string]: unknown;
 }

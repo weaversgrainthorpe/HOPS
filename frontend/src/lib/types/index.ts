@@ -44,10 +44,21 @@ export interface Entry {
   showStatus?: boolean;
 }
 
+/**
+ * A dashboard, tab or folder background (M4). Missing, or `inherit: true`,
+ * means the level inherits its parent's background; the inherit form keeps
+ * any stored picture fields (an "off but kept" picture). Otherwise `type`
+ * names the picture kind. The backend verifies this shape on every save.
+ */
 export interface Background {
-  type: 'image' | 'slideshow' | 'color';
+  /** Present on a picture; optional only in the inherit form. */
+  type?: 'image' | 'slideshow' | 'color';
+  /** true: inherit the parent's background, keeping these picture fields stored. */
+  inherit?: boolean;
+  /** 0–1 show-through opacity of this level's surface (default 1); distinct from overlayOpacity. */
+  opacity?: number;
   value?: string;
-  images?: string[];
+  images?: string[]; // at most 200
   interval?: number; // Duration in seconds between slides
   fit?: 'cover' | 'contain' | 'fill'; // How to fit the image
   transition?: 'crossfade' | 'slide' | 'slide-up' | 'slide-down' | 'zoom' | 'zoom-out' | 'fade-black' | 'blur' | 'flip' | 'swirl' | 'wipe' | 'curtain' | 'circle' | 'diamond' | 'dissolve' | 'flash' | 'glitch' | 'kenburns' | 'none' | 'random'; // Transition effect

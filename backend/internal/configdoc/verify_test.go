@@ -326,3 +326,44 @@ func showcaseDash(t *testing.T, id string) Obj {
 	}
 	return norm(t, d).(Obj)
 }
+
+// The converter writes the M4 background form; Verify checks it exactly
+// (the picture kept, inherit iff perTabBackgrounds was off, no legacy keys).
+func TestVerify_BackgroundFinalForm(t *testing.T) {
+	cases := map[string]struct {
+		file   string
+		mutate func(doc Obj)
+		want   string
+	}{
+		"inactive tab left active": {"testdata/v2_messy.json", func(d Obj) {
+			delete(tabN(d, 1)["background"].(Obj), "inherit")
+		}, "inherit"},
+		"picture changed": {"testdata/v2_messy.json", func(d Obj) {
+			tabN(d, 1)["background"].(Obj)["value"] = "other"
+		}, "value"},
+		"active tab made inherit": {"testdata/v2_basic.json", func(d Obj) {
+			tabN(d, 0)["background"].(Obj)["inherit"] = true
+		}, "inherit"},
+		"mirror written": {"testdata/v2_basic.json", func(d Obj) {
+			tabN(d, 0)["backgroundEnabled"] = true
+		}, "backgroundEnabled"},
+		"switch kept": {"testdata/v2_basic.json", func(d Obj) {
+			dash0(d)["perTabBackgrounds"] = true
+		}, "perTabBackgrounds"},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			v2 := loadJSON(t, tc.file)
+			doc := migrated(t, v2)
+			if err := Verify(v2, doc); err != nil {
+				t.Fatalf("clean conversion rejected: %v", err)
+			}
+			tc.mutate(doc)
+			err := Verify(v2, doc)
+			if err == nil {
+				t.Fatal("Verify = nil, want a problem")
+			}
+			wantProblem(t, err, tc.want)
+		})
+	}
+}

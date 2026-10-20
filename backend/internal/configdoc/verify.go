@@ -177,7 +177,12 @@ func VerifyMigration(v2, v3 Obj, renames []Rename) error {
 			// revision, settings and defaultLayout are converter-owned:
 			// ConvertDashboardV2 deliberately overwrites any v2 value (Ruling 4),
 			// so skip the equality check but still require them well-formed.
-			v.compareKeys("dashboard "+id, a, b, "tabs", "revision", "settings", "defaultLayout")
+			// perTabBackgrounds is retired into the tabs' background form
+			// (checked per tab in compareTabs) and must be gone.
+			v.compareKeys("dashboard "+id, a, b, "tabs", "revision", "settings", "defaultLayout", legacyPerTabKey)
+			if _, has := b[legacyPerTabKey]; has {
+				v.add("dashboard %q: key %q is still present", id, legacyPerTabKey)
+			}
 			v.checkOwned(id, b)
 			v.compareTabs(id, path, a, b)
 		})
@@ -200,8 +205,15 @@ func (v *verifier) compareTabs(dashID, dashPath string, a, b Obj) {
 		v.add("dashboard %q: v3 tabs is %T, want array", dashID, b["tabs"])
 		return
 	}
+	active := tabBackgroundsActive(a)
 	v.compareLevel("tab", "dashboard "+dashID, dashPath+".tabs", v2t, v3t, "", func(ta, tb Obj, tid, tpath string) {
-		v.compareKeys("tab "+tid, ta, tb, "groups")
+		// The background is v2's, plus inherit:true when the dashboard's
+		// perTabBackgrounds was off; nothing else about it may differ.
+		v.compareKeys("tab "+tid, ta, tb, "groups", "background", legacyEnabledKey)
+		if _, has := tb[legacyEnabledKey]; has {
+			v.add("tab %q: key %q is still present", tid, legacyEnabledKey)
+		}
+		v.checkBackgroundKept("tab "+tid, ta, tb, !active)
 		v2g, _ := asList(ta["groups"])
 		root, _ := tb["root"].(Obj)
 		v3g, ok := asList(root["children"])
@@ -395,6 +407,7 @@ func (v *verifier) checkIDs(doc Obj) {
 		dash = ""
 		dn := note(fmt.Sprintf("dashboard[%d]", i), dm)
 		dash, _ = dm["id"].(string)
+		v.checkBackground(dn, dm)
 		tabs, ok := asList(dm["tabs"])
 		if !ok {
 			v.add("%s: tabs is %T, want array", dn, dm["tabs"])
@@ -407,6 +420,7 @@ func (v *verifier) checkIDs(doc Obj) {
 				continue
 			}
 			tn := note(fmt.Sprintf("tab[%d]", j), tm)
+			v.checkBackground(tn, tm)
 			root, ok := tm["root"].(Obj)
 			if !ok {
 				v.add("%s: root is %T, want object", tn, tm["root"])
@@ -436,6 +450,7 @@ func (v *verifier) checkContainer(owner string, c Obj, note func(string, Obj) st
 		switch km["kind"] {
 		case "tile":
 		case "folder":
+			v.checkBackground(n, km)
 			content, ok := km["content"].(Obj)
 			if !ok {
 				v.add("%s: content is %T, want object", n, km["content"])

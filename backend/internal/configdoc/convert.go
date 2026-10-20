@@ -77,7 +77,11 @@ func ConvertDashboardV2(d Obj) (Obj, error) {
 
 // convertDashboard converts an already-copied dashboard in place.
 func convertDashboard(d Obj) (Obj, error) {
-	perTab, _ := d["perTabBackgrounds"].(bool)
+	// v2's perTabBackgrounds switch is written straight into the M4 form:
+	// when it was off, each tab background becomes {inherit: true, …picture}
+	// (kept, not shown); the switch itself is dropped (see retireTabSwitches).
+	perTab := tabBackgroundsActive(d)
+	delete(d, legacyPerTabKey)
 	tabs, err := listOf(d, "tabs")
 	if err != nil {
 		return nil, err
@@ -148,8 +152,13 @@ func convertTab(t Obj, perTab bool) (Obj, error) {
 		children = append(children, f)
 	}
 	t["layout"] = "inherit"
-	if _, has := t["background"]; has {
-		t["backgroundEnabled"] = perTab
+	delete(t, legacyEnabledKey)
+	if bg, has := t["background"]; has && !perTab {
+		f, err := inheritForm(bg)
+		if err != nil {
+			return nil, err
+		}
+		t["background"] = f
 	}
 	t["root"] = Obj{"columns": RootColumns, "children": children}
 	return t, nil

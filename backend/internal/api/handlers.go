@@ -1367,6 +1367,21 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 		if format == "hops-v3" {
 			// New to this install: revision restarts at 1; settings are kept.
 			d["revision"] = 1
+			// An export from a pre-M4 build carries the retired per-tab
+			// background switches: bring it to the M4 form (verified) so an
+			// inactive tab picture is never imported as an active one.
+			before := configdoc.Obj{"schemaVersion": configdoc.SchemaVersion, "dashboards": []any{d}}
+			after, changed, uerr := configdoc.UpdateBackgroundsV4(before)
+			if uerr == nil && changed {
+				uerr = configdoc.VerifyBackgroundsV4(before, after)
+			}
+			if uerr != nil {
+				writeJSONError(w, fmt.Sprintf("Import refused — dashboard %q has backgrounds that could not be updated: %s", dashboardLabel(d), verifyProblems(uerr)), http.StatusBadRequest)
+				return
+			}
+			if changed {
+				d = after["dashboards"].([]any)[0].(configdoc.Obj)
+			}
 			if verr := configdoc.VerifyImportedDashboard(d); verr != nil {
 				writeJSONError(w, fmt.Sprintf("Import refused — dashboard %q is malformed: %s", dashboardLabel(d), verifyProblems(verr)), http.StatusBadRequest)
 				return
