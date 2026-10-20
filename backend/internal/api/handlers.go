@@ -1365,6 +1365,11 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 			}
 		}
 		if format == "hops-v3" {
+			// Response-only keys (e.g. the computed `display`) are never
+			// dashboard content: drop them, as a PUT does.
+			for k := range transientDashboardKeys {
+				delete(d, k)
+			}
 			// New to this install: revision restarts at 1; settings are kept.
 			d["revision"] = 1
 			// An export from a pre-M4 build carries the retired per-tab

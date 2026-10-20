@@ -19,8 +19,10 @@
     scope?: 'viewport' | 'box';
     /** 0–1 opacity of this whole layer; defaults to background.opacity, then 1. */
     opacity?: number;
-    /** false: the first image, still — no interval, no transitions. */
+    /** false: the current image (first, initially), still — no interval, no transitions. */
     animate?: boolean;
+    /** true: load nothing and stop every timer (a fully opaque layer covers this one); resumes where it was. */
+    paused?: boolean;
     onError?: (url: string) => void;
     /** An image was shown (loaded); used to clear an earlier failure (Ruling 7). */
     onLoad?: (url: string) => void;
@@ -34,6 +36,7 @@
     scope = 'viewport',
     opacity,
     animate = true,
+    paused = false,
     onError,
     onLoad,
     fallbackColor = '#1e293b',
@@ -148,19 +151,23 @@
 
   // (Re)start only when what is shown or its timing actually changes — a new
   // background object with the same content (e.g. a draft edit elsewhere)
-  // must not restart the slideshow.
-  const restartKey = $derived(JSON.stringify([kind, configured, animate, intervalMs]));
+  // must not restart the slideshow. `animate` and `paused` are NOT part of
+  // it: turning them off and on again resumes at the current image.
+  const restartKey = $derived(JSON.stringify([kind, configured, intervalMs]));
+
+  /** The running slideshow's control, re-synced when animate/paused change. */
+  let sync: (() => void) | null = null;
 
   $effect(() => {
     void restartKey;
 
     untrack(() => {
       const urls = configured;
-      const anim = animate;
       const every = intervalMs;
       const slideshow = kind === 'slideshow';
       stopAll();
       allFailed = false;
+      sync = null;
       if (urls.length === 0) {
         layer1Image = '';
         layer2Image = '';
@@ -173,24 +180,37 @@
       }
       const failed = new Set<number>();
       let current = -1;
+      /** The first image's preload is in flight. */
+      let firstLoading = false;
+
+      const running = () => animate && !paused;
+      const startInterval = () => {
+        if (intervalId === undefined && slideshow && usable.length > 1 && current >= 0) {
+          intervalId = setInterval(advance, every);
+        }
+      };
 
       const giveUp = () => {
         stopAll();
+        firstLoading = false;
         layer1Image = '';
         layer2Image = '';
         allFailed = true;
       };
 
-      /** Show the first usable image that loads, from index i on. */
+      /** Show the first usable image that loads, from index i on (skipping known failures). */
       const showFirst = (i: number) => {
+        while (i < usable.length && failed.has(i)) i++;
         if (i >= usable.length) return giveUp();
+        firstLoading = true;
         preload(usable[i], () => {
+          firstLoading = false;
           current = i;
           layer1Image = cssUrl(usable[i]);
           layer2Image = '';
           layer1Visible = true;
           loaded(usable[i]);
-          if (anim && slideshow && usable.length > 1) intervalId = setInterval(advance, every);
+          if (running()) startInterval();
         }, () => {
           failed.add(i);
           report(usable[i]);
@@ -251,10 +271,40 @@
       };
 
       if (usable.length === 0) return giveUp();
-      showFirst(0);
+
+      // paused: nothing loads and every timer stops (what is shown stays);
+      // not running: the current image, still. Resuming continues from the
+      // current image, never from the first.
+      sync = () => {
+        if (allFailed) return;
+        if (paused) {
+          stopAll();
+          firstLoading = false;
+          return;
+        }
+        if (current < 0) {
+          if (!firstLoading) showFirst(0);
+          return;
+        }
+        if (running()) {
+          startInterval();
+        } else {
+          stopAll();
+        }
+      };
+      sync();
     });
 
-    return stopAll;
+    return () => {
+      sync = null;
+      stopAll();
+    };
+  });
+
+  $effect(() => {
+    void animate;
+    void paused;
+    untrack(() => sync?.());
   });
 </script>
 
@@ -263,6 +313,7 @@
     class="background-root scope-{scope}"
     data-bg-level={level}
     data-animate={String(animate)}
+    data-paused={String(paused)}
     style:opacity={layerOpacity}
     aria-hidden="true"
   >

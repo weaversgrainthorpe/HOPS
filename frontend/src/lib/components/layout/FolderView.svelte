@@ -17,6 +17,7 @@
   import { COLLAPSED_HINT } from '$lib/editor/resize';
   import ResizeHandles from '../editor/ResizeHandles.svelte';
   import FolderSurface from '../background/FolderSurface.svelte';
+  import BackgroundFailedBadge from '../background/BackgroundFailedBadge.svelte';
 
   interface Props {
     folder: FolderNode;
@@ -122,7 +123,6 @@
       colorOpacity={surfaceOpacity}
       mode="still"
       dashboardId={dashboard.id}
-      {editing}
     />
     {#if unreadable}
       <span class="empty-note unreadable">Can't display this folder's contents</span>
@@ -145,6 +145,8 @@
     {/if}
     <span class="collapsed-name">{folder.name}</span>
   </div>
+  <!-- Edit mode: a failed background image, flagged on a tab outside the tile (never on its content). -->
+  <BackgroundFailedBadge background={folder.background} {editing} level="folder" placement="corner" />
   {#if editing}
     <!-- The tooltip's hint, also for touch and screen readers (no handles on a collapsed folder). -->
     <span id="resize-hint-{folder.id}" class="sr-only">{COLLAPSED_HINT}</span>
@@ -186,7 +188,6 @@
         colorOpacity={surfaceOpacity}
         mode="animated"
         dashboardId={dashboard.id}
-        {editing}
       />
     {/if}
     {#if showTitle}
@@ -201,10 +202,14 @@
           </span>
         {/if}
         <h3>{folder.name}</h3>
+        <BackgroundFailedBadge background={folder.background} {editing} level="folder" placement="inline" />
         {#if views && !$editMode}
           <FolderControls dashboardId={views.dashboardId} folderId={folder.id} {remembered} {saved} variant="bar" />
         {/if}
       </div>
+    {/if}
+    {#if !showTitle}
+      <BackgroundFailedBadge background={folder.background} {editing} level="folder" placement="corner" />
     {/if}
     {#if !showTitle && views && !$editMode}
       <div class="corner-controls">
@@ -219,7 +224,6 @@
           color="transparent"
           mode="animated"
           dashboardId={dashboard.id}
-          {editing}
         />
       {/if}
       <ContainerView

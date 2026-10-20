@@ -29,6 +29,8 @@ export const reducedMotion: Readable<boolean> = readable(false, (set) => {
 
 interface Reg {
   seq: number;
+  /** false: a still folder (collapsed tile, single image) — lazy-load only, never animates or takes a slot. */
+  counts: boolean;
   setting: boolean;
   unsubSetting: (() => void) | null;
   visible: boolean;
@@ -48,7 +50,7 @@ function recompute() {
   const candidates: Reg[] = [];
   if (!reduced) {
     for (const r of regs.values()) {
-      if (r.visible && r.setting) candidates.push(r);
+      if (r.counts && r.visible && r.setting) candidates.push(r);
     }
   }
   candidates.sort((a, b) => b.area - a.area || a.seq - b.seq);
@@ -89,12 +91,21 @@ function stop() {
   reduced = false;
 }
 
+/**
+ * Register a folder background element. `loaded` turns true once the element
+ * has been on screen (lazy loading); `animate` is this folder's slot.
+ * `countsTowardCap: false` registers a still folder (collapsed tile, single
+ * image): it only gets `loaded`, never animates and never takes one of the
+ * MAX_ANIMATED_FOLDERS slots; `animatedSetting` is then not needed.
+ */
 export function registerFolderBackground(
   el: Element,
-  opts: { animatedSetting: Readable<boolean> },
+  opts: { animatedSetting?: Readable<boolean>; countsTowardCap?: boolean },
 ): { animate: Readable<boolean>; loaded: Readable<boolean>; unregister(): void } {
+  const counts = opts.countsTowardCap !== false && !!opts.animatedSetting;
   const reg: Reg = {
     seq: seq++,
+    counts,
     setting: false,
     unsubSetting: null,
     visible: false,
@@ -106,11 +117,13 @@ export function registerFolderBackground(
   regs.get(el)?.animate.set(false);
   regs.set(el, reg);
   start();
-  reg.unsubSetting = opts.animatedSetting.subscribe((v) => {
-    const changed = v !== reg.setting;
-    reg.setting = v;
-    if (changed) recompute();
-  });
+  if (counts && opts.animatedSetting) {
+    reg.unsubSetting = opts.animatedSetting.subscribe((v) => {
+      const changed = v !== reg.setting;
+      reg.setting = v;
+      if (changed) recompute();
+    });
+  }
 
   if (observer) {
     observer.observe(el);

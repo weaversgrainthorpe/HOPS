@@ -11,18 +11,19 @@
   //   the picture is the surface.
   // - A colour background is itself the surface.
   //
-  // Animation (mode="animated"): registered with the shared controller (one
-  // IntersectionObserver, cap of 4, reduced motion, the dashboard's setting);
-  // the picture is only loaded once the folder has been on screen. No
-  // backdrop-filter here (Tenet 4): the canvas-level overlay is the only blur.
+  // Every picture registers with the shared controller (one
+  // IntersectionObserver) and is only loaded once the folder has been on
+  // screen. An animated slideshow (mode="animated") also competes for one of
+  // the 4 animation slots (reduced motion, the dashboard's setting); a still
+  // one (collapsed tile, single image) never takes a slot. The edit-mode
+  // failure indicator is placed by the parent (BackgroundFailedBadge), off the
+  // content. No backdrop-filter here (Tenet 4): the canvas overlay is the only blur.
   import { readable, type Readable } from 'svelte/store';
   import type { Background } from '$lib/types';
   import BackgroundLayer from './BackgroundLayer.svelte';
   import { registerFolderBackground } from '$lib/stores/backgroundAnimation';
   import { animatedFolderBackgroundsFor } from '$lib/stores/config';
-  import {
-    failedBackgroundUrls, reportBackgroundError, markBackgroundLoaded, backgroundUrlsOf, failedFor
-  } from '$lib/stores/backgroundErrors';
+  import { reportBackgroundError, markBackgroundLoaded, backgroundUrlsOf } from '$lib/stores/backgroundErrors';
 
   interface Props {
     background?: Background;
@@ -33,10 +34,8 @@
     /** animated: subject to the shared controller; still: the first image, no slideshow. */
     mode: 'animated' | 'still';
     dashboardId: string;
-    /** Edit mode: a failed image shows the indicator. */
-    editing?: boolean;
   }
-  let { background, color, colorOpacity = 1, mode, dashboardId, editing = false }: Props = $props();
+  let { background, color, colorOpacity = 1, mode, dashboardId }: Props = $props();
 
   const own = $derived(background && !background.inherit && background.type ? background : undefined);
   const isPicture = $derived(own?.type === 'image' || own?.type === 'slideshow');
@@ -57,35 +56,45 @@
     markBackgroundLoaded(url);
   }
 
-  // ---- animation controller (animated slideshows only) ----
+  // ---- shared controller: lazy loading for every picture; animation slots
+  // only for an animated slideshow (stills never take one of the 4 slots).
   let el = $state<HTMLElement | null>(null);
   const NOT_ANIMATED: Readable<boolean> = readable(false);
-  const LOADED: Readable<boolean> = readable(true);
+  // Not loaded until the controller's first report says the folder is on screen.
+  const NOT_LOADED: Readable<boolean> = readable(false);
   let animateStore = $state<Readable<boolean>>(NOT_ANIMATED);
-  let loadedStore = $state<Readable<boolean>>(LOADED);
-  const wantsController = $derived(mode === 'animated' && own?.type === 'slideshow');
+  let loadedStore = $state<Readable<boolean>>(NOT_LOADED);
+  const animates = $derived(mode === 'animated' && own?.type === 'slideshow');
 
   $effect(() => {
-    if (!el || !wantsController) {
+    const anim = animates;
+    if (!el || !isPicture) {
       animateStore = NOT_ANIMATED;
-      loadedStore = LOADED;
+      loadedStore = NOT_LOADED;
       return;
     }
-    const reg = registerFolderBackground(el, { animatedSetting: animatedFolderBackgroundsFor(dashboardId) });
+    const reg = anim
+      ? registerFolderBackground(el, { animatedSetting: animatedFolderBackgroundsFor(dashboardId) })
+      : registerFolderBackground(el, { countsTowardCap: false });
     animateStore = reg.animate;
     loadedStore = reg.loaded;
-    return () => reg.unregister();
+    return () => {
+      reg.unregister();
+      animateStore = NOT_ANIMATED;
+      loadedStore = NOT_LOADED;
+    };
   });
 
-  const animate = $derived(mode === 'animated' && $animateStore);
-  const failed = $derived(editing ? failedFor(own, $failedBackgroundUrls) : []);
+  const animate = $derived(animates && $animateStore);
+  // A colour background needs no loading; a picture waits for the controller.
+  const drawLayer = $derived(!!own && (!isPicture || $loadedStore));
 </script>
 
 <div class="folder-surface" aria-hidden="true" bind:this={el}>
   {#if showColour}
     <div class="folder-surface-color" style:background-color={color} style:opacity={colourOpacity}></div>
   {/if}
-  {#if own && $loadedStore}
+  {#if drawLayer}
     <BackgroundLayer
       background={own}
       scope="box"
@@ -97,13 +106,6 @@
     />
   {/if}
 </div>
-{#if failed.length > 0}
-  <span
-    class="bg-failed-badge"
-    data-bg-failed="folder"
-    role="status"
-  >Background image couldn't be loaded</span>
-{/if}
 
 <style>
   .folder-surface {
@@ -118,22 +120,5 @@
     position: absolute;
     inset: 0;
     border-radius: inherit;
-  }
-  .bg-failed-badge {
-    position: absolute;
-    left: 0.25rem;
-    bottom: 0.25rem;
-    z-index: 3;
-    max-width: calc(100% - 0.5rem);
-    padding: 0.1rem 0.4rem;
-    border-radius: 0.25rem;
-    font-size: 0.7rem;
-    line-height: 1.3;
-    background: var(--color-error, #dc2626);
-    color: #fff;
-    pointer-events: none;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 </style>

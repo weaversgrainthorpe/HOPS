@@ -53,6 +53,8 @@
   --z-context-menu: 300;
   --z-modal: 1000;
   --z-folder-overlay: 900;
+  /* Dimmed backdrop behind folder overlay and maximised panels (over the live dashboard). */
+  --folder-backdrop: rgba(0, 0, 0, 0.6);
   --z-modal-overlay: 1100;
   --z-modal-critical: 1200;
   --z-toast: 1300;

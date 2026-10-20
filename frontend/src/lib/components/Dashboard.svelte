@@ -27,7 +27,8 @@
   import { onMount, onDestroy, tick, untrack } from 'svelte';
   import { get } from 'svelte/store';
   import { toast } from '$lib/stores/toast';
-  import { reportBackgroundError, markBackgroundLoaded, failedBackgroundUrls, failedFor } from '$lib/stores/backgroundErrors';
+  import { reportBackgroundError, markBackgroundLoaded } from '$lib/stores/backgroundErrors';
+  import BackgroundFailedBadge from './background/BackgroundFailedBadge.svelte';
   import { reducedMotion } from '$lib/stores/backgroundAnimation';
 
   // The route's dashboard: the stored v3 dashboard (every dashboard is editable).
@@ -182,13 +183,11 @@
   const overlayBlur = $derived(
     finite(overlaySource?.overlayBlur) ? Math.min(20, Math.max(0, overlaySource.overlayBlur)) : 10
   );
-  // Reduced motion freezes both slideshows; a fully opaque tab pauses the
-  // dashboard's (it stops loading further images).
+  // Reduced motion freezes both slideshows. A fully opaque tab pauses the
+  // dashboard's layer: nothing more loads (nothing at all if it starts there),
+  // and it resumes at its current image when a see-through tab is shown.
   const dashboardAnimates = $derived(!$reducedMotion && !tabOpaque);
   const tabAnimates = $derived(!$reducedMotion);
-  // Edit mode: a visible indicator per level for its images that failed (Ruling 7).
-  const dashboardFailed = $derived(editing ? failedFor(dashboardBackground, $failedBackgroundUrls) : []);
-  const tabFailed = $derived(editing ? failedFor(tabBackground, $failedBackgroundUrls) : []);
 
   onMount(() => {
     initEasterEggs();
@@ -299,6 +298,7 @@
     scope="viewport"
     level="dashboard"
     animate={dashboardAnimates}
+    paused={tabOpaque}
     onError={reportBackgroundError}
     onLoad={markBackgroundLoaded}
     fallbackColor="#1e293b"
@@ -413,14 +413,11 @@
     {/if}
   </div>
 
-  {#if dashboardFailed.length > 0 || tabFailed.length > 0}
+  {#if editing}
+    <!-- Edit mode: a failed background image per level (Ruling 7), in its own row above the canvas. -->
     <div class="bg-failed-row">
-      {#if dashboardFailed.length > 0}
-        <span class="bg-failed-badge" data-bg-failed="dashboard" role="status">Background image couldn't be loaded (dashboard)</span>
-      {/if}
-      {#if tabFailed.length > 0}
-        <span class="bg-failed-badge" data-bg-failed="tab" role="status">Background image couldn't be loaded (this tab)</span>
-      {/if}
+      <BackgroundFailedBadge background={dashboardBackground} {editing} level="dashboard" placement="inline" label="(dashboard)" />
+      <BackgroundFailedBadge background={tabBackground} {editing} level="tab" placement="inline" label="(this tab)" />
     </div>
   {/if}
 
@@ -552,15 +549,11 @@
     display: flex;
     flex-wrap: wrap;
     gap: 0.5rem;
-    padding: 0.5rem 2rem 0;
+    padding: 0 2rem;
   }
 
-  .bg-failed-badge {
-    padding: 0.2rem 0.6rem;
-    border-radius: 0.25rem;
-    font-size: 0.8rem;
-    background: var(--color-error, #dc2626);
-    color: #fff;
+  .bg-failed-row:has(:global(.bg-failed-badge)) {
+    padding-top: 0.5rem;
   }
 
   .layout-missing,

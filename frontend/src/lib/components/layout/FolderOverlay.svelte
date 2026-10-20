@@ -10,6 +10,7 @@
   import { findFolderChain } from '$lib/stores/folderView';
   import ContainerView from './ContainerView.svelte';
   import FolderSurface from '../background/FolderSurface.svelte';
+  import BackgroundFailedBadge from '../background/BackgroundFailedBadge.svelte';
 
   interface Props {
     dashboard: LayoutDashboard;
@@ -88,7 +89,6 @@
         color="var(--bg-primary)"
         mode="animated"
         dashboardId={dashboard.id}
-        {editing}
       />
       <header class="overlay-header">
         <nav aria-label="Folder path" class="crumbs">
@@ -110,6 +110,7 @@
             {/if}
           {/each}
         </nav>
+        <BackgroundFailedBadge background={folder.background} {editing} level="folder" placement="inline" />
         <button type="button" class="close-btn" aria-label="Close folder" title="Close (Esc)" onclick={closeTop}>
           <Icon icon="mdi:close" width="24" />
         </button>
@@ -142,7 +143,7 @@
   .overlay-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.6);
+    background: var(--folder-backdrop, rgba(0, 0, 0, 0.6));
     display: flex;
     align-items: center;
     justify-content: center;

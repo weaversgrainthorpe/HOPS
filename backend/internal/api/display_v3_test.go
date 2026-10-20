@@ -1,6 +1,9 @@
 package api
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+)
 
 // displayOf returns dashboard id's read-only `display` block from a view.
 func displayOf(t *testing.T, view map[string]interface{}, id string) map[string]interface{} {
@@ -65,5 +68,33 @@ func TestGetConfig_DisplayAnimatedFolderBackgrounds(t *testing.T) {
 	}
 	if got := displayOf(t, getView(t, c), "d1")["animatedFolderBackgrounds"]; got != true {
 		t.Fatalf("override on: animatedFolderBackgrounds = %v, want true", got)
+	}
+}
+
+// Fix round 1 (Minor 2): a hops-v3 import that carries the computed `display`
+// block (or any other transient key) stores none of them.
+func TestImport_DropsDisplay(t *testing.T) {
+	router, db := setupTestRouter(t)
+	c := newClient(t, router)
+	seed(t, db)
+	var env map[string]interface{}
+	if err := json.Unmarshal(c.export(""), &env); err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range env["config"].(map[string]interface{})["dashboards"].([]interface{}) {
+		dm := d.(map[string]interface{})
+		dm["display"] = map[string]interface{}{"animatedFolderBackgrounds": true}
+		dm["migrationNotices"] = []interface{}{"x"}
+	}
+	b, _ := json.Marshal(env)
+	if code, resp := c.importFile(b); code != 200 {
+		t.Fatalf("import: %d %v", code, resp)
+	}
+	for id, d := range storedDashboards(storedDoc(t, db)) {
+		for k := range transientDashboardKeys {
+			if _, has := d[k]; has {
+				t.Errorf("dashboard %s stored transient key %q", id, k)
+			}
+		}
 	}
 }

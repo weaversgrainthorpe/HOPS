@@ -169,6 +169,48 @@ describe('BackgroundLayer', () => {
     expect(onError).not.toHaveBeenCalled();
   });
 
+  it('animate off then on resumes at the current image (no restart, no re-preload)', async () => {
+    const r = render(BackgroundLayer, {
+      background: slideshow(['/backgrounds/a.jpg', '/backgrounds/b.jpg', '/backgrounds/c.jpg']),
+      scope: 'box',
+      animate: true
+    });
+    await settle();
+    img('/backgrounds/a.jpg').load();
+    await settle();
+    vi.advanceTimersByTime(10_000);
+    await settle();
+    img('/backgrounds/b.jpg').load();
+    await settle();
+    await r.rerender({ animate: false });
+    await settle();
+    expect(vi.getTimerCount()).toBe(0);
+    const before = FakeImage.all.length;
+    await r.rerender({ animate: true });
+    await settle();
+    expect(visibleImage(r.container)).toBe('url("/backgrounds/b.jpg")');
+    expect(FakeImage.all.length).toBe(before);
+    vi.advanceTimersByTime(10_000);
+    await settle();
+    expect(img('/backgrounds/c.jpg')).toBeTruthy();
+  });
+
+  it('paused from the start loads nothing; unpausing loads the first image', async () => {
+    const r = render(BackgroundLayer, {
+      background: slideshow(['/backgrounds/a.jpg', '/backgrounds/b.jpg']),
+      scope: 'viewport',
+      animate: true,
+      paused: true
+    });
+    await settle();
+    vi.advanceTimersByTime(60_000);
+    expect(FakeImage.all.length).toBe(0);
+    expect(vi.getTimerCount()).toBe(0);
+    await r.rerender({ paused: false });
+    await settle();
+    expect(img('/backgrounds/a.jpg')).toBeTruthy();
+  });
+
   it('unmount clears the curtain timeout (and the interval)', async () => {
     const r = render(BackgroundLayer, {
       background: slideshow(['/backgrounds/a.jpg', '/backgrounds/b.jpg'], { transition: 'curtain' }),

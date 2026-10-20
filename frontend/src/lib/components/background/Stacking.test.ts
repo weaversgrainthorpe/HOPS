@@ -112,6 +112,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
   closeAll();
@@ -177,8 +178,9 @@ describe('dashboard and tab layers', () => {
     expect(panel(container).style.getPropertyValue('--overlay-blur')).toBe('10px');
   });
 
-  it('the dashboard animation is paused under a fully opaque tab', async () => {
-    const d = dash({ background: dashBg }, [
+  it('the dashboard animation is paused under a fully opaque tab, and resumes at its current image', async () => {
+    vi.useFakeTimers();
+    const d = dash({ background: slideshow(['/backgrounds/d1.jpg', '/backgrounds/d2.jpg', '/backgrounds/d3.jpg']) }, [
       { id: 't1', name: 'Plain', root: { columns: 12, children: [] } },
       { id: 't2', name: 'Opaque', background: slideshow(['/backgrounds/t1.jpg', '/backgrounds/t2.jpg']), root: { columns: 12, children: [] } },
       { id: 't3', name: 'Half', background: image('/backgrounds/h.jpg', { opacity: 0.5 }), root: { columns: 12, children: [] } }
@@ -186,21 +188,52 @@ describe('dashboard and tab layers', () => {
     config.set({ schemaVersion: 3, dashboards: [d] });
     const { container } = render(Dashboard, { dashboard: d });
     await settle();
-    expect(layer(container, 'dashboard')?.dataset.animate).toBe('true');
+    const dl = () => layer(container, 'dashboard')!;
+    const shown = () => dl().querySelector<HTMLElement>('.background-layer.visible')?.style.backgroundImage ?? '';
+    expect(dl().dataset.animate).toBe('true');
+    expect(dl().dataset.paused).toBe('false');
+    img('/backgrounds/d1.jpg').onload?.();
+    await settle();
+    vi.advanceTimersByTime(10_000);
+    await settle();
+    img('/backgrounds/d2.jpg').onload?.();
+    await settle();
+    expect(shown()).toContain('/backgrounds/d2.jpg');
 
     await fireEvent.click(screen.getByRole('tab', { name: 'Switch to Opaque tab' }));
     await settle();
-    expect(layer(container, 'dashboard')?.dataset.animate).toBe('false');
+    expect(dl().dataset.paused).toBe('true');
     expect(layer(container, 'tab')?.dataset.animate).toBe('true');
-    // Paused: no preload of a further dashboard image while the tab covers it.
-    const before = FakeImage.all.filter((i) => i.src === '/backgrounds/d2.jpg').length;
-    img('/backgrounds/d1.jpg').onload?.();
+    const dashLoads = () => FakeImage.all.filter((i) => i.src.startsWith('/backgrounds/d')).length;
+    const before = dashLoads();
+    vi.advanceTimersByTime(120_000);
     await settle();
-    expect(FakeImage.all.filter((i) => i.src === '/backgrounds/d2.jpg').length).toBe(before);
+    expect(dashLoads()).toBe(before); // paused: nothing more loads
 
     await fireEvent.click(screen.getByRole('tab', { name: 'Switch to Half tab' }));
     await settle();
-    expect(layer(container, 'dashboard')?.dataset.animate).toBe('true');
+    expect(dl().dataset.paused).toBe('false');
+    expect(shown()).toContain('/backgrounds/d2.jpg'); // resumed where it was, not restarted at d1
+    expect(dashLoads()).toBe(before);
+    vi.advanceTimersByTime(10_000);
+    await settle();
+    expect(img('/backgrounds/d3.jpg')).toBeTruthy(); // continues with the next slide
+    vi.useRealTimers();
+  });
+
+  it('a dashboard under a fully opaque first tab loads nothing at all', async () => {
+    const d = dash({ background: slideshow(['/backgrounds/d1.jpg', '/backgrounds/d2.jpg']) }, [
+      { id: 't1', name: 'Opaque', background: image('/backgrounds/t.jpg'), root: { columns: 12, children: [] } },
+      { id: 't2', name: 'Plain', root: { columns: 12, children: [] } }
+    ]);
+    config.set({ schemaVersion: 3, dashboards: [d] });
+    const { container } = render(Dashboard, { dashboard: d });
+    await settle();
+    expect(layer(container, 'dashboard')?.dataset.paused).toBe('true');
+    expect(FakeImage.all.some((i) => i.src.startsWith('/backgrounds/d'))).toBe(false);
+    await fireEvent.click(screen.getByRole('tab', { name: 'Switch to Plain tab' }));
+    await settle();
+    expect(img('/backgrounds/d1.jpg')).toBeTruthy(); // loads once uncovered
   });
 
   it('reduced motion freezes the dashboard and tab slideshows', async () => {
@@ -385,6 +418,33 @@ describe('folder layers', () => {
     expect(container.querySelector('[data-bg-failed]')).toBeNull();
   });
 
+  it('the failure badge sits off the content: in the title bar, or on a tab outside the box', async () => {
+    const broken = image('/backgrounds/missing.jpg');
+    const { d, tab } = mkTab([
+      folder('ft', 'Titled', [tile('a', 'A')], { background: broken }),
+      { ...folder('fu', 'Untitled', [tile('b', 'B')], { background: broken, showTitle: false }), placement: { x: 4, y: 1, w: 4, h: 3 } },
+      { ...folder('fc', 'Collapsed', [tile('c', 'C')], { background: broken, display: 'collapsed' }), placement: { x: 8, y: 1, w: 2, h: 2 } }
+    ]);
+    const { container } = render(TabCanvas, { dashboard: d, tab, editing: true });
+    await settle();
+    for (const i of FakeImage.all.filter((x) => x.src === '/backgrounds/missing.jpg')) i.onerror?.();
+    await settle();
+
+    const titled = node(container, 'ft').querySelector('[data-bg-failed="folder"]')!;
+    expect(titled.closest('.folder-header')).not.toBeNull();
+    expect(titled.closest('.folder-body')).toBeNull();
+
+    const untitled = node(container, 'fu').querySelector('[data-bg-failed="folder"]')!;
+    expect(untitled.classList.contains('placement-corner')).toBe(true);
+    expect(untitled.parentElement).toBe(node(container, 'fu'));
+    expect(untitled.closest('.folder-body')).toBeNull();
+
+    const collapsed = node(container, 'fc').querySelector('[data-bg-failed="folder"]')!;
+    expect(collapsed.classList.contains('placement-corner')).toBe(true);
+    expect(collapsed.closest('.folder-collapsed-tile')).toBeNull();
+    expect(collapsed.parentElement).toBe(node(container, 'fc'));
+  });
+
   it('the folder overlay shows the folder background over its dimmed backdrop', async () => {
     const f = folder('f1', 'Box', [tile('in1', 'Inside')], { display: 'collapsed', background: image('/backgrounds/o.jpg', { opacity: 0.7 }) });
     const { d, tab } = mkTab([f]);
@@ -398,3 +458,69 @@ describe('folder layers', () => {
     expect(p?.closest('.overlay-backdrop')).not.toBeNull();
   });
 });
+
+// ---- lazy loading through the shared controller (Ruling 10.5) ----------------
+
+type IOCb = (entries: Partial<IntersectionObserverEntry>[]) => void;
+class FakeIO {
+  static live: FakeIO[] = [];
+  cb: IOCb;
+  observed = new Set<Element>();
+  constructor(cb: IOCb) { this.cb = cb; FakeIO.live.push(this); }
+  observe(el: Element) { this.observed.add(el); }
+  unobserve(el: Element) { this.observed.delete(el); }
+  disconnect() { this.observed.clear(); FakeIO.live = FakeIO.live.filter((i) => i !== this); }
+}
+function emitVisible(el: Element, area: number) {
+  const io = FakeIO.live.find((i) => i.observed.has(el));
+  if (!io) throw new Error('element not observed');
+  io.cb([{ target: el, isIntersecting: area > 0, intersectionRect: { width: area, height: 1 } as DOMRectReadOnly }]);
+}
+
+describe('folder lazy loading', () => {
+  beforeEach(() => {
+    FakeIO.live = [];
+    vi.stubGlobal('IntersectionObserver', FakeIO);
+  });
+
+  it('collapsed and single-image folders load only once visible, and never take an animation slot', async () => {
+    const anims = [0, 1, 2, 3].map((i) => ({
+      ...folder(`a${i}`, `Anim${i}`, [tile(`at${i}`, `AT${i}`)], { background: slideshow([`/backgrounds/a${i}-1.jpg`, `/backgrounds/a${i}-2.jpg`]) }),
+      placement: { x: i * 3, y: 0, w: 3, h: 3 }
+    }));
+    const { d, tab } = mkTab([
+      ...anims,
+      { ...folder('fc', 'Collapsed', [tile('c', 'C')], { display: 'collapsed', background: slideshow(['/backgrounds/c1.jpg', '/backgrounds/c2.jpg']) }), placement: { x: 0, y: 3, w: 2, h: 2 } },
+      { ...folder('fi', 'Single', [tile('s', 'S')], { background: image('/backgrounds/single.jpg') }), placement: { x: 2, y: 3, w: 4, h: 3 } }
+    ]);
+    const { container } = render(TabCanvas, { dashboard: d, tab });
+    await settle();
+    // Nothing loads before the observer's first report.
+    expect(FakeImage.all.length).toBe(0);
+    const surface = (id: string) => node(container, id).querySelector('.folder-surface')!;
+
+    // The stills are the largest on screen; the 4 slideshows still all animate.
+    emitVisible(surface('fc'), 100_000);
+    emitVisible(surface('fi'), 100_000);
+    for (let i = 0; i < 4; i++) emitVisible(surface(`a${i}`), 10);
+    await settle();
+    expect(img('/backgrounds/c1.jpg')).toBeTruthy();
+    expect(img('/backgrounds/single.jpg')).toBeTruthy();
+    for (let i = 0; i < 4; i++) {
+      expect(node(container, `a${i}`).querySelector<HTMLElement>('.background-root')?.dataset.animate).toBe('true');
+    }
+    expect(node(container, 'fc').querySelector<HTMLElement>('.background-root')?.dataset.animate).toBe('false');
+    expect(node(container, 'fi').querySelector<HTMLElement>('.background-root')?.dataset.animate).toBe('false');
+  });
+
+  it('an off-screen single-image folder never loads', async () => {
+    const { d, tab } = mkTab([folder('fi', 'Single', [tile('s', 'S')], { background: image('/backgrounds/far.jpg') })]);
+    const { container } = render(TabCanvas, { dashboard: d, tab });
+    await settle();
+    emitVisible(node(container, 'fi').querySelector('.folder-surface')!, 0);
+    await settle();
+    expect(FakeImage.all.some((i) => i.src === '/backgrounds/far.jpg')).toBe(false);
+    expect(node(container, 'fi').querySelector('.folder-surface-color')).not.toBeNull();
+  });
+});
+

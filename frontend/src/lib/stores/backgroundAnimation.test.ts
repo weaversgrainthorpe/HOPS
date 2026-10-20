@@ -188,4 +188,24 @@ describe('backgroundAnimation', () => {
     expect(regs.filter((r) => get(r.animate)).length).toBe(0);
     warn.mockRestore();
   });
+
+  it('still registrations (countsTowardCap:false) lazy-load but never animate nor take a cap slot', async () => {
+    const m = await load();
+    const stills = mk(3);
+    const anims = mk(4);
+    const sr = stills.map((el) => m.registerFolderBackground(el, { countsTowardCap: false }));
+    const ar = anims.map((el) => m.registerFolderBackground(el, { animatedSetting: writable(true) }));
+    // Not loaded before the first observer report.
+    for (const r of sr) expect(get(r.loaded)).toBe(false);
+    // Stills are the largest on screen; the 4 animated ones still all animate.
+    stills.forEach((el) => emit(el, 1000));
+    anims.forEach((el) => emit(el, 10));
+    for (const r of sr) {
+      expect(get(r.loaded)).toBe(true);
+      expect(get(r.animate)).toBe(false);
+    }
+    for (const r of ar) expect(get(r.animate)).toBe(true);
+    [...sr, ...ar].forEach((r) => r.unregister());
+  });
 });
+

@@ -128,7 +128,9 @@
     right: 0;
     bottom: 0;
     padding: 1rem;
-    background: var(--bg-primary);
+    /* Dimmed, translucent backdrop over the live dashboard (Ruling 10.1); the
+       panel's surface draws the folder background or the panel colour. */
+    background: var(--folder-backdrop, rgba(0, 0, 0, 0.6));
     box-sizing: border-box;
   }
   .max-panel {
