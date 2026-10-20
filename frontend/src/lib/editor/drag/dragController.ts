@@ -23,11 +23,14 @@
  *   (`tab-order`, from `tabSource`), both through this same engine.
  * Dwell timers live here (the frame computes the dwell key; the timer ripens it and performs the
  * navigation); resolveDrop stays pure and only reads `state.dwell`.
+ * Task 9: resize drags (resizeSource on a handle → `resize`, resolved by resolveResize through
+ * resize.ts) and the phone (stacked) layout, where a drop goes at a place in the reading order
+ * (resolveStacked + stacked.ts) shown by an insertion marker; merge, into-folder and tabs as above.
  */
 import { get, writable, type Readable } from 'svelte/store';
 import type { Container, LayoutDashboard, LayoutNode, Placement } from '$lib/types/layout';
 import type { ContainerMetrics } from '$lib/layout/geometry';
-import { clampPlacement, isRenderable } from '$lib/layout/geometry';
+import { clampPlacement, isRenderable, nodeBox } from '$lib/layout/geometry';
 import {
   TreeOpError, copyNodes, deleteNodes, firstFreeCell, freeSide, isDescendant, locate, mergeIntoNewFolder, moveNodes,
   originOf, pushAside, reorderTabs, resolveContainer, type ContainerRef
@@ -35,7 +38,9 @@ import {
 import {
   adaptedFor, containerOfNode, currentDraft, documentIds, findIn, placementsFor, sizeFor
 } from '../editorActions';
-import { editorMenu, openDialog, ownsTarget } from '../editorUi';
+import { canvasStacked, editorMenu, openDialog, ownsTarget } from '../editorUi';
+import { commitResize, resizeBlocked, resizeTarget, type ResizeEdge, type ResizeTarget } from '../resize';
+import { readingIds, stackPlans } from './stacked';
 import { closeTo, closeTop, openFolder, overlayStack } from '$lib/stores/folderOverlay';
 import { apply, session, undo } from '$lib/stores/editSession';
 import { toast } from '$lib/stores/toast';
@@ -54,8 +59,21 @@ export interface Guide {
   to: number;
 }
 
+/** An insertion marker (viewport px): a vertical bar, or a horizontal one when `width` is set. */
+export interface Marker {
+  left: number;
+  top: number;
+  height: number;
+  width?: number;
+}
+
 export type DropTarget =
-  | { kind: 'place'; to: ContainerRef; at: Placement[]; push: Map<string, Placement>; guides?: Guide[] }
+  | {
+      kind: 'place'; to: ContainerRef; at: Placement[]; push: Map<string, Placement>; guides?: Guide[];
+      /** Stacked (phone) layout: where in the reading order it goes. */
+      marker?: Marker;
+    }
+  | ResizeTarget
   | { kind: 'merge'; targetTileId: string }
   | { kind: 'into-folder'; folderId: string; at: Placement[] }
   | { kind: 'tab-append'; tabId: string; at: Placement[] }
@@ -81,8 +99,16 @@ export interface DragState {
   tabId?: string;
   /** Viewport box of the item or tab under the pointer, for a merge / into / append cue. */
   over?: Box;
-  /** Tab reorder: where the dragged tab would go (viewport px). */
-  marker?: { left: number; top: number; height: number };
+  /** Tab reorder or a stacked (phone) drop: where it would go (viewport px). */
+  marker?: Marker;
+  /**
+   * A resize drag (a handle of `id`): the grabbed edge, the size it started from (cells / design
+   * units), the pointer's start and the container's rendered metrics. `ids` is then empty.
+   */
+  resize?: {
+    id: string; edge: ResizeEdge; startW: number; startH: number; storedH: number;
+    x0: number; y0: number; metrics: ContainerMetrics;
+  };
   /** Where the first item was grabbed, as a fraction of its rendered box (0..1). */
   grab?: { fx: number; fy: number };
   /** Ghost: the grabbed item's rendered size and a label. */
@@ -354,9 +380,6 @@ export function resolveDrop(state: DragState, hit: HitResult, draft: LayoutDashb
   if (hit.tabId !== undefined) return resolveTabAppend(state, hit.tabId, draft);
   const c = hit.container;
   if (!c) return invalid(hit.tabBar ? 'Drop it on a tab, the dashboard, or inside a folder.' : 'Drop it on the dashboard or inside a folder.');
-  if (c.layout === 'stacked') {
-    return invalid("Dragging to a position isn't available in the narrow (stacked) layout yet — use Cut and Paste.");
-  }
   const ids = state.ids;
   const to = c.ref;
   const bad = checkIds(draft, ids, to.folderId);
@@ -369,6 +392,7 @@ export function resolveDrop(state: DragState, hit: HitResult, draft: LayoutDashb
     if (n?.kind === 'folder') return resolveIntoFolder(state, n.id, draft);
     if (n?.kind === 'tile' && ripe(state, `merge:${n.id}`)) return resolveMerge(state, n.id, draft);
   }
+  if (c.layout === 'stacked') return resolveStacked(state, hit, draft, to);
 
   let r: ReturnType<typeof resolveContainer>;
   let nodes: LayoutNode[];
@@ -483,6 +507,104 @@ export function resolveDrop(state: DragState, hit: HitResult, draft: LayoutDashb
   });
 }
 
+/**
+ * The stacked (phone) slot: the item box nearest the pointer, and which side of it — its left /
+ * right half, or top / bottom half for a wide item (an expanded folder spans the row).
+ */
+function stackSlot(hit: HitResult, known: ReadonlySet<string>): { id: string; box: Box; after: boolean } | null {
+  // Only items the order knows (a placeholder for an unreadable item is not a slot).
+  const boxes = (hit.stackBoxes ?? []).filter((b) => known.has(b.id));
+  if (boxes.length === 0) return null;
+  const { dx: x, dy: y } = hit;
+  const dist = (b: Box) => {
+    const ddx = x < b.left ? b.left - x : x > b.left + b.width ? x - (b.left + b.width) : 0;
+    const ddy = y < b.top ? b.top - y : y > b.top + b.height ? y - (b.top + b.height) : 0;
+    return Math.hypot(ddx, ddy);
+  };
+  let best = boxes[0];
+  for (const b of boxes) if (dist(b) < dist(best)) best = b;
+  const wide = best.width > 2 * best.height;
+  return {
+    id: best.id,
+    box: best,
+    after: wide ? y >= best.top + best.height / 2 : x >= best.left + best.width / 2
+  };
+}
+
+/** The marker for a stacked slot, in viewport px (the container's top-left when it is empty). */
+function stackMarker(slot: ReturnType<typeof stackSlot>, origin: { left: number; top: number }): Marker {
+  if (!slot) return { left: origin.left, top: origin.top, width: 120, height: 0 };
+  const b = slot.box;
+  if (b.width > 2 * b.height) {
+    return { left: origin.left + b.left, top: origin.top + (slot.after ? b.top + b.height : b.top), width: b.width, height: 0 };
+  }
+  return { left: origin.left + (slot.after ? b.left + b.width : b.left), top: origin.top + b.top, height: b.height };
+}
+
+/**
+ * Stacked (phone) layout: the drop goes at a place in the container's READING ORDER — before or
+ * after the nearest item (stackSlot). stacked.stackPlans proposes stored placements; each is
+ * trial-run through the very op the commit runs, and only one whose result shows exactly the
+ * wanted order is taken (so the drop lands where the marker is, or the target is invalid).
+ */
+function resolveStacked(state: DragState, hit: HitResult, draft: LayoutDashboard, to: ContainerRef): DropTarget {
+  const ids = state.ids;
+  let r: ReturnType<typeof resolveContainer>;
+  let nodes: LayoutNode[];
+  try {
+    r = resolveContainer(draft, to);
+    nodes = adaptedFor(draft, ids, to);
+  } catch (e) {
+    return invalid(message(e, "That can't go there."));
+  }
+  const cols = r.columns;
+  const moving: ReadonlySet<string> = state.copy ? new Set<string>() : new Set(ids);
+  const others = readingIds(r.container).filter((id) => !moving.has(id));
+  const slot = stackSlot(hit, new Set(others));
+  const index = slot ? others.indexOf(slot.id) + (slot.after ? 1 : 0) : others.length;
+  const marker = stackMarker(slot, hit.container ?? { left: 0, top: 0 });
+  const target = memoised(JSON.stringify(['stack', ids, state.copy, to, index]), draft, () => {
+    const sizes = nodes.map((n) => sizeFor(n, r.mode));
+    const zs = nodes.map((n) => (typeof n.placement?.z === 'number' && Number.isFinite(n.placement.z) ? n.placement.z : undefined));
+    let lastError = '';
+    for (const plan of stackPlans(r.container, cols, moving, sizes, index, zs)) {
+      try {
+        let result: LayoutDashboard;
+        let placedIds = ids;
+        if (state.copy) {
+          const c = copyNodes(draft, ids, to, plan.at, documentIds(), plan.push); // the same id set as the commit
+          result = c.dashboard;
+          placedIds = c.newIds;
+        } else {
+          result = moveNodes(draft, ids, to, plan.at, plan.push);
+        }
+        const want = [...others.slice(0, index), ...placedIds, ...others.slice(index)];
+        const got = readingIds(resolveContainer(result, to).container);
+        if (got.join('\u0000') === want.join('\u0000')) {
+          return { kind: 'place', to, at: plan.at, push: plan.push } as DropTarget;
+        }
+      } catch (e) {
+        lastError = e instanceof TreeOpError ? e.message : message(e, '');
+      }
+    }
+    return invalid(lastError || "There's no room to put it there in this order — try a wider screen, or Cut and Paste.");
+  });
+  return target.kind === 'place' ? { ...target, marker } : target;
+}
+
+/** A resize drag: the pointer's travel since the press, snapped to whole cells / 8 px units. */
+export function resolveResize(state: DragState, draft: LayoutDashboard): DropTarget {
+  const r = state.resize;
+  if (!r) return invalid('Nothing is being resized.');
+  const m = r.metrics;
+  if (!(m.unitPx > 0) || !(m.rowPx > 0)) return invalid("That area can't be measured right now; try again.");
+  const dw = Math.round((state.pointer.x - r.x0) / m.unitPx);
+  const dh = Math.round((state.pointer.y - r.y0) / m.rowPx);
+  const w = r.edge === 'bottom' ? r.startW : Math.max(1, r.startW + dw);
+  const h = r.edge === 'right' ? r.storedH : Math.max(1, r.startH + dh);
+  return memoised(JSON.stringify(['resize', r.id, w, h]), draft, () => resizeTarget(draft, r.id, w, h));
+}
+
 // ---------------------------------------------------------------- commit
 
 function describe(d: LayoutDashboard, ids: string[]): string {
@@ -549,6 +671,12 @@ export function commitDrop(state: DragState): void {
     return;
   }
   const before = d;
+
+  if (t.kind === 'resize') {
+    const label = commitResize(t); // '' = the same size: no change, no undo step
+    if (label) announce(label, before);
+    return;
+  }
 
   if (t.kind === 'tab-order') {
     if (t.tabIds.join('\u0000') === d.tabs.map((x) => x.id).join('\u0000')) return; // same order: no change
@@ -626,6 +754,8 @@ interface Press {
   id?: string;
   /** The tab pressed (tab reorder). */
   tab?: string;
+  /** A resize handle pressed: its node, edge and the container's rendered metrics. */
+  resize?: { id: string; edge: ResizeEdge; metrics: ContainerMetrics };
   rect?: { left: number; top: number; width: number; height: number };
   onMenu?: (x: number, y: number, target: EventTarget | null) => void;
   ready: boolean;
@@ -702,7 +832,44 @@ function startTabDrag(p: Press, x: number, y: number) {
   });
 }
 
+/**
+ * A resize drag: the same press, frame loop, cancel and commit as an item drag. The preview is
+ * drawn in the node's container from the box measured on press (rendered geometry, Ruling 13).
+ */
+function startResize(p: Press, x: number, y: number) {
+  const spec = p.resize!;
+  const d = currentDraft();
+  const n = d ? findIn(d, spec.id) : undefined;
+  const blocked = d ? resizeBlocked(d, spec.id, get(canvasStacked)) : 'Not editing: click Edit first.';
+  const m = spec.metrics;
+  if (!d || !n || blocked || !(m.unitPx > 0) || !(m.rowPx > 0)) {
+    endPress();
+    toast.info(blocked ?? "That area can't be measured right now, so it can't be resized; try again.");
+    return;
+  }
+  const stored = clampPlacement(n.placement, m.columns);
+  const rect = p.rect;
+  // A free folder can render taller than its stored height (content never clips): start from what is shown.
+  const shownH = rect && rect.height > 0 ? Math.round(rect.height / m.rowPx) : 0;
+  const b = nodeBox(stored, m);
+  beginDragging(d, {
+    ids: [],
+    copy: false,
+    pointer: { x, y },
+    target: null,
+    resize: {
+      id: spec.id, edge: spec.edge, startW: stored.w, startH: Math.max(stored.h, shownH), storedH: stored.h,
+      x0: p.x, y0: p.y, metrics: m
+    },
+    view: rect ? { left: rect.left - b.leftPx, top: rect.top - b.topPx, metrics: m } : undefined
+  });
+}
+
 function startDrag(p: Press, x: number, y: number, copy: boolean) {
+  if (p.resize) {
+    startResize(p, x, y);
+    return;
+  }
   if (p.tab !== undefined) {
     startTabDrag(p, x, y);
     return;
@@ -738,17 +905,27 @@ function frame() {
   if (!s || !d) return;
   const at = pending ?? s.pointer;
   pending = null;
+  if (s.resize) {
+    // A resize reads no layout: the size follows the pointer's travel (resolveResize).
+    const next: DragState = { ...s, pointer: { x: at.x, y: at.y } };
+    next.target = resolveResize(next, d);
+    setState(next);
+    return;
+  }
   const hit = env.hitTest(at.x, at.y, new Set(s.ids));
   lastHit = hit;
   const next: DragState = { ...s, pointer: { x: at.x, y: at.y } };
   next.dwell = dwellFor(next, hit, d, s.dwell);
   next.target = resolveDrop(next, hit, d);
-  next.view = hit.container ? { left: hit.container.left, top: hit.container.top, metrics: hit.container.metrics } : undefined;
+  // Stacked containers have no cell geometry to highlight: their drop shows as a marker instead.
+  next.view = hit.container && hit.container.layout !== 'stacked'
+    ? { left: hit.container.left, top: hit.container.top, metrics: hit.container.metrics }
+    : undefined;
   next.over = overFor(next.target, hit);
   const slot = next.target.kind === 'tab-order' ? tabSlot(next, hit) : null;
   next.marker = slot
     ? { left: slot.after ? slot.box.left + slot.box.width : slot.box.left, top: slot.box.top, height: slot.box.height }
-    : undefined;
+    : next.target.kind === 'place' ? next.target.marker : undefined;
   if (hit.panel !== undefined) enteredPanels.add(hit.panel);
   setState(next);
   autoScroll(at.x, at.y, hit.scroller);
@@ -804,7 +981,7 @@ function dwellKey(s: DragState, hit: HitResult, d: LayoutDashboard): { key: stri
     return top !== undefined && enteredPanels.has(top) ? { key: `out:${top}`, ms: OPEN_DWELL_MS } : null;
   }
   if (hit.tabId !== undefined) return hit.tabId !== activeTab ? { key: `tab:${hit.tabId}`, ms: OPEN_DWELL_MS } : null;
-  if (!hit.container || hit.container.layout === 'stacked') return null;
+  if (!hit.container) return null;
   const zone = zoneOf(s, hit);
   if (!zone?.centre) return null;
   const n = findIn(d, zone.id);
@@ -893,7 +1070,7 @@ export function crumbAction(crumb: string): (() => void) | null {
 function reresolve(copy: boolean) {
   const s = current;
   const d = currentDraft();
-  if (!s || !d || s.copy === copy || s.tab !== undefined) return;
+  if (!s || !d || s.copy === copy || s.tab !== undefined || s.resize) return;
   const next: DragState = { ...s, copy };
   if (lastHit) next.target = resolveDrop(next, lastHit, d);
   setState(next);
@@ -955,7 +1132,7 @@ function onMove(e: PointerEvent) {
       return;
     }
     if (dist <= MOUSE_THRESHOLD_PX) return;
-    if (!p.id && p.tab === undefined) {
+    if (!p.id && p.tab === undefined && !p.resize) {
       endPress(); // a container press has nothing to drag
       return;
     }
@@ -1006,7 +1183,7 @@ function onKeyDown(e: KeyboardEvent) {
     // Consumed: Escape ends the drag only (no overlay closes, no selection clears).
     e.preventDefault();
     e.stopImmediatePropagation();
-    cancelDrag();
+    cancelDrag(current.resize ? 'Resize cancelled — nothing changed.' : undefined);
     return;
   }
   if (current && (e.key === 'Control' || e.key === 'Meta')) reresolve(true);
@@ -1133,6 +1310,45 @@ export function dragSource(el: HTMLElement, params: DragSourceParams) {
       el.removeEventListener('dragstart', nativeDrag);
       el.removeEventListener('touchmove', onTouchMove);
       if (press && !current && press.id === prm.id) endPress();
+    }
+  };
+}
+
+export interface ResizeSourceParams {
+  id: string;
+  edge: ResizeEdge;
+  /** The RENDERED metrics of the container the node sits in (one geometry source). */
+  metrics: ContainerMetrics;
+  enabled: boolean;
+}
+
+/**
+ * Svelte action for a resize handle: a drag of the handle resizes its node (the closest
+ * `data-node-id` element) through this same engine. The handle's press wins over the node's own
+ * dragSource (the innermost claim wins).
+ */
+export function resizeSource(el: HTMLElement, params: ResizeSourceParams) {
+  let prm = params;
+  const down = (e: PointerEvent) => {
+    if (!prm.enabled || !claimable(e)) return;
+    claimed.add(e);
+    const nodeEl = (el.closest('[data-node-id]') as HTMLElement | null) ?? el;
+    begin(e, nodeEl, undefined, undefined);
+    if (press) {
+      press.resize = { id: prm.id, edge: prm.edge, metrics: prm.metrics };
+      press.rect = env.measure(nodeEl); // measured on press, never in pointermove
+    }
+  };
+  el.addEventListener('pointerdown', down);
+  el.addEventListener('touchmove', onTouchMove, { passive: false });
+  return {
+    update(next: ResizeSourceParams) {
+      prm = next;
+    },
+    destroy() {
+      el.removeEventListener('pointerdown', down);
+      el.removeEventListener('touchmove', onTouchMove);
+      if (press && !current && press.resize?.id === prm.id) endPress();
     }
   };
 }

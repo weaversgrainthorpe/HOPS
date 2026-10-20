@@ -15,6 +15,7 @@
   import type { ContainerRef } from '$lib/editor/treeOps';
   import { drag, dragSource, pressMenu } from '$lib/editor/drag/dragController';
   import { dropContainer } from '$lib/editor/drag/hitTest';
+  import ResizeHandles from '../editor/ResizeHandles.svelte';
 
   interface Props {
     container: Container;
@@ -176,6 +177,10 @@
             fit={fitOf(node)}
             editorSelected={editing ? $selectedNodes.has(node.id) : undefined}
           />
+          {#if editing && effective === 'free'}
+            <!-- Free tiles resize like folders; a grid tile is one cell (its Size is in the tile dialog). -->
+            <ResizeHandles id={node.id} name={node.name} metrics={metrics} />
+          {/if}
         </div>
       {:else}
         <FolderView

@@ -6,7 +6,8 @@
    * Every size comes from geometry.nodeBox with the target container's rendered metrics; a pushed
    * collapsed folder is drawn as the one cell it renders as (Ruling 13). Task 8: the merge /
    * into-folder / tab-append cue on the item or tab under the pointer, free alignment guides, the
-   * tab-reorder marker, and the DragBreadcrumb.
+   * tab-reorder marker, and the DragBreadcrumb. Task 9: a resize shows the resulting box and any
+   * push (no ghost); a stacked (phone) drop shows its reading-order insertion marker.
    */
   import { drag, setActiveTab, setTabSwitcher } from './dragController';
   import DragBreadcrumb from './DragBreadcrumb.svelte';
@@ -34,7 +35,7 @@
   const boxes = $derived.by((): { at: NodeBox[]; push: NodeBox[] } => {
     const t = s?.target;
     const view = s?.view;
-    if (!s || !view || !t || t.kind !== 'place') return { at: [], push: [] };
+    if (!s || !view || !t || (t.kind !== 'place' && t.kind !== 'resize')) return { at: [], push: [] };
     const m = view.metrics;
     const d = $session?.draft;
     const tab = d?.tabs.find((x) => x.id === t.to.tabId);
@@ -44,7 +45,7 @@
       const shown = n?.kind === 'folder' && n.display === 'collapsed' && tab ? minimisedPlacement(p, m.mode, tab) : p;
       push.push(nodeBox(shown, m));
     }
-    return { at: t.at.map((p) => nodeBox(p, m)), push };
+    return { at: (t.kind === 'resize' ? [t.at] : t.at).map((p) => nodeBox(p, m)), push };
   });
 
   const box = (b: NodeBox, left: number, top: number) =>
@@ -100,12 +101,18 @@
       </div>
     {/if}
     {#if s.marker}
-      <div class="marker" style="left:{px(s.marker.left - 2)};top:{px(s.marker.top)};width:4px;height:{px(s.marker.height)};"></div>
+      {#if s.marker.width !== undefined}
+        <div class="marker" style="left:{px(s.marker.left)};top:{px(s.marker.top - 2)};width:{px(s.marker.width)};height:4px;"></div>
+      {:else}
+        <div class="marker" style="left:{px(s.marker.left - 2)};top:{px(s.marker.top)};width:4px;height:{px(s.marker.height)};"></div>
+      {/if}
     {/if}
-    <div class="ghost" class:invalid={invalid !== null} style={ghostStyle}>
-      <span class="ghost-label">{s.ghost?.label ?? ''}</span>
-      {#if s.copy}<span class="badge" title="Copy">+</span>{/if}
-    </div>
+    {#if !s.resize}
+      <div class="ghost" class:invalid={invalid !== null} style={ghostStyle}>
+        <span class="ghost-label">{s.ghost?.label ?? ''}</span>
+        {#if s.copy}<span class="badge" title="Copy">+</span>{/if}
+      </div>
+    {/if}
     {#if invalid !== null}
       <div class="reason" style="left:{px(s.pointer.x + 16)};top:{px(s.pointer.y + 16)};">{invalid}</div>
     {/if}

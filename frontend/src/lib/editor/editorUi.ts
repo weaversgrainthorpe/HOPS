@@ -31,6 +31,12 @@ export interface MenuRequest {
 
 export const editorMenu = writable<MenuRequest | null>(null);
 
+/**
+ * The editing canvas is in the phone (stacked) layout: no resize handles and no free placement;
+ * the toolbar shows a one-line hint. TabCanvas sets it while editing.
+ */
+export const canvasStacked = writable(false);
+
 export function openDialog(d: EditorDialog): void {
   editorMenu.set(null);
   editorDialog.set(d);

@@ -14,6 +14,8 @@
   import { selectedNodes, toggleNode } from '$lib/stores/nodeSelection';
   import { openDialog, openMenu, menuPointFor } from '$lib/editor/editorUi';
   import { drag, dragSource } from '$lib/editor/drag/dragController';
+  import { COLLAPSED_HINT } from '$lib/editor/resize';
+  import ResizeHandles from '../editor/ResizeHandles.svelte';
 
   interface Props {
     folder: FolderNode;
@@ -87,6 +89,7 @@
     class:dragging
     data-node-id={folder.id}
     {style}
+    title={editing ? COLLAPSED_HINT : undefined}
     oncontextmenu={editing ? menu : undefined}
     use:dragSource={{ id: folder.id, enabled: editing, onMenu: pressed }}
   >
@@ -194,6 +197,10 @@
         {editing}
       />
     </div>
+    {#if editing && plan.kind !== 'stacked'}
+      <!-- Handles on the rendered (expanded) box; a collapsed folder has none (Ruling 13). -->
+      <ResizeHandles id={folder.id} name={folder.name} metrics={parent} />
+    {/if}
   </div>
 {/if}
 

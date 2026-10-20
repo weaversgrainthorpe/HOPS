@@ -3,8 +3,10 @@
   import { session, dirty, save, discard, undo, redo } from '$lib/stores/editSession';
   import { selectedNodes, clearSelection, selectionInDraft } from '$lib/stores/nodeSelection';
   import { copySelection, cutSelection, pasteInto } from '$lib/stores/nodeClipboard';
-  import { openDialog, currentContainer } from '$lib/editor/editorUi';
-  import { deleteWithConfirm } from '$lib/editor/editorActions';
+  import { openDialog, currentContainer, canvasStacked } from '$lib/editor/editorUi';
+  import { deleteWithConfirm, zOrderSelection } from '$lib/editor/editorActions';
+  import { NARROW_HINT, resizeBy } from '$lib/editor/resize';
+  import { toast } from '$lib/stores/toast';
 
   interface Props {
     /** The active tab: adds and pastes without a target go to its root, or the open folder overlay. */
@@ -27,6 +29,13 @@
     }
   }
 
+  const ARROWS: Record<string, [number, number]> = {
+    ArrowRight: [1, 0],
+    ArrowLeft: [-1, 0],
+    ArrowDown: [0, 1],
+    ArrowUp: [0, -1]
+  };
+
   function isTyping(t: EventTarget | null): boolean {
     if (!(t instanceof HTMLElement)) return false;
     if (t.isContentEditable) return true;
@@ -47,11 +56,30 @@
     if (!$session || e.defaultPrevented || isTyping(e.target) || modalOpen()) return;
     const mod = e.ctrlKey || e.metaKey;
     const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+    // Shift+Arrow: resize the selected item by one cell (grid) or one 8 px unit (free).
+    const grow = ARROWS[e.key];
+    if (grow && e.shiftKey && !mod && !e.altKey) {
+      const ids = selectionInDraft();
+      if (ids.length === 0) return; // nothing selected: leave Shift+Arrow to the page
+      e.preventDefault();
+      if (ids.length > 1) toast.info('Select one item to resize it with Shift+Arrow keys.');
+      else resizeBy(ids[0], grow[0], grow[1]);
+      return;
+    }
     if (mod && !e.altKey) {
       if (k === 'z' && !e.shiftKey) { e.preventDefault(); undo(); return; }
       if ((k === 'z' && e.shiftKey) || (k === 'y' && !e.shiftKey)) { e.preventDefault(); redo(); return; }
       if (k === 's' && !e.shiftKey) { e.preventDefault(); void doSave(); return; }
       if (e.shiftKey) return;
+      // Ctrl+] / Ctrl+[: bring forward / send back (free layouts).
+      const z = k === ']' || e.code === 'BracketRight' ? 'forward' : k === '[' || e.code === 'BracketLeft' ? 'back' : null;
+      if (z) {
+        const ids = selectionInDraft();
+        if (ids.length === 0) return;
+        e.preventDefault();
+        zOrderSelection(ids, z);
+        return;
+      }
       // Copy/cut only when no text is selected on the page (then the browser copies the text).
       const textSelected = (window.getSelection()?.toString().length ?? 0) > 0;
       if (k === 'c' && !textSelected && $selectedNodes.size > 0) { e.preventDefault(); copySelection(); return; }
@@ -106,6 +134,11 @@
       <Icon icon="mdi:tab-plus" width="18" /> Add tab
     </button>
   </div>
+  {#if $canvasStacked}
+    <p class="narrow-hint" role="note">
+      <Icon icon="mdi:information-outline" width="16" /><span>{NARROW_HINT}</span>
+    </p>
+  {/if}
 </div>
 
 <style>
@@ -154,6 +187,15 @@
     background: var(--accent);
     border-color: var(--accent);
     color: #fff;
+  }
+  .narrow-hint {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-basis: 100%;
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 0.8125rem;
   }
   .unsaved {
     display: inline-flex;

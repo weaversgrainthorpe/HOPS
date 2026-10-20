@@ -5,7 +5,7 @@ import { begin, session, resetEditSessionForTests } from '$lib/stores/editSessio
 import { clearSelection } from '$lib/stores/nodeSelection';
 import { clearNodeClipboard } from '$lib/stores/nodeClipboard';
 import { closeAll } from '$lib/stores/folderOverlay';
-import { editorDialog, editorMenu } from '$lib/editor/editorUi';
+import { canvasStacked, editorDialog, editorMenu } from '$lib/editor/editorUi';
 import { confirmModalState, closeConfirmModal } from '$lib/stores/confirmModal';
 import { toast } from '$lib/stores/toast';
 import type { Config } from '$lib/types';
@@ -63,6 +63,7 @@ export function resetEditor(): void {
   closeAll();
   editorDialog.set(null);
   editorMenu.set(null);
+  canvasStacked.set(false);
   toast.clear();
 }
 

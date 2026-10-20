@@ -290,6 +290,40 @@ export function zOrder(id: string, dir: 'forward' | 'back'): boolean {
   return apply(dir === 'forward' ? 'Bring forward' : 'Send back', (dd) => setZ(dd, id, dir));
 }
 
+/**
+ * Ctrl+] / Ctrl+[ on the selection: z-order of ONE item in a FREE container (as the item menu).
+ * Anything else changes nothing and says why — never a silent no-op.
+ */
+export function zOrderSelection(ids: string[], dir: 'forward' | 'back'): boolean {
+  const d = currentDraft();
+  if (!d || ids.length === 0) return false;
+  if (ids.length > 1) {
+    toast.info('Select one item to bring it forward or send it back.');
+    return false;
+  }
+  const ref = containerOfNode(d, ids[0]);
+  let mode: LayoutMode | null = null;
+  try {
+    mode = ref ? resolveContainer(d, ref).mode : null;
+  } catch {
+    mode = null;
+  }
+  if (!ref || mode === null) {
+    toast.error('That item no longer exists.');
+    return false;
+  }
+  if (mode !== 'free') {
+    toast.info('Bring forward / Send back are for free layouts — items in a grid never overlap.');
+    return false;
+  }
+  const before = currentDraft();
+  const ok = zOrder(ids[0], dir);
+  if (ok && currentDraft() === before) {
+    toast.info(dir === 'forward' ? 'It is already in front of everything here.' : 'It is already behind everything here.');
+  }
+  return ok;
+}
+
 /** Move or copy items to another container on THIS dashboard (first free cells). */
 export function moveOrCopyTo(ids: string[], to: ContainerRef, mode: 'move' | 'copy'): boolean {
   const d = currentDraft();

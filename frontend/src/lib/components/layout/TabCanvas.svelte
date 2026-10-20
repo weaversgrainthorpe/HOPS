@@ -6,6 +6,7 @@
   import { closeAll, overlayStack, reconcile } from '$lib/stores/folderOverlay';
   import { toast } from '$lib/stores/toast';
   import { editMode } from '$lib/stores/editMode';
+  import { canvasStacked } from '$lib/editor/editorUi';
   import {
     FOLDER_VIEW_CONTEXT, applyFolderViews, findFolderChain, folderViewFor, type FolderViewContext
   } from '$lib/stores/folderView';
@@ -101,6 +102,13 @@
   const plan = $derived(planCanvas(mode, width, viewTab));
   // The root's sizes: one source (geometry.containerMetrics), recomputed per width change only.
   const metrics = $derived(containerMetrics(viewTab.root, mode, rootBoxWidthPx(plan, viewTab)));
+  // Editing on a phone (stacked plan, once measured): the toolbar says resize / free placement need more room.
+  const stacked = $derived(width > 0 && plan.kind === 'stacked');
+  $effect(() => {
+    if (!editing) return;
+    canvasStacked.set(stacked);
+    return () => canvasStacked.set(false);
+  });
 </script>
 
 <div class="tab-canvas" class:editing bind:this={el} data-tab-id={tab.id}>

@@ -470,9 +470,12 @@ function minFolderHeight(folder: FolderNode, w: number, parentMode: LayoutMode, 
   return Math.max(1, Math.ceil(requiredFolderHeightPx(probe, m) / m.rowPx - 1e-9));
 }
 
-export function resizeNode(
-  d: LayoutDashboard, id: string, w: number, h: number, push?: Map<string, Placement>
-): LayoutDashboard {
+/**
+ * The placement resizeNode would give `id` for a requested w x h: clamped to the container's
+ * columns, and an expanded folder never shorter than its content. Pure; the resize preview uses
+ * it so the highlight shows exactly what the commit stores.
+ */
+export function resizedPlacement(d: LayoutDashboard, id: string, w: number, h: number): Placement {
   const node = findNode(d, id);
   if (!Number.isFinite(w) || !Number.isFinite(h)) throw new TreeOpError('That size is not valid.');
   const loc = locate(d, id)!;
@@ -482,6 +485,15 @@ export function resizeNode(
   if (node.kind === 'folder') {
     sized.h = Math.max(sized.h, minFolderHeight(node, sized.w, r.mode, cols));
   }
+  return sized;
+}
+
+export function resizeNode(
+  d: LayoutDashboard, id: string, w: number, h: number, push?: Map<string, Placement>
+): LayoutDashboard {
+  const sized = resizedPlacement(d, id, w, h);
+  const loc = locate(d, id)!;
+  const r = resolveRef(d, { tabId: loc.tabId, folderId: loc.folderChain[loc.folderChain.length - 1] });
   const ref: ContainerRef = { tabId: loc.tabId, folderId: loc.folderChain[loc.folderChain.length - 1] };
   const changed = new Set<string>([id, ...(push ? push.keys() : [])]);
   return editContainer(d, ref, (c) => {

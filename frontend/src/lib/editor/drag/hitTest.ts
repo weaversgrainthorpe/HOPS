@@ -44,6 +44,12 @@ export interface HitResult {
   crumb?: string;
   /** An open folder overlay's backdrop (outside its panel) is under the pointer (`data-drag-outside`). */
   outside?: boolean;
+  /**
+   * A STACKED container (phones): the rendered boxes of its own items (its direct `data-node-id`
+   * children, minus dragged ones) in px from its content origin, in DOM (= reading) order. A drop
+   * goes before / after the nearest one.
+   */
+  stackBoxes?: { id: string; left: number; top: number; width: number; height: number }[];
   /** The scrollable panel (`data-drag-scroll`) holding the container, for auto-scroll. */
   scroller?: Element;
 }
@@ -135,6 +141,15 @@ export function hitTest(x: number, y: number, dragged: ReadonlySet<string>, env:
     out.nodeId = nodeId;
     const nr = env.rectOf(nEl);
     out.node = { id: nodeId, left: nr.left - r.left, top: nr.top - r.top, width: nr.width ?? 0, height: nr.height ?? 0 };
+  }
+  if (info.layout === 'stacked') {
+    out.stackBoxes = [];
+    for (const k of Array.from(cEl.children)) {
+      const id = k.getAttribute('data-node-id');
+      if (id === null || dragged.has(id)) continue;
+      const kr = env.rectOf(k);
+      out.stackBoxes.push({ id, left: kr.left - r.left, top: kr.top - r.top, width: kr.width ?? 0, height: kr.height ?? 0 });
+    }
   }
   const scroller = cEl.closest('[data-drag-scroll]');
   if (scroller) out.scroller = scroller;
