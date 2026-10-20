@@ -8,7 +8,7 @@
   import NodeContextMenu from './NodeContextMenu.svelte';
   import { editorDialog, editorMenu, openDialog } from '$lib/editor/editorUi';
   import {
-    addNode, blankFolder, blankTile, deleteWithConfirm, duplicate, editNode, findIn
+    addNode, blankFolder, blankTile, deleteWithConfirm, duplicate, editFolder, editNode, findIn
   } from '$lib/editor/editorActions';
   import { session } from '$lib/stores/editSession';
   import { toast } from '$lib/stores/toast';
@@ -60,7 +60,7 @@
   function saveFolder(fields: FolderFields) {
     if (!dlg || dlg.kind !== 'folder') return;
     if (dlg.id) {
-      if (editNode(dlg.id, fields as Partial<LayoutNode>)) close();
+      if (editFolder(dlg.id, fields)) close();
       return;
     }
     const node = { ...blankFolder(), ...fields } as FolderNode;

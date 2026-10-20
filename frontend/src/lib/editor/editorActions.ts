@@ -10,14 +10,14 @@ import type {
 } from './treeOps';
 import {
   TreeOpError, cellIsFree, copyNodes, deleteNodes, deleteTab, duplicateNode, duplicateTab, firstFreeCell,
-  insertNode, locate, moveNodes, newNodeId, resolveContainer, setFolderDisplay, setTabLayout, setZ, addTab,
+  insertNode, locate, moveNodes, newNodeId, resolveContainer, setFolderDisplay, setFolderLayout, setTabLayout, setZ,
+  addTab, adaptNode, originOf, freeSide,
   updateNode, updateTab
 } from './treeOps';
 import type {
   Container, FolderNode, LayoutDashboard, LayoutMode, LayoutNode, LayoutTab, Placement, TileNode
 } from '$lib/types/layout';
 import type { Background, HeaderConfig } from '$lib/types';
-import { DEFAULT_DESIGN_WIDTH, FREE_UNIT_PX, ROOT_COLUMNS } from '$lib/layout/geometry';
 import { layoutDoc } from '$lib/stores/config';
 import { apply, session } from '$lib/stores/editSession';
 import { confirm } from '$lib/stores/confirmModal';
@@ -62,24 +62,22 @@ function tabOf(d: LayoutDashboard, tabId: string): LayoutTab | undefined {
   return d.tabs.find((t) => t.id === tabId);
 }
 
-/** One dashboard column in free design units (as a minimised free folder: designWidth / 12 / 8). */
-function freeSide(tab: LayoutTab | undefined): number {
-  const dw = typeof tab?.designWidth === 'number' && tab.designWidth > 0 ? tab.designWidth : DEFAULT_DESIGN_WIDTH;
-  return Math.max(1, Math.round(dw / ROOT_COLUMNS / FREE_UNIT_PX));
+/**
+ * The size an item takes in `mode`, from a node ALREADY converted for the target (adaptNode):
+ * a grid tile is always one cell (parent spec §6.3); everything else keeps its size.
+ */
+function sizeFor(n: Pick<LayoutNode, 'kind' | 'placement'>, mode: LayoutMode): { w: number; h: number } {
+  if (mode === 'grid' && n.kind === 'tile') return { w: 1, h: 1 };
+  return { w: Math.max(1, Math.floor(n.placement?.w ?? 1)), h: Math.max(1, Math.floor(n.placement?.h ?? 1)) };
 }
 
-/**
- * The size an item takes in a container of `mode`. Grid: a tile is one cell (parent spec §6.3); a
- * folder keeps its size (width capped by firstFreeCell). Free: a tile smaller than half a column
- * (it came from a grid) gets one column square; anything else keeps its size.
- */
-function sizeFor(n: Pick<LayoutNode, 'kind' | 'placement'>, mode: LayoutMode, tab: LayoutTab | undefined): { w: number; h: number } {
-  const w = Math.max(1, Math.floor(n.placement?.w ?? 1));
-  const h = Math.max(1, Math.floor(n.placement?.h ?? 1));
-  if (mode === 'grid') return n.kind === 'tile' ? { w: 1, h: 1 } : { w, h };
-  const side = freeSide(tab);
-  if (n.kind === 'tile' && (w < side / 2 || h < side / 2)) return { w: side, h: side };
-  return { w, h };
+/** Nodes of the draft as they would go into `to` (converted on the one path when modes differ). */
+export function adaptedFor(d: LayoutDashboard, ids: string[], to: ContainerRef): LayoutNode[] {
+  return ids.map((id) => {
+    const n = findIn(d, id);
+    if (!n) throw new TreeOpError('That item no longer exists.');
+    return adaptNode(d, n, originOf(d, id), to);
+  });
 }
 
 /**
@@ -92,11 +90,10 @@ export function placementsFor(
   d: LayoutDashboard, to: ContainerRef, nodes: Pick<LayoutNode, 'kind' | 'placement'>[], cell?: Cell
 ): Placement[] {
   const r = resolveContainer(d, to);
-  const tab = tabOf(d, to.tabId);
   const work: Container = { columns: r.columns, children: [...r.container.children] };
   const out: Placement[] = [];
   nodes.forEach((n, i) => {
-    const { w, h } = sizeFor(n, r.mode, tab);
+    const { w, h } = sizeFor(n, r.mode);
     let at: Placement | undefined;
     if (i === 0 && cell) {
       const cand: Placement = { x: Math.floor(cell.x), y: Math.floor(cell.y), w: Math.min(w, r.columns), h };
@@ -173,9 +170,14 @@ export function addNode(node: LayoutNode, to: ContainerRef, cell?: Cell): string
   const placed = { ...plain(node), id } as LayoutNode;
   if (placed.kind === 'folder') placed.content = { ...placed.content, children: [] };
   const ok = apply(node.kind === 'tile' ? 'Add tile' : 'Add folder', (dd) => {
-    const [at] = placementsFor(dd, to, [placed], cell);
-    if (placed.kind === 'folder') placed.content = { ...placed.content, columns: at.w };
-    return insertNode(dd, placed, to, at);
+    // New items are drawn at grid sizes (a tile one cell, a folder 4 x 3); in a free container
+    // they are converted on the one mode-conversion path (one cell = one dashboard column).
+    let fresh = adaptNode(dd, placed, { mode: 'grid', side: freeSide(tabOf(dd, to.tabId)) }, to);
+    const [at] = placementsFor(dd, to, [fresh], cell);
+    if (fresh.kind === 'folder' && fresh.content.children.length === 0) {
+      fresh = { ...fresh, content: { ...fresh.content, columns: Math.max(1, at.w) } };
+    }
+    return insertNode(dd, fresh, to, at);
   });
   if (!ok) return null;
   toggleNode(id, false);
@@ -194,6 +196,7 @@ export function editNode(id: string, edited: Partial<LayoutNode>): boolean {
     toast.error('That item no longer exists.');
     return false;
   }
+  if (node.kind === 'folder') return editFolder(id, edited as Partial<FolderNode>);
   if (node.kind === 'tile') {
     const why = tileProblem({ ...node, ...(edited as Partial<TileNode>) });
     if (why) {
@@ -204,6 +207,22 @@ export function editNode(id: string, edited: Partial<LayoutNode>): boolean {
   const patch: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(plain(edited))) if (!LOCKED.includes(k)) patch[k] = v;
   return apply(node.kind === 'tile' ? 'Edit tile' : 'Edit folder', (dd) => updateNode(dd, id, patch as Partial<LayoutNode>));
+}
+
+/**
+ * Save the folder dialog as ONE undo step: its look through updateNode, "Starts" through
+ * setFolderDisplay, and its layout through setFolderLayout (which converts the content).
+ */
+export function editFolder(id: string, fields: Partial<FolderNode>): boolean {
+  const { display, layout, ...rest } = plain(fields) as Partial<FolderNode>;
+  const patch: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(rest)) if (!LOCKED.includes(k)) patch[k] = v;
+  return apply('Edit folder', (dd) => {
+    let next = updateNode(dd, id, patch as Partial<LayoutNode>);
+    if (display !== undefined) next = setFolderDisplay(next, id, display);
+    if (layout !== undefined) next = setFolderLayout(next, id, layout);
+    return next;
+  });
 }
 
 export function findIn(d: LayoutDashboard, id: string): LayoutNode | undefined {
@@ -277,11 +296,7 @@ export function moveOrCopyTo(ids: string[], to: ContainerRef, mode: 'move' | 'co
   if (!d || ids.length === 0) return false;
   let newIds: string[] = [];
   const ok = apply(mode === 'move' ? 'Move' : 'Copy', (dd) => {
-    const nodes = ids.map((id) => {
-      const n = findIn(dd, id);
-      if (!n) throw new TreeOpError('That item no longer exists.');
-      return n;
-    });
+    const nodes = adaptedFor(dd, ids, to);
     // Moving within the same container: the moved items vacate their own cells first.
     const vacated = mode === 'move' ? deleteNodes(dd, ids) : dd;
     const at = placementsFor(vacated, to, nodes);

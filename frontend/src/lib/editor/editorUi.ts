@@ -73,7 +73,11 @@ export function menuPointFor(e: MouseEvent, el: Element): { x: number; y: number
   return { x: r.left + Math.min(24, r.width / 2), y: r.top + Math.min(24, r.height / 2) };
 }
 
-/** Touch long-press (~500 ms, no movement beyond 8 px) opens the item menu, as right-click does. */
+/**
+ * Touch long-press (~500 ms, no movement beyond 8 px) opens the item menu, as right-click does.
+ * INTERIM (Ruling 18(1)): Task 7's drag engine starts a touch drag on a 400 ms long-press and
+ * replaces this timer with its own long-press handling (menu vs drag), so the two never race.
+ */
 export function longPress(node: HTMLElement, open: (x: number, y: number, target: EventTarget | null) => void) {
   let timer: ReturnType<typeof setTimeout> | null = null;
   let start: { x: number; y: number; target: EventTarget | null } | null = null;

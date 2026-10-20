@@ -1,14 +1,14 @@
 import { writable, get, type Readable } from 'svelte/store';
 import type { LayoutNode } from '$lib/types/layout';
 import type { ContainerRef } from '$lib/editor/treeOps';
-import { copyNodes, deleteNodes, locate, moveNodes } from '$lib/editor/treeOps';
+import { adaptNode, deleteNodes, locate, moveNodes, originOf, pasteSnapshot, type NodeOrigin } from '$lib/editor/treeOps';
 import { apply, session, dirty, rebaseCleanSession } from './editSession';
 import { layoutDoc, findLayoutDashboard, applySavedLayout } from './config';
 import { selectedNodes, clearSelection, toggleNode } from './nodeSelection';
 import { toast } from './toast';
 import { transferNodes, ConflictError } from '$lib/utils/api';
 import { logError } from '$lib/utils/errors';
-import { documentIds, findIn, placementsFor, plain, type Cell } from '$lib/editor/editorActions';
+import { adaptedFor, documentIds, findIn, placementsFor, plain, type Cell } from '$lib/editor/editorActions';
 
 // Edit-mode clipboard for tiles and folders (Ctrl+C / Ctrl+X / Ctrl+V and the
 // item menu). Held in memory only. Copy keeps a snapshot of the nodes; the
@@ -19,7 +19,10 @@ import { documentIds, findIn, placementsFor, plain, type Cell } from '$lib/edito
 
 export interface NodeClipboard {
   mode: 'copy' | 'cut';
+  /** A snapshot taken at Copy/Cut time: later edits to the originals never change a pasted copy. */
   nodes: LayoutNode[];
+  /** Where each node sat (its container's mode and tab's free side), for converting on paste. */
+  origins: NodeOrigin[];
   sourceDashboardId: string;
 }
 
@@ -53,7 +56,8 @@ function take(mode: 'copy' | 'cut'): boolean {
     toast.info(`Select a tile or folder to ${mode} first.`);
     return false;
   }
-  state.set({ mode, nodes: plain(nodes), sourceDashboardId: s.dashboardId });
+  const origins = nodes.map((n) => originOf(s.draft, n.id));
+  state.set({ mode, nodes: plain(nodes), origins, sourceDashboardId: s.dashboardId });
   const what = nodes.length === 1 ? `"${nodes[0].name || 'Untitled'}"` : `${nodes.length} items`;
   toast.info(mode === 'copy' ? `Copied ${what}` : `Cut ${what} — paste to move it`);
   return true;
@@ -87,14 +91,11 @@ export async function pasteInto(to: ContainerRef, cell?: Cell): Promise<boolean>
   if (clip.sourceDashboardId !== s.dashboardId) return pasteAcross(clip, ids, to);
 
   if (clip.mode === 'copy') {
-    if (ids.some((id) => !locate(s.draft, id))) {
-      toast.error('The copied items are no longer on this dashboard, so there is nothing to paste.');
-      return false;
-    }
+    // Clones of the snapshot, with fresh ids: works even if the originals were edited or deleted since.
     let newIds: string[] = [];
     const ok = apply(ids.length === 1 ? 'Paste' : `Paste ${ids.length} items`, (d) => {
-      const nodes = ids.map((id) => findIn(d, id)!);
-      const r = copyNodes(d, ids, to, placementsFor(d, to, nodes, cell), documentIds());
+      const adapted = clip.nodes.map((n, i) => adaptNode(d, n, clip.origins[i], to));
+      const r = pasteSnapshot(d, clip.nodes, clip.origins, to, placementsFor(d, to, adapted, cell), documentIds());
       newIds = r.newIds;
       return r.dashboard;
     });
@@ -107,7 +108,7 @@ export async function pasteInto(to: ContainerRef, cell?: Cell): Promise<boolean>
     return false;
   }
   const ok = apply(ids.length === 1 ? 'Move' : `Move ${ids.length} items`, (d) => {
-    const nodes = ids.map((id) => findIn(d, id)!);
+    const nodes = adaptedFor(d, ids, to);
     // The moved items vacate their own cells before the new ones are chosen.
     return moveNodes(d, ids, to, placementsFor(deleteNodes(d, ids), to, nodes, cell));
   });

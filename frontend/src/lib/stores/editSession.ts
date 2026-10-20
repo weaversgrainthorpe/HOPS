@@ -9,7 +9,8 @@ import {
   applySavedLayout,
   loadConfig,
   configError,
-  migrationFailure
+  migrationFailure,
+  setSettingsSavedHook
 } from './config';
 import { confirm, confirmChoice } from './confirmModal';
 import { toast } from './toast';
@@ -477,6 +478,31 @@ export function guardUnload(e: BeforeUnloadEvent): void {
   e.preventDefault();
   e.returnValue = '';
 }
+
+/**
+ * The per-dashboard Settings dialog saved while this session is open (Ruling 19). That save
+ * bumps the server revision; the session absorbs it so the next Save does not falsely conflict:
+ * the base revision becomes the new one and the new settings go into saved, the draft and the
+ * undo/redo states (the settings are not part of the draft's edits). Only when the settings save
+ * was checked against the session's own base revision — otherwise a real change made elsewhere
+ * would be hidden, and the normal conflict path must handle it.
+ */
+export function absorbSettingsSave(id: string, checkedRevision: number, revision: number, settings: unknown): boolean {
+  const s = get(state);
+  if (!s || s.dashboardId !== id || s.baseRevision !== checkedRevision) return false;
+  const withSettings = (d: LayoutDashboard): LayoutDashboard => ({ ...d, settings: clone(settings) });
+  const saved = { ...withSettings(s.saved), revision };
+  state.set({
+    ...s,
+    baseRevision: revision,
+    saved,
+    draft: s.draft === s.saved ? saved : withSettings(s.draft),
+    undo: s.undo.map((d) => (d === s.saved ? saved : withSettings(d))),
+    redo: s.redo.map((d) => (d === s.saved ? saved : withSettings(d)))
+  });
+  return true;
+}
+setSettingsSavedHook(absorbSettingsSave);
 
 /** Tests only: forget the session, any parked draft and the conflict. */
 export function resetEditSessionForTests(): void {

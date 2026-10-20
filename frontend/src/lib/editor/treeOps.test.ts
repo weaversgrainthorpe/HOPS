@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
   TreeOpError, newNodeId, locate, isDescendant, moveNodes, copyNodes, mergeIntoNewFolder, insertNode,
   updateNode, deleteNodes, duplicateNode, resizeNode, setZ, reorderTabs, addTab, updateTab, deleteTab,
-  firstFreeCell, pushAside, assertGridNoOverlap, setFolderDisplay, duplicateTab, setTabLayout
+  firstFreeCell, pushAside, assertGridNoOverlap, setFolderDisplay, duplicateTab, setTabLayout, setFolderLayout, adaptNode, originOf,
+  pasteSnapshot
 } from './treeOps';
 import type { Container, FolderNode, LayoutDashboard, LayoutNode, Placement } from '../types/layout';
 
@@ -507,5 +508,148 @@ describe('setTabLayout', () => {
   it('refuses a bad layout or design width', () => {
     expect(() => setTabLayout(dash(), 't1', 'free', 50)).toThrow(TreeOpError);
     expect(() => setTabLayout(dash(), 't1', 'wavy' as never)).toThrow(TreeOpError);
+  });
+});
+
+// ---------------------------------------------------------------- M3 Task 6 fix round 1: one mode-conversion path
+
+function mixed(): LayoutDashboard {
+  // t1 grid; tf free (designWidth 960 → side 10). gf: a 4 x 3 grid folder with an inheriting grid sub-folder.
+  return deepFreeze({
+    id: 'd', name: 'D', path: '/d', revision: 1,
+    tabs: [
+      { id: 't1', name: 'Grid', root: { columns: 12, children: [
+        tile('a', p(0, 0)),
+        folder('gf', p(0, 1, 4, 3), [tile('g1', p(0, 0)), folder('gs', p(1, 0, 2, 2), [tile('g2', p(0, 0))], { content: { columns: 2, children: [tile('g2', p(0, 0))] } })]),
+        tile('b', p(5, 1))
+      ] } },
+      { id: 'tf', name: 'Free', layout: 'free', designWidth: 960, root: { columns: 120, children: [
+        tile('fa', p(0, 0, 10, 10)),
+        folder('ff', p(20, 0, 40, 30), [tile('f1x', p(0, 0, 10, 10)), tile('f2x', p(12, 0, 10, 10))], { content: { columns: 40, children: [tile('f1x', p(0, 0, 10, 10)), tile('f2x', p(12, 0, 10, 10))] } })
+      ] } }
+    ]
+  } as LayoutDashboard);
+}
+const findDeep = (d: LayoutDashboard, id: string): LayoutNode => {
+  const walk = (c: LayoutNode[]): LayoutNode | undefined => {
+    for (const n of c) {
+      if (n.id === id) return n;
+      if (n.kind === 'folder') { const r = walk(n.content.children); if (r) return r; }
+    }
+    return undefined;
+  };
+  for (const t of d.tabs) { const r = walk(t.root.children); if (r) return r; }
+  throw new Error('missing ' + id);
+};
+
+describe('cross-mode move / copy / paste (one conversion path)', () => {
+  it('a grid folder moved into a free tab is scaled by one column (side) with its inheriting content', () => {
+    const d = mixed();
+    const at = adaptNode(d, findDeep(d, 'gf'), originOf(d, 'gf'), { tabId: 'tf' }).placement;
+    expect(at).toMatchObject({ w: 40, h: 30 });
+    const out = moveNodes(d, ['gf'], { tabId: 'tf' }, [{ ...at, x: 0, y: 40 }]);
+    const gf = findDeep(out, 'gf') as FolderNode;
+    expect(gf.placement).toEqual(p(0, 40, 40, 30));
+    expect(gf.content.columns).toBe(40);
+    expect(findDeep(out, 'g1').placement).toEqual(p(0, 0, 10, 10));
+    const gs = findDeep(out, 'gs') as FolderNode;
+    expect(gs.placement).toEqual(p(10, 0, 20, 20));
+    expect(gs.content.columns).toBe(20); // from its ORIGINAL 2 columns, scaled once
+    expect(findDeep(out, 'g2').placement).toEqual(p(0, 0, 10, 10));
+  });
+
+  it('a free folder copied into a grid tab is divided back, tiles one cell, content without overlaps', () => {
+    const d = mixed();
+    const adapted = adaptNode(d, findDeep(d, 'ff'), originOf(d, 'ff'), { tabId: 't1' });
+    expect(adapted.placement).toMatchObject({ w: 4, h: 3 });
+    const { dashboard, newIds } = copyNodes(d, ['ff'], { tabId: 't1' }, [p(6, 0, 4, 3)], new Set(allNodeIds(d)));
+    const copy = findDeep(dashboard, newIds[0]) as FolderNode;
+    expect(copy.content.columns).toBe(4);
+    expect(copy.content.children.map((n) => n.placement)).toEqual([p(0, 0), p(1, 0)]);
+    expect(() => assertGridNoOverlap(copy.content)).not.toThrow();
+    expect(() => assertGridNoOverlap(dashboard.tabs[0].root)).not.toThrow();
+  });
+
+  it('a converted folder is never shorter than its content needs', () => {
+    const d: LayoutDashboard = deepFreeze({
+      ...mixed(),
+      tabs: [mixed().tabs[0], { id: 'tf', name: 'Free', layout: 'free', designWidth: 960, root: { columns: 120, children: [
+        // 10 units tall (one row once divided) but holds tiles in 3 rows.
+        folder('flat', p(0, 0, 20, 10), [tile('r1', p(0, 0, 10, 10)), tile('r2', p(0, 10, 10, 10)), tile('r3', p(0, 20, 10, 10))], { content: { columns: 20, children: [tile('r1', p(0, 0, 10, 10)), tile('r2', p(0, 10, 10, 10)), tile('r3', p(0, 20, 10, 10))] } })
+      ] } }]
+    } as LayoutDashboard);
+    const adapted = adaptNode(d, findDeep(d, 'flat'), originOf(d, 'flat'), { tabId: 't1' }) as FolderNode;
+    expect(adapted.placement.h).toBeGreaterThanOrEqual(4); // 3 content rows + the title row
+  });
+
+  it('pasteSnapshot clones a snapshot with fresh ids, converted from its recorded origin', () => {
+    const d = mixed();
+    const snap = structuredClone(findDeep(d, 'gf'));
+    const { dashboard, newIds } = pasteSnapshot(d, [snap], [{ mode: 'grid', side: 10 }], { tabId: 'tf' }, [p(0, 40, 40, 30)], new Set(allNodeIds(d)));
+    const c = findDeep(dashboard, newIds[0]) as FolderNode;
+    expect(c.id).not.toBe('gf');
+    expect(c.content.children.map((n) => n.id)).not.toContain('g1');
+    expect(c.content.columns).toBe(40);
+  });
+
+  it('same mode: nothing is converted', () => {
+    const d = mixed();
+    const n = findDeep(d, 'gf');
+    expect(adaptNode(d, n, originOf(d, 'gf'), { tabId: 't1' })).toBe(n);
+  });
+});
+
+describe('setFolderLayout', () => {
+  it('grid → free converts the content (side of its own tab: 1280 / 12 / 8 = 13) and keeps the folder in place', () => {
+    const out = setFolderLayout(mixed(), 'gf', 'free');
+    const gf = findDeep(out, 'gf') as FolderNode;
+    expect(gf.layout).toBe('free');
+    expect(gf.placement).toEqual(p(0, 1, 4, 3));
+    expect(gf.content.columns).toBe(52);
+    expect(findDeep(out, 'g1').placement).toEqual(p(0, 0, 13, 13));
+  });
+
+  it('free → grid (in a free tab) divides the content back without overlaps', () => {
+    const out = setFolderLayout(mixed(), 'ff', 'grid');
+    const ff = findDeep(out, 'ff') as FolderNode;
+    expect(ff.content.columns).toBe(4);
+    expect(ff.content.children.map((n) => n.placement)).toEqual([p(0, 0), p(1, 0)]);
+    expect(() => assertGridNoOverlap(ff.content)).not.toThrow();
+  });
+
+  it('a folder that now needs more height grows, pushing grid neighbours aside (never overlapping)', () => {
+    // A free folder in a grid tab whose content, once a grid, needs 3 rows + title.
+    const d: LayoutDashboard = deepFreeze({
+      ...mixed(),
+      tabs: [{ id: 't1', name: 'Grid', root: { columns: 4, children: [
+        folder('fz', p(0, 0, 2, 2), [tile('q1', p(0, 0, 10, 10)), tile('q2', p(0, 10, 10, 10)), tile('q3', p(0, 20, 10, 10))], { layout: 'free', content: { columns: 20, children: [tile('q1', p(0, 0, 10, 10)), tile('q2', p(0, 10, 10, 10)), tile('q3', p(0, 20, 10, 10))] } }),
+        tile('below', p(0, 2))
+      ] } }]
+    } as LayoutDashboard);
+    const out = setFolderLayout(d, 'fz', 'inherit');
+    const fz = findDeep(out, 'fz') as FolderNode;
+    expect(fz.placement.h).toBeGreaterThanOrEqual(4);
+    expect(() => assertGridNoOverlap(out.tabs[0].root)).not.toThrow();
+    expect(findDeep(out, 'below').placement).not.toEqual(p(0, 2)); // pushed aside
+  });
+
+  it('unchanged → same dashboard; refuses tiles and bad values', () => {
+    const d = mixed();
+    expect(setFolderLayout(d, 'gf', 'inherit')).toBe(d);
+    expect(() => setFolderLayout(d, 'a', 'free')).toThrow(TreeOpError);
+    expect(() => setFolderLayout(d, 'gf', 'wavy' as never)).toThrow(TreeOpError);
+  });
+
+  it('setTabLayout scales a folder whose content.columns is missing from its ORIGINAL width (no double scaling)', () => {
+    const d: LayoutDashboard = deepFreeze({
+      ...mixed(),
+      tabs: [{ id: 't1', name: 'G', root: { columns: 12, children: [
+        { kind: 'folder', id: 'nc', name: 'nc', display: 'expanded', placement: p(0, 0, 3, 2), content: { children: [tile('k', p(2, 0))] } }
+      ] } }]
+    } as unknown as LayoutDashboard);
+    const out = setTabLayout(d, 't1', 'free', 960);
+    const nc = findDeep(out, 'nc') as FolderNode;
+    expect(nc.content.columns).toBe(30); // 3 x 10, not 30 x 10
+    expect(findDeep(out, 'k').placement).toEqual(p(20, 0, 10, 10));
   });
 });

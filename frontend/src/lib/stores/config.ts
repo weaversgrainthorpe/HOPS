@@ -337,6 +337,18 @@ function storeRevision(cfg: Config, id: string): number | undefined {
  * untouched and the failure is recorded (conflict banner / migration page)
  * before being rethrown for the caller to show inline.
  */
+/**
+ * Called after a confirmed per-dashboard settings save with the revision it was checked against,
+ * the server's new revision and the merged overrides. editSession registers it so an open edit
+ * session absorbs the save (its base revision moves on; no false conflict on the next Save).
+ * config.ts cannot import editSession (that would be an import cycle).
+ */
+export type SettingsSavedHook = (id: string, checkedRevision: number, revision: number, settings: DashboardSettings) => void;
+let settingsSavedHook: SettingsSavedHook | null = null;
+export function setSettingsSavedHook(fn: SettingsSavedHook | null): void {
+  settingsSavedHook = fn;
+}
+
 export async function saveDashboardSettingsChanges(
   id: string,
   changes: Partial<Record<keyof DashboardSettings, string | number | boolean | null>>
@@ -354,6 +366,8 @@ export async function saveDashboardSettingsChanges(
         const resp = await saveDashboardSettings(id, changes, ld.revision);
         const latest = get(config) ?? cfg;
         config.set({ ...latest, ...freshLayoutPatch(resp) });
+        const merged = { ...((ld.settings as DashboardSettings | undefined) ?? {}), ...changes } as DashboardSettings;
+        settingsSavedHook?.(id, ld.revision, resp.revision, merged);
       } catch (error) {
         logError('Dashboard settings save', error);
         noteSaveFailure(error);
@@ -369,6 +383,7 @@ export async function saveDashboardSettingsChanges(
       const resp = await saveDashboardSettings(id, changes, revision);
       const merged = { ...(dash.settings ?? {}), ...changes } as DashboardSettings;
       applyDashboardSettings(id, merged, resp.revision, resp);
+      settingsSavedHook?.(id, revision, resp.revision, merged);
     } catch (error) {
       logError('Dashboard settings save', error);
       noteSaveFailure(error);

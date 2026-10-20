@@ -33,9 +33,14 @@
     return t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT';
   }
 
-  /** A modal dialog (other than a folder overlay) is open: it owns the keyboard. */
+  /**
+   * A modal dialog (other than a folder overlay) is open, or an item menu has focus: either owns
+   * the keyboard, so Delete / Ctrl+Z / Ctrl+C… pressed there never reach the editor's shortcuts.
+   */
   function modalOpen(): boolean {
-    return !!document.querySelector('[role="dialog"][aria-modal="true"]:not(.overlay-panel)');
+    if (document.querySelector('[role="dialog"][aria-modal="true"]:not(.overlay-panel)')) return true;
+    const active = document.activeElement;
+    return active instanceof Element && !!active.closest('[role="menu"]');
   }
 
   function onKey(e: KeyboardEvent) {

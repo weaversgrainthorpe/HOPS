@@ -259,7 +259,10 @@ export function moveNodes(
       throw new TreeOpError('An item cannot be moved together with the folder that contains it.');
     }
   }
-  const placed = nodes.map((n, i) => ({ ...n, placement: checkedPlacement(at[i], target) }) as LayoutNode);
+  // Across modes, a node is converted (size and inheriting content) on the one path: convertNode.
+  const placed = nodes.map(
+    (n, i) => ({ ...adaptNode(d, n, originOf(d, n.id), to), placement: checkedPlacement(at[i], target) }) as LayoutNode
+  );
   return commitToContainer(removeIds(d, idSet), to, target, placed, push);
 }
 
@@ -283,7 +286,7 @@ export function copyNodes(
   const target = resolveRef(d, to);
   const used = new Set(allIds); // never mutate the caller's set
   const copies = nodes.map((n, i) => {
-    const c = cloneWithNewIds(n, used);
+    const c = cloneWithNewIds(adaptNode(d, n, originOf(d, n.id), to), used);
     c.placement = checkedPlacement(at[i], target);
     return c;
   });
@@ -291,6 +294,28 @@ export function copyNodes(
     dashboard: commitToContainer(d, to, target, copies, push),
     newIds: copies.map((c) => c.id)
   };
+}
+
+/**
+ * Paste clones of a clipboard SNAPSHOT (taken at Copy time, so later edits or deletion of the
+ * originals do not change what is pasted): fresh ids for every node, avoiding `allIds`; each node
+ * converted from its recorded origin when the target's mode differs; placed at `at`.
+ */
+export function pasteSnapshot(
+  d: LayoutDashboard, nodes: LayoutNode[], origins: NodeOrigin[], to: ContainerRef, at: Placement[],
+  allIds: Set<string>, push?: Map<string, Placement>
+): { dashboard: LayoutDashboard; newIds: string[] } {
+  if (nodes.length !== at.length || nodes.length !== origins.length) {
+    throw new TreeOpError('Each pasted item needs a position.');
+  }
+  const target = resolveRef(d, to);
+  const used = new Set(allIds);
+  const copies = nodes.map((n, i) => {
+    const c = cloneWithNewIds(adaptNode(d, n, origins[i], to), used);
+    c.placement = checkedPlacement(at[i], target);
+    return c;
+  });
+  return { dashboard: commitToContainer(d, to, target, copies, push), newIds: copies.map((c) => c.id) };
 }
 
 export function insertNode(
@@ -557,49 +582,131 @@ export function setTabLayout(
     if (next.layout === tab.layout && next.designWidth === tab.designWidth && next.root === tab.root) return d;
     return { ...d, tabs: d.tabs.map((t) => (t.id === tabId ? next : t)) };
   }
-  const side = Math.max(1, Math.round(dw / ROOT_COLUMNS / FREE_UNIT_PX));
-  next.root = convertContainer(tab.root, after, side, after === 'free' ? freeCols : ROOT_COLUMNS);
+  next.root = convertContainer(tab.root, after, freeSide(next), after === 'free' ? freeCols : ROOT_COLUMNS);
   return { ...d, tabs: d.tabs.map((t) => (t.id === tabId ? next : t)) };
 }
 
-/** Convert a container's placements to `to` mode (see setTabLayout). `cols` = the result's columns. */
+// ---------------------------------------------------------------- mode conversion (the one path)
+
+/** One dashboard column in free design units for a tab: round(designWidth / 12 / 8), at least 1. */
+export function freeSide(tab: LayoutTab | undefined): number {
+  const dw = typeof tab?.designWidth === 'number' && tab.designWidth > 0 ? tab.designWidth : DEFAULT_DESIGN_WIDTH;
+  return Math.max(1, Math.round(dw / ROOT_COLUMNS / FREE_UNIT_PX));
+}
+
+const isInheriting = (f: FolderNode): boolean => f.layout === undefined || f.layout === 'inherit';
+
+/**
+ * THE mode-conversion path (tab layout, folder layout, and move/copy/paste across modes).
+ * A node sitting in a `from`-mode container is converted to look the same in a `to`-mode container
+ * of `cols` columns, computed from the node's ORIGINAL values (never from already-scaled ones):
+ * one grid cell = `side` free units. Grid → free multiplies by side; free → grid divides and
+ * rounds (min 1 x 1; a tile is one cell; x kept inside the columns). A folder that inherits its
+ * mode is converted with its content; a folder with its own layout keeps its content. A
+ * converted folder is never shorter than its content needs. Same mode → the node unchanged.
+ */
+export function convertNode(n: LayoutNode, from: LayoutMode, to: LayoutMode, side: number, cols: number): LayoutNode {
+  if (from === to || !isRenderable(n)) return n;
+  const p = n.placement;
+  let q: Placement;
+  if (to === 'free') {
+    q = { x: p.x * side, y: p.y * side, w: p.w * side, h: p.h * side };
+  } else {
+    const w = n.kind === 'tile' ? 1 : Math.max(1, Math.round(p.w / side));
+    const h = n.kind === 'tile' ? 1 : Math.max(1, Math.round(p.h / side));
+    const qw = Math.min(w, cols);
+    q = { x: Math.min(Math.max(0, Math.round(p.x / side)), cols - qw), y: Math.max(0, Math.round(p.y / side)), w: qw, h };
+  }
+  if (p.z !== undefined) q.z = p.z;
+  if (n.kind === 'tile') return { ...n, placement: q };
+  let out: FolderNode = { ...n, placement: q };
+  if (isInheriting(n)) {
+    out = { ...out, content: convertContainer(n.content, to, side, innerColumnsFor(n, to, side)) };
+  }
+  q.h = Math.max(q.h, minFolderHeight(out, q.w, to, cols));
+  return out;
+}
+
+/** A folder's content columns after its content changes mode (from its ORIGINAL columns). */
+function innerColumnsFor(f: FolderNode, to: LayoutMode, side: number): number {
+  const c = containerColumns(f.content, f);
+  return to === 'free' ? Math.max(1, c * side) : Math.max(1, Math.round(c / side));
+}
+
+/** Convert every child of a container to `to` mode; `cols` = the result's columns. Grid: no overlaps. */
 function convertContainer(c: Container, to: LayoutMode, side: number, cols: number): Container {
-  const scaled = kids(c).map((n) => {
-    if (!isRenderable(n)) return n;
-    const p = n.placement;
-    let q: Placement;
-    if (to === 'free') {
-      q = { x: p.x * side, y: p.y * side, w: p.w * side, h: p.h * side };
-    } else {
-      const w = n.kind === 'tile' ? 1 : Math.max(1, Math.round(p.w / side));
-      const h = n.kind === 'tile' ? 1 : Math.max(1, Math.round(p.h / side));
-      const qw = Math.min(w, cols);
-      q = { x: Math.min(Math.max(0, Math.round(p.x / side)), cols - qw), y: Math.max(0, Math.round(p.y / side)), w: qw, h };
-    }
-    if (p.z !== undefined) q.z = p.z;
-    let out = { ...n, placement: q } as LayoutNode;
-    if (out.kind === 'folder' && (out.layout === undefined || out.layout === 'inherit')) {
-      const innerCols = to === 'free' ? Math.max(1, containerColumns(out.content, out) * side) : q.w;
-      out = { ...out, content: convertContainer(out.content, to, side, innerCols) };
-    }
-    return out;
-  });
-  if (to === 'free') return { ...c, columns: cols, children: scaled };
-  // Grid: settle collisions in reading order.
+  const from: LayoutMode = to === 'free' ? 'grid' : 'free';
+  const converted = kids(c).map((n) => convertNode(n, from, to, side, cols));
+  if (to === 'free') return { ...c, columns: cols, children: converted };
+  return { ...c, columns: cols, children: settleGrid(converted, cols) };
+}
+
+/** Grid: keep each item where it is when it fits; otherwise the first free cell, in reading order. */
+function settleGrid(children: LayoutNode[], cols: number): LayoutNode[] {
   const placed: LayoutNode[] = [];
   const work: Container = { columns: cols, children: placed };
-  const ordered = readingOrder(scaled.filter(isRenderable));
-  for (const n of ordered) {
+  for (const n of readingOrder(children.filter(isRenderable))) {
     const p = n.placement;
     const fits = p.x + p.w <= cols && !placed.some((m) => overlaps(m.placement, p));
     placed.push(fits ? n : ({ ...n, placement: { ...firstFreeCell(work, p.w, p.h), ...(p.z !== undefined ? { z: p.z } : {}) } } as LayoutNode));
   }
   const byId = new Map(placed.map((n) => [n.id, n]));
-  return {
-    ...c,
-    columns: cols,
-    children: scaled.map((n) => (isRenderable(n) ? byId.get(n.id)! : n))
-  };
+  return children.map((n) => (isRenderable(n) ? byId.get(n.id)! : n));
+}
+
+/** Where a node sits: its container's mode and its tab's free side (the inputs convertNode needs). */
+export interface NodeOrigin { mode: LayoutMode; side: number }
+
+export function originOf(d: LayoutDashboard, id: string): NodeOrigin {
+  const loc = locate(d, id);
+  if (!loc) throw new TreeOpError('That item no longer exists.');
+  const r = resolveRef(d, { tabId: loc.tabId, folderId: loc.folderChain[loc.folderChain.length - 1] });
+  return { mode: r.mode, side: freeSide(r.tab) };
+}
+
+/**
+ * A node as it should go into `to` (converted when the modes differ). The side comes from the
+ * free end: the target tab's when going to free, the origin's when coming from free.
+ */
+export function adaptNode(d: LayoutDashboard, n: LayoutNode, origin: NodeOrigin, to: ContainerRef): LayoutNode {
+  const r = resolveRef(d, to);
+  if (origin.mode === r.mode) return n;
+  const side = r.mode === 'free' ? freeSide(r.tab) : origin.side;
+  return convertNode(n, origin.mode, r.mode, side, containerColumns(r.container, r.folder));
+}
+
+/**
+ * Set a folder's own layout ('inherit' | grid | free). When its content's effective mode changes,
+ * the content is converted (convertNode); the folder keeps its place and grows if its content now
+ * needs more height (neighbours in a grid are pushed aside, never overlapped). Unchanged → same d.
+ */
+export function setFolderLayout(d: LayoutDashboard, id: string, layout: 'inherit' | LayoutMode): LayoutDashboard {
+  if (layout !== 'inherit' && layout !== 'grid' && layout !== 'free') throw new TreeOpError('That layout is not valid.');
+  const node = findNode(d, id);
+  if (node.kind !== 'folder') throw new TreeOpError('Only folders have a layout here.');
+  if ((node.layout ?? 'inherit') === layout) return d;
+  const loc = locate(d, id)!;
+  const ref: ContainerRef = { tabId: loc.tabId, folderId: loc.folderChain[loc.folderChain.length - 1] };
+  const parent = resolveRef(d, ref);
+  const before = resolveMode(d, parent.tab, [...parent.chain, node]);
+  let next: FolderNode = { ...node, layout };
+  const after = resolveMode(d, parent.tab, [...parent.chain, next]);
+  if (before !== after) {
+    const side = freeSide(parent.tab);
+    next = { ...next, content: convertContainer(node.content, after, side, innerColumnsFor(node, after, side)) };
+    const cols = containerColumns(parent.container, parent.folder);
+    const h = Math.max(node.placement.h, minFolderHeight(next, node.placement.w, parent.mode, cols));
+    if (h !== node.placement.h) next = { ...next, placement: { ...node.placement, h } };
+  }
+  const push = parent.mode === 'grid' && next.placement !== node.placement
+    ? pushAside(parent.container, new Set([id]), next.placement)
+    : undefined;
+  const changed = new Set<string>([id, ...(push ? push.keys() : [])]);
+  return editContainer(d, ref, (c) => {
+    const out = { ...c, children: applyPush(kids(c), push).map((n) => (n.id === id ? next : n)) };
+    if (parent.mode === 'grid') assertGridNoOverlap(out, changed);
+    return out;
+  });
 }
 
 export function deleteTab(d: LayoutDashboard, tabId: string): LayoutDashboard {

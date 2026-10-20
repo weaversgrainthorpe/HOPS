@@ -13,9 +13,11 @@ vi.mock('$lib/editor/treeOps', async () => {
     duplicateNode: spy('duplicateNode'),
     deleteNodes: spy('deleteNodes'),
     copyNodes: spy('copyNodes'),
+    pasteSnapshot: spy('pasteSnapshot'),
     moveNodes: spy('moveNodes'),
     setZ: spy('setZ'),
     setFolderDisplay: spy('setFolderDisplay'),
+    setFolderLayout: spy('setFolderLayout'),
     insertNode: spy('insertNode')
   };
 });
@@ -26,7 +28,9 @@ import { editorDialog, type MenuRequest } from '$lib/editor/editorUi';
 import { nodeClipboard } from '$lib/stores/nodeClipboard';
 import { selectedNodes, toggleNode } from '$lib/stores/nodeSelection';
 import { overlayStack, openFolder } from '$lib/stores/folderOverlay';
-import { undo } from '$lib/stores/editSession';
+import { undo, session } from '$lib/stores/editSession';
+import { editMode } from '$lib/stores/editMode';
+import EditorDialogs from './EditorDialogs.svelte';
 import { setLayout, resetEditor, startSession, draft, nodeIn, answerConfirm } from './editorTestKit';
 import type { FolderNode } from '$lib/types/layout';
 
@@ -143,7 +147,7 @@ describe('NodeContextMenu — each action calls the right op', () => {
     expect(vi.mocked(ops.deleteNodes).mock.calls.at(-1)![1]).toEqual(['a', 'b']);
   });
 
-  it('Copy and Cut fill the clipboard; Paste here on a folder → copyNodes into it', async () => {
+  it('Copy and Cut fill the clipboard; Paste here on a folder → pasteSnapshot (copy) / moveNodes (cut)', async () => {
     let r = open({ kind: 'node', id: 'a' });
     await fireEvent.click(item('Copy'));
     expect(get(nodeClipboard)).toMatchObject({ mode: 'copy', sourceDashboardId: 'd1' });
@@ -151,7 +155,7 @@ describe('NodeContextMenu — each action calls the right op', () => {
     r = open({ kind: 'node', id: 'f1' });
     await fireEvent.click(item('Paste here'));
     await tick();
-    expect(ops.copyNodes).toHaveBeenCalledTimes(1);
+    expect(ops.pasteSnapshot).toHaveBeenCalledTimes(1);
     expect((nodeIn(draft(), 'f1') as FolderNode).content.children).toHaveLength(2);
     r.unmount();
     r = open({ kind: 'node', id: 'b' });
@@ -229,5 +233,22 @@ describe('NodeContextMenu — each action calls the right op', () => {
   it('an item that no longer exists shows a visible note instead of actions', () => {
     open({ kind: 'node', id: 'gone' });
     expect(screen.getByRole('menu').textContent).toMatch(/no longer exists/i);
+  });
+
+  it('the folder dialog saves "Starts" via setFolderDisplay and the layout via setFolderLayout, as ONE undo step', async () => {
+    editMode.set(true);
+    render(EditorDialogs, { tabId: 't1' });
+    editorDialog.set({ kind: 'folder', id: 'f1' });
+    await tick();
+    await fireEvent.click(screen.getByRole('radio', { name: 'Collapsed' }));
+    await fireEvent.change(screen.getByLabelText('Layout'), { target: { value: 'free' } });
+    await fireEvent.click(screen.getByRole('button', { name: /^Save/ }));
+    expect(ops.setFolderDisplay).toHaveBeenLastCalledWith(expect.anything(), 'f1', 'collapsed');
+    expect(ops.setFolderLayout).toHaveBeenLastCalledWith(expect.anything(), 'f1', 'free');
+    const f1 = nodeIn(draft(), 'f1') as FolderNode;
+    expect(f1.display).toBe('collapsed');
+    expect(f1.content.columns).toBe(4 * 13); // content converted (side 13 for 1280)
+    expect(get(session)!.undo).toHaveLength(1);
+    editMode.set(false);
   });
 });

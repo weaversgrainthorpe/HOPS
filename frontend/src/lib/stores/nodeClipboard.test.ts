@@ -14,7 +14,7 @@ import { toast } from './toast';
 import { begin, apply, session, dirty, resetEditSessionForTests } from './editSession';
 import { toggleNode, clearSelection, selectedNodes } from './nodeSelection';
 import { nodeClipboard, copySelection, cutSelection, pasteInto, clearNodeClipboard } from './nodeClipboard';
-import { updateNode } from '$lib/editor/treeOps';
+import { updateNode, deleteNodes } from '$lib/editor/treeOps';
 import type { Config } from '$lib/types';
 import type { FolderNode, LayoutDashboard, LayoutDoc, LayoutNode, Placement } from '$lib/types/layout';
 
@@ -238,5 +238,54 @@ describe('across dashboards', () => {
     expect(err).toHaveBeenCalledWith(expect.stringContaining('Dashboard not found: o'));
     expect(draft()).toBe(before);
     expect(get(nodeClipboard)).not.toBeNull();
+  });
+});
+
+describe('paste of a copy uses the snapshot taken at Copy time (Ruling 18(6))', () => {
+  it('copy → delete the original → paste still works (fresh ids, deep)', async () => {
+    begin('d');
+    toggleNode('src', false);
+    copySelection();
+    apply('Delete', (d) => deleteNodes(d, ['src']));
+    expect(await pasteInto({ tabId: 't2' })).toBe(true);
+    const pasted = draft().tabs[1].root.children[0] as FolderNode;
+    expect(pasted.name).toBe('src');
+    expect(pasted.id).not.toBe('src');
+    expect(pasted.content.children).toHaveLength(2);
+    expect(pasted.content.children.map((n) => n.id)).not.toContain('s1');
+  });
+
+  it('copy → edit the original → paste gives the pre-edit version', async () => {
+    begin('d');
+    toggleNode('a', false);
+    copySelection();
+    apply('Rename', (d) => updateNode(d, 'a', { name: 'edited later' } as Partial<LayoutNode>));
+    await pasteInto({ tabId: 't2' });
+    expect(draft().tabs[1].root.children[0].name).toBe('a');
+  });
+
+  it('a cut whose original is gone stays refused with a toast', async () => {
+    begin('d');
+    toggleNode('a', false);
+    cutSelection();
+    apply('Delete', (d) => deleteNodes(d, ['a']));
+    const err = vi.spyOn(toast, 'error');
+    const before = draft();
+    expect(await pasteInto({ tabId: 't2' })).toBe(false);
+    expect(err).toHaveBeenCalledWith(expect.stringMatching(/no longer/i));
+    expect(draft()).toBe(before);
+  });
+
+  it('a grid folder pasted into a free tab is converted (not left at 4 x 3 design units)', async () => {
+    config.set({ dashboards: [], layout: { schemaVersion: 3, dashboards: [{
+      ...home(), tabs: [home().tabs[0], { id: 'tf', name: 'F', layout: 'free', designWidth: 960, root: { columns: 120, children: [] } }]
+    }] } } as unknown as Config);
+    begin('d');
+    toggleNode('f1', false);
+    copySelection();
+    await pasteInto({ tabId: 'tf' });
+    const pasted = draft().tabs[1].root.children[0] as FolderNode;
+    expect(pasted.placement).toMatchObject({ w: 40, h: 30 });
+    expect(pasted.content.children[0].placement).toEqual({ x: 0, y: 0, w: 10, h: 10 });
   });
 });

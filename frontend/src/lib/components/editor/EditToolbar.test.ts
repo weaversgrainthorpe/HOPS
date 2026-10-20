@@ -12,6 +12,7 @@ vi.mock('$lib/utils/api', async () => ({
 
 import * as api from '$lib/utils/api';
 import EditToolbar from './EditToolbar.svelte';
+import NodeContextMenu from './NodeContextMenu.svelte';
 import { apply, dirty } from '$lib/stores/editSession';
 import { updateNode } from '$lib/editor/treeOps';
 import { editorDialog } from '$lib/editor/editorUi';
@@ -158,5 +159,38 @@ describe('EditToolbar', () => {
     await key('Delete');
     await answerConfirm(true);
     expect(nodeIn(draft(), 'a')).toBeUndefined();
+  });
+
+  it('shortcuts are ignored while a modal dialog is open', async () => {
+    render(EditToolbar, { tabId: 't1', onAddTab: vi.fn() });
+    rename('a', 'Changed');
+    toggleNode('b', false);
+    const dlg = document.createElement('div');
+    dlg.setAttribute('role', 'dialog');
+    dlg.setAttribute('aria-modal', 'true');
+    document.body.appendChild(dlg);
+    await key('z', { ctrlKey: true });
+    await key('Delete');
+    expect(nodeIn(draft(), 'a')!.name).toBe('Changed');
+    expect(get(confirmModalState).isOpen).toBe(false);
+    dlg.remove();
+  });
+
+  it('keys pressed in an open item menu never reach the shortcuts (Delete, Ctrl+Z, Ctrl+C/X/V)', async () => {
+    render(EditToolbar, { tabId: 't1', onAddTab: vi.fn() });
+    render(NodeContextMenu, { request: { x: 1, y: 1, target: { kind: 'node', id: 'b' } }, onClose: vi.fn() });
+    await tick();
+    rename('a', 'Changed');
+    const focused = document.activeElement as HTMLElement;
+    expect(focused.getAttribute('role')).toBe('menuitem');
+    await fireEvent.keyDown(focused, { key: 'Delete' });
+    await fireEvent.keyDown(focused, { key: 'Backspace' });
+    await fireEvent.keyDown(focused, { key: 'z', ctrlKey: true });
+    await fireEvent.keyDown(focused, { key: 'c', ctrlKey: true });
+    await fireEvent.keyDown(focused, { key: 'x', ctrlKey: true });
+    await fireEvent.keyDown(focused, { key: 'v', ctrlKey: true });
+    expect(get(confirmModalState).isOpen).toBe(false);
+    expect(nodeIn(draft(), 'a')!.name).toBe('Changed');
+    expect(get(nodeClipboard)).toBeNull();
   });
 });
