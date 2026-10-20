@@ -4,9 +4,11 @@
 	// See scripts/generate-icon-bundle.mjs and TENETS.md #10.
 	import '$lib/icons/offline-bundle';
 	import { onMount } from 'svelte';
-	import { config, loadConfig, migrationFailure, resolveDashboardRoute, showMigrationFailedPage } from '$lib/stores/config';
-	import { beforeNavigate } from '$app/navigation';
+	import { config, currentRoute, loadConfig, migrationFailure, resolveDashboardRoute, showMigrationFailedPage } from '$lib/stores/config';
+	import { beforeNavigate, goto } from '$app/navigation';
 	import { get } from 'svelte/store';
+	import { untrack } from 'svelte';
+	import { guardNavigation, guardUnload } from '$lib/stores/editSession';
 	import { revealNavigation } from '$lib/stores/folderOverlay';
 	import { page } from '$app/stores';
 	import { initAuth, mustChangePassword } from '$lib/stores/auth';
@@ -24,19 +26,29 @@
 	import SearchModal from '$lib/components/SearchModal.svelte';
 	import { selectedEntry } from '$lib/stores/selection';
 	import { copyEntry, cutEntry, clipboard } from '$lib/stores/clipboard';
-	import { editMode } from '$lib/stores/editMode';
+	import { editMode, followRoute } from '$lib/stores/editMode';
 	import '../app.css';
 
 	let { children } = $props();
 
 	let showSearch = $state(false);
 
-	// A pending search reveal survives only the navigation to its own dashboard.
-	beforeNavigate(({ to }) => {
+	// Unsaved edit-session changes: ask before leaving (leaving anyway discards
+	// them). The reveal bookkeeping below only runs for a navigation that goes ahead.
+	beforeNavigate((nav) => {
+		if (guardNavigation(nav, (href) => goto(href))) return;
+		const { to } = nav;
 		const seg = to?.params?.dashboard;
 		const cfg = get(config);
 		const r = seg && cfg ? resolveDashboardRoute(seg, cfg) : undefined;
 		revealNavigation(r && r.kind !== 'missing-layout' ? r.dashboard.id : null);
+	});
+
+	// In edit mode the session follows the route's dashboard.
+	$effect(() => {
+		void $currentRoute;
+		void $editMode;
+		untrack(followRoute);
 	});
 
 	onMount(() => {
@@ -124,7 +136,7 @@
 	<title>HOPS - Home Operations Portal System</title>
 </svelte:head>
 
-<svelte:window onkeydown={handleKeyDown} />
+<svelte:window onkeydown={handleKeyDown} onbeforeunload={guardUnload} />
 
 <Navbar onSearch={() => (showSearch = true)} />
 <OfflineBanner />

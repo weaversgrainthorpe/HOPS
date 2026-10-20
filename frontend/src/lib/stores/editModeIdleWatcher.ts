@@ -1,8 +1,9 @@
 import { get } from 'svelte/store';
 import { toast } from './toast';
-import { editMode } from './editMode';
+import { editMode, disableEditMode, routeDashboardId } from './editMode';
+import { dirty } from './editSession';
 import { listSettings, getDashboardSettings } from '$lib/utils/api';
-import { currentDashboard } from './config';
+import { currentRoute } from './config';
 
 // Edit-mode idle timeout.
 //
@@ -15,6 +16,8 @@ import { currentDashboard } from './config';
 // "Activity" means any pointer/keyboard interaction anywhere on the page.
 // On every event we extend the deadline; if the deadline passes without
 // activity, edit mode flips off and a non-intrusive toast explains why.
+// With UNSAVED changes it never discards on its own: it asks Save / Discard /
+// Keep editing and waits (Tenet 5); Keep editing re-arms the timer.
 //
 // The timeout window comes from the editmode.idle_timeout_minutes admin
 // setting (default 15 min). A value of 0 disables the idle timer entirely.
@@ -25,6 +28,9 @@ import { currentDashboard } from './config';
 let watcherInited = false;
 let idleTimer: ReturnType<typeof setTimeout> | null = null;
 let idleTimeoutMs = 15 * 60 * 1000;
+// True while the idle Save/Discard prompt is open: activity over the dialog
+// must not re-arm the timer (which would stack a second prompt).
+let prompting = false;
 
 const ACTIVITY_EVENTS = ['mousemove', 'mousedown', 'keydown', 'wheel', 'touchstart'] as const;
 
@@ -39,12 +45,29 @@ function armIdleTimer(): void {
   clearIdleTimer();
   if (idleTimeoutMs <= 0) return; // 0 disables the timer
   idleTimer = setTimeout(() => {
-    // Only fire if we're still in edit mode (race: the user may have
-    // turned it off manually between arming and firing).
-    if (!get(editMode)) return;
-    editMode.set(false);
-    toast.info('Edit mode timed out — click Edit again to make more changes.');
+    idleTimer = null;
+    void onIdle();
   }, idleTimeoutMs);
+}
+
+async function onIdle(): Promise<void> {
+  // Only fire if we're still in edit mode (race: the user may have
+  // turned it off manually between arming and firing).
+  if (!get(editMode) || prompting) return;
+  if (!get(dirty)) {
+    await disableEditMode();
+    toast.info('Edit mode timed out — click Edit again to make more changes.');
+    return;
+  }
+  prompting = true;
+  try {
+    const ended = await disableEditMode({
+      message: 'Edit mode timed out with unsaved changes. Save them, discard them, or keep editing?'
+    });
+    if (!ended && get(editMode)) armIdleTimer();
+  } finally {
+    prompting = false;
+  }
 }
 
 function onActivity(): void {
@@ -52,7 +75,7 @@ function onActivity(): void {
   // place — at typical activity rates (mouse moves dozens of times per
   // second) this is still negligible work compared to what the page
   // already does on each event.
-  if (get(editMode)) armIdleTimer();
+  if (get(editMode) && !prompting) armIdleTimer();
 }
 
 /** Current idle timeout in ms (exposed for tests). */
@@ -81,14 +104,15 @@ async function refreshFromGlobalSetting(): Promise<void> {
   }
 }
 
-// The timeout is per dashboard (effective = override or inherited global).
-// With no current dashboard, or if the per-dashboard lookup fails, fall back
-// to the global setting; a failure is warned about, not silently swallowed.
+// The timeout is per dashboard (effective = override or inherited global),
+// for the route's dashboard of either kind. With no current dashboard, or if
+// the per-dashboard lookup fails, fall back to the global setting; a failure
+// is warned about, not silently swallowed.
 export async function refreshTimeoutFromSettings(): Promise<void> {
-  const dash = get(currentDashboard);
-  if (dash) {
+  const id = routeDashboardId();
+  if (id) {
     try {
-      const resp = await getDashboardSettings(dash.id);
+      const resp = await getDashboardSettings(id);
       const minutes = Number(resp.effective.editIdleTimeoutMinutes);
       if (Number.isFinite(minutes) && minutes >= 0) {
         idleTimeoutMs = minutes * 60 * 1000;
@@ -127,8 +151,9 @@ export function initEditModeIdleWatcher(): void {
   // Re-resolve the timeout while in edit mode when the current dashboard
   // changes, or its settings are saved (applyDashboardSettings replaces them).
   let lastKey: string | null = null;
-  currentDashboard.subscribe((d) => {
-    const key = d ? `${d.id}:${JSON.stringify(d.settings ?? null)}` : null;
+  currentRoute.subscribe((r) => {
+    const d = r && r.kind !== 'missing-layout' ? r.dashboard : null;
+    const key = d ? `${d.id}:${JSON.stringify((d as { settings?: unknown }).settings ?? null)}` : null;
     const changed = key !== lastKey;
     lastKey = key;
     if (changed && get(editMode)) {

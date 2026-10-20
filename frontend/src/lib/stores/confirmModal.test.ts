@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
-import { confirmModalState, confirm, closeConfirmModal } from './confirmModal';
+import { confirmModalState, confirm, confirmChoice, closeConfirmModal } from './confirmModal';
 
 describe('confirmModal store', () => {
 	beforeEach(() => {
@@ -67,5 +67,29 @@ describe('confirmModal store', () => {
 
 		const state = get(confirmModalState);
 		expect(state.options?.title).toBe('second');
+	});
+
+	it('three-button variant resolves confirm / alternate / cancel', async () => {
+		const a = confirmChoice({ title: 'X', message: 'X', confirmText: 'Save', alternateText: 'Discard', cancelText: 'Keep editing' });
+		expect(get(confirmModalState).options?.alternateText).toBe('Discard');
+		closeConfirmModal('alternate');
+		await expect(a).resolves.toBe('alternate');
+		const b = confirmChoice({ title: 'X', message: 'X', alternateText: 'Discard' });
+		closeConfirmModal(true);
+		await expect(b).resolves.toBe('confirm');
+		const c = confirmChoice({ title: 'X', message: 'X', alternateText: 'Discard' });
+		closeConfirmModal(false);
+		await expect(c).resolves.toBe('cancel');
+	});
+
+	it('the two-button confirm never shows an alternate button', () => {
+		confirm({ title: 'X', message: 'X', alternateText: 'Nope' });
+		expect(get(confirmModalState).options?.alternateText).toBeUndefined();
+	});
+
+	it('a replaced modal answers cancel instead of hanging', async () => {
+		const first = confirm({ title: 'first', message: 'm' });
+		confirm({ title: 'second', message: 'm' });
+		await expect(first).resolves.toBe(false);
 	});
 });

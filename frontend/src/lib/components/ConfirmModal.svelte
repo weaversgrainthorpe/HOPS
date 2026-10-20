@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { confirmModalState, closeConfirmModal, type ConfirmOptions } from '$lib/stores/confirmModal';
+  import { confirmModalState, closeConfirmModal, type ConfirmOptions, type ConfirmChoice } from '$lib/stores/confirmModal';
   import { focusTrap } from '$lib/utils/focusTrap';
   import { portal } from '$lib/utils/portal';
   import { COLORS } from '$lib/constants/colors';
@@ -8,7 +8,7 @@
   interface ConfirmState {
     isOpen: boolean;
     options: ConfirmOptions | null;
-    resolve: ((value: boolean) => void) | null;
+    resolve: ((value: ConfirmChoice) => void) | null;
   }
 
   let state = $state<ConfirmState>({ isOpen: false, options: null, resolve: null });
@@ -78,6 +78,18 @@
         <button class="btn-secondary" onclick={() => closeConfirmModal(false)}>
           {state.options.cancelText || 'Cancel'}
         </button>
+        {#if state.options.alternateText}
+          <button
+            class="btn-confirm"
+            class:btn-danger={state.options.alternateStyle === 'danger'}
+            class:btn-warning={state.options.alternateStyle === 'warning'}
+            class:btn-primary={state.options.alternateStyle === 'primary'}
+            class:btn-secondary={!state.options.alternateStyle}
+            onclick={() => closeConfirmModal('alternate')}
+          >
+            {state.options.alternateText}
+          </button>
+        {/if}
         <button
           class="btn-confirm"
           class:btn-danger={state.options.confirmStyle === 'danger'}
@@ -150,6 +162,7 @@
 
   .modal-actions {
     display: flex;
+    flex-wrap: wrap;
     gap: 0.75rem;
     justify-content: center;
   }

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { saveConflict, loadConfig } from '$lib/stores/config';
+  import { sessionConflict, keepEditingAfterConflict, reloadAfterConflict } from '$lib/stores/editSession';
   import Icon from '@iconify/svelte';
 
   let reloading = $state(false);
@@ -14,12 +15,37 @@
       reloading = false;
     }
   }
+
+  // An edit session's save was refused: the draft is still held. Reload ends
+  // the session (the draft is lost) and reloads; Keep editing hides this
+  // message and leaves the draft and session exactly as they are.
+  async function reloadSession() {
+    reloading = true;
+    try {
+      await reloadAfterConflict();
+    } finally {
+      reloading = false;
+    }
+  }
 </script>
 
 <!-- A save was rejected because the dashboard changed elsewhere. Deliberately
      NOT dismissible: the only way out is Reload, so an unsaved change can
      never be mistaken for a saved one. -->
-{#if $saveConflict}
+{#if $sessionConflict}
+  <div class="conflict-banner" role="alert">
+    <Icon icon="mdi:alert-outline" width="20" />
+    <span class="text">
+      This dashboard was changed somewhere else, so your changes were <strong>not</strong> saved.
+    </span>
+    <button type="button" class="reload" onclick={reloadSession} disabled={reloading}>
+      {reloading ? 'Reloading…' : 'Reload (lose my draft)'}
+    </button>
+    <button type="button" class="keep" onclick={keepEditingAfterConflict} disabled={reloading}>
+      Keep editing
+    </button>
+  </div>
+{:else if $saveConflict}
   <div class="conflict-banner" role="alert">
     <Icon icon="mdi:alert-outline" width="20" />
     <span class="text">
@@ -59,13 +85,25 @@
     cursor: pointer;
   }
 
-  .reload:disabled {
+  .keep {
+    padding: 0.25rem 0.8rem;
+    border-radius: 0.25rem;
+    border: 1px solid #fecaca;
+    background: transparent;
+    color: #fee2e2;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .reload:disabled,
+  .keep:disabled {
     opacity: 0.6;
     cursor: wait;
   }
 
   @media (max-width: 600px) {
     .conflict-banner {
+      flex-wrap: wrap;
       font-size: 0.85rem;
       padding: 0.45rem 0.75rem;
     }

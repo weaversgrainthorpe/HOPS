@@ -122,8 +122,8 @@ function saveFailedMessage(error: unknown): string {
 // tab by id; TabCanvas reconciles the stack). Only a first load (or a reload
 // with no held config) shows the global loading screen. A failure is surfaced
 // either way (configError).
-export async function loadConfig() {
-  const background = get(layoutStale) && get(config) !== null;
+export async function loadConfig(opts: { background?: boolean } = {}) {
+  const background = (opts.background === true || get(layoutStale)) && get(config) !== null;
   if (!background) configLoading.set(true);
   configError.set(null);
 
@@ -144,6 +144,24 @@ export async function loadConfig() {
   } finally {
     configLoading.set(false);
   }
+}
+
+/**
+ * After an edit session's v3 save: take the response's fresh layout into the
+ * store (a response without one marks the layout stale and reloads it, never
+ * keeping the old one as current). The legacy view of the saved dashboard is
+ * now older than the layout, so the whole config is refreshed in the
+ * background; a failure there surfaces through configError as usual.
+ */
+export function applySavedLayout(fresh: FreshLayout): void {
+  const cfg = get(config);
+  if (!cfg) {
+    void loadConfig();
+    return;
+  }
+  const hadLayout = !!fresh.layout;
+  config.set({ ...cfg, ...freshLayoutPatch(fresh) }); // no layout: stale + reload
+  if (hadLayout) void loadConfig({ background: true });
 }
 
 // Apply server-assigned revisions onto a config: the top-level map and each

@@ -1,5 +1,5 @@
 import type { Config, Dashboard, DashboardSettings } from '$lib/types';
-import type { LayoutDoc } from '$lib/types/layout';
+import type { LayoutDoc, LayoutDashboard } from '$lib/types/layout';
 import type { ImportResult } from './importResult';
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api';
@@ -274,6 +274,35 @@ export async function saveDashboard(
   if (resp.layout) {
     out.layout = resp.layout;
     out.v3OnlyDashboards = resp.v3OnlyDashboards ?? [];
+  }
+  return out;
+}
+
+/**
+ * Revision-checked save of one v3 dashboard (an edit session's draft):
+ * PUT /api/dashboards/{id} with `{schema: 3, dashboard, revision}`. A 409
+ * surfaces as ConflictError and a 503 as MigrationFailedError (fetchAPI); a
+ * 400 carries the server's message. The response's fresh layout is returned
+ * when present; a response without one is passed on without it so the caller
+ * can mark the held layout stale rather than trust it.
+ */
+export async function saveDashboardV3(
+  id: string,
+  dashboard: LayoutDashboard,
+  revision: number
+): Promise<{ revision: number; warning?: string } & FreshLayout> {
+  const resp = await fetchAPI(`/dashboards/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    body: JSON.stringify({ schema: 3, dashboard, revision }),
+  });
+  if (!resp || typeof resp.revision !== 'number') {
+    throw new Error('The server did not confirm the new dashboard revision.');
+  }
+  const out: { revision: number; warning?: string } & FreshLayout = { revision: resp.revision };
+  if (typeof resp.warning === 'string' && resp.warning) out.warning = resp.warning;
+  if (resp.layout && Array.isArray(resp.layout.dashboards)) {
+    out.layout = resp.layout;
+    out.v3OnlyDashboards = Array.isArray(resp.v3OnlyDashboards) ? resp.v3OnlyDashboards : [];
   }
   return out;
 }

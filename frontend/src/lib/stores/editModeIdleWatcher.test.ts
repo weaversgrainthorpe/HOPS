@@ -2,9 +2,10 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 const { current } = vi.hoisted(() => ({ current: { v: null as unknown } }));
 vi.mock('./config', async () => {
+	const actual = await vi.importActual<object>('./config');
 	const { writable } = await import('svelte/store');
-	current.v = writable<{ id: string } | null>(null);
-	return { currentDashboard: current.v };
+	current.v = writable<unknown>(undefined);
+	return { ...actual, currentRoute: current.v };
 });
 vi.mock('$lib/utils/api', async () => ({
 	...(await vi.importActual<object>('$lib/utils/api')),
@@ -18,7 +19,13 @@ import { editMode } from './editMode';
 
 const globalList = { settings: [{ key: 'editmode.idle_timeout_minutes', value: '15' }] };
 
-const cur = () => current.v as import('svelte/store').Writable<{ id: string } | null>;
+// The route's dashboard, either kind: { id, settings? } → a legacy route; pass
+// kind 'v3only' for a v3-only dashboard.
+const route = () => current.v as import('svelte/store').Writable<unknown>;
+const cur = () => ({
+	set: (d: ({ id: string; settings?: unknown }) | null, kind: 'legacy' | 'v3only' = 'legacy') =>
+		route().set(d ? { kind, dashboard: d } : undefined)
+});
 
 beforeEach(() => {
 	vi.clearAllMocks();
@@ -36,6 +43,16 @@ describe('refreshTimeoutFromSettings', () => {
 		await refreshTimeoutFromSettings();
 		expect(api.getDashboardSettings).toHaveBeenCalledWith('d1');
 		expect(getIdleTimeoutMs()).toBe(3 * 60 * 1000);
+	});
+
+	it('uses a v3-only route dashboard too', async () => {
+		cur().set({ id: 'v3d' }, 'v3only');
+		vi.mocked(api.getDashboardSettings).mockResolvedValue({
+			overrides: {}, revision: 1, effective: { editIdleTimeoutMinutes: 5 }
+		} as never);
+		await refreshTimeoutFromSettings();
+		expect(api.getDashboardSettings).toHaveBeenCalledWith('v3d');
+		expect(getIdleTimeoutMs()).toBe(5 * 60 * 1000);
 	});
 
 	it('uses the global lookup when no dashboard is current', async () => {
