@@ -16,16 +16,20 @@ vi.mock('$lib/utils/api', async () => ({
 import * as api from '$lib/utils/api';
 import { refreshTimeoutFromSettings, getIdleTimeoutMs, initEditModeIdleWatcher } from './editModeIdleWatcher';
 import { editMode } from './editMode';
+import { get } from 'svelte/store';
 
 const globalList = { settings: [{ key: 'editmode.idle_timeout_minutes', value: '15' }] };
 
-// The route's dashboard, either kind: { id, settings? } → a legacy route; pass
-// kind 'v3only' for a v3-only dashboard.
+// The route's dashboard (the v3 dashboard itself, or undefined off a dashboard).
 const route = () => current.v as import('svelte/store').Writable<unknown>;
 const cur = () => ({
-	set: (d: ({ id: string; settings?: unknown }) | null, kind: 'legacy' | 'v3only' = 'legacy') =>
-		route().set(d ? { kind, dashboard: d } : undefined)
+	set: (d: ({ id: string; settings?: unknown; [k: string]: unknown }) | null) => route().set(d ?? undefined)
 });
+// The Showcase: a free-layout dashboard (once "view-only (v3)").
+const showcase = {
+	id: 'sc-dash', name: 'Showcase', path: '/showcase', revision: 3,
+	tabs: [{ id: 'sc-tab-free', name: 'Free', layout: 'free', designWidth: 1280, root: { columns: 160, children: [] } }]
+};
 
 beforeEach(() => {
 	vi.clearAllMocks();
@@ -45,13 +49,13 @@ describe('refreshTimeoutFromSettings', () => {
 		expect(getIdleTimeoutMs()).toBe(3 * 60 * 1000);
 	});
 
-	it('uses a v3-only route dashboard too', async () => {
-		cur().set({ id: 'v3d' }, 'v3only');
+	it('uses the Showcase (a free-layout dashboard) like any other', async () => {
+		cur().set(showcase);
 		vi.mocked(api.getDashboardSettings).mockResolvedValue({
 			overrides: {}, revision: 1, effective: { editIdleTimeoutMinutes: 5 }
 		} as never);
 		await refreshTimeoutFromSettings();
-		expect(api.getDashboardSettings).toHaveBeenCalledWith('v3d');
+		expect(api.getDashboardSettings).toHaveBeenCalledWith('sc-dash');
 		expect(getIdleTimeoutMs()).toBe(5 * 60 * 1000);
 	});
 
@@ -97,6 +101,26 @@ describe('re-resolving while in edit mode', () => {
 		cur().set({ id: 'd2', settings: { editIdleTimeoutMinutes: 9 } } as never);
 		await vi.waitFor(() => expect(getIdleTimeoutMs()).toBe(9 * 60 * 1000));
 		editMode.set(false);
+	});
+
+	it('times edit mode out on the Showcase', async () => {
+		vi.useFakeTimers();
+		try {
+			vi.mocked(api.getDashboardSettings).mockResolvedValue({
+				overrides: {}, revision: 3, effective: { editIdleTimeoutMinutes: 1 }
+			} as never);
+			cur().set(showcase);
+			initEditModeIdleWatcher();
+			editMode.set(true);
+			await vi.advanceTimersByTimeAsync(0);
+			expect(getIdleTimeoutMs()).toBe(60 * 1000);
+			expect(get(editMode)).toBe(true);
+			await vi.advanceTimersByTimeAsync(60 * 1000 + 10);
+			expect(get(editMode)).toBe(false);
+		} finally {
+			editMode.set(false);
+			vi.useRealTimers();
+		}
 	});
 
 	it('warns when the global setting is missing', async () => {

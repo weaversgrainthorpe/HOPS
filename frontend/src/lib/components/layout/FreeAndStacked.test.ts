@@ -206,7 +206,7 @@ describe('phone stacking', () => {
     const { dash, tab } = mk([
       folder('f', 'Box', { x: 0, y: 0, w: 2, h: 2 }, [tile('x', 'Inside', { x: 0, y: 0, w: 1, h: 1 })], { display: 'collapsed' })
     ], 'grid', 12);
-    config.set({ layout: { schemaVersion: 3, dashboards: [dash] } } as any);
+    config.set({ schemaVersion: 3, dashboards: [dash] } as any);
     width = 1024;
     render(TabCanvas, { dashboard: dash, tab });
     await tick();

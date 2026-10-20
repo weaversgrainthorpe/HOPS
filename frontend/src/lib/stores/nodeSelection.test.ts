@@ -16,7 +16,7 @@ const d = (id: string): LayoutDashboard => ({
 beforeEach(() => {
   resetEditSessionForTests();
   clearSelection();
-  config.set({ dashboards: [], layout: { schemaVersion: 3, dashboards: [d('p'), d('q')] } } as unknown as Config);
+  config.set({ schemaVersion: 3, dashboards: [d('p'), d('q')] } as unknown as Config);
 });
 
 describe('nodeSelection', () => {

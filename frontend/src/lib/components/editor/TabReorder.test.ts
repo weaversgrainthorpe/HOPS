@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/svelte';
+import { render, screen, fireEvent, cleanup } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { get } from 'svelte/store';
 
@@ -17,7 +17,7 @@ import { closeAll } from '$lib/stores/folderOverlay';
 import { begin, session, resetEditSessionForTests } from '$lib/stores/editSession';
 import { clearSelection } from '$lib/stores/nodeSelection';
 import { drag, setDragEnv, resetDragForTests } from '$lib/editor/drag/dragController';
-import type { Config, Dashboard as DashboardT } from '$lib/types';
+import type { Config } from '$lib/types';
 import type { LayoutDashboard } from '$lib/types/layout';
 import { FakeRO } from './editorTestKit';
 import { toast } from '$lib/stores/toast';
@@ -25,14 +25,6 @@ import { toast } from '$lib/stores/toast';
 const entry = (id: string, name: string) => ({ id, name, url: 'http://x.test', icon: '', openMode: 'newtab' as const, size: 'medium' as const, order: 0 });
 const tile = (id: string, name: string): any => ({ kind: 'tile', ...entry(id, name), placement: { x: 0, y: 0, w: 1, h: 1 } });
 
-const legacy: DashboardT = {
-  id: 'd1', name: 'Home', path: '/home', order: 0, revision: 1,
-  tabs: [
-    { id: 't1', name: 'Main', order: 0, groups: [] },
-    { id: 't2', name: 'Second', order: 1, groups: [] },
-    { id: 't3', name: 'Third', order: 2, groups: [] }
-  ]
-};
 const layoutD1: LayoutDashboard = {
   id: 'd1', name: 'Home', path: '/home', revision: 1,
   tabs: [
@@ -41,10 +33,8 @@ const layoutD1: LayoutDashboard = {
     { id: 't3', name: 'Third', root: { columns: 12, children: [] } }
   ]
 };
-const cfg = (): Config => ({
-  dashboards: [legacy], theme: { mode: 'auto' }, settings: {}, dashboardRevisions: { d1: 1 },
-  layout: { schemaVersion: 3, dashboards: [layoutD1] }, v3OnlyDashboards: []
-}) as unknown as Config;
+const legacy = layoutD1; // the route's dashboard
+const cfg = (): Config => ({ schemaVersion: 3, dashboards: [layoutD1] });
 
 let frames: FrameRequestCallback[] = [];
 const flush = () => {
@@ -72,6 +62,8 @@ beforeEach(() => {
   setDragEnv({ raf: (cb) => { frames.push(cb); return frames.length; }, cancelRaf: () => { frames = []; } });
 });
 afterEach(async () => {
+  // Unmount first, so nothing re-renders after the stubs (ResizeObserver) are removed.
+  cleanup();
   // A mouse drag swallows the click that follows it until a 0 ms timer clears that: let it expire.
   await new Promise((r) => setTimeout(r, 0));
   resetDragForTests();

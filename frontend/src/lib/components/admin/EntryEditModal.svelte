@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Entry, Tab } from '$lib/types';
+  import type { Entry } from '$lib/types';
   import Icon from '@iconify/svelte';
   import ColoredIcon from '../ColoredIcon.svelte';
   import ColorPicker from './ColorPicker.svelte';
@@ -9,55 +9,25 @@
   import { confirm } from '$lib/stores/confirmModal';
   import { editMode } from '$lib/stores/editMode';
 
-  interface TabInfo {
-    id: string;
-    name: string;
-    groups: { id: string; name: string }[];
-  }
-
   interface Props {
     entry: Entry;
-    currentTabId?: string;
-    currentGroupId?: string;
-    availableTabs?: TabInfo[];
     onSave: (entry: Entry) => void;
     onCancel: () => void;
     onDelete?: () => void;
-    onMoveToTab?: (targetTabId: string, targetGroupId: string) => void;
-    onCopyToTab?: (targetTabId: string, targetGroupId: string) => void;
     /**
-     * v3 editor: opens the Move/Copy dialog (any tab or folder) instead of the
-     * legacy tab/group selects. A v3 tile goes in and comes out with its
-     * kind, id and placement untouched (the editor never patches those).
+     * Opens the Move/Copy dialog (any tab or folder, any dashboard). A tile
+     * goes in and comes out with its kind, id and placement untouched (the
+     * editor never patches those).
      */
     onMoveCopy?: () => void;
   }
 
-  let { entry, currentTabId, currentGroupId, availableTabs = [], onSave, onCancel, onDelete, onMoveToTab, onCopyToTab, onMoveCopy }: Props = $props();
+  let { entry, onSave, onCancel, onDelete, onMoveCopy }: Props = $props();
 
   // Form state initialized from props (intentionally captures initial values)
   // svelte-ignore state_referenced_locally
   let editedEntry = $state<Entry>({ ...entry });
   let showIconEditor = $state(false);
-
-  // Move/copy to tab state
-  let showMoveSection = $state(false);
-  let selectedMoveTabId = $state('');
-  let selectedMoveGroupId = $state('');
-  let isMovingOrCopying = $state(false);
-
-  // Get groups for the selected tab (for move dropdown)
-  const moveTargetGroups = $derived(
-    availableTabs.find(t => t.id === selectedMoveTabId)?.groups || []
-  );
-
-  // Check if move/copy is available (has other tabs/groups to target)
-  const canMoveOrCopy = $derived(
-    availableTabs.length > 0 && (onMoveToTab || onCopyToTab) && (
-      availableTabs.length > 1 || // Multiple tabs
-      availableTabs.some(t => t.groups.length > 1) // Or current tab has multiple groups
-    )
-  );
 
   // Update editedEntry when entry prop changes. Normalise `type` to
   // 'link' when the incoming entry has no value, so the Tile type
@@ -99,28 +69,6 @@
       editedEntry.showStatus = false;
     }
     onSave(editedEntry);
-  }
-
-  async function handleMove() {
-    if (isMovingOrCopying || !onMoveToTab || !selectedMoveTabId || !selectedMoveGroupId) return;
-
-    // Don't move if target is same as current location
-    if (selectedMoveTabId === currentTabId && selectedMoveGroupId === currentGroupId) {
-      showMoveSection = false;
-      return;
-    }
-
-    isMovingOrCopying = true;
-    onMoveToTab(selectedMoveTabId, selectedMoveGroupId);
-    onCancel(); // Close modal after move
-  }
-
-  async function handleCopy() {
-    if (isMovingOrCopying || !onCopyToTab || !selectedMoveTabId || !selectedMoveGroupId) return;
-
-    isMovingOrCopying = true;
-    onCopyToTab(selectedMoveTabId, selectedMoveGroupId);
-    onCancel(); // Close modal after copy
   }
 
   async function handleDelete() {
@@ -297,66 +245,6 @@
             <Icon icon="mdi:folder-move" width="18" />
             Move or copy to…
           </button>
-        </div>
-      {:else if canMoveOrCopy}
-        <div class="form-group full-width move-section">
-          {#if !showMoveSection}
-            <button type="button" class="btn-move-toggle" onclick={() => showMoveSection = true}>
-              <Icon icon="mdi:folder-move" width="18" />
-              Move or Copy to Different Tab/Group
-            </button>
-          {:else}
-            <div class="move-controls">
-              <label for="move-tab-select">Target:</label>
-              <div class="move-selects">
-                <select id="move-tab-select" bind:value={selectedMoveTabId} onchange={() => selectedMoveGroupId = ''}>
-                  <option value="">Select Tab...</option>
-                  {#each availableTabs as tab}
-                    <option value={tab.id}>{tab.name} {tab.id === currentTabId ? '(current)' : ''}</option>
-                  {/each}
-                </select>
-                {#if selectedMoveTabId}
-                  <select id="move-group-select" bind:value={selectedMoveGroupId} aria-label="Select target group">
-                    <option value="">Select Group...</option>
-                    {#each moveTargetGroups as group}
-                      <option value={group.id}>
-                        {group.name} {selectedMoveTabId === currentTabId && group.id === currentGroupId ? '(current)' : ''}
-                      </option>
-                    {/each}
-                  </select>
-                {/if}
-              </div>
-              <div class="move-actions">
-                <button type="button" class="btn-secondary btn-sm" onclick={() => { showMoveSection = false; selectedMoveTabId = ''; selectedMoveGroupId = ''; }}>
-                  Cancel
-                </button>
-                {#if onMoveToTab}
-                  <button
-                    type="button"
-                    class="btn-move btn-sm"
-                    onclick={handleMove}
-                    disabled={isMovingOrCopying || !selectedMoveTabId || !selectedMoveGroupId || (selectedMoveTabId === currentTabId && selectedMoveGroupId === currentGroupId)}
-                    title="Move this tile to the selected target (removed from current location)"
-                  >
-                    <Icon icon="mdi:folder-move" width="16" />
-                    Move
-                  </button>
-                {/if}
-                {#if onCopyToTab}
-                  <button
-                    type="button"
-                    class="btn-copy btn-sm"
-                    onclick={handleCopy}
-                    disabled={isMovingOrCopying || !selectedMoveTabId || !selectedMoveGroupId}
-                    title="Copy this tile to the selected target (original stays in place)"
-                  >
-                    <Icon icon="mdi:content-copy" width="16" />
-                    Copy
-                  </button>
-                {/if}
-              </div>
-            </div>
-          {/if}
         </div>
       {/if}
     </div>
@@ -615,86 +503,6 @@
     color: var(--accent);
   }
 
-  .move-controls {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-    padding: 1rem;
-    background: var(--bg-tertiary);
-    border: 1px solid var(--border);
-    border-radius: 0.375rem;
-  }
-
-  .move-controls label {
-    font-weight: 500;
-    font-size: 0.875rem;
-    color: var(--text-primary);
-  }
-
-  .move-selects {
-    display: flex;
-    gap: 0.5rem;
-  }
-
-  .move-selects select {
-    flex: 1;
-    padding: 0.5rem 0.75rem;
-    border: 1px solid var(--border);
-    border-radius: 0.375rem;
-    background: var(--bg-secondary);
-    color: var(--text-primary);
-    font-size: 0.875rem;
-  }
-
-  .move-actions {
-    display: flex;
-    gap: 0.5rem;
-    justify-content: flex-end;
-  }
-
-  .btn-sm {
-    padding: 0.5rem 0.75rem;
-    font-size: 0.8rem;
-  }
-
-  .btn-move,
-  .btn-copy {
-    color: white;
-    border: none;
-    border-radius: 0.375rem;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
-  }
-
-  .btn-move {
-    background: var(--accent);
-  }
-
-  .btn-move:hover:not(:disabled) {
-    background: var(--accent-hover);
-  }
-
-  .btn-copy {
-    background: var(--color-success, #16a34a);
-  }
-
-  .btn-copy:hover:not(:disabled) {
-    background: var(--color-success-dark, #15803d);
-  }
-
-  .btn-move:disabled,
-  .btn-copy:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  @media (max-width: 640px) {
-    .move-selects {
-      flex-direction: column;
-    }
-  }
 </style>
 
 {#if showIconEditor}

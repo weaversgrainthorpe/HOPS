@@ -1,60 +1,33 @@
 <script lang="ts">
+  // One tile as the layout renderer draws it (view mode and inside the v3
+  // editor, whose containers handle selection, menus and dialogs).
   import type { Entry } from '$lib/types';
-  import Icon from '@iconify/svelte';
   import ColoredIcon from './ColoredIcon.svelte';
-  import { editMode } from '$lib/stores/editMode';
-  import { confirm } from '$lib/stores/confirmModal';
-  import EntryEditModal from './admin/EntryEditModal.svelte';
   import IframeModal from './IframeModal.svelte';
   import PopupModal from './PopupModal.svelte';
   import StatusIndicator from './StatusIndicator.svelte';
-  import { copyEntry, cutEntry } from '$lib/stores/clipboard';
-  import { selectEntry, toggleEntrySelection, isEntrySelected, selectedEntries } from '$lib/stores/selection';
-  import { safeOpenUrl, isValidUrl } from '$lib/utils/url';
-
-  interface TabInfo {
-    id: string;
-    name: string;
-    groups: { id: string; name: string }[];
-  }
+  import { safeOpenUrl } from '$lib/utils/url';
 
   interface Props {
     entry: Entry;
-    currentTabId?: string;
-    currentGroupId?: string;
-    availableTabs?: TabInfo[];
-    onUpdate?: (entry: Entry) => void;
-    onDelete?: () => void;
-    onMoveToTab?: (targetTabId: string, targetGroupId: string) => void;
-    onCopyToTab?: (targetTabId: string, targetGroupId: string) => void;
-    tabId?: string;
-    groupId?: string;
-    /** Render as a plain tile: edit mode is ignored (no edit controls, selection, context menu or modal). */
-    viewOnly?: boolean;
     /**
-     * Layout renderer only: the tile fills its cell exactly (no min-height of its own);
-     * 'compact' also drops the description and shrinks padding/icon for small cells.
-     * Unset (legacy TabPanel) keeps the v2 sizing untouched.
+     * The tile fills its cell exactly (no min-height of its own); 'compact'
+     * also drops the description and shrinks padding/icon for small cells.
      */
     fit?: 'fill' | 'compact';
     /**
-     * v3 editor (with viewOnly): defined while editing — the tile is a
-     * selectable item (its container handles clicks) and this says whether
-     * it is selected. Undefined outside the editor.
+     * v3 editor: defined while editing — the tile is a selectable item (its
+     * container handles clicks) and this says whether it is selected.
+     * Undefined outside the editor.
      */
     editorSelected?: boolean;
   }
 
-  let { entry, currentTabId = '', currentGroupId = '', availableTabs = [], onUpdate, onDelete, onMoveToTab, onCopyToTab, tabId, groupId, viewOnly = false, fit, editorSelected }: Props = $props();
+  let { entry, fit, editorSelected }: Props = $props();
   const inEditor = $derived(editorSelected !== undefined);
   const compact = $derived(fit === 'compact');
-  const inEdit = $derived($editMode && !viewOnly);
-  let showEditModal = $state(false);
   let showIframeModal = $state(false);
   let showPopupModal = $state(false);
-  let showContextMenu = $state(false);
-  let contextMenuX = $state(0);
-  let contextMenuY = $state(0);
 
   // Note tiles are text-only — name + description, no URL, no icon, no
   // status, no click-to-open behaviour. Treated as "link" when type is
@@ -62,27 +35,8 @@
   // tile semantics.
   let isNote = $derived(entry.type === 'note');
 
-  // Check if this entry is selected
-  let isSelected = $derived(
-    !viewOnly && tabId && groupId ? isEntrySelected(entry.id, tabId, groupId) : false
-  );
-
-  function handleClick(e: MouseEvent) {
-    // In edit mode, handle multi-select with Ctrl/Cmd key
-    if (inEdit) {
-      if (e.ctrlKey || e.metaKey) {
-        // Toggle multi-selection
-        if (tabId && groupId) {
-          toggleEntrySelection(entry, tabId, groupId);
-        }
-        return;
-      }
-      // Regular click - open edit modal
-      showEditModal = true;
-      return;
-    }
-
-    // Note tiles are inert outside edit mode — no URL to open.
+  function handleClick() {
+    // Note tiles are inert — no URL to open.
     if (isNote) return;
 
     switch (entry.openMode) {
@@ -105,71 +59,10 @@
     }
   }
 
-  function handleContextMenu(e: MouseEvent) {
-    if (!inEdit) return;
-
-    e.preventDefault();
-    e.stopPropagation();
-
-    // Store this entry as the currently selected one for keyboard shortcuts
-    if (tabId && groupId) {
-      selectEntry(entry, tabId, groupId);
-    }
-
-    contextMenuX = e.clientX;
-    contextMenuY = e.clientY;
-    showContextMenu = true;
-  }
-
-  function handleCopy() {
-    if (tabId && groupId) {
-      copyEntry(entry, tabId, groupId);
-    }
-    showContextMenu = false;
-  }
-
-  function handleCut() {
-    if (tabId && groupId) {
-      cutEntry(entry, tabId, groupId);
-    }
-    showContextMenu = false;
-  }
-
-  function handleSave(updatedEntry: Entry) {
-    if (onUpdate) {
-      onUpdate(updatedEntry);
-    }
-    showEditModal = false;
-  }
-
-  async function handleDeleteClick(e: MouseEvent) {
-    e.stopPropagation();
-    if (!onDelete) return;
-
-    const confirmed = await confirm({
-      title: 'Delete Tile',
-      message: `Are you sure you want to delete "${entry.name}"?`,
-      confirmText: 'Delete',
-      confirmStyle: 'danger'
-    });
-    if (confirmed) {
-      onDelete();
-    }
-  }
-
-  // Close context menu when clicking outside
-  function handleWindowClick() {
-    if (showContextMenu) {
-      showContextMenu = false;
-    }
-  }
-
   // Get size classes
   // svelte-ignore state_referenced_locally
   const sizeClass = entry.size || 'medium';
 </script>
-
-<svelte:window onclick={handleWindowClick} />
 
 <div class="entry-container" style:height={fit ? '100%' : undefined}>
   <button
@@ -180,17 +73,15 @@
     style:min-height={fit ? '0px' : undefined}
     style:box-sizing={fit ? 'border-box' : undefined}
     style:overflow={fit ? 'hidden' : undefined}
-    class:edit-mode={inEdit}
     class:custom-color={entry.color}
-    class:selected={isSelected || editorSelected === true}
+    class:selected={editorSelected === true}
     class:entry-note={isNote}
     style:background-color={entry.color}
     style:opacity={entry.opacity !== undefined ? entry.opacity : 0.95}
     onclick={handleClick}
-    oncontextmenu={handleContextMenu}
     title={entry.description || entry.name}
-    aria-label={inEditor ? entry.name : isNote ? entry.name : (inEdit ? `Edit ${entry.name}` : `Open ${entry.name}`)}
-    aria-pressed={inEditor ? editorSelected : isSelected}
+    aria-label={inEditor || isNote ? entry.name : `Open ${entry.name}`}
+    aria-pressed={inEditor ? editorSelected : undefined}
   >
     {#if isNote}
       <!-- Note tile: just the name as a heading + description as body
@@ -232,34 +123,7 @@
       {/if}
     {/if}
   </button>
-
-  {#if inEdit}
-    <div class="hover-controls">
-      <button class="control-btn edit-btn" onclick={(e) => { e.stopPropagation(); showEditModal = true; }} aria-label="Edit {entry.name}" title="Edit tile">
-        <Icon icon="mdi:pencil" width="16" />
-      </button>
-      {#if onDelete}
-        <button class="control-btn delete-btn" onclick={handleDeleteClick} aria-label="Delete {entry.name}" title="Delete tile">
-          <Icon icon="mdi:trash-can" width="16" />
-        </button>
-      {/if}
-    </div>
-  {/if}
 </div>
-
-{#if showEditModal}
-  <EntryEditModal
-    entry={entry}
-    currentTabId={currentTabId}
-    currentGroupId={currentGroupId}
-    availableTabs={availableTabs}
-    onSave={handleSave}
-    onCancel={() => showEditModal = false}
-    onDelete={onDelete}
-    onMoveToTab={onMoveToTab ? (targetTabId, targetGroupId) => { onMoveToTab(targetTabId, targetGroupId); showEditModal = false; } : undefined}
-    onCopyToTab={onCopyToTab ? (targetTabId, targetGroupId) => { onCopyToTab(targetTabId, targetGroupId); showEditModal = false; } : undefined}
-  />
-{/if}
 
 {#if showIframeModal}
   <IframeModal url={entry.url} title={entry.name} onClose={() => showIframeModal = false} />
@@ -267,31 +131,6 @@
 
 {#if showPopupModal}
   <PopupModal url={entry.url} title={entry.name} onClose={() => showPopupModal = false} />
-{/if}
-
-{#if showContextMenu}
-  <div
-    class="context-menu"
-    style="left: {contextMenuX}px; top: {contextMenuY}px;"
-    role="menu"
-    aria-label="Tile actions"
-  >
-    <button class="context-menu-item" onclick={handleCopy} role="menuitem" aria-label="Copy tile">
-      <Icon icon="mdi:content-copy" width="18" />
-      Copy
-    </button>
-    <button class="context-menu-item" onclick={handleCut} role="menuitem" aria-label="Cut tile">
-      <Icon icon="mdi:content-cut" width="18" />
-      Cut
-    </button>
-    {#if onDelete}
-      <div class="context-menu-divider" role="separator"></div>
-      <button class="context-menu-item danger" onclick={handleDeleteClick} role="menuitem" aria-label="Delete tile">
-        <Icon icon="mdi:trash-can" width="18" />
-        Delete
-      </button>
-    {/if}
-  </div>
 {/if}
 
 <style>
@@ -351,14 +190,6 @@
     border-color: var(--border);
     transform: none;
     box-shadow: none;
-  }
-
-  .entry-note.edit-mode:hover,
-  .entry-note.edit-mode {
-    /* In edit mode the tile is still clickable (to open the edit modal),
-       so a subtle hover cue helps. */
-    cursor: pointer;
-    border-color: var(--accent);
   }
 
   .note-title {
@@ -524,17 +355,6 @@
     padding: 0.25rem;
   }
 
-  /* Edit mode styles */
-  .entry.edit-mode {
-    cursor: pointer;
-    border-color: var(--color-warning);
-  }
-
-  .entry.edit-mode:hover {
-    border-color: var(--color-warning);
-    box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2);
-  }
-
   .entry.selected {
     border-color: var(--accent);
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent);
@@ -560,102 +380,4 @@
     border-color: rgba(255, 255, 255, 0.4);
   }
 
-  .hover-controls {
-    position: absolute;
-    top: 0.5rem;
-    right: 0.5rem;
-    display: flex;
-    gap: 0.25rem;
-    opacity: 0;
-    transition: opacity 0.2s;
-    z-index: 10;
-  }
-
-  .entry-container:hover .hover-controls,
-  .entry-container:focus-within .hover-controls {
-    opacity: 1;
-  }
-
-  /* Touch devices have no hover — keep the edit/delete buttons always
-     visible so they can actually be tapped. Without this, the documented
-     "edit on a tablet" flow is broken because the affordance only appears
-     to a mouse. */
-  @media (hover: none) {
-    .hover-controls {
-      opacity: 1;
-    }
-  }
-
-  .control-btn {
-    background: var(--bg-tertiary);
-    color: var(--text-primary);
-    border: none;
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transition: all 0.2s;
-    padding: 0;
-  }
-
-  .control-btn.edit-btn:hover {
-    background: var(--color-warning);
-    color: white;
-    transform: scale(1.1);
-  }
-
-  .control-btn.delete-btn:hover {
-    background: var(--color-error-dark);
-    color: white;
-    transform: scale(1.1);
-  }
-
-  /* Context menu */
-  .context-menu {
-    position: fixed;
-    background: var(--bg-primary);
-    border: 1px solid var(--border);
-    border-radius: 0.5rem;
-    box-shadow: 0 4px 12px var(--shadow);
-    z-index: var(--z-context-menu);
-    min-width: 150px;
-    padding: 0.5rem 0;
-  }
-
-  .context-menu-item {
-    width: 100%;
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 0.625rem 1rem;
-    background: none;
-    border: none;
-    border-radius: 0;
-    color: var(--text-primary);
-    cursor: pointer;
-    transition: background 0.15s;
-    font-size: 0.875rem;
-    text-align: left;
-  }
-
-  .context-menu-item:hover {
-    background: var(--bg-tertiary);
-  }
-
-  .context-menu-item.danger {
-    color: var(--color-error-dark);
-  }
-
-  .context-menu-item.danger:hover {
-    background: color-mix(in srgb, var(--color-error-dark) 10%, transparent);
-  }
-
-  .context-menu-divider {
-    height: 1px;
-    background: var(--border);
-    margin: 0.5rem 0;
-  }
 </style>

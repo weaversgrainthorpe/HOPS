@@ -7,22 +7,23 @@ import type { Config } from '$lib/types';
 afterEach(() => config.set(null));
 
 describe('ExportModal (m7)', () => {
-  it('counts and lists every dashboard, including v3-only ones', () => {
+  it('counts and lists every dashboard (the free-layout Showcase included), each exportable, in display order', () => {
     config.set({
+      schemaVersion: 3,
       dashboards: [
-        { id: 'd1', name: 'Home', path: '/home', order: 0, tabs: [] },
-        { id: 'd2', name: 'Work', path: '/work', order: 1, tabs: [] }
-      ],
-      theme: { mode: 'auto' },
-      v3OnlyDashboards: [{ id: 'v3d', name: 'Fancy', path: '/fancy', reason: 'free layout' }]
-    } as unknown as Config);
+        { id: 'd2', name: 'Work', path: '/work', order: 1, revision: 1, tabs: [] },
+        { id: 'd1', name: 'Home', path: '/home', order: 0, revision: 1, tabs: [] },
+        { id: 'v3d', name: 'Fancy', path: '/fancy', order: 2, revision: 1, tabs: [{ id: 'f', name: 'F', layout: 'free', root: { columns: 160, children: [] } }] }
+      ]
+    } as Config);
     render(ExportModal, { onClose: () => {} });
     expect(screen.getByRole('button', { name: /Export All \(3 dashboards\)/ })).toBeInTheDocument();
     for (const n of ['Home', 'Work', 'Fancy']) expect(screen.getByText(n)).toBeInTheDocument();
     expect(screen.getByText('/fancy')).toBeInTheDocument();
-    expect(document.querySelectorAll('.dashboard-item').length).toBe(3);
+    const items = Array.from(document.querySelectorAll('.dashboard-item'));
+    expect(items.map((i) => i.querySelector('.dashboard-name')?.textContent)).toEqual(['Home', 'Work', 'Fancy']);
     const fancy = screen.getByText('Fancy').closest('.dashboard-item') as HTMLElement;
-    expect(fancy.textContent).toMatch(/view-only/i);
+    expect(fancy.textContent).not.toMatch(/view-only/i);
     expect(fancy.querySelector('button')).not.toBeNull();
   });
 });

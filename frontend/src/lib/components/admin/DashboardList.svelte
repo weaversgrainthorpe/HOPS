@@ -1,25 +1,30 @@
 <script lang="ts">
-  import { config, updateConfig, loadConfig, deleteDashboard, dashboardHref } from '$lib/stores/config';
-  import { editMode } from '$lib/stores/editMode';
+  import {
+    dashboards, loadConfig, createDashboard, renameDashboard, deleteDashboard, reorderDashboards, dashboardHref
+  } from '$lib/stores/config';
   import { confirm } from '$lib/stores/confirmModal';
   import { toast } from '$lib/stores/toast';
   import { goto } from '$app/navigation';
   import { exportConfig } from '$lib/utils/api';
-  import type { Dashboard } from '$lib/types';
+  import type { LayoutDashboard } from '$lib/types/layout';
   import { tick } from 'svelte';
   import Icon from '@iconify/svelte';
   import ImportModal from './ImportModal.svelte';
   import QRCodeModal from './QRCodeModal.svelte';
 
+  // Every write goes through its own endpoint (create, rename at the stored
+  // revision, delete with the revision, reorder); a refusal is shown by the
+  // store and the form stays as it was, so nothing unsaved ever looks saved.
   let editingId = $state<string | null>(null);
   let editName = $state('');
   let editPath = $state('');
   let showImport = $state(false);
   let exportingId = $state<string | null>(null);
-  let qrDashboard = $state<Dashboard | null>(null);
+  let qrDashboard = $state<LayoutDashboard | null>(null);
   let creatingNew = $state(false);
   let newName = $state('');
   let newPath = $state('');
+  let busy = $state(false);
 
   async function handleNew() {
     creatingNew = true;
@@ -38,31 +43,19 @@
   }
 
   async function saveNew() {
-    if (!$config || !newName.trim()) return;
-
-    const newDashboard: Dashboard = {
-      id: `dashboard-${Date.now()}`,
-      name: newName.trim(),
-      path: newPath.trim() || `/dashboard-${Date.now()}`,
-      tabs: [],
-      order: $config?.dashboards.length || 0
-    };
-
-    const updatedConfig = {
-      ...$config,
-      dashboards: [...$config.dashboards, newDashboard]
-    };
+    if (!newName.trim() || busy) return;
+    busy = true;
     try {
-      await updateConfig(updatedConfig);
+      await createDashboard(newName.trim(), newPath.trim() || `/dashboard-${Date.now()}`);
     } catch {
-      return; // not saved; the store already raised a toast/banner. Keep the form as-is.
+      return; // not created; the store already showed why. Keep the form as-is.
+    } finally {
+      busy = false;
     }
-    creatingNew = false;
-    newName = '';
-    newPath = '';
+    cancelNew();
   }
 
-  async function handleDelete(dashboard: Dashboard) {
+  async function handleDelete(dashboard: LayoutDashboard) {
     const confirmed = await confirm({
       title: 'Delete Dashboard',
       message: `Are you sure you want to delete "${dashboard.name}"? This action cannot be undone.`,
@@ -70,38 +63,14 @@
       confirmStyle: 'danger'
     });
     if (!confirmed) return;
-
-    if ($config) {
-      const updatedConfig = {
-        ...$config,
-        dashboards: $config.dashboards.filter(d => d.id !== dashboard.id)
-      };
-      try {
-        await updateConfig(updatedConfig);
-      } catch {
-        // not deleted; the store already raised a toast/banner.
-      }
-    }
-  }
-
-  // v3-only dashboards have no legacy view: they are deleted through the
-  // revision-checked DELETE endpoint (the store applies the fresh layout).
-  async function handleDeleteV3Only(d: { id: string; name: string }) {
-    const confirmed = await confirm({
-      title: 'Delete Dashboard',
-      message: `Are you sure you want to delete "${d.name}"? This action cannot be undone.`,
-      confirmText: 'Delete',
-      confirmStyle: 'danger'
-    });
-    if (!confirmed) return;
     try {
-      await deleteDashboard(d.id);
+      await deleteDashboard(dashboard.id);
     } catch {
       // not deleted; the store already raised a toast/banner.
     }
   }
 
-  function startEdit(dashboard: Dashboard) {
+  function startEdit(dashboard: LayoutDashboard) {
     editingId = dashboard.id;
     editName = dashboard.name;
     editPath = dashboard.path;
@@ -113,26 +82,37 @@
     editPath = '';
   }
 
-  async function saveEdit(dashboard: Dashboard) {
-    if (!$config) return;
-
-    const updatedConfig = {
-      ...$config,
-      dashboards: $config.dashboards.map(d =>
-        d.id === dashboard.id
-          ? { ...d, name: editName, path: editPath }
-          : d
-      )
-    };
+  async function saveEdit(dashboard: LayoutDashboard) {
+    if (busy) return;
+    busy = true;
     try {
-      await updateConfig(updatedConfig);
+      await renameDashboard(dashboard.id, { name: editName, path: editPath });
     } catch {
       return; // not saved; keep the edit row open.
+    } finally {
+      busy = false;
     }
     editingId = null;
   }
 
-  async function openDashboard(dashboard: Dashboard) {
+  /** Move a dashboard one place up (-1) or down (+1) in the display order. */
+  async function move(index: number, by: -1 | 1) {
+    const list = $dashboards;
+    const to = index + by;
+    if (busy || to < 0 || to >= list.length) return;
+    const ids = list.map((d) => d.id);
+    [ids[index], ids[to]] = [ids[to], ids[index]];
+    busy = true;
+    try {
+      await reorderDashboards(ids);
+    } catch {
+      // not saved; the store already showed why, and the list keeps the stored order.
+    } finally {
+      busy = false;
+    }
+  }
+
+  async function openDashboard(dashboard: LayoutDashboard) {
     // Land on the dashboard in view mode. Admins toggle edit mode from the
     // navbar when they actually want to make changes — auto-enabling it on
     // arrival meant a stray click could change tiles before the admin had
@@ -140,7 +120,7 @@
     await goto(dashboardHref(dashboard.path));
   }
 
-  async function handleExport(dashboard: Dashboard) {
+  async function handleExport(dashboard: LayoutDashboard) {
     exportingId = dashboard.id;
     try {
       // Export only this specific dashboard
@@ -156,7 +136,7 @@
       document.body.removeChild(a);
       toast.success(`Exported "${dashboard.name}"`);
     } catch (err) {
-      toast.error('Export failed');
+      toast.error(err instanceof Error && err.message ? `Export failed: ${err.message}` : 'Export failed');
     } finally {
       exportingId = null;
     }
@@ -202,7 +182,7 @@
           </div>
         </div>
         <div class="edit-actions">
-          <button onclick={saveNew} class="btn-primary btn-sm" disabled={!newName.trim()}>
+          <button onclick={saveNew} class="btn-primary btn-sm" disabled={!newName.trim() || busy}>
             <Icon icon="mdi:check" width="18" />
             Save
           </button>
@@ -214,9 +194,9 @@
     </div>
   {/if}
 
-  {#if (($config?.dashboards?.length ?? 0) + ($config?.v3OnlyDashboards?.length ?? 0)) > 0}
+  {#if $dashboards.length > 0}
     <div class="dashboards">
-      {#each $config?.dashboards ?? [] as dashboard (dashboard.id)}
+      {#each $dashboards as dashboard, index (dashboard.id)}
         <div class="dashboard-item card">
           {#if editingId === dashboard.id}
             <div class="dashboard-edit-form">
@@ -241,7 +221,7 @@
                 </div>
               </div>
               <div class="edit-actions">
-                <button onclick={() => saveEdit(dashboard)} class="btn-primary btn-sm">
+                <button onclick={() => saveEdit(dashboard)} class="btn-primary btn-sm" disabled={busy}>
                   <Icon icon="mdi:check" width="18" />
                   Save
                 </button>
@@ -258,6 +238,24 @@
             </button>
 
             <div class="dashboard-actions">
+              <button
+                onclick={() => move(index, -1)}
+                class="btn-secondary"
+                aria-label="Move {dashboard.name} up"
+                title="Move up"
+                disabled={index === 0 || busy}
+              >
+                <Icon icon="mdi:arrow-up" width="20" />
+              </button>
+              <button
+                onclick={() => move(index, 1)}
+                class="btn-secondary"
+                aria-label="Move {dashboard.name} down"
+                title="Move down"
+                disabled={index === $dashboards.length - 1 || busy}
+              >
+                <Icon icon="mdi:arrow-down" width="20" />
+              </button>
               <button onclick={() => startEdit(dashboard)} class="btn-secondary" aria-label="Rename {dashboard.name}" title="Rename">
                 <Icon icon="mdi:pencil" width="20" />
               </button>
@@ -284,20 +282,6 @@
               </button>
             </div>
           {/if}
-        </div>
-      {/each}
-      {#each $config?.v3OnlyDashboards ?? [] as d (d.id)}
-        <div class="dashboard-item card v3-only">
-          <button class="dashboard-info" onclick={() => goto(dashboardHref(d.path))} title="Open dashboard (view-only)">
-            <h3>{d.name}</h3>
-            <p class="path">{d.path}</p>
-            <p class="meta"><span class="badge-v3" title={d.reason}>View-only (v3)</span></p>
-          </button>
-          <div class="dashboard-actions">
-            <button onclick={() => handleDeleteV3Only(d)} class="btn-danger" aria-label="Delete {d.name}" title="Delete">
-              <Icon icon="mdi:trash-can" width="20" />
-            </button>
-          </div>
         </div>
       {/each}
     </div>
@@ -352,16 +336,6 @@
     justify-content: space-between;
     padding: 1.5rem;
     gap: 1rem;
-  }
-
-  .badge-v3 {
-    display: inline-block;
-    padding: 0.1rem 0.5rem;
-    border-radius: 999px;
-    border: 1px solid var(--accent);
-    color: var(--accent);
-    font-size: 0.75rem;
-    font-weight: 600;
   }
 
   .dashboard-info {

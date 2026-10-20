@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/svelte';
+import { render, screen, fireEvent, cleanup } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { get } from 'svelte/store';
 
@@ -20,7 +20,7 @@ import Dashboard from './Dashboard.svelte';
 import { config } from '$lib/stores/config';
 import { editMode } from '$lib/stores/editMode';
 import { closeAll, overlayStack, revealRequest } from '$lib/stores/folderOverlay';
-import type { Config, Dashboard as DashboardT } from '$lib/types';
+import type { Config } from '$lib/types';
 import type { LayoutDashboard } from '$lib/types/layout';
 
 class FakeRO {
@@ -58,13 +58,7 @@ const layoutD1: LayoutDashboard = {
     }
   ]
 };
-const legacy: DashboardT = {
-  id: 'd1', name: 'Home', path: '/home', order: 0, revision: 1,
-  tabs: [
-    { id: 't1', name: 'Main', order: 0, groups: [] },
-    { id: 't2', name: 'Second', order: 1, groups: [] }
-  ]
-};
+const legacy = layoutD1; // the route's dashboard
 
 beforeEach(() => {
   vi.stubGlobal('ResizeObserver', FakeRO);
@@ -73,15 +67,11 @@ beforeEach(() => {
   closeAll();
   revealRequest.set(null);
   editMode.set(false);
-  config.set({
-    dashboards: [legacy],
-    theme: { mode: 'auto' },
-    settings: { searchHotkey: '/', defaultView: 'd1' },
-    layout: { schemaVersion: 3, dashboards: [layoutD1] },
-    v3OnlyDashboards: []
-  } as Config);
+  config.set({ schemaVersion: 3, dashboards: [layoutD1] } as Config);
 });
 afterEach(() => {
+  // Unmount first, so nothing re-renders after the stubs (ResizeObserver) are removed.
+  cleanup();
   vi.unstubAllGlobals();
   closeAll();
   revealRequest.set(null);
@@ -122,7 +112,7 @@ describe('SearchModal recursive search', () => {
     const evil = '<img src=x onerror=alert(1)>';
     config.update((c) => ({
       ...c!,
-      layout: { schemaVersion: 3, dashboards: [{ ...layoutD1, tabs: [{ id: 't1', name: evil, root: { columns: 12, children: [tile('x', 'Evil ' + evil)] } }] }] }
+      dashboards: [{ ...layoutD1, tabs: [{ id: 't1', name: evil, root: { columns: 12, children: [tile('x', 'Evil ' + evil)] } }] }]
     }));
     render(SearchModal, { onClose: () => {} });
     await tick();
@@ -139,7 +129,7 @@ describe('SearchModal scope', () => {
     tabs: [{ id: 'u1', name: 'Bench', root: { columns: 12, children: [tile('other', 'Other Dash Tile')] } }]
   };
   const twoDashboards = () =>
-    config.update((c) => ({ ...c!, layout: { schemaVersion: 3, dashboards: [layoutD1, layoutD2] } }));
+    config.update((c) => ({ ...c!, dashboards: [layoutD1, layoutD2] }));
   const type = async (v: string) => {
     await fireEvent.input(screen.getByRole('textbox', { name: /search/i }), { target: { value: v } });
     await tick();
@@ -159,8 +149,7 @@ describe('SearchModal scope', () => {
 
   it('on a decoded multi-word dashboard path the scope still resolves', async () => {
     config.update((c) => ({
-      ...c!, dashboards: [{ ...legacy, path: '/my dash' }],
-      layout: { schemaVersion: 3, dashboards: [{ ...layoutD1, path: '/my dash' }, layoutD2] }
+      ...c!, dashboards: [{ ...layoutD1, path: '/my dash' }, layoutD2]
     }));
     setPage({ dashboard: 'my dash' });
     render(SearchModal, { onClose: () => {} });
@@ -181,8 +170,8 @@ describe('SearchModal scope', () => {
     expect(screen.getByRole('button', { name: /Top Tile/ })).toHaveTextContent('Home');
   });
 
-  it('dashboard page whose layout is absent keeps the visible alert', async () => {
-    config.update((c) => ({ ...c!, layout: { schemaVersion: 3, dashboards: [layoutD2] } }));
+  it('with no document loaded (failed load) the visible alert shows, not "no matches"', async () => {
+    config.set(null);
     setPage({ dashboard: 'home' });
     render(SearchModal, { onClose: () => {} });
     await tick();

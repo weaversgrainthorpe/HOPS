@@ -33,7 +33,7 @@ function mk(children: any[]): { dash: LayoutDashboard; tab: LayoutTab } {
   return { dash, tab };
 }
 function setDoc(dash: LayoutDashboard) {
-  config.set({ layout: { schemaVersion: 3, dashboards: [dash] } } as any);
+  config.set({ schemaVersion: 3, dashboards: [dash] } as any);
 }
 
 beforeEach(() => {

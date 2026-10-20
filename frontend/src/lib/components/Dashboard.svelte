@@ -1,14 +1,13 @@
 <script lang="ts">
-  import type { Dashboard, HeaderConfig, Background } from '$lib/types';
+  import type { HeaderConfig, Background } from '$lib/types';
   import type { LayoutDashboard, LayoutTab } from '$lib/types/layout';
   import TabCanvas from './layout/TabCanvas.svelte';
   import BackgroundSlideshow from './BackgroundSlideshow.svelte';
   import PartyMode from './PartyMode.svelte';
   import HopAnimation from './HopAnimation.svelte';
-  import { config, layoutDoc, layoutStale, findLayoutDashboard, loadConfig } from '$lib/stores/config';
+  import { layoutStale, loadConfig } from '$lib/stores/config';
   import { closeAll, openFolder, revealRequest, takeReveal, type RevealRequest } from '$lib/stores/folderOverlay';
   import { editMode } from '$lib/stores/editMode';
-  import { isAuthenticated } from '$lib/stores/auth';
   import { session, apply } from '$lib/stores/editSession';
   import { initEasterEggs, destroyEasterEggs, partyModeActive } from '$lib/stores/easterEggs';
   import TabEditModal from './admin/TabEditModal.svelte';
@@ -29,21 +28,11 @@
   import { get } from 'svelte/store';
   import { toast } from '$lib/stores/toast';
 
-  // A v3-only dashboard arrives here as its LayoutDashboard (header, background,
-  // tabs and name keys match); with v3Only set it is view-only (the gate is
-  // removed when the legacy view retires, M3 Task 11).
-  let { dashboard, v3Only = false }: { dashboard: Dashboard; v3Only?: boolean } = $props();
+  // The route's dashboard: the stored v3 dashboard (every dashboard is editable).
+  let { dashboard }: { dashboard: LayoutDashboard } = $props();
   let activeTabIndex = $state(0);
 
-  // Edit mode applies only to legacy-editable dashboards (for now).
-  const editing = $derived($editMode && !v3Only);
-  // Why a v3-only dashboard is view-only, as the server reported it.
-  const v3OnlyReason = $derived(
-    v3Only ? ($config?.v3OnlyDashboards ?? []).find((d) => d.id === dashboard.id)?.reason ?? '' : ''
-  );
-  $effect(() => {
-    if (v3Only && $editMode) editMode.set(false);
-  });
+  const editing = $derived($editMode);
 
   // Edit mode works on the edit session's DRAFT of this dashboard (Tenet 5):
   // every change below goes through editSession.apply, and nothing is saved
@@ -52,7 +41,7 @@
     editing && $session && $session.dashboardId === dashboard.id ? $session.draft : null
   );
 
-  /** What the tab bar needs from either shape (legacy tab or v3 draft tab). */
+  /** What the tab bar needs from a tab (saved or draft). */
   interface BarTab {
     id: string;
     name: string;
@@ -70,19 +59,16 @@
     editing ? ((draft?.tabs ?? []) as unknown as BarTab[]) : (dashboard.tabs as unknown as BarTab[])
   );
   // The dashboard-level look (background, per-tab backgrounds) the page shows: the draft's while editing.
-  const look = $derived<{ background?: Background; perTabBackgrounds?: boolean; header?: HeaderConfig }>(
-    draft
-      ? (draft as unknown as { background?: Background; perTabBackgrounds?: boolean; header?: HeaderConfig })
-      : dashboard
-  );
+  type Look = { background?: Background; perTabBackgrounds?: boolean; header?: HeaderConfig };
+  const look = $derived<Look>((draft ?? dashboard) as unknown as Look);
 
-  // View mode renders through the layout engine. The tab is matched by id
-  // (legacy and layout tab order may differ).
-  const layoutDash = $derived<LayoutDashboard | undefined>(
-    findLayoutDashboard(dashboard.id, $layoutDoc) ?? (v3Only ? (dashboard as unknown as LayoutDashboard) : undefined)
-  );
+  // View mode renders the saved dashboard through the layout engine; the tab
+  // is followed by id.
   const activeTabId = $derived(barTabs[activeTabIndex]?.id);
-  const layoutTab = $derived(layoutDash?.tabs.find((t) => t.id === activeTabId));
+  const layoutTab = $derived(dashboard.tabs.find((t) => t.id === activeTabId));
+  /** A tab the renderer can draw: it has a root container with a children list. */
+  const drawable = (t: LayoutTab | undefined): t is LayoutTab =>
+    !!t && !!t.root && typeof t.root === 'object' && Array.isArray(t.root.children);
   const draftTab = $derived<LayoutTab | undefined>(draft?.tabs.find((t) => t.id === activeTabId));
 
   // A reload, entering edit mode, or any new tabs array keeps the ACTIVE TAB
@@ -304,20 +290,6 @@
           Settings
         </button>
       </div>
-    {:else if v3Only && $isAuthenticated}
-      <!-- View-only (v3): no editor yet, but per-dashboard settings use their own endpoint. -->
-      <div class="header-actions">
-        <!-- Visible reason (the Navbar's disabled edit toggle points here via aria-describedby). -->
-        <p class="view-only-note" id="v3-view-only-reason">
-          <Icon icon="mdi:eye-outline" width="18" />
-          <span>View-only until the new editor arrives</span>
-          {#if v3OnlyReason}<span class="view-only-why">({v3OnlyReason})</span>{/if}
-        </p>
-        <button class="header-config-btn" onclick={() => showDashboardSettings = true} title="Dashboard settings">
-          <Icon icon="mdi:cog-outline" width="20" />
-          Settings
-        </button>
-      </div>
     {/if}
 
     {#if barTabs.length >= 1 || editing}
@@ -426,15 +398,15 @@
       <div role="status" class="layout-refreshing">Starting the edit session…</div>
     {/if}
   {:else if dashboard.tabs.length > 0}
-    {#if layoutDash && layoutTab}
+    {#if drawable(layoutTab)}
       <div class="canvas-panel">
-        <TabCanvas dashboard={layoutDash} tab={layoutTab} />
+        <TabCanvas {dashboard} tab={layoutTab} />
       </div>
     {:else if $layoutStale}
       <div role="status" class="layout-refreshing">Refreshing layout…</div>
     {:else}
       <div role="alert" class="layout-missing">
-        <span>{layoutDash ? 'Layout data missing for this tab — reload' : 'Layout data missing for this dashboard — reload'}</span>
+        <span>Layout data missing for this tab — reload</span>
         <button type="button" onclick={() => loadConfig()}>Reload</button>
       </div>
     {/if}
@@ -564,23 +536,6 @@
     align-items: center;
     justify-content: flex-end;
     margin-bottom: 1rem;
-  }
-
-  .view-only-note {
-    display: inline-flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 0.35rem;
-    margin: 0 auto 0 0;
-    padding: 0.3rem 0.65rem;
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    background: var(--bg-tertiary);
-    color: var(--text-secondary);
-    font-size: 0.85rem;
-  }
-  .view-only-why {
-    opacity: 0.85;
   }
 
   .header-config-btn {

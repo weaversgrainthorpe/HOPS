@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent, within } from '@testing-library/svelte';
+import { render, screen, fireEvent, within, cleanup } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { get } from 'svelte/store';
 
@@ -18,7 +18,7 @@ import { editMode } from '$lib/stores/editMode';
 import { isAuthenticated } from '$lib/stores/auth';
 import { closeAll, overlayStack, requestReveal, revealNavigation, revealRequest } from '$lib/stores/folderOverlay';
 import { applyThemePreset } from '$lib/stores/theme';
-import type { Config, Dashboard as DashboardT } from '$lib/types';
+import type { Config } from '$lib/types';
 import type { LayoutDashboard } from '$lib/types/layout';
 import { begin, session, resetEditSessionForTests, apply } from '$lib/stores/editSession';
 import { selectedNodes, clearSelection } from '$lib/stores/nodeSelection';
@@ -43,36 +43,25 @@ const folder = (id: string, name: string, children: any[], display = 'expanded')
   kind: 'folder', id, name, display, placement: { x: 0, y: 1, w: 4, h: 3 }, content: { columns: 4, children }
 });
 
-const legacy: DashboardT = {
-  id: 'd1', name: 'Home', path: '/home', order: 0, revision: 1,
-  tabs: [
-    { id: 't1', name: 'Main', order: 0, groups: [{ id: 'g1', name: 'G', order: 0, collapsed: false, entries: [entry('e1', 'LegacyTile')] }] },
-    { id: 't2', name: 'Second', order: 1, groups: [] }
-  ]
-};
-// Layout tabs deliberately in the opposite order: the active tab is matched by id.
 const layoutD1: LayoutDashboard = {
   id: 'd1', name: 'Home', path: '/home', revision: 1,
   tabs: [
-    { id: 't2', name: 'Second', root: { columns: 12, children: [tile('s1', 'SecondTile')] } },
-    { id: 't1', name: 'Main', root: { columns: 12, children: [tile('m1', 'MainTile'), folder('box', 'Box', [tile('in1', 'Inside')], 'collapsed')] } }
+    { id: 't1', name: 'Main', root: { columns: 12, children: [tile('m1', 'MainTile'), folder('box', 'Box', [tile('in1', 'Inside')], 'collapsed')] } },
+    { id: 't2', name: 'Second', root: { columns: 12, children: [tile('s1', 'SecondTile')] } }
   ]
 };
+const legacy = layoutD1; // the dashboard the route hands Dashboard (v3, like every dashboard)
+// The Showcase: a free-layout dashboard, once "view-only (v3)", now editable like any other.
 const v3d: LayoutDashboard = {
   id: 'v3d', name: 'Fancy', path: '/fancy', revision: 4,
   header: { centerTitle: 'Fancy Header' },
-  tabs: [{ id: 'vt', name: 'Only', root: { columns: 12, children: [tile('f1', 'FancyTile')] } }]
+  tabs: [{ id: 'vt', name: 'Only', layout: 'free', designWidth: 1280, root: { columns: 160, children: [
+    { ...tile('f1', 'FancyTile'), placement: { x: 0, y: 0, w: 16, h: 16 } }
+  ] } }]
 };
 
-function cfg(layoutDashes: LayoutDashboard[] = [layoutD1, v3d]): Config {
-  return {
-    dashboards: [legacy],
-    theme: { mode: 'auto' },
-    settings: { searchHotkey: '/', defaultView: 'd1' },
-    dashboardRevisions: { d1: 1 },
-    layout: { schemaVersion: 3, dashboards: layoutDashes },
-    v3OnlyDashboards: [{ id: 'v3d', name: 'Fancy', path: '/fancy', reason: 'free layout' }]
-  } as Config;
+function cfg(dashes: LayoutDashboard[] = [layoutD1, v3d]): Config {
+  return { schemaVersion: 3, dashboards: dashes };
 }
 
 function enterEdit(id = 'd1') {
@@ -91,6 +80,8 @@ beforeEach(() => {
   config.set(cfg());
 });
 afterEach(() => {
+  // Unmount first, so nothing re-renders after the stubs (ResizeObserver) are removed.
+  cleanup();
   vi.unstubAllGlobals();
   closeAll();
   editMode.set(false);
@@ -109,15 +100,15 @@ describe('Dashboard view/edit rendering', () => {
     enterEdit();
     await tick();
     expect(container.querySelector('.tab-panel')).toBeNull();
-    // The draft (v3 tree) is what is rendered, editable: the legacy-only tile is not there.
+    // The session's draft is what is rendered, editable.
     expect(container.querySelector('.tab-canvas.editing[data-tab-id="t1"]')).not.toBeNull();
+    expect(get(session)?.draft.tabs.map((t) => t.id)).toEqual(['t1', 't2']);
     expect(screen.getByText('MainTile')).toBeInTheDocument();
-    expect(screen.queryByText('LegacyTile')).toBeNull();
     expect(screen.getByRole('toolbar', { name: 'Editing' })).toBeInTheDocument();
     expect(screen.queryByText('Unsaved changes')).toBeNull();
   });
 
-  it('matches the active tab between legacy and layout by id, not index', async () => {
+  it('switching tabs shows that tab\'s canvas', async () => {
     const { container } = render(Dashboard, { dashboard: legacy });
     await tick();
     await fireEvent.click(screen.getByRole('tab', { name: 'Switch to Second tab' }));
@@ -126,11 +117,12 @@ describe('Dashboard view/edit rendering', () => {
     expect(screen.getByText('SecondTile')).toBeInTheDocument();
   });
 
-  it('missing layout dashboard shows the error banner, not TabPanel', async () => {
-    config.set(cfg([v3d]));
-    const { container } = render(Dashboard, { dashboard: legacy });
+  it('a tab whose layout data is missing shows the error banner, not a blank canvas', async () => {
+    const broken = { ...layoutD1, tabs: [{ id: 't1', name: 'Main' } as unknown as LayoutDashboard['tabs'][number]] };
+    config.set(cfg([broken]));
+    const { container } = render(Dashboard, { dashboard: broken });
     await tick();
-    const banner = screen.getByText('Layout data missing for this dashboard — reload').closest('[role="alert"]');
+    const banner = screen.getByText('Layout data missing for this tab — reload').closest('[role="alert"]');
     expect(banner).not.toBeNull();
     expect(container.querySelector('.tab-panel')).toBeNull();
     expect(container.querySelector('.tab-canvas')).toBeNull();
@@ -151,75 +143,61 @@ describe('Dashboard view/edit rendering', () => {
   });
 });
 
-describe('v3-only dashboards', () => {
-  it('v3-only dashboard: renders in view mode, edit toggle disabled with the tooltip text', async () => {
+const atRoute = (path: string, seg?: string) =>
+  pageStore.set!({ url: new URL('http://localhost' + path), params: seg ? { dashboard: seg } : {}, route: { id: seg ? '/[dashboard]' : '/' }, status: 200, error: null, data: {}, form: undefined });
+
+describe('the Showcase (free layout) is editable like every dashboard', () => {
+  afterEach(() => atRoute('/'));
+
+  it('the edit toggle is enabled with no view-only tooltip; it starts an edit session and the editor', async () => {
     isAuthenticated.set(true);
-    editMode.set(true); // left on from a legacy dashboard
-    pageStore.set!({ url: new URL('http://localhost/fancy'), params: { dashboard: 'fancy' }, route: { id: '/[dashboard]' }, status: 200, error: null, data: {}, form: undefined });
+    atRoute('/fancy', 'fancy');
     const nav = render(Navbar);
-    const { container } = render(Dashboard, { dashboard: v3d as unknown as DashboardT, v3Only: true });
+    const { container } = render(Dashboard, { dashboard: v3d });
     await tick();
-    expect(get(editMode)).toBe(false);
     expect(container.querySelector('.tab-canvas[data-tab-id="vt"]')).not.toBeNull();
     expect(screen.getByText('FancyTile')).toBeInTheDocument();
-    expect(container.querySelector('.tab-panel')).toBeNull();
-    expect(screen.queryByText('Add Tab')).toBeNull();
-    // Settings cog still available (its modal uses its own endpoint).
-    expect(screen.getByTitle('Dashboard settings')).toBeInTheDocument();
-
-    const toggle = nav.container.querySelector('.edit-toggle') as HTMLButtonElement;
-    expect(toggle).not.toBeNull();
-    expect(toggle.disabled).toBe(true);
-    expect(toggle.getAttribute('title')).toBe('This dashboard uses v3 layout features and is view-only until the new editor arrives');
-    // Header comes from the v3 dashboard.
+    expect(screen.queryByText(/view-only/i)).toBeNull();
     expect(nav.getByText('Fancy Header')).toBeInTheDocument();
-    pageStore.set!({ url: new URL('http://localhost/'), params: {}, route: { id: '/' }, status: 200, error: null, data: {}, form: undefined });
-  });
 
-  it('a v3-only dashboard shows why it is view-only as visible text, tied to the disabled toggle', async () => {
-    isAuthenticated.set(true);
-    pageStore.set!({ url: new URL('http://localhost/fancy'), params: { dashboard: 'fancy' }, route: { id: '/[dashboard]' }, status: 200, error: null, data: {}, form: undefined });
-    const nav = render(Navbar);
-    render(Dashboard, { dashboard: v3d as unknown as DashboardT, v3Only: true });
-    await tick();
-    const note = screen.getByText(/View-only until the new editor arrives/);
-    expect(note).toBeVisible();
-    expect(note.closest('[id]')!.textContent).toContain('free layout'); // the server's reason
     const toggle = nav.container.querySelector('.edit-toggle') as HTMLButtonElement;
-    const describedBy = toggle.getAttribute('aria-describedby');
-    expect(describedBy).toBeTruthy();
-    expect(document.getElementById(describedBy!)!.textContent).toMatch(/View-only until the new editor arrives/);
-    pageStore.set!({ url: new URL('http://localhost/'), params: {}, route: { id: '/' }, status: 200, error: null, data: {}, form: undefined });
+    expect(toggle.disabled).toBe(false);
+    expect(toggle.getAttribute('title') ?? '').not.toMatch(/view-only/i);
+    expect(toggle.hasAttribute('aria-describedby')).toBe(false);
+    await fireEvent.click(toggle);
+    await tick();
+    expect(get(editMode)).toBe(true);
+    expect(get(session)?.dashboardId).toBe('v3d');
+    expect(container.querySelector('.tab-canvas.editing[data-tab-id="vt"]')).not.toBeNull();
+    expect(screen.getByRole('toolbar', { name: 'Editing' })).toBeInTheDocument();
+    expect(screen.getByText('Add Tab')).toBeInTheDocument();
+    expect(screen.getByTitle('Dashboard settings')).toBeInTheDocument();
   });
 
-  it('anonymous viewers of a v3-only dashboard get no editor notice', async () => {
-    render(Dashboard, { dashboard: v3d as unknown as DashboardT, v3Only: true });
+  it('anonymous viewers get the dashboard and no editor chrome', async () => {
+    render(Dashboard, { dashboard: v3d });
     await tick();
-    expect(screen.queryByText(/View-only until the new editor arrives/)).toBeNull();
-  });
-
-  it('a v3-only dashboard never renders the editor even if edit mode is switched on', async () => {
-    const { container } = render(Dashboard, { dashboard: v3d as unknown as DashboardT, v3Only: true });
-    await tick();
-    editMode.set(true);
-    await tick();
-    expect(container.querySelector('.tab-panel')).toBeNull();
-    expect(container.querySelector('.tab-canvas')).not.toBeNull();
+    expect(screen.getByText('FancyTile')).toBeInTheDocument();
+    expect(screen.queryByText(/view-only/i)).toBeNull();
+    expect(screen.queryByTitle('Dashboard settings')).toBeNull();
   });
 });
 
 describe('route resolution and reveal lifetime', () => {
-  it('a v3-only dashboard at a path that needs encoding still disables the edit toggle', async () => {
+  it('a dashboard at a path that needs encoding is found for the edit toggle', async () => {
     const spaced: LayoutDashboard = { ...v3d, id: 'sp', name: 'Spaced', path: '/my dash' };
-    config.set({ ...cfg([layoutD1, spaced]), v3OnlyDashboards: [{ id: 'sp', name: 'Spaced', path: '/my dash', reason: 'x' }] } as Config);
+    config.set(cfg([layoutD1, spaced]));
     isAuthenticated.set(true);
-    pageStore.set!({ url: new URL('http://localhost/my%20dash'), params: { dashboard: 'my dash' }, route: { id: '/[dashboard]' }, status: 200, error: null, data: {}, form: undefined });
+    atRoute('/my%20dash', 'my dash');
     const nav = render(Navbar);
     await tick();
     const toggle = nav.container.querySelector('.edit-toggle') as HTMLButtonElement;
-    expect(toggle.disabled).toBe(true);
-    expect(toggle.getAttribute('title')).toBe('This dashboard uses v3 layout features and is view-only until the new editor arrives');
-    pageStore.set!({ url: new URL('http://localhost/'), params: {}, route: { id: '/' }, status: 200, error: null, data: {}, form: undefined });
+    expect(toggle.disabled).toBe(false);
+    await fireEvent.click(toggle);
+    await tick();
+    expect(get(session)?.dashboardId).toBe('sp');
+    editMode.set(false);
+    atRoute('/');
   });
 
   it('a reveal request cleared by navigating elsewhere does not fire on a later visit', async () => {
@@ -242,12 +220,9 @@ describe('route resolution and reveal lifetime', () => {
     layoutStale.set(true);
     await tick();
     // The reload lands with the tabs reordered (the active tab moved index).
-    const reordered: DashboardT = { ...legacy, revision: 2, tabs: [legacy.tabs[1], legacy.tabs[0]] };
     // Fresh objects throughout, as a real reload delivers.
-    const next = structuredClone(cfg());
-    next.dashboards = [reordered];
-    next.dashboardRevisions = { d1: 2 };
-    config.set(next);
+    const reordered: LayoutDashboard = structuredClone({ ...legacy, revision: 2, tabs: [legacy.tabs[1], legacy.tabs[0]] });
+    config.set(cfg([reordered, v3d]));
     layoutStale.set(false);
     await rerender({ dashboard: reordered });
     await tick();
@@ -351,7 +326,7 @@ describe('Dashboard edit mode (M3 Task 6: the v3 editor shell)', () => {
     await tick();
     await fireEvent.click(screen.getByRole('button', { name: 'Duplicate Main tab' }));
     await tick();
-    expect(draft().tabs.map((t) => t.name)).toEqual(['Second', 'Main', 'Main (Copy)']);
+    expect(draft().tabs.map((t) => t.name)).toEqual(['Main', 'Second', 'Main (Copy)']);
     await fireEvent.click(screen.getByRole('button', { name: 'Delete Second tab' }));
     await tick();
     const { closeConfirmModal } = await import('$lib/stores/confirmModal');

@@ -272,7 +272,7 @@
     color: var(--text-primary);
     font-size: 0.95rem;
   }
-  /* Modal body already pads — see GroupEditModal note. */
+  /* Modal body already pads; no extra padding here. */
   form {
     padding: 0;
   }

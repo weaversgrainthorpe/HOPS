@@ -69,10 +69,7 @@
 
   // On a dashboard page (resolved by the same route resolver the page uses)
   // search only that dashboard; anywhere else search them all.
-  const route = get(currentRoute);
-  const scopedId = route
-    ? route.kind === 'missing-layout' ? route.id : route.dashboard.id
-    : undefined;
+  const scopedId = get(currentRoute)?.id;
   const scoped = scopedId !== undefined;
   const index = buildIndex($layoutDoc, scopedId);
   // No layout held, or the current dashboard's layout is absent from it
@@ -119,7 +116,7 @@
     const cfg = get(config);
     const seg = get(page).params?.dashboard;
     const here = cfg && seg ? resolveDashboardRoute(seg, cfg) : undefined;
-    const hereId = here && here.kind !== 'missing-layout' ? here.dashboard.id : undefined;
+    const hereId = here?.id;
     if (hereId !== r.dashboardId) {
       goto(dashboardHref(r.dashboardPath)).catch((e) => {
         revealRequest.set(null);

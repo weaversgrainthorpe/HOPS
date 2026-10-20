@@ -169,11 +169,6 @@
         >
           <Entry
             entry={node}
-            currentTabId={tab.id}
-            currentGroupId={parentId}
-            tabId={tab.id}
-            groupId={parentId}
-            viewOnly
             fit={fitOf(node)}
             editorSelected={editing ? $selectedNodes.has(node.id) : undefined}
           />

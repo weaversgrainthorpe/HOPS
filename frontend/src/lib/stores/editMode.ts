@@ -10,11 +10,9 @@ import { logWarn } from '$lib/utils/errors';
 // ends the session (asking Save / Discard / Keep editing when dirty).
 export const editMode = writable(false);
 
-/** The current route's dashboard id, for either kind (legacy or v3-only). */
+/** The current route's dashboard id (null off a dashboard page). */
 export function routeDashboardId(): string | null {
-  const r = get(currentRoute);
-  if (!r) return null;
-  return r.kind === 'missing-layout' ? r.id : r.dashboard.id;
+  return get(currentRoute)?.id ?? null;
 }
 
 export async function toggleEditMode(): Promise<boolean> {
@@ -69,7 +67,7 @@ export function followRoute(): void {
   if (get(session)?.dashboardId !== id) editMode.set(false);
 }
 
-// Edit mode switched off from outside (sign-out, a view-only dashboard) ends
+// Edit mode switched off from outside (sign-out, the idle timeout) ends
 // the session too. Dropping unsaved changes this way is said out loud.
 editMode.subscribe((on) => {
   if (on) return;

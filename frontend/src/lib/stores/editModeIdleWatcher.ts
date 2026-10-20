@@ -105,7 +105,7 @@ async function refreshFromGlobalSetting(): Promise<void> {
 }
 
 // The timeout is per dashboard (effective = override or inherited global),
-// for the route's dashboard of either kind. With no current dashboard, or if
+// for the route's dashboard. With no current dashboard, or if
 // the per-dashboard lookup fails, fall back to the global setting; a failure
 // is warned about, not silently swallowed.
 export async function refreshTimeoutFromSettings(): Promise<void> {
@@ -149,11 +149,10 @@ export function initEditModeIdleWatcher(): void {
   });
 
   // Re-resolve the timeout while in edit mode when the current dashboard
-  // changes, or its settings are saved (applyDashboardSettings replaces them).
+  // changes, or its settings are saved (the saved document replaces them).
   let lastKey: string | null = null;
   currentRoute.subscribe((r) => {
-    const d = r && r.kind !== 'missing-layout' ? r.dashboard : null;
-    const key = d ? `${d.id}:${JSON.stringify((d as { settings?: unknown }).settings ?? null)}` : null;
+    const key = r ? `${r.id}:${JSON.stringify(r.settings ?? null)}` : null;
     const changed = key !== lastKey;
     lastKey = key;
     if (changed && get(editMode)) {

@@ -55,6 +55,8 @@ export interface LayoutDashboard {
   name: string;
   path: string;
   revision: number;
+  /** Display position among the dashboards (PUT /api/dashboards/order). */
+  order?: number;
   defaultLayout?: LayoutMode;
   tabs: LayoutTab[];
   [k: string]: unknown;

@@ -87,7 +87,7 @@ describe('MoveCopyDialog tree picker', () => {
       schemaVersion: 3 as const,
       dashboards: [{ ...deepHome(), revision: 6 }, { ...deepOther(), revision: 3 }]
     };
-    vi.mocked(api.transferNodes).mockResolvedValue({ sourceRevision: 6, targetRevision: 3, layout: fresh, v3OnlyDashboards: [] });
+    vi.mocked(api.transferNodes).mockResolvedValue({ sourceRevision: 6, targetRevision: 3, layout: fresh });
     render(MoveCopyDialog, { ids: ['a'], onClose });
     await expand(/^Other/);
     await fireEvent.click(item(/^OT/));

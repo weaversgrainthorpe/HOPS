@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { config, dashboards, currentDashboard, currentV3OnlyDashboard, dashboardHref } from '$lib/stores/config';
+  import { dashboards, currentRoute, dashboardHref } from '$lib/stores/config';
   import { page } from '$app/stores';
   import type { HeaderConfig } from '$lib/types';
   import { isAuthenticated } from '$lib/stores/auth';
@@ -62,23 +62,16 @@
     'mdi:theme-light-dark'
   );
 
-  // v3-only dashboards are view-only until the new editor arrives.
-  const V3_ONLY_TOOLTIP = 'This dashboard uses v3 layout features and is view-only until the new editor arrives';
-  let viewOnlyV3 = $derived($currentV3OnlyDashboard !== null);
-  // Every dashboard for the nav links: legacy ones, then v3-only ones.
-  let navDashboards = $derived([
-    ...$dashboards.map((d) => ({ id: d.id, name: d.name, path: dashboardHref(d.path) })),
-    ...($config?.v3OnlyDashboards ?? []).map((d) => ({ id: d.id, name: d.name, path: dashboardHref(d.path) }))
-  ]);
+  // Every dashboard for the nav links, in display order.
+  let navDashboards = $derived($dashboards.map((d) => ({ id: d.id, name: d.name, path: dashboardHref(d.path) })));
 
-  // Get header config from current dashboard or use defaults
-  let pageDashboard = $derived($currentDashboard ?? $currentV3OnlyDashboard);
-  // A v3 dashboard keeps the same header object as its legacy form.
-  // While editing, the header shows the edit session's draft (the Header dialog edits the draft).
+  // Header config from the current dashboard (or defaults). While editing, the
+  // header shows the edit session's draft (the Header dialog edits the draft).
+  let pageDashboard = $derived($currentRoute);
   let headerConfig = $derived(
-    $editMode && $session && pageDashboard && $session.dashboardId === pageDashboard.id
-      ? ($session.draft.header as HeaderConfig | undefined)
-      : $currentDashboard ? $currentDashboard.header : ($currentV3OnlyDashboard?.header as HeaderConfig | undefined)
+    ($editMode && $session && pageDashboard && $session.dashboardId === pageDashboard.id
+      ? $session.draft.header
+      : pageDashboard?.header) as HeaderConfig | undefined
   );
   let showLeft = $derived(headerConfig?.showLeft !== false); // Default true
   let showCenter = $derived(headerConfig?.showCenter !== false); // Default true
@@ -177,9 +170,7 @@
           onclick={toggleEditMode}
           class="edit-toggle"
           class:active={$editMode}
-          disabled={viewOnlyV3}
-          title={viewOnlyV3 ? V3_ONLY_TOOLTIP : $editMode ? "Exit Edit Mode" : "Enter Edit Mode (Authentication Required)"}
-          aria-describedby={viewOnlyV3 ? 'v3-view-only-reason' : undefined}
+          title={$editMode ? "Exit Edit Mode" : "Enter Edit Mode (Authentication Required)"}
           aria-label={$editMode ? "Exit Edit Mode" : "Enter Edit Mode"}
         >
           <Icon icon={$editMode ? 'mdi:pencil-off' : 'mdi:pencil'} width="32" height="32" />
@@ -370,14 +361,6 @@
   .search-btn:hover, .theme-toggle:hover, .admin-link:hover, .edit-toggle:hover, .export-btn:hover, .help-btn:hover, .about-btn:hover {
     background: var(--accent);
     color: white;
-  }
-
-  .edit-toggle:disabled,
-  .edit-toggle:disabled:hover {
-    opacity: 0.45;
-    cursor: not-allowed;
-    background: var(--bg-tertiary);
-    color: var(--text-secondary);
   }
 
   .edit-toggle {

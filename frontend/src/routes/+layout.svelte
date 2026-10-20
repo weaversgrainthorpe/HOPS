@@ -40,7 +40,7 @@
 		const seg = to?.params?.dashboard;
 		const cfg = get(config);
 		const r = seg && cfg ? resolveDashboardRoute(seg, cfg) : undefined;
-		revealNavigation(r && r.kind !== 'missing-layout' ? r.dashboard.id : null);
+		revealNavigation(r ? r.id : null);
 	});
 
 	// In edit mode the session follows the route's dashboard.

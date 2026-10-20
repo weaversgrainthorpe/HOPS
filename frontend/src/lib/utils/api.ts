@@ -1,4 +1,4 @@
-import type { Config, Dashboard, DashboardSettings } from '$lib/types';
+import type { Config, DashboardSettings } from '$lib/types';
 import type { LayoutDoc, LayoutDashboard } from '$lib/types/layout';
 import type { ImportResult } from './importResult';
 
@@ -121,10 +121,9 @@ async function fetchAPI(endpoint: string, options: RequestInit = {}) {
         typeof parsedBody.detail === 'string' ? parsedBody.detail : undefined
       );
     }
-    // v3_only: the dashboard is view-only until the new editor arrives; show
-    // the server's sentence rather than the bare error code.
-    if (response.status === 409 && parsedBody?.error === 'v3_only') {
-      throw new Error(typeof parsedBody.detail === 'string' && parsedBody.detail ? parsedBody.detail : 'This dashboard is view-only (v3).');
+    // path_taken (and other 409s with a sentence): show the server's detail.
+    if (response.status === 409 && typeof parsedBody?.detail === 'string' && parsedBody.detail) {
+      throw new Error(parsedBody.detail);
     }
     if (response.status === 503 && parsedBody?.error === 'migration_failed') {
       throw new MigrationFailedError(typeof parsedBody.detail === 'string' ? parsedBody.detail : '');
@@ -160,8 +159,19 @@ export async function getBackendVersion(): Promise<{ version: string }> {
   return fetchAPI('/version');
 }
 
+/**
+ * GET /api/config: the stored v3 document. Anything that is not a schema-3
+ * document with a dashboards list is a visible error, never shown as an
+ * empty or partial dashboard set.
+ */
 export async function getConfig(): Promise<Config> {
-  return fetchAPI('/config');
+  const resp = await fetchAPI('/config');
+  if (!resp || typeof resp !== 'object' || resp.schemaVersion !== 3 || !Array.isArray(resp.dashboards)) {
+    throw new Error('The server sent a configuration this version of HOPS cannot read (expected schema 3 dashboards). Reload the page; if it persists, check the server.');
+  }
+  const out: Config = { schemaVersion: 3, dashboards: resp.dashboards };
+  if (Array.isArray(resp.migrationNotices)) out.migrationNotices = resp.migrationNotices;
+  return out;
 }
 
 export async function getStatus(entryId: string) {
@@ -235,47 +245,42 @@ export async function changePassword(oldPassword: string, newPassword: string): 
 
 // Admin API calls
 
-// updateConfig PUTs the config and returns any warnings the server
-// attached (e.g. "pre-update backup failed: ... — config saved anyway").
-// Callers should surface non-empty warnings to the user so silent
-// degradation of the safety-net is visible.
-/** Fresh view-only layout fields every successful config write returns. */
+/**
+ * The fresh document every successful dashboard write returns (`layout`, the
+ * committed document as GET /api/config serves it). A response without one is
+ * passed on without it so the caller marks the held document stale rather
+ * than trusting it.
+ */
 export interface FreshLayout {
   layout?: LayoutDoc;
-  v3OnlyDashboards?: { id: string; name: string; path: string; reason: string }[];
 }
 
-export async function updateConfig(
-  config: Config
-): Promise<{ warning?: string; revisions?: Record<string, number> } & FreshLayout> {
-  const resp = await fetchAPI('/config', {
-    method: 'PUT',
-    body: JSON.stringify(config),
-  });
-  return resp ?? {};
+function freshOf(resp: { layout?: unknown } | null | undefined): FreshLayout {
+  const l = resp?.layout as LayoutDoc | undefined;
+  return l && typeof l === 'object' && Array.isArray(l.dashboards) ? { layout: l } : {};
 }
 
-/** Revision-checked save of one dashboard (PUT /api/dashboards/{id}). */
-export async function saveDashboard(
-  id: string,
-  dashboard: Dashboard,
-  revision: number
-): Promise<{ revision: number; warning?: string } & FreshLayout> {
-  const resp = await fetchAPI(`/dashboards/${encodeURIComponent(id)}`, {
-    method: 'PUT',
-    body: JSON.stringify({ dashboard, revision }),
-  });
-  if (!resp || typeof resp.revision !== 'number') {
-    throw new Error('The server did not confirm the new dashboard revision.');
+/** `warning`: the pre-update backup failed but the write went through. */
+function warningOf(resp: { warning?: unknown } | null | undefined): { warning?: string } {
+  return resp && typeof resp.warning === 'string' && resp.warning ? { warning: resp.warning } : {};
+}
+
+/** Create a dashboard: POST /api/dashboards {name, path} (409 path_taken when the path is used). */
+export async function createDashboard(
+  name: string,
+  path: string
+): Promise<{ id: string; revision: number; warning?: string } & FreshLayout> {
+  const resp = await fetchAPI('/dashboards', { method: 'POST', body: JSON.stringify({ name, path }) });
+  if (!resp || typeof resp.id !== 'string' || !resp.id || typeof resp.revision !== 'number') {
+    throw new Error('The server did not confirm the new dashboard.');
   }
-  // `warning`: the pre-update backup failed but the save went through.
-  const out: { revision: number; warning?: string } & FreshLayout = { revision: resp.revision };
-  if (typeof resp.warning === 'string' && resp.warning) out.warning = resp.warning;
-  if (resp.layout) {
-    out.layout = resp.layout;
-    out.v3OnlyDashboards = resp.v3OnlyDashboards ?? [];
-  }
-  return out;
+  return { id: resp.id, revision: resp.revision, ...warningOf(resp), ...freshOf(resp) };
+}
+
+/** Reorder the dashboards: PUT /api/dashboards/order {order: [every id once]}. */
+export async function reorderDashboards(order: string[]): Promise<{ warning?: string } & FreshLayout> {
+  const resp = await fetchAPI('/dashboards/order', { method: 'PUT', body: JSON.stringify({ order }) });
+  return { ...warningOf(resp), ...freshOf(resp) };
 }
 
 /**
@@ -298,13 +303,7 @@ export async function saveDashboardV3(
   if (!resp || typeof resp.revision !== 'number') {
     throw new Error('The server did not confirm the new dashboard revision.');
   }
-  const out: { revision: number; warning?: string } & FreshLayout = { revision: resp.revision };
-  if (typeof resp.warning === 'string' && resp.warning) out.warning = resp.warning;
-  if (resp.layout && Array.isArray(resp.layout.dashboards)) {
-    out.layout = resp.layout;
-    out.v3OnlyDashboards = Array.isArray(resp.v3OnlyDashboards) ? resp.v3OnlyDashboards : [];
-  }
-  return out;
+  return { revision: resp.revision, ...warningOf(resp), ...freshOf(resp) };
 }
 
 export interface TransferRequest {
@@ -333,20 +332,12 @@ export async function transferNodes(
   if (!resp || typeof resp.sourceRevision !== 'number' || typeof resp.targetRevision !== 'number') {
     throw new Error('The server did not confirm the new dashboard revisions.');
   }
-  const out: { sourceRevision: number; targetRevision: number } & FreshLayout = {
-    sourceRevision: resp.sourceRevision,
-    targetRevision: resp.targetRevision
-  };
-  if (resp.layout && Array.isArray(resp.layout.dashboards)) {
-    out.layout = resp.layout;
-    out.v3OnlyDashboards = Array.isArray(resp.v3OnlyDashboards) ? resp.v3OnlyDashboards : [];
-  }
-  return out;
+  return { sourceRevision: resp.sourceRevision, targetRevision: resp.targetRevision, ...freshOf(resp) };
 }
 
 /**
- * Revision-checked delete of one dashboard (legacy-editable or v3-only):
- * DELETE /api/dashboards/{id}?revision=n. Returns the fresh layout fields.
+ * Revision-checked delete of one dashboard: DELETE
+ * /api/dashboards/{id}?revision=n. Returns the fresh document.
  */
 export async function deleteDashboard(
   id: string,
@@ -356,13 +347,7 @@ export async function deleteDashboard(
     `/dashboards/${encodeURIComponent(id)}?revision=${encodeURIComponent(String(revision))}`,
     { method: 'DELETE' }
   );
-  const out: { warning?: string } & FreshLayout = {};
-  if (resp && typeof resp.warning === 'string' && resp.warning) out.warning = resp.warning;
-  if (resp && resp.layout) {
-    out.layout = resp.layout;
-    out.v3OnlyDashboards = resp.v3OnlyDashboards ?? [];
-  }
-  return out;
+  return { ...warningOf(resp), ...freshOf(resp) };
 }
 
 /** Resolved per-dashboard settings (what actually applies). */
@@ -406,9 +391,7 @@ export async function saveDashboardSettings(
   if (!resp || typeof resp.revision !== 'number') {
     throw new Error('The server did not confirm the new settings revision.');
   }
-  return resp.layout
-    ? { revision: resp.revision, layout: resp.layout, v3OnlyDashboards: resp.v3OnlyDashboards ?? [] }
-    : { revision: resp.revision };
+  return { revision: resp.revision, ...freshOf(resp) };
 }
 
 export async function exportConfig(format: 'json' | 'yaml' = 'json', dashboardId?: string): Promise<Blob> {
@@ -620,7 +603,7 @@ export async function deleteBackgroundCategory(id: string): Promise<void> {
 
 // Config reset
 
-export async function resetConfig(): Promise<Config> {
+export async function resetConfig(): Promise<unknown> {
   return fetchAPI('/config/reset', { method: 'POST' });
 }
 
@@ -824,26 +807,37 @@ export async function updateScanResult(
   );
 }
 
-// PromoteTarget describes where promoted tiles should land. The admin
-// picks dashboard + tab; the server distributes tiles across groups by
-// their category (one group per unique category, find-or-create by
-// category display name). New-dashboard implies new-tab.
+// PromoteTarget describes where promoted tiles should land: a dashboard and
+// tab (existing or new; a new dashboard implies a new tab) and optionally an
+// existing folder (any depth) of an existing tab that takes every tile.
+// Without a folder the server puts the tiles in one folder per category at
+// the tab's root (reusing a root folder with that category's name).
 export interface PromoteTarget {
   dashboardId?: string;
   newDashboard?: { name: string; path?: string };
   tabId?: string;
   newTab?: { name: string };
+  folderId?: string;
 }
 
 export async function promoteScan(
   scanId: string,
   target: PromoteTarget,
   resultIds: string[]
-): Promise<{ promoted: number; dashboardPath?: string }> {
-  return fetchAPI(`/discovery/scans/${encodeURIComponent(scanId)}/promote`, {
+): Promise<{ promoted: number; dashboardPath?: string; warning?: string } & FreshLayout> {
+  const resp = await fetchAPI(`/discovery/scans/${encodeURIComponent(scanId)}/promote`, {
     method: 'POST',
     body: JSON.stringify({ target, resultIds }),
   });
+  if (!resp || typeof resp.promoted !== 'number') {
+    throw new Error('The server did not confirm the promotion.');
+  }
+  return {
+    promoted: resp.promoted,
+    ...(typeof resp.dashboardPath === 'string' ? { dashboardPath: resp.dashboardPath } : {}),
+    ...warningOf(resp),
+    ...freshOf(resp)
+  };
 }
 
 export async function suggestDiscoveryCIDR(): Promise<{ cidr: string }> {

@@ -1,13 +1,14 @@
 import { writable, derived, get } from 'svelte/store';
-import type { Config, Dashboard, DashboardSettings } from '$lib/types';
+import type { Config, DashboardSettings } from '$lib/types';
 import type { LayoutDoc, LayoutDashboard } from '$lib/types/layout';
 import type { FreshLayout } from '$lib/utils/api';
 import {
   getConfig,
-  updateConfig as apiUpdateConfig,
-  saveDashboard,
+  saveDashboardV3,
   saveDashboardSettings,
   deleteDashboard as apiDeleteDashboard,
+  createDashboard as apiCreateDashboard,
+  reorderDashboards as apiReorderDashboards,
   ConflictError,
   MigrationFailedError
 } from '$lib/utils/api';
@@ -15,59 +16,47 @@ import { page } from '$app/stores';
 import { toast } from './toast';
 import { logError } from '$lib/utils/errors';
 
-// Create a writable store for the config
+// The stored v3 document as GET /api/config serves it: {schemaVersion: 3,
+// dashboards, migrationNotices?}. null until it has loaded (or when it failed).
 export const config = writable<Config | null>(null);
 
-// Derived store for dashboards
-export const dashboards = derived(config, ($config) => $config?.dashboards || []);
+/**
+ * Dashboards in display order: by `order` (PUT /api/dashboards/order rewrites
+ * it), document order for ties and for dashboards without one.
+ */
+export function sortedDashboards(list: LayoutDashboard[] | undefined): LayoutDashboard[] {
+  const all = Array.isArray(list) ? list : [];
+  const key = (d: LayoutDashboard): number => (typeof d.order === 'number' && Number.isFinite(d.order) ? d.order : Infinity);
+  return all
+    .map((d, i) => ({ d, i, k: key(d) }))
+    .sort((a, b) => (a.k === b.k ? a.i - b.i : a.k - b.k))
+    .map((x) => x.d);
+}
+
+// Every dashboard, in display order.
+export const dashboards = derived(config, ($config) => sortedDashboards($config?.dashboards));
+
+// The stored v3 document (the config itself), for the renderer and editor.
+export const layoutDoc = derived(config, ($config): LayoutDoc | null => $config ?? null);
 
 // The current page's dashboard, resolved exactly as the [dashboard] route
-// resolves it (path first, then id, across legacy and v3-only dashboards).
-// Uses the route's DECODED param (as the route does), never the encoded
-// pathname, so "/my%20dash" resolves the dashboard at "/my dash".
+// resolves it (path first, then id). Uses the route's DECODED param (as the
+// route does), never the encoded pathname, so "/my%20dash" resolves the
+// dashboard at "/my dash".
 export const currentRoute = derived([config, page], ([$config, $page]) => {
   const seg = ($page.params as Record<string, string | undefined> | undefined)?.dashboard;
   return $config && seg ? resolveDashboardRoute(seg, $config) : undefined;
 });
 
-// The current page's LEGACY dashboard (null on a v3-only dashboard, which
-// legacy-only code must never see).
-export const currentDashboard = derived(currentRoute, (r) => (r?.kind === 'legacy' ? r.dashboard : null));
-
-// The current page's v3-only dashboard (view-only; no legacy view exists).
-export const currentV3OnlyDashboard = derived(currentRoute, (r) => (r?.kind === 'v3only' ? r.dashboard : null));
-
-// The stored v3 layout document (null until the config has loaded or when the
-// server sent none).
-export const layoutDoc = derived(config, ($config): LayoutDoc | null => $config?.layout ?? null);
-
-// Ids of dashboards that exist only in v3 (no legacy view).
-export const v3OnlyDashboardIds = derived(
-  config,
-  ($config) => new Set(($config?.v3OnlyDashboards ?? []).map((d) => d.id))
-);
-
 export function findLayoutDashboard(id: string, doc: LayoutDoc | null): LayoutDashboard | undefined {
   return doc?.dashboards.find((d) => d.id === id);
 }
 
-// True while the held `layout` is known to be older than the legacy data (a
-// write response did not carry a fresh one and a reload is in flight/failed).
-// The renderer shows a refreshing state instead of the old tree. loadConfig
-// clears it once a fresh config has landed.
+// True while the held document is known to be older than a write that just
+// succeeded (its response carried no fresh document) and a reload is in
+// flight or failed. The renderer shows a refreshing state instead of the old
+// tree; loadConfig clears it once a fresh config has landed.
 export const layoutStale = writable(false);
-
-// The layout fields to merge into the config in the SAME config.set as a
-// legacy update. A response without `layout` leaves the old one unusable: flag
-// it stale and reload, never present it as current.
-function freshLayoutPatch(resp: FreshLayout | undefined): Pick<Config, 'layout' | 'v3OnlyDashboards'> | {} {
-  if (resp && resp.layout) {
-    return { layout: resp.layout, v3OnlyDashboards: resp.v3OnlyDashboards ?? [] };
-  }
-  layoutStale.set(true);
-  void loadConfig();
-  return {};
-}
 
 // Loading state
 export const configLoading = writable(true);
@@ -75,7 +64,7 @@ export const configLoading = writable(true);
 // Error state
 export const configError = writable<string | null>(null);
 
-// Set when a save was rejected because the dashboard changed elsewhere
+// Set when a write was rejected because the dashboard changed elsewhere
 // (HTTP 409). Persistent: only loadConfig() (Reload) clears it, so a change
 // that was NOT saved can never look saved.
 export const saveConflict = writable<{ dashboardId: string } | null>(null);
@@ -98,7 +87,7 @@ export function showMigrationFailedPage(pathname: string, failure: string | null
   return failure !== null && pathname !== '/';
 }
 
-// Record a failed save where the user can see it. Conflicts raise the
+// Record a failed write where the user can see it. Conflicts raise the
 // persistent banner; a migration failure swaps in the migration-failed page.
 function noteSaveFailure(error: unknown) {
   if (error instanceof ConflictError) {
@@ -108,10 +97,15 @@ function noteSaveFailure(error: unknown) {
   }
 }
 
-// Toast text for a failed save: the server's reason when there is one (e.g.
-// "Invalid config: ..."), so the user can see why nothing was saved.
-function saveFailedMessage(error: unknown): string {
-  return error instanceof Error && error.message ? `Failed to save changes: ${error.message}` : 'Failed to save changes';
+/** Toast a failed dashboard write: `what` is e.g. "Not saved" / "Not deleted". */
+function toastWriteFailure(what: string, error: unknown) {
+  if (error instanceof Error && error.message === 'SESSION_EXPIRED') {
+    toast.error('Your session has expired. Please refresh the page and log in again.');
+  } else if (error instanceof ConflictError) {
+    toast.error(`${what} — changed somewhere else`);
+  } else {
+    toast.error(error instanceof Error && error.message ? `${what}: ${error.message}` : `${what}.`);
+  }
 }
 
 // Load configuration from API. A reload of a held-but-stale layout runs in the
@@ -147,196 +141,136 @@ export async function loadConfig(opts: { background?: boolean } = {}) {
 }
 
 /**
- * After an edit session's v3 save: take the response's fresh layout into the
- * store (a response without one marks the layout stale and reloads it, never
- * keeping the old one as current). The legacy view of the saved dashboard is
- * now older than the layout, so the whole config is refreshed in the
- * background; a failure there surfaces through configError as usual.
+ * After any successful write: take the response's fresh document into the
+ * store (keeping the migration notices, which only GET carries). A response
+ * without one leaves the held document unusable: it is marked stale and
+ * reloaded, never presented as current.
  */
-export function applySavedLayout(fresh: FreshLayout): void {
-  const cfg = get(config);
-  if (!cfg) {
-    void loadConfig();
+export function applySavedLayout(fresh: FreshLayout | undefined): void {
+  const layout = fresh?.layout;
+  if (layout && Array.isArray(layout.dashboards)) {
+    const notices = get(config)?.migrationNotices;
+    config.set({ schemaVersion: 3, dashboards: layout.dashboards, ...(notices ? { migrationNotices: notices } : {}) });
     return;
   }
-  const hadLayout = !!fresh.layout;
-  config.set({ ...cfg, ...freshLayoutPatch(fresh) }); // no layout: stale + reload
-  if (hadLayout) void loadConfig({ background: true });
+  layoutStale.set(true);
+  void loadConfig();
 }
 
-// Apply server-assigned revisions onto a config: the top-level map and each
-// dashboard's own `revision` stay in sync.
-function withRevisions(cfg: Config, revisions: Record<string, number>): Config {
-  return {
-    ...cfg,
-    dashboards: cfg.dashboards.map((d) =>
-      revisions[d.id] !== undefined ? { ...d, revision: revisions[d.id] } : d
-    ),
-    dashboardRevisions: revisions
-  };
+// ---------------------------------------------------------------------------
+// Serialized write queue. Dashboard-list writes (create, rename, delete,
+// reorder, settings) run one at a time, and each reads the store only after
+// the previous one's result has landed, so it always sends the latest
+// revision it knows.
+// ---------------------------------------------------------------------------
+let saveQueue: Promise<unknown> = Promise.resolve();
+
+function enqueueSave<T>(task: () => Promise<T>): Promise<T> {
+  const next = saveQueue.then(task, task); // run on success or failure of prev
+  // Don't poison the chain: future tasks should run even if this one rejected.
+  saveQueue = next.catch(() => undefined);
+  return next;
 }
 
-// Update configuration (admin only). The store is only updated after the
-// server confirms; on any failure it is left untouched.
-export async function updateConfig(newConfig: Config, showToast = true) {
-  try {
-    // layout / v3OnlyDashboards are view-only server fields; never send them back.
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { layout: _layout, v3OnlyDashboards: _v3Only, ...putBody } = newConfig;
-    const resp = await apiUpdateConfig(putBody);
-    const patch = freshLayoutPatch(resp);
-    config.set({ ...(resp.revisions ? withRevisions(newConfig, resp.revisions) : newConfig), ...patch });
-    if (showToast) {
-      toast.success('Changes saved');
-    }
-    // Server may attach a warning when the pre-update backup failed
-    // but the config was saved anyway. Surface it so the admin knows
-    // the rollback safety-net didn't fire this time.
-    if (resp.warning) {
-      toast.warning(resp.warning);
-    }
-  } catch (error) {
-    logError('Config update', error);
-    noteSaveFailure(error);
-
-    // Check if it's a session expiration error
-    if (error instanceof Error && error.message === 'SESSION_EXPIRED') {
-      toast.error('Your session has expired. Please refresh the page and log in again.');
-    } else if (error instanceof ConflictError) {
-      toast.error('Not saved \u2014 changed somewhere else');
-    } else {
-      toast.error(saveFailedMessage(error));
-    }
-    throw error;
+/** The dashboard as the store holds it, or a visible refusal. */
+function heldDashboard(id: string, what: string): LayoutDashboard {
+  const d = findLayoutDashboard(id, get(layoutDoc));
+  if (!d) {
+    const err = new Error(get(config) ? 'Dashboard not found — reload and try again' : 'No configuration loaded');
+    toast.error(`${what}: ${err.message}`);
+    throw err;
   }
-}
-
-// Save one dashboard with its current revision (optimistic concurrency).
-// On success the store takes the returned revision; on failure the store is
-// untouched so the unsaved change never looks saved.
-async function saveOneDashboard(updated: Dashboard): Promise<void> {
-  const currentConfig = get(config);
-  if (!currentConfig) {
-    throw new Error('No configuration loaded');
+  if (typeof d.revision !== 'number') {
+    const err = new Error('Dashboard has no known revision — reload and try again');
+    toast.error(`${what}: ${err.message}`);
+    throw err;
   }
-  const index = currentConfig.dashboards.findIndex((d) => d.id === updated.id);
-  if (index === -1) {
-    throw new Error('Dashboard not found');
-  }
-  const revision = storeRevision(currentConfig, updated.id);
-  if (revision === undefined) {
-    throw new Error('Dashboard has no known revision \u2014 reload and try again');
-  }
-
-  try {
-    const resp = await saveDashboard(updated.id, updated, revision);
-    const saved: Dashboard = { ...updated, revision: resp.revision };
-    config.set({
-      ...currentConfig,
-      dashboards: [
-        ...currentConfig.dashboards.slice(0, index),
-        saved,
-        ...currentConfig.dashboards.slice(index + 1)
-      ],
-      dashboardRevisions: { ...(currentConfig.dashboardRevisions ?? {}), [updated.id]: resp.revision },
-      ...freshLayoutPatch(resp)
-    });
-    toast.success('Changes saved');
-    // The save went through but its pre-update backup failed: say so, so
-    // the admin doesn't trust a rollback point that doesn't exist.
-    if (resp.warning) {
-      toast.warning(resp.warning);
-    }
-  } catch (error) {
-    logError('Dashboard save', error);
-    noteSaveFailure(error);
-    if (error instanceof Error && error.message === 'SESSION_EXPIRED') {
-      toast.error('Your session has expired. Please refresh the page and log in again.');
-    } else if (error instanceof ConflictError) {
-      toast.error('Not saved \u2014 changed somewhere else');
-    } else {
-      toast.error(saveFailedMessage(error));
-    }
-    throw error;
-  }
-}
-
-function isV3Only(cfg: Config, id: string): boolean {
-  return (cfg.v3OnlyDashboards ?? []).some((d) => d.id === id);
+  return d;
 }
 
 /**
- * Delete one dashboard (legacy or v3-only), revision-checked against the
- * revision THIS STORE holds (the legacy view's, or for a v3-only dashboard the
- * held layout's). Runs in the save queue. On success the store drops the
- * dashboard and takes the response's fresh layout atomically; on failure the
- * store is untouched, the failure is recorded (conflict banner / migration
- * page) and toasted, and the error is rethrown.
+ * Create a dashboard (POST /api/dashboards). Resolves to the new id once the
+ * store holds the fresh document; on failure the store is untouched, the
+ * failure is shown and the error rethrown.
  */
-export async function deleteDashboard(id: string): Promise<void> {
+export async function createDashboard(name: string, path: string): Promise<string> {
   return enqueueSave(async () => {
-    const cfg = get(config);
-    if (!cfg) throw new Error('No configuration loaded');
-    const legacy = cfg.dashboards.some((d) => d.id === id);
-    const revision = legacy
-      ? storeRevision(cfg, id)
-      : isV3Only(cfg, id)
-        ? findLayoutDashboard(id, cfg.layout ?? null)?.revision
-        : undefined;
-    if (!legacy && !isV3Only(cfg, id)) {
-      const err = new Error('Dashboard not found');
-      toast.error(`Not deleted: ${err.message}`);
-      throw err;
-    }
-    if (typeof revision !== 'number') {
-      const err = new Error('Dashboard has no known revision \u2014 reload and try again');
-      toast.error(`Not deleted: ${err.message}`);
-      throw err;
-    }
     try {
-      const resp = await apiDeleteDashboard(id, revision);
-      const latest = get(config) ?? cfg;
-      const revs = { ...(latest.dashboardRevisions ?? {}) };
-      delete revs[id];
-      config.set({
-        ...latest,
-        dashboards: latest.dashboards.filter((d) => d.id !== id),
-        dashboardRevisions: revs,
-        ...freshLayoutPatch(resp)
-      });
-      toast.success('Dashboard deleted');
+      const resp = await apiCreateDashboard(name, path);
+      applySavedLayout(resp);
+      toast.success(`Dashboard "${name}" created`);
       if (resp.warning) toast.warning(resp.warning);
+      return resp.id;
     } catch (error) {
-      logError('Dashboard delete', error);
+      logError('Dashboard create', error);
       noteSaveFailure(error);
-      if (error instanceof Error && error.message === 'SESSION_EXPIRED') {
-        toast.error('Your session has expired. Please refresh the page and log in again.');
-      } else if (error instanceof ConflictError) {
-        toast.error('Not deleted \u2014 changed somewhere else');
-      } else {
-        toast.error(error instanceof Error && error.message ? `Not deleted: ${error.message}` : 'Failed to delete the dashboard');
-      }
+      toastWriteFailure('Not created', error);
       throw error;
     }
   });
 }
 
-// Revision the store holds for a dashboard (what the client last saw).
-function storeRevision(cfg: Config, id: string): number | undefined {
-  const d = cfg.dashboards.find((x) => x.id === id);
-  return d?.revision ?? cfg.dashboardRevisions?.[id];
+/**
+ * Rename a dashboard and/or change its path: the stored dashboard with the
+ * new name/path, saved at the revision THIS STORE holds (PUT schema 3), so a
+ * change made elsewhere is a visible 409, never overwritten.
+ */
+export async function renameDashboard(id: string, changes: { name: string; path: string }): Promise<void> {
+  return enqueueSave(async () => {
+    const d = heldDashboard(id, 'Not saved');
+    try {
+      const resp = await saveDashboardV3(id, { ...d, name: changes.name, path: changes.path }, d.revision);
+      applySavedLayout(resp);
+      toast.success('Changes saved');
+      if (resp.warning) toast.warning(resp.warning);
+    } catch (error) {
+      logError('Dashboard rename', error);
+      noteSaveFailure(error);
+      toastWriteFailure('Not saved', error);
+      throw error;
+    }
+  });
 }
 
 /**
- * Save per-dashboard settings overrides (absent key = unchanged, null = reset
- * to inherit), revision-checked against the revision THIS STORE holds, not a
- * freshly fetched one: if the store is stale the server answers 409, so a
- * settings save can never fast-forward a stale store past someone else's
- * change. Runs in the same save queue as mutateDashboard. On success the
- * store takes the merged overrides and new revision; on failure it is left
- * untouched and the failure is recorded (conflict banner / migration page)
- * before being rethrown for the caller to show inline.
+ * Delete one dashboard, revision-checked against the revision THIS STORE
+ * holds. On success the store takes the response's fresh document; on failure
+ * the store is untouched, the failure is recorded (conflict banner /
+ * migration page) and toasted, and the error is rethrown.
  */
+export async function deleteDashboard(id: string): Promise<void> {
+  return enqueueSave(async () => {
+    const d = heldDashboard(id, 'Not deleted');
+    try {
+      const resp = await apiDeleteDashboard(id, d.revision);
+      applySavedLayout(resp);
+      toast.success('Dashboard deleted');
+      if (resp.warning) toast.warning(resp.warning);
+    } catch (error) {
+      logError('Dashboard delete', error);
+      noteSaveFailure(error);
+      toastWriteFailure('Not deleted', error);
+      throw error;
+    }
+  });
+}
+
+/** Put the dashboards in this order (every id exactly once): PUT /api/dashboards/order. */
+export async function reorderDashboards(ids: string[]): Promise<void> {
+  return enqueueSave(async () => {
+    try {
+      const resp = await apiReorderDashboards(ids);
+      applySavedLayout(resp);
+      if (resp.warning) toast.warning(resp.warning);
+    } catch (error) {
+      logError('Dashboard reorder', error);
+      noteSaveFailure(error);
+      toastWriteFailure('Order not saved', error);
+      throw error;
+    }
+  });
+}
+
 /**
  * Called after a confirmed per-dashboard settings save with the revision it was checked against,
  * the server's new revision and the merged overrides. editSession registers it so an open edit
@@ -349,67 +283,33 @@ export function setSettingsSavedHook(fn: SettingsSavedHook | null): void {
   settingsSavedHook = fn;
 }
 
+/**
+ * Save per-dashboard settings overrides (absent key = unchanged, null = reset
+ * to inherit), revision-checked against the revision THIS STORE holds, not a
+ * freshly fetched one: if the store is stale the server answers 409, so a
+ * settings save can never fast-forward a stale store past someone else's
+ * change. On success the store takes the response's fresh document; on
+ * failure it is left untouched and the failure is recorded (conflict banner /
+ * migration page) before being rethrown for the caller to show inline.
+ */
 export async function saveDashboardSettingsChanges(
   id: string,
   changes: Partial<Record<keyof DashboardSettings, string | number | boolean | null>>
 ): Promise<void> {
   return enqueueSave(async () => {
-    const cfg = get(config);
-    if (!cfg) throw new Error('No configuration loaded');
-    const dash = cfg.dashboards.find((d) => d.id === id);
-    if (!dash) {
-      // A v3-only dashboard has no legacy view: check against the revision
-      // the held layout carries and take the fresh layout from the response.
-      const ld = isV3Only(cfg, id) ? findLayoutDashboard(id, cfg.layout ?? null) : undefined;
-      if (!ld) throw new Error('Dashboard not found');
-      try {
-        const resp = await saveDashboardSettings(id, changes, ld.revision);
-        const latest = get(config) ?? cfg;
-        config.set({ ...latest, ...freshLayoutPatch(resp) });
-        const merged = { ...((ld.settings as DashboardSettings | undefined) ?? {}), ...changes } as DashboardSettings;
-        settingsSavedHook?.(id, ld.revision, resp.revision, merged);
-      } catch (error) {
-        logError('Dashboard settings save', error);
-        noteSaveFailure(error);
-        throw error;
-      }
-      return;
-    }
-    const revision = storeRevision(cfg, id);
-    if (revision === undefined) {
-      throw new Error('Dashboard has no known revision \u2014 reload and try again');
-    }
+    const d = findLayoutDashboard(id, get(layoutDoc));
+    if (!d) throw new Error(get(config) ? 'Dashboard not found' : 'No configuration loaded');
+    if (typeof d.revision !== 'number') throw new Error('Dashboard has no known revision — reload and try again');
     try {
-      const resp = await saveDashboardSettings(id, changes, revision);
-      const merged = { ...(dash.settings ?? {}), ...changes } as DashboardSettings;
-      applyDashboardSettings(id, merged, resp.revision, resp);
-      settingsSavedHook?.(id, revision, resp.revision, merged);
+      const resp = await saveDashboardSettings(id, changes, d.revision);
+      applySavedLayout(resp);
+      const merged = { ...((d.settings as DashboardSettings | undefined) ?? {}), ...changes } as DashboardSettings;
+      settingsSavedHook?.(id, d.revision, resp.revision, merged);
     } catch (error) {
       logError('Dashboard settings save', error);
       noteSaveFailure(error);
       throw error;
     }
-  });
-}
-
-// After a confirmed per-dashboard settings save: take the new revision and
-// merged overrides into the store so the next dashboard save does not
-// spuriously conflict (and so the UI reflects what the server holds). Only
-// call it with a revision the server returned for a save that was checked
-// against this store's own revision (see saveDashboardSettingsChanges).
-export function applyDashboardSettings(
-  id: string,
-  settings: DashboardSettings,
-  revision: number,
-  fresh?: FreshLayout
-): void {
-  const cfg = get(config);
-  if (!cfg) return;
-  config.set({
-    ...cfg,
-    dashboards: cfg.dashboards.map((d) => (d.id === id ? { ...d, settings, revision } : d)),
-    dashboardRevisions: { ...(cfg.dashboardRevisions ?? {}), [id]: revision },
-    ...freshLayoutPatch(fresh)
   });
 }
 
@@ -441,122 +341,16 @@ export function dashboardHref(path: string): string {
   return '/' + encodeURIComponent(bare);
 }
 
-// Helper to find a LEGACY dashboard by path or id. A path match always wins
-// over an id match.
-export function findDashboard(pathOrId: string, cfg: Config): Dashboard | undefined {
-  const r = resolveDashboardRoute(pathOrId, cfg);
-  return r?.kind === 'legacy' ? r.dashboard : undefined;
-}
-
-export type RouteDashboard =
-  | { kind: 'legacy'; dashboard: Dashboard }
-  | { kind: 'v3only'; dashboard: LayoutDashboard }
-  /** A v3-only dashboard is listed but its layout is absent: an error, never a blank page. */
-  | { kind: 'missing-layout'; id: string; name: string };
-
 /**
  * Resolve a route segment ("home", "/home" or an id) to a dashboard: by path
- * FIRST across legacy and v3-only dashboards, and only when no path matches,
- * by id. A path match always wins over an id match.
+ * FIRST, and only when no path matches, by id. A path match always wins over
+ * an id match.
  */
-export function resolveDashboardRoute(pathOrId: string, cfg: Config): RouteDashboard | undefined {
-  const legacy = cfg.dashboards ?? [];
-  const v3 = cfg.v3OnlyDashboards ?? [];
-  const asV3 = (d: { id: string; name: string }): RouteDashboard => {
-    const ld = findLayoutDashboard(d.id, cfg.layout ?? null);
-    return ld ? { kind: 'v3only', dashboard: ld } : { kind: 'missing-layout', id: d.id, name: d.name };
-  };
+export function resolveDashboardRoute(pathOrId: string, cfg: Config): LayoutDashboard | undefined {
+  const all = Array.isArray(cfg.dashboards) ? cfg.dashboards : [];
   const path = normPath(pathOrId);
-  const lp = legacy.find((d) => normPath(d.path) === path);
-  if (lp) return { kind: 'legacy', dashboard: lp };
-  const vp = v3.find((d) => normPath(d.path) === path);
-  if (vp) return asV3(vp);
+  const byPath = all.find((d) => normPath(d.path) === path);
+  if (byPath) return byPath;
   const id = String(pathOrId ?? '').replace(/^\/+/, '');
-  const li = legacy.find((d) => d.id === id);
-  if (li) return { kind: 'legacy', dashboard: li };
-  const vi = v3.find((d) => d.id === id);
-  if (vi) return asV3(vi);
-  return undefined;
-}
-
-// Update a specific dashboard.
-//
-// DEPRECATED for new callers — use mutateDashboard() instead. mutateDashboard
-// runs your mutation against the LATEST dashboard state at execution time and
-// serializes saves through a queue, eliminating stale-snapshot races when
-// multiple mutations fire in rapid succession (e.g. drag-then-delete).
-//
-// This whole-snapshot updateDashboard is racy: if you read $state.snapshot,
-// mutate, then call updateDashboard, a concurrent mutation between your read
-// and your write will be silently overwritten by your stale snapshot.
-//
-// Kept only for any straggler callers; new code should not use it.
-export async function updateDashboard(updatedDashboard: Dashboard) {
-  return saveDashboardSnapshot(updatedDashboard);
-}
-
-async function saveDashboardSnapshot(updatedDashboard: Dashboard): Promise<void> {
-  return saveOneDashboard(updatedDashboard);
-}
-
-// ---------------------------------------------------------------------------
-// Serialized save queue. Every save runs sequentially. The next save only
-// reads from the store AFTER the previous save's config.set() has run, so
-// it always sees the latest committed state.
-//
-// Without this, two mutations fired in rapid succession could each snapshot
-// the dashboard before either save completed → both saves write stale data
-// → last write wins → first mutation silently lost.
-// ---------------------------------------------------------------------------
-let saveQueue: Promise<unknown> = Promise.resolve();
-
-function enqueueSave<T>(task: () => Promise<T>): Promise<T> {
-  const next = saveQueue.then(task, task);  // run on success or failure of prev
-  // Don't poison the chain: future tasks should run even if this one rejected.
-  saveQueue = next.catch(() => undefined);
-  return next;
-}
-
-/**
- * Apply a mutation to a dashboard, atomically against the latest store state.
- *
- * The mutator function receives a fresh deep clone of the named dashboard,
- * which it mutates in place (or replaces by returning a new Dashboard). The
- * clone reflects the LATEST state of the store at the moment the mutation
- * runs, which means even if you call mutateDashboard() while a previous save
- * is still in flight, you see the post-previous-save state, not what the
- * dashboard looked like when you called.
- *
- * Saves run in a single serialized queue, so you cannot have two PUTs to the
- * backend racing. The returned Promise resolves after the backend confirms
- * the save AND the local store has been updated.
- *
- * Usage:
- *   await mutateDashboard(dashboard.id, (dash) => {
- *     const tab = dash.tabs.find(t => t.id === tabId);
- *     if (tab) tab.groups = tab.groups.filter(g => g.id !== groupId);
- *   });
- */
-export async function mutateDashboard(
-  dashboardId: string,
-  mutator: (dashboard: Dashboard) => Dashboard | void
-): Promise<void> {
-  return enqueueSave(async () => {
-    const currentConfig = get(config);
-    if (!currentConfig) {
-      throw new Error('No configuration loaded');
-    }
-
-    const dashboardIndex = currentConfig.dashboards.findIndex(d => d.id === dashboardId);
-    if (dashboardIndex === -1) {
-      throw new Error('Dashboard not found');
-    }
-
-    // Take a structuredClone of the latest committed state. JSON round-trip
-    // avoids any Svelte 5 Proxy edge cases that have bitten us before.
-    const fresh: Dashboard = JSON.parse(JSON.stringify(currentConfig.dashboards[dashboardIndex]));
-    const result = mutator(fresh) ?? fresh;
-
-    await saveOneDashboard(result);
-  });
+  return all.find((d) => d.id === id);
 }

@@ -29,7 +29,7 @@ function mk(children: any[], tabId = 't1'): { dash: LayoutDashboard; tab: Layout
 }
 async function renderTab(children: any[], tabId = 't1') {
   const { dash, tab } = mk(children, tabId);
-  config.set({ layout: { schemaVersion: 3, dashboards: [dash] } } as any);
+  config.set({ schemaVersion: 3, dashboards: [dash] } as any);
   const r = render(TabCanvas, { dashboard: dash, tab });
   await tick();
   return { ...r, dash, tab };
@@ -90,7 +90,7 @@ describe('folder controls', () => {
     setFolderView('d1', 'f1', 'collapsed');
     const { dash, tab } = mk([folder('f1', [tile('a')], { placement: { x: 10, y: 20, w: 40, h: 30 } })]);
     tab.layout = 'free'; tab.designWidth = 1280; tab.root.columns = 160;
-    config.set({ layout: { schemaVersion: 3, dashboards: [dash] } } as any);
+    config.set({ schemaVersion: 3, dashboards: [dash] } as any);
     const { container } = render(TabCanvas, { dashboard: dash, tab });
     await tick();
     const f = el(container, 'f1');
@@ -214,7 +214,7 @@ describe('folder controls', () => {
     it('free mode: the minimised square, stored placement unchanged', async () => {
       const { dash, tab } = mk([big({ placement: { x: 10, y: 20, w: 100, h: 60 } })]);
       tab.layout = 'free'; tab.designWidth = 1280; tab.root.columns = 160;
-      config.set({ layout: { schemaVersion: 3, dashboards: [dash] } } as any);
+      config.set({ schemaVersion: 3, dashboards: [dash] } as any);
       const { container } = render(TabCanvas, { dashboard: dash, tab });
       await tick();
       expect(el(container, 'f1').style.width).toBe(`${Math.round(13 * 8 * (1440 / 1280) * 100) / 100}px`);

@@ -34,6 +34,14 @@ const effective = {
 	defaultLayout: 'grid'
 };
 
+// A settings save's response: the new revision and the committed document.
+function saved(revision: number, settings: Record<string, unknown> = {}) {
+	return {
+		revision,
+		layout: { schemaVersion: 3 as const, dashboards: [{ id: 'd1', name: 'D', path: '/d', tabs: [], order: 0, revision, settings: { ...allNull, ...settings } }] }
+	};
+}
+
 function serverSettings(overrides = {}, eff = effective) {
 	return { overrides: { ...allNull, ...overrides }, effective: eff, revision: 4 };
 }
@@ -42,12 +50,7 @@ beforeEach(() => {
 	vi.clearAllMocks();
 	migrationFailure.set(null);
 	saveConflict.set(null);
-	config.set({
-		dashboards: [{ id: 'd1', name: 'D', path: '/d', tabs: [], order: 0, revision: 4 }],
-		theme: { mode: 'auto' },
-		settings: { searchHotkey: '/', defaultView: 'd1' },
-		dashboardRevisions: { d1: 4 }
-	} as never);
+	config.set({ schemaVersion: 3, dashboards: [{ id: 'd1', name: 'D', path: '/d', tabs: [], order: 0, revision: 4 }] });
 });
 
 describe('DashboardSettingsModal', () => {
@@ -65,7 +68,7 @@ describe('DashboardSettingsModal', () => {
 		vi.mocked(api.getDashboardSettings).mockResolvedValue(
 			serverSettings({ statusCheckTimeoutSeconds: 20 }, { ...effective, statusCheckTimeoutSeconds: 20 })
 		);
-		vi.mocked(api.saveDashboardSettings).mockResolvedValue({ revision: 5 });
+		vi.mocked(api.saveDashboardSettings).mockResolvedValue(saved(5, { editIdleTimeoutMinutes: 30 }));
 		const onClose = vi.fn();
 		render(DashboardSettingsModal, { props: { dashboardId: 'd1', onClose } });
 		await screen.findByText('Check timeout (seconds)');
@@ -85,7 +88,7 @@ describe('DashboardSettingsModal', () => {
 		vi.mocked(api.getDashboardSettings).mockResolvedValue(
 			serverSettings({ statusCheckTimeoutSeconds: 20 }, { ...effective, statusCheckTimeoutSeconds: 20 })
 		);
-		vi.mocked(api.saveDashboardSettings).mockResolvedValue({ revision: 5 });
+		vi.mocked(api.saveDashboardSettings).mockResolvedValue(saved(5, { editIdleTimeoutMinutes: 30 }));
 		render(DashboardSettingsModal, { props: { dashboardId: 'd1', onClose: () => {} } });
 		await screen.findByText('Check timeout (seconds)');
 		await fireEvent.click(screen.getByRole('button', { name: 'Reset to inherit: Check timeout (seconds)' }));
@@ -97,15 +100,15 @@ describe('DashboardSettingsModal', () => {
 
 	it('updates the store revision and settings after a successful save', async () => {
 		vi.mocked(api.getDashboardSettings).mockResolvedValue(serverSettings());
-		vi.mocked(api.saveDashboardSettings).mockResolvedValue({ revision: 5 });
+		vi.mocked(api.saveDashboardSettings).mockResolvedValue(saved(5, { editIdleTimeoutMinutes: 30 }));
 		render(DashboardSettingsModal, { props: { dashboardId: 'd1', onClose: () => {} } });
 		await screen.findByText('Check timeout (seconds)');
 		await fireEvent.click(screen.getByLabelText('Override for this dashboard: Edit mode idle timeout (minutes)'));
 		await fireEvent.input(screen.getByLabelText('Edit mode idle timeout (minutes)'), { target: { value: '30' } });
 		await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 		await waitFor(() => expect(get(config)!.dashboards[0].revision).toBe(5));
-		expect(get(config)!.dashboardRevisions!.d1).toBe(5);
-		expect(get(config)!.dashboards[0].settings?.editIdleTimeoutMinutes).toBe(30);
+		expect((get(config)!.dashboards[0].settings as Record<string, unknown>).editIdleTimeoutMinutes).toBe(30);
+		expect(vi.mocked(api.saveDashboardSettings).mock.calls[0][2]).toBe(4);
 	});
 
 	it('cancel sends nothing', async () => {

@@ -8,11 +8,11 @@ import type { Config } from '$lib/types';
 
 const notices = [
   'Tab "main" in dashboard "Heimdall Import" was renamed to "main-heimdall" because another dashboard already used that id',
-  'Group "services" in dashboard "Heimdall Import" was renamed to "services-heimdall" because another dashboard already used that id'
+  'Folder "services" in dashboard "Heimdall Import" was renamed to "services-heimdall" because another dashboard already used that id'
 ];
 
 function cfg(migrationNotices?: string[]): Config {
-  return { dashboards: [], theme: {} as Config['theme'], settings: {} as Config['settings'], migrationNotices };
+  return { schemaVersion: 3, dashboards: [], migrationNotices };
 }
 
 describe('MigrationNotices', () => {

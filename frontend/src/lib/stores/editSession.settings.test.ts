@@ -26,19 +26,20 @@ beforeEach(() => {
   vi.clearAllMocks();
   resetEditSessionForTests();
   layoutStale.set(false);
-  config.set({
-    dashboards: [{ id: 'd', name: 'D', path: '/d', order: 0, revision: 7, tabs: [], settings: { editIdleTimeoutMinutes: null } }],
-    dashboardRevisions: { d: 7 },
-    layout: { schemaVersion: 3, dashboards: [layoutD()] },
-    v3OnlyDashboards: []
-  } as unknown as Config);
+  config.set({ schemaVersion: 3, dashboards: [layoutD()] });
+});
+
+/** A write response: the new revision and the committed document. */
+const freshAt = (revision: number, settings: Record<string, unknown> = { editIdleTimeoutMinutes: 30 }) => ({
+  revision,
+  layout: { schemaVersion: 3 as const, dashboards: [{ ...layoutD(), revision, settings }] }
 });
 
 describe('Settings saved during an edit session (Ruling 19)', () => {
   it('the session absorbs it: the next Save is checked against the new revision — no false conflict', async () => {
     begin('d');
     apply('Rename', (d) => updateNode(d, 'a', { name: 'Renamed' } as Partial<LayoutNode>));
-    vi.mocked(api.saveDashboardSettings).mockResolvedValue({ revision: 8 });
+    vi.mocked(api.saveDashboardSettings).mockResolvedValue(freshAt(8));
     await saveDashboardSettingsChanges('d', { editIdleTimeoutMinutes: 30 });
     expect(api.saveDashboardSettings).toHaveBeenCalledWith('d', { editIdleTimeoutMinutes: 30 }, 7);
 
@@ -48,7 +49,7 @@ describe('Settings saved during an edit session (Ruling 19)', () => {
     expect((s.draft.settings as Record<string, unknown>).editIdleTimeoutMinutes).toBe(30);
     expect(get(dirty)).toBe(true); // the draft edit is still pending
 
-    vi.mocked(api.saveDashboardV3).mockResolvedValue({ revision: 9 });
+    vi.mocked(api.saveDashboardV3).mockResolvedValue(freshAt(9));
     expect(await save()).toBe('saved');
     expect(vi.mocked(api.saveDashboardV3).mock.calls[0][2]).toBe(8);
     expect(get(sessionConflict)).toBeNull();
@@ -57,7 +58,7 @@ describe('Settings saved during an edit session (Ruling 19)', () => {
 
   it('a clean session absorbs it and stays clean', async () => {
     begin('d');
-    vi.mocked(api.saveDashboardSettings).mockResolvedValue({ revision: 8 });
+    vi.mocked(api.saveDashboardSettings).mockResolvedValue(freshAt(8));
     await saveDashboardSettingsChanges('d', { editIdleTimeoutMinutes: 30 });
     expect(get(session)!.baseRevision).toBe(8);
     expect(get(dirty)).toBe(false);
@@ -67,7 +68,7 @@ describe('Settings saved during an edit session (Ruling 19)', () => {
     begin('d');
     const cfg = get(config)!;
     config.set({ ...cfg, dashboards: [{ ...cfg.dashboards[0], revision: 11 }] } as Config);
-    vi.mocked(api.saveDashboardSettings).mockResolvedValue({ revision: 12 });
+    vi.mocked(api.saveDashboardSettings).mockResolvedValue(freshAt(12));
     await saveDashboardSettingsChanges('d', { editIdleTimeoutMinutes: 30 });
     expect(get(session)!.baseRevision).toBe(7); // the normal conflict path will surface it on Save
   });

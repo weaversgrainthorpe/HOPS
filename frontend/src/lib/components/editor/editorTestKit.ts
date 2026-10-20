@@ -48,10 +48,7 @@ export function other(): LayoutDashboard {
 }
 
 export function setLayout(dashes: LayoutDashboard[] = [home(), other()], extra: Partial<Config> = {}): void {
-  config.set({
-    dashboards: [], theme: { mode: 'auto' }, settings: {}, dashboardRevisions: {},
-    layout: { schemaVersion: 3, dashboards: dashes }, v3OnlyDashboards: [], ...extra
-  } as unknown as Config);
+  config.set({ schemaVersion: 3, dashboards: dashes, ...extra } as Config);
 }
 
 export function resetEditor(): void {

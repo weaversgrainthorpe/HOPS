@@ -12,8 +12,6 @@ vi.mock('./config', async () => {
 vi.mock('$lib/utils/api', async () => ({
 	...(await vi.importActual<object>('$lib/utils/api')),
 	saveDashboardV3: vi.fn(),
-	saveDashboard: vi.fn(),
-	updateConfig: vi.fn(),
 	getConfig: vi.fn(),
 	listSettings: vi.fn(),
 	getDashboardSettings: vi.fn(),
@@ -72,7 +70,7 @@ const draft = () => get(session)!.draft;
 const setName = (n: string) => (d: LayoutDashboard) => updateNode(d, 'a', { name: n } as Partial<LayoutNode>);
 const setRoute = (id: string | undefined) =>
 	(route.v as import('svelte/store').Writable<unknown>).set(
-		id ? { kind: 'legacy', dashboard: { id } } : undefined
+		id ? { id } : undefined
 	);
 const flush = () => new Promise((r) => setTimeout(r, 0));
 
@@ -83,7 +81,7 @@ beforeEach(async () => {
 	saveConflict.set(null);
 	layoutStale.set(false);
 	toast.clear();
-	config.set({ dashboards: [], layout: doc(), v3OnlyDashboards: [] } as unknown as Config);
+	config.set(doc());
 	isAuthenticated.set(true);
 	editMode.set(false);
 	setRoute('d');
@@ -124,7 +122,7 @@ describe('begin', () => {
 		const err = vi.spyOn(toast, 'error');
 		begin('nope');
 		expect(get(session)).toBeNull();
-		config.set({ dashboards: [] } as unknown as Config);
+		config.set(null);
 		begin('d');
 		expect(get(session)).toBeNull();
 		expect(err).toHaveBeenCalledTimes(2);
@@ -133,7 +131,7 @@ describe('begin', () => {
 	it('the session is independent of later store changes', () => {
 		begin('d');
 		const cfg = get(config)!;
-		config.set({ ...cfg, layout: { schemaVersion: 3, dashboards: [{ ...dash(), name: 'changed' }] } });
+		config.set({ ...cfg, dashboards: [{ ...dash(), name: 'changed' }] });
 		expect(draft().name).toBe('D');
 	});
 });
@@ -166,7 +164,7 @@ describe('apply / undo / redo', () => {
 		expect(get(dirty)).toBe(false);
 		expect(get(session)!.undo).toEqual([]);
 		expect(get(session)!.redo).toEqual([]);
-		for (const fn of [api.saveDashboardV3, api.saveDashboard, api.updateConfig]) {
+		for (const fn of [api.saveDashboardV3, api.getConfig]) {
 			expect(fn).not.toHaveBeenCalled();
 		}
 	});
@@ -265,10 +263,12 @@ describe('save', () => {
 		apply('1', setName('one'));
 		const sent = draft();
 		const fresh: LayoutDoc = { schemaVersion: 3, dashboards: [{ ...sent, revision: 8 }] };
-		vi.mocked(api.saveDashboardV3).mockResolvedValue({ revision: 8, layout: fresh, v3OnlyDashboards: [] });
-		vi.mocked(api.getConfig).mockResolvedValue({ dashboards: [], layout: fresh, v3OnlyDashboards: [] } as unknown as Config);
+		vi.mocked(api.saveDashboardV3).mockResolvedValue({ revision: 8, layout: fresh });
+		vi.mocked(api.getConfig).mockResolvedValue(fresh);
 		expect(await save()).toBe('saved');
 		expect(api.saveDashboardV3).toHaveBeenCalledWith('d', sent, 7);
+		// The response's document is the store's: no whole-config reload follows.
+		expect(api.getConfig).not.toHaveBeenCalled();
 		const s = get(session)!;
 		expect(s.baseRevision).toBe(8);
 		expect(get(dirty)).toBe(false);
@@ -315,7 +315,7 @@ describe('save', () => {
 		expect(draft()).toBe(mine);
 		await flush();
 		const fresh: LayoutDoc = { schemaVersion: 3, dashboards: [{ ...dash(), revision: 9, name: 'theirs' }] };
-		vi.mocked(api.getConfig).mockResolvedValue({ dashboards: [], layout: fresh, v3OnlyDashboards: [] } as unknown as Config);
+		vi.mocked(api.getConfig).mockResolvedValue(fresh);
 		await fireEvent.click(screen.getByRole('button', { name: 'Reload (lose my draft)' }));
 		await vi.waitFor(() => expect(get(session)?.baseRevision).toBe(9));
 		expect(api.getConfig).toHaveBeenCalled();
@@ -344,9 +344,7 @@ describe('save', () => {
 		vi.mocked(api.saveDashboardV3).mockRejectedValue(new ConflictError('d', 9));
 		await save();
 		// The dashboard is gone from the reloaded layout.
-		vi.mocked(api.getConfig).mockResolvedValue({
-			dashboards: [], layout: { schemaVersion: 3, dashboards: [] }, v3OnlyDashboards: []
-		} as unknown as Config);
+		vi.mocked(api.getConfig).mockResolvedValue({ schemaVersion: 3, dashboards: [] });
 		await reloadAfterConflict();
 		expect(get(session)).toBeNull();
 		expect(get(editMode)).toBe(false);
@@ -357,8 +355,8 @@ describe('save', () => {
 		apply('1', setName('one'));
 		const normalised = { ...draft(), revision: 8, normalisedByServer: true };
 		const fresh: LayoutDoc = { schemaVersion: 3, dashboards: [normalised] };
-		vi.mocked(api.saveDashboardV3).mockResolvedValue({ revision: 8, layout: fresh, v3OnlyDashboards: [] });
-		vi.mocked(api.getConfig).mockResolvedValue({ dashboards: [], layout: fresh, v3OnlyDashboards: [] } as unknown as Config);
+		vi.mocked(api.saveDashboardV3).mockResolvedValue({ revision: 8, layout: fresh });
+		vi.mocked(api.getConfig).mockResolvedValue(fresh);
 		expect(await save()).toBe('saved');
 		expect(get(session)!.saved).toEqual(normalised);
 		expect(draft()).toEqual(normalised);

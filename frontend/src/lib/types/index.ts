@@ -1,23 +1,6 @@
 import type { LayoutDoc } from './layout';
-// Type definitions matching the backend models
-
-export interface Dashboard {
-  id: string;
-  name: string;
-  path: string;
-  background?: Background;
-  perTabBackgrounds?: boolean; // When true, each tab can have its own background
-  header?: HeaderConfig;
-  theme?: {
-    color?: string;
-    opacity?: number;
-  };
-  tabs: Tab[];
-  order: number;
-  /** Optimistic-concurrency revision (server-assigned). */
-  revision?: number;
-  settings?: DashboardSettings;
-}
+// Type definitions matching the backend models. Dashboards themselves are the
+// v3 tree (types/layout.ts); the types here are the shared leaf shapes.
 
 /** Per-dashboard overrides; null = inherit the global setting. */
 export interface DashboardSettings {
@@ -34,36 +17,6 @@ export interface HeaderConfig {
   centerTitle?: string;
   showLeft?: boolean;
   showCenter?: boolean;
-}
-
-export interface Tab {
-  id: string;
-  name: string;
-  icon?: string; // Optional Iconify icon name (e.g., 'mdi:home')
-  iconUrl?: string; // Optional image URL for SVG icons
-  iconBgColor?: string; // Optional coloured backing behind the icon (for dark icons on dark tabs)
-  background?: Background;
-  color?: string;
-  opacity?: number;
-  textColor?: 'auto' | 'light' | 'dark'; // Auto determines based on background color
-  groups: Group[];
-  order: number;
-}
-
-export interface Group {
-  id: string;
-  name: string;
-  icon?: string; // Optional Iconify icon name (e.g., 'mdi:folder')
-  iconUrl?: string; // Optional image URL for SVG icons
-  iconBgColor?: string; // Optional coloured backing behind the icon (for dark icons on dark groups)
-  collapsed: boolean;
-  color?: string;
-  opacity?: number;
-  textColor?: 'auto' | 'light' | 'dark'; // Auto determines based on background color
-  displayStyle?: 'header' | 'folder'; // header = full width bar, folder = tab style
-  width?: 'full' | 'half' | 'third'; // Lay this group out as full/half/third row width (default 'full'). On narrow screens all groups become full.
-  entries: Entry[];
-  order: number;
 }
 
 export interface Entry {
@@ -109,33 +62,8 @@ export interface StatusCheck {
   interval: number;
 }
 
-export interface StatusResult {
-  entryId: string;
-  status: 'up' | 'down' | 'error' | 'unknown';
-  responseTime?: number;
-  lastChecked: Date;
-}
-
-export interface Config {
-  dashboards: Dashboard[];
-  theme: Theme;
-  settings: Settings;
-  /** Revision of every dashboard as last seen; sent back on whole-config PUTs. */
-  dashboardRevisions?: Record<string, number>;
-  /** Ids the startup v2→v3 migration renamed (view-only; the server strips it on PUT). */
+/** GET /api/config: the stored v3 document, plus this start's migration notices. */
+export interface Config extends LayoutDoc {
+  /** Ids the startup v2→v3 migration renamed (from GET only; never stored). */
   migrationNotices?: string[];
-  /** The stored v3 layout document (view-only; the server strips it on PUT). */
-  layout?: LayoutDoc;
-  /** Dashboards that exist only in v3 and have no legacy view (view-only; stripped on PUT). */
-  v3OnlyDashboards?: { id: string; name: string; path: string; reason: string }[];
-}
-
-export interface Theme {
-  mode: 'light' | 'dark' | 'auto';
-  customCss?: string;
-}
-
-export interface Settings {
-  searchHotkey: string;
-  defaultView: string;
 }

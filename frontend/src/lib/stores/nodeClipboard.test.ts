@@ -71,7 +71,7 @@ beforeEach(() => {
   clearSelection();
   clearNodeClipboard();
   toast.clear();
-  config.set({ dashboards: [], layout: doc(), v3OnlyDashboards: [] } as unknown as Config);
+  config.set(doc());
 });
 
 describe('copy then paste', () => {
@@ -145,11 +145,11 @@ describe('copy then paste', () => {
   });
 
   it('a collapsed folder\'s reserved footprint counts as taken (Ruling 13)', async () => {
-    config.set({ dashboards: [], layout: { schemaVersion: 3, dashboards: [{
+    config.set({ schemaVersion: 3, dashboards: [{
       ...home(), tabs: [{ id: 't1', name: 'One', root: { columns: 2, children: [
         { ...folder('c', p(0, 0, 2, 2), []), display: 'collapsed' }, tile('a', p(0, 2))
       ] } }]
-    }] } } as unknown as Config);
+    }] } as unknown as Config);
     begin('d');
     toggleNode('a', false);
     copySelection();
@@ -215,7 +215,7 @@ describe('across dashboards', () => {
         { ...other(), revision: 4, tabs: [{ id: 'ot', name: 'OT', root: { columns: 12, children: [] } }] }
       ]
     };
-    vi.mocked(api.transferNodes).mockResolvedValue({ sourceRevision: 4, targetRevision: 8, layout: fresh, v3OnlyDashboards: [] });
+    vi.mocked(api.transferNodes).mockResolvedValue({ sourceRevision: 4, targetRevision: 8, layout: fresh });
     await pasteInto({ tabId: 't1', folderId: 'f1' });
     expect(api.transferNodes).toHaveBeenCalledWith({
       mode: 'move', sourceId: 'o', sourceRevision: 3, nodeIds: ['o1'],
@@ -305,9 +305,9 @@ describe('paste of a copy uses the snapshot taken at Copy time (Ruling 18(6))', 
   });
 
   it('a grid folder pasted into a free tab is converted (not left at 4 x 3 design units)', async () => {
-    config.set({ dashboards: [], layout: { schemaVersion: 3, dashboards: [{
+    config.set({ schemaVersion: 3, dashboards: [{
       ...home(), tabs: [home().tabs[0], { id: 'tf', name: 'F', layout: 'free', designWidth: 960, root: { columns: 120, children: [] } }]
-    }] } } as unknown as Config);
+    }] } as unknown as Config);
     begin('d');
     toggleNode('f1', false);
     copySelection();

@@ -2,7 +2,7 @@
   import Icon from '@iconify/svelte';
   import Modal from '$lib/components/shared/Modal.svelte';
   import { exportConfig } from '$lib/utils/api';
-  import { config } from '$lib/stores/config';
+  import { dashboards } from '$lib/stores/config';
   import { toast } from '$lib/stores/toast';
 
   interface Props {
@@ -12,11 +12,8 @@
   let { onClose }: Props = $props();
   let exporting = $state(false);
   let exportingId = $state<string | null>(null);
-  // Every dashboard the server exports: legacy ones, then v3-only (view-only) ones.
-  const allDashboards = $derived([
-    ...($config?.dashboards ?? []).map((d) => ({ id: d.id, name: d.name, path: d.path, viewOnly: false })),
-    ...($config?.v3OnlyDashboards ?? []).map((d) => ({ id: d.id, name: d.name, path: d.path, viewOnly: true }))
-  ]);
+  // Every dashboard the server exports, in display order.
+  const allDashboards = $derived($dashboards);
 
   async function handleExportAll() {
     exporting = true;
@@ -71,7 +68,7 @@
 
   <div class="export-section">
     <h3>Export All Dashboards</h3>
-    <p class="section-description">Download your complete configuration including all dashboards, tabs, groups, and tiles.</p>
+    <p class="section-description">Download your complete configuration including all dashboards, tabs, folders and tiles.</p>
     <button class="btn-primary" onclick={handleExportAll} disabled={exporting}>
       {#if exporting}
         <Icon icon="mdi:loading" width="20" class="spin" />
@@ -93,9 +90,6 @@
             <div class="dashboard-info">
               <span class="dashboard-name">{dashboard.name}</span>
               <span class="dashboard-path">{dashboard.path}</span>
-              {#if dashboard.viewOnly}
-                <span class="dashboard-badge">View-only (v3)</span>
-              {/if}
             </div>
             <button
               class="btn-secondary btn-sm"
@@ -184,11 +178,6 @@
     font-size: 0.75rem;
     color: var(--accent);
     font-family: monospace;
-  }
-
-  .dashboard-badge {
-    font-size: 0.7rem;
-    color: var(--text-secondary);
   }
 
   .info-box {
