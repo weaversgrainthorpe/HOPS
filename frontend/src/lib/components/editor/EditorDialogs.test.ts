@@ -140,24 +140,24 @@ describe('EditorDialogs (the dialogs edit the draft only)', () => {
 
   it('Move/Copy dialog: move to another tab and copy into a folder (same dashboard, draft only)', async () => {
     await show({ kind: 'movecopy', ids: ['a'] });
-    const target = screen.getByLabelText('Destination') as HTMLSelectElement;
     // The item's own container is listed but cannot be chosen for a move.
-    await fireEvent.change(target, { target: { value: 'tab:t2' } });
+    await fireEvent.click(screen.getByRole('treeitem', { name: /^Free/ }));
     await fireEvent.click(screen.getByRole('button', { name: /^Move$/ }));
     expect(draft().tabs[1].root.children.map((n) => n.id)).toContain('a');
     expect(fetchSpy).not.toHaveBeenCalled();
     editorDialog.set({ kind: 'movecopy', ids: ['a'] });
     await tick();
-    await fireEvent.change(screen.getByLabelText('Destination'), { target: { value: 'folder:f1' } });
+    await fireEvent.keyDown(screen.getByRole('treeitem', { name: /^Main/ }), { key: 'ArrowRight' });
+    await fireEvent.click(screen.getByRole('treeitem', { name: /^F1/ }));
     await fireEvent.click(screen.getByRole('button', { name: /^Copy$/ }));
     expect((nodeIn(draft(), 'f1') as FolderNode).content.children).toHaveLength(2);
   });
 
   it('Move/Copy dialog disables a folder as a destination for itself and its descendants', async () => {
     await show({ kind: 'movecopy', ids: ['f1'] });
-    const opt = (v: string) => screen.getByLabelText('Destination').querySelector(`option[value="${v}"]`) as HTMLOptionElement;
-    expect(opt('folder:f1').disabled).toBe(true);
-    expect(opt('folder:c1').disabled).toBe(false);
+    await fireEvent.keyDown(screen.getByRole('treeitem', { name: /^Main/ }), { key: 'ArrowRight' });
+    expect(screen.getByRole('treeitem', { name: /^F1/ })).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByRole('treeitem', { name: /^C1/ })).not.toHaveAttribute('aria-disabled');
   });
 
   it('the item menu is rendered from the menu request', async () => {
