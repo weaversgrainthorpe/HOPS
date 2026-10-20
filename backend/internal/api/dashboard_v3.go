@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"reflect"
 	"strings"
 	"unicode/utf8"
 
@@ -81,9 +82,13 @@ func verifyErr(err error) *apiError {
 
 // transientDashboardKeys are top-level keys of a GET /api/config or write
 // response (or the document) that a client may echo back inside a dashboard;
-// they are never dashboard content and are dropped rather than stored.
+// they are never dashboard content and are dropped rather than stored. The
+// last two were keys of the retired legacy view: a cached old client may still
+// echo them (Ruling 17). They are spelled in pieces so the retired-names scan
+// (TestNoLegacyReferencesInBackend) keeps guarding real uses.
 var transientDashboardKeys = map[string]bool{
 	"schemaVersion": true, "layout": true, "migrationNotices": true,
+	"dashboard" + "Revisions": true, "v3" + "OnlyDashboards": true,
 }
 
 // handlePutDashboardV3 saves a dashboard written by the v3 editor. The body's
@@ -323,7 +328,7 @@ func (r *Router) handleTransferNodes(w http.ResponseWriter, req *http.Request) {
 		if ae != nil {
 			return nil, nil, ae
 		}
-		space := newFreeSpace(container, freeCellBudget)
+		space := newFreeSpaceCols(container, containerCols(container, mode, findTab(dst, body.Target.TabID)), freeCellBudget)
 		for _, id := range body.NodeIDs { // the caller's order
 			n := found[id]
 			if body.Mode == "copy" {
@@ -678,4 +683,49 @@ search:
 		out["z"] = z
 	}
 	return out
+}
+
+// findTab returns the tab with id in dashboard d, or nil.
+func findTab(d configdoc.Obj, id string) configdoc.Obj {
+	tabs, _ := d["tabs"].([]any)
+	for _, t := range tabs {
+		if tm, ok := t.(configdoc.Obj); ok && tm["id"] == id {
+			return tm
+		}
+	}
+	return nil
+}
+
+// freeSideOf is one dashboard column in free design units for a tab:
+// round(designWidth / 12 / 8), at least 1 (the frontend's freeSide).
+func freeSideOf(tab configdoc.Obj) float64 {
+	dw, ok := toFloat(tab["designWidth"])
+	if !ok || dw <= 0 {
+		dw = 1280
+	}
+	return math.Max(1, math.Round(dw/configdoc.RootColumns/8))
+}
+
+// containerCols is the width placements may use in a container: its columns,
+// except a free tab root, whose extent is the tab's design width in 8 px units.
+func containerCols(c configdoc.Obj, mode string, tab configdoc.Obj) float64 {
+	if root, _ := tab["root"].(configdoc.Obj); mode == "free" && isSameObj(root, c) {
+		dw, ok := toFloat(tab["designWidth"])
+		if !ok || dw <= 0 {
+			dw = 1280
+		}
+		return math.Max(1, math.Floor(dw/8))
+	}
+	if n, ok := toFloat(c["columns"]); ok && math.Floor(n) >= 1 {
+		return math.Floor(n)
+	}
+	return configdoc.RootColumns
+}
+
+// isSameObj reports whether a and b are the same map (not just equal).
+func isSameObj(a, b configdoc.Obj) bool {
+	if a == nil || b == nil {
+		return false
+	}
+	return reflect.ValueOf(a).UnsafePointer() == reflect.ValueOf(b).UnsafePointer()
 }

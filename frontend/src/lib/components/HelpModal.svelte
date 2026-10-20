@@ -65,19 +65,19 @@
               <div class="keys">
                 <kbd>Ctrl</kbd> + <kbd>C</kbd>
               </div>
-              <div class="desc">Copy selected tile</div>
+              <div class="desc">Copy the selected tiles and folders</div>
             </div>
             <div class="shortcut">
               <div class="keys">
                 <kbd>Ctrl</kbd> + <kbd>V</kbd>
               </div>
-              <div class="desc">Paste tile into focused group</div>
+              <div class="desc">Paste into the open folder (or the tab)</div>
             </div>
             <div class="shortcut">
               <div class="keys">
                 <kbd>Ctrl</kbd> + <kbd>X</kbd>
               </div>
-              <div class="desc">Cut selected tile</div>
+              <div class="desc">Cut the selected tiles and folders</div>
             </div>
             <div class="shortcut">
               <div class="keys">
@@ -104,14 +104,14 @@
               <Icon icon="mdi:drag" width="24" />
               <div>
                 <strong>Drag & Drop</strong>
-                <p>Drag tiles between groups, reorder tabs, and reorganize your dashboard.</p>
+                <p>Drag tiles and folders anywhere (into folders, onto other tabs), reorder tabs, and reorganize your dashboard.</p>
               </div>
             </div>
             <div class="feature">
               <Icon icon="mdi:plus-circle" width="24" />
               <div>
                 <strong>Add Items</strong>
-                <p>Click + buttons to add new tabs, groups, or tiles.</p>
+                <p>Use the toolbar or right-click to add new tabs, folders, or tiles.</p>
               </div>
             </div>
             <div class="feature">
@@ -125,14 +125,14 @@
               <Icon icon="mdi:trash-can" width="24" />
               <div>
                 <strong>Delete Items</strong>
-                <p>Click the trash icon to remove tabs, groups, or tiles.</p>
+                <p>Delete tabs, folders, or tiles from their menu (right-click) or with the Delete key.</p>
               </div>
             </div>
             <div class="feature">
               <Icon icon="mdi:content-copy" width="24" />
               <div>
                 <strong>Copy/Paste Tiles</strong>
-                <p>Select a tile and use Ctrl+C/V to duplicate it across groups.</p>
+                <p>Select tiles or folders and use Ctrl+C/V to copy them into another folder, tab or dashboard.</p>
               </div>
             </div>
           </div>
@@ -146,14 +146,14 @@
               <Icon icon="mdi:palette" width="24" />
               <div>
                 <strong>Colors</strong>
-                <p>Set custom colors for tabs, groups, and tiles.</p>
+                <p>Set custom colors for tabs, folders, and tiles.</p>
               </div>
             </div>
             <div class="feature">
               <Icon icon="mdi:opacity" width="24" />
               <div>
                 <strong>Opacity</strong>
-                <p>Adjust transparency of tabs, groups, and tiles.</p>
+                <p>Adjust transparency of tabs, folders, and tiles.</p>
               </div>
             </div>
             <div class="feature">

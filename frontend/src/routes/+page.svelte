@@ -42,7 +42,7 @@
   async function handleFactoryReset() {
     const confirmed = await confirm({
       title: 'Factory Reset',
-      message: 'This will permanently delete all dashboards, tabs, groups, and entries, resetting everything to defaults. A backup will be created automatically. This action cannot be undone.',
+      message: 'This will permanently delete all dashboards, tabs, folders and tiles, resetting everything to defaults. A backup will be created automatically. This action cannot be undone.',
       confirmText: 'Reset Everything',
       confirmStyle: 'danger',
     });

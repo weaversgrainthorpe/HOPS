@@ -8,10 +8,10 @@ import (
 	"math"
 	"net"
 	"net/http"
-	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"database/sql"
 
@@ -601,51 +601,6 @@ func promoteInto(stored configdoc.Obj, t *promoteTarget, results []*discovery.Re
 	return stored, resp, nil
 }
 
-// findTab returns the tab with id in dashboard d, or nil.
-func findTab(d configdoc.Obj, id string) configdoc.Obj {
-	tabs, _ := d["tabs"].([]any)
-	for _, t := range tabs {
-		if tm, ok := t.(configdoc.Obj); ok && tm["id"] == id {
-			return tm
-		}
-	}
-	return nil
-}
-
-// freeSideOf is one dashboard column in free design units for a tab:
-// round(designWidth / 12 / 8), at least 1 (the frontend's freeSide).
-func freeSideOf(tab configdoc.Obj) float64 {
-	dw, ok := toFloat(tab["designWidth"])
-	if !ok || dw <= 0 {
-		dw = 1280
-	}
-	return math.Max(1, math.Round(dw/configdoc.RootColumns/8))
-}
-
-// containerCols is the width placements may use in a container: its columns,
-// except a free tab root, whose extent is the tab's design width in 8 px units.
-func containerCols(c configdoc.Obj, mode string, tab configdoc.Obj) float64 {
-	if root, _ := tab["root"].(configdoc.Obj); mode == "free" && isSameObj(root, c) {
-		dw, ok := toFloat(tab["designWidth"])
-		if !ok || dw <= 0 {
-			dw = 1280
-		}
-		return math.Max(1, math.Floor(dw/8))
-	}
-	if n, ok := toFloat(c["columns"]); ok && math.Floor(n) >= 1 {
-		return math.Floor(n)
-	}
-	return configdoc.RootColumns
-}
-
-// isSameObj reports whether a and b are the same map (not just equal).
-func isSameObj(a, b configdoc.Obj) bool {
-	if a == nil || b == nil {
-		return false
-	}
-	return reflect.ValueOf(a).UnsafePointer() == reflect.ValueOf(b).UnsafePointer()
-}
-
 // rootFolderNamed finds a folder among the root's direct children whose name
 // matches (case-insensitive, trimmed), or nil.
 func rootFolderNamed(root configdoc.Obj, name string) configdoc.Obj {
@@ -707,7 +662,9 @@ func newCategoryFolder(info discovery.CategoryInfo, rootMode string, side float6
 	rows := math.Ceil(float64(len(results)) / promoteFolderColumns)
 	w, h := float64(promoteFolderColumns), rows+1 // +1: the title row
 	if rootMode == "free" {
-		w, h = w*side, h*side
+		// One dashboard column (side units) per grid cell, plus the title.
+		w = w * side
+		h, _ = folderNeed(rootMode, "grid", rows, side)
 	}
 	return configdoc.Obj{
 		"id": id, "kind": "folder", "name": info.DisplayName, "icon": info.Icon,
@@ -771,9 +728,6 @@ func fitFolderChain(dash configdoc.Obj, tabID, folderID string, side float64) st
 		name, _ := lv.folder["name"].(string)
 		p, _ := lv.folder["placement"].(configdoc.Obj)
 		_, y, _, h, ok := rect(p)
-		if lv.parentMode != lv.mode || !ok {
-			return fmt.Sprintf("Folder %q may need resizing to show all its tiles.", name)
-		}
 		content, _ := lv.folder["content"].(configdoc.Obj)
 		bottom := 0.0
 		kids, _ := content["children"].([]any)
@@ -783,11 +737,10 @@ func fitFolderChain(dash configdoc.Obj, tabID, folderID string, side float64) st
 				bottom = math.Max(bottom, ky+kh)
 			}
 		}
-		title := 1.0 // one row (grid) or one dashboard column (free) for the title bar
-		if lv.mode == "free" {
-			title = side
+		need, sizeable := folderNeed(lv.parentMode, lv.mode, bottom, side)
+		if !ok || !sizeable {
+			return fmt.Sprintf("Folder %q may need resizing to show all its tiles.", name)
 		}
-		need := bottom + title
 		if need <= h {
 			continue
 		}
@@ -811,10 +764,31 @@ func fitFolderChain(dash configdoc.Obj, tabID, folderID string, side float64) st
 	return ""
 }
 
+// freeTitleUnits is a folder's title bar in free design units (8 px each),
+// the convention mergeIntoNewFolder uses (40 px title + body padding).
+const freeTitleUnits = 8
+
+// folderNeed is the height a folder needs in its parent's units for content
+// reaching down to `bottom` (in the content's units): grid in grid = rows + a
+// title row; free in free = units + an 8-unit title; grid in free = one
+// dashboard column (side units) per row + the title. Free content in a grid
+// parent can't be sized here (a grid row's height depends on the viewport).
+func folderNeed(parentMode, mode string, bottom, side float64) (float64, bool) {
+	switch {
+	case parentMode == "grid" && mode == "grid":
+		return bottom + 1, true
+	case parentMode == "free" && mode == "free":
+		return bottom + freeTitleUnits, true
+	case parentMode == "free" && mode == "grid":
+		return bottom*side + freeTitleUnits, true
+	}
+	return 0, false
+}
+
 // validatePromoteTarget enforces the "exactly one of ID-or-new" rule for
-// dashboard and tab, plus the cascading rule (new dashboard ⇒ new tab).
-// Groups are derived from result categories at promote time, so this
-// function doesn't validate them.
+// dashboard and tab, plus the cascading rule (new dashboard ⇒ new tab), and
+// bounds new names like POST /api/dashboards. Folders come from result
+// categories (or the picked folder) at promote time.
 func validatePromoteTarget(t *promoteTarget) error {
 	dashNew := t.NewDashboard != nil
 	tabNew := t.NewTab != nil
@@ -829,6 +803,12 @@ func validatePromoteTarget(t *promoteTarget) error {
 	}
 	if tabNew && strings.TrimSpace(t.NewTab.Name) == "" {
 		return errors.New("newTab.name is required")
+	}
+	if dashNew && utf8.RuneCountInString(strings.TrimSpace(t.NewDashboard.Name)) > maxDashboardNameRunes {
+		return fmt.Errorf("dashboard name is longer than %d characters", maxDashboardNameRunes)
+	}
+	if tabNew && utf8.RuneCountInString(strings.TrimSpace(t.NewTab.Name)) > maxDashboardNameRunes {
+		return fmt.Errorf("tab name is longer than %d characters", maxDashboardNameRunes)
 	}
 
 	if !dashNew && t.DashboardID == "" {

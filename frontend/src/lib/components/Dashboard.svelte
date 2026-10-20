@@ -713,7 +713,7 @@
   }
 
   /* Optional coloured backing behind the tab icon. Same pattern as
-     tile / group — invisible until iconBgColor is set. */
+     tile / folder — invisible until iconBgColor is set. */
   .tab-icon-backing {
     display: inline-flex;
     align-items: center;
@@ -828,8 +828,7 @@
 
   /* Party mode wiggle effect */
   .dashboard.party-mode :global(.entry),
-  .dashboard.party-mode :global(.tab),
-  .dashboard.party-mode :global(.group-header) {
+  .dashboard.party-mode :global(.tab) {
     animation: party-wiggle 0.3s ease-in-out infinite alternate;
   }
 

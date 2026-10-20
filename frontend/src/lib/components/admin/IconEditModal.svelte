@@ -118,7 +118,7 @@
   <div class="body">
     {#if iconUrl}
       <!-- Custom uploaded icon — preview reflects the chosen icon
-           background so the user sees what the rendered tile/group/tab
+           background so the user sees what the rendered tile/folder/tab
            will look like. -->
       <div class="custom-icon-display">
         <span class="custom-icon-backing"
@@ -235,7 +235,7 @@
   }
 
   /* Wrapper that takes on the iconBgColor when one is set, so the
-     preview in this modal looks like the rendered tile/group/tab. */
+     preview in this modal looks like the rendered tile/folder/tab. */
   .custom-icon-backing {
     display: inline-flex;
     align-items: center;
