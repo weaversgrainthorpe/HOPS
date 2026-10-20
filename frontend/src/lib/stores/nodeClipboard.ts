@@ -2,13 +2,11 @@ import { writable, get, type Readable } from 'svelte/store';
 import type { LayoutNode } from '$lib/types/layout';
 import type { ContainerRef } from '$lib/editor/treeOps';
 import { adaptNode, deleteNodes, locate, moveNodes, originOf, pasteSnapshot, type NodeOrigin } from '$lib/editor/treeOps';
-import { apply, session, dirty, rebaseCleanSession } from './editSession';
-import { layoutDoc, findLayoutDashboard, applySavedLayout } from './config';
+import { apply, session, dirty } from './editSession';
+import { layoutDoc, findLayoutDashboard } from './config';
 import { selectedNodes, clearSelection, toggleNode } from './nodeSelection';
 import { toast } from './toast';
-import { transferNodes, ConflictError } from '$lib/utils/api';
-import { logError } from '$lib/utils/errors';
-import { adaptedFor, documentIds, findIn, placementsFor, plain, type Cell } from '$lib/editor/editorActions';
+import { adaptedFor, documentIds, transferAndRebase, findIn, placementsFor, plain, type Cell } from '$lib/editor/editorActions';
 
 // Edit-mode clipboard for tiles and folders (Ctrl+C / Ctrl+X / Ctrl+V and the
 // item menu). Held in memory only. Copy keeps a snapshot of the nodes; the
@@ -137,8 +135,8 @@ async function pasteAcross(clip: NodeClipboard, ids: string[], to: ContainerRef)
     toast.error("The dashboard these items came from is no longer available, so they can't be pasted.");
     return false;
   }
-  try {
-    const resp = await transferNodes({
+  const ok = await transferAndRebase(
+    {
       mode: clip.mode === 'copy' ? 'copy' : 'move',
       sourceId: clip.sourceDashboardId,
       sourceRevision: source.revision,
@@ -146,26 +144,10 @@ async function pasteAcross(clip: NodeClipboard, ids: string[], to: ContainerRef)
       targetId: s.dashboardId,
       targetRevision: s.baseRevision,
       target: to.folderId ? { tabId: to.tabId, folderId: to.folderId } : { tabId: to.tabId }
-    });
-    applySavedLayout(resp);
-    if (!rebaseCleanSession(resp.layout)) {
-      // No fresh layout came back (or edits arrived meanwhile): the layout is
-      // marked stale and reloading; say so rather than show the old draft as current.
-      toast.warning('Pasted and saved, but the editor could not refresh. Leave edit mode and reload to see it.');
-    } else {
-      toast.success(
-        `${clip.mode === 'copy' ? 'Copied' : 'Moved'} ${ids.length === 1 ? '1 item' : `${ids.length} items`} from another dashboard and saved`
-      );
-    }
-    if (clip.mode === 'cut') state.set(null);
-    return true;
-  } catch (e) {
-    logError('Paste from another dashboard', e);
-    if (e instanceof ConflictError) {
-      toast.error('Not pasted — one of the dashboards was changed somewhere else. Reload and try again.');
-    } else {
-      toast.error(e instanceof Error && e.message ? `Paste failed: ${e.message}` : 'Paste failed.');
-    }
-    return false;
-  }
+    },
+    `${clip.mode === 'copy' ? 'Copied' : 'Moved'} ${ids.length === 1 ? '1 item' : `${ids.length} items`} from another dashboard and saved`,
+    'Paste failed'
+  );
+  if (ok && clip.mode === 'cut') state.set(null);
+  return ok;
 }

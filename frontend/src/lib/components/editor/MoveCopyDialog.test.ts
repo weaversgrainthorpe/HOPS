@@ -122,17 +122,44 @@ describe('MoveCopyDialog tree picker', () => {
     expect(item(/^C1/)).not.toHaveAttribute('aria-disabled');
   });
 
-  it('a 409 raises the conflict banner state and a toast; the draft is untouched', async () => {
-    vi.mocked(api.transferNodes).mockRejectedValue(new api.ConflictError('o', 9));
-    const err = vi.spyOn(toast, 'error');
+  it('a 409 for the session dashboard raises the conflict banner state', async () => {
+    vi.mocked(api.transferNodes).mockRejectedValue(new api.ConflictError('d1', 9));
     render(MoveCopyDialog, { ids: ['a'], onClose });
     await expand(/^Other/);
     await fireEvent.click(item(/^OT/));
     await fireEvent.click(screen.getByRole('button', { name: /^Move$/ }));
     await waitFor(() => expect(get(sessionConflict)).toEqual({ dashboardId: 'd1', currentRevision: 9 }));
-    expect(err).toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
     expect(nodeIn(draft(), 'a')).toBeTruthy();
+  });
+
+  it('a 409 for the target dashboard toasts by name, reloads the layout, and raises no banner', async () => {
+    vi.mocked(api.transferNodes).mockRejectedValue(new api.ConflictError('o', 9));
+    vi.mocked(api.getConfig).mockClear();
+    const err = vi.spyOn(toast, 'error');
+    render(MoveCopyDialog, { ids: ['a'], onClose });
+    await expand(/^Other/);
+    await fireEvent.click(item(/^OT/));
+    await fireEvent.click(screen.getByRole('button', { name: /^Move$/ }));
+    await waitFor(() => expect(err).toHaveBeenCalledWith(expect.stringContaining('\u2018Other\u2019 was changed somewhere else')));
+    expect(get(sessionConflict)).toBeNull();
+    await waitFor(() => expect(api.getConfig).toHaveBeenCalled());
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('a chosen destination that vanishes from the layout is cleared with a visible notice', async () => {
+    render(MoveCopyDialog, { ids: ['a'], onClose });
+    await expand(/^Other/);
+    await fireEvent.click(item(/^OT/));
+    expect(screen.getByRole('button', { name: /^Copy$/ })).toBeEnabled();
+    setLayout([deepHome(), { ...other(), tabs: [] }]);
+    await waitFor(() => expect(screen.getByText(/That destination no longer exists/)).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: /^Copy$/ })).toBeDisabled();
+  });
+
+  it('dashboard rows are never selectable (aria-disabled)', () => {
+    render(MoveCopyDialog, { ids: ['a'], onClose });
+    expect(item(/^Home/)).toHaveAttribute('aria-disabled', 'true');
   });
 
   it('another failure is toasted visibly and the dialog stays open', async () => {

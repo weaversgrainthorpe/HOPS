@@ -11,7 +11,7 @@ vi.mock('$lib/utils/api', async () => ({
 import * as api from '$lib/utils/api';
 import { config } from './config';
 import { toast } from './toast';
-import { begin, apply, session, dirty, resetEditSessionForTests } from './editSession';
+import { begin, apply, session, dirty, sessionConflict, resetEditSessionForTests } from './editSession';
 import { toggleNode, clearSelection, selectedNodes } from './nodeSelection';
 import { nodeClipboard, copySelection, cutSelection, pasteInto, clearNodeClipboard } from './nodeClipboard';
 import { updateNode, deleteNodes } from '$lib/editor/treeOps';
@@ -238,6 +238,34 @@ describe('across dashboards', () => {
     expect(err).toHaveBeenCalledWith(expect.stringContaining('Dashboard not found: o'));
     expect(draft()).toBe(before);
     expect(get(nodeClipboard)).not.toBeNull();
+  });
+});
+
+describe('paste across dashboards: conflict reporting (shared transfer path)', () => {
+  function copyFromOther2() {
+    begin('o');
+    toggleNode('o1', false);
+    copySelection();
+    resetEditSessionForTests();
+    begin('d');
+  }
+
+  it('a 409 for the session dashboard raises the banner state', async () => {
+    copyFromOther2();
+    vi.mocked(api.transferNodes).mockRejectedValue(new api.ConflictError('d', 12));
+    expect(await pasteInto({ tabId: 't1' })).toBe(false);
+    expect(get(sessionConflict)).toEqual({ dashboardId: 'd', currentRevision: 12 });
+  });
+
+  it('a 409 for the other dashboard toasts by name and reloads the layout, with no banner', async () => {
+    copyFromOther2();
+    vi.mocked(api.transferNodes).mockRejectedValue(new api.ConflictError('o', 12));
+    vi.mocked(api.getConfig).mockClear();
+    const err = vi.spyOn(toast, 'error');
+    expect(await pasteInto({ tabId: 't1' })).toBe(false);
+    expect(get(sessionConflict)).toBeNull();
+    expect(err).toHaveBeenCalledWith(expect.stringContaining('was changed somewhere else — nothing was moved'));
+    expect(api.getConfig).toHaveBeenCalled();
   });
 });
 

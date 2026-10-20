@@ -8,13 +8,11 @@
   import Icon from '@iconify/svelte';
   import Modal from '../shared/Modal.svelte';
   import { isDescendant } from '$lib/editor/treeOps';
-  import { containerOfNode, moveOrCopyTo } from '$lib/editor/editorActions';
-  import { session, dirty, rebaseCleanSession, sessionConflict } from '$lib/stores/editSession';
-  import { layoutDoc, findLayoutDashboard, applySavedLayout } from '$lib/stores/config';
+  import { containerOfNode, moveOrCopyTo, transferAndRebase } from '$lib/editor/editorActions';
+  import { session, dirty } from '$lib/stores/editSession';
+  import { layoutDoc, findLayoutDashboard } from '$lib/stores/config';
   import { toast } from '$lib/stores/toast';
-  import { transferNodes, ConflictError } from '$lib/utils/api';
-  import { logError } from '$lib/utils/errors';
-  import type { Container, LayoutDashboard, LayoutNode } from '$lib/types/layout';
+    import type { Container, LayoutDashboard, LayoutNode } from '$lib/types/layout';
 
   interface Props {
     ids: string[];
@@ -140,6 +138,25 @@
   let focusKey = $state('');
   let busy = $state(false);
   const dest = $derived(rows.find((r) => r.key === chosen && r.selectable));
+  let gone = $state(false);
+  // A chosen row can vanish when the layout refreshes under the dialog (e.g. after a
+  // conflict reload). Only a row that is truly missing from the data counts, not one
+  // hidden by a collapsed parent, so check the data, not the visible rows.
+  function exists(key: string): boolean {
+    const [kind, did, id] = key.split(':');
+    const d = dashboards.find((x) => x.id === did);
+    if (!d) return false;
+    if (kind === 't') return d.tabs.some((t) => t.id === id);
+    const find = (c: Container): boolean =>
+      (Array.isArray(c.children) ? c.children : []).some((n) => n.kind === 'folder' && (n.id === id || find(n.content)));
+    return d.tabs.some((t) => find(t.root));
+  }
+  $effect(() => {
+    if (chosen && !exists(chosen)) {
+      chosen = '';
+      gone = true;
+    }
+  });
   const count = $derived(ids.length === 1 ? 'this item' : `these ${ids.length} items`);
   const tabbable = $derived(rows.some((r) => r.key === focusKey) ? focusKey : (rows[0]?.key ?? ''));
 
@@ -171,7 +188,7 @@
         break;
       case 'Enter':
       case ' ':
-        if (r.selectable) chosen = r.key;
+        if (r.selectable) { chosen = r.key; gone = false; }
         else if (r.expandable) toggle(r);
         break;
       default: handled = false;
@@ -182,9 +199,9 @@
   async function go(mode: 'move' | 'copy') {
     const r = dest;
     const s = $session;
-    if (!r || !s || busy || !r.tabId) return;
+    if (!r || !s || busy) return;
     if (r.dashboardId === s.dashboardId) {
-      if (moveOrCopyTo(ids, r.tabId && r.folderId ? { tabId: r.tabId, folderId: r.folderId } : { tabId: r.tabId }, mode)) onClose();
+      if (moveOrCopyTo(ids, r.folderId ? { tabId: r.tabId!, folderId: r.folderId } : { tabId: r.tabId! }, mode)) onClose();
       return;
     }
     if ($dirty) {
@@ -198,30 +215,20 @@
     }
     busy = true;
     try {
-      const resp = await transferNodes({
-        mode,
-        sourceId: s.dashboardId,
-        sourceRevision: s.baseRevision,
-        nodeIds: ids,
-        targetId: r.dashboardId,
-        targetRevision: target.revision,
-        target: r.folderId ? { tabId: r.tabId, folderId: r.folderId } : { tabId: r.tabId }
-      });
-      applySavedLayout(resp);
-      if (!rebaseCleanSession(resp.layout)) {
-        toast.warning('Saved, but the editor could not refresh. Leave edit mode and reload to see it.');
-      } else {
-        toast.success(`${mode === 'copy' ? 'Copied' : 'Moved'} ${ids.length === 1 ? '1 item' : `${ids.length} items`} to "${target.name}" and saved`);
-      }
-      onClose();
-    } catch (e) {
-      logError('Move/copy to another dashboard', e);
-      if (e instanceof ConflictError) {
-        sessionConflict.set({ dashboardId: s.dashboardId, currentRevision: e.currentRevision });
-        toast.error('Not moved — one of the dashboards was changed somewhere else.');
-      } else {
-        toast.error(e instanceof Error && e.message ? `Failed: ${e.message}` : 'The transfer failed.');
-      }
+      const ok = await transferAndRebase(
+        {
+          mode,
+          sourceId: s.dashboardId,
+          sourceRevision: s.baseRevision,
+          nodeIds: ids,
+          targetId: r.dashboardId,
+          targetRevision: target.revision,
+          target: r.folderId ? { tabId: r.tabId!, folderId: r.folderId } : { tabId: r.tabId! }
+        },
+        `${mode === 'copy' ? 'Copied' : 'Moved'} ${ids.length === 1 ? '1 item' : `${ids.length} items`} to "${target.name}" and saved`,
+        'Move/copy failed'
+      );
+      if (ok) onClose();
     } finally {
       busy = false;
     }
@@ -242,7 +249,7 @@
           aria-level={r.level}
           aria-expanded={r.expandable ? r.expanded : undefined}
           aria-selected={r.selectable ? chosen === r.key : undefined}
-          aria-disabled={r.kind !== 'dashboard' && !r.selectable ? 'true' : undefined}
+          aria-disabled={!r.selectable ? 'true' : undefined}
           tabindex={r.key === tabbable ? 0 : -1}
           class="row"
           class:sel={chosen === r.key}
@@ -253,7 +260,7 @@
           onclick={(e) => {
             if (e.target !== e.currentTarget && !(e.target as HTMLElement).closest('.name')) return;
             focusKey = r.key;
-            if (r.selectable) chosen = r.key;
+            if (r.selectable) { chosen = r.key; gone = false; }
             else toggle(r);
           }}
         >
@@ -270,6 +277,9 @@
         </li>
       {/each}
     </ul>
+    {#if gone}
+      <p class="why" role="status">That destination no longer exists. Choose another.</p>
+    {/if}
     {#if dest?.noMove}
       <p class="why" role="status">{dest.noMove}: choose Copy, or another destination to move.</p>
     {/if}

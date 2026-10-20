@@ -18,8 +18,10 @@ import type {
   Container, FolderNode, LayoutDashboard, LayoutMode, LayoutNode, LayoutTab, Placement, TileNode
 } from '$lib/types/layout';
 import type { Background, HeaderConfig } from '$lib/types';
-import { layoutDoc } from '$lib/stores/config';
-import { apply, session } from '$lib/stores/editSession';
+import { layoutDoc, findLayoutDashboard, applySavedLayout, loadConfig } from '$lib/stores/config';
+import { apply, session, rebaseCleanSession, sessionConflict } from '$lib/stores/editSession';
+import { transferNodes, ConflictError, type TransferRequest } from '$lib/utils/api';
+import { logError } from '$lib/utils/errors';
 import { confirm } from '$lib/stores/confirmModal';
 import { toast } from '$lib/stores/toast';
 import { clearSelection, toggleNode } from '$lib/stores/nodeSelection';
@@ -427,4 +429,46 @@ export function setBackground(background: Background | undefined): boolean {
 
 export function setPerTabBackgrounds(enabled: boolean): boolean {
   return apply('Per-tab backgrounds', (dd) => (dd.perTabBackgrounds === enabled ? dd : { ...dd, perTabBackgrounds: enabled }));
+}
+
+// ---------------------------------------------------------------- cross-dashboard transfer
+
+/**
+ * THE one path for a cross-dashboard move/copy (item-menu paste and the
+ * Move/Copy dialog): transfer endpoint, then refresh the layout and rebase the
+ * clean session. Returns true when the server did it. Failures are always
+ * visible: a 409 for the session's own dashboard raises the conflict banner; a
+ * 409 for the other dashboard toasts, and the layout is reloaded so pickers
+ * show fresh data (nothing was changed); anything else is toasted.
+ * `success` is the toast after a refreshed rebase; `failure` prefixes other errors.
+ */
+export async function transferAndRebase(req: TransferRequest, success: string, failure: string): Promise<boolean> {
+  const sessionId = get(session)?.dashboardId ?? '';
+  try {
+    const resp = await transferNodes(req);
+    applySavedLayout(resp);
+    if (!rebaseCleanSession(resp.layout)) {
+      // No fresh layout came back (or edits arrived meanwhile): the layout is
+      // marked stale and reloading; say so rather than show the old draft as current.
+      toast.warning('Saved, but the editor could not refresh. Leave edit mode and reload to see it.');
+    } else {
+      toast.success(success);
+    }
+    return true;
+  } catch (e) {
+    logError(failure, e);
+    if (e instanceof ConflictError) {
+      if (e.dashboardId && e.dashboardId === sessionId) {
+        sessionConflict.set({ dashboardId: sessionId, currentRevision: e.currentRevision });
+        toast.error('Not saved — this dashboard was changed somewhere else.');
+      } else {
+        const other = e.dashboardId ? findLayoutDashboard(e.dashboardId, get(layoutDoc)) : undefined;
+        toast.error(`\u2018${other?.name || 'The other dashboard'}\u2019 was changed somewhere else — nothing was moved; try again.`);
+        void loadConfig({ background: true });
+      }
+    } else {
+      toast.error(e instanceof Error && e.message ? `${failure}: ${e.message}` : `${failure}.`);
+    }
+    return false;
+  }
 }
