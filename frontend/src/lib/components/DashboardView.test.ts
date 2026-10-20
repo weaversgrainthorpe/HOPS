@@ -226,7 +226,8 @@ describe('route resolution and reveal lifetime', () => {
     await tick();
     // The reload lands with the tabs reordered (the active tab moved index).
     const reordered: DashboardT = { ...legacy, revision: 2, tabs: [legacy.tabs[1], legacy.tabs[0]] };
-    const next = cfg();
+    // Fresh objects throughout, as a real reload delivers.
+    const next = structuredClone(cfg());
     next.dashboards = [reordered];
     next.dashboardRevisions = { d1: 2 };
     config.set(next);

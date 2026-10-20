@@ -3,7 +3,7 @@ import { render } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import TabCanvas from './TabCanvas.svelte';
 import Entry from '../Entry.svelte';
-import { COMPACT_TILE_PX } from '$lib/layout/geometry';
+import { COMPACT_TILE_PX, containerMetrics, folderInnerMetrics } from '$lib/layout/geometry';
 import type { LayoutDashboard, LayoutTab } from '$lib/types/layout';
 
 // Ruling 22 (I1): inside the layout renderer a tile fills its grid cell exactly
@@ -69,7 +69,9 @@ describe('tiles fit their grid cell (Ruling 22)', () => {
         // Nothing between the tile and the grid track can grow it.
         expect(cell.style.minHeight === '' || cell.style.minHeight === '0px').toBe(true);
         // Compact exactly when the cell is too small for the full tile.
-        const colPx = id.startsWith('r-') ? w / 12 : (6 * (w / 12)) / 6;
+        // Root columns are w/12; a folder's are its content box (minus chrome) / its columns.
+        const rootM = containerMetrics(tab.root, 'grid', w);
+        const colPx = id.startsWith('r-') ? rootM.unitPx : folderInnerMetrics(tab.root.children[4] as any, rootM).unitPx;
         const cellW = colPx * (id === 'r-big' ? 2 : 1);
         const compact = Math.min(cellW, cellH) < COMPACT_TILE_PX;
         expect(btn.classList.contains('compact')).toBe(compact);

@@ -315,6 +315,24 @@ export function overlayBodyPx(innerWidth: number, clientWidth: number): number {
   return Math.max(1, viewportContentPx(innerWidth, clientWidth) - OVERLAY_GUTTER_PX - OVERLAY_PANEL_CHROME_PX);
 }
 
+/**
+ * Sizing of a folder shown in a panel above the canvas (folder overlay; Task 2's
+ * maximised panel). Cells keep the dashboard's size, capped so the content fits
+ * bodyPx (Ruling 23). panelWidthPx = content + the panel's own chrome.
+ */
+export function overlayMetrics(
+  plan: CanvasPlan,
+  tab: LayoutTab,
+  mode: LayoutMode,
+  folder: FolderNode,
+  bodyPx: number
+): { metrics: ContainerMetrics; panelWidthPx: number } {
+  const columns = folderInnerColumns(folder);
+  const unit = overlayUnitPx(plan, tab, mode, columns, bodyPx);
+  const metrics = containerMetrics(folder.content, mode, columns * unit, { folder });
+  return { metrics, panelWidthPx: metrics.innerWidthPx + OVERLAY_PANEL_CHROME_PX };
+}
+
 /** Box width of a tab's root container for a plan (0 when stacked). */
 export function rootBoxWidthPx(plan: CanvasPlan, tab: LayoutTab): number {
   const cols = containerColumns(tab.root);

@@ -161,6 +161,7 @@ describe('loadConfig', () => {
 
 describe('loadConfig while the layout is stale (M3 Task 1)', () => {
   it('reloads in the background: never shows the global loading screen', async () => {
+    config.set(makeConfig()); // a held config (independent of test order)
     configLoading.set(false);
     layoutStale.set(true);
     let resolve!: (c: Config) => void;
@@ -177,6 +178,7 @@ describe('loadConfig while the layout is stale (M3 Task 1)', () => {
   });
 
   it('a first (non-stale) load still shows the loading screen', async () => {
+    config.set(null);
     layoutStale.set(false);
     configLoading.set(false);
     let resolve!: (c: Config) => void;
@@ -189,6 +191,7 @@ describe('loadConfig while the layout is stale (M3 Task 1)', () => {
   });
 
   it('a failed stale reload is still surfaced', async () => {
+    config.set(makeConfig());
     configLoading.set(false);
     layoutStale.set(true);
     vi.mocked(api.getConfig).mockRejectedValue(new Error('down'));

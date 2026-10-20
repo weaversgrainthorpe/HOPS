@@ -2,9 +2,8 @@
   import Icon from '@iconify/svelte';
   import type { Container, FolderNode, LayoutDashboard, LayoutTab } from '$lib/types/layout';
   import type { CanvasPlan } from '$lib/layout/geometry';
-  import {
-    containerMetrics, folderInnerColumns, OVERLAY_PANEL_CHROME_PX, overlayBodyPx, overlayUnitPx, resolveMode
-  } from '$lib/layout/geometry';
+  import { overlayBodyPx, overlayMetrics, resolveMode } from '$lib/layout/geometry';
+  import { layoutStale } from '$lib/stores/config';
   import { focusTrap } from '$lib/utils/focusTrap';
   import { overlayStack, closeTop, closeTo } from '$lib/stores/folderOverlay';
   import { tick } from 'svelte';
@@ -27,11 +26,7 @@
 
   /** Content sizing for one panel (Ruling 23): cells keep the dashboard's size, capped by the viewport. */
   function sizing(chain: FolderNode[]) {
-    const folder = chain[chain.length - 1];
-    const mode = resolveMode(dashboard, tab, chain);
-    const unit = overlayUnitPx(plan, tab, mode, folderInnerColumns(folder), bodyPx);
-    const metrics = containerMetrics(folder.content, mode, folderInnerColumns(folder) * unit, { folder });
-    return { metrics, box: metrics.innerWidthPx };
+    return overlayMetrics(plan, tab, resolveMode(dashboard, tab, chain), chain[chain.length - 1], bodyPx);
   }
 
   /** Outermost-first chain of folders ending at `id`, or null when not in this tab. */
@@ -112,7 +107,7 @@
       aria-modal="true"
       aria-label={folder.name}
       tabindex="-1"
-      style:width={px(size.box + OVERLAY_PANEL_CHROME_PX)}
+      style:width={px(size.panelWidthPx)}
       style:max-width="100%"
       use:inertUnless={isTop}
       use:restoreFocus
@@ -143,15 +138,20 @@
         </button>
       </header>
       <div class="overlay-body">
-        <div class="overlay-content" style:width={px(size.box)}>
-          <ContainerView
-            container={{ columns: size.metrics.columns, children: folder.content?.children }}
-            metrics={size.metrics}
-            {plan}
-            {dashboard}
-            {tab}
-            folderChain={p.chain}
-          />
+        <div class="overlay-content" style:width={px(size.metrics.innerWidthPx)}>
+          {#if $layoutStale}
+            <!-- The held tree is older than the server's: never show it as current. -->
+            <div role="status" class="refreshing">Refreshing layout…</div>
+          {:else}
+            <ContainerView
+              container={{ columns: size.metrics.columns, children: folder.content?.children }}
+              metrics={size.metrics}
+              {plan}
+              {dashboard}
+              {tab}
+              folderChain={p.chain}
+            />
+          {/if}
         </div>
       </div>
     </div>
@@ -227,6 +227,10 @@
     padding: 1rem;
     overflow-y: auto;
     overflow-x: auto;
+  }
+  .refreshing {
+    padding: 1rem;
+    color: var(--text-secondary);
   }
   .overlay-content {
     margin: 0 auto;

@@ -37,9 +37,12 @@
   // the stack is global, and a stale entry would block arrow-key navigation.
   onDestroy(() => closeAll());
 
-  // Switching tab closes every open folder overlay.
+  // Switching tab closes every open folder overlay. Keyed on the id (a derived
+  // only notifies on a changed value), so a reload that hands a fresh tab
+  // object for the SAME tab keeps the overlays open.
+  const tabId = $derived(tab.id);
   $effect(() => {
-    void tab.id;
+    void tabId;
     untrack(() => closeAll());
   });
 

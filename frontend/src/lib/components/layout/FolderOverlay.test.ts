@@ -292,6 +292,35 @@ describe('overlay robustness', () => {
     layoutStale.set(false);
   });
 
+  it('while the layout is stale the panel stays (focus intact) but shows Refreshing, not the old tree', async () => {
+    const { dash, rerender } = await renderTab([folder('f1', 'Box', [tile('a', 'Alpha')])]);
+    try {
+      await fireEvent.click(screen.getByRole('button', { name: /Box/ }));
+      await new Promise((r) => requestAnimationFrame(() => r(null)));
+      const dlg = screen.getByRole('dialog');
+      expect(dlg.querySelector('[data-node-id="a"]')).not.toBeNull();
+      layoutStale.set(true);
+      await tick();
+      expect(screen.getByRole('dialog')).toBe(dlg);
+      expect(dlg.contains(document.activeElement)).toBe(true);
+      expect(dlg.querySelector('[role="status"]')?.textContent).toContain('Refreshing layout');
+      expect(dlg.querySelector('[data-node-id="a"]')).toBeNull();
+      // The reload lands: the panel shows the fresh content.
+      const freshTab: LayoutTab = { ...dash.tabs[0], root: { columns: 12, children: [folder('f1', 'Box', [tile('b', 'Bravo')])] } };
+      const fresh: LayoutDashboard = { ...dash, revision: 2, tabs: [freshTab] };
+      setDoc(fresh);
+      layoutStale.set(false);
+      await rerender({ dashboard: fresh, tab: freshTab });
+      await tick();
+      expect(screen.getByRole('dialog')).toBe(dlg);
+      expect(dlg.querySelector('[role="status"]')).toBeNull();
+      expect(dlg.querySelector('[data-node-id="a"]')).toBeNull();
+      expect(dlg.querySelector('[data-node-id="b"]')).not.toBeNull();
+    } finally {
+      layoutStale.set(false);
+    }
+  });
+
   it('a folder moved to another tab is dropped with the toast', async () => {
     const info = vi.spyOn(toast, 'info');
     const { dash } = await renderTab([folder('f1', 'Box', [tile('a', 'Alpha')])]);

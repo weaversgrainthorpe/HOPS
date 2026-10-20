@@ -4,7 +4,7 @@ import {
 } from './geometry';
 import {
   containerMetrics, nodeBox, folderChrome, folderContentBox, folderInnerMetrics, requiredFolderHeightPx,
-  overlayBodyPx, scrollbarPx, ROOT_COLUMNS
+  overlayBodyPx, scrollbarPx, ROOT_COLUMNS, overlayMetrics, OVERLAY_PANEL_CHROME_PX
 } from './geometry';
 import type { Container } from '../types/layout';
 import type { FolderNode, LayoutDashboard, LayoutNode, LayoutTab, Placement } from '../types/layout';
@@ -265,5 +265,33 @@ describe('overlay viewport width', () => {
   it('an unmeasurable clientWidth (0) means no scrollbar, never a zero-width body', () => {
     expect(scrollbarPx(400, 0)).toBe(0);
     expect(overlayBodyPx(400, 0)).toBe(400 - 32 - 34);
+  });
+});
+
+describe('overlayMetrics (one source for overlay and maximised panels)', () => {
+  const t = tab();
+  const f = ffold({ placement: p(0, 0, 3, 2), content: { columns: 3, children: [] } });
+  it('keeps the dashboard cell when the viewport allows; panel = content + chrome', () => {
+    const o = overlayMetrics({ kind: 'grid', cellPx: 120 }, t, 'grid', f, 2000);
+    expect(o.metrics.columns).toBe(3);
+    expect(o.metrics.unitPx).toBe(120);
+    expect(o.metrics.rowPx).toBe(120);
+    expect(o.metrics.innerWidthPx).toBe(360);
+    expect(o.panelWidthPx).toBe(360 + OVERLAY_PANEL_CHROME_PX);
+  });
+  it('shrinks to the body width when the viewport is narrow', () => {
+    const o = overlayMetrics({ kind: 'grid', cellPx: 120 }, t, 'grid', f, 300);
+    expect(o.metrics.unitPx).toBe(100);
+    expect(o.metrics.innerWidthPx).toBe(300);
+  });
+  it('a bad content.columns falls back to placement.w', () => {
+    const bad = ffold({ placement: p(0, 0, 4, 2), content: { columns: 0, children: [] } });
+    expect(overlayMetrics({ kind: 'grid', cellPx: 120 }, t, 'grid', bad, 2000).metrics.columns).toBe(4);
+  });
+  it('free mode uses the free unit', () => {
+    const o = overlayMetrics({ kind: 'free', scale: 1 }, t, 'free', ffold({ content: { columns: 40, children: [] } }), 2000);
+    expect(o.metrics.mode).toBe('free');
+    expect(o.metrics.unitPx).toBe(8);
+    expect(o.metrics.innerWidthPx).toBe(320);
   });
 });

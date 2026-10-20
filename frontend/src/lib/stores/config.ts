@@ -115,10 +115,13 @@ function saveFailedMessage(error: unknown): string {
 }
 
 // Load configuration from API. A reload of a held-but-stale layout runs in the
-// background: the dashboard stays mounted (showing "Refreshing layout", never
-// the old tree), so the active tab and open folder overlays survive and are
-// re-resolved against the fresh layout. Only a first load (or a reload with no
-// held config) shows the global loading screen. A failure is surfaced either way.
+// background: the dashboard stays mounted, and both the canvas (TabCanvas) and
+// every open folder overlay body (FolderOverlay) show "Refreshing layout"
+// instead of the old tree. The active tab id and the overlay stack survive and
+// are re-resolved against the fresh layout when it lands (Dashboard follows the
+// tab by id; TabCanvas reconciles the stack). Only a first load (or a reload
+// with no held config) shows the global loading screen. A failure is surfaced
+// either way (configError).
 export async function loadConfig() {
   const background = get(layoutStale) && get(config) !== null;
   if (!background) configLoading.set(true);
