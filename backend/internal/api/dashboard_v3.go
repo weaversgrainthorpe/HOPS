@@ -132,11 +132,31 @@ func (r *Router) handlePutDashboardV3(w http.ResponseWriter, id string, in confi
 		} else {
 			delete(nd, "order")
 		}
+		if ne := nameBoundsError(nd); ne != nil {
+			return nil, nil, ne
+		}
 		if err := configdoc.VerifyDashboard(nd); err != nil {
 			return nil, nil, verifyErr(err)
 		}
 		return replaceDashboard(stored, id, nd), map[string]interface{}{"revision": cur + 1}, nil
 	})
+}
+
+// nameBoundsError bounds the dashboard's name and its tabs' names to
+// maxDashboardNameRunes, the same limit create and promote enforce. A visible
+// 400, nothing stored. (Names that are not strings are left to VerifyDashboard.)
+func nameBoundsError(d configdoc.Obj) *apiError {
+	if n, ok := d["name"].(string); ok && utf8.RuneCountInString(n) > maxDashboardNameRunes {
+		return newAPIError(http.StatusBadRequest, fmt.Sprintf("Dashboard name is longer than %d characters", maxDashboardNameRunes))
+	}
+	tabs, _ := d["tabs"].([]any)
+	for _, t := range tabs {
+		tm, _ := t.(configdoc.Obj)
+		if n, ok := tm["name"].(string); ok && utf8.RuneCountInString(n) > maxDashboardNameRunes {
+			return newAPIError(http.StatusBadRequest, fmt.Sprintf("Tab name is longer than %d characters", maxDashboardNameRunes))
+		}
+	}
+	return nil
 }
 
 // handleDashboardsRoot serves /api/dashboards (no id): POST creates one.

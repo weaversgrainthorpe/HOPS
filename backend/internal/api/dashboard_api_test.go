@@ -333,3 +333,35 @@ func TestGetStatus_DisabledPerDashboard(t *testing.T) {
 		t.Fatalf("disabled: %d %v", code, resp)
 	}
 }
+
+// Final review Minor 7: the v3 PUT bounds dashboard and tab names exactly as
+// create/promote do (runes, not bytes), with a visible 400 and nothing stored.
+func TestPutDashboard_BoundsDashboardAndTabNames(t *testing.T) {
+	router, db := setupTestRouter(t)
+	c := newClient(t, router)
+	seed(t, db)
+	long := strings.Repeat("é", maxDashboardNameRunes+1)
+	ok := strings.Repeat("é", maxDashboardNameRunes)
+
+	d := v3Body(t, c, "d1")
+	d["name"] = long
+	if code, resp := v3Put(c, "d1", d, 1); code != 400 || !strings.Contains(fmt.Sprint(resp["error"]), "Dashboard name is longer than 200 characters") {
+		t.Fatalf("long dashboard name: %d %v", code, resp)
+	}
+	d = v3Body(t, c, "d1")
+	d["tabs"].([]interface{})[0].(map[string]interface{})["name"] = long
+	if code, resp := v3Put(c, "d1", d, 1); code != 400 || !strings.Contains(fmt.Sprint(resp["error"]), "Tab name is longer than 200 characters") {
+		t.Fatalf("long tab name: %d %v", code, resp)
+	}
+	got := getView(t, c)["dashboards"].([]interface{})[0].(map[string]interface{})
+	if got["revision"] != float64(1) || got["name"] != "First" {
+		t.Fatalf("a refused write changed the stored dashboard: %v", got)
+	}
+
+	d = v3Body(t, c, "d1")
+	d["name"] = ok
+	d["tabs"].([]interface{})[0].(map[string]interface{})["name"] = ok
+	if code, resp := v3Put(c, "d1", d, 1); code != 200 {
+		t.Fatalf("names at the limit: %d %v", code, resp)
+	}
+}
