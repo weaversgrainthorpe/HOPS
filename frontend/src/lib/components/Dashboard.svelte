@@ -725,21 +725,24 @@
     border-radius: 0.3rem;
   }
 
+  /* The edit/duplicate/delete controls sit BESIDE the tab button (in the tab box's flow), never over
+     it: drawn over a short tab they swallowed its clicks and hid it from drops (Ruling 29). They take
+     pointer events only while visible (the tab hovered / focused, or on touch), and never during a
+     drag. */
   .tab-controls {
-    position: absolute;
-    right: -0.5rem;
-    top: 50%;
-    transform: translateY(-50%);
     display: flex;
     gap: 0.25rem;
+    margin-left: 0.25rem;
+    align-self: center;
     opacity: 0;
+    pointer-events: none;
     transition: opacity 0.2s;
-    z-index: 10;
   }
 
   .tab-container:hover .tab-controls,
   .tab-container:focus-within .tab-controls {
     opacity: 1;
+    pointer-events: auto;
   }
 
   /* Touch devices have no hover, so the edit/duplicate/delete tab buttons
@@ -748,7 +751,15 @@
   @media (hover: none) {
     .tab-controls {
       opacity: 1;
+      pointer-events: auto;
     }
+  }
+
+  :global(body.hops-dragging) .tab-controls,
+  :global(body.hops-resizing) .tab-controls {
+    /* beats the :hover / :focus-within reveal above while the pointer is over a tab mid-drag */
+    opacity: 0 !important;
+    pointer-events: none !important;
   }
 
   .tab-control-btn {

@@ -13,12 +13,18 @@
   import { nodeClipboard, copySelection, cutSelection, pasteInto } from '$lib/stores/nodeClipboard';
   import { openFolder } from '$lib/stores/folderOverlay';
   import { portal } from '$lib/utils/portal';
+  import { toast } from '$lib/stores/toast';
 
   interface Props {
     request: MenuRequest;
     onClose: () => void;
   }
-  let { request, onClose }: Props = $props();
+  let { request: requestProp, onClose }: Props = $props();
+  // The parent keys the menu on its request and nulls it when the menu closes, which
+  // happens BEFORE the chosen action runs. Capture the request once (it never changes
+  // for this instance) so nothing below reads a null request after closing.
+  // svelte-ignore state_referenced_locally
+  const request: MenuRequest = requestProp;
 
   interface Item {
     label: string;
@@ -30,7 +36,6 @@
   }
 
   // Right-clicking an item outside the selection selects just it (as Explorer does).
-  // svelte-ignore state_referenced_locally
   const initial = request.target;
   if (initial.kind === 'node' && !$selectedNodes.has(initial.id)) {
     if ($session && locate($session.draft, initial.id)) toggleNode(initial.id, false);
@@ -67,9 +72,13 @@
       ];
     }
     if (!node || !draft) return [];
+    // Capture everything the actions need now: they run after the menu has closed.
     const id = node.id;
+    const kind = node.kind;
+    const d = draft;
+    const ids = [...targetIds];
     const out: Item[] = [];
-    if (!many) out.push({ label: 'Edit', icon: 'mdi:pencil', run: () => openDialog({ kind: node.kind, id }) });
+    if (!many) out.push({ label: 'Edit', icon: 'mdi:pencil', run: () => openDialog({ kind, id }) });
     if (!many && node.kind === 'folder' && node.display === 'collapsed') {
       out.push({ label: 'Open', icon: 'mdi:folder-open', run: () => openFolder(id) });
     }
@@ -83,11 +92,11 @@
         disabled: !canPaste,
         // Onto a folder: into it. Onto a tile: beside it, in the same container.
         run: () => {
-          const to = node.kind === 'folder' ? { tabId: locate(draft, id)!.tabId, folderId: id } : containerOfNode(draft, id);
+          const to = kind === 'folder' ? { tabId: locate(d, id)!.tabId, folderId: id } : containerOfNode(d, id);
           return to ? pasteInto(to) : undefined;
         }
       },
-      { label: 'Move/Copy to…', icon: 'mdi:folder-move', run: () => openDialog({ kind: 'movecopy', ids: targetIds }) }
+      { label: 'Move/Copy to…', icon: 'mdi:folder-move', run: () => openDialog({ kind: 'movecopy', ids }) }
     );
     if (!many && containerMode === 'free') {
       out.push(
@@ -107,7 +116,7 @@
       icon: 'mdi:trash-can',
       danger: true,
       separatorBefore: true,
-      run: () => deleteWithConfirm(targetIds)
+      run: () => deleteWithConfirm(ids)
     });
     return out;
   });
@@ -153,7 +162,13 @@
   async function choose(it: Item) {
     if (it.disabled) return;
     close(false);
-    await it.run();
+    try {
+      await it.run();
+    } catch (err) {
+      // Never fail silently: the menu is already gone, so say so out loud.
+      console.error('Menu action failed', err);
+      toast.error(`${it.label.replace(/…$/, '')} failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 
   function onKey(e: KeyboardEvent) {

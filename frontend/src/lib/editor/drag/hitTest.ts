@@ -28,7 +28,13 @@ export interface HitResult {
   nodeId?: string;
   /** That node's RENDERED box in px from the container's content origin (Ruling 13: a collapsed folder = one cell). */
   node?: { id: string; left: number; top: number; width: number; height: number };
-  /** A tab button under the pointer (`data-drag-tab`), with its viewport box. */
+  /**
+   * Item drags only (set by the drag controller's frame, not by hitTest): the item under the dragged
+   * item's VISUAL centre (the ghost's centre), viewport px; null = none there. Absent = the centre is
+   * the pointer, so `node` is that item. The merge / into-folder zone is judged by this (Ruling 29).
+   */
+  centreNode?: { id: string; left: number; top: number; width: number; height: number } | null;
+  /** A tab under the pointer (its `data-drag-tab` button, or anything in its `data-drag-tabbox`), with the button's viewport box. */
   tabId?: string;
   tabRect?: { left: number; top: number; width: number; height: number };
   /** The tab bar itself (`data-drag-tabbar`) is under the pointer, between or after the tabs. */
@@ -97,7 +103,11 @@ export function hitTest(x: number, y: number, dragged: ReadonlySet<string>, env:
   const crumbEl = start.closest('[data-drag-crumb]');
   if (crumbEl) return { ...NO_HIT, crumb: crumbEl.getAttribute('data-drag-crumb') ?? '' };
   const bar = start.closest('[data-drag-tabbar]');
-  const tabEl = start.closest('[data-drag-tab]');
+  // A tab is its whole box (`data-drag-tabbox`: the button plus its controls and padding), so a
+  // control drawn over the button never hides the tab from a drop (real-browser bug, Ruling 29).
+  const tabBox = start.closest('[data-drag-tabbox]');
+  const tabEl =
+    start.closest('[data-drag-tab]') ?? (tabBox?.getAttribute('data-drag-tabbox') ? tabBox.querySelector('[data-drag-tab]') : null);
   const boxes = (): Pick<HitResult, 'tabBoxes'> => {
     if (!bar) return {};
     return {

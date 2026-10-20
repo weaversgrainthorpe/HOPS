@@ -12,8 +12,11 @@
  * - Commits go through editSession.apply (undoable) and are announced in a toast with Undo.
  *
  * Task 7 resolves `place` (grid with pushAside, free with 8 px units) and `invalid`. Task 8 adds:
- * - `merge`: the pointer held in a tile's centre zone (the inner 50% of its RENDERED box) for
- *   MERGE_DWELL_MS; the drop makes a new folder of both and opens its dialog. The edge zone places.
+ * - `merge`: the dragged item's VISUAL centre (the ghost's centre: pointer − grab offset + half the
+ *   ghost) held in a tile's centre zone (the inner 50% of its RENDERED box) for MERGE_DWELL_MS; the
+ *   drop makes a new folder of both and opens its dialog. The edge zone places. Users aim with the
+ *   ghost, not the cursor (Ruling 29), and a "hold to make a folder" cue with progress shows from the
+ *   moment the centre enters the zone until the dwell ripens.
  * - `into-folder`: the centre zone of a folder → its first free cells. Held over a collapsed folder
  *   for OPEN_DWELL_MS, its overlay opens and the drag continues inside it.
  * - `tab-append`: a drop on a tab button; held there for OPEN_DWELL_MS, the tab switches and the
@@ -192,13 +195,44 @@ function memoised(key: string, draft: LayoutDashboard, fn: () => DropTarget): Dr
   return target;
 }
 
-/** The (non-dragged) item under the pointer and whether the pointer is in its centre zone (inner 50%). */
-function zoneOf(state: DragState, hit: HitResult): { id: string; centre: boolean } | null {
-  const n = hit.node;
-  if (!n || state.ids.includes(n.id) || !(n.width > 0) || !(n.height > 0)) return null;
-  const cx = n.left + n.width / 2;
-  const cy = n.top + n.height / 2;
-  return { id: n.id, centre: Math.abs(hit.dx - cx) <= n.width / 4 && Math.abs(hit.dy - cy) <= n.height / 4 };
+/**
+ * The dragged item's visual centre in viewport px: the ghost is drawn at pointer − grab × size, so
+ * its centre is pointer − grab offset + half the ghost. Without a ghost (or grab) it is the pointer.
+ */
+export function visualCentre(state: Pick<DragState, 'pointer' | 'grab' | 'ghost'>): { x: number; y: number } {
+  const g = state.ghost;
+  const grab = state.grab;
+  if (!g || !grab) return { ...state.pointer };
+  return {
+    x: state.pointer.x + (0.5 - grab.fx) * g.widthPx,
+    y: state.pointer.y + (0.5 - grab.fy) * g.heightPx
+  };
+}
+
+/**
+ * The (non-dragged) item the dragged item's visual centre is over, its viewport box, and whether
+ * that centre is in the item's centre zone (inner 50%). The item is `hit.centreNode` (hit-tested at
+ * the visual centre by the frame) when present, else the item under the pointer.
+ */
+function zoneOf(state: DragState, hit: HitResult): { id: string; centre: boolean; box: Box } | null {
+  let box: Box & { id: string };
+  if (hit.centreNode !== undefined) {
+    if (hit.centreNode === null) return null;
+    box = hit.centreNode;
+  } else {
+    const n = hit.node;
+    if (!n || !hit.container) return null;
+    box = { id: n.id, left: hit.container.left + n.left, top: hit.container.top + n.top, width: n.width, height: n.height };
+  }
+  if (state.ids.includes(box.id) || !(box.width > 0) || !(box.height > 0)) return null;
+  const c = visualCentre(state);
+  const cx = box.left + box.width / 2;
+  const cy = box.top + box.height / 2;
+  return {
+    id: box.id,
+    box: { left: box.left, top: box.top, width: box.width, height: box.height },
+    centre: Math.abs(c.x - cx) <= box.width / 4 && Math.abs(c.y - cy) <= box.height / 4
+  };
 }
 
 const ripe = (state: DragState, key: string): boolean => state.dwell?.key === key && state.dwell.ripe === true;
@@ -939,16 +973,16 @@ function frame() {
     setState(next);
     return;
   }
-  const hit = env.hitTest(at.x, at.y, new Set(s.ids));
-  lastHit = hit;
   const next: DragState = { ...s, pointer: { x: at.x, y: at.y } };
+  const hit = hitFor(next);
+  lastHit = hit;
   next.dwell = dwellFor(next, hit, d, s.dwell);
   next.target = resolveDrop(next, hit, d);
   // Stacked containers have no cell geometry to highlight: their drop shows as a marker instead.
   next.view = hit.container && hit.container.layout !== 'stacked'
     ? { left: hit.container.left, top: hit.container.top, metrics: hit.container.metrics }
     : undefined;
-  next.over = overFor(next.target, hit);
+  next.over = overFor(next, next.target, hit);
   const slot = next.target.kind === 'tab-order' ? tabSlot(next, hit) : null;
   next.marker = slot
     ? { left: slot.after ? slot.box.left + slot.box.width : slot.box.left, top: slot.box.top, height: slot.box.height }
@@ -958,11 +992,35 @@ function frame() {
   autoScroll(at.x, at.y, hit.scroller);
 }
 
-/** The viewport box the merge / into-folder / tab-append cue is drawn on. */
-function overFor(t: DropTarget, hit: HitResult): Box | undefined {
-  if ((t.kind === 'merge' || t.kind === 'into-folder') && hit.node && hit.container) {
-    const n = hit.node;
-    return { left: hit.container.left + n.left, top: hit.container.top + n.top, width: n.width, height: n.height };
+/**
+ * The hit test for an item drag's frame: what is under the pointer, plus (when the ghost's visual
+ * centre is elsewhere) the item under that centre, which the merge / into-folder zone is judged by.
+ * Layout reads happen only here, once per frame (Tenet 4).
+ */
+function hitFor(s: DragState): HitResult {
+  const dragged = new Set(s.ids);
+  const hit = env.hitTest(s.pointer.x, s.pointer.y, dragged);
+  if (s.tab !== undefined || s.ids.length === 0 || !s.ghost || !s.grab) return hit;
+  const c = visualCentre(s);
+  if (Math.abs(c.x - s.pointer.x) < 0.5 && Math.abs(c.y - s.pointer.y) < 0.5) return hit;
+  const ch = env.hitTest(c.x, c.y, dragged);
+  const n = ch.node;
+  return {
+    ...hit,
+    centreNode: n && ch.container
+      ? { id: n.id, left: ch.container.left + n.left, top: ch.container.top + n.top, width: n.width, height: n.height }
+      : null
+  };
+}
+
+/**
+ * The viewport box the merge / into-folder / tab-append cue is drawn on. While a merge dwell is
+ * still running (target = place) it is the tile being held over: the "hold to make a folder" cue.
+ */
+function overFor(s: DragState, t: DropTarget, hit: HitResult): Box | undefined {
+  if (t.kind === 'merge' || t.kind === 'into-folder' || (s.dwell?.key.startsWith('merge:') && !s.dwell.ripe)) {
+    const z = zoneOf(s, hit);
+    if (z?.centre) return z.box;
   }
   if (t.kind === 'tab-append' && hit.tabRect) return { ...hit.tabRect };
   return undefined;
@@ -1049,7 +1107,8 @@ function ripen(key: string) {
   if (!s || !d || s.dwell?.key !== key) return;
   if (pending) {
     const at = { ...pending };
-    const latest = dwellKey({ ...s, pointer: at }, env.hitTest(at.x, at.y, new Set(s.ids)), d);
+    const moved = { ...s, pointer: at };
+    const latest = dwellKey(moved, hitFor(moved), d);
     if (latest?.key !== key) {
       schedule(); // the next frame starts the dwell for wherever the pointer is now
       return;

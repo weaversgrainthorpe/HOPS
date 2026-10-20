@@ -9,7 +9,7 @@
    * tab-reorder marker, and the DragBreadcrumb. Task 9: a resize shows the resulting box and any
    * push (no ghost); a stacked (phone) drop shows its reading-order insertion marker.
    */
-  import { drag, setActiveTab, setTabSwitcher } from './dragController';
+  import { drag, setActiveTab, setTabSwitcher, MERGE_DWELL_MS } from './dragController';
   import DragBreadcrumb from './DragBreadcrumb.svelte';
 
   interface Props {
@@ -53,11 +53,14 @@
 
   const invalid = $derived(s?.target?.kind === 'invalid' ? s.target.reason : null);
   const guides = $derived(s?.target?.kind === 'place' ? (s.target.guides ?? []) : []);
+  /** A merge dwell is running (the dragged item's centre is in a tile's centre zone): show progress. */
+  const holding = $derived(!!s?.dwell && s.dwell.key.startsWith('merge:') && !s.dwell.ripe && s.target?.kind === 'place');
   const cue = $derived.by((): string | null => {
     const t = s?.target;
     const d = $session?.draft;
     if (!t || !s?.over) return null;
     if (t.kind === 'merge') return 'Make a folder';
+    if (holding) return 'Hold to make a folder';
     if (t.kind === 'into-folder') return `Into "${(d && findIn(d, t.folderId)?.name) || 'folder'}"`;
     if (t.kind === 'tab-append') return `Add to "${d?.tabs.find((x) => x.id === t.tabId)?.name || 'tab'}"`;
     return null;
@@ -101,8 +104,14 @@
     {#if cue !== null && s.over}
       <div
         class="cue"
+        class:hold={holding}
         style="left:{px(s.over.left)};top:{px(s.over.top)};width:{px(s.over.width)};height:{px(s.over.height)};"
       >
+        {#if holding && s.dwell}
+          {#key s.dwell.since}
+            <span class="cue-progress" style="animation-duration:{MERGE_DWELL_MS}ms;"></span>
+          {/key}
+        {/if}
         <span class="cue-label">{cue}</span>
       </div>
     {/if}
@@ -195,6 +204,28 @@
     display: flex;
     align-items: flex-end;
     justify-content: center;
+  }
+  .cue.hold {
+    border-style: dashed;
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+  }
+  /* The merge dwell's progress: a bar filling along the tile's top edge over MERGE_DWELL_MS. */
+  .cue-progress {
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 5px;
+    width: 100%;
+    border-radius: 0.75rem 0.75rem 0 0;
+    background: var(--accent);
+    transform-origin: left center;
+    animation-name: cue-fill;
+    animation-timing-function: linear;
+    animation-fill-mode: both;
+  }
+  @keyframes cue-fill {
+    from { transform: scaleX(0); }
+    to { transform: scaleX(1); }
   }
   .cue-label {
     margin-bottom: -1.6rem;

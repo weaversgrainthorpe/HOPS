@@ -82,6 +82,29 @@ describe('hitTest', () => {
     expect(h.node).toEqual({ id: 'b', left: 100, top: 0, width: 100, height: 100 });
   });
 
+  it('a tab\'s controls and padding count as the tab: it is resolved through its [data-drag-tabbox]', () => {
+    // Real-browser bug: the edit/duplicate/delete controls lie over the tab button, so
+    // elementFromPoint returned a control (not inside [data-drag-tab]) and no tab was hit.
+    const icon = el({ class: 'svg' });
+    const dup = el({ class: 'tab-control-btn duplicate-btn' }, icon);
+    const controls = el({ class: 'tab-controls' }, dup);
+    const tab = el({ 'data-drag-tab': 't2' }, el({ class: 'tab-name' }));
+    const tabbox = el({ 'data-drag-tabbox': 't2' }, tab, controls);
+    const bar = el({ 'data-drag-tabbar': '' }, tabbox);
+    document.body.append(bar);
+    const rects = new Map<Element, { left: number; top: number; width: number; height: number }>([
+      [tab, { left: 118, top: 117, width: 83, height: 48 }],
+      [tabbox, { left: 118, top: 117, width: 99, height: 48 }]
+    ]);
+    const envAt = (under: Element): HitEnv => ({ elementFromPoint: () => under, rectOf: (e) => rects.get(e) ?? { left: 0, top: 0 } });
+    for (const under of [icon, dup, controls, tabbox]) {
+      const h = hitTest(160, 141, new Set(), envAt(under));
+      expect(h.tabId).toBe('t2');
+      expect(h.tabRect).toEqual({ left: 118, top: 117, width: 83, height: 48 });
+      expect(h.tabBar).toBeUndefined();
+    }
+  });
+
   it('a crumb, a tab button, the tab bar and an overlay backdrop are navigation hits', () => {
     const crumb = el({ 'data-drag-crumb': 'tab:t1' }, el({}));
     const tab = el({ 'data-drag-tab': 't2' }, el({}));
@@ -120,8 +143,11 @@ describe('hitTest', () => {
       [b1, { left: 0, top: 0, width: 150, height: 40 }],
       [b2, { left: 160, top: 0, width: 150, height: 40 }]
     ]);
+    // Ruling 29: a tab's controls count as that tab (through its tabbox), and the boxes are still reported.
     const h = hitTest(300, 10, new Set(), { elementFromPoint: () => ctl, rectOf: (e) => rects.get(e) ?? { left: 0, top: 0 } });
-    expect(h.tabBar).toBe(true);
+    expect(h.tabId).toBe('t2');
+    // Between the tabs (the bar itself), it is the tab bar.
+    expect(hitTest(155, 10, new Set(), { elementFromPoint: () => bar, rectOf: (e) => rects.get(e) ?? { left: 0, top: 0 } }).tabBar).toBe(true);
     expect(h.tabBoxes?.map((b) => [b.id, b.left])).toEqual([['t1', 0], ['t2', 160]]);
     expect(hitTest(0, 0, new Set(), env(root)).panel).toBe('c1');
     expect(hitTest(0, 0, new Set(), env(panel.firstElementChild)).panel).toBe('c1'); // the header: no container, still the panel

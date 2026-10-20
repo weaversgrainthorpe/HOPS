@@ -166,4 +166,53 @@ describe('EditorDialogs (the dialogs edit the draft only)', () => {
     await tick();
     expect(screen.getByRole('menu')).toBeInTheDocument();
   });
+
+  // Real-browser bug: the menu closes itself (the parent nulls `request`) before the
+  // action runs, so actions that read the request-derived state threw and did nothing.
+  describe('menu actions through the real store wiring (closing nulls the request)', () => {
+    async function menuFor(id: string) {
+      editorMenu.set({ x: 10, y: 10, target: { kind: 'node', id } });
+      await tick();
+    }
+    const pick = (name: string) => fireEvent.click(screen.getByRole('menuitem', { name }));
+
+    it('Edit on a tile opens the tile dialog', async () => {
+      render(EditorDialogs, { tabId: 't1' });
+      await menuFor('a');
+      await pick('Edit');
+      await tick();
+      expect(get(editorMenu)).toBeNull();
+      expect(get(editorDialog)).toEqual({ kind: 'tile', id: 'a' });
+    });
+
+    it('Edit on a folder (expanded or collapsed) opens the folder dialog', async () => {
+      render(EditorDialogs, { tabId: 't1' });
+      await menuFor('f1');
+      await pick('Edit');
+      await tick();
+      expect(get(editorDialog)).toEqual({ kind: 'folder', id: 'f1' });
+      editorDialog.set(null);
+      await tick();
+      await menuFor('c1');
+      await pick('Edit');
+      await tick();
+      expect(get(editorDialog)).toEqual({ kind: 'folder', id: 'c1' });
+    });
+
+    it('Move/Copy to… opens the move/copy dialog for the item', async () => {
+      render(EditorDialogs, { tabId: 't1' });
+      await menuFor('f1');
+      await pick('Move/Copy to…');
+      await tick();
+      expect(get(editorDialog)).toEqual({ kind: 'movecopy', ids: ['f1'] });
+    });
+
+    it('Delete asks, then deletes the item', async () => {
+      render(EditorDialogs, { tabId: 't1' });
+      await menuFor('b');
+      await pick('Delete');
+      await answerConfirm(true);
+      expect(nodeIn(draft(), 'b')).toBeUndefined();
+    });
+  });
 });

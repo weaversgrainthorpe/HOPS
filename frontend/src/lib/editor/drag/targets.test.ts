@@ -185,6 +185,60 @@ describe('merge', () => {
   });
 });
 
+// Real-browser bug (Ruling 29): users aim with the dragged tile (the ghost), not the cursor. The
+// merge zone is tested at the ghost's VISUAL centre (pointer − grab offset + half the ghost).
+describe('merge by the dragged tile\'s visual centre', () => {
+  it('grabbed off-centre: the ghost centred on b merges although the pointer is in b\'s edge zone', () => {
+    startMouseDrag(source('a'), 10, 90); // grabbed near its bottom-left (fx 0.1, fy 0.9)
+    moveTo(110, 90); // ghost centre = (110 − 10 + 50, 90 − 90 + 50) = (150, 50): b's centre
+    flush();
+    expect(get(drag)?.target?.kind).toBe('place');
+    vi.advanceTimersByTime(MERGE_DWELL_MS);
+    flush();
+    expect(get(drag)?.target).toEqual({ kind: 'merge', targetTileId: 'b' });
+  });
+
+  it('the pointer on b\'s centre with the ghost mostly off it does not merge', () => {
+    startMouseDrag(source('a'), 10, 90);
+    moveTo(150, 50); // ghost centre = (190, 10): inside b, outside its inner 50%
+    flush();
+    vi.advanceTimersByTime(2000);
+    flush();
+    expect(get(drag)?.target?.kind).toBe('place');
+  });
+
+  it('the pointer past b\'s edge (over empty cells) still merges when the ghost\'s centre is in b\'s centre zone', () => {
+    startMouseDrag(source('a'), 95, 50); // grabbed at its right edge (fx 0.95)
+    moveTo(215, 50); // pointer beyond b (b spans 100..200); ghost centre = (170, 50): in b's inner 50%
+    flush();
+    vi.advanceTimersByTime(MERGE_DWELL_MS);
+    flush();
+    expect(get(drag)?.target).toEqual({ kind: 'merge', targetTileId: 'b' });
+  });
+
+  it('shows a "hold to make a folder" cue with progress as soon as the centre enters the zone', async () => {
+    render(DragLayer);
+    startMouseDrag(source('a'), 10, 90);
+    moveTo(110, 90);
+    flush();
+    await tick();
+    const cue = document.querySelector('.drag-layer .cue');
+    expect(cue?.textContent).toMatch(/hold to make a folder/i);
+    expect(cue?.querySelector('.cue-progress')).toBeTruthy();
+    expect(get(drag)?.over).toEqual({ left: 100, top: 0, width: 100, height: 100 });
+    // ripe: the cue becomes the commit cue
+    vi.advanceTimersByTime(MERGE_DWELL_MS);
+    flush();
+    await tick();
+    expect(document.querySelector('.drag-layer .cue')?.textContent).toMatch(/^\s*make a folder\s*$/i);
+    // leaving the zone drops the cue
+    moveTo(30, 90); // ghost centre (70, 50): over empty space left of b (a is the dragged item)
+    flush();
+    await tick();
+    expect(document.querySelector('.drag-layer .cue')).toBeNull();
+  });
+});
+
 describe('into folders', () => {
   it('a drop on a collapsed folder goes inside it, at its first free cell', () => {
     startMouseDrag(source('a'), 50, 50);
@@ -231,13 +285,13 @@ describe('into folders', () => {
     nodes = [{ id: 'g', box: { left: 200, top: 100, width: 100, height: 100 } }];
     sourceRect = { left: 0, top: 100, width: 400, height: 300 };
     const before = draft();
-    startMouseDrag(source('f1'), 10, 110);
-    moveTo(250, 150);
+    startMouseDrag(source('f1'), 10, 110); // grabbed at its top-left: the ghost (400×300) hangs right/down
+    moveTo(60, 10); // the ghost's visual centre = (60 + 190, 10 + 140) = (250, 150): g's centre
     flush();
     expect(get(drag)?.target).toEqual({ kind: 'invalid', reason: "A folder can't go inside itself." });
     await tick();
     expect(document.querySelector('.drag-layer .reason')?.textContent).toBe("A folder can't go inside itself.");
-    drop(250, 150);
+    drop(60, 10);
     expect(draft()).toBe(before);
     expect(get(toast).at(-1)?.type).toBe('error');
   });
