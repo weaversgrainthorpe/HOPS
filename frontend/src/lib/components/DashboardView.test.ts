@@ -361,18 +361,7 @@ describe('Dashboard edit mode (M3 Task 6: the v3 editor shell)', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it('tab reorder by drag (the tab bar finalize) reorders the draft and keeps the active tab', async () => {
-    render(Dashboard, { dashboard: legacy });
-    enterEdit();
-    await tick();
-    expect(screen.getByRole('tab', { name: 'Switch to Main tab' }).getAttribute('aria-selected')).toBe('true');
-    const bar = document.querySelector('[data-dashboard-tabs]') as HTMLElement;
-    const items = draft().tabs.map((t) => ({ id: t.id, name: t.name })).reverse();
-    bar.dispatchEvent(new CustomEvent('finalize', { detail: { items, info: { id: 't1', source: 'pointer', trigger: 'droppedIntoZone' } } }));
-    await tick();
-    expect(draft().tabs.map((t) => t.id)).toEqual(['t1', 't2']);
-    expect(screen.getByRole('tab', { name: 'Switch to Main tab' }).getAttribute('aria-selected')).toBe('true');
-  });
+  // Tab reorder by drag (the editor's drag engine, Task 8) is covered in editor/TabReorder.test.ts.
 
   it('the Header dialog edits the draft only; the Settings cog stays', async () => {
     render(Dashboard, { dashboard: legacy });

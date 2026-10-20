@@ -18,14 +18,13 @@
   import EditToolbar from './editor/EditToolbar.svelte';
   import EditorDialogs from './editor/EditorDialogs.svelte';
   import DragLayer from '$lib/editor/drag/DragLayer.svelte';
+  import { tabSource } from '$lib/editor/drag/dragController';
   import {
     addTabWith, editTab, duplicateTabAction, deleteTabWithConfirm, setHeader, setBackground, setPerTabBackgrounds,
     setTabBackground, type TabFields
   } from '$lib/editor/editorActions';
   import { reorderTabs } from '$lib/editor/treeOps';
   import Icon from '@iconify/svelte';
-  import { dndzone } from 'svelte-dnd-action';
-  import type { DndEvent } from 'svelte-dnd-action';
   import { onMount, onDestroy, tick, untrack } from 'svelte';
   import { get } from 'svelte/store';
   import { toast } from '$lib/stores/toast';
@@ -174,7 +173,6 @@
   let showHeaderConfig = $state(false);
   let showDashboardSettings = $state(false);
   let showBackgroundConfig = $state(false);
-  let draggedTabs = $state<BarTab[]>([]);
 
   // The effective background: per-tab when enabled, else the dashboard's.
   const effectiveBackground = $derived.by(() => {
@@ -188,12 +186,6 @@
 
   onDestroy(() => {
     destroyEasterEggs();
-  });
-
-  // svelte-dnd-action does an internal structuredClone() that fails on Svelte 5
-  // $state Proxies. $state.snapshot() returns a plain deep copy that's safe.
-  $effect(() => {
-    draggedTabs = $state.snapshot(barTabs) as BarTab[];
   });
 
   // Clicking a tab always switches to it — even in edit mode. The per-tab
@@ -253,16 +245,30 @@
     if (setBackground(background)) showBackgroundConfig = false;
   }
 
-  function handleTabsConsider(e: CustomEvent<DndEvent<BarTab>>) {
-    draggedTabs = e.detail.items;
+  /** A drag (the editor's drag engine) asks to show a tab: the drag continues there. */
+  function showTabForDrag(tabId: string) {
+    const i = barTabs.findIndex((t) => t.id === tabId);
+    if (i !== -1) activeTabIndex = i;
+    else toast.error("That tab is no longer on this dashboard, so the drag stayed where it was.");
   }
 
-  function handleTabsFinalize(e: CustomEvent<DndEvent<BarTab>>) {
-    draggedTabs = e.detail.items;
-    if (!editing) return;
-    const ids = e.detail.items.map((t) => t.id);
+  /** Keyboard tab reorder (edit mode): Alt+Left / Alt+Right moves the focused tab one place. */
+  function handleTabKey(e: KeyboardEvent, index: number) {
+    if (e.key === 'Enter' || e.key === ' ') {
+      handleTabClick(index);
+      return;
+    }
+    if (!editing || !e.altKey || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight')) return;
+    e.preventDefault();
+    const to = index + (e.key === 'ArrowLeft' ? -1 : 1);
+    if (to < 0 || to >= barTabs.length) return;
+    const ids = barTabs.map((t) => t.id);
+    [ids[index], ids[to]] = [ids[to], ids[index]];
+    const focusId = ids[to];
     // The active tab is followed by id when the draft's tab order changes.
-    apply('Reorder tabs', (d) => reorderTabs(d, ids));
+    if (apply('Reorder tabs', (d) => reorderTabs(d, ids))) {
+      void tick().then(() => document.querySelector<HTMLElement>(`[data-drag-tab="${CSS.escape(focusId)}"]`)?.focus());
+    }
   }
 
   const inheritedLayout = $derived<'grid' | 'free'>(draft?.defaultLayout === 'free' ? 'free' : 'grid');
@@ -311,16 +317,9 @@
         data-dashboard-tabs
         role="tablist"
         aria-label="Dashboard tabs"
-        use:dndzone={{
-          items: draggedTabs,
-          flipDurationMs: 200,
-          dragDisabled: !editing,
-          dropTargetStyle: {}
-        }}
-        onconsider={handleTabsConsider}
-        onfinalize={handleTabsFinalize}
+        data-drag-tabbar={editing ? '' : undefined}
       >
-        {#each draggedTabs as tab, index (tab.id)}
+        {#each barTabs as tab, index (tab.id)}
           <div class="tab-container">
             <div
               class="tab"
@@ -333,8 +332,11 @@
               tabindex="0"
               aria-selected={activeTabIndex === index}
               aria-label={`Switch to ${tab.name} tab`}
+              title={editing ? 'Drag to reorder (or Alt+Left / Alt+Right); drop items here to move them to this tab' : undefined}
+              data-drag-tab={editing ? tab.id : undefined}
+              use:tabSource={{ tabId: tab.id, enabled: editing }}
               onclick={() => handleTabClick(index)}
-              onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleTabClick(index); }}
+              onkeydown={(e) => handleTabKey(e, index)}
             >
               {#if tab.iconUrl || tab.icon}
                 <span class="tab-icon-backing"
@@ -409,7 +411,7 @@
         </div>
       {/if}
       <EditorDialogs tabId={activeTabId ?? ''} />
-      <DragLayer tabId={activeTabId ?? null} />
+      <DragLayer tabId={activeTabId ?? null} onSwitchTab={showTabForDrag} />
     {:else}
       <!-- Edit mode is on but no session is open for this dashboard yet (it follows the route). -->
       <div role="status" class="layout-refreshing">Starting the edit session…</div>

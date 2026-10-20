@@ -93,7 +93,7 @@
         </button>
         </span>
       </header>
-      <div class="max-body">
+      <div class="max-body" data-drag-scroll>
         <div class="max-content" style:width="{Math.round(size.metrics.innerWidthPx * 100) / 100}px">
           {#if $layoutStale}
             <div role="status" class="refreshing">Refreshing layout…</div>

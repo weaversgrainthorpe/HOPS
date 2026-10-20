@@ -62,6 +62,7 @@
   <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
   <div
     class="overlay-backdrop"
+    data-drag-outside={editing && isTop ? p.id : undefined}
     style:z-index="calc(var(--z-folder-overlay) + {p.depth})"
     onclick={(e) => {
       if (e.target === e.currentTarget && isTop) closeTop();
@@ -103,7 +104,8 @@
           <Icon icon="mdi:close" width="24" />
         </button>
       </header>
-      <div class="overlay-body">
+      <!-- data-drag-scroll: a drag near this panel's top/bottom edge scrolls it (editor drag engine). -->
+      <div class="overlay-body" data-drag-scroll>
         <div class="overlay-content" style:width={px(size.metrics.innerWidthPx)}>
           {#if $layoutStale}
             <!-- The held tree is older than the server's: never show it as current. -->

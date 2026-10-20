@@ -68,4 +68,42 @@ describe('hitTest', () => {
     document.body.appendChild(stray);
     expect(hitTest(0, 0, new Set(), env(stray)).container).toBeNull();
   });
+
+  it('reports the rendered box of the node under the pointer, relative to the container (Task 8 zones)', () => {
+    const cell = el({ 'data-node-id': 'b' });
+    const root = el({ 'data-container-id': 't1' }, cell);
+    document.body.appendChild(root);
+    reg(root, { ref: { tabId: 't1' }, metrics: gridMetrics, layout: 'grid' });
+    const rects = new Map<Element, { left: number; top: number; width?: number; height?: number }>([
+      [root, { left: 20, top: 40 }],
+      [cell, { left: 120, top: 40, width: 100, height: 100 }]
+    ]);
+    const h = hitTest(170, 90, new Set(), { elementFromPoint: () => cell, rectOf: (e) => rects.get(e) ?? { left: 0, top: 0 } });
+    expect(h.node).toEqual({ id: 'b', left: 100, top: 0, width: 100, height: 100 });
+  });
+
+  it('a crumb, a tab button, the tab bar and an overlay backdrop are navigation hits', () => {
+    const crumb = el({ 'data-drag-crumb': 'tab:t1' }, el({}));
+    const tab = el({ 'data-drag-tab': 't2' }, el({}));
+    const bar = el({ 'data-drag-tabbar': '' }, tab);
+    const back = el({ 'data-drag-outside': 'c1' }, el({ 'data-container-id': 'c1' }));
+    document.body.append(crumb, bar, back);
+    expect(hitTest(0, 0, new Set(), env(crumb.firstElementChild)).crumb).toBe('tab:t1');
+    const rects = new Map([[tab, { left: 100, top: 0, width: 80, height: 40 }]]);
+    const h = hitTest(0, 0, new Set(), { elementFromPoint: () => tab.firstElementChild, rectOf: (e) => rects.get(e as HTMLElement) ?? { left: 0, top: 0 } });
+    expect(h.tabId).toBe('t2');
+    expect(h.tabRect).toEqual({ left: 100, top: 0, width: 80, height: 40 });
+    expect(hitTest(0, 0, new Set(), env(bar)).tabBar).toBe(true);
+    expect(hitTest(0, 0, new Set(), env(back)).outside).toBe(true);
+    // inside the panel (not the backdrop itself) is not "outside"
+    expect(hitTest(0, 0, new Set(), env(back.firstElementChild)).outside).toBeUndefined();
+  });
+
+  it('reports the scrollable panel holding the container', () => {
+    const root = el({ 'data-container-id': 'c1' });
+    const body = el({ 'data-drag-scroll': '' }, root);
+    document.body.appendChild(body);
+    reg(root, { ref: { tabId: 't1', folderId: 'c1' }, metrics: gridMetrics, layout: 'grid' });
+    expect(hitTest(0, 0, new Set(), env(root)).scroller).toBe(body);
+  });
 });

@@ -11,20 +11,32 @@
  *   the draft unchanged.
  * - Commits go through editSession.apply (undoable) and are announced in a toast with Undo.
  *
- * Task 7 resolves `place` (grid with pushAside, free with 8 px units) and `invalid`. Task 8 adds
- * `merge`, `into-folder` (dwell into collapsed folders), `tab-append`, the breadcrumb and guides:
- * they extend resolveDrop's cases and commitDrop's switch; `dwell` is reserved for their timers.
+ * Task 7 resolves `place` (grid with pushAside, free with 8 px units) and `invalid`. Task 8 adds:
+ * - `merge`: the pointer held in a tile's centre zone (the inner 50% of its RENDERED box) for
+ *   MERGE_DWELL_MS; the drop makes a new folder of both and opens its dialog. The edge zone places.
+ * - `into-folder`: the centre zone of a folder → its first free cells. Held over a collapsed folder
+ *   for OPEN_DWELL_MS, its overlay opens and the drag continues inside it.
+ * - `tab-append`: a drop on a tab button; held there for OPEN_DWELL_MS, the tab switches and the
+ *   drag continues there. The DragBreadcrumb's crumbs (Tab › Folder › …) return to a level the same
+ *   way, and holding over an open overlay's backdrop closes that overlay (top only).
+ * - free alignment guides (edges and centres of siblings within SNAP_PX) and tab reorder
+ *   (`tab-order`, from `tabSource`), both through this same engine.
+ * Dwell timers live here (the frame computes the dwell key; the timer ripens it and performs the
+ * navigation); resolveDrop stays pure and only reads `state.dwell`.
  */
 import { get, writable, type Readable } from 'svelte/store';
 import type { Container, LayoutDashboard, LayoutNode, Placement } from '$lib/types/layout';
 import type { ContainerMetrics } from '$lib/layout/geometry';
 import { clampPlacement, isRenderable } from '$lib/layout/geometry';
 import {
-  TreeOpError, copyNodes, firstFreeCell, freeSide, isDescendant, locate, moveNodes, originOf, pushAside,
-  resolveContainer, type ContainerRef
+  TreeOpError, copyNodes, deleteNodes, firstFreeCell, freeSide, isDescendant, locate, mergeIntoNewFolder, moveNodes,
+  originOf, pushAside, reorderTabs, resolveContainer, type ContainerRef
 } from '../treeOps';
-import { adaptedFor, containerOfNode, currentDraft, documentIds, findIn, sizeFor } from '../editorActions';
-import { editorMenu, ownsTarget } from '../editorUi';
+import {
+  adaptedFor, containerOfNode, currentDraft, documentIds, findIn, placementsFor, sizeFor
+} from '../editorActions';
+import { editorMenu, openDialog, ownsTarget } from '../editorUi';
+import { closeTo, closeTop, openFolder, overlayStack } from '$lib/stores/folderOverlay';
 import { apply, session, undo } from '$lib/stores/editSession';
 import { toast } from '$lib/stores/toast';
 import { clearSelection, selectionInDraft, toggleNode } from '$lib/stores/nodeSelection';
@@ -32,12 +44,25 @@ import { hitTest as domHitTest, type HitResult } from './hitTest';
 
 // ---------------------------------------------------------------- types
 
+/** A free-mode alignment guide, in px from the target container's content origin. */
+export interface Guide {
+  axis: 'x' | 'y';
+  /** The line's position: x for a vertical guide, y for a horizontal one. */
+  at: number;
+  /** Its extent along the other axis. */
+  from: number;
+  to: number;
+}
+
 export type DropTarget =
-  | { kind: 'place'; to: ContainerRef; at: Placement[]; push: Map<string, Placement> }
+  | { kind: 'place'; to: ContainerRef; at: Placement[]; push: Map<string, Placement>; guides?: Guide[] }
   | { kind: 'merge'; targetTileId: string }
   | { kind: 'into-folder'; folderId: string; at: Placement[] }
-  | { kind: 'tab-append'; tabId: string }
+  | { kind: 'tab-append'; tabId: string; at: Placement[] }
+  | { kind: 'tab-order'; tabIds: string[] }
   | { kind: 'invalid'; reason: string };
+
+type Box = { left: number; top: number; width: number; height: number };
 
 export interface DragState {
   /** Dragged ids; the first is the item that was grabbed. */
@@ -47,8 +72,17 @@ export interface DragState {
   pointer: { x: number; y: number };
   /** The last resolved (= highlighted) target. */
   target: DropTarget | null;
-  /** Reserved for Task 8's dwell timers (merge, collapsed folder, tab, crumb). */
-  dwell?: { key: string; since: number };
+  /** The hover being timed (merge, collapsed folder, tab, crumb, backdrop); ripe once held long enough. */
+  dwell?: { key: string; since: number; ripe?: boolean };
+  /** A tab drag (tab reorder): the dragged tab's id. `ids` is then empty. */
+  tab?: string;
+  /** The tab the drag started on, and the tab it is on now (the breadcrumb shows both). */
+  origin?: string;
+  tabId?: string;
+  /** Viewport box of the item or tab under the pointer, for a merge / into / append cue. */
+  over?: Box;
+  /** Tab reorder: where the dragged tab would go (viewport px). */
+  marker?: { left: number; top: number; height: number };
   /** Where the first item was grabbed, as a fraction of its rendered box (0..1). */
   grab?: { fx: number; fy: number };
   /** Ghost: the grabbed item's rendered size and a label. */
@@ -65,6 +99,8 @@ export interface DragEnv {
   measure(el: Element): { left: number; top: number; width: number; height: number };
   viewport(): { width: number; height: number };
   scrollBy(dx: number, dy: number): void;
+  /** Scroll a panel (an overlay body) by dy px. */
+  scrollElBy(el: Element, dy: number): void;
 }
 
 const domEnv: DragEnv = {
@@ -73,7 +109,10 @@ const domEnv: DragEnv = {
   cancelRaf: (id) => cancelAnimationFrame(id),
   measure: (el) => el.getBoundingClientRect(),
   viewport: () => ({ width: window.innerWidth, height: window.innerHeight }),
-  scrollBy: (dx, dy) => window.scrollBy(dx, dy)
+  scrollBy: (dx, dy) => window.scrollBy(dx, dy),
+  scrollElBy: (el, dy) => {
+    (el as HTMLElement).scrollTop += dy;
+  }
 };
 let env: DragEnv = domEnv;
 
@@ -89,6 +128,12 @@ export const TOUCH_HOLD_MS = 400;
 export const TOUCH_SLOP_PX = 8;
 const EDGE_PX = 48;
 const MAX_SCROLL_PX = 20;
+/** Held in a tile's centre zone this long → merge (make a folder). */
+export const MERGE_DWELL_MS = 500;
+/** Held over a collapsed folder, a tab, a crumb or an overlay's backdrop this long → go there. */
+export const OPEN_DWELL_MS = 600;
+/** Free mode: an edge or centre within this many rendered px of a sibling's snaps to it. */
+export const SNAP_PX = 4;
 
 // ---------------------------------------------------------------- the one resolver
 
@@ -107,23 +152,29 @@ function message(e: unknown, fallback: string): string {
 /** One-entry memo of the validated result (inputs are immutable, so this is transparent). */
 let memo: { key: string; draft: LayoutDashboard; target: DropTarget } | null = null;
 
-/**
- * THE drop resolver: pure, used for the highlight every frame and (through state.target) for the
- * commit. Grid: the cells under the ghost, neighbours pushed aside (Ruling 11: the push map is part
- * of the target and the op is trial-run here, so a highlighted target never throws on commit);
- * stored footprints count, so a collapsed folder's reserved cells are occupied (Ruling 13). Free:
- * the 8 px design unit under the ghost, overlap allowed. Selections keep their relative offsets
- * when they come from one container; otherwise the others take the first free cells.
- */
-export function resolveDrop(state: DragState, hit: HitResult, draft: LayoutDashboard): DropTarget {
-  const c = hit.container;
-  if (!c) return invalid('Drop it on the dashboard or inside a folder.');
-  if (c.layout === 'stacked') {
-    return invalid("Dragging to a position isn't available in the narrow (stacked) layout yet — use Cut and Paste.");
-  }
-  const ids = state.ids;
+function memoised(key: string, draft: LayoutDashboard, fn: () => DropTarget): DropTarget {
+  if (memo && memo.draft === draft && memo.key === key) return memo.target;
+  const target = fn();
+  memo = { key, draft, target };
+  return target;
+}
+
+/** The (non-dragged) item under the pointer and whether the pointer is in its centre zone (inner 50%). */
+function zoneOf(state: DragState, hit: HitResult): { id: string; centre: boolean } | null {
+  const n = hit.node;
+  if (!n || state.ids.includes(n.id) || !(n.width > 0) || !(n.height > 0)) return null;
+  const cx = n.left + n.width / 2;
+  const cy = n.top + n.height / 2;
+  return { id: n.id, centre: Math.abs(hit.dx - cx) <= n.width / 4 && Math.abs(hit.dy - cy) <= n.height / 4 };
+}
+
+const ripe = (state: DragState, key: string): boolean => state.dwell?.key === key && state.dwell.ripe === true;
+
+const SELF = "A folder can't go inside itself.";
+
+/** The checks every item drag shares (existence, drawability, folder-with-its-content, self-nesting). */
+function checkIds(draft: LayoutDashboard, ids: string[], intoFolder?: string): DropTarget | null {
   if (ids.length === 0) return invalid('Nothing is being dragged.');
-  const to = c.ref;
   const idSet = new Set(ids);
   for (const id of ids) {
     const loc = locate(draft, id);
@@ -132,10 +183,169 @@ export function resolveDrop(state: DragState, hit: HitResult, draft: LayoutDashb
     if (loc.folderChain.some((f) => idSet.has(f))) {
       return invalid("An item can't be dragged together with the folder that contains it.");
     }
-    if (to.folderId !== undefined && (to.folderId === id || isDescendant(draft, id, to.folderId))) {
-      return invalid("A folder can't go inside itself.");
+    if (intoFolder !== undefined && (intoFolder === id || isDescendant(draft, id, intoFolder))) return invalid(SELF);
+  }
+  return null;
+}
+
+/**
+ * Merge `ids` onto tile `tileId` as one new folder (treeOps.mergeIntoNewFolder). Items coming from
+ * a container of the other mode are first converted on the one path (moveNodes → convertNode) into
+ * the tile's container, so the new folder's content is in its mode. Used by the trial run and the commit.
+ */
+function mergeDrop(
+  d: LayoutDashboard, ids: string[], tileId: string, allIds: Set<string>
+): { dashboard: LayoutDashboard; folderId: string } {
+  const tc = containerOfNode(d, tileId);
+  if (!tc) throw new TreeOpError('That tile no longer exists.');
+  const mode = resolveContainer(d, tc).mode;
+  let base = d;
+  if (ids.some((id) => originOf(d, id).mode !== mode)) {
+    const at = placementsFor(deleteNodes(d, ids), tc, adaptedFor(d, ids, tc));
+    base = moveNodes(d, ids, tc, at);
+  }
+  return mergeIntoNewFolder(base, ids, tileId, allIds);
+}
+
+/** Into a container at its first free cells (a drop on a folder or a tab button). Trial-run like place. */
+function resolveAppend(state: DragState, to: ContainerRef, draft: LayoutDashboard): DropTarget {
+  return memoised(JSON.stringify(['append', state.ids, state.copy, to]), draft, () => {
+    try {
+      const nodes = adaptedFor(draft, state.ids, to);
+      const at = placementsFor(state.copy ? draft : deleteNodes(draft, state.ids), to, nodes);
+      if (state.copy) copyNodes(draft, state.ids, to, at, documentIds());
+      else moveNodes(draft, state.ids, to, at);
+      return to.folderId !== undefined
+        ? { kind: 'into-folder', folderId: to.folderId, at }
+        : { kind: 'tab-append', tabId: to.tabId, at };
+    } catch (e) {
+      return invalid(e instanceof TreeOpError ? e.message : message(e, "That can't go there."));
+    }
+  });
+}
+
+function resolveIntoFolder(state: DragState, folderId: string, draft: LayoutDashboard): DropTarget {
+  const bad = checkIds(draft, state.ids, folderId);
+  if (bad) return bad;
+  const loc = locate(draft, folderId);
+  if (!loc) return invalid('That folder no longer exists.');
+  return resolveAppend(state, { tabId: loc.tabId, folderId }, draft);
+}
+
+function resolveTabAppend(state: DragState, tabId: string, draft: LayoutDashboard): DropTarget {
+  const bad = checkIds(draft, state.ids);
+  if (bad) return bad;
+  if (!draft.tabs.some((t) => t.id === tabId)) return invalid('That tab no longer exists.');
+  return resolveAppend(state, { tabId }, draft);
+}
+
+function resolveMerge(state: DragState, tileId: string, draft: LayoutDashboard): DropTarget {
+  if (state.copy) return invalid("Release Ctrl/Cmd to make a folder — copying onto a tile isn't available.");
+  return memoised(JSON.stringify(['merge', state.ids, tileId]), draft, () => {
+    try {
+      mergeDrop(draft, state.ids, tileId, documentIds());
+      return { kind: 'merge', targetTileId: tileId };
+    } catch (e) {
+      return invalid(e instanceof TreeOpError ? e.message : message(e, "Those can't be made into a folder."));
+    }
+  });
+}
+
+/** Tab reorder: before or after the tab under the pointer (by its half), or last over the bar's empty end. */
+function resolveTabOrder(state: DragState, hit: HitResult, draft: LayoutDashboard): DropTarget {
+  const me = state.tab!;
+  const ids = draft.tabs.map((t) => t.id);
+  if (!ids.includes(me)) return invalid('That tab no longer exists.');
+  const rest = ids.filter((i) => i !== me);
+  if (hit.tabId !== undefined && hit.tabRect) {
+    if (hit.tabId === me) return { kind: 'tab-order', tabIds: ids };
+    const j = rest.indexOf(hit.tabId);
+    if (j === -1) return invalid('That tab no longer exists.');
+    rest.splice(tabAfter(state, hit.tabRect) ? j + 1 : j, 0, me);
+    return { kind: 'tab-order', tabIds: rest };
+  }
+  if (hit.tabBar) return { kind: 'tab-order', tabIds: [...rest, me] };
+  return invalid('Drop the tab on the tab bar to move it.');
+}
+
+const tabAfter = (state: DragState, r: Box): boolean => state.pointer.x >= r.left + r.width / 2;
+
+/** The integer position within SNAP_PX (rendered) of a sibling line for any of this item's edges/centre. */
+function snapAxis(raw: number, size: number, lines: number[], unitPx: number): number {
+  let best: { pos: number; d: number } | null = null;
+  for (const off of [0, size / 2, size]) {
+    for (const line of lines) {
+      const pos = line - off;
+      if (!Number.isInteger(pos)) continue;
+      const d = Math.abs(raw - pos) * unitPx;
+      if (d <= SNAP_PX + 1e-9 && (!best || d < best.d)) best = { pos, d };
     }
   }
+  return best ? best.pos : Math.round(raw);
+}
+
+/** Guides for every edge/centre of `p` that lines up exactly with a sibling's (px, container origin). */
+function guidesFor(p: Placement, sibs: Placement[], m: ContainerMetrics): Guide[] {
+  const out: Guide[] = [];
+  const seen = new Set<string>();
+  const feats = (a: number, w: number) => [a, a + w / 2, a + w];
+  for (const q of sibs) {
+    for (const f of feats(p.x, p.w)) {
+      if (!feats(q.x, q.w).includes(f)) continue;
+      const g: Guide = {
+        axis: 'x', at: f * m.unitPx,
+        from: Math.min(p.y, q.y) * m.rowPx, to: Math.max(p.y + p.h, q.y + q.h) * m.rowPx
+      };
+      const k = `x${g.at}:${g.from}:${g.to}`;
+      if (!seen.has(k)) out.push(g), seen.add(k);
+    }
+    for (const f of feats(p.y, p.h)) {
+      if (!feats(q.y, q.h).includes(f)) continue;
+      const g: Guide = {
+        axis: 'y', at: f * m.rowPx,
+        from: Math.min(p.x, q.x) * m.unitPx, to: Math.max(p.x + p.w, q.x + q.w) * m.unitPx
+      };
+      const k = `y${g.at}:${g.from}:${g.to}`;
+      if (!seen.has(k)) out.push(g), seen.add(k);
+    }
+  }
+  return out;
+}
+
+/**
+ * THE drop resolver: pure, used for the highlight every frame and (through state.target) for the
+ * commit. Grid: the cells under the ghost, neighbours pushed aside (Ruling 11: the push map is part
+ * of the target and the op is trial-run here, so a highlighted target never throws on commit);
+ * stored footprints count, so a collapsed folder's reserved cells are occupied (Ruling 13). Free:
+ * the 8 px design unit under the ghost, overlap allowed, snapped to sibling edges/centres within
+ * SNAP_PX. Selections keep their relative offsets when they come from one container; otherwise the
+ * others take the first free cells. Zones and hit boxes are RENDERED geometry (Ruling 13); a tile's
+ * centre zone becomes a merge only once state.dwell has ripened on it; a folder's centre zone is
+ * into-folder; tab buttons are tab-append; crumbs and an overlay's backdrop are navigation only.
+ */
+export function resolveDrop(state: DragState, hit: HitResult, draft: LayoutDashboard): DropTarget {
+  if (state.tab !== undefined) return resolveTabOrder(state, hit, draft);
+  if (hit.crumb !== undefined) return invalid('Dropping on the path changes nothing — hold over a crumb to go back to that level.');
+  if (hit.outside) return invalid('Keep holding here to close this folder — dropping here changes nothing.');
+  if (hit.tabId !== undefined) return resolveTabAppend(state, hit.tabId, draft);
+  const c = hit.container;
+  if (!c) return invalid(hit.tabBar ? 'Drop it on a tab, the dashboard, or inside a folder.' : 'Drop it on the dashboard or inside a folder.');
+  if (c.layout === 'stacked') {
+    return invalid("Dragging to a position isn't available in the narrow (stacked) layout yet — use Cut and Paste.");
+  }
+  const ids = state.ids;
+  const to = c.ref;
+  const bad = checkIds(draft, ids, to.folderId);
+  if (bad) return bad;
+  const idSet = new Set(ids);
+
+  const zone = zoneOf(state, hit);
+  if (zone?.centre) {
+    const n = findIn(draft, zone.id);
+    if (n?.kind === 'folder') return resolveIntoFolder(state, n.id, draft);
+    if (n?.kind === 'tile' && ripe(state, `merge:${n.id}`)) return resolveMerge(state, n.id, draft);
+  }
+
   let r: ReturnType<typeof resolveContainer>;
   let nodes: LayoutNode[];
   try {
@@ -151,11 +361,22 @@ export function resolveDrop(state: DragState, hit: HitResult, draft: LayoutDashb
     const s = sizeFor(n, r.mode);
     return { w: Math.min(s.w, cols), h: s.h };
   });
+  const moving = state.copy ? new Set<string>() : idSet;
+  const siblings = r.container.children
+    .filter((n) => n && !moving.has(n.id) && isRenderable(n))
+    .map((n) => clampPlacement(n.placement, cols));
 
-  // The grabbed item's top-left cell: the ghost's top-left, rounded to the nearest cell / unit.
+  // The grabbed item's top-left cell: the ghost's top-left, rounded to the nearest cell / unit
+  // (free: or snapped to a sibling's edge / centre within SNAP_PX).
   const grab = state.grab ?? { fx: 0, fy: 0 };
-  const x0 = Math.round((hit.dx - grab.fx * sizes[0].w * m.unitPx) / m.unitPx);
-  const y0 = Math.round((hit.dy - grab.fy * sizes[0].h * m.rowPx) / m.rowPx);
+  const rawX = (hit.dx - grab.fx * sizes[0].w * m.unitPx) / m.unitPx;
+  const rawY = (hit.dy - grab.fy * sizes[0].h * m.rowPx) / m.rowPx;
+  let x0 = Math.round(rawX);
+  let y0 = Math.round(rawY);
+  if (r.mode === 'free') {
+    x0 = snapAxis(rawX, sizes[0].w, siblings.flatMap((q) => [q.x, q.x + q.w / 2, q.x + q.w]), m.unitPx);
+    y0 = snapAxis(rawY, sizes[0].h, siblings.flatMap((q) => [q.y, q.y + q.h / 2, q.y + q.h]), m.rowPx);
+  }
 
   // Offsets from the grabbed item, in the target's units (scaled across modes as convertNode does).
   const origins = ids.map((id) => containerOfNode(draft, id));
@@ -190,50 +411,52 @@ export function resolveDrop(state: DragState, hit: HitResult, draft: LayoutDashb
     w.y += sy;
   }
 
-  const key = JSON.stringify([ids, state.copy, to, r.mode, wanted]);
-  if (memo && memo.draft === draft && memo.key === key) return memo.target;
-
-  const at: Placement[] = [];
-  const push = new Map<string, Placement>();
-  const moving = state.copy ? new Set<string>() : idSet;
-  const work: Container = {
-    columns: cols,
-    children: r.container.children.filter((n) => !(n && moving.has(n.id)))
-  };
-  const slot = (i: number, p: Placement) =>
-    work.children.push({ kind: 'tile', id: `\u0000drop-${i}`, placement: p } as unknown as LayoutNode);
-  nodes.forEach((n, i) => {
-    let t = wanted[i];
-    if (r.mode === 'grid') {
-      if (t && at.some((a) => overlaps(a, t!))) t = null; // a converted group can collide with itself
-      if (!t) {
-        t = firstFreeCell(work, sizes[i].w, sizes[i].h, 'grid');
-        t.h = sizes[i].h;
-      } else {
-        for (const [pid, pp] of pushAside(work, new Set(), t)) {
-          push.set(pid, pp);
-          work.children = work.children.map((k) => (k.id === pid ? ({ ...k, placement: pp } as LayoutNode) : k));
+  const key = JSON.stringify([ids, state.copy, to, r.mode, wanted, m.unitPx, m.rowPx]);
+  return memoised(key, draft, () => {
+    const at: Placement[] = [];
+    const push = new Map<string, Placement>();
+    const work: Container = {
+      columns: cols,
+      children: r.container.children.filter((n) => !(n && moving.has(n.id)))
+    };
+    const slot = (i: number, p: Placement) =>
+      work.children.push({ kind: 'tile', id: `\u0000drop-${i}`, placement: p } as unknown as LayoutNode);
+    nodes.forEach((n, i) => {
+      let t = wanted[i];
+      if (r.mode === 'grid') {
+        if (t && at.some((a) => overlaps(a, t!))) t = null; // a converted group can collide with itself
+        if (!t) {
+          t = firstFreeCell(work, sizes[i].w, sizes[i].h, 'grid');
+          t.h = sizes[i].h;
+        } else {
+          for (const [pid, pp] of pushAside(work, new Set(), t)) {
+            push.set(pid, pp);
+            work.children = work.children.map((k) => (k.id === pid ? ({ ...k, placement: pp } as LayoutNode) : k));
+          }
         }
+      } else {
+        t = t ? clampPlacement(t, cols) : firstFreeCell(work, sizes[i].w, sizes[i].h, 'free');
       }
-    } else {
-      t = t ? clampPlacement(t, cols) : firstFreeCell(work, sizes[i].w, sizes[i].h, 'free');
-    }
-    const z = n.placement?.z;
-    if (typeof z === 'number' && Number.isFinite(z)) t = { ...t, z };
-    at.push(t);
-    slot(i, t);
-  });
+      const z = n.placement?.z;
+      if (typeof z === 'number' && Number.isFinite(z)) t = { ...t, z };
+      at.push(t);
+      slot(i, t);
+    });
 
-  // Trial-run the very op the commit will run (Ruling 11): a highlighted target never throws.
-  let target: DropTarget = { kind: 'place', to, at, push };
-  try {
-    if (state.copy) copyNodes(draft, ids, to, at, documentIds(), push); // the same id set as the commit
-    else moveNodes(draft, ids, to, at, push);
-  } catch (e) {
-    target = invalid(e instanceof TreeOpError ? e.message : message(e, "That can't go there."));
-  }
-  memo = { key, draft, target };
-  return target;
+    // Trial-run the very op the commit will run (Ruling 11): a highlighted target never throws.
+    const target: DropTarget = { kind: 'place', to, at, push };
+    if (r.mode === 'free') {
+      const guides = guidesFor(at[0], siblings, m);
+      if (guides.length) target.guides = guides;
+    }
+    try {
+      if (state.copy) copyNodes(draft, ids, to, at, documentIds(), push); // the same id set as the commit
+      else moveNodes(draft, ids, to, at, push);
+    } catch (e) {
+      return invalid(e instanceof TreeOpError ? e.message : message(e, "That can't go there."));
+    }
+    return target;
+  });
 }
 
 // ---------------------------------------------------------------- commit
@@ -262,6 +485,29 @@ function unchanged(d: LayoutDashboard, ids: string[], t: Extract<DropTarget, { k
   });
 }
 
+/** The success toast with Undo: Undo steps back only while this drop is still the latest change. */
+function announce(label: string, before: LayoutDashboard): void {
+  toast.add({
+    type: 'success',
+    message: label,
+    duration: 8000,
+    action: {
+      label: 'Undo',
+      onClick: () => {
+        const st = get(session);
+        // The draft this drop replaced: while it is still on top of the undo stack, the drop is the
+        // latest change (a save replaces the draft reference but keeps the stack, so Undo still works).
+        if (st && st.undo[st.undo.length - 1] === before) undo();
+        else toast.info('Other changes were made after that drop. Use Undo in the toolbar (Ctrl+Z) to step back through them.');
+      }
+    }
+  });
+}
+
+function tabName(d: LayoutDashboard, tabId: string): string {
+  return d.tabs.find((t) => t.id === tabId)?.name || 'the tab';
+}
+
 /** Apply exactly state.target via apply(); 'invalid' → nothing changes and the reason is toasted. */
 export function commitDrop(state: DragState): void {
   const t = state.target;
@@ -273,45 +519,70 @@ export function commitDrop(state: DragState): void {
     toast.error(t.reason);
     return;
   }
-  if (t.kind !== 'place') {
-    toast.error("That kind of drop isn't available yet, so nothing changed.");
-    return;
-  }
   const d = currentDraft();
   if (!d) {
     toast.error('Not editing: click Edit first.');
     return;
   }
-  if (!state.copy && unchanged(d, state.ids, t)) return; // put back where it was: no change, no undo step
-  const label = `${state.copy ? 'Copied' : 'Moved'} ${describe(d, state.ids)} to ${destName(d, t.to)}`;
+  const before = d;
+
+  if (t.kind === 'tab-order') {
+    if (t.tabIds.join('\u0000') === d.tabs.map((x) => x.id).join('\u0000')) return; // same order: no change
+    const label = `Moved the "${tabName(d, state.tab ?? '')}" tab`;
+    if (apply('Reorder tabs', (dd) => reorderTabs(dd, t.tabIds))) announce(label, before);
+    return;
+  }
+
+  if (t.kind === 'merge') {
+    let folderId = '';
+    const label = `Made a folder from ${describe(d, [t.targetTileId, ...state.ids])}`;
+    const ok = apply('Make folder', (dd) => {
+      const r = mergeDrop(dd, state.ids, t.targetTileId, documentIds());
+      folderId = r.folderId;
+      return r.dashboard;
+    });
+    if (!ok) return; // apply has already said why
+    clearSelection();
+    announce(label, before);
+    // Name it straight away: the dialog opens with "New folder" selected; Cancel keeps that name.
+    openDialog({ kind: 'folder', id: folderId });
+    return;
+  }
+
+  let to: ContainerRef;
+  let at: Placement[];
+  let push: Map<string, Placement> | undefined;
+  if (t.kind === 'place') {
+    if (!state.copy && unchanged(d, state.ids, t)) return; // put back where it was: no change, no undo step
+    to = t.to;
+    at = t.at;
+    push = t.push;
+  } else if (t.kind === 'into-folder') {
+    const loc = locate(d, t.folderId);
+    if (!loc) {
+      toast.error('That folder no longer exists, so nothing changed.');
+      return;
+    }
+    to = { tabId: loc.tabId, folderId: t.folderId };
+    at = t.at;
+  } else {
+    to = { tabId: t.tabId };
+    at = t.at;
+  }
+  const label = `${state.copy ? 'Copied' : 'Moved'} ${describe(d, state.ids)} to ${destName(d, to)}`;
   let newIds: string[] = [];
   const ok = apply(label, (dd) => {
-    if (!state.copy) return moveNodes(dd, state.ids, t.to, t.at, t.push);
-    const r = copyNodes(dd, state.ids, t.to, t.at, documentIds(), t.push);
+    if (!state.copy) return moveNodes(dd, state.ids, to, at, push);
+    const r = copyNodes(dd, state.ids, to, at, documentIds(), push);
     newIds = r.newIds;
     return r.dashboard;
   });
-  // The draft this drop replaced: while it is still on top of the undo stack, the drop is the
-  // latest change (a save replaces the draft reference but keeps the stack, so Undo still works).
-  const before = d;
   if (!ok) return; // apply has already said why
   if (state.copy) {
     clearSelection();
     newIds.forEach((id) => toggleNode(id, true));
   }
-  toast.add({
-    type: 'success',
-    message: label,
-    duration: 8000,
-    action: {
-      label: 'Undo',
-      onClick: () => {
-        const st = get(session);
-        if (st && st.undo[st.undo.length - 1] === before) undo();
-        else toast.info('Other changes were made after that drop. Use Undo in the toolbar (Ctrl+Z) to step back through them.');
-      }
-    }
-  });
+  announce(label, before);
 }
 
 // ---------------------------------------------------------------- the store
@@ -329,6 +600,8 @@ interface Press {
   target: EventTarget | null;
   /** The node pressed (absent for a container press, which only opens a menu). */
   id?: string;
+  /** The tab pressed (tab reorder). */
+  tab?: string;
   rect?: { left: number; top: number; width: number; height: number };
   onMenu?: (x: number, y: number, target: EventTarget | null) => void;
   ready: boolean;
@@ -341,6 +614,7 @@ let draftAtStart: LayoutDashboard | null = null;
 let pending: { x: number; y: number } | null = null;
 let frameId = 0;
 let lastHit: HitResult | null = null;
+let dwellTimer: ReturnType<typeof setTimeout> | null = null;
 
 function setState(s: DragState | null) {
   current = s;
@@ -365,7 +639,48 @@ function dragIds(d: LayoutDashboard, id: string): string[] {
   return [id];
 }
 
+function grabOf(p: Press, rect: { left: number; top: number; width: number; height: number }) {
+  const frac = (v: number) => (Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0);
+  return {
+    fx: rect.width > 0 ? frac((p.x - rect.left) / rect.width) : 0,
+    fy: rect.height > 0 ? frac((p.y - rect.top) / rect.height) : 0
+  };
+}
+
+function beginDragging(d: LayoutDashboard, s: DragState) {
+  draftAtStart = d;
+  editorMenu.set(null);
+  if (typeof document !== 'undefined') document.body.classList.add('hops-dragging');
+  setState(s);
+  pending = { ...s.pointer };
+  schedule();
+}
+
+/** A tab reorder drag: the same engine, its own resolver case (tab-order). */
+function startTabDrag(p: Press, x: number, y: number) {
+  const d = currentDraft();
+  const tab = d?.tabs.find((t) => t.id === p.tab);
+  if (!d || !tab) {
+    endPress();
+    return;
+  }
+  const rect = p.rect ?? { left: p.x, top: p.y, width: 1, height: 1 };
+  beginDragging(d, {
+    ids: [],
+    tab: tab.id,
+    copy: false,
+    pointer: { x, y },
+    target: null,
+    grab: grabOf(p, rect),
+    ghost: { widthPx: Math.max(24, rect.width), heightPx: Math.max(24, rect.height), label: tab.name || 'Tab' }
+  });
+}
+
 function startDrag(p: Press, x: number, y: number, copy: boolean) {
+  if (p.tab !== undefined) {
+    startTabDrag(p, x, y);
+    return;
+  }
   const d = currentDraft();
   if (!d || !p.id || !locate(d, p.id)) {
     endPress();
@@ -373,23 +688,16 @@ function startDrag(p: Press, x: number, y: number, copy: boolean) {
   }
   const ids = dragIds(d, p.id);
   const rect = p.rect ?? { left: p.x, top: p.y, width: 1, height: 1 };
-  const frac = (v: number) => (Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0);
-  draftAtStart = d;
-  editorMenu.set(null);
-  if (typeof document !== 'undefined') document.body.classList.add('hops-dragging');
-  setState({
+  beginDragging(d, {
     ids,
     copy,
     pointer: { x, y },
     target: null,
-    grab: {
-      fx: rect.width > 0 ? frac((p.x - rect.left) / rect.width) : 0,
-      fy: rect.height > 0 ? frac((p.y - rect.top) / rect.height) : 0
-    },
+    origin: activeTab ?? undefined,
+    tabId: activeTab ?? undefined,
+    grab: grabOf(p, rect),
     ghost: { widthPx: Math.max(24, rect.width), heightPx: Math.max(24, rect.height), label: label(d, ids) }
   });
-  pending = { x, y };
-  schedule();
 }
 
 function schedule() {
@@ -407,29 +715,141 @@ function frame() {
   const hit = env.hitTest(at.x, at.y, new Set(s.ids));
   lastHit = hit;
   const next: DragState = { ...s, pointer: { x: at.x, y: at.y } };
+  next.dwell = dwellFor(next, hit, d, s.dwell);
   next.target = resolveDrop(next, hit, d);
   next.view = hit.container ? { left: hit.container.left, top: hit.container.top, metrics: hit.container.metrics } : undefined;
+  next.over = overFor(next.target, hit);
+  next.marker =
+    next.target.kind === 'tab-order' && hit.tabRect && hit.tabId !== s.tab
+      ? {
+          left: tabAfter(next, hit.tabRect) ? hit.tabRect.left + hit.tabRect.width : hit.tabRect.left,
+          top: hit.tabRect.top,
+          height: hit.tabRect.height
+        }
+      : undefined;
   setState(next);
-  autoScroll(at.x, at.y);
+  autoScroll(at.x, at.y, hit.scroller);
 }
 
-/** Near the top or bottom edge of the viewport, scroll (and keep scrolling while held there). */
-function autoScroll(x: number, y: number) {
+/** The viewport box the merge / into-folder / tab-append cue is drawn on. */
+function overFor(t: DropTarget, hit: HitResult): Box | undefined {
+  if ((t.kind === 'merge' || t.kind === 'into-folder') && hit.node && hit.container) {
+    const n = hit.node;
+    return { left: hit.container.left + n.left, top: hit.container.top + n.top, width: n.width, height: n.height };
+  }
+  if (t.kind === 'tab-append' && hit.tabRect) return { ...hit.tabRect };
+  return undefined;
+}
+
+/** Near an edge, scroll (and keep scrolling while held there): the panel under the pointer first, else the page. */
+function autoScroll(x: number, y: number, scroller?: Element) {
+  const step = (pos: number, top: number, bottom: number): number => {
+    if (pos < top + EDGE_PX) return -Math.ceil(((top + EDGE_PX - pos) / EDGE_PX) * MAX_SCROLL_PX);
+    if (pos > bottom - EDGE_PX) return Math.ceil(((pos - (bottom - EDGE_PX)) / EDGE_PX) * MAX_SCROLL_PX);
+    return 0;
+  };
+  const clamp = (v: number) => Math.max(-MAX_SCROLL_PX, Math.min(MAX_SCROLL_PX, v));
+  if (scroller) {
+    const r = env.measure(scroller);
+    const dy = r.height > 2 * EDGE_PX ? step(y, r.top, r.top + r.height) : 0;
+    if (dy !== 0) {
+      env.scrollElBy(scroller, clamp(dy));
+      pending = { x, y };
+      schedule();
+      return;
+    }
+  }
   const vp = env.viewport();
-  let dy = 0;
-  if (y < EDGE_PX) dy = -Math.ceil(((EDGE_PX - y) / EDGE_PX) * MAX_SCROLL_PX);
-  else if (y > vp.height - EDGE_PX) dy = Math.ceil(((y - (vp.height - EDGE_PX)) / EDGE_PX) * MAX_SCROLL_PX);
+  const dy = step(y, 0, vp.height);
   if (dy === 0) return;
-  env.scrollBy(0, Math.max(-MAX_SCROLL_PX, Math.min(MAX_SCROLL_PX, dy)));
+  env.scrollBy(0, clamp(dy));
   pending = { x, y };
   schedule();
+}
+
+// ---- dwell: hold over a target to merge, open a folder, switch tab, return via a crumb, close an overlay
+
+/** What holding still over `hit` would do, as a key and a duration; null = nothing to wait for. */
+function dwellKey(s: DragState, hit: HitResult, d: LayoutDashboard): { key: string; ms: number } | null {
+  if (s.tab !== undefined) return null;
+  const stack = get(overlayStack);
+  if (hit.crumb !== undefined) return crumbAction(hit.crumb) ? { key: `crumb:${hit.crumb}`, ms: OPEN_DWELL_MS } : null;
+  if (hit.outside) return stack.length ? { key: `out:${stack[stack.length - 1]}`, ms: OPEN_DWELL_MS } : null;
+  if (hit.tabId !== undefined) return hit.tabId !== activeTab ? { key: `tab:${hit.tabId}`, ms: OPEN_DWELL_MS } : null;
+  if (!hit.container || hit.container.layout === 'stacked') return null;
+  const zone = zoneOf(s, hit);
+  if (!zone?.centre) return null;
+  const n = findIn(d, zone.id);
+  if (n?.kind === 'tile') return { key: `merge:${n.id}`, ms: MERGE_DWELL_MS };
+  if (n?.kind === 'folder' && n.display === 'collapsed' && !s.ids.some((id) => id === n.id || isDescendant(d, id, n.id))) {
+    return { key: `open:${n.id}`, ms: OPEN_DWELL_MS };
+  }
+  return null;
+}
+
+function clearDwell() {
+  if (dwellTimer) clearTimeout(dwellTimer);
+  dwellTimer = null;
+}
+
+/** Keep the running dwell while its key holds; start a new timer when it changes; none when nothing to wait for. */
+function dwellFor(s: DragState, hit: HitResult, d: LayoutDashboard, prev: DragState['dwell']): DragState['dwell'] {
+  const k = dwellKey(s, hit, d);
+  if (!k) {
+    clearDwell();
+    return undefined;
+  }
+  if (prev && prev.key === k.key) return prev;
+  clearDwell();
+  dwellTimer = setTimeout(() => ripen(k.key), k.ms);
+  return { key: k.key, since: Date.now(), ripe: false };
+}
+
+/** The dwell's time is up: mark it ripe, do its navigation, and re-resolve on the next frame. */
+function ripen(key: string) {
+  dwellTimer = null;
+  const s = current;
+  if (!s || s.dwell?.key !== key) return;
+  setState({ ...s, dwell: { ...s.dwell, ripe: true } });
+  const [kind, ...rest] = key.split(':');
+  const arg = rest.join(':');
+  if (kind === 'open') openFolder(arg);
+  else if (kind === 'tab') switchDragTab(arg);
+  else if (kind === 'crumb') crumbAction(arg)?.();
+  else if (kind === 'out') {
+    const stack = get(overlayStack);
+    if (stack[stack.length - 1] === arg) closeTop();
+  }
+  if (current) {
+    pending = { ...current.pointer };
+    schedule();
+  }
+}
+
+/**
+ * What a breadcrumb crumb returns to: "tab:<id>" → that tab (another tab: switch to it; this
+ * tab: close every overlay); "folder:<depth>" → close the overlays above that depth. Null when
+ * the crumb is the level the drag is already on.
+ */
+export function crumbAction(crumb: string): (() => void) | null {
+  const stack = get(overlayStack);
+  if (crumb.startsWith('tab:')) {
+    const id = crumb.slice(4);
+    if (id !== activeTab) return () => switchDragTab(id);
+    return stack.length ? () => closeTo(0) : null;
+  }
+  if (crumb.startsWith('folder:')) {
+    const depth = Number(crumb.slice(7));
+    return Number.isInteger(depth) && depth >= 1 && depth < stack.length ? () => closeTo(depth) : null;
+  }
+  return null;
 }
 
 /** Re-resolve against the last hit (no layout read) after the copy flag changes. */
 function reresolve(copy: boolean) {
   const s = current;
   const d = currentDraft();
-  if (!s || !d || s.copy === copy) return;
+  if (!s || !d || s.copy === copy || s.tab !== undefined) return;
   const next: DragState = { ...s, copy };
   if (lastHit) next.target = resolveDrop(next, lastHit, d);
   setState(next);
@@ -444,6 +864,8 @@ function endPress() {
 function stopDrag() {
   if (frameId) env.cancelRaf(frameId);
   frameId = 0;
+  clearDwell();
+  allowedTab = null;
   pending = null;
   lastHit = null;
   draftAtStart = null;
@@ -488,7 +910,7 @@ function onMove(e: PointerEvent) {
       return;
     }
     if (dist <= MOUSE_THRESHOLD_PX) return;
-    if (!p.id) {
+    if (!p.id && p.tab === undefined) {
       endPress(); // a container press has nothing to drag
       return;
     }
@@ -590,7 +1012,7 @@ function detach() {
   window.removeEventListener('touchmove', onTouchMove);
 }
 
-function begin(e: PointerEvent, el: HTMLElement, id: string | undefined, onMenu: Press['onMenu']) {
+function begin(e: PointerEvent, el: HTMLElement, id: string | undefined, onMenu: Press['onMenu'], tab?: string) {
   const touch = e.pointerType === 'touch';
   press = {
     pointerId: e.pointerId,
@@ -599,8 +1021,9 @@ function begin(e: PointerEvent, el: HTMLElement, id: string | undefined, onMenu:
     y: e.clientY,
     target: e.target,
     id,
+    tab,
     // Measured on press (never in pointermove): the grab point and the ghost's size.
-    rect: id ? env.measure(el) : undefined,
+    rect: id || tab !== undefined ? env.measure(el) : undefined,
     onMenu,
     ready: false,
     timer: null
@@ -696,18 +1119,73 @@ export function pressMenu(el: HTMLElement, params: PressMenuParams) {
   };
 }
 
+export interface TabSourceParams {
+  tabId: string;
+  enabled: boolean;
+}
+
+/**
+ * Svelte action for a tab button: drag it along the tab bar to reorder the tabs (the same press,
+ * thresholds, frame loop, cancel and commit as item drags). A press without movement is an
+ * ordinary click (switch tab); after a mouse drag the click is swallowed.
+ */
+export function tabSource(el: HTMLElement, params: TabSourceParams) {
+  let prm = params;
+  const down = (e: PointerEvent) => {
+    if (!prm.enabled || !claimable(e)) return;
+    claimed.add(e);
+    begin(e, el, undefined, undefined, prm.tabId);
+  };
+  el.addEventListener('pointerdown', down);
+  el.addEventListener('touchmove', onTouchMove, { passive: false });
+  return {
+    update(next: TabSourceParams) {
+      prm = next;
+    },
+    destroy() {
+      el.removeEventListener('pointerdown', down);
+      el.removeEventListener('touchmove', onTouchMove);
+      if (press && !current && press.tab === prm.tabId) endPress();
+    }
+  };
+}
+
 // ---- the active tab: a drag is resolved against the tab it is shown on
 
 let activeTab: string | null = null;
 let deliberateSwitch = false;
+/** The tab the drag itself asked to switch to (the switch reaches setActiveTab after a render). */
+let allowedTab: string | null = null;
+let tabSwitcher: ((tabId: string) => void) | null = null;
 
-/** The editor's active tab (DragLayer reports it). A change during a drag cancels the drag. */
+/** The editor's active tab (DragLayer reports it). A change during a drag cancels the drag, unless the drag asked for it. */
 export function setActiveTab(tabId: string | null): void {
   const prev = activeTab;
   activeTab = tabId;
-  if (current && prev !== tabId && !deliberateSwitch) {
-    cancelDrag('The tab changed during the drag, so nothing was dropped.');
+  if (!current || prev === tabId) return;
+  if (deliberateSwitch || (allowedTab !== null && tabId === allowedTab)) {
+    allowedTab = null;
+    setState({ ...current, tabId: tabId ?? undefined });
+    pending = { ...current.pointer };
+    schedule();
+    return;
   }
+  cancelDrag('The tab changed during the drag, so nothing was dropped.');
+}
+
+/** Dashboard (through DragLayer) registers how to show a tab; the drag uses it for tab dwell and crumbs. */
+export function setTabSwitcher(fn: ((tabId: string) => void) | null): void {
+  tabSwitcher = fn;
+}
+
+/** The drag's own tab switch: it continues on the new tab. */
+function switchDragTab(tabId: string): void {
+  if (!tabSwitcher) {
+    toast.error("Couldn't switch tab during the drag — drop on the tab button instead.");
+    return;
+  }
+  allowedTab = tabId;
+  tabSwitcher(tabId);
 }
 
 /** For a tab switch the drag itself asks for (Task 8's tab dwell): the drag continues. */
@@ -735,5 +1213,7 @@ export function resetDragForTests(): void {
   env = domEnv;
   activeTab = null;
   deliberateSwitch = false;
+  allowedTab = null;
+  tabSwitcher = null;
 }
 
