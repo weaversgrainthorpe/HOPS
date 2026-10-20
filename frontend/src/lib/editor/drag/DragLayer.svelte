@@ -73,6 +73,12 @@
 
 <DragBreadcrumb />
 
+<!-- The layer below is aria-hidden (pure visuals); this always-mounted polite region announces
+     why a drop is not allowed while the pointer is over such a target (final review Minor 10). -->
+<div class="sr-only" role="status" aria-live="polite" data-testid="drag-announce">
+  {invalid !== null ? `Not allowed: ${invalid}` : ''}
+</div>
+
 {#if s}
   <div class="drag-layer" use:portal aria-hidden="true">
     {#if s.view}

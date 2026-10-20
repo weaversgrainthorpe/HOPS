@@ -119,7 +119,11 @@ export function findFolderChain(c: Container | undefined, id: string): FolderNod
  * folder (saved or minimised) shrinks to its tile (geometry.minimisedPlacement) and keeps
  * its inner column count, so opening it shows the same content; nothing else moves.
  * Ids with no folder in the tab are ignored silently (a deleted folder's memory).
- * Returns the SAME tab object when nothing applies.
+ * Render-only: the input is never modified. Returns the SAME tab object only when the
+ * tab has no effectively collapsed folder and no remembered view changes a display;
+ * every effectively collapsed folder (saved or remembered) is always re-created with
+ * its shrunken placement, so a tab holding one is always a new object (and so are its
+ * containers on the path to that folder).
  */
 export function applyFolderViews(dash: LayoutDashboard, tab: LayoutTab, views: Views): LayoutTab {
   function walk(c: Container, chain: FolderNode[]): Container {

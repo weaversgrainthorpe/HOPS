@@ -594,3 +594,30 @@ describe('final fix I2: the non-passive touchmove guard exists only while editin
     expect(count()).toBeGreaterThan(0);
   });
 });
+
+describe('final fix Minor 10: the drag refusal reason is announced', () => {
+  it('a polite live region outside the aria-hidden layer carries "not allowed: <reason>" while it applies', async () => {
+    render(DragLayer);
+    await tick();
+    const live = () => document.querySelector('[data-testid="drag-announce"]') as HTMLElement | null;
+    expect(live()).toBeTruthy(); // mounted before any drag, so changes are announced
+    expect(live()!.getAttribute('aria-live')).toBe('polite');
+    expect(live()!.closest('[aria-hidden="true"]')).toBeNull();
+    expect(live()!.textContent!.trim()).toBe('');
+    const { el } = source('a');
+    startMouseDrag(el, 50, 50);
+    where = null;
+    moveTo(350, 50);
+    flush();
+    await tick();
+    const t = get(drag)!.target!;
+    expect(t.kind).toBe('invalid');
+    expect(live()!.textContent).toContain(`Not allowed: ${t.kind === 'invalid' ? t.reason : ''}`);
+    where = { ref: { tabId: 't1' }, metrics: GRID, layout: 'grid' };
+    moveTo(350, 60);
+    flush();
+    await tick();
+    expect(live()!.textContent!.trim()).toBe('');
+    drop(350, 60);
+  });
+});
