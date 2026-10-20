@@ -7,15 +7,16 @@
   import { isAuthenticated, waitForAuthChecked } from '$lib/stores/auth';
   import { toast } from '$lib/stores/toast';
   import { confirm } from '$lib/stores/confirmModal';
-  import { config as configStore, loadConfig, dashboardHref } from '$lib/stores/config';
+  import { loadConfig, applySavedLayout, dashboardHref } from '$lib/stores/config';
   import {
     getScan, cancelScan, deleteScan, updateScanResult, promoteScan, createScan,
     createDetector,
     CATEGORY_LIST, categoryLabel, categoryIcon,
     type DiscoveryScan, type DiscoveryResult, type DiscoveryCategory,
-    type DiscoveryDetector, type DiscoveryDetectorInput,
+    type DiscoveryDetector, type DiscoveryDetectorInput, type PromoteTarget,
   } from '$lib/utils/api';
   import DetectorEditModal from '$lib/components/admin/DetectorEditModal.svelte';
+  import PromoteDialog from '$lib/components/admin/PromoteDialog.svelte';
 
   const scanId = $derived(page.params.id ?? '');
 
@@ -50,16 +51,8 @@
   // the server round-trip.
   let categoryDrafts = $state<Record<string, DiscoveryCategory>>({});
 
-  // Promote modal state. The admin picks dashboard + tab; the server
-  // distributes selected results into groups by their category, so the
-  // modal no longer asks for a group. New-dashboard still implies
-  // new-tab (server enforces; UI mirrors).
-  const NEW = '__new__';
+  // Promote dialog (PromoteDialog picks the target from the v3 tree).
   let showPromote = $state(false);
-  let promoteDashId = $state('');
-  let promoteTabId = $state('');
-  let newDashName = $state('');
-  let newTabName = $state('');
   let promoting = $state(false);
   let rescanning = $state(false);
 
@@ -442,11 +435,6 @@
     }
   }
 
-  // Promote pick lists — driven from the loaded config blob.
-  let dashboards = $derived($configStore?.dashboards ?? []);
-  let tabsForDash = $derived(
-    promoteDashId === NEW ? [] : (dashboards.find((d) => d.id === promoteDashId)?.tabs ?? [])
-  );
   // selectedCount excludes already-promoted rows so the "Promote N"
   // button reflects only what would actually be added on the next click.
   let selectedCount = $derived(
@@ -456,7 +444,7 @@
     )
   );
 
-  // Categories that will become groups when the user presses Promote.
+  // Categories that will become folders when the user presses Promote.
   // Preview shown in the modal so the admin sees the distribution
   // before committing.
   let categoriesInSelection = $derived.by(() => {
@@ -471,48 +459,16 @@
       .map((c) => ({ slug: c.slug, label: c.label, icon: c.icon, count: counts.get(c.slug)! }));
   });
 
-  // Cascading rule (server-enforced, UI-mirrored): new dashboard ⇒ new
-  // tab. Groups aren't picked anymore — categories drive that.
-  let dashIsNew = $derived(promoteDashId === NEW);
-  let tabIsNew = $derived(dashIsNew || promoteTabId === NEW);
-
   function openPromote() {
     if (selectedCount === 0) {
       toast.error('Tick at least one result to promote');
       return;
     }
     showPromote = true;
-    if (!promoteDashId) {
-      promoteDashId = dashboards[0]?.id ?? NEW;
-    }
   }
 
-  // When the dashboard changes and the current tab doesn't belong to
-  // it, reset the tab. Skipped while the parent is in "new" mode.
-  $effect(() => {
-    if (dashIsNew) {
-      promoteTabId = NEW;
-      return;
-    }
-    if (!tabsForDash.find((t) => t.id === promoteTabId)) {
-      promoteTabId = tabsForDash[0]?.id ?? NEW;
-    }
-  });
-
-  function promoteCanSubmit(): boolean {
-    if (dashIsNew && !newDashName.trim()) return false;
-    if (!dashIsNew && !promoteDashId) return false;
-    if (tabIsNew && !newTabName.trim()) return false;
-    if (!tabIsNew && !promoteTabId) return false;
-    return true;
-  }
-
-  async function doPromote() {
+  async function doPromote(target: PromoteTarget) {
     if (!scan || promoting) return;
-    if (!promoteCanSubmit()) {
-      toast.error('Pick or name a dashboard and tab');
-      return;
-    }
     promoting = true;
     const ids = results
       .filter((r) => selected[r.id] && r.curateState !== 'promoted')
@@ -522,30 +478,16 @@
     for (const r of results) {
       if (selected[r.id]) await persistCurateState(r);
     }
-    const target: Record<string, unknown> = {};
-    if (dashIsNew) target.newDashboard = { name: newDashName.trim() };
-    else target.dashboardId = promoteDashId;
-    if (tabIsNew) target.newTab = { name: newTabName.trim() };
-    else target.tabId = promoteTabId;
-
     try {
-      const { promoted, dashboardPath } = await promoteScan(scan.id, target, ids);
-      toast.success(`${promoted} tile${promoted === 1 ? '' : 's'} added to the dashboard`);
-      // Reload the config before going anywhere — for a new AND an existing
-      // dashboard — so the store never shows the pre-promote tiles/layout as
-      // current. A failed reload is surfaced by loadConfig (configError).
-      await loadConfig();
-      // Take the user to where their new tiles now live — prefer the
-      // path the server tells us, fall back to the picked dashboard.
-      if (dashboardPath) {
-        goto(dashboardHref(dashboardPath));
-      } else if (!dashIsNew) {
-        const dash = dashboards.find((d) => d.id === promoteDashId);
-        if (dash) goto(dashboardHref(dash.path));
-        else goto('/admin/discovery');
-      } else {
-        goto('/admin/discovery');
-      }
+      const resp = await promoteScan(scan.id, target, ids);
+      toast.success(`${resp.promoted} tile${resp.promoted === 1 ? '' : 's'} added to the dashboard`);
+      if (resp.warning) toast.warning(resp.warning);
+      // Take the committed document (a response without one marks the held
+      // one stale and reloads it), so the pre-promote tiles never show as current.
+      applySavedLayout(resp);
+      // Take the user to where their new tiles now live.
+      if (resp.dashboardPath) goto(dashboardHref(resp.dashboardPath));
+      else goto('/admin/discovery');
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Promote failed');
       promoting = false;
@@ -829,89 +771,13 @@
 </div>
 
 {#if showPromote && scan}
-  <div class="modal-backdrop" onclick={() => (showPromote = false)} role="presentation">
-    <div class="modal" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Promote results">
-      <h2>Promote {selectedCount} tile{selectedCount === 1 ? '' : 's'}</h2>
-      <p class="muted">Pick where the new tiles should land — or create a new dashboard, tab, or group on the fly.</p>
-
-      <div class="field">
-        <label for="p-dash">Dashboard</label>
-        <select id="p-dash" bind:value={promoteDashId}>
-          {#each dashboards as d (d.id)}
-            <option value={d.id}>{d.name}</option>
-          {/each}
-          <option value={NEW}>+ New dashboard…</option>
-        </select>
-        {#if dashIsNew}
-          <input
-            type="text"
-            placeholder="New dashboard name (e.g. Media)"
-            bind:value={newDashName}
-            aria-label="New dashboard name"
-            autocomplete="off"
-          />
-          <div class="hint">A URL path will be auto-generated from the name.</div>
-        {/if}
-      </div>
-
-      <div class="field">
-        <label for="p-tab">Tab</label>
-        {#if tabIsNew}
-          <input
-            type="text"
-            placeholder="New tab name"
-            bind:value={newTabName}
-            aria-label="New tab name"
-            autocomplete="off"
-          />
-          {#if dashIsNew}
-            <div class="hint">A new dashboard needs at least one tab.</div>
-          {/if}
-        {:else}
-          <select id="p-tab" bind:value={promoteTabId}>
-            {#each tabsForDash as t (t.id)}
-              <option value={t.id}>{t.name}</option>
-            {/each}
-            <option value={NEW}>+ New tab…</option>
-          </select>
-        {/if}
-      </div>
-
-      <div class="field">
-        <span class="label">Groups will be created from categories</span>
-        <div class="category-preview">
-          {#each categoriesInSelection as c (c.slug)}
-            <span class="cat-chip">
-              <Icon icon={c.icon} width="16" />
-              <span>{c.label}</span>
-              <span class="cat-count">{c.count}</span>
-            </span>
-          {/each}
-          {#if categoriesInSelection.length === 0}
-            <span class="muted">No results selected.</span>
-          {/if}
-        </div>
-        <div class="hint">
-          Each unique category becomes one group in the target tab. If a
-          group with that name already exists there, the tiles are added
-          to it. Change a result's category in the table to move it
-          between groups.
-        </div>
-      </div>
-
-      <div class="modal-actions">
-        <Button variant="secondary" onclick={() => (showPromote = false)}>Cancel</Button>
-        <Button
-          variant="primary"
-          icon="mdi:check-bold"
-          disabled={promoting || !promoteCanSubmit()}
-          onclick={doPromote}
-        >
-          {promoting ? 'Promoting…' : 'Promote'}
-        </Button>
-      </div>
-    </div>
-  </div>
+  <PromoteDialog
+    count={selectedCount}
+    categories={categoriesInSelection}
+    busy={promoting}
+    onSubmit={doPromote}
+    onCancel={() => (showPromote = false)}
+  />
 {/if}
 
 {#if bootstrapSeed}
@@ -1090,38 +956,6 @@
     font-size: 0.88rem;
   }
 
-  .category-preview {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.4rem;
-    padding: 0.5rem;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    background: var(--bg-secondary);
-    min-height: 2.2rem;
-    align-items: center;
-  }
-  .cat-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    background: var(--bg-tertiary);
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    padding: 0.2rem 0.6rem 0.2rem 0.55rem;
-    font-size: 0.85rem;
-  }
-  .cat-count {
-    background: var(--accent, var(--accent));
-    color: white;
-    border-radius: 999px;
-    padding: 0 0.45rem;
-    font-size: 0.78rem;
-    font-weight: 600;
-    min-width: 1.2rem;
-    text-align: center;
-  }
-
   /* Promoted rows fade slightly to signal "this one's done"; the icon in
      the checkbox cell takes the row's accent so it doesn't look ticked. */
   table.results tr.promoted { background: rgba(168,85,247,0.04); }
@@ -1132,46 +966,4 @@
     cursor: not-allowed;
   }
 
-  /* Modal */
-  .modal-backdrop {
-    position: fixed; inset: 0;
-    background: rgba(0,0,0,0.55);
-    backdrop-filter: blur(2px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1100;
-  }
-  .modal {
-    background: var(--bg-secondary);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-xl);
-    padding: 1.2rem 1.4rem;
-    width: 100%;
-    max-width: 460px;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.4);
-  }
-  .modal h2 { margin: 0 0 0.4rem; font-size: var(--font-h2); }
-  .modal .field { display: flex; flex-direction: column; gap: 0.3rem; margin-top: 0.9rem; }
-  .modal .field label { font-weight: 600; font-size: 0.88rem; }
-  .modal .field select,
-  .modal .field input[type="text"] {
-    background: var(--bg-secondary);
-    color: var(--text-primary);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    padding: 0.45rem 0.6rem;
-    font-size: 0.95rem;
-  }
-  .modal .hint {
-    color: var(--text-secondary);
-    font-size: 0.8rem;
-    margin-top: 0.1rem;
-  }
-  .modal-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 0.5rem;
-    margin-top: 1.2rem;
-  }
 </style>
