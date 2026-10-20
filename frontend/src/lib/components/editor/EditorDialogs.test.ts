@@ -33,6 +33,19 @@ async function show(d: Parameters<typeof editorDialog.set>[0]) {
   await tick();
 }
 
+
+/**
+ * The dialogs edit the draft only: no request at all, except the status-check row's read of the
+ * dashboard's settings (GET, M4 Task 7 / Ruling 3).
+ */
+function noRequestsButSettingsRead(spy: ReturnType<typeof vi.fn>) {
+  const other = spy.mock.calls.filter(([url, init]) => {
+    const method = ((init as RequestInit | undefined)?.method ?? 'GET').toUpperCase();
+    return !(method === 'GET' && /\/api\/dashboards\/[^/]+\/settings$/.test(String(url)));
+  });
+  expect(other).toEqual([]);
+}
+
 describe('FolderEditModal', () => {
   it('shows the folder fields and returns them on Save', async () => {
     const onSave = vi.fn();
@@ -76,7 +89,7 @@ describe('EditorDialogs (the dialogs edit the draft only)', () => {
     expect(f.display).toBe('collapsed');
     expect(f.placement).toEqual(p(0, 1, 4, 3));
     expect(get(dirty)).toBe(true);
-    expect(fetchSpy).not.toHaveBeenCalled();
+    noRequestsButSettingsRead(fetchSpy);
     expect(get(editorDialog)).toBeNull();
   });
 
@@ -89,7 +102,7 @@ describe('EditorDialogs (the dialogs edit the draft only)', () => {
     expect(f.kind).toBe('folder');
     expect(f.name).toBe('Tools');
     expect(f.content.children).toEqual([]);
-    expect(fetchSpy).not.toHaveBeenCalled();
+    noRequestsButSettingsRead(fetchSpy);
   });
 
   it('folder dialog Delete asks, then deletes; Duplicate deep-copies', async () => {
@@ -110,7 +123,7 @@ describe('EditorDialogs (the dialogs edit the draft only)', () => {
     await fireEvent.click(screen.getByRole('button', { name: /^Save/ }));
     const t = nodeIn(draft(), 'a') as TileNode;
     expect(t).toMatchObject({ kind: 'tile', id: 'a', name: 'Router', placement: p(0, 0) });
-    expect(fetchSpy).not.toHaveBeenCalled();
+    noRequestsButSettingsRead(fetchSpy);
   });
 
   it('tile dialog refuses a javascript: URL with a toast and leaves the draft alone', async () => {
@@ -144,7 +157,7 @@ describe('EditorDialogs (the dialogs edit the draft only)', () => {
     await fireEvent.click(screen.getByRole('treeitem', { name: /^Free/ }));
     await fireEvent.click(screen.getByRole('button', { name: /^Move$/ }));
     expect(draft().tabs[1].root.children.map((n) => n.id)).toContain('a');
-    expect(fetchSpy).not.toHaveBeenCalled();
+    noRequestsButSettingsRead(fetchSpy);
     editorDialog.set({ kind: 'movecopy', ids: ['a'] });
     await tick();
     await fireEvent.keyDown(screen.getByRole('treeitem', { name: /^Main/ }), { key: 'ArrowRight' });

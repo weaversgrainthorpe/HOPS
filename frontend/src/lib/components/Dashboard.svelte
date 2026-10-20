@@ -23,6 +23,7 @@
     type TabFields
   } from '$lib/editor/editorActions';
   import { reorderTabs } from '$lib/editor/treeOps';
+  import { contextForTab } from '$lib/editor/statusChecks';
   import Icon from '@iconify/svelte';
   import { onMount, onDestroy, tick, untrack } from 'svelte';
   import { get } from 'svelte/store';
@@ -56,6 +57,7 @@
     background?: Background;
     layout?: 'inherit' | 'grid' | 'free';
     designWidth?: number;
+    statusChecksEnabled?: unknown;
   }
   // The tabs shown: the draft's while editing (added/renamed/reordered tabs live there), else the saved ones.
   const barTabs = $derived<BarTab[]>(
@@ -217,9 +219,14 @@
   function tabFields(
     name: string, icon?: string, iconUrl?: string, iconBgColor?: string, color?: string, opacity?: number,
     layout?: { layout: 'inherit' | 'grid' | 'free'; designWidth?: number },
-    background?: Background | null
+    background?: Background | null,
+    statusChecksEnabled?: boolean | null
   ): TabFields {
-    return { name, icon, iconUrl, iconBgColor, color, opacity, ...(layout ?? {}), ...(background !== undefined ? { background } : {}) };
+    return {
+      name, icon, iconUrl, iconBgColor, color, opacity, ...(layout ?? {}),
+      ...(background !== undefined ? { background } : {}),
+      ...(statusChecksEnabled !== undefined ? { statusChecksEnabled } : {})
+    };
   }
 
   function handleAddTab() {
@@ -290,6 +297,8 @@
     }
   }
 
+  // The tab dialog's status-check row inherits from the dashboard (M4 §4b).
+  const tabStatusContext = $derived(contextForTab(draft ?? dashboard));
   const inheritedLayout = $derived<'grid' | 'free'>(draft?.defaultLayout === 'free' ? 'free' : 'grid');
 </script>
 
@@ -473,6 +482,7 @@
   <TabEditModal
     tabName=""
     {inheritedLayout}
+    statusContext={tabStatusContext}
     onSave={handleSaveNewTab}
     onCancel={() => (showAddTabModal = false)}
   />
@@ -491,6 +501,8 @@
       tabBackground={t.background}
       tabLayout={t.layout}
       tabDesignWidth={t.designWidth}
+      tabStatusChecks={t.statusChecksEnabled}
+      statusContext={tabStatusContext}
       {inheritedLayout}
       onSave={(...args) => handleUpdateTab(t.id, ...args)}
       onCancel={() => (editingTabIndex = null)}

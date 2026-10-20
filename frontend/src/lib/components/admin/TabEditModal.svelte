@@ -9,6 +9,8 @@
   import type { Background } from '$lib/types';
   import { editMode } from '$lib/stores/editMode';
   import { backgroundSummary } from '../background/backgroundSummary';
+  import StatusCheckSetting from '../editor/StatusCheckSetting.svelte';
+  import { containerSetting, type LevelSetting, type StatusContext } from '$lib/editor/statusChecks';
 
   // Close modal when edit mode is turned off
   $effect(() => {
@@ -35,14 +37,20 @@
       name: string, icon?: string, iconUrl?: string, iconBgColor?: string, color?: string, opacity?: number,
       layout?: { layout: 'inherit' | 'grid' | 'free'; designWidth?: number },
       /** A background picked in this dialog: undefined = unchanged, null = removed. */
-      background?: Background | null
+      background?: Background | null,
+      /** Status checks: undefined = unchanged, null = inherit (key removed), true/false = set here. */
+      statusChecksEnabled?: boolean | null
     ) => void;
     onCancel: () => void;
     onDelete?: () => void;
     onDuplicate?: () => void;
+    /** The tab's stored status-check setting (missing = inherit). */
+    tabStatusChecks?: unknown;
+    /** The dashboard, for the status-check row's "inherited from" text. */
+    statusContext?: StatusContext;
   }
 
-  let { tabName, tabIcon, tabIconUrl, tabIconBgColor, tabColor, tabOpacity, tabBackground, tabLayout, tabDesignWidth, inheritedLayout = 'grid', onSave, onCancel, onDelete, onDuplicate }: Props = $props();
+  let { tabName, tabIcon, tabIconUrl, tabIconBgColor, tabColor, tabOpacity, tabBackground, tabLayout, tabDesignWidth, inheritedLayout = 'grid', onSave, onCancel, onDelete, onDuplicate, tabStatusChecks, statusContext }: Props = $props();
   // Form state initialized from props (intentionally captures initial values)
   // svelte-ignore state_referenced_locally
   let name = $state(tabName);
@@ -61,6 +69,9 @@
   // svelte-ignore state_referenced_locally
   let designWidth = $state<number | string>(tabDesignWidth ?? 1280);
   let problem = $state('');
+  // svelte-ignore state_referenced_locally
+  const initialStatus = containerSetting(tabStatusChecks);
+  let statusSetting = $state<LevelSetting>(initialStatus);
   const isFree = $derived(layout === 'free' || (layout === 'inherit' && inheritedLayout === 'free'));
   const MIN_DESIGN_WIDTH = 320;
   const MAX_DESIGN_WIDTH = 7680;
@@ -96,7 +107,12 @@
     }
     problem = '';
     const bg = stagedBackground ? (stagedBackground.value ?? null) : undefined;
-    onSave(name.trim(), icon || undefined, iconUrl || undefined, iconBgColor, color, opacity, { layout, designWidth: dw }, bg);
+    // Only a changed choice is written (an untouched invalid value stays as stored).
+    const sc =
+      statusSetting !== initialStatus && statusSetting !== 'invalid' && statusSetting !== 'unset'
+        ? statusSetting === 'inherit' ? null : statusSetting === 'on'
+        : undefined;
+    onSave(name.trim(), icon || undefined, iconUrl || undefined, iconBgColor, color, opacity, { layout, designWidth: dw }, bg, sc);
   }
 
   function handleBackgroundSave(background: Background | undefined) {
@@ -184,6 +200,8 @@
       </div>
     {/if}
     {#if problem}<p class="problem" role="alert">{problem}</p>{/if}
+
+    <StatusCheckSetting level="tab" bind:value={statusSetting} context={statusContext} />
 
     <div class="form-group">
       <button type="button" class="btn-background" onclick={() => showBackgroundConfig = true}>

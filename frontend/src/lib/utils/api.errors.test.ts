@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
-  saveDashboardV3, getConfig, createDashboard, reorderDashboards, promoteScan, ConflictError, MigrationFailedError
+  saveDashboardV3, getConfig, dismissNotice, createDashboard, reorderDashboards, promoteScan, ConflictError, MigrationFailedError
 } from './api';
 import type { LayoutDashboard } from '$lib/types/layout';
 
@@ -55,6 +55,21 @@ describe('GET /api/config', () => {
   it('returns the v3 document with its migration notices', async () => {
     respond(200, { ...doc, migrationNotices: ['n'] });
     expect(await getConfig()).toEqual({ ...doc, migrationNotices: ['n'] });
+  });
+
+  it('returns the server notices (M4 Task 7); a malformed notice is a visible error, never dropped silently', async () => {
+    respond(200, { ...doc, notices: [{ id: 'n1', text: 'Hello' }] });
+    expect(await getConfig()).toEqual({ ...doc, notices: [{ id: 'n1', text: 'Hello' }] });
+    respond(200, { ...doc, notices: [{ id: 'n1' }] });
+    await expect(getConfig()).rejects.toThrow(/notice/i);
+  });
+
+  it('dismissNotice POSTs to /api/notices/{id}/dismiss (id encoded)', async () => {
+    respond(204, null);
+    await dismissNotice('a/b');
+    const [url, init] = vi.mocked(fetch).mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('/api/notices/a%2Fb/dismiss');
+    expect(init.method).toBe('POST');
   });
 
   it('anything that is not a schema-3 document is a visible error, never an empty dashboard list', async () => {

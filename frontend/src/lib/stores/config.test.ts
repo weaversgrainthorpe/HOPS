@@ -81,6 +81,31 @@ describe('the store is the v3 document', () => {
   });
 });
 
+describe('server notices across writes (M4 Task 7)', () => {
+  it('a write keeps the notices and re-reads them, since a write can change what they list', async () => {
+    config.set({ ...makeConfig(), notices: [{ id: 'n', text: 'old' }] });
+    vi.mocked(api.getConfig).mockResolvedValue({ ...makeConfig(dash('a', 4)), notices: [{ id: 'n', text: 'new' }] });
+    applySavedLayout({ layout: doc(dash('a', 4)) });
+    expect(get(config)?.notices).toEqual([{ id: 'n', text: 'old' }]);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(get(config)?.notices).toEqual([{ id: 'n', text: 'new' }]);
+    expect(get(config)?.dashboards).toEqual([dash('a', 4)]);
+  });
+
+  it('notices that went away are removed', async () => {
+    config.set({ ...makeConfig(), notices: [{ id: 'n', text: 'old' }] });
+    vi.mocked(api.getConfig).mockResolvedValue(makeConfig(dash('a', 4)));
+    applySavedLayout({ layout: doc(dash('a', 4)) });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(get(config)).not.toHaveProperty('notices');
+  });
+
+  it('no notices held: no extra read', () => {
+    applySavedLayout({ layout: doc(dash('a', 4)) });
+    expect(api.getConfig).not.toHaveBeenCalled();
+  });
+});
+
 describe('loadConfig', () => {
   it('sets migrationFailure on MigrationFailedError', async () => {
     vi.mocked(api.getConfig).mockRejectedValue(new api.MigrationFailedError('boom'));

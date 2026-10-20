@@ -69,7 +69,11 @@ export interface Background {
 
 export interface StatusCheck {
   type: 'http';
-  enabled: boolean;
+  /**
+   * Layered (M4 §4b, Ruling 12): true = on, false = off, null = inherit (follow the folder, tab,
+   * dashboard or global setting). Missing = off: status checks only run where turned on.
+   */
+  enabled?: boolean | null;
   interval: number;
 }
 
@@ -77,4 +81,11 @@ export interface StatusCheck {
 export interface Config extends LayoutDoc {
   /** Ids the startup v2→v3 migration renamed (from GET only; never stored). */
   migrationNotices?: string[];
+  /** One-time notices the server computes per GET (M4 Task 6/7); dismissed via POST. Never stored. */
+  notices?: ServerNotice[];
+}
+
+export interface ServerNotice {
+  id: string;
+  text: string;
 }

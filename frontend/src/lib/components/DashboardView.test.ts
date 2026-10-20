@@ -89,6 +89,19 @@ afterEach(() => {
   config.set(null);
 });
 
+
+/**
+ * The dialogs edit the draft only: no request at all, except the status-check row's read of the
+ * dashboard's settings (GET, M4 Task 7 / Ruling 3).
+ */
+function noRequestsButSettingsRead(spy: ReturnType<typeof vi.fn>) {
+  const other = spy.mock.calls.filter(([url, init]) => {
+    const method = ((init as RequestInit | undefined)?.method ?? 'GET').toUpperCase();
+    return !(method === 'GET' && /\/api\/dashboards\/[^/]+\/settings$/.test(String(url)));
+  });
+  expect(other).toEqual([]);
+}
+
 describe('Dashboard view/edit rendering', () => {
   it('view mode renders TabCanvas; entering edit mode renders the editing canvas (no TabPanel) with the toolbar', async () => {
     const { container } = render(Dashboard, { dashboard: legacy });
@@ -301,7 +314,7 @@ describe('Dashboard edit mode (M3 Task 6: the v3 editor shell)', () => {
     expect(draft().tabs.find((t) => t.id === 't1')!.name).toBe('Front');
     await tick();
     expect(screen.getByRole('tab', { name: 'Switch to Front tab' })).toBeInTheDocument();
-    expect(fetchSpy).not.toHaveBeenCalled();
+    noRequestsButSettingsRead(fetchSpy);
   });
 
   it('Add tab creates the tab in the draft and switches to it', async () => {
@@ -317,7 +330,7 @@ describe('Dashboard edit mode (M3 Task 6: the v3 editor shell)', () => {
     expect(added.name).toBe('Media');
     expect(screen.getByRole('tab', { name: 'Switch to Media tab' }).getAttribute('aria-selected')).toBe('true');
     expect(container.querySelector(`.tab-canvas[data-tab-id="${added.id}"]`)).not.toBeNull();
-    expect(fetchSpy).not.toHaveBeenCalled();
+    noRequestsButSettingsRead(fetchSpy);
   });
 
   it('duplicating and deleting a tab edit the draft (delete asks first)', async () => {
@@ -333,7 +346,7 @@ describe('Dashboard edit mode (M3 Task 6: the v3 editor shell)', () => {
     closeConfirmModal(true);
     await new Promise((r) => setTimeout(r, 0));
     expect(draft().tabs.map((t) => t.name)).toEqual(['Main', 'Main (Copy)']);
-    expect(fetchSpy).not.toHaveBeenCalled();
+    noRequestsButSettingsRead(fetchSpy);
   });
 
   // Tab reorder by drag (the editor's drag engine, Task 8) is covered in editor/TabReorder.test.ts.
@@ -347,6 +360,6 @@ describe('Dashboard edit mode (M3 Task 6: the v3 editor shell)', () => {
     await fireEvent.input(screen.getByLabelText(/Custom Title/), { target: { value: 'Draft title' } });
     await fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /^Save/ }));
     expect((draft().header as { centerTitle?: string }).centerTitle).toBe('Draft title');
-    expect(fetchSpy).not.toHaveBeenCalled();
+    noRequestsButSettingsRead(fetchSpy);
   });
 });

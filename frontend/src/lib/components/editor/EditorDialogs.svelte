@@ -13,6 +13,7 @@
   import { session } from '$lib/stores/editSession';
   import { toast } from '$lib/stores/toast';
   import type { Entry } from '$lib/types';
+  import { contextForContainer, contextForNode } from '$lib/editor/statusChecks';
   import type { FolderNode, LayoutNode, TileNode } from '$lib/types/layout';
 
   interface Props {
@@ -43,6 +44,12 @@
 
   const close = () => editorDialog.set(null);
 
+  // The levels above the edited (or new) item, for the status-check row (M4 §4b).
+  const statusContext = $derived.by(() => {
+    if (!dlg || !draft || (dlg.kind !== 'tile' && dlg.kind !== 'folder')) return undefined;
+    return dlg.id ? contextForNode(draft, dlg.id) : contextForContainer(draft, dlg.to ?? { tabId });
+  });
+
   // A fresh blank per opened "new" dialog.
   const newTile = $derived(dlg && dlg.kind === 'tile' && !dlg.id ? blankTile() : null);
   const newFolder = $derived(dlg && dlg.kind === 'folder' && !dlg.id ? blankFolder() : null);
@@ -64,8 +71,11 @@
       return;
     }
     // A new folder: a picked background is set on it (null = removed = no key).
-    const { background, ...rest } = fields;
-    const node = { ...blankFolder(), ...rest, ...(background ? { background } : {}) } as FolderNode;
+    const { background, statusChecksEnabled, ...rest } = fields;
+    const node = {
+      ...blankFolder(), ...rest, ...(background ? { background } : {}),
+      ...(typeof statusChecksEnabled === 'boolean' ? { statusChecksEnabled } : {})
+    } as FolderNode;
     if (addNode(node, dlg.to ?? { tabId }, dlg.cell)) close();
   }
 
@@ -90,10 +100,11 @@
         onCancel={close}
         onDelete={() => remove(id)}
         onMoveCopy={() => openDialog({ kind: 'movecopy', ids: [id] })}
+        {statusContext}
       />
     {/key}
   {:else if !dlg.id && newTile}
-    <EntryEditModal entry={newTile} onSave={saveTile} onCancel={close} />
+    <EntryEditModal entry={newTile} onSave={saveTile} onCancel={close} {statusContext} />
   {/if}
 {:else if dlg?.kind === 'folder'}
   {#if dlg.id && existing && existing.kind === 'folder'}
@@ -108,10 +119,11 @@
           if (duplicate(id)) close();
         }}
         onMoveCopy={() => openDialog({ kind: 'movecopy', ids: [id] })}
+        {statusContext}
       />
     {/key}
   {:else if !dlg.id && newFolder}
-    <FolderEditModal folder={newFolder} isNew onSave={saveFolder} onCancel={close} />
+    <FolderEditModal folder={newFolder} isNew onSave={saveFolder} onCancel={close} {statusContext} />
   {/if}
 {:else if dlg?.kind === 'movecopy'}
   <MoveCopyDialog ids={dlg.ids} onClose={close} />

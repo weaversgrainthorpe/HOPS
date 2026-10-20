@@ -7,6 +7,7 @@
   import PopupModal from './PopupModal.svelte';
   import StatusIndicator from './StatusIndicator.svelte';
   import { safeOpenUrl } from '$lib/utils/url';
+  import { tileMayBeChecked } from '$lib/editor/statusChecks';
 
   interface Props {
     entry: Entry;
@@ -116,10 +117,10 @@
         <div class="subtitle">{entry.description}</div>
       {/if}
 
-      {#if entry.statusCheck?.enabled}
-        <div class="status-badge">
-          <StatusIndicator entryId={entry.id} />
-        </div>
+      <!-- Layered status checks (M4 §4b): a tile switched on or set to inherit asks the
+           server, which resolves the levels; an unset or switched-off tile is never checked. -->
+      {#if tileMayBeChecked(entry)}
+        <StatusIndicator entryId={entry.id} showOff={inEditor} />
       {/if}
     {/if}
   </button>
@@ -243,15 +244,6 @@
     width: 48px;
     height: 48px;
     object-fit: contain;
-  }
-
-  .status-badge {
-    position: absolute;
-    top: 0.375rem;
-    right: 0.375rem;
-    background: rgba(0, 0, 0, 0.4);
-    border-radius: 50%;
-    padding: 2px;
   }
 
   .subtitle {

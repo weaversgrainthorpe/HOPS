@@ -8,6 +8,8 @@
   import Modal from '../shared/Modal.svelte';
   import { confirm } from '$lib/stores/confirmModal';
   import { editMode } from '$lib/stores/editMode';
+  import StatusCheckSetting from '../editor/StatusCheckSetting.svelte';
+  import { tileSetting, type LevelSetting, type StatusContext } from '$lib/editor/statusChecks';
 
   interface Props {
     entry: Entry;
@@ -20,14 +22,20 @@
      * editor never patches those).
      */
     onMoveCopy?: () => void;
+    /** The levels above the tile, for the status-check row's "inherited from" text. */
+    statusContext?: StatusContext;
   }
 
-  let { entry, onSave, onCancel, onDelete, onMoveCopy }: Props = $props();
+  let { entry, onSave, onCancel, onDelete, onMoveCopy, statusContext }: Props = $props();
 
   // Form state initialized from props (intentionally captures initial values)
   // svelte-ignore state_referenced_locally
   let editedEntry = $state<Entry>({ ...entry });
   let showIconEditor = $state(false);
+  // Status checks: Inherit / On / Off (unset = Off, the tile default). Saved with the dialog.
+  // svelte-ignore state_referenced_locally
+  const initialStatus = tileSetting(entry);
+  let statusSetting = $state<LevelSetting>(initialStatus);
 
   // Update editedEntry when entry prop changes. Normalise `type` to
   // 'link' when the incoming entry has no value, so the Tile type
@@ -67,6 +75,15 @@
       editedEntry.openMode = 'newtab';
       editedEntry.statusCheck = undefined;
       editedEntry.showStatus = false;
+    } else if (statusSetting !== initialStatus && statusSetting !== 'unset' && statusSetting !== 'invalid') {
+      // Only a changed choice is written; unchanged (including unset and an invalid stored
+      // value) keeps the stored statusCheck exactly.
+      const prev = editedEntry.statusCheck && typeof editedEntry.statusCheck === 'object' ? editedEntry.statusCheck : undefined;
+      editedEntry.statusCheck = {
+        ...(prev ?? { interval: 60 }),
+        type: 'http',
+        enabled: statusSetting === 'inherit' ? null : statusSetting === 'on'
+      } as Entry['statusCheck'];
     }
     onSave(editedEntry);
   }
@@ -222,20 +239,8 @@
           </select>
         </div>
 
-        <div class="form-group checkbox-group">
-          <label>
-            <input
-              type="checkbox"
-              checked={editedEntry.statusCheck?.enabled ?? false}
-              onchange={(e) => {
-                if (!editedEntry.statusCheck) {
-                  editedEntry.statusCheck = { type: 'http', enabled: false, interval: 60 };
-                }
-                editedEntry.statusCheck.enabled = (e.target as HTMLInputElement).checked;
-              }}
-            />
-            Enable Status Check
-          </label>
+        <div class="form-group full-width">
+          <StatusCheckSetting level="tile" bind:value={statusSetting} context={statusContext} />
         </div>
       {/if}
 
@@ -397,22 +402,6 @@
 
   small a:hover {
     text-decoration: underline;
-  }
-
-  .checkbox-group {
-    flex-direction: row;
-    align-items: center;
-  }
-
-  .checkbox-group label {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    cursor: pointer;
-  }
-
-  input[type="checkbox"] {
-    cursor: pointer;
   }
 
   .modal-actions {

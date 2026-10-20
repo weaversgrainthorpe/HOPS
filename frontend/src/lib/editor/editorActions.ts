@@ -219,7 +219,10 @@ export function editFolder(
   id: string, fields: Omit<Partial<FolderNode>, 'background'> & { background?: Background | null }
 ): boolean {
   // background: undefined = unchanged, null = removed (a picker choice staged in the dialog).
-  const { background, ...others } = plain(fields) as { background?: Background | null } & Record<string, unknown>;
+  // statusChecksEnabled: undefined = unchanged, null = inherit (the key is removed), true/false = set.
+  const { background, statusChecksEnabled, ...others } = plain(fields) as {
+    background?: Background | null; statusChecksEnabled?: boolean | null
+  } & Record<string, unknown>;
   const { display, layout, ...rest } = others as Partial<FolderNode>;
   const patch: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(rest)) if (!LOCKED.includes(k)) patch[k] = v;
@@ -228,6 +231,9 @@ export function editFolder(
     if (display !== undefined) next = setFolderDisplay(next, id, display);
     if (layout !== undefined) next = setFolderLayout(next, id, layout);
     if (background !== undefined) next = folderWithBackground(next, id, background ?? undefined);
+    if (statusChecksEnabled !== undefined) {
+      next = mapNode(next, id, (f) => withStatusChecks(f, statusChecksEnabled) as LayoutNode);
+    }
     return next;
   });
 }
@@ -367,6 +373,8 @@ export interface TabFields {
   designWidth?: number;
   /** A background picked in the dialog: undefined = unchanged, null = removed. */
   background?: Background | null;
+  /** Status checks (M4 §4b): undefined = unchanged, null = inherit (key removed), true/false = set. */
+  statusChecksEnabled?: boolean | null;
 }
 
 function tabPatch(f: TabFields): Partial<LayoutTab> {
@@ -374,6 +382,14 @@ function tabPatch(f: TabFields): Partial<LayoutTab> {
     name: f.name, icon: f.icon, iconUrl: f.iconUrl, iconBgColor: f.iconBgColor, color: f.color, opacity: f.opacity
   };
   return patch;
+}
+
+/** A tab or folder with its status-check setting: null removes the key (inherit). */
+function withStatusChecks<T extends object>(o: T, v: boolean | null): T {
+  const next = { ...o } as Record<string, unknown>;
+  if (v === null) delete next.statusChecksEnabled;
+  else next.statusChecksEnabled = v;
+  return next as T;
 }
 
 /** Name/look via updateTab; layout and design width via setTabLayout (which converts the content). */
@@ -391,6 +407,10 @@ function applyTabFields(d: LayoutDashboard, tabId: string, f: TabFields): Layout
         return next;
       })
     };
+  }
+  if (f.statusChecksEnabled !== undefined) {
+    const v = f.statusChecksEnabled;
+    named = { ...named, tabs: named.tabs.map((t) => (t.id === tabId ? withStatusChecks(t, v) : t)) };
   }
   return f.layout !== undefined ? setTabLayout(named, tabId, f.layout, f.designWidth) : named;
 }

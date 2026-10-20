@@ -8,7 +8,7 @@
   import ChangePasswordModal from '$lib/components/admin/ChangePasswordModal.svelte';
   import BackupModal from '$lib/components/admin/BackupModal.svelte';
   import MigrationFailed from '$lib/components/MigrationFailed.svelte';
-  import MigrationNotices from '$lib/components/MigrationNotices.svelte';
+  import NoticesBanner from '$lib/components/NoticesBanner.svelte';
   import BackendStatus from '$lib/components/BackendStatus.svelte';
   import Button from '$lib/components/shared/Button.svelte';
   import Icon from '@iconify/svelte';
@@ -193,7 +193,7 @@
         <!-- Never show an empty DashboardList as if there were no dashboards. -->
         <MigrationFailed onOpenBackups={() => showBackupModal = true} />
       {:else}
-        <MigrationNotices />
+        <NoticesBanner />
         <div class="admin-content" class:greyed-out={$isBackendOffline}>
           <DashboardList />
         </div>

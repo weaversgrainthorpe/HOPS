@@ -171,7 +171,19 @@ export async function getConfig(): Promise<Config> {
   }
   const out: Config = { schemaVersion: 3, dashboards: resp.dashboards };
   if (Array.isArray(resp.migrationNotices)) out.migrationNotices = resp.migrationNotices;
+  if (resp.notices !== undefined) {
+    const ok = Array.isArray(resp.notices) && resp.notices.every(
+      (n: unknown) => !!n && typeof (n as { id?: unknown }).id === 'string' && typeof (n as { text?: unknown }).text === 'string'
+    );
+    if (!ok) throw new Error('The server sent notices this version of HOPS cannot read. Reload the page; if it persists, check the server.');
+    out.notices = (resp.notices as { id: string; text: string }[]).map((n) => ({ id: n.id, text: n.text }));
+  }
   return out;
+}
+
+/** POST /api/notices/{id}/dismiss: the dismissal is stored, so the notice stays gone. */
+export async function dismissNotice(id: string): Promise<void> {
+  await fetchAPI(`/notices/${encodeURIComponent(id)}/dismiss`, { method: 'POST' });
 }
 
 export async function getStatus(entryId: string) {

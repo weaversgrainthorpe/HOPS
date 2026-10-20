@@ -8,7 +8,11 @@
   export type FolderFields = Pick<
     FolderNode,
     'name' | 'icon' | 'iconUrl' | 'iconBgColor' | 'color' | 'opacity' | 'textColor' | 'display' | 'layout' | 'showTitle' | 'shape'
-  > & { background?: Background | null };
+  > & {
+    background?: Background | null;
+    /** Status checks (M4 §4b): true/false = set here, null = inherit (key removed), absent = unchanged. */
+    statusChecksEnabled?: boolean | null;
+  };
 </script>
 
 <script lang="ts">
@@ -20,6 +24,8 @@
   import BackgroundConfigModal from '../admin/BackgroundConfigModal.svelte';
   import { backgroundSummary } from '../background/backgroundSummary';
   import Modal from '../shared/Modal.svelte';
+  import StatusCheckSetting from './StatusCheckSetting.svelte';
+  import { containerSetting, type LevelSetting, type StatusContext } from '$lib/editor/statusChecks';
 
   interface Props {
     folder: FolderNode;
@@ -30,8 +36,10 @@
     onDelete?: () => void;
     onDuplicate?: () => void;
     onMoveCopy?: () => void;
+    /** The levels above the folder, for the status-check row's "inherited from" text. */
+    statusContext?: StatusContext;
   }
-  let { folder, isNew = false, onSave, onCancel, onDelete, onDuplicate, onMoveCopy }: Props = $props();
+  let { folder, isNew = false, onSave, onCancel, onDelete, onDuplicate, onMoveCopy, statusContext }: Props = $props();
   let showBackgroundConfig = $state(false);
   // A picked background is staged here and saved with the dialog (one undo step);
   // Cancel discards it (Ruling 11(5)).
@@ -63,6 +71,9 @@
   let showTitle = $state(folder.showTitle !== false);
   // svelte-ignore state_referenced_locally
   let shape = $state<'rounded' | 'folder-tab'>(folder.shape === 'folder-tab' ? 'folder-tab' : 'rounded');
+  // svelte-ignore state_referenced_locally
+  const initialStatus = containerSetting(folder.statusChecksEnabled);
+  let statusSetting = $state<LevelSetting>(initialStatus);
   let showIconEditor = $state(false);
   let problem = $state('');
   let nameEl = $state<HTMLInputElement | null>(null);
@@ -105,7 +116,11 @@
       layout,
       showTitle,
       shape,
-      ...(stagedBackground ? { background: stagedBackground.value ?? null } : {})
+      ...(stagedBackground ? { background: stagedBackground.value ?? null } : {}),
+      // Only a changed choice is written (an untouched invalid value stays as stored).
+      ...(statusSetting !== initialStatus && statusSetting !== 'invalid' && statusSetting !== 'unset'
+        ? { statusChecksEnabled: statusSetting === 'inherit' ? null : statusSetting === 'on' }
+        : {})
     });
   }
 </script>
@@ -192,6 +207,8 @@
     <label class="check">
       <input type="checkbox" bind:checked={showTitle} /> Show title bar
     </label>
+
+    <StatusCheckSetting level="folder" bind:value={statusSetting} context={statusContext} />
 
     <div class="form-group">
       <button type="button" class="btn-secondary background-btn" onclick={() => (showBackgroundConfig = true)}>

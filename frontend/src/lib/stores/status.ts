@@ -10,6 +10,10 @@ export interface StatusInfo {
   intervalMinutes?: number;
   /** Set when the last status fetch failed: the values above are old data. */
   fetchError?: string;
+  /** The level whose setting decided on/off (M4 §4b): global | dashboard | tab | folder | tile | invalid. */
+  source?: string;
+  /** That level's id ("" for global). */
+  sourceId?: string;
 }
 
 /**
@@ -71,7 +75,9 @@ export async function fetchStatus(entryId: string, previous?: StatusInfo): Promi
       // The tile's resolved probe interval from the server; anything that
       // isn't a positive number falls back to the default in isStatusStale.
       intervalMinutes:
-        typeof data.intervalMinutes === 'number' && data.intervalMinutes > 0 ? data.intervalMinutes : undefined
+        typeof data.intervalMinutes === 'number' && data.intervalMinutes > 0 ? data.intervalMinutes : undefined,
+      ...(typeof data.source === 'string' ? { source: data.source } : {}),
+      ...(typeof data.sourceId === 'string' ? { sourceId: data.sourceId } : {})
     };
   } catch (error) {
     logError('Status fetch', error);

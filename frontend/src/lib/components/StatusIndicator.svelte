@@ -4,12 +4,20 @@
   import { COLORS } from '$lib/constants/colors';
   import Icon from '@iconify/svelte';
   import { onMount, onDestroy } from 'svelte';
+  import { layoutDoc } from '$lib/stores/config';
+  import { disabledTooltip } from '$lib/editor/statusChecks';
 
   interface Props {
     entryId: string;
+    /**
+     * Show the "checks are off" state too (the editor). In view mode a tile whose checks
+     * resolve off shows no badge at all; the indicator stays mounted (and polling) so the
+     * badge appears when a level switches the checks on.
+     */
+    showOff?: boolean;
   }
 
-  let { entryId }: Props = $props();
+  let { entryId, showOff = false }: Props = $props();
   let status = $state<StatusInfo>({ status: 'loading' });
   let unsubscribe: (() => void) | null = null;
 
@@ -35,6 +43,8 @@
   });
 
   let stale = $derived(isStatusStale(status, $now));
+  let visible = $derived(showOff || status.status !== 'disabled');
+  let invalid = $derived(status.status === 'disabled' && status.source === 'invalid');
 
   function getStatusColor(s: StatusInfo['status']) {
     switch (s) {
@@ -62,7 +72,7 @@
                  s.status === 'down' ? 'Offline' :
                  s.status === 'error' ? 'Error' :
                  s.status === 'loading' ? 'Checking...' :
-                 s.status === 'disabled' ? 'Status checks are turned off in Settings' :
+                 s.status === 'disabled' ? disabledTooltip($layoutDoc?.dashboards ?? [], s.source, s.sourceId) :
                  'Unknown';
     if (s.responseTime && s.status === 'up') {
       return `${base} (${s.responseTime}ms)`;
@@ -74,6 +84,8 @@
 <!-- When the browser/HOPS server is offline, freeze the per-tile indicator:
      show a neutral "we can't tell right now" icon instead of letting every
      tile turn red. The actual status colour returns the moment we're back. -->
+{#if visible}
+<div class="status-badge">
 {#if $isOffline}
   <div
     class="status-indicator offline"
@@ -88,16 +100,28 @@
     class="status-indicator"
     class:loading={status.status === 'loading'}
     class:stale
+    class:invalid
     style:--status-color={getStatusColor(status.status)}
     role="img"
     aria-label={stale ? staleReason(status) : getStatusTitle(status)}
     title={stale ? `${staleReason(status)} Last known: ${getStatusTitle(status)}` : getStatusTitle(status)}
   >
-    <Icon icon={stale ? 'mdi:clock-alert-outline' : getStatusIcon(status.status)} width="12" />
+    <Icon icon={stale ? 'mdi:clock-alert-outline' : invalid ? 'mdi:alert-octagon-outline' : getStatusIcon(status.status)} width="12" />
   </div>
+{/if}
+</div>
 {/if}
 
 <style>
+  .status-badge {
+    position: absolute;
+    top: 0.375rem;
+    right: 0.375rem;
+    background: rgba(0, 0, 0, 0.4);
+    border-radius: 50%;
+    padding: 2px;
+  }
+
   .status-indicator {
     display: flex;
     align-items: center;
@@ -122,6 +146,11 @@
   /* Stale / fetch-failed: grey, so old data never reads as a live status. */
   .status-indicator.stale {
     color: rgba(148, 163, 184, 0.85);
+  }
+
+  /* A wrong-typed stored setting (source "invalid"): a warning, not the plain "off" look. */
+  .status-indicator.invalid {
+    color: #f59e0b;
   }
 
   @keyframes spin {

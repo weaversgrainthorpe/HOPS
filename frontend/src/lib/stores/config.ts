@@ -15,6 +15,7 @@ import {
 import { page } from '$app/stores';
 import { toast } from './toast';
 import { logError } from '$lib/utils/errors';
+import { refreshStatusBase } from './statusCheckBase';
 
 // The stored v3 document as GET /api/config serves it: {schemaVersion: 3,
 // dashboards, migrationNotices?}. null until it has loaded (or when it failed).
@@ -168,12 +169,40 @@ export async function loadConfig(opts: { background?: boolean } = {}) {
 export function applySavedLayout(fresh: FreshLayout | undefined): void {
   const layout = fresh?.layout;
   if (layout && Array.isArray(layout.dashboards)) {
-    const notices = get(config)?.migrationNotices;
-    config.set({ schemaVersion: 3, dashboards: layout.dashboards, ...(notices ? { migrationNotices: notices } : {}) });
+    const held = get(config);
+    const notices = held?.migrationNotices;
+    const serverNotices = held?.notices;
+    config.set({
+      schemaVersion: 3,
+      dashboards: layout.dashboards,
+      ...(notices ? { migrationNotices: notices } : {}),
+      ...(serverNotices ? { notices: serverNotices } : {})
+    });
+    // Server notices are computed per GET from the document (Ruling 13), so a write can change
+    // them (e.g. the dashboard they list was switched on or deleted): read them again.
+    if (serverNotices && serverNotices.length > 0) void refreshNotices();
     return;
   }
   layoutStale.set(true);
   void loadConfig();
+}
+
+/**
+ * Re-read the server notices after a write. Only the notices are taken from the response (the
+ * document came with the write). A failed read keeps the held notices and is logged; the admin
+ * page re-reads the whole config whenever it opens.
+ */
+async function refreshNotices(): Promise<void> {
+  try {
+    const fresh = await getConfig();
+    config.update((c) => {
+      if (!c) return c;
+      const { notices: _old, ...rest } = c;
+      return fresh.notices && fresh.notices.length > 0 ? { ...rest, notices: fresh.notices } : rest;
+    });
+  } catch (error) {
+    logError('Notices refresh', error);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -322,6 +351,8 @@ export async function saveDashboardSettingsChanges(
     try {
       const resp = await saveDashboardSettings(id, changes, d.revision);
       applySavedLayout(resp);
+      // The editing dialogs' "inherited from" text uses this dashboard's settings (Ruling 3).
+      void refreshStatusBase(id);
       const merged = { ...((d.settings as DashboardSettings | undefined) ?? {}), ...changes } as DashboardSettings;
       settingsSavedHook?.(id, d.revision, resp.revision, merged);
     } catch (error) {
