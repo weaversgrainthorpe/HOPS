@@ -9,7 +9,7 @@
   import { openFolder } from '$lib/stores/folderOverlay';
   import { getContext } from 'svelte';
   import { editMode } from '$lib/stores/editMode';
-  import { FOLDER_VIEW_CONTEXT, type FolderViewContext } from '$lib/stores/folderView';
+  import { FOLDER_VIEW_CONTEXT, differsFromSaved, type FolderViewContext } from '$lib/stores/folderView';
   import FolderControls from './FolderControls.svelte';
 
   interface Props {
@@ -57,14 +57,15 @@
 </script>
 
 {#if folder.display === 'collapsed'}
+  <!-- The positioned wrapper carries the node id and placement; the tile (role=button) and
+       the restore control are siblings, never nested. -->
+  <div class="folder-slot collapsed" data-node-id={folder.id} {style}>
   <div
-    class="folder collapsed folder-collapsed-tile"
-    data-node-id={folder.id}
+    class="folder tile-face folder-collapsed-tile"
     role="button"
     tabindex="0"
     aria-haspopup="dialog"
     aria-label={collapsedLabel}
-    {style}
     style:--group-bg={folder.color || 'var(--bg-secondary)'}
     style:--group-opacity={folder.opacity !== undefined ? folder.opacity : 0.95}
     style:color={textColor}
@@ -91,11 +92,12 @@
       </div>
     {/if}
     <span class="collapsed-name">{folder.name}</span>
-    {#if views && !$editMode}
-      <span class="tile-restore">
-        <FolderControls dashboardId={views.dashboardId} folderId={folder.id} {remembered} {saved} variant="tile" />
-      </span>
-    {/if}
+  </div>
+  {#if views && !$editMode && differsFromSaved(saved, remembered)}
+    <span class="tile-restore">
+      <FolderControls dashboardId={views.dashboardId} folderId={folder.id} {remembered} {saved} variant="tile" />
+    </span>
+  {/if}
   </div>
 {:else}
   <div
@@ -124,6 +126,11 @@
         {#if views && !$editMode}
           <FolderControls dashboardId={views.dashboardId} folderId={folder.id} {remembered} {saved} variant="bar" />
         {/if}
+      </div>
+    {/if}
+    {#if !showTitle && views && !$editMode}
+      <div class="corner-controls">
+        <FolderControls dashboardId={views.dashboardId} folderId={folder.id} {remembered} {saved} variant="bar" />
       </div>
     {/if}
     <div class="folder-body">
@@ -229,7 +236,7 @@
     margin-top: -1px;
   }
 
-  .collapsed {
+  .tile-face {
     align-items: center;
     justify-content: center;
     gap: 0.25rem;
@@ -255,10 +262,38 @@
     height: 100%;
     object-fit: contain;
   }
+  .folder-slot {
+    position: relative;
+    display: flex;
+    min-width: 0;
+    min-height: 0;
+  }
+  .folder-slot > .tile-face {
+    flex: 1;
+    min-width: 0;
+  }
   .tile-restore {
     position: absolute;
     top: 0.15rem;
     right: 0.15rem;
+  }
+  /* Untitled folders: a corner cluster, shown on hover or keyboard focus, always on touch. */
+  .corner-controls {
+    position: absolute;
+    top: 0.15rem;
+    right: 0.15rem;
+    z-index: 3;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+  .folder:hover > .corner-controls,
+  .corner-controls:focus-within {
+    opacity: 1;
+  }
+  @media (hover: none) {
+    .corner-controls {
+      opacity: 1;
+    }
   }
   .empty-note {
     font-size: 0.75rem;

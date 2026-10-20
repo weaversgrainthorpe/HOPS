@@ -23,3 +23,19 @@ export function restoreFocus(_node: HTMLElement) {
     }
   };
 }
+
+/**
+ * After a folder's own control unmounts (minimise / restore), focus its replacement in the
+ * canvas: the restore control, else the collapsed tile, else the minimise control.
+ */
+export function focusFolderControl(folderId: string): void {
+  const slot = Array.from(document.querySelectorAll('[data-node-id]')).find(
+    (e) => e.getAttribute('data-node-id') === folderId && !e.closest('[role="dialog"]')
+  );
+  if (!slot) return;
+  const target =
+    slot.querySelector<HTMLElement>('button[aria-label="Restore folder"]') ??
+    slot.querySelector<HTMLElement>('.folder-collapsed-tile') ??
+    slot.querySelector<HTMLElement>('button[aria-label="Minimise folder"]');
+  target?.focus();
+}

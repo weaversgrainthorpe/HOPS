@@ -4,10 +4,11 @@
   import type { CanvasPlan } from '$lib/layout/geometry';
   import { overlayBodyPx, overlayMetrics, resolveMode } from '$lib/layout/geometry';
   import { layoutStale } from '$lib/stores/config';
+  import { tick } from 'svelte';
   import { overlayStack } from '$lib/stores/folderOverlay';
-  import { clearFolderView, findFolderChain } from '$lib/stores/folderView';
+  import { clearFolderView, findFolderChain, setFolderView } from '$lib/stores/folderView';
   import { focusTrap } from '$lib/utils/focusTrap';
-  import { portal, inertUnless, restoreFocus } from '$lib/utils/overlayActions';
+  import { portal, inertUnless, restoreFocus, focusFolderControl } from '$lib/utils/overlayActions';
   import ContainerView from './ContainerView.svelte';
 
   interface Props {
@@ -22,22 +23,40 @@
   // measured on mount and resize only. Width: same viewport rule as the folder overlay.
   let topPx = $state(0);
   let bodyPx = $state(overlayBodyPx(1280, 0));
+  // Top bar and the dashboard's own tab bar (a dedicated attribute, so no other `.tabs` counts).
+  function barElements(): Element[] {
+    return [document.querySelector('nav.navbar'), document.querySelector('[data-dashboard-tabs]')].filter(
+      (e): e is Element => e !== null
+    );
+  }
   function measure() {
     let t = 0;
-    for (const sel of ['.navbar', '.tabs']) {
-      const b = document.querySelector(sel)?.getBoundingClientRect().bottom;
+    for (const el of barElements()) {
+      const b = el.getBoundingClientRect().bottom;
       if (typeof b === 'number' && Number.isFinite(b)) t = Math.max(t, b);
     }
     topPx = Math.round(t);
     bodyPx = overlayBodyPx(window.innerWidth, document.documentElement.clientWidth);
   }
-  $effect(() => measure());
+  $effect(() => {
+    measure();
+    // Re-measure when either bar changes size (one observer on those two elements).
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => measure());
+    for (const el of barElements()) ro.observe(el);
+    return () => ro.disconnect();
+  });
 
   const chain = $derived(findFolderChain(tab.root, folderId));
   const folder = $derived(chain ? chain[chain.length - 1] : null);
   const size = $derived(chain && folder ? overlayMetrics(plan, tab, resolveMode(dashboard, tab, chain), folder, bodyPx) : null);
 
   const restore = () => clearFolderView(dashboard.id, folderId);
+  async function minimise() {
+    setFolderView(dashboard.id, folderId, 'collapsed');
+    await tick();
+    focusFolderControl(folderId);
+  }
 
   function onWindowKey(e: KeyboardEvent) {
     // A folder overlay opened from here (or any other handler) takes this Escape first.
@@ -65,9 +84,14 @@
     >
       <header class="max-header">
         <h2>{folder.name}</h2>
+        <span class="max-actions">
+        <button type="button" class="hdr-btn" aria-label="Minimise folder" title="Minimise folder" onclick={minimise}>
+          <Icon icon="mdi:window-minimize" width="24" />
+        </button>
         <button type="button" class="restore-btn" aria-label="Restore folder" title="Restore (Esc)" onclick={restore}>
           <Icon icon="mdi:restore" width="24" />
         </button>
+        </span>
       </header>
       <div class="max-body">
         <div class="max-content" style:width="{Math.round(size.metrics.innerWidthPx * 100) / 100}px">
@@ -124,6 +148,11 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  .max-actions {
+    display: inline-flex;
+    gap: 0.5rem;
+  }
+  .hdr-btn,
   .restore-btn {
     background: none;
     border: none;

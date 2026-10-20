@@ -779,6 +779,7 @@
     {#if dashboard.tabs.length >= 1 || editing}
       <div
         class="tabs"
+        data-dashboard-tabs
         role="tablist"
         aria-label="Dashboard tabs"
         use:dndzone={{

@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { tick } from 'svelte';
+  import { focusFolderControl } from '$lib/utils/overlayActions';
   import Icon from '@iconify/svelte';
   import { clearFolderView, differsFromSaved, setFolderView } from '$lib/stores/folderView';
   import type { FolderNode } from '$lib/types/layout';
@@ -14,13 +16,20 @@
   }
   let { dashboardId, folderId, remembered, saved, variant }: Props = $props();
   const showRestore = $derived(differsFromSaved(saved, remembered));
-  // The tile and the bar sit inside click/keyboard targets of their own: keep these presses local.
-  const stop = (e: Event) => e.stopPropagation();
+  const hasButtons = $derived(variant === 'bar' || showRestore);
+
+  /** The clicked button is about to unmount: hand focus to whatever replaces it. */
+  async function act(change: () => void) {
+    change();
+    await tick();
+    focusFolderControl(folderId);
+  }
 </script>
 
-<span class="folder-controls" role="presentation" onclick={stop} onkeydown={stop}>
+{#if hasButtons}
+<span class="folder-controls">
   {#if variant === 'bar'}
-    <button type="button" aria-label="Minimise folder" title="Minimise folder" onclick={() => setFolderView(dashboardId, folderId, 'collapsed')}>
+    <button type="button" aria-label="Minimise folder" title="Minimise folder" onclick={() => act(() => setFolderView(dashboardId, folderId, 'collapsed'))}>
       <Icon icon="mdi:window-minimize" width="18" />
     </button>
     <button type="button" aria-label="Maximise folder" title="Maximise folder" onclick={() => setFolderView(dashboardId, folderId, 'maximised')}>
@@ -28,20 +37,18 @@
     </button>
   {/if}
   {#if showRestore}
-    <button type="button" aria-label="Restore folder" title="Restore folder" onclick={() => clearFolderView(dashboardId, folderId)}>
+    <button type="button" aria-label="Restore folder" title="Restore folder" onclick={() => act(() => clearFolderView(dashboardId, folderId))}>
       <Icon icon="mdi:restore" width="18" />
     </button>
   {/if}
 </span>
+{/if}
 
 <style>
   .folder-controls {
     display: inline-flex;
     gap: 0.25rem;
     flex: none;
-  }
-  .folder-controls:empty {
-    display: none;
   }
   button {
     background: none;

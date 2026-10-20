@@ -181,7 +181,7 @@
     gap: 0.875rem;
     width: 100%;
   }
-  .container-stacked :global(.folder.collapsed) {
+  .container-stacked :global(.folder-slot.collapsed) {
     min-height: 7rem;
   }
   @media (max-width: 768px) {

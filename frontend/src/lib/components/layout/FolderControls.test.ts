@@ -145,4 +145,53 @@ describe('folder controls', () => {
     expect(el(container, 'f1').classList.contains('collapsed')).toBe(false);
     expect(screen.getByRole('button', { name: 'Restore folder' })).toBeInTheDocument();
   });
+
+  it('an untitled folder still has controls, reachable by keyboard focus', async () => {
+    const { container } = await renderTab([folder('f1', [tile('a')], { showTitle: false })]);
+    const corner = container.querySelector('[data-node-id="f1"] .corner-controls') as HTMLElement;
+    expect(corner).not.toBeNull();
+    const min = within(corner).getByRole('button', { name: 'Minimise folder' });
+    min.focus();
+    expect(document.activeElement).toBe(min);
+    expect(within(corner).getByRole('button', { name: 'Maximise folder' })).toBeInTheDocument();
+  });
+  it('the collapsed tile and its restore control are siblings under the positioned wrapper', async () => {
+    setFolderView('d1', 'f1', 'collapsed');
+    const { container } = await renderTab([folder('f1', [tile('a')])]);
+    const slot = el(container, 'f1');
+    expect(container.querySelectorAll('[data-node-id="f1"]').length).toBe(1);
+    expect(slot.style.gridColumn).toBe('3 / span 1');
+    const tileEl = slot.querySelector('[role="button"].folder-collapsed-tile') as HTMLElement;
+    const restore = screen.getByRole('button', { name: 'Restore folder' });
+    expect(tileEl.contains(restore)).toBe(false);
+    expect(restore.closest('[data-node-id]')).toBe(slot);
+  });
+  it('the maximised panel has a Minimise button: closes the panel, folder minimised in place', async () => {
+    const { container } = await renderTab([folder('f1', [tile('a')])]);
+    await fireEvent.click(screen.getByRole('button', { name: 'Maximise folder' }));
+    await fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Minimise folder' }));
+    await tick();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(get(folderViewFor('d1'))).toEqual({ f1: 'collapsed' });
+    expect(el(container, 'f1').classList.contains('collapsed')).toBe(true);
+  });
+  it('Escape on a nested folder control inside the maximised panel still closes the panel', async () => {
+    await renderTab([folder('f1', [folder('g', [tile('a')], { placement: { x: 0, y: 0, w: 2, h: 2 } })])]);
+    await fireEvent.click(screen.getAllByRole('button', { name: 'Maximise folder' })[0]);
+    const nested = within(screen.getByRole('dialog')).getAllByRole('button', { name: 'Minimise folder' })[1];
+    nested.focus();
+    await fireEvent.keyDown(nested, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+  it('focus moves to the replacement control after Minimise and Restore', async () => {
+    await renderTab([folder('f1', [tile('a')])]);
+    const min = screen.getByRole('button', { name: 'Minimise folder' });
+    min.focus();
+    await fireEvent.click(min);
+    await tick();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Restore folder' }));
+    await fireEvent.click(document.activeElement as HTMLElement);
+    await tick();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Minimise folder' }));
+  });
 });
