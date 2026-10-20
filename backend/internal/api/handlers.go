@@ -1489,6 +1489,9 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 			}
 		}
 		used := collectIDs(stored)
+		for id := range configdoc.ReservedDashboardIDs { // never import a dashboard onto a collection route
+			used[id] = true
+		}
 
 		// Append imported dashboards, renaming paths (and ids) if they conflict
 		for _, d := range imported {

@@ -78,6 +78,13 @@ func firstOccurrence(nodes []v2Node) map[string]string {
 	return first
 }
 
+// ReservedDashboardIDs are ids no dashboard may carry: /api/dashboards/order
+// and /api/dashboards/transfer are collection routes that would shadow them.
+var ReservedDashboardIDs = map[string]bool{"order": true, "transfer": true}
+
+// IsReservedDashboardID reports whether id is reserved (see ReservedDashboardIDs).
+func IsReservedDashboardID(id string) bool { return ReservedDashboardIDs[id] }
+
 // renameDuplicates rewrites, in place, the id of every object that repeats
 // an id already used earlier in document order. The first occurrence keeps
 // its id; later ones become <old>-<owning dashboard id> (dashboards:
@@ -97,7 +104,7 @@ func renameDuplicates(v2 Obj) []Rename {
 		if !ok || id == "" {
 			continue
 		}
-		if first[id] != n.path {
+		if first[id] != n.path || (n.kind == "dashboard" && IsReservedDashboardID(id)) {
 			var cand string
 			if n.kind == "dashboard" {
 				for s := 2; ; s++ {

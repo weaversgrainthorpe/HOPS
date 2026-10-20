@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/weaversgrainthorpe/HOPS/internal/configdoc"
 )
@@ -178,7 +179,7 @@ func TestV3Put_PathClash409AndSamePathOK(t *testing.T) {
 	d2 := v3Body(t, c, "d2")
 	d2["path"] = "d1" // normalises onto /d1
 	code, resp := v3Put(c, "d2", d2, 1)
-	if code != 409 || resp["error"] != "path_taken" || resp["dashboardId"] != "d2" || resp["path"] != "d1" {
+	if code != 409 || resp["error"] != "path_taken" || resp["dashboardId"] != "d1" || resp["path"] != "d1" {
 		t.Fatalf("v3 put clash: %d %v", code, resp)
 	}
 	d2["path"] = "/d2"
@@ -239,7 +240,8 @@ func TestCreateDashboard(t *testing.T) {
 	n = backupCount(t, c)
 	for _, p := range []string{"/fresh", "fresh", "//d1"} {
 		code, resp = c.do("POST", "/api/dashboards", map[string]interface{}{"name": "Dup", "path": p})
-		if code != 409 || resp["error"] != "path_taken" {
+		if code != 409 || resp["error"] != "path_taken" || resp["dashboardId"] == "" || resp["dashboardId"] == nil ||
+			storedDashboards(storedDoc(t, db))[resp["dashboardId"].(string)] == nil {
 			t.Fatalf("clash %q: %d %v", p, code, resp)
 		}
 	}
@@ -367,8 +369,8 @@ func TestTransfer(t *testing.T) {
 		"unknown folder": transferBody(merge(cur, map[string]interface{}{"target": map[string]interface{}{"tabId": tabID, "folderId": "ghost"}})),
 		"dup node ids":   transferBody(merge(cur, map[string]interface{}{"nodeIds": []string{"e1", "e1"}, "target": target})),
 	} {
-		if code, resp := c.do("POST", "/api/dashboards/transfer", b); code != 400 && code != 404 {
-			t.Errorf("%s: %d %v", name, code, resp)
+		if code, resp := c.do("POST", "/api/dashboards/transfer", b); code != 400 {
+			t.Errorf("%s: %d %v, want 400", name, code, resp)
 		}
 	}
 	if code, _ := c.do("POST", "/api/dashboards/transfer", transferBody(merge(cur, map[string]interface{}{"targetId": "ghost", "target": target}))); code != 404 {
@@ -496,4 +498,262 @@ func merge(a, b map[string]interface{}) map[string]interface{} {
 		out[k] = v
 	}
 	return out
+}
+
+// ---- fix round 1 ----
+
+func TestReservedIDs_LegacyWholeConfigRefusesNewOrderDashboard(t *testing.T) {
+	router, db := setupTestRouter(t)
+	c := newClient(t, router)
+	seed(t, c)
+	before := storedRaw(db)
+	for _, id := range []string{"order", "transfer"} {
+		v := getView(t, c)
+		nd := legacyDashWithID(id, "Reserved")
+		nd["path"] = "/" + id + "-path"
+		v["dashboards"] = append(v["dashboards"].([]interface{}), nd)
+		code, resp := c.do("PUT", "/api/config", v)
+		if code != 400 || !strings.Contains(fmt.Sprint(resp["error"]), "reserved") {
+			t.Fatalf("%s: %d %v", id, code, resp)
+		}
+	}
+	if storedRaw(db) != before {
+		t.Fatal("rejected write changed the document")
+	}
+}
+
+func TestReservedIDs_ImportRenames(t *testing.T) {
+	router, db := setupTestRouter(t)
+	c := newClient(t, router)
+	seed(t, c)
+	imp := []byte(`{"dashboards":[{"id":"order","name":"O","path":"/o","order":0,"tabs":[{"id":"t9","name":"T","order":0,
+	  "groups":[{"id":"g9","name":"G","order":0,"entries":[{"id":"e9","name":"A","url":"https://a","order":0}]}]}]},
+	  {"id":"transfer","name":"T","path":"/t","order":1,"tabs":[]}]}`)
+	if code, resp := c.importFile(imp); code != 200 {
+		t.Fatalf("import: %d %v", code, resp)
+	}
+	all := storedDashboards(storedDoc(t, db))
+	if all["order"] != nil || all["transfer"] != nil {
+		t.Fatalf("reserved ids stored: %v", all)
+	}
+	names := map[string]bool{}
+	for _, d := range all {
+		names[fmt.Sprint(d["name"])] = true
+	}
+	if !names["O"] || !names["T"] {
+		t.Fatalf("imported dashboards missing: %v", names)
+	}
+}
+
+func TestReservedIDs_MigrationRenamesWithNotice(t *testing.T) {
+	v2 := `{"dashboards":[{"id":"order","name":"Ord","path":"/ord","order":0,"tabs":[]},
+	  {"id":"keep","name":"Keep","path":"/keep","order":1,"tabs":[]}]}`
+	router, db := setupTestRouterSeeded(t, v2)
+	c := newClient(t, router)
+	all := storedDashboards(storedDoc(t, db))
+	if all["order"] != nil || all["order-2"] == nil || all["keep"] == nil {
+		t.Fatalf("ids after migration: %v", all)
+	}
+	n := notices(t, getView(t, c))
+	if len(n) != 1 || !strings.Contains(n[0], `"order"`) || !strings.Contains(n[0], "reserved") {
+		t.Fatalf("notices: %q", n)
+	}
+	// And the dashboard is reachable for editing.
+	if code, resp := c.do("GET", "/api/dashboards/order-2/settings", nil); code != 200 {
+		t.Fatalf("%d %v", code, resp)
+	}
+}
+
+// Pathological container: many small tiles, then big tiles covering the early
+// cells last in child order, then a large grid transfer. Must stay fast.
+func TestTransfer_PathologicalContainerIsBounded(t *testing.T) {
+	router, _ := setupTestRouter(t)
+	c := newClient(t, router)
+	seed(t, c)
+	addD2(t, c)
+	d := v3Body(t, c, "d1")
+	kids := []interface{}{}
+	for i := 0; i < 2500; i++ { // source: 2500 tiles to transfer
+		kids = append(kids, tileJSON(fmt.Sprintf("s%d", i), i%12, i/12))
+	}
+	rootOf(d)["children"] = kids
+	if code, r := v3Put(c, "d1", d, 1); code != 200 {
+		t.Fatalf("%d %.200v", code, r)
+	}
+	d2 := v3Body(t, c, "d2")
+	tk := []interface{}{}
+	for i := 0; i < 2400; i++ { // full block of cells far down first-fit scans past
+		tk = append(tk, tileJSON(fmt.Sprintf("u%d", i), i%12, i/12))
+	}
+	// huge covering tiles last in child order
+	tk = append(tk, map[string]interface{}{"id": "cover", "kind": "tile", "name": "c", "url": "http://c",
+		"placement": map[string]interface{}{"x": 0, "y": 0, "w": 12, "h": 1e9}})
+	rootOf(d2)["children"] = tk
+	if code, r := v3Put(c, "d2", d2, 1); code != 200 {
+		t.Fatalf("%d %.200v", code, r)
+	}
+	ids := make([]string, 2500)
+	for i := range ids {
+		ids[i] = fmt.Sprintf("s%d", i)
+	}
+	tabID := v3Body(t, c, "d2")["tabs"].([]interface{})[0].(map[string]interface{})["id"]
+	start := time.Now()
+	code, resp := c.do("POST", "/api/dashboards/transfer", transferBody(map[string]interface{}{
+		"sourceRevision": 2, "targetRevision": 2, "nodeIds": ids, "target": map[string]interface{}{"tabId": tabID}}))
+	if code != 200 && code != 400 { // 400 only if the 5000-node bound trips
+		t.Fatalf("%d %.200v", code, resp)
+	}
+	if el := time.Since(start); el > 3*time.Second {
+		t.Fatalf("transfer took %v", el)
+	}
+}
+
+func TestFreeSpace_BudgetFallsBackBelowEverything(t *testing.T) {
+	kids := []any{}
+	for i := 0; i < 100; i++ {
+		kids = append(kids, tileJSON(fmt.Sprintf("k%d", i), i%12, i/12))
+	}
+	c := configdoc.Obj{"columns": 12, "children": kids}
+	fs := newFreeSpace(c, 10) // starved
+	bottom := fs.bottom
+	cell := fs.place(configdoc.Obj{"w": 1, "h": 1}, "grid")
+	if cell["y"].(float64) < bottom {
+		t.Fatalf("starved placement overlaps: %v (bottom %v)", cell, bottom)
+	}
+}
+
+func TestTransfer_GridPlacementClampsSize(t *testing.T) {
+	router, db := setupTestRouter(t)
+	c := newClient(t, router)
+	seed(t, c)
+	addD2(t, c)
+	d := v3Body(t, c, "d1")
+	rootOf(d)["children"] = []interface{}{
+		map[string]interface{}{"id": "odd1", "kind": "tile", "name": "a", "url": "http://a",
+			"placement": map[string]interface{}{"x": 0, "y": 0, "w": 1.7, "h": 0.4}},
+		map[string]interface{}{"id": "odd2", "kind": "tile", "name": "b", "url": "http://b",
+			"placement": map[string]interface{}{"x": 2, "y": 0, "w": -4, "h": -3, "z": 5}},
+		map[string]interface{}{"id": "odd3", "kind": "tile", "name": "c", "url": "http://c",
+			"placement": map[string]interface{}{"x": 4, "y": 0, "w": 2, "h": 2.9}},
+	}
+	if code, r := v3Put(c, "d1", d, 1); code != 200 {
+		t.Fatalf("%d %v", code, r)
+	}
+	tabID := v3Body(t, c, "d2")["tabs"].([]interface{})[0].(map[string]interface{})["id"]
+	code, resp := c.do("POST", "/api/dashboards/transfer", transferBody(map[string]interface{}{
+		"mode": "move", "sourceRevision": 2, "nodeIds": []string{"odd1", "odd2", "odd3"},
+		"target": map[string]interface{}{"tabId": tabID}}))
+	if code != 200 {
+		t.Fatalf("%d %v", code, resp)
+	}
+	want := map[string][4]float64{"odd1": {1, 1}, "odd2": {1, 1}, "odd3": {2, 2}}
+	for id, wh := range want {
+		n := findNode(storedDashboards(storedDoc(t, db))["d2"], id)[0]["placement"].(configdoc.Obj)
+		if n["w"] != wh[0] || n["h"] != wh[1] {
+			t.Errorf("%s placement %v, want w=%v h=%v", id, n, wh[0], wh[1])
+		}
+	}
+	if z := findNode(storedDashboards(storedDoc(t, db))["d2"], "odd2")[0]["placement"].(configdoc.Obj)["z"]; z != float64(5) {
+		t.Errorf("z lost: %v", z)
+	}
+}
+
+func TestV3Put_ClashChecksOnlyWhenPathChanged(t *testing.T) {
+	router, db := setupTestRouter(t)
+	c := newClient(t, router)
+	seed(t, c)
+	addD2(t, c)
+	// Force a pre-existing clash directly in the store.
+	doc := storedDoc(t, db)
+	storedDashboards(doc)["d2"]["path"] = "/d1"
+	if err := configdoc.Save(db, doc); err != nil {
+		t.Fatal(err)
+	}
+	d2 := v3Body(t, c, "d2")
+	d2["name"] = "Renamed only"
+	if code, resp := v3Put(c, "d2", d2, 1); code != 200 {
+		t.Fatalf("unchanged clashing path blocked an unrelated save: %d %v", code, resp)
+	}
+}
+
+func TestV3Put_StripsTransientKeysKeepsOthers(t *testing.T) {
+	router, db := setupTestRouter(t)
+	c := newClient(t, router)
+	seed(t, c)
+	d := v3Body(t, c, "d1")
+	for _, k := range []string{"schemaVersion", "layout", "migrationNotices", "dashboardRevisions", "v3OnlyDashboards"} {
+		d[k] = "junk"
+	}
+	d["customKey"] = "keep me"
+	if code, resp := v3Put(c, "d1", d, 1); code != 200 {
+		t.Fatalf("%d %v", code, resp)
+	}
+	got := storedDashboards(storedDoc(t, db))["d1"]
+	for _, k := range []string{"schemaVersion", "layout", "migrationNotices", "dashboardRevisions", "v3OnlyDashboards"} {
+		if _, has := got[k]; has {
+			t.Errorf("transient key %s stored", k)
+		}
+	}
+	if got["customKey"] != "keep me" {
+		t.Error("ordinary key dropped")
+	}
+}
+
+func TestV3Put_TabLimit(t *testing.T) {
+	router, _ := setupTestRouter(t)
+	c := newClient(t, router)
+	seed(t, c)
+	d := v3Body(t, c, "d1")
+	tabs := []interface{}{}
+	for i := 0; i < 201; i++ {
+		tabs = append(tabs, map[string]interface{}{"id": fmt.Sprintf("tab%d", i), "name": "T",
+			"root": map[string]interface{}{"columns": 12, "children": []interface{}{}}})
+	}
+	d["tabs"] = tabs
+	code, resp := v3Put(c, "d1", d, 1)
+	if code != 400 || !strings.Contains(fmt.Sprint(resp), "200") {
+		t.Fatalf("%d %v", code, resp)
+	}
+	d["tabs"] = tabs[:200]
+	if code, resp := v3Put(c, "d1", d, 1); code != 200 {
+		t.Fatalf("200 tabs: %d %.200v", code, resp)
+	}
+}
+
+func TestV3Put_RootPathRefused(t *testing.T) {
+	router, _ := setupTestRouter(t)
+	c := newClient(t, router)
+	seed(t, c)
+	for _, p := range []string{"/", "//", ""} {
+		d := v3Body(t, c, "d1")
+		d["path"] = p
+		if code, resp := v3Put(c, "d1", d, 1); code != 400 {
+			t.Errorf("path %q: %d %v", p, code, resp)
+		}
+	}
+}
+
+func TestV3Routes_OversizedBody413(t *testing.T) {
+	router, db := setupTestRouter(t)
+	c := newClient(t, router)
+	seed(t, c)
+	before := storedRaw(db)
+	big := strings.Repeat("a", 2<<20) // over the 1 MiB small-body cap
+	if code, _ := c.do("POST", "/api/dashboards", map[string]interface{}{"name": big, "path": "/x"}); code != 413 {
+		t.Errorf("create: %d", code)
+	}
+	if code, _ := c.do("PUT", "/api/dashboards/order", map[string]interface{}{"order": []string{big}}); code != 413 {
+		t.Errorf("order: %d", code)
+	}
+	huge := strings.Repeat("a", 17<<20)
+	if code, _ := c.do("PUT", "/api/dashboards/d1", map[string]interface{}{"schema": 3, "revision": 1,
+		"dashboard": map[string]interface{}{"id": "d1", "pad": huge}}); code != 413 {
+		t.Errorf("put: %d", code)
+	}
+	if code, _ := c.do("POST", "/api/dashboards/transfer", map[string]interface{}{"mode": huge}); code != 413 {
+		t.Errorf("transfer: %d", code)
+	}
+	if storedRaw(db) != before {
+		t.Fatal("oversized request changed the document")
+	}
 }

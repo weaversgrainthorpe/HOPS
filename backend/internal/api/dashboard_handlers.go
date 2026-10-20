@@ -437,6 +437,9 @@ func applyLegacyView(stored configdoc.Obj, in configdoc.Obj, lc *configdoc.Legac
 			}
 			continue
 		}
+		if configdoc.IsReservedDashboardID(id) {
+			return nil, nil, newAPIError(http.StatusBadRequest, fmt.Sprintf("Invalid config: %q is a reserved dashboard id; choose another", id))
+		}
 		// Not stored, yet the client knew a revision for it: it was deleted
 		// somewhere else. Saving would silently bring it back.
 		_, hasRev := intRevision(dm["revision"])
@@ -800,6 +803,9 @@ func migrationNotices(renames []configdoc.Rename, doc configdoc.Obj) []string {
 			} else {
 				reason = "another dashboard already used that id"
 			}
+		}
+		if rn.Kind == "dashboard" && configdoc.IsReservedDashboardID(rn.OldID) {
+			reason = "that id is reserved by HOPS"
 		}
 		if rn.Kind == "dashboard" {
 			out = append(out, fmt.Sprintf("Dashboard %q had its id %q renamed to %q because %s", dash, rn.OldID, rn.NewID, reason))

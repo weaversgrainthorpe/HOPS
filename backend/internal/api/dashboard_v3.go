@@ -65,7 +65,7 @@ func pathClash(stored configdoc.Obj, selfID, p string) *apiError {
 		}
 		if sp, _ := d["path"].(string); sp != "" && normPath(sp) == normPath(p) {
 			e := newAPIError(http.StatusConflict, "path_taken")
-			e.body["dashboardId"] = selfID
+			e.body["dashboardId"] = id
 			e.body["path"] = p
 			e.body["detail"] = fmt.Sprintf("Path %s is already used by the dashboard %s", p, dashboardLabel(d))
 			return e
@@ -77,6 +77,14 @@ func pathClash(stored configdoc.Obj, selfID, p string) *apiError {
 // verifyErr maps a VerifyDashboard failure to a visible 400.
 func verifyErr(err error) *apiError {
 	return newAPIError(http.StatusBadRequest, "Invalid dashboard: "+verifyProblems(err))
+}
+
+// transientDashboardKeys are top-level keys of a GET /api/config response (or
+// the document) that a client may echo back inside a dashboard; they are never
+// dashboard content and are dropped rather than stored.
+var transientDashboardKeys = map[string]bool{
+	"schemaVersion": true, "layout": true, "migrationNotices": true,
+	"dashboardRevisions": true, "v3OnlyDashboards": true,
 }
 
 // handlePutDashboardV3 saves a dashboard written by the v3 editor. The body's
@@ -92,11 +100,13 @@ func (r *Router) handlePutDashboardV3(w http.ResponseWriter, id string, in confi
 			return nil, nil, ce
 		}
 		if pathChanged(prev, in) {
+			p, _ := in["path"].(string)
+			if strings.TrimLeft(p, "/") == "" {
+				return nil, nil, newAPIError(http.StatusBadRequest, "A dashboard path is required")
+			}
 			if pe := unsafePathError(in); pe != nil {
 				return nil, nil, pe
 			}
-		}
-		if p, _ := in["path"].(string); p != "" {
 			if ce := pathClash(stored, id, p); ce != nil {
 				return nil, nil, ce
 			}
@@ -107,7 +117,9 @@ func (r *Router) handlePutDashboardV3(w http.ResponseWriter, id string, in confi
 		}
 		nd := make(configdoc.Obj, len(in))
 		for k, v := range in {
-			nd[k] = v
+			if !transientDashboardKeys[k] {
+				nd[k] = v
+			}
 		}
 		nd["settings"] = prev["settings"]
 		nd["revision"] = cur + 1
@@ -312,7 +324,7 @@ func (r *Router) handleTransferNodes(w http.ResponseWriter, req *http.Request) {
 		if ae != nil {
 			return nil, nil, ae
 		}
-		placed := make([]configdoc.Obj, 0, len(body.NodeIDs))
+		space := newFreeSpace(container, freeCellBudget)
 		for _, id := range body.NodeIDs { // the caller's order
 			n := found[id]
 			if body.Mode == "copy" {
@@ -326,11 +338,9 @@ func (r *Router) handleTransferNodes(w http.ResponseWriter, req *http.Request) {
 			if from == nil {
 				return nil, nil, newAPIError(http.StatusBadRequest, fmt.Sprintf("Item %v has no placement", n["id"]))
 			}
-			cell := firstFreeCell(container, from, mode)
-			n["placement"] = cell
+			n["placement"] = space.place(from, mode)
 			kids, _ := container["children"].([]any)
 			container["children"] = append(kids, n)
-			placed = append(placed, n)
 		}
 		if body.Mode == "move" {
 			removeNodes(src, want)
@@ -567,69 +577,99 @@ func rect(p any) (x, y, w, h float64, ok bool) {
 	return x, y, w, h, o[0] && o[1] && o[2] && o[3]
 }
 
-// maxFreeCellProbes bounds firstFreeCell's search so a container with
-// absurd placements cannot stall a request; past it the cell goes below
-// everything.
-const maxFreeCellProbes = 250000
+// freeCellBudget is the total number of box comparisons one request may spend
+// searching for free cells, across every node it places. Once spent, cells go
+// below everything already placed, so a crafted container plus a large
+// transfer cannot stall the server (the update function runs twice per
+// request, each run with its own budget).
+const freeCellBudget = 2_000_000
 
-// firstFreeCell is the Go twin of the frontend's firstFreeCell (treeOps.ts):
-// the first w x h position overlapping nothing in c. Grid scans row-major one
-// cell at a time; free scans in tile-sized steps. Width is capped at the
-// column count. In grid mode the node keeps its own height; z is carried.
-func firstFreeCell(c configdoc.Obj, from configdoc.Obj, mode string) configdoc.Obj {
-	cols := 12.0
+type box struct{ x, y, w, h float64 }
+
+// freeSpace is a container's occupied boxes, grown as nodes are placed.
+type freeSpace struct {
+	cols   float64
+	taken  []box
+	bottom float64
+	budget int
+}
+
+func newFreeSpace(c configdoc.Obj, budget int) *freeSpace {
+	fs := &freeSpace{cols: 12, budget: budget}
 	if n, ok := toFloat(c["columns"]); ok && math.Floor(n) >= 1 {
-		cols = math.Floor(n)
+		fs.cols = math.Floor(n)
 	}
-	w, _ := toFloat(from["w"])
-	h, _ := toFloat(from["h"])
-	cw := math.Min(math.Max(1, math.Floor(w)), cols)
-	chh := math.Max(1, math.Floor(h))
-	type box struct{ x, y, w, h float64 }
-	var taken []box
-	bottom := 0.0
 	kids, _ := c["children"].([]any)
 	for _, k := range kids {
-		km, ok := k.(configdoc.Obj)
-		if !ok {
-			continue
-		}
-		if x, y, w, h, ok := rect(km["placement"]); ok {
-			taken = append(taken, box{x, y, w, h})
-			bottom = math.Max(bottom, y+h)
+		if km, ok := k.(configdoc.Obj); ok && renderableNode(km) {
+			x, y, w, h, _ := rect(km["placement"])
+			fs.add(box{x, y, w, h})
 		}
 	}
+	return fs
+}
+
+func (fs *freeSpace) add(b box) {
+	fs.taken = append(fs.taken, b)
+	fs.bottom = math.Max(fs.bottom, b.y+b.h)
+}
+
+// renderableNode mirrors the frontend's isRenderable: a tile or folder with
+// a finite placement (a folder also needs a content.children array).
+func renderableNode(n configdoc.Obj) bool {
+	if n["kind"] != "tile" && n["kind"] != "folder" {
+		return false
+	}
+	if _, _, _, _, ok := rect(n["placement"]); !ok {
+		return false
+	}
+	if n["kind"] == "folder" {
+		content, _ := n["content"].(configdoc.Obj)
+		if _, ok := content["children"].([]any); !ok {
+			return false
+		}
+	}
+	return true
+}
+
+// place is the Go twin of the frontend's firstFreeCell (treeOps.ts): the first
+// w x h position overlapping nothing, recorded as taken. Grid scans row-major
+// one cell at a time; free scans in tile-sized steps. Width is capped at the
+// column count and w and h are clamped to at least 1, as the frontend does;
+// z is carried.
+func (fs *freeSpace) place(from configdoc.Obj, mode string) configdoc.Obj {
+	w, _ := toFloat(from["w"])
+	h, _ := toFloat(from["h"])
+	cw := math.Min(math.Max(1, math.Floor(w)), fs.cols)
+	chh := math.Max(1, math.Floor(h))
 	stepX, stepY := 1.0, 1.0
 	if mode == "free" {
 		stepX, stepY = cw, chh
 	}
-	cell := func(x, y float64) configdoc.Obj {
-		out := configdoc.Obj{"x": x, "y": y, "w": cw, "h": chh}
-		if mode == "grid" {
-			out["h"] = h
-		}
-		if z, ok := from["z"]; ok {
-			out["z"] = z
-		}
-		return out
-	}
-	probes := 0
-	for y := 0.0; y <= bottom; y += stepY {
-		for x := 0.0; x+cw <= cols; x += stepX {
-			if probes++; probes > maxFreeCellProbes {
-				return cell(0, math.Ceil(bottom/stepY)*stepY)
-			}
+	x, y := 0.0, math.Ceil(fs.bottom/stepY)*stepY
+search:
+	for cy := 0.0; cy <= fs.bottom; cy += stepY {
+		for cx := 0.0; cx+cw <= fs.cols; cx += stepX {
 			free := true
-			for _, t := range taken {
-				if x < t.x+t.w && t.x < x+cw && y < t.y+t.h && t.y < y+chh {
+			for _, t := range fs.taken {
+				if fs.budget--; fs.budget < 0 {
+					break search // spent: keep the fallback below everything
+				}
+				if cx < t.x+t.w && t.x < cx+cw && cy < t.y+t.h && t.y < cy+chh {
 					free = false
 					break
 				}
 			}
 			if free {
-				return cell(x, y)
+				x, y = cx, cy
+				break search
 			}
 		}
 	}
-	return cell(0, math.Ceil(bottom/stepY)*stepY)
+	fs.add(box{x, y, cw, chh})
+	out := configdoc.Obj{"x": x, "y": y, "w": cw, "h": chh}
+	if z, ok := from["z"]; ok {
+		out["z"] = z
+	}
+	return out
 }

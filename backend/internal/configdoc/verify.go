@@ -70,6 +70,7 @@ func VerifyImportedDashboard(d Obj) error {
 const (
 	MaxDashboardNodes = 5000
 	MaxNestingDepth   = 12
+	MaxTabs           = 200
 )
 
 // VerifyDashboard checks one dashboard written by the v3 editor: everything
@@ -89,6 +90,9 @@ func VerifyDashboard(d Obj) error {
 // boundsProblem returns why d's tree is too big or too deep, or "". It stops
 // walking as soon as a limit is crossed.
 func boundsProblem(d Obj) string {
+	if tabs, _ := d["tabs"].([]any); len(tabs) > MaxTabs {
+		return fmt.Sprintf("dashboard has more than %d tabs (the limit is %d per dashboard)", MaxTabs, MaxTabs)
+	}
 	count := 0
 	var walk func(c Obj, depth int) string
 	walk = func(c Obj, depth int) string {
@@ -264,7 +268,7 @@ func (v *verifier) expectedID(level, path, id string, a Obj) (string, Obj) {
 	if want := levelKind[level]; r.Kind != want {
 		v.add("rename %s: kind %q, want %q", path, r.Kind, want)
 	}
-	if first, ok := v.first[id]; !ok || first == path {
+	if first, ok := v.first[id]; (!ok || first == path) && !(level == "dashboard" && IsReservedDashboardID(id)) {
 		v.add("rename %s: id %q is not duplicated by an earlier object (first at %s), so it must keep its id", path, id, first)
 	}
 	cp := make(Obj, len(a))
