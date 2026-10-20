@@ -235,3 +235,78 @@ func TestVerifyIDs_RequiresPlacement(t *testing.T) {
 		}
 	}
 }
+
+// v3Dash builds a minimal valid v3 dashboard with the given root children.
+func v3Dash(children []any) Obj {
+	return Obj{
+		"id": "d", "name": "D", "path": "/d", "revision": 1, "defaultLayout": "grid",
+		"settings": nullSettings(),
+		"tabs":     []any{Obj{"id": "t", "name": "T", "root": Obj{"columns": 12, "children": children}}},
+	}
+}
+
+func nullSettings() Obj {
+	s := Obj{}
+	for _, k := range settingsKeys {
+		s[k] = nil
+	}
+	return s
+}
+
+func tileNode(id string) Obj {
+	return Obj{"id": id, "kind": "tile", "name": id, "placement": Obj{"x": 0, "y": 0, "w": 1, "h": 1}}
+}
+
+func TestVerifyDashboard_Bounds(t *testing.T) {
+	if err := VerifyDashboard(v3Dash([]any{tileNode("a")})); err != nil {
+		t.Fatalf("valid dashboard: %v", err)
+	}
+	many := func(n int) []any {
+		out := make([]any, n)
+		for i := range out {
+			out[i] = tileNode("n" + itoa(i))
+		}
+		return out
+	}
+	if err := VerifyDashboard(v3Dash(many(MaxDashboardNodes))); err != nil {
+		t.Fatalf("5000 nodes should pass: %v", err)
+	}
+	wantProblem(t, VerifyDashboard(v3Dash(many(MaxDashboardNodes+1))), "5000")
+
+	nest := func(depth int) []any { // a chain of `depth` folders, innermost holds one tile
+		node := tileNode("leaf")
+		for i := depth - 1; i >= 1; i-- {
+			node = Obj{"id": "f" + itoa(i), "kind": "folder", "name": "f", "display": "expanded",
+				"placement": Obj{"x": 0, "y": 0, "w": 1, "h": 1}, "content": Obj{"columns": 1, "children": []any{node}}}
+		}
+		return []any{node}
+	}
+	if err := VerifyDashboard(v3Dash(nest(MaxNestingDepth))); err != nil {
+		t.Fatalf("depth 12 should pass: %v", err)
+	}
+	wantProblem(t, VerifyDashboard(v3Dash(nest(MaxNestingDepth+1))), "12")
+}
+
+func TestVerifyDashboard_StructureAndPlacement(t *testing.T) {
+	bad := tileNode("a")
+	delete(bad, "placement")
+	wantProblem(t, VerifyDashboard(v3Dash([]any{bad})), "placement")
+	wantProblem(t, VerifyDashboard(v3Dash([]any{tileNode("a"), tileNode("a")})), "duplicate id")
+	d := v3Dash(nil)
+	d["path"] = ""
+	wantProblem(t, VerifyDashboard(d), "path")
+	d = v3Dash(nil)
+	delete(d, "settings")
+	wantProblem(t, VerifyDashboard(d), "settings")
+}
+
+func itoa(i int) string {
+	if i == 0 {
+		return "0"
+	}
+	var b []byte
+	for ; i > 0; i /= 10 {
+		b = append([]byte{byte('0' + i%10)}, b...)
+	}
+	return string(b)
+}

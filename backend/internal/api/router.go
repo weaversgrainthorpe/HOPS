@@ -255,6 +255,7 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/health", r.handleGetHealth)
 	r.mux.HandleFunc("/api/version", r.handleGetVersion)
 	r.mux.HandleFunc("/api/config", r.handleConfig)
+	r.mux.HandleFunc("/api/dashboards", r.protected(r.handleDashboardsRoot))
 	r.mux.HandleFunc("/api/dashboards/", r.protected(r.handleDashboards))
 	// Intentionally public — the SPA polls this for tile colour indicators
 	// before login so a viewer landing on a public dashboard sees status

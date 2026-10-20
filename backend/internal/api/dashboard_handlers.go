@@ -527,6 +527,19 @@ func (r *Router) handleDashboards(w http.ResponseWriter, req *http.Request) {
 		writeJSONError(w, "Dashboard id required", http.StatusBadRequest)
 		return
 	}
+	// The literal segments "order" and "transfer" are collection routes, not
+	// dashboard ids, and are matched before any {id} route.
+	if sub == "" && (id == "order" || id == "transfer") {
+		switch {
+		case id == "order" && req.Method == http.MethodPut:
+			r.handleOrderDashboards(w, req)
+		case id == "transfer" && req.Method == http.MethodPost:
+			r.handleTransferNodes(w, req)
+		default:
+			writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+		return
+	}
 	switch {
 	case sub == "" && req.Method == http.MethodPut:
 		r.handlePutDashboard(w, req, id)
@@ -545,15 +558,32 @@ func (r *Router) handleDashboards(w http.ResponseWriter, req *http.Request) {
 
 func (r *Router) handlePutDashboard(w http.ResponseWriter, req *http.Request, id string) {
 	var body struct {
+		Schema    any           `json:"schema"`
 		Dashboard configdoc.Obj `json:"dashboard"`
 		Revision  any           `json:"revision"`
 	}
+	req.Body = http.MaxBytesReader(w, req.Body, maxDashboardBodyBytes)
 	if err := json.NewDecoder(req.Body).Decode(&body); err != nil || body.Dashboard == nil {
+		var mbe *http.MaxBytesError
+		if errors.As(err, &mbe) {
+			writeAPIError(w, newAPIError(http.StatusRequestEntityTooLarge, "Request body is larger than the 16 MiB limit"))
+			return
+		}
 		writeJSONError(w, "Invalid JSON: expected {\"dashboard\": {...}, \"revision\": n}", http.StatusBadRequest)
 		return
 	}
 	if bid, _ := body.Dashboard["id"].(string); bid != id {
 		writeJSONError(w, "Dashboard id in body does not match the URL", http.StatusBadRequest)
+		return
+	}
+	// A body without "schema" is the legacy shape (kept until the legacy
+	// editor is retired).
+	if body.Schema != nil {
+		if n, ok := intRevision(body.Schema); !ok || n != configdoc.SchemaVersion {
+			writeJSONError(w, fmt.Sprintf("Unsupported schema %v: this endpoint accepts schema %d dashboards", body.Schema, configdoc.SchemaVersion), http.StatusBadRequest)
+			return
+		}
+		r.handlePutDashboardV3(w, id, body.Dashboard, body.Revision)
 		return
 	}
 	r.updateDocWithBackup(w, func(stored configdoc.Obj, lc *configdoc.LegacyCache) (configdoc.Obj, interface{}, error) {

@@ -65,6 +65,66 @@ func VerifyImportedDashboard(d Obj) error {
 	return nil
 }
 
+// Bounds on one natively saved dashboard (Task 5): the editor and renderer
+// stay responsive, and a request cannot make the server walk an unbounded tree.
+const (
+	MaxDashboardNodes = 5000
+	MaxNestingDepth   = 12
+)
+
+// VerifyDashboard checks one dashboard written by the v3 editor: everything
+// VerifyImportedDashboard checks (path, converter-owned keys, a well-formed
+// tree with finite placements and ids unique within the dashboard), plus the
+// size bounds: at most MaxDashboardNodes nodes (tiles and folders) and folder
+// nesting no deeper than MaxNestingDepth (a root child is at depth 1). The
+// bounds are checked first, so an oversized tree is rejected with a message
+// naming the limit before it is walked in full. It returns a *VerifyError.
+func VerifyDashboard(d Obj) error {
+	if msg := boundsProblem(d); msg != "" {
+		return &VerifyError{Problems: []string{msg}}
+	}
+	return VerifyImportedDashboard(d)
+}
+
+// boundsProblem returns why d's tree is too big or too deep, or "". It stops
+// walking as soon as a limit is crossed.
+func boundsProblem(d Obj) string {
+	count := 0
+	var walk func(c Obj, depth int) string
+	walk = func(c Obj, depth int) string {
+		kids, _ := c["children"].([]any)
+		for _, k := range kids {
+			km, ok := k.(Obj)
+			if !ok {
+				continue // reported by the structure check
+			}
+			count++
+			if count > MaxDashboardNodes {
+				return fmt.Sprintf("dashboard has more than %d items (the limit is %d per dashboard)", MaxDashboardNodes, MaxDashboardNodes)
+			}
+			if depth > MaxNestingDepth {
+				return fmt.Sprintf("items are nested deeper than %d levels (the limit is %d)", MaxNestingDepth, MaxNestingDepth)
+			}
+			if km["kind"] == "folder" {
+				content, _ := km["content"].(Obj)
+				if msg := walk(content, depth+1); msg != "" {
+					return msg
+				}
+			}
+		}
+		return ""
+	}
+	tabs, _ := d["tabs"].([]any)
+	for _, t := range tabs {
+		tm, _ := t.(Obj)
+		root, _ := tm["root"].(Obj)
+		if msg := walk(root, 1); msg != "" {
+			return msg
+		}
+	}
+	return ""
+}
+
 // Verify proves v3 is a faithful conversion of v2 with no ids renamed; it is
 // VerifyMigration with an empty rename list, so a v3 document that kept a
 // duplicate id still fails.
