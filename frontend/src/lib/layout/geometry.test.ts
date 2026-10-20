@@ -1,8 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import {
-  resolveMode, readingOrder, clampPlacement, previewChildren, planCanvas,
-  folderContentRowPx, isRenderable
+  resolveMode, readingOrder, clampPlacement, previewChildren, planCanvas, isRenderable
 } from './geometry';
+import {
+  containerMetrics, nodeBox, folderChrome, folderContentBox, folderInnerMetrics, requiredFolderHeightPx,
+  overlayBodyPx, scrollbarPx, ROOT_COLUMNS
+} from './geometry';
+import type { Container } from '../types/layout';
 import type { FolderNode, LayoutDashboard, LayoutNode, LayoutTab, Placement } from '../types/layout';
 
 const p = (x: number, y: number, w = 1, h = 1): Placement => ({ x, y, w, h });
@@ -80,12 +84,6 @@ describe('planCanvas', () => {
   });
 });
 
-describe('folderContentRowPx', () => {
-  it('with title', () => expect(folderContentRowPx(3, 120, true)).toBe(152));
-  it('without title', () => expect(folderContentRowPx(2, 120, false)).toBe(224));
-  it('h=1 still yields one row', () => expect(folderContentRowPx(1, 120, true)).toBeGreaterThan(0));
-});
-
 describe('isRenderable', () => {
   it('accepts valid tile and folder', () => {
     expect(isRenderable(tile('a', p(0, 0)))).toBe(true);
@@ -128,9 +126,6 @@ describe('robustness', () => {
     expect(clampPlacement({ x: NaN, y: Infinity, w: NaN, h: NaN }, NaN)).toEqual({ x: 0, y: 0, w: 1, h: 1 });
     expect(clampPlacement({ x: 1.7, y: 2.9, w: 2.5, h: 1.2 }, 12)).toEqual({ x: 1, y: 2, w: 2, h: 1 });
   });
-  it('folderContentRowPx treats height < 1 as 1', () => {
-    expect(folderContentRowPx(0, 120, true)).toBe(folderContentRowPx(1, 120, true));
-  });
 });
 
 describe('clampPlacement z validation', () => {
@@ -142,5 +137,133 @@ describe('clampPlacement z validation', () => {
     expect(clampPlacement({ ...base, z: 2.7 }, 12).z).toBe(2);
     expect(clampPlacement({ ...base, z: 1e9 }, 12).z).toBe(1000);
     expect(clampPlacement({ ...base, z: -1e9 }, 12).z).toBe(-1000);
+  });
+});
+
+// ---- M3 Task 1: one geometry source (containerMetrics / nodeBox / folderChrome) ----
+
+const ffold = (over: Partial<FolderNode> = {}): FolderNode => ({
+  kind: 'folder', id: 'ff', name: 'ff', display: 'expanded', placement: p(0, 0, 5, 4),
+  content: { columns: 5, children: [] }, ...over
+});
+
+describe('containerMetrics: one columns fallback everywhere', () => {
+  const root = (columns: unknown): Container => ({ columns, children: [] }) as unknown as Container;
+  for (const bad of [0, -2, undefined, NaN]) {
+    it(`root columns ${String(bad)} falls back to ROOT_COLUMNS, as planCanvas and clampPlacement do`, () => {
+      const m = containerMetrics(root(bad), 'grid', 1440);
+      expect(m.columns).toBe(ROOT_COLUMNS);
+      expect(m.unitPx).toBe(120);
+      const plan = planCanvas('grid', 1440, tab({ root: root(bad) }));
+      expect(plan).toEqual({ kind: 'grid', cellPx: m.unitPx });
+      expect(clampPlacement({ x: 20, y: 0, w: 1, h: 1 }, bad as number).x).toBe(ROOT_COLUMNS - 1);
+    });
+    it(`folder content.columns ${String(bad)} falls back to placement.w`, () => {
+      const f = ffold({ content: { columns: bad as number, children: [] } });
+      const m = containerMetrics(f.content, 'grid', 500, { folder: f });
+      expect(m.columns).toBe(5);
+      expect(m.unitPx).toBe(100);
+    });
+  }
+  it('fractional columns floor the same way for a root, a folder, planCanvas and clampPlacement', () => {
+    const r = containerMetrics(root(2.7), 'grid', 1000);
+    expect(r.columns).toBe(2);
+    expect(r.unitPx).toBe(500);
+    expect(planCanvas('grid', 1000, tab({ root: root(2.7) }))).toEqual({ kind: 'grid', cellPx: 500 });
+    expect(clampPlacement({ x: 5, y: 0, w: 1, h: 1 }, 2.7).x).toBe(1);
+    const f = ffold({ content: { columns: 2.7, children: [] } });
+    expect(containerMetrics(f.content, 'grid', 1000, { folder: f }).columns).toBe(2);
+  });
+  it('a folder with bad content.columns and a fractional placement.w floors w', () => {
+    const f = ffold({ placement: { x: 0, y: 0, w: 3.9, h: 2 }, content: { columns: 0, children: [] } });
+    expect(containerMetrics(f.content, 'grid', 300, { folder: f }).columns).toBe(3);
+  });
+  it('grid rows default to square cells; rowPx overrides; free rows are always the unit', () => {
+    const c = root(12);
+    expect(containerMetrics(c, 'grid', 1200).rowPx).toBe(100);
+    expect(containerMetrics(c, 'grid', 1200, { rowPx: 40 }).rowPx).toBe(40);
+    const free = containerMetrics(root(160), 'free', 1280, { rowPx: 40 });
+    expect(free.unitPx).toBe(8);
+    expect(free.rowPx).toBe(8);
+    expect(free.innerWidthPx).toBe(1280);
+  });
+  it('never returns non-finite sizes', () => {
+    for (const w of [NaN, -5, Infinity]) {
+      const m = containerMetrics(root(12), 'grid', w);
+      expect(Number.isFinite(m.unitPx) && m.unitPx >= 0).toBe(true);
+      expect(Number.isFinite(m.rowPx) && m.rowPx >= 0).toBe(true);
+    }
+  });
+});
+
+describe('nodeBox', () => {
+  const m = containerMetrics({ columns: 12, children: [] }, 'grid', 1200, { rowPx: 50 });
+  it('floors fractional h (and w, x, y) after clampPlacement', () => {
+    expect(nodeBox({ x: 1.5, y: 2.2, w: 2.9, h: 2.7 }, m)).toEqual({ leftPx: 100, topPx: 100, widthPx: 200, heightPx: 100 });
+  });
+  it('clamps to the container width', () => {
+    const b = nodeBox({ x: 11, y: 0, w: 6, h: 1 }, m);
+    expect(b.leftPx + b.widthPx).toBe(m.innerWidthPx);
+  });
+});
+
+describe('folderChrome', () => {
+  it('the folder-tab look has its own values, different from the rounded look', () => {
+    expect(folderChrome('folder-tab', true)).not.toEqual(folderChrome(undefined, true));
+    expect(folderChrome('rounded', true)).toEqual(folderChrome(undefined, true));
+  });
+  it('no title means no title bar', () => {
+    expect(folderChrome(undefined, false).titlePx).toBe(0);
+    expect(folderChrome('folder-tab', false).titlePx).toBe(0);
+    expect(folderChrome(undefined, true).titlePx).toBeGreaterThan(0);
+  });
+  it('folderContentBox subtracts the chrome', () => {
+    const ch = folderChrome(undefined, true);
+    const box = { leftPx: 0, topPx: 0, widthPx: 600, heightPx: 400 };
+    expect(folderContentBox(ffold(), box, ch)).toEqual({ widthPx: 600 - ch.padXPx, heightPx: 400 - ch.titlePx - ch.padYPx });
+  });
+});
+
+describe('free folder scale subtracts the chrome', () => {
+  const parent = containerMetrics({ columns: 160, children: [] }, 'free', 1920);
+  const f = ffold({ layout: 'free', placement: p(0, 0, 40, 10), content: { columns: 40, children: [] } });
+  it("a free folder's children never exceed its inner width", () => {
+    const inner = folderInnerMetrics(f, parent);
+    const box = nodeBox(f.placement, parent);
+    expect(inner.mode).toBe('free');
+    expect(inner.innerWidthPx).toBeCloseTo(box.widthPx - folderChrome(f.shape, true).padXPx, 6);
+    expect(inner.unitPx * inner.columns).toBeCloseTo(inner.innerWidthPx, 6);
+    const child = nodeBox({ x: 35, y: 0, w: 30, h: 1 }, inner);
+    expect(child.leftPx + child.widthPx).toBeLessThanOrEqual(inner.innerWidthPx + 1e-9);
+  });
+  it('requiredFolderHeightPx grows a free folder to title + padding + content, never below its box', () => {
+    const tall = ffold({ layout: 'free', placement: p(0, 0, 40, 1), content: { columns: 40, children: [tile('t', p(0, 2, 5, 50))] } });
+    const inner = folderInnerMetrics(tall, parent);
+    const ch = folderChrome(tall.shape, true);
+    expect(requiredFolderHeightPx(tall, parent)).toBeCloseTo(ch.titlePx + ch.padYPx + 52 * inner.rowPx, 6);
+    const short = ffold({ layout: 'free', placement: p(0, 0, 40, 100), content: { columns: 40, children: [tile('t', p(0, 0, 1, 1))] } });
+    expect(requiredFolderHeightPx(short, parent)).toBe(nodeBox(short.placement, parent).heightPx);
+    const collapsed = { ...tall, display: 'collapsed' as const };
+    expect(requiredFolderHeightPx(collapsed, parent)).toBe(nodeBox(tall.placement, parent).heightPx);
+  });
+  it('a grid folder in a grid parent fits its rows to the folder height (fractional h floored)', () => {
+    const gp = containerMetrics({ columns: 12, children: [] }, 'grid', 1440);
+    const g = ffold({ placement: { x: 0, y: 0, w: 6, h: 3.8 }, content: { columns: 6, children: [] } });
+    const inner = folderInnerMetrics(g, gp);
+    const ch = folderChrome(undefined, true);
+    expect(inner.rowPx).toBeCloseTo((3 * 120 - ch.titlePx - ch.padYPx) / 2, 6);
+    expect(requiredFolderHeightPx(g, gp)).toBe(360);
+  });
+});
+
+describe('overlay viewport width', () => {
+  it('subtracts a measured 15px scrollbar', () => {
+    expect(scrollbarPx(1000, 985)).toBe(15);
+    expect(overlayBodyPx(1000, 985)).toBe(overlayBodyPx(985, 985));
+    expect(overlayBodyPx(1000, 985)).toBeLessThan(overlayBodyPx(1000, 1000));
+  });
+  it('an unmeasurable clientWidth (0) means no scrollbar, never a zero-width body', () => {
+    expect(scrollbarPx(400, 0)).toBe(0);
+    expect(overlayBodyPx(400, 0)).toBe(400 - 32 - 34);
   });
 });

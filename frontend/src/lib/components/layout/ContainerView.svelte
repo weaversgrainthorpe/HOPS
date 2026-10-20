@@ -1,9 +1,9 @@
 <script lang="ts">
-  import type { Container, FolderNode, LayoutDashboard, LayoutMode, LayoutNode, LayoutTab } from '$lib/types/layout';
-  import type { CanvasPlan } from '$lib/layout/geometry';
+  import type { Container, FolderNode, LayoutDashboard, LayoutNode, LayoutTab } from '$lib/types/layout';
+  import type { CanvasPlan, ContainerMetrics } from '$lib/layout/geometry';
   import {
-    clampPlacement, FOLDER_CHROME_PX, FOLDER_TITLE_PX, folderInnerColumns, FREE_UNIT_PX, hasPosition, isRenderable,
-    readingOrder, resolveMode, tileFit
+    clampPlacement, freeContentHeightPx, hasPosition, isRenderable, nodeBox, readingOrder, requiredFolderHeightPx,
+    tileFit
   } from '$lib/layout/geometry';
   import type { Placement } from '$lib/types/layout';
   import Entry from '../Entry.svelte';
@@ -12,92 +12,44 @@
 
   interface Props {
     container: Container;
-    mode: LayoutMode;
+    /** Every size in this container comes from these (geometry.containerMetrics). */
+    metrics: ContainerMetrics;
     plan: CanvasPlan;
     dashboard: LayoutDashboard;
     tab: LayoutTab;
     /** Outermost-first chain of the folders enclosing this container. */
     folderChain: FolderNode[];
-    /** Row height in px for nested containers; root uses the plan's cell size. */
-    rowPx?: number;
-    /** Content-box width in px handed down by the parent folder (root derives it from the plan). */
-    boxPx?: number;
   }
-  let { container, mode, plan, dashboard, tab, folderChain, rowPx, boxPx }: Props = $props();
+  let { container, metrics, plan, dashboard, tab, folderChain }: Props = $props();
 
   const parent = $derived(folderChain[folderChain.length - 1]);
   const parentId = $derived(parent ? parent.id : tab.id);
-  const columns = $derived(
-    Number.isFinite(container?.columns) && container.columns >= 1 ? Math.floor(container.columns) : 12
-  );
+  const columns = $derived(metrics.columns);
   const kids = $derived(Array.isArray(container?.children) ? container.children : []);
   // Valid children in reading order, followed by unplaceable ones (readingOrder never throws).
   const ordered = $derived(readingOrder(kids) as unknown[]);
 
-  const isRoot = $derived(folderChain.length === 0);
-
   // Phone/narrow plans stack every container, whatever its own mode.
-  const effective = $derived<'grid' | 'free' | 'stacked'>(
-    plan.kind === 'stacked' ? 'stacked' : mode === 'free' ? 'free' : 'grid'
-  );
-
-  // Sizes flow down from the canvas (the only ResizeObserver): the root derives its box
-  // from the plan; nested containers receive their box width from the parent folder.
-  const boxWidth = $derived.by(() => {
-    if (boxPx !== undefined && boxPx > 0) return boxPx;
-    if (plan.kind === 'grid') return plan.cellPx * columns;
-    if (plan.kind === 'free') return plan.scale * FREE_UNIT_PX * columns;
-    return 0;
-  });
-  /** Width in px of one column of this container; children's boxes are w * unitPx. */
-  const unitPx = $derived(
-    effective === 'free'
-      ? boxWidth / columns
-      : isRoot && plan.kind === 'grid'
-        ? plan.cellPx
-        : boxWidth / columns
-  );
-  const cellPx = $derived(rowPx ?? (plan.kind === 'grid' && isRoot ? plan.cellPx : unitPx || 48));
-  const freeScale = $derived(boxWidth / (columns * FREE_UNIT_PX));
+  const effective = $derived<'grid' | 'free' | 'stacked'>(plan.kind === 'stacked' ? 'stacked' : metrics.mode);
 
   const px = (v: number) => `${Math.round(v * 100) / 100}px`;
+  // Column tracks round DOWN so N tracks never overflow the container by a rounding hair.
+  const trackPx = (v: number) => `${Math.floor(v * 100) / 100}px`;
 
-  /** Height a node needs inside a free container with unit u px: folders grow past their box, never clip. */
-  function requiredPx(n: LayoutNode, u: number, chain: FolderNode[], cols: number): number {
-    const p = clampPlacement(n.placement, cols);
-    const box = p.h * u;
-    if (n.kind !== 'folder' || n.display === 'collapsed') return box;
-    const inner = [...chain, n];
-    if (resolveMode(dashboard, tab, inner) !== 'free') return box;
-    const innerCols = folderInnerColumns(n);
-    const innerU = (p.w * u) / innerCols;
-    const chrome = (n.showTitle !== false ? FOLDER_TITLE_PX : 0) + FOLDER_CHROME_PX;
-    return Math.max(box, chrome + freeContentPx(n.content.children, innerCols, innerU, inner));
-  }
-  function freeContentPx(children: unknown[], cols: number, u: number, chain: FolderNode[]): number {
-    let bottom = 0;
-    for (const c of children) {
-      if (!isRenderable(c)) continue;
-      const p = clampPlacement(c.placement, cols);
-      bottom = Math.max(bottom, p.y * u + requiredPx(c, u, chain, cols));
-    }
-    return bottom;
-  }
-  const freeHeight = $derived(freeContentPx(kids, columns, FREE_UNIT_PX * freeScale, folderChain));
+  const freeHeight = $derived(freeContentHeightPx(kids, metrics));
   const freeStyle = $derived(
-    `position:relative;min-height:${px(freeHeight)};width:${px(boxWidth)};`
+    `position:relative;min-height:${px(freeHeight)};width:${px(metrics.innerWidthPx)};`
   );
   function freeCellStyle(n: LayoutNode): string {
-    const p = clampPlacement(n.placement, columns);
-    const u = FREE_UNIT_PX * freeScale;
+    const b = nodeBox(n.placement, metrics);
+    const z = clampPlacement(n.placement, columns).z ?? 0;
     // Folders grow past their box (min-height) rather than clip their content.
-    return `position:absolute;left:${px(p.x * u)};top:${px(p.y * u)};width:${px(p.w * u)};` +
-      `${n.kind === 'folder' ? 'min-height' : 'height'}:${px(p.h * u)};z-index:${p.z ?? 0};`;
+    const h = n.kind === 'folder' ? `min-height:${px(requiredFolderHeightPx(n, metrics))}` : `height:${px(b.heightPx)}`;
+    return `position:absolute;left:${px(b.leftPx)};top:${px(b.topPx)};width:${px(b.widthPx)};${h};z-index:${z};`;
   }
   const gridStyle = $derived(
-    `display:grid;grid-template-columns:${
-      isRoot && plan.kind === 'grid' ? `repeat(${columns}, ${cellPx}px)` : `repeat(${columns}, minmax(0, 1fr))`
-    };grid-auto-rows:${rowPx ?? cellPx}px;`
+    `display:grid;grid-template-columns:repeat(${columns}, ${trackPx(metrics.unitPx)});` +
+      `grid-auto-rows:${px(metrics.rowPx)};`
   );
 
   function cellStyle(n: LayoutNode): string {
@@ -109,12 +61,8 @@
   /** How a tile fits its box (Ruling 22): the box is the tile's cell span, in px. */
   function fitOf(n: LayoutNode): 'fill' | 'compact' | undefined {
     if (effective === 'stacked') return undefined; // phone stacking keeps the v2 tile sizes
-    const p = clampPlacement(n.placement, columns);
-    if (effective === 'free') {
-      const u = FREE_UNIT_PX * freeScale;
-      return tileFit(p.w * u, p.h * u);
-    }
-    return tileFit(p.w * unitPx, p.h * (rowPx ?? cellPx));
+    const b = nodeBox(n.placement, metrics);
+    return tileFit(b.widthPx, b.heightPx);
   }
 
   // Placeholders (unrenderable nodes, m3): one that has a position keeps it, drawn
@@ -135,9 +83,9 @@
   function placeholderStyle(n: unknown): string {
     const p = clampPlacement(rawPlacement(n), columns);
     if (effective === 'free') {
-      const u = FREE_UNIT_PX * freeScale;
-      return `position:absolute;left:${px(p.x * u)};top:${px(p.y * u)};width:${px(p.w * u)};` +
-        `height:${px(p.h * u)};z-index:${topZ};`;
+      const b = nodeBox(p, metrics);
+      return `position:absolute;left:${px(b.leftPx)};top:${px(b.topPx)};width:${px(b.widthPx)};` +
+        `height:${px(b.heightPx)};z-index:${topZ};`;
     }
     return `grid-column: ${p.x + 1} / span ${p.w}; grid-row: ${p.y + 1} / span ${p.h}; z-index: ${topZ};`;
   }
@@ -170,8 +118,7 @@
           {dashboard}
           {tab}
           {folderChain}
-          parentRowPx={cellPx}
-          {unitPx}
+          parent={metrics}
         />
       {/if}
     {:else if !inPlace}

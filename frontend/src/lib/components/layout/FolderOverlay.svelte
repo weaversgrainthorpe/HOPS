@@ -2,7 +2,9 @@
   import Icon from '@iconify/svelte';
   import type { Container, FolderNode, LayoutDashboard, LayoutTab } from '$lib/types/layout';
   import type { CanvasPlan } from '$lib/layout/geometry';
-  import { folderInnerColumns, overlayUnitPx, resolveMode } from '$lib/layout/geometry';
+  import {
+    containerMetrics, folderInnerColumns, OVERLAY_PANEL_CHROME_PX, overlayBodyPx, overlayUnitPx, resolveMode
+  } from '$lib/layout/geometry';
   import { focusTrap } from '$lib/utils/focusTrap';
   import { overlayStack, closeTop, closeTo } from '$lib/stores/folderOverlay';
   import { tick } from 'svelte';
@@ -14,25 +16,22 @@
     plan: CanvasPlan;
   }
   let { dashboard, tab, plan }: Props = $props();
-  // Viewport content width (excludes a page scrollbar); measured on mount and resize only.
-  let vw = $state(1280);
+  // Widest content box the viewport allows (minus the measured page scrollbar,
+  // backdrop padding and panel chrome); measured on mount and resize only.
+  let bodyPx = $state(overlayBodyPx(1280, 0));
   function measureViewport() {
-    const cw = document.documentElement.clientWidth;
-    vw = cw > 0 ? cw : window.innerWidth;
+    bodyPx = overlayBodyPx(window.innerWidth, document.documentElement.clientWidth);
   }
   $effect(() => measureViewport());
-  // Widest content box the viewport allows: minus backdrop padding (32) and panel chrome (34).
-  const PANEL_CHROME_PX = 34; // body padding 2 × 16 + border 2 × 1
-  const bodyPx = $derived(Math.max(1, vw - 32 - PANEL_CHROME_PX));
   const px = (v: number) => `${Math.round(v * 100) / 100}px`;
 
   /** Content sizing for one panel (Ruling 23): cells keep the dashboard's size, capped by the viewport. */
   function sizing(chain: FolderNode[]) {
     const folder = chain[chain.length - 1];
     const mode = resolveMode(dashboard, tab, chain);
-    const columns = folderInnerColumns(folder);
-    const unit = overlayUnitPx(plan, tab, mode, columns, bodyPx);
-    return { mode, box: columns * unit, rowPx: mode === 'grid' ? unit : undefined };
+    const unit = overlayUnitPx(plan, tab, mode, folderInnerColumns(folder), bodyPx);
+    const metrics = containerMetrics(folder.content, mode, folderInnerColumns(folder) * unit, { folder });
+    return { metrics, box: metrics.innerWidthPx };
   }
 
   /** Outermost-first chain of folders ending at `id`, or null when not in this tab. */
@@ -85,7 +84,8 @@
   // Escape closes the top overlay wherever focus is, unless a tile modal is open
   // above it (that modal handles its own Escape).
   function onWindowKey(e: KeyboardEvent) {
-    if (e.key !== 'Escape' || panels.length === 0) return;
+    // Another handler (a menu, a picker, the editor) already dealt with this Escape.
+    if (e.key !== 'Escape' || e.defaultPrevented || panels.length === 0) return;
     if (document.querySelector('[role="dialog"][aria-modal="true"]:not(.overlay-panel)')) return;
     closeTop();
   }
@@ -112,7 +112,7 @@
       aria-modal="true"
       aria-label={folder.name}
       tabindex="-1"
-      style:width={px(size.box + PANEL_CHROME_PX)}
+      style:width={px(size.box + OVERLAY_PANEL_CHROME_PX)}
       style:max-width="100%"
       use:inertUnless={isTop}
       use:restoreFocus
@@ -145,14 +145,12 @@
       <div class="overlay-body">
         <div class="overlay-content" style:width={px(size.box)}>
           <ContainerView
-            container={{ columns: folderInnerColumns(folder), children: folder.content?.children }}
-            mode={size.mode}
+            container={{ columns: size.metrics.columns, children: folder.content?.children }}
+            metrics={size.metrics}
             {plan}
             {dashboard}
             {tab}
             folderChain={p.chain}
-            boxPx={size.box}
-            rowPx={size.rowPx}
           />
         </div>
       </div>

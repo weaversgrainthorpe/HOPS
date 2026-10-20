@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy, untrack } from 'svelte';
   import type { LayoutDashboard, LayoutTab } from '$lib/types/layout';
-  import { planCanvas, resolveMode } from '$lib/layout/geometry';
+  import { containerMetrics, planCanvas, resolveMode, rootBoxWidthPx } from '$lib/layout/geometry';
   import { layoutDoc, layoutStale } from '$lib/stores/config';
   import { closeAll, overlayStack, reconcile } from '$lib/stores/folderOverlay';
   import { toast } from '$lib/stores/toast';
@@ -56,13 +56,15 @@
 
   const mode = $derived(resolveMode(dashboard, tab, []));
   const plan = $derived(planCanvas(mode, width, tab));
+  // The root's sizes: one source (geometry.containerMetrics), recomputed per width change only.
+  const metrics = $derived(containerMetrics(tab.root, mode, rootBoxWidthPx(plan, tab)));
 </script>
 
 <div class="tab-canvas" bind:this={el} data-tab-id={tab.id}>
   {#if $layoutStale}
     <div role="status" class="refreshing">Refreshing layout…</div>
   {:else if width > 0}
-    <ContainerView container={tab.root} {mode} {plan} {dashboard} {tab} folderChain={[]} />
+    <ContainerView container={tab.root} {metrics} {plan} {dashboard} {tab} folderChain={[]} />
   {/if}
 </div>
 <!-- Outside the conditional above and portalled to <body>: survives stale flips. -->

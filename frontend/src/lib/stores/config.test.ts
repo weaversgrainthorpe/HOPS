@@ -27,6 +27,8 @@ import {
   saveDashboardSettingsChanges,
   layoutDoc,
   layoutStale,
+  configLoading,
+  configError,
   resolveDashboardRoute,
   deleteDashboard,
   dashboardHref
@@ -154,6 +156,47 @@ describe('loadConfig', () => {
     await loadConfig();
     expect(get(migrationFailure)).toBeNull();
     expect(get(config)!.dashboards).toHaveLength(2);
+  });
+});
+
+describe('loadConfig while the layout is stale (M3 Task 1)', () => {
+  it('reloads in the background: never shows the global loading screen', async () => {
+    configLoading.set(false);
+    layoutStale.set(true);
+    let resolve!: (c: Config) => void;
+    vi.mocked(api.getConfig).mockImplementation(() => new Promise<Config>((r) => (resolve = r)));
+    const loading: boolean[] = [];
+    const unsub = configLoading.subscribe((v) => loading.push(v));
+    const p = loadConfig();
+    expect(get(configLoading)).toBe(false);
+    resolve(makeConfig());
+    await p;
+    unsub();
+    expect(loading).not.toContain(true);
+    expect(get(layoutStale)).toBe(false);
+  });
+
+  it('a first (non-stale) load still shows the loading screen', async () => {
+    layoutStale.set(false);
+    configLoading.set(false);
+    let resolve!: (c: Config) => void;
+    vi.mocked(api.getConfig).mockImplementation(() => new Promise<Config>((r) => (resolve = r)));
+    const p = loadConfig();
+    expect(get(configLoading)).toBe(true);
+    resolve(makeConfig());
+    await p;
+    expect(get(configLoading)).toBe(false);
+  });
+
+  it('a failed stale reload is still surfaced', async () => {
+    configLoading.set(false);
+    layoutStale.set(true);
+    vi.mocked(api.getConfig).mockRejectedValue(new Error('down'));
+    await loadConfig();
+    expect(get(configError)).toBe('down');
+    expect(get(layoutStale)).toBe(true);
+    configError.set(null);
+    layoutStale.set(false);
   });
 });
 

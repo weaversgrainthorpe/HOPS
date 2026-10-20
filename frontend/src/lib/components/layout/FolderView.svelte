@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { FolderNode, LayoutDashboard, LayoutTab } from '$lib/types/layout';
-  import type { CanvasPlan } from '$lib/layout/geometry';
-  import { clampPlacement, folderContentRowPx, folderInnerColumns, isRenderable, previewChildren, resolveMode } from '$lib/layout/geometry';
+  import type { CanvasPlan, ContainerMetrics } from '$lib/layout/geometry';
+  import { folderInnerMetrics, previewChildren } from '$lib/layout/geometry';
   import { getTextColorValue } from '$lib/utils/colorContrast';
   import Icon from '@iconify/svelte';
   import ColoredIcon from '../ColoredIcon.svelte';
@@ -17,43 +17,19 @@
     tab: LayoutTab;
     /** Folders enclosing this one (outermost first); does not include `folder`. */
     folderChain: FolderNode[];
-    /** Row height (px) of the container this folder sits in; sizes this folder's own rows. */
-    parentRowPx: number;
-    /** Width in px of one column of the parent container (child box = w * unitPx). */
-    unitPx?: number;
+    /** Metrics of the container this folder sits in; every inner size derives from them. */
+    parent: ContainerMetrics;
   }
-  let { folder, style = '', plan, dashboard, tab, folderChain, parentRowPx, unitPx = 0 }: Props = $props();
+  let { folder, style = '', plan, dashboard, tab, folderChain, parent }: Props = $props();
 
   const chain = $derived([...folderChain, folder]);
-  const innerMode = $derived(resolveMode(dashboard, tab, chain));
   const showTitle = $derived(folder.showTitle !== false);
   const tabLook = $derived(folder.shape === 'folder-tab');
   const textColor = $derived(
     folder.color ? getTextColorValue(folder.textColor || 'auto', folder.color) : 'inherit'
   );
-  const innerColumns = $derived(folderInnerColumns(folder));
-  // Content rows = max(h-1, deepest child bottom), so a child below the folder's
-  // nominal height still has a row and is shrunk-to-fit, never clipped.
-  const contentRows = $derived.by(() => {
-    let rows = Math.max(1, Math.floor(folder.placement.h) - 1);
-    for (const c of folder.content.children) {
-      if (!isRenderable(c)) continue;
-      const p = clampPlacement(c.placement, innerColumns);
-      rows = Math.max(rows, p.y + p.h);
-    }
-    return rows;
-  });
-  const innerRowPx = $derived(
-    plan.kind === 'grid'
-      ? Math.round(
-          ((folderContentRowPx(folder.placement.h, parentRowPx, showTitle) *
-            Math.max(1, Math.floor(folder.placement.h) - 1)) /
-            contentRows) *
-            100
-        ) / 100
-      : undefined
-  );
-  const innerBoxPx = $derived(unitPx > 0 ? Math.max(1, Math.floor(folder.placement.w)) * unitPx : undefined);
+  // Content box, columns, row height and mode: one source (geometry.folderInnerMetrics).
+  const innerMetrics = $derived(folderInnerMetrics(folder, parent));
   const previews = $derived(previewChildren(folder));
   const itemCount = $derived(Array.isArray(folder.content?.children) ? folder.content.children.length : 0);
   // Children exist but none can be drawn: say so, never "Empty folder" (no silent failures).
@@ -69,7 +45,7 @@
       openFolder(folder.id);
     }
   }
-  const inner = $derived({ columns: innerColumns, children: folder.content.children });
+  const inner = $derived({ columns: innerMetrics.columns, children: folder.content.children });
 </script>
 
 {#if folder.display === 'collapsed'}
@@ -137,13 +113,11 @@
     <div class="folder-body">
       <ContainerView
         container={inner}
-        mode={innerMode}
+        metrics={innerMetrics}
         {plan}
         {dashboard}
         {tab}
         folderChain={chain}
-        rowPx={innerRowPx}
-        boxPx={innerBoxPx}
       />
     </div>
   </div>
@@ -231,9 +205,12 @@
     border: 1px solid var(--border);
     border-radius: 0 0.5rem 0.5rem 0.5rem;
     background: rgba(var(--bg-secondary-rgb, 30, 41, 59), 0.5);
-    margin-top: -1px;
     position: relative;
     z-index: 1;
+  }
+  /* The body overlaps the tab's 1px edge (geometry.folderChrome: titlePx 39). */
+  .folder.folder-style .folder-header + .folder-body {
+    margin-top: -1px;
   }
 
   .collapsed {

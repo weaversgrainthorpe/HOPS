@@ -6,6 +6,7 @@ import TabCanvas from './TabCanvas.svelte';
 import { config } from '$lib/stores/config';
 import { closeAll, openFolder, overlayStack } from '$lib/stores/folderOverlay';
 import type { LayoutDashboard, LayoutTab } from '$lib/types/layout';
+import { containerMetrics, folderChrome, folderInnerMetrics, requiredFolderHeightPx } from '$lib/layout/geometry';
 
 let width = 1920;
 const instances: FakeRO[] = [];
@@ -86,8 +87,9 @@ describe('free placement', () => {
     const { container } = render(TabCanvas, { dashboard: dash, tab });
     await tick();
     await tick();
-    // box = 6 cells * 100px = 600; scale = 600/(75*8) = 1 -> child 10*8*1 = 80px wide
-    expect((container.querySelector('[data-node-id="c"]') as HTMLElement).style.width).toBe('80px');
+    // box = 6 cells * 100px = 600, minus the folder's 18px side chrome = 582 over 75 columns
+    // = 7.76px/unit -> child 10 units = 77.6px wide
+    expect((container.querySelector('[data-node-id="c"]') as HTMLElement).style.width).toBe('77.6px');
   });
 
   it('still shows a placeholder for an unrenderable child in free mode', async () => {
@@ -123,9 +125,10 @@ describe('fix round 1', () => {
     const frees = [...container.querySelectorAll('.container-free')] as HTMLElement[];
     expect(frees.length).toBe(3);
     for (const f of frees) expect(f.style.height).toBe('');
-    // inner folder box = 40*12 = 480px over 40 cols -> 12px/unit; 50 units tall -> 600px
+    // outer box 80*12 = 960 - 18 chrome = 942 over 80 cols -> 11.775px/unit;
+    // inner box 40*11.775 = 471 - 18 = 453 over 40 cols -> 11.325px/unit; 50 units tall -> 566.25px
     const innermost = frees[2];
-    expect(parseFloat(innermost.style.minHeight)).toBeCloseTo(600, 1);
+    expect(parseFloat(innermost.style.minHeight)).toBeCloseTo(566.25, 1);
     const outerMin = parseFloat(frees[1].style.minHeight);
     expect(outerMin).toBeGreaterThanOrEqual(parseFloat(innermost.style.minHeight) + 18);
     expect(parseFloat(frees[0].style.minHeight)).toBeGreaterThanOrEqual(outerMin);
@@ -217,5 +220,39 @@ describe('phone stacking', () => {
     await resizeTo(1024);
     expect(get(overlayStack)).toEqual(['f']);
     expect(screen.getByRole('dialog').querySelector('.container-stacked')).toBeNull();
+  });
+});
+
+describe('one geometry source (M3 Task 1)', () => {
+  it('a free folder renders exactly requiredFolderHeightPx, and its children stay inside its inner width', async () => {
+    const kids = [tile('deep', 'Deep', { x: 0, y: 2, w: 10, h: 50 }), tile('wide', 'Wide', { x: 30, y: 0, w: 40, h: 2 })];
+    const f = folder('ff', 'Free', { x: 0, y: 0, w: 40, h: 1 }, kids, { layout: 'free', content: { columns: 40, children: kids } });
+    const { dash, tab } = mk([f], 'free', 160);
+    const { container } = render(TabCanvas, { dashboard: dash, tab });
+    await tick();
+    const root = containerMetrics(tab.root, 'free', 1920);
+    const el = container.querySelector('[data-node-id="ff"]') as HTMLElement;
+    expect(parseFloat(el.style.minHeight)).toBeCloseTo(requiredFolderHeightPx(f, root), 1);
+    const inner = folderInnerMetrics(f, root);
+    const ch = folderChrome(undefined, true);
+    const innerFree = el.querySelector('.container-free') as HTMLElement;
+    expect(parseFloat(innerFree.style.width)).toBeCloseTo(inner.innerWidthPx, 1);
+    expect(parseFloat(innerFree.style.minHeight) + ch.titlePx + ch.padYPx).toBeCloseTo(requiredFolderHeightPx(f, root), 1);
+    const w = container.querySelector('[data-node-id="wide"]') as HTMLElement;
+    expect(parseFloat(w.style.left) + parseFloat(w.style.width)).toBeLessThanOrEqual(inner.innerWidthPx + 0.01);
+  });
+
+  it('a grid folder in a free tab grows to its square-cell rows', async () => {
+    const kids = [tile('g1', 'G1', { x: 0, y: 3, w: 1, h: 1 })];
+    const f = folder('gf', 'GridIn', { x: 0, y: 0, w: 40, h: 5 }, kids, { layout: 'grid', content: { columns: 4, children: kids } });
+    const { dash, tab } = mk([f], 'free', 160);
+    const { container } = render(TabCanvas, { dashboard: dash, tab });
+    await tick();
+    const root = containerMetrics(tab.root, 'free', 1920);
+    const el = container.querySelector('[data-node-id="gf"]') as HTMLElement;
+    const need = requiredFolderHeightPx(f, root);
+    expect(need).toBeGreaterThan(5 * 12);
+    expect(parseFloat(el.style.minHeight)).toBeCloseTo(need, 1);
+    expect(parseFloat((container.querySelector('.container-free') as HTMLElement).style.minHeight)).toBeCloseTo(need, 1);
   });
 });

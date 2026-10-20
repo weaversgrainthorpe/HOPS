@@ -1,5 +1,5 @@
 import type {
-  FolderNode, LayoutDashboard, LayoutMode, LayoutNode, LayoutTab, Placement
+  Container, FolderNode, LayoutDashboard, LayoutMode, LayoutNode, LayoutTab, Placement
 } from '../types/layout';
 
 export const ROOT_COLUMNS = 12;
@@ -8,9 +8,6 @@ export const DEFAULT_DESIGN_WIDTH = 1280;
 export const MIN_FREE_SCALE = 0.6;
 export const PHONE_BREAKPOINT_PX = 768;
 export const PREVIEW_COUNT = 4;
-
-const TITLE_BAR_PX = 40;
-const FOLDER_PADDING_PX = 16;
 
 function concrete(m: unknown): m is LayoutMode {
   return m === 'grid' || m === 'free';
@@ -59,7 +56,7 @@ function fin(v: unknown, dflt: number): number {
 }
 
 export function clampPlacement(p: Placement, columns: number): Placement {
-  const cols = Math.max(1, fin(columns, ROOT_COLUMNS));
+  const cols = resolveColumns(columns, ROOT_COLUMNS);
   const x = Math.min(Math.max(fin(p.x, 0), 0), cols - 1);
   const w = Math.min(Math.max(fin(p.w, 1), 1), cols - x);
   const out: Placement = { x, y: Math.max(fin(p.y, 0), 0), w, h: Math.max(fin(p.h, 1), 1) };
@@ -73,12 +70,29 @@ export function previewChildren(folder: FolderNode): LayoutNode[] {
   return readingOrder(kids.filter(isRenderable)).slice(0, PREVIEW_COUNT);
 }
 
+/**
+ * THE columns rule, used everywhere a column count is read: floor a finite value;
+ * if that is not >= 1, use `fallback` (itself floored; 1 if it is no good either).
+ */
+export function resolveColumns(raw: unknown, fallback: number): number {
+  const c = isNum(raw) ? Math.floor(raw) : NaN;
+  if (c >= 1) return c;
+  const f = isNum(fallback) ? Math.floor(fallback) : NaN;
+  return f >= 1 ? f : 1;
+}
+
+/**
+ * A container's column count. A root falls back to ROOT_COLUMNS; a folder's
+ * content falls back to the folder's placement.w (and that to 1).
+ */
+export function containerColumns(container: Container | undefined, folder?: FolderNode): number {
+  const fallback = folder ? resolveColumns(folder.placement?.w, 1) : ROOT_COLUMNS;
+  return resolveColumns(container?.columns, fallback);
+}
+
 /** A folder's inner column count: its content.columns (design extent when free), else its placement width. */
 export function folderInnerColumns(folder: FolderNode): number {
-  const cc = folder.content?.columns;
-  if (isNum(cc) && cc >= 1) return Math.floor(cc);
-  const w = folder.placement?.w;
-  return isNum(w) && w >= 1 ? Math.floor(w) : 1;
+  return containerColumns(folder.content, folder);
 }
 
 /** A tile box narrower or shorter than this renders compact (icon + name). Ruling 22. */
@@ -91,9 +105,6 @@ export function tileFit(wPx: number, hPx: number): TileFit {
   return isNum(m) && m < COMPACT_TILE_PX ? 'compact' : 'fill';
 }
 
-export const FOLDER_CHROME_PX = 18; // body padding (16) + border (2)
-export const FOLDER_TITLE_PX = TITLE_BAR_PX;
-
 export type CanvasPlan =
   | { kind: 'grid'; cellPx: number }
   | { kind: 'free'; scale: number }
@@ -103,8 +114,7 @@ export function planCanvas(mode: LayoutMode, widthPx: number, tab: LayoutTab): C
   if (!isNum(widthPx) || widthPx <= 0) return { kind: 'stacked' };
   if (mode === 'grid') {
     if (widthPx < PHONE_BREAKPOINT_PX) return { kind: 'stacked' };
-    const c = tab.root?.columns;
-    return { kind: 'grid', cellPx: widthPx / (isNum(c) && c > 0 ? c : ROOT_COLUMNS) };
+    return { kind: 'grid', cellPx: widthPx / containerColumns(tab.root) };
   }
   const dw = tab.designWidth;
   const scale = widthPx / (isNum(dw) && dw > 0 ? dw : DEFAULT_DESIGN_WIDTH);
@@ -119,7 +129,7 @@ export function planCanvas(mode: LayoutMode, widthPx: number, tab: LayoutTab): C
  * viewport is too narrow. Grid: one cell; free: one 8 px design unit × scale.
  */
 export function overlayUnitPx(plan: CanvasPlan, tab: LayoutTab, mode: LayoutMode, columns: number, bodyPx: number): number {
-  const cols = isNum(columns) && columns >= 1 ? Math.floor(columns) : 1;
+  const cols = resolveColumns(columns, 1);
   const fit = Math.max(1, isNum(bodyPx) ? bodyPx : 1) / cols;
   const canvas = canvasUnitPx(plan, tab, mode);
   return canvas > 0 ? Math.min(canvas, fit) : fit;
@@ -127,23 +137,190 @@ export function overlayUnitPx(plan: CanvasPlan, tab: LayoutTab, mode: LayoutMode
 
 function canvasUnitPx(plan: CanvasPlan, tab: LayoutTab, mode: LayoutMode): number {
   if (plan.kind === 'stacked') return 0; // phone stacking ignores sizes
-  const rc = tab.root?.columns;
   const dw = tab.designWidth;
   const canvasW =
     plan.kind === 'grid'
-      ? plan.cellPx * (isNum(rc) && rc > 0 ? rc : ROOT_COLUMNS)
+      ? plan.cellPx * containerColumns(tab.root)
       : plan.scale * (isNum(dw) && dw > 0 ? dw : DEFAULT_DESIGN_WIDTH);
   if (mode === 'grid') return plan.kind === 'grid' ? plan.cellPx : canvasW / ROOT_COLUMNS;
   return FREE_UNIT_PX * (plan.kind === 'free' ? plan.scale : canvasW / DEFAULT_DESIGN_WIDTH);
 }
 
-/** Height of one content row inside an expanded folder of folderHeightCells rows. */
-export function folderContentRowPx(folderHeightCells: number, cellPx: number, showTitle: boolean): number {
-  const h = isNum(folderHeightCells) && folderHeightCells >= 1 ? folderHeightCells : 1;
-  const total = h * cellPx;
-  const chrome = (showTitle ? TITLE_BAR_PX : 0) + FOLDER_PADDING_PX;
-  const rows = Math.max(1, h - 1);
-  return (total - chrome) / rows;
+// ---------------------------------------------------------------------------
+// One geometry source. The renderer (and the M3 editor's hit-testing and
+// resize handles) take every size from the functions below; nothing else
+// derives a column width, row height, folder chrome or box.
+// ---------------------------------------------------------------------------
+
+export interface NodeBox { leftPx: number; topPx: number; widthPx: number; heightPx: number }
+
+export interface ContainerMetrics {
+  mode: 'grid' | 'free';
+  columns: number;
+  /** Width in px of one column. */
+  unitPx: number;
+  /** Height in px of one row (free: always unitPx). */
+  rowPx: number;
+  /** Width in px of the container's content box (= columns * unitPx). */
+  innerWidthPx: number;
+}
+
+const nonNeg = (v: unknown): number => (isNum(v) && v > 0 ? v : 0);
+
+/**
+ * The ONLY function that turns a container + its box into child geometry.
+ * Grid rows are square unless `opts.rowPx` is given; free rows are the unit.
+ * Pass `opts.folder` for a folder's content so a bad `columns` falls back to its placement.w.
+ */
+export function containerMetrics(
+  container: Container,
+  mode: LayoutMode,
+  boxWidthPx: number,
+  opts: { rowPx?: number; folder?: FolderNode } = {}
+): ContainerMetrics {
+  const columns = containerColumns(container, opts.folder);
+  const innerWidthPx = nonNeg(boxWidthPx);
+  const unitPx = innerWidthPx / columns;
+  const m: LayoutMode = mode === 'free' ? 'free' : 'grid';
+  const rowPx = m === 'grid' && opts.rowPx !== undefined ? nonNeg(opts.rowPx) : unitPx;
+  return { mode: m, columns, unitPx, rowPx, innerWidthPx };
+}
+
+/** A node's box inside a container, after clampPlacement (so fractional x/y/w/h are floored). */
+export function nodeBox(p: Placement, m: ContainerMetrics): NodeBox {
+  const c = clampPlacement(p, m.columns);
+  return { leftPx: c.x * m.unitPx, topPx: c.y * m.rowPx, widthPx: c.w * m.unitPx, heightPx: c.h * m.rowPx };
+}
+
+/** Space a folder's own chrome takes, per look. Mirrors FolderView's CSS (global border-box). */
+export interface FolderChrome { titlePx: number; padXPx: number; padYPx: number }
+
+/** Title bar height (FolderView .folder-header, border-box). */
+const TITLE_BAR_PX = 40;
+/** Body padding 0.5rem each side + 1px border each side. */
+const BODY_PAD_PX = 2 * 8 + 2 * 1;
+
+/**
+ * The one chrome table.
+ * - rounded (default): 1px border round the folder, 40px title, body padding 8px.
+ * - folder-tab: no outer border; the 40px tab sits over the bordered body and
+ *   overlaps its top border by 1px; body padding 8px + 1px border.
+ */
+export function folderChrome(shape: string | undefined, showTitle: boolean): FolderChrome {
+  if (shape === 'folder-tab') {
+    return { titlePx: showTitle ? TITLE_BAR_PX - 1 : 0, padXPx: BODY_PAD_PX, padYPx: BODY_PAD_PX };
+  }
+  return { titlePx: showTitle ? TITLE_BAR_PX : 0, padXPx: BODY_PAD_PX, padYPx: BODY_PAD_PX };
+}
+
+/** The content box inside a folder's box (a collapsed folder has none). */
+export function folderContentBox(folder: FolderNode, box: NodeBox, chrome: FolderChrome): { widthPx: number; heightPx: number } {
+  if (folder.display === 'collapsed') return { widthPx: 0, heightPx: 0 };
+  return {
+    widthPx: nonNeg(box.widthPx - chrome.padXPx),
+    heightPx: nonNeg(box.heightPx - chrome.titlePx - chrome.padYPx)
+  };
+}
+
+function chromeOf(folder: FolderNode): FolderChrome {
+  return folderChrome(folder.shape, folder.showTitle !== false);
+}
+
+/** A folder's own mode: concrete folder.layout, else its parent container's (as resolveMode). */
+function innerMode(folder: FolderNode, parent: ContainerMetrics): LayoutMode {
+  return concrete(folder.layout) ? folder.layout : parent.mode;
+}
+
+/** Rows a grid folder's content spans: max(h - 1, deepest child bottom), at least 1. */
+function gridContentRows(folder: FolderNode, columns: number, minRows: number): number {
+  let rows = Math.max(1, minRows);
+  const kids = Array.isArray(folder.content?.children) ? folder.content.children : [];
+  for (const c of kids) {
+    if (!isRenderable(c)) continue;
+    const p = clampPlacement(c.placement, columns);
+    rows = Math.max(rows, p.y + p.h);
+  }
+  return rows;
+}
+
+/**
+ * Metrics of an expanded folder's content, inside a parent container.
+ * Width: the folder box minus its chrome (so free children never exceed it).
+ * Rows: a grid folder in a grid parent fits its rows to its height (content
+ * rows = max(h-1, deepest child), shrunk to fit, never clipped); a grid folder
+ * in a free parent uses square cells and grows; free rows are the unit.
+ */
+export function folderInnerMetrics(folder: FolderNode, parent: ContainerMetrics): ContainerMetrics {
+  const box = nodeBox(folder.placement, parent);
+  const content = folderContentBox({ ...folder, display: 'expanded' }, box, chromeOf(folder));
+  const mode = innerMode(folder, parent);
+  const columns = folderInnerColumns(folder);
+  let rowPx: number | undefined;
+  if (mode === 'grid' && parent.mode === 'grid') {
+    const h = clampPlacement(folder.placement, parent.columns).h;
+    rowPx = content.heightPx / gridContentRows(folder, columns, h - 1);
+  }
+  return containerMetrics(folder.content, mode, content.widthPx, { rowPx, folder });
+}
+
+/** Height free children need: the lowest bottom edge (folders at their required height). */
+export function freeContentHeightPx(children: unknown, m: ContainerMetrics): number {
+  let bottom = 0;
+  for (const c of Array.isArray(children) ? children : []) {
+    if (!isRenderable(c)) continue;
+    const b = nodeBox(c.placement, m);
+    bottom = Math.max(bottom, b.topPx + (c.kind === 'folder' ? requiredFolderHeightPx(c, m) : b.heightPx));
+  }
+  return bottom;
+}
+
+/**
+ * Height a folder renders at inside container m: its box, or more when its
+ * content needs it (folders grow past their box, never clip). FolderView in a
+ * free container renders exactly this as its min-height.
+ */
+export function requiredFolderHeightPx(folder: FolderNode, m: ContainerMetrics): number {
+  const box = nodeBox(folder.placement, m);
+  if (folder.display === 'collapsed' || !isRenderable(folder)) return box.heightPx;
+  const inner = folderInnerMetrics(folder, m);
+  const ch = chromeOf(folder);
+  let content: number;
+  if (inner.mode === 'free') {
+    content = freeContentHeightPx(folder.content.children, inner);
+  } else if (m.mode === 'grid') {
+    return box.heightPx; // rows were fitted to the box
+  } else {
+    content = gridContentRows(folder, inner.columns, 0) * inner.rowPx;
+  }
+  return Math.max(box.heightPx, ch.titlePx + ch.padYPx + content);
+}
+
+/** Overlay backdrop padding (2 x 1rem) and panel chrome (body padding 2 x 16 + border 2 x 1). */
+export const OVERLAY_GUTTER_PX = 32;
+export const OVERLAY_PANEL_CHROME_PX = 34;
+
+/** Width of a page scrollbar: innerWidth - clientWidth (0 when clientWidth is unmeasurable). */
+export function scrollbarPx(innerWidth: number, clientWidth: number): number {
+  if (!isNum(innerWidth) || !isNum(clientWidth) || clientWidth <= 0) return 0;
+  return Math.max(0, innerWidth - clientWidth);
+}
+
+/** Viewport width usable by fixed overlays/maximised panels: innerWidth minus the measured scrollbar. */
+export function viewportContentPx(innerWidth: number, clientWidth: number): number {
+  return nonNeg(innerWidth) - scrollbarPx(innerWidth, clientWidth);
+}
+
+/** Widest content box a folder overlay body may have in this viewport. */
+export function overlayBodyPx(innerWidth: number, clientWidth: number): number {
+  return Math.max(1, viewportContentPx(innerWidth, clientWidth) - OVERLAY_GUTTER_PX - OVERLAY_PANEL_CHROME_PX);
+}
+
+/** Box width of a tab's root container for a plan (0 when stacked). */
+export function rootBoxWidthPx(plan: CanvasPlan, tab: LayoutTab): number {
+  const cols = containerColumns(tab.root);
+  if (plan.kind === 'grid') return plan.cellPx * cols;
+  if (plan.kind === 'free') return plan.scale * FREE_UNIT_PX * cols;
+  return 0;
 }
 
 function isNum(v: unknown): v is number {

@@ -193,6 +193,26 @@ describe('overlay sizing (Ruling 23)', () => {
   });
 });
 
+describe('overlay width excludes the scrollbar (M3 Task 1)', () => {
+  it('a 15px page scrollbar is subtracted from the overlay body', async () => {
+    const prevW = window.innerWidth;
+    const de = document.documentElement;
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 400 });
+    Object.defineProperty(de, 'clientWidth', { configurable: true, value: 385 });
+    try {
+      const kids = [tile('a', 'A', 0, 0), tile('b', 'B', 1, 0), tile('c', 'C', 2, 0), tile('d', 'D', 3, 0)];
+      await renderTab([folder('f1', 'Box', kids)]);
+      await fireEvent.click(screen.getByRole('button', { name: /^Box/ }));
+      const grid = (screen.getByRole('dialog').querySelector('[data-node-id="a"]') as HTMLElement).parentElement as HTMLElement;
+      const row = Number(/grid-auto-rows:\s*([\d.]+)px/.exec(grid.getAttribute('style') ?? '')![1]);
+      expect(row).toBeCloseTo((385 - 32 - 34) / 4, 1);
+    } finally {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: prevW });
+      delete (de as unknown as Record<string, unknown>).clientWidth;
+    }
+  });
+});
+
 describe('overlay focus and lifetime', () => {
   it('initial focus goes to the close button, not the breadcrumb root', async () => {
     await renderTab([folder('f1', 'Box', [tile('a', 'Alpha')])]);
@@ -216,6 +236,20 @@ describe('overlay robustness', () => {
     (document.activeElement as HTMLElement | null)?.blur();
     await fireEvent.keyDown(document.body, { key: 'Escape' });
     expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('an Escape another handler already handled (defaultPrevented) leaves the overlay open', async () => {
+    await renderTab([folder('f1', 'Box', [tile('a', 'Alpha')])]);
+    await fireEvent.click(screen.getByRole('button', { name: /Box/ }));
+    const handled = (e: KeyboardEvent) => e.preventDefault();
+    document.body.addEventListener('keydown', handled);
+    try {
+      await fireEvent.keyDown(document.body, { key: 'Escape' });
+    } finally {
+      document.body.removeEventListener('keydown', handled);
+    }
+    expect(get(overlayStack)).toEqual(['f1']);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 
   it('with a tile modal open, Escape closes only the modal', async () => {

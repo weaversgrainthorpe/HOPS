@@ -48,6 +48,31 @@
   const activeTabId = $derived(dashboard.tabs[activeTabIndex]?.id);
   const layoutTab = $derived(layoutDash?.tabs.find((t) => t.id === activeTabId));
 
+  // A reload (or any new tabs array) keeps the ACTIVE TAB ID, not its index:
+  // when the tab moved, follow it. An explicit index change (tab click, add,
+  // reveal) always wins, even when it lands in the same flush as new tabs.
+  let heldTabs: unknown = undefined;
+  let heldIndex = -1;
+  let heldTabId: string | undefined = undefined;
+  $effect.pre(() => {
+    const tabs = dashboard.tabs;
+    const idx = activeTabIndex;
+    untrack(() => {
+      if (tabs !== heldTabs && idx === heldIndex && heldTabId !== undefined && tabs[idx]?.id !== heldTabId) {
+        const j = tabs.findIndex((t) => t.id === heldTabId);
+        if (j !== -1) {
+          heldTabs = tabs;
+          heldIndex = j;
+          activeTabIndex = j;
+          return;
+        }
+      }
+      heldTabs = tabs;
+      heldIndex = idx;
+      heldTabId = tabs[idx]?.id;
+    });
+  });
+
   // Keep the active index in range when tabs disappear (e.g. a reload).
   $effect(() => {
     const n = dashboard.tabs.length;

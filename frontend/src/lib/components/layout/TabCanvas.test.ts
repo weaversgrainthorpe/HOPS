@@ -152,9 +152,9 @@ describe('TabCanvas', () => {
     const cell = container.querySelector('[data-node-id="low"]') as HTMLElement;
     expect(cell.getAttribute('style')).toContain('grid-row: 4 / span 1');
     const inner = cell.parentElement as HTMLElement;
-    // 4 content rows must fit the folder body: (2*120 - 56) / 4 = 46px each
+    // 4 content rows must fit the folder body: (2*120 - 58 chrome) / 4 = 45.5px each
     const m = /grid-auto-rows:\s*([\d.]+)px/.exec(inner.getAttribute('style') ?? '');
-    expect(Number(m![1])).toBeCloseTo(46, 1);
+    expect(Number(m![1])).toBeCloseTo(45.5, 1);
     let el: HTMLElement | null = cell;
     while (el && el !== container) {
       expect(getComputedStyle(el).overflow).not.toBe('hidden');
@@ -168,12 +168,13 @@ describe('TabCanvas', () => {
     ]);
     const { container } = render(TabCanvas, { dashboard: dash, tab });
     await tick();
-    const outerRow = (8 * 120 - 56) / 7;
-    const expected = (6 * outerRow - 56) / 5;
+    // chrome = 40 title + 2 x 8 padding + 2 x 1 border = 58 (geometry.folderChrome)
+    const outerRow = (8 * 120 - 58) / 7;
+    const expected = (6 * outerRow - 58) / 5;
     const innerGrid = (container.querySelector('[data-node-id="t"]') as HTMLElement).parentElement as HTMLElement;
     const m = /grid-auto-rows:\s*([\d.]+)px/.exec(innerGrid.getAttribute('style') ?? '');
     expect(Number(m![1])).toBeCloseTo(expected, 1);
-    expect(Math.abs(Number(m![1]) - (6 * 120 - 56) / 5)).toBeGreaterThan(5);
+    expect(Math.abs(Number(m![1]) - (6 * 120 - 58) / 5)).toBeGreaterThan(5);
   });
 
   it('tiles are view-only even when edit mode is on', async () => {

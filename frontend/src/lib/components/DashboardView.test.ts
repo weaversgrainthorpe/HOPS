@@ -13,7 +13,7 @@ vi.mock('$app/stores', async () => {
 
 import Dashboard from './Dashboard.svelte';
 import Navbar from './Navbar.svelte';
-import { config } from '$lib/stores/config';
+import { config, layoutStale } from '$lib/stores/config';
 import { editMode } from '$lib/stores/editMode';
 import { isAuthenticated } from '$lib/stores/auth';
 import { closeAll, overlayStack, requestReveal, revealNavigation, revealRequest } from '$lib/stores/folderOverlay';
@@ -213,5 +213,29 @@ describe('route resolution and reveal lifetime', () => {
     await tick();
     await new Promise((r) => setTimeout(r, 30));
     expect(container.querySelector('.tab-canvas[data-tab-id="t1"]')).not.toBeNull();
+  });
+
+  it('a stale reload keeps the active tab id and the open overlay stack (M3 Task 1)', async () => {
+    const { container, rerender } = render(Dashboard, { dashboard: legacy });
+    await tick();
+    expect(container.querySelector('.tab-canvas[data-tab-id="t1"]')).not.toBeNull();
+    await fireEvent.click(screen.getByRole('button', { name: /^Box, folder/ }));
+    expect(get(overlayStack)).toEqual(['box']);
+    // A write response came back without a layout: stale, reload in flight.
+    layoutStale.set(true);
+    await tick();
+    // The reload lands with the tabs reordered (the active tab moved index).
+    const reordered: DashboardT = { ...legacy, revision: 2, tabs: [legacy.tabs[1], legacy.tabs[0]] };
+    const next = cfg();
+    next.dashboards = [reordered];
+    next.dashboardRevisions = { d1: 2 };
+    config.set(next);
+    layoutStale.set(false);
+    await rerender({ dashboard: reordered });
+    await tick();
+    expect(container.querySelector('.tab-canvas[data-tab-id="t1"]')).not.toBeNull();
+    expect(screen.getByRole('tab', { name: 'Switch to Main tab' }).getAttribute('aria-selected')).toBe('true');
+    expect(get(overlayStack)).toEqual(['box']);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 });
