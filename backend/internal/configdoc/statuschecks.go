@@ -3,6 +3,7 @@ package configdoc
 import (
 	"fmt"
 	"log/slog"
+	"sync"
 
 	"github.com/weaversgrainthorpe/HOPS/internal/settings"
 )
@@ -16,91 +17,129 @@ const (
 	SourceTab       CheckSource = "tab"
 	SourceFolder    CheckSource = "folder"
 	SourceTile      CheckSource = "tile"
+	// SourceInvalid: a level on the tile's path (the tile, a folder or the
+	// tab) holds a wrong-typed value. Verify never writes one, so it is
+	// unexpected; the tile is off and the response names that level, so the
+	// user can see and fix it instead of a value being silently ignored.
+	SourceInvalid CheckSource = "invalid"
 )
 
-// triState reads a tab's, folder's or dashboard's optional on/off setting:
-// (value, true) when it is set, (false, false) when it inherits (absent or
-// null). A wrong-typed value is never written (verify rejects it), so
-// meeting one is unexpected: it inherits and is logged at WARN, never
-// silently coerced.
-func triState(level string, owner Obj, v any) (bool, bool) {
+// tri is a decoded layered on/off setting.
+type tri int
+
+const (
+	triInherit tri = iota
+	triOn
+	triOff
+	triInvalid
+)
+
+func containerTri(v any) tri {
 	switch b := v.(type) {
 	case nil:
-		return false, false
+		return triInherit
 	case bool:
-		return b, true
+		if b {
+			return triOn
+		}
+		return triOff
 	}
-	warnWrongType(level, owner, v, "inherit")
-	return false, false
+	return triInvalid
 }
 
-// TileStatusCheck is the tile's own status-check setting (Ruling 12, keeping
-// v2.2.1's "status checks only go where you asked them to"):
-//   - statusCheck.enabled true or false: (that value, true);
-//   - statusCheck.enabled explicitly null: (false, false), i.e. inherit;
-//   - no statusCheck, statusCheck null, or enabled absent: (false, true),
-//     i.e. off, so a tile nobody asked to check is never checked.
-//
-// A wrong-typed value is never written (verify rejects it); meeting one is
-// unexpected, so it is off (never probe what wasn't asked for) and logged at
-// WARN.
-func TileStatusCheck(tile Obj) (bool, bool) {
+// tileTri is the tile's own setting (Ruling 12, keeping v2.2.1's "status
+// checks only go where you asked them to"): statusCheck.enabled true/false is
+// on/off; an explicit null inherits; no statusCheck, statusCheck null, or no
+// enabled is OFF (an unset tile is never checked); anything else is invalid.
+func tileTri(tile Obj) tri {
 	raw, has := tile["statusCheck"]
 	if !has || raw == nil {
-		return false, true
+		return triOff
 	}
 	sc, ok := raw.(Obj)
 	if !ok {
-		warnWrongType("tile", tile, raw, "off")
-		return false, true
+		return triInvalid
 	}
 	v, has := sc["enabled"]
 	if !has {
-		return false, true
+		return triOff
 	}
-	switch b := v.(type) {
-	case nil:
-		return false, false
-	case bool:
-		return b, true
-	}
-	warnWrongType("tile", tile, v, "off")
-	return false, true
+	return containerTri(v)
 }
 
-func warnWrongType(level string, owner Obj, v any, using string) {
-	id, _ := owner["id"].(string)
-	slog.Warn("status-check setting has the wrong type; using "+using,
-		"component", "configdoc", "level", level, "id", id, "value", fmt.Sprintf("%v", v))
+// invalidWarned de-duplicates the invalid-value WARN: once per (tile, level)
+// per process, not on every checker pass or status request.
+var invalidWarned sync.Map
+
+func warnInvalid(tileID, level, levelID string, v any) {
+	if _, seen := invalidWarned.LoadOrStore(tileID+"\x00"+level+"\x00"+levelID, true); seen {
+		return
+	}
+	slog.Warn("status-check setting has the wrong type; the tile is not checked (source \"invalid\")",
+		"component", "configdoc", "tile", tileID, "level", level, "id", levelID, "value", fmt.Sprintf("%v", v))
 }
 
 // EffectiveStatusChecks resolves whether tile is status-checked: the most
 // specific level that sets it wins — the tile, then its folders from the
 // innermost out (folderChain is outermost first, as Walk's path), then the
 // tab, then the dashboard's override, then the global setting. A tile only
-// inherits when its statusCheck.enabled is explicitly null (TileStatusCheck);
-// an unset tile is off. It returns the deciding level and that level's id
-// ("" for the global). dash, tab and folderChain may be nil (that level
-// inherits); a nil tile means "no tile level" (e.g. an id not in the config).
+// inherits when its statusCheck.enabled is explicitly null; an unset tile is
+// off. If the tile, a folder or the tab holds a wrong-typed value, the tile is
+// off with SourceInvalid and that level's id (WARN logged once). It returns
+// the deciding level and that level's id ("" for the global). dash, tab and
+// folderChain may be nil (that level inherits); a nil tile means "no tile
+// level" (e.g. an id not in the config).
 func EffectiveStatusChecks(svc *settings.Service, dash, tab Obj, folderChain []Obj, tile Obj) (bool, CheckSource, string) {
 	idOf := func(o Obj) string { s, _ := o["id"].(string); return s }
+	tileID := idOf(tile)
+
+	// Any invalid value on the path makes the tile off, most specific first.
+	if tile != nil && tileTri(tile) == triInvalid {
+		warnInvalid(tileID, "tile", tileID, tile["statusCheck"])
+		return false, SourceInvalid, tileID
+	}
+	for i := len(folderChain) - 1; i >= 0; i-- {
+		if v := folderChain[i]["statusChecksEnabled"]; containerTri(v) == triInvalid {
+			warnInvalid(tileID, "folder", idOf(folderChain[i]), v)
+			return false, SourceInvalid, idOf(folderChain[i])
+		}
+	}
+	if v := tab["statusChecksEnabled"]; containerTri(v) == triInvalid {
+		warnInvalid(tileID, "tab", idOf(tab), v)
+		return false, SourceInvalid, idOf(tab)
+	}
+
 	if tile != nil {
-		if on, set := TileStatusCheck(tile); set {
-			return on, SourceTile, idOf(tile)
+		switch tileTri(tile) {
+		case triOn:
+			return true, SourceTile, tileID
+		case triOff:
+			return false, SourceTile, tileID
 		}
 	}
 	for i := len(folderChain) - 1; i >= 0; i-- {
-		f := folderChain[i]
-		if on, set := triState("folder", f, f["statusChecksEnabled"]); set {
-			return on, SourceFolder, idOf(f)
+		switch containerTri(folderChain[i]["statusChecksEnabled"]) {
+		case triOn:
+			return true, SourceFolder, idOf(folderChain[i])
+		case triOff:
+			return false, SourceFolder, idOf(folderChain[i])
 		}
 	}
-	if on, set := triState("tab", tab, tab["statusChecksEnabled"]); set {
-		return on, SourceTab, idOf(tab)
+	switch containerTri(tab["statusChecksEnabled"]) {
+	case triOn:
+		return true, SourceTab, idOf(tab)
+	case triOff:
+		return false, SourceTab, idOf(tab)
 	}
+	// The dashboard override keeps Resolve's handling (a wrong type there
+	// falls back to the global with a WARN, as for every dashboard setting).
 	if ov, ok := dash["settings"].(Obj); ok {
-		if on, set := triState("dashboard", dash, ov["statusChecksEnabled"]); set {
-			return on, SourceDashboard, idOf(dash)
+		switch ov["statusChecksEnabled"].(type) {
+		case bool:
+			return ov["statusChecksEnabled"].(bool), SourceDashboard, idOf(dash)
+		case nil:
+		default:
+			return Resolve(svc, dash).StatusChecksEnabled, SourceGlobal, ""
 		}
 	}
 	return svc.GetBool(settings.KeyStatusChecksEnabled), SourceGlobal, ""

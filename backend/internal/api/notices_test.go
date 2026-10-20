@@ -1,9 +1,11 @@
 package api
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -285,5 +287,97 @@ func inheritTileCheck(t *testing.T, db *sql.DB, id string) {
 	tile["statusCheck"] = configdoc.Obj{"type": "http", "enabled": nil}
 	if err := configdoc.Save(db, doc); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// Ruling 13: the notice reflects the current config on every GET. Turning the
+// dashboard on removes it; turning another one off (with a tile switched on)
+// brings it back, naming that dashboard.
+func TestNotices_FollowTheCurrentConfig(t *testing.T) {
+	router, _ := setupTestRouterSeeded(t, layeredStatusFixture(t))
+	c := newClient(t, router)
+	setOverride := func(id string, v interface{}) {
+		t.Helper()
+		code, resp := c.do("GET", "/api/dashboards/"+id+"/settings", nil)
+		if code != 200 {
+			t.Fatalf("get settings %s: %d %v", id, code, resp)
+		}
+		code, resp = c.do("PUT", "/api/dashboards/"+id+"/settings", map[string]interface{}{
+			"overrides": map[string]interface{}{"statusChecksEnabled": v}, "revision": resp["revision"]})
+		if code != 200 {
+			t.Fatalf("put settings %s: %d %v", id, code, resp)
+		}
+	}
+	setOverride("da", true)
+	setOverride("de", true)
+	if ns := noticesOf(t, getView(t, c)); len(ns) != 0 {
+		t.Fatalf("after turning Alpha and Epsilon on: %v", ns)
+	}
+	setOverride("dc", false) // Gamma: tile switched on
+	ns := noticesOf(t, getView(t, c))
+	if len(ns) != 1 || !strings.HasSuffix(ns[0]["text"].(string), "now checked: Gamma.") {
+		t.Fatalf("after turning Gamma off: %v", ns)
+	}
+}
+
+// If dismissed_notices can't be read at startup, notices are shown (never
+// silently hidden) and the read is retried on each GET until it works.
+func TestNotices_DismissedReadFailureShowsThenRetries(t *testing.T) {
+	_, db := setupTestRouterSeeded(t, layeredStatusFixture(t))
+	if _, err := db.Exec(`DROP TABLE dismissed_notices`); err != nil {
+		t.Fatal(err)
+	}
+	buf := captureSlog(t)
+	router := restartRouter(t, db) // restartRouter does not re-run the schema migrations
+	c := newClient(t, router)
+	if ns := noticesOf(t, getView(t, c)); len(ns) != 1 {
+		t.Fatalf("with dismissals unreadable: %v, want the notice shown", ns)
+	}
+	if !strings.Contains(buf.String(), "level=ERROR") {
+		t.Errorf("unreadable dismissals not logged: %q", buf.String())
+	}
+	if _, err := db.Exec(`CREATE TABLE dismissed_notices (id TEXT PRIMARY KEY, dismissed_at DATETIME DEFAULT CURRENT_TIMESTAMP)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO dismissed_notices (id) VALUES (?)`, layeredNoticeID); err != nil {
+		t.Fatal(err)
+	}
+	if ns := noticesOf(t, getView(t, c)); len(ns) != 0 {
+		t.Errorf("after the read recovers the dismissal must apply: %v", ns)
+	}
+}
+
+// captureSlog routes the default logger into a buffer for the test.
+func captureSlog(t *testing.T) *bytes.Buffer {
+	t.Helper()
+	var buf bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, nil)))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+	return &buf
+}
+
+// GET /api/status names a wrong-typed stored value: the tile is off with
+// source "invalid" and the offending level's id (Ruling 13).
+func TestGetStatus_InvalidValueIsSurfaced(t *testing.T) {
+	router, db := setupTestRouterSeeded(t, layeredStatusFixture(t))
+	doc, err := configdoc.Load(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dash, _, _ := configdoc.FindTile(doc, "dc-e")
+	tab := dash["tabs"].([]any)[0].(configdoc.Obj)
+	folder := tab["root"].(configdoc.Obj)["children"].([]any)[0].(configdoc.Obj)
+	folder["statusChecksEnabled"] = "yes"
+	if err := configdoc.Save(db, doc); err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest("GET", "/api/status/dc-e", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	var got map[string]interface{}
+	_ = json.Unmarshal(w.Body.Bytes(), &got)
+	if w.Code != 200 || got["status"] != "disabled" || got["source"] != "invalid" || got["sourceId"] != folder["id"] {
+		t.Errorf("got %d %v, want disabled/invalid/%v", w.Code, got, folder["id"])
 	}
 }

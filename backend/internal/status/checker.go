@@ -59,14 +59,12 @@ func ssrfSafeDialControl(_, address string, _ syscall.RawConn) error {
 	return nil
 }
 
-// Entry represents a minimal entry for status checking
+// Entry is one tile to probe. Whether it is probed at all is decided by
+// configdoc.EffectiveStatusChecks in getEntriesFromConfig.
 type Entry struct {
 	ID          string `json:"id"`
 	Type        string `json:"type"` // "link" (default) or "note" — notes are skipped
 	URL         string `json:"url"`
-	StatusCheck *struct {
-		Enabled bool `json:"enabled"`
-	} `json:"statusCheck"` // nil or Enabled=false → never checked
 
 	// Effective settings of the owning dashboard when the pass started.
 	DashboardID     string `json:"-"`

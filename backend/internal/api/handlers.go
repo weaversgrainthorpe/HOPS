@@ -128,7 +128,7 @@ func (r *Router) handleGetConfig(w http.ResponseWriter, _ *http.Request) {
 		view["migrationNotices"] = migrationNotices(r.migration.Renames, stored)
 	}
 	// One-time notices (notices.go), like migrationNotices only when any.
-	if ns := r.notices.current(); len(ns) > 0 {
+	if ns := r.currentNotices(stored); len(ns) > 0 {
 		view["notices"] = ns
 	}
 	writeJSON(w, view)

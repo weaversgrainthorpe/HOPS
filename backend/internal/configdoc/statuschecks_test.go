@@ -16,16 +16,17 @@ import (
 // levels, the tile forms, the fixed ids d / t / f0..fN / x) are in
 // testdata/status_checks_cases.README.md.
 type statusCase struct {
-	Name              string          `json:"name"`
-	Global            bool            `json:"global"`
-	DashboardOverride *bool           `json:"dashboardOverride"`
-	Tab               *bool           `json:"tab"`
-	Folders           []*bool         `json:"folders"`
-	Tile              json.RawMessage `json:"tile"`
+	Name              string            `json:"name"`
+	Global            bool              `json:"global"`
+	DashboardOverride *bool             `json:"dashboardOverride"`
+	Tab               json.RawMessage   `json:"tab"`
+	Folders           []json.RawMessage `json:"folders"`
+	Tile              json.RawMessage   `json:"tile"`
 	Want              struct {
-		On        bool   `json:"on"`
-		Source    string `json:"source"`
-		SourceIdx *int   `json:"sourceIdx"`
+		On        bool    `json:"on"`
+		Source    string  `json:"source"`
+		SourceIdx *int    `json:"sourceIdx"`
+		SourceID  *string `json:"sourceId"`
 	} `json:"want"`
 }
 
@@ -56,16 +57,27 @@ func TestEffectiveStatusChecks_SharedMatrix(t *testing.T) {
 			if c.DashboardOverride != nil {
 				dash["settings"].(Obj)["statusChecksEnabled"] = *c.DashboardOverride
 			}
-			tab := Obj{"id": "t"}
-			if c.Tab != nil {
-				tab["statusChecksEnabled"] = *c.Tab
+			// container sets a tab/folder level: true/false, null = absent
+			// (inherit), "invalid" = the wrong-typed value "yes".
+			container := func(o Obj, raw json.RawMessage) {
+				switch strings.TrimSpace(string(raw)) {
+				case "null", "":
+				case "true":
+					o["statusChecksEnabled"] = true
+				case "false":
+					o["statusChecksEnabled"] = false
+				case `"invalid"`:
+					o["statusChecksEnabled"] = "yes"
+				default:
+					t.Fatalf("unknown level form %s", raw)
+				}
 			}
+			tab := Obj{"id": "t"}
+			container(tab, c.Tab)
 			var chain []Obj
 			for i, f := range c.Folders {
 				fo := Obj{"id": fmt.Sprintf("f%d", i), "kind": "folder"}
-				if f != nil {
-					fo["statusChecksEnabled"] = *f
-				}
+				container(fo, f)
 				chain = append(chain, fo)
 			}
 			tile := Obj{"id": "x", "kind": "tile"}
@@ -79,6 +91,8 @@ func TestEffectiveStatusChecks_SharedMatrix(t *testing.T) {
 				tile["statusCheck"] = Obj{"type": "http", "enabled": true}
 			case "false":
 				tile["statusCheck"] = Obj{"type": "http", "enabled": false}
+			case `"invalid"`:
+				tile["statusCheck"] = Obj{"type": "http", "enabled": "yes"}
 			default:
 				t.Fatalf("unknown tile form %s", c.Tile)
 			}
@@ -91,6 +105,11 @@ func TestEffectiveStatusChecks_SharedMatrix(t *testing.T) {
 					t.Fatal("folder source needs sourceIdx")
 				}
 				wantID = fmt.Sprintf("f%d", *c.Want.SourceIdx)
+			}
+			if c.Want.SourceID != nil {
+				wantID = *c.Want.SourceID
+			} else if c.Want.Source == "invalid" {
+				t.Fatal("invalid source needs sourceId")
 			}
 			if on != c.Want.On || string(src) != c.Want.Source || id != wantID {
 				t.Errorf("got (%v, %q, %q), want (%v, %q, %q)", on, src, id, c.Want.On, c.Want.Source, wantID)
@@ -126,23 +145,26 @@ func TestEffectiveStatusChecks_TileForms(t *testing.T) {
 	}
 }
 
-// A wrong-typed stored value (never written: verify rejects it) is logged at
-// WARN, never silently coerced: a folder's inherits; a tile's is off (never
-// probe what wasn't asked for).
-func TestEffectiveStatusChecks_WrongTypeWarns(t *testing.T) {
+// A wrong-typed stored value (never written: verify rejects it) makes the
+// tile off with source "invalid" naming that level, and the WARN is logged
+// once per (tile, level) per process, not on every pass.
+func TestEffectiveStatusChecks_InvalidIsOffAndWarnsOnce(t *testing.T) {
 	buf := captureLogs(t)
 	svc := newSvc(t)
-	on, src, _ := EffectiveStatusChecks(svc, Obj{"id": "d"}, Obj{"id": "t"},
-		[]Obj{{"id": "f0", "statusChecksEnabled": "yes"}}, Obj{"id": "x", "statusCheck": Obj{"enabled": nil}})
-	if !on || src != SourceGlobal {
-		t.Errorf("folder wrong type: got (%v, %q), want global on", on, src)
+	tile := Obj{"id": "warn-once-x", "statusCheck": Obj{"enabled": true}}
+	for i := 0; i < 3; i++ {
+		on, src, id := EffectiveStatusChecks(svc, Obj{"id": "d"}, Obj{"id": "t"},
+			[]Obj{{"id": "f0", "statusChecksEnabled": "yes"}}, tile)
+		if on || src != SourceInvalid || id != "f0" {
+			t.Fatalf("got (%v, %q, %q), want off/invalid/f0", on, src, id)
+		}
 	}
-	on, src, _ = EffectiveStatusChecks(svc, Obj{"id": "d"}, Obj{"id": "t"}, nil, Obj{"id": "x", "statusCheck": Obj{"enabled": "yes"}})
-	if on || src != SourceTile {
-		t.Errorf("tile wrong type: got (%v, %q), want off/tile", on, src)
+	on, src, id := EffectiveStatusChecks(svc, nil, nil, nil, Obj{"id": "warn-once-y", "statusCheck": "on"})
+	if on || src != SourceInvalid || id != "warn-once-y" {
+		t.Errorf("tile statusCheck string: got (%v, %q, %q)", on, src, id)
 	}
-	if out := buf.String(); strings.Count(out, "level=WARN") < 2 {
-		t.Errorf("expected two WARN logs, got %q", out)
+	if n := strings.Count(buf.String(), "level=WARN"); n != 2 {
+		t.Errorf("want 2 WARN lines (one per tile/level), got %d: %q", n, buf.String())
 	}
 }
 

@@ -536,3 +536,29 @@ func TestGetEntries_RealWeaversProbesOnlyExplicitlyEnabledTiles(t *testing.T) {
 		}
 	}
 }
+
+// Ruling 13: a wrong-typed stored value on a tile's path (here its folder)
+// makes the tile off (source "invalid"), even when the tile is switched on.
+func TestCheckAllEntries_InvalidValueOnPathIsNotProbed(t *testing.T) {
+	h := newHitCounter(t)
+	var v2 configdoc.Obj
+	if err := json.Unmarshal([]byte(configWith(h.srv.URL)), &v2); err != nil {
+		t.Fatal(err)
+	}
+	doc, err := configdoc.MigrateV2(v2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tab := doc["dashboards"].([]any)[0].(configdoc.Obj)["tabs"].([]any)[0].(configdoc.Obj)
+	folder := tab["root"].(configdoc.Obj)["children"].([]any)[0].(configdoc.Obj)
+	folder["statusChecksEnabled"] = "yes"
+	c, _, _ := newTestCheckerDoc(t, doc)
+
+	c.checkAllEntries()
+
+	for _, p := range []string{"/on", "/inh"} {
+		if got := h.count(p); got != 0 {
+			t.Errorf("tile %s under an invalid folder probed %d time(s)", p, got)
+		}
+	}
+}

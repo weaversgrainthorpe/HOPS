@@ -58,7 +58,7 @@ type Router struct {
 	shutdownReq    chan struct{}
 	mu             sync.RWMutex // guards trustedProxies (rebuilt on settings change requires restart, but the slice itself is accessed concurrently)
 	trustedProxies []*net.IPNet // parsed at construction from settings.proxy.trusted_cidrs
-	notices        noticeState  // one-time notices, computed at startup (notices.go)
+	notices        noticeState  // dismissed one-time notices (notices.go)
 }
 
 // RequestShutdown is the API-side handle for the shutdown channel.
@@ -225,7 +225,7 @@ func NewRouter(db *sql.DB, authService *auth.Service, cfg *config.Config, settin
 		}
 	})
 
-	r.notices.list = r.computeNotices()
+	r.notices.load(db) // a failure is logged and retried on GET /api/config
 
 	r.setupRoutes()
 	return r, r.securityHeadersMiddleware(r.corsMiddleware(r.recoverMiddleware(r.loggingMiddleware(r.mux))))

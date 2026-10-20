@@ -17,5 +17,8 @@
   {"name": "tile unset (no statusCheck) under dashboard on -> off/tile", "global": true, "dashboardOverride": true, "tab": null, "folders": [], "tile": "absent", "want": {"on": false, "source": "tile"}},
   {"name": "tile unset (statusCheck without enabled) under everything on -> off/tile", "global": true, "dashboardOverride": null, "tab": true, "folders": [true], "tile": "noEnabled", "want": {"on": false, "source": "tile"}},
   {"name": "tile null under dashboard off -> off/dashboard", "global": true, "dashboardOverride": false, "tab": null, "folders": [], "tile": null, "want": {"on": false, "source": "dashboard"}},
-  {"name": "tile null under folder on -> on/folder", "global": false, "dashboardOverride": false, "tab": null, "folders": [true], "tile": null, "want": {"on": true, "source": "folder", "sourceIdx": 0}}
+  {"name": "tile null under folder on -> on/folder", "global": false, "dashboardOverride": false, "tab": null, "folders": [true], "tile": null, "want": {"on": true, "source": "folder", "sourceIdx": 0}},
+  {"name": "invalid tile value -> off/invalid (tile)", "global": true, "dashboardOverride": true, "tab": null, "folders": [], "tile": "invalid", "want": {"on": false, "source": "invalid", "sourceId": "x"}},
+  {"name": "invalid folder under a tile switched on -> off/invalid (that folder)", "global": true, "dashboardOverride": null, "tab": null, "folders": [true, "invalid"], "tile": true, "want": {"on": false, "source": "invalid", "sourceId": "f1"}},
+  {"name": "invalid tab, everything else on -> off/invalid (tab)", "global": true, "dashboardOverride": true, "tab": "invalid", "folders": [true], "tile": true, "want": {"on": false, "source": "invalid", "sourceId": "t"}}
 ]
