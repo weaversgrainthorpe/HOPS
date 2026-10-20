@@ -606,3 +606,141 @@ describe('idle timeout', () => {
 		expect(get(session)).toBeNull();
 	});
 });
+
+describe('final fix wave', () => {
+	function deferred<T>() {
+		let resolve!: (v: T) => void;
+		let reject!: (e: unknown) => void;
+		const promise = new Promise<T>((res, rej) => {
+			resolve = res;
+			reject = rej;
+		});
+		return { promise, resolve, reject };
+	}
+
+	it('Minor 1: a save of an unchanged-meanwhile draft keeps the SAME draft object', async () => {
+		begin('d');
+		apply('1', setName('one'));
+		const sent = draft();
+		const fresh: LayoutDoc = { schemaVersion: 3, dashboards: [clone({ ...sent, revision: 8 })] };
+		vi.mocked(api.saveDashboardV3).mockResolvedValue({ revision: 8, layout: fresh });
+		expect(await save()).toBe('saved');
+		const s = get(session)!;
+		expect(s.draft).toBe(sent);
+		expect(s.saved).toBe(sent);
+		expect(s.baseRevision).toBe(8);
+		expect(s.draft.revision).toBe(8);
+		expect(get(dirty)).toBe(false);
+	});
+
+	it('Minor 1: a server copy that differs from what was sent still replaces the draft', async () => {
+		begin('d');
+		apply('1', setName('one'));
+		const sent = draft();
+		const fresh: LayoutDoc = { schemaVersion: 3, dashboards: [{ ...clone(sent), revision: 8, name: 'normalised' }] };
+		vi.mocked(api.saveDashboardV3).mockResolvedValue({ revision: 8, layout: fresh });
+		await save();
+		expect(draft()).not.toBe(sent);
+		expect(draft().name).toBe('normalised');
+	});
+
+	it('Minor 2: leaving edit mode while a save is in flight waits for it; no Discard prompt after it saved', async () => {
+		enableEditMode();
+		apply('1', setName('mine'));
+		const sent = draft();
+		const d = deferred<{ revision: number; layout: LayoutDoc }>();
+		vi.mocked(api.saveDashboardV3).mockReturnValue(d.promise);
+		const saving = save();
+		const off = disableEditMode();
+		await flush();
+		expect(get(confirmModalState).isOpen).toBe(false); // not asked while the save is unresolved
+		d.resolve({ revision: 8, layout: { schemaVersion: 3, dashboards: [clone({ ...sent, revision: 8 })] } });
+		await saving;
+		expect(await off).toBe(true);
+		expect(get(confirmModalState).isOpen).toBe(false);
+		expect(get(session)).toBeNull();
+		expect(get(toast).map((t) => t.message)).toContain('Changes saved');
+	});
+
+	it('Minor 2: Discard pressed while a save is in flight says the changes were already saved', async () => {
+		begin('d');
+		apply('1', setName('mine'));
+		const sent = draft();
+		const d = deferred<{ revision: number; layout: LayoutDoc }>();
+		vi.mocked(api.saveDashboardV3).mockReturnValue(d.promise);
+		const saving = save();
+		const dropping = discard();
+		await flush();
+		expect(get(confirmModalState).isOpen).toBe(false);
+		d.resolve({ revision: 8, layout: { schemaVersion: 3, dashboards: [clone({ ...sent, revision: 8 })] } });
+		await saving;
+		expect(await dropping).toBe(true);
+		expect(get(toast).at(-1)?.message).toMatch(/already saved, so there was nothing to discard/);
+		expect(draft().name).toBe('D'); // the saved state, not the pre-save one
+		expect(nodeName('a')).toBe('mine');
+		expect(get(dirty)).toBe(false);
+	});
+
+	it('Minor 2: Discard chosen in the leave prompt while a save started meanwhile reports it truthfully', async () => {
+		enableEditMode();
+		apply('1', setName('mine'));
+		const sent = draft();
+		const off = disableEditMode();
+		await flush();
+		expect(get(confirmModalState).isOpen).toBe(true);
+		const d = deferred<{ revision: number; layout: LayoutDoc }>();
+		vi.mocked(api.saveDashboardV3).mockReturnValue(d.promise);
+		const saving = save(); // e.g. a keyboard shortcut reached Save
+		closeConfirmModal('alternate');
+		await flush();
+		expect(get(session)).not.toBeNull(); // waits for the save
+		d.resolve({ revision: 8, layout: { schemaVersion: 3, dashboards: [clone({ ...sent, revision: 8 })] } });
+		await saving;
+		expect(await off).toBe(true);
+		expect(get(toast).at(-1)?.message).toMatch(/already saved/);
+	});
+
+	it('Minor 6: a newer layout revision rebases a CLEAN session, visibly', async () => {
+		begin('d');
+		const theirs = { ...dash(), revision: 9, name: 'theirs' };
+		config.set({ schemaVersion: 3, dashboards: [theirs] } as unknown as Config);
+		await flush();
+		const s = get(session)!;
+		expect(s.baseRevision).toBe(9);
+		expect(s.draft.name).toBe('theirs');
+		expect(s.saved).toBe(s.draft);
+		expect(get(dirty)).toBe(false);
+		expect(get(toast).at(-1)?.message).toMatch(/changed somewhere else/);
+	});
+
+	it('Minor 6: a dirty session is left alone (its save will conflict)', async () => {
+		begin('d');
+		apply('1', setName('mine'));
+		const mine = draft();
+		config.set({ schemaVersion: 3, dashboards: [{ ...dash(), revision: 9, name: 'theirs' }] } as unknown as Config);
+		await flush();
+		expect(draft()).toBe(mine);
+		expect(get(session)!.baseRevision).toBe(7);
+	});
+
+	it('Minor 6: our own save does not trigger a rebase toast', async () => {
+		begin('d');
+		apply('1', setName('one'));
+		const sent = draft();
+		vi.mocked(api.saveDashboardV3).mockResolvedValue({
+			revision: 8, layout: { schemaVersion: 3, dashboards: [clone({ ...sent, revision: 8 })] }
+		});
+		await save();
+		await flush();
+		expect(draft()).toBe(sent);
+		expect(get(toast).map((t) => t.message).join('|')).not.toMatch(/changed somewhere else/);
+	});
+});
+
+function clone<T>(v: T): T {
+	return JSON.parse(JSON.stringify(v)) as T;
+}
+function nodeName(id: string): string | undefined {
+	const n = draft().tabs[0].root.children.find((c) => c.id === id) as { name?: string } | undefined;
+	return n?.name;
+}

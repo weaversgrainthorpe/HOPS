@@ -66,10 +66,24 @@ describe('Settings saved during an edit session (Ruling 19)', () => {
 
   it('not absorbed when the settings save was checked against a different revision (a real change elsewhere)', async () => {
     begin('d');
+    // Dirty: a CLEAN session would follow the newer layout at once (final review Minor 6).
+    apply('edit', (d) => updateNode(d, 'a', { name: 'mine' } as Partial<LayoutNode>));
     const cfg = get(config)!;
     config.set({ ...cfg, dashboards: [{ ...cfg.dashboards[0], revision: 11 }] } as Config);
     vi.mocked(api.saveDashboardSettings).mockResolvedValue(freshAt(12));
     await saveDashboardSettingsChanges('d', { editIdleTimeoutMinutes: 30 });
     expect(get(session)!.baseRevision).toBe(7); // the normal conflict path will surface it on Save
+  });
+
+  it('a clean session follows a change made elsewhere, then absorbs the settings save checked against it', async () => {
+    begin('d');
+    const cfg = get(config)!;
+    config.set({ ...cfg, dashboards: [{ ...cfg.dashboards[0], revision: 11 }] } as Config);
+    await Promise.resolve();
+    expect(get(session)!.baseRevision).toBe(11);
+    vi.mocked(api.saveDashboardSettings).mockResolvedValue(freshAt(12));
+    await saveDashboardSettingsChanges('d', { editIdleTimeoutMinutes: 30 });
+    expect(get(session)!.baseRevision).toBe(12);
+    expect(get(dirty)).toBe(false);
   });
 });

@@ -209,6 +209,27 @@ export function rebaseCleanSession(layout: LayoutDoc | undefined): boolean {
   return true;
 }
 
+/**
+ * The layout store brought a NEWER revision of the session's dashboard (a
+ * reload after another dashboard's 409, the generic conflict banner's Reload,
+ * any background refresh). A CLEAN session follows it at once, visibly, so it
+ * never keeps showing the older tree as current. A dirty session is left
+ * alone: its Save takes the normal conflict path. Checked one microtask after
+ * the store changes, so our own writes — which update the session's base
+ * revision synchronously after updating the store (save, transfer rebase,
+ * settings absorb) — are never mistaken for a change made elsewhere.
+ */
+function followLayout(): void {
+  const s = get(state);
+  if (!s || isDirty(s) || get(layoutStale)) return;
+  const d = findLayoutDashboard(s.dashboardId, get(layoutDoc));
+  if (!d || typeof d.revision !== 'number' || d.revision <= s.baseRevision) return;
+  if (rebaseCleanSession(get(layoutDoc) ?? undefined)) {
+    toast.info('This dashboard was changed somewhere else; you are now editing the latest version.');
+  }
+}
+layoutDoc.subscribe(() => queueMicrotask(followLayout));
+
 export function undo(): void {
   const s = get(state);
   if (!s || s.undo.length === 0) return;
@@ -267,7 +288,16 @@ async function doSave(): Promise<'saved' | 'conflict' | 'error'> {
     if (cur && cur.dashboardId === s.dashboardId) {
       // Prefer the server's normalised copy of what it stored.
       const stored = resp.layout ? findLayoutDashboard(s.dashboardId, resp.layout) : undefined;
-      const saved = stored ? clone(stored) : { ...sent, revision: resp.revision };
+      let saved = stored ? clone(stored) : { ...sent, revision: resp.revision };
+      // Nothing edited during the save and the server stored exactly what was
+      // sent: keep the SAME draft object (a drag in progress or an Undo toast
+      // identifies the draft by reference; a fresh copy would cancel them).
+      // Only its revision is brought up to date — not content, and nothing
+      // else holds that object as a different state.
+      if (cur.draft === sent && deepEqual({ ...saved, revision: 0 }, { ...sent, revision: 0 })) {
+        if (!Object.isFrozen(sent)) sent.revision = resp.revision;
+        saved = sent;
+      }
       state.set({
         ...cur,
         baseRevision: resp.revision,
@@ -311,6 +341,9 @@ async function doSave(): Promise<'saved' | 'conflict' | 'error'> {
  * to keep the changes.
  */
 export async function discard(opts: { confirm?: boolean } = {}): Promise<boolean> {
+  // A save in flight settles first: discarding under it would toast "Changes
+  // saved" right after the user chose Discard (final review Minor 2).
+  if (inFlight && (await settleSave())) return true;
   const s = get(state);
   if (!s) return true;
   if (isDirty(s) && opts.confirm !== false) {
@@ -322,6 +355,7 @@ export async function discard(opts: { confirm?: boolean } = {}): Promise<boolean
       confirmStyle: 'danger'
     });
     if (!ok) return false;
+    if (inFlight && (await settleSave(true))) return true;
   }
   const cur = get(state);
   if (!cur) return true;
@@ -335,6 +369,9 @@ export async function discard(opts: { confirm?: boolean } = {}): Promise<boolean
  * the session and returns false. A clean session ends silently.
  */
 export async function end(opts: { message?: string } = {}): Promise<boolean> {
+  // Let a save in flight settle before asking: its result decides whether
+  // there is anything left to save or discard (it toasts its own outcome).
+  if (inFlight) await inFlight;
   const s = get(state);
   if (!s) return true;
   if (!isDirty(s)) {
@@ -357,8 +394,33 @@ export async function end(opts: { message?: string } = {}): Promise<boolean> {
     // An edit made while the save was in flight is still unsaved: keep editing.
     if (isDirty(get(state))) return false;
   }
+  // Discard chosen while a save started meanwhile: wait for it and say what it did.
+  if (choice === 'alternate' && inFlight) await settleSave(true);
   close();
   return true;
+}
+
+/**
+ * For a Discard: wait for a save in flight, if any, and tell the truth about
+ * it — a save that landed cannot be discarded. Returns true when that save
+ * left the session clean (there is nothing left to discard; the user is told
+ * so). When `afterChoice` (the user already confirmed Discard) and the save
+ * covered only part of the draft (edits arrived meanwhile), says that only the
+ * later edits are being discarded.
+ */
+async function settleSave(afterChoice = false): Promise<boolean> {
+  if (!inFlight) return false;
+  const r = await inFlight;
+  if (r !== 'saved') return false;
+  const s = get(state);
+  if (s && !isDirty(s)) {
+    toast.info('Your changes were already saved, so there was nothing to discard.');
+    return true;
+  }
+  if (s && afterChoice) {
+    toast.info('Your changes were already saved up to when you pressed Save; only the later edits were discarded.');
+  }
+  return false;
 }
 
 /**

@@ -479,7 +479,6 @@ describe('fix round 1', () => {
   });
 
   it('the toast Undo still undoes the drop after a save replaced the draft', async () => {
-    vi.mocked(api.saveDashboardV3).mockResolvedValue({ revision: 6 } as never);
     const { el } = source('a');
     startMouseDrag(el, 50, 50);
     moveTo(350, 50);
@@ -487,10 +486,36 @@ describe('fix round 1', () => {
     drop(350, 50);
     const undoToast = get(toast).find((t) => t.action?.label === 'Undo')!;
     const savedDraft = draft();
+    // The server's stored copy differs (normalised), so the draft is replaced.
+    vi.mocked(api.saveDashboardV3).mockResolvedValue({
+      revision: 6,
+      layout: { schemaVersion: 3, dashboards: [{ ...JSON.parse(JSON.stringify(savedDraft)), revision: 6, normalisedByServer: true }] }
+    } as never);
     expect(await save()).toBe('saved');
     expect(draft()).not.toBe(savedDraft); // the save swapped the draft reference
     undoToast.action!.onClick();
     expect(nodeIn(draft(), 'a')!.placement).toEqual(p(0, 0));
+  });
+
+  it('final fix Minor 1: a save landing mid-drag (nothing edited meanwhile) does not cancel the drag', async () => {
+    const { apply } = await import('$lib/stores/editSession');
+    apply('Rename', (d: LayoutDashboard) => ({ ...d, name: 'Renamed' }));
+    const sent = draft();
+    let land!: (v: unknown) => void;
+    vi.mocked(api.saveDashboardV3).mockReturnValue(new Promise((r) => { land = r; }) as never);
+    const saving = save();
+    const { el } = source('a');
+    startMouseDrag(el, 50, 50);
+    moveTo(350, 50);
+    flush();
+    expect(get(drag)).not.toBeNull();
+    land({ revision: 6, layout: { schemaVersion: 3, dashboards: [{ ...JSON.parse(JSON.stringify(sent)), revision: 6 }] } });
+    expect(await saving).toBe('saved');
+    expect(draft()).toBe(sent);
+    expect(get(drag)).not.toBeNull(); // still dragging
+    drop(350, 50);
+    expect(nodeIn(draft(), 'a')!.placement).toEqual(p(3, 0));
+    expect(get(toast).map((t) => t.message).join('|')).not.toMatch(/changed during the drag/);
   });
 
   it('the toast Undo refuses (visibly) when another change came after the drop', async () => {
