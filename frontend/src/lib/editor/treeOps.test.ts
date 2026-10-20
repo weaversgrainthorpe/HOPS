@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   TreeOpError, newNodeId, locate, isDescendant, moveNodes, copyNodes, mergeIntoNewFolder, insertNode,
   updateNode, deleteNodes, duplicateNode, resizeNode, setZ, reorderTabs, addTab, updateTab, deleteTab,
-  firstFreeCell, pushAside
+  firstFreeCell, pushAside, assertGridNoOverlap
 } from './treeOps';
 import type { Container, FolderNode, LayoutDashboard, LayoutNode, Placement } from '../types/layout';
 
@@ -138,7 +138,7 @@ describe('copyNodes / duplicateNode', () => {
 describe('mergeIntoNewFolder', () => {
   it('builds the folder at the target with row-major content', () => {
     const d = dash();
-    const r = mergeIntoNewFolder(d, ['b', 'a'], 'c');
+    const r = mergeIntoNewFolder(d, ['b', 'a'], 'c', new Set(allNodeIds(d)));
     const f = byId(rootOf(r.dashboard), r.folderId) as FolderNode;
     expect(f).toMatchObject({ kind: 'folder', name: 'New folder', display: 'collapsed', layout: 'inherit', shape: 'rounded', showTitle: true });
     expect(f.placement).toEqual({ x: 6, y: 2, w: 3, h: 2 });
@@ -151,28 +151,99 @@ describe('mergeIntoNewFolder', () => {
   });
   it('sizes for more than four tiles', () => {
     const d = dash();
-    const r = mergeIntoNewFolder(d, ['a', 'b', 'x', 'z', 'y'], 'c');
+    const r = mergeIntoNewFolder(d, ['a', 'b', 'x', 'z', 'y'], 'c', new Set(allNodeIds(d)));
     const f = byId(rootOf(r.dashboard), r.folderId) as FolderNode;
     expect(f.placement).toMatchObject({ w: 4, h: 3 }); // n=6 -> ceil(6/4)+1
     expect(f.content.children[4].placement).toEqual(p(0, 1));
   });
   it('rejects bad input', () => {
     const d = dash();
-    expect(() => mergeIntoNewFolder(d, ['c'], 'c')).toThrow(TreeOpError);
-    expect(() => mergeIntoNewFolder(d, ['a'], 'f1')).toThrow(TreeOpError);
-    expect(() => mergeIntoNewFolder(d, ['f1'], 'y')).toThrow(TreeOpError);
-    expect(() => mergeIntoNewFolder(d, ['nope'], 'c')).toThrow(TreeOpError);
+    const ALL = new Set(allNodeIds(d));
+    expect(() => mergeIntoNewFolder(d, ['c'], 'c', ALL)).toThrow(TreeOpError);
+    expect(() => mergeIntoNewFolder(d, ['a'], 'f1', ALL)).toThrow(TreeOpError);
+    expect(() => mergeIntoNewFolder(d, ['f1'], 'y', ALL)).toThrow(TreeOpError);
+    expect(() => mergeIntoNewFolder(d, ['nope'], 'c', ALL)).toThrow(TreeOpError);
   });
   it('in a free parent sizes in 8px units from the target tile size', () => {
     const d = deepFreeze({
       id: 'd', name: 'D', path: '/d', revision: 1, defaultLayout: 'free',
       tabs: [{ id: 't', name: 'T', root: { columns: 160, children: [tile('a', p(10, 10, 12, 10)), tile('b', p(50, 50, 6, 6))] } }]
     } as LayoutDashboard);
-    const r = mergeIntoNewFolder(d, ['b'], 'a');
+    const r = mergeIntoNewFolder(d, ['b'], 'a', new Set(['a', 'b']));
     const f = r.dashboard.tabs[0].root.children.find((n) => n.id === r.folderId) as FolderNode;
     expect(f.placement).toEqual({ x: 10, y: 10, w: 24, h: 18 }); // 2 cols x 12, 1 row x 10 + 8 title/padding
     expect(f.content.columns).toBe(24);
     expect(f.content.children.map((c) => c.placement)).toEqual([p(0, 0, 12, 10), p(12, 0, 12, 10)]);
+  });
+});
+
+describe('merge safety', () => {
+  const ids = (d: LayoutDashboard) => new Set(allNodeIds(d));
+  it('rejects a dragged folder together with its own descendant', () => {
+    const d = dash();
+    expect(() => mergeIntoNewFolder(d, ['f1', 'y'], 'c', ids(d))).toThrow(TreeOpError);
+    expect(() => mergeIntoNewFolder(d, ['y', 'f1'], 'c', ids(d))).toThrow(TreeOpError);
+  });
+  it('keeps the folder inside the grid at the right edge', () => {
+    const d = deepFreeze({
+      id: 'd', name: 'D', path: '/d', revision: 1,
+      tabs: [{ id: 't', name: 'T', root: { columns: 12, children: [tile('a', p(11, 0)), tile('b', p(0, 0)), tile('c', p(0, 5)), tile('n', p(9, 0, 2, 2))] } }]
+    } as LayoutDashboard);
+    const r = mergeIntoNewFolder(d, ['b', 'c'], 'a', ids(d));
+    const root = r.dashboard.tabs[0].root;
+    const f = root.children.find((x) => x.id === r.folderId)!;
+    expect(f.placement).toEqual({ x: 9, y: 0, w: 3, h: 2 });
+    const n = root.children.find((x) => x.id === 'n')!;
+    expect(n.placement.x === 9 && n.placement.y === 0).toBe(false); // pushed off the footprint
+    expect(() => assertGridNoOverlap(root)).not.toThrow();
+  });
+  it('new folder id avoids allIds', () => {
+    const d = dash();
+    const r = mergeIntoNewFolder(d, ['a'], 'c', ids(d));
+    expect(ids(d).has(r.folderId)).toBe(false);
+  });
+});
+
+describe('grid overlap contract', () => {
+  const ids = (d: LayoutDashboard) => new Set(allNodeIds(d));
+  const root = (d: LayoutDashboard) => d.tabs[0].root;
+  it('moveNodes refuses an overlap without push, succeeds with pushAside', () => {
+    const d = dash();
+    expect(() => moveNodes(d, ['c'], { tabId: 't1' }, [p(3, 0)])).toThrow('That space is taken');
+    const push = pushAside(root(d), new Set(['c']), p(3, 0));
+    const r = moveNodes(d, ['c'], { tabId: 't1' }, [p(3, 0)], push);
+    expect(byId(rootOf(r), 'c').placement).toEqual(p(3, 0));
+    expect(byId(rootOf(r), 'b').placement).not.toEqual(p(3, 0));
+    expect(() => assertGridNoOverlap(r.tabs[0].root)).not.toThrow();
+  });
+  it('copyNodes refuses an overlap without push, succeeds with it', () => {
+    const d = dash();
+    expect(() => copyNodes(d, ['c'], { tabId: 't1' }, [p(0, 0)], ids(d))).toThrow('That space is taken');
+    const push = pushAside(root(d), new Set(), p(0, 0));
+    const r = copyNodes(d, ['c'], { tabId: 't1' }, [p(0, 0)], ids(d), push);
+    expect(() => assertGridNoOverlap(r.dashboard.tabs[0].root)).not.toThrow();
+  });
+  it('insertNode refuses an overlap without push, succeeds with it', () => {
+    const d = dash();
+    expect(() => insertNode(d, tile('n', p(0, 0)), { tabId: 't1' }, p(0, 0))).toThrow('That space is taken');
+    const push = pushAside(root(d), new Set(), p(0, 0));
+    const r = insertNode(d, tile('n', p(0, 0)), { tabId: 't1' }, p(0, 0), push);
+    expect(() => assertGridNoOverlap(r.tabs[0].root)).not.toThrow();
+  });
+  it('resizeNode into a neighbour is refused without push', () => {
+    const d = dash();
+    expect(() => resizeNode(d, 'a', 4, 1)).toThrow('That space is taken');
+    const push = pushAside(root(d), new Set(['a']), p(0, 0, 4, 1));
+    const r = resizeNode(d, 'a', 4, 1, push);
+    expect(byId(rootOf(r), 'a').placement).toEqual(p(0, 0, 4, 1));
+    expect(() => assertGridNoOverlap(r.tabs[0].root)).not.toThrow();
+  });
+  it('free containers tolerate overlap', () => {
+    const fd = deepFreeze({
+      id: 'd', name: 'D', path: '/d', revision: 1, defaultLayout: 'free',
+      tabs: [{ id: 't', name: 'T', root: { columns: 160, children: [tile('a', p(0, 0, 10, 10)), tile('b', p(20, 0, 10, 10))] } }]
+    } as LayoutDashboard);
+    expect(() => moveNodes(fd, ['b'], { tabId: 't' }, [p(5, 5, 10, 10)])).not.toThrow();
   });
 });
 
@@ -183,9 +254,16 @@ describe('insert/update/delete', () => {
     expect(locate(r, 'n')!.folderChain).toEqual(['f1']);
     expect((byId((byId(rootOf(r), 'f1') as FolderNode).content.children, 'n')).placement).toEqual(p(3, 2));
     expect(() => insertNode(d, tile('a', p(0, 0)), { tabId: 't1' }, p(0, 0))).toThrow(TreeOpError);
+    const nested = folder('nf', p(0, 0), [tile('z', p(0, 0))]); // z exists in another tab
+    expect(() => insertNode(d, nested, { tabId: 't1' }, p(8, 8, 2, 2))).toThrow(TreeOpError);
+    const dup = folder('nf2', p(0, 0), [tile('q', p(0, 0)), tile('q', p(1, 0))]);
+    expect(() => insertNode(d, dup, { tabId: 't1' }, p(8, 8, 2, 2))).toThrow(TreeOpError);
   });
   it('updateNode patches and refuses id/kind changes', () => {
     const d = dash();
+    for (const bad of [{ id: 'y' }, { kind: 'tile' }, { placement: p(0, 0) }, { content: { columns: 1, children: [] } }]) {
+      expect(() => updateNode(d, 'y', bad as unknown as Partial<LayoutNode>)).toThrow(TreeOpError);
+    }
     const r = updateNode(d, 'y', { name: 'renamed' } as Partial<LayoutNode>);
     const y = byId(((byId((byId(rootOf(r), 'f1') as FolderNode).content.children, 'f2')) as FolderNode).content.children, 'y');
     expect(y.name).toBe('renamed');
@@ -303,6 +381,22 @@ describe('pushAside', () => {
   });
 });
 
+describe('pushAside on a full grid', () => {
+  it('never overlaps when displaced nodes outnumber free cells', () => {
+    const kidsN = [0, 1, 2, 3, 4].map((i) => tile('n' + i, p(0, i)));
+    const cont: Container = { columns: 1, children: kidsN };
+    const m = pushAside(cont, new Set(), p(0, 0, 1, 5));
+    expect(m.size).toBe(5);
+    const all = [...m.values(), p(0, 0, 1, 5)];
+    for (let i = 0; i < all.length; i++) {
+      for (let j = i + 1; j < all.length; j++) {
+        const a = all[i], b = all[j];
+        expect(a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h).toBe(false);
+      }
+    }
+  });
+});
+
 describe('purity', () => {
   it('does not mutate frozen inputs', () => {
     const d = dash();
@@ -310,7 +404,7 @@ describe('purity', () => {
     const before = JSON.stringify(d);
     moveNodes(d, ['a'], { tabId: 't2' }, [p(0, 0)]);
     copyNodes(d, ['f1'], { tabId: 't2' }, [p(0, 0, 4, 3)], all);
-    mergeIntoNewFolder(d, ['a'], 'c');
+    mergeIntoNewFolder(d, ['a'], 'c', all);
     insertNode(d, tile('n', p(0, 0)), { tabId: 't1' }, p(2, 2));
     updateNode(d, 'a', { name: 'q' } as Partial<LayoutNode>);
     deleteNodes(d, ['f1']);

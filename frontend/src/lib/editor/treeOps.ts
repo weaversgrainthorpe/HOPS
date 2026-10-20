@@ -181,9 +181,50 @@ function checkedPlacement(p: Placement, r: Resolved): Placement {
   return out;
 }
 
+// ---------------------------------------------------------------- grid overlap contract (Ruling 11)
+
+const overlaps = (a: Placement, b: Placement): boolean =>
+  a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+
+/**
+ * Grid containers never hold overlapping siblings. Throws "That space is taken" if any node in
+ * `only` (default: all) overlaps another. Checking only the changed ids keeps legacy overlaps
+ * elsewhere in the container from blocking unrelated edits. Free containers never call this.
+ */
+export function assertGridNoOverlap(c: Container, only?: Set<string>): void {
+  const cols = containerColumns(c);
+  const nodes = kids(c).filter(isRenderable).map((n) => ({ id: n.id, p: clampPlacement(n.placement, cols) }));
+  for (let i = 0; i < nodes.length; i++) {
+    for (let j = i + 1; j < nodes.length; j++) {
+      if (only && !only.has(nodes[i].id) && !only.has(nodes[j].id)) continue;
+      if (overlaps(nodes[i].p, nodes[j].p)) throw new TreeOpError('That space is taken');
+    }
+  }
+}
+
+/** Apply a pushAside map to a children list (ids not present are ignored). */
+function applyPush(children: LayoutNode[], push?: Map<string, Placement>): LayoutNode[] {
+  if (!push || push.size === 0) return children;
+  return children.map((n) => (push.has(n.id) ? ({ ...n, placement: push.get(n.id) } as LayoutNode) : n));
+}
+
+/** Append `add` to the container at `to`, applying `push` to its siblings; grid result must not overlap. */
+function commitToContainer(
+  d: LayoutDashboard, to: ContainerRef, r: Resolved, add: LayoutNode[], push?: Map<string, Placement>
+): LayoutDashboard {
+  const changed = new Set<string>([...add.map((a) => a.id), ...(push ? push.keys() : [])]);
+  return editContainer(d, to, (c) => {
+    const next = { ...c, children: [...applyPush(kids(c), push), ...add] };
+    if (r.mode === 'grid') assertGridNoOverlap(next, changed);
+    return next;
+  });
+}
+
 // ---------------------------------------------------------------- move / copy / insert
 
-export function moveNodes(d: LayoutDashboard, ids: string[], to: ContainerRef, at: Placement[]): LayoutDashboard {
+export function moveNodes(
+  d: LayoutDashboard, ids: string[], to: ContainerRef, at: Placement[], push?: Map<string, Placement>
+): LayoutDashboard {
   if (ids.length !== at.length) throw new TreeOpError('Each moved item needs a position.');
   const nodes = mustFind(d, ids);
   const target = resolveRef(d, to);
@@ -198,7 +239,7 @@ export function moveNodes(d: LayoutDashboard, ids: string[], to: ContainerRef, a
     }
   }
   const placed = nodes.map((n, i) => ({ ...n, placement: checkedPlacement(at[i], target) }) as LayoutNode);
-  return editContainer(removeIds(d, idSet), to, (c) => ({ ...c, children: [...kids(c), ...placed] }));
+  return commitToContainer(removeIds(d, idSet), to, target, placed, push);
 }
 
 /** Deep-copy a node with fresh ids (nodes and every descendant) drawn from `used`. */
@@ -213,7 +254,8 @@ function cloneWithNewIds(node: LayoutNode, used: Set<string>): LayoutNode {
 }
 
 export function copyNodes(
-  d: LayoutDashboard, ids: string[], to: ContainerRef, at: Placement[], allIds: Set<string>
+  d: LayoutDashboard, ids: string[], to: ContainerRef, at: Placement[], allIds: Set<string>,
+  push?: Map<string, Placement>
 ): { dashboard: LayoutDashboard; newIds: string[] } {
   if (ids.length !== at.length) throw new TreeOpError('Each copied item needs a position.');
   const nodes = mustFind(d, ids);
@@ -225,16 +267,24 @@ export function copyNodes(
     return c;
   });
   return {
-    dashboard: editContainer(d, to, (c) => ({ ...c, children: [...kids(c), ...copies] })),
+    dashboard: commitToContainer(d, to, target, copies, push),
     newIds: copies.map((c) => c.id)
   };
 }
 
-export function insertNode(d: LayoutDashboard, node: LayoutNode, to: ContainerRef, at: Placement): LayoutDashboard {
-  if (locate(d, node.id)) throw new TreeOpError('An item with that id already exists.');
+export function insertNode(
+  d: LayoutDashboard, node: LayoutNode, to: ContainerRef, at: Placement, push?: Map<string, Placement>
+): LayoutDashboard {
+  const seen = new Set<string>();
+  const walk = (n: LayoutNode): void => {
+    if (locate(d, n.id) || seen.has(n.id)) throw new TreeOpError('An item with that id already exists.');
+    seen.add(n.id);
+    if (n.kind === 'folder') kids(n.content).forEach(walk);
+  };
+  walk(node);
   const target = resolveRef(d, to);
   const placed = { ...node, placement: checkedPlacement(at, target) } as LayoutNode;
-  return editContainer(d, to, (c) => ({ ...c, children: [...kids(c), placed] }));
+  return commitToContainer(d, to, target, [placed], push);
 }
 
 export function duplicateNode(
@@ -255,64 +305,87 @@ export function duplicateNode(
 
 /**
  * Merge `draggedIds` and the target tile into a new collapsed folder in the target's slot.
- * Grid parent: n = 1 + dragged; folder w = min(4, n), h = ceil(n / 4) + 1 (its expanded size; collapsed
- * it renders as one cell); content.columns = w; children are 1 x 1, row-major, target first then the
- * dragged nodes in reading order.
+ * The folder's placement is its STORED (expanded) size; how a collapsed folder renders is the
+ * renderer's business.
+ * Grid parent: n = 1 + dragged; per = min(4, n, parent columns); folder w = per, h = ceil(n / per) + 1
+ * (= ceil(n / 4) + 1 whenever the parent has >= 4 columns); x = min(target x, columns - w) so it
+ * stays inside the grid; content.columns = w; children are 1 x 1, row-major, target first then the
+ * dragged nodes in reading order. Nodes the new footprint overlaps are pushed aside (pushAside,
+ * merged nodes excluded) inside this op, so the result never overlaps.
  * Free parent (8 px units): children keep the target tile's size (cw x ch); the folder is
- * min(4, n) * cw wide and ceil(n / 4) * ch + 8 tall (8 units = 64 px, enough for the 40 px title bar
- * and body padding); content.columns = folder width; children are placed row-major in cw x ch steps.
+ * per * cw wide and ceil(n / per) * ch + 8 tall (8 units = 64 px, enough for the 40 px title bar
+ * and body padding) at the target's x,y; content.columns = folder width; children are placed
+ * row-major in cw x ch steps. Free parents tolerate overlap.
+ * `allIds` is every id in the document (all dashboards + draft); the new folder id avoids it.
  */
 export function mergeIntoNewFolder(
-  d: LayoutDashboard, draggedIds: string[], targetTileId: string
+  d: LayoutDashboard, draggedIds: string[], targetTileId: string, allIds: Set<string>
 ): { dashboard: LayoutDashboard; folderId: string } {
   const target = findNode(d, targetTileId);
   if (target.kind !== 'tile') throw new TreeOpError('Items can only be merged onto a tile.');
   if (draggedIds.length === 0) throw new TreeOpError('Nothing to merge.');
   if (draggedIds.includes(targetTileId)) throw new TreeOpError('An item cannot be merged with itself.');
   const dragged = mustFind(d, draggedIds);
-  const tloc = locate(d, targetTileId)!;
+  const idSet = new Set(draggedIds);
   for (const n of dragged) {
+    const loc = locate(d, n.id)!;
+    if (loc.folderChain.some((f) => idSet.has(f))) {
+      throw new TreeOpError('An item cannot be merged together with the folder that contains it.');
+    }
     if (n.kind === 'folder' && isDescendant(d, n.id, targetTileId)) {
       throw new TreeOpError('A folder cannot be moved into itself.');
     }
   }
+  const tloc = locate(d, targetTileId)!;
   const ref: ContainerRef = { tabId: tloc.tabId, folderId: tloc.folderChain[tloc.folderChain.length - 1] };
   const parent = resolveRef(d, ref);
+  const cols = containerColumns(parent.container, parent.folder);
   const members = [target, ...readingOrder(dragged)];
   const n = members.length;
-  const perRow = Math.min(4, n);
-  const rows = Math.ceil(n / 4);
+  const per = Math.min(4, n, parent.mode === 'grid' ? cols : n);
+  const rows = Math.ceil(n / per);
   const tp = target.placement;
-  let cw = 1, ch = 1, fw = perRow, fh = rows + 1;
+  let cw = 1, ch = 1, fw = per, fh = rows + 1, fx = tp.x;
   if (parent.mode === 'free') {
     cw = Math.max(1, Math.floor(tp.w));
     ch = Math.max(1, Math.floor(tp.h));
-    fw = perRow * cw;
+    fw = per * cw;
     fh = rows * ch + 8;
+  } else {
+    fx = Math.max(0, Math.min(tp.x, cols - fw));
   }
   const children = members.map((m, i) => {
-    const place: Placement = { x: (i % perRow) * cw, y: Math.floor(i / perRow) * ch, w: cw, h: ch };
+    const place: Placement = { x: (i % per) * cw, y: Math.floor(i / per) * ch, w: cw, h: ch };
     return { ...m, placement: place } as LayoutNode;
   });
-  const placement: Placement = { x: tp.x, y: tp.y, w: fw, h: fh };
+  const placement: Placement = { x: fx, y: tp.y, w: fw, h: fh };
   if (tp.z !== undefined) placement.z = tp.z;
-  const folderId = uniqueId('folder', new Set());
+  const folderId = uniqueId('folder', new Set(allIds));
   const folder: FolderNode = {
     kind: 'folder', id: folderId, name: 'New folder', display: 'collapsed', layout: 'inherit',
     shape: 'rounded', showTitle: true, placement, content: { columns: fw, children }
   };
-  const without = removeIds(d, new Set(draggedIds));
-  const dashboard = mapTabs(without, (x) => (x.id === targetTileId ? folder : x));
+  const without = removeIds(d, idSet);
+  const after = resolveRef(without, ref);
+  const push = parent.mode === 'grid'
+    ? pushAside(after.container, new Set([targetTileId, ...draggedIds]), placement)
+    : undefined;
+  const dashboard = editContainer(without, ref, (c) => {
+    const next = { ...c, children: applyPush(kids(c), push).map((x) => (x.id === targetTileId ? folder : x)) };
+    if (parent.mode === 'grid') assertGridNoOverlap(next, new Set([folderId, ...(push ? push.keys() : [])]));
+    return next;
+  });
   return { dashboard, folderId };
 }
 
 // ---------------------------------------------------------------- update / delete / resize / z
 
 export function updateNode(d: LayoutDashboard, id: string, patch: Partial<LayoutNode>): LayoutDashboard {
-  const node = findNode(d, id);
+  findNode(d, id);
   const p = patch as Record<string, unknown>;
-  if ('id' in p && p.id !== id) throw new TreeOpError('An item id cannot be changed.');
-  if ('kind' in p && p.kind !== node.kind) throw new TreeOpError('An item cannot change between a tile and a folder.');
+  for (const k of ['id', 'kind', 'placement', 'content']) {
+    if (k in p) throw new TreeOpError(`"${k}" cannot be changed here; use the dedicated operation.`);
+  }
   return mapTabs(d, (n) => (n.id === id ? ({ ...n, ...patch } as LayoutNode) : n));
 }
 
@@ -325,7 +398,8 @@ export function deleteNodes(d: LayoutDashboard, ids: string[]): LayoutDashboard 
  * Smallest height (in the parent's rows) a folder of width w can have without clipping its content.
  * Grid folder in a grid parent: its content rows + 1 (the title row), per geometry's rows rule.
  * Otherwise geometry's requiredFolderHeightPx on a nominal parent (80 px cells in a grid parent,
- * 8 px in a free one), converted back to parent rows.
+ * 8 px in a free one), converted back to parent rows. The nominal 80 px is an internal bound
+ * (the real unit depends on viewport width), not a rendering value.
  */
 function minFolderHeight(folder: FolderNode, w: number, parentMode: LayoutMode, parentCols: number): number {
   const unit = parentMode === 'free' ? FREE_UNIT_PX : 80;
@@ -336,7 +410,9 @@ function minFolderHeight(folder: FolderNode, w: number, parentMode: LayoutMode, 
   return Math.max(1, Math.ceil(requiredFolderHeightPx(probe, m) / m.rowPx - 1e-9));
 }
 
-export function resizeNode(d: LayoutDashboard, id: string, w: number, h: number): LayoutDashboard {
+export function resizeNode(
+  d: LayoutDashboard, id: string, w: number, h: number, push?: Map<string, Placement>
+): LayoutDashboard {
   const node = findNode(d, id);
   if (!Number.isFinite(w) || !Number.isFinite(h)) throw new TreeOpError('That size is not valid.');
   const loc = locate(d, id)!;
@@ -346,7 +422,16 @@ export function resizeNode(d: LayoutDashboard, id: string, w: number, h: number)
   if (node.kind === 'folder') {
     sized.h = Math.max(sized.h, minFolderHeight(node, sized.w, r.mode, cols));
   }
-  return mapTabs(d, (n) => (n.id === id ? ({ ...n, placement: sized } as LayoutNode) : n));
+  const ref: ContainerRef = { tabId: loc.tabId, folderId: loc.folderChain[loc.folderChain.length - 1] };
+  const changed = new Set<string>([id, ...(push ? push.keys() : [])]);
+  return editContainer(d, ref, (c) => {
+    const next = {
+      ...c,
+      children: applyPush(kids(c), push).map((n) => (n.id === id ? ({ ...n, placement: sized } as LayoutNode) : n))
+    };
+    if (r.mode === 'grid') assertGridNoOverlap(next, changed);
+    return next;
+  });
 }
 
 export function setZ(d: LayoutDashboard, id: string, dir: 'forward' | 'back'): LayoutDashboard {
@@ -394,9 +479,6 @@ export function deleteTab(d: LayoutDashboard, tabId: string): LayoutDashboard {
 
 // ---------------------------------------------------------------- free cells / reflow
 
-const overlaps = (a: Placement, b: Placement): boolean =>
-  a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
-
 function renderablePlacements(c: Container): Placement[] {
   return kids(c).filter(isRenderable).map((n) => n.placement);
 }
@@ -443,7 +525,6 @@ export function pushAside(c: Container, moving: Set<string>, target: Placement):
   const displacedIds = new Set(displaced.map((n) => n.id));
   const occupied: Placement[] = [tgt];
   for (const n of others) if (!displacedIds.has(n.id)) occupied.push(clampPlacement(n.placement, cols));
-  const bottom = occupied.reduce((m, o) => Math.max(m, o.y + o.h), 0);
   for (const n of displaced) {
     const orig = clampPlacement(n.placement, cols);
     const xs: number[] = [];
@@ -458,9 +539,8 @@ export function pushAside(c: Container, moving: Set<string>, target: Placement):
           break;
         }
       }
-      if (y > bottom + orig.h + 1) break; // unreachable safety net: a row below everything is always free
     }
-    const final = placed ?? { ...orig, x: 0, y: bottom };
+    const final = placed as Placement; // rows grow downward without bound, so a free cell is always found
     occupied.push(final);
     out.set(n.id, final);
   }
