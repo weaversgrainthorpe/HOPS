@@ -1,7 +1,7 @@
 import { writable, get } from 'svelte/store';
 import { isAuthenticated } from './auth';
 import { currentRoute } from './config';
-import { begin, end, abandon, session } from './editSession';
+import { begin, end, abandon, park, session, setSessionLostHandler } from './editSession';
 import { toast } from './toast';
 import { logWarn } from '$lib/utils/errors';
 
@@ -76,9 +76,16 @@ editMode.subscribe((on) => {
   if (abandon()) toast.warning('Edit mode ended — your unsaved changes were discarded.');
 });
 
-// Automatically disable edit mode when user logs out
+// A session that ended unexpectedly (e.g. a failed conflict reload) turns
+// edit mode off: edit mode never stays on without a session.
+setSessionLostHandler(() => editMode.set(false));
+
+// Automatically disable edit mode when the user is signed out. A dirty draft
+// is parked (kept in memory, shown by ParkedDraftBanner) rather than dropped;
+// signing back in and entering edit mode on that dashboard restores it.
 isAuthenticated.subscribe(authenticated => {
   if (!authenticated) {
+    park();
     editMode.set(false);
   }
 });

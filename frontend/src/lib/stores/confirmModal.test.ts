@@ -92,4 +92,21 @@ describe('confirmModal store', () => {
 		confirm({ title: 'second', message: 'm' });
 		await expect(first).resolves.toBe(false);
 	});
+
+	it('Enter never picks the destructive button of a danger-style dialog', async () => {
+		const { render } = await import('@testing-library/svelte');
+		const ConfirmModal = (await import('$lib/components/ConfirmModal.svelte')).default;
+		render(ConfirmModal);
+		const danger = confirm({ title: 'Delete', message: 'm', confirmStyle: 'danger' });
+		await Promise.resolve();
+		window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+		expect(get(confirmModalState).isOpen).toBe(true);
+		closeConfirmModal(false);
+		await expect(danger).resolves.toBe(false);
+
+		const plain = confirm({ title: 'OK?', message: 'm' });
+		await Promise.resolve();
+		window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+		await expect(plain).resolves.toBe(true);
+	});
 });

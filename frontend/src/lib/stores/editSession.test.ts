@@ -16,26 +16,29 @@ vi.mock('$lib/utils/api', async () => ({
 	updateConfig: vi.fn(),
 	getConfig: vi.fn(),
 	listSettings: vi.fn(),
-	getDashboardSettings: vi.fn()
+	getDashboardSettings: vi.fn(),
+	logout: vi.fn()
 }));
 
 import * as api from '$lib/utils/api';
 import { ConflictError } from '$lib/utils/api';
 import { config, layoutStale, layoutDoc, saveConflict } from './config';
-import { isAuthenticated } from './auth';
+import { isAuthenticated, logout } from './auth';
 import { editMode, enableEditMode, disableEditMode } from './editMode';
 import { initEditModeIdleWatcher } from './editModeIdleWatcher';
 import { confirmModalState, closeConfirmModal } from './confirmModal';
 import { toast } from './toast';
 import {
 	session, dirty, begin, apply, undo, redo, save, discard, end, sessionConflict,
-	keepEditingAfterConflict, reloadAfterConflict, abandon, guardNavigation
+	keepEditingAfterConflict, reloadAfterConflict, guardNavigation, parkedDraft,
+	resetEditSessionForTests
 } from './editSession';
 import {
 	TreeOpError, moveNodes, updateNode, resizeNode, addTab, reorderTabs, deleteNodes, insertNode,
 	setZ, updateTab, mergeIntoNewFolder
 } from '$lib/editor/treeOps';
 import ConflictBanner from '$lib/components/ConflictBanner.svelte';
+import ParkedDraftBanner from '$lib/components/ParkedDraftBanner.svelte';
 import type { Config } from '$lib/types';
 import type { LayoutDashboard, LayoutDoc, LayoutNode, Placement } from '$lib/types/layout';
 
@@ -76,8 +79,7 @@ const flush = () => new Promise((r) => setTimeout(r, 0));
 beforeEach(async () => {
 	vi.clearAllMocks();
 	if (get(confirmModalState).isOpen) closeConfirmModal(false);
-	abandon();
-	sessionConflict.set(null);
+	resetEditSessionForTests();
 	saveConflict.set(null);
 	layoutStale.set(false);
 	toast.clear();
@@ -100,6 +102,7 @@ describe('begin', () => {
 		expect(s.draft).toEqual(dash());
 		expect(s.undo).toEqual([]);
 		expect(get(dirty)).toBe(false);
+		expect(s.draft).toBe(s.saved); // shared until the first op (ops are pure)
 	});
 
 	it('reads the stored layout, never the per-browser folder view', () => {
@@ -321,15 +324,45 @@ describe('save', () => {
 		expect(get(sessionConflict)).toBeNull();
 	});
 
-	it('reload ends the session when the reload fails', async () => {
+	it('reload ends the session and edit mode when the reload fails', async () => {
 		vi.spyOn(console, 'error').mockImplementation(() => {});
-		begin('d');
+		const err = vi.spyOn(toast, 'error');
+		enableEditMode();
 		apply('1', setName('mine'));
 		vi.mocked(api.saveDashboardV3).mockRejectedValue(new ConflictError('d', 9));
 		await save();
 		vi.mocked(api.getConfig).mockRejectedValue(new Error('down'));
 		await reloadAfterConflict();
 		expect(get(session)).toBeNull();
+		expect(get(editMode)).toBe(false);
+		expect(err).toHaveBeenCalledWith(expect.stringContaining("Couldn't reload"));
+	});
+
+	it('reload turns edit mode off when the session cannot restart', async () => {
+		enableEditMode();
+		apply('1', setName('mine'));
+		vi.mocked(api.saveDashboardV3).mockRejectedValue(new ConflictError('d', 9));
+		await save();
+		// The dashboard is gone from the reloaded layout.
+		vi.mocked(api.getConfig).mockResolvedValue({
+			dashboards: [], layout: { schemaVersion: 3, dashboards: [] }, v3OnlyDashboards: []
+		} as unknown as Config);
+		await reloadAfterConflict();
+		expect(get(session)).toBeNull();
+		expect(get(editMode)).toBe(false);
+	});
+
+	it('takes the saved dashboard from the server response when present', async () => {
+		begin('d');
+		apply('1', setName('one'));
+		const normalised = { ...draft(), revision: 8, normalisedByServer: true };
+		const fresh: LayoutDoc = { schemaVersion: 3, dashboards: [normalised] };
+		vi.mocked(api.saveDashboardV3).mockResolvedValue({ revision: 8, layout: fresh, v3OnlyDashboards: [] });
+		vi.mocked(api.getConfig).mockResolvedValue({ dashboards: [], layout: fresh, v3OnlyDashboards: [] } as unknown as Config);
+		expect(await save()).toBe('saved');
+		expect(get(session)!.saved).toEqual(normalised);
+		expect(draft()).toEqual(normalised);
+		expect(get(dirty)).toBe(false);
 	});
 
 	it('keepEditingAfterConflict only hides the message', async () => {
@@ -426,6 +459,20 @@ describe('end and edit mode', () => {
 		expect(api.saveDashboardV3).not.toHaveBeenCalled();
 	});
 
+	it('guardNavigation: leaving on back/forward repeats the history step instead of pushing', async () => {
+		begin('d');
+		apply('1', setName('mine'));
+		const go = vi.fn(async () => {});
+		const hgo = vi.spyOn(window.history, 'go').mockImplementation(() => {});
+		const nav = { willUnload: false, type: 'popstate', delta: -1, to: { url: new URL('http://localhost/o') }, cancel: vi.fn() };
+		guardNavigation(nav, go);
+		expect(nav.cancel).toHaveBeenCalled();
+		closeConfirmModal(true);
+		await vi.waitFor(() => expect(hgo).toHaveBeenCalledWith(-1));
+		expect(go).not.toHaveBeenCalled();
+		expect(get(session)).toBeNull();
+	});
+
 	it('guardNavigation: staying keeps the draft', async () => {
 		begin('d');
 		apply('1', setName('mine'));
@@ -436,6 +483,71 @@ describe('end and edit mode', () => {
 		await flush();
 		expect(go).not.toHaveBeenCalled();
 		expect(get(dirty)).toBe(true);
+	});
+});
+
+describe('sign-out', () => {
+	it('a 401 during save parks the draft; signing in and editing restores it', async () => {
+		enableEditMode();
+		apply('1', setName('mine'));
+		apply('2', (d) => resizeNode(d, 'c', 2, 2));
+		const mine = draft();
+		const err = vi.spyOn(toast, 'error');
+		vi.mocked(api.saveDashboardV3).mockImplementation(async () => {
+			isAuthenticated.set(false); // what the session-expired handler does before the throw
+			throw new Error('SESSION_EXPIRED');
+		});
+		expect(await save()).toBe('error');
+		expect(get(editMode)).toBe(false);
+		expect(get(session)).toBeNull();
+		expect(get(parkedDraft)?.draft).toBe(mine);
+		expect(err).toHaveBeenCalledWith(expect.stringContaining('sign in to save them'));
+
+		render(ParkedDraftBanner);
+		expect(screen.getByRole('alert').textContent).toMatch(/You were signed out — sign in to save your changes/);
+
+		isAuthenticated.set(true);
+		expect(get(parkedDraft)).not.toBeNull(); // kept until edit mode is entered
+		expect(enableEditMode()).toBe(true);
+		const s = get(session)!;
+		expect(s.draft).toBe(mine);
+		expect(s.baseRevision).toBe(7);
+		expect(s.undo.length).toBe(2);
+		expect(get(dirty)).toBe(true);
+		expect(get(parkedDraft)).toBeNull();
+		await flush();
+		expect(screen.queryByRole('alert')).toBeNull();
+	});
+
+	it('a clean session ends silently on sign-out', () => {
+		enableEditMode();
+		isAuthenticated.set(false);
+		expect(get(session)).toBeNull();
+		expect(get(parkedDraft)).toBeNull();
+	});
+
+	it('logout with unsaved changes asks first; Keep editing stays signed in', async () => {
+		enableEditMode();
+		apply('1', setName('mine'));
+		const out = logout();
+		await flush();
+		const st = get(confirmModalState);
+		expect(st.isOpen).toBe(true);
+		expect(st.options?.alternateText).toBe('Discard');
+		closeConfirmModal(false); // Keep editing
+		expect(await out).toBe(false);
+		expect(api.logout).not.toHaveBeenCalled();
+		expect(get(isAuthenticated)).toBe(true);
+		expect(get(editMode)).toBe(true);
+		expect(get(dirty)).toBe(true);
+
+		const out2 = logout();
+		await flush();
+		closeConfirmModal('alternate'); // Discard
+		expect(await out2).toBe(true);
+		expect(api.logout).toHaveBeenCalled();
+		expect(get(isAuthenticated)).toBe(false);
+		expect(get(parkedDraft)).toBeNull();
 	});
 });
 

@@ -2,6 +2,7 @@ import { writable } from 'svelte/store';
 import { login as apiLogin, logout as apiLogout, checkAuth, setSessionExpiredHandler, LoginError } from '$lib/utils/api';
 import { toast } from './toast';
 import { logError } from '$lib/utils/errors';
+import { end as endEditSession } from './editSession';
 
 // Auth state
 export const isAuthenticated = writable(false);
@@ -111,8 +112,13 @@ export function clearMustChangePassword() {
   mustChangePassword.set(false);
 }
 
-// Logout
-export async function logout() {
+// Logout. With unsaved edit-session changes the user is asked first (Save /
+// Discard / Keep editing); Keep editing, or a save that fails, cancels the
+// logout and returns false.
+export async function logout(): Promise<boolean> {
+  if (!(await endEditSession({ message: 'Save your changes to this dashboard before signing out?' }))) {
+    return false;
+  }
   try {
     await apiLogout();
     toast.info('Logged out');
@@ -123,4 +129,5 @@ export async function logout() {
     mustChangePassword.set(false);
     // Edit mode will automatically disable via its subscription to isAuthenticated
   }
+  return true;
 }

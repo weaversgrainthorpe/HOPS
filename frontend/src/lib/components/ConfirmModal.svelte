@@ -26,6 +26,9 @@
     if (e.key === 'Escape') {
       closeConfirmModal(false);
     } else if (e.key === 'Enter') {
+      // Enter never picks a destructive button: in a danger-style dialog it
+      // does nothing, so the user has to click (or focus) that button on purpose.
+      if (state.options?.confirmStyle === 'danger') return;
       closeConfirmModal(true);
     }
   }

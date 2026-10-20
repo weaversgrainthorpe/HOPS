@@ -18,6 +18,7 @@
 	import OfflineBanner from '$lib/components/OfflineBanner.svelte';
 	import VersionMismatchBanner from '$lib/components/VersionMismatchBanner.svelte';
 	import ConflictBanner from '$lib/components/ConflictBanner.svelte';
+	import ParkedDraftBanner from '$lib/components/ParkedDraftBanner.svelte';
 	import MigrationFailed from '$lib/components/MigrationFailed.svelte';
 	import Toast from '$lib/components/Toast.svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
@@ -142,6 +143,7 @@
 <OfflineBanner />
 <VersionMismatchBanner />
 <ConflictBanner />
+<ParkedDraftBanner />
 
 <!-- While the config migration has failed, only the admin page ("/": login +
      Backups, the remedy) stays reachable; everything else shows the notice. -->

@@ -75,6 +75,24 @@ export const dirty: Readable<boolean> = derived(state, isDirty);
  */
 export const sessionConflict = writable<{ dashboardId: string; currentRevision: number } | null>(null);
 
+/**
+ * A dirty draft kept in memory after the user was signed out (session expiry
+ * or sign-out while editing). Nothing is lost: after signing in, entering edit
+ * mode on that dashboard restores it — with its original base revision, so a
+ * change made elsewhere meanwhile takes the normal conflict path.
+ * ParkedDraftBanner shows it persistently.
+ */
+const parkedState = writable<EditSession | null>(null);
+export const parkedDraft: Readable<EditSession | null> = { subscribe: parkedState.subscribe };
+
+// Called when a session ends unexpectedly (a conflict reload that failed or
+// could not restart the session), so edit mode never stays on with no
+// session. editMode.ts registers it; editSession cannot import editMode.
+let sessionLostHandler: (() => void) | null = null;
+export function setSessionLostHandler(fn: (() => void) | null): void {
+  sessionLostHandler = fn;
+}
+
 function clone<T>(v: T): T {
   return JSON.parse(JSON.stringify(v)) as T;
 }
@@ -97,6 +115,14 @@ export function begin(dashboardId: string): void {
     toast.error('Save or discard your changes to the other dashboard first.');
     return;
   }
+  const parked = get(parkedState);
+  if (parked && parked.dashboardId === dashboardId) {
+    parkedState.set(null);
+    sessionConflict.set(null);
+    state.set(parked);
+    toast.info('Your unsaved changes are back. Save them when you are ready.');
+    return;
+  }
   if (get(layoutStale)) {
     toast.error("The layout is refreshing, so editing can't start yet. Try again in a moment.");
     return;
@@ -116,11 +142,14 @@ export function begin(dashboardId: string): void {
     return;
   }
   sessionConflict.set(null);
+  // draft starts as the same object as saved: operations are pure, so an
+  // unchanged subtree stays the same reference and the dirty check skips it.
+  const saved = clone(d);
   state.set({
     dashboardId,
     baseRevision: d.revision,
-    saved: clone(d),
-    draft: clone(d),
+    saved,
+    draft: saved,
     undo: [],
     redo: []
   });
@@ -191,6 +220,11 @@ let inFlight: Promise<'saved' | 'conflict' | 'error'> | null = null;
  * are and the conflict banner is raised. Any other failure is toasted and
  * keeps the draft. A clean draft sends nothing.
  */
+//
+// A save already in flight is shared: a second caller gets the SAME promise,
+// whose result describes the draft that was sent first. Edits made after that
+// draft was sent are not part of it and stay dirty (callers that need them
+// saved, like end(), check dirty again afterwards).
 export function save(): Promise<'saved' | 'conflict' | 'error'> {
   if (inFlight) return inFlight;
   inFlight = doSave().finally(() => {
@@ -211,7 +245,9 @@ async function doSave(): Promise<'saved' | 'conflict' | 'error'> {
     const resp = await saveDashboardV3(s.dashboardId, sent, s.baseRevision);
     const cur = get(state);
     if (cur && cur.dashboardId === s.dashboardId) {
-      const saved = { ...sent, revision: resp.revision };
+      // Prefer the server's normalised copy of what it stored.
+      const stored = resp.layout ? findLayoutDashboard(s.dashboardId, resp.layout) : undefined;
+      const saved = stored ? clone(stored) : { ...sent, revision: resp.revision };
       state.set({
         ...cur,
         baseRevision: resp.revision,
@@ -236,7 +272,11 @@ async function doSave(): Promise<'saved' | 'conflict' | 'error'> {
       migrationFailure.set(error.detail);
     }
     if (error instanceof Error && error.message === 'SESSION_EXPIRED') {
-      toast.error('Your session has expired. Your changes were not saved — log in again.');
+      toast.error(
+        get(parkedState)
+          ? 'You were signed out, so your changes were not saved. They are kept — sign in to save them.'
+          : 'Your session has expired. Your changes were not saved — sign in again.'
+      );
     } else {
       toast.error(error instanceof Error && error.message ? `Failed to save changes: ${error.message}` : 'Failed to save changes');
     }
@@ -265,7 +305,7 @@ export async function discard(opts: { confirm?: boolean } = {}): Promise<boolean
   }
   const cur = get(state);
   if (!cur) return true;
-  state.set({ ...cur, draft: clone(cur.saved), undo: [], redo: [], lastLabel: undefined });
+  state.set({ ...cur, draft: cur.saved, undo: [], redo: [], lastLabel: undefined });
   return true;
 }
 
@@ -312,6 +352,33 @@ export function abandon(): boolean {
   return wasDirty;
 }
 
+/**
+ * The user was signed out. A dirty draft is parked (kept in memory with its
+ * undo history and base revision) instead of being dropped; a clean session
+ * just ends. Returns true when a draft was parked.
+ */
+export function park(): boolean {
+  const s = get(state);
+  close();
+  if (!s || !isDirty(s)) return false;
+  parkedState.set(s);
+  return true;
+}
+
+/** Throw away a parked draft (asks first). */
+export async function discardParked(): Promise<boolean> {
+  if (!get(parkedState)) return true;
+  const ok = await confirm({
+    title: 'Discard kept changes?',
+    message: 'The unsaved changes kept from before you were signed out will be lost.',
+    confirmText: 'Discard',
+    cancelText: 'Keep them',
+    confirmStyle: 'danger'
+  });
+  if (ok) parkedState.set(null);
+  return ok;
+}
+
 /** Conflict banner: keep editing. The draft and session stay exactly as they are. */
 export function keepEditingAfterConflict(): void {
   sessionConflict.set(null);
@@ -326,7 +393,12 @@ export async function reloadAfterConflict(): Promise<void> {
   const id = get(state)?.dashboardId;
   close();
   await loadConfig();
-  if (id && get(configError) === null) begin(id);
+  if (get(configError) !== null) {
+    toast.error("Couldn't reload the dashboard, so edit mode has been turned off.");
+  } else if (id) {
+    begin(id); // refuses visibly if it can't start
+  }
+  if (!get(state)) sessionLostHandler?.();
 }
 
 /** The subset of SvelteKit's BeforeNavigate that guardNavigation uses. */
@@ -334,6 +406,8 @@ export interface NavigationLike {
   willUnload: boolean;
   to: { url: URL } | null;
   cancel: () => void;
+  type?: string;
+  delta?: number;
 }
 
 /**
@@ -359,6 +433,12 @@ export function guardNavigation(nav: NavigationLike, go: (href: string) => Promi
     if (!leave) return;
     abandon();
     try {
+      // Back/forward: repeat the same history step rather than pushing a new
+      // entry (goto would turn [A, B] + Back into [A, B, A]).
+      if (nav.type === 'popstate' && typeof nav.delta === 'number' && nav.delta !== 0) {
+        history.go(nav.delta);
+        return;
+      }
       await go(href);
     } catch (e) {
       logError('Navigation', e);
@@ -373,4 +453,10 @@ export function guardUnload(e: BeforeUnloadEvent): void {
   if (!get(dirty)) return;
   e.preventDefault();
   e.returnValue = '';
+}
+
+/** Tests only: forget the session, any parked draft and the conflict. */
+export function resetEditSessionForTests(): void {
+  close();
+  parkedState.set(null);
 }
