@@ -1,0 +1,17 @@
+[
+  {"name": "all inherit, global on -> global", "global": true, "dashboardOverride": null, "tab": null, "folders": [], "tile": null, "want": {"on": true, "source": "global"}},
+  {"name": "all inherit, global off -> global", "global": false, "dashboardOverride": null, "tab": null, "folders": [null, null], "tile": null, "want": {"on": false, "source": "global"}},
+  {"name": "dashboard on beats global off", "global": false, "dashboardOverride": true, "tab": null, "folders": [], "tile": null, "want": {"on": true, "source": "dashboard"}},
+  {"name": "dashboard off beats global on", "global": true, "dashboardOverride": false, "tab": null, "folders": [null], "tile": null, "want": {"on": false, "source": "dashboard"}},
+  {"name": "dashboard off + tile on -> on/tile", "global": true, "dashboardOverride": false, "tab": null, "folders": [], "tile": true, "want": {"on": true, "source": "tile"}},
+  {"name": "global off + tile on -> on/tile", "global": false, "dashboardOverride": null, "tab": null, "folders": [], "tile": true, "want": {"on": true, "source": "tile"}},
+  {"name": "dashboard on + folder off + tile inherit -> off/folder", "global": true, "dashboardOverride": true, "tab": null, "folders": [false], "tile": null, "want": {"on": false, "source": "folder", "sourceIdx": 0}},
+  {"name": "nested folders: inner on wins over outer off", "global": true, "dashboardOverride": null, "tab": null, "folders": [false, true], "tile": null, "want": {"on": true, "source": "folder", "sourceIdx": 1}},
+  {"name": "nested folders: inner off wins over outer on", "global": false, "dashboardOverride": null, "tab": null, "folders": [true, null, false, null], "tile": null, "want": {"on": false, "source": "folder", "sourceIdx": 2}},
+  {"name": "nested folders: inherit passes through to the set outer one", "global": false, "dashboardOverride": false, "tab": false, "folders": [true, null, null], "tile": null, "want": {"on": true, "source": "folder", "sourceIdx": 0}},
+  {"name": "tab on overrides dashboard off", "global": true, "dashboardOverride": false, "tab": true, "folders": [null], "tile": null, "want": {"on": true, "source": "tab"}},
+  {"name": "tab off overrides dashboard on", "global": false, "dashboardOverride": true, "tab": false, "folders": [], "tile": null, "want": {"on": false, "source": "tab"}},
+  {"name": "folder beats tab", "global": true, "dashboardOverride": true, "tab": false, "folders": [true], "tile": null, "want": {"on": true, "source": "folder", "sourceIdx": 0}},
+  {"name": "tile off under everything on -> off/tile", "global": true, "dashboardOverride": true, "tab": true, "folders": [true, true], "tile": false, "want": {"on": false, "source": "tile"}},
+  {"name": "tile on under everything off -> on/tile", "global": false, "dashboardOverride": false, "tab": false, "folders": [false, false], "tile": true, "want": {"on": true, "source": "tile"}}
+]

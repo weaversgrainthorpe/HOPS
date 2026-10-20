@@ -59,10 +59,48 @@ func VerifyImportedDashboard(d Obj) error {
 	}
 	v.checkOwned(id, d)
 	v.checkIDs(Obj{"dashboards": []any{d}})
+	v.checkStatusChecks(d)
 	if len(v.problems) > 0 {
 		return &VerifyError{Problems: v.problems}
 	}
 	return nil
+}
+
+// checkStatusChecks requires every layered status-check setting below the
+// dashboard to be on, off or inherit: a tab's or folder's statusChecksEnabled
+// is true, false or absent/null, and a tile's statusCheck is an object (or
+// absent/null) whose enabled is true, false or absent/null. Run on saves and
+// imports only (not on the whole stored document), so legacy stored data
+// never blocks unrelated writes.
+func (v *verifier) checkStatusChecks(d Obj) {
+	triOK := func(x any) bool { _, isBool := x.(bool); return x == nil || isBool }
+	tabs, _ := d["tabs"].([]any)
+	for j, t := range tabs {
+		tm, _ := t.(Obj)
+		if tm != nil && !triOK(tm["statusChecksEnabled"]) {
+			v.add("tab[%d] %s: statusChecksEnabled is %s, want true or false (or absent to inherit)", j, show(tm["id"]), trunc(show(tm["statusChecksEnabled"])))
+		}
+	}
+	Walk(Obj{"dashboards": []any{d}}, func(_, _ Obj, _ []Obj, n Obj) bool {
+		switch n["kind"] {
+		case "folder":
+			if !triOK(n["statusChecksEnabled"]) {
+				v.add("folder %s: statusChecksEnabled is %s, want true or false (or absent to inherit)", show(n["id"]), trunc(show(n["statusChecksEnabled"])))
+			}
+		case "tile":
+			sc := n["statusCheck"]
+			if sc == nil {
+				break
+			}
+			scm, ok := sc.(Obj)
+			if !ok {
+				v.add("tile %s: statusCheck is %s, want an object whose enabled is true or false", show(n["id"]), trunc(show(sc)))
+			} else if !triOK(scm["enabled"]) {
+				v.add("tile %s: statusCheck.enabled is %s, want true or false (or absent to inherit)", show(n["id"]), trunc(show(scm["enabled"])))
+			}
+		}
+		return true
+	})
 }
 
 // Bounds on one natively saved dashboard (Task 5): the editor and renderer

@@ -57,6 +57,10 @@ func TestSmokeRoutesNoFiveHundred(t *testing.T) {
 		{method: "POST", path: "/api/config/import", body: `{"data":{}}`},
 		{method: "POST", path: "/api/config/reset"},
 
+		// One-time notices.
+		{method: "POST", path: "/api/notices/layered-status-checks-v4/dismiss"},
+		{method: "POST", path: "/api/notices/unknown/dismiss"},
+
 		// Backups.
 		{method: "GET", path: "/api/backups"},
 		{method: "GET", path: "/api/backups/nonexistent-backup-id"},
@@ -162,6 +166,7 @@ func TestSmokeUnauthenticatedRoutesReject(t *testing.T) {
 		"/api/discovery/scans",
 		"/api/discovery/detectors",
 		"/api/discovery/diagnostics",
+		"/api/notices/layered-status-checks-v4/dismiss",
 	}
 	for _, path := range protected {
 		t.Run(path, func(t *testing.T) {

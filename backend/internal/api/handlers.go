@@ -103,7 +103,7 @@ func (r *Router) handleConfig(w http.ResponseWriter, req *http.Request) {
 }
 
 // handleGetConfig returns the stored v3 document as {schemaVersion,
-// dashboards, migrationNotices?}. It is public (all dashboards are public,
+// dashboards, migrationNotices?, notices?}. It is public (all dashboards are public,
 // SECURITY.md), so it carries the dashboards' own content and nothing else
 // from the stored document. Every dashboard's revision must be readable: a
 // client saves against it, so an unreadable one is a visible 500, never a
@@ -126,6 +126,10 @@ func (r *Router) handleGetConfig(w http.ResponseWriter, _ *http.Request) {
 	view := r.publicDoc(stored)
 	if len(r.migration.Renames) > 0 {
 		view["migrationNotices"] = migrationNotices(r.migration.Renames, stored)
+	}
+	// One-time notices (notices.go), like migrationNotices only when any.
+	if ns := r.notices.current(); len(ns) > 0 {
+		view["notices"] = ns
 	}
 	writeJSON(w, view)
 }
@@ -380,10 +384,12 @@ func (r *Router) handleGetStatus(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Checks switched off for the tile's dashboard: say so explicitly rather
-	// than "unknown", so the badge shows "checks off", not "something's
-	// wrong". The config must be readable to know that; if it isn't, say so
-	// instead of guessing.
+	// Checks switched off for the tile: say so explicitly rather than
+	// "unknown", so the badge shows "checks off", not "something's wrong".
+	// On/off follows the same layered rule as the checker (the most
+	// specific level that sets it wins) and the response names that level
+	// (source, sourceId). The config must be readable to know that; if it
+	// isn't, say so instead of guessing.
 	doc, err := configdoc.Load(r.db)
 	if err != nil {
 		slog.Error("status lookup: cannot load config", "component", "api", "error", err)
@@ -393,10 +399,11 @@ func (r *Router) handleGetStatus(w http.ResponseWriter, req *http.Request) {
 	// The tile's resolved settings (global values when the tile isn't in
 	// the config). intervalMinutes lets the UI judge staleness against the
 	// real probe interval rather than a guessed default.
-	dash, _, _ := configdoc.FindTile(doc, entryID)
+	dash, tab, folders, tile, found := configdoc.FindTileWithAncestors(doc, entryID)
 	eff := configdoc.Resolve(r.settings, dash)
-	if dash != nil && !eff.StatusChecksEnabled {
-		writeJSON(w, map[string]string{"status": "disabled"})
+	on, source, sourceID := configdoc.EffectiveStatusChecks(r.settings, dash, tab, folders, tile)
+	if found && !on {
+		writeJSON(w, map[string]string{"status": "disabled", "source": string(source), "sourceId": sourceID})
 		return
 	}
 
@@ -414,6 +421,8 @@ func (r *Router) handleGetStatus(w http.ResponseWriter, req *http.Request) {
 		writeJSON(w, map[string]interface{}{
 			"status":          "unknown",
 			"intervalMinutes": eff.StatusCheckIntervalMinutes,
+			"source":          string(source),
+			"sourceId":        sourceID,
 		})
 		return
 	}
@@ -427,6 +436,8 @@ func (r *Router) handleGetStatus(w http.ResponseWriter, req *http.Request) {
 		"status":          status,
 		"lastChecked":     lastChecked,
 		"intervalMinutes": eff.StatusCheckIntervalMinutes,
+		"source":          string(source),
+		"sourceId":        sourceID,
 	}
 	if responseTime.Valid {
 		result["responseTime"] = responseTime.Int64

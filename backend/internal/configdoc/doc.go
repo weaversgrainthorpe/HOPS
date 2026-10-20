@@ -84,3 +84,17 @@ func FindTile(doc Obj, id string) (dash Obj, tile Obj, ok bool) {
 	})
 	return
 }
+
+// FindTileWithAncestors returns the tile with the given id and every level
+// above it: its dashboard, its tab and its ancestor folders (outermost
+// first), as EffectiveStatusChecks takes them.
+func FindTileWithAncestors(doc Obj, id string) (dash, tab Obj, folders []Obj, tile Obj, ok bool) {
+	Walk(doc, func(d, t Obj, path []Obj, n Obj) bool {
+		if n["kind"] == "tile" && n["id"] == id {
+			dash, tab, folders, tile, ok = d, t, path, n, true
+			return false
+		}
+		return true
+	})
+	return
+}

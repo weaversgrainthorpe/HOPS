@@ -649,7 +649,7 @@ func TestV3Put_StripsTransientKeysKeepsOthers(t *testing.T) {
 	c := newClient(t, router)
 	seed(t, db)
 	d := v3Body(t, c, "d1")
-	for _, k := range []string{"schemaVersion", "layout", "migrationNotices", "dashboardRevisions", "v3OnlyDashboards"} {
+	for _, k := range []string{"schemaVersion", "layout", "migrationNotices", "notices", "dashboardRevisions", "v3OnlyDashboards"} {
 		d[k] = "junk"
 	}
 	d["customKey"] = "keep me"
@@ -657,7 +657,7 @@ func TestV3Put_StripsTransientKeysKeepsOthers(t *testing.T) {
 		t.Fatalf("%d %v", code, resp)
 	}
 	got := storedDashboards(storedDoc(t, db))["d1"]
-	for _, k := range []string{"schemaVersion", "layout", "migrationNotices", "dashboardRevisions", "v3OnlyDashboards"} {
+	for _, k := range []string{"schemaVersion", "layout", "migrationNotices", "notices", "dashboardRevisions", "v3OnlyDashboards"} {
 		if _, has := got[k]; has {
 			t.Errorf("transient key %s stored", k)
 		}

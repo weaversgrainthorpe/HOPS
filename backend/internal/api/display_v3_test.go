@@ -85,10 +85,14 @@ func TestImport_DropsDisplay(t *testing.T) {
 		dm := d.(map[string]interface{})
 		dm["display"] = map[string]interface{}{"animatedFolderBackgrounds": true}
 		dm["migrationNotices"] = []interface{}{"x"}
+		dm["notices"] = []interface{}{map[string]interface{}{"id": "x", "text": "y"}}
 	}
 	b, _ := json.Marshal(env)
 	if code, resp := c.importFile(b); code != 200 {
 		t.Fatalf("import: %d %v", code, resp)
+	}
+	if !transientDashboardKeys["notices"] {
+		t.Error("notices is not a transient key")
 	}
 	for id, d := range storedDashboards(storedDoc(t, db)) {
 		for k := range transientDashboardKeys {

@@ -82,9 +82,10 @@ type StatusResult struct {
 	LastChecked  string `json:"lastChecked"`
 }
 
-// Checker handles HTTP status checks for entries. Interval, timeout and the
-// on/off switch are resolved per dashboard (configdoc.Resolve): a dashboard's
-// own override wins, otherwise the global status.* setting applies.
+// Checker handles HTTP status checks for entries. Interval and timeout are
+// resolved per dashboard (configdoc.Resolve): a dashboard's own override
+// wins, otherwise the global status.* setting applies. The on/off switch is
+// layered down to the tile (configdoc.EffectiveStatusChecks).
 type Checker struct {
 	db       *sql.DB
 	settings *settings.Service
@@ -128,9 +129,9 @@ func NewChecker(db *sql.DB, settingsSvc *settings.Service) *Checker {
 	}
 	c.client = c.buildClient()
 
-	// Global default for dashboards that don't override it. Run a pass
+	// Global default for every tile that inherits it. Run a pass
 	// straight away so turning checks off prunes cached results of the
-	// dashboards that inherit it (no stale badges) and turning them on
+	// tiles that inherit it (no stale badges) and turning them on
 	// doesn't leave every tile "unknown" for a whole interval.
 	settingsSvc.Subscribe(settings.KeyStatusChecksEnabled, func(string) {
 		slog.Info("status checks toggled", "component", "status",
@@ -209,9 +210,12 @@ func (c *Checker) runLoop() {
 }
 
 // getEntriesFromConfig extracts the entries that should be status-checked:
-// link tiles (at any folder depth) with a URL whose "Enable Status Check" box
-// is ticked, in a dashboard whose effective statusChecksEnabled is true. It
-// returns an error if the stored config cannot be loaded as a v3 document.
+// link tiles (at any folder depth, never note tiles) with a URL whose
+// effective status-check setting is on — the most specific level that sets
+// it wins (configdoc.EffectiveStatusChecks: tile, folders, tab, dashboard,
+// global), the same rule GET /api/status uses for the badge. Interval and
+// timeout are the owning dashboard's effective settings. It returns an error
+// if the stored config cannot be loaded as a v3 document.
 func (c *Checker) getEntriesFromConfig() ([]Entry, error) {
 	doc, err := configdoc.Load(c.db)
 	if err != nil {
@@ -220,7 +224,7 @@ func (c *Checker) getEntriesFromConfig() ([]Entry, error) {
 
 	var entries []Entry
 	eff := map[string]configdoc.Effective{}
-	configdoc.Walk(doc, func(dash, _ configdoc.Obj, _ []configdoc.Obj, node configdoc.Obj) bool {
+	configdoc.Walk(doc, func(dash, tab configdoc.Obj, path []configdoc.Obj, node configdoc.Obj) bool {
 		if node["kind"] != "tile" {
 			return true
 		}
@@ -228,13 +232,12 @@ func (c *Checker) getEntriesFromConfig() ([]Entry, error) {
 		if t, _ := node["type"].(string); t == "note" {
 			return true
 		}
-		sc, _ := node["statusCheck"].(configdoc.Obj)
-		if on, _ := sc["enabled"].(bool); !on {
-			return true
-		}
 		id, _ := node["id"].(string)
 		u, _ := node["url"].(string)
 		if id == "" || u == "" {
+			return true
+		}
+		if on, _, _ := configdoc.EffectiveStatusChecks(c.settings, dash, tab, path, node); !on {
 			return true
 		}
 		dashID, _ := dash["id"].(string)
@@ -242,9 +245,6 @@ func (c *Checker) getEntriesFromConfig() ([]Entry, error) {
 		if !ok {
 			e = configdoc.Resolve(c.settings, dash)
 			eff[dashID] = e
-		}
-		if !e.StatusChecksEnabled {
-			return true
 		}
 		interval := e.StatusCheckIntervalMinutes
 		if interval <= 0 {

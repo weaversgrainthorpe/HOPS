@@ -105,7 +105,8 @@ func configWith(base string) string {
 	]}]}]}]}`
 }
 
-// newTwoDash builds two dashboards through MigrateV2 and then sets d2's
+// newTwoDash builds two dashboards (tiles a1, b1 inheriting the status-check
+// switch) through MigrateV2 and then sets d2's
 // per-dashboard overrides (MigrateV2 resets settings to all-null).
 func newTwoDash(t *testing.T, base, d2Settings string) (*Checker, *sql.DB, *settings.Service) {
 	t.Helper()
@@ -128,9 +129,9 @@ func newTwoDash(t *testing.T, base, d2Settings string) (*Checker, *sql.DB, *sett
 func twoDashConfig(base string) string {
 	return `{"dashboards":[
 	 {"id":"d1","name":"A","path":"/a","tabs":[{"id":"t1","groups":[{"id":"g1","entries":[
-	  {"id":"a1","url":"` + base + `/a1","statusCheck":{"enabled":true}}]}]}]},
+	  {"id":"a1","url":"` + base + `/a1"}]}]}]},
 	 {"id":"d2","name":"B","path":"/b","tabs":[{"id":"t2","groups":[{"id":"g2","entries":[
-	  {"id":"b1","url":"` + base + `/b1","statusCheck":{"enabled":true}}]}]}]}
+	  {"id":"b1","url":"` + base + `/b1"}]}]}]}
 	]}`
 }
 
@@ -152,23 +153,28 @@ func cachedIDs(t *testing.T, db *sql.DB) map[string]bool {
 	return out
 }
 
-// Tiles without "Enable Status Check" ticked must never be probed.
-func TestCheckAllEntries_OnlyChecksTilesWithStatusCheckEnabled(t *testing.T) {
+// Layered status checks (M4 §4b): a tile is probed iff its effective setting
+// (most specific level that sets it) is on. "on" is explicitly on, "none"
+// inherits the global (on), "off" is explicitly off; a note tile is never
+// probed, even when ticked.
+func TestCheckAllEntries_ProbesEffectivelyOnTilesOnly(t *testing.T) {
 	h := newHitCounter(t)
 	c, db, _ := newTestChecker(t, configWith(h.srv.URL))
 
 	c.checkAllEntries()
 
-	if got := h.count("/on"); got != 1 {
-		t.Errorf("enabled tile: want 1 request, got %d", got)
-	}
-	for _, p := range []string{"/off", "/none", "/note"} {
-		if got := h.count(p); got != 0 {
-			t.Errorf("tile %s has status check disabled/absent but was probed %d time(s)", p, got)
+	for _, p := range []string{"/on", "/none"} {
+		if got := h.count(p); got != 1 {
+			t.Errorf("tile %s is effectively on: want 1 request, got %d", p, got)
 		}
 	}
-	if ids := cachedIDs(t, db); !ids["on"] || len(ids) != 1 {
-		t.Errorf("status_cache should hold only the enabled tile, got %v", ids)
+	for _, p := range []string{"/off", "/note"} {
+		if got := h.count(p); got != 0 {
+			t.Errorf("tile %s is off or a note but was probed %d time(s)", p, got)
+		}
+	}
+	if ids := cachedIDs(t, db); !ids["on"] || !ids["none"] || len(ids) != 2 {
+		t.Errorf("status_cache should hold only the effectively-on tiles, got %v", ids)
 	}
 }
 
@@ -188,11 +194,13 @@ func TestCheckAllEntries_DropsCacheRowsForTilesNoLongerChecked(t *testing.T) {
 	}
 }
 
-// The global switch off means no probes at all and no stale results left.
-func TestCheckAllEntries_GlobalSwitchOffChecksNothing(t *testing.T) {
+// The global switch off turns off every tile that inherits it; a tile
+// explicitly on is more specific and still probed. Stale rows of tiles now
+// off are pruned.
+func TestCheckAllEntries_GlobalSwitchOffChecksOnlyExplicitlyOnTiles(t *testing.T) {
 	h := newHitCounter(t)
 	c, db, svc := newTestChecker(t, configWith(h.srv.URL))
-	if _, err := db.Exec(`INSERT INTO status_cache (entry_id, status) VALUES ('on','up')`); err != nil {
+	if _, err := db.Exec(`INSERT INTO status_cache (entry_id, status) VALUES ('none','up')`); err != nil {
 		t.Fatal(err)
 	}
 	if err := svc.Set(settings.KeyStatusChecksEnabled, "false"); err != nil {
@@ -201,11 +209,87 @@ func TestCheckAllEntries_GlobalSwitchOffChecksNothing(t *testing.T) {
 
 	c.checkAllEntries()
 
-	if got := h.count("/on"); got != 0 {
-		t.Errorf("global checks disabled but enabled tile was probed %d time(s)", got)
+	if got := h.count("/none"); got != 0 {
+		t.Errorf("global checks off but inheriting tile was probed %d time(s)", got)
 	}
-	if ids := cachedIDs(t, db); len(ids) != 0 {
-		t.Errorf("status_cache should be empty when checks are globally off, got %v", ids)
+	if got := h.count("/on"); got != 1 {
+		t.Errorf("explicitly-on tile: want 1 request, got %d", got)
+	}
+	if ids := cachedIDs(t, db); !ids["on"] || len(ids) != 1 {
+		t.Errorf("status_cache should hold only the explicitly-on tile, got %v", ids)
+	}
+}
+
+// A tile switched on under a dashboard whose checks are off is probed (the
+// tile is more specific), with the dashboard's interval and timeout.
+func TestCheckAllEntries_TileOnUnderDashboardOffIsProbed(t *testing.T) {
+	h := newHitCounter(t)
+	c, _, _ := newTwoDash(t, h.srv.URL, `{"statusChecksEnabled":false,"statusCheckIntervalMinutes":7,"statusCheckTimeoutSeconds":3}`)
+	doc, err := configdoc.Load(c.db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, tile, ok := configdoc.FindTile(doc, "b1")
+	if !ok {
+		t.Fatal("b1 missing")
+	}
+	tile["statusCheck"] = configdoc.Obj{"type": "http", "enabled": true}
+	if err := configdoc.Save(c.db, doc); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := c.getEntriesFromConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var b1 *Entry
+	for i := range entries {
+		if entries[i].ID == "b1" {
+			b1 = &entries[i]
+		}
+	}
+	if b1 == nil {
+		t.Fatalf("b1 (tile on, dashboard off) not scheduled: %+v", entries)
+	}
+	if b1.IntervalMinutes != 7 || b1.TimeoutSeconds != 3 {
+		t.Errorf("b1 interval/timeout = %d/%d, want the dashboard's 7/3", b1.IntervalMinutes, b1.TimeoutSeconds)
+	}
+	c.checkAllEntries()
+	if h.count("/b1") != 1 {
+		t.Errorf("b1 probed %d time(s), want 1", h.count("/b1"))
+	}
+}
+
+// A folder switched off turns off the inheriting tiles inside it (at any
+// depth) even when the dashboard is on; a tile explicitly on inside it is
+// still probed.
+func TestCheckAllEntries_FolderOffBeatsDashboardOn(t *testing.T) {
+	h := newHitCounter(t)
+	var v2 configdoc.Obj
+	if err := json.Unmarshal([]byte(configWith(h.srv.URL)), &v2); err != nil {
+		t.Fatal(err)
+	}
+	doc, err := configdoc.MigrateV2(v2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dash := doc["dashboards"].([]any)[0].(configdoc.Obj)
+	dash["settings"].(configdoc.Obj)["statusChecksEnabled"] = true
+	tab := dash["tabs"].([]any)[0].(configdoc.Obj)
+	root := tab["root"].(configdoc.Obj)
+	inner := root["children"].([]any)[0].(configdoc.Obj)
+	root["children"] = []any{configdoc.Obj{
+		"kind": "folder", "id": "outer", "statusChecksEnabled": false,
+		"content": configdoc.Obj{"columns": 12, "children": []any{inner}},
+	}}
+	c, _, _ := newTestCheckerDoc(t, doc)
+
+	c.checkAllEntries()
+
+	if got := h.count("/none"); got != 0 {
+		t.Errorf("inheriting tile under an off folder probed %d time(s)", got)
+	}
+	if got := h.count("/on"); got != 1 {
+		t.Errorf("explicitly-on tile under an off folder: want 1 request, got %d", got)
 	}
 }
 

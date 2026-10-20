@@ -18,7 +18,7 @@ import (
 // reads and writes the v3 document.
 
 // GET /api/config is the v3 document: exactly schemaVersion and dashboards
-// (plus migrationNotices when there are any), with no groups/entries anywhere
+// (plus migrationNotices / notices when there are any), with no groups/entries anywhere
 // and none of the retired view-only keys.
 func TestGetConfig_IsTheV3Document(t *testing.T) {
 	router, db := setupTestRouter(t)

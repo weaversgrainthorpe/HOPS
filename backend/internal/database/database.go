@@ -222,6 +222,13 @@ func runMigrations(db *sql.DB) error {
 			FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
 		)`,
 
+		// One-time notices (e.g. layered-status-checks-v4) the user has
+		// dismissed; a dismissed notice is never shown again.
+		`CREATE TABLE IF NOT EXISTS dismissed_notices (
+			id           TEXT PRIMARY KEY,
+			dismissed_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+
 		// Indexes for faster lookups
 		`CREATE INDEX IF NOT EXISTS idx_icons_category ON icons(category_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_icons_preset ON icons(is_preset)`,

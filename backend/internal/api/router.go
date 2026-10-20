@@ -58,6 +58,7 @@ type Router struct {
 	shutdownReq    chan struct{}
 	mu             sync.RWMutex // guards trustedProxies (rebuilt on settings change requires restart, but the slice itself is accessed concurrently)
 	trustedProxies []*net.IPNet // parsed at construction from settings.proxy.trusted_cidrs
+	notices        noticeState  // one-time notices, computed at startup (notices.go)
 }
 
 // RequestShutdown is the API-side handle for the shutdown channel.
@@ -224,6 +225,8 @@ func NewRouter(db *sql.DB, authService *auth.Service, cfg *config.Config, settin
 		}
 	})
 
+	r.notices.list = r.computeNotices()
+
 	r.setupRoutes()
 	return r, r.securityHeadersMiddleware(r.corsMiddleware(r.recoverMiddleware(r.loggingMiddleware(r.mux))))
 }
@@ -272,6 +275,7 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/config/export", r.protected(r.handleExportConfig))
 	r.mux.HandleFunc("/api/config/import", r.protected(r.handleImportConfig))
 	r.mux.HandleFunc("/api/config/reset", r.protected(r.handleResetConfig))
+	r.mux.HandleFunc("/api/notices/", r.protected(r.handleNotices))
 
 	// Backup management routes. Note the asymmetry, kept deliberately:
 	//   POST /api/backups            → create a new backup
