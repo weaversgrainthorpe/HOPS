@@ -43,17 +43,50 @@ describe('TabEditModal layout and design width (M3 Task 6)', () => {
   });
 });
 
-describe('TabEditModal background (M4 Task 5)', () => {
+describe('TabEditModal background (M4 Task 5, Ruling 11(5))', () => {
+  beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn(() =>
+      Promise.resolve(new Response(JSON.stringify({ categories: [], images: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    ));
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
   it('always offers the background picker (no per-tab switch any more)', () => {
-    render(TabEditModal, { tabName: 'Media', onSave: vi.fn(), onSaveBackground: vi.fn(), onCancel: vi.fn() });
+    render(TabEditModal, { tabName: 'Media', onSave: vi.fn(), onCancel: vi.fn() });
     expect(screen.getByRole('button', { name: /Configure Tab Background/ })).toBeInTheDocument();
     expect(screen.queryByText(/Individual backgrounds per tab/)).toBeNull();
   });
   it('says when a kept picture is switched off (inherit form)', () => {
     render(TabEditModal, {
       tabName: 'Media', tabBackground: { inherit: true, type: 'image', value: '/backgrounds/a.jpg' },
-      onSave: vi.fn(), onSaveBackground: vi.fn(), onCancel: vi.fn()
+      onSave: vi.fn(), onCancel: vi.fn()
     });
     expect(screen.getByText(/dashboard background/i, { selector: '.background-status' }).textContent).toMatch(/kept/i);
+  });
+  it('a picked background is staged and passed with the dialog Save; Cancel passes nothing', async () => {
+    const onSave = vi.fn();
+    const onCancel = vi.fn();
+    render(TabEditModal, { tabName: 'Media', onSave, onCancel });
+    await fireEvent.click(screen.getByRole('button', { name: /Configure Tab Background/ }));
+    await fireEvent.click(screen.getByRole('button', { name: /^Color$/ }));
+    await fireEvent.click(screen.getByRole('button', { name: /^Save Background/ }));
+    expect(onSave).not.toHaveBeenCalled();
+    expect(screen.getByText(/applies when you save/i, { selector: '.background-status' })).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: /^Save$/ }));
+    expect(onSave.mock.calls[0][7]).toMatchObject({ type: 'color' });
+  });
+  it('without a pick, Save passes no background change; None passes null', async () => {
+    const onSave = vi.fn();
+    const { unmount } = render(TabEditModal, { tabName: 'Media', tabBackground: { type: 'color', value: '#000000' }, onSave, onCancel: vi.fn() });
+    await fireEvent.click(screen.getByRole('button', { name: /^Save$/ }));
+    expect(onSave.mock.calls[0][7]).toBeUndefined();
+    unmount();
+    const onSave2 = vi.fn();
+    render(TabEditModal, { tabName: 'Media', tabBackground: { type: 'color', value: '#000000' }, onSave: onSave2, onCancel: vi.fn() });
+    await fireEvent.click(screen.getByRole('button', { name: /Configure Tab Background/ }));
+    await fireEvent.click(screen.getByRole('button', { name: /^None$/ }));
+    await fireEvent.click(screen.getByRole('button', { name: /^Save Background/ }));
+    await fireEvent.click(screen.getByRole('button', { name: /^Save$/ }));
+    expect(onSave2.mock.calls[0][7]).toBeNull();
   });
 });

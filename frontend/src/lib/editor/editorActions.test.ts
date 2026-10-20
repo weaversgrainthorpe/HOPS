@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { get } from 'svelte/store';
 import {
   documentIds, setBackground, setFolderBackground, setHeader, addNode, blankTile, blankFolder, placementsFor,
-  moveOrCopyTo, tileProblem, editNode, duplicate, editTab
+  moveOrCopyTo, tileProblem, editNode, duplicate, editTab, editFolder
 } from './editorActions';
 import { dirty, session, undo } from '$lib/stores/editSession';
 import { toast } from '$lib/stores/toast';
@@ -129,5 +129,30 @@ describe('editorActions', () => {
     expect(setFolderBackground('nope', { type: 'color', value: '#000000' })).toBe(false);
     expect(draft()).toBe(before);
     expect(err).toHaveBeenCalledTimes(2);
+  });
+
+  it('editTab with a background is ONE undo step; null removes it; undefined leaves it (Ruling 11(5))', () => {
+    expect(editTab('t1', { name: 'Main 2', background: { type: 'color', value: '#123456', opacity: 0.5 } })).toBe(true);
+    expect(draft().tabs[0]).toMatchObject({ name: 'Main 2', background: { type: 'color', value: '#123456', opacity: 0.5 } });
+    expect(get(session)!.undo).toHaveLength(1);
+    expect(editTab('t1', { name: 'Main 3' })).toBe(true);
+    expect(draft().tabs[0].background).toEqual({ type: 'color', value: '#123456', opacity: 0.5 });
+    expect(editTab('t1', { name: 'Main 3', background: null })).toBe(true);
+    expect(draft().tabs[0]).not.toHaveProperty('background');
+    undo();
+    undo();
+    undo();
+    expect(draft().tabs[0].name).toBe('Main');
+    expect(draft().tabs[0]).not.toHaveProperty('background');
+    expect(get(dirty)).toBe(false);
+  });
+
+  it('editFolder with a background is ONE undo step that reverts fields and background', () => {
+    expect(editFolder('f1', { name: 'Renamed', background: { type: 'image', value: '/presets/network-grid.jpg' } })).toBe(true);
+    expect(nodeIn(draft(), 'f1')).toMatchObject({ name: 'Renamed', background: { type: 'image' } });
+    expect(get(session)!.undo).toHaveLength(1);
+    undo();
+    expect(nodeIn(draft(), 'f1')!.name).toBe('F1');
+    expect(nodeIn(draft(), 'f1')).not.toHaveProperty('background');
   });
 });

@@ -6,6 +6,7 @@
   import { confirm } from '$lib/stores/confirmModal';
   import { focusTrap } from '$lib/utils/focusTrap';
   import { portal } from '$lib/utils/portal';
+  import { untrack } from 'svelte';
   import { logError } from '$lib/utils/errors';
   import { isSafeBackgroundUrl, cssUrl } from '$lib/components/background/backgroundUrl';
 
@@ -22,7 +23,8 @@
   /** The slideshow limit the server's document rules enforce. */
   const MAX_IMAGES = 200;
   const LEVEL_TEXT = {
-    dashboard: { title: 'Dashboard background', inherit: 'Inherit the default background', from: 'the default background' },
+    // Nothing sits above a dashboard: "inherit" there means no background, picture kept.
+    dashboard: { title: 'Dashboard background', inherit: 'No background (keep this picture stored)', from: 'no background' },
     tab: { title: 'Tab background', inherit: "Inherit the dashboard's background", from: "the dashboard's background" },
     folder: { title: 'Folder background', inherit: 'Inherit (show what is behind the folder)', from: 'what is behind the folder' }
   } as const;
@@ -78,6 +80,28 @@
   let overlayOpacity = $state(background?.overlayOpacity ?? 0.7);
   // svelte-ignore state_referenced_locally
   let overlayBlur = $state(background?.overlayBlur ?? 10);
+
+  // Exact round trip: Save starts from the stored background (unknown keys and
+  // fields the current type doesn't use are kept) and writes only what the form
+  // changed — so opening and saving without a change gives back an equal object.
+  // svelte-ignore state_referenced_locally
+  const stored: Readonly<Background> = background ? JSON.parse(JSON.stringify(background)) : {};
+  // Read once, on open (untrack: a snapshot, not a dependency).
+  const initial = untrack(() => ({
+    type: backgroundType,
+    fit: backgroundFit,
+    opacity: surfaceOpacity,
+    color: colorValue,
+    image: singleImageUrl,
+    images: [...slideshowImages],
+    interval: slideshowInterval,
+    transition: transitionEffect,
+    transitionDuration,
+    overlayOpacity,
+    overlayBlur
+  }));
+  /** Saved slideshow entries the renderer would refuse (legacy data): shown, never re-saved silently. */
+  const unsafeImages = $derived(slideshowImages.filter((u) => !isSafeBackgroundUrl(u)));
   let selectedCategory = $state('all');
   let customImageUrl = $state('');
   // Visible problems (no silent failures): a refused custom URL, a refused Save, a failed library load.
@@ -339,35 +363,50 @@
 
   /** The picture the form describes (undefined for None), or a reason it can't be saved. */
   function buildPicture(): { bg?: Background; problem?: string } {
-    if (backgroundType === 'none') return {};
+    // None, untouched, on a stored form with no type (e.g. the bare inherit form): keep it as is.
+    const base: Background = { ...stored };
+    delete base.inherit;
+    if (backgroundType === 'none') {
+      return initial.type === 'none' && Object.keys(base).length > 0 ? { bg: base } : {};
+    }
 
-    const newBackground: Background = {
-      type: backgroundType as 'color' | 'image' | 'slideshow',
-      fit: backgroundFit,
-      opacity: clamp01(Number(surfaceOpacity), 1)
-    };
+    const out: Background = base;
+    const typeChanged = backgroundType !== initial.type;
+    // The form owns a field when the user changed it, or when the type changed (then every
+    // field the new type uses comes from the form). Fields the type doesn't use are kept.
+    const owns = (changed: boolean) => typeChanged || changed;
+    out.type = backgroundType as 'color' | 'image' | 'slideshow';
+    if (owns(backgroundFit !== initial.fit)) out.fit = backgroundFit;
+    const op = clamp01(Number(surfaceOpacity), 1);
+    // Write the opacity when the user moved it, or when the stored value needed clamping.
+    if (op !== initial.opacity || (stored.opacity !== undefined && stored.opacity !== op)) out.opacity = op;
 
     if (backgroundType === 'color') {
-      newBackground.value = colorValue;
+      if (owns(colorValue !== initial.color)) out.value = colorValue;
     } else if (backgroundType === 'image') {
       const url = singleImageUrl.trim();
       if (!url) return { problem: 'Choose an image from the gallery, or enter its URL.' };
       if (!isSafeBackgroundUrl(url)) return { problem: URL_RULE };
-      newBackground.value = url;
+      if (owns(singleImageUrl !== initial.image)) out.value = url;
     } else if (backgroundType === 'slideshow') {
       if (slideshowImages.length === 0) return { problem: 'A slideshow needs at least one image.' };
       if (slideshowImages.length > MAX_IMAGES) return { problem: `A slideshow can have at most ${MAX_IMAGES} images.` };
-      newBackground.images = [...slideshowImages];
-      newBackground.interval = slideshowInterval;
-      newBackground.transition = transitionEffect;
-      newBackground.transitionDuration = transitionDuration;
+      if (unsafeImages.length > 0) {
+        return { problem: `${unsafeImages.length} saved slideshow ${unsafeImages.length === 1 ? 'image' : 'images'} can't be used (marked below); remove ${unsafeImages.length === 1 ? 'it' : 'them'} to save.` };
+      }
+      const imagesChanged =
+        slideshowImages.length !== initial.images.length || slideshowImages.some((u, i) => u !== initial.images[i]);
+      if (owns(imagesChanged)) out.images = [...slideshowImages];
+      if (owns(slideshowInterval !== initial.interval)) out.interval = slideshowInterval;
+      if (owns(transitionEffect !== initial.transition)) out.transition = transitionEffect;
+      if (owns(transitionDuration !== initial.transitionDuration)) out.transitionDuration = transitionDuration;
     }
-    // Folders have no overlay or blur of their own (call 1): never written there.
+    // Folders have no overlay or blur of their own (call 1): the picker never writes them there.
     if (hasOverlay && (backgroundType === 'image' || backgroundType === 'slideshow')) {
-      newBackground.overlayOpacity = overlayOpacity;
-      newBackground.overlayBlur = overlayBlur;
+      if (owns(overlayOpacity !== initial.overlayOpacity)) out.overlayOpacity = overlayOpacity;
+      if (owns(overlayBlur !== initial.overlayBlur)) out.overlayBlur = overlayBlur;
     }
-    return { bg: newBackground };
+    return { bg: out };
   }
 
   function handleSave() {
@@ -384,7 +423,8 @@
       onSave(bg ? { ...bg, inherit: true } : { inherit: true });
       return;
     }
-    onSave(bg);
+    // None without Inherit = no background of this level's own.
+    onSave(backgroundType === 'none' ? undefined : bg);
   }
 
   function handleKeydown(e: KeyboardEvent) {
@@ -784,8 +824,12 @@
           {#if slideshowImages.length > 0}
             <div class="selected-images" aria-labelledby="selected-images-label">
               {#each slideshowImages as imageUrl, index}
-                <div class="selected-image">
-                  <img src={imageUrl} alt="Slide {index + 1}" />
+                <div class="selected-image" class:unsafe={!isSafeBackgroundUrl(imageUrl)}>
+                  {#if isSafeBackgroundUrl(imageUrl)}
+                    <img src={imageUrl} alt="Slide {index + 1}" />
+                  {:else}
+                    <span class="unsafe-note" title={imageUrl}>Can't be used</span>
+                  {/if}
                   <button class="remove-btn" onclick={() => handleRemoveFromSlideshow(index)} title="Remove">
                     <Icon icon="mdi:close" width="16" />
                   </button>
@@ -795,6 +839,12 @@
             </div>
           {:else}
             <p class="empty-message">No images selected. Choose from the gallery below or upload your own.</p>
+          {/if}
+          {#if unsafeImages.length > 0}
+            <p class="field-error" role="alert">
+              {unsafeImages.length === 1 ? 'This saved image' : `${unsafeImages.length} saved images`} can't be used as a background
+              (not http(s), /backgrounds/… or /presets/…): {unsafeImages.slice(0, 3).join(', ')}{unsafeImages.length > 3 ? ', …' : ''}. Remove {unsafeImages.length === 1 ? 'it' : 'them'} to save.
+            </p>
           {/if}
         </div>
 
@@ -1054,6 +1104,19 @@
 
   .form-group {
     margin-bottom: 1.5rem;
+  }
+
+  .selected-image.unsafe {
+    outline: 2px solid var(--color-error, #dc2626);
+  }
+  .unsafe-note {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    font-size: 0.7rem;
+    color: var(--color-error, #dc2626);
+    text-align: center;
   }
 
   .field-error {

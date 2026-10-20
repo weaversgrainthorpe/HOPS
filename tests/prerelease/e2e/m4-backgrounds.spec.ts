@@ -197,7 +197,20 @@ test.describe('M4 backgrounds in a real browser', () => {
     await page.goto(f.path);
     await expect(page.locator(sel)).toBeVisible();
     await enterEdit(page);
+    // Cancel discards a picked background (Ruling 11(5)): nothing reaches the draft.
+    {
+      const { dlg, picker } = await openFolderPicker(page, sel);
+      await picker.getByRole('button', { name: /^Color$/ }).click();
+      await picker.getByRole('button', { name: /^Save Background/ }).click();
+      await expect(picker).toBeHidden();
+      await expect(dlg.locator('.background-status')).toContainText(/applies when you save/);
+      await dlg.getByRole('button', { name: /^Cancel$/ }).click();
+      await expect(dlg).toBeHidden();
+      await expect(page.getByRole('toolbar', { name: 'Editing' }).getByRole('button', { name: /Save/ })).toBeDisabled();
+      await expect(page.locator(`${sel} .folder-surface .background-root`)).toHaveCount(0);
+    }
     const { dlg, picker } = await openFolderPicker(page, sel);
+    await expect(dlg.locator('.background-status')).toContainText(/No background of its own/);
     // Folder level: no overlay or blur of its own (call 1).
     await picker.getByRole('button', { name: /^Image$/ }).click();
     await expect(picker.getByText(/Overlay Darkness/i)).toHaveCount(0);

@@ -215,14 +215,19 @@ export function editNode(id: string, edited: Partial<LayoutNode>): boolean {
  * Save the folder dialog as ONE undo step: its look through updateNode, "Starts" through
  * setFolderDisplay, and its layout through setFolderLayout (which converts the content).
  */
-export function editFolder(id: string, fields: Partial<FolderNode>): boolean {
-  const { display, layout, ...rest } = plain(fields) as Partial<FolderNode>;
+export function editFolder(
+  id: string, fields: Omit<Partial<FolderNode>, 'background'> & { background?: Background | null }
+): boolean {
+  // background: undefined = unchanged, null = removed (a picker choice staged in the dialog).
+  const { background, ...others } = plain(fields) as { background?: Background | null } & Record<string, unknown>;
+  const { display, layout, ...rest } = others as Partial<FolderNode>;
   const patch: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(rest)) if (!LOCKED.includes(k)) patch[k] = v;
   return apply('Edit folder', (dd) => {
     let next = updateNode(dd, id, patch as Partial<LayoutNode>);
     if (display !== undefined) next = setFolderDisplay(next, id, display);
     if (layout !== undefined) next = setFolderLayout(next, id, layout);
+    if (background !== undefined) next = folderWithBackground(next, id, background ?? undefined);
     return next;
   });
 }
@@ -360,6 +365,8 @@ export interface TabFields {
   opacity?: number;
   layout?: 'inherit' | LayoutMode;
   designWidth?: number;
+  /** A background picked in the dialog: undefined = unchanged, null = removed. */
+  background?: Background | null;
 }
 
 function tabPatch(f: TabFields): Partial<LayoutTab> {
@@ -371,7 +378,20 @@ function tabPatch(f: TabFields): Partial<LayoutTab> {
 
 /** Name/look via updateTab; layout and design width via setTabLayout (which converts the content). */
 function applyTabFields(d: LayoutDashboard, tabId: string, f: TabFields): LayoutDashboard {
-  const named = updateTab(d, tabId, tabPatch(f));
+  let named = updateTab(d, tabId, tabPatch(f));
+  if (f.background !== undefined) {
+    const bg = f.background === null ? undefined : plain(f.background);
+    named = {
+      ...named,
+      tabs: named.tabs.map((t) => {
+        if (t.id !== tabId) return t;
+        const next = { ...t };
+        if (bg === undefined) delete next.background;
+        else next.background = bg;
+        return next;
+      })
+    };
+  }
   return f.layout !== undefined ? setTabLayout(named, tabId, f.layout, f.designWidth) : named;
 }
 
@@ -413,27 +433,26 @@ export async function deleteTabWithConfirm(tabId: string): Promise<boolean> {
   return apply('Delete tab', (dd) => deleteTab(dd, tabId));
 }
 
-export function setTabBackground(tabId: string, background: Background | undefined): boolean {
-  return apply('Tab background', (dd) => updateTab(dd, tabId, { background: plain(background) } as Partial<LayoutTab>));
-}
-
 /**
  * A folder's background (M4): one undoable draft edit. `undefined` removes the
  * key (no background of its own); the inherit form keeps its stored picture.
  * A missing id or a non-folder is refused (apply toasts the TreeOpError).
  */
 export function setFolderBackground(folderId: string, background: Background | undefined): boolean {
-  return apply('Folder background', (dd) => {
-    const n = findIn(dd, folderId);
-    if (!n) throw new TreeOpError('That folder no longer exists.');
-    if (n.kind !== 'folder') throw new TreeOpError('Only folders have a background here.');
-    const bg = plain(background);
-    return mapNode(dd, folderId, (f) => {
-      const next = { ...f } as FolderNode;
-      if (bg === undefined) delete next.background;
-      else next.background = bg;
-      return next;
-    });
+  return apply('Folder background', (dd) => folderWithBackground(dd, folderId, background));
+}
+
+/** The draft with one folder's background set (undefined removes the key). Throws for a non-folder. */
+function folderWithBackground(dd: LayoutDashboard, folderId: string, background: Background | undefined): LayoutDashboard {
+  const n = findIn(dd, folderId);
+  if (!n) throw new TreeOpError('That folder no longer exists.');
+  if (n.kind !== 'folder') throw new TreeOpError('Only folders have a background here.');
+  const bg = plain(background);
+  return mapNode(dd, folderId, (f) => {
+    const next = { ...f } as FolderNode;
+    if (bg === undefined) delete next.background;
+    else next.background = bg;
+    return next;
   });
 }
 

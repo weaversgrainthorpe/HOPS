@@ -8,6 +8,7 @@
   import Modal from '../shared/Modal.svelte';
   import type { Background } from '$lib/types';
   import { editMode } from '$lib/stores/editMode';
+  import { backgroundSummary } from '../background/backgroundSummary';
 
   // Close modal when edit mode is turned off
   $effect(() => {
@@ -32,15 +33,16 @@
     inheritedLayout?: 'grid' | 'free';
     onSave: (
       name: string, icon?: string, iconUrl?: string, iconBgColor?: string, color?: string, opacity?: number,
-      layout?: { layout: 'inherit' | 'grid' | 'free'; designWidth?: number }
+      layout?: { layout: 'inherit' | 'grid' | 'free'; designWidth?: number },
+      /** A background picked in this dialog: undefined = unchanged, null = removed. */
+      background?: Background | null
     ) => void;
-    onSaveBackground?: (background: Background | undefined) => void;
     onCancel: () => void;
     onDelete?: () => void;
     onDuplicate?: () => void;
   }
 
-  let { tabName, tabIcon, tabIconUrl, tabIconBgColor, tabColor, tabOpacity, tabBackground, tabLayout, tabDesignWidth, inheritedLayout = 'grid', onSave, onSaveBackground, onCancel, onDelete, onDuplicate }: Props = $props();
+  let { tabName, tabIcon, tabIconUrl, tabIconBgColor, tabColor, tabOpacity, tabBackground, tabLayout, tabDesignWidth, inheritedLayout = 'grid', onSave, onCancel, onDelete, onDuplicate }: Props = $props();
   // Form state initialized from props (intentionally captures initial values)
   // svelte-ignore state_referenced_locally
   let name = $state(tabName);
@@ -64,15 +66,10 @@
   const MAX_DESIGN_WIDTH = 7680;
   let showBackgroundConfig = $state(false);
 
-  /** What the tab shows, in words (the inherit form keeps its picture). */
-  function backgroundSummary(bg: Background | undefined): string {
-    if (!bg || !bg.type) return 'Using the dashboard background';
-    const what =
-      bg.type === 'color' ? `Colour ${bg.value ?? ''}`.trim()
-      : bg.type === 'image' ? 'Image'
-      : `Slideshow (${bg.images?.length || 0} images)`;
-    return bg.inherit ? `Using the dashboard background (own ${what.toLowerCase()} kept)` : what;
-  }
+  // A picked background is staged here and saved with the dialog (one undo step);
+  // Cancel discards it (Ruling 11(5)).
+  let stagedBackground = $state<{ value: Background | undefined } | null>(null);
+  const shownBackground = $derived(stagedBackground ? stagedBackground.value : tabBackground);
   let showIconEditor = $state(false);
 
   function handleBeforeClose(): boolean {
@@ -98,13 +95,12 @@
       }
     }
     problem = '';
-    onSave(name.trim(), icon || undefined, iconUrl || undefined, iconBgColor, color, opacity, { layout, designWidth: dw });
+    const bg = stagedBackground ? (stagedBackground.value ?? null) : undefined;
+    onSave(name.trim(), icon || undefined, iconUrl || undefined, iconBgColor, color, opacity, { layout, designWidth: dw }, bg);
   }
 
   function handleBackgroundSave(background: Background | undefined) {
-    if (onSaveBackground) {
-      onSaveBackground(background);
-    }
+    stagedBackground = { value: background };
     showBackgroundConfig = false;
   }
 
@@ -189,15 +185,15 @@
     {/if}
     {#if problem}<p class="problem" role="alert">{problem}</p>{/if}
 
-    {#if onSaveBackground}
-      <div class="form-group">
-        <button type="button" class="btn-background" onclick={() => showBackgroundConfig = true}>
-          <Icon icon="mdi:image-multiple" width="20" />
-          Configure Tab Background
-        </button>
-        <small class="background-status">{backgroundSummary(tabBackground)}</small>
-      </div>
-    {/if}
+    <div class="form-group">
+      <button type="button" class="btn-background" onclick={() => showBackgroundConfig = true}>
+        <Icon icon="mdi:image-multiple" width="20" />
+        Configure Tab Background
+      </button>
+      <small class="background-status">
+        {backgroundSummary(shownBackground, 'Using the dashboard background')}{stagedBackground ? ' — applies when you save this tab' : ''}
+      </small>
+    </div>
 
   </form>
 
@@ -232,7 +228,7 @@
 
 {#if showBackgroundConfig}
   <BackgroundConfigModal
-    background={tabBackground}
+    background={shownBackground}
     level="tab"
     onSave={handleBackgroundSave}
     onCancel={() => showBackgroundConfig = false}

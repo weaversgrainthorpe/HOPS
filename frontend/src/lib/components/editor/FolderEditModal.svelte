@@ -1,10 +1,14 @@
 <script lang="ts" module>
   import type { FolderNode } from '$lib/types/layout';
-  /** The folder's own fields a dialog may change (never id, kind, placement or content). */
+  import type { Background } from '$lib/types';
+  /**
+   * The folder's own fields a dialog may change (never id, kind, placement or content).
+   * `background` is present only when one was picked: a Background, or null = removed.
+   */
   export type FolderFields = Pick<
     FolderNode,
     'name' | 'icon' | 'iconUrl' | 'iconBgColor' | 'color' | 'opacity' | 'textColor' | 'display' | 'layout' | 'showTitle' | 'shape'
-  >;
+  > & { background?: Background | null };
 </script>
 
 <script lang="ts">
@@ -14,7 +18,7 @@
   import OpacitySlider from '../admin/OpacitySlider.svelte';
   import IconEditModal from '../admin/IconEditModal.svelte';
   import BackgroundConfigModal from '../admin/BackgroundConfigModal.svelte';
-  import type { Background } from '$lib/types';
+  import { backgroundSummary } from '../background/backgroundSummary';
   import Modal from '../shared/Modal.svelte';
 
   interface Props {
@@ -26,26 +30,13 @@
     onDelete?: () => void;
     onDuplicate?: () => void;
     onMoveCopy?: () => void;
-    /**
-     * Apply the picker's background to the draft straight away (one undo step,
-     * editorActions.setFolderBackground) — like the tab dialog. Not offered for
-     * a folder that does not exist yet.
-     */
-    onSaveBackground?: (background: Background | undefined) => void;
   }
-  let { folder, isNew = false, onSave, onCancel, onDelete, onDuplicate, onMoveCopy, onSaveBackground }: Props = $props();
+  let { folder, isNew = false, onSave, onCancel, onDelete, onDuplicate, onMoveCopy }: Props = $props();
   let showBackgroundConfig = $state(false);
-
-  /** What the folder shows, in words (the inherit form keeps its picture). */
-  function backgroundSummary(bg: Background | undefined): string {
-    if (!bg || !bg.type) return 'No background of its own';
-    const what =
-      bg.type === 'color' ? `Colour ${bg.value ?? ''}`.trim()
-      : bg.type === 'image' ? 'Image'
-      : `Slideshow (${bg.images?.length || 0} images)`;
-    const pct = typeof bg.opacity === 'number' && bg.opacity < 1 ? `, ${Math.round(Math.max(0, bg.opacity) * 100)}% opacity` : '';
-    return bg.inherit ? `No background of its own (${what.toLowerCase()} kept, switched off)` : what + pct;
-  }
+  // A picked background is staged here and saved with the dialog (one undo step);
+  // Cancel discards it (Ruling 11(5)).
+  let stagedBackground = $state<{ value: Background | undefined } | null>(null);
+  const shownBackground = $derived(stagedBackground ? stagedBackground.value : folder.background);
 
   // Form state starts from the folder (intentionally captures the initial values).
   // svelte-ignore state_referenced_locally
@@ -113,7 +104,8 @@
       display,
       layout,
       showTitle,
-      shape
+      shape,
+      ...(stagedBackground ? { background: stagedBackground.value ?? null } : {})
     });
   }
 </script>
@@ -201,14 +193,14 @@
       <input type="checkbox" bind:checked={showTitle} /> Show title bar
     </label>
 
-    {#if onSaveBackground && !isNew}
-      <div class="form-group">
-        <button type="button" class="btn-secondary background-btn" onclick={() => (showBackgroundConfig = true)}>
-          <Icon icon="mdi:image-multiple" width="18" /> Background…
-        </button>
-        <small class="background-status">{backgroundSummary(folder.background)}</small>
-      </div>
-    {/if}
+    <div class="form-group">
+      <button type="button" class="btn-secondary background-btn" onclick={() => (showBackgroundConfig = true)}>
+        <Icon icon="mdi:image-multiple" width="18" /> Background…
+      </button>
+      <small class="background-status">
+        {backgroundSummary(shownBackground, 'No background of its own')}{stagedBackground ? ` — applies when you ${isNew ? 'create' : 'save'} this folder` : ''}
+      </small>
+    </div>
 
     {#if onMoveCopy && !isNew}
       <button type="button" class="btn-secondary move-btn" onclick={onMoveCopy}>
@@ -237,12 +229,12 @@
   {/snippet}
 </Modal>
 
-{#if showBackgroundConfig && onSaveBackground}
+{#if showBackgroundConfig}
   <BackgroundConfigModal
-    background={folder.background}
+    background={shownBackground}
     level="folder"
     onSave={(bg) => {
-      onSaveBackground(bg);
+      stagedBackground = { value: bg };
       showBackgroundConfig = false;
     }}
     onCancel={() => (showBackgroundConfig = false)}

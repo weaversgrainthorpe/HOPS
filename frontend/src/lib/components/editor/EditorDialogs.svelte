@@ -8,7 +8,7 @@
   import NodeContextMenu from './NodeContextMenu.svelte';
   import { editorDialog, editorMenu, openDialog } from '$lib/editor/editorUi';
   import {
-    addNode, blankFolder, blankTile, deleteWithConfirm, duplicate, editFolder, editNode, findIn, setFolderBackground
+    addNode, blankFolder, blankTile, deleteWithConfirm, duplicate, editFolder, editNode, findIn
   } from '$lib/editor/editorActions';
   import { session } from '$lib/stores/editSession';
   import { toast } from '$lib/stores/toast';
@@ -63,7 +63,9 @@
       if (editFolder(dlg.id, fields)) close();
       return;
     }
-    const node = { ...blankFolder(), ...fields } as FolderNode;
+    // A new folder: a picked background is set on it (null = removed = no key).
+    const { background, ...rest } = fields;
+    const node = { ...blankFolder(), ...rest, ...(background ? { background } : {}) } as FolderNode;
     if (addNode(node, dlg.to ?? { tabId }, dlg.cell)) close();
   }
 
@@ -106,7 +108,6 @@
           if (duplicate(id)) close();
         }}
         onMoveCopy={() => openDialog({ kind: 'movecopy', ids: [id] })}
-        onSaveBackground={(bg) => setFolderBackground(id, bg)}
       />
     {/key}
   {:else if !dlg.id && newFolder}

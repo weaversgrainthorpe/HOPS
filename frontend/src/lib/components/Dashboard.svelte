@@ -20,7 +20,7 @@
   import { tabSource } from '$lib/editor/drag/dragController';
   import {
     addTabWith, editTab, duplicateTabAction, deleteTabWithConfirm, setHeader, setBackground,
-    setTabBackground, type TabFields
+    type TabFields
   } from '$lib/editor/editorActions';
   import { reorderTabs } from '$lib/editor/treeOps';
   import Icon from '@iconify/svelte';
@@ -216,9 +216,10 @@
 
   function tabFields(
     name: string, icon?: string, iconUrl?: string, iconBgColor?: string, color?: string, opacity?: number,
-    layout?: { layout: 'inherit' | 'grid' | 'free'; designWidth?: number }
+    layout?: { layout: 'inherit' | 'grid' | 'free'; designWidth?: number },
+    background?: Background | null
   ): TabFields {
-    return { name, icon, iconUrl, iconBgColor, color, opacity, ...(layout ?? {}) };
+    return { name, icon, iconUrl, iconBgColor, color, opacity, ...(layout ?? {}), ...(background !== undefined ? { background } : {}) };
   }
 
   function handleAddTab() {
@@ -492,7 +493,6 @@
       tabDesignWidth={t.designWidth}
       {inheritedLayout}
       onSave={(...args) => handleUpdateTab(t.id, ...args)}
-      onSaveBackground={(background) => setTabBackground(t.id, background)}
       onCancel={() => (editingTabIndex = null)}
       onDelete={() => handleDeleteTab(t.id)}
       onDuplicate={() => handleDuplicateTab(t.id)}

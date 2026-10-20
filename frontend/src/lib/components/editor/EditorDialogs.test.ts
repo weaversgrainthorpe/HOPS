@@ -217,40 +217,92 @@ describe('EditorDialogs (the dialogs edit the draft only)', () => {
   });
 });
 
-describe('FolderEditModal background (M4 Task 5)', () => {
-  it('a new folder has no Background button (it does not exist yet)', async () => {
-    await show({ kind: 'folder', to: { tabId: 't1' } });
-    expect(screen.queryByRole('button', { name: /Background/ })).toBeNull();
-  });
-
-  it('Background opens the folder-level picker; its Save is one undoable draft edit — no write request', async () => {
+describe('FolderEditModal background (M4 Task 5, Ruling 11(5))', () => {
+  beforeEach(() => {
     fetchSpy.mockImplementation(() =>
       Promise.resolve(new Response(JSON.stringify({ categories: [], images: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
     );
-    await show({ kind: 'folder', id: 'f1' });
-    expect(screen.getByText(/No background of its own/i)).toBeInTheDocument();
+  });
+  /** Open the folder picker from the dialog, pick Colour at 50%, Save the picker. */
+  async function pickColour() {
     await fireEvent.click(screen.getByRole('button', { name: /Background/ }));
     expect(screen.getByRole('heading', { name: /Folder background/i })).toBeInTheDocument();
-    // Folder level: no overlay controls.
     await fireEvent.click(screen.getByRole('button', { name: /^Color$/ }));
     expect(screen.queryByText(/Overlay Darkness/i)).toBeNull();
     await fireEvent.input(screen.getByLabelText(/^Background opacity/), { target: { value: '0.5' } });
     await fireEvent.click(screen.getByRole('button', { name: /^Save Background/ }));
     await tick();
-    const f = nodeIn(draft(), 'f1') as FolderNode;
-    expect(f.background).toMatchObject({ type: 'color', opacity: 0.5 });
-    expect(get(session)!.undo).toHaveLength(1);
-    expect(get(dirty)).toBe(true);
-    // The picker closed; the folder dialog is still open and says what is set.
     expect(screen.queryByRole('heading', { name: /Folder background/i })).toBeNull();
-    expect(screen.getByText(/Colour/i, { selector: '.background-status' })).toBeInTheDocument();
-    // Only the picker's library GET went out: nothing was written to the server.
+  }
+  const noWrites = () => {
     for (const [url, init] of fetchSpy.mock.calls) {
       expect(String(url)).toMatch(/\/api\/backgrounds$/);
       expect((init as RequestInit | undefined)?.method ?? 'GET').toBe('GET');
     }
-    undo();
+  };
+
+  it('a picked background is staged: the status shows it, but the draft is untouched until the dialog saves', async () => {
+    await show({ kind: 'folder', id: 'f1' });
+    expect(screen.getByText(/No background of its own/i)).toBeInTheDocument();
+    await pickColour();
+    expect(screen.getByText(/Colour .*50% opacity/i, { selector: '.background-status' }).textContent).toMatch(/applies when you save/i);
     expect((nodeIn(draft(), 'f1') as FolderNode).background).toBeUndefined();
+    expect(get(session)!.undo).toHaveLength(0);
+  });
+
+  it('Cancel discards a picked background: draft unchanged, no undo entry', async () => {
+    await show({ kind: 'folder', id: 'f1' });
+    const before = draft();
+    await fireEvent.input(screen.getByLabelText(/Folder name/), { target: { value: 'Renamed' } });
+    await pickColour();
+    await fireEvent.click(screen.getByRole('button', { name: /^Cancel$/ }));
+    expect(get(editorDialog)).toBeNull();
+    expect(draft()).toBe(before);
+    expect(get(session)!.undo).toHaveLength(0);
     expect(get(dirty)).toBe(false);
+    noWrites();
+  });
+
+  it('Save applies the fields and the background as ONE undo step; undo reverts both', async () => {
+    await show({ kind: 'folder', id: 'f1' });
+    await fireEvent.input(screen.getByLabelText(/Folder name/), { target: { value: 'Renamed' } });
+    await pickColour();
+    await fireEvent.click(screen.getByRole('button', { name: /^Save$/ }));
+    const f = nodeIn(draft(), 'f1') as FolderNode;
+    expect(f.name).toBe('Renamed');
+    expect(f.background).toMatchObject({ type: 'color', opacity: 0.5 });
+    expect(get(session)!.undo).toHaveLength(1);
+    noWrites();
+    undo();
+    const back = nodeIn(draft(), 'f1') as FolderNode;
+    expect(back.name).toBe('F1');
+    expect(back).not.toHaveProperty('background');
+    expect(get(dirty)).toBe(false);
+  });
+
+  it('picking None removes an existing background on Save (key gone)', async () => {
+    const d = home();
+    (d.tabs[0].root.children.find((n) => n.id === 'f1') as FolderNode).background = { type: 'color', value: '#000000' };
+    resetEditor();
+    setLayout([d]);
+    startSession();
+    await show({ kind: 'folder', id: 'f1' });
+    await fireEvent.click(screen.getByRole('button', { name: /Background/ }));
+    await fireEvent.click(screen.getByRole('button', { name: /^None$/ }));
+    await fireEvent.click(screen.getByRole('button', { name: /^Save Background/ }));
+    await fireEvent.click(screen.getByRole('button', { name: /^Save$/ }));
+    expect(nodeIn(draft(), 'f1')).not.toHaveProperty('background');
+    expect(get(session)!.undo).toHaveLength(1);
+  });
+
+  it('a new folder can get a background, set on Create', async () => {
+    await show({ kind: 'folder', to: { tabId: 't1' } });
+    await fireEvent.input(screen.getByLabelText(/Folder name/), { target: { value: 'Tools' } });
+    await pickColour();
+    await fireEvent.click(screen.getByRole('button', { name: /^Create/ }));
+    const root = draft().tabs[0].root.children;
+    const f = root[root.length - 1] as FolderNode;
+    expect(f.name).toBe('Tools');
+    expect(f.background).toMatchObject({ type: 'color', opacity: 0.5 });
   });
 });

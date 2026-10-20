@@ -25,7 +25,7 @@ function open(level: Level, background?: Background) {
   return { onSave, onCancel };
 }
 const save = () => fireEvent.click(screen.getByRole('button', { name: /^Save Background/ }));
-const inheritSwitch = () => screen.getByRole('switch', { name: /Inherit/ });
+const inheritSwitch = () => screen.getByRole('switch');
 
 describe('BackgroundConfigModal at every level', () => {
   it('has a title per level', () => {
@@ -52,12 +52,71 @@ describe('BackgroundConfigModal at every level', () => {
     expect(screen.getByText(/Overlay Blur/i)).toBeInTheDocument();
   });
 
-  it('folder level never writes overlay fields', async () => {
-    const { onSave } = open('folder', { type: 'image', value: '/presets/network-grid.jpg', overlayOpacity: 0.3 });
+  it('folder level never writes overlay fields (a picture picked there has none)', async () => {
+    const { onSave } = open('folder', { type: 'color', value: '#112233' });
+    await fireEvent.click(screen.getByRole('button', { name: /^Image$/ }));
+    await fireEvent.input(screen.getByLabelText(/^Image URL/), { target: { value: '/presets/network-grid.jpg' } });
     await save();
     const out = onSave.mock.calls[0][0] as Background;
+    expect(out).toMatchObject({ type: 'image', value: '/presets/network-grid.jpg' });
     expect(out).not.toHaveProperty('overlayOpacity');
     expect(out).not.toHaveProperty('overlayBlur');
+  });
+
+  it('the dashboard Inherit switch is "No background (keep this picture stored)"', () => {
+    open('dashboard', { type: 'image', value: '/presets/network-grid.jpg' });
+    expect(screen.getByRole('switch', { name: 'No background (keep this picture stored)' })).toBeInTheDocument();
+  });
+
+  describe('exact round trip (Ruling 11)', () => {
+    const cases: [Level, Background][] = [
+      ['dashboard', { type: 'slideshow', images: ['/presets/network-grid.jpg'], interval: 40, transition: 'kenburns', transitionDuration: 2, overlayOpacity: 0.4, overlayBlur: 3 }],
+      ['tab', { type: 'image', value: '/backgrounds/a.jpg' }],
+      ['folder', { type: 'color', value: '#123456', opacity: 0.3 }],
+      ['folder', { type: 'image', value: '/presets/network-grid.jpg', overlayOpacity: 0.3, fit: 'contain' }],
+      ['tab', { inherit: true, type: 'slideshow', images: ['/backgrounds/a.jpg'], value: '/backgrounds/old.jpg' }],
+      ['tab', { inherit: true }],
+      ['folder', { type: 'image', value: '/backgrounds/a.jpg', future: { x: 1 } } as unknown as Background]
+    ];
+    for (const [level, bg] of cases) {
+      it(`a no-op open + Save gives back an equal background (${level}: ${JSON.stringify(bg)})`, async () => {
+        const { onSave } = open(level, structuredClone(bg));
+        await save();
+        expect(onSave).toHaveBeenCalledTimes(1);
+        expect(onSave.mock.calls[0][0]).toEqual(bg);
+      });
+    }
+
+    it('an unknown key survives Inherit on and off', async () => {
+      const bg = { type: 'image', value: '/backgrounds/a.jpg', future: 'kept' } as unknown as Background;
+      let r = open('tab', structuredClone(bg));
+      await fireEvent.click(inheritSwitch());
+      await save();
+      const on = r.onSave.mock.calls[0][0];
+      expect(on).toEqual({ ...bg, inherit: true });
+      document.body.innerHTML = '';
+      r = open('tab', structuredClone(on));
+      await fireEvent.click(inheritSwitch());
+      await save();
+      expect(r.onSave.mock.calls[0][0]).toEqual(bg);
+    });
+
+    it('a slideshow keeps a stored value, and changing one field writes only that field', async () => {
+      const bg: Background = { type: 'slideshow', images: ['/presets/network-grid.jpg'], value: '/backgrounds/old.jpg' };
+      const { onSave } = open('folder', structuredClone(bg));
+      await fireEvent.input(screen.getByLabelText(/^Background opacity/), { target: { value: '0.5' } });
+      await save();
+      expect(onSave.mock.calls[0][0]).toEqual({ ...bg, opacity: 0.5 });
+    });
+
+    it('an unsafe saved slideshow image is reported inline and blocks Save (never re-saved silently)', async () => {
+      const { onSave } = open('tab', { type: 'slideshow', images: ['/presets/network-grid.jpg', 'javascript:alert(1)'] });
+      const alerts = () => screen.getAllByRole('alert').map((a) => a.textContent ?? '');
+      expect(alerts().some((t) => /can't be used/i.test(t) && t.includes('javascript:alert(1)'))).toBe(true);
+      await save();
+      expect(onSave).not.toHaveBeenCalled();
+      expect(alerts().some((t) => /remove it to save/i.test(t))).toBe(true);
+    });
   });
 
   it('Inherit keeps the stored picture and sets inherit: true', async () => {
