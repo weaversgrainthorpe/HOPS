@@ -27,6 +27,7 @@
   import { onMount, onDestroy, tick, untrack } from 'svelte';
   import { get } from 'svelte/store';
   import { toast } from '$lib/stores/toast';
+  import { reportBackgroundError } from '$lib/stores/backgroundErrors';
 
   // The route's dashboard: the stored v3 dashboard (every dashboard is editable).
   let { dashboard }: { dashboard: LayoutDashboard } = $props();
@@ -166,15 +167,6 @@
     return look.background;
   });
 
-  // A background image that is refused or fails to load is reported once per
-  // URL (not on every slide), so the user knows why it is not showing.
-  const reportedBackgroundErrors = new Set<string>();
-  function backgroundError(url: string) {
-    if (reportedBackgroundErrors.has(url)) return;
-    reportedBackgroundErrors.add(url);
-    toast.error(`Background image could not be shown: ${url}`);
-  }
-
   onMount(() => {
     initEasterEggs();
   });
@@ -279,7 +271,7 @@
 </script>
 
 <div class="dashboard" class:party-mode={$partyModeActive}>
-  <BackgroundLayer background={effectiveBackground} scope="viewport" animate={true} onError={backgroundError} fallbackColor="#1e293b" />
+  <BackgroundLayer background={effectiveBackground} scope="viewport" animate={true} onError={reportBackgroundError} fallbackColor="#1e293b" />
   <PartyMode />
   <HopAnimation />
 

@@ -100,6 +100,7 @@
     if (pending) {
       pending.onload = null;
       pending.onerror = null;
+      pending.src = ''; // cancel the in-flight download
       pending = undefined;
     }
     curtainAnimating = false;

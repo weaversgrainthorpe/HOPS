@@ -188,6 +188,24 @@ describe('BackgroundLayer', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
+  it('unmount cancels an in-flight preload download', async () => {
+    const r = render(BackgroundLayer, {
+      background: slideshow(['/backgrounds/a.jpg', '/backgrounds/b.jpg']),
+      scope: 'viewport',
+      animate: true
+    });
+    await settle();
+    img('/backgrounds/a.jpg').load();
+    await settle();
+    vi.advanceTimersByTime(10_000);
+    await settle();
+    const inFlight = img('/backgrounds/b.jpg');
+    r.unmount();
+    expect(inFlight.src).toBe('');
+    expect(inFlight.onload).toBeNull();
+    expect(inFlight.onerror).toBeNull();
+  });
+
   it('preloads the next image before swapping to it', async () => {
     const { container } = render(BackgroundLayer, {
       background: slideshow(['/backgrounds/a.jpg', '/backgrounds/b.jpg']),
@@ -249,13 +267,12 @@ describe('BackgroundLayer', () => {
   it.each([
     'data:image/png;base64,AAAA',
     'ftp://example.com/a.jpg',
-    '/backgrounds/a.jpg") ; background: red; ("',
-    "/backgrounds/it's.jpg",
-    '/backgrounds/a(1).jpg',
-    '/backgrounds/a\\b.jpg',
-    '/backgrounds/a\nb.jpg',
-    'example.com/a.jpg'
-  ])('rejects %j', async (bad) => {
+    'example.com/a.jpg',
+    '//evil.example/a.jpg',
+    '/api/config',
+    '/icons/x.png',
+    '/backgrounds/../api/config'
+  ])('rejects %j (onError + fallback)', async (bad) => {
     const onError = vi.fn();
     const { container } = render(BackgroundLayer, {
       background: { type: 'image', value: bad },
@@ -267,6 +284,40 @@ describe('BackgroundLayer', () => {
     expect(onError).toHaveBeenCalledWith(bad);
     expect(FakeImage.all.length).toBe(0);
     expect(container.querySelector('.background-fallback')).not.toBeNull();
+  });
+
+  it.each([
+    ['/backgrounds/photo (1).jpg', 'url("/backgrounds/photo (1).jpg")'],
+    ["https://cdn.example/it's.jpg", 'url("https://cdn.example/it\'s.jpg")'],
+    ['https://x.example/img(2).jpg', 'url("https://x.example/img(2).jpg")'],
+    ['/presets/a\\b.jpg', 'url("/presets/a\\\\b.jpg")']
+  ])('accepts %j and renders it escaped', async (good, css) => {
+    const onError = vi.fn();
+    const { container } = render(BackgroundLayer, {
+      background: { type: 'image', value: good },
+      scope: 'box',
+      onError
+    });
+    await settle();
+    img(good).load();
+    await settle();
+    expect(onError).not.toHaveBeenCalled();
+    expect(visibleImage(container)).toBe(css);
+  });
+
+  it('a quote-breakout string renders inertly inside one url()', async () => {
+    const evil = '/backgrounds/a.jpg") ; background: red; ("';
+    const { container } = render(BackgroundLayer, {
+      background: { type: 'image', value: evil },
+      scope: 'box'
+    });
+    await settle();
+    img(evil).load();
+    await settle();
+    const layer = container.querySelector<HTMLElement>('.background-layer.visible')!;
+    expect(layer.style.backgroundColor).toBe('');
+    expect(layer.style.background).not.toContain('red;');
+    expect(layer.style.backgroundImage.startsWith('url("/backgrounds/a.jpg\\")')).toBe(true);
   });
 
   it('accepts http(s) and same-origin asset paths', async () => {
