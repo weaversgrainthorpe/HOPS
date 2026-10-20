@@ -3,8 +3,10 @@
 // One IntersectionObserver serves every registered folder background. At most
 // MAX_ANIMATED_FOLDERS of the visible ones animate, chosen by largest visible
 // area (ties -> registration order). Allocation is recomputed only on observer
-// callbacks, registration changes, refreshBackgroundAnimation() (setting
-// changes) and prefers-reduced-motion changes -- never per frame.
+// callbacks, registration changes, setting changes (each registration
+// subscribes to its `animatedSetting` readable) and prefers-reduced-motion
+// changes -- never per frame. The cap is global for the viewport: it spans all
+// registered folder backgrounds, not per dashboard.
 //
 // Dashboard / tab layers are not registered here; they consume `reducedMotion`
 // directly and are not counted in the cap.
@@ -27,8 +29,8 @@ export const reducedMotion: Readable<boolean> = readable(false, (set) => {
 
 interface Reg {
   seq: number;
-  el: Element;
-  animatedSetting: () => boolean;
+  setting: boolean;
+  unsubSetting: (() => void) | null;
   visible: boolean;
   area: number;
   animate: Writable<boolean>;
@@ -46,7 +48,7 @@ function recompute() {
   const candidates: Reg[] = [];
   if (!reduced) {
     for (const r of regs.values()) {
-      if (r.visible && r.animatedSetting()) candidates.push(r);
+      if (r.visible && r.setting) candidates.push(r);
     }
   }
   candidates.sort((a, b) => b.area - a.area || a.seq - b.seq);
@@ -87,19 +89,14 @@ function stop() {
   reduced = false;
 }
 
-/** Re-evaluate allocation after a dashboard setting changed. */
-export function refreshBackgroundAnimation(): void {
-  recompute();
-}
-
 export function registerFolderBackground(
   el: Element,
-  opts: { dashboardId: string; animatedSetting: () => boolean },
+  opts: { animatedSetting: Readable<boolean> },
 ): { animate: Readable<boolean>; loaded: Readable<boolean>; unregister(): void } {
   const reg: Reg = {
     seq: seq++,
-    el,
-    animatedSetting: opts.animatedSetting,
+    setting: false,
+    unsubSetting: null,
     visible: false,
     area: 0,
     animate: writable(false),
@@ -109,6 +106,11 @@ export function registerFolderBackground(
   regs.get(el)?.animate.set(false);
   regs.set(el, reg);
   start();
+  reg.unsubSetting = opts.animatedSetting.subscribe((v) => {
+    const changed = v !== reg.setting;
+    reg.setting = v;
+    if (changed) recompute();
+  });
 
   if (observer) {
     observer.observe(el);
@@ -132,6 +134,8 @@ export function registerFolderBackground(
     unregister() {
       if (done) return;
       done = true;
+      reg.unsubSetting?.();
+      reg.unsubSetting = null;
       if (regs.get(el) === reg) {
         regs.delete(el);
         observer?.unobserve(el);

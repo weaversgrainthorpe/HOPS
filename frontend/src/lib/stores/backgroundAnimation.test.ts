@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { get } from 'svelte/store';
+import { get, writable } from 'svelte/store';
 
 type IOCb = (entries: Partial<IntersectionObserverEntry>[]) => void;
 let ioInstances: FakeIO[] = [];
@@ -16,7 +16,8 @@ class FakeIO {
   disconnect() { this.disconnected = true; this.observed.clear(); }
 }
 function emit(el: Element, area: number) {
-  const io = ioInstances[ioInstances.length - 1];
+  const io = [...ioInstances].reverse().find((i) => !i.disconnected && i.observed.has(el));
+  if (!io) throw new Error('no live observer observing element');
   io.cb([{ target: el, isIntersecting: area > 0, intersectionRect: { width: area, height: 1 } as DOMRectReadOnly }]);
 }
 
@@ -47,11 +48,50 @@ function mk(n: number) {
   return Array.from({ length: n }, () => document.createElement('div'));
 }
 
+function countedStore(initial: boolean) {
+  const w = writable(initial);
+  let subs = 0;
+  return {
+    set: w.set,
+    count: () => subs,
+    subscribe(run: (v: boolean) => void) {
+      subs++;
+      const u = w.subscribe(run);
+      return () => { subs--; u(); };
+    },
+  };
+}
+
 describe('backgroundAnimation', () => {
+  it('unregister releases the setting subscription', async () => {
+    const m = await load();
+    const setting = countedStore(true);
+    const [el] = mk(1);
+    const r = m.registerFolderBackground(el, { animatedSetting: setting });
+    expect(setting.count()).toBe(1);
+    r.unregister();
+    expect(setting.count()).toBe(0);
+  });
+
+  it('matchMedia listener removed after last unregister; re-register works', async () => {
+    const m = await load();
+    const [a, b] = mk(2);
+    const r1 = m.registerFolderBackground(a, { animatedSetting: writable(true) });
+    emit(a, 10);
+    expect(mql.listeners.size).toBe(1);
+    r1.unregister();
+    expect(mql.listeners.size).toBe(0);
+    const r2 = m.registerFolderBackground(b, { animatedSetting: writable(true) });
+    expect(mql.listeners.size).toBe(1);
+    emit(b, 10);
+    expect(get(r2.animate)).toBe(true);
+    expect(ioInstances.length).toBe(2);
+  });
+
   it('10 visible -> exactly 4 animate, largest area first', async () => {
     const m = await load();
     const els = mk(10);
-    const regs = els.map((el) => m.registerFolderBackground(el, { dashboardId: 'd', animatedSetting: () => true }));
+    const regs = els.map((el) => m.registerFolderBackground(el, { animatedSetting: writable(true) }));
     els.forEach((el, i) => emit(el, (i + 1) * 100));
     const on = regs.map((r, i) => (get(r.animate) ? i : -1)).filter((i) => i >= 0);
     expect(on).toEqual([6, 7, 8, 9]);
@@ -62,7 +102,7 @@ describe('backgroundAnimation', () => {
   it('ties break by registration order', async () => {
     const m = await load();
     const els = mk(6);
-    const regs = els.map((el) => m.registerFolderBackground(el, { dashboardId: 'd', animatedSetting: () => true }));
+    const regs = els.map((el) => m.registerFolderBackground(el, { animatedSetting: writable(true) }));
     els.forEach((el) => emit(el, 50));
     expect(regs.map((r) => get(r.animate))).toEqual([true, true, true, true, false, false]);
   });
@@ -70,7 +110,7 @@ describe('backgroundAnimation', () => {
   it('a folder leaving view hands its slot to the next', async () => {
     const m = await load();
     const els = mk(5);
-    const regs = els.map((el) => m.registerFolderBackground(el, { dashboardId: 'd', animatedSetting: () => true }));
+    const regs = els.map((el) => m.registerFolderBackground(el, { animatedSetting: writable(true) }));
     els.forEach((el, i) => emit(el, 500 - i * 10));
     expect(get(regs[4].animate)).toBe(false);
     emit(els[0], 0);
@@ -81,7 +121,7 @@ describe('backgroundAnimation', () => {
   it('reduced motion disables all, live', async () => {
     const m = await load();
     const [el] = mk(1);
-    const r = m.registerFolderBackground(el, { dashboardId: 'd', animatedSetting: () => true });
+    const r = m.registerFolderBackground(el, { animatedSetting: writable(true) });
     emit(el, 100);
     expect(get(r.animate)).toBe(true);
     setReduced(true);
@@ -91,22 +131,21 @@ describe('backgroundAnimation', () => {
     expect(get(r.animate)).toBe(true);
   });
 
-  it('dashboard setting off disables all (after refresh)', async () => {
+  it('dashboard setting off disables all (reactive, no manual call)', async () => {
     const m = await load();
-    let on = true;
+    const on = writable(true);
     const [el] = mk(1);
-    const r = m.registerFolderBackground(el, { dashboardId: 'd', animatedSetting: () => on });
+    const r = m.registerFolderBackground(el, { animatedSetting: on });
     emit(el, 100);
     expect(get(r.animate)).toBe(true);
-    on = false;
-    m.refreshBackgroundAnimation();
+    on.set(false);
     expect(get(r.animate)).toBe(false);
   });
 
   it('setting off from the start never animates', async () => {
     const m = await load();
     const [el] = mk(1);
-    const r = m.registerFolderBackground(el, { dashboardId: 'd', animatedSetting: () => false });
+    const r = m.registerFolderBackground(el, { animatedSetting: writable(false) });
     emit(el, 100);
     expect(get(r.animate)).toBe(false);
     expect(get(r.loaded)).toBe(true);
@@ -115,7 +154,7 @@ describe('backgroundAnimation', () => {
   it('loaded is false until first visible, then sticky', async () => {
     const m = await load();
     const [el] = mk(1);
-    const r = m.registerFolderBackground(el, { dashboardId: 'd', animatedSetting: () => true });
+    const r = m.registerFolderBackground(el, { animatedSetting: writable(true) });
     expect(get(r.loaded)).toBe(false);
     emit(el, 0);
     expect(get(r.loaded)).toBe(false);
@@ -128,7 +167,7 @@ describe('backgroundAnimation', () => {
   it('unregister frees the slot and disconnects when empty', async () => {
     const m = await load();
     const els = mk(5);
-    const regs = els.map((el) => m.registerFolderBackground(el, { dashboardId: 'd', animatedSetting: () => true }));
+    const regs = els.map((el) => m.registerFolderBackground(el, { animatedSetting: writable(true) }));
     els.forEach((el, i) => emit(el, 500 - i * 10));
     expect(get(regs[4].animate)).toBe(false);
     regs[0].unregister();
@@ -141,7 +180,7 @@ describe('backgroundAnimation', () => {
     vi.stubGlobal('IntersectionObserver', undefined);
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const m = await load();
-    const regs = mk(6).map((el) => m.registerFolderBackground(el, { dashboardId: 'd', animatedSetting: () => true }));
+    const regs = mk(6).map((el) => m.registerFolderBackground(el, { animatedSetting: writable(true) }));
     expect(regs.every((r) => get(r.loaded))).toBe(true);
     expect(regs.filter((r) => get(r.animate)).length).toBe(4);
     expect(warn).toHaveBeenCalledTimes(1);
