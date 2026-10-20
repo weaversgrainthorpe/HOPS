@@ -232,7 +232,7 @@ function innerMode(folder: FolderNode, parent: ContainerMetrics): LayoutMode {
 }
 
 /** Rows a grid folder's content spans: max(h - 1, deepest child bottom), at least 1. */
-function gridContentRows(folder: FolderNode, columns: number, minRows: number): number {
+export function gridContentRows(folder: FolderNode, columns: number, minRows: number): number {
   let rows = Math.max(1, minRows);
   const kids = Array.isArray(folder.content?.children) ? folder.content.children : [];
   for (const c of kids) {
