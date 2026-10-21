@@ -106,8 +106,9 @@ export function folderInnerColumns(folder: FolderNode): number {
 }
 
 /**
- * A tile box narrower or shorter than this renders compact (icon + name). Ruling 22. Unchanged by
- * the finer grid: a Medium 2 x 2 tile is the old 1 x 1 cell's px.
+ * A tile box narrower or shorter than this is marked compact. Ruling 22. Unchanged by the finer
+ * grid: a Medium 2 x 2 tile is the old 1 x 1 cell's px. Since spec §10 the mark changes nothing in
+ * a link tile's arrangement (its content scales with the box); only a note tile drops its body.
  */
 export const COMPACT_TILE_PX = 110;
 export type TileFit = 'fill' | 'compact';

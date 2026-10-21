@@ -12,8 +12,9 @@
   interface Props {
     entry: Entry;
     /**
-     * The tile fills its cell exactly (no min-height of its own); 'compact'
-     * also drops the description and shrinks padding/icon for small cells.
+     * The tile fills its cell exactly (no min-height of its own) and scales its
+     * content with the cell (spec §10: a size container). 'compact' marks a small
+     * cell but draws the same arrangement; only a note tile drops its body there.
      */
     fit?: 'fill' | 'compact';
     /**
@@ -73,7 +74,7 @@
   const sizeClass = $derived(entry.size === 'small' || entry.size === 'large' ? entry.size : 'medium');
 </script>
 
-<div class="entry-container" style:height={fit ? '100%' : undefined}>
+<div class="entry-container" class:sized={!!fit} style:height={fit ? '100%' : undefined}>
   <button
     class="entry {sizeClass}"
     class:fill={!!fit}
@@ -120,7 +121,9 @@
         </div>
       </div>
 
-      {#if entry.description && !compact}
+      <!-- Spec §10: one arrangement at every size and fit. The description is hidden only by a
+           container height query, when the tile is too short to fit it. -->
+      {#if entry.description}
         <div class="subtitle" style:opacity={textOpacity}>{entry.description}</div>
       {/if}
 
@@ -152,7 +155,8 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: space-between;
+    /* Spec §10: name, icon and description kept together as one group, centred in the tile. */
+    justify-content: center;
     gap: 0.5rem;
     padding: 1rem 1.5rem;
     /* The background is drawn by .entry-bg (its own opacity), never by the tile itself. */
@@ -240,8 +244,13 @@
     font-weight: 600;
     text-align: center;
     font-size: 0.875rem;
+    line-height: 1.2;
     width: 100%;
     flex-shrink: 0;
+    /* The name is always shown, on one line. */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .icon {
@@ -249,7 +258,7 @@
     align-items: center;
     justify-content: center;
     color: var(--accent);
-    flex: 1;
+    flex: 0 0 auto;
   }
 
   /* Wrapper around the icon graphic. Invisible by default — only takes on
@@ -273,15 +282,23 @@
     object-fit: contain;
   }
 
+  /* The description: at most two lines, with an ellipsis. */
   .subtitle {
     font-size: 0.75rem;
+    line-height: 1.2;
     color: var(--text-secondary);
     text-align: center;
     width: 100%;
     flex-shrink: 0;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+    overflow-wrap: anywhere;
   }
 
-  /* Size variants */
+  /* Size variants: the v2 sizes of an unfitted tile (phone stacking). */
   .small {
     min-height: 100px;
     padding: 0.75rem 1rem;
@@ -337,70 +354,46 @@
     font-size: 0.875rem;
   }
 
-  /* Layout renderer fit (Ruling 22): the cell sets the size (inline height/min-height),
-     so content shrinks to it rather than spilling into the next row. */
+  /* Layout renderer fit (Ruling 22, spec §10): the cell sets the tile's size (inline height and
+     min-height) and the tile is a size container, so its content scales with it: 1cqmin is 1% of
+     the tile's shorter side. One arrangement at every size; the size class only nudges the scale
+     (Small a little smaller), never a fixed px. A Medium at a typical width (~128px) draws the
+     old Medium: a ~44px icon and a ~13px name. Budget at a square tile, in cqmin: padding 2 x 5,
+     name 12.6, gaps 2 x 4, icon 34, description 2 x 10.8, about 86 of 100, so it always fits. */
+  .entry-container.sized {
+    container: tile / size;
+  }
   .entry.fill {
-    padding: 0.6rem 0.75rem;
-    gap: 0.3rem;
+    --icon-r: 34cqmin;
+    --name-r: 10.5cqmin;
+    --desc-r: 9cqmin;
+    padding: clamp(3px, 5cqmin, 16px);
+    gap: clamp(2px, 4cqmin, 12px);
   }
-  .entry.fill .title,
+  .entry.fill.small {
+    --icon-r: 28cqmin;
+    --name-r: 9cqmin;
+    --desc-r: 8cqmin;
+  }
+  .entry.fill .title {
+    font-size: clamp(8px, var(--name-r), 17px);
+  }
   .entry.fill .subtitle {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .entry.fill .icon {
-    min-height: 0;
+    font-size: clamp(7px, var(--desc-r), 15px);
   }
   .entry.fill .icon :global(svg),
   .entry.fill .icon img {
-    max-height: 100%;
+    width: clamp(12px, var(--icon-r), 112px);
+    height: clamp(12px, var(--icon-r), 112px);
   }
-  /* Spec §8/§9: Small is one 1 x 1 cell, always drawn compact — a smaller icon and text, also when the tile
-     fills its cell (the fit padding above would otherwise win over .small's). */
-  .entry.fill.small {
-    padding: 0.45rem 0.5rem;
-    gap: 0.2rem;
+  .entry.fill .icon-backing.has-bg {
+    padding: clamp(2px, 4cqmin, 8px);
   }
-  /* Clearly smaller than Medium (48px icon, 0.875rem title): at most 0.6x the icon, 0.8x the text. */
-  .entry.fill.small .title {
-    font-size: 0.68rem;
-  }
-  .entry.fill.small .icon :global(svg),
-  .entry.fill.small .icon img {
-    width: 28px;
-    height: 28px;
-  }
-  .entry.compact {
-    padding: 0.35rem 0.4rem;
-    gap: 0.2rem;
-    justify-content: center;
-  }
-  .entry.compact .title {
-    font-size: 0.7rem;
-    order: 1;
-  }
-  .entry.compact .icon :global(svg),
-  .entry.compact .icon img {
-    width: 28px;
-    height: 28px;
-  }
-  .entry.compact .icon-backing.has-bg {
-    padding: 0.25rem;
-  }
-  /* Small in a compact cell (e.g. beside a Large tile in a folder, whose rows then halve):
-     clearly smaller than Medium's compact 28px icon and 0.7rem title, at most 0.6x the icon
-     and 0.8x the text (spec §8), so the two never look alike. */
-  .entry.compact.small {
-    padding: 0.3rem 0.35rem;
-  }
-  .entry.compact.small .title {
-    font-size: 0.55rem;
-  }
-  .entry.compact.small .icon :global(svg),
-  .entry.compact.small .icon img {
-    width: 16px;
-    height: 16px;
+  /* The description is hidden only when the tile is too short to fit it under the name and icon. */
+  @container tile (max-height: 71.99px) {
+    .entry.fill .subtitle {
+      display: none;
+    }
   }
 
   .entry.selected {

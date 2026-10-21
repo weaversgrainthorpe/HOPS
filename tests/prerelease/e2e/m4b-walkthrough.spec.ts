@@ -26,7 +26,7 @@ async function importDash(
   page: Page,
   context: BrowserContext,
   tabs: TabSpec[],
-  opts: { background?: Record<string, unknown> } = {}
+  opts: { background?: Record<string, unknown>; fineGrid?: boolean } = {}
 ) {
   const p = `m4bw${Date.now().toString(36)}${(seq++).toString(36)}`;
   const id = (s: string) => `${p}-${s}`;
@@ -38,13 +38,15 @@ async function importDash(
     },
     defaultLayout: 'grid',
     tabs: tabs.map((t, i) => ({
-      id: id(`tab${i}`), name: t.name, order: i, layout: 'inherit', root: { columns: 12, children: t.children(id) }
+      id: id(`tab${i}`), name: t.name, order: i, layout: 'inherit', root: { columns: opts.fineGrid ? 24 : 12, children: t.children(id) }
     }))
   };
   if (opts.background) dash.background = opts.background;
+  // fineGrid: the placements are already in the finer grid's units (spec §9: 24 columns, marker gridUnit 2),
+  // so a 1 x 1 is a Small; otherwise they are the old 12-column form, which the import doubles.
   const doc = {
     format: 'hops-export', schemaVersion: 3, exportedAt: new Date().toISOString(), exportType: 'single-dashboard',
-    config: { dashboards: [dash] }
+    config: opts.fineGrid ? { gridUnit: 2, dashboards: [dash] } : { dashboards: [dash] }
   };
   const r = await page.request.post('/api/config/import', {
     headers: { 'X-CSRF-Token': await getCsrfToken(context) },
@@ -2114,10 +2116,7 @@ test.describe('§8 tile size sets the space it takes', () => {
   }
 
   test('Small is clearly smaller than Medium in the same container: compact cells (1280px) and full cells (1920px)', async ({ page, context }, info) => {
-    for (const [width, fit, medium] of [
-      [1280, 'compact', { icon: 28, font: 11.2 }],
-      [1920, 'fill', { icon: 48, font: 14 }]
-    ] as const) {
+    for (const [width, fit] of [[1280, 'compact'], [1920, 'fill']] as const) {
       await page.setViewportSize({ width, height: 900 });
       const g = await sizeDash(page, context);
       await page.goto(g.path);
@@ -2127,10 +2126,150 @@ test.describe('§8 tile size sets the space it takes', () => {
       if (fit === 'compact') await expect(b).toHaveClass(/\bcompact\b/);
       else await expect(b).not.toHaveClass(/\bcompact\b/);
       await info.attach(`tiles-${width}`, { body: await page.screenshot(), contentType: 'image/png' });
-      // Medium is as it was; Small is clearly smaller beside it.
+      // Spec §10: Medium's icon scales with its tile (about a third of its shorter side) at either
+      // fit; Small is clearly smaller beside it.
       const med = await looks(page, g.id('b'));
-      expect(med, `${width}px Medium`).toEqual(medium);
+      const tb = (await b.boundingBox())!;
+      const side = Math.min(tb.width, tb.height);
+      expect(med.icon, `${width}px Medium icon ${med.icon}px on a ${side}px tile`).toBeGreaterThanOrEqual(0.28 * side);
+      expect(med.icon, `${width}px Medium icon ${med.icon}px on a ${side}px tile`).toBeLessThanOrEqual(0.4 * side);
       clearlySmaller(await looks(page, g.id('a')), med, `${fit} (${width}px)`);
+    }
+  });
+});
+
+// Spec §10: one arrangement at every size and fit (name, icon, description, kept together and centred,
+// never space-between), and the content scales with the tile (container query units).
+test.describe('§10 tile content layout', () => {
+  type R = { top: number; bottom: number; left: number; right: number; width: number; height: number };
+  type Look = { tile: R; title: R; icon: R; sub: R | null; font: number; fit: string };
+
+  /** Services-shaped tiles in the finer grid's own units: Large 4 x 4, Medium 2 x 2, Small 1 x 1. */
+  async function layoutDash(page: Page, context: BrowserContext) {
+    return importDash(page, context, [{
+      name: 'Main',
+      children: (id) => [
+        tile(id('lg'), 'Google', 0, 0, { description: 'Search Engine', icon: 'mdi:google', size: 'large', placement: placement(0, 0, 4, 4) }),
+        tile(id('md'), 'YouTube', 4, 0, { description: 'Video Platform', icon: 'mdi:youtube', placement: placement(4, 0, 2, 2) }),
+        tile(id('sm'), 'GitHub', 6, 0, { description: 'Code Repository', icon: 'mdi:github', size: 'small', placement: placement(6, 0, 1, 1) })
+      ]
+    }], { fineGrid: true });
+  }
+
+  /** The drawn boxes of a tile and its name, icon graphic and description (null when not shown). */
+  async function look(page: Page, id: string): Promise<Look> {
+    return page.locator(`.tab-canvas [data-node-id="${id}"]`).evaluate((cell) => {
+      const r = (el: Element) => {
+        const b = el.getBoundingClientRect();
+        return { top: b.top, bottom: b.bottom, left: b.left, right: b.right, width: b.width, height: b.height };
+      };
+      const btn = cell.querySelector('button.entry')!;
+      const sub = btn.querySelector('.subtitle');
+      const shown = sub && getComputedStyle(sub).display !== 'none' && sub.getBoundingClientRect().height > 0;
+      return {
+        tile: r(btn), title: r(btn.querySelector('.title')!), icon: r(btn.querySelector('.icon svg, .icon img')!),
+        sub: shown ? r(sub) : null, font: parseFloat(getComputedStyle(btn.querySelector('.title')!).fontSize),
+        fit: btn.classList.contains('compact') ? 'compact' : btn.classList.contains('fill') ? 'fill' : 'none'
+      };
+    });
+  }
+
+  const f1 = (n: number) => n.toFixed(1);
+  const describeLook = (l: Look) =>
+    `tile ${f1(l.tile.width)}x${f1(l.tile.height)} (${l.fit}); title y ${f1(l.title.top - l.tile.top)}; ` +
+    `icon y ${f1(l.icon.top - l.tile.top)} size ${f1(l.icon.width)}; ` +
+    `description ${l.sub ? 'y ' + f1(l.sub.top - l.tile.top) : 'hidden'}; font ${l.font}px`;
+
+  /** Name above icon above description; small gaps; centred together; nothing spills out of the tile. */
+  function arranged(l: Look, what: string) {
+    const h = l.tile.height;
+    expect(l.title.bottom, `${what}: the name is above the icon`).toBeLessThanOrEqual(l.icon.top + 0.5);
+    const gapTop = l.icon.top - l.title.bottom;
+    expect(gapTop, `${what}: name-icon gap ${f1(gapTop)}px <= 12% of ${f1(h)}px`).toBeLessThanOrEqual(0.12 * h);
+    let last = l.icon.bottom;
+    if (l.sub) {
+      expect(l.icon.bottom, `${what}: the icon is above the description`).toBeLessThanOrEqual(l.sub.top + 0.5);
+      const gapBot = l.sub.top - l.icon.bottom;
+      expect(gapBot, `${what}: icon-description gap ${f1(gapBot)}px <= 12% of ${f1(h)}px`).toBeLessThanOrEqual(0.12 * h);
+      last = l.sub.bottom;
+    }
+    // Kept together and centred: the space above the name and below the last line match (within 6%).
+    const above = l.title.top - l.tile.top;
+    const below = l.tile.bottom - last;
+    expect(Math.abs(above - below), `${what}: centred (above ${f1(above)}, below ${f1(below)})`).toBeLessThanOrEqual(0.06 * h + 2);
+    expect(above, `${what}: the name is inside the tile`).toBeGreaterThanOrEqual(0);
+    expect(below, `${what}: the content is inside the tile`).toBeGreaterThanOrEqual(0);
+    for (const [k, b] of [['name', l.title], ['icon', l.icon]] as const) {
+      expect(b.left, `${what}: ${k} inside on the left`).toBeGreaterThanOrEqual(l.tile.left - 0.5);
+      expect(b.right, `${what}: ${k} inside on the right`).toBeLessThanOrEqual(l.tile.right + 0.5);
+    }
+  }
+
+  for (const width of [1280, 1600, 1920]) test(`name above icon above description, close together, and the icon grows Small < Medium < Large (${width}px)`, async ({ page, context }, info) => {
+    await page.setViewportSize({ width, height: 900 });
+    const f = await layoutDash(page, context);
+    await page.goto(f.path);
+    await expect(page.locator(`.tab-canvas [data-node-id="${f.id('sm')}"] .icon svg`)).toBeVisible();
+    const [sm, md, lg] = [await look(page, f.id('sm')), await look(page, f.id('md')), await look(page, f.id('lg'))];
+    const report = `${width}px\n  Small:  ${describeLook(sm)}\n  Medium: ${describeLook(md)}\n  Large:  ${describeLook(lg)}`;
+    console.log(report);
+    await info.attach(`layout-${width}`, { body: report, contentType: 'text/plain' });
+    await info.attach(`layout-${width}.png`, { body: await page.screenshot(), contentType: 'image/png' });
+    for (const [what, l] of [['Small', sm], ['Medium', md], ['Large', lg]] as const) arranged(l, `${what} at ${width}px`);
+    expect(sm.icon.width, `${width}px: Small's icon < Medium's`).toBeLessThan(md.icon.width);
+    expect(md.icon.width, `${width}px: Medium's icon < Large's`).toBeLessThan(lg.icon.width);
+    // The name and description are shown on Medium and Large at every width.
+    expect(md.sub, `${width}px: Medium shows its description`).not.toBeNull();
+    expect(lg.sub, `${width}px: Large shows its description`).not.toBeNull();
+    // Still clearly smaller than Medium beside it (spec §8): at most 0.6x the icon, 0.8x the name.
+    expect(sm.icon.width, `${width}px: Small's icon is at most 0.6 x Medium's`).toBeLessThanOrEqual(0.6 * md.icon.width);
+    expect(sm.font, `${width}px: Small's name is at most 0.8 x Medium's`).toBeLessThanOrEqual(0.8 * md.font);
+  });
+
+  test('a Medium at a typical width (1600px) looks like the old Medium: a ~48px icon and a ~14px name', async ({ page, context }) => {
+    await page.setViewportSize({ width: 1600, height: 900 });
+    const f = await layoutDash(page, context);
+    await page.goto(f.path);
+    const md = await look(page, f.id('md'));
+    expect(md.icon.width, describeLook(md)).toBeGreaterThanOrEqual(40);
+    expect(md.icon.width, describeLook(md)).toBeLessThanOrEqual(56);
+    expect(md.font, describeLook(md)).toBeGreaterThanOrEqual(12.5);
+    expect(md.font, describeLook(md)).toBeLessThanOrEqual(15.5);
+  });
+
+  test('a long name stays on one line and a long description on at most two', async ({ page, context }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    const long = 'A very long description that goes on and on and certainly needs more than two lines to show it all';
+    const f = await importDash(page, context, [{
+      name: 'Main',
+      children: (id) => [tile(id('md'), 'An extremely long tile name', 0, 0, { description: long, placement: placement(0, 0, 2, 2) })]
+    }], { fineGrid: true });
+    await page.goto(f.path);
+    const m = await page.locator(`.tab-canvas [data-node-id="${f.id('md')}"] button.entry`).evaluate((btn) => {
+      const lh = (el: Element) => parseFloat(getComputedStyle(el).lineHeight);
+      const t = btn.querySelector('.title')!, s = btn.querySelector('.subtitle')!;
+      return { th: t.getBoundingClientRect().height, tl: lh(t), sh: s.getBoundingClientRect().height, sl: lh(s) };
+    });
+    expect(m.th, 'the name is one line').toBeLessThanOrEqual(m.tl * 1.5);
+    expect(m.sh, 'the description is at most two lines').toBeLessThanOrEqual(m.sl * 2.5);
+    expect(m.sh, 'the description shows (it is not dropped)').toBeGreaterThan(m.sl * 0.5);
+    arranged(await look(page, f.id('md')), 'long text Medium');
+  });
+
+  test('in edit mode the arrangement is the same, and on a phone (stacked) too', async ({ page, context }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    const f = await layoutDash(page, context);
+    await page.goto(f.path);
+    await enterEdit(page);
+    for (const k of ['sm', 'md', 'lg']) arranged(await look(page, f.id(k)), `edit mode ${k}`);
+    await page.goto(f.path);
+    await page.setViewportSize({ width: 375, height: 812 });
+    await expect(page.locator(`.tab-canvas [data-node-id="${f.id('md')}"] .icon svg`)).toBeVisible();
+    for (const k of ['sm', 'md', 'lg']) {
+      const l = await look(page, f.id(k));
+      expect(l.fit, `phone ${k}: stacked tiles have no fit`).toBe('none');
+      arranged(l, `phone ${k}`);
+      expect(l.sub, `phone ${k}: shows its description`).not.toBeNull();
     }
   });
 });

@@ -82,7 +82,9 @@ describe('tiles fit their grid cell (Ruling 22)', () => {
         if (id.endsWith('tiny')) expect(compact).toBe(true);
         expect(btn.classList.contains('compact')).toBe(compact);
         expect(btn.classList.contains('fill')).toBe(true);
-        if (compact) expect(cell.querySelector('.subtitle')).toBeNull();
+        // Spec §10: one arrangement at every fit; the description is never dropped from a compact tile
+        // (only a container height query hides it when the tile is too short to fit it).
+        expect(cell.querySelector('.subtitle'), `${id} keeps its description`).not.toBeNull();
       }
       if (w === 1440) {
         // 60px root cells, a Medium is 120px: full tiles with their description; a Small is compact.

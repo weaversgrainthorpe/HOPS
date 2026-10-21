@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/svelte';
 import { tick } from 'svelte';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import Entry from './Entry.svelte';
 import { editMode } from '$lib/stores/editMode';
 import type { Entry as EntryType } from '$lib/types';
@@ -132,5 +134,72 @@ describe('Entry size class', () => {
     expect(btn().classList.contains('medium')).toBe(false);
     await rerender({ entry: { ...entry, size: 'large' }, fit: 'fill' });
     expect(btn().classList.contains('large')).toBe(true);
+  });
+});
+
+// Spec §10: one arrangement at every size and fit — name, icon, description, kept together and
+// centred — and the content scales with the tile. jsdom has no layout and component CSS is not
+// injected, so the structure is checked on the DOM and the rules on the component's own source.
+describe('Entry content layout (spec §10)', () => {
+  const withDesc = { ...entry, description: 'Search Engine' } as EntryType;
+  const parts = (c: HTMLElement) =>
+    [...c.querySelector('button.entry')!.children]
+      .map((el) => el.className.split(' ').find((k) => ['title', 'icon', 'subtitle'].includes(k)))
+      .filter(Boolean);
+
+  for (const fit of [undefined, 'fill', 'compact'] as const)
+    for (const size of ['small', 'medium', 'large'] as const)
+      it(`${size}, fit ${fit ?? 'none'}: name, then icon, then description`, async () => {
+        const { container } = render(Entry, { entry: { ...withDesc, size }, fit });
+        await tick();
+        expect(parts(container)).toEqual(['title', 'icon', 'subtitle']);
+      });
+
+  it('a fitted tile is a size container (the tile scales its content); an unfitted one is not', async () => {
+    const { container, rerender } = render(Entry, { entry: withDesc, fit: 'compact' });
+    await tick();
+    const box = () => container.querySelector('.entry-container') as HTMLElement;
+    expect(box().classList.contains('sized')).toBe(true);
+    await rerender({ entry: withDesc, fit: 'fill' });
+    expect(box().classList.contains('sized')).toBe(true);
+    await rerender({ entry: withDesc, fit: undefined });
+    expect(box().classList.contains('sized')).toBe(false);
+  });
+
+  describe('the component styles', () => {
+    const src = readFileSync(resolve(process.cwd(), 'src/lib/components/Entry.svelte'), 'utf8');
+    const css = src.slice(src.indexOf('<style>'));
+    const rule = (sel: string) => {
+      const i = css.indexOf(`\n  ${sel} {`);
+      return i < 0 ? '' : css.slice(i, css.indexOf('}', i));
+    };
+
+    it('never spreads the content apart (no space-between) and never reorders it', () => {
+      expect(css).not.toMatch(/space-between/);
+      expect(css).not.toMatch(/\border\s*:/);
+    });
+
+    it('has no compact-only arrangement: compact and fill differ in nothing but the class', () => {
+      expect(css).not.toMatch(/\.compact/);
+    });
+
+    it('the fitted tile is a size container; icon and text use cqmin-based clamp() values', () => {
+      expect(rule('.entry-container.sized')).toMatch(/container:\s*tile\s*\/\s*size/);
+      // The ratios are cqmin custom properties (the size class nudges them); the clamps use them.
+      const scaled = (v: string) => new RegExp(`clamp\\([^;]*var\\(--${v}-r\\)`);
+      for (const v of ['icon', 'name', 'desc']) expect(rule('.entry.fill')).toMatch(new RegExp(`--${v}-r:\\s*[\\d.]+cqmin`));
+      expect(css).toMatch(/\.fill \.icon :global\(svg\)[^{]*\{[^}]*clamp\([^;]*var\(--icon-r\)/);
+      expect(css.slice(css.indexOf('.entry.fill .title {'))).toMatch(scaled('name'));
+      expect(css.slice(css.indexOf('.entry.fill .subtitle {'))).toMatch(scaled('desc'));
+    });
+
+    it('the description hides only when the tile is too short (a container height query)', () => {
+      expect(css).toMatch(/@container tile \(max-height:[^)]*\)\s*\{[^}]*\.subtitle[^}]*\{[^}]*display:\s*none/);
+    });
+
+    it('the size class no longer sets a fixed icon px on a fitted tile', () => {
+      expect(css).not.toMatch(/\.fill\.small \.icon/);
+      expect(css).not.toMatch(/\.fill\.large \.icon/);
+    });
   });
 });
