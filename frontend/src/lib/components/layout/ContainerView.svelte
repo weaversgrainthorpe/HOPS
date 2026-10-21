@@ -16,6 +16,7 @@
   import { drag, dragSource, pressMenu } from '$lib/editor/drag/dragController';
   import { dropContainer } from '$lib/editor/drag/hitTest';
   import ResizeHandles from '../editor/ResizeHandles.svelte';
+  import EditHandle from '../editor/EditHandle.svelte';
 
   interface Props {
     container: Container;
@@ -37,6 +38,8 @@
   // ---- editing: selection uses the RENDERED boxes; every edit goes through the editor (draft).
   const ref = $derived<ContainerRef>(parent ? { tabId: tab.id, folderId: parent.id } : { tabId: tab.id });
   function onNodeClick(e: MouseEvent, id: string) {
+    // The edit handle's own click edits; it must reach the handle (and not select).
+    if (e.target instanceof Element && e.target.closest('[data-edit-handle]')) return;
     // Capture phase: the tile never sees the click, so it does not open its link while editing.
     e.preventDefault();
     e.stopPropagation();
@@ -172,6 +175,9 @@
             fit={fitOf(node)}
             editorSelected={editing ? $selectedNodes.has(node.id) : undefined}
           />
+          {#if editing}
+            <EditHandle name={node.name} onEdit={() => openDialog({ kind: 'tile', id: node.id })} />
+          {/if}
           {#if editing && effective === 'free'}
             <!-- Free tiles resize like folders; a grid tile is one cell (its Size is in the tile dialog). -->
             <ResizeHandles id={node.id} name={node.name} metrics={metrics} />
@@ -269,6 +275,8 @@
   }
   /* Edit mode: items are dragged, so no text selection or touch callout on them. */
   .cell.editable {
+    /* The edit handle sits in the corner (free cells are already absolutely positioned). */
+    position: relative;
     user-select: none;
     -webkit-user-select: none;
     -webkit-touch-callout: none;

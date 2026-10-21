@@ -82,12 +82,12 @@ describe('hitTest', () => {
     expect(h.node).toEqual({ id: 'b', left: 100, top: 0, width: 100, height: 100 });
   });
 
-  it('a tab\'s controls and padding count as the tab: it is resolved through its [data-drag-tabbox]', () => {
-    // Real-browser bug: the edit/duplicate/delete controls lie over the tab button, so
-    // elementFromPoint returned a control (not inside [data-drag-tab]) and no tab was hit.
+  it('a tab\'s edit handle and padding count as the tab: it is resolved through its [data-drag-tabbox]', () => {
+    // Real-browser bug (M3): controls beside the tab button were hit by elementFromPoint (not inside
+    // [data-drag-tab]) and no tab was hit. The tab's edit handle (§4B) sits in the same box.
     const icon = el({ class: 'svg' });
-    const dup = el({ class: 'tab-control-btn duplicate-btn' }, icon);
-    const controls = el({ class: 'tab-controls' }, dup);
+    const dup = el({ class: 'edit-handle inline', 'data-edit-handle': '' }, icon);
+    const controls = el({ class: 'tab-handle-slot' }, dup);
     const tab = el({ 'data-drag-tab': 't2' }, el({ class: 'tab-name' }));
     const tabbox = el({ 'data-drag-tabbox': 't2' }, tab, controls);
     const bar = el({ 'data-drag-tabbar': '' }, tabbox);
@@ -132,7 +132,7 @@ describe('hitTest', () => {
 
   it('inside the tab bar, reports every tab box in bar order; inside an overlay panel, its folder id', () => {
     const b1 = el({ 'data-drag-tabbox': 't1' }, el({ 'data-drag-tab': 't1' }));
-    const ctl = el({ class: 'tab-controls' });
+    const ctl = el({ class: 'edit-handle inline', 'data-edit-handle': '' });
     const b2 = el({ 'data-drag-tabbox': 't2' }, el({ 'data-drag-tab': 't2' }), ctl);
     const bar = el({ 'data-drag-tabbar': '' }, b1, b2);
     const root = el({ 'data-container-id': 'c1' });
@@ -143,7 +143,7 @@ describe('hitTest', () => {
       [b1, { left: 0, top: 0, width: 150, height: 40 }],
       [b2, { left: 160, top: 0, width: 150, height: 40 }]
     ]);
-    // Ruling 29: a tab's controls count as that tab (through its tabbox), and the boxes are still reported.
+    // Ruling 29: a tab's edit handle counts as that tab (through its tabbox), and the boxes are still reported.
     const h = hitTest(300, 10, new Set(), { elementFromPoint: () => ctl, rectOf: (e) => rects.get(e) ?? { left: 0, top: 0 } });
     expect(h.tabId).toBe('t2');
     // Between the tabs (the bar itself), it is the tab bar.

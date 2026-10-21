@@ -15,13 +15,17 @@ export type EditorDialog =
   /** id set: edit that tile; otherwise a new tile going into `to` (at `cell` if free). */
   | { kind: 'tile'; id?: string; to?: ContainerRef; cell?: Cell }
   | { kind: 'folder'; id?: string; to?: ContainerRef; cell?: Cell }
-  | { kind: 'movecopy'; ids: string[] };
+  | { kind: 'movecopy'; ids: string[] }
+  /** Edit a tab of the draft (TabEditModal, mounted by Dashboard). */
+  | { kind: 'tab'; id: string };
 
 export const editorDialog = writable<EditorDialog | null>(null);
 
 export type MenuTarget =
   | { kind: 'node'; id: string }
-  | { kind: 'container'; ref: ContainerRef; cell?: Cell };
+  | { kind: 'container'; ref: ContainerRef; cell?: Cell }
+  /** A tab in the tab bar: Edit, Duplicate, Delete (the same menu, §4B). */
+  | { kind: 'tab'; id: string };
 
 export interface MenuRequest {
   x: number;
@@ -45,6 +49,12 @@ export function openDialog(d: EditorDialog): void {
 export function openMenu(m: MenuRequest): void {
   editorMenu.set(m);
 }
+
+/**
+ * A tab the editor asks the dashboard to show (after a menu Duplicate shows the copy). Dashboard
+ * takes it (and clears it); a request for a tab it does not have is reported, never dropped.
+ */
+export const showTabRequest = writable<string | null>(null);
 
 /**
  * Where an add or paste without a target goes: the folder of the top open

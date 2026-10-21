@@ -2,11 +2,12 @@
   import { onMount, tick } from 'svelte';
   import Icon from '@iconify/svelte';
   import type { MenuRequest } from '$lib/editor/editorUi';
-  import { openDialog } from '$lib/editor/editorUi';
+  import { openDialog, showTabRequest } from '$lib/editor/editorUi';
   import type { ContainerRef } from '$lib/editor/treeOps';
   import { locate, resolveContainer } from '$lib/editor/treeOps';
   import {
-    containerOfNode, deleteWithConfirm, duplicate, findIn, setDisplay, zOrder
+    containerOfNode, deleteTabWithConfirm, deleteWithConfirm, duplicate, duplicateTabAction, findIn, setDisplay,
+    zOrder
   } from '$lib/editor/editorActions';
   import { session } from '$lib/stores/editSession';
   import { selectedNodes, toggleNode } from '$lib/stores/nodeSelection';
@@ -50,8 +51,11 @@
     return $selectedNodes.has(id) && $selectedNodes.size > 1 ? [...$selectedNodes] : [id];
   });
   const many = $derived(targetIds.length > 1);
+  const tab = $derived(
+    draft && request.target.kind === 'tab' ? draft.tabs.find((t) => t.id === (request.target as { id: string }).id) : undefined
+  );
   const containerMode = $derived.by(() => {
-    if (!draft) return 'grid';
+    if (!draft || request.target.kind === 'tab') return 'grid';
     const ref: ContainerRef | undefined =
       request.target.kind === 'node' ? containerOfNode(draft, request.target.id) : request.target.ref;
     try {
@@ -69,6 +73,22 @@
         { label: 'Add tile here', icon: 'mdi:plus-box', run: () => openDialog({ kind: 'tile', to: t.ref, ...(t.cell ? { cell: t.cell } : {}) }) },
         { label: 'Add folder here', icon: 'mdi:folder-plus', run: () => openDialog({ kind: 'folder', to: t.ref, ...(t.cell ? { cell: t.cell } : {}) }) },
         { label: 'Paste here', icon: 'mdi:content-paste', disabled: !canPaste, run: () => pasteInto(t.ref, t.cell) }
+      ];
+    }
+    if (t.kind === 'tab') {
+      if (!tab) return [];
+      const id = tab.id;
+      return [
+        { label: 'Edit', icon: 'mdi:pencil', run: () => openDialog({ kind: 'tab', id }) },
+        {
+          label: 'Duplicate',
+          icon: 'mdi:content-duplicate',
+          run: () => {
+            const copy = duplicateTabAction(id);
+            if (copy) showTabRequest.set(copy); // show the copy, as the old duplicate button did
+          }
+        },
+        { label: 'Delete', icon: 'mdi:trash-can', danger: true, separatorBefore: true, run: () => deleteTabWithConfirm(id) }
       ];
     }
     if (!node || !draft) return [];
@@ -124,7 +144,9 @@
   const label = $derived(
     request.target.kind === 'container'
       ? 'Container actions'
-      : node
+      : request.target.kind === 'tab'
+        ? `Tab actions: ${tab?.name || 'Untitled'}`
+        : node
         ? `${node.kind === 'folder' ? 'Folder' : 'Tile'} actions: ${node.name || 'Untitled'}`
         : 'Item actions'
   );

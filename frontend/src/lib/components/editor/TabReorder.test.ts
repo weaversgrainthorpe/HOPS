@@ -141,7 +141,7 @@ describe('tab reorder with the drag engine', () => {
     expect(draftIds()).toEqual(['t1', 't3', 't2']);
   });
 
-  it("a drop on a tab's controls counts as that tab's half", async () => {
+  it("a drop on a tab's edit handle counts as that tab's half", async () => {
     render(Dashboard, { dashboard: legacy });
     await tick();
     layoutTabs();

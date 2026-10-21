@@ -1,6 +1,7 @@
 <script lang="ts">
   // Renders the editor's item menu and dialogs (mounted once by Dashboard in
-  // edit mode). Every save here edits the session draft through
+  // edit mode). The tab dialog ({kind:'tab'}) is rendered by Dashboard, next
+  // to the tab bar it edits; this component only closes it when its tab is gone. Every save here edits the session draft through
   // editorActions → editSession.apply; nothing is sent to the server.
   import EntryEditModal from '../admin/EntryEditModal.svelte';
   import FolderEditModal, { type FolderFields } from './FolderEditModal.svelte';
@@ -31,6 +32,11 @@
   $effect(() => {
     if (dlg && (dlg.kind === 'tile' || dlg.kind === 'folder') && dlg.id && draft && !existing) {
       toast.error('That item no longer exists, so its dialog was closed.');
+      editorDialog.set(null);
+    }
+    // The tab dialog (rendered by Dashboard, which owns the tab bar): the same rule.
+    if (dlg && dlg.kind === 'tab' && draft && !draft.tabs.some((t) => t.id === dlg.id)) {
+      toast.error('That tab no longer exists, so its dialog was closed.');
       editorDialog.set(null);
     }
   });

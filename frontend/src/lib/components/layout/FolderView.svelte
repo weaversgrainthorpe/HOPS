@@ -16,6 +16,7 @@
   import { drag, dragSource } from '$lib/editor/drag/dragController';
   import { COLLAPSED_HINT } from '$lib/editor/resize';
   import ResizeHandles from '../editor/ResizeHandles.svelte';
+  import EditHandle from '../editor/EditHandle.svelte';
   import FolderSurface from '../background/FolderSurface.svelte';
   import BackgroundFailedBadge from '../background/BackgroundFailedBadge.svelte';
 
@@ -30,7 +31,7 @@
     folderChain: FolderNode[];
     /** Metrics of the container this folder sits in; every inner size derives from them. */
     parent: ContainerMetrics;
-    /** Edit mode: click selects, double-click opens (collapsed) or edits (expanded), right-click = item menu. */
+    /** Edit mode: click selects, double-click / the handle edits (collapsed too), right-click = item menu. */
     editing?: boolean;
   }
   let { folder, style = '', plan, dashboard, tab, folderChain, parent, editing = false }: Props = $props();
@@ -48,6 +49,8 @@
   }
   /** Touch long-press released without moving (Ruling 18(1)): the folder's menu. */
   const pressed = (x: number, y: number) => openMenu({ x, y, target: { kind: 'node', id: folder.id } });
+  /** Every item edits the same way (§4B): the handle and a double-click open the folder dialog. */
+  const edit = () => openDialog({ kind: 'folder', id: folder.id });
   const dragging = $derived(editing && ($drag?.ids.includes(folder.id) ?? false));
 
   // This viewer's remembered view and the saved default (TabCanvas has already applied the view).
@@ -110,8 +113,9 @@
     onclick={(e) => (editing ? select(e) : openFolder(folder.id))}
     ondblclick={editing
       ? (e) => {
+          // Edit mode: double-click edits, like every item; "Open" is in its menu (§4B).
           e.stopPropagation();
-          openFolder(folder.id);
+          edit();
         }
       : undefined}
     onkeydown={onKey}
@@ -148,8 +152,9 @@
   <!-- Edit mode: a failed background image, flagged on a tab outside the tile (never on its content). -->
   <BackgroundFailedBadge background={folder.background} {editing} level="folder" placement="corner" />
   {#if editing}
-    <!-- The tooltip's hint, also for touch and screen readers (no handles on a collapsed folder). -->
+    <!-- The tooltip's hint, also for touch and screen readers (no resize handles on a collapsed folder). -->
     <span id="resize-hint-{folder.id}" class="sr-only">{COLLAPSED_HINT}</span>
+    <EditHandle name={folder.name} onEdit={edit} />
   {/if}
   {#if views && !$editMode && differsFromSaved(saved, remembered)}
     <span class="tile-restore">
@@ -173,7 +178,7 @@
     ondblclick={editing
       ? (e) => {
           e.stopPropagation();
-          openDialog({ kind: 'folder', id: folder.id });
+          edit();
         }
       : undefined}
     oncontextmenu={editing ? menu : undefined}
@@ -238,6 +243,9 @@
         {editing}
       />
     </div>
+    {#if editing}
+      <EditHandle name={folder.name} onEdit={edit} />
+    {/if}
     {#if editing && plan.kind !== 'stacked'}
       <!-- Handles on the rendered (expanded) box; a collapsed folder has none (Ruling 13). -->
       <ResizeHandles id={folder.id} name={folder.name} metrics={parent} />

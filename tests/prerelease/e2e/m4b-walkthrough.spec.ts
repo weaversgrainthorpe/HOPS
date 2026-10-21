@@ -384,4 +384,169 @@ test.describe('M4 walkthrough changes in a real browser', () => {
       await ctx.close();
     }
   });
+
+  // ---- §4B: every item edits the same way (handle, double-click, menu)
+
+  /** One dashboard with a tile, an expanded folder and a collapsed folder on Main, and a second tab. */
+  async function itemsDash(page: Page, context: BrowserContext) {
+    return importDash(page, context, [
+      {
+        name: 'Main',
+        children: (id) => [
+          tile(id('a'), 'Alpha', 0, 0),
+          {
+            id: id('grp'), kind: 'folder', name: 'Group', layout: 'inherit', display: 'expanded', shape: 'rounded',
+            showTitle: true, placement: placement(2, 0, 4, 3),
+            content: { columns: 4, children: [tile(id('in'), 'Inner')] }
+          },
+          {
+            id: id('box'), kind: 'folder', name: 'Box', layout: 'inherit', display: 'collapsed', shape: 'rounded',
+            showTitle: true, placement: placement(8, 0, 4, 3),
+            content: { columns: 4, children: [tile(id('bx'), 'Boxed')] }
+          }
+        ]
+      },
+      { name: 'Two', children: (id) => [tile(id('t2a'), 'Tango')] }
+    ]);
+  }
+
+  /** The three ways in, for one item: its handle, a double-click, and its menu's Edit. */
+  async function editsThreeWays(
+    page: Page,
+    o: {
+      item: ReturnType<Page['locator']>;
+      handle: string;
+      dialog: string;
+      field: ReturnType<Page['locator']>;
+      value: string;
+      dblAt?: { x: number; y: number };
+    }
+  ) {
+    const dlg = page.getByRole('dialog', { name: o.dialog });
+    const handle = page.getByRole('button', { name: o.handle, exact: true });
+    // Hidden (and click-through) until the item is hovered; then shown.
+    await page.mouse.move(2, 2);
+    await expect(handle).toHaveCSS('opacity', '0');
+    await o.item.hover({ position: o.dblAt });
+    await expect(handle).toHaveCSS('opacity', '1');
+    // 1. The handle.
+    await handle.click();
+    await expect(dlg).toBeVisible();
+    await expect(o.field).toHaveValue(o.value);
+    await dlg.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(dlg).toHaveCount(0);
+    // 2. Double-click.
+    await o.item.dblclick({ position: o.dblAt });
+    await expect(dlg).toBeVisible();
+    await expect(o.field).toHaveValue(o.value);
+    await dlg.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(dlg).toHaveCount(0);
+    // 3. Right-click: the shared menu; its Edit opens the same dialog.
+    await o.item.click({ button: 'right', position: o.dblAt });
+    const menu = page.getByRole('menu');
+    await expect(menu).toBeVisible();
+    await menu.getByRole('menuitem', { name: 'Edit', exact: true }).click();
+    await expect(dlg).toBeVisible();
+    await expect(o.field).toHaveValue(o.value);
+    await dlg.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(dlg).toHaveCount(0);
+    // 4. Keyboard: the handle is a real button; focusing it shows it and Enter edits.
+    await page.mouse.move(2, 2);
+    await handle.focus();
+    await expect(handle).toHaveCSS('opacity', '1');
+    await page.keyboard.press('Enter');
+    await expect(dlg).toBeVisible();
+    await dlg.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(dlg).toHaveCount(0);
+  }
+
+  test('tile: the handle, a double-click and the menu all edit it', async ({ page, context }) => {
+    const f = await itemsDash(page, context);
+    await page.goto(f.path);
+    await enterEdit(page);
+    await editsThreeWays(page, {
+      item: page.locator(`[data-node-id="${f.id('a')}"]`),
+      handle: 'Edit Alpha',
+      dialog: 'Edit Tile',
+      field: page.getByRole('dialog').locator('input#name'),
+      value: 'Alpha',
+      dblAt: { x: 20, y: 40 }
+    });
+  });
+
+  test('expanded folder: the handle, a double-click and the menu all edit it', async ({ page, context }) => {
+    const f = await itemsDash(page, context);
+    await page.goto(f.path);
+    await enterEdit(page);
+    await editsThreeWays(page, {
+      item: page.locator(`[data-node-id="${f.id('grp')}"]`),
+      handle: 'Edit Group',
+      dialog: 'Edit Folder',
+      field: page.locator('#folder-name'),
+      value: 'Group',
+      dblAt: { x: 60, y: 20 }
+    });
+  });
+
+  test('collapsed folder: the handle, a double-click and the menu edit it; "Open" in its menu opens it', async ({ page, context }) => {
+    const f = await itemsDash(page, context);
+    await page.goto(f.path);
+    await enterEdit(page);
+    const item = page.locator(`[data-node-id="${f.id('box')}"]`);
+    await editsThreeWays(page, {
+      item,
+      handle: 'Edit Box',
+      dialog: 'Edit Folder',
+      field: page.locator('#folder-name'),
+      value: 'Box',
+      dblAt: { x: 30, y: 60 }
+    });
+    // A double-click edited it: it never opened.
+    await expect(page.locator(`[data-drag-panel="${f.id('box')}"]`)).toHaveCount(0);
+    await item.click({ button: 'right', position: { x: 30, y: 60 } });
+    await page.getByRole('menu').getByRole('menuitem', { name: 'Open', exact: true }).click();
+    await expect(page.locator(`[data-drag-panel="${f.id('box')}"]`)).toBeVisible();
+  });
+
+  test('collapsed folder outside edit mode: a click still opens it and there is no handle', async ({ page, context }) => {
+    const f = await itemsDash(page, context);
+    await page.goto(f.path);
+    await expect(page.locator(`[data-node-id="${f.id('box')}"]`)).toBeVisible();
+    await expect(page.locator('[data-edit-handle]')).toHaveCount(0);
+    await page.locator(`[data-node-id="${f.id('box')}"]`).click({ position: { x: 30, y: 60 } });
+    await expect(page.getByRole('dialog', { name: 'Box' })).toBeVisible();
+  });
+
+  test('tab: the handle, a double-click and the menu all edit it; the menu also duplicates and deletes', async ({ page, context }) => {
+    const f = await itemsDash(page, context);
+    await page.goto(f.path);
+    await enterEdit(page);
+    // The old per-tab pencil, duplicate and delete buttons are gone.
+    await expect(page.locator('.tab-control-btn')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Duplicate Two tab' })).toHaveCount(0);
+    const tab = page.getByRole('tab', { name: 'Switch to Two tab' });
+    await editsThreeWays(page, {
+      item: tab,
+      handle: 'Edit Two tab',
+      dialog: 'Edit Tab',
+      field: page.getByRole('dialog').getByLabel(/Tab Name/),
+      value: 'Two'
+    });
+    // The double-click's clicks switched to the tab — harmless, and still the tab edited.
+    await expect(tab).toHaveAttribute('aria-selected', 'true');
+
+    // Duplicate from the menu: the copy is shown.
+    await tab.click({ button: 'right' });
+    const menu = page.getByRole('menu', { name: 'Tab actions: Two' });
+    await expect(menu.getByRole('menuitem')).toHaveText(['Edit', 'Duplicate', 'Delete']);
+    await menu.getByRole('menuitem', { name: 'Duplicate' }).click();
+    const copy = page.getByRole('tab', { name: 'Switch to Two (Copy) tab' });
+    await expect(copy).toHaveAttribute('aria-selected', 'true');
+    // Delete from the menu (asks first).
+    await copy.click({ button: 'right' });
+    await page.getByRole('menu').getByRole('menuitem', { name: 'Delete' }).click();
+    await page.getByRole('button', { name: 'Delete', exact: true }).last().click();
+    await expect(copy).toHaveCount(0);
+    await expect(page.getByRole('tab')).toHaveCount(2);
+  });
 });

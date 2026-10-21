@@ -16,6 +16,8 @@
   import BackgroundConfigModal from './admin/BackgroundConfigModal.svelte';
   import EditToolbar from './editor/EditToolbar.svelte';
   import EditorDialogs from './editor/EditorDialogs.svelte';
+  import EditHandle from './editor/EditHandle.svelte';
+  import { editorDialog, openDialog, openMenu, menuPointFor, showTabRequest } from '$lib/editor/editorUi';
   import DragLayer from '$lib/editor/drag/DragLayer.svelte';
   import { tabSource } from '$lib/editor/drag/dragController';
   import {
@@ -159,7 +161,10 @@
     target.focus();
     target.scrollIntoView?.({ block: 'nearest' });
   }
-  let editingTabIndex = $state<number | null>(null);
+  // The tab being edited: one editor dialog request ({kind:'tab'}), opened by the tab's handle,
+  // a double-click or its menu's Edit — the same flow as every item (§4B).
+  const editingTabId = $derived($editorDialog?.kind === 'tab' ? $editorDialog.id : null);
+  const closeTabDialog = () => editorDialog.set(null);
   let showAddTabModal = $state(false);
   let showHeaderConfig = $state(false);
   let showDashboardSettings = $state(false);
@@ -199,19 +204,41 @@
     destroyEasterEggs();
   });
 
-  // Clicking a tab always switches to it — even in edit mode. The per-tab
-  // pencil button (rendered in edit mode) is the entry point for editing
-  // the tab itself.
+  // Clicking a tab always switches to it — even in edit mode. Editing the tab
+  // itself is its handle, a double-click or its menu (§4B).
   function handleTabClick(index: number) {
     activeTabIndex = index;
   }
 
+  function editTabAt(tabId: string) {
+    openDialog({ kind: 'tab', id: tabId });
+  }
+
+  function tabMenu(e: MouseEvent, tabId: string) {
+    e.preventDefault();
+    e.stopPropagation();
+    openMenu({ ...menuPointFor(e, e.currentTarget as Element), target: { kind: 'tab', id: tabId } });
+  }
+
+  // The editor (a menu Duplicate) asks to show a tab: switch to it, or say why not.
+  $effect(() => {
+    const want = $showTabRequest;
+    if (!want) return;
+    untrack(() => {
+      showTabRequest.set(null);
+      void showDraftTab(want).then((shown) => {
+        if (!shown) toast.error("Couldn't show that tab: it is no longer on this dashboard.");
+      });
+    });
+  });
+
   /** Switch to a tab of the draft by id (after an add or duplicate). */
-  async function showDraftTab(tabId: string | null) {
-    if (!tabId) return;
+  async function showDraftTab(tabId: string | null): Promise<boolean> {
+    if (!tabId) return false;
     await tick();
     const i = (get(session)?.draft.tabs ?? []).findIndex((t) => t.id === tabId);
     if (i !== -1) activeTabIndex = i;
+    return i !== -1;
   }
 
   // ---- edit mode: every change edits the draft (editorActions → apply).
@@ -241,17 +268,18 @@
   }
 
   function handleUpdateTab(tabId: string, ...args: Parameters<typeof tabFields>) {
-    if (editTab(tabId, tabFields(...args))) editingTabIndex = null;
+    if (editTab(tabId, tabFields(...args))) closeTabDialog();
   }
 
   function handleDuplicateTab(tabId: string) {
     const id = duplicateTabAction(tabId);
-    editingTabIndex = null;
+    if (!id) return; // apply() has already said why
+    closeTabDialog();
     void showDraftTab(id);
   }
 
   async function handleDeleteTab(tabId: string) {
-    if (await deleteTabWithConfirm(tabId)) editingTabIndex = null;
+    if (await deleteTabWithConfirm(tabId)) closeTabDialog();
   }
 
   function handleUpdateHeader(headerConfig: HeaderConfig) {
@@ -368,6 +396,8 @@
               data-drag-tab={editing ? tab.id : undefined}
               use:tabSource={{ tabId: tab.id, enabled: editing }}
               onclick={() => handleTabClick(index)}
+              ondblclick={editing ? () => editTabAt(tab.id) : undefined}
+              oncontextmenu={editing ? (e) => tabMenu(e, tab.id) : undefined}
               onkeydown={(e) => handleTabKey(e, index)}
             >
               {#if tab.iconUrl || tab.icon}
@@ -384,32 +414,8 @@
               <span class="tab-name">{tab.name}</span>
             </div>
             {#if editing}
-              <div class="tab-controls" role="group" aria-label="Tab actions">
-                <button
-                  class="tab-control-btn"
-                  onclick={(e) => { e.stopPropagation(); editingTabIndex = index; }}
-                  title="Edit tab"
-                  aria-label="Edit {tab.name} tab"
-                >
-                  <Icon icon="mdi:pencil" width="16" />
-                </button>
-                <button
-                  class="tab-control-btn duplicate-btn"
-                  onclick={(e) => { e.stopPropagation(); handleDuplicateTab(tab.id); }}
-                  title="Duplicate tab"
-                  aria-label="Duplicate {tab.name} tab"
-                >
-                  <Icon icon="mdi:content-copy" width="16" />
-                </button>
-                <button
-                  class="tab-control-btn delete-btn"
-                  onclick={(e) => { e.stopPropagation(); void handleDeleteTab(tab.id); }}
-                  title="Delete tab"
-                  aria-label="Delete {tab.name} tab"
-                >
-                  <Icon icon="mdi:trash-can" width="16" />
-                </button>
-              </div>
+              <!-- The shared edit handle, inside the tab's box: a drop on it counts as the tab. -->
+              <EditHandle name="{tab.name} tab" placement="inline" onEdit={() => editTabAt(tab.id)} />
             {/if}
           </div>
         {/each}
@@ -488,8 +494,8 @@
   />
 {/if}
 
-{#if editing && editingTabIndex !== null && barTabs[editingTabIndex]}
-  {@const t = barTabs[editingTabIndex]}
+{#if editing && editingTabId !== null && barTabs.find((x) => x.id === editingTabId)}
+  {@const t = barTabs.find((x) => x.id === editingTabId)!}
   {#key t.id}
     <TabEditModal
       tabName={t.name}
@@ -505,7 +511,7 @@
       statusContext={tabStatusContext}
       {inheritedLayout}
       onSave={(...args) => handleUpdateTab(t.id, ...args)}
-      onCancel={() => (editingTabIndex = null)}
+      onCancel={closeTabDialog}
       onDelete={() => handleDeleteTab(t.id)}
       onDuplicate={() => handleDuplicateTab(t.id)}
     />
@@ -800,72 +806,13 @@
     border-radius: 0.3rem;
   }
 
-  /* The edit/duplicate/delete controls sit BESIDE the tab button (in the tab box's flow), never over
-     it: drawn over a short tab they swallowed its clicks and hid it from drops (Ruling 29). They take
-     pointer events only while visible (the tab hovered / focused, or on touch), and never during a
-     drag. */
-  .tab-controls {
-    display: flex;
-    gap: 0.25rem;
+  /* The tab's edit handle sits BESIDE the tab button (in the tab box's flow), never over it: drawn
+     over a short tab, controls swallowed its clicks and hid it from drops (Ruling 29). It is inside
+     the tab box, so a drop on it counts as the tab; it takes pointer events only while shown, and
+     never during a drag (EditHandle). */
+  .tab-container > :global(.edit-handle) {
     margin-left: 0.25rem;
     align-self: center;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.2s;
-  }
-
-  .tab-container:hover .tab-controls,
-  .tab-container:focus-within .tab-controls {
-    opacity: 1;
-    pointer-events: auto;
-  }
-
-  /* Touch devices have no hover, so the edit/duplicate/delete tab buttons
-     would be unreachable without this — only entry to those actions on
-     a tablet. */
-  @media (hover: none) {
-    .tab-controls {
-      opacity: 1;
-      pointer-events: auto;
-    }
-  }
-
-  :global(body.hops-dragging) .tab-controls,
-  :global(body.hops-resizing) .tab-controls {
-    /* beats the :hover / :focus-within reveal above while the pointer is over a tab mid-drag */
-    opacity: 0 !important;
-    pointer-events: none !important;
-  }
-
-  .tab-control-btn {
-    padding: 0;
-    background: var(--bg-tertiary);
-    border: none;
-    border-radius: 50%;
-    width: 24px;
-    height: 24px;
-    color: var(--text-primary);
-    cursor: pointer;
-    transition: all 0.2s;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .tab-control-btn:hover {
-    background: var(--color-warning);
-    color: white;
-    transform: scale(1.1);
-  }
-
-  .tab-control-btn.duplicate-btn:hover {
-    background: var(--color-success);
-    color: white;
-  }
-
-  .tab-control-btn.delete-btn:hover {
-    background: var(--color-error-dark);
-    color: white;
   }
 
   .empty-dashboard {

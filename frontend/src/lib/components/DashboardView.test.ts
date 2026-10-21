@@ -297,7 +297,9 @@ describe('Dashboard edit mode (M3 Task 6: the v3 editor shell)', () => {
     render(Dashboard, { dashboard: legacy });
     enterEdit();
     await tick();
+    // The tab's shared edit handle (§4B) opens the tab dialog.
     await fireEvent.click(screen.getByRole('button', { name: 'Edit Main tab' }));
+    await tick();
     const name = screen.getByLabelText(/Tab Name/) as HTMLInputElement;
     await fireEvent.input(name, { target: { value: 'Front' } });
     await fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /^Save/ }));
@@ -323,14 +325,21 @@ describe('Dashboard edit mode (M3 Task 6: the v3 editor shell)', () => {
     noRequestsButSettingsRead(fetchSpy);
   });
 
-  it('duplicating and deleting a tab edit the draft (delete asks first)', async () => {
+  it('duplicating and deleting a tab from its menu edit the draft (delete asks first)', async () => {
     render(Dashboard, { dashboard: legacy });
     enterEdit();
     await tick();
-    await fireEvent.click(screen.getByRole('button', { name: 'Duplicate Main tab' }));
+    await fireEvent.contextMenu(screen.getByRole('tab', { name: 'Switch to Main tab' }), { clientX: 10, clientY: 10 });
+    await tick();
+    await fireEvent.click(within(screen.getByRole('menu')).getByRole('menuitem', { name: 'Duplicate' }));
+    await tick();
     await tick();
     expect(draft().tabs.map((t) => t.name)).toEqual(['Main', 'Second', 'Main (Copy)']);
-    await fireEvent.click(screen.getByRole('button', { name: 'Delete Second tab' }));
+    // The copy is shown, as the old duplicate button did.
+    expect(screen.getByRole('tab', { name: 'Switch to Main (Copy) tab' }).getAttribute('aria-selected')).toBe('true');
+    await fireEvent.contextMenu(screen.getByRole('tab', { name: 'Switch to Second tab' }), { clientX: 10, clientY: 10 });
+    await tick();
+    await fireEvent.click(within(screen.getByRole('menu')).getByRole('menuitem', { name: 'Delete' }));
     await tick();
     const { closeConfirmModal } = await import('$lib/stores/confirmModal');
     closeConfirmModal(true);
@@ -351,5 +360,145 @@ describe('Dashboard edit mode (M3 Task 6: the v3 editor shell)', () => {
     await fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /^Save/ }));
     expect((draft().header as { centerTitle?: string }).centerTitle).toBe('Draft title');
     noRequestsButSettingsRead(fetchSpy);
+  });
+});
+
+describe('one editing flow (walkthrough §4B): handle, double-click and menu for every item', () => {
+  let fetchSpy: ReturnType<typeof vi.fn>;
+  beforeEach(() => {
+    fetchSpy = vi.fn(() => Promise.reject(new Error('no network in tests')));
+    vi.stubGlobal('fetch', fetchSpy);
+    editorMenu.set(null);
+    editorDialog.set(null);
+  });
+  const cellOf = (c: HTMLElement, id: string) => c.querySelector(`.tab-canvas [data-node-id="${id}"]`) as HTMLElement;
+  const expandedD: LayoutDashboard = {
+    id: 'd1', name: 'Home', path: '/home', revision: 1,
+    tabs: [{ id: 't1', name: 'Main', root: { columns: 12, children: [tile('m1', 'MainTile'), folder('grp', 'Group', [tile('g1', 'InGroup')])] } }]
+  };
+
+  it('the old per-tab pencil / duplicate / delete buttons are gone', async () => {
+    const { container } = render(Dashboard, { dashboard: legacy });
+    enterEdit();
+    await tick();
+    expect(container.querySelector('.tab-control-btn')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Duplicate Main tab' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Delete Main tab' })).toBeNull();
+  });
+
+  it('no handles outside edit mode', async () => {
+    const { container } = render(Dashboard, { dashboard: legacy });
+    await tick();
+    expect(container.querySelector('[data-edit-handle]')).toBeNull();
+  });
+
+  it('tile: the handle and a double-click open its dialog; the handle click does not select it', async () => {
+    const { container } = render(Dashboard, { dashboard: legacy });
+    enterEdit();
+    await tick();
+    await fireEvent.click(within(cellOf(container, 'm1')).getByRole('button', { name: 'Edit MainTile' }));
+    expect(get(editorDialog)).toEqual({ kind: 'tile', id: 'm1' });
+    expect(get(selectedNodes).has('m1')).toBe(false);
+    editorDialog.set(null);
+    await fireEvent.dblClick(cellOf(container, 'm1'));
+    expect(get(editorDialog)).toEqual({ kind: 'tile', id: 'm1' });
+  });
+
+  it('expanded folder: the handle and a double-click open the folder dialog', async () => {
+    config.set(cfg([expandedD])); // the edit session drafts the stored dashboard
+    const { container } = render(Dashboard, { dashboard: expandedD });
+    enterEdit();
+    await tick();
+    const f = cellOf(container, 'grp');
+    await fireEvent.click(screen.getByRole('button', { name: 'Edit Group' }));
+    expect(get(editorDialog)).toEqual({ kind: 'folder', id: 'grp' });
+    expect(get(selectedNodes).has('grp')).toBe(false);
+    editorDialog.set(null);
+    await fireEvent.dblClick(f);
+    expect(get(editorDialog)).toEqual({ kind: 'folder', id: 'grp' });
+    // The inner tile's own handle edits the tile, not the folder.
+    editorDialog.set(null);
+    await fireEvent.click(screen.getByRole('button', { name: 'Edit InGroup' }));
+    expect(get(editorDialog)).toEqual({ kind: 'tile', id: 'g1' });
+  });
+
+  it('collapsed folder in edit mode: double-click EDITS (no overlay); the handle edits; "Open" stays in its menu', async () => {
+    const { container } = render(Dashboard, { dashboard: legacy });
+    enterEdit();
+    await tick();
+    const face = cellOf(container, 'box').querySelector('[role="button"][aria-haspopup]') as HTMLElement;
+    await fireEvent.dblClick(face);
+    await tick();
+    expect(get(editorDialog)).toEqual({ kind: 'folder', id: 'box' });
+    expect(get(overlayStack)).toEqual([]);
+    editorDialog.set(null);
+    await fireEvent.click(screen.getByRole('button', { name: 'Edit Box' }));
+    expect(get(editorDialog)).toEqual({ kind: 'folder', id: 'box' });
+    expect(get(overlayStack)).toEqual([]);
+    editorDialog.set(null);
+    await fireEvent.contextMenu(cellOf(container, 'box'), { clientX: 5, clientY: 5 });
+    await tick();
+    const menu = screen.getByRole('menu');
+    expect(within(menu).getByRole('menuitem', { name: 'Edit' })).toBeInTheDocument();
+    await fireEvent.click(within(menu).getByRole('menuitem', { name: 'Open' }));
+    await tick();
+    expect(get(overlayStack)).toEqual(['box']);
+  });
+
+  it('collapsed folder outside edit mode: a click still opens it, and there is no handle', async () => {
+    const { container } = render(Dashboard, { dashboard: legacy });
+    await tick();
+    const face = cellOf(container, 'box').querySelector('[role="button"][aria-haspopup]') as HTMLElement;
+    await fireEvent.click(face);
+    await tick();
+    expect(get(overlayStack)).toEqual(['box']);
+    expect(get(editorDialog)).toBeNull();
+  });
+
+  it('tab: the handle, a double-click and the menu\'s Edit all open the tab dialog', async () => {
+    render(Dashboard, { dashboard: legacy });
+    enterEdit();
+    await tick();
+    const tabEl = screen.getByRole('tab', { name: 'Switch to Second tab' });
+    // Handle.
+    await fireEvent.click(screen.getByRole('button', { name: 'Edit Second tab' }));
+    await tick();
+    expect(get(editorDialog)).toEqual({ kind: 'tab', id: 't2' });
+    expect((screen.getByLabelText(/Tab Name/) as HTMLInputElement).value).toBe('Second');
+    await fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /^Cancel/ }));
+    await tick();
+    expect(get(editorDialog)).toBeNull();
+    expect(screen.queryByLabelText(/Tab Name/)).toBeNull();
+    // Double-click.
+    await fireEvent.dblClick(tabEl);
+    await tick();
+    expect(get(editorDialog)).toEqual({ kind: 'tab', id: 't2' });
+    expect((screen.getByLabelText(/Tab Name/) as HTMLInputElement).value).toBe('Second');
+    editorDialog.set(null);
+    await tick();
+    // Right-click: the shared menu with Edit, Duplicate, Delete.
+    await fireEvent.contextMenu(tabEl, { clientX: 40, clientY: 12 });
+    expect(get(editorMenu)).toEqual({ x: 40, y: 12, target: { kind: 'tab', id: 't2' } });
+    await tick();
+    const menu = screen.getByRole('menu', { name: 'Tab actions: Second' });
+    expect(within(menu).getAllByRole('menuitem').map((b) => b.textContent?.trim())).toEqual(['Edit', 'Duplicate', 'Delete']);
+    await fireEvent.click(within(menu).getByRole('menuitem', { name: 'Edit' }));
+    await tick();
+    expect(get(editorDialog)).toEqual({ kind: 'tab', id: 't2' });
+    expect((screen.getByLabelText(/Tab Name/) as HTMLInputElement).value).toBe('Second');
+    noRequestsButSettingsRead(fetchSpy);
+  });
+
+  it('a tab dialog whose tab has gone (undo) closes, saying so', async () => {
+    const { toast } = await import('$lib/stores/toast');
+    const err = vi.spyOn(toast, 'error');
+    render(Dashboard, { dashboard: legacy });
+    enterEdit();
+    await tick();
+    editorDialog.set({ kind: 'tab', id: 'nope' });
+    await tick();
+    await tick();
+    expect(get(editorDialog)).toBeNull();
+    expect(err).toHaveBeenCalledWith(expect.stringMatching(/no longer exists/));
   });
 });
