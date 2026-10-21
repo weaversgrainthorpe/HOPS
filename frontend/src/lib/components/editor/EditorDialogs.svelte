@@ -1,8 +1,10 @@
 <script lang="ts">
   // Renders the editor's item menu and dialogs (mounted once by Dashboard in
-  // edit mode). The tab dialog ({kind:'tab'}) is rendered by Dashboard, next
-  // to the tab bar it edits; this component only closes it when its tab is gone. Every save here edits the session draft through
+  // edit mode). Every save here edits the session draft through
   // editorActions → editSession.apply; nothing is sent to the server.
+  //
+  // The tab dialog ({kind:'tab'}) is rendered by Dashboard, next to the tab
+  // bar it edits; this component only closes it when its tab is gone.
   import EntryEditModal from '../admin/EntryEditModal.svelte';
   import FolderEditModal, { type FolderFields } from './FolderEditModal.svelte';
   import MoveCopyDialog from './MoveCopyDialog.svelte';

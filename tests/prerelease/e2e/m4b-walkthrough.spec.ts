@@ -550,3 +550,88 @@ test.describe('M4 walkthrough changes in a real browser', () => {
     await expect(page.getByRole('tab')).toHaveCount(2);
   });
 });
+
+// ---- §4B fix round 1: nested handles never overlap; touch shows them without hover
+
+/** An untitled folder (showTitle false) with a tile in its top-right corner, and a tile beside it. */
+async function nestedDash(page: Page, context: BrowserContext) {
+  return importDash(page, context, [{
+    name: 'Main',
+    children: (id) => [
+      tile(id('out'), 'Outside', 0, 0),
+      {
+        id: id('nf'), kind: 'folder', name: 'Plain', layout: 'inherit', display: 'expanded', shape: 'rounded',
+        showTitle: false, placement: placement(2, 1, 4, 3),
+        content: { columns: 4, children: [tile(id('corner'), 'Corner', 3, 0)] }
+      }
+    ]
+  }]);
+}
+
+const overlaps = (a: Box, b: Box) =>
+  a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+
+test.describe('§4B handles: innermost only, never overlapping', () => {
+  test('an untitled folder with a tile in its top-right corner: the tile\'s handle edits the tile', async ({ page, context }) => {
+    const f = await nestedDash(page, context);
+    await page.goto(f.path);
+    await enterEdit(page);
+    const corner = page.locator(`[data-node-id="${f.id('corner')}"]`);
+    const tileHandle = page.getByRole('button', { name: 'Edit Corner', exact: true });
+    const folderHandle = page.getByRole('button', { name: 'Edit Plain', exact: true });
+    await corner.hover({ position: { x: 20, y: 40 } });
+    // Only the innermost hovered item shows its handle.
+    await expect(tileHandle).toHaveCSS('opacity', '1');
+    await expect(folderHandle).toHaveCSS('opacity', '0');
+    const tb = (await tileHandle.boundingBox())!;
+    await page.mouse.move(tb.x + tb.width / 2, tb.y + tb.height / 2);
+    await page.mouse.down();
+    await page.mouse.up();
+    const dlg = page.getByRole('dialog', { name: 'Edit Tile' });
+    await expect(dlg).toBeVisible();
+    await expect(dlg.locator('input#name')).toHaveValue('Corner');
+    await dlg.getByRole('button', { name: 'Cancel', exact: true }).click();
+    // The folder's own handle (on its frame, outside its content) still edits the folder.
+    // (Closing the dialog returns focus to the tile's handle, which keeps it shown: drop that focus.)
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    const nf = page.locator(`[data-node-id="${f.id('nf')}"]`);
+    await nf.hover({ position: { x: 4, y: 60 } });
+    await expect(folderHandle).toHaveCSS('opacity', '1');
+    await expect(tileHandle).toHaveCSS('opacity', '0');
+    await folderHandle.click();
+    const fdlg = page.getByRole('dialog', { name: 'Edit Folder' });
+    await expect(fdlg.locator('#folder-name')).toHaveValue('Plain');
+    await fdlg.getByRole('button', { name: 'Cancel', exact: true }).click();
+    // Never overlapping, whatever is shown.
+    expect(overlaps((await folderHandle.boundingBox())!, (await tileHandle.boundingBox())!)).toBe(false);
+  });
+});
+
+test.describe('§4B handles on a touch device (hover: none)', () => {
+  test.use({ hasTouch: true, isMobile: true, viewport: { width: 1280, height: 900 } });
+
+  test('every handle is shown without hovering, none overlap, and a tap on the tile\'s edits the tile', async ({ page, context }) => {
+    const f = await nestedDash(page, context);
+    await page.goto(f.path);
+    expect(await page.evaluate(() => matchMedia('(hover: none)').matches)).toBe(true);
+    await page.getByRole('button', { name: 'Enter Edit Mode' }).tap();
+    await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
+    const names = ['Edit Outside', 'Edit Corner', 'Edit Plain', 'Edit Main tab'];
+    const boxes: Box[] = [];
+    for (const n of names) {
+      const h = page.getByRole('button', { name: n, exact: true });
+      await expect(h).toHaveCSS('opacity', '1');
+      boxes.push((await h.boundingBox())!);
+    }
+    for (let i = 0; i < boxes.length; i++)
+      for (let j = i + 1; j < boxes.length; j++)
+        expect(overlaps(boxes[i], boxes[j]), `${names[i]} vs ${names[j]}`).toBe(false);
+    await page.getByRole('button', { name: 'Edit Corner', exact: true }).tap();
+    const dlg = page.getByRole('dialog', { name: 'Edit Tile' });
+    await expect(dlg).toBeVisible();
+    await expect(dlg.locator('input#name')).toHaveValue('Corner');
+    await dlg.getByRole('button', { name: 'Cancel', exact: true }).tap();
+    await page.getByRole('button', { name: 'Edit Plain', exact: true }).tap();
+    await expect(page.getByRole('dialog', { name: 'Edit Folder' }).locator('#folder-name')).toHaveValue('Plain');
+  });
+});

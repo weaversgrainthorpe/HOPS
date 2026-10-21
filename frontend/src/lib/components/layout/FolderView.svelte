@@ -17,6 +17,7 @@
   import { COLLAPSED_HINT } from '$lib/editor/resize';
   import ResizeHandles from '../editor/ResizeHandles.svelte';
   import EditHandle from '../editor/EditHandle.svelte';
+  import { folderHandleSpot } from '$lib/editor/editHandleSpot';
   import FolderSurface from '../background/FolderSurface.svelte';
   import BackgroundFailedBadge from '../background/BackgroundFailedBadge.svelte';
 
@@ -58,6 +59,8 @@
   const remembered = $derived(views?.remembered(folder.id));
   const saved = $derived(views?.saved(folder.id) ?? folder.display);
   const chain = $derived([...folderChain, folder]);
+  // In its header when titled, else hanging outside its box: never over an inner item's handle.
+  const handleSpot = $derived(folderHandleSpot(chain));
   const showTitle = $derived(folder.showTitle !== false);
   const tabLook = $derived(folder.shape === 'folder-tab');
   const textColor = $derived(
@@ -244,7 +247,7 @@
       />
     </div>
     {#if editing}
-      <EditHandle name={folder.name} onEdit={edit} />
+      <EditHandle name={folder.name} onEdit={edit} placement={handleSpot === 'header' ? 'corner' : handleSpot} />
     {/if}
     {#if editing && plan.kind !== 'stacked'}
       <!-- Handles on the rendered (expanded) box; a collapsed folder has none (Ruling 13). -->

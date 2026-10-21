@@ -14,8 +14,12 @@
     onEdit: () => void;
     /** Optional visible text beside the pencil (Task 6's "Dashboard" handle). */
     label?: string;
-    /** corner: pinned to the host's top-right (the host is positioned); inline: in the flow. */
-    placement?: 'corner' | 'inline';
+    /**
+     * corner: pinned inside the host's top-right (the host is positioned); inline: in the flow;
+     * above / right: hanging just OUTSIDE the host's top-right edge (an untitled folder, so it
+     * never covers an inner item's handle — see editor/editHandleSpot.ts).
+     */
+    placement?: 'corner' | 'inline' | 'above' | 'right';
   }
   let { name, onEdit, label, placement = 'corner' }: Props = $props();
   const aria = $derived(`Edit ${name?.trim() ? name : 'Untitled'}`);
@@ -86,6 +90,18 @@
     right: 0.25rem;
     z-index: 4;
   }
+  .edit-handle.above {
+    position: absolute;
+    bottom: 100%;
+    right: 0.25rem;
+    z-index: 4;
+  }
+  .edit-handle.right {
+    position: absolute;
+    left: 100%;
+    top: 0.25rem;
+    z-index: 4;
+  }
   .edit-handle.labelled {
     padding: 0 0.6rem;
   }
@@ -98,9 +114,10 @@
     outline: 2px solid var(--accent);
     outline-offset: 2px;
   }
-  /* Shown on the host's hover or keyboard focus (the host is the handle's parent). */
-  :global(*:hover) > .edit-handle,
-  :global(*:focus-within) > .edit-handle,
+  /* Shown on the host's hover or keyboard focus (the host is the handle's parent) — only the
+     INNERMOST item's: a folder hides its handle while an item inside it is hovered / focused. */
+  :global(*:hover:not(:has([data-node-id]:hover))) > .edit-handle,
+  :global(*:focus-within:not(:has([data-node-id]:focus-within))) > .edit-handle,
   .edit-handle:focus,
   .edit-handle.labelled {
     opacity: 1;

@@ -20,14 +20,14 @@ describe('EditHandle (one editing flow, §4B)', () => {
     expect(screen.getByRole('button', { name: 'Edit Untitled' })).toBeInTheDocument();
   });
 
-  it('is reachable by keyboard (no negative tabindex) and Enter edits', async () => {
+  it('is reachable by keyboard (focusable, no negative tabindex) and its click edits (Enter: Playwright)', async () => {
     const onEdit = vi.fn();
     render(EditHandle, { name: 'Router', onEdit });
     const btn = screen.getByRole('button', { name: 'Edit Router' });
     expect(btn.getAttribute('tabindex')).not.toBe('-1');
     btn.focus();
     expect(document.activeElement).toBe(btn);
-    // A native button turns Enter into a click.
+    // A native button turns Enter into a click; jsdom does not, so the real Enter is in m4b-walkthrough.
     await fireEvent.click(btn);
     expect(onEdit).toHaveBeenCalled();
   });
