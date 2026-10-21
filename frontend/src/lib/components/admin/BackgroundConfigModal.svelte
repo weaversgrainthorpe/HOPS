@@ -9,6 +9,7 @@
   import { untrack } from 'svelte';
   import { logError } from '$lib/utils/errors';
   import { isSafeBackgroundUrl, cssUrl } from '$lib/components/background/backgroundUrl';
+  import { galleryImages } from '$lib/components/background/galleryImages';
   import {
     slideshowInterval as clampInterval,
     slideshowTransitionDuration as clampDuration,
@@ -189,12 +190,8 @@
     isLoading = false;
   }
 
-  // Filter images by category
-  let filteredImages = $derived(
-    selectedCategory === 'all'
-      ? allImages
-      : allImages.filter(img => img.category === selectedCategory)
-  );
+  // Filter images by category; each picture (URL) appears once per view (walkthrough §1)
+  let filteredImages = $derived(galleryImages(allImages, selectedCategory));
 
   // Categories with "All" option
   let allCategories = $derived([

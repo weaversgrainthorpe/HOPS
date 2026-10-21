@@ -63,6 +63,14 @@ describe('BackgroundConfigModal at every level', () => {
     expect(out).not.toHaveProperty('overlayBlur');
   });
 
+  it('picking a picture listed under several names selects exactly one card (walkthrough 1)', async () => {
+    open('dashboard', { type: 'image', value: '/presets/dark-gradient.jpg' });
+    const card = await screen.findByTitle('Network Grid');
+    await fireEvent.click(card);
+    expect(document.querySelectorAll('.image-card.selected')).toHaveLength(1);
+    expect(document.querySelectorAll('.image-card img[src="/presets/network-grid.jpg"]')).toHaveLength(1);
+  });
+
   it('the dashboard Inherit switch is "No background (keep this picture stored)"', () => {
     open('dashboard', { type: 'image', value: '/presets/network-grid.jpg' });
     expect(screen.getByRole('switch', { name: 'No background (keep this picture stored)' })).toBeInTheDocument();
