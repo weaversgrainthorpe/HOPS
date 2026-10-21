@@ -190,6 +190,57 @@ describe('DashboardEditModal (walkthrough §4C): one dialog, one Save, one Cance
 		expect(undoDepth()).toBe(0);
 	});
 
+	it('while settings are saving it cannot be closed (Cancel, X, Escape), says so, and a late success still applies once', async () => {
+		let finish!: (v: unknown) => void;
+		vi.mocked(api.saveDashboardSettings).mockReturnValueOnce(new Promise((r) => (finish = r)) as never);
+		const onClose = vi.fn();
+		open(onClose);
+		try {
+			await screen.findByText('Check timeout (seconds)');
+			await fireEvent.input(screen.getByLabelText(/Custom Title/), { target: { value: 'During' } });
+			await section('Settings');
+			await fireEvent.click(screen.getByLabelText('Override for this dashboard: Edit mode idle timeout (minutes)'));
+			await save();
+			await waitFor(() => expect(api.saveDashboardSettings).toHaveBeenCalled());
+			expect(screen.getByRole('button', { name: /Saving/ })).toBeDisabled();
+			const cancel = screen.getByRole('button', { name: 'Cancel' });
+			expect(cancel).toBeDisabled();
+			await fireEvent.click(cancel);
+			await fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+			await fireEvent.keyDown(screen.getByRole('tab', { name: 'Settings' }), { key: 'Escape' });
+			expect(onClose).not.toHaveBeenCalled();
+			expect(undoDepth()).toBe(0);
+			finish(saved(5, { editIdleTimeoutMinutes: 15 }));
+			await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+			expect((draft().header as { centerTitle?: string }).centerTitle).toBe('During');
+			expect(undoDepth()).toBe(1);
+		} finally {
+			finish?.(saved(5, { editIdleTimeoutMinutes: 15 })); // never leave the save queue blocked
+		}
+	});
+
+	it('Enter in a header text field saves', async () => {
+		const onClose = vi.fn();
+		open(onClose);
+		await screen.findByText('Check timeout (seconds)');
+		const title = screen.getByLabelText(/Custom Title/);
+		await fireEvent.input(title, { target: { value: 'By Enter' } });
+		await fireEvent.keyDown(title, { key: 'Enter' });
+		await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+		expect((draft().header as { centerTitle?: string }).centerTitle).toBe('By Enter');
+	});
+
+	it('Ctrl+Enter saves from the Settings section', async () => {
+		const onClose = vi.fn();
+		open(onClose);
+		await screen.findByText('Check timeout (seconds)');
+		await fireEvent.input(screen.getByLabelText(/Custom Title/), { target: { value: 'By Ctrl' } });
+		await section('Settings');
+		await fireEvent.keyDown(screen.getByLabelText('Override for this dashboard: Status checks'), { key: 'Enter', ctrlKey: true });
+		await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+		expect((draft().header as { centerTitle?: string }).centerTitle).toBe('By Ctrl');
+	});
+
 	it('the dialog\'s Escape cancels it (no request, no draft change)', async () => {
 		const onClose = vi.fn();
 		open(onClose);

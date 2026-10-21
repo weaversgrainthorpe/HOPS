@@ -166,6 +166,10 @@
   let showAddTabModal = $state(false);
   /** The one dashboard dialog (Header, Background, Settings — walkthrough §4C). */
   let showDashboardEdit = $state(false);
+  // Edit mode ending (Exit, idle timeout) closes it for good: it never reopens on the next entry.
+  $effect(() => {
+    if (!editing) untrack(() => (showDashboardEdit = false));
+  });
 
   // ---- background layers (M4 Task 4, design §4a calls 1–4) ----
   // The dashboard's layer, then the active tab's own layer above it (at its

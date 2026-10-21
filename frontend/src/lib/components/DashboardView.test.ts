@@ -352,6 +352,22 @@ describe('Dashboard edit mode (M3 Task 6: the v3 editor shell)', () => {
 
   // Tab reorder by drag (the editor's drag engine, Task 8) is covered in editor/TabReorder.test.ts.
 
+  it('the Dashboard dialog does not come back by itself after edit mode ends with it open (idle timeout)', async () => {
+    render(Dashboard, { dashboard: legacy });
+    enterEdit();
+    await tick();
+    await fireEvent.click(screen.getByRole('button', { name: 'Edit Dashboard' }));
+    expect(screen.getByRole('dialog', { name: 'Edit Dashboard' })).toBeInTheDocument();
+    editMode.set(false);
+    resetEditSessionForTests();
+    await tick();
+    expect(screen.queryByRole('dialog', { name: 'Edit Dashboard' })).toBeNull();
+    enterEdit();
+    await tick();
+    await tick();
+    expect(screen.queryByRole('dialog', { name: 'Edit Dashboard' })).toBeNull();
+  });
+
   it('the Dashboard dialog edits the draft only (header and background); its settings read is the only request', async () => {
     render(Dashboard, { dashboard: legacy });
     enterEdit();

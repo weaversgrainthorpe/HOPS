@@ -82,6 +82,19 @@
     onClose();
   }
 
+  /**
+   * Keyboard save, as in the other edit dialogs: Enter in a header text field (the old Header
+   * dialog was a form), Ctrl+Enter anywhere (as the background picker).
+   */
+  function onBodyKey(e: KeyboardEvent) {
+    if (e.key !== 'Enter' || e.defaultPrevented || e.isComposing || e.altKey || e.shiftKey) return;
+    const t = e.target as HTMLElement | null;
+    const headerText = t instanceof HTMLInputElement && t.type === 'text' && !!t.closest('#dash-edit-panel-header');
+    if (!e.ctrlKey && !e.metaKey && !headerText) return;
+    e.preventDefault();
+    void handleSave();
+  }
+
   function onTabKey(e: KeyboardEvent, i: number) {
     if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
     e.preventDefault();
@@ -90,7 +103,18 @@
   }
 </script>
 
-<Modal id="dashboard-edit" title="Edit Dashboard" titleIcon="mdi:view-dashboard-edit-outline" {onClose} maxWidth="1000px">
+<!-- While settings are saving it can't be closed (Cancel, X, backdrop, Escape): a Cancel that
+     didn't discard would be a lie, since the save then goes on to apply the draft. -->
+<Modal
+  id="dashboard-edit"
+  title="Edit Dashboard"
+  titleIcon="mdi:view-dashboard-edit-outline"
+  {onClose}
+  onBeforeClose={() => !saving}
+  maxWidth="1000px"
+>
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div class="body" onkeydown={onBodyKey}>
   <div class="tabs" role="tablist" aria-label="Dashboard sections">
     {#each SECTIONS as s, i (s.id)}
       <button
@@ -132,15 +156,16 @@
       {dashboardId}
     />
   </div>
+  </div>
 
   {#snippet footer()}
     {#if problem}
       <p class="problem" role="alert">{problem}</p>
     {/if}
-    <button type="button" class="btn-secondary" onclick={onClose}>Cancel</button>
+    <button type="button" class="btn-secondary" onclick={() => !saving && onClose()} disabled={saving}>Cancel</button>
     <button type="button" class="btn-primary" onclick={handleSave} disabled={saving || settingsInvalid}>
-      <Icon icon="mdi:content-save" width="20" />
-      Save
+      <Icon icon={saving ? 'mdi:loading' : 'mdi:content-save'} width="20" class={saving ? 'spin' : undefined} />
+      {saving ? 'Saving…' : 'Save'}
     </button>
   {/snippet}
 </Modal>
