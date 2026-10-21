@@ -95,6 +95,11 @@ describe('minimised folder', () => {
     expect(minimisedPlacement({ x: 5, y: 0, w: 1, h: 6 }, 'grid', tab())).toEqual({ x: 5, y: 0, w: 1, h: 2 });
     expect(minimisedPlacement({ x: 5, y: 0, w: 6, h: 1, z: 3 }, 'grid', tab())).toEqual({ x: 5, y: 0, w: 2, h: 1, z: 3 });
   });
+  it('grid: a non-finite w or h gives a Medium in that direction, never NaN (final review Minor 5)', () => {
+    expect(minimisedPlacement({ x: 1, y: 2, w: NaN, h: 1 }, 'grid', tab())).toEqual({ x: 1, y: 2, w: 2, h: 1 });
+    expect(minimisedPlacement({ x: 1, y: 2, w: 1, h: Infinity }, 'grid', tab())).toEqual({ x: 1, y: 2, w: 1, h: 2 });
+    expect(minimisedPlacement({ x: 1, y: 2, w: 'x', h: undefined } as never, 'grid', tab())).toEqual({ x: 1, y: 2, w: 2, h: 2 });
+  });
 });
 
 describe('nodeFit: Small (1 x 1) is always compact', () => {

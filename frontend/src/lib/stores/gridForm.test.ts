@@ -13,7 +13,7 @@ vi.mock('$lib/utils/api', async () => ({
 
 import * as api from '$lib/utils/api';
 import { config, gridFormProblem, OLD_GRID_FORM, applySavedLayout, renameDashboard } from './config';
-import { apply, begin, save, resetEditSessionForTests } from './editSession';
+import { apply, begin, save, resetEditSessionForTests, session, dirty } from './editSession';
 import { toast } from './toast';
 import { updateNode } from '$lib/editor/treeOps';
 import { transferAndRebase } from '$lib/editor/editorActions';
@@ -95,5 +95,38 @@ describe('the editor refuses to save into an unmarked document', () => {
     expect(await transferAndRebase({} as never, 'Moved', 'Not moved')).toBe(false);
     expect(api.transferNodes).not.toHaveBeenCalled();
     expect(err).toHaveBeenCalledWith(OLD_GRID_FORM);
+  });
+});
+
+// Ruling 5: the server refuses a write without gridUnit: 2 (a page loaded before the update).
+// The user sees the reason, and nothing is lost: the draft stays exactly as it was, still dirty.
+describe('the server refuses a write (409 grid_unit_mismatch)', () => {
+  const REFUSED = "HOPS's layout changed since this page was loaded, so this change was not saved. Reload the page, then make the change again.";
+  it('save(): the reload message is shown and the draft is kept', async () => {
+    load(2);
+    edit();
+    const draft = get(session)?.draft;
+    vi.mocked(api.saveDashboardV3).mockRejectedValue(new Error(REFUSED));
+    const err = vi.spyOn(toast, 'error');
+    expect(await save()).toBe('error');
+    expect(err).toHaveBeenCalledWith(expect.stringContaining(REFUSED));
+    expect(get(session)?.draft).toBe(draft);
+    expect(get(dirty)).toBe(true);
+  });
+  it('rename: the reload message is shown and the held document is unchanged', async () => {
+    load(2);
+    const before = structuredClone(get(config));
+    vi.mocked(api.saveDashboardV3).mockRejectedValue(new Error(REFUSED));
+    const err = vi.spyOn(toast, 'error');
+    await expect(renameDashboard('d', { name: 'New', path: '/new' })).rejects.toThrow(REFUSED);
+    expect(err).toHaveBeenCalledWith(expect.stringContaining(REFUSED));
+    expect(get(config)).toEqual(before);
+  });
+  it('a move/copy to another dashboard: the reload message is shown', async () => {
+    load(2);
+    vi.mocked(api.transferNodes).mockRejectedValue(new Error(REFUSED));
+    const err = vi.spyOn(toast, 'error');
+    expect(await transferAndRebase({ mode: 'move' } as never, 'Moved', 'Not moved')).toBe(false);
+    expect(err).toHaveBeenCalledWith(expect.stringContaining(REFUSED));
   });
 });

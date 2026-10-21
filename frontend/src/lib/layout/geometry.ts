@@ -426,8 +426,9 @@ export function minimisedPlacement(p: Placement, mode: LayoutMode, tab: LayoutTa
   if (mode === 'free') {
     w = h = Math.max(1, Math.round(MEDIUM_CELLS * freeSideOf(tab.designWidth)));
   } else {
-    w = Math.min(MEDIUM_CELLS, Math.max(1, p.w));
-    h = Math.min(MEDIUM_CELLS, Math.max(1, p.h));
+    // A non-finite side (unreachable for renderable nodes) is a Medium, never NaN.
+    w = isNum(p.w) ? Math.min(MEDIUM_CELLS, Math.max(1, p.w)) : MEDIUM_CELLS;
+    h = isNum(p.h) ? Math.min(MEDIUM_CELLS, Math.max(1, p.h)) : MEDIUM_CELLS;
   }
   const out: Placement = { x: p.x, y: p.y, w, h };
   if (p.z !== undefined) out.z = p.z;

@@ -381,12 +381,18 @@ func gridFailed(detail string) MigrationResult {
 	return MigrationResult{Failed: true, Detail: detail}
 }
 
-// warnOddGridRoots logs a WARN for every grid tab root whose columns are not
-// RootColumns after the update. The verifier deliberately accepts twice the
-// old effective columns rather than forcing 24 (spec §9 deviation: forcing it
-// would change how such a root renders); no known path writes a grid root
-// other than 12, so one is an anomaly worth seeing.
-func warnOddGridRoots(doc Obj) {
+// OddGridRoot is a grid tab root whose columns are not RootColumns.
+type OddGridRoot struct {
+	Dashboard, Tab, TabName, Columns any
+}
+
+// OddGridRoots lists every grid tab root in doc whose columns are not
+// RootColumns. The verifier deliberately accepts twice the old effective
+// columns rather than forcing 24 (spec §9 deviation: forcing it would change
+// how such a root renders); no known path writes a grid root other than 12,
+// so one is an anomaly worth seeing (startup WARNs, import reports it).
+func OddGridRoots(doc Obj) []OddGridRoot {
+	var out []OddGridRoot
 	dashes, _ := doc["dashboards"].([]any)
 	for _, d := range dashes {
 		dm, _ := d.(Obj)
@@ -398,9 +404,17 @@ func warnOddGridRoots(doc Obj) {
 				continue
 			}
 			if n, ok := numberValue(root["columns"]); !ok || n != RootColumns {
-				slog.Warn("grid tab root is not 24 columns after the finer-grid update (kept at twice its old width, so it looks the same)",
-					"component", "configdoc", "dashboard", dm["id"], "tab", tm["id"], "columns", root["columns"])
+				out = append(out, OddGridRoot{Dashboard: dm["id"], Tab: tm["id"], TabName: tm["name"], Columns: root["columns"]})
 			}
 		}
+	}
+	return out
+}
+
+// warnOddGridRoots logs a WARN for every OddGridRoots entry after the update.
+func warnOddGridRoots(doc Obj) {
+	for _, o := range OddGridRoots(doc) {
+		slog.Warn("grid tab root is not 24 columns after the finer-grid update (kept at twice its old width, so it looks the same)",
+			"component", "configdoc", "dashboard", o.Dashboard, "tab", o.Tab, "columns", o.Columns)
 	}
 }

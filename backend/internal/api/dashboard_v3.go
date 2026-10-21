@@ -94,7 +94,8 @@ var transientDashboardKeys = map[string]bool{
 
 // handlePutDashboardV3 saves a dashboard written by the v3 editor. The body's
 // settings are ignored (they have their own endpoint) and so is its revision
-// beyond the conflict check: the stored one is bumped.
+// beyond the conflict check: the stored one is bumped. The caller has already
+// refused a request without gridUnit: 2 (gridUnitError).
 func (r *Router) handlePutDashboardV3(w http.ResponseWriter, id string, in configdoc.Obj, revision any) {
 	r.updateDocWithBackup(w, func(stored configdoc.Obj) (configdoc.Obj, interface{}, error) {
 		prev, ok := storedDashboards(stored)[id]
@@ -281,6 +282,7 @@ type transferRequest struct {
 	NodeIDs        []string `json:"nodeIds"`
 	TargetID       string   `json:"targetId"`
 	TargetRevision any      `json:"targetRevision"`
+	GridUnit       any      `json:"gridUnit"` // must be configdoc.GridUnit (Ruling 5)
 	Target         struct {
 		TabID    string `json:"tabId"`
 		FolderID string `json:"folderId"`
@@ -324,6 +326,10 @@ func (r *Router) handleTransferNodes(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 		want[id] = true
+	}
+	if ge := gridUnitError(body.GridUnit); ge != nil {
+		writeAPIError(w, ge)
+		return
 	}
 	r.updateDocWithBackup(w, func(stored configdoc.Obj) (configdoc.Obj, interface{}, error) {
 		all := storedDashboards(stored)

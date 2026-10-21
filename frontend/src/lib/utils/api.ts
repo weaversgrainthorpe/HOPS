@@ -1,6 +1,7 @@
 import type { Config, DashboardSettings } from '$lib/types';
 import type { LayoutDoc, LayoutDashboard } from '$lib/types/layout';
 import type { ImportResult } from './importResult';
+import { GRID_UNIT } from '$lib/layout/geometry';
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 
@@ -66,6 +67,9 @@ export class MigrationFailedError extends Error {
   }
 }
 
+/** Fallback text for a 409 grid_unit_mismatch whose body has no detail. */
+const GRID_UNIT_REFUSED = "HOPS's layout changed since this page was loaded, so this change was not saved. Reload the page, then make the change again.";
+
 // Helper to make API requests. Session auth is handled via HttpOnly cookies,
 // CSRF protection via the double-submit cookie pattern.
 async function fetchAPI(endpoint: string, options: RequestInit = {}) {
@@ -120,6 +124,11 @@ async function fetchAPI(endpoint: string, options: RequestInit = {}) {
         Number(parsedBody.currentRevision ?? 0),
         typeof parsedBody.detail === 'string' ? parsedBody.detail : undefined
       );
+    }
+    // Ruling 5: a placement-carrying write without gridUnit 2 (this page predates the server's
+    // layout) is refused; never a revision conflict, and always says to reload.
+    if (response.status === 409 && parsedBody?.error === 'grid_unit_mismatch') {
+      throw new Error(typeof parsedBody.detail === 'string' && parsedBody.detail ? parsedBody.detail : GRID_UNIT_REFUSED);
     }
     // path_taken (and other 409s with a sentence): show the server's detail.
     if (response.status === 409 && typeof parsedBody?.detail === 'string' && parsedBody.detail) {
@@ -321,7 +330,9 @@ export async function saveDashboardV3(
 ): Promise<{ revision: number; warning?: string } & FreshLayout> {
   const resp = await fetchAPI(`/dashboards/${encodeURIComponent(id)}`, {
     method: 'PUT',
-    body: JSON.stringify({ schema: 3, dashboard, revision }),
+    // gridUnit: the units this page's placements are in. The server refuses a write without it
+    // (Ruling 5), so a page loaded before a layout change can never store old units.
+    body: JSON.stringify({ schema: 3, dashboard, revision, gridUnit: GRID_UNIT }),
   });
   if (!resp || typeof resp.revision !== 'number') {
     throw new Error('The server did not confirm the new dashboard revision.');
@@ -351,7 +362,11 @@ export async function transferNodes(
 ): Promise<{ sourceRevision: number; targetRevision: number } & FreshLayout> {
   const body: TransferRequest = { ...req, target: { tabId: req.target.tabId } };
   if (req.target.folderId) body.target.folderId = req.target.folderId;
-  const resp = await fetchAPI('/dashboards/transfer', { method: 'POST', body: JSON.stringify(body) });
+  // gridUnit: see saveDashboardV3 (Ruling 5).
+  const resp = await fetchAPI('/dashboards/transfer', {
+    method: 'POST',
+    body: JSON.stringify({ ...body, gridUnit: GRID_UNIT }),
+  });
   if (!resp || typeof resp.sourceRevision !== 'number' || typeof resp.targetRevision !== 'number') {
     throw new Error('The server did not confirm the new dashboard revisions.');
   }

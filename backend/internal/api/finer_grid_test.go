@@ -367,3 +367,38 @@ func TestPromote_GridTabNewUnits(t *testing.T) {
 		}
 	}
 }
+
+// Final review Minor 4: an old-form export whose grid root is not 12 columns
+// is imported at twice that width (so it looks the same), but that is an
+// anomaly the user is told about — as the startup update WARNs — not silent.
+func TestImport_OddGridRootIsReported(t *testing.T) {
+	data, err := os.ReadFile("../configdoc/testdata/v3_showcase_export.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var env map[string]any
+	if err := json.Unmarshal(data, &env); err != nil {
+		t.Fatal(err)
+	}
+	dash := dashOf(env["config"].(map[string]any))
+	tab := dash["tabs"].([]any)[0].(map[string]any)
+	tab["root"].(map[string]any)["columns"] = 10.0
+	odd, _ := json.Marshal(env)
+
+	router, _ := setupTestRouter(t)
+	c := newClient(t, router)
+	code, resp := c.importFile(odd)
+	if code != 200 {
+		t.Fatalf("import: %d %v", code, resp)
+	}
+	msg, _ := resp["message"].(string)
+	if !strings.Contains(msg, "20 columns") || !strings.Contains(msg, tab["name"].(string)) {
+		t.Errorf("message %q does not report the 20-column grid root of tab %v", msg, tab["name"])
+	}
+	// A 12-column (normal) root says nothing extra.
+	router2, _ := setupTestRouter(t)
+	c2 := newClient(t, router2)
+	if code, resp := c2.importFile(data); code != 200 || strings.Contains(resp["message"].(string), "columns") {
+		t.Errorf("normal import: %d %v", code, resp["message"])
+	}
+}

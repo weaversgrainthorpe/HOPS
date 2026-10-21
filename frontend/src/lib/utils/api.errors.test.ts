@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
-  saveDashboardV3, getConfig, dismissNotice, createDashboard, reorderDashboards, promoteScan, ConflictError, MigrationFailedError
+  saveDashboardV3, transferNodes, getConfig, dismissNotice, createDashboard, reorderDashboards, promoteScan, ConflictError, MigrationFailedError
 } from './api';
 import type { LayoutDashboard } from '$lib/types/layout';
 
@@ -90,6 +90,33 @@ describe('GET /api/config', () => {
   });
 });
 
+describe('Ruling 5: every placement-carrying write says which grid it is in', () => {
+  const req = {
+    mode: 'move' as const, sourceId: 'a', sourceRevision: 3, nodeIds: ['n'], targetId: 'b', targetRevision: 1,
+    target: { tabId: 't' }
+  };
+  it('transferNodes POSTs gridUnit: 2 with the request', async () => {
+    respond(200, { sourceRevision: 4, targetRevision: 2, layout: doc });
+    await transferNodes(req);
+    const [url, init] = vi.mocked(fetch).mock.calls[0] as [string, RequestInit];
+    expect(url).toContain('/dashboards/transfer');
+    expect(JSON.parse(init.body as string)).toEqual({ ...req, gridUnit: 2 });
+  });
+  it('a 409 grid_unit_mismatch surfaces the server\'s reload message (and is not a revision conflict)', async () => {
+    const detail = "HOPS's layout changed since this page was loaded, so this change was not saved. Reload the page, then make the change again.";
+    respond(409, { error: 'grid_unit_mismatch', detail, gridUnit: 2 });
+    const err = await saveDashboardV3('a', dash, 3).catch((e: unknown) => e) as Error;
+    expect(err).not.toBeInstanceOf(ConflictError);
+    expect(err.message).toBe(detail);
+    respond(409, { error: 'grid_unit_mismatch', detail, gridUnit: 2 });
+    await expect(transferNodes(req)).rejects.toThrow(detail);
+  });
+  it('a 409 grid_unit_mismatch without a detail still says to reload', async () => {
+    respond(409, { error: 'grid_unit_mismatch' });
+    await expect(saveDashboardV3('a', dash, 3)).rejects.toThrow(/layout changed.*Reload/);
+  });
+});
+
 describe('dashboard writes', () => {
   it('saveDashboardV3 PUTs {schema: 3, dashboard, revision} and returns the revision and fresh document', async () => {
     respond(200, { revision: 4, layout: doc });
@@ -98,7 +125,7 @@ describe('dashboard writes', () => {
     const [url, init] = vi.mocked(fetch).mock.calls[0] as [string, RequestInit];
     expect(url).toContain('/dashboards/a');
     expect(init.method).toBe('PUT');
-    expect(JSON.parse(init.body as string)).toEqual({ schema: 3, dashboard: dash, revision: 3 });
+    expect(JSON.parse(init.body as string)).toEqual({ schema: 3, dashboard: dash, revision: 3, gridUnit: 2 });
   });
 
   it('createDashboard POSTs {name, path} and needs the new id back', async () => {

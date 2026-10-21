@@ -1376,6 +1376,7 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 	// old 12-column form: each dashboard is converted (and verified) below.
 	// An unknown marker is refused, never guessed.
 	oldGrid := false
+	var oddRoots []string // grid roots not 24 columns after an old-form conversion (reported)
 	if format == "hops-v3" {
 		unit, gerr := configdoc.GridUnitOf(importedConfig)
 		if gerr != nil {
@@ -1436,6 +1437,13 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 					return
 				}
 				d = after["dashboards"].([]any)[0].(configdoc.Obj)
+				// Final review Minor 4: a grid root that was not 12 columns is
+				// kept at twice its width (it looks the same) but reported.
+				for _, o := range configdoc.OddGridRoots(after) {
+					slog.Warn("import: grid tab root is not 24 columns after the finer-grid conversion (kept at twice its old width, so it looks the same)",
+						"component", "import", "dashboard", o.Dashboard, "tab", o.Tab, "columns", o.Columns)
+					oddRoots = append(oddRoots, fmt.Sprintf("dashboard %q tab %q is %v columns wide, not 24", dashboardLabel(d), fmt.Sprint(o.TabName), o.Columns))
+				}
 			}
 			if verr := configdoc.VerifyImportedDashboard(d); verr != nil {
 				writeJSONError(w, fmt.Sprintf("Import refused — dashboard %q is malformed: %s", dashboardLabel(d), verifyProblems(verr)), http.StatusBadRequest)
@@ -1571,6 +1579,9 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 		}
 		if iconErr != nil {
 			message += ". Icon auto-matching skipped: " + iconErr.Error()
+		}
+		if len(oddRoots) > 0 {
+			message += ". Check the layout of: " + strings.Join(oddRoots, "; ") + " (kept as it looked; resize it in the editor if needed)"
 		}
 		if len(assetsFailed) > 0 {
 			message += fmt.Sprintf(". %d asset(s) could not be restored: %s", len(assetsFailed), strings.Join(assetsFailed, "; "))

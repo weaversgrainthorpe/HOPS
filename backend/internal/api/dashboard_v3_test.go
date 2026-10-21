@@ -30,7 +30,7 @@ func v3Body(t *testing.T, c *apiClient, id string) map[string]interface{} {
 }
 
 func v3Put(c *apiClient, id string, d map[string]interface{}, rev interface{}) (int, map[string]interface{}) {
-	return c.do("PUT", "/api/dashboards/"+id, map[string]interface{}{"schema": 3, "dashboard": d, "revision": rev})
+	return c.do("PUT", "/api/dashboards/"+id, map[string]interface{}{"schema": 3, "dashboard": d, "revision": rev, "gridUnit": 2})
 }
 
 func tileJSON(id string, x, y int) map[string]interface{} {
@@ -273,7 +273,7 @@ func TestOrderDashboards(t *testing.T) {
 func transferBody(m map[string]interface{}) map[string]interface{} {
 	b := map[string]interface{}{"mode": "copy", "sourceId": "d1", "sourceRevision": 1,
 		"nodeIds": []string{"e1"}, "targetId": "d2", "targetRevision": 1,
-		"target": map[string]interface{}{"tabId": "t2"}}
+		"target": map[string]interface{}{"tabId": "t2"}, "gridUnit": 2}
 	for k, v := range m {
 		b[k] = v
 	}

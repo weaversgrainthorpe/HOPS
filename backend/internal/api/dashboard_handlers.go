@@ -36,6 +36,22 @@ func conflictError(dashboardID string, current int) *apiError {
 	return e
 }
 
+// gridUnitError is the 409 grid_unit_mismatch for a placement-carrying write
+// whose gridUnit is not configdoc.GridUnit (Ruling 5), or nil when it is. A
+// page loaded before the finer-grid update runs older code that sends no
+// gridUnit and holds 12-column placements; storing them in the 24-column
+// document would draw everything at half size behind a "saved" toast. The
+// request is refused before the document is read, so nothing changes.
+func gridUnitError(v any) *apiError {
+	if f, ok := v.(float64); ok && f == configdoc.GridUnit {
+		return nil
+	}
+	e := newAPIError(http.StatusConflict, "grid_unit_mismatch")
+	e.body["detail"] = "HOPS's layout changed since this page was loaded, so this change was not saved. Reload the page, then make the change again."
+	e.body["gridUnit"] = configdoc.GridUnit
+	return e
+}
+
 // deletedElsewhereError is the 409 for a save that still holds a dashboard
 // another client deleted.
 func deletedElsewhereError(dashboardID string) *apiError {
@@ -423,6 +439,7 @@ func (r *Router) handlePutDashboard(w http.ResponseWriter, req *http.Request, id
 		Schema    any           `json:"schema"`
 		Dashboard configdoc.Obj `json:"dashboard"`
 		Revision  any           `json:"revision"`
+		GridUnit  any           `json:"gridUnit"`
 	}
 	req.Body = http.MaxBytesReader(w, req.Body, maxDashboardBodyBytes)
 	if err := json.NewDecoder(req.Body).Decode(&body); err != nil || body.Dashboard == nil {
@@ -440,6 +457,10 @@ func (r *Router) handlePutDashboard(w http.ResponseWriter, req *http.Request, id
 	}
 	if n, ok := intRevision(body.Schema); !ok || n != configdoc.SchemaVersion {
 		writeJSONError(w, fmt.Sprintf("Unsupported schema %v: this endpoint accepts schema %d dashboards ({\"schema\": 3, \"dashboard\": {...}, \"revision\": n})", body.Schema, configdoc.SchemaVersion), http.StatusBadRequest)
+		return
+	}
+	if ge := gridUnitError(body.GridUnit); ge != nil {
+		writeAPIError(w, ge)
 		return
 	}
 	r.handlePutDashboardV3(w, id, body.Dashboard, body.Revision)
