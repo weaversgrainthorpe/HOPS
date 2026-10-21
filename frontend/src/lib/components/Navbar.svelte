@@ -95,6 +95,15 @@
     if (done && isAdminPage) await goto('/');
   }
 
+  // The dashboard links scroll sideways when there are more than fit; a plain mouse wheel
+  // scrolls them too (most mice have no sideways wheel).
+  function scrollLinks(e: WheelEvent) {
+    const el = e.currentTarget as HTMLElement;
+    if (el.scrollWidth <= el.clientWidth || Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+    e.preventDefault();
+    el.scrollLeft += e.deltaY;
+  }
+
   let themeIcon = $derived(
     $theme === 'dark' ? 'mdi:weather-night' :
     $theme === 'light' ? 'mdi:weather-sunny' :
@@ -132,7 +141,7 @@
           </a>
 
           {#if $isAuthenticated && isDashboardPage}
-            <div class="nav-links">
+            <div class="nav-links" onwheel={scrollLinks}>
               {#each navDashboards as dashboard (dashboard.id)}
                 <a
                   href={dashboard.path}
@@ -293,7 +302,11 @@
        don't sit under the rounded screen corners in landscape. */
     padding: 0 max(1rem, env(safe-area-inset-left, 0)) 0 max(1rem, env(safe-area-inset-right, 0));
     display: grid;
-    grid-template-columns: 1fr auto 1fr;
+    /* The right-hand controls (pencil, gear, Log out…) always get their full width; the logo
+       and a strip of dashboard links (which scrolls) keep theirs; the centre title shrinks
+       (ellipsis). With room to spare both sides are equal, so the title stays centred.
+       Never wider than the screen, however many dashboards there are. */
+    grid-template-columns: minmax(min-content, 1fr) minmax(0, auto) minmax(max-content, 1fr);
     align-items: center;
     gap: 2rem;
     height: 70px;
@@ -304,12 +317,18 @@
     align-items: center;
     gap: 2rem;
     justify-content: flex-start;
+    min-width: 0;
+  }
+
+  .nav-left .logo {
+    flex-shrink: 0;
   }
 
   .nav-center {
     display: flex;
     align-items: center;
     justify-content: center;
+    min-width: 0;
   }
 
   .center-title {
@@ -318,6 +337,8 @@
     font-weight: 600;
     color: var(--text-primary);
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .custom-text {
@@ -352,12 +373,24 @@
     opacity: 0.8;
   }
 
+  /* Many dashboards: the links scroll sideways inside their own column instead of pushing
+     the page wider or sliding under the controls. */
   .nav-links {
     display: flex;
     gap: 0.5rem;
+    /* A fixed preferred width that grows: the column's min-content is the logo plus this
+       strip, never the full list of links. */
+    width: 8rem;
+    min-width: 8rem;
+    flex: 1 1 auto;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
   }
 
   .nav-link {
+    flex-shrink: 0;
+    white-space: nowrap;
     padding: 0.5rem 1rem;
     border-radius: 0.375rem;
     text-decoration: none;

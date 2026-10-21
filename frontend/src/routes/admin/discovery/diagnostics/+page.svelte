@@ -25,7 +25,7 @@
   onMount(async () => {
     await waitForAuthChecked();
     if (!$isAuthenticated) {
-      goto('/settings'); // logged out: Settings asks for the password in place
+      goto('/settings', { replaceState: true }); // logged out: Settings asks for the password in place
       return;
     }
     await refresh();

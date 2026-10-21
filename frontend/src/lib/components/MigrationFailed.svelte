@@ -5,8 +5,10 @@
   interface Props {
     /** When given (Settings), render a button that opens the backups UI instead of a link. */
     onOpenBackups?: () => void;
+    /** Shown on Settings itself (signed out): say to sign in here, not link to this same page. */
+    onSettingsPage?: boolean;
   }
-  let { onOpenBackups }: Props = $props();
+  let { onOpenBackups, onSettingsPage = false }: Props = $props();
 </script>
 
 <!-- Full-page notice shown instead of the app while the stored config could
@@ -26,6 +28,8 @@
     Settings → Backups holds the automatic pre-v3-migration and startup backups.
     {#if onOpenBackups}
       <button type="button" class="open-backups" onclick={onOpenBackups}>Open Backups</button>
+    {:else if onSettingsPage}
+      Sign in, then open Backups on this page.
     {:else}
       Sign in and restore it from <a href="/settings">Settings → Backups</a>.
     {/if}

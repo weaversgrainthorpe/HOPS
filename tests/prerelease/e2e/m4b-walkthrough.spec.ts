@@ -1000,6 +1000,109 @@ test.describe('§4D Settings is the admin home; / shows a dashboard', () => {
     }
   });
 
+  test('logged out from an admin page: Cancel on the Settings sign-in leaves for a dashboard, and Back does not loop', async ({ page, browser }) => {
+    const first = await firstDashboard(page);
+    const { page: anon, ctx } = await anonPage(browser);
+    try {
+      await anon.goto(first.path);
+      await expect(anon.locator('.center-title')).toHaveText(first.name);
+      await anon.goto('/admin/discovery');
+      await expect(anon).toHaveURL(/\/settings$/);
+      const dlg = anon.getByRole('dialog', { name: 'Sign in' });
+      await expect(dlg).toBeVisible();
+      await dlg.getByRole('button', { name: 'Cancel' }).click();
+      await expect(anon).toHaveURL(new RegExp(`${first.path}$`));
+      await expect(anon.getByRole('dialog', { name: 'Sign in' })).toHaveCount(0);
+      // Back: the redirect replaced /admin/discovery, so it never sends you into it again.
+      await anon.goBack();
+      await expect(anon).not.toHaveURL(/\/admin\/discovery$/);
+      if (/\/settings$/.test(anon.url())) {
+        await anon.getByRole('dialog', { name: 'Sign in' }).getByRole('button', { name: 'Cancel' }).click();
+        await expect(anon).not.toHaveURL(/\/(settings|admin\/discovery)$/);
+      }
+    } finally {
+      await ctx.close();
+    }
+  });
+
+  test('an expired session on Settings asks for the password again in place (no redirect)', async ({ browser }) => {
+    const { page: own, ctx } = await anonPage(browser);
+    try {
+      await login(own);
+      const csrf = (await ctx.cookies()).find((c) => c.name === 'hops_csrf')!.value;
+      const out = await own.request.post('/api/auth/logout', { headers: { 'X-CSRF-Token': csrf } });
+      expect(out.ok()).toBeTruthy();
+      // The next request finds out (401): a setting save, which must not be stored.
+      const input = own.locator('[id="setting-auth.login_rate_limit_per_min"]');
+      const before = await input.inputValue();
+      await input.fill(String(Number(before) - 1));
+      await own.locator('.row', { has: input }).getByRole('button', { name: 'Save', exact: true }).click();
+      const dlg = own.getByRole('dialog', { name: 'Sign in' });
+      await expect(dlg).toBeVisible();
+      await own.waitForTimeout(1000); // the old handler left after 300 ms
+      await expect(own).toHaveURL(/\/settings$/);
+      await expect(dlg).toBeVisible();
+      await signInDialog(own);
+      await expect(own.getByRole('heading', { name: 'Global settings', level: 2 })).toBeVisible();
+      await expect(own.locator('[id="setting-auth.login_rate_limit_per_min"]')).toHaveValue(before);
+    } finally {
+      await ctx.close();
+    }
+  });
+
+  test('with 8 dashboards at 1280px the navbar keeps the pencil, gear and Log out clickable; the page is no wider than the screen', async ({ page, context }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    const dashes = [];
+    for (let i = 0; i < 8; i++) {
+      dashes.push(await importDash(page, context, [{ name: 'Main', children: (id) => [tile(id('a'), `Tile ${i}`)] }]));
+    }
+    const f = dashes[7];
+    await page.goto(f.path);
+    await expect(page.locator(`[data-node-id="${f.id('a')}"]`)).toBeVisible();
+    const pencil = page.getByRole('button', { name: 'Enter Edit Mode' });
+    // trial: every actionability check, including that nothing else receives the click.
+    await pencil.click({ trial: true, timeout: 3000 });
+    await page.getByRole('link', { name: 'Settings' }).click({ trial: true, timeout: 3000 });
+    await page.getByRole('button', { name: 'Log out' }).click({ trial: true, timeout: 3000 });
+    const widths = await page.evaluate(() => ({ doc: document.documentElement.scrollWidth, view: window.innerWidth }));
+    expect(widths.doc).toBeLessThanOrEqual(widths.view);
+    // Nothing in the bar overlaps: logo/version, the links strip, the title, the controls.
+    const checkBar = async () => {
+      const boxes = await page.evaluate(() =>
+        ['.logo', '.nav-links', '.center-title', '.nav-right'].map((sel) => {
+          const r = document.querySelector(sel)!.getBoundingClientRect();
+          return { sel, left: r.left, right: r.right, width: r.width };
+        })
+      );
+      for (let i = 1; i < boxes.length; i++) {
+        expect(boxes[i].left, `${boxes[i].sel} starts after ${boxes[i - 1].sel} ends`).toBeGreaterThanOrEqual(boxes[i - 1].right - 0.5);
+      }
+      expect(boxes[1].width, 'the dashboard links keep a visible strip').toBeGreaterThan(100);
+    };
+    await checkBar();
+    // The strip scrolls, with a plain (vertical) mouse wheel too.
+    const strip = page.locator('.nav-links');
+    await strip.hover();
+    await page.mouse.wheel(0, 400);
+    await expect.poll(() => strip.evaluate((el) => el.scrollLeft)).toBeGreaterThan(0);
+    // Every dashboard link is still reachable (the links scroll), and the pencil really works.
+    for (const d of dashes) {
+      await expect(page.locator(`.nav-link[href="${d.path}"]`)).toHaveCount(1);
+    }
+    await pencil.click();
+    await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
+    const editWidths = await page.evaluate(() => ({ doc: document.documentElement.scrollWidth, view: window.innerWidth }));
+    expect(editWidths.doc).toBeLessThanOrEqual(editWidths.view);
+    await checkBar();
+    await page.getByRole('link', { name: 'Settings' }).click({ trial: true, timeout: 3000 });
+    await page.getByRole('button', { name: 'Log out' }).click({ trial: true, timeout: 3000 });
+    // A link scrolled into its strip still opens its dashboard.
+    await page.getByRole('button', { name: 'Exit Edit Mode' }).click();
+    await page.locator(`.nav-link[href="${dashes[0].path}"]`).click();
+    await expect(page).toHaveURL(new RegExp(`${dashes[0].path}$`));
+    await expect(page.locator(`[data-node-id="${dashes[0].id('a')}"]`)).toBeVisible();
+  });
+
   test('logged out, /admin/discovery sends you to Settings to sign in', async ({ browser }) => {
     const { page: anon, ctx } = await anonPage(browser);
     try {

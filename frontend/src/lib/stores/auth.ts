@@ -44,30 +44,35 @@ export async function waitForAuthChecked(): Promise<void> {
 let authCheckedValue = false;
 authChecked.subscribe((v) => { authCheckedValue = v; });
 
-// Paths that require an authenticated admin. If the session expires
-// while the user is on one of these, we redirect them to the dashboard
-// root — sitting on a broken settings page with all API calls 401-ing
-// is a worse experience than seeing the public dashboard with the
-// navbar flipped to "Sign in". From any non-admin path (the dashboards
-// themselves) we just clear state and let the navbar reflect it — the
-// user keeps seeing their dashboard in anonymous read-only mode.
-function isAdminOnlyPath(path: string): boolean {
+// Paths that require an authenticated admin: Settings (the admin home) and the
+// tools under /admin.
+export function isAdminOnlyPath(path: string): boolean {
   return path === '/settings' || path.startsWith('/settings/') || path === '/admin' || path.startsWith('/admin/');
+}
+
+/**
+ * Where a page goes when its session expires: null = stay. A dashboard stays
+ * (HOPS dashboards work anonymously; the navbar flips to signed out). Settings
+ * stays too: it asks for the password again in place. The other admin pages
+ * can't work signed out and have no sign-in of their own, so they leave for /.
+ */
+export function sessionExpiredRedirect(path: string): string | null {
+  if (path === '/settings') return null;
+  return isAdminOnlyPath(path) ? '/' : null;
 }
 
 // Register the global session-expired handler with the API layer.
 // Fires when any fetchAPI call hits 401 — clears auth state, toasts
-// once. We do NOT pull the user away from a dashboard they're viewing;
-// HOPS dashboards work fine anonymously.
+// once, and leaves only a page that can't work signed out.
 setSessionExpiredHandler(() => {
   isAuthenticated.set(false);
   mustChangePassword.set(false);
   toast.info('You’ve been signed out — dashboards are still browseable. Click Sign in when you want to make changes.');
-  if (typeof window !== 'undefined' && isAdminOnlyPath(window.location.pathname)) {
-    // The current page genuinely requires auth (settings, admin tools).
+  const target = typeof window !== 'undefined' ? sessionExpiredRedirect(window.location.pathname) : null;
+  if (target) {
     // Defer slightly so any pending per-page error handling can show
     // its own context before we move.
-    setTimeout(() => { window.location.href = '/'; }, 300);
+    setTimeout(() => { window.location.href = target; }, 300);
   }
 });
 

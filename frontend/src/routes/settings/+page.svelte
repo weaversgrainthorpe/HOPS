@@ -4,10 +4,11 @@
   import Button from '$lib/components/shared/Button.svelte';
   import { toast } from '$lib/stores/toast';
   import { confirm } from '$lib/stores/confirmModal';
-  import { isAuthenticated, authChecked, mustChangePassword, logout } from '$lib/stores/auth';
+  import { isAuthenticated, authChecked, mustChangePassword, logout, isAdminOnlyPath } from '$lib/stores/auth';
   import { isBackendOffline, backendStatus } from '$lib/stores/backendStatus';
   import { listSettings, resetConfig, type SettingDef } from '$lib/utils/api';
-  import { saveGlobalSetting, loadConfig, migrationFailure } from '$lib/stores/config';
+  import { saveGlobalSetting, loadConfig, migrationFailure, configError } from '$lib/stores/config';
+  import { get } from 'svelte/store';
   import LoginDialog from '$lib/components/LoginDialog.svelte';
   import DashboardList from '$lib/components/admin/DashboardList.svelte';
   import ChangePasswordModal from '$lib/components/admin/ChangePasswordModal.svelte';
@@ -60,11 +61,12 @@
     )
   );
 
-  // Where Cancel on the sign-in dialog goes: the page you came from, else "/".
+  // Where Cancel on the sign-in dialog goes: the page you came from, else "/". Never an admin
+  // page: signed out, it would send you straight back here (a loop you can't leave).
   let previous = $state<string | null>(null);
   afterNavigate((nav) => {
     const from = nav?.from?.url;
-    if (from && from.pathname !== '/settings') previous = from.pathname + from.search + from.hash;
+    if (from && !isAdminOnlyPath(from.pathname)) previous = from.pathname + from.search + from.hash;
   });
 
   // Set while this page's Log out runs: the page is being left, so no sign-in dialog flashes up.
@@ -126,11 +128,19 @@
     if (!confirmed) return;
     try {
       await resetConfig();
-      await loadConfig();
-      toast.success('Configuration reset to factory defaults');
-    } catch {
-      toast.error('Failed to reset configuration');
+    } catch (e) {
+      toast.error(`Factory reset failed: ${e instanceof Error && e.message ? e.message : 'the request failed'}. Nothing was changed.`);
+      return;
     }
+    // The reset itself is done; re-reading the dashboards is a separate step that can fail on
+    // its own — say exactly that, never "reset failed" and never a success over stale data.
+    await loadConfig();
+    const reloadError = get(configError);
+    if (reloadError) {
+      toast.error(`The factory reset was done, but the dashboards couldn't be reloaded: ${reloadError}. Reload the page.`);
+      return;
+    }
+    toast.success('Configuration reset to factory defaults');
   }
 
   const sections = [
@@ -266,7 +276,7 @@
 
   {#if $migrationFailure}
     <!-- On top: the stored config could not be migrated; Backups is the remedy. -->
-    <MigrationFailed onOpenBackups={ready ? () => (showBackupModal = true) : undefined} />
+    <MigrationFailed onOpenBackups={ready ? () => (showBackupModal = true) : undefined} onSettingsPage />
   {/if}
 
   {#if $isBackendOffline}

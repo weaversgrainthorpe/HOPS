@@ -26,6 +26,7 @@ vi.mock('$lib/utils/api', async () => ({
 
 import * as api from '$lib/utils/api';
 import { goto } from '$app/navigation';
+import { toast } from '$lib/stores/toast';
 import { isAuthenticated, authChecked, mustChangePassword, clearMustChangePassword } from '$lib/stores/auth';
 import { config, migrationFailure } from '$lib/stores/config';
 import { confirmModalState, closeConfirmModal } from '$lib/stores/confirmModal';
@@ -96,6 +97,22 @@ describe('/settings logged out', () => {
 		for (const cb of nav.after) cb({ from: { url: new URL('http://localhost/d?x=1') }, to: { url: new URL('http://localhost/settings') } });
 		await fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
 		expect(gotoMock).toHaveBeenCalledWith('/d?x=1');
+	});
+
+	it('Cancel after a redirect from an admin page goes to /, not back into the redirect (no loop)', async () => {
+		render(Page);
+		for (const cb of nav.after) cb({ from: { url: new URL('http://localhost/admin/discovery') }, to: { url: new URL('http://localhost/settings') } });
+		await fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
+		expect(gotoMock).toHaveBeenCalledWith('/');
+		expect(gotoMock).not.toHaveBeenCalledWith('/admin/discovery');
+	});
+
+	it('a failed migration, logged out: the notice says to sign in here (no link to this same page)', async () => {
+		migrationFailure.set('could not migrate');
+		render(Page);
+		const notice = screen.getByRole('alert');
+		expect(notice.textContent).toContain('Sign in, then open Backups on this page.');
+		expect(within(notice).queryByRole('link')).toBeNull();
 	});
 
 	it('a successful sign-in shows Settings in place', async () => {
@@ -195,4 +212,43 @@ describe('/settings signed in: the admin home', () => {
 		await flush();
 		expect(api.resetConfig).not.toHaveBeenCalled();
 	});
+
+	it('Factory Reset refused by the server: the error says why', async () => {
+		(api.resetConfig as unknown as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('database is locked'));
+		const seen: string[] = [];
+		let before: Set<string> | null = null; // toasts left over from earlier tests don't count
+		const unsub = toast.subscribe((l) => {
+			before ??= new Set(l.map((t) => t.id));
+			l.filter((t) => !before!.has(t.id)).forEach((t) => seen.push(`${t.type}:${t.message}`));
+		});
+		render(Page);
+		await fireEvent.click(screen.getByRole('button', { name: /Factory Reset/ }));
+		await vi.waitFor(() => expect(get(confirmModalState).isOpen).toBe(true));
+		closeConfirmModal(true);
+		await waitFor(() => expect(seen.some((t) => t.startsWith('error:') && t.includes('database is locked'))).toBe(true));
+		unsub();
+		expect(seen.some((t) => t.startsWith('success:'))).toBe(false);
+	});
+
+	it('Factory Reset done but the reload failed: says exactly that, not "reset failed"', async () => {
+		(api.getConfig as unknown as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('server unreachable'));
+		const seen: string[] = [];
+		let before: Set<string> | null = null; // toasts left over from earlier tests don't count
+		const unsub = toast.subscribe((l) => {
+			before ??= new Set(l.map((t) => t.id));
+			l.filter((t) => !before!.has(t.id)).forEach((t) => seen.push(`${t.type}:${t.message}`));
+		});
+		render(Page);
+		await fireEvent.click(screen.getByRole('button', { name: /Factory Reset/ }));
+		await vi.waitFor(() => expect(get(confirmModalState).isOpen).toBe(true));
+		closeConfirmModal(true);
+		await waitFor(() => expect(api.resetConfig).toHaveBeenCalled());
+		await waitFor(() => expect(seen.some((t) => t.startsWith('error:') && t.includes('server unreachable'))).toBe(true));
+		unsub();
+		const err = seen.find((t) => t.startsWith('error:') && t.includes('server unreachable'))!;
+		expect(err).toMatch(/reset was done/i);
+		expect(err).not.toMatch(/reset failed/i);
+		expect(seen.some((t) => t.startsWith('success:'))).toBe(false);
+	});
 });
+

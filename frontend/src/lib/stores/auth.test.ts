@@ -207,3 +207,30 @@ describe('auth store', () => {
 		});
 	});
 });
+
+describe('sessionExpiredRedirect (where an expired session sends the page)', () => {
+	it('Settings stays: it signs in again in place', async () => {
+		const { sessionExpiredRedirect } = await import('./auth');
+		expect(sessionExpiredRedirect('/settings')).toBeNull();
+	});
+	it('the other admin pages leave for /', async () => {
+		const { sessionExpiredRedirect } = await import('./auth');
+		expect(sessionExpiredRedirect('/admin/discovery')).toBe('/');
+		expect(sessionExpiredRedirect('/admin')).toBe('/');
+	});
+	it('a dashboard stays (read-only)', async () => {
+		const { sessionExpiredRedirect } = await import('./auth');
+		expect(sessionExpiredRedirect('/home')).toBeNull();
+	});
+});
+
+describe('isAdminOnlyPath', () => {
+	it('is true for Settings and /admin pages only', async () => {
+		const { isAdminOnlyPath } = await import('./auth');
+		expect(isAdminOnlyPath('/settings')).toBe(true);
+		expect(isAdminOnlyPath('/admin/discovery/new')).toBe(true);
+		expect(isAdminOnlyPath('/administrators')).toBe(false);
+		expect(isAdminOnlyPath('/home')).toBe(false);
+	});
+});
+
