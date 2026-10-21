@@ -539,7 +539,7 @@
       {/if}
     </p>
   {:else}
-    <div class="inherit-radios" role="radiogroup" aria-label="{level === 'tab' ? 'Tab' : 'Folder'} background" aria-describedby="bg-inherit-hint">
+    <div class="inherit-radios" role="radiogroup" aria-label="{level === 'tab' ? 'Tab' : 'Folder'} background" aria-describedby={inheritOn ? 'bg-inherit-hint' : undefined}>
       <label class="inherit-radio">
         <input type="radio" name="bg-source" checked={inheritOn} onchange={() => (inheritOn = true)} />
         <span>{sameAs}</span>
@@ -549,13 +549,9 @@
         <span>Its own background</span>
       </label>
     </div>
-    <p class="toggle-hint" id="bg-inherit-hint">
-      {#if inheritOn}
-        This {level}'s own picture is kept for when you switch back.
-      {:else}
-        This {level} uses the background below.
-      {/if}
-    </p>
+    {#if inheritOn}
+      <p class="toggle-hint radio-hint" id="bg-inherit-hint">This {level}'s own picture is kept for when you switch back.</p>
+    {/if}
   {/if}
 </div>
 
@@ -1199,6 +1195,10 @@
     font-size: 0.875rem;
     color: var(--text-secondary);
     padding-left: calc(48px + 1rem);
+  }
+
+  .toggle-hint.radio-hint {
+    padding-left: 0;
   }
 
   .label-hint {

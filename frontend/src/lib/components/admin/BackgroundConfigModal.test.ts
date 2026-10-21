@@ -125,6 +125,15 @@ describe('BackgroundConfigModal at every level', () => {
       open('folder', pic);
       expect(sameOption().labels?.[0].textContent?.trim()).toBe('Same as the folder it sits in');
     });
+    it('no level, in either state, says "uses the background below"', () => {
+      for (const level of ['dashboard', 'tab', 'folder'] as const) {
+        for (const bg of [pic, kept]) {
+          const { unmount } = render(BackgroundConfigModal, { level, background: bg, parentName: 'Media', onSave: vi.fn(), onCancel: vi.fn() });
+          expect(document.body.textContent).not.toMatch(/uses the background below/i);
+          unmount();
+        }
+      }
+    });
     it('choosing "Same as" sets inherit:true and keeps the picture; switching back restores it', async () => {
       const { onSave } = open('folder', { ...pic, opacity: 0.4 }, 'Media');
       await fireEvent.click(sameOption());
