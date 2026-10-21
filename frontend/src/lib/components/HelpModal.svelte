@@ -1,6 +1,7 @@
 <script lang="ts">
   import Icon from '@iconify/svelte';
   import { focusTrap } from '$lib/utils/focusTrap';
+  import { dialogContentKeydown, dialogWindowEscape } from '$lib/utils/dialogKeys';
 
   interface Props {
     onClose: () => void;
@@ -11,21 +12,22 @@
   const appVersion = __APP_VERSION__;
   let activeTab = $state<'shortcuts' | 'editing' | 'features'>('shortcuts');
 
+  let dialogEl = $state<HTMLElement>();
+  // Escape: the content element handles it (dialogKeys); window is the fallback for focus outside.
   function handleKeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape') {
-      onClose();
-    }
+    dialogWindowEscape(e, dialogEl, onClose);
   }
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
 
-<!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="modal-backdrop" onclick={onClose} onkeydown={(e) => e.key === 'Escape' && onClose()}>
+<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+<div class="modal-backdrop" onclick={onClose}>
   <div
+    bind:this={dialogEl}
     class="modal-content"
     onclick={(e) => e.stopPropagation()}
-    onkeydown={(e) => e.stopPropagation()}
+    onkeydown={(e) => dialogContentKeydown(e, onClose)}
     role="dialog"
     aria-modal="true"
     aria-labelledby="help-modal-title"

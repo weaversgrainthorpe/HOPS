@@ -3,6 +3,7 @@
   import { theme, setTheme, applyThemePreset } from '$lib/stores/theme';
   import { browser } from '$app/environment';
   import { focusTrap } from '$lib/utils/focusTrap';
+  import { dialogContentKeydown, dialogWindowEscape } from '$lib/utils/dialogKeys';
   import { createGridKeyboardHandler } from '$lib/utils/gridKeyboardNav';
 
   interface Props {
@@ -195,10 +196,10 @@
     onClose();
   }
 
+  let dialogEl = $state<HTMLElement>();
+  // Escape: the content element handles it (dialogKeys); window is the fallback for focus outside.
   function handleKeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape') {
-      onClose();
-    }
+    dialogWindowEscape(e, dialogEl, onClose);
   }
 
   // Load saved preset on mount
@@ -232,12 +233,13 @@
 
 <svelte:window onkeydown={handleKeydown} />
 
-<!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="modal-backdrop" onclick={onClose} onkeydown={(e) => e.key === 'Escape' && onClose()}>
+<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+<div class="modal-backdrop" onclick={onClose}>
   <div
+    bind:this={dialogEl}
     class="modal-content"
     onclick={(e) => e.stopPropagation()}
-    onkeydown={(e) => e.stopPropagation()}
+    onkeydown={(e) => dialogContentKeydown(e, onClose)}
     role="dialog"
     aria-modal="true"
     aria-labelledby="theme-settings-title"

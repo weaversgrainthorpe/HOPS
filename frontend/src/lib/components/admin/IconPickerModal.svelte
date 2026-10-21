@@ -6,6 +6,7 @@
   import { toast } from '$lib/stores/toast';
   import { onMount } from 'svelte';
   import { focusTrap } from '$lib/utils/focusTrap';
+  import { dialogContentKeydown, dialogWindowEscape } from '$lib/utils/dialogKeys';
   import { portal } from '$lib/utils/portal';
 
   interface IconSelection {
@@ -137,15 +138,19 @@
     return category?.name || categoryId;
   }
 
-  function handleKeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape') {
-      if (showAddIcon || showAddCategory) {
-        showAddIcon = false;
-        showAddCategory = false;
-      } else {
-        onCancel();
-      }
+  let dialogEl = $state<HTMLElement>();
+  /** Escape closes an open add form first, then the picker. */
+  function handleEscape() {
+    if (showAddIcon || showAddCategory) {
+      showAddIcon = false;
+      showAddCategory = false;
+    } else {
+      onCancel();
     }
+  }
+  // Escape: the content element handles it (dialogKeys); window is the fallback for focus outside.
+  function handleKeydown(e: KeyboardEvent) {
+    dialogWindowEscape(e, dialogEl, handleEscape);
   }
 
   function handleSelectIcon(iconData: IconType) {
@@ -313,12 +318,13 @@
 
 <svelte:window onkeydown={handleKeydown} />
 
-<!-- svelte-ignore a11y_no_static_element_interactions -->
-<div use:portal class="modal-backdrop" onclick={onCancel} onkeydown={(e) => e.key === 'Escape' && onCancel()}>
+<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+<div use:portal class="modal-backdrop" onclick={onCancel}>
   <div
+    bind:this={dialogEl}
     class="modal-content"
     onclick={(e) => e.stopPropagation()}
-    onkeydown={(e) => e.stopPropagation()}
+    onkeydown={(e) => dialogContentKeydown(e, handleEscape)}
     role="dialog"
     aria-modal="true"
     aria-labelledby="icon-picker-title"

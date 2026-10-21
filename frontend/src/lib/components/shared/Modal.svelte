@@ -2,6 +2,7 @@
   import Icon from '@iconify/svelte';
   import { focusTrap } from '$lib/utils/focusTrap';
   import { portal } from '$lib/utils/portal';
+  import { dialogContentKeydown, dialogWindowEscape } from '$lib/utils/dialogKeys';
   import type { Snippet } from 'svelte';
 
   interface Props {
@@ -54,10 +55,13 @@
     onClose();
   }
 
-  function handleKeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape') {
-      tryClose();
-    }
+  let contentEl = $state<HTMLElement>();
+
+  // Escape is handled on the content element (the focused, innermost dialog closes; no key
+  // leaves it — see dialogKeys). The window listener is the fallback for focus outside every
+  // dialog, and only the topmost dialog acts on it.
+  function handleWindowKeydown(e: KeyboardEvent) {
+    dialogWindowEscape(e, contentEl, tryClose);
   }
 
   function handleBackdropClick(e: MouseEvent) {
@@ -67,20 +71,20 @@
   }
 </script>
 
-<svelte:window onkeydown={handleKeydown} />
+<svelte:window onkeydown={handleWindowKeydown} />
 
-<!-- svelte-ignore a11y_no_static_element_interactions -->
+<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
 <div
   use:portal
   class="modal-backdrop"
   onclick={handleBackdropClick}
-  onkeydown={(e) => e.key === 'Escape' && tryClose()}
   style:--modal-z-index={zIndex}
 >
   <div
+    bind:this={contentEl}
     class="modal-content {contentClass}"
     onclick={(e) => e.stopPropagation()}
-    onkeydown={(e) => e.stopPropagation()}
+    onkeydown={(e) => dialogContentKeydown(e, tryClose)}
     role="dialog"
     aria-modal="true"
     aria-labelledby="{id}-title"

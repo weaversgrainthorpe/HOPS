@@ -2,6 +2,7 @@
   import { confirmModalState, closeConfirmModal, type ConfirmOptions, type ConfirmChoice } from '$lib/stores/confirmModal';
   import { focusTrap } from '$lib/utils/focusTrap';
   import { portal } from '$lib/utils/portal';
+  import { dialogContentKeydown, dialogWindowEscape } from '$lib/utils/dialogKeys';
   import { COLORS } from '$lib/constants/colors';
   import Icon from '@iconify/svelte';
 
@@ -20,11 +21,14 @@
     return unsubscribe;
   });
 
+  const cancel = () => closeConfirmModal(false);
+
+  // Escape: the content element handles it (dialogKeys); window is the fallback for focus outside.
   function handleKeydown(e: KeyboardEvent) {
     if (!state.isOpen) return;
 
     if (e.key === 'Escape') {
-      closeConfirmModal(false);
+      dialogWindowEscape(e, document.querySelector('[aria-labelledby="confirm-title"]'), cancel);
     } else if (e.key === 'Enter') {
       // Enter never picks a destructive button: in a danger-style dialog it
       // does nothing, so the user has to click (or focus) that button on purpose.
@@ -53,17 +57,16 @@
 <svelte:window onkeydown={handleKeydown} />
 
 {#if state.isOpen && state.options}
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
   <div
     use:portal
     class="modal-backdrop"
     onclick={() => closeConfirmModal(false)}
-    onkeydown={(e) => e.key === 'Escape' && closeConfirmModal(false)}
   >
     <div
       class="modal-content"
       onclick={(e) => e.stopPropagation()}
-      onkeydown={(e) => e.stopPropagation()}
+      onkeydown={(e) => dialogContentKeydown(e, cancel)}
       role="dialog"
       aria-modal="true"
       aria-labelledby="confirm-title"

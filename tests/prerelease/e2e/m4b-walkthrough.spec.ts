@@ -635,3 +635,89 @@ test.describe('§4B handles on a touch device (hover: none)', () => {
     await expect(page.getByRole('dialog', { name: 'Edit Folder' }).locator('#folder-name')).toHaveValue('Plain');
   });
 });
+
+// ---- Escape closes edit dialogs (pre-existing bug: Modal stopped every keydown, so its
+// window-level Escape never ran in a real browser). Innermost first; no other key leaks.
+
+test.describe('Escape in edit dialogs (real browser)', () => {
+  async function escDash(page: Page, context: BrowserContext) {
+    return importDash(page, context, [
+      { name: 'Main', children: (id) => [tile(id('a'), 'Alpha', 0, 0), tile(id('b'), 'Bravo', 1, 0)] },
+      { name: 'Two', children: (id) => [tile(id('t2'), 'Tango')] }
+    ]);
+  }
+
+  test('Escape closes the tile dialog without saving; arrow keys and Delete stay inside it', async ({ page, context }) => {
+    const f = await escDash(page, context);
+    await page.goto(f.path);
+    await enterEdit(page);
+    const a = page.locator(`[data-node-id="${f.id('a')}"]`);
+    await a.click(); // selected: a Delete reaching the page would delete it
+    await a.dblclick();
+    const dlg = page.getByRole('dialog', { name: 'Edit Tile' });
+    await expect(dlg).toBeVisible();
+    await dlg.locator('input#name').fill('Alpha changed');
+    // Arrow keys and Delete on a button inside the dialog stay inside it.
+    const cancel = dlg.getByRole('button', { name: 'Cancel', exact: true });
+    await cancel.focus();
+    for (const k of ['ArrowDown', 'ArrowRight', 'ArrowUp', 'ArrowLeft', 'Delete']) await page.keyboard.press(k);
+    await expect(dlg).toBeVisible();
+    expect(await page.evaluate(() => !!document.activeElement?.closest('[role="dialog"]'))).toBe(true);
+    await expect(a).toBeVisible();
+    // Escape (focus in a text field): closes it, nothing applied.
+    await dlg.locator('input#name').focus();
+    await page.keyboard.press('Escape');
+    await expect(dlg).toHaveCount(0);
+    await expect(a).toContainText('Alpha');
+    await expect(a).not.toContainText('Alpha changed');
+    await expect(page.getByRole('status').filter({ hasText: 'Unsaved changes' })).toHaveCount(0);
+  });
+
+  test('nested: Escape closes only the innermost (icon picker, then icon editor, then the tile dialog)', async ({ page, context }) => {
+    const f = await escDash(page, context);
+    await page.goto(f.path);
+    await enterEdit(page);
+    await page.locator(`[data-node-id="${f.id('a')}"]`).dblclick();
+    const dlg = page.getByRole('dialog', { name: 'Edit Tile' });
+    await dlg.getByRole('button', { name: /Edit icon/ }).click();
+    const iconDlg = page.getByRole('dialog', { name: 'Edit icon' });
+    await expect(iconDlg).toBeVisible();
+    await iconDlg.getByRole('button', { name: /Browse/ }).click();
+    const picker = page.getByRole('dialog', { name: 'Choose an Icon' });
+    await expect(picker).toBeVisible();
+    await expect.poll(() => page.evaluate(() => !!document.activeElement?.closest('[aria-labelledby="icon-picker-title"]'))).toBe(true);
+
+    await page.keyboard.press('Escape');
+    await expect(picker).toHaveCount(0);
+    await expect(iconDlg).toBeVisible();
+    await expect(dlg).toBeVisible();
+    await iconDlg.locator('#icon-edit-input').focus();
+    await page.keyboard.press('Escape');
+    await expect(iconDlg).toHaveCount(0);
+    await expect(dlg).toBeVisible();
+    await dlg.locator('input#name').focus();
+    await page.keyboard.press('Escape');
+    await expect(dlg).toHaveCount(0);
+  });
+
+  test('nested: Escape in the tab background picker closes the picker, then the tab dialog', async ({ page, context }) => {
+    const f = await escDash(page, context);
+    await page.goto(f.path);
+    await enterEdit(page);
+    await page.getByRole('tab', { name: 'Switch to Two tab' }).dblclick();
+    const dlg = page.getByRole('dialog', { name: 'Edit Tab' });
+    await expect(dlg).toBeVisible();
+    await dlg.getByRole('button', { name: /Configure Tab Background/ }).click();
+    const picker = page.getByRole('dialog', { name: 'Tab background' });
+    await expect(picker).toBeVisible();
+    await expect.poll(() => page.evaluate(() => !!document.activeElement?.closest('[aria-labelledby="background-config-title"]'))).toBe(true);
+    await page.keyboard.press('Escape');
+    await expect(picker).toHaveCount(0);
+    await expect(dlg).toBeVisible();
+    await dlg.getByLabel(/Tab Name/).focus();
+    await page.keyboard.press('Escape');
+    await expect(dlg).toHaveCount(0);
+    await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible(); // edit mode stays on
+  });
+});
+

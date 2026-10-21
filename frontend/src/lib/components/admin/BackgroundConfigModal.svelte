@@ -6,6 +6,7 @@
   import { confirm } from '$lib/stores/confirmModal';
   import { focusTrap } from '$lib/utils/focusTrap';
   import { portal } from '$lib/utils/portal';
+  import { dialogContentKeydown, dialogWindowEscape } from '$lib/utils/dialogKeys';
   import { untrack } from 'svelte';
   import { logError } from '$lib/utils/errors';
   import { isSafeBackgroundUrl, cssUrl } from '$lib/components/background/backgroundUrl';
@@ -447,12 +448,20 @@
     onSave(backgroundType === 'none' ? undefined : bg);
   }
 
-  function handleKeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape') {
-      onCancel();
-    } else if (e.key === 'Enter' && e.ctrlKey) {
+  let dialogEl = $state<HTMLElement>();
+  // Keys inside the picker: Ctrl+Enter saves, Escape cancels it (only it, when nested), and no
+  // key leaves it (dialogKeys). The window listener is the Escape fallback for focus outside.
+  function handleContentKeydown(e: KeyboardEvent) {
+    if (e.key === 'Enter' && e.ctrlKey) {
+      e.stopPropagation();
+      e.preventDefault();
       handleSave();
+      return;
     }
+    dialogContentKeydown(e, onCancel);
+  }
+  function handleKeydown(e: KeyboardEvent) {
+    dialogWindowEscape(e, dialogEl, onCancel);
   }
 
   // Slideshow preview animation
@@ -518,13 +527,14 @@
 
 <svelte:window onkeydown={handleKeydown} />
 
-<!-- svelte-ignore a11y_no_static_element_interactions -->
+<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
 <!-- Portalled above the dialog that opened it (tab/folder dialogs are portalled Modals too). -->
-<div class="modal-backdrop" use:portal onclick={onCancel} onkeydown={(e) => e.key === 'Escape' && onCancel()}>
+<div class="modal-backdrop" use:portal onclick={onCancel}>
   <div
+    bind:this={dialogEl}
     class="modal-content"
     onclick={(e) => e.stopPropagation()}
-    onkeydown={(e) => e.stopPropagation()}
+    onkeydown={handleContentKeydown}
     role="dialog"
     aria-modal="true"
     aria-labelledby="background-config-title"

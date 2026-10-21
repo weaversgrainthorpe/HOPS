@@ -1,5 +1,6 @@
 import { get } from 'svelte/store';
 import { overlayStack } from '$lib/stores/folderOverlay';
+import { modalDialogOpen } from './dialogKeys';
 
 const CANDIDATE = '.entry, .folder-collapsed-tile';
 
@@ -11,6 +12,8 @@ const CANDIDATE = '.entry, .folder-collapsed-tile';
  * never a candidate. Returns true if focus moved (caller should preventDefault).
  */
 export function navigateTiles(direction: string, root: ParentNode = document): boolean {
+	// A modal dialog owns the keyboard: arrow keys never move focus to a tile behind it.
+	if (modalDialogOpen(document)) return false;
 	let scope: ParentNode = root;
 	if (get(overlayStack).length > 0) {
 		const panels = root.querySelectorAll<HTMLElement>('.overlay-panel');
