@@ -739,12 +739,12 @@ func (r *Router) handleExportConfig(w http.ResponseWriter, req *http.Request) {
 	}
 
 	cfg, err := configdoc.Load(r.db)
-	stored := cfg
 	if err != nil {
 		slog.Error("export: stored config unreadable", "component", "export", "error", err)
 		writeJSONError(w, "Stored configuration could not be read, so nothing was exported: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+	stored := cfg // the whole document; cfg may be narrowed to one dashboard below
 
 	dashboardId := req.URL.Query().Get("dashboardId")
 	format := req.URL.Query().Get("format")

@@ -369,6 +369,7 @@ func updateGridOnStartup(db *sql.DB) (MigrationResult, error) {
 	if err := tx.Commit(); err != nil {
 		return MigrationResult{}, fmt.Errorf("configdoc: commit grid update: %w", err)
 	}
+	warnOddGridRoots(out)
 	slog.Info("config grid updated to the finer grid (24 columns, grid placements doubled); original archived",
 		"component", "configdoc", "notes", GridV5Note)
 	return MigrationResult{GridUpdated: true}, nil
@@ -378,4 +379,28 @@ func gridFailed(detail string) MigrationResult {
 	detail = "grid update failed: " + detail
 	slog.Error("config grid update FAILED; stored config left untouched", "component", "configdoc", "detail", detail)
 	return MigrationResult{Failed: true, Detail: detail}
+}
+
+// warnOddGridRoots logs a WARN for every grid tab root whose columns are not
+// RootColumns after the update. The verifier deliberately accepts twice the
+// old effective columns rather than forcing 24 (spec §9 deviation: forcing it
+// would change how such a root renders); no known path writes a grid root
+// other than 12, so one is an anomaly worth seeing.
+func warnOddGridRoots(doc Obj) {
+	dashes, _ := doc["dashboards"].([]any)
+	for _, d := range dashes {
+		dm, _ := d.(Obj)
+		tabs, _ := dm["tabs"].([]any)
+		for _, t := range tabs {
+			tm, _ := t.(Obj)
+			root, _ := tm["root"].(Obj)
+			if tm == nil || root == nil || tabMode(dm, tm) != "grid" {
+				continue
+			}
+			if n, ok := numberValue(root["columns"]); !ok || n != RootColumns {
+				slog.Warn("grid tab root is not 24 columns after the finer-grid update (kept at twice its old width, so it looks the same)",
+					"component", "configdoc", "dashboard", dm["id"], "tab", tm["id"], "columns", root["columns"])
+			}
+		}
+	}
 }

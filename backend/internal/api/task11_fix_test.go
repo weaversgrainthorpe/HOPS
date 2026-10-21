@@ -61,8 +61,9 @@ func insertResults(t *testing.T, st *discovery.Store, scanID string, ids ...stri
 // Promote into a free tab: the grid-in-free category folder is sized with the
 // same rule it was created with (grid rows x side + an 8-unit title, as
 // mergeIntoNewFolder), grows on a repeat promote, and never warns. Finer grid
-// (spec §9): side = round(1280/24/8) = 7; the folder is 8 cells wide (4
-// Medium tiles) and each tile row is 2 cells.
+// (spec §9, Ruling 2): side = round(1280/12/8)/2 = 6.5; the folder is 8 cells
+// wide (4 Medium tiles) and each tile row is 2 cells — the same units as
+// before the finer grid.
 func TestPromote_FreeTabRepeatSizesWithoutWarning(t *testing.T) {
 	router, db := setupTestRouter(t)
 	c := newClient(t, router)
@@ -89,16 +90,16 @@ func TestPromote_FreeTabRepeatSizesWithoutWarning(t *testing.T) {
 			folder = m
 		}
 	}
-	if _, _, w, h, _ := rect(folder["placement"]); w != 56 || h != 2*7+8 {
-		t.Fatalf("new folder %v, want w=56 (8 cells of 7) h=22 (one 2-cell tile row + 8-unit title)", folder["placement"])
+	if _, _, w, h, _ := rect(folder["placement"]); w != 52 || h != 13+8 {
+		t.Fatalf("new folder %v, want w=52 (8 cells of 6.5) h=21 (one 2-cell tile row + 8-unit title)", folder["placement"])
 	}
 	promote("result-0010", "result-0011", "result-0012", "result-0013")
 	f := findOne(storedDash(t, db, "s1"), folder["id"].(string))
 	if len(contentKids(f)) != 5 {
 		t.Fatalf("folder not reused: %v", contentKids(f))
 	}
-	if _, _, _, h, _ := rect(f["placement"]); h != 4*7+8 {
-		t.Fatalf("folder h = %v, want 36 (two 2-cell tile rows + title)", h)
+	if _, _, _, h, _ := rect(f["placement"]); h != 2*13+8 {
+		t.Fatalf("folder h = %v, want 34 (two 2-cell tile rows + title)", h)
 	}
 }
 

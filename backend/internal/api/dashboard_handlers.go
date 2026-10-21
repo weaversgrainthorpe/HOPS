@@ -195,8 +195,8 @@ type docUpdateFn func(stored configdoc.Obj) (configdoc.Obj, interface{}, error)
 type docAfterFn func(tx *sql.Tx) error
 
 // publicDoc is what GET /api/config serves and every write response carries
-// as `layout`: the schema version and the dashboards, nothing else from the
-// stored document.
+// as `layout`: the schema version, the finer-grid marker gridUnit (Ruling 3)
+// and the dashboards, nothing else from the stored document.
 //
 // Each dashboard also carries a read-only `display` block computed from its
 // effective settings (Ruling 9): what every viewer, signed in or not, needs to
@@ -219,7 +219,13 @@ func (r *Router) publicDoc(stored configdoc.Obj) map[string]interface{} {
 		out["display"] = map[string]interface{}{"animatedFolderBackgrounds": eff.AnimatedFolderBackgrounds}
 		dashes = append(dashes, out)
 	}
-	return map[string]interface{}{"schemaVersion": configdoc.SchemaVersion, "dashboards": dashes}
+	out := map[string]interface{}{"schemaVersion": configdoc.SchemaVersion, "dashboards": dashes}
+	// Ruling 3: the finer-grid marker is served, so the frontend can refuse
+	// (visibly) to save into a document that is not in the form it writes.
+	if v, ok := stored[configdoc.GridKey]; ok {
+		out[configdoc.GridKey] = v
+	}
+	return out
 }
 
 // attachLayout adds `layout` (the committed document, as GET /api/config

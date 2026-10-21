@@ -717,22 +717,24 @@ func findTab(d configdoc.Obj, id string) configdoc.Obj {
 	return nil
 }
 
-// freeSideOf is one grid cell in free design units for a tab:
-// round(designWidth / RootColumns / 8), at least 1 (the frontend's freeSide).
+// freeSideOf is one grid cell in free design units for a tab (Ruling 2):
+// exactly half the old 12-column side, round(designWidth / 12 / 8) / 2 —
+// 6.5 at 1280, 10 at 1920 — the frontend's freeSideOf (geometry.ts). It may
+// be fractional; every conversion rounds its result to whole units.
 //
-// With the finer grid (24 columns) a 1280 px tab's cell is 6.67 units, which
-// rounds to 7 (the old 12-column side was 13.33 → 13). Rounding to nearest is
-// kept deliberately: a grid → free → grid round trip is exact for any side
-// (x·side/side), and a free → grid → free round trip snaps by at most side/2
-// units — 3.5 units (28 px) now against 6.5 (52 px) before — so no layout
-// drifts more than it did. A converted cell is ≤ 5% off its exact size
-// (7 vs 6.67), the cost of whole design units.
+// Why half the old side rather than round(designWidth / 24 / 8) (7 at 1280):
+// free layouts made by the old grid→free conversion sit on multiples of the
+// old side, which map to whole doubled cells and back exactly (52 → 8 cells →
+// 52), and a full-width grid row is 24 · 6.5 = 156 units, exactly the old
+// 12 · 13, so it still fits a 1280 free root (160). With 7 the same row would
+// be 168 (wider than the root) and 52 would drift to 49.
 func freeSideOf(tab configdoc.Obj) float64 {
 	dw, ok := toFloat(tab["designWidth"])
 	if !ok || dw <= 0 {
 		dw = 1280
 	}
-	return math.Max(1, math.Round(dw/configdoc.RootColumns/8))
+	oldSide := math.Max(1, math.Round(dw/(configdoc.RootColumns/configdoc.GridUnit)/8))
+	return oldSide / configdoc.GridUnit
 }
 
 // containerCols is the width placements may use in a container: its columns,

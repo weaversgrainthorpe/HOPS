@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"math"
 	"os"
 	"strings"
 	"testing"
@@ -209,7 +210,9 @@ func TestNewDashboard_Root24(t *testing.T) {
 }
 
 func TestFreeSide_24Columns(t *testing.T) {
-	for dw, want := range map[float64]float64{1280: 7, 1920: 10, 320: 2, 0: 7} {
+	// Ruling 2: exactly half the old 12-column side, round(dw/12/8)/2 — the
+	// frontend's freeSideOf (geometry.ts).
+	for dw, want := range map[float64]float64{1280: 6.5, 1920: 10, 320: 1.5, 0: 6.5} {
 		tab := configdoc.Obj{}
 		if dw > 0 {
 			tab["designWidth"] = dw
@@ -220,6 +223,109 @@ func TestFreeSide_24Columns(t *testing.T) {
 	}
 	if got := newFreeSpace(configdoc.Obj{"children": []any{}}, 10).cols; got != 24 {
 		t.Errorf("newFreeSpace default cols = %v, want 24", got)
+	}
+}
+
+// Free positions made by the old grid→free conversion sit on multiples of the
+// old side (13 at 1280). They map to whole doubled cells and back exactly:
+// 52 stays 52. And a full-width grid row in free units is exactly what it was
+// (12 · old side), so at 1280 and 1920 it fits the free root.
+func TestFreeSide_NoDriftAndFullWidthFits(t *testing.T) {
+	for _, dw := range []float64{1280, 1920} {
+		tab := configdoc.Obj{"designWidth": dw}
+		side := freeSideOf(tab)
+		oldSide := math.Max(1, math.Round(dw/12/8))
+		for k := 0.0; k <= 12; k++ {
+			free := k * oldSide // an old-converted free position/size
+			cells := math.Round(free / side)
+			if cells != 2*k {
+				t.Errorf("dw %v: %v units -> %v cells, want %v", dw, free, cells, 2*k)
+			}
+			if back := math.Round(cells * side); back != free {
+				t.Errorf("dw %v: %v units drifted to %v", dw, free, back)
+			}
+		}
+		full := math.Round(configdoc.RootColumns * side)
+		if full > math.Floor(dw/8) {
+			t.Errorf("dw %v: full-width row = %v units, wider than the free root %v", dw, full, math.Floor(dw/8))
+		}
+	}
+	// No design width is worse than before: the full-width row is unchanged.
+	for dw := 320.0; dw <= 7680; dw += 8 {
+		side := freeSideOf(configdoc.Obj{"designWidth": dw})
+		if got, old := math.Round(configdoc.RootColumns*side), 12*math.Max(1, math.Round(dw/12/8)); got != old {
+			t.Fatalf("dw %v: full width %v, was %v", dw, got, old)
+		}
+	}
+}
+
+// Grid content in a free parent: height rounds to whole design units.
+func TestFolderNeed_WholeUnits(t *testing.T) {
+	if h, ok := folderNeed("free", "grid", 3, 6.5); !ok || h != 28 {
+		t.Errorf("folderNeed(free, grid, 3 rows, 6.5) = %v %v, want 28 (round(19.5)=20 + 8)", h, ok)
+	}
+	if h, _ := folderNeed("grid", "grid", 4, 6.5); h != 6 {
+		t.Errorf("grid in grid = %v, want 6 (4 + 2-cell title)", h)
+	}
+}
+
+// Ruling 3: GET /api/config carries the grid marker; the frontend refuses to
+// save into a document without it.
+func TestGetConfig_CarriesGridMarker(t *testing.T) {
+	router, db := setupTestRouter(t)
+	c := newClient(t, router)
+	seed(t, db)
+	if v := getView(t, c); v["gridUnit"] != float64(2) {
+		t.Fatalf("GET /api/config gridUnit = %v, want 2", v["gridUnit"])
+	}
+}
+
+// An OLD-form single-dashboard export (config {dashboards:[one]}, no marker)
+// is converted on import: grid doubled, free untouched.
+func TestImport_OldSingleDashboardExport(t *testing.T) {
+	var cfg map[string]any
+	if err := json.Unmarshal([]byte(`{"dashboards":[{
+		"id":"old1","name":"Old","path":"/old","revision":7,"defaultLayout":"grid",
+		"settings":{"statusChecksEnabled":null,"statusCheckIntervalMinutes":null,"statusCheckTimeoutSeconds":null,
+			"editIdleTimeoutMinutes":null,"animatedFolderBackgrounds":null,"defaultLayout":null},
+		"tabs":[
+		 {"id":"old-g","name":"G","layout":"inherit","root":{"columns":12,"children":[
+			{"id":"old-t","kind":"tile","name":"T","url":"http://t","placement":{"x":3,"y":1,"w":1,"h":1}},
+			{"id":"old-f","kind":"folder","name":"F","layout":"inherit","display":"expanded",
+			 "placement":{"x":0,"y":2,"w":4,"h":3},
+			 "content":{"columns":4,"children":[
+				{"id":"old-ft","kind":"tile","name":"FT","url":"http://f","placement":{"x":1,"y":1,"w":2,"h":2}}]}}]}},
+		 {"id":"old-free","name":"Fr","layout":"free","designWidth":1280,"root":{"columns":160,"children":[
+			{"id":"old-x","kind":"tile","name":"X","url":"http://x","placement":{"x":52,"y":13,"w":13,"h":13}}]}}
+		]}]}`), &cfg); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := json.Marshal(map[string]any{"format": "hops-export", "schemaVersion": 3, "exportType": "single-dashboard", "config": cfg})
+	router, db := setupTestRouter(t)
+	c := newClient(t, router)
+	seed(t, db)
+	if code, resp := c.importFile(b); code != 200 {
+		t.Fatalf("import: %d %v", code, resp)
+	}
+	d := storedDash(t, db, "old1")
+	want := map[string]string{
+		"old-t":  `{"h":2,"w":2,"x":6,"y":2}`,
+		"old-f":  `{"h":6,"w":8,"x":0,"y":4}`,
+		"old-ft": `{"h":4,"w":4,"x":2,"y":2}`,
+		"old-x":  `{"h":13,"w":13,"x":52,"y":13}`,
+	}
+	configdoc.Walk(configdoc.Obj{"dashboards": []any{d}}, func(_, _ configdoc.Obj, _ []configdoc.Obj, n configdoc.Obj) bool {
+		if p, _ := json.Marshal(n["placement"]); want[n["id"].(string)] != string(p) {
+			t.Errorf("%v placement = %s, want %s", n["id"], p, want[n["id"].(string)])
+		}
+		return true
+	})
+	tabs := d["tabs"].([]any)
+	if c := tabs[0].(configdoc.Obj)["root"].(configdoc.Obj)["columns"]; c != float64(24) {
+		t.Errorf("grid root columns = %v, want 24", c)
+	}
+	if c := tabs[1].(configdoc.Obj)["root"].(configdoc.Obj)["columns"]; c != float64(160) {
+		t.Errorf("free root columns = %v, want 160", c)
 	}
 }
 

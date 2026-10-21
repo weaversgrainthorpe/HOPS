@@ -1,7 +1,9 @@
 package configdoc
 
 import (
+	"bytes"
 	"encoding/json"
+	"log/slog"
 	"os"
 	"strings"
 	"testing"
@@ -526,5 +528,31 @@ func TestVerifyMigration_RequiresGridMarker(t *testing.T) {
 	delete(v3, "gridUnit")
 	if err := Verify(v2, v3); err == nil || !strings.Contains(err.Error(), "gridUnit") {
 		t.Fatalf("err = %v, want a missing gridUnit problem", err)
+	}
+}
+
+// Spec §9 deviation: a grid root that was not 12 columns becomes twice its old
+// width (so it looks the same), not 24 — and that anomaly is logged at WARN.
+func TestMigrateWithBackup_OddGridRootWarns(t *testing.T) {
+	var buf bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, nil)))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	db := newStoreDB(t)
+	doc := oldGridDoc(t)
+	tabByID(t, doc, "u2")["root"].(Obj)["columns"] = 6
+	seed(t, db, snapshot2(doc))
+	res, _, err := MigrateWithBackup(db, func() error { return nil })
+	if err != nil || res.Failed || !res.GridUpdated {
+		t.Fatalf("res=%+v err=%v", res, err)
+	}
+	stored, _ := Load(db)
+	if c := tabByID(t, stored, "u2")["root"].(Obj)["columns"]; c != 12.0 {
+		t.Errorf("odd root columns = %v, want 12 (twice 6)", c)
+	}
+	logs := buf.String()
+	if !strings.Contains(logs, "level=WARN") || !strings.Contains(logs, "tab=u2") || strings.Contains(logs, "tab=t1") {
+		t.Errorf("want exactly one WARN naming tab u2, got:\n%s", logs)
 	}
 }

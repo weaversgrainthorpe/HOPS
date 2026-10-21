@@ -27,7 +27,7 @@ func TestGetConfig_IsTheV3Document(t *testing.T) {
 	addShowcase(t, db)
 	v := getView(t, c)
 	for k := range v {
-		if k != "schemaVersion" && k != "dashboards" {
+		if k != "schemaVersion" && k != "dashboards" && k != configdoc.GridKey { // Ruling 3: gridUnit is served
 			t.Errorf("unexpected top-level key %q in GET /api/config", k)
 		}
 	}

@@ -620,12 +620,12 @@ func rootFolderNamed(root configdoc.Obj, name string) configdoc.Obj {
 
 // addTiles appends one tile per result to a folder's content (in mode), each
 // at the first free cell and Medium-sized: GridUnit x GridUnit cells (2 x 2)
-// in a grid, that many grid cells square (GridUnit·side units) in a free
-// container.
+// in a grid, that many grid cells square (GridUnit·side units, rounded to
+// whole units) in a free container.
 func addTiles(container configdoc.Obj, mode string, side float64, results []*discovery.Result) *apiError {
 	size := float64(configdoc.GridUnit)
 	if mode == "free" {
-		size = configdoc.GridUnit * side
+		size = math.Round(configdoc.GridUnit * side)
 	}
 	space := newFreeSpace(container, freeCellBudget)
 	for _, res := range results {
@@ -670,8 +670,8 @@ func newCategoryFolder(info discovery.CategoryInfo, rootMode string, side float6
 	w := float64(promoteFolderColumns)
 	h, _ := folderNeed("grid", "grid", bottom, side) // + the title row
 	if rootMode == "free" {
-		// side units per grid cell, plus the title.
-		w = w * side
+		// side units per grid cell (rounded to whole units), plus the title.
+		w = math.Round(w * side)
 		h, _ = folderNeed(rootMode, "grid", bottom, side)
 	}
 	return configdoc.Obj{
@@ -779,7 +779,8 @@ const freeTitleUnits = 8
 // folderNeed is the height a folder needs in its parent's units for content
 // reaching down to `bottom` (in the content's units): grid in grid = rows + a
 // title row (configdoc.GridTitleRows cells); free in free = units + an 8-unit
-// title; grid in free = side units per grid row + the title. Free content in a grid
+// title; grid in free = side units per grid row, rounded to whole units, +
+// the title. Free content in a grid
 // parent can't be sized here (a grid row's height depends on the viewport).
 func folderNeed(parentMode, mode string, bottom, side float64) (float64, bool) {
 	switch {
@@ -788,7 +789,7 @@ func folderNeed(parentMode, mode string, bottom, side float64) (float64, bool) {
 	case parentMode == "free" && mode == "free":
 		return bottom + freeTitleUnits, true
 	case parentMode == "free" && mode == "grid":
-		return bottom*side + freeTitleUnits, true
+		return math.Round(bottom*side) + freeTitleUnits, true
 	}
 	return 0, false
 }
