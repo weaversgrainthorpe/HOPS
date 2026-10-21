@@ -1615,6 +1615,117 @@ test.describe('§7.2 edit mode keeps the view layout', () => {
   });
 });
 
+test.describe('§7.2 fix round 1', () => {
+  const broken = (p: string) => ({ type: 'image', value: `/backgrounds/${p}-missing.jpg` });
+
+  /** A long Main tab (a tile at row 0 and a last row far below) and a second tab; a broken dashboard background. */
+  async function longDash(page: Page, context: BrowserContext) {
+    return importDash(page, context, [
+      {
+        name: 'Main',
+        children: (id) => [
+          tile(id('a'), 'Alpha', 0, 0),
+          ...Array.from({ length: 12 }, (_, i) => tile(id(`last${i}`), `Last${i}`, i, 14))
+        ]
+      },
+      { name: 'Two', children: (id) => [tile(id('t2a'), 'Tango')] }
+    ], { background: broken(`m4bw-room${Date.now().toString(36)}`) });
+  }
+
+  test('1024px, the toolbar wrapped with a failed-background warning: the last row scrolls fully clear of it; "Unsaved changes" moves no button', async ({ page, context }) => {
+    await page.setViewportSize({ width: 1024, height: 800 });
+    const f = await longDash(page, context);
+    await page.goto(f.path);
+    // Large text (the navbar's text size, per browser): the toolbar no longer fits one row at 1024px.
+    await page.getByRole('button', { name: 'Increase text size' }).click();
+    await expect.poll(() => page.evaluate(() => document.documentElement.style.fontSize)).toBe('18px');
+    await enterEdit(page);
+    const bar = page.getByRole('toolbar', { name: 'Editing' });
+    await expect(bar.locator('[data-bg-failed="dashboard"]')).toBeVisible();
+    const addTile = bar.getByRole('button', { name: 'Add tile', exact: true });
+    const before = (await addTile.boundingBox())!;
+    // Make the draft dirty (Alt+Right moves the Main tab): "Unsaved changes" appears.
+    await page.getByRole('tab', { name: 'Switch to Main tab' }).focus();
+    await page.keyboard.press('Alt+ArrowRight');
+    await expect(bar.getByText('Unsaved changes')).toBeVisible();
+    const after = (await addTile.boundingBox())!;
+    expect(Math.abs(after.x - before.x), 'Add tile x moved when "Unsaved changes" appeared').toBeLessThanOrEqual(1);
+    expect(Math.abs(after.y - before.y), 'Add tile y moved when "Unsaved changes" appeared').toBeLessThanOrEqual(1);
+    await page.getByRole('tab', { name: 'Switch to Main tab' }).click();
+    const tb = (await bar.boundingBox())!;
+    expect(tb.height, 'the scenario: a tall (wrapped, with a warning) toolbar').toBeGreaterThan(100);
+    await expect
+      .poll(async () => {
+        await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+        return page.evaluate((ids) => {
+          const bar = document.querySelector('[role="toolbar"][aria-label="Editing"]')!.getBoundingClientRect();
+          const bottoms = ids.map((id) => document.querySelector(`[data-node-id="${CSS.escape(id)}"]`)!.getBoundingClientRect().bottom);
+          const last = Math.max(...bottoms);
+          return last <= bar.top ? 'clear' : `last row ends at ${last.toFixed(0)}, toolbar starts at ${bar.top.toFixed(0)}`;
+        }, Array.from({ length: 12 }, (_, i) => f.id(`last${i}`)));
+      }, { message: 'scrolled to the bottom, the last row is clear of the toolbar' })
+      .toBe('clear');
+  });
+
+  test('during a drag the toolbar lets the drop through: a tile dropped on a cell under it lands there', async ({ page, context }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    const f = await longDash(page, context);
+    await page.goto(f.path);
+    await enterEdit(page);
+    const bar = page.getByRole('toolbar', { name: 'Editing' });
+    await expect(bar.locator('[data-bg-failed="dashboard"]')).toBeVisible();
+    await page.evaluate(() => window.scrollTo(0, 0));
+    const alpha = page.locator(`[data-node-id="${f.id('a')}"]`);
+    const a0 = (await alpha.boundingBox())!;
+    const tb = (await bar.boundingBox())!;
+    // A point inside the toolbar's left end (the drag breadcrumb shows at the bottom centre), above
+    // the auto-scroll edge zone (48px), over the grid.
+    const x = tb.x + 16;
+    const y = tb.y + 8;
+    expect(y, 'the point is above the auto-scroll zone').toBeLessThan(800 - 50);
+    await page.mouse.move(a0.x + a0.width / 2, a0.y + a0.height / 2);
+    await page.mouse.down();
+    for (let i = 1; i <= 25; i++) {
+      await page.mouse.move(a0.x + a0.width / 2 + ((x - a0.x - a0.width / 2) * i) / 25, a0.y + a0.height / 2 + ((y - a0.y - a0.height / 2) * i) / 25);
+      await page.waitForTimeout(16);
+    }
+    await page.waitForTimeout(100);
+    // Nothing but the toolbar was over that point: what is there now (pointer-events none) is the canvas.
+    expect(await page.evaluate(([px, py]) => !!document.elementFromPoint(px, py)?.closest('.tab-canvas'), [x, y])).toBe(true);
+    await page.mouse.up();
+    await expect
+      .poll(async () => {
+        const b = (await alpha.boundingBox())!;
+        return b.y - a0.y;
+      }, { message: 'Alpha moved down to the cell under the toolbar' })
+      .toBeGreaterThan(400);
+  });
+
+  test('a titled folder\'s edit handle never covers its failed-background warning or its controls', async ({ page, context }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    const f = await importDash(page, context, [{
+      name: 'Main',
+      children: (id) => [{
+        id: id('grp'), kind: 'folder', name: 'Group', layout: 'inherit', display: 'expanded', shape: 'rounded',
+        showTitle: true, placement: placement(0, 0, 4, 3), background: broken(`m4bw-fold${Date.now().toString(36)}`),
+        content: { columns: 4, children: [tile(id('in'), 'Inner')] }
+      }]
+    }]);
+    await page.goto(f.path);
+    await enterEdit(page);
+    const grp = page.locator(`[data-node-id="${f.id('grp')}"]`);
+    const badge = grp.locator('[data-bg-failed="folder"]');
+    await expect(badge).toBeVisible();
+    const handle = page.getByRole('button', { name: 'Edit Group', exact: true });
+    await grp.hover({ position: { x: 10, y: 10 } });
+    await expect(handle).toHaveCSS('opacity', '1');
+    const hb = (await handle.boundingBox())!;
+    expect(overlaps(hb, (await badge.boundingBox())!), 'the handle covers the warning').toBe(false);
+    for (const b of ['Minimise folder', 'Maximise folder'])
+      expect(overlaps(hb, (await grp.getByRole('button', { name: b }).boundingBox())!), `the handle covers ${b}`).toBe(false);
+  });
+});
+
 test.describe('§7.2 on a touch device (hover: none)', () => {
   test.use({ hasTouch: true, isMobile: true, viewport: { width: 1280, height: 900 } });
 
@@ -1633,6 +1744,45 @@ test.describe('§7.2 on a touch device (hover: none)', () => {
     const ctl = page.locator('.tab-canvas').getByRole('button', { name: /^(Minimise|Maximise) folder$/ });
     await expect(ctl).toHaveCount(4);
     for (let i = 0; i < 4; i++) boxes.push([`folder control ${i}`, (await ctl.nth(i).boundingBox())!]);
+    for (let i = 0; i < boxes.length; i++)
+      for (let j = i + 1; j < boxes.length; j++)
+        expect(overlaps(boxes[i][1], boxes[j][1]), `${boxes[i][0]} vs ${boxes[j][0]}`).toBe(false);
+  });
+});
+
+test.describe('§7.2 nested untitled folders on a touch device', () => {
+  test.use({ hasTouch: true, isMobile: true, viewport: { width: 1280, height: 900 } });
+
+  test('an untitled folder inside an untitled folder (handle on the right): no handle or control overlaps another', async ({ page, context }) => {
+    const f = await importDash(page, context, [{
+      name: 'Main',
+      children: (id) => [{
+        id: id('outer'), kind: 'folder', name: 'Outer', layout: 'inherit', display: 'expanded', shape: 'rounded',
+        showTitle: false, placement: placement(1, 1, 8, 5),
+        content: { columns: 8, children: [{
+          id: id('inner'), kind: 'folder', name: 'InnerF', layout: 'inherit', display: 'expanded', shape: 'rounded',
+          showTitle: false, placement: placement(1, 1, 4, 3),
+          content: { columns: 4, children: [tile(id('deep'), 'Deep', 3, 0)] }
+        }] }
+      }]
+    }]);
+    await page.goto(f.path);
+    await page.getByRole('button', { name: 'Enter Edit Mode' }).tap();
+    await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
+    // The inner folder's handle hangs on its right (its parent's hangs above).
+    const innerHandle = page.getByRole('button', { name: 'Edit InnerF', exact: true });
+    await expect(innerHandle).toHaveClass(/\bright\b/);
+    const boxes: [string, Box][] = [];
+    for (const n of ['Edit Outer', 'Edit InnerF', 'Edit Deep']) {
+      const h = page.getByRole('button', { name: n, exact: true });
+      await expect(h).toHaveCSS('opacity', '1');
+      boxes.push([n, (await h.boundingBox())!]);
+    }
+    for (const [key, name] of [['outer', 'Outer'], ['inner', 'InnerF']] as const) {
+      const host = page.locator(`[data-node-id="${f.id(key)}"] > .corner-controls`);
+      for (const b of ['Minimise folder', 'Maximise folder'])
+        boxes.push([`${name} ${b}`, (await host.getByRole('button', { name: b }).boundingBox())!]);
+    }
     for (let i = 0; i < boxes.length; i++)
       for (let j = i + 1; j < boxes.length; j++)
         expect(overlaps(boxes[i][1], boxes[j][1]), `${boxes[i][0]} vs ${boxes[j][0]}`).toBe(false);

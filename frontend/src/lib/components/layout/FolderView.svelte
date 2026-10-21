@@ -210,14 +210,15 @@
           </span>
         {/if}
         <h3>{folder.name}</h3>
-        <BackgroundFailedBadge background={folder.background} {editing} level="folder" placement="inline" />
         {#if editing}
-          <!-- A zero-width slot just left of the controls: the handle hangs from it over the header
-               (never over the controls or an inner item, and taking no layout space — §7.2). -->
+          <!-- A zero-width slot at the end of the title: the handle hangs from it over the title's end
+               (never over the failed-background warning, the controls or an inner item, and taking no
+               layout space — §7.2). -->
           <span class="handle-slot">
             <EditHandle name={folder.name} onEdit={edit} placement="inline" />
           </span>
         {/if}
+        <BackgroundFailedBadge background={folder.background} {editing} level="folder" placement="inline" />
         {#if views}
           <!-- Shown in edit mode too (§7.2): there Minimise sets the saved default (FolderControls). -->
           <FolderControls dashboardId={views.dashboardId} folderId={folder.id} {remembered} {saved} variant="bar" {editing} />
@@ -419,9 +420,15 @@
     pointer-events: auto;
   }
   /* An untitled folder whose handle hangs above its top-right edge: just left of the controls' tab
-     there (that tab is 2 x 1.5rem buttons + 0.25rem gap + 0.2rem padding each side + 2px border). */
+     there. Its width comes from the same variables the tab and FolderControls are drawn with. */
+  .folder {
+    --corner-inset: 0.5rem;
+    --corner-pad-x: 0.2rem;
+    --corner-border: 1px;
+    --corner-tab-width: calc(var(--folder-controls-width) + 2 * var(--corner-pad-x) + 2 * var(--corner-border));
+  }
   .folder > .corner-controls ~ :global(.edit-handle.above) {
-    right: calc(0.5rem + 3.65rem + 2px + 0.25rem);
+    right: calc(var(--corner-inset) + var(--corner-tab-width) + 0.25rem);
   }
   .tile-restore {
     position: absolute;
@@ -434,12 +441,12 @@
      maximised bodies keep enough top padding that a row-0 folder's tab is not clipped. */
   .corner-controls {
     position: absolute;
-    right: 0.5rem;
+    right: var(--corner-inset);
     bottom: 100%;
     z-index: 3;
     display: flex;
-    padding: 0.05rem 0.2rem;
-    border: 1px solid var(--border);
+    padding: 0.05rem var(--corner-pad-x);
+    border: var(--corner-border) solid var(--border);
     border-bottom: none;
     border-radius: 0.375rem 0.375rem 0 0;
     background: var(--group-bg, var(--bg-secondary));

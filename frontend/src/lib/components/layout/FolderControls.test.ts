@@ -61,7 +61,7 @@ describe('folder controls', () => {
     expect(screen.queryByRole('button', { name: 'Restore folder' })).toBeNull();
   });
   it('edit mode shows them too; Minimise sets the draft\'s saved default (one undo step), never the viewer\'s view', async () => {
-    const { dash, tab } = mk([folder('f1', [tile('a')]), tile('s', 8, 1)]);
+    const { dash } = mk([folder('f1', [tile('a')]), tile('s', 8, 1)]);
     config.set({ schemaVersion: 3, dashboards: [dash] } as any);
     begin('d1');
     editMode.set(true);
@@ -77,7 +77,6 @@ describe('folder controls', () => {
     expect(s.undo).toHaveLength(1);
     expect(get(folderViewFor('d1'))).toEqual({}); // the viewer's remembered view is untouched
     expect(get(selectedNodes).has('f1')).toBe(false); // the click did not also select the folder
-    void tab;
   });
   it('edit mode: Maximise says it is a viewer\'s choice instead of doing nothing', async () => {
     const { dash } = mk([folder('f1', [tile('a')])]);

@@ -162,6 +162,18 @@
   // a double-click or its menu's Edit — the same flow as every item (§4B).
   const editingTabId = $derived($editorDialog?.kind === 'tab' ? $editorDialog.id : null);
   const closeTabDialog = () => editorDialog.set(null);
+
+  // ---- §7.2 room for the floating toolbar. The panel's bottom padding (the same in both modes) is
+  // the baseline; when the toolbar reaches higher than that (it wrapped, a warning or the hint shows),
+  // an edit-only spacer BELOW all content makes up the rest, so the last row can always be scrolled
+  // clear of it. Space below the last row moves nothing, so view and edit positions still match.
+  let editPanelEl = $state<HTMLElement | null>(null);
+  let toolbarSpacerPx = $state(0);
+  const TOOLBAR_GAP_PX = 8;
+  function onToolbarReach(reach: number) {
+    const pad = editPanelEl ? parseFloat(getComputedStyle(editPanelEl).paddingBottom) || 0 : 0;
+    toolbarSpacerPx = Math.max(0, Math.ceil(reach + TOOLBAR_GAP_PX - pad));
+  }
   let showAddTabModal = $state(false);
   /** The one dashboard dialog (Header, Background, Settings — walkthrough §4C). */
   let showDashboardEdit = $state(false);
@@ -408,10 +420,17 @@
         onEditDashboard={() => (showDashboardEdit = true)}
         {dashboardBackground}
         {tabBackground}
+        onReach={onToolbarReach}
       />
       {#if draftTab}
-        <div class="canvas-panel editing" style:--overlay-opacity={overlayOpacity} style:--overlay-blur="{overlayBlur}px">
+        <div
+          class="canvas-panel editing"
+          bind:this={editPanelEl}
+          style:--overlay-opacity={overlayOpacity}
+          style:--overlay-blur="{overlayBlur}px"
+        >
           <TabCanvas dashboard={draft} tab={draftTab} editing />
+          <div class="toolbar-spacer" aria-hidden="true" style:height="{toolbarSpacerPx}px"></div>
         </div>
       {:else}
         <div class="empty-dashboard">

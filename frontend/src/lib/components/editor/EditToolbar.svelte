@@ -22,8 +22,29 @@
     /** The dashboard's and the active tab's own backgrounds: a failed image shows a compact warning here (Ruling 7). */
     dashboardBackground?: Background;
     tabBackground?: Background;
+    /**
+     * Told how far up from the bottom of the screen the toolbar reaches (px), whenever that changes
+     * (it wraps, a warning or the hint appears, the window resizes): the page keeps that much room.
+     */
+    onReach?: (px: number) => void;
   }
-  let { tabId, onAddTab, onEditDashboard, dashboardBackground, tabBackground }: Props = $props();
+  let { tabId, onAddTab, onEditDashboard, dashboardBackground, tabBackground, onReach }: Props = $props();
+
+  let barEl = $state<HTMLElement | null>(null);
+  $effect(() => {
+    const el = barEl;
+    const report = onReach;
+    if (!el || !report) return;
+    const measure = () => report(Math.max(0, window.innerHeight - el.getBoundingClientRect().top));
+    measure();
+    const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(measure) : null;
+    ro?.observe(el);
+    window.addEventListener('resize', measure);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  });
 
   let saving = $state(false);
   const canUndo = $derived(($session?.undo.length ?? 0) > 0);
@@ -118,7 +139,7 @@
 <!-- §7.2: one floating toolbar pinned to the bottom of the screen. It sits over the page and takes no
      layout space, so every tile, folder and tab stays where view mode puts it. Below every dialog
      (folder overlays included): it never covers one. -->
-<div class="edit-toolbar" role="toolbar" aria-label="Editing">
+<div class="edit-toolbar" role="toolbar" aria-label="Editing" bind:this={barEl}>
   <div class="controls">
     <div class="group">
       <button type="button" class="tb primary" onclick={doSave} disabled={!$dirty || saving} title="Save (Ctrl+S)">
@@ -133,11 +154,14 @@
       <button type="button" class="tb" onclick={redo} disabled={!canRedo} title="Redo (Ctrl+Shift+Z or Ctrl+Y)">
         <Icon icon="mdi:redo" width="18" /> Redo
       </button>
-      {#if $dirty}
-        <span class="unsaved" role="status">
-          <Icon icon="mdi:circle-medium" width="18" />Unsaved changes
-        </span>
-      {/if}
+      <!-- Its space is always reserved (an invisible copy, drawn by CSS), so no button moves when it appears. -->
+      <span class="unsaved-slot">
+        {#if $dirty}
+          <span class="unsaved" role="status">
+            <Icon icon="mdi:circle-medium" width="18" />Unsaved changes
+          </span>
+        {/if}
+      </span>
     </div>
     <div class="group">
       <button type="button" class="tb" onclick={() => openDialog({ kind: 'tile', to: currentContainer(tabId) })}>
@@ -254,6 +278,30 @@
     margin: 0;
     color: var(--text-secondary);
     font-size: 0.8125rem;
+  }
+  .unsaved-slot {
+    display: inline-grid;
+    align-items: center;
+  }
+  .unsaved-slot::before {
+    /* The reserved width: the icon (18px) and the same text, invisible. */
+    content: 'Unsaved changes';
+    grid-area: 1 / 1;
+    visibility: hidden;
+    padding-left: 18px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .unsaved-slot > .unsaved {
+    grid-area: 1 / 1;
+  }
+  /* While an item is dragged or resized, the toolbar lets the pointer through: a cell under it
+     still takes the drop (the drag engine hit-tests with elementFromPoint). */
+  :global(body.hops-dragging) .edit-toolbar,
+  :global(body.hops-resizing) .edit-toolbar {
+    pointer-events: none;
+    opacity: 0.4;
   }
   .unsaved {
     display: inline-flex;

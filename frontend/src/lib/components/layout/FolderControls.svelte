@@ -78,10 +78,16 @@
 <style>
   .folder-controls {
     display: inline-flex;
-    gap: 0.25rem;
+    gap: var(--folder-control-gap);
     flex: none;
   }
-  /* A fixed size (1.5rem square, 0.25rem apart): the edit handle beside them is placed by it (FolderView). */
+  /* The controls' size, shared with FolderView (the untitled folder's corner tab and the edit handle
+     placed beside it read these): two buttons of --folder-control-size, --folder-control-gap apart. */
+  :global(:root) {
+    --folder-control-size: 1.5rem;
+    --folder-control-gap: 0.25rem;
+    --folder-controls-width: calc(2 * var(--folder-control-size) + var(--folder-control-gap));
+  }
   button {
     background: none;
     border: none;
@@ -91,8 +97,8 @@
     align-items: center;
     justify-content: center;
     box-sizing: border-box;
-    width: 1.5rem;
-    height: 1.5rem;
+    width: var(--folder-control-size);
+    height: var(--folder-control-size);
     padding: 0;
     border-radius: 0.25rem;
     opacity: 0.8;
