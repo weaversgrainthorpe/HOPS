@@ -22,13 +22,15 @@ vi.mock('$app/stores', async () => {
 vi.mock('$app/navigation', () => ({ goto: vi.fn(async () => {}), beforeNavigate: vi.fn() }));
 vi.mock('$lib/utils/api', async () => ({
 	...(await vi.importActual<object>('$lib/utils/api')),
-	login: vi.fn()
+	login: vi.fn(),
+	logout: vi.fn(async () => {})
 }));
 
 import * as api from '$lib/utils/api';
 import { LoginError } from '$lib/utils/api';
 import { config } from '$lib/stores/config';
-import { isAuthenticated } from '$lib/stores/auth';
+import { isAuthenticated, mustChangePassword, clearMustChangePassword } from '$lib/stores/auth';
+import { goto } from '$app/navigation';
 import { editMode } from '$lib/stores/editMode';
 import { session, resetEditSessionForTests } from '$lib/stores/editSession';
 import Navbar from './Navbar.svelte';
@@ -56,6 +58,7 @@ describe('Navbar pencil when logged out', () => {
 		apiLogin.mockReset();
 		resetEditSessionForTests();
 		isAuthenticated.set(false);
+		mustChangePassword.set(false);
 		editMode.set(false);
 		config.set(doc());
 	});
@@ -109,3 +112,80 @@ describe('Navbar pencil when logged out', () => {
 		expect(get(session)?.dashboardId).toBe('d');
 	});
 });
+
+describe('Navbar after a sign-in that must change the password', () => {
+	beforeEach(() => {
+		apiLogin.mockReset();
+		resetEditSessionForTests();
+		isAuthenticated.set(false);
+		mustChangePassword.set(false);
+		editMode.set(false);
+		config.set(doc());
+	});
+
+	it('editing waits until the forced password change is done (the change dialog can\'t be dismissed)', async () => {
+		apiLogin.mockResolvedValue({ mustChangePassword: true });
+		render(Navbar, {});
+		await fireEvent.click(screen.getByRole('button', { name: 'Enter Edit Mode' }));
+		await signInWith('admin');
+		await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Sign in' })).toBeNull());
+		await new Promise((r) => setTimeout(r, 0));
+		expect(get(editMode)).toBe(false);
+		expect(get(session)).toBeNull();
+		clearMustChangePassword();
+		await waitFor(() => expect(get(editMode)).toBe(true));
+		expect(get(session)?.dashboardId).toBe('d');
+	});
+
+	it('a session that ends before the password is changed never starts editing', async () => {
+		apiLogin.mockResolvedValue({ mustChangePassword: true });
+		render(Navbar, {});
+		await fireEvent.click(screen.getByRole('button', { name: 'Enter Edit Mode' }));
+		await signInWith('admin');
+		await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Sign in' })).toBeNull());
+		isAuthenticated.set(false);
+		mustChangePassword.set(false);
+		await new Promise((r) => setTimeout(r, 0));
+		expect(get(editMode)).toBe(false);
+		expect(get(session)).toBeNull();
+	});
+});
+
+describe('Navbar gear and Log out (spec §4D)', () => {
+	beforeEach(() => {
+		(goto as unknown as ReturnType<typeof vi.fn>).mockClear();
+		(api.logout as unknown as ReturnType<typeof vi.fn>).mockClear();
+		resetEditSessionForTests();
+		mustChangePassword.set(false);
+		editMode.set(false);
+		config.set(doc());
+	});
+
+	it('the gear links to /settings, logged out and logged in', () => {
+		isAuthenticated.set(false);
+		const { unmount } = render(Navbar, {});
+		expect(screen.getByRole('link', { name: 'Settings' }).getAttribute('href')).toBe('/settings');
+		unmount();
+		isAuthenticated.set(true);
+		render(Navbar, {});
+		expect(screen.getByRole('link', { name: 'Settings' }).getAttribute('href')).toBe('/settings');
+	});
+
+	it('Log out shows only when logged in', () => {
+		isAuthenticated.set(false);
+		render(Navbar, {});
+		expect(screen.queryByRole('button', { name: 'Log out' })).toBeNull();
+		isAuthenticated.set(true);
+	});
+
+	it('Log out signs out and stays on this dashboard', async () => {
+		isAuthenticated.set(true);
+		render(Navbar, {});
+		await fireEvent.click(screen.getByRole('button', { name: 'Log out' }));
+		await waitFor(() => expect(api.logout).toHaveBeenCalledTimes(1));
+		expect(get(isAuthenticated)).toBe(false);
+		expect(goto).not.toHaveBeenCalled();
+		expect(screen.queryByRole('button', { name: 'Log out' })).toBeNull();
+	});
+});
+

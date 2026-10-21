@@ -118,8 +118,9 @@
 <ParkedDraftBanner />
 
 <div class="app-page">
-<!-- While the config migration has failed, only the admin page ("/": login +
-     Backups, the remedy) stays reachable; everything else shows the notice. -->
+<!-- While the config migration has failed, only "/" (which shows the notice
+     itself) and Settings (sign-in + Backups, the remedy) stay reachable;
+     everything else shows the notice. -->
 {#if showMigrationFailedPage($page.url.pathname, $migrationFailure)}
 	<MigrationFailed />
 {:else}

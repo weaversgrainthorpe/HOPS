@@ -311,6 +311,8 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.75rem;
     margin-bottom: 1.5rem;
   }
 
@@ -457,6 +459,7 @@
     .dashboard-actions {
       width: 100%;
       justify-content: flex-start;
+      flex-wrap: wrap;
     }
 
     .edit-fields {

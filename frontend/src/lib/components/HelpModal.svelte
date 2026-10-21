@@ -248,14 +248,14 @@
               <Icon icon="mdi:qrcode" width="24" />
               <div>
                 <strong>QR Codes</strong>
-                <p>Generate a scannable QR for any dashboard from the admin panel — open it on a phone or tablet without typing the URL.</p>
+                <p>Generate a scannable QR for any dashboard from Settings → Dashboards — open it on a phone or tablet without typing the URL.</p>
               </div>
             </div>
             <div class="feature">
               <Icon icon="mdi:backup-restore" width="24" />
               <div>
                 <strong>Automatic Backups</strong>
-                <p>HOPS backs up the database on startup and before config changes. Restore or delete from the Admin → Backups dialog.</p>
+                <p>HOPS backs up the database on startup and before config changes. Restore or delete from Settings → Backups.</p>
               </div>
             </div>
             <div class="feature">
@@ -297,14 +297,14 @@
               <Icon icon="mdi:cellphone" width="24" />
               <div>
                 <strong>View only on phones</strong>
-                <p>Dashboards work great on phones, but editing is hidden — drag-and-drop and dense modals are awkward on touchscreens. Use a tablet or desktop to edit. The admin gear stays available so you can still reach Backups and Change Password.</p>
+                <p>Dashboards work great on phones, but editing is hidden — drag-and-drop and dense modals are awkward on touchscreens. Use a tablet or desktop to edit. The gear (Settings) stays available so you can still reach Backups and Change Password.</p>
               </div>
             </div>
             <div class="feature">
               <Icon icon="mdi:qrcode-scan" width="24" />
               <div>
                 <strong>Quick mobile access</strong>
-                <p>Use the QR code feature on the admin panel to open any dashboard on your phone — no URL typing required.</p>
+                <p>Use the QR code feature in Settings → Dashboards to open any dashboard on your phone — no URL typing required.</p>
               </div>
             </div>
           </div>

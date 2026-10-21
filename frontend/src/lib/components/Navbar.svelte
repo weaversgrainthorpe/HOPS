@@ -2,7 +2,8 @@
   import { dashboards, currentRoute, dashboardHref } from '$lib/stores/config';
   import { page } from '$app/stores';
   import type { HeaderConfig } from '$lib/types';
-  import { isAuthenticated } from '$lib/stores/auth';
+  import { isAuthenticated, logout, whenPasswordSettled } from '$lib/stores/auth';
+  import { goto } from '$app/navigation';
   import { theme, toggleTheme } from '$lib/stores/theme';
   import { editMode, toggleEditMode, enableEditMode } from '$lib/stores/editMode';
   import { session } from '$lib/stores/editSession';
@@ -47,11 +48,16 @@
       }, 500);
     }
   }
+  // The admin pages: Settings (the admin home) and the tools under /admin.
+  let isAdminPage = $derived(
+    currentPath === '/settings' || currentPath.startsWith('/settings/') ||
+    currentPath === '/admin' || currentPath.startsWith('/admin/')
+  );
   // True only when the current page is an actual dashboard (i.e. somewhere
-  // that has tiles to edit). The admin page (`/`) has its own controls, and
-  // the Settings page (`/settings`) has its own form UI — on neither does
+  // that has tiles to edit). "/" only forwards to a dashboard (or says there
+  // is none) and the admin pages have their own UI — on neither does
   // dashboard edit-mode make sense, so the navbar's Edit toggle hides there.
-  let isDashboardPage = $derived(currentPath !== '/' && !currentPath.startsWith('/settings'));
+  let isDashboardPage = $derived(currentPath !== '/' && !isAdminPage);
   let showThemePicker = $state(false);
   let showExport = $state(false);
   let showHelp = $state(false);
@@ -68,9 +74,25 @@
     showLogin = true;
   }
 
+  // Editing starts once the user may act: a forced password change (its dialog can't be
+  // dismissed) comes first.
+  let cancelPendingEdit: (() => void) | null = null;
   function handleLoginSuccess() {
     showLogin = false;
-    enableEditMode();
+    cancelPendingEdit?.();
+    cancelPendingEdit = whenPasswordSettled(() => {
+      cancelPendingEdit = null;
+      enableEditMode();
+    });
+  }
+  $effect(() => () => cancelPendingEdit?.());
+
+  // Log out from anywhere (a shared tablet). Unsaved edits are asked about first (logout()
+  // returns false if the user keeps editing). An admin page needs a session, so leave it; a
+  // dashboard stays, read-only.
+  async function handleLogout() {
+    const done = await logout();
+    if (done && isAdminPage) await goto('/');
   }
 
   let themeIcon = $derived(
@@ -213,12 +235,20 @@
         </button>
       {/if}
 
-      <a href="/" class="admin-link" title="Admin Panel" aria-label="Admin Panel">
+      <!-- Settings is the admin home; logged out, it asks for the password in place. -->
+      <a href="/settings" class="admin-link" title="Settings" aria-label="Settings">
         <Icon icon="mdi:cog" width="32" height="32" />
         {#if $isAuthenticated}
           <span class="admin-badge"></span>
         {/if}
       </a>
+
+      {#if $isAuthenticated}
+        <button type="button" onclick={handleLogout} class="logout-btn" title="Log out" aria-label="Log out">
+          <Icon icon="mdi:logout" width="18" height="18" />
+          <span class="logout-label">Log out</span>
+        </button>
+      {/if}
     </div>
   </div>
 </nav>
@@ -400,6 +430,28 @@
     font-weight: 500;
   }
 
+  /* Small: a text button next to the gear, not another big round icon. */
+  .logout-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    height: 32px;
+    padding: 0 0.7rem;
+    border-radius: 1rem;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s;
+  }
+
+  .logout-btn:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+  }
+
   .admin-badge {
     position: absolute;
     top: 8px;
@@ -558,6 +610,17 @@
     .help-btn,
     .about-btn {
       display: none;
+    }
+  }
+
+  /* Phones: the logout button keeps its icon, drops its word. */
+  @media (max-width: 480px) {
+    .logout-label {
+      display: none;
+    }
+
+    .logout-btn {
+      padding: 0 0.5rem;
     }
   }
 </style>

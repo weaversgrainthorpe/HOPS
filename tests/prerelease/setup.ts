@@ -10,12 +10,14 @@ import { ADMIN_USERNAME, ADMIN_INITIAL_PASSWORD, ADMIN_TEST_PASSWORD } from './c
 // which guarantees this runs first.
 
 setup('authenticate and save state', async ({ page }) => {
-  await page.goto('/');
-
-  // Login form
-  await page.fill('input#username', ADMIN_USERNAME);
-  await page.fill('input#password', ADMIN_INITIAL_PASSWORD);
-  await page.click('button[type="submit"]');
+  // Settings is the admin home; logged out it asks for the password in place.
+  await page.goto('/settings');
+  const dlg = page.getByRole('dialog', { name: 'Sign in' });
+  await expect(dlg).toBeVisible({ timeout: 10_000 });
+  await dlg.getByLabel('Username').fill(ADMIN_USERNAME);
+  await dlg.getByLabel('Password').fill(ADMIN_INITIAL_PASSWORD);
+  await dlg.getByLabel('Password').press('Enter');
+  await expect(dlg).toHaveCount(0);
 
   // Forced password change modal
   await expect(page.getByRole('heading', { name: 'Set a New Password' })).toBeVisible({ timeout: 10_000 });
@@ -25,8 +27,8 @@ setup('authenticate and save state', async ({ page }) => {
   await page.click('button:has-text("Set Password")');
 
   // Modal auto-dismisses ~1.5s after success. Don't race the success-message
-  // animation — just wait for the underlying admin page to be interactive.
-  await expect(page.getByRole('heading', { name: 'HOPS Admin Panel' })).toBeVisible({ timeout: 15_000 });
+  // animation — just wait for Settings to load its sections (it waits for the change).
+  await expect(page.getByRole('heading', { name: 'Global settings', level: 2 })).toBeVisible({ timeout: 15_000 });
   // Give the modal teardown a beat so its DOM is gone before we save state.
   await page.waitForTimeout(500);
 

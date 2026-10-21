@@ -16,17 +16,20 @@ test('UI icons render with the Iconify API fully blocked (offline)', async ({ pa
     return route.abort();
   });
 
-  await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'HOPS Admin Panel' })).toBeVisible();
+  await page.goto('/settings');
+  await expect(page.getByRole('heading', { name: 'Global settings', level: 2 })).toBeVisible();
 
   // @iconify/svelte renders each icon as an inline <svg>. With the API blocked,
   // any icon that rendered must have come from the embedded bundle. The logo is
   // an <img>, not inline svg, so inline <svg> count ≈ Iconify icons drawn.
   await expect.poll(() => page.locator('svg').count(), { timeout: 5_000 }).toBeGreaterThan(5);
 
-  // The admin header buttons (Settings=mdi:cog, Discovery=mdi:radar, …) must
-  // each have drawn their icon.
-  await expect(page.locator('.header-actions svg').first()).toBeVisible();
+  // The admin buttons on Settings (Backups=mdi:backup-restore, Discovery=mdi:radar, …)
+  // and the navbar gear (mdi:cog) must each have drawn their icon.
+  for (const section of ['#discovery', '#backups', '#password', '#reset', '#logout']) {
+    await expect(page.locator(`${section} svg`).first()).toBeVisible();
+  }
+  await expect(page.getByRole('link', { name: 'Settings' }).locator('svg')).toBeVisible();
 
   // Even if some request was attempted and aborted, the icons rendered — but in
   // practice nothing should have reached out at all.

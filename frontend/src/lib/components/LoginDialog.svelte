@@ -1,35 +1,43 @@
 <script lang="ts">
+  import { onMount, tick } from 'svelte';
   import Icon from '@iconify/svelte';
   import Modal from '$lib/components/shared/Modal.svelte';
   import { login, loginError, isLoggingIn } from '$lib/stores/auth';
 
-  // Sign in without leaving the page (the dashboard pencil today; the gear and
-  // Settings later). Credentials go through the auth store's login(), so the
-  // session cookie + CSRF flow is the same as the admin login form.
+  // Sign in without leaving the page: the dashboard pencil, and Settings (the gear). Credentials
+  // go through the auth store's login(), so the session cookie + CSRF flow is the same everywhere.
   interface Props {
     onSuccess: () => void;
     onCancel: () => void;
+    /** One line saying what signing in is for. */
+    intro?: string;
   }
 
-  let { onSuccess, onCancel }: Props = $props();
+  let { onSuccess, onCancel, intro = 'Sign in to edit this dashboard.' }: Props = $props();
 
   let username = $state('');
   let password = $state('');
-  let error = $state('');
+  let passwordEl = $state<HTMLInputElement | null>(null);
+
+  // A failure from before this dialog opened is not this dialog's failure.
+  onMount(() => loginError.set(''));
 
   async function handleSubmit(e: Event) {
     e.preventDefault();
     if ($isLoggingIn) return;
-    error = '';
-    const ok = await login(username, password);
+    // The dialog shows the reason itself ($loginError), so login() sends no second copy to a toast.
+    const ok = await login(username, password, { quietErrors: true });
     if (ok) {
       password = '';
       onSuccess();
       return;
     }
-    // Never a silent failure: the reason (wrong password, server unreachable,
-    // rate-limited) is shown here, in the dialog, which stays open.
-    error = $loginError || 'Sign-in failed. Try again.';
+    // Never a silent failure: the reason (wrong password, server unreachable, rate-limited) is
+    // shown below, in the dialog, which stays open. The fields were disabled during the attempt
+    // (which drops focus); put the cursor back in the password to try again.
+    await tick();
+    passwordEl?.focus();
+    passwordEl?.select();
   }
 
   function cancel() {
@@ -47,7 +55,7 @@
   zIndex="var(--z-modal-overlay)"
   initialFocus="#login-username"
 >
-  <p class="intro">Sign in to edit this dashboard.</p>
+  <p class="intro">{intro}</p>
   <form id="login-dialog-form" onsubmit={handleSubmit}>
     <div class="form-group">
       <label for="login-username">Username</label>
@@ -72,13 +80,14 @@
         required
         autocomplete="current-password"
         disabled={$isLoggingIn}
+        bind:this={passwordEl}
       />
     </div>
 
-    {#if error}
+    {#if $loginError}
       <div class="error-message" role="alert">
         <Icon icon="mdi:alert-circle" width="18" />
-        <span>{error}</span>
+        <span>{$loginError}</span>
       </div>
     {/if}
   </form>

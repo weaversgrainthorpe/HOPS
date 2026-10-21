@@ -274,8 +274,14 @@ describe('showMigrationFailedPage', () => {
   it('is true on a dashboard route when migration failed', () => {
     expect(showMigrationFailedPage('/home', 'bad')).toBe(true);
   });
-  it('is false on / (admin page shows its own banner)', () => {
+  it('is false on / (the home page shows its own notice)', () => {
     expect(showMigrationFailedPage('/', 'bad')).toBe(false);
+  });
+  it('is false on /settings (the admin home: sign-in and Backups, the remedy)', () => {
+    expect(showMigrationFailedPage('/settings', 'bad')).toBe(false);
+  });
+  it('is true on the other admin pages', () => {
+    expect(showMigrationFailedPage('/admin/discovery', 'bad')).toBe(true);
   });
   it('is false when there is no failure', () => {
     expect(showMigrationFailedPage('/home', null)).toBe(false);

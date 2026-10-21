@@ -462,7 +462,7 @@
     <div class="empty-dashboard">
       <p>No tabs yet on this dashboard</p>
       <p class="hint">Tabs let you organize tiles and folders by purpose (e.g. Media, Tools, Networking).</p>
-      <a href="/">Go to Admin Panel</a>
+      <a href="/settings">Open Settings</a>
     </div>
   {/if}
 </div>

@@ -84,8 +84,38 @@ export async function initAuth() {
   }
 }
 
-// Login
-export async function login(username: string, password: string) {
+/**
+ * Run `fn` once the signed-in user may act: right away, or — when a forced password change is
+ * pending (its dialog can't be dismissed) — as soon as it is done. Dropped if the session ends
+ * first. Returns a function that cancels the wait.
+ */
+export function whenPasswordSettled(fn: () => void): () => void {
+  let done = false;
+  let unsubscribe: (() => void) | null = null;
+  const stop = () => {
+    done = true;
+    if (unsubscribe) { const u = unsubscribe; unsubscribe = null; u(); }
+  };
+  const check = () => {
+    if (done) return;
+    if (!authenticatedValue) { stop(); return; }
+    if (!mustChangeValue) { stop(); fn(); }
+  };
+  const unA = isAuthenticated.subscribe(() => check());
+  const unM = mustChangePassword.subscribe(() => check());
+  unsubscribe = () => { unA(); unM(); };
+  if (done) stop();
+  return stop;
+}
+
+let authenticatedValue = false;
+isAuthenticated.subscribe((v) => { authenticatedValue = v; });
+let mustChangeValue = false;
+mustChangePassword.subscribe((v) => { mustChangeValue = v; });
+
+// Login. `quietErrors`: the caller shows the failure itself (the sign-in dialog shows
+// $loginError inline), so no second copy goes to a toast.
+export async function login(username: string, password: string, opts: { quietErrors?: boolean } = {}) {
   isLoggingIn.set(true);
   loginError.set('');
 
@@ -101,9 +131,9 @@ export async function login(username: string, password: string) {
     return true;
   } catch (error) {
     logError('Login', error);
-    const message = error instanceof LoginError ? error.message : 'Sign-in failed. Try again.';
+    const message = error instanceof LoginError && error.message ? error.message : 'Sign-in failed. Try again.';
     loginError.set(message);
-    toast.error(message);
+    if (!opts.quietErrors) toast.error(message);
     return false;
   } finally {
     isLoggingIn.set(false);

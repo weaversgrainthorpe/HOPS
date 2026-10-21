@@ -3,7 +3,7 @@
   import Icon from '@iconify/svelte';
 
   interface Props {
-    /** When given (admin page), render a button that opens the backups UI instead of a link. */
+    /** When given (Settings), render a button that opens the backups UI instead of a link. */
     onOpenBackups?: () => void;
   }
   let { onOpenBackups }: Props = $props();
@@ -11,7 +11,7 @@
 
 <!-- Full-page notice shown instead of the app while the stored config could
      not be migrated to v3. The server refuses config requests in this state;
-     the automatic pre-v3-migration / startup backups are the remedy (Admin → Backups). -->
+     the automatic pre-v3-migration / startup backups are the remedy (Settings → Backups). -->
 <main class="migration-failed" role="alert">
   <Icon icon="mdi:database-alert-outline" width="48" />
   <h1>HOPS couldn't migrate your configuration</h1>
@@ -23,11 +23,11 @@
     <pre class="detail">{$migrationFailure}</pre>
   {/if}
   <p>
-    Admin → Backups holds the automatic pre-v3-migration and startup backups.
+    Settings → Backups holds the automatic pre-v3-migration and startup backups.
     {#if onOpenBackups}
       <button type="button" class="open-backups" onclick={onOpenBackups}>Open Backups</button>
     {:else}
-      Sign in and restore it from <a href="/">Admin → Backups</a>.
+      Sign in and restore it from <a href="/settings">Settings → Backups</a>.
     {/if}
   </p>
 </main>

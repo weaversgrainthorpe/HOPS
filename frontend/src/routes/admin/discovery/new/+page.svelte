@@ -22,7 +22,7 @@
   onMount(async () => {
     await waitForAuthChecked();
     if (!$isAuthenticated) {
-      goto('/');
+      goto('/settings'); // logged out: Settings asks for the password in place
       return;
     }
     // Pre-fill from URL params if present (the "Edit & re-scan" flow

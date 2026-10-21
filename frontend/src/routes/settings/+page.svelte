@@ -1,12 +1,24 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import { goto } from '$app/navigation';
+  import { goto, afterNavigate } from '$app/navigation';
   import Icon from '@iconify/svelte';
   import Button from '$lib/components/shared/Button.svelte';
   import { toast } from '$lib/stores/toast';
-  import { isAuthenticated, waitForAuthChecked } from '$lib/stores/auth';
-  import { listSettings, type SettingDef } from '$lib/utils/api';
-  import { saveGlobalSetting } from '$lib/stores/config';
+  import { confirm } from '$lib/stores/confirmModal';
+  import { isAuthenticated, authChecked, mustChangePassword, logout } from '$lib/stores/auth';
+  import { isBackendOffline, backendStatus } from '$lib/stores/backendStatus';
+  import { listSettings, resetConfig, type SettingDef } from '$lib/utils/api';
+  import { saveGlobalSetting, loadConfig, migrationFailure } from '$lib/stores/config';
+  import LoginDialog from '$lib/components/LoginDialog.svelte';
+  import DashboardList from '$lib/components/admin/DashboardList.svelte';
+  import ChangePasswordModal from '$lib/components/admin/ChangePasswordModal.svelte';
+  import BackupModal from '$lib/components/admin/BackupModal.svelte';
+  import MigrationFailed from '$lib/components/MigrationFailed.svelte';
+  import NoticesBanner from '$lib/components/NoticesBanner.svelte';
+  import BackendStatus from '$lib/components/BackendStatus.svelte';
+
+  // Settings is the one admin home (spec §4D): dashboards, the global settings, Discovery,
+  // backups, password, factory reset and log out. Logged out, it asks for the password in
+  // place (the same dialog as the dashboard pencil); Cancel goes back where you came from.
 
   // Settings are grouped by the dotted prefix of their key — server.*, log.*,
   // auth.*, status.*, upload.*, http.*. The labels here drive the section
@@ -48,15 +60,34 @@
     )
   );
 
-  onMount(async () => {
-    // Wait for the layout's initAuth() to resolve before checking
-    // isAuthenticated — otherwise we race the first /api/auth/check and
-    // bounce a freshly-logged-in user straight back to the admin index.
-    await waitForAuthChecked();
-    if (!$isAuthenticated) {
-      goto('/');
-      return;
+  // Where Cancel on the sign-in dialog goes: the page you came from, else "/".
+  let previous = $state<string | null>(null);
+  afterNavigate((nav) => {
+    const from = nav?.from?.url;
+    if (from && from.pathname !== '/settings') previous = from.pathname + from.search + from.hash;
+  });
+
+  // Set while this page's Log out runs: the page is being left, so no sign-in dialog flashes up.
+  let leaving = $state(false);
+  // Logged out (once the first auth check has answered — never on a guess): sign in here.
+  let needsLogin = $derived($authChecked && !$isAuthenticated && !leaving);
+  // The admin content needs a session and no pending forced password change (its dialog can't
+  // be dismissed, and the server refuses the rest until it is done).
+  let ready = $derived($authChecked && $isAuthenticated && !$mustChangePassword);
+
+  let requested = false;
+  $effect(() => {
+    if (ready && !requested) {
+      requested = true;
+      void loadSettings();
+    } else if (!$isAuthenticated) {
+      requested = false;
     }
+  });
+
+  async function loadSettings() {
+    loading = true;
+    loadError = '';
     try {
       const { settings: list } = await listSettings();
       settings = list;
@@ -66,7 +97,51 @@
     } finally {
       loading = false;
     }
-  });
+  }
+
+  function cancelLogin() {
+    void goto(previous ?? '/');
+  }
+
+  let showChangePassword = $state(false);
+  let showBackupModal = $state(false);
+
+  async function handleLogout() {
+    // logout() asks about unsaved edits first; false = the user kept editing.
+    leaving = true;
+    if (await logout()) {
+      await goto('/');
+    } else {
+      leaving = false;
+    }
+  }
+
+  async function handleFactoryReset() {
+    const confirmed = await confirm({
+      title: 'Factory Reset',
+      message: 'This will permanently delete all dashboards, tabs, folders and tiles, resetting everything to defaults. A backup will be created automatically. This action cannot be undone.',
+      confirmText: 'Reset Everything',
+      confirmStyle: 'danger',
+    });
+    if (!confirmed) return;
+    try {
+      await resetConfig();
+      await loadConfig();
+      toast.success('Configuration reset to factory defaults');
+    } catch {
+      toast.error('Failed to reset configuration');
+    }
+  }
+
+  const sections = [
+    { id: 'dashboards', label: 'Dashboards' },
+    { id: 'global', label: 'Global settings' },
+    { id: 'discovery', label: 'Discovery' },
+    { id: 'backups', label: 'Backups' },
+    { id: 'password', label: 'Password' },
+    { id: 'reset', label: 'Factory reset' },
+    { id: 'logout', label: 'Log out' },
+  ];
 
   function isDirty(s: SettingDef): boolean {
     return drafts[s.key] !== s.value;
@@ -183,150 +258,257 @@
 
 <div class="settings-page">
   <header class="page-header">
-    <div class="title-row">
-      <Button variant="ghost" icon="mdi:arrow-left" onclick={() => goto('/')}>Back to admin</Button>
-      <h1>Settings</h1>
-    </div>
+    <h1>Settings</h1>
     <p class="lede">
-      Configure HOPS at runtime. Most settings apply immediately; a few are
-      marked <span class="badge badge--warning badge--pill">Restart required</span> — they only
-      take effect after the server restarts.
+      Manage HOPS: your dashboards, how the server runs, backups and your password.
     </p>
   </header>
 
-  {#if pendingRestartKeys.length > 0}
-    <div class="restart-banner" role="status">
-      <Icon icon="mdi:restart" width="20" />
-      <div class="restart-banner-text">
-        <strong>{pendingRestartKeys.length} setting{pendingRestartKeys.length === 1 ? '' : 's'} need{pendingRestartKeys.length === 1 ? 's' : ''} a HOPS restart to take effect.</strong>
-        <div class="restart-banner-keys">
-          {#each pendingRestartKeys as key (key)}
-            <code>{key}</code>
-          {/each}
-        </div>
+  {#if $migrationFailure}
+    <!-- On top: the stored config could not be migrated; Backups is the remedy. -->
+    <MigrationFailed onOpenBackups={ready ? () => (showBackupModal = true) : undefined} />
+  {/if}
+
+  {#if $isBackendOffline}
+    <div class="offline-banner" role="alert">
+      <Icon icon="mdi:cloud-off-outline" width="24" />
+      <div class="offline-content">
+        <strong>Backend Offline</strong>
+        <span>All admin functions are disabled until the backend is available.</span>
       </div>
+      <button class="retry-btn" onclick={() => backendStatus.check()}>
+        <Icon icon="mdi:refresh" width="18" />
+        Retry
+      </button>
     </div>
   {/if}
 
-  {#if loading}
-    <p class="muted">Loading…</p>
-  {:else if loadError}
-    <p class="error">Failed to load settings: {loadError}</p>
+  {#if !$authChecked}
+    <p class="muted" role="status">Checking sign-in…</p>
+  {:else if needsLogin}
+    <p class="muted">Sign in to manage HOPS.</p>
+    <div class="status-section"><BackendStatus /></div>
+  {:else if $mustChangePassword}
+    <p class="muted" role="status">Set a new password to continue.</p>
   {:else}
-    {#each grouped as [groupKey, items] (groupKey)}
-      <section class="group">
-        <h2>{groupLabels[groupKey] ?? groupKey}</h2>
-        <div class="rows">
-          {#each items as s (s.key)}
-            <div class="row" class:dirty={isDirty(s)}>
-              <div class="row-label">
-                <label class="label-text" for={`setting-${s.key}`}>
-                  {labelFor(s.key)}
-                  {#if s.restartRequired}
-                    <span class="badge badge--warning badge--pill" title="Takes effect on next restart">
-                      <Icon icon="mdi:restart" width="12" /> Restart
-                    </span>
-                  {/if}
-                </label>
-                <div class="desc">{s.description}</div>
-                <div class="meta">
-                  <span class="meta-defaults">Default <code>{s.default}</code>{#if s.min !== undefined && s.min !== 0} · min {s.min}{/if}{#if s.max !== undefined && s.max !== 0} · max {s.max}{/if}</span>
-                  <code class="meta-key" title="Internal setting key — used in scripts and the API">{s.key}</code>
-                </div>
-              </div>
-              <div class="row-input">
-                {#if (s.type === 'log_level' || s.type === 'enum') && s.enum}
-                  <select id={`setting-${s.key}`} bind:value={drafts[s.key]}>
-                    {#each s.enum as opt (opt)}
-                      <option value={opt}>{opt}</option>
-                    {/each}
-                  </select>
-                {:else if s.type === 'bool'}
-                  <label class="bool-toggle">
-                    <input
-                      id={`setting-${s.key}`}
-                      type="checkbox"
-                      checked={drafts[s.key] === 'true'}
-                      onchange={(e) => (drafts[s.key] = (e.currentTarget as HTMLInputElement).checked ? 'true' : 'false')}
-                    />
-                    {drafts[s.key] === 'true' ? 'On' : 'Off'}
-                  </label>
-                {:else if s.type === 'cidr_list'}
-                  <div class="cidr-builder">
-                    {#each parseCidrList(drafts[s.key]) as cidr (cidr)}
-                      <span class="cidr-chip">
-                        <code>{cidr}</code>
-                        <button
-                          type="button"
-                          class="cidr-remove"
-                          title="Remove {cidr}"
-                          aria-label="Remove {cidr}"
-                          onclick={() => removeCidr(s, cidr)}
-                        >
-                          <Icon icon="mdi:close" width="14" />
-                        </button>
-                      </span>
-                    {/each}
-                    {#if parseCidrList(drafts[s.key]).length === 0}
-                      <span class="cidr-empty">No CIDRs configured — HOPS will not honour forwarded headers.</span>
-                    {/if}
-                    <div class="cidr-add">
+    {#if !$migrationFailure}
+      <NoticesBanner />
+    {/if}
+
+    <nav class="section-nav" aria-label="Settings sections">
+      {#each sections as sec (sec.id)}
+        <a href="#{sec.id}">{sec.label}</a>
+      {/each}
+    </nav>
+
+    <div class="admin-content" class:greyed-out={$isBackendOffline}>
+      <section id="dashboards" class="section">
+        {#if $migrationFailure}
+          <h2>Dashboards</h2>
+          <!-- Never an empty list as if there were no dashboards: they can't be read right now. -->
+          <p class="error">Your dashboards can't be shown until the configuration is restored from a backup (above).</p>
+        {:else}
+          <!-- Phone-only: editing is hidden under 480px (drag-and-drop is awkward on a phone). -->
+          <div class="phone-edit-note">
+            <Icon icon="mdi:tablet" width="18" />
+            <span>Editing dashboards needs a tablet or desktop — drag-and-drop is awkward on a phone. You can still manage everything else here.</span>
+          </div>
+          <DashboardList />
+        {/if}
+      </section>
+
+      <section id="global" class="section">
+        <h2>Global settings</h2>
+        <p class="lede">
+          Most settings apply immediately; a few are marked
+          <span class="badge badge--warning badge--pill">Restart required</span> — they only
+          take effect after the server restarts.
+        </p>
+      {#if pendingRestartKeys.length > 0}
+        <div class="restart-banner" role="status">
+          <Icon icon="mdi:restart" width="20" />
+          <div class="restart-banner-text">
+            <strong>{pendingRestartKeys.length} setting{pendingRestartKeys.length === 1 ? '' : 's'} need{pendingRestartKeys.length === 1 ? 's' : ''} a HOPS restart to take effect.</strong>
+            <div class="restart-banner-keys">
+              {#each pendingRestartKeys as key (key)}
+                <code>{key}</code>
+              {/each}
+            </div>
+          </div>
+        </div>
+      {/if}
+
+      {#if loading}
+        <p class="muted">Loading…</p>
+      {:else if loadError}
+        <p class="error">Failed to load settings: {loadError}</p>
+      {:else}
+        {#each grouped as [groupKey, items] (groupKey)}
+          <div class="group">
+            <h3>{groupLabels[groupKey] ?? groupKey}</h3>
+            <div class="rows">
+              {#each items as s (s.key)}
+                <div class="row" class:dirty={isDirty(s)}>
+                  <div class="row-label">
+                    <label class="label-text" for={`setting-${s.key}`}>
+                      {labelFor(s.key)}
+                      {#if s.restartRequired}
+                        <span class="badge badge--warning badge--pill" title="Takes effect on next restart">
+                          <Icon icon="mdi:restart" width="12" /> Restart
+                        </span>
+                      {/if}
+                    </label>
+                    <div class="desc">{s.description}</div>
+                    <div class="meta">
+                      <span class="meta-defaults">Default <code>{s.default}</code>{#if s.min !== undefined && s.min !== 0} · min {s.min}{/if}{#if s.max !== undefined && s.max !== 0} · max {s.max}{/if}</span>
+                      <code class="meta-key" title="Internal setting key — used in scripts and the API">{s.key}</code>
+                    </div>
+                  </div>
+                  <div class="row-input">
+                    {#if (s.type === 'log_level' || s.type === 'enum') && s.enum}
+                      <select id={`setting-${s.key}`} bind:value={drafts[s.key]}>
+                        {#each s.enum as opt (opt)}
+                          <option value={opt}>{opt}</option>
+                        {/each}
+                      </select>
+                    {:else if s.type === 'bool'}
+                      <label class="bool-toggle">
+                        <input
+                          id={`setting-${s.key}`}
+                          type="checkbox"
+                          checked={drafts[s.key] === 'true'}
+                          onchange={(e) => (drafts[s.key] = (e.currentTarget as HTMLInputElement).checked ? 'true' : 'false')}
+                        />
+                        {drafts[s.key] === 'true' ? 'On' : 'Off'}
+                      </label>
+                    {:else if s.type === 'cidr_list'}
+                      <div class="cidr-builder">
+                        {#each parseCidrList(drafts[s.key]) as cidr (cidr)}
+                          <span class="cidr-chip">
+                            <code>{cidr}</code>
+                            <button
+                              type="button"
+                              class="cidr-remove"
+                              title="Remove {cidr}"
+                              aria-label="Remove {cidr}"
+                              onclick={() => removeCidr(s, cidr)}
+                            >
+                              <Icon icon="mdi:close" width="14" />
+                            </button>
+                          </span>
+                        {/each}
+                        {#if parseCidrList(drafts[s.key]).length === 0}
+                          <span class="cidr-empty">No CIDRs configured — HOPS will not honour forwarded headers.</span>
+                        {/if}
+                        <div class="cidr-add">
+                          <input
+                            id={`setting-${s.key}`}
+                            type="text"
+                            bind:value={cidrDrafts[s.key]}
+                            placeholder="10.0.0.0/8 or 192.168.1.5/32"
+                            onkeydown={(e) => handleCidrKeydown(e, s)}
+                          />
+                          <Button variant="secondary" icon="mdi:plus" onclick={() => addCidr(s)}>
+                            Add
+                          </Button>
+                        </div>
+                        {#if cidrInputErrors[s.key]}
+                          <div class="error inline">{cidrInputErrors[s.key]}</div>
+                        {/if}
+                      </div>
+                    {:else}
                       <input
                         id={`setting-${s.key}`}
-                        type="text"
-                        bind:value={cidrDrafts[s.key]}
-                        placeholder="10.0.0.0/8 or 192.168.1.5/32"
-                        onkeydown={(e) => handleCidrKeydown(e, s)}
+                        type="number"
+                        bind:value={drafts[s.key]}
+                        min={s.min || undefined}
+                        max={s.max || undefined}
                       />
-                      <Button variant="secondary" icon="mdi:plus" onclick={() => addCidr(s)}>
-                        Add
-                      </Button>
-                    </div>
-                    {#if cidrInputErrors[s.key]}
-                      <div class="error inline">{cidrInputErrors[s.key]}</div>
                     {/if}
+                    {#if perKeyError[s.key]}
+                      <div class="error inline">{perKeyError[s.key]}</div>
+                    {/if}
+                    <div class="row-actions">
+                      <Button
+                        variant="primary"
+                        onclick={() => save(s)}
+                        disabled={!isDirty(s) || savingKey === s.key}
+                      >
+                        {savingKey === s.key ? 'Saving…' : 'Save'}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        onclick={() => reset(s)}
+                        disabled={!isDirty(s)}
+                      >
+                        Revert
+                      </Button>
+                      {#if drafts[s.key] !== s.default}
+                        <Button variant="ghost" onclick={() => resetToDefault(s)}>
+                          Reset to default
+                        </Button>
+                      {/if}
+                    </div>
                   </div>
-                {:else}
-                  <input
-                    id={`setting-${s.key}`}
-                    type="number"
-                    bind:value={drafts[s.key]}
-                    min={s.min || undefined}
-                    max={s.max || undefined}
-                  />
-                {/if}
-                {#if perKeyError[s.key]}
-                  <div class="error inline">{perKeyError[s.key]}</div>
-                {/if}
-                <div class="row-actions">
-                  <Button
-                    variant="primary"
-                    onclick={() => save(s)}
-                    disabled={!isDirty(s) || savingKey === s.key}
-                  >
-                    {savingKey === s.key ? 'Saving…' : 'Save'}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    onclick={() => reset(s)}
-                    disabled={!isDirty(s)}
-                  >
-                    Revert
-                  </Button>
-                  {#if drafts[s.key] !== s.default}
-                    <Button variant="ghost" onclick={() => resetToDefault(s)}>
-                      Reset to default
-                    </Button>
-                  {/if}
                 </div>
-              </div>
+              {/each}
             </div>
-          {/each}
-        </div>
+          </div>
+        {/each}
+      {/if}
       </section>
-    {/each}
+
+      <section id="discovery" class="section">
+        <h2>Discovery</h2>
+        <p class="lede">Scan your network for services and add them as tiles.</p>
+        <a class="btn-secondary section-link" href="/admin/discovery">
+          <Icon icon="mdi:radar" width="18" /> Open Discovery
+        </a>
+      </section>
+
+      <section id="backups" class="section">
+        <h2>Backups</h2>
+        <p class="lede">HOPS backs up the database on startup and before config changes. Restore or delete them here.</p>
+        <Button variant="secondary" icon="mdi:backup-restore" onclick={() => (showBackupModal = true)} disabled={$isBackendOffline}>
+          Open Backups
+        </Button>
+      </section>
+
+      <section id="password" class="section">
+        <h2>Password</h2>
+        <Button variant="secondary" icon="mdi:key" onclick={() => (showChangePassword = true)} disabled={$isBackendOffline}>
+          Change Password
+        </Button>
+      </section>
+
+      <section id="reset" class="section">
+        <h2>Factory reset</h2>
+        <p class="lede">Delete every dashboard and start again. A backup is made first.</p>
+        <Button variant="danger" icon="mdi:delete-forever" onclick={handleFactoryReset} disabled={$isBackendOffline}>
+          Factory Reset
+        </Button>
+      </section>
+    </div>
+
+    <section id="logout" class="section">
+      <h2>Log out</h2>
+      <Button variant="secondary" icon="mdi:logout" onclick={handleLogout}>Log out</Button>
+      <div class="status-section"><BackendStatus /></div>
+    </section>
   {/if}
 </div>
+
+{#if needsLogin}
+  <LoginDialog intro="Sign in to open Settings." onSuccess={() => {}} onCancel={cancelLogin} />
+{/if}
+
+{#if showChangePassword}
+  <ChangePasswordModal onClose={() => (showChangePassword = false)} />
+{/if}
+
+{#if showBackupModal}
+  <BackupModal onClose={() => (showBackupModal = false)} />
+{/if}
 
 <style>
   .settings-page {
@@ -340,13 +522,6 @@
     margin-bottom: 2rem;
   }
 
-  .title-row {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    margin-bottom: 0.75rem;
-  }
-
   h1 {
     margin: 0;
     font-size: var(--font-h1);
@@ -358,16 +533,144 @@
     margin: 0;
   }
 
+  .section {
+    margin-bottom: 3rem;
+    scroll-margin-top: 90px;
+  }
+
+  .section > h2 {
+    margin: 0 0 0.75rem;
+    font-size: 1.4rem;
+  }
+
+  .section > .lede {
+    margin-bottom: 1rem;
+  }
+
+  .section-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 1rem;
+    margin: 0 0 2rem;
+    padding: 0.6rem 0.9rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    font-size: 0.9rem;
+  }
+
+  .section-nav a {
+    color: var(--accent);
+    text-decoration: none;
+  }
+
+  .section-nav a:hover {
+    text-decoration: underline;
+  }
+
+  .section-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    text-decoration: none;
+  }
+
+  .status-section {
+    margin-top: 1.5rem;
+    max-width: 300px;
+  }
+
   .group {
     margin-bottom: 2.5rem;
   }
 
-  .group h2 {
+  .group h3 {
     margin: 0 0 0.75rem;
     font-size: 1.15rem;
     color: var(--accent);
     border-bottom: 1px solid var(--border);
     padding-bottom: 0.4rem;
+  }
+
+  /* Phone-only banner explaining the missing edit pencil. The 480px
+     breakpoint matches the navbar rule that hides .edit-toggle. */
+  .phone-edit-note {
+    display: none;
+  }
+  @media (max-width: 480px) {
+    .phone-edit-note {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.6rem;
+      padding: 0.7rem 0.9rem;
+      margin: 0 0 1.5rem;
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      border-radius: 0.4rem;
+      background: rgba(79, 140, 255, 0.07);
+      color: var(--text-secondary);
+      font-size: 0.85rem;
+      line-height: 1.45;
+    }
+    .phone-edit-note :global(svg) {
+      flex-shrink: 0;
+      color: var(--accent);
+      margin-top: 0.1rem;
+    }
+  }
+
+  .offline-banner {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem 1.5rem;
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(239, 68, 68, 0.05));
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 0.75rem;
+    margin-bottom: 1.5rem;
+    color: #ef4444;
+  }
+
+  .offline-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .offline-content strong {
+    font-size: 0.9rem;
+  }
+
+  .offline-content span {
+    font-size: 0.8rem;
+    opacity: 0.8;
+  }
+
+  .offline-banner .retry-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: rgba(239, 68, 68, 0.2);
+    border: 1px solid rgba(239, 68, 68, 0.4);
+    border-radius: 0.5rem;
+    color: #ef4444;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+  }
+
+  .offline-banner .retry-btn:hover {
+    background: rgba(239, 68, 68, 0.3);
+  }
+
+  /* Greyed out while the backend is offline */
+  .admin-content.greyed-out {
+    opacity: 0.4;
+    pointer-events: none;
+    user-select: none;
+    filter: grayscale(50%);
   }
 
   .rows {
@@ -586,6 +889,18 @@
   @media (max-width: 720px) {
     .row {
       grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .settings-page {
+      padding: 1.25rem 1rem 3rem;
+    }
+
+    .offline-banner {
+      flex-direction: column;
+      align-items: flex-start;
+      padding: 0.75rem 1rem;
     }
   }
 </style>

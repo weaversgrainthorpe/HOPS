@@ -1,451 +1,109 @@
 <script lang="ts">
-  import { isAuthenticated, login, logout, isLoggingIn } from '$lib/stores/auth';
+  import { goto } from '$app/navigation';
+  import Icon from '@iconify/svelte';
   import { isBackendOffline, backendStatus } from '$lib/stores/backendStatus';
-  import { confirm } from '$lib/stores/confirmModal';
-  import { toast } from '$lib/stores/toast';
-  import { loadConfig, migrationFailure } from '$lib/stores/config';
-  import DashboardList from '$lib/components/admin/DashboardList.svelte';
-  import ChangePasswordModal from '$lib/components/admin/ChangePasswordModal.svelte';
-  import BackupModal from '$lib/components/admin/BackupModal.svelte';
+  import {
+    config, configLoading, configError, migrationFailure, dashboards, dashboardHref, loadConfig
+  } from '$lib/stores/config';
   import MigrationFailed from '$lib/components/MigrationFailed.svelte';
-  import NoticesBanner from '$lib/components/NoticesBanner.svelte';
   import BackendStatus from '$lib/components/BackendStatus.svelte';
   import Button from '$lib/components/shared/Button.svelte';
-  import Icon from '@iconify/svelte';
-  import { resetConfig } from '$lib/utils/api';
-  import { goto } from '$app/navigation';
 
-  let username = $state('admin');
-  let password = $state('');
-  let error = $state('');
-  let showChangePassword = $state(false);
-  let showBackupModal = $state(false);
+  // "/" shows a dashboard (spec §4D): it forwards to the first one, in display order. The admin
+  // home is Settings (the gear). Every other state says what it is — a load that failed is never
+  // shown as "no dashboards", and an old document held after a failed reload is never followed.
+  let first = $derived(
+    !$configLoading && !$configError && !$migrationFailure && $config ? $dashboards[0] : undefined
+  );
+  let redirected = false;
 
-  async function handleLogin(e: Event) {
-    e.preventDefault();
-    error = '';
-
-    const success = await login(username, password);
-
-    // The login() store function already toasts a friendly + context-
-    // appropriate error (wrong password vs. server-unreachable vs.
-    // rate-limited). We just need to surface a brief inline note too.
-    if (!success) {
-      error = 'Sign-in failed — see the message at the top of the page.';
+  $effect(() => {
+    if (first && !redirected) {
+      redirected = true;
+      void goto(dashboardHref(first.path), { replaceState: true });
     }
-  }
-
-  async function handleLogout() {
-    await logout();
-  }
-
-  async function handleFactoryReset() {
-    const confirmed = await confirm({
-      title: 'Factory Reset',
-      message: 'This will permanently delete all dashboards, tabs, folders and tiles, resetting everything to defaults. A backup will be created automatically. This action cannot be undone.',
-      confirmText: 'Reset Everything',
-      confirmStyle: 'danger',
-    });
-
-    if (!confirmed) return;
-
-    try {
-      await resetConfig();
-      await loadConfig();
-      toast.success('Configuration reset to factory defaults');
-    } catch (err) {
-      toast.error('Failed to reset configuration');
-    }
-  }
+  });
 </script>
 
-<div class="admin-container">
-  {#if $migrationFailure && !$isAuthenticated}
-    <!-- Login must stay usable; Backups needs a session. -->
+<div class="home">
+  {#if $migrationFailure}
     <MigrationFailed />
-  {/if}
-  {#if !$isAuthenticated}
-    <div class="login-card card">
-      <h1>HOPS Admin</h1>
-      <p>Login to manage your dashboards</p>
-
-      <form onsubmit={handleLogin}>
-        <div class="form-group">
-          <label for="username">Username</label>
-          <input
-            id="username"
-            type="text"
-            bind:value={username}
-            required
-            autocomplete="username"
-          />
-        </div>
-
-        <div class="form-group">
-          <label for="password">Password</label>
-          <input
-            id="password"
-            type="password"
-            bind:value={password}
-            required
-            autocomplete="current-password"
-          />
-        </div>
-
-        {#if error}
-          <div class="error-message">{error}</div>
-        {/if}
-
-        <Button
-          type="submit"
-          variant="primary"
-          fullWidth
-          loading={$isLoggingIn}
-          disabled={$isBackendOffline}
-        >
-          {$isLoggingIn ? 'Logging in...' : 'Login'}
+  {:else if $configLoading}
+    <p class="muted" role="status">Loading dashboards…</p>
+  {:else if $configError || !$config}
+    <div class="card load-failed" role="alert">
+      <Icon icon={$isBackendOffline ? 'mdi:cloud-off-outline' : 'mdi:alert-circle-outline'} width="32" />
+      <h1>Couldn't load your dashboards</h1>
+      <p>{$configError ?? 'The configuration has not been loaded.'}</p>
+      {#if $isBackendOffline}
+        <p class="muted">The HOPS server can't be reached. Check that it's running and your network is up.</p>
+      {/if}
+      <div class="actions">
+        <Button variant="primary" icon="mdi:refresh" onclick={() => { backendStatus.check(); void loadConfig(); }}>
+          Retry
         </Button>
-      </form>
-
-      <p class="hint">Default credentials: admin / admin</p>
-
+      </div>
       <BackendStatus />
     </div>
+  {:else if first}
+    <p class="muted" role="status">Opening {first.name}…</p>
   {:else}
-    <div class="admin-panel" class:disabled={$isBackendOffline}>
-      {#if $isBackendOffline}
-        <div class="offline-banner">
-          <Icon icon="mdi:cloud-off-outline" width="24" />
-          <div class="offline-content">
-            <strong>Backend Offline</strong>
-            <span>All admin functions are disabled until the backend is available.</span>
-          </div>
-          <button class="retry-btn" onclick={() => backendStatus.check()}>
-            <Icon icon="mdi:refresh" width="18" />
-            Retry
-          </button>
-        </div>
-      {/if}
-
-      <!-- Phone-only note: editing is hidden under 480px because
-           touchscreen drag-and-drop is awkward. Without this banner a
-           phone user has no idea why the edit pencil is missing from
-           the navbar — and might think it's broken. -->
-      <div class="phone-edit-note">
-        <Icon icon="mdi:tablet" width="18" />
-        <span>Editing dashboards needs a tablet or desktop — drag-and-drop is awkward on a phone. You can still manage Settings, Backups, Change Password, and Discovery from here.</span>
-      </div>
-
-      <div class="admin-header">
-        <h1>HOPS Admin Panel</h1>
-        <div class="header-actions">
-          <Button
-            variant="secondary"
-            icon="mdi:cog"
-            onclick={() => goto('/settings')}
-            disabled={$isBackendOffline}
-          >
-            Settings
-          </Button>
-          <Button
-            variant="secondary"
-            icon="mdi:radar"
-            onclick={() => goto('/admin/discovery')}
-            disabled={$isBackendOffline}
-          >
-            Discovery
-          </Button>
-          <Button
-            variant="secondary"
-            icon="mdi:backup-restore"
-            onclick={() => showBackupModal = true}
-            disabled={$isBackendOffline}
-          >
-            Backups
-          </Button>
-          <Button
-            variant="secondary"
-            icon="mdi:key"
-            onclick={() => showChangePassword = true}
-            disabled={$isBackendOffline}
-          >
-            Change Password
-          </Button>
-          <Button
-            variant="danger"
-            icon="mdi:delete-forever"
-            onclick={handleFactoryReset}
-            disabled={$isBackendOffline}
-          >
-            Factory Reset
-          </Button>
-          <Button
-            variant="secondary"
-            icon="mdi:logout"
-            onclick={handleLogout}
-          >
-            Logout
-          </Button>
-        </div>
-      </div>
-
-      {#if $migrationFailure}
-        <!-- Never show an empty DashboardList as if there were no dashboards. -->
-        <MigrationFailed onOpenBackups={() => showBackupModal = true} />
-      {:else}
-        <NoticesBanner />
-        <div class="admin-content" class:greyed-out={$isBackendOffline}>
-          <DashboardList />
-        </div>
-      {/if}
-
-      <div class="status-section">
-        <BackendStatus />
+    <div class="card empty">
+      <Icon icon="mdi:view-dashboard-outline" width="40" />
+      <h1>No dashboards yet</h1>
+      <p>Create your first dashboard in Settings.</p>
+      <div class="actions">
+        <Button variant="primary" icon="mdi:cog" onclick={() => goto('/settings')}>Open Settings</Button>
       </div>
     </div>
   {/if}
 </div>
 
-{#if showChangePassword}
-  <ChangePasswordModal onClose={() => showChangePassword = false} />
-{/if}
-
-{#if showBackupModal}
-  <BackupModal onClose={() => showBackupModal = false} />
-{/if}
-
 <style>
-  .admin-container {
-    min-height: calc(100vh - 60px);
-    padding: 2rem;
+  .home {
+    min-height: calc(100vh - 70px);
+    padding: 2rem 1rem;
   }
 
-  .admin-container > * {
-    margin: 0 auto;
+  .card {
+    max-width: 440px;
+    margin: 4rem auto 0;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
   }
 
-  .login-card {
-    max-width: 400px;
-    width: 100%;
+  .card :global(svg) {
+    color: var(--text-secondary);
+  }
+
+  .load-failed :global(svg) {
+    color: var(--color-error, #ef4444);
   }
 
   h1 {
-    margin-bottom: 0.5rem;
+    margin: 0;
     font-size: var(--font-h1);
   }
 
   p {
-    margin-bottom: 1.5rem;
+    margin: 0;
     color: var(--text-secondary);
   }
 
-  form {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
+  .actions {
+    margin: 0.5rem 0;
   }
 
-  .form-group {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-
-  label {
-    font-weight: 500;
-  }
-
-  input {
-    width: 100%;
-  }
-
-  button {
-    margin-top: 0.5rem;
-  }
-
-  button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  .error-message {
-    padding: 0.75rem;
-    background: color-mix(in srgb, var(--color-error) 15%, transparent);
-    color: var(--color-error-text);
-    border-radius: 0.375rem;
-    font-size: 0.875rem;
-  }
-
-  .hint {
-    margin-top: 1rem;
-    font-size: 0.875rem;
+  .muted {
     text-align: center;
+    color: var(--text-secondary);
+    margin-top: 4rem;
   }
 
-  .admin-panel {
-    max-width: 1200px;
-    margin: 0 auto;
-  }
-
-  /* Phone-only banner explaining the missing edit pencil. The 480px
-     breakpoint matches the navbar rule that hides .edit-toggle. */
-  .phone-edit-note {
-    display: none;
-  }
-  @media (max-width: 480px) {
-    .phone-edit-note {
-      display: flex;
-      align-items: flex-start;
-      gap: 0.6rem;
-      padding: 0.7rem 0.9rem;
-      margin: 0 0 1.5rem;
-      border: 1px solid var(--border);
-      border-left: 3px solid var(--accent);
-      border-radius: 0.4rem;
-      background: rgba(79, 140, 255, 0.07);
-      color: var(--text-secondary);
-      font-size: 0.85rem;
-      line-height: 1.45;
-    }
-    .phone-edit-note :global(svg) {
-      flex-shrink: 0;
-      color: var(--accent);
-      margin-top: 0.1rem;
-    }
-  }
-
-  .admin-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 2rem;
-  }
-
-  .admin-header h1 {
-    margin: 0;
-  }
-
-  .header-actions {
-    display: flex;
-    gap: 0.75rem;
-  }
-
-  /* All button styling now comes from the shared Button component */
-
-  .status-section {
-    margin-top: 2rem;
-    max-width: 300px;
-  }
-
-  /* Offline banner */
-  .offline-banner {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    padding: 1rem 1.5rem;
-    background: linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(239, 68, 68, 0.05));
-    border: 1px solid rgba(239, 68, 68, 0.3);
-    border-radius: 0.75rem;
-    margin-bottom: 1.5rem;
-    color: #ef4444;
-  }
-
-  .offline-content {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-  }
-
-  .offline-content strong {
-    font-size: 0.9rem;
-  }
-
-  .offline-content span {
-    font-size: 0.8rem;
-    opacity: 0.8;
-  }
-
-  .offline-banner .retry-btn {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem 1rem;
-    background: rgba(239, 68, 68, 0.2);
-    border: 1px solid rgba(239, 68, 68, 0.4);
-    border-radius: 0.5rem;
-    color: #ef4444;
-    font-size: 0.875rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s;
-    margin: 0;
-  }
-
-  .offline-banner .retry-btn:hover {
-    background: rgba(239, 68, 68, 0.3);
-  }
-
-  /* Greyed out content when offline */
-  .admin-content.greyed-out {
-    opacity: 0.4;
-    pointer-events: none;
-    user-select: none;
-    filter: grayscale(50%);
-  }
-
-  /* Tablet: tighter padding, allow header to wrap */
-  @media (max-width: 1024px) {
-    .admin-container {
-      padding: 1.5rem;
-    }
-
-    .admin-header {
-      flex-wrap: wrap;
-      gap: 1rem;
-    }
-  }
-
-  /* Mobile landscape */
-  @media (max-width: 768px) {
-    .admin-container {
-      padding: 1rem;
-    }
-
-    .admin-header {
-      flex-direction: column;
-      align-items: flex-start;
-    }
-
-    .header-actions {
-      width: 100%;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-    }
-
-    h1 {
-      font-size: 1.5rem;
-    }
-  }
-
-  /* Mobile portrait: stack header buttons full-width */
-  @media (max-width: 480px) {
-    .admin-container {
-      padding: 0.75rem;
-    }
-
-    .header-actions {
-      flex-direction: column;
-    }
-
-    .header-actions :global(.btn) {
-      width: 100%;
-    }
-
-    .offline-banner {
-      flex-direction: column;
-      align-items: flex-start;
-      padding: 0.75rem 1rem;
-    }
+  .card .muted {
+    margin-top: 0;
   }
 </style>

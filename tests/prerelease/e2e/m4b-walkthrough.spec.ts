@@ -2,7 +2,7 @@ import { test, expect, type Page, type BrowserContext, type Browser } from '@pla
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { getCsrfToken } from '../helpers';
+import { getCsrfToken, login, signInDialog, setSetting } from '../helpers';
 import { ADMIN_USERNAME, ADMIN_TEST_PASSWORD } from '../constants';
 
 // M4 walkthrough changes (design/specs/2026-10-21-hops-v3-m4-walkthrough-changes-design.md §1–3, §6),
@@ -66,6 +66,21 @@ test.afterEach(async ({ page, context }) => {
     });
     expect(r.ok(), `cleanup: delete dashboard ${id}: ${r.status()} ${await r.text()}`).toBeTruthy();
   }
+});
+
+// These tests sign in through the UI (some with a wrong password on purpose). The failed-login
+// limit is per IP per minute and api/boundaries.spec exhausts it on purpose just before, so each
+// test raises it for itself and puts the stored value back afterwards.
+const RATE_LIMIT_KEY = 'auth.login_rate_limit_per_min';
+let rateLimitBefore: string | null = null;
+test.beforeEach(async ({ page }) => {
+  rateLimitBefore = await setSetting(page, RATE_LIMIT_KEY, '1000');
+});
+test.afterEach(async ({ page }) => {
+  if (rateLimitBefore === null) return;
+  const v = rateLimitBefore;
+  rateLimitBefore = null;
+  await setSetting(page, RATE_LIMIT_KEY, v);
 });
 
 async function enterEdit(page: Page) {
@@ -818,3 +833,182 @@ test.describe('§4C one dashboard dialog', () => {
     await expect(page.getByRole('status').filter({ hasText: 'Unsaved changes' })).toHaveCount(0);
   });
 });
+
+// ---- §4D: Settings is the admin home; "/" shows a dashboard
+test.describe('§4D Settings is the admin home; / shows a dashboard', () => {
+  /** A fresh browser context with no session (logged out), same server. */
+  async function anonPage(browser: Browser): Promise<{ page: Page; ctx: BrowserContext }> {
+    const ctx = await browser.newContext({
+      baseURL: test.info().project.use.baseURL, serviceWorkers: 'block', storageState: { cookies: [], origins: [] }
+    });
+    return { page: await ctx.newPage(), ctx };
+  }
+
+  /** The first dashboard in display order, as the server stores it. */
+  async function firstDashboard(page: Page): Promise<{ id: string; path: string; name: string }> {
+    const cfg = await (await page.request.get('/api/config')).json();
+    const all = cfg.dashboards.map((d: { order?: number }, i: number) => ({ d, i, k: typeof d.order === 'number' ? d.order : Infinity }));
+    all.sort((a: { k: number; i: number }, b: { k: number; i: number }) => (a.k === b.k ? a.i - b.i : a.k - b.k));
+    expect(all.length, 'the server has at least one dashboard').toBeGreaterThan(0);
+    return all[0].d;
+  }
+
+  test('logged out, the gear opens Settings with the sign-in dialog in place; a wrong password stays in the dialog', async ({ page, context, browser }) => {
+    const f = await importDash(page, context, [{ name: 'Main', children: (id) => [tile(id('a'), 'Alpha')] }]);
+    const { page: anon, ctx } = await anonPage(browser);
+    try {
+      await anon.goto(f.path);
+      await expect(anon.locator(`[data-node-id="${f.id('a')}"]`)).toBeVisible();
+      await expect(anon.getByRole('button', { name: 'Log out' })).toHaveCount(0);
+      await anon.getByRole('link', { name: 'Settings' }).click();
+      await expect(anon).toHaveURL(/\/settings$/);
+      const dlg = anon.getByRole('dialog', { name: 'Sign in' });
+      await expect(dlg).toBeVisible();
+      await expect(dlg).toContainText('Sign in to open Settings.');
+      await expect(dlg.getByLabel('Username')).toBeFocused();
+      // Nothing admin shows behind the dialog.
+      await expect(anon.getByRole('heading', { name: 'Global settings' })).toHaveCount(0);
+
+      // A wrong password: the reason shows once, in the dialog (no second copy in a toast), and
+      // the cursor is back in the password field.
+      await dlg.getByLabel('Username').fill(ADMIN_USERNAME);
+      await dlg.getByLabel('Password').fill('definitely-wrong');
+      await dlg.getByLabel('Password').press('Enter');
+      await expect(dlg.getByRole('alert')).toContainText('check your username and password');
+      await expect(anon.locator('.toast-error')).toHaveCount(0);
+      await expect(dlg.getByLabel('Password')).toBeFocused();
+      await expect(dlg).toBeVisible();
+
+      // The right one: Settings, in place.
+      await dlg.getByLabel('Password').fill(ADMIN_TEST_PASSWORD);
+      await dlg.getByLabel('Password').press('Enter');
+      await expect(dlg).toHaveCount(0);
+      await expect(anon).toHaveURL(/\/settings$/);
+      for (const h of ['Dashboards', 'Global settings', 'Discovery', 'Backups', 'Password', 'Factory reset', 'Log out']) {
+        await expect(anon.getByRole('heading', { name: h, level: 2, exact: true })).toBeVisible();
+      }
+      await expect(anon.getByRole('heading', { name: `M4 walkthrough ${f.path.slice(1)}`, level: 3 })).toBeVisible();
+      await expect(anon.getByRole('button', { name: 'Log out' }).first()).toBeVisible();
+    } finally {
+      await ctx.close();
+    }
+  });
+
+  test('Cancel on the Settings sign-in goes back to the dashboard you came from', async ({ page, context, browser }) => {
+    const f = await importDash(page, context, [{ name: 'Main', children: (id) => [tile(id('a'), 'Alpha')] }]);
+    const { page: anon, ctx } = await anonPage(browser);
+    try {
+      await anon.goto(f.path);
+      await expect(anon.locator(`[data-node-id="${f.id('a')}"]`)).toBeVisible();
+      await anon.getByRole('link', { name: 'Settings' }).click();
+      const dlg = anon.getByRole('dialog', { name: 'Sign in' });
+      await expect(dlg).toBeVisible();
+      await dlg.getByRole('button', { name: 'Cancel' }).click();
+      await expect(dlg).toHaveCount(0);
+      await expect(anon).toHaveURL(new RegExp(`${f.path}$`));
+      await expect(anon.locator(`[data-node-id="${f.id('a')}"]`)).toBeVisible();
+      const check = await (await anon.request.get('/api/auth/check')).json();
+      expect(check.authenticated).toBe(false);
+    } finally {
+      await ctx.close();
+    }
+  });
+
+  test('"/" lands on the first dashboard (logged in and logged out), replacing itself in history', async ({ page, browser }) => {
+    const first = await firstDashboard(page);
+    await page.goto('/settings');
+    await expect(page.getByRole('heading', { name: 'Global settings', level: 2 })).toBeVisible();
+    await page.goto('/');
+    await expect(page).toHaveURL(new RegExp(`${first.path}$`));
+    await expect(page.locator('.center-title')).toHaveText(first.name);
+    // "/" replaced itself: Back goes to the page before it, not to "/" (which would forward again).
+    await page.goBack();
+    await expect(page).toHaveURL(/\/settings$/);
+
+    const { page: anon, ctx } = await anonPage(browser);
+    try {
+      await anon.goto('/');
+      await expect(anon).toHaveURL(new RegExp(`${first.path}$`));
+      await expect(anon.locator('.center-title')).toHaveText(first.name);
+    } finally {
+      await ctx.close();
+    }
+  });
+
+  test('with zero dashboards "/" says "No dashboards yet" and its button opens Settings', async ({ page, context }) => {
+    // Keep every dashboard (the export), delete them all, and put them back afterwards.
+    const exp = await page.request.get('/api/config/export');
+    expect(exp.status()).toBe(200);
+    const bundle = await exp.json();
+    const ids: string[] = bundle.config.dashboards.map((d: { id: string }) => d.id);
+    expect(ids.length).toBeGreaterThan(0);
+    try {
+      for (const id of ids) {
+        const cfg = await (await page.request.get('/api/config')).json();
+        const rev = cfg.dashboards.find((d: { id: string }) => d.id === id)?.revision;
+        const r = await page.request.delete(`/api/dashboards/${encodeURIComponent(id)}?revision=${rev}`, {
+          headers: { 'X-CSRF-Token': await getCsrfToken(context) }
+        });
+        expect(r.ok(), `delete ${id}: ${r.status()} ${await r.text()}`).toBeTruthy();
+      }
+      expect((await (await page.request.get('/api/config')).json()).dashboards).toEqual([]);
+
+      await page.goto('/');
+      await expect(page.getByRole('heading', { name: 'No dashboards yet' })).toBeVisible();
+      await expect(page).toHaveURL(/\/$/);
+      await page.getByRole('button', { name: 'Open Settings' }).click();
+      await expect(page).toHaveURL(/\/settings$/);
+      await expect(page.getByRole('heading', { name: 'Global settings', level: 2 })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'New Dashboard' })).toBeVisible();
+    } finally {
+      const r = await page.request.post('/api/config/import', {
+        headers: { 'X-CSRF-Token': await getCsrfToken(context) },
+        multipart: { file: { name: 'restore.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(bundle)) } }
+      });
+      expect(r.status(), `restore: ${await r.text()}`).toBe(200);
+      const after = (await (await page.request.get('/api/config')).json()).dashboards.map((d: { id: string }) => d.id);
+      expect(after.sort()).toEqual([...ids].sort());
+    }
+  });
+
+  test('Log out: from the navbar it stays on the dashboard, signed out; from Settings it leaves Settings', async ({ page, context, browser }) => {
+    const f = await importDash(page, context, [{ name: 'Main', children: (id) => [tile(id('a'), 'Alpha')] }]);
+    // Its own session: logging out must not end the shared one the other tests use.
+    const { page: own, ctx } = await anonPage(browser);
+    try {
+      await login(own);
+      await own.goto(f.path);
+      await expect(own.locator(`[data-node-id="${f.id('a')}"]`)).toBeVisible();
+      await own.getByRole('button', { name: 'Log out' }).click();
+      await expect(own.getByRole('button', { name: 'Log out' })).toHaveCount(0);
+      await expect(own).toHaveURL(new RegExp(`${f.path}$`));
+      await expect(own.locator(`[data-node-id="${f.id('a')}"]`)).toBeVisible();
+      await expect(own.getByRole('button', { name: 'Enter Edit Mode' })).toHaveAttribute('title', 'Sign in to edit this dashboard');
+      expect((await (await own.request.get('/api/auth/check')).json()).authenticated).toBe(false);
+
+      // Again, from the Settings section: Settings is left (no sign-in dialog pops up).
+      await own.goto('/settings');
+      await signInDialog(own);
+      await expect(own.getByRole('heading', { name: 'Log out', level: 2 })).toBeVisible();
+      await own.locator('#logout').getByRole('button', { name: 'Log out' }).click();
+      await expect(own).not.toHaveURL(/\/settings$/);
+      await expect(own.getByRole('dialog', { name: 'Sign in' })).toHaveCount(0);
+      await expect(own.getByRole('button', { name: 'Log out' })).toHaveCount(0);
+      expect((await (await own.request.get('/api/auth/check')).json()).authenticated).toBe(false);
+    } finally {
+      await ctx.close();
+    }
+  });
+
+  test('logged out, /admin/discovery sends you to Settings to sign in', async ({ browser }) => {
+    const { page: anon, ctx } = await anonPage(browser);
+    try {
+      await anon.goto('/admin/discovery');
+      await expect(anon).toHaveURL(/\/settings$/);
+      await expect(anon.getByRole('dialog', { name: 'Sign in' })).toBeVisible();
+    } finally {
+      await ctx.close();
+    }
+  });
+});
+

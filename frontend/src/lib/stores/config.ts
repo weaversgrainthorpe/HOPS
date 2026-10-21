@@ -125,11 +125,11 @@ export async function dismissServerNotice(id: string): Promise<void> {
 
 /**
  * True when the layout should replace the page with the migration-failed
- * notice. The admin page ("/": login + Backups, the remedy) is exempt and
- * shows its own persistent banner instead.
+ * notice. Exempt: "/" (shows the notice itself) and Settings, the admin home
+ * (sign-in + Backups, the remedy), which shows it on top.
  */
 export function showMigrationFailedPage(pathname: string, failure: string | null): boolean {
-  return failure !== null && pathname !== '/';
+  return failure !== null && pathname !== '/' && pathname !== '/settings';
 }
 
 // Record a failed write where the user can see it. Conflicts raise the

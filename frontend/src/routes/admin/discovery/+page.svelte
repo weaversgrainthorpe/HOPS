@@ -18,7 +18,7 @@
   onMount(async () => {
     await waitForAuthChecked();
     if (!$isAuthenticated) {
-      goto('/');
+      goto('/settings'); // logged out: Settings asks for the password in place
       return;
     }
     await refresh();
@@ -90,7 +90,7 @@
 <div class="page">
   <header class="header">
     <div class="title-row">
-      <Button variant="ghost" icon="mdi:arrow-left" onclick={() => goto('/')} ariaLabel="Back to admin" />
+      <Button variant="ghost" icon="mdi:arrow-left" onclick={() => goto('/settings')} ariaLabel="Back to Settings" />
       <h1>Network Discovery</h1>
     </div>
     <div class="header-actions">

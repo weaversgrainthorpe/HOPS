@@ -102,8 +102,8 @@ test.describe('M4 layered status checks in a real browser', () => {
     await dlg.getByRole('button', { name: 'Cancel' }).click();
     await expect(dlg).toHaveCount(0);
 
-    // The admin page shows the one-time notice listing this dashboard.
-    await page.goto('/');
+    // Settings (the admin home) shows the one-time notice listing this dashboard.
+    await page.goto('/settings');
     const notice = page.locator('.server-notice').filter({ hasText: f.name });
     await expect(notice).toBeVisible();
     await expect(notice).toContainText('Status checks now follow the most specific setting');
@@ -112,7 +112,7 @@ test.describe('M4 layered status checks in a real browser', () => {
 
     // Dismissed on the server: still gone after a reload.
     await page.reload();
-    await expect(page.getByRole('button', { name: /logout/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Global settings', level: 2 })).toBeVisible();
     await expect(page.locator('.server-notice')).toHaveCount(0);
     const cfg = await (await page.request.get('/api/config')).json();
     expect(cfg.notices ?? []).toEqual([]);
