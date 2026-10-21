@@ -32,6 +32,7 @@ test('dashboard CRUD round-trip via UI: create → rename → delete', async ({ 
   await page.fill('input#new-name', original);
   await page.click('.new-dashboard-form button.btn-primary:has-text("Save")');
   await expect(page.getByRole('heading', { name: original, level: 3 })).toBeVisible();
+  made.push(original); // cleaned up if the test fails before its own delete
 
   // Rename via the row's pencil button. While editing, the inline form
   // replaces the heading, so target the form's Save button directly rather
@@ -40,6 +41,7 @@ test('dashboard CRUD round-trip via UI: create → rename → delete', async ({ 
   await page.locator('input[placeholder="Dashboard name"]').fill(renamed);
   await page.locator('.dashboard-edit-form button.btn-primary:has-text("Save")').click();
   await expect(page.getByRole('heading', { name: renamed, level: 3 })).toBeVisible();
+  made.splice(made.indexOf(original), 1, renamed);
 
   // Delete via the row's bin button. HOPS uses a custom confirm modal, not
   // the browser's native dialog — click the modal's danger-styled Delete.
@@ -48,6 +50,7 @@ test('dashboard CRUD round-trip via UI: create → rename → delete', async ({ 
   await expect(page.getByRole('heading', { name: renamed, level: 3 })).not.toBeVisible();
   const cfg = await (await page.request.get('/api/config')).json();
   expect(cfg.dashboards.map((d: { name: string }) => d.name)).not.toContain(renamed);
+  made.splice(made.indexOf(renamed), 1); // deleted by the test itself
 });
 
 async function saveDraft(page: Page) {
@@ -61,9 +64,8 @@ test('dashboard hierarchy + folder background colour renders after reload (the r
   const dashName = uniqueName('Colours');
   const tabName = 'Test Tab';
   const folderName = 'Coloured Folder';
-  made.push(dashName);
 
-  await createDashboardViaUI(page, dashName);
+  await createDashboardViaUI(page, dashName, undefined, made);
 
   // Add a tab (the New Tab dialog uses input#name); it becomes the shown tab.
   await page.getByRole('toolbar', { name: 'Editing' }).getByRole('button', { name: 'Add tab' }).click();

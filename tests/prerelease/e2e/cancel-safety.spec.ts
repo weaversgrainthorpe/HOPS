@@ -19,8 +19,7 @@ test.afterEach(async ({ page }) => {
 
 async function scaffold(page: Page) {
   const name = uniqueName('CancelSafe');
-  made.push(name);
-  await createDashboardViaUI(page, name);
+  await createDashboardViaUI(page, name, undefined, made);
   await expect(page.getByRole('tab', { name: 'Switch to Home tab' })).toBeVisible();
 }
 

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { getCsrfToken } from '../helpers';
+import { setSetting } from '../helpers';
 
 // Settings page round-trip. The bug class is "changing a setting on
 // the UI saves something different to what's persisted (or doesn't
@@ -14,32 +14,33 @@ test('settings page loads and shows all expected groups', async ({ page }) => {
   await expect(page.getByRole('heading', { level: 2 }).first()).toBeVisible({ timeout: 10_000 });
 });
 
-test('updating a setting via API is reflected on the settings page', async ({ page, context, request }) => {
-  const csrf = await getCsrfToken(context);
+// The setting the second test changes, and its stored value to put back. Restored in afterEach
+// (which runs even when the test fails midway): later specs share this server, and a raised
+// login limit would hide api/boundaries' rate-limit check.
+const KEY = 'auth.login_rate_limit_per_min';
+let restoreTo: string | null = null;
 
+test.afterEach(async ({ page }) => {
+  if (restoreTo === null) return;
+  const v = restoreTo;
+  restoreTo = null;
+  await setSetting(page, KEY, v);
+});
+
+test('updating a setting via API is reflected on the settings page', async ({ page, request }) => {
   // Pick a runtime-changeable setting that's safe to mutate — login rate limit.
-  // Put it back afterwards: later specs share this server.
-  const before = await (await request.get('/api/settings')).json();
-  const original = (before.settings || []).find((s: { key: string }) => s.key === 'auth.login_rate_limit_per_min');
-  expect(original).toBeDefined();
   const newValue = 99;
-  const resp = await request.put('/api/settings/auth.login_rate_limit_per_min', {
-    headers: { 'X-CSRF-Token': csrf, 'Content-Type': 'application/json' },
-    data: JSON.stringify({ value: String(newValue) }),
-  });
-  expect(resp.ok()).toBeTruthy();
+  restoreTo = await setSetting(page, KEY, String(newValue));
 
   // Verify the GET reflects the change
   const list = await request.get('/api/settings');
   expect(list.ok()).toBeTruthy();
   const settings = await list.json();
-  const item = (settings.settings || []).find((s: { key: string }) => s.key === 'auth.login_rate_limit_per_min');
+  const item = (settings.settings || []).find((s: { key: string }) => s.key === KEY);
   expect(item).toBeDefined();
   expect(String(item.value)).toBe(String(newValue));
 
-  const restore = await request.put('/api/settings/auth.login_rate_limit_per_min', {
-    headers: { 'X-CSRF-Token': csrf, 'Content-Type': 'application/json' },
-    data: JSON.stringify({ value: String(original.value) }),
-  });
-  expect(restore.ok(), `restore: ${restore.status()}`).toBeTruthy();
+  // And the Settings page shows it.
+  await page.goto('/settings');
+  await expect(page.locator(`[id="setting-${KEY}"]`)).toHaveValue(String(newValue));
 });

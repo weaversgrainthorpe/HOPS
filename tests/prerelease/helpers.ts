@@ -70,10 +70,11 @@ export async function openSettings(page: Page) {
 
 /**
  * Create a dashboard via the UI from Settings (the admin home), open it and turn edit mode on.
- * Returns the URL path the dashboard ended up on. The caller deletes it afterwards
- * (deleteDashboardsNamed) so later specs start from the same set of dashboards.
+ * Returns the URL path the dashboard ended up on. Its name is pushed onto `track` once it
+ * exists; the caller deletes those afterwards (deleteDashboardsNamed) so later specs start from
+ * the same set of dashboards.
  */
-export async function createDashboardViaUI(page: Page, name: string, urlPath?: string): Promise<string> {
+export async function createDashboardViaUI(page: Page, name: string, urlPath?: string, track?: string[]): Promise<string> {
   await openSettings(page);
   await page.getByRole('button', { name: 'New Dashboard' }).click();
   await page.fill('input#new-name', name);
@@ -83,6 +84,9 @@ export async function createDashboardViaUI(page: Page, name: string, urlPath?: s
   await page.click('.new-dashboard-form button.btn-primary:has-text("Save")');
   // The dashboard name lives in an <h3> inside a `button.dashboard-info`.
   await expect(page.getByRole('heading', { name, level: 3 })).toBeVisible({ timeout: 5_000 });
+  // Created: from here on the caller's cleanup owns it (not before — a failed create must not
+  // add a second, misleading cleanup failure).
+  track?.push(name);
   await page.getByRole('heading', { name, level: 3 }).click();
   await page.waitForLoadState('networkidle');
   // Opening a dashboard doesn't enter edit mode; the "Exit Edit Mode" label is the

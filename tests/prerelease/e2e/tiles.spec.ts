@@ -26,10 +26,9 @@ test('tile CRUD: add Link tile, reload, edit name, save, reload again', async ({
   const tileName = 'Plex';
   const tileURL = 'https://example.com/plex';
   const renamedTile = 'Plex (renamed)';
-  made.push(dashName);
 
   // A dashboard made in Settings comes with a Home tab; add the tile there.
-  await createDashboardViaUI(page, dashName);
+  await createDashboardViaUI(page, dashName, undefined, made);
   await toolbar(page).getByRole('button', { name: 'Add tile' }).click();
   const newDlg = page.getByRole('dialog', { name: 'New Tile' });
   await newDlg.locator('input#name').fill(tileName);
