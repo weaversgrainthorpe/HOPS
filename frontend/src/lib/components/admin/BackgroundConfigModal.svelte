@@ -17,9 +17,11 @@
     onCancel: () => void;
     /** Which level this picker edits (design §4a): folders get no overlay or blur of their own. */
     level: 'dashboard' | 'tab' | 'folder';
+    /** Folder level: the name of the tab or folder it sits in. */
+    parentName?: string;
   }
 
-  let { background, onSave, onCancel, level }: Props = $props();
+  let { background, onSave, onCancel, level, parentName }: Props = $props();
 
   let section = $state<BackgroundSection>();
   /** A refused Save, shown by the buttons (no silent failures). */
@@ -77,7 +79,7 @@
     </div>
 
     <div class="modal-body">
-      <BackgroundSection bind:this={section} {background} {level} />
+      <BackgroundSection bind:this={section} {background} {level} {parentName} />
     </div>
 
     <div class="modal-footer">

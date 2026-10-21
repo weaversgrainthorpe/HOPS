@@ -44,6 +44,12 @@
   // A picked background is staged here and saved with the dialog (one undo step);
   // Cancel discards it (Ruling 11(5)).
   let stagedBackground = $state<{ value: Background | undefined } | null>(null);
+  // "Same as <name>": the folder it sits in, else the tab (an unnamed one reads as a plain phrase).
+  const parentName = $derived.by(() => {
+    const above = statusContext?.folders[statusContext.folders.length - 1];
+    if (above) return above.name?.trim() || 'the folder it sits in';
+    return statusContext?.tab?.name?.trim() || 'the tab it sits in';
+  });
   const shownBackground = $derived(stagedBackground ? stagedBackground.value : folder.background);
 
   // Form state starts from the folder (intentionally captures the initial values).
@@ -250,6 +256,7 @@
   <BackgroundConfigModal
     background={shownBackground}
     level="folder"
+    {parentName}
     onSave={(bg) => {
       stagedBackground = { value: bg };
       showBackgroundConfig = false;

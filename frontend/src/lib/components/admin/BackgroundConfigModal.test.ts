@@ -18,14 +18,30 @@ beforeEach(() => {
 });
 
 type Level = 'dashboard' | 'tab' | 'folder';
-function open(level: Level, background?: Background) {
+function open(level: Level, background?: Background, parentName?: string) {
   const onSave = vi.fn();
   const onCancel = vi.fn();
-  render(BackgroundConfigModal, { level, background, onSave, onCancel });
+  render(BackgroundConfigModal, { level, background, onSave, onCancel, parentName });
   return { onSave, onCancel };
 }
 const save = () => fireEvent.click(screen.getByRole('button', { name: /^Save Background/ }));
-const inheritSwitch = () => screen.getByRole('switch');
+// Plain wording per level (§7.1): the dashboard has a switch "Show background picture"
+// (on = not inherit); tab and folder have a two-choice radio group.
+const sameOption = () => screen.getByRole('radio', { name: /^Same as / }) as HTMLInputElement;
+const ownOption = () => screen.getByRole('radio', { name: 'Its own background' }) as HTMLInputElement;
+const showSwitch = () => screen.getByRole('switch', { name: 'Show background picture' }) as HTMLInputElement;
+/** Is "inherit" currently on, whichever control this level has? */
+function inheritIsOn(level: Level): boolean {
+  return level === 'dashboard' ? !showSwitch().checked : sameOption().checked;
+}
+/** Click the control that turns inherit on (to = true) or off. */
+async function setInherit(level: Level, to: boolean) {
+  if (level === 'dashboard') {
+    if (showSwitch().checked === to) await fireEvent.click(showSwitch());
+  } else {
+    await fireEvent.click(to ? sameOption() : ownOption());
+  }
+}
 
 describe('BackgroundConfigModal at every level', () => {
   it('has a title per level', () => {
@@ -71,9 +87,55 @@ describe('BackgroundConfigModal at every level', () => {
     expect(document.querySelectorAll('.image-card img[src="/presets/network-grid.jpg"]')).toHaveLength(1);
   });
 
-  it('the dashboard Inherit switch is "No background (keep this picture stored)"', () => {
-    open('dashboard', { type: 'image', value: '/presets/network-grid.jpg' });
-    expect(screen.getByRole('switch', { name: 'No background (keep this picture stored)' })).toBeInTheDocument();
+  describe('plain on/off wording per level (§7.1)', () => {
+    const pic: Background = { type: 'image', value: '/presets/network-grid.jpg' };
+    const kept = { inherit: true, ...pic } as Background;
+
+    it('dashboard: a labelled switch "Show background picture", on by default', () => {
+      open('dashboard', pic);
+      expect(showSwitch().checked).toBe(true);
+      expect(screen.getByText('Shown behind the whole dashboard.')).toBeInTheDocument();
+      expect(screen.queryByText(/keep this picture stored/i)).toBeNull();
+    });
+    it('dashboard off: says the picture is kept', () => {
+      open('dashboard', kept);
+      expect(showSwitch().checked).toBe(false);
+      expect(screen.getByText('No picture. Your chosen picture is kept, so turning this back on restores it.')).toBeInTheDocument();
+    });
+    it('tab: a radio group, "Same as the dashboard" / "Its own background"', () => {
+      open('tab', pic);
+      const group = screen.getByRole('radiogroup', { name: /tab background/i });
+      expect(group).toBeInTheDocument();
+      expect(sameOption().labels?.[0].textContent?.trim()).toBe('Same as the dashboard');
+      expect(ownOption().checked).toBe(true);
+      expect(screen.queryByRole('switch')).toBeNull();
+    });
+    it('tab same-as: the kept-picture help text', () => {
+      open('tab', kept);
+      expect(sameOption().checked).toBe(true);
+      expect(screen.getByText("This tab's own picture is kept for when you switch back.")).toBeInTheDocument();
+    });
+    it('folder: "Same as <name>" names the tab or folder it sits in, as text', () => {
+      open('folder', kept, 'Media <b>x</b>');
+      expect(sameOption().labels?.[0].textContent?.trim()).toBe('Same as Media <b>x</b>');
+      expect(document.querySelector('.modal-body b')).toBeNull();
+      expect(screen.getByText("This folder's own picture is kept for when you switch back.")).toBeInTheDocument();
+    });
+    it('folder with no parent name falls back to a plain phrase', () => {
+      open('folder', pic);
+      expect(sameOption().labels?.[0].textContent?.trim()).toBe('Same as the folder it sits in');
+    });
+    it('choosing "Same as" sets inherit:true and keeps the picture; switching back restores it', async () => {
+      const { onSave } = open('folder', { ...pic, opacity: 0.4 }, 'Media');
+      await fireEvent.click(sameOption());
+      await save();
+      expect(onSave.mock.calls[0][0]).toEqual({ ...pic, opacity: 0.4, inherit: true });
+      document.body.innerHTML = '';
+      const r = open('folder', structuredClone(onSave.mock.calls[0][0]), 'Media');
+      await fireEvent.click(ownOption());
+      await save();
+      expect(r.onSave.mock.calls[0][0]).toEqual({ ...pic, opacity: 0.4 });
+    });
   });
 
   describe('exact round trip (Ruling 11)', () => {
@@ -98,13 +160,13 @@ describe('BackgroundConfigModal at every level', () => {
     it('an unknown key survives Inherit on and off', async () => {
       const bg = { type: 'image', value: '/backgrounds/a.jpg', future: 'kept' } as unknown as Background;
       let r = open('tab', structuredClone(bg));
-      await fireEvent.click(inheritSwitch());
+      await setInherit('tab', true);
       await save();
       const on = r.onSave.mock.calls[0][0];
       expect(on).toEqual({ ...bg, inherit: true });
       document.body.innerHTML = '';
       r = open('tab', structuredClone(on));
-      await fireEvent.click(inheritSwitch());
+      await setInherit('tab', false);
       await save();
       expect(r.onSave.mock.calls[0][0]).toEqual(bg);
     });
@@ -130,26 +192,24 @@ describe('BackgroundConfigModal at every level', () => {
   it('Inherit keeps the stored picture and sets inherit: true', async () => {
     const images = ['/presets/network-grid.jpg', '/presets/data-center.jpg'];
     const { onSave } = open('tab', { type: 'slideshow', images, interval: 40 });
-    const sw = inheritSwitch();
-    expect((sw as HTMLInputElement).checked).toBe(false);
-    await fireEvent.click(sw);
-    expect(screen.getByText(/picture below is kept/i)).toBeInTheDocument();
+    expect(inheritIsOn('tab')).toBe(false);
+    await setInherit('tab', true);
+    expect(screen.getByText(/own picture is kept/i)).toBeInTheDocument();
     await save();
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ inherit: true, type: 'slideshow', images, interval: 40 }));
   });
 
   it('Inherit keeps a single image value', async () => {
     const { onSave } = open('folder', { type: 'image', value: '/backgrounds/a.jpg' });
-    await fireEvent.click(inheritSwitch());
+    await setInherit('folder', true);
     await save();
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ inherit: true, type: 'image', value: '/backgrounds/a.jpg' }));
   });
 
   it('turning Inherit off restores the kept picture', async () => {
     const { onSave } = open('dashboard', { inherit: true, type: 'image', value: '/backgrounds/a.jpg', opacity: 0.4 });
-    const sw = inheritSwitch();
-    expect((sw as HTMLInputElement).checked).toBe(true);
-    await fireEvent.click(sw);
+    expect(inheritIsOn('dashboard')).toBe(true);
+    await setInherit('dashboard', false);
     await save();
     const out = onSave.mock.calls[0][0] as Background;
     expect(out).toMatchObject({ type: 'image', value: '/backgrounds/a.jpg', opacity: 0.4 });
@@ -158,7 +218,7 @@ describe('BackgroundConfigModal at every level', () => {
 
   it('a bare inherit form opens with Inherit on and saves as inherit', async () => {
     const { onSave } = open('tab', { inherit: true });
-    expect((inheritSwitch() as HTMLInputElement).checked).toBe(true);
+    expect(inheritIsOn('tab')).toBe(true);
     await save();
     expect(onSave).toHaveBeenCalledWith({ inherit: true });
   });

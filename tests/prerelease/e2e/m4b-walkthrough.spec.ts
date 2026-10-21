@@ -1293,3 +1293,58 @@ test.describe('phones: the page is never wider than the screen', () => {
     }
   });
 });
+
+// ---- §7.1: plain words for the background on/off control at every level
+
+test.describe('§7.1 background on/off wording', () => {
+  test('the folder dialog says "Same as <tab name>"; the tab and dashboard dialogs use their own words', async ({ page, context }) => {
+    const f = await importDash(page, context, [{
+      name: 'Main',
+      children: (id) => [
+        tile(id('anchor'), 'Anchor', 11, 0),
+        {
+          id: id('fold'), kind: 'folder', name: 'Folder', layout: 'inherit', display: 'expanded', shape: 'rounded',
+          showTitle: true, placement: placement(0, 1, 4, 3),
+          content: { columns: 4, children: [tile(id('in'), 'Inner')] }
+        }
+      ]
+    }]);
+    const sel = `[data-node-id="${f.id('fold')}"]`;
+    await page.goto(f.path);
+    await expect(page.locator(sel)).toBeVisible();
+    await enterEdit(page);
+
+    // Folder: a radio group naming the tab it sits in.
+    await page.locator(sel).dblclick({ position: { x: 20, y: 20 } });
+    const dlg = page.getByRole('dialog', { name: 'Edit Folder' });
+    await dlg.getByRole('button', { name: /^Background/ }).click();
+    const picker = page.getByRole('dialog', { name: 'Folder background' });
+    await expect(picker.getByRole('radiogroup', { name: 'Folder background' })).toBeVisible();
+    await expect(picker.getByRole('radio', { name: 'Same as Main' })).toBeVisible();
+    await picker.getByRole('radio', { name: 'Same as Main' }).check();
+    await expect(picker.getByText("This folder's own picture is kept for when you switch back.")).toBeVisible();
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Escape');
+    await expect(dlg).toHaveCount(0);
+
+    // Tab.
+    await page.getByRole('tab', { name: 'Switch to Main tab' }).dblclick();
+    const tabDlg = page.getByRole('dialog', { name: 'Edit Tab' });
+    await tabDlg.getByRole('button', { name: /Configure Tab Background/ }).click();
+    const tabPicker = page.getByRole('dialog', { name: 'Tab background' });
+    await expect(tabPicker.getByRole('radio', { name: 'Same as the dashboard' })).toBeVisible();
+    await expect(tabPicker.getByRole('radio', { name: 'Its own background' })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Escape');
+    await expect(tabDlg).toHaveCount(0);
+
+    // Dashboard.
+    await page.getByRole('button', { name: 'Edit Dashboard' }).click();
+    const dashDlg = page.getByRole('dialog', { name: 'Edit Dashboard' });
+    await dashDlg.getByRole('tab', { name: 'Background' }).click();
+    // The switch is a visually hidden checkbox behind a drawn track; its label text is what shows.
+    await expect(dashDlg.getByRole('switch', { name: 'Show background picture' })).toBeChecked();
+    await expect(dashDlg.getByText('Show background picture')).toBeVisible();
+    await page.keyboard.press('Escape');
+  });
+});

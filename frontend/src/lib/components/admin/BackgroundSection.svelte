@@ -1,9 +1,9 @@
 <script lang="ts" module>
-  /** Per-level wording (design §4a). Nothing sits above a dashboard: "inherit" there means no background, picture kept. */
+  /** Per-level wording (design §4a, §7.1). The dialog title lives here; the on/off wording is in the markup. */
   export const LEVEL_TEXT = {
-    dashboard: { title: 'Dashboard background', inherit: 'No background (keep this picture stored)', from: 'no background' },
-    tab: { title: 'Tab background', inherit: "Inherit the dashboard's background", from: "the dashboard's background" },
-    folder: { title: 'Folder background', inherit: 'Inherit (show what is behind the folder)', from: 'what is behind the folder' }
+    dashboard: { title: 'Dashboard background' },
+    tab: { title: 'Tab background' },
+    folder: { title: 'Folder background' }
   } as const;
 </script>
 
@@ -35,13 +35,17 @@
     background?: Background;
     /** Which level this picker edits (design §4a): folders get no overlay or blur of their own. */
     level: 'dashboard' | 'tab' | 'folder';
+    /** Folder level: the name of the tab or folder it sits in ("Same as <name>"); blank = unnamed. */
+    parentName?: string;
   }
 
-  let { background, level }: Props = $props();
+  let { background, level, parentName }: Props = $props();
 
   /** The slideshow limit the server's document rules enforce. */
   const MAX_IMAGES = 200;
-  const text = $derived(LEVEL_TEXT[level]);
+  const sameAs = $derived(
+    level === 'tab' ? 'Same as the dashboard' : `Same as ${parentName?.trim() || 'the folder it sits in'}`
+  );
   const hasOverlay = $derived(level !== 'folder');
 
   const clamp01 = (n: unknown, d: number) =>
@@ -508,29 +512,51 @@
   });
 </script>
 
-<!-- Inherit (call 5): off but kept — the picture below stays stored while the parent's shows. -->
+<!-- On/off, in plain words per level (§7.1). Off but kept (call 5): the picture below stays stored
+     while the parent's shows. Data: { inherit: true, …picture }. -->
 <div class="form-group toggle-group">
-  <label class="toggle-label">
-    <span class="toggle-switch" class:enabled={inheritOn} aria-hidden="true">
-      <span class="toggle-knob"></span>
-    </span>
-    <span class="toggle-text">{text.inherit}</span>
-    <input
-      type="checkbox"
-      role="switch"
-      aria-checked={inheritOn}
-      aria-describedby="bg-inherit-hint"
-      bind:checked={inheritOn}
-      class="toggle-checkbox"
-    />
-  </label>
-  <p class="toggle-hint" id="bg-inherit-hint">
-    {#if inheritOn}
-      Showing {text.from}. The picture below is kept; turn Inherit off to use it again.
-    {:else}
-      This {level} uses the background below.
-    {/if}
-  </p>
+  {#if level === 'dashboard'}
+    <label class="toggle-label">
+      <span class="toggle-switch" class:enabled={!inheritOn} aria-hidden="true">
+        <span class="toggle-knob"></span>
+      </span>
+      <span class="toggle-text">Show background picture</span>
+      <input
+        type="checkbox"
+        role="switch"
+        aria-checked={!inheritOn}
+        aria-describedby="bg-inherit-hint"
+        checked={!inheritOn}
+        onchange={(e) => (inheritOn = !e.currentTarget.checked)}
+        class="toggle-checkbox"
+      />
+    </label>
+    <p class="toggle-hint" id="bg-inherit-hint">
+      {#if inheritOn}
+        No picture. Your chosen picture is kept, so turning this back on restores it.
+      {:else}
+        Shown behind the whole dashboard.
+      {/if}
+    </p>
+  {:else}
+    <div class="inherit-radios" role="radiogroup" aria-label="{level === 'tab' ? 'Tab' : 'Folder'} background" aria-describedby="bg-inherit-hint">
+      <label class="inherit-radio">
+        <input type="radio" name="bg-source" checked={inheritOn} onchange={() => (inheritOn = true)} />
+        <span>{sameAs}</span>
+      </label>
+      <label class="inherit-radio">
+        <input type="radio" name="bg-source" checked={!inheritOn} onchange={() => (inheritOn = false)} />
+        <span>Its own background</span>
+      </label>
+    </div>
+    <p class="toggle-hint" id="bg-inherit-hint">
+      {#if inheritOn}
+        This {level}'s own picture is kept for when you switch back.
+      {:else}
+        This {level} uses the background below.
+      {/if}
+    </p>
+  {/if}
 </div>
 
 <!-- Background Type Selection -->
@@ -1156,6 +1182,18 @@
     line-height: 1.4;
   }
 
+  .inherit-radios {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+  .inherit-radio {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    color: var(--text-primary, inherit);
+  }
   .toggle-hint {
     margin: 0.75rem 0 0 0;
     font-size: 0.875rem;

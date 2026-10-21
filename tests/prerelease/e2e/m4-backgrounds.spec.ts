@@ -253,10 +253,10 @@ test.describe('M4 backgrounds in a real browser', () => {
     await enterEdit(page);
 
     let { dlg, picker } = await openFolderPicker(page, sel);
-    const sw = picker.getByRole('switch', { name: /Inherit/ });
-    await expect(sw).not.toBeChecked();
-    await picker.getByText(/^Inherit \(show what is behind the folder\)$/).click();
-    await expect(sw).toBeChecked();
+    const same = picker.getByRole('radio', { name: /^Same as / });
+    await expect(same).not.toBeChecked();
+    await same.check();
+    await expect(same).toBeChecked();
     await picker.getByRole('button', { name: /^Save Background/ }).click();
     await expect(dlg.locator('.background-status')).toContainText(/kept/);
     await dlg.getByRole('button', { name: /^Save/ }).click();
@@ -267,8 +267,8 @@ test.describe('M4 backgrounds in a real browser', () => {
     await expect(page.locator(`${sel} .folder-surface .background-root`)).toHaveCount(0);
 
     ({ dlg, picker } = await openFolderPicker(page, sel));
-    await expect(picker.getByRole('switch', { name: /Inherit/ })).toBeChecked();
-    await picker.getByText(/^Inherit \(show what is behind the folder\)$/).click();
+    await expect(picker.getByRole('radio', { name: /^Same as / })).toBeChecked();
+    await picker.getByRole('radio', { name: 'Its own background' }).check();
     await picker.getByRole('button', { name: /^Save Background/ }).click();
     await dlg.getByRole('button', { name: /^Save/ }).click();
     await saveDraft(page);
