@@ -1829,7 +1829,7 @@ test.describe('§8 tile size sets the space it takes', () => {
         expect(overlaps(bs[i], bs[j]), `${ids[i]} vs ${ids[j]}`).toBe(false);
   }
 
-  test('Large makes a 2 x 2 box (two cells plus the gap) and pushes its neighbours; Undo restores it', async ({ page, context }) => {
+  test('Large makes a 4 x 4 box (two Medium pitches plus the gap) and pushes its neighbours; Undo restores it', async ({ page, context }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
     const f = await sizeDash(page, context);
     await page.goto(f.path);
@@ -1908,6 +1908,41 @@ test.describe('§8 tile size sets the space it takes', () => {
     near(a1.y, a0.y, 'keeps its top-left (y)');
   });
 
+  /** The root grid's column track and row height, in px, read from the rendered grid. */
+  async function rootCell(page: Page) {
+    return page.locator('.tab-canvas').evaluate((canvas) => {
+      const grids = [canvas as HTMLElement, ...canvas.querySelectorAll<HTMLElement>('*')].filter((el) => getComputedStyle(el).display === 'grid');
+      const g = grids.find((el) => getComputedStyle(el).gridTemplateColumns.split(' ').length === 24);
+      if (!g) throw new Error('no 24-column grid: ' + grids.map((el) => el.className + ' ' + getComputedStyle(el).gridTemplateColumns).join(' | '));
+      const cs = getComputedStyle(g);
+      return { col: parseFloat(cs.gridTemplateColumns.split(' ')[0]), row: parseFloat(cs.gridAutoRows) };
+    });
+  }
+
+  // Spec §9: Small 1 x 1, Medium 2 x 2, Large 4 x 4 cells of the 24-column grid, so the drawn boxes'
+  // areas run Small < Medium < Large (1 : 4 : 16).
+  for (const width of [1280, 1920]) test(`box sizes: Small 1 x 1, Medium 2 x 2, Large 4 x 4 cells; Small < Medium < Large (${width}px)`, async ({ page, context }) => {
+    await page.setViewportSize({ width, height: 900 });
+    const f = await sizeDash(page, context);
+    await page.goto(f.path);
+    await enterEdit(page);
+    await pickSize(page, page.locator(`[data-node-id="${f.id('a')}"]`), 'large');
+    await pickSize(page, page.locator(`[data-node-id="${f.id('f')}"]`), 'small');
+    const cell = await rootCell(page);
+    expect(cell.col, 'a 24-column cell is 1/24 of the canvas').toBeGreaterThan(20);
+    const [sm, md, lg] = [await box(page, f.id('f')), await box(page, f.id('b')), await box(page, f.id('a'))];
+    for (const [what, b, n] of [['Small', sm, 1], ['Medium', md, 2], ['Large', lg, 4]] as const) {
+      near(b.width, n * cell.col, `${what} is ${n} cells wide`);
+      near(b.height, n * cell.row, `${what} is ${n} cells high`);
+    }
+    const area = (b: { width: number; height: number }) => b.width * b.height;
+    expect(area(sm), 'Small < Medium').toBeLessThan(area(md));
+    expect(area(md), 'Medium < Large').toBeLessThan(area(lg));
+    expect(area(md) / area(sm)).toBeCloseTo(4, 0);
+    expect(area(lg) / area(md)).toBeCloseTo(4, 0);
+    await allApart(page, ['a', 'b', 'd', 'e', 'f'].map(f.id));
+  });
+
   test("a stored large tile at a Medium's span (Sample's Netflix, 2 x 2 after the finer-grid import) is not enlarged on load", async ({ page, context }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
     const s = await sampleCopy(page, context);
@@ -1934,7 +1969,7 @@ test.describe('§8 tile size sets the space it takes', () => {
     expect(found[0]).toMatchObject({ size: 'large', placement: { w: 2, h: 2 } });
 
     // The dialog tells the truth (spec §8, amended): Custom, not Large. Picking Large applies it
-    // (2 x 2) as one undo step.
+    // (4 x 4 cells, twice a Medium each way) as one undo step.
     const nid = await netflix.getAttribute('data-node-id');
     const sidEarly = await spotify.getAttribute('data-node-id');
     expect(sidEarly).toBeTruthy();
@@ -1946,11 +1981,11 @@ test.describe('§8 tile size sets the space it takes', () => {
     await dlg.getByLabel('Size', { exact: true }).selectOption('large');
     await dlg.getByRole('button', { name: 'Save', exact: true }).click();
     await expect(dlg).toHaveCount(0);
-    // Spotify (still 1 x 1, edit-mode layout) is the one-cell yardstick.
+    // Spotify (still a Medium, 2 x 2 cells, edit-mode layout) is the one-Medium yardstick.
     const one = (await page.locator(`.tab-canvas [data-node-id="${sidEarly}"]`).boundingBox())!;
     const big = (await nf.boundingBox())!;
-    near(big.width, 2 * one.width, 'Netflix is now two cells wide');
-    near(big.height, 2 * one.height, 'Netflix is now two cells high');
+    near(big.width, 2 * one.width, 'Netflix is now two Mediums (4 cells) wide');
+    near(big.height, 2 * one.height, 'Netflix is now two Mediums (4 cells) high');
     const bar = page.getByRole('toolbar', { name: 'Editing' });
     await bar.getByRole('button', { name: 'Undo' }).click();
     await expect(bar.getByRole('button', { name: 'Undo' })).toBeDisabled();
@@ -2021,10 +2056,31 @@ test.describe('§8 tile size sets the space it takes', () => {
       expect(now.height, `${n} (${now.height}px) stays above the compact threshold (110px)`).toBeGreaterThan(110);
       expect(Math.abs(now.height - was.height) / was.height, `${n} height ${was.height} -> ${now.height}`).toBeLessThan(0.2);
     }
+    // Each tile changes on its own: Google is two Mediums each way; the others keep their boxes' size.
+    const sizes = async () => ({ Google: await box(page, ids.Google), GitHub: await box(page, ids.GitHub), YouTube: await box(page, ids.YouTube) });
+    const s1 = await sizes();
+    near(s1.Google.width, 2 * s1.YouTube.width, 'Google Large is two Mediums (4 cells) wide');
+    near(s1.Google.height, 2 * s1.YouTube.height, 'Google Large is two Mediums (4 cells) high');
     await pickSize(page, cell('YouTube'), 'medium');
     await expectSizes({ Google: 'large', GitHub: 'medium', YouTube: 'medium' }, 'YouTube Medium');
+    const s2 = await sizes();
+    for (const n of ['Google', 'GitHub', 'YouTube'] as const) {
+      near(s2[n].width, s1[n].width, `YouTube Medium: ${n} keeps its width`);
+      near(s2[n].height, s1[n].height, `YouTube Medium: ${n} keeps its height`);
+    }
     await pickSize(page, cell('GitHub'), 'small');
     await expectSizes({ Google: 'large', GitHub: 'small', YouTube: 'medium' }, 'GitHub Small');
+    const s3 = await sizes();
+    for (const n of ['Google', 'YouTube'] as const) {
+      near(s3[n].width, s2[n].width, `GitHub Small: ${n} keeps its width`);
+      near(s3[n].height, s2[n].height, `GitHub Small: ${n} keeps its height`);
+    }
+    // GitHub is one cell: half YouTube's Medium each way, and visibly smaller (icon and title).
+    near(s3.GitHub.width, s3.YouTube.width / 2, 'GitHub Small is half a Medium wide');
+    near(s3.GitHub.height, s3.YouTube.height / 2, 'GitHub Small is half a Medium high');
+    expect(s3.GitHub.width * s3.GitHub.height, 'GitHub takes a quarter of YouTube\'s area').toBeLessThan(0.3 * s3.YouTube.width * s3.YouTube.height);
+    clearlySmaller(await looks(page, ids.GitHub), await looks(page, ids.YouTube), 'Services: GitHub Small beside YouTube Medium');
+    expect((await folderBox())!.height, 'Services is still grown for Google').toBeGreaterThanOrEqual(svc1.height - 1);
     // The menu's Edit on YouTube (GitHub was edited last) opens YouTube's own dialog.
     await cell('YouTube').click({ button: 'right' });
     await page.getByRole('menu').getByRole('menuitem', { name: 'Edit', exact: true }).click();

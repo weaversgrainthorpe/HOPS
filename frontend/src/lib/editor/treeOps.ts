@@ -522,15 +522,22 @@ export function deleteNodes(d: LayoutDashboard, ids: string[]): LayoutDashboard 
 }
 
 /**
+ * Nominal grid cell for minFolderHeight: the pre-finer-grid 80 px (12 columns) halved, i.e. the
+ * same px per old cell, so the resize floor is the old one at every viewport width (only snapped to
+ * half an old row). A larger nominal (e.g. 1280 / 24 = 53.3 px) would let fixed folder chrome
+ * (title + padding) take fewer rows and loosen the floor.
+ */
+const NOMINAL_CELL_PX = 80 / MEDIUM_CELLS;
+
+/**
  * Smallest height (in the parent's rows) a folder of width w can have without clipping its content.
  * Grid folder in a grid parent: its content rows + GRID_TITLE_ROWS (the title), per geometry's rows
- * rule. Otherwise geometry's requiredFolderHeightPx on a nominal parent (in a grid parent one cell
- * of the default design width, DEFAULT_DESIGN_WIDTH / ROOT_COLUMNS, so it scales with the cell; 8 px
- * in a free one), converted back to parent rows. The nominal cell is an internal bound (the real
- * unit depends on viewport width), not a rendering value.
+ * rule. Otherwise geometry's requiredFolderHeightPx on a nominal parent (NOMINAL_CELL_PX cells in a
+ * grid parent; 8 px in a free one), converted back to parent rows. The nominal cell is an internal
+ * bound (the real unit depends on viewport width), not a rendering value.
  */
 function minFolderHeight(folder: FolderNode, w: number, parentMode: LayoutMode, parentCols: number): number {
-  const unit = parentMode === 'free' ? FREE_UNIT_PX : DEFAULT_DESIGN_WIDTH / ROOT_COLUMNS;
+  const unit = parentMode === 'free' ? FREE_UNIT_PX : NOMINAL_CELL_PX;
   const m = containerMetrics({ columns: parentCols, children: [] }, parentMode, parentCols * unit);
   const probe: FolderNode = { ...folder, display: 'expanded', placement: { ...folder.placement, w, h: 1 } };
   const inner = folderInnerMetrics(probe, m);
@@ -730,8 +737,10 @@ export function convertNode(n: LayoutNode, from: LayoutMode, to: LayoutMode, sid
   const p = n.placement;
   let q: Placement;
   if (to === 'free') {
+    // Round the EDGES (not x and w separately): side may be fractional (6.5), and rounding w on its
+    // own made an odd-x cell overlap its right neighbour by one unit.
     const u = (v: number) => Math.round(v * side);
-    q = { x: u(p.x), y: u(p.y), w: Math.max(1, u(p.w)), h: Math.max(1, u(p.h)) };
+    q = { x: u(p.x), y: u(p.y), w: Math.max(1, u(p.x + p.w) - u(p.x)), h: Math.max(1, u(p.y + p.h) - u(p.y)) };
   } else {
     // Tiles and folders alike: rounded to cells (a tile keeps its span, spec §8 — Large 4·side -> 4).
     const w = Math.max(1, Math.round(p.w / side));

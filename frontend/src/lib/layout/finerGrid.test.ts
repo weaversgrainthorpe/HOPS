@@ -88,6 +88,13 @@ describe('minimised folder', () => {
     expect(minimisedPlacement({ x: 44, y: 50, w: 20, h: 16 }, 'free', tab(1280))).toEqual({ x: 44, y: 50, w: 13, h: 13 });
     expect(minimisedPlacement({ x: 0, y: 0, w: 20, h: 16 }, 'free', tab(960))).toMatchObject({ w: 10, h: 10 });
   });
+  it('grid: a folder narrower or shorter than a Medium minimises to its own footprint, never larger', () => {
+    // A 1 x 1 (or 1-wide / 1-high) grid folder, reachable by resizing: the minimised tile stays inside
+    // the footprint it had, so it can never draw over a neighbour or be clamped at column 23.
+    expect(minimisedPlacement({ x: 23, y: 3, w: 1, h: 1 }, 'grid', tab())).toEqual({ x: 23, y: 3, w: 1, h: 1 });
+    expect(minimisedPlacement({ x: 5, y: 0, w: 1, h: 6 }, 'grid', tab())).toEqual({ x: 5, y: 0, w: 1, h: 2 });
+    expect(minimisedPlacement({ x: 5, y: 0, w: 6, h: 1, z: 3 }, 'grid', tab())).toEqual({ x: 5, y: 0, w: 2, h: 1, z: 3 });
+  });
 });
 
 describe('nodeFit: Small (1 x 1) is always compact', () => {
@@ -217,12 +224,30 @@ describe('folder minimum height scales with the cell', () => {
     const d = gridDash([folder('f', p(0, 0, 8, 8), [tile('x', p(0, 0, 2, 2)), tile('y', p(0, 2, 2, 2))])]);
     expect(resizedPlacement(d, 'f', 8, 1)).toEqual({ x: 0, y: 0, w: 8, h: 6 });
   });
-  it('a free folder in a grid parent needs as many 24-column rows as its content px at the default width', () => {
-    // A cell is 1280 / 24 = 53.33 px (the default design width; no nominal 80 px). The folder is 8 cells
-    // = 426.67 px; its free content unit is (426.67 - 18) / 80 = 5.108 px, so the 30-unit tile needs
-    // 153.25 px + title 40 + padding 18 = 211.25 px = 3.96 cells → 4 rows.
+  it('a free folder in a grid parent: rows measured on the old nominal cell, halved (80 / 2 = 40 px)', () => {
+    // Before the finer grid the nominal cell was 80 px (12 columns); the same px under 24 columns is 40 px.
+    // The folder is 8 cells = 320 px (the old 4 x 80); its free content unit is (320 - 18) / 80 = 3.775 px,
+    // so the 30-unit tile needs 113.25 px + title 40 + padding 18 = 171.25 px = 4.28 fine rows → 5
+    // (before: 2.14 old rows → 3 = 6 fine rows; the finer grid snaps to half an old row).
     const d = gridDash([folder('f', p(0, 0, 8, 2), [tile('x', p(0, 0, 10, 30))], { layout: 'free', content: { columns: 80, children: [tile('x', p(0, 0, 10, 30))] } })]);
-    expect(resizedPlacement(d, 'f', 8, 1).h).toBe(4);
+    expect(resizedPlacement(d, 'f', 8, 1).h).toBe(5);
+  });
+  it('the free-folder resize floor matches the old floor at every width (never looser than half an old row)', () => {
+    // Independent old reference: 12 columns, nominal 80 px cells, the folder at half the width.
+    const OLD_CELL = 80;
+    const chrome = 40 + 18; // rounded folder, title shown: title bar + body padding/border
+    for (const w of [2, 3, 4, 6, 8, 12, 16, 24]) for (const tileH of [5, 13, 30, 60, 120]) {
+      const kid = tile('x', p(0, 0, 10, tileH));
+      const d = gridDash([folder('f', p(0, 0, w, 2), [kid], { layout: 'free', content: { columns: 80, children: [kid] } })]);
+      const fine = resizedPlacement(d, 'f', w, 1).h;
+      const boxPx = (w / 2) * OLD_CELL; // the same px box as the old w/2 columns
+      const needPx = chrome + ((boxPx - 18) / 80) * tileH;
+      const oldRows = Math.max(1, Math.ceil(needPx / OLD_CELL - 1e-9));
+      // At any viewport width the old cell is c and a fine cell c / 2, so comparing in fine rows covers every width.
+      expect(fine, `w=${w} tileH=${tileH}`).toBe(Math.max(1, Math.ceil(needPx / (OLD_CELL / 2) - 1e-9)));
+      expect(fine, `w=${w} tileH=${tileH}: no looser than the old floor less half an old row`).toBeGreaterThanOrEqual(2 * oldRows - 1);
+      expect(fine).toBeLessThanOrEqual(2 * oldRows);
+    }
   });
 });
 
@@ -239,6 +264,18 @@ describe('free ↔ grid conversion in the new units (side 6.5 at 1280)', () => {
     expect(f.placement).toEqual(p(39, 0, 52, 39));
     expect(f.content.columns).toBe(52);
     expect(f.content.children.map((c) => c.placement)).toEqual([p(0, 0, 13, 13), p(13, 0, 13, 13)]);
+  });
+  it('grid → free rounds edges, not x and w separately: odd-x Smalls never overlap their neighbours', () => {
+    // x=1 w=1 used to become [7, 14) while x=2 starts at 13: a one-unit overlap.
+    const row = [0, 1, 2, 3, 4, 5].map((x) => tile(`s${x}`, p(x, 1, 1, 1)));
+    const out = setTabLayout(gridDash(row), 't', 'free', 1280);
+    const got = rootKids(out).map((n) => n.placement);
+    for (let i = 0; i + 1 < got.length; i++) {
+      expect(got[i].x + got[i].w, `s${i} ends where s${i + 1} starts`).toBe(got[i + 1].x);
+    }
+    for (const q of got) expect(q.y + q.h).toBe(13); // rows too: bottom edge = round(2 x 6.5)
+    // And back to grid exactly.
+    expect(rootKids(setTabLayout(out, 't', 'grid'))).toEqual(row);
   });
   it('grid → free → grid is exact (no drift)', () => {
     const d = gridDash(kids);

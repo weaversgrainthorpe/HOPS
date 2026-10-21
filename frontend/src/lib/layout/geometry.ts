@@ -416,12 +416,20 @@ export function freeSideOf(designWidth: unknown): number {
 
 /**
  * Placement of a folder minimised to its tile (per-browser view): one Medium tile at the same
- * x,y — a grid folder 2 x 2 cells, a free folder a square of 2 x side design units (freeSideOf;
- * the old one-column square, so it looks exactly as before the finer grid).
+ * x,y — a grid folder 2 x 2 cells, clamped to its own footprint (a folder 1 cell wide or high
+ * minimises to 1 in that direction, so it never draws over a neighbour); a free folder a square of
+ * 2 x side design units (freeSideOf; the old one-column square, so it looks exactly as before the
+ * finer grid).
  */
 export function minimisedPlacement(p: Placement, mode: LayoutMode, tab: LayoutTab): Placement {
-  const side = mode === 'free' ? Math.max(1, Math.round(MEDIUM_CELLS * freeSideOf(tab.designWidth))) : MEDIUM_CELLS;
-  const out: Placement = { x: p.x, y: p.y, w: side, h: side };
+  let w: number, h: number;
+  if (mode === 'free') {
+    w = h = Math.max(1, Math.round(MEDIUM_CELLS * freeSideOf(tab.designWidth)));
+  } else {
+    w = Math.min(MEDIUM_CELLS, Math.max(1, p.w));
+    h = Math.min(MEDIUM_CELLS, Math.max(1, p.h));
+  }
+  const out: Placement = { x: p.x, y: p.y, w, h };
   if (p.z !== undefined) out.z = p.z;
   return out;
 }
