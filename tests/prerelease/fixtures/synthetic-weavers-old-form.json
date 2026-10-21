@@ -1,0 +1,953 @@
+{
+  "format": "hops-export",
+  "schemaVersion": 3,
+  "exportedAt": "2026-10-21T00:00:00Z",
+  "exportType": "full",
+  "config": {
+    "dashboards": [
+      {
+        "id": "syn-weavers",
+        "name": "Synthetic Weavers",
+        "order": 0,
+        "path": "/syn-weavers",
+        "revision": 1,
+        "settings": {
+          "statusChecksEnabled": null,
+          "statusCheckIntervalMinutes": null,
+          "statusCheckTimeoutSeconds": null,
+          "editIdleTimeoutMinutes": null,
+          "animatedFolderBackgrounds": null,
+          "defaultLayout": null
+        },
+        "defaultLayout": "grid",
+        "tabs": [
+          {
+            "id": "syn-w-tab1",
+            "name": "Media",
+            "order": 0,
+            "layout": "inherit",
+            "root": {
+              "columns": 12,
+              "children": [
+                {
+                  "id": "syn-w-fmed",
+                  "kind": "folder",
+                  "name": "Media",
+                  "layout": "inherit",
+                  "display": "expanded",
+                  "shape": "rounded",
+                  "showTitle": true,
+                  "placement": {
+                    "x": 0,
+                    "y": 0,
+                    "w": 8,
+                    "h": 5
+                  },
+                  "content": {
+                    "columns": 8,
+                    "children": [
+                      {
+                        "id": "syn-w-m1",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Stream",
+                        "url": "https://syn-w-m1.example.lan/",
+                        "icon": "mdi:lan",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 0,
+                        "placement": {
+                          "x": 0,
+                          "y": 0,
+                          "w": 1,
+                          "h": 1
+                        }
+                      },
+                      {
+                        "id": "syn-w-m2",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Library",
+                        "url": "https://syn-w-m2.example.lan/",
+                        "icon": "mdi:lan",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 1,
+                        "placement": {
+                          "x": 1,
+                          "y": 0,
+                          "w": 1,
+                          "h": 1
+                        }
+                      },
+                      {
+                        "id": "syn-w-m3",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Requests",
+                        "url": "https://syn-w-m3.example.lan/",
+                        "icon": "mdi:lan",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 2,
+                        "placement": {
+                          "x": 2,
+                          "y": 0,
+                          "w": 1,
+                          "h": 1
+                        }
+                      },
+                      {
+                        "id": "syn-w-mbig",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Player",
+                        "url": "https://syn-w-mbig.example.lan/",
+                        "icon": "mdi:lan",
+                        "openMode": "newtab",
+                        "size": "large",
+                        "order": 3,
+                        "placement": {
+                          "x": 3,
+                          "y": 0,
+                          "w": 2,
+                          "h": 2
+                        }
+                      },
+                      {
+                        "id": "syn-w-fext",
+                        "kind": "folder",
+                        "name": "Extras (expanded)",
+                        "layout": "inherit",
+                        "display": "expanded",
+                        "shape": "rounded",
+                        "showTitle": true,
+                        "placement": {
+                          "x": 0,
+                          "y": 1,
+                          "w": 3,
+                          "h": 3
+                        },
+                        "content": {
+                          "columns": 3,
+                          "children": [
+                            {
+                              "id": "syn-w-e1",
+                              "kind": "tile",
+                              "type": "link",
+                              "name": "Extra One",
+                              "url": "https://syn-w-e1.example.lan/",
+                              "icon": "mdi:lan",
+                              "openMode": "newtab",
+                              "size": "medium",
+                              "order": 0,
+                              "placement": {
+                                "x": 0,
+                                "y": 0,
+                                "w": 1,
+                                "h": 1
+                              }
+                            },
+                            {
+                              "id": "syn-w-e2",
+                              "kind": "tile",
+                              "type": "link",
+                              "name": "Extra Two",
+                              "url": "https://syn-w-e2.example.lan/",
+                              "icon": "mdi:lan",
+                              "openMode": "newtab",
+                              "size": "medium",
+                              "order": 1,
+                              "placement": {
+                                "x": 1,
+                                "y": 0,
+                                "w": 1,
+                                "h": 1
+                              }
+                            }
+                          ]
+                        },
+                        "order": 4
+                      }
+                    ]
+                  },
+                  "order": 0
+                },
+                {
+                  "id": "syn-w-fgame",
+                  "kind": "folder",
+                  "name": "Games (minimised)",
+                  "layout": "inherit",
+                  "display": "collapsed",
+                  "shape": "rounded",
+                  "showTitle": true,
+                  "placement": {
+                    "x": 8,
+                    "y": 0,
+                    "w": 4,
+                    "h": 2
+                  },
+                  "content": {
+                    "columns": 4,
+                    "children": [
+                      {
+                        "id": "syn-w-g1",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Game One",
+                        "url": "https://syn-w-g1.example.lan/",
+                        "icon": "mdi:lan",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 0,
+                        "placement": {
+                          "x": 0,
+                          "y": 0,
+                          "w": 1,
+                          "h": 1
+                        }
+                      },
+                      {
+                        "id": "syn-w-g2",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Game Two",
+                        "url": "https://syn-w-g2.example.lan/",
+                        "icon": "mdi:lan",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 1,
+                        "placement": {
+                          "x": 1,
+                          "y": 0,
+                          "w": 1,
+                          "h": 1
+                        }
+                      }
+                    ]
+                  },
+                  "order": 1
+                },
+                {
+                  "id": "syn-w-n1",
+                  "kind": "tile",
+                  "type": "note",
+                  "name": "Reminder",
+                  "url": "",
+                  "icon": "mdi:note-text-outline",
+                  "openMode": "newtab",
+                  "size": "medium",
+                  "order": 2,
+                  "placement": {
+                    "x": 8,
+                    "y": 2,
+                    "w": 4,
+                    "h": 3
+                  },
+                  "description": "Synthetic note tile."
+                },
+                {
+                  "id": "syn-w-t1",
+                  "kind": "tile",
+                  "type": "link",
+                  "name": "Top One",
+                  "url": "https://syn-w-t1.example.lan/",
+                  "icon": "mdi:lan",
+                  "openMode": "newtab",
+                  "size": "medium",
+                  "order": 3,
+                  "placement": {
+                    "x": 0,
+                    "y": 5,
+                    "w": 1,
+                    "h": 1
+                  }
+                },
+                {
+                  "id": "syn-w-t2",
+                  "kind": "tile",
+                  "type": "link",
+                  "name": "Top Two",
+                  "url": "https://syn-w-t2.example.lan/",
+                  "icon": "mdi:lan",
+                  "openMode": "newtab",
+                  "size": "medium",
+                  "order": 4,
+                  "placement": {
+                    "x": 1,
+                    "y": 5,
+                    "w": 1,
+                    "h": 1
+                  }
+                },
+                {
+                  "id": "syn-w-fuse",
+                  "kind": "folder",
+                  "name": "Utilities",
+                  "layout": "inherit",
+                  "display": "expanded",
+                  "shape": "rounded",
+                  "showTitle": true,
+                  "placement": {
+                    "x": 2,
+                    "y": 5,
+                    "w": 10,
+                    "h": 4
+                  },
+                  "content": {
+                    "columns": 10,
+                    "children": [
+                      {
+                        "id": "syn-w-u1",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Util One",
+                        "url": "https://syn-w-u1.example.lan/",
+                        "icon": "mdi:lan",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 0,
+                        "placement": {
+                          "x": 0,
+                          "y": 0,
+                          "w": 1,
+                          "h": 1
+                        }
+                      },
+                      {
+                        "id": "syn-w-u2",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Util Two",
+                        "url": "https://syn-w-u2.example.lan/",
+                        "icon": "mdi:lan",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 1,
+                        "placement": {
+                          "x": 1,
+                          "y": 0,
+                          "w": 1,
+                          "h": 1
+                        }
+                      },
+                      {
+                        "id": "syn-w-fu2",
+                        "kind": "folder",
+                        "name": "Util group",
+                        "layout": "inherit",
+                        "display": "expanded",
+                        "shape": "rounded",
+                        "showTitle": true,
+                        "placement": {
+                          "x": 0,
+                          "y": 1,
+                          "w": 5,
+                          "h": 3
+                        },
+                        "content": {
+                          "columns": 5,
+                          "children": [
+                            {
+                              "id": "syn-w-x1",
+                              "kind": "tile",
+                              "type": "link",
+                              "name": "X One",
+                              "url": "https://syn-w-x1.example.lan/",
+                              "icon": "mdi:lan",
+                              "openMode": "newtab",
+                              "size": "medium",
+                              "order": 0,
+                              "placement": {
+                                "x": 0,
+                                "y": 0,
+                                "w": 1,
+                                "h": 1
+                              }
+                            },
+                            {
+                              "id": "syn-w-fu3",
+                              "kind": "folder",
+                              "name": "Util subgroup (minimised)",
+                              "layout": "inherit",
+                              "display": "collapsed",
+                              "shape": "rounded",
+                              "showTitle": true,
+                              "placement": {
+                                "x": 1,
+                                "y": 1,
+                                "w": 2,
+                                "h": 2
+                              },
+                              "content": {
+                                "columns": 2,
+                                "children": [
+                                  {
+                                    "id": "syn-w-y1",
+                                    "kind": "tile",
+                                    "type": "link",
+                                    "name": "Y One",
+                                    "url": "https://syn-w-y1.example.lan/",
+                                    "icon": "mdi:lan",
+                                    "openMode": "newtab",
+                                    "size": "medium",
+                                    "order": 0,
+                                    "placement": {
+                                      "x": 0,
+                                      "y": 0,
+                                      "w": 1,
+                                      "h": 1
+                                    }
+                                  }
+                                ]
+                              },
+                              "order": 1
+                            }
+                          ]
+                        },
+                        "order": 2
+                      }
+                    ]
+                  },
+                  "order": 5
+                }
+              ]
+            }
+          },
+          {
+            "id": "syn-w-tab2",
+            "name": "Infrastructure",
+            "order": 1,
+            "layout": "inherit",
+            "root": {
+              "columns": 12,
+              "children": [
+                {
+                  "id": "syn-w-r1",
+                  "kind": "tile",
+                  "type": "link",
+                  "name": "Gateway",
+                  "url": "https://syn-w-r1.example.lan/",
+                  "icon": "mdi:lan",
+                  "openMode": "newtab",
+                  "size": "medium",
+                  "order": 0,
+                  "placement": {
+                    "x": 0,
+                    "y": 0,
+                    "w": 1,
+                    "h": 1
+                  }
+                },
+                {
+                  "id": "syn-w-r2",
+                  "kind": "tile",
+                  "type": "link",
+                  "name": "Switch",
+                  "url": "https://syn-w-r2.example.lan/",
+                  "icon": "mdi:lan",
+                  "openMode": "newtab",
+                  "size": "medium",
+                  "order": 1,
+                  "placement": {
+                    "x": 1,
+                    "y": 0,
+                    "w": 1,
+                    "h": 1
+                  }
+                },
+                {
+                  "id": "syn-w-r3",
+                  "kind": "tile",
+                  "type": "link",
+                  "name": "Wireless",
+                  "url": "https://syn-w-r3.example.lan/",
+                  "icon": "mdi:lan",
+                  "openMode": "newtab",
+                  "size": "medium",
+                  "order": 2,
+                  "placement": {
+                    "x": 2,
+                    "y": 0,
+                    "w": 1,
+                    "h": 1
+                  }
+                },
+                {
+                  "id": "syn-w-fsrv",
+                  "kind": "folder",
+                  "name": "Servers",
+                  "layout": "inherit",
+                  "display": "expanded",
+                  "shape": "rounded",
+                  "showTitle": true,
+                  "placement": {
+                    "x": 0,
+                    "y": 1,
+                    "w": 12,
+                    "h": 5
+                  },
+                  "content": {
+                    "columns": 12,
+                    "children": [
+                      {
+                        "id": "syn-w-h1",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Host One",
+                        "url": "https://syn-w-h1.example.lan/",
+                        "icon": "mdi:lan",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 0,
+                        "placement": {
+                          "x": 0,
+                          "y": 0,
+                          "w": 1,
+                          "h": 1
+                        }
+                      },
+                      {
+                        "id": "syn-w-h2",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Host Two",
+                        "url": "https://syn-w-h2.example.lan/",
+                        "icon": "mdi:lan",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 1,
+                        "placement": {
+                          "x": 1,
+                          "y": 0,
+                          "w": 1,
+                          "h": 1
+                        }
+                      },
+                      {
+                        "id": "syn-w-h3",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Host Three",
+                        "url": "https://syn-w-h3.example.lan/",
+                        "icon": "mdi:lan",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 2,
+                        "placement": {
+                          "x": 2,
+                          "y": 0,
+                          "w": 1,
+                          "h": 1
+                        }
+                      },
+                      {
+                        "id": "syn-w-hbig",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Hypervisor",
+                        "url": "https://syn-w-hbig.example.lan/",
+                        "icon": "mdi:lan",
+                        "openMode": "newtab",
+                        "size": "large",
+                        "order": 3,
+                        "placement": {
+                          "x": 3,
+                          "y": 0,
+                          "w": 2,
+                          "h": 2
+                        }
+                      },
+                      {
+                        "id": "syn-w-fvm",
+                        "kind": "folder",
+                        "name": "Virtual machines",
+                        "layout": "inherit",
+                        "display": "expanded",
+                        "shape": "rounded",
+                        "showTitle": true,
+                        "placement": {
+                          "x": 0,
+                          "y": 1,
+                          "w": 3,
+                          "h": 3
+                        },
+                        "content": {
+                          "columns": 3,
+                          "children": [
+                            {
+                              "id": "syn-w-vm1",
+                              "kind": "tile",
+                              "type": "link",
+                              "name": "VM One",
+                              "url": "https://syn-w-vm1.example.lan/",
+                              "icon": "mdi:lan",
+                              "openMode": "newtab",
+                              "size": "medium",
+                              "order": 0,
+                              "placement": {
+                                "x": 0,
+                                "y": 0,
+                                "w": 1,
+                                "h": 1
+                              }
+                            },
+                            {
+                              "id": "syn-w-vm2",
+                              "kind": "tile",
+                              "type": "link",
+                              "name": "VM Two",
+                              "url": "https://syn-w-vm2.example.lan/",
+                              "icon": "mdi:lan",
+                              "openMode": "newtab",
+                              "size": "medium",
+                              "order": 1,
+                              "placement": {
+                                "x": 1,
+                                "y": 0,
+                                "w": 1,
+                                "h": 1
+                              }
+                            },
+                            {
+                              "id": "syn-w-vm3",
+                              "kind": "tile",
+                              "type": "link",
+                              "name": "VM Three",
+                              "url": "https://syn-w-vm3.example.lan/",
+                              "icon": "mdi:lan",
+                              "openMode": "newtab",
+                              "size": "medium",
+                              "order": 2,
+                              "placement": {
+                                "x": 2,
+                                "y": 0,
+                                "w": 1,
+                                "h": 1
+                              }
+                            }
+                          ]
+                        },
+                        "order": 4
+                      },
+                      {
+                        "id": "syn-w-fbk",
+                        "kind": "folder",
+                        "name": "Backups (minimised)",
+                        "layout": "inherit",
+                        "display": "collapsed",
+                        "shape": "rounded",
+                        "showTitle": true,
+                        "placement": {
+                          "x": 5,
+                          "y": 0,
+                          "w": 3,
+                          "h": 2
+                        },
+                        "content": {
+                          "columns": 3,
+                          "children": [
+                            {
+                              "id": "syn-w-b1",
+                              "kind": "tile",
+                              "type": "link",
+                              "name": "Backup One",
+                              "url": "https://syn-w-b1.example.lan/",
+                              "icon": "mdi:lan",
+                              "openMode": "newtab",
+                              "size": "medium",
+                              "order": 0,
+                              "placement": {
+                                "x": 0,
+                                "y": 0,
+                                "w": 1,
+                                "h": 1
+                              }
+                            }
+                          ]
+                        },
+                        "order": 5
+                      }
+                    ]
+                  },
+                  "order": 3
+                },
+                {
+                  "id": "syn-w-fmon",
+                  "kind": "folder",
+                  "name": "Monitoring (minimised)",
+                  "layout": "inherit",
+                  "display": "collapsed",
+                  "shape": "rounded",
+                  "showTitle": true,
+                  "placement": {
+                    "x": 0,
+                    "y": 6,
+                    "w": 4,
+                    "h": 2
+                  },
+                  "content": {
+                    "columns": 4,
+                    "children": [
+                      {
+                        "id": "syn-w-q1",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Quiet One",
+                        "url": "https://syn-w-q1.example.lan/",
+                        "icon": "mdi:lan",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 0,
+                        "placement": {
+                          "x": 0,
+                          "y": 0,
+                          "w": 1,
+                          "h": 1
+                        }
+                      }
+                    ]
+                  },
+                  "order": 4
+                }
+              ]
+            }
+          },
+          {
+            "id": "syn-w-tab3",
+            "name": "Desk",
+            "order": 2,
+            "layout": "free",
+            "designWidth": 1920,
+            "root": {
+              "columns": 160,
+              "children": [
+                {
+                  "id": "syn-w-d1",
+                  "kind": "tile",
+                  "type": "link",
+                  "name": "Desk One",
+                  "url": "https://syn-w-d1.example.lan/",
+                  "icon": "mdi:lan",
+                  "openMode": "newtab",
+                  "size": "medium",
+                  "order": 0,
+                  "placement": {
+                    "x": 2,
+                    "y": 2,
+                    "w": 16,
+                    "h": 10,
+                    "z": 1
+                  }
+                },
+                {
+                  "id": "syn-w-d2",
+                  "kind": "tile",
+                  "type": "link",
+                  "name": "Desk Two",
+                  "url": "https://syn-w-d2.example.lan/",
+                  "icon": "mdi:lan",
+                  "openMode": "newtab",
+                  "size": "medium",
+                  "order": 1,
+                  "placement": {
+                    "x": 20,
+                    "y": 2,
+                    "w": 16,
+                    "h": 10,
+                    "z": 1
+                  }
+                },
+                {
+                  "id": "syn-w-dbig",
+                  "kind": "tile",
+                  "type": "link",
+                  "name": "Desk Large",
+                  "url": "https://syn-w-dbig.example.lan/",
+                  "icon": "mdi:lan",
+                  "openMode": "newtab",
+                  "size": "large",
+                  "order": 2,
+                  "placement": {
+                    "x": 2,
+                    "y": 16,
+                    "w": 32,
+                    "h": 20,
+                    "z": 2
+                  }
+                },
+                {
+                  "id": "syn-w-dg",
+                  "kind": "folder",
+                  "name": "Desk grid folder",
+                  "layout": "grid",
+                  "display": "expanded",
+                  "shape": "rounded",
+                  "showTitle": true,
+                  "placement": {
+                    "x": 44,
+                    "y": 2,
+                    "w": 70,
+                    "h": 40,
+                    "z": 1
+                  },
+                  "content": {
+                    "columns": 7,
+                    "children": [
+                      {
+                        "id": "syn-w-dg1",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Dg One",
+                        "url": "https://syn-w-dg1.example.lan/",
+                        "icon": "mdi:lan",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 0,
+                        "placement": {
+                          "x": 0,
+                          "y": 0,
+                          "w": 1,
+                          "h": 1
+                        }
+                      },
+                      {
+                        "id": "syn-w-dg2",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Dg Two",
+                        "url": "https://syn-w-dg2.example.lan/",
+                        "icon": "mdi:lan",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 1,
+                        "placement": {
+                          "x": 1,
+                          "y": 0,
+                          "w": 1,
+                          "h": 1
+                        }
+                      },
+                      {
+                        "id": "syn-w-dg3",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Dg Three",
+                        "url": "https://syn-w-dg3.example.lan/",
+                        "icon": "mdi:lan",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 2,
+                        "placement": {
+                          "x": 2,
+                          "y": 0,
+                          "w": 1,
+                          "h": 1
+                        }
+                      },
+                      {
+                        "id": "syn-w-dgi",
+                        "kind": "folder",
+                        "name": "Dg inner (expanded)",
+                        "layout": "inherit",
+                        "display": "expanded",
+                        "shape": "rounded",
+                        "showTitle": true,
+                        "placement": {
+                          "x": 0,
+                          "y": 1,
+                          "w": 5,
+                          "h": 3
+                        },
+                        "content": {
+                          "columns": 5,
+                          "children": [
+                            {
+                              "id": "syn-w-dgi1",
+                              "kind": "tile",
+                              "type": "link",
+                              "name": "Dgi One",
+                              "url": "https://syn-w-dgi1.example.lan/",
+                              "icon": "mdi:lan",
+                              "openMode": "newtab",
+                              "size": "medium",
+                              "order": 0,
+                              "placement": {
+                                "x": 0,
+                                "y": 0,
+                                "w": 1,
+                                "h": 1
+                              }
+                            },
+                            {
+                              "id": "syn-w-dgi2",
+                              "kind": "tile",
+                              "type": "link",
+                              "name": "Dgi Two",
+                              "url": "https://syn-w-dgi2.example.lan/",
+                              "icon": "mdi:lan",
+                              "openMode": "newtab",
+                              "size": "medium",
+                              "order": 1,
+                              "placement": {
+                                "x": 1,
+                                "y": 0,
+                                "w": 1,
+                                "h": 1
+                              }
+                            }
+                          ]
+                        },
+                        "order": 3
+                      }
+                    ]
+                  },
+                  "order": 3
+                },
+                {
+                  "id": "syn-w-dm",
+                  "kind": "folder",
+                  "name": "Desk grid folder (minimised)",
+                  "layout": "grid",
+                  "display": "collapsed",
+                  "shape": "rounded",
+                  "showTitle": true,
+                  "placement": {
+                    "x": 44,
+                    "y": 50,
+                    "w": 20,
+                    "h": 16,
+                    "z": 1
+                  },
+                  "content": {
+                    "columns": 4,
+                    "children": [
+                      {
+                        "id": "syn-w-dm1",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Dm One",
+                        "url": "https://syn-w-dm1.example.lan/",
+                        "icon": "mdi:lan",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 0,
+                        "placement": {
+                          "x": 0,
+                          "y": 0,
+                          "w": 1,
+                          "h": 1
+                        }
+                      }
+                    ]
+                  },
+                  "order": 4
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
