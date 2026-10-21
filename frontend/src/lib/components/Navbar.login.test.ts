@@ -1,12 +1,14 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
 import { get } from 'svelte/store';
+import { tick } from 'svelte';
 
 // On a dashboard page (/d).
 vi.mock('$app/stores', async () => {
-	const { readable } = await import('svelte/store');
+	const { readable, writable } = await import('svelte/store');
 	return {
-		page: readable({
+		// Writable so a test can navigate (change the URL) under the mounted Navbar.
+		page: writable({
 			url: new URL('http://localhost/d'),
 			params: { dashboard: 'd' },
 			route: { id: '/[dashboard]' },
@@ -31,6 +33,8 @@ import { LoginError } from '$lib/utils/api';
 import { config } from '$lib/stores/config';
 import { isAuthenticated, mustChangePassword, clearMustChangePassword } from '$lib/stores/auth';
 import { goto } from '$app/navigation';
+import { page } from '$app/stores';
+import type { Writable } from 'svelte/store';
 import { editMode } from '$lib/stores/editMode';
 import { session, resetEditSessionForTests } from '$lib/stores/editSession';
 import Navbar from './Navbar.svelte';
@@ -53,8 +57,17 @@ async function signInWith(pass: string) {
 	await fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
 }
 
+function navigateTo(path: string) {
+	(page as unknown as Writable<{ url: URL; params: Record<string, string> }>).update((p) => ({
+		...p,
+		url: new URL(`http://localhost${path}`),
+		params: (path.startsWith('/settings') ? {} : { dashboard: path.slice(1) }) as Record<string, string>
+	}));
+}
+
 describe('Navbar pencil when logged out', () => {
 	beforeEach(() => {
+		navigateTo('/d');
 		apiLogin.mockReset();
 		resetEditSessionForTests();
 		isAuthenticated.set(false);
@@ -103,6 +116,27 @@ describe('Navbar pencil when logged out', () => {
 		expect(screen.getByRole('button', { name: 'Enter Edit Mode' })).toBeTruthy();
 	});
 
+	it('navigating away (Back, or to /settings) closes the sign-in dialog', async () => {
+		render(Navbar, {});
+		await fireEvent.click(screen.getByRole('button', { name: 'Enter Edit Mode' }));
+		expect(screen.getByRole('dialog', { name: 'Sign in' })).toBeTruthy();
+		navigateTo('/settings');
+		await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Sign in' })).toBeNull());
+		// Coming back does not bring the old dialog back with it.
+		navigateTo('/d');
+		await tick();
+		expect(screen.queryByRole('dialog', { name: 'Sign in' })).toBeNull();
+	});
+
+	it('navigating to another dashboard closes it too: a later sign-in never edits the wrong one', async () => {
+		render(Navbar, {});
+		await fireEvent.click(screen.getByRole('button', { name: 'Enter Edit Mode' }));
+		navigateTo('/e');
+		await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Sign in' })).toBeNull());
+		expect(apiLogin).not.toHaveBeenCalled();
+		expect(get(editMode)).toBe(false);
+	});
+
 	it('logged in, the pencil enters edit mode directly (no dialog)', async () => {
 		isAuthenticated.set(true);
 		render(Navbar, {});
@@ -115,6 +149,7 @@ describe('Navbar pencil when logged out', () => {
 
 describe('Navbar after a sign-in that must change the password', () => {
 	beforeEach(() => {
+		navigateTo('/d');
 		apiLogin.mockReset();
 		resetEditSessionForTests();
 		isAuthenticated.set(false);
@@ -153,6 +188,7 @@ describe('Navbar after a sign-in that must change the password', () => {
 
 describe('Navbar gear and Log out (spec §4D)', () => {
 	beforeEach(() => {
+		navigateTo('/d');
 		(goto as unknown as ReturnType<typeof vi.fn>).mockClear();
 		(api.logout as unknown as ReturnType<typeof vi.fn>).mockClear();
 		resetEditSessionForTests();

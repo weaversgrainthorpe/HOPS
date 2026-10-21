@@ -77,6 +77,21 @@ describe('Entry', () => {
       expect(btnOf(container).style.opacity).toBe('');
     });
 
+    it('text and icon opacity 0 (and background 0) never fade the status badge', async () => {
+      const e = { ...entry, description: 'Desc', opacity: 0, textOpacity: 0, iconOpacity: 0, statusCheck: { enabled: true } } as unknown as EntryType;
+      const { container } = render(Entry, { entry: e });
+      await tick();
+      const badge = container.querySelector('.status-badge') as HTMLElement;
+      expect(badge, 'the tile has a status badge').not.toBeNull();
+      // Every element from the badge up to (and including) the tile button is unfaded.
+      const btn = btnOf(container);
+      for (let el: HTMLElement | null = badge; el; el = el.parentElement) {
+        expect(el.style.opacity === '' || Number(el.style.opacity) === 1, `${el.className} is not faded`).toBe(true);
+        if (el === btn) break;
+      }
+      expect(btn.contains(badge)).toBe(true);
+    });
+
     it('defaults: text and icon are fully opaque', async () => {
       const { container } = render(Entry, { entry: { ...entry, description: 'Desc' } });
       await tick();

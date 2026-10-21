@@ -44,6 +44,18 @@ describe('/ (the home page)', () => {
 		expect(gotoMock).toHaveBeenCalledWith('/first', { replaceState: true });
 	});
 
+	it('a redirect that fails says so, with the reason and a plain link to the dashboard (never "Opening…" forever)', async () => {
+		gotoMock.mockImplementationOnce(async () => { throw new Error('route failed to load'); });
+		config.set(doc([{ id: 'a', name: 'First', path: '/first', order: 0 }]));
+		configLoading.set(false);
+		render(Page);
+		const alert = await screen.findByRole('alert');
+		expect(alert.textContent).toContain("Couldn't open First");
+		expect(alert.textContent).toContain('route failed to load');
+		expect(screen.getByRole('link', { name: /Open First/ }).getAttribute('href')).toBe('/first');
+		expect(screen.queryByText(/Opening First/)).toBeNull();
+	});
+
 	it('waits for the config before redirecting (no redirect, no empty state while loading)', async () => {
 		render(Page);
 		await new Promise((r) => setTimeout(r, 0));

@@ -16,11 +16,16 @@
     !$configLoading && !$configError && !$migrationFailure && $config ? $dashboards[0] : undefined
   );
   let redirected = false;
+  // A redirect that fails (an aborted navigation, a route that won't load) is shown, with a plain
+  // link to the dashboard — never "Opening…" forever.
+  let redirectError = $state<string | null>(null);
 
   $effect(() => {
     if (first && !redirected) {
       redirected = true;
-      void goto(dashboardHref(first.path), { replaceState: true });
+      goto(dashboardHref(first.path), { replaceState: true }).catch((e: unknown) => {
+        redirectError = e instanceof Error && e.message ? e.message : 'the page could not be opened';
+      });
     }
   });
 </script>
@@ -44,6 +49,15 @@
         </Button>
       </div>
       <BackendStatus />
+    </div>
+  {:else if first && redirectError}
+    <div class="card load-failed" role="alert">
+      <Icon icon="mdi:alert-circle-outline" width="32" />
+      <h1>Couldn't open {first.name}</h1>
+      <p>{redirectError}</p>
+      <div class="actions">
+        <a class="btn-primary" href={dashboardHref(first.path)} data-sveltekit-reload>Open {first.name}</a>
+      </div>
     </div>
   {:else if first}
     <p class="muted" role="status">Opening {first.name}…</p>

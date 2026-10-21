@@ -54,11 +54,13 @@ export function isAdminOnlyPath(path: string): boolean {
  * Where a page goes when its session expires: null = stay. A dashboard stays
  * (HOPS dashboards work anonymously; the navbar flips to signed out). Settings
  * stays too: it asks for the password again in place. The other admin pages
- * can't work signed out and have no sign-in of their own, so they leave for /.
+ * can't work signed out and have no sign-in of their own, so they go to Settings
+ * to sign in there (as a signed-out visit to them does), not to / (which forwards
+ * to a dashboard with no sign-in prompt).
  */
 export function sessionExpiredRedirect(path: string): string | null {
   if (path === '/settings') return null;
-  return isAdminOnlyPath(path) ? '/' : null;
+  return isAdminOnlyPath(path) ? '/settings' : null;
 }
 
 // Register the global session-expired handler with the API layer.

@@ -201,6 +201,46 @@ describe('/settings signed in: the admin home', () => {
 		expect(screen.getByRole('button', { name: 'Log out' })).toBeInTheDocument();
 	});
 
+	it('the session ending closes Backups and Change Password: nothing admin stays on screen', async () => {
+		render(Page);
+		await fireEvent.click(screen.getByRole('button', { name: /Open Backups/ }));
+		expect(await screen.findByRole('dialog', { name: /Backup/ })).toBeTruthy();
+		isAuthenticated.set(false);
+		await waitFor(() => expect(screen.queryByRole('dialog', { name: /Backup/ })).toBeNull());
+		expect(await screen.findByRole('dialog', { name: 'Sign in' })).toBeTruthy();
+		// Signing back in does not reopen it.
+		isAuthenticated.set(true);
+		await flush();
+		expect(screen.queryByRole('dialog', { name: /Backup/ })).toBeNull();
+
+		await fireEvent.click(screen.getByRole('button', { name: /Change Password/i }));
+		expect(await screen.findByRole('dialog', { name: 'Change Password' })).toBeTruthy();
+		isAuthenticated.set(false);
+		await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Change Password' })).toBeNull());
+	});
+
+	it('Log out hides the admin content at once, while leaving (no signed-out admin shell)', async () => {
+		gotoMock.mockImplementationOnce(() => new Promise(() => {}));
+		render(Page);
+		await fireEvent.click(screen.getByRole('button', { name: 'Log out' }));
+		await waitFor(() => expect(gotoMock).toHaveBeenCalledWith('/'));
+		expect(get(isAuthenticated)).toBe(false);
+		expect(screen.queryByRole('heading', { name: 'Dashboards' })).toBeNull();
+		expect(screen.queryByRole('heading', { name: 'Global settings' })).toBeNull();
+		expect(screen.queryByRole('dialog', { name: 'Sign in' })).toBeNull();
+	});
+
+	it('Log out whose navigation fails: the reason is shown and the page asks to sign in (never stuck)', async () => {
+		const toastError = vi.spyOn(toast, 'error');
+		gotoMock.mockImplementationOnce(async () => { throw new Error('navigation aborted'); });
+		render(Page);
+		await fireEvent.click(screen.getByRole('button', { name: 'Log out' }));
+		expect(await screen.findByRole('dialog', { name: 'Sign in' })).toBeTruthy();
+		expect(screen.queryByRole('heading', { name: 'Global settings' })).toBeNull();
+		expect(toastError).toHaveBeenCalledWith(expect.stringContaining('navigation aborted'));
+		toastError.mockRestore();
+	});
+
 	it('Factory Reset: the confirmation describes the v3 content, and Cancel resets nothing', async () => {
 		render(Page);
 		await fireEvent.click(screen.getByRole('button', { name: /Factory Reset/ }));

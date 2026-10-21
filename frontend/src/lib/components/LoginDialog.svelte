@@ -15,6 +15,14 @@
 
   let { onSuccess, onCancel, intro = 'Sign in to edit this dashboard.' }: Props = $props();
 
+  // Per-instance ids: two dialogs must never share a form id (the footer's Sign in button finds
+  // its form by id, so a duplicate would submit the wrong one).
+  const uid = $props.id();
+  const dialogId = `login-dialog-${uid}`;
+  const formId = `login-dialog-form-${uid}`;
+  const usernameId = `login-username-${uid}`;
+  const passwordId = `login-password-${uid}`;
+
   let username = $state('');
   let password = $state('');
   let passwordEl = $state<HTMLInputElement | null>(null);
@@ -47,20 +55,20 @@
 </script>
 
 <Modal
-  id="login-dialog"
+  id={dialogId}
   title="Sign in"
   titleIcon="mdi:account-key"
   onClose={cancel}
   maxWidth="400px"
   zIndex="var(--z-modal-overlay)"
-  initialFocus="#login-username"
+  initialFocus={`#${usernameId}`}
 >
   <p class="intro">{intro}</p>
-  <form id="login-dialog-form" onsubmit={handleSubmit}>
+  <form id={formId} onsubmit={handleSubmit}>
     <div class="form-group">
-      <label for="login-username">Username</label>
+      <label for={usernameId}>Username</label>
       <input
-        id="login-username"
+        id={usernameId}
         type="text"
         bind:value={username}
         required
@@ -72,9 +80,9 @@
     </div>
 
     <div class="form-group">
-      <label for="login-password">Password</label>
+      <label for={passwordId}>Password</label>
       <input
-        id="login-password"
+        id={passwordId}
         type="password"
         bind:value={password}
         required
@@ -95,7 +103,7 @@
   {#snippet footer()}
     <div class="modal-actions">
       <button type="button" class="btn-secondary" onclick={cancel} disabled={$isLoggingIn}>Cancel</button>
-      <button type="submit" form="login-dialog-form" class="btn-primary" disabled={$isLoggingIn}>
+      <button type="submit" form={formId} class="btn-primary" disabled={$isLoggingIn}>
         {#if $isLoggingIn}
           <Icon icon="mdi:loading" width="18" class="spin" />
         {/if}

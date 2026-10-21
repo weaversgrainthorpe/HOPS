@@ -62,7 +62,14 @@
   let showExport = $state(false);
   let showHelp = $state(false);
   let showAbout = $state(false);
-  let showLogin = $state(false);
+  // The page the sign-in dialog was opened on (null: closed). The dialog belongs to that page:
+  // navigating anywhere else (Back, a link, /settings with its own dialog) closes it, so it can
+  // never sign in to edit a different dashboard or stack on Settings' own sign-in dialog.
+  let loginPath = $state<string | null>(null);
+  let showLogin = $derived(loginPath !== null && loginPath === currentPath && isDashboardPage);
+  $effect(() => {
+    if (loginPath !== null && loginPath !== currentPath) loginPath = null;
+  });
 
   // The pencil is on every dashboard page. Logged out, it signs in first, in
   // place (no trip to the admin page), then starts editing this dashboard.
@@ -71,18 +78,21 @@
       void toggleEditMode();
       return;
     }
-    showLogin = true;
+    loginPath = currentPath;
   }
 
   // Editing starts once the user may act: a forced password change (its dialog can't be
   // dismissed) comes first.
   let cancelPendingEdit: (() => void) | null = null;
   function handleLoginSuccess() {
-    showLogin = false;
+    const signedInOn = loginPath;
+    loginPath = null;
     cancelPendingEdit?.();
     cancelPendingEdit = whenPasswordSettled(() => {
       cancelPendingEdit = null;
-      enableEditMode();
+      // Only the dashboard the pencil was pressed on: a forced password change may have
+      // taken long enough for the user to go elsewhere.
+      if (currentPath === signedInOn) enableEditMode();
     });
   }
   $effect(() => () => cancelPendingEdit?.());
@@ -279,7 +289,7 @@
 {/if}
 
 {#if showLogin}
-  <LoginDialog onSuccess={handleLoginSuccess} onCancel={() => showLogin = false} />
+  <LoginDialog onSuccess={handleLoginSuccess} onCancel={() => (loginPath = null)} />
 {/if}
 
 <style>
@@ -646,14 +656,11 @@
     }
   }
 
-  /* Phones: the logout button keeps its icon, drops its word. */
+  /* Phones: no room for Log out beside the gear (it pushed the page wider than a 375–390px
+     screen). It stays one tap away, in Settings (its Log out section). */
   @media (max-width: 480px) {
-    .logout-label {
-      display: none;
-    }
-
     .logout-btn {
-      padding: 0 0.5rem;
+      display: none;
     }
   }
 </style>

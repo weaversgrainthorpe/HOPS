@@ -117,7 +117,9 @@
 <ConflictBanner />
 <ParkedDraftBanner />
 
-<div class="app-page">
+<!-- dashboard-route: the same column layout as :has() below, for browsers without :has()
+     (Firefox < 121, older kiosk WebViews), where the panel would otherwise stop short. -->
+<div class="app-page" class:dashboard-route={$page.route.id === '/[dashboard]' && !showMigrationFailedPage($page.url.pathname, $migrationFailure)}>
 <!-- While the config migration has failed, only "/" (which shows the notice
      itself) and Settings (sign-in + Backups, the remedy) stay reachable;
      everything else shows the notice. -->
@@ -151,6 +153,11 @@
 	   as before; a dashboard page becomes a column so its panel can fill the rest. */
 	.app-page {
 		flex: 1 0 auto;
+	}
+	/* Two rules, not one list: a browser without :has() drops a whole selector list it can't parse. */
+	.app-page.dashboard-route {
+		display: flex;
+		flex-direction: column;
 	}
 	.app-page:has(> :global(.dashboard)) {
 		display: flex;

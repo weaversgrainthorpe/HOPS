@@ -140,4 +140,16 @@ describe('LoginDialog', () => {
 		render(LoginDialog, { props: { onSuccess: vi.fn(), onCancel: vi.fn(), intro: 'Sign in to open Settings.' } });
 		expect(screen.getByRole('dialog', { name: 'Sign in' }).textContent).toContain('Sign in to open Settings.');
 	});
+	it('two instances never share element ids; each Sign in button names its own form', () => {
+		render(LoginDialog, { onSuccess: vi.fn(), onCancel: vi.fn() });
+		render(LoginDialog, { onSuccess: vi.fn(), onCancel: vi.fn() });
+		const forms = Array.from(document.querySelectorAll('form'));
+		expect(forms).toHaveLength(2);
+		expect(forms[0].id).not.toBe(forms[1].id);
+		const ids = Array.from(document.querySelectorAll('[id]')).map((el) => el.id);
+		expect(new Set(ids).size).toBe(ids.length);
+		const submits = screen.getAllByRole('button', { name: 'Sign in' });
+		expect(submits.map((b) => b.getAttribute('form')).sort()).toEqual(forms.map((f) => f.id).sort());
+		for (const label of screen.getAllByLabelText('Username')) expect(label.tagName).toBe('INPUT');
+	});
 });

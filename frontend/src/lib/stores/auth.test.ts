@@ -213,10 +213,10 @@ describe('sessionExpiredRedirect (where an expired session sends the page)', () 
 		const { sessionExpiredRedirect } = await import('./auth');
 		expect(sessionExpiredRedirect('/settings')).toBeNull();
 	});
-	it('the other admin pages leave for /', async () => {
+	it('the other admin pages go to Settings, to sign in there (not to /, which loses the place)', async () => {
 		const { sessionExpiredRedirect } = await import('./auth');
-		expect(sessionExpiredRedirect('/admin/discovery')).toBe('/');
-		expect(sessionExpiredRedirect('/admin')).toBe('/');
+		expect(sessionExpiredRedirect('/admin/discovery')).toBe('/settings');
+		expect(sessionExpiredRedirect('/admin')).toBe('/settings');
 	});
 	it('a dashboard stays (read-only)', async () => {
 		const { sessionExpiredRedirect } = await import('./auth');

@@ -69,10 +69,11 @@
     if (from && !isAdminOnlyPath(from.pathname)) previous = from.pathname + from.search + from.hash;
   });
 
-  // Set while this page's Log out runs: the page is being left, so no sign-in dialog flashes up.
+  // Set while this page's Log out runs: the page is being left, so neither the admin content nor
+  // a sign-in dialog shows meanwhile.
   let leaving = $state(false);
   // Logged out (once the first auth check has answered — never on a guess): sign in here.
-  let needsLogin = $derived($authChecked && !$isAuthenticated && !leaving);
+  let needsLogin = $derived($authChecked && !$isAuthenticated);
   // The admin content needs a session and no pending forced password change (its dialog can't
   // be dismissed, and the server refuses the rest until it is done).
   let ready = $derived($authChecked && $isAuthenticated && !$mustChangePassword);
@@ -107,14 +108,28 @@
 
   let showChangePassword = $state(false);
   let showBackupModal = $state(false);
+  // The admin dialogs need the session too: when it ends (idle expiry, a Log out from the navbar)
+  // they close with the rest of the admin content, and signing back in doesn't reopen them.
+  $effect(() => {
+    if (!ready) {
+      showChangePassword = false;
+      showBackupModal = false;
+    }
+  });
 
   async function handleLogout() {
     // logout() asks about unsaved edits first; false = the user kept editing.
     leaving = true;
-    if (await logout()) {
+    try {
+      if (!(await logout())) {
+        leaving = false;
+        return;
+      }
       await goto('/');
-    } else {
+    } catch (e) {
+      // Signed out but still here: say why, and show the sign-in dialog rather than an empty page.
       leaving = false;
+      toast.error(`Signed out, but couldn't leave Settings: ${e instanceof Error && e.message ? e.message : 'navigation failed'}`);
     }
   }
 
@@ -293,7 +308,9 @@
     </div>
   {/if}
 
-  {#if !$authChecked}
+  {#if leaving}
+    <p class="muted" role="status">Signing out…</p>
+  {:else if !$authChecked}
     <p class="muted" role="status">Checking sign-in…</p>
   {:else if needsLogin}
     <p class="muted">Sign in to manage HOPS.</p>
@@ -508,15 +525,15 @@
   {/if}
 </div>
 
-{#if needsLogin}
+{#if needsLogin && !leaving}
   <LoginDialog intro="Sign in to open Settings." onSuccess={() => {}} onCancel={cancelLogin} />
 {/if}
 
-{#if showChangePassword}
+{#if ready && showChangePassword}
   <ChangePasswordModal onClose={() => (showChangePassword = false)} />
 {/if}
 
-{#if showBackupModal}
+{#if ready && showBackupModal}
   <BackupModal onClose={() => (showBackupModal = false)} />
 {/if}
 

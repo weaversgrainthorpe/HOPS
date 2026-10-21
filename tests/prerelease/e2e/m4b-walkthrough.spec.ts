@@ -935,7 +935,7 @@ test.describe('§4D Settings is the admin home; / shows a dashboard', () => {
     }
   });
 
-  test('with zero dashboards "/" says "No dashboards yet" and its button opens Settings', async ({ page, context }) => {
+  test('with zero dashboards "/" says "No dashboards yet" and its button opens Settings (logged in and logged out)', async ({ page, context, browser }) => {
     // Keep every dashboard (the export), delete them all, and put them back afterwards.
     const exp = await page.request.get('/api/config/export');
     expect(exp.status()).toBe(200);
@@ -960,6 +960,23 @@ test.describe('§4D Settings is the admin home; / shows a dashboard', () => {
       await expect(page).toHaveURL(/\/settings$/);
       await expect(page.getByRole('heading', { name: 'Global settings', level: 2 })).toBeVisible();
       await expect(page.getByRole('button', { name: 'New Dashboard' })).toBeVisible();
+
+      // Logged out: the same empty state; its button opens Settings, which signs in in place.
+      const { page: anon, ctx } = await anonPage(browser);
+      try {
+        await anon.goto('/');
+        await expect(anon.getByRole('heading', { name: 'No dashboards yet' })).toBeVisible();
+        await expect(anon).toHaveURL(/\/$/);
+        await anon.getByRole('button', { name: 'Open Settings' }).click();
+        await expect(anon).toHaveURL(/\/settings$/);
+        await expect(anon.getByRole('heading', { name: 'Global settings', level: 2 })).toHaveCount(0);
+        await signInDialog(anon);
+        await expect(anon).toHaveURL(/\/settings$/);
+        await expect(anon.getByRole('heading', { name: 'Global settings', level: 2 })).toBeVisible();
+        await expect(anon.getByRole('button', { name: 'New Dashboard' })).toBeVisible();
+      } finally {
+        await ctx.close();
+      }
     } finally {
       const r = await page.request.post('/api/config/import', {
         headers: { 'X-CSRF-Token': await getCsrfToken(context) },
@@ -1115,3 +1132,164 @@ test.describe('§4D Settings is the admin home; / shows a dashboard', () => {
   });
 });
 
+
+test.describe('one sign-in dialog at a time: navigating closes the pencil\'s', () => {
+  async function anonPage(browser: Browser): Promise<{ page: Page; ctx: BrowserContext }> {
+    const ctx = await browser.newContext({
+      baseURL: test.info().project.use.baseURL, serviceWorkers: 'block', storageState: { cookies: [], origins: [] }
+    });
+    return { page: await ctx.newPage(), ctx };
+  }
+
+  test('pencil dialog open, then Back to /settings: only Settings\' dialog, and its Sign in button signs in', async ({ page, context, browser }) => {
+    const f = await importDash(page, context, [{ name: 'Main', children: (id) => [tile(id('a'), 'Alpha')] }]);
+    const { page: anon, ctx } = await anonPage(browser);
+    try {
+      await anon.goto(f.path);
+      await expect(anon.locator(`[data-node-id="${f.id('a')}"]`)).toBeVisible();
+      // Client-side history: dashboard → /settings → (Cancel) dashboard.
+      await anon.getByRole('link', { name: 'Settings' }).click();
+      await expect(anon).toHaveURL(/\/settings$/);
+      await anon.getByRole('dialog', { name: 'Sign in' }).getByRole('button', { name: 'Cancel' }).click();
+      await expect(anon).toHaveURL(new RegExp(`${f.path}$`));
+      await expect(anon.getByRole('dialog', { name: 'Sign in' })).toHaveCount(0);
+
+      await anon.getByRole('button', { name: 'Enter Edit Mode' }).click();
+      const dlg = anon.getByRole('dialog', { name: 'Sign in' });
+      await expect(dlg).toHaveCount(1);
+      await expect(dlg).toContainText('Sign in to edit this dashboard.');
+
+      await anon.goBack();
+      await expect(anon).toHaveURL(/\/settings$/);
+      await expect(dlg).toHaveCount(1);
+      await expect(dlg).toContainText('Sign in to open Settings.');
+      expect(await anon.locator('form').count(), 'one sign-in form in the page').toBe(1);
+
+      // The footer's Sign in button (not Enter) submits this dialog's own form.
+      await dlg.getByLabel('Username').fill(ADMIN_USERNAME);
+      await dlg.getByLabel('Password').fill(ADMIN_TEST_PASSWORD);
+      await dlg.getByRole('button', { name: 'Sign in' }).click();
+      await expect(dlg).toHaveCount(0);
+      await expect(anon.getByRole('heading', { name: 'Global settings', level: 2 })).toBeVisible();
+      await expect(anon).toHaveURL(/\/settings$/);
+      await expect(anon.getByText("There's no dashboard here to edit")).toHaveCount(0);
+      await expect(anon.getByRole('toolbar', { name: 'Editing' })).toHaveCount(0);
+    } finally {
+      await ctx.close();
+    }
+  });
+
+  test('pencil dialog open, then Back to another dashboard: no dialog; the pencil there edits that one', async ({ page, context, browser }) => {
+    const a = await importDash(page, context, [{ name: 'Main', children: (id) => [tile(id('a'), 'Alpha')] }]);
+    const b = await importDash(page, context, [{ name: 'Main', children: (id) => [tile(id('b'), 'Bravo')] }]);
+    const { page: anon, ctx } = await anonPage(browser);
+    try {
+      await anon.goto(a.path);
+      await expect(anon.locator(`[data-node-id="${a.id('a')}"]`)).toBeVisible();
+      // A client-side navigation to B (logged out the navbar has no dashboard links): an ordinary
+      // same-origin link, which SvelteKit routes in place.
+      await anon.evaluate((href) => {
+        const link = document.createElement('a');
+        link.href = href;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      }, b.path);
+      await expect(anon).toHaveURL(new RegExp(`${b.path}$`));
+      await expect(anon.locator(`[data-node-id="${b.id('b')}"]`)).toBeVisible();
+
+      await anon.getByRole('button', { name: 'Enter Edit Mode' }).click();
+      await expect(anon.getByRole('dialog', { name: 'Sign in' })).toHaveCount(1);
+      await anon.goBack();
+      await expect(anon).toHaveURL(new RegExp(`${a.path}$`));
+      await expect(anon.locator(`[data-node-id="${a.id('a')}"]`)).toBeVisible();
+      await expect(anon.getByRole('dialog', { name: 'Sign in' })).toHaveCount(0);
+
+      // Signing in from A's pencil edits A.
+      await anon.getByRole('button', { name: 'Enter Edit Mode' }).click();
+      const dlg = anon.getByRole('dialog', { name: 'Sign in' });
+      await expect(dlg).toHaveCount(1);
+      await dlg.getByLabel('Username').fill(ADMIN_USERNAME);
+      await dlg.getByLabel('Password').fill(ADMIN_TEST_PASSWORD);
+      await dlg.getByRole('button', { name: 'Sign in' }).click();
+      await expect(dlg).toHaveCount(0);
+      await expect(anon.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
+      expect(new URL(anon.url()).pathname).toBe(a.path);
+      await anon.locator(`[data-node-id="${a.id('a')}"]`).click({ button: 'right' });
+      await anon.getByRole('menuitem', { name: 'Edit' }).click();
+      await expect(anon.getByRole('dialog').locator('input#name')).toHaveValue('Alpha');
+    } finally {
+      await ctx.close();
+    }
+  });
+});
+
+test.describe('phones: the page is never wider than the screen', () => {
+  const WIDTHS = [360, 375, 390];
+
+  async function anonPage(browser: Browser): Promise<{ page: Page; ctx: BrowserContext }> {
+    const ctx = await browser.newContext({
+      baseURL: test.info().project.use.baseURL, serviceWorkers: 'block', storageState: { cookies: [], origins: [] }
+    });
+    return { page: await ctx.newPage(), ctx };
+  }
+
+  async function fits(p: Page, what: string) {
+    const w = await p.evaluate(() => ({ doc: document.documentElement.scrollWidth, view: window.innerWidth }));
+    expect(w.doc, `${what}: page ${w.doc}px wide on a ${w.view}px screen`).toBeLessThanOrEqual(w.view);
+  }
+
+  /** The element is shown and lies entirely inside the screen's width. */
+  async function inside(p: Page, loc: ReturnType<Page['locator']>, what: string) {
+    await expect(loc, what).toBeVisible();
+    await loc.scrollIntoViewIfNeeded();
+    const box = await loc.boundingBox();
+    const view = await p.evaluate(() => window.innerWidth);
+    expect(box, what).not.toBeNull();
+    expect(box!.x, `${what}: left edge`).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width, `${what}: right edge`).toBeLessThanOrEqual(view + 0.5);
+  }
+
+  test('logged in: a dashboard and /settings fit at 360, 375 and 390px; the gear and Log out stay reachable', async ({ page, context }) => {
+    const f = await importDash(page, context, [{ name: 'Main', children: (id) => [tile(id('a'), 'Alpha')] }]);
+    for (const width of WIDTHS) {
+      await page.setViewportSize({ width, height: 812 });
+      await page.goto(f.path);
+      await expect(page.locator(`[data-node-id="${f.id('a')}"]`)).toBeVisible();
+      await expect(page.locator('.admin-badge')).toHaveCount(1); // the logged-in navbar has rendered
+      await fits(page, `${width}px, logged in, dashboard`);
+      await inside(page, page.getByRole('link', { name: 'Settings' }), `${width}px dashboard: the gear`);
+      const navLogout = page.locator('nav').getByRole('button', { name: 'Log out' });
+      if (await navLogout.isVisible()) await inside(page, navLogout, `${width}px dashboard: navbar Log out`);
+
+      await page.getByRole('link', { name: 'Settings' }).click();
+      await expect(page.getByRole('heading', { name: 'Global settings', level: 2 })).toBeVisible();
+      await fits(page, `${width}px, logged in, /settings`);
+      // Log out is always reachable on a phone: in Settings (the navbar's may be hidden there).
+      await inside(page, page.locator('#logout').getByRole('button', { name: 'Log out' }), `${width}px /settings: Log out`);
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await fits(page, `${width}px, logged in, /settings (after scrolling)`);
+    }
+  });
+
+  test('logged out: a dashboard and /settings (with its sign-in dialog) fit at 360, 375 and 390px', async ({ page, context, browser }) => {
+    const f = await importDash(page, context, [{ name: 'Main', children: (id) => [tile(id('a'), 'Alpha')] }]);
+    const { page: anon, ctx } = await anonPage(browser);
+    try {
+      for (const width of WIDTHS) {
+        await anon.setViewportSize({ width, height: 812 });
+        await anon.goto(f.path);
+        await expect(anon.locator(`[data-node-id="${f.id('a')}"]`)).toBeVisible();
+        await fits(anon, `${width}px, logged out, dashboard`);
+        await inside(anon, anon.getByRole('link', { name: 'Settings' }), `${width}px logged out: the gear`);
+        await anon.goto('/settings');
+        const dlg = anon.getByRole('dialog', { name: 'Sign in' });
+        await expect(dlg).toBeVisible();
+        await fits(anon, `${width}px, logged out, /settings`);
+        await inside(anon, dlg.getByRole('button', { name: 'Sign in' }), `${width}px: the dialog's Sign in button`);
+      }
+    } finally {
+      await ctx.close();
+    }
+  });
+});
