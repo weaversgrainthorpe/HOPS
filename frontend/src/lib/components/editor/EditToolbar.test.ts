@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/svelte';
+import { render, screen, fireEvent, within } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import { tick } from 'svelte';
 
@@ -22,6 +22,8 @@ import { openFolder, closeAll } from '$lib/stores/folderOverlay';
 import { confirmModalState } from '$lib/stores/confirmModal';
 import { setLayout, resetEditor, startSession, draft, nodeIn, answerConfirm } from './editorTestKit';
 import type { FolderNode, LayoutNode } from '$lib/types/layout';
+import type { Background } from '$lib/types';
+import { reportBackgroundError, clearBackgroundErrors } from '$lib/stores/backgroundErrors';
 
 const rename = (id: string, name: string) =>
   apply('Rename', (d) => updateNode(d, id, { name } as Partial<LayoutNode>));
@@ -115,6 +117,36 @@ describe('EditToolbar', () => {
     openFolder('c1');
     await fireEvent.click(screen.getByRole('button', { name: /^Add folder/ }));
     expect(get(editorDialog)).toEqual({ kind: 'folder', to: { tabId: 't1', folderId: 'c1' } });
+  });
+
+  it('holds the Dashboard pencil: labelled "Dashboard", always shown, and it calls its handler', async () => {
+    const onEditDashboard = vi.fn();
+    render(EditToolbar, { tabId: 't1', onAddTab: vi.fn(), onEditDashboard });
+    const bar = screen.getByRole('toolbar', { name: 'Editing' });
+    const handle = within(bar).getByRole('button', { name: 'Edit Dashboard' });
+    expect(handle).toHaveTextContent('Dashboard');
+    await fireEvent.click(handle);
+    expect(onEditDashboard).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a failed dashboard / tab background as a compact warning inside the toolbar (never silent)', async () => {
+    clearBackgroundErrors();
+    const bg = (value: string) => ({ type: 'image', value }) as Background;
+    const r = render(EditToolbar, {
+      tabId: 't1', onAddTab: vi.fn(), onEditDashboard: vi.fn(),
+      dashboardBackground: bg('/backgrounds/dash.jpg'), tabBackground: bg('/backgrounds/tab.jpg')
+    });
+    const bar = screen.getByRole('toolbar', { name: 'Editing' });
+    expect(bar.querySelector('[data-bg-failed]')).toBeNull();
+    reportBackgroundError('/backgrounds/dash.jpg');
+    await tick();
+    expect(bar.querySelector('[data-bg-failed="dashboard"]')?.textContent).toContain("couldn't be loaded");
+    expect(bar.querySelector('[data-bg-failed="tab"]')).toBeNull();
+    reportBackgroundError('/backgrounds/tab.jpg');
+    await tick();
+    expect(bar.querySelector('[data-bg-failed="tab"]')?.textContent).toContain("couldn't be loaded");
+    r.unmount();
+    clearBackgroundErrors();
   });
 
   it('Add tab calls its handler', async () => {

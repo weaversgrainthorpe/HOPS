@@ -261,6 +261,8 @@ describe('dashboard and tab layers', () => {
     expect(layer(container, 'dashboard')?.querySelector('.background-fallback')).not.toBeNull();
     const badge = container.querySelector('[data-bg-failed="dashboard"]');
     expect(badge?.textContent).toContain("Background image couldn't be loaded");
+    // §7.2: the warning sits in the floating editing toolbar, never in a row that moves the page.
+    expect(badge?.closest('[role="toolbar"]')).not.toBeNull();
     expect(console.error).toHaveBeenCalledWith('Background image could not be shown', '/backgrounds/broken.jpg');
   });
 

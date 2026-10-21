@@ -29,7 +29,6 @@
   import { get } from 'svelte/store';
   import { toast } from '$lib/stores/toast';
   import { reportBackgroundError, markBackgroundLoaded } from '$lib/stores/backgroundErrors';
-  import BackgroundFailedBadge from './background/BackgroundFailedBadge.svelte';
   import { reducedMotion } from '$lib/stores/backgroundAnimation';
 
   // The route's dashboard: the stored v3 dashboard (every dashboard is editable).
@@ -346,15 +345,10 @@
   <PartyMode />
   <HopAnimation />
 
+  <!-- §7.2: the header and tab row are identical in both modes. Every editing control (the Dashboard
+       pencil and Add tab included) is in the floating EditToolbar, which takes no layout space. -->
   <div class="dashboard-header">
-    {#if editing}
-      <div class="header-actions">
-        <!-- The dashboard's own edit handle (§4C): one labelled pencil, always shown while editing. -->
-        <EditHandle name="Dashboard" label="Dashboard" placement="inline" onEdit={() => (showDashboardEdit = true)} />
-      </div>
-    {/if}
-
-    {#if barTabs.length >= 1 || editing}
+    {#if barTabs.length >= 1}
       <div
         class="tabs"
         data-dashboard-tabs
@@ -402,29 +396,19 @@
             {/if}
           </div>
         {/each}
-        {#if editing}
-          <button class="add-tab-btn" onclick={handleAddTab} title="Add New Tab" aria-label="Add new tab to dashboard">
-            <Icon icon="mdi:plus" width="24" />
-            <span>Add Tab</span>
-          </button>
-        {/if}
       </div>
     {/if}
   </div>
 
   {#if editing}
-    <!-- Edit mode: a failed background image per level (Ruling 7), in its own row above the canvas. -->
-    <div class="bg-failed-row">
-      <BackgroundFailedBadge background={dashboardBackground} {editing} level="dashboard" placement="inline" label="(dashboard)" />
-      <BackgroundFailedBadge background={tabBackground} {editing} level="tab" placement="inline" label="(this tab)" />
-    </div>
-  {/if}
-
-  {#if editing}
     {#if draft}
-      <div class="editor-shell">
-        <EditToolbar tabId={activeTabId ?? ''} onAddTab={handleAddTab} />
-      </div>
+      <EditToolbar
+        tabId={activeTabId ?? ''}
+        onAddTab={handleAddTab}
+        onEditDashboard={() => (showDashboardEdit = true)}
+        {dashboardBackground}
+        {tabBackground}
+      />
       {#if draftTab}
         <div class="canvas-panel editing" style:--overlay-opacity={overlayOpacity} style:--overlay-blur="{overlayBlur}px">
           <TabCanvas dashboard={draft} tab={draftTab} editing />
@@ -522,30 +506,28 @@
     background-attachment: fixed;
   }
 
+  /* Room below the last row for the floating edit toolbar (§7.2). The same in BOTH modes, so every
+     item sits at exactly the same place in view and edit mode; the user can scroll the last row
+     clear of the toolbar. Phones: the toolbar's button row scrolls sideways and stays one row. */
+  .dashboard {
+    --edit-toolbar-room: 4.5rem;
+  }
+  @media (max-width: 768px) {
+    .dashboard {
+      --edit-toolbar-room: 6.5rem;
+    }
+  }
+
   .canvas-panel {
     position: relative;
     padding: 2rem;
+    padding-bottom: calc(2rem + var(--edit-toolbar-room));
     background: rgba(15, 23, 42, var(--overlay-opacity, 0.7));
     backdrop-filter: blur(var(--overlay-blur, 10px));
     min-height: 400px;
     /* Fills the screen below the tab bar on short content; grows with long content. */
     flex: 1 0 auto;
     border-top: 1px solid var(--border);
-  }
-
-  .editor-shell {
-    padding: 0.75rem 2rem 0;
-  }
-
-  .bg-failed-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    padding: 0 2rem;
-  }
-
-  .bg-failed-row:has(:global(.bg-failed-badge)) {
-    padding-top: 0.5rem;
   }
 
   .layout-missing,
@@ -581,37 +563,6 @@
     padding: 1rem 2rem 0;
     background: rgba(15, 23, 42, 0.8);
     backdrop-filter: blur(10px);
-  }
-
-  .header-actions {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    margin-bottom: 1rem;
-  }
-
-
-  .add-tab-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-    padding: 0 1.5rem;
-    height: 48px;
-    background: var(--bg-secondary);
-    border: 2px dashed var(--border);
-    border-radius: 0.5rem 0.5rem 0 0;
-    color: var(--text-secondary);
-    cursor: pointer;
-    transition: all 0.2s;
-    font-size: 0.875rem;
-    font-weight: 500;
-  }
-
-  .add-tab-btn:hover {
-    background: var(--bg-tertiary);
-    border-color: var(--accent);
-    color: var(--accent);
   }
 
   .tabs {
@@ -757,13 +708,21 @@
     border-radius: 0.3rem;
   }
 
-  /* The tab's edit handle sits BESIDE the tab button (in the tab box's flow), never over it: drawn
-     over a short tab, controls swallowed its clicks and hid it from drops (Ruling 29). It is inside
-     the tab box, so a drop on it counts as the tab; it takes pointer events only while shown, and
-     never during a drag (EditHandle). */
+  /* The tab's edit handle takes no layout space (§7.2: the tab row is identical in both modes). It sits
+     inside the tab's own right padding (1.5rem), so it never covers the tab's icon or name, and it
+     is inside the tab box, so a drop on it counts as the tab. It takes pointer events only while
+     shown, and never during a drag (EditHandle) — hidden, it never swallows a tab click (Ruling 29). */
   .tab-container > :global(.edit-handle) {
-    margin-left: 0.25rem;
-    align-self: center;
+    position: absolute;
+    top: 50%;
+    right: 2px;
+    transform: translateY(-50%);
+    z-index: 3;
+    box-sizing: border-box;
+    min-width: 0;
+    width: 1.375rem;
+    height: 1.375rem;
+    padding: 0;
   }
 
   .empty-dashboard {

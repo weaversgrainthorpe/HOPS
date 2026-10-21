@@ -1348,3 +1348,293 @@ test.describe('§7.1 background on/off wording', () => {
     await page.keyboard.press('Escape');
   });
 });
+
+// ---- §7.2: edit mode looks like the real thing (WYSIWYG)
+
+/** Import a copy of a bundled/stored dashboard under a fresh id, path and name; returns its stored entry. */
+async function importCopy(page: Page, context: BrowserContext, dash: Record<string, unknown>, label: string) {
+  const p = `m4bw72${Date.now().toString(36)}${(seq++).toString(36)}`;
+  const copy = JSON.parse(JSON.stringify(dash));
+  copy.id = `${p}-dash`;
+  copy.path = `/${p}`;
+  copy.name = `${label} ${p}`;
+  const bundle = { format: 'hops-export', schemaVersion: 3, exportType: 'full', config: { dashboards: [copy] } };
+  const r = await page.request.post('/api/config/import', {
+    headers: { 'X-CSRF-Token': await getCsrfToken(context) },
+    multipart: { file: { name: 'copy.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(bundle)) } }
+  });
+  expect(r.status(), await r.text()).toBe(200);
+  const cfg = await (await page.request.get('/api/config')).json();
+  const stored = cfg.dashboards.find((d: { name: string }) => d.name === copy.name);
+  expect(stored, `imported ${label} copy is stored`).toBeTruthy();
+  made.push(stored.id);
+  return stored as { id: string; path: string; tabs: { name: string }[] };
+}
+
+async function showcaseCopy(page: Page, context: BrowserContext) {
+  const fixture = JSON.parse(fs.readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../backend/internal/configdoc/testdata/v3_showcase_export.json'), 'utf8'));
+  return importCopy(page, context, fixture.config.dashboards[0], 'Showcase');
+}
+
+/** The Sample dashboard every fresh install starts with (the test server's), copied. */
+async function sampleCopy(page: Page, context: BrowserContext) {
+  const exp = await page.request.get('/api/config/export');
+  expect(exp.status()).toBe(200);
+  const sample = (await exp.json()).config.dashboards.find((d: { id: string }) => d.id === 'sample');
+  expect(sample, 'the test server has the default Sample dashboard').toBeTruthy();
+  return importCopy(page, context, sample, 'Sample');
+}
+
+type Boxes = Record<string, { x: number; y: number; w: number; h: number }>;
+
+/** Page-coordinate boxes of every item on the canvas and every tab (overlays closed). */
+async function layoutBoxes(page: Page): Promise<Boxes> {
+  return page.evaluate(() => {
+    const out: Record<string, { x: number; y: number; w: number; h: number }> = {};
+    const add = (key: string, el: Element) => {
+      const r = el.getBoundingClientRect();
+      let k = key;
+      for (let i = 2; k in out; i++) k = `${key}#${i}`;
+      out[k] = { x: r.x + scrollX, y: r.y + scrollY, w: r.width, h: r.height };
+    };
+    document.querySelectorAll('.tab-canvas [data-node-id]').forEach((el) => add(`node ${el.getAttribute('data-node-id')}`, el));
+    document.querySelectorAll('[data-dashboard-tabs] [role="tab"]').forEach((el) => add(`tab ${el.getAttribute('aria-label')}`, el));
+    const panel = document.querySelector('.canvas-panel');
+    if (panel) add('panel', panel);
+    return out;
+  });
+}
+
+/** The boxes once they have stopped moving (tabs animate their border on a switch: 0.2s transition). */
+async function settledBoxes(page: Page): Promise<Boxes> {
+  let prev = await layoutBoxes(page);
+  for (let i = 0; i < 40; i++) {
+    await page.waitForTimeout(100);
+    const next = await layoutBoxes(page);
+    if (JSON.stringify(prev) === JSON.stringify(next)) return next;
+    prev = next;
+  }
+  throw new Error('the layout never settled');
+}
+
+/** Every key of `want` is in `got` at the same box, within 1px. Returns the differences. */
+function boxDiffs(want: Boxes, got: Boxes): string[] {
+  const diffs: string[] = [];
+  for (const [k, a] of Object.entries(want)) {
+    const b = got[k];
+    if (!b) { diffs.push(`${k}: missing in edit mode`); continue; }
+    // The panel's height may grow (it fills the screen / its content); its top-left and width may not.
+    const keys = k === 'panel' ? (['x', 'y', 'w'] as const) : (['x', 'y', 'w', 'h'] as const);
+    for (const c of keys) if (Math.abs(a[c] - b[c]) > 1) diffs.push(`${k}: ${c} ${a[c].toFixed(1)} -> ${b[c].toFixed(1)}`);
+  }
+  for (const k of Object.keys(got)) if (!(k in want)) diffs.push(`${k}: only in edit mode`);
+  return diffs;
+}
+
+async function noSideScroll(page: Page, what: string) {
+  const w = await page.evaluate(() => ({ doc: document.documentElement.scrollWidth, view: window.innerWidth }));
+  expect(w.doc, `${what}: page ${w.doc}px wide on a ${w.view}px screen`).toBeLessThanOrEqual(w.view);
+}
+
+/**
+ * Enter edit mode at this viewport. Phones (<= 480px) hide the navbar pencil, so there the pencil
+ * is pressed at desktop width and the window is narrowed back (edit mode stays on).
+ */
+async function enterEditAt(page: Page, width: number, height: number) {
+  if (width <= 480) await page.setViewportSize({ width: 1280, height });
+  await enterEdit(page);
+  if (width <= 480) await page.setViewportSize({ width, height });
+}
+
+/** A tile, a titled folder and an untitled folder (with a tile in its top-right corner) on Main; a second tab. */
+async function folderDash(page: Page, context: BrowserContext) {
+  return importDash(page, context, [
+    {
+      name: 'Main',
+      children: (id) => [
+        tile(id('a'), 'Alpha', 0, 0),
+        {
+          id: id('grp'), kind: 'folder', name: 'Group', layout: 'inherit', display: 'expanded', shape: 'rounded',
+          showTitle: true, placement: placement(2, 0, 4, 3),
+          content: { columns: 4, children: [tile(id('in'), 'Inner')] }
+        },
+        {
+          id: id('plain'), kind: 'folder', name: 'Plain', layout: 'inherit', display: 'expanded', shape: 'rounded',
+          showTitle: false, placement: placement(7, 1, 4, 3),
+          content: { columns: 4, children: [tile(id('pin'), 'Pinned', 3, 0)] }
+        }
+      ]
+    },
+    { name: 'Two', children: (id) => [tile(id('t2a'), 'Tango')] }
+  ]);
+}
+
+test.describe('§7.2 edit mode keeps the view layout', () => {
+  for (const which of ['Showcase', 'Sample'] as const) {
+    for (const width of [1280, 375]) {
+      test(`edit mode keeps every item where it is: ${which} at ${width}x800`, async ({ page, context }) => {
+        await page.setViewportSize({ width, height: 800 });
+        const d = which === 'Showcase' ? await showcaseCopy(page, context) : await sampleCopy(page, context);
+        await page.goto(d.path);
+        const tabNames = d.tabs.map((t) => t.name);
+        expect(tabNames.length).toBeGreaterThan(0);
+        const tabOf = (n: string) => page.getByRole('tab', { name: `Switch to ${n} tab`, exact: true });
+        const view: Record<string, Boxes> = {};
+        for (const n of tabNames) {
+          await tabOf(n).click();
+          await expect(tabOf(n)).toHaveAttribute('aria-selected', 'true');
+          await expect(page.locator('.tab-canvas [data-node-id]').first()).toBeVisible();
+          await page.evaluate(() => window.scrollTo(0, 0));
+          view[n] = await settledBoxes(page);
+          await noSideScroll(page, `${which} ${width}px view, ${n}`);
+        }
+        await enterEditAt(page, width, 800);
+        await expect(page.locator('.canvas-panel.editing')).toBeVisible();
+        for (const n of tabNames) {
+          await tabOf(n).click();
+          await expect(tabOf(n)).toHaveAttribute('aria-selected', 'true');
+          await page.evaluate(() => window.scrollTo(0, 0));
+          await expect
+            .poll(async () => boxDiffs(view[n], await layoutBoxes(page)), { message: `${which} ${width}px, tab ${n}: same boxes in edit mode` })
+            .toEqual([]);
+          await noSideScroll(page, `${which} ${width}px edit, ${n}`);
+        }
+        // The toolbar floats over the page: it is fixed to the bottom and inside the screen.
+        const bar = page.getByRole('toolbar', { name: 'Editing' });
+        expect(await bar.evaluate((el) => getComputedStyle(el).position)).toBe('fixed');
+        const bb = (await bar.boundingBox())!;
+        expect(bb.x).toBeGreaterThanOrEqual(0);
+        expect(bb.x + bb.width).toBeLessThanOrEqual(width + 0.5);
+        expect(bb.y + bb.height).toBeLessThanOrEqual(800 + 0.5);
+      });
+    }
+  }
+
+
+
+  test('the toolbar holds every editing control; the old Dashboard row, Add Tab button and failed-background row are gone', async ({ page, context }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    const f = await folderDash(page, context);
+    await page.goto(f.path);
+    await enterEdit(page);
+    const bar = page.getByRole('toolbar', { name: 'Editing' });
+    for (const n of ['Save', 'Discard', 'Undo', 'Redo', 'Add tile', 'Add folder', 'Add tab', 'Edit Dashboard'])
+      await expect(bar.getByRole('button', { name: n, exact: true }), n).toBeVisible();
+    await expect(page.locator('[data-dashboard-tabs]').getByRole('button', { name: /add/i })).toHaveCount(0);
+    await expect(page.locator('.header-actions, .bg-failed-row, .add-tab-btn, .editor-shell')).toHaveCount(0);
+    // Add tab from the toolbar.
+    await bar.getByRole('button', { name: 'Add tab', exact: true }).click();
+    await expect(page.getByRole('dialog', { name: 'New Tab' })).toBeVisible();
+  });
+
+  test('its buttons are reachable by keyboard, in order, and Enter works', async ({ page, context }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    const f = await folderDash(page, context);
+    await page.goto(f.path);
+    await enterEdit(page);
+    const bar = page.getByRole('toolbar', { name: 'Editing' });
+    await page.getByRole('tab', { name: 'Switch to Two tab' }).focus();
+    const reached: string[] = [];
+    for (let i = 0; i < 60 && !reached.includes('Edit Dashboard'); i++) {
+      await page.keyboard.press('Tab');
+      const name = await page.evaluate(() => {
+        const a = document.activeElement as HTMLElement | null;
+        return a?.closest('[role="toolbar"]') ? a.getAttribute('aria-label') || a.textContent?.trim() || '' : null;
+      });
+      if (name !== null) reached.push(name);
+    }
+    expect(reached).toEqual(expect.arrayContaining(['Add tile', 'Add folder', 'Add tab', 'Edit Dashboard']));
+    await expect(bar.getByRole('button', { name: 'Edit Dashboard' })).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('dialog', { name: 'Edit Dashboard' })).toBeVisible();
+  });
+
+  for (const width of [1280, 375]) {
+    test(`the toolbar never covers an open dialog (${width}px)`, async ({ page, context }) => {
+      await page.setViewportSize({ width, height: 800 });
+      const f = await folderDash(page, context);
+      await page.goto(f.path);
+      await enterEditAt(page, width, 800);
+      const bar = page.getByRole('toolbar', { name: 'Editing' });
+      const opens: [string, string][] = [['Edit Dashboard', 'Edit Dashboard'], ['Add tile', 'New Tile'], ['Add tab', 'New Tab']];
+      for (const [button, dialog] of opens) {
+        await bar.getByRole('button', { name: button, exact: true }).click();
+        const dlg = page.getByRole('dialog', { name: dialog });
+        await expect(dlg).toBeVisible();
+        // Wherever the toolbar is, what is on top there is the dialog (or its backdrop), never the toolbar.
+        const covered = await bar.evaluate((el) => {
+          const r = el.getBoundingClientRect();
+          const pts = [[r.left + 4, r.top + 4], [r.left + r.width / 2, r.top + r.height / 2], [r.right - 4, r.bottom - 4]];
+          return pts.some(([x, y]) => {
+            const top = document.elementFromPoint(x, y);
+            return !!top && el.contains(top);
+          });
+        });
+        expect(covered, `${button}: the toolbar is drawn over the ${dialog} dialog`).toBe(false);
+        await page.keyboard.press('Escape');
+        await expect(dlg).toHaveCount(0);
+      }
+    });
+  }
+
+  test('folder minimise/maximise show in edit mode; Minimise changes the saved default (undoable); none hit a handle', async ({ page, context }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    const f = await folderDash(page, context);
+    await page.goto(f.path);
+    const grp = page.locator(`[data-node-id="${f.id('grp')}"]`);
+    const plain = page.locator(`[data-node-id="${f.id('plain')}"]`);
+    await expect(grp.getByRole('button', { name: 'Minimise folder' })).toBeVisible();
+    await enterEdit(page);
+    await expect(grp.getByRole('button', { name: 'Minimise folder' })).toBeVisible();
+    await expect(grp.getByRole('button', { name: 'Maximise folder' })).toBeVisible();
+    await plain.hover({ position: { x: 4, y: 60 } });
+    await expect(plain.getByRole('button', { name: 'Minimise folder' })).toBeVisible();
+    // Neither folder's controls overlap its edit handle (focus shows the handle without a hover).
+    for (const [loc, name] of [[grp, 'Edit Group'], [plain, 'Edit Plain']] as const) {
+      const handle = page.getByRole('button', { name, exact: true });
+      await handle.focus();
+      await expect(handle).toHaveCSS('opacity', '1');
+      const hb = (await handle.boundingBox())!;
+      for (const b of ['Minimise folder', 'Maximise folder']) {
+        const cb = (await loc.getByRole('button', { name: b }).boundingBox())!;
+        expect(overlaps(hb, cb), `${name} vs ${b}`).toBe(false);
+      }
+    }
+    // Minimise in edit mode sets the draft's saved default: undoable, and the folder is not also selected.
+    await page.mouse.move(2, 2);
+    await grp.getByRole('button', { name: 'Minimise folder' }).click();
+    await expect(page.locator(`[data-node-id="${f.id('grp')}"].folder-slot.collapsed`)).toBeVisible();
+    await expect(page.locator(`[data-node-id="${f.id('grp')}"].selected`)).toHaveCount(0);
+    const bar = page.getByRole('toolbar', { name: 'Editing' });
+    await bar.getByRole('button', { name: 'Undo', exact: true }).click();
+    await expect(grp.getByRole('button', { name: 'Minimise folder' })).toBeVisible();
+    // Maximise is a viewer's choice: in edit mode it says so instead of doing nothing.
+    await grp.getByRole('button', { name: 'Maximise folder' }).click();
+    await expect(page.getByText(/Maximise is how a viewer looks at a folder/)).toBeVisible();
+  });
+});
+
+test.describe('§7.2 on a touch device (hover: none)', () => {
+  test.use({ hasTouch: true, isMobile: true, viewport: { width: 1280, height: 900 } });
+
+  test('every handle, folder control and tab handle is shown and none overlap', async ({ page, context }) => {
+    const f = await folderDash(page, context);
+    await page.goto(f.path);
+    await page.getByRole('button', { name: 'Enter Edit Mode' }).tap();
+    await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
+    const named = ['Edit Alpha', 'Edit Group', 'Edit Inner', 'Edit Plain', 'Edit Pinned', 'Edit Main tab', 'Edit Two tab'];
+    const boxes: [string, Box][] = [];
+    for (const n of named) {
+      const h = page.getByRole('button', { name: n, exact: true });
+      await expect(h).toHaveCSS('opacity', '1');
+      boxes.push([n, (await h.boundingBox())!]);
+    }
+    const ctl = page.locator('.tab-canvas').getByRole('button', { name: /^(Minimise|Maximise) folder$/ });
+    await expect(ctl).toHaveCount(4);
+    for (let i = 0; i < 4; i++) boxes.push([`folder control ${i}`, (await ctl.nth(i).boundingBox())!]);
+    for (let i = 0; i < boxes.length; i++)
+      for (let j = i + 1; j < boxes.length; j++)
+        expect(overlaps(boxes[i][1], boxes[j][1]), `${boxes[i][0]} vs ${boxes[j][0]}`).toBe(false);
+  });
+});

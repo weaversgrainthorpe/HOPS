@@ -8,6 +8,9 @@ import { closeAll } from '$lib/stores/folderOverlay';
 import { editMode } from '$lib/stores/editMode';
 import { folderViewFor, setFolderView, resetFolderViewsForTests } from '$lib/stores/folderView';
 import type { LayoutDashboard, LayoutTab } from '$lib/types/layout';
+import { begin, session, resetEditSessionForTests } from '$lib/stores/editSession';
+import { selectedNodes, clearSelection } from '$lib/stores/nodeSelection';
+import { toast } from '$lib/stores/toast';
 
 let width = 1440;
 class FakeRO {
@@ -41,6 +44,8 @@ beforeEach(() => {
   localStorage.clear();
   resetFolderViewsForTests();
   editMode.set(false);
+  resetEditSessionForTests();
+  clearSelection();
   vi.stubGlobal('ResizeObserver', FakeRO);
   closeAll();
 });
@@ -55,11 +60,38 @@ describe('folder controls', () => {
     }
     expect(screen.queryByRole('button', { name: 'Restore folder' })).toBeNull();
   });
-  it('edit mode renders none of them', async () => {
+  it('edit mode shows them too; Minimise sets the draft\'s saved default (one undo step), never the viewer\'s view', async () => {
+    const { dash, tab } = mk([folder('f1', [tile('a')]), tile('s', 8, 1)]);
+    config.set({ schemaVersion: 3, dashboards: [dash] } as any);
+    begin('d1');
     editMode.set(true);
-    await renderTab([folder('f1', [tile('a')])]);
-    expect(screen.queryByRole('button', { name: 'Minimise folder' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Maximise folder' })).toBeNull();
+    const d = get(session)!.draft;
+    render(TabCanvas, { dashboard: d, tab: d.tabs[0], editing: true });
+    await tick();
+    const min = screen.getByRole('button', { name: 'Minimise folder' });
+    expect(screen.getByRole('button', { name: 'Maximise folder' })).toBeInTheDocument();
+    await fireEvent.click(min);
+    const s = get(session)!;
+    const f1 = s.draft.tabs[0].root.children.find((n) => n.id === 'f1') as any;
+    expect(f1.display).toBe('collapsed');
+    expect(s.undo).toHaveLength(1);
+    expect(get(folderViewFor('d1'))).toEqual({}); // the viewer's remembered view is untouched
+    expect(get(selectedNodes).has('f1')).toBe(false); // the click did not also select the folder
+    void tab;
+  });
+  it('edit mode: Maximise says it is a viewer\'s choice instead of doing nothing', async () => {
+    const { dash } = mk([folder('f1', [tile('a')])]);
+    config.set({ schemaVersion: 3, dashboards: [dash] } as any);
+    begin('d1');
+    editMode.set(true);
+    const d = get(session)!.draft;
+    render(TabCanvas, { dashboard: d, tab: d.tabs[0], editing: true });
+    await tick();
+    toast.clear();
+    await fireEvent.click(screen.getByRole('button', { name: 'Maximise folder' }));
+    expect(get(toast).at(-1)?.message).toMatch(/Maximise is how a viewer looks at a folder/);
+    expect(get(folderViewFor('d1'))).toEqual({});
+    expect(get(session)!.undo).toHaveLength(0);
   });
   it('minimise: one cell at the old top-left, siblings unmoved, then Restore brings it back', async () => {
     const { container } = await renderTab([folder('f1', [tile('a')]), tile('s', 8, 1)]);

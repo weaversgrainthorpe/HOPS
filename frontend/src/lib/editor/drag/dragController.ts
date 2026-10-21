@@ -320,7 +320,7 @@ function resolveMerge(state: DragState, tileId: string, draft: LayoutDashboard):
 
 /**
  * Where a dragged tab would go: the tab box (button + its controls) nearest the pointer, and which
- * side of it (by its x half). Gaps between tabs, the controls and the Add Tab button all resolve
+ * side of it (by its x half). Gaps between tabs, the edit handles and the bar past the last tab resolve
  * to a real slot, so the marker always shows exactly where the drop will land.
  */
 function tabSlot(state: DragState, hit: HitResult): { id: string; box: Box; after: boolean } | null {

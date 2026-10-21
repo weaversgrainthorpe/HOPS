@@ -9,13 +9,21 @@
   import { toast } from '$lib/stores/toast';
   import { get } from 'svelte/store';
   import { drag } from '$lib/editor/drag/dragController';
+  import EditHandle from './EditHandle.svelte';
+  import BackgroundFailedBadge from '../background/BackgroundFailedBadge.svelte';
+  import type { Background } from '$lib/types';
 
   interface Props {
     /** The active tab: adds and pastes without a target go to its root, or the open folder overlay. */
     tabId: string;
     onAddTab: () => void;
+    /** The labelled "Dashboard" pencil (§4C) opens the one dashboard dialog. */
+    onEditDashboard?: () => void;
+    /** The dashboard's and the active tab's own backgrounds: a failed image shows a compact warning here (Ruling 7). */
+    dashboardBackground?: Background;
+    tabBackground?: Background;
   }
-  let { tabId, onAddTab }: Props = $props();
+  let { tabId, onAddTab, onEditDashboard, dashboardBackground, tabBackground }: Props = $props();
 
   let saving = $state(false);
   const canUndo = $derived(($session?.undo.length ?? 0) > 0);
@@ -107,56 +115,102 @@
 
 <svelte:window onkeydown={onKey} />
 
+<!-- §7.2: one floating toolbar pinned to the bottom of the screen. It sits over the page and takes no
+     layout space, so every tile, folder and tab stays where view mode puts it. Below every dialog
+     (folder overlays included): it never covers one. -->
 <div class="edit-toolbar" role="toolbar" aria-label="Editing">
-  <div class="group">
-    <button type="button" class="tb primary" onclick={doSave} disabled={!$dirty || saving} title="Save (Ctrl+S)">
-      <Icon icon="mdi:content-save" width="18" /> Save
-    </button>
-    <button type="button" class="tb" onclick={() => discard()} disabled={!$dirty || saving} title="Discard all unsaved changes">
-      <Icon icon="mdi:close-circle-outline" width="18" /> Discard
-    </button>
-    <button type="button" class="tb" onclick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)">
-      <Icon icon="mdi:undo" width="18" /> Undo
-    </button>
-    <button type="button" class="tb" onclick={redo} disabled={!canRedo} title="Redo (Ctrl+Shift+Z or Ctrl+Y)">
-      <Icon icon="mdi:redo" width="18" /> Redo
-    </button>
-    {#if $dirty}
-      <span class="unsaved" role="status">
-        <Icon icon="mdi:circle-medium" width="18" />Unsaved changes
-      </span>
+  <div class="controls">
+    <div class="group">
+      <button type="button" class="tb primary" onclick={doSave} disabled={!$dirty || saving} title="Save (Ctrl+S)">
+        <Icon icon="mdi:content-save" width="18" /> Save
+      </button>
+      <button type="button" class="tb" onclick={() => discard()} disabled={!$dirty || saving} title="Discard all unsaved changes">
+        <Icon icon="mdi:close-circle-outline" width="18" /> Discard
+      </button>
+      <button type="button" class="tb" onclick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)">
+        <Icon icon="mdi:undo" width="18" /> Undo
+      </button>
+      <button type="button" class="tb" onclick={redo} disabled={!canRedo} title="Redo (Ctrl+Shift+Z or Ctrl+Y)">
+        <Icon icon="mdi:redo" width="18" /> Redo
+      </button>
+      {#if $dirty}
+        <span class="unsaved" role="status">
+          <Icon icon="mdi:circle-medium" width="18" />Unsaved changes
+        </span>
+      {/if}
+    </div>
+    <div class="group">
+      <button type="button" class="tb" onclick={() => openDialog({ kind: 'tile', to: currentContainer(tabId) })}>
+        <Icon icon="mdi:plus-box-outline" width="18" /> Add tile
+      </button>
+      <button type="button" class="tb" onclick={() => openDialog({ kind: 'folder', to: currentContainer(tabId) })}>
+        <Icon icon="mdi:folder-plus-outline" width="18" /> Add folder
+      </button>
+      <button type="button" class="tb" onclick={onAddTab}>
+        <Icon icon="mdi:tab-plus" width="18" /> Add tab
+      </button>
+    </div>
+    {#if onEditDashboard}
+      <div class="group">
+        <!-- The dashboard's own edit handle (§4C): one labelled pencil, always shown while editing. -->
+        <EditHandle name="Dashboard" label="Dashboard" placement="inline" onEdit={onEditDashboard} />
+      </div>
     {/if}
   </div>
-  <div class="group">
-    <button type="button" class="tb" onclick={() => openDialog({ kind: 'tile', to: currentContainer(tabId) })}>
-      <Icon icon="mdi:plus-box-outline" width="18" /> Add tile
-    </button>
-    <button type="button" class="tb" onclick={() => openDialog({ kind: 'folder', to: currentContainer(tabId) })}>
-      <Icon icon="mdi:folder-plus-outline" width="18" /> Add folder
-    </button>
-    <button type="button" class="tb" onclick={onAddTab}>
-      <Icon icon="mdi:tab-plus" width="18" /> Add tab
-    </button>
+  <!-- A failed background image per level (Ruling 7): compact, inside the toolbar, never moving the page. -->
+  <div class="notes">
+    <BackgroundFailedBadge background={dashboardBackground} editing level="dashboard" placement="inline" label="(dashboard)" />
+    <BackgroundFailedBadge background={tabBackground} editing level="tab" placement="inline" label="(this tab)" />
+    {#if $canvasStacked}
+      <p class="narrow-hint" role="note">
+        <Icon icon="mdi:information-outline" width="16" /><span>{NARROW_HINT}</span>
+      </p>
+    {/if}
   </div>
-  {#if $canvasStacked}
-    <p class="narrow-hint" role="note">
-      <Icon icon="mdi:information-outline" width="16" /><span>{NARROW_HINT}</span>
-    </p>
-  {/if}
 </div>
 
 <style>
   .edit-toolbar {
+    /* Floating: fixed to the bottom of the screen, over the page (it reserves no layout space; the
+       canvas panel's bottom padding, the same in both modes, lets the last row scroll clear of it). */
+    position: fixed;
+    left: 50%;
+    bottom: 0.75rem;
+    transform: translateX(-50%);
+    /* Above the page and the navbar, below every dialog and folder overlay, menus and toasts. */
+    z-index: calc(var(--z-folder-overlay) - 10);
+    box-sizing: border-box;
+    width: max-content;
+    max-width: calc(100vw - 1rem);
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.35rem;
+    padding: 0.5rem 0.75rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 0.75rem;
+    box-shadow: 0 6px 24px var(--shadow, rgba(0, 0, 0, 0.4));
+  }
+  .controls {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    justify-content: space-between;
+    justify-content: center;
     gap: 0.5rem 1rem;
-    padding: 0.5rem 0.75rem;
-    margin-bottom: 0.75rem;
-    background: var(--bg-secondary);
-    border: 1px solid var(--border);
-    border-radius: 0.5rem;
+    min-width: 0;
+  }
+  .notes {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem 0.5rem;
+    min-width: 0;
+  }
+  /* Nothing to say: no empty strip. */
+  .notes:not(:has(> *)) {
+    display: none;
   }
   .group {
     display: flex;
@@ -174,6 +228,7 @@
     background: var(--bg-primary);
     color: var(--text-primary);
     font-size: 0.875rem;
+    white-space: nowrap;
     cursor: pointer;
   }
   .tb:hover:not(:disabled) {
@@ -196,7 +251,6 @@
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
-    flex-basis: 100%;
     margin: 0;
     color: var(--text-secondary);
     font-size: 0.8125rem;
@@ -207,5 +261,34 @@
     color: var(--color-warning, #d97706);
     font-size: 0.875rem;
     font-weight: 600;
+    white-space: nowrap;
+  }
+  /* Phones: the buttons stay on one row that scrolls sideways (the toolbar's height stays small and
+     the page is never wider than the screen); the warnings and the hint wrap below it. */
+  @media (max-width: 768px) {
+    .edit-toolbar {
+      left: 0.5rem;
+      right: 0.5rem;
+      bottom: 0.5rem;
+      transform: none;
+      width: auto;
+      max-width: none;
+      padding: 0.4rem 0.5rem;
+    }
+    .controls {
+      flex-wrap: nowrap;
+      justify-content: flex-start;
+      overflow-x: auto;
+      scrollbar-width: thin;
+      gap: 0.5rem;
+      padding-bottom: 2px;
+    }
+    .group {
+      flex-wrap: nowrap;
+      flex: none;
+    }
+    .tb {
+      padding: 0.4rem 0.6rem;
+    }
   }
 </style>

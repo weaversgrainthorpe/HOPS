@@ -173,9 +173,15 @@ describe('the Showcase (free layout) is editable like every dashboard', () => {
     expect(get(session)?.dashboardId).toBe('v3d');
     expect(container.querySelector('.tab-canvas.editing[data-tab-id="vt"]')).not.toBeNull();
     expect(screen.getByRole('toolbar', { name: 'Editing' })).toBeInTheDocument();
-    expect(screen.getByText('Add Tab')).toBeInTheDocument();
+    // §7.2: every editing control is in the one floating toolbar; the tab row and the page above the
+    // canvas are as in view mode (no Dashboard row, no Add Tab in the tab row, no failed-background row).
+    const bar = screen.getByRole('toolbar', { name: 'Editing' });
+    expect(within(bar).getByRole('button', { name: /^Add tab/ })).toBeInTheDocument();
+    expect(screen.queryByText('Add Tab')).toBeNull();
+    expect(container.querySelector('[data-dashboard-tabs] button:not([data-edit-handle])')).toBeNull();
+    expect(container.querySelector('.header-actions, .bg-failed-row, .add-tab-btn, .editor-shell')).toBeNull();
     // One labelled "Dashboard" pencil (walkthrough §4C) replaces Background, Header and Settings.
-    expect(screen.getByRole('button', { name: 'Edit Dashboard' })).toHaveTextContent('Dashboard');
+    expect(within(bar).getByRole('button', { name: 'Edit Dashboard' })).toHaveTextContent('Dashboard');
     for (const t of ['Configure Background', 'Configure Header', 'Dashboard settings']) expect(screen.queryByTitle(t)).toBeNull();
   });
 

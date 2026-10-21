@@ -154,12 +154,13 @@ describe('tab reorder with the drag engine', () => {
     expect(draftIds()).toEqual(['t2', 't3', 't1']);
   });
 
-  it('a drop on Add Tab goes to the end, with the marker after the last tab', async () => {
+  it('a drop on the empty tab bar past the last tab goes to the end, with the marker after it', async () => {
     render(Dashboard, { dashboard: legacy });
     await tick();
     layoutTabs();
-    const add = screen.getByRole('button', { name: 'Add new tab to dashboard' });
-    const shown = dragTab('Main', 560, add);
+    // §7.2: the tab row has no Add Tab button in edit mode (new tabs come from the toolbar).
+    expect(screen.queryByRole('button', { name: 'Add new tab to dashboard' })).toBeNull();
+    const shown = dragTab('Main', 560, bar());
     expect(shown.target).toEqual({ kind: 'tab-order', tabIds: ['t2', 't3', 't1'] });
     expect(shown.marker).toEqual({ left: 470, top: 0, height: 40 });
     document.body.dispatchEvent(pe('pointerup', 560, 20));

@@ -211,19 +211,28 @@
         {/if}
         <h3>{folder.name}</h3>
         <BackgroundFailedBadge background={folder.background} {editing} level="folder" placement="inline" />
-        {#if views && !$editMode}
-          <FolderControls dashboardId={views.dashboardId} folderId={folder.id} {remembered} {saved} variant="bar" />
+        {#if editing}
+          <!-- A zero-width slot just left of the controls: the handle hangs from it over the header
+               (never over the controls or an inner item, and taking no layout space — §7.2). -->
+          <span class="handle-slot">
+            <EditHandle name={folder.name} onEdit={edit} placement="inline" />
+          </span>
+        {/if}
+        {#if views}
+          <!-- Shown in edit mode too (§7.2): there Minimise sets the saved default (FolderControls). -->
+          <FolderControls dashboardId={views.dashboardId} folderId={folder.id} {remembered} {saved} variant="bar" {editing} />
         {/if}
       </div>
     {/if}
     {#if !showTitle}
       <BackgroundFailedBadge background={folder.background} {editing} level="folder" placement="corner" />
     {/if}
-    {#if !showTitle && views && !$editMode}
+    {#if !showTitle && views}
       <!-- Call 6: a small tab just OUTSIDE the top-right edge (never on the content); the
-           edit-mode failure tab hangs off the top-LEFT edge, so the two never meet. -->
+           edit-mode failure tab hangs off the top-LEFT edge, so the two never meet. In edit mode
+           an edit handle hanging above sits just left of this tab (style below). -->
       <div class="corner-controls" data-placement="outside-top-right">
-        <FolderControls dashboardId={views.dashboardId} folderId={folder.id} {remembered} {saved} variant="bar" />
+        <FolderControls dashboardId={views.dashboardId} folderId={folder.id} {remembered} {saved} variant="bar" {editing} />
       </div>
     {/if}
     <div class="folder-body">
@@ -246,7 +255,7 @@
         {editing}
       />
     </div>
-    {#if editing}
+    {#if editing && (handleSpot !== 'header' || !showTitle)}
       <EditHandle name={folder.name} onEdit={edit} placement={handleSpot === 'header' ? 'corner' : handleSpot} />
     {/if}
     {#if editing && plan.kind !== 'stacked'}
@@ -387,6 +396,32 @@
   .folder-slot > .tile-face {
     flex: 1;
     min-width: 0;
+  }
+  /* The titled folder's edit handle: hung from a zero-width slot just left of the controls, centred
+     in the header. Shown like every handle — on the folder's hover or focus, only when no inner item
+     is hovered / focused (EditHandle's own rule keys on its parent, here the slot). */
+  .handle-slot {
+    position: relative;
+    flex: none;
+    width: 0;
+    align-self: stretch;
+  }
+  .handle-slot > :global(.edit-handle) {
+    position: absolute;
+    top: 50%;
+    right: 0.25rem;
+    transform: translateY(-50%);
+    z-index: 4;
+  }
+  .folder:hover:not(:has([data-node-id]:hover)) > .folder-header > .handle-slot > :global(.edit-handle),
+  .folder:focus-within:not(:has([data-node-id]:focus-within)) > .folder-header > .handle-slot > :global(.edit-handle) {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  /* An untitled folder whose handle hangs above its top-right edge: just left of the controls' tab
+     there (that tab is 2 x 1.5rem buttons + 0.25rem gap + 0.2rem padding each side + 2px border). */
+  .folder > .corner-controls ~ :global(.edit-handle.above) {
+    right: calc(0.5rem + 3.65rem + 2px + 0.25rem);
   }
   .tile-restore {
     position: absolute;
