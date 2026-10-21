@@ -62,6 +62,7 @@ func migrateV2(v2 Obj) (Obj, []Rename, error) {
 	}
 	cp["dashboards"] = out
 	cp["schemaVersion"] = SchemaVersion
+	cp[GridKey] = GridUnit // written straight in the finer-grid form
 	return cp, renames, nil
 }
 
@@ -135,13 +136,15 @@ func convertTab(t Obj, perTab bool) (Obj, error) {
 		if !ok {
 			return nil, fmt.Errorf("groups[%d] is %T, want object", i, g)
 		}
-		w := groupWidth(gm)
+		perRow := groupWidth(gm)
 		n := 0
 		if es, ok := gm["entries"].([]any); ok {
 			n = len(es)
 		}
-		widths[i] = w
-		sizes[i] = [2]int{w, max(1, ceilDiv(n, w)) + 1}
+		widths[i] = perRow
+		// The finer grid (spec §9): each tile is GridUnit×GridUnit cells
+		// (Medium) and the title row is GridTitleRows cells.
+		sizes[i] = [2]int{perRow * GridUnit, max(1, ceilDiv(n, perRow))*GridUnit + GridTitleRows}
 	}
 	placed := packRowMajor(sizes, RootColumns)
 	for i, g := range groups {
@@ -164,6 +167,7 @@ func convertTab(t Obj, perTab bool) (Obj, error) {
 	return t, nil
 }
 
+// groupWidth is a v2 group's width in tiles per row (a v2 row held 12 tiles).
 func groupWidth(g Obj) int {
 	switch g["width"] {
 	case "half":
@@ -180,7 +184,9 @@ func placement(x, y, w, h int) Obj {
 	return Obj{"x": x, "y": y, "w": w, "h": h}
 }
 
-func convertGroup(g Obj, w int, p [4]int) (Obj, error) {
+// convertGroup turns a v2 group into a folder of perRow tiles per row, each
+// tile GridUnit×GridUnit cells, placed at p.
+func convertGroup(g Obj, perRow int, p [4]int) (Obj, error) {
 	entries, err := listOf(g, "entries")
 	if err != nil {
 		return nil, err
@@ -193,7 +199,7 @@ func convertGroup(g Obj, w int, p [4]int) (Obj, error) {
 			return nil, fmt.Errorf("entries[%d] is %T, want object", i, e)
 		}
 		em["kind"] = "tile"
-		em["placement"] = placement(i%w, i/w, 1, 1)
+		em["placement"] = placement(i%perRow*GridUnit, i/perRow*GridUnit, GridUnit, GridUnit)
 		tiles = append(tiles, em)
 	}
 	g["kind"] = "folder"
@@ -210,7 +216,7 @@ func convertGroup(g Obj, w int, p [4]int) (Obj, error) {
 	}
 	g["showTitle"] = true
 	g["placement"] = placement(p[0], p[1], p[2], p[3])
-	g["content"] = Obj{"columns": w, "children": tiles}
+	g["content"] = Obj{"columns": perRow * GridUnit, "children": tiles}
 	return g, nil
 }
 

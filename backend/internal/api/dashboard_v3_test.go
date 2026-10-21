@@ -581,7 +581,7 @@ func TestFreeSpace_BudgetFallsBackBelowEverything(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		kids = append(kids, tileJSON(fmt.Sprintf("k%d", i), i%12, i/12))
 	}
-	c := configdoc.Obj{"columns": 12, "children": kids}
+	c := configdoc.Obj{"columns": configdoc.RootColumns, "children": kids}
 	fs := newFreeSpace(c, 10) // starved
 	bottom := fs.bottom
 	cell := fs.place(configdoc.Obj{"w": 1, "h": 1}, "grid")
@@ -675,7 +675,7 @@ func TestV3Put_TabLimit(t *testing.T) {
 	tabs := []interface{}{}
 	for i := 0; i < 201; i++ {
 		tabs = append(tabs, map[string]interface{}{"id": fmt.Sprintf("tab%d", i), "name": "T",
-			"root": map[string]interface{}{"columns": 12, "children": []interface{}{}}})
+			"root": map[string]interface{}{"columns": configdoc.RootColumns, "children": []interface{}{}}})
 	}
 	d["tabs"] = tabs
 	code, resp := v3Put(c, "d1", d, 1)

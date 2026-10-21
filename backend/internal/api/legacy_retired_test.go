@@ -176,13 +176,14 @@ func TestPromote_IntoExistingFolderAtDepth2(t *testing.T) {
 	// d1 has folder g1 at the root; put folder g2 inside it (depth 2).
 	doc := storedDoc(t, db)
 	g1 := findOne(storedDashboards(doc)["d1"], "g1")
-	// g2 is one row tall (too short for any tile); a tile sits right below it.
+	// g2 is only its title row tall (too short for any tile); a tile sits
+	// right below it. Finer grid (spec §9): the title row is 2 cells, tiles 2x2.
 	g1["content"].(configdoc.Obj)["children"] = append(contentKids(g1), configdoc.Obj{
 		"id": "g2", "kind": "folder", "name": "Deep", "display": "expanded", "layout": "inherit",
-		"placement": configdoc.Obj{"x": 0, "y": 1, "w": 3, "h": 1},
-		"content":   configdoc.Obj{"columns": 3, "children": []any{}},
+		"placement": configdoc.Obj{"x": 0, "y": 2, "w": 6, "h": 2},
+		"content":   configdoc.Obj{"columns": 6, "children": []any{}},
 	}, configdoc.Obj{"id": "below", "kind": "tile", "name": "Below", "url": "http://b",
-		"placement": configdoc.Obj{"x": 0, "y": 2, "w": 1, "h": 1}})
+		"placement": configdoc.Obj{"x": 0, "y": 4, "w": 2, "h": 2}})
 	if err := configdoc.Save(db, doc); err != nil {
 		t.Fatal(err)
 	}
@@ -211,11 +212,12 @@ func TestPromote_IntoExistingFolderAtDepth2(t *testing.T) {
 	for _, k := range kids {
 		tile := k.(configdoc.Obj)
 		p, _ := tile["placement"].(configdoc.Obj)
-		if tile["kind"] != "tile" || p == nil || p["w"] != float64(1) || p["h"] != float64(1) {
-			t.Fatalf("not a 1x1 v3 tile: %v", tile)
+		// Finer grid (spec §9): a promoted tile is Medium, 2x2 cells.
+		if tile["kind"] != "tile" || p == nil || p["w"] != float64(2) || p["h"] != float64(2) {
+			t.Fatalf("not a 2x2 v3 tile: %v", tile)
 		}
-		if x := p["x"].(float64); x < 0 || x >= 3 {
-			t.Fatalf("tile outside g2's 3 columns: %v", p)
+		if x := p["x"].(float64); x < 0 || x+2 > 6 {
+			t.Fatalf("tile outside g2's 6 columns: %v", p)
 		}
 		at := [2]float64{p["x"].(float64), p["y"].(float64)}
 		if seen[at] {
@@ -228,14 +230,14 @@ func TestPromote_IntoExistingFolderAtDepth2(t *testing.T) {
 	}
 	// g2 grew to fit its tiles plus its title row; the tile below it moved
 	// down by the same amount, and g1 grew to hold it all.
-	if _, _, _, h, _ := rect(g2["placement"]); h != 2 {
-		t.Fatalf("g2 h = %v, want 2", h)
+	if _, _, _, h, _ := rect(g2["placement"]); h != 4 {
+		t.Fatalf("g2 h = %v, want 4 (one 2-cell tile row + 2-cell title)", h)
 	}
-	if _, y, _, _, _ := rect(findOne(d1, "below")["placement"]); y != 3 {
-		t.Fatalf("tile below g2 at y=%v, want 3", y)
+	if _, y, _, _, _ := rect(findOne(d1, "below")["placement"]); y != 6 {
+		t.Fatalf("tile below g2 at y=%v, want 6", y)
 	}
-	if _, _, _, h, _ := rect(findOne(d1, "g1")["placement"]); h != 5 {
-		t.Fatalf("g1 h = %v, want 5 (content bottom 4 + title)", h)
+	if _, _, _, h, _ := rect(findOne(d1, "g1")["placement"]); h != 10 {
+		t.Fatalf("g1 h = %v, want 10 (content bottom 8 + 2-cell title)", h)
 	}
 	// No new folders anywhere: tiles went where they were asked to.
 	if got := len(rootOf(map[string]interface{}{"tabs": d1["tabs"]})["children"].([]interface{})); got != 1 {

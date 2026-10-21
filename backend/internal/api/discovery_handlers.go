@@ -619,12 +619,13 @@ func rootFolderNamed(root configdoc.Obj, name string) configdoc.Obj {
 }
 
 // addTiles appends one tile per result to a folder's content (in mode), each
-// at the first free cell: 1 x 1 in a grid, one dashboard column square (side
-// units) in a free container.
+// at the first free cell and Medium-sized: GridUnit x GridUnit cells (2 x 2)
+// in a grid, that many grid cells square (GridUnit·side units) in a free
+// container.
 func addTiles(container configdoc.Obj, mode string, side float64, results []*discovery.Result) *apiError {
-	size := 1.0
+	size := float64(configdoc.GridUnit)
 	if mode == "free" {
-		size = side
+		size = configdoc.GridUnit * side
 	}
 	space := newFreeSpace(container, freeCellBudget)
 	for _, res := range results {
@@ -639,12 +640,17 @@ func addTiles(container configdoc.Obj, mode string, side float64, results []*dis
 	return nil
 }
 
-// promoteFolderColumns is the content width of a folder promote creates.
-const promoteFolderColumns = 4
+// promoteTilesPerRow is how many tiles a folder promote creates holds per
+// row; its content is promoteTilesPerRow Medium tiles wide.
+const promoteTilesPerRow = 4
+
+// promoteFolderColumns is the content width of a folder promote creates, in
+// grid cells (4 Medium tiles of GridUnit cells each).
+const promoteFolderColumns = promoteTilesPerRow * configdoc.GridUnit
 
 // newCategoryFolder builds the folder for one category holding its tiles. In a
 // grid tab it inherits the layout; in a free tab it keeps its own grid layout
-// so its tiles stay one cell each. Its placement carries only the size (the
+// so its tiles stay grid cells (Medium, 2 x 2). Its placement carries only the size (the
 // caller places it).
 func newCategoryFolder(info discovery.CategoryInfo, rootMode string, side float64, results []*discovery.Result) (configdoc.Obj, *apiError) {
 	id, ae := newNodeID("folder")
@@ -659,12 +665,14 @@ func newCategoryFolder(info discovery.CategoryInfo, rootMode string, side float6
 	if ae := addTiles(content, "grid", side, results); ae != nil {
 		return nil, ae
 	}
-	rows := math.Ceil(float64(len(results)) / promoteFolderColumns)
-	w, h := float64(promoteFolderColumns), rows+1 // +1: the title row
+	// The content's bottom in grid cells: GridUnit cells per tile row.
+	bottom := math.Ceil(float64(len(results))/promoteTilesPerRow) * configdoc.GridUnit
+	w := float64(promoteFolderColumns)
+	h, _ := folderNeed("grid", "grid", bottom, side) // + the title row
 	if rootMode == "free" {
-		// One dashboard column (side units) per grid cell, plus the title.
+		// side units per grid cell, plus the title.
 		w = w * side
-		h, _ = folderNeed(rootMode, "grid", rows, side)
+		h, _ = folderNeed(rootMode, "grid", bottom, side)
 	}
 	return configdoc.Obj{
 		"id": id, "kind": "folder", "name": info.DisplayName, "icon": info.Icon,
@@ -770,13 +778,13 @@ const freeTitleUnits = 8
 
 // folderNeed is the height a folder needs in its parent's units for content
 // reaching down to `bottom` (in the content's units): grid in grid = rows + a
-// title row; free in free = units + an 8-unit title; grid in free = one
-// dashboard column (side units) per row + the title. Free content in a grid
+// title row (configdoc.GridTitleRows cells); free in free = units + an 8-unit
+// title; grid in free = side units per grid row + the title. Free content in a grid
 // parent can't be sized here (a grid row's height depends on the viewport).
 func folderNeed(parentMode, mode string, bottom, side float64) (float64, bool) {
 	switch {
 	case parentMode == "grid" && mode == "grid":
-		return bottom + 1, true
+		return bottom + configdoc.GridTitleRows, true
 	case parentMode == "free" && mode == "free":
 		return bottom + freeTitleUnits, true
 	case parentMode == "free" && mode == "grid":

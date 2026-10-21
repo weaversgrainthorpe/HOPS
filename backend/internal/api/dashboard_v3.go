@@ -218,7 +218,7 @@ func (r *Router) handleDashboardsRoot(w http.ResponseWriter, req *http.Request) 
 			"defaultLayout": "grid",
 			"tabs": []any{configdoc.Obj{
 				"id": tabID, "name": "Home", "layout": "inherit",
-				"root": configdoc.Obj{"columns": 12, "children": []any{}},
+				"root": configdoc.Obj{"columns": configdoc.RootColumns, "children": []any{}},
 			}},
 		}
 		if err := configdoc.VerifyDashboard(nd); err != nil {
@@ -620,7 +620,7 @@ type freeSpace struct {
 }
 
 func newFreeSpace(c configdoc.Obj, budget int) *freeSpace {
-	cols := 12.0
+	cols := float64(configdoc.RootColumns)
 	if n, ok := toFloat(c["columns"]); ok && math.Floor(n) >= 1 {
 		cols = math.Floor(n)
 	}
@@ -717,8 +717,16 @@ func findTab(d configdoc.Obj, id string) configdoc.Obj {
 	return nil
 }
 
-// freeSideOf is one dashboard column in free design units for a tab:
-// round(designWidth / 12 / 8), at least 1 (the frontend's freeSide).
+// freeSideOf is one grid cell in free design units for a tab:
+// round(designWidth / RootColumns / 8), at least 1 (the frontend's freeSide).
+//
+// With the finer grid (24 columns) a 1280 px tab's cell is 6.67 units, which
+// rounds to 7 (the old 12-column side was 13.33 → 13). Rounding to nearest is
+// kept deliberately: a grid → free → grid round trip is exact for any side
+// (x·side/side), and a free → grid → free round trip snaps by at most side/2
+// units — 3.5 units (28 px) now against 6.5 (52 px) before — so no layout
+// drifts more than it did. A converted cell is ≤ 5% off its exact size
+// (7 vs 6.67), the cost of whole design units.
 func freeSideOf(tab configdoc.Obj) float64 {
 	dw, ok := toFloat(tab["designWidth"])
 	if !ok || dw <= 0 {

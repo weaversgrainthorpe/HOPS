@@ -739,6 +739,7 @@ func (r *Router) handleExportConfig(w http.ResponseWriter, req *http.Request) {
 	}
 
 	cfg, err := configdoc.Load(r.db)
+	stored := cfg
 	if err != nil {
 		slog.Error("export: stored config unreadable", "component", "export", "error", err)
 		writeJSONError(w, "Stored configuration could not be read, so nothing was exported: "+err.Error(), http.StatusInternalServerError)
@@ -763,6 +764,17 @@ func (r *Router) handleExportConfig(w http.ResponseWriter, req *http.Request) {
 			filename = "hops-" + strings.ToLower(strings.ReplaceAll(name, " ", "-"))
 		}
 	}
+
+	// The finer-grid marker travels in config.gridUnit (also for a
+	// single-dashboard export), so an import can tell the new form from an
+	// old 12-column export. The stored document carries it after the startup
+	// update; a stored document without it would be mislabelled, so refuse.
+	if unit, gerr := configdoc.GridUnitOf(stored); gerr != nil || unit != configdoc.GridUnit {
+		slog.Error("export: stored config is not in the finer-grid form", "component", "export", "gridUnit", stored[configdoc.GridKey], "error", gerr)
+		writeJSONError(w, "Stored configuration is not in the current grid form, so nothing was exported", http.StatusInternalServerError)
+		return
+	}
+	cfg[configdoc.GridKey] = configdoc.GridUnit
 
 	// Embed local asset files (icons, backgrounds) as base64 for portability
 	assetCount := r.embedAssets(cfg)
@@ -1360,6 +1372,19 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// A v3 export without the finer-grid marker (config.gridUnit) is in the
+	// old 12-column form: each dashboard is converted (and verified) below.
+	// An unknown marker is refused, never guessed.
+	oldGrid := false
+	if format == "hops-v3" {
+		unit, gerr := configdoc.GridUnitOf(importedConfig)
+		if gerr != nil {
+			writeJSONError(w, "Import refused — the export's grid form is unknown: "+gerr.Error(), http.StatusBadRequest)
+			return
+		}
+		oldGrid = unit != configdoc.GridUnit
+	}
+
 	// Bring every imported dashboard to the v3 shape.
 	var imported []configdoc.Obj
 	var skipped []string
@@ -1398,6 +1423,20 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 			if changed {
 				d = after["dashboards"].([]any)[0].(configdoc.Obj)
 			}
+			// An old-form (12-column) export: double its grid placements,
+			// exactly as the startup update does, and verify.
+			if oldGrid {
+				before := configdoc.Obj{"schemaVersion": configdoc.SchemaVersion, "dashboards": []any{d}}
+				after, _, gerr := configdoc.UpdateGridV5(before)
+				if gerr == nil {
+					gerr = configdoc.VerifyGridV5(before, after)
+				}
+				if gerr != nil {
+					writeJSONError(w, fmt.Sprintf("Import refused — dashboard %q could not be brought to the current grid: %s", dashboardLabel(d), verifyProblems(gerr)), http.StatusBadRequest)
+					return
+				}
+				d = after["dashboards"].([]any)[0].(configdoc.Obj)
+			}
 			if verr := configdoc.VerifyImportedDashboard(d); verr != nil {
 				writeJSONError(w, fmt.Sprintf("Import refused — dashboard %q is malformed: %s", dashboardLabel(d), verifyProblems(verr)), http.StatusBadRequest)
 				return
@@ -1410,9 +1449,11 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 			writeJSONError(w, fmt.Sprintf("Import refused — dashboard %q could not be converted: %v", dashboardLabel(d), err), http.StatusBadRequest)
 			return
 		}
+		// The converter writes the finer grid directly, so the converted
+		// dashboard is checked as part of a marked document.
 		verr := configdoc.Verify(
 			configdoc.Obj{"dashboards": []any{d}},
-			configdoc.Obj{"schemaVersion": configdoc.SchemaVersion, "dashboards": []any{v3}},
+			configdoc.Obj{"schemaVersion": configdoc.SchemaVersion, configdoc.GridKey: configdoc.GridUnit, "dashboards": []any{v3}},
 		)
 		if verr != nil {
 			var ve *configdoc.VerifyError
@@ -1451,6 +1492,12 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 		slog.Error("import: stored config unreadable", "component", "import", "error", err)
 		return newAPIError(http.StatusInternalServerError, importUnreadableMsg)
 	}, func(stored configdoc.Obj) (configdoc.Obj, interface{}, error) {
+		// Imported dashboards are in the finer-grid form now; never merge them
+		// into a document that is not (the startup update marks it).
+		if unit, gerr := configdoc.GridUnitOf(stored); gerr != nil || unit != configdoc.GridUnit {
+			slog.Error("import: stored config is not in the finer-grid form", "component", "import", "gridUnit", stored[configdoc.GridKey], "error", gerr)
+			return nil, nil, newAPIError(http.StatusInternalServerError, "Stored configuration is not in the current grid form — import refused so nothing is mixed")
+		}
 		existing, _ := stored["dashboards"].([]any)
 		existingPaths := map[string]bool{}
 		for _, d := range existing {

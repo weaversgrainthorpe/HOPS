@@ -303,7 +303,9 @@ func TestMigrateWithBackup_UpdatesBackgroundsOnce(t *testing.T) {
 	if err != nil || res.Failed || res.BackgroundsUpdated {
 		t.Fatalf("second start: res=%+v err=%v", res, err)
 	}
-	if archiveCount(t, db) != 1 || rawRow(t, db) != stored {
+	// Two rows from the first start: backgrounds-v4, then the finer-grid
+	// update's grid-v5 (legacyDoc is unmarked).
+	if archiveCount(t, db) != 2 || rawRow(t, db) != stored {
 		t.Error("second start wrote something")
 	}
 }

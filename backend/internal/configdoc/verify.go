@@ -183,13 +183,18 @@ func Verify(v2, v3 Obj) error { return VerifyMigration(v2, v3, nil) }
 //   - counts match (nothing extra in v3);
 //   - every other v2 key/value on each object equals the v3 object's (child
 //     lists excepted);
-//   - IDs are unique document-wide and the v3 tree is well-formed.
+//   - IDs are unique document-wide and the v3 tree is well-formed;
+//   - v3 carries the finer-grid marker gridUnit: GridUnit.
 //
 // It returns a *VerifyError listing up to 20 problems.
 func VerifyMigration(v2, v3 Obj, renames []Rename) error {
 	v := &verifier{}
 	if !IsV3(v3) {
 		v.add("document: schemaVersion is %s, want %d", show(v3["schemaVersion"]), SchemaVersion)
+	}
+	if u, err := GridUnitOf(v3); err != nil || u != GridUnit {
+		// The converter writes the finer grid directly (spec §9).
+		v.add("document: %s is %s, want %d", GridKey, trunc(show(v3[GridKey])), GridUnit)
 	}
 	v.checkIDs(v3)
 	v.renames = map[string]Rename{}
@@ -203,7 +208,7 @@ func VerifyMigration(v2, v3 Obj, renames []Rename) error {
 	}
 	v.first = firstOccurrence(v2Nodes(v2))
 
-	v.compareKeys("document", v2, v3, "dashboards", "schemaVersion")
+	v.compareKeys("document", v2, v3, "dashboards", "schemaVersion", GridKey)
 	v2d, ok2 := asList(v2["dashboards"])
 	v3d, ok3 := asList(v3["dashboards"])
 	switch {

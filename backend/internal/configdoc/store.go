@@ -58,6 +58,9 @@ type MigrationResult struct {
 	// BackgroundsUpdated is true if this start's one-time M4 background
 	// update (updateBackgroundsOnStartup) rewrote the stored document.
 	BackgroundsUpdated bool
+	// GridUpdated is true if this start's one-time finer-grid update
+	// (updateGridOnStartup) rewrote the stored document.
+	GridUpdated bool
 }
 
 // MigrateOnStartup converts a stored v2 document to v3. If the stored
@@ -139,8 +142,9 @@ func failed(detail string) MigrationResult {
 	return MigrationResult{Failed: true, Detail: detail}
 }
 
-// MigrateWithBackup runs MigrateOnStartup and then the one-time M4
-// background update (updateBackgroundsOnStartup), but when the stored document is
+// MigrateWithBackup runs MigrateOnStartup, then the one-time M4 background
+// update (updateBackgroundsOnStartup), then the one-time finer-grid update
+// (updateGridOnStartup), but when the stored document is
 // still v2 it first calls backup synchronously so the safety backup holds the
 // pre-migration data. If that backup fails the migration is NOT attempted and
 // a Failed result is returned. backedUp reports whether backup was called
@@ -168,5 +172,17 @@ func MigrateWithBackup(db *sql.DB, backup func() error) (res MigrationResult, ba
 		return res, backedUp, nil
 	}
 	res.BackgroundsUpdated = bg.BackgroundsUpdated
+	// Then the one-time finer-grid update (spec §9). A freshly migrated v2
+	// document is already marked (convert.go writes the new form), so this is
+	// a no-op for it; a failure blocks the app exactly like a failed migration.
+	gr, err := updateGridOnStartup(db)
+	if err != nil {
+		return res, backedUp, err
+	}
+	if gr.Failed {
+		res.Failed, res.Detail = true, gr.Detail
+		return res, backedUp, nil
+	}
+	res.GridUpdated = gr.GridUpdated
 	return res, backedUp, nil
 }

@@ -159,7 +159,7 @@ func TestMigrateV2_Basic(t *testing.T) {
 		}
 		eq(t, tab["layout"], "inherit", "tab.layout")
 		root := tab["root"].(Obj)
-		eq(t, root["columns"], 12, "root.columns")
+		eq(t, root["columns"], 24, "root.columns")
 	}
 	// perTabBackgrounds was on: the tab background stays active, unchanged.
 	for i, tab := range tabs {
@@ -176,9 +176,10 @@ func TestMigrateV2_Basic(t *testing.T) {
 		t.Fatalf("folders = %d", len(folders))
 	}
 	wantPl := []Obj{
-		{"x": 0, "y": 0, "w": 12, "h": 2}, // 3 entries at 12 wide: 1 row + 1
-		{"x": 0, "y": 2, "w": 6, "h": 2},
-		{"x": 6, "y": 2, "w": 6, "h": 2},
+		// Finer grid (spec §9): 2×2 tiles, a 2-cell title row, 24 columns.
+		{"x": 0, "y": 0, "w": 24, "h": 4}, // 3 entries at 12 per row: 1 tile row (2) + title (2)
+		{"x": 0, "y": 4, "w": 12, "h": 4},
+		{"x": 12, "y": 4, "w": 12, "h": 4},
 	}
 	for i, f := range folders {
 		assertKeysPreserved(t, v2groups[i], f, "folder", "entries")
@@ -189,8 +190,8 @@ func TestMigrateV2_Basic(t *testing.T) {
 		eq(t, f["showTitle"], true, "showTitle")
 		eq(t, f["placement"], wantPl[i], "placement")
 	}
-	eq(t, folders[0]["content"].(Obj)["columns"], 12, "content.columns")
-	eq(t, folders[1]["content"].(Obj)["columns"], 6, "content.columns")
+	eq(t, folders[0]["content"].(Obj)["columns"], 24, "content.columns")
+	eq(t, folders[1]["content"].(Obj)["columns"], 12, "content.columns")
 
 	tiles := children(t, folders[0]["content"].(Obj))
 	v2entries := list(t, v2groups[0], "entries")
@@ -200,7 +201,7 @@ func TestMigrateV2_Basic(t *testing.T) {
 	for i, tile := range tiles {
 		assertKeysPreserved(t, v2entries[i], tile, "tile")
 		eq(t, tile["kind"], "tile", "tile.kind")
-		eq(t, tile["placement"], Obj{"x": i, "y": 0, "w": 1, "h": 1}, "tile.placement")
+		eq(t, tile["placement"], Obj{"x": 2 * i, "y": 0, "w": 2, "h": 2}, "tile.placement")
 	}
 	// array order, not `order`, drives display: ids e1,e2,e3 despite order 2,1,0.
 	for i, id := range []string{"e1", "e2", "e3"} {
@@ -214,10 +215,10 @@ func TestMigrateV2_Basic(t *testing.T) {
 	f := children(t, tabs[1]["root"].(Obj))[0]
 	eq(t, f["display"], "collapsed", "display")
 	eq(t, f["shape"], "folder-tab", "shape")
-	eq(t, f["placement"], Obj{"x": 0, "y": 0, "w": 4, "h": 3}, "placement") // ceil(5/4)=2, +1
-	want := [][2]int{{0, 0}, {1, 0}, {2, 0}, {3, 0}, {0, 1}}
+	eq(t, f["placement"], Obj{"x": 0, "y": 0, "w": 8, "h": 6}, "placement") // ceil(5/4)=2 tile rows ×2, +2 title
+	want := [][2]int{{0, 0}, {2, 0}, {4, 0}, {6, 0}, {0, 2}}
 	for i, tile := range children(t, f["content"].(Obj)) {
-		eq(t, tile["placement"], Obj{"x": want[i][0], "y": want[i][1], "w": 1, "h": 1}, "tile placement")
+		eq(t, tile["placement"], Obj{"x": want[i][0], "y": want[i][1], "w": 2, "h": 2}, "tile placement")
 	}
 }
 
@@ -273,17 +274,17 @@ func TestMigrateV2_MessyInput(t *testing.T) {
 		t.Fatalf("folders = %d", len(fs))
 	}
 	eq(t, fs[0]["order"], 9, "order carried verbatim")
-	eq(t, fs[0]["placement"], Obj{"x": 0, "y": 0, "w": 12, "h": 2}, "NoWidth placement") // null entries
+	eq(t, fs[0]["placement"], Obj{"x": 0, "y": 0, "w": 24, "h": 4}, "NoWidth placement") // null entries
 	if n := len(children(t, fs[0]["content"].(Obj))); n != 0 {
 		t.Errorf("null entries -> %d tiles", n)
 	}
-	// Unknown width falls back to 12; non-bool collapsed is not collapsed.
-	eq(t, fs[1]["content"].(Obj)["columns"], 12, "bad width columns")
+	// Unknown width falls back to 12 tiles per row (24 columns); non-bool collapsed is not collapsed.
+	eq(t, fs[1]["content"].(Obj)["columns"], 24, "bad width columns")
 	eq(t, fs[1]["display"], "expanded", "display")
 	eq(t, fs[1]["shape"], "rounded", "shape")
 	eq(t, fs[1]["collapsed"], "yes", "collapsed carried")
-	eq(t, fs[2]["placement"], Obj{"x": 0, "y": 4, "w": 4, "h": 2}, "third placement")
-	eq(t, fs[3]["placement"], Obj{"x": 4, "y": 4, "w": 6, "h": 2}, "half placement")
+	eq(t, fs[2]["placement"], Obj{"x": 0, "y": 8, "w": 8, "h": 4}, "third placement")
+	eq(t, fs[3]["placement"], Obj{"x": 8, "y": 8, "w": 12, "h": 4}, "half placement")
 
 	tile := children(t, fs[2]["content"].(Obj))[0]
 	eq(t, tile["x-extra"], []any{1, Obj{"y": nil}}, "tile extras")
