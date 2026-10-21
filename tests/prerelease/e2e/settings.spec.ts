@@ -17,7 +17,11 @@ test('settings page loads and shows all expected groups', async ({ page }) => {
 test('updating a setting via API is reflected on the settings page', async ({ page, context, request }) => {
   const csrf = await getCsrfToken(context);
 
-  // Pick a runtime-changeable setting that's safe to mutate — login rate limit
+  // Pick a runtime-changeable setting that's safe to mutate — login rate limit.
+  // Put it back afterwards: later specs share this server.
+  const before = await (await request.get('/api/settings')).json();
+  const original = (before.settings || []).find((s: { key: string }) => s.key === 'auth.login_rate_limit_per_min');
+  expect(original).toBeDefined();
   const newValue = 99;
   const resp = await request.put('/api/settings/auth.login_rate_limit_per_min', {
     headers: { 'X-CSRF-Token': csrf, 'Content-Type': 'application/json' },
@@ -32,4 +36,10 @@ test('updating a setting via API is reflected on the settings page', async ({ pa
   const item = (settings.settings || []).find((s: { key: string }) => s.key === 'auth.login_rate_limit_per_min');
   expect(item).toBeDefined();
   expect(String(item.value)).toBe(String(newValue));
+
+  const restore = await request.put('/api/settings/auth.login_rate_limit_per_min', {
+    headers: { 'X-CSRF-Token': csrf, 'Content-Type': 'application/json' },
+    data: JSON.stringify({ value: String(original.value) }),
+  });
+  expect(restore.ok(), `restore: ${restore.status()}`).toBeTruthy();
 });
