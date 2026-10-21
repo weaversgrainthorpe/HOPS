@@ -72,5 +72,10 @@ export interface LayoutDashboard {
 
 export interface LayoutDoc {
   schemaVersion: 3;
+  /**
+   * The finer-grid marker (spec §9): 2 = the 24-column form this build writes. Absent or any other
+   * value: an older form (or an older server); the editor refuses to save into it (Ruling 3).
+   */
+  gridUnit?: number;
   dashboards: LayoutDashboard[];
 }

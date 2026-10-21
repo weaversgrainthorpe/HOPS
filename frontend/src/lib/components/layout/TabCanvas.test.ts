@@ -24,7 +24,7 @@ function folder(id: string, name: string, x: number, y: number, w: number, h: nu
   return { kind: 'folder', id, name, display: 'expanded', placement: { x, y, w, h }, content: { columns: w, children }, ...extra };
 }
 function mk(children: any[]): { dash: LayoutDashboard; tab: LayoutTab } {
-  const tab: LayoutTab = { id: 't1', name: 'Main', root: { columns: 12, children } };
+  const tab: LayoutTab = { id: 't1', name: 'Main', root: { columns: 24, children } };
   const dash: LayoutDashboard = { id: 'd1', name: 'Home', path: '/home', revision: 1, tabs: [tab] };
   return { dash, tab };
 }
@@ -38,8 +38,8 @@ afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 describe('TabCanvas', () => {
   it('renders the migrated v2_basic dashboard as folders and tiles at 1440px', async () => {
     const { dash, tab } = mk([
-      folder('g1', 'Full', 0, 0, 12, 4, [tile('e1', 'Alpha', 0, 0), tile('e2', 'Bravo', 1, 0), tile('e3', 'Charlie', 2, 0)]),
-      folder('g2', 'Half1', 0, 4, 6, 3, [tile('e4', 'Delta', 0, 0)])
+      folder('g1', 'Full', 0, 0, 24, 8, [tile('e1', 'Alpha', 0, 0, 2, 2), tile('e2', 'Bravo', 2, 0, 2, 2), tile('e3', 'Charlie', 4, 0, 2, 2)]),
+      folder('g2', 'Half1', 0, 8, 12, 6, [tile('e4', 'Delta', 0, 0, 2, 2)])
     ]);
     const { container } = render(TabCanvas, { dashboard: dash, tab });
     await tick();
@@ -47,23 +47,23 @@ describe('TabCanvas', () => {
       expect(screen.getByText(n)).toBeInTheDocument();
     }
     const region = container.querySelector('[data-node-id="g1"]') as HTMLElement;
-    expect(region.getAttribute('style')).toContain('grid-column: 1 / span 12');
+    expect(region.getAttribute('style')).toContain('grid-column: 1 / span 24');
   });
 
   it('places a root tile at its cell', async () => {
-    const { dash, tab } = mk([tile('e1', 'Solo', 2, 1)]);
+    const { dash, tab } = mk([tile('e1', 'Solo', 4, 2, 2, 2)]);
     const { container } = render(TabCanvas, { dashboard: dash, tab });
     await tick();
     const el = container.querySelector('[data-node-id="e1"]') as HTMLElement;
-    expect(el.getAttribute('style')).toContain('grid-column: 3 / span 1');
-    expect(el.getAttribute('style')).toContain('grid-row: 2 / span 1');
+    expect(el.getAttribute('style')).toContain('grid-column: 5 / span 2');
+    expect(el.getAttribute('style')).toContain('grid-row: 3 / span 2');
   });
 
   it('renders three levels of nested expanded folders', async () => {
     const { dash, tab } = mk([
-      folder('f1', 'Level1', 0, 0, 12, 8, [
-        folder('f2', 'Level2', 0, 0, 8, 6, [
-          folder('f3', 'Level3', 0, 0, 4, 4, [tile('deep', 'DeepTile', 0, 0)])
+      folder('f1', 'Level1', 0, 0, 24, 16, [
+        folder('f2', 'Level2', 0, 0, 16, 12, [
+          folder('f3', 'Level3', 0, 0, 8, 8, [tile('deep', 'DeepTile', 0, 0, 2, 2)])
         ])
       ])
     ]);
@@ -136,25 +136,25 @@ describe('TabCanvas', () => {
   });
 
   it('clamps an out-of-range placement instead of dropping it', async () => {
-    const { dash, tab } = mk([tile('e1', 'Edge', 40, 0, 9)]);
+    const { dash, tab } = mk([tile('e1', 'Edge', 80, 0, 18)]);
     const { container } = render(TabCanvas, { dashboard: dash, tab });
     await tick();
     expect(screen.getByText('Edge')).toBeInTheDocument();
     const el = container.querySelector('[data-node-id="e1"]') as HTMLElement;
-    expect(el.getAttribute('style')).toContain('grid-column: 12 / span 1');
+    expect(el.getAttribute('style')).toContain('grid-column: 24 / span 1');
   });
 
   it('renders a child below the folder height instead of clipping it', async () => {
-    const { dash, tab } = mk([folder('f1', 'Short', 0, 0, 6, 2, [tile('low', 'LowTile', 0, 3)])]);
+    const { dash, tab } = mk([folder('f1', 'Short', 0, 0, 12, 4, [tile('low', 'LowTile', 0, 6, 2, 2)])]);
     const { container } = render(TabCanvas, { dashboard: dash, tab });
     await tick();
     expect(screen.getByText('LowTile')).toBeInTheDocument();
     const cell = container.querySelector('[data-node-id="low"]') as HTMLElement;
-    expect(cell.getAttribute('style')).toContain('grid-row: 4 / span 1');
+    expect(cell.getAttribute('style')).toContain('grid-row: 7 / span 2');
     const inner = cell.parentElement as HTMLElement;
-    // 4 content rows must fit the folder body: (2*120 - 58 chrome) / 4 = 45.5px each
+    // 8 content rows must fit the folder body: (4*60 - 58 chrome) / 8 = 22.75px each (the old 45.5 halved)
     const m = /grid-auto-rows:\s*([\d.]+)px/.exec(inner.getAttribute('style') ?? '');
-    expect(Number(m![1])).toBeCloseTo(45.5, 1);
+    expect(Number(m![1])).toBeCloseTo(22.75, 1);
     let el: HTMLElement | null = cell;
     while (el && el !== container) {
       expect(getComputedStyle(el).overflow).not.toBe('hidden');
@@ -164,17 +164,18 @@ describe('TabCanvas', () => {
 
   it("sizes a nested folder's rows from its parent's cell size", async () => {
     const { dash, tab } = mk([
-      folder('f1', 'Outer', 0, 0, 12, 8, [folder('f2', 'Inner', 0, 0, 8, 6, [tile('t', 'T', 0, 0)])])
+      folder('f1', 'Outer', 0, 0, 24, 16, [folder('f2', 'Inner', 0, 0, 16, 12, [tile('t', 'T', 0, 0, 2, 2)])])
     ]);
     const { container } = render(TabCanvas, { dashboard: dash, tab });
     await tick();
-    // chrome = 40 title + 2 x 8 padding + 2 x 1 border = 58 (geometry.folderChrome)
-    const outerRow = (8 * 120 - 58) / 7;
-    const expected = (6 * outerRow - 58) / 5;
+    // chrome = 40 title + 2 x 8 padding + 2 x 1 border = 58 (geometry.folderChrome); 24 columns of
+    // 60 px; a folder's title takes 2 rows (finer grid: the old 12-column fixture doubled, same px).
+    const outerRow = (16 * 60 - 58) / 14;
+    const expected = (12 * outerRow - 58) / 10;
     const innerGrid = (container.querySelector('[data-node-id="t"]') as HTMLElement).parentElement as HTMLElement;
     const m = /grid-auto-rows:\s*([\d.]+)px/.exec(innerGrid.getAttribute('style') ?? '');
     expect(Number(m![1])).toBeCloseTo(expected, 1);
-    expect(Math.abs(Number(m![1]) - (6 * 120 - 58) / 5)).toBeGreaterThan(5);
+    expect(Math.abs(Number(m![1]) - (12 * 60 - 58) / 10)).toBeGreaterThan(2.5);
   });
 
   it('tiles are view-only even when edit mode is on', async () => {

@@ -80,14 +80,14 @@ describe('free placement', () => {
   });
 
   it('a free folder inside a grid tab scales its children to its own box', async () => {
-    width = 1200; // 100px cells, folder 6 cells = 600px box in the fake RO? RO reports 1200 for every element
+    width = 1200; // 50px cells (24 columns), folder 12 cells = 600px box in the fake RO? RO reports 1200 for every element
     const { dash, tab } = mk([
-      folder('f', 'Mixed', { x: 0, y: 0, w: 6, h: 4 }, [tile('c', 'Child', { x: 0, y: 0, w: 10, h: 5 })], { layout: 'free', content: { columns: 75, children: [tile('c', 'Child', { x: 0, y: 0, w: 10, h: 5 })] } })
-    ], 'grid', 12);
+      folder('f', 'Mixed', { x: 0, y: 0, w: 12, h: 8 }, [tile('c', 'Child', { x: 0, y: 0, w: 10, h: 5 })], { layout: 'free', content: { columns: 75, children: [tile('c', 'Child', { x: 0, y: 0, w: 10, h: 5 })] } })
+    ], 'grid', 24);
     const { container } = render(TabCanvas, { dashboard: dash, tab });
     await tick();
     await tick();
-    // box = 6 cells * 100px = 600, minus the folder's 18px side chrome = 582 over 75 columns
+    // box = 12 cells * 50px = 600, minus the folder's 18px side chrome = 582 over 75 columns
     // = 7.76px/unit -> child 10 units = 77.6px wide
     expect((container.querySelector('[data-node-id="c"]') as HTMLElement).style.width).toBe('77.6px');
   });
@@ -136,9 +136,9 @@ describe('fix round 1', () => {
 
   it('constructs exactly one ResizeObserver for nested free and grid folders', async () => {
     const { dash, tab } = mk([
-      folder('g', 'G', { x: 0, y: 0, w: 4, h: 3 }, [tile('a', 'A', { x: 0, y: 0, w: 1, h: 1 })]),
-      folder('f', 'F', { x: 4, y: 0, w: 4, h: 3 }, [tile('b', 'B', { x: 0, y: 0, w: 5, h: 5 })], { layout: 'free', content: { columns: 40, children: [tile('b', 'B', { x: 0, y: 0, w: 5, h: 5 })] } })
-    ], 'grid', 12);
+      folder('g', 'G', { x: 0, y: 0, w: 8, h: 6 }, [tile('a', 'A', { x: 0, y: 0, w: 2, h: 2 })]),
+      folder('f', 'F', { x: 8, y: 0, w: 8, h: 6 }, [tile('b', 'B', { x: 0, y: 0, w: 5, h: 5 })], { layout: 'free', content: { columns: 40, children: [tile('b', 'B', { x: 0, y: 0, w: 5, h: 5 })] } })
+    ], 'grid', 24);
     width = 1200;
     render(TabCanvas, { dashboard: dash, tab });
     await tick();
@@ -147,19 +147,19 @@ describe('fix round 1', () => {
 
   it('a grid folder uses content.columns, not placement.w, for its columns', async () => {
     const { dash, tab } = mk([
-      folder('g', 'G', { x: 0, y: 0, w: 4, h: 3 }, [tile('a', 'A', { x: 5, y: 0, w: 1, h: 1 })], { content: { columns: 8, children: [tile('a', 'A', { x: 5, y: 0, w: 1, h: 1 })] } })
-    ], 'grid', 12);
+      folder('g', 'G', { x: 0, y: 0, w: 8, h: 6 }, [tile('a', 'A', { x: 10, y: 0, w: 2, h: 2 })], { content: { columns: 16, children: [tile('a', 'A', { x: 10, y: 0, w: 2, h: 2 })] } })
+    ], 'grid', 24);
     width = 1200;
     const { container } = render(TabCanvas, { dashboard: dash, tab });
     await tick();
-    expect((container.querySelector('[data-node-id="a"]') as HTMLElement).style.gridColumn).toContain('6 / span 1');
+    expect((container.querySelector('[data-node-id="a"]') as HTMLElement).style.gridColumn).toContain('11 / span 2');
   });
 });
 
 describe('z injection', () => {
   it.each(['free', 'grid'] as const)('a malicious string z emits no injected CSS (%s)', async (layout) => {
     const evil = '1;background:url(https://evil/x)';
-    const { dash, tab } = mk([tile('a', 'A', { x: 0, y: 0, w: 5, h: 5, z: evil })], layout, layout === 'free' ? 160 : 12);
+    const { dash, tab } = mk([tile('a', 'A', { x: 0, y: 0, w: 5, h: 5, z: evil })], layout, layout === 'free' ? 160 : 24);
     const { container } = render(TabCanvas, { dashboard: dash, tab });
     await tick();
     const el = container.querySelector('[data-node-id="a"]') as HTMLElement;
@@ -187,11 +187,11 @@ describe('phone stacking', () => {
   it('grid tab at 767px stacks: expanded folder full width; collapsed tile-sized; y then x', async () => {
     width = 767;
     const { dash, tab } = mk([
-      tile('t2', 'T2', { x: 3, y: 2, w: 1, h: 1 }),
-      folder('exp', 'Big', { x: 0, y: 1, w: 12, h: 4 }, [tile('in2', 'In2', { x: 1, y: 0, w: 1, h: 1 }), tile('in1', 'In1', { x: 0, y: 0, w: 1, h: 1 })]),
-      folder('col', 'Small', { x: 5, y: 0, w: 2, h: 2 }, [tile('hid', 'Hid', { x: 0, y: 0, w: 1, h: 1 })], { display: 'collapsed' }),
-      tile('t1', 'T1', { x: 0, y: 2, w: 1, h: 1 })
-    ], 'grid', 12);
+      tile('t2', 'T2', { x: 6, y: 4, w: 2, h: 2 }),
+      folder('exp', 'Big', { x: 0, y: 2, w: 24, h: 8 }, [tile('in2', 'In2', { x: 2, y: 0, w: 2, h: 2 }), tile('in1', 'In1', { x: 0, y: 0, w: 2, h: 2 })]),
+      folder('col', 'Small', { x: 10, y: 0, w: 4, h: 4 }, [tile('hid', 'Hid', { x: 0, y: 0, w: 2, h: 2 })], { display: 'collapsed' }),
+      tile('t1', 'T1', { x: 0, y: 4, w: 2, h: 2 })
+    ], 'grid', 24);
     const { container } = render(TabCanvas, { dashboard: dash, tab });
     await tick();
     expect(container.querySelector('.container-grid')).toBeNull();
@@ -204,8 +204,8 @@ describe('phone stacking', () => {
 
   it('crossing the breakpoint keeps an open overlay open', async () => {
     const { dash, tab } = mk([
-      folder('f', 'Box', { x: 0, y: 0, w: 2, h: 2 }, [tile('x', 'Inside', { x: 0, y: 0, w: 1, h: 1 })], { display: 'collapsed' })
-    ], 'grid', 12);
+      folder('f', 'Box', { x: 0, y: 0, w: 4, h: 4 }, [tile('x', 'Inside', { x: 0, y: 0, w: 2, h: 2 })], { display: 'collapsed' })
+    ], 'grid', 24);
     config.set({ schemaVersion: 3, dashboards: [dash] } as any);
     width = 1024;
     render(TabCanvas, { dashboard: dash, tab });
@@ -243,8 +243,8 @@ describe('one geometry source (M3 Task 1)', () => {
   });
 
   it('a grid folder in a free tab grows to its square-cell rows', async () => {
-    const kids = [tile('g1', 'G1', { x: 0, y: 3, w: 1, h: 1 })];
-    const f = folder('gf', 'GridIn', { x: 0, y: 0, w: 40, h: 5 }, kids, { layout: 'grid', content: { columns: 4, children: kids } });
+    const kids = [tile('g1', 'G1', { x: 0, y: 6, w: 2, h: 2 })];
+    const f = folder('gf', 'GridIn', { x: 0, y: 0, w: 40, h: 5 }, kids, { layout: 'grid', content: { columns: 8, children: kids } });
     const { dash, tab } = mk([f], 'free', 160);
     const { container } = render(TabCanvas, { dashboard: dash, tab });
     await tick();

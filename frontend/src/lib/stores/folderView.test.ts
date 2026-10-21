@@ -84,23 +84,23 @@ describe('effectiveDisplay', () => {
 describe('applyFolderViews', () => {
   const dash = (children: any[], layout?: any): LayoutDashboard => ({
     id: 'd1', name: 'D', path: '/d', revision: 1, defaultLayout: layout,
-    tabs: [{ id: 't1', name: 'T', root: { columns: 12, children } }]
+    tabs: [{ id: 't1', name: 'T', root: { columns: 24, children } }]
   });
   it('returns the same tab when nothing is remembered; ignores unknown ids', () => {
     const d = dash([f('a')]);
     expect(applyFolderViews(d, d.tabs[0], {})).toBe(d.tabs[0]);
     expect(applyFolderViews(d, d.tabs[0], { gone: 'collapsed' })).toBe(d.tabs[0]);
   });
-  it('a minimised grid folder becomes one cell at its x,y; siblings are untouched', () => {
-    const d = dash([f('a', { placement: { x: 3, y: 1, w: 4, h: 3 } }), f('b', { placement: { x: 7, y: 0, w: 2, h: 2 } })]);
+  it('a minimised grid folder becomes one Medium tile (2 x 2) at its x,y; siblings are untouched', () => {
+    const d = dash([f('a', { placement: { x: 6, y: 2, w: 8, h: 6 } }), f('b', { placement: { x: 14, y: 0, w: 4, h: 4 } })]);
     const t = applyFolderViews(d, d.tabs[0], { a: 'collapsed' });
     const [a, b] = t.root.children as any[];
     expect(a.display).toBe('collapsed');
-    expect(a.placement).toMatchObject({ x: 3, y: 1, w: 1, h: 1 });
+    expect(a.placement).toMatchObject({ x: 6, y: 2, w: 2, h: 2 });
     expect(a.content.columns).toBe(4);
     expect(b).toBe(d.tabs[0].root.children[1]);
   });
-  it('a minimised free folder becomes round(designWidth/12/8) units square', () => {
+  it('a minimised free folder becomes a Medium square, 2 x side = round(designWidth/12/8) units (as before the finer grid)', () => {
     const d = dash([f('a', { placement: { x: 10, y: 20, w: 40, h: 30 } })], 'free');
     const t = applyFolderViews(d, { ...d.tabs[0], designWidth: 1280 }, { a: 'collapsed' });
     expect((t.root.children[0] as any).placement).toMatchObject({ x: 10, y: 20, w: 13, h: 13 });
@@ -111,11 +111,11 @@ describe('applyFolderViews', () => {
     expect((t.root.children as any[]).map((c) => c.display)).toEqual(['expanded', 'expanded']);
     expect((t.root.children[0] as any).placement).toEqual({ x: 0, y: 0, w: 2, h: 2 });
   });
-  it('a saved-collapsed folder is one cell with no remembered view; stored data is untouched', () => {
-    const d = dash([f('a', { display: 'collapsed', placement: { x: 1, y: 2, w: 12, h: 3 } })]);
+  it('a saved-collapsed folder is one Medium tile with no remembered view; stored data is untouched', () => {
+    const d = dash([f('a', { display: 'collapsed', placement: { x: 2, y: 4, w: 24, h: 6 } })]);
     const orig = JSON.stringify(d);
     const t = applyFolderViews(d, d.tabs[0], {});
-    expect((t.root.children[0] as any).placement).toMatchObject({ x: 1, y: 2, w: 1, h: 1 });
+    expect((t.root.children[0] as any).placement).toMatchObject({ x: 2, y: 4, w: 2, h: 2 });
     expect((t.root.children[0] as any).content.columns).toBe(4);
     expect(JSON.stringify(d)).toBe(orig);
   });

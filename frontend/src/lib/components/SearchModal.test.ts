@@ -35,20 +35,20 @@ class FakeRO {
 
 const tile = (id: string, name: string, extra: any = {}): any => ({
   kind: 'tile', id, name, url: 'http://deep.test/' + id, icon: '', openMode: 'newtab', size: 'medium', order: 0,
-  placement: { x: 0, y: 0, w: 1, h: 1 }, ...extra
+  placement: { x: 0, y: 0, w: 2, h: 2 }, ...extra
 });
 const folder = (id: string, name: string, display: string, children: any[]): any => ({
-  kind: 'folder', id, name, display, placement: { x: 0, y: 1, w: 4, h: 3 }, content: { columns: 4, children }
+  kind: 'folder', id, name, display, placement: { x: 0, y: 2, w: 8, h: 6 }, content: { columns: 8, children }
 });
 
 // Tab "Second" > Outer (collapsed) > Mid (expanded) > Inner (collapsed) > "Deep Thing"
 const layoutD1: LayoutDashboard = {
   id: 'd1', name: 'Home', path: '/home', revision: 1,
   tabs: [
-    { id: 't1', name: 'Main', root: { columns: 12, children: [tile('top', 'Top Tile')] } },
+    { id: 't1', name: 'Main', root: { columns: 24, children: [tile('top', 'Top Tile')] } },
     {
       id: 't2', name: 'Second',
-      root: { columns: 12, children: [
+      root: { columns: 24, children: [
         folder('outer', 'Outer', 'collapsed', [
           folder('mid', 'Mid', 'expanded', [
             folder('inner', 'Inner', 'collapsed', [tile('deep', 'Deep Thing')])
@@ -112,7 +112,7 @@ describe('SearchModal recursive search', () => {
     const evil = '<img src=x onerror=alert(1)>';
     config.update((c) => ({
       ...c!,
-      dashboards: [{ ...layoutD1, tabs: [{ id: 't1', name: evil, root: { columns: 12, children: [tile('x', 'Evil ' + evil)] } }] }]
+      dashboards: [{ ...layoutD1, tabs: [{ id: 't1', name: evil, root: { columns: 24, children: [tile('x', 'Evil ' + evil)] } }] }]
     }));
     render(SearchModal, { onClose: () => {} });
     await tick();
@@ -126,7 +126,7 @@ describe('SearchModal recursive search', () => {
 describe('SearchModal scope', () => {
   const layoutD2: LayoutDashboard = {
     id: 'd2', name: 'Lab', path: '/lab', revision: 1,
-    tabs: [{ id: 'u1', name: 'Bench', root: { columns: 12, children: [tile('other', 'Other Dash Tile')] } }]
+    tabs: [{ id: 'u1', name: 'Bench', root: { columns: 24, children: [tile('other', 'Other Dash Tile')] } }]
   };
   const twoDashboards = () =>
     config.update((c) => ({ ...c!, dashboards: [layoutD1, layoutD2] }));

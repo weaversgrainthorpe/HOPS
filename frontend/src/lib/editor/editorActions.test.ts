@@ -64,25 +64,25 @@ describe('editorActions', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it('a new tile in a free tab gets one column square (designWidth / 12 / 8) at a free spot', () => {
+  it('a new (Medium) tile in a free tab gets a 2-cell square (2 x side = round(designWidth / 12 / 8)) at a free spot', () => {
     const id = addNode({ ...blankTile(), name: 'F', url: 'https://f.test' }, { tabId: 't2' })!;
     const t = nodeIn(draft(), id) as TileNode;
     expect(t.placement.w).toBe(13);
     expect(t.placement.h).toBe(13);
   });
 
-  it('a new folder in a grid takes 4 x 3 at the first free cell, with matching content columns', () => {
+  it('a new folder in a grid takes 8 x 6 at the first free cell, with matching content columns', () => {
     const id = addNode({ ...blankFolder(), name: 'G' }, { tabId: 't1' })!;
     const f = nodeIn(draft(), id) as FolderNode;
-    expect(f.placement).toEqual(p(7, 0, 4, 3));
-    expect(f.content.columns).toBe(4);
+    expect(f.placement).toEqual(p(14, 0, 8, 6));
+    expect(f.content.columns).toBe(8);
   });
 
   it('placements for several items never overlap, and a taken cell falls back to the first free one', () => {
     const at = placementsFor(draft(), { tabId: 't1' }, [
       { kind: 'tile', placement: p(0, 0) }, { kind: 'tile', placement: p(0, 0) }
     ] as never, { x: 0, y: 0 });
-    expect(at).toEqual([p(2, 0), p(3, 0)]);
+    expect(at).toEqual([p(4, 0), p(6, 0)]);
   });
 
   it('tiles need a name and an allowed URL (notes need no URL)', () => {
@@ -99,7 +99,7 @@ describe('editorActions', () => {
     editNode('f1', { name: 'N', id: 'zz', placement: p(9, 9), content: { columns: 1, children: [] } } as never);
     const f = nodeIn(draft(), 'f1') as FolderNode;
     expect(f.name).toBe('N');
-    expect(f.placement).toEqual(p(0, 1, 4, 3));
+    expect(f.placement).toEqual(p(0, 2, 8, 6));
     expect(f.content.children).toHaveLength(1);
   });
 
@@ -114,7 +114,7 @@ describe('editorActions', () => {
   });
 
   it('editTab with a layout change converts the content (grid → free)', () => {
-    editTab('t1', { name: 'Main', layout: 'free', designWidth: 960 });
+    editTab('t1', { name: 'Main', layout: 'free', designWidth: 960 }); // side 5: a Medium b at x 2 → 10
     const t = draft().tabs[0];
     expect(t.layout).toBe('free');
     expect(t.root.columns).toBe(120);

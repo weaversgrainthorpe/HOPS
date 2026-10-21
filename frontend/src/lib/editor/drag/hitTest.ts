@@ -26,7 +26,7 @@ export interface HitResult {
   dy: number;
   /** The (non-dragged) node directly under the pointer inside that container, if any (Task 8: merge). */
   nodeId?: string;
-  /** That node's RENDERED box in px from the container's content origin (Ruling 13: a collapsed folder = one cell). */
+  /** That node's RENDERED box in px from the container's content origin (Ruling 13: a collapsed folder = one Medium tile). */
   node?: { id: string; left: number; top: number; width: number; height: number };
   /**
    * Item drags only (set by the drag controller's frame, not by hitTest): the item under the dragged

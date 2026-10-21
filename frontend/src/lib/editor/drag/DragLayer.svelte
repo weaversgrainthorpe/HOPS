@@ -4,7 +4,7 @@
    * draws state.target (the one resolver's result): the target cells, the neighbours' pushed
    * positions (exactly the push map the drop will apply) and, for an invalid target, the reason.
    * Every size comes from geometry.nodeBox with the target container's rendered metrics; a pushed
-   * collapsed folder is drawn as the one cell it renders as (Ruling 13). Task 8: the merge /
+   * collapsed folder is drawn as the one Medium tile it renders as (Ruling 13). Task 8: the merge /
    * into-folder / tab-append cue on the item or tab under the pointer, free alignment guides, the
    * tab-reorder marker, and the DragBreadcrumb. Task 9: a resize shows the resulting box and any
    * push (no ghost); a stacked (phone) drop shows its reading-order insertion marker.

@@ -76,7 +76,7 @@ describe('EditorDialogs (the dialogs edit the draft only)', () => {
     const f = nodeIn(draft(), 'f1') as FolderNode;
     expect(f.name).toBe('Renamed');
     expect(f.display).toBe('collapsed');
-    expect(f.placement).toEqual(p(0, 1, 4, 3));
+    expect(f.placement).toEqual(p(0, 2, 8, 6));
     expect(get(dirty)).toBe(true);
     noRequestsButSettingsRead(fetchSpy);
     expect(get(editorDialog)).toBeNull();
@@ -115,26 +115,26 @@ describe('EditorDialogs (the dialogs edit the draft only)', () => {
     noRequestsButSettingsRead(fetchSpy);
   });
 
-  it('tile dialog Size (spec §8): Large saves a 2 x 2 span with neighbours pushed, as ONE undo step', async () => {
+  it('tile dialog Size (spec §8/§9): Large saves a 4 x 4 span with neighbours pushed, as ONE undo step', async () => {
     await show({ kind: 'tile', id: 'a' });
     const sel = screen.getByLabelText(/^Size/) as HTMLSelectElement;
     expect(sel.value).toBe('medium');
     await fireEvent.change(sel, { target: { value: 'large' } });
     expect(nodeIn(draft(), 'a')!.placement).toEqual(p(0, 0)); // staged until Save
     await fireEvent.click(screen.getByRole('button', { name: /^Save/ }));
-    expect(nodeIn(draft(), 'a')).toMatchObject({ size: 'large', placement: p(0, 0, 2, 2) });
-    expect(nodeIn(draft(), 'b')!.placement).not.toEqual(p(1, 0));
+    expect(nodeIn(draft(), 'a')).toMatchObject({ size: 'large', placement: p(0, 0, 4, 4) });
+    expect(nodeIn(draft(), 'b')!.placement).not.toEqual(p(2, 0));
     expect(get(session)!.undo).toHaveLength(1);
     undo();
     expect(nodeIn(draft(), 'a')!.placement).toEqual(p(0, 0));
-    expect(nodeIn(draft(), 'b')!.placement).toEqual(p(1, 0));
+    expect(nodeIn(draft(), 'b')!.placement).toEqual(p(2, 0));
   });
 
-  it('tile dialog Size: a tile in a 1-column folder refuses Large inline; the draft is untouched', async () => {
+  it('tile dialog Size: a tile in a 2-column folder refuses Large inline; the draft is untouched', async () => {
     const d = home();
     d.tabs[0].root.children.push({
-      kind: 'folder', id: 'narrow', name: 'Narrow', display: 'expanded', placement: p(8, 0, 1, 3),
-      content: { columns: 1, children: [{ ...(nodeIn(home(), 'x') as TileNode), id: 'nx' }] }
+      kind: 'folder', id: 'narrow', name: 'Narrow', display: 'expanded', placement: p(16, 0, 2, 6),
+      content: { columns: 2, children: [{ ...(nodeIn(home(), 'x') as TileNode), id: 'nx' }] }
     } as FolderNode);
     setLayout([d]);
     resetEditor();
@@ -142,13 +142,13 @@ describe('EditorDialogs (the dialogs edit the draft only)', () => {
     await show({ kind: 'tile', id: 'nx' });
     const before = draft();
     await fireEvent.change(screen.getByLabelText(/^Size/), { target: { value: 'large' } });
-    expect(screen.getByRole('alert')).toHaveTextContent(/only 1 column wide/);
+    expect(screen.getByRole('alert')).toHaveTextContent(/only 2 columns wide/);
     await fireEvent.click(screen.getByRole('button', { name: /^Save/ }));
     expect(draft()).toBe(before);
     expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 
-  it('a stored large tile at 1 x 1 (Netflix): Size shows Custom; picking Large makes it 2 x 2 in ONE undo step', async () => {
+  it('a stored large tile at 2 x 2 (Netflix, after the finer-grid update): Size shows Custom; picking Large makes it 4 x 4 in ONE undo step', async () => {
     const d = home();
     (d.tabs[0].root.children[0] as TileNode).size = 'large';
     setLayout([d]);
@@ -159,7 +159,7 @@ describe('EditorDialogs (the dialogs edit the draft only)', () => {
     expect(sel.value).toBe('custom');
     await fireEvent.change(sel, { target: { value: 'large' } });
     await fireEvent.click(screen.getByRole('button', { name: /^Save/ }));
-    expect(nodeIn(draft(), 'a')).toMatchObject({ size: 'large', placement: p(0, 0, 2, 2) });
+    expect(nodeIn(draft(), 'a')).toMatchObject({ size: 'large', placement: p(0, 0, 4, 4) });
     expect(get(session)!.undo).toHaveLength(1);
     undo();
     expect(nodeIn(draft(), 'a')!.placement).toEqual(p(0, 0));
@@ -167,7 +167,7 @@ describe('EditorDialogs (the dialogs edit the draft only)', () => {
 
   it('tile dialog Size shows "Custom" for a non-standard span', async () => {
     const d = home();
-    (d.tabs[0].root.children[1] as TileNode).placement = p(1, 0, 3, 1);
+    (d.tabs[0].root.children[1] as TileNode).placement = p(2, 0, 6, 2);
     setLayout([d]);
     resetEditor();
     startSession();
@@ -186,12 +186,12 @@ describe('EditorDialogs (the dialogs edit the draft only)', () => {
   });
 
   it('Add tile at a right-clicked free cell lands there', async () => {
-    await show({ kind: 'tile', to: { tabId: 't1' }, cell: { x: 9, y: 0 } });
+    await show({ kind: 'tile', to: { tabId: 't1' }, cell: { x: 18, y: 0 } });
     await fireEvent.input(screen.getByLabelText(/^Name/), { target: { value: 'New one' } });
     await fireEvent.input(screen.getByLabelText(/^URL/), { target: { value: 'https://new.test' } });
     await fireEvent.click(screen.getByRole('button', { name: /^Create/ }));
     const root = draft().tabs[0].root.children;
-    expect(root[root.length - 1]).toMatchObject({ kind: 'tile', name: 'New one', placement: p(9, 0) });
+    expect(root[root.length - 1]).toMatchObject({ kind: 'tile', name: 'New one', placement: p(18, 0) });
   });
 
   it("the tile dialog's move/copy section opens the move/copy dialog", async () => {

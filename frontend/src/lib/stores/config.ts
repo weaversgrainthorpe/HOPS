@@ -19,6 +19,29 @@ import { toast } from './toast';
 import { logError } from '$lib/utils/errors';
 import { refreshStatusBase, refreshAllStatusBases } from './statusCheckBase';
 import { refreshAllStatuses } from './status';
+import { GRID_UNIT } from '$lib/layout/geometry';
+
+/**
+ * Controller Ruling 3 (finer grid): this build writes 24-column placements, so it never saves into
+ * a document that is not marked `gridUnit: 2` (one served by an older HOPS, or in the old form):
+ * the write is refused with this visible message instead of mixing units.
+ */
+export const OLD_GRID_FORM =
+  'Not saved: this dashboard was saved by an older HOPS layout. Reload the page, then make your change again.';
+
+/** Why nothing may be saved into `doc` (it lacks the finer-grid marker), or null. */
+export function gridFormProblem(doc: LayoutDoc | null | undefined): string | null {
+  return doc?.gridUnit === GRID_UNIT ? null : OLD_GRID_FORM;
+}
+
+/** The finer-grid guard for a write: toast and throw when the held document is not marked. */
+export function assertGridForm(): void {
+  const why = gridFormProblem(get(config));
+  if (why) {
+    toast.error(why);
+    throw new Error(why);
+  }
+}
 
 // The stored v3 document as GET /api/config serves it: {schemaVersion: 3,
 // dashboards, migrationNotices?}. null until it has loaded (or when it failed).
@@ -200,6 +223,8 @@ export function applySavedLayout(fresh: FreshLayout | undefined): void {
     const serverNotices = held?.notices;
     config.set({
       schemaVersion: 3,
+      // The marker comes from the fresh document only: a response without it blocks the next save.
+      ...(layout.gridUnit !== undefined ? { gridUnit: layout.gridUnit } : {}),
       dashboards: layout.dashboards,
       ...(notices ? { migrationNotices: notices } : {}),
       ...(serverNotices ? { notices: serverNotices } : {}),
@@ -333,6 +358,7 @@ export async function createDashboard(name: string, path: string): Promise<strin
 export async function renameDashboard(id: string, changes: { name: string; path: string }): Promise<void> {
   return enqueueSave(async () => {
     const d = heldDashboard(id, 'Not saved');
+    assertGridForm();
     try {
       const resp = await saveDashboardV3(id, { ...d, name: changes.name, path: changes.path }, d.revision);
       applySavedLayout(resp);

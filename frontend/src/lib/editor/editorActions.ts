@@ -18,7 +18,8 @@ import type {
   Container, FolderNode, LayoutDashboard, LayoutMode, LayoutNode, LayoutTab, Placement, TileNode
 } from '$lib/types/layout';
 import type { Background, HeaderConfig } from '$lib/types';
-import { layoutDoc, findLayoutDashboard, applySavedLayout, loadConfig } from '$lib/stores/config';
+import { MEDIUM_CELLS } from '$lib/layout/geometry';
+import { config, layoutDoc, findLayoutDashboard, applySavedLayout, loadConfig, gridFormProblem } from '$lib/stores/config';
 import { apply, session, rebaseCleanSession, sessionConflict } from '$lib/stores/editSession';
 import { transferNodes, ConflictError, type TransferRequest } from '$lib/utils/api';
 import { logError } from '$lib/utils/errors';
@@ -66,10 +67,12 @@ function tabOf(d: LayoutDashboard, tabId: string): LayoutTab | undefined {
 
 /**
  * The size an item takes in `mode`, from a node ALREADY converted for the target (adaptNode).
- * Placement is the truth (spec §8): a grid tile keeps its span (Large = 2 x 2), like everything else.
+ * Placement is the truth (spec §8): a grid tile keeps its span (Large = 4 x 4), like everything else;
+ * a missing span is a Medium (2 x 2, spec §9).
  */
 export function sizeFor(n: Pick<LayoutNode, 'placement'>): { w: number; h: number } {
-  return { w: Math.max(1, Math.floor(n.placement?.w ?? 1)), h: Math.max(1, Math.floor(n.placement?.h ?? 1)) };
+  const d = MEDIUM_CELLS;
+  return { w: Math.max(1, Math.floor(n.placement?.w ?? d)), h: Math.max(1, Math.floor(n.placement?.h ?? d)) };
 }
 
 // ---------------------------------------------------------------- tile size = space (spec §8)
@@ -78,26 +81,33 @@ export type TileSize = TileNode['size'];
 /** What the tile dialog's Size shows: a size, or "Custom (resized)" for any other span. */
 export type SizeChoice = TileSize | 'custom';
 
+/** Cells each way per Size on the finer grid (spec §9): Small 1 x 1, Medium 2 x 2, Large 4 x 4. */
+const SIZE_CELLS = { small: 1, medium: MEDIUM_CELLS, large: 2 * MEDIUM_CELLS } as const;
+
 /**
- * The span a tile Size takes: Large = 2 x 2 cells, Medium and Small = 1 x 1 (Small is drawn
- * compact). Grid: cells; free: the free-unit equivalent, one cell = `side` units (freeSide).
+ * The span a tile Size takes: Small = 1 x 1 cell (always drawn compact), Medium = 2 x 2 (also no
+ * size), Large = 4 x 4. Grid: cells; free: the free-unit equivalent, one cell = `side` units
+ * (freeSide, may be fractional), rounded to whole units.
  */
 export function sizeSpan(size: unknown, mode: LayoutMode, side = 1): { w: number; h: number } {
-  const cells = size === 'large' ? 2 : 1;
-  const unit = mode === 'free' ? Math.max(1, Math.floor(side) || 1) : 1;
-  return { w: cells * unit, h: cells * unit };
+  const cells = size === 'small' || size === 'large' ? SIZE_CELLS[size] : SIZE_CELLS.medium;
+  const unit = mode === 'free' ? (Number.isFinite(side) && side > 0 ? side : 1) : 1;
+  const n = Math.max(1, Math.round(cells * unit));
+  return { w: n, h: n };
 }
 
 /**
- * The size the dialog shows for a tile — always the truth (spec §8, amended after review):
- * Large only for a 2 x 2 span; the stored Small/Medium only for a 1 x 1 tile stored small or
- * medium; anything else (another span, or a stored large tile at 1 x 1) is Custom, so picking a
- * size from it is always a real change that applies.
+ * The size the dialog shows for a tile — always the truth (spec §8/§9): a size only when the tile
+ * has exactly that size's span and is stored as that size (no size = Medium); Large is shown for a
+ * Large span whatever was stored (as before the finer grid). Anything else is Custom — e.g. a
+ * stored-large tile that the finer-grid update left at 2 x 2, or an old Small left at 2 x 2 — so
+ * picking a size from it is always a real change that applies, and nothing is silently resized.
  */
 export function sizeShown(t: Pick<TileNode, 'size' | 'placement'>, mode: LayoutMode, side = 1): SizeChoice {
   const is = (s: { w: number; h: number }) => t.placement?.w === s.w && t.placement?.h === s.h;
   if (is(sizeSpan('large', mode, side))) return 'large';
-  if (is(sizeSpan('medium', mode, side)) && t.size !== 'large') return t.size === 'small' ? 'small' : 'medium';
+  const stored = t.size === 'small' || t.size === 'large' ? t.size : 'medium';
+  if (stored !== 'large' && is(sizeSpan(stored, mode, side))) return stored;
   return 'custom';
 }
 
@@ -191,14 +201,14 @@ export function placementsFor(
 export function blankTile(): TileNode {
   return {
     kind: 'tile', id: '', type: 'link', name: '', url: '', icon: '', openMode: 'newtab', size: 'medium', order: 0,
-    placement: { x: 0, y: 0, w: 1, h: 1 }
+    placement: { x: 0, y: 0, w: MEDIUM_CELLS, h: MEDIUM_CELLS }
   };
 }
 
 export function blankFolder(): FolderNode {
   return {
     kind: 'folder', id: '', name: 'New folder', display: 'expanded', layout: 'inherit', shape: 'rounded',
-    showTitle: true, placement: { x: 0, y: 0, w: 4, h: 3 }, content: { columns: 4, children: [] }
+    showTitle: true, placement: { x: 0, y: 0, w: 8, h: 6 }, content: { columns: 8, children: [] }
   };
 }
 
@@ -247,8 +257,8 @@ export function addNode(node: LayoutNode, to: ContainerRef, cell?: Cell): string
   const placed = { ...plain(node), id } as LayoutNode;
   if (placed.kind === 'folder') placed.content = { ...placed.content, children: [] };
   const ok = apply(node.kind === 'tile' ? 'Add tile' : 'Add folder', (dd) => {
-    // New items are drawn at grid sizes (a tile one cell, a folder 4 x 3); in a free container
-    // they are converted on the one mode-conversion path (one cell = one dashboard column).
+    // New items are drawn at grid sizes (a tile its Size's span, a folder 8 x 6); in a free container
+    // they are converted on the one mode-conversion path (one cell = `side` free units).
     // A new tile takes the span of its Size (spec §8); too narrow a container refuses, saying why.
     let sized = placed;
     if (placed.kind === 'tile') {
@@ -619,6 +629,11 @@ export function setLook(header: HeaderConfig | undefined, background: Background
  */
 export async function transferAndRebase(req: TransferRequest, success: string, failure: string): Promise<boolean> {
   const sessionId = get(session)?.dashboardId ?? '';
+  const gridProblem = gridFormProblem(get(config));
+  if (gridProblem) {
+    toast.error(gridProblem); // Ruling 3: never write the finer grid into an older-form document
+    return false;
+  }
   try {
     const resp = await transferNodes(req);
     applySavedLayout(resp);

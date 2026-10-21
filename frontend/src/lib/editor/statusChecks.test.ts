@@ -131,9 +131,9 @@ describe('statusRowText', () => {
 describe('level names and the badge tooltip', () => {
   const dash = {
     id: 'd', name: 'Home', path: '/h', revision: 1,
-    tabs: [{ id: 't', name: 'Main', root: { columns: 12, children: [
-      { kind: 'folder', id: 'f0', name: 'Media', display: 'expanded', placement: { x: 0, y: 0, w: 1, h: 1 },
-        content: { columns: 4, children: [{ kind: 'tile', id: 'x', name: 'Plex', placement: { x: 0, y: 0, w: 1, h: 1 } }] } }
+    tabs: [{ id: 't', name: 'Main', root: { columns: 24, children: [
+      { kind: 'folder', id: 'f0', name: 'Media', display: 'expanded', placement: { x: 0, y: 0, w: 2, h: 2 },
+        content: { columns: 8, children: [{ kind: 'tile', id: 'x', name: 'Plex', placement: { x: 0, y: 0, w: 2, h: 2 } }] } }
     ] } }]
   } as unknown as LayoutDashboard;
 

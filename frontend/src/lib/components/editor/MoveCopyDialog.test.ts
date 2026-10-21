@@ -20,12 +20,12 @@ import type { FolderNode, LayoutDashboard } from '$lib/types/layout';
 function deepHome(): LayoutDashboard {
   const h = home();
   const f1 = h.tabs[0].root.children.find((n) => n.id === 'f1') as FolderNode;
-  f1.content.children.push(folder('g1', p(2, 0, 2, 2), [folder('h1', p(0, 0, 1, 1), [])]));
+  f1.content.children.push(folder('g1', p(4, 0, 4, 4), [folder('h1', p(0, 0, 2, 2), [])]));
   return h;
 }
 function deepOther(): LayoutDashboard {
   const o = other();
-  o.tabs[0].root.children.push(folder('of1', p(3, 0, 2, 2), [folder('of2', p(0, 0, 2, 2), [folder('of3', p(0, 0, 1, 1), [])])]));
+  o.tabs[0].root.children.push(folder('of1', p(6, 0, 4, 4), [folder('of2', p(0, 0, 4, 4), [folder('of3', p(0, 0, 2, 2), [])])]));
   return o;
 }
 

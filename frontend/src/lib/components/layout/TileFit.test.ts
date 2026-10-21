@@ -28,7 +28,7 @@ function tile(id: string, size: 'small' | 'medium' | 'large', x: number, y: numb
   return { kind: 'tile', id, name: 'N-' + id, description: 'Desc ' + id, url: 'http://x.test', icon: 'mdi:home', openMode: 'newtab', size, order: 0, placement: { x, y, w, h } };
 }
 function mk(children: any[]): { dash: LayoutDashboard; tab: LayoutTab } {
-  const tab: LayoutTab = { id: 't1', name: 'Main', root: { columns: 12, children } };
+  const tab: LayoutTab = { id: 't1', name: 'Main', root: { columns: 24, children } };
   return { dash: { id: 'd1', name: 'Home', path: '/home', revision: 1, tabs: [tab] }, tab };
 }
 const px = (s: string, prop: string) => {
@@ -43,14 +43,17 @@ describe('tiles fit their grid cell (Ruling 22)', () => {
   for (const w of [1440, 1024, 800]) {
     it(`at a ${w}px canvas no tile's box exceeds its cell`, async () => {
       width = w;
+      // The finer grid (spec §9): 24 columns, Medium 2 x 2, Large 4 x 4, Small 1 x 1 — the old
+      // 12-column fixture doubled (r-s/f-s: old Smalls left at 2 x 2), plus true 1 x 1 Smalls.
       const { dash, tab } = mk([
-        tile('r-s', 'small', 0, 0), tile('r-m', 'medium', 1, 0), tile('r-l', 'large', 2, 0), tile('r-big', 'large', 3, 0, 2, 2),
-        { kind: 'folder', id: 'f', name: 'F', display: 'expanded', placement: { x: 0, y: 2, w: 6, h: 3 },
-          content: { columns: 6, children: [tile('f-m', 'medium', 0, 0), tile('f-l', 'large', 1, 0), tile('f-s', 'small', 2, 1)] } }
+        tile('r-s', 'small', 0, 0, 2, 2), tile('r-m', 'medium', 2, 0, 2, 2), tile('r-l', 'large', 4, 0, 2, 2), tile('r-big', 'large', 6, 0, 4, 4),
+        tile('r-tiny', 'small', 10, 0, 1, 1),
+        { kind: 'folder', id: 'f', name: 'F', display: 'expanded', placement: { x: 0, y: 4, w: 12, h: 6 },
+          content: { columns: 12, children: [tile('f-m', 'medium', 0, 0, 2, 2), tile('f-l', 'large', 2, 0, 2, 2), tile('f-s', 'small', 4, 2, 2, 2), tile('f-tiny', 'small', 6, 0, 1, 1)] } }
       ]);
       const { container } = render(TabCanvas, { dashboard: dash, tab });
       await tick();
-      const ids = ['r-s', 'r-m', 'r-l', 'r-big', 'f-m', 'f-l', 'f-s'];
+      const ids = ['r-s', 'r-m', 'r-l', 'r-big', 'r-tiny', 'f-m', 'f-l', 'f-s', 'f-tiny'];
       for (const id of ids) {
         const cell = container.querySelector(`[data-node-id="${id}"]`) as HTMLElement;
         const grid = cell.parentElement as HTMLElement;
@@ -68,18 +71,22 @@ describe('tiles fit their grid cell (Ruling 22)', () => {
         expect(btn.style.overflow).toBe('hidden');
         // Nothing between the tile and the grid track can grow it.
         expect(cell.style.minHeight === '' || cell.style.minHeight === '0px').toBe(true);
-        // Compact exactly when the cell is too small for the full tile.
-        // Root columns are w/12; a folder's are its content box (minus chrome) / its columns.
+        // Compact exactly when the cell is too small for the full tile, or the tile is one 1 x 1
+        // cell (Small: always compact, spec §9). Root columns are w/24; a folder's are its content
+        // box (minus chrome) / its columns.
         const rootM = containerMetrics(tab.root, 'grid', w);
-        const colPx = id.startsWith('r-') ? rootM.unitPx : folderInnerMetrics(tab.root.children[4] as any, rootM).unitPx;
-        const cellW = colPx * (id === 'r-big' ? 2 : 1);
-        const compact = Math.min(cellW, cellH) < COMPACT_TILE_PX;
+        const colPx = id.startsWith('r-') ? rootM.unitPx : folderInnerMetrics(tab.root.children[5] as any, rootM).unitPx;
+        const spanW = Number(/grid-column:\s*\d+\s*\/\s*span\s*(\d+)/.exec(cell.getAttribute('style') ?? '')![1]);
+        const cellW = colPx * spanW;
+        const compact = (spanW === 1 && span === 1) || Math.min(cellW, cellH) < COMPACT_TILE_PX;
+        if (id.endsWith('tiny')) expect(compact).toBe(true);
         expect(btn.classList.contains('compact')).toBe(compact);
         expect(btn.classList.contains('fill')).toBe(true);
         if (compact) expect(cell.querySelector('.subtitle')).toBeNull();
       }
       if (w === 1440) {
-        // 120px root cells: full tiles with their description.
+        // 60px root cells, a Medium is 120px: full tiles with their description; a Small is compact.
+        expect(container.querySelector('[data-node-id="r-tiny"] button.entry')!.classList.contains('compact')).toBe(true);
         expect(container.querySelector('[data-node-id="r-m"] .subtitle')).not.toBeNull();
         expect(container.querySelector('[data-node-id="r-m"] button.entry')!.classList.contains('compact')).toBe(false);
       } else {

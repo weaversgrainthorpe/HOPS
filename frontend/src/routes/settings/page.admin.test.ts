@@ -46,8 +46,8 @@ function doc(extra: Partial<Config> = {}): Config {
 		schemaVersion: 3,
 		dashboards: [{
 			id: 'd', name: 'D', path: '/d', revision: 1,
-			tabs: [{ id: 't', name: 'T', root: { columns: 12, children: [
-				{ kind: 'tile', id: 'a', name: 'a', url: 'http://x', placement: { x: 0, y: 0, w: 1, h: 1 } } as unknown as LayoutNode
+			tabs: [{ id: 't', name: 'T', root: { columns: 24, children: [
+				{ kind: 'tile', id: 'a', name: 'a', url: 'http://x', placement: { x: 0, y: 0, w: 2, h: 2 } } as unknown as LayoutNode
 			] } }]
 		}],
 		...extra

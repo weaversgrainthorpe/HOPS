@@ -45,7 +45,7 @@ function dash(revision: number, settings: Record<string, unknown> = {}) {
 	return {
 		id: 'd1', name: 'D', path: '/d', order: 0, revision, header: HEADER, background: BACKGROUND,
 		settings: { ...allNull, ...settings },
-		tabs: [{ id: 't1', name: 'Main', root: { columns: 12, children: [] } }]
+		tabs: [{ id: 't1', name: 'Main', root: { columns: 24, children: [] } }]
 	};
 }
 

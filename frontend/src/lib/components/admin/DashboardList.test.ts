@@ -24,17 +24,17 @@ import type { LayoutDashboard } from '$lib/types/layout';
 
 const home = (): LayoutDashboard => ({
   id: 'd1', name: 'Home', path: '/home', revision: 2, order: 0,
-  tabs: [{ id: 't1', name: 'Main', root: { columns: 12, children: [] } }]
+  tabs: [{ id: 't1', name: 'Main', root: { columns: 24, children: [] } }]
 });
 // The Showcase: a free-layout dashboard (once "view-only (v3)"); now a dashboard like any other.
 const showcase = (): LayoutDashboard => ({
   id: 'v3d', name: 'Fancy', path: '/fancy', revision: 6, order: 1,
   tabs: [{ id: 'ft', name: 'Free', layout: 'free', designWidth: 1280, root: { columns: 160, children: [] } }]
 });
-const doc = (...ds: LayoutDashboard[]) => ({ schemaVersion: 3 as const, dashboards: ds });
+const doc = (...ds: LayoutDashboard[]) => ({ schemaVersion: 3 as const, gridUnit: 2, dashboards: ds });
 
 function cfg(): Config {
-  return { schemaVersion: 3, dashboards: [home(), showcase()] };
+  return { schemaVersion: 3, gridUnit: 2, dashboards: [home(), showcase()] };
 }
 
 beforeEach(() => {

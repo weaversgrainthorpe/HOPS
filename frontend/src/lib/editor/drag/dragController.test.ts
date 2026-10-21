@@ -25,8 +25,8 @@ import * as api from '$lib/utils/api';
 import { save } from '$lib/stores/editSession';
 import { setLayout, resetEditor, startSession, draft, nodeIn, home, other, folder, p, FakeRO } from '$lib/components/editor/editorTestKit';
 
-// t1's root: 12 columns of 100 px (square rows); t2 (free): 160 units of 8 px.
-const GRID = containerMetrics({ columns: 12, children: [] }, 'grid', 1200);
+// t1's root: 24 columns of 50 px (square rows; a Medium tile is the old 100 px cell); t2 (free): 160 units of 8 px.
+const GRID = containerMetrics({ columns: 24, children: [] }, 'grid', 1200);
 const FREE = containerMetrics({ columns: 160, children: [] }, 'free', 1280);
 
 /** Where the stub says the pointer is: the t1 root unless a test redirects it. */
@@ -163,18 +163,18 @@ describe('drag engine — dropping', () => {
     const before = draft();
     startMouseDrag(el, 50, 50);
     moveTo(350, 50);
-    flush(); // target A: (3, 0)
-    expect(get(drag)?.target).toMatchObject({ kind: 'place', at: [p(3, 0)] });
+    flush(); // target A: (6, 0)
+    expect(get(drag)?.target).toMatchObject({ kind: 'place', at: [p(6, 0)] });
     moveTo(650, 250);
-    flush(); // target B: (6, 2)
+    flush(); // target B: (12, 4)
     const shown = get(drag)!;
-    expect(shown.target).toMatchObject({ kind: 'place', to: { tabId: 't1' }, at: [p(6, 2)] });
+    expect(shown.target).toMatchObject({ kind: 'place', to: { tabId: 't1' }, at: [p(12, 4)] });
     // highlight and commit come from the one pure resolver: the same inputs give the same target
     expect(resolveDrop(shown, lastHit!, before)).toEqual(shown.target);
     // the pointer moves on but no frame has highlighted it yet: the drop is where the highlight was
     moveTo(950, 50);
     drop(950, 50);
-    expect(nodeIn(draft(), 'a')!.placement).toEqual(p(6, 2));
+    expect(nodeIn(draft(), 'a')!.placement).toEqual(p(12, 4));
     expect(get(drag)).toBeNull();
   });
 
@@ -209,7 +209,7 @@ describe('drag engine — dropping', () => {
     expect(nodeIn(d, 'a')!.placement).toEqual(p(0, 0)); // original stays
     const copies = d.tabs[0].root.children.filter((n) => n.kind === 'tile' && n.name === 'A' && n.id !== 'a');
     expect(copies).toHaveLength(1);
-    expect(copies[0].placement).toEqual(p(3, 0));
+    expect(copies[0].placement).toEqual(p(6, 0));
     expect(get(selectedNodes).has(copies[0].id)).toBe(true);
 
     startMouseDrag(el, 50, 50);
@@ -217,7 +217,7 @@ describe('drag engine — dropping', () => {
     flush();
     expect(get(drag)?.copy).toBe(false);
     drop(450, 150);
-    expect(nodeIn(draft(), 'a')!.placement).toEqual(p(4, 1));
+    expect(nodeIn(draft(), 'a')!.placement).toEqual(p(8, 2));
     expect(draft().tabs[0].root.children.filter((n) => n.name === 'A')).toHaveLength(2);
   });
 
@@ -230,31 +230,31 @@ describe('drag engine — dropping', () => {
     flush();
     expect(get(drag)?.ids).toEqual(['a', 'b']);
     drop(850, 550);
-    expect(nodeIn(draft(), 'a')!.placement).toEqual(p(8, 5));
-    expect(nodeIn(draft(), 'b')!.placement).toEqual(p(9, 5));
+    expect(nodeIn(draft(), 'a')!.placement).toEqual(p(16, 10));
+    expect(nodeIn(draft(), 'b')!.placement).toEqual(p(18, 10));
     expect(get(toast).at(-1)?.message).toBe('Moved 2 items to Main');
   });
 
   it('grid push preview equals the committed placements', () => {
     const { el } = source('a');
     startMouseDrag(el, 50, 50);
-    moveTo(150, 50); // onto b at (1, 0)
+    moveTo(150, 50); // onto b at (2, 0)
     flush();
     const t = get(drag)!.target!;
     expect(t.kind).toBe('place');
     if (t.kind !== 'place') return;
-    expect(t.at).toEqual([p(1, 0)]);
+    expect(t.at).toEqual([p(2, 0)]);
     expect(t.push.has('b')).toBe(true);
     const pushedTo = t.push.get('b');
     drop(150, 50);
-    expect(nodeIn(draft(), 'a')!.placement).toEqual(p(1, 0));
+    expect(nodeIn(draft(), 'a')!.placement).toEqual(p(2, 0));
     expect(nodeIn(draft(), 'b')!.placement).toEqual(pushedTo);
   });
 
   it('a collapsed folder\'s stored footprint is occupied: a drop there pushes it rather than overlapping (Ruling 13)', () => {
     const { el } = source('a');
     startMouseDrag(el, 50, 50);
-    moveTo(650, 250); // (6, 2): inside c1's stored 2 x 2 at (5, 1), though c1 renders as one cell
+    moveTo(650, 250); // (12, 4): inside c1's stored 4 x 4 at (10, 2), though c1 renders as one Medium tile
     flush();
     const t = get(drag)!.target!;
     expect(t.kind).toBe('place');
@@ -291,7 +291,7 @@ describe('drag engine — dropping', () => {
   });
 
   it('across containers on the same tab: a tile dragged into a folder lands at the pointer cell', () => {
-    const fm = containerMetrics({ columns: 4, children: [] }, 'grid', 400);
+    const fm = containerMetrics({ columns: 8, children: [] }, 'grid', 400);
     where = { ref: { tabId: 't1', folderId: 'f1' }, metrics: fm, layout: 'grid' };
     const { el } = source('a');
     startMouseDrag(el, 50, 50);
@@ -299,7 +299,7 @@ describe('drag engine — dropping', () => {
     flush();
     drop(250, 150);
     const f1 = nodeIn(draft(), 'f1');
-    expect(f1?.kind === 'folder' && f1.content.children.find((n) => n.id === 'a')?.placement).toEqual(p(2, 1));
+    expect(f1?.kind === 'folder' && f1.content.children.find((n) => n.id === 'a')?.placement).toEqual(p(4, 2));
     expect(draft().tabs[0].root.children.some((n) => n.id === 'a')).toBe(false);
     expect(get(toast).at(-1)?.message).toBe('Moved "A" to F1');
   });
@@ -307,7 +307,7 @@ describe('drag engine — dropping', () => {
   it('across modes on the same tab: a grid tile dropped into a free folder is converted', () => {
     resetEditor();
     const d = home();
-    d.tabs[0].root.children.push(folder('ff', p(0, 5, 6, 4), [], { layout: 'free', content: { columns: 80, children: [] } }));
+    d.tabs[0].root.children.push(folder('ff', p(0, 10, 12, 8), [], { layout: 'free', content: { columns: 80, children: [] } }));
     setLayout([d, other()]);
     startSession();
     const fm = containerMetrics({ columns: 80, children: [] }, 'free', 640);
@@ -318,7 +318,7 @@ describe('drag engine — dropping', () => {
     flush();
     drop(200, 200);
     const a = nodeIn(draft(), 'a')!;
-    // one grid column of a 1280 px design = 13 free units (13 * 8 = 104 px)
+    // a Medium (2 cells of side round(1280 / 12 / 8) / 2 = 6.5) = 13 free units (13 * 8 = 104 px, as before)
     expect(a.placement.w).toBe(13);
     expect(a.placement.h).toBe(13);
   });
@@ -351,7 +351,7 @@ describe('drag engine — dropping', () => {
   });
 
   it('a folder dropped into its own content is refused', () => {
-    const fm = containerMetrics({ columns: 4, children: [] }, 'grid', 400);
+    const fm = containerMetrics({ columns: 8, children: [] }, 'grid', 400);
     const state: DragState = { ids: ['f1'], copy: false, pointer: { x: 0, y: 0 }, target: null, grab: { fx: 0, fy: 0 } };
     const hit: HitResult = { container: { ref: { tabId: 't1', folderId: 'f1' }, metrics: fm, layout: 'grid', left: 0, top: 0 }, dx: 0, dy: 0 };
     expect(resolveDrop(state, hit, draft())).toEqual({ kind: 'invalid', reason: "A folder can't go inside itself." });
@@ -379,7 +379,7 @@ describe('drag engine — through the real renderer', () => {
   });
 
   it('a tile in the editing canvas drags with the DOM hit test; the layer shows the target and the push', async () => {
-    vi.stubGlobal('ResizeObserver', FakeRO); // 1440 px wide: 12 columns of 120 px
+    vi.stubGlobal('ResizeObserver', FakeRO); // 1440 px wide: 24 columns of 60 px (a Medium is 120 px)
     setDragEnv({ raf: (cb) => { frames.push(cb); return frames.length; }, cancelRaf: () => { frames = []; },
       measure: () => ({ left: 0, top: 0, width: 120, height: 120 }) });
     const d = draft();
@@ -392,16 +392,16 @@ describe('drag engine — through the real renderer', () => {
     document.elementFromPoint = () => root;
     cell.dispatchEvent(pe('pointerdown', 60, 60));
     moveTo(66, 60);
-    moveTo(180, 60); // onto b at (1, 0)
+    moveTo(180, 60); // onto b at (2, 0)
     flush();
     await tick();
-    expect(get(drag)?.target).toMatchObject({ kind: 'place', at: [p(1, 0)] });
+    expect(get(drag)?.target).toMatchObject({ kind: 'place', at: [p(2, 0)] });
     expect(document.querySelectorAll('.drag-layer .target')).toHaveLength(1);
     expect(document.querySelectorAll('.drag-layer .push')).toHaveLength(1);
     expect(document.querySelector('.drag-layer .ghost')?.textContent).toContain('A');
     drop(180, 60);
     await tick();
-    expect(nodeIn(draft(), 'a')!.placement).toEqual(p(1, 0));
+    expect(nodeIn(draft(), 'a')!.placement).toEqual(p(2, 0));
     expect(document.querySelector('.drag-layer')).toBeNull();
   });
 
@@ -514,7 +514,7 @@ describe('fix round 1', () => {
     expect(draft()).toBe(sent);
     expect(get(drag)).not.toBeNull(); // still dragging
     drop(350, 50);
-    expect(nodeIn(draft(), 'a')!.placement).toEqual(p(3, 0));
+    expect(nodeIn(draft(), 'a')!.placement).toEqual(p(6, 0));
     expect(get(toast).map((t) => t.message).join('|')).not.toMatch(/changed during the drag/);
   });
 
@@ -529,7 +529,7 @@ describe('fix round 1', () => {
     apply('Other', (d: LayoutDashboard) => ({ ...d, name: 'Renamed' }));
     undoToast.action!.onClick();
     expect(draft().name).toBe('Renamed');
-    expect(nodeIn(draft(), 'a')!.placement).toEqual(p(3, 0));
+    expect(nodeIn(draft(), 'a')!.placement).toEqual(p(6, 0));
     expect(get(toast).at(-1)?.message).toMatch(/Ctrl\+Z/);
   });
 });

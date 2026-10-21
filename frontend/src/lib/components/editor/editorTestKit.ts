@@ -12,7 +12,8 @@ import { toast } from '$lib/stores/toast';
 import type { Config } from '$lib/types';
 import type { FolderNode, LayoutDashboard, LayoutNode, Placement } from '$lib/types/layout';
 
-export const p = (x: number, y: number, w = 1, h = 1, z?: number): Placement =>
+/** A placement; w and h default to a Medium tile's span (2 x 2 on the finer grid, spec §9). */
+export const p = (x: number, y: number, w = 2, h = 2, z?: number): Placement =>
   z === undefined ? { x, y, w, h } : { x, y, w, h, z };
 export const tile = (id: string, pl: Placement, extra: Record<string, unknown> = {}): LayoutNode =>
   ({
@@ -24,16 +25,19 @@ export const folder = (id: string, pl: Placement, children: LayoutNode[], over: 
   ...over
 });
 
-/** d1: grid tab t1 (a, b, folder f1 [x], collapsed folder c1 [y]), free tab t2 (fa, fb). */
+/**
+ * d1: grid tab t1 (a, b, folder f1 [x], collapsed folder c1 [y]), free tab t2 (fa, fb). In the finer
+ * grid's units (24 columns, Medium tiles 2 x 2): the pre-finer-grid fixture doubled.
+ */
 export function home(): LayoutDashboard {
   return {
     id: 'd1', name: 'Home', path: '/home', revision: 5,
     header: { centerTitle: 'Saved title' },
     tabs: [
-      { id: 't1', name: 'Main', root: { columns: 12, children: [
-        tile('a', p(0, 0)), tile('b', p(1, 0)),
-        folder('f1', p(0, 1, 4, 3), [tile('x', p(0, 0))]),
-        folder('c1', p(5, 1, 2, 2), [tile('y', p(0, 0))], { display: 'collapsed' })
+      { id: 't1', name: 'Main', root: { columns: 24, children: [
+        tile('a', p(0, 0)), tile('b', p(2, 0)),
+        folder('f1', p(0, 2, 8, 6), [tile('x', p(0, 0))]),
+        folder('c1', p(10, 2, 4, 4), [tile('y', p(0, 0))], { display: 'collapsed' })
       ] } },
       { id: 't2', name: 'Free', layout: 'free', designWidth: 1280, root: { columns: 160, children: [
         tile('fa', p(0, 0, 16, 16, 0)), tile('fb', p(20, 0, 16, 16, 1))
@@ -44,12 +48,12 @@ export function home(): LayoutDashboard {
 
 export function other(): LayoutDashboard {
   return { id: 'o', name: 'Other', path: '/other', revision: 2, tabs: [
-    { id: 'ot', name: 'OT', root: { columns: 12, children: [tile('o1', p(0, 0))] } }
+    { id: 'ot', name: 'OT', root: { columns: 24, children: [tile('o1', p(0, 0))] } }
   ] };
 }
 
 export function setLayout(dashes: LayoutDashboard[] = [home(), other()], extra: Partial<Config> = {}): void {
-  config.set({ schemaVersion: 3, dashboards: dashes, ...extra } as Config);
+  config.set({ schemaVersion: 3, gridUnit: 2, dashboards: dashes, ...extra } as Config);
 }
 
 export function resetEditor(): void {

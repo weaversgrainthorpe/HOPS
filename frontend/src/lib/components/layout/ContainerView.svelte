@@ -3,7 +3,7 @@
   import type { CanvasPlan, ContainerMetrics } from '$lib/layout/geometry';
   import {
     clampPlacement, freeContentHeightPx, hasPosition, isRenderable, nodeBox, readingOrder, requiredFolderHeightPx,
-    tileFit
+    nodeFit
   } from '$lib/layout/geometry';
   import type { Placement } from '$lib/types/layout';
   import Entry from '../Entry.svelte';
@@ -114,8 +114,7 @@
   /** How a tile fits its box (Ruling 22): the box is the tile's cell span, in px. */
   function fitOf(n: LayoutNode): 'fill' | 'compact' | undefined {
     if (effective === 'stacked') return undefined; // phone stacking keeps the v2 tile sizes
-    const b = nodeBox(n.placement, metrics);
-    return tileFit(b.widthPx, b.heightPx);
+    return nodeFit(n.placement, metrics); // Small (1 x 1) is always compact (spec §9)
   }
 
   // Placeholders (unrenderable nodes, m3): one that has a position keeps it, drawn
@@ -180,7 +179,7 @@
           {/if}
           {#if editing && effective === 'free'}
             <!-- Free tiles resize like folders; a grid tile's span is set by its Size in the tile dialog
-                 (spec §8: Large = 2 x 2, Medium and Small = 1 x 1), so it has no handles. -->
+                 (spec §9: Small 1 x 1, Medium 2 x 2, Large 4 x 4), so it has no handles. -->
             <ResizeHandles id={node.id} name={node.name} metrics={metrics} />
           {/if}
         </div>
@@ -268,7 +267,7 @@
     min-width: 0;
     min-height: 0;
   }
-  /* Edit-mode selection: an outline on the rendered box (a collapsed folder = its one cell). */
+  /* Edit-mode selection: an outline on the rendered box (a collapsed folder = its one Medium tile). */
   .cell.selected {
     outline: 3px solid var(--accent);
     outline-offset: 2px;

@@ -3,8 +3,8 @@
  * (a pointer drag through the drag engine) and the keyboard (Shift+Arrow on the selection).
  *
  * - Folders (expanded) and tiles in FREE containers resize; a grid tile's span is set by its
- *   Size in the tile dialog (spec §8: Large = 2 x 2, else 1 x 1); a collapsed folder renders as one cell, so it has no
- *   handles (Ruling 13) — it is expanded first.
+ *   Size in the tile dialog (spec §9: Small 1 x 1, Medium 2 x 2, Large 4 x 4); a collapsed folder renders as one
+ *   Medium tile, so it has no handles (Ruling 13) — it is expanded first.
  * - The phone (stacked) layout has no resizing.
  * - Grid: a resize that would overlap pushes the neighbours aside (Ruling 11); the push is part of
  *   the target and trial-run here, so what the preview shows is exactly what the commit stores.
@@ -36,7 +36,7 @@ export type ResizeResult = ResizeTarget | { kind: 'invalid'; reason: string };
 /** The phone hint (toolbar) and the reason a resize is refused there. */
 export const NARROW_HINT = 'Resize and free placement need a wider screen';
 export const COLLAPSED_HINT =
-  'This folder is collapsed, so it shows as one cell — choose "Start expanded" in its menu to resize it.';
+  'This folder is collapsed, so it shows as one tile — choose "Start expanded" in its menu to resize it.';
 export const GRID_TILE_HINT = 'A tile in a grid takes the space of its Size — change its Size in the tile dialog instead.';
 
 /** Why `id` can't be resized here, or null when it can. */

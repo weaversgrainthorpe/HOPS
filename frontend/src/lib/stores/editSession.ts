@@ -10,7 +10,9 @@ import {
   loadConfig,
   configError,
   migrationFailure,
-  setSettingsSavedHook
+  setSettingsSavedHook,
+  config,
+  gridFormProblem
 } from './config';
 import { confirm, confirmChoice } from './confirmModal';
 import { toast } from './toast';
@@ -281,6 +283,12 @@ async function doSave(): Promise<'saved' | 'conflict' | 'error'> {
     return 'error';
   }
   if (!isDirty(s)) return 'saved';
+  const gridProblem = gridFormProblem(get(config));
+  if (gridProblem) {
+    // Ruling 3: never write 24-column placements into an older-form document. The draft is kept.
+    toast.error(gridProblem);
+    return 'error';
+  }
   const sent = s.draft;
   try {
     const resp = await saveDashboardV3(s.dashboardId, sent, s.baseRevision);

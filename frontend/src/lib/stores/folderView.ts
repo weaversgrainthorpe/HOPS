@@ -136,7 +136,7 @@ export function applyFolderViews(dash: LayoutDashboard, tab: LayoutTab, views: V
       const inner = f.content ? walk(f.content, [...chain, f]) : f.content;
       const v = views[f.id];
       const display = v === undefined ? f.display : effectiveDisplay(f, v);
-      // Option A: ANY effectively collapsed folder (saved or remembered) is one cell; render-only.
+      // Option A: ANY effectively collapsed folder (saved or remembered) is one Medium tile (2 x 2); render-only.
       const shrink = display === 'collapsed' && !!f.placement;
       let out = f;
       if (inner !== f.content || display !== f.display || shrink) {

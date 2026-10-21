@@ -24,8 +24,8 @@ import {
 } from './dragController';
 import { setLayout, resetEditor, startSession, draft, nodeIn, home, other, folder, tile, p } from '$lib/components/editor/editorTestKit';
 
-// t1's root: 12 columns of 100 px (square rows).
-const GRID = containerMetrics({ columns: 12, children: [] }, 'grid', 1200);
+// t1's root: 24 columns of 50 px (square rows): a Medium tile (2 x 2) is a 100 px box.
+const GRID = containerMetrics({ columns: 24, children: [] }, 'grid', 1200);
 const FREE = containerMetrics({ columns: 160, children: [] }, 'free', 1280);
 
 type Box = { left: number; top: number; width: number; height: number };
@@ -180,7 +180,7 @@ describe('merge', () => {
     flush();
     expect(get(drag)?.target?.kind).toBe('place');
     drop(105, 50);
-    expect(nodeIn(draft(), 'a')!.placement).toEqual(p(1, 0));
+    expect(nodeIn(draft(), 'a')!.placement).toEqual(p(1, 0)); // snapped to the finer cell
     expect(nodeIn(draft(), 'b')!.kind).toBe('tile');
   });
 });
@@ -242,13 +242,13 @@ describe('merge by the dragged tile\'s visual centre', () => {
 describe('into folders', () => {
   it('a drop on a collapsed folder goes inside it, at its first free cell', () => {
     startMouseDrag(source('a'), 50, 50);
-    moveTo(550, 150); // the centre of c1's one rendered cell
+    moveTo(550, 150); // the centre of c1's one rendered Medium tile
     flush();
     const t = get(drag)!.target!;
     expect(t.kind).toBe('into-folder');
     drop(550, 150);
     const c1 = nodeIn(draft(), 'c1') as FolderNode;
-    expect(c1.content.children.find((n) => n.id === 'a')?.placement).toEqual(p(1, 0));
+    expect(c1.content.children.find((n) => n.id === 'a')?.placement).toEqual(p(2, 0));
     expect(get(toast).at(-1)?.message).toBe('Moved "A" to C1');
   });
 
@@ -263,15 +263,15 @@ describe('into folders', () => {
     expect(get(overlayStack)).toEqual(['c1']);
     expect(get(drag)).not.toBeNull();
     // the overlay's content container now lies under the pointer (it registers like any other)
-    where = { ref: { tabId: 't1', folderId: 'c1' }, metrics: containerMetrics({ columns: 2, children: [] }, 'grid', 200), layout: 'grid' };
+    where = { ref: { tabId: 't1', folderId: 'c1' }, metrics: containerMetrics({ columns: 4, children: [] }, 'grid', 200), layout: 'grid' };
     nodes = [];
     flush();
     moveTo(150, 50);
     flush();
-    expect(get(drag)?.target).toMatchObject({ kind: 'place', to: { tabId: 't1', folderId: 'c1' }, at: [p(1, 0)] });
+    expect(get(drag)?.target).toMatchObject({ kind: 'place', to: { tabId: 't1', folderId: 'c1' }, at: [p(2, 0)] });
     drop(150, 50);
     const c1 = nodeIn(draft(), 'c1') as FolderNode;
-    expect(c1.content.children.find((n) => n.id === 'a')?.placement).toEqual(p(1, 0));
+    expect(c1.content.children.find((n) => n.id === 'a')?.placement).toEqual(p(2, 0));
   });
 
   it('a folder over its own descendant is invalid while hovering, and the drop changes nothing', async () => {

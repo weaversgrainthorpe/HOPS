@@ -5,12 +5,12 @@ import { config } from '$lib/stores/config';
 import type { LayoutDashboard, LayoutNode } from '$lib/types/layout';
 
 const folder = (id: string, name: string, children: LayoutNode[] = []): LayoutNode =>
-  ({ kind: 'folder', id, name, display: 'expanded', placement: { x: 0, y: 0, w: 4, h: 3 }, content: { columns: 4, children } }) as LayoutNode;
+  ({ kind: 'folder', id, name, display: 'expanded', placement: { x: 0, y: 0, w: 8, h: 6 }, content: { columns: 8, children } }) as LayoutNode;
 
 // Home: tab Main > folder Media > folder Deep (depth 2). Showcase: a free tab.
 const home: LayoutDashboard = {
   id: 'd1', name: 'Home', path: '/home', revision: 3, order: 0,
-  tabs: [{ id: 't1', name: 'Main', root: { columns: 12, children: [folder('f1', 'Media', [folder('f2', 'Deep')])] } }]
+  tabs: [{ id: 't1', name: 'Main', root: { columns: 24, children: [folder('f1', 'Media', [folder('f2', 'Deep')])] } }]
 };
 const showcase: LayoutDashboard = {
   id: 's1', name: 'Showcase', path: '/showcase', revision: 2, order: 1,
@@ -87,7 +87,7 @@ describe('PromoteDialog: targets from the v3 tree', () => {
     await expand(/^Home/);
     await expand(/^Main/);
     await fireEvent.click(item(/^Media/));
-    config.set({ schemaVersion: 3, dashboards: [{ ...home, tabs: [{ ...home.tabs[0], root: { columns: 12, children: [] } }] }, showcase] });
+    config.set({ schemaVersion: 3, dashboards: [{ ...home, tabs: [{ ...home.tabs[0], root: { columns: 24, children: [] } }] }, showcase] });
     await vi.waitFor(() => expect(screen.getByText('That destination no longer exists. Choose another.')).toBeInTheDocument());
     expect(promote()).toBeDisabled();
   });

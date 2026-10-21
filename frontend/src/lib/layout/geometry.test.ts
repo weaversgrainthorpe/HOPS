@@ -17,7 +17,7 @@ const folder = (layout?: FolderNode['layout'], children: LayoutNode[] = []): Fol
   content: { columns: 4, children }
 });
 const tab = (over: Partial<LayoutTab> = {}): LayoutTab =>
-  ({ id: 't', name: 't', root: { columns: 12, children: [] }, ...over });
+  ({ id: 't', name: 't', root: { columns: 24, children: [] }, ...over });
 const dash = (over: Partial<LayoutDashboard> = {}): LayoutDashboard =>
   ({ id: 'd', name: 'd', path: '/d', revision: 1, tabs: [], ...over });
 
@@ -71,7 +71,7 @@ describe('previewChildren', () => {
 
 describe('planCanvas', () => {
   it('grid', () => {
-    expect(planCanvas('grid', 1440, tab())).toEqual({ kind: 'grid', cellPx: 120 });
+    expect(planCanvas('grid', 1440, tab())).toEqual({ kind: 'grid', cellPx: 60 });
     expect(planCanvas('grid', 767, tab())).toEqual({ kind: 'stacked' });
   });
   it('free', () => {
@@ -108,9 +108,9 @@ describe('robustness', () => {
       expect(planCanvas('grid', w, tab())).toEqual({ kind: 'stacked' });
     }
     for (const columns of [0, -1, NaN]) {
-      expect(planCanvas('grid', 1440, tab({ root: { columns, children: [] } }))).toEqual({ kind: 'grid', cellPx: 120 });
+      expect(planCanvas('grid', 1440, tab({ root: { columns, children: [] } }))).toEqual({ kind: 'grid', cellPx: 60 });
     }
-    expect(planCanvas('grid', 1440, { id: 't', name: 't' } as unknown as LayoutTab)).toEqual({ kind: 'grid', cellPx: 120 });
+    expect(planCanvas('grid', 1440, { id: 't', name: 't' } as unknown as LayoutTab)).toEqual({ kind: 'grid', cellPx: 60 });
   });
   const bad = [null, 'str', { kind: 'tile', id: 'np' }] as unknown as { placement?: Placement }[];
   it('readingOrder puts malformed children last, in array order, without throwing', () => {
@@ -153,10 +153,10 @@ describe('containerMetrics: one columns fallback everywhere', () => {
     it(`root columns ${String(bad)} falls back to ROOT_COLUMNS, as planCanvas and clampPlacement do`, () => {
       const m = containerMetrics(root(bad), 'grid', 1440);
       expect(m.columns).toBe(ROOT_COLUMNS);
-      expect(m.unitPx).toBe(120);
+      expect(m.unitPx).toBe(60); // 1440 / 24
       const plan = planCanvas('grid', 1440, tab({ root: root(bad) }));
       expect(plan).toEqual({ kind: 'grid', cellPx: m.unitPx });
-      expect(clampPlacement({ x: 20, y: 0, w: 1, h: 1 }, bad as number).x).toBe(ROOT_COLUMNS - 1);
+      expect(clampPlacement({ x: 40, y: 0, w: 1, h: 1 }, bad as number).x).toBe(ROOT_COLUMNS - 1);
     });
     it(`folder content.columns ${String(bad)} falls back to placement.w`, () => {
       const f = ffold({ content: { columns: bad as number, children: [] } });
@@ -247,11 +247,12 @@ describe('free folder scale subtracts the chrome', () => {
     expect(requiredFolderHeightPx(collapsed, parent)).toBe(nodeBox(tall.placement, parent).heightPx);
   });
   it('a grid folder in a grid parent fits its rows to the folder height (fractional h floored)', () => {
-    const gp = containerMetrics({ columns: 12, children: [] }, 'grid', 1440);
-    const g = ffold({ placement: { x: 0, y: 0, w: 6, h: 3.8 }, content: { columns: 6, children: [] } });
+    // 24 columns of 60 px; the title takes 2 rows (the old 12-column fixture doubled: same px).
+    const gp = containerMetrics({ columns: 24, children: [] }, 'grid', 1440);
+    const g = ffold({ placement: { x: 0, y: 0, w: 12, h: 6.8 }, content: { columns: 12, children: [] } });
     const inner = folderInnerMetrics(g, gp);
     const ch = folderChrome(undefined, true);
-    expect(inner.rowPx).toBeCloseTo((3 * 120 - ch.titlePx - ch.padYPx) / 2, 6);
+    expect(inner.rowPx).toBeCloseTo((6 * 60 - ch.titlePx - ch.padYPx) / 4, 6);
     expect(requiredFolderHeightPx(g, gp)).toBe(360);
   });
 });

@@ -7,10 +7,10 @@ import type { Config } from '$lib/types';
 import type { LayoutDashboard, LayoutNode } from '$lib/types/layout';
 
 const tile = (id: string, x: number): LayoutNode =>
-  ({ kind: 'tile', id, name: id, url: 'http://x', placement: { x, y: 0, w: 1, h: 1 } }) as unknown as LayoutNode;
+  ({ kind: 'tile', id, name: id, url: 'http://x', placement: { x, y: 0, w: 2, h: 2 } }) as unknown as LayoutNode;
 const d = (id: string): LayoutDashboard => ({
   id, name: id, path: '/' + id, revision: 1,
-  tabs: [{ id: id + '-t', name: 'T', root: { columns: 12, children: [tile(id + 'a', 0), tile(id + 'b', 1)] } }]
+  tabs: [{ id: id + '-t', name: 'T', root: { columns: 24, children: [tile(id + 'a', 0), tile(id + 'b', 2)] } }]
 });
 
 beforeEach(() => {

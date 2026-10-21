@@ -23,14 +23,14 @@ import { FakeRO } from './editorTestKit';
 import { toast } from '$lib/stores/toast';
 
 const entry = (id: string, name: string) => ({ id, name, url: 'http://x.test', icon: '', openMode: 'newtab' as const, size: 'medium' as const, order: 0 });
-const tile = (id: string, name: string): any => ({ kind: 'tile', ...entry(id, name), placement: { x: 0, y: 0, w: 1, h: 1 } });
+const tile = (id: string, name: string): any => ({ kind: 'tile', ...entry(id, name), placement: { x: 0, y: 0, w: 2, h: 2 } });
 
 const layoutD1: LayoutDashboard = {
   id: 'd1', name: 'Home', path: '/home', revision: 1,
   tabs: [
-    { id: 't1', name: 'Main', root: { columns: 12, children: [tile('m1', 'MainTile')] } },
-    { id: 't2', name: 'Second', root: { columns: 12, children: [] } },
-    { id: 't3', name: 'Third', root: { columns: 12, children: [] } }
+    { id: 't1', name: 'Main', root: { columns: 24, children: [tile('m1', 'MainTile')] } },
+    { id: 't2', name: 'Second', root: { columns: 24, children: [] } },
+    { id: 't3', name: 'Third', root: { columns: 24, children: [] } }
   ]
 };
 const legacy = layoutD1; // the route's dashboard

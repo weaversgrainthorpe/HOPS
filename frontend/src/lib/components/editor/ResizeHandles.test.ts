@@ -87,7 +87,7 @@ beforeEach(() => {
   setActiveTab('t1');
   frames = [];
   scrollPos = { x: 0, y: 0 };
-  // t1 at 1440 px: 120 px cells. f1 sits at (0, 1) 4 × 3.
+  // t1 at 1440 px: 60 px cells (24 columns). f1 sits at (0, 2) 8 × 6 = the same 480 × 360 px box.
   rects = { f1: { left: 0, top: 120, width: 480, height: 360 }, fa: { left: 0, top: 0, width: 128, height: 128 } };
   env();
 });
@@ -118,7 +118,7 @@ describe('resize handles', () => {
     expect(c1.getAttribute('title')).toMatch(/collapsed.*expand/i);
   });
 
-  it('a corner drag of +2 cells on a grid folder → w+2, h+2, pushing the neighbour as previewed; one undo step', async () => {
+  it('a corner drag of +4 cells (240 px of 60 px cells) on a grid folder → w+4, h+4, pushing the neighbour as previewed; one undo step', async () => {
     const { container } = canvas();
     render(DragLayer, { tabId: 't1' });
     await tick();
@@ -127,18 +127,18 @@ describe('resize handles', () => {
     const t = get(drag)?.target;
     expect(t?.kind).toBe('resize');
     if (t?.kind !== 'resize') throw new Error('not a resize');
-    expect(t.at).toMatchObject({ x: 0, y: 1, w: 6, h: 5 });
+    expect(t.at).toMatchObject({ x: 0, y: 2, w: 12, h: 10 });
     expect([...t.push.keys()]).toEqual(['c1']); // the collapsed folder's reserved cells are pushed aside
     await tick();
     expect(document.querySelectorAll('.drag-layer .push').length).toBe(1);
     expect(document.querySelectorAll('.drag-layer .target').length).toBe(1);
     document.body.dispatchEvent(pe('pointerup', 718, 718));
-    expect(nodeIn(draft(), 'f1')!.placement).toMatchObject({ x: 0, y: 1, w: 6, h: 5 });
+    expect(nodeIn(draft(), 'f1')!.placement).toMatchObject({ x: 0, y: 2, w: 12, h: 10 });
     expect(nodeIn(draft(), 'c1')!.placement).toEqual(t.push.get('c1'));
     expect(get(session)!.undo.length).toBe(undoBefore + 1);
     undo();
-    expect(nodeIn(draft(), 'f1')!.placement).toMatchObject({ w: 4, h: 3 });
-    expect(nodeIn(draft(), 'c1')!.placement).toMatchObject({ x: 5, y: 1 });
+    expect(nodeIn(draft(), 'f1')!.placement).toMatchObject({ w: 8, h: 6 });
+    expect(nodeIn(draft(), 'c1')!.placement).toMatchObject({ x: 10, y: 2 });
   });
 
   it("a folder can't shrink below its content", async () => {
@@ -148,9 +148,9 @@ describe('resize handles', () => {
     const t = get(drag)?.target;
     expect(t?.kind).toBe('resize');
     if (t?.kind !== 'resize') throw new Error('not a resize');
-    expect(t.at.h).toBe(2); // one content row + the title row
+    expect(t.at.h).toBe(4); // one Medium tile's 2 content rows + the 2 title rows
     document.body.dispatchEvent(pe('pointerup', 240, -122));
-    expect(nodeIn(draft(), 'f1')!.placement).toMatchObject({ w: 4, h: 2 });
+    expect(nodeIn(draft(), 'f1')!.placement).toMatchObject({ w: 8, h: 4 });
   });
 
   it('Escape cancels a resize and leaves the draft unchanged', async () => {
@@ -190,16 +190,16 @@ describe('resize follow-ups (fix round 1)', () => {
     resizeDrag(handle(container, 'f1', 'bottom')!, 240, 478, 0, 6);
     const v0 = get(drag)!.view!;
     expect(v0.top).toBe(0);
-    scrollPos = { x: 0, y: 240 }; // the page scrolls two cells down, the pointer stays put
+    scrollPos = { x: 0, y: 240 }; // the page scrolls four 60 px cells down, the pointer stays put
     window.dispatchEvent(new Event('scroll'));
     flush();
     const s = get(drag)!;
     expect(s.view!.top).toBe(-240); // the container moved up the screen with the page
     const t = s.target;
     if (t?.kind !== 'resize') throw new Error('not a resize');
-    expect(t.at.h).toBe(5);
+    expect(t.at.h).toBe(10);
     document.body.dispatchEvent(pe('pointerup', 240, 478));
-    expect(nodeIn(draft(), 'f1')!.placement).toMatchObject({ w: 4, h: 5 });
+    expect(nodeIn(draft(), 'f1')!.placement).toMatchObject({ w: 8, h: 10 });
   });
 
   it('the cursor follows the edge while resizing, never "grabbing"; it is cleared afterwards', async () => {
@@ -241,13 +241,13 @@ describe('keyboard resize and z-order', () => {
     render(EditToolbar, { tabId: 't1', onAddTab: () => {} });
     toggleNode('f1', false);
     await fireEvent.keyDown(window, { key: 'ArrowRight', shiftKey: true });
-    expect(nodeIn(draft(), 'f1')!.placement).toMatchObject({ w: 5, h: 3 });
+    expect(nodeIn(draft(), 'f1')!.placement).toMatchObject({ w: 9, h: 6 });
     await fireEvent.keyDown(window, { key: 'ArrowDown', shiftKey: true });
-    expect(nodeIn(draft(), 'f1')!.placement).toMatchObject({ w: 5, h: 4 });
+    expect(nodeIn(draft(), 'f1')!.placement).toMatchObject({ w: 9, h: 7 });
     await fireEvent.keyDown(window, { key: 'ArrowLeft', shiftKey: true });
-    expect(nodeIn(draft(), 'f1')!.placement).toMatchObject({ w: 4, h: 4 });
+    expect(nodeIn(draft(), 'f1')!.placement).toMatchObject({ w: 8, h: 7 });
     undo();
-    expect(nodeIn(draft(), 'f1')!.placement).toMatchObject({ w: 5, h: 4 });
+    expect(nodeIn(draft(), 'f1')!.placement).toMatchObject({ w: 9, h: 7 });
   });
 
   it('Shift+Arrow on a grid tile or a collapsed folder changes nothing and says why', async () => {

@@ -212,22 +212,22 @@ describe('NodeContextMenu — each action calls the right op', () => {
   });
 
   it('empty space: Add tile here / Add folder here open the new-item dialog at that cell; Paste here pastes there', async () => {
-    let r = open({ kind: 'container', ref: { tabId: 't1' }, cell: { x: 9, y: 0 } });
+    let r = open({ kind: 'container', ref: { tabId: 't1' }, cell: { x: 18, y: 0 } });
     await fireEvent.click(item('Add tile here'));
-    expect(get(editorDialog)).toEqual({ kind: 'tile', to: { tabId: 't1' }, cell: { x: 9, y: 0 } });
+    expect(get(editorDialog)).toEqual({ kind: 'tile', to: { tabId: 't1' }, cell: { x: 18, y: 0 } });
     r.unmount();
-    r = open({ kind: 'container', ref: { tabId: 't1', folderId: 'f1' }, cell: { x: 2, y: 1 } });
+    r = open({ kind: 'container', ref: { tabId: 't1', folderId: 'f1' }, cell: { x: 4, y: 2 } });
     await fireEvent.click(item('Add folder here'));
-    expect(get(editorDialog)).toEqual({ kind: 'folder', to: { tabId: 't1', folderId: 'f1' }, cell: { x: 2, y: 1 } });
+    expect(get(editorDialog)).toEqual({ kind: 'folder', to: { tabId: 't1', folderId: 'f1' }, cell: { x: 4, y: 2 } });
     r.unmount();
     toggleNode('a', false);
     const { copySelection } = await import('$lib/stores/nodeClipboard');
     copySelection();
-    open({ kind: 'container', ref: { tabId: 't1' }, cell: { x: 9, y: 0 } });
+    open({ kind: 'container', ref: { tabId: 't1' }, cell: { x: 18, y: 0 } });
     await fireEvent.click(item('Paste here'));
     await tick();
     const root = draft().tabs[0].root.children;
-    expect(root[root.length - 1].placement).toEqual({ x: 9, y: 0, w: 1, h: 1 });
+    expect(root[root.length - 1].placement).toEqual({ x: 18, y: 0, w: 2, h: 2 });
   });
 
   it('an item that no longer exists shows a visible note instead of actions', () => {

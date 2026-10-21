@@ -22,13 +22,13 @@ class FakeRO {
 }
 
 function tile(id: string, name: string, x = 0, y = 0, extra: any = {}): any {
-  return { kind: 'tile', id, name, url: 'http://x.test', icon: 'mdi:home', openMode: 'newtab', size: 'medium', order: 0, placement: { x, y, w: 1, h: 1 }, ...extra };
+  return { kind: 'tile', id, name, url: 'http://x.test', icon: 'mdi:home', openMode: 'newtab', size: 'medium', order: 0, placement: { x, y, w: 2, h: 2 }, ...extra }; // Medium (spec §9)
 }
 function folder(id: string, name: string, children: any[], extra: any = {}): any {
-  return { kind: 'folder', id, name, display: 'collapsed', placement: { x: 0, y: 0, w: 2, h: 2 }, content: { columns: 4, children }, ...extra };
+  return { kind: 'folder', id, name, display: 'collapsed', placement: { x: 0, y: 0, w: 4, h: 4 }, content: { columns: 8, children }, ...extra };
 }
 function mk(children: any[]): { dash: LayoutDashboard; tab: LayoutTab } {
-  const tab: LayoutTab = { id: 't1', name: 'Main', root: { columns: 12, children } };
+  const tab: LayoutTab = { id: 't1', name: 'Main', root: { columns: 24, children } };
   const dash: LayoutDashboard = { id: 'd1', name: 'Home', path: '/home', revision: 1, tabs: [tab] };
   return { dash, tab };
 }
@@ -75,7 +75,7 @@ describe('collapsed folder preview', () => {
     expect(screen.getByRole('button', { name: "Box, folder with 2 items (can't display its contents)" })).toBeInTheDocument();
   });
   it('aria-label names the folder and its item count', async () => {
-    await renderTab([folder('f1', 'Box', [tile('a', 'A'), tile('b', 'B', 1), tile('c', 'C', 2)]), folder('f2', 'One', [tile('d', 'D')], { placement: { x: 2, y: 0, w: 2, h: 2 } }), folder('f3', 'None', [], { placement: { x: 4, y: 0, w: 2, h: 2 } })]);
+    await renderTab([folder('f1', 'Box', [tile('a', 'A'), tile('b', 'B', 2), tile('c', 'C', 4)]), folder('f2', 'One', [tile('d', 'D')], { placement: { x: 4, y: 0, w: 4, h: 4 } }), folder('f3', 'None', [], { placement: { x: 8, y: 0, w: 4, h: 4 } })]);
     expect(screen.getByRole('button', { name: 'Box, folder with 3 items' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'One, folder with 1 item' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'None, folder with 0 items' })).toBeInTheDocument();
@@ -103,7 +103,7 @@ describe('overlay', () => {
   });
 
   it('nested collapsed folder stacks; breadcrumb shows Tab > A > B; clicking A closes B', async () => {
-    await renderTab([folder('fa', 'FolderA', [folder('fb', 'FolderB', [tile('a', 'Deep')], { placement: { x: 0, y: 0, w: 2, h: 2 } })])]);
+    await renderTab([folder('fa', 'FolderA', [folder('fb', 'FolderB', [tile('a', 'Deep')], { placement: { x: 0, y: 0, w: 4, h: 4 } })])]);
     await fireEvent.click(screen.getByRole('button', { name: /FolderA/ }));
     await fireEvent.click(screen.getByRole('button', { name: /FolderB/ }));
     const dialogs = screen.getAllByRole('dialog');
@@ -136,7 +136,7 @@ describe('overlay', () => {
     const { dash } = await renderTab([folder('f1', 'Box', [tile('a', 'Alpha')])]);
     await fireEvent.click(screen.getByRole('button', { name: /Box/ }));
     expect(screen.getByRole('dialog')).toBeInTheDocument();
-    setDoc({ ...dash, revision: 2, tabs: [{ ...dash.tabs[0], root: { columns: 12, children: [] } }] });
+    setDoc({ ...dash, revision: 2, tabs: [{ ...dash.tabs[0], root: { columns: 24, children: [] } }] });
     await tick();
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(info).toHaveBeenCalledWith('A folder you had open was changed elsewhere and has been closed');
@@ -160,20 +160,22 @@ describe('overlay', () => {
 });
 
 describe('overlay sizing (Ruling 23)', () => {
-  for (const cols of [1, 3]) {
-    it(`a ${cols}-column folder's overlay cells equal the dashboard cell (120px at 1440), not bodyPx/columns`, async () => {
-      const kids = [0, 1, 2].map((i) => tile('k' + i, 'K' + i, i % cols, Math.floor(i / cols)));
+  // 24 columns of 60 px at 1440; folders of 1 and 3 Medium tiles across (2 and 6 columns).
+  for (const cols of [2, 6]) {
+    it(`a ${cols}-column folder's overlay cells equal the dashboard cell (60px at 1440), not bodyPx/columns`, async () => {
+      const per = cols / 2;
+      const kids = [0, 1, 2].map((i) => tile('k' + i, 'K' + i, (i % per) * 2, Math.floor(i / per) * 2));
       await renderTab([folder('f1', 'Box', kids, { content: { columns: cols, children: kids } })]);
       await fireEvent.click(screen.getByRole('button', { name: /^Box/ }));
       const panel = screen.getByRole('dialog');
       const cell = panel.querySelector('[data-node-id="k0"]') as HTMLElement;
       const grid = cell.parentElement as HTMLElement;
-      expect(grid.getAttribute('style')).toMatch(/grid-auto-rows:\s*120px/);
-      // The content box is exactly columns x cell, so each 1fr column is 120px too.
+      expect(grid.getAttribute('style')).toMatch(/grid-auto-rows:\s*60px/);
+      // The content box is exactly columns x cell, so each 1fr column is 60px too (a Medium = the old 120 px).
       const box = panel.querySelector('.overlay-content') as HTMLElement;
-      expect(box.style.width).toBe(`${cols * 120}px`);
+      expect(box.style.width).toBe(`${cols * 60}px`);
       // The panel fits its content (+ chrome), capped at the viewport.
-      expect((panel as HTMLElement).style.width).toBe(`${cols * 120 + 34}px`);
+      expect((panel as HTMLElement).style.width).toBe(`${cols * 60 + 34}px`);
       expect((panel as HTMLElement).style.maxWidth).toBe('100%');
     });
   }
@@ -181,12 +183,12 @@ describe('overlay sizing (Ruling 23)', () => {
     const prev = window.innerWidth;
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 400 });
     try {
-      const kids = [tile('a', 'A', 0, 0), tile('b', 'B', 1, 0), tile('c', 'C', 2, 0), tile('d', 'D', 3, 0)];
+      const kids = [tile('a', 'A', 0, 0), tile('b', 'B', 2, 0), tile('c', 'C', 4, 0), tile('d', 'D', 6, 0)];
       await renderTab([folder('f1', 'Box', kids)]);
       await fireEvent.click(screen.getByRole('button', { name: /^Box/ }));
       const grid = (screen.getByRole('dialog').querySelector('[data-node-id="a"]') as HTMLElement).parentElement as HTMLElement;
       const row = Number(/grid-auto-rows:\s*([\d.]+)px/.exec(grid.getAttribute('style') ?? '')![1]);
-      expect(row).toBeCloseTo((400 - 32 - 34) / 4, 1);
+      expect(row).toBeCloseTo((400 - 32 - 34) / 8, 1); // 8 content columns
     } finally {
       Object.defineProperty(window, 'innerWidth', { configurable: true, value: prev });
     }
@@ -200,12 +202,12 @@ describe('overlay width excludes the scrollbar (M3 Task 1)', () => {
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 400 });
     Object.defineProperty(de, 'clientWidth', { configurable: true, value: 385 });
     try {
-      const kids = [tile('a', 'A', 0, 0), tile('b', 'B', 1, 0), tile('c', 'C', 2, 0), tile('d', 'D', 3, 0)];
+      const kids = [tile('a', 'A', 0, 0), tile('b', 'B', 2, 0), tile('c', 'C', 4, 0), tile('d', 'D', 6, 0)];
       await renderTab([folder('f1', 'Box', kids)]);
       await fireEvent.click(screen.getByRole('button', { name: /^Box/ }));
       const grid = (screen.getByRole('dialog').querySelector('[data-node-id="a"]') as HTMLElement).parentElement as HTMLElement;
       const row = Number(/grid-auto-rows:\s*([\d.]+)px/.exec(grid.getAttribute('style') ?? '')![1]);
-      expect(row).toBeCloseTo((385 - 32 - 34) / 4, 1);
+      expect(row).toBeCloseTo((385 - 32 - 34) / 8, 1); // 8 content columns
     } finally {
       Object.defineProperty(window, 'innerWidth', { configurable: true, value: prevW });
       delete (de as unknown as Record<string, unknown>).clientWidth;
@@ -306,7 +308,7 @@ describe('overlay robustness', () => {
       expect(dlg.querySelector('[role="status"]')?.textContent).toContain('Refreshing layout');
       expect(dlg.querySelector('[data-node-id="a"]')).toBeNull();
       // The reload lands: the panel shows the fresh content.
-      const freshTab: LayoutTab = { ...dash.tabs[0], root: { columns: 12, children: [folder('f1', 'Box', [tile('b', 'Bravo')])] } };
+      const freshTab: LayoutTab = { ...dash.tabs[0], root: { columns: 24, children: [folder('f1', 'Box', [tile('b', 'Bravo')])] } };
       const fresh: LayoutDashboard = { ...dash, revision: 2, tabs: [freshTab] };
       setDoc(fresh);
       layoutStale.set(false);
@@ -325,8 +327,8 @@ describe('overlay robustness', () => {
     const info = vi.spyOn(toast, 'info');
     const { dash } = await renderTab([folder('f1', 'Box', [tile('a', 'Alpha')])]);
     await fireEvent.click(screen.getByRole('button', { name: /Box/ }));
-    const other: LayoutTab = { id: 't2', name: 'Other', root: { columns: 12, children: [folder('f1', 'Box', [])] } };
-    setDoc({ ...dash, revision: 2, tabs: [{ ...dash.tabs[0], root: { columns: 12, children: [] } }, other] });
+    const other: LayoutTab = { id: 't2', name: 'Other', root: { columns: 24, children: [folder('f1', 'Box', [])] } };
+    setDoc({ ...dash, revision: 2, tabs: [{ ...dash.tabs[0], root: { columns: 24, children: [] } }, other] });
     await tick();
     expect(get(overlayStack)).toEqual([]);
     expect(info).toHaveBeenCalledTimes(1);

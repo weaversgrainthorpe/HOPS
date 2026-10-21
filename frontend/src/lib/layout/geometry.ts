@@ -2,7 +2,17 @@ import type {
   Container, FolderNode, LayoutDashboard, LayoutMode, LayoutNode, LayoutTab, Placement
 } from '../types/layout';
 
-export const ROOT_COLUMNS = 12;
+/**
+ * A tab's grid: 24 columns (spec §9, the finer grid). Small = 1 x 1 cell, Medium = 2 x 2 (the old
+ * 12-column cell), Large = 4 x 4. Documents carry `gridUnit: GRID_UNIT` once in this form.
+ */
+export const ROOT_COLUMNS = 24;
+/** The finer-grid marker a document in the 24-column form carries (config.gridUnit). */
+export const GRID_UNIT = 2;
+/** Cells a Medium tile spans each way (the old one cell); a minimised folder shows as one. */
+export const MEDIUM_CELLS = 2;
+/** Grid rows a folder's title takes in a grid parent (the old one row, in the finer cells). */
+export const GRID_TITLE_ROWS = 2;
 export const FREE_UNIT_PX = 8;
 export const DEFAULT_DESIGN_WIDTH = 1280;
 export const MIN_FREE_SCALE = 0.6;
@@ -95,7 +105,10 @@ export function folderInnerColumns(folder: FolderNode): number {
   return containerColumns(folder.content, folder);
 }
 
-/** A tile box narrower or shorter than this renders compact (icon + name). Ruling 22. */
+/**
+ * A tile box narrower or shorter than this renders compact (icon + name). Ruling 22. Unchanged by
+ * the finer grid: a Medium 2 x 2 tile is the old 1 x 1 cell's px.
+ */
 export const COMPACT_TILE_PX = 110;
 export type TileFit = 'fill' | 'compact';
 
@@ -103,6 +116,19 @@ export type TileFit = 'fill' | 'compact';
 export function tileFit(wPx: number, hPx: number): TileFit {
   const m = Math.min(wPx, hPx);
   return isNum(m) && m < COMPACT_TILE_PX ? 'compact' : 'fill';
+}
+
+/**
+ * How a tile placed at `p` in container `m` fits: a grid tile of one cell (Small, 1 x 1) is always
+ * compact, so it is clearly smaller than Medium at any width (spec §9); otherwise tileFit on its box.
+ */
+export function nodeFit(p: Placement, m: ContainerMetrics): TileFit {
+  if (m.mode === 'grid') {
+    const c = clampPlacement(p, m.columns);
+    if (c.w <= 1 && c.h <= 1) return 'compact';
+  }
+  const b = nodeBox(p, m);
+  return tileFit(b.widthPx, b.heightPx);
 }
 
 export type CanvasPlan =
@@ -242,7 +268,7 @@ function innerMode(folder: FolderNode, parent: ContainerMetrics): LayoutMode {
   return concrete(folder.layout) ? folder.layout : parent.mode;
 }
 
-/** Rows a grid folder's content spans: max(h - 1, deepest child bottom), at least 1. */
+/** Rows a grid folder's content spans: max(minRows, deepest child bottom), at least 1. */
 export function gridContentRows(folder: FolderNode, columns: number, minRows: number): number {
   let rows = Math.max(1, minRows);
   const kids = Array.isArray(folder.content?.children) ? folder.content.children : [];
@@ -258,7 +284,7 @@ export function gridContentRows(folder: FolderNode, columns: number, minRows: nu
  * Metrics of an expanded folder's content, inside a parent container.
  * Width: the folder box minus its chrome (so free children never exceed it).
  * Rows: a grid folder in a grid parent fits its rows to its height (content
- * rows = max(h-1, deepest child), shrunk to fit, never clipped); a grid folder
+ * rows = max(h - GRID_TITLE_ROWS, deepest child), shrunk to fit, never clipped); a grid folder
  * in a free parent uses square cells and grows; free rows are the unit.
  */
 export function folderInnerMetrics(folder: FolderNode, parent: ContainerMetrics): ContainerMetrics {
@@ -269,7 +295,7 @@ export function folderInnerMetrics(folder: FolderNode, parent: ContainerMetrics)
   let rowPx: number | undefined;
   if (mode === 'grid' && parent.mode === 'grid') {
     const h = clampPlacement(folder.placement, parent.columns).h;
-    rowPx = content.heightPx / gridContentRows(folder, columns, h - 1);
+    rowPx = content.heightPx / gridContentRows(folder, columns, h - GRID_TITLE_ROWS);
   }
   return containerMetrics(folder.content, mode, content.widthPx, { rowPx, folder });
 }
@@ -379,16 +405,22 @@ export function isRenderable(n: unknown): n is LayoutNode {
 }
 
 /**
- * Placement of a folder minimised to its tile (per-browser view): a grid folder keeps its
- * top-left cell (1 x 1); a free folder becomes a square one dashboard column wide
- * (round(designWidth / 12 / 8) design units, at least 1) at the same x,y.
+ * One dashboard grid cell in free design units for a tab: half the old 12-column side,
+ * round(designWidth / 12 / 8) / 2 (6.5 at 1280; controller Ruling 2), so a Medium (2 cells) is
+ * exactly the old side. It may be fractional: conversions round to whole units.
+ */
+export function freeSideOf(designWidth: unknown): number {
+  const dw = isNum(designWidth) && designWidth > 0 ? designWidth : DEFAULT_DESIGN_WIDTH;
+  return Math.max(1, Math.round(dw / (ROOT_COLUMNS / MEDIUM_CELLS) / FREE_UNIT_PX)) / MEDIUM_CELLS;
+}
+
+/**
+ * Placement of a folder minimised to its tile (per-browser view): one Medium tile at the same
+ * x,y — a grid folder 2 x 2 cells, a free folder a square of 2 x side design units (freeSideOf;
+ * the old one-column square, so it looks exactly as before the finer grid).
  */
 export function minimisedPlacement(p: Placement, mode: LayoutMode, tab: LayoutTab): Placement {
-  const dw = tab.designWidth;
-  const side =
-    mode === 'free'
-      ? Math.max(1, Math.round((isNum(dw) && dw > 0 ? dw : DEFAULT_DESIGN_WIDTH) / ROOT_COLUMNS / FREE_UNIT_PX))
-      : 1;
+  const side = mode === 'free' ? Math.max(1, Math.round(MEDIUM_CELLS * freeSideOf(tab.designWidth))) : MEDIUM_CELLS;
   const out: Placement = { x: p.x, y: p.y, w: side, h: side };
   if (p.z !== undefined) out.z = p.z;
   return out;

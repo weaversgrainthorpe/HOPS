@@ -39,16 +39,16 @@ class FakeRO {
 }
 
 const entry = (id: string, name: string) => ({ id, name, url: 'http://x.test', icon: '', openMode: 'newtab' as const, size: 'medium' as const, order: 0 });
-const tile = (id: string, name: string, x = 0, y = 0): any => ({ kind: 'tile', ...entry(id, name), placement: { x, y, w: 1, h: 1 } });
+const tile = (id: string, name: string, x = 0, y = 0): any => ({ kind: 'tile', ...entry(id, name), placement: { x, y, w: 2, h: 2 } });
 const folder = (id: string, name: string, children: any[], display = 'expanded'): any => ({
-  kind: 'folder', id, name, display, placement: { x: 0, y: 1, w: 4, h: 3 }, content: { columns: 4, children }
+  kind: 'folder', id, name, display, placement: { x: 0, y: 2, w: 8, h: 6 }, content: { columns: 8, children }
 });
 
 const layoutD1: LayoutDashboard = {
   id: 'd1', name: 'Home', path: '/home', revision: 1,
   tabs: [
-    { id: 't1', name: 'Main', root: { columns: 12, children: [tile('m1', 'MainTile'), folder('box', 'Box', [tile('in1', 'Inside')], 'collapsed')] } },
-    { id: 't2', name: 'Second', root: { columns: 12, children: [tile('s1', 'SecondTile')] } }
+    { id: 't1', name: 'Main', root: { columns: 24, children: [tile('m1', 'MainTile'), folder('box', 'Box', [tile('in1', 'Inside')], 'collapsed')] } },
+    { id: 't2', name: 'Second', root: { columns: 24, children: [tile('s1', 'SecondTile')] } }
   ]
 };
 const legacy = layoutD1; // the dashboard the route hands Dashboard (v3, like every dashboard)
@@ -296,9 +296,9 @@ describe('Dashboard edit mode (M3 Task 6: the v3 editor shell)', () => {
     editorMenu.set(null);
     const grid = container.querySelector('.tab-canvas [data-container-id="t1"]') as HTMLElement;
     grid.getBoundingClientRect = () => ({ left: 0, top: 0, right: 1440, bottom: 600, width: 1440, height: 600, x: 0, y: 0, toJSON() {} }) as DOMRect;
-    await fireEvent.contextMenu(grid, { clientX: 5 * 120 + 10, clientY: 10 });
+    await fireEvent.contextMenu(grid, { clientX: 10 * 60 + 10, clientY: 10 });
     const req = get(editorMenu)!;
-    expect(req.target).toEqual({ kind: 'container', ref: { tabId: 't1' }, cell: { x: 5, y: 0 } });
+    expect(req.target).toEqual({ kind: 'container', ref: { tabId: 't1' }, cell: { x: 10, y: 0 } });
   });
 
   it('the tab dialog edits the draft only (no request), and the tab bar shows the draft', async () => {
@@ -399,7 +399,7 @@ describe('one editing flow (walkthrough §4B): handle, double-click and menu for
   const cellOf = (c: HTMLElement, id: string) => c.querySelector(`.tab-canvas [data-node-id="${id}"]`) as HTMLElement;
   const expandedD: LayoutDashboard = {
     id: 'd1', name: 'Home', path: '/home', revision: 1,
-    tabs: [{ id: 't1', name: 'Main', root: { columns: 12, children: [tile('m1', 'MainTile'), folder('grp', 'Group', [tile('g1', 'InGroup')])] } }]
+    tabs: [{ id: 't1', name: 'Main', root: { columns: 24, children: [tile('m1', 'MainTile'), folder('grp', 'Group', [tile('g1', 'InGroup')])] } }]
   };
 
   it('the old per-tab pencil / duplicate / delete buttons are gone', async () => {

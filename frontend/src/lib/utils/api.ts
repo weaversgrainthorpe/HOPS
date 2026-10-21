@@ -170,6 +170,9 @@ export async function getConfig(): Promise<Config> {
     throw new Error('The server sent a configuration this version of HOPS cannot read (expected schema 3 dashboards). Reload the page; if it persists, check the server.');
   }
   const out: Config = { schemaVersion: 3, dashboards: resp.dashboards };
+  // The finer-grid marker (spec §9) is passed through as sent: the editor refuses to save into a
+  // document without gridUnit 2 (Ruling 3), so it must never be dropped (or invented) here.
+  if (resp.gridUnit !== undefined) out.gridUnit = resp.gridUnit;
   if (Array.isArray(resp.migrationNotices)) out.migrationNotices = resp.migrationNotices;
   if (resp.notices !== undefined) {
     // A notice this build cannot read is dropped from the list but counted, so the banner

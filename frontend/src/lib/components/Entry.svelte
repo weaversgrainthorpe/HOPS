@@ -356,7 +356,7 @@
   .entry.fill .icon img {
     max-height: 100%;
   }
-  /* Spec §8: Small is one cell drawn compact — a smaller icon and text, also when the tile
+  /* Spec §8/§9: Small is one 1 x 1 cell, always drawn compact — a smaller icon and text, also when the tile
      fills its cell (the fit padding above would otherwise win over .small's). */
   .entry.fill.small {
     padding: 0.45rem 0.5rem;

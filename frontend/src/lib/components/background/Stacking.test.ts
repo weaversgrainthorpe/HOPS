@@ -65,10 +65,10 @@ function stubMatchMedia() {
 // ---- fixtures ---------------------------------------------------------------
 
 const tile = (id: string, name: string, x = 0, y = 0): any => ({
-  kind: 'tile', id, name, url: 'http://x.test', icon: '', openMode: 'newtab', size: 'medium', order: 0, placement: { x, y, w: 1, h: 1 }
+  kind: 'tile', id, name, url: 'http://x.test', icon: '', openMode: 'newtab', size: 'medium', order: 0, placement: { x, y, w: 2, h: 2 }
 });
 const folder = (id: string, name: string, children: any[], extra: any = {}): any => ({
-  kind: 'folder', id, name, display: 'expanded', placement: { x: 0, y: 1, w: 4, h: 3 }, content: { columns: 4, children }, ...extra
+  kind: 'folder', id, name, display: 'expanded', placement: { x: 0, y: 2, w: 8, h: 6 }, content: { columns: 8, children }, ...extra
 });
 const image = (value: string, extra: Partial<Background> = {}): Background => ({ type: 'image', value, ...extra });
 const slideshow = (images: string[], extra: Partial<Background> = {}): Background => ({
@@ -80,8 +80,8 @@ function dash(over: Partial<LayoutDashboard> = {}, tabs?: LayoutTab[]): LayoutDa
     id: 'd1', name: 'Home', path: '/home', revision: 1,
     display: { animatedFolderBackgrounds: true },
     tabs: tabs ?? [
-      { id: 't1', name: 'Main', root: { columns: 12, children: [tile('m1', 'MainTile')] } },
-      { id: 't2', name: 'Second', root: { columns: 12, children: [tile('s1', 'SecondTile')] } }
+      { id: 't1', name: 'Main', root: { columns: 24, children: [tile('m1', 'MainTile')] } },
+      { id: 't2', name: 'Second', root: { columns: 24, children: [tile('s1', 'SecondTile')] } }
     ],
     ...over
   } as LayoutDashboard;
@@ -129,11 +129,11 @@ describe('dashboard and tab layers', () => {
 
   it('the overlay vars come from the dashboard, or from the tab when the tab is fully opaque', async () => {
     const d = dash({ background: dashBg }, [
-      { id: 't1', name: 'Plain', root: { columns: 12, children: [] } },
-      { id: 't2', name: 'Opaque', background: image('/backgrounds/t.jpg', { overlayOpacity: 0.2, overlayBlur: 6 }), root: { columns: 12, children: [] } },
-      { id: 't3', name: 'Half', background: image('/backgrounds/h.jpg', { opacity: 0.5, overlayOpacity: 0.9, overlayBlur: 15 }), root: { columns: 12, children: [] } },
-      { id: 't4', name: 'Inherit', background: { inherit: true, type: 'image', value: '/backgrounds/i.jpg', overlayOpacity: 0.95 }, root: { columns: 12, children: [] } },
-      { id: 't5', name: 'Bare', background: { inherit: true }, root: { columns: 12, children: [] } }
+      { id: 't1', name: 'Plain', root: { columns: 24, children: [] } },
+      { id: 't2', name: 'Opaque', background: image('/backgrounds/t.jpg', { overlayOpacity: 0.2, overlayBlur: 6 }), root: { columns: 24, children: [] } },
+      { id: 't3', name: 'Half', background: image('/backgrounds/h.jpg', { opacity: 0.5, overlayOpacity: 0.9, overlayBlur: 15 }), root: { columns: 24, children: [] } },
+      { id: 't4', name: 'Inherit', background: { inherit: true, type: 'image', value: '/backgrounds/i.jpg', overlayOpacity: 0.95 }, root: { columns: 24, children: [] } },
+      { id: 't5', name: 'Bare', background: { inherit: true }, root: { columns: 24, children: [] } }
     ]);
     config.set({ schemaVersion: 3, dashboards: [d] });
     const { container } = render(Dashboard, { dashboard: d });
@@ -164,8 +164,8 @@ describe('dashboard and tab layers', () => {
 
   it('overlay values are clamped and default when the dashboard has none', async () => {
     const d = dash({}, [
-      { id: 't1', name: 'Wild', background: image('/backgrounds/t.jpg', { overlayOpacity: 7, overlayBlur: -4 }), root: { columns: 12, children: [] } },
-      { id: 't2', name: 'None', root: { columns: 12, children: [] } }
+      { id: 't1', name: 'Wild', background: image('/backgrounds/t.jpg', { overlayOpacity: 7, overlayBlur: -4 }), root: { columns: 24, children: [] } },
+      { id: 't2', name: 'None', root: { columns: 24, children: [] } }
     ]);
     config.set({ schemaVersion: 3, dashboards: [d] });
     const { container } = render(Dashboard, { dashboard: d });
@@ -181,9 +181,9 @@ describe('dashboard and tab layers', () => {
   it('the dashboard animation is paused under a fully opaque tab, and resumes at its current image', async () => {
     vi.useFakeTimers();
     const d = dash({ background: slideshow(['/backgrounds/d1.jpg', '/backgrounds/d2.jpg', '/backgrounds/d3.jpg']) }, [
-      { id: 't1', name: 'Plain', root: { columns: 12, children: [] } },
-      { id: 't2', name: 'Opaque', background: slideshow(['/backgrounds/t1.jpg', '/backgrounds/t2.jpg']), root: { columns: 12, children: [] } },
-      { id: 't3', name: 'Half', background: image('/backgrounds/h.jpg', { opacity: 0.5 }), root: { columns: 12, children: [] } }
+      { id: 't1', name: 'Plain', root: { columns: 24, children: [] } },
+      { id: 't2', name: 'Opaque', background: slideshow(['/backgrounds/t1.jpg', '/backgrounds/t2.jpg']), root: { columns: 24, children: [] } },
+      { id: 't3', name: 'Half', background: image('/backgrounds/h.jpg', { opacity: 0.5 }), root: { columns: 24, children: [] } }
     ]);
     config.set({ schemaVersion: 3, dashboards: [d] });
     const { container } = render(Dashboard, { dashboard: d });
@@ -223,8 +223,8 @@ describe('dashboard and tab layers', () => {
 
   it('a dashboard under a fully opaque first tab loads nothing at all', async () => {
     const d = dash({ background: slideshow(['/backgrounds/d1.jpg', '/backgrounds/d2.jpg']) }, [
-      { id: 't1', name: 'Opaque', background: image('/backgrounds/t.jpg'), root: { columns: 12, children: [] } },
-      { id: 't2', name: 'Plain', root: { columns: 12, children: [] } }
+      { id: 't1', name: 'Opaque', background: image('/backgrounds/t.jpg'), root: { columns: 24, children: [] } },
+      { id: 't2', name: 'Plain', root: { columns: 24, children: [] } }
     ]);
     config.set({ schemaVersion: 3, dashboards: [d] });
     const { container } = render(Dashboard, { dashboard: d });
@@ -239,7 +239,7 @@ describe('dashboard and tab layers', () => {
   it('reduced motion freezes the dashboard and tab slideshows', async () => {
     reduced = true;
     const d = dash({ background: dashBg }, [
-      { id: 't1', name: 'Half', background: slideshow(['/backgrounds/t1.jpg', '/backgrounds/t2.jpg'], { opacity: 0.5 }), root: { columns: 12, children: [] } }
+      { id: 't1', name: 'Half', background: slideshow(['/backgrounds/t1.jpg', '/backgrounds/t2.jpg'], { opacity: 0.5 }), root: { columns: 24, children: [] } }
     ]);
     config.set({ schemaVersion: 3, dashboards: [d] });
     const { container } = render(Dashboard, { dashboard: d });
@@ -282,7 +282,7 @@ describe('dashboard and tab layers', () => {
 // ---- folders ----------------------------------------------------------------
 
 function mkTab(children: any[]): { d: LayoutDashboard; tab: LayoutTab } {
-  const tab: LayoutTab = { id: 't1', name: 'Main', root: { columns: 12, children } };
+  const tab: LayoutTab = { id: 't1', name: 'Main', root: { columns: 24, children } };
   const d = dash({}, [tab]);
   config.set({ schemaVersion: 3, dashboards: [d] });
   return { d, tab };
@@ -341,7 +341,7 @@ describe('folder layers', () => {
   it('an inherit folder renders no layer (and a bare {inherit:true} does not crash)', async () => {
     const { d, tab } = mkTab([
       folder('f1', 'Kept', [tile('a', 'A')], { background: { inherit: true, type: 'image', value: '/backgrounds/k.jpg' } }),
-      { ...folder('f2', 'Bare', [tile('b', 'B')], { background: { inherit: true } }), placement: { x: 4, y: 1, w: 4, h: 3 } }
+      { ...folder('f2', 'Bare', [tile('b', 'B')], { background: { inherit: true } }), placement: { x: 8, y: 2, w: 8, h: 6 } }
     ]);
     const { container } = render(TabCanvas, { dashboard: d, tab });
     await settle();
@@ -424,8 +424,8 @@ describe('folder layers', () => {
     const broken = image('/backgrounds/missing.jpg');
     const { d, tab } = mkTab([
       folder('ft', 'Titled', [tile('a', 'A')], { background: broken }),
-      { ...folder('fu', 'Untitled', [tile('b', 'B')], { background: broken, showTitle: false }), placement: { x: 4, y: 1, w: 4, h: 3 } },
-      { ...folder('fc', 'Collapsed', [tile('c', 'C')], { background: broken, display: 'collapsed' }), placement: { x: 8, y: 1, w: 2, h: 2 } }
+      { ...folder('fu', 'Untitled', [tile('b', 'B')], { background: broken, showTitle: false }), placement: { x: 8, y: 2, w: 8, h: 6 } },
+      { ...folder('fc', 'Collapsed', [tile('c', 'C')], { background: broken, display: 'collapsed' }), placement: { x: 16, y: 2, w: 4, h: 4 } }
     ]);
     const { container } = render(TabCanvas, { dashboard: d, tab, editing: true });
     await settle();
@@ -488,11 +488,11 @@ describe('folder lazy loading', () => {
   it('collapsed and single-image folders load only once visible, and never take an animation slot', async () => {
     const anims = [0, 1, 2, 3].map((i) => ({
       ...folder(`a${i}`, `Anim${i}`, [tile(`at${i}`, `AT${i}`)], { background: slideshow([`/backgrounds/a${i}-1.jpg`, `/backgrounds/a${i}-2.jpg`]) }),
-      placement: { x: i * 3, y: 0, w: 3, h: 3 }
+      placement: { x: i * 6, y: 0, w: 6, h: 6 }
     }));
     const { d, tab } = mkTab([
       ...anims,
-      { ...folder('fc', 'Collapsed', [tile('c', 'C')], { display: 'collapsed', background: slideshow(['/backgrounds/c1.jpg', '/backgrounds/c2.jpg']) }), placement: { x: 0, y: 3, w: 2, h: 2 } },
+      { ...folder('fc', 'Collapsed', [tile('c', 'C')], { display: 'collapsed', background: slideshow(['/backgrounds/c1.jpg', '/backgrounds/c2.jpg']) }), placement: { x: 0, y: 6, w: 4, h: 4 } },
       { ...folder('fi', 'Single', [tile('s', 'S')], { background: image('/backgrounds/single.jpg') }), placement: { x: 2, y: 3, w: 4, h: 3 } }
     ]);
     const { container } = render(TabCanvas, { dashboard: d, tab });

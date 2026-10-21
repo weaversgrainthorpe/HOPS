@@ -18,31 +18,32 @@ import { updateNode, deleteNodes } from '$lib/editor/treeOps';
 import type { Config } from '$lib/types';
 import type { FolderNode, LayoutDashboard, LayoutDoc, LayoutNode, Placement } from '$lib/types/layout';
 
-const p = (x: number, y: number, w = 1, h = 1): Placement => ({ x, y, w, h });
+// Finer grid (spec §9): 24 columns, a Medium tile 2 x 2 — the pre-finer-grid fixture doubled.
+const p = (x: number, y: number, w = 2, h = 2): Placement => ({ x, y, w, h });
 const tile = (id: string, pl: Placement): LayoutNode =>
   ({ kind: 'tile', id, name: id, url: 'http://x', placement: pl }) as unknown as LayoutNode;
 const folder = (id: string, pl: Placement, children: LayoutNode[]): FolderNode => ({
-  kind: 'folder', id, name: id, display: 'expanded', placement: pl, content: { columns: 4, children }
+  kind: 'folder', id, name: id, display: 'expanded', placement: pl, content: { columns: 8, children }
 });
 function home(): LayoutDashboard {
   return {
     id: 'd', name: 'D', path: '/d', revision: 7,
     tabs: [
-      { id: 't1', name: 'One', root: { columns: 12, children: [
-        tile('a', p(0, 0)), tile('b', p(1, 0)),
-        folder('f1', p(0, 2, 4, 3), [tile('x', p(0, 0))]),
-        folder('src', p(5, 2, 4, 3), [tile('s1', p(0, 0)), folder('deep', p(1, 0, 2, 2), [tile('s2', p(0, 0))])])
+      { id: 't1', name: 'One', root: { columns: 24, children: [
+        tile('a', p(0, 0)), tile('b', p(2, 0)),
+        folder('f1', p(0, 4, 8, 6), [tile('x', p(0, 0))]),
+        folder('src', p(10, 4, 8, 6), [tile('s1', p(0, 0)), folder('deep', p(2, 0, 4, 4), [tile('s2', p(0, 0))])])
       ] } },
-      { id: 't2', name: 'Two', root: { columns: 12, children: [] } }
+      { id: 't2', name: 'Two', root: { columns: 24, children: [] } }
     ]
   };
 }
 function other(): LayoutDashboard {
   return { id: 'o', name: 'O', path: '/o', revision: 3, tabs: [
-    { id: 'ot', name: 'OT', root: { columns: 12, children: [tile('o1', p(0, 0))] } }
+    { id: 'ot', name: 'OT', root: { columns: 24, children: [tile('o1', p(0, 0))] } }
   ] };
 }
-const doc = (): LayoutDoc => ({ schemaVersion: 3, dashboards: [home(), other()] });
+const doc = (): LayoutDoc => ({ schemaVersion: 3, gridUnit: 2, dashboards: [home(), other()] });
 const draft = () => get(session)!.draft;
 const kidsOf = (folderId: string): LayoutNode[] => {
   const walk = (c: LayoutNode[]): FolderNode | undefined => {
@@ -107,7 +108,7 @@ describe('copy then paste', () => {
     copySelection();
     await pasteInto({ tabId: 't2' });
     const kids = draft().tabs[1].root.children;
-    expect(kids.map((k) => k.placement)).toEqual([p(0, 0), p(1, 0)]);
+    expect(kids.map((k) => k.placement)).toEqual([p(0, 0), p(2, 0)]);
   });
 
   it('an item inside a selected folder is not copied twice', () => {
@@ -136,26 +137,26 @@ describe('copy then paste', () => {
     begin('d');
     toggleNode('a', false);
     copySelection();
-    await pasteInto({ tabId: 't1' }, { x: 9, y: 0 });
+    await pasteInto({ tabId: 't1' }, { x: 18, y: 0 });
     const kids = draft().tabs[0].root.children;
-    expect(kids[kids.length - 1].placement).toEqual(p(9, 0));
+    expect(kids[kids.length - 1].placement).toEqual(p(18, 0));
     await pasteInto({ tabId: 't1' }, { x: 0, y: 0 }); // taken by a
     const k2 = draft().tabs[0].root.children;
-    expect(k2[k2.length - 1].placement).toEqual(p(2, 0));
+    expect(k2[k2.length - 1].placement).toEqual(p(4, 0));
   });
 
   it('a collapsed folder\'s reserved footprint counts as taken (Ruling 13)', async () => {
-    config.set({ schemaVersion: 3, dashboards: [{
-      ...home(), tabs: [{ id: 't1', name: 'One', root: { columns: 2, children: [
-        { ...folder('c', p(0, 0, 2, 2), []), display: 'collapsed' }, tile('a', p(0, 2))
+    config.set({ schemaVersion: 3, gridUnit: 2, dashboards: [{
+      ...home(), tabs: [{ id: 't1', name: 'One', root: { columns: 4, children: [
+        { ...folder('c', p(0, 0, 4, 4), []), display: 'collapsed' }, tile('a', p(0, 4))
       ] } }]
     }] } as unknown as Config);
     begin('d');
     toggleNode('a', false);
     copySelection();
-    await pasteInto({ tabId: 't1' }, { x: 1, y: 1 }); // inside c's reserved cells
+    await pasteInto({ tabId: 't1' }, { x: 2, y: 2 }); // inside c's reserved cells
     const kids = draft().tabs[0].root.children;
-    expect(kids[kids.length - 1].placement).toEqual(p(1, 2));
+    expect(kids[kids.length - 1].placement).toEqual(p(2, 4));
   });
 });
 
@@ -207,12 +208,12 @@ describe('across dashboards', () => {
   it('a clean session uses the transfer endpoint with both revisions, then rebases on the fresh layout', async () => {
     copyFromOther('cut');
     const fresh: LayoutDoc = {
-      schemaVersion: 3,
+      schemaVersion: 3, gridUnit: 2,
       dashboards: [
-        { ...home(), revision: 8, tabs: [{ ...home().tabs[0], root: { columns: 12, children: [
-          ...home().tabs[0].root.children, tile('o1', p(2, 0))
+        { ...home(), revision: 8, tabs: [{ ...home().tabs[0], root: { columns: 24, children: [
+          ...home().tabs[0].root.children, tile('o1', p(4, 0))
         ] } }, home().tabs[1]] },
-        { ...other(), revision: 4, tabs: [{ id: 'ot', name: 'OT', root: { columns: 12, children: [] } }] }
+        { ...other(), revision: 4, tabs: [{ id: 'ot', name: 'OT', root: { columns: 24, children: [] } }] }
       ]
     };
     vi.mocked(api.transferNodes).mockResolvedValue({ sourceRevision: 4, targetRevision: 8, layout: fresh });
@@ -305,7 +306,7 @@ describe('paste of a copy uses the snapshot taken at Copy time (Ruling 18(6))', 
   });
 
   it('a grid folder pasted into a free tab is converted (not left at 4 x 3 design units)', async () => {
-    config.set({ schemaVersion: 3, dashboards: [{
+    config.set({ schemaVersion: 3, gridUnit: 2, dashboards: [{
       ...home(), tabs: [home().tabs[0], { id: 'tf', name: 'F', layout: 'free', designWidth: 960, root: { columns: 120, children: [] } }]
     }] } as unknown as Config);
     begin('d');

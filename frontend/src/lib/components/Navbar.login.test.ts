@@ -46,7 +46,7 @@ function doc(): Config {
 	return {
 		schemaVersion: 3,
 		dashboards: [
-			{ id: 'd', name: 'D', path: '/d', revision: 3, tabs: [{ id: 't1', name: 'One', root: { columns: 12, children: [] } }] }
+			{ id: 'd', name: 'D', path: '/d', revision: 3, tabs: [{ id: 't1', name: 'One', root: { columns: 24, children: [] } }] }
 		]
 	} as unknown as Config;
 }

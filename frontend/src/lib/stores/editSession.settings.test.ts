@@ -16,23 +16,23 @@ import type { Config } from '$lib/types';
 import type { LayoutDashboard, LayoutNode } from '$lib/types/layout';
 
 const tile = (id: string) =>
-  ({ kind: 'tile', id, name: id, url: 'http://x', placement: { x: 0, y: 0, w: 1, h: 1 } }) as unknown as LayoutNode;
+  ({ kind: 'tile', id, name: id, url: 'http://x', placement: { x: 0, y: 0, w: 2, h: 2 } }) as unknown as LayoutNode;
 const layoutD = (): LayoutDashboard => ({
   id: 'd', name: 'D', path: '/d', revision: 7, settings: { editIdleTimeoutMinutes: null },
-  tabs: [{ id: 't', name: 'T', root: { columns: 12, children: [tile('a')] } }]
+  tabs: [{ id: 't', name: 'T', root: { columns: 24, children: [tile('a')] } }]
 });
 
 beforeEach(() => {
   vi.clearAllMocks();
   resetEditSessionForTests();
   layoutStale.set(false);
-  config.set({ schemaVersion: 3, dashboards: [layoutD()] });
+  config.set({ schemaVersion: 3, gridUnit: 2, dashboards: [layoutD()] });
 });
 
 /** A write response: the new revision and the committed document. */
 const freshAt = (revision: number, settings: Record<string, unknown> = { editIdleTimeoutMinutes: 30 }) => ({
   revision,
-  layout: { schemaVersion: 3 as const, dashboards: [{ ...layoutD(), revision, settings }] }
+  layout: { schemaVersion: 3 as const, gridUnit: 2, dashboards: [{ ...layoutD(), revision, settings }] }
 });
 
 describe('Settings saved during an edit session (Ruling 19)', () => {

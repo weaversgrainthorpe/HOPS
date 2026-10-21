@@ -54,10 +54,10 @@ function dash(id: string, revision: number, extra: Partial<LayoutDashboard> = {}
 }
 
 function makeConfig(...ds: LayoutDashboard[]): Config {
-  return { schemaVersion: 3, dashboards: ds.length ? ds : [dash('a', 3), dash('b', 7)] };
+  return { schemaVersion: 3, gridUnit: 2, dashboards: ds.length ? ds : [dash('a', 3), dash('b', 7)] };
 }
 
-const doc = (...ds: LayoutDashboard[]) => ({ schemaVersion: 3 as const, dashboards: ds });
+const doc = (...ds: LayoutDashboard[]) => ({ schemaVersion: 3 as const, gridUnit: 2, dashboards: ds });
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -87,7 +87,7 @@ describe('the store is the v3 document', () => {
   it('migration notices from GET are kept when a write response refreshes the document', () => {
     config.set({ ...makeConfig(), migrationNotices: ['renamed'] });
     applySavedLayout({ layout: doc(dash('a', 4)) });
-    expect(get(config)).toEqual({ schemaVersion: 3, dashboards: [dash('a', 4)], migrationNotices: ['renamed'] });
+    expect(get(config)).toEqual({ schemaVersion: 3, gridUnit: 2, dashboards: [dash('a', 4)], migrationNotices: ['renamed'] });
   });
 });
 
@@ -345,7 +345,7 @@ describe('createDashboard (POST /api/dashboards)', () => {
 
 describe('renameDashboard (PUT schema 3 at the stored revision, no session)', () => {
   it('sends the stored dashboard with the new name/path at the revision the store holds', async () => {
-    const full = dash('a', 3, { tabs: [{ id: 't', name: 'T', root: { columns: 12, children: [] } }], header: { leftText: 'x' } });
+    const full = dash('a', 3, { tabs: [{ id: 't', name: 'T', root: { columns: 24, children: [] } }], header: { leftText: 'x' } });
     config.set(makeConfig(full, dash('b', 7)));
     vi.mocked(api.saveDashboardV3).mockResolvedValue({ revision: 4, layout: doc({ ...full, name: 'Renamed', path: '/r', revision: 4 }, dash('b', 7)) });
     await renameDashboard('a', { name: 'Renamed', path: '/r' });

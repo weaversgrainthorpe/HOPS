@@ -1352,13 +1352,18 @@ test.describe('§7.1 background on/off wording', () => {
 // ---- §7.2: edit mode looks like the real thing (WYSIWYG)
 
 /** Import a copy of a bundled/stored dashboard under a fresh id, path and name; returns its stored entry. */
-async function importCopy(page: Page, context: BrowserContext, dash: Record<string, unknown>, label: string) {
+/**
+ * Import a copy of `dash`. `gridUnit` is the finer-grid marker of the form `dash` is in: absent for an
+ * OLD-form (12-column) export, which the import doubles; 2 for a copy of this server's own export.
+ */
+async function importCopy(page: Page, context: BrowserContext, dash: Record<string, unknown>, label: string, gridUnit?: number) {
   const p = `m4bw72${Date.now().toString(36)}${(seq++).toString(36)}`;
   const copy = JSON.parse(JSON.stringify(dash));
   copy.id = `${p}-dash`;
   copy.path = `/${p}`;
   copy.name = `${label} ${p}`;
-  const bundle = { format: 'hops-export', schemaVersion: 3, exportType: 'full', config: { dashboards: [copy] } };
+  const config = gridUnit === undefined ? { dashboards: [copy] } : { gridUnit, dashboards: [copy] };
+  const bundle = { format: 'hops-export', schemaVersion: 3, exportType: 'full', config };
   const r = await page.request.post('/api/config/import', {
     headers: { 'X-CSRF-Token': await getCsrfToken(context) },
     multipart: { file: { name: 'copy.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(bundle)) } }
@@ -1381,9 +1386,11 @@ async function showcaseCopy(page: Page, context: BrowserContext) {
 async function sampleCopy(page: Page, context: BrowserContext) {
   const exp = await page.request.get('/api/config/export');
   expect(exp.status()).toBe(200);
-  const sample = (await exp.json()).config.dashboards.find((d: { id: string }) => d.id === 'sample');
+  const cfg = (await exp.json()).config;
+  const sample = cfg.dashboards.find((d: { id: string }) => d.id === 'sample');
   expect(sample, 'the test server has the default Sample dashboard').toBeTruthy();
-  return importCopy(page, context, sample, 'Sample');
+  expect(cfg.gridUnit, 'the export carries the finer-grid marker').toBe(2);
+  return importCopy(page, context, sample, 'Sample', cfg.gridUnit);
 }
 
 type Boxes = Record<string, { x: number; y: number; w: number; h: number }>;
@@ -1789,7 +1796,8 @@ test.describe('§7.2 nested untitled folders on a touch device', () => {
   });
 });
 
-// ---- §8: a tile's Size sets the space it takes (Large = 2 x 2, Medium and Small = 1 x 1)
+// ---- §8/§9: a tile's Size sets the space it takes. These dashboards are imported as OLD-form (12-column)
+// exports, which the import doubles (finer grid, spec §9): a Medium is 2 x 2 cells, Large 4 x 4, Small 1 x 1.
 
 test.describe('§8 tile size sets the space it takes', () => {
   const box = async (page: Page, id: string) => (await page.locator(`.tab-canvas [data-node-id="${id}"]`).boundingBox())!;
@@ -1878,8 +1886,8 @@ test.describe('§8 tile size sets the space it takes', () => {
     await allApart(page, ['a', 'b', 'd', 'e', 'f'].map(f.id));
   });
 
-  // 1280px: cells are compact (under 110px); 1920px: tiles fill their cells. Small is smaller in both.
-  for (const width of [1280, 1920]) test(`Small draws a smaller icon at once and the tile stays one cell (${width}px)`, async ({ page, context }) => {
+  // Spec §9: Small is one 1 x 1 cell (a quarter of a Medium's 2 x 2), always compact, with a smaller icon.
+  for (const width of [1280, 1920]) test(`Small takes one cell (half a Medium each way), is compact and draws a smaller icon (${width}px)`, async ({ page, context }) => {
     await page.setViewportSize({ width, height: 900 });
     const f = await sizeDash(page, context);
     await page.goto(f.path);
@@ -1890,14 +1898,17 @@ test.describe('§8 tile size sets the space it takes', () => {
     const i0 = (await icon.boundingBox())!;
     await pickSize(page, item, 'small');
     await expect(item.locator('button.entry')).toHaveClass(/\bsmall\b/);
+    await expect(item.locator('button.entry')).toHaveClass(/\bcompact\b/);
     const i1 = (await icon.boundingBox())!;
     expect(i1.width, 'icon is smaller').toBeLessThan(i0.width - 4);
     const a1 = await box(page, f.id('a'));
-    near(a1.width, a0.width, 'still one cell wide');
-    near(a1.height, a0.height, 'still one cell high');
+    near(a1.width, a0.width / 2, 'one cell wide: half a Medium');
+    near(a1.height, a0.height / 2, 'one cell high: half a Medium');
+    near(a1.x, a0.x, 'keeps its top-left (x)');
+    near(a1.y, a0.y, 'keeps its top-left (y)');
   });
 
-  test("a stored large tile at 1 x 1 (Sample's Netflix) is not enlarged on load", async ({ page, context }) => {
+  test("a stored large tile at a Medium's span (Sample's Netflix, 2 x 2 after the finer-grid import) is not enlarged on load", async ({ page, context }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
     const s = await sampleCopy(page, context);
     await page.goto(s.path);
@@ -1908,7 +1919,7 @@ test.describe('§8 tile size sets the space it takes', () => {
     const [n, sp] = [(await netflix.boundingBox())!, (await spotify.boundingBox())!];
     near(n.width, sp.width, 'Netflix is one cell wide, like Spotify');
     near(n.height, sp.height, 'Netflix is one cell high, like Spotify');
-    // And the stored placement is still 1 x 1.
+    // And the stored placement is the old 1 x 1, doubled by the import: 2 x 2 (nothing silently resized).
     const cfg = await (await page.request.get('/api/config')).json();
     const dash = cfg.dashboards.find((d: { id: string }) => d.id === s.id);
     const found: { size?: string; placement?: { w: number; h: number } }[] = [];
@@ -1920,7 +1931,7 @@ test.describe('§8 tile size sets the space it takes', () => {
     };
     for (const t of dash.tabs) walk(t.root);
     expect(found).toHaveLength(1);
-    expect(found[0]).toMatchObject({ size: 'large', placement: { w: 1, h: 1 } });
+    expect(found[0]).toMatchObject({ size: 'large', placement: { w: 2, h: 2 } });
 
     // The dialog tells the truth (spec §8, amended): Custom, not Large. Picking Large applies it
     // (2 x 2) as one undo step.
@@ -2029,8 +2040,8 @@ test.describe('§8 tile size sets the space it takes', () => {
     const dash = cfg.dashboards.find((d: { id: string }) => d.id === f.id('dash'));
     const kids = dash.tabs[0].root.children[0].content.children as { id: string; size: string; placement: { w: number; h: number } }[];
     const by = (n: Name) => kids.find((k) => k.id === ids[n])!;
-    expect(by('Google')).toMatchObject({ size: 'large', placement: { w: 2, h: 2 } });
-    expect(by('YouTube')).toMatchObject({ size: 'medium', placement: { w: 1, h: 1 } });
+    expect(by('Google')).toMatchObject({ size: 'large', placement: { w: 4, h: 4 } });
+    expect(by('YouTube')).toMatchObject({ size: 'medium', placement: { w: 2, h: 2 } });
     expect(by('GitHub')).toMatchObject({ size: 'small', placement: { w: 1, h: 1 } });
   });
 

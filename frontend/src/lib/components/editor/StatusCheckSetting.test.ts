@@ -64,7 +64,7 @@ afterEach(() => {
 
 function withF1(over: Partial<FolderNode> = {}, x: Record<string, unknown> = {}) {
   const d = home();
-  d.tabs[0].root.children[2] = folder('f1', p(0, 1, 4, 3), [tile('x', p(0, 0), x)], over);
+  d.tabs[0].root.children[2] = folder('f1', p(0, 2, 8, 6), [tile('x', p(0, 0), x)], over);
   setLayout([d]);
   startSession();
 }

@@ -4,11 +4,11 @@ import { overlayStack, openFolder, closeTop, closeAll, reconcile } from './folde
 import type { LayoutDoc } from '$lib/types/layout';
 
 const f = (id: string, children: any[] = []): any => ({
-  kind: 'folder', id, name: id, display: 'collapsed', placement: { x: 0, y: 0, w: 1, h: 1 }, content: { columns: 1, children }
+  kind: 'folder', id, name: id, display: 'collapsed', placement: { x: 0, y: 0, w: 2, h: 2 }, content: { columns: 2, children }
 });
 const doc = (children: any[]): LayoutDoc => ({
   schemaVersion: 3,
-  dashboards: [{ id: 'd1', name: 'D', path: '/d', revision: 1, tabs: [{ id: 't1', name: 'T', root: { columns: 12, children } }] }]
+  dashboards: [{ id: 'd1', name: 'D', path: '/d', revision: 1, tabs: [{ id: 't1', name: 'T', root: { columns: 24, children } }] }]
 });
 
 beforeEach(() => closeAll());

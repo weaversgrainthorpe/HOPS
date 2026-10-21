@@ -22,24 +22,24 @@ import { session } from '$lib/stores/editSession';
 import { setLayout, resetEditor, startSession, draft, nodeIn, folder, tile, p } from '$lib/components/editor/editorTestKit';
 
 // A phone: 3 stacked columns of 120 px. Stacked metrics are not used for positions.
-const STACK = containerMetrics({ columns: 12, children: [] }, 'grid', 0);
+const STACK = containerMetrics({ columns: 24, children: [] }, 'grid', 0);
 type Box = { left: number; top: number; width: number; height: number };
 type Where = { ref: ContainerRef; metrics: ContainerMetrics; layout: 'grid' | 'free' | 'stacked' };
 
 /**
- * t1 (grid, 4 columns): a b c d on row 0, then the collapsed folder fc (y inside) and the expanded
- * folder fe (e1 inside) on row 1. t2 (grid): z.
+ * t1 (grid, 8 columns, Medium 2 x 2 tiles): a b c d on row 0, then the collapsed folder fc (y inside) and the expanded
+ * folder fe (e1 inside) below them. t2 (grid): z.
  */
 function phoneDash(): LayoutDashboard {
   return {
     id: 'd1', name: 'Home', path: '/home', revision: 5,
     tabs: [
-      { id: 't1', name: 'Main', root: { columns: 4, children: [
-        tile('a', p(0, 0)), tile('b', p(1, 0)), tile('c', p(2, 0)), tile('d', p(3, 0)),
-        folder('fc', p(0, 1, 1, 1), [tile('y', p(0, 0))], { display: 'collapsed' }),
-        folder('fe', p(1, 1, 3, 2), [tile('e1', p(0, 0))])
+      { id: 't1', name: 'Main', root: { columns: 8, children: [
+        tile('a', p(0, 0)), tile('b', p(2, 0)), tile('c', p(4, 0)), tile('d', p(6, 0)),
+        folder('fc', p(0, 2, 2, 2), [tile('y', p(0, 0))], { display: 'collapsed' }),
+        folder('fe', p(2, 2, 6, 4), [tile('e1', p(0, 0))])
       ] } },
-      { id: 't2', name: 'Other', root: { columns: 12, children: [tile('z', p(0, 0))] } }
+      { id: 't2', name: 'Other', root: { columns: 24, children: [tile('z', p(0, 0))] } }
     ]
   };
 }

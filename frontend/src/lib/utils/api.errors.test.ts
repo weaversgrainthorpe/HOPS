@@ -67,6 +67,13 @@ describe('GET /api/config', () => {
     expect(await getConfig()).toEqual({ ...doc, notices: [], noticesUnreadable: 1 });
   });
 
+  it('keeps the finer-grid marker (gridUnit) so the editor can tell the form (Ruling 3); absent stays absent', async () => {
+    respond(200, { ...doc, gridUnit: 2 });
+    expect(await getConfig()).toEqual({ ...doc, gridUnit: 2 });
+    respond(200, doc);
+    expect(await getConfig()).not.toHaveProperty('gridUnit');
+  });
+
   it('dismissNotice POSTs to /api/notices/{id}/dismiss (id encoded)', async () => {
     respond(204, null);
     await dismissNotice('a/b');
