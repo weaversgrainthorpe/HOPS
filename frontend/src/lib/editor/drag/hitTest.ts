@@ -135,7 +135,17 @@ export function hitTest(x: number, y: number, dragged: ReadonlySet<string>, env:
     if (id !== null && dragged.has(id)) start = e.parentElement;
   }
   if (!start) return NO_HIT;
-  const cEl = start.closest('[data-container-id]');
+  let cEl = start.closest('[data-container-id]');
+  // A container element is only as tall as the rows its items fill, but it is DRAWN in a larger
+  // space (`data-drop-area`: the canvas panel, an expanded folder's body, an overlay's body). That
+  // whole space is the container's: the canvas below the last row is the canvas, and a folder's
+  // empty space below its items is that folder — never "not allowed", never the folder's parent.
+  // An area nested deeper than the container found (a folder body inside the canvas) wins.
+  const area = start.closest('[data-drop-area]');
+  if (area && (!cEl || !area.contains(cEl))) {
+    const own = area.querySelector('[data-container-id]');
+    if (own && registry.has(own)) cEl = own;
+  }
   const info = cEl ? registry.get(cEl) : undefined;
   if (!cEl || !info) {
     // Over an open overlay's backdrop (not its panel): "dragging out" of that folder.

@@ -62,6 +62,40 @@ describe('hitTest', () => {
     expect(h2.nodeId).toBe('x');
   });
 
+  it('a drop area is its container: the canvas below the last row, and a folder body below its items (dragout-debug)', () => {
+    // canvas panel [area] > root grid > folder [node] > body [area] > folder grid > tile
+    const tile = el({ 'data-node-id': 'e1' });
+    const folderGrid = el({ 'data-container-id': 'f1' }, tile);
+    const body = el({ 'data-drop-area': '' }, folderGrid);
+    const header = el({ class: 'folder-header' });
+    const folder = el({ 'data-node-id': 'f1' }, header, body);
+    const root = el({ 'data-container-id': 't1' }, folder);
+    const panel = el({ 'data-drop-area': '' }, root);
+    document.body.appendChild(panel);
+    reg(root, { ref: { tabId: 't1' }, metrics: gridMetrics, layout: 'grid' });
+    reg(folderGrid, { ref: { tabId: 't1', folderId: 'f1' }, metrics: gridMetrics, layout: 'grid' });
+    const rects = new Map([[root, { left: 20, top: 40 }], [folderGrid, { left: 30, top: 300 }]]);
+    // The panel below the root grid's last row: the root, offset from the root grid's origin.
+    const below = hitTest(500, 900, new Set(), env(panel, rects));
+    expect(below.container?.ref).toEqual({ tabId: 't1' });
+    expect(below.dx).toBe(480);
+    expect(below.dy).toBe(860);
+    expect(below.nodeId).toBeUndefined();
+    // A folder's body below its items: that folder, not the canvas (and no node: not a merge target).
+    const inBody = hitTest(100, 600, new Set(), env(body, rects));
+    expect(inBody.container?.ref).toEqual({ tabId: 't1', folderId: 'f1' });
+    expect(inBody.dy).toBe(300);
+    expect(inBody.nodeId).toBeUndefined();
+    // The folder's header is still the canvas, over the folder (the merge / into-folder zones).
+    const onHeader = hitTest(100, 320, new Set(), env(header, rects));
+    expect(onHeader.container?.ref).toEqual({ tabId: 't1' });
+    expect(onHeader.nodeId).toBe('f1');
+    // A tile inside the folder: the folder's grid, as before.
+    expect(hitTest(40, 310, new Set(), env(tile, rects)).container?.ref).toEqual({ tabId: 't1', folderId: 'f1' });
+    // The folder itself dragged: its own body is never a target (the canvas is).
+    expect(hitTest(100, 600, new Set(['f1']), env(body, rects)).container?.ref).toEqual({ tabId: 't1' });
+  });
+
   it('nothing under the pointer, or an unregistered container, is no container', () => {
     expect(hitTest(0, 0, new Set(), env(null)).container).toBeNull();
     const stray = el({ 'data-container-id': 'zz' });

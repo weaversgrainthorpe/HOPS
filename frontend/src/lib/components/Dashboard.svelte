@@ -423,8 +423,10 @@
         onReach={onToolbarReach}
       />
       {#if draftTab}
+        <!-- data-drop-area: the whole panel is the canvas for a drop, below the last row too. -->
         <div
           class="canvas-panel editing"
+          data-drop-area=""
           bind:this={editPanelEl}
           style:--overlay-opacity={overlayOpacity}
           style:--overlay-blur="{overlayBlur}px"

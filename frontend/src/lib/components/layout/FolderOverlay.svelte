@@ -116,7 +116,7 @@
         </button>
       </header>
       <!-- data-drag-scroll: a drag near this panel's top/bottom edge scrolls it (editor drag engine). -->
-      <div class="overlay-body" data-drag-scroll>
+      <div class="overlay-body" data-drag-scroll data-drop-area={editing ? '' : undefined}>
         <div class="overlay-content" style:width={px(size.metrics.innerWidthPx)}>
           {#if $layoutStale}
             <!-- The held tree is older than the server's: never show it as current. -->

@@ -315,3 +315,215 @@ test.describe('M3 editor in a real browser', () => {
     expect(errors).toEqual([]);
   });
 });
+
+// Dragging into and out of folders (dragout-debug, 2026-10-21). A container's drop area is the
+// whole space it is drawn in, not just the rows its items happen to fill:
+//   - the dashboard canvas below its last row is the canvas (it was "not allowed");
+//   - an expanded folder's empty space below its items is that folder (it went to the canvas).
+// Each test is a real mouse drag; the result is checked in the saved document.
+test.describe('M3 editor: dragging into and out of folders', () => {
+  test.use({ viewport: { width: 1280, height: 1000 } });
+
+  /** Row 0: Alpha, Bravo, Charlie. Row 2-4: expanded folders One (Echo) and Two (Golf). */
+  async function importFolders(page: Page, context: BrowserContext): Promise<Fixture> {
+    const p = `m3f${Date.now().toString(36)}${(seq++).toString(36)}`;
+    const id = (s: string) => `${p}-${s}`;
+    const folder = (fid: string, name: string, x: number, inner: ReturnType<typeof tile>) => ({
+      id: fid, kind: 'folder', name, layout: 'inherit', display: 'expanded', shape: 'rounded', showTitle: true,
+      placement: placement(x, 2, 5, 3), content: { columns: 5, children: [inner] }
+    });
+    const dash = {
+      id: id('dash'), name: `M3 folders ${p}`, order: 0, path: `/${p}`, revision: 1,
+      settings: {
+        statusChecksEnabled: null, statusCheckIntervalMinutes: null, statusCheckTimeoutSeconds: null,
+        editIdleTimeoutMinutes: null, animatedFolderBackgrounds: null, defaultLayout: null
+      },
+      defaultLayout: 'grid',
+      tabs: [{
+        id: id('tab'), name: 'Grid', order: 0, layout: 'inherit',
+        root: {
+          columns: 12,
+          children: [
+            tile(id('a'), 'Alpha', 0, 0, 0), tile(id('b'), 'Bravo', 1, 0, 1), tile(id('c'), 'Charlie', 2, 0, 2),
+            folder(id('f1'), 'One', 0, tile(id('e1'), 'Echo', 0, 0, 0)),
+            folder(id('f2'), 'Two', 6, tile(id('g1'), 'Golf', 0, 0, 0))
+          ]
+        }
+      }]
+    };
+    const doc = {
+      format: 'hops-export', schemaVersion: 3, exportedAt: new Date().toISOString(), exportType: 'single-dashboard',
+      config: { dashboards: [dash] }
+    };
+    const r = await page.request.post('/api/config/import', {
+      headers: { 'X-CSRF-Token': await getCsrfToken(context) },
+      multipart: { file: { name: 'm3f.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(doc)) } }
+    });
+    expect(r.status(), await r.text()).toBe(200);
+    made = { id: id('dash') };
+    return { path: `/${p}`, id };
+  }
+
+  /** The id of the folder holding `id` in the saved document, or 'canvas' at the tab root. */
+  async function savedParent(page: Page, f: Fixture, id: string): Promise<string | null> {
+    const find = (ns: AnyNode[], parent: string): string | null => {
+      for (const n of ns) {
+        if (n.id === id) return parent;
+        const r = n.content ? find(n.content.children, n.id) : null;
+        if (r) return r;
+      }
+      return null;
+    };
+    return find((await storedTabs(page, f))[0].root.children, 'canvas');
+  }
+
+  /** Drag the CENTRE of `id` to (x, y), let the frame resolve, check the highlight is allowed, drop. */
+  async function dropAt(page: Page, id: string, x: number, y: number) {
+    const s = await box(page, id);
+    await dragTo(page, s.x + s.width / 2, s.y + s.height / 2, x, y);
+    await page.waitForTimeout(150);
+    await expect(page.locator('.drag-layer')).not.toContainText(/not allowed|Drop it on the dashboard/i);
+    await page.mouse.up();
+  }
+
+  /** An empty canvas point one row below the folders (below every item on the tab). */
+  async function belowEverything(page: Page, f: Fixture) {
+    const f2 = await box(page, f.id('f2'));
+    return { x: f2.x + f2.width / 2, y: f2.y + f2.height + 60 };
+  }
+
+  /** Merge Alpha onto Charlie (a collapsed "New folder"); returns the new folder's slot. */
+  async function mergeAlphaIntoCharlie(page: Page, f: Fixture) {
+    const a = await box(page, f.id('a'));
+    const c = await box(page, f.id('c'));
+    await dragTo(page, a.x + a.width / 2, a.y + a.height / 2, c.x + c.width / 2, c.y + c.height / 2);
+    await page.waitForTimeout(700);
+    await page.mouse.up();
+    const dlg = page.getByRole('dialog', { name: 'Edit Folder' });
+    await expect(dlg).toBeVisible();
+    await dlg.getByRole('button', { name: /^Save/ }).click();
+    await expect(dlg).toBeHidden();
+    const slot = page.locator('.folder-slot.collapsed', { hasText: 'New folder' });
+    await expect(slot).toBeVisible();
+    return slot;
+  }
+
+  const editModeOn = (page: Page) => expect(page.locator('[aria-label="Exit Edit Mode"]')).toBeVisible();
+
+  test('a tile dragged out of an existing folder onto empty canvas lands on the canvas', async ({ page, context }) => {
+    const f = await importFolders(page, context);
+    const errors = await openEditing(page, f);
+    const to = await belowEverything(page, f);
+    await dropAt(page, f.id('e1'), to.x, to.y);
+    await saveDraft(page);
+    expect(await savedParent(page, f, f.id('e1'))).toBe('canvas');
+    expect(errors).toEqual([]);
+  });
+
+  test('a tile dragged from the canvas into an expanded folder\'s empty space lands in that folder', async ({ page, context }) => {
+    const f = await importFolders(page, context);
+    const errors = await openEditing(page, f);
+    const f1 = await box(page, f.id('f1'));
+    // Below Echo, inside One's body: the folder's empty space.
+    await dropAt(page, f.id('b'), f1.x + f1.width - 80, f1.y + f1.height - 60);
+    await saveDraft(page);
+    expect(await savedParent(page, f, f.id('b'))).toBe(f.id('f1'));
+    expect(errors).toEqual([]);
+  });
+
+  test('a tile dragged from one folder into another folder\'s empty space lands in the other folder', async ({ page, context }) => {
+    const f = await importFolders(page, context);
+    const errors = await openEditing(page, f);
+    const f2 = await box(page, f.id('f2'));
+    await dropAt(page, f.id('e1'), f2.x + f2.width - 80, f2.y + f2.height - 60);
+    await saveDraft(page);
+    expect(await savedParent(page, f, f.id('e1'))).toBe(f.id('f2'));
+    expect(errors).toEqual([]);
+  });
+
+  test('merge, Open the new folder from its menu, drag a tile out over the backdrop onto empty canvas', async ({ page, context }) => {
+    const f = await importFolders(page, context);
+    const errors = await openEditing(page, f);
+    const to = await belowEverything(page, f);
+    const slot = await mergeAlphaIntoCharlie(page, f);
+    await slot.click({ button: 'right' });
+    await page.getByRole('menuitem', { name: 'Open' }).click();
+    const panel = page.locator('.overlay-panel');
+    await expect(panel).toBeVisible();
+    await editModeOn(page);
+    // Out of the panel onto the backdrop, held there until the overlay closes…
+    const a = await box(page, f.id('a'));
+    await dragTo(page, a.x + a.width / 2, a.y + a.height / 2, to.x, to.y);
+    await expect(page.locator('.drag-layer')).toContainText(/Keep holding here to close this folder/);
+    await expect(panel).toBeHidden({ timeout: 3_000 });
+    // …then the canvas under the pointer is the target.
+    await page.mouse.move(to.x + 4, to.y + 4);
+    await page.waitForTimeout(150);
+    await expect(page.locator('.drag-layer')).not.toContainText(/not allowed|Drop it on the dashboard/i);
+    await page.mouse.up();
+    await editModeOn(page);
+    await saveDraft(page);
+    expect(await savedParent(page, f, f.id('a'))).toBe('canvas');
+    expect(await savedParent(page, f, f.id('c'))).not.toBe('canvas');
+    expect(errors).toEqual([]);
+  });
+
+  test('merge, "Start expanded" (edit mode stays on), drag a tile out of the folder onto empty canvas', async ({ page, context }) => {
+    const f = await importFolders(page, context);
+    const errors = await openEditing(page, f);
+    const slot = await mergeAlphaIntoCharlie(page, f);
+    await slot.click({ button: 'right' });
+    await page.getByRole('menuitem', { name: 'Start expanded' }).click();
+    await expect(page.locator('.folder', { hasText: 'New folder' })).toBeVisible();
+    await editModeOn(page);
+    const to = await belowEverything(page, f);
+    await dropAt(page, f.id('a'), to.x, to.y);
+    await editModeOn(page);
+    await saveDraft(page);
+    expect(await savedParent(page, f, f.id('a'))).toBe('canvas');
+    expect(errors).toEqual([]);
+  });
+
+  test('minimise then "Start expanded" in edit mode keeps edit mode and the draft; a tile then drags out', async ({ page, context }) => {
+    const f = await importFolders(page, context);
+    const errors = await openEditing(page, f);
+    // A change first (Charlie into Two), so a lost draft would show.
+    const f2 = await box(page, f.id('f2'));
+    await dropAt(page, f.id('c'), f2.x + f2.width - 80, f2.y + f2.height - 60);
+    const one = page.locator(`[data-node-id="${f.id('f1')}"]`);
+    await one.getByRole('button', { name: 'Minimise folder' }).click();
+    await expect(page.locator('.folder-slot.collapsed', { hasText: 'One' })).toBeVisible();
+    await editModeOn(page);
+    await page.locator('.folder-slot.collapsed', { hasText: 'One' }).click({ button: 'right' });
+    await page.getByRole('menuitem', { name: 'Start expanded' }).click();
+    await expect(page.locator('.folder', { hasText: 'One' })).toBeVisible();
+    await editModeOn(page);
+    await expect(page.getByRole('status').filter({ hasText: 'Unsaved changes' })).toBeVisible();
+    const to = await belowEverything(page, f);
+    await dropAt(page, f.id('e1'), to.x, to.y);
+    await editModeOn(page);
+    await saveDraft(page);
+    expect(await savedParent(page, f, f.id('c'))).toBe(f.id('f2'));
+    expect(await savedParent(page, f, f.id('e1'))).toBe('canvas');
+    expect(errors).toEqual([]);
+  });
+
+  test('Maximise in edit mode keeps edit mode and the draft; a tile then drags out', async ({ page, context }) => {
+    const f = await importFolders(page, context);
+    const errors = await openEditing(page, f);
+    // A change first, so a lost draft would show.
+    const f1 = await box(page, f.id('f1'));
+    await dropAt(page, f.id('b'), f1.x + f1.width - 80, f1.y + f1.height - 60);
+    await page.locator(`[data-node-id="${f.id('f2')}"]`).getByRole('button', { name: 'Maximise folder' }).click();
+    await expect(page.getByText(/Maximise is how a viewer looks at a folder/)).toBeVisible();
+    await editModeOn(page);
+    await expect(page.getByRole('status').filter({ hasText: 'Unsaved changes' })).toBeVisible();
+    const to = await belowEverything(page, f);
+    await dropAt(page, f.id('g1'), to.x, to.y);
+    await editModeOn(page);
+    await saveDraft(page);
+    expect(await savedParent(page, f, f.id('b'))).toBe(f.id('f1'));
+    expect(await savedParent(page, f, f.id('g1'))).toBe('canvas');
+    expect(errors).toEqual([]);
+  });
+});

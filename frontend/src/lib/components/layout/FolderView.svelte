@@ -236,7 +236,8 @@
         <FolderControls dashboardId={views.dashboardId} folderId={folder.id} {remembered} {saved} variant="bar" {editing} />
       </div>
     {/if}
-    <div class="folder-body">
+    <!-- data-drop-area: the whole body is this folder's drop target, not just its items' rows. -->
+    <div class="folder-body" data-drop-area={editing ? '' : undefined}>
       {#if tabLook}
         <!-- Folder-tab look: the body is the surface (its own tint stays the colour look). -->
         <FolderSurface
