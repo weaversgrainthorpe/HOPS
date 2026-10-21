@@ -447,7 +447,7 @@ export function resolveDrop(state: DragState, hit: HitResult, draft: LayoutDashb
   if (!(m.unitPx > 0) || !(m.rowPx > 0)) return invalid("That area can't be measured right now; try again.");
   const cols = r.columns;
   const sizes = nodes.map((n) => {
-    const s = sizeFor(n, r.mode);
+    const s = sizeFor(n);
     return { w: Math.min(s.w, cols), h: s.h };
   });
   const moving = state.copy ? new Set<string>() : idSet;
@@ -605,7 +605,7 @@ function resolveStacked(state: DragState, hit: HitResult, draft: LayoutDashboard
   const index = slot ? others.indexOf(slot.id) + (slot.after ? 1 : 0) : others.length;
   const marker = stackMarker(slot, hit.container ?? { left: 0, top: 0 });
   const target = memoised(JSON.stringify(['stack', ids, state.copy, to, index]), draft, () => {
-    const sizes = nodes.map((n) => sizeFor(n, r.mode));
+    const sizes = nodes.map((n) => sizeFor(n));
     const zs = nodes.map((n) => (typeof n.placement?.z === 'number' && Number.isFinite(n.placement.z) ? n.placement.z : undefined));
     let lastError = '';
     for (const plan of stackPlans(r.container, cols, moving, sizes, index, zs)) {

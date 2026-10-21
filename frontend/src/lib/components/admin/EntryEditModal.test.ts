@@ -77,18 +77,18 @@ describe('EntryEditModal Size', () => {
     return { onSave, checkSize };
   }
 
-  it('shows "Custom (resized)" for a non-standard span, and only then', async () => {
+  it('shows "Custom" for a non-standard span, and only then', async () => {
     openSized('custom');
     await tick();
     expect(sizeSelect().value).toBe('custom');
-    expect(screen.getByRole('option', { name: 'Custom (resized)' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Custom' })).toBeInTheDocument();
   });
 
   it('a standard span shows its size and no Custom option', async () => {
     openSized('large');
     await tick();
     expect(sizeSelect().value).toBe('large');
-    expect(screen.queryByRole('option', { name: 'Custom (resized)' })).toBeNull();
+    expect(screen.queryByRole('option', { name: 'Custom' })).toBeNull();
   });
 
   it('a save without picking a size passes no size (the span is untouched)', async () => {

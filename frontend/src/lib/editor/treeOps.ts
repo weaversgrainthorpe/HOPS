@@ -353,15 +353,17 @@ export function duplicateNode(
  * Merge `draggedIds` and the target tile into a new collapsed folder in the target's slot.
  * The folder's placement is its STORED (expanded) size; how a collapsed folder renders is the
  * renderer's business.
- * Grid parent: n = 1 + dragged; per = min(4, n, parent columns); folder w = per, h = ceil(n / per) + 1
+ * Grid parent: n = 1 + dragged; per = min(4, n, parent columns); with every member 1 x 1, folder w = per, h = ceil(n / per) + 1
  * (= ceil(n / 4) + 1 whenever the parent has >= 4 columns); x = min(target x, columns - w) so it
- * stays inside the grid; content.columns = w; children are 1 x 1, row-major, target first then the
- * dragged nodes in reading order. Nodes the new footprint overlaps are pushed aside (pushAside,
+ * stays inside the grid; content.columns = w; children go row-major (first free cell), target first
+ * then the dragged nodes in reading order. A tile keeps its span (spec §8; the folder widens for a
+ * wide tile, up to the parent's columns, and the span is clamped to that); other members are 1 x 1;
+ * h = the content's rows + 1. Nodes the new footprint overlaps are pushed aside (pushAside,
  * merged nodes excluded) inside this op, so the result never overlaps.
- * Free parent (8 px units): children keep the target tile's size (cw x ch); the folder is
- * per * cw wide and ceil(n / per) * ch + 8 tall (8 units = 64 px, enough for the 40 px title bar
- * and body padding) at the target's x,y; content.columns = folder width; children are placed
- * row-major in cw x ch steps. Free parents tolerate overlap.
+ * Free parent (8 px units): a tile keeps its own size (spec §8), other members take the target
+ * tile's; cw x ch = the largest of those; the folder is per * cw wide and ceil(n / per) * ch + 8
+ * tall (8 units = 64 px, enough for the 40 px title bar and body padding) at the target's x,y;
+ * content.columns = folder width; children are placed row-major in cw x ch steps. Free parents tolerate overlap.
  * `allIds` is every id in the document (all dashboards + draft); the new folder id avoids it.
  */
 export function mergeIntoNewFolder(
@@ -391,19 +393,41 @@ export function mergeIntoNewFolder(
   const per = Math.min(4, n, parent.mode === 'grid' ? cols : n);
   const rows = Math.ceil(n / per);
   const tp = target.placement;
-  let cw = 1, ch = 1, fw = per, fh = rows + 1, fx = tp.x;
+  // Spec §8: a TILE keeps its span in the new folder (in the parent's units, converted on the one
+  // path when it comes from another mode); other members take one cell / the target's size, as before.
+  const spanOf = (m: LayoutNode): { w: number; h: number } | undefined => {
+    if (m.kind !== 'tile') return undefined;
+    const a = m.id === target.id ? m : adaptNode(d, m, originOf(d, m.id), ref);
+    return { w: Math.max(1, Math.floor(a.placement.w)), h: Math.max(1, Math.floor(a.placement.h)) };
+  };
+  let fw: number, fh: number, fx = tp.x;
+  let children: LayoutNode[];
   if (parent.mode === 'free') {
-    cw = Math.max(1, Math.floor(tp.w));
-    ch = Math.max(1, Math.floor(tp.h));
+    const own = { w: Math.max(1, Math.floor(tp.w)), h: Math.max(1, Math.floor(tp.h)) };
+    const spans = members.map((m) => spanOf(m) ?? own);
+    const cw = Math.max(...spans.map((s) => s.w));
+    const ch = Math.max(...spans.map((s) => s.h));
     fw = per * cw;
     fh = rows * ch + 8;
+    children = members.map((m, i) => {
+      const place: Placement = { x: (i % per) * cw, y: Math.floor(i / per) * ch, w: spans[i].w, h: spans[i].h };
+      return { ...m, placement: place } as LayoutNode;
+    });
   } else {
+    // Grid: row-major first free cell in a folder `per` wide (wider for a wide tile, never wider
+    // than the parent); a tile's span is clamped to that width. All 1 x 1: the old layout exactly.
+    const spans = members.map((m) => spanOf(m) ?? { w: 1, h: 1 });
+    fw = Math.min(cols, Math.max(per, ...spans.map((s) => s.w)));
+    const work: Container = { columns: fw, children: [] };
+    children = members.map((m, i) => {
+      const place = firstFreeCell(work, Math.min(spans[i].w, fw), spans[i].h);
+      const placed = { ...m, placement: place } as LayoutNode;
+      work.children.push(placed);
+      return placed;
+    });
+    fh = Math.max(...children.map((c) => c.placement.y + c.placement.h)) + 1;
     fx = Math.max(0, Math.min(tp.x, cols - fw));
   }
-  const children = members.map((m, i) => {
-    const place: Placement = { x: (i % per) * cw, y: Math.floor(i / per) * ch, w: cw, h: ch };
-    return { ...m, placement: place } as LayoutNode;
-  });
   const placement: Placement = { x: fx, y: tp.y, w: fw, h: fh };
   if (tp.z !== undefined) placement.z = tp.z;
   const folderId = uniqueId('folder', new Set(allIds));
@@ -491,19 +515,7 @@ export function resizedPlacement(d: LayoutDashboard, id: string, w: number, h: n
 export function resizeNode(
   d: LayoutDashboard, id: string, w: number, h: number, push?: Map<string, Placement>
 ): LayoutDashboard {
-  const sized = resizedPlacement(d, id, w, h);
-  const loc = locate(d, id)!;
-  const r = resolveRef(d, { tabId: loc.tabId, folderId: loc.folderChain[loc.folderChain.length - 1] });
-  const ref: ContainerRef = { tabId: loc.tabId, folderId: loc.folderChain[loc.folderChain.length - 1] };
-  const changed = new Set<string>([id, ...(push ? push.keys() : [])]);
-  return editContainer(d, ref, (c) => {
-    const next = {
-      ...c,
-      children: applyPush(kids(c), push).map((n) => (n.id === id ? ({ ...n, placement: sized } as LayoutNode) : n))
-    };
-    if (r.mode === 'grid') assertGridNoOverlap(next, changed);
-    return next;
-  });
+  return placeNode(d, id, resizedPlacement(d, id, w, h), push);
 }
 
 /**
@@ -619,7 +631,7 @@ export function duplicateTab(
  * When the tab's effective mode changes, the tab's content is converted so it looks the same:
  * one grid cell = one dashboard column = round(designWidth / 12 / 8) free units ("side").
  * Grid → free multiplies every placement by side (exact, no overlaps); free → grid divides and
- * rounds (min 1 x 1; tiles become one cell), then any item that would overlap or fall outside the
+ * rounds (min 1 x 1; tiles keep their span, rounded and clamped like folders), then any item that would overlap or fall outside the
  * columns goes to the first free cell, in reading order. Folders that inherit the mode are
  * converted with their content; folders with their own layout keep their content as is. The
  * root's columns follow the mode (grid: 12; free: designWidth / 8).
@@ -662,7 +674,7 @@ const isInheriting = (f: FolderNode): boolean => f.layout === undefined || f.lay
  * A node sitting in a `from`-mode container is converted to look the same in a `to`-mode container
  * of `cols` columns, computed from the node's ORIGINAL values (never from already-scaled ones):
  * one grid cell = `side` free units. Grid → free multiplies by side; free → grid divides and
- * rounds (min 1 x 1; a tile is one cell; x kept inside the columns). A folder that inherits its
+ * rounds (min 1 x 1, tiles keep their span like folders; w clamped and x kept inside the columns). A folder that inherits its
  * mode is converted with its content; a folder with its own layout keeps its content. A
  * converted folder is never shorter than its content needs. Same mode → the node unchanged.
  */
@@ -673,8 +685,9 @@ export function convertNode(n: LayoutNode, from: LayoutMode, to: LayoutMode, sid
   if (to === 'free') {
     q = { x: p.x * side, y: p.y * side, w: p.w * side, h: p.h * side };
   } else {
-    const w = n.kind === 'tile' ? 1 : Math.max(1, Math.round(p.w / side));
-    const h = n.kind === 'tile' ? 1 : Math.max(1, Math.round(p.h / side));
+    // Tiles and folders alike: rounded to cells (a tile keeps its span, spec §8 — Large 2·side -> 2).
+    const w = Math.max(1, Math.round(p.w / side));
+    const h = Math.max(1, Math.round(p.h / side));
     const qw = Math.min(w, cols);
     q = { x: Math.min(Math.max(0, Math.round(p.x / side)), cols - qw), y: Math.max(0, Math.round(p.y / side)), w: qw, h };
   }

@@ -1,12 +1,14 @@
 // Spec §8 (M4 walkthrough changes): a tile's Small/Medium/Large sets the space it takes.
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { get } from 'svelte/store';
-import { sizeSpan, sizeShown, sizeTarget, newTileSizeProblem, editNode, addNode, blankTile, sizeFor } from './editorActions';
-import { assertGridNoOverlap } from './treeOps';
+import {
+  sizeSpan, sizeShown, sizeTarget, newTileSizeProblem, editNode, addNode, blankTile, moveOrCopyTo, editTab, documentIds
+} from './editorActions';
+import { assertGridNoOverlap, convertNode, mergeIntoNewFolder } from './treeOps';
 import { session, undo } from '$lib/stores/editSession';
 import { toast } from '$lib/stores/toast';
 import { setLayout, resetEditor, startSession, draft, nodeIn, p, tile, folder, home } from '$lib/components/editor/editorTestKit';
-import type { LayoutDashboard, TileNode } from '$lib/types/layout';
+import type { FolderNode, LayoutDashboard, TileNode } from '$lib/types/layout';
 
 beforeEach(() => {
   resetEditor();
@@ -41,10 +43,10 @@ describe('sizeSpan', () => {
 
 describe('sizeShown (the dialog shows the size that matches the span)', () => {
   const t = (size: string, pl = p(0, 0)) => tile('t', pl, { size }) as TileNode;
-  it('a 1 x 1 tile shows its stored size (a stored large-at-1x1 is not "Custom")', () => {
+  it('a 1 x 1 tile shows its stored Small/Medium; a stored large at 1 x 1 is "Custom" (truthful, re-pickable)', () => {
     expect(sizeShown(t('small'), 'grid', 13)).toBe('small');
     expect(sizeShown(t('medium'), 'grid', 13)).toBe('medium');
-    expect(sizeShown(t('large'), 'grid', 13)).toBe('large');
+    expect(sizeShown(t('large'), 'grid', 13)).toBe('custom');
   });
   it('2 x 2 shows Large; any other span shows Custom', () => {
     expect(sizeShown(t('medium', p(0, 0, 2, 2)), 'grid', 13)).toBe('large');
@@ -137,7 +139,49 @@ describe('a large tile keeps its span', () => {
     expect(nodeIn(draft(), id!)!.placement).toEqual({ x: 9, y: 0, w: 2, h: 2 });
   });
 
-  it('moving a grid tile keeps its placement span (placement is the truth)', () => {
-    expect(sizeFor({ kind: 'tile', placement: p(0, 0, 2, 2) }, 'grid')).toEqual({ w: 2, h: 2 });
+  it('moving a 2 x 2 tile into a folder (Move/Copy) keeps its span', () => {
+    withRoot([tile('big', p(6, 0, 2, 2), { size: 'large' }), folder('f', p(0, 0, 4, 4), [tile('k', p(0, 0))]) as unknown as ReturnType<typeof tile>]);
+    expect(moveOrCopyTo(['big'], { tabId: 't1', folderId: 'f' }, 'move')).toBe(true);
+    expect(nodeIn(draft(), 'big')!.placement).toMatchObject({ w: 2, h: 2 });
+    expect(() => assertGridNoOverlap((nodeIn(draft(), 'f') as FolderNode).content)).not.toThrow();
+  });
+
+  it('grid -> free -> grid (the tab layout) keeps a 2 x 2 tile 2 x 2', () => {
+    withRoot([tile('big', p(3, 0, 2, 2), { size: 'large' }), tile('m', p(0, 0))]);
+    expect(editTab('t1', { name: 'Main', layout: 'free' })).toBe(true);
+    expect(nodeIn(draft(), 'big')!.placement).toMatchObject({ w: 26, h: 26 });
+    expect(editTab('t1', { name: 'Main', layout: 'grid' })).toBe(true);
+    expect(nodeIn(draft(), 'big')!.placement).toMatchObject({ w: 2, h: 2 });
+    expect(nodeIn(draft(), 'm')!.placement).toMatchObject({ w: 1, h: 1 });
+    expect(() => assertGridNoOverlap(draft().tabs[0].root)).not.toThrow();
+  });
+
+  it('free -> grid rounds a tile like a folder and clamps it to the columns', () => {
+    expect(convertNode(tile('q', p(0, 0, 40, 14)), 'free', 'grid', 13, 12).placement).toMatchObject({ w: 3, h: 1 });
+    expect(convertNode(tile('q', p(0, 0, 40, 30)), 'free', 'grid', 13, 2).placement).toMatchObject({ x: 0, w: 2, h: 2 });
+  });
+
+  it('merging onto a tile keeps a Large member 2 x 2 (and 1 x 1 members as before)', () => {
+    withRoot([tile('t', p(0, 0)), tile('big', p(3, 0, 2, 2), { size: 'large' }), tile('s', p(6, 0))]);
+    const r = mergeIntoNewFolder(draft(), ['big', 's'], 't', documentIds());
+    const f = nodeIn(r.dashboard, r.folderId) as FolderNode;
+    const kid = (id: string) => f.content.children.find((c) => c.id === id)!.placement;
+    expect(kid('t')).toMatchObject({ w: 1, h: 1 });
+    expect(kid('big')).toMatchObject({ w: 2, h: 2 });
+    expect(kid('s')).toMatchObject({ w: 1, h: 1 });
+    expect(() => assertGridNoOverlap(f.content)).not.toThrow();
+    // The folder is tall enough for its content (rows + the title row).
+    const bottom = Math.max(...f.content.children.map((c) => c.placement.y + c.placement.h));
+    expect(f.placement.h).toBeGreaterThanOrEqual(bottom + 1);
+  });
+
+  it('merging into a 1-column folder clamps a Large member to the column (never silently 1 x 1)', () => {
+    withRoot([
+      folder('n', p(0, 0, 1, 4), [tile('k', p(0, 0))]) as unknown as ReturnType<typeof tile>,
+      tile('big', p(3, 0, 2, 2), { size: 'large' })
+    ]);
+    const r = mergeIntoNewFolder(draft(), ['big'], 'k', documentIds());
+    const f = nodeIn(r.dashboard, r.folderId) as FolderNode;
+    expect(f.content.children.find((c) => c.id === 'big')!.placement).toMatchObject({ w: 1, h: 2 });
   });
 });

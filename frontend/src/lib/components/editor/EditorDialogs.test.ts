@@ -148,7 +148,24 @@ describe('EditorDialogs (the dialogs edit the draft only)', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 
-  it('tile dialog Size shows "Custom (resized)" for a non-standard span', async () => {
+  it('a stored large tile at 1 x 1 (Netflix): Size shows Custom; picking Large makes it 2 x 2 in ONE undo step', async () => {
+    const d = home();
+    (d.tabs[0].root.children[0] as TileNode).size = 'large';
+    setLayout([d]);
+    resetEditor();
+    startSession();
+    await show({ kind: 'tile', id: 'a' });
+    const sel = screen.getByLabelText(/^Size/) as HTMLSelectElement;
+    expect(sel.value).toBe('custom');
+    await fireEvent.change(sel, { target: { value: 'large' } });
+    await fireEvent.click(screen.getByRole('button', { name: /^Save/ }));
+    expect(nodeIn(draft(), 'a')).toMatchObject({ size: 'large', placement: p(0, 0, 2, 2) });
+    expect(get(session)!.undo).toHaveLength(1);
+    undo();
+    expect(nodeIn(draft(), 'a')!.placement).toEqual(p(0, 0));
+  });
+
+  it('tile dialog Size shows "Custom" for a non-standard span', async () => {
     const d = home();
     (d.tabs[0].root.children[1] as TileNode).placement = p(1, 0, 3, 1);
     setLayout([d]);

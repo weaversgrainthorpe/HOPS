@@ -28,7 +28,7 @@
     statusContext?: StatusContext;
     /**
      * Spec §8: what Size shows — the size matching the tile's span, or 'custom' for any other
-     * span ("Custom (resized)"). Default: the stored size.
+     * span ("Custom"). Default: the stored size.
      */
     sizeShown?: SizeChoice;
     /** Trial-runs a picked size; returns why it can't be done (shown inline), or null. */
@@ -280,7 +280,7 @@
           <option value="medium">Medium</option>
           <option value="large">Large</option>
           {#if initialSize === 'custom'}
-            <option value="custom">Custom (resized)</option>
+            <option value="custom">Custom</option>
           {/if}
         </select>
         {#if sizeError}

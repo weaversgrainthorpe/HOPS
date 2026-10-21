@@ -165,7 +165,7 @@ describe('mergeIntoNewFolder', () => {
     expect(() => mergeIntoNewFolder(d, ['f1'], 'y', ALL)).toThrow(TreeOpError);
     expect(() => mergeIntoNewFolder(d, ['nope'], 'c', ALL)).toThrow(TreeOpError);
   });
-  it('in a free parent sizes in 8px units from the target tile size', () => {
+  it('in a free parent sizes in 8px units from the target tile size; each tile keeps its own size (spec §8)', () => {
     const d = deepFreeze({
       id: 'd', name: 'D', path: '/d', revision: 1, defaultLayout: 'free',
       tabs: [{ id: 't', name: 'T', root: { columns: 160, children: [tile('a', p(10, 10, 12, 10)), tile('b', p(50, 50, 6, 6))] } }]
@@ -174,7 +174,7 @@ describe('mergeIntoNewFolder', () => {
     const f = r.dashboard.tabs[0].root.children.find((n) => n.id === r.folderId) as FolderNode;
     expect(f.placement).toEqual({ x: 10, y: 10, w: 24, h: 18 }); // 2 cols x 12, 1 row x 10 + 8 title/padding
     expect(f.content.columns).toBe(24);
-    expect(f.content.children.map((c) => c.placement)).toEqual([p(0, 0, 12, 10), p(12, 0, 12, 10)]);
+    expect(f.content.children.map((c) => c.placement)).toEqual([p(0, 0, 12, 10), p(12, 0, 6, 6)]);
   });
 });
 

@@ -68,7 +68,7 @@ function tabOf(d: LayoutDashboard, tabId: string): LayoutTab | undefined {
  * The size an item takes in `mode`, from a node ALREADY converted for the target (adaptNode).
  * Placement is the truth (spec §8): a grid tile keeps its span (Large = 2 x 2), like everything else.
  */
-export function sizeFor(n: Pick<LayoutNode, 'kind' | 'placement'>, _mode: LayoutMode): { w: number; h: number } {
+export function sizeFor(n: Pick<LayoutNode, 'placement'>): { w: number; h: number } {
   return { w: Math.max(1, Math.floor(n.placement?.w ?? 1)), h: Math.max(1, Math.floor(n.placement?.h ?? 1)) };
 }
 
@@ -89,14 +89,15 @@ export function sizeSpan(size: unknown, mode: LayoutMode, side = 1): { w: number
 }
 
 /**
- * The size the dialog shows for a tile: a 1 x 1 span shows its stored size (a stored large tile
- * at 1 x 1 is never silently enlarged); a 2 x 2 span shows Large; any other span is Custom.
+ * The size the dialog shows for a tile — always the truth (spec §8, amended after review):
+ * Large only for a 2 x 2 span; the stored Small/Medium only for a 1 x 1 tile stored small or
+ * medium; anything else (another span, or a stored large tile at 1 x 1) is Custom, so picking a
+ * size from it is always a real change that applies.
  */
 export function sizeShown(t: Pick<TileNode, 'size' | 'placement'>, mode: LayoutMode, side = 1): SizeChoice {
-  const stored: TileSize = t.size === 'small' || t.size === 'large' ? t.size : 'medium';
   const is = (s: { w: number; h: number }) => t.placement?.w === s.w && t.placement?.h === s.h;
-  if (is(sizeSpan('medium', mode, side))) return stored;
   if (is(sizeSpan('large', mode, side))) return 'large';
+  if (is(sizeSpan('medium', mode, side)) && t.size !== 'large') return t.size === 'small' ? 'small' : 'medium';
   return 'custom';
 }
 
@@ -169,7 +170,7 @@ export function placementsFor(
   const work: Container = { columns: r.columns, children: [...r.container.children] };
   const out: Placement[] = [];
   nodes.forEach((n, i) => {
-    const { w, h } = sizeFor(n, r.mode);
+    const { w, h } = sizeFor(n);
     let at: Placement | undefined;
     if (i === 0 && cell) {
       const cand: Placement = { x: Math.floor(cell.x), y: Math.floor(cell.y), w: Math.min(w, r.columns), h };

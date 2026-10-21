@@ -1921,5 +1921,33 @@ test.describe('§8 tile size sets the space it takes', () => {
     for (const t of dash.tabs) walk(t.root);
     expect(found).toHaveLength(1);
     expect(found[0]).toMatchObject({ size: 'large', placement: { w: 1, h: 1 } });
+
+    // The dialog tells the truth (spec §8, amended): Custom, not Large. Picking Large applies it
+    // (2 x 2) as one undo step.
+    const nid = await netflix.getAttribute('data-node-id');
+    const sidEarly = await spotify.getAttribute('data-node-id');
+    expect(sidEarly).toBeTruthy();
+    const nf = page.locator(`.tab-canvas [data-node-id="${nid}"]`);
+    await enterEdit(page);
+    await nf.dblclick();
+    const dlg = page.getByRole('dialog', { name: 'Edit Tile' });
+    await expect(dlg.getByLabel('Size', { exact: true })).toHaveValue('custom');
+    await dlg.getByLabel('Size', { exact: true }).selectOption('large');
+    await dlg.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(dlg).toHaveCount(0);
+    // Spotify (still 1 x 1, edit-mode layout) is the one-cell yardstick.
+    const one = (await page.locator(`.tab-canvas [data-node-id="${sidEarly}"]`).boundingBox())!;
+    const big = (await nf.boundingBox())!;
+    near(big.width, 2 * one.width, 'Netflix is now two cells wide');
+    near(big.height, 2 * one.height, 'Netflix is now two cells high');
+    const bar = page.getByRole('toolbar', { name: 'Editing' });
+    await bar.getByRole('button', { name: 'Undo' }).click();
+    await expect(bar.getByRole('button', { name: 'Undo' })).toBeDisabled();
+    // One cell again: the same box as Spotify and as on load (a folder's rows share its height).
+    await expect.poll(async () => {
+      const b = (await nf.boundingBox())!;
+      const sb = (await page.locator(`.tab-canvas [data-node-id="${sidEarly}"]`).boundingBox())!;
+      return [Math.round(b.width - sb.width), Math.round(b.height - sb.height), Math.round(b.width - n.width), Math.round(b.height - n.height)];
+    }, { message: 'Undo: one cell again' }).toEqual([0, 0, 0, 0]);
   });
 });
