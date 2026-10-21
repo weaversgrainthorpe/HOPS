@@ -10,10 +10,12 @@
   import { editMode } from '$lib/stores/editMode';
   import StatusCheckSetting from '../editor/StatusCheckSetting.svelte';
   import { tileSetting, type LevelSetting, type StatusContext } from '$lib/editor/statusChecks';
+  import type { SizeChoice, TileSize } from '$lib/editor/editorActions';
 
   interface Props {
     entry: Entry;
-    onSave: (entry: Entry) => void;
+    /** `extra.size` is set only when a Size was picked in the dialog (it sets the tile's span). */
+    onSave: (entry: Entry, extra: { size?: TileSize }) => void;
     onCancel: () => void;
     onDelete?: () => void;
     /**
@@ -24,9 +26,29 @@
     onMoveCopy?: () => void;
     /** The levels above the tile, for the status-check row's "inherited from" text. */
     statusContext?: StatusContext;
+    /**
+     * Spec §8: what Size shows — the size matching the tile's span, or 'custom' for any other
+     * span ("Custom (resized)"). Default: the stored size.
+     */
+    sizeShown?: SizeChoice;
+    /** Trial-runs a picked size; returns why it can't be done (shown inline), or null. */
+    checkSize?: (size: TileSize) => string | null;
   }
 
-  let { entry, onSave, onCancel, onDelete, onMoveCopy, statusContext }: Props = $props();
+  let { entry, onSave, onCancel, onDelete, onMoveCopy, statusContext, sizeShown, checkSize }: Props = $props();
+
+  // Size (spec §8): picking one stages it (checked at once, refusals shown inline); Save passes it
+  // as `{ size }` so the editor sets the span. Not picking passes nothing: the span is untouched.
+  // svelte-ignore state_referenced_locally
+  const initialSize: SizeChoice = sizeShown ?? (entry.size === 'small' || entry.size === 'large' ? entry.size : 'medium');
+  let sizeValue = $state<SizeChoice>(initialSize);
+  let sizePicked = $state(false);
+  let sizeError = $state<string | null>(null);
+
+  function pickSize() {
+    sizePicked = sizeValue !== 'custom';
+    sizeError = sizePicked && checkSize ? checkSize(sizeValue as TileSize) : null;
+  }
 
   // Form state initialized from props (intentionally captures initial values)
   // svelte-ignore state_referenced_locally
@@ -65,6 +87,12 @@
   let isNote = $derived(editedEntry.type === 'note');
 
   function handleSave() {
+    if (sizePicked) {
+      // Re-checked at Save (the draft may have changed); a refusal stays in the dialog, inline.
+      sizeError = checkSize ? checkSize(sizeValue as TileSize) : null;
+      if (sizeError) return;
+      editedEntry.size = sizeValue as TileSize;
+    }
     // For note tiles, clear out the link-only fields so the saved record
     // is clean (no stale URL / open mode / status check / icon left
     // behind from a previous link form).
@@ -85,7 +113,7 @@
         enabled: statusSetting === 'inherit' ? null : statusSetting === 'on'
       } as Entry['statusCheck'];
     }
-    onSave(editedEntry);
+    onSave(editedEntry, sizePicked ? { size: sizeValue as TileSize } : {});
   }
 
   async function handleDelete() {
@@ -241,11 +269,23 @@
 
       <div class="form-group">
         <label for="size">Size</label>
-        <select id="size" bind:value={editedEntry.size}>
+        <select
+          id="size"
+          bind:value={sizeValue}
+          onchange={pickSize}
+          aria-invalid={sizeError ? 'true' : undefined}
+          aria-describedby={sizeError ? 'size-error' : undefined}
+        >
           <option value="small">Small</option>
           <option value="medium">Medium</option>
           <option value="large">Large</option>
+          {#if initialSize === 'custom'}
+            <option value="custom">Custom (resized)</option>
+          {/if}
         </select>
+        {#if sizeError}
+          <p id="size-error" class="field-error" role="alert">{sizeError}</p>
+        {/if}
       </div>
 
       {#if !isNote}
@@ -408,6 +448,12 @@
     color: var(--accent);
     font-size: 0.875rem;
     font-weight: 500;
+  }
+
+  .field-error {
+    margin: 0;
+    font-size: 0.8rem;
+    color: var(--color-error-text);
   }
 
   small {

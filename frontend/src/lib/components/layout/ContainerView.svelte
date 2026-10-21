@@ -179,7 +179,8 @@
             <EditHandle name={node.name} onEdit={() => openDialog({ kind: 'tile', id: node.id })} />
           {/if}
           {#if editing && effective === 'free'}
-            <!-- Free tiles resize like folders; a grid tile is one cell (its Size is in the tile dialog). -->
+            <!-- Free tiles resize like folders; a grid tile's span is set by its Size in the tile dialog
+                 (spec §8: Large = 2 x 2, Medium and Small = 1 x 1), so it has no handles. -->
             <ResizeHandles id={node.id} name={node.name} metrics={metrics} />
           {/if}
         </div>

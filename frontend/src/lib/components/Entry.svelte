@@ -69,9 +69,8 @@
   const textOpacity = $derived(String(clamp01(entry.textOpacity, 1)));
   const iconOpacity = $derived(String(clamp01(entry.iconOpacity, 1)));
 
-  // Get size classes
-  // svelte-ignore state_referenced_locally
-  const sizeClass = entry.size || 'medium';
+  // The size class follows the tile (spec §8: a changed Size shows at once, no reload).
+  const sizeClass = $derived(entry.size === 'small' || entry.size === 'large' ? entry.size : 'medium');
 </script>
 
 <div class="entry-container" style:height={fit ? '100%' : undefined}>
@@ -357,6 +356,20 @@
   .entry.fill .icon img {
     max-height: 100%;
   }
+  /* Spec §8: Small is one cell drawn compact — a smaller icon and text, also when the tile
+     fills its cell (the fit padding above would otherwise win over .small's). */
+  .entry.fill.small {
+    padding: 0.45rem 0.5rem;
+    gap: 0.2rem;
+  }
+  .entry.fill.small .title {
+    font-size: 0.75rem;
+  }
+  .entry.fill.small .icon :global(svg),
+  .entry.fill.small .icon img {
+    width: 32px;
+    height: 32px;
+  }
   .entry.compact {
     padding: 0.35rem 0.4rem;
     gap: 0.2rem;
@@ -373,6 +386,18 @@
   }
   .entry.compact .icon-backing.has-bg {
     padding: 0.25rem;
+  }
+  /* Small in a compact cell: still smaller than Medium's compact icon and text (spec §8). */
+  .entry.compact.small {
+    padding: 0.3rem 0.35rem;
+  }
+  .entry.compact.small .title {
+    font-size: 0.62rem;
+  }
+  .entry.compact.small .icon :global(svg),
+  .entry.compact.small .icon img {
+    width: 20px;
+    height: 20px;
   }
 
   .entry.selected {

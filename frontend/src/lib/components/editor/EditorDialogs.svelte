@@ -11,8 +11,10 @@
   import NodeContextMenu from './NodeContextMenu.svelte';
   import { editorDialog, editorMenu, openDialog } from '$lib/editor/editorUi';
   import {
-    addNode, blankFolder, blankTile, deleteWithConfirm, duplicate, editFolder, editNode, findIn
+    addNode, blankFolder, blankTile, containerOfNode, deleteWithConfirm, duplicate, editFolder, editNode, findIn,
+    newTileSizeProblem, sizeShown, sizeTarget, type SizeChoice, type TileSize
   } from '$lib/editor/editorActions';
+  import { originOf, resolveContainer } from '$lib/editor/treeOps';
   import { session } from '$lib/stores/editSession';
   import { toast } from '$lib/stores/toast';
   import type { Entry } from '$lib/types';
@@ -62,10 +64,29 @@
   const newTile = $derived(dlg && dlg.kind === 'tile' && !dlg.id ? blankTile() : null);
   const newFolder = $derived(dlg && dlg.kind === 'folder' && !dlg.id ? blankFolder() : null);
 
-  function saveTile(edited: Entry) {
+  // Size = the space a tile takes (spec §8): what the dialog shows for the edited tile's span,
+  // and the trial run of a picked size against the draft (a refusal is shown in the dialog).
+  function shownSize(t: TileNode): SizeChoice | undefined {
+    if (!draft) return undefined;
+    const ref = containerOfNode(draft, t.id);
+    if (!ref) return undefined;
+    try {
+      return sizeShown(t, resolveContainer(draft, ref).mode, originOf(draft, t.id).side);
+    } catch {
+      return undefined; // the dialog closes itself when the item has gone
+    }
+  }
+  function checkSize(size: TileSize): string | null {
+    if (!dlg || dlg.kind !== 'tile' || !draft) return 'Not editing: click Edit first.';
+    if (!dlg.id) return newTileSizeProblem(draft, dlg.to ?? { tabId }, size);
+    const t = sizeTarget(draft, dlg.id, size);
+    return t.kind === 'invalid' ? t.reason : null;
+  }
+
+  function saveTile(edited: Entry, extra: { size?: TileSize } = {}) {
     if (!dlg || dlg.kind !== 'tile') return;
     if (dlg.id) {
-      if (editNode(dlg.id, edited as Partial<LayoutNode>)) close();
+      if (editNode(dlg.id, edited as Partial<LayoutNode>, extra)) close();
       return;
     }
     const node = { ...blankTile(), ...edited, kind: 'tile' } as TileNode;
@@ -104,6 +125,8 @@
     {#key id}
       <EntryEditModal
         entry={existing}
+        sizeShown={shownSize(existing)}
+        {checkSize}
         onSave={saveTile}
         onCancel={close}
         onDelete={() => remove(id)}
@@ -112,7 +135,7 @@
       />
     {/key}
   {:else if !dlg.id && newTile}
-    <EntryEditModal entry={newTile} onSave={saveTile} onCancel={close} {statusContext} />
+    <EntryEditModal entry={newTile} {checkSize} onSave={saveTile} onCancel={close} {statusContext} />
   {/if}
 {:else if dlg?.kind === 'folder'}
   {#if dlg.id && existing && existing.kind === 'folder'}

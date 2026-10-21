@@ -119,3 +119,18 @@ describe('Entry', () => {
     });
   });
 });
+
+// Spec §8: the size class follows the tile, so a changed Size shows at once (no reload).
+describe('Entry size class', () => {
+  it('is reactive: medium, then small, then large, on the same rendered tile', async () => {
+    const { container, rerender } = render(Entry, { entry, fit: 'fill' });
+    await tick();
+    const btn = () => container.querySelector('button.entry')!;
+    expect(btn().classList.contains('medium')).toBe(true);
+    await rerender({ entry: { ...entry, size: 'small' }, fit: 'fill' });
+    expect(btn().classList.contains('small')).toBe(true);
+    expect(btn().classList.contains('medium')).toBe(false);
+    await rerender({ entry: { ...entry, size: 'large' }, fit: 'fill' });
+    expect(btn().classList.contains('large')).toBe(true);
+  });
+});

@@ -1788,3 +1788,138 @@ test.describe('§7.2 nested untitled folders on a touch device', () => {
         expect(overlaps(boxes[i][1], boxes[j][1]), `${boxes[i][0]} vs ${boxes[j][0]}`).toBe(false);
   });
 });
+
+// ---- §8: a tile's Size sets the space it takes (Large = 2 x 2, Medium and Small = 1 x 1)
+
+test.describe('§8 tile size sets the space it takes', () => {
+  const box = async (page: Page, id: string) => (await page.locator(`.tab-canvas [data-node-id="${id}"]`).boundingBox())!;
+  const near = (a: number, b: number, what: string) => expect(Math.abs(a - b), `${what}: ${a} vs ${b}`).toBeLessThanOrEqual(1.5);
+
+  async function sizeDash(page: Page, context: BrowserContext) {
+    return importDash(page, context, [{
+      name: 'Main',
+      children: (id) => [
+        tile(id('a'), 'Alpha', 0, 0), tile(id('b'), 'Bravo', 1, 0), tile(id('d'), 'Delta', 0, 1),
+        tile(id('e'), 'Edge', 11, 0), tile(id('f'), 'Foxtrot', 10, 1)
+      ]
+    }]);
+  }
+
+  async function pickSize(page: Page, item: ReturnType<Page['locator']>, size: string) {
+    await item.dblclick();
+    const dlg = page.getByRole('dialog', { name: 'Edit Tile' });
+    await expect(dlg).toBeVisible();
+    await dlg.getByLabel('Size', { exact: true }).selectOption(size);
+    await dlg.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(dlg).toHaveCount(0);
+  }
+
+  async function allApart(page: Page, ids: string[]) {
+    const bs = await Promise.all(ids.map((i) => box(page, i)));
+    for (let i = 0; i < bs.length; i++)
+      for (let j = i + 1; j < bs.length; j++)
+        expect(overlaps(bs[i], bs[j]), `${ids[i]} vs ${ids[j]}`).toBe(false);
+  }
+
+  test('Large makes a 2 x 2 box (two cells plus the gap) and pushes its neighbours; Undo restores it', async ({ page, context }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    const f = await sizeDash(page, context);
+    await page.goto(f.path);
+    await enterEdit(page);
+    const [a0, b0, d0] = [await box(page, f.id('a')), await box(page, f.id('b')), await box(page, f.id('d'))];
+    const pitchX = b0.x - a0.x;
+    const pitchY = d0.y - a0.y;
+    const tileBox = async () => (await page.locator(`[data-node-id="${f.id('a')}"] button.entry`).boundingBox())!;
+    const t0 = await tileBox();
+
+    await pickSize(page, page.locator(`[data-node-id="${f.id('a')}"]`), 'large');
+    const a1 = await box(page, f.id('a'));
+    near(a1.x, a0.x, 'x');
+    near(a1.y, a0.y, 'y');
+    near(a1.width, 2 * pitchX, 'cell width = 2 cells');
+    near(a1.height, 2 * pitchY, 'cell height = 2 rows');
+    // The drawn tile: two cell widths plus the gap between them (likewise in height).
+    const t1 = await tileBox();
+    near(t1.width, pitchX + t0.width, 'tile width = 2 cells + the gap');
+    near(t1.height, pitchY + t0.height, 'tile height = 2 rows + the gap');
+    const b1 = await box(page, f.id('b'));
+    const d1 = await box(page, f.id('d'));
+    expect(b1.x !== b0.x || b1.y !== b0.y, 'Bravo was pushed aside').toBe(true);
+    expect(d1.x !== d0.x || d1.y !== d0.y, 'Delta was pushed aside').toBe(true);
+    await allApart(page, ['a', 'b', 'd', 'e', 'f'].map(f.id));
+    // Opening it again shows Large.
+    await page.locator(`[data-node-id="${f.id('a')}"]`).dblclick();
+    const dlg = page.getByRole('dialog', { name: 'Edit Tile' });
+    await expect(dlg.getByLabel('Size', { exact: true })).toHaveValue('large');
+    await dlg.getByRole('button', { name: 'Cancel', exact: true }).click();
+
+    // One undo step restores the tile and its neighbours.
+    const bar = page.getByRole('toolbar', { name: 'Editing' });
+    await bar.getByRole('button', { name: 'Undo' }).click();
+    for (const [id, was] of [['a', a0], ['b', b0], ['d', d0]] as const) {
+      const now = await box(page, f.id(id));
+      near(now.x, was.x, `${id} x after undo`);
+      near(now.y, was.y, `${id} y after undo`);
+      near(now.width, was.width, `${id} width after undo`);
+    }
+    await expect(bar.getByRole('button', { name: 'Undo' })).toBeDisabled();
+  });
+
+  test('at the right edge Large shifts the tile left; nothing overlaps', async ({ page, context }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    const f = await sizeDash(page, context);
+    await page.goto(f.path);
+    await enterEdit(page);
+    const [e0, f0] = [await box(page, f.id('e')), await box(page, f.id('f'))];
+    await pickSize(page, page.locator(`[data-node-id="${f.id('e')}"]`), 'large');
+    const e1 = await box(page, f.id('e'));
+    near(e1.x, f0.x, 'shifted one cell left');
+    near(e1.x + e1.width, e0.x + e0.width, 'still ends at the right edge');
+    await allApart(page, ['a', 'b', 'd', 'e', 'f'].map(f.id));
+  });
+
+  // 1280px: cells are compact (under 110px); 1920px: tiles fill their cells. Small is smaller in both.
+  for (const width of [1280, 1920]) test(`Small draws a smaller icon at once and the tile stays one cell (${width}px)`, async ({ page, context }) => {
+    await page.setViewportSize({ width, height: 900 });
+    const f = await sizeDash(page, context);
+    await page.goto(f.path);
+    await enterEdit(page);
+    const item = page.locator(`[data-node-id="${f.id('a')}"]`);
+    const icon = item.locator('.icon svg');
+    const a0 = await box(page, f.id('a'));
+    const i0 = (await icon.boundingBox())!;
+    await pickSize(page, item, 'small');
+    await expect(item.locator('button.entry')).toHaveClass(/\bsmall\b/);
+    const i1 = (await icon.boundingBox())!;
+    expect(i1.width, 'icon is smaller').toBeLessThan(i0.width - 4);
+    const a1 = await box(page, f.id('a'));
+    near(a1.width, a0.width, 'still one cell wide');
+    near(a1.height, a0.height, 'still one cell high');
+  });
+
+  test("a stored large tile at 1 x 1 (Sample's Netflix) is not enlarged on load", async ({ page, context }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    const s = await sampleCopy(page, context);
+    await page.goto(s.path);
+    await page.getByRole('tab', { name: 'Switch to Media tab' }).click();
+    const netflix = page.locator('.tab-canvas [data-node-id]', { has: page.getByRole('button', { name: 'Open Netflix' }) }).last();
+    const spotify = page.locator('.tab-canvas [data-node-id]', { has: page.getByRole('button', { name: 'Open Spotify' }) }).last();
+    await expect(netflix).toBeVisible();
+    const [n, sp] = [(await netflix.boundingBox())!, (await spotify.boundingBox())!];
+    near(n.width, sp.width, 'Netflix is one cell wide, like Spotify');
+    near(n.height, sp.height, 'Netflix is one cell high, like Spotify');
+    // And the stored placement is still 1 x 1.
+    const cfg = await (await page.request.get('/api/config')).json();
+    const dash = cfg.dashboards.find((d: { id: string }) => d.id === s.id);
+    const found: { size?: string; placement?: { w: number; h: number } }[] = [];
+    const walk = (c: { children?: unknown[] } | undefined) => {
+      for (const x of (c?.children ?? []) as { name?: string; kind?: string; content?: { children?: unknown[] } }[]) {
+        if (x.kind === 'tile' && x.name === 'Netflix') found.push(x as never);
+        if (x.kind === 'folder') walk(x.content);
+      }
+    };
+    for (const t of dash.tabs) walk(t.root);
+    expect(found).toHaveLength(1);
+    expect(found[0]).toMatchObject({ size: 'large', placement: { w: 1, h: 1 } });
+  });
+});

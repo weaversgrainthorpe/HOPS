@@ -506,6 +506,30 @@ export function resizeNode(
   });
 }
 
+/**
+ * Put `id` at `at` (position and size) in its own container, applying `push` to its siblings
+ * (pushAside, Ruling 11). Used when a tile's Size sets its span (spec §8), which may also shift
+ * it left at the container's right edge. Grid: validated and never overlapping (else TreeOpError).
+ */
+export function placeNode(
+  d: LayoutDashboard, id: string, at: Placement, push?: Map<string, Placement>
+): LayoutDashboard {
+  findNode(d, id);
+  const loc = locate(d, id)!;
+  const ref: ContainerRef = { tabId: loc.tabId, folderId: loc.folderChain[loc.folderChain.length - 1] };
+  const r = resolveRef(d, ref);
+  const placed = checkedPlacement(at, r);
+  const changed = new Set<string>([id, ...(push ? push.keys() : [])]);
+  return editContainer(d, ref, (c) => {
+    const next = {
+      ...c,
+      children: applyPush(kids(c), push).map((n) => (n.id === id ? ({ ...n, placement: placed } as LayoutNode) : n))
+    };
+    if (r.mode === 'grid') assertGridNoOverlap(next, changed);
+    return next;
+  });
+}
+
 const Z_LIMIT = 1000;
 /** A node's z as stored, read the way the renderer reads it: finite, truncated, within ±1000. */
 function zOf(n: LayoutNode | undefined): number {

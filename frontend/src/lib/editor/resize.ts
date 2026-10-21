@@ -2,8 +2,8 @@
  * Resizing (M3 §5.6, plan Task 9): the one resolver and commit shared by the resize handles
  * (a pointer drag through the drag engine) and the keyboard (Shift+Arrow on the selection).
  *
- * - Folders (expanded) and tiles in FREE containers resize; grid tiles are one cell (their v2
- *   `size` stays in the tile dialog); a collapsed folder renders as one cell, so it has no
+ * - Folders (expanded) and tiles in FREE containers resize; a grid tile's span is set by its
+ *   Size in the tile dialog (spec §8: Large = 2 x 2, else 1 x 1); a collapsed folder renders as one cell, so it has no
  *   handles (Ruling 13) — it is expanded first.
  * - The phone (stacked) layout has no resizing.
  * - Grid: a resize that would overlap pushes the neighbours aside (Ruling 11); the push is part of
@@ -37,7 +37,7 @@ export type ResizeResult = ResizeTarget | { kind: 'invalid'; reason: string };
 export const NARROW_HINT = 'Resize and free placement need a wider screen';
 export const COLLAPSED_HINT =
   'This folder is collapsed, so it shows as one cell — choose "Start expanded" in its menu to resize it.';
-export const GRID_TILE_HINT = 'A tile in a grid is one cell — change its Size in the tile dialog instead.';
+export const GRID_TILE_HINT = 'A tile in a grid takes the space of its Size — change its Size in the tile dialog instead.';
 
 /** Why `id` can't be resized here, or null when it can. */
 export function resizeBlocked(d: LayoutDashboard, id: string, stacked: boolean): string | null {

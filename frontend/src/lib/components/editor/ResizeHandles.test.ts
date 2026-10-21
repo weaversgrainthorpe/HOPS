@@ -256,7 +256,7 @@ describe('keyboard resize and z-order', () => {
     const spy = vi.spyOn(toast, 'info');
     toggleNode('a', false);
     await fireEvent.keyDown(window, { key: 'ArrowRight', shiftKey: true });
-    expect(spy).toHaveBeenLastCalledWith(expect.stringMatching(/one cell.*tile dialog/i));
+    expect(spy).toHaveBeenLastCalledWith(expect.stringMatching(/its Size.*tile dialog/i));
     clearSelection();
     toggleNode('c1', false);
     await fireEvent.keyDown(window, { key: 'ArrowRight', shiftKey: true });

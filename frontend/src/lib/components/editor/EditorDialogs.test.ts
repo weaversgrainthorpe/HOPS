@@ -115,6 +115,49 @@ describe('EditorDialogs (the dialogs edit the draft only)', () => {
     noRequestsButSettingsRead(fetchSpy);
   });
 
+  it('tile dialog Size (spec §8): Large saves a 2 x 2 span with neighbours pushed, as ONE undo step', async () => {
+    await show({ kind: 'tile', id: 'a' });
+    const sel = screen.getByLabelText(/^Size/) as HTMLSelectElement;
+    expect(sel.value).toBe('medium');
+    await fireEvent.change(sel, { target: { value: 'large' } });
+    expect(nodeIn(draft(), 'a')!.placement).toEqual(p(0, 0)); // staged until Save
+    await fireEvent.click(screen.getByRole('button', { name: /^Save/ }));
+    expect(nodeIn(draft(), 'a')).toMatchObject({ size: 'large', placement: p(0, 0, 2, 2) });
+    expect(nodeIn(draft(), 'b')!.placement).not.toEqual(p(1, 0));
+    expect(get(session)!.undo).toHaveLength(1);
+    undo();
+    expect(nodeIn(draft(), 'a')!.placement).toEqual(p(0, 0));
+    expect(nodeIn(draft(), 'b')!.placement).toEqual(p(1, 0));
+  });
+
+  it('tile dialog Size: a tile in a 1-column folder refuses Large inline; the draft is untouched', async () => {
+    const d = home();
+    d.tabs[0].root.children.push({
+      kind: 'folder', id: 'narrow', name: 'Narrow', display: 'expanded', placement: p(8, 0, 1, 3),
+      content: { columns: 1, children: [{ ...(nodeIn(home(), 'x') as TileNode), id: 'nx' }] }
+    } as FolderNode);
+    setLayout([d]);
+    resetEditor();
+    startSession();
+    await show({ kind: 'tile', id: 'nx' });
+    const before = draft();
+    await fireEvent.change(screen.getByLabelText(/^Size/), { target: { value: 'large' } });
+    expect(screen.getByRole('alert')).toHaveTextContent(/only 1 column wide/);
+    await fireEvent.click(screen.getByRole('button', { name: /^Save/ }));
+    expect(draft()).toBe(before);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('tile dialog Size shows "Custom (resized)" for a non-standard span', async () => {
+    const d = home();
+    (d.tabs[0].root.children[1] as TileNode).placement = p(1, 0, 3, 1);
+    setLayout([d]);
+    resetEditor();
+    startSession();
+    await show({ kind: 'tile', id: 'b' });
+    expect((screen.getByLabelText(/^Size/) as HTMLSelectElement).value).toBe('custom');
+  });
+
   it('tile dialog refuses a javascript: URL with a toast and leaves the draft alone', async () => {
     const err = vi.spyOn(toast, 'error');
     await show({ kind: 'tile', id: 'a' });

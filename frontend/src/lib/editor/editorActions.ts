@@ -11,7 +11,7 @@ import type {
 import {
   TreeOpError, cellIsFree, copyNodes, deleteNodes, deleteTab, duplicateNode, duplicateTab, firstFreeCell,
   insertNode, locate, moveNodes, newNodeId, resolveContainer, setFolderDisplay, setFolderLayout, setTabLayout, setZ,
-  addTab, adaptNode, originOf, freeSide,
+  addTab, adaptNode, originOf, freeSide, placeNode, pushAside,
   updateNode, updateTab
 } from './treeOps';
 import type {
@@ -65,12 +65,86 @@ function tabOf(d: LayoutDashboard, tabId: string): LayoutTab | undefined {
 }
 
 /**
- * The size an item takes in `mode`, from a node ALREADY converted for the target (adaptNode):
- * a grid tile is always one cell (parent spec §6.3); everything else keeps its size.
+ * The size an item takes in `mode`, from a node ALREADY converted for the target (adaptNode).
+ * Placement is the truth (spec §8): a grid tile keeps its span (Large = 2 x 2), like everything else.
  */
-export function sizeFor(n: Pick<LayoutNode, 'kind' | 'placement'>, mode: LayoutMode): { w: number; h: number } {
-  if (mode === 'grid' && n.kind === 'tile') return { w: 1, h: 1 };
+export function sizeFor(n: Pick<LayoutNode, 'kind' | 'placement'>, _mode: LayoutMode): { w: number; h: number } {
   return { w: Math.max(1, Math.floor(n.placement?.w ?? 1)), h: Math.max(1, Math.floor(n.placement?.h ?? 1)) };
+}
+
+// ---------------------------------------------------------------- tile size = space (spec §8)
+
+export type TileSize = TileNode['size'];
+/** What the tile dialog's Size shows: a size, or "Custom (resized)" for any other span. */
+export type SizeChoice = TileSize | 'custom';
+
+/**
+ * The span a tile Size takes: Large = 2 x 2 cells, Medium and Small = 1 x 1 (Small is drawn
+ * compact). Grid: cells; free: the free-unit equivalent, one cell = `side` units (freeSide).
+ */
+export function sizeSpan(size: unknown, mode: LayoutMode, side = 1): { w: number; h: number } {
+  const cells = size === 'large' ? 2 : 1;
+  const unit = mode === 'free' ? Math.max(1, Math.floor(side) || 1) : 1;
+  return { w: cells * unit, h: cells * unit };
+}
+
+/**
+ * The size the dialog shows for a tile: a 1 x 1 span shows its stored size (a stored large tile
+ * at 1 x 1 is never silently enlarged); a 2 x 2 span shows Large; any other span is Custom.
+ */
+export function sizeShown(t: Pick<TileNode, 'size' | 'placement'>, mode: LayoutMode, side = 1): SizeChoice {
+  const stored: TileSize = t.size === 'small' || t.size === 'large' ? t.size : 'medium';
+  const is = (s: { w: number; h: number }) => t.placement?.w === s.w && t.placement?.h === s.h;
+  if (is(sizeSpan('medium', mode, side))) return stored;
+  if (is(sizeSpan('large', mode, side))) return 'large';
+  return 'custom';
+}
+
+export type SizeResult =
+  | { kind: 'size'; id: string; at: Placement; push: Map<string, Placement> }
+  | { kind: 'invalid'; reason: string };
+
+function tooNarrow(size: unknown, columns: number, ref: ContainerRef): string {
+  const where = ref.folderId ? 'this folder' : 'this tab';
+  return `There isn't room for a ${String(size)} tile here: ${where} is only ${columns} column${columns === 1 ? '' : 's'} wide.`;
+}
+
+/**
+ * Where tile `id` goes when its Size is set to `size`: the span from sizeSpan at its own top-left,
+ * shifted left when it would pass the right edge, with grid neighbours pushed aside by the M3 push
+ * (pushAside, as drag and resize). Refused, with the reason, when the container is too narrow.
+ * Trial-run, so a returned target never throws on commit. Pure.
+ */
+export function sizeTarget(d: LayoutDashboard, id: string, size: unknown): SizeResult {
+  try {
+    const n = findIn(d, id);
+    const to = containerOfNode(d, id);
+    if (!n || !to) return { kind: 'invalid', reason: 'That item no longer exists.' };
+    if (n.kind !== 'tile') return { kind: 'invalid', reason: 'Only tiles have a size.' };
+    const r = resolveContainer(d, to);
+    const span = sizeSpan(size, r.mode, originOf(d, id).side);
+    if (span.w > r.columns) return { kind: 'invalid', reason: tooNarrow(size, r.columns, to) };
+    const cur = n.placement;
+    const x = Math.min(Math.max(0, Math.floor(cur.x)), r.columns - span.w);
+    const at: Placement = { x, y: Math.max(0, Math.floor(cur.y)), w: span.w, h: span.h };
+    if (cur.z !== undefined) at.z = cur.z;
+    const push = r.mode === 'grid' ? pushAside(r.container, new Set([id]), at) : new Map<string, Placement>();
+    placeNode(d, id, at, push); // the very op the commit runs
+    return { kind: 'size', id, at, push };
+  } catch (e) {
+    return { kind: 'invalid', reason: e instanceof Error && e.message ? e.message : "That size isn't possible here." };
+  }
+}
+
+/** Why a NEW tile of `size` can't go in `to` (too narrow), or null. */
+export function newTileSizeProblem(d: LayoutDashboard, to: ContainerRef, size: unknown): string | null {
+  try {
+    const r = resolveContainer(d, to);
+    const side = freeSide(tabOf(d, to.tabId));
+    return sizeSpan(size, r.mode, side).w > r.columns ? tooNarrow(size, r.columns, to) : null;
+  } catch (e) {
+    return e instanceof Error && e.message ? e.message : "That size isn't possible here.";
+  }
 }
 
 /** Nodes of the draft as they would go into `to` (converted on the one path when modes differ). */
@@ -174,7 +248,14 @@ export function addNode(node: LayoutNode, to: ContainerRef, cell?: Cell): string
   const ok = apply(node.kind === 'tile' ? 'Add tile' : 'Add folder', (dd) => {
     // New items are drawn at grid sizes (a tile one cell, a folder 4 x 3); in a free container
     // they are converted on the one mode-conversion path (one cell = one dashboard column).
-    let fresh = adaptNode(dd, placed, { mode: 'grid', side: freeSide(tabOf(dd, to.tabId)) }, to);
+    // A new tile takes the span of its Size (spec §8); too narrow a container refuses, saying why.
+    let sized = placed;
+    if (placed.kind === 'tile') {
+      const why = newTileSizeProblem(dd, to, placed.size);
+      if (why) throw new TreeOpError(why);
+      sized = { ...placed, placement: { ...placed.placement, ...sizeSpan(placed.size, 'grid') } };
+    }
+    let fresh = adaptNode(dd, sized, { mode: 'grid', side: freeSide(tabOf(dd, to.tabId)) }, to);
     const [at] = placementsFor(dd, to, [fresh], cell);
     if (fresh.kind === 'folder' && fresh.content.children.length === 0) {
       fresh = { ...fresh, content: { ...fresh.content, columns: Math.max(1, at.w) } };
@@ -190,8 +271,12 @@ export function addNode(node: LayoutNode, to: ContainerRef, cell?: Cell): string
 
 const LOCKED = ['id', 'kind', 'placement', 'content'];
 
-/** Update a node's own fields from a dialog (id/kind/placement/content are never patched here). */
-export function editNode(id: string, edited: Partial<LayoutNode>): boolean {
+/**
+ * Update a node's own fields from a dialog (id/kind/placement/content are never patched here).
+ * `opts.size` (a tile's Size picked in the dialog, spec §8) also sets its span, pushing grid
+ * neighbours aside — in the SAME undo step. A refused size changes nothing and says why.
+ */
+export function editNode(id: string, edited: Partial<LayoutNode>, opts: { size?: TileSize } = {}): boolean {
   const d = currentDraft();
   const node = d ? findIn(d, id) : undefined;
   if (!d || !node) {
@@ -208,7 +293,13 @@ export function editNode(id: string, edited: Partial<LayoutNode>): boolean {
   }
   const patch: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(plain(edited))) if (!LOCKED.includes(k)) patch[k] = v;
-  return apply(node.kind === 'tile' ? 'Edit tile' : 'Edit folder', (dd) => updateNode(dd, id, patch as Partial<LayoutNode>));
+  return apply(node.kind === 'tile' ? 'Edit tile' : 'Edit folder', (dd) => {
+    const next = updateNode(dd, id, patch as Partial<LayoutNode>);
+    if (node.kind !== 'tile' || opts.size === undefined) return next;
+    const t = sizeTarget(next, id, opts.size);
+    if (t.kind === 'invalid') throw new TreeOpError(t.reason);
+    return placeNode(next, id, t.at, t.push);
+  });
 }
 
 /**
