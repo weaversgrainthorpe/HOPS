@@ -88,6 +88,10 @@ export function createFocusTrap(container: HTMLElement, options: FocusTrapOption
     if (focusableElements.length > 0) {
       // Delay focus slightly to allow modal animation to complete
       requestAnimationFrame(() => {
+        // The user (or a fast typist) already moved into a field of this dialog: never pull
+        // the focus — and what they type next — back to the first one.
+        const active = document.activeElement;
+        if (active && active !== container && container.contains(active)) return;
         const preferred = options.initialFocus
           ? container.querySelector<HTMLElement>(options.initialFocus)
           : null;
