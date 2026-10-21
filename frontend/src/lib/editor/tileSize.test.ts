@@ -5,6 +5,7 @@ import {
   sizeSpan, sizeShown, sizeTarget, newTileSizeProblem, editNode, addNode, blankTile, moveOrCopyTo, editTab, documentIds
 } from './editorActions';
 import { assertGridNoOverlap, convertNode, mergeIntoNewFolder } from './treeOps';
+import { containerMetrics, folderInnerMetrics, nodeBox, tileFit } from '$lib/layout/geometry';
 import { session, undo } from '$lib/stores/editSession';
 import { toast } from '$lib/stores/toast';
 import { setLayout, resetEditor, startSession, draft, nodeIn, p, tile, folder, home } from '$lib/components/editor/editorTestKit';
@@ -183,5 +184,49 @@ describe('a large tile keeps its span', () => {
     const r = mergeIntoNewFolder(draft(), ['big'], 'k', documentIds());
     const f = nodeIn(r.dashboard, r.folderId) as FolderNode;
     expect(f.content.children.find((c) => c.id === 'big')!.placement).toMatchObject({ w: 1, h: 2 });
+  });
+});
+
+// Jonathan's walkthrough on dev (Sample's Services folder): the sizes looked "linked". Each tile's
+// size is its own; what made them look alike is that a Large tile in a folder whose height stays
+// put adds a content row, so the rows halve and every 1 x 1 neighbour renders compact.
+describe("the Services walkthrough: each tile's size is its own", () => {
+  function services(): void {
+    withRoot([folder('svc', p(0, 0, 12, 2), [
+      tile('google', p(0, 0)), tile('github', p(1, 0)), tile('youtube', p(2, 0))
+    ]) as unknown as ReturnType<typeof tile>]);
+  }
+  const shown = (id: string) => sizeShown(nodeIn(draft(), id) as TileNode, 'grid');
+  const sizes = () => ['google', 'github', 'youtube'].map((id) => `${id}:${(nodeIn(draft(), id) as TileNode).size}/${shown(id)}`);
+
+  it('Google Large, YouTube Medium, GitHub Small: only the edited tile changes each time', () => {
+    services();
+    const edit = (id: string, size: TileNode['size']) =>
+      expect(editNode(id, { ...(nodeIn(draft(), id) as TileNode), size } as Partial<TileNode>, { size })).toBe(true);
+    edit('google', 'large');
+    expect(sizes()).toEqual(['google:large/large', 'github:medium/medium', 'youtube:medium/medium']);
+    edit('youtube', 'medium');
+    expect(sizes()).toEqual(['google:large/large', 'github:medium/medium', 'youtube:medium/medium']);
+    edit('github', 'small');
+    expect(sizes()).toEqual(['google:large/large', 'github:small/small', 'youtube:medium/medium']);
+    // No two tiles share an object (a shared placement would move them together).
+    const [g, h, y] = ['google', 'github', 'youtube'].map((id) => nodeIn(draft(), id)!);
+    expect(new Set([g, h, y, g.placement, h.placement, y.placement]).size).toBe(6);
+    expect(() => assertGridNoOverlap((nodeIn(draft(), 'svc') as FolderNode).content)).not.toThrow();
+  });
+
+  it('the cause of the look: a Large tile adds a content row to a folder of fixed height, so its 1 x 1 neighbours render compact', () => {
+    services();
+    const fit = (id: string) => {
+      const f = nodeIn(draft(), 'svc') as FolderNode;
+      const inner = folderInnerMetrics(f, containerMetrics(draft().tabs[0].root, 'grid', 1376));
+      const b = nodeBox(nodeIn(draft(), id)!.placement, inner);
+      return tileFit(b.widthPx, b.heightPx);
+    };
+    expect(fit('youtube')).toBe('fill');
+    editNode('google', { size: 'large' } as Partial<TileNode>, { size: 'large' });
+    expect((nodeIn(draft(), 'svc') as FolderNode).placement).toEqual(p(0, 0, 12, 2)); // the folder stays 2 rows high
+    expect(fit('youtube')).toBe('compact');
+    expect(fit('github')).toBe('compact');
   });
 });

@@ -362,13 +362,14 @@
     padding: 0.45rem 0.5rem;
     gap: 0.2rem;
   }
+  /* Clearly smaller than Medium (48px icon, 0.875rem title): at most 0.6x the icon, 0.8x the text. */
   .entry.fill.small .title {
-    font-size: 0.75rem;
+    font-size: 0.68rem;
   }
   .entry.fill.small .icon :global(svg),
   .entry.fill.small .icon img {
-    width: 32px;
-    height: 32px;
+    width: 28px;
+    height: 28px;
   }
   .entry.compact {
     padding: 0.35rem 0.4rem;
@@ -387,17 +388,19 @@
   .entry.compact .icon-backing.has-bg {
     padding: 0.25rem;
   }
-  /* Small in a compact cell: still smaller than Medium's compact icon and text (spec §8). */
+  /* Small in a compact cell (e.g. beside a Large tile in a folder, whose rows then halve):
+     clearly smaller than Medium's compact 28px icon and 0.7rem title, at most 0.6x the icon
+     and 0.8x the text (spec §8), so the two never look alike. */
   .entry.compact.small {
     padding: 0.3rem 0.35rem;
   }
   .entry.compact.small .title {
-    font-size: 0.62rem;
+    font-size: 0.55rem;
   }
   .entry.compact.small .icon :global(svg),
   .entry.compact.small .icon img {
-    width: 20px;
-    height: 20px;
+    width: 16px;
+    height: 16px;
   }
 
   .entry.selected {

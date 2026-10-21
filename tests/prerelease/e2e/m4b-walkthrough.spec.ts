@@ -1950,4 +1950,116 @@ test.describe('§8 tile size sets the space it takes', () => {
       return [Math.round(b.width - sb.width), Math.round(b.height - sb.height), Math.round(b.width - n.width), Math.round(b.height - n.height)];
     }, { message: 'Undo: one cell again' }).toEqual([0, 0, 0, 0]);
   });
+  // Jonathan's walkthrough (Sample's Services folder: Google, GitHub, YouTube). Each tile's size is
+  // its own: checked after every step in the dialog, on the drawn tile and in the saved config.
+  async function servicesDash(page: Page, context: BrowserContext) {
+    return importDash(page, context, [{
+      name: 'Main',
+      children: (id) => [{
+        id: id('services'), kind: 'folder', name: 'Services', layout: 'inherit', display: 'expanded', shape: 'rounded',
+        showTitle: true, color: '#8b5cf6', opacity: 0.95, placement: placement(0, 0, 12, 2),
+        content: {
+          columns: 12, children: [
+            tile(id('google'), 'Google', 0, 0, { description: 'Search Engine', icon: 'mdi:google' }),
+            tile(id('github'), 'GitHub', 1, 0, { description: 'Code Repository', icon: 'mdi:github', order: 1 }),
+            tile(id('youtube'), 'YouTube', 2, 0, { description: 'Video Platform', icon: 'mdi:youtube', order: 2 })
+          ]
+        }
+      }]
+    }]);
+  }
+
+  test('Services walkthrough: Google Large, YouTube Medium, GitHub Small; each tile keeps its own size', async ({ page, context }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const f = await servicesDash(page, context);
+    await page.goto(f.path);
+    await enterEdit(page);
+    const ids = { Google: f.id('google'), GitHub: f.id('github'), YouTube: f.id('youtube') } as const;
+    type Name = keyof typeof ids;
+    const cell = (n: Name) => page.locator(`.tab-canvas [data-node-id="${ids[n]}"]`);
+    const dlg = page.getByRole('dialog', { name: 'Edit Tile' });
+    const sizeIn = async (n: Name) => {
+      await cell(n).dblclick();
+      await expect(dlg.locator('input#name')).toHaveValue(n);
+      const v = await dlg.getByLabel('Size', { exact: true }).inputValue();
+      await dlg.getByRole('button', { name: 'Cancel', exact: true }).click();
+      await expect(dlg).toHaveCount(0);
+      return v;
+    };
+    const expectSizes = async (want: Record<Name, string>, step: string) => {
+      for (const n of Object.keys(want) as Name[]) {
+        await expect(cell(n).locator('button.entry'), `${step}: ${n} is drawn ${want[n]}`).toHaveClass(new RegExp(`\\b${want[n]}\\b`));
+        expect(await sizeIn(n), `${step}: ${n}'s dialog shows ${want[n]}`).toBe(want[n]);
+      }
+    };
+
+    await expectSizes({ Google: 'medium', GitHub: 'medium', YouTube: 'medium' }, 'start');
+    await pickSize(page, cell('Google'), 'large');
+    await expectSizes({ Google: 'large', GitHub: 'medium', YouTube: 'medium' }, 'Google Large');
+    await pickSize(page, cell('YouTube'), 'medium');
+    await expectSizes({ Google: 'large', GitHub: 'medium', YouTube: 'medium' }, 'YouTube Medium');
+    await pickSize(page, cell('GitHub'), 'small');
+    await expectSizes({ Google: 'large', GitHub: 'small', YouTube: 'medium' }, 'GitHub Small');
+    // The menu's Edit on YouTube (GitHub was edited last) opens YouTube's own dialog.
+    await cell('YouTube').click({ button: 'right' });
+    await page.getByRole('menu').getByRole('menuitem', { name: 'Edit', exact: true }).click();
+    await expect(dlg.locator('input#name')).toHaveValue('YouTube');
+    await expect(dlg.getByLabel('Size', { exact: true })).toHaveValue('medium');
+    await dlg.getByRole('button', { name: 'Cancel', exact: true }).click();
+
+    // Saved: each tile's own size and span.
+    const bar = page.getByRole('toolbar', { name: 'Editing' });
+    await bar.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(bar.getByText('Unsaved changes')).toHaveCount(0);
+    const cfg = await (await page.request.get('/api/config')).json();
+    const dash = cfg.dashboards.find((d: { id: string }) => d.id === f.id('dash'));
+    const kids = dash.tabs[0].root.children[0].content.children as { id: string; size: string; placement: { w: number; h: number } }[];
+    const by = (n: Name) => kids.find((k) => k.id === ids[n])!;
+    expect(by('Google')).toMatchObject({ size: 'large', placement: { w: 2, h: 2 } });
+    expect(by('YouTube')).toMatchObject({ size: 'medium', placement: { w: 1, h: 1 } });
+    expect(by('GitHub')).toMatchObject({ size: 'small', placement: { w: 1, h: 1 } });
+  });
+
+  /** A tile's drawn icon and title size. */
+  async function looks(page: Page, id: string) {
+    return page.locator(`.tab-canvas [data-node-id="${id}"]`).evaluate((el) => {
+      const icon = el.querySelector('.icon svg, .icon img')!.getBoundingClientRect();
+      return { icon: Math.max(icon.width, icon.height), font: parseFloat(getComputedStyle(el.querySelector('.title')!).fontSize) };
+    });
+  }
+  function clearlySmaller(small: { icon: number; font: number }, medium: { icon: number; font: number }, where: string) {
+    expect(small.icon, `${where}: Small's icon (${small.icon}px) is at most 0.6 x Medium's (${medium.icon}px)`).toBeLessThanOrEqual(0.6 * medium.icon);
+    expect(small.font, `${where}: Small's title (${small.font}px) is at most 0.8 x Medium's (${medium.font}px)`).toBeLessThanOrEqual(0.8 * medium.font);
+  }
+
+  test('Small is clearly smaller than Medium in the same container: squeezed (compact) cells and full cells', async ({ page, context }, info) => {
+    // Squeezed: a Large tile in Services adds a second content row, so its 1 x 1 neighbours render
+    // compact (Jonathan's screenshot). Medium stays as it is; Small must still look smaller.
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const f = await servicesDash(page, context);
+    await page.goto(f.path);
+    await enterEdit(page);
+    const cell = (s: string) => page.locator(`.tab-canvas [data-node-id="${f.id(s)}"]`);
+    await pickSize(page, cell('google'), 'large');
+    await pickSize(page, cell('github'), 'small');
+    await expect(cell('github').locator('button.entry')).toHaveClass(/\bcompact\b/);
+    await expect(cell('youtube').locator('button.entry')).toHaveClass(/\bcompact\b/);
+    await info.attach('services-compact', { body: await page.screenshot(), contentType: 'image/png' });
+    // Medium compact is unchanged (28px icon, 0.7rem title).
+    const med = await looks(page, f.id('youtube'));
+    expect(med).toEqual({ icon: 28, font: 11.2 });
+    clearlySmaller(await looks(page, f.id('github')), med, 'compact');
+
+    // Full cells: a tab of 1 x 1 tiles at 1920px (they fill their cells, not compact).
+    await page.setViewportSize({ width: 1920, height: 900 });
+    const g = await sizeDash(page, context);
+    await page.goto(g.path);
+    await enterEdit(page);
+    await pickSize(page, page.locator(`.tab-canvas [data-node-id="${g.id('a')}"]`), 'small');
+    await expect(page.locator(`.tab-canvas [data-node-id="${g.id('b')}"] button.entry`)).not.toHaveClass(/\bcompact\b/);
+    await info.attach('tab-fill', { body: await page.screenshot(), contentType: 'image/png' });
+    const fullMed = await looks(page, g.id('b'));
+    expect(fullMed).toEqual({ icon: 48, font: 14 });
+    clearlySmaller(await looks(page, g.id('a')), fullMed, 'fill');
+  });
 });
