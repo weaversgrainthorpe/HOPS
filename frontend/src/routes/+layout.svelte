@@ -108,12 +108,16 @@
 
 <svelte:window onkeydown={handleKeyDown} onbeforeunload={guardUnload} />
 
+<!-- A column at least as tall as the screen: the page area takes what the navbar and the
+     banners leave, so a dashboard's tab panel can fill the rest (walkthrough §3). -->
+<div class="app-root">
 <Navbar onSearch={() => (showSearch = true)} />
 <OfflineBanner />
 <VersionMismatchBanner />
 <ConflictBanner />
 <ParkedDraftBanner />
 
+<div class="app-page">
 <!-- While the config migration has failed, only the admin page ("/": login +
      Backups, the remedy) stays reachable; everything else shows the notice. -->
 {#if showMigrationFailedPage($page.url.pathname, $migrationFailure)}
@@ -121,6 +125,8 @@
 {:else}
 	{@render children()}
 {/if}
+</div>
+</div>
 
 {#if $mustChangePassword}
 	<ChangePasswordModal forced={true} onClose={() => {}} />
@@ -132,3 +138,21 @@
 
 <Toast />
 <ConfirmModal />
+
+<style>
+	.app-root {
+		display: flex;
+		flex-direction: column;
+		min-height: 100vh;
+		min-height: 100dvh;
+	}
+	/* Grows into the space left below the navbar and banners. Other pages lay out as blocks,
+	   as before; a dashboard page becomes a column so its panel can fill the rest. */
+	.app-page {
+		flex: 1 0 auto;
+	}
+	.app-page:has(> :global(.dashboard)) {
+		display: flex;
+		flex-direction: column;
+	}
+</style>

@@ -1,4 +1,7 @@
 import { test, expect, type Page, type BrowserContext } from '@playwright/test';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { getCsrfToken } from '../helpers';
 
 // M4 walkthrough changes (design/specs/2026-10-21-hops-v3-m4-walkthrough-changes-design.md §1–3, §6),
@@ -204,5 +207,82 @@ test.describe('M4 walkthrough changes in a real browser', () => {
     // ... while the text matches the solid tile's (white; a faded title would be ~(255,255,204)).
     expect(dist(whitest[0], whitest[1]), `text ${whitest[0]} vs ${whitest[1]}`).toBeLessThanOrEqual(12);
     expect(dist(whitest[0], [255, 255, 255]), `faint text ${whitest[0]}`).toBeLessThanOrEqual(12);
+  });
+
+  // ---- §3: the tab panel fills the screen (no edge)
+
+  /** The canvas panel's bottom and the viewport height, in page coordinates. */
+  const panelGeometry = (page: Page) => page.evaluate(() => {
+    const el = document.querySelector('.canvas-panel');
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    return { bottom: r.bottom + window.scrollY, vh: window.innerHeight, docH: document.documentElement.scrollHeight };
+  });
+
+  test('the panel reaches the bottom of the screen on the Showcase Free tab, in view and edit mode', async ({ page, context }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    // The bundled showcase fixture, under a fresh id and path.
+    const fixture = JSON.parse(fs.readFileSync(
+      path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../backend/internal/configdoc/testdata/v3_showcase_export.json'), 'utf8'));
+    const p = `m4bwsc${Date.now().toString(36)}${(seq++).toString(36)}`;
+    const dash = fixture.config.dashboards[0];
+    dash.id = `${p}-dash`;
+    dash.path = `/${p}`;
+    dash.name = `Showcase ${p}`;
+    fixture.config.dashboards = [dash];
+    const r = await page.request.post('/api/config/import', {
+      headers: { 'X-CSRF-Token': await getCsrfToken(context) },
+      multipart: { file: { name: 'sc.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(fixture)) } }
+    });
+    expect(r.status(), await r.text()).toBe(200);
+    const cfg = await (await page.request.get('/api/config')).json();
+    const stored = cfg.dashboards.find((d: { name: string }) => d.name === dash.name);
+    expect(stored, 'imported showcase is stored').toBeTruthy();
+    made.push(stored.id);
+
+    await page.goto(stored.path);
+    await page.getByRole('tab', { name: 'Switch to Free tab' }).click();
+    await expect(page.getByRole('tab', { name: 'Switch to Free tab' })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('.canvas-panel')).toBeVisible();
+
+    for (const mode of ['view', 'edit'] as const) {
+      if (mode === 'edit') {
+        await enterEdit(page);
+        await expect(page.locator('.canvas-panel.editing')).toBeVisible();
+      }
+      await expect
+        .poll(async () => {
+          const g = await panelGeometry(page);
+          return g ? g.bottom >= g.vh - 1 : false;
+        }, { message: `${mode} mode: the panel reaches the bottom of the viewport` })
+        .toBe(true);
+      const g = (await panelGeometry(page))!;
+      // A short tab is the content case this checks: the page does not need to scroll.
+      expect(g.docH, `${mode}: short content, page height ${g.docH} vs viewport ${g.vh}`).toBeLessThanOrEqual(g.vh + 1);
+      expect(g.bottom, `${mode}: panel bottom ${g.bottom} vs viewport ${g.vh}`).toBeLessThanOrEqual(g.vh + 1);
+    }
+  });
+
+  test('on a long tab the panel grows with its content and contains its last tile', async ({ page, context }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const f = await importDash(page, context, [{
+      name: 'Long',
+      children: (id) => [tile(id('first'), 'First', 0, 0), tile(id('last'), 'Last', 0, 40)]
+    }]);
+    await page.goto(f.path);
+    const last = page.locator(`[data-node-id="${f.id('last')}"]`);
+    await expect(last).toBeAttached();
+    for (const mode of ['view', 'edit'] as const) {
+      if (mode === 'edit') await enterEdit(page);
+      await expect
+        .poll(async () => page.evaluate((id) => {
+          const panel = document.querySelector('.canvas-panel')?.getBoundingClientRect();
+          const t = document.querySelector(`[data-node-id="${CSS.escape(id)}"]`)?.getBoundingClientRect();
+          if (!panel || !t) return 'missing';
+          if (t.bottom <= window.innerHeight) return `tile ends at ${t.bottom}, not below the fold`;
+          return panel.top <= t.top && panel.bottom >= t.bottom ? 'contained' : `panel ${panel.top}-${panel.bottom} vs tile ${t.top}-${t.bottom}`;
+        }, f.id('last')), { message: `${mode} mode: the last tile is inside the panel` })
+        .toBe('contained');
+    }
   });
 });

@@ -534,8 +534,12 @@
 {/if}
 
 <style>
+  /* A column filling the page area below the navbar (the layout's .app-page), so the
+     tab panel can take the rest of the screen (walkthrough §3). */
   .dashboard {
-    min-height: calc(100vh - 60px);
+    flex: 1 0 auto;
+    display: flex;
+    flex-direction: column;
     background-size: cover;
     background-position: center;
     background-attachment: fixed;
@@ -547,6 +551,8 @@
     background: rgba(15, 23, 42, var(--overlay-opacity, 0.7));
     backdrop-filter: blur(var(--overlay-blur, 10px));
     min-height: 400px;
+    /* Fills the screen below the tab bar on short content; grows with long content. */
+    flex: 1 0 auto;
     border-top: 1px solid var(--border);
   }
 
