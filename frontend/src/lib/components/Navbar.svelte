@@ -4,7 +4,7 @@
   import type { HeaderConfig } from '$lib/types';
   import { isAuthenticated } from '$lib/stores/auth';
   import { theme, toggleTheme } from '$lib/stores/theme';
-  import { editMode, toggleEditMode } from '$lib/stores/editMode';
+  import { editMode, toggleEditMode, enableEditMode } from '$lib/stores/editMode';
   import { session } from '$lib/stores/editSession';
   import { textSize, increaseTextSize, decreaseTextSize, canIncrease, canDecrease, textSizeConfigs } from '$lib/stores/textSize';
   import { triggerHopAnimation } from '$lib/stores/easterEggs';
@@ -13,6 +13,7 @@
   import ExportModal from './admin/ExportModal.svelte';
   import HelpModal from './HelpModal.svelte';
   import AboutModal from './AboutModal.svelte';
+  import LoginDialog from './LoginDialog.svelte';
 
   let { onSearch }: { onSearch?: () => void } = $props();
 
@@ -55,6 +56,22 @@
   let showExport = $state(false);
   let showHelp = $state(false);
   let showAbout = $state(false);
+  let showLogin = $state(false);
+
+  // The pencil is on every dashboard page. Logged out, it signs in first, in
+  // place (no trip to the admin page), then starts editing this dashboard.
+  function handlePencil() {
+    if ($isAuthenticated) {
+      void toggleEditMode();
+      return;
+    }
+    showLogin = true;
+  }
+
+  function handleLoginSuccess() {
+    showLogin = false;
+    enableEditMode();
+  }
 
   let themeIcon = $derived(
     $theme === 'dark' ? 'mdi:weather-night' :
@@ -165,12 +182,12 @@
         </button>
       {/if}
 
-      {#if $isAuthenticated && isDashboardPage}
+      {#if isDashboardPage}
         <button
-          onclick={toggleEditMode}
+          onclick={handlePencil}
           class="edit-toggle"
           class:active={$editMode}
-          title={$editMode ? "Exit Edit Mode" : "Enter Edit Mode (Authentication Required)"}
+          title={$editMode ? "Exit Edit Mode" : $isAuthenticated ? "Enter Edit Mode" : "Sign in to edit this dashboard"}
           aria-label={$editMode ? "Exit Edit Mode" : "Enter Edit Mode"}
         >
           <Icon icon={$editMode ? 'mdi:pencil-off' : 'mdi:pencil'} width="32" height="32" />
@@ -220,6 +237,10 @@
 
 {#if showAbout}
   <AboutModal onClose={() => showAbout = false} />
+{/if}
+
+{#if showLogin}
+  <LoginDialog onSuccess={handleLoginSuccess} onCancel={() => showLogin = false} />
 {/if}
 
 <style>

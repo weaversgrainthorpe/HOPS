@@ -7,6 +7,10 @@ import { end as endEditSession } from './editSession';
 // Auth state
 export const isAuthenticated = writable(false);
 export const isLoggingIn = writable(false);
+// The last sign-in failure, in words for the user ('' when the last attempt
+// succeeded or none was made). Lets a form show the reason inline, not only
+// in the toast.
+export const loginError = writable('');
 // True when the current user must change their password before doing anything else
 export const mustChangePassword = writable(false);
 // True once initAuth() has resolved at least once. Protected pages should
@@ -83,6 +87,7 @@ export async function initAuth() {
 // Login
 export async function login(username: string, password: string) {
   isLoggingIn.set(true);
+  loginError.set('');
 
   try {
     const result = await apiLogin(username, password);
@@ -96,11 +101,9 @@ export async function login(username: string, password: string) {
     return true;
   } catch (error) {
     logError('Login', error);
-    if (error instanceof LoginError) {
-      toast.error(error.message);
-    } else {
-      toast.error('Sign-in failed. Try again.');
-    }
+    const message = error instanceof LoginError ? error.message : 'Sign-in failed. Try again.';
+    loginError.set(message);
+    toast.error(message);
     return false;
   } finally {
     isLoggingIn.set(false);

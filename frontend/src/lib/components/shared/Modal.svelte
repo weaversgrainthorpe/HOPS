@@ -29,6 +29,8 @@
     footer?: Snippet;
     /** Called before close - return false to prevent closing (e.g. to close a nested modal first) */
     onBeforeClose?: () => boolean;
+    /** Selector (inside the dialog) of the element to focus on open; default: the first focusable one */
+    initialFocus?: string;
   }
 
   let {
@@ -43,7 +45,8 @@
     header,
     children,
     footer,
-    onBeforeClose
+    onBeforeClose,
+    initialFocus
   }: Props = $props();
 
   function tryClose() {
@@ -82,7 +85,7 @@
     aria-modal="true"
     aria-labelledby="{id}-title"
     tabindex="-1"
-    use:focusTrap
+    use:focusTrap={{ initialFocus }}
     style:--modal-max-width={maxWidth}
   >
     {#if header}

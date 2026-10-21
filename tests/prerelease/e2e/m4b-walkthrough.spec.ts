@@ -1,8 +1,9 @@
-import { test, expect, type Page, type BrowserContext } from '@playwright/test';
+import { test, expect, type Page, type BrowserContext, type Browser } from '@playwright/test';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getCsrfToken } from '../helpers';
+import { ADMIN_USERNAME, ADMIN_TEST_PASSWORD } from '../constants';
 
 // M4 walkthrough changes (design/specs/2026-10-21-hops-v3-m4-walkthrough-changes-design.md §1–3, §6),
 // in a REAL browser: selection rendering, compositing (pixels) and layout need Chromium.
@@ -283,6 +284,104 @@ test.describe('M4 walkthrough changes in a real browser', () => {
           return panel.top <= t.top && panel.bottom >= t.bottom ? 'contained' : `panel ${panel.top}-${panel.bottom} vs tile ${t.top}-${t.bottom}`;
         }, f.id('last')), { message: `${mode} mode: the last tile is inside the panel` })
         .toBe('contained');
+    }
+  });
+
+  // ---- §4A: log in from the pencil, in place
+
+  /** A fresh browser context with no session (logged out), same server. */
+  async function loggedOutPage(browser: Browser): Promise<{ page: Page; ctx: BrowserContext }> {
+    // Explicitly empty: in Playwright Test a new context would otherwise inherit the project's auth.json.
+    const ctx = await browser.newContext({
+      baseURL: test.info().project.use.baseURL, serviceWorkers: 'block', storageState: { cookies: [], origins: [] }
+    });
+    return { page: await ctx.newPage(), ctx };
+  }
+
+  /** Logged out on a dashboard: the pencil opens the sign-in dialog; sign in with the test admin. */
+  async function signInFromPencil(page: Page) {
+    const pencil = page.getByRole('button', { name: 'Enter Edit Mode' });
+    await expect(pencil).toBeVisible();
+    await pencil.click();
+    const dlg = page.getByRole('dialog', { name: 'Sign in' });
+    await expect(dlg).toBeVisible();
+    await expect(dlg.getByLabel('Username')).toBeFocused();
+    await dlg.getByLabel('Username').fill(ADMIN_USERNAME);
+    await dlg.getByLabel('Password').fill(ADMIN_TEST_PASSWORD);
+    await dlg.getByLabel('Password').press('Enter');
+    await expect(dlg).toHaveCount(0);
+  }
+
+  test('logged out on a dashboard: pencil, sign in, and edit mode is on, on the same dashboard', async ({ page, context, browser }) => {
+    const f = await importDash(page, context, [{ name: 'Main', children: (id) => [tile(id('a'), 'Alpha')] }]);
+    const { page: anon, ctx } = await loggedOutPage(browser);
+    try {
+      await anon.goto(f.path);
+      await expect(anon.locator(`[data-node-id="${f.id('a')}"]`)).toBeVisible();
+      await expect(anon.getByRole('toolbar', { name: 'Editing' })).toHaveCount(0);
+
+      // A wrong password: the error is in the dialog, which stays open; nothing else changes.
+      await anon.getByRole('button', { name: 'Enter Edit Mode' }).click();
+      const dlg = anon.getByRole('dialog', { name: 'Sign in' });
+      await dlg.getByLabel('Username').fill(ADMIN_USERNAME);
+      await dlg.getByLabel('Password').fill('definitely-wrong');
+      await dlg.getByRole('button', { name: 'Sign in' }).click();
+      await expect(dlg.getByRole('alert')).toContainText('check your username and password');
+      await expect(dlg).toBeVisible();
+      await dlg.getByRole('button', { name: 'Cancel' }).click();
+      await expect(dlg).toHaveCount(0);
+      await expect(anon.getByRole('toolbar', { name: 'Editing' })).toHaveCount(0);
+
+      await signInFromPencil(anon);
+      await expect(anon.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
+      await expect(anon.getByRole('button', { name: 'Exit Edit Mode' })).toBeVisible();
+      expect(new URL(anon.url()).pathname).toBe(f.path);
+      // The edit session is on this dashboard: its tile opens the editor.
+      await anon.locator(`[data-node-id="${f.id('a')}"]`).click({ button: 'right' });
+      await anon.getByRole('menuitem', { name: 'Edit' }).click();
+      await expect(anon.getByRole('dialog').locator('input#name')).toHaveValue('Alpha');
+    } finally {
+      await ctx.close();
+    }
+  });
+
+  test('a parked draft is restored after signing back in through the pencil dialog', async ({ page, context, browser }) => {
+    const f = await importDash(page, context, [{ name: 'Main', children: (id) => [tile(id('a'), 'Alpha')] }]);
+    const { page: anon, ctx } = await loggedOutPage(browser);
+    try {
+      await anon.goto(f.path);
+      await signInFromPencil(anon);
+      await expect(anon.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
+
+      // A dirty draft: rename the tile (not saved).
+      await anon.locator(`[data-node-id="${f.id('a')}"]`).click({ button: 'right' });
+      await anon.getByRole('menuitem', { name: 'Edit' }).click();
+      const tileDlg = anon.getByRole('dialog');
+      await tileDlg.locator('input#name').fill('Alpha draft');
+      await tileDlg.getByRole('button', { name: /^Save$/ }).click();
+      await expect(anon.locator(`[data-node-id="${f.id('a')}"]`)).toContainText('Alpha draft');
+
+      // The session ends on the server; the next save finds out (401) and parks the draft.
+      const csrf = (await ctx.cookies()).find((c) => c.name === 'hops_csrf')!.value;
+      const out = await anon.request.post('/api/auth/logout', { headers: { 'X-CSRF-Token': csrf } });
+      expect(out.ok(), `logout: ${out.status()}`).toBeTruthy();
+      await anon.getByRole('toolbar', { name: 'Editing' }).getByRole('button', { name: /Save/ }).click();
+      await expect(anon.locator('.parked-banner')).toContainText('sign in to save your changes');
+      await expect(anon.getByRole('toolbar', { name: 'Editing' })).toHaveCount(0);
+
+      // Back in through the pencil dialog: edit mode is on with the draft restored.
+      await signInFromPencil(anon);
+      await expect(anon.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
+      await expect(anon.locator('.parked-banner')).toHaveCount(0);
+      await expect(anon.locator(`[data-node-id="${f.id('a')}"]`)).toContainText('Alpha draft');
+      await expect(anon.getByRole('status').filter({ hasText: 'Unsaved changes' })).toHaveCount(1);
+      // Nothing reached the server while signed out.
+      const cfg = await (await page.request.get('/api/config')).json();
+      const stored = cfg.dashboards.find((d: { id: string }) => d.id === f.id('dash'));
+      expect(JSON.stringify(stored)).toContain('"Alpha"');
+      expect(JSON.stringify(stored)).not.toContain('Alpha draft');
+    } finally {
+      await ctx.close();
     }
   });
 });
