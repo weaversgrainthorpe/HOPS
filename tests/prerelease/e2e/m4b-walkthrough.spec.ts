@@ -69,6 +69,49 @@ async function enterEdit(page: Page) {
   await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
 }
 
+type RGB = [number, number, number];
+type Box = { x: number; y: number; width: number; height: number };
+const dist = (a: RGB, b: RGB) => Math.max(...a.map((v, i) => Math.abs(v - b[i])));
+
+/**
+ * From one real screenshot (decoded by the browser): the colour at each point, and for each
+ * box the pixel closest to white (on a white-text title, a pixel fully inside a glyph).
+ */
+async function sample(page: Page, points: [number, number][], boxes: Box[]): Promise<{ at: RGB[]; whitest: RGB[] }> {
+  const png = await page.screenshot({ animations: 'disabled', caret: 'hide' });
+  return page.evaluate(
+    async ({ b64, pts, bxs }) => {
+      const img = new Image();
+      img.src = `data:image/png;base64,${b64}`;
+      await img.decode();
+      const c = document.createElement('canvas');
+      c.width = img.naturalWidth;
+      c.height = img.naturalHeight;
+      const ctx = c.getContext('2d', { willReadFrequently: true })!;
+      ctx.drawImage(img, 0, 0);
+      const scale = img.naturalWidth / window.innerWidth;
+      const at = pts.map(([x, y]) => {
+        const d = ctx.getImageData(Math.round(x * scale), Math.round(y * scale), 1, 1).data;
+        return [d[0], d[1], d[2]] as [number, number, number];
+      });
+      const whitest = bxs.map((b) => {
+        const x0 = Math.round(b.x * scale), y0 = Math.round(b.y * scale);
+        const w = Math.max(1, Math.round(b.width * scale)), h = Math.max(1, Math.round(b.height * scale));
+        const d = ctx.getImageData(x0, y0, w, h).data;
+        let best: [number, number, number] = [0, 0, 0];
+        let bestD = Infinity;
+        for (let i = 0; i < d.length; i += 4) {
+          const dd = Math.max(255 - d[i], 255 - d[i + 1], 255 - d[i + 2]);
+          if (dd < bestD) { bestD = dd; best = [d[i], d[i + 1], d[i + 2]]; }
+        }
+        return best;
+      });
+      return { at, whitest };
+    },
+    { b64: png.toString('base64'), pts: points, bxs: boxes }
+  );
+}
+
 test.describe('M4 walkthrough changes in a real browser', () => {
   // ---- §1: the gallery shows each picture once
 
@@ -106,5 +149,60 @@ test.describe('M4 walkthrough changes in a real browser', () => {
     const srcs = await picker.locator('.image-card img').evaluateAll((els) => els.map((e) => e.getAttribute('src')));
     expect(srcs.length).toBeGreaterThan(0);
     expect(new Set(srcs).size).toBe(srcs.length);
+  });
+
+  // ---- §2: tile opacity fades the background only
+
+  test('a tile at background opacity 0.2: its text is as solid as a tile at 1.0; its background shows the wallpaper', async ({ page, context }) => {
+    // A bright flat wallpaper (no overlay) and blue tiles with white text (custom colour).
+    const WALL: RGB = [255, 255, 0];
+    const BLUE: RGB = [0, 0, 255];
+    const f = await importDash(page, context, [{
+      name: 'Main',
+      children: (id) => [
+        tile(id('faint'), 'Faint', 0, 0, { size: 'large', color: '#0000ff', opacity: 0.2, placement: placement(0, 0, 3, 2) }),
+        tile(id('solid'), 'Solid', 4, 0, { size: 'large', color: '#0000ff', opacity: 1, placement: placement(4, 0, 3, 2) })
+      ]
+    }], { background: { type: 'color', value: '#ffff00', overlayOpacity: 0, overlayBlur: 0 } });
+    await page.goto(f.path);
+    const faint = page.locator(`[data-node-id="${f.id('faint')}"] .entry`);
+    const solid = page.locator(`[data-node-id="${f.id('solid')}"] .entry`);
+    await expect(faint).toBeVisible();
+    await expect(solid).toBeVisible();
+    await page.mouse.move(1, 1);
+
+    // Nothing on the title's path is faded, in either tile (the old bug faded the whole tile).
+    const chain = (loc: typeof faint) => loc.locator('.title').evaluate((el) => {
+      let o = 1;
+      for (let n: Element | null = el; n; n = n.parentElement) o *= parseFloat(getComputedStyle(n).opacity);
+      return o;
+    });
+    expect(await chain(faint)).toBe(1);
+    expect(await chain(solid)).toBe(1);
+
+    const fb = (await faint.boundingBox())!;
+    const sb = (await solid.boundingBox())!;
+    const ft = (await faint.locator('.title').boundingBox())!;
+    const st = (await solid.locator('.title').boundingBox())!;
+    // On the tile face near its left edge, mid-height: clear of the title, icon and border.
+    const faceF: [number, number] = [fb.x + 8, fb.y + fb.height / 2];
+    const faceS: [number, number] = [sb.x + 8, sb.y + sb.height / 2];
+    const expectedFace: RGB = [0, 1, 2].map((i) => Math.round(0.2 * BLUE[i] + 0.8 * WALL[i])) as RGB;
+
+    // Poll until the tiles have painted (fonts, transitions) and the colours match.
+    await expect
+      .poll(async () => {
+        const { at, whitest } = await sample(page, [faceF, faceS], [ft, st]);
+        return dist(at[0], expectedFace) <= 8 && dist(at[1], BLUE) <= 6 && dist(whitest[0], whitest[1]) <= 12;
+      }, { message: 'faint tile: face blended with the wallpaper, text as white as the solid tile' })
+      .toBe(true);
+
+    const { at, whitest } = await sample(page, [faceF, faceS], [ft, st]);
+    // The backgrounds differ: the faint one shows the wallpaper through it ...
+    expect(dist(at[0], at[1]), `faces ${at[0]} vs ${at[1]}`).toBeGreaterThan(100);
+    expect(dist(at[0], expectedFace), `faint face ${at[0]} vs ${expectedFace}`).toBeLessThanOrEqual(8);
+    // ... while the text matches the solid tile's (white; a faded title would be ~(255,255,204)).
+    expect(dist(whitest[0], whitest[1]), `text ${whitest[0]} vs ${whitest[1]}`).toBeLessThanOrEqual(12);
+    expect(dist(whitest[0], [255, 255, 255]), `faint text ${whitest[0]}`).toBeLessThanOrEqual(12);
   });
 });

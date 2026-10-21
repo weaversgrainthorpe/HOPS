@@ -47,4 +47,60 @@ describe('Entry', () => {
     expect(btn.getAttribute('aria-label')).toBe('Open Plain');
     expect(btn.hasAttribute('aria-pressed')).toBe(false);
   });
+
+  // Walkthrough §2: opacity fades the tile's background only; text and icon have their own.
+  describe('opacity', () => {
+    const layer = (c: HTMLElement) => c.querySelector('button.entry > .entry-bg') as HTMLElement;
+    const btnOf = (c: HTMLElement) => c.querySelector('button.entry') as HTMLElement;
+
+    it('is never set on the tile itself; the background layer carries it (default 0.95)', async () => {
+      const { container, rerender } = render(Entry, { entry });
+      await tick();
+      expect(btnOf(container).style.opacity).toBe('');
+      expect(layer(container)).not.toBeNull();
+      expect(layer(container).style.opacity).toBe('0.95');
+      await rerender({ entry: { ...entry, opacity: 0.2, color: '#ff0000' } });
+      expect(btnOf(container).style.opacity).toBe('');
+      expect(btnOf(container).style.backgroundColor).toBe('');
+      expect(layer(container).style.opacity).toBe('0.2');
+      expect(layer(container).style.backgroundColor).toBe('rgb(255, 0, 0)');
+    });
+
+    it('text and icon follow their own fields (default 1); the tile itself is never faded', async () => {
+      const e = { ...entry, description: 'Desc', opacity: 0.1, textOpacity: 0.4, iconOpacity: 0.6 } as EntryType;
+      const { container } = render(Entry, { entry: e });
+      await tick();
+      expect((container.querySelector('.title') as HTMLElement).style.opacity).toBe('0.4');
+      expect((container.querySelector('.subtitle') as HTMLElement).style.opacity).toBe('0.4');
+      expect((container.querySelector('.icon') as HTMLElement).style.opacity).toBe('0.6');
+      // The status badge sits directly in the tile, outside the faded parts.
+      expect(btnOf(container).style.opacity).toBe('');
+    });
+
+    it('defaults: text and icon are fully opaque', async () => {
+      const { container } = render(Entry, { entry: { ...entry, description: 'Desc' } });
+      await tick();
+      expect((container.querySelector('.title') as HTMLElement).style.opacity).toBe('1');
+      expect((container.querySelector('.icon') as HTMLElement).style.opacity).toBe('1');
+    });
+
+    it('note tiles fade their text with textOpacity', async () => {
+      const { container } = render(Entry, { entry: { ...entry, type: 'note', description: 'Body', textOpacity: 0.3 } });
+      await tick();
+      expect((container.querySelector('.note-title') as HTMLElement).style.opacity).toBe('0.3');
+      expect((container.querySelector('.note-body') as HTMLElement).style.opacity).toBe('0.3');
+    });
+
+    it('clamps all three to 0–1 (2 → 1, -1 → 0, junk → default)', async () => {
+      const { container, rerender } = render(Entry, { entry: { ...entry, opacity: 2, textOpacity: 2, iconOpacity: -1 } });
+      await tick();
+      expect(layer(container).style.opacity).toBe('1');
+      expect((container.querySelector('.title') as HTMLElement).style.opacity).toBe('1');
+      expect((container.querySelector('.icon') as HTMLElement).style.opacity).toBe('0');
+      await rerender({ entry: { ...entry, opacity: 'x', textOpacity: NaN, iconOpacity: Infinity } as unknown as EntryType });
+      expect(layer(container).style.opacity).toBe('0.95');
+      expect((container.querySelector('.title') as HTMLElement).style.opacity).toBe('1');
+      expect((container.querySelector('.icon') as HTMLElement).style.opacity).toBe('1');
+    });
+  });
 });

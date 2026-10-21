@@ -35,7 +35,12 @@ export interface Entry {
   statusCheck?: StatusCheck;
   size: 'small' | 'medium' | 'large';
   color?: string;
+  /** 0–1 opacity of the tile's background only (default 0.95); clamped when rendered. */
   opacity?: number;
+  /** 0–1 opacity of the name, description and note text (default 1); clamped when rendered. */
+  textOpacity?: number;
+  /** 0–1 opacity of the icon and its backing (default 1); clamped when rendered. */
+  iconOpacity?: number;
   // Optional coloured backing behind the icon graphic — useful for dark
   // logos (e.g. GitHub's octocat) on dark tiles where they'd otherwise
   // vanish. Undefined means "no backing, icon sits directly on the tile".

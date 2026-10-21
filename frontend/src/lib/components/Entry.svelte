@@ -60,6 +60,15 @@
     }
   }
 
+  // Walkthrough §2: opacity fades the tile's BACKGROUND only (a separate layer, as in
+  // FolderSurface); the text and the icon have their own; the status badge never fades.
+  // All three are clamped to 0–1 before they reach a style.
+  const clamp01 = (n: unknown, d: number) =>
+    typeof n === 'number' && Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : d;
+  const bgOpacity = $derived(String(clamp01(entry.opacity, 0.95)));
+  const textOpacity = $derived(String(clamp01(entry.textOpacity, 1)));
+  const iconOpacity = $derived(String(clamp01(entry.iconOpacity, 1)));
+
   // Get size classes
   // svelte-ignore state_referenced_locally
   const sizeClass = entry.size || 'medium';
@@ -77,24 +86,23 @@
     class:custom-color={entry.color}
     class:selected={editorSelected === true}
     class:entry-note={isNote}
-    style:background-color={entry.color}
-    style:opacity={entry.opacity !== undefined ? entry.opacity : 0.95}
     onclick={handleClick}
     title={entry.description || entry.name}
     aria-label={inEditor || isNote ? entry.name : `Open ${entry.name}`}
     aria-pressed={inEditor ? editorSelected : undefined}
   >
+    <span class="entry-bg" aria-hidden="true" style:background-color={entry.color} style:opacity={bgOpacity}></span>
     {#if isNote}
       <!-- Note tile: just the name as a heading + description as body
            text. No icon, no status badge, no click-to-open. -->
-      <div class="note-title">{entry.name}</div>
+      <div class="note-title" style:opacity={textOpacity}>{entry.name}</div>
       {#if entry.description && !compact}
-        <div class="note-body">{entry.description}</div>
+        <div class="note-body" style:opacity={textOpacity}>{entry.description}</div>
       {/if}
     {:else}
-      <div class="title">{entry.name}</div>
+      <div class="title" style:opacity={textOpacity}>{entry.name}</div>
 
-      <div class="icon">
+      <div class="icon" style:opacity={iconOpacity}>
         <!-- icon-backing exists on every tile so layout doesn't shift when
              the optional background is added/removed. It's only visually
              present (padding + rounding + bg) when entry.iconBgColor is set. -->
@@ -114,7 +122,7 @@
       </div>
 
       {#if entry.description && !compact}
-        <div class="subtitle">{entry.description}</div>
+        <div class="subtitle" style:opacity={textOpacity}>{entry.description}</div>
       {/if}
 
       <!-- Layered status checks (M4 §4b): a tile switched on or set to inherit asks the
@@ -148,7 +156,9 @@
     justify-content: space-between;
     gap: 0.5rem;
     padding: 1rem 1.5rem;
-    background: var(--bg-secondary);
+    /* The background is drawn by .entry-bg (its own opacity), never by the tile itself. */
+    background: transparent;
+    isolation: isolate;
     border: 1px solid var(--border);
     border-radius: 0.75rem;
     cursor: pointer;
@@ -160,8 +170,23 @@
     width: 100%;
   }
 
+  /* The tile's background layer: behind the content, inside the tile's own stacking
+     context (isolation), so its opacity never fades the text, icon or status badge. */
+  .entry-bg {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    background-color: var(--bg-secondary);
+    pointer-events: none;
+    transition: background-color 0.2s;
+  }
+
+  .entry:hover .entry-bg {
+    background-color: var(--bg-tertiary);
+  }
+
   .entry:hover {
-    background: var(--bg-tertiary);
     border-color: var(--accent);
     transform: translateY(-2px);
     box-shadow: 0 4px 12px var(--shadow);
@@ -185,9 +210,12 @@
     padding: 1rem 1.25rem;
   }
 
+  .entry-note:hover .entry-bg {
+    background-color: var(--bg-secondary);
+  }
+
   .entry-note:hover {
     /* Suppress the link-tile hover effect entirely. */
-    background: var(--bg-secondary);
     border-color: var(--border);
     transform: none;
     box-shadow: none;

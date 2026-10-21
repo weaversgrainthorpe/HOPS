@@ -2,16 +2,26 @@
   interface Props {
     opacity?: number;
     onSelect: (opacity: number | undefined) => void;
+    /** Visible label (default "Opacity"). */
+    label?: string;
+    /** Input id; must be unique when several sliders share a dialog. */
+    id?: string;
+    /** The value shown for an unset field and restored by Reset, 0–1 (default 0.95). */
+    defaultValue?: number;
   }
 
-  let { opacity, onSelect }: Props = $props();
+  let { opacity, onSelect, label = 'Opacity', id = 'opacity', defaultValue = 0.95 }: Props = $props();
+
+  // A stored value is shown clamped to 0–1; anything non-numeric shows the default.
+  const toPercent = (o: number | undefined) =>
+    (typeof o === 'number' && Number.isFinite(o) ? Math.min(1, Math.max(0, o)) : defaultValue) * 100;
 
   // Convert opacity (0-1) to percentage (0-100)
   // svelte-ignore state_referenced_locally
-  let opacityPercent = $state((opacity ?? 0.95) * 100);
+  let opacityPercent = $state(toPercent(opacity));
 
   $effect(() => {
-    opacityPercent = (opacity ?? 0.95) * 100;
+    opacityPercent = toPercent(opacity);
   });
 
   function handleChange(e: Event) {
@@ -21,20 +31,20 @@
   }
 
   function handleReset() {
-    opacityPercent = 95;
+    opacityPercent = defaultValue * 100;
     onSelect(undefined);
   }
 </script>
 
 <div class="opacity-slider">
   <div class="opacity-header">
-    <label for="opacity">Opacity: {Math.round(opacityPercent)}%</label>
+    <label for={id}>{label}: {Math.round(opacityPercent)}%</label>
     <button type="button" class="reset-btn" onclick={handleReset} title="Reset to default">
       Reset
     </button>
   </div>
   <input
-    id="opacity"
+    {id}
     type="range"
     min="0"
     max="100"

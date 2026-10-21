@@ -212,11 +212,31 @@
         />
       </div>
 
+      <!-- Walkthrough §2: the tile's opacity fades its background only; the text and
+           the icon have their own (the status badge is never faded). -->
       <div class="form-group full-width">
         <OpacitySlider
+          id="entry-bg-opacity"
+          label="Background opacity"
           opacity={editedEntry.opacity}
           onSelect={(opacity) => editedEntry.opacity = opacity}
         />
+        <OpacitySlider
+          id="entry-text-opacity"
+          label="Text opacity"
+          defaultValue={1}
+          opacity={editedEntry.textOpacity}
+          onSelect={(o) => editedEntry.textOpacity = o}
+        />
+        {#if !isNote}
+          <OpacitySlider
+            id="entry-icon-opacity"
+            label="Icon opacity"
+            defaultValue={1}
+            opacity={editedEntry.iconOpacity}
+            onSelect={(o) => editedEntry.iconOpacity = o}
+          />
+        {/if}
       </div>
 
       <div class="form-group">
