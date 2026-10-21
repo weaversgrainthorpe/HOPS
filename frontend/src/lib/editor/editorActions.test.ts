@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { get } from 'svelte/store';
 import {
-  documentIds, setBackground, setFolderBackground, setHeader, addNode, blankTile, blankFolder, placementsFor,
+  documentIds, setFolderBackground, setLook, addNode, blankTile, blankFolder, placementsFor,
   moveOrCopyTo, tileProblem, editNode, duplicate, editTab, editFolder
 } from './editorActions';
 import { dirty, session, undo } from '$lib/stores/editSession';
@@ -36,15 +36,32 @@ describe('editorActions', () => {
   });
 
   it('Header and Background edit the draft (parent spec §7.1) — no request, undoable', () => {
-    setHeader({ centerTitle: 'Draft' });
-    setBackground({ type: 'color', value: '#123456' });
+    setLook({ centerTitle: 'Draft' }, { type: 'color', value: '#123456' });
     expect(draft().header).toEqual({ centerTitle: 'Draft' });
     expect(draft().background).toEqual({ type: 'color', value: '#123456' });
     expect(get(dirty)).toBe(true);
     expect(fetchSpy).not.toHaveBeenCalled();
     undo();
-    undo();
     expect(get(dirty)).toBe(false);
+  });
+
+  it('setLook applies header and background as ONE undo step (walkthrough §4C); unchanged adds none', () => {
+    const before = draft();
+    expect(setLook({ centerTitle: 'Saved title' }, undefined)).toBe(true);
+    expect(draft()).toBe(before); // nothing changed: no undo step
+    expect(get(session)!.undo).toHaveLength(0);
+    expect(setLook({ centerTitle: 'Both' }, { type: 'color', value: '#123456' })).toBe(true);
+    expect(draft().header).toEqual({ centerTitle: 'Both' });
+    expect(draft().background).toEqual({ type: 'color', value: '#123456' });
+    expect(get(session)!.undo).toHaveLength(1);
+    expect(get(session)!.lastLabel).toBe('Edit dashboard');
+    // Key order does not count as a change.
+    expect(setLook({ centerTitle: 'Both' }, { value: '#123456', type: 'color' })).toBe(true);
+    expect(get(session)!.undo).toHaveLength(1);
+    undo();
+    expect(draft()).toEqual(before);
+    expect(get(dirty)).toBe(false);
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it('a new tile in a free tab gets one column square (designWidth / 12 / 8) at a free spot', () => {

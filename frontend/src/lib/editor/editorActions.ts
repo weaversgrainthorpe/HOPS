@@ -491,12 +491,26 @@ function mapNode(d: LayoutDashboard, id: string, fn: (n: LayoutNode) => LayoutNo
 
 // ---------------------------------------------------------------- dashboard-level (draft, parent spec §7.1)
 
-export function setHeader(header: HeaderConfig): boolean {
-  return apply('Edit header', (dd) => ({ ...dd, header: plain(header) }));
+/** JSON with object keys sorted: equal values compare equal whatever their key order. */
+function canonical(v: unknown): string {
+  return JSON.stringify(v, (_k, x) =>
+    x && typeof x === 'object' && !Array.isArray(x)
+      ? Object.fromEntries(Object.keys(x).sort().map((k) => [k, (x as Record<string, unknown>)[k]]))
+      : x
+  );
 }
 
-export function setBackground(background: Background | undefined): boolean {
-  return apply('Edit background', (dd) => ({ ...dd, background: plain(background) }));
+/**
+ * The dashboard dialog's Header and Background (walkthrough §4C), applied as ONE undo step.
+ * Nothing changed (whatever the key order): no undo step.
+ */
+export function setLook(header: HeaderConfig | undefined, background: Background | undefined): boolean {
+  return apply('Edit dashboard', (dd) => {
+    const h = plain(header);
+    const b = plain(background);
+    if (canonical(dd.header) === canonical(h) && canonical(dd.background) === canonical(b)) return dd;
+    return { ...dd, header: h, background: b };
+  });
 }
 
 

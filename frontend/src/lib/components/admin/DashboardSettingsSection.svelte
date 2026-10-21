@@ -1,8 +1,11 @@
 <script lang="ts">
-  import Icon from '@iconify/svelte';
+  /**
+   * The dashboard's own settings (overrides of the global ones), the dashboard dialog's Settings
+   * section (walkthrough §4C). They save to the server, not the draft: the dialog calls `save()`
+   * first on its Save, and only a changed setting is sent.
+   */
   import { onMount } from 'svelte';
   import type { DashboardSettings } from '$lib/types';
-  import { focusTrap } from '$lib/utils/focusTrap';
   import {
     getDashboardSettings,
     ConflictError,
@@ -13,10 +16,13 @@
 
   interface Props {
     dashboardId: string;
-    onClose: () => void;
+    /** Out: an overridden number field holds no valid number (the dialog disables Save). */
+    invalid?: boolean;
+    /** Out: the settings couldn't be loaded (the dialog marks the Settings section). */
+    loadFailed?: boolean;
   }
 
-  let { dashboardId, onClose }: Props = $props();
+  let { dashboardId, invalid = $bindable(false), loadFailed = $bindable(false) }: Props = $props();
 
   type Key = keyof DashboardSettings;
   type Value = string | number | boolean;
@@ -79,7 +85,7 @@
   }
 
   // An overridden number field must hold a whole number >= its minimum.
-  function invalid(r: { key: Key; kind: Kind; min?: number }): string | null {
+  function rowProblem(r: { key: Key; kind: Kind; min?: number }): string | null {
     if (r.kind !== 'int' || !enabled[r.key]) return null;
     const v = values[r.key];
     if (typeof v !== 'number' || !Number.isInteger(v) || v < (r.min ?? 0)) {
@@ -87,7 +93,13 @@
     }
     return null;
   }
-  let hasInvalid = $derived(ROWS.some((r) => invalid(r) !== null));
+  let hasInvalid = $derived(ROWS.some((r) => rowProblem(r) !== null));
+  $effect(() => {
+    invalid = hasInvalid;
+  });
+  $effect(() => {
+    loadFailed = loadError !== null;
+  });
 
   function toggle(key: Key, on: boolean) {
     enabled[key] = on;
@@ -114,19 +126,29 @@
     return changes;
   }
 
-  async function handleSave() {
-    if (!original || saving || hasInvalid) return;
+  /**
+   * Save the changed settings (none changed: nothing is sent). Returns true when there is nothing
+   * left to save, false on a failure, which is shown here. Not loaded (still loading, or the load
+   * failed, shown here): there is nothing this section can save, so true.
+   */
+  export async function save(): Promise<boolean> {
+    if (!original || saving) return !saving;
+    if (hasInvalid) return false;
     saveError = null;
     const changes = buildChanges();
+    if (Object.keys(changes).length === 0) return true;
     saving = true;
     try {
       // Revision-checked against the store's revision (not the one fetched
       // above), so a stale page gets a 409 instead of being fast-forwarded.
-      // The store raises the conflict banner / migration page itself.
-      if (Object.keys(changes).length > 0) {
-        await saveDashboardSettingsChanges(dashboardId, changes);
-      }
-      onClose();
+      // The store raises the conflict banner / migration page itself, and
+      // refreshes the status-check base after a save (M4 Task 7).
+      await saveDashboardSettingsChanges(dashboardId, changes);
+      // Saved: this is the new baseline, so a retried dialog Save never resends it.
+      const next = { ...original };
+      for (const r of ROWS) (next as Record<string, unknown>)[r.key] = enabled[r.key] ? values[r.key] : null;
+      original = next;
+      return true;
     } catch (e) {
       if (e instanceof ConflictError) {
         saveError = 'Not saved — this dashboard was changed somewhere else. Close this dialog and reload to see the latest settings.';
@@ -135,168 +157,89 @@
       } else {
         saveError = e instanceof Error ? e.message : 'Failed to save settings';
       }
+      return false;
     } finally {
       saving = false;
     }
   }
-
-  function handleKeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape') onClose();
-  }
 </script>
 
-<svelte:window onkeydown={handleKeydown} />
-
-<!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="modal-backdrop" onclick={onClose} onkeydown={(e) => e.key === 'Escape' && onClose()}>
-  <div
-    class="modal-content"
-    onclick={(e) => e.stopPropagation()}
-    onkeydown={(e) => e.stopPropagation()}
-    role="dialog"
-    aria-modal="true"
-    aria-labelledby="dash-settings-title"
-    tabindex="-1"
-    use:focusTrap
-  >
-    <div class="modal-header">
-      <h2 id="dash-settings-title">Dashboard settings</h2>
-      <button type="button" class="close-btn" onclick={onClose} aria-label="Close">
-        <Icon icon="mdi:close" width="24" />
-      </button>
-    </div>
-
-    <form onsubmit={(e) => { e.preventDefault(); handleSave(); }}>
-      {#if loading}
-        <p class="hint">Loading settings…</p>
-      {:else if loadError}
-        <div class="error-box" role="alert">
-          Couldn't load this dashboard's settings: {loadError}
-        </div>
-        <div class="modal-actions">
-          <button type="button" class="btn-secondary" onclick={onClose}>Cancel</button>
-          <button type="button" class="btn-primary" onclick={load}>Retry</button>
-        </div>
-      {:else if effective}
-        <p class="hint">Each setting inherits the global value unless you override it for this dashboard.</p>
-        {#each ROWS as row (row.key)}
-          <div class="row">
-            <div class="row-head">
-              <span class="row-label" id={`lbl-${row.key}`}>{row.label}</span>
-              <label class="override-toggle">
-                <input
-                  type="checkbox"
-                  checked={enabled[row.key]}
-                  aria-label={`Override for this dashboard: ${row.label}`}
-                  onchange={(e) => toggle(row.key, e.currentTarget.checked)}
-                />
-                Override for this dashboard
-              </label>
-            </div>
-            <div class="row-body">
-              {#if !enabled[row.key]}
-                <span class="inherited">Inherited: {display(row.kind, effective[row.key])}</span>
-              {:else if row.kind === 'bool'}
-                <input
-                  type="checkbox"
-                  aria-labelledby={`lbl-${row.key}`}
-                  checked={values[row.key] === true}
-                  onchange={(e) => (values[row.key] = e.currentTarget.checked)}
-                />
-              {:else if row.kind === 'int'}
-                <input
-                  type="number"
-                  step="1"
-                  min={row.min}
-                  aria-labelledby={`lbl-${row.key}`}
-                  value={values[row.key]}
-                  oninput={(e) => (values[row.key] = e.currentTarget.value.trim() === '' ? NaN : Number(e.currentTarget.value))}
-                />
-              {:else}
-                <select
-                  aria-labelledby={`lbl-${row.key}`}
-                  value={values[row.key]}
-                  onchange={(e) => (values[row.key] = e.currentTarget.value)}
-                >
-                  <option value="grid">grid</option>
-                  <option value="free">free</option>
-                </select>
-              {/if}
-              <button
-                type="button"
-                class="reset-btn"
-                disabled={!enabled[row.key]}
-                aria-label={`Reset to inherit: ${row.label}`}
-                onclick={() => toggle(row.key, false)}
-              >
-                Reset to inherit
-              </button>
-            </div>
-            {#if invalid(row)}
-              <small class="row-error" role="alert">{invalid(row)}</small>
-            {/if}
-          </div>
-        {/each}
-
-        {#if saveError}
-          <div class="error-box" role="alert">{saveError}</div>
-        {/if}
-
-        <div class="modal-actions">
-          <button type="button" class="btn-secondary" onclick={onClose}>Cancel</button>
-          <button type="submit" class="btn-primary" disabled={saving || hasInvalid}>
-            <Icon icon="mdi:content-save" width="20" />
-            Save
-          </button>
-        </div>
-      {/if}
-    </form>
+{#if loading}
+  <p class="hint">Loading settings…</p>
+{:else if loadError}
+  <div class="error-box" role="alert">
+    Couldn't load this dashboard's settings: {loadError}
   </div>
-</div>
+  <div class="retry-row">
+    <button type="button" class="btn-secondary" onclick={load}>Retry</button>
+  </div>
+{:else if effective}
+  <p class="hint">Each setting inherits the global value unless you override it for this dashboard.</p>
+  {#each ROWS as row (row.key)}
+    <div class="row">
+      <div class="row-head">
+        <span class="row-label" id={`lbl-${row.key}`}>{row.label}</span>
+        <label class="override-toggle">
+          <input
+            type="checkbox"
+            checked={enabled[row.key]}
+            aria-label={`Override for this dashboard: ${row.label}`}
+            onchange={(e) => toggle(row.key, e.currentTarget.checked)}
+          />
+          Override for this dashboard
+        </label>
+      </div>
+      <div class="row-body">
+        {#if !enabled[row.key]}
+          <span class="inherited">Inherited: {display(row.kind, effective[row.key])}</span>
+        {:else if row.kind === 'bool'}
+          <input
+            type="checkbox"
+            aria-labelledby={`lbl-${row.key}`}
+            checked={values[row.key] === true}
+            onchange={(e) => (values[row.key] = e.currentTarget.checked)}
+          />
+        {:else if row.kind === 'int'}
+          <input
+            type="number"
+            step="1"
+            min={row.min}
+            aria-labelledby={`lbl-${row.key}`}
+            value={values[row.key]}
+            oninput={(e) => (values[row.key] = e.currentTarget.value.trim() === '' ? NaN : Number(e.currentTarget.value))}
+          />
+        {:else}
+          <select
+            aria-labelledby={`lbl-${row.key}`}
+            value={values[row.key]}
+            onchange={(e) => (values[row.key] = e.currentTarget.value)}
+          >
+            <option value="grid">grid</option>
+            <option value="free">free</option>
+          </select>
+        {/if}
+        <button
+          type="button"
+          class="reset-btn"
+          disabled={!enabled[row.key]}
+          aria-label={`Reset to inherit: ${row.label}`}
+          onclick={() => toggle(row.key, false)}
+        >
+          Reset to inherit
+        </button>
+      </div>
+      {#if rowProblem(row)}
+        <small class="row-error" role="alert">{rowProblem(row)}</small>
+      {/if}
+    </div>
+  {/each}
+
+  {#if saveError}
+    <div class="error-box" role="alert">{saveError}</div>
+  {/if}
+{/if}
 
 <style>
-  .modal-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.7);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: var(--z-modal);
-    padding: 1rem;
-  }
-  .modal-content {
-    background: var(--bg-primary);
-    border-radius: 0.75rem;
-    width: 100%;
-    max-width: 560px;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-    max-height: 90vh;
-    overflow-y: auto;
-  }
-  .modal-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 1.5rem;
-    border-bottom: 1px solid var(--border);
-    position: sticky;
-    top: 0;
-    background: var(--bg-primary);
-    z-index: 1;
-  }
-  .modal-header h2 { margin: 0; font-size: 1.5rem; }
-  .close-btn {
-    background: none;
-    border: none;
-    color: var(--text-secondary);
-    cursor: pointer;
-    padding: 0.5rem;
-    border-radius: 0.375rem;
-    display: flex;
-  }
-  .close-btn:hover { background: var(--bg-tertiary); color: var(--text-primary); }
-  form { padding: 1.5rem; }
   .hint { color: var(--text-secondary); font-size: 0.875rem; margin: 0 0 1rem; }
   .row { padding: 0.75rem 0; border-bottom: 1px solid var(--border); }
   .row-head { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
@@ -324,6 +267,8 @@
   }
   .reset-btn:disabled { opacity: 0.4; cursor: default; }
   .row-error { display: block; margin-top: 0.25rem; color: var(--error, #c0392b); font-size: 0.8rem; }
+  .retry-row { display: flex; justify-content: flex-end; margin-top: 1rem; }
+  .retry-row button { padding: 0.5rem 1rem; border: none; border-radius: 0.375rem; cursor: pointer; }
   .error-box {
     margin: 1rem 0 0;
     padding: 0.75rem 1rem;
@@ -332,6 +277,4 @@
     color: var(--error, #c0392b);
     font-size: 0.875rem;
   }
-  .modal-actions { display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1.5rem; }
-  .modal-actions button { display: flex; align-items: center; gap: 0.5rem; padding: 0.625rem 1.25rem; border: none; border-radius: 0.375rem; font-weight: 500; cursor: pointer; }
 </style>

@@ -11,9 +11,7 @@
   import { session, apply } from '$lib/stores/editSession';
   import { initEasterEggs, destroyEasterEggs, partyModeActive } from '$lib/stores/easterEggs';
   import TabEditModal from './admin/TabEditModal.svelte';
-  import HeaderConfigModal from './admin/HeaderConfigModal.svelte';
-  import DashboardSettingsModal from './admin/DashboardSettingsModal.svelte';
-  import BackgroundConfigModal from './admin/BackgroundConfigModal.svelte';
+  import DashboardEditModal from './editor/DashboardEditModal.svelte';
   import EditToolbar from './editor/EditToolbar.svelte';
   import EditorDialogs from './editor/EditorDialogs.svelte';
   import EditHandle from './editor/EditHandle.svelte';
@@ -21,7 +19,7 @@
   import DragLayer from '$lib/editor/drag/DragLayer.svelte';
   import { tabSource } from '$lib/editor/drag/dragController';
   import {
-    addTabWith, editTab, duplicateTabAction, deleteTabWithConfirm, setHeader, setBackground,
+    addTabWith, editTab, duplicateTabAction, deleteTabWithConfirm,
     type TabFields
   } from '$lib/editor/editorActions';
   import { reorderTabs } from '$lib/editor/treeOps';
@@ -166,9 +164,8 @@
   const editingTabId = $derived($editorDialog?.kind === 'tab' ? $editorDialog.id : null);
   const closeTabDialog = () => editorDialog.set(null);
   let showAddTabModal = $state(false);
-  let showHeaderConfig = $state(false);
-  let showDashboardSettings = $state(false);
-  let showBackgroundConfig = $state(false);
+  /** The one dashboard dialog (Header, Background, Settings — walkthrough §4C). */
+  let showDashboardEdit = $state(false);
 
   // ---- background layers (M4 Task 4, design §4a calls 1–4) ----
   // The dashboard's layer, then the active tab's own layer above it (at its
@@ -282,14 +279,6 @@
     if (await deleteTabWithConfirm(tabId)) closeTabDialog();
   }
 
-  function handleUpdateHeader(headerConfig: HeaderConfig) {
-    if (setHeader(headerConfig)) showHeaderConfig = false;
-  }
-
-  function handleUpdateBackground(background: Background | undefined) {
-    if (setBackground(background)) showBackgroundConfig = false;
-  }
-
   /** A drag (the editor's drag engine) asks to show a tab: the drag continues there. */
   function showTabForDrag(tabId: string): boolean {
     const i = barTabs.findIndex((t) => t.id === tabId);
@@ -356,18 +345,8 @@
   <div class="dashboard-header">
     {#if editing}
       <div class="header-actions">
-        <button class="header-config-btn" onclick={() => showBackgroundConfig = true} title="Configure Background">
-          <Icon icon="mdi:image-multiple" width="20" />
-          Background
-        </button>
-        <button class="header-config-btn" onclick={() => showHeaderConfig = true} title="Configure Header">
-          <Icon icon="mdi:tune" width="20" />
-          Header
-        </button>
-        <button class="header-config-btn" onclick={() => showDashboardSettings = true} title="Dashboard settings">
-          <Icon icon="mdi:cog-outline" width="20" />
-          Settings
-        </button>
+        <!-- The dashboard's own edit handle (§4C): one labelled pencil, always shown while editing. -->
+        <EditHandle name="Dashboard" label="Dashboard" placement="inline" onEdit={() => (showDashboardEdit = true)} />
       </div>
     {/if}
 
@@ -518,24 +497,12 @@
   {/key}
 {/if}
 
-{#if editing && showHeaderConfig}
-  <HeaderConfigModal
+{#if editing && draft && showDashboardEdit}
+  <DashboardEditModal
+    dashboardId={dashboard.id}
     header={look.header}
-    onSave={handleUpdateHeader}
-    onCancel={() => showHeaderConfig = false}
-  />
-{/if}
-
-{#if showDashboardSettings}
-  <DashboardSettingsModal dashboardId={dashboard.id} onClose={() => showDashboardSettings = false} />
-{/if}
-
-{#if editing && showBackgroundConfig}
-  <BackgroundConfigModal
     background={look.background}
-    level="dashboard"
-    onSave={handleUpdateBackground}
-    onCancel={() => showBackgroundConfig = false}
+    onClose={() => (showDashboardEdit = false)}
   />
 {/if}
 
@@ -619,26 +586,6 @@
     margin-bottom: 1rem;
   }
 
-  .header-config-btn {
-    background: var(--bg-tertiary);
-    border: 1px solid var(--border);
-    color: var(--text-secondary);
-    padding: 0.5rem 1rem;
-    border-radius: 0.5rem;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    cursor: pointer;
-    transition: all 0.2s;
-    font-size: 0.875rem;
-    font-weight: 500;
-  }
-
-  .header-config-btn:hover {
-    background: var(--accent);
-    color: white;
-    border-color: var(--accent);
-  }
 
   .add-tab-btn {
     display: flex;

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent, within, cleanup } from '@testing-library/svelte';
+import { render, screen, fireEvent, within, cleanup, waitFor } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { get } from 'svelte/store';
 
@@ -174,7 +174,9 @@ describe('the Showcase (free layout) is editable like every dashboard', () => {
     expect(container.querySelector('.tab-canvas.editing[data-tab-id="vt"]')).not.toBeNull();
     expect(screen.getByRole('toolbar', { name: 'Editing' })).toBeInTheDocument();
     expect(screen.getByText('Add Tab')).toBeInTheDocument();
-    expect(screen.getByTitle('Dashboard settings')).toBeInTheDocument();
+    // One labelled "Dashboard" pencil (walkthrough §4C) replaces Background, Header and Settings.
+    expect(screen.getByRole('button', { name: 'Edit Dashboard' })).toHaveTextContent('Dashboard');
+    for (const t of ['Configure Background', 'Configure Header', 'Dashboard settings']) expect(screen.queryByTitle(t)).toBeNull();
   });
 
   it('anonymous viewers get the dashboard and no editor chrome', async () => {
@@ -182,7 +184,7 @@ describe('the Showcase (free layout) is editable like every dashboard', () => {
     await tick();
     expect(screen.getByText('FancyTile')).toBeInTheDocument();
     expect(screen.queryByText(/view-only/i)).toBeNull();
-    expect(screen.queryByTitle('Dashboard settings')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Edit Dashboard' })).toBeNull();
   });
 });
 
@@ -350,15 +352,16 @@ describe('Dashboard edit mode (M3 Task 6: the v3 editor shell)', () => {
 
   // Tab reorder by drag (the editor's drag engine, Task 8) is covered in editor/TabReorder.test.ts.
 
-  it('the Header dialog edits the draft only; the Settings cog stays', async () => {
+  it('the Dashboard dialog edits the draft only (header and background); its settings read is the only request', async () => {
     render(Dashboard, { dashboard: legacy });
     enterEdit();
     await tick();
-    expect(screen.getByTitle('Dashboard settings')).toBeInTheDocument();
-    await fireEvent.click(screen.getByTitle('Configure Header'));
-    await fireEvent.input(screen.getByLabelText(/Custom Title/), { target: { value: 'Draft title' } });
-    await fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /^Save/ }));
-    expect((draft().header as { centerTitle?: string }).centerTitle).toBe('Draft title');
+    await fireEvent.click(screen.getByRole('button', { name: 'Edit Dashboard' }));
+    const dlg = screen.getByRole('dialog', { name: 'Edit Dashboard' });
+    await fireEvent.input(within(dlg).getByLabelText(/Custom Title/), { target: { value: 'Draft title' } });
+    await fireEvent.click(within(dlg).getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect((draft().header as { centerTitle?: string }).centerTitle).toBe('Draft title'));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Edit Dashboard' })).toBeNull());
     noRequestsButSettingsRead(fetchSpy);
   });
 });

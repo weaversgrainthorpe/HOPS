@@ -719,5 +719,102 @@ test.describe('Escape in edit dialogs (real browser)', () => {
     await expect(dlg).toHaveCount(0);
     await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible(); // edit mode stays on
   });
+
+  test('Escape closes the dashboard dialog and discards its edits', async ({ page, context }) => {
+    const f = await escDash(page, context);
+    await page.goto(f.path);
+    await enterEdit(page);
+    await page.getByRole('button', { name: 'Edit Dashboard' }).click();
+    const dlg = page.getByRole('dialog', { name: 'Edit Dashboard' });
+    await expect(dlg).toBeVisible();
+    await dlg.getByLabel(/Custom Title/).fill('Never applied');
+    await page.keyboard.press('Escape');
+    await expect(dlg).toHaveCount(0);
+    await expect(page.getByRole('status').filter({ hasText: 'Unsaved changes' })).toHaveCount(0);
+    await expect(page.getByText('Never applied')).toHaveCount(0);
+  });
 });
 
+// ---- §4C: one dashboard dialog (Header, Background, Settings), one Save, one undo step
+
+test.describe('§4C one dashboard dialog', () => {
+  async function dash(page: Page, context: BrowserContext) {
+    return importDash(page, context, [{ name: 'Main', children: (id) => [tile(id('a'), 'Alpha')] }]);
+  }
+
+  test('the three old buttons are gone; one labelled "Dashboard" pencil opens one dialog with three sections', async ({ page, context }) => {
+    const f = await dash(page, context);
+    await page.goto(f.path);
+    await enterEdit(page);
+    for (const t of ['Configure Background', 'Configure Header', 'Dashboard settings']) {
+      await expect(page.getByTitle(t, { exact: true })).toHaveCount(0);
+    }
+    const handle = page.getByRole('button', { name: 'Edit Dashboard' });
+    await expect(handle).toBeVisible();
+    await expect(handle).toHaveText('Dashboard');
+    await expect(handle).toHaveCSS('opacity', '1');
+    await handle.click();
+    const dlg = page.getByRole('dialog', { name: 'Edit Dashboard' });
+    await expect(dlg.getByRole('tab')).toHaveText(['Header', 'Background', 'Settings']);
+  });
+
+  test('a header title and a background preset in one Save: one undo step; both persist after the toolbar Save and a reload', async ({ page, context }) => {
+    const f = await dash(page, context);
+    await page.goto(f.path);
+    await enterEdit(page);
+    await page.getByRole('button', { name: 'Edit Dashboard' }).click();
+    const dlg = page.getByRole('dialog', { name: 'Edit Dashboard' });
+    await dlg.getByLabel(/Custom Title/).fill('Walkthrough Title');
+    await dlg.getByRole('tab', { name: 'Background' }).click();
+    await dlg.getByRole('button', { name: /^Image$/ }).click();
+    const card = dlg.locator('.image-card:has(img[src="/presets/network-grid.jpg"])');
+    await card.click();
+    await expect(dlg.locator('.image-card.selected img')).toHaveAttribute('src', '/presets/network-grid.jpg');
+    await dlg.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(dlg).toHaveCount(0);
+    await expect(page.locator('nav').getByText('Walkthrough Title')).toBeVisible();
+
+    // One undo step for both.
+    const bar = page.getByRole('toolbar', { name: 'Editing' });
+    await bar.getByRole('button', { name: 'Undo' }).click();
+    await expect(page.locator('nav').getByText('Walkthrough Title')).toHaveCount(0);
+    await expect(bar.getByRole('button', { name: 'Undo' })).toBeDisabled();
+    await bar.getByRole('button', { name: 'Redo' }).click();
+    await expect(page.locator('nav').getByText('Walkthrough Title')).toBeVisible();
+
+    await bar.getByRole('button', { name: /Save/ }).click();
+    await expect(page.getByRole('status').filter({ hasText: 'Unsaved changes' })).toHaveCount(0);
+    await page.reload();
+    await expect(page.locator('nav').getByText('Walkthrough Title')).toBeVisible();
+    const cfg = await (await page.request.get('/api/config')).json();
+    const stored = cfg.dashboards.find((d: { id: string }) => d.id === f.id('dash'));
+    expect(stored.header?.centerTitle).toBe('Walkthrough Title');
+    expect(stored.background?.type).toBe('image');
+    expect(stored.background?.value).toBe('/presets/network-grid.jpg');
+  });
+
+  test('a failed settings save: the error shows in the dialog, it stays open, and the draft is untouched', async ({ page, context }) => {
+    const f = await dash(page, context);
+    await page.goto(f.path);
+    await enterEdit(page);
+    await page.route(`**/api/dashboards/*/settings`, (route) =>
+      route.request().method() === 'PUT'
+        ? route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'disk full' }) })
+        : route.continue()
+    );
+    await page.getByRole('button', { name: 'Edit Dashboard' }).click();
+    const dlg = page.getByRole('dialog', { name: 'Edit Dashboard' });
+    await dlg.getByLabel(/Custom Title/).fill('Not Yet');
+    await dlg.getByRole('tab', { name: 'Settings' }).click();
+    await dlg.getByLabel('Override for this dashboard: Edit mode idle timeout (minutes)').check();
+    await dlg.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(dlg.getByRole('alert').filter({ hasText: /disk full|settings/i }).first()).toBeVisible();
+    await expect(dlg).toBeVisible();
+    await expect(page.getByRole('status').filter({ hasText: 'Unsaved changes' })).toHaveCount(0);
+    await expect(page.locator('nav').getByText('Not Yet')).toHaveCount(0);
+    // Cancel discards everything.
+    await dlg.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(dlg).toHaveCount(0);
+    await expect(page.getByRole('status').filter({ hasText: 'Unsaved changes' })).toHaveCount(0);
+  });
+});
