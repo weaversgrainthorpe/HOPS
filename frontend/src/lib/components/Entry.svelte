@@ -319,7 +319,7 @@
   }
 
   .small .subtitle {
-    font-size: 0.65rem;
+    font-size: 0.6875rem; /* 11px: the description's readable floor (spec §10 fix round 1) */
   }
 
   .medium {
@@ -356,10 +356,9 @@
 
   /* Layout renderer fit (Ruling 22, spec §10): the cell sets the tile's size (inline height and
      min-height) and the tile is a size container, so its content scales with it: 1cqmin is 1% of
-     the tile's shorter side. One arrangement at every size; the size class only nudges the scale
-     (Small a little smaller), never a fixed px. A Medium at a typical width (~128px) draws the
-     old Medium: a ~44px icon and a ~13px name. Budget at a square tile, in cqmin: padding 2 x 5,
-     name 12.6, gaps 2 x 4, icon 34, description 2 x 10.8, about 86 of 100, so it always fits. */
+     the tile's shorter side. One arrangement at every size; the size class only nudges the scale,
+     never a fixed px. Text has readable floors (fix round 1): a name is never under 12px, a
+     description never under 11px. A description that cannot fit at its floor is hidden, not shrunk. */
   .entry-container.sized {
     container: tile / size;
   }
@@ -375,11 +374,15 @@
     --name-r: 9cqmin;
     --desc-r: 8cqmin;
   }
+  /* Large: a slightly larger name, reaching its 20px cap from a ~180px tile. */
+  .entry.fill.large {
+    --name-r: 11cqmin;
+  }
   .entry.fill .title {
-    font-size: clamp(8px, var(--name-r), 17px);
+    font-size: clamp(12px, var(--name-r), 20px);
   }
   .entry.fill .subtitle {
-    font-size: clamp(7px, var(--desc-r), 15px);
+    font-size: clamp(11px, var(--desc-r), 15px);
   }
   .entry.fill .icon :global(svg),
   .entry.fill .icon img {
@@ -389,9 +392,19 @@
   .entry.fill .icon-backing.has-bg {
     padding: clamp(2px, 4cqmin, 8px);
   }
-  /* The description is hidden only when the tile is too short to fit it under the name and icon. */
-  @container tile (max-height: 71.99px) {
-    .entry.fill .subtitle {
+  /* Hide, don't shrink: the description shows only when the tile is tall enough for it at its floor.
+     The height the content needs, with s = 1cqmin in px and the text at its floors (line-height 1.2):
+       padding 2 x 5s + gaps 2 x 4s + icon (34s; Small 28s) + name 12 x 1.2 + description 2 x 11 x 1.2
+       = 52s + 40.8 px (Small 46s + 40.8).
+     The worst case is a tile no taller than it is wide (s = height / 100), where that needs
+     height >= 85px (Small >= 75.6px); a taller-than-wide tile needs less, so these never clip. */
+  @container tile (max-height: 84.99px) {
+    .entry.fill:not(.small) .subtitle {
+      display: none;
+    }
+  }
+  @container tile (max-height: 75.99px) {
+    .entry.fill.small .subtitle {
       display: none;
     }
   }

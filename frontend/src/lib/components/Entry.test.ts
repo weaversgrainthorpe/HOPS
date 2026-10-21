@@ -197,6 +197,21 @@ describe('Entry content layout (spec §10)', () => {
       expect(css).toMatch(/@container tile \(max-height:[^)]*\)\s*\{[^}]*\.subtitle[^}]*\{[^}]*display:\s*none/);
     });
 
+    // Fix round 1 (binding): readable floors; hide, don't shrink; Large's name up to ~20px.
+    it('a fitted name is never under 12px nor over 20px; a description never under 11px', () => {
+      expect(css.slice(css.indexOf('.entry.fill .title {'))).toMatch(/font-size:\s*clamp\(12px,\s*var\(--name-r\),\s*20px\)/);
+      expect(css.slice(css.indexOf('.entry.fill .subtitle {'))).toMatch(/font-size:\s*clamp\(11px,\s*var\(--desc-r\),/);
+      expect(rule('.entry.fill.large')).toMatch(/--name-r:\s*[\d.]+cqmin/);
+      // The unfitted (phone) sizes keep the floors too.
+      expect(rule('.small .subtitle')).toMatch(/font-size:\s*(0\.6875rem|11px)/);
+    });
+
+    it('the description hide thresholds are the heights its floors need (85px, Small 76px), not a fixed 72px', () => {
+      expect(css).not.toMatch(/71\.99px/);
+      expect(css).toMatch(/@container tile \(max-height:\s*84\.99px\)\s*\{[^}]*\.entry\.fill:not\(\.small\) \.subtitle[^}]*\{[^}]*display:\s*none/);
+      expect(css).toMatch(/@container tile \(max-height:\s*75\.99px\)\s*\{[^}]*\.entry\.fill\.small \.subtitle[^}]*\{[^}]*display:\s*none/);
+    });
+
     it('the size class no longer sets a fixed icon px on a fitted tile', () => {
       expect(css).not.toMatch(/\.fill\.small \.icon/);
       expect(css).not.toMatch(/\.fill\.large \.icon/);

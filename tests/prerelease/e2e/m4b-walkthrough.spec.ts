@@ -2112,7 +2112,8 @@ test.describe('§8 tile size sets the space it takes', () => {
   }
   function clearlySmaller(small: { icon: number; font: number }, medium: { icon: number; font: number }, where: string) {
     expect(small.icon, `${where}: Small's icon (${small.icon}px) is at most 0.6 x Medium's (${medium.icon}px)`).toBeLessThanOrEqual(0.6 * medium.icon);
-    expect(small.font, `${where}: Small's title (${small.font}px) is at most 0.8 x Medium's (${medium.font}px)`).toBeLessThanOrEqual(0.8 * medium.font);
+    // Spec §10 fix round 1: a name is never under 12px, so where Medium's is at that floor Small's is too.
+    expect(small.font, `${where}: Small's title (${small.font}px) is at most 0.8 x Medium's (${medium.font}px) or the 12px floor`).toBeLessThanOrEqual(Math.max(12, 0.8 * medium.font));
   }
 
   test('Small is clearly smaller than Medium in the same container: compact cells (1280px) and full cells (1920px)', async ({ page, context }, info) => {
@@ -2142,7 +2143,7 @@ test.describe('§8 tile size sets the space it takes', () => {
 // never space-between), and the content scales with the tile (container query units).
 test.describe('§10 tile content layout', () => {
   type R = { top: number; bottom: number; left: number; right: number; width: number; height: number };
-  type Look = { tile: R; title: R; icon: R; sub: R | null; font: number; fit: string };
+  type Look = { tile: R; title: R; icon: R; sub: R | null; font: number; subFont: number | null; subLines: number | null; fit: string };
 
   /** Services-shaped tiles in the finer grid's own units: Large 4 x 4, Medium 2 x 2, Small 1 x 1. */
   async function layoutDash(page: Page, context: BrowserContext) {
@@ -2169,6 +2170,8 @@ test.describe('§10 tile content layout', () => {
       return {
         tile: r(btn), title: r(btn.querySelector('.title')!), icon: r(btn.querySelector('.icon svg, .icon img')!),
         sub: shown ? r(sub) : null, font: parseFloat(getComputedStyle(btn.querySelector('.title')!).fontSize),
+        subFont: shown ? parseFloat(getComputedStyle(sub).fontSize) : null,
+        subLines: shown ? sub.getBoundingClientRect().height / parseFloat(getComputedStyle(sub).lineHeight) : null,
         fit: btn.classList.contains('compact') ? 'compact' : btn.classList.contains('fill') ? 'fill' : 'none'
       };
     });
@@ -2178,7 +2181,7 @@ test.describe('§10 tile content layout', () => {
   const describeLook = (l: Look) =>
     `tile ${f1(l.tile.width)}x${f1(l.tile.height)} (${l.fit}); title y ${f1(l.title.top - l.tile.top)}; ` +
     `icon y ${f1(l.icon.top - l.tile.top)} size ${f1(l.icon.width)}; ` +
-    `description ${l.sub ? 'y ' + f1(l.sub.top - l.tile.top) : 'hidden'}; font ${l.font}px`;
+    `description ${l.sub ? 'y ' + f1(l.sub.top - l.tile.top) + ' font ' + l.subFont + 'px' : 'hidden'}; name font ${l.font}px`;
 
   /** Name above icon above description; small gaps; centred together; nothing spills out of the tile. */
   function arranged(l: Look, what: string) {
@@ -2223,7 +2226,31 @@ test.describe('§10 tile content layout', () => {
     expect(lg.sub, `${width}px: Large shows its description`).not.toBeNull();
     // Still clearly smaller than Medium beside it (spec §8): at most 0.6x the icon, 0.8x the name.
     expect(sm.icon.width, `${width}px: Small's icon is at most 0.6 x Medium's`).toBeLessThanOrEqual(0.6 * md.icon.width);
-    expect(sm.font, `${width}px: Small's name is at most 0.8 x Medium's`).toBeLessThanOrEqual(0.8 * md.font);
+    // ... and its name at most 0.8x Medium's, unless both sit at the 12px floor (fix round 1).
+    expect(sm.font, `${width}px: Small's name is at most 0.8 x Medium's (or the 12px floor)`).toBeLessThanOrEqual(Math.max(12, 0.8 * md.font));
+  });
+
+  // Fix round 1 (binding): readable text. A name is never under 12px and a description never under
+  // 11px; a description that cannot fit at that floor (2 lines plus gaps) is hidden, not shrunk.
+  for (const width of [1280, 1600, 1920]) test(`readable text: wherever shown, the name is >= 12px and the description >= 11px (${width}px)`, async ({ page, context }) => {
+    await page.setViewportSize({ width, height: 900 });
+    const f = await layoutDash(page, context);
+    await page.goto(f.path);
+    await expect(page.locator(`.tab-canvas [data-node-id="${f.id('sm')}"] .icon svg`)).toBeVisible();
+    for (const k of ['sm', 'md', 'lg']) {
+      const l = await look(page, f.id(k));
+      const what = `${k} at ${width}px: ${describeLook(l)}`;
+      expect(l.title.height, `${what}: the name is shown`).toBeGreaterThan(0);
+      expect(l.font, `${what}: name >= 12px`).toBeGreaterThanOrEqual(12);
+      if (l.sub) {
+        expect(l.subFont!, `${what}: description >= 11px`).toBeGreaterThanOrEqual(11);
+        expect(l.subLines!, `${what}: description at most 2 lines`).toBeLessThanOrEqual(2.05);
+        expect(l.sub.bottom, `${what}: the description fits in the tile`).toBeLessThanOrEqual(l.tile.bottom + 0.5);
+      }
+      arranged(l, what);
+    }
+    // Medium keeps its description at every width, at the readable size.
+    expect((await look(page, f.id('md'))).sub, `${width}px: Medium shows its description`).not.toBeNull();
   });
 
   test('a Medium at a typical width (1600px) looks like the old Medium: a ~48px icon and a ~14px name', async ({ page, context }) => {
