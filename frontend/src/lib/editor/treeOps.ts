@@ -234,11 +234,50 @@ function commitToContainer(
   d: LayoutDashboard, to: ContainerRef, r: Resolved, add: LayoutNode[], push?: Map<string, Placement>
 ): LayoutDashboard {
   const changed = new Set<string>([...add.map((a) => a.id), ...(push ? push.keys() : [])]);
-  return editContainer(d, to, (c) => {
+  return fitAncestors(editContainer(d, to, (c) => {
     const next = { ...c, children: [...applyPush(kids(c), push), ...add] };
     if (r.mode === 'grid') assertGridNoOverlap(next, changed);
     return next;
-  });
+  }), to);
+}
+
+/**
+ * Ruling 2 (parent spec §6.3: tiles keep their physical size inside and outside folders): grid
+ * content is never squashed. After the content of the container at `ref` changes, every folder on
+ * the chain (innermost first) whose content now needs more rows than it has grows to fit
+ * (minFolderHeight: content rows + the title row), pushing its own neighbours aside with the M3
+ * push (pushAside), so nothing overlaps. Only a grid folder in a grid parent fits its rows to its
+ * height (geometry's folderInnerMetrics); elsewhere folders already grow past their box, so the
+ * walk stops there. Grid rows are unbounded, so a grown folder always has room; anything
+ * impossible throws TreeOpError (shown, never silent).
+ */
+function fitAncestors(d: LayoutDashboard, ref: ContainerRef): LayoutDashboard {
+  let cur = d;
+  let folderId = ref.folderId;
+  while (folderId !== undefined) {
+    const r = resolveRef(cur, { tabId: ref.tabId, folderId });
+    const f = r.folder as FolderNode;
+    const parentRef: ContainerRef = { tabId: ref.tabId, folderId: r.chain.length > 1 ? r.chain[r.chain.length - 2].id : undefined };
+    const parent = resolveRef(cur, parentRef);
+    if (r.mode !== 'grid' || parent.mode !== 'grid') break;
+    const cols = containerColumns(parent.container, parent.folder);
+    const pl = clampPlacement(f.placement, cols);
+    const need = minFolderHeight(f, pl.w, parent.mode, cols);
+    if (pl.h >= need) break;
+    const at: Placement = { ...pl, h: need };
+    const push = pushAside(parent.container, new Set([f.id]), at);
+    const changed = new Set<string>([f.id, ...push.keys()]);
+    cur = editContainer(cur, parentRef, (c) => {
+      const next = {
+        ...c,
+        children: applyPush(kids(c), push).map((n) => (n.id === f.id ? ({ ...n, placement: at } as LayoutNode) : n))
+      };
+      assertGridNoOverlap(next, changed);
+      return next;
+    });
+    folderId = parentRef.folderId;
+  }
+  return cur;
 }
 
 // ---------------------------------------------------------------- move / copy / insert
@@ -440,11 +479,11 @@ export function mergeIntoNewFolder(
   const push = parent.mode === 'grid'
     ? pushAside(after.container, new Set([targetTileId, ...draggedIds]), placement)
     : undefined;
-  const dashboard = editContainer(without, ref, (c) => {
+  const dashboard = fitAncestors(editContainer(without, ref, (c) => {
     const next = { ...c, children: applyPush(kids(c), push).map((x) => (x.id === targetTileId ? folder : x)) };
     if (parent.mode === 'grid') assertGridNoOverlap(next, new Set([folderId, ...(push ? push.keys() : [])]));
     return next;
-  });
+  }), ref);
   return { dashboard, folderId };
 }
 
@@ -532,14 +571,14 @@ export function placeNode(
   const r = resolveRef(d, ref);
   const placed = checkedPlacement(at, r);
   const changed = new Set<string>([id, ...(push ? push.keys() : [])]);
-  return editContainer(d, ref, (c) => {
+  return fitAncestors(editContainer(d, ref, (c) => {
     const next = {
       ...c,
       children: applyPush(kids(c), push).map((n) => (n.id === id ? ({ ...n, placement: placed } as LayoutNode) : n))
     };
     if (r.mode === 'grid') assertGridNoOverlap(next, changed);
     return next;
-  });
+  }), ref);
 }
 
 const Z_LIMIT = 1000;
@@ -776,11 +815,11 @@ export function setFolderLayout(d: LayoutDashboard, id: string, layout: 'inherit
     ? pushAside(parent.container, new Set([id]), next.placement)
     : undefined;
   const changed = new Set<string>([id, ...(push ? push.keys() : [])]);
-  return editContainer(d, ref, (c) => {
+  return fitAncestors(editContainer(d, ref, (c) => {
     const out = { ...c, children: applyPush(kids(c), push).map((n) => (n.id === id ? next : n)) };
     if (parent.mode === 'grid') assertGridNoOverlap(out, changed);
     return out;
-  });
+  }), ref);
 }
 
 export function deleteTab(d: LayoutDashboard, tabId: string): LayoutDashboard {

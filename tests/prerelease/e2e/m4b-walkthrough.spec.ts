@@ -1994,8 +1994,22 @@ test.describe('§8 tile size sets the space it takes', () => {
     };
 
     await expectSizes({ Google: 'medium', GitHub: 'medium', YouTube: 'medium' }, 'start');
+    const folderBox = () => page.locator(`.tab-canvas [data-node-id="${f.id('services')}"]`).boundingBox();
+    const [svc0, yt0, gh0] = [(await folderBox())!, await box(page, ids.YouTube), await box(page, ids.GitHub)];
     await pickSize(page, cell('Google'), 'large');
     await expectSizes({ Google: 'large', GitHub: 'medium', YouTube: 'medium' }, 'Google Large');
+    // Ruling 2: never squashed. The Services folder grew (by a row) and its 1 x 1 tiles keep their
+    // full Medium look: not compact, the same width, and no shorter than a cell outside the folder.
+    const svc1 = (await folderBox())!;
+    expect(svc1.height, 'Services grew').toBeGreaterThan(svc0.height + 50);
+    near(svc1.width, svc0.width, 'Services keeps its width');
+    for (const [n, was] of [['YouTube', yt0], ['GitHub', gh0]] as const) {
+      const now = await box(page, ids[n]);
+      await expect(cell(n).locator('button.entry'), `${n} is not squashed to compact`).not.toHaveClass(/\bcompact\b/);
+      near(now.width, was.width, `${n} keeps its width`);
+      expect(now.height, `${n} (${now.height}px) stays above the compact threshold (110px)`).toBeGreaterThan(110);
+      expect(Math.abs(now.height - was.height) / was.height, `${n} height ${was.height} -> ${now.height}`).toBeLessThan(0.2);
+    }
     await pickSize(page, cell('YouTube'), 'medium');
     await expectSizes({ Google: 'large', GitHub: 'medium', YouTube: 'medium' }, 'YouTube Medium');
     await pickSize(page, cell('GitHub'), 'small');
@@ -2032,34 +2046,24 @@ test.describe('§8 tile size sets the space it takes', () => {
     expect(small.font, `${where}: Small's title (${small.font}px) is at most 0.8 x Medium's (${medium.font}px)`).toBeLessThanOrEqual(0.8 * medium.font);
   }
 
-  test('Small is clearly smaller than Medium in the same container: squeezed (compact) cells and full cells', async ({ page, context }, info) => {
-    // Squeezed: a Large tile in Services adds a second content row, so its 1 x 1 neighbours render
-    // compact (Jonathan's screenshot). Medium stays as it is; Small must still look smaller.
-    await page.setViewportSize({ width: 1440, height: 900 });
-    const f = await servicesDash(page, context);
-    await page.goto(f.path);
-    await enterEdit(page);
-    const cell = (s: string) => page.locator(`.tab-canvas [data-node-id="${f.id(s)}"]`);
-    await pickSize(page, cell('google'), 'large');
-    await pickSize(page, cell('github'), 'small');
-    await expect(cell('github').locator('button.entry')).toHaveClass(/\bcompact\b/);
-    await expect(cell('youtube').locator('button.entry')).toHaveClass(/\bcompact\b/);
-    await info.attach('services-compact', { body: await page.screenshot(), contentType: 'image/png' });
-    // Medium compact is unchanged (28px icon, 0.7rem title).
-    const med = await looks(page, f.id('youtube'));
-    expect(med).toEqual({ icon: 28, font: 11.2 });
-    clearlySmaller(await looks(page, f.id('github')), med, 'compact');
-
-    // Full cells: a tab of 1 x 1 tiles at 1920px (they fill their cells, not compact).
-    await page.setViewportSize({ width: 1920, height: 900 });
-    const g = await sizeDash(page, context);
-    await page.goto(g.path);
-    await enterEdit(page);
-    await pickSize(page, page.locator(`.tab-canvas [data-node-id="${g.id('a')}"]`), 'small');
-    await expect(page.locator(`.tab-canvas [data-node-id="${g.id('b')}"] button.entry`)).not.toHaveClass(/\bcompact\b/);
-    await info.attach('tab-fill', { body: await page.screenshot(), contentType: 'image/png' });
-    const fullMed = await looks(page, g.id('b'));
-    expect(fullMed).toEqual({ icon: 48, font: 14 });
-    clearlySmaller(await looks(page, g.id('a')), fullMed, 'fill');
+  test('Small is clearly smaller than Medium in the same container: compact cells (1280px) and full cells (1920px)', async ({ page, context }, info) => {
+    for (const [width, fit, medium] of [
+      [1280, 'compact', { icon: 28, font: 11.2 }],
+      [1920, 'fill', { icon: 48, font: 14 }]
+    ] as const) {
+      await page.setViewportSize({ width, height: 900 });
+      const g = await sizeDash(page, context);
+      await page.goto(g.path);
+      await enterEdit(page);
+      await pickSize(page, page.locator(`.tab-canvas [data-node-id="${g.id('a')}"]`), 'small');
+      const b = page.locator(`.tab-canvas [data-node-id="${g.id('b')}"] button.entry`);
+      if (fit === 'compact') await expect(b).toHaveClass(/\bcompact\b/);
+      else await expect(b).not.toHaveClass(/\bcompact\b/);
+      await info.attach(`tiles-${width}`, { body: await page.screenshot(), contentType: 'image/png' });
+      // Medium is as it was; Small is clearly smaller beside it.
+      const med = await looks(page, g.id('b'));
+      expect(med, `${width}px Medium`).toEqual(medium);
+      clearlySmaller(await looks(page, g.id('a')), med, `${fit} (${width}px)`);
+    }
   });
 });

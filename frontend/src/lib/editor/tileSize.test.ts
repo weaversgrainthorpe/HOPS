@@ -215,18 +215,72 @@ describe("the Services walkthrough: each tile's size is its own", () => {
     expect(() => assertGridNoOverlap((nodeIn(draft(), 'svc') as FolderNode).content)).not.toThrow();
   });
 
-  it('the cause of the look: a Large tile adds a content row to a folder of fixed height, so its 1 x 1 neighbours render compact', () => {
+  // Ruling 2 (parent spec §6.3: tiles keep their physical size inside folders): grid content is
+  // never squashed. Growing a tile inside a folder grows the folder (pushing its neighbours with
+  // the M3 push), in the same undo step, at every depth.
+  const rowPxOf = (folderId: string, parentRowPx = 113) => {
+    const f = nodeIn(draft(), folderId) as FolderNode;
+    const inner = folderInnerMetrics(f, containerMetrics({ columns: 12, children: [] }, 'grid', 12 * parentRowPx));
+    return inner.rowPx;
+  };
+
+  it('Large inside an h = 2 folder: the folder grows a row, its neighbour moves down, the rows keep their height', () => {
+    withRoot([
+      folder('svc', p(0, 0, 12, 2), [tile('google', p(0, 0)), tile('github', p(1, 0)), tile('youtube', p(2, 0))]) as unknown as ReturnType<typeof tile>,
+      tile('below', p(0, 2))
+    ]);
+    const row0 = rowPxOf('svc');
+    expect(editNode('google', { size: 'large' } as Partial<TileNode>, { size: 'large' })).toBe(true);
+    expect((nodeIn(draft(), 'svc') as FolderNode).placement).toEqual(p(0, 0, 12, 3));
+    expect(nodeIn(draft(), 'below')!.placement.y).toBeGreaterThanOrEqual(3);
+    expect(() => assertGridNoOverlap(draft().tabs[0].root)).not.toThrow();
+    // Never squashed: a folder fits its rows to its height (rows = (h x cell - title/padding) / (h - 1)),
+    // so a taller folder's rows are a little shorter than before, but never shorter than a cell
+    // outside the folder (113 px here) and the 1 x 1 tiles keep their full (fill) look.
+    expect(row0).toBeGreaterThan(113);
+    expect(rowPxOf('svc')).toBeGreaterThanOrEqual(113);
+    const f = nodeIn(draft(), 'svc') as FolderNode;
+    const inner = folderInnerMetrics(f, containerMetrics({ columns: 12, children: [] }, 'grid', 12 * 113));
+    const b = nodeBox(nodeIn(draft(), 'youtube')!.placement, inner);
+    expect(tileFit(b.widthPx, b.heightPx)).toBe('fill');
+    expect(get(session)!.undo).toHaveLength(1); // one undo step with the dialog Save
+  });
+
+  it('nested: the inner folder grows, then the outer one, each pushing its own neighbours', () => {
+    withRoot([
+      folder('outer', p(0, 0, 12, 4), [
+        folder('inner', p(0, 0, 12, 2), [tile('k', p(0, 0)), tile('l', p(1, 0))]) as unknown as ReturnType<typeof tile>,
+        tile('under', p(0, 2))
+      ]) as unknown as ReturnType<typeof tile>,
+      tile('rootBelow', p(0, 4))
+    ]);
+    expect(editNode('k', { size: 'large' } as Partial<TileNode>, { size: 'large' })).toBe(true);
+    expect((nodeIn(draft(), 'inner') as FolderNode).placement.h).toBe(3);
+    expect(nodeIn(draft(), 'under')!.placement.y).toBeGreaterThanOrEqual(3);
+    // outer: content rows 4 (under at y 3) -> h 5; the root neighbour moves below it
+    expect((nodeIn(draft(), 'outer') as FolderNode).placement.h).toBe(5);
+    expect(nodeIn(draft(), 'rootBelow')!.placement.y).toBeGreaterThanOrEqual(5);
+    expect(() => assertGridNoOverlap(draft().tabs[0].root)).not.toThrow();
+    expect(() => assertGridNoOverlap((nodeIn(draft(), 'outer') as FolderNode).content)).not.toThrow();
+  });
+
+  it('the dialog trial run (sizeTarget) sees the same grown folder the Save commits', () => {
     services();
-    const fit = (id: string) => {
-      const f = nodeIn(draft(), 'svc') as FolderNode;
-      const inner = folderInnerMetrics(f, containerMetrics(draft().tabs[0].root, 'grid', 1376));
-      const b = nodeBox(nodeIn(draft(), id)!.placement, inner);
-      return tileFit(b.widthPx, b.heightPx);
-    };
-    expect(fit('youtube')).toBe('fill');
-    editNode('google', { size: 'large' } as Partial<TileNode>, { size: 'large' });
-    expect((nodeIn(draft(), 'svc') as FolderNode).placement).toEqual(p(0, 0, 12, 2)); // the folder stays 2 rows high
-    expect(fit('youtube')).toBe('compact');
-    expect(fit('github')).toBe('compact');
+    const t = sizeTarget(draft(), 'google', 'large');
+    expect(t.kind).toBe('size');
+  });
+
+  it('a drop into a folder that needs more rows grows the folder too (moveOrCopyTo)', () => {
+    withRoot([
+      folder('svc', p(0, 0, 12, 2), [tile('google', p(0, 0))]) as unknown as ReturnType<typeof tile>,
+      tile('big', p(0, 2, 2, 2), { size: 'large' }),
+      tile('next', p(3, 2))
+    ]);
+    expect(moveOrCopyTo(['big'], { tabId: 't1', folderId: 'svc' }, 'move')).toBe(true);
+    const f = nodeIn(draft(), 'svc') as FolderNode;
+    expect(nodeIn(draft(), 'big')!.placement).toMatchObject({ w: 2, h: 2 });
+    const bottom = Math.max(...f.content.children.map((c) => c.placement.y + c.placement.h));
+    expect(f.placement.h).toBeGreaterThanOrEqual(bottom + 1);
+    expect(() => assertGridNoOverlap(draft().tabs[0].root)).not.toThrow();
   });
 });
