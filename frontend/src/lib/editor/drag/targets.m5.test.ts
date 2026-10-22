@@ -28,6 +28,7 @@ import DragLayer from './DragLayer.svelte';
 import { drag, dragSource, setDragEnv, resetDragForTests, setActiveTab, OPEN_DWELL_MS } from './dragController';
 import { flowIndex } from './targets';
 import { moveOrCopyTo } from '../editorActions';
+import { undo } from '$lib/stores/editSession';
 import { setLayout, resetEditor, startSession, draft, nodeIn, tile, folder, p } from '$lib/components/editor/editorTestKit';
 
 const GRID = containerMetrics({ columns: 24, children: [] }, 1200);
@@ -406,5 +407,99 @@ describe('a sub-folder dragged out to the tab (§3a.3)', () => {
     setFolderPage('d1', 'S', 1);
     expect(moveOrCopyTo(['S'], { tabId: 't1', folderId: 'E' }, 'move')).toBe(true);
     expect(get(folderNavFor('d1')).page).toEqual({ S: 1 });
+  });
+});
+
+// Walkthrough 1, Ruling 11: merge works the same inside folders. A Large tile dragged from the tab
+// over a Medium-contents folder's page is drawn there at the folder's item size (what it would be in
+// that folder), keeping the point where it was grabbed; the merge zone is judged by THAT ghost's
+// centre (Ruling 29: users aim with the ghost). Held on a tile's centre → a new sub-folder in its
+// place; a quick drop → a place in the order.
+describe('merge inside a folder (walkthrough 1, Ruling 11)', () => {
+  /** Grab a Large (200 px) tile from the tab near its top (fx 0.5, fy 0.1). */
+  function startLarge() {
+    sourceRect = { left: 0, top: 0, width: 200, height: 200 };
+    start('a', 100, 20);
+  }
+
+  it('over a folder\'s page the ghost is the folder\'s item size, grabbed at the same point; back on the tab its own size', async () => {
+    const { container } = render(DragLayer, { tabId: 't1' });
+    startLarge();
+    hit = onPage(['k1', 'k2', 'k3', 'k4'], 0, 4);
+    moveTo(150, 310);
+    await tick();
+    const g = container.ownerDocument.querySelector('.drag-layer .ghost') as HTMLElement;
+    expect(g.style.width).toBe('100px');
+    expect(g.style.height).toBe('100px');
+    expect(g.style.left).toBe('100px'); // 150 − 0.5 × 100
+    expect(g.style.top).toBe('300px'); // 310 − 0.1 × 100
+    hit = () => ({ container: { ref: { tabId: 't1' }, metrics: GRID, layout: 'grid', left: 0, top: 0 }, dx: 600, dy: 20 });
+    moveTo(600, 20);
+    await tick();
+    expect(g.style.width).toBe('200px');
+    expect(g.style.top).toBe('0px');
+  });
+
+  it('the ghost (folder item size) centred on k2 and held there: a merge, with the "make a folder" cue', () => {
+    startLarge();
+    hit = onPage(['k1', 'k2', 'k3', 'k4'], 0, 4);
+    // Ghost centre = (150, 310 + 0.4 × 100) = (150, 350): k2's centre. (At the tab size, 200 px, it
+    // would be (150, 390): outside k2's inner 50%.)
+    moveTo(150, 310);
+    expect(get(drag)!.target?.kind).toBe('place');
+    expect(get(drag)!.dwell?.key).toBe('merge:k2');
+    vi.advanceTimersByTime(500);
+    flush();
+    expect(get(drag)!.target).toEqual({ kind: 'merge', targetTileId: 'k2' });
+  });
+
+  it('the drop makes one sub-folder in k2\'s place: [k2, a], at F\'s contents size; one Undo restores it', () => {
+    startLarge();
+    hit = onPage(['k1', 'k2', 'k3', 'k4'], 0, 4);
+    const before = draft();
+    moveTo(150, 310);
+    vi.advanceTimersByTime(500);
+    flush();
+    drop(150, 310);
+    const kids = (nodeIn(draft(), 'F') as FolderNode).content.children;
+    const made = kids[1] as FolderNode;
+    expect(kids.map((n) => n.id)).toEqual(['k1', made.id, ...ks(10).slice(2).map((k) => k.id), 'S']);
+    expect(made.kind).toBe('folder');
+    const cs = (nodeIn(before, 'F') as FolderNode).contentSize ?? 'medium';
+    expect(made).toMatchObject({ size: cs, contentSize: cs });
+    expect(made.content.children.map((n) => n.id)).toEqual(['k2', 'a']);
+    undo();
+    expect(draft()).toEqual(before);
+  });
+
+  it('a quick drop on k2\'s centre (no hold) inserts at the pointer\'s place, as before', () => {
+    startLarge();
+    hit = onPage(['k1', 'k2', 'k3', 'k4'], 0, 4);
+    moveTo(150, 310);
+    vi.advanceTimersByTime(200);
+    flush();
+    drop(150, 310);
+    const o = order('F');
+    expect(o.slice(0, 3)).toEqual(['k1', 'k2', 'a']); // the pointer is on k2's right half: after it
+    expect(o).toHaveLength(12);
+  });
+
+  it('a folder held on another folder\'s tile merges, the same as on the tab (folders can do what tiles can)', () => {
+    start('G', 50, 50);
+    hit = onPage(['k1', 'k2', 'k3', 'k4'], 0, 4);
+    moveTo(150, 350);
+    vi.advanceTimersByTime(500);
+    flush();
+    expect(get(drag)!.target).toEqual({ kind: 'merge', targetTileId: 'k2' });
+  });
+
+  it('a folder held on a tile inside its own content is refused (visible reason), the same as on the tab', () => {
+    sourceRect = { left: 0, top: 0, width: 100, height: 100 };
+    start('F', 50, 50);
+    hit = onPage(['k1', 'k2', 'k3', 'k4'], 0, 4);
+    moveTo(150, 350);
+    vi.advanceTimersByTime(500);
+    flush();
+    expect(get(drag)!.target).toEqual({ kind: 'invalid', reason: "A folder can't go inside itself." });
   });
 });

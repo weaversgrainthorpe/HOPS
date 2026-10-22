@@ -118,6 +118,12 @@ export interface DragState {
   grab?: { fx: number; fy: number };
   /** Ghost: the grabbed item's rendered size and a label. */
   ghost?: { widthPx: number; heightPx: number; label: string };
+  /**
+   * The ghost's size as drawn now, when it differs from `ghost`: over an open folder's page it is
+   * that folder's item size — what the item would be there (walkthrough 1, Ruling 11) — still held
+   * at the same fraction (`grab`). The visual centre (merge zone) follows it. Absent = `ghost`'s size.
+   */
+  ghostShown?: { widthPx: number; heightPx: number };
   /** The target container's content origin (viewport px) and rendered metrics, for the highlight. */
   view?: { left: number; top: number; metrics: ContainerMetrics };
 }
@@ -195,8 +201,8 @@ function memoised(key: string, draft: LayoutDashboard, fn: () => DropTarget): Dr
  * The dragged item's visual centre in viewport px: the ghost is drawn at pointer − grab × size, so
  * its centre is pointer − grab offset + half the ghost. Without a ghost (or grab) it is the pointer.
  */
-export function visualCentre(state: Pick<DragState, 'pointer' | 'grab' | 'ghost'>): { x: number; y: number } {
-  const g = state.ghost;
+export function visualCentre(state: Pick<DragState, 'pointer' | 'grab' | 'ghost' | 'ghostShown'>): { x: number; y: number } {
+  const g = state.ghost ? (state.ghostShown ?? state.ghost) : undefined;
   const grab = state.grab;
   if (!g || !grab) return { ...state.pointer };
   return {
@@ -970,6 +976,22 @@ function frame() {
 }
 
 /**
+ * The ghost's size over `hit`: on an open folder's page, the size its items are drawn at (the
+ * rendered box of one, else its contents size in cells), since that is what the dragged item would
+ * be there; elsewhere undefined (the item's own rendered size).
+ */
+export function ghostOver(hit: HitResult): { widthPx: number; heightPx: number } | undefined {
+  const c = hit.container;
+  if (!c || c.layout !== 'flow') return undefined;
+  const b = hit.flowPage?.boxes[0];
+  if (b && b.width > 0 && b.height > 0) return { widthPx: b.width, heightPx: b.height };
+  const f = c.metrics.flow;
+  if (!f) return undefined;
+  const side = f.phone ? f.phone.colPx : f.span * c.metrics.unitPx;
+  return side > 0 ? { widthPx: Math.max(24, side), heightPx: Math.max(24, side) } : undefined;
+}
+
+/**
  * The hit test for an item drag's frame: what is under the pointer, plus (when the ghost's visual
  * centre is elsewhere) the item under that centre, which the merge / into-folder zone is judged by.
  * Layout reads happen only here, once per frame (Tenet 4).
@@ -977,6 +999,7 @@ function frame() {
 function hitFor(s: DragState): HitResult {
   const dragged = new Set(s.ids);
   const hit = env.hitTest(s.pointer.x, s.pointer.y, dragged);
+  s.ghostShown = s.tab === undefined && s.ghost ? ghostOver(hit) : undefined;
   if (s.tab !== undefined || s.ids.length === 0 || !s.ghost || !s.grab) return hit;
   const c = visualCentre(s);
   if (Math.abs(c.x - s.pointer.x) < 0.5 && Math.abs(c.y - s.pointer.y) < 0.5) return hit;

@@ -498,8 +498,12 @@ export function mergeIntoNewFolder(
   }
   const ref = refOf(locate(d, targetTileId)!);
   const folderId = uniqueId('folder', new Set(allIds));
+  // Inside a folder the new sub-folder is one of its items: it is drawn at — and its own size and
+  // contents size are — the parent's contents size (walkthrough 1, Ruling 11). On the tab: Medium.
+  const parent = ref.folderId !== undefined ? findNode(d, ref.folderId) : undefined;
+  const size: FolderNode['contentSize'] = parent?.kind === 'folder' ? (parent.contentSize ?? 'medium') : 'medium';
   const folder: FolderNode = {
-    kind: 'folder', id: folderId, name: 'New folder', display: 'collapsed', size: 'medium', contentSize: 'medium',
+    kind: 'folder', id: folderId, name: 'New folder', display: 'collapsed', size, contentSize: size,
     shape: 'rounded', showTitle: true, content: { children: [target, ...dragged].map(unplaced) }
   };
   const without = removeIds(d, idSet);

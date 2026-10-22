@@ -66,9 +66,11 @@
   const ghostStyle = $derived.by(() => {
     if (!s || !s.ghost) return '';
     const g = s.grab ?? { fx: 0, fy: 0 };
-    const left = s.pointer.x - g.fx * s.ghost.widthPx;
-    const top = s.pointer.y - g.fy * s.ghost.heightPx;
-    return `left:${px(left)};top:${px(top)};width:${px(s.ghost.widthPx)};height:${px(s.ghost.heightPx)};`;
+    // Over a folder's page the ghost is that folder's item size (ghostShown), held at the same point.
+    const size = s.ghostShown ?? s.ghost;
+    const left = s.pointer.x - g.fx * size.widthPx;
+    const top = s.pointer.y - g.fy * size.heightPx;
+    return `left:${px(left)};top:${px(top)};width:${px(size.widthPx)};height:${px(size.heightPx)};`;
   });
 </script>
 

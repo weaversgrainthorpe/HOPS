@@ -356,9 +356,13 @@
 
   /* Layout renderer fit (Ruling 22, spec §10): the cell sets the tile's size (inline height and
      min-height) and the tile is a size container, so its content scales with it: 1cqmin is 1% of
-     the tile's shorter side. One arrangement at every size; the size class only nudges the scale,
-     never a fixed px. Text has readable floors (fix round 1): a name is never under 12px, a
-     description never under 11px. A description that cannot fit at its floor is hidden, not shrunk. */
+     the tile's shorter side. ONE rule at every size (walkthrough 1, Ruling 10): icon, name,
+     description, padding and gaps are a share of the tile, with no caps, so a bigger tile is the same
+     tile scaled up; the size class only sets the shares. Medium: icon 34%, name 10.5%, description 9%.
+     Large is a scaled-up Medium with its icon about 45% of the tile (Ruling 10). Small keeps its
+     smaller shares, so it is driven by the floors. Text has readable floors (fix round 1): a name is
+     never under 12px, a description never under 11px. A description that cannot fit at its floor is
+     hidden, not shrunk. */
   .entry-container.sized {
     container: tile / size;
   }
@@ -366,38 +370,42 @@
     --icon-r: 34cqmin;
     --name-r: 10.5cqmin;
     --desc-r: 9cqmin;
-    padding: clamp(3px, 5cqmin, 16px);
-    gap: clamp(2px, 4cqmin, 12px);
+    padding: max(3px, 5cqmin);
+    gap: max(2px, 4cqmin);
   }
   .entry.fill.small {
     --icon-r: 28cqmin;
     --name-r: 9cqmin;
     --desc-r: 8cqmin;
   }
-  /* Large: a slightly larger name, reaching its 20px cap from a ~180px tile. */
   .entry.fill.large {
-    --name-r: 11cqmin;
+    --icon-r: 45cqmin;
+  }
+  /* Large with an icon badge: the badge (icon plus its padding) is the 45%, so the content still fits. */
+  .entry.fill.large:has(.icon-backing.has-bg) {
+    --icon-r: calc(45cqmin - 2 * clamp(2px, 4cqmin, 8px));
   }
   .entry.fill .title {
-    font-size: clamp(12px, var(--name-r), 20px);
+    font-size: max(12px, var(--name-r));
   }
   .entry.fill .subtitle {
-    font-size: clamp(11px, var(--desc-r), 15px);
+    font-size: max(11px, var(--desc-r));
   }
   .entry.fill .icon :global(svg),
   .entry.fill .icon img {
-    width: clamp(12px, var(--icon-r), 112px);
-    height: clamp(12px, var(--icon-r), 112px);
+    width: max(12px, var(--icon-r));
+    height: max(12px, var(--icon-r));
   }
   .entry.fill .icon-backing.has-bg {
     padding: clamp(2px, 4cqmin, 8px);
   }
   /* Hide, don't shrink: the description shows only when the tile is tall enough for it at its floor.
      The height the content needs, with s = 1cqmin in px and the text at its floors (line-height 1.2):
-       padding 2 x 5s + gaps 2 x 4s + icon (34s; Small 28s) + name 12 x 1.2 + description 2 x 11 x 1.2
-       = 52s + 40.8 px (Small 46s + 40.8).
+       padding 2 x 5s + gaps 2 x 4s + icon (Medium 34s; Small 28s; Large 45s) + name 12 x 1.2
+       + description 2 x 11 x 1.2 = 52s + 40.8 px (Small 46s + 40.8; Large 63s + 40.8).
      The worst case is a tile no taller than it is wide (s = height / 100), where that needs
-     height >= 85px (Small >= 75.6px); a taller-than-wide tile needs less, so these never clip. */
+     height >= 85px (Small >= 75.6px, Large >= 110.3px); a taller-than-wide tile needs less. Above the
+     floors the shares add up to 86.2s (Large 97.2s), so these never clip. */
   @container tile (max-height: 84.99px) {
     .entry.fill:not(.small) .subtitle {
       display: none;
@@ -405,6 +413,11 @@
   }
   @container tile (max-height: 75.99px) {
     .entry.fill.small .subtitle {
+      display: none;
+    }
+  }
+  @container tile (max-height: 110.29px) {
+    .entry.fill.large .subtitle {
       display: none;
     }
   }

@@ -215,6 +215,32 @@ describe('mergeIntoNewFolder', () => {
   it('refuses merging a folder into its own descendant', () => {
     expect(() => mergeIntoNewFolder(dash(), ['f1'], 'z', ALL)).toThrow(/into itself/);
   });
+  // Walkthrough 1, Ruling 11: merge works the same inside folders; the new sub-folder is an item of
+  // its parent, so it is drawn at — and its own size and contents size are — the parent's contents size.
+  for (const cs of ['small', 'medium', 'large'] as const)
+    it(`inside a ${cs}-contents folder: the new sub-folder's size and contents size are ${cs} (the parent's)`, () => {
+      const d = deepFreeze({
+        id: 'd', name: 'D', path: '/d', revision: 1,
+        tabs: [{ id: 't1', name: 'One', root: { columns: 24, children: [
+          tile('B', p(0, 0, 4, 4), 'large'),
+          folder('P', [tile('i1'), tile('i2', undefined, 'large')], p(6, 0, 12, 12), { contentSize: cs })
+        ] } }]
+      } as LayoutDashboard);
+      const r = mergeIntoNewFolder(d, ['B'], 'i2', new Set(['d', 't1', 'B', 'P', 'i1', 'i2']));
+      const kids = folderIn(r.dashboard, 'P').content.children;
+      expect(kids.map((n) => n.id)).toEqual(['i1', r.folderId]);
+      const f = kids[1] as FolderNode;
+      expect(f).toMatchObject({ kind: 'folder', size: cs, contentSize: cs, display: 'collapsed' });
+      expect(f.content.children.map((n) => n.id)).toEqual(['i2', 'B']);
+      expect('placement' in f).toBe(false);
+      // Each member keeps its own size; the dragged tile leaves the tab.
+      expect(f.content.children.map((n) => (n as { size?: string }).size)).toEqual(['large', 'large']);
+      expect(root(r.dashboard).map((n) => n.id)).toEqual(['P']);
+    });
+  it('on the tab the new folder is still Medium with Medium contents (unchanged)', () => {
+    const r = mergeIntoNewFolder(dash(), ['a'], 'L', ALL);
+    expect(node(root(r.dashboard), r.folderId)).toMatchObject({ size: 'medium', contentSize: 'medium' });
+  });
 });
 
 describe('tab-level helpers', () => {

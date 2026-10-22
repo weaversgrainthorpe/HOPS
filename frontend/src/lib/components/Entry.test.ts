@@ -183,12 +183,13 @@ describe('Entry content layout (spec §10)', () => {
       expect(css).not.toMatch(/\.compact/);
     });
 
-    it('the fitted tile is a size container; icon and text use cqmin-based clamp() values', () => {
+    it('the fitted tile is a size container; icon and text use cqmin-based values with floors (max())', () => {
       expect(rule('.entry-container.sized')).toMatch(/container:\s*tile\s*\/\s*size/);
-      // The ratios are cqmin custom properties (the size class nudges them); the clamps use them.
-      const scaled = (v: string) => new RegExp(`clamp\\([^;]*var\\(--${v}-r\\)`);
+      // The ratios are cqmin custom properties (the size class sets them); max() adds the floors
+      // (walkthrough 1, Ruling 10: no caps).
+      const scaled = (v: string) => new RegExp(`max\\([^;]*var\\(--${v}-r\\)`);
       for (const v of ['icon', 'name', 'desc']) expect(rule('.entry.fill')).toMatch(new RegExp(`--${v}-r:\\s*[\\d.]+cqmin`));
-      expect(css).toMatch(/\.fill \.icon :global\(svg\)[^{]*\{[^}]*clamp\([^;]*var\(--icon-r\)/);
+      expect(css).toMatch(/\.fill \.icon :global\(svg\)[^{]*\{[^}]*max\([^;]*var\(--icon-r\)/);
       expect(css.slice(css.indexOf('.entry.fill .title {'))).toMatch(scaled('name'));
       expect(css.slice(css.indexOf('.entry.fill .subtitle {'))).toMatch(scaled('desc'));
     });
@@ -197,13 +198,30 @@ describe('Entry content layout (spec §10)', () => {
       expect(css).toMatch(/@container tile \(max-height:[^)]*\)\s*\{[^}]*\.subtitle[^}]*\{[^}]*display:\s*none/);
     });
 
-    // Fix round 1 (binding): readable floors; hide, don't shrink; Large's name up to ~20px.
-    it('a fitted name is never under 12px nor over 20px; a description never under 11px', () => {
-      expect(css.slice(css.indexOf('.entry.fill .title {'))).toMatch(/font-size:\s*clamp\(12px,\s*var\(--name-r\),\s*20px\)/);
-      expect(css.slice(css.indexOf('.entry.fill .subtitle {'))).toMatch(/font-size:\s*clamp\(11px,\s*var\(--desc-r\),/);
-      expect(rule('.entry.fill.large')).toMatch(/--name-r:\s*[\d.]+cqmin/);
+    // Fix round 1 (binding): readable floors; hide, don't shrink. Walkthrough 1, Ruling 10: no caps —
+    // the content scales with the tile at every size (Large is a scaled-up Medium).
+    it('a fitted name is never under 12px and a description never under 11px; neither (nor the icon) has a cap', () => {
+      expect(css.slice(css.indexOf('.entry.fill .title {'))).toMatch(/^[^}]*font-size:\s*max\(12px,\s*var\(--name-r\)\)/);
+      expect(css.slice(css.indexOf('.entry.fill .subtitle {'))).toMatch(/^[^}]*font-size:\s*max\(11px,\s*var\(--desc-r\)\)/);
+      expect(css).toMatch(/\.entry\.fill \.icon img \{[^}]*width:\s*max\(12px,\s*var\(--icon-r\)\)/);
+      expect(css).not.toMatch(/var\(--(name|desc|icon)-r\),\s*[\d.]+px\)/);
       // The unfitted (phone) sizes keep the floors too.
       expect(rule('.small .subtitle')).toMatch(/font-size:\s*(0\.6875rem|11px)/);
+    });
+
+    // Walkthrough 1, Ruling 10: one rule (the cqmin ratios above) for every size; the size class only
+    // sets the ratios. Medium keeps its ratios (it looks as before); Large is a scaled-up Medium with
+    // its icon about 45% of the tile's shorter side; Small keeps its floors-driven ratios.
+    it('the ratios: Medium 34 / 10.5 / 9, Large the same text with a 45cqmin icon, Small 28 / 9 / 8', () => {
+      const r = (sel: string, v: string) => rule(sel).match(new RegExp(`--${v}-r:\\s*([\\d.]+)cqmin`))?.[1];
+      expect([r('.entry.fill', 'icon'), r('.entry.fill', 'name'), r('.entry.fill', 'desc')]).toEqual(['34', '10.5', '9']);
+      expect(r('.entry.fill.large', 'icon')).toBe('45');
+      expect(rule('.entry.fill.large')).not.toMatch(/--(name|desc)-r/);
+      expect([r('.entry.fill.small', 'icon'), r('.entry.fill.small', 'name'), r('.entry.fill.small', 'desc')]).toEqual(['28', '9', '8']);
+    });
+
+    it('Large hides its description below the height its floors need (110.3px)', () => {
+      expect(css).toMatch(/@container tile \(max-height:\s*110\.29px\)\s*\{[^}]*\.entry\.fill\.large \.subtitle[^}]*\{[^}]*display:\s*none/);
     });
 
     it('the description hide thresholds are the heights its floors need (85px, Small 76px), not a fixed 72px', () => {
