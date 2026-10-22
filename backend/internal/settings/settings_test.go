@@ -50,7 +50,7 @@ func TestEveryKeyHasADefinition(t *testing.T) {
 		KeyHTTPReadHeaderTimeoutSeconds, KeyHTTPReadTimeoutSeconds,
 		KeyHTTPWriteTimeoutSeconds, KeyHTTPIdleTimeoutSeconds,
 		KeyDiscoveryMaxParallelProbes, KeyDiscoveryPerHostTimeoutSecs,
-		KeyFoldersAnimatedBackgrounds, KeyLayoutDefaultMode,
+		KeyFoldersAnimatedBackgrounds,
 	}
 	for _, k := range keys {
 		if _, ok := defByKey[k]; !ok {
@@ -358,22 +358,27 @@ func TestBoolSetting(t *testing.T) {
 }
 
 func TestEnumSetting(t *testing.T) {
+	// No current setting is an enum (layout.default_mode was the only one,
+	// removed in M5); the type is still checked exactly.
+	def := Definition{Key: "test.enum", Type: "enum", Default: "a", Enum: []string{"a", "b"}}
+	for _, bad := range []string{"a ", "c", "", "A"} {
+		if err := validate(def, bad); err == nil {
+			t.Errorf("validate(%q) should be rejected", bad)
+		}
+	}
+	if err := validate(def, "b"); err != nil {
+		t.Fatalf("validate(b): %v", err)
+	}
 	s := newTestService(t)
-	if got := s.Get(KeyLayoutDefaultMode); got != "grid" {
-		t.Fatalf("default = %q, want grid", got)
-	}
-	for _, bad := range []string{"grid ", "tiles", "", "Grid"} {
-		if err := s.Set(KeyLayoutDefaultMode, bad); err == nil {
-			t.Errorf("Set(%q) should be rejected", bad)
-		}
-		if err := s.Validate(KeyLayoutDefaultMode, bad); err == nil {
-			t.Errorf("Validate(%q) should be rejected", bad)
-		}
-	}
-	if err := s.Set(KeyLayoutDefaultMode, "free"); err != nil {
-		t.Fatalf("Set(free): %v", err)
-	}
 	if err := s.Validate("no.such.key", "x"); err == nil {
 		t.Error("Validate of unknown key should error")
+	}
+}
+
+// Ruling 4: free layout is gone, so is the layout.default_mode setting.
+func TestLayoutDefaultModeRemoved(t *testing.T) {
+	s := newTestService(t)
+	if _, ok := s.Definition("layout.default_mode"); ok {
+		t.Error("layout.default_mode is still a setting")
 	}
 }

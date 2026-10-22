@@ -56,9 +56,10 @@ type Router struct {
 	// file under an open connection leaves the running process with a
 	// stale view). main.go selects on it alongside SIGTERM.
 	shutdownReq    chan struct{}
-	mu             sync.RWMutex // guards trustedProxies (rebuilt on settings change requires restart, but the slice itself is accessed concurrently)
-	trustedProxies []*net.IPNet // parsed at construction from settings.proxy.trusted_cidrs
-	notices        noticeState  // dismissed one-time notices (notices.go)
+	mu             sync.RWMutex  // guards trustedProxies (rebuilt on settings change requires restart, but the slice itself is accessed concurrently)
+	trustedProxies []*net.IPNet  // parsed at construction from settings.proxy.trusted_cidrs
+	notices        noticeState   // dismissed one-time notices (notices.go)
+	sizeNotes      sizeNoteState // tiles whose unknown size became Medium (notices.go)
 }
 
 // RequestShutdown is the API-side handle for the shutdown channel.
@@ -226,6 +227,15 @@ func NewRouter(db *sql.DB, authService *auth.Service, cfg *config.Config, settin
 	})
 
 	r.notices.load(db) // a failure is logged and retried on GET /api/config
+	if len(migration.SizeChanges) > 0 {
+		// Name each tile's dashboard from the migrated document; if it cannot
+		// be read the dashboard id stands in (the notice is never dropped).
+		doc, err := configdoc.Load(db)
+		if err != nil {
+			slog.Error("notices: cannot read config to name normalised tiles' dashboards", "component", "api", "error", err)
+		}
+		r.sizeNotes.add(sizeNoteItems(migration.SizeChanges, doc)...)
+	}
 
 	r.setupRoutes()
 	return r, r.securityHeadersMiddleware(r.corsMiddleware(r.recoverMiddleware(r.loggingMiddleware(r.mux))))

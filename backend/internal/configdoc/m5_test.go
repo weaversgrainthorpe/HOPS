@@ -313,3 +313,103 @@ func TestMigrateWithBackup_V2MigratesStraightToM5(t *testing.T) {
 		t.Fatalf("second start: res=%+v err=%v", res, err)
 	}
 }
+
+// Ruling 3: an unknown v2 tile size (e.g. "custom", or a number) becomes
+// Medium and is reported, never a failed migration; VerifyMigrationFull
+// accepts exactly the reported changes and nothing else.
+func unknownSizesV2(t *testing.T) Obj {
+	t.Helper()
+	v2 := loadJSON(t, "testdata/v2_basic.json")
+	tabs := v2["dashboards"].([]any)[0].(Obj)["tabs"].([]any)
+	g1 := tabs[0].(Obj)["groups"].([]any)[0].(Obj)
+	g1["entries"].([]any)[0].(Obj)["size"] = "custom" // e1
+	g2 := tabs[0].(Obj)["groups"].([]any)[1].(Obj)
+	g2["entries"].([]any)[0].(Obj)["size"] = 3.0 // e4
+	return v2
+}
+
+func TestMigrateV2_UnknownSizeBecomesMediumAndIsReported(t *testing.T) {
+	v2 := unknownSizesV2(t)
+	before := snapshot(t, v2)
+	doc, renames, sizes, err := MigrateV2Full(v2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshot(t, v2) != before {
+		t.Fatal("input mutated")
+	}
+	if len(sizes) != 2 {
+		t.Fatalf("size changes = %+v, want e1 and e4", sizes)
+	}
+	want := map[string]any{"e1": "custom", "e4": 3.0}
+	for _, s := range sizes {
+		if show(s.OldSize) != show(want[s.TileID]) || s.DashboardID != "d1" || s.TileName == "" || s.Path == "" {
+			t.Errorf("size change %+v", s)
+		}
+	}
+	for _, id := range []string{"e1", "e4"} {
+		_, tile, _ := FindTile(doc, id)
+		if tile["size"] != "medium" {
+			t.Errorf("%s size = %v, want medium", id, tile["size"])
+		}
+	}
+	if err := VerifyMigrationFull(v2, doc, renames, sizes); err != nil {
+		t.Fatalf("reported normalisation rejected: %v", err)
+	}
+	// Not reported: refused.
+	wantProblem(t, VerifyMigration(v2, doc, renames), "size")
+	// Only the reported tiles may change: a change elsewhere is refused.
+	_, e2, _ := FindTile(doc, "e2")
+	e2["size"] = "medium"
+	wantProblem(t, VerifyMigrationFull(v2, doc, renames, sizes), "e2", "size")
+	delete(e2, "size")
+	// A reported change that did not happen (or a bogus one) is refused.
+	bogus := append(append([]SizeChange(nil), sizes...), SizeChange{Path: "dashboards[0].tabs[0].groups[0].entries[1]", TileID: "e2", OldSize: "x"})
+	wantProblem(t, VerifyMigrationFull(v2, doc, renames, bogus), "entries[1]")
+}
+
+func TestConvertDashboardV2Full_ReportsUnknownSizes(t *testing.T) {
+	d := unknownSizesV2(t)["dashboards"].([]any)[0].(Obj)
+	nd, sizes, err := ConvertDashboardV2Full(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sizes) != 2 || sizes[0].Path != "dashboards[0].tabs[0].groups[0].entries[0]" {
+		t.Fatalf("sizes = %+v", sizes)
+	}
+	v3 := Obj{"schemaVersion": 3, LayoutVersionKey: LayoutVersion, "dashboards": []any{nd}}
+	if err := VerifyMigrationFull(Obj{"dashboards": []any{d}}, v3, nil, sizes); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestMigrateWithBackup_UnknownSizeDoesNotFail(t *testing.T) {
+	db := newStoreDB(t)
+	seed(t, db, snapshot2(unknownSizesV2(t)))
+	res, _, err := MigrateWithBackup(db, func() error { return nil })
+	if err != nil || res.Failed || !res.Migrated {
+		t.Fatalf("res=%+v err=%v", res, err)
+	}
+	if len(res.SizeChanges) != 2 {
+		t.Fatalf("SizeChanges = %+v, want 2", res.SizeChanges)
+	}
+	doc, _ := Load(db)
+	if _, tile, _ := FindTile(doc, "e1"); tile["size"] != "medium" {
+		t.Errorf("stored e1 size = %v", tile["size"])
+	}
+}
+
+// Ruling 4: free layout is gone, so is its default-layout setting: the
+// converter writes no settings.defaultLayout and an override of it is refused.
+func TestDefaultLayoutSettingRemoved(t *testing.T) {
+	if _, has := SettingKeys["defaultLayout"]; has {
+		t.Error("SettingKeys still maps defaultLayout")
+	}
+	doc := migrated(t, loadJSON(t, "testdata/v2_basic.json"))
+	if _, has := dash0(doc)["settings"].(Obj)["defaultLayout"]; has {
+		t.Error("converter wrote settings.defaultLayout")
+	}
+	if err := ValidateOverrides(newSvc(t), Obj{"defaultLayout": "grid"}); err == nil {
+		t.Error("a defaultLayout override was accepted")
+	}
+}

@@ -188,8 +188,11 @@ func TestDashboardSettings_RoundTripAndValidation(t *testing.T) {
 	code, resp := c.do("GET", "/api/dashboards/d1/settings", nil)
 	ov := resp["overrides"].(map[string]interface{})
 	eff := resp["effective"].(map[string]interface{})
-	if code != 200 || len(ov) != 6 || len(eff) != 6 || resp["revision"] != float64(1) {
+	if code != 200 || len(ov) != 5 || len(eff) != 5 || resp["revision"] != float64(1) {
 		t.Fatalf("%d %v", code, resp)
+	}
+	if _, has := eff["defaultLayout"]; has { // Ruling 4: free layout and its setting are gone
+		t.Fatalf("effective still serves defaultLayout: %v", eff)
 	}
 	if _, ok := eff["statusCheckIntervalMinutes"].(float64); !ok {
 		t.Fatalf("effective not camelCase numbers: %v", eff)

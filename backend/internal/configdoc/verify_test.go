@@ -155,7 +155,7 @@ func findNode(doc Obj, id string) (Obj, Obj, []Obj, Obj) {
 
 func TestVerify_RequiresOwnedDashboardKeys(t *testing.T) {
 	v2 := loadJSON(t, "testdata/v2_basic.json")
-	for key, bad := range map[string]any{"revision": 0, "settings": "x", "defaultLayout": 3} {
+	for key, bad := range map[string]any{"revision": 0, "settings": "x"} {
 		doc := migrated(t, v2)
 		list(t, doc, "dashboards")[0][key] = bad
 		wantProblem(t, Verify(v2, doc), "d1", key)

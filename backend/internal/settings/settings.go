@@ -75,7 +75,6 @@ const (
 	KeyDiscoveryMaxParallelProbes   = "discovery.max_parallel_probes"
 	KeyDiscoveryPerHostTimeoutSecs  = "discovery.per_host_timeout_seconds"
 	KeyFoldersAnimatedBackgrounds   = "folders.animated_backgrounds"
-	KeyLayoutDefaultMode            = "layout.default_mode"
 )
 
 // Definitions is the authoritative list of every setting HOPS exposes.
@@ -178,11 +177,6 @@ var Definitions = []Definition{
 	{
 		Key: KeyFoldersAnimatedBackgrounds, Type: "bool", Default: "true",
 		Description: "Whether folders may show animated (video/GIF) backgrounds. Individual dashboards can override this.",
-	},
-	{
-		Key: KeyLayoutDefaultMode, Type: "enum", Default: "grid",
-		Description: "Default layout for dashboards: grid (snap to a grid) or free (place anywhere). Individual dashboards can override this.",
-		Enum:        []string{"grid", "free"},
 	},
 }
 

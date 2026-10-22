@@ -14,7 +14,7 @@ import (
 // node never is).
 const unplacedDash = `{"id": "pz", "name": "Probe", "path": "/pz", "revision": 1,
 	"settings": {"statusChecksEnabled": null, "statusCheckIntervalMinutes": null, "statusCheckTimeoutSeconds": null,
-	             "editIdleTimeoutMinutes": null, "animatedFolderBackgrounds": null, "defaultLayout": null},
+	             "editIdleTimeoutMinutes": null, "animatedFolderBackgrounds": null},
 	"tabs": [{"id": "pz-t", "name": "T", "root": {"columns": 24, "children": [
 		{"id": "pz-f", "kind": "folder", "name": "F", "size": "medium", "contentSize": "medium",
 		 "placement": {"x": 0, "y": 0, "w": 4, "h": 2}, "content": {"children": []}},

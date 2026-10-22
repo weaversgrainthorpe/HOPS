@@ -833,7 +833,8 @@ func (r *Router) handleResetConfig(w http.ResponseWriter, req *http.Request) {
 	}
 
 	if err := database.ResetConfig(r.db); err != nil {
-		writeJSONError(w, "Failed to reset configuration", http.StatusInternalServerError)
+		slog.Error("factory reset failed; stored config left untouched", "component", "api", "error", err)
+		writeJSONError(w, "Failed to reset configuration (nothing was changed): "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -1384,6 +1385,7 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 
 	// Bring every imported dashboard to the v3 shape.
 	var imported []configdoc.Obj
+	var sizeChanges []importedSizes // tiles whose unknown size became Medium (Ruling 3)
 	var skipped []string
 	for i, raw := range rawDashboards {
 		d, ok := raw.(configdoc.Obj)
@@ -1412,16 +1414,19 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 			imported = append(imported, d)
 			continue
 		}
-		v3, err := configdoc.ConvertDashboardV2(d)
+		v3, sizes, err := configdoc.ConvertDashboardV2Full(d)
 		if err != nil {
 			writeJSONError(w, fmt.Sprintf("Import refused — dashboard %q could not be converted: %v", dashboardLabel(d), err), http.StatusBadRequest)
 			return
 		}
 		// The converter writes the current layout form directly, so the
 		// converted dashboard is checked as part of a marked document.
-		verr := configdoc.Verify(
+		// A tile size HOPS does not recognise became Medium (Ruling 3): the
+		// verifier accepts exactly those reported changes.
+		verr := configdoc.VerifyMigrationFull(
 			configdoc.Obj{"dashboards": []any{d}},
 			configdoc.Obj{"schemaVersion": configdoc.SchemaVersion, configdoc.LayoutVersionKey: configdoc.LayoutVersion, "dashboards": []any{v3}},
+			nil, sizes,
 		)
 		if verr != nil {
 			var ve *configdoc.VerifyError
@@ -1433,6 +1438,9 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 		imported = append(imported, v3)
+		if len(sizes) > 0 {
+			sizeChanges = append(sizeChanges, importedSizes{dash: v3, changes: sizes})
+		}
 	}
 	if len(imported) == 0 {
 		msg := "No dashboards found in the import file"
@@ -1456,6 +1464,7 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 		slog.Info("icon matching complete", "component", "import", "matched", iconMatchCount, "error", iconErr)
 	}
 
+	var sizeItems []string
 	r.updateDocWithLoadErr(w, func(err error) *apiError {
 		slog.Error("import: stored config unreadable", "component", "import", "error", err)
 		return newAPIError(http.StatusInternalServerError, importUnreadableMsg)
@@ -1528,6 +1537,14 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 		assetsRestored, assetsFailed = r.restoreAssets(importedConfig)
 
 		message := fmt.Sprintf("Imported %d dashboard(s) from %s format: %s", len(names), importFormat, strings.Join(names, ", "))
+		sizeItems = nil
+		for _, ic := range sizeChanges {
+			// Named after the merge, so a renamed dashboard is named as stored.
+			sizeItems = append(sizeItems, sizeNoteItems(withDashID(ic.changes, ic.dash), configdoc.Obj{"dashboards": []any{ic.dash}})...)
+		}
+		if len(sizeItems) > 0 {
+			message += fmt.Sprintf(". %d tile(s) had a size HOPS does not recognise and are now Medium: %s", len(sizeItems), strings.Join(sizeItems, "; "))
+		}
 		if len(skipped) > 0 {
 			message += fmt.Sprintf(". Skipped %d item(s): %s", len(skipped), strings.Join(skipped, "; "))
 		}
@@ -1563,7 +1580,27 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 			resp["warning"] = warning
 		}
 		return stored, resp, nil
+	}, func() {
+		// Committed: the one-time notice lists these tiles until dismissed.
+		r.sizeNotes.add(sizeItems...)
 	})
+}
+
+// importedSizes pairs an imported dashboard with its normalised tile sizes.
+type importedSizes struct {
+	dash    configdoc.Obj
+	changes []configdoc.SizeChange
+}
+
+// withDashID returns changes with DashboardID set to dash's (current) id.
+func withDashID(changes []configdoc.SizeChange, dash configdoc.Obj) []configdoc.SizeChange {
+	id, _ := dash["id"].(string)
+	out := make([]configdoc.SizeChange, len(changes))
+	for i, c := range changes {
+		c.DashboardID = id
+		out[i] = c
+	}
+	return out
 }
 
 // handleIconActions routes icon CRUD operations based on HTTP method

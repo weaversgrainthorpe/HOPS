@@ -223,7 +223,7 @@ func validDashboardForStatusTest() Obj {
 		"id": "d", "name": "D", "path": "/d", "revision": float64(1),
 		"settings": Obj{
 			"statusChecksEnabled": nil, "statusCheckIntervalMinutes": nil, "statusCheckTimeoutSeconds": nil,
-			"editIdleTimeoutMinutes": nil, "animatedFolderBackgrounds": nil, "defaultLayout": nil,
+			"editIdleTimeoutMinutes": nil, "animatedFolderBackgrounds": nil,
 		},
 	}
 }

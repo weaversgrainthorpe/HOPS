@@ -139,7 +139,7 @@ func TestMigrateV2_Basic(t *testing.T) {
 		t.Error("defaultLayout written; every tab is a grid tab (M5)")
 	}
 	settings := d["settings"].(Obj)
-	if len(settings) != 6 {
+	if len(settings) != len(settingsKeys) {
 		t.Errorf("settings has %d keys", len(settings))
 	}
 	for _, k := range settingsKeys {
@@ -260,7 +260,7 @@ func TestMigrateV2_MessyInput(t *testing.T) {
 	if _, has := d["defaultLayout"]; has {
 		t.Error("defaultLayout kept")
 	}
-	if len(d["settings"].(Obj)) != 6 {
+	if len(d["settings"].(Obj)) != len(settingsKeys) {
 		t.Errorf("settings not replaced: %v", d["settings"])
 	}
 	if v, ok := d["weird"]; !ok || v != nil {

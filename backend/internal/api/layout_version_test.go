@@ -265,11 +265,40 @@ func TestImport_ReleaseSourcesWriteM5Form(t *testing.T) {
 			assertM5Dashboard(t, imp)
 			// Folder children keep the source's entry order.
 			f := imp["tabs"].([]any)[0].(configdoc.Obj)["root"].(configdoc.Obj)["children"].([]any)[0].(configdoc.Obj)
-			if len(contentKids(f)) < 1 {
-				t.Errorf("first folder is empty")
+			var got []string
+			for _, k := range contentKids(f) {
+				got = append(got, k.(configdoc.Obj)["name"].(string))
+			}
+			if want := firstGroupNames(t, name, data); strings.Join(got, "|") != strings.Join(want, "|") {
+				t.Errorf("first folder's children = %q, want the source order %q", got, want)
 			}
 		})
 	}
+}
+
+// firstGroupNames is the entry names of the source's first group, in order:
+// read from the file for a v2 export, as written for the inline sources.
+func firstGroupNames(t *testing.T, source string, data []byte) []string {
+	t.Helper()
+	switch source {
+	case "Homer", "Heimdall":
+		return []string{"Plex", "Sonarr"}
+	case "Dashy":
+		return []string{"Grafana", "Loki"}
+	}
+	var v2 map[string]any
+	if err := json.Unmarshal(data, &v2); err != nil {
+		t.Fatal(err)
+	}
+	tab := v2["dashboards"].([]any)[0].(map[string]any)["tabs"].([]any)[0].(map[string]any)
+	var out []string
+	for _, e := range tab["groups"].([]any)[0].(map[string]any)["entries"].([]any) {
+		out = append(out, e.(map[string]any)["name"].(string))
+	}
+	if len(out) < 2 {
+		t.Fatalf("%s: first group has %d entries; the order check needs at least 2", source, len(out))
+	}
+	return out
 }
 
 func TestNewDashboard_IsM5Form(t *testing.T) {

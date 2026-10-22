@@ -17,7 +17,6 @@ type Effective struct {
 	StatusCheckTimeoutSeconds  int
 	EditIdleTimeoutMinutes     int
 	AnimatedFolderBackgrounds  bool
-	DefaultLayout              string
 }
 
 // SettingKeys maps each DashboardSettings JSON key to its global settings key.
@@ -27,7 +26,6 @@ var SettingKeys = map[string]string{
 	"statusCheckTimeoutSeconds":  settings.KeyStatusCheckTimeoutSeconds,
 	"editIdleTimeoutMinutes":     settings.KeyEditModeIdleTimeoutMinutes,
 	"animatedFolderBackgrounds":  settings.KeyFoldersAnimatedBackgrounds,
-	"defaultLayout":              settings.KeyLayoutDefaultMode,
 }
 
 // settingsKeys is the sorted key list, derived from SettingKeys so the two
@@ -122,7 +120,6 @@ func Resolve(svc *settings.Service, dash Obj) Effective {
 		StatusCheckTimeoutSeconds:  toInt(pick("statusCheckTimeoutSeconds"), settings.KeyStatusCheckTimeoutSeconds),
 		EditIdleTimeoutMinutes:     toInt(pick("editIdleTimeoutMinutes"), settings.KeyEditModeIdleTimeoutMinutes),
 		AnimatedFolderBackgrounds:  pick("animatedFolderBackgrounds") == "true",
-		DefaultLayout:              pick("defaultLayout"),
 	}
 }
 

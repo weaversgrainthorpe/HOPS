@@ -55,6 +55,9 @@ type MigrationResult struct {
 	Failed   bool     // true if the stored doc could not be migrated
 	Detail   string   // human-readable failure reason
 	Renames  []Rename // duplicate ids renamed by this start's migration
+	// SizeChanges are v2 tiles whose unknown size this start set to Medium
+	// (Ruling 3); the router shows them as a one-time notice.
+	SizeChanges []SizeChange
 }
 
 // MigrateOnStartup converts a stored v2 document to v3. If the stored
@@ -84,11 +87,11 @@ func MigrateOnStartup(db *sql.DB) (MigrationResult, error) {
 		return MigrationResult{}, nil
 	}
 
-	v3, renames, err := MigrateV2Renaming(v2)
+	v3, renames, sizes, err := MigrateV2Full(v2)
 	if err != nil {
 		return failed(fmt.Sprintf("conversion failed: %v", err)), nil
 	}
-	if err := VerifyMigration(v2, v3, renames); err != nil {
+	if err := VerifyMigrationFull(v2, v3, renames, sizes); err != nil {
 		return failed(fmt.Sprintf("verification failed: %v", err)), nil
 	}
 
@@ -128,7 +131,11 @@ func MigrateOnStartup(db *sql.DB) (MigrationResult, error) {
 		slog.Warn("renamed duplicate id during config migration", "component", "configdoc",
 			"kind", r.Kind, "dashboard", r.DashboardID, "old_id", r.OldID, "new_id", r.NewID, "path", r.Path)
 	}
-	return MigrationResult{Migrated: true, Renames: renames}, nil
+	for _, sc := range sizes {
+		slog.Warn("tile size not recognised during config migration; set to medium", "component", "configdoc",
+			"dashboard", sc.DashboardID, "tile", sc.TileID, "name", sc.TileName, "old_size", show(sc.OldSize), "path", sc.Path)
+	}
+	return MigrationResult{Migrated: true, Renames: renames, SizeChanges: sizes}, nil
 }
 
 func failed(detail string) MigrationResult {

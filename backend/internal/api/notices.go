@@ -2,6 +2,9 @@ package api
 
 import (
 	"database/sql"
+	"encoding/json"
+	"fmt"
+	"hash/fnv"
 	"log/slog"
 	"net/http"
 	"regexp"
@@ -28,6 +31,77 @@ const noticeLayeredStatusChecks = "layered-status-checks-v4"
 // knownNotices is every notice id this build can show; dismissing any other
 // id is a 404.
 var knownNotices = map[string]bool{noticeLayeredStatusChecks: true}
+
+// noticeTileSizesPrefix starts the id of the tile-size notice (Ruling 3). The
+// rest is a hash of its text, so a later import's tiles get a fresh notice
+// even after an earlier one was dismissed.
+const noticeTileSizesPrefix = "tile-sizes-medium-"
+
+// sizeNoteState lists, for this process, the tiles whose unknown v2 size was
+// set to Medium by the start-up migration or an import, until the notice
+// naming them is dismissed.
+type sizeNoteState struct {
+	mu    sync.Mutex
+	items []string
+}
+
+func (s *sizeNoteState) add(items ...string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.items = append(s.items, items...)
+}
+
+// notice returns the current tile-size notice, or false when there is none.
+func (s *sizeNoteState) notice() (notice, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.items) == 0 {
+		return notice{}, false
+	}
+	text := "Some tiles had a size HOPS does not recognise, so they are now Medium (change them in the editor if needed): " +
+		strings.Join(s.items, "; ") + "."
+	h := fnv.New32a()
+	h.Write([]byte(text))
+	return notice{ID: fmt.Sprintf("%s%08x", noticeTileSizesPrefix, h.Sum32()), Text: text}, true
+}
+
+// isCurrent reports whether id is the current tile-size notice.
+func (s *sizeNoteState) isCurrent(id string) bool {
+	n, ok := s.notice()
+	return ok && n.ID == id
+}
+
+// clearIf drops the listed tiles when id is still their notice (dismissed).
+func (s *sizeNoteState) clearIf(id string) {
+	if s.isCurrent(id) {
+		s.mu.Lock()
+		s.items = nil
+		s.mu.Unlock()
+	}
+}
+
+// sizeNoteItems describes each normalised tile for the notice, naming its
+// dashboard from doc (by id; the id itself when it is not found).
+func sizeNoteItems(changes []configdoc.SizeChange, doc configdoc.Obj) []string {
+	names := map[string]string{}
+	for id, d := range storedDashboards(doc) {
+		names[id] = dashboardLabel(d)
+	}
+	out := make([]string, 0, len(changes))
+	for _, sc := range changes {
+		dash := names[sc.DashboardID]
+		if dash == "" {
+			dash = sc.DashboardID
+		}
+		tile := sc.TileName
+		if tile == "" {
+			tile = sc.TileID
+		}
+		old, _ := json.Marshal(sc.OldSize)
+		out = append(out, fmt.Sprintf("%q in dashboard %q (was %s)", tile, dash, old))
+	}
+	return out
+}
 
 // noticeIDPattern bounds a notice id taken from a URL.
 var noticeIDPattern = regexp.MustCompile(`^[a-z0-9-]{1,64}$`)
@@ -107,6 +181,9 @@ func (s *noticeState) dismiss(id string) {
 // (the document the handler just loaded), leaving out dismissed ones.
 func (r *Router) currentNotices(stored configdoc.Obj) []notice {
 	var out []notice
+	if n, ok := r.sizeNotes.notice(); ok {
+		out = append(out, n)
+	}
 	if names := dashboardsWithTilesOnUnderOff(r, stored); len(names) > 0 {
 		out = append(out, notice{
 			ID: noticeLayeredStatusChecks,
@@ -186,7 +263,8 @@ func (r *Router) handleNotices(w http.ResponseWriter, req *http.Request) {
 		writeJSONError(w, "Invalid notice id", http.StatusBadRequest)
 		return
 	}
-	if !knownNotices[id] {
+	// The tile-size notice is one-time: dismissing it clears its list.
+	if !knownNotices[id] && !r.sizeNotes.isCurrent(id) {
 		writeJSONError(w, "Notice not found: "+id, http.StatusNotFound)
 		return
 	}
@@ -196,5 +274,6 @@ func (r *Router) handleNotices(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	r.notices.dismiss(id)
+	r.sizeNotes.clearIf(id)
 	writeJSONSuccess(w)
 }

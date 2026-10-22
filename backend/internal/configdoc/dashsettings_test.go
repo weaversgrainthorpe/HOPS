@@ -33,7 +33,6 @@ func TestResolve_InheritAndOverride(t *testing.T) {
 	e := Resolve(svc, Obj{"id": "d1", "settings": Obj{
 		"statusCheckIntervalMinutes": float64(2),
 		"statusChecksEnabled":        nil,
-		"defaultLayout":              "free",
 		"animatedFolderBackgrounds":  false,
 	}})
 	if e.StatusCheckIntervalMinutes != 2 {
@@ -45,12 +44,12 @@ func TestResolve_InheritAndOverride(t *testing.T) {
 	if e.StatusCheckTimeoutSeconds != 10 || e.EditIdleTimeoutMinutes != 15 {
 		t.Errorf("missing keys should inherit: %+v", e)
 	}
-	if e.DefaultLayout != "free" || e.AnimatedFolderBackgrounds {
+	if e.AnimatedFolderBackgrounds {
 		t.Errorf("overrides not applied: %+v", e)
 	}
 	// no settings object at all -> all global
 	g := Resolve(svc, Obj{"id": "d2"})
-	if g.StatusCheckIntervalMinutes != 5 || g.DefaultLayout != "grid" || !g.AnimatedFolderBackgrounds {
+	if g.StatusCheckIntervalMinutes != 5 || !g.AnimatedFolderBackgrounds {
 		t.Errorf("globals not used: %+v", g)
 	}
 }
@@ -60,12 +59,11 @@ func TestResolve_BadStoredValueFallsBackToGlobal(t *testing.T) {
 	e := Resolve(svc, Obj{"id": "d1", "settings": Obj{
 		"statusCheckIntervalMinutes": "soon",
 		"statusCheckTimeoutSeconds":  float64(0),
-		"defaultLayout":              "tiles",
 		"statusChecksEnabled":        float64(1),
 		"editIdleTimeoutMinutes":     1.5,
 	}})
 	if e.StatusCheckIntervalMinutes != 5 || e.StatusCheckTimeoutSeconds != 10 ||
-		e.DefaultLayout != "grid" || !e.StatusChecksEnabled || e.EditIdleTimeoutMinutes != 15 {
+		!e.StatusChecksEnabled || e.EditIdleTimeoutMinutes != 15 {
 		t.Errorf("bad values must fall back to global: %+v", e)
 	}
 }
@@ -96,12 +94,9 @@ func TestValidateOverrides(t *testing.T) {
 	if err := ValidateOverrides(svc, Obj{"statusChecksEnabled": "true"}); err == nil {
 		t.Error("string for bool should error")
 	}
-	if err := ValidateOverrides(svc, Obj{"defaultLayout": "tiles"}); err == nil {
-		t.Error("bad enum should error")
-	}
 	if err := ValidateOverrides(svc, Obj{
 		"statusCheckIntervalMinutes": float64(3), "statusChecksEnabled": false,
-		"defaultLayout": "free", "editIdleTimeoutMinutes": nil,
+		"editIdleTimeoutMinutes": nil,
 	}); err != nil {
 		t.Errorf("valid overrides rejected: %v", err)
 	}

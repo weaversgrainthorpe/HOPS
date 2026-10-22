@@ -23,6 +23,8 @@ type verifier struct {
 	// Set by VerifyMigration only.
 	renames     map[string]Rename // by v2 path
 	usedRenames map[string]bool
+	sizes       map[string]SizeChange // by v2 entry path (Ruling 3)
+	usedSizes   map[string]bool
 	first       map[string]string // v2 id -> path of its first occurrence
 }
 
@@ -171,9 +173,14 @@ func boundsProblem(d Obj) string {
 // Verify proves v3 is a faithful conversion of v2 with no ids renamed; it is
 // VerifyMigration with an empty rename list, so a v3 document that kept a
 // duplicate id still fails.
-func Verify(v2, v3 Obj) error { return VerifyMigration(v2, v3, nil) }
+func Verify(v2, v3 Obj) error { return VerifyMigrationFull(v2, v3, nil, nil) }
 
-// VerifyMigration proves v3 is a faithful conversion of v2 given the renames
+// VerifyMigration is VerifyMigrationFull with no normalised tile sizes.
+func VerifyMigration(v2, v3 Obj, renames []Rename) error {
+	return VerifyMigrationFull(v2, v3, renames, nil)
+}
+
+// VerifyMigrationFull proves v3 is a faithful conversion of v2 given the renames
 // MigrateV2Renaming reported:
 //   - every v2 dashboard/tab/group/entry appears exactly once at the matching
 //     level, under the matching parent, in the same order, under its own id
@@ -185,10 +192,12 @@ func Verify(v2, v3 Obj) error { return VerifyMigration(v2, v3, nil) }
 //     lists excepted);
 //   - IDs are unique document-wide and the v3 tree is well-formed and in
 //     the current layout form (see layout.go);
-//   - v3 carries this build's layoutVersion.
+//   - v3 carries this build's layoutVersion;
+//   - a v2 entry's size differs only where sizes reports it: an unknown
+//     size, now "medium" (Ruling 3); every reported change happened.
 //
 // It returns a *VerifyError listing up to 20 problems.
-func VerifyMigration(v2, v3 Obj, renames []Rename) error {
+func VerifyMigrationFull(v2, v3 Obj, renames []Rename, sizes []SizeChange) error {
 	v := &verifier{}
 	if !IsV3(v3) {
 		v.add("document: schemaVersion is %s, want %d", show(v3["schemaVersion"]), SchemaVersion)
@@ -207,6 +216,15 @@ func VerifyMigration(v2, v3 Obj, renames []Rename) error {
 		v.renames[r.Path] = r
 	}
 	v.first = firstOccurrence(v2Nodes(v2))
+	v.sizes = map[string]SizeChange{}
+	v.usedSizes = map[string]bool{}
+	for _, sc := range sizes {
+		if _, dup := v.sizes[sc.Path]; dup {
+			v.add("size change list names path %s twice", sc.Path)
+			continue
+		}
+		v.sizes[sc.Path] = sc
+	}
 
 	v.compareKeys("document", v2, v3, "dashboards", "schemaVersion", LayoutVersionKey)
 	v2d, ok2 := asList(v2["dashboards"])
@@ -232,6 +250,11 @@ func VerifyMigration(v2, v3 Obj, renames []Rename) error {
 			v.checkOwned(id, b)
 			v.compareTabs(id, path, a, b)
 		})
+	}
+	for _, sc := range sizes {
+		if !v.usedSizes[sc.Path] {
+			v.add("size change %s (tile %q, size %s) does not match any v2 entry", sc.Path, sc.TileID, trunc(show(sc.OldSize)))
+		}
 	}
 	for _, r := range renames {
 		if !v.usedRenames[r.Path] {
@@ -277,8 +300,30 @@ func (v *verifier) compareTabs(dashID, dashPath string, a, b Obj) {
 			if !ok {
 				return
 			}
-			v.compareLevel("entry", "group "+gid, gpath+".entries", v2e, v3e, "tile", func(ea, eb Obj, eid, _ string) {
-				v.compareKeys("entry "+eid, ea, eb)
+			v.compareLevel("entry", "group "+gid, gpath+".entries", v2e, v3e, "tile", func(ea, eb Obj, eid, epath string) {
+				sc, normalised := v.sizes[epath]
+				if !normalised {
+					v.compareKeys("entry "+eid, ea, eb)
+					if _, had := ea["size"]; !had {
+						if _, has := eb["size"]; has {
+							v.add("entry %s: key \"size\" was added (%s) without a reported size change", eid, trunc(show(eb["size"])))
+						}
+					}
+					return
+				}
+				// Ruling 3: exactly this reported tile's unknown size became
+				// Medium; everything else about it is unchanged.
+				v.usedSizes[epath] = true
+				v.compareKeys("entry "+eid, ea, eb, "size")
+				if _, known := SizeSpan(ea["size"]); known || show(ea["size"]) != show(sc.OldSize) {
+					v.add("size change %s: v2 size is %s, reported %s (only an unknown size may be normalised)", epath, trunc(show(ea["size"])), trunc(show(sc.OldSize)))
+				}
+				if eb["size"] != "medium" {
+					v.add("entry %s: size is %s, want \"medium\" (normalised from %s)", eid, trunc(show(eb["size"])), trunc(show(sc.OldSize)))
+				}
+				if sc.TileID != eid {
+					v.add("size change %s: tile id %q, want %q", epath, sc.TileID, eid)
+				}
 			})
 		})
 	})

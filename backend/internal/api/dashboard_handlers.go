@@ -256,7 +256,7 @@ func (r *Router) attachLayout(resp map[string]interface{}, committed configdoc.O
 // updateDoc runs fn on the stored config inside one transaction. fn returns
 // the new document and the response body; any error rolls everything back.
 func (r *Router) updateDoc(w http.ResponseWriter, fn docUpdateFn) {
-	r.updateDocTx(w, loadErr, fn, nil)
+	r.updateDocTx(w, loadErr, fn, nil, nil)
 }
 
 // computeDoc loads the stored config through tx, runs fn, and verifies the
@@ -280,14 +280,17 @@ func computeDoc(tx *sql.Tx, onLoadErr func(error) *apiError, fn docUpdateFn) (co
 
 // updateDocWithLoadErr is updateDoc with a caller-chosen mapping for a failure
 // to load the stored config (e.g. import's "refused so nothing is overwritten").
-func (r *Router) updateDocWithLoadErr(w http.ResponseWriter, onLoadErr func(error) *apiError, fn docUpdateFn) {
-	r.updateDocTx(w, onLoadErr, fn, nil)
+// onCommit (when given) runs once the write has committed, before the
+// response is written: process state that must follow the stored document
+// only (e.g. import's notices) is updated there, never on a rolled-back write.
+func (r *Router) updateDocWithLoadErr(w http.ResponseWriter, onLoadErr func(error) *apiError, fn docUpdateFn, onCommit func()) {
+	r.updateDocTx(w, onLoadErr, fn, nil, onCommit)
 }
 
 // updateDocTx is the one write path: load, fn, verify ids, save, then after
 // (when given), all in one transaction; the response carries the committed
 // document as `layout`.
-func (r *Router) updateDocTx(w http.ResponseWriter, onLoadErr func(error) *apiError, fn docUpdateFn, after docAfterFn) {
+func (r *Router) updateDocTx(w http.ResponseWriter, onLoadErr func(error) *apiError, fn docUpdateFn, after docAfterFn, onCommit func()) {
 	tx, err := r.db.Begin()
 	if err != nil {
 		writeAPIError(w, newAPIError(http.StatusInternalServerError, "Failed to start save: "+err.Error()))
@@ -325,6 +328,9 @@ func (r *Router) updateDocTx(w http.ResponseWriter, onLoadErr func(error) *apiEr
 		writeAPIError(w, newAPIError(http.StatusInternalServerError, "Failed to commit config: "+err.Error()))
 		return
 	}
+	if onCommit != nil {
+		onCommit()
+	}
 	if m, ok := resp.(map[string]interface{}); ok {
 		r.attachLayout(m, committed)
 	}
@@ -359,7 +365,7 @@ func (r *Router) updateDocWithBackupAfter(w http.ResponseWriter, fn docUpdateFn,
 			}
 		}
 		return next, resp, err
-	}, after)
+	}, after, nil)
 }
 
 // joinWarnings appends w to an existing response warning (if any).
@@ -553,7 +559,6 @@ func (r *Router) handleGetDashboardSettings(w http.ResponseWriter, id string) {
 			"statusCheckTimeoutSeconds":  eff.StatusCheckTimeoutSeconds,
 			"editIdleTimeoutMinutes":     eff.EditIdleTimeoutMinutes,
 			"animatedFolderBackgrounds":  eff.AnimatedFolderBackgrounds,
-			"defaultLayout":              eff.DefaultLayout,
 		},
 		"revision": rev,
 	})

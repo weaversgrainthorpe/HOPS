@@ -19,7 +19,7 @@ func addShowcase(t *testing.T, db *sql.DB) {
 	if err := json.Unmarshal([]byte(`{
 		"id": "s1", "name": "Showcase", "path": "/showcase", "revision": 3,
 		"settings": {"statusChecksEnabled": null, "statusCheckIntervalMinutes": null, "statusCheckTimeoutSeconds": null,
-			"editIdleTimeoutMinutes": null, "animatedFolderBackgrounds": null, "defaultLayout": null},
+			"editIdleTimeoutMinutes": null, "animatedFolderBackgrounds": null},
 		"tabs": [{"id": "s1-t1", "name": "Grid",
 			"root": {"columns": 24, "children": [
 				{"id": "s1-e1", "kind": "tile", "name": "Big", "url": "http://big", "size": "large", "placement": {"x": 3, "y": 5, "w": 4, "h": 4, "z": 2}},

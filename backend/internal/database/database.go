@@ -317,15 +317,24 @@ func runMigrations(db *sql.DB) error {
 	return nil
 }
 
-// ResetConfig resets the configuration to the default state
+// ResetConfig resets the configuration to the default state: the default v2
+// config converted and verified through the release path, as start-up does.
+// Any failure is returned (the caller shows it) and nothing is written.
 func ResetConfig(db *sql.DB) error {
+	return resetConfigFrom(db, DefaultConfig)
+}
+
+func resetConfigFrom(db *sql.DB, raw string) error {
 	var v2 map[string]any
-	if err := json.Unmarshal([]byte(DefaultConfig), &v2); err != nil {
+	if err := json.Unmarshal([]byte(raw), &v2); err != nil {
 		return fmt.Errorf("default config is not valid JSON: %w", err)
 	}
-	v3, err := configdoc.MigrateV2(v2)
+	v3, renames, sizes, err := configdoc.MigrateV2Full(v2)
 	if err != nil {
 		return fmt.Errorf("failed to convert default config to v3: %w", err)
+	}
+	if err := configdoc.VerifyMigrationFull(v2, v3, renames, sizes); err != nil {
+		return fmt.Errorf("default config verification failed: %w", err)
 	}
 	return configdoc.Save(db, v3)
 }

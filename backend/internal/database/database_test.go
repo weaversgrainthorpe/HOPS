@@ -373,3 +373,44 @@ func TestResetConfigWritesV3(t *testing.T) {
 		t.Fatal("reset config has no dashboards")
 	}
 }
+
+// A reset converts the default v2 config through the release path and
+// verifies it, exactly as start-up does: a conversion that does not verify is
+// a visible error and the stored config is left untouched.
+func TestResetConfigFrom_VerifiesAndWritesNothingOnFailure(t *testing.T) {
+	db, err := Initialize(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	var before string
+	if err := db.QueryRow("SELECT data FROM config WHERE id = 1").Scan(&before); err != nil {
+		t.Fatal(err)
+	}
+	// A v2 entry carrying a placement converts into a placed folder child,
+	// which the M5 form forbids: verification must refuse it.
+	bad := `{"dashboards":[{"id":"d","name":"D","path":"/d","tabs":[{"id":"t","name":"T","groups":[
+		{"id":"g","name":"G","entries":[{"id":"e","name":"E","placement":{"x":0,"y":0,"w":2,"h":2}}]}]}]}]}`
+	err = resetConfigFrom(db, bad)
+	if err == nil || !strings.Contains(err.Error(), "verification failed") || !strings.Contains(err.Error(), "placement") {
+		t.Fatalf("resetConfigFrom = %v, want a visible verification failure naming the placement", err)
+	}
+	var after string
+	if err := db.QueryRow("SELECT data FROM config WHERE id = 1").Scan(&after); err != nil {
+		t.Fatal(err)
+	}
+	if after != before {
+		t.Fatal("a failed reset changed the stored config")
+	}
+	// The real default verifies and carries the current layout version.
+	if err := ResetConfig(db); err != nil {
+		t.Fatal(err)
+	}
+	doc, err := configdoc.Load(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := configdoc.CheckLayoutVersion(doc); err != nil {
+		t.Fatal(err)
+	}
+}
