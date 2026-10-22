@@ -503,3 +503,65 @@ describe('merge inside a folder (walkthrough 1, Ruling 11)', () => {
     expect(get(drag)!.target).toEqual({ kind: 'invalid', reason: "A folder can't go inside itself." });
   });
 });
+
+// Walkthrough 1 (C), Ruling 11's other half: an item dragged OUT of a folder is drawn at the folder's
+// item size only while it is over a folder's page; over the tab it is at its OWN size (what it
+// becomes there), at once, and back to the folder's item size over a folder again. The drop on the
+// tab is placed by that same own-size box.
+describe('the ghost follows the target: out of a folder onto the tab (walkthrough 1 C)', () => {
+  /** k1 is a Large tile (4×4 cells = 200 px on the tab) shown at F's Medium item size (100 px). */
+  function largeInF() {
+    resetEditor();
+    const d = dash();
+    const f = d.tabs[0].root.children[1] as FolderNode;
+    f.content.children[0] = tile('k1', undefined, { size: 'large' });
+    setLayout([d]);
+    startSession();
+    setActiveTab('t1');
+    sourceRect = { left: 0, top: 300, width: 100, height: 100 };
+    hit = onPage(['k1', 'k2', 'k3', 'k4'], 0, 4);
+    start('k1', 50, 310); // grabbed at (fx 0.5, fy 0.1) of its 100 px box
+  }
+  const onTab = (x: number, y: number): HitResult =>
+    ({ container: { ref: { tabId: 't1' }, metrics: GRID, layout: 'grid', left: 0, top: 0 }, dx: x, dy: y });
+
+  it('over the tab the ghost is the item\'s own size (Large: 200 px), grabbed at the same point; back over F, F\'s item size', async () => {
+    const { container } = render(DragLayer, { tabId: 't1' });
+    largeInF();
+    moveTo(60, 320);
+    await tick();
+    const g = container.ownerDocument.querySelector('.drag-layer .ghost') as HTMLElement;
+    expect(g.style.width).toBe('100px');
+    hit = onTab;
+    moveTo(900, 700);
+    await tick();
+    expect(g.style.width).toBe('200px');
+    expect(g.style.height).toBe('200px');
+    expect(g.style.left).toBe('800px'); // 900 − 0.5 × 200
+    expect(g.style.top).toBe('680px'); // 700 − 0.1 × 200
+    hit = onPage(['k1', 'k2', 'k3', 'k4'], 0, 4);
+    moveTo(150, 310);
+    await tick();
+    expect(g.style.width).toBe('100px');
+    expect(g.style.top).toBe('300px');
+  });
+
+  it('the drop on the tab lands where its own-size ghost is drawn', () => {
+    largeInF();
+    hit = onTab;
+    moveTo(900, 700);
+    expect(get(drag)!.ghostShown).toEqual({ widthPx: 200, heightPx: 200 });
+    drop(900, 700);
+    const k1 = nodeIn(draft(), 'k1')!;
+    // Ghost top-left (800, 680) → cell (16, 13.6 → 14), 4×4.
+    expect(k1.placement).toMatchObject({ x: 16, y: 14, w: 4, h: 4 });
+  });
+
+  it('an item dragged on the tab keeps its rendered ghost (nothing changes for tab-to-tab drags)', () => {
+    sourceRect = { left: 0, top: 0, width: 100, height: 100 };
+    start('a', 50, 50);
+    hit = onTab;
+    moveTo(600, 400);
+    expect(get(drag)!.ghostShown).toBeUndefined();
+  });
+});

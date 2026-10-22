@@ -7,6 +7,7 @@
    * only its click (and double-click) stop here, so editing never also selects or switches.
    */
   import Icon from '@iconify/svelte';
+  import { cornerHandleFit } from '$lib/editor/handleFit';
 
   interface Props {
     /** The item's name, for the accessible label "Edit <name>". */
@@ -21,6 +22,38 @@
     placement?: 'corner' | 'inline';
   }
   let { name, onEdit, label, placement = 'corner' }: Props = $props();
+
+  /**
+   * A corner handle is sized to its host and never over the host's centre (walkthrough 1 C,
+   * handleFit): a click in an item's middle always reaches the item. Measured on the host (the
+   * handle's parent) whenever it resizes; an item too small to hold it clear of its centre has it
+   * hung just outside its top-right corner. Without ResizeObserver (test DOMs) the CSS default holds.
+   */
+  function fitCorner(el: HTMLElement, on: boolean) {
+    let ro: ResizeObserver | null = null;
+    const apply = () => {
+      const host = el.parentElement;
+      if (!host) return;
+      const r = host.getBoundingClientRect();
+      const f = cornerHandleFit(r.width, r.height);
+      el.style.setProperty('--eh-size', `${f.sizePx}px`);
+      el.style.setProperty('--eh-offset', `${f.offsetPx}px`);
+      el.toggleAttribute('data-outside', f.outside);
+    };
+    const start = (yes: boolean) => {
+      ro?.disconnect();
+      ro = null;
+      if (!yes || typeof ResizeObserver === 'undefined' || !el.parentElement) return;
+      ro = new ResizeObserver(apply);
+      ro.observe(el.parentElement);
+      apply();
+    };
+    start(on);
+    return {
+      update: start,
+      destroy: () => ro?.disconnect()
+    };
+  }
   const aria = $derived(`Edit ${name?.trim() ? name : 'Untitled'}`);
 
   /**
@@ -55,6 +88,7 @@
   aria-label={aria}
   title={aria}
   use:ownEvents
+  use:fitCorner={placement === 'corner' && !label}
 >
   <Icon icon="mdi:pencil" width="16" />
   {#if label}<span class="text">{label}</span>{/if}
@@ -83,11 +117,16 @@
     font-size: 0.85rem;
     line-height: 1;
   }
+  /* Top-right, sized to the item and clear of its centre (fitCorner sets the two values). */
   .edit-handle.corner {
     position: absolute;
-    top: 0.25rem;
-    right: 0.25rem;
+    top: var(--eh-offset, 0.25rem);
+    right: var(--eh-offset, 0.25rem);
     z-index: 4;
+    min-width: var(--eh-size, 1.75rem);
+    width: var(--eh-size, 1.75rem);
+    height: var(--eh-size, 1.75rem);
+    padding: 0;
   }
   .edit-handle.labelled {
     padding: 0 0.6rem;

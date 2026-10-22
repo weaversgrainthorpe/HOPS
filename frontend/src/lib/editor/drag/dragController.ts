@@ -976,12 +976,23 @@ function frame() {
 }
 
 /**
- * The ghost's size over `hit`: on an open folder's page, the size its items are drawn at (the
- * rendered box of one, else its contents size in cells), since that is what the dragged item would
- * be there; elsewhere undefined (the item's own rendered size).
+ * The ghost's size over `hit`: what the dragged item would be there (Ruling 11, both ways).
+ * - On an open folder's page: the size its items are drawn at (the rendered box of one, else its
+ *   contents size in cells).
+ * - On a tab's grid, for an item that comes from a folder (`ownCells`: its own span on a tab, as the
+ *   drop places it): its OWN size, those cells at the tab's cell size — at once, not on the drop.
+ * - Otherwise undefined: the item's own rendered size (a tab item over its tab, the tab bar, a phone).
  */
-export function ghostOver(hit: HitResult): { widthPx: number; heightPx: number } | undefined {
+export function ghostOver(
+  hit: HitResult, ownCells?: { w: number; h: number }
+): { widthPx: number; heightPx: number } | undefined {
   const c = hit.container;
+  if (c && c.layout === 'grid' && c.ref.folderId === undefined && ownCells) {
+    const m = c.metrics;
+    const w = Math.min(ownCells.w, m.columns) * m.unitPx;
+    const h = ownCells.h * m.rowPx;
+    return w > 0 && h > 0 ? { widthPx: Math.max(24, w), heightPx: Math.max(24, h) } : undefined;
+  }
   if (!c || c.layout !== 'flow') return undefined;
   const b = hit.flowPage?.boxes[0];
   if (b && b.width > 0 && b.height > 0) return { widthPx: b.width, heightPx: b.height };
@@ -992,6 +1003,20 @@ export function ghostOver(hit: HitResult): { widthPx: number; heightPx: number }
 }
 
 /**
+ * The grabbed item's own span on a tab (what the drop there places, resolveDrop's sizes), when it
+ * comes from inside a folder — there it is drawn at the folder's item size, not its own. Undefined
+ * for an item already on a tab (its rendered box is its own size).
+ */
+function ownTabCells(s: DragState): { w: number; h: number } | undefined {
+  const d = currentDraft();
+  const id = s.ids[0];
+  if (!d || !id) return undefined;
+  if (containerOfNode(d, id)?.folderId === undefined) return undefined;
+  const n = findIn(d, id);
+  return n ? sizeFor(n) : undefined;
+}
+
+/**
  * The hit test for an item drag's frame: what is under the pointer, plus (when the ghost's visual
  * centre is elsewhere) the item under that centre, which the merge / into-folder zone is judged by.
  * Layout reads happen only here, once per frame (Tenet 4).
@@ -999,7 +1024,7 @@ export function ghostOver(hit: HitResult): { widthPx: number; heightPx: number }
 function hitFor(s: DragState): HitResult {
   const dragged = new Set(s.ids);
   const hit = env.hitTest(s.pointer.x, s.pointer.y, dragged);
-  s.ghostShown = s.tab === undefined && s.ghost ? ghostOver(hit) : undefined;
+  s.ghostShown = s.tab === undefined && s.ghost ? ghostOver(hit, ownTabCells(s)) : undefined;
   if (s.tab !== undefined || s.ids.length === 0 || !s.ghost || !s.grab) return hit;
   const c = visualCentre(s);
   if (Math.abs(c.x - s.pointer.x) < 0.5 && Math.abs(c.y - s.pointer.y) < 0.5) return hit;

@@ -230,11 +230,21 @@
   // bar's own width (a window resize) and whenever what it holds changes; all before the next paint
   // (a ResizeObserver callback, then microtasks), so no level flashes. The bar's width never depends
   // on the level, so this never loops.
+  //
+  // First, the dashboard links (walkthrough 1 C): while some are in More, the right-hand controls go
+  // compact (.tight: icons only — no "Editing" text, Log out as its icon — and tighter gaps) when
+  // that shows more links. Nothing is hidden or moved into a menu: every control stays, smaller.
   const MAX_COMPACT = 6;
   let navContentEl = $state<HTMLElement | null>(null);
   let compact = $state(0);
+  let tight = $state(false);
   let fitting = false;
   let fitAgain = false;
+  /** How many links show now (measured at once, not on the next ResizeObserver round). */
+  function linksShown(): number {
+    measureLinks();
+    return Math.min(shownCount, navDashboards.length);
+  }
   async function fitBar() {
     if (!navContentEl) return;
     if (fitting) {
@@ -246,11 +256,28 @@
       do {
         fitAgain = false;
         compact = 0;
+        tight = false;
         await tick();
+        if (dashEl && measureEl && navDashboards.length > 0) {
+          const roomy = linksShown();
+          if (roomy < navDashboards.length) {
+            tight = true;
+            await tick();
+            // Compact only when it shows more links (the title stays centred, so it may not).
+            if (linksShown() <= roomy) {
+              tight = false;
+              await tick();
+              measureLinks();
+            }
+          }
+        }
         while (navContentEl && compact < MAX_COMPACT && navContentEl.scrollWidth > navContentEl.clientWidth + 0.5) {
           compact++;
           await tick();
         }
+        // Let the effects of this run's own changes (how many links show) settle while it still
+        // counts as fitting, so they never start another run.
+        await tick();
       } while (fitAgain);
     } finally {
       fitting = false;
@@ -264,8 +291,16 @@
   });
   // What the bar holds: edit mode, signed in or not, the page, the title, the text size, the links.
   $effect(() => {
-    void [$editMode, $isAuthenticated, isDashboardPage, showLeft, showCenter, leftText, centerTitle, pageDashboard?.name, $textSize, moreWidthPx, moreLinks.length];
+    void [$editMode, $isAuthenticated, isDashboardPage, showLeft, showCenter, leftText, centerTitle, pageDashboard?.name, $textSize, navDashboards];
     untrack(() => void fitBar());
+  });
+  // The More button coming or going changes what the bar needs. fitBar itself changes how many links
+  // show while it runs (it measures with and without .tight): those changes are its own, not news.
+  $effect(() => {
+    void [moreWidthPx, moreLinks.length];
+    untrack(() => {
+      if (!fitting) void fitBar();
+    });
   });
 </script>
 
@@ -280,6 +315,7 @@
     class:c4={compact >= 4}
     class:c5={compact >= 5}
     class:c6={compact >= 6}
+    class:tight
     bind:this={navContentEl}
   >
     <div class="nav-left">
@@ -984,6 +1020,27 @@
     }
   }
 
+  /* Some dashboard links are in More: the controls go compact so more links show (fitBar). Icons
+     only and tighter gaps; every control stays, at its full tap size. */
+  .tight .nav-right {
+    gap: 0.5rem;
+  }
+
+  .tight .edit-label,
+  .tight .logout-label {
+    display: none;
+  }
+
+  .tight .edit-toggle {
+    width: 44px;
+    padding: 0;
+    border-radius: 50%;
+  }
+
+  .tight .logout-btn {
+    padding: 0 0.5rem;
+  }
+
   .c2 .wordmark {
     display: none;
   }
@@ -1019,6 +1076,11 @@
   .c4 .edit-toggle {
     height: 40px;
     padding: 0 0.6rem;
+  }
+
+  .c4.tight .edit-toggle {
+    width: 40px;
+    padding: 0;
   }
 
   .c4 .logout-label {
