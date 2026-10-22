@@ -3,19 +3,21 @@
  * LayoutDashboard (or Container) and returns a NEW value; inputs are never
  * mutated. Invalid operations throw TreeOpError with a user-facing message.
  *
- * Grid gaps persist: moving or deleting never shifts any other node. Only
- * pushAside (an explicit reflow for a drop target) relocates displaced nodes.
+ * Two kinds of container (M5, one folder model):
+ * - a TAB's root: a 24-column grid of placed items. Gaps persist: moving or deleting never shifts
+ *   any other node; only pushAside (an explicit reflow for a drop target) relocates displaced
+ *   nodes. A tile on a tab always takes its Size's span (S 1 x 1, M 2 x 2, L 4 x 4).
+ * - a FOLDER's content: an ORDERED list with no placements. Items are inserted at an index.
  */
-import type {
-  Container, FolderNode, LayoutDashboard, LayoutMode, LayoutNode, LayoutTab, Placement
-} from '../types/layout';
+import type { Container, FolderNode, LayoutDashboard, LayoutNode, LayoutTab, Placement } from '../types/layout';
 import {
-  DEFAULT_DESIGN_WIDTH, FREE_UNIT_PX, GRID_TITLE_ROWS, MEDIUM_CELLS, ROOT_COLUMNS, clampPlacement, containerColumns,
-  containerMetrics, folderInnerMetrics, freeSideOf, gridContentRows, isRenderable, readingOrder, requiredFolderHeightPx, resolveMode
+  GRID_TITLE_ROWS, ROOT_COLUMNS, clampPlacement, containerColumns, defaultFolderBox, isPlaced, sizeSpan, tabSpan
 } from '../layout/geometry';
 
 export type ContainerRef = { tabId: string; folderId?: string }; // folderId absent = tab root
 export interface NodeLocation { tabId: string; folderChain: string[]; index: number }
+/** Where items go: placements on a tab (one per item), or an index in a folder's order. */
+export type Where = Placement[] | number;
 
 export class TreeOpError extends Error {
   constructor(message: string) {
@@ -67,23 +69,28 @@ function folderPath(children: LayoutNode[], folderId: string): FolderNode[] | un
   return undefined;
 }
 
-interface Resolved { tab: LayoutTab; chain: FolderNode[]; container: Container; folder?: FolderNode; mode: LayoutMode }
+interface Resolved { tab: LayoutTab; chain: FolderNode[]; container: Container; folder?: FolderNode }
 
 function resolveRef(d: LayoutDashboard, ref: ContainerRef): Resolved {
   const tab = findTab(d, ref.tabId);
-  if (ref.folderId === undefined) return { tab, chain: [], container: tab.root, mode: resolveMode(d, tab, []) };
+  if (ref.folderId === undefined) return { tab, chain: [], container: tab.root };
   const chain = folderPath(kids(tab.root), ref.folderId);
   if (!chain) throw new TreeOpError('That folder no longer exists.');
   const folder = chain[chain.length - 1];
-  return { tab, chain, container: folder.content, folder, mode: resolveMode(d, tab, chain) };
+  return { tab, chain, container: folder.content, folder };
 }
 
-/** The container a ref names, with its resolved mode and column count (throws TreeOpError if gone). */
+/**
+ * The container a ref names (throws TreeOpError if gone): a tab root (`columns` = its grid's) or a
+ * folder's ordered content (`columns` 0: it has none).
+ */
 export function resolveContainer(
   d: LayoutDashboard, ref: ContainerRef
-): { container: Container; mode: LayoutMode; columns: number; folder?: FolderNode } {
+): { kind: 'tab' | 'folder'; container: Container; columns: number; folder?: FolderNode } {
   const r = resolveRef(d, ref);
-  return { container: r.container, mode: r.mode, columns: containerColumns(r.container, r.folder), folder: r.folder };
+  return r.folder
+    ? { kind: 'folder', container: r.container, columns: 0, folder: r.folder }
+    : { kind: 'tab', container: r.container, columns: containerColumns(r.container) };
 }
 
 export function locate(d: LayoutDashboard, nodeId: string): NodeLocation | undefined {
@@ -122,6 +129,11 @@ function findNode(d: LayoutDashboard, id: string): LayoutNode {
 function mustFind(d: LayoutDashboard, ids: string[]): LayoutNode[] {
   if (new Set(ids).size !== ids.length) throw new TreeOpError('The same item was selected twice.');
   return ids.map((id) => findNode(d, id));
+}
+
+function refOf(loc: NodeLocation): ContainerRef {
+  const folderId = loc.folderChain[loc.folderChain.length - 1];
+  return folderId === undefined ? { tabId: loc.tabId } : { tabId: loc.tabId, folderId };
 }
 
 // ---------------------------------------------------------------- immutable rewriting
@@ -165,7 +177,35 @@ function removeIds(d: LayoutDashboard, ids: Set<string>): LayoutDashboard {
   return mapTabs(d, (n) => (ids.has(n.id) ? null : n));
 }
 
-// ---------------------------------------------------------------- placement validation
+// ---------------------------------------------------------------- shapes per level
+
+/** A node as it sits in a folder: no placement (M5). Its own size is kept. */
+function unplaced(n: LayoutNode): LayoutNode {
+  if (!('placement' in n)) return n;
+  const out = { ...n } as Record<string, unknown>;
+  delete out.placement;
+  return out as unknown as LayoutNode;
+}
+
+/**
+ * A node as it sits on a tab at `at`: validated inside the columns; a tile takes its Size's span
+ * whatever was asked (its size is the truth, M5 §2); a folder arriving from inside a folder is
+ * minimised (M5 §3a.3).
+ */
+function placedOnTab(n: LayoutNode, at: Placement, cols: number, fromFolder: boolean): LayoutNode {
+  finitePlacement(at);
+  const span = n.kind === 'tile' ? sizeSpan(n.size) : undefined;
+  const p: Placement = { x: at.x, y: at.y, w: span ?? at.w, h: span ?? at.h };
+  if (at.z !== undefined) p.z = at.z;
+  if (!Number.isInteger(p.x) || !Number.isInteger(p.y) || !Number.isInteger(p.w) || !Number.isInteger(p.h)) {
+    throw new TreeOpError('That position is not valid.');
+  }
+  if (p.x < 0 || p.y < 0 || p.w < 1 || p.h < 1 || p.x + p.w > cols) {
+    throw new TreeOpError('That position is outside the grid.');
+  }
+  if (n.kind === 'folder' && fromFolder) return { ...n, display: 'collapsed', placement: p };
+  return { ...n, placement: p } as LayoutNode;
+}
 
 function finitePlacement(p: Placement): void {
   for (const k of ['x', 'y', 'w', 'h'] as const) {
@@ -173,21 +213,13 @@ function finitePlacement(p: Placement): void {
   }
 }
 
-/**
- * Validate a placement for a container. Grid: must lie wholly inside the columns
- * (else TreeOpError). Free: the design extent is soft, so it is clamped.
- */
-function checkedPlacement(p: Placement, r: Resolved): Placement {
-  finitePlacement(p);
-  const cols = containerColumns(r.container, r.folder);
-  if (r.mode === 'free') return clampPlacement(p, cols);
-  if (p.x < 0 || p.y < 0 || p.w < 1 || p.h < 1 || p.x + p.w > cols) {
-    throw new TreeOpError('That position is outside the grid.');
-  }
-  const out: Placement = { x: p.x, y: p.y, w: p.w, h: p.h };
-  if (p.z !== undefined) out.z = p.z;
-  return out;
+/** An index into a folder's order: a whole number (clamped to the list by the insert). */
+function checkIndex(i: unknown): number {
+  if (typeof i !== 'number' || !Number.isInteger(i)) throw new TreeOpError('That position in the folder is not valid.');
+  return i;
 }
+
+const END = Number.MAX_SAFE_INTEGER;
 
 // ---------------------------------------------------------------- grid overlap contract (Ruling 11)
 
@@ -195,13 +227,13 @@ const overlaps = (a: Placement, b: Placement): boolean =>
   a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 
 /**
- * Grid containers never hold overlapping siblings. Throws "That space is taken" if any node in
- * `only` (default: all) overlaps another. Checking only the changed ids keeps legacy overlaps
- * elsewhere in the container from blocking unrelated edits. Free containers never call this.
+ * A tab never holds overlapping items. Throws "That space is taken" if any node in `only`
+ * (default: all) overlaps another. Checking only the changed ids keeps legacy overlaps elsewhere
+ * from blocking unrelated edits.
  */
 export function assertGridNoOverlap(c: Container, only?: Set<string>): void {
   const cols = containerColumns(c);
-  const nodes = kids(c).filter(isRenderable).map((n) => ({ id: n.id, p: clampPlacement(n.placement, cols) }));
+  const nodes = kids(c).filter(isPlaced).map((n) => ({ id: n.id, p: clampPlacement(n.placement, cols) }));
   for (let i = 0; i < nodes.length; i++) {
     for (let j = i + 1; j < nodes.length; j++) {
       if (only && !only.has(nodes[i].id) && !only.has(nodes[j].id)) continue;
@@ -211,16 +243,14 @@ export function assertGridNoOverlap(c: Container, only?: Set<string>): void {
 }
 
 /**
- * True when `p` can go in `c` as it is: a grid needs it inside the columns and clear of every
- * sibling's STORED footprint (a collapsed folder's reserved cells count, Ruling 13); free
- * containers tolerate overlap, so any finite position is fine there.
+ * True when `p` can go on tab root `c` as it is: inside the columns and clear of every sibling's
+ * STORED footprint (a minimised folder's reserved cells count, Ruling 13).
  */
-export function cellIsFree(c: Container, p: Placement, mode: LayoutMode): boolean {
+export function cellIsFree(c: Container, p: Placement): boolean {
   if (![p.x, p.y, p.w, p.h].every((v) => typeof v === 'number' && Number.isFinite(v))) return false;
-  if (mode === 'free') return p.x >= 0 && p.y >= 0;
   const cols = containerColumns(c);
   if (p.x < 0 || p.y < 0 || p.w < 1 || p.h < 1 || p.x + p.w > cols) return false;
-  return !kids(c).filter(isRenderable).some((n) => overlaps(clampPlacement(n.placement, cols), p));
+  return !kids(c).filter(isPlaced).some((n) => overlaps(clampPlacement(n.placement, cols), p));
 }
 
 /** Apply a pushAside map to a children list (ids not present are ignored). */
@@ -229,80 +259,103 @@ function applyPush(children: LayoutNode[], push?: Map<string, Placement>): Layou
   return children.map((n) => (push.has(n.id) ? ({ ...n, placement: push.get(n.id) } as LayoutNode) : n));
 }
 
-/** Append `add` to the container at `to`, applying `push` to its siblings; grid result must not overlap. */
-function commitToContainer(
-  d: LayoutDashboard, to: ContainerRef, r: Resolved, add: LayoutNode[], push?: Map<string, Placement>
+/**
+ * Put `add` (already shaped for the level) into the container at `to`: appended on a tab, with
+ * `push` applied to its siblings and no overlap; inserted at `index` in a folder (no push there).
+ */
+function commit(
+  d: LayoutDashboard, to: ContainerRef, add: LayoutNode[], index: number | undefined, push?: Map<string, Placement>
 ): LayoutDashboard {
+  if (to.folderId !== undefined) {
+    if (push && push.size > 0) throw new TreeOpError('Items in a folder are not placed, so nothing can be pushed aside.');
+    return editContainer(d, to, (c) => {
+      const list = [...kids(c)];
+      const at = Math.min(Math.max(0, index ?? END), list.length);
+      list.splice(at, 0, ...add);
+      return { ...c, children: list };
+    });
+  }
   const changed = new Set<string>([...add.map((a) => a.id), ...(push ? push.keys() : [])]);
-  return fitAncestors(editContainer(d, to, (c) => {
+  return editContainer(d, to, (c) => {
     const next = { ...c, children: [...applyPush(kids(c), push), ...add] };
-    if (r.mode === 'grid') assertGridNoOverlap(next, changed);
+    assertGridNoOverlap(next, changed);
     return next;
-  }), to);
+  });
 }
 
 /**
- * Ruling 2 (parent spec §6.3: tiles keep their physical size inside and outside folders): grid
- * content is never squashed. After the content of the container at `ref` changes, every folder on
- * the chain (innermost first) whose content now needs more rows than it has grows to fit
- * (minFolderHeight: content rows + the title row), pushing its own neighbours aside with the M3
- * push (pushAside), so nothing overlaps. Only a grid folder in a grid parent fits its rows to its
- * height (geometry's folderInnerMetrics); elsewhere folders already grow past their box, so the
- * walk stops there. Grid rows are unbounded, so a grown folder always has room; anything
- * impossible throws TreeOpError (shown, never silent).
+ * The shaped nodes and folder index for `nodes` going to `to` at `where`. A tab needs one
+ * placement per item; a folder takes an index (placements given for a folder mean "at the end").
  */
-function fitAncestors(d: LayoutDashboard, ref: ContainerRef): LayoutDashboard {
-  let cur = d;
-  let folderId = ref.folderId;
-  while (folderId !== undefined) {
-    const r = resolveRef(cur, { tabId: ref.tabId, folderId });
-    const f = r.folder as FolderNode;
-    const parentRef: ContainerRef = { tabId: ref.tabId, folderId: r.chain.length > 1 ? r.chain[r.chain.length - 2].id : undefined };
-    const parent = resolveRef(cur, parentRef);
-    if (r.mode !== 'grid' || parent.mode !== 'grid') break;
-    const cols = containerColumns(parent.container, parent.folder);
-    const pl = clampPlacement(f.placement, cols);
-    const need = minFolderHeight(f, pl.w, parent.mode, cols);
-    if (pl.h >= need) break;
-    const at: Placement = { ...pl, h: need };
-    const push = pushAside(parent.container, new Set([f.id]), at);
-    const changed = new Set<string>([f.id, ...push.keys()]);
-    cur = editContainer(cur, parentRef, (c) => {
-      const next = {
-        ...c,
-        children: applyPush(kids(c), push).map((n) => (n.id === f.id ? ({ ...n, placement: at } as LayoutNode) : n))
-      };
-      assertGridNoOverlap(next, changed);
-      return next;
-    });
-    folderId = parentRef.folderId;
+function shapeFor(
+  d: LayoutDashboard, to: ContainerRef, nodes: LayoutNode[], where: Where, fromFolder: boolean[]
+): { add: LayoutNode[]; index?: number } {
+  const r = resolveRef(d, to);
+  if (r.folder) {
+    const index = typeof where === 'number' ? checkIndex(where) : END;
+    return { add: nodes.map(unplaced), index };
   }
-  return cur;
+  if (!Array.isArray(where) || where.length !== nodes.length) {
+    throw new TreeOpError('Each item placed on the tab needs a position.');
+  }
+  const cols = containerColumns(r.container);
+  return { add: nodes.map((n, i) => placedOnTab(n, where[i], cols, fromFolder[i])) };
+}
+
+function fromFolderFlags(d: LayoutDashboard, ids: string[]): boolean[] {
+  return ids.map((id) => (locate(d, id)?.folderChain.length ?? 0) > 0);
 }
 
 // ---------------------------------------------------------------- move / copy / insert
 
-export function moveNodes(
-  d: LayoutDashboard, ids: string[], to: ContainerRef, at: Placement[], push?: Map<string, Placement>
-): LayoutDashboard {
-  if (ids.length !== at.length) throw new TreeOpError('Each moved item needs a position.');
-  const nodes = mustFind(d, ids);
-  const target = resolveRef(d, to);
-  const idSet = new Set(ids);
+function checkMovable(d: LayoutDashboard, nodes: LayoutNode[], toFolderId: string | undefined, verb: string): void {
+  const idSet = new Set(nodes.map((n) => n.id));
   for (const n of nodes) {
-    if (n.kind === 'folder' && (n.id === to.folderId || (to.folderId && isDescendant(d, n.id, to.folderId)))) {
+    if (n.kind === 'folder' && toFolderId !== undefined && (n.id === toFolderId || isDescendant(d, n.id, toFolderId))) {
       throw new TreeOpError('A folder cannot be moved into itself.');
     }
     const loc = locate(d, n.id)!;
     if (loc.folderChain.some((f) => idSet.has(f))) {
-      throw new TreeOpError('An item cannot be moved together with the folder that contains it.');
+      throw new TreeOpError(`An item cannot be ${verb} together with the folder that contains it.`);
     }
   }
-  // Across modes, a node is converted (size and inheriting content) on the one path: convertNode.
-  const placed = nodes.map(
-    (n, i) => ({ ...adaptNode(d, n, originOf(d, n.id), to), placement: checkedPlacement(at[i], target) }) as LayoutNode
-  );
-  return commitToContainer(removeIds(d, idSet), to, target, placed, push);
+}
+
+/**
+ * THE move: `ids` to `to` — tab ⇄ folder, folder ⇄ folder, within one folder — at `where`
+ * (placements on a tab, an index in a folder). In a folder the index counts the items that stay
+ * (the moved ones are taken out first), and several items keep their given order there. A folder
+ * into itself or a descendant is refused, as is an item moved with the folder that holds it.
+ */
+export function moveBetween(
+  d: LayoutDashboard, ids: string[], to: ContainerRef, where: Where, push?: Map<string, Placement>
+): LayoutDashboard {
+  const nodes = mustFind(d, ids);
+  resolveRef(d, to);
+  checkMovable(d, nodes, to.folderId, 'moved');
+  const { add, index } = shapeFor(d, to, nodes, where, fromFolderFlags(d, ids));
+  return commit(removeIds(d, new Set(ids)), to, add, index, push);
+}
+
+/** Move `ids` to `to`: at `at` on a tab; at the end of a folder (use moveBetween for an index). */
+export function moveNodes(
+  d: LayoutDashboard, ids: string[], to: ContainerRef, at: Placement[], push?: Map<string, Placement>
+): LayoutDashboard {
+  return moveBetween(d, ids, to, to.folderId !== undefined ? END : at, push);
+}
+
+/** Reorder one direct child of a folder to `toIndex` (among the others). Same place → same dashboard. */
+export function reorderInFolder(d: LayoutDashboard, folderId: string, nodeId: string, toIndex: number): LayoutDashboard {
+  checkIndex(toIndex);
+  const loc = locate(d, folderId);
+  if (!loc) throw new TreeOpError('That folder no longer exists.');
+  const f = findNode(d, folderId);
+  if (f.kind !== 'folder') throw new TreeOpError('Only a folder keeps its items in order.');
+  const list = kids(f.content);
+  const from = list.findIndex((n) => n.id === nodeId);
+  if (from === -1) throw new TreeOpError('That item is not in this folder.');
+  if (Math.min(Math.max(0, toIndex), list.length - 1) === from) return d;
+  return moveBetween(d, [nodeId], { tabId: loc.tabId, folderId }, toIndex);
 }
 
 /** Deep-copy a node with fresh ids (nodes and every descendant) drawn from `used`. */
@@ -316,49 +369,39 @@ function cloneWithNewIds(node: LayoutNode, used: Set<string>): LayoutNode {
   return copy;
 }
 
+/** Deep copies of `ids` (fresh ids avoiding `allIds`) put in `to` at `where`. */
 export function copyNodes(
-  d: LayoutDashboard, ids: string[], to: ContainerRef, at: Placement[], allIds: Set<string>,
+  d: LayoutDashboard, ids: string[], to: ContainerRef, where: Where, allIds: Set<string>,
   push?: Map<string, Placement>
 ): { dashboard: LayoutDashboard; newIds: string[] } {
-  if (ids.length !== at.length) throw new TreeOpError('Each copied item needs a position.');
   const nodes = mustFind(d, ids);
-  const target = resolveRef(d, to);
+  resolveRef(d, to);
   const used = new Set(allIds); // never mutate the caller's set
-  const copies = nodes.map((n, i) => {
-    const c = cloneWithNewIds(adaptNode(d, n, originOf(d, n.id), to), used);
-    c.placement = checkedPlacement(at[i], target);
-    return c;
-  });
-  return {
-    dashboard: commitToContainer(d, to, target, copies, push),
-    newIds: copies.map((c) => c.id)
-  };
+  const copies = nodes.map((n) => cloneWithNewIds(n, used));
+  const { add, index } = shapeFor(d, to, copies, where, fromFolderFlags(d, ids));
+  return { dashboard: commit(d, to, add, index, push), newIds: copies.map((c) => c.id) };
 }
 
 /**
  * Paste clones of a clipboard SNAPSHOT (taken at Copy time, so later edits or deletion of the
- * originals do not change what is pasted): fresh ids for every node, avoiding `allIds`; each node
- * converted from its recorded origin when the target's mode differs; placed at `at`.
+ * originals do not change what is pasted): fresh ids for every node, avoiding `allIds`; put in `to`
+ * at `where`.
  */
 export function pasteSnapshot(
-  d: LayoutDashboard, nodes: LayoutNode[], origins: NodeOrigin[], to: ContainerRef, at: Placement[],
+  d: LayoutDashboard, nodes: LayoutNode[], to: ContainerRef, where: Where,
   allIds: Set<string>, push?: Map<string, Placement>
 ): { dashboard: LayoutDashboard; newIds: string[] } {
-  if (nodes.length !== at.length || nodes.length !== origins.length) {
-    throw new TreeOpError('Each pasted item needs a position.');
-  }
-  const target = resolveRef(d, to);
+  resolveRef(d, to);
   const used = new Set(allIds);
-  const copies = nodes.map((n, i) => {
-    const c = cloneWithNewIds(adaptNode(d, n, origins[i], to), used);
-    c.placement = checkedPlacement(at[i], target);
-    return c;
-  });
-  return { dashboard: commitToContainer(d, to, target, copies, push), newIds: copies.map((c) => c.id) };
+  const copies = nodes.map((n) => cloneWithNewIds(n, used));
+  // A snapshot with no placement came from inside a folder.
+  const { add, index } = shapeFor(d, to, copies, where, nodes.map((n) => !n.placement));
+  return { dashboard: commit(d, to, add, index, push), newIds: copies.map((c) => c.id) };
 }
 
+/** Insert a NEW node (its ids unused) into `to` at `where`. */
 export function insertNode(
-  d: LayoutDashboard, node: LayoutNode, to: ContainerRef, at: Placement, push?: Map<string, Placement>
+  d: LayoutDashboard, node: LayoutNode, to: ContainerRef, where: Placement | number, push?: Map<string, Placement>
 ): LayoutDashboard {
   const seen = new Set<string>();
   const walk = (n: LayoutNode): void => {
@@ -367,45 +410,52 @@ export function insertNode(
     if (n.kind === 'folder') kids(n.content).forEach(walk);
   };
   walk(node);
-  const target = resolveRef(d, to);
-  const placed = { ...node, placement: checkedPlacement(at, target) } as LayoutNode;
-  return commitToContainer(d, to, target, [placed], push);
+  const { add, index } = shapeFor(d, to, [node], typeof where === 'number' ? where : [where], [false]);
+  return commit(d, to, add, index, push);
 }
 
+/** Insert a NEW node into folder `folderId` at `index` (past the end appends). */
+export function insertIntoFolder(d: LayoutDashboard, folderId: string, node: LayoutNode, index: number): LayoutDashboard {
+  checkIndex(index);
+  const loc = locate(d, folderId);
+  if (!loc) throw new TreeOpError('That folder no longer exists.');
+  if (findNode(d, folderId).kind !== 'folder') throw new TreeOpError('Only a folder keeps its items in order.');
+  return insertNode(d, node, { tabId: loc.tabId, folderId }, index);
+}
+
+/**
+ * A copy of `id` next to it: inside a folder right after the source; on a tab at the first free
+ * cells of its span.
+ */
 export function duplicateNode(
   d: LayoutDashboard, id: string, allIds: Set<string>
 ): { dashboard: LayoutDashboard; newId: string } {
   const node = findNode(d, id);
   const loc = locate(d, id)!;
-  const ref: ContainerRef = { tabId: loc.tabId, folderId: loc.folderChain[loc.folderChain.length - 1] };
-  const r = resolveRef(d, ref);
-  const cell = firstFreeCell(r.container, node.placement.w, node.placement.h, r.mode);
-  if (r.mode === 'grid') cell.h = node.placement.h;
-  if (node.placement.z !== undefined) cell.z = node.placement.z;
-  const out = copyNodes(d, [id], ref, [cell], allIds);
+  const ref = refOf(loc);
+  let where: Where;
+  if (ref.folderId !== undefined) {
+    where = loc.index + 1;
+  } else {
+    const r = resolveRef(d, ref);
+    const span = tabSpan(node);
+    const cell = firstFreeCell(r.container, span.w, span.h);
+    if (node.placement?.z !== undefined) cell.z = node.placement.z;
+    where = [cell];
+  }
+  const out = copyNodes(d, [id], ref, where, allIds);
   return { dashboard: out.dashboard, newId: out.newIds[0] };
 }
 
 // ---------------------------------------------------------------- merge into a new folder
 
 /**
- * Merge `draggedIds` and the target tile into a new collapsed folder in the target's slot.
- * The folder's placement is its STORED (expanded) size; how a collapsed folder renders is the
- * renderer's business.
- * Grid parent (finer grid, spec §9: a Medium is 2 x 2 cells and a title GRID_TITLE_ROWS rows):
- * n = 1 + dragged; per = min(4, n, parent columns / 2); with every member Medium, folder
- * w = 2 * per, h = 2 * ceil(n / per) + 2 (the old 12-column layout exactly, doubled);
- * x = min(target x, columns - w) so it stays inside the grid; content.columns = w; children go
- * row-major (first free cell), target first then the dragged nodes in reading order. A tile keeps
- * its span (spec §8; the folder widens for a wide tile, up to the parent's columns, and the span is
- * clamped to that); other members are Medium; h = the content's rows + GRID_TITLE_ROWS. Nodes the
- * new footprint overlaps are pushed aside (pushAside, merged nodes excluded) inside this op, so
- * the result never overlaps.
- * Free parent (8 px units): a tile keeps its own size (spec §8), other members take the target
- * tile's; cw x ch = the largest of those; the folder is per * cw wide and ceil(n / per) * ch + 8
- * tall (8 units = 64 px, enough for the 40 px title bar and body padding) at the target's x,y;
- * content.columns = folder width; children are placed row-major in cw x ch steps. Free parents tolerate overlap.
- * `allIds` is every id in the document (all dashboards + draft); the new folder id avoids it.
+ * Merge `draggedIds` and the target tile into a new minimised folder in the target's place:
+ * `{ size: 'medium', contentSize: 'medium', content: { children: [target, ...dragged] } }`, the
+ * children in that order with no placements. On a tab the folder keeps the default open box
+ * (defaultFolderBox: 6 x 4 for Medium) at the target's top-left (shifted left at the right edge);
+ * nodes it now overlaps are pushed aside (pushAside), so the result never overlaps. Inside a folder
+ * it takes the target's index. `allIds` is every id in the document; the new folder id avoids it.
  */
 export function mergeIntoNewFolder(
   d: LayoutDashboard, draggedIds: string[], targetTileId: string, allIds: Set<string>
@@ -425,69 +475,33 @@ export function mergeIntoNewFolder(
       throw new TreeOpError('A folder cannot be moved into itself.');
     }
   }
-  const tloc = locate(d, targetTileId)!;
-  const ref: ContainerRef = { tabId: tloc.tabId, folderId: tloc.folderChain[tloc.folderChain.length - 1] };
-  const parent = resolveRef(d, ref);
-  const cols = containerColumns(parent.container, parent.folder);
-  const members = [target, ...readingOrder(dragged)];
-  const n = members.length;
-  const per = Math.min(4, n, parent.mode === 'grid' ? Math.max(1, Math.floor(cols / MEDIUM_CELLS)) : n);
-  const rows = Math.ceil(n / per);
-  const tp = target.placement;
-  // Spec §8: a TILE keeps its span in the new folder (in the parent's units, converted on the one
-  // path when it comes from another mode); other members take a Medium (2 x 2) / the target's size, as before.
-  const spanOf = (m: LayoutNode): { w: number; h: number } | undefined => {
-    if (m.kind !== 'tile') return undefined;
-    const a = m.id === target.id ? m : adaptNode(d, m, originOf(d, m.id), ref);
-    return { w: Math.max(1, Math.floor(a.placement.w)), h: Math.max(1, Math.floor(a.placement.h)) };
-  };
-  let fw: number, fh: number, fx = tp.x;
-  let children: LayoutNode[];
-  if (parent.mode === 'free') {
-    const own = { w: Math.max(1, Math.floor(tp.w)), h: Math.max(1, Math.floor(tp.h)) };
-    const spans = members.map((m) => spanOf(m) ?? own);
-    const cw = Math.max(...spans.map((s) => s.w));
-    const ch = Math.max(...spans.map((s) => s.h));
-    fw = per * cw;
-    fh = rows * ch + 8;
-    children = members.map((m, i) => {
-      const place: Placement = { x: (i % per) * cw, y: Math.floor(i / per) * ch, w: spans[i].w, h: spans[i].h };
-      return { ...m, placement: place } as LayoutNode;
-    });
-  } else {
-    // Grid: row-major first free cell in a folder `per` Medium tiles wide (wider for a wide tile,
-    // never wider than the parent); a tile's span is clamped to that width. All Medium: the old
-    // 12-column layout exactly, doubled.
-    const medium = { w: MEDIUM_CELLS, h: MEDIUM_CELLS };
-    const spans = members.map((m) => spanOf(m) ?? medium);
-    fw = Math.min(cols, Math.max(per * MEDIUM_CELLS, ...spans.map((s) => s.w)));
-    const work: Container = { columns: fw, children: [] };
-    children = members.map((m, i) => {
-      const place = firstFreeCell(work, Math.min(spans[i].w, fw), spans[i].h);
-      const placed = { ...m, placement: place } as LayoutNode;
-      work.children.push(placed);
-      return placed;
-    });
-    fh = Math.max(...children.map((c) => c.placement.y + c.placement.h)) + GRID_TITLE_ROWS;
-    fx = Math.max(0, Math.min(tp.x, cols - fw));
-  }
-  const placement: Placement = { x: fx, y: tp.y, w: fw, h: fh };
-  if (tp.z !== undefined) placement.z = tp.z;
+  const ref = refOf(locate(d, targetTileId)!);
   const folderId = uniqueId('folder', new Set(allIds));
   const folder: FolderNode = {
-    kind: 'folder', id: folderId, name: 'New folder', display: 'collapsed', layout: 'inherit',
-    shape: 'rounded', showTitle: true, placement, content: { columns: fw, children }
+    kind: 'folder', id: folderId, name: 'New folder', display: 'collapsed', size: 'medium', contentSize: 'medium',
+    shape: 'rounded', showTitle: true, content: { children: [target, ...dragged].map(unplaced) }
   };
   const without = removeIds(d, idSet);
+  if (ref.folderId !== undefined) {
+    const dashboard = editContainer(without, ref, (c) => ({
+      ...c, children: kids(c).map((x) => (x.id === targetTileId ? folder : x))
+    }));
+    return { dashboard, folderId };
+  }
   const after = resolveRef(without, ref);
-  const push = parent.mode === 'grid'
-    ? pushAside(after.container, new Set([targetTileId, ...draggedIds]), placement)
-    : undefined;
-  const dashboard = fitAncestors(editContainer(without, ref, (c) => {
+  const cols = containerColumns(after.container);
+  const box = defaultFolderBox(folder.size);
+  const w = Math.min(box.w, cols);
+  const tp = target.placement as Placement;
+  const placement: Placement = { x: Math.max(0, Math.min(Math.floor(tp.x), cols - w)), y: Math.floor(tp.y), w, h: box.h };
+  if (tp.z !== undefined) placement.z = tp.z;
+  folder.placement = placement;
+  const push = pushAside(after.container, new Set([targetTileId, ...draggedIds]), placement);
+  const dashboard = editContainer(without, ref, (c) => {
     const next = { ...c, children: applyPush(kids(c), push).map((x) => (x.id === targetTileId ? folder : x)) };
-    if (parent.mode === 'grid') assertGridNoOverlap(next, new Set([folderId, ...(push ? push.keys() : [])]));
+    assertGridNoOverlap(next, new Set([folderId, ...push.keys()]));
     return next;
-  }), ref);
+  });
   return { dashboard, folderId };
 }
 
@@ -521,45 +535,32 @@ export function deleteNodes(d: LayoutDashboard, ids: string[]): LayoutDashboard 
   return removeIds(d, new Set(ids));
 }
 
-/**
- * Nominal grid cell for minFolderHeight: the pre-finer-grid 80 px (12 columns) halved, i.e. the
- * same px per old cell, so the resize floor is the old one at every viewport width (only snapped to
- * half an old row). A larger nominal (e.g. 1280 / 24 = 53.3 px) would let fixed folder chrome
- * (title + padding) take fewer rows and loosen the floor.
- */
-const NOMINAL_CELL_PX = 80 / MEDIUM_CELLS;
-
-/**
- * Smallest height (in the parent's rows) a folder of width w can have without clipping its content.
- * Grid folder in a grid parent: its content rows + GRID_TITLE_ROWS (the title), per geometry's rows
- * rule. Otherwise geometry's requiredFolderHeightPx on a nominal parent (NOMINAL_CELL_PX cells in a
- * grid parent; 8 px in a free one), converted back to parent rows. The nominal cell is an internal
- * bound (the real unit depends on viewport width), not a rendering value.
- */
-function minFolderHeight(folder: FolderNode, w: number, parentMode: LayoutMode, parentCols: number): number {
-  const unit = parentMode === 'free' ? FREE_UNIT_PX : NOMINAL_CELL_PX;
-  const m = containerMetrics({ columns: parentCols, children: [] }, parentMode, parentCols * unit);
-  const probe: FolderNode = { ...folder, display: 'expanded', placement: { ...folder.placement, w, h: 1 } };
-  const inner = folderInnerMetrics(probe, m);
-  if (inner.mode === 'grid' && m.mode === 'grid') return gridContentRows(probe, inner.columns, 0) + GRID_TITLE_ROWS;
-  return Math.max(1, Math.ceil(requiredFolderHeightPx(probe, m) / m.rowPx - 1e-9));
+/** The tab root holding `id`, refusing an item inside a folder (it has no placement there). */
+function onTab(d: LayoutDashboard, id: string, what: string): { node: LayoutNode; ref: ContainerRef; r: Resolved } {
+  const node = findNode(d, id);
+  const loc = locate(d, id)!;
+  if (loc.folderChain.length > 0 || !isPlaced(node)) {
+    throw new TreeOpError(`Items inside a folder take its contents size and order, so they can't be ${what}.`);
+  }
+  const ref = refOf(loc);
+  return { node, ref, r: resolveRef(d, ref) };
 }
 
 /**
- * The placement resizeNode would give `id` for a requested w x h: clamped to the container's
- * columns, and an expanded folder never shorter than its content. Pure; the resize preview uses
- * it so the highlight shows exactly what the commit stores.
+ * The placement resizeNode would give folder `id` on a tab for a requested w x h: clamped to the
+ * columns, and never smaller than its title plus one item at its contents size (M5: the folder
+ * pages its contents instead of growing to fit them). Pure; the resize preview uses it so the
+ * highlight shows exactly what the commit stores.
  */
 export function resizedPlacement(d: LayoutDashboard, id: string, w: number, h: number): Placement {
-  const node = findNode(d, id);
   if (!Number.isFinite(w) || !Number.isFinite(h)) throw new TreeOpError('That size is not valid.');
-  const loc = locate(d, id)!;
-  const r = resolveRef(d, { tabId: loc.tabId, folderId: loc.folderChain[loc.folderChain.length - 1] });
-  const cols = containerColumns(r.container, r.folder);
-  const sized = clampPlacement({ ...node.placement, w, h }, cols);
-  if (node.kind === 'folder') {
-    sized.h = Math.max(sized.h, minFolderHeight(node, sized.w, r.mode, cols));
-  }
+  const { node, r } = onTab(d, id, 'resized');
+  if (node.kind !== 'folder') throw new TreeOpError('A tile takes the space of its Size — change its Size in the tile dialog instead.');
+  const cols = containerColumns(r.container);
+  const sized = clampPlacement({ ...(node.placement as Placement), w, h }, cols);
+  const item = Math.min(sizeSpan(node.contentSize), cols - sized.x);
+  sized.w = Math.max(sized.w, item);
+  sized.h = Math.max(sized.h, GRID_TITLE_ROWS + sizeSpan(node.contentSize));
   return sized;
 }
 
@@ -570,27 +571,21 @@ export function resizeNode(
 }
 
 /**
- * Put `id` at `at` (position and size) in its own container, applying `push` to its siblings
- * (pushAside, Ruling 11). Used when a tile's Size sets its span (spec §8), which may also shift
- * it left at the container's right edge. Grid: validated and never overlapping (else TreeOpError).
+ * Put `id` at `at` (position and size) on its tab, applying `push` to its siblings (pushAside,
+ * Ruling 11). Used when a tile's Size sets its span (spec §8), which may also shift it left at
+ * the right edge. Validated and never overlapping (else TreeOpError).
  */
 export function placeNode(
   d: LayoutDashboard, id: string, at: Placement, push?: Map<string, Placement>
 ): LayoutDashboard {
-  findNode(d, id);
-  const loc = locate(d, id)!;
-  const ref: ContainerRef = { tabId: loc.tabId, folderId: loc.folderChain[loc.folderChain.length - 1] };
-  const r = resolveRef(d, ref);
-  const placed = checkedPlacement(at, r);
+  const { node, ref, r } = onTab(d, id, 'placed');
+  const placed = placedOnTab(node, at, containerColumns(r.container), false);
   const changed = new Set<string>([id, ...(push ? push.keys() : [])]);
-  return fitAncestors(editContainer(d, ref, (c) => {
-    const next = {
-      ...c,
-      children: applyPush(kids(c), push).map((n) => (n.id === id ? ({ ...n, placement: placed } as LayoutNode) : n))
-    };
-    if (r.mode === 'grid') assertGridNoOverlap(next, changed);
+  return editContainer(d, ref, (c) => {
+    const next = { ...c, children: applyPush(kids(c), push).map((n) => (n.id === id ? placed : n)) };
+    assertGridNoOverlap(next, changed);
     return next;
-  }), ref);
+  });
 }
 
 const Z_LIMIT = 1000;
@@ -601,15 +596,12 @@ function zOf(n: LayoutNode | undefined): number {
 }
 
 /**
- * Bring forward (above every sibling) / send back (below every sibling). Unchanged → the same
- * dashboard. At the ±1000 limit the siblings are first renumbered 0..n-1 in their current stacking
- * order (z, then document order, as rendered), so a tie at the limit still moves past.
+ * Bring forward (above every sibling) / send back (below every sibling) on a tab. Unchanged → the
+ * same dashboard. At the ±1000 limit the siblings are first renumbered 0..n-1 in their current
+ * stacking order (z, then document order, as rendered), so a tie at the limit still moves past.
  */
 export function setZ(d: LayoutDashboard, id: string, dir: 'forward' | 'back'): LayoutDashboard {
-  const node = findNode(d, id);
-  const loc = locate(d, id)!;
-  const ref: ContainerRef = { tabId: loc.tabId, folderId: loc.folderChain[loc.folderChain.length - 1] };
-  const r = resolveRef(d, ref);
+  const { node, ref, r } = onTab(d, id, 'brought forward or sent back');
   const list = kids(r.container);
   const others = list.filter((n) => n.id !== id).map(zOf);
   const cur = zOf(node);
@@ -677,225 +669,53 @@ export function duplicateTab(
   return { dashboard: { ...d, tabs: [...d.tabs, copy] }, tabId: newId };
 }
 
-/**
- * Set a tab's layout ('inherit' | grid | free) and, for free tabs, its design width (px).
- * When the tab's effective mode changes, the tab's content is converted so it looks the same:
- * one grid cell = round(designWidth / 12 / 8) / 2 free units ("side", freeSide; may be fractional).
- * Grid → free multiplies every placement by side, rounded to whole units; free → grid divides and
- * rounds (min 1 x 1; tiles keep their span, rounded and clamped like folders), then any item that would overlap or fall outside the
- * columns goes to the first free cell, in reading order. Folders that inherit the mode are
- * converted with their content; folders with their own layout keep their content as is. The
- * root's columns follow the mode (grid: ROOT_COLUMNS = 24; free: designWidth / 8).
- */
-export function setTabLayout(
-  d: LayoutDashboard, tabId: string, layout: 'inherit' | LayoutMode, designWidth?: number
-): LayoutDashboard {
-  const tab = findTab(d, tabId);
-  if (layout !== 'inherit' && layout !== 'grid' && layout !== 'free') throw new TreeOpError('That layout is not valid.');
-  if (designWidth !== undefined && (!Number.isInteger(designWidth) || designWidth < 320 || designWidth > 7680)) {
-    throw new TreeOpError('The design width must be a whole number of pixels from 320 to 7680.');
-  }
-  const next: LayoutTab = { ...tab, layout };
-  if (designWidth !== undefined) next.designWidth = designWidth;
-  const before = resolveMode(d, tab, []);
-  const after = resolveMode(d, next, []);
-  const dw = typeof next.designWidth === 'number' && next.designWidth > 0 ? next.designWidth : DEFAULT_DESIGN_WIDTH;
-  const freeCols = Math.max(1, Math.round(dw / FREE_UNIT_PX));
-  if (before === after) {
-    if (after === 'free' && containerColumns(tab.root) !== freeCols) next.root = { ...tab.root, columns: freeCols };
-    if (next.layout === tab.layout && next.designWidth === tab.designWidth && next.root === tab.root) return d;
-    return { ...d, tabs: d.tabs.map((t) => (t.id === tabId ? next : t)) };
-  }
-  next.root = convertContainer(tab.root, after, freeSide(next), after === 'free' ? freeCols : ROOT_COLUMNS);
-  return { ...d, tabs: d.tabs.map((t) => (t.id === tabId ? next : t)) };
-}
-
-// ---------------------------------------------------------------- mode conversion (the one path)
-
-/**
- * One grid cell in free design units for a tab (geometry.freeSideOf): round(designWidth / 12 / 8) / 2,
- * half the old 12-column side (6.5 at 1280), so a Medium tile (2 cells) is exactly the old side.
- */
-export function freeSide(tab: LayoutTab | undefined): number {
-  return freeSideOf(tab?.designWidth);
-}
-
-const isInheriting = (f: FolderNode): boolean => f.layout === undefined || f.layout === 'inherit';
-
-/**
- * THE mode-conversion path (tab layout, folder layout, and move/copy/paste across modes).
- * A node sitting in a `from`-mode container is converted to look the same in a `to`-mode container
- * of `cols` columns, computed from the node's ORIGINAL values (never from already-scaled ones):
- * one grid cell = `side` free units. Grid → free multiplies by side (rounded to whole units, as side
- * may be fractional); free → grid divides and
- * rounds (min 1 x 1, tiles keep their span like folders; w clamped and x kept inside the columns). A folder that inherits its
- * mode is converted with its content; a folder with its own layout keeps its content. A
- * converted folder is never shorter than its content needs. Same mode → the node unchanged.
- */
-export function convertNode(n: LayoutNode, from: LayoutMode, to: LayoutMode, side: number, cols: number): LayoutNode {
-  if (from === to || !isRenderable(n)) return n;
-  const p = n.placement;
-  let q: Placement;
-  if (to === 'free') {
-    // Round the EDGES (not x and w separately): side may be fractional (6.5), and rounding w on its
-    // own made an odd-x cell overlap its right neighbour by one unit.
-    const u = (v: number) => Math.round(v * side);
-    q = { x: u(p.x), y: u(p.y), w: Math.max(1, u(p.x + p.w) - u(p.x)), h: Math.max(1, u(p.y + p.h) - u(p.y)) };
-  } else {
-    // Tiles and folders alike: rounded to cells (a tile keeps its span, spec §8 — Large 4·side -> 4).
-    const w = Math.max(1, Math.round(p.w / side));
-    const h = Math.max(1, Math.round(p.h / side));
-    const qw = Math.min(w, cols);
-    q = { x: Math.min(Math.max(0, Math.round(p.x / side)), cols - qw), y: Math.max(0, Math.round(p.y / side)), w: qw, h };
-  }
-  if (p.z !== undefined) q.z = p.z;
-  if (n.kind === 'tile') return { ...n, placement: q };
-  let out: FolderNode = { ...n, placement: q };
-  if (isInheriting(n)) {
-    out = { ...out, content: convertContainer(n.content, to, side, innerColumnsFor(n, to, side)) };
-  }
-  q.h = Math.max(q.h, minFolderHeight(out, q.w, to, cols));
-  return out;
-}
-
-/** A folder's content columns after its content changes mode (from its ORIGINAL columns). */
-function innerColumnsFor(f: FolderNode, to: LayoutMode, side: number): number {
-  const c = containerColumns(f.content, f);
-  return to === 'free' ? Math.max(1, Math.round(c * side)) : Math.max(1, Math.round(c / side));
-}
-
-/** Convert every child of a container to `to` mode; `cols` = the result's columns. Grid: no overlaps. */
-function convertContainer(c: Container, to: LayoutMode, side: number, cols: number): Container {
-  const from: LayoutMode = to === 'free' ? 'grid' : 'free';
-  const converted = kids(c).map((n) => convertNode(n, from, to, side, cols));
-  if (to === 'free') return { ...c, columns: cols, children: converted };
-  return { ...c, columns: cols, children: settleGrid(converted, cols) };
-}
-
-/** Grid: keep each item where it is when it fits; otherwise the first free cell, in reading order. */
-function settleGrid(children: LayoutNode[], cols: number): LayoutNode[] {
-  const placed: LayoutNode[] = [];
-  const work: Container = { columns: cols, children: placed };
-  for (const n of readingOrder(children.filter(isRenderable))) {
-    const p = n.placement;
-    const fits = p.x + p.w <= cols && !placed.some((m) => overlaps(m.placement, p));
-    placed.push(fits ? n : ({ ...n, placement: { ...firstFreeCell(work, p.w, p.h), ...(p.z !== undefined ? { z: p.z } : {}) } } as LayoutNode));
-  }
-  const byId = new Map(placed.map((n) => [n.id, n]));
-  return children.map((n) => (isRenderable(n) ? byId.get(n.id)! : n));
-}
-
-/** Where a node sits: its container's mode and its tab's free side (the inputs convertNode needs). */
-export interface NodeOrigin { mode: LayoutMode; side: number }
-
-export function originOf(d: LayoutDashboard, id: string): NodeOrigin {
-  const loc = locate(d, id);
-  if (!loc) throw new TreeOpError('That item no longer exists.');
-  const r = resolveRef(d, { tabId: loc.tabId, folderId: loc.folderChain[loc.folderChain.length - 1] });
-  return { mode: r.mode, side: freeSide(r.tab) };
-}
-
-/**
- * A node as it should go into `to` (converted when the modes differ). The side comes from the
- * free end: the target tab's when going to free, the origin's when coming from free.
- */
-export function adaptNode(d: LayoutDashboard, n: LayoutNode, origin: NodeOrigin, to: ContainerRef): LayoutNode {
-  const r = resolveRef(d, to);
-  if (origin.mode === r.mode) return n;
-  const side = r.mode === 'free' ? freeSide(r.tab) : origin.side;
-  return convertNode(n, origin.mode, r.mode, side, containerColumns(r.container, r.folder));
-}
-
-/**
- * Set a folder's own layout ('inherit' | grid | free). When its content's effective mode changes,
- * the content is converted (convertNode); the folder keeps its place and grows if its content now
- * needs more height (neighbours in a grid are pushed aside, never overlapped). Unchanged → same d.
- */
-export function setFolderLayout(d: LayoutDashboard, id: string, layout: 'inherit' | LayoutMode): LayoutDashboard {
-  if (layout !== 'inherit' && layout !== 'grid' && layout !== 'free') throw new TreeOpError('That layout is not valid.');
-  const node = findNode(d, id);
-  if (node.kind !== 'folder') throw new TreeOpError('Only folders have a layout here.');
-  if ((node.layout ?? 'inherit') === layout) return d;
-  const loc = locate(d, id)!;
-  const ref: ContainerRef = { tabId: loc.tabId, folderId: loc.folderChain[loc.folderChain.length - 1] };
-  const parent = resolveRef(d, ref);
-  const before = resolveMode(d, parent.tab, [...parent.chain, node]);
-  let next: FolderNode = { ...node, layout };
-  const after = resolveMode(d, parent.tab, [...parent.chain, next]);
-  if (before !== after) {
-    const side = freeSide(parent.tab);
-    next = { ...next, content: convertContainer(node.content, after, side, innerColumnsFor(node, after, side)) };
-    const cols = containerColumns(parent.container, parent.folder);
-    const h = Math.max(node.placement.h, minFolderHeight(next, node.placement.w, parent.mode, cols));
-    if (h !== node.placement.h) next = { ...next, placement: { ...node.placement, h } };
-  }
-  const push = parent.mode === 'grid' && next.placement !== node.placement
-    ? pushAside(parent.container, new Set([id]), next.placement)
-    : undefined;
-  const changed = new Set<string>([id, ...(push ? push.keys() : [])]);
-  return fitAncestors(editContainer(d, ref, (c) => {
-    const out = { ...c, children: applyPush(kids(c), push).map((n) => (n.id === id ? next : n)) };
-    if (parent.mode === 'grid') assertGridNoOverlap(out, changed);
-    return out;
-  }), ref);
-}
-
 export function deleteTab(d: LayoutDashboard, tabId: string): LayoutDashboard {
   findTab(d, tabId);
   if (d.tabs.length <= 1) throw new TreeOpError('A dashboard needs at least one tab.');
   return { ...d, tabs: d.tabs.filter((t) => t.id !== tabId) };
 }
 
-// ---------------------------------------------------------------- free cells / reflow
+// ---------------------------------------------------------------- free cells / reflow (tab level)
 
-function renderablePlacements(c: Container): Placement[] {
-  return kids(c).filter(isRenderable).map((n) => n.placement);
-}
-
-/**
- * First position of size w x h that overlaps nothing in `c`. Grid (default): row-major, one cell at
- * a time. Free: row-major in tile-sized steps (x in multiples of w, y in multiples of h), so a copy
- * lands beside/below the others on a tile-aligned lattice. `mode` is an optional addition to the
- * brief's signature; width is capped at the column count.
- */
-export function firstFreeCell(c: Container, w: number, h: number, mode: LayoutMode = 'grid'): Placement {
+/** First position of size w x h on tab root `c` that overlaps nothing: row-major, one cell at a time. */
+export function firstFreeCell(c: Container, w: number, h: number): Placement {
   const cols = containerColumns(c);
   const cw = Math.min(Math.max(1, Math.floor(w) || 1), cols);
   const chh = Math.max(1, Math.floor(h) || 1);
-  const taken = renderablePlacements(c);
+  const taken = kids(c).filter(isPlaced).map((n) => n.placement);
   const bottom = taken.reduce((m, t) => Math.max(m, t.y + t.h), 0);
-  const stepX = mode === 'free' ? cw : 1;
-  const stepY = mode === 'free' ? chh : 1;
-  for (let y = 0; y <= bottom; y += stepY) {
-    for (let x = 0; x + cw <= cols; x += stepX) {
+  for (let y = 0; y <= bottom; y++) {
+    for (let x = 0; x + cw <= cols; x++) {
       const cand = { x, y, w: cw, h: chh };
       if (!taken.some((t) => overlaps(cand, t))) return cand;
     }
   }
-  return { x: 0, y: Math.ceil(bottom / stepY) * stepY, w: cw, h: chh };
+  return { x: 0, y: bottom, w: cw, h: chh };
 }
 
 /**
- * Grid reflow for a drop. `moving` are the ids being dragged (they vacate their cells, so they are
- * ignored); `target` is where they will land. Returns only the nodes that must move (empty when the
- * target is free). Algorithm: take the other nodes that overlap the target, in reading order; each
- * keeps its size and moves to the nearest free position at or below its own row (same row first,
- * nearest column, right before left on a tie, then the next row down, ...), where free means clear of
- * the target, of every node that stays put, and of nodes already re-homed. Displaced nodes only
- * take free cells, so nothing cascades and the result never overlaps. Grid containers only.
+ * Grid reflow for a drop on a tab. `moving` are the ids being dragged (they vacate their cells, so
+ * they are ignored); `target` is where they will land. Returns only the nodes that must move (empty
+ * when the target is free). Algorithm: take the other nodes that overlap the target, in reading
+ * order; each keeps its size and moves to the nearest free position at or below its own row (same
+ * row first, nearest column, right before left on a tie, then the next row down, ...), where free
+ * means clear of the target, of every node that stays put, and of nodes already re-homed. Displaced
+ * nodes only take free cells, so nothing cascades and the result never overlaps.
  */
 export function pushAside(c: Container, moving: Set<string>, target: Placement): Map<string, Placement> {
   const out = new Map<string, Placement>();
   const cols = containerColumns(c);
   const tgt = clampPlacement(target, cols);
-  const others = readingOrder(kids(c).filter((n) => isRenderable(n) && !moving.has(n.id)));
-  const displaced = others.filter((n) => overlaps(clampPlacement(n.placement, cols), tgt));
+  const others = kids(c)
+    .filter((n) => isPlaced(n) && !moving.has(n.id))
+    .map((n, i) => ({ n, i, p: clampPlacement(n.placement as Placement, cols) }))
+    .sort((a, b) => a.p.y - b.p.y || a.p.x - b.p.x || a.i - b.i);
+  const displaced = others.filter((o) => overlaps(o.p, tgt));
   if (displaced.length === 0) return out;
-  const displacedIds = new Set(displaced.map((n) => n.id));
+  const displacedIds = new Set(displaced.map((o) => o.n.id));
   const occupied: Placement[] = [tgt];
-  for (const n of others) if (!displacedIds.has(n.id)) occupied.push(clampPlacement(n.placement, cols));
-  for (const n of displaced) {
-    const orig = clampPlacement(n.placement, cols);
+  for (const o of others) if (!displacedIds.has(o.n.id)) occupied.push(o.p);
+  for (const { n, p: orig } of displaced) {
     const xs: number[] = [];
     for (let x = 0; x + orig.w <= cols; x++) xs.push(x);
     xs.sort((a, b) => Math.abs(a - orig.x) - Math.abs(b - orig.x) || b - a);

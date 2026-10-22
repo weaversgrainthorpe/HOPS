@@ -27,15 +27,8 @@
     tabColor?: string;
     tabOpacity?: number;
     tabBackground?: Background;
-    /** v3: the tab's own layout ('inherit' / missing = the dashboard default). */
-    tabLayout?: 'inherit' | 'grid' | 'free';
-    /** v3: a free tab's design width in px. */
-    tabDesignWidth?: number;
-    /** v3: what 'inherit' resolves to (the dashboard default), so free-only fields show correctly. */
-    inheritedLayout?: 'grid' | 'free';
     onSave: (
       name: string, icon?: string, iconUrl?: string, iconBgColor?: string, color?: string, opacity?: number,
-      layout?: { layout: 'inherit' | 'grid' | 'free'; designWidth?: number },
       /** A background picked in this dialog: undefined = unchanged, null = removed. */
       background?: Background | null,
       /** Status checks: undefined = unchanged, null = inherit (key removed), true/false = set here. */
@@ -50,7 +43,7 @@
     statusContext?: StatusContext;
   }
 
-  let { tabName, tabIcon, tabIconUrl, tabIconBgColor, tabColor, tabOpacity, tabBackground, tabLayout, tabDesignWidth, inheritedLayout = 'grid', onSave, onCancel, onDelete, onDuplicate, tabStatusChecks, statusContext }: Props = $props();
+  let { tabName, tabIcon, tabIconUrl, tabIconBgColor, tabColor, tabOpacity, tabBackground, onSave, onCancel, onDelete, onDuplicate, tabStatusChecks, statusContext }: Props = $props();
   // Form state initialized from props (intentionally captures initial values)
   // svelte-ignore state_referenced_locally
   let name = $state(tabName);
@@ -65,16 +58,8 @@
   // svelte-ignore state_referenced_locally
   let opacity = $state(tabOpacity);
   // svelte-ignore state_referenced_locally
-  let layout = $state<'inherit' | 'grid' | 'free'>(tabLayout === 'grid' || tabLayout === 'free' ? tabLayout : 'inherit');
-  // svelte-ignore state_referenced_locally
-  let designWidth = $state<number | string>(tabDesignWidth ?? 1280);
-  let problem = $state('');
-  // svelte-ignore state_referenced_locally
   const initialStatus = containerSetting(tabStatusChecks);
   let statusSetting = $state<LevelSetting>(initialStatus);
-  const isFree = $derived(layout === 'free' || (layout === 'inherit' && inheritedLayout === 'free'));
-  const MIN_DESIGN_WIDTH = 320;
-  const MAX_DESIGN_WIDTH = 7680;
   let showBackgroundConfig = $state(false);
 
   // A picked background is staged here and saved with the dialog (one undo step);
@@ -97,22 +82,13 @@
 
   function handleSave() {
     if (!name.trim()) return;
-    let dw: number | undefined;
-    if (isFree) {
-      dw = Number(designWidth);
-      if (!Number.isInteger(dw) || dw < MIN_DESIGN_WIDTH || dw > MAX_DESIGN_WIDTH) {
-        problem = `The design width must be a whole number of pixels from ${MIN_DESIGN_WIDTH} to ${MAX_DESIGN_WIDTH}.`;
-        return;
-      }
-    }
-    problem = '';
     const bg = stagedBackground ? (stagedBackground.value ?? null) : undefined;
     // Only a changed choice is written (an untouched invalid value stays as stored).
     const sc =
       statusSetting !== initialStatus && statusSetting !== 'invalid' && statusSetting !== 'unset'
         ? statusSetting === 'inherit' ? null : statusSetting === 'on'
         : undefined;
-    onSave(name.trim(), icon || undefined, iconUrl || undefined, iconBgColor, color, opacity, { layout, designWidth: dw }, bg, sc);
+    onSave(name.trim(), icon || undefined, iconUrl || undefined, iconBgColor, color, opacity, bg, sc);
   }
 
   function handleBackgroundSave(background: Background | undefined) {
@@ -183,23 +159,6 @@
       onSelect={(o) => opacity = o}
     />
 
-    <div class="form-group">
-      <label for="tab-layout">Layout</label>
-      <select id="tab-layout" bind:value={layout}>
-        <option value="inherit">Dashboard default ({inheritedLayout === 'free' ? 'free' : 'grid'})</option>
-        <option value="grid">Grid</option>
-        <option value="free">Free</option>
-      </select>
-    </div>
-
-    {#if isFree}
-      <div class="form-group">
-        <label for="tab-design-width">Design width (px)</label>
-        <input id="tab-design-width" type="number" min={MIN_DESIGN_WIDTH} max={MAX_DESIGN_WIDTH} step="1" bind:value={designWidth} />
-        <small class="background-hint">The screen width a free tab is laid out for; it scales to fit other screens.</small>
-      </div>
-    {/if}
-    {#if problem}<p class="problem" role="alert">{problem}</p>{/if}
 
     <StatusCheckSetting level="tab" bind:value={statusSetting} context={statusContext} />
 
@@ -266,20 +225,6 @@
 {/if}
 
 <style>
-  .problem {
-    margin: 0 0 1rem;
-    color: var(--color-error, #dc2626);
-    font-size: 0.875rem;
-  }
-  select,
-  input[type='number'] {
-    padding: 0.625rem 0.75rem;
-    border: 1px solid var(--border);
-    border-radius: 0.375rem;
-    background: var(--bg-secondary);
-    color: var(--text-primary);
-    font-size: 0.95rem;
-  }
   /* Modal body already pads; no extra padding here. */
   form {
     padding: 0;
@@ -440,17 +385,6 @@
     border-radius: 0.25rem;
   }
 
-  .background-hint {
-    display: flex;
-    align-items: flex-start;
-    gap: 0.5rem;
-    color: var(--text-secondary);
-    font-size: 0.8rem;
-    padding: 0.75rem;
-    background: var(--bg-tertiary);
-    border-radius: 0.375rem;
-    border: 1px dashed var(--border);
-  }
 
   /* Old inline-icon CSS removed — IconEditModal owns the picker UI now. */
 </style>

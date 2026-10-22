@@ -141,14 +141,14 @@ describe('resize handles', () => {
     expect(nodeIn(draft(), 'c1')!.placement).toMatchObject({ x: 10, y: 2 });
   });
 
-  it("a folder can't shrink below its content", async () => {
+  it("a folder can't shrink below its title plus one item at its contents size", async () => {
     const { container } = canvas();
     await tick();
     resizeDrag(handle(container, 'f1', 'bottom')!, 240, 478, 0, -600);
     const t = get(drag)?.target;
     expect(t?.kind).toBe('resize');
     if (t?.kind !== 'resize') throw new Error('not a resize');
-    expect(t.at.h).toBe(4); // one Medium tile's 2 content rows + the 2 title rows
+    expect(t.at.h).toBe(4); // one Medium item's 2 rows + the 2 title rows
     document.body.dispatchEvent(pe('pointerup', 240, -122));
     expect(nodeIn(draft(), 'f1')!.placement).toMatchObject({ w: 8, h: 4 });
   });
@@ -165,21 +165,12 @@ describe('resize handles', () => {
     expect(draft()).toBe(before);
   });
 
-  it('a free tile resize snaps to 8 px units', async () => {
-    width = 1280; // scale 1: one design unit = 8 px
-    setActiveTab('t2');
-    const { container, refresh } = canvas('t2');
+  it('items inside a folder and tiles have no handles (only open folders on a tab resize)', async () => {
+    const { container } = canvas();
     await tick();
-    const h = handle(container, 'fa', 'right');
-    expect(h).not.toBeNull();
-    resizeDrag(h!, 127, 64, 21, 5); // 21 px → 2.6 units → 3; the right edge keeps the height
-    const t = get(drag)?.target;
-    if (t?.kind !== 'resize') throw new Error('not a resize');
-    expect(t.at).toMatchObject({ w: 19, h: 16 });
-    document.body.dispatchEvent(pe('pointerup', 148, 69));
-    expect(nodeIn(draft(), 'fa')!.placement).toMatchObject({ x: 0, y: 0, w: 19, h: 16 });
-    await refresh();
-    expect((container.querySelector('[data-node-id="fa"]') as HTMLElement).style.width).toBe('152px');
+    expect(handle(container, 'x', 'right')).toBeNull();
+    expect(handle(container, 'a', 'right')).toBeNull();
+    expect(handle(container, 'f1', 'right')).not.toBeNull();
   });
 });
 
@@ -264,33 +255,15 @@ describe('keyboard resize and z-order', () => {
     expect(draft()).toBe(before);
   });
 
-  it('setZ forward / back changes z and the canvas renders it', async () => {
+  it('a stored z still renders (setZ on a tab item)', async () => {
     width = 1280;
     const { container, refresh } = canvas('t2');
     await tick();
     const z = (id: string) => Number((container.querySelector(`[data-node-id="${id}"]`) as HTMLElement).style.zIndex);
-    expect(z('fa')).toBeLessThan(z('fb'));
     expect(zOrder('fa', 'forward')).toBe(true);
     await refresh();
-    expect(nodeIn(draft(), 'fa')!.placement.z).toBe(2);
+    expect(nodeIn(draft(), 'fa')!.placement!.z).toBe(1);
     expect(z('fa')).toBeGreaterThan(z('fb'));
-    expect(zOrder('fa', 'back')).toBe(true);
-    await refresh();
-    expect(z('fa')).toBeLessThan(z('fb'));
-  });
-
-  it('Ctrl+] / Ctrl+[ bring the selected free item forward / send it back; ignored while typing', async () => {
-    render(EditToolbar, { tabId: 't2', onAddTab: () => {} });
-    toggleNode('fa', false);
-    await fireEvent.keyDown(window, { key: ']', ctrlKey: true });
-    expect(nodeIn(draft(), 'fa')!.placement.z).toBe(2);
-    await fireEvent.keyDown(window, { key: '[', ctrlKey: true });
-    expect(nodeIn(draft(), 'fa')!.placement.z).toBe(0);
-    const input = document.createElement('input');
-    document.body.appendChild(input);
-    const before = draft();
-    await fireEvent.keyDown(input, { key: ']', ctrlKey: true });
-    expect(draft()).toBe(before);
   });
 
   it('Ctrl with a key that is not ] / [ (another layout\'s BracketRight key, e.g. "+") is left alone', async () => {
@@ -303,14 +276,20 @@ describe('keyboard resize and z-order', () => {
     expect(ev.defaultPrevented).toBe(false);
   });
 
-  it('Ctrl+] in a grid container changes nothing and says z-order is for free layouts', async () => {
+  it('Ctrl+] / Ctrl+[ change nothing and say why (items never overlap; M5 has no free layout); ignored while typing', async () => {
     render(EditToolbar, { tabId: 't1', onAddTab: () => {} });
     const spy = vi.spyOn(toast, 'info');
     toggleNode('a', false);
     const before: LayoutDashboard = draft();
     await fireEvent.keyDown(window, { key: ']', ctrlKey: true });
+    await fireEvent.keyDown(window, { key: '[', ctrlKey: true });
     expect(draft()).toBe(before);
-    expect(spy).toHaveBeenLastCalledWith(expect.stringMatching(/free/i));
+    expect(spy).toHaveBeenLastCalledWith(expect.stringMatching(/never overlap/i));
+    spy.mockClear();
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    await fireEvent.keyDown(input, { key: ']', ctrlKey: true });
+    expect(spy).not.toHaveBeenCalled();
   });
 });
 

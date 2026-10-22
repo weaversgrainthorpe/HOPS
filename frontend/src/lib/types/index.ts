@@ -9,7 +9,6 @@ export interface DashboardSettings {
   statusCheckTimeoutSeconds: string | number | null;
   editIdleTimeoutMinutes: string | number | null;
   animatedFolderBackgrounds: string | boolean | null;
-  defaultLayout: string | null;
 }
 
 export interface HeaderConfig {

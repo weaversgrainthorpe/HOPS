@@ -41,7 +41,8 @@ class FakeRO {
 const entry = (id: string, name: string) => ({ id, name, url: 'http://x.test', icon: '', openMode: 'newtab' as const, size: 'medium' as const, order: 0 });
 const tile = (id: string, name: string, x = 0, y = 0): any => ({ kind: 'tile', ...entry(id, name), placement: { x, y, w: 2, h: 2 } });
 const folder = (id: string, name: string, children: any[], display = 'expanded'): any => ({
-  kind: 'folder', id, name, display, placement: { x: 0, y: 2, w: 8, h: 6 }, content: { columns: 8, children }
+  kind: 'folder', id, name, display, size: 'medium', contentSize: 'medium', placement: { x: 0, y: 2, w: 8, h: 6 },
+  content: { children: children.map(({ placement: _p, ...c }) => c) } // M5: folder contents have no placements
 });
 
 const layoutD1: LayoutDashboard = {
@@ -52,13 +53,11 @@ const layoutD1: LayoutDashboard = {
   ]
 };
 const legacy = layoutD1; // the dashboard the route hands Dashboard (v3, like every dashboard)
-// The Showcase: a free-layout dashboard, once "view-only (v3)", now editable like any other.
+// The Showcase: once "view-only (v3)", now editable like any other (M5: a grid tab like every tab).
 const v3d: LayoutDashboard = {
   id: 'v3d', name: 'Fancy', path: '/fancy', revision: 4,
   header: { centerTitle: 'Fancy Header' },
-  tabs: [{ id: 'vt', name: 'Only', layout: 'free', designWidth: 1280, root: { columns: 160, children: [
-    { ...tile('f1', 'FancyTile'), placement: { x: 0, y: 0, w: 16, h: 16 } }
-  ] } }]
+  tabs: [{ id: 'vt', name: 'Only', root: { columns: 24, children: [tile('f1', 'FancyTile')] } }]
 };
 
 function cfg(dashes: LayoutDashboard[] = [layoutD1, v3d]): Config {

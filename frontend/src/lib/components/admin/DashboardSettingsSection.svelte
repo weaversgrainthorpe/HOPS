@@ -26,15 +26,14 @@
 
   type Key = keyof DashboardSettings;
   type Value = string | number | boolean;
-  type Kind = 'bool' | 'int' | 'layout';
+  type Kind = 'bool' | 'int';
 
   const ROWS: { key: Key; label: string; kind: Kind; min?: number }[] = [
     { key: 'statusChecksEnabled', label: 'Status checks', kind: 'bool' },
     { key: 'statusCheckIntervalMinutes', label: 'Check interval (minutes)', kind: 'int', min: 1 },
     { key: 'statusCheckTimeoutSeconds', label: 'Check timeout (seconds)', kind: 'int', min: 1 },
     { key: 'editIdleTimeoutMinutes', label: 'Edit mode idle timeout (minutes)', kind: 'int', min: 0 },
-    { key: 'animatedFolderBackgrounds', label: 'Animated folder backgrounds', kind: 'bool' },
-    { key: 'defaultLayout', label: 'Default layout for new tabs', kind: 'layout' }
+    { key: 'animatedFolderBackgrounds', label: 'Animated folder backgrounds', kind: 'bool' }
   ];
 
   let loading = $state(true);
@@ -199,7 +198,7 @@
             checked={values[row.key] === true}
             onchange={(e) => (values[row.key] = e.currentTarget.checked)}
           />
-        {:else if row.kind === 'int'}
+        {:else}
           <input
             type="number"
             step="1"
@@ -208,15 +207,6 @@
             value={values[row.key]}
             oninput={(e) => (values[row.key] = e.currentTarget.value.trim() === '' ? NaN : Number(e.currentTarget.value))}
           />
-        {:else}
-          <select
-            aria-labelledby={`lbl-${row.key}`}
-            value={values[row.key]}
-            onchange={(e) => (values[row.key] = e.currentTarget.value)}
-          >
-            <option value="grid">grid</option>
-            <option value="free">free</option>
-          </select>
         {/if}
         <button
           type="button"
@@ -247,7 +237,7 @@
   .override-toggle { display: flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; color: var(--text-secondary); cursor: pointer; }
   .row-body { display: flex; align-items: center; gap: 0.75rem; margin-top: 0.5rem; min-height: 2rem; }
   .inherited { color: var(--text-secondary); font-size: 0.875rem; flex: 1; }
-  .row-body input[type='number'], .row-body select {
+  .row-body input[type='number'] {
     padding: 0.5rem;
     border: 1px solid var(--border);
     border-radius: 0.375rem;

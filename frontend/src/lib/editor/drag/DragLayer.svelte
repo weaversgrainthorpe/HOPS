@@ -4,8 +4,8 @@
    * draws state.target (the one resolver's result): the target cells, the neighbours' pushed
    * positions (exactly the push map the drop will apply) and, for an invalid target, the reason.
    * Every size comes from geometry.nodeBox with the target container's rendered metrics; a pushed
-   * collapsed folder is drawn as the one Medium tile it renders as (Ruling 13). Task 8: the merge /
-   * into-folder / tab-append cue on the item or tab under the pointer, free alignment guides, the
+   * collapsed folder is drawn as the tile of its size it renders as (Ruling 13). Task 8: the merge /
+   * into-folder / tab-append cue on the item or tab under the pointer, the
    * tab-reorder marker, and the DragBreadcrumb. Task 9: a resize shows the resulting box and any
    * push (no ghost); a stacked (phone) drop shows its reading-order insertion marker.
    */
@@ -38,11 +38,10 @@
     if (!s || !view || !t || (t.kind !== 'place' && t.kind !== 'resize')) return { at: [], push: [] };
     const m = view.metrics;
     const d = $session?.draft;
-    const tab = d?.tabs.find((x) => x.id === t.to.tabId);
     const push: NodeBox[] = [];
     for (const [id, p] of t.push) {
       const n = d ? findIn(d, id) : undefined;
-      const shown = n?.kind === 'folder' && n.display === 'collapsed' && tab ? minimisedPlacement(p, m.mode, tab) : p;
+      const shown = n?.kind === 'folder' && n.display === 'collapsed' ? minimisedPlacement(p, n.size) : p;
       push.push(nodeBox(shown, m));
     }
     return { at: (t.kind === 'resize' ? [t.at] : t.at).map((p) => nodeBox(p, m)), push };
@@ -52,7 +51,6 @@
     `left:${px(left + b.leftPx)};top:${px(top + b.topPx)};width:${px(b.widthPx)};height:${px(b.heightPx)};`;
 
   const invalid = $derived(s?.target?.kind === 'invalid' ? s.target.reason : null);
-  const guides = $derived(s?.target?.kind === 'place' ? (s.target.guides ?? []) : []);
   /** A merge dwell is running (the dragged item's centre is in a tile's centre zone): show progress. */
   const holding = $derived(!!s?.dwell && s.dwell.key.startsWith('merge:') && !s.dwell.ripe && s.target?.kind === 'place');
   const cue = $derived.by((): string | null => {
@@ -90,15 +88,6 @@
       {/each}
       {#each boxes.at as b, i (i)}
         <div class="target" class:copy={s.copy} style={box(b, s.view.left, s.view.top)}></div>
-      {/each}
-      {#each guides as g, i (i)}
-        <div
-          class="guide"
-          class:vertical={g.axis === 'x'}
-          style={g.axis === 'x'
-            ? `left:${px(s.view.left + g.at - 0.5)};top:${px(s.view.top + g.from)};width:1px;height:${px(g.to - g.from)};`
-            : `left:${px(s.view.left + g.from)};top:${px(s.view.top + g.at - 0.5)};width:${px(g.to - g.from)};height:1px;`}
-        ></div>
       {/each}
     {/if}
     {#if cue !== null && s.over}
@@ -192,10 +181,6 @@
     background: var(--accent);
     color: white;
     font-weight: 700;
-  }
-  .guide {
-    background: var(--accent);
-    opacity: 0.9;
   }
   .cue {
     border: 3px solid var(--accent);

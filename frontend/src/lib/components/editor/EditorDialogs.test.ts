@@ -44,15 +44,16 @@ describe('FolderEditModal', () => {
     expect(name.value).toBe('F1');
     await fireEvent.input(name, { target: { value: 'Media' } });
     await fireEvent.click(screen.getByRole('radio', { name: 'Collapsed' }));
-    await fireEvent.change(screen.getByLabelText('Layout'), { target: { value: 'free' } });
+    expect(screen.queryByLabelText('Layout')).toBeNull(); // M5: folders always flow; no layout
     await fireEvent.click(screen.getByLabelText('Show title bar'));
     await fireEvent.change(screen.getByLabelText('Look'), { target: { value: 'folder-tab' } });
     await fireEvent.click(screen.getByRole('button', { name: /^Save/ }));
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
-      name: 'Media', display: 'collapsed', layout: 'free', showTitle: false, shape: 'folder-tab',
+      name: 'Media', display: 'collapsed', showTitle: false, shape: 'folder-tab',
       color: '#112233', opacity: 0.5, textColor: 'dark'
     }));
     const patch = onSave.mock.calls[0][0];
+    expect(patch).not.toHaveProperty('layout');
     expect(patch).not.toHaveProperty('placement');
     expect(patch).not.toHaveProperty('content');
   });
@@ -130,49 +131,24 @@ describe('EditorDialogs (the dialogs edit the draft only)', () => {
     expect(nodeIn(draft(), 'b')!.placement).toEqual(p(2, 0));
   });
 
-  it('tile dialog Size: a tile in a 2-column folder refuses Large inline; the draft is untouched', async () => {
-    const d = home();
-    d.tabs[0].root.children.push({
-      kind: 'folder', id: 'narrow', name: 'Narrow', display: 'expanded', placement: p(16, 0, 2, 6),
-      content: { columns: 2, children: [{ ...(nodeIn(home(), 'x') as TileNode), id: 'nx' }] }
-    } as FolderNode);
-    setLayout([d]);
-    resetEditor();
-    startSession();
-    await show({ kind: 'tile', id: 'nx' });
-    const before = draft();
+  it('tile dialog Size inside a folder: any size is accepted, nothing is placed, the folder is untouched', async () => {
+    await show({ kind: 'tile', id: 'x' });
+    const folderBefore = (nodeIn(draft(), 'f1') as FolderNode).placement;
     await fireEvent.change(screen.getByLabelText(/^Size/), { target: { value: 'large' } });
-    expect(screen.getByRole('alert')).toHaveTextContent(/only 2 columns wide/);
+    expect(screen.queryByRole('alert')).toBeNull();
     await fireEvent.click(screen.getByRole('button', { name: /^Save/ }));
-    expect(draft()).toBe(before);
-    expect(screen.getByRole('dialog')).toBeInTheDocument();
-  });
-
-  it('a stored large tile at 2 x 2 (Netflix, after the finer-grid update): Size shows Custom; picking Large makes it 4 x 4 in ONE undo step', async () => {
-    const d = home();
-    (d.tabs[0].root.children[0] as TileNode).size = 'large';
-    setLayout([d]);
-    resetEditor();
-    startSession();
-    await show({ kind: 'tile', id: 'a' });
-    const sel = screen.getByLabelText(/^Size/) as HTMLSelectElement;
-    expect(sel.value).toBe('custom');
-    await fireEvent.change(sel, { target: { value: 'large' } });
-    await fireEvent.click(screen.getByRole('button', { name: /^Save/ }));
-    expect(nodeIn(draft(), 'a')).toMatchObject({ size: 'large', placement: p(0, 0, 4, 4) });
+    const x = nodeIn(draft(), 'x') as TileNode;
+    expect(x.size).toBe('large');
+    expect('placement' in x).toBe(false);
+    expect((nodeIn(draft(), 'f1') as FolderNode).placement).toEqual(folderBefore);
     expect(get(session)!.undo).toHaveLength(1);
-    undo();
-    expect(nodeIn(draft(), 'a')!.placement).toEqual(p(0, 0));
   });
 
-  it('tile dialog Size shows "Custom" for a non-standard span', async () => {
-    const d = home();
-    (d.tabs[0].root.children[1] as TileNode).placement = p(2, 0, 6, 2);
-    setLayout([d]);
-    resetEditor();
-    startSession();
+  it('tile dialog Size offers Small, Medium and Large only (no Custom)', async () => {
     await show({ kind: 'tile', id: 'b' });
-    expect((screen.getByLabelText(/^Size/) as HTMLSelectElement).value).toBe('custom');
+    const sel = screen.getByLabelText(/^Size/) as HTMLSelectElement;
+    expect(sel.value).toBe('medium');
+    expect([...sel.options].map((o) => o.value)).toEqual(['small', 'medium', 'large']);
   });
 
   it('tile dialog refuses a javascript: URL with a toast and leaves the draft alone', async () => {
@@ -203,7 +179,7 @@ describe('EditorDialogs (the dialogs edit the draft only)', () => {
   it('Move/Copy dialog: move to another tab and copy into a folder (same dashboard, draft only)', async () => {
     await show({ kind: 'movecopy', ids: ['a'] });
     // The item's own container is listed but cannot be chosen for a move.
-    await fireEvent.click(screen.getByRole('treeitem', { name: /^Free/ }));
+    await fireEvent.click(screen.getByRole('treeitem', { name: /^Two/ }));
     await fireEvent.click(screen.getByRole('button', { name: /^Move$/ }));
     expect(draft().tabs[1].root.children.map((n) => n.id)).toContain('a');
     noRequestsButSettingsRead(fetchSpy);

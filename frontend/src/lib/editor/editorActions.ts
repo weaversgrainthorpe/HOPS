@@ -10,16 +10,16 @@ import type {
 } from './treeOps';
 import {
   TreeOpError, cellIsFree, copyNodes, deleteNodes, deleteTab, duplicateNode, duplicateTab, firstFreeCell,
-  insertNode, locate, moveNodes, newNodeId, resolveContainer, setFolderDisplay, setFolderLayout, setTabLayout, setZ,
-  addTab, adaptNode, originOf, freeSide, placeNode, pushAside,
+  insertNode, locate, moveNodes, newNodeId, resolveContainer, setFolderDisplay, setZ,
+  addTab, placeNode, pushAside,
   updateNode, updateTab
 } from './treeOps';
 import type {
-  Container, FolderNode, LayoutDashboard, LayoutMode, LayoutNode, LayoutTab, Placement, TileNode
+  Container, FolderNode, ItemSize, LayoutDashboard, LayoutNode, LayoutTab, Placement, TileNode
 } from '$lib/types/layout';
 import type { Background, HeaderConfig } from '$lib/types';
-import { MEDIUM_CELLS } from '$lib/layout/geometry';
-import { config, layoutDoc, findLayoutDashboard, applySavedLayout, loadConfig, gridFormProblem } from '$lib/stores/config';
+import { defaultFolderBox, sizeOf, sizeSpan, tabSpan } from '$lib/layout/geometry';
+import { config, layoutDoc, findLayoutDashboard, applySavedLayout, loadConfig, layoutFormProblem } from '$lib/stores/config';
 import { apply, session, rebaseCleanSession, sessionConflict } from '$lib/stores/editSession';
 import { transferNodes, ConflictError, type TransferRequest } from '$lib/utils/api';
 import { logError } from '$lib/utils/errors';
@@ -65,66 +65,40 @@ function tabOf(d: LayoutDashboard, tabId: string): LayoutTab | undefined {
   return d.tabs.find((t) => t.id === tabId);
 }
 
-/**
- * The size an item takes in `mode`, from a node ALREADY converted for the target (adaptNode).
- * Placement is the truth (spec §8): a grid tile keeps its span (Large = 4 x 4), like everything else;
- * a missing span is a Medium (2 x 2, spec §9).
- */
-export function sizeFor(n: Pick<LayoutNode, 'placement'>): { w: number; h: number } {
-  const d = MEDIUM_CELLS;
-  return { w: Math.max(1, Math.floor(n.placement?.w ?? d)), h: Math.max(1, Math.floor(n.placement?.h ?? d)) };
+/** The cells an item takes on a tab (geometry.tabSpan): a tile its Size's span; a folder its box. */
+export function sizeFor(n: Pick<LayoutNode, 'kind' | 'placement'> & { size?: unknown }): { w: number; h: number } {
+  return tabSpan(n);
 }
 
-// ---------------------------------------------------------------- tile size = space (spec §8)
+// ---------------------------------------------------------------- sizes (M5 §2)
 
-export type TileSize = TileNode['size'];
-/** What the tile dialog's Size shows: a size, or "Custom (resized)" for any other span. */
-export type SizeChoice = TileSize | 'custom';
-
-/** Cells each way per Size on the finer grid (spec §9): Small 1 x 1, Medium 2 x 2, Large 4 x 4. */
-const SIZE_CELLS = { small: 1, medium: MEDIUM_CELLS, large: 2 * MEDIUM_CELLS } as const;
+export type TileSize = ItemSize;
 
 /**
- * The span a tile Size takes: Small = 1 x 1 cell (always drawn compact), Medium = 2 x 2 (also no
- * size), Large = 4 x 4. Grid: cells; free: the free-unit equivalent, one cell = `side` units
- * (freeSide, may be fractional), rounded to whole units.
+ * The size an item SHOWS at (M5 §2): on a tab (`parent` undefined) its own size; inside a folder
+ * the folder's contents size, for tiles and sub-folders alike. The item's own size never changes
+ * by being in a folder. Missing or unknown = Medium.
  */
-export function sizeSpan(size: unknown, mode: LayoutMode, side = 1): { w: number; h: number } {
-  const cells = size === 'small' || size === 'large' ? SIZE_CELLS[size] : SIZE_CELLS.medium;
-  const unit = mode === 'free' ? (Number.isFinite(side) && side > 0 ? side : 1) : 1;
-  const n = Math.max(1, Math.round(cells * unit));
-  return { w: n, h: n };
+export function displaySize(node: Pick<LayoutNode, 'kind'> & { size?: unknown }, parent: FolderNode | undefined): ItemSize {
+  return sizeOf(parent ? parent.contentSize : node.size);
 }
 
-/**
- * The size the dialog shows for a tile — always the truth (spec §8/§9): a size only when the tile
- * has exactly that size's span and is stored as that size (no size = Medium); Large is shown for a
- * Large span whatever was stored (as before the finer grid). Anything else is Custom — e.g. a
- * stored-large tile that the finer-grid update left at 2 x 2, or an old Small left at 2 x 2 — so
- * picking a size from it is always a real change that applies, and nothing is silently resized.
- */
-export function sizeShown(t: Pick<TileNode, 'size' | 'placement'>, mode: LayoutMode, side = 1): SizeChoice {
-  const is = (s: { w: number; h: number }) => t.placement?.w === s.w && t.placement?.h === s.h;
-  if (is(sizeSpan('large', mode, side))) return 'large';
-  const stored = t.size === 'small' || t.size === 'large' ? t.size : 'medium';
-  if (stored !== 'large' && is(sizeSpan(stored, mode, side))) return stored;
-  return 'custom';
+/** A tile's own Size, as the dialog shows it: Small, Medium or Large (missing or unknown = Medium). */
+export function tileSizeOf(t: { size?: unknown }): TileSize {
+  return sizeOf(t.size);
 }
 
 export type SizeResult =
-  | { kind: 'size'; id: string; at: Placement; push: Map<string, Placement> }
+  /** `at` is set for a tile on a tab (its new span); a tile inside a folder has no placement. */
+  | { kind: 'size'; id: string; at?: Placement; push: Map<string, Placement> }
   | { kind: 'invalid'; reason: string };
 
-function tooNarrow(size: unknown, columns: number, ref: ContainerRef): string {
-  const where = ref.folderId ? 'this folder' : 'this tab';
-  return `There isn't room for a ${String(size)} tile here: ${where} is only ${columns} column${columns === 1 ? '' : 's'} wide.`;
-}
-
 /**
- * Where tile `id` goes when its Size is set to `size`: the span from sizeSpan at its own top-left,
- * shifted left when it would pass the right edge, with grid neighbours pushed aside by the M3 push
- * (pushAside, as drag and resize). Refused, with the reason, when the container is too narrow.
- * Trial-run, so a returned target never throws on commit. Pure.
+ * Where tile `id` goes when its Size is set to `size`. On a tab: the span (sizeSpan) at its own
+ * top-left, shifted left when it would pass the right edge, with neighbours pushed aside by the M3
+ * push (pushAside, as drag and resize). Inside a folder nothing moves: the tile keeps its place in
+ * the order and shows the folder's contents size. Trial-run, so a returned target never throws on
+ * commit. Pure.
  */
 export function sizeTarget(d: LayoutDashboard, id: string, size: unknown): SizeResult {
   try {
@@ -132,51 +106,57 @@ export function sizeTarget(d: LayoutDashboard, id: string, size: unknown): SizeR
     const to = containerOfNode(d, id);
     if (!n || !to) return { kind: 'invalid', reason: 'That item no longer exists.' };
     if (n.kind !== 'tile') return { kind: 'invalid', reason: 'Only tiles have a size.' };
+    if (to.folderId !== undefined) return { kind: 'size', id, push: new Map() };
     const r = resolveContainer(d, to);
-    const span = sizeSpan(size, r.mode, originOf(d, id).side);
-    if (span.w > r.columns) return { kind: 'invalid', reason: tooNarrow(size, r.columns, to) };
-    const cur = n.placement;
-    const x = Math.min(Math.max(0, Math.floor(cur.x)), r.columns - span.w);
-    const at: Placement = { x, y: Math.max(0, Math.floor(cur.y)), w: span.w, h: span.h };
+    const span = sizeSpan(size);
+    if (span > r.columns) return { kind: 'invalid', reason: tooNarrow(size, r.columns) };
+    const cur = n.placement as Placement;
+    const x = Math.min(Math.max(0, Math.floor(cur.x)), r.columns - span);
+    const at: Placement = { x, y: Math.max(0, Math.floor(cur.y)), w: span, h: span };
     if (cur.z !== undefined) at.z = cur.z;
-    const push = r.mode === 'grid' ? pushAside(r.container, new Set([id]), at) : new Map<string, Placement>();
-    placeNode(d, id, at, push); // the very op the commit runs
+    const push = pushAside(r.container, new Set([id]), at);
+    placeNode(updateNode(d, id, { size: sizeOf(size) } as Partial<LayoutNode>), id, at, push); // the very op the commit runs
     return { kind: 'size', id, at, push };
   } catch (e) {
     return { kind: 'invalid', reason: e instanceof Error && e.message ? e.message : "That size isn't possible here." };
   }
 }
 
-/** Why a NEW tile of `size` can't go in `to` (too narrow), or null. */
+function tooNarrow(size: unknown, columns: number): string {
+  return `There isn't room for a ${String(size)} tile here: this tab is only ${columns} column${columns === 1 ? '' : 's'} wide.`;
+}
+
+/** Why a NEW tile of `size` can't go in `to` (too narrow), or null. A folder takes any size. */
 export function newTileSizeProblem(d: LayoutDashboard, to: ContainerRef, size: unknown): string | null {
   try {
     const r = resolveContainer(d, to);
-    const side = freeSide(tabOf(d, to.tabId));
-    return sizeSpan(size, r.mode, side).w > r.columns ? tooNarrow(size, r.columns, to) : null;
+    if (r.kind === 'folder') return null;
+    return sizeSpan(size) > r.columns ? tooNarrow(size, r.columns) : null;
   } catch (e) {
     return e instanceof Error && e.message ? e.message : "That size isn't possible here.";
   }
 }
 
-/** Nodes of the draft as they would go into `to` (converted on the one path when modes differ). */
-export function adaptedFor(d: LayoutDashboard, ids: string[], to: ContainerRef): LayoutNode[] {
+/** Nodes of the draft by id (refusing one that has gone). */
+export function nodesOf(d: LayoutDashboard, ids: string[]): LayoutNode[] {
   return ids.map((id) => {
     const n = findIn(d, id);
     if (!n) throw new TreeOpError('That item no longer exists.');
-    return adaptNode(d, n, originOf(d, id), to);
+    return n;
   });
 }
 
 /**
- * Placements for `nodes` going into `to`, none overlapping each other or what is there (grid).
- * The first goes at `cell` when it is free there; the rest (or all, without a usable cell) at
- * firstFreeCell — never a fake push (Ruling 11). Stored footprints count, so a collapsed
- * folder's reserved cells are taken (Ruling 13).
+ * Placements for `nodes` going onto tab `to`, none overlapping each other or what is there. The
+ * first goes at `cell` when it is free there; the rest (or all, without a usable cell) at
+ * firstFreeCell — never a fake push (Ruling 11). Stored footprints count, so a minimised folder's
+ * reserved cells are taken (Ruling 13). A folder target is ordered: no placements ([]).
  */
 export function placementsFor(
-  d: LayoutDashboard, to: ContainerRef, nodes: Pick<LayoutNode, 'kind' | 'placement'>[], cell?: Cell
+  d: LayoutDashboard, to: ContainerRef, nodes: (Pick<LayoutNode, 'kind' | 'placement'> & { size?: unknown })[], cell?: Cell
 ): Placement[] {
   const r = resolveContainer(d, to);
+  if (r.kind === 'folder') return [];
   const work: Container = { columns: r.columns, children: [...r.container.children] };
   const out: Placement[] = [];
   nodes.forEach((n, i) => {
@@ -184,11 +164,11 @@ export function placementsFor(
     let at: Placement | undefined;
     if (i === 0 && cell) {
       const cand: Placement = { x: Math.floor(cell.x), y: Math.floor(cell.y), w: Math.min(w, r.columns), h };
-      if (cellIsFree(work, cand, r.mode)) at = cand;
+      if (cellIsFree(work, cand)) at = cand;
     }
     if (!at) {
-      at = firstFreeCell(work, w, h, r.mode);
-      if (r.mode === 'grid') at.h = h;
+      at = firstFreeCell(work, w, h);
+      at.h = h;
     }
     out.push(at);
     work.children.push({ kind: 'tile', id: `\u0000slot-${i}`, placement: at } as unknown as LayoutNode);
@@ -199,16 +179,14 @@ export function placementsFor(
 // ---------------------------------------------------------------- new nodes
 
 export function blankTile(): TileNode {
-  return {
-    kind: 'tile', id: '', type: 'link', name: '', url: '', icon: '', openMode: 'newtab', size: 'medium', order: 0,
-    placement: { x: 0, y: 0, w: MEDIUM_CELLS, h: MEDIUM_CELLS }
-  };
+  return { kind: 'tile', id: '', type: 'link', name: '', url: '', icon: '', openMode: 'newtab', size: 'medium', order: 0 };
 }
 
 export function blankFolder(): FolderNode {
+  const box = defaultFolderBox('medium');
   return {
-    kind: 'folder', id: '', name: 'New folder', display: 'expanded', layout: 'inherit', shape: 'rounded',
-    showTitle: true, placement: { x: 0, y: 0, w: 8, h: 6 }, content: { columns: 8, children: [] }
+    kind: 'folder', id: '', name: 'New folder', display: 'expanded', size: 'medium', contentSize: 'medium',
+    shape: 'rounded', showTitle: true, placement: { x: 0, y: 0, ...box }, content: { children: [] }
   };
 }
 
@@ -231,8 +209,9 @@ export function tileProblem(t: Partial<TileNode>): string | null {
 }
 
 /**
- * Add a new tile or folder to `to`: at `cell` if free there, else the first free cell. The new id
- * avoids every id in the document. Selects the new item. Returns its id, or null if refused.
+ * Add a new tile or folder to `to`: on a tab at `cell` if free there, else the first free cell; in
+ * a folder at the end of its order. The new id avoids every id in the document. Selects the new
+ * item. Returns its id, or null if refused.
  */
 export function addNode(node: LayoutNode, to: ContainerRef, cell?: Cell): string | null {
   const d = currentDraft();
@@ -257,21 +236,15 @@ export function addNode(node: LayoutNode, to: ContainerRef, cell?: Cell): string
   const placed = { ...plain(node), id } as LayoutNode;
   if (placed.kind === 'folder') placed.content = { ...placed.content, children: [] };
   const ok = apply(node.kind === 'tile' ? 'Add tile' : 'Add folder', (dd) => {
-    // New items are drawn at grid sizes (a tile its Size's span, a folder 8 x 6); in a free container
-    // they are converted on the one mode-conversion path (one cell = `side` free units).
-    // A new tile takes the span of its Size (spec §8); too narrow a container refuses, saying why.
-    let sized = placed;
+    // A new tile takes the span of its Size on a tab (spec §8); too narrow a tab refuses, saying why.
+    // In a folder it goes at the end of the order (no placement).
     if (placed.kind === 'tile') {
       const why = newTileSizeProblem(dd, to, placed.size);
       if (why) throw new TreeOpError(why);
-      sized = { ...placed, placement: { ...placed.placement, ...sizeSpan(placed.size, 'grid') } };
     }
-    let fresh = adaptNode(dd, sized, { mode: 'grid', side: freeSide(tabOf(dd, to.tabId)) }, to);
-    const [at] = placementsFor(dd, to, [fresh], cell);
-    if (fresh.kind === 'folder' && fresh.content.children.length === 0) {
-      fresh = { ...fresh, content: { ...fresh.content, columns: Math.max(1, at.w) } };
-    }
-    return insertNode(dd, fresh, to, at);
+    if (to.folderId !== undefined) return insertNode(dd, placed, to, Number.MAX_SAFE_INTEGER);
+    const [at] = placementsFor(dd, to, [placed], cell);
+    return insertNode(dd, placed, to, at);
   });
   if (!ok) return null;
   toggleNode(id, false);
@@ -309,13 +282,14 @@ export function editNode(id: string, edited: Partial<LayoutNode>, opts: { size?:
     if (node.kind !== 'tile' || opts.size === undefined) return next;
     const t = sizeTarget(next, id, opts.size);
     if (t.kind === 'invalid') throw new TreeOpError(t.reason);
-    return placeNode(next, id, t.at, t.push);
+    const sized = updateNode(next, id, { size: opts.size } as Partial<LayoutNode>);
+    return t.at ? placeNode(sized, id, t.at, t.push) : sized;
   });
 }
 
 /**
- * Save the folder dialog as ONE undo step: its look through updateNode, "Starts" through
- * setFolderDisplay, and its layout through setFolderLayout (which converts the content).
+ * Save the folder dialog as ONE undo step: its look (and sizes) through updateNode, and "Starts"
+ * through setFolderDisplay.
  */
 export function editFolder(
   id: string, fields: Omit<Partial<FolderNode>, 'background'> & { background?: Background | null }
@@ -325,13 +299,12 @@ export function editFolder(
   const { background, statusChecksEnabled, ...others } = plain(fields) as {
     background?: Background | null; statusChecksEnabled?: boolean | null
   } & Record<string, unknown>;
-  const { display, layout, ...rest } = others as Partial<FolderNode>;
+  const { display, ...rest } = others as Partial<FolderNode>;
   const patch: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(rest)) if (!LOCKED.includes(k)) patch[k] = v;
   return apply('Edit folder', (dd) => {
     let next = updateNode(dd, id, patch as Partial<LayoutNode>);
     if (display !== undefined) next = setFolderDisplay(next, id, display);
-    if (layout !== undefined) next = setFolderLayout(next, id, layout);
     if (background !== undefined) next = folderWithBackground(next, id, background ?? undefined);
     if (statusChecksEnabled !== undefined) {
       next = mapNode(next, id, (f) => withStatusChecks(f, statusChecksEnabled) as LayoutNode);
@@ -412,41 +385,27 @@ export function zOrder(id: string, dir: 'forward' | 'back'): boolean {
 }
 
 /**
- * Ctrl+] / Ctrl+[ on the selection: z-order of ONE item in a FREE container (as the item menu).
- * Anything else changes nothing and says why — never a silent no-op.
+ * Ctrl+] / Ctrl+[ on the selection. Every tab is a grid (M5: free layout is removed), where items
+ * never overlap, so this changes nothing and says why — never a silent no-op.
  */
-export function zOrderSelection(ids: string[], dir: 'forward' | 'back'): boolean {
+export function zOrderSelection(ids: string[], _dir: 'forward' | 'back'): boolean {
   const d = currentDraft();
   if (!d || ids.length === 0) return false;
-  if (ids.length > 1) {
-    toast.info('Select one item to bring it forward or send it back.');
-    return false;
-  }
-  const ref = containerOfNode(d, ids[0]);
-  let mode: LayoutMode | null = null;
-  try {
-    mode = ref ? resolveContainer(d, ref).mode : null;
-  } catch {
-    mode = null;
-  }
-  if (!ref || mode === null) {
+  if (!containerOfNode(d, ids[0])) {
     toast.error('That item no longer exists.');
     return false;
   }
-  if (mode !== 'free') {
-    toast.info('Bring forward / Send back are for free layouts — items in a grid never overlap.');
-    return false;
-  }
-  return zOrder(ids[0], dir);
+  toast.info('Items never overlap, so there is nothing to bring forward or send back.');
+  return false;
 }
 
-/** Move or copy items to another container on THIS dashboard (first free cells). */
+/** Move or copy items to another container on THIS dashboard (first free cells; a folder's end). */
 export function moveOrCopyTo(ids: string[], to: ContainerRef, mode: 'move' | 'copy'): boolean {
   const d = currentDraft();
   if (!d || ids.length === 0) return false;
   let newIds: string[] = [];
   const ok = apply(mode === 'move' ? 'Move' : 'Copy', (dd) => {
-    const nodes = adaptedFor(dd, ids, to);
+    const nodes = nodesOf(dd, ids);
     // Moving within the same container: the moved items vacate their own cells first.
     const vacated = mode === 'move' ? deleteNodes(dd, ids) : dd;
     const at = placementsFor(vacated, to, nodes);
@@ -471,8 +430,6 @@ export interface TabFields {
   iconBgColor?: string;
   color?: string;
   opacity?: number;
-  layout?: 'inherit' | LayoutMode;
-  designWidth?: number;
   /** A background picked in the dialog: undefined = unchanged, null = removed. */
   background?: Background | null;
   /** Status checks (M4 §4b): undefined = unchanged, null = inherit (key removed), true/false = set. */
@@ -494,7 +451,7 @@ function withStatusChecks<T extends object>(o: T, v: boolean | null): T {
   return next as T;
 }
 
-/** Name/look via updateTab; layout and design width via setTabLayout (which converts the content). */
+/** Name/look via updateTab, plus its background and status-check setting. */
 function applyTabFields(d: LayoutDashboard, tabId: string, f: TabFields): LayoutDashboard {
   let named = updateTab(d, tabId, tabPatch(f));
   if (f.background !== undefined) {
@@ -514,7 +471,7 @@ function applyTabFields(d: LayoutDashboard, tabId: string, f: TabFields): Layout
     const v = f.statusChecksEnabled;
     named = { ...named, tabs: named.tabs.map((t) => (t.id === tabId ? withStatusChecks(t, v) : t)) };
   }
-  return f.layout !== undefined ? setTabLayout(named, tabId, f.layout, f.designWidth) : named;
+  return named;
 }
 
 export function addTabWith(f: TabFields): string | null {
@@ -629,9 +586,9 @@ export function setLook(header: HeaderConfig | undefined, background: Background
  */
 export async function transferAndRebase(req: TransferRequest, success: string, failure: string): Promise<boolean> {
   const sessionId = get(session)?.dashboardId ?? '';
-  const gridProblem = gridFormProblem(get(config));
-  if (gridProblem) {
-    toast.error(gridProblem); // Ruling 3: never write the finer grid into an older-form document
+  const formProblem = layoutFormProblem(get(config));
+  if (formProblem) {
+    toast.error(formProblem); // M5 §2a: never write this layout form into a document of another
     return false;
   }
   try {

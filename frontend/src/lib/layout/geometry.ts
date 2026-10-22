@@ -1,37 +1,48 @@
-import type {
-  Container, FolderNode, LayoutDashboard, LayoutMode, LayoutNode, LayoutTab, Placement
-} from '../types/layout';
+import type { Container, FolderNode, ItemSize, LayoutNode, LayoutTab, PlacedNode, Placement } from '../types/layout';
 
 /**
- * A tab's grid: 24 columns (spec §9, the finer grid). Small = 1 x 1 cell, Medium = 2 x 2 (the old
- * 12-column cell), Large = 4 x 4. Documents carry `gridUnit: GRID_UNIT` once in this form.
+ * A tab's grid: 24 columns (spec §9). Every tab is a grid tab (M5: free layout is removed).
+ * Tiles on a tab are exactly Small (1 x 1 cell), Medium (2 x 2) or Large (4 x 4) — sizeSpan.
  */
 export const ROOT_COLUMNS = 24;
-/** The finer-grid marker a document in the 24-column form carries (config.gridUnit). */
-export const GRID_UNIT = 2;
-/** Cells a Medium tile spans each way (the old one cell); a minimised folder shows as one. */
+/**
+ * The stored layout format this build reads and writes (M5 §2a). Every placement-carrying write
+ * sends it; the server refuses a mismatch (409). Bumped whenever the stored layout format changes.
+ */
+export const LAYOUT_VERSION = 1;
+/** Cells a Medium item spans each way. */
 export const MEDIUM_CELLS = 2;
-/** Grid rows a folder's title takes in a grid parent (the old one row, in the finer cells). */
+/** Grid rows a folder's title takes on a tab (the backend's FolderTitleRows). */
 export const GRID_TITLE_ROWS = 2;
-export const FREE_UNIT_PX = 8;
-export const DEFAULT_DESIGN_WIDTH = 1280;
-export const MIN_FREE_SCALE = 0.6;
 export const PHONE_BREAKPOINT_PX = 768;
 export const PREVIEW_COUNT = 4;
 
-function concrete(m: unknown): m is LayoutMode {
-  return m === 'grid' || m === 'free';
+/** Cells each way per size: Small 1, Medium 2, Large 4. */
+const SPAN: Record<ItemSize, number> = { small: 1, medium: MEDIUM_CELLS, large: 2 * MEDIUM_CELLS };
+
+/** A size as stored, read the way the server reads it: anything but small / large is Medium. */
+export function sizeOf(size: unknown): ItemSize {
+  return size === 'small' || size === 'large' ? size : 'medium';
 }
 
-/** folder -> tab -> dashboard -> 'grid'. 'inherit'/missing defer to the parent. folderChain is outermost-first. */
-export function resolveMode(dash: LayoutDashboard, tab: LayoutTab, folderChain: FolderNode[]): LayoutMode {
-  for (let i = folderChain.length - 1; i >= 0; i--) {
-    const m = folderChain[i].layout;
-    if (concrete(m)) return m;
-  }
-  if (concrete(tab.layout)) return tab.layout;
-  if (concrete(dash.defaultLayout)) return dash.defaultLayout;
-  return 'grid';
+/** THE span table: the cells an item of `size` spans each way (S 1, M 2, L 4; unknown = Medium). */
+export function sizeSpan(size: unknown): number {
+  return SPAN[sizeOf(size)];
+}
+
+/**
+ * How many items one page of an open folder holds: its content box (px) filled row by row with
+ * items of `contentSize`, each sizeSpan(contentSize) tab cells (`cellPx`) square. At least one per
+ * row and one row, so a box too small for one item (or an unmeasurable one) still shows one.
+ */
+export function folderPage(
+  box: { widthPx: number; heightPx: number }, contentSize: unknown, cellPx: number
+): { perRow: number; rowsPerPage: number; perPage: number } {
+  const item = sizeSpan(contentSize) * cellPx;
+  const fit = (px: number) => (isNum(item) && item > 0 && isNum(px) && px > 0 ? Math.max(1, Math.floor(px / item + 1e-9)) : 1);
+  const perRow = fit(box.widthPx);
+  const rowsPerPage = fit(box.heightPx);
+  return { perRow, rowsPerPage, perPage: perRow * rowsPerPage };
 }
 
 /** True when c is an object whose placement has finite numeric x and y (it has a position). */
@@ -48,7 +59,8 @@ function hasPos(c: unknown): boolean {
 /**
  * Stable sort by placement.y, then placement.x, then original index. Does not mutate.
  * Never throws: anything that is not an object with finite numeric placement x/y
- * sorts AFTER the valid children, in original array order.
+ * sorts AFTER the valid children, in original array order. (Tab level only: folder contents
+ * are already in order.)
  */
 export function readingOrder<T extends { placement?: Placement }>(children: T[]): T[] {
   const valid: { c: T; i: number }[] = [];
@@ -67,22 +79,22 @@ function fin(v: unknown, dflt: number): number {
 
 export function clampPlacement(p: Placement, columns: number): Placement {
   const cols = resolveColumns(columns, ROOT_COLUMNS);
-  const x = Math.min(Math.max(fin(p.x, 0), 0), cols - 1);
-  const w = Math.min(Math.max(fin(p.w, 1), 1), cols - x);
-  const out: Placement = { x, y: Math.max(fin(p.y, 0), 0), w, h: Math.max(fin(p.h, 1), 1) };
-  if (typeof p.z === 'number' && Number.isFinite(p.z)) out.z = Math.min(1000, Math.max(-1000, Math.trunc(p.z)));
+  const x = Math.min(Math.max(fin(p?.x, 0), 0), cols - 1);
+  const w = Math.min(Math.max(fin(p?.w, 1), 1), cols - x);
+  const out: Placement = { x, y: Math.max(fin(p?.y, 0), 0), w, h: Math.max(fin(p?.h, 1), 1) };
+  if (typeof p?.z === 'number' && Number.isFinite(p.z)) out.z = Math.min(1000, Math.max(-1000, Math.trunc(p.z)));
   return out;
 }
 
-/** First PREVIEW_COUNT renderable children in reading order; non-renderable ones are skipped. */
+/** First PREVIEW_COUNT renderable children, in their order; non-renderable ones are skipped. */
 export function previewChildren(folder: FolderNode): LayoutNode[] {
   const kids = Array.isArray(folder.content?.children) ? folder.content.children : [];
-  return readingOrder(kids.filter(isRenderable)).slice(0, PREVIEW_COUNT);
+  return kids.filter(isRenderable).slice(0, PREVIEW_COUNT);
 }
 
 /**
- * THE columns rule, used everywhere a column count is read: floor a finite value;
- * if that is not >= 1, use `fallback` (itself floored; 1 if it is no good either).
+ * THE columns rule: floor a finite value; if that is not >= 1, use `fallback` (itself floored;
+ * 1 if it is no good either).
  */
 export function resolveColumns(raw: unknown, fallback: number): number {
   const c = isNum(raw) ? Math.floor(raw) : NaN;
@@ -91,24 +103,14 @@ export function resolveColumns(raw: unknown, fallback: number): number {
   return f >= 1 ? f : 1;
 }
 
-/**
- * A container's column count. A root falls back to ROOT_COLUMNS; a folder's
- * content falls back to the folder's placement.w (and that to 1).
- */
-export function containerColumns(container: Container | undefined, folder?: FolderNode): number {
-  const fallback = folder ? resolveColumns(folder.placement?.w, 1) : ROOT_COLUMNS;
-  return resolveColumns(container?.columns, fallback);
-}
-
-/** A folder's inner column count: its content.columns (design extent when free), else its placement width. */
-export function folderInnerColumns(folder: FolderNode): number {
-  return containerColumns(folder.content, folder);
+/** A tab root's column count (24; a bad value falls back to ROOT_COLUMNS). */
+export function containerColumns(container: Container | undefined): number {
+  return resolveColumns(container?.columns, ROOT_COLUMNS);
 }
 
 /**
- * A tile box narrower or shorter than this is marked compact. Ruling 22. Unchanged by the finer
- * grid: a Medium 2 x 2 tile is the old 1 x 1 cell's px. Since spec §10 the mark changes nothing in
- * a link tile's arrangement (its content scales with the box); only a note tile drops its body.
+ * A tile box narrower or shorter than this is marked compact. Ruling 22. A Medium 2 x 2 tile at the
+ * usual cell is above it; only a note tile drops its body when compact.
  */
 export const COMPACT_TILE_PX = 110;
 export type TileFit = 'fill' | 'compact';
@@ -120,108 +122,74 @@ export function tileFit(wPx: number, hPx: number): TileFit {
 }
 
 /**
- * How a tile placed at `p` in container `m` fits: a grid tile of one cell (Small, 1 x 1) is always
- * compact, so it is clearly smaller than Medium at any width (spec §9); otherwise tileFit on its box.
+ * How an item `span` cells square fits at `cellPx` per cell: a Small item (1 cell) is always compact,
+ * so it is clearly smaller than Medium at any width (spec §9); otherwise tileFit on its box.
+ * The same rule on a tab and in a folder (M5: consistent sizes).
  */
+export function spanFit(span: number, cellPx: number): TileFit {
+  if (span <= 1) return 'compact';
+  return tileFit(span * cellPx, span * cellPx);
+}
+
+/** How a tile placed at `p` on a tab fits (spanFit on its span; Small is compact). */
 export function nodeFit(p: Placement, m: ContainerMetrics): TileFit {
-  if (m.mode === 'grid') {
-    const c = clampPlacement(p, m.columns);
-    if (c.w <= 1 && c.h <= 1) return 'compact';
-  }
+  const c = clampPlacement(p, m.columns);
+  if (c.w <= 1 && c.h <= 1) return 'compact';
   const b = nodeBox(p, m);
   return tileFit(b.widthPx, b.heightPx);
 }
 
-export type CanvasPlan =
-  | { kind: 'grid'; cellPx: number }
-  | { kind: 'free'; scale: number }
-  | { kind: 'stacked' };
+export type CanvasPlan = { kind: 'grid'; cellPx: number } | { kind: 'stacked' };
 
-export function planCanvas(mode: LayoutMode, widthPx: number, tab: LayoutTab): CanvasPlan {
-  if (!isNum(widthPx) || widthPx <= 0) return { kind: 'stacked' };
-  if (mode === 'grid') {
-    if (widthPx < PHONE_BREAKPOINT_PX) return { kind: 'stacked' };
-    return { kind: 'grid', cellPx: widthPx / containerColumns(tab.root) };
-  }
-  const dw = tab.designWidth;
-  const scale = widthPx / (isNum(dw) && dw > 0 ? dw : DEFAULT_DESIGN_WIDTH);
-  // epsilon guards float error exactly at the 0.6 boundary
-  if (scale < MIN_FREE_SCALE - 1e-9) return { kind: 'stacked' };
-  return { kind: 'free', scale: Math.max(scale, MIN_FREE_SCALE) };
-}
-
-/**
- * Overlay content unit (Ruling 23): min(the dashboard's own unit for this mode, bodyPx / columns),
- * so tiles in a folder overlay keep their size on the canvas and only shrink when the
- * viewport is too narrow. Grid: one cell; free: one 8 px design unit × scale.
- */
-export function overlayUnitPx(plan: CanvasPlan, tab: LayoutTab, mode: LayoutMode, columns: number, bodyPx: number): number {
-  const cols = resolveColumns(columns, 1);
-  const fit = Math.max(1, isNum(bodyPx) ? bodyPx : 1) / cols;
-  const canvas = canvasUnitPx(plan, tab, mode);
-  return canvas > 0 ? Math.min(canvas, fit) : fit;
-}
-
-function canvasUnitPx(plan: CanvasPlan, tab: LayoutTab, mode: LayoutMode): number {
-  if (plan.kind === 'stacked') return 0; // phone stacking ignores sizes
-  const dw = tab.designWidth;
-  const canvasW =
-    plan.kind === 'grid'
-      ? plan.cellPx * containerColumns(tab.root)
-      : plan.scale * (isNum(dw) && dw > 0 ? dw : DEFAULT_DESIGN_WIDTH);
-  if (mode === 'grid') return plan.kind === 'grid' ? plan.cellPx : canvasW / ROOT_COLUMNS;
-  return FREE_UNIT_PX * (plan.kind === 'free' ? plan.scale : canvasW / DEFAULT_DESIGN_WIDTH);
+/** A tab's canvas: its 24-column grid at this width, or stacked on a phone / unmeasured width. */
+export function planCanvas(widthPx: number, tab: LayoutTab): CanvasPlan {
+  if (!isNum(widthPx) || widthPx < PHONE_BREAKPOINT_PX) return { kind: 'stacked' };
+  return { kind: 'grid', cellPx: widthPx / containerColumns(tab.root) };
 }
 
 // ---------------------------------------------------------------------------
-// One geometry source. The renderer (and the M3 editor's hit-testing and
-// resize handles) take every size from the functions below; nothing else
-// derives a column width, row height, folder chrome or box.
+// One geometry source. The renderer (and the editor's hit-testing and resize
+// handles) take every size from the functions below; nothing else derives a
+// column width, row height, folder chrome or box.
 // ---------------------------------------------------------------------------
 
 export interface NodeBox { leftPx: number; topPx: number; widthPx: number; heightPx: number }
 
 export interface ContainerMetrics {
-  mode: 'grid' | 'free';
   columns: number;
-  /** Width in px of one column. */
+  /** Width in px of one column (one tab cell). */
   unitPx: number;
-  /** Height in px of one row (free: always unitPx). */
+  /** Height in px of one row. */
   rowPx: number;
-  /** Width in px of the container's content box (= columns * unitPx). */
+  /** Width in px of the container's content box. */
   innerWidthPx: number;
+  /**
+   * A folder's content (M5): no placements; items flow in order, each `span` cells square
+   * (its contents size), `perRow` to a row. Absent for a tab root.
+   */
+  flow?: { span: number; perRow: number };
 }
 
 const nonNeg = (v: unknown): number => (isNum(v) && v > 0 ? v : 0);
 
-/**
- * The ONLY function that turns a container + its box into child geometry.
- * Grid rows are square unless `opts.rowPx` is given; free rows are the unit.
- * Pass `opts.folder` for a folder's content so a bad `columns` falls back to its placement.w.
- */
-export function containerMetrics(
-  container: Container,
-  mode: LayoutMode,
-  boxWidthPx: number,
-  opts: { rowPx?: number; folder?: FolderNode } = {}
-): ContainerMetrics {
-  const columns = containerColumns(container, opts.folder);
+/** A tab root's metrics: square cells unless `opts.rowPx` is given. */
+export function containerMetrics(container: Container, boxWidthPx: number, opts: { rowPx?: number } = {}): ContainerMetrics {
+  const columns = containerColumns(container);
   const innerWidthPx = nonNeg(boxWidthPx);
   const unitPx = innerWidthPx / columns;
-  const m: LayoutMode = mode === 'free' ? 'free' : 'grid';
-  const rowPx = m === 'grid' && opts.rowPx !== undefined ? nonNeg(opts.rowPx) : unitPx;
-  return { mode: m, columns, unitPx, rowPx, innerWidthPx };
+  const rowPx = opts.rowPx !== undefined ? nonNeg(opts.rowPx) : unitPx;
+  return { columns, unitPx, rowPx, innerWidthPx };
 }
 
-/** A node's box inside a container, after clampPlacement (so fractional x/y/w/h are floored). */
+/** A node's box on a tab, after clampPlacement (so fractional x/y/w/h are floored). */
 export function nodeBox(p: Placement, m: ContainerMetrics): NodeBox {
   const c = clampPlacement(p, m.columns);
   return { leftPx: c.x * m.unitPx, topPx: c.y * m.rowPx, widthPx: c.w * m.unitPx, heightPx: c.h * m.rowPx };
 }
 
 /**
- * The cell under a point, given in px from the container's content-box origin (grid: a column and
- * row; free: an 8 px design unit). Clamped to the columns and to x, y >= 0.
+ * The cell under a point, given in px from the container's content-box origin. Clamped to the
+ * columns and to x, y >= 0.
  */
 export function pointToCell(m: ContainerMetrics, dxPx: number, dyPx: number): { x: number; y: number } {
   if (!(m.unitPx > 0) || !(m.rowPx > 0)) return { x: 0, y: 0 };
@@ -264,78 +232,30 @@ function chromeOf(folder: FolderNode): FolderChrome {
   return folderChrome(folder.shape, folder.showTitle !== false);
 }
 
-/** A folder's own mode: concrete folder.layout, else its parent container's (as resolveMode). */
-function innerMode(folder: FolderNode, parent: ContainerMetrics): LayoutMode {
-  return concrete(folder.layout) ? folder.layout : parent.mode;
-}
-
-/** Rows a grid folder's content spans: max(minRows, deepest child bottom), at least 1. */
-export function gridContentRows(folder: FolderNode, columns: number, minRows: number): number {
-  let rows = Math.max(1, minRows);
-  const kids = Array.isArray(folder.content?.children) ? folder.content.children : [];
-  for (const c of kids) {
-    if (!isRenderable(c)) continue;
-    const p = clampPlacement(c.placement, columns);
-    rows = Math.max(rows, p.y + p.h);
-  }
-  return rows;
+/** Flow metrics: items `span` cells of `cellPx` square, `perRow` to a row, in `widthPx`. */
+function flowMetrics(span: number, perRow: number, cellPx: number, widthPx: number): ContainerMetrics {
+  const unitPx = nonNeg(cellPx);
+  return { columns: perRow * span, unitPx, rowPx: unitPx, innerWidthPx: nonNeg(widthPx), flow: { span, perRow } };
 }
 
 /**
- * Metrics of an expanded folder's content, inside a parent container.
- * Width: the folder box minus its chrome (so free children never exceed it).
- * Rows: a grid folder in a grid parent fits its rows to its height (content
- * rows = max(h - GRID_TITLE_ROWS, deepest child), shrunk to fit, never clipped); a grid folder
- * in a free parent uses square cells and grows; free rows are the unit.
+ * Metrics of an open folder's content on a tab (M5 §2): the items flow in order at the folder's
+ * contents size, in the tab's own cell (`parent.unitPx`), as many per row as fit its content box
+ * (folderPage). A folder without a placement (inside another folder) has no box of its own here.
  */
 export function folderInnerMetrics(folder: FolderNode, parent: ContainerMetrics): ContainerMetrics {
-  const box = nodeBox(folder.placement, parent);
+  const box = folder.placement ? nodeBox(folder.placement, parent) : { leftPx: 0, topPx: 0, widthPx: 0, heightPx: 0 };
   const content = folderContentBox({ ...folder, display: 'expanded' }, box, chromeOf(folder));
-  const mode = innerMode(folder, parent);
-  const columns = folderInnerColumns(folder);
-  let rowPx: number | undefined;
-  if (mode === 'grid' && parent.mode === 'grid') {
-    const h = clampPlacement(folder.placement, parent.columns).h;
-    rowPx = content.heightPx / gridContentRows(folder, columns, h - GRID_TITLE_ROWS);
-  }
-  return containerMetrics(folder.content, mode, content.widthPx, { rowPx, folder });
-}
-
-/** Height free children need: the lowest bottom edge (folders at their required height). */
-export function freeContentHeightPx(children: unknown, m: ContainerMetrics): number {
-  let bottom = 0;
-  for (const c of Array.isArray(children) ? children : []) {
-    if (!isRenderable(c)) continue;
-    const b = nodeBox(c.placement, m);
-    bottom = Math.max(bottom, b.topPx + (c.kind === 'folder' ? requiredFolderHeightPx(c, m) : b.heightPx));
-  }
-  return bottom;
-}
-
-/**
- * Height a folder renders at inside container m: its box, or more when its
- * content needs it (folders grow past their box, never clip). FolderView in a
- * free container renders exactly this as its min-height.
- */
-export function requiredFolderHeightPx(folder: FolderNode, m: ContainerMetrics): number {
-  const box = nodeBox(folder.placement, m);
-  if (folder.display === 'collapsed' || !isRenderable(folder)) return box.heightPx;
-  const inner = folderInnerMetrics(folder, m);
-  const ch = chromeOf(folder);
-  let content: number;
-  if (inner.mode === 'free') {
-    content = freeContentHeightPx(folder.content.children, inner);
-  } else if (m.mode === 'grid') {
-    return box.heightPx; // rows were fitted to the box
-  } else {
-    content = gridContentRows(folder, inner.columns, 0) * inner.rowPx;
-  }
-  return Math.max(box.heightPx, ch.titlePx + ch.padYPx + content);
+  const span = sizeSpan(folder.contentSize);
+  const { perRow } = folderPage(content, folder.contentSize, parent.unitPx);
+  return flowMetrics(span, perRow, parent.unitPx, content.widthPx);
 }
 
 /** Overlay backdrop padding (2 x 1rem) and panel chrome (body padding 2 x 16 + border 2 x 1). */
 export const OVERLAY_GUTTER_PX = 32;
 export const OVERLAY_PANEL_CHROME_PX = 34;
+/** The cell an overlay uses when the canvas is stacked (phone): the old 12-column cell at 1280 px, halved. */
+const STACKED_CELL_PX = 1280 / ROOT_COLUMNS;
 
 /** Width of a page scrollbar: innerWidth - clientWidth (0 when clientWidth is unmeasurable). */
 export function scrollbarPx(innerWidth: number, clientWidth: number): number {
@@ -354,29 +274,28 @@ export function overlayBodyPx(innerWidth: number, clientWidth: number): number {
 }
 
 /**
- * Sizing of a folder shown in a panel above the canvas (folder overlay; Task 2's
- * maximised panel). Cells keep the dashboard's size, capped so the content fits
- * bodyPx (Ruling 23). panelWidthPx = content + the panel's own chrome.
+ * Sizing of a folder shown in a panel above the canvas (the pop-over and maximised panel, until
+ * M5 Task 3 replaces them). Its items flow at its contents size in the tab's cell (capped so one
+ * item fits `bodyPx`), as many per row as fit, never more than it has. panelWidthPx = content +
+ * the panel's own chrome.
  */
 export function overlayMetrics(
-  plan: CanvasPlan,
-  tab: LayoutTab,
-  mode: LayoutMode,
-  folder: FolderNode,
-  bodyPx: number
+  plan: CanvasPlan, folder: FolderNode, bodyPx: number
 ): { metrics: ContainerMetrics; panelWidthPx: number } {
-  const columns = folderInnerColumns(folder);
-  const unit = overlayUnitPx(plan, tab, mode, columns, bodyPx);
-  const metrics = containerMetrics(folder.content, mode, columns * unit, { folder });
+  const span = sizeSpan(folder.contentSize);
+  const body = Math.max(1, isNum(bodyPx) ? bodyPx : 1);
+  const canvasCell = plan.kind === 'grid' && plan.cellPx > 0 ? plan.cellPx : STACKED_CELL_PX;
+  const cell = Math.min(canvasCell, body / span);
+  const count = Array.isArray(folder.content?.children) ? folder.content.children.length : 0;
+  const fits = folderPage({ widthPx: body, heightPx: body }, folder.contentSize, cell).perRow;
+  const perRow = Math.max(1, Math.min(fits, count));
+  const metrics = flowMetrics(span, perRow, cell, perRow * span * cell);
   return { metrics, panelWidthPx: metrics.innerWidthPx + OVERLAY_PANEL_CHROME_PX };
 }
 
 /** Box width of a tab's root container for a plan (0 when stacked). */
 export function rootBoxWidthPx(plan: CanvasPlan, tab: LayoutTab): number {
-  const cols = containerColumns(tab.root);
-  if (plan.kind === 'grid') return plan.cellPx * cols;
-  if (plan.kind === 'free') return plan.scale * FREE_UNIT_PX * cols;
-  return 0;
+  return plan.kind === 'grid' ? plan.cellPx * containerColumns(tab.root) : 0;
 }
 
 function isNum(v: unknown): v is number {
@@ -392,12 +311,13 @@ function validPlacement(p: unknown): p is Placement {
 /**
  * SHALLOW check: validates this node only (and that a folder's content.children is an array).
  * Contract: the renderer calls it on every child at every container level.
- * True only for nodes the renderer can draw; false => show a visible placeholder. */
+ * True only for nodes the renderer can draw; false => show a visible placeholder.
+ * Folder contents have no placements (M5): a tab-level node must also pass isPlaced.
+ */
 export function isRenderable(n: unknown): n is LayoutNode {
   if (!n || typeof n !== 'object') return false;
   const o = n as Record<string, unknown>;
   if (o.kind !== 'tile' && o.kind !== 'folder') return false;
-  if (!validPlacement(o.placement)) return false;
   if (o.kind === 'folder') {
     const c = o.content as Record<string, unknown> | undefined;
     if (!c || typeof c !== 'object' || !Array.isArray(c.children)) return false;
@@ -405,33 +325,42 @@ export function isRenderable(n: unknown): n is LayoutNode {
   return true;
 }
 
-/**
- * One dashboard grid cell in free design units for a tab: half the old 12-column side,
- * round(designWidth / 12 / 8) / 2 (6.5 at 1280; controller Ruling 2), so a Medium (2 cells) is
- * exactly the old side. It may be fractional: conversions round to whole units.
- */
-export function freeSideOf(designWidth: unknown): number {
-  const dw = isNum(designWidth) && designWidth > 0 ? designWidth : DEFAULT_DESIGN_WIDTH;
-  return Math.max(1, Math.round(dw / (ROOT_COLUMNS / MEDIUM_CELLS) / FREE_UNIT_PX)) / MEDIUM_CELLS;
+/** A renderable node with a valid placement: what may sit on a tab. */
+export function isPlaced(n: unknown): n is PlacedNode {
+  return isRenderable(n) && validPlacement((n as { placement?: unknown }).placement);
 }
 
 /**
- * Placement of a folder minimised to its tile (per-browser view): one Medium tile at the same
- * x,y — a grid folder 2 x 2 cells, clamped to its own footprint (a folder 1 cell wide or high
- * minimises to 1 in that direction, so it never draws over a neighbour); a free folder a square of
- * 2 x side design units (freeSideOf; the old one-column square, so it looks exactly as before the
- * finer grid).
+ * Placement of a folder minimised on a tab (per-browser view or saved): a tile of its own size
+ * (sizeSpan) at the top-left of the space it keeps, clamped to that space so it never draws over a
+ * neighbour (M5 §3a.2).
  */
-export function minimisedPlacement(p: Placement, mode: LayoutMode, tab: LayoutTab): Placement {
-  let w: number, h: number;
-  if (mode === 'free') {
-    w = h = Math.max(1, Math.round(MEDIUM_CELLS * freeSideOf(tab.designWidth)));
-  } else {
-    // A non-finite side (unreachable for renderable nodes) is a Medium, never NaN.
-    w = isNum(p.w) ? Math.min(MEDIUM_CELLS, Math.max(1, p.w)) : MEDIUM_CELLS;
-    h = isNum(p.h) ? Math.min(MEDIUM_CELLS, Math.max(1, p.h)) : MEDIUM_CELLS;
-  }
+export function minimisedPlacement(p: Placement, size: unknown): Placement {
+  const span = sizeSpan(size);
+  // A non-finite side (unreachable for placed nodes) is the span, never NaN.
+  const w = isNum(p.w) ? Math.min(span, Math.max(1, p.w)) : span;
+  const h = isNum(p.h) ? Math.min(span, Math.max(1, p.h)) : span;
   const out: Placement = { x: p.x, y: p.y, w, h };
   if (p.z !== undefined) out.z = p.z;
   return out;
+}
+
+/** The default open box of a folder that has none (M5 §3a.3): its size in cells x 3 wide, x 2 high. */
+export function defaultFolderBox(size: unknown): { w: number; h: number } {
+  const s = sizeSpan(size);
+  return { w: 3 * s, h: 2 * s };
+}
+
+/**
+ * The cells an item takes when it is placed on a tab: a tile its Size's span (square); a folder
+ * its stored open box, or the default box when it has none (it comes from inside a folder).
+ */
+export function tabSpan(n: Pick<LayoutNode, 'kind' | 'placement'> & { size?: unknown }): { w: number; h: number } {
+  if (n.kind === 'tile') {
+    const s = sizeSpan(n.size);
+    return { w: s, h: s };
+  }
+  const p = n.placement;
+  if (p && isNum(p.w) && isNum(p.h)) return { w: Math.max(1, Math.floor(p.w)), h: Math.max(1, Math.floor(p.h)) };
+  return defaultFolderBox(n.size);
 }

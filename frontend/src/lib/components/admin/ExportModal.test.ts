@@ -13,7 +13,7 @@ describe('ExportModal (m7)', () => {
       dashboards: [
         { id: 'd2', name: 'Work', path: '/work', order: 1, revision: 1, tabs: [] },
         { id: 'd1', name: 'Home', path: '/home', order: 0, revision: 1, tabs: [] },
-        { id: 'v3d', name: 'Fancy', path: '/fancy', order: 2, revision: 1, tabs: [{ id: 'f', name: 'F', layout: 'free', root: { columns: 160, children: [] } }] }
+        { id: 'v3d', name: 'Fancy', path: '/fancy', order: 2, revision: 1, tabs: [{ id: 'f', name: 'F', root: { columns: 24, children: [] } }] }
       ]
     } as Config);
     render(ExportModal, { onClose: () => {} });

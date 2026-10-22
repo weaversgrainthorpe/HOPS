@@ -1,5 +1,6 @@
 import { test, expect, type Page, type BrowserContext } from '@playwright/test';
 import { getCsrfToken } from '../helpers';
+import { m5Config } from '../m5form';
 
 // M4 Task 7 in a REAL browser: layered status checks show their source and effect, the badge
 // follows the resolved setting, and the one-time notice lists a dashboard whose tiles are
@@ -41,7 +42,7 @@ async function importDash(page: Page, context: BrowserContext) {
   };
   const doc = {
     format: 'hops-export', schemaVersion: 3, exportedAt: new Date().toISOString(), exportType: 'single-dashboard',
-    config: { dashboards: [dash] }
+    config: m5Config([dash]) // M5 form (layoutVersion 1): see m5form.ts
   };
   const r = await page.request.post('/api/config/import', {
     headers: { 'X-CSRF-Token': await getCsrfToken(context) },

@@ -28,7 +28,7 @@ const cur = () => ({
 // The Showcase: a free-layout dashboard (once "view-only (v3)").
 const showcase = {
 	id: 'sc-dash', name: 'Showcase', path: '/showcase', revision: 3,
-	tabs: [{ id: 'sc-tab-free', name: 'Free', layout: 'free', designWidth: 1280, root: { columns: 160, children: [] } }]
+	tabs: [{ id: 'sc-tab-free', name: 'Free', root: { columns: 24, children: [] } }]
 };
 
 beforeEach(() => {

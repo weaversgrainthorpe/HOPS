@@ -21,11 +21,15 @@ class FakeRO {
   disconnect() {}
 }
 
-function tile(id: string, name: string, x = 0, y = 0, extra: any = {}): any {
-  return { kind: 'tile', id, name, url: 'http://x.test', icon: 'mdi:home', openMode: 'newtab', size: 'medium', order: 0, placement: { x, y, w: 2, h: 2 }, ...extra }; // Medium (spec §9)
+/** A folder's child (M5: no placement; the x, y of older fixtures are ignored). */
+function tile(id: string, name: string, _x = 0, _y = 0, extra: any = {}): any {
+  return { kind: 'tile', id, name, url: 'http://x.test', icon: 'mdi:home', openMode: 'newtab', size: 'medium', order: 0, ...extra };
 }
 function folder(id: string, name: string, children: any[], extra: any = {}): any {
-  return { kind: 'folder', id, name, display: 'collapsed', placement: { x: 0, y: 0, w: 4, h: 4 }, content: { columns: 8, children }, ...extra };
+  return {
+    kind: 'folder', id, name, display: 'collapsed', size: 'medium', contentSize: 'medium',
+    placement: { x: 0, y: 0, w: 4, h: 4 }, content: { children }, ...extra
+  };
 }
 function mk(children: any[]): { dash: LayoutDashboard; tab: LayoutTab } {
   const tab: LayoutTab = { id: 't1', name: 'Main', root: { columns: 24, children } };
@@ -68,7 +72,7 @@ describe('collapsed folder preview', () => {
     expect(container.querySelectorAll('[data-node-id="f1"] .preview-cell').length).toBe(4);
   });
   it('a folder whose children all cannot be displayed says so, never "Empty folder"', async () => {
-    const { container } = await renderTab([folder('f1', 'Box', [{ kind: 'tile', id: 'x1' }, { kind: 'widget', id: 'x2' }])]);
+    const { container } = await renderTab([folder('f1', 'Box', [{ kind: 'gadget', id: 'x1' }, { kind: 'widget', id: 'x2' }])]);
     expect(screen.queryByText('Empty folder')).toBeNull();
     const note = container.querySelector('[data-node-id="f1"] .empty-note') as HTMLElement;
     expect(note.textContent).toBe("Can't display this folder's contents");
@@ -159,36 +163,40 @@ describe('overlay', () => {
   });
 });
 
-describe('overlay sizing (Ruling 23)', () => {
-  // 24 columns of 60 px at 1440; folders of 1 and 3 Medium tiles across (2 and 6 columns).
-  for (const cols of [2, 6]) {
-    it(`a ${cols}-column folder's overlay cells equal the dashboard cell (60px at 1440), not bodyPx/columns`, async () => {
-      const per = cols / 2;
-      const kids = [0, 1, 2].map((i) => tile('k' + i, 'K' + i, (i % per) * 2, Math.floor(i / per) * 2));
-      await renderTab([folder('f1', 'Box', kids, { content: { columns: cols, children: kids } })]);
+describe('overlay sizing (Ruling 23, M5 consistent sizes)', () => {
+  // 24 columns of 60 px at 1440: a Medium item is 2 x 60 px, in the overlay as on the tab.
+  for (const n of [1, 3]) {
+    it(`${n} Medium item(s): the overlay shows them at the dashboard's Medium size (120 px), ${n} across`, async () => {
+      const kids = Array.from({ length: n }, (_, i) => tile('k' + i, 'K' + i));
+      await renderTab([folder('f1', 'Box', kids)]);
       await fireEvent.click(screen.getByRole('button', { name: /^Box/ }));
       const panel = screen.getByRole('dialog');
       const cell = panel.querySelector('[data-node-id="k0"]') as HTMLElement;
-      const grid = cell.parentElement as HTMLElement;
-      expect(grid.getAttribute('style')).toMatch(/grid-auto-rows:\s*60px/);
-      // The content box is exactly columns x cell, so each 1fr column is 60px too (a Medium = the old 120 px).
+      const flow = cell.parentElement as HTMLElement;
+      expect(flow.getAttribute('style')).toMatch(/grid-auto-rows:\s*120px/);
+      // The content box is exactly the items across, so the panel fits its content (+ chrome).
       const box = panel.querySelector('.overlay-content') as HTMLElement;
-      expect(box.style.width).toBe(`${cols * 60}px`);
-      // The panel fits its content (+ chrome), capped at the viewport.
-      expect((panel as HTMLElement).style.width).toBe(`${cols * 60 + 34}px`);
+      expect(box.style.width).toBe(`${n * 120}px`);
+      expect((panel as HTMLElement).style.width).toBe(`${n * 120 + 34}px`);
       expect((panel as HTMLElement).style.maxWidth).toBe('100%');
     });
   }
-  it('a narrow viewport shrinks the overlay cell below the dashboard cell', async () => {
+  it('a Small-contents folder shows its items at the Small size (one cell)', async () => {
+    await renderTab([folder('f1', 'Box', [tile('a', 'A')], { contentSize: 'small' })]);
+    await fireEvent.click(screen.getByRole('button', { name: /^Box/ }));
+    const flow = (screen.getByRole('dialog').querySelector('[data-node-id="a"]') as HTMLElement).parentElement as HTMLElement;
+    expect(flow.getAttribute('style')).toMatch(/grid-auto-rows:\s*60px/);
+  });
+  it('a narrow viewport wraps the items to the body width, keeping their size', async () => {
     const prev = window.innerWidth;
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 400 });
     try {
-      const kids = [tile('a', 'A', 0, 0), tile('b', 'B', 2, 0), tile('c', 'C', 4, 0), tile('d', 'D', 6, 0)];
+      const kids = [tile('a', 'A'), tile('b', 'B'), tile('c', 'C'), tile('d', 'D')];
       await renderTab([folder('f1', 'Box', kids)]);
       await fireEvent.click(screen.getByRole('button', { name: /^Box/ }));
-      const grid = (screen.getByRole('dialog').querySelector('[data-node-id="a"]') as HTMLElement).parentElement as HTMLElement;
-      const row = Number(/grid-auto-rows:\s*([\d.]+)px/.exec(grid.getAttribute('style') ?? '')![1]);
-      expect(row).toBeCloseTo((400 - 32 - 34) / 8, 1); // 8 content columns
+      const flow = (screen.getByRole('dialog').querySelector('[data-node-id="a"]') as HTMLElement).parentElement as HTMLElement;
+      expect(flow.getAttribute('style')).toMatch(/grid-auto-rows:\s*120px/);
+      expect(flow.getAttribute('style')).toContain('repeat(2, 120px)'); // (400 - 32 - 34) / 120 = 2 across
     } finally {
       Object.defineProperty(window, 'innerWidth', { configurable: true, value: prev });
     }
@@ -199,15 +207,16 @@ describe('overlay width excludes the scrollbar (M3 Task 1)', () => {
   it('a 15px page scrollbar is subtracted from the overlay body', async () => {
     const prevW = window.innerWidth;
     const de = document.documentElement;
-    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 400 });
-    Object.defineProperty(de, 'clientWidth', { configurable: true, value: 385 });
+    // A 320 px viewport with a 15 px scrollbar: (305 - 66) / 120 → 1 across; had the scrollbar not been
+    // subtracted, (320 - 66) / 120 → 2 across.
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 320 });
+    Object.defineProperty(de, 'clientWidth', { configurable: true, value: 305 });
     try {
-      const kids = [tile('a', 'A', 0, 0), tile('b', 'B', 2, 0), tile('c', 'C', 4, 0), tile('d', 'D', 6, 0)];
+      const kids = [tile('a', 'A'), tile('b', 'B'), tile('c', 'C'), tile('d', 'D')];
       await renderTab([folder('f1', 'Box', kids)]);
       await fireEvent.click(screen.getByRole('button', { name: /^Box/ }));
-      const grid = (screen.getByRole('dialog').querySelector('[data-node-id="a"]') as HTMLElement).parentElement as HTMLElement;
-      const row = Number(/grid-auto-rows:\s*([\d.]+)px/.exec(grid.getAttribute('style') ?? '')![1]);
-      expect(row).toBeCloseTo((385 - 32 - 34) / 8, 1); // 8 content columns
+      const flow = (screen.getByRole('dialog').querySelector('[data-node-id="a"]') as HTMLElement).parentElement as HTMLElement;
+      expect(flow.getAttribute('style')).toContain('repeat(1, 120px)');
     } finally {
       Object.defineProperty(window, 'innerWidth', { configurable: true, value: prevW });
       delete (de as unknown as Record<string, unknown>).clientWidth;

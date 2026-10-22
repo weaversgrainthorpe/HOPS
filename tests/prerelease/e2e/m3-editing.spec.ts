@@ -1,5 +1,6 @@
 import { test, expect, type Page, type BrowserContext } from '@playwright/test';
 import { getCsrfToken } from '../helpers';
+import { m5Config } from '../m5form';
 
 // M3 editor, in a REAL browser (Ruling 29). The jsdom suites stub hit-testing and layout, so they
 // cannot see CSS stacking (tab controls over a tab button), real store wiring (the context menu
@@ -74,7 +75,7 @@ async function importFixture(page: Page, context: BrowserContext): Promise<Fixtu
   };
   const doc = {
     format: 'hops-export', schemaVersion: 3, exportedAt: new Date().toISOString(), exportType: 'single-dashboard',
-    config: { dashboards: [dash] }
+    config: m5Config([dash]) // M5 form (layoutVersion 1): see m5form.ts
   };
   const r = await page.request.post('/api/config/import', {
     headers: { 'X-CSRF-Token': await getCsrfToken(context) },
@@ -353,7 +354,7 @@ test.describe('M3 editor: dragging into and out of folders', () => {
     };
     const doc = {
       format: 'hops-export', schemaVersion: 3, exportedAt: new Date().toISOString(), exportType: 'single-dashboard',
-      config: { dashboards: [dash] }
+      config: m5Config([dash]) // M5 form (layoutVersion 1): see m5form.ts
     };
     const r = await page.request.post('/api/config/import', {
       headers: { 'X-CSRF-Token': await getCsrfToken(context) },

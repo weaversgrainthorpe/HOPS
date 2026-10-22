@@ -2,13 +2,15 @@
  * Resizing (M3 §5.6, plan Task 9): the one resolver and commit shared by the resize handles
  * (a pointer drag through the drag engine) and the keyboard (Shift+Arrow on the selection).
  *
- * - Folders (expanded) and tiles in FREE containers resize; a grid tile's span is set by its
- *   Size in the tile dialog (spec §9: Small 1 x 1, Medium 2 x 2, Large 4 x 4); a collapsed folder renders as one
- *   Medium tile, so it has no handles (Ruling 13) — it is expanded first.
+ * - Only open folders on a tab resize. A tile's span is set by its Size in the tile dialog
+ *   (Small 1 x 1, Medium 2 x 2, Large 4 x 4); a minimised folder renders as a tile of its size,
+ *   so it has no handles (Ruling 13) — it is opened first; items inside a folder take its contents
+ *   size and order (M5).
  * - The phone (stacked) layout has no resizing.
- * - Grid: a resize that would overlap pushes the neighbours aside (Ruling 11); the push is part of
- *   the target and trial-run here, so what the preview shows is exactly what the commit stores.
- * - An expanded folder is never smaller than its content (treeOps.resizedPlacement clamps).
+ * - A resize that would overlap pushes the neighbours aside (Ruling 11); the push is part of the
+ *   target and trial-run here, so what the preview shows is exactly what the commit stores.
+ * - An open folder is never smaller than its title plus one item (treeOps.resizedPlacement
+ *   clamps); it pages its contents instead of growing to fit them (M5).
  */
 import { get } from 'svelte/store';
 import type { Placement } from '$lib/types/layout';
@@ -28,16 +30,17 @@ export interface ResizeTarget {
   to: ContainerRef;
   /** The node's placement after the resize (clamped exactly as the commit will). */
   at: Placement;
-  /** Grid neighbours pushed aside (Ruling 11); empty in free containers. */
+  /** Neighbours pushed aside (Ruling 11). */
   push: Map<string, Placement>;
 }
 export type ResizeResult = ResizeTarget | { kind: 'invalid'; reason: string };
 
 /** The phone hint (toolbar) and the reason a resize is refused there. */
-export const NARROW_HINT = 'Resize and free placement need a wider screen';
+export const NARROW_HINT = 'Resizing needs a wider screen';
 export const COLLAPSED_HINT =
   'This folder is collapsed, so it shows as one tile — choose "Start expanded" in its menu to resize it.';
-export const GRID_TILE_HINT = 'A tile in a grid takes the space of its Size — change its Size in the tile dialog instead.';
+export const GRID_TILE_HINT = 'A tile takes the space of its Size — change its Size in the tile dialog instead.';
+export const IN_FOLDER_HINT = "Items inside a folder take the folder's contents size — set it in the folder's dialog.";
 
 /** Why `id` can't be resized here, or null when it can. */
 export function resizeBlocked(d: LayoutDashboard, id: string, stacked: boolean): string | null {
@@ -47,14 +50,9 @@ export function resizeBlocked(d: LayoutDashboard, id: string, stacked: boolean):
   if (stacked) return `${NARROW_HINT}.`;
   const ref = containerOfNode(d, id);
   if (!ref) return 'That item no longer exists.';
-  let mode: 'grid' | 'free';
-  try {
-    mode = resolveContainer(d, ref).mode;
-  } catch (e) {
-    return e instanceof Error && e.message ? e.message : 'That item no longer exists.';
-  }
-  if (n.kind === 'tile' && mode === 'grid') return GRID_TILE_HINT;
-  if (n.kind === 'folder' && n.display === 'collapsed') return COLLAPSED_HINT;
+  if (ref.folderId !== undefined) return IN_FOLDER_HINT;
+  if (n.kind === 'tile') return GRID_TILE_HINT;
+  if (n.display === 'collapsed') return COLLAPSED_HINT;
   return null;
 }
 
@@ -65,7 +63,7 @@ export function resizeTarget(d: LayoutDashboard, id: string, w: number, h: numbe
     if (!to) return { kind: 'invalid', reason: 'That item no longer exists.' };
     const r = resolveContainer(d, to);
     const at = resizedPlacement(d, id, w, h);
-    const push = r.mode === 'grid' ? pushAside(r.container, new Set([id]), at) : new Map<string, Placement>();
+    const push = pushAside(r.container, new Set([id]), at);
     resizeNode(d, id, at.w, at.h, push); // the very op the commit runs: a shown target never throws
     return { kind: 'resize', id, to, at, push };
   } catch (e) {
@@ -76,7 +74,7 @@ export function resizeTarget(d: LayoutDashboard, id: string, w: number, h: numbe
 /** True when the target changes nothing (same size, nothing pushed). */
 export function resizeUnchanged(d: LayoutDashboard, t: ResizeTarget): boolean {
   const n = findIn(d, t.id);
-  return !!n && t.push.size === 0 && n.placement.w === t.at.w && n.placement.h === t.at.h;
+  return !!n && t.push.size === 0 && n.placement?.w === t.at.w && n.placement?.h === t.at.h;
 }
 
 /**
@@ -99,7 +97,7 @@ export function commitResize(t: ResizeTarget): string | null {
 }
 
 /**
- * Keyboard resize (Shift+Arrow): grow or shrink `id` by one cell (grid) or one 8 px unit (free).
+ * Keyboard resize (Shift+Arrow): grow or shrink `id` by one cell.
  * Never a silent no-op: a refusal or a size that can't change is told in a toast.
  */
 export function resizeBy(id: string, dw: number, dh: number): boolean {
@@ -111,7 +109,8 @@ export function resizeBy(id: string, dw: number, dh: number): boolean {
     return false;
   }
   const n = findIn(d, id)!;
-  const t = resizeTarget(d, id, Math.max(1, n.placement.w + dw), Math.max(1, n.placement.h + dh));
+  const cur = n.placement!; // resizeBlocked refused anything without a placement
+  const t = resizeTarget(d, id, Math.max(1, cur.w + dw), Math.max(1, cur.h + dh));
   if (t.kind === 'invalid') {
     toast.error(t.reason);
     return false;
@@ -120,7 +119,7 @@ export function resizeBy(id: string, dw: number, dh: number): boolean {
     const name = n.name || 'Untitled';
     toast.info(
       dw < 0 || dh < 0
-        ? `"${name}" can't get any smaller${n.kind === 'folder' ? ' than its content' : ''}.`
+        ? `"${name}" can't get any smaller: it needs room for its title and one item.`
         : `"${name}" can't get any bigger here.`
     );
     return false;

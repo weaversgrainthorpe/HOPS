@@ -11,10 +11,9 @@
   import NodeContextMenu from './NodeContextMenu.svelte';
   import { editorDialog, editorMenu, openDialog } from '$lib/editor/editorUi';
   import {
-    addNode, blankFolder, blankTile, containerOfNode, deleteWithConfirm, duplicate, editFolder, editNode, findIn,
-    newTileSizeProblem, sizeShown, sizeTarget, type SizeChoice, type TileSize
+    addNode, blankFolder, blankTile, deleteWithConfirm, duplicate, editFolder, editNode, findIn,
+    newTileSizeProblem, sizeTarget, type TileSize
   } from '$lib/editor/editorActions';
-  import { originOf, resolveContainer } from '$lib/editor/treeOps';
   import { session } from '$lib/stores/editSession';
   import { toast } from '$lib/stores/toast';
   import type { Entry } from '$lib/types';
@@ -64,18 +63,8 @@
   const newTile = $derived(dlg && dlg.kind === 'tile' && !dlg.id ? blankTile() : null);
   const newFolder = $derived(dlg && dlg.kind === 'folder' && !dlg.id ? blankFolder() : null);
 
-  // Size = the space a tile takes (spec §8): what the dialog shows for the edited tile's span,
-  // and the trial run of a picked size against the draft (a refusal is shown in the dialog).
-  function shownSize(t: TileNode): SizeChoice | undefined {
-    if (!draft) return undefined;
-    const ref = containerOfNode(draft, t.id);
-    if (!ref) return undefined;
-    try {
-      return sizeShown(t, resolveContainer(draft, ref).mode, originOf(draft, t.id).side);
-    } catch {
-      return undefined; // the dialog closes itself when the item has gone
-    }
-  }
+  // Size = the space a tile takes on a tab (spec §8): the trial run of a picked size against the
+  // draft (a refusal is shown in the dialog).
   function checkSize(size: TileSize): string | null {
     if (!dlg || dlg.kind !== 'tile' || !draft) return 'Not editing: click Edit first.';
     if (!dlg.id) return newTileSizeProblem(draft, dlg.to ?? { tabId }, size);
@@ -125,7 +114,6 @@
     {#key id}
       <EntryEditModal
         entry={existing}
-        sizeShown={shownSize(existing)}
         {checkSize}
         onSave={saveTile}
         onCancel={close}

@@ -36,7 +36,7 @@ export interface MenuRequest {
 export const editorMenu = writable<MenuRequest | null>(null);
 
 /**
- * The editing canvas is in the phone (stacked) layout: no resize handles and no free placement;
+ * The editing canvas is in the phone (stacked) layout: no resize handles;
  * the toolbar shows a one-line hint. TabCanvas sets it while editing.
  */
 export const canvasStacked = writable(false);

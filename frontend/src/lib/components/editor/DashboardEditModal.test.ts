@@ -25,8 +25,7 @@ const allNull = {
 	statusCheckIntervalMinutes: null,
 	statusCheckTimeoutSeconds: null,
 	editIdleTimeoutMinutes: null,
-	animatedFolderBackgrounds: null,
-	defaultLayout: null
+	animatedFolderBackgrounds: null
 };
 
 const effective = {
@@ -34,8 +33,7 @@ const effective = {
 	statusCheckIntervalMinutes: 5,
 	statusCheckTimeoutSeconds: 10,
 	editIdleTimeoutMinutes: 15,
-	animatedFolderBackgrounds: false,
-	defaultLayout: 'grid'
+	animatedFolderBackgrounds: false
 };
 
 const HEADER = { centerTitle: 'Saved title' };
@@ -264,9 +262,9 @@ describe('DashboardEditModal Settings section', () => {
 		await openSettings();
 		expect(await screen.findByText('Inherited: 15')).toBeInTheDocument();
 		expect(screen.getByText('Inherited: 5')).toBeInTheDocument();
-		expect(screen.getByText('Inherited: grid')).toBeInTheDocument();
 		expect(screen.getByText('Edit mode idle timeout (minutes)')).toBeInTheDocument();
-		expect(screen.getByText('Default layout for new tabs')).toBeInTheDocument();
+		// M5: free layout is gone, and with it the dashboard's default layout setting (Ruling 4).
+		expect(screen.queryByText('Default layout for new tabs')).toBeNull();
 	});
 
 	it('save sends only changed overrides with revision', async () => {

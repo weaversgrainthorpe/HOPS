@@ -1,6 +1,6 @@
 import { writable, readonly, get, type Readable, type Writable } from 'svelte/store';
 import type { Container, FolderNode, LayoutDashboard, LayoutNode, LayoutTab } from '$lib/types/layout';
-import { folderInnerColumns, minimisedPlacement, resolveMode } from '$lib/layout/geometry';
+import { minimisedPlacement } from '$lib/layout/geometry';
 
 /** A viewer's own choice for one folder; absent = follow the saved `display`. */
 export type FolderViewState = 'collapsed' | 'expanded' | 'maximised';
@@ -116,8 +116,9 @@ export function findFolderChain(c: Container | undefined, id: string): FolderNod
 
 /**
  * The tab as this viewer sees it: each remembered folder re-displayed. Every collapsed
- * folder (saved or minimised) shrinks to its tile (geometry.minimisedPlacement) and keeps
- * its inner column count, so opening it shows the same content; nothing else moves.
+ * folder on the tab (saved or minimised) shrinks to a tile of its own size
+ * (geometry.minimisedPlacement) in the space it keeps; nothing else moves. Folders inside a
+ * folder have no placement: only their display changes.
  * Ids with no folder in the tab are ignored silently (a deleted folder's memory).
  * Render-only: the input is never modified. Returns the SAME tab object only when the
  * tab has no effectively collapsed folder and no remembered view changes a display;
@@ -125,26 +126,22 @@ export function findFolderChain(c: Container | undefined, id: string): FolderNod
  * its shrunken placement, so a tab holding one is always a new object (and so are its
  * containers on the path to that folder).
  */
-export function applyFolderViews(dash: LayoutDashboard, tab: LayoutTab, views: Views): LayoutTab {
-  function walk(c: Container, chain: FolderNode[]): Container {
+export function applyFolderViews(_dash: LayoutDashboard, tab: LayoutTab, views: Views): LayoutTab {
+  function walk(c: Container): Container {
     const kids = Array.isArray(c?.children) ? c.children : [];
-    const mode = resolveMode(dash, tab, chain);
     let changed = false;
     const next = kids.map((n: LayoutNode) => {
       if (!n || (n as { kind?: unknown }).kind !== 'folder') return n;
       const f = n as FolderNode;
-      const inner = f.content ? walk(f.content, [...chain, f]) : f.content;
+      const inner = f.content ? walk(f.content) : f.content;
       const v = views[f.id];
       const display = v === undefined ? f.display : effectiveDisplay(f, v);
-      // Option A: ANY effectively collapsed folder (saved or remembered) is one Medium tile (2 x 2); render-only.
+      // ANY effectively collapsed folder on the tab (saved or remembered) is a tile of its own size; render-only.
       const shrink = display === 'collapsed' && !!f.placement;
       let out = f;
       if (inner !== f.content || display !== f.display || shrink) {
         out = { ...f, display, ...(inner !== f.content ? { content: inner } : {}) } as FolderNode;
-        if (shrink) {
-          out.placement = minimisedPlacement(f.placement, mode, tab);
-          out.content = { ...out.content, columns: folderInnerColumns(f) };
-        }
+        if (shrink && f.placement) out.placement = minimisedPlacement(f.placement, f.size);
       }
       if (out !== f) changed = true;
       return out;
@@ -152,7 +149,7 @@ export function applyFolderViews(dash: LayoutDashboard, tab: LayoutTab, views: V
     return changed ? { ...c, children: next } : c;
   }
 
-  const root = walk(tab.root, []);
+  const root = walk(tab.root);
   return root === tab.root ? tab : { ...tab, root };
 }
 

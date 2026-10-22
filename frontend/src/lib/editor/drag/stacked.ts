@@ -10,10 +10,10 @@
  *  2. rotate: the affected items swap positions along the order (same sizes: a compact reorder);
  *  3. reflow: from the insertion point on, each item takes the first free spot after the one
  *     before it (always possible: rows grow downward).
- * Grid and free containers alike only take spots that overlap nothing. Pure; no layout reads.
+ * Only spots that overlap nothing are taken. Pure; no layout reads.
  */
 import type { Container, Placement } from '$lib/types/layout';
-import { clampPlacement, isRenderable, readingOrder } from '$lib/layout/geometry';
+import { clampPlacement, isPlaced, isRenderable, readingOrder } from '$lib/layout/geometry';
 
 export interface StackPlan {
   /** Placements for the incoming items, in their order. */
@@ -67,7 +67,7 @@ export function* stackPlans(
   c: Container, cols: number, moving: ReadonlySet<string>, sizes: Size[], index: number,
   z: (number | undefined)[] = []
 ): Generator<StackPlan> {
-  const all: Item[] = readingOrder((Array.isArray(c.children) ? c.children : []).filter(isRenderable)).map((n) => ({
+  const all: Item[] = readingOrder((Array.isArray(c.children) ? c.children : []).filter(isPlaced)).map((n) => ({
     id: n.id, p: clampPlacement(n.placement, cols)
   }));
   const others = all.filter((i) => !moving.has(i.id));

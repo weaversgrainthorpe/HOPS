@@ -1,6 +1,7 @@
 import type { Background, Entry } from './index';
 
-export type LayoutMode = 'grid' | 'free';
+/** The three item sizes (M5): Small 1 x 1 cell, Medium 2 x 2, Large 4 x 4 (geometry.sizeSpan). */
+export type ItemSize = 'small' | 'medium' | 'large';
 
 export interface Placement {
   x: number;
@@ -10,14 +11,19 @@ export interface Placement {
   z?: number;
 }
 
+/**
+ * A container: a tab's root (24 columns, placed children) or a folder's content (an ORDERED list,
+ * no placements, no columns).
+ */
 export interface Container {
-  columns: number;
+  columns?: number;
   children: LayoutNode[];
 }
 
 export interface TileNode extends Entry {
   kind: 'tile';
-  placement: Placement;
+  /** On a tab only (its Size's span); a tile inside a folder has none (M5). */
+  placement?: Placement;
 }
 
 export interface FolderNode {
@@ -30,24 +36,29 @@ export interface FolderNode {
   color?: string;
   opacity?: number;
   textColor?: 'auto' | 'light' | 'dark';
-  layout?: 'inherit' | LayoutMode;
   display: 'expanded' | 'collapsed';
+  /** Its size when minimised on a tab (M5 §3a.2); kept but unused while inside a folder. */
+  size?: ItemSize;
+  /** The size every item inside it shows at (M5 §2). Missing = Medium. */
+  contentSize?: ItemSize;
   shape?: string;
   showTitle?: boolean;
   /** Folder background (M4); missing or inherit form = none of its own. */
   background?: Background;
-  placement: Placement;
+  /** On a tab only (its open box); a folder inside a folder has none (M5). */
+  placement?: Placement;
   content: Container;
   [k: string]: unknown;
 }
 
 export type LayoutNode = TileNode | FolderNode;
 
+/** A node that sits on a tab: it has a placement (geometry.isPlaced is the runtime guard). */
+export type PlacedNode = LayoutNode & { placement: Placement };
+
 export interface LayoutTab {
   id: string;
   name: string;
-  layout?: 'inherit' | LayoutMode;
-  designWidth?: number;
   /** Tab background (M4); missing or inherit form = the dashboard's shows. */
   background?: Background;
   root: Container;
@@ -61,7 +72,6 @@ export interface LayoutDashboard {
   revision: number;
   /** Display position among the dashboards (PUT /api/dashboards/order). */
   order?: number;
-  defaultLayout?: LayoutMode;
   /** Dashboard background (M4); missing or inherit form = the global one. */
   background?: Background;
   /** Read-only, computed by GET /api/config from the effective settings (Ruling 9); never stored. */
@@ -73,9 +83,9 @@ export interface LayoutDashboard {
 export interface LayoutDoc {
   schemaVersion: 3;
   /**
-   * The finer-grid marker (spec §9): 2 = the 24-column form this build writes. Absent or any other
-   * value: an older form (or an older server); the editor refuses to save into it (Ruling 3).
+   * The stored layout format (M5 §2a): geometry.LAYOUT_VERSION is the form this build writes.
+   * Absent or any other value: another form (or another server); the editor refuses to save into it.
    */
-  gridUnit?: number;
+  layoutVersion?: number;
   dashboards: LayoutDashboard[];
 }

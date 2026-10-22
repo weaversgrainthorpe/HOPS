@@ -25,12 +25,13 @@ import * as api from '$lib/utils/api';
 import { save } from '$lib/stores/editSession';
 import { setLayout, resetEditor, startSession, draft, nodeIn, home, other, folder, p, FakeRO } from '$lib/components/editor/editorTestKit';
 
-// t1's root: 24 columns of 50 px (square rows; a Medium tile is the old 100 px cell); t2 (free): 160 units of 8 px.
-const GRID = containerMetrics({ columns: 24, children: [] }, 'grid', 1200);
-const FREE = containerMetrics({ columns: 160, children: [] }, 'free', 1280);
+// t1's root: 24 columns of 50 px (square rows; a Medium tile is 100 px). A folder's content flows (M5):
+// Medium items (2 cells of 50 px), 3 to a row.
+const GRID = containerMetrics({ columns: 24, children: [] }, 1200);
+const FLOW: ContainerMetrics = { columns: 6, unitPx: 50, rowPx: 50, innerWidthPx: 300, flow: { span: 2, perRow: 3 } };
 
 /** Where the stub says the pointer is: the t1 root unless a test redirects it. */
-let where: { ref: ContainerRef; metrics: ContainerMetrics; layout: 'grid' | 'free' | 'stacked' } | null;
+let where: { ref: ContainerRef; metrics: ContainerMetrics; layout: 'grid' | 'flow' | 'stacked' } | null;
 let lastHit: HitResult | null = null;
 let frames: FrameRequestCallback[] = [];
 let sourceRect = { left: 0, top: 0, width: 100, height: 100 };
@@ -276,51 +277,31 @@ describe('drag engine — dropping', () => {
     expect(draft()).toBe(before);
   });
 
-  it('free containers snap to 8 px units and never push', () => {
-    where = { ref: { tabId: 't2' }, metrics: FREE, layout: 'free' };
-    sourceRect = { left: 0, top: 0, width: 128, height: 128 };
-    const { el } = source('fa');
-    startMouseDrag(el, 64, 64);
-    moveTo(64 + 83, 64 + 45);
-    flush();
-    const t = get(drag)!.target!;
-    expect(t).toMatchObject({ kind: 'place', to: { tabId: 't2' }, at: [{ x: 10, y: 6, w: 16, h: 16 }] });
-    if (t.kind === 'place') expect(t.push.size).toBe(0);
-    drop(64 + 83, 64 + 45);
-    expect(nodeIn(draft(), 'fa')!.placement).toMatchObject({ x: 10, y: 6, w: 16, h: 16 });
-  });
-
-  it('across containers on the same tab: a tile dragged into a folder lands at the pointer cell', () => {
-    const fm = containerMetrics({ columns: 8, children: [] }, 'grid', 400);
-    where = { ref: { tabId: 't1', folderId: 'f1' }, metrics: fm, layout: 'grid' };
+  it('across containers on the same tab: a tile dragged into a folder joins its order, unplaced', () => {
+    where = { ref: { tabId: 't1', folderId: 'f1' }, metrics: FLOW, layout: 'flow' };
     const { el } = source('a');
     startMouseDrag(el, 50, 50);
     moveTo(250, 150);
     flush();
+    expect(get(drag)!.target).toMatchObject({ kind: 'into-folder', folderId: 'f1' });
     drop(250, 150);
     const f1 = nodeIn(draft(), 'f1');
-    expect(f1?.kind === 'folder' && f1.content.children.find((n) => n.id === 'a')?.placement).toEqual(p(4, 2));
+    const kids = f1?.kind === 'folder' ? f1.content.children : [];
+    expect(kids.map((n) => n.id)).toEqual(['x', 'a']); // the end of its order until M5 Task 4 drops at the pointer
+    expect('placement' in kids[1]).toBe(false);
     expect(draft().tabs[0].root.children.some((n) => n.id === 'a')).toBe(false);
     expect(get(toast).at(-1)?.message).toBe('Moved "A" to F1');
   });
 
-  it('across modes on the same tab: a grid tile dropped into a free folder is converted', () => {
-    resetEditor();
-    const d = home();
-    d.tabs[0].root.children.push(folder('ff', p(0, 10, 12, 8), [], { layout: 'free', content: { columns: 80, children: [] } }));
-    setLayout([d, other()]);
-    startSession();
-    const fm = containerMetrics({ columns: 80, children: [] }, 'free', 640);
-    where = { ref: { tabId: 't1', folderId: 'ff' }, metrics: fm, layout: 'free' };
-    const { el } = source('a');
+  it('out of a folder onto the tab: placed at the pointer cell at its Size\'s span', () => {
+    sourceRect = { left: 0, top: 0, width: 100, height: 100 };
+    const { el } = source('x');
     startMouseDrag(el, 50, 50);
-    moveTo(200, 200);
+    moveTo(950, 50);
     flush();
-    drop(200, 200);
-    const a = nodeIn(draft(), 'a')!;
-    // a Medium (2 cells of side round(1280 / 12 / 8) / 2 = 6.5) = 13 free units (13 * 8 = 104 px, as before)
-    expect(a.placement.w).toBe(13);
-    expect(a.placement.h).toBe(13);
+    drop(950, 50);
+    expect(nodeIn(draft(), 'x')!.placement).toEqual(p(18, 0));
+    expect((nodeIn(draft(), 'f1') as { content: { children: unknown[] } }).content.children).toHaveLength(0);
   });
 
   it('dropped back where it was: no change and no undo step', () => {
@@ -351,9 +332,8 @@ describe('drag engine — dropping', () => {
   });
 
   it('a folder dropped into its own content is refused', () => {
-    const fm = containerMetrics({ columns: 8, children: [] }, 'grid', 400);
     const state: DragState = { ids: ['f1'], copy: false, pointer: { x: 0, y: 0 }, target: null, grab: { fx: 0, fy: 0 } };
-    const hit: HitResult = { container: { ref: { tabId: 't1', folderId: 'f1' }, metrics: fm, layout: 'grid', left: 0, top: 0 }, dx: 0, dy: 0 };
+    const hit: HitResult = { container: { ref: { tabId: 't1', folderId: 'f1' }, metrics: FLOW, layout: 'flow', left: 0, top: 0 }, dx: 0, dy: 0 };
     expect(resolveDrop(state, hit, draft())).toEqual({ kind: 'invalid', reason: "A folder can't go inside itself." });
   });
 

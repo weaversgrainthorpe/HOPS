@@ -54,8 +54,6 @@
     color?: string;
     opacity?: number;
     background?: Background;
-    layout?: 'inherit' | 'grid' | 'free';
-    designWidth?: number;
     statusChecksEnabled?: unknown;
   }
   // The tabs shown: the draft's while editing (added/renamed/reordered tabs live there), else the saved ones.
@@ -257,12 +255,11 @@
 
   function tabFields(
     name: string, icon?: string, iconUrl?: string, iconBgColor?: string, color?: string, opacity?: number,
-    layout?: { layout: 'inherit' | 'grid' | 'free'; designWidth?: number },
     background?: Background | null,
     statusChecksEnabled?: boolean | null
   ): TabFields {
     return {
-      name, icon, iconUrl, iconBgColor, color, opacity, ...(layout ?? {}),
+      name, icon, iconUrl, iconBgColor, color, opacity,
       ...(background !== undefined ? { background } : {}),
       ...(statusChecksEnabled !== undefined ? { statusChecksEnabled } : {})
     };
@@ -331,7 +328,6 @@
 
   // The tab dialog's status-check row inherits from the dashboard (M4 §4b).
   const tabStatusContext = $derived(contextForTab(draft ?? dashboard));
-  const inheritedLayout = $derived<'grid' | 'free'>(draft?.defaultLayout === 'free' ? 'free' : 'grid');
 </script>
 
 <div class="dashboard" class:party-mode={$partyModeActive}>
@@ -475,7 +471,6 @@
 {#if editing && showAddTabModal}
   <TabEditModal
     tabName=""
-    {inheritedLayout}
     statusContext={tabStatusContext}
     onSave={handleSaveNewTab}
     onCancel={() => (showAddTabModal = false)}
@@ -493,11 +488,8 @@
       tabColor={t.color}
       tabOpacity={t.opacity}
       tabBackground={t.background}
-      tabLayout={t.layout}
-      tabDesignWidth={t.designWidth}
       tabStatusChecks={t.statusChecksEnabled}
       statusContext={tabStatusContext}
-      {inheritedLayout}
       onSave={(...args) => handleUpdateTab(t.id, ...args)}
       onCancel={closeTabDialog}
       onDelete={() => handleDeleteTab(t.id)}

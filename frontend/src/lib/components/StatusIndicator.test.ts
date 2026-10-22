@@ -26,7 +26,7 @@ beforeEach(() => {
       id: 'd1', name: 'Home', path: '/h', revision: 1,
       tabs: [{ id: 't1', name: 'Main', root: { columns: 24, children: [
         { kind: 'folder', id: 'f1', name: 'Media', display: 'expanded', placement: { x: 0, y: 0, w: 2, h: 2 },
-          content: { columns: 4, children: [] } }
+          content: { children: [] } }
       ] } }]
     }]
   });

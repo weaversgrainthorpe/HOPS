@@ -1,5 +1,6 @@
 import { test, expect, type Page, type BrowserContext } from '@playwright/test';
 import { getCsrfToken } from '../helpers';
+import { m5Config } from '../m5form';
 
 // M4 Task 4 fix round 1 (Ruling 10), in a REAL browser: jsdom has no layout, so
 // "the failure badge never covers content" and "the maximised backdrop is
@@ -29,7 +30,7 @@ async function importDash(page: Page, context: BrowserContext, children: (id: (s
   };
   const doc = {
     format: 'hops-export', schemaVersion: 3, exportedAt: new Date().toISOString(), exportType: 'single-dashboard',
-    config: { dashboards: [dash] }
+    config: m5Config([dash]) // M5 form (layoutVersion 1): see m5form.ts
   };
   const r = await page.request.post('/api/config/import', {
     headers: { 'X-CSRF-Token': await getCsrfToken(context) },
@@ -72,7 +73,7 @@ async function importFixture(page: Page, context: BrowserContext) {
   };
   const doc = {
     format: 'hops-export', schemaVersion: 3, exportedAt: new Date().toISOString(), exportType: 'single-dashboard',
-    config: { dashboards: [dash] }
+    config: m5Config([dash]) // M5 form (layoutVersion 1): see m5form.ts
   };
   const r = await page.request.post('/api/config/import', {
     headers: { 'X-CSRF-Token': await getCsrfToken(context) },

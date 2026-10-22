@@ -35,11 +35,11 @@ import type { Container, LayoutDashboard, LayoutNode, Placement } from '$lib/typ
 import type { ContainerMetrics } from '$lib/layout/geometry';
 import { clampPlacement, isRenderable, nodeBox } from '$lib/layout/geometry';
 import {
-  TreeOpError, copyNodes, deleteNodes, firstFreeCell, freeSide, isDescendant, locate, mergeIntoNewFolder, moveNodes,
-  originOf, pushAside, reorderTabs, resolveContainer, type ContainerRef
+  TreeOpError, copyNodes, deleteNodes, firstFreeCell, isDescendant, locate, mergeIntoNewFolder, moveBetween, moveNodes,
+  pushAside, reorderTabs, resolveContainer, type ContainerRef
 } from '../treeOps';
 import {
-  adaptedFor, containerOfNode, currentDraft, documentIds, findIn, placementsFor, sizeFor
+  containerOfNode, currentDraft, documentIds, findIn, nodesOf, placementsFor, sizeFor
 } from '../editorActions';
 import { canvasStacked, editorMenu, openDialog, ownsTarget } from '../editorUi';
 import { commitResize, resizeBlocked, resizeTarget, type ResizeEdge, type ResizeTarget } from '../resize';
@@ -52,16 +52,6 @@ import { hitTest as domHitTest, type HitResult } from './hitTest';
 
 // ---------------------------------------------------------------- types
 
-/** A free-mode alignment guide, in px from the target container's content origin. */
-export interface Guide {
-  axis: 'x' | 'y';
-  /** The line's position: x for a vertical guide, y for a horizontal one. */
-  at: number;
-  /** Its extent along the other axis. */
-  from: number;
-  to: number;
-}
-
 /** An insertion marker (viewport px): a vertical bar, or a horizontal one when `width` is set. */
 export interface Marker {
   left: number;
@@ -72,9 +62,11 @@ export interface Marker {
 
 export type DropTarget =
   | {
-      kind: 'place'; to: ContainerRef; at: Placement[]; push: Map<string, Placement>; guides?: Guide[];
+      kind: 'place'; to: ContainerRef; at: Placement[]; push: Map<string, Placement>;
       /** Stacked (phone) layout: where in the reading order it goes. */
       marker?: Marker;
+      /** Into a folder (ordered, M5): the index in its order; `at` is then empty. */
+      index?: number;
     }
   | ResizeTarget
   | { kind: 'merge'; targetTileId: string }
@@ -168,8 +160,6 @@ const MAX_SCROLL_PX = 20;
 export const MERGE_DWELL_MS = 500;
 /** Held over a collapsed folder, a tab, a crumb or an overlay's backdrop this long → go there. */
 export const OPEN_DWELL_MS = 600;
-/** Free mode: an edge or centre within this many rendered px of a sibling's snaps to it. */
-export const SNAP_PX = 4;
 
 // ---------------------------------------------------------------- the one resolver
 
@@ -256,29 +246,23 @@ function checkIds(draft: LayoutDashboard, ids: string[], intoFolder?: string): D
 }
 
 /**
- * Merge `ids` onto tile `tileId` as one new folder (treeOps.mergeIntoNewFolder). Items coming from
- * a container of the other mode are first converted on the one path (moveNodes → convertNode) into
- * the tile's container, so the new folder's content is in its mode. Used by the trial run and the commit.
+ * Merge `ids` onto tile `tileId` as one new folder (treeOps.mergeIntoNewFolder). Used by the trial
+ * run and the commit.
  */
 function mergeDrop(
   d: LayoutDashboard, ids: string[], tileId: string, allIds: Set<string>
 ): { dashboard: LayoutDashboard; folderId: string } {
-  const tc = containerOfNode(d, tileId);
-  if (!tc) throw new TreeOpError('That tile no longer exists.');
-  const mode = resolveContainer(d, tc).mode;
-  let base = d;
-  if (ids.some((id) => originOf(d, id).mode !== mode)) {
-    const at = placementsFor(deleteNodes(d, ids), tc, adaptedFor(d, ids, tc));
-    base = moveNodes(d, ids, tc, at);
-  }
-  return mergeIntoNewFolder(base, ids, tileId, allIds);
+  return mergeIntoNewFolder(d, ids, tileId, allIds);
 }
 
-/** Into a container at its first free cells (a drop on a folder or a tab button). Trial-run like place. */
+/**
+ * Into a container: a tab at its first free cells, a folder at the end of its order (a drop on a
+ * folder or a tab button). Trial-run like place.
+ */
 function resolveAppend(state: DragState, to: ContainerRef, draft: LayoutDashboard): DropTarget {
   return memoised(JSON.stringify(['append', state.ids, state.copy, to]), draft, () => {
     try {
-      const nodes = adaptedFor(draft, state.ids, to);
+      const nodes = nodesOf(draft, state.ids);
       const at = placementsFor(state.copy ? draft : deleteNodes(draft, state.ids), to, nodes);
       if (state.copy) copyNodes(draft, state.ids, to, at, documentIds());
       else moveNodes(draft, state.ids, to, at);
@@ -357,62 +341,15 @@ function resolveTabOrder(state: DragState, hit: HitResult, draft: LayoutDashboar
 }
 
 /**
- * The integer position within the snap distance of a sibling line for any of this item's
- * edges/centre: max(SNAP_PX rendered px, one design unit) (Ruling 23), so snapping matters at
- * every scale (at 8 px per unit plain rounding already lands within 4 px).
- */
-function snapAxis(raw: number, size: number, lines: number[], unitPx: number): number {
-  const within = Math.max(SNAP_PX, unitPx);
-  let best: { pos: number; d: number } | null = null;
-  for (const off of [0, size / 2, size]) {
-    for (const line of lines) {
-      const pos = line - off;
-      if (!Number.isInteger(pos)) continue;
-      const d = Math.abs(raw - pos) * unitPx;
-      if (d <= within + 1e-9 && (!best || d < best.d)) best = { pos, d };
-    }
-  }
-  return best ? best.pos : Math.round(raw);
-}
-
-/** Guides for every edge/centre of `p` that lines up exactly with a sibling's (px, container origin). */
-function guidesFor(p: Placement, sibs: Placement[], m: ContainerMetrics): Guide[] {
-  const out: Guide[] = [];
-  const seen = new Set<string>();
-  const feats = (a: number, w: number) => [a, a + w / 2, a + w];
-  for (const q of sibs) {
-    for (const f of feats(p.x, p.w)) {
-      if (!feats(q.x, q.w).includes(f)) continue;
-      const g: Guide = {
-        axis: 'x', at: f * m.unitPx,
-        from: Math.min(p.y, q.y) * m.rowPx, to: Math.max(p.y + p.h, q.y + q.h) * m.rowPx
-      };
-      const k = `x${g.at}:${g.from}:${g.to}`;
-      if (!seen.has(k)) out.push(g), seen.add(k);
-    }
-    for (const f of feats(p.y, p.h)) {
-      if (!feats(q.y, q.h).includes(f)) continue;
-      const g: Guide = {
-        axis: 'y', at: f * m.rowPx,
-        from: Math.min(p.x, q.x) * m.unitPx, to: Math.max(p.x + p.w, q.x + q.w) * m.unitPx
-      };
-      const k = `y${g.at}:${g.from}:${g.to}`;
-      if (!seen.has(k)) out.push(g), seen.add(k);
-    }
-  }
-  return out;
-}
-
-/**
  * THE drop resolver: pure, used for the highlight every frame and (through state.target) for the
- * commit. Grid: the cells under the ghost, neighbours pushed aside (Ruling 11: the push map is part
- * of the target and the op is trial-run here, so a highlighted target never throws on commit);
- * stored footprints count, so a collapsed folder's reserved cells are occupied (Ruling 13). Free:
- * the 8 px design unit under the ghost, overlap allowed, snapped to sibling edges/centres within
- * SNAP_PX. Selections keep their relative offsets when they come from one container; otherwise the
- * others take the first free cells. Zones and hit boxes are RENDERED geometry (Ruling 13); a tile's
- * centre zone becomes a merge only once state.dwell has ripened on it; a folder's centre zone is
- * into-folder; tab buttons are tab-append; crumbs and an overlay's backdrop are navigation only.
+ * commit. On a tab: the cells under the ghost, neighbours pushed aside (Ruling 11: the push map is
+ * part of the target and the op is trial-run here, so a highlighted target never throws on commit);
+ * stored footprints count, so a minimised folder's reserved cells are occupied (Ruling 13). Items
+ * keep their relative offsets when they come from one tab; otherwise the others take the first free
+ * cells. Into a folder's content (ordered, M5): the end of its order (M5 Task 4 adds the pointer
+ * index). Zones and hit boxes are RENDERED geometry (Ruling 13); a tile's centre zone becomes a merge
+ * only once state.dwell has ripened on it; a folder's centre zone is into-folder; tab buttons are
+ * tab-append; crumbs and an overlay's backdrop are navigation only.
  */
 export function resolveDrop(state: DragState, hit: HitResult, draft: LayoutDashboard): DropTarget {
   if (state.tab !== undefined) return resolveTabOrder(state, hit, draft);
@@ -434,12 +371,13 @@ export function resolveDrop(state: DragState, hit: HitResult, draft: LayoutDashb
     if (n?.kind === 'tile' && ripe(state, `merge:${n.id}`)) return resolveMerge(state, n.id, draft);
   }
   if (c.layout === 'stacked') return resolveStacked(state, hit, draft, to);
+  if (to.folderId !== undefined) return resolveIntoFolder(state, to.folderId, draft);
 
   let r: ReturnType<typeof resolveContainer>;
   let nodes: LayoutNode[];
   try {
     r = resolveContainer(draft, to);
-    nodes = adaptedFor(draft, ids, to);
+    nodes = nodesOf(draft, ids);
   } catch (e) {
     return invalid(message(e, "That can't go there."));
   }
@@ -451,35 +389,23 @@ export function resolveDrop(state: DragState, hit: HitResult, draft: LayoutDashb
     return { w: Math.min(s.w, cols), h: s.h };
   });
   const moving = state.copy ? new Set<string>() : idSet;
-  const siblings = r.container.children
-    .filter((n) => n && !moving.has(n.id) && isRenderable(n))
-    .map((n) => clampPlacement(n.placement, cols));
 
-  // The grabbed item's top-left cell: the ghost's top-left, rounded to the nearest cell / unit
-  // (free: or snapped to a sibling's edge / centre within SNAP_PX).
+  // The grabbed item's top-left cell: the ghost's top-left, rounded to the nearest cell.
   const grab = state.grab ?? { fx: 0, fy: 0 };
-  const rawX = (hit.dx - grab.fx * sizes[0].w * m.unitPx) / m.unitPx;
-  const rawY = (hit.dy - grab.fy * sizes[0].h * m.rowPx) / m.rowPx;
-  let x0 = Math.round(rawX);
-  let y0 = Math.round(rawY);
-  if (r.mode === 'free') {
-    x0 = snapAxis(rawX, sizes[0].w, siblings.flatMap((q) => [q.x, q.x + q.w / 2, q.x + q.w]), m.unitPx);
-    y0 = snapAxis(rawY, sizes[0].h, siblings.flatMap((q) => [q.y, q.y + q.h / 2, q.y + q.h]), m.rowPx);
-  }
+  const x0 = Math.round((hit.dx - grab.fx * sizes[0].w * m.unitPx) / m.unitPx);
+  const y0 = Math.round((hit.dy - grab.fy * sizes[0].h * m.rowPx) / m.rowPx);
 
-  // Offsets from the grabbed item, in the target's units (scaled across modes as convertNode does).
+  // Offsets from the grabbed item, when every item comes from one tab (items from a folder have no
+  // placement: they take the first free cells).
   const origins = ids.map((id) => containerOfNode(draft, id));
-  const together = origins.every((o) => sameRef(o, origins[0]));
-  const from = originOf(draft, ids[0]);
-  const tab = draft.tabs.find((t) => t.id === to.tabId);
-  const scale = from.mode === r.mode ? 1 : r.mode === 'free' ? freeSide(tab) : 1 / Math.max(1, from.side);
-  const p0 = findIn(draft, ids[0])!.placement;
-  const wanted: (Placement | null)[] = ids.map((id, i) => {
+  const together = origins.every((o) => sameRef(o, origins[0])) && nodes.every((n) => !!n.placement);
+  const p0 = nodes[0].placement;
+  const wanted: (Placement | null)[] = nodes.map((n, i) => {
     if (i > 0 && !together) return null;
-    const pi = findIn(draft, id)!.placement;
+    const pi = n.placement;
     return {
-      x: x0 + Math.round((pi.x - p0.x) * scale),
-      y: y0 + Math.round((pi.y - p0.y) * scale),
+      x: x0 + (i > 0 && pi && p0 ? Math.round(pi.x - p0.x) : 0),
+      y: y0 + (i > 0 && pi && p0 ? Math.round(pi.y - p0.y) : 0),
       w: sizes[i].w,
       h: sizes[i].h
     };
@@ -489,18 +415,15 @@ export function resolveDrop(state: DragState, hit: HitResult, draft: LayoutDashb
   const minX = Math.min(...placed.map((w) => w.x));
   const maxR = Math.max(...placed.map((w) => w.x + w.w));
   const minY = Math.min(...placed.map((w) => w.y));
-  let sx = minX < 0 ? -minX : maxR > cols ? cols - maxR : 0;
-  if (minX + sx < 0) {
-    if (r.mode === 'grid') return invalid(`Those items don't fit across ${cols} columns here.`);
-    sx = -minX;
-  }
+  const sx = minX < 0 ? -minX : maxR > cols ? cols - maxR : 0;
+  if (minX + sx < 0) return invalid(`Those items don't fit across ${cols} columns here.`);
   const sy = minY < 0 ? -minY : 0;
   for (const w of placed) {
     w.x += sx;
     w.y += sy;
   }
 
-  const key = JSON.stringify([ids, state.copy, to, r.mode, wanted, m.unitPx, m.rowPx]);
+  const key = JSON.stringify([ids, state.copy, to, wanted, m.unitPx, m.rowPx]);
   return memoised(key, draft, () => {
     const at: Placement[] = [];
     const push = new Map<string, Placement>();
@@ -512,19 +435,15 @@ export function resolveDrop(state: DragState, hit: HitResult, draft: LayoutDashb
       work.children.push({ kind: 'tile', id: `\u0000drop-${i}`, placement: p } as unknown as LayoutNode);
     nodes.forEach((n, i) => {
       let t = wanted[i];
-      if (r.mode === 'grid') {
-        if (t && at.some((a) => overlaps(a, t!))) t = null; // a converted group can collide with itself
-        if (!t) {
-          t = firstFreeCell(work, sizes[i].w, sizes[i].h, 'grid');
-          t.h = sizes[i].h;
-        } else {
-          for (const [pid, pp] of pushAside(work, new Set(), t)) {
-            push.set(pid, pp);
-            work.children = work.children.map((k) => (k.id === pid ? ({ ...k, placement: pp } as LayoutNode) : k));
-          }
-        }
+      if (t && at.some((a) => overlaps(a, t!))) t = null; // a group can collide with itself
+      if (!t) {
+        t = firstFreeCell(work, sizes[i].w, sizes[i].h);
+        t.h = sizes[i].h;
       } else {
-        t = t ? clampPlacement(t, cols) : firstFreeCell(work, sizes[i].w, sizes[i].h, 'free');
+        for (const [pid, pp] of pushAside(work, new Set(), t)) {
+          push.set(pid, pp);
+          work.children = work.children.map((k) => (k.id === pid ? ({ ...k, placement: pp } as LayoutNode) : k));
+        }
       }
       const z = n.placement?.z;
       if (typeof z === 'number' && Number.isFinite(z)) t = { ...t, z };
@@ -534,10 +453,6 @@ export function resolveDrop(state: DragState, hit: HitResult, draft: LayoutDashb
 
     // Trial-run the very op the commit will run (Ruling 11): a highlighted target never throws.
     const target: DropTarget = { kind: 'place', to, at, push };
-    if (r.mode === 'free') {
-      const guides = guidesFor(at[0], siblings, m);
-      if (guides.length) target.guides = guides;
-    }
     try {
       if (state.copy) copyNodes(draft, ids, to, at, documentIds(), push); // the same id set as the commit
       else moveNodes(draft, ids, to, at, push);
@@ -594,7 +509,7 @@ function resolveStacked(state: DragState, hit: HitResult, draft: LayoutDashboard
   let nodes: LayoutNode[];
   try {
     r = resolveContainer(draft, to);
-    nodes = adaptedFor(draft, ids, to);
+    nodes = nodesOf(draft, ids);
   } catch (e) {
     return invalid(message(e, "That can't go there."));
   }
@@ -604,6 +519,19 @@ function resolveStacked(state: DragState, hit: HitResult, draft: LayoutDashboard
   const slot = stackSlot(hit, new Set(others));
   const index = slot ? others.indexOf(slot.id) + (slot.after ? 1 : 0) : others.length;
   const marker = stackMarker(slot, hit.container ?? { left: 0, top: 0 });
+  if (r.kind === 'folder') {
+    // A folder is ordered (M5): the index is the drop, nothing is placed.
+    const t = memoised(JSON.stringify(['stack-folder', ids, state.copy, to, index]), draft, () => {
+      try {
+        if (state.copy) copyNodes(draft, ids, to, index, documentIds());
+        else moveBetween(draft, ids, to, index);
+        return { kind: 'place', to, at: [], push: new Map(), index } as DropTarget;
+      } catch (e) {
+        return invalid(e instanceof TreeOpError ? e.message : message(e, "That can't go there."));
+      }
+    });
+    return t.kind === 'place' ? { ...t, marker } : t;
+  }
   const target = memoised(JSON.stringify(['stack', ids, state.copy, to, index]), draft, () => {
     const sizes = nodes.map((n) => sizeFor(n));
     const zs = nodes.map((n) => (typeof n.placement?.z === 'number' && Number.isFinite(n.placement.z) ? n.placement.z : undefined));
@@ -664,11 +592,15 @@ function destName(d: LayoutDashboard, to: ContainerRef): string {
 /** A move that would put every item back exactly where it is (and push nothing). */
 function unchanged(d: LayoutDashboard, ids: string[], t: Extract<DropTarget, { kind: 'place' }>): boolean {
   if (t.push.size > 0) return false;
+  if (t.index !== undefined) {
+    // In a folder's order: one item dropped at its own place (the index counts the others).
+    return ids.length === 1 && sameRef(containerOfNode(d, ids[0]), t.to) && locate(d, ids[0])?.index === t.index;
+  }
   return ids.every((id, i) => {
     const n = findIn(d, id);
     if (!n || !sameRef(containerOfNode(d, id), t.to)) return false;
     const a = n.placement, b = t.at[i];
-    return a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h;
+    return !!a && !!b && a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h;
   });
 }
 
@@ -743,13 +675,13 @@ export function commitDrop(state: DragState): void {
   }
 
   let to: ContainerRef;
-  let at: Placement[];
+  let at: Placement[] | number;
   let push: Map<string, Placement> | undefined;
   if (t.kind === 'place') {
     if (!state.copy && unchanged(d, state.ids, t)) return; // put back where it was: no change, no undo step
     to = t.to;
-    at = t.at;
-    push = t.push;
+    at = t.index ?? t.at;
+    push = t.index === undefined ? t.push : undefined;
   } else if (t.kind === 'into-folder') {
     const loc = locate(d, t.folderId);
     if (!loc) {
@@ -765,7 +697,7 @@ export function commitDrop(state: DragState): void {
   const label = `${state.copy ? 'Copied' : 'Moved'} ${describe(d, state.ids)} to ${destName(d, to)}`;
   let newIds: string[] = [];
   const ok = apply(label, (dd) => {
-    if (!state.copy) return moveNodes(dd, state.ids, to, at, push);
+    if (!state.copy) return moveBetween(dd, state.ids, to, at, push);
     const r = copyNodes(dd, state.ids, to, at, documentIds(), push);
     newIds = r.newIds;
     return r.dashboard;
@@ -902,10 +834,8 @@ function startResize(p: Press, x: number, y: number) {
     toast.info(blocked ?? "That area can't be measured right now, so it can't be resized; try again.");
     return;
   }
-  const stored = clampPlacement(n.placement, m.columns);
+  const stored = clampPlacement(n.placement!, m.columns); // resizeBlocked refused anything not on a tab
   const rect = p.rect;
-  // A free folder can render taller than its stored height (content never clips): start from what is shown.
-  const shownH = rect && rect.height > 0 ? Math.round(rect.height / m.rowPx) : 0;
   const b = nodeBox(stored, m);
   const view0 = rect ? { left: rect.left - b.leftPx, top: rect.top - b.topPx } : undefined;
   beginDragging(d, {
@@ -914,7 +844,7 @@ function startResize(p: Press, x: number, y: number) {
     pointer: { x, y },
     target: null,
     resize: {
-      id: spec.id, edge: spec.edge, startW: stored.w, startH: Math.max(stored.h, shownH), storedH: stored.h,
+      id: spec.id, edge: spec.edge, startW: stored.w, startH: stored.h, storedH: stored.h,
       x0: p.x, y0: p.y, metrics: m,
       sx0: spec.scroll.x, sy0: spec.scroll.y, sx: spec.scroll.x, sy: spec.scroll.y, view0
     },

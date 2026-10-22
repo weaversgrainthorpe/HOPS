@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { containerMetrics } from '$lib/layout/geometry';
 import { hitTest, registerContainer, unregisterContainer, type HitEnv, type ContainerInfo } from './hitTest';
 
-const gridMetrics = containerMetrics({ columns: 24, children: [] }, 'grid', 1200);
+const gridMetrics = containerMetrics({ columns: 24, children: [] }, 1200);
 
 function el(attrs: Record<string, string>, ...kids: HTMLElement[]): HTMLElement {
   const e = document.createElement('div');

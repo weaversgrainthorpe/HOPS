@@ -133,7 +133,7 @@ describe('level names and the badge tooltip', () => {
     id: 'd', name: 'Home', path: '/h', revision: 1,
     tabs: [{ id: 't', name: 'Main', root: { columns: 24, children: [
       { kind: 'folder', id: 'f0', name: 'Media', display: 'expanded', placement: { x: 0, y: 0, w: 2, h: 2 },
-        content: { columns: 8, children: [{ kind: 'tile', id: 'x', name: 'Plex', placement: { x: 0, y: 0, w: 2, h: 2 } }] } }
+        content: { children: [{ kind: 'tile', id: 'x', name: 'Plex' }] } }
     ] } }]
   } as unknown as LayoutDashboard;
 

@@ -4,7 +4,7 @@ import { overlayStack, openFolder, closeTop, closeAll, reconcile } from './folde
 import type { LayoutDoc } from '$lib/types/layout';
 
 const f = (id: string, children: any[] = []): any => ({
-  kind: 'folder', id, name: id, display: 'collapsed', placement: { x: 0, y: 0, w: 2, h: 2 }, content: { columns: 2, children }
+  kind: 'folder', id, name: id, display: 'collapsed', placement: { x: 0, y: 0, w: 2, h: 2 }, size: 'medium', contentSize: 'medium', content: { children }
 });
 const doc = (children: any[]): LayoutDoc => ({
   schemaVersion: 3,

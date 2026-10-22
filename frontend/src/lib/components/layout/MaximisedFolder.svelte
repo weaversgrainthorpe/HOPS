@@ -2,7 +2,7 @@
   import Icon from '@iconify/svelte';
   import type { LayoutDashboard, LayoutTab } from '$lib/types/layout';
   import type { CanvasPlan } from '$lib/layout/geometry';
-  import { overlayBodyPx, overlayMetrics, resolveMode } from '$lib/layout/geometry';
+  import { overlayBodyPx, overlayMetrics } from '$lib/layout/geometry';
   import { layoutStale } from '$lib/stores/config';
   import { tick } from 'svelte';
   import { overlayStack } from '$lib/stores/folderOverlay';
@@ -50,7 +50,7 @@
 
   const chain = $derived(findFolderChain(tab.root, folderId));
   const folder = $derived(chain ? chain[chain.length - 1] : null);
-  const size = $derived(chain && folder ? overlayMetrics(plan, tab, resolveMode(dashboard, tab, chain), folder, bodyPx) : null);
+  const size = $derived(chain && folder ? overlayMetrics(plan, folder, bodyPx) : null);
 
   const restore = () => clearFolderView(dashboard.id, folderId);
   async function minimise() {

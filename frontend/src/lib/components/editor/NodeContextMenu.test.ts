@@ -15,9 +15,9 @@ vi.mock('$lib/editor/treeOps', async () => {
     copyNodes: spy('copyNodes'),
     pasteSnapshot: spy('pasteSnapshot'),
     moveNodes: spy('moveNodes'),
+    moveBetween: spy('moveBetween'),
     setZ: spy('setZ'),
     setFolderDisplay: spy('setFolderDisplay'),
-    setFolderLayout: spy('setFolderLayout'),
     insertNode: spy('insertNode')
   };
 });
@@ -77,14 +77,14 @@ describe('NodeContextMenu — structure and keyboard', () => {
     expect(get(overlayStack)).toEqual(['f1']);
   });
 
-  it('a tile in a grid offers the v2 actions and no z-order; a free tile adds Bring forward / Send back', async () => {
+  it('a tile offers the v2 actions and no z-order (items never overlap: M5 has no free layout)', async () => {
     const r = open({ kind: 'node', id: 'a' });
     for (const n of ['Edit', 'Duplicate', 'Cut', 'Copy', 'Paste here', 'Move/Copy to…', 'Delete']) expect(item(n)).toBeInTheDocument();
     expect(screen.queryByRole('menuitem', { name: 'Bring forward' })).toBeNull();
     r.unmount();
-    open({ kind: 'node', id: 'fa' });
-    expect(item('Bring forward')).toBeInTheDocument();
-    expect(item('Send back')).toBeInTheDocument();
+    open({ kind: 'node', id: 'x' });
+    expect(screen.queryByRole('menuitem', { name: 'Bring forward' })).toBeNull();
+    expect(screen.queryByRole('menuitem', { name: 'Send back' })).toBeNull();
   });
 
   it('right-clicking an unselected item selects just it', () => {
@@ -147,7 +147,7 @@ describe('NodeContextMenu — each action calls the right op', () => {
     expect(vi.mocked(ops.deleteNodes).mock.calls.at(-1)![1]).toEqual(['a', 'b']);
   });
 
-  it('Copy and Cut fill the clipboard; Paste here on a folder → pasteSnapshot (copy) / moveNodes (cut)', async () => {
+  it('Copy and Cut fill the clipboard; Paste here on a folder → pasteSnapshot (copy) / moveBetween (cut), after the item asked on', async () => {
     let r = open({ kind: 'node', id: 'a' });
     await fireEvent.click(item('Copy'));
     expect(get(nodeClipboard)).toMatchObject({ mode: 'copy', sourceDashboardId: 'd1' });
@@ -162,11 +162,12 @@ describe('NodeContextMenu — each action calls the right op', () => {
     await fireEvent.click(item('Cut'));
     expect(get(nodeClipboard)).toMatchObject({ mode: 'cut' });
     r.unmount();
-    open({ kind: 'node', id: 'x' }); // paste beside x = into f1
+    open({ kind: 'node', id: 'x' }); // paste beside x = into f1, right after x
     await fireEvent.click(item('Paste here'));
     await tick();
-    expect(ops.moveNodes).toHaveBeenCalledTimes(1);
-    expect((nodeIn(draft(), 'f1') as FolderNode).content.children.map((n) => n.id)).toContain('b');
+    expect(ops.moveBetween).toHaveBeenCalledTimes(1);
+    const kids = (nodeIn(draft(), 'f1') as FolderNode).content.children.map((n) => n.id);
+    expect(kids.slice(0, 2)).toEqual(['x', 'b']);
   });
 
   it('Paste here is disabled with an empty clipboard', () => {
@@ -178,17 +179,6 @@ describe('NodeContextMenu — each action calls the right op', () => {
     open({ kind: 'node', id: 'a' });
     await fireEvent.click(item('Move/Copy to…'));
     expect(get(editorDialog)).toEqual({ kind: 'movecopy', ids: ['a'] });
-  });
-
-  it('Bring forward / Send back → setZ in free mode', async () => {
-    let r = open({ kind: 'node', id: 'fa' });
-    await fireEvent.click(item('Bring forward'));
-    expect(ops.setZ).toHaveBeenLastCalledWith(expect.anything(), 'fa', 'forward');
-    expect(nodeIn(draft(), 'fa')!.placement.z).toBe(2);
-    r.unmount();
-    r = open({ kind: 'node', id: 'fa' });
-    await fireEvent.click(item('Send back'));
-    expect(ops.setZ).toHaveBeenLastCalledWith(expect.anything(), 'fa', 'back');
   });
 
   it('a folder offers "Start collapsed" / "Start expanded" → setFolderDisplay (saved default, undoable)', async () => {
@@ -235,19 +225,19 @@ describe('NodeContextMenu — each action calls the right op', () => {
     expect(screen.getByRole('menu').textContent).toMatch(/no longer exists/i);
   });
 
-  it('the folder dialog saves "Starts" via setFolderDisplay and the layout via setFolderLayout, as ONE undo step', async () => {
+  it('the folder dialog saves "Starts" via setFolderDisplay with its look, as ONE undo step', async () => {
     editMode.set(true);
     render(EditorDialogs, { tabId: 't1' });
     editorDialog.set({ kind: 'folder', id: 'f1' });
     await tick();
     await fireEvent.click(screen.getByRole('radio', { name: 'Collapsed' }));
-    await fireEvent.change(screen.getByLabelText('Layout'), { target: { value: 'free' } });
+    await fireEvent.change(screen.getByLabelText('Look'), { target: { value: 'folder-tab' } });
     await fireEvent.click(screen.getByRole('button', { name: /^Save/ }));
     expect(ops.setFolderDisplay).toHaveBeenLastCalledWith(expect.anything(), 'f1', 'collapsed');
-    expect(ops.setFolderLayout).toHaveBeenLastCalledWith(expect.anything(), 'f1', 'free');
     const f1 = nodeIn(draft(), 'f1') as FolderNode;
     expect(f1.display).toBe('collapsed');
-    expect(f1.content.columns).toBe(4 * 13); // content converted (side 13 for 1280)
+    expect(f1.shape).toBe('folder-tab');
+    expect('layout' in f1).toBe(false);
     expect(get(session)!.undo).toHaveLength(1);
     editMode.set(false);
   });

@@ -25,11 +25,12 @@ import {
 import { setLayout, resetEditor, startSession, draft, nodeIn, home, other, folder, tile, p } from '$lib/components/editor/editorTestKit';
 
 // t1's root: 24 columns of 50 px (square rows): a Medium tile (2 x 2) is a 100 px box.
-const GRID = containerMetrics({ columns: 24, children: [] }, 'grid', 1200);
-const FREE = containerMetrics({ columns: 160, children: [] }, 'free', 1280);
+const GRID = containerMetrics({ columns: 24, children: [] }, 1200);
+/** A folder's content (M5): Medium items of 2 x 50 px, flowing 2 to a row. */
+const FLOW: ContainerMetrics = { columns: 4, unitPx: 50, rowPx: 50, innerWidthPx: 200, flow: { span: 2, perRow: 2 } };
 
 type Box = { left: number; top: number; width: number; height: number };
-type Where = { ref: ContainerRef; metrics: ContainerMetrics; layout: 'grid' | 'free' | 'stacked' };
+type Where = { ref: ContainerRef; metrics: ContainerMetrics; layout: 'grid' | 'flow' | 'stacked' };
 
 /** The stub DOM: a container (or none), rendered node boxes in it, and tab-bar / crumb targets. */
 let where: Where | null;
@@ -240,7 +241,7 @@ describe('merge by the dragged tile\'s visual centre', () => {
 });
 
 describe('into folders', () => {
-  it('a drop on a collapsed folder goes inside it, at its first free cell', () => {
+  it('a drop on a collapsed folder goes inside it, at the end of its order (unplaced)', () => {
     startMouseDrag(source('a'), 50, 50);
     moveTo(550, 150); // the centre of c1's one rendered Medium tile
     flush();
@@ -248,7 +249,8 @@ describe('into folders', () => {
     expect(t.kind).toBe('into-folder');
     drop(550, 150);
     const c1 = nodeIn(draft(), 'c1') as FolderNode;
-    expect(c1.content.children.find((n) => n.id === 'a')?.placement).toEqual(p(2, 0));
+    expect(c1.content.children.map((n) => n.id)).toEqual(['y', 'a']);
+    expect('placement' in c1.content.children[1]).toBe(false);
     expect(get(toast).at(-1)?.message).toBe('Moved "A" to C1');
   });
 
@@ -263,22 +265,23 @@ describe('into folders', () => {
     expect(get(overlayStack)).toEqual(['c1']);
     expect(get(drag)).not.toBeNull();
     // the overlay's content container now lies under the pointer (it registers like any other)
-    where = { ref: { tabId: 't1', folderId: 'c1' }, metrics: containerMetrics({ columns: 4, children: [] }, 'grid', 200), layout: 'grid' };
+    where = { ref: { tabId: 't1', folderId: 'c1' }, metrics: FLOW, layout: 'flow' };
     nodes = [];
     flush();
     moveTo(150, 50);
     flush();
-    expect(get(drag)?.target).toMatchObject({ kind: 'place', to: { tabId: 't1', folderId: 'c1' }, at: [p(2, 0)] });
+    // Into its ordered content: the end of its order (M5 Task 4 adds the pointer index).
+    expect(get(drag)?.target).toMatchObject({ kind: 'into-folder', folderId: 'c1' });
     drop(150, 50);
     const c1 = nodeIn(draft(), 'c1') as FolderNode;
-    expect(c1.content.children.find((n) => n.id === 'a')?.placement).toEqual(p(2, 0));
+    expect(c1.content.children.map((n) => n.id)).toEqual(['y', 'a']);
   });
 
   it('a folder over its own descendant is invalid while hovering, and the drop changes nothing', async () => {
     resetEditor();
     const d = home();
     const f1 = d.tabs[0].root.children.find((n) => n.id === 'f1') as FolderNode;
-    f1.content.children.push(folder('g', p(2, 0), [tile('z', p(0, 0))], { display: 'collapsed' }));
+    f1.content.children.push(folder('g', undefined, [tile('z')], { display: 'collapsed' }));
     setLayout([d, other()]);
     startSession();
     render(DragLayer);
@@ -313,7 +316,7 @@ describe('across tabs', () => {
     setActiveTab('t2'); // what Dashboard → DragLayer report once the switch renders
     expect(get(drag)).not.toBeNull();
     tabUnder = null;
-    where = { ref: { tabId: 't2' }, metrics: FREE, layout: 'free' };
+    where = { ref: { tabId: 't2' }, metrics: GRID, layout: 'grid' };
     nodes = [];
     moveTo(400, 400);
     flush();
@@ -335,10 +338,10 @@ describe('across tabs', () => {
     const a = t2.find((n) => n.id === 'a') as LayoutNode;
     expect(a).toBeTruthy();
     for (const o of t2.filter((n) => n.id !== 'a')) {
-      const q = o.placement, r = a.placement;
+      const q = o.placement!, r = a.placement!;
       expect(r.x < q.x + q.w && q.x < r.x + r.w && r.y < q.y + q.h && q.y < r.y + r.h).toBe(false);
     }
-    expect(get(toast).at(-1)?.message).toBe('Moved "A" to Free');
+    expect(get(toast).at(-1)?.message).toBe('Moved "A" to Two');
   });
 
   it('the breadcrumb shows the original tab; 600 ms over its crumb returns there', async () => {
@@ -384,51 +387,6 @@ describe('across tabs', () => {
   });
 });
 
-describe('free alignment guides', () => {
-  // t2 drawn 640 px wide: one design unit is 4 px, so a 4 px snap can beat plain rounding.
-  const FREE640 = containerMetrics({ columns: 160, children: [] }, 'free', 640);
-
-  it('an edge within 4 px of a sibling\'s edge snaps to it and draws a guide; 5 px away does not', () => {
-    where = { ref: { tabId: 't2' }, metrics: FREE640, layout: 'free' };
-    nodes = [];
-    sourceRect = { left: 0, top: 0, width: 64, height: 64 };
-    startMouseDrag(source('fa'), 32, 32);
-    // fb's right edge is at 36 units = 144 px. Ghost left at 147 px (3 px off): 36.75 units would round to 37.
-    moveTo(147 + 32, 100 + 32);
-    flush();
-    let t = get(drag)!.target!;
-    expect(t.kind).toBe('place');
-    if (t.kind !== 'place') return;
-    expect(t.at[0].x).toBe(36);
-    expect(t.guides?.some((g) => g.axis === 'x' && g.at === 144)).toBe(true);
-    moveTo(149 + 32, 100 + 32); // 5 px off: plain rounding (37.25 → 37), no guide
-    flush();
-    t = get(drag)!.target!;
-    if (t.kind !== 'place') throw new Error('expected place');
-    expect(t.at[0].x).toBe(37);
-    expect(t.guides?.some((g) => g.axis === 'x') ?? false).toBe(false);
-    drop(149 + 32, 100 + 32);
-    expect(nodeIn(draft(), 'fa')!.placement).toMatchObject({ x: 37, y: 25 });
-  });
-
-  it('centres snap too, and the layer draws the guide', async () => {
-    render(DragLayer);
-    where = { ref: { tabId: 't2' }, metrics: FREE640, layout: 'free' };
-    nodes = [];
-    sourceRect = { left: 0, top: 0, width: 64, height: 64 };
-    startMouseDrag(source('fa'), 32, 32);
-    // fb's centre is x = 28 units = 112 px; fa's centre at 114 px (2 px off) → fa.x = 28 - 8 = 20
-    moveTo(114, 300);
-    flush();
-    const t = get(drag)!.target!;
-    if (t.kind !== 'place') throw new Error('expected place');
-    expect(t.at[0].x).toBe(20);
-    expect(t.guides?.some((g) => g.axis === 'x' && g.at === 112)).toBe(true);
-    await tick();
-    expect(document.querySelectorAll('.drag-layer .guide').length).toBeGreaterThan(0);
-  });
-});
-
 describe('dragging out of an open overlay', () => {
   const stubHits = (fn: () => HitResult) =>
     setDragEnv({
@@ -436,7 +394,7 @@ describe('dragging out of an open overlay', () => {
       raf: (cb) => { frames.push(cb); return frames.length; },
       cancelRaf: () => { frames = []; }
     });
-  const C1 = { ref: { tabId: 't1', folderId: 'c1' }, metrics: containerMetrics({ columns: 2, children: [] }, 'grid', 200), layout: 'grid' as const, left: 0, top: 0 };
+  const C1 = { ref: { tabId: 't1', folderId: 'c1' }, metrics: FLOW, layout: 'flow' as const, left: 0, top: 0 };
 
   it('an overlay the dwell opened under a pointer over its backdrop stays open (no open/close loop)', () => {
     startMouseDrag(source('a'), 50, 50);
@@ -538,22 +496,6 @@ describe('dwell edge cases', () => {
     expect(get(drag)).not.toBeNull();
     setActiveTab('t2'); // an unrelated change later: cancels as any other tab change does
     expect(get(drag)).toBeNull();
-  });
-});
-
-describe('free snap at normal scale', () => {
-  it('at 8 px per unit, an edge 7 px from a sibling\'s edge snaps (one design unit), changing the rounded position', () => {
-    where = { ref: { tabId: 't2' }, metrics: FREE, layout: 'free' };
-    nodes = [];
-    sourceRect = { left: 0, top: 0, width: 128, height: 128 };
-    startMouseDrag(source('fa'), 64, 64);
-    // fb's right edge: 36 units = 288 px. Ghost left at 295 px = 36.875 units → would round to 37.
-    moveTo(295 + 64, 400 + 64);
-    flush();
-    const t = get(drag)!.target!;
-    if (t.kind !== 'place') throw new Error('expected place');
-    expect(t.at[0].x).toBe(36);
-    expect(t.guides?.some((g) => g.axis === 'x' && g.at === 288)).toBe(true);
   });
 });
 

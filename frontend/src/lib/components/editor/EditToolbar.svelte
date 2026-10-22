@@ -87,7 +87,7 @@
     if (!$session || e.defaultPrevented || isTyping(e.target) || modalOpen()) return;
     const mod = e.ctrlKey || e.metaKey;
     const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
-    // Shift+Arrow: resize the selected item by one cell (grid) or one 8 px unit (free).
+    // Shift+Arrow: resize the selected item by one cell.
     const grow = ARROWS[e.key];
     if (grow && e.shiftKey && !mod && !e.altKey) {
       if (get(drag)) return; // a pointer drag or resize owns the item until it ends
@@ -103,7 +103,7 @@
       if ((k === 'z' && e.shiftKey) || (k === 'y' && !e.shiftKey)) { e.preventDefault(); redo(); return; }
       if (k === 's' && !e.shiftKey) { e.preventDefault(); void doSave(); return; }
       if (e.shiftKey) return;
-      // Ctrl+] / Ctrl+[: bring forward / send back (free layouts).
+      // Ctrl+] / Ctrl+[: bring forward / send back (items never overlap, so it says so).
       // By the character typed (e.key), never e.code: on other layouts that key is e.g. "+" (zoom).
       const z = k === ']' ? 'forward' : k === '[' ? 'back' : null;
       if (z) {

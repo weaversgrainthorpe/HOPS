@@ -1,42 +1,24 @@
 import { describe, it, expect } from 'vitest';
+import { readingOrder, clampPlacement, previewChildren, planCanvas, isRenderable, isPlaced } from './geometry';
 import {
-  resolveMode, readingOrder, clampPlacement, previewChildren, planCanvas, isRenderable
-} from './geometry';
-import {
-  containerMetrics, nodeBox, folderChrome, folderContentBox, folderInnerMetrics, requiredFolderHeightPx,
+  containerMetrics, nodeBox, folderChrome, folderContentBox, folderInnerMetrics,
   overlayBodyPx, scrollbarPx, ROOT_COLUMNS, overlayMetrics, OVERLAY_PANEL_CHROME_PX, pointToCell
 } from './geometry';
 import type { Container } from '../types/layout';
-import type { FolderNode, LayoutDashboard, LayoutNode, LayoutTab, Placement } from '../types/layout';
+import type { FolderNode, LayoutNode, LayoutTab, Placement } from '../types/layout';
 
 const p = (x: number, y: number, w = 1, h = 1): Placement => ({ x, y, w, h });
-const tile = (id: string, pl: Placement): LayoutNode =>
-  ({ kind: 'tile', id, name: id, url: 'http://x', placement: pl }) as unknown as LayoutNode;
-const folder = (layout?: FolderNode['layout'], children: LayoutNode[] = []): FolderNode => ({
-  kind: 'folder', id: 'f', name: 'f', layout, display: 'collapsed', placement: p(0, 0),
-  content: { columns: 4, children }
+/** A tile; `pl` only on a tab (M5: folder contents have no placements). */
+const tile = (id: string, pl?: Placement): LayoutNode =>
+  ({ kind: 'tile', id, name: id, url: 'http://x', ...(pl ? { placement: pl } : {}) }) as unknown as LayoutNode;
+const folder = (children: LayoutNode[] = []): FolderNode => ({
+  kind: 'folder', id: 'f', name: 'f', display: 'collapsed', size: 'medium', contentSize: 'medium', placement: p(0, 0),
+  content: { children }
 });
 const tab = (over: Partial<LayoutTab> = {}): LayoutTab =>
   ({ id: 't', name: 't', root: { columns: 24, children: [] }, ...over });
-const dash = (over: Partial<LayoutDashboard> = {}): LayoutDashboard =>
-  ({ id: 'd', name: 'd', path: '/d', revision: 1, tabs: [], ...over });
 
-describe('resolveMode', () => {
-  it('folder free beats tab grid', () => {
-    expect(resolveMode(dash(), tab({ layout: 'grid' }), [folder('free')])).toBe('free');
-  });
-  it('innermost concrete folder wins', () => {
-    expect(resolveMode(dash(), tab(), [folder('free'), folder('grid'), folder('inherit')])).toBe('grid');
-  });
-  it('inherit all the way falls to dashboard default', () => {
-    expect(resolveMode(dash({ defaultLayout: 'free' }), tab({ layout: 'inherit' }), [folder('inherit'), folder()])).toBe('free');
-  });
-  it('nothing set is grid', () => {
-    expect(resolveMode(dash(), tab(), [])).toBe('grid');
-  });
-});
-
-describe('readingOrder', () => {
+describe('readingOrder (tab level)', () => {
   it('orders by y then x', () => {
     const r = readingOrder([{ placement: p(1, 0) }, { placement: p(0, 1) }, { placement: p(0, 0) }]);
     expect(r.map((n) => [n.placement.x, n.placement.y])).toEqual([[0, 0], [1, 0], [0, 1]]);
@@ -61,7 +43,7 @@ describe('clampPlacement', () => {
 });
 
 describe('previewChildren', () => {
-  const mk = (n: number) => folder('grid', Array.from({ length: n }, (_, i) => tile('t' + i, p(i, 0))));
+  const mk = (n: number) => folder(Array.from({ length: n }, (_, i) => tile('t' + i)));
   it('caps at 4', () => {
     expect(previewChildren(mk(0))).toHaveLength(0);
     expect(previewChildren(mk(1))).toHaveLength(1);
@@ -70,29 +52,22 @@ describe('previewChildren', () => {
 });
 
 describe('planCanvas', () => {
-  it('grid', () => {
-    expect(planCanvas('grid', 1440, tab())).toEqual({ kind: 'grid', cellPx: 60 });
-    expect(planCanvas('grid', 767, tab())).toEqual({ kind: 'stacked' });
-  });
-  it('free', () => {
-    expect(planCanvas('free', 1920, tab({ designWidth: 1280 }))).toEqual({ kind: 'free', scale: 1.5 });
-    expect(planCanvas('free', 700, tab({ designWidth: 1280 }))).toEqual({ kind: 'stacked' });
-    expect(planCanvas('free', 768, tab({ designWidth: 1280 }))).toEqual({ kind: 'free', scale: 0.6 });
-  });
-  it('free defaults designWidth to 1280', () => {
-    expect(planCanvas('free', 1280, tab())).toEqual({ kind: 'free', scale: 1 });
+  it('grid at a desktop width, stacked below the phone breakpoint', () => {
+    expect(planCanvas(1440, tab())).toEqual({ kind: 'grid', cellPx: 60 });
+    expect(planCanvas(767, tab())).toEqual({ kind: 'stacked' });
   });
 });
 
-describe('isRenderable', () => {
-  it('accepts valid tile and folder', () => {
+describe('isRenderable / isPlaced', () => {
+  it('accepts valid tiles and folders, with or without a placement', () => {
     expect(isRenderable(tile('a', p(0, 0)))).toBe(true);
-    expect(isRenderable(folder('grid', [tile('a', p(0, 0))]))).toBe(true);
+    expect(isRenderable(tile('a'))).toBe(true);
+    expect(isRenderable(folder([tile('a')]))).toBe(true);
   });
-  it('rejects unknown kind, missing placement, bad folder content', () => {
+  it('rejects unknown kind and bad folder content; a bad placement is not placed', () => {
     expect(isRenderable({ kind: 'widget', placement: p(0, 0) })).toBe(false);
-    expect(isRenderable({ kind: 'tile', id: 'a' })).toBe(false);
-    expect(isRenderable({ kind: 'tile', placement: { x: 'a', y: 0, w: 1, h: 1 } })).toBe(false);
+    expect(isPlaced({ kind: 'tile', id: 'a' })).toBe(false);
+    expect(isPlaced({ kind: 'tile', placement: { x: 'a', y: 0, w: 1, h: 1 } })).toBe(false);
     expect(isRenderable({ kind: 'folder', placement: p(0, 0), content: {} })).toBe(false);
     expect(isRenderable(null)).toBe(false);
   });
@@ -100,17 +75,13 @@ describe('isRenderable', () => {
 
 describe('robustness', () => {
   it('planCanvas never returns an undrawable plan', () => {
-    for (const dw of [0, NaN, -5]) {
-      expect(planCanvas('free', 1280, tab({ designWidth: dw }))).toEqual({ kind: 'free', scale: 1 });
-    }
     for (const w of [0, NaN, -10, Infinity]) {
-      expect(planCanvas('free', w, tab())).toEqual({ kind: 'stacked' });
-      expect(planCanvas('grid', w, tab())).toEqual({ kind: 'stacked' });
+      expect(planCanvas(w, tab())).toEqual({ kind: 'stacked' });
     }
     for (const columns of [0, -1, NaN]) {
-      expect(planCanvas('grid', 1440, tab({ root: { columns, children: [] } }))).toEqual({ kind: 'grid', cellPx: 60 });
+      expect(planCanvas(1440, tab({ root: { columns, children: [] } }))).toEqual({ kind: 'grid', cellPx: 60 });
     }
-    expect(planCanvas('grid', 1440, { id: 't', name: 't' } as unknown as LayoutTab)).toEqual({ kind: 'grid', cellPx: 60 });
+    expect(planCanvas(1440, { id: 't', name: 't' } as unknown as LayoutTab)).toEqual({ kind: 'grid', cellPx: 60 });
   });
   const bad = [null, 'str', { kind: 'tile', id: 'np' }] as unknown as { placement?: Placement }[];
   it('readingOrder puts malformed children last, in array order, without throwing', () => {
@@ -118,9 +89,9 @@ describe('robustness', () => {
     const r = readingOrder([bad[0], v1, bad[1], bad[2], v0]);
     expect(r).toEqual([v0, v1, bad[0], bad[1], bad[2]]);
   });
-  it('previewChildren skips non-renderable children', () => {
-    const f = folder('grid', [null, tile('a', p(1, 0)), 'x', tile('b', p(0, 0))] as unknown as LayoutNode[]);
-    expect(previewChildren(f).map((n) => n.id)).toEqual(['b', 'a']);
+  it('previewChildren skips non-renderable children and keeps the order', () => {
+    const f = folder([null, tile('a'), 'x', tile('b')] as unknown as LayoutNode[]);
+    expect(previewChildren(f).map((n) => n.id)).toEqual(['a', 'b']);
   });
   it('clampPlacement guards non-finite and fractional values', () => {
     expect(clampPlacement({ x: NaN, y: Infinity, w: NaN, h: NaN }, NaN)).toEqual({ x: 0, y: 0, w: 1, h: 1 });
@@ -140,56 +111,40 @@ describe('clampPlacement z validation', () => {
   });
 });
 
-// ---- M3 Task 1: one geometry source (containerMetrics / nodeBox / folderChrome) ----
+// ---- one geometry source (containerMetrics / nodeBox / folderChrome) ----
 
 const ffold = (over: Partial<FolderNode> = {}): FolderNode => ({
-  kind: 'folder', id: 'ff', name: 'ff', display: 'expanded', placement: p(0, 0, 5, 4),
-  content: { columns: 5, children: [] }, ...over
+  kind: 'folder', id: 'ff', name: 'ff', display: 'expanded', size: 'medium', contentSize: 'medium',
+  placement: p(0, 0, 5, 4), content: { children: [] }, ...over
 });
 
 describe('containerMetrics: one columns fallback everywhere', () => {
   const root = (columns: unknown): Container => ({ columns, children: [] }) as unknown as Container;
   for (const bad of [0, -2, undefined, NaN]) {
     it(`root columns ${String(bad)} falls back to ROOT_COLUMNS, as planCanvas and clampPlacement do`, () => {
-      const m = containerMetrics(root(bad), 'grid', 1440);
+      const m = containerMetrics(root(bad), 1440);
       expect(m.columns).toBe(ROOT_COLUMNS);
       expect(m.unitPx).toBe(60); // 1440 / 24
-      const plan = planCanvas('grid', 1440, tab({ root: root(bad) }));
+      const plan = planCanvas(1440, tab({ root: root(bad) }));
       expect(plan).toEqual({ kind: 'grid', cellPx: m.unitPx });
       expect(clampPlacement({ x: 40, y: 0, w: 1, h: 1 }, bad as number).x).toBe(ROOT_COLUMNS - 1);
     });
-    it(`folder content.columns ${String(bad)} falls back to placement.w`, () => {
-      const f = ffold({ content: { columns: bad as number, children: [] } });
-      const m = containerMetrics(f.content, 'grid', 500, { folder: f });
-      expect(m.columns).toBe(5);
-      expect(m.unitPx).toBe(100);
-    });
   }
-  it('fractional columns floor the same way for a root, a folder, planCanvas and clampPlacement', () => {
-    const r = containerMetrics(root(2.7), 'grid', 1000);
+  it('fractional columns floor the same way for a root, planCanvas and clampPlacement', () => {
+    const r = containerMetrics(root(2.7), 1000);
     expect(r.columns).toBe(2);
     expect(r.unitPx).toBe(500);
-    expect(planCanvas('grid', 1000, tab({ root: root(2.7) }))).toEqual({ kind: 'grid', cellPx: 500 });
+    expect(planCanvas(1000, tab({ root: root(2.7) }))).toEqual({ kind: 'grid', cellPx: 500 });
     expect(clampPlacement({ x: 5, y: 0, w: 1, h: 1 }, 2.7).x).toBe(1);
-    const f = ffold({ content: { columns: 2.7, children: [] } });
-    expect(containerMetrics(f.content, 'grid', 1000, { folder: f }).columns).toBe(2);
   });
-  it('a folder with bad content.columns and a fractional placement.w floors w', () => {
-    const f = ffold({ placement: { x: 0, y: 0, w: 3.9, h: 2 }, content: { columns: 0, children: [] } });
-    expect(containerMetrics(f.content, 'grid', 300, { folder: f }).columns).toBe(3);
-  });
-  it('grid rows default to square cells; rowPx overrides; free rows are always the unit', () => {
+  it('rows default to square cells; rowPx overrides', () => {
     const c = root(12);
-    expect(containerMetrics(c, 'grid', 1200).rowPx).toBe(100);
-    expect(containerMetrics(c, 'grid', 1200, { rowPx: 40 }).rowPx).toBe(40);
-    const free = containerMetrics(root(160), 'free', 1280, { rowPx: 40 });
-    expect(free.unitPx).toBe(8);
-    expect(free.rowPx).toBe(8);
-    expect(free.innerWidthPx).toBe(1280);
+    expect(containerMetrics(c, 1200).rowPx).toBe(100);
+    expect(containerMetrics(c, 1200, { rowPx: 40 }).rowPx).toBe(40);
   });
   it('never returns non-finite sizes', () => {
     for (const w of [NaN, -5, Infinity]) {
-      const m = containerMetrics(root(12), 'grid', w);
+      const m = containerMetrics(root(12), w);
       expect(Number.isFinite(m.unitPx) && m.unitPx >= 0).toBe(true);
       expect(Number.isFinite(m.rowPx) && m.rowPx >= 0).toBe(true);
     }
@@ -197,7 +152,7 @@ describe('containerMetrics: one columns fallback everywhere', () => {
 });
 
 describe('nodeBox', () => {
-  const m = containerMetrics({ columns: 12, children: [] }, 'grid', 1200, { rowPx: 50 });
+  const m = containerMetrics({ columns: 12, children: [] }, 1200, { rowPx: 50 });
   it('floors fractional h (and w, x, y) after clampPlacement', () => {
     expect(nodeBox({ x: 1.5, y: 2.2, w: 2.9, h: 2.7 }, m)).toEqual({ leftPx: 100, topPx: 100, widthPx: 200, heightPx: 100 });
   });
@@ -224,36 +179,25 @@ describe('folderChrome', () => {
   });
 });
 
-describe('free folder scale subtracts the chrome', () => {
-  const parent = containerMetrics({ columns: 160, children: [] }, 'free', 1920);
-  const f = ffold({ layout: 'free', placement: p(0, 0, 40, 10), content: { columns: 40, children: [] } });
-  it("a free folder's children never exceed its inner width", () => {
-    const inner = folderInnerMetrics(f, parent);
-    const box = nodeBox(f.placement, parent);
-    expect(inner.mode).toBe('free');
-    expect(inner.innerWidthPx).toBeCloseTo(box.widthPx - folderChrome(f.shape, true).padXPx, 6);
-    expect(inner.unitPx * inner.columns).toBeCloseTo(inner.innerWidthPx, 6);
-    const child = nodeBox({ x: 35, y: 0, w: 30, h: 1 }, inner);
-    expect(child.leftPx + child.widthPx).toBeLessThanOrEqual(inner.innerWidthPx + 1e-9);
+describe("an open folder's contents (M5: in order, at its contents size, in the tab's cell)", () => {
+  const gp = containerMetrics({ columns: 24, children: [] }, 1440); // 60 px cells
+  it('the item side is the contents span in tab cells, whatever the folder width', () => {
+    for (const w of [6, 12, 20]) {
+      const inner = folderInnerMetrics(ffold({ placement: p(0, 0, w, 6) }), gp);
+      expect(inner.unitPx).toBe(60);
+      expect(inner.flow!.span).toBe(2);
+    }
   });
-  it('requiredFolderHeightPx grows a free folder to title + padding + content, never below its box', () => {
-    const tall = ffold({ layout: 'free', placement: p(0, 0, 40, 1), content: { columns: 40, children: [tile('t', p(0, 2, 5, 50))] } });
-    const inner = folderInnerMetrics(tall, parent);
-    const ch = folderChrome(tall.shape, true);
-    expect(requiredFolderHeightPx(tall, parent)).toBeCloseTo(ch.titlePx + ch.padYPx + 52 * inner.rowPx, 6);
-    const short = ffold({ layout: 'free', placement: p(0, 0, 40, 100), content: { columns: 40, children: [tile('t', p(0, 0, 1, 1))] } });
-    expect(requiredFolderHeightPx(short, parent)).toBe(nodeBox(short.placement, parent).heightPx);
-    const collapsed = { ...tall, display: 'collapsed' as const };
-    expect(requiredFolderHeightPx(collapsed, parent)).toBe(nodeBox(tall.placement, parent).heightPx);
-  });
-  it('a grid folder in a grid parent fits its rows to the folder height (fractional h floored)', () => {
-    // 24 columns of 60 px; the title takes 2 rows (the old 12-column fixture doubled: same px).
-    const gp = containerMetrics({ columns: 24, children: [] }, 'grid', 1440);
-    const g = ffold({ placement: { x: 0, y: 0, w: 12, h: 6.8 }, content: { columns: 12, children: [] } });
-    const inner = folderInnerMetrics(g, gp);
+  it('as many per row as fit the content box (never fewer than one)', () => {
     const ch = folderChrome(undefined, true);
-    expect(inner.rowPx).toBeCloseTo((6 * 60 - ch.titlePx - ch.padYPx) / 4, 6);
-    expect(requiredFolderHeightPx(g, gp)).toBe(360);
+    const inner = folderInnerMetrics(ffold({ placement: p(0, 0, 12, 6) }), gp);
+    expect(inner.flow!.perRow).toBe(Math.floor((12 * 60 - ch.padXPx) / 120));
+    expect(folderInnerMetrics(ffold({ placement: p(0, 0, 1, 6) }), gp).flow!.perRow).toBe(1);
+  });
+  it('a folder without a placement (inside a folder) still has sane metrics', () => {
+    const inner = folderInnerMetrics(ffold({ placement: undefined }), gp);
+    expect(inner.flow).toEqual({ span: 2, perRow: 1 });
+    expect(inner.innerWidthPx).toBe(0);
   });
 });
 
@@ -270,49 +214,37 @@ describe('overlay viewport width', () => {
 });
 
 describe('overlayMetrics (one source for overlay and maximised panels)', () => {
-  const t = tab();
-  const f = ffold({ placement: p(0, 0, 3, 2), content: { columns: 3, children: [] } });
-  it('keeps the dashboard cell when the viewport allows; panel = content + chrome', () => {
-    const o = overlayMetrics({ kind: 'grid', cellPx: 120 }, t, 'grid', f, 2000);
-    expect(o.metrics.columns).toBe(3);
-    expect(o.metrics.unitPx).toBe(120);
-    expect(o.metrics.rowPx).toBe(120);
+  const kids = (n: number) => Array.from({ length: n }, (_, i) => tile('k' + i));
+  it('keeps the dashboard cell when the viewport allows; as many per row as it has; panel = content + chrome', () => {
+    const o = overlayMetrics({ kind: 'grid', cellPx: 60 }, ffold({ content: { children: kids(3) } }), 2000);
+    expect(o.metrics.unitPx).toBe(60);
+    expect(o.metrics.flow).toEqual({ span: 2, perRow: 3 });
     expect(o.metrics.innerWidthPx).toBe(360);
     expect(o.panelWidthPx).toBe(360 + OVERLAY_PANEL_CHROME_PX);
   });
-  it('shrinks to the body width when the viewport is narrow', () => {
-    const o = overlayMetrics({ kind: 'grid', cellPx: 120 }, t, 'grid', f, 300);
-    expect(o.metrics.unitPx).toBe(100);
-    expect(o.metrics.innerWidthPx).toBe(300);
+  it('wraps at the body width', () => {
+    const o = overlayMetrics({ kind: 'grid', cellPx: 60 }, ffold({ content: { children: kids(10) } }), 500);
+    expect(o.metrics.flow!.perRow).toBe(4); // 500 / 120
   });
-  it('a bad content.columns falls back to placement.w', () => {
-    const bad = ffold({ placement: p(0, 0, 4, 2), content: { columns: 0, children: [] } });
-    expect(overlayMetrics({ kind: 'grid', cellPx: 120 }, t, 'grid', bad, 2000).metrics.columns).toBe(4);
-  });
-  it('free mode uses the free unit', () => {
-    const o = overlayMetrics({ kind: 'free', scale: 1 }, t, 'free', ffold({ content: { columns: 40, children: [] } }), 2000);
-    expect(o.metrics.mode).toBe('free');
-    expect(o.metrics.unitPx).toBe(8);
-    expect(o.metrics.innerWidthPx).toBe(320);
+  it('shrinks the cell when even one item is wider than the body', () => {
+    const o = overlayMetrics({ kind: 'grid', cellPx: 60 }, ffold({ contentSize: 'large', content: { children: kids(1) } }), 200);
+    expect(o.metrics.unitPx).toBe(50); // 200 / 4
+    expect(o.metrics.innerWidthPx).toBe(200);
   });
 });
 
 describe('pointToCell (M3 Task 6: right-clicked cell)', () => {
   it('maps a point inside the container to the cell under it, from the metrics', () => {
-    const m = containerMetrics({ columns: 12, children: [] }, 'grid', 1200);
+    const m = containerMetrics({ columns: 12, children: [] }, 1200);
     expect(pointToCell(m, 0, 0)).toEqual({ x: 0, y: 0 });
     expect(pointToCell(m, 250, 199)).toEqual({ x: 2, y: 1 });
   });
   it('clamps to the columns and never goes negative', () => {
-    const m = containerMetrics({ columns: 4, children: [] }, 'grid', 400);
+    const m = containerMetrics({ columns: 4, children: [] }, 400);
     expect(pointToCell(m, 5000, -20)).toEqual({ x: 3, y: 0 });
   });
-  it('free containers use 8 px design units', () => {
-    const m = containerMetrics({ columns: 160, children: [] }, 'free', 1280);
-    expect(pointToCell(m, 81, 17)).toEqual({ x: 10, y: 2 });
-  });
   it('degenerate metrics give the origin', () => {
-    const m = containerMetrics({ columns: 12, children: [] }, 'grid', 0);
+    const m = containerMetrics({ columns: 12, children: [] }, 0);
     expect(pointToCell(m, 50, 50)).toEqual({ x: 0, y: 0 });
   });
 });

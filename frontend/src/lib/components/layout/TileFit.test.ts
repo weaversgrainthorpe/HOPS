@@ -27,6 +27,12 @@ class FakeRO {
 function tile(id: string, size: 'small' | 'medium' | 'large', x: number, y: number, w = 1, h = 1): any {
   return { kind: 'tile', id, name: 'N-' + id, description: 'Desc ' + id, url: 'http://x.test', icon: 'mdi:home', openMode: 'newtab', size, order: 0, placement: { x, y, w, h } };
 }
+/** A folder's child (M5: no placement). */
+function kid(id: string, size: 'small' | 'medium' | 'large'): any {
+  const t = tile(id, size, 0, 0);
+  delete t.placement;
+  return t;
+}
 function mk(children: any[]): { dash: LayoutDashboard; tab: LayoutTab } {
   const tab: LayoutTab = { id: 't1', name: 'Main', root: { columns: 24, children } };
   return { dash: { id: 'd1', name: 'Home', path: '/home', revision: 1, tabs: [tab] }, tab };
@@ -43,24 +49,29 @@ describe('tiles fit their grid cell (Ruling 22)', () => {
   for (const w of [1440, 1024, 800]) {
     it(`at a ${w}px canvas no tile's box exceeds its cell`, async () => {
       width = w;
-      // The finer grid (spec §9): 24 columns, Medium 2 x 2, Large 4 x 4, Small 1 x 1 — the old
-      // 12-column fixture doubled (r-s/f-s: old Smalls left at 2 x 2), plus true 1 x 1 Smalls.
+      // M5: on the tab every tile is exactly its Size's span (Small 1 x 1, Medium 2 x 2, Large 4 x 4);
+      // inside a folder every item shows the folder's contents size (here Medium), in order.
       const { dash, tab } = mk([
-        tile('r-s', 'small', 0, 0, 2, 2), tile('r-m', 'medium', 2, 0, 2, 2), tile('r-l', 'large', 4, 0, 2, 2), tile('r-big', 'large', 6, 0, 4, 4),
-        tile('r-tiny', 'small', 10, 0, 1, 1),
-        { kind: 'folder', id: 'f', name: 'F', display: 'expanded', placement: { x: 0, y: 4, w: 12, h: 6 },
-          content: { columns: 12, children: [tile('f-m', 'medium', 0, 0, 2, 2), tile('f-l', 'large', 2, 0, 2, 2), tile('f-s', 'small', 4, 2, 2, 2), tile('f-tiny', 'small', 6, 0, 1, 1)] } }
+        tile('r-s', 'small', 0, 0, 1, 1), tile('r-m', 'medium', 2, 0, 2, 2), tile('r-big', 'large', 6, 0, 4, 4),
+        { kind: 'folder', id: 'f', name: 'F', display: 'expanded', size: 'medium', contentSize: 'medium',
+          placement: { x: 0, y: 4, w: 12, h: 6 },
+          content: { children: [kid('f-m', 'medium'), kid('f-l', 'large'), kid('f-s', 'small')] } }
       ]);
       const { container } = render(TabCanvas, { dashboard: dash, tab });
       await tick();
-      const ids = ['r-s', 'r-m', 'r-l', 'r-big', 'r-tiny', 'f-m', 'f-l', 'f-s', 'f-tiny'];
-      for (const id of ids) {
+      const rootM = containerMetrics(tab.root, w);
+      const inner = folderInnerMetrics(tab.root.children[3] as any, rootM);
+      for (const id of ['r-s', 'r-m', 'r-big', 'f-m', 'f-l', 'f-s']) {
         const cell = container.querySelector(`[data-node-id="${id}"]`) as HTMLElement;
         const grid = cell.parentElement as HTMLElement;
         const rowPx = px(grid.getAttribute('style') ?? '', 'grid-auto-rows');
-        const span = Number(/grid-row:\s*\d+\s*\/\s*span\s*(\d+)/.exec(cell.getAttribute('style') ?? '')![1]);
         expect(rowPx).toBeGreaterThan(0);
+        // A tab tile spans its rows; a folder item is one flow track of its contents size.
+        const inFolder = id.startsWith('f-');
+        const span = inFolder ? 1 : Number(/grid-row:\s*\d+\s*\/\s*span\s*(\d+)/.exec(cell.getAttribute('style') ?? '')![1]);
+        const spanW = inFolder ? 1 : Number(/grid-column:\s*\d+\s*\/\s*span\s*(\d+)/.exec(cell.getAttribute('style') ?? '')![1]);
         const cellH = rowPx * span;
+        const cellW = (inFolder ? inner.flow!.span * inner.unitPx : rootM.unitPx) * spanW;
         const box = cell.querySelector('.entry-container') as HTMLElement;
         const btn = cell.querySelector('button.entry') as HTMLElement;
         // The tile is sized by its cell: 100% of it, never a min-height of its own.
@@ -71,46 +82,31 @@ describe('tiles fit their grid cell (Ruling 22)', () => {
         expect(btn.style.overflow).toBe('hidden');
         // Nothing between the tile and the grid track can grow it.
         expect(cell.style.minHeight === '' || cell.style.minHeight === '0px').toBe(true);
-        // Compact exactly when the cell is too small for the full tile, or the tile is one 1 x 1
-        // cell (Small: always compact, spec §9). Root columns are w/24; a folder's are its content
-        // box (minus chrome) / its columns.
-        const rootM = containerMetrics(tab.root, 'grid', w);
-        const colPx = id.startsWith('r-') ? rootM.unitPx : folderInnerMetrics(tab.root.children[5] as any, rootM).unitPx;
-        const spanW = Number(/grid-column:\s*\d+\s*\/\s*span\s*(\d+)/.exec(cell.getAttribute('style') ?? '')![1]);
-        const cellW = colPx * spanW;
-        const compact = (spanW === 1 && span === 1) || Math.min(cellW, cellH) < COMPACT_TILE_PX;
-        if (id.endsWith('tiny')) expect(compact).toBe(true);
+        // Compact exactly when the cell is too small for the full tile, or the tile is one cell
+        // (Small: always compact, spec §9).
+        const oneCell = inFolder ? inner.flow!.span === 1 : spanW === 1 && span === 1;
+        const compact = oneCell || Math.min(cellW, cellH) < COMPACT_TILE_PX;
         expect(btn.classList.contains('compact')).toBe(compact);
         expect(btn.classList.contains('fill')).toBe(true);
-        // Spec §10: one arrangement at every fit; the description is never dropped from a compact tile
-        // (only a container height query hides it when the tile is too short to fit it).
+        // Spec §10: one arrangement at every fit; the description is never dropped from a compact tile.
         expect(cell.querySelector('.subtitle'), `${id} keeps its description`).not.toBeNull();
       }
+      // Consistent sizes (M5 §2): a Medium in a Medium folder is the same box as a Medium on the tab.
+      const rootRow = px((container.querySelector('.container-grid') as HTMLElement).getAttribute('style') ?? '', 'grid-auto-rows');
+      const flowRow = px((container.querySelector('.container-flow') as HTMLElement).getAttribute('style') ?? '', 'grid-auto-rows');
+      expect(flowRow).toBeCloseTo(2 * rootRow, 1); // both are rounded to 0.01 px
+      expect(container.querySelector('[data-node-id="r-s"] button.entry')!.classList.contains('compact')).toBe(true);
       if (w === 1440) {
-        // 60px root cells, a Medium is 120px: full tiles with their description; a Small is compact.
-        expect(container.querySelector('[data-node-id="r-tiny"] button.entry')!.classList.contains('compact')).toBe(true);
-        expect(container.querySelector('[data-node-id="r-m"] .subtitle')).not.toBeNull();
+        // 60px root cells, a Medium is 120px: full tiles with their description.
         expect(container.querySelector('[data-node-id="r-m"] button.entry')!.classList.contains('compact')).toBe(false);
+        expect(container.querySelector('[data-node-id="f-l"] button.entry')!.classList.contains('compact')).toBe(false);
       } else {
-        // 85px / 67px root cells: compact.
+        // 85px / 67px root cells: compact, on the tab and in the folder alike.
         expect(container.querySelector('[data-node-id="r-m"] button.entry')!.classList.contains('compact')).toBe(true);
+        expect(container.querySelector('[data-node-id="f-m"] button.entry')!.classList.contains('compact')).toBe(true);
       }
     });
   }
-
-  it('a free-layout tile fills its box too', async () => {
-    width = 1280;
-    const tab: LayoutTab = { id: 't1', name: 'Free', layout: 'free', designWidth: 1280, root: { columns: 160, children: [tile('fr', 'medium', 0, 0, 10, 10)] } } as any;
-    const dash: LayoutDashboard = { id: 'd1', name: 'Home', path: '/home', revision: 1, tabs: [tab] };
-    const { container } = render(TabCanvas, { dashboard: dash, tab });
-    await tick();
-    const cell = container.querySelector('[data-node-id="fr"]') as HTMLElement;
-    expect(cell.style.height).toBe('80px');
-    const btn = cell.querySelector('button.entry') as HTMLElement;
-    expect(btn.style.height).toBe('100%');
-    expect(btn.style.minHeight).toBe('0px');
-    expect(btn.classList.contains('compact')).toBe(true);
-  });
 });
 
 describe('legacy Entry is unchanged', () => {

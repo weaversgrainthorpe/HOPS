@@ -1,7 +1,7 @@
 import type { Config, DashboardSettings } from '$lib/types';
 import type { LayoutDoc, LayoutDashboard } from '$lib/types/layout';
 import type { ImportResult } from './importResult';
-import { GRID_UNIT } from '$lib/layout/geometry';
+import { LAYOUT_VERSION } from '$lib/layout/geometry';
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 
@@ -67,8 +67,8 @@ export class MigrationFailedError extends Error {
   }
 }
 
-/** Fallback text for a 409 grid_unit_mismatch whose body has no detail. */
-const GRID_UNIT_REFUSED = "HOPS's layout changed since this page was loaded, so this change was not saved. Reload the page, then make the change again.";
+/** Fallback text for a 409 layout_version_mismatch whose body has no detail. */
+const LAYOUT_VERSION_REFUSED = 'HOPS was updated since this page was loaded, so this change was not saved. Reload the page, then make the change again.';
 
 // Helper to make API requests. Session auth is handled via HttpOnly cookies,
 // CSRF protection via the double-submit cookie pattern.
@@ -125,10 +125,10 @@ async function fetchAPI(endpoint: string, options: RequestInit = {}) {
         typeof parsedBody.detail === 'string' ? parsedBody.detail : undefined
       );
     }
-    // Ruling 5: a placement-carrying write without gridUnit 2 (this page predates the server's
+    // M5 §2a: a placement-carrying write at another layoutVersion (this page predates the server's
     // layout) is refused; never a revision conflict, and always says to reload.
-    if (response.status === 409 && parsedBody?.error === 'grid_unit_mismatch') {
-      throw new Error(typeof parsedBody.detail === 'string' && parsedBody.detail ? parsedBody.detail : GRID_UNIT_REFUSED);
+    if (response.status === 409 && parsedBody?.error === 'layout_version_mismatch') {
+      throw new Error(typeof parsedBody.detail === 'string' && parsedBody.detail ? parsedBody.detail : LAYOUT_VERSION_REFUSED);
     }
     // path_taken (and other 409s with a sentence): show the server's detail.
     if (response.status === 409 && typeof parsedBody?.detail === 'string' && parsedBody.detail) {
@@ -179,9 +179,9 @@ export async function getConfig(): Promise<Config> {
     throw new Error('The server sent a configuration this version of HOPS cannot read (expected schema 3 dashboards). Reload the page; if it persists, check the server.');
   }
   const out: Config = { schemaVersion: 3, dashboards: resp.dashboards };
-  // The finer-grid marker (spec §9) is passed through as sent: the editor refuses to save into a
-  // document without gridUnit 2 (Ruling 3), so it must never be dropped (or invented) here.
-  if (resp.gridUnit !== undefined) out.gridUnit = resp.gridUnit;
+  // The layout version (M5 §2a) is passed through as sent: the editor refuses to save into a
+  // document at another version, so it must never be dropped (or invented) here.
+  if (resp.layoutVersion !== undefined) out.layoutVersion = resp.layoutVersion;
   if (Array.isArray(resp.migrationNotices)) out.migrationNotices = resp.migrationNotices;
   if (resp.notices !== undefined) {
     // A notice this build cannot read is dropped from the list but counted, so the banner
@@ -330,9 +330,9 @@ export async function saveDashboardV3(
 ): Promise<{ revision: number; warning?: string } & FreshLayout> {
   const resp = await fetchAPI(`/dashboards/${encodeURIComponent(id)}`, {
     method: 'PUT',
-    // gridUnit: the units this page's placements are in. The server refuses a write without it
-    // (Ruling 5), so a page loaded before a layout change can never store old units.
-    body: JSON.stringify({ schema: 3, dashboard, revision, gridUnit: GRID_UNIT }),
+    // layoutVersion: the layout form this page's placements are in. The server refuses a write at
+    // another version (M5 §2a), so a page loaded before a layout change can never store an old form.
+    body: JSON.stringify({ schema: 3, dashboard, revision, layoutVersion: LAYOUT_VERSION }),
   });
   if (!resp || typeof resp.revision !== 'number') {
     throw new Error('The server did not confirm the new dashboard revision.');
@@ -362,10 +362,10 @@ export async function transferNodes(
 ): Promise<{ sourceRevision: number; targetRevision: number } & FreshLayout> {
   const body: TransferRequest = { ...req, target: { tabId: req.target.tabId } };
   if (req.target.folderId) body.target.folderId = req.target.folderId;
-  // gridUnit: see saveDashboardV3 (Ruling 5).
+  // layoutVersion: see saveDashboardV3 (M5 §2a).
   const resp = await fetchAPI('/dashboards/transfer', {
     method: 'POST',
-    body: JSON.stringify({ ...body, gridUnit: GRID_UNIT }),
+    body: JSON.stringify({ ...body, layoutVersion: LAYOUT_VERSION }),
   });
   if (!resp || typeof resp.sourceRevision !== 'number' || typeof resp.targetRevision !== 'number') {
     throw new Error('The server did not confirm the new dashboard revisions.');
@@ -395,7 +395,6 @@ export interface EffectiveDashboardSettings {
   statusCheckTimeoutSeconds: number;
   editIdleTimeoutMinutes: number;
   animatedFolderBackgrounds: boolean;
-  defaultLayout: string;
 }
 
 export interface DashboardSettingsResponse {

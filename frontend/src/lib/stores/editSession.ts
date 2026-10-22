@@ -12,7 +12,7 @@ import {
   migrationFailure,
   setSettingsSavedHook,
   config,
-  gridFormProblem
+  layoutFormProblem
 } from './config';
 import { confirm, confirmChoice } from './confirmModal';
 import { toast } from './toast';
@@ -283,10 +283,10 @@ async function doSave(): Promise<'saved' | 'conflict' | 'error'> {
     return 'error';
   }
   if (!isDirty(s)) return 'saved';
-  const gridProblem = gridFormProblem(get(config));
-  if (gridProblem) {
-    // Ruling 3: never write 24-column placements into an older-form document. The draft is kept.
-    toast.error(gridProblem);
+  const formProblem = layoutFormProblem(get(config));
+  if (formProblem) {
+    // M5 §2a: never write this layout form into a document of another version. The draft is kept.
+    toast.error(formProblem);
     return 'error';
   }
   const sent = s.draft;

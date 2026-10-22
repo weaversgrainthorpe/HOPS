@@ -23,13 +23,13 @@ let fetchSpy: ReturnType<typeof vi.fn>;
 function settingsBody(b: { override: boolean | null; effective: boolean }) {
   const nulls = {
     statusChecksEnabled: null, statusCheckIntervalMinutes: null, statusCheckTimeoutSeconds: null,
-    editIdleTimeoutMinutes: null, animatedFolderBackgrounds: null, defaultLayout: null
+    editIdleTimeoutMinutes: null, animatedFolderBackgrounds: null
   };
   return {
     overrides: { ...nulls, statusChecksEnabled: b.override },
     effective: {
       statusChecksEnabled: b.effective, statusCheckIntervalMinutes: 5, statusCheckTimeoutSeconds: 10,
-      editIdleTimeoutMinutes: 15, animatedFolderBackgrounds: false, defaultLayout: 'grid'
+      editIdleTimeoutMinutes: 15, animatedFolderBackgrounds: false
     },
     revision: 5
   };
@@ -217,7 +217,7 @@ describe('tab dialog: tri-state status checks', () => {
     expect(radio('Inherit').checked).toBe(true);
     expect(await screen.findByText('Inherited from Home: off')).toBeInTheDocument();
     await fireEvent.click(screen.getByRole('button', { name: /^Save/ }));
-    expect(onSave.mock.calls[0][8]).toBeUndefined();
+    expect(onSave.mock.calls[0][7]).toBeUndefined();
   });
 
   it('On is saved as true and says what it overrides', async () => {
@@ -226,7 +226,7 @@ describe('tab dialog: tri-state status checks', () => {
     await fireEvent.click(radio('On'));
     expect(await screen.findByText('Overridden here: on (the dashboard is off)')).toBeInTheDocument();
     await fireEvent.click(screen.getByRole('button', { name: /^Save/ }));
-    expect(onSave.mock.calls[0][8]).toBe(true);
+    expect(onSave.mock.calls[0][7]).toBe(true);
   });
 
   it('Reset to inherit on a set tab returns null (remove the key)', async () => {
@@ -235,7 +235,7 @@ describe('tab dialog: tri-state status checks', () => {
     expect(radio('Off').checked).toBe(true);
     await fireEvent.click(screen.getByRole('button', { name: 'Reset to inherit' }));
     await fireEvent.click(screen.getByRole('button', { name: /^Save/ }));
-    expect(onSave.mock.calls[0][8]).toBeNull();
+    expect(onSave.mock.calls[0][7]).toBeNull();
   });
 
   it('editTab: true/false set the key, null removes it, undefined leaves it (draft, undoable)', () => {

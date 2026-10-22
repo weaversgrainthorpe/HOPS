@@ -6,40 +6,16 @@ import { editMode } from '$lib/stores/editMode';
 beforeEach(() => editMode.set(true));
 afterEach(() => editMode.set(false));
 
-describe('TabEditModal layout and design width (M3 Task 6)', () => {
-  it('round-trips layout and designWidth', async () => {
+describe('TabEditModal has no layout (M5: every tab is a grid)', () => {
+  it('offers no Layout or Design width, and Save passes no layout', async () => {
     const onSave = vi.fn();
-    render(TabEditModal, { tabName: 'Media', tabLayout: 'free', tabDesignWidth: 1600, onSave, onCancel: vi.fn() });
-    const layout = screen.getByLabelText('Layout') as HTMLSelectElement;
-    expect(layout.value).toBe('free');
-    const dw = screen.getByLabelText(/Design width/) as HTMLInputElement;
-    expect(dw.value).toBe('1600');
-    await fireEvent.input(dw, { target: { value: '1920' } });
+    render(TabEditModal, { tabName: 'Media', onSave, onCancel: vi.fn() });
+    expect(screen.queryByLabelText('Layout')).toBeNull();
+    expect(screen.queryByLabelText(/Design width/)).toBeNull();
     await fireEvent.click(screen.getByRole('button', { name: /^Save/ }));
     expect(onSave).toHaveBeenCalledTimes(1);
     expect(onSave.mock.calls[0][0]).toBe('Media');
-    expect(onSave.mock.calls[0][6]).toEqual({ layout: 'free', designWidth: 1920 });
-  });
-
-  it('design width is only offered for free tabs; grid/inherit save no design width change', async () => {
-    const onSave = vi.fn();
-    render(TabEditModal, { tabName: 'Main', tabLayout: undefined, onSave, onCancel: vi.fn() });
-    const layout = screen.getByLabelText('Layout') as HTMLSelectElement;
-    expect(layout.value).toBe('inherit');
-    expect(screen.queryByLabelText(/Design width/)).toBeNull();
-    await fireEvent.change(layout, { target: { value: 'grid' } });
-    await fireEvent.click(screen.getByRole('button', { name: /^Save/ }));
-    expect(onSave.mock.calls[0][6]).toEqual({ layout: 'grid', designWidth: undefined });
-  });
-
-  it('an out-of-range design width is refused visibly', async () => {
-    const onSave = vi.fn();
-    render(TabEditModal, { tabName: 'Main', tabLayout: 'free', onSave, onCancel: vi.fn() });
-    await fireEvent.input(screen.getByLabelText(/Design width/), { target: { value: '50' } });
-    // (A browser's own min/max check also stops the submit; this is the editor's check behind it.)
-    await fireEvent.submit(document.getElementById('tab-edit-form')!);
-    expect(onSave).not.toHaveBeenCalled();
-    expect(screen.getByRole('alert').textContent).toMatch(/design width/i);
+    expect(onSave.mock.calls[0]).toHaveLength(8); // name, icon, iconUrl, iconBgColor, color, opacity, background, status checks
   });
 });
 
@@ -73,13 +49,13 @@ describe('TabEditModal background (M4 Task 5, Ruling 11(5))', () => {
     expect(onSave).not.toHaveBeenCalled();
     expect(screen.getByText(/applies when you save/i, { selector: '.background-status' })).toBeInTheDocument();
     await fireEvent.click(screen.getByRole('button', { name: /^Save$/ }));
-    expect(onSave.mock.calls[0][7]).toMatchObject({ type: 'color' });
+    expect(onSave.mock.calls[0][6]).toMatchObject({ type: 'color' });
   });
   it('without a pick, Save passes no background change; None passes null', async () => {
     const onSave = vi.fn();
     const { unmount } = render(TabEditModal, { tabName: 'Media', tabBackground: { type: 'color', value: '#000000' }, onSave, onCancel: vi.fn() });
     await fireEvent.click(screen.getByRole('button', { name: /^Save$/ }));
-    expect(onSave.mock.calls[0][7]).toBeUndefined();
+    expect(onSave.mock.calls[0][6]).toBeUndefined();
     unmount();
     const onSave2 = vi.fn();
     render(TabEditModal, { tabName: 'Media', tabBackground: { type: 'color', value: '#000000' }, onSave: onSave2, onCancel: vi.fn() });
@@ -87,6 +63,6 @@ describe('TabEditModal background (M4 Task 5, Ruling 11(5))', () => {
     await fireEvent.click(screen.getByRole('button', { name: /^None$/ }));
     await fireEvent.click(screen.getByRole('button', { name: /^Save Background/ }));
     await fireEvent.click(screen.getByRole('button', { name: /^Save$/ }));
-    expect(onSave2.mock.calls[0][7]).toBeNull();
+    expect(onSave2.mock.calls[0][6]).toBeNull();
   });
 });

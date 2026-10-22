@@ -14,8 +14,8 @@ export interface ContainerInfo {
   ref: ContainerRef;
   /** The metrics the container was RENDERED with (Ruling 13: hit-testing uses rendered geometry). */
   metrics: ContainerMetrics;
-  /** How it is drawn right now: phone stacking ignores the container's own mode. */
-  layout: 'grid' | 'free' | 'stacked';
+  /** How it is drawn right now: a tab's grid, a folder's ordered flow, or phone stacking. */
+  layout: 'grid' | 'flow' | 'stacked';
 }
 
 export interface HitResult {

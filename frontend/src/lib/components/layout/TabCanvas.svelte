@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy, setContext, untrack } from 'svelte';
   import type { Container, FolderNode, LayoutDashboard, LayoutDoc, LayoutTab } from '$lib/types/layout';
-  import { containerMetrics, planCanvas, resolveMode, rootBoxWidthPx } from '$lib/layout/geometry';
+  import { containerMetrics, planCanvas, rootBoxWidthPx } from '$lib/layout/geometry';
   import { layoutDoc, layoutStale } from '$lib/stores/config';
   import { closeAll, overlayStack, reconcile } from '$lib/stores/folderOverlay';
   import { toast } from '$lib/stores/toast';
@@ -98,11 +98,10 @@
     el?.toggleAttribute('inert', $overlayStack.length > 0 || maximisedId !== null);
   });
 
-  const mode = $derived(resolveMode(dashboard, viewTab, []));
-  const plan = $derived(planCanvas(mode, width, viewTab));
+  const plan = $derived(planCanvas(width, viewTab));
   // The root's sizes: one source (geometry.containerMetrics), recomputed per width change only.
-  const metrics = $derived(containerMetrics(viewTab.root, mode, rootBoxWidthPx(plan, viewTab)));
-  // Editing on a phone (stacked plan, once measured): the toolbar says resize / free placement need more room.
+  const metrics = $derived(containerMetrics(viewTab.root, rootBoxWidthPx(plan, viewTab)));
+  // Editing on a phone (stacked plan, once measured): the toolbar says resizing needs more room.
   const stacked = $derived(width > 0 && plan.kind === 'stacked');
   $effect(() => {
     if (!editing) return;

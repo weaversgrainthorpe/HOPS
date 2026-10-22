@@ -65,34 +65,35 @@ describe('EntryEditModal opacity sliders', () => {
   });
 });
 
-// Spec §8: Size sets the space the tile takes; the dialog shows the size matching the span.
+// Spec §8, M5: Size sets the space the tile takes on a tab; the dialog shows the tile's own size,
+// Small, Medium or Large only (no "Custom").
 describe('EntryEditModal Size', () => {
   beforeEach(() => editMode.set(true));
   afterEach(() => editMode.set(false));
   const sizeSelect = () => screen.getByLabelText(/^Size/) as HTMLSelectElement;
 
-  function openSized(sizeShown: 'small' | 'medium' | 'large' | 'custom', checkSize = vi.fn(() => null as string | null)) {
+  function openSized(size: 'small' | 'medium' | 'large' | undefined, checkSize = vi.fn(() => null as string | null)) {
     const onSave = vi.fn();
-    render(EntryEditModal, { entry, onSave, onCancel: vi.fn(), sizeShown, checkSize });
+    render(EntryEditModal, { entry: { ...entry, size } as Entry, onSave, onCancel: vi.fn(), checkSize });
     return { onSave, checkSize };
   }
 
-  it('shows "Custom" for a non-standard span, and only then', async () => {
-    openSized('custom');
-    await tick();
-    expect(sizeSelect().value).toBe('custom');
-    expect(screen.getByRole('option', { name: 'Custom' })).toBeInTheDocument();
-  });
-
-  it('a standard span shows its size and no Custom option', async () => {
+  it('shows the stored size, with exactly Small, Medium and Large on offer', async () => {
     openSized('large');
     await tick();
     expect(sizeSelect().value).toBe('large');
+    expect([...sizeSelect().options].map((o) => o.textContent)).toEqual(['Small', 'Medium', 'Large']);
     expect(screen.queryByRole('option', { name: 'Custom' })).toBeNull();
   });
 
+  it('a missing size shows Medium', async () => {
+    openSized(undefined);
+    await tick();
+    expect(sizeSelect().value).toBe('medium');
+  });
+
   it('a save without picking a size passes no size (the span is untouched)', async () => {
-    const { onSave } = openSized('custom');
+    const { onSave } = openSized('medium');
     await tick();
     await save();
     expect(onSave).toHaveBeenCalledTimes(1);

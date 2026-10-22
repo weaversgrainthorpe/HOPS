@@ -18,12 +18,13 @@ import { updateNode, deleteNodes } from '$lib/editor/treeOps';
 import type { Config } from '$lib/types';
 import type { FolderNode, LayoutDashboard, LayoutDoc, LayoutNode, Placement } from '$lib/types/layout';
 
-// Finer grid (spec §9): 24 columns, a Medium tile 2 x 2 — the pre-finer-grid fixture doubled.
+// M5 form: 24 columns, a Medium tile 2 x 2; folder contents are ordered, with no placements.
 const p = (x: number, y: number, w = 2, h = 2): Placement => ({ x, y, w, h });
-const tile = (id: string, pl: Placement): LayoutNode =>
-  ({ kind: 'tile', id, name: id, url: 'http://x', placement: pl }) as unknown as LayoutNode;
-const folder = (id: string, pl: Placement, children: LayoutNode[]): FolderNode => ({
-  kind: 'folder', id, name: id, display: 'expanded', placement: pl, content: { columns: 8, children }
+const tile = (id: string, pl?: Placement): LayoutNode =>
+  ({ kind: 'tile', id, name: id, url: 'http://x', size: 'medium', ...(pl ? { placement: pl } : {}) }) as unknown as LayoutNode;
+const folder = (id: string, pl: Placement | undefined, children: LayoutNode[]): FolderNode => ({
+  kind: 'folder', id, name: id, display: 'expanded', size: 'medium', contentSize: 'medium',
+  ...(pl ? { placement: pl } : {}), content: { children }
 });
 function home(): LayoutDashboard {
   return {
@@ -31,8 +32,8 @@ function home(): LayoutDashboard {
     tabs: [
       { id: 't1', name: 'One', root: { columns: 24, children: [
         tile('a', p(0, 0)), tile('b', p(2, 0)),
-        folder('f1', p(0, 4, 8, 6), [tile('x', p(0, 0))]),
-        folder('src', p(10, 4, 8, 6), [tile('s1', p(0, 0)), folder('deep', p(2, 0, 4, 4), [tile('s2', p(0, 0))])])
+        folder('f1', p(0, 4, 8, 6), [tile('x')]),
+        folder('src', p(10, 4, 8, 6), [tile('s1'), folder('deep', undefined, [tile('s2')])])
       ] } },
       { id: 't2', name: 'Two', root: { columns: 24, children: [] } }
     ]
@@ -43,7 +44,7 @@ function other(): LayoutDashboard {
     { id: 'ot', name: 'OT', root: { columns: 24, children: [tile('o1', p(0, 0))] } }
   ] };
 }
-const doc = (): LayoutDoc => ({ schemaVersion: 3, gridUnit: 2, dashboards: [home(), other()] });
+const doc = (): LayoutDoc => ({ schemaVersion: 3, layoutVersion: 1, dashboards: [home(), other()] });
 const draft = () => get(session)!.draft;
 const kidsOf = (folderId: string): LayoutNode[] => {
   const walk = (c: LayoutNode[]): FolderNode | undefined => {
@@ -76,7 +77,7 @@ beforeEach(() => {
 });
 
 describe('copy then paste', () => {
-  it('copy then paste into a folder deep-copies with new ids, at a free cell', async () => {
+  it('copy then paste into a folder deep-copies with new ids, at the end of its order, unplaced', async () => {
     begin('d');
     toggleNode('src', false);
     expect(copySelection()).toBe(true);
@@ -92,9 +93,9 @@ describe('copy then paste', () => {
     const copiedIds = allIds({ ...home(), tabs: [{ id: 'x', name: 'x', root: { columns: 4, children: [copy] } }] });
     expect(copiedIds).toHaveLength(4); // folder + s1 + deep + s2
     for (const id of copiedIds) expect(before.has(id)).toBe(false);
-    // The original is still there; the copy does not overlap x (0,0).
+    // The original is still there; the copy has no placement inside the folder.
     expect(kidsOf('src')).toHaveLength(2);
-    expect(copy.placement.x === 0 && copy.placement.y === 0).toBe(false);
+    expect('placement' in copy).toBe(false);
     // The clipboard stays for another paste; the selection is the new copy.
     expect(get(nodeClipboard)).not.toBeNull();
     expect([...get(selectedNodes)]).toEqual([copy.id]);
@@ -146,7 +147,7 @@ describe('copy then paste', () => {
   });
 
   it('a collapsed folder\'s reserved footprint counts as taken (Ruling 13)', async () => {
-    config.set({ schemaVersion: 3, gridUnit: 2, dashboards: [{
+    config.set({ schemaVersion: 3, layoutVersion: 1, dashboards: [{
       ...home(), tabs: [{ id: 't1', name: 'One', root: { columns: 4, children: [
         { ...folder('c', p(0, 0, 4, 4), []), display: 'collapsed' }, tile('a', p(0, 4))
       ] } }]
@@ -208,7 +209,7 @@ describe('across dashboards', () => {
   it('a clean session uses the transfer endpoint with both revisions, then rebases on the fresh layout', async () => {
     copyFromOther('cut');
     const fresh: LayoutDoc = {
-      schemaVersion: 3, gridUnit: 2,
+      schemaVersion: 3, layoutVersion: 1,
       dashboards: [
         { ...home(), revision: 8, tabs: [{ ...home().tabs[0], root: { columns: 24, children: [
           ...home().tabs[0].root.children, tile('o1', p(4, 0))
@@ -305,16 +306,28 @@ describe('paste of a copy uses the snapshot taken at Copy time (Ruling 18(6))', 
     expect(draft()).toBe(before);
   });
 
-  it('a grid folder pasted into a free tab is converted (not left at 4 x 3 design units)', async () => {
-    config.set({ schemaVersion: 3, gridUnit: 2, dashboards: [{
-      ...home(), tabs: [home().tabs[0], { id: 'tf', name: 'F', layout: 'free', designWidth: 960, root: { columns: 120, children: [] } }]
-    }] } as unknown as Config);
+  it('inside a folder a paste goes right after its source (or after the item it was asked on)', async () => {
     begin('d');
-    toggleNode('f1', false);
+    toggleNode('s1', false);
     copySelection();
-    await pasteInto({ tabId: 'tf' });
+    await pasteInto({ tabId: 't1', folderId: 'src' });
+    const kids = kidsOf('src');
+    expect(kids).toHaveLength(3);
+    expect(kids[0].id).toBe('s1');
+    expect(kids[2].id).toBe('deep');
+    expect(kids[1].id).not.toBe('s1');
+    await pasteInto({ tabId: 't1', folderId: 'src' }, undefined, 'deep');
+    expect(kidsOf('src').map((n) => n.id).slice(-2)[0]).toBe('deep');
+  });
+
+  it('a folder copied from inside a folder lands on a tab minimised, at its default box', async () => {
+    begin('d');
+    toggleNode('deep', false);
+    copySelection();
+    await pasteInto({ tabId: 't2' });
     const pasted = draft().tabs[1].root.children[0] as FolderNode;
-    expect(pasted.placement).toMatchObject({ w: 40, h: 30 });
-    expect(pasted.content.children[0].placement).toEqual({ x: 0, y: 0, w: 10, h: 10 });
+    expect(pasted.display).toBe('collapsed');
+    expect(pasted.placement).toEqual(p(0, 0, 6, 4));
+    expect('placement' in pasted.content.children[0]).toBe(false);
   });
 });

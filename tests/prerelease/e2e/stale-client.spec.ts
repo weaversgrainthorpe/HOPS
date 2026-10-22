@@ -1,12 +1,13 @@
 import { test, expect, type Page, type BrowserContext } from '@playwright/test';
 import { getCsrfToken } from '../helpers';
+import { m5Config } from '../m5form';
 
-// Finer grid, Ruling 5 (final review Important 1), in a REAL browser against a real server.
-// A page loaded before the finer-grid update runs the old code: it holds 12-column placements and
-// sends no gridUnit. The server must refuse every placement-carrying write from it with a visible
-// 409 ("reload: the layout changed") and leave the stored document exactly as it was; the current
-// page sends gridUnit: 2 on each such write, and when a write is refused the user sees why and
-// keeps the draft.
+// M5 §2a (one layout version), in a REAL browser against a real server. A page loaded before a
+// layout-format update runs the old code: it holds another form's placements and sends no (or
+// another) layoutVersion. The server must refuse every placement-carrying write from it with a
+// visible 409 ("HOPS was updated… Reload") and leave the stored document exactly as it was; the
+// current page sends layoutVersion: 1 on each such write, and when a write is refused the user
+// sees why and keeps the draft.
 
 let seq = 0;
 const made: string[] = [];
@@ -18,7 +19,7 @@ function tile(id: string, name: string, x: number) {
   };
 }
 
-/** Import one small OLD-form dashboard (converted to the finer grid on import); returns its ids. */
+/** Import one small dashboard (in the M5 form: m5form.ts); returns its ids. */
 async function importDash(page: Page, context: BrowserContext) {
   const p = `stale${Date.now().toString(36)}${(seq++).toString(36)}`;
   const id = (s: string) => `${p}-${s}`;
@@ -34,7 +35,7 @@ async function importDash(page: Page, context: BrowserContext) {
   };
   const doc = {
     format: 'hops-export', schemaVersion: 3, exportedAt: new Date().toISOString(), exportType: 'single-dashboard',
-    config: { dashboards: [dash] }
+    config: m5Config([dash]) // M5 form (layoutVersion 1): see m5form.ts
   };
   const r = await page.request.post('/api/config/import', {
     headers: { 'X-CSRF-Token': await getCsrfToken(context) },
@@ -65,17 +66,17 @@ test.afterEach(async ({ page, context }) => {
   }
 });
 
-test.describe('a stale (pre-update) client cannot write old grid units', () => {
-  test('save, rename and move/copy without gridUnit: 2 are refused with a 409; the stored document is unchanged', async ({ page, context }) => {
+test.describe('a stale (pre-update) client cannot write an old layout form', () => {
+  test('save, rename and move/copy without layoutVersion: 1 are refused with a 409; the stored document is unchanged', async ({ page, context }) => {
     const a = await importDash(page, context);
     const b = await importDash(page, context);
     const csrf = await getCsrfToken(context);
     const headers = { 'X-CSRF-Token': csrf, 'Content-Type': 'application/json' };
     const before = await storedConfig(page);
-    expect(before.gridUnit).toBe(2);
+    expect(before.layoutVersion).toBe(1);
     const d = dashIn(before, a.id('dash'));
 
-    // An old page's save: 12-column placements (half the stored ones), no gridUnit.
+    // An old page's save: 12-column placements (half the stored ones), no layoutVersion.
     const old = structuredClone(d);
     for (const n of old.tabs[0].root.children as unknown as { placement: { x: number; w: number; h: number } }[]) {
       n.placement.x /= 2; n.placement.w /= 2; n.placement.h /= 2;
@@ -84,7 +85,8 @@ test.describe('a stale (pre-update) client cannot write old grid units', () => {
       { what: 'save', method: 'put', url: `/api/dashboards/${a.id('dash')}`, body: { schema: 3, dashboard: old, revision: d.revision } },
       { what: 'rename', method: 'put', url: `/api/dashboards/${a.id('dash')}`,
         body: { schema: 3, dashboard: { ...d, name: 'Renamed by a stale page' }, revision: d.revision } },
-      { what: 'save, gridUnit 1', method: 'put', url: `/api/dashboards/${a.id('dash')}`, body: { schema: 3, dashboard: old, revision: d.revision, gridUnit: 1 } },
+      { what: 'save, the retired gridUnit 2', method: 'put', url: `/api/dashboards/${a.id('dash')}`, body: { schema: 3, dashboard: d, revision: d.revision, gridUnit: 2 } },
+      { what: 'save, layoutVersion 2', method: 'put', url: `/api/dashboards/${a.id('dash')}`, body: { schema: 3, dashboard: d, revision: d.revision, layoutVersion: 2 } },
       ...(['move', 'copy'] as const).map((mode) => ({
         what: mode, method: 'post' as const, url: '/api/dashboards/transfer',
         body: { mode, sourceId: a.id('dash'), sourceRevision: d.revision, nodeIds: [a.id('a')],
@@ -95,13 +97,13 @@ test.describe('a stale (pre-update) client cannot write old grid units', () => {
       const r = await page.request[w.method](w.url, { headers, data: JSON.stringify(w.body) });
       expect(r.status(), `${w.what}: ${await r.text()}`).toBe(409);
       const body = await r.json();
-      expect(body.error, w.what).toBe('grid_unit_mismatch');
-      expect(body.detail, w.what).toMatch(/layout changed.*Reload/);
+      expect(body.error, w.what).toBe('layout_version_mismatch');
+      expect(body.detail, w.what).toMatch(/HOPS was updated.*Reload/);
       expect(await storedConfig(page), `${w.what} left the stored document unchanged`).toEqual(before);
     }
   });
 
-  test('the editor sends gridUnit: 2; a refused save shows the reload message and keeps the draft', async ({ page, context }) => {
+  test('the editor sends layoutVersion: 1; a refused save shows the reload message and keeps the draft', async ({ page, context }) => {
     const f = await importDash(page, context);
     const before = await storedConfig(page);
     const errors: string[] = [];
@@ -120,20 +122,21 @@ test.describe('a stale (pre-update) client cannot write old grid units', () => {
     await dlg.getByRole('button', { name: /^Save$/ }).click();
     await expect(alpha).toContainText('Alpha edited');
 
-    // Simulate the stale page: strip gridUnit from the outgoing save.
+    // Simulate the stale page: strip layoutVersion from the outgoing save.
     const sent: unknown[] = [];
     await page.route(/\/api\/dashboards\/[^/]+$/, async (route) => {
       const body = route.request().postDataJSON();
       sent.push({ ...body });
-      delete body.gridUnit;
+      delete body.layoutVersion;
       await route.continue({ postData: JSON.stringify(body) });
     });
     const save = toolbar.getByRole('button', { name: /Save/ });
     const refused = page.waitForResponse((r) => r.request().method() === 'PUT' && /\/api\/dashboards\//.test(r.url()));
     await save.click();
     expect((await refused).status()).toBe(409);
-    expect((sent[0] as { gridUnit?: number }).gridUnit, 'the editor sent gridUnit: 2').toBe(2);
-    await expect(page.locator('.toast-error').filter({ hasText: /layout changed.*Reload/ })).toBeVisible();
+    expect((sent[0] as { layoutVersion?: number }).layoutVersion, 'the editor sent layoutVersion: 1').toBe(1);
+    expect(sent[0], 'and no retired gridUnit').not.toHaveProperty('gridUnit');
+    await expect(page.locator('.toast-error').filter({ hasText: /HOPS was updated.*Reload/ })).toBeVisible();
     await expect(page.getByRole('status').filter({ hasText: 'Unsaved changes' })).toHaveCount(1);
     await expect(alpha).toContainText('Alpha edited');
     expect(await storedConfig(page), 'the refused save changed nothing').toEqual(before);

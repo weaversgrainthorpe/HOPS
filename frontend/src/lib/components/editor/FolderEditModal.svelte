@@ -7,7 +7,7 @@
    */
   export type FolderFields = Pick<
     FolderNode,
-    'name' | 'icon' | 'iconUrl' | 'iconBgColor' | 'color' | 'opacity' | 'textColor' | 'display' | 'layout' | 'showTitle' | 'shape'
+    'name' | 'icon' | 'iconUrl' | 'iconBgColor' | 'color' | 'opacity' | 'textColor' | 'display' | 'showTitle' | 'shape'
   > & {
     background?: Background | null;
     /** Status checks (M4 §4b): true/false = set here, null = inherit (key removed), absent = unchanged. */
@@ -70,10 +70,6 @@
   // svelte-ignore state_referenced_locally
   let display = $state<'expanded' | 'collapsed'>(folder.display === 'collapsed' ? 'collapsed' : 'expanded');
   // svelte-ignore state_referenced_locally
-  let layout = $state<'inherit' | 'grid' | 'free'>(
-    folder.layout === 'grid' || folder.layout === 'free' ? folder.layout : 'inherit'
-  );
-  // svelte-ignore state_referenced_locally
   let showTitle = $state(folder.showTitle !== false);
   // svelte-ignore state_referenced_locally
   let shape = $state<'rounded' | 'folder-tab'>(folder.shape === 'folder-tab' ? 'folder-tab' : 'rounded');
@@ -119,7 +115,6 @@
       opacity,
       textColor,
       display,
-      layout,
       showTitle,
       shape,
       ...(stagedBackground ? { background: stagedBackground.value ?? null } : {}),
@@ -193,14 +188,6 @@
     </fieldset>
 
     <div class="form-row">
-      <div class="form-group">
-        <label for="folder-layout">Layout</label>
-        <select id="folder-layout" bind:value={layout}>
-          <option value="inherit">Same as the tab</option>
-          <option value="grid">Grid</option>
-          <option value="free">Free</option>
-        </select>
-      </div>
       <div class="form-group">
         <label for="folder-shape">Look</label>
         <select id="folder-shape" bind:value={shape}>

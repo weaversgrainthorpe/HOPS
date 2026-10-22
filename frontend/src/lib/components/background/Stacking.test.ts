@@ -68,7 +68,8 @@ const tile = (id: string, name: string, x = 0, y = 0): any => ({
   kind: 'tile', id, name, url: 'http://x.test', icon: '', openMode: 'newtab', size: 'medium', order: 0, placement: { x, y, w: 2, h: 2 }
 });
 const folder = (id: string, name: string, children: any[], extra: any = {}): any => ({
-  kind: 'folder', id, name, display: 'expanded', placement: { x: 0, y: 2, w: 8, h: 6 }, content: { columns: 8, children }, ...extra
+  kind: 'folder', id, name, display: 'expanded', size: 'medium', contentSize: 'medium', placement: { x: 0, y: 2, w: 8, h: 6 },
+  content: { children: children.map(({ placement: _p, ...c }) => c) }, ...extra // M5: folder contents have no placements
 });
 const image = (value: string, extra: Partial<Background> = {}): Background => ({ type: 'image', value, ...extra });
 const slideshow = (images: string[], extra: Partial<Background> = {}): Background => ({
@@ -450,7 +451,7 @@ describe('folder layers', () => {
   it('the folder overlay shows the folder background over its dimmed backdrop', async () => {
     const f = folder('f1', 'Box', [tile('in1', 'Inside')], { display: 'collapsed', background: image('/backgrounds/o.jpg', { opacity: 0.7 }) });
     const { d, tab } = mkTab([f]);
-    render(FolderOverlay, { dashboard: d, tab, plan: planCanvas('grid', 1440, tab) });
+    render(FolderOverlay, { dashboard: d, tab, plan: planCanvas(1440, tab) });
     openFolder('f1');
     await settle();
     const p = document.querySelector<HTMLElement>('.overlay-panel');

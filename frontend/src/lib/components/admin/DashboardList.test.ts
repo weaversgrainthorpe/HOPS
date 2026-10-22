@@ -29,12 +29,12 @@ const home = (): LayoutDashboard => ({
 // The Showcase: a free-layout dashboard (once "view-only (v3)"); now a dashboard like any other.
 const showcase = (): LayoutDashboard => ({
   id: 'v3d', name: 'Fancy', path: '/fancy', revision: 6, order: 1,
-  tabs: [{ id: 'ft', name: 'Free', layout: 'free', designWidth: 1280, root: { columns: 160, children: [] } }]
+  tabs: [{ id: 'ft', name: 'Free', root: { columns: 24, children: [] } }]
 });
-const doc = (...ds: LayoutDashboard[]) => ({ schemaVersion: 3 as const, gridUnit: 2, dashboards: ds });
+const doc = (...ds: LayoutDashboard[]) => ({ schemaVersion: 3 as const, layoutVersion: 1, dashboards: ds });
 
 function cfg(): Config {
-  return { schemaVersion: 3, gridUnit: 2, dashboards: [home(), showcase()] };
+  return { schemaVersion: 3, layoutVersion: 1, dashboards: [home(), showcase()] };
 }
 
 beforeEach(() => {

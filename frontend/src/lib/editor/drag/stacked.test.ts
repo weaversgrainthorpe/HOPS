@@ -22,9 +22,9 @@ import { session } from '$lib/stores/editSession';
 import { setLayout, resetEditor, startSession, draft, nodeIn, folder, tile, p } from '$lib/components/editor/editorTestKit';
 
 // A phone: 3 stacked columns of 120 px. Stacked metrics are not used for positions.
-const STACK = containerMetrics({ columns: 24, children: [] }, 'grid', 0);
+const STACK = containerMetrics({ columns: 24, children: [] }, 0);
 type Box = { left: number; top: number; width: number; height: number };
-type Where = { ref: ContainerRef; metrics: ContainerMetrics; layout: 'grid' | 'free' | 'stacked' };
+type Where = { ref: ContainerRef; metrics: ContainerMetrics; layout: 'grid' | 'flow' | 'stacked' };
 
 /**
  * t1 (grid, 8 columns, Medium 2 x 2 tiles): a b c d on row 0, then the collapsed folder fc (y inside) and the expanded
@@ -36,8 +36,8 @@ function phoneDash(): LayoutDashboard {
     tabs: [
       { id: 't1', name: 'Main', root: { columns: 8, children: [
         tile('a', p(0, 0)), tile('b', p(2, 0)), tile('c', p(4, 0)), tile('d', p(6, 0)),
-        folder('fc', p(0, 2, 2, 2), [tile('y', p(0, 0))], { display: 'collapsed' }),
-        folder('fe', p(2, 2, 6, 4), [tile('e1', p(0, 0))])
+        folder('fc', p(0, 2, 2, 2), [tile('y')], { display: 'collapsed' }),
+        folder('fe', p(2, 2, 6, 4), [tile('e1')])
       ] } },
       { id: 't2', name: 'Other', root: { columns: 24, children: [tile('z', p(0, 0))] } }
     ]
@@ -118,11 +118,11 @@ function dragTo(id: string, from: [number, number], to: [number, number]) {
 const drop = (x: number, y: number) => document.body.dispatchEvent(pe('pointerup', x, y));
 const drop2 = (x: number, y: number) => document.body.dispatchEvent(pe('pointerup', x, y, { ctrlKey: true }));
 
-/** Ids in a container's reading order (what the stacked layout shows). */
+/** Ids in a container's order as the stacked layout shows it: a tab's reading order, a folder's own order (M5). */
 function orderOf(d: LayoutDashboard, tabId: string, folderId?: string): string[] {
   const tab = d.tabs.find((t) => t.id === tabId)!;
-  const kids = folderId ? (nodeIn(d, folderId) as { content: { children: LayoutNode[] } }).content.children : tab.root.children;
-  return readingOrder(kids).map((n) => n.id);
+  if (folderId) return (nodeIn(d, folderId) as { content: { children: LayoutNode[] } }).content.children.map((n) => n.id);
+  return readingOrder(tab.root.children).map((n) => n.id);
 }
 
 beforeEach(() => {
@@ -325,12 +325,12 @@ describe('phone editing rules', () => {
     }
     vi.stubGlobal('ResizeObserver', RO);
     const tb = render(EditToolbar, { tabId: 't1', onAddTab: () => {} });
-    expect(tb.queryByText('Resize and free placement need a wider screen')).toBeNull();
+    expect(tb.queryByText('Resizing needs a wider screen')).toBeNull();
     const d = draft();
     const { container } = render(TabCanvas, { dashboard: d, tab: d.tabs[0], editing: true });
     await tick();
     expect(container.querySelector('.container-stacked')).not.toBeNull();
     expect(container.querySelector('[data-resize]')).toBeNull();
-    expect(tb.getByText('Resize and free placement need a wider screen')).toBeInTheDocument();
+    expect(tb.getByText('Resizing needs a wider screen')).toBeInTheDocument();
   });
 });

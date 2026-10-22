@@ -260,8 +260,8 @@
     {#if editing && (handleSpot !== 'header' || !showTitle)}
       <EditHandle name={folder.name} onEdit={edit} placement={handleSpot === 'header' ? 'corner' : handleSpot} />
     {/if}
-    {#if editing && plan.kind !== 'stacked'}
-      <!-- Handles on the rendered (expanded) box; a collapsed folder has none (Ruling 13). -->
+    {#if editing && plan.kind !== 'stacked' && folder.placement}
+      <!-- Handles on the rendered (expanded) box on a tab; a collapsed folder has none (Ruling 13). -->
       <ResizeHandles id={folder.id} name={folder.name} metrics={parent} />
     {/if}
   </div>

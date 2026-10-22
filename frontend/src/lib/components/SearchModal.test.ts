@@ -38,7 +38,8 @@ const tile = (id: string, name: string, extra: any = {}): any => ({
   placement: { x: 0, y: 0, w: 2, h: 2 }, ...extra
 });
 const folder = (id: string, name: string, display: string, children: any[]): any => ({
-  kind: 'folder', id, name, display, placement: { x: 0, y: 2, w: 8, h: 6 }, content: { columns: 8, children }
+  kind: 'folder', id, name, display, size: 'medium', contentSize: 'medium', placement: { x: 0, y: 2, w: 8, h: 6 },
+  content: { children: children.map(({ placement: _p, ...c }) => c) } // M5: folder contents have no placements
 });
 
 // Tab "Second" > Outer (collapsed) > Mid (expanded) > Inner (collapsed) > "Deep Thing"

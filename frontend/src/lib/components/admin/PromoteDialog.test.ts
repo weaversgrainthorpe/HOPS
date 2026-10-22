@@ -5,7 +5,7 @@ import { config } from '$lib/stores/config';
 import type { LayoutDashboard, LayoutNode } from '$lib/types/layout';
 
 const folder = (id: string, name: string, children: LayoutNode[] = []): LayoutNode =>
-  ({ kind: 'folder', id, name, display: 'expanded', placement: { x: 0, y: 0, w: 8, h: 6 }, content: { columns: 8, children } }) as LayoutNode;
+  ({ kind: 'folder', id, name, display: 'expanded', placement: { x: 0, y: 0, w: 8, h: 6 }, size: 'medium', contentSize: 'medium', content: { children } }) as LayoutNode;
 
 // Home: tab Main > folder Media > folder Deep (depth 2). Showcase: a free tab.
 const home: LayoutDashboard = {
@@ -14,7 +14,7 @@ const home: LayoutDashboard = {
 };
 const showcase: LayoutDashboard = {
   id: 's1', name: 'Showcase', path: '/showcase', revision: 2, order: 1,
-  tabs: [{ id: 'st', name: 'Free', layout: 'free', designWidth: 1280, root: { columns: 160, children: [] } }]
+  tabs: [{ id: 'st', name: 'Free', root: { columns: 24, children: [] } }]
 };
 const categories = [
   { slug: 'media', label: 'Media', icon: 'mdi:play', count: 2 },

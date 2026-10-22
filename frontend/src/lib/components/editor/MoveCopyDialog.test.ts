@@ -62,7 +62,7 @@ describe('MoveCopyDialog tree picker', () => {
 
   it('a same-dashboard move changes the draft only (one undo step)', async () => {
     render(MoveCopyDialog, { ids: ['a'], onClose });
-    await fireEvent.click(item(/^Free/));
+    await fireEvent.click(item(/^Two/));
     await fireEvent.click(screen.getByRole('button', { name: /^Move$/ }));
     expect(draft().tabs[1].root.children.map((n) => n.id)).toContain('a');
     expect(api.transferNodes).not.toHaveBeenCalled();
@@ -178,10 +178,10 @@ describe('MoveCopyDialog tree picker', () => {
     const main = item(/^Main/);
     main.focus();
     await fireEvent.keyDown(main, { key: 'ArrowDown' });
-    await waitFor(() => expect(item(/^Free/)).toHaveFocus());
-    await fireEvent.keyDown(item(/^Free/), { key: 'Enter' });
-    expect(item(/^Free/)).toHaveAttribute('aria-selected', 'true');
-    await fireEvent.keyDown(item(/^Free/), { key: 'ArrowLeft' });
+    await waitFor(() => expect(item(/^Two/)).toHaveFocus());
+    await fireEvent.keyDown(item(/^Two/), { key: 'Enter' });
+    expect(item(/^Two/)).toHaveAttribute('aria-selected', 'true');
+    await fireEvent.keyDown(item(/^Two/), { key: 'ArrowLeft' });
     await waitFor(() => expect(item(/^Home/)).toHaveFocus());
     await fireEvent.keyDown(item(/^Home/), { key: 'ArrowLeft' });
     expect(screen.queryByRole('treeitem', { name: /^Main/ })).toBeNull();

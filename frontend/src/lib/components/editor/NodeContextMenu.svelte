@@ -3,11 +3,9 @@
   import Icon from '@iconify/svelte';
   import type { MenuRequest } from '$lib/editor/editorUi';
   import { openDialog, showTabRequest } from '$lib/editor/editorUi';
-  import type { ContainerRef } from '$lib/editor/treeOps';
-  import { locate, resolveContainer } from '$lib/editor/treeOps';
+  import { locate } from '$lib/editor/treeOps';
   import {
-    containerOfNode, deleteTabWithConfirm, deleteWithConfirm, duplicate, duplicateTabAction, findIn, setDisplay,
-    zOrder
+    containerOfNode, deleteTabWithConfirm, deleteWithConfirm, duplicate, duplicateTabAction, findIn, setDisplay
   } from '$lib/editor/editorActions';
   import { session } from '$lib/stores/editSession';
   import { selectedNodes, toggleNode } from '$lib/stores/nodeSelection';
@@ -54,16 +52,6 @@
   const tab = $derived(
     draft && request.target.kind === 'tab' ? draft.tabs.find((t) => t.id === (request.target as { id: string }).id) : undefined
   );
-  const containerMode = $derived.by(() => {
-    if (!draft || request.target.kind === 'tab') return 'grid';
-    const ref: ContainerRef | undefined =
-      request.target.kind === 'node' ? containerOfNode(draft, request.target.id) : request.target.ref;
-    try {
-      return ref ? resolveContainer(draft, ref).mode : 'grid';
-    } catch {
-      return 'grid';
-    }
-  });
   const canPaste = $derived(!!$nodeClipboard && $nodeClipboard.nodes.length > 0);
 
   const items = $derived.by((): Item[] => {
@@ -110,20 +98,15 @@
         label: 'Paste here',
         icon: 'mdi:content-paste',
         disabled: !canPaste,
-        // Onto a folder: into it. Onto a tile: beside it, in the same container.
+        // Onto a folder: into it. Onto a tile: beside it, in the same container (in a folder:
+        // right after it in the order).
         run: () => {
           const to = kind === 'folder' ? { tabId: locate(d, id)!.tabId, folderId: id } : containerOfNode(d, id);
-          return to ? pasteInto(to) : undefined;
+          return to ? pasteInto(to, undefined, kind === 'folder' ? undefined : id) : undefined;
         }
       },
       { label: 'Move/Copy to…', icon: 'mdi:folder-move', run: () => openDialog({ kind: 'movecopy', ids }) }
     );
-    if (!many && containerMode === 'free') {
-      out.push(
-        { label: 'Bring forward', icon: 'mdi:arrange-bring-forward', run: () => zOrder(id, 'forward'), separatorBefore: true },
-        { label: 'Send back', icon: 'mdi:arrange-send-backward', run: () => zOrder(id, 'back') }
-      );
-    }
     if (!many && node.kind === 'folder') {
       out.push(
         node.display === 'collapsed'

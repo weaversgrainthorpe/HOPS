@@ -20,8 +20,19 @@ class FakeRO {
 function tile(id: string, name: string, x: number, y: number, w = 1, h = 1): any {
   return { kind: 'tile', id, name, url: 'http://x.test', icon: '', openMode: 'newtab', size: 'medium', order: 0, placement: { x, y, w, h } };
 }
+/** A folder's child (M5: no placement). */
+function kid(id: string, name: string, extra: any = {}): any {
+  return { kind: 'tile', id, name, url: 'http://x.test', icon: '', openMode: 'newtab', size: 'medium', order: 0, ...extra };
+}
 function folder(id: string, name: string, x: number, y: number, w: number, h: number, children: any[], extra: any = {}): any {
-  return { kind: 'folder', id, name, display: 'expanded', placement: { x, y, w, h }, content: { columns: w, children }, ...extra };
+  return {
+    kind: 'folder', id, name, display: 'expanded', size: 'medium', contentSize: 'medium',
+    placement: { x, y, w, h }, content: { children }, ...extra
+  };
+}
+/** A sub-folder (no placement). */
+function sub(id: string, name: string, children: any[]): any {
+  return { kind: 'folder', id, name, display: 'expanded', size: 'medium', contentSize: 'medium', content: { children } };
 }
 function mk(children: any[]): { dash: LayoutDashboard; tab: LayoutTab } {
   const tab: LayoutTab = { id: 't1', name: 'Main', root: { columns: 24, children } };
@@ -38,8 +49,8 @@ afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 describe('TabCanvas', () => {
   it('renders the migrated v2_basic dashboard as folders and tiles at 1440px', async () => {
     const { dash, tab } = mk([
-      folder('g1', 'Full', 0, 0, 24, 8, [tile('e1', 'Alpha', 0, 0, 2, 2), tile('e2', 'Bravo', 2, 0, 2, 2), tile('e3', 'Charlie', 4, 0, 2, 2)]),
-      folder('g2', 'Half1', 0, 8, 12, 6, [tile('e4', 'Delta', 0, 0, 2, 2)])
+      folder('g1', 'Full', 0, 0, 24, 8, [kid('e1', 'Alpha'), kid('e2', 'Bravo'), kid('e3', 'Charlie')]),
+      folder('g2', 'Half1', 0, 8, 12, 6, [kid('e4', 'Delta')])
     ]);
     const { container } = render(TabCanvas, { dashboard: dash, tab });
     await tick();
@@ -59,17 +70,18 @@ describe('TabCanvas', () => {
     expect(el.getAttribute('style')).toContain('grid-row: 3 / span 2');
   });
 
-  it('renders three levels of nested expanded folders', async () => {
+  it('a sub-folder shows in its parent as its minimised tile (M5 §2), whatever its saved display', async () => {
     const { dash, tab } = mk([
       folder('f1', 'Level1', 0, 0, 24, 16, [
-        folder('f2', 'Level2', 0, 0, 16, 12, [
-          folder('f3', 'Level3', 0, 0, 8, 8, [tile('deep', 'DeepTile', 0, 0, 2, 2)])
-        ])
+        sub('f2', 'Level2', [sub('f3', 'Level3', [kid('deep', 'DeepTile')])])
       ])
     ]);
-    render(TabCanvas, { dashboard: dash, tab });
+    const { container } = render(TabCanvas, { dashboard: dash, tab });
     await tick();
-    for (const n of ['Level1', 'Level2', 'Level3', 'DeepTile']) expect(screen.getByText(n)).toBeInTheDocument();
+    expect(screen.getByText('Level1')).toBeInTheDocument();
+    expect(screen.getByText('Level2')).toBeInTheDocument();
+    expect(container.querySelector('[data-node-id="f2"]')!.classList.contains('collapsed')).toBe(true);
+    expect(screen.queryByText('DeepTile')).toBeNull();
   });
 
   it('renders a placeholder for a node without placement', async () => {
@@ -86,7 +98,7 @@ describe('TabCanvas', () => {
 
   it('renders a placeholder for an unrenderable child nested inside a folder', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
-    const bad: any = { kind: 'tile', id: 'nested-bad', name: 'x' };
+    const bad: any = { kind: 'widget', id: 'nested-bad', name: 'x' };
     const { dash, tab } = mk([folder('f1', 'F', 0, 0, 6, 3, [bad])]);
     render(TabCanvas, { dashboard: dash, tab });
     await tick();
@@ -114,27 +126,6 @@ describe('TabCanvas', () => {
     expect(grid.querySelector('[data-node-id="no-pos"]')).toBeNull();
   });
 
-  it('a positioned placeholder in a free container sits at its position above its siblings', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {});
-    const posBad: any = { kind: 'tile', id: 'pos-bad', name: 'x', placement: { x: 2, y: 3, h: 4 } };
-    const noPos: any = { kind: 'tile', id: 'no-pos', name: 'y' };
-    const tab: LayoutTab = { id: 't1', name: 'Free', layout: 'free', designWidth: 1280, root: { columns: 160, children: [
-      { ...tile('a', 'A', 0, 0, 20, 20), placement: { x: 0, y: 0, w: 20, h: 20, z: 7 } }, posBad, noPos
-    ] } } as any;
-    width = 1280;
-    const dash: LayoutDashboard = { id: 'd1', name: 'Home', path: '/home', revision: 1, tabs: [tab] };
-    const { container } = render(TabCanvas, { dashboard: dash, tab });
-    await tick();
-    const st = (container.querySelector('.node-placeholder[data-node-id="pos-bad"]') as HTMLElement).style;
-    expect(st.position).toBe('absolute');
-    expect(st.left).toBe('16px');
-    expect(st.top).toBe('24px');
-    expect(st.zIndex).toBe('8');
-    const stack = container.querySelector('.placeholder-stack') as HTMLElement;
-    expect(stack.querySelector('[data-node-id="no-pos"]')).not.toBeNull();
-    expect((container.querySelector('.container-free') as HTMLElement).querySelector('[data-node-id="no-pos"]')).toBeNull();
-  });
-
   it('clamps an out-of-range placement instead of dropping it', async () => {
     const { dash, tab } = mk([tile('e1', 'Edge', 80, 0, 18)]);
     const { container } = render(TabCanvas, { dashboard: dash, tab });
@@ -144,38 +135,45 @@ describe('TabCanvas', () => {
     expect(el.getAttribute('style')).toContain('grid-column: 24 / span 1');
   });
 
-  it('renders a child below the folder height instead of clipping it', async () => {
-    const { dash, tab } = mk([folder('f1', 'Short', 0, 0, 12, 4, [tile('low', 'LowTile', 0, 6, 2, 2)])]);
+  it("a folder's contents flow in order at its contents size, in the tab's cell, and overflow scrolls", async () => {
+    const kids = Array.from({ length: 9 }, (_, i) => kid('k' + i, 'K' + i));
+    const { dash, tab } = mk([folder('f1', 'Short', 0, 0, 12, 4, kids)]);
     const { container } = render(TabCanvas, { dashboard: dash, tab });
     await tick();
-    expect(screen.getByText('LowTile')).toBeInTheDocument();
-    const cell = container.querySelector('[data-node-id="low"]') as HTMLElement;
-    expect(cell.getAttribute('style')).toContain('grid-row: 7 / span 2');
-    const inner = cell.parentElement as HTMLElement;
-    // 8 content rows must fit the folder body: (4*60 - 58 chrome) / 8 = 22.75px each (the old 45.5 halved)
-    const m = /grid-auto-rows:\s*([\d.]+)px/.exec(inner.getAttribute('style') ?? '');
-    expect(Number(m![1])).toBeCloseTo(22.75, 1);
-    let el: HTMLElement | null = cell;
-    while (el && el !== container) {
-      expect(getComputedStyle(el).overflow).not.toBe('hidden');
-      el = el.parentElement;
-    }
+    const flow = container.querySelector('.container-flow') as HTMLElement;
+    // (12 x 60 - 18) px wide / 120 px Medium items = 5 per row; each item is 2 x 60 px square.
+    expect(flow.getAttribute('style')).toContain('grid-template-columns: repeat(5, 120px)');
+    expect(flow.getAttribute('style')).toContain('grid-auto-rows: 120px');
+    expect([...flow.querySelectorAll(':scope > [data-node-id]')].map((e) => e.getAttribute('data-node-id')))
+      .toEqual(kids.map((k) => k.id));
+    // Every item is drawn (nothing hidden); the overflow scrolls inside the folder until M5 Task 3 pages it.
+    for (const k of kids) expect(screen.getByText(k.name)).toBeInTheDocument();
   });
 
-  it("sizes a nested folder's rows from its parent's cell size", async () => {
+  it('a tile inside a folder is drawn at the contents size; its own size is kept (M5 §2)', async () => {
     const { dash, tab } = mk([
-      folder('f1', 'Outer', 0, 0, 24, 16, [folder('f2', 'Inner', 0, 0, 16, 12, [tile('t', 'T', 0, 0, 2, 2)])])
+      tile('top', 'Top', 0, 0, 4, 4),
+      folder('f1', 'F', 0, 4, 12, 6, [kid('big', 'Big', { size: 'large' })], { contentSize: 'small' })
     ]);
+    (tab.root.children[0] as any).size = 'large';
     const { container } = render(TabCanvas, { dashboard: dash, tab });
     await tick();
-    // chrome = 40 title + 2 x 8 padding + 2 x 1 border = 58 (geometry.folderChrome); 24 columns of
-    // 60 px; a folder's title takes 2 rows (finer grid: the old 12-column fixture doubled, same px).
-    const outerRow = (16 * 60 - 58) / 14;
-    const expected = (12 * outerRow - 58) / 10;
-    const innerGrid = (container.querySelector('[data-node-id="t"]') as HTMLElement).parentElement as HTMLElement;
-    const m = /grid-auto-rows:\s*([\d.]+)px/.exec(innerGrid.getAttribute('style') ?? '');
-    expect(Number(m![1])).toBeCloseTo(expected, 1);
-    expect(Math.abs(Number(m![1]) - (12 * 60 - 58) / 10)).toBeGreaterThan(2.5);
+    expect(container.querySelector('[data-node-id="top"] button.entry')!.classList.contains('large')).toBe(true);
+    const inFolder = container.querySelector('[data-node-id="big"] button.entry')!;
+    expect(inFolder.classList.contains('small')).toBe(true);
+    expect(inFolder.classList.contains('large')).toBe(false);
+    expect((tab.root.children[1] as any).content.children[0].size).toBe('large');
+  });
+
+  it('a Medium item in a folder is the same size as a Medium tile on the tab (M5 consistent sizes)', async () => {
+    const { dash, tab } = mk([tile('top', 'Top', 0, 0, 2, 2), folder('f1', 'F', 0, 2, 24, 8, [kid('in', 'In')])]);
+    const { container } = render(TabCanvas, { dashboard: dash, tab });
+    await tick();
+    const grid = container.querySelector('.container-grid') as HTMLElement;
+    const row = Number(/grid-auto-rows:\s*([\d.]+)px/.exec(grid.getAttribute('style') ?? '')![1]);
+    const flow = container.querySelector('.container-flow') as HTMLElement;
+    const item = Number(/grid-auto-rows:\s*([\d.]+)px/.exec(flow.getAttribute('style') ?? '')![1]);
+    expect(item).toBeCloseTo(2 * row, 1); // both are rounded to 0.01 px
   });
 
   it('tiles are view-only even when edit mode is on', async () => {

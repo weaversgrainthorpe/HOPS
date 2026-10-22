@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getCsrfToken, login, signInDialog, setSetting } from '../helpers';
 import { ADMIN_USERNAME, ADMIN_TEST_PASSWORD } from '../constants';
+import { m5Config } from '../m5form';
 
 // M4 walkthrough changes (design/specs/2026-10-21-hops-v3-m4-walkthrough-changes-design.md §1–3, §6),
 // in a REAL browser: selection rendering, compositing (pixels) and layout need Chromium.
@@ -42,11 +43,11 @@ async function importDash(
     }))
   };
   if (opts.background) dash.background = opts.background;
-  // fineGrid: the placements are already in the finer grid's units (spec §9: 24 columns, marker gridUnit 2),
-  // so a 1 x 1 is a Small; otherwise they are the old 12-column form, which the import doubles.
+  // fineGrid: the placements are already in the 24-column grid's units (spec §9); otherwise they are the old
+  // 12-column form. Either way the dashboard is put in the M5 stored form (m5form.ts) before it is imported.
   const doc = {
     format: 'hops-export', schemaVersion: 3, exportedAt: new Date().toISOString(), exportType: 'single-dashboard',
-    config: opts.fineGrid ? { gridUnit: 2, dashboards: [dash] } : { dashboards: [dash] }
+    config: m5Config([dash])
   };
   const r = await page.request.post('/api/config/import', {
     headers: { 'X-CSRF-Token': await getCsrfToken(context) },
@@ -247,7 +248,7 @@ test.describe('M4 walkthrough changes in a real browser', () => {
     dash.id = `${p}-dash`;
     dash.path = `/${p}`;
     dash.name = `Showcase ${p}`;
-    fixture.config.dashboards = [dash];
+    fixture.config = m5Config([dash]); // the pre-M5 fixture in the M5 form (M5 Task 5 rewrites the file)
     const r = await page.request.post('/api/config/import', {
       headers: { 'X-CSRF-Token': await getCsrfToken(context) },
       multipart: { file: { name: 'sc.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(fixture)) } }
@@ -1355,16 +1356,16 @@ test.describe('§7.1 background on/off wording', () => {
 
 /** Import a copy of a bundled/stored dashboard under a fresh id, path and name; returns its stored entry. */
 /**
- * Import a copy of `dash`. `gridUnit` is the finer-grid marker of the form `dash` is in: absent for an
- * OLD-form (12-column) export, which the import doubles; 2 for a copy of this server's own export.
+ * Import a copy of `dash`, put in the M5 stored form (m5form.ts; a copy of this server's own M5 export
+ * passes through unchanged in shape).
  */
-async function importCopy(page: Page, context: BrowserContext, dash: Record<string, unknown>, label: string, gridUnit?: number) {
+async function importCopy(page: Page, context: BrowserContext, dash: Record<string, unknown>, label: string) {
   const p = `m4bw72${Date.now().toString(36)}${(seq++).toString(36)}`;
   const copy = JSON.parse(JSON.stringify(dash));
   copy.id = `${p}-dash`;
   copy.path = `/${p}`;
   copy.name = `${label} ${p}`;
-  const config = gridUnit === undefined ? { dashboards: [copy] } : { gridUnit, dashboards: [copy] };
+  const config = m5Config([copy]);
   const bundle = { format: 'hops-export', schemaVersion: 3, exportType: 'full', config };
   const r = await page.request.post('/api/config/import', {
     headers: { 'X-CSRF-Token': await getCsrfToken(context) },
@@ -1391,8 +1392,8 @@ async function sampleCopy(page: Page, context: BrowserContext) {
   const cfg = (await exp.json()).config;
   const sample = cfg.dashboards.find((d: { id: string }) => d.id === 'sample');
   expect(sample, 'the test server has the default Sample dashboard').toBeTruthy();
-  expect(cfg.gridUnit, 'the export carries the finer-grid marker').toBe(2);
-  return importCopy(page, context, sample, 'Sample', cfg.gridUnit);
+  expect(cfg.layoutVersion, 'the export carries the layout version').toBe(1);
+  return importCopy(page, context, sample, 'Sample');
 }
 
 type Boxes = Record<string, { x: number; y: number; w: number; h: number }>;
@@ -1945,7 +1946,7 @@ test.describe('§8 tile size sets the space it takes', () => {
     await allApart(page, ['a', 'b', 'd', 'e', 'f'].map(f.id));
   });
 
-  test("a stored large tile at a Medium's span (Sample's Netflix, 2 x 2 after the finer-grid import) is not enlarged on load", async ({ page, context }) => {
+  test("a stored large tile inside a folder (Sample's Netflix) shows the folder's contents size; its own size stays Large", async ({ page, context }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
     const s = await sampleCopy(page, context);
     await page.goto(s.path);
@@ -1954,49 +1955,46 @@ test.describe('§8 tile size sets the space it takes', () => {
     const spotify = page.locator('.tab-canvas [data-node-id]', { has: page.getByRole('button', { name: 'Open Spotify' }) }).last();
     await expect(netflix).toBeVisible();
     const [n, sp] = [(await netflix.boundingBox())!, (await spotify.boundingBox())!];
-    near(n.width, sp.width, 'Netflix is one cell wide, like Spotify');
-    near(n.height, sp.height, 'Netflix is one cell high, like Spotify');
-    // And the stored placement is the old 1 x 1, doubled by the import: 2 x 2 (nothing silently resized).
+    // M5 §2: inside a folder every item shows the folder's contents size (Medium), whatever its own.
+    near(n.width, sp.width, 'Netflix is drawn at the contents size, like Spotify');
+    near(n.height, sp.height, 'Netflix is drawn at the contents size, like Spotify');
+    await expect(netflix.locator('button.entry')).toHaveClass(/\bmedium\b/);
+    // Stored: its own size, Large, and no placement inside the folder (nothing silently resized).
     const cfg = await (await page.request.get('/api/config')).json();
     const dash = cfg.dashboards.find((d: { id: string }) => d.id === s.id);
-    const found: { size?: string; placement?: { w: number; h: number } }[] = [];
-    const walk = (c: { children?: unknown[] } | undefined) => {
+    const found: { size?: string; placement?: unknown }[] = [];
+    const walk = (c: { children?: unknown[] } | undefined, inFolder: boolean) => {
       for (const x of (c?.children ?? []) as { name?: string; kind?: string; content?: { children?: unknown[] } }[]) {
-        if (x.kind === 'tile' && x.name === 'Netflix') found.push(x as never);
-        if (x.kind === 'folder') walk(x.content);
+        if (x.kind === 'tile' && x.name === 'Netflix' && inFolder) found.push(x as never);
+        if (x.kind === 'folder') walk(x.content, true);
       }
     };
-    for (const t of dash.tabs) walk(t.root);
+    for (const t of dash.tabs) walk(t.root, false);
     expect(found).toHaveLength(1);
-    expect(found[0]).toMatchObject({ size: 'large', placement: { w: 2, h: 2 } });
+    expect(found[0]).toMatchObject({ size: 'large' });
+    expect(found[0]).not.toHaveProperty('placement');
 
-    // The dialog tells the truth (spec §8, amended): Custom, not Large. Picking Large applies it
-    // (4 x 4 cells, twice a Medium each way) as one undo step.
+    // The dialog shows its own size (Large; no "Custom"). Picking Small changes the stored size only:
+    // the drawn box stays the contents size. Undo restores Large.
     const nid = await netflix.getAttribute('data-node-id');
-    const sidEarly = await spotify.getAttribute('data-node-id');
-    expect(sidEarly).toBeTruthy();
     const nf = page.locator(`.tab-canvas [data-node-id="${nid}"]`);
     await enterEdit(page);
     await nf.dblclick();
     const dlg = page.getByRole('dialog', { name: 'Edit Tile' });
-    await expect(dlg.getByLabel('Size', { exact: true })).toHaveValue('custom');
-    await dlg.getByLabel('Size', { exact: true }).selectOption('large');
+    await expect(dlg.getByLabel('Size', { exact: true })).toHaveValue('large');
+    await expect(dlg.getByLabel('Size', { exact: true }).locator('option')).toHaveText(['Small', 'Medium', 'Large']);
+    await dlg.getByLabel('Size', { exact: true }).selectOption('small');
     await dlg.getByRole('button', { name: 'Save', exact: true }).click();
     await expect(dlg).toHaveCount(0);
-    // Spotify (still a Medium, 2 x 2 cells, edit-mode layout) is the one-Medium yardstick.
-    const one = (await page.locator(`.tab-canvas [data-node-id="${sidEarly}"]`).boundingBox())!;
-    const big = (await nf.boundingBox())!;
-    near(big.width, 2 * one.width, 'Netflix is now two Mediums (4 cells) wide');
-    near(big.height, 2 * one.height, 'Netflix is now two Mediums (4 cells) high');
+    const after = (await nf.boundingBox())!;
+    near(after.width, n.width, 'still the contents size');
+    near(after.height, n.height, 'still the contents size');
     const bar = page.getByRole('toolbar', { name: 'Editing' });
     await bar.getByRole('button', { name: 'Undo' }).click();
     await expect(bar.getByRole('button', { name: 'Undo' })).toBeDisabled();
-    // One cell again: the same box as Spotify and as on load (a folder's rows share its height).
-    await expect.poll(async () => {
-      const b = (await nf.boundingBox())!;
-      const sb = (await page.locator(`.tab-canvas [data-node-id="${sidEarly}"]`).boundingBox())!;
-      return [Math.round(b.width - sb.width), Math.round(b.height - sb.height), Math.round(b.width - n.width), Math.round(b.height - n.height)];
-    }, { message: 'Undo: one cell again' }).toEqual([0, 0, 0, 0]);
+    await nf.dblclick();
+    await expect(dlg.getByLabel('Size', { exact: true })).toHaveValue('large');
+    await dlg.getByRole('button', { name: 'Cancel', exact: true }).click();
   });
   // Jonathan's walkthrough (Sample's Services folder: Google, GitHub, YouTube). Each tile's size is
   // its own: checked after every step in the dialog, on the drawn tile and in the saved config.
@@ -2034,55 +2032,38 @@ test.describe('§8 tile size sets the space it takes', () => {
       await expect(dlg).toHaveCount(0);
       return v;
     };
+    // M5 §2: in the folder every tile is DRAWN at its contents size (Medium); the dialog shows its own size.
     const expectSizes = async (want: Record<Name, string>, step: string) => {
       for (const n of Object.keys(want) as Name[]) {
-        await expect(cell(n).locator('button.entry'), `${step}: ${n} is drawn ${want[n]}`).toHaveClass(new RegExp(`\\b${want[n]}\\b`));
+        await expect(cell(n).locator('button.entry'), `${step}: ${n} is drawn at the contents size`).toHaveClass(/\bmedium\b/);
         expect(await sizeIn(n), `${step}: ${n}'s dialog shows ${want[n]}`).toBe(want[n]);
+      }
+    };
+    const sizes = async () => ({ Google: await box(page, ids.Google), GitHub: await box(page, ids.GitHub), YouTube: await box(page, ids.YouTube) });
+    const sameBoxes = async (was: Awaited<ReturnType<typeof sizes>>, step: string) => {
+      const now = await sizes();
+      for (const n of ['Google', 'GitHub', 'YouTube'] as const) {
+        near(now[n].width, was[n].width, `${step}: ${n} keeps its drawn width`);
+        near(now[n].height, was[n].height, `${step}: ${n} keeps its drawn height`);
       }
     };
 
     await expectSizes({ Google: 'medium', GitHub: 'medium', YouTube: 'medium' }, 'start');
     const folderBox = () => page.locator(`.tab-canvas [data-node-id="${f.id('services')}"]`).boundingBox();
-    const [svc0, yt0, gh0] = [(await folderBox())!, await box(page, ids.YouTube), await box(page, ids.GitHub)];
+    const [svc0, s0] = [(await folderBox())!, await sizes()];
+    near(s0.Google.width, s0.YouTube.width, 'all three are drawn Medium');
     await pickSize(page, cell('Google'), 'large');
     await expectSizes({ Google: 'large', GitHub: 'medium', YouTube: 'medium' }, 'Google Large');
-    // Ruling 2: never squashed. The Services folder grew (by a row) and its 1 x 1 tiles keep their
-    // full Medium look: not compact, the same width, and no shorter than a cell outside the folder.
+    await sameBoxes(s0, 'Google Large');
+    // The folder never grows to fit its contents (M5: it pages them instead).
     const svc1 = (await folderBox())!;
-    expect(svc1.height, 'Services grew').toBeGreaterThan(svc0.height + 50);
+    near(svc1.height, svc0.height, 'Services keeps its height');
     near(svc1.width, svc0.width, 'Services keeps its width');
-    for (const [n, was] of [['YouTube', yt0], ['GitHub', gh0]] as const) {
-      const now = await box(page, ids[n]);
-      await expect(cell(n).locator('button.entry'), `${n} is not squashed to compact`).not.toHaveClass(/\bcompact\b/);
-      near(now.width, was.width, `${n} keeps its width`);
-      expect(now.height, `${n} (${now.height}px) stays above the compact threshold (110px)`).toBeGreaterThan(110);
-      expect(Math.abs(now.height - was.height) / was.height, `${n} height ${was.height} -> ${now.height}`).toBeLessThan(0.2);
-    }
-    // Each tile changes on its own: Google is two Mediums each way; the others keep their boxes' size.
-    const sizes = async () => ({ Google: await box(page, ids.Google), GitHub: await box(page, ids.GitHub), YouTube: await box(page, ids.YouTube) });
-    const s1 = await sizes();
-    near(s1.Google.width, 2 * s1.YouTube.width, 'Google Large is two Mediums (4 cells) wide');
-    near(s1.Google.height, 2 * s1.YouTube.height, 'Google Large is two Mediums (4 cells) high');
     await pickSize(page, cell('YouTube'), 'medium');
     await expectSizes({ Google: 'large', GitHub: 'medium', YouTube: 'medium' }, 'YouTube Medium');
-    const s2 = await sizes();
-    for (const n of ['Google', 'GitHub', 'YouTube'] as const) {
-      near(s2[n].width, s1[n].width, `YouTube Medium: ${n} keeps its width`);
-      near(s2[n].height, s1[n].height, `YouTube Medium: ${n} keeps its height`);
-    }
     await pickSize(page, cell('GitHub'), 'small');
     await expectSizes({ Google: 'large', GitHub: 'small', YouTube: 'medium' }, 'GitHub Small');
-    const s3 = await sizes();
-    for (const n of ['Google', 'YouTube'] as const) {
-      near(s3[n].width, s2[n].width, `GitHub Small: ${n} keeps its width`);
-      near(s3[n].height, s2[n].height, `GitHub Small: ${n} keeps its height`);
-    }
-    // GitHub is one cell: half YouTube's Medium each way, and visibly smaller (icon and title).
-    near(s3.GitHub.width, s3.YouTube.width / 2, 'GitHub Small is half a Medium wide');
-    near(s3.GitHub.height, s3.YouTube.height / 2, 'GitHub Small is half a Medium high');
-    expect(s3.GitHub.width * s3.GitHub.height, 'GitHub takes a quarter of YouTube\'s area').toBeLessThan(0.3 * s3.YouTube.width * s3.YouTube.height);
-    clearlySmaller(await looks(page, ids.GitHub), await looks(page, ids.YouTube), 'Services: GitHub Small beside YouTube Medium');
-    expect((await folderBox())!.height, 'Services is still grown for Google').toBeGreaterThanOrEqual(svc1.height - 1);
+    await sameBoxes(s0, 'GitHub Small');
     // The menu's Edit on YouTube (GitHub was edited last) opens YouTube's own dialog.
     await cell('YouTube').click({ button: 'right' });
     await page.getByRole('menu').getByRole('menuitem', { name: 'Edit', exact: true }).click();
@@ -2090,17 +2071,18 @@ test.describe('§8 tile size sets the space it takes', () => {
     await expect(dlg.getByLabel('Size', { exact: true })).toHaveValue('medium');
     await dlg.getByRole('button', { name: 'Cancel', exact: true }).click();
 
-    // Saved: each tile's own size and span.
+    // Saved: each tile's own size, and no placements inside the folder.
     const bar = page.getByRole('toolbar', { name: 'Editing' });
     await bar.getByRole('button', { name: 'Save', exact: true }).click();
     await expect(bar.getByText('Unsaved changes')).toHaveCount(0);
     const cfg = await (await page.request.get('/api/config')).json();
     const dash = cfg.dashboards.find((d: { id: string }) => d.id === f.id('dash'));
-    const kids = dash.tabs[0].root.children[0].content.children as { id: string; size: string; placement: { w: number; h: number } }[];
+    const kids = dash.tabs[0].root.children[0].content.children as { id: string; size: string; placement?: unknown }[];
     const by = (n: Name) => kids.find((k) => k.id === ids[n])!;
-    expect(by('Google')).toMatchObject({ size: 'large', placement: { w: 4, h: 4 } });
-    expect(by('YouTube')).toMatchObject({ size: 'medium', placement: { w: 2, h: 2 } });
-    expect(by('GitHub')).toMatchObject({ size: 'small', placement: { w: 1, h: 1 } });
+    expect(by('Google')).toMatchObject({ size: 'large' });
+    expect(by('YouTube')).toMatchObject({ size: 'medium' });
+    expect(by('GitHub')).toMatchObject({ size: 'small' });
+    for (const k of kids) expect(k, 'no placement inside a folder').not.toHaveProperty('placement');
   });
 
   /** A tile's drawn icon and title size. */

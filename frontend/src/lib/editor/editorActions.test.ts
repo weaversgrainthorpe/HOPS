@@ -64,18 +64,23 @@ describe('editorActions', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it('a new (Medium) tile in a free tab gets a 2-cell square (2 x side = round(designWidth / 12 / 8)) at a free spot', () => {
+  it('a new (Medium) tile on a tab takes its 2 x 2 span at the first free cell; in a folder it goes last, unplaced', () => {
     const id = addNode({ ...blankTile(), name: 'F', url: 'https://f.test' }, { tabId: 't2' })!;
     const t = nodeIn(draft(), id) as TileNode;
-    expect(t.placement.w).toBe(13);
-    expect(t.placement.h).toBe(13);
+    expect(t.placement).toEqual(p(2, 0));
+    const inF = addNode({ ...blankTile(), name: 'G', url: 'https://g.test' }, { tabId: 't1', folderId: 'f1' })!;
+    const kids = (nodeIn(draft(), 'f1') as FolderNode).content.children;
+    expect(kids.map((n) => n.id)).toEqual(['x', inF]);
+    expect('placement' in kids[1]).toBe(false);
   });
 
-  it('a new folder in a grid takes 8 x 6 at the first free cell, with matching content columns', () => {
+  it('a new folder on a tab takes its default box (Medium: 6 x 4) at the first free cell, Medium with Medium contents', () => {
     const id = addNode({ ...blankFolder(), name: 'G' }, { tabId: 't1' })!;
     const f = nodeIn(draft(), id) as FolderNode;
-    expect(f.placement).toEqual(p(14, 0, 8, 6));
-    expect(f.content.columns).toBe(8);
+    expect(f.placement).toEqual(p(14, 0, 6, 4));
+    expect(f).toMatchObject({ size: 'medium', contentSize: 'medium', content: { children: [] } });
+    expect('columns' in f.content).toBe(false);
+    expect('layout' in f).toBe(false);
   });
 
   it('placements for several items never overlap, and a taken cell falls back to the first free one', () => {
@@ -96,7 +101,7 @@ describe('editorActions', () => {
   });
 
   it('editNode never patches id, kind, placement or content', () => {
-    editNode('f1', { name: 'N', id: 'zz', placement: p(9, 9), content: { columns: 1, children: [] } } as never);
+    editNode('f1', { name: 'N', id: 'zz', placement: p(9, 9), content: { children: [] } } as never);
     const f = nodeIn(draft(), 'f1') as FolderNode;
     expect(f.name).toBe('N');
     expect(f.placement).toEqual(p(0, 2, 8, 6));
@@ -113,12 +118,14 @@ describe('editorActions', () => {
     expect(inF1[1].id).not.toBe('b');
   });
 
-  it('editTab with a layout change converts the content (grid → free)', () => {
-    editTab('t1', { name: 'Main', layout: 'free', designWidth: 960 }); // side 5: a Medium b at x 2 → 10
+  it('editTab changes the name as one undo step; there is no layout to change (every tab is a grid)', () => {
+    editTab('t1', { name: 'Renamed', layout: 'free', designWidth: 960 } as never);
     const t = draft().tabs[0];
-    expect(t.layout).toBe('free');
-    expect(t.root.columns).toBe(120);
-    expect(nodeIn(draft(), 'b')!.placement).toEqual(p(10, 0, 10, 10));
+    expect(t.name).toBe('Renamed');
+    expect('layout' in t).toBe(false);
+    expect('designWidth' in t).toBe(false);
+    expect(t.root.columns).toBe(24);
+    expect(nodeIn(draft(), 'b')!.placement).toEqual(p(2, 0));
     expect(get(session)!.undo).toHaveLength(1);
   });
 

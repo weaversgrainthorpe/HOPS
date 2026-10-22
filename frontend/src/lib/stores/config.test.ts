@@ -54,10 +54,10 @@ function dash(id: string, revision: number, extra: Partial<LayoutDashboard> = {}
 }
 
 function makeConfig(...ds: LayoutDashboard[]): Config {
-  return { schemaVersion: 3, gridUnit: 2, dashboards: ds.length ? ds : [dash('a', 3), dash('b', 7)] };
+  return { schemaVersion: 3, layoutVersion: 1, dashboards: ds.length ? ds : [dash('a', 3), dash('b', 7)] };
 }
 
-const doc = (...ds: LayoutDashboard[]) => ({ schemaVersion: 3 as const, gridUnit: 2, dashboards: ds });
+const doc = (...ds: LayoutDashboard[]) => ({ schemaVersion: 3 as const, layoutVersion: 1, dashboards: ds });
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -87,7 +87,7 @@ describe('the store is the v3 document', () => {
   it('migration notices from GET are kept when a write response refreshes the document', () => {
     config.set({ ...makeConfig(), migrationNotices: ['renamed'] });
     applySavedLayout({ layout: doc(dash('a', 4)) });
-    expect(get(config)).toEqual({ schemaVersion: 3, gridUnit: 2, dashboards: [dash('a', 4)], migrationNotices: ['renamed'] });
+    expect(get(config)).toEqual({ schemaVersion: 3, layoutVersion: 1, dashboards: [dash('a', 4)], migrationNotices: ['renamed'] });
   });
 });
 
@@ -472,7 +472,7 @@ describe('saveDashboardSettingsChanges', () => {
   });
 
   it('works on a free-layout (Showcase) dashboard like any other', async () => {
-    const show = dash('s', 8, { tabs: [{ id: 'ft', name: 'Free', layout: 'free', designWidth: 1280, root: { columns: 160, children: [] } }] });
+    const show = dash('s', 8, { tabs: [{ id: 'ft', name: 'Free', root: { columns: 24, children: [] } }] });
     config.set(makeConfig(show));
     const fresh = doc({ ...show, revision: 9 });
     vi.mocked(api.saveDashboardSettings).mockResolvedValue({ revision: 9, layout: fresh });
@@ -496,7 +496,7 @@ describe('resolveDashboardRoute (path first, then id)', () => {
   });
 
   it('resolves every dashboard (a free-layout Showcase included) to its v3 dashboard', () => {
-    const show = dash('s', 4, { path: '/showcase', tabs: [{ id: 'ft', name: 'Free', layout: 'free', root: { columns: 160, children: [] } }] });
+    const show = dash('s', 4, { path: '/showcase', tabs: [{ id: 'ft', name: 'Free', root: { columns: 24, children: [] } }] });
     expect(resolveDashboardRoute('showcase', makeConfig(show))).toBe(show);
   });
 

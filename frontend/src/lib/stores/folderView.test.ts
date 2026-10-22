@@ -7,7 +7,7 @@ import type { LayoutDashboard } from '$lib/types/layout';
 
 const KEY = 'hops.folderView.d1';
 const f = (id: string, extra: any = {}): any => ({
-  kind: 'folder', id, name: id, display: 'expanded', placement: { x: 0, y: 0, w: 2, h: 2 }, content: { columns: 4, children: [] }, ...extra
+  kind: 'folder', id, name: id, display: 'expanded', placement: { x: 0, y: 0, w: 2, h: 2 }, size: 'medium', contentSize: 'medium', content: { children: [] }, ...extra
 });
 
 beforeEach(() => {
@@ -82,8 +82,8 @@ describe('effectiveDisplay', () => {
 });
 
 describe('applyFolderViews', () => {
-  const dash = (children: any[], layout?: any): LayoutDashboard => ({
-    id: 'd1', name: 'D', path: '/d', revision: 1, defaultLayout: layout,
+  const dash = (children: any[]): LayoutDashboard => ({
+    id: 'd1', name: 'D', path: '/d', revision: 1,
     tabs: [{ id: 't1', name: 'T', root: { columns: 24, children } }]
   });
   it('returns the same tab when nothing is remembered; ignores unknown ids', () => {
@@ -91,19 +91,19 @@ describe('applyFolderViews', () => {
     expect(applyFolderViews(d, d.tabs[0], {})).toBe(d.tabs[0]);
     expect(applyFolderViews(d, d.tabs[0], { gone: 'collapsed' })).toBe(d.tabs[0]);
   });
-  it('a minimised grid folder becomes one Medium tile (2 x 2) at its x,y; siblings are untouched', () => {
+  it('a minimised Medium folder becomes one Medium tile (2 x 2) at its x,y; siblings are untouched', () => {
     const d = dash([f('a', { placement: { x: 6, y: 2, w: 8, h: 6 } }), f('b', { placement: { x: 14, y: 0, w: 4, h: 4 } })]);
     const t = applyFolderViews(d, d.tabs[0], { a: 'collapsed' });
     const [a, b] = t.root.children as any[];
     expect(a.display).toBe('collapsed');
     expect(a.placement).toMatchObject({ x: 6, y: 2, w: 2, h: 2 });
-    expect(a.content.columns).toBe(4);
+    expect(a.content).toBe((d.tabs[0].root.children[0] as any).content); // its contents are untouched
     expect(b).toBe(d.tabs[0].root.children[1]);
   });
-  it('a minimised free folder becomes a Medium square, 2 x side = round(designWidth/12/8) units (as before the finer grid)', () => {
-    const d = dash([f('a', { placement: { x: 10, y: 20, w: 40, h: 30 } })], 'free');
-    const t = applyFolderViews(d, { ...d.tabs[0], designWidth: 1280 }, { a: 'collapsed' });
-    expect((t.root.children[0] as any).placement).toMatchObject({ x: 10, y: 20, w: 13, h: 13 });
+  it('a minimised folder is a tile of its own size (M5 §3a.2)', () => {
+    const d = dash([f('a', { size: 'large', placement: { x: 10, y: 20, w: 8, h: 6 } })]);
+    const t = applyFolderViews(d, d.tabs[0], { a: 'collapsed' });
+    expect((t.root.children[0] as any).placement).toEqual({ x: 10, y: 20, w: 4, h: 4 });
   });
   it('expanded and maximised override a saved collapsed default, keeping its placement', () => {
     const d = dash([f('a', { display: 'collapsed' }), f('b', { display: 'collapsed' })]);
@@ -111,16 +111,15 @@ describe('applyFolderViews', () => {
     expect((t.root.children as any[]).map((c) => c.display)).toEqual(['expanded', 'expanded']);
     expect((t.root.children[0] as any).placement).toEqual({ x: 0, y: 0, w: 2, h: 2 });
   });
-  it('a saved-collapsed folder is one Medium tile with no remembered view; stored data is untouched', () => {
+  it('a saved-collapsed (Medium) folder is one Medium tile with no remembered view; stored data is untouched', () => {
     const d = dash([f('a', { display: 'collapsed', placement: { x: 2, y: 4, w: 24, h: 6 } })]);
     const orig = JSON.stringify(d);
     const t = applyFolderViews(d, d.tabs[0], {});
     expect((t.root.children[0] as any).placement).toMatchObject({ x: 2, y: 4, w: 2, h: 2 });
-    expect((t.root.children[0] as any).content.columns).toBe(4);
     expect(JSON.stringify(d)).toBe(orig);
   });
   it('reaches nested folders', () => {
-    const d = dash([f('o', { content: { columns: 4, children: [f('i')] } })]);
+    const d = dash([f('o', { content: { children: [{ ...f('i'), placement: undefined }] } })]);
     const t = applyFolderViews(d, d.tabs[0], { i: 'collapsed' });
     expect(((t.root.children[0] as any).content.children[0]).display).toBe('collapsed');
   });

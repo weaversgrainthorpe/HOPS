@@ -2,7 +2,7 @@
   import Icon from '@iconify/svelte';
   import type { FolderNode, LayoutDashboard, LayoutTab } from '$lib/types/layout';
   import type { CanvasPlan } from '$lib/layout/geometry';
-  import { overlayBodyPx, overlayMetrics, resolveMode } from '$lib/layout/geometry';
+  import { overlayBodyPx, overlayMetrics } from '$lib/layout/geometry';
   import { layoutStale } from '$lib/stores/config';
   import { focusTrap } from '$lib/utils/focusTrap';
   import { overlayStack, closeTop, closeTo } from '$lib/stores/folderOverlay';
@@ -30,7 +30,7 @@
 
   /** Content sizing for one panel (Ruling 23): cells keep the dashboard's size, capped by the viewport. */
   function sizing(chain: FolderNode[]) {
-    return overlayMetrics(plan, tab, resolveMode(dashboard, tab, chain), chain[chain.length - 1], bodyPx);
+    return overlayMetrics(plan, chain[chain.length - 1], bodyPx);
   }
 
   // Each open id resolved to its folder (and enclosing chain) from the live tab,

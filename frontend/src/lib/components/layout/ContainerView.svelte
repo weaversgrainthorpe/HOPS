@@ -1,10 +1,7 @@
 <script lang="ts">
   import type { Container, FolderNode, LayoutDashboard, LayoutNode, LayoutTab } from '$lib/types/layout';
   import type { CanvasPlan, ContainerMetrics } from '$lib/layout/geometry';
-  import {
-    clampPlacement, freeContentHeightPx, hasPosition, isRenderable, nodeBox, readingOrder, requiredFolderHeightPx,
-    nodeFit
-  } from '$lib/layout/geometry';
+  import { clampPlacement, hasPosition, isPlaced, isRenderable, readingOrder, nodeFit, spanFit } from '$lib/layout/geometry';
   import type { Placement } from '$lib/types/layout';
   import Entry from '../Entry.svelte';
   import FolderView from './FolderView.svelte';
@@ -14,8 +11,8 @@
   import { openDialog, openMenu, menuPointFor, ownsTarget } from '$lib/editor/editorUi';
   import type { ContainerRef } from '$lib/editor/treeOps';
   import { drag, dragSource, pressMenu } from '$lib/editor/drag/dragController';
+  import { displaySize } from '$lib/editor/editorActions';
   import { dropContainer } from '$lib/editor/drag/hitTest';
-  import ResizeHandles from '../editor/ResizeHandles.svelte';
   import EditHandle from '../editor/EditHandle.svelte';
 
   interface Props {
@@ -53,7 +50,7 @@
   }
   function containerMenuAt(el: HTMLElement, x: number, y: number, fromPointer: boolean) {
     let cell: { x: number; y: number } | undefined;
-    if (fromPointer && effective !== 'stacked') {
+    if (fromPointer && effective === 'grid') {
       const r = el.getBoundingClientRect();
       cell = pointToCell(metrics, x - r.left, y - r.top);
     }
@@ -68,7 +65,7 @@
   const nodeMenu = (id: string) => (x: number, y: number) => openMenu({ x, y, target: { kind: 'node', id } });
   const dragging = $derived(new Set(editing ? ($drag?.ids ?? []) : []));
   let gridEl = $state<HTMLElement | null>(null);
-  let freeEl = $state<HTMLElement | null>(null);
+  let flowEl = $state<HTMLElement | null>(null);
   function onContainerMenu(e: MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
@@ -79,34 +76,36 @@
 
   const columns = $derived(metrics.columns);
   const kids = $derived(Array.isArray(container?.children) ? container.children : []);
-  // Valid children in reading order, followed by unplaceable ones (readingOrder never throws).
-  const ordered = $derived(readingOrder(kids) as unknown[]);
+  // A folder's content is an ordered list (M5); a tab's children are drawn in reading order,
+  // followed by unplaceable ones (readingOrder never throws).
+  const isFolder = $derived(!!parent);
+  const ordered = $derived((isFolder ? kids : readingOrder(kids)) as unknown[]);
 
-  // Phone/narrow plans stack every container, whatever its own mode.
-  const effective = $derived<'grid' | 'free' | 'stacked'>(plan.kind === 'stacked' ? 'stacked' : metrics.mode);
+  // Phone/narrow plans stack every container; a folder's content flows in order (M5).
+  const effective = $derived<'grid' | 'flow' | 'stacked'>(
+    plan.kind === 'stacked' ? 'stacked' : metrics.flow ? 'flow' : 'grid'
+  );
 
   const px = (v: number) => `${Math.round(v * 100) / 100}px`;
   // Column tracks round DOWN so N tracks never overflow the container by a rounding hair.
   const trackPx = (v: number) => `${Math.floor(v * 100) / 100}px`;
 
-  const freeHeight = $derived(freeContentHeightPx(kids, metrics));
-  const freeStyle = $derived(
-    `position:relative;min-height:${px(freeHeight)};width:${px(metrics.innerWidthPx)};`
+  // Folder contents (M5, until Task 3's Folder component pages them): in order, row by row, every
+  // item at the folder's contents size in the tab's cell. Overflow scrolls, so nothing is hidden.
+  const flowItemPx = $derived(metrics.flow ? metrics.flow.span * metrics.unitPx : 0);
+  const flowStyle = $derived(
+    metrics.flow
+      ? `display:grid;grid-template-columns:repeat(${metrics.flow.perRow}, ${trackPx(flowItemPx)});` +
+          `grid-auto-rows:${px(flowItemPx)};`
+      : ''
   );
-  function freeCellStyle(n: LayoutNode): string {
-    const b = nodeBox(n.placement, metrics);
-    const z = clampPlacement(n.placement, columns).z ?? 0;
-    // Folders grow past their box (min-height) rather than clip their content.
-    const h = n.kind === 'folder' ? `min-height:${px(requiredFolderHeightPx(n, metrics))}` : `height:${px(b.heightPx)}`;
-    return `position:absolute;left:${px(b.leftPx)};top:${px(b.topPx)};width:${px(b.widthPx)};${h};z-index:${z};`;
-  }
   const gridStyle = $derived(
     `display:grid;grid-template-columns:repeat(${columns}, ${trackPx(metrics.unitPx)});` +
       `grid-auto-rows:${px(metrics.rowPx)};`
   );
 
   function cellStyle(n: LayoutNode): string {
-    const p = clampPlacement(n.placement, columns);
+    const p = clampPlacement(n.placement as Placement, columns);
     return `grid-column: ${p.x + 1} / span ${p.w}; grid-row: ${p.y + 1} / span ${p.h};` +
       (p.z !== undefined ? ` z-index: ${p.z};` : '');
   }
@@ -114,16 +113,30 @@
   /** How a tile fits its box (Ruling 22): the box is the tile's cell span, in px. */
   function fitOf(n: LayoutNode): 'fill' | 'compact' | undefined {
     if (effective === 'stacked') return undefined; // phone stacking keeps the v2 tile sizes
-    return nodeFit(n.placement, metrics); // Small (1 x 1) is always compact (spec §9)
+    if (metrics.flow) return spanFit(metrics.flow.span, metrics.unitPx); // the folder's contents size
+    return nodeFit(n.placement as Placement, metrics); // Small (1 x 1) is always compact (spec §9)
   }
+  /**
+   * The tile as it is drawn here (M5 §2): on a tab at its own size; inside a folder at the folder's
+   * contents size. Its stored size is never changed by this.
+   */
+  function shownEntry(n: LayoutNode): LayoutNode {
+    const size = displaySize(n, isFolder ? parent : undefined);
+    return n.kind === 'tile' && n.size !== size ? ({ ...n, size } as LayoutNode) : n;
+  }
+  /** Can this child be drawn here? On a tab it needs a placement; in a folder it has none (M5). */
+  const drawable = (n: unknown): n is LayoutNode => (isFolder ? isRenderable(n) : isPlaced(n));
+  /** A sub-folder in a folder's flow shows as its minimised tile (M5 §2; Task 3 opens it in place). */
+  const asItem = (n: FolderNode): FolderNode =>
+    effective === 'flow' && n.display !== 'collapsed' ? { ...n, display: 'collapsed' } : n;
 
   // Placeholders (unrenderable nodes, m3): one that has a position keeps it, drawn
   // above its siblings so a tile can never hide it; the rest stack after every
   // positioned item, in array order.
-  const unplaced = $derived(kids.filter((k) => !isRenderable(k) && !hasPosition(k)));
+  const unplaced = $derived(isFolder ? [] : kids.filter((k) => !isPlaced(k) && !hasPosition(k)));
   const topZ = $derived(
     kids.reduce((m: number, k) => {
-      if (!isRenderable(k)) return m;
+      if (!isPlaced(k)) return m;
       const z = clampPlacement(k.placement, columns).z;
       return z !== undefined && z > m ? z : m;
     }, 0) + 1
@@ -134,11 +147,6 @@
   }
   function placeholderStyle(n: unknown): string {
     const p = clampPlacement(rawPlacement(n), columns);
-    if (effective === 'free') {
-      const b = nodeBox(p, metrics);
-      return `position:absolute;left:${px(b.leftPx)};top:${px(b.topPx)};width:${px(b.widthPx)};` +
-        `height:${px(b.heightPx)};z-index:${topZ};`;
-    }
     return `grid-column: ${p.x + 1} / span ${p.w}; grid-row: ${p.y + 1} / span ${p.h}; z-index: ${topZ};`;
   }
   function nodeId(n: unknown): string {
@@ -149,7 +157,7 @@
 
 {#snippet nodes(list: unknown[], styleOf: (n: LayoutNode) => string, folderStyle: (n: LayoutNode) => string, inPlace: boolean)}
   {#each list as node, i (nodeId(node) + ':' + i)}
-    {#if isRenderable(node)}
+    {#if drawable(node)}
       {#if node.kind === 'tile'}
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div
@@ -170,22 +178,17 @@
           use:dragSource={{ id: node.id, enabled: editing, onMenu: nodeMenu(node.id) }}
         >
           <Entry
-            entry={node}
+            entry={shownEntry(node) as typeof node}
             fit={fitOf(node)}
             editorSelected={editing ? $selectedNodes.has(node.id) : undefined}
           />
           {#if editing}
             <EditHandle name={node.name} onEdit={() => openDialog({ kind: 'tile', id: node.id })} />
           {/if}
-          {#if editing && effective === 'free'}
-            <!-- Free tiles resize like folders; a grid tile's span is set by its Size in the tile dialog
-                 (spec §9: Small 1 x 1, Medium 2 x 2, Large 4 x 4), so it has no handles. -->
-            <ResizeHandles id={node.id} name={node.name} metrics={metrics} />
-          {/if}
         </div>
       {:else}
         <FolderView
-          folder={node}
+          folder={asItem(node as FolderNode)}
           style={folderStyle(node)}
           {plan}
           {dashboard}
@@ -227,20 +230,19 @@
     {@render nodes(ordered, cellStyle, cellStyle, true)}
   </div>
   {@render stackedPlaceholders()}
-{:else if effective === 'free'}
+{:else if effective === 'flow'}
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
-    class="container-free"
-    style={freeStyle}
+    class="container-flow"
+    style={flowStyle}
     data-container-id={parentId}
     oncontextmenu={editing ? onContainerMenu : undefined}
-    use:pressMenu={{ enabled: editing, onMenu: emptyPress(freeEl) }}
-    use:dropContainer={{ ref, metrics, layout: 'free' }}
-    bind:this={freeEl}
+    use:pressMenu={{ enabled: editing, onMenu: emptyPress(flowEl) }}
+    use:dropContainer={{ ref, metrics, layout: 'flow' }}
+    bind:this={flowEl}
   >
-    {@render nodes(kids, freeCellStyle, freeCellStyle, true)}
+    {@render nodes(ordered, () => '', () => '', false)}
   </div>
-  {@render stackedPlaceholders()}
 {:else}
   <!-- Phone stacking: reading order, tiles wrap at today's phone sizes, expanded folders full width. -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -262,6 +264,11 @@
 <style>
   .container-grid {
     width: 100%;
+  }
+  .container-flow {
+    width: 100%;
+    height: 100%;
+    overflow: auto;
   }
   .cell {
     min-width: 0;

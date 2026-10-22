@@ -19,24 +19,24 @@ import { toast } from './toast';
 import { logError } from '$lib/utils/errors';
 import { refreshStatusBase, refreshAllStatusBases } from './statusCheckBase';
 import { refreshAllStatuses } from './status';
-import { GRID_UNIT } from '$lib/layout/geometry';
+import { LAYOUT_VERSION } from '$lib/layout/geometry';
 
 /**
- * Controller Ruling 3 (finer grid): this build writes 24-column placements, so it never saves into
- * a document that is not marked `gridUnit: 2` (one served by an older HOPS, or in the old form):
- * the write is refused with this visible message instead of mixing units.
+ * M5 §2a: this build writes the layout form of LAYOUT_VERSION, so it never saves into a document
+ * marked with another `layoutVersion` (or none: one served by another HOPS): the write is refused
+ * with this visible message instead of mixing forms.
  */
-export const OLD_GRID_FORM =
-  'Not saved: this dashboard was saved by an older HOPS layout. Reload the page, then make your change again.';
+export const OLD_LAYOUT_FORM =
+  'Not saved: this dashboard was loaded from a different HOPS layout version. Reload the page, then make your change again.';
 
-/** Why nothing may be saved into `doc` (it lacks the finer-grid marker), or null. */
-export function gridFormProblem(doc: LayoutDoc | null | undefined): string | null {
-  return doc?.gridUnit === GRID_UNIT ? null : OLD_GRID_FORM;
+/** Why nothing may be saved into `doc` (it is not at this build's layout version), or null. */
+export function layoutFormProblem(doc: LayoutDoc | null | undefined): string | null {
+  return doc?.layoutVersion === LAYOUT_VERSION ? null : OLD_LAYOUT_FORM;
 }
 
-/** The finer-grid guard for a write: toast and throw when the held document is not marked. */
-export function assertGridForm(): void {
-  const why = gridFormProblem(get(config));
+/** The layout-version guard for a write: toast and throw when the held document is not at it. */
+export function assertLayoutForm(): void {
+  const why = layoutFormProblem(get(config));
   if (why) {
     toast.error(why);
     throw new Error(why);
@@ -224,7 +224,7 @@ export function applySavedLayout(fresh: FreshLayout | undefined): void {
     config.set({
       schemaVersion: 3,
       // The marker comes from the fresh document only: a response without it blocks the next save.
-      ...(layout.gridUnit !== undefined ? { gridUnit: layout.gridUnit } : {}),
+      ...(layout.layoutVersion !== undefined ? { layoutVersion: layout.layoutVersion } : {}),
       dashboards: layout.dashboards,
       ...(notices ? { migrationNotices: notices } : {}),
       ...(serverNotices ? { notices: serverNotices } : {}),
@@ -358,7 +358,7 @@ export async function createDashboard(name: string, path: string): Promise<strin
 export async function renameDashboard(id: string, changes: { name: string; path: string }): Promise<void> {
   return enqueueSave(async () => {
     const d = heldDashboard(id, 'Not saved');
-    assertGridForm();
+    assertLayoutForm();
     try {
       const resp = await saveDashboardV3(id, { ...d, name: changes.name, path: changes.path }, d.revision);
       applySavedLayout(resp);

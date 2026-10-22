@@ -10,7 +10,7 @@
   import { editMode } from '$lib/stores/editMode';
   import StatusCheckSetting from '../editor/StatusCheckSetting.svelte';
   import { tileSetting, type LevelSetting, type StatusContext } from '$lib/editor/statusChecks';
-  import type { SizeChoice, TileSize } from '$lib/editor/editorActions';
+  import { tileSizeOf, type TileSize } from '$lib/editor/editorActions';
 
   interface Props {
     entry: Entry;
@@ -26,28 +26,24 @@
     onMoveCopy?: () => void;
     /** The levels above the tile, for the status-check row's "inherited from" text. */
     statusContext?: StatusContext;
-    /**
-     * Spec §8: what Size shows — the size matching the tile's span, or 'custom' for any other
-     * span ("Custom"). Default: the stored size.
-     */
-    sizeShown?: SizeChoice;
     /** Trial-runs a picked size; returns why it can't be done (shown inline), or null. */
     checkSize?: (size: TileSize) => string | null;
   }
 
-  let { entry, onSave, onCancel, onDelete, onMoveCopy, statusContext, sizeShown, checkSize }: Props = $props();
+  let { entry, onSave, onCancel, onDelete, onMoveCopy, statusContext, checkSize }: Props = $props();
 
-  // Size (spec §8): picking one stages it (checked at once, refusals shown inline); Save passes it
-  // as `{ size }` so the editor sets the span. Not picking passes nothing: the span is untouched.
+  // Size (M5: Small, Medium or Large only): picking one stages it (checked at once, refusals shown
+  // inline); Save passes it as `{ size }` so the editor sets the span on a tab. Not picking passes
+  // nothing. Inside a folder the tile shows the folder's contents size; this is its own size.
   // svelte-ignore state_referenced_locally
-  const initialSize: SizeChoice = sizeShown ?? (entry.size === 'small' || entry.size === 'large' ? entry.size : 'medium');
-  let sizeValue = $state<SizeChoice>(initialSize);
+  const initialSize: TileSize = tileSizeOf(entry);
+  let sizeValue = $state<TileSize>(initialSize);
   let sizePicked = $state(false);
   let sizeError = $state<string | null>(null);
 
   function pickSize() {
-    sizePicked = sizeValue !== 'custom';
-    sizeError = sizePicked && checkSize ? checkSize(sizeValue as TileSize) : null;
+    sizePicked = true;
+    sizeError = checkSize ? checkSize(sizeValue) : null;
   }
 
   // Form state initialized from props (intentionally captures initial values)
@@ -279,9 +275,6 @@
           <option value="small">Small</option>
           <option value="medium">Medium</option>
           <option value="large">Large</option>
-          {#if initialSize === 'custom'}
-            <option value="custom">Custom</option>
-          {/if}
         </select>
         {#if sizeError}
           <p id="size-error" class="field-error" role="alert">{sizeError}</p>
