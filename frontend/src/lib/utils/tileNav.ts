@@ -1,5 +1,3 @@
-import { get } from 'svelte/store';
-import { overlayStack } from '$lib/stores/folderOverlay';
 import { modalDialogOpen } from './dialogKeys';
 
 const CANDIDATE = '.entry, .folder-collapsed-tile';
@@ -7,20 +5,13 @@ const CANDIDATE = '.entry, .folder-collapsed-tile';
 /**
  * Spatial arrow-key navigation between dashboard tiles and collapsed folders.
  * Of all candidates in the requested half-plane, picks the closest centre,
- * weighting off-axis distance double. While a folder overlay is open the
- * candidates are only those inside the top panel; anything inside [inert] is
- * never a candidate. Returns true if focus moved (caller should preventDefault).
+ * weighting off-axis distance double. Anything inside [inert] is never a
+ * candidate (folders open in place, so their items are ordinary candidates). Returns true if focus moved (caller should preventDefault).
  */
 export function navigateTiles(direction: string, root: ParentNode = document): boolean {
 	// A modal dialog owns the keyboard: arrow keys never move focus to a tile behind it.
 	if (modalDialogOpen(document)) return false;
-	let scope: ParentNode = root;
-	if (get(overlayStack).length > 0) {
-		const panels = root.querySelectorAll<HTMLElement>('.overlay-panel');
-		const top = panels[panels.length - 1];
-		if (!top) return false;
-		scope = top;
-	}
+	const scope: ParentNode = root;
 
 	const tiles = Array.from(scope.querySelectorAll<HTMLElement>(CANDIDATE)).filter((t) => {
 		if (t.closest('[inert]')) return false;

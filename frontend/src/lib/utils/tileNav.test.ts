@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { navigateTiles } from './tileNav';
-import { openFolder, closeAll } from '$lib/stores/folderOverlay';
 
 function box(el: HTMLElement, x: number, y: number) {
 	el.getBoundingClientRect = () =>
@@ -22,7 +21,6 @@ describe('navigateTiles', () => {
 		page = document.createElement('div');
 		document.body.appendChild(page);
 	});
-	afterEach(() => closeAll());
 
 	it('reaches a collapsed folder by arrow keys', () => {
 		const a = mk('entry', 0, 0, page, 'a');
@@ -61,27 +59,14 @@ describe('navigateTiles', () => {
 		expect(document.activeElement).toBe(live);
 	});
 
-	it('with an overlay open, never focuses a tile behind it', () => {
-		mk('entry', 100, 0, page, 'behind');
-		const panel = document.createElement('div');
-		panel.className = 'overlay-panel';
-		document.body.appendChild(panel);
-		const p1 = mk('entry', 0, 0, panel, 'p1');
-		openFolder('x');
-		p1.focus();
-		expect(navigateTiles('ArrowRight')).toBe(false);
-		expect(document.activeElement).toBe(p1);
-	});
-
-	it('focuses the first panel candidate when focus is outside the overlay', () => {
-		const behind = mk('entry', 0, 0, page, 'behind');
-		const panel = document.createElement('div');
-		panel.className = 'overlay-panel';
-		document.body.appendChild(panel);
-		const p1 = mk('entry', 0, 0, panel, 'p1');
-		openFolder('x');
-		behind.focus();
-		expect(navigateTiles('ArrowDown')).toBe(true);
-		expect(document.activeElement).toBe(p1);
+	it('folders open in place: their items are ordinary candidates beside the tab\'s', () => {
+		const a = mk('entry', 0, 0, page, 'a');
+		const box = document.createElement('div');
+		box.className = 'folder open';
+		page.appendChild(box);
+		const inner = mk('entry', 60, 0, box, 'inner');
+		a.focus();
+		expect(navigateTiles('ArrowRight')).toBe(true);
+		expect(document.activeElement).toBe(inner);
 	});
 });

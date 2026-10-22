@@ -9,10 +9,10 @@
  * dialog closes, and only it — and `window` is just the fallback for focus outside every dialog.
  */
 
-/** The open modal dialogs, bottom to top (folder overlay panels are not edit dialogs). */
-const DIALOGS = '[role="dialog"][aria-modal="true"]:not(.overlay-panel)';
+/** The open modal dialogs, bottom to top. */
+const DIALOGS = '[role="dialog"][aria-modal="true"]';
 
-/** True while any modal dialog (not a folder overlay panel) is open. */
+/** True while any modal dialog is open. */
 export function modalDialogOpen(root: ParentNode = document): boolean {
   return root.querySelector(DIALOGS) !== null;
 }

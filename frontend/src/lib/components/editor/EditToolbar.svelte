@@ -14,7 +14,7 @@
   import type { Background } from '$lib/types';
 
   interface Props {
-    /** The active tab: adds and pastes without a target go to its root, or the open folder overlay. */
+    /** The active tab: adds and pastes without a target go to its root (a folder's menu adds into it). */
     tabId: string;
     onAddTab: () => void;
     /** The labelled "Dashboard" pencil (§4C) opens the one dashboard dialog. */
@@ -74,11 +74,11 @@
   }
 
   /**
-   * A modal dialog (other than a folder overlay) is open, or an item menu has focus: either owns
+   * A modal dialog is open, or an item menu has focus: either owns
    * the keyboard, so Delete / Ctrl+Z / Ctrl+C… pressed there never reach the editor's shortcuts.
    */
   function modalOpen(): boolean {
-    if (document.querySelector('[role="dialog"][aria-modal="true"]:not(.overlay-panel)')) return true;
+    if (document.querySelector('[role="dialog"][aria-modal="true"]')) return true;
     const active = document.activeElement;
     return active instanceof Element && !!active.closest('[role="menu"]');
   }
@@ -121,7 +121,7 @@
       return;
     }
     if (e.key === 'Escape') {
-      // Not marked handled: Escape also closes an open folder overlay as before.
+      // Not marked handled: another Escape handler (a menu, a dialog) may also want it.
       clearSelection();
       return;
     }

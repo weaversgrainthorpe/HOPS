@@ -13,7 +13,6 @@ import Dashboard from '../Dashboard.svelte';
 import { config } from '$lib/stores/config';
 import { editMode } from '$lib/stores/editMode';
 import { isAuthenticated } from '$lib/stores/auth';
-import { closeAll } from '$lib/stores/folderOverlay';
 import { begin, session, resetEditSessionForTests } from '$lib/stores/editSession';
 import { clearSelection } from '$lib/stores/nodeSelection';
 import { drag, setDragEnv, resetDragForTests } from '$lib/editor/drag/dragController';
@@ -53,7 +52,6 @@ beforeEach(() => {
   resetDragForTests();
   clearSelection();
   vi.stubGlobal('ResizeObserver', FakeRO);
-  closeAll();
   config.set(cfg());
   isAuthenticated.set(true);
   begin('d1');
@@ -69,7 +67,6 @@ afterEach(async () => {
   resetDragForTests();
   document.elementFromPoint = realEFP;
   vi.unstubAllGlobals();
-  closeAll();
   editMode.set(false);
   isAuthenticated.set(false);
   config.set(null);

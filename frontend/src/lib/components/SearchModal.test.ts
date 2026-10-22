@@ -19,7 +19,8 @@ import SearchModal from './SearchModal.svelte';
 import Dashboard from './Dashboard.svelte';
 import { config } from '$lib/stores/config';
 import { editMode } from '$lib/stores/editMode';
-import { closeAll, overlayStack, revealRequest } from '$lib/stores/folderOverlay';
+import { revealRequest } from '$lib/stores/reveal';
+import { folderViewFor, folderNavFor, resetFolderViewsForTests } from '$lib/stores/folderView';
 import type { Config } from '$lib/types';
 import type { LayoutDashboard } from '$lib/types/layout';
 
@@ -65,7 +66,8 @@ beforeEach(() => {
   vi.stubGlobal('ResizeObserver', FakeRO);
   vi.clearAllMocks();
   setPage({});
-  closeAll();
+  localStorage.clear();
+  resetFolderViewsForTests();
   revealRequest.set(null);
   editMode.set(false);
   config.set({ schemaVersion: 3, dashboards: [layoutD1] } as Config);
@@ -74,13 +76,12 @@ afterEach(() => {
   // Unmount first, so nothing re-renders after the stubs (ResizeObserver) are removed.
   cleanup();
   vi.unstubAllGlobals();
-  closeAll();
   revealRequest.set(null);
   config.set(null);
 });
 
 describe('SearchModal recursive search', () => {
-  it('SearchModal: finds a tile 3 levels deep, shows its path, opens the collapsed folders on select', async () => {
+  it('SearchModal: finds a tile 3 levels deep, shows its path, opens the folder chain in place on select', async () => {
     const { container } = render(Dashboard, { dashboard: legacy });
     await tick();
     expect(container.querySelector('.tab-canvas[data-tab-id="t1"]')).not.toBeNull();
@@ -97,10 +98,13 @@ describe('SearchModal recursive search', () => {
 
     await fireEvent.click(result);
     expect(onClose).toHaveBeenCalled();
-    // Switched to the tile's tab, opened the collapsed folders outermost first.
+    // Switched to the tile's tab, opened the outermost folder in place and drilled down to Inner
+    // (this browser's memory, as if the user had done it) — nothing pops over.
     await vi.waitFor(() => expect(container.querySelector('.tab-canvas[data-tab-id="t2"]')).not.toBeNull());
-    await vi.waitFor(() => expect(get(overlayStack)).toEqual(['outer', 'inner']));
-    // ...and focused the tile (inside the top overlay).
+    await vi.waitFor(() => expect(get(folderViewFor('d1'))).toEqual({ outer: 'expanded' }));
+    expect(get(folderNavFor('d1')).drill).toEqual({ outer: ['mid', 'inner'] });
+    await vi.waitFor(() => expect(container.querySelector('.tab-canvas [data-node-id="deep"]')).not.toBeNull()); // in place
+    // ...and focused the tile.
     await vi.waitFor(() => {
       const active = document.activeElement as HTMLElement | null;
       expect(active?.closest('[data-node-id="deep"]')).not.toBeNull();

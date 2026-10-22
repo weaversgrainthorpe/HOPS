@@ -1,15 +1,12 @@
 /**
  * Which editor menu or dialog is open. The editing renderer (ContainerView,
- * FolderView), the toolbar and the keyboard ask for one here; EditorDialogs
+ * Folder), the toolbar and the keyboard ask for one here; EditorDialogs
  * (mounted once by Dashboard in edit mode) renders it. Display state only:
  * the edits themselves go through editorActions → editSession.apply.
  */
 import { writable, get } from 'svelte/store';
 import type { ContainerRef } from './treeOps';
-import { locate } from './treeOps';
 import type { Cell } from './editorActions';
-import { overlayStack } from '$lib/stores/folderOverlay';
-import { session } from '$lib/stores/editSession';
 
 export type EditorDialog =
   /** id set: edit that tile; otherwise a new tile going into `to` (at `cell` if free). */
@@ -57,17 +54,10 @@ export function openMenu(m: MenuRequest): void {
 export const showTabRequest = writable<string | null>(null);
 
 /**
- * Where an add or paste without a target goes: the folder of the top open
- * overlay when it is on this tab, else the tab root.
+ * Where an add or paste without a target goes: the tab root (M5: folders open in place on the
+ * tab, so there is no "top" folder to prefer; the menu's "Add here" names a folder explicitly).
  */
 export function currentContainer(tabId: string): ContainerRef {
-  const stack = get(overlayStack);
-  const top = stack[stack.length - 1];
-  const s = get(session);
-  if (top && s) {
-    const loc = locate(s.draft, top);
-    if (loc && loc.tabId === tabId) return { tabId, folderId: top };
-  }
   return { tabId };
 }
 

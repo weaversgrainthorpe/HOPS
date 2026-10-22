@@ -7,7 +7,9 @@ import {
   displaySize, tileSizeOf, sizeTarget, newTileSizeProblem, editNode, addNode, blankTile, moveOrCopyTo, documentIds
 } from './editorActions';
 import { assertGridNoOverlap, mergeIntoNewFolder, moveBetween } from './treeOps';
+import { tabSpan } from '$lib/layout/geometry';
 import { session, undo } from '$lib/stores/editSession';
+import { toast } from '$lib/stores/toast';
 import { setLayout, resetEditor, startSession, draft, nodeIn, p, tile, folder, home } from '$lib/components/editor/editorTestKit';
 import type { FolderNode, LayoutDashboard, TileNode } from '$lib/types/layout';
 
@@ -61,6 +63,21 @@ describe('sizeTarget (push, right-edge shift; inside a folder nothing moves)', (
 });
 
 describe('editNode with a picked size: one undo step', () => {
+  it('a refused size changes nothing and says why (never silent)', () => {
+    // A 2-column tab has no room for a Large (4 x 4) tile.
+    const d: LayoutDashboard = home();
+    d.tabs[0].root = { columns: 2, children: [tile('a', p(0, 0))] };
+    setLayout([d]);
+    resetEditor();
+    startSession();
+    const err = vi.spyOn(toast, 'error');
+    const before = draft();
+    expect(editNode('a', { name: 'Big' } as Partial<TileNode>, { size: 'large' })).toBe(false);
+    expect(draft()).toEqual(before);
+    expect(get(session)!.undo).toHaveLength(0);
+    expect(err).toHaveBeenCalledWith(expect.stringMatching(/room for a large tile.*2 columns/));
+  });
+
   it('Save with Large: the fields, the 4 x 4 span and the push are ONE undo step; Undo restores all', () => {
     const before = draft();
     expect(editNode('a', { name: 'Big', size: 'large' } as Partial<TileNode>, { size: 'large' })).toBe(true);
@@ -113,7 +130,8 @@ describe('a tile keeps its own size everywhere', () => {
     expect(big.size).toBe('large');
     expect('placement' in big).toBe(false);
     expect(displaySize(big, nodeIn(draft(), 'f') as FolderNode)).toBe('small');
-    const back = moveBetween(draft(), ['big'], { tabId: 't1' }, [p(12, 0, 2, 2)]);
+    // Back on the tab its footprint is its own Size's span (tabSpan), the same as every caller asks.
+    const back = moveBetween(draft(), ['big'], { tabId: 't1' }, [{ x: 12, y: 0, ...tabSpan(big) }]);
     expect(nodeIn(back, 'big')!.placement).toEqual(p(12, 0, 4, 4));
   });
 

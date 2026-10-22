@@ -177,11 +177,11 @@ function toastWriteFailure(what: string, error: unknown) {
 }
 
 // Load configuration from API. A reload of a held-but-stale layout runs in the
-// background: the dashboard stays mounted, and both the canvas (TabCanvas) and
-// every open folder overlay body (FolderOverlay) show "Refreshing layout"
-// instead of the old tree. The active tab id and the overlay stack survive and
-// are re-resolved against the fresh layout when it lands (Dashboard follows the
-// tab by id; TabCanvas reconciles the stack). Only a first load (or a reload
+// background: the dashboard stays mounted, and the canvas (TabCanvas) shows
+// "Refreshing layout" instead of the old tree. The active tab id and this
+// browser's folder memory survive and are re-resolved against the fresh layout
+// when it lands (Dashboard follows the tab by id; TabCanvas reconciles the
+// drill-down paths). Only a first load (or a reload
 // with no held config) shows the global loading screen. A failure is surfaced
 // either way (configError).
 export async function loadConfig(opts: { background?: boolean } = {}) {

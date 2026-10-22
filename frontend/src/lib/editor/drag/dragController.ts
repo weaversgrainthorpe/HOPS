@@ -17,11 +17,11 @@
  *   drop makes a new folder of both and opens its dialog. The edge zone places. Users aim with the
  *   ghost, not the cursor (Ruling 29), and a "hold to make a folder" cue with progress shows from the
  *   moment the centre enters the zone until the dwell ripens.
- * - `into-folder`: the centre zone of a folder → its first free cells. Held over a collapsed folder
- *   for OPEN_DWELL_MS, its overlay opens and the drag continues inside it.
+ * - `into-folder`: the centre zone of a folder → the end of its order. (M5: folders open in place;
+ *   holding over a minimised folder no longer opens a pop-over, §3a.4.)
  * - `tab-append`: a drop on a tab button; held there for OPEN_DWELL_MS, the tab switches and the
- *   drag continues there. The DragBreadcrumb's crumbs (Tab › Folder › …) return to a level the same
- *   way, and holding over an open overlay's backdrop closes that overlay (top only).
+ *   drag continues there. The DragBreadcrumb's tab crumbs return to the tab the drag started on the
+ *   same way.
  * - free alignment guides (edges and centres of siblings within SNAP_PX) and tab reorder
  *   (`tab-order`, from `tabSource`), both through this same engine.
  * Dwell timers live here (the frame computes the dwell key; the timer ripens it and performs the
@@ -44,7 +44,6 @@ import {
 import { canvasStacked, editorMenu, openDialog, ownsTarget } from '../editorUi';
 import { commitResize, resizeBlocked, resizeTarget, type ResizeEdge, type ResizeTarget } from '../resize';
 import { readingIds, stackPlans } from './stacked';
-import { closeTo, closeTop, openFolder, overlayStack } from '$lib/stores/folderOverlay';
 import { apply, session, undo } from '$lib/stores/editSession';
 import { toast } from '$lib/stores/toast';
 import { clearSelection, selectionInDraft, toggleNode } from '$lib/stores/nodeSelection';
@@ -85,7 +84,7 @@ export interface DragState {
   pointer: { x: number; y: number };
   /** The last resolved (= highlighted) target. */
   target: DropTarget | null;
-  /** The hover being timed (merge, collapsed folder, tab, crumb, backdrop); ripe once held long enough. */
+  /** The hover being timed (merge, tab, crumb); ripe once held long enough. */
   dwell?: { key: string; since: number; ripe?: boolean };
   /** A tab drag (tab reorder): the dragged tab's id. `ids` is then empty. */
   tab?: string;
@@ -158,7 +157,7 @@ const EDGE_PX = 48;
 const MAX_SCROLL_PX = 20;
 /** Held in a tile's centre zone this long → merge (make a folder). */
 export const MERGE_DWELL_MS = 500;
-/** Held over a collapsed folder, a tab, a crumb or an overlay's backdrop this long → go there. */
+/** Held over a tab or a crumb this long → go there. */
 export const OPEN_DWELL_MS = 600;
 
 // ---------------------------------------------------------------- the one resolver
@@ -349,12 +348,11 @@ function resolveTabOrder(state: DragState, hit: HitResult, draft: LayoutDashboar
  * cells. Into a folder's content (ordered, M5): the end of its order (M5 Task 4 adds the pointer
  * index). Zones and hit boxes are RENDERED geometry (Ruling 13); a tile's centre zone becomes a merge
  * only once state.dwell has ripened on it; a folder's centre zone is into-folder; tab buttons are
- * tab-append; crumbs and an overlay's backdrop are navigation only.
+ * tab-append; crumbs are navigation only.
  */
 export function resolveDrop(state: DragState, hit: HitResult, draft: LayoutDashboard): DropTarget {
   if (state.tab !== undefined) return resolveTabOrder(state, hit, draft);
   if (hit.crumb !== undefined) return invalid('Dropping on the path changes nothing — hold over a crumb to go back to that level.');
-  if (hit.outside) return invalid('Keep holding here to close this folder — dropping here changes nothing.');
   if (hit.tabId !== undefined) return resolveTabAppend(state, hit.tabId, draft);
   const c = hit.container;
   if (!c) return invalid(hit.tabBar ? 'Drop it on a tab, the dashboard, or inside a folder.' : 'Drop it on the dashboard or inside a folder.');
@@ -752,8 +750,6 @@ let pending: { x: number; y: number } | null = null;
 let frameId = 0;
 let lastHit: HitResult | null = null;
 let dwellTimer: ReturnType<typeof setTimeout> | null = null;
-/** Overlays (folder ids) whose panel the pointer has been over during this drag. */
-const enteredPanels = new Set<string>();
 
 function setState(s: DragState | null) {
   current = s;
@@ -917,7 +913,6 @@ function frame() {
   next.marker = slot
     ? { left: slot.after ? slot.box.left + slot.box.width : slot.box.left, top: slot.box.top, height: slot.box.height }
     : next.target.kind === 'place' ? next.target.marker : undefined;
-  if (hit.panel !== undefined) enteredPanels.add(hit.panel);
   setState(next);
   autoScroll(at.x, at.y, hit.scroller);
 }
@@ -982,28 +977,18 @@ function autoScroll(x: number, y: number, scroller?: Element) {
   schedule();
 }
 
-// ---- dwell: hold over a target to merge, open a folder, switch tab, return via a crumb, close an overlay
+// ---- dwell: hold over a target to merge, switch tab, or return via a crumb
 
 /** What holding still over `hit` would do, as a key and a duration; null = nothing to wait for. */
 function dwellKey(s: DragState, hit: HitResult, d: LayoutDashboard): { key: string; ms: number } | null {
   if (s.tab !== undefined) return null;
-  const stack = get(overlayStack);
   if (hit.crumb !== undefined) return crumbAction(hit.crumb) ? { key: `crumb:${hit.crumb}`, ms: OPEN_DWELL_MS } : null;
-  if (hit.outside) {
-    // Only once the pointer has been inside that overlay's panel during this drag: an overlay the
-    // dwell just opened under a pointer that is over its backdrop must not close (and reopen) itself.
-    const top = stack[stack.length - 1];
-    return top !== undefined && enteredPanels.has(top) ? { key: `out:${top}`, ms: OPEN_DWELL_MS } : null;
-  }
   if (hit.tabId !== undefined) return hit.tabId !== activeTab ? { key: `tab:${hit.tabId}`, ms: OPEN_DWELL_MS } : null;
   if (!hit.container) return null;
   const zone = zoneOf(s, hit);
   if (!zone?.centre) return null;
   const n = findIn(d, zone.id);
   if (n?.kind === 'tile') return { key: `merge:${n.id}`, ms: MERGE_DWELL_MS };
-  if (n?.kind === 'folder' && n.display === 'collapsed' && !s.ids.some((id) => id === n.id || isDescendant(d, id, n.id))) {
-    return { key: `open:${n.id}`, ms: OPEN_DWELL_MS };
-  }
   return null;
 }
 
@@ -1047,16 +1032,8 @@ function ripen(key: string) {
   setState({ ...s, dwell: { ...s.dwell, ripe: true } });
   const [kind, ...rest] = key.split(':');
   const arg = rest.join(':');
-  if (kind === 'open') {
-    enteredPanels.delete(arg); // a freshly opened overlay: it closes on drag-out only after being entered
-    openFolder(arg);
-  }
-  else if (kind === 'tab') switchDragTab(arg);
+  if (kind === 'tab') switchDragTab(arg);
   else if (kind === 'crumb') crumbAction(arg)?.();
-  else if (kind === 'out') {
-    const stack = get(overlayStack);
-    if (stack[stack.length - 1] === arg) closeTop();
-  }
   if (current) {
     pending = { ...current.pointer };
     schedule();
@@ -1064,20 +1041,13 @@ function ripen(key: string) {
 }
 
 /**
- * What a breadcrumb crumb returns to: "tab:<id>" → that tab (another tab: switch to it; this
- * tab: close every overlay); "folder:<depth>" → close the overlays above that depth. Null when
- * the crumb is the level the drag is already on.
+ * What a drag-breadcrumb crumb returns to: "tab:<id>" → that tab (switch to it). Null when it is
+ * the tab the drag is already on. (A folder's own breadcrumb is M5 Task 4's dwell target.)
  */
 export function crumbAction(crumb: string): (() => void) | null {
-  const stack = get(overlayStack);
   if (crumb.startsWith('tab:')) {
     const id = crumb.slice(4);
-    if (id !== activeTab) return () => switchDragTab(id);
-    return stack.length ? () => closeTo(0) : null;
-  }
-  if (crumb.startsWith('folder:')) {
-    const depth = Number(crumb.slice(7));
-    return Number.isInteger(depth) && depth >= 1 && depth < stack.length ? () => closeTo(depth) : null;
+    return id !== activeTab ? () => switchDragTab(id) : null;
   }
   return null;
 }
@@ -1103,7 +1073,6 @@ function stopDrag() {
   frameId = 0;
   clearDwell();
   allowedTab = null;
-  enteredPanels.clear();
   pending = null;
   lastHit = null;
   draftAtStart = null;

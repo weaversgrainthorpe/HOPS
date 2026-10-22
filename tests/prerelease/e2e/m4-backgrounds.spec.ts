@@ -3,8 +3,8 @@ import { getCsrfToken } from '../helpers';
 import { m5Config } from '../m5form';
 
 // M4 Task 4 fix round 1 (Ruling 10), in a REAL browser: jsdom has no layout, so
-// "the failure badge never covers content" and "the maximised backdrop is
-// translucent" are checked here. (Task 9 adds the full background suite.)
+// "the failure badge never covers content" is checked here. (M5: the maximised panel
+// and its backdrop are gone; folders open in place.) (Task 9 adds the full background suite.)
 
 let seq = 0;
 let made: { id: string } | null = null;
@@ -133,24 +133,16 @@ test.describe('M4 backgrounds in a real browser', () => {
     }
   });
 
-  test('a maximised folder sits over a translucent, dimmed backdrop', async ({ page, context }) => {
+  test('no maximise and no backdrop (M5): an open folder is drawn in place over the live dashboard', async ({ page, context }) => {
     const f = await importFixture(page, context);
     await page.goto(f.path);
     const titled = page.locator(`[data-node-id="${f.id('ft')}"]`);
     await expect(titled).toBeVisible();
-    await titled.getByRole('button', { name: 'Maximise folder' }).click();
-    const host = page.locator('.max-host');
-    await expect(host).toBeVisible();
-    const bg = await host.evaluate((el) => getComputedStyle(el).backgroundColor);
-    const m = bg.match(/rgba?\(([^)]+)\)/);
-    expect(m, `max-host background ${bg}`).toBeTruthy();
-    const parts = m![1].split(',').map((s) => parseFloat(s));
-    expect(parts.length, `max-host background ${bg} has an alpha`).toBe(4);
-    expect(parts[3]).toBeGreaterThan(0);
-    expect(parts[3]).toBeLessThan(1);
-    // Leave the viewer's remembered view as it was.
-    await host.getByRole('button', { name: 'Restore folder' }).click();
-    await expect(host).toHaveCount(0);
+    await expect(titled.getByRole('button', { name: 'Maximise folder' })).toHaveCount(0);
+    await expect(titled.getByRole('button', { name: 'Minimise folder' })).toBeVisible();
+    await expect(page.locator('.max-host, .overlay-backdrop')).toHaveCount(0);
+    // Its surface is its own (translucent) look, inside its box.
+    await expect(titled.locator(':scope > .folder-surface')).toHaveCount(1);
   });
 
   // ---- M4 Task 5: the picker at folder level and the corner controls (call 6)
@@ -279,48 +271,47 @@ test.describe('M4 backgrounds in a real browser', () => {
     await expect(page.locator(`${sel} .folder-surface .background-root`)).toHaveCount(1);
   });
 
-  test('a row-0 untitled folder: corner controls sit outside the content, unclipped, clear of the badge tab', async ({ page, context }) => {
+  test('a row-0 untitled folder: its bar (M5: every open folder has one) holds the controls, unclipped, clear of content and the badge', async ({ page, context }) => {
     const f = await importDash(page, context, (id) => [
-      // Row 0, right-hand side; a broken picture so edit mode shows the failure tab too.
+      // Row 0, right-hand side; a broken picture so edit mode shows the failure badge too.
       untitledAt(id, 'f0', 8, 0, { background: { type: 'image', value: `/backgrounds/${id('nope')}.jpg` } }),
       tile(id('anchor'), 'Anchor')
     ]);
     const sel = `[data-node-id="${f.id('f0')}"]`;
     await page.goto(f.path);
     await expect(page.locator(sel)).toBeVisible();
-    await page.locator(`${sel} > .folder-body`).hover();
-    const controls = page.locator(`${sel} > .corner-controls`);
-    await expect(controls).toBeVisible();
-    await expect.poll(() => controls.evaluate((el) => getComputedStyle(el).opacity)).toBe('1');
-    const cb = (await controls.boundingBox())!;
+    const bar = page.locator(`${sel} > .folder-header`);
+    await expect(bar).toBeVisible();
+    await expect(bar).not.toContainText('Folder f0'); // untitled: controls only
+    const min = bar.getByRole('button', { name: 'Minimise folder' });
+    await expect(min).toBeVisible();
+    const cb = (await min.boundingBox())!;
     const body = await boxOf(page, `${sel} > .folder-body`);
     const folderBox = await boxOf(page, sel);
-    expect(intersects(cb, body), 'corner controls overlap the folder content').toBe(false);
-    // Just outside the top-right edge.
-    expect(cb.y + cb.height).toBeLessThanOrEqual(folderBox.y + 1);
+    expect(intersects(cb, body), 'the controls overlap the folder content').toBe(false);
+    // Inside the folder's box, at its top-right, never clipped.
+    expect(cb.y).toBeGreaterThanOrEqual(folderBox.y - 1);
     expect(cb.x + cb.width).toBeLessThanOrEqual(folderBox.x + folderBox.width + 1);
     expect(cb.x).toBeGreaterThan(folderBox.x + folderBox.width / 2);
-    // Not clipped: inside the viewport, and the button at its centre is what is hit there.
     expect(cb.y).toBeGreaterThanOrEqual(0);
-    const max = controls.getByRole('button', { name: 'Maximise folder' });
-    const mb = (await max.boundingBox())!;
     const hit = await page.evaluate(
       ([x, y]) => (document.elementFromPoint(x, y)?.closest('button')?.getAttribute('aria-label') ?? null),
-      [mb.x + mb.width / 2, mb.y + mb.height / 2]
+      [cb.x + cb.width / 2, cb.y + cb.height / 2]
     );
-    expect(hit).toBe('Maximise folder');
-    // And it works.
-    await max.click();
-    await expect(page.locator('.max-host')).toBeVisible();
-    await page.locator('.max-host').getByRole('button', { name: 'Restore folder' }).click();
-    await expect(page.locator('.max-host')).toHaveCount(0);
+    expect(hit).toBe('Minimise folder');
+    // And it works (then Restore brings it back).
+    await min.click();
+    await expect(page.locator(sel)).toHaveClass(/collapsed/);
+    await page.locator(sel).getByRole('button', { name: 'Restore folder' }).click();
+    await expect(page.locator(`${sel} > .folder-header`)).toBeVisible();
 
-    // Edit mode: the failure tab hangs off the top-LEFT edge — clear of where the controls sit.
+    // Edit mode: the failure badge sits in the bar too — clear of the controls and the content.
     await enterEdit(page);
     const badge = page.locator(`${sel} [data-bg-failed="folder"]`);
     await expect(badge).toBeVisible();
     const bb = (await badge.boundingBox())!;
-    expect(intersects(bb, cb), 'failure tab and corner controls would collide').toBe(false);
+    const cb2 = (await page.locator(`${sel} > .folder-header`).getByRole('button', { name: 'Minimise folder' }).boundingBox())!;
+    expect(intersects(bb, cb2), 'failure badge and controls would collide').toBe(false);
     expect(intersects(bb, await boxOf(page, `${sel} > .folder-body`))).toBe(false);
     expect(bb.y).toBeGreaterThanOrEqual(0);
   });

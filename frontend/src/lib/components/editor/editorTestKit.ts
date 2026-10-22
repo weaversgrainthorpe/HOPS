@@ -5,7 +5,7 @@ import { config, layoutStale } from '$lib/stores/config';
 import { begin, session, resetEditSessionForTests } from '$lib/stores/editSession';
 import { clearSelection } from '$lib/stores/nodeSelection';
 import { clearNodeClipboard } from '$lib/stores/nodeClipboard';
-import { closeAll } from '$lib/stores/folderOverlay';
+import { resetFolderViewsForTests } from '$lib/stores/folderView';
 import { canvasStacked, editorDialog, editorMenu } from '$lib/editor/editorUi';
 import { confirmModalState, closeConfirmModal } from '$lib/stores/confirmModal';
 import { toast } from '$lib/stores/toast';
@@ -65,7 +65,7 @@ export function resetEditor(): void {
   layoutStale.set(false);
   clearSelection();
   clearNodeClipboard();
-  closeAll();
+  resetFolderViewsForTests();
   editorDialog.set(null);
   editorMenu.set(null);
   canvasStacked.set(false);

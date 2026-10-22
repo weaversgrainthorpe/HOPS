@@ -5,7 +5,7 @@
   import { page } from '$app/stores';
   import Icon from '@iconify/svelte';
   import { config, layoutDoc, resolveDashboardRoute, dashboardHref, currentRoute } from '$lib/stores/config';
-  import { requestReveal, revealRequest } from '$lib/stores/folderOverlay';
+  import { requestReveal, revealRequest } from '$lib/stores/reveal';
   import { toast } from '$lib/stores/toast';
   import { portal } from '$lib/utils/portal';
   import type { Entry } from '$lib/types';
@@ -28,8 +28,8 @@
     tabId: string;
     /** "Tab › Folder › Sub" */
     path: string;
-    /** Collapsed folders enclosing the tile, outermost first. */
-    collapsedFolderIds: string[];
+    /** Every folder enclosing the tile, outermost first (the reveal opens them in place). */
+    folderIds: string[];
   };
 
   function walk(c: Container | undefined, chain: FolderNode[], visit: (e: Entry, chain: FolderNode[]) => void) {
@@ -55,7 +55,7 @@
             dashboardName: d.name,
             tabId: t.id,
             path: [t.name, ...chain.map((f) => f.name)].join(' \u203a '),
-            collapsedFolderIds: chain.filter((f) => f.display === 'collapsed').map((f) => f.id)
+            folderIds: chain.map((f) => f.id)
           });
         });
       }
@@ -104,13 +104,13 @@
   });
 
   // Show the tile where it lives: the Dashboard switches to its tab, opens the
-  // collapsed folders on its path (outermost first) and focuses it. Navigate
-  // first when it lives on another dashboard.
+  // folders on its path in place (outermost first), drills down, flips to its
+  // page and focuses it. Navigate first when it lives on another dashboard.
   function openResult(r: Result) {
     requestReveal({
       dashboardId: r.dashboardId,
       tabId: r.tabId,
-      folderIds: r.collapsedFolderIds,
+      folderIds: r.folderIds,
       tileId: r.entry.id
     });
     const cfg = get(config);

@@ -1,8 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readingOrder, clampPlacement, previewChildren, planCanvas, isRenderable, isPlaced } from './geometry';
 import {
-  containerMetrics, nodeBox, folderChrome, folderContentBox, folderInnerMetrics,
-  overlayBodyPx, scrollbarPx, ROOT_COLUMNS, overlayMetrics, OVERLAY_PANEL_CHROME_PX, pointToCell
+  containerMetrics, nodeBox, FOLDER_CHROME, openFolderContentBox, folderPaging, folderFlowMetrics, ROOT_COLUMNS, pointToCell
 } from './geometry';
 import type { Container } from '../types/layout';
 import type { FolderNode, LayoutNode, LayoutTab, Placement } from '../types/layout';
@@ -54,7 +53,7 @@ describe('previewChildren', () => {
 describe('planCanvas', () => {
   it('grid at a desktop width, stacked below the phone breakpoint', () => {
     expect(planCanvas(1440, tab())).toEqual({ kind: 'grid', cellPx: 60 });
-    expect(planCanvas(767, tab())).toEqual({ kind: 'stacked' });
+    expect(planCanvas(767, tab())).toMatchObject({ kind: 'stacked', widthPx: 767 });
   });
 });
 
@@ -76,7 +75,7 @@ describe('isRenderable / isPlaced', () => {
 describe('robustness', () => {
   it('planCanvas never returns an undrawable plan', () => {
     for (const w of [0, NaN, -10, Infinity]) {
-      expect(planCanvas(w, tab())).toEqual({ kind: 'stacked' });
+      expect(planCanvas(w, tab())).toMatchObject({ kind: 'stacked' });
     }
     for (const columns of [0, -1, NaN]) {
       expect(planCanvas(1440, tab({ root: { columns, children: [] } }))).toEqual({ kind: 'grid', cellPx: 60 });
@@ -111,7 +110,7 @@ describe('clampPlacement z validation', () => {
   });
 });
 
-// ---- one geometry source (containerMetrics / nodeBox / folderChrome) ----
+// ---- one geometry source (containerMetrics / nodeBox / FOLDER_CHROME) ----
 
 const ffold = (over: Partial<FolderNode> = {}): FolderNode => ({
   kind: 'folder', id: 'ff', name: 'ff', display: 'expanded', size: 'medium', contentSize: 'medium',
@@ -162,74 +161,28 @@ describe('nodeBox', () => {
   });
 });
 
-describe('folderChrome', () => {
-  it('the folder-tab look has its own values, different from the rounded look', () => {
-    expect(folderChrome('folder-tab', true)).not.toEqual(folderChrome(undefined, true));
-    expect(folderChrome('rounded', true)).toEqual(folderChrome(undefined, true));
-  });
-  it('no title means no title bar', () => {
-    expect(folderChrome(undefined, false).titlePx).toBe(0);
-    expect(folderChrome('folder-tab', false).titlePx).toBe(0);
-    expect(folderChrome(undefined, true).titlePx).toBeGreaterThan(0);
-  });
-  it('folderContentBox subtracts the chrome', () => {
-    const ch = folderChrome(undefined, true);
-    const box = { leftPx: 0, topPx: 0, widthPx: 600, heightPx: 400 };
-    expect(folderContentBox(ffold(), box, ch)).toEqual({ widthPx: 600 - ch.padXPx, heightPx: 400 - ch.titlePx - ch.padYPx });
+describe('FOLDER_CHROME (M5: one look; every open folder has its bar)', () => {
+  it('openFolderContentBox subtracts the bar, border and padding, whatever the shape or title', () => {
+    const box = { widthPx: 600, heightPx: 400 };
+    expect(openFolderContentBox(box)).toEqual({ widthPx: 600 - FOLDER_CHROME.padXPx, heightPx: 400 - FOLDER_CHROME.titlePx - FOLDER_CHROME.padYPx });
   });
 });
 
-describe("an open folder's contents (M5: in order, at its contents size, in the tab's cell)", () => {
+describe("an open folder's page (M5: in order, at its contents size, in the tab's cell)", () => {
   const gp = containerMetrics({ columns: 24, children: [] }, 1440); // 60 px cells
+  const pageOf = (w: number) => {
+    const c = openFolderContentBox(nodeBox(p(0, 0, w, 6), gp));
+    return folderFlowMetrics(folderPaging(c, 'medium', gp.unitPx, 0, 0), gp.unitPx, c.widthPx);
+  };
   it('the item side is the contents span in tab cells, whatever the folder width', () => {
     for (const w of [6, 12, 20]) {
-      const inner = folderInnerMetrics(ffold({ placement: p(0, 0, w, 6) }), gp);
-      expect(inner.unitPx).toBe(60);
-      expect(inner.flow!.span).toBe(2);
+      expect(pageOf(w).unitPx).toBe(60);
+      expect(pageOf(w).flow!.span).toBe(2);
     }
   });
   it('as many per row as fit the content box (never fewer than one)', () => {
-    const ch = folderChrome(undefined, true);
-    const inner = folderInnerMetrics(ffold({ placement: p(0, 0, 12, 6) }), gp);
-    expect(inner.flow!.perRow).toBe(Math.floor((12 * 60 - ch.padXPx) / 120));
-    expect(folderInnerMetrics(ffold({ placement: p(0, 0, 1, 6) }), gp).flow!.perRow).toBe(1);
-  });
-  it('a folder without a placement (inside a folder) still has sane metrics', () => {
-    const inner = folderInnerMetrics(ffold({ placement: undefined }), gp);
-    expect(inner.flow).toEqual({ span: 2, perRow: 1 });
-    expect(inner.innerWidthPx).toBe(0);
-  });
-});
-
-describe('overlay viewport width', () => {
-  it('subtracts a measured 15px scrollbar', () => {
-    expect(scrollbarPx(1000, 985)).toBe(15);
-    expect(overlayBodyPx(1000, 985)).toBe(overlayBodyPx(985, 985));
-    expect(overlayBodyPx(1000, 985)).toBeLessThan(overlayBodyPx(1000, 1000));
-  });
-  it('an unmeasurable clientWidth (0) means no scrollbar, never a zero-width body', () => {
-    expect(scrollbarPx(400, 0)).toBe(0);
-    expect(overlayBodyPx(400, 0)).toBe(400 - 32 - 34);
-  });
-});
-
-describe('overlayMetrics (one source for overlay and maximised panels)', () => {
-  const kids = (n: number) => Array.from({ length: n }, (_, i) => tile('k' + i));
-  it('keeps the dashboard cell when the viewport allows; as many per row as it has; panel = content + chrome', () => {
-    const o = overlayMetrics({ kind: 'grid', cellPx: 60 }, ffold({ content: { children: kids(3) } }), 2000);
-    expect(o.metrics.unitPx).toBe(60);
-    expect(o.metrics.flow).toEqual({ span: 2, perRow: 3 });
-    expect(o.metrics.innerWidthPx).toBe(360);
-    expect(o.panelWidthPx).toBe(360 + OVERLAY_PANEL_CHROME_PX);
-  });
-  it('wraps at the body width', () => {
-    const o = overlayMetrics({ kind: 'grid', cellPx: 60 }, ffold({ content: { children: kids(10) } }), 500);
-    expect(o.metrics.flow!.perRow).toBe(4); // 500 / 120
-  });
-  it('shrinks the cell when even one item is wider than the body', () => {
-    const o = overlayMetrics({ kind: 'grid', cellPx: 60 }, ffold({ contentSize: 'large', content: { children: kids(1) } }), 200);
-    expect(o.metrics.unitPx).toBe(50); // 200 / 4
-    expect(o.metrics.innerWidthPx).toBe(200);
+    expect(pageOf(12).flow!.perRow).toBe(Math.floor((12 * 60 - FOLDER_CHROME.padXPx) / 120));
+    expect(pageOf(1).flow!.perRow).toBe(1);
   });
 });
 

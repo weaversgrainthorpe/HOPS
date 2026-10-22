@@ -27,11 +27,11 @@ import NodeContextMenu from './NodeContextMenu.svelte';
 import { editorDialog, type MenuRequest } from '$lib/editor/editorUi';
 import { nodeClipboard } from '$lib/stores/nodeClipboard';
 import { selectedNodes, toggleNode } from '$lib/stores/nodeSelection';
-import { overlayStack, openFolder } from '$lib/stores/folderOverlay';
+import { folderNavFor, resetFolderViewsForTests } from '$lib/stores/folderView';
 import { undo, session } from '$lib/stores/editSession';
 import { editMode } from '$lib/stores/editMode';
 import EditorDialogs from './EditorDialogs.svelte';
-import { setLayout, resetEditor, startSession, draft, nodeIn, answerConfirm } from './editorTestKit';
+import { setLayout, resetEditor, startSession, draft, nodeIn, answerConfirm, home, folder, tile } from './editorTestKit';
 import type { FolderNode } from '$lib/types/layout';
 
 function open(target: MenuRequest['target']) {
@@ -43,6 +43,8 @@ const item = (name: RegExp | string) => screen.getByRole('menuitem', { name });
 
 beforeEach(() => {
   vi.clearAllMocks();
+  localStorage.clear();
+  resetFolderViewsForTests();
   resetEditor();
   setLayout();
   startSession();
@@ -66,15 +68,13 @@ describe('NodeContextMenu — structure and keyboard', () => {
     expect(document.activeElement).toBe(items[items.length - 1]);
   });
 
-  it('Escape closes it and is not passed on (an open folder overlay stays open)', async () => {
-    openFolder('f1');
+  it('Escape closes it and is not passed on', async () => {
     const { onClose } = open({ kind: 'node', id: 'x' });
     await tick();
     const ev = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
     screen.getByRole('menu').dispatchEvent(ev);
     expect(onClose).toHaveBeenCalled();
     expect(ev.defaultPrevented).toBe(true);
-    expect(get(overlayStack)).toEqual(['f1']);
   });
 
   it('a tile offers the v2 actions and no z-order (items never overlap: M5 has no free layout)', async () => {
@@ -181,24 +181,36 @@ describe('NodeContextMenu — each action calls the right op', () => {
     expect(get(editorDialog)).toEqual({ kind: 'movecopy', ids: ['a'] });
   });
 
-  it('a folder offers "Start collapsed" / "Start expanded" → setFolderDisplay (saved default, undoable)', async () => {
+  it('a folder on a tab: open offers Minimise, minimised offers Open — both open/minimise it in place as its saved default (undoable)', async () => {
     let r = open({ kind: 'node', id: 'f1' });
-    expect(screen.queryByRole('menuitem', { name: 'Start expanded' })).toBeNull();
-    await fireEvent.click(item('Start collapsed'));
+    expect(screen.queryByRole('menuitem', { name: 'Open' })).toBeNull();
+    expect(screen.queryByRole('menuitem', { name: /Start (collapsed|expanded)/ })).toBeNull();
+    await fireEvent.click(item('Minimise'));
     expect(ops.setFolderDisplay).toHaveBeenLastCalledWith(expect.anything(), 'f1', 'collapsed');
     expect((nodeIn(draft(), 'f1') as FolderNode).display).toBe('collapsed');
     r.unmount();
     r = open({ kind: 'node', id: 'f1' });
-    await fireEvent.click(item('Start expanded'));
+    expect(screen.queryByRole('menuitem', { name: 'Minimise' })).toBeNull();
+    await fireEvent.click(item('Open'));
     expect((nodeIn(draft(), 'f1') as FolderNode).display).toBe('expanded');
     undo();
     expect((nodeIn(draft(), 'f1') as FolderNode).display).toBe('collapsed');
+    expect(document.querySelector('[role="dialog"]')).toBeNull(); // nothing pops over
   });
 
-  it('a collapsed folder offers Open, which opens its overlay', async () => {
-    open({ kind: 'node', id: 'c1' });
+  it('a sub-folder inside a folder: Open drills into it in place (this browser\'s memory; the draft is unchanged)', async () => {
+    const d = home();
+    (d.tabs[0].root.children[2] as FolderNode).content.children.push(folder('s', undefined, [tile('z')]));
+    setLayout([d]);
+    resetEditor();
+    startSession();
+    const before = draft();
+    open({ kind: 'node', id: 's' });
+    expect(screen.queryByRole('menuitem', { name: 'Minimise' })).toBeNull();
     await fireEvent.click(item('Open'));
-    expect(get(overlayStack)).toEqual(['c1']);
+    expect(get(folderNavFor('d1')).drill).toEqual({ f1: ['s'] });
+    expect(draft()).toEqual(before);
+    expect(get(session)!.undo).toHaveLength(0);
   });
 
   it('empty space: Add tile here / Add folder here open the new-item dialog at that cell; Paste here pastes there', async () => {

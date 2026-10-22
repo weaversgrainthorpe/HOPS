@@ -44,12 +44,8 @@ export interface HitResult {
    * bar order, viewport px. Tab reorder resolves to the nearest gap from these.
    */
   tabBoxes?: { id: string; left: number; top: number; width: number; height: number }[];
-  /** The open folder overlay whose panel is under the pointer (`data-drag-panel`). */
-  panel?: string;
   /** A drag-breadcrumb crumb under the pointer (`data-drag-crumb`: "tab:<id>" or "folder:<depth>"). */
   crumb?: string;
-  /** An open folder overlay's backdrop (outside its panel) is under the pointer (`data-drag-outside`). */
-  outside?: boolean;
   /**
    * A STACKED container (phones): the rendered boxes of its own items (its direct `data-node-id`
    * children, minus dragged ones) in px from its content origin, in DOM (= reading) order. A drop
@@ -127,8 +123,6 @@ export function hitTest(x: number, y: number, dragged: ReadonlySet<string>, env:
     };
   }
   if (bar) return { ...NO_HIT, tabBar: true, ...boxes() };
-  const panelId = start.closest('[data-drag-panel]')?.getAttribute('data-drag-panel') ?? undefined;
-  const withPanel = (h: HitResult): HitResult => (panelId !== undefined ? { ...h, panel: panelId } : h);
   // Climb out of the outermost dragged node: a dragged folder never targets its own content.
   for (let e: Element | null = start; e; e = e.parentElement) {
     const id = e.getAttribute('data-node-id');
@@ -137,7 +131,7 @@ export function hitTest(x: number, y: number, dragged: ReadonlySet<string>, env:
   if (!start) return NO_HIT;
   let cEl = start.closest('[data-container-id]');
   // A container element is only as tall as the rows its items fill, but it is DRAWN in a larger
-  // space (`data-drop-area`: the canvas panel, an expanded folder's body, an overlay's body). That
+  // space (`data-drop-area`: the canvas panel, an open folder's body). That
   // whole space is the container's: the canvas below the last row is the canvas, and a folder's
   // empty space below its items is that folder — never "not allowed", never the folder's parent.
   // An area nested deeper than the container found (a folder body inside the canvas) wins.
@@ -147,11 +141,7 @@ export function hitTest(x: number, y: number, dragged: ReadonlySet<string>, env:
     if (own && registry.has(own)) cEl = own;
   }
   const info = cEl ? registry.get(cEl) : undefined;
-  if (!cEl || !info) {
-    // Over an open overlay's backdrop (not its panel): "dragging out" of that folder.
-    const back = start.closest('[data-drag-outside]');
-    return back && back === start ? { ...NO_HIT, outside: true } : withPanel(NO_HIT);
-  }
+  if (!cEl || !info) return NO_HIT;
   let nodeId: string | undefined;
   const nEl = start.closest('[data-node-id]');
   if (nEl && cEl.contains(nEl) && nEl !== cEl) nodeId = nEl.getAttribute('data-node-id') ?? undefined;
@@ -173,5 +163,5 @@ export function hitTest(x: number, y: number, dragged: ReadonlySet<string>, env:
   }
   const scroller = cEl.closest('[data-drag-scroll]');
   if (scroller) out.scroller = scroller;
-  return withPanel(out);
+  return out;
 }

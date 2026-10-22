@@ -9,7 +9,7 @@
 	import { get } from 'svelte/store';
 	import { untrack } from 'svelte';
 	import { guardNavigation, guardUnload } from '$lib/stores/editSession';
-	import { revealNavigation } from '$lib/stores/folderOverlay';
+	import { revealNavigation } from '$lib/stores/reveal';
 	import { page } from '$app/stores';
 	import { initAuth, mustChangePassword } from '$lib/stores/auth';
 	import { initEditModeIdleWatcher } from '$lib/stores/editModeIdleWatcher';

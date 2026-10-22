@@ -118,9 +118,15 @@ describe('moveBetween', () => {
     const d = moveBetween(dash(), ['x'], { tabId: 't1' }, [p(12, 0, 2, 2)]);
     expect(node(root(d), 'x').placement).toEqual(p(12, 0, 2, 2));
     expect(order(d, 'f1')).toEqual(['y', 'f2']);
-    // A Large tile asked into a 2 x 2 goes in at 4 x 4: its size is the truth.
-    const d2 = moveBetween(moveBetween(dash(), ['L'], { tabId: 't1', folderId: 'f1' }, 0), ['L'], { tabId: 't2' }, [p(10, 10, 2, 2)]);
+    // A Large tile asked into a 4 x 4 goes in at 4 x 4.
+    const inF = moveBetween(dash(), ['L'], { tabId: 't1', folderId: 'f1' }, 0);
+    const d2 = moveBetween(inF, ['L'], { tabId: 't2' }, [p(10, 10, 4, 4)]);
     expect(node(root(d2, 't2'), 'L').placement).toEqual(p(10, 10, 4, 4));
+  });
+  it('a tile asked onto a tab at a footprint other than its Size\'s span is REFUSED (never silently resized)', () => {
+    const inF = moveBetween(dash(), ['L'], { tabId: 't1', folderId: 'f1' }, 0);
+    expect(() => moveBetween(inF, ['L'], { tabId: 't2' }, [p(10, 10, 2, 2)])).toThrow(TreeOpError);
+    expect(() => moveBetween(inF, ['L'], { tabId: 't2' }, [p(10, 10, 2, 2)])).toThrow(/Large.*4 x 4|4 x 4/);
   });
   it('a folder leaving a folder for the tab arrives minimised, at the box it is given', () => {
     const d = moveBetween(dash(), ['f2'], { tabId: 't1' }, [p(12, 0, 6, 4)]);

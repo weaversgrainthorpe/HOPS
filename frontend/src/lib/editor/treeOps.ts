@@ -11,7 +11,7 @@
  */
 import type { Container, FolderNode, LayoutDashboard, LayoutNode, LayoutTab, Placement } from '../types/layout';
 import {
-  GRID_TITLE_ROWS, ROOT_COLUMNS, clampPlacement, containerColumns, defaultFolderBox, isPlaced, sizeSpan, tabSpan
+  GRID_TITLE_ROWS, ROOT_COLUMNS, clampPlacement, containerColumns, defaultFolderBox, isPlaced, sizeOf, sizeSpan, tabSpan
 } from '../layout/geometry';
 
 export type ContainerRef = { tabId: string; folderId?: string }; // folderId absent = tab root
@@ -188,14 +188,23 @@ function unplaced(n: LayoutNode): LayoutNode {
 }
 
 /**
- * A node as it sits on a tab at `at`: validated inside the columns; a tile takes its Size's span
- * whatever was asked (its size is the truth, M5 §2); a folder arriving from inside a folder is
- * minimised (M5 §3a.3).
+ * A node as it sits on a tab at `at`: validated inside the columns; a tile must be asked at exactly
+ * its Size's span (its size is the truth, M5 §2) — any other footprint is REFUSED, never silently
+ * resized, so a preview can never show one footprint and commit another; a folder arriving from
+ * inside a folder is minimised (M5 §3a.3).
  */
 function placedOnTab(n: LayoutNode, at: Placement, cols: number, fromFolder: boolean): LayoutNode {
   finitePlacement(at);
-  const span = n.kind === 'tile' ? sizeSpan(n.size) : undefined;
-  const p: Placement = { x: at.x, y: at.y, w: span ?? at.w, h: span ?? at.h };
+  if (n.kind === 'tile') {
+    const span = sizeSpan(n.size);
+    if (at.w !== span || at.h !== span) {
+      const name = sizeOf(n.size);
+      throw new TreeOpError(
+        `A ${name[0].toUpperCase()}${name.slice(1)} tile takes ${span} x ${span} cells on a tab, not ${at.w} x ${at.h}.`
+      );
+    }
+  }
+  const p: Placement = { x: at.x, y: at.y, w: at.w, h: at.h };
   if (at.z !== undefined) p.z = at.z;
   if (!Number.isInteger(p.x) || !Number.isInteger(p.y) || !Number.isInteger(p.w) || !Number.isInteger(p.h)) {
     throw new TreeOpError('That position is not valid.');

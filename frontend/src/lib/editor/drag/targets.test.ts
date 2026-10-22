@@ -11,7 +11,6 @@ import { render, fireEvent } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { containerMetrics, type ContainerMetrics } from '$lib/layout/geometry';
 import { toast } from '$lib/stores/toast';
-import { overlayStack } from '$lib/stores/folderOverlay';
 import { editorDialog } from '../editorUi';
 import type { FolderNode, LayoutNode } from '$lib/types/layout';
 import type { ContainerRef } from '../treeOps';
@@ -254,25 +253,16 @@ describe('into folders', () => {
     expect(get(toast).at(-1)?.message).toBe('Moved "A" to C1');
   });
 
-  it('600 ms over a collapsed folder opens its overlay; the drag continues and the drop lands inside', () => {
-    expect(OPEN_DWELL_MS).toBe(600);
+  it('holding over a minimised folder opens nothing (no pop-over, M5 §3a.4); the drop lands inside, at the end', () => {
     startMouseDrag(source('a'), 50, 50);
     moveTo(550, 150);
     flush();
-    vi.advanceTimersByTime(599);
-    expect(get(overlayStack)).toEqual([]);
-    vi.advanceTimersByTime(1);
-    expect(get(overlayStack)).toEqual(['c1']);
-    expect(get(drag)).not.toBeNull();
-    // the overlay's content container now lies under the pointer (it registers like any other)
-    where = { ref: { tabId: 't1', folderId: 'c1' }, metrics: FLOW, layout: 'flow' };
-    nodes = [];
+    vi.advanceTimersByTime(OPEN_DWELL_MS * 3);
     flush();
-    moveTo(150, 50);
-    flush();
-    // Into its ordered content: the end of its order (M5 Task 4 adds the pointer index).
+    expect(get(drag)?.dwell).toBeUndefined();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
     expect(get(drag)?.target).toMatchObject({ kind: 'into-folder', folderId: 'c1' });
-    drop(150, 50);
+    drop(550, 150);
     const c1 = nodeIn(draft(), 'c1') as FolderNode;
     expect(c1.content.children.map((n) => n.id)).toEqual(['y', 'a']);
   });
@@ -372,63 +362,13 @@ describe('across tabs', () => {
     expect(get(drag)).not.toBeNull();
   });
 
-  it('a crumb for an open folder closes the overlays above it', () => {
+  it('a crumb for the tab the drag is already on does nothing (no dwell)', () => {
     startMouseDrag(source('a'), 50, 50);
-    moveTo(550, 150);
-    flush();
-    vi.advanceTimersByTime(OPEN_DWELL_MS);
-    expect(get(overlayStack)).toEqual(['c1']);
     crumbUnder = 'tab:t1';
     moveTo(70, 900);
     flush();
-    vi.advanceTimersByTime(OPEN_DWELL_MS);
-    expect(get(overlayStack)).toEqual([]);
-    expect(get(drag)).not.toBeNull();
-  });
-});
-
-describe('dragging out of an open overlay', () => {
-  const stubHits = (fn: () => HitResult) =>
-    setDragEnv({
-      hitTest: fn,
-      raf: (cb) => { frames.push(cb); return frames.length; },
-      cancelRaf: () => { frames = []; }
-    });
-  const C1 = { ref: { tabId: 't1', folderId: 'c1' }, metrics: FLOW, layout: 'flow' as const, left: 0, top: 0 };
-
-  it('an overlay the dwell opened under a pointer over its backdrop stays open (no open/close loop)', () => {
-    startMouseDrag(source('a'), 50, 50);
-    moveTo(550, 150);
-    flush();
-    vi.advanceTimersByTime(OPEN_DWELL_MS);
-    expect(get(overlayStack)).toEqual(['c1']);
-    stubHits(() => ({ container: null, dx: 0, dy: 0, outside: true }));
-    moveTo(551, 150);
-    flush();
-    vi.advanceTimersByTime(1200);
-    flush();
-    expect(get(overlayStack)).toEqual(['c1']);
-    expect(get(drag)).not.toBeNull();
-  });
-
-  it('after the pointer has been inside the panel, holding over the backdrop closes the top overlay only', () => {
-    startMouseDrag(source('a'), 50, 50);
-    moveTo(550, 150);
-    flush();
-    vi.advanceTimersByTime(OPEN_DWELL_MS);
-    expect(get(overlayStack)).toEqual(['c1']);
-    stubHits(() => ({ container: C1, dx: 10, dy: 10, panel: 'c1' }));
-    moveTo(560, 160);
-    flush();
-    stubHits(() => ({ container: null, dx: 0, dy: 0, outside: true }));
-    moveTo(5, 5);
-    flush();
+    expect(get(drag)?.dwell).toBeUndefined();
     expect(get(drag)?.target?.kind).toBe('invalid');
-    vi.advanceTimersByTime(OPEN_DWELL_MS - 1);
-    expect(get(overlayStack)).toEqual(['c1']);
-    vi.advanceTimersByTime(1);
-    expect(get(overlayStack)).toEqual([]);
-    expect(get(drag)).not.toBeNull();
   });
 });
 
@@ -452,24 +392,27 @@ describe('dwell edge cases', () => {
 
   it('Escape during a pending dwell: the timer never fires', () => {
     startMouseDrag(source('a'), 50, 50);
-    moveTo(550, 150);
+    moveTo(150, 50); // b's centre zone: a merge dwell
     flush();
     vi.advanceTimersByTime(300);
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
     expect(get(drag)).toBeNull();
     vi.advanceTimersByTime(5000);
-    expect(get(overlayStack)).toEqual([]);
     expect(vi.getTimerCount()).toBe(0);
   });
 
   it('a hover left within the last frame never acts (ripen re-checks the latest pointer)', () => {
+    const switched: string[] = [];
+    setTabSwitcher((id) => { switched.push(id); });
     startMouseDrag(source('a'), 50, 50);
-    moveTo(550, 150);
+    tabUnder = 't2';
+    moveTo(60, 10);
     flush();
     vi.advanceTimersByTime(OPEN_DWELL_MS - 1);
-    moveTo(50, 350); // away from c1; no frame has run yet
+    tabUnder = null;
+    moveTo(50, 350); // away from the tab; no frame has run yet
     vi.advanceTimersByTime(1);
-    expect(get(overlayStack)).toEqual([]);
+    expect(switched).toEqual([]);
     expect(get(drag)).not.toBeNull();
   });
 
@@ -499,8 +442,8 @@ describe('dwell edge cases', () => {
   });
 });
 
-describe('overlay auto-scroll', () => {
-  it('near the bottom edge of a scrollable overlay body, that body scrolls (not only the page)', () => {
+describe('panel auto-scroll', () => {
+  it('near the bottom edge of a scrollable panel (data-drag-scroll), that panel scrolls (not only the page)', () => {
     const body = document.createElement('div');
     const scrolled: number[] = [];
     const pageScrolled: number[] = [];

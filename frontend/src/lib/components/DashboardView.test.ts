@@ -16,7 +16,8 @@ import Navbar from './Navbar.svelte';
 import { config, layoutStale } from '$lib/stores/config';
 import { editMode } from '$lib/stores/editMode';
 import { isAuthenticated } from '$lib/stores/auth';
-import { closeAll, overlayStack, requestReveal, revealNavigation, revealRequest } from '$lib/stores/folderOverlay';
+import { requestReveal, revealNavigation, revealRequest } from '$lib/stores/reveal';
+import { folderViewFor, folderNavFor, resetFolderViewsForTests } from '$lib/stores/folderView';
 import { applyThemePreset } from '$lib/stores/theme';
 import type { Config } from '$lib/types';
 import type { LayoutDashboard } from '$lib/types/layout';
@@ -74,7 +75,8 @@ beforeEach(() => {
   resetEditSessionForTests();
   clearSelection();
   vi.stubGlobal('ResizeObserver', FakeRO);
-  closeAll();
+  localStorage.clear();
+  resetFolderViewsForTests();
   editMode.set(false);
   isAuthenticated.set(false);
   config.set(cfg());
@@ -83,7 +85,6 @@ afterEach(() => {
   // Unmount first, so nothing re-renders after the stubs (ResizeObserver) are removed.
   cleanup();
   vi.unstubAllGlobals();
-  closeAll();
   editMode.set(false);
   isAuthenticated.set(false);
   config.set(null);
@@ -130,18 +131,15 @@ describe('Dashboard view/edit rendering', () => {
     expect(container.querySelector('.tab-canvas')).toBeNull();
   });
 
-  it('theme tokens set on :root reach the body-portalled folder overlay', async () => {
-    applyThemePreset('default', 'dark');
-    render(Dashboard, { dashboard: legacy });
+  it('a minimised folder opens in place: nothing pops over (M5: no overlay)', async () => {
+    const { container } = render(Dashboard, { dashboard: legacy });
     await tick();
     await fireEvent.click(screen.getByRole('button', { name: 'Box, folder with 1 item' }));
     await tick();
-    expect(get(overlayStack)).toEqual(['box']);
-    const panel = document.body.querySelector('.overlay-panel') as HTMLElement;
-    expect(panel).not.toBeNull();
-    const rootVal = getComputedStyle(document.documentElement).getPropertyValue('--bg-secondary').trim();
-    expect(rootVal).toBe('#1e293b');
-    expect(getComputedStyle(panel).getPropertyValue('--bg-secondary').trim()).toBe(rootVal);
+    expect(container.querySelector('.tab-canvas [data-node-id="box"]')!.classList.contains('collapsed')).toBe(false);
+    expect(within(container.querySelector('.tab-canvas') as HTMLElement).getByText('Inside')).toBeInTheDocument();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(get(folderViewFor('d1'))).toEqual({ box: 'expanded' });
   });
 });
 
@@ -220,12 +218,12 @@ describe('route resolution and reveal lifetime', () => {
     expect(container.querySelector('.tab-canvas[data-tab-id="t1"]')).not.toBeNull();
   });
 
-  it('a stale reload keeps the active tab id and the open overlay stack (M3 Task 1)', async () => {
+  it('a stale reload keeps the active tab id and the folder open in place (M3 Task 1)', async () => {
     const { container, rerender } = render(Dashboard, { dashboard: legacy });
     await tick();
     expect(container.querySelector('.tab-canvas[data-tab-id="t1"]')).not.toBeNull();
     await fireEvent.click(screen.getByRole('button', { name: /^Box, folder/ }));
-    expect(get(overlayStack)).toEqual(['box']);
+    expect(get(folderViewFor('d1'))).toEqual({ box: 'expanded' });
     // A write response came back without a layout: stale, reload in flight.
     layoutStale.set(true);
     await tick();
@@ -238,8 +236,31 @@ describe('route resolution and reveal lifetime', () => {
     await tick();
     expect(container.querySelector('.tab-canvas[data-tab-id="t1"]')).not.toBeNull();
     expect(screen.getByRole('tab', { name: 'Switch to Main tab' }).getAttribute('aria-selected')).toBe('true');
-    expect(get(overlayStack)).toEqual(['box']);
-    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(container.querySelector('.tab-canvas [data-node-id="box"]')!.classList.contains('collapsed')).toBe(false);
+    expect(screen.getByText('Inside')).toBeInTheDocument();
+  });
+
+  it('search reveal: opens the folder chain in place, drills down, flips to the tile\'s page and focuses it', async () => {
+    const kids = Array.from({ length: 12 }, (_, i) => entry(`k${i + 1}`, `Kid${i + 1}`));
+    const sub = { kind: 'folder', id: 'sb', name: 'Sub', display: 'expanded', size: 'medium', contentSize: 'medium', content: { children: kids } };
+    const deep: LayoutDashboard = {
+      ...legacy,
+      tabs: [legacy.tabs[0], { id: 't2', name: 'Second', root: { columns: 24, children: [
+        { ...folder('box2', 'Box2', [], 'collapsed'), content: { children: [entry('first', 'First'), sub] } }
+      ] } }]
+    };
+    config.set(cfg([deep, v3d]));
+    const { container } = render(Dashboard, { dashboard: deep });
+    await tick();
+    requestReveal({ dashboardId: 'd1', tabId: 't2', folderIds: ['box2', 'sb'], tileId: 'k12' });
+    // An 8 x 6 box at 60 px cells: 462 x 302 content → 3 a row; overfull, so 2 rows (6) a page: k12 is on page 2.
+    await waitFor(() => expect(container.querySelector('.tab-canvas [data-node-id="k12"]')).not.toBeNull());
+    expect(get(folderViewFor('d1'))).toEqual({ box2: 'expanded' });
+    expect(get(folderNavFor('d1'))).toEqual({ drill: { box2: ['sb'] }, page: { sb: 1 } });
+    expect(container.querySelector('[data-folder-page]')!.getAttribute('data-folder-page')).toBe('1');
+    expect(container.querySelector('.tab-canvas [data-node-id="k1"]')).toBeNull(); // only the current page renders
+    await waitFor(() => expect(container.querySelector('[data-node-id="k12"]')!.contains(document.activeElement)).toBe(true));
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
   });
 });
 
@@ -446,19 +467,17 @@ describe('one editing flow (walkthrough §4B): handle, double-click and menu for
     expect(get(editorDialog)).toEqual({ kind: 'tile', id: 'g1' });
   });
 
-  it('collapsed folder in edit mode: double-click EDITS (no overlay); the handle edits; "Open" stays in its menu', async () => {
+  it('collapsed folder in edit mode: double-click EDITS; the handle edits; "Open" in its menu opens it in place', async () => {
     const { container } = render(Dashboard, { dashboard: legacy });
     enterEdit();
     await tick();
-    const face = cellOf(container, 'box').querySelector('[role="button"][aria-haspopup]') as HTMLElement;
+    const face = cellOf(container, 'box').querySelector('.folder-collapsed-tile') as HTMLElement;
     await fireEvent.dblClick(face);
     await tick();
     expect(get(editorDialog)).toEqual({ kind: 'folder', id: 'box' });
-    expect(get(overlayStack)).toEqual([]);
     editorDialog.set(null);
     await fireEvent.click(screen.getByRole('button', { name: 'Edit Box' }));
     expect(get(editorDialog)).toEqual({ kind: 'folder', id: 'box' });
-    expect(get(overlayStack)).toEqual([]);
     editorDialog.set(null);
     await fireEvent.contextMenu(cellOf(container, 'box'), { clientX: 5, clientY: 5 });
     await tick();
@@ -466,16 +485,17 @@ describe('one editing flow (walkthrough §4B): handle, double-click and menu for
     expect(within(menu).getByRole('menuitem', { name: 'Edit' })).toBeInTheDocument();
     await fireEvent.click(within(menu).getByRole('menuitem', { name: 'Open' }));
     await tick();
-    expect(get(overlayStack)).toEqual(['box']);
+    expect((get(session)!.draft.tabs[0].root.children[1] as any).display).toBe('expanded');
+    expect(cellOf(container, 'box').classList.contains('collapsed')).toBe(false);
   });
 
-  it('collapsed folder outside edit mode: a click still opens it, and there is no handle', async () => {
+  it('collapsed folder outside edit mode: a click opens it in place, and there is no handle', async () => {
     const { container } = render(Dashboard, { dashboard: legacy });
     await tick();
-    const face = cellOf(container, 'box').querySelector('[role="button"][aria-haspopup]') as HTMLElement;
+    const face = cellOf(container, 'box').querySelector('.folder-collapsed-tile') as HTMLElement;
     await fireEvent.click(face);
     await tick();
-    expect(get(overlayStack)).toEqual(['box']);
+    expect(cellOf(container, 'box').classList.contains('collapsed')).toBe(false);
     expect(get(editorDialog)).toBeNull();
   });
 

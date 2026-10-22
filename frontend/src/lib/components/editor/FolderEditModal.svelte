@@ -7,7 +7,8 @@
    */
   export type FolderFields = Pick<
     FolderNode,
-    'name' | 'icon' | 'iconUrl' | 'iconBgColor' | 'color' | 'opacity' | 'textColor' | 'display' | 'showTitle' | 'shape'
+    | 'name' | 'icon' | 'iconUrl' | 'iconBgColor' | 'color' | 'opacity' | 'textColor' | 'display' | 'showTitle' | 'shape'
+    | 'size' | 'contentSize'
   > & {
     background?: Background | null;
     /** Status checks (M4 §4b): true/false = set here, null = inherit (key removed), absent = unchanged. */
@@ -26,6 +27,8 @@
   import Modal from '../shared/Modal.svelte';
   import StatusCheckSetting from './StatusCheckSetting.svelte';
   import { containerSetting, type LevelSetting, type StatusContext } from '$lib/editor/statusChecks';
+  import { sizeOf } from '$lib/layout/geometry';
+  import type { ItemSize } from '$lib/types/layout';
 
   interface Props {
     folder: FolderNode;
@@ -71,6 +74,13 @@
   let display = $state<'expanded' | 'collapsed'>(folder.display === 'collapsed' ? 'collapsed' : 'expanded');
   // svelte-ignore state_referenced_locally
   let showTitle = $state(folder.showTitle !== false);
+  // M5: the size of every item inside (tiles and sub-folders) and of its minimised tile on a tab.
+  // Staged here; saved with the dialog as one undo step.
+  // svelte-ignore state_referenced_locally
+  let contentSize = $state<ItemSize>(sizeOf(folder.contentSize));
+  // svelte-ignore state_referenced_locally
+  let size = $state<ItemSize>(sizeOf(folder.size));
+  const SIZES: [ItemSize, string][] = [['small', 'Small'], ['medium', 'Medium'], ['large', 'Large']];
   // svelte-ignore state_referenced_locally
   let shape = $state<'rounded' | 'folder-tab'>(folder.shape === 'folder-tab' ? 'folder-tab' : 'rounded');
   // svelte-ignore state_referenced_locally
@@ -117,6 +127,8 @@
       display,
       showTitle,
       shape,
+      size,
+      contentSize,
       ...(stagedBackground ? { background: stagedBackground.value ?? null } : {}),
       // Only a changed choice is written (an untouched invalid value stays as stored).
       ...(statusSetting !== initialStatus && statusSetting !== 'invalid' && statusSetting !== 'unset'
@@ -189,11 +201,29 @@
 
     <div class="form-row">
       <div class="form-group">
+        <label for="folder-content-size">Contents size</label>
+        <select id="folder-content-size" bind:value={contentSize}>
+          {#each SIZES as [v, label] (v)}<option value={v}>{label}</option>{/each}
+        </select>
+        <small>Every tile and folder inside is shown at this size.</small>
+      </div>
+      <div class="form-group">
+        <label for="folder-size">Size when minimised</label>
+        <select id="folder-size" bind:value={size}>
+          {#each SIZES as [v, label] (v)}<option value={v}>{label}</option>{/each}
+        </select>
+        <small>Its tile on the tab, inside the space it keeps.</small>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
         <label for="folder-shape">Look</label>
-        <select id="folder-shape" bind:value={shape}>
+        <select id="folder-shape" bind:value={shape} aria-describedby="folder-shape-note">
           <option value="rounded">Rounded box</option>
           <option value="folder-tab">Folder tab</option>
         </select>
+        <small id="folder-shape-note">Kept for a later update: every folder draws as a rounded box for now.</small>
       </div>
     </div>
 

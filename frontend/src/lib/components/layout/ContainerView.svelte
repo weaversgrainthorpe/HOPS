@@ -4,7 +4,7 @@
   import { clampPlacement, hasPosition, isPlaced, isRenderable, readingOrder, nodeFit, spanFit } from '$lib/layout/geometry';
   import type { Placement } from '$lib/types/layout';
   import Entry from '../Entry.svelte';
-  import FolderView from './FolderView.svelte';
+  import Folder from './Folder.svelte';
   import NodePlaceholder from './NodePlaceholder.svelte';
   import { pointToCell } from '$lib/layout/geometry';
   import { selectedNodes, toggleNode } from '$lib/stores/nodeSelection';
@@ -81,17 +81,19 @@
   const isFolder = $derived(!!parent);
   const ordered = $derived((isFolder ? kids : readingOrder(kids)) as unknown[]);
 
-  // Phone/narrow plans stack every container; a folder's content flows in order (M5).
+  // A folder's page flows in order everywhere, on a phone too (M5: the same component); a tab is its
+  // grid, or stacked on a phone.
   const effective = $derived<'grid' | 'flow' | 'stacked'>(
-    plan.kind === 'stacked' ? 'stacked' : metrics.flow ? 'flow' : 'grid'
+    metrics.flow ? 'flow' : plan.kind === 'stacked' ? 'stacked' : 'grid'
   );
 
   const px = (v: number) => `${Math.round(v * 100) / 100}px`;
   // Column tracks round DOWN so N tracks never overflow the container by a rounding hair.
   const trackPx = (v: number) => `${Math.floor(v * 100) / 100}px`;
 
-  // Folder contents (M5, until Task 3's Folder component pages them): in order, row by row, every
-  // item at the folder's contents size in the tab's cell. Overflow scrolls, so nothing is hidden.
+  // One page of a folder (M5: Folder.svelte pages it, so only that page is here): in order, row by
+  // row, every item at the folder's contents size in the tab's cell (the same box as a tab tile of
+  // that size at this width).
   const flowItemPx = $derived(metrics.flow ? metrics.flow.span * metrics.unitPx : 0);
   const flowStyle = $derived(
     metrics.flow
@@ -112,8 +114,8 @@
 
   /** How a tile fits its box (Ruling 22): the box is the tile's cell span, in px. */
   function fitOf(n: LayoutNode): 'fill' | 'compact' | undefined {
-    if (effective === 'stacked') return undefined; // phone stacking keeps the v2 tile sizes
     if (metrics.flow) return spanFit(metrics.flow.span, metrics.unitPx); // the folder's contents size
+    if (effective === 'stacked') return undefined; // phone stacking keeps the v2 tile sizes
     return nodeFit(n.placement as Placement, metrics); // Small (1 x 1) is always compact (spec §9)
   }
   /**
@@ -126,9 +128,6 @@
   }
   /** Can this child be drawn here? On a tab it needs a placement; in a folder it has none (M5). */
   const drawable = (n: unknown): n is LayoutNode => (isFolder ? isRenderable(n) : isPlaced(n));
-  /** A sub-folder in a folder's flow shows as its minimised tile (M5 §2; Task 3 opens it in place). */
-  const asItem = (n: FolderNode): FolderNode =>
-    effective === 'flow' && n.display !== 'collapsed' ? { ...n, display: 'collapsed' } : n;
 
   // Placeholders (unrenderable nodes, m3): one that has a position keeps it, drawn
   // above its siblings so a tile can never hide it; the rest stack after every
@@ -187,14 +186,16 @@
           {/if}
         </div>
       {:else}
-        <FolderView
-          folder={asItem(node as FolderNode)}
+        <!-- A sub-folder on a folder's page is an item: its minimised tile (M5 §2); opening it drills in. -->
+        <Folder
+          folder={node as FolderNode}
           style={folderStyle(node)}
           {plan}
           {dashboard}
           {tab}
           {folderChain}
           parent={metrics}
+          item={isFolder}
           {editing}
         />
       {/if}
@@ -267,8 +268,6 @@
   }
   .container-flow {
     width: 100%;
-    height: 100%;
-    overflow: auto;
   }
   .cell {
     min-width: 0;

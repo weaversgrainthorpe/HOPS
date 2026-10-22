@@ -370,8 +370,9 @@ export function duplicate(id: string): string | null {
   return newId;
 }
 
+/** Edit mode's open / minimise of a folder on the tab: its saved default (how it starts), one undo step. */
 export function setDisplay(id: string, display: FolderNode['display']): boolean {
-  return apply(display === 'collapsed' ? 'Start collapsed' : 'Start expanded', (dd) => setFolderDisplay(dd, id, display));
+  return apply(display === 'collapsed' ? 'Minimise folder' : 'Open folder', (dd) => setFolderDisplay(dd, id, display));
 }
 
 /** Bring forward / Send back (menu and Ctrl+] / Ctrl+[): one undo step, or a toast when already there. */

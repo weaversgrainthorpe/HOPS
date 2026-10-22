@@ -506,7 +506,7 @@ test.describe('M4 walkthrough changes in a real browser', () => {
     });
   });
 
-  test('collapsed folder: the handle, a double-click and the menu edit it; "Open" in its menu opens it', async ({ page, context }) => {
+  test('collapsed folder: the handle, a double-click and the menu edit it; "Open" in its menu opens it in place', async ({ page, context }) => {
     const f = await itemsDash(page, context);
     await page.goto(f.path);
     await enterEdit(page);
@@ -520,19 +520,22 @@ test.describe('M4 walkthrough changes in a real browser', () => {
       dblAt: { x: 30, y: 60 }
     });
     // A double-click edited it: it never opened.
-    await expect(page.locator(`[data-drag-panel="${f.id('box')}"]`)).toHaveCount(0);
+    await expect(item).toHaveClass(/collapsed/);
     await item.click({ button: 'right', position: { x: 30, y: 60 } });
     await page.getByRole('menu').getByRole('menuitem', { name: 'Open', exact: true }).click();
-    await expect(page.locator(`[data-drag-panel="${f.id('box')}"]`)).toBeVisible();
+    // M5 §3a.8: in place (edit mode: its saved default), never a pop-over.
+    await expect(item).toHaveAttribute('role', 'group');
+    await expect(page.locator('[role="dialog"]')).toHaveCount(0);
   });
 
-  test('collapsed folder outside edit mode: a click still opens it and there is no handle', async ({ page, context }) => {
+  test('collapsed folder outside edit mode: a click opens it in place and there is no handle', async ({ page, context }) => {
     const f = await itemsDash(page, context);
     await page.goto(f.path);
     await expect(page.locator(`[data-node-id="${f.id('box')}"]`)).toBeVisible();
     await expect(page.locator('[data-edit-handle]')).toHaveCount(0);
     await page.locator(`[data-node-id="${f.id('box')}"]`).click({ position: { x: 30, y: 60 } });
-    await expect(page.getByRole('dialog', { name: 'Box' })).toBeVisible();
+    await expect(page.getByRole('group', { name: 'Box folder' })).toBeVisible();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
   });
 
   test('tab: the handle, a double-click and the menu all edit it; the menu also duplicates and deletes', async ({ page, context }) => {
@@ -1588,7 +1591,7 @@ test.describe('§7.2 edit mode keeps the view layout', () => {
     });
   }
 
-  test('folder minimise/maximise show in edit mode; Minimise changes the saved default (undoable); none hit a handle', async ({ page, context }) => {
+  test('folder Minimise shows in edit mode (no Maximise, M5); Minimise changes the saved default (undoable); none hit a handle', async ({ page, context }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     const f = await folderDash(page, context);
     await page.goto(f.path);
@@ -1597,7 +1600,7 @@ test.describe('§7.2 edit mode keeps the view layout', () => {
     await expect(grp.getByRole('button', { name: 'Minimise folder' })).toBeVisible();
     await enterEdit(page);
     await expect(grp.getByRole('button', { name: 'Minimise folder' })).toBeVisible();
-    await expect(grp.getByRole('button', { name: 'Maximise folder' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Maximise folder' })).toHaveCount(0);
     await plain.hover({ position: { x: 4, y: 60 } });
     await expect(plain.getByRole('button', { name: 'Minimise folder' })).toBeVisible();
     // Neither folder's controls overlap its edit handle (focus shows the handle without a hover).
@@ -1606,10 +1609,8 @@ test.describe('§7.2 edit mode keeps the view layout', () => {
       await handle.focus();
       await expect(handle).toHaveCSS('opacity', '1');
       const hb = (await handle.boundingBox())!;
-      for (const b of ['Minimise folder', 'Maximise folder']) {
-        const cb = (await loc.getByRole('button', { name: b }).boundingBox())!;
-        expect(overlaps(hb, cb), `${name} vs ${b}`).toBe(false);
-      }
+      const cb = (await loc.getByRole('button', { name: 'Minimise folder' }).boundingBox())!;
+      expect(overlaps(hb, cb), `${name} vs Minimise folder`).toBe(false);
     }
     // Minimise in edit mode sets the draft's saved default: undoable, and the folder is not also selected.
     await page.mouse.move(2, 2);
@@ -1619,9 +1620,6 @@ test.describe('§7.2 edit mode keeps the view layout', () => {
     const bar = page.getByRole('toolbar', { name: 'Editing' });
     await bar.getByRole('button', { name: 'Undo', exact: true }).click();
     await expect(grp.getByRole('button', { name: 'Minimise folder' })).toBeVisible();
-    // Maximise is a viewer's choice: in edit mode it says so instead of doing nothing.
-    await grp.getByRole('button', { name: 'Maximise folder' }).click();
-    await expect(page.getByText(/Maximise is how a viewer looks at a folder/)).toBeVisible();
   });
 });
 
@@ -1731,8 +1729,7 @@ test.describe('§7.2 fix round 1', () => {
     await expect(handle).toHaveCSS('opacity', '1');
     const hb = (await handle.boundingBox())!;
     expect(overlaps(hb, (await badge.boundingBox())!), 'the handle covers the warning').toBe(false);
-    for (const b of ['Minimise folder', 'Maximise folder'])
-      expect(overlaps(hb, (await grp.getByRole('button', { name: b }).boundingBox())!), `the handle covers ${b}`).toBe(false);
+    expect(overlaps(hb, (await grp.getByRole('button', { name: 'Minimise folder' }).boundingBox())!), 'the handle covers Minimise').toBe(false);
   });
 });
 
@@ -1751,9 +1748,10 @@ test.describe('§7.2 on a touch device (hover: none)', () => {
       await expect(h).toHaveCSS('opacity', '1');
       boxes.push([n, (await h.boundingBox())!]);
     }
+    // M5: one control per open folder (Minimise), in its bar; no Maximise.
     const ctl = page.locator('.tab-canvas').getByRole('button', { name: /^(Minimise|Maximise) folder$/ });
-    await expect(ctl).toHaveCount(4);
-    for (let i = 0; i < 4; i++) boxes.push([`folder control ${i}`, (await ctl.nth(i).boundingBox())!]);
+    await expect(ctl).toHaveCount(2);
+    for (let i = 0; i < 2; i++) boxes.push([`folder control ${i}`, (await ctl.nth(i).boundingBox())!]);
     for (let i = 0; i < boxes.length; i++)
       for (let j = i + 1; j < boxes.length; j++)
         expect(overlaps(boxes[i][1], boxes[j][1]), `${boxes[i][0]} vs ${boxes[j][0]}`).toBe(false);
@@ -1763,7 +1761,10 @@ test.describe('§7.2 on a touch device (hover: none)', () => {
 test.describe('§7.2 nested untitled folders on a touch device', () => {
   test.use({ hasTouch: true, isMobile: true, viewport: { width: 1280, height: 900 } });
 
-  test('an untitled folder inside an untitled folder (handle on the right): no handle or control overlaps another', async ({ page, context }) => {
+  // M5: an untitled folder inside an untitled folder is an item on its page (its minimised tile, its
+  // handle in its own corner); opening it drills in, filling the parent, and the parent's bar (which
+  // every open folder has) shows the breadcrumb. Neither level's handles or controls overlap.
+  test('an untitled folder inside an untitled folder: no handle, control or crumb overlaps another, before and after drilling in', async ({ page, context }) => {
     const f = await importDash(page, context, [{
       name: 'Main',
       children: (id) => [{
@@ -1779,23 +1780,30 @@ test.describe('§7.2 nested untitled folders on a touch device', () => {
     await page.goto(f.path);
     await page.getByRole('button', { name: 'Enter Edit Mode' }).tap();
     await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
-    // The inner folder's handle hangs on its right (its parent's hangs above).
-    const innerHandle = page.getByRole('button', { name: 'Edit InnerF', exact: true });
-    await expect(innerHandle).toHaveClass(/\bright\b/);
-    const boxes: [string, Box][] = [];
-    for (const n of ['Edit Outer', 'Edit InnerF', 'Edit Deep']) {
-      const h = page.getByRole('button', { name: n, exact: true });
-      await expect(h).toHaveCSS('opacity', '1');
-      boxes.push([n, (await h.boundingBox())!]);
-    }
-    for (const [key, name] of [['outer', 'Outer'], ['inner', 'InnerF']] as const) {
-      const host = page.locator(`[data-node-id="${f.id(key)}"] > .corner-controls`);
-      for (const b of ['Minimise folder', 'Maximise folder'])
-        boxes.push([`${name} ${b}`, (await host.getByRole('button', { name: b }).boundingBox())!]);
-    }
-    for (let i = 0; i < boxes.length; i++)
-      for (let j = i + 1; j < boxes.length; j++)
-        expect(overlaps(boxes[i][1], boxes[j][1]), `${boxes[i][0]} vs ${boxes[j][0]}`).toBe(false);
+    const outer = page.locator(`[data-node-id="${f.id('outer')}"]`);
+    const noOverlaps = async (names: string[], extra: [string, Box][]) => {
+      const boxes: [string, Box][] = [...extra];
+      for (const n of names) {
+        const h = page.getByRole('button', { name: n, exact: true });
+        await expect(h).toHaveCSS('opacity', '1');
+        boxes.push([n, (await h.boundingBox())!]);
+      }
+      for (let i = 0; i < boxes.length; i++)
+        for (let j = i + 1; j < boxes.length; j++)
+          expect(overlaps(boxes[i][1], boxes[j][1]), `${boxes[i][0]} vs ${boxes[j][0]}`).toBe(false);
+    };
+    const minimise = async (): Promise<[string, Box]> =>
+      ['Outer Minimise folder', (await outer.locator('.folder-header').getByRole('button', { name: 'Minimise folder' }).boundingBox())!];
+    // The inner folder is an item: its minimised tile, its handle in its own corner; Outer's in its bar.
+    await expect(page.locator(`[data-node-id="${f.id('inner')}"]`)).toHaveClass(/collapsed/);
+    await noOverlaps(['Edit Outer', 'Edit InnerF'], [await minimise()]);
+    // Drill in (the item menu's Open, as a long-press gives on touch): Deep fills Outer's box.
+    await page.locator(`[data-node-id="${f.id('inner')}"]`).click({ button: 'right' });
+    await page.getByRole('menu').getByRole('menuitem', { name: 'Open', exact: true }).click();
+    const crumbs = outer.getByRole('navigation', { name: 'Folder path' });
+    await expect(crumbs.locator('[aria-current="page"]')).toHaveText('InnerF');
+    const back = crumbs.locator(`[data-crumb="${f.id('outer')}"]`);
+    await noOverlaps(['Edit Outer', 'Edit Deep'], [await minimise(), ['Outer crumb', (await back.boundingBox())!]]);
   });
 });
 

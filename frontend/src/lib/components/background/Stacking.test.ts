@@ -12,14 +12,12 @@ vi.mock('$app/stores', async () => {
 
 import Dashboard from '../Dashboard.svelte';
 import TabCanvas from '../layout/TabCanvas.svelte';
-import FolderOverlay from '../layout/FolderOverlay.svelte';
 import { config } from '$lib/stores/config';
 import { editMode } from '$lib/stores/editMode';
 import { isAuthenticated } from '$lib/stores/auth';
-import { closeAll, openFolder } from '$lib/stores/folderOverlay';
+import { resetFolderViewsForTests } from '$lib/stores/folderView';
 import { failedBackgroundUrls, clearBackgroundErrors } from '$lib/stores/backgroundErrors';
 import { begin, resetEditSessionForTests } from '$lib/stores/editSession';
-import { planCanvas } from '$lib/layout/geometry';
 import type { Background } from '$lib/types';
 import type { LayoutDashboard, LayoutTab } from '$lib/types/layout';
 
@@ -107,7 +105,8 @@ beforeEach(() => {
   vi.spyOn(console, 'warn').mockImplementation(() => {});
   resetEditSessionForTests();
   clearBackgroundErrors();
-  closeAll();
+  localStorage.clear();
+  resetFolderViewsForTests();
   editMode.set(false);
   isAuthenticated.set(false);
 });
@@ -116,7 +115,8 @@ afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
-  closeAll();
+  localStorage.clear();
+  resetFolderViewsForTests();
   editMode.set(false);
   isAuthenticated.set(false);
   config.set(null);
@@ -421,7 +421,7 @@ describe('folder layers', () => {
     expect(container.querySelector('[data-bg-failed]')).toBeNull();
   });
 
-  it('the failure badge sits off the content: in the title bar, or on a tab outside the box', async () => {
+  it('the failure badge sits off the content: in the bar of an open folder (titled or not), or on a tab outside a minimised one', async () => {
     const broken = image('/backgrounds/missing.jpg');
     const { d, tab } = mkTab([
       folder('ft', 'Titled', [tile('a', 'A')], { background: broken }),
@@ -437,9 +437,9 @@ describe('folder layers', () => {
     expect(titled.closest('.folder-header')).not.toBeNull();
     expect(titled.closest('.folder-body')).toBeNull();
 
+    // M5 §3a.7: every open folder has its bar, an untitled one too.
     const untitled = node(container, 'fu').querySelector('[data-bg-failed="folder"]')!;
-    expect(untitled.classList.contains('placement-corner')).toBe(true);
-    expect(untitled.parentElement).toBe(node(container, 'fu'));
+    expect(untitled.closest('.folder-header')).not.toBeNull();
     expect(untitled.closest('.folder-body')).toBeNull();
 
     const collapsed = node(container, 'fc').querySelector('[data-bg-failed="folder"]')!;
@@ -448,17 +448,16 @@ describe('folder layers', () => {
     expect(collapsed.parentElement).toBe(node(container, 'fc'));
   });
 
-  it('the folder overlay shows the folder background over its dimmed backdrop', async () => {
-    const f = folder('f1', 'Box', [tile('in1', 'Inside')], { display: 'collapsed', background: image('/backgrounds/o.jpg', { opacity: 0.7 }) });
+  it('an open folder (opened in place) draws its own background in its box, at its opacity', async () => {
+    const f = folder('f1', 'Box', [tile('in1', 'Inside')], { display: 'expanded', background: image('/backgrounds/o.jpg', { opacity: 0.7 }) });
     const { d, tab } = mkTab([f]);
-    render(FolderOverlay, { dashboard: d, tab, plan: planCanvas(1440, tab) });
-    openFolder('f1');
+    const { container } = render(TabCanvas, { dashboard: d, tab });
     await settle();
-    const p = document.querySelector<HTMLElement>('.overlay-panel');
-    const root = p?.querySelector<HTMLElement>('.folder-surface .background-root.scope-box');
+    const box = node(container, 'f1');
+    const root = box.querySelector<HTMLElement>(':scope > .folder-surface .background-root.scope-box');
     expect(root).not.toBeNull();
     expect(root?.style.opacity).toBe('0.7');
-    expect(p?.closest('.overlay-backdrop')).not.toBeNull();
+    expect(document.querySelector('.overlay-backdrop')).toBeNull();
   });
 });
 

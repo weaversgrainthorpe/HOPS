@@ -18,7 +18,6 @@ import { updateNode } from '$lib/editor/treeOps';
 import { editorDialog } from '$lib/editor/editorUi';
 import { selectedNodes, toggleNode } from '$lib/stores/nodeSelection';
 import { nodeClipboard } from '$lib/stores/nodeClipboard';
-import { openFolder, closeAll } from '$lib/stores/folderOverlay';
 import { confirmModalState } from '$lib/stores/confirmModal';
 import { setLayout, resetEditor, startSession, draft, nodeIn, answerConfirm } from './editorTestKit';
 import type { FolderNode, LayoutNode } from '$lib/types/layout';
@@ -110,13 +109,12 @@ describe('EditToolbar', () => {
     expect(nodeIn(draft(), 'a')!.name).toBe('A');
   });
 
-  it('Add tile / Add folder open the new-item dialog for the tab root, or the open folder overlay', async () => {
+  it('Add tile / Add folder open the new-item dialog for the tab root (folders open in place: a folder\'s menu adds into it)', async () => {
     render(EditToolbar, { tabId: 't1', onAddTab: vi.fn() });
     await fireEvent.click(screen.getByRole('button', { name: /^Add tile/ }));
     expect(get(editorDialog)).toEqual({ kind: 'tile', to: { tabId: 't1' } });
-    openFolder('c1');
     await fireEvent.click(screen.getByRole('button', { name: /^Add folder/ }));
-    expect(get(editorDialog)).toEqual({ kind: 'folder', to: { tabId: 't1', folderId: 'c1' } });
+    expect(get(editorDialog)).toEqual({ kind: 'folder', to: { tabId: 't1' } });
   });
 
   it('holds the Dashboard pencil: labelled "Dashboard", always shown, and it calls its handler', async () => {
@@ -164,23 +162,23 @@ describe('EditToolbar', () => {
     expect(get(selectedNodes).size).toBe(0);
   });
 
-  it('Ctrl+C / Ctrl+X / Ctrl+V copy, cut and paste the selection into the current container', async () => {
+  it('Ctrl+C / Ctrl+X / Ctrl+V copy, cut and paste the selection into the tab root', async () => {
     render(EditToolbar, { tabId: 't1', onAddTab: vi.fn() });
     toggleNode('a', false);
     await key('c', { ctrlKey: true });
     expect(get(nodeClipboard)!.mode).toBe('copy');
-    openFolder('f1');
+    const before = draft().tabs[0].root.children.length;
     await key('v', { ctrlKey: true });
     await tick();
-    expect((nodeIn(draft(), 'f1') as FolderNode).content.children).toHaveLength(2);
+    expect(draft().tabs[0].root.children).toHaveLength(before + 1);
+    expect((nodeIn(draft(), 'f1') as FolderNode).content.children).toHaveLength(1);
     toggleNode('b', false);
     await key('x', { ctrlKey: true });
     expect(get(nodeClipboard)!.mode).toBe('cut');
-    closeAll();
     toggleNode('x', false);
     await key('v', { ctrlKey: true });
     await tick();
-    // No overlay open: into the tab root. b was already there, so it moves to a free cell.
+    // Into the tab root. b was already there, so it moves to a free cell.
     expect(nodeIn(draft(), 'b')).toBeDefined();
     expect(get(nodeClipboard)).toBeNull();
   });

@@ -81,12 +81,4 @@ describe('dialogWindowEscape (focus outside every dialog)', () => {
     expect(close).not.toHaveBeenCalled();
   });
 
-  it('a folder overlay panel (also an aria-modal dialog) never counts as above an edit dialog', () => {
-    const el = dialog();
-    const panel = dialog();
-    panel.classList.add('overlay-panel');
-    const close = vi.fn();
-    dialogWindowEscape(key('Escape'), el, close);
-    expect(close).toHaveBeenCalledTimes(1);
-  });
 });

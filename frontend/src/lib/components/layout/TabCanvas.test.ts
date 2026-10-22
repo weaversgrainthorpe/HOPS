@@ -135,7 +135,7 @@ describe('TabCanvas', () => {
     expect(el.getAttribute('style')).toContain('grid-column: 24 / span 1');
   });
 
-  it("a folder's contents flow in order at its contents size, in the tab's cell, and overflow scrolls", async () => {
+  it("a folder's contents flow in order at its contents size, in the tab's cell, one page at a time", async () => {
     const kids = Array.from({ length: 9 }, (_, i) => kid('k' + i, 'K' + i));
     const { dash, tab } = mk([folder('f1', 'Short', 0, 0, 12, 4, kids)]);
     const { container } = render(TabCanvas, { dashboard: dash, tab });
@@ -144,10 +144,11 @@ describe('TabCanvas', () => {
     // (12 x 60 - 18) px wide / 120 px Medium items = 5 per row; each item is 2 x 60 px square.
     expect(flow.getAttribute('style')).toContain('grid-template-columns: repeat(5, 120px)');
     expect(flow.getAttribute('style')).toContain('grid-auto-rows: 120px');
+    // 4 x 60 - 40 - 18 = 182 px high: one row a page (the page bar fits under it). Only that page is drawn.
     expect([...flow.querySelectorAll(':scope > [data-node-id]')].map((e) => e.getAttribute('data-node-id')))
-      .toEqual(kids.map((k) => k.id));
-    // Every item is drawn (nothing hidden); the overflow scrolls inside the folder until M5 Task 3 pages it.
-    for (const k of kids) expect(screen.getByText(k.name)).toBeInTheDocument();
+      .toEqual(kids.slice(0, 5).map((k) => k.id));
+    expect(screen.queryByText('K5')).toBeNull();
+    expect(container.querySelector('[data-page-bar="next"]')).not.toBeNull();
   });
 
   it('a tile inside a folder is drawn at the contents size; its own size is kept (M5 §2)', async () => {

@@ -115,7 +115,7 @@ describe('resize handles', () => {
     await tick();
     const c1 = container.querySelector('[data-node-id="c1"]') as HTMLElement;
     expect(c1.querySelector('[data-resize]')).toBeNull();
-    expect(c1.getAttribute('title')).toMatch(/collapsed.*expand/i);
+    expect(c1.getAttribute('title')).toMatch(/minimised.*Open/);
   });
 
   it('a corner drag of +4 cells (240 px of 60 px cells) on a grid folder → w+4, h+4, pushing the neighbour as previewed; one undo step', async () => {
@@ -223,7 +223,7 @@ describe('resize follow-ups (fix round 1)', () => {
     const tileEl = container.querySelector('[data-node-id="c1"] [role="button"]') as HTMLElement;
     const ref = tileEl.getAttribute('aria-describedby');
     expect(ref).toBeTruthy();
-    expect(document.getElementById(ref!)?.textContent).toMatch(/collapsed.*expand/i);
+    expect(document.getElementById(ref!)?.textContent).toMatch(/minimised.*Open/);
   });
 });
 
@@ -251,7 +251,7 @@ describe('keyboard resize and z-order', () => {
     clearSelection();
     toggleNode('c1', false);
     await fireEvent.keyDown(window, { key: 'ArrowRight', shiftKey: true });
-    expect(spy).toHaveBeenLastCalledWith(expect.stringMatching(/collapsed/i));
+    expect(spy).toHaveBeenLastCalledWith(expect.stringMatching(/minimised/i));
     expect(draft()).toBe(before);
   });
 

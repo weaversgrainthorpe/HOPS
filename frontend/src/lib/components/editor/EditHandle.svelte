@@ -15,11 +15,10 @@
     /** Optional visible text beside the pencil (Task 6's "Dashboard" handle). */
     label?: string;
     /**
-     * corner: pinned inside the host's top-right (the host is positioned); inline: in the flow;
-     * above / right: hanging just OUTSIDE the host's top-right edge (an untitled folder, so it
-     * never covers an inner item's handle — see editor/editHandleSpot.ts).
+     * corner: pinned inside the host's top-right (the host is positioned); inline: in the flow
+     * (an open folder's title bar, which every open folder has — M5 §3a.7).
      */
-    placement?: 'corner' | 'inline' | 'above' | 'right';
+    placement?: 'corner' | 'inline';
   }
   let { name, onEdit, label, placement = 'corner' }: Props = $props();
   const aria = $derived(`Edit ${name?.trim() ? name : 'Untitled'}`);
@@ -88,18 +87,6 @@
     position: absolute;
     top: 0.25rem;
     right: 0.25rem;
-    z-index: 4;
-  }
-  .edit-handle.above {
-    position: absolute;
-    bottom: 100%;
-    right: 0.25rem;
-    z-index: 4;
-  }
-  .edit-handle.right {
-    position: absolute;
-    left: 100%;
-    top: 0.25rem;
     z-index: 4;
   }
   .edit-handle.labelled {

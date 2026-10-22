@@ -139,21 +139,17 @@ describe('hitTest', () => {
     }
   });
 
-  it('a crumb, a tab button, the tab bar and an overlay backdrop are navigation hits', () => {
+  it('a crumb, a tab button and the tab bar are navigation hits', () => {
     const crumb = el({ 'data-drag-crumb': 'tab:t1' }, el({}));
     const tab = el({ 'data-drag-tab': 't2' }, el({}));
     const bar = el({ 'data-drag-tabbar': '' }, tab);
-    const back = el({ 'data-drag-outside': 'c1' }, el({ 'data-container-id': 'c1' }));
-    document.body.append(crumb, bar, back);
+    document.body.append(crumb, bar);
     expect(hitTest(0, 0, new Set(), env(crumb.firstElementChild)).crumb).toBe('tab:t1');
     const rects = new Map([[tab, { left: 100, top: 0, width: 80, height: 40 }]]);
     const h = hitTest(0, 0, new Set(), { elementFromPoint: () => tab.firstElementChild, rectOf: (e) => rects.get(e as HTMLElement) ?? { left: 0, top: 0 } });
     expect(h.tabId).toBe('t2');
     expect(h.tabRect).toEqual({ left: 100, top: 0, width: 80, height: 40 });
     expect(hitTest(0, 0, new Set(), env(bar)).tabBar).toBe(true);
-    expect(hitTest(0, 0, new Set(), env(back)).outside).toBe(true);
-    // inside the panel (not the backdrop itself) is not "outside"
-    expect(hitTest(0, 0, new Set(), env(back.firstElementChild)).outside).toBeUndefined();
   });
 
   it('reports the scrollable panel holding the container', () => {
@@ -164,15 +160,12 @@ describe('hitTest', () => {
     expect(hitTest(0, 0, new Set(), env(root)).scroller).toBe(body);
   });
 
-  it('inside the tab bar, reports every tab box in bar order; inside an overlay panel, its folder id', () => {
+  it('inside the tab bar, reports every tab box in bar order', () => {
     const b1 = el({ 'data-drag-tabbox': 't1' }, el({ 'data-drag-tab': 't1' }));
     const ctl = el({ class: 'edit-handle inline', 'data-edit-handle': '' });
     const b2 = el({ 'data-drag-tabbox': 't2' }, el({ 'data-drag-tab': 't2' }), ctl);
     const bar = el({ 'data-drag-tabbar': '' }, b1, b2);
-    const root = el({ 'data-container-id': 'c1' });
-    const panel = el({ 'data-drag-panel': 'c1' }, el({ class: 'header' }), root);
-    document.body.append(bar, panel);
-    reg(root, { ref: { tabId: 't1', folderId: 'c1' }, metrics: gridMetrics, layout: 'grid' });
+    document.body.append(bar);
     const rects = new Map<Element, { left: number; top: number; width: number; height: number }>([
       [b1, { left: 0, top: 0, width: 150, height: 40 }],
       [b2, { left: 160, top: 0, width: 150, height: 40 }]
@@ -183,7 +176,5 @@ describe('hitTest', () => {
     // Between the tabs (the bar itself), it is the tab bar.
     expect(hitTest(155, 10, new Set(), { elementFromPoint: () => bar, rectOf: (e) => rects.get(e) ?? { left: 0, top: 0 } }).tabBar).toBe(true);
     expect(h.tabBoxes?.map((b) => [b.id, b.left])).toEqual([['t1', 0], ['t2', 160]]);
-    expect(hitTest(0, 0, new Set(), env(root)).panel).toBe('c1');
-    expect(hitTest(0, 0, new Set(), env(panel.firstElementChild)).panel).toBe('c1'); // the header: no container, still the panel
   });
 });

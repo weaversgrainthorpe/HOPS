@@ -83,6 +83,34 @@ describe('EditorDialogs (the dialogs edit the draft only)', () => {
     expect(get(editorDialog)).toBeNull();
   });
 
+  it('folder dialog "Contents size" and "Size when minimised" (M5): staged until Save, then ONE undo step', async () => {
+    await show({ kind: 'folder', id: 'f1' });
+    const contents = screen.getByLabelText('Contents size') as HTMLSelectElement;
+    const minimised = screen.getByLabelText('Size when minimised') as HTMLSelectElement;
+    expect(contents.value).toBe('medium');
+    expect(minimised.value).toBe('medium');
+    expect(Array.from(contents.options).map((o) => o.value)).toEqual(['small', 'medium', 'large']);
+    expect(Array.from(minimised.options).map((o) => o.value)).toEqual(['small', 'medium', 'large']);
+    const before = draft();
+    await fireEvent.change(contents, { target: { value: 'small' } });
+    await fireEvent.change(minimised, { target: { value: 'large' } });
+    expect(draft()).toEqual(before); // staged
+    await fireEvent.click(screen.getByRole('button', { name: /^Save/ }));
+    const f = nodeIn(draft(), 'f1') as FolderNode;
+    expect(f).toMatchObject({ contentSize: 'small', size: 'large', placement: p(0, 2, 8, 6) });
+    expect(get(session)!.undo).toHaveLength(1);
+    undo();
+    expect(draft()).toEqual(before);
+  });
+
+  it('folder dialog Cancel discards a staged size change', async () => {
+    await show({ kind: 'folder', id: 'f1' });
+    const before = draft();
+    await fireEvent.change(screen.getByLabelText('Contents size'), { target: { value: 'large' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(draft()).toEqual(before);
+  });
+
   it('Add folder: Create inserts a folder at the first free cell of the target (draft only)', async () => {
     await show({ kind: 'folder', to: { tabId: 't1' } });
     await fireEvent.input(screen.getByLabelText(/Folder name/), { target: { value: 'Tools' } });

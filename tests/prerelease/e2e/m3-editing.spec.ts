@@ -442,26 +442,18 @@ test.describe('M3 editor: dragging into and out of folders', () => {
     expect(errors).toEqual([]);
   });
 
-  test('merge, Open the new folder from its menu, drag a tile out over the backdrop onto empty canvas', async ({ page, context }) => {
+  test('merge, Open the new folder from its menu (in place, no pop-over), drag a tile out onto empty canvas', async ({ page, context }) => {
     const f = await importFolders(page, context);
     const errors = await openEditing(page, f);
-    const to = await belowEverything(page, f);
     const slot = await mergeAlphaIntoCharlie(page, f);
     await slot.click({ button: 'right' });
     await page.getByRole('menuitem', { name: 'Open' }).click();
-    const panel = page.locator('.overlay-panel');
-    await expect(panel).toBeVisible();
+    // M5 §3a.8: it opens in place, into the space it kept (edit mode: its saved default).
+    await expect(page.locator('.folder.open', { hasText: 'New folder' })).toBeVisible();
+    await expect(page.locator('[role="dialog"]')).toHaveCount(0);
     await editModeOn(page);
-    // Out of the panel onto the backdrop, held there until the overlay closes…
-    const a = await box(page, f.id('a'));
-    await dragTo(page, a.x + a.width / 2, a.y + a.height / 2, to.x, to.y);
-    await expect(page.locator('.drag-layer')).toContainText(/Keep holding here to close this folder/);
-    await expect(panel).toBeHidden({ timeout: 3_000 });
-    // …then the canvas under the pointer is the target.
-    await page.mouse.move(to.x + 4, to.y + 4);
-    await page.waitForTimeout(150);
-    await expect(page.locator('.drag-layer')).not.toContainText(/not allowed|Drop it on the dashboard/i);
-    await page.mouse.up();
+    const to = await belowEverything(page, f);
+    await dropAt(page, f.id('a'), to.x, to.y);
     await editModeOn(page);
     await saveDraft(page);
     expect(await savedParent(page, f, f.id('a'))).toBe('canvas');
@@ -469,13 +461,13 @@ test.describe('M3 editor: dragging into and out of folders', () => {
     expect(errors).toEqual([]);
   });
 
-  test('merge, "Start expanded" (edit mode stays on), drag a tile out of the folder onto empty canvas', async ({ page, context }) => {
+  test('merge, Enter on the new folder opens it in place (edit mode stays on), drag a tile out onto empty canvas', async ({ page, context }) => {
     const f = await importFolders(page, context);
     const errors = await openEditing(page, f);
     const slot = await mergeAlphaIntoCharlie(page, f);
-    await slot.click({ button: 'right' });
-    await page.getByRole('menuitem', { name: 'Start expanded' }).click();
-    await expect(page.locator('.folder', { hasText: 'New folder' })).toBeVisible();
+    await slot.locator('.folder-collapsed-tile').focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('.folder.open', { hasText: 'New folder' })).toBeVisible();
     await editModeOn(page);
     const to = await belowEverything(page, f);
     await dropAt(page, f.id('a'), to.x, to.y);
@@ -485,7 +477,7 @@ test.describe('M3 editor: dragging into and out of folders', () => {
     expect(errors).toEqual([]);
   });
 
-  test('minimise then "Start expanded" in edit mode keeps edit mode and the draft; a tile then drags out', async ({ page, context }) => {
+  test('minimise then Open (its menu) in edit mode keeps edit mode and the draft; a tile then drags out', async ({ page, context }) => {
     const f = await importFolders(page, context);
     const errors = await openEditing(page, f);
     // A change first (Charlie into Two), so a lost draft would show.
@@ -496,8 +488,8 @@ test.describe('M3 editor: dragging into and out of folders', () => {
     await expect(page.locator('.folder-slot.collapsed', { hasText: 'One' })).toBeVisible();
     await editModeOn(page);
     await page.locator('.folder-slot.collapsed', { hasText: 'One' }).click({ button: 'right' });
-    await page.getByRole('menuitem', { name: 'Start expanded' }).click();
-    await expect(page.locator('.folder', { hasText: 'One' })).toBeVisible();
+    await page.getByRole('menuitem', { name: 'Open' }).click();
+    await expect(page.locator('.folder.open', { hasText: 'One' })).toBeVisible();
     await editModeOn(page);
     await expect(page.getByRole('status').filter({ hasText: 'Unsaved changes' })).toBeVisible();
     const to = await belowEverything(page, f);
@@ -509,14 +501,15 @@ test.describe('M3 editor: dragging into and out of folders', () => {
     expect(errors).toEqual([]);
   });
 
-  test('Maximise in edit mode keeps edit mode and the draft; a tile then drags out', async ({ page, context }) => {
+  test('no Maximise any more (M5): the bar has Minimise only; the draft is kept and a tile then drags out', async ({ page, context }) => {
     const f = await importFolders(page, context);
     const errors = await openEditing(page, f);
     // A change first, so a lost draft would show.
     const f1 = await box(page, f.id('f1'));
     await dropAt(page, f.id('b'), f1.x + f1.width - 80, f1.y + f1.height - 60);
-    await page.locator(`[data-node-id="${f.id('f2')}"]`).getByRole('button', { name: 'Maximise folder' }).click();
-    await expect(page.getByText(/Maximise is how a viewer looks at a folder/)).toBeVisible();
+    const two = page.locator(`[data-node-id="${f.id('f2')}"]`);
+    await expect(two.getByRole('button', { name: 'Maximise folder' })).toHaveCount(0);
+    await expect(two.getByRole('button', { name: 'Minimise folder' })).toBeVisible();
     await editModeOn(page);
     await expect(page.getByRole('status').filter({ hasText: 'Unsaved changes' })).toBeVisible();
     const to = await belowEverything(page, f);

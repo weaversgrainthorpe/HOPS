@@ -6,7 +6,8 @@
   import PartyMode from './PartyMode.svelte';
   import HopAnimation from './HopAnimation.svelte';
   import { layoutStale, loadConfig } from '$lib/stores/config';
-  import { closeAll, openFolder, revealRequest, takeReveal, type RevealRequest } from '$lib/stores/folderOverlay';
+  import { revealRequest, takeReveal, type RevealRequest } from '$lib/stores/reveal';
+  import { clearPageReveal, revealInFolders } from '$lib/stores/folderView';
   import { editMode } from '$lib/stores/editMode';
   import { session, apply } from '$lib/stores/editSession';
   import { initEasterEggs, destroyEasterEggs, partyModeActive } from '$lib/stores/easterEggs';
@@ -121,7 +122,6 @@
     );
 
   function findTileEl(tileId: string): HTMLElement | null {
-    // The last match wins: open overlays are portalled after the canvas.
     const all = Array.from(document.querySelectorAll<HTMLElement>('[data-node-id]')).filter(
       (el) => el.getAttribute('data-node-id') === tileId && !el.closest('[inert]')
     );
@@ -135,9 +135,9 @@
       return;
     }
     activeTabIndex = idx;
-    await tick(); // let the canvas switch tab (which closes any open folders) first
-    closeAll();
-    for (const id of req.folderIds) openFolder(id);
+    await tick(); // let the canvas switch tab first
+    // Open the folder chain in place, drill down and flip to the tile's page (this browser's memory).
+    revealInFolders(dashboard.id, req.folderIds, req.tileId);
     let el: HTMLElement | null = null;
     for (let i = 0; i < 60 && !el; i++) {
       await tick();
@@ -145,10 +145,11 @@
       if (!el) await nextFrame();
     }
     if (!el) {
+      clearPageReveal();
       toast.error("Couldn't show that tile: it may have been moved or removed — reload and try again");
       return;
     }
-    // After the overlay's own focus-on-open (next frame), focus the tile.
+    // After the folder's own focus-on-open (next frame), focus the tile.
     await nextFrame();
     const target =
       el.querySelector<HTMLElement>('a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])') ?? el;

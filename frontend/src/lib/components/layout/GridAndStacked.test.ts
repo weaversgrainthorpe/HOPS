@@ -4,7 +4,7 @@ import { tick } from 'svelte';
 import { get } from 'svelte/store';
 import TabCanvas from './TabCanvas.svelte';
 import { config } from '$lib/stores/config';
-import { closeAll, openFolder, overlayStack } from '$lib/stores/folderOverlay';
+import { folderViewFor, resetFolderViewsForTests, setFolderView } from '$lib/stores/folderView';
 import type { LayoutDashboard, LayoutTab } from '$lib/types/layout';
 
 let width = 1920;
@@ -54,7 +54,8 @@ const order = (c: HTMLElement) => [...c.querySelectorAll('[data-node-id]')].map(
 beforeEach(() => {
   width = 1920;
   instances.length = 0;
-  closeAll();
+  localStorage.clear();
+  resetFolderViewsForTests();
   vi.stubGlobal('ResizeObserver', FakeRO);
 });
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
@@ -137,26 +138,29 @@ describe('phone stacking', () => {
     const style = (id: string) => (container.querySelector(`[data-node-id="${id}"]`) as HTMLElement).getAttribute('style') ?? '';
     expect(style('exp')).toContain('grid-column: 1 / -1');
     expect(style('col')).not.toContain('grid-column');
-    expect(container.querySelector('[data-node-id="exp"] .container-stacked')).not.toBeNull();
+    // The open folder is the same component at full width: its page flows in order (M5).
+    expect(container.querySelector('[data-node-id="exp"] .container-flow')).not.toBeNull();
   });
 
-  it('crossing the breakpoint keeps an open overlay open', async () => {
+  it('crossing the breakpoint keeps a folder opened in place open (the same component on a phone)', async () => {
     const { dash, tab } = mk([
       folder('f', 'Box', { x: 0, y: 0, w: 4, h: 4 }, [kid('x', 'Inside')], { display: 'collapsed' })
     ]);
     config.set({ schemaVersion: 3, dashboards: [dash] } as any);
     width = 1024;
-    render(TabCanvas, { dashboard: dash, tab });
+    const { container } = render(TabCanvas, { dashboard: dash, tab });
     await tick();
-    openFolder('f');
+    setFolderView('d1', 'f', 'expanded');
     await tick();
-    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    const open = () => !container.querySelector('[data-node-id="f"]')!.classList.contains('collapsed');
+    expect(open()).toBe(true);
     await resizeTo(600);
-    expect(get(overlayStack)).toEqual(['f']);
-    expect(screen.getByRole('dialog')).toBeInTheDocument();
-    expect(screen.getByRole('dialog').querySelector('.container-stacked')).not.toBeNull();
+    expect(get(folderViewFor('d1'))).toEqual({ f: 'expanded' });
+    expect(open()).toBe(true);
+    expect(container.querySelector('[data-node-id="f"]')!.getAttribute('style')).toContain('grid-column: 1 / -1');
     await resizeTo(1024);
-    expect(get(overlayStack)).toEqual(['f']);
-    expect(screen.getByRole('dialog').querySelector('.container-stacked')).toBeNull();
+    expect(open()).toBe(true);
+    expect(container.querySelector('[data-node-id="f"]')!.getAttribute('style')).toContain('grid-column: 1 / span 4');
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
   });
 });

@@ -1,16 +1,14 @@
 <script lang="ts">
   /**
-   * Where an item drag is: Tab › Folder › … (the tab the drag started on comes first when the
-   * drag has moved to another tab). Holding the pointer over a crumb for OPEN_DWELL_MS returns to
-   * that level — the controller hit-tests `data-drag-crumb` and runs crumbAction — so a drag can
-   * always get back out of folders it opened and back to the tab it came from. Portalled above the
-   * folder overlays; it must take pointer hits (elementFromPoint skips pointer-events: none).
+   * Where an item drag is: its tab (the tab the drag started on comes first when the drag has
+   * moved to another tab). Holding the pointer over a crumb for OPEN_DWELL_MS returns to that tab —
+   * the controller hit-tests `data-drag-crumb` and runs crumbAction — so a drag can always get back
+   * to the tab it came from. Folders open in place (M5), so a folder's own breadcrumb (in its title
+   * bar) is its path; it must take pointer hits (elementFromPoint skips pointer-events: none).
    */
   import { drag, crumbAction } from './dragController';
-  import { overlayStack } from '$lib/stores/folderOverlay';
   import { session } from '$lib/stores/editSession';
   import { portal } from '$lib/utils/overlayActions';
-  import { findIn } from '../editorActions';
 
   interface Crumb {
     key: string;
@@ -31,10 +29,6 @@
     }
     const n = tabName(s.tabId);
     out.push({ key: `tab:${s.tabId}`, label: n, aria: `${n} tab — hold here to return to the tab`, current: false });
-    $overlayStack.forEach((id, i) => {
-      const name = (d && findIn(d, id)?.name) || 'Folder';
-      out.push({ key: `folder:${i + 1}`, label: name, aria: `${name} folder — hold here to return to it`, current: false });
-    });
     out[out.length - 1].current = true;
     return out;
   });

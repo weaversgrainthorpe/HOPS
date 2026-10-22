@@ -20,12 +20,16 @@ export const PREVIEW_COUNT = 4;
 /** Cells each way per size: Small 1, Medium 2, Large 4. */
 const SPAN: Record<ItemSize, number> = { small: 1, medium: MEDIUM_CELLS, large: 2 * MEDIUM_CELLS };
 
-/** A size as stored, read the way the server reads it: anything but small / large is Medium. */
+/**
+ * A size as the client draws it: anything but small / large is drawn as Medium. Never a
+ * conversion of stored data: the server refuses an unknown size (400), and only the v2→v3
+ * migration maps one to Medium, with a visible notice.
+ */
 export function sizeOf(size: unknown): ItemSize {
   return size === 'small' || size === 'large' ? size : 'medium';
 }
 
-/** THE span table: the cells an item of `size` spans each way (S 1, M 2, L 4; unknown = Medium). */
+/** THE span table: the cells an item of `size` spans each way (S 1, M 2, L 4; unknown drawn as Medium). */
 export function sizeSpan(size: unknown): number {
   return SPAN[sizeOf(size)];
 }
@@ -139,11 +143,12 @@ export function nodeFit(p: Placement, m: ContainerMetrics): TileFit {
   return tileFit(b.widthPx, b.heightPx);
 }
 
-export type CanvasPlan = { kind: 'grid'; cellPx: number } | { kind: 'stacked' };
+/** A stacked (phone) plan carries the canvas width: an open folder there is that wide (M5). */
+export type CanvasPlan = { kind: 'grid'; cellPx: number } | { kind: 'stacked'; widthPx?: number };
 
 /** A tab's canvas: its 24-column grid at this width, or stacked on a phone / unmeasured width. */
 export function planCanvas(widthPx: number, tab: LayoutTab): CanvasPlan {
-  if (!isNum(widthPx) || widthPx < PHONE_BREAKPOINT_PX) return { kind: 'stacked' };
+  if (!isNum(widthPx) || widthPx < PHONE_BREAKPOINT_PX) return { kind: 'stacked', widthPx: nonNeg(widthPx) };
   return { kind: 'grid', cellPx: widthPx / containerColumns(tab.root) };
 }
 
@@ -198,99 +203,77 @@ export function pointToCell(m: ContainerMetrics, dxPx: number, dyPx: number): { 
   return { x: Math.min(Math.max(x, 0), Math.max(0, m.columns - 1)), y: Math.max(y, 0) };
 }
 
-/** Space a folder's own chrome takes, per look. Mirrors FolderView's CSS (global border-box). */
-export interface FolderChrome { titlePx: number; padXPx: number; padYPx: number }
-
-/** Title bar height (FolderView .folder-header, border-box). */
-const TITLE_BAR_PX = 40;
-/** Body padding 0.5rem each side + 1px border each side. */
-const BODY_PAD_PX = 2 * 8 + 2 * 1;
-
 /**
- * The one chrome table.
- * - rounded (default): 1px border round the folder, 40px title, body padding 8px.
- * - folder-tab: no outer border; the 40px tab sits over the bordered body and
- *   overlaps its top border by 1px; body padding 8px + 1px border.
+ * An open folder's own chrome (Folder.svelte's CSS, global border-box). Every open folder has its
+ * title bar, titled or not, since it holds the minimise control and the breadcrumb (M5 §3a.7);
+ * `shape` is ignored until M6, so there is one look: a 1px border, a 40px bar, 8px body padding.
  */
-export function folderChrome(shape: string | undefined, showTitle: boolean): FolderChrome {
-  if (shape === 'folder-tab') {
-    return { titlePx: showTitle ? TITLE_BAR_PX - 1 : 0, padXPx: BODY_PAD_PX, padYPx: BODY_PAD_PX };
-  }
-  return { titlePx: showTitle ? TITLE_BAR_PX : 0, padXPx: BODY_PAD_PX, padYPx: BODY_PAD_PX };
-}
+export const FOLDER_CHROME = { titlePx: 40, padXPx: 2 * 8 + 2 * 1, padYPx: 2 * 8 + 2 * 1 } as const;
+/** The page bar (« ‹ 1 2 3 › »), shown only when a folder has more than one page. */
+export const PAGE_BAR_PX = 32;
+/** The cell a folder uses on a phone (stacked: the tab has no grid there): Medium = 120 px. */
+export const STACKED_CELL_PX = 60;
+/** Rows of items one page shows on a phone, where an open folder has no box height of its own. */
+export const PHONE_FOLDER_ROWS = 3;
 
-/** The content box inside a folder's box (a collapsed folder has none). */
-export function folderContentBox(folder: FolderNode, box: NodeBox, chrome: FolderChrome): { widthPx: number; heightPx: number } {
-  if (folder.display === 'collapsed') return { widthPx: 0, heightPx: 0 };
+/** The content box inside an open folder's box: its bar, border and padding taken off. */
+export function openFolderContentBox(box: { widthPx: number; heightPx: number }): { widthPx: number; heightPx: number } {
   return {
-    widthPx: nonNeg(box.widthPx - chrome.padXPx),
-    heightPx: nonNeg(box.heightPx - chrome.titlePx - chrome.padYPx)
+    widthPx: nonNeg(box.widthPx - FOLDER_CHROME.padXPx),
+    heightPx: nonNeg(box.heightPx - FOLDER_CHROME.titlePx - FOLDER_CHROME.padYPx)
   };
 }
 
-function chromeOf(folder: FolderNode): FolderChrome {
-  return folderChrome(folder.shape, folder.showTitle !== false);
+/** An open folder's content box on a phone: the full width, PHONE_FOLDER_ROWS rows plus the page bar. */
+export function phoneFolderBox(widthPx: number, contentSize: unknown): { widthPx: number; heightPx: number } {
+  return { widthPx: nonNeg(widthPx), heightPx: PHONE_FOLDER_ROWS * sizeSpan(contentSize) * STACKED_CELL_PX + PAGE_BAR_PX };
 }
 
-/** Flow metrics: items `span` cells of `cellPx` square, `perRow` to a row, in `widthPx`. */
-function flowMetrics(span: number, perRow: number, cellPx: number, widthPx: number): ContainerMetrics {
+/** One page of an open folder (M5 §2): which items show, and whether there is a page bar. */
+export interface FolderPaging {
+  /** Cells each item spans each way (its contents size) and its side in px. */
+  span: number;
+  itemPx: number;
+  perRow: number;
+  rowsPerPage: number;
+  perPage: number;
+  pages: number;
+  /** A page bar is drawn only when there is more than one page. */
+  pageBar: boolean;
+  /** The page shown: the asked-for page clamped to 0 .. pages - 1. */
+  page: number;
+  /** Items [start, end) of the folder's order are on this page. */
+  start: number;
+  end: number;
+}
+
+/**
+ * THE page model of an open folder: `count` items of `contentSize` (in `cellPx` cells) fill its
+ * content box row by row (folderPage). When they don't all fit, the page bar takes its height off
+ * first. `page` (a remembered one) is clamped, so a folder made smaller or emptied still shows a
+ * real page.
+ */
+export function folderPaging(
+  content: { widthPx: number; heightPx: number }, contentSize: unknown, cellPx: number, count: number, page: number
+): FolderPaging {
+  const span = sizeSpan(contentSize);
+  const n = isNum(count) && count > 0 ? Math.floor(count) : 0;
+  let fit = folderPage(content, contentSize, cellPx);
+  const pageBar = n > fit.perPage;
+  if (pageBar) fit = folderPage({ widthPx: content.widthPx, heightPx: content.heightPx - PAGE_BAR_PX }, contentSize, cellPx);
+  const pages = Math.max(1, Math.ceil(n / fit.perPage));
+  const asked = isNum(page) ? Math.floor(page) : 0;
+  const p = Math.min(Math.max(0, asked), pages - 1);
+  const start = p * fit.perPage;
+  return {
+    span, itemPx: span * nonNeg(cellPx), ...fit, pages, pageBar, page: p, start, end: Math.min(n, start + fit.perPage)
+  };
+}
+
+/** The metrics one page is drawn (and hit-tested) with: `perRow` items of `span` cells in a row. */
+export function folderFlowMetrics(g: Pick<FolderPaging, 'span' | 'perRow'>, cellPx: number, widthPx: number): ContainerMetrics {
   const unitPx = nonNeg(cellPx);
-  return { columns: perRow * span, unitPx, rowPx: unitPx, innerWidthPx: nonNeg(widthPx), flow: { span, perRow } };
-}
-
-/**
- * Metrics of an open folder's content on a tab (M5 §2): the items flow in order at the folder's
- * contents size, in the tab's own cell (`parent.unitPx`), as many per row as fit its content box
- * (folderPage). A folder without a placement (inside another folder) has no box of its own here.
- */
-export function folderInnerMetrics(folder: FolderNode, parent: ContainerMetrics): ContainerMetrics {
-  const box = folder.placement ? nodeBox(folder.placement, parent) : { leftPx: 0, topPx: 0, widthPx: 0, heightPx: 0 };
-  const content = folderContentBox({ ...folder, display: 'expanded' }, box, chromeOf(folder));
-  const span = sizeSpan(folder.contentSize);
-  const { perRow } = folderPage(content, folder.contentSize, parent.unitPx);
-  return flowMetrics(span, perRow, parent.unitPx, content.widthPx);
-}
-
-/** Overlay backdrop padding (2 x 1rem) and panel chrome (body padding 2 x 16 + border 2 x 1). */
-export const OVERLAY_GUTTER_PX = 32;
-export const OVERLAY_PANEL_CHROME_PX = 34;
-/** The cell an overlay uses when the canvas is stacked (phone): the old 12-column cell at 1280 px, halved. */
-const STACKED_CELL_PX = 1280 / ROOT_COLUMNS;
-
-/** Width of a page scrollbar: innerWidth - clientWidth (0 when clientWidth is unmeasurable). */
-export function scrollbarPx(innerWidth: number, clientWidth: number): number {
-  if (!isNum(innerWidth) || !isNum(clientWidth) || clientWidth <= 0) return 0;
-  return Math.max(0, innerWidth - clientWidth);
-}
-
-/** Viewport width usable by fixed overlays/maximised panels: innerWidth minus the measured scrollbar. */
-export function viewportContentPx(innerWidth: number, clientWidth: number): number {
-  return nonNeg(innerWidth) - scrollbarPx(innerWidth, clientWidth);
-}
-
-/** Widest content box a folder overlay body may have in this viewport. */
-export function overlayBodyPx(innerWidth: number, clientWidth: number): number {
-  return Math.max(1, viewportContentPx(innerWidth, clientWidth) - OVERLAY_GUTTER_PX - OVERLAY_PANEL_CHROME_PX);
-}
-
-/**
- * Sizing of a folder shown in a panel above the canvas (the pop-over and maximised panel, until
- * M5 Task 3 replaces them). Its items flow at its contents size in the tab's cell (capped so one
- * item fits `bodyPx`), as many per row as fit, never more than it has. panelWidthPx = content +
- * the panel's own chrome.
- */
-export function overlayMetrics(
-  plan: CanvasPlan, folder: FolderNode, bodyPx: number
-): { metrics: ContainerMetrics; panelWidthPx: number } {
-  const span = sizeSpan(folder.contentSize);
-  const body = Math.max(1, isNum(bodyPx) ? bodyPx : 1);
-  const canvasCell = plan.kind === 'grid' && plan.cellPx > 0 ? plan.cellPx : STACKED_CELL_PX;
-  const cell = Math.min(canvasCell, body / span);
-  const count = Array.isArray(folder.content?.children) ? folder.content.children.length : 0;
-  const fits = folderPage({ widthPx: body, heightPx: body }, folder.contentSize, cell).perRow;
-  const perRow = Math.max(1, Math.min(fits, count));
-  const metrics = flowMetrics(span, perRow, cell, perRow * span * cell);
-  return { metrics, panelWidthPx: metrics.innerWidthPx + OVERLAY_PANEL_CHROME_PX };
+  return { columns: g.perRow * g.span, unitPx, rowPx: unitPx, innerWidthPx: nonNeg(widthPx), flow: { span: g.span, perRow: g.perRow } };
 }
 
 /** Box width of a tab's root container for a plan (0 when stacked). */

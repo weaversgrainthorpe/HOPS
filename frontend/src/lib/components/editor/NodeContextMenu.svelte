@@ -10,7 +10,7 @@
   import { session } from '$lib/stores/editSession';
   import { selectedNodes, toggleNode } from '$lib/stores/nodeSelection';
   import { nodeClipboard, copySelection, cutSelection, pasteInto } from '$lib/stores/nodeClipboard';
-  import { openFolder } from '$lib/stores/folderOverlay';
+  import { drillTo } from '$lib/stores/folderView';
   import { portal } from '$lib/utils/portal';
   import { toast } from '$lib/stores/toast';
 
@@ -87,8 +87,16 @@
     const ids = [...targetIds];
     const out: Item[] = [];
     if (!many) out.push({ label: 'Edit', icon: 'mdi:pencil', run: () => openDialog({ kind, id }) });
-    if (!many && node.kind === 'folder' && node.display === 'collapsed') {
-      out.push({ label: 'Open', icon: 'mdi:folder-open', run: () => openFolder(id) });
+    // Folders open in place (M5 §3a.8): a sub-folder drills in (this browser's memory); a folder on
+    // the tab opens into the space it kept — in edit mode, as its saved default (undoable).
+    const chain = locate(d, id)?.folderChain ?? [];
+    const nested = chain.length > 0;
+    if (!many && node.kind === 'folder' && (nested || node.display === 'collapsed')) {
+      out.push({
+        label: 'Open',
+        icon: 'mdi:folder-open',
+        run: () => (nested ? drillTo(d.id, [...chain, id]) : setDisplay(id, 'expanded'))
+      });
     }
     if (!many) out.push({ label: 'Duplicate', icon: 'mdi:content-duplicate', run: () => duplicate(id) });
     out.push(
@@ -107,12 +115,8 @@
       },
       { label: 'Move/Copy to…', icon: 'mdi:folder-move', run: () => openDialog({ kind: 'movecopy', ids }) }
     );
-    if (!many && node.kind === 'folder') {
-      out.push(
-        node.display === 'collapsed'
-          ? { label: 'Start expanded', icon: 'mdi:arrow-expand', run: () => setDisplay(id, 'expanded'), separatorBefore: true }
-          : { label: 'Start collapsed', icon: 'mdi:arrow-collapse', run: () => setDisplay(id, 'collapsed'), separatorBefore: true }
-      );
+    if (!many && node.kind === 'folder' && !nested && node.display !== 'collapsed') {
+      out.push({ label: 'Minimise', icon: 'mdi:window-minimize', run: () => setDisplay(id, 'collapsed'), separatorBefore: true });
     }
     out.push({
       label: many ? `Delete ${targetIds.length} items` : 'Delete',

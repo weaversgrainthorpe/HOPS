@@ -3,7 +3,7 @@ import { render } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import TabCanvas from './TabCanvas.svelte';
 import Entry from '../Entry.svelte';
-import { COMPACT_TILE_PX, containerMetrics, folderInnerMetrics } from '$lib/layout/geometry';
+import { COMPACT_TILE_PX, containerMetrics, sizeSpan } from '$lib/layout/geometry';
 import type { LayoutDashboard, LayoutTab } from '$lib/types/layout';
 
 // Ruling 22 (I1): inside the layout renderer a tile fills its grid cell exactly
@@ -60,7 +60,6 @@ describe('tiles fit their grid cell (Ruling 22)', () => {
       const { container } = render(TabCanvas, { dashboard: dash, tab });
       await tick();
       const rootM = containerMetrics(tab.root, w);
-      const inner = folderInnerMetrics(tab.root.children[3] as any, rootM);
       for (const id of ['r-s', 'r-m', 'r-big', 'f-m', 'f-l', 'f-s']) {
         const cell = container.querySelector(`[data-node-id="${id}"]`) as HTMLElement;
         const grid = cell.parentElement as HTMLElement;
@@ -71,7 +70,8 @@ describe('tiles fit their grid cell (Ruling 22)', () => {
         const span = inFolder ? 1 : Number(/grid-row:\s*\d+\s*\/\s*span\s*(\d+)/.exec(cell.getAttribute('style') ?? '')![1]);
         const spanW = inFolder ? 1 : Number(/grid-column:\s*\d+\s*\/\s*span\s*(\d+)/.exec(cell.getAttribute('style') ?? '')![1]);
         const cellH = rowPx * span;
-        const cellW = (inFolder ? inner.flow!.span * inner.unitPx : rootM.unitPx) * spanW;
+        // In a folder an item is its contents size in the tab's own cell (the same box as a tab tile).
+        const cellW = (inFolder ? sizeSpan('medium') * rootM.unitPx : rootM.unitPx) * spanW;
         const box = cell.querySelector('.entry-container') as HTMLElement;
         const btn = cell.querySelector('button.entry') as HTMLElement;
         // The tile is sized by its cell: 100% of it, never a min-height of its own.
@@ -84,7 +84,7 @@ describe('tiles fit their grid cell (Ruling 22)', () => {
         expect(cell.style.minHeight === '' || cell.style.minHeight === '0px').toBe(true);
         // Compact exactly when the cell is too small for the full tile, or the tile is one cell
         // (Small: always compact, spec §9).
-        const oneCell = inFolder ? inner.flow!.span === 1 : spanW === 1 && span === 1;
+        const oneCell = inFolder ? sizeSpan('medium') === 1 : spanW === 1 && span === 1;
         const compact = oneCell || Math.min(cellW, cellH) < COMPACT_TILE_PX;
         expect(btn.classList.contains('compact')).toBe(compact);
         expect(btn.classList.contains('fill')).toBe(true);
