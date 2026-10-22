@@ -172,10 +172,13 @@ func convertTab(t Obj, perTab bool, path string) (Obj, []SizeChange, error) {
 		if es, ok := gm["entries"].([]any); ok {
 			n = len(es)
 		}
-		// The folder's box on the tab: perRow Medium tiles (2×2 cells) per
-		// row and a FolderTitleRows title row, as v2 drew the group. Its
-		// contents flow inside it (M5), so this only sizes the box.
-		sizes[i] = [2]int{perRow * medium, max(1, ceilDiv(n, perRow))*medium + FolderTitleRows}
+		// The folder's open box on the tab (Ruling 9): v2's footprint, perRow
+		// Medium tiles wide, so groups that sat side by side in v2 still do,
+		// and tall enough that every entry shows on page 1 at every grid width
+		// (the padding takes a column, so a full v2 row wraps to a second
+		// one). Never below the open-folder minimum (FolderBoxFor).
+		w, h := FolderBoxFor(Obj{"contentSize": "medium"}, n, perRow*medium)
+		sizes[i] = [2]int{w, h}
 	}
 	placed := packRowMajor(sizes, RootColumns)
 	var changed []SizeChange

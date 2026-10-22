@@ -209,7 +209,7 @@ test.describe('M5 one Folder component', () => {
       const f = await importDash(page, context, (id) => [
         tile(id('m'), 'TabMed', 0, 0),
         folder(id('f'), 'Box', { x: 4, y: 0, w: 12, h: 6 }, [kid(id('in'), 'InMed', { size: 'large' })]),
-        folder(id('mf'), 'Mini', { x: 18, y: 0, w: 6, h: 4 }, kids(id, 3, 'M'), { display: 'collapsed' })
+        folder(id('mf'), 'Mini', { x: 18, y: 0, w: 6, h: 5 }, kids(id, 3, 'M'), { display: 'collapsed' })
       ]);
       await page.goto(f.path);
       const measure = async () => ({
@@ -374,7 +374,7 @@ test.describe('M5 folders on a 390 x 844 phone: the phone tab\'s tiles, a page f
   for (const size of ['small', 'medium', 'large'] as const) {
     test(`a page of ${size} items fits the viewport and pages the rest`, async ({ page, context }) => {
       const f = await importDash(page, context, (id) => [
-        folder(id('f'), 'Fit', { x: 0, y: 0, w: 8, h: 6 }, kids(id, 40), { contentSize: size })
+        folder(id('f'), 'Fit', { x: 0, y: 0, w: 8, h: 8 }, kids(id, 40), { contentSize: size })
       ]);
       await page.goto(f.path);
       const g = node(page, f.id('f'));
@@ -394,7 +394,7 @@ test.describe('M5 folders on a phone (stacked)', () => {
   test('the same component at full width, with the same pages', async ({ page, context }) => {
     const f = await importDash(page, context, (id) => [
       folder(id('f'), 'Phone', { x: 0, y: 0, w: 8, h: 6 }, kids(id, 20)),
-      folder(id('m'), 'Mini', { x: 10, y: 0, w: 6, h: 4 }, kids(id, 2, 'M'), { display: 'collapsed' })
+      folder(id('m'), 'Mini', { x: 10, y: 0, w: 6, h: 5 }, kids(id, 2, 'M'), { display: 'collapsed' })
     ]);
     await page.goto(f.path);
     const ph = node(page, f.id('f'));

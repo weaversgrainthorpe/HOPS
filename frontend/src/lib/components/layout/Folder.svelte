@@ -382,6 +382,12 @@
       data-folder-page={paging.page}
       data-folder-per-page={paging.perPage}
     >
+      {#if paging.tooSmall}
+        <!-- Never a silent clip (Important 2): a box below its minimum says so, and how to fix it. -->
+        <p class="too-small" role="status" data-folder-too-small>
+          Too small to show its contents — resize it{editing ? '' : ' in edit mode'}.
+        </p>
+      {/if}
       {#if kids.length === 0}
         <span class="empty-note open-empty">Empty folder</span>
       {:else}
@@ -529,12 +535,27 @@
     opacity: 0.6;
   }
   .folder-body {
+    position: relative;
     padding: 0.5rem;
     flex: 1;
     min-height: 0;
     display: flex;
     flex-direction: column;
     overflow: hidden;
+  }
+  .too-small {
+    position: absolute;
+    inset: auto 0 0 0;
+    z-index: 2;
+    margin: 0;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1.2;
+    text-align: center;
+    color: #fff;
+    background: var(--color-error, #dc2626);
+    pointer-events: none;
   }
   .page {
     flex: none;

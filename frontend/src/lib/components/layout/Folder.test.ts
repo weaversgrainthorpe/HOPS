@@ -353,3 +353,20 @@ describe('drag targets on an open folder (M5 Task 4)', () => {
     expect(container.querySelector('[data-folder-bar]')).toBeNull();
   });
 });
+
+// M5 final review, Important 2 (backstop): a box below its minimum — which the server refuses, so
+// only reachable by a bug — says so visibly instead of clipping its item or page bar.
+describe('an undersized open box is flagged, never clipped silently', () => {
+  it('a 24 x 4 box at 1024 px with a full row: "too small" note', async () => {
+    width = 1024; // cells of 42.7 px: content 106 px high, the page bar leaves 74 px < one 85 px item
+    const { container } = await renderTab([folder('f', kids(12), { placement: { x: 0, y: 0, w: 24, h: 4 } })]);
+    const note = el(container, 'f').querySelector('[data-folder-too-small]');
+    expect(note).not.toBeNull();
+    expect(note!.textContent).toMatch(/Too small to show its contents — resize it/);
+  });
+  it('the same folder at its minimum and more has no note', async () => {
+    width = 1024;
+    const { container } = await renderTab([folder('f', kids(12), { placement: { x: 0, y: 0, w: 24, h: 5 } })]);
+    expect(el(container, 'f').querySelector('[data-folder-too-small]')).toBeNull();
+  });
+});

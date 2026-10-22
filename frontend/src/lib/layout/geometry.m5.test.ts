@@ -266,3 +266,31 @@ describe('defaultFolderBox: never below the minimum (Ruling 7a)', () => {
     expect(tabSpan(f('small', 'small') as unknown as LayoutNode)).toEqual({ w: 3, h: 4 });
   });
 });
+
+// Important 2 backstop: a box that cannot show one item (and the page bar it needs) says so,
+// never clips silently. Content boxes are in px; cells 32 px; a Medium item is 64 px.
+describe('folderPaging.tooSmall: an undersized box is flagged, never clipped silently', () => {
+  it('a box at its minimum is not too small, with or without a page bar', () => {
+    const min = minOpenFolderCells('medium');
+    const box = openFolderContentBox({ widthPx: min.w * 32, heightPx: min.h * 32 });
+    expect(folderPaging(box, 'medium', 32, 1, 0).tooSmall).toBe(false);
+    expect(folderPaging(box, 'medium', 32, 50, 0).tooSmall).toBe(false);
+  });
+  it('24 x 4 at a 32 px cell: one row fits, but the page bar a full row needs does not', () => {
+    const box = openFolderContentBox({ widthPx: 24 * 32, heightPx: 4 * 32 });
+    expect(folderPaging(box, 'medium', 32, 3, 0).tooSmall).toBe(false);
+    const g = folderPaging(box, 'medium', 32, 12, 0);
+    expect(g.pageBar).toBe(true);
+    expect(g.tooSmall).toBe(true);
+  });
+  it('too narrow or too short for one item is too small', () => {
+    expect(folderPaging({ widthPx: 40, heightPx: 200 }, 'medium', 32, 1, 0).tooSmall).toBe(true);
+    expect(folderPaging({ widthPx: 200, heightPx: 40 }, 'medium', 32, 1, 0).tooSmall).toBe(true);
+  });
+  it('an empty folder is never too small (it shows its empty note)', () => {
+    expect(folderPaging({ widthPx: 10, heightPx: 10 }, 'medium', 32, 0, 0).tooSmall).toBe(false);
+  });
+  it('phone paging is never flagged (it sizes its own rows)', () => {
+    expect(phonePaging(300, 360, { widthPx: 360, heightPx: 700 }, 'large', 10, 0).tooSmall).toBe(false);
+  });
+});

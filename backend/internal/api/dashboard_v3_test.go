@@ -396,7 +396,7 @@ func TestTransfer_CopyFolderGetsFreshIDsForDescendants(t *testing.T) {
 	rootOf(d)["children"] = append(rootOf(d)["children"].([]interface{}), map[string]interface{}{
 		"id": "fold1", "kind": "folder", "name": "F", "display": "expanded",
 		"size": "medium", "contentSize": "medium",
-		"placement": map[string]interface{}{"x": 0, "y": 9, "w": 2, "h": 2},
+		"placement": map[string]interface{}{"x": 0, "y": 9, "w": 3, "h": 5},
 		"content":   map[string]interface{}{"children": []interface{}{inFolder(tileJSON("inner1", 0, 0))}}})
 	if code, r := v3Put(c, "d1", d, 1); code != 200 {
 		t.Fatalf("%d %v", code, r)
@@ -608,13 +608,14 @@ func TestTransfer_TabSpanFromSize(t *testing.T) {
 	seed(t, db)
 	addD2(t, db)
 	d := v3Body(t, c, "d1")
-	big := tileJSON("big", 10, 4)
+	// Below the converted group's box (24×5: one row of Medium tiles and the chrome).
+	big := tileJSON("big", 10, 8)
 	big["size"] = "large"
-	big["placement"] = map[string]interface{}{"x": 10, "y": 4, "w": 4, "h": 4, "z": 5}
-	plain := tileJSON("plain", 16, 4)
+	big["placement"] = map[string]interface{}{"x": 10, "y": 8, "w": 4, "h": 4, "z": 5}
+	plain := tileJSON("plain", 16, 8)
 	delete(plain, "size")
-	plain["placement"] = map[string]interface{}{"x": 16, "y": 4, "w": 2, "h": 2}
-	rootOf(d)["children"] = append(rootOf(d)["children"].([]interface{}), tileJSON("small", 20, 4), big, plain)
+	plain["placement"] = map[string]interface{}{"x": 16, "y": 8, "w": 2, "h": 2}
+	rootOf(d)["children"] = append(rootOf(d)["children"].([]interface{}), tileJSON("small", 20, 8), big, plain)
 	if code, r := v3Put(c, "d1", d, 1); code != 200 {
 		t.Fatalf("%d %v", code, r)
 	}

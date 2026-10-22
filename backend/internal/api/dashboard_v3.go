@@ -378,6 +378,12 @@ func (r *Router) handleTransferNodes(w http.ResponseWriter, req *http.Request) {
 			kids, _ := container["children"].([]any)
 			container["children"] = append(kids, n)
 		}
+		if !tabLevel {
+			// Into a folder: its tab-level box grows to a raised minimum (Ruling 7b).
+			if ae := growToMinimum(findTab(dst, body.Target.TabID)["root"].(configdoc.Obj), body.Target.FolderID); ae != nil {
+				return nil, nil, ae
+			}
+		}
 		if body.Mode == "move" {
 			removeNodes(src, want)
 		}
@@ -528,7 +534,10 @@ func resolveTarget(d configdoc.Obj, tabID, folderID string) (container configdoc
 
 // tabSpan is the w×h cells node n takes on a tab: a tile its size's standard
 // span (Small 1×1, Medium 2×2, Large 4×4); a folder its kept box when it has
-// one, else (coming out of a folder, M5 §3a.3) its size × 3 wide, × 2 high.
+// one, else (coming out of a folder, M5 §3a.3) its size × 3 wide, × 2 high,
+// raised each way to its open-folder minimum (Ruling 7a, Ruling 9) — the twin
+// of geometry.ts defaultFolderBox. A kept box below the minimum is left for
+// VerifyDashboard to refuse, never silently grown.
 func tabSpan(n configdoc.Obj) (w, h float64, ae *apiError) {
 	s, ok := configdoc.SizeSpan(n["size"])
 	if !ok {
@@ -538,9 +547,71 @@ func tabSpan(n configdoc.Obj) (w, h float64, ae *apiError) {
 		if _, _, fw, fh, ok := rect(n["placement"]); ok && fw >= 1 && fh >= 1 {
 			return fw, fh, nil
 		}
-		return float64(3 * s), float64(2 * s), nil
+		mw, mh := configdoc.FolderMinCellsOf(n)
+		return float64(max(3*s, mw)), float64(max(2*s, mh)), nil
 	}
 	return float64(s), float64(s), nil
+}
+
+// growToMinimum grows the tab-level folder of tab root `root` that holds
+// folderID (or is it) to its open-folder minimum when items moved into it
+// raised that minimum (Ruling 7b): wider (shifted left at the right edge)
+// and/or taller, in the same write. There is no push on the server: when the
+// grown box would overlap a neighbour, the transfer is refused (409) naming
+// the folder and both sizes, never stored undersized or clipped.
+func growToMinimum(root configdoc.Obj, folderID string) *apiError {
+	kids, _ := root["children"].([]any)
+	for _, k := range kids {
+		top, _ := k.(configdoc.Obj)
+		if top == nil || top["kind"] != "folder" || !holds(top, folderID) {
+			continue
+		}
+		x, y, w, h, ok := rect(top["placement"])
+		if !ok {
+			return nil // left to VerifyDashboard
+		}
+		mw, mh := configdoc.FolderMinCellsOf(top)
+		if w >= float64(mw) && h >= float64(mh) {
+			return nil
+		}
+		nw, nh := math.Max(w, float64(mw)), math.Max(h, float64(mh))
+		nx := math.Max(0, math.Min(x, configdoc.RootColumns-nw))
+		for _, o := range kids {
+			om, _ := o.(configdoc.Obj)
+			if om == nil || om["id"] == top["id"] || !renderableNode(om) {
+				continue
+			}
+			ox, oy, ow, oh, _ := rect(om["placement"])
+			if nx < ox+ow && ox < nx+nw && y < oy+oh && oy < y+nh {
+				name, _ := top["name"].(string)
+				if name == "" {
+					name = "Untitled"
+				}
+				return newAPIError(http.StatusConflict, fmt.Sprintf(
+					"There isn't room for %q on the target tab: with %s contents its open box must grow from %v×%v to %v×%v cells, and %v is in the way. Make room or resize it first, then try again.",
+					name, configdoc.LargestContentSize(top), w, h, nw, nh, om["name"]))
+			}
+		}
+		p := top["placement"].(configdoc.Obj)
+		p["x"], p["w"], p["h"] = nx, nw, nh
+		return nil
+	}
+	return nil
+}
+
+// holds reports whether folder f is folderID or has it inside, however deep.
+func holds(f configdoc.Obj, folderID string) bool {
+	if f["id"] == folderID {
+		return true
+	}
+	content, _ := f["content"].(configdoc.Obj)
+	kids, _ := content["children"].([]any)
+	for _, k := range kids {
+		if km, ok := k.(configdoc.Obj); ok && km["kind"] == "folder" && holds(km, folderID) {
+			return true
+		}
+	}
+	return false
 }
 
 // newTab is an empty tab in the current layout form: a RootColumns grid.

@@ -287,7 +287,7 @@ func TestVerifyDashboard_Bounds(t *testing.T) {
 			node = Obj{"id": "f" + itoa(i), "kind": "folder", "name": "f", "display": "expanded",
 				"size": "medium", "contentSize": "medium", "content": Obj{"children": []any{node}}}
 		}
-		node["placement"] = Obj{"x": 0, "y": 0, "w": 1, "h": 1}
+		node["placement"] = Obj{"x": 0, "y": 0, "w": 3, "h": 5}
 		return []any{node}
 	}
 	if err := VerifyDashboard(v3Dash(nest(MaxNestingDepth))); err != nil {

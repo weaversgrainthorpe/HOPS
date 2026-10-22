@@ -62,10 +62,49 @@ func VerifyImportedDashboard(d Obj) error {
 	v.checkOwned(id, d)
 	v.checkIDs(Obj{"dashboards": []any{d}})
 	v.checkStatusChecks(d)
+	v.checkFolderMinimums(d)
 	if len(v.problems) > 0 {
 		return &VerifyError{Problems: v.problems}
 	}
 	return nil
+}
+
+// checkFolderMinimums refuses a tab-level folder whose open box is below its
+// minimum, FolderMinCellsOf (Ruling 7, Ruling 9): such a box would clip its
+// item or its page bar, a silent failure. It is refused, never silently
+// grown, naming the folder and both sizes. Run on saves, imports and the
+// converter's output (not on the whole stored document), like
+// checkStatusChecks. Boxes that are not whole numbers are left to
+// checkTabPlacement.
+func (v *verifier) checkFolderMinimums(d Obj) {
+	tabs, _ := d["tabs"].([]any)
+	for _, t := range tabs {
+		tm, _ := t.(Obj)
+		root, _ := tm["root"].(Obj)
+		kids, _ := root["children"].([]any)
+		for _, k := range kids {
+			f, _ := k.(Obj)
+			if f == nil || f["kind"] != "folder" {
+				continue
+			}
+			p, _ := f["placement"].(Obj)
+			w, okW := numberValue(p["w"])
+			h, okH := numberValue(p["h"])
+			if p == nil || !okW || !okH {
+				continue
+			}
+			mw, mh := FolderMinCellsOf(f)
+			if w < float64(mw) || h < float64(mh) {
+				name, _ := f["name"].(string)
+				if name == "" {
+					name = "Untitled"
+				}
+				size := LargestContentSize(f)
+				v.add("folder %q (%s) on tab %s: its open box is %v×%v cells, below its minimum %d×%d for %s contents; make it at least %d×%d",
+					trunc(name), show(f["id"]), show(tm["id"]), w, h, mw, mh, size, mw, mh)
+			}
+		}
+	}
 }
 
 // checkStatusChecks requires every layered status-check setting below the
@@ -206,6 +245,13 @@ func VerifyMigrationFull(v2, v3 Obj, renames []Rename, sizes []SizeChange) error
 		v.add("document: %s: %v", LayoutVersionKey, err)
 	}
 	v.checkIDs(v3)
+	if dashes, ok := asList(v3["dashboards"]); ok {
+		for _, d := range dashes {
+			if dm, ok := d.(Obj); ok {
+				v.checkFolderMinimums(dm)
+			}
+		}
+	}
 	v.renames = map[string]Rename{}
 	v.usedRenames = map[string]bool{}
 	for _, r := range renames {

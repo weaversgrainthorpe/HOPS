@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"math"
 	"net"
 	"net/http"
 	"regexp"
@@ -624,8 +623,8 @@ func addTiles(content configdoc.Obj, results []*discovery.Result) *apiError {
 const promoteTilesPerRow = 4
 
 // newCategoryFolder builds the folder for one category holding its tiles: a
-// Medium folder with Medium contents whose open box is promoteTilesPerRow
-// Medium tiles wide and tall enough for its tiles plus the title row. Its
+// Medium folder with Medium contents whose open box holds promoteTilesPerRow
+// Medium tiles a row and all its tiles on page 1 (configdoc.FolderBoxFor). Its
 // placement carries only the size (the caller places it).
 func newCategoryFolder(info discovery.CategoryInfo, results []*discovery.Result) (configdoc.Obj, *apiError) {
 	id, ae := newNodeID("folder")
@@ -636,9 +635,11 @@ func newCategoryFolder(info discovery.CategoryInfo, results []*discovery.Result)
 	if ae := addTiles(content, results); ae != nil {
 		return nil, ae
 	}
-	medium, _ := configdoc.SizeSpan("medium")
-	w := float64(promoteTilesPerRow * medium)
-	h := math.Ceil(float64(len(results))/promoteTilesPerRow)*float64(medium) + configdoc.FolderTitleRows
+	// Its open box holds promoteTilesPerRow Medium tiles a row and every
+	// tile on page 1, never below the open-folder minimum (Ruling 9).
+	bw, bh := configdoc.FolderBoxFor(configdoc.Obj{"contentSize": "medium"}, len(results),
+		configdoc.FolderWidthFor("medium", promoteTilesPerRow))
+	w, h := float64(bw), float64(bh)
 	return configdoc.Obj{
 		"id": id, "kind": "folder", "name": info.DisplayName, "icon": info.Icon,
 		"size": "medium", "contentSize": "medium",

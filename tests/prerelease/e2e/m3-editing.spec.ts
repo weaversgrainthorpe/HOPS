@@ -62,7 +62,7 @@ async function importFixture(page: Page, context: BrowserContext): Promise<Fixtu
             tile(id('c'), 'Charlie', 4, 0, 2),
             {
               id: id('fk'), kind: 'folder', name: 'Kept', display: 'collapsed', shape: 'rounded', size: 'medium', contentSize: 'medium',
-              showTitle: true, placement: placement(10, 0, 6, 4),
+              showTitle: true, placement: placement(12, 0, 6, 5),
               content: { children: [kid(id('k1'), 'Kilo')] }
             },
             {

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { setContext, untrack } from 'svelte';
   import type { Container, FolderNode, LayoutDashboard, LayoutDoc, LayoutTab } from '$lib/types/layout';
-  import { containerMetrics, planCanvas, rootBoxWidthPx } from '$lib/layout/geometry';
+  import { PHONE_BREAKPOINT_PX, containerMetrics, planCanvas, rootBoxWidthPx } from '$lib/layout/geometry';
   import { layoutDoc, layoutStale } from '$lib/stores/config';
   import { toast } from '$lib/stores/toast';
   import { editMode } from '$lib/stores/editMode';
@@ -78,7 +78,12 @@
   // The window's size: on a phone an open folder's page fits the viewport (geometry.phonePaging).
   let viewportW = $state(typeof window !== 'undefined' ? window.innerWidth : 0);
   let viewportH = $state(typeof window !== 'undefined' ? window.innerHeight : 0);
-  const plan = $derived(planCanvas(width, viewTab, { widthPx: viewportW, heightPx: viewportH }));
+  // Only a stacked (phone) plan needs the viewport: a grid plan does not read it, so a window
+  // resize (or a phone URL bar showing and hiding) does not re-page every folder on a grid.
+  const gridWide = $derived(Number.isFinite(width) && width >= PHONE_BREAKPOINT_PX);
+  const plan = $derived(
+    gridWide ? planCanvas(width, viewTab) : planCanvas(width, viewTab, { widthPx: viewportW, heightPx: viewportH })
+  );
   // The root's sizes: one source (geometry.containerMetrics), recomputed per width change only.
   const metrics = $derived(containerMetrics(viewTab.root, rootBoxWidthPx(plan, viewTab)));
   // Editing on a phone (stacked plan, once measured): the toolbar says resizing needs more room.

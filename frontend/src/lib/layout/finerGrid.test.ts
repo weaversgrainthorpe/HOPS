@@ -2,16 +2,15 @@
 // tab. The v3→v3 doubling, free mode and folder-interior placements are gone (M5 §2a, §3.8); the
 // span table and folder-page maths are in geometry.m5.test.ts.
 import { describe, it, expect } from 'vitest';
-import { ROOT_COLUMNS, GRID_TITLE_ROWS, containerMetrics, minimisedPlacement, nodeFit, nodeBox } from './geometry';
+import { ROOT_COLUMNS, containerMetrics, minimisedPlacement, nodeFit, nodeBox } from './geometry';
 import { blankFolder, blankTile } from '$lib/editor/editorActions';
 import type { Placement } from '$lib/types/layout';
 
 const p = (x: number, y: number, w = 1, h = 1): Placement => ({ x, y, w, h });
 
 describe('the grid is 24 columns', () => {
-  it('ROOT_COLUMNS is 24 and a folder title takes 2 rows', () => {
+  it('ROOT_COLUMNS is 24', () => {
     expect(ROOT_COLUMNS).toBe(24);
-    expect(GRID_TITLE_ROWS).toBe(2);
   });
   it('a Medium tile at 1280 px is the old 12-column cell (106.7 px)', () => {
     const m = containerMetrics({ columns: 24, children: [] }, 1280);

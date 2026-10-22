@@ -158,11 +158,11 @@ func TestMigrateV2_FolderChildrenInEntryOrder(t *testing.T) {
 		ids = append(ids, c["id"].(string))
 	}
 	eq(t, ids, []string{"e1", "e2", "e3"}, "child order")
-	eq(t, folders[0]["placement"], Obj{"x": 0, "y": 0, "w": 24, "h": 4}, "folder placement")
-	eq(t, folders[1]["placement"], Obj{"x": 0, "y": 4, "w": 12, "h": 4}, "folder placement")
+	eq(t, folders[0]["placement"], Obj{"x": 0, "y": 0, "w": 24, "h": 5}, "folder placement")
+	eq(t, folders[1]["placement"], Obj{"x": 0, "y": 5, "w": 12, "h": 5}, "folder placement")
 	f := children(t, tabs[1]["root"].(Obj))[0]
 	eq(t, f["display"], "collapsed", "display")
-	eq(t, f["placement"], Obj{"x": 0, "y": 0, "w": 8, "h": 6}, "collapsed folder placement")
+	eq(t, f["placement"], Obj{"x": 0, "y": 0, "w": 8, "h": 7}, "collapsed folder placement")
 	if n := len(children(t, f["content"].(Obj))); n != 5 {
 		t.Errorf("children = %d, want 5", n)
 	}

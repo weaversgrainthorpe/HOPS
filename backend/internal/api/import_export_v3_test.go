@@ -697,10 +697,10 @@ func TestImport_V3Showcase(t *testing.T) {
 			}
 			// An open folder box is never below its minimum (Ruling 7): one item
 			// at its largest contents size, the bar, padding and the page bar.
-			mins := map[string][2]float64{"small": {2, 4}, "medium": {3, 5}, "large": {5, 7}}
-			m := mins[largestContents(n)]
-			if p["w"].(float64) < m[0] || p["h"].(float64) < m[1] {
-				t.Errorf("folder %v box %vx%v is below its minimum %vx%v", n["id"], p["w"], p["h"], m[0], m[1])
+			// THE table: configdoc.FolderMinCellsOf (Ruling 9).
+			mw, mh := configdoc.FolderMinCellsOf(n)
+			if p["w"].(float64) < float64(mw) || p["h"].(float64) < float64(mh) {
+				t.Errorf("folder %v box %vx%v is below its minimum %dx%d", n["id"], p["w"], p["h"], mw, mh)
 			}
 		}
 	}
@@ -830,18 +830,3 @@ func contains(list []string, s string) bool {
 	return false
 }
 
-// largestContents is the largest contentSize of folder f and every folder in it.
-func largestContents(f configdoc.Obj) string {
-	rank := map[string]int{"small": 1, "medium": 2, "large": 3}
-	best, _ := f["contentSize"].(string)
-	for _, ch := range f["content"].(configdoc.Obj)["children"].([]any) {
-		c := ch.(configdoc.Obj)
-		if c["kind"] != "folder" {
-			continue
-		}
-		if sub := largestContents(c); rank[sub] > rank[best] {
-			best = sub
-		}
-	}
-	return best
-}

@@ -67,7 +67,7 @@ async function importFixture(page: Page, context: BrowserContext) {
           tile(id('anchor'), 'Anchor'),
           folder('ft', 'Titled', 0),
           folder('fu', 'Untitled', 8, { showTitle: false }),
-          folder('fc', 'Collapsed', 16, { display: 'collapsed', placement: placement(16, 2, 4, 4) })
+          folder('fc', 'Collapsed', 16, { display: 'collapsed', placement: placement(16, 2, 4, 5) })
         ]
       }
     }]

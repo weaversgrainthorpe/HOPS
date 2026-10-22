@@ -181,7 +181,8 @@ test.describe('M4 layered backgrounds in a real browser', () => {
 
   const SLIDES = ['/presets/network-grid.jpg', '/presets/dark-gradient.jpg'];
   const slideFolder = (id: (s: string) => string, key: string, x: number, y: number) => ({
-    id: id(key), kind: 'folder', name: `Slides ${key}`, display: 'expanded', shape: 'rounded', size: 'medium', contentSize: 'medium',
+    // Small contents: a 4 x 4 (and the 2 x 4 small ones) box is at least its minimum (Ruling 7, 2 x 4).
+    id: id(key), kind: 'folder', name: `Slides ${key}`, display: 'expanded', shape: 'rounded', size: 'medium', contentSize: 'small',
     showTitle: false, placement: placement(x, y, 4, 4),
     background: { type: 'slideshow', images: SLIDES, interval: 30, transition: 'crossfade' },
     content: { children: [kid(id(`${key}-t`), `T${key}`)] }

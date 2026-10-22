@@ -1,0 +1,18 @@
+{
+  "minOpen": [
+    {"contentSize": "small", "want": {"w": 2, "h": 4}},
+    {"contentSize": "medium", "want": {"w": 3, "h": 5}},
+    {"contentSize": "large", "want": {"w": 5, "h": 7}},
+    {"contentSize": null, "want": {"w": 3, "h": 5}},
+    {"contentSize": "huge", "want": {"w": 3, "h": 5}}
+  ],
+  "folders": [
+    {"name": "empty small folder", "folder": {"kind": "folder", "contentSize": "small", "content": {"children": []}}, "largest": "small", "min": {"w": 2, "h": 4}},
+    {"name": "tiles do not count", "folder": {"kind": "folder", "contentSize": "small", "content": {"children": [{"kind": "tile", "size": "large"}]}}, "largest": "small", "min": {"w": 2, "h": 4}},
+    {"name": "a sub-folder's size counts, not its own size", "folder": {"kind": "folder", "contentSize": "small", "content": {"children": [{"kind": "folder", "size": "large", "contentSize": "medium", "content": {"children": []}}]}}, "largest": "medium", "min": {"w": 3, "h": 5}},
+    {"name": "deep large wins", "folder": {"kind": "folder", "contentSize": "medium", "content": {"children": [{"kind": "folder", "contentSize": "small", "content": {"children": [{"kind": "folder", "contentSize": "large", "content": {"children": []}}]}}]}}, "largest": "large", "min": {"w": 5, "h": 7}},
+    {"name": "own large beats smaller subs", "folder": {"kind": "folder", "contentSize": "large", "content": {"children": [{"kind": "folder", "contentSize": "small", "content": {"children": []}}]}}, "largest": "large", "min": {"w": 5, "h": 7}},
+    {"name": "missing contentSize is medium", "folder": {"kind": "folder", "content": {"children": []}}, "largest": "medium", "min": {"w": 3, "h": 5}},
+    {"name": "malformed content is no children", "folder": {"kind": "folder", "contentSize": "small", "content": {"children": "nope"}}, "largest": "small", "min": {"w": 2, "h": 4}}
+  ]
+}

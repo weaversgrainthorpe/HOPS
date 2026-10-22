@@ -12,8 +12,6 @@ export const ROOT_COLUMNS = 24;
 export const LAYOUT_VERSION = 1;
 /** Cells a Medium item spans each way. */
 export const MEDIUM_CELLS = 2;
-/** Grid rows a folder's title takes on a tab (the backend's FolderTitleRows). */
-export const GRID_TITLE_ROWS = 2;
 export const PHONE_BREAKPOINT_PX = 768;
 export const PREVIEW_COUNT = 4;
 
@@ -221,7 +219,12 @@ export function pointToCell(m: ContainerMetrics, dxPx: number, dyPx: number): { 
  * `shape` is ignored until M6, so there is one look: a 1px border, a 40px bar, 8px body padding.
  */
 export const FOLDER_CHROME = { titlePx: 40, padXPx: 2 * 8 + 2 * 1, padYPx: 2 * 8 + 2 * 1 } as const;
-/** The page bar (« ‹ 1 2 3 › »), shown only when a folder has more than one page. */
+/**
+ * The page bar (« ‹ 1 2 3 › »), shown only when a folder has more than one page. FOLDER_CHROME,
+ * PAGE_BAR_PX and MIN_GRID_CELL_PX have a Go twin (configdoc/layout.go: FolderTitlePx, FolderPadPx,
+ * PageBarPx, MinGridCellPx); the shared table backend/internal/configdoc/testdata/folder_min_cases.json
+ * is run by both suites (Ruling 9).
+ */
 export const PAGE_BAR_PX = 32;
 /**
  * The narrowest a tab's grid cell gets: below PHONE_BREAKPOINT_PX the tab stacks (planCanvas), so a
@@ -288,6 +291,11 @@ export interface FolderPaging {
   /** Items [start, end) of the folder's order are on this page. */
   start: number;
   end: number;
+  /**
+   * The box cannot show one item, or the page bar its items need (a box below its minimum, which the
+   * server refuses — Important 2's backstop). The folder then says so visibly; it never clips silently.
+   */
+  tooSmall: boolean;
 }
 
 /**
@@ -304,7 +312,13 @@ export function folderPaging(
   let fit = folderPage(content, contentSize, cellPx);
   const pageBar = n > fit.perPage;
   if (pageBar) fit = folderPage({ widthPx: content.widthPx, heightPx: content.heightPx - PAGE_BAR_PX }, contentSize, cellPx);
-  return { span, itemPx: span * nonNeg(cellPx), ...fit, ...pageOf(n, fit.perPage, page), pageBar };
+  const itemPx = span * nonNeg(cellPx);
+  // folderPage shows at least one item a row and one row; this is when even that one does not fit.
+  const eps = 0.5;
+  const tooSmall =
+    n > 0 &&
+    (nonNeg(content.widthPx) + eps < itemPx || nonNeg(content.heightPx) - (pageBar ? PAGE_BAR_PX : 0) + eps < itemPx);
+  return { span, itemPx, ...fit, ...pageOf(n, fit.perPage, page), pageBar, tooSmall };
 }
 
 /** The page shown of `n` items at `perPage` a page: the asked-for page clamped, and its item range. */
@@ -364,7 +378,8 @@ export function phonePaging(
   const perPage = perRow * rowsPerPage;
   const n = isNum(count) && count > 0 ? Math.floor(count) : 0;
   return {
-    span: 1, itemPx: col, rowPx, gapPx: gap, perRow, rowsPerPage, perPage, pageBar: n > perPage, ...pageOf(n, perPage, page)
+    span: 1, itemPx: col, rowPx, gapPx: gap, perRow, rowsPerPage, perPage, pageBar: n > perPage, ...pageOf(n, perPage, page),
+    tooSmall: false
   };
 }
 

@@ -2026,7 +2026,7 @@ test.describe('§8 tile size sets the space it takes', () => {
     return importDash(page, context, [{
       name: 'Main',
       children: (id) => [
-        folder(id('services'), 'Services', placement(0, 0, 24, 4), [
+        folder(id('services'), 'Services', placement(0, 0, 24, 5), [
           kid(id('google'), 'Google', { description: 'Search Engine', icon: 'mdi:google' }),
           kid(id('github'), 'GitHub', { description: 'Code Repository', icon: 'mdi:github', order: 1 }),
           kid(id('youtube'), 'YouTube', { description: 'Video Platform', icon: 'mdi:youtube', order: 2 })
