@@ -192,7 +192,8 @@ test.describe('M5 drag and drop in ordered, paged folders', () => {
     const root = await savedRoot(page, f.id('dash'));
     expect(root.map((n) => n.id).sort()).toEqual([f.id('f'), f.id('k2'), f.id('s')].sort());
     expect(find(root, f.id('k2'))?.placement).toMatchObject({ w: 2, h: 2 });
-    expect(find(root, f.id('s'))).toMatchObject({ display: 'collapsed', placement: { w: 6, h: 4 } });
+    // Its default open box: Medium x 3 by x 2 (6 x 4), raised to the Medium minimum (5 high, Ruling 7a).
+    expect(find(root, f.id('s'))).toMatchObject({ display: 'collapsed', placement: { w: 6, h: 5 } });
     expect(orderOf(root, f.id('f'))).toEqual([f.id('k1')]);
     // View mode applies this browser's memory: the moved-out sub-folder is still minimised.
     await page.locator('[aria-label="Exit Edit Mode"]').click();
@@ -461,3 +462,65 @@ test.describe('M5 drag and drop in ordered, paged folders', () => {
   });
 });
 
+
+// Ruling 7: an open folder box is never below its minimum. (a) A folder that comes out of a folder
+// gets its default box raised to its minimum (at its largest contents size). (b) Moving a folder whose
+// subtree has a larger contents size into a folder grows the receiving open box to the new minimum,
+// pushing neighbours by the M3 rules, in the same undo step. (No room on a 24-column tab cannot happen
+// at a 5-column minimum; the refusal is covered by the treeOps unit tests.)
+test.describe('Ruling 7: an open folder box is never below its minimum', () => {
+  test.use({ viewport: { width: 1280, height: 1000 } });
+
+  test('a sub-folder with Large contents dragged out to the tab lands with its default box raised to 6 x 7', async ({ page, context }) => {
+    const f = await importDash(page, context, (id) => [
+      folder(id('f'), 'Box', { x: 0, y: 0, w: 14, h: 8 }, [kid(id('k1'), 'K1'), folder(id('s'), 'Sub', null, kids(id, 2, 'Z'), { contentSize: 'large' })])
+    ]);
+    const errors = await openEditing(page, f.path, f.id('f'));
+    const fb = await box(node(page, f.id('f')));
+    await dragCentre(page, node(page, f.id('s')), fb.x + fb.width + 200, fb.y + 60);
+    await allowedThenDrop(page);
+    await saveDraft(page);
+    const root = await savedRoot(page, f.id('dash'));
+    expect(find(root, f.id('s'))).toMatchObject({ display: 'collapsed', placement: { w: 6, h: 7 } });
+    expect(errors).toEqual([]);
+  });
+
+  test('a Large-contents folder dropped into a Medium folder at its minimum grows it to 5 x 7, pushing the neighbour; one Undo restores both', async ({ page, context }) => {
+    const f = await importDash(page, context, (id) => [
+      folder(id('f'), 'Box', { x: 0, y: 0, w: 3, h: 5 }, kids(id, 1)),
+      tile(id('n'), 'Next', 0, 5),
+      folder(id('g'), 'Large', { x: 12, y: 0, w: 8, h: 8 }, kids(id, 1, 'G'), { contentSize: 'large' })
+    ]);
+    const errors = await openEditing(page, f.path, f.id('f'));
+    const f0 = await box(node(page, f.id('f')));
+    const n0 = await box(node(page, f.id('n')));
+    const gbar = await box(node(page, f.id('g')).locator('.folder-header'));
+    const fbar = await box(node(page, f.id('f')).locator('.folder-header'));
+    await dragTo(page, gbar.x + 40, gbar.y + gbar.height / 2, fbar.x + fbar.width / 2, fbar.y + fbar.height / 2);
+    await page.waitForTimeout(120);
+    await expect(page.locator('.drag-layer .cue')).toContainText('Into "Box"');
+    await allowedThenDrop(page);
+    // Drawn grown at once; the neighbour moved clear of it.
+    const fb = await box(node(page, f.id('f')));
+    expect(fb.width).toBeGreaterThan(f0.width + 1);
+    expect(fb.height).toBeGreaterThan(f0.height + 1);
+    const nb = await box(node(page, f.id('n')));
+    expect(nb.x >= fb.x + fb.width - 1 || nb.y >= fb.y + fb.height - 1, 'the neighbour is clear of the grown folder').toBe(true);
+    // One undo step: the move and the growth come back together.
+    const toolbar = page.getByRole('toolbar', { name: 'Editing' });
+    await toolbar.getByRole('button', { name: /Undo/ }).click();
+    await expect(toolbar.getByRole('button', { name: /Undo/ })).toBeDisabled();
+    await expect(node(page, f.id('g'))).toHaveAttribute('role', 'group'); // back on the tab
+    for (const [a, b] of [[await box(node(page, f.id('f'))), f0], [await box(node(page, f.id('n'))), n0]] as const) {
+      for (const k of ['x', 'y', 'width', 'height'] as const) expect(Math.abs(a[k] - b[k])).toBeLessThanOrEqual(1);
+    }
+    await toolbar.getByRole('button', { name: /Redo/ }).click();
+    await saveDraft(page);
+    const root = await savedRoot(page, f.id('dash'));
+    expect(orderOf(root, f.id('f'))).toEqual([f.id('k1'), f.id('g')]);
+    expect(find(root, f.id('f'))).toMatchObject({ placement: { x: 0, y: 0, w: 5, h: 7 } });
+    const n = find(root, f.id('n'))!.placement!;
+    expect(n.x >= 5 || n.y >= 7).toBe(true);
+    expect(errors).toEqual([]);
+  });
+});

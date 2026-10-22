@@ -5,7 +5,7 @@ import {
   LAYOUT_VERSION, sizeSpan, folderPage, minimisedPlacement, planCanvas, isRenderable, isPlaced,
   containerMetrics, previewChildren, ROOT_COLUMNS, nodeBox, FOLDER_CHROME, openFolderContentBox, folderPaging,
   folderFlowMetrics, PAGE_BAR_PX, phoneTrack, phoneColumnPx, phonePaging, PHONE_TILE_MIN_PX, PHONE_PAGE_RESERVE_PX,
-  minOpenFolderCells, MIN_GRID_CELL_PX, largestContentSize, folderMinCells
+  minOpenFolderCells, MIN_GRID_CELL_PX, largestContentSize, folderMinCells, defaultFolderBox, tabSpan
 } from './geometry';
 import type { FolderNode, LayoutNode, LayoutTab } from '../types/layout';
 
@@ -243,5 +243,26 @@ describe('the smallest open folder fits its largest contents size', () => {
   it('folderMinCells uses it', () => {
     expect(folderMinCells(f('a', 'small', [f('b', 'large')]))).toEqual(minOpenFolderCells('large'));
     expect(folderMinCells(f('a', 'small'))).toEqual(minOpenFolderCells('small'));
+  });
+});
+
+// Ruling 7 (a): an open folder box is never below its minimum. The default open box is its size in
+// cells x 3 wide by x 2 high, raised to its minimum (at its largest contents size) where that is bigger.
+describe('defaultFolderBox: never below the minimum (Ruling 7a)', () => {
+  const f = (size: string, contentSize: string, children: unknown[] = []) =>
+    ({ kind: 'folder', id: 'f', name: 'f', display: 'collapsed', size, contentSize, content: { children } }) as unknown as FolderNode;
+  it('is max(size x 3 by size x 2, the minimum), each way', () => {
+    expect(defaultFolderBox(f('medium', 'medium'))).toEqual({ w: 6, h: 5 }); // 6 x 4, raised to the 5-high minimum
+    expect(defaultFolderBox(f('small', 'small'))).toEqual({ w: 3, h: 4 }); // 3 x 2, raised to 2 x 4
+    expect(defaultFolderBox(f('large', 'medium'))).toEqual({ w: 12, h: 8 }); // already above 3 x 5
+    expect(defaultFolderBox(f('small', 'large'))).toEqual({ w: 5, h: 7 }); // 3 x 2 is below 5 x 7
+  });
+  it('takes the largest contents size of any sub-folder, however deep', () => {
+    const deep = f('medium', 'small', [tile('t'), f('medium', 'medium', [f('small', 'large')])]);
+    expect(defaultFolderBox(deep)).toEqual({ w: 6, h: 7 });
+  });
+  it('tabSpan of a folder with no box (it comes from inside a folder) is that default box', () => {
+    expect(tabSpan(f('medium', 'large') as unknown as LayoutNode)).toEqual({ w: 6, h: 7 });
+    expect(tabSpan(f('small', 'small') as unknown as LayoutNode)).toEqual({ w: 3, h: 4 });
   });
 });

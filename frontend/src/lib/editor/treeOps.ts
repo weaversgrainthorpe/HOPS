@@ -212,7 +212,17 @@ function placedOnTab(n: LayoutNode, at: Placement, cols: number, fromFolder: boo
   if (p.x < 0 || p.y < 0 || p.w < 1 || p.h < 1 || p.x + p.w > cols) {
     throw new TreeOpError('That position is outside the grid.');
   }
-  if (n.kind === 'folder' && fromFolder) return { ...n, display: 'collapsed', placement: p };
+  if (n.kind === 'folder' && fromFolder) {
+    // Out of a folder it has no box of its own: it is given its default box (tabSpan), never one below
+    // its minimum (Ruling 7a) — a smaller one is refused, never silently grown.
+    const min = folderMinCells(n);
+    if (p.w < min.w || p.h < min.h) {
+      throw new TreeOpError(
+        `"${n.name || 'Untitled'}" needs at least ${min.w} x ${min.h} cells on a tab when open, not ${p.w} x ${p.h}.`
+      );
+    }
+    return { ...n, display: 'collapsed', placement: p };
+  }
   return { ...n, placement: p } as LayoutNode;
 }
 
@@ -277,12 +287,14 @@ function commit(
 ): LayoutDashboard {
   if (to.folderId !== undefined) {
     if (push && push.size > 0) throw new TreeOpError('Items in a folder are not placed, so nothing can be pushed aside.');
-    return editContainer(d, to, (c) => {
+    const folderId = to.folderId;
+    const next = editContainer(d, to, (c) => {
       const list = [...kids(c)];
       const at = Math.min(Math.max(0, index ?? END), list.length);
       list.splice(at, 0, ...add);
       return { ...c, children: list };
     });
+    return growForMinimum(d, next, folderId);
   }
   const changed = new Set<string>([...add.map((a) => a.id), ...(push ? push.keys() : [])]);
   return editContainer(d, to, (c) => {
@@ -462,7 +474,7 @@ export function duplicateNode(
  * Merge `draggedIds` and the target tile into a new minimised folder in the target's place:
  * `{ size: 'medium', contentSize: 'medium', content: { children: [target, ...dragged] } }`, the
  * children in that order with no placements. On a tab the folder keeps the default open box
- * (defaultFolderBox: 6 x 4 for Medium) at the target's top-left (shifted left at the right edge);
+ * (defaultFolderBox: 6 x 5 for Medium contents, raised to its minimum, Ruling 7a) at the target's top-left (shifted left at the right edge);
  * nodes it now overlaps are pushed aside (pushAside), so the result never overlaps. Inside a folder
  * it takes the target's index. `allIds` is every id in the document; the new folder id avoids it.
  */
@@ -492,14 +504,14 @@ export function mergeIntoNewFolder(
   };
   const without = removeIds(d, idSet);
   if (ref.folderId !== undefined) {
-    const dashboard = editContainer(without, ref, (c) => ({
+    const merged = editContainer(without, ref, (c) => ({
       ...c, children: kids(c).map((x) => (x.id === targetTileId ? folder : x))
     }));
-    return { dashboard, folderId };
+    return { dashboard: growForMinimum(d, merged, ref.folderId), folderId };
   }
   const after = resolveRef(without, ref);
   const cols = containerColumns(after.container);
-  const box = defaultFolderBox(folder.size);
+  const box = defaultFolderBox(folder);
   const w = Math.min(box.w, cols);
   const tp = target.placement as Placement;
   const placement: Placement = { x: Math.max(0, Math.min(Math.floor(tp.x), cols - w)), y: Math.floor(tp.y), w, h: box.h };
@@ -602,6 +614,24 @@ export function fitFolderMinimum(d: LayoutDashboard, id: string): LayoutDashboar
   const at: Placement = { x: Math.min(cur.x, cols - w), y: cur.y, w, h: Math.max(cur.h, min.h) };
   if (cur.z !== undefined) at.z = cur.z;
   return placeNode(d, topId, at, pushAside(r.container, new Set([topId]), at));
+}
+
+/**
+ * Ruling 7b: after items went into folder `folderId` (`before` → `after`), the tab-level open box
+ * holding it grows to its new minimum when the largest contents size inside it went UP (a folder whose
+ * subtree has a larger contents size came in) — fitFolderMinimum, pushing neighbours by the M3 rules,
+ * in the same operation (so the same undo step); no room is a TreeOpError with the reason. A move that
+ * does not raise the minimum leaves the box exactly as it was.
+ */
+function growForMinimum(before: LayoutDashboard, after: LayoutDashboard, folderId: string): LayoutDashboard {
+  const loc = locate(after, folderId);
+  if (!loc) return after;
+  const topId = loc.folderChain[0] ?? folderId;
+  const was = locate(before, topId) ? findNode(before, topId) : undefined;
+  const now = findNode(after, topId);
+  if (was?.kind !== 'folder' || now.kind !== 'folder') return after;
+  if (sizeSpan(largestContentSize(now)) <= sizeSpan(largestContentSize(was))) return after;
+  return fitFolderMinimum(after, folderId);
 }
 
 export function resizeNode(

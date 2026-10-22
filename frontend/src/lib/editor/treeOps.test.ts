@@ -149,7 +149,7 @@ describe('mergeIntoNewFolder', () => {
     const r = mergeIntoNewFolder(d, ['b', 'a'], 'c', new Set(allNodeIds(d)));
     const f = byId(rootOf(r.dashboard), r.folderId) as FolderNode;
     expect(f).toMatchObject({ kind: 'folder', name: 'New folder', display: 'collapsed', size: 'medium', contentSize: 'medium', shape: 'rounded', showTitle: true });
-    expect(f.placement).toEqual({ x: 12, y: 4, w: 6, h: 4 }); // the default open box of a Medium folder
+    expect(f.placement).toEqual({ x: 12, y: 4, w: 6, h: 5 }); // the default open box of a Medium folder
     expect(f.content.children.map((c) => c.id)).toEqual(['c', 'b', 'a']);
     expect(f.content.children.every((c) => !('placement' in c))).toBe(true);
     expect('columns' in f.content).toBe(false);
@@ -161,7 +161,7 @@ describe('mergeIntoNewFolder', () => {
     const d = dash();
     const r = mergeIntoNewFolder(d, ['a', 'b', 'x', 'z', 'y'], 'c', new Set(allNodeIds(d)));
     const f = byId(rootOf(r.dashboard), r.folderId) as FolderNode;
-    expect(f.placement).toMatchObject({ w: 6, h: 4 });
+    expect(f.placement).toMatchObject({ w: 6, h: 5 });
     expect(f.content.children.map((n) => n.id)).toEqual(['c', 'a', 'b', 'x', 'z', 'y']);
   });
   it('rejects bad input', () => {
@@ -179,7 +179,7 @@ describe('mergeIntoNewFolder', () => {
     } as LayoutDashboard);
     const r = mergeIntoNewFolder(d, ['b'], 'a', new Set(['a', 'b']));
     const f = r.dashboard.tabs[0].root.children.find((n) => n.id === r.folderId) as FolderNode;
-    expect(f.placement).toEqual({ x: 10, y: 10, w: 6, h: 4 });
+    expect(f.placement).toEqual({ x: 10, y: 10, w: 6, h: 5 });
     expect(f.content.children.map((c) => (c as { size?: string }).size)).toEqual(['large', 'small']);
   });
 });
@@ -199,7 +199,7 @@ describe('merge safety', () => {
     const r = mergeIntoNewFolder(d, ['b', 'c'], 'a', ids(d));
     const root = r.dashboard.tabs[0].root;
     const f = root.children.find((x) => x.id === r.folderId)!;
-    expect(f.placement).toEqual({ x: 18, y: 0, w: 6, h: 4 });
+    expect(f.placement).toEqual({ x: 18, y: 0, w: 6, h: 5 });
     const n = root.children.find((x) => x.id === 'n')!;
     expect(n.placement!.x === 18 && n.placement!.y === 0).toBe(false); // pushed off the footprint
     expect(() => assertGridNoOverlap(root)).not.toThrow();

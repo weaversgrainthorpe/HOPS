@@ -24,8 +24,8 @@ describe('new items', () => {
     expect(blankTile().size).toBe('medium');
     expect('placement' in blankTile()).toBe(false);
   });
-  it('a new folder is Medium with Medium contents and the default open box (6 x 4)', () => {
-    expect(blankFolder()).toMatchObject({ size: 'medium', contentSize: 'medium', placement: { x: 0, y: 0, w: 6, h: 4 } });
+  it('a new folder is Medium with Medium contents and the default open box (6 x 5: 6 x 4 raised to the Medium minimum, Ruling 7a)', () => {
+    expect(blankFolder()).toMatchObject({ size: 'medium', contentSize: 'medium', placement: { x: 0, y: 0, w: 6, h: 5 } });
     expect(blankFolder().content).toEqual({ children: [] });
   });
 });

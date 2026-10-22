@@ -129,10 +129,10 @@ describe('moveBetween', () => {
     expect(() => moveBetween(inF, ['L'], { tabId: 't2' }, [p(10, 10, 2, 2)])).toThrow(/Large.*4 x 4|4 x 4/);
   });
   it('a folder leaving a folder for the tab arrives minimised, at the box it is given', () => {
-    const d = moveBetween(dash(), ['f2'], { tabId: 't1' }, [p(12, 0, 6, 4)]);
+    const d = moveBetween(dash(), ['f2'], { tabId: 't1' }, [p(12, 0, 6, 5)]);
     const f2 = node(root(d), 'f2') as FolderNode;
     expect(f2.display).toBe('collapsed');
-    expect(f2.placement).toEqual(p(12, 0, 6, 4));
+    expect(f2.placement).toEqual(p(12, 0, 6, 5));
     expect(f2.content.children.map((n) => n.id)).toEqual(['z']);
   });
   it('folder → folder at an index', () => {
@@ -201,8 +201,8 @@ describe('mergeIntoNewFolder', () => {
     expect(f.content).toEqual({ children: [expect.objectContaining({ id: 'a' }), expect.objectContaining({ id: 'L' })] });
     expect(f.content.children.every((c) => !('placement' in c))).toBe(true);
     expect('layout' in f).toBe(false);
-    // The open box: size cells x 3 wide by x 2 high, at the target's top-left.
-    expect(f.placement).toEqual(p(0, 0, 6, 4));
+    // The open box: size cells x 3 wide by x 2 high, raised to the Medium minimum (5 high, Ruling 7a), at the target's top-left.
+    expect(f.placement).toEqual(p(0, 0, 6, 5));
   });
   it('inside a folder: the new folder takes the target\'s place in the order', () => {
     const r = mergeIntoNewFolder(dash(), ['y'], 'x', ALL);
@@ -270,5 +270,89 @@ describe('the minimum at the largest contents size', () => {
     const d = small('large', 4);
     expect(() => fitFolderMinimum(d, 'f1')).toThrow(TreeOpError);
     expect(() => fitFolderMinimum(d, 'f1')).toThrow(/room/);
+  });
+});
+
+// Ruling 7: an open folder box is never below its minimum. (a) A new folder's default box is raised to
+// its minimum; (b) moving a folder (or contents) whose subtree has a larger contents size into a folder
+// grows the receiving tab-level open box to the new minimum, pushing its neighbours by the M3 rules, in
+// the SAME operation (one undo step); no room across the tab is refused with the reason.
+describe('Ruling 7: the receiving open box grows to the new minimum', () => {
+  /** t1: f1 (Medium contents, at its Medium minimum 3 x 5) with tile x; tile `below` under it; G (Large contents) on the tab. */
+  function d7(columns = 24): LayoutDashboard {
+    return deepFreeze({
+      id: 'd', name: 'D', path: '/d', revision: 1,
+      tabs: [
+        { id: 't1', name: 'One', root: { columns, children: [
+          folder('f1', [tile('x')], p(0, 0, 3, 5)),
+          tile('below', p(0, 5)),
+          folder('G', [tile('g1')], p(columns >= 16 ? 10 : 0, columns >= 16 ? 0 : 7, 5, 7), { contentSize: 'large' })
+        ] } },
+        { id: 't2', name: 'Two', root: { columns, children: [
+          folder('H', [folder('Hs', [tile('h1')], undefined, { contentSize: 'large' })], p(0, 0, 5, 7))
+        ] } }
+      ]
+    } as LayoutDashboard);
+  }
+  const ALL7 = new Set(['d', 't1', 't2', 'f1', 'x', 'below', 'G', 'g1', 'H', 'Hs', 'h1']);
+  const at = (d: LayoutDashboard, id: string, t = 't1') => (root(d, t).find((n) => n.id === id) as LayoutNode).placement;
+  const clear = (d: LayoutDashboard) => {
+    const b = at(d, 'below')!;
+    expect(b).not.toEqual(p(0, 5));
+    expect(b.x >= 5 || b.y >= 7).toBe(true);
+  };
+
+  it('moving a Large-contents folder from the tab into a Medium folder grows that folder to 5 x 7 and pushes', () => {
+    const r = moveBetween(d7(), ['G'], { tabId: 't1', folderId: 'f1' }, 1);
+    expect(order(r, 'f1')).toEqual(['x', 'G']);
+    expect(at(r, 'f1')).toEqual(p(0, 0, 5, 7));
+    clear(r);
+  });
+  it('moving a sub-folder with Large contents out of another tab\'s folder grows the receiving box', () => {
+    const r = moveBetween(d7(), ['Hs'], { tabId: 't1', folderId: 'f1' }, 0);
+    expect(at(r, 'f1')).toEqual(p(0, 0, 5, 7));
+    clear(r);
+  });
+  it('copy and paste grow it the same way', () => {
+    expect(at(copyNodes(d7(), ['G'], { tabId: 't1', folderId: 'f1' }, 0, ALL7).dashboard, 'f1')).toEqual(p(0, 0, 5, 7));
+    const snap = [folderIn(d7(), 'Hs')];
+    expect(at(pasteSnapshot(d7(), snap, { tabId: 't1', folderId: 'f1' }, 0, ALL7).dashboard, 'f1')).toEqual(p(0, 0, 5, 7));
+  });
+  it('a NEW folder with Large contents inserted into a folder grows it', () => {
+    const fresh = folder('n', [], undefined, { contentSize: 'large' }) as LayoutNode;
+    expect(at(insertNode(d7(), fresh, { tabId: 't1', folderId: 'f1' }, 0), 'f1')).toEqual(p(0, 0, 5, 7));
+  });
+  it('moving into a sub-folder grows the TAB-LEVEL folder that holds it', () => {
+    const d = deepFreeze({
+      ...d7(),
+      tabs: [{ id: 't1', name: 'One', root: { columns: 24, children: [
+        folder('f1', [folder('f2', [tile('z')])], p(0, 0, 3, 5)),
+        folder('G', [tile('g1')], p(10, 0, 5, 7), { contentSize: 'large' })
+      ] } }]
+    } as LayoutDashboard);
+    expect(at(moveBetween(d, ['G'], { tabId: 't1', folderId: 'f2' }, 0), 'f1')).toEqual(p(0, 0, 5, 7));
+  });
+  it('a move that does not raise the minimum leaves the box as it is (same placement)', () => {
+    const r = moveBetween(d7(), ['below'], { tabId: 't1', folderId: 'f1' }, 0);
+    expect(at(r, 'f1')).toEqual(p(0, 0, 3, 5));
+  });
+  it('no room across the tab: refused with the reason; nothing changes', () => {
+    const d = d7(4); // 4 columns: a Large-contents folder needs 5
+    expect(() => moveBetween(d, ['G'], { tabId: 't1', folderId: 'f1' }, 0)).toThrow(TreeOpError);
+    expect(() => moveBetween(d, ['G'], { tabId: 't1', folderId: 'f1' }, 0)).toThrow(/room/);
+  });
+  it('merging onto a tile inside a folder with a Large-contents folder grows the tab-level box', () => {
+    const r = mergeIntoNewFolder(d7(), ['G'], 'x', ALL7);
+    expect(at(r.dashboard, 'f1')).toEqual(p(0, 0, 5, 7));
+    clear(r.dashboard);
+  });
+  it('merging on the tab: the new folder\'s box is its default raised to its minimum', () => {
+    const r = mergeIntoNewFolder(d7(), ['G'], 'below', ALL7);
+    expect(at(r.dashboard, r.folderId)).toMatchObject({ w: 6, h: 7 }); // 6 x 4 default, Large inside: 7 high
+  });
+  it('a folder moved out of a folder onto the tab takes a box no smaller than its minimum; a smaller one is refused', () => {
+    expect(() => moveBetween(d7(), ['Hs'], { tabId: 't1' }, [p(16, 0, 6, 4)])).toThrow(/at least 5 x 7/);
+    const r = moveBetween(d7(), ['Hs'], { tabId: 't1' }, [p(16, 0, 6, 7)]);
+    expect(at(r, 'Hs')).toEqual(p(16, 0, 6, 7));
   });
 });

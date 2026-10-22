@@ -347,7 +347,7 @@ describe('paste of a copy uses the snapshot taken at Copy time (Ruling 18(6))', 
     await pasteInto({ tabId: 't2' });
     const pasted = draft().tabs[1].root.children[0] as FolderNode;
     expect(pasted.display).toBe('collapsed');
-    expect(pasted.placement).toEqual(p(0, 0, 6, 4));
+    expect(pasted.placement).toEqual(p(0, 0, 6, 5));
     expect('placement' in pasted.content.children[0]).toBe(false);
   });
 });

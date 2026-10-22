@@ -184,7 +184,7 @@ export function blankTile(): TileNode {
 }
 
 export function blankFolder(): FolderNode {
-  const box = defaultFolderBox('medium');
+  const box = defaultFolderBox({ size: 'medium', contentSize: 'medium' });
   return {
     kind: 'folder', id: '', name: 'New folder', display: 'expanded', size: 'medium', contentSize: 'medium',
     shape: 'rounded', showTitle: true, placement: { x: 0, y: 0, ...box }, content: { children: [] }
@@ -235,7 +235,12 @@ export function addNode(node: LayoutNode, to: ContainerRef, cell?: Cell): string
     return null;
   }
   const placed = { ...plain(node), id } as LayoutNode;
-  if (placed.kind === 'folder') placed.content = { ...placed.content, children: [] };
+  if (placed.kind === 'folder') {
+    placed.content = { ...placed.content, children: [] };
+    // A new folder's box is its default box for the size and contents size picked in the dialog,
+    // never below its minimum (Ruling 7a).
+    if (to.folderId === undefined) placed.placement = { ...(placed.placement ?? { x: 0, y: 0 }), ...defaultFolderBox(placed) } as Placement;
+  }
   const ok = apply(node.kind === 'tile' ? 'Add tile' : 'Add folder', (dd) => {
     // A new tile takes the span of its Size on a tab (spec §8); too narrow a tab refuses, saying why.
     // In a folder it goes at the end of the order (no placement).

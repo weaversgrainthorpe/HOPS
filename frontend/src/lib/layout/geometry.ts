@@ -434,22 +434,31 @@ export function minimisedPlacement(p: Placement, size: unknown): Placement {
   return out;
 }
 
-/** The default open box of a folder that has none (M5 §3a.3): its size in cells x 3 wide, x 2 high. */
-export function defaultFolderBox(size: unknown): { w: number; h: number } {
-  const s = sizeSpan(size);
-  return { w: 3 * s, h: 2 * s };
+/**
+ * The default open box of a folder that has none (M5 §3a.3): its size in cells x 3 wide, x 2 high —
+ * raised, each way, to its smallest open box at its largest contents size (folderMinCells), since an
+ * open folder box is never below its minimum (Ruling 7a). Medium with Medium contents: 6 x 5.
+ */
+export function defaultFolderBox(folder: Pick<FolderNode, 'size' | 'contentSize'> & { content?: FolderNode['content'] }): {
+  w: number; h: number;
+} {
+  const s = sizeSpan(folder.size);
+  const min = folderMinCells({ content: { children: [] }, ...folder } as FolderNode);
+  return { w: Math.max(3 * s, min.w), h: Math.max(2 * s, min.h) };
 }
 
 /**
  * The cells an item takes when it is placed on a tab: a tile its Size's span (square); a folder
  * its stored open box, or the default box when it has none (it comes from inside a folder).
  */
-export function tabSpan(n: Pick<LayoutNode, 'kind' | 'placement'> & { size?: unknown }): { w: number; h: number } {
+export function tabSpan(
+  n: Pick<LayoutNode, 'kind' | 'placement'> & { size?: unknown; contentSize?: unknown; content?: unknown }
+): { w: number; h: number } {
   if (n.kind === 'tile') {
     const s = sizeSpan(n.size);
     return { w: s, h: s };
   }
   const p = n.placement;
   if (p && isNum(p.w) && isNum(p.h)) return { w: Math.max(1, Math.floor(p.w)), h: Math.max(1, Math.floor(p.h)) };
-  return defaultFolderBox(n.size);
+  return defaultFolderBox(n as FolderNode);
 }
