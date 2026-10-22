@@ -254,11 +254,9 @@ async function linksAndMore(page: Page) {
 }
 
 test.describe('walkthrough 1 C (2): with room short, the navbar controls go compact so more dashboard links show', () => {
-  // Measured (Chromium, default text size): the 4 links need 497 px (86 + 95 + 165 + 127 and three
-  // 8 px gaps). The title stays centred, so the left side (logo 173 + 32 + links) gets at most half of
-  // what the title leaves: 517 px at 1280, 577 px at 1416 and above (the bar is at most 1400 wide) —
-  // room for 311 / 371 px of links. Compact controls (edit 484 px, view 432 px) already fit in their
-  // half, so 2 links + More is the most a centred title allows at both widths (see walkthrough1-C.md).
+  // Walkthrough 1 C measured that a CENTRED title left room for only 2 links. Ruling 13 (review round
+  // D) moved the title just right of the links, so more fit now; m5-walkthrough1d.spec.ts holds the
+  // exact counts (4 in view / 3 in edit at 1416). These keep C's floor: at least 2 links + More.
   test('4 dashboards at 1280 and 1416, view and edit: the controls compact when that shows more links; at least 2 links + More; nothing overlaps; every control stays', async ({ page, context }) => {
     const sc = await fourDashboards(page, context);
     const all = ['Sample', 'Weavers', 'Sample (Imported)', 'v3 Showcase'];

@@ -220,6 +220,13 @@ describe('Entry content layout (spec §10)', () => {
       expect([r('.entry.fill.small', 'icon'), r('.entry.fill.small', 'name'), r('.entry.fill.small', 'desc')]).toEqual(['28', '9', '8']);
     });
 
+    // Review round (walkthrough 1 D): Large's description scales with the tile like the rest, but has
+    // an upper bound (at 1920 it reached about 28px, larger than the navbar title): 1.25rem at most.
+    it('Large\'s description has an upper bound (1.25rem), its floor still 11px; the name and icon stay uncapped', () => {
+      expect(rule('.entry.fill.large .subtitle')).toMatch(/font-size:\s*clamp\(11px,\s*var\(--desc-r\),\s*1\.25rem\)/);
+      expect(css).not.toMatch(/\.large \.title \{[^}]*(min|clamp)\(/);
+    });
+
     it('Large hides its description below the height its floors need (110.3px)', () => {
       expect(css).toMatch(/@container tile \(max-height:\s*110\.29px\)\s*\{[^}]*\.entry\.fill\.large \.subtitle[^}]*\{[^}]*display:\s*none/);
     });

@@ -1,7 +1,8 @@
-// M5 walkthrough 1 (C): an item's edit handle sits in its top-right corner, sized to the item, and
-// never covers the item's centre — so a click in the middle always reaches the item (opens a
-// minimised folder, selects a tile), never the Edit dialog. It is always at least 24×24 to tap; an
-// item too small to hold one clear of its centre has it hung just outside its corner.
+// M5 walkthrough 1 (C, then the review round D): an item's edit handle sits INSIDE its top-right
+// corner, sized to the item, and never covers the item's centre — so a click or tap in the middle
+// always reaches the item (opens a minimised folder, selects a tile), never the Edit dialog. It never
+// hangs outside the item (review round: on touch a hung handle covered a neighbour's corner and took
+// its taps), with a mouse or on touch alike.
 import { describe, it, expect } from 'vitest';
 import { cornerHandleFit, HANDLE_MIN_PX, HANDLE_MAX_PX } from './handleFit';
 
@@ -14,28 +15,59 @@ const coversCentre = (w: number, h: number) => {
   const b = box(w, h);
   return b.left <= w / 2 && w / 2 <= b.right && b.top <= h / 2 && h / 2 <= b.bottom;
 };
+const sizes = (from: number) => {
+  const out: [number, number][] = [];
+  for (let w = from; w <= 600; w += 1) for (const h of [w, Math.round(w * 0.6), Math.round(w * 1.5)]) out.push([w, h]);
+  return out;
+};
 
-describe('cornerHandleFit: the corner edit handle never covers the item\'s centre', () => {
-  it('never covers the centre, at every item size (Small 24 px up to Large 600 px, square or not)', () => {
-    for (let w = 24; w <= 600; w += 1) {
-      for (const h of [w, Math.round(w * 0.6), Math.round(w * 1.5)]) {
-        expect(coversCentre(w, h), `${w}×${h}`).toBe(false);
-        // A margin round the centre stays clear too (a click a hair off-centre).
-        const b = box(w, h);
-        const clearX = b.left >= w / 2 + 4 || b.right <= w / 2 - 4;
-        const clearY = b.top >= h / 2 + 4 || b.bottom <= h / 2 - 4;
-        expect(clearX || clearY, `${w}×${h} keeps 4 px round the centre`).toBe(true);
-      }
+describe('cornerHandleFit: inside the corner, never over the centre', () => {
+  it('is always inside the item: never past its top or right edge (no overhang onto a neighbour), at every size', () => {
+    for (const [w, h] of sizes(12)) {
+      const b = box(w, h);
+      expect(b.offsetPx, `${w}×${h}: offset`).toBeGreaterThanOrEqual(0);
+      expect(b.left, `${w}×${h}: left edge inside`).toBeGreaterThanOrEqual(0);
+      expect(b.bottom, `${w}×${h}: bottom edge inside`).toBeLessThanOrEqual(h);
+      expect(b.right).toBeLessThanOrEqual(w);
     }
   });
 
-  it('is always at least 24×24 (a tap target) and never more than 28', () => {
-    for (let w = 24; w <= 600; w += 7) {
+  it('never covers the centre (every item 26 px and up, square or not)', () => {
+    for (const [w, h] of sizes(26)) expect(coversCentre(w, h), `${w}×${h}`).toBe(false);
+  });
+
+  it('keeps 4 px round the centre clear where the item has room (64 px and up)', () => {
+    for (const [w, h] of sizes(64)) {
+      const b = box(w, h);
+      const clearX = b.left >= w / 2 + 4 || b.right <= w / 2 - 4;
+      const clearY = b.top >= h / 2 + 4 || b.bottom <= h / 2 - 4;
+      expect(clearX || clearY, `${w}×${h}`).toBe(true);
+    }
+  });
+
+  it('a Small item (51–56 px at 1280–1416) still gets a 24 px handle inside its corner, its centre free', () => {
+    for (const w of [51, 52, 53, 54, 55, 56]) {
+      const b = box(w, w);
+      expect(b.sizePx, `${w}`).toBe(HANDLE_MIN_PX);
+      expect(b.offsetPx, `${w}`).toBeGreaterThanOrEqual(0);
+      expect(coversCentre(w, w), `${w}`).toBe(false);
+    }
+  });
+
+  it('at least 24×24 (a tap target) on every item 50 px and up, never more than 28', () => {
+    for (let w = 50; w <= 600; w += 7) {
       const f = cornerHandleFit(w, w);
       expect(f.sizePx).toBeGreaterThanOrEqual(HANDLE_MIN_PX);
       expect(f.sizePx).toBeLessThanOrEqual(HANDLE_MAX_PX);
-      expect(HANDLE_MIN_PX).toBe(24);
     }
+    expect(HANDLE_MIN_PX).toBe(24);
+  });
+
+  it('a tiny item (under 50 px) gets a smaller handle rather than one over its centre or outside it', () => {
+    const f = cornerHandleFit(40, 40);
+    expect(f.sizePx).toBeLessThan(HANDLE_MIN_PX);
+    expect(f.offsetPx).toBe(0);
+    expect(coversCentre(40, 40)).toBe(false);
   });
 
   it('is sized to the item: a bigger item gets a bigger handle, up to the cap', () => {
@@ -43,28 +75,8 @@ describe('cornerHandleFit: the corner edit handle never covers the item\'s centr
     expect(cornerHandleFit(300, 300).sizePx).toBe(HANDLE_MAX_PX);
   });
 
-  it('inside the corner when it fits clear of the centre (Medium and up, and a roomy Small)', () => {
-    for (const w of [77, 101, 154, 202, 309]) {
-      const f = cornerHandleFit(w, w);
-      expect(f.outside, `${w}`).toBe(false);
-      expect(f.offsetPx).toBeGreaterThanOrEqual(0);
-    }
-  });
-
-  it('a Small item too small to hold it clear of its centre: hung just outside the corner, still touching it', () => {
-    for (const w of [24, 40, 50, 56]) {
-      const f = cornerHandleFit(w, w);
-      expect(f.outside, `${w}`).toBe(true);
-      expect(f.offsetPx).toBeLessThan(0);
-      // Still overlaps the item's corner, so the pointer can move from the item onto it.
-      expect(-f.offsetPx).toBeLessThan(f.sizePx);
-    }
-    // At most 8 px past the item where that is enough (a folder page's padding is 8 px).
-    expect(cornerHandleFit(56, 56).offsetPx).toBe(-8);
-  });
-
   it('an unmeasured item (0 or NaN) gets the plain default, inside', () => {
-    expect(cornerHandleFit(0, 0)).toEqual({ sizePx: HANDLE_MAX_PX, offsetPx: 4, outside: false });
-    expect(cornerHandleFit(NaN, 50)).toEqual({ sizePx: HANDLE_MAX_PX, offsetPx: 4, outside: false });
+    expect(cornerHandleFit(0, 0)).toEqual({ sizePx: HANDLE_MAX_PX, offsetPx: 4 });
+    expect(cornerHandleFit(NaN, 50)).toEqual({ sizePx: HANDLE_MAX_PX, offsetPx: 4 });
   });
 });

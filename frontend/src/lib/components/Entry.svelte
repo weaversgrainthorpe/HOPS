@@ -391,6 +391,11 @@
   .entry.fill .subtitle {
     font-size: max(11px, var(--desc-r));
   }
+  /* Large's description scales too, but never past 1.25rem (review round, walkthrough 1 D: at 1920 it
+     reached about 28px, bigger than the navbar title). A smaller description only needs less room. */
+  .entry.fill.large .subtitle {
+    font-size: clamp(11px, var(--desc-r), 1.25rem);
+  }
   .entry.fill .icon :global(svg),
   .entry.fill .icon img {
     width: max(12px, var(--icon-r));

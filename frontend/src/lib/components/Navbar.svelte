@@ -111,31 +111,38 @@
   let navDashboards = $derived($dashboards.map((d) => ({ id: d.id, name: d.name, path: dashboardHref(d.path) })));
 
   // ---- the dashboard links (Ruling 12): the links that fit, in order; the rest in a "More" menu.
-  // No scrolling strip and no scrollbar. A hidden copy of every link (and of the More button) is
-  // measured; the room is .nav-dash's width, which never depends on how many links show (it takes
-  // the column's spare width), so showing or hiding links never feeds back into the measurement.
+  // No scrolling strip and no scrollbar. Ruling 13: the title is not centred — it sits just right of
+  // the links (and More), so the links get the whole middle of the bar but for the title's own width.
+  // A hidden copy of every link (and of the More button) is measured; the room is the middle's width
+  // (.nav-mid, which takes the bar's spare width and never depends on how many links show) less the
+  // title's natural width (its scrollWidth, whole even while it is squeezed) — so showing or hiding
+  // links never feeds back into the measurement.
+  let midEl = $state<HTMLElement | null>(null);
   let dashEl = $state<HTMLElement | null>(null);
+  let titleEl = $state<HTMLElement | null>(null);
   let measureEl = $state<HTMLElement | null>(null);
   let shownCount = $state(Number.POSITIVE_INFINITY);
   let moreWidthPx = $state(0);
   function measureLinks() {
-    if (!dashEl || !measureEl) return;
+    if (!midEl || !dashEl || !measureEl) return;
     const widths = Array.from(measureEl.querySelectorAll<HTMLElement>('[data-measure-link]')).map(
       (e) => e.getBoundingClientRect().width
     );
     const more = measureEl.querySelector<HTMLElement>('[data-measure-more]')?.getBoundingClientRect().width ?? 0;
     const gap = parseFloat(getComputedStyle(dashEl).columnGap) || 0;
+    const titleRoom = titleEl ? titleEl.scrollWidth + (parseFloat(getComputedStyle(midEl).columnGap) || 0) : 0;
     moreWidthPx = Math.ceil(more);
-    shownCount = fitLinks(widths, gap, more, dashEl.getBoundingClientRect().width);
+    shownCount = fitLinks(widths, gap, more, midEl.getBoundingClientRect().width - titleRoom);
   }
   $effect(() => {
-    if (!dashEl || !measureEl) return;
+    if (!midEl || !dashEl || !measureEl) return;
     void navDashboards; // a renamed, added or removed dashboard: measure again
+    void titleEl;
     measureLinks();
     // (No ResizeObserver — very old browsers, test DOMs — measures once per change of the list.)
     if (typeof ResizeObserver === 'undefined') return;
     const ro = new ResizeObserver(() => measureLinks());
-    ro.observe(dashEl);
+    ro.observe(midEl);
     ro.observe(measureEl);
     return () => ro.disconnect();
   });
@@ -226,7 +233,11 @@
   let showCenter = $derived(headerConfig?.showCenter !== false); // Default true
   let leftText = $derived(headerConfig?.leftText);
   let centerTitle = $derived(headerConfig?.centerTitle);
-  // ---- the bar never outgrows the screen: step down (CSS .c1–.c6) until it fits. Measured on the
+  /** The links show beside the logo (signed in, on a dashboard; not with a custom left text). */
+  let showLinks = $derived(showLeft && !leftText && $isAuthenticated && isDashboardPage);
+  /** The title: the header's own, else the dashboard's name (Ruling 13: just right of the links). */
+  let titleText = $derived(showCenter ? centerTitle || pageDashboard?.name || '' : '');
+  // ---- the bar never outgrows the screen: step down (CSS .c1–.c7) until it fits. Measured on the
   // bar's own width (a window resize) and whenever what it holds changes; all before the next paint
   // (a ResizeObserver callback, then microtasks), so no level flashes. The bar's width never depends
   // on the level, so this never loops.
@@ -234,12 +245,15 @@
   // First, the dashboard links (walkthrough 1 C): while some are in More, the right-hand controls go
   // compact (.tight: icons only — no "Editing" text, Log out as its icon — and tighter gaps) when
   // that shows more links. Nothing is hidden or moved into a menu: every control stays, smaller.
-  const MAX_COMPACT = 6;
+  const MAX_COMPACT = 7;
   let navContentEl = $state<HTMLElement | null>(null);
   let compact = $state(0);
   let tight = $state(false);
   let fitting = false;
   let fitAgain = false;
+  /** While fitBar measures, the controls' transitions are off: a button mid-animation (a padding or
+   *  width easing to a level's value) would be measured at a size it is about to leave. */
+  let measuring = $state(false);
   /** How many links show now (measured at once, not on the next ResizeObserver round). */
   function linksShown(): number {
     measureLinks();
@@ -252,18 +266,19 @@
       return;
     }
     fitting = true;
+    measuring = true;
     try {
       do {
         fitAgain = false;
         compact = 0;
         tight = false;
         await tick();
-        if (dashEl && measureEl && navDashboards.length > 0) {
+        if (midEl && dashEl && measureEl && navDashboards.length > 0) {
           const roomy = linksShown();
           if (roomy < navDashboards.length) {
             tight = true;
             await tick();
-            // Compact only when it shows more links (the title stays centred, so it may not).
+            // Compact only when it shows more links.
             if (linksShown() <= roomy) {
               tight = false;
               await tick();
@@ -271,9 +286,18 @@
             }
           }
         }
-        while (navContentEl && compact < MAX_COMPACT && navContentEl.scrollWidth > navContentEl.clientWidth + 0.5) {
+        // Each level changes the middle's room, so the links are measured again (now, not on the next
+        // ResizeObserver round) before the bar is: the check always sees the links that will show.
+        const overflowing = () => !!navContentEl && navContentEl.scrollWidth > navContentEl.clientWidth + 0.5;
+        const settleLinks = async () => {
+          measureLinks();
+          await tick();
+        };
+        await settleLinks();
+        while (compact < MAX_COMPACT && overflowing()) {
           compact++;
           await tick();
+          await settleLinks();
         }
         // Let the effects of this run's own changes (how many links show) settle while it still
         // counts as fitting, so they never start another run.
@@ -281,6 +305,7 @@
       } while (fitAgain);
     } finally {
       fitting = false;
+      measuring = false;
     }
   }
   $effect(() => {
@@ -291,7 +316,7 @@
   });
   // What the bar holds: edit mode, signed in or not, the page, the title, the text size, the links.
   $effect(() => {
-    void [$editMode, $isAuthenticated, isDashboardPage, showLeft, showCenter, leftText, centerTitle, pageDashboard?.name, $textSize, navDashboards];
+    void [$editMode, $isAuthenticated, isDashboardPage, showLeft, showCenter, leftText, titleText, $textSize, navDashboards];
     untrack(() => void fitBar());
   });
   // The More button coming or going changes what the bar needs. fitBar itself changes how many links
@@ -315,7 +340,9 @@
     class:c4={compact >= 4}
     class:c5={compact >= 5}
     class:c6={compact >= 6}
+    class:c7={compact >= 7}
     class:tight
+    class:measuring
     bind:this={navContentEl}
   >
     <div class="nav-left">
@@ -328,90 +355,86 @@
             <span class="wordmark">HOPS</span>
             <span class="version">v{appVersion}</span>
           </a>
+        {/if}
+      {/if}
 
-          {#if $isAuthenticated && isDashboardPage}
-            <div class="nav-dash" bind:this={dashEl} style:min-width="{moreWidthPx}px">
-              <!-- Measured, never seen: every link and the More button at their natural widths. -->
-              <div class="nav-measure-clip" aria-hidden="true">
-                <div class="nav-measure" bind:this={measureEl}>
-                  {#each navDashboards as dashboard (dashboard.id)}
-                    <span class="nav-link" data-measure-link>{dashboard.name}</span>
-                  {/each}
-                  <span class="nav-more-btn" data-measure-more>More <Icon icon="mdi:chevron-down" width="18" height="18" /></span>
-                </div>
+      <!-- The middle (Ruling 13): the dashboard links that fit, More, then the title just right of them. -->
+      <div class="nav-mid" bind:this={midEl} style:--more-w="{showLinks ? moreWidthPx : 0}px">
+        {#if showLinks}
+          <div class="nav-dash" bind:this={dashEl}>
+            <!-- Measured, never seen: every link and the More button at their natural widths. -->
+            <div class="nav-measure-clip" aria-hidden="true">
+              <div class="nav-measure" bind:this={measureEl}>
+                {#each navDashboards as dashboard (dashboard.id)}
+                  <span class="nav-link" data-measure-link>{dashboard.name}</span>
+                {/each}
+                <span class="nav-more-btn" data-measure-more>More <Icon icon="mdi:chevron-down" width="18" height="18" /></span>
               </div>
-              {#if shownLinks.length > 0}
-                <div class="nav-links">
-                  {#each shownLinks as dashboard (dashboard.id)}
-                    <a
-                      href={dashboard.path}
-                      class="nav-link"
-                      class:active={currentPath === dashboard.path}
-                      aria-current={currentPath === dashboard.path ? 'page' : undefined}
-                    >
-                      {dashboard.name}
-                    </a>
-                  {/each}
-                </div>
-              {/if}
-              {#if moreLinks.length > 0}
-                <div class="nav-more">
-                  <button
-                    type="button"
-                    class="nav-more-btn"
-                    class:active={moreHasCurrent}
-                    bind:this={moreBtn}
-                    aria-label="More dashboards"
-                    aria-haspopup="menu"
-                    aria-expanded={moreOpen}
-                    aria-controls="nav-more-menu"
-                    title="More dashboards"
-                    onclick={() => (moreOpen ? closeMore() : void openMore(null))}
-                    onkeydown={onMoreKey}
-                  >
-                    More <Icon icon="mdi:chevron-down" width="18" height="18" />
-                  </button>
-                  {#if moreOpen}
-                    <!-- svelte-ignore a11y_interactive_supports_focus -->
-                    <div
-                      class="more-menu"
-                      id="nav-more-menu"
-                      role="menu"
-                      aria-label="More dashboards"
-                      bind:this={moreMenu}
-                      onkeydown={onMenuKey}
-                    >
-                      {#each moreLinks as dashboard (dashboard.id)}
-                        <a
-                          href={dashboard.path}
-                          role="menuitem"
-                          tabindex="-1"
-                          class="more-item"
-                          class:active={currentPath === dashboard.path}
-                          aria-current={currentPath === dashboard.path ? 'page' : undefined}
-                          onclick={() => closeMore()}
-                        >
-                          {dashboard.name}
-                        </a>
-                      {/each}
-                    </div>
-                  {/if}
-                </div>
-              {/if}
             </div>
-          {/if}
+            {#if shownLinks.length > 0}
+              <div class="nav-links">
+                {#each shownLinks as dashboard (dashboard.id)}
+                  <a
+                    href={dashboard.path}
+                    class="nav-link"
+                    class:active={currentPath === dashboard.path}
+                    aria-current={currentPath === dashboard.path ? 'page' : undefined}
+                  >
+                    {dashboard.name}
+                  </a>
+                {/each}
+              </div>
+            {/if}
+            {#if moreLinks.length > 0}
+              <div class="nav-more">
+                <button
+                  type="button"
+                  class="nav-more-btn"
+                  class:active={moreHasCurrent}
+                  bind:this={moreBtn}
+                  aria-label="More dashboards"
+                  aria-haspopup="menu"
+                  aria-expanded={moreOpen}
+                  aria-controls="nav-more-menu"
+                  title="More dashboards"
+                  onclick={() => (moreOpen ? closeMore() : void openMore(null))}
+                  onkeydown={onMoreKey}
+                >
+                  More <Icon icon="mdi:chevron-down" width="18" height="18" />
+                </button>
+                {#if moreOpen}
+                  <!-- svelte-ignore a11y_interactive_supports_focus -->
+                  <div
+                    class="more-menu"
+                    id="nav-more-menu"
+                    role="menu"
+                    aria-label="More dashboards"
+                    bind:this={moreMenu}
+                    onkeydown={onMenuKey}
+                  >
+                    {#each moreLinks as dashboard (dashboard.id)}
+                      <a
+                        href={dashboard.path}
+                        role="menuitem"
+                        tabindex="-1"
+                        class="more-item"
+                        class:active={currentPath === dashboard.path}
+                        aria-current={currentPath === dashboard.path ? 'page' : undefined}
+                        onclick={() => closeMore()}
+                      >
+                        {dashboard.name}
+                      </a>
+                    {/each}
+                  </div>
+                {/if}
+              </div>
+            {/if}
+          </div>
         {/if}
-      {/if}
-    </div>
-
-    <div class="nav-center">
-      {#if showCenter}
-        {#if centerTitle}
-          <h1 class="center-title">{centerTitle}</h1>
-        {:else if pageDashboard}
-          <h1 class="center-title">{pageDashboard.name}</h1>
+        {#if titleText}
+          <h1 class="center-title" bind:this={titleEl}>{titleText}</h1>
         {/if}
-      {/if}
+      </div>
     </div>
 
     <div class="nav-right">
@@ -548,12 +571,11 @@
     /* Match the navbar safe-area on the sides too, so the brand/actions
        don't sit under the rounded screen corners in landscape. */
     padding: 0 max(1rem, env(safe-area-inset-left, 0)) 0 max(1rem, env(safe-area-inset-right, 0));
-    display: grid;
-    /* The right-hand controls (pencil, gear, Log out…) always get their full width; the logo and
-       room for the More button keep theirs; the dashboard links take what is left of their side
-       (those that fit; the rest are in More); the centre title shrinks (ellipsis). With room to
-       spare both sides are equal, so the title stays centred. Never wider than the screen. */
-    grid-template-columns: minmax(min-content, 1fr) minmax(0, auto) minmax(max-content, 1fr);
+    /* Ruling 13: the logo, then the middle (the dashboard links that fit, More, the title just right of
+       them), then the right-hand controls at their full width. The middle takes what is left; its
+       smallest width is the More button (the title shrinks, with an ellipsis, before anything
+       overlaps), so the bar is never wider than the screen however many dashboards there are. */
+    display: flex;
     align-items: center;
     gap: 2rem;
     height: 70px;
@@ -564,21 +586,25 @@
     align-items: center;
     gap: 2rem;
     justify-content: flex-start;
-    min-width: 0;
+    flex: 1 1 0;
   }
 
   .nav-left .logo {
     flex-shrink: 0;
   }
 
-  .nav-center {
+  .nav-mid {
     display: flex;
     align-items: center;
-    justify-content: center;
-    min-width: 0;
+    gap: 1rem;
+    flex: 1 1 0;
+    width: 0;
+    min-width: var(--more-w, 0px);
   }
 
   .center-title {
+    flex: 0 1 auto;
+    min-width: 0;
     margin: 0;
     font-size: 1.5rem;
     font-weight: 600;
@@ -620,16 +646,14 @@
     opacity: 0.8;
   }
 
-  /* The dashboard links and the More button (Ruling 12). It takes the column's spare width — never
-     its content's (width 0, then it grows) — so the column's smallest width is the logo plus room for
-     the More button, and the bar is never wider than the screen however many dashboards there are. */
+  /* The dashboard links and the More button (Ruling 12): only as wide as what shows, so the title
+     sits just right of them (Ruling 13). fitLinks keeps it within the middle's room. */
   .nav-dash {
     position: relative;
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    flex: 1 1 0;
-    width: 0;
+    flex: none;
   }
 
   /* Only links that fit are drawn, so nothing is cut off; clip (never scroll) a sub-pixel rounding. */
@@ -918,10 +942,14 @@
   }
 
   /* Mobile landscape / small tablet: hide the dashboard links (and More) and the text-size
-     controls. */
+     controls (phones; from 769 px up the text-size buttons never hide). */
   @media (max-width: 768px) {
     .nav-dash {
       display: none;
+    }
+
+    .nav-mid {
+      min-width: 0;
     }
 
     .text-size-controls {
@@ -1002,9 +1030,11 @@
   }
   /* The bar never outgrows the screen (walkthrough 1: the page never scrolls sideways), at any width
      or text size: while it would, it steps down one level at a time (fitBar), least useful first —
-     tighter gaps, no wordmark, no text-size buttons or "Editing" label, smaller buttons and Log out as
-     an icon, no version, then no Help/About (still in Settings' reach for an admin). The pencil, gear
-     and Log out always stay (phones keep their own rules above). */
+     tighter gaps, no wordmark, no "Editing" label, smaller buttons and Log out as an icon, no
+     Help/About (still in Settings' reach for an admin), smaller text-size buttons, and last the
+     version. The text-size buttons are NEVER hidden (they are the only text-size control: a user who
+     enlarged the text must always be able to make it smaller again); the pencil, gear and Log out
+     always stay (phones keep their own rules above). */
   @media (min-width: 481px) {
     .nav-content.c1 {
       gap: 1rem;
@@ -1045,7 +1075,6 @@
     display: none;
   }
 
-  .c3 .text-size-controls,
   .c3 .edit-label {
     display: none;
   }
@@ -1091,12 +1120,27 @@
     padding: 0 0.5rem;
   }
 
-  .c5 .version {
+  .measuring :global(*) {
+    transition: none !important;
+  }
+
+  .c5 .help-btn,
+  .c5 .about-btn {
     display: none;
   }
 
-  .c6 .help-btn,
-  .c6 .about-btn {
+  /* Smaller, never hidden: still a 28 px tap target each. */
+  .c6 .text-size-controls {
+    gap: 0;
+    padding: 0.125rem;
+  }
+
+  .c6 .text-size-btn {
+    width: 28px;
+    height: 28px;
+  }
+
+  .c7 .version {
     display: none;
   }
 </style>

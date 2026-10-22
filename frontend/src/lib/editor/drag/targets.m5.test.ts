@@ -30,6 +30,7 @@ import { flowIndex } from './targets';
 import { moveOrCopyTo } from '../editorActions';
 import { undo } from '$lib/stores/editSession';
 import { setLayout, resetEditor, startSession, draft, nodeIn, tile, folder, p } from '$lib/components/editor/editorTestKit';
+import { toggleNode } from '$lib/stores/nodeSelection';
 
 const GRID = containerMetrics({ columns: 24, children: [] }, 1200);
 /** F's page: Medium items (100 px), 4 to a page here (2 a row, 2 rows). */
@@ -504,6 +505,37 @@ describe('merge inside a folder (walkthrough 1, Ruling 11)', () => {
   });
 });
 
+// Review round (walkthrough 1 D): Ruling 7(b) holds for a merge made by a DRAG inside a folder: a
+// folder whose contents are larger than the receiving folder's, merged onto a tile on its page,
+// grows the tab-level open box to its new minimum, in the same undo step.
+describe('Ruling 7(b) on a drag merge inside a folder', () => {
+  it('G (Large contents) held on F\'s k2 and dropped: F grows to its Large-contents minimum; one Undo restores it', () => {
+    resetEditor();
+    const d = dash();
+    // F at its Medium-contents minimum, G (a folder with Large contents) on the tab beside it.
+    (d.tabs[0].root.children[1] as FolderNode).placement = p(0, 4, 3, 5);
+    d.tabs[0].root.children[3] = folder('G', p(18, 0, 6, 7), [tile('g1')], { contentSize: 'large' });
+    setLayout([d]);
+    startSession();
+    setActiveTab('t1');
+    const before = draft();
+    sourceRect = { left: 0, top: 0, width: 100, height: 100 };
+    start('G', 50, 50);
+    hit = onPage(['k1', 'k2', 'k3', 'k4'], 0, 4);
+    moveTo(150, 350);
+    vi.advanceTimersByTime(500);
+    flush();
+    expect(get(drag)!.target).toEqual({ kind: 'merge', targetTileId: 'k2' });
+    drop(150, 350);
+    const F = nodeIn(draft(), 'F') as FolderNode;
+    const made = F.content.children[1] as FolderNode;
+    expect(made.content.children.map((n) => n.id)).toEqual(['k2', 'G']);
+    expect(F.placement).toMatchObject({ w: 5, h: 7 }); // Large contents inside: at least 5 x 7
+    undo();
+    expect(draft()).toEqual(before);
+  });
+});
+
 // Walkthrough 1 (C), Ruling 11's other half: an item dragged OUT of a folder is drawn at the folder's
 // item size only while it is over a folder's page; over the tab it is at its OWN size (what it
 // becomes there), at once, and back to the folder's item size over a folder again. The drop on the
@@ -555,6 +587,36 @@ describe('the ghost follows the target: out of a folder onto the tab (walkthroug
     const k1 = nodeIn(draft(), 'k1')!;
     // Ghost top-left (800, 680) → cell (16, 13.6 → 14), 4×4.
     expect(k1.placement).toMatchObject({ x: 16, y: 14, w: 4, h: 4 });
+  });
+
+  // Review round (walkthrough 1 D): a multi-select drag's ghost is sized for the GROUP, not for
+  // whichever item is first. Over the tab it is the group's largest own size, and the grabbed item
+  // lands at the ghost's top-left.
+  it('a group from F (k2 Medium grabbed, k1 Large with it): over the tab the ghost is the group\'s largest own size (Large), and k2 lands at its top-left', async () => {
+    const { container } = render(DragLayer, { tabId: 't1' });
+    resetEditor();
+    const d = dash();
+    const f = d.tabs[0].root.children[1] as FolderNode;
+    f.content.children[0] = tile('k1', undefined, { size: 'large' });
+    setLayout([d]);
+    startSession();
+    setActiveTab('t1');
+    toggleNode('k2', false);
+    toggleNode('k1', true);
+    sourceRect = { left: 100, top: 300, width: 100, height: 100 };
+    hit = onPage(['k1', 'k2', 'k3', 'k4'], 0, 4);
+    start('k2', 150, 310); // grabbed at (fx 0.5, fy 0.1)
+    expect(get(drag)!.ids).toEqual(['k2', 'k1']);
+    hit = onTab;
+    moveTo(900, 700);
+    await tick();
+    expect(get(drag)!.ghostShown).toEqual({ widthPx: 200, heightPx: 200 });
+    const g = container.ownerDocument.querySelector('.drag-layer .ghost') as HTMLElement;
+    expect(g.style.width).toBe('200px');
+    drop(900, 700);
+    // Ghost top-left (800, 680) → cell (16, 13.6 → 14); k2 (Medium, 2×2) lands there.
+    expect(nodeIn(draft(), 'k2')!.placement).toMatchObject({ x: 16, y: 14, w: 2, h: 2 });
+    expect(nodeIn(draft(), 'k1')!.placement).toMatchObject({ w: 4, h: 4 });
   });
 
   it('an item dragged on the tab keeps its rendered ghost (nothing changes for tab-to-tab drags)', () => {

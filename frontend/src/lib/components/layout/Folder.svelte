@@ -31,7 +31,8 @@
     setFolderDrill, setFolderPage, setFolderView, takePageReveal, type FolderViewContext
   } from '$lib/stores/folderView';
   import { selectedNodes, toggleNode } from '$lib/stores/nodeSelection';
-  import { openDialog, openMenu, menuPointFor } from '$lib/editor/editorUi';
+  import { editorMenu, openDialog, openMenu, menuPointFor } from '$lib/editor/editorUi';
+  import { get } from 'svelte/store';
   import { setDisplay } from '$lib/editor/editorActions';
   import { drag, dragSource } from '$lib/editor/drag/dragController';
   import { crumbDwellKey, pageDwellKey } from '$lib/editor/drag/targets';
@@ -72,10 +73,14 @@
   function menu(e: MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
+    cancelPendingOpen(); // the menu is the answer to this press, never also an open
     openMenu({ ...menuPointFor(e, e.currentTarget as Element), target: { kind: 'node', id: folder.id } });
   }
   /** Touch long-press released without moving (Ruling 18(1)): the folder's menu. */
-  const pressed = (x: number, y: number) => openMenu({ x, y, target: { kind: 'node', id: folder.id } });
+  const pressed = (x: number, y: number) => {
+    cancelPendingOpen();
+    openMenu({ x, y, target: { kind: 'node', id: folder.id } });
+  };
   /** Every item edits the same way (§4B): the handle and a double-click open the folder dialog. */
   const edit = () => openDialog({ kind: 'folder', id: folder.id });
   const dragging = $derived(editing && ($drag?.ids.includes(folder.id) ?? false));
@@ -148,6 +153,10 @@
     e.preventDefault();
     e.stopPropagation(); // an enclosing folder must not select itself too
     if (e.detail > 1) return; // the second click of a double-click: its dblclick edits
+    // A menu is open: this click is the release of the long-press (or right-press) that opened it —
+    // a tablet sends one after the long-press. A real new tap first presses outside the menu, which
+    // closes it. So it neither opens nor selects (walkthrough 1 D).
+    if (get(editorMenu) !== null) return;
     if (!item) toggleNode(folder.id, false);
     cancelPendingOpen();
     pendingOpen = setTimeout(() => {
@@ -716,6 +725,8 @@
   }
   .folder-slot {
     position: relative;
+    /* Its own stacking context: the edit handle inside its corner stacks with the item (as a tile's). */
+    isolation: isolate;
     display: flex;
     min-width: 0;
     min-height: 0;

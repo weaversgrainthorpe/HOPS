@@ -1104,12 +1104,16 @@ test.describe('§4D Settings is the admin home; / shows a dashboard', () => {
     await checkBar();
     await page.getByRole('link', { name: 'Settings' }).click({ trial: true, timeout: 3000 });
     await page.getByRole('button', { name: 'Log out' }).click({ trial: true, timeout: 3000 });
-    // A link in the More menu still opens its dashboard.
+    // A link in the More menu still opens its dashboard: one of these 8 that IS in the menu (which
+    // ones are depends on how many links fit, so none is assumed).
     await page.getByRole('button', { name: 'Exit Edit Mode' }).click();
     await more.click();
-    await page.getByRole('menu', { name: 'More dashboards' }).locator(`[href="${dashes[0].path}"]`).click();
-    await expect(page).toHaveURL(new RegExp(`${dashes[0].path}$`));
-    await expect(page.locator(`[data-node-id="${dashes[0].id('a')}"]`)).toBeVisible();
+    const inMenu = await page.getByRole('menu', { name: 'More dashboards' }).getByRole('menuitem').evaluateAll((els) => els.map((e) => e.getAttribute('href')));
+    const pick = dashes.find((d) => inMenu.includes(d.path) && d !== f);
+    expect(pick, 'one of the 8 (not the current one) is in the More menu').toBeTruthy();
+    await page.getByRole('menu', { name: 'More dashboards' }).locator(`[href="${pick!.path}"]`).click();
+    await expect(page).toHaveURL(new RegExp(`${pick!.path}$`));
+    await expect(page.locator(`[data-node-id="${pick!.id('a')}"]`)).toBeVisible();
   });
 
   test('logged out, /admin/discovery sends you to Settings to sign in', async ({ browser }) => {

@@ -288,8 +288,11 @@
   }
   /* Edit mode: items are dragged, so no text selection or touch callout on them. */
   .cell.editable {
-    /* The edit handle sits in the corner (free cells are already absolutely positioned). */
+    /* The edit handle sits inside the corner (free cells are already absolutely positioned). The item
+       is its own stacking context, so its handle paints above everything in it and stacks with it: an
+       item above this one (a higher z) covers the handle exactly as it covers the item, never less. */
     position: relative;
+    isolation: isolate;
     user-select: none;
     -webkit-user-select: none;
     -webkit-touch-callout: none;

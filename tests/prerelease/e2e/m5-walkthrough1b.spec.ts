@@ -161,7 +161,11 @@ for (const width of [1280, 1920]) test.describe(`Ruling 10: Large is a scaled-up
     expect(near(lg.name / lg.side, md.name / md.side), `name share: ${what}`).toBeLessThanOrEqual(0.2);
     expect(lg.desc, `Large shows its description: ${what}`).not.toBeNull();
     expect(md.desc, `Medium shows its description: ${what}`).not.toBeNull();
-    expect(near(lg.desc! / lg.side, md.desc! / md.side), `description share: ${what}`).toBeLessThanOrEqual(0.2);
+    // Its description is Medium's share too, up to its upper bound (review round D: 1.25rem, 20 px at
+    // the default text size) — at 1920 the bound applies.
+    const descWant = Math.min((md.desc! / md.side) * lg.side, 20);
+    expect(lg.desc!, `description: ${what}`).toBeLessThanOrEqual(20.01);
+    expect(near(lg.desc!, descWant), `description share (or its bound): ${what}`).toBeLessThanOrEqual(0.2);
     // The icon is at least Medium's share (Ruling 10: about 45%, Medium about a third).
     expect(lg.icon / lg.side, `icon share: ${what}`).toBeGreaterThanOrEqual(md.icon / md.side);
     // No more empty space than Medium: the content fills at least Medium's share of the height (-5%).

@@ -406,10 +406,13 @@ export function resolveDrop(state: DragState, hit: HitResult, draft: LayoutDashb
   });
   const moving = state.copy ? new Set<string>() : idSet;
 
-  // The grabbed item's top-left cell: the ghost's top-left, rounded to the nearest cell.
+  // The grabbed item's top-left cell: the ghost's top-left, rounded to the nearest cell. The ghost is
+  // the grabbed item's size, or over a tab for items from a folder the group's (ownTabCells).
   const grab = state.grab ?? { fx: 0, fy: 0 };
-  const x0 = Math.round((hit.dx - grab.fx * sizes[0].w * m.unitPx) / m.unitPx);
-  const y0 = Math.round((hit.dy - grab.fy * sizes[0].h * m.rowPx) / m.rowPx);
+  const ghostCells = (to.folderId === undefined ? ownTabCells(state, draft) : undefined) ?? sizes[0];
+  const gw = Math.min(ghostCells.w, cols), gh = ghostCells.h;
+  const x0 = Math.round((hit.dx - grab.fx * gw * m.unitPx) / m.unitPx);
+  const y0 = Math.round((hit.dy - grab.fy * gh * m.rowPx) / m.rowPx);
 
   // Offsets from the grabbed item, when every item comes from one tab (items from a folder have no
   // placement: they take the first free cells).
@@ -1003,17 +1006,24 @@ export function ghostOver(
 }
 
 /**
- * The grabbed item's own span on a tab (what the drop there places, resolveDrop's sizes), when it
- * comes from inside a folder — there it is drawn at the folder's item size, not its own. Undefined
- * for an item already on a tab (its rendered box is its own size).
+ * The dragged items' own span on a tab (what the drop there places, resolveDrop's sizes), when any
+ * of them comes from inside a folder — there they are drawn at the folder's item size, not their own.
+ * For a group (multi-select) it is the GROUP's: its largest item's span (review round, walkthrough 1
+ * D), never just the first item's; the grabbed item lands at the ghost's top-left. Undefined when
+ * every item is already on a tab (the rendered box is the grabbed item's own size).
  */
-function ownTabCells(s: DragState): { w: number; h: number } | undefined {
-  const d = currentDraft();
-  const id = s.ids[0];
-  if (!d || !id) return undefined;
-  if (containerOfNode(d, id)?.folderId === undefined) return undefined;
-  const n = findIn(d, id);
-  return n ? sizeFor(n) : undefined;
+function ownTabCells(s: DragState, d: LayoutDashboard | null = currentDraft()): { w: number; h: number } | undefined {
+  if (!d || s.ids.length === 0) return undefined;
+  if (s.ids.every((id) => containerOfNode(d, id)?.folderId === undefined)) return undefined;
+  let w = 0, h = 0;
+  for (const id of s.ids) {
+    const n = findIn(d, id);
+    if (!n) continue;
+    const c = sizeFor(n);
+    w = Math.max(w, c.w);
+    h = Math.max(h, c.h);
+  }
+  return w > 0 && h > 0 ? { w, h } : undefined;
 }
 
 /**

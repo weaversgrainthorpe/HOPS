@@ -24,10 +24,11 @@
   let { name, onEdit, label, placement = 'corner' }: Props = $props();
 
   /**
-   * A corner handle is sized to its host and never over the host's centre (walkthrough 1 C,
-   * handleFit): a click in an item's middle always reaches the item. Measured on the host (the
-   * handle's parent) whenever it resizes; an item too small to hold it clear of its centre has it
-   * hung just outside its top-right corner. Without ResizeObserver (test DOMs) the CSS default holds.
+   * A corner handle is sized to its host, inside its top-right corner and never over the host's
+   * centre (walkthrough 1 C and D, handleFit): a click or tap in an item's middle always reaches the
+   * item, and the handle never overhangs a neighbour (on touch it is always shown, so a hung handle
+   * took the neighbour's taps). Measured on the host (the handle's parent) whenever it resizes.
+   * Without ResizeObserver (test DOMs) the CSS default holds.
    */
   function fitCorner(el: HTMLElement, on: boolean) {
     let ro: ResizeObserver | null = null;
@@ -38,7 +39,6 @@
       const f = cornerHandleFit(r.width, r.height);
       el.style.setProperty('--eh-size', `${f.sizePx}px`);
       el.style.setProperty('--eh-offset', `${f.offsetPx}px`);
-      el.toggleAttribute('data-outside', f.outside);
     };
     const start = (yes: boolean) => {
       ro?.disconnect();
@@ -117,7 +117,8 @@
     font-size: 0.85rem;
     line-height: 1;
   }
-  /* Top-right, sized to the item and clear of its centre (fitCorner sets the two values). */
+  /* Top-right, inside the item, sized to it and clear of its centre (fitCorner sets the two values).
+     It paints above everything in its own item (the host is its own stacking context, below). */
   .edit-handle.corner {
     position: absolute;
     top: var(--eh-offset, 0.25rem);
