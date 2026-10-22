@@ -9,7 +9,7 @@ import { editorDialog, editorMenu } from '$lib/editor/editorUi';
 import { editMode } from '$lib/stores/editMode';
 import { dirty, session, undo } from '$lib/stores/editSession';
 import { toast } from '$lib/stores/toast';
-import { setLayout, resetEditor, startSession, draft, nodeIn, home, answerConfirm, p, noRequestsButSettingsRead } from './editorTestKit';
+import { setLayout, resetEditor, startSession, draft, nodeIn, home, answerConfirm, p, noRequestsButSettingsRead, folder, tile } from './editorTestKit';
 import type { FolderNode, TileNode } from '$lib/types/layout';
 
 let fetchSpy: ReturnType<typeof vi.fn>;
@@ -101,6 +101,50 @@ describe('EditorDialogs (the dialogs edit the draft only)', () => {
     expect(get(session)!.undo).toHaveLength(1);
     undo();
     expect(draft()).toEqual(before);
+  });
+
+  // Fix round 1 (§3.5): a larger contents size needs a larger smallest box. A box that can no longer fit
+  // one item grows to the new minimum, pushing its neighbours, in the same undo step as the Save.
+  it('raising Contents size grows a box too small for one item (neighbours pushed) — ONE undo step with the Save', async () => {
+    const d = home();
+    d.tabs[0].root.children.push(tile('under', p(0, 8)));
+    resetEditor();
+    setLayout([d]);
+    startSession();
+    await show({ kind: 'folder', id: 'f1' });
+    const before = draft();
+    await fireEvent.change(screen.getByLabelText('Contents size'), { target: { value: 'large' } });
+    expect(screen.queryByText(/isn't room/)).toBeNull();
+    await fireEvent.click(screen.getByRole('button', { name: /^Save/ }));
+    expect(get(editorDialog)).toBeNull();
+    const f = nodeIn(draft(), 'f1') as FolderNode;
+    expect(f).toMatchObject({ contentSize: 'large', placement: p(0, 2, 8, 7) }); // Large minimum is 5 x 7
+    const u = nodeIn(draft(), 'under')!.placement!; // pushed aside (M3 rules), clear of the grown box
+    expect(u).not.toEqual(p(0, 8));
+    expect(u.x >= 8 || u.y >= 9 || u.y + u.h <= 2).toBe(true);
+    expect(get(session)!.undo).toHaveLength(1);
+    undo();
+    expect(draft()).toEqual(before);
+  });
+
+  it('no room for the larger box: refused visibly IN the dialog; Save keeps it open and changes nothing', async () => {
+    resetEditor();
+    setLayout([{ id: 'd1', name: 'Narrow', path: '/n', revision: 1, tabs: [
+      { id: 't1', name: 'Main', root: { columns: 4, children: [folder('nf', p(0, 0, 3, 5), [tile('q')])] } }
+    ] }]);
+    startSession();
+    await show({ kind: 'folder', id: 'nf' });
+    const before = draft();
+    await fireEvent.change(screen.getByLabelText('Contents size'), { target: { value: 'large' } });
+    expect(screen.getByText(/isn't room/).getAttribute('role')).toBe('alert');
+    await fireEvent.click(screen.getByRole('button', { name: /^Save/ }));
+    expect(get(editorDialog)).not.toBeNull();
+    expect(draft()).toBe(before);
+    // Back to a size that fits: the reason goes and Save works.
+    await fireEvent.change(screen.getByLabelText('Contents size'), { target: { value: 'small' } });
+    expect(screen.queryByText(/isn't room/)).toBeNull();
+    await fireEvent.click(screen.getByRole('button', { name: /^Save/ }));
+    expect((nodeIn(draft(), 'nf') as FolderNode).contentSize).toBe('small');
   });
 
   it('folder dialog Cancel discards a staged size change', async () => {

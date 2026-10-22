@@ -348,4 +348,116 @@ test.describe('M5 drag and drop in ordered, paged folders', () => {
     await expect(fbox.locator('[data-container-id] > [data-node-id]')).toHaveCount(1);
     expect(errors).toEqual([]);
   });
+
+  // ---- Fix round 1
+
+  test('an empty open folder shows the "Into" cue while dragged over, and the drop lands inside', async ({ page, context }) => {
+    const f = await importDash(page, context, (id) => [
+      tile(id('t'), 'Tee', 0, 0),
+      folder(id('e'), 'Empty', { x: 0, y: 3, w: 10, h: 6 }, [])
+    ]);
+    const errors = await openEditing(page, f.path, f.id('t'));
+    const body = await box(node(page, f.id('e')).locator('.folder-body'));
+    await dragCentre(page, node(page, f.id('t')), body.x + body.width / 2, body.y + body.height / 2);
+    const cue = page.locator('.drag-layer .cue');
+    await expect(cue).toContainText('Into "Empty"');
+    const cb = await box(cue); // drawn on the folder's body
+    expect(Math.abs(cb.x - body.x)).toBeLessThanOrEqual(1);
+    expect(Math.abs(cb.width - body.width)).toBeLessThanOrEqual(1);
+    await allowedThenDrop(page);
+    await saveDraft(page);
+    expect(orderOf(await savedRoot(page, f.id('dash')), f.id('e'))).toEqual([f.id('t')]);
+    expect(errors).toEqual([]);
+  });
+
+  test('the right half of the last item on a full page puts the drop after it', async ({ page, context }) => {
+    const f = await importDash(page, context, (id) => [
+      tile(id('t'), 'Tee', 0, 0),
+      folder(id('f'), 'Box', { x: 0, y: 3, w: 8, h: 6 }, kids(id, 9))
+    ]);
+    const errors = await openEditing(page, f.path, f.id('t'));
+    const per = Number(await node(page, f.id('f')).locator('[data-folder-page]').getAttribute('data-folder-per-page'));
+    expect(per).toBeLessThan(9); // page 1 is full
+    const last = await box(node(page, f.id(`k${per}`)));
+    // Right half, outside the centre zone (no merge hold).
+    await dragCentre(page, node(page, f.id('t')), last.x + last.width - 8, last.y + last.height / 2);
+    await expect(page.locator('.drag-layer .marker')).toBeVisible();
+    await allowedThenDrop(page);
+    await saveDraft(page);
+    const want = kids(f.id, 9).map((k) => k.id as string);
+    want.splice(per, 0, f.id('t'));
+    expect(orderOf(await savedRoot(page, f.id('dash')), f.id('f'))).toEqual(want);
+    expect(errors).toEqual([]);
+  });
+
+  test('resize stops at the LARGEST contents size inside: a Large-contents sub-folder keeps a Small folder at 5 x 7', async ({ page, context }) => {
+    const f = await importDash(page, context, (id) => [
+      folder(id('f'), 'Box', { x: 0, y: 0, w: 12, h: 9 }, [kid(id('k1'), 'K1'), folder(id('s'), 'Sub', null, kids(id, 2, 'Z'), { contentSize: 'large' })], { contentSize: 'small' })
+    ]);
+    const errors = await openEditing(page, f.path, f.id('f'));
+    const fbox = node(page, f.id('f'));
+    await fbox.hover();
+    const cb = await box(fbox.locator('[data-resize="corner"]'));
+    const start = await box(fbox);
+    await dragTo(page, cb.x + cb.width / 2, cb.y + cb.height / 2, start.x + 20, start.y + 20);
+    await page.waitForTimeout(120);
+    await page.mouse.up();
+    await saveDraft(page);
+    expect(find(await savedRoot(page, f.id('dash')), f.id('f'))!.placement).toMatchObject({ x: 0, y: 0, w: 5, h: 7 });
+    // Drilled into the Large sub-folder, one whole Large item still fits in the box.
+    await node(page, f.id('s')).locator('.folder-collapsed-tile').focus();
+    await page.keyboard.press('Enter');
+    await expect(fbox.locator(`[data-folder-page][data-folder-id="${f.id('s')}"]`)).toBeVisible();
+    const fb = await box(fbox);
+    const item = await box(fbox.locator('[data-container-id] > [data-node-id]').first());
+    expect(item.x + item.width).toBeLessThanOrEqual(fb.x + fb.width);
+    expect(item.y + item.height).toBeLessThanOrEqual(fb.y + fb.height);
+    expect(errors).toEqual([]);
+  });
+
+  test('raising Contents size in the dialog grows a box too small for one item, pushing neighbours; one Undo restores both', async ({ page, context }) => {
+    const f = await importDash(page, context, (id) => [
+      folder(id('f'), 'Box', { x: 0, y: 0, w: 3, h: 5 }, kids(id, 2)),
+      tile(id('n'), 'Next', 0, 5)
+    ]);
+    const errors = await openEditing(page, f.path, f.id('f'));
+    const f0 = await box(node(page, f.id('f')));
+    const n0 = await box(node(page, f.id('n')));
+    await node(page, f.id('f')).locator('.folder-header h3').hover();
+    await page.getByRole('button', { name: 'Edit Box', exact: true }).click();
+    const dlg = page.getByRole('dialog', { name: 'Edit Folder' });
+    await expect(dlg).toBeVisible();
+    await dlg.getByLabel('Contents size').selectOption('large');
+    await expect(dlg.getByRole('alert')).toHaveCount(0);
+    await dlg.getByRole('button', { name: /^Save/ }).click();
+    await expect(dlg).toBeHidden();
+    // Drawn grown; the neighbour moved clear of it.
+    const fb = await box(node(page, f.id('f')));
+    const nb = await box(node(page, f.id('n')));
+    const clear = nb.x >= fb.x + fb.width - 1 || nb.y >= fb.y + fb.height - 1;
+    expect(clear, 'the neighbour is clear of the grown folder').toBe(true);
+    // One undo step: Undo once restores both.
+    const toolbar = page.getByRole('toolbar', { name: 'Editing' });
+    await toolbar.getByRole('button', { name: /Undo/ }).click();
+    await expect(toolbar.getByRole('button', { name: /Undo/ })).toBeDisabled();
+    const f1 = await box(node(page, f.id('f')));
+    const n1 = await box(node(page, f.id('n')));
+    for (const [a, b] of [[f1, f0], [n1, n0]] as const) {
+      for (const k of ['x', 'y', 'width', 'height'] as const) expect(Math.abs(a[k] - b[k])).toBeLessThanOrEqual(1);
+    }
+    // Again, then save: the saved document has the grown box and the pushed neighbour.
+    await node(page, f.id('f')).locator('.folder-header h3').hover();
+    await page.getByRole('button', { name: 'Edit Box', exact: true }).click();
+    await dlg.getByLabel('Contents size').selectOption('large');
+    await dlg.getByRole('button', { name: /^Save/ }).click();
+    await expect(dlg).toBeHidden();
+    await saveDraft(page);
+    const root = await savedRoot(page, f.id('dash'));
+    const saved = find(root, f.id('f'))!;
+    expect(saved).toMatchObject({ placement: { x: 0, y: 0, w: 5, h: 7 } });
+    const n = find(root, f.id('n'))!.placement!;
+    expect(n.x >= 5 || n.y >= 7).toBe(true);
+    expect(errors).toEqual([]);
+  });
 });
+

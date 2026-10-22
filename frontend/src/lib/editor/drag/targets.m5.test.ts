@@ -133,13 +133,25 @@ describe('flowIndex: the place in a folder\'s order under the pointer', () => {
   const kids = ['k1', 'k2', 'k3', 'k4', 'k5', 'k6'];
   const b = (id: string, left: number, top: number): Box & { id: string } => ({ id, left, top, width: 100, height: 100 });
   const page0 = { folderId: 'F', page: 0, perPage: 4, count: 4, boxes: [b('k1', 0, 0), b('k2', 100, 0), b('k3', 0, 100), b('k4', 100, 100)] };
-  it('before the item under the pointer', () => {
-    expect(flowIndex(kids, new Set(), page0, 150, 150)).toMatchObject({ index: 3, before: 'k4' });
+  it('the left half of the item under the pointer: before it', () => {
+    expect(flowIndex(kids, new Set(), page0, 110, 150)).toMatchObject({ index: 3, before: 'k4' });
     expect(flowIndex(kids, new Set(), page0, 5, 5)).toMatchObject({ index: 0, before: 'k1' });
+  });
+  it('the right half of the item under the pointer: after it — so after the last item of a full page is reachable', () => {
+    expect(flowIndex(kids, new Set(), page0, 150, 150)).toMatchObject({ index: 4, after: 'k4' });
+    expect(flowIndex(kids, new Set(), page0, 60, 50)).toMatchObject({ index: 1, after: 'k1' });
   });
   it('the index counts the items that stay (a moved item is taken out first)', () => {
     const boxes = page0.boxes.filter((x) => x.id !== 'k1');
-    expect(flowIndex(kids, new Set(['k1']), { ...page0, boxes }, 150, 150)).toMatchObject({ index: 2, before: 'k4' });
+    expect(flowIndex(kids, new Set(['k1']), { ...page0, boxes }, 110, 150)).toMatchObject({ index: 2, before: 'k4' });
+  });
+  it('a phone page has gaps between rows: a pointer in the gap is the nearest row, never the end of the page', () => {
+    // Phone tiles 120 px high with a 12 px gap: rows at 0 and 132.
+    const pb = (id: string, left: number, top: number) => ({ id, left, top, width: 120, height: 120 });
+    const phone = { folderId: 'F', page: 0, perPage: 4, count: 4, boxes: [pb('k1', 0, 0), pb('k2', 132, 0), pb('k3', 0, 132), pb('k4', 132, 132)] };
+    expect(flowIndex(kids, new Set(), phone, 20, 124)).toMatchObject({ index: 0, before: 'k1' }); // nearer row 1
+    expect(flowIndex(kids, new Set(), phone, 20, 129)).toMatchObject({ index: 2, before: 'k3' }); // nearer row 2
+    expect(flowIndex(kids, new Set(), phone, 124, 20)).toMatchObject({ index: 1, after: 'k1' }); // the column gap: nearest side
   });
   it('past the last item of a row: after it', () => {
     expect(flowIndex(kids, new Set(), page0, 250, 50)).toMatchObject({ index: 2, after: 'k2' });
@@ -261,11 +273,15 @@ describe('a drop on a folder\'s bar, a crumb, a sub-folder tile or an empty open
     expect(order('S')).toEqual(['z', 'a']);
   });
 
-  it('an empty open folder: that folder', () => {
+  it('an empty open folder: that folder, with an "Into" cue on its body', async () => {
+    render(DragLayer, { tabId: 't1' });
     start('a');
-    hit = () => ({ container: null, dx: 0, dy: 0, emptyFolder: 'E' });
+    hit = () => ({ container: null, dx: 0, dy: 0, emptyFolder: { folderId: 'E', rect: { left: 500, top: 300, width: 280, height: 200 } } });
     moveTo(700, 400);
     expect(get(drag)!.target).toMatchObject({ kind: 'into-folder', folderId: 'E' });
+    expect(get(drag)!.over).toEqual({ left: 500, top: 300, width: 280, height: 200 });
+    await tick();
+    expect(document.querySelector('.drag-layer .cue')?.textContent).toMatch(/Into "E"/);
     drop(700, 400);
     expect(order('E')).toEqual(['a']);
   });
@@ -280,7 +296,7 @@ describe('refusals: a folder never goes into itself or a descendant', () => {
       container: { ref: { tabId: 't1', folderId: 'H' }, metrics: FLOW, layout: 'flow', left: 0, top: 0 }, dx: 5, dy: 5,
       flowPage: { folderId: 'H', page: 0, perPage: 4, count: 1, boxes: [{ id: 'h1', left: 0, top: 0, width: 100, height: 100 }] }
     })],
-    ['an empty descendant', (): HitResult => ({ container: null, dx: 0, dy: 0, emptyFolder: 'H' })]
+    ['an empty descendant', (): HitResult => ({ container: null, dx: 0, dy: 0, emptyFolder: { folderId: 'H', rect: { left: 0, top: 0, width: 10, height: 10 } } })]
   ])('%s: refused with a visible reason; the drop changes nothing', async (_what, h) => {
     render(DragLayer, { tabId: 't1' });
     const before = draft();

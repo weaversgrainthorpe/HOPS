@@ -5,7 +5,7 @@ import {
   LAYOUT_VERSION, sizeSpan, folderPage, minimisedPlacement, planCanvas, isRenderable, isPlaced,
   containerMetrics, previewChildren, ROOT_COLUMNS, nodeBox, FOLDER_CHROME, openFolderContentBox, folderPaging,
   folderFlowMetrics, PAGE_BAR_PX, phoneTrack, phoneColumnPx, phonePaging, PHONE_TILE_MIN_PX, PHONE_PAGE_RESERVE_PX,
-  minOpenFolderCells, MIN_GRID_CELL_PX
+  minOpenFolderCells, MIN_GRID_CELL_PX, largestContentSize, folderMinCells
 } from './geometry';
 import type { FolderNode, LayoutNode, LayoutTab } from '../types/layout';
 
@@ -227,5 +227,21 @@ describe('minOpenFolderCells: the smallest open folder', () => {
       expect(g.rowsPerPage * g.itemPx).toBeLessThanOrEqual(content.heightPx - PAGE_BAR_PX);
       expect(g.perRow * g.itemPx).toBeLessThanOrEqual(content.widthPx);
     }
+  });
+});
+
+// Fix round 1: the minimum is taken at the LARGEST contents size of the folder and every folder in it
+// (a drilled-into sub-folder's page is drawn in the same box, at its own contents size).
+describe('the smallest open folder fits its largest contents size', () => {
+  const f = (id: string, contentSize: string, children: unknown[] = []) =>
+    ({ kind: 'folder', id, name: id, display: 'expanded', size: 'medium', contentSize, content: { children } }) as unknown as FolderNode;
+  it('is the largest of the folder and every sub-folder, however deep', () => {
+    expect(largestContentSize(f('a', 'small'))).toBe('small');
+    expect(largestContentSize(f('a', 'small', [tile('t'), f('b', 'medium', [f('c', 'large')])]))).toBe('large');
+    expect(largestContentSize(f('a', 'medium', [f('b', 'small')]))).toBe('medium');
+  });
+  it('folderMinCells uses it', () => {
+    expect(folderMinCells(f('a', 'small', [f('b', 'large')]))).toEqual(minOpenFolderCells('large'));
+    expect(folderMinCells(f('a', 'small'))).toEqual(minOpenFolderCells('small'));
   });
 });

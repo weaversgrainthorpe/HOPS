@@ -10,32 +10,45 @@ type Box = { left: number; top: number; width: number; height: number };
 
 /**
  * Where a drop on an open folder's page goes in the folder's order, from the pointer (px from the
- * page's content origin):
- * - over an item: before it;
- * - in a row of items but over none of them: before the next one to the right, else after the row's last;
+ * page's content origin). Each item is split into halves (fix round 1):
+ * - over an item: its left half is before it, its right half after it — so "after the last item of a
+ *   full page" is reachable;
+ * - in a row of items but over none of them (a column gap): the nearest item in that row, by the same
+ *   halves;
+ * - in the gap between two rows (phone pages have gaps): the nearer row, by the same rule;
  * - above the first row: before the page's first item;
  * - anywhere else (below the items, an empty page): the end of THIS page, not of the folder.
  * The index counts the items that stay (treeOps.moveBetween takes the moved ones out first). `order`
  * is the folder's children ids; `moving` the ids being moved (empty for a copy). `before` / `after`
- * name the item the insertion marker is drawn against.
+ * name the item the insertion marker is drawn against. The same rule on a phone and a desktop.
  */
 export function flowIndex(
   order: readonly string[], moving: ReadonlySet<string>, fp: FlowPage, dx: number, dy: number
 ): { index: number; before?: string; after?: string } {
   const others = order.filter((id) => !moving.has(id));
   const boxes = fp.boxes.filter((b) => others.includes(b.id));
-  const before = (id: string) => ({ index: others.indexOf(id), before: id });
-  const after = (id: string) => ({ index: others.indexOf(id) + 1, after: id });
+  const side = (b: Box & { id: string }) =>
+    dx >= b.left + b.width / 2 ? { index: others.indexOf(b.id) + 1, after: b.id } : { index: others.indexOf(b.id), before: b.id };
   const inX = (b: Box) => dx >= b.left && dx < b.left + b.width;
   const inY = (b: Box) => dy >= b.top && dy < b.top + b.height;
   const under = boxes.find((b) => inX(b) && inY(b));
-  if (under) return before(under.id);
-  const row = boxes.filter(inY);
-  if (row.length > 0) {
-    const next = row.find((b) => b.left >= dx);
-    return next ? before(next.id) : after(row[row.length - 1].id);
+  if (under) return side(under);
+  let row = boxes.filter(inY);
+  if (row.length === 0 && boxes.length > 0) {
+    const top = Math.min(...boxes.map((b) => b.top));
+    const bottom = Math.max(...boxes.map((b) => b.top + b.height));
+    if (dy >= top && dy < bottom) {
+      // Between two rows: the nearer one.
+      const vdist = (b: Box) => (dy < b.top ? b.top - dy : dy - (b.top + b.height));
+      const nearest = boxes.reduce((m, b) => (vdist(b) < vdist(m) ? b : m));
+      row = boxes.filter((b) => b.top === nearest.top);
+    }
   }
-  if (boxes.length > 0 && dy < Math.min(...boxes.map((b) => b.top))) return before(boxes[0].id);
+  if (row.length > 0) {
+    const hdist = (b: Box) => (dx < b.left ? b.left - dx : dx >= b.left + b.width ? dx - (b.left + b.width) : 0);
+    return side(row.reduce((m, b) => (hdist(b) < hdist(m) ? b : m)));
+  }
+  if (boxes.length > 0 && dy < Math.min(...boxes.map((b) => b.top))) return { index: others.indexOf(boxes[0].id), before: boxes[0].id };
   // The end of this page: past every item drawn on it (the dragged ones too: they are still in place).
   const pageEnd = fp.page * fp.perPage + fp.count;
   const index = order.slice(0, pageEnd).filter((id) => !moving.has(id)).length;

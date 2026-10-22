@@ -69,8 +69,8 @@ export interface HitResult {
    * origin, DOM = order). The drop's place in the order comes from these (targets.flowIndex).
    */
   flowPage?: { folderId: string; page: number; perPage: number; count: number; boxes: (Box & { id: string })[] };
-  /** An open folder's body with nothing drawn in it (an empty folder): that folder. */
-  emptyFolder?: string;
+  /** An open folder's body with nothing drawn in it (an empty folder): that folder, and the body's box for the cue. */
+  emptyFolder?: { folderId: string; rect: Box };
 }
 
 type Box = { left: number; top: number; width: number; height: number };
@@ -182,7 +182,9 @@ export function hitTest(x: number, y: number, dragged: ReadonlySet<string>, env:
     const own = area.querySelector('[data-container-id]');
     if (own && registry.has(own)) cEl = own;
     // An open folder's body with nothing drawn in it is that folder, never the canvas under it.
-    else if (area.hasAttribute('data-folder-id')) return { ...NO_HIT, ...nav, emptyFolder: area.getAttribute('data-folder-id') ?? '' };
+    else if (area.hasAttribute('data-folder-id')) {
+      return { ...NO_HIT, ...nav, emptyFolder: { folderId: area.getAttribute('data-folder-id') ?? '', rect: box(area) } };
+    }
   }
   const info = cEl ? registry.get(cEl) : undefined;
   if (!cEl || !info) return { ...NO_HIT, ...nav };

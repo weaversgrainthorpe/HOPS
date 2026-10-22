@@ -365,7 +365,7 @@ export function resolveDrop(state: DragState, hit: HitResult, draft: LayoutDashb
   // An open folder's own targets (M5 §3.4, §3a.4): its breadcrumb, its title bar, its empty body.
   if (hit.folderCrumb) return resolveIntoFolder(state, hit.folderCrumb.to, draft);
   if (hit.folderBar) return resolveIntoFolder(state, hit.folderBar.folderId, draft);
-  if (hit.emptyFolder !== undefined) return resolveIntoFolder(state, hit.emptyFolder, draft);
+  if (hit.emptyFolder !== undefined) return resolveIntoFolder(state, hit.emptyFolder.folderId, draft);
   const c = hit.container;
   if (!c) return invalid(hit.tabBar ? 'Drop it on a tab, the dashboard, or inside a folder.' : 'Drop it on the dashboard or inside a folder.');
   const ids = state.ids;
@@ -995,8 +995,8 @@ function hitFor(s: DragState): HitResult {
  * still running (target = place) it is the tile being held over: the "hold to make a folder" cue.
  */
 function overFor(s: DragState, t: DropTarget, hit: HitResult): Box | undefined {
-  // Into an open folder through its breadcrumb or title bar: the cue is on that crumb / bar.
-  const bar = hit.folderCrumb?.rect ?? hit.folderBar?.rect;
+  // Into an open folder through its breadcrumb, title bar or empty body: the cue is on that crumb / bar / body.
+  const bar = hit.folderCrumb?.rect ?? hit.folderBar?.rect ?? hit.emptyFolder?.rect;
   if (t.kind === 'into-folder' && bar) return { ...bar };
   if (t.kind === 'merge' || t.kind === 'into-folder' || (s.dwell?.key.startsWith('merge:') && !s.dwell.ripe)) {
     const z = zoneOf(s, hit);

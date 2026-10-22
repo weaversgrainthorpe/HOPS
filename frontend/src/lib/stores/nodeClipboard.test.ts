@@ -15,6 +15,7 @@ import { begin, apply, session, dirty, sessionConflict, resetEditSessionForTests
 import { toggleNode, clearSelection, selectedNodes } from './nodeSelection';
 import { nodeClipboard, copySelection, cutSelection, pasteInto, clearNodeClipboard } from './nodeClipboard';
 import { updateNode, deleteNodes } from '$lib/editor/treeOps';
+import { folderNavFor, folderViewFor, resetFolderViewsForTests, setFolderDrill, setFolderPage, setFolderView } from './folderView';
 import type { Config } from '$lib/types';
 import type { FolderNode, LayoutDashboard, LayoutDoc, LayoutNode, Placement } from '$lib/types/layout';
 
@@ -171,6 +172,25 @@ describe('cut then paste', () => {
     expect(draft().tabs[0].root.children.some((n) => n.id === 'a')).toBe(false);
     expect(get(nodeClipboard)).toBeNull();
     expect(api.transferNodes).not.toHaveBeenCalled();
+  });
+
+  // M5 §3a.3 (Task 4 fix round 1): a sub-folder cut out of a folder and pasted onto a tab is minimised
+  // there, and this browser forgets that it had it open, its page and its drill path.
+  it('a sub-folder pasted onto a tab forgets this browser\'s open / page / drill memory of it', async () => {
+    localStorage.clear();
+    resetFolderViewsForTests();
+    setFolderView('d', 'deep', 'expanded');
+    setFolderPage('d', 'deep', 1);
+    setFolderDrill('d', 'deep', ['zz']);
+    setFolderView('d', 'f1', 'collapsed'); // another folder's memory is kept
+    begin('d');
+    toggleNode('deep', false);
+    expect(cutSelection()).toBe(true);
+    await pasteInto({ tabId: 't2' });
+    const pasted = draft().tabs[1].root.children.find((n) => n.id === 'deep') as FolderNode;
+    expect(pasted.display).toBe('collapsed');
+    expect(get(folderViewFor('d'))).toEqual({ f1: 'collapsed' });
+    expect(get(folderNavFor('d'))).toEqual({ page: {}, drill: {} });
   });
 
   it('a refused move (folder into itself) is toasted and changes nothing', async () => {

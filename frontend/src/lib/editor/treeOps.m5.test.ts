@@ -3,7 +3,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   TreeOpError, insertIntoFolder, reorderInFolder, moveBetween, moveNodes, copyNodes, mergeIntoNewFolder,
-  duplicateNode, pasteSnapshot, insertNode, resolveContainer, resizedPlacement, firstFreeCell
+  duplicateNode, pasteSnapshot, insertNode, resolveContainer, resizedPlacement, firstFreeCell, fitFolderMinimum
 } from './treeOps';
 import * as treeOps from './treeOps';
 import type { FolderNode, LayoutDashboard, LayoutNode, Placement } from '../types/layout';
@@ -232,5 +232,43 @@ describe('tab-level helpers', () => {
   });
   it('firstFreeCell is grid only', () => {
     expect(firstFreeCell({ columns: 24, children: [tile('a', p(0, 0))] }, 2, 2)).toEqual(p(2, 0));
+  });
+});
+
+// Fix round 1: the minimum is the folder's LARGEST contents size (its own or any sub-folder's), and a
+// folder whose contents size went up grows to that minimum, pushing its neighbours (M3 rules).
+describe('the minimum at the largest contents size', () => {
+  /** t1: f1 (Small contents, at its Small minimum 2 x 4) holding sub-folder f2 (contents `inner`), tile `below` under it. */
+  function small(inner: 'small' | 'large', columns = 24): LayoutDashboard {
+    return deepFreeze({
+      id: 'd', name: 'D', path: '/d', revision: 1,
+      tabs: [{ id: 't1', name: 'One', root: { columns, children: [
+        folder('f1', [tile('x'), folder('f2', [tile('z')], undefined, { contentSize: inner })], p(0, 0, 2, 4), { contentSize: 'small' }),
+        tile('below', p(0, 4))
+      ] } }]
+    } as LayoutDashboard);
+  }
+  const at = (d: LayoutDashboard, id: string) => (d.tabs[0].root.children.find((n) => n.id === id) as LayoutNode).placement;
+
+  it('resizing stops at the largest contents size inside (a Large-contents sub-folder: 5 x 7)', () => {
+    expect(resizedPlacement(small('large'), 'f1', 1, 1)).toEqual(p(0, 0, 5, 7));
+    expect(resizedPlacement(small('small'), 'f1', 1, 1)).toEqual(p(0, 0, 2, 4));
+  });
+
+  it('fitFolderMinimum grows a box below its minimum and pushes the neighbours aside; a box that fits is untouched', () => {
+    const d = small('large');
+    const r = fitFolderMinimum(d, 'f2'); // any folder inside: its tab-level folder is fitted
+    expect(at(r, 'f1')).toEqual(p(0, 0, 5, 7));
+    const b = at(r, 'below')!; // pushed (M3 rules: the nearest free spot), clear of the grown box
+    expect(b).not.toEqual(p(0, 4));
+    expect(b.x >= 5 || b.y >= 7).toBe(true);
+    const ok = small('small');
+    expect(fitFolderMinimum(ok, 'f1')).toBe(ok);
+  });
+
+  it('no room across the tab: refused with a reason, nothing changed', () => {
+    const d = small('large', 4);
+    expect(() => fitFolderMinimum(d, 'f1')).toThrow(TreeOpError);
+    expect(() => fitFolderMinimum(d, 'f1')).toThrow(/room/);
   });
 });

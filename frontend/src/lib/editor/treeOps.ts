@@ -11,7 +11,7 @@
  */
 import type { Container, FolderNode, LayoutDashboard, LayoutNode, LayoutTab, Placement } from '../types/layout';
 import {
-  ROOT_COLUMNS, clampPlacement, containerColumns, defaultFolderBox, isPlaced, minOpenFolderCells, sizeOf, sizeSpan, tabSpan
+  ROOT_COLUMNS, clampPlacement, containerColumns, defaultFolderBox, folderMinCells, isPlaced, largestContentSize, sizeOf, sizeSpan, tabSpan
 } from '../layout/geometry';
 
 export type ContainerRef = { tabId: string; folderId?: string }; // folderId absent = tab root
@@ -557,8 +557,8 @@ function onTab(d: LayoutDashboard, id: string, what: string): { node: LayoutNode
 
 /**
  * The placement resizeNode would give folder `id` on a tab for a requested w x h: clamped to the
- * columns, and never smaller than its bar, padding, one item at its contents size and the page bar
- * (geometry.minOpenFolderCells; M5 §3.5: the folder pages its contents instead of growing to fit
+ * columns, and never smaller than its bar, padding, one item at its LARGEST contents size (its own or
+ * any sub-folder's) and the page bar (geometry.folderMinCells; M5 §3.5: the folder pages its contents instead of growing to fit
  * them). Pure; the resize preview uses it so the
  * highlight shows exactly what the commit stores.
  */
@@ -568,10 +568,40 @@ export function resizedPlacement(d: LayoutDashboard, id: string, w: number, h: n
   if (node.kind !== 'folder') throw new TreeOpError('A tile takes the space of its Size — change its Size in the tile dialog instead.');
   const cols = containerColumns(r.container);
   const sized = clampPlacement({ ...(node.placement as Placement), w, h }, cols);
-  const min = minOpenFolderCells(node.contentSize);
+  const min = folderMinCells(node);
   sized.w = Math.max(sized.w, Math.min(min.w, cols - sized.x));
   sized.h = Math.max(sized.h, min.h);
   return sized;
+}
+
+/**
+ * The tab-level folder holding `id` (or `id` itself) grown to its smallest open box when it is below
+ * it — after its contents size (or a sub-folder's) went up (fix round 1, §3.5). Its neighbours are
+ * pushed aside by the M3 rules (pushAside). Already big enough, or not on a tab: the same dashboard.
+ * No room across the tab: TreeOpError with the reason, nothing changed.
+ */
+export function fitFolderMinimum(d: LayoutDashboard, id: string): LayoutDashboard {
+  const loc = locate(d, id);
+  if (!loc) throw new TreeOpError('That folder no longer exists.');
+  const topId = loc.folderChain[0] ?? id;
+  const top = findNode(d, topId);
+  if (top.kind !== 'folder' || !isPlaced(top)) return d;
+  const r = resolveRef(d, refOf(locate(d, topId)!));
+  const cols = containerColumns(r.container);
+  const min = folderMinCells(top);
+  const cur = clampPlacement(top.placement as Placement, cols);
+  if (cur.w >= min.w && cur.h >= min.h) return d;
+  if (min.w > cols) {
+    const size = largestContentSize(top);
+    throw new TreeOpError(
+      `There isn't room for "${top.name || 'Untitled'}" with ${size[0].toUpperCase()}${size.slice(1)} contents here: ` +
+        `open, it needs at least ${min.w} columns and this tab has ${cols}.`
+    );
+  }
+  const w = Math.max(cur.w, min.w);
+  const at: Placement = { x: Math.min(cur.x, cols - w), y: cur.y, w, h: Math.max(cur.h, min.h) };
+  if (cur.z !== undefined) at.z = cur.z;
+  return placeNode(d, topId, at, pushAside(r.container, new Set([topId]), at));
 }
 
 export function resizeNode(

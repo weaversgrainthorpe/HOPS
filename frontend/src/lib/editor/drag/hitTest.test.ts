@@ -205,6 +205,7 @@ describe('hitTest', () => {
         [root, { left: 0, top: 0 }],
         [flow, { left: 20, top: 100 }],
         [header, { left: 10, top: 50, width: 400, height: 40 }],
+        [body, { left: 15, top: 95, width: 390, height: 300 }],
         [crumbTop, { left: 20, top: 55, width: 60, height: 30 }],
         [items[0], { left: 20, top: 100, width: 100, height: 100 }],
         [items[1], { left: 120, top: 100, width: 100, height: 100 }],
@@ -253,7 +254,8 @@ describe('hitTest', () => {
     it('an empty open folder\'s body is that folder (never the canvas under it)', () => {
       const f = openFolder({ empty: true });
       const h = f.at(f.body);
-      expect(h.emptyFolder).toBe('s1');
+      // With its rect: the "Into" cue is drawn on the body (fix round 1: never a cue-less target).
+      expect(h.emptyFolder).toEqual({ folderId: 's1', rect: { left: 15, top: 95, width: 390, height: 300 } });
       expect(h.container).toBeNull();
     });
 

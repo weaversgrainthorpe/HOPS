@@ -240,6 +240,30 @@ export function minOpenFolderCells(contentSize: unknown): { w: number; h: number
     h: span + Math.ceil((FOLDER_CHROME.titlePx + FOLDER_CHROME.padYPx + PAGE_BAR_PX) / MIN_GRID_CELL_PX)
   };
 }
+/**
+ * The largest contents size of `folder` and every folder inside it, however deep. A drilled-into
+ * sub-folder's page is drawn in the same open box at ITS contents size, so the box must fit one of
+ * the largest (fix round 1).
+ */
+export function largestContentSize(folder: FolderNode): ItemSize {
+  let best = sizeOf(folder.contentSize);
+  const walk = (f: FolderNode) => {
+    for (const k of Array.isArray(f.content?.children) ? f.content.children : []) {
+      if (!k || (k as { kind?: unknown }).kind !== 'folder') continue;
+      const sub = k as FolderNode;
+      if (sizeSpan(sub.contentSize) > sizeSpan(best)) best = sizeOf(sub.contentSize);
+      walk(sub);
+    }
+  };
+  walk(folder);
+  return best;
+}
+
+/** The smallest open box of `folder` on a tab: minOpenFolderCells at its largest contents size. */
+export function folderMinCells(folder: FolderNode): { w: number; h: number } {
+  return minOpenFolderCells(largestContentSize(folder));
+}
+
 /** The content box inside an open folder's box: its bar, border and padding taken off. */
 export function openFolderContentBox(box: { widthPx: number; heightPx: number }): { widthPx: number; heightPx: number } {
   return {

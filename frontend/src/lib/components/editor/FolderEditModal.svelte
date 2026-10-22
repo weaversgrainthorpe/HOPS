@@ -41,8 +41,12 @@
     onMoveCopy?: () => void;
     /** The levels above the folder, for the status-check row's "inherited from" text. */
     statusContext?: StatusContext;
+    /** Why this contents size can't be used here (no room for its smallest open box), or null. */
+    checkContentSize?: (size: ItemSize) => string | null;
   }
-  let { folder, isNew = false, onSave, onCancel, onDelete, onDuplicate, onMoveCopy, statusContext }: Props = $props();
+  let {
+    folder, isNew = false, onSave, onCancel, onDelete, onDuplicate, onMoveCopy, statusContext, checkContentSize
+  }: Props = $props();
   let showBackgroundConfig = $state(false);
   // A picked background is staged here and saved with the dialog (one undo step);
   // Cancel discards it (Ruling 11(5)).
@@ -88,6 +92,8 @@
   let statusSetting = $state<LevelSetting>(initialStatus);
   let showIconEditor = $state(false);
   let problem = $state('');
+  /** A contents size refused here (shown in the dialog; Save is refused while it stands). */
+  const contentSizeError = $derived(checkContentSize ? checkContentSize(contentSize) : null);
   let nameEl = $state<HTMLInputElement | null>(null);
 
   // A merge creates "New folder" and opens this dialog with the name selected for editing (Task 8).
@@ -116,6 +122,7 @@
       return;
     }
     problem = '';
+    if (contentSizeError) return; // shown under Contents size
     onSave({
       name: name.trim(),
       icon: icon || undefined,
@@ -206,6 +213,7 @@
           {#each SIZES as [v, label] (v)}<option value={v}>{label}</option>{/each}
         </select>
         <small>Every tile and folder inside is shown at this size.</small>
+        {#if contentSizeError}<p class="problem" role="alert">{contentSizeError}</p>{/if}
       </div>
       <div class="form-group">
         <label for="folder-size">Size when minimised</label>

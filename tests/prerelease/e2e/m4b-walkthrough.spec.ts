@@ -1711,7 +1711,7 @@ test.describe('§7.2 fix round 1', () => {
 
   // M5 Task 4: the same through-the-toolbar drop onto an open folder's page (its drop area): it goes in
   // at the pointer's place in the folder's order — before the item under the pointer — as saved.
-  test('during a drag the toolbar lets the drop through onto an open folder\'s page: before the item under it', async ({ page, context }) => {
+  test('during a drag the toolbar lets the drop through onto an open folder\'s page: at the item under it', async ({ page, context }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     const f = await importDash(page, context, [{
       name: 'Main',
@@ -1741,11 +1741,14 @@ test.describe('§7.2 fix round 1', () => {
     }
     await page.waitForTimeout(100);
     // The toolbar lets the pointer through (pointer-events none): under it is an item on the folder's page.
-    const under = await page.evaluate(
-      ([px, py]) => document.elementFromPoint(px, py)?.closest('[data-folder-page] [data-node-id]')?.getAttribute('data-node-id') ?? null,
-      [x, y]
-    );
-    expect(under, 'an item of the open folder is under the toolbar').not.toBeNull();
+    const hitItem = await page.evaluate(([px, py]) => {
+      const el = document.elementFromPoint(px, py)?.closest('[data-folder-page] [data-node-id]');
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return { id: el.getAttribute('data-node-id') ?? '', right: px >= r.left + r.width / 2 };
+    }, [x, y]);
+    expect(hitItem, 'an item of the open folder is under the toolbar').not.toBeNull();
+    const under = hitItem!.id;
     await expect(page.locator('.drag-layer .marker')).toBeVisible();
     await page.mouse.up();
     const save = bar.getByRole('button', { name: /Save/ });
@@ -1757,7 +1760,8 @@ test.describe('§7.2 fix round 1', () => {
     const big = d.tabs[0].root.children.find((n: { id: string }) => n.id === f.id('f'));
     const order: string[] = big.content.children.map((n: { id: string }) => n.id);
     const want = Array.from({ length: 120 }, (_, i) => f.id(`k${i}`));
-    want.splice(want.indexOf(under!), 0, f.id('a'));
+    // Its left half: before it; its right half: after it (fix round 1).
+    want.splice(want.indexOf(under) + (hitItem!.right ? 1 : 0), 0, f.id('a'));
     expect(order).toEqual(want);
   });
 

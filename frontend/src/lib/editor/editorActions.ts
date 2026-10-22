@@ -11,7 +11,7 @@ import type {
 import {
   TreeOpError, cellIsFree, copyNodes, deleteNodes, deleteTab, duplicateNode, duplicateTab, firstFreeCell,
   insertNode, locate, moveNodes, newNodeId, resolveContainer, setFolderDisplay, setZ,
-  addTab, placeNode, pushAside,
+  addTab, fitFolderMinimum, placeNode, pushAside,
   updateNode, updateTab
 } from './treeOps';
 import type {
@@ -310,8 +310,23 @@ export function editFolder(
     if (statusChecksEnabled !== undefined) {
       next = mapNode(next, id, (f) => withStatusChecks(f, statusChecksEnabled) as LayoutNode);
     }
-    return next;
+    // A larger contents size needs a larger smallest open box (§3.5): grown here, neighbours pushed,
+    // in this same undo step — or the whole Save is refused with the reason (TreeOpError → toast).
+    return 'contentSize' in patch ? fitFolderMinimum(next, id) : next;
   });
+}
+
+/**
+ * Why folder `id` can't take contents size `contentSize` (its open box can't grow to the new smallest
+ * box on its tab), or null. The trial run of the very op editFolder runs; the dialog shows it.
+ */
+export function contentSizeProblem(d: LayoutDashboard, id: string, contentSize: unknown): string | null {
+  try {
+    fitFolderMinimum(updateNode(d, id, { contentSize: sizeOf(contentSize) } as Partial<LayoutNode>), id);
+    return null;
+  } catch (e) {
+    return e instanceof Error && e.message ? e.message : "That contents size isn't possible here.";
+  }
 }
 
 export function findIn(d: LayoutDashboard, id: string): LayoutNode | undefined {
