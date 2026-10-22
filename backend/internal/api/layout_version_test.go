@@ -207,7 +207,8 @@ func TestImport_OtherLayoutVersionRefused(t *testing.T) {
 	}
 }
 
-// The Showcase fixture is a pre-M5 export; it is refused (Task 5 rewrites it).
+// The Showcase without its layoutVersion (as a pre-M5 v3 build exported it)
+// is refused visibly, naming the version this build reads; nothing changes.
 func TestImport_PreM5ShowcaseRefused(t *testing.T) {
 	data, err := os.ReadFile("../configdoc/testdata/v3_showcase_export.json")
 	if err != nil {
@@ -217,13 +218,19 @@ func TestImport_PreM5ShowcaseRefused(t *testing.T) {
 	if err := json.Unmarshal(data, &env); err != nil {
 		t.Fatal(err)
 	}
-	if _, has := env["config"].(map[string]any)["layoutVersion"]; has {
-		t.Skip("the Showcase fixture is now in the current form; TestImport_V3Showcase covers it")
+	cfg := env["config"].(map[string]any)
+	if _, has := cfg["layoutVersion"]; !has {
+		t.Fatal("the Showcase fixture has no layoutVersion: it must be in the current form")
+	}
+	delete(cfg, "layoutVersion")
+	pre, err := json.Marshal(env)
+	if err != nil {
+		t.Fatal(err)
 	}
 	router, db := setupTestRouter(t)
 	c := newClient(t, router)
 	before := storedRaw(db)
-	code, resp := c.importFile(data)
+	code, resp := c.importFile(pre)
 	if code != 400 || !strings.Contains(resp["error"].(string), "layout version 1") {
 		t.Fatalf("import: %d %v, want 400 naming layout version 1", code, resp)
 	}

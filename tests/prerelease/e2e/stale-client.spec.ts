@@ -1,6 +1,5 @@
 import { test, expect, type Page, type BrowserContext } from '@playwright/test';
 import { getCsrfToken } from '../helpers';
-import { m5Config } from '../m5form';
 
 // M5 §2a (one layout version), in a REAL browser against a real server. A page loaded before a
 // layout-format update runs the old code: it holds another form's placements and sends no (or
@@ -15,11 +14,11 @@ const made: string[] = [];
 function tile(id: string, name: string, x: number) {
   return {
     id, kind: 'tile', type: 'link', name, url: `https://${name.toLowerCase()}.example.lan/`, icon: 'mdi:lan',
-    openMode: 'newtab', size: 'medium', order: x, placement: { x, y: 0, w: 1, h: 1 }
+    openMode: 'newtab', size: 'medium', order: x / 2, placement: { x, y: 0, w: 2, h: 2 }
   };
 }
 
-/** Import one small dashboard (in the M5 form: m5form.ts); returns its ids. */
+/** Import one small dashboard (in the M5 stored form, layoutVersion 1); returns its ids. */
 async function importDash(page: Page, context: BrowserContext) {
   const p = `stale${Date.now().toString(36)}${(seq++).toString(36)}`;
   const id = (s: string) => `${p}-${s}`;
@@ -27,15 +26,14 @@ async function importDash(page: Page, context: BrowserContext) {
     id: id('dash'), name: `Stale ${p}`, order: 0, path: `/${p}`, revision: 1,
     settings: {
       statusChecksEnabled: null, statusCheckIntervalMinutes: null, statusCheckTimeoutSeconds: null,
-      editIdleTimeoutMinutes: null, animatedFolderBackgrounds: null, defaultLayout: null
+      editIdleTimeoutMinutes: null, animatedFolderBackgrounds: null
     },
-    defaultLayout: 'grid',
-    tabs: [{ id: id('tab'), name: 'Main', order: 0, layout: 'inherit',
-      root: { columns: 12, children: [tile(id('a'), 'Alpha', 0), tile(id('b'), 'Bravo', 1)] } }]
+    tabs: [{ id: id('tab'), name: 'Main', order: 0,
+      root: { columns: 24, children: [tile(id('a'), 'Alpha', 0), tile(id('b'), 'Bravo', 2)] } }]
   };
   const doc = {
     format: 'hops-export', schemaVersion: 3, exportedAt: new Date().toISOString(), exportType: 'single-dashboard',
-    config: m5Config([dash]) // M5 form (layoutVersion 1): see m5form.ts
+    config: { layoutVersion: 1, dashboards: [dash] }
   };
   const r = await page.request.post('/api/config/import', {
     headers: { 'X-CSRF-Token': await getCsrfToken(context) },

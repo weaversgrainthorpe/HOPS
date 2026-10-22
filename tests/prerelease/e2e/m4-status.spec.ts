@@ -1,6 +1,5 @@
 import { test, expect, type Page, type BrowserContext } from '@playwright/test';
 import { getCsrfToken } from '../helpers';
-import { m5Config } from '../m5form';
 
 // M4 Task 7 in a REAL browser: layered status checks show their source and effect, the badge
 // follows the resolved setting, and the one-time notice lists a dashboard whose tiles are
@@ -8,7 +7,7 @@ import { m5Config } from '../m5form';
 
 let made: { id: string } | null = null;
 
-const placement = (x: number, y: number, w = 1, h = 1) => ({ x, y, w, h });
+const placement = (x: number, y: number, w = 2, h = 2) => ({ x, y, w, h });
 
 async function importDash(page: Page, context: BrowserContext) {
   const p = `m4s${Date.now().toString(36)}`;
@@ -22,27 +21,26 @@ async function importDash(page: Page, context: BrowserContext) {
     settings: {
       // The dashboard's checks are OFF ...
       statusChecksEnabled: false, statusCheckIntervalMinutes: null, statusCheckTimeoutSeconds: null,
-      editIdleTimeoutMinutes: null, animatedFolderBackgrounds: null, defaultLayout: null
+      editIdleTimeoutMinutes: null, animatedFolderBackgrounds: null
     },
-    defaultLayout: 'grid',
     tabs: [{
-      id: id('tab'), name: 'Main', order: 0, layout: 'inherit',
+      id: id('tab'), name: 'Main', order: 0,
       root: {
-        columns: 12,
+        columns: 24, // the M5 stored form: a 24-column grid, a Medium tile 2 x 2 cells
         children: [
           // ... but this tile is explicitly switched on (so it is checked: the most specific wins).
           tile('on', 'Checked', 0, { statusCheck: { type: 'http', enabled: true, interval: 60 } }),
           // An unset tile: off, never checked.
-          tile('unset', 'Plain', 1),
+          tile('unset', 'Plain', 2),
           // Inherits: follows the off dashboard.
-          tile('inh', 'Follower', 2, { statusCheck: { type: 'http', enabled: null, interval: 60 } })
+          tile('inh', 'Follower', 4, { statusCheck: { type: 'http', enabled: null, interval: 60 } })
         ]
       }
     }]
   };
   const doc = {
     format: 'hops-export', schemaVersion: 3, exportedAt: new Date().toISOString(), exportType: 'single-dashboard',
-    config: m5Config([dash]) // M5 form (layoutVersion 1): see m5form.ts
+    config: { layoutVersion: 1, dashboards: [dash] }
   };
   const r = await page.request.post('/api/config/import', {
     headers: { 'X-CSRF-Token': await getCsrfToken(context) },

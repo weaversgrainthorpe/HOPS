@@ -1,6 +1,5 @@
 import { test, expect, type Page, type BrowserContext } from '@playwright/test';
 import { getCsrfToken } from '../helpers';
-import { m5Config } from '../m5form';
 
 // M4 Task 4 fix round 1 (Ruling 10), in a REAL browser: jsdom has no layout, so
 // "the failure badge never covers content" is checked here. (M5: the maximised panel
@@ -9,11 +8,15 @@ import { m5Config } from '../m5form';
 let seq = 0;
 let made: { id: string } | null = null;
 
-const placement = (x: number, y: number, w = 1, h = 1) => ({ x, y, w, h });
-const tile = (id: string, name: string) => ({
+const placement = (x: number, y: number, w = 2, h = 2) => ({ x, y, w, h });
+// The M5 stored form: 24-column grid tabs (a Medium tile is 2 x 2 cells); folder contents ordered, unplaced.
+/** A tile inside a folder: no placement. */
+const kid = (id: string, name: string) => ({
   id, kind: 'tile', type: 'link', name, url: `https://${name.toLowerCase()}.example.lan/`, icon: 'mdi:lan',
-  openMode: 'newtab', size: 'medium', order: 0, placement: placement(0, 0)
+  openMode: 'newtab', size: 'medium', order: 0
 });
+/** A Medium tile at the tab's top-left. */
+const tile = (id: string, name: string) => ({ ...kid(id, name), placement: placement(0, 0) });
 
 /** Import one dashboard whose Main tab holds `children(id)`; returns its path and id maker. */
 async function importDash(page: Page, context: BrowserContext, children: (id: (s: string) => string) => unknown[]) {
@@ -23,14 +26,13 @@ async function importDash(page: Page, context: BrowserContext, children: (id: (s
     id: id('dash'), name: `M4 backgrounds ${p}`, order: 0, path: `/${p}`, revision: 1,
     settings: {
       statusChecksEnabled: null, statusCheckIntervalMinutes: null, statusCheckTimeoutSeconds: null,
-      editIdleTimeoutMinutes: null, animatedFolderBackgrounds: null, defaultLayout: null
+      editIdleTimeoutMinutes: null, animatedFolderBackgrounds: null
     },
-    defaultLayout: 'grid',
-    tabs: [{ id: id('tab'), name: 'Main', order: 0, layout: 'inherit', root: { columns: 12, children: children(id) } }]
+    tabs: [{ id: id('tab'), name: 'Main', order: 0, root: { columns: 24, children: children(id) } }]
   };
   const doc = {
     format: 'hops-export', schemaVersion: 3, exportedAt: new Date().toISOString(), exportType: 'single-dashboard',
-    config: m5Config([dash]) // M5 form (layoutVersion 1): see m5form.ts
+    config: { layoutVersion: 1, dashboards: [dash] }
   };
   const r = await page.request.post('/api/config/import', {
     headers: { 'X-CSRF-Token': await getCsrfToken(context) },
@@ -47,33 +49,32 @@ async function importFixture(page: Page, context: BrowserContext) {
   // A same-origin asset path that does not exist: the image fails to load.
   const broken = { type: 'image', value: `/backgrounds/${p}-missing.jpg` };
   const folder = (key: string, name: string, x: number, extra: Record<string, unknown> = {}) => ({
-    id: id(key), kind: 'folder', name, layout: 'inherit', display: 'expanded', shape: 'rounded', showTitle: true,
-    placement: placement(x, 1, 4, 3), background: broken,
-    content: { columns: 4, children: [tile(id(`${key}-t`), `${name}Tile`)] }, ...extra
+    id: id(key), kind: 'folder', name, display: 'expanded', shape: 'rounded', showTitle: true, size: 'medium', contentSize: 'medium',
+    placement: placement(x, 2, 8, 6), background: broken,
+    content: { children: [kid(id(`${key}-t`), `${name}Tile`)] }, ...extra
   });
   const dash = {
     id: id('dash'), name: `M4 backgrounds ${p}`, order: 0, path: `/${p}`, revision: 1,
     settings: {
       statusChecksEnabled: null, statusCheckIntervalMinutes: null, statusCheckTimeoutSeconds: null,
-      editIdleTimeoutMinutes: null, animatedFolderBackgrounds: null, defaultLayout: null
+      editIdleTimeoutMinutes: null, animatedFolderBackgrounds: null
     },
-    defaultLayout: 'grid',
     tabs: [{
-      id: id('tab'), name: 'Main', order: 0, layout: 'inherit',
+      id: id('tab'), name: 'Main', order: 0,
       root: {
-        columns: 12,
+        columns: 24,
         children: [
           tile(id('anchor'), 'Anchor'),
           folder('ft', 'Titled', 0),
-          folder('fu', 'Untitled', 4, { showTitle: false }),
-          folder('fc', 'Collapsed', 8, { display: 'collapsed', placement: placement(8, 1, 2, 2) })
+          folder('fu', 'Untitled', 8, { showTitle: false }),
+          folder('fc', 'Collapsed', 16, { display: 'collapsed', placement: placement(16, 2, 4, 4) })
         ]
       }
     }]
   };
   const doc = {
     format: 'hops-export', schemaVersion: 3, exportedAt: new Date().toISOString(), exportType: 'single-dashboard',
-    config: m5Config([dash]) // M5 form (layoutVersion 1): see m5form.ts
+    config: { layoutVersion: 1, dashboards: [dash] }
   };
   const r = await page.request.post('/api/config/import', {
     headers: { 'X-CSRF-Token': await getCsrfToken(context) },
@@ -149,9 +150,9 @@ test.describe('M4 backgrounds in a real browser', () => {
 
   const PRESET = '/presets/network-grid.jpg';
   const untitledAt = (id: (s: string) => string, key: string, x: number, y: number, extra: Record<string, unknown> = {}) => ({
-    id: id(key), kind: 'folder', name: `Folder ${key}`, layout: 'inherit', display: 'expanded', shape: 'rounded',
-    showTitle: false, placement: placement(x, y, 4, 3),
-    content: { columns: 4, children: [tile(id(`${key}-t`), `${key}Tile`)] }, ...extra
+    id: id(key), kind: 'folder', name: `Folder ${key}`, display: 'expanded', shape: 'rounded', size: 'medium', contentSize: 'medium',
+    showTitle: false, placement: placement(x, y, 8, 6),
+    content: { children: [kid(id(`${key}-t`), `${key}Tile`)] }, ...extra
   });
 
   async function enterEdit(page: Page) {
@@ -185,7 +186,7 @@ test.describe('M4 backgrounds in a real browser', () => {
   test('folder picker: a preset picture at 50% opacity is saved, survives a reload and is drawn', async ({ page, context }) => {
     const errors: string[] = [];
     page.on('pageerror', (e) => errors.push(e.message));
-    const f = await importDash(page, context, (id) => [tile(id('anchor'), 'Anchor'), untitledAt(id, 'fp', 0, 1, { showTitle: true })]);
+    const f = await importDash(page, context, (id) => [tile(id('anchor'), 'Anchor'), untitledAt(id, 'fp', 0, 2, { showTitle: true })]);
     const sel = `[data-node-id="${f.id('fp')}"]`;
     await page.goto(f.path);
     await expect(page.locator(sel)).toBeVisible();
@@ -238,7 +239,7 @@ test.describe('M4 backgrounds in a real browser', () => {
   test('Inherit keeps the folder picture: switched off, stored, and restored on un-inherit', async ({ page, context }) => {
     const f = await importDash(page, context, (id) => [
       tile(id('anchor'), 'Anchor'),
-      untitledAt(id, 'fi', 0, 1, { showTitle: true, background: { type: 'image', value: PRESET, opacity: 0.8 } })
+      untitledAt(id, 'fi', 0, 2, { showTitle: true, background: { type: 'image', value: PRESET, opacity: 0.8 } })
     ]);
     const sel = `[data-node-id="${f.id('fi')}"]`;
     await page.goto(f.path);
@@ -274,7 +275,7 @@ test.describe('M4 backgrounds in a real browser', () => {
   test('a row-0 untitled folder: its bar (M5: every open folder has one) holds the controls, unclipped, clear of content and the badge', async ({ page, context }) => {
     const f = await importDash(page, context, (id) => [
       // Row 0, right-hand side; a broken picture so edit mode shows the failure badge too.
-      untitledAt(id, 'f0', 8, 0, { background: { type: 'image', value: `/backgrounds/${id('nope')}.jpg` } }),
+      untitledAt(id, 'f0', 16, 0, { background: { type: 'image', value: `/backgrounds/${id('nope')}.jpg` } }),
       tile(id('anchor'), 'Anchor')
     ]);
     const sel = `[data-node-id="${f.id('f0')}"]`;

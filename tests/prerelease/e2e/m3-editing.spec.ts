@@ -1,6 +1,5 @@
 import { test, expect, type Page, type BrowserContext } from '@playwright/test';
 import { getCsrfToken } from '../helpers';
-import { m5Config } from '../m5form';
 
 // M3 editor, in a REAL browser (Ruling 29). The jsdom suites stub hit-testing and layout, so they
 // cannot see CSS stacking (tab controls over a tab button), real store wiring (the context menu
@@ -20,15 +19,23 @@ interface Fixture {
   id: (s: string) => string;
 }
 
-function placement(x: number, y: number, w = 1, h = 1) {
+function placement(x: number, y: number, w = 2, h = 2) {
   return { x, y, w, h };
 }
 
-function tile(id: string, name: string, x: number, y: number, order: number) {
+// The M5 stored form (layoutVersion 1): 24-column grid tabs, a Medium tile 2 x 2 cells; folder contents
+// are an ordered list with no placements; folders carry size and contentSize.
+/** A tile inside a folder: no placement. */
+function kid(id: string, name: string, order = 0) {
   return {
     id, kind: 'tile', type: 'link', name, url: `https://${name.toLowerCase()}.example.lan/`, icon: 'mdi:lan',
-    openMode: 'newtab', size: 'medium', order, placement: placement(x, y)
+    openMode: 'newtab', size: 'medium', order
   };
+}
+
+/** A Medium tile on a tab at cell (x, y). */
+function tile(id: string, name: string, x: number, y: number, order: number) {
+  return { ...kid(id, name, order), placement: placement(x, y) };
 }
 
 async function importFixture(page: Page, context: BrowserContext): Promise<Fixture> {
@@ -42,40 +49,39 @@ async function importFixture(page: Page, context: BrowserContext): Promise<Fixtu
     revision: 1,
     settings: {
       statusChecksEnabled: null, statusCheckIntervalMinutes: null, statusCheckTimeoutSeconds: null,
-      editIdleTimeoutMinutes: null, animatedFolderBackgrounds: null, defaultLayout: null
+      editIdleTimeoutMinutes: null, animatedFolderBackgrounds: null
     },
-    defaultLayout: 'grid',
     tabs: [
       {
-        id: id('tab-grid'), name: 'Grid', order: 0, layout: 'inherit',
+        id: id('tab-grid'), name: 'Grid', order: 0,
         root: {
-          columns: 12,
+          columns: 24,
           children: [
             tile(id('a'), 'Alpha', 0, 0, 0),
-            tile(id('b'), 'Bravo', 1, 0, 1),
-            tile(id('c'), 'Charlie', 2, 0, 2),
+            tile(id('b'), 'Bravo', 2, 0, 1),
+            tile(id('c'), 'Charlie', 4, 0, 2),
             {
-              id: id('fk'), kind: 'folder', name: 'Kept', layout: 'inherit', display: 'collapsed', shape: 'rounded',
-              showTitle: true, placement: placement(5, 0, 3, 2),
-              content: { columns: 3, children: [tile(id('k1'), 'Kilo', 0, 0, 0)] }
+              id: id('fk'), kind: 'folder', name: 'Kept', display: 'collapsed', shape: 'rounded', size: 'medium', contentSize: 'medium',
+              showTitle: true, placement: placement(10, 0, 6, 4),
+              content: { children: [kid(id('k1'), 'Kilo')] }
             },
             {
-              id: id('fe'), kind: 'folder', name: 'Open folder', layout: 'inherit', display: 'expanded', shape: 'rounded',
-              showTitle: true, placement: placement(0, 2, 6, 3),
-              content: { columns: 6, children: [tile(id('e1'), 'Echo', 0, 0, 0)] }
+              id: id('fe'), kind: 'folder', name: 'Open folder', display: 'expanded', shape: 'rounded', size: 'medium', contentSize: 'medium',
+              showTitle: true, placement: placement(0, 4, 12, 6),
+              content: { children: [kid(id('e1'), 'Echo')] }
             }
           ]
         }
       },
       {
-        id: id('tab-two'), name: 'Two', order: 1, layout: 'inherit',
-        root: { columns: 12, children: [tile(id('t1'), 'Tango', 0, 0, 0)] }
+        id: id('tab-two'), name: 'Two', order: 1,
+        root: { columns: 24, children: [tile(id('t1'), 'Tango', 0, 0, 0)] }
       }
     ]
   };
   const doc = {
     format: 'hops-export', schemaVersion: 3, exportedAt: new Date().toISOString(), exportType: 'single-dashboard',
-    config: m5Config([dash]) // M5 form (layoutVersion 1): see m5form.ts
+    config: { layoutVersion: 1, dashboards: [dash] }
   };
   const r = await page.request.post('/api/config/import', {
     headers: { 'X-CSRF-Token': await getCsrfToken(context) },
@@ -329,32 +335,31 @@ test.describe('M3 editor: dragging into and out of folders', () => {
   async function importFolders(page: Page, context: BrowserContext): Promise<Fixture> {
     const p = `m3f${Date.now().toString(36)}${(seq++).toString(36)}`;
     const id = (s: string) => `${p}-${s}`;
-    const folder = (fid: string, name: string, x: number, inner: ReturnType<typeof tile>) => ({
-      id: fid, kind: 'folder', name, layout: 'inherit', display: 'expanded', shape: 'rounded', showTitle: true,
-      placement: placement(x, 2, 5, 3), content: { columns: 5, children: [inner] }
+    const folder = (fid: string, name: string, x: number, inner: ReturnType<typeof kid>) => ({
+      id: fid, kind: 'folder', name, display: 'expanded', shape: 'rounded', showTitle: true, size: 'medium', contentSize: 'medium',
+      placement: placement(x, 4, 10, 6), content: { children: [inner] }
     });
     const dash = {
       id: id('dash'), name: `M3 folders ${p}`, order: 0, path: `/${p}`, revision: 1,
       settings: {
         statusChecksEnabled: null, statusCheckIntervalMinutes: null, statusCheckTimeoutSeconds: null,
-        editIdleTimeoutMinutes: null, animatedFolderBackgrounds: null, defaultLayout: null
+        editIdleTimeoutMinutes: null, animatedFolderBackgrounds: null
       },
-      defaultLayout: 'grid',
       tabs: [{
-        id: id('tab'), name: 'Grid', order: 0, layout: 'inherit',
+        id: id('tab'), name: 'Grid', order: 0,
         root: {
-          columns: 12,
+          columns: 24,
           children: [
-            tile(id('a'), 'Alpha', 0, 0, 0), tile(id('b'), 'Bravo', 1, 0, 1), tile(id('c'), 'Charlie', 2, 0, 2),
-            folder(id('f1'), 'One', 0, tile(id('e1'), 'Echo', 0, 0, 0)),
-            folder(id('f2'), 'Two', 6, tile(id('g1'), 'Golf', 0, 0, 0))
+            tile(id('a'), 'Alpha', 0, 0, 0), tile(id('b'), 'Bravo', 2, 0, 1), tile(id('c'), 'Charlie', 4, 0, 2),
+            folder(id('f1'), 'One', 0, kid(id('e1'), 'Echo')),
+            folder(id('f2'), 'Two', 12, kid(id('g1'), 'Golf'))
           ]
         }
       }]
     };
     const doc = {
       format: 'hops-export', schemaVersion: 3, exportedAt: new Date().toISOString(), exportType: 'single-dashboard',
-      config: m5Config([dash]) // M5 form (layoutVersion 1): see m5form.ts
+      config: { layoutVersion: 1, dashboards: [dash] }
     };
     const r = await page.request.post('/api/config/import', {
       headers: { 'X-CSRF-Token': await getCsrfToken(context) },

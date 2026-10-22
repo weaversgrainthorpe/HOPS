@@ -560,11 +560,13 @@ func TestImport_V3Showcase(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(data), `"layoutVersion"`) {
-		// M5 Task 5 rewrites the fixture in the current layout form; until
-		// then it is a pre-M5 export, which import refuses
-		// (TestImport_PreM5ShowcaseRefused asserts that).
-		t.Skip("v3_showcase_export.json is still a pre-M5 export (M5 Task 5 rewrites it)")
+	// Written natively in the M5 form (layoutVersion 1): no conversion runs on import.
+	var env map[string]any
+	if err := json.Unmarshal(data, &env); err != nil {
+		t.Fatal(err)
+	}
+	if err := configdoc.CheckLayoutVersion(env["config"].(map[string]any)); err != nil {
+		t.Fatalf("the Showcase fixture is not at this build's layout version: %v", err)
 	}
 	router, db := setupTestRouter(t)
 	c := newClient(t, router)
@@ -591,7 +593,7 @@ func TestImport_V3Showcase(t *testing.T) {
 
 	// Structure later tasks rely on.
 	tabs := dash["tabs"].([]any)
-	wantTabs := []string{"sc-tab-grid", "sc-tab-free", "sc-tab-mixed"}
+	wantTabs := []string{"sc-tab-grid", "sc-tab-sizes", "sc-tab-folders"}
 	if len(tabs) != 3 {
 		t.Fatalf("%d tabs, want 3", len(tabs))
 	}
@@ -651,13 +653,68 @@ func TestImport_V3Showcase(t *testing.T) {
 		t.Error("no iframe tile under the collapsed level-3 folder")
 	}
 
+	// M5 cases: overfull folders (more items than one page of their box
+	// holds, at any width: the box is in cells, and so are the items),
+	// sub-folders 2+ deep with differing contents sizes, Small- and
+	// Large-contents folders, a minimised folder of each own size, and every
+	// tab-level tile at exactly its size's span.
+	for id, want := range map[string]int{"sc-f-small": 30, "sc-f-many": 20} {
+		if f := byID[id]; f == nil || len(childIDs(f)) != want || f["display"] != "expanded" {
+			t.Errorf("%s should be an open folder with %d items: %v", id, want, f)
+		}
+	}
+	if f := byID["sc-f-small"]; f["contentSize"] != "small" {
+		t.Errorf("sc-f-small contentSize = %v, want small", f["contentSize"])
+	}
+	if f := byID["sc-f-large"]; f == nil || f["contentSize"] != "large" {
+		t.Errorf("sc-f-large should have Large contents: %v", f)
+	}
+	nestA, nestB := byID["sc-f-nest-a"], byID["sc-f-nest-b"]
+	if nestA == nil || nestB == nil || nestA["contentSize"] != "small" || nestB["contentSize"] != "large" {
+		t.Fatalf("sc-f-nest-a (small) > sc-f-nest-b (large) missing: %v / %v", nestA, nestB)
+	}
+	if !contains(childIDs(byID["sc-f-nest"]), "sc-f-nest-a") || !contains(childIDs(nestA), "sc-f-nest-b") {
+		t.Error("sc-f-nest > sc-f-nest-a > sc-f-nest-b is not 2 deep")
+	}
+	for id, size := range map[string]string{"sc-f-min-s": "small", "sc-f-min-m": "medium", "sc-f-min-l": "large"} {
+		if f := byID[id]; f == nil || f["display"] != "collapsed" || f["size"] != size || len(childIDs(f)) == 0 {
+			t.Errorf("%s should be a minimised %s folder with items: %v", id, size, f)
+		}
+	}
+	spans := map[string]float64{"small": 1, "medium": 2, "large": 4}
+	sizesSeen := map[string]bool{}
+	for _, tb := range tabs {
+		for _, ch := range tb.(configdoc.Obj)["root"].(configdoc.Obj)["children"].([]any) {
+			n := ch.(configdoc.Obj)
+			p := n["placement"].(configdoc.Obj)
+			if n["kind"] == "tile" {
+				sz, _ := n["size"].(string)
+				sizesSeen[sz] = true
+				if p["w"] != spans[sz] || p["h"] != spans[sz] {
+					t.Errorf("tab tile %v (%s) is %vx%v", n["id"], sz, p["w"], p["h"])
+				}
+				continue
+			}
+			// An open folder box is never below its minimum (Ruling 7): one item
+			// at its largest contents size, the bar, padding and the page bar.
+			mins := map[string][2]float64{"small": {2, 4}, "medium": {3, 5}, "large": {5, 7}}
+			m := mins[largestContents(n)]
+			if p["w"].(float64) < m[0] || p["h"].(float64) < m[1] {
+				t.Errorf("folder %v box %vx%v is below its minimum %vx%v", n["id"], p["w"], p["h"], m[0], m[1])
+			}
+		}
+	}
+	if !sizesSeen["small"] || !sizesSeen["medium"] || !sizesSeen["large"] {
+		t.Errorf("tab tiles of every size: saw %v", sizesSeen)
+	}
+
 	// Layered backgrounds (M4): every shape verifies, the M4 update is a no-op
 	// on them, and only bundled preset pictures are used.
 	if bg, _ := dash["background"].(configdoc.Obj); bg == nil || bg["type"] != "image" {
 		t.Errorf("dashboard background = %v, want an image", dash["background"])
 	}
 	if bg, _ := tabs[1].(configdoc.Obj)["background"].(configdoc.Obj); bg == nil || bg["opacity"] != 0.6 {
-		t.Errorf("free tab background = %v, want opacity 0.6", tabs[1].(configdoc.Obj)["background"])
+		t.Errorf("Sizes tab background = %v, want opacity 0.6", tabs[1].(configdoc.Obj)["background"])
 	}
 	slide, _ := byID["sc-f-slide"]["background"].(configdoc.Obj)
 	if slide == nil || slide["type"] != "slideshow" || len(slide["images"].([]any)) != 2 {
@@ -762,4 +819,29 @@ func TestImport_LegacyTabBackgroundSwitchRefused(t *testing.T) {
 			t.Errorf("%s: config row changed", k)
 		}
 	}
+}
+
+func contains(list []string, s string) bool {
+	for _, x := range list {
+		if x == s {
+			return true
+		}
+	}
+	return false
+}
+
+// largestContents is the largest contentSize of folder f and every folder in it.
+func largestContents(f configdoc.Obj) string {
+	rank := map[string]int{"small": 1, "medium": 2, "large": 3}
+	best, _ := f["contentSize"].(string)
+	for _, ch := range f["content"].(configdoc.Obj)["children"].([]any) {
+		c := ch.(configdoc.Obj)
+		if c["kind"] != "folder" {
+			continue
+		}
+		if sub := largestContents(c); rank[sub] > rank[best] {
+			best = sub
+		}
+	}
+	return best
 }

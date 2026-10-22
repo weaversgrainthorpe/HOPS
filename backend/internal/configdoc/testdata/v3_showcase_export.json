@@ -1,9 +1,10 @@
 {
   "format": "hops-export",
   "schemaVersion": 3,
-  "exportedAt": "2026-10-19T00:00:00Z",
+  "exportedAt": "2026-10-22T00:00:00Z",
   "exportType": "single-dashboard",
   "config": {
+    "layoutVersion": 1,
     "dashboards": [
       {
         "id": "sc-dash",
@@ -16,18 +17,27 @@
           "statusCheckIntervalMinutes": null,
           "statusCheckTimeoutSeconds": null,
           "editIdleTimeoutMinutes": null,
-          "animatedFolderBackgrounds": null,
-          "defaultLayout": null
+          "animatedFolderBackgrounds": null
         },
-        "defaultLayout": "grid",
+        "background": {
+          "type": "image",
+          "value": "/presets/dark-gradient.jpg",
+          "images": [],
+          "interval": 0,
+          "fit": "cover",
+          "transition": "fade",
+          "transitionDuration": 0,
+          "overlayOpacity": 0.3,
+          "overlayBlur": 0,
+          "opacity": 1
+        },
         "tabs": [
           {
             "id": "sc-tab-grid",
             "name": "Grid",
             "order": 0,
-            "layout": "inherit",
             "root": {
-              "columns": 12,
+              "columns": 24,
               "children": [
                 {
                   "id": "sc-r1",
@@ -42,8 +52,8 @@
                   "placement": {
                     "x": 0,
                     "y": 0,
-                    "w": 1,
-                    "h": 1
+                    "w": 2,
+                    "h": 2
                   }
                 },
                 {
@@ -57,10 +67,10 @@
                   "size": "medium",
                   "order": 1,
                   "placement": {
-                    "x": 1,
+                    "x": 2,
                     "y": 0,
-                    "w": 1,
-                    "h": 1
+                    "w": 2,
+                    "h": 2
                   }
                 },
                 {
@@ -74,28 +84,28 @@
                   "size": "medium",
                   "order": 2,
                   "placement": {
-                    "x": 2,
+                    "x": 4,
                     "y": 0,
-                    "w": 1,
-                    "h": 1
+                    "w": 2,
+                    "h": 2
                   }
                 },
                 {
                   "id": "sc-f-l1",
                   "kind": "folder",
                   "name": "Level 1 folder (tiles + a subfolder)",
-                  "layout": "inherit",
                   "display": "expanded",
                   "shape": "rounded",
                   "showTitle": true,
+                  "size": "medium",
+                  "contentSize": "medium",
                   "placement": {
                     "x": 0,
-                    "y": 1,
-                    "w": 12,
-                    "h": 5
+                    "y": 2,
+                    "w": 24,
+                    "h": 10
                   },
                   "content": {
-                    "columns": 12,
                     "children": [
                       {
                         "id": "sc-l1-t1",
@@ -106,13 +116,7 @@
                         "icon": "mdi:docker",
                         "openMode": "newtab",
                         "size": "medium",
-                        "order": 0,
-                        "placement": {
-                          "x": 0,
-                          "y": 0,
-                          "w": 1,
-                          "h": 1
-                        }
+                        "order": 0
                       },
                       {
                         "id": "sc-l1-t2",
@@ -123,13 +127,7 @@
                         "icon": "mdi:nas",
                         "openMode": "newtab",
                         "size": "medium",
-                        "order": 1,
-                        "placement": {
-                          "x": 1,
-                          "y": 0,
-                          "w": 1,
-                          "h": 1
-                        }
+                        "order": 1
                       },
                       {
                         "id": "sc-l1-t3",
@@ -140,30 +138,18 @@
                         "icon": "mdi:lan",
                         "openMode": "newtab",
                         "size": "medium",
-                        "order": 2,
-                        "placement": {
-                          "x": 2,
-                          "y": 0,
-                          "w": 1,
-                          "h": 1
-                        }
+                        "order": 2
                       },
                       {
                         "id": "sc-f-l2",
                         "kind": "folder",
                         "name": "Level 2 folder (tiles + a subfolder)",
-                        "layout": "inherit",
                         "display": "expanded",
                         "shape": "rounded",
                         "showTitle": true,
-                        "placement": {
-                          "x": 0,
-                          "y": 1,
-                          "w": 6,
-                          "h": 4
-                        },
+                        "size": "medium",
+                        "contentSize": "medium",
                         "content": {
-                          "columns": 6,
                           "children": [
                             {
                               "id": "sc-l2-t1",
@@ -174,13 +160,7 @@
                               "icon": "mdi:camera",
                               "openMode": "newtab",
                               "size": "medium",
-                              "order": 0,
-                              "placement": {
-                                "x": 0,
-                                "y": 0,
-                                "w": 1,
-                                "h": 1
-                              }
+                              "order": 0
                             },
                             {
                               "id": "sc-l2-t2",
@@ -191,30 +171,18 @@
                               "icon": "mdi:harddisk",
                               "openMode": "newtab",
                               "size": "medium",
-                              "order": 1,
-                              "placement": {
-                                "x": 1,
-                                "y": 0,
-                                "w": 1,
-                                "h": 1
-                              }
+                              "order": 1
                             },
                             {
                               "id": "sc-f-l3",
                               "kind": "folder",
                               "name": "Level 3 folder (collapsed: tiles + a subfolder)",
-                              "layout": "inherit",
                               "display": "collapsed",
                               "shape": "rounded",
                               "showTitle": true,
-                              "placement": {
-                                "x": 0,
-                                "y": 1,
-                                "w": 3,
-                                "h": 3
-                              },
+                              "size": "medium",
+                              "contentSize": "medium",
                               "content": {
-                                "columns": 3,
                                 "children": [
                                   {
                                     "id": "sc-deep-1",
@@ -225,13 +193,7 @@
                                     "icon": "mdi:docker",
                                     "openMode": "newtab",
                                     "size": "medium",
-                                    "order": 0,
-                                    "placement": {
-                                      "x": 0,
-                                      "y": 0,
-                                      "w": 1,
-                                      "h": 1
-                                    }
+                                    "order": 0
                                   },
                                   {
                                     "id": "sc-deep-2",
@@ -242,13 +204,7 @@
                                     "icon": "mdi:nas",
                                     "openMode": "iframe",
                                     "size": "medium",
-                                    "order": 1,
-                                    "placement": {
-                                      "x": 1,
-                                      "y": 0,
-                                      "w": 1,
-                                      "h": 1
-                                    }
+                                    "order": 1
                                   },
                                   {
                                     "id": "sc-deep-3",
@@ -259,13 +215,7 @@
                                     "icon": "mdi:lan",
                                     "openMode": "newtab",
                                     "size": "medium",
-                                    "order": 2,
-                                    "placement": {
-                                      "x": 2,
-                                      "y": 0,
-                                      "w": 1,
-                                      "h": 1
-                                    }
+                                    "order": 2
                                   },
                                   {
                                     "id": "sc-deep-4",
@@ -276,13 +226,7 @@
                                     "icon": "mdi:camera",
                                     "openMode": "newtab",
                                     "size": "medium",
-                                    "order": 3,
-                                    "placement": {
-                                      "x": 0,
-                                      "y": 1,
-                                      "w": 1,
-                                      "h": 1
-                                    }
+                                    "order": 3
                                   },
                                   {
                                     "id": "sc-deep-5",
@@ -293,30 +237,18 @@
                                     "icon": "mdi:harddisk",
                                     "openMode": "newtab",
                                     "size": "medium",
-                                    "order": 4,
-                                    "placement": {
-                                      "x": 1,
-                                      "y": 1,
-                                      "w": 1,
-                                      "h": 1
-                                    }
+                                    "order": 4
                                   },
                                   {
                                     "id": "sc-f-l4",
                                     "kind": "folder",
                                     "name": "Level 4 (collapsed)",
-                                    "layout": "inherit",
                                     "display": "collapsed",
                                     "shape": "rounded",
                                     "showTitle": true,
-                                    "placement": {
-                                      "x": 2,
-                                      "y": 1,
-                                      "w": 1,
-                                      "h": 1
-                                    },
+                                    "size": "medium",
+                                    "contentSize": "medium",
                                     "content": {
-                                      "columns": 1,
                                       "children": [
                                         {
                                           "id": "sc-l4-t1",
@@ -327,13 +259,7 @@
                                           "icon": "mdi:docker",
                                           "openMode": "newtab",
                                           "size": "medium",
-                                          "order": 0,
-                                          "placement": {
-                                            "x": 0,
-                                            "y": 0,
-                                            "w": 1,
-                                            "h": 1
-                                          }
+                                          "order": 0
                                         },
                                         {
                                           "id": "sc-l4-t2",
@@ -344,42 +270,40 @@
                                           "icon": "mdi:lan",
                                           "openMode": "newtab",
                                           "size": "medium",
-                                          "order": 1,
-                                          "placement": {
-                                            "x": 0,
-                                            "y": 1,
-                                            "w": 1,
-                                            "h": 1
-                                          }
+                                          "order": 1
                                         }
                                       ]
-                                    }
+                                    },
+                                    "order": 5
                                   }
                                 ]
-                              }
+                              },
+                              "order": 2
                             }
                           ]
-                        }
+                        },
+                        "order": 3
                       }
                     ]
-                  }
+                  },
+                  "order": 3
                 },
                 {
                   "id": "sc-f-six",
                   "kind": "folder",
                   "name": "Six tiles (collapsed)",
-                  "layout": "inherit",
                   "display": "collapsed",
                   "shape": "rounded",
                   "showTitle": true,
+                  "size": "medium",
+                  "contentSize": "medium",
                   "placement": {
                     "x": 0,
-                    "y": 6,
-                    "w": 6,
-                    "h": 3
+                    "y": 12,
+                    "w": 12,
+                    "h": 6
                   },
                   "content": {
-                    "columns": 3,
                     "children": [
                       {
                         "id": "sc-six-1",
@@ -390,13 +314,7 @@
                         "icon": "mdi:docker",
                         "openMode": "newtab",
                         "size": "medium",
-                        "order": 0,
-                        "placement": {
-                          "x": 0,
-                          "y": 0,
-                          "w": 1,
-                          "h": 1
-                        }
+                        "order": 0
                       },
                       {
                         "id": "sc-six-2",
@@ -407,13 +325,7 @@
                         "icon": "mdi:nas",
                         "openMode": "newtab",
                         "size": "medium",
-                        "order": 1,
-                        "placement": {
-                          "x": 1,
-                          "y": 0,
-                          "w": 1,
-                          "h": 1
-                        }
+                        "order": 1
                       },
                       {
                         "id": "sc-six-3",
@@ -424,13 +336,7 @@
                         "icon": "mdi:lan",
                         "openMode": "newtab",
                         "size": "medium",
-                        "order": 2,
-                        "placement": {
-                          "x": 2,
-                          "y": 0,
-                          "w": 1,
-                          "h": 1
-                        }
+                        "order": 2
                       },
                       {
                         "id": "sc-six-4",
@@ -441,13 +347,7 @@
                         "icon": "mdi:camera",
                         "openMode": "newtab",
                         "size": "medium",
-                        "order": 3,
-                        "placement": {
-                          "x": 0,
-                          "y": 1,
-                          "w": 1,
-                          "h": 1
-                        }
+                        "order": 3
                       },
                       {
                         "id": "sc-six-5",
@@ -458,13 +358,7 @@
                         "icon": "mdi:harddisk",
                         "openMode": "newtab",
                         "size": "medium",
-                        "order": 4,
-                        "placement": {
-                          "x": 1,
-                          "y": 1,
-                          "w": 1,
-                          "h": 1
-                        }
+                        "order": 4
                       },
                       {
                         "id": "sc-six-6",
@@ -475,35 +369,31 @@
                         "icon": "mdi:home",
                         "openMode": "newtab",
                         "size": "medium",
-                        "order": 5,
-                        "placement": {
-                          "x": 2,
-                          "y": 1,
-                          "w": 1,
-                          "h": 1
-                        }
+                        "order": 5
                       }
                     ]
-                  }
+                  },
+                  "order": 4
                 },
                 {
                   "id": "sc-f-empty",
                   "kind": "folder",
                   "name": "Empty (collapsed)",
-                  "layout": "inherit",
                   "display": "collapsed",
                   "shape": "rounded",
                   "showTitle": true,
+                  "size": "medium",
+                  "contentSize": "medium",
                   "placement": {
-                    "x": 6,
-                    "y": 6,
-                    "w": 3,
-                    "h": 2
+                    "x": 12,
+                    "y": 12,
+                    "w": 6,
+                    "h": 5
                   },
                   "content": {
-                    "columns": 3,
                     "children": []
-                  }
+                  },
+                  "order": 5
                 },
                 {
                   "id": "sc-note",
@@ -514,68 +404,24 @@
                   "icon": "mdi:note-text-outline",
                   "openMode": "newtab",
                   "size": "medium",
-                  "order": 0,
+                  "order": 6,
+                  "description": "A note tile with text only.",
                   "placement": {
-                    "x": 9,
-                    "y": 6,
-                    "w": 3,
+                    "x": 18,
+                    "y": 12,
+                    "w": 2,
                     "h": 2
-                  },
-                  "description": "A note tile with text only."
+                  }
                 },
                 {
                   "id": "sc-f-slide",
                   "kind": "folder",
                   "name": "Slideshow folder",
-                  "layout": "inherit",
                   "display": "expanded",
                   "shape": "rounded",
                   "showTitle": true,
-                  "placement": {
-                    "x": 0,
-                    "y": 9,
-                    "w": 6,
-                    "h": 3
-                  },
-                  "content": {
-                    "columns": 6,
-                    "children": [
-                      {
-                        "id": "sc-slide-1",
-                        "kind": "tile",
-                        "type": "link",
-                        "name": "Slide 1",
-                        "url": "https://sc-slide-1.example.lan/",
-                        "icon": "mdi:lan",
-                        "openMode": "newtab",
-                        "size": "medium",
-                        "order": 0,
-                        "placement": {
-                          "x": 0,
-                          "y": 0,
-                          "w": 1,
-                          "h": 1
-                        }
-                      },
-                      {
-                        "id": "sc-slide-2",
-                        "kind": "tile",
-                        "type": "link",
-                        "name": "Slide 2",
-                        "url": "https://sc-slide-2.example.lan/",
-                        "icon": "mdi:lan",
-                        "openMode": "newtab",
-                        "size": "medium",
-                        "order": 1,
-                        "placement": {
-                          "x": 1,
-                          "y": 0,
-                          "w": 1,
-                          "h": 1
-                        }
-                      }
-                    ]
-                  },
+                  "size": "medium",
+                  "contentSize": "medium",
                   "background": {
                     "type": "slideshow",
                     "value": "",
@@ -588,24 +434,67 @@
                     "transition": "fade",
                     "transitionDuration": 1,
                     "opacity": 1
-                  }
+                  },
+                  "placement": {
+                    "x": 0,
+                    "y": 18,
+                    "w": 12,
+                    "h": 6
+                  },
+                  "content": {
+                    "children": [
+                      {
+                        "id": "sc-slide-1",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Slide 1",
+                        "url": "https://sc-slide-1.example.lan/",
+                        "icon": "mdi:lan",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 0
+                      },
+                      {
+                        "id": "sc-slide-2",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Slide 2",
+                        "url": "https://sc-slide-2.example.lan/",
+                        "icon": "mdi:lan",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 1
+                      }
+                    ]
+                  },
+                  "order": 7
                 },
                 {
                   "id": "sc-f-see",
                   "kind": "folder",
                   "name": "See-through folder (opacity 0)",
-                  "layout": "inherit",
                   "display": "expanded",
                   "shape": "rounded",
                   "showTitle": true,
+                  "size": "medium",
+                  "contentSize": "medium",
+                  "background": {
+                    "type": "image",
+                    "value": "/presets/cosmic-clouds.jpg",
+                    "images": [],
+                    "interval": 0,
+                    "fit": "cover",
+                    "transition": "fade",
+                    "transitionDuration": 0,
+                    "opacity": 0
+                  },
                   "placement": {
-                    "x": 6,
-                    "y": 9,
-                    "w": 6,
-                    "h": 3
+                    "x": 12,
+                    "y": 18,
+                    "w": 12,
+                    "h": 6
                   },
                   "content": {
-                    "columns": 6,
                     "children": [
                       {
                         "id": "sc-see-1",
@@ -616,43 +505,29 @@
                         "icon": "mdi:lan",
                         "openMode": "newtab",
                         "size": "medium",
-                        "order": 0,
-                        "placement": {
-                          "x": 0,
-                          "y": 0,
-                          "w": 1,
-                          "h": 1
-                        }
+                        "order": 0
                       }
                     ]
                   },
-                  "background": {
-                    "type": "image",
-                    "value": "/presets/cosmic-clouds.jpg",
-                    "images": [],
-                    "interval": 0,
-                    "fit": "cover",
-                    "transition": "fade",
-                    "transitionDuration": 0,
-                    "opacity": 0
-                  }
+                  "order": 8
                 },
                 {
                   "id": "sc-f-off",
                   "kind": "folder",
                   "name": "Checks off folder",
-                  "layout": "inherit",
                   "display": "expanded",
                   "shape": "rounded",
                   "showTitle": true,
+                  "size": "medium",
+                  "contentSize": "medium",
+                  "statusChecksEnabled": false,
                   "placement": {
                     "x": 0,
-                    "y": 12,
-                    "w": 6,
-                    "h": 3
+                    "y": 24,
+                    "w": 12,
+                    "h": 6
                   },
                   "content": {
-                    "columns": 6,
                     "children": [
                       {
                         "id": "sc-off-on",
@@ -664,12 +539,6 @@
                         "openMode": "newtab",
                         "size": "medium",
                         "order": 0,
-                        "placement": {
-                          "x": 0,
-                          "y": 0,
-                          "w": 1,
-                          "h": 1
-                        },
                         "statusCheck": {
                           "enabled": true
                         }
@@ -683,124 +552,19 @@
                         "icon": "mdi:lan",
                         "openMode": "newtab",
                         "size": "medium",
-                        "order": 1,
-                        "placement": {
-                          "x": 1,
-                          "y": 0,
-                          "w": 1,
-                          "h": 1
-                        }
+                        "order": 1
                       }
                     ]
                   },
-                  "statusChecksEnabled": false
+                  "order": 9
                 }
               ]
             }
           },
           {
-            "id": "sc-tab-free",
-            "name": "Free",
+            "id": "sc-tab-sizes",
+            "name": "Sizes",
             "order": 1,
-            "layout": "free",
-            "designWidth": 1280,
-            "root": {
-              "columns": 160,
-              "children": [
-                {
-                  "id": "sc-fa",
-                  "kind": "tile",
-                  "type": "link",
-                  "name": "Free A",
-                  "url": "https://freea.example.lan/",
-                  "icon": "mdi:docker",
-                  "openMode": "newtab",
-                  "size": "medium",
-                  "order": 0,
-                  "placement": {
-                    "x": 4,
-                    "y": 4,
-                    "w": 16,
-                    "h": 10,
-                    "z": 1
-                  }
-                },
-                {
-                  "id": "sc-fb",
-                  "kind": "tile",
-                  "type": "link",
-                  "name": "Free B",
-                  "url": "https://freeb.example.lan/",
-                  "icon": "mdi:harddisk",
-                  "openMode": "newtab",
-                  "size": "medium",
-                  "order": 1,
-                  "placement": {
-                    "x": 12,
-                    "y": 8,
-                    "w": 16,
-                    "h": 10,
-                    "z": 2
-                  }
-                },
-                {
-                  "id": "sc-ff",
-                  "kind": "folder",
-                  "name": "Free folder",
-                  "layout": "inherit",
-                  "display": "expanded",
-                  "shape": "rounded",
-                  "showTitle": true,
-                  "placement": {
-                    "x": 50,
-                    "y": 3,
-                    "w": 40,
-                    "h": 26,
-                    "z": 1
-                  },
-                  "content": {
-                    "columns": 40,
-                    "children": [
-                      {
-                        "id": "sc-ff-1",
-                        "kind": "tile",
-                        "type": "link",
-                        "name": "Inside",
-                        "url": "https://inside.example.lan/",
-                        "icon": "mdi:home",
-                        "openMode": "newtab",
-                        "size": "medium",
-                        "order": 0,
-                        "placement": {
-                          "x": 0,
-                          "y": 0,
-                          "w": 16,
-                          "h": 10
-                        }
-                      }
-                    ]
-                  }
-                },
-                {
-                  "id": "sc-big",
-                  "kind": "tile",
-                  "type": "link",
-                  "name": "Big tile",
-                  "url": "https://big.example.lan/",
-                  "icon": "mdi:camera",
-                  "openMode": "newtab",
-                  "size": "medium",
-                  "order": 2,
-                  "placement": {
-                    "x": 5,
-                    "y": 32,
-                    "w": 30,
-                    "h": 20,
-                    "z": 1
-                  }
-                }
-              ]
-            },
             "background": {
               "type": "image",
               "value": "/presets/galaxy.jpg",
@@ -812,32 +576,806 @@
               "overlayOpacity": 0,
               "overlayBlur": 0,
               "opacity": 0.6
+            },
+            "root": {
+              "columns": 24,
+              "children": [
+                {
+                  "id": "sc-fa",
+                  "kind": "tile",
+                  "type": "link",
+                  "name": "Medium A",
+                  "url": "https://freea.example.lan/",
+                  "icon": "mdi:docker",
+                  "openMode": "newtab",
+                  "size": "medium",
+                  "order": 0,
+                  "placement": {
+                    "x": 0,
+                    "y": 0,
+                    "w": 2,
+                    "h": 2
+                  }
+                },
+                {
+                  "id": "sc-fb",
+                  "kind": "tile",
+                  "type": "link",
+                  "name": "Medium B",
+                  "url": "https://freeb.example.lan/",
+                  "icon": "mdi:harddisk",
+                  "openMode": "newtab",
+                  "size": "medium",
+                  "order": 1,
+                  "placement": {
+                    "x": 2,
+                    "y": 0,
+                    "w": 2,
+                    "h": 2
+                  }
+                },
+                {
+                  "id": "sc-big",
+                  "kind": "tile",
+                  "type": "link",
+                  "name": "Big tile",
+                  "url": "https://big.example.lan/",
+                  "icon": "mdi:camera",
+                  "openMode": "newtab",
+                  "size": "large",
+                  "order": 2,
+                  "placement": {
+                    "x": 4,
+                    "y": 0,
+                    "w": 4,
+                    "h": 4
+                  }
+                },
+                {
+                  "id": "sc-sz-s",
+                  "kind": "tile",
+                  "type": "link",
+                  "name": "Small tile",
+                  "url": "https://sc-sz-s.example.lan/",
+                  "icon": "mdi:home",
+                  "openMode": "newtab",
+                  "size": "small",
+                  "placement": {
+                    "x": 8,
+                    "y": 0,
+                    "w": 1,
+                    "h": 1
+                  },
+                  "order": 3
+                },
+                {
+                  "id": "sc-ff",
+                  "kind": "folder",
+                  "name": "Medium contents",
+                  "display": "expanded",
+                  "shape": "rounded",
+                  "showTitle": true,
+                  "size": "medium",
+                  "contentSize": "medium",
+                  "placement": {
+                    "x": 10,
+                    "y": 0,
+                    "w": 8,
+                    "h": 5
+                  },
+                  "content": {
+                    "children": [
+                      {
+                        "id": "sc-ff-1",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Inside",
+                        "url": "https://inside.example.lan/",
+                        "icon": "mdi:home",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 0
+                      },
+                      {
+                        "id": "sc-ff-2",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Large inside",
+                        "url": "https://sc-ff-2.example.lan/",
+                        "icon": "mdi:server",
+                        "openMode": "newtab",
+                        "size": "large",
+                        "order": 1
+                      }
+                    ]
+                  },
+                  "order": 4
+                },
+                {
+                  "id": "sc-f-small",
+                  "kind": "folder",
+                  "name": "Small contents (overfull)",
+                  "display": "expanded",
+                  "shape": "rounded",
+                  "showTitle": true,
+                  "size": "medium",
+                  "contentSize": "small",
+                  "placement": {
+                    "x": 0,
+                    "y": 5,
+                    "w": 6,
+                    "h": 5
+                  },
+                  "content": {
+                    "children": [
+                      {
+                        "id": "sc-sm-1",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Small 1",
+                        "url": "https://sc-sm-1.example.lan/",
+                        "icon": "mdi:lan",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 0
+                      },
+                      {
+                        "id": "sc-sm-2",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Small 2",
+                        "url": "https://sc-sm-2.example.lan/",
+                        "icon": "mdi:server",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 1
+                      },
+                      {
+                        "id": "sc-sm-3",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Small 3",
+                        "url": "https://sc-sm-3.example.lan/",
+                        "icon": "mdi:database",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 2
+                      },
+                      {
+                        "id": "sc-sm-4",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Small 4",
+                        "url": "https://sc-sm-4.example.lan/",
+                        "icon": "mdi:cloud",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 3
+                      },
+                      {
+                        "id": "sc-sm-5",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Small 5",
+                        "url": "https://sc-sm-5.example.lan/",
+                        "icon": "mdi:web",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 4
+                      },
+                      {
+                        "id": "sc-sm-6",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Small 6",
+                        "url": "https://sc-sm-6.example.lan/",
+                        "icon": "mdi:router",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 5
+                      },
+                      {
+                        "id": "sc-sm-7",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Small 7",
+                        "url": "https://sc-sm-7.example.lan/",
+                        "icon": "mdi:lan",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 6
+                      },
+                      {
+                        "id": "sc-sm-8",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Small 8",
+                        "url": "https://sc-sm-8.example.lan/",
+                        "icon": "mdi:server",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 7
+                      },
+                      {
+                        "id": "sc-sm-9",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Small 9",
+                        "url": "https://sc-sm-9.example.lan/",
+                        "icon": "mdi:database",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 8
+                      },
+                      {
+                        "id": "sc-sm-10",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Small 10",
+                        "url": "https://sc-sm-10.example.lan/",
+                        "icon": "mdi:cloud",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 9
+                      },
+                      {
+                        "id": "sc-sm-11",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Small 11",
+                        "url": "https://sc-sm-11.example.lan/",
+                        "icon": "mdi:web",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 10
+                      },
+                      {
+                        "id": "sc-sm-12",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Small 12",
+                        "url": "https://sc-sm-12.example.lan/",
+                        "icon": "mdi:router",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 11
+                      },
+                      {
+                        "id": "sc-sm-13",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Small 13",
+                        "url": "https://sc-sm-13.example.lan/",
+                        "icon": "mdi:lan",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 12
+                      },
+                      {
+                        "id": "sc-sm-14",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Small 14",
+                        "url": "https://sc-sm-14.example.lan/",
+                        "icon": "mdi:server",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 13
+                      },
+                      {
+                        "id": "sc-sm-15",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Small 15",
+                        "url": "https://sc-sm-15.example.lan/",
+                        "icon": "mdi:database",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 14
+                      },
+                      {
+                        "id": "sc-sm-16",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Small 16",
+                        "url": "https://sc-sm-16.example.lan/",
+                        "icon": "mdi:cloud",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 15
+                      },
+                      {
+                        "id": "sc-sm-17",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Small 17",
+                        "url": "https://sc-sm-17.example.lan/",
+                        "icon": "mdi:web",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 16
+                      },
+                      {
+                        "id": "sc-sm-18",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Small 18",
+                        "url": "https://sc-sm-18.example.lan/",
+                        "icon": "mdi:router",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 17
+                      },
+                      {
+                        "id": "sc-sm-19",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Small 19",
+                        "url": "https://sc-sm-19.example.lan/",
+                        "icon": "mdi:lan",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 18
+                      },
+                      {
+                        "id": "sc-sm-20",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Small 20",
+                        "url": "https://sc-sm-20.example.lan/",
+                        "icon": "mdi:server",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 19
+                      },
+                      {
+                        "id": "sc-sm-21",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Small 21",
+                        "url": "https://sc-sm-21.example.lan/",
+                        "icon": "mdi:database",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 20
+                      },
+                      {
+                        "id": "sc-sm-22",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Small 22",
+                        "url": "https://sc-sm-22.example.lan/",
+                        "icon": "mdi:cloud",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 21
+                      },
+                      {
+                        "id": "sc-sm-23",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Small 23",
+                        "url": "https://sc-sm-23.example.lan/",
+                        "icon": "mdi:web",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 22
+                      },
+                      {
+                        "id": "sc-sm-24",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Small 24",
+                        "url": "https://sc-sm-24.example.lan/",
+                        "icon": "mdi:router",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 23
+                      },
+                      {
+                        "id": "sc-sm-25",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Small 25",
+                        "url": "https://sc-sm-25.example.lan/",
+                        "icon": "mdi:lan",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 24
+                      },
+                      {
+                        "id": "sc-sm-26",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Small 26",
+                        "url": "https://sc-sm-26.example.lan/",
+                        "icon": "mdi:server",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 25
+                      },
+                      {
+                        "id": "sc-sm-27",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Small 27",
+                        "url": "https://sc-sm-27.example.lan/",
+                        "icon": "mdi:database",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 26
+                      },
+                      {
+                        "id": "sc-sm-28",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Small 28",
+                        "url": "https://sc-sm-28.example.lan/",
+                        "icon": "mdi:cloud",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 27
+                      },
+                      {
+                        "id": "sc-sm-29",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Small 29",
+                        "url": "https://sc-sm-29.example.lan/",
+                        "icon": "mdi:web",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 28
+                      },
+                      {
+                        "id": "sc-sm-30",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Small 30",
+                        "url": "https://sc-sm-30.example.lan/",
+                        "icon": "mdi:router",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 29
+                      }
+                    ]
+                  },
+                  "order": 5
+                },
+                {
+                  "id": "sc-f-large",
+                  "kind": "folder",
+                  "name": "Large contents",
+                  "display": "expanded",
+                  "shape": "rounded",
+                  "showTitle": true,
+                  "size": "medium",
+                  "contentSize": "large",
+                  "placement": {
+                    "x": 8,
+                    "y": 5,
+                    "w": 16,
+                    "h": 10
+                  },
+                  "content": {
+                    "children": [
+                      {
+                        "id": "sc-lg-1",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Large 1",
+                        "url": "https://sc-lg-1.example.lan/",
+                        "icon": "mdi:movie",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 0
+                      },
+                      {
+                        "id": "sc-lg-2",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Large 2",
+                        "url": "https://sc-lg-2.example.lan/",
+                        "icon": "mdi:music",
+                        "openMode": "newtab",
+                        "size": "small",
+                        "order": 1
+                      },
+                      {
+                        "id": "sc-f-large-sub",
+                        "kind": "folder",
+                        "name": "Small-contents sub-folder",
+                        "display": "expanded",
+                        "shape": "rounded",
+                        "showTitle": true,
+                        "size": "medium",
+                        "contentSize": "small",
+                        "content": {
+                          "children": [
+                            {
+                              "id": "sc-lgs-1",
+                              "kind": "tile",
+                              "type": "link",
+                              "name": "Inner 1",
+                              "url": "https://sc-lgs-1.example.lan/",
+                              "icon": "mdi:lan",
+                              "openMode": "newtab",
+                              "size": "medium",
+                              "order": 0
+                            },
+                            {
+                              "id": "sc-lgs-2",
+                              "kind": "tile",
+                              "type": "link",
+                              "name": "Inner 2",
+                              "url": "https://sc-lgs-2.example.lan/",
+                              "icon": "mdi:server",
+                              "openMode": "newtab",
+                              "size": "medium",
+                              "order": 1
+                            },
+                            {
+                              "id": "sc-lgs-3",
+                              "kind": "tile",
+                              "type": "link",
+                              "name": "Inner 3",
+                              "url": "https://sc-lgs-3.example.lan/",
+                              "icon": "mdi:database",
+                              "openMode": "newtab",
+                              "size": "medium",
+                              "order": 2
+                            },
+                            {
+                              "id": "sc-lgs-4",
+                              "kind": "tile",
+                              "type": "link",
+                              "name": "Inner 4",
+                              "url": "https://sc-lgs-4.example.lan/",
+                              "icon": "mdi:cloud",
+                              "openMode": "newtab",
+                              "size": "medium",
+                              "order": 3
+                            },
+                            {
+                              "id": "sc-lgs-5",
+                              "kind": "tile",
+                              "type": "link",
+                              "name": "Inner 5",
+                              "url": "https://sc-lgs-5.example.lan/",
+                              "icon": "mdi:web",
+                              "openMode": "newtab",
+                              "size": "medium",
+                              "order": 4
+                            }
+                          ]
+                        },
+                        "order": 2
+                      }
+                    ]
+                  },
+                  "order": 6
+                },
+                {
+                  "id": "sc-f-min-s",
+                  "kind": "folder",
+                  "name": "Minimised Small",
+                  "display": "collapsed",
+                  "shape": "rounded",
+                  "showTitle": true,
+                  "size": "small",
+                  "contentSize": "small",
+                  "placement": {
+                    "x": 0,
+                    "y": 15,
+                    "w": 3,
+                    "h": 4
+                  },
+                  "content": {
+                    "children": [
+                      {
+                        "id": "sc-mins-1",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "MinS 1",
+                        "url": "https://sc-mins-1.example.lan/",
+                        "icon": "mdi:lan",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 0
+                      },
+                      {
+                        "id": "sc-mins-2",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "MinS 2",
+                        "url": "https://sc-mins-2.example.lan/",
+                        "icon": "mdi:server",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 1
+                      },
+                      {
+                        "id": "sc-mins-3",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "MinS 3",
+                        "url": "https://sc-mins-3.example.lan/",
+                        "icon": "mdi:database",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 2
+                      }
+                    ]
+                  },
+                  "order": 7
+                },
+                {
+                  "id": "sc-f-min-m",
+                  "kind": "folder",
+                  "name": "Minimised Medium",
+                  "display": "collapsed",
+                  "shape": "rounded",
+                  "showTitle": true,
+                  "size": "medium",
+                  "contentSize": "medium",
+                  "placement": {
+                    "x": 3,
+                    "y": 15,
+                    "w": 6,
+                    "h": 5
+                  },
+                  "content": {
+                    "children": [
+                      {
+                        "id": "sc-minm-1",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "MinM 1",
+                        "url": "https://sc-minm-1.example.lan/",
+                        "icon": "mdi:lan",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 0
+                      },
+                      {
+                        "id": "sc-minm-2",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "MinM 2",
+                        "url": "https://sc-minm-2.example.lan/",
+                        "icon": "mdi:server",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 1
+                      },
+                      {
+                        "id": "sc-minm-3",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "MinM 3",
+                        "url": "https://sc-minm-3.example.lan/",
+                        "icon": "mdi:database",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 2
+                      },
+                      {
+                        "id": "sc-minm-4",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "MinM 4",
+                        "url": "https://sc-minm-4.example.lan/",
+                        "icon": "mdi:cloud",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 3
+                      }
+                    ]
+                  },
+                  "order": 8
+                },
+                {
+                  "id": "sc-f-min-l",
+                  "kind": "folder",
+                  "name": "Minimised Large",
+                  "display": "collapsed",
+                  "shape": "rounded",
+                  "showTitle": true,
+                  "size": "large",
+                  "contentSize": "medium",
+                  "placement": {
+                    "x": 9,
+                    "y": 15,
+                    "w": 12,
+                    "h": 8
+                  },
+                  "content": {
+                    "children": [
+                      {
+                        "id": "sc-minl-1",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "MinL 1",
+                        "url": "https://sc-minl-1.example.lan/",
+                        "icon": "mdi:lan",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 0
+                      },
+                      {
+                        "id": "sc-minl-2",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "MinL 2",
+                        "url": "https://sc-minl-2.example.lan/",
+                        "icon": "mdi:server",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 1
+                      },
+                      {
+                        "id": "sc-minl-3",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "MinL 3",
+                        "url": "https://sc-minl-3.example.lan/",
+                        "icon": "mdi:database",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 2
+                      },
+                      {
+                        "id": "sc-minl-4",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "MinL 4",
+                        "url": "https://sc-minl-4.example.lan/",
+                        "icon": "mdi:cloud",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 3
+                      },
+                      {
+                        "id": "sc-minl-5",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "MinL 5",
+                        "url": "https://sc-minl-5.example.lan/",
+                        "icon": "mdi:web",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 4
+                      }
+                    ]
+                  },
+                  "order": 9
+                }
+              ]
             }
           },
           {
-            "id": "sc-tab-mixed",
-            "name": "Mixed",
+            "id": "sc-tab-folders",
+            "name": "Folders",
             "order": 2,
-            "layout": "inherit",
             "root": {
-              "columns": 12,
+              "columns": 24,
               "children": [
                 {
                   "id": "sc-mf",
                   "kind": "folder",
-                  "name": "Free folder",
-                  "layout": "free",
+                  "name": "Mixed folder",
                   "display": "expanded",
                   "shape": "rounded",
                   "showTitle": true,
+                  "size": "medium",
+                  "contentSize": "medium",
                   "placement": {
                     "x": 0,
                     "y": 0,
-                    "w": 6,
-                    "h": 4
+                    "w": 12,
+                    "h": 8
                   },
                   "content": {
-                    "columns": 48,
                     "children": [
                       {
                         "id": "sc-mf-1",
@@ -848,14 +1386,7 @@
                         "icon": "mdi:docker",
                         "openMode": "newtab",
                         "size": "medium",
-                        "order": 0,
-                        "placement": {
-                          "x": 2,
-                          "y": 2,
-                          "w": 16,
-                          "h": 10,
-                          "z": 1
-                        }
+                        "order": 0
                       },
                       {
                         "id": "sc-mf-2",
@@ -866,14 +1397,7 @@
                         "icon": "mdi:nas",
                         "openMode": "newtab",
                         "size": "medium",
-                        "order": 1,
-                        "placement": {
-                          "x": 10,
-                          "y": 6,
-                          "w": 16,
-                          "h": 10,
-                          "z": 2
-                        }
+                        "order": 1
                       },
                       {
                         "id": "sc-mf-3",
@@ -884,34 +1408,28 @@
                         "icon": "mdi:lan",
                         "openMode": "newtab",
                         "size": "medium",
-                        "order": 2,
-                        "placement": {
-                          "x": 30,
-                          "y": 3,
-                          "w": 12,
-                          "h": 8,
-                          "z": 1
-                        }
+                        "order": 2
                       }
                     ]
-                  }
+                  },
+                  "order": 0
                 },
                 {
                   "id": "sc-mg",
                   "kind": "folder",
                   "name": "Grid folder",
-                  "layout": "inherit",
                   "display": "expanded",
                   "shape": "rounded",
                   "showTitle": true,
+                  "size": "medium",
+                  "contentSize": "medium",
                   "placement": {
-                    "x": 6,
+                    "x": 12,
                     "y": 0,
-                    "w": 6,
-                    "h": 3
+                    "w": 12,
+                    "h": 6
                   },
                   "content": {
-                    "columns": 6,
                     "children": [
                       {
                         "id": "sc-mg-1",
@@ -922,13 +1440,7 @@
                         "icon": "mdi:docker",
                         "openMode": "newtab",
                         "size": "medium",
-                        "order": 0,
-                        "placement": {
-                          "x": 0,
-                          "y": 0,
-                          "w": 1,
-                          "h": 1
-                        }
+                        "order": 0
                       },
                       {
                         "id": "sc-mg-2",
@@ -939,13 +1451,7 @@
                         "icon": "mdi:nas",
                         "openMode": "newtab",
                         "size": "medium",
-                        "order": 1,
-                        "placement": {
-                          "x": 1,
-                          "y": 0,
-                          "w": 1,
-                          "h": 1
-                        }
+                        "order": 1
                       },
                       {
                         "id": "sc-mg-3",
@@ -956,13 +1462,7 @@
                         "icon": "mdi:lan",
                         "openMode": "newtab",
                         "size": "medium",
-                        "order": 2,
-                        "placement": {
-                          "x": 2,
-                          "y": 0,
-                          "w": 1,
-                          "h": 1
-                        }
+                        "order": 2
                       },
                       {
                         "id": "sc-mg-4",
@@ -973,33 +1473,429 @@
                         "icon": "mdi:camera",
                         "openMode": "newtab",
                         "size": "medium",
-                        "order": 3,
-                        "placement": {
-                          "x": 0,
-                          "y": 1,
-                          "w": 1,
-                          "h": 1
-                        }
+                        "order": 3
                       }
                     ]
-                  }
+                  },
+                  "order": 1
+                },
+                {
+                  "id": "sc-f-many",
+                  "kind": "folder",
+                  "name": "Many (three pages)",
+                  "display": "expanded",
+                  "shape": "rounded",
+                  "showTitle": true,
+                  "size": "medium",
+                  "contentSize": "medium",
+                  "placement": {
+                    "x": 0,
+                    "y": 8,
+                    "w": 8,
+                    "h": 6
+                  },
+                  "content": {
+                    "children": [
+                      {
+                        "id": "sc-many-1",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Item 1",
+                        "url": "https://sc-many-1.example.lan/",
+                        "icon": "mdi:lan",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 0
+                      },
+                      {
+                        "id": "sc-many-2",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Item 2",
+                        "url": "https://sc-many-2.example.lan/",
+                        "icon": "mdi:server",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 1
+                      },
+                      {
+                        "id": "sc-many-3",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Item 3",
+                        "url": "https://sc-many-3.example.lan/",
+                        "icon": "mdi:database",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 2
+                      },
+                      {
+                        "id": "sc-many-4",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Item 4",
+                        "url": "https://sc-many-4.example.lan/",
+                        "icon": "mdi:cloud",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 3
+                      },
+                      {
+                        "id": "sc-many-5",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Item 5",
+                        "url": "https://sc-many-5.example.lan/",
+                        "icon": "mdi:web",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 4
+                      },
+                      {
+                        "id": "sc-many-6",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Item 6",
+                        "url": "https://sc-many-6.example.lan/",
+                        "icon": "mdi:router",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 5
+                      },
+                      {
+                        "id": "sc-many-7",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Item 7",
+                        "url": "https://sc-many-7.example.lan/",
+                        "icon": "mdi:lan",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 6
+                      },
+                      {
+                        "id": "sc-many-8",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Item 8",
+                        "url": "https://sc-many-8.example.lan/",
+                        "icon": "mdi:server",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 7
+                      },
+                      {
+                        "id": "sc-many-9",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Item 9",
+                        "url": "https://sc-many-9.example.lan/",
+                        "icon": "mdi:database",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 8
+                      },
+                      {
+                        "id": "sc-many-10",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Item 10",
+                        "url": "https://sc-many-10.example.lan/",
+                        "icon": "mdi:cloud",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 9
+                      },
+                      {
+                        "id": "sc-many-11",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Item 11",
+                        "url": "https://sc-many-11.example.lan/",
+                        "icon": "mdi:web",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 10
+                      },
+                      {
+                        "id": "sc-many-12",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Item 12",
+                        "url": "https://sc-many-12.example.lan/",
+                        "icon": "mdi:router",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 11
+                      },
+                      {
+                        "id": "sc-many-13",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Item 13",
+                        "url": "https://sc-many-13.example.lan/",
+                        "icon": "mdi:lan",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 12
+                      },
+                      {
+                        "id": "sc-many-14",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Item 14",
+                        "url": "https://sc-many-14.example.lan/",
+                        "icon": "mdi:server",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 13
+                      },
+                      {
+                        "id": "sc-many-15",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Item 15",
+                        "url": "https://sc-many-15.example.lan/",
+                        "icon": "mdi:database",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 14
+                      },
+                      {
+                        "id": "sc-many-16",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Item 16",
+                        "url": "https://sc-many-16.example.lan/",
+                        "icon": "mdi:cloud",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 15
+                      },
+                      {
+                        "id": "sc-many-17",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Item 17",
+                        "url": "https://sc-many-17.example.lan/",
+                        "icon": "mdi:web",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 16
+                      },
+                      {
+                        "id": "sc-many-18",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Item 18",
+                        "url": "https://sc-many-18.example.lan/",
+                        "icon": "mdi:router",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 17
+                      },
+                      {
+                        "id": "sc-many-19",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Item 19",
+                        "url": "https://sc-many-19.example.lan/",
+                        "icon": "mdi:lan",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 18
+                      },
+                      {
+                        "id": "sc-many-20",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Item 20",
+                        "url": "https://sc-many-20.example.lan/",
+                        "icon": "mdi:server",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 19
+                      }
+                    ]
+                  },
+                  "order": 2
+                },
+                {
+                  "id": "sc-f-nest",
+                  "kind": "folder",
+                  "name": "Nested sizes (2 deep)",
+                  "display": "expanded",
+                  "shape": "rounded",
+                  "showTitle": true,
+                  "size": "medium",
+                  "contentSize": "medium",
+                  "placement": {
+                    "x": 12,
+                    "y": 8,
+                    "w": 12,
+                    "h": 8
+                  },
+                  "content": {
+                    "children": [
+                      {
+                        "id": "sc-nest-1",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Top 1",
+                        "url": "https://sc-nest-1.example.lan/",
+                        "icon": "mdi:cog",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 0
+                      },
+                      {
+                        "id": "sc-f-nest-a",
+                        "kind": "folder",
+                        "name": "Small-contents child",
+                        "display": "expanded",
+                        "shape": "rounded",
+                        "showTitle": true,
+                        "size": "medium",
+                        "contentSize": "small",
+                        "content": {
+                          "children": [
+                            {
+                              "id": "sc-nesta-1",
+                              "kind": "tile",
+                              "type": "link",
+                              "name": "Child 1",
+                              "url": "https://sc-nesta-1.example.lan/",
+                              "icon": "mdi:lan",
+                              "openMode": "newtab",
+                              "size": "medium",
+                              "order": 0
+                            },
+                            {
+                              "id": "sc-nesta-2",
+                              "kind": "tile",
+                              "type": "link",
+                              "name": "Child 2",
+                              "url": "https://sc-nesta-2.example.lan/",
+                              "icon": "mdi:server",
+                              "openMode": "newtab",
+                              "size": "medium",
+                              "order": 1
+                            },
+                            {
+                              "id": "sc-nesta-3",
+                              "kind": "tile",
+                              "type": "link",
+                              "name": "Child 3",
+                              "url": "https://sc-nesta-3.example.lan/",
+                              "icon": "mdi:database",
+                              "openMode": "newtab",
+                              "size": "medium",
+                              "order": 2
+                            },
+                            {
+                              "id": "sc-nesta-4",
+                              "kind": "tile",
+                              "type": "link",
+                              "name": "Child 4",
+                              "url": "https://sc-nesta-4.example.lan/",
+                              "icon": "mdi:cloud",
+                              "openMode": "newtab",
+                              "size": "medium",
+                              "order": 3
+                            },
+                            {
+                              "id": "sc-nesta-5",
+                              "kind": "tile",
+                              "type": "link",
+                              "name": "Child 5",
+                              "url": "https://sc-nesta-5.example.lan/",
+                              "icon": "mdi:web",
+                              "openMode": "newtab",
+                              "size": "medium",
+                              "order": 4
+                            },
+                            {
+                              "id": "sc-nesta-6",
+                              "kind": "tile",
+                              "type": "link",
+                              "name": "Child 6",
+                              "url": "https://sc-nesta-6.example.lan/",
+                              "icon": "mdi:router",
+                              "openMode": "newtab",
+                              "size": "medium",
+                              "order": 5
+                            },
+                            {
+                              "id": "sc-nesta-7",
+                              "kind": "tile",
+                              "type": "link",
+                              "name": "Child 7",
+                              "url": "https://sc-nesta-7.example.lan/",
+                              "icon": "mdi:lan",
+                              "openMode": "newtab",
+                              "size": "medium",
+                              "order": 6
+                            },
+                            {
+                              "id": "sc-nesta-8",
+                              "kind": "tile",
+                              "type": "link",
+                              "name": "Child 8",
+                              "url": "https://sc-nesta-8.example.lan/",
+                              "icon": "mdi:server",
+                              "openMode": "newtab",
+                              "size": "medium",
+                              "order": 7
+                            },
+                            {
+                              "id": "sc-f-nest-b",
+                              "kind": "folder",
+                              "name": "Large-contents grandchild",
+                              "display": "expanded",
+                              "shape": "rounded",
+                              "showTitle": true,
+                              "size": "medium",
+                              "contentSize": "large",
+                              "content": {
+                                "children": [
+                                  {
+                                    "id": "sc-nestb-1",
+                                    "kind": "tile",
+                                    "type": "link",
+                                    "name": "Grand 1",
+                                    "url": "https://sc-nestb-1.example.lan/",
+                                    "icon": "mdi:weather-sunny",
+                                    "openMode": "newtab",
+                                    "size": "medium",
+                                    "order": 0
+                                  },
+                                  {
+                                    "id": "sc-nestb-2",
+                                    "kind": "tile",
+                                    "type": "link",
+                                    "name": "Grand 2",
+                                    "url": "https://sc-nestb-2.example.lan/",
+                                    "icon": "mdi:chart-line",
+                                    "openMode": "newtab",
+                                    "size": "medium",
+                                    "order": 1
+                                  }
+                                ]
+                              },
+                              "order": 8
+                            }
+                          ]
+                        },
+                        "order": 1
+                      }
+                    ]
+                  },
+                  "order": 3
                 }
               ]
             }
           }
-        ],
-        "background": {
-          "type": "image",
-          "value": "/presets/dark-gradient.jpg",
-          "images": [],
-          "interval": 0,
-          "fit": "cover",
-          "transition": "fade",
-          "transitionDuration": 0,
-          "overlayOpacity": 0.3,
-          "overlayBlur": 0,
-          "opacity": 1
-        }
+        ]
       }
     ]
   }

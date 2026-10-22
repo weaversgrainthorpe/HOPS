@@ -1,6 +1,5 @@
 import { test, expect, type Page, type BrowserContext } from '@playwright/test';
 import { getCsrfToken } from '../helpers';
-import { m5Config } from '../m5form';
 
 // M4 Task 9: layered backgrounds in a REAL browser (Chromium has layout, compositing and
 // IntersectionObserver; jsdom has none of them).
@@ -20,7 +19,7 @@ import { m5Config } from '../m5form';
 let seq = 0;
 const made: string[] = [];
 
-const placement = (x: number, y: number, w = 1, h = 1) => ({ x, y, w, h });
+const placement = (x: number, y: number, w = 2, h = 2) => ({ x, y, w, h });
 
 type Child = Record<string, unknown>;
 
@@ -37,15 +36,15 @@ async function importDash(
     id: id('dash'), name: `M4 bg status ${p}`, order: 0, path: `/${p}`, revision: 1,
     settings: {
       statusChecksEnabled: null, statusCheckIntervalMinutes: null, statusCheckTimeoutSeconds: null,
-      editIdleTimeoutMinutes: null, animatedFolderBackgrounds: opts.animated ?? null, defaultLayout: null
+      editIdleTimeoutMinutes: null, animatedFolderBackgrounds: opts.animated ?? null
     },
-    defaultLayout: 'grid',
-    tabs: [{ id: id('tab'), name: 'Main', order: 0, layout: 'inherit', root: { columns: 12, children: children(id) } }]
+    // The M5 stored form: a 24-column grid tab (tiles at their Size's span); folder contents ordered, unplaced.
+    tabs: [{ id: id('tab'), name: 'Main', order: 0, root: { columns: 24, children: children(id) } }]
   };
   if (opts.background) dash.background = opts.background;
   const doc = {
     format: 'hops-export', schemaVersion: 3, exportedAt: new Date().toISOString(), exportType: 'single-dashboard',
-    config: m5Config([dash]) // M5 form (layoutVersion 1): see m5form.ts
+    config: { layoutVersion: 1, dashboards: [dash] }
   };
   const r = await page.request.post('/api/config/import', {
     headers: { 'X-CSRF-Token': await getCsrfToken(context) },
@@ -69,10 +68,13 @@ test.afterEach(async ({ page, context }) => {
   }
 });
 
-const tile = (id: string, name: string, x = 0, y = 0, extra: Child = {}) => ({
+/** A tile inside a folder: no placement. */
+const kid = (id: string, name: string, extra: Child = {}): Child => ({
   id, kind: 'tile', type: 'link', name, url: `https://${name.toLowerCase()}.example.lan/`, icon: 'mdi:lan',
-  openMode: 'newtab', size: 'medium', order: 0, placement: placement(x, y), ...extra
+  openMode: 'newtab', size: 'medium', order: 0, ...extra
 });
+/** A Medium tile on the tab at cell (x, y) of the 24-column grid. */
+const tile = (id: string, name: string, x = 0, y = 0, extra: Child = {}): Child => ({ ...kid(id, name, extra), placement: placement(x, y) });
 
 type RGB = [number, number, number];
 
@@ -109,21 +111,18 @@ test.describe('M4 layered backgrounds in a real browser', () => {
       page,
       context,
       (id) => [
-        tile(id('anchor'), 'Anchor', 11, 0),
+        tile(id('anchor'), 'Anchor', 22, 0),
         // The see-through folder: a vivid green colour look at opacity 0 — green must NOT show.
         {
-          id: id('clear'), kind: 'folder', name: 'Clear', layout: 'inherit', display: 'expanded', shape: 'rounded',
-          showTitle: false, color: '#00ff00', opacity: 0, placement: placement(0, 0, 6, 4),
-          content: {
-            columns: 6,
-            children: [tile(id('inner'), 'Inner', 0, 0, { color: '#0000ff', opacity: 1 })]
-          }
+          id: id('clear'), kind: 'folder', name: 'Clear', display: 'expanded', shape: 'rounded', size: 'medium', contentSize: 'medium',
+          showTitle: false, color: '#00ff00', opacity: 0, placement: placement(0, 0, 12, 8),
+          content: { children: [kid(id('inner'), 'Inner', { color: '#0000ff', opacity: 1 })] }
         },
         // A control: the same green, fully opaque — proves the sampling would see a folder colour.
         {
-          id: id('solid'), kind: 'folder', name: 'Solid', layout: 'inherit', display: 'expanded', shape: 'rounded',
-          showTitle: false, color: '#00ff00', opacity: 1, placement: placement(6, 0, 4, 4),
-          content: { columns: 4, children: [tile(id('s-t'), 'SolidTile')] }
+          id: id('solid'), kind: 'folder', name: 'Solid', display: 'expanded', shape: 'rounded', size: 'medium', contentSize: 'medium',
+          showTitle: false, color: '#00ff00', opacity: 1, placement: placement(12, 0, 8, 8),
+          content: { children: [kid(id('s-t'), 'SolidTile')] }
         }
       ],
       { background: { type: 'color', value: '#c82828', overlayOpacity: 0, overlayBlur: 0 } }
@@ -182,17 +181,17 @@ test.describe('M4 layered backgrounds in a real browser', () => {
 
   const SLIDES = ['/presets/network-grid.jpg', '/presets/dark-gradient.jpg'];
   const slideFolder = (id: (s: string) => string, key: string, x: number, y: number) => ({
-    id: id(key), kind: 'folder', name: `Slides ${key}`, layout: 'inherit', display: 'expanded', shape: 'rounded',
-    showTitle: false, placement: placement(x, y, 2, 2),
+    id: id(key), kind: 'folder', name: `Slides ${key}`, display: 'expanded', shape: 'rounded', size: 'medium', contentSize: 'medium',
+    showTitle: false, placement: placement(x, y, 4, 4),
     background: { type: 'slideshow', images: SLIDES, interval: 30, transition: 'crossfade' },
-    content: { columns: 2, children: [tile(id(`${key}-t`), `T${key}`)] }
+    content: { children: [kid(id(`${key}-t`), `T${key}`)] }
   });
   /** 10 slideshow folders on the first screen (two rows of five) and 5 more far below. */
   const slideshowDash = (id: (s: string) => string) => {
     const out: Child[] = [];
-    for (let i = 0; i < 10; i++) out.push(slideFolder(id, `top${i}`, (i % 5) * 2, Math.floor(i / 5) * 2));
-    for (let i = 0; i < 5; i++) out.push(slideFolder(id, `low${i}`, i * 2, 30));
-    out.push(tile(id('anchor'), 'Anchor', 11, 0));
+    for (let i = 0; i < 10; i++) out.push(slideFolder(id, `top${i}`, (i % 5) * 4, Math.floor(i / 5) * 4));
+    for (let i = 0; i < 5; i++) out.push(slideFolder(id, `low${i}`, i * 4, 60));
+    out.push(tile(id('anchor'), 'Anchor', 22, 0));
     return out;
   };
   const folderLayer = (page: Page, folderId: string) =>
@@ -258,15 +257,15 @@ test.describe('M4 layered backgrounds in a real browser', () => {
     // slowly, the big one first appears as a sliver (smallest area, ranked last) and must win a
     // slot once most of it is on screen while the small ones are still fully visible. With the
     // observer's default [0] threshold its area was measured only at that first sliver.
-    const Y = 24;
+    const Y = 48;
     const f = await importDash(page, context, (id) => {
       const out: Child[] = [tile(id('anchor'), 'Anchor', 0, 0)];
       for (let i = 0; i < 4; i++) {
-        out.push({ ...slideFolder(id, `small${i}`, 8 + i, Y - 2), placement: placement(8 + i, Y - 2, 1, 2),
-          content: { columns: 1, children: [tile(id(`small${i}-t`), `S${i}`)] } });
+        out.push({ ...slideFolder(id, `small${i}`, 16 + 2 * i, Y - 4), placement: placement(16 + 2 * i, Y - 4, 2, 4),
+          content: { children: [kid(id(`small${i}-t`), `S${i}`)] } });
       }
-      out.push({ ...slideFolder(id, 'big', 0, Y), placement: placement(0, Y, 8, 10),
-        content: { columns: 8, children: [tile(id('big-t'), 'BigT')] } });
+      out.push({ ...slideFolder(id, 'big', 0, Y), placement: placement(0, Y, 16, 20),
+        content: { children: [kid(id('big-t'), 'BigT')] } });
       return out;
     }, { animated: true });
     const smalls = Array.from({ length: 4 }, (_, i) => f.id(`small${i}`));

@@ -4,7 +4,6 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getCsrfToken, login, longPress, signInDialog, setSetting } from '../helpers';
 import { ADMIN_USERNAME, ADMIN_TEST_PASSWORD } from '../constants';
-import { m5Config } from '../m5form';
 
 // M4 walkthrough changes (design/specs/2026-10-21-hops-v3-m4-walkthrough-changes-design.md §1–3, §6),
 // in a REAL browser: selection rendering, compositing (pixels) and layout need Chromium.
@@ -12,12 +11,27 @@ import { m5Config } from '../m5form';
 let seq = 0;
 const made: string[] = [];
 
-const placement = (x: number, y: number, w = 1, h = 1) => ({ x, y, w, h });
+const placement = (x: number, y: number, w = 2, h = 2) => ({ x, y, w, h });
 type Child = Record<string, unknown>;
 
-const tile = (id: string, name: string, x = 0, y = 0, extra: Child = {}) => ({
+// The M5 stored form (layoutVersion 1): 24-column grid tabs; a tab tile is exactly its Size's span;
+// folder contents are an ordered list with no placements; folders carry size and contentSize.
+const SPAN: Record<string, number> = { small: 1, medium: 2, large: 4 };
+/** A tile as it sits inside a folder: no placement. */
+const kid = (id: string, name: string, extra: Child = {}): Child => ({
   id, kind: 'tile', type: 'link', name, url: `https://${name.toLowerCase()}.example.lan/`, icon: 'mdi:lan',
-  openMode: 'newtab', size: 'medium', order: 0, placement: placement(x, y), ...extra
+  openMode: 'newtab', size: 'medium', order: 0, ...extra
+});
+/** A tile on a tab at cell (x, y) of the 24-column grid, its Size's span each way. */
+const tile = (id: string, name: string, x = 0, y = 0, extra: Child = {}): Child => {
+  const t = kid(id, name, extra);
+  const s = SPAN[String(t.size)] ?? 2;
+  return { placement: placement(x, y, s, s), ...t };
+};
+/** A folder on a tab (`box` in cells) or inside a folder (`box` null). */
+const folder = (id: string, name: string, box: ReturnType<typeof placement> | null, children: Child[], extra: Child = {}): Child => ({
+  id, kind: 'folder', name, display: 'expanded', shape: 'rounded', showTitle: true, size: 'medium', contentSize: 'medium',
+  ...(box ? { placement: box } : {}), content: { children }, ...extra
 });
 
 type TabSpec = { name: string; children: (id: (s: string) => string) => Child[] };
@@ -27,7 +41,7 @@ async function importDash(
   page: Page,
   context: BrowserContext,
   tabs: TabSpec[],
-  opts: { background?: Record<string, unknown>; fineGrid?: boolean } = {}
+  opts: { background?: Record<string, unknown> } = {}
 ) {
   const p = `m4bw${Date.now().toString(36)}${(seq++).toString(36)}`;
   const id = (s: string) => `${p}-${s}`;
@@ -35,19 +49,16 @@ async function importDash(
     id: id('dash'), name: `M4 walkthrough ${p}`, order: 0, path: `/${p}`, revision: 1,
     settings: {
       statusChecksEnabled: null, statusCheckIntervalMinutes: null, statusCheckTimeoutSeconds: null,
-      editIdleTimeoutMinutes: null, animatedFolderBackgrounds: null, defaultLayout: null
+      editIdleTimeoutMinutes: null, animatedFolderBackgrounds: null
     },
-    defaultLayout: 'grid',
     tabs: tabs.map((t, i) => ({
-      id: id(`tab${i}`), name: t.name, order: i, layout: 'inherit', root: { columns: opts.fineGrid ? 24 : 12, children: t.children(id) }
+      id: id(`tab${i}`), name: t.name, order: i, root: { columns: 24, children: t.children(id) }
     }))
   };
   if (opts.background) dash.background = opts.background;
-  // fineGrid: the placements are already in the 24-column grid's units (spec §9); otherwise they are the old
-  // 12-column form. Either way the dashboard is put in the M5 stored form (m5form.ts) before it is imported.
   const doc = {
     format: 'hops-export', schemaVersion: 3, exportedAt: new Date().toISOString(), exportType: 'single-dashboard',
-    config: m5Config([dash])
+    config: { layoutVersion: 1, dashboards: [dash] }
   };
   const r = await page.request.post('/api/config/import', {
     headers: { 'X-CSRF-Token': await getCsrfToken(context) },
@@ -141,12 +152,8 @@ test.describe('M4 walkthrough changes in a real browser', () => {
     const f = await importDash(page, context, [{
       name: 'Main',
       children: (id) => [
-        tile(id('anchor'), 'Anchor', 11, 0),
-        {
-          id: id('fold'), kind: 'folder', name: 'Folder', layout: 'inherit', display: 'expanded', shape: 'rounded',
-          showTitle: true, placement: placement(0, 1, 4, 3),
-          content: { columns: 4, children: [tile(id('in'), 'Inner')] }
-        }
+        tile(id('anchor'), 'Anchor', 22, 0),
+        folder(id('fold'), 'Folder', placement(0, 2, 8, 6), [kid(id('in'), 'Inner')])
       ]
     }]);
     const sel = `[data-node-id="${f.id('fold')}"]`;
@@ -182,8 +189,8 @@ test.describe('M4 walkthrough changes in a real browser', () => {
     const f = await importDash(page, context, [{
       name: 'Main',
       children: (id) => [
-        tile(id('faint'), 'Faint', 0, 0, { size: 'large', color: '#0000ff', opacity: 0.2, placement: placement(0, 0, 3, 2) }),
-        tile(id('solid'), 'Solid', 4, 0, { size: 'large', color: '#0000ff', opacity: 1, placement: placement(4, 0, 3, 2) })
+        tile(id('faint'), 'Faint', 0, 0, { size: 'large', color: '#0000ff', opacity: 0.2 }),
+        tile(id('solid'), 'Solid', 8, 0, { size: 'large', color: '#0000ff', opacity: 1 })
       ]
     }], { background: { type: 'color', value: '#ffff00', overlayOpacity: 0, overlayBlur: 0 } });
     await page.goto(f.path);
@@ -238,30 +245,17 @@ test.describe('M4 walkthrough changes in a real browser', () => {
     return { bottom: r.bottom + window.scrollY, vh: window.innerHeight, docH: document.documentElement.scrollHeight };
   });
 
-  test('the panel reaches the bottom of the screen on the Showcase Free tab, in view and edit mode', async ({ page, context }) => {
+  // (Was the Showcase's Free tab, the short tab with a picture. Free tabs are gone (M5) and the M5 Showcase's
+  // tabs are all long, so the short tab with a picture is its own dashboard here.)
+  test('the panel reaches the bottom of the screen on a short tab with a background picture, in view and edit mode', async ({ page, context }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
-    // The bundled showcase fixture, under a fresh id and path.
-    const fixture = JSON.parse(fs.readFileSync(
-      path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../backend/internal/configdoc/testdata/v3_showcase_export.json'), 'utf8'));
-    const p = `m4bwsc${Date.now().toString(36)}${(seq++).toString(36)}`;
-    const dash = fixture.config.dashboards[0];
-    dash.id = `${p}-dash`;
-    dash.path = `/${p}`;
-    dash.name = `Showcase ${p}`;
-    fixture.config = m5Config([dash]); // the pre-M5 fixture in the M5 form (M5 Task 5 rewrites the file)
-    const r = await page.request.post('/api/config/import', {
-      headers: { 'X-CSRF-Token': await getCsrfToken(context) },
-      multipart: { file: { name: 'sc.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(fixture)) } }
-    });
-    expect(r.status(), await r.text()).toBe(200);
-    const cfg = await (await page.request.get('/api/config')).json();
-    const stored = cfg.dashboards.find((d: { name: string }) => d.name === dash.name);
-    expect(stored, 'imported showcase is stored').toBeTruthy();
-    made.push(stored.id);
-
-    await page.goto(stored.path);
-    await page.getByRole('tab', { name: 'Switch to Free tab' }).click();
-    await expect(page.getByRole('tab', { name: 'Switch to Free tab' })).toHaveAttribute('aria-selected', 'true');
+    const f = await importDash(page, context, [
+      { name: 'Long', children: (id) => [tile(id('first'), 'First', 0, 0), tile(id('far'), 'Far', 0, 40)] },
+      { name: 'Short', children: (id) => [tile(id('a'), 'Alpha', 2, 2), tile(id('big'), 'Big', 8, 2, { size: 'large' })] }
+    ], { background: { type: 'image', value: '/presets/galaxy.jpg', fit: 'cover', overlayOpacity: 0, overlayBlur: 0, opacity: 0.6 } });
+    await page.goto(f.path);
+    await page.getByRole('tab', { name: 'Switch to Short tab' }).click();
+    await expect(page.getByRole('tab', { name: 'Switch to Short tab' })).toHaveAttribute('aria-selected', 'true');
     await expect(page.locator('.canvas-panel')).toBeVisible();
 
     for (const mode of ['view', 'edit'] as const) {
@@ -286,7 +280,7 @@ test.describe('M4 walkthrough changes in a real browser', () => {
     await page.setViewportSize({ width: 1440, height: 900 });
     const f = await importDash(page, context, [{
       name: 'Long',
-      children: (id) => [tile(id('first'), 'First', 0, 0), tile(id('last'), 'Last', 0, 40)]
+      children: (id) => [tile(id('first'), 'First', 0, 0), tile(id('last'), 'Last', 0, 80)]
     }]);
     await page.goto(f.path);
     const last = page.locator(`[data-node-id="${f.id('last')}"]`);
@@ -412,16 +406,8 @@ test.describe('M4 walkthrough changes in a real browser', () => {
         name: 'Main',
         children: (id) => [
           tile(id('a'), 'Alpha', 0, 0),
-          {
-            id: id('grp'), kind: 'folder', name: 'Group', layout: 'inherit', display: 'expanded', shape: 'rounded',
-            showTitle: true, placement: placement(2, 0, 4, 3),
-            content: { columns: 4, children: [tile(id('in'), 'Inner')] }
-          },
-          {
-            id: id('box'), kind: 'folder', name: 'Box', layout: 'inherit', display: 'collapsed', shape: 'rounded',
-            showTitle: true, placement: placement(8, 0, 4, 3),
-            content: { columns: 4, children: [tile(id('bx'), 'Boxed')] }
-          }
+          folder(id('grp'), 'Group', placement(4, 0, 8, 6), [kid(id('in'), 'Inner')]),
+          folder(id('box'), 'Box', placement(16, 0, 8, 6), [kid(id('bx'), 'Boxed')], { display: 'collapsed' })
         ]
       },
       { name: 'Two', children: (id) => [tile(id('t2a'), 'Tango')] }
@@ -580,11 +566,7 @@ async function nestedDash(page: Page, context: BrowserContext) {
     name: 'Main',
     children: (id) => [
       tile(id('out'), 'Outside', 0, 0),
-      {
-        id: id('nf'), kind: 'folder', name: 'Plain', layout: 'inherit', display: 'expanded', shape: 'rounded',
-        showTitle: false, placement: placement(2, 1, 4, 3),
-        content: { columns: 4, children: [tile(id('corner'), 'Corner', 3, 0)] }
-      }
+      folder(id('nf'), 'Plain', placement(4, 2, 8, 6), [kid(id('corner'), 'Corner')], { showTitle: false })
     ]
   }]);
 }
@@ -663,7 +645,7 @@ test.describe('§4B handles on a touch device (hover: none)', () => {
 test.describe('Escape in edit dialogs (real browser)', () => {
   async function escDash(page: Page, context: BrowserContext) {
     return importDash(page, context, [
-      { name: 'Main', children: (id) => [tile(id('a'), 'Alpha', 0, 0), tile(id('b'), 'Bravo', 1, 0)] },
+      { name: 'Main', children: (id) => [tile(id('a'), 'Alpha', 0, 0), tile(id('b'), 'Bravo', 2, 0)] },
       { name: 'Two', children: (id) => [tile(id('t2'), 'Tango')] }
     ]);
   }
@@ -1307,12 +1289,8 @@ test.describe('§7.1 background on/off wording', () => {
     const f = await importDash(page, context, [{
       name: 'Main',
       children: (id) => [
-        tile(id('anchor'), 'Anchor', 11, 0),
-        {
-          id: id('fold'), kind: 'folder', name: 'Folder', layout: 'inherit', display: 'expanded', shape: 'rounded',
-          showTitle: true, placement: placement(0, 1, 4, 3),
-          content: { columns: 4, children: [tile(id('in'), 'Inner')] }
-        }
+        tile(id('anchor'), 'Anchor', 22, 0),
+        folder(id('fold'), 'Folder', placement(0, 2, 8, 6), [kid(id('in'), 'Inner')])
       ]
     }]);
     const sel = `[data-node-id="${f.id('fold')}"]`;
@@ -1358,17 +1336,14 @@ test.describe('§7.1 background on/off wording', () => {
 // ---- §7.2: edit mode looks like the real thing (WYSIWYG)
 
 /** Import a copy of a bundled/stored dashboard under a fresh id, path and name; returns its stored entry. */
-/**
- * Import a copy of `dash`, put in the M5 stored form (m5form.ts; a copy of this server's own M5 export
- * passes through unchanged in shape).
- */
+/** `dash` is in the M5 stored form already (the bundled M5 Showcase, or this server's own export). */
 async function importCopy(page: Page, context: BrowserContext, dash: Record<string, unknown>, label: string) {
   const p = `m4bw72${Date.now().toString(36)}${(seq++).toString(36)}`;
   const copy = JSON.parse(JSON.stringify(dash));
   copy.id = `${p}-dash`;
   copy.path = `/${p}`;
   copy.name = `${label} ${p}`;
-  const config = m5Config([copy]);
+  const config = { layoutVersion: 1, dashboards: [copy] };
   const bundle = { format: 'hops-export', schemaVersion: 3, exportType: 'full', config };
   const r = await page.request.post('/api/config/import', {
     headers: { 'X-CSRF-Token': await getCsrfToken(context) },
@@ -1467,16 +1442,8 @@ async function folderDash(page: Page, context: BrowserContext) {
       name: 'Main',
       children: (id) => [
         tile(id('a'), 'Alpha', 0, 0),
-        {
-          id: id('grp'), kind: 'folder', name: 'Group', layout: 'inherit', display: 'expanded', shape: 'rounded',
-          showTitle: true, placement: placement(2, 0, 4, 3),
-          content: { columns: 4, children: [tile(id('in'), 'Inner')] }
-        },
-        {
-          id: id('plain'), kind: 'folder', name: 'Plain', layout: 'inherit', display: 'expanded', shape: 'rounded',
-          showTitle: false, placement: placement(7, 1, 4, 3),
-          content: { columns: 4, children: [tile(id('pin'), 'Pinned', 3, 0)] }
-        }
+        folder(id('grp'), 'Group', placement(4, 0, 8, 6), [kid(id('in'), 'Inner')]),
+        folder(id('plain'), 'Plain', placement(14, 2, 8, 6), [kid(id('pin'), 'Pinned')], { showTitle: false })
       ]
     },
     { name: 'Two', children: (id) => [tile(id('t2a'), 'Tango')] }
@@ -1633,7 +1600,7 @@ test.describe('§7.2 fix round 1', () => {
         name: 'Main',
         children: (id) => [
           tile(id('a'), 'Alpha', 0, 0),
-          ...Array.from({ length: 12 }, (_, i) => tile(id(`last${i}`), `Last${i}`, i, 14))
+          ...Array.from({ length: 12 }, (_, i) => tile(id(`last${i}`), `Last${i}`, 2 * i, 28))
         ]
       },
       { name: 'Two', children: (id) => [tile(id('t2a'), 'Tango')] }
@@ -1717,12 +1684,9 @@ test.describe('§7.2 fix round 1', () => {
       name: 'Main',
       children: (id) => [
         tile(id('a'), 'Alpha', 0, 0),
-        {
-          id: id('f'), kind: 'folder', name: 'Big', display: 'expanded', shape: 'rounded', size: 'medium', contentSize: 'medium',
-          placement: placement(0, 2, 24, 20), content: { children: Array.from({ length: 120 }, (_, i) => tile(id(`k${i}`), `K${i}`)) }
-        }
+        folder(id('f'), 'Big', placement(0, 2, 24, 20), Array.from({ length: 120 }, (_, i) => kid(id(`k${i}`), `K${i}`)))
       ]
-    }], { fineGrid: true });
+    }]);
     await page.goto(f.path);
     await enterEdit(page);
     await page.evaluate(() => window.scrollTo(0, 0));
@@ -1769,11 +1733,9 @@ test.describe('§7.2 fix round 1', () => {
     await page.setViewportSize({ width: 1280, height: 800 });
     const f = await importDash(page, context, [{
       name: 'Main',
-      children: (id) => [{
-        id: id('grp'), kind: 'folder', name: 'Group', layout: 'inherit', display: 'expanded', shape: 'rounded',
-        showTitle: true, placement: placement(0, 0, 4, 3), background: broken(`m4bw-fold${Date.now().toString(36)}`),
-        content: { columns: 4, children: [tile(id('in'), 'Inner')] }
-      }]
+      children: (id) => [
+        folder(id('grp'), 'Group', placement(0, 0, 8, 6), [kid(id('in'), 'Inner')], { background: broken(`m4bw-fold${Date.now().toString(36)}`) })
+      ]
     }]);
     await page.goto(f.path);
     await enterEdit(page);
@@ -1823,15 +1785,11 @@ test.describe('§7.2 nested untitled folders on a touch device', () => {
   test('an untitled folder inside an untitled folder: no handle, control or crumb overlaps another, before and after drilling in', async ({ page, context }) => {
     const f = await importDash(page, context, [{
       name: 'Main',
-      children: (id) => [{
-        id: id('outer'), kind: 'folder', name: 'Outer', layout: 'inherit', display: 'expanded', shape: 'rounded',
-        showTitle: false, placement: placement(1, 1, 8, 5),
-        content: { columns: 8, children: [{
-          id: id('inner'), kind: 'folder', name: 'InnerF', layout: 'inherit', display: 'expanded', shape: 'rounded',
-          showTitle: false, placement: placement(1, 1, 4, 3),
-          content: { columns: 4, children: [tile(id('deep'), 'Deep', 3, 0)] }
-        }] }
-      }]
+      children: (id) => [
+        folder(id('outer'), 'Outer', placement(2, 2, 16, 10), [
+          folder(id('inner'), 'InnerF', null, [kid(id('deep'), 'Deep')], { showTitle: false })
+        ], { showTitle: false })
+      ]
     }]);
     await page.goto(f.path);
     await page.getByRole('button', { name: 'Enter Edit Mode' }).tap();
@@ -1876,8 +1834,8 @@ test.describe('§8 tile size sets the space it takes', () => {
     return importDash(page, context, [{
       name: 'Main',
       children: (id) => [
-        tile(id('a'), 'Alpha', 0, 0), tile(id('b'), 'Bravo', 1, 0), tile(id('d'), 'Delta', 0, 1),
-        tile(id('e'), 'Edge', 11, 0), tile(id('f'), 'Foxtrot', 10, 1)
+        tile(id('a'), 'Alpha', 0, 0), tile(id('b'), 'Bravo', 2, 0), tile(id('d'), 'Delta', 0, 2),
+        tile(id('e'), 'Edge', 22, 0), tile(id('f'), 'Foxtrot', 20, 2)
       ]
     }]);
   }
@@ -2067,17 +2025,13 @@ test.describe('§8 tile size sets the space it takes', () => {
   async function servicesDash(page: Page, context: BrowserContext) {
     return importDash(page, context, [{
       name: 'Main',
-      children: (id) => [{
-        id: id('services'), kind: 'folder', name: 'Services', layout: 'inherit', display: 'expanded', shape: 'rounded',
-        showTitle: true, color: '#8b5cf6', opacity: 0.95, placement: placement(0, 0, 12, 2),
-        content: {
-          columns: 12, children: [
-            tile(id('google'), 'Google', 0, 0, { description: 'Search Engine', icon: 'mdi:google' }),
-            tile(id('github'), 'GitHub', 1, 0, { description: 'Code Repository', icon: 'mdi:github', order: 1 }),
-            tile(id('youtube'), 'YouTube', 2, 0, { description: 'Video Platform', icon: 'mdi:youtube', order: 2 })
-          ]
-        }
-      }]
+      children: (id) => [
+        folder(id('services'), 'Services', placement(0, 0, 24, 4), [
+          kid(id('google'), 'Google', { description: 'Search Engine', icon: 'mdi:google' }),
+          kid(id('github'), 'GitHub', { description: 'Code Repository', icon: 'mdi:github', order: 1 }),
+          kid(id('youtube'), 'YouTube', { description: 'Video Platform', icon: 'mdi:youtube', order: 2 })
+        ], { color: '#8b5cf6', opacity: 0.95 })
+      ]
     }]);
   }
 
@@ -2202,7 +2156,7 @@ test.describe('§10 tile content layout', () => {
         tile(id('md'), 'YouTube', 4, 0, { description: 'Video Platform', icon: 'mdi:youtube', placement: placement(4, 0, 2, 2) }),
         tile(id('sm'), 'GitHub', 6, 0, { description: 'Code Repository', icon: 'mdi:github', size: 'small', placement: placement(6, 0, 1, 1) })
       ]
-    }], { fineGrid: true });
+    }]);
   }
 
   /** The drawn boxes of a tile and its name, icon graphic and description (null when not shown). */
@@ -2318,7 +2272,7 @@ test.describe('§10 tile content layout', () => {
     const f = await importDash(page, context, [{
       name: 'Main',
       children: (id) => [tile(id('md'), 'An extremely long tile name', 0, 0, { description: long, placement: placement(0, 0, 2, 2) })]
-    }], { fineGrid: true });
+    }]);
     await page.goto(f.path);
     const m = await page.locator(`.tab-canvas [data-node-id="${f.id('md')}"] button.entry`).evaluate((btn) => {
       const lh = (el: Element) => parseFloat(getComputedStyle(el).lineHeight);
