@@ -378,6 +378,21 @@ test.describe('M3 editor: dragging into and out of folders', () => {
     return find((await storedTabs(page, f))[0].root.children, 'canvas');
   }
 
+  /** The saved order of folder `folderId`'s items (M5: a folder's content is an ordered list). */
+  async function savedOrder(page: Page, f: Fixture, folderId: string): Promise<string[]> {
+    const find = (ns: AnyNode[]): AnyNode | undefined => {
+      for (const n of ns) {
+        if (n.id === folderId) return n;
+        const r = n.content ? find(n.content.children) : undefined;
+        if (r) return r;
+      }
+      return undefined;
+    };
+    const folder = find((await storedTabs(page, f))[0].root.children);
+    expect(folder, `folder ${folderId} is saved`).toBeTruthy();
+    return (folder!.content?.children ?? []).map((n) => n.id);
+  }
+
   /** Drag the CENTRE of `id` to (x, y), let the frame resolve, check the highlight is allowed, drop. */
   async function dropAt(page: Page, id: string, x: number, y: number) {
     const s = await box(page, id);
@@ -421,24 +436,27 @@ test.describe('M3 editor: dragging into and out of folders', () => {
     expect(errors).toEqual([]);
   });
 
-  test('a tile dragged from the canvas into an expanded folder\'s empty space lands in that folder', async ({ page, context }) => {
+  test('a tile dragged from the canvas into an expanded folder\'s empty space lands in that folder, at the end of its order', async ({ page, context }) => {
     const f = await importFolders(page, context);
     const errors = await openEditing(page, f);
     const f1 = await box(page, f.id('f1'));
-    // Below Echo, inside One's body: the folder's empty space.
+    // Below Echo, inside One's body: the folder's empty space (M5: the end of the page shown).
     await dropAt(page, f.id('b'), f1.x + f1.width - 80, f1.y + f1.height - 60);
     await saveDraft(page);
     expect(await savedParent(page, f, f.id('b'))).toBe(f.id('f1'));
+    expect(await savedOrder(page, f, f.id('f1'))).toEqual([f.id('e1'), f.id('b')]);
     expect(errors).toEqual([]);
   });
 
-  test('a tile dragged from one folder into another folder\'s empty space lands in the other folder', async ({ page, context }) => {
+  test('a tile dragged from one folder into another folder\'s empty space lands in the other folder, at the end of its order', async ({ page, context }) => {
     const f = await importFolders(page, context);
     const errors = await openEditing(page, f);
     const f2 = await box(page, f.id('f2'));
     await dropAt(page, f.id('e1'), f2.x + f2.width - 80, f2.y + f2.height - 60);
     await saveDraft(page);
     expect(await savedParent(page, f, f.id('e1'))).toBe(f.id('f2'));
+    expect(await savedOrder(page, f, f.id('f2'))).toEqual([f.id('g1'), f.id('e1')]);
+    expect(await savedOrder(page, f, f.id('f1'))).toEqual([]);
     expect(errors).toEqual([]);
   });
 

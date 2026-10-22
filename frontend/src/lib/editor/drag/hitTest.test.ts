@@ -177,4 +177,96 @@ describe('hitTest', () => {
     expect(hitTest(155, 10, new Set(), { elementFromPoint: () => bar, rectOf: (e) => rects.get(e) ?? { left: 0, top: 0 } }).tabBar).toBe(true);
     expect(h.tabBoxes?.map((b) => [b.id, b.left])).toEqual([['t1', 0], ['t2', 160]]);
   });
+
+  // M5 Task 4: an open folder (Folder.svelte) exposes its title bar, its breadcrumb's crumbs, its page
+  // bar and the page it shows; the drag reads them here (the only layout reads).
+  describe('an open folder (M5)', () => {
+    const flowMetrics = { columns: 8, unitPx: 50, rowPx: 50, innerWidthPx: 400, flow: { span: 2, perRow: 4 } };
+    function openFolder(opts: { empty?: boolean; prevDisabled?: boolean } = {}) {
+      const items = ['k5', 'k6', 'k7'].map((id) => el({ 'data-node-id': id }, el({ class: 'face' })));
+      const flow = el({ 'data-container-id': 'f1' }, ...items);
+      const page = el({ class: 'page' }, flow);
+      const prev = el({ 'data-page-bar': 'prev' });
+      if (opts.prevDisabled) prev.setAttribute('disabled', '');
+      const next = el({ 'data-page-bar': 'next', disabled: '' });
+      const pageBar = el({ class: 'page-bar' }, prev, next);
+      const body = el(
+        { class: 'folder-body', 'data-drop-area': '', 'data-folder-id': 's1', 'data-folder-page': '1', 'data-folder-per-page': '4' },
+        ...(opts.empty ? [] : [page]), pageBar
+      );
+      const crumbTop = el({ 'data-crumb': 'f1' });
+      const header = el({ class: 'folder-header', 'data-folder-bar': 's1' }, el({ class: 'crumbs' }, crumbTop));
+      const folder = el({ 'data-node-id': 'f1' }, header, body);
+      const root = el({ 'data-container-id': 't1' }, folder);
+      document.body.appendChild(root);
+      reg(root, { ref: { tabId: 't1' }, metrics: gridMetrics, layout: 'grid' });
+      if (!opts.empty) reg(flow, { ref: { tabId: 't1', folderId: 's1' }, metrics: flowMetrics, layout: 'flow' });
+      const rects = new Map<Element, { left: number; top: number; width?: number; height?: number }>([
+        [root, { left: 0, top: 0 }],
+        [flow, { left: 20, top: 100 }],
+        [header, { left: 10, top: 50, width: 400, height: 40 }],
+        [crumbTop, { left: 20, top: 55, width: 60, height: 30 }],
+        [items[0], { left: 20, top: 100, width: 100, height: 100 }],
+        [items[1], { left: 120, top: 100, width: 100, height: 100 }],
+        [items[2], { left: 220, top: 100, width: 100, height: 100 }]
+      ]);
+      const at = (under: Element, dragged: string[] = []) =>
+        hitTest(150, 150, new Set(dragged), { elementFromPoint: () => under, rectOf: (e) => rects.get(e) ?? { left: 0, top: 0 } });
+      return { items, flow, header, crumbTop, prev, next, body, at };
+    }
+
+    it('its title bar: a drop target for the folder it shows (data-folder-bar), over the canvas', () => {
+      const f = openFolder();
+      const h = f.at(f.header);
+      expect(h.folderBar).toEqual({ folderId: 's1', rect: { left: 10, top: 50, width: 400, height: 40 } });
+      expect(h.container?.ref).toEqual({ tabId: 't1' });
+      expect(h.nodeId).toBe('f1');
+    });
+
+    it('a crumb of its breadcrumb: the open folder and the level it goes back to', () => {
+      const f = openFolder();
+      const h = f.at(f.crumbTop);
+      expect(h.folderCrumb).toEqual({ folderId: 'f1', to: 'f1', rect: { left: 20, top: 55, width: 60, height: 30 } });
+    });
+
+    it('its page bar\'s ‹ ›: the folder shown, its page, the direction and whether it can go that way', () => {
+      const f = openFolder();
+      expect(f.at(f.prev).pageBar).toEqual({ folderId: 's1', dir: 'prev', page: 1, disabled: false });
+      expect(f.at(f.next).pageBar).toEqual({ folderId: 's1', dir: 'next', page: 1, disabled: true });
+      // ...and it is inside the folder's body, so a drop there is a drop on that page.
+      expect(f.at(f.next).container?.ref).toEqual({ tabId: 't1', folderId: 's1' });
+    });
+
+    it('its page: the page shown, its size, how many it draws, and the boxes of the items not dragged', () => {
+      const f = openFolder();
+      const h = f.at(f.items[1].firstElementChild!, ['k6']);
+      expect(h.container?.layout).toBe('flow');
+      expect(h.flowPage).toEqual({
+        folderId: 's1', page: 1, perPage: 4, count: 3,
+        boxes: [
+          { id: 'k5', left: 0, top: 0, width: 100, height: 100 },
+          { id: 'k7', left: 200, top: 0, width: 100, height: 100 }
+        ]
+      });
+    });
+
+    it('an empty open folder\'s body is that folder (never the canvas under it)', () => {
+      const f = openFolder({ empty: true });
+      const h = f.at(f.body);
+      expect(h.emptyFolder).toBe('s1');
+      expect(h.container).toBeNull();
+    });
+
+    it('the folder itself dragged: none of its own bar, crumbs or page is a target', () => {
+      const f = openFolder();
+      for (const under of [f.header, f.crumbTop, f.next, f.items[0]]) {
+        const h = f.at(under, ['f1']);
+        expect(h.folderBar).toBeUndefined();
+        expect(h.folderCrumb).toBeUndefined();
+        expect(h.pageBar).toBeUndefined();
+        expect(h.flowPage).toBeUndefined();
+        expect(h.container?.ref).toEqual({ tabId: 't1' });
+      }
+    });
+  });
 });

@@ -285,10 +285,11 @@ describe('resizeNode', () => {
   it('a tile is never resized: its Size sets its span', () => {
     expect(() => resizeNode(dash(), 'a', 6, 4)).toThrow(/Size/);
   });
-  it('a folder clamps to the columns and never shrinks below its title plus one item', () => {
+  it('a folder clamps to the columns and never shrinks below its bar, padding, one item and the page bar', () => {
     const d = dash();
     const r = resizeNode(d, 'f1', 8, 1);
-    expect(byId(rootOf(r), 'f1').placement).toMatchObject({ w: 8, h: 4 }); // 2 title rows + a Medium
+    expect(byId(rootOf(r), 'f1').placement).toMatchObject({ w: 8, h: 5 }); // geometry.minOpenFolderCells (Medium)
+    expect(byId(rootOf(resizeNode(d, 'f1', 1, 8)), 'f1').placement).toMatchObject({ w: 3, h: 8 }); // a Medium + padding
     const r2 = resizeNode(d, 'f1', 10, 12);
     expect(byId(rootOf(r2), 'f1').placement).toMatchObject({ w: 10, h: 12 });
     const r3 = resizeNode(d, 'f1', 99, 6);

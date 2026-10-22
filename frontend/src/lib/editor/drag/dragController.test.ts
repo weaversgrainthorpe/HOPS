@@ -33,6 +33,8 @@ const FLOW: ContainerMetrics = { columns: 6, unitPx: 50, rowPx: 50, innerWidthPx
 /** Where the stub says the pointer is: the t1 root unless a test redirects it. */
 let where: { ref: ContainerRef; metrics: ContainerMetrics; layout: 'grid' | 'flow' | 'stacked' } | null;
 let lastHit: HitResult | null = null;
+/** A folder's page under the pointer (hitTest's flowPage), when the stub is on one. */
+let flowPage: HitResult['flowPage'];
 let frames: FrameRequestCallback[] = [];
 let sourceRect = { left: 0, top: 0, width: 100, height: 100 };
 
@@ -46,7 +48,7 @@ function env() {
   setDragEnv({
     hitTest: (x, y) => {
       lastHit = where
-        ? { container: { ...where, left: 0, top: 0 }, dx: x, dy: y }
+        ? { container: { ...where, left: 0, top: 0 }, dx: x, dy: y, ...(flowPage ? { flowPage } : {}) }
         : { container: null, dx: 0, dy: 0 };
       return lastHit;
     },
@@ -97,6 +99,7 @@ beforeEach(() => {
   setLayout();
   startSession();
   where = { ref: { tabId: 't1' }, metrics: GRID, layout: 'grid' };
+  flowPage = undefined;
   lastHit = null;
   frames = [];
   sourceRect = { left: 0, top: 0, width: 100, height: 100 };
@@ -277,17 +280,19 @@ describe('drag engine — dropping', () => {
     expect(draft()).toBe(before);
   });
 
-  it('across containers on the same tab: a tile dragged into a folder joins its order, unplaced', () => {
+  it('across containers on the same tab: a tile dragged into a folder joins its order (at the pointer), unplaced', () => {
     where = { ref: { tabId: 't1', folderId: 'f1' }, metrics: FLOW, layout: 'flow' };
+    // The folder's page as hitTest reports it (M5 Task 4): x drawn at its top-left.
+    flowPage = { folderId: 'f1', page: 0, perPage: 4, count: 1, boxes: [{ id: 'x', left: 0, top: 0, width: 100, height: 100 }] };
     const { el } = source('a');
     startMouseDrag(el, 50, 50);
     moveTo(250, 150);
     flush();
-    expect(get(drag)!.target).toMatchObject({ kind: 'into-folder', folderId: 'f1' });
+    expect(get(drag)!.target).toMatchObject({ kind: 'place', to: { tabId: 't1', folderId: 'f1' }, index: 1 }); // past x: after it
     drop(250, 150);
     const f1 = nodeIn(draft(), 'f1');
     const kids = f1?.kind === 'folder' ? f1.content.children : [];
-    expect(kids.map((n) => n.id)).toEqual(['x', 'a']); // the end of its order until M5 Task 4 drops at the pointer
+    expect(kids.map((n) => n.id)).toEqual(['x', 'a']);
     expect('placement' in kids[1]).toBe(false);
     expect(draft().tabs[0].root.children.some((n) => n.id === 'a')).toBe(false);
     expect(get(toast).at(-1)?.message).toBe('Moved "A" to F1');

@@ -141,16 +141,16 @@ describe('resize handles', () => {
     expect(nodeIn(draft(), 'c1')!.placement).toMatchObject({ x: 10, y: 2 });
   });
 
-  it("a folder can't shrink below its title plus one item at its contents size", async () => {
+  it("a folder can't shrink below its bar, padding, one item at its contents size and the page bar", async () => {
     const { container } = canvas();
     await tick();
     resizeDrag(handle(container, 'f1', 'bottom')!, 240, 478, 0, -600);
     const t = get(drag)?.target;
     expect(t?.kind).toBe('resize');
     if (t?.kind !== 'resize') throw new Error('not a resize');
-    expect(t.at.h).toBe(4); // one Medium item's 2 rows + the 2 title rows
+    expect(t.at.h).toBe(5); // geometry.minOpenFolderCells('medium').h
     document.body.dispatchEvent(pe('pointerup', 240, -122));
-    expect(nodeIn(draft(), 'f1')!.placement).toMatchObject({ w: 8, h: 4 });
+    expect(nodeIn(draft(), 'f1')!.placement).toMatchObject({ w: 8, h: 5 });
   });
 
   it('Escape cancels a resize and leaves the draft unchanged', async () => {

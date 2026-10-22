@@ -223,6 +223,23 @@ export function pointToCell(m: ContainerMetrics, dxPx: number, dyPx: number): { 
 export const FOLDER_CHROME = { titlePx: 40, padXPx: 2 * 8 + 2 * 1, padYPx: 2 * 8 + 2 * 1 } as const;
 /** The page bar (« ‹ 1 2 3 › »), shown only when a folder has more than one page. */
 export const PAGE_BAR_PX = 32;
+/**
+ * The narrowest a tab's grid cell gets: below PHONE_BREAKPOINT_PX the tab stacks (planCanvas), so a
+ * grid cell is never under PHONE_BREAKPOINT_PX / ROOT_COLUMNS = 32 px.
+ */
+export const MIN_GRID_CELL_PX = PHONE_BREAKPOINT_PX / ROOT_COLUMNS;
+/**
+ * The smallest open folder on a tab (M5 §3.5), in whole cells: its bar, border and padding, ONE item
+ * at its contents size and the page bar. Counted at the narrowest grid cell (MIN_GRID_CELL_PX), so it
+ * holds at every grid width — the layout is the same at every width, and a wider cell only adds room.
+ */
+export function minOpenFolderCells(contentSize: unknown): { w: number; h: number } {
+  const span = sizeSpan(contentSize);
+  return {
+    w: span + Math.ceil(FOLDER_CHROME.padXPx / MIN_GRID_CELL_PX),
+    h: span + Math.ceil((FOLDER_CHROME.titlePx + FOLDER_CHROME.padYPx + PAGE_BAR_PX) / MIN_GRID_CELL_PX)
+  };
+}
 /** The content box inside an open folder's box: its bar, border and padding taken off. */
 export function openFolderContentBox(box: { widthPx: number; heightPx: number }): { widthPx: number; heightPx: number } {
   return {

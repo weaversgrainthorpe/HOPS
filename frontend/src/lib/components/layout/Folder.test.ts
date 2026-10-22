@@ -338,3 +338,18 @@ describe('the pop-over and maximise are gone', () => {
     }
   });
 });
+
+// M5 Task 4: the drag reads the folder's own targets from the DOM (hitTest), and holding a crumb
+// or a page arrow during a drag shows which one is being held.
+describe('drag targets on an open folder (M5 Task 4)', () => {
+  it('its title bar names the folder it shows: itself, or the sub-folder drilled into', async () => {
+    const { container } = await renderTab([folder('f', [kid('a'), sub('s', [kid('deep')])])]);
+    expect(container.querySelector('.folder-header')!.getAttribute('data-folder-bar')).toBe('f');
+    await fireEvent.click(screen.getByRole('button', { name: /^s, folder with/ }));
+    expect(container.querySelector('.folder-header')!.getAttribute('data-folder-bar')).toBe('s');
+  });
+  it('a minimised folder has no title bar target', async () => {
+    const { container } = await renderTab([folder('f', kids(2), { display: 'collapsed' })]);
+    expect(container.querySelector('[data-folder-bar]')).toBeNull();
+  });
+});

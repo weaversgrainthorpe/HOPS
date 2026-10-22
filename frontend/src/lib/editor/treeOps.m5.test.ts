@@ -225,9 +225,10 @@ describe('tab-level helpers', () => {
   it('only items on the tab resize', () => {
     expect(() => resizedPlacement(dash(), 'x', 4, 4)).toThrow(TreeOpError);
   });
-  it('a folder is no longer grown to fit its contents: it resizes down to title + one item', () => {
-    // Medium contents: 2 cells wide, title (2 rows) + 2 rows high.
-    expect(resizedPlacement(dash(), 'f1', 1, 1)).toEqual(p(0, 6, 2, 4));
+  it('a folder is no longer grown to fit its contents: it resizes down to bar + padding + one item + page bar', () => {
+    // Medium contents (geometry.minOpenFolderCells): 2 cells + the 18 px padding wide (3), and the
+    // 40 px bar, 18 px padding, 32 px page bar and 2 cells high (5), at the narrowest grid cell.
+    expect(resizedPlacement(dash(), 'f1', 1, 1)).toEqual(p(0, 6, 3, 5));
   });
   it('firstFreeCell is grid only', () => {
     expect(firstFreeCell({ columns: 24, children: [tile('a', p(0, 0))] }, 2, 2)).toEqual(p(2, 0));

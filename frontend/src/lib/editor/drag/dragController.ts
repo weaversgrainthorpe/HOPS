@@ -11,7 +11,7 @@
  *   the draft unchanged.
  * - Commits go through editSession.apply (undoable) and are announced in a toast with Undo.
  *
- * Task 7 resolves `place` (grid with pushAside, free with 8 px units) and `invalid`. Task 8 adds:
+ * Task 7 resolves `place` (the tab's grid, with pushAside) and `invalid`. Task 8 adds:
  * - `merge`: the dragged item's VISUAL centre (the ghost's centre: pointer − grab offset + half the
  *   ghost) held in a tile's centre zone (the inner 50% of its RENDERED box) for MERGE_DWELL_MS; the
  *   drop makes a new folder of both and opens its dialog. The edge zone places. Users aim with the
@@ -19,11 +19,16 @@
  *   moment the centre enters the zone until the dwell ripens.
  * - `into-folder`: the centre zone of a folder → the end of its order. (M5: folders open in place;
  *   holding over a minimised folder no longer opens a pop-over, §3a.4.)
+ * M5 Task 4 (ordered, paged folders; targets.ts): a drop on an open folder's page goes in at the
+ * pointer's place in its order (`place` with an index and an insertion marker); its title bar, a
+ * crumb of its breadcrumb or an empty open folder → `into-folder` (the end). Holding over the page
+ * bar's ‹ › flips the page, and over a crumb goes back up to it (this browser's memory); the drag
+ * goes on there. A sub-folder dropped on the tab is minimised there and this browser forgets its
+ * open / page / drill memory (§3a.3).
  * - `tab-append`: a drop on a tab button; held there for OPEN_DWELL_MS, the tab switches and the
  *   drag continues there. The DragBreadcrumb's tab crumbs return to the tab the drag started on the
  *   same way.
- * - free alignment guides (edges and centres of siblings within SNAP_PX) and tab reorder
- *   (`tab-order`, from `tabSource`), both through this same engine.
+ * - tab reorder (`tab-order`, from `tabSource`) through this same engine.
  * Dwell timers live here (the frame computes the dwell key; the timer ripens it and performs the
  * navigation); resolveDrop stays pure and only reads `state.dwell`.
  * Task 9: resize drags (resizeSource on a handle → `resize`, resolved by resolveResize through
@@ -39,7 +44,7 @@ import {
   pushAside, reorderTabs, resolveContainer, type ContainerRef
 } from '../treeOps';
 import {
-  containerOfNode, currentDraft, documentIds, findIn, nodesOf, placementsFor, sizeFor
+  containerOfNode, currentDraft, documentIds, findIn, forgetMovedOutFolders, nodesOf, placementsFor, sizeFor
 } from '../editorActions';
 import { canvasStacked, editorMenu, openDialog, ownsTarget } from '../editorUi';
 import { commitResize, resizeBlocked, resizeTarget, type ResizeEdge, type ResizeTarget } from '../resize';
@@ -48,6 +53,8 @@ import { apply, session, undo } from '$lib/stores/editSession';
 import { toast } from '$lib/stores/toast';
 import { clearSelection, selectionInDraft, toggleNode } from '$lib/stores/nodeSelection';
 import { hitTest as domHitTest, type HitResult } from './hitTest';
+import { crumbDwellKey, dwellArgs, flowIndex, flowMarker, pageDwellKey } from './targets';
+import { drillUpTo, setFolderPage } from '$lib/stores/folderView';
 
 // ---------------------------------------------------------------- types
 
@@ -345,15 +352,20 @@ function resolveTabOrder(state: DragState, hit: HitResult, draft: LayoutDashboar
  * part of the target and the op is trial-run here, so a highlighted target never throws on commit);
  * stored footprints count, so a minimised folder's reserved cells are occupied (Ruling 13). Items
  * keep their relative offsets when they come from one tab; otherwise the others take the first free
- * cells. Into a folder's content (ordered, M5): the end of its order (M5 Task 4 adds the pointer
- * index). Zones and hit boxes are RENDERED geometry (Ruling 13); a tile's centre zone becomes a merge
- * only once state.dwell has ripened on it; a folder's centre zone is into-folder; tab buttons are
- * tab-append; crumbs are navigation only.
+ * cells. On a folder's page (ordered, M5): the pointer's place in its order (resolveFlow); on its
+ * title bar, a crumb or an empty open folder: the end of its order. Zones and hit boxes are RENDERED
+ * geometry (Ruling 13); a tile's centre zone becomes a merge only once state.dwell has ripened on it;
+ * a folder's centre zone is into-folder; tab buttons are tab-append; the drag breadcrumb is
+ * navigation only.
  */
 export function resolveDrop(state: DragState, hit: HitResult, draft: LayoutDashboard): DropTarget {
   if (state.tab !== undefined) return resolveTabOrder(state, hit, draft);
   if (hit.crumb !== undefined) return invalid('Dropping on the path changes nothing — hold over a crumb to go back to that level.');
   if (hit.tabId !== undefined) return resolveTabAppend(state, hit.tabId, draft);
+  // An open folder's own targets (M5 §3.4, §3a.4): its breadcrumb, its title bar, its empty body.
+  if (hit.folderCrumb) return resolveIntoFolder(state, hit.folderCrumb.to, draft);
+  if (hit.folderBar) return resolveIntoFolder(state, hit.folderBar.folderId, draft);
+  if (hit.emptyFolder !== undefined) return resolveIntoFolder(state, hit.emptyFolder, draft);
   const c = hit.container;
   if (!c) return invalid(hit.tabBar ? 'Drop it on a tab, the dashboard, or inside a folder.' : 'Drop it on the dashboard or inside a folder.');
   const ids = state.ids;
@@ -369,7 +381,7 @@ export function resolveDrop(state: DragState, hit: HitResult, draft: LayoutDashb
     if (n?.kind === 'tile' && ripe(state, `merge:${n.id}`)) return resolveMerge(state, n.id, draft);
   }
   if (c.layout === 'stacked') return resolveStacked(state, hit, draft, to);
-  if (to.folderId !== undefined) return resolveIntoFolder(state, to.folderId, draft);
+  if (to.folderId !== undefined) return resolveFlow(state, hit, draft, to);
 
   let r: ReturnType<typeof resolveContainer>;
   let nodes: LayoutNode[];
@@ -459,6 +471,43 @@ export function resolveDrop(state: DragState, hit: HitResult, draft: LayoutDashb
     }
     return target;
   });
+}
+
+/**
+ * A drop on an open folder's page (M5 §3.4): at the pointer's place in the folder's order
+ * (targets.flowIndex: before the item under the pointer, or at the end of the page shown), shown by
+ * an insertion marker. Trial-run through the very op the commit runs (Ruling 11). A page whose
+ * position can't be read is refused with a reason, never guessed.
+ */
+function resolveFlow(state: DragState, hit: HitResult, draft: LayoutDashboard, to: ContainerRef): DropTarget {
+  const fp = hit.flowPage;
+  if (
+    !fp || fp.folderId !== to.folderId || !Number.isInteger(fp.page) || fp.page < 0 ||
+    !Number.isInteger(fp.perPage) || fp.perPage < 1
+  ) {
+    return invalid("That folder's page can't be read right now, so the drop can't be placed; try again.");
+  }
+  let order: string[];
+  try {
+    order = resolveContainer(draft, to).container.children.map((n) => n.id);
+  } catch (e) {
+    return invalid(message(e, "That can't go there."));
+  }
+  const ids = state.ids;
+  const moving: ReadonlySet<string> = state.copy ? new Set<string>() : new Set(ids);
+  const slot = flowIndex(order, moving, fp, hit.dx, hit.dy);
+  const m = hit.container?.metrics;
+  const marker = flowMarker(slot, fp, hit.container ?? { left: 0, top: 0 }, m?.flow ? m.flow.span * m.unitPx : 40);
+  const t = memoised(JSON.stringify(['flow', ids, state.copy, to, slot.index]), draft, () => {
+    try {
+      if (state.copy) copyNodes(draft, ids, to, slot.index, documentIds());
+      else moveBetween(draft, ids, to, slot.index);
+      return { kind: 'place', to, at: [], push: new Map(), index: slot.index } as DropTarget;
+    } catch (e) {
+      return invalid(e instanceof TreeOpError ? e.message : message(e, "That can't go there."));
+    }
+  });
+  return t.kind === 'place' ? { ...t, marker } : t;
 }
 
 /**
@@ -704,10 +753,13 @@ export function commitDrop(state: DragState): void {
   if (state.copy) {
     clearSelection();
     newIds.forEach((id) => toggleNode(id, true));
+  } else {
+    forgetMovedOutFolders(before, state.ids, to); // §3a.3: drawn minimised on the tab
   }
   announce(label, before);
-  // Ruling 24: the first phone (stacked) reorder of a session says what else it changes.
-  if (t.kind === 'place' && t.marker && !phoneNoticeShown) {
+  // Ruling 24: the first phone (stacked) reorder of a session says what else it changes. A folder's
+  // order (an index) is the same at every width, so it changes nothing else.
+  if (t.kind === 'place' && t.marker && t.index === undefined && !phoneNoticeShown) {
     phoneNoticeShown = true;
     toast.info(PHONE_REORDER_NOTICE);
   }
@@ -943,6 +995,9 @@ function hitFor(s: DragState): HitResult {
  * still running (target = place) it is the tile being held over: the "hold to make a folder" cue.
  */
 function overFor(s: DragState, t: DropTarget, hit: HitResult): Box | undefined {
+  // Into an open folder through its breadcrumb or title bar: the cue is on that crumb / bar.
+  const bar = hit.folderCrumb?.rect ?? hit.folderBar?.rect;
+  if (t.kind === 'into-folder' && bar) return { ...bar };
   if (t.kind === 'merge' || t.kind === 'into-folder' || (s.dwell?.key.startsWith('merge:') && !s.dwell.ripe)) {
     const z = zoneOf(s, hit);
     if (z?.centre) return z.box;
@@ -977,13 +1032,22 @@ function autoScroll(x: number, y: number, scroller?: Element) {
   schedule();
 }
 
-// ---- dwell: hold over a target to merge, switch tab, or return via a crumb
+// ---- dwell: hold over a target to merge, switch tab, return via a crumb, flip a folder's page or go up its path
 
 /** What holding still over `hit` would do, as a key and a duration; null = nothing to wait for. */
 function dwellKey(s: DragState, hit: HitResult, d: LayoutDashboard): { key: string; ms: number } | null {
   if (s.tab !== undefined) return null;
   if (hit.crumb !== undefined) return crumbAction(hit.crumb) ? { key: `crumb:${hit.crumb}`, ms: OPEN_DWELL_MS } : null;
   if (hit.tabId !== undefined) return hit.tabId !== activeTab ? { key: `tab:${hit.tabId}`, ms: OPEN_DWELL_MS } : null;
+  // An open folder's page bar: ‹ / › flips the page (none at that end); its breadcrumb goes back up.
+  if (hit.pageBar) {
+    const b = hit.pageBar;
+    const to = b.page + (b.dir === 'next' ? 1 : -1);
+    return !b.disabled && Number.isInteger(to) && to >= 0 ? { key: pageDwellKey(b.folderId, to), ms: OPEN_DWELL_MS } : null;
+  }
+  if (hit.folderCrumb) return { key: crumbDwellKey(hit.folderCrumb.folderId, hit.folderCrumb.to), ms: OPEN_DWELL_MS };
+  // A title bar or an empty open folder is "into that folder" whatever is under the ghost: no merge hold.
+  if (hit.folderBar || hit.emptyFolder !== undefined) return null;
   if (!hit.container) return null;
   const zone = zoneOf(s, hit);
   if (!zone?.centre) return null;
@@ -1034,15 +1098,36 @@ function ripen(key: string) {
   const arg = rest.join(':');
   if (kind === 'tab') switchDragTab(arg);
   else if (kind === 'crumb') crumbAction(arg)?.();
+  else if (kind === 'page') flipPage(d, arg);
+  else if (kind === 'fcrumb') goUpCrumb(d, arg);
   if (current) {
     pending = { ...current.pointer };
     schedule();
   }
 }
 
+/** A page-bar dwell ripened: the folder shows that page (this browser's memory); the drag goes on. */
+function flipPage(d: LayoutDashboard, arg: string): void {
+  const a = dwellArgs<number>(arg);
+  try {
+    if (!a) throw new Error('unreadable page');
+    setFolderPage(d.id, a[0], a[1]);
+  } catch (e) {
+    toast.error(`Couldn't turn the folder's page during the drag: ${message(e, 'unknown error')}`);
+  }
+}
+
+/** A crumb dwell ripened: the open folder goes back up to that level (this browser's memory). */
+function goUpCrumb(d: LayoutDashboard, arg: string): void {
+  const a = dwellArgs<string>(arg);
+  if (!a || !drillUpTo(d.id, a[0], a[1])) {
+    toast.error("Couldn't go back up to that folder: it is no longer on the folder's path.");
+  }
+}
+
 /**
  * What a drag-breadcrumb crumb returns to: "tab:<id>" → that tab (switch to it). Null when it is
- * the tab the drag is already on. (A folder's own breadcrumb is M5 Task 4's dwell target.)
+ * the tab the drag is already on. (A folder's own breadcrumb, in its title bar, is a `fcrumb` dwell.)
  */
 export function crumbAction(crumb: string): (() => void) | null {
   if (crumb.startsWith('tab:')) {

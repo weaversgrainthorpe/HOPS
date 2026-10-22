@@ -54,7 +54,26 @@ export interface HitResult {
   stackBoxes?: { id: string; left: number; top: number; width: number; height: number }[];
   /** The scrollable panel (`data-drag-scroll`) holding the container, for auto-scroll. */
   scroller?: Element;
+  /**
+   * M5 open folders (Folder.svelte), never one being dragged. Its title bar (`data-folder-bar`: the
+   * folder it shows, the drilled-into one when drilled): a drop there goes in at the end.
+   */
+  folderBar?: { folderId: string; rect: Box };
+  /** A crumb of an open folder's breadcrumb (`data-crumb`): the open folder and the level it goes back to. */
+  folderCrumb?: { folderId: string; to: string; rect: Box };
+  /** The page bar's ‹ / › (`data-page-bar`) of the folder showing `folderId` at `page`; disabled at that end. */
+  pageBar?: { folderId: string; dir: 'prev' | 'next'; page: number; disabled: boolean };
+  /**
+   * A folder's page (a `flow` container inside `data-folder-page`): the page shown, its size, how many
+   * items it draws, and the RENDERED boxes of those not dragged (px from the container's content
+   * origin, DOM = order). The drop's place in the order comes from these (targets.flowIndex).
+   */
+  flowPage?: { folderId: string; page: number; perPage: number; count: number; boxes: (Box & { id: string })[] };
+  /** An open folder's body with nothing drawn in it (an empty folder): that folder. */
+  emptyFolder?: string;
 }
+
+type Box = { left: number; top: number; width: number; height: number };
 
 export interface HitEnv {
   elementFromPoint(x: number, y: number): Element | null;
@@ -129,6 +148,29 @@ export function hitTest(x: number, y: number, dragged: ReadonlySet<string>, env:
     if (id !== null && dragged.has(id)) start = e.parentElement;
   }
   if (!start) return NO_HIT;
+  const box = (el: Element): Box => {
+    const r = env.rectOf(el);
+    return { left: r.left, top: r.top, width: r.width ?? 0, height: r.height ?? 0 };
+  };
+  // An open folder's own targets (M5): its breadcrumb's crumbs, its title bar, its page bar.
+  const nav: Pick<HitResult, 'folderBar' | 'folderCrumb' | 'pageBar'> = {};
+  const crumb = start.closest('[data-crumb]');
+  const open = crumb?.closest('[data-node-id]');
+  if (crumb && open) {
+    nav.folderCrumb = { folderId: open.getAttribute('data-node-id') ?? '', to: crumb.getAttribute('data-crumb') ?? '', rect: box(crumb) };
+  }
+  const barEl = start.closest('[data-folder-bar]');
+  if (barEl) nav.folderBar = { folderId: barEl.getAttribute('data-folder-bar') ?? '', rect: box(barEl) };
+  const pageBtn = start.closest('[data-page-bar]');
+  const pageOf = pageBtn?.closest('[data-folder-page]');
+  if (pageBtn && pageOf) {
+    nav.pageBar = {
+      folderId: pageOf.getAttribute('data-folder-id') ?? '',
+      dir: pageBtn.getAttribute('data-page-bar') === 'prev' ? 'prev' : 'next',
+      page: Number(pageOf.getAttribute('data-folder-page')),
+      disabled: pageBtn.hasAttribute('disabled')
+    };
+  }
   let cEl = start.closest('[data-container-id]');
   // A container element is only as tall as the rows its items fill, but it is DRAWN in a larger
   // space (`data-drop-area`: the canvas panel, an open folder's body). That
@@ -139,14 +181,16 @@ export function hitTest(x: number, y: number, dragged: ReadonlySet<string>, env:
   if (area && (!cEl || !area.contains(cEl))) {
     const own = area.querySelector('[data-container-id]');
     if (own && registry.has(own)) cEl = own;
+    // An open folder's body with nothing drawn in it is that folder, never the canvas under it.
+    else if (area.hasAttribute('data-folder-id')) return { ...NO_HIT, ...nav, emptyFolder: area.getAttribute('data-folder-id') ?? '' };
   }
   const info = cEl ? registry.get(cEl) : undefined;
-  if (!cEl || !info) return NO_HIT;
+  if (!cEl || !info) return { ...NO_HIT, ...nav };
   let nodeId: string | undefined;
   const nEl = start.closest('[data-node-id]');
   if (nEl && cEl.contains(nEl) && nEl !== cEl) nodeId = nEl.getAttribute('data-node-id') ?? undefined;
   const r = env.rectOf(cEl);
-  const out: HitResult = { container: { ...info, left: r.left, top: r.top }, dx: x - r.left, dy: y - r.top };
+  const out: HitResult = { container: { ...info, left: r.left, top: r.top }, dx: x - r.left, dy: y - r.top, ...nav };
   if (nodeId !== undefined && nEl) {
     out.nodeId = nodeId;
     const nr = env.rectOf(nEl);
@@ -160,6 +204,26 @@ export function hitTest(x: number, y: number, dragged: ReadonlySet<string>, env:
       const kr = env.rectOf(k);
       out.stackBoxes.push({ id, left: kr.left - r.left, top: kr.top - r.top, width: kr.width ?? 0, height: kr.height ?? 0 });
     }
+  }
+  const shown = info.layout === 'flow' ? cEl.closest('[data-folder-page]') : null;
+  if (shown) {
+    let count = 0;
+    const boxes: (Box & { id: string })[] = [];
+    for (const k of Array.from(cEl.children)) {
+      const id = k.getAttribute('data-node-id');
+      if (id === null) continue;
+      count++;
+      if (dragged.has(id)) continue;
+      const kr = box(k);
+      boxes.push({ id, left: kr.left - r.left, top: kr.top - r.top, width: kr.width, height: kr.height });
+    }
+    out.flowPage = {
+      folderId: shown.getAttribute('data-folder-id') ?? '',
+      page: Number(shown.getAttribute('data-folder-page')),
+      perPage: Number(shown.getAttribute('data-folder-per-page')),
+      count,
+      boxes
+    };
   }
   const scroller = cEl.closest('[data-drag-scroll]');
   if (scroller) out.scroller = scroller;

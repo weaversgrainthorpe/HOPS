@@ -10,8 +10,10 @@
    * - drilled: a sub-folder fills the box; the title bar becomes a breadcrumb back up.
    * Click, Enter, the menu's "Open" and Restore all open a folder in place: nothing pops over.
    * Page and drill-down are this browser's memory (folderView), never saved to the layout.
-   * Task 4 reads data-folder-id / data-folder-page / data-folder-per-page (the page shown),
-   * data-page-bar ("prev" / "next") and data-crumb (the folder id a crumb goes back to).
+   * The drag (hitTest, Task 4) reads data-folder-id / data-folder-page / data-folder-per-page (the
+   * page shown: a drop goes at the pointer's place in it), data-folder-bar (the title bar: a drop
+   * goes at the end of the folder shown), data-page-bar ("prev" / "next": held, it flips the page)
+   * and data-crumb (the folder id a crumb goes back to: held, it goes up; a drop goes at its end).
    */
   import { getContext, tick, untrack } from 'svelte';
   import type { FolderNode, LayoutDashboard, LayoutTab } from '$lib/types/layout';
@@ -32,6 +34,7 @@
   import { openDialog, openMenu, menuPointFor } from '$lib/editor/editorUi';
   import { setDisplay } from '$lib/editor/editorActions';
   import { drag, dragSource } from '$lib/editor/drag/dragController';
+  import { crumbDwellKey, pageDwellKey } from '$lib/editor/drag/targets';
   import { COLLAPSED_HINT } from '$lib/editor/resize';
   import { focusFolderControl } from '$lib/utils/overlayActions';
   import ResizeHandles from '../editor/ResizeHandles.svelte';
@@ -179,6 +182,8 @@
   const metrics = $derived(phone ? phoneFlowMetrics(phone, contentWidthPx) : folderFlowMetrics(paging, parent.unitPx, contentWidthPx));
   const pageKids = $derived(kids.slice(paging.start, paging.end));
   const pageNumbers = $derived(paging.pages <= 7 ? Array.from({ length: paging.pages }, (_, i) => i) : []);
+  /** The dwell a drag is holding over this folder's page arrows or crumbs (shown, so the hold is visible). */
+  const holdingKey = $derived(editing ? ($drag?.dwell?.key ?? null) : null);
 
   function goPage(e: Event, n: number) {
     own(e);
@@ -325,7 +330,7 @@
     <FolderSurface background={folder.background} color={surfaceColor} colorOpacity={surfaceOpacity} mode="animated" dashboardId={dashboard.id} />
     <!-- Every open folder has its bar (M5 §3a.7): an untitled one shows only its controls, or the
          breadcrumb when drilled in. -->
-    <div class="folder-header" class:custom-color={folder.color}>
+    <div class="folder-header" class:custom-color={folder.color} data-folder-bar={current.id}>
       {#if drilled.length > 0}
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <nav class="crumbs" aria-label="Folder path" ondblclick={own}>
@@ -334,7 +339,13 @@
             {#if i === drilled.length}
               <span class="crumb current" aria-current="page">{c.name}</span>
             {:else}
-              <button type="button" class="crumb" data-crumb={c.id} onclick={(e) => goUp(e, i)}>{c.name}</button>
+              <button
+                type="button"
+                class="crumb"
+                class:holding={holdingKey === crumbDwellKey(folder.id, c.id)}
+                data-crumb={c.id}
+                onclick={(e) => goUp(e, i)}>{c.name}</button
+              >
             {/if}
           {/each}
         </nav>
@@ -390,7 +401,14 @@
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <nav class="page-bar" aria-label="{current.name} pages" ondblclick={own}>
           <button type="button" aria-label="First page" disabled={paging.page === 0} onclick={(e) => goPage(e, 0)}>«</button>
-          <button type="button" aria-label="Previous page" data-page-bar="prev" disabled={paging.page === 0} onclick={(e) => goPage(e, paging.page - 1)}>‹</button>
+          <button
+            type="button"
+            aria-label="Previous page"
+            data-page-bar="prev"
+            class:holding={holdingKey === pageDwellKey(current.id, paging.page - 1)}
+            disabled={paging.page === 0}
+            onclick={(e) => goPage(e, paging.page - 1)}>‹</button
+          >
           {#if pageNumbers.length > 0}
             {#each pageNumbers as n (n)}
               <button
@@ -404,7 +422,14 @@
           {:else}
             <span class="page-of" aria-live="polite">Page {paging.page + 1} of {paging.pages}</span>
           {/if}
-          <button type="button" aria-label="Next page" data-page-bar="next" disabled={paging.page >= paging.pages - 1} onclick={(e) => goPage(e, paging.page + 1)}>›</button>
+          <button
+            type="button"
+            aria-label="Next page"
+            data-page-bar="next"
+            class:holding={holdingKey === pageDwellKey(current.id, paging.page + 1)}
+            disabled={paging.page >= paging.pages - 1}
+            onclick={(e) => goPage(e, paging.page + 1)}>›</button
+          >
           <button type="button" aria-label="Last page" disabled={paging.page >= paging.pages - 1} onclick={(e) => goPage(e, paging.pages - 1)}>»</button>
         </nav>
       {/if}
@@ -549,6 +574,13 @@
     border-color: currentColor;
     font-weight: 600;
     opacity: 1;
+  }
+  /* A drag holding here: it goes up / turns the page once the hold ripens (OPEN_DWELL_MS). */
+  .crumb.holding,
+  .page-bar button.holding {
+    opacity: 1;
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
   }
   .page-of {
     font-size: 0.875rem;

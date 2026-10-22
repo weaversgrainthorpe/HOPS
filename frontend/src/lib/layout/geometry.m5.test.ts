@@ -4,7 +4,8 @@ import { describe, it, expect } from 'vitest';
 import {
   LAYOUT_VERSION, sizeSpan, folderPage, minimisedPlacement, planCanvas, isRenderable, isPlaced,
   containerMetrics, previewChildren, ROOT_COLUMNS, nodeBox, FOLDER_CHROME, openFolderContentBox, folderPaging,
-  folderFlowMetrics, PAGE_BAR_PX, phoneTrack, phoneColumnPx, phonePaging, PHONE_TILE_MIN_PX, PHONE_PAGE_RESERVE_PX
+  folderFlowMetrics, PAGE_BAR_PX, phoneTrack, phoneColumnPx, phonePaging, PHONE_TILE_MIN_PX, PHONE_PAGE_RESERVE_PX,
+  minOpenFolderCells, MIN_GRID_CELL_PX
 } from './geometry';
 import type { FolderNode, LayoutNode, LayoutTab } from '../types/layout';
 
@@ -200,6 +201,31 @@ describe('the pop-over / maximise sizing is gone (M5 §2: one component draws ev
     const g = await import('./geometry');
     for (const k of ['overlayMetrics', 'overlayBodyPx', 'OVERLAY_GUTTER_PX', 'OVERLAY_PANEL_CHROME_PX', 'folderInnerMetrics', 'folderChrome']) {
       expect(k in g, k).toBe(false);
+    }
+  });
+});
+
+// M5 Task 4 (§3.5, Task 2 review): the smallest open folder holds its bar, its border and padding,
+// one item at its contents size and the page bar — at EVERY grid width (a grid cell is never
+// narrower than PHONE_BREAKPOINT_PX / ROOT_COLUMNS = 32 px; below that the tab stacks).
+describe('minOpenFolderCells: the smallest open folder', () => {
+  it('is title + padding + one item + page bar, in whole cells', () => {
+    expect(MIN_GRID_CELL_PX).toBe(32);
+    expect(minOpenFolderCells('small')).toEqual({ w: 2, h: 4 });
+    expect(minOpenFolderCells('medium')).toEqual({ w: 3, h: 5 });
+    expect(minOpenFolderCells('large')).toEqual({ w: 5, h: 7 });
+  });
+  it.each([32, 40, 50, 80])('at %i px cells, one item and the page bar fit inside that box', (cell) => {
+    for (const size of ['small', 'medium', 'large'] as const) {
+      const m = minOpenFolderCells(size);
+      const content = openFolderContentBox({ widthPx: m.w * cell, heightPx: m.h * cell });
+      expect(content.widthPx).toBeGreaterThanOrEqual(sizeSpan(size) * cell);
+      expect(content.heightPx - PAGE_BAR_PX).toBeGreaterThanOrEqual(sizeSpan(size) * cell);
+      // Overfull: the page bar shows, and the rows shown really fit above it (never a clipped item).
+      const g = folderPaging(content, size, cell, 50, 0);
+      expect(g.pageBar).toBe(true);
+      expect(g.rowsPerPage * g.itemPx).toBeLessThanOrEqual(content.heightPx - PAGE_BAR_PX);
+      expect(g.perRow * g.itemPx).toBeLessThanOrEqual(content.widthPx);
     }
   });
 });

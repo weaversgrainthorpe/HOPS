@@ -3,7 +3,7 @@ import { get } from 'svelte/store';
 import {
   folderViewFor, setFolderView, clearFolderView, effectiveDisplay, applyFolderViews, resetFolderViewsForTests,
   folderNavFor, setFolderPage, setFolderDrill, resolveDrill, reconcileNav, revealInFolders, pageReveal, takePageReveal,
-  drillTo
+  drillTo, drillUpTo, forgetFolderMemory
 } from './folderView';
 import type { LayoutDashboard } from '$lib/types/layout';
 
@@ -216,5 +216,43 @@ describe('revealInFolders: search opens the chain in place, drills down and asks
     revealInFolders('d1', [], 'x');
     expect(get(folderViewFor('d1'))).toEqual({});
     expect(get(pageReveal)).toBeNull();
+  });
+});
+
+// M5 Task 4: the drag's breadcrumb dwell goes up a level; a sub-folder dragged out to the tab forgets
+// this browser's memory of it, so it draws minimised (§3a.3).
+describe('drillUpTo (breadcrumb dwell)', () => {
+  it('goes back up to a crumb of the open folder\'s path, or to the folder itself', () => {
+    setFolderDrill('d1', 'top', ['a', 'b', 'c']);
+    expect(drillUpTo('d1', 'top', 'a')).toBe(true);
+    expect(get(folderNavFor('d1')).drill).toEqual({ top: ['a'] });
+    expect(drillUpTo('d1', 'top', 'top')).toBe(true);
+    expect(get(folderNavFor('d1')).drill).toEqual({});
+  });
+  it('a crumb that is not on the path changes nothing and says so (false)', () => {
+    setFolderDrill('d1', 'top', ['a']);
+    expect(drillUpTo('d1', 'top', 'zz')).toBe(false);
+    expect(get(folderNavFor('d1')).drill).toEqual({ top: ['a'] });
+  });
+});
+
+describe('forgetFolderMemory', () => {
+  it('clears the open/minimised view, the page and the drill path of those folders only', () => {
+    setFolderView('d1', 'sub', 'expanded');
+    setFolderView('d1', 'keep', 'collapsed');
+    setFolderPage('d1', 'sub', 2);
+    setFolderPage('d1', 'keep', 1);
+    setFolderDrill('d1', 'sub', ['deeper']);
+    setFolderDrill('d1', 'keep', ['k']);
+    forgetFolderMemory('d1', ['sub']);
+    expect(get(folderViewFor('d1'))).toEqual({ keep: 'collapsed' });
+    expect(get(folderNavFor('d1'))).toEqual({ page: { keep: 1 }, drill: { keep: ['k'] } });
+    expect(JSON.parse(localStorage.getItem(KEY)!)).toEqual({ keep: 'collapsed' });
+    expect(JSON.parse(localStorage.getItem('hops.folderNav.d1')!)).toEqual({ page: { keep: 1 }, drill: { keep: ['k'] } });
+  });
+  it('nothing remembered: no change and no write', () => {
+    const spy = vi.spyOn(Storage.prototype, 'setItem');
+    forgetFolderMemory('d1', ['none']);
+    expect(spy).not.toHaveBeenCalled();
   });
 });

@@ -2,10 +2,10 @@
   /**
    * Resize handles for one node in the editing renderer (M3 §5.6): the right edge, the bottom edge
    * and the bottom-right corner of its RENDERED box (Ruling 13). Dragging one is a drag of the
-   * drag engine (dragController.resizeSource): snapped to cells (grid) or 8 px units (free), pushes
-   * grid neighbours aside as previewed, Escape cancels, each resize is one undo step.
-   * The parent renders these only where resizing applies: expanded folders, and tiles in free
-   * containers — never grid tiles, collapsed folders, or the phone (stacked) layout.
+   * drag engine (dragController.resizeSource): snapped to whole cells, pushes grid neighbours aside
+   * as previewed, Escape cancels, each resize is one undo step. The parent renders these only where
+   * resizing applies: open folders on a tab (M5) — never tiles, minimised folders, items inside a
+   * folder or the phone (stacked) layout.
    * Keyboard: select the item and press Shift+Arrow keys (EditToolbar).
    */
   import type { ContainerMetrics } from '$lib/layout/geometry';

@@ -155,6 +155,49 @@ export function drillTo(dashboardId: string, chain: string[]): void {
 }
 
 /**
+ * Back up the breadcrumb of open folder `folderId` to crumb `to` (the folder itself, or a sub-folder
+ * on its remembered path): the drag's crumb dwell (M5 §3a.4). False, with nothing changed, when `to`
+ * is not on the path (the crumb is stale) — the caller says so.
+ */
+export function drillUpTo(dashboardId: string, folderId: string, to: string): boolean {
+  if (to === folderId) {
+    setFolderDrill(dashboardId, folderId, []);
+    return true;
+  }
+  const path = get(navOf(dashboardId)).drill[folderId] ?? [];
+  const i = path.indexOf(to);
+  if (i < 0) return false;
+  setFolderDrill(dashboardId, folderId, path.slice(0, i + 1));
+  return true;
+}
+
+/**
+ * Forget this browser's memory of `folderIds` — open/minimised, page and drill path. A sub-folder
+ * moved out to the tab is a minimised folder there (M5 §3a.3), so an "open" remembered from before
+ * must not draw it open. No memory of them: nothing is written.
+ */
+export function forgetFolderMemory(dashboardId: string, folderIds: string[]): void {
+  const views = get(viewsOf(dashboardId));
+  const nav = get(navOf(dashboardId));
+  const ids = folderIds.filter((id) => id in views || id in nav.page || id in nav.drill);
+  if (ids.length === 0) return;
+  if (ids.some((id) => id in views)) {
+    const next: Views = { ...views };
+    for (const id of ids) delete next[id];
+    viewsOf(dashboardId).set(next);
+    write(viewKey(dashboardId), next);
+  }
+  if (ids.some((id) => id in nav.page || id in nav.drill)) {
+    setNav(dashboardId, (n) => {
+      for (const id of ids) {
+        delete n.page[id];
+        delete n.drill[id];
+      }
+    });
+  }
+}
+
+/**
  * The remembered drill path below `folder`, as far as it still holds: each id must be a sub-folder
  * directly inside the one before. Stops at the first that is not (gone, moved or now a tile).
  */

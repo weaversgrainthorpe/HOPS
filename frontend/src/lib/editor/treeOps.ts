@@ -11,7 +11,7 @@
  */
 import type { Container, FolderNode, LayoutDashboard, LayoutNode, LayoutTab, Placement } from '../types/layout';
 import {
-  GRID_TITLE_ROWS, ROOT_COLUMNS, clampPlacement, containerColumns, defaultFolderBox, isPlaced, sizeOf, sizeSpan, tabSpan
+  ROOT_COLUMNS, clampPlacement, containerColumns, defaultFolderBox, isPlaced, minOpenFolderCells, sizeOf, sizeSpan, tabSpan
 } from '../layout/geometry';
 
 export type ContainerRef = { tabId: string; folderId?: string }; // folderId absent = tab root
@@ -557,8 +557,9 @@ function onTab(d: LayoutDashboard, id: string, what: string): { node: LayoutNode
 
 /**
  * The placement resizeNode would give folder `id` on a tab for a requested w x h: clamped to the
- * columns, and never smaller than its title plus one item at its contents size (M5: the folder
- * pages its contents instead of growing to fit them). Pure; the resize preview uses it so the
+ * columns, and never smaller than its bar, padding, one item at its contents size and the page bar
+ * (geometry.minOpenFolderCells; M5 §3.5: the folder pages its contents instead of growing to fit
+ * them). Pure; the resize preview uses it so the
  * highlight shows exactly what the commit stores.
  */
 export function resizedPlacement(d: LayoutDashboard, id: string, w: number, h: number): Placement {
@@ -567,9 +568,9 @@ export function resizedPlacement(d: LayoutDashboard, id: string, w: number, h: n
   if (node.kind !== 'folder') throw new TreeOpError('A tile takes the space of its Size — change its Size in the tile dialog instead.');
   const cols = containerColumns(r.container);
   const sized = clampPlacement({ ...(node.placement as Placement), w, h }, cols);
-  const item = Math.min(sizeSpan(node.contentSize), cols - sized.x);
-  sized.w = Math.max(sized.w, item);
-  sized.h = Math.max(sized.h, GRID_TITLE_ROWS + sizeSpan(node.contentSize));
+  const min = minOpenFolderCells(node.contentSize);
+  sized.w = Math.max(sized.w, Math.min(min.w, cols - sized.x));
+  sized.h = Math.max(sized.h, min.h);
   return sized;
 }
 

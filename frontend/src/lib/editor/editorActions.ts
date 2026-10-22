@@ -26,6 +26,7 @@ import { logError } from '$lib/utils/errors';
 import { confirm } from '$lib/stores/confirmModal';
 import { toast } from '$lib/stores/toast';
 import { clearSelection, toggleNode } from '$lib/stores/nodeSelection';
+import { forgetFolderMemory } from '$lib/stores/folderView';
 import { isValidUrl } from '$lib/utils/url';
 
 export type Cell = { x: number; y: number };
@@ -329,6 +330,18 @@ export function containerOfNode(d: LayoutDashboard, id: string): ContainerRef | 
   return folderId ? { tabId: loc.tabId, folderId } : { tabId: loc.tabId };
 }
 
+/**
+ * After `ids` were MOVED to `to`: each folder among them that came out of a folder onto a tab is a
+ * minimised folder there (M5 §3a.3, treeOps.placedOnTab), so this browser forgets its open / page /
+ * drill memory — an "open" remembered from before must not draw it open. `before` is the draft the
+ * move was made from.
+ */
+export function forgetMovedOutFolders(before: LayoutDashboard, ids: string[], to: ContainerRef): void {
+  if (to.folderId !== undefined) return;
+  const out = ids.filter((id) => findIn(before, id)?.kind === 'folder' && (locate(before, id)?.folderChain.length ?? 0) > 0);
+  if (out.length > 0) forgetFolderMemory(before.id, out);
+}
+
 function describe(d: LayoutDashboard, ids: string[]): string {
   if (ids.length === 1) {
     const n = findIn(d, ids[0]);
@@ -419,6 +432,7 @@ export function moveOrCopyTo(ids: string[], to: ContainerRef, mode: 'move' | 'co
     clearSelection();
     newIds.forEach((id) => toggleNode(id, true));
   }
+  if (ok && mode === 'move') forgetMovedOutFolders(d, ids, to);
   return ok;
 }
 

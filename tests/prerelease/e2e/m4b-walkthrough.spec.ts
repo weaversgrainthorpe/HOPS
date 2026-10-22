@@ -1709,6 +1709,58 @@ test.describe('§7.2 fix round 1', () => {
       .toBeGreaterThan(400);
   });
 
+  // M5 Task 4: the same through-the-toolbar drop onto an open folder's page (its drop area): it goes in
+  // at the pointer's place in the folder's order — before the item under the pointer — as saved.
+  test('during a drag the toolbar lets the drop through onto an open folder\'s page: before the item under it', async ({ page, context }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    const f = await importDash(page, context, [{
+      name: 'Main',
+      children: (id) => [
+        tile(id('a'), 'Alpha', 0, 0),
+        {
+          id: id('f'), kind: 'folder', name: 'Big', display: 'expanded', shape: 'rounded', size: 'medium', contentSize: 'medium',
+          placement: placement(0, 2, 24, 20), content: { children: Array.from({ length: 120 }, (_, i) => tile(id(`k${i}`), `K${i}`)) }
+        }
+      ]
+    }], { fineGrid: true });
+    await page.goto(f.path);
+    await enterEdit(page);
+    await page.evaluate(() => window.scrollTo(0, 0));
+    const bar = page.getByRole('toolbar', { name: 'Editing' });
+    const alpha = page.locator(`[data-node-id="${f.id('a')}"]`);
+    const a0 = (await alpha.boundingBox())!;
+    const tb = (await bar.boundingBox())!;
+    const x = tb.x + 16;
+    const y = tb.y + 8;
+    expect(y, 'the point is above the auto-scroll zone').toBeLessThan(800 - 50);
+    await page.mouse.move(a0.x + a0.width / 2, a0.y + a0.height / 2);
+    await page.mouse.down();
+    for (let i = 1; i <= 25; i++) {
+      await page.mouse.move(a0.x + a0.width / 2 + ((x - a0.x - a0.width / 2) * i) / 25, a0.y + a0.height / 2 + ((y - a0.y - a0.height / 2) * i) / 25);
+      await page.waitForTimeout(16);
+    }
+    await page.waitForTimeout(100);
+    // The toolbar lets the pointer through (pointer-events none): under it is an item on the folder's page.
+    const under = await page.evaluate(
+      ([px, py]) => document.elementFromPoint(px, py)?.closest('[data-folder-page] [data-node-id]')?.getAttribute('data-node-id') ?? null,
+      [x, y]
+    );
+    expect(under, 'an item of the open folder is under the toolbar').not.toBeNull();
+    await expect(page.locator('.drag-layer .marker')).toBeVisible();
+    await page.mouse.up();
+    const save = bar.getByRole('button', { name: /Save/ });
+    const saved = page.waitForResponse((r) => r.request().method() === 'PUT' && /\/api\/dashboards\//.test(r.url()));
+    await save.click();
+    expect((await saved).status()).toBe(200);
+    const cfg = await (await page.request.get('/api/config')).json();
+    const d = cfg.dashboards.find((x: { id: string }) => x.id === f.id('dash'));
+    const big = d.tabs[0].root.children.find((n: { id: string }) => n.id === f.id('f'));
+    const order: string[] = big.content.children.map((n: { id: string }) => n.id);
+    const want = Array.from({ length: 120 }, (_, i) => f.id(`k${i}`));
+    want.splice(want.indexOf(under!), 0, f.id('a'));
+    expect(order).toEqual(want);
+  });
+
   test('a titled folder\'s edit handle never covers its failed-background warning or its controls', async ({ page, context }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     const f = await importDash(page, context, [{

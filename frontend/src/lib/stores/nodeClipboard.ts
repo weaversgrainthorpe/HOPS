@@ -6,7 +6,9 @@ import { apply, session, dirty } from './editSession';
 import { layoutDoc, findLayoutDashboard } from './config';
 import { selectedNodes, clearSelection, toggleNode } from './nodeSelection';
 import { toast } from './toast';
-import { documentIds, transferAndRebase, findIn, nodesOf, placementsFor, plain, type Cell } from '$lib/editor/editorActions';
+import {
+  documentIds, forgetMovedOutFolders, transferAndRebase, findIn, nodesOf, placementsFor, plain, type Cell
+} from '$lib/editor/editorActions';
 import type { LayoutDashboard } from '$lib/types/layout';
 
 // Edit-mode clipboard for tiles and folders (Ctrl+C / Ctrl+X / Ctrl+V and the
@@ -127,6 +129,7 @@ export async function pasteInto(to: ContainerRef, cell?: Cell, after?: string): 
   });
   if (ok) {
     state.set(null);
+    forgetMovedOutFolders(s.draft, ids, to); // M5 §3a.3: a sub-folder pasted onto a tab is minimised
     selectOnly(ids);
   }
   return ok;

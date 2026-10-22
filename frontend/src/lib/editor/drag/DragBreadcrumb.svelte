@@ -3,8 +3,10 @@
    * Where an item drag is: its tab (the tab the drag started on comes first when the drag has
    * moved to another tab). Holding the pointer over a crumb for OPEN_DWELL_MS returns to that tab —
    * the controller hit-tests `data-drag-crumb` and runs crumbAction — so a drag can always get back
-   * to the tab it came from. Folders open in place (M5), so a folder's own breadcrumb (in its title
-   * bar) is its path; it must take pointer hits (elementFromPoint skips pointer-events: none).
+   * to the tab it came from. Folders open in place (M5), so a folder's path is its own breadcrumb in
+   * its title bar (`data-crumb`): holding over one of those goes back up to it (the controller's
+   * `fcrumb` dwell), and a drop on one goes in at the end of that folder. Both must take pointer hits
+   * (elementFromPoint skips pointer-events: none).
    */
   import { drag, crumbAction } from './dragController';
   import { session } from '$lib/stores/editSession';

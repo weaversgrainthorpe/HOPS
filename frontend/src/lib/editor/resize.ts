@@ -9,8 +9,9 @@
  * - The phone (stacked) layout has no resizing.
  * - A resize that would overlap pushes the neighbours aside (Ruling 11); the push is part of the
  *   target and trial-run here, so what the preview shows is exactly what the commit stores.
- * - An open folder is never smaller than its title plus one item (treeOps.resizedPlacement
- *   clamps); it pages its contents instead of growing to fit them (M5).
+ * - Handles snap to whole cells (free resize is gone with free layout, M5). An open folder is never
+ *   smaller than its bar, padding, one item and the page bar (treeOps.resizedPlacement clamps to
+ *   geometry.minOpenFolderCells); it pages its contents instead of growing to fit them (M5).
  */
 import { get } from 'svelte/store';
 import type { Placement } from '$lib/types/layout';
@@ -119,7 +120,7 @@ export function resizeBy(id: string, dw: number, dh: number): boolean {
     const name = n.name || 'Untitled';
     toast.info(
       dw < 0 || dh < 0
-        ? `"${name}" can't get any smaller: it needs room for its title and one item.`
+        ? `"${name}" can't get any smaller: it needs room for its title, one item and the page bar.`
         : `"${name}" can't get any bigger here.`
     );
     return false;
