@@ -19,6 +19,7 @@ import { isAuthenticated } from '$lib/stores/auth';
 import { requestReveal, revealNavigation, revealRequest } from '$lib/stores/reveal';
 import { folderViewFor, folderNavFor, resetFolderViewsForTests } from '$lib/stores/folderView';
 import { applyThemePreset } from '$lib/stores/theme';
+import { toast } from '$lib/stores/toast';
 import type { Config } from '$lib/types';
 import type { LayoutDashboard } from '$lib/types/layout';
 import { begin, session, resetEditSessionForTests, apply } from '$lib/stores/editSession';
@@ -487,6 +488,22 @@ describe('one editing flow (walkthrough §4B): handle, double-click and menu for
     await tick();
     expect((get(session)!.draft.tabs[0].root.children[1] as any).display).toBe('expanded');
     expect(cellOf(container, 'box').classList.contains('collapsed')).toBe(false);
+  });
+
+  it('edit mode search reveal (Ruling 6): a saved-minimised folder opens like the menu\'s Open — an undoable draft change, never an error', async () => {
+    const { container } = render(Dashboard, { dashboard: legacy });
+    enterEdit();
+    await tick();
+    toast.clear();
+    expect(cellOf(container, 'box').classList.contains('collapsed')).toBe(true);
+    requestReveal({ dashboardId: 'd1', tabId: 't1', folderIds: ['box'], tileId: 'in1' });
+    await waitFor(() => expect(cellOf(container, 'in1')).not.toBeNull());
+    expect((get(session)!.draft.tabs[0].root.children[1] as any).display).toBe('expanded');
+    expect(get(session)!.undo).toHaveLength(1);
+    expect(get(session)!.lastLabel).toBe('Open folder');
+    expect(get(toast).filter((t) => t.type === 'error')).toEqual([]);
+    await waitFor(() => expect(cellOf(container, 'in1')!.contains(document.activeElement)).toBe(true));
+    expect(get(folderViewFor('d1'))).toEqual({}); // a draft change, not this viewer's view
   });
 
   it('collapsed folder outside edit mode: a click opens it in place, and there is no handle', async () => {

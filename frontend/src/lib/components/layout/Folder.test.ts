@@ -320,6 +320,13 @@ describe('phone (stacked): the same component at full width', () => {
     expect(container.querySelector('[data-node-id="f"] [data-page-bar="next"]')).not.toBeNull();
     expect(shownIds(container).length).toBeLessThan(30);
     expect(el(container, 'm').classList.contains('collapsed')).toBe(true);
+    // Items are the phone tab tile's column wide (jsdom: a 1024 px window → 135 px minimum, 14 px gap):
+    // the tab has 3 columns of (500 - 28) / 3 px; the folder (482 px inside) fits 2 of them.
+    const flow = page(container).querySelector('[data-container-id="f"]') as HTMLElement;
+    expect(flow.style.gridTemplateColumns).toBe('repeat(2, 157.33px)');
+    expect(flow.style.gap).toBe('14px');
+    // Unfitted, like a phone tab tile (its size's own minimum height).
+    expect(flow.querySelector('button.entry')!.classList.contains('fill')).toBe(false);
   });
 });
 

@@ -206,6 +206,12 @@ describe('revealInFolders: search opens the chain in place, drills down and asks
     expect(takePageReveal('d1', 'b')).toEqual({ dashboardId: 'd1', folderId: 'b', itemId: 'deep' });
     expect(get(pageReveal)).toBeNull();
   });
+  it('edit mode (view: false) writes the drill-down and page request but never the viewer\'s view', () => {
+    revealInFolders('d1', ['top', 'a'], 'x', { view: false });
+    expect(get(folderViewFor('d1'))).toEqual({});
+    expect(get(folderNavFor('d1')).drill).toEqual({ top: ['a'] });
+    expect(get(pageReveal)).toEqual({ dashboardId: 'd1', folderId: 'a', itemId: 'x' });
+  });
   it('a tile on the tab itself needs no folder memory', () => {
     revealInFolders('d1', [], 'x');
     expect(get(folderViewFor('d1'))).toEqual({});

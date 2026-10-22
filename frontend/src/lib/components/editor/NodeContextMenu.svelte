@@ -193,7 +193,7 @@
       case 'Tab': close(); return; // let focus move on
       default: return;
     }
-    // Handled here: an open folder overlay or modal must not also act on it.
+    // Handled here: a modal or another Escape handler must not also act on it.
     e.preventDefault();
     e.stopPropagation();
   }
@@ -242,7 +242,7 @@
 <style>
   .node-menu {
     position: fixed;
-    /* Above open folder overlays (--z-folder-overlay + depth), below modals. */
+    /* Above the page and the editor toolbar, below modals. */
     z-index: calc(var(--z-modal) - 10);
     min-width: 12rem;
     padding: 0.25rem;

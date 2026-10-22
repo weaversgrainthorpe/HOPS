@@ -20,7 +20,7 @@
   import DragLayer from '$lib/editor/drag/DragLayer.svelte';
   import { tabSource } from '$lib/editor/drag/dragController';
   import {
-    addTabWith, editTab, duplicateTabAction, deleteTabWithConfirm,
+    addTabWith, editTab, duplicateTabAction, deleteTabWithConfirm, findIn, setDisplay,
     type TabFields
   } from '$lib/editor/editorActions';
   import { reorderTabs } from '$lib/editor/treeOps';
@@ -137,7 +137,14 @@
     activeTabIndex = idx;
     await tick(); // let the canvas switch tab first
     // Open the folder chain in place, drill down and flip to the tile's page (this browser's memory).
-    revealInFolders(dashboard.id, req.folderIds, req.tileId);
+    // Edit mode shows the saved layout, so a folder saved minimised there is opened exactly as its
+    // menu's "Open" does: an undoable draft change (Ruling 6), never a dead end.
+    if (editing && draft && req.folderIds.length > 0) {
+      const top = findIn(draft, req.folderIds[0]);
+      if (top?.kind === 'folder' && top.display === 'collapsed') setDisplay(top.id, 'expanded');
+    }
+    // (Edit mode never writes this viewer's open/minimised view; the drill and page memory it does.)
+    revealInFolders(dashboard.id, req.folderIds, req.tileId, { view: !editing });
     let el: HTMLElement | null = null;
     for (let i = 0; i < 60 && !el; i++) {
       await tick();

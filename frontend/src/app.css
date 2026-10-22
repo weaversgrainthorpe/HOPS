@@ -52,7 +52,8 @@
   --z-dropdown: 200;
   --z-context-menu: 300;
   --z-modal: 1000;
-  --z-folder-overlay: 900;
+  /* The editor's floating toolbar: above the page and the navbar, below menus, dialogs and toasts. */
+  --z-edit-toolbar: 890;
   --z-modal-overlay: 1100;
   --z-modal-critical: 1200;
   --z-toast: 1300;

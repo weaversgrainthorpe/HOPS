@@ -229,11 +229,15 @@ export function clearPageReveal(): void {
 /**
  * Search reveal (M5 §3a.5): open the folder chain (outermost first, ending with the folder that holds
  * the item) in place, drill down to the last, and ask that folder to flip to the item's page — all
- * written to this browser's memory, as if the user had done it.
+ * written to this browser's memory, as if the user had done it. `view: false` (edit mode) leaves the
+ * open/minimised view alone.
  */
-export function revealInFolders(dashboardId: string, folderIds: string[], itemId: string): void {
+export function revealInFolders(
+  dashboardId: string, folderIds: string[], itemId: string, opts: { view?: boolean } = {}
+): void {
   if (folderIds.length === 0) return;
-  setFolderView(dashboardId, folderIds[0], 'expanded');
+  // Edit mode opens the outermost folder in the draft instead (the caller), as its menu's Open does.
+  if (opts.view !== false) setFolderView(dashboardId, folderIds[0], 'expanded');
   setFolderDrill(dashboardId, folderIds[0], folderIds.slice(1));
   pending.set({ dashboardId, folderId: folderIds[folderIds.length - 1], itemId });
 }

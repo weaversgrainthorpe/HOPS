@@ -17,7 +17,8 @@
   import type { FolderNode, LayoutDashboard, LayoutTab } from '$lib/types/layout';
   import type { CanvasPlan, ContainerMetrics } from '$lib/layout/geometry';
   import {
-    FOLDER_CHROME, STACKED_CELL_PX, folderFlowMetrics, folderPaging, nodeBox, openFolderContentBox, phoneFolderBox, previewChildren
+    FOLDER_CHROME, folderFlowMetrics, folderPaging, nodeBox, openFolderContentBox, phoneFlowMetrics, phonePaging,
+    previewChildren
   } from '$lib/layout/geometry';
   import { getTextColorValue } from '$lib/utils/colorContrast';
   import Icon from '@iconify/svelte';
@@ -147,17 +148,35 @@
   const current = $derived(drilled.length > 0 ? drilled[drilled.length - 1] : folder);
   const chainShown = $derived([...folderChain, folder, ...drilled]);
   const kids = $derived(Array.isArray(current.content?.children) ? current.content.children : []);
-  // On a phone an open folder spans the stacked canvas (its width comes with the plan: no extra
-  // observer, Tenet 4); on a tab it fills the box it keeps.
+  // On a phone an open folder spans the stacked canvas (its width and the viewport come with the plan:
+  // no extra observer, Tenet 4) and its items are the phone tab's tiles; on a tab it fills the box it
+  // keeps and its items are tab cells at its contents size. One page model each (geometry.ts).
   const stacked = $derived(plan.kind === 'stacked' || !folder.placement);
-  const cellPx = $derived(plan.kind === 'grid' && folder.placement ? parent.unitPx : STACKED_CELL_PX);
-  const content = $derived(
-    stacked
-      ? phoneFolderBox((plan.kind === 'stacked' ? (plan.widthPx ?? 0) : 0) - FOLDER_CHROME.padXPx, current.contentSize)
-      : openFolderContentBox(nodeBox(folder.placement!, parent))
+  const phoneCanvasPx = $derived(plan.kind === 'stacked' ? (plan.widthPx ?? 0) : 0);
+  const contentWidthPx = $derived(
+    stacked ? Math.max(0, phoneCanvasPx - FOLDER_CHROME.padXPx) : openFolderContentBox(nodeBox(folder.placement!, parent)).widthPx
   );
-  const paging = $derived(folderPaging(content, current.contentSize, cellPx, kids.length, $nav.page[current.id] ?? 0));
-  const metrics = $derived(folderFlowMetrics(paging, cellPx, content.widthPx));
+  const asked = $derived($nav.page[current.id] ?? 0);
+  const phone = $derived(
+    stacked
+      ? phonePaging(
+          contentWidthPx,
+          phoneCanvasPx,
+          {
+            widthPx: plan.kind === 'stacked' ? (plan.viewportWidthPx ?? phoneCanvasPx) : 0,
+            heightPx: plan.kind === 'stacked' ? (plan.viewportHeightPx ?? 0) : 0
+          },
+          current.contentSize,
+          kids.length,
+          asked
+        )
+      : null
+  );
+  const paging = $derived(
+    phone ??
+      folderPaging(openFolderContentBox(nodeBox(folder.placement!, parent)), current.contentSize, parent.unitPx, kids.length, asked)
+  );
+  const metrics = $derived(phone ? phoneFlowMetrics(phone, contentWidthPx) : folderFlowMetrics(paging, parent.unitPx, contentWidthPx));
   const pageKids = $derived(kids.slice(paging.start, paging.end));
   const pageNumbers = $derived(paging.pages <= 7 ? Array.from({ length: paging.pages }, (_, i) => i) : []);
 

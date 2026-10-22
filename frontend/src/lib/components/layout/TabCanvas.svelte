@@ -75,7 +75,10 @@
     remembered: (id) => remembered[id],
     saved: (id) => savedDisplay.get(id)
   });
-  const plan = $derived(planCanvas(width, viewTab));
+  // The window's size: on a phone an open folder's page fits the viewport (geometry.phonePaging).
+  let viewportW = $state(typeof window !== 'undefined' ? window.innerWidth : 0);
+  let viewportH = $state(typeof window !== 'undefined' ? window.innerHeight : 0);
+  const plan = $derived(planCanvas(width, viewTab, { widthPx: viewportW, heightPx: viewportH }));
   // The root's sizes: one source (geometry.containerMetrics), recomputed per width change only.
   const metrics = $derived(containerMetrics(viewTab.root, rootBoxWidthPx(plan, viewTab)));
   // Editing on a phone (stacked plan, once measured): the toolbar says resizing needs more room.
@@ -86,6 +89,8 @@
     return () => canvasStacked.set(false);
   });
 </script>
+
+<svelte:window bind:innerWidth={viewportW} bind:innerHeight={viewportH} />
 
 <div class="tab-canvas" class:editing bind:this={el} data-tab-id={tab.id}>
   {#if $layoutStale}

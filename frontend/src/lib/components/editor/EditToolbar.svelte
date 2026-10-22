@@ -137,8 +137,8 @@
 <svelte:window onkeydown={onKey} />
 
 <!-- §7.2: one floating toolbar pinned to the bottom of the screen. It sits over the page and takes no
-     layout space, so every tile, folder and tab stays where view mode puts it. Below every dialog
-     (folder overlays included): it never covers one. -->
+     layout space, so every tile, folder and tab stays where view mode puts it. Below every dialog:
+     it never covers one. -->
 <div class="edit-toolbar" role="toolbar" aria-label="Editing" bind:this={barEl}>
   <div class="controls">
     <div class="group">
@@ -201,8 +201,8 @@
     left: 50%;
     bottom: 0.75rem;
     transform: translateX(-50%);
-    /* Above the page and the navbar, below every dialog and folder overlay, menus and toasts. */
-    z-index: calc(var(--z-folder-overlay) - 10);
+    /* Above the page and the navbar, below every dialog, menus and toasts. */
+    z-index: var(--z-edit-toolbar);
     box-sizing: border-box;
     width: max-content;
     max-width: calc(100vw - 1rem);

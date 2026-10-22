@@ -2,7 +2,7 @@ import { test, expect, type Page, type BrowserContext, type Browser } from '@pla
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { getCsrfToken, login, signInDialog, setSetting } from '../helpers';
+import { getCsrfToken, login, longPress, signInDialog, setSetting } from '../helpers';
 import { ADMIN_USERNAME, ADMIN_TEST_PASSWORD } from '../constants';
 import { m5Config } from '../m5form';
 
@@ -1797,9 +1797,11 @@ test.describe('§7.2 nested untitled folders on a touch device', () => {
     // The inner folder is an item: its minimised tile, its handle in its own corner; Outer's in its bar.
     await expect(page.locator(`[data-node-id="${f.id('inner')}"]`)).toHaveClass(/collapsed/);
     await noOverlaps(['Edit Outer', 'Edit InnerF'], [await minimise()]);
-    // Drill in (the item menu's Open, as a long-press gives on touch): Deep fills Outer's box.
-    await page.locator(`[data-node-id="${f.id('inner')}"]`).click({ button: 'right' });
-    await page.getByRole('menu').getByRole('menuitem', { name: 'Open', exact: true }).click();
+    // Drill in through the item menu a REAL touch long-press opens (its Open): Deep fills Outer's box.
+    await longPress(page, page.locator(`[data-node-id="${f.id('inner')}"] .folder-collapsed-tile`));
+    const menu = page.getByRole('menu');
+    await expect(menu).toBeVisible();
+    await menu.getByRole('menuitem', { name: 'Open', exact: true }).tap();
     const crumbs = outer.getByRole('navigation', { name: 'Folder path' });
     await expect(crumbs.locator('[aria-current="page"]')).toHaveText('InnerF');
     const back = crumbs.locator(`[data-crumb="${f.id('outer')}"]`);

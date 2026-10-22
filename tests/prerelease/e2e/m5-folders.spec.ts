@@ -203,16 +203,102 @@ test.describe('M5 one Folder component', () => {
     await expect(crumbs.locator('[aria-current="page"]')).toHaveText('Storage');
   });
 
-  test('a Medium item in a folder is exactly a Medium tile on the tab (one size everywhere)', async ({ page, context }) => {
+  for (const width of [1280, 1920]) {
+    test(`one size everywhere at ${width}px: a Medium box is identical on the tab and in a Medium folder, and a minimised folder too, in view and edit mode`, async ({ page, context }) => {
+      await page.setViewportSize({ width, height: 900 });
+      const f = await importDash(page, context, (id) => [
+        tile(id('m'), 'TabMed', 0, 0),
+        folder(id('f'), 'Box', { x: 4, y: 0, w: 12, h: 6 }, [kid(id('in'), 'InMed', { size: 'large' })]),
+        folder(id('mf'), 'Mini', { x: 18, y: 0, w: 6, h: 4 }, kids(id, 3, 'M'), { display: 'collapsed' })
+      ]);
+      await page.goto(f.path);
+      const measure = async () => ({
+        tab: await box(node(page, f.id('m'))),
+        inFolder: await box(node(page, f.id('in'))),
+        minimised: await box(node(page, f.id('mf')))
+      });
+      const view = await measure();
+      // The item's own size is Large; the folder's contents size (Medium) wins: the tab tile's box.
+      near(view.inFolder.width, view.tab.width, 'view: in-folder width');
+      near(view.inFolder.height, view.tab.height, 'view: in-folder height');
+      near(view.minimised.width, view.tab.width, 'view: minimised width');
+      near(view.minimised.height, view.tab.height, 'view: minimised height');
+      await page.locator('[aria-label="Enter Edit Mode"]').click();
+      await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
+      const edit = await measure();
+      for (const k of ['tab', 'inFolder', 'minimised'] as const) {
+        near(edit[k].x, view[k].x, `edit vs view ${k} x`);
+        near(edit[k].y, view[k].y, `edit vs view ${k} y`);
+        near(edit[k].width, view[k].width, `edit vs view ${k} width`);
+        near(edit[k].height, view[k].height, `edit vs view ${k} height`);
+      }
+    });
+  }
+
+  test('view mode: a bigger box shows more per page', async ({ page, context }) => {
     const f = await importDash(page, context, (id) => [
-      tile(id('m'), 'TabMed', 0, 0),
-      folder(id('f'), 'Box', { x: 4, y: 0, w: 12, h: 6 }, [kid(id('in'), 'InMed', { size: 'large' })])
+      folder(id('narrow'), 'Narrow', { x: 0, y: 0, w: 6, h: 6 }, kids(id, 12, 'N')),
+      folder(id('wide'), 'Wide', { x: 8, y: 0, w: 14, h: 6 }, kids(id, 12, 'W'))
     ]);
     await page.goto(f.path);
-    const tb = await box(node(page, f.id('m')));
-    const ib = await box(node(page, f.id('in')));
-    near(ib.width, tb.width, 'width');
-    near(ib.height, tb.height, 'height');
+    const per = async (k: string) => Number(await node(page, f.id(k)).locator('[data-folder-page]').getAttribute('data-folder-per-page'));
+    expect(await per('wide')).toBeGreaterThan(await per('narrow'));
+    await expect(node(page, f.id('narrow')).locator('[data-node-id]')).toHaveCount(Math.min(12, await per('narrow')));
+    await expect(node(page, f.id('wide')).locator('[data-node-id]')).toHaveCount(Math.min(12, await per('wide')));
+  });
+
+  test('the page is clamped: deleting the last page\'s items, or growing the box, while on the last page shows a real page', async ({ page, context }) => {
+    const f = await importDash(page, context, (id) => [folder(id('f'), 'Clamp', { x: 0, y: 0, w: 6, h: 6 }, kids(id, 20))]);
+    await page.goto(f.path);
+    const g = node(page, f.id('f'));
+    const pageAttr = async () => Number(await g.locator('[data-folder-page]').getAttribute('data-folder-page'));
+    const next = g.locator('[data-page-bar="next"]');
+    while (await next.isEnabled()) await next.click();
+    const last = await pageAttr();
+    expect(last).toBeGreaterThan(0);
+    await page.locator('[aria-label="Enter Edit Mode"]').click();
+    await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
+    expect(await pageAttr()).toBe(last); // the page is remembered while editing too
+    // Delete every item on the last page: the folder now shows the new last page, never an empty one.
+    const onLast = await shown(page, f.id('f'));
+    for (const [i, id] of onLast.entries()) {
+      await node(page, id).click({ modifiers: i === 0 ? [] : ['Control'], position: { x: 10, y: 30 } });
+    }
+    await page.keyboard.press('Delete');
+    const confirm = page.getByRole('dialog', { name: /Delete/ });
+    await confirm.getByRole('button', { name: 'Delete' }).click();
+    await expect.poll(pageAttr).toBe(last - 1);
+    expect((await shown(page, f.id('f'))).length).toBeGreaterThan(0);
+    // Growing the box (more per page) while on the last page clamps too.
+    await g.locator('.folder-header').click({ position: { x: 5, y: 5 } });
+    for (let i = 0; i < 12; i++) await page.keyboard.press('Shift+ArrowRight');
+    for (let i = 0; i < 6; i++) await page.keyboard.press('Shift+ArrowDown');
+    await expect.poll(async () => (await g.locator('[data-page-bar]').count()) === 0 || (await pageAttr()) < last - 1).toBe(true);
+    const per = Number(await g.locator('[data-folder-page]').getAttribute('data-folder-per-page'));
+    const pages = Math.ceil((20 - onLast.length) / per);
+    expect(await pageAttr()).toBe(Math.min(last - 1, pages - 1));
+    expect((await shown(page, f.id('f'))).length).toBeGreaterThan(0);
+  });
+
+  test('edit mode search reveal (Ruling 6): a saved-minimised folder opens like its menu\'s Open — undoable, never an error', async ({ page, context }) => {
+    const f = await importDash(page, context, (id) => [
+      folder(id('f'), 'Shut', { x: 0, y: 0, w: 8, h: 6 }, [kid(id('a'), 'First'), kid(id('needle'), 'Editneedle')], { display: 'collapsed' })
+    ]);
+    await page.goto(f.path);
+    await page.locator('[aria-label="Enter Edit Mode"]').click();
+    const bar = page.getByRole('toolbar', { name: 'Editing' });
+    await expect(bar).toBeVisible();
+    await expect(node(page, f.id('f'))).toHaveClass(/collapsed/);
+    await page.keyboard.press('/');
+    await page.getByRole('textbox', { name: /search tiles/i }).fill('editneedle');
+    await page.getByRole('button', { name: /Editneedle/ }).click();
+    await expect(node(page, f.id('f'))).toHaveAttribute('role', 'group'); // opened in place
+    await expect(node(page, f.id('needle'))).toBeVisible();
+    await expect.poll(() => page.evaluate((id) => !!document.activeElement?.closest(`[data-node-id="${id}"]`), f.id('needle'))).toBe(true);
+    await expect(page.getByText(/Couldn't show that tile/)).toHaveCount(0);
+    await expect(page.getByRole('status').filter({ hasText: 'Unsaved changes' })).toBeVisible();
+    await bar.getByRole('button', { name: 'Undo', exact: true }).click();
+    await expect(node(page, f.id('f'))).toHaveClass(/collapsed/);
   });
 
   test('resizing the open folder shows more per page', async ({ page, context }) => {
@@ -268,6 +354,39 @@ test.describe('M5 one Folder component', () => {
     await bar.getByRole('button', { name: 'Minimise folder' }).click();
     await expect(node(page, f.id('f'))).toHaveClass(/collapsed/);
   });
+});
+
+test.describe('M5 folders on a 390 x 844 phone: the phone tab\'s tiles, a page fits the screen', () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+  test('a Medium item in a phone folder is the same box as a Medium phone tab tile', async ({ page, context }) => {
+    const f = await importDash(page, context, (id) => [
+      tile(id('t1'), 'One', 0, 0), tile(id('t2'), 'Two', 2, 0), tile(id('t3'), 'Three', 4, 0),
+      folder(id('f'), 'Phone', { x: 0, y: 2, w: 8, h: 6 }, kids(id, 30))
+    ]);
+    await page.goto(f.path);
+    const tb = await box(node(page, f.id('t1')).locator('button.entry'));
+    const ib = await box(node(page, f.id('k1')).locator('button.entry'));
+    near(ib.width, tb.width, 'width');
+    near(ib.height, tb.height, 'height');
+    const fb = await box(node(page, f.id('f')));
+    expect(fb.height).toBeLessThanOrEqual(844);
+  });
+  for (const size of ['small', 'medium', 'large'] as const) {
+    test(`a page of ${size} items fits the viewport and pages the rest`, async ({ page, context }) => {
+      const f = await importDash(page, context, (id) => [
+        folder(id('f'), 'Fit', { x: 0, y: 0, w: 8, h: 6 }, kids(id, 40), { contentSize: size })
+      ]);
+      await page.goto(f.path);
+      const g = node(page, f.id('f'));
+      await expect(g.locator('[data-page-bar="next"]')).toBeVisible();
+      const gb = await box(g);
+      // The whole open folder (bar, page and page bar) is on screen below the top bar and the tab bar.
+      expect(gb.y + gb.height, `${size}: the open folder's bottom edge`).toBeLessThanOrEqual(844);
+      const per = Number(await g.locator('[data-folder-page]').getAttribute('data-folder-per-page'));
+      expect(per).toBeGreaterThanOrEqual(1);
+      await expect(g.locator('[data-node-id]')).toHaveCount(per);
+    });
+  }
 });
 
 test.describe('M5 folders on a phone (stacked)', () => {

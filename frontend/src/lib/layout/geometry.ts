@@ -143,12 +143,24 @@ export function nodeFit(p: Placement, m: ContainerMetrics): TileFit {
   return tileFit(b.widthPx, b.heightPx);
 }
 
-/** A stacked (phone) plan carries the canvas width: an open folder there is that wide (M5). */
-export type CanvasPlan = { kind: 'grid'; cellPx: number } | { kind: 'stacked'; widthPx?: number };
+/**
+ * A stacked (phone) plan carries the canvas width and the viewport (window) size: an open folder there
+ * is the canvas wide, its items are the phone tab's tiles, and a page fits the viewport (M5).
+ */
+export type CanvasPlan =
+  | { kind: 'grid'; cellPx: number }
+  | { kind: 'stacked'; widthPx?: number; viewportWidthPx?: number; viewportHeightPx?: number };
 
 /** A tab's canvas: its 24-column grid at this width, or stacked on a phone / unmeasured width. */
-export function planCanvas(widthPx: number, tab: LayoutTab): CanvasPlan {
-  if (!isNum(widthPx) || widthPx < PHONE_BREAKPOINT_PX) return { kind: 'stacked', widthPx: nonNeg(widthPx) };
+export function planCanvas(widthPx: number, tab: LayoutTab, viewport?: { widthPx: number; heightPx: number }): CanvasPlan {
+  if (!isNum(widthPx) || widthPx < PHONE_BREAKPOINT_PX) {
+    const plan: CanvasPlan = { kind: 'stacked', widthPx: nonNeg(widthPx) };
+    if (viewport) {
+      plan.viewportWidthPx = nonNeg(viewport.widthPx);
+      plan.viewportHeightPx = nonNeg(viewport.heightPx);
+    }
+    return plan;
+  }
   return { kind: 'grid', cellPx: widthPx / containerColumns(tab.root) };
 }
 
@@ -172,7 +184,7 @@ export interface ContainerMetrics {
    * A folder's content (M5): no placements; items flow in order, each `span` cells square
    * (its contents size), `perRow` to a row. Absent for a tab root.
    */
-  flow?: { span: number; perRow: number };
+  flow?: { span: number; perRow: number; phone?: { colPx: number; gapPx: number } };
 }
 
 const nonNeg = (v: unknown): number => (isNum(v) && v > 0 ? v : 0);
@@ -211,22 +223,12 @@ export function pointToCell(m: ContainerMetrics, dxPx: number, dyPx: number): { 
 export const FOLDER_CHROME = { titlePx: 40, padXPx: 2 * 8 + 2 * 1, padYPx: 2 * 8 + 2 * 1 } as const;
 /** The page bar (« ‹ 1 2 3 › »), shown only when a folder has more than one page. */
 export const PAGE_BAR_PX = 32;
-/** The cell a folder uses on a phone (stacked: the tab has no grid there): Medium = 120 px. */
-export const STACKED_CELL_PX = 60;
-/** Rows of items one page shows on a phone, where an open folder has no box height of its own. */
-export const PHONE_FOLDER_ROWS = 3;
-
 /** The content box inside an open folder's box: its bar, border and padding taken off. */
 export function openFolderContentBox(box: { widthPx: number; heightPx: number }): { widthPx: number; heightPx: number } {
   return {
     widthPx: nonNeg(box.widthPx - FOLDER_CHROME.padXPx),
     heightPx: nonNeg(box.heightPx - FOLDER_CHROME.titlePx - FOLDER_CHROME.padYPx)
   };
-}
-
-/** An open folder's content box on a phone: the full width, PHONE_FOLDER_ROWS rows plus the page bar. */
-export function phoneFolderBox(widthPx: number, contentSize: unknown): { widthPx: number; heightPx: number } {
-  return { widthPx: nonNeg(widthPx), heightPx: PHONE_FOLDER_ROWS * sizeSpan(contentSize) * STACKED_CELL_PX + PAGE_BAR_PX };
 }
 
 /** One page of an open folder (M5 §2): which items show, and whether there is a page bar. */
@@ -261,12 +263,75 @@ export function folderPaging(
   let fit = folderPage(content, contentSize, cellPx);
   const pageBar = n > fit.perPage;
   if (pageBar) fit = folderPage({ widthPx: content.widthPx, heightPx: content.heightPx - PAGE_BAR_PX }, contentSize, cellPx);
-  const pages = Math.max(1, Math.ceil(n / fit.perPage));
+  return { span, itemPx: span * nonNeg(cellPx), ...fit, ...pageOf(n, fit.perPage, page), pageBar };
+}
+
+/** The page shown of `n` items at `perPage` a page: the asked-for page clamped, and its item range. */
+function pageOf(n: number, perPage: number, page: number): { pages: number; page: number; start: number; end: number } {
+  const pages = Math.max(1, Math.ceil(n / perPage));
   const asked = isNum(page) ? Math.floor(page) : 0;
   const p = Math.min(Math.max(0, asked), pages - 1);
-  const start = p * fit.perPage;
+  const start = p * perPage;
+  return { pages, page: p, start, end: Math.min(n, start + perPage) };
+}
+
+// ---- phones (stacked): a folder's items are the phone tab's tiles (M5: one size everywhere)
+
+/** A phone tab tile's height by size: the unfitted tile's own minimum (Entry.svelte .small/.medium/.large). */
+export const PHONE_TILE_MIN_PX: Record<ItemSize, number> = { small: 100, medium: 120, large: 160 };
+/**
+ * The viewport height a phone page does not get: the top bar, the tab bar, the folder's own bar, its
+ * page bar and padding. A page is at most the viewport less this, so it fits on screen.
+ */
+export const PHONE_PAGE_RESERVE_PX = 220;
+
+/**
+ * The phone tab grid (ContainerView .container-stacked, the same media queries): its column minimum
+ * and gap at this viewport width.
+ */
+export function phoneTrack(viewportWidthPx: number): { minPx: number; gapPx: number } {
+  const vw = isNum(viewportWidthPx) ? viewportWidthPx : 0;
+  if (vw <= 480) return { minPx: 100, gapPx: 12 };
+  if (vw <= 768) return { minPx: 120, gapPx: 12 };
+  return { minPx: 135, gapPx: 14 };
+}
+
+/** A phone tab column's width: as many columns as fit the canvas (auto-fill), sharing it (1fr). */
+export function phoneColumnPx(canvasWidthPx: number, track: { minPx: number; gapPx: number }): number {
+  const w = nonNeg(canvasWidthPx);
+  const n = Math.max(1, Math.floor((w + track.gapPx) / (track.minPx + track.gapPx)));
+  return n === 1 ? w : (w - (n - 1) * track.gapPx) / n;
+}
+
+/**
+ * THE page model of an open folder on a phone. Items are the phone tab's tiles: a tab column wide
+ * (phoneColumnPx of the canvas) and their size's height (PHONE_TILE_MIN_PX), as many a row as fit the
+ * folder's content width. Rows per page come from a pixel budget (the viewport height less
+ * PHONE_PAGE_RESERVE_PX, at least one row), so a page fits the screen, Large included.
+ */
+export function phonePaging(
+  contentWidthPx: number, canvasWidthPx: number, viewport: { widthPx: number; heightPx: number },
+  contentSize: unknown, count: number, page: number
+): FolderPaging & { rowPx: number; gapPx: number } {
+  const track = phoneTrack(viewport.widthPx);
+  const col = phoneColumnPx(canvasWidthPx, track);
+  const gap = track.gapPx;
+  const perRow = col > 0 ? Math.max(1, Math.floor((nonNeg(contentWidthPx) + gap) / (col + gap) + 1e-9)) : 1;
+  const rowPx = PHONE_TILE_MIN_PX[sizeOf(contentSize)];
+  const budget = Math.max(rowPx, nonNeg(viewport.heightPx) - PHONE_PAGE_RESERVE_PX);
+  const rowsPerPage = Math.max(1, Math.floor((budget + gap) / (rowPx + gap) + 1e-9));
+  const perPage = perRow * rowsPerPage;
+  const n = isNum(count) && count > 0 ? Math.floor(count) : 0;
   return {
-    span, itemPx: span * nonNeg(cellPx), ...fit, pages, pageBar, page: p, start, end: Math.min(n, start + fit.perPage)
+    span: 1, itemPx: col, rowPx, gapPx: gap, perRow, rowsPerPage, perPage, pageBar: n > perPage, ...pageOf(n, perPage, page)
+  };
+}
+
+/** The metrics one phone page is drawn (and hit-tested) with: perRow tab-tile columns, unfitted tiles. */
+export function phoneFlowMetrics(g: FolderPaging & { rowPx: number; gapPx: number }, widthPx: number): ContainerMetrics {
+  return {
+    columns: g.perRow, unitPx: g.itemPx, rowPx: g.rowPx, innerWidthPx: nonNeg(widthPx),
+    flow: { span: 1, perRow: g.perRow, phone: { colPx: g.itemPx, gapPx: g.gapPx } }
   };
 }
 

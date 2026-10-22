@@ -1,4 +1,4 @@
-import type { Page, APIRequestContext, BrowserContext } from '@playwright/test';
+import type { Page, APIRequestContext, BrowserContext, Locator } from '@playwright/test';
 import { expect } from '@playwright/test';
 import { ADMIN_USERNAME, ADMIN_TEST_PASSWORD } from './constants';
 
@@ -143,4 +143,25 @@ export async function setSetting(page: Page, key: string, value: string): Promis
   });
   expect(r.ok(), `set ${key}=${value}: ${r.status()} ${await r.text()}`).toBeTruthy();
   return String(item.value);
+}
+
+/**
+ * A REAL touch long-press on `target` (Chromium's touch input via CDP: touchstart, held `ms`, touchend,
+ * no movement), at a fraction of its box (default 30 % across, 60 % down: clear of a corner edit
+ * handle). On an editor item this is the touch path to its menu (dragController: drag-ready after
+ * 400 ms, released without moving → the item menu). Needs a touch-enabled context (hasTouch).
+ */
+export async function longPress(page: Page, target: Locator, ms = 650, at: { fx: number; fy: number } = { fx: 0.3, fy: 0.6 }) {
+  const b = await target.boundingBox();
+  if (!b) throw new Error('longPress: the target has no box (not visible?)');
+  const x = b.x + b.width * at.fx;
+  const y = b.y + b.height * at.fy;
+  const cdp = await page.context().newCDPSession(page);
+  try {
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+    await page.waitForTimeout(ms);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  } finally {
+    await cdp.detach();
+  }
 }

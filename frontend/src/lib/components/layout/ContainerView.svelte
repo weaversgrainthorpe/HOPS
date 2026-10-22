@@ -95,11 +95,16 @@
   // row, every item at the folder's contents size in the tab's cell (the same box as a tab tile of
   // that size at this width).
   const flowItemPx = $derived(metrics.flow ? metrics.flow.span * metrics.unitPx : 0);
+  // On a phone the items are the phone tab's tiles: its column width, its gap, unfitted (their size's
+  // own height), exactly as .container-stacked draws them.
   const flowStyle = $derived(
-    metrics.flow
-      ? `display:grid;grid-template-columns:repeat(${metrics.flow.perRow}, ${trackPx(flowItemPx)});` +
-          `grid-auto-rows:${px(flowItemPx)};`
-      : ''
+    metrics.flow?.phone
+      ? `display:grid;grid-template-columns:repeat(${metrics.flow.perRow}, ${trackPx(metrics.flow.phone.colPx)});` +
+          `gap:${px(metrics.flow.phone.gapPx)};`
+      : metrics.flow
+        ? `display:grid;grid-template-columns:repeat(${metrics.flow.perRow}, ${trackPx(flowItemPx)});` +
+            `grid-auto-rows:${px(flowItemPx)};`
+        : ''
   );
   const gridStyle = $derived(
     `display:grid;grid-template-columns:repeat(${columns}, ${trackPx(metrics.unitPx)});` +
@@ -114,6 +119,7 @@
 
   /** How a tile fits its box (Ruling 22): the box is the tile's cell span, in px. */
   function fitOf(n: LayoutNode): 'fill' | 'compact' | undefined {
+    if (metrics.flow?.phone) return undefined; // a phone tab tile: unfitted, as on the phone's tab
     if (metrics.flow) return spanFit(metrics.flow.span, metrics.unitPx); // the folder's contents size
     if (effective === 'stacked') return undefined; // phone stacking keeps the v2 tile sizes
     return nodeFit(n.placement as Placement, metrics); // Small (1 x 1) is always compact (spec §9)
@@ -235,6 +241,7 @@
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
     class="container-flow"
+    class:phone={!!metrics.flow?.phone}
     style={flowStyle}
     data-container-id={parentId}
     oncontextmenu={editing ? onContainerMenu : undefined}
@@ -303,7 +310,8 @@
     gap: 0.875rem;
     width: 100%;
   }
-  .container-stacked :global(.folder-slot.collapsed) {
+  .container-stacked :global(.folder-slot.collapsed),
+  .container-flow.phone :global(.folder-slot.collapsed) {
     min-height: 7rem;
   }
   @media (max-width: 768px) {

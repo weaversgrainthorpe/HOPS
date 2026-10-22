@@ -4,7 +4,7 @@ import { describe, it, expect } from 'vitest';
 import {
   LAYOUT_VERSION, sizeSpan, folderPage, minimisedPlacement, planCanvas, isRenderable, isPlaced,
   containerMetrics, previewChildren, ROOT_COLUMNS, nodeBox, FOLDER_CHROME, openFolderContentBox, folderPaging,
-  folderFlowMetrics, PAGE_BAR_PX, phoneFolderBox, STACKED_CELL_PX, PHONE_FOLDER_ROWS
+  folderFlowMetrics, PAGE_BAR_PX, phoneTrack, phoneColumnPx, phonePaging, PHONE_TILE_MIN_PX, PHONE_PAGE_RESERVE_PX
 } from './geometry';
 import type { FolderNode, LayoutNode, LayoutTab } from '../types/layout';
 
@@ -156,14 +156,42 @@ describe('folderPaging: one page at a time, a page bar only when there is more t
   });
 });
 
-describe('phone (stacked): the same paging, full width', () => {
-  it('a phone folder is PHONE_FOLDER_ROWS rows of items at STACKED_CELL_PX cells, with room for the page bar', () => {
-    const b = phoneFolderBox(400, 'medium');
-    const item = 2 * STACKED_CELL_PX;
-    expect(b.widthPx).toBe(400);
-    expect(folderPaging(b, 'medium', STACKED_CELL_PX, 1, 0).rowsPerPage).toBe(PHONE_FOLDER_ROWS);
-    expect(folderPaging(b, 'medium', STACKED_CELL_PX, 100, 0).rowsPerPage).toBe(PHONE_FOLDER_ROWS);
-    expect(b.heightPx).toBe(PHONE_FOLDER_ROWS * item + PAGE_BAR_PX);
+describe('phone (stacked): folder items are the phone tab tiles, paged to fit the viewport', () => {
+  it('the phone tab grid per viewport width (ContainerView .container-stacked): column minimum and gap', () => {
+    expect(phoneTrack(390)).toEqual({ minPx: 100, gapPx: 12 });
+    expect(phoneTrack(700)).toEqual({ minPx: 120, gapPx: 12 });
+    expect(phoneTrack(1000)).toEqual({ minPx: 135, gapPx: 14 });
+  });
+  it('a phone tab column: as many as fit the canvas, sharing it (auto-fill, 1fr)', () => {
+    expect(phoneColumnPx(358, { minPx: 100, gapPx: 12 })).toBeCloseTo((358 - 2 * 12) / 3);
+    expect(phoneColumnPx(50, { minPx: 100, gapPx: 12 })).toBe(50);
+  });
+  it('items are the tab tile\'s column wide and its size\'s height; as many a row as fit the folder', () => {
+    const vp = { widthPx: 390, heightPx: 844 };
+    const g = phonePaging(358 - FOLDER_CHROME.padXPx, 358, vp, 'medium', 30, 0);
+    const col = (358 - 24) / 3;
+    expect(g.itemPx).toBeCloseTo(col);
+    expect(g.rowPx).toBe(PHONE_TILE_MIN_PX.medium);
+    expect(g.gapPx).toBe(12);
+    expect(g.perRow).toBe(2); // 340 px < 3 columns + 2 gaps
+    expect(g.pageBar).toBe(true);
+  });
+  it('rows come from a pixel budget so a page fits the viewport — Large included', () => {
+    const vp = { widthPx: 390, heightPx: 844 };
+    for (const size of ['small', 'medium', 'large'] as const) {
+      const g = phonePaging(340, 358, vp, size, 100, 0);
+      const pageH = g.rowsPerPage * g.rowPx + (g.rowsPerPage - 1) * g.gapPx;
+      expect(pageH + PHONE_PAGE_RESERVE_PX, size).toBeLessThanOrEqual(844);
+      expect(g.rowsPerPage, size).toBeGreaterThanOrEqual(1);
+    }
+    expect(phonePaging(340, 358, vp, 'large', 100, 0).rowsPerPage).toBeLessThan(phonePaging(340, 358, vp, 'small', 100, 0).rowsPerPage);
+    // A tiny viewport still shows one row (never zero).
+    expect(phonePaging(340, 358, { widthPx: 390, heightPx: 100 }, 'large', 5, 0).rowsPerPage).toBe(1);
+  });
+  it('the page is clamped as on a tab', () => {
+    const vp = { widthPx: 390, heightPx: 844 };
+    const g = phonePaging(340, 358, vp, 'medium', 3, 9);
+    expect(g).toMatchObject({ page: 0, pages: 1, pageBar: false, start: 0, end: 3 });
   });
 });
 
