@@ -11,12 +11,9 @@ type Obj = map[string]any
 const (
 	// SchemaVersion is the document schema version produced by this package.
 	SchemaVersion = 3
-	// RootColumns is the column count of every grid tab root container
-	// (the finer grid, spec §9; the old form had 12).
+	// RootColumns is the column count of every tab root: every tab is a
+	// 24-column grid (spec §9; layout.go).
 	RootColumns = 24
-	// GridUnit is the document marker value (key "gridUnit") of the finer
-	// grid: one old grid cell is GridUnit × GridUnit cells. See gridupdate.go.
-	GridUnit = 2
 )
 
 // ErrNotV3 is returned when a document is not schemaVersion 3.

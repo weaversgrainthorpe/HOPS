@@ -49,7 +49,7 @@ func VerifyIDs(doc Obj) error {
 
 // VerifyImportedDashboard checks one dashboard of an imported v3 document on
 // its own: non-empty string path, the converter-owned keys (revision, the six
-// settings keys, defaultLayout) and a well-formed tree whose ids are non-empty
+// settings keys) and a well-formed tree in the current layout form whose ids are non-empty
 // and unique within the dashboard. It returns a *VerifyError.
 func VerifyImportedDashboard(d Obj) error {
 	v := &verifier{}
@@ -183,8 +183,9 @@ func Verify(v2, v3 Obj) error { return VerifyMigration(v2, v3, nil) }
 //   - counts match (nothing extra in v3);
 //   - every other v2 key/value on each object equals the v3 object's (child
 //     lists excepted);
-//   - IDs are unique document-wide and the v3 tree is well-formed;
-//   - v3 carries the finer-grid marker gridUnit: GridUnit.
+//   - IDs are unique document-wide and the v3 tree is well-formed and in
+//     the current layout form (see layout.go);
+//   - v3 carries this build's layoutVersion.
 //
 // It returns a *VerifyError listing up to 20 problems.
 func VerifyMigration(v2, v3 Obj, renames []Rename) error {
@@ -192,9 +193,8 @@ func VerifyMigration(v2, v3 Obj, renames []Rename) error {
 	if !IsV3(v3) {
 		v.add("document: schemaVersion is %s, want %d", show(v3["schemaVersion"]), SchemaVersion)
 	}
-	if u, err := GridUnitOf(v3); err != nil || u != GridUnit {
-		// The converter writes the finer grid directly (spec §9).
-		v.add("document: %s is %s, want %d", GridKey, trunc(show(v3[GridKey])), GridUnit)
+	if err := CheckLayoutVersion(v3); err != nil {
+		v.add("document: %s: %v", LayoutVersionKey, err)
 	}
 	v.checkIDs(v3)
 	v.renames = map[string]Rename{}
@@ -208,7 +208,7 @@ func VerifyMigration(v2, v3 Obj, renames []Rename) error {
 	}
 	v.first = firstOccurrence(v2Nodes(v2))
 
-	v.compareKeys("document", v2, v3, "dashboards", "schemaVersion", GridKey)
+	v.compareKeys("document", v2, v3, "dashboards", "schemaVersion", LayoutVersionKey)
 	v2d, ok2 := asList(v2["dashboards"])
 	v3d, ok3 := asList(v3["dashboards"])
 	switch {
@@ -218,9 +218,11 @@ func VerifyMigration(v2, v3 Obj, renames []Rename) error {
 		v.add("document: v3 dashboards is %T, want array", v3["dashboards"])
 	default:
 		v.compareLevel("dashboard", "document", "dashboards", v2d, v3d, "", func(a, b Obj, id, path string) {
-			// revision, settings and defaultLayout are converter-owned:
-			// ConvertDashboardV2 deliberately overwrites any v2 value (Ruling 4),
-			// so skip the equality check but still require them well-formed.
+			// revision and settings are converter-owned: ConvertDashboardV2
+			// deliberately overwrites any v2 value (Ruling 4), so skip the
+			// equality check but still require them well-formed. A v2
+			// defaultLayout is dropped (every tab is a grid tab; checkIDs
+			// requires it gone).
 			// perTabBackgrounds is retired into the tabs' background form
 			// (checked per tab in compareTabs) and must be gone.
 			v.compareKeys("dashboard "+id, a, b, "tabs", "revision", "settings", "defaultLayout", legacyPerTabKey)
@@ -253,7 +255,9 @@ func (v *verifier) compareTabs(dashID, dashPath string, a, b Obj) {
 	v.compareLevel("tab", "dashboard "+dashID, dashPath+".tabs", v2t, v3t, "", func(ta, tb Obj, tid, tpath string) {
 		// The background is v2's, plus inherit:true when the dashboard's
 		// perTabBackgrounds was off; nothing else about it may differ.
-		v.compareKeys("tab "+tid, ta, tb, "groups", "background", legacyEnabledKey)
+		// A tab's layout and designWidth are dropped (every tab is a grid
+		// tab; checkIDs requires them gone).
+		v.compareKeys("tab "+tid, ta, tb, "groups", "background", legacyEnabledKey, "layout", "designWidth")
 		if _, has := tb[legacyEnabledKey]; has {
 			v.add("tab %q: key %q is still present", tid, legacyEnabledKey)
 		}
@@ -265,7 +269,8 @@ func (v *verifier) compareTabs(dashID, dashPath string, a, b Obj) {
 			return // reported by checkIDs
 		}
 		v.compareLevel("group", "tab "+tid, tpath+".groups", v2g, v3g, "folder", func(ga, gb Obj, gid, gpath string) {
-			v.compareKeys("group "+gid, ga, gb, "entries")
+			// A folder has no layout of its own (M5; checkIDs requires it gone).
+			v.compareKeys("group "+gid, ga, gb, "entries", "layout")
 			v2e, _ := asList(ga["entries"])
 			content, _ := gb["content"].(Obj)
 			v3e, ok := asList(content["children"])
@@ -300,9 +305,6 @@ func (v *verifier) checkOwned(id string, d Obj) {
 				v.add("dashboard %q: settings is missing key %q", id, k)
 			}
 		}
-	}
-	if _, ok := d["defaultLayout"].(string); !ok {
-		v.add("dashboard %q: key \"defaultLayout\" is %s, want a string", id, show(d["defaultLayout"]))
 	}
 }
 
@@ -417,7 +419,8 @@ next:
 }
 
 // checkIDs walks the whole v3 tree, enforcing document-wide ID uniqueness and
-// reporting every malformed node instead of skipping it.
+// the current layout form (layout.go), and reporting every malformed node
+// instead of skipping it.
 func (v *verifier) checkIDs(doc Obj) {
 	seen := map[string]string{}
 	dash := "" // id of the dashboard being walked, named in duplicate reports
@@ -452,6 +455,7 @@ func (v *verifier) checkIDs(doc Obj) {
 		dn := note(fmt.Sprintf("dashboard[%d]", i), dm)
 		dash, _ = dm["id"].(string)
 		v.checkBackground(dn, dm)
+		v.noKeys(dn, dm, "defaultLayout", legacyPerTabKey)
 		tabs, ok := asList(dm["tabs"])
 		if !ok {
 			v.add("%s: tabs is %T, want array", dn, dm["tabs"])
@@ -465,24 +469,42 @@ func (v *verifier) checkIDs(doc Obj) {
 			}
 			tn := note(fmt.Sprintf("tab[%d]", j), tm)
 			v.checkBackground(tn, tm)
+			v.noKeys(tn, tm, "layout", "designWidth", legacyEnabledKey)
 			root, ok := tm["root"].(Obj)
 			if !ok {
 				v.add("%s: root is %T, want object", tn, tm["root"])
 				continue
 			}
-			v.checkContainer(tn, root, note)
+			if n, ok := numberValue(root["columns"]); !ok || n != RootColumns {
+				v.add("%s: root columns is %s, want %d (every tab is a %d-column grid)", tn, trunc(show(root["columns"])), RootColumns, RootColumns)
+			}
+			v.checkContainer(tn, root, note, true)
+		}
+	}
+}
+
+// noKeys reports each of keys that o carries: settings of the removed free
+// layout and per-container grids (M5) and the retired per-tab background
+// switches (M4), which the current form never has.
+func (v *verifier) noKeys(where string, o Obj, keys ...string) {
+	for _, k := range keys {
+		if _, has := o[k]; has {
+			v.add("%s: key %q is not part of the current layout form (layout version %d)", where, k, LayoutVersion)
 		}
 	}
 }
 
 // checkContainer checks every child of c: each is a tile or a folder (any
 // mix, any depth, per the v3 tree), and a folder's content is checked in turn.
-func (v *verifier) checkContainer(owner string, c Obj, note func(string, Obj) string) {
+// A tab root's children are placed on the grid (checkTabPlacement, then
+// checkOverlaps); a folder's children are an ordered list with no placement.
+func (v *verifier) checkContainer(owner string, c Obj, note func(string, Obj) string, tabLevel bool) {
 	kids, ok := asList(c["children"])
 	if !ok {
 		v.add("%s: children is %T, want array", owner, c["children"])
 		return
 	}
+	var boxes []placedBox
 	for i, k := range kids {
 		km, ok := k.(Obj)
 		if !ok {
@@ -490,35 +512,102 @@ func (v *verifier) checkContainer(owner string, c Obj, note func(string, Obj) st
 			continue
 		}
 		n := note(fmt.Sprintf("%s child[%d]", owner, i), km)
-		v.checkPlacement(n, km["placement"])
+		if tabLevel {
+			if b, ok := v.checkTabPlacement(n, km); ok {
+				boxes = append(boxes, b)
+			}
+		} else if _, has := km["placement"]; has {
+			v.add("%s: has a placement inside a folder, want none (folder contents are an ordered list)", n)
+		}
 		switch km["kind"] {
 		case "tile":
+			if _, ok := SizeSpan(km["size"]); !ok {
+				v.add("%s: size is %s, want \"small\", \"medium\" or \"large\"", n, trunc(show(km["size"])))
+			}
 		case "folder":
 			v.checkBackground(n, km)
+			v.noKeys(n, km, "layout")
+			for _, k := range []string{"size", "contentSize"} {
+				if s, _ := km[k].(string); sizeSpans[s] == 0 {
+					v.add("%s: %s is %s, want \"small\", \"medium\" or \"large\"", n, k, trunc(show(km[k])))
+				}
+			}
 			content, ok := km["content"].(Obj)
 			if !ok {
 				v.add("%s: content is %T, want object", n, km["content"])
 				continue
 			}
-			v.checkContainer(n, content, note)
+			v.noKeys(n+" content", content, "columns")
+			v.checkContainer(n, content, note, false)
 		default:
 			v.add("%s: kind is %s, want \"tile\" or \"folder\"", n, show(km["kind"]))
 		}
 	}
+	if tabLevel {
+		v.checkOverlaps(owner, boxes)
+	}
 }
 
-// checkPlacement requires a placement object with finite numeric x, y, w and
-// h: the editor and the renderer position by it, so a node
-// without one could not be shown (Ruling 24).
-func (v *verifier) checkPlacement(n string, p any) {
-	pm, ok := p.(Obj)
+// placedBox is a tab-level item's cells, for the overlap check.
+type placedBox struct {
+	name       string
+	x, y, w, h float64
+}
+
+// checkTabPlacement requires a tab-level item's placement to be whole cells
+// inside the RootColumns grid (Ruling 24: the editor and renderer position by
+// it), and a tile's span to be exactly its size's: Small 1×1, Medium 2×2 or
+// Large 4×4 (a missing size is Medium). It returns the box when it is usable
+// for the overlap check.
+func (v *verifier) checkTabPlacement(n string, node Obj) (placedBox, bool) {
+	pm, ok := node["placement"].(Obj)
 	if !ok {
-		v.add("%s: placement is %s, want an object with numeric x, y, w, h", n, trunc(show(p)))
-		return
+		v.add("%s: placement is %s, want an object with numeric x, y, w, h", n, trunc(show(node["placement"])))
+		return placedBox{}, false
 	}
-	for _, k := range []string{"x", "y", "w", "h"} {
+	var f [4]float64
+	good := true
+	for i, k := range []string{"x", "y", "w", "h"} {
 		if !finiteNumber(pm[k]) {
 			v.add("%s: placement.%s is %s, want a finite number", n, k, trunc(show(pm[k])))
+			good = false
+			continue
+		}
+		f[i], _ = numberValue(pm[k])
+		if f[i] != math.Trunc(f[i]) {
+			v.add("%s: placement.%s is %v, want a whole number of grid cells", n, k, f[i])
+			good = false
+		}
+	}
+	if !good {
+		return placedBox{}, false
+	}
+	b := placedBox{n, f[0], f[1], f[2], f[3]}
+	if b.x < 0 || b.y < 0 || b.w < 1 || b.h < 1 || b.x+b.w > RootColumns {
+		v.add("%s: placement %s is outside the %d-column grid", n, trunc(show(pm)), RootColumns)
+		return placedBox{}, false
+	}
+	if node["kind"] == "tile" {
+		if s, ok := SizeSpan(node["size"]); ok && (b.w != float64(s) || b.h != float64(s)) {
+			v.add("%s: span is %v×%v, want %d×%d for size %s (tiles are Small 1×1, Medium 2×2 or Large 4×4)", n, b.w, b.h, s, s, trunc(show(node["size"])))
+		}
+	}
+	return b, true
+}
+
+// checkOverlaps reports tab-level items whose cells overlap (at most a few).
+// Tab-level item counts are bounded by MaxDashboardNodes, so the pairwise
+// scan is bounded too.
+func (v *verifier) checkOverlaps(owner string, boxes []placedBox) {
+	reported := 0
+	for i := 0; i < len(boxes) && reported < 3; i++ {
+		a := boxes[i]
+		for j := i + 1; j < len(boxes) && reported < 3; j++ {
+			b := boxes[j]
+			if a.x < b.x+b.w && b.x < a.x+a.w && a.y < b.y+b.h && b.y < a.y+a.h {
+				v.add("%s and %s overlap", a.name, b.name)
+				reported++
+			}
 		}
 	}
 }

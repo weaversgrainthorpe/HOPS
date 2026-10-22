@@ -496,7 +496,7 @@ func promoteInto(stored configdoc.Obj, t *promoteTarget, results []*discovery.Re
 		}
 		dash = configdoc.Obj{
 			"id": id, "name": name, "path": path, "revision": 0, "order": nextOrder(stored),
-			"settings": settings, "defaultLayout": "grid", "tabs": []any{},
+			"settings": settings, "tabs": []any{},
 		}
 		stored["dashboards"] = append(list, dash)
 	} else {
@@ -512,31 +512,25 @@ func promoteInto(stored configdoc.Obj, t *promoteTarget, results []*discovery.Re
 			return nil, nil, ae
 		}
 		tabs, _ := dash["tabs"].([]any)
-		dash["tabs"] = append(tabs, configdoc.Obj{
-			"id": id, "name": strings.TrimSpace(t.NewTab.Name), "layout": "inherit",
-			"root": configdoc.Obj{"columns": configdoc.RootColumns, "children": []any{}},
-		})
+		dash["tabs"] = append(tabs, newTab(id, strings.TrimSpace(t.NewTab.Name)))
 		tabID = id
 	}
 	tab := findTab(dash, tabID)
 	if tab == nil {
 		return nil, nil, bad("Tab %q not found in dashboard %s. Reload and try again.", tabID, dashboardLabel(dash))
 	}
-	side := freeSideOf(tab)
-	var warnings []string
 	if t.FolderID != "" {
-		container, mode, ae := resolveTarget(dash, tabID, t.FolderID)
-		if ae != nil {
+		// Into the picked folder: appended to its ordered list. Folders page
+		// their contents (M5), so nothing is resized or moved.
+		container, tabLevel, ae := resolveTarget(dash, tabID, t.FolderID)
+		if ae != nil || tabLevel {
 			return nil, nil, bad("Folder %q not found in that tab. Reload and try again.", t.FolderID)
 		}
-		if ae := addTiles(container, mode, side, results); ae != nil {
+		if ae := addTiles(container, results); ae != nil {
 			return nil, nil, ae
 		}
-		if w := fitFolderChain(dash, tabID, t.FolderID, side); w != "" {
-			warnings = append(warnings, w)
-		}
 	} else {
-		root, rootMode, ae := resolveTarget(dash, tabID, "")
+		root, _, ae := resolveTarget(dash, tabID, "")
 		if ae != nil {
 			return nil, nil, ae
 		}
@@ -556,25 +550,20 @@ func promoteInto(stored configdoc.Obj, t *promoteTarget, results []*discovery.Re
 		for _, cat := range cats {
 			info := discovery.CategoryInfoFor(cat)
 			if f := rootFolderNamed(root, info.DisplayName); f != nil {
-				fid, _ := f["id"].(string)
-				content, mode, ae := resolveTarget(dash, tabID, fid)
-				if ae != nil {
+				content, _ := f["content"].(configdoc.Obj)
+				if ae := addTiles(content, byCat[cat]); ae != nil {
 					return nil, nil, ae
-				}
-				if ae := addTiles(content, mode, side, byCat[cat]); ae != nil {
-					return nil, nil, ae
-				}
-				if w := fitFolderChain(dash, tabID, fid, side); w != "" {
-					warnings = append(warnings, w)
 				}
 				continue
 			}
-			f, ae := newCategoryFolder(info, rootMode, side, byCat[cat])
+			f, ae := newCategoryFolder(info, byCat[cat])
 			if ae != nil {
 				return nil, nil, ae
 			}
-			fp, _ := f["placement"].(configdoc.Obj)
-			f["placement"] = newFreeSpaceCols(root, containerCols(root, rootMode, tab), freeCellBudget).place(fp, rootMode)
+			p, _ := f["placement"].(configdoc.Obj)
+			w, _ := toFloat(p["w"])
+			h, _ := toFloat(p["h"])
+			f["placement"] = newFreeSpace(root, freeCellBudget).place(w, h, p)
 			kids, _ := root["children"].([]any)
 			root["children"] = append(kids, f)
 		}
@@ -595,9 +584,6 @@ func promoteInto(stored configdoc.Obj, t *promoteTarget, results []*discovery.Re
 	}
 	path, _ := dash["path"].(string)
 	resp := map[string]interface{}{"promoted": len(results), "dashboardPath": path, "dashboardId": dash["id"]}
-	if len(warnings) > 0 {
-		resp["warning"] = strings.Join(warnings, " ")
-	}
 	return stored, resp, nil
 }
 
@@ -618,180 +604,48 @@ func rootFolderNamed(root configdoc.Obj, name string) configdoc.Obj {
 	return nil
 }
 
-// addTiles appends one tile per result to a folder's content (in mode), each
-// at the first free cell and Medium-sized: GridUnit x GridUnit cells (2 x 2)
-// in a grid, that many grid cells square (GridUnit·side units, rounded to
-// whole units) in a free container.
-func addTiles(container configdoc.Obj, mode string, side float64, results []*discovery.Result) *apiError {
-	size := float64(configdoc.GridUnit)
-	if mode == "free" {
-		size = math.Round(configdoc.GridUnit * side)
-	}
-	space := newFreeSpace(container, freeCellBudget)
+// addTiles appends one tile per result to a folder's content, in result
+// order. Folder contents are an ordered list with no placements (M5).
+func addTiles(content configdoc.Obj, results []*discovery.Result) *apiError {
 	for _, res := range results {
 		tile, ae := resultToTile(res)
 		if ae != nil {
 			return ae
 		}
-		tile["placement"] = space.place(configdoc.Obj{"w": size, "h": size}, mode)
-		kids, _ := container["children"].([]any)
-		container["children"] = append(kids, tile)
+		delete(tile, "placement")
+		kids, _ := content["children"].([]any)
+		content["children"] = append(kids, tile)
 	}
 	return nil
 }
 
-// promoteTilesPerRow is how many tiles a folder promote creates holds per
-// row; its content is promoteTilesPerRow Medium tiles wide.
+// promoteTilesPerRow is how many Medium tiles wide the box of a folder that
+// promote creates is.
 const promoteTilesPerRow = 4
 
-// promoteFolderColumns is the content width of a folder promote creates, in
-// grid cells (4 Medium tiles of GridUnit cells each).
-const promoteFolderColumns = promoteTilesPerRow * configdoc.GridUnit
-
-// newCategoryFolder builds the folder for one category holding its tiles. In a
-// grid tab it inherits the layout; in a free tab it keeps its own grid layout
-// so its tiles stay grid cells (Medium, 2 x 2). Its placement carries only the size (the
-// caller places it).
-func newCategoryFolder(info discovery.CategoryInfo, rootMode string, side float64, results []*discovery.Result) (configdoc.Obj, *apiError) {
+// newCategoryFolder builds the folder for one category holding its tiles: a
+// Medium folder with Medium contents whose open box is promoteTilesPerRow
+// Medium tiles wide and tall enough for its tiles plus the title row. Its
+// placement carries only the size (the caller places it).
+func newCategoryFolder(info discovery.CategoryInfo, results []*discovery.Result) (configdoc.Obj, *apiError) {
 	id, ae := newNodeID("folder")
 	if ae != nil {
 		return nil, ae
 	}
-	layout := "inherit"
-	if rootMode == "free" {
-		layout = "grid"
-	}
-	content := configdoc.Obj{"columns": promoteFolderColumns, "children": []any{}}
-	if ae := addTiles(content, "grid", side, results); ae != nil {
+	content := configdoc.Obj{"children": []any{}}
+	if ae := addTiles(content, results); ae != nil {
 		return nil, ae
 	}
-	// The content's bottom in grid cells: GridUnit cells per tile row.
-	bottom := math.Ceil(float64(len(results))/promoteTilesPerRow) * configdoc.GridUnit
-	w := float64(promoteFolderColumns)
-	h, _ := folderNeed("grid", "grid", bottom, side) // + the title row
-	if rootMode == "free" {
-		// side units per grid cell (rounded to whole units), plus the title.
-		w = math.Round(w * side)
-		h, _ = folderNeed(rootMode, "grid", bottom, side)
-	}
+	medium, _ := configdoc.SizeSpan("medium")
+	w := float64(promoteTilesPerRow * medium)
+	h := math.Ceil(float64(len(results))/promoteTilesPerRow)*float64(medium) + configdoc.FolderTitleRows
 	return configdoc.Obj{
 		"id": id, "kind": "folder", "name": info.DisplayName, "icon": info.Icon,
-		"layout": layout, "display": "expanded", "shape": "rounded", "showTitle": true,
+		"size": "medium", "contentSize": "medium",
+		"display": "expanded", "shape": "rounded", "showTitle": true,
 		"placement": configdoc.Obj{"x": 0, "y": 0, "w": w, "h": h},
 		"content":   content,
 	}, nil
-}
-
-// fitFolderChain grows the folder folderID (and then each enclosing folder)
-// so it is tall enough for its content, moving the items below it in the same
-// container down by the same amount so nothing overlaps. Only a container
-// and its folder's content of the same mode can be sized this way; otherwise
-// a warning is returned for the response (never silently left too small).
-func fitFolderChain(dash configdoc.Obj, tabID, folderID string, side float64) string {
-	tab := findTab(dash, tabID)
-	root, _ := tab["root"].(configdoc.Obj)
-	_, rootMode, ae := resolveTarget(dash, tabID, "")
-	if ae != nil {
-		return ""
-	}
-	// The chain from the root to folderID: (container, mode) of each level.
-	type level struct {
-		folder     configdoc.Obj
-		parent     configdoc.Obj
-		parentMode string
-		mode       string
-	}
-	var chain []level
-	var walk func(c configdoc.Obj, mode string) bool
-	walk = func(c configdoc.Obj, mode string) bool {
-		kids, _ := c["children"].([]any)
-		for _, k := range kids {
-			km, ok := k.(configdoc.Obj)
-			if !ok || km["kind"] != "folder" {
-				continue
-			}
-			content, ok := km["content"].(configdoc.Obj)
-			if !ok {
-				continue
-			}
-			m := mode
-			if l, _ := km["layout"].(string); l == "grid" || l == "free" {
-				m = l
-			}
-			chain = append(chain, level{km, c, mode, m})
-			if km["id"] == folderID || walk(content, m) {
-				return true
-			}
-			chain = chain[:len(chain)-1]
-		}
-		return false
-	}
-	if !walk(root, rootMode) {
-		return ""
-	}
-	changed := true // the innermost folder's content just changed
-	for i := len(chain) - 1; i >= 0 && changed; i-- {
-		lv := chain[i]
-		changed = false
-		name, _ := lv.folder["name"].(string)
-		p, _ := lv.folder["placement"].(configdoc.Obj)
-		_, y, _, h, ok := rect(p)
-		content, _ := lv.folder["content"].(configdoc.Obj)
-		bottom := 0.0
-		kids, _ := content["children"].([]any)
-		for _, k := range kids {
-			if km, ok := k.(configdoc.Obj); ok && renderableNode(km) {
-				_, ky, _, kh, _ := rect(km["placement"])
-				bottom = math.Max(bottom, ky+kh)
-			}
-		}
-		need, sizeable := folderNeed(lv.parentMode, lv.mode, bottom, side)
-		if !ok || !sizeable {
-			return fmt.Sprintf("Folder %q may need resizing to show all its tiles.", name)
-		}
-		if need <= h {
-			continue
-		}
-		// Everything at or below the folder's old bottom moves down by the
-		// growth: nothing overlaps afterwards (whatever overlapped the grown
-		// rows started at or below the old bottom).
-		delta, oldBottom := need-h, y+h
-		sibs, _ := lv.parent["children"].([]any)
-		for _, k := range sibs {
-			km, ok := k.(configdoc.Obj)
-			if !ok || isSameObj(km, lv.folder) || !renderableNode(km) {
-				continue
-			}
-			if _, sy, _, _, _ := rect(km["placement"]); sy >= oldBottom {
-				km["placement"].(configdoc.Obj)["y"] = sy + delta
-			}
-		}
-		p["h"] = need
-		changed = true
-	}
-	return ""
-}
-
-// freeTitleUnits is a folder's title bar in free design units (8 px each),
-// the convention mergeIntoNewFolder uses (40 px title + body padding).
-const freeTitleUnits = 8
-
-// folderNeed is the height a folder needs in its parent's units for content
-// reaching down to `bottom` (in the content's units): grid in grid = rows + a
-// title row (configdoc.GridTitleRows cells); free in free = units + an 8-unit
-// title; grid in free = side units per grid row, rounded to whole units, +
-// the title. Free content in a grid
-// parent can't be sized here (a grid row's height depends on the viewport).
-func folderNeed(parentMode, mode string, bottom, side float64) (float64, bool) {
-	switch {
-	case parentMode == "grid" && mode == "grid":
-		return bottom + configdoc.GridTitleRows, true
-	case parentMode == "free" && mode == "free":
-		return bottom + freeTitleUnits, true
-	case parentMode == "free" && mode == "grid":
-		return math.Round(bottom*side) + freeTitleUnits, true
-	}
-	return 0, false
 }
 
 // validatePromoteTarget enforces the "exactly one of ID-or-new" rule for

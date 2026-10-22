@@ -9,8 +9,9 @@ import (
 	"github.com/weaversgrainthorpe/HOPS/internal/configdoc"
 )
 
-// addShowcase stores the Showcase dashboard s1 (a free tab with a tile at its
-// root) after the existing ones, directly in the stored document.
+// addShowcase stores the Showcase dashboard s1 (a grid tab with a Large tile
+// at its root and a folder holding a sub-folder) after the existing ones,
+// directly in the stored document.
 func addShowcase(t *testing.T, db *sql.DB) {
 	t.Helper()
 	doc := storedDoc(t, db)
@@ -18,15 +19,16 @@ func addShowcase(t *testing.T, db *sql.DB) {
 	if err := json.Unmarshal([]byte(`{
 		"id": "s1", "name": "Showcase", "path": "/showcase", "revision": 3,
 		"settings": {"statusChecksEnabled": null, "statusCheckIntervalMinutes": null, "statusCheckTimeoutSeconds": null,
-			"editIdleTimeoutMinutes": null, "animatedFolderBackgrounds": null, "defaultLayout": null}, "defaultLayout": "free",
-		"tabs": [{"id": "s1-t1", "name": "Free", "layout": "free", "designWidth": 1280,
-			"root": {"columns": 12, "children": [
-				{"id": "s1-e1", "kind": "tile", "name": "Big", "url": "http://big", "placement": {"x": 3, "y": 5, "w": 30, "h": 20, "z": 2}},
-				{"id": "s1-f1", "kind": "folder", "name": "Outer", "layout": "inherit", "display": "expanded", "shape": "rounded", "showTitle": true,
-				 "placement": {"x": 40, "y": 0, "w": 20, "h": 20},
-				 "content": {"columns": 2, "children": [
-					{"id": "s1-f2", "kind": "folder", "name": "Inner", "placement": {"x": 0, "y": 0, "w": 1, "h": 1},
-					 "content": {"columns": 1, "children": []}}]}}]}}]}`), &s1); err != nil {
+			"editIdleTimeoutMinutes": null, "animatedFolderBackgrounds": null, "defaultLayout": null},
+		"tabs": [{"id": "s1-t1", "name": "Grid",
+			"root": {"columns": 24, "children": [
+				{"id": "s1-e1", "kind": "tile", "name": "Big", "url": "http://big", "size": "large", "placement": {"x": 3, "y": 5, "w": 4, "h": 4, "z": 2}},
+				{"id": "s1-f1", "kind": "folder", "name": "Outer", "display": "expanded", "shape": "rounded", "showTitle": true,
+				 "size": "medium", "contentSize": "medium",
+				 "placement": {"x": 10, "y": 0, "w": 8, "h": 6},
+				 "content": {"children": [
+					{"id": "s1-f2", "kind": "folder", "name": "Inner", "size": "medium", "contentSize": "small",
+					 "content": {"children": []}}]}}]}}]}`), &s1); err != nil {
 		t.Fatal(err)
 	}
 	doc["dashboards"] = append(doc["dashboards"].([]any), s1)
@@ -85,7 +87,7 @@ func TestDeleteDashboard(t *testing.T) {
 	if backupCount(t, c) != n+1 {
 		t.Fatal("accepted delete took no pre-update backup")
 	}
-	// Works for the Showcase (free tab, nested folders) too.
+	// Works for the Showcase (nested folders) too.
 	if code, resp := c.do("DELETE", "/api/dashboards/s1?revision=3", nil); code != 200 {
 		t.Fatalf("delete s1: %d %v", code, resp)
 	}
@@ -159,7 +161,7 @@ func TestImport_TakenPathIsRenamed(t *testing.T) {
 		settings[k] = nil
 	}
 	s1["settings"] = settings
-	code, resp := c.importFile(v3ExportOf(t, map[string]interface{}{"dashboards": []interface{}{s1}}))
+	code, resp := c.importFile(v3ExportOf(t, map[string]interface{}{"layoutVersion": 1, "dashboards": []interface{}{s1}}))
 	if code != 200 {
 		t.Fatalf("import: %d %v", code, resp)
 	}
@@ -179,7 +181,7 @@ func TestImport_TakenPathIsRenamed(t *testing.T) {
 	// The same path without its leading slash routes to the same dashboard,
 	// so it is renamed too.
 	s1["path"] = "showcase"
-	if code, resp = c.importFile(v3ExportOf(t, map[string]interface{}{"dashboards": []interface{}{s1}})); code != 200 {
+	if code, resp = c.importFile(v3ExportOf(t, map[string]interface{}{"layoutVersion": 1, "dashboards": []interface{}{s1}})); code != 200 {
 		t.Fatalf("second import: %d %v", code, resp)
 	}
 	for _, d := range dashList(storedDoc(t, db)) {

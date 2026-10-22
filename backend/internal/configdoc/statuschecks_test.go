@@ -170,16 +170,17 @@ func TestEffectiveStatusChecks_InvalidIsOffAndWarnsOnce(t *testing.T) {
 
 func TestVerifyDashboard_StatusChecksTriState(t *testing.T) {
 	mk := func(tabV, folderV, tileSC any) Obj {
-		tile := Obj{"kind": "tile", "id": "x", "placement": Obj{"x": 0, "y": 0, "w": 1, "h": 1}}
+		tile := Obj{"kind": "tile", "id": "x"}
 		if tileSC != "absent" {
 			tile["statusCheck"] = tileSC
 		}
-		folder := Obj{"kind": "folder", "id": "f", "placement": Obj{"x": 0, "y": 0, "w": 1, "h": 1},
-			"content": Obj{"columns": 12, "children": []any{tile}}}
+		folder := Obj{"kind": "folder", "id": "f", "size": "medium", "contentSize": "medium",
+			"placement": Obj{"x": 0, "y": 0, "w": 1, "h": 1},
+			"content":   Obj{"children": []any{tile}}}
 		if folderV != "absent" {
 			folder["statusChecksEnabled"] = folderV
 		}
-		tab := Obj{"id": "t", "root": Obj{"columns": 12, "children": []any{folder}}}
+		tab := Obj{"id": "t", "root": Obj{"columns": RootColumns, "children": []any{folder}}}
 		if tabV != "absent" {
 			tab["statusChecksEnabled"] = tabV
 		}
@@ -219,7 +220,7 @@ func TestVerifyDashboard_StatusChecksTriState(t *testing.T) {
 // (tabs filled in by the caller).
 func validDashboardForStatusTest() Obj {
 	return Obj{
-		"id": "d", "name": "D", "path": "/d", "revision": float64(1), "defaultLayout": "grid",
+		"id": "d", "name": "D", "path": "/d", "revision": float64(1),
 		"settings": Obj{
 			"statusChecksEnabled": nil, "statusCheckIntervalMinutes": nil, "statusCheckTimeoutSeconds": nil,
 			"editIdleTimeoutMinutes": nil, "animatedFolderBackgrounds": nil, "defaultLayout": nil,

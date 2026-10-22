@@ -231,7 +231,7 @@ func TestMigrateWithBackup_BackupFailureBlocksMigration(t *testing.T) {
 
 func TestMigrateWithBackup_V3NoSyncBackup(t *testing.T) {
 	db := newStoreDB(t)
-	if err := Save(db, Obj{"dashboards": []any{}}); err != nil {
+	if err := Save(db, Obj{LayoutVersionKey: LayoutVersion, "dashboards": []any{}}); err != nil {
 		t.Fatal(err)
 	}
 	called := false

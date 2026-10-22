@@ -27,7 +27,7 @@ func TestGetConfig_IsTheV3Document(t *testing.T) {
 	addShowcase(t, db)
 	v := getView(t, c)
 	for k := range v {
-		if k != "schemaVersion" && k != "dashboards" && k != configdoc.GridKey { // Ruling 3: gridUnit is served
+		if k != "schemaVersion" && k != "dashboards" && k != configdoc.LayoutVersionKey { // the layout-form marker is served
 			t.Errorf("unexpected top-level key %q in GET /api/config", k)
 		}
 	}
@@ -156,8 +156,9 @@ func contentKids(f configdoc.Obj) []any {
 }
 
 // Promote into an existing folder two levels deep: every tile lands there,
-// as a v3 tile with a placement inside that folder's grid, the target's
-// revision is bumped, and no other dashboard changes.
+// appended in result order to its ordered list (no placements), the target's
+// revision is bumped, nothing is resized or moved (folders page, M5), and no
+// other dashboard changes.
 func TestPromote_IntoExistingFolderAtDepth2(t *testing.T) {
 	router, db := setupTestRouter(t)
 	c := newClient(t, router)
@@ -173,20 +174,19 @@ func TestPromote_IntoExistingFolderAtDepth2(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	// d1 has folder g1 at the root; put folder g2 inside it (depth 2).
+	// d1 has folder g1 at the root; put folder g2 (holding one tile) inside
+	// it (depth 2), followed by a tile.
 	doc := storedDoc(t, db)
 	g1 := findOne(storedDashboards(doc)["d1"], "g1")
-	// g2 is only its title row tall (too short for any tile); a tile sits
-	// right below it. Finer grid (spec §9): the title row is 2 cells, tiles 2x2.
 	g1["content"].(configdoc.Obj)["children"] = append(contentKids(g1), configdoc.Obj{
-		"id": "g2", "kind": "folder", "name": "Deep", "display": "expanded", "layout": "inherit",
-		"placement": configdoc.Obj{"x": 0, "y": 2, "w": 6, "h": 2},
-		"content":   configdoc.Obj{"columns": 6, "children": []any{}},
-	}, configdoc.Obj{"id": "below", "kind": "tile", "name": "Below", "url": "http://b",
-		"placement": configdoc.Obj{"x": 0, "y": 4, "w": 2, "h": 2}})
+		"id": "g2", "kind": "folder", "name": "Deep", "display": "expanded",
+		"size": "medium", "contentSize": "medium",
+		"content": configdoc.Obj{"children": []any{configdoc.Obj{"id": "first", "kind": "tile", "name": "First"}}},
+	}, configdoc.Obj{"id": "below", "kind": "tile", "name": "Below", "url": "http://b"})
 	if err := configdoc.Save(db, doc); err != nil {
 		t.Fatal(err)
 	}
+	g1Box := jsonStr(g1["placement"])
 	n := backupCount(t, c)
 
 	code, resp := c.do("POST", "/api/discovery/scans/"+scanID+"/promote", map[string]interface{}{
@@ -196,6 +196,9 @@ func TestPromote_IntoExistingFolderAtDepth2(t *testing.T) {
 	if code != 200 || resp["promoted"] != float64(2) {
 		t.Fatalf("promote: %d %v", code, resp)
 	}
+	if _, has := resp["warning"]; has {
+		t.Errorf("unexpected warning: %v", resp["warning"])
+	}
 	if backupCount(t, c) != n+1 {
 		t.Fatal("accepted promote took no backup")
 	}
@@ -203,41 +206,25 @@ func TestPromote_IntoExistingFolderAtDepth2(t *testing.T) {
 	if d1["revision"] != float64(2) {
 		t.Fatalf("d1 revision = %v, want 2", d1["revision"])
 	}
-	g2 := findOne(d1, "g2")
-	kids := contentKids(g2)
-	if len(kids) != 2 {
-		t.Fatalf("g2 children = %v", kids)
-	}
-	seen := map[[2]float64]bool{}
+	assertM5Dashboard(t, d1)
+	kids := contentKids(findOne(d1, "g2"))
+	var names []string
 	for _, k := range kids {
 		tile := k.(configdoc.Obj)
-		p, _ := tile["placement"].(configdoc.Obj)
-		// Finer grid (spec §9): a promoted tile is Medium, 2x2 cells.
-		if tile["kind"] != "tile" || p == nil || p["w"] != float64(2) || p["h"] != float64(2) {
-			t.Fatalf("not a 2x2 v3 tile: %v", tile)
-		}
-		if x := p["x"].(float64); x < 0 || x+2 > 6 {
-			t.Fatalf("tile outside g2's 6 columns: %v", p)
-		}
-		at := [2]float64{p["x"].(float64), p["y"].(float64)}
-		if seen[at] {
-			t.Fatalf("two tiles at %v", at)
-		}
-		seen[at] = true
-		if id, _ := tile["id"].(string); !strings.HasPrefix(id, "tile-") {
+		names = append(names, tile["name"].(string))
+		if id, _ := tile["id"].(string); id != "first" && !strings.HasPrefix(id, "tile-") {
 			t.Fatalf("tile id %q", id)
 		}
 	}
-	// g2 grew to fit its tiles plus its title row; the tile below it moved
-	// down by the same amount, and g1 grew to hold it all.
-	if _, _, _, h, _ := rect(g2["placement"]); h != 4 {
-		t.Fatalf("g2 h = %v, want 4 (one 2-cell tile row + 2-cell title)", h)
+	if strings.Join(names, ",") != "First,Thing,Other thing" {
+		t.Fatalf("g2 children = %v, want the existing tile then the results in order", names)
 	}
-	if _, y, _, _, _ := rect(findOne(d1, "below")["placement"]); y != 6 {
-		t.Fatalf("tile below g2 at y=%v, want 6", y)
+	// Nothing grew or moved: folders page their contents.
+	if jsonStr(findOne(d1, "g1")["placement"]) != g1Box {
+		t.Fatalf("g1 box changed: %v", findOne(d1, "g1")["placement"])
 	}
-	if _, _, _, h, _ := rect(findOne(d1, "g1")["placement"]); h != 10 {
-		t.Fatalf("g1 h = %v, want 10 (content bottom 8 + 2-cell title)", h)
+	if got := contentKids(findOne(d1, "g1")); len(got) != 3 || got[2].(configdoc.Obj)["id"] != "below" {
+		t.Fatalf("g1 children changed: %v", got)
 	}
 	// No new folders anywhere: tiles went where they were asked to.
 	if got := len(rootOf(map[string]interface{}{"tabs": d1["tabs"]})["children"].([]interface{})); got != 1 {
@@ -245,9 +232,6 @@ func TestPromote_IntoExistingFolderAtDepth2(t *testing.T) {
 	}
 	if storedDashJSON(t, db, "s1") != s1Before {
 		t.Fatal("promote changed another dashboard")
-	}
-	if err := configdoc.VerifyDashboard(d1); err != nil {
-		t.Fatalf("stored dashboard does not verify: %v", err)
 	}
 }
 
@@ -284,7 +268,7 @@ func TestPromote_FolderPerCategoryOnShowcase(t *testing.T) {
 	if len(contentKids(folder)) != 1 {
 		t.Fatalf("folder tiles: %v", contentKids(folder))
 	}
-	// Placed clear of the Showcase's existing items (free tab: no overlap).
+	// Placed clear of the Showcase's existing items (no overlap).
 	fx, fy, fw, fh, _ := rect(folder["placement"])
 	for _, k := range root["children"].([]interface{}) {
 		m := k.(configdoc.Obj)
@@ -382,12 +366,10 @@ func TestPromote_NewDashboardIsV3(t *testing.T) {
 			nd = d
 		}
 	}
-	if nd == nil || nd["revision"] != float64(1) || nd["defaultLayout"] != "grid" {
+	if nd == nil || nd["revision"] != float64(1) {
 		t.Fatalf("new dashboard: %v", nd)
 	}
-	if err := configdoc.VerifyDashboard(nd); err != nil {
-		t.Fatalf("new dashboard does not verify: %v", err)
-	}
+	assertM5Dashboard(t, nd)
 	tab := nd["tabs"].([]any)[0].(configdoc.Obj)
 	if tab["name"] != "Services" || tab["root"] == nil {
 		t.Fatalf("new tab: %v", tab)

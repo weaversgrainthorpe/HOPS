@@ -49,7 +49,7 @@ func TestGetConfig_MigrationNoticesAfterRenamingMigration(t *testing.T) {
 	// A dashboard save that echoes the notices strips them: never stored.
 	d := v["dashboards"].([]interface{})[0].(map[string]interface{})
 	d["migrationNotices"] = v["migrationNotices"]
-	if code, r := c.do("PUT", "/api/dashboards/"+d["id"].(string), map[string]interface{}{"schema": 3, "dashboard": d, "revision": d["revision"], "gridUnit": 2}); code != 200 {
+	if code, r := c.do("PUT", "/api/dashboards/"+d["id"].(string), map[string]interface{}{"schema": 3, "dashboard": d, "revision": d["revision"], "layoutVersion": 1}); code != 200 {
 		t.Fatalf("PUT: %d %v", code, r)
 	}
 	if strings.Contains(storedRaw(db), "migrationNotices") {

@@ -30,11 +30,18 @@ func v3Body(t *testing.T, c *apiClient, id string) map[string]interface{} {
 }
 
 func v3Put(c *apiClient, id string, d map[string]interface{}, rev interface{}) (int, map[string]interface{}) {
-	return c.do("PUT", "/api/dashboards/"+id, map[string]interface{}{"schema": 3, "dashboard": d, "revision": rev, "gridUnit": 2})
+	return c.do("PUT", "/api/dashboards/"+id, map[string]interface{}{"schema": 3, "dashboard": d, "revision": rev, "layoutVersion": 1})
 }
 
+// inFolder strips n's placement: folder contents are an ordered list (M5).
+func inFolder(n map[string]interface{}) map[string]interface{} {
+	delete(n, "placement")
+	return n
+}
+
+// tileJSON is a Small (1×1) tab-level tile at cell x, y.
 func tileJSON(id string, x, y int) map[string]interface{} {
-	return map[string]interface{}{"id": id, "kind": "tile", "name": id, "url": "http://x",
+	return map[string]interface{}{"id": id, "kind": "tile", "name": id, "url": "http://x", "size": "small",
 		"placement": map[string]interface{}{"x": x, "y": y, "w": 1, "h": 1}}
 }
 
@@ -201,12 +208,13 @@ func TestCreateDashboard(t *testing.T) {
 	}
 	id := resp["id"].(string)
 	d := storedDashboards(storedDoc(t, db))[id]
-	if d == nil || d["name"] != "Fresh" || d["path"] != "/fresh" || d["defaultLayout"] != "grid" {
+	if d == nil || d["name"] != "Fresh" || d["path"] != "/fresh" {
 		t.Fatalf("stored: %v", d)
 	}
+	assertM5Dashboard(t, d)
 	tabs := d["tabs"].([]any)
 	tab := tabs[0].(configdoc.Obj)
-	if len(tabs) != 1 || tab["name"] != "Home" || tab["layout"] != "inherit" {
+	if len(tabs) != 1 || tab["name"] != "Home" {
 		t.Fatalf("tabs: %v", tabs)
 	}
 	for _, v := range d["settings"].(configdoc.Obj) {
@@ -273,7 +281,7 @@ func TestOrderDashboards(t *testing.T) {
 func transferBody(m map[string]interface{}) map[string]interface{} {
 	b := map[string]interface{}{"mode": "copy", "sourceId": "d1", "sourceRevision": 1,
 		"nodeIds": []string{"e1"}, "targetId": "d2", "targetRevision": 1,
-		"target": map[string]interface{}{"tabId": "t2"}, "gridUnit": 2}
+		"target": map[string]interface{}{"tabId": "t2"}, "layoutVersion": 1}
 	for k, v := range m {
 		b[k] = v
 	}
@@ -387,8 +395,9 @@ func TestTransfer_CopyFolderGetsFreshIDsForDescendants(t *testing.T) {
 	d := v3Body(t, c, "d1")
 	rootOf(d)["children"] = append(rootOf(d)["children"].([]interface{}), map[string]interface{}{
 		"id": "fold1", "kind": "folder", "name": "F", "display": "expanded",
+		"size": "medium", "contentSize": "medium",
 		"placement": map[string]interface{}{"x": 0, "y": 9, "w": 2, "h": 2},
-		"content":   map[string]interface{}{"columns": 2, "children": []interface{}{tileJSON("inner1", 0, 0)}}})
+		"content":   map[string]interface{}{"children": []interface{}{inFolder(tileJSON("inner1", 0, 0))}}})
 	if code, r := v3Put(c, "d1", d, 1); code != 200 {
 		t.Fatalf("%d %v", code, r)
 	}
@@ -532,8 +541,8 @@ func TestReservedIDs_MigrationRenamesWithNotice(t *testing.T) {
 	}
 }
 
-// Pathological container: many small tiles, then big tiles covering the early
-// cells last in child order, then a large grid transfer. Must stay fast.
+// Pathological container: many small tiles, then a huge folder box below them,
+// then a large grid transfer. Must stay fast (the free-cell budget).
 func TestTransfer_PathologicalContainerIsBounded(t *testing.T) {
 	router, db := setupTestRouter(t)
 	c := newClient(t, router)
@@ -542,7 +551,7 @@ func TestTransfer_PathologicalContainerIsBounded(t *testing.T) {
 	d := v3Body(t, c, "d1")
 	kids := []interface{}{}
 	for i := 0; i < 2500; i++ { // source: 2500 tiles to transfer
-		kids = append(kids, tileJSON(fmt.Sprintf("s%d", i), i%12, i/12))
+		kids = append(kids, tileJSON(fmt.Sprintf("s%d", i), i%24, i/24))
 	}
 	rootOf(d)["children"] = kids
 	if code, r := v3Put(c, "d1", d, 1); code != 200 {
@@ -551,11 +560,12 @@ func TestTransfer_PathologicalContainerIsBounded(t *testing.T) {
 	d2 := v3Body(t, c, "d2")
 	tk := []interface{}{}
 	for i := 0; i < 2400; i++ { // full block of cells far down first-fit scans past
-		tk = append(tk, tileJSON(fmt.Sprintf("u%d", i), i%12, i/12))
+		tk = append(tk, tileJSON(fmt.Sprintf("u%d", i), i%24, i/24))
 	}
-	// huge covering tiles last in child order
-	tk = append(tk, map[string]interface{}{"id": "cover", "kind": "tile", "name": "c", "url": "http://c",
-		"placement": map[string]interface{}{"x": 0, "y": 0, "w": 12, "h": 1e9}})
+	// a huge folder box below them, last in child order
+	tk = append(tk, map[string]interface{}{"id": "cover", "kind": "folder", "name": "c",
+		"size": "medium", "contentSize": "medium", "content": map[string]interface{}{"children": []interface{}{}},
+		"placement": map[string]interface{}{"x": 0, "y": 100, "w": 24, "h": 1e9}})
 	rootOf(d2)["children"] = tk
 	if code, r := v3Put(c, "d2", d2, 1); code != 200 {
 		t.Fatalf("%d %.200v", code, r)
@@ -579,51 +589,54 @@ func TestTransfer_PathologicalContainerIsBounded(t *testing.T) {
 func TestFreeSpace_BudgetFallsBackBelowEverything(t *testing.T) {
 	kids := []any{}
 	for i := 0; i < 100; i++ {
-		kids = append(kids, tileJSON(fmt.Sprintf("k%d", i), i%12, i/12))
+		kids = append(kids, tileJSON(fmt.Sprintf("k%d", i), i%24, i/24))
 	}
 	c := configdoc.Obj{"columns": configdoc.RootColumns, "children": kids}
 	fs := newFreeSpace(c, 10) // starved
 	bottom := fs.bottom
-	cell := fs.place(configdoc.Obj{"w": 1, "h": 1}, "grid")
+	cell := fs.place(1, 1, nil)
 	if cell["y"].(float64) < bottom {
 		t.Fatalf("starved placement overlaps: %v (bottom %v)", cell, bottom)
 	}
 }
 
-func TestTransfer_GridPlacementClampsSize(t *testing.T) {
+// Onto a tab, a tile takes its size's standard span (Small 1×1, Medium 2×2,
+// Large 4×4; no size is Medium) and keeps its z.
+func TestTransfer_TabSpanFromSize(t *testing.T) {
 	router, db := setupTestRouter(t)
 	c := newClient(t, router)
 	seed(t, db)
 	addD2(t, db)
 	d := v3Body(t, c, "d1")
-	rootOf(d)["children"] = []interface{}{
-		map[string]interface{}{"id": "odd1", "kind": "tile", "name": "a", "url": "http://a",
-			"placement": map[string]interface{}{"x": 0, "y": 0, "w": 1.7, "h": 0.4}},
-		map[string]interface{}{"id": "odd2", "kind": "tile", "name": "b", "url": "http://b",
-			"placement": map[string]interface{}{"x": 2, "y": 0, "w": -4, "h": -3, "z": 5}},
-		map[string]interface{}{"id": "odd3", "kind": "tile", "name": "c", "url": "http://c",
-			"placement": map[string]interface{}{"x": 4, "y": 0, "w": 2, "h": 2.9}},
-	}
+	big := tileJSON("big", 10, 4)
+	big["size"] = "large"
+	big["placement"] = map[string]interface{}{"x": 10, "y": 4, "w": 4, "h": 4, "z": 5}
+	plain := tileJSON("plain", 16, 4)
+	delete(plain, "size")
+	plain["placement"] = map[string]interface{}{"x": 16, "y": 4, "w": 2, "h": 2}
+	rootOf(d)["children"] = append(rootOf(d)["children"].([]interface{}), tileJSON("small", 20, 4), big, plain)
 	if code, r := v3Put(c, "d1", d, 1); code != 200 {
 		t.Fatalf("%d %v", code, r)
 	}
 	tabID := v3Body(t, c, "d2")["tabs"].([]interface{})[0].(map[string]interface{})["id"]
 	code, resp := c.do("POST", "/api/dashboards/transfer", transferBody(map[string]interface{}{
-		"mode": "move", "sourceRevision": 2, "nodeIds": []string{"odd1", "odd2", "odd3"},
+		"mode": "move", "sourceRevision": 2, "nodeIds": []string{"small", "big", "plain"},
 		"target": map[string]interface{}{"tabId": tabID}}))
 	if code != 200 {
 		t.Fatalf("%d %v", code, resp)
 	}
-	want := map[string][4]float64{"odd1": {1, 1}, "odd2": {1, 1}, "odd3": {2, 2}}
-	for id, wh := range want {
-		n := findNode(storedDashboards(storedDoc(t, db))["d2"], id)[0]["placement"].(configdoc.Obj)
-		if n["w"] != wh[0] || n["h"] != wh[1] {
-			t.Errorf("%s placement %v, want w=%v h=%v", id, n, wh[0], wh[1])
+	want := map[string]float64{"small": 1, "big": 4, "plain": 2}
+	d2 := storedDashboards(storedDoc(t, db))["d2"]
+	for id, side := range want {
+		n := findNode(d2, id)[0]["placement"].(configdoc.Obj)
+		if n["w"] != side || n["h"] != side {
+			t.Errorf("%s placement %v, want %v×%v", id, n, side, side)
 		}
 	}
-	if z := findNode(storedDashboards(storedDoc(t, db))["d2"], "odd2")[0]["placement"].(configdoc.Obj)["z"]; z != float64(5) {
+	if z := findNode(d2, "big")[0]["placement"].(configdoc.Obj)["z"]; z != float64(5) {
 		t.Errorf("z lost: %v", z)
 	}
+	assertM5Dashboard(t, d2)
 }
 
 func TestV3Put_ClashChecksOnlyWhenPathChanged(t *testing.T) {

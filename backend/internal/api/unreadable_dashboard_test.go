@@ -9,16 +9,16 @@ import (
 	"github.com/weaversgrainthorpe/HOPS/internal/configdoc"
 )
 
-// unplacedDash is a group-style v3 dashboard (folder at the tab root, so no
-// explicit v3 feature) whose only tile has no placement: the reviewer's I3
-// probe.
+// unplacedDash is an M5 dashboard whose tab-level tile has no placement: the
+// reviewer's I3 probe (folder contents are unplaced by design; a tab-level
+// node never is).
 const unplacedDash = `{"id": "pz", "name": "Probe", "path": "/pz", "revision": 1,
 	"settings": {"statusChecksEnabled": null, "statusCheckIntervalMinutes": null, "statusCheckTimeoutSeconds": null,
 	             "editIdleTimeoutMinutes": null, "animatedFolderBackgrounds": null, "defaultLayout": null},
-	"defaultLayout": "grid",
-	"tabs": [{"id": "pz-t", "name": "T", "root": {"columns": 12, "children": [
-		{"id": "pz-f", "kind": "folder", "name": "F", "placement": {"x": 0, "y": 0, "w": 4, "h": 2},
-		 "content": {"columns": 4, "children": [{"id": "pz-a", "kind": "tile", "name": "A", "url": "http://a"}]}}]}}]}`
+	"tabs": [{"id": "pz-t", "name": "T", "root": {"columns": 24, "children": [
+		{"id": "pz-f", "kind": "folder", "name": "F", "size": "medium", "contentSize": "medium",
+		 "placement": {"x": 0, "y": 0, "w": 4, "h": 2}, "content": {"children": []}},
+		{"id": "pz-a", "kind": "tile", "name": "A", "url": "http://a"}]}}]}`
 
 // Ruling 24: importing it is a 400 naming the node, and nothing is written.
 func TestImport_V3NodeWithoutPlacementIs400(t *testing.T) {
@@ -31,7 +31,7 @@ func TestImport_V3NodeWithoutPlacementIs400(t *testing.T) {
 	}
 	var before string
 	db.QueryRow("SELECT data FROM config WHERE id = 1").Scan(&before)
-	code, resp := c.importFile(v3ExportOf(t, map[string]interface{}{"dashboards": []interface{}{d}}))
+	code, resp := c.importFile(v3ExportOf(t, map[string]interface{}{"layoutVersion": 1, "dashboards": []interface{}{d}}))
 	msg := fmt.Sprint(resp["error"])
 	if code != 400 || !strings.Contains(msg, "pz-a") || !strings.Contains(msg, "placement") {
 		t.Fatalf("got %d %v, want 400 naming pz-a's placement", code, resp)
@@ -77,7 +77,7 @@ func TestGetConfig_UnplacedNodeIsServedNot500(t *testing.T) {
 		t.Fatalf("pz served without its unplaced tile: %s", b)
 	}
 	// Saving it as-is is refused visibly, naming the node.
-	code, resp := c.do("PUT", "/api/dashboards/pz", map[string]interface{}{"schema": 3, "dashboard": dashes[1], "revision": 1, "gridUnit": 2})
+	code, resp := c.do("PUT", "/api/dashboards/pz", map[string]interface{}{"schema": 3, "dashboard": dashes[1], "revision": 1, "layoutVersion": 1})
 	if msg := fmt.Sprint(resp["error"]); code != 400 || !strings.Contains(msg, "pz-a") || !strings.Contains(msg, "placement") {
 		t.Fatalf("save of unplaced tile: %d %v", code, resp)
 	}

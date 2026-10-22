@@ -233,7 +233,7 @@ func TestUnreadableStoredConfigIs500(t *testing.T) {
 		body interface{}
 	}{
 		{"GET", "/api/config", nil},
-		{"PUT", "/api/dashboards/d1", map[string]interface{}{"schema": 3, "dashboard": map[string]interface{}{"id": "d1"}, "revision": 1, "gridUnit": 2}},
+		{"PUT", "/api/dashboards/d1", map[string]interface{}{"schema": 3, "dashboard": map[string]interface{}{"id": "d1"}, "revision": 1, "layoutVersion": 1}},
 	} {
 		code, resp := c.do(tc.m, tc.p, tc.body)
 		if code != 500 || resp["error"] == nil {
@@ -304,7 +304,7 @@ func TestStoredRevisionUnreadableIs500(t *testing.T) {
 		{"GET", "/api/config"}, {"GET", "/api/dashboards/d1/settings"},
 		{"PUT", "/api/dashboards/d1/settings"}, {"PUT", "/api/dashboards/d1"},
 	} {
-		body := map[string]interface{}{"overrides": map[string]interface{}{}, "revision": 1, "schema": 3, "gridUnit": 2,
+		body := map[string]interface{}{"overrides": map[string]interface{}{}, "revision": 1, "schema": 3, "layoutVersion": 1,
 			"dashboard": map[string]interface{}{"id": "d1", "name": "X", "path": "/d1", "tabs": []interface{}{}}}
 		code, resp := c.do(tc.m, tc.p, body)
 		if code != 500 || !strings.Contains(fmt.Sprint(resp["error"]), "stored revision unreadable for dashboard d1") {

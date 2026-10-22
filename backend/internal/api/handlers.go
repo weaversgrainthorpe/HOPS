@@ -765,16 +765,16 @@ func (r *Router) handleExportConfig(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	// The finer-grid marker travels in config.gridUnit (also for a
-	// single-dashboard export), so an import can tell the new form from an
-	// old 12-column export. The stored document carries it after the startup
-	// update; a stored document without it would be mislabelled, so refuse.
-	if unit, gerr := configdoc.GridUnitOf(stored); gerr != nil || unit != configdoc.GridUnit {
-		slog.Error("export: stored config is not in the finer-grid form", "component", "export", "gridUnit", stored[configdoc.GridKey], "error", gerr)
-		writeJSONError(w, "Stored configuration is not in the current grid form, so nothing was exported", http.StatusInternalServerError)
+	// The layout-form marker travels in config.layoutVersion (also for a
+	// single-dashboard export), so an import can refuse any other form. A
+	// stored document at another version would be mislabelled, so refuse
+	// (start-up already blocks one; this never stamps a guess).
+	if lerr := configdoc.CheckLayoutVersion(stored); lerr != nil {
+		slog.Error("export: stored config is not in this build's layout form", "component", "export", "error", lerr)
+		writeJSONError(w, "Stored configuration is not in this build's layout form, so nothing was exported: "+lerr.Error(), http.StatusInternalServerError)
 		return
 	}
-	cfg[configdoc.GridKey] = configdoc.GridUnit
+	cfg[configdoc.LayoutVersionKey] = configdoc.LayoutVersion
 
 	// Embed local asset files (icons, backgrounds) as base64 for portability
 	assetCount := r.embedAssets(cfg)
@@ -1372,18 +1372,14 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// A v3 export without the finer-grid marker (config.gridUnit) is in the
-	// old 12-column form: each dashboard is converted (and verified) below.
-	// An unknown marker is refused, never guessed.
-	oldGrid := false
-	var oddRoots []string // grid roots not 24 columns after an old-form conversion (reported)
+	// A v3 export is imported only in this build's layout form (M5 spec
+	// §2a): there is no conversion of other v3 forms, so any other
+	// layoutVersion (or none: a pre-release export) is refused, naming both.
 	if format == "hops-v3" {
-		unit, gerr := configdoc.GridUnitOf(importedConfig)
-		if gerr != nil {
-			writeJSONError(w, "Import refused — the export's grid form is unknown: "+gerr.Error(), http.StatusBadRequest)
+		if lerr := configdoc.CheckLayoutVersion(importedConfig); lerr != nil {
+			writeJSONError(w, "Import refused — this HOPS export cannot be imported: "+lerr.Error()+". Import a v2 export or one made by this HOPS version instead.", http.StatusBadRequest)
 			return
 		}
-		oldGrid = unit != configdoc.GridUnit
 	}
 
 	// Bring every imported dashboard to the v3 shape.
@@ -1409,42 +1405,6 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 			}
 			// New to this install: revision restarts at 1; settings are kept.
 			d["revision"] = 1
-			// An export from a pre-M4 build carries the retired per-tab
-			// background switches: bring it to the M4 form (verified) so an
-			// inactive tab picture is never imported as an active one.
-			before := configdoc.Obj{"schemaVersion": configdoc.SchemaVersion, "dashboards": []any{d}}
-			after, changed, uerr := configdoc.UpdateBackgroundsV4(before)
-			if uerr == nil && changed {
-				uerr = configdoc.VerifyBackgroundsV4(before, after)
-			}
-			if uerr != nil {
-				writeJSONError(w, fmt.Sprintf("Import refused — dashboard %q has backgrounds that could not be updated: %s", dashboardLabel(d), verifyProblems(uerr)), http.StatusBadRequest)
-				return
-			}
-			if changed {
-				d = after["dashboards"].([]any)[0].(configdoc.Obj)
-			}
-			// An old-form (12-column) export: double its grid placements,
-			// exactly as the startup update does, and verify.
-			if oldGrid {
-				before := configdoc.Obj{"schemaVersion": configdoc.SchemaVersion, "dashboards": []any{d}}
-				after, _, gerr := configdoc.UpdateGridV5(before)
-				if gerr == nil {
-					gerr = configdoc.VerifyGridV5(before, after)
-				}
-				if gerr != nil {
-					writeJSONError(w, fmt.Sprintf("Import refused — dashboard %q could not be brought to the current grid: %s", dashboardLabel(d), verifyProblems(gerr)), http.StatusBadRequest)
-					return
-				}
-				d = after["dashboards"].([]any)[0].(configdoc.Obj)
-				// Final review Minor 4: a grid root that was not 12 columns is
-				// kept at twice its width (it looks the same) but reported.
-				for _, o := range configdoc.OddGridRoots(after) {
-					slog.Warn("import: grid tab root is not 24 columns after the finer-grid conversion (kept at twice its old width, so it looks the same)",
-						"component", "import", "dashboard", o.Dashboard, "tab", o.Tab, "columns", o.Columns)
-					oddRoots = append(oddRoots, fmt.Sprintf("dashboard %q tab %q is %v columns wide, not 24", dashboardLabel(d), fmt.Sprint(o.TabName), o.Columns))
-				}
-			}
 			if verr := configdoc.VerifyImportedDashboard(d); verr != nil {
 				writeJSONError(w, fmt.Sprintf("Import refused — dashboard %q is malformed: %s", dashboardLabel(d), verifyProblems(verr)), http.StatusBadRequest)
 				return
@@ -1457,11 +1417,11 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 			writeJSONError(w, fmt.Sprintf("Import refused — dashboard %q could not be converted: %v", dashboardLabel(d), err), http.StatusBadRequest)
 			return
 		}
-		// The converter writes the finer grid directly, so the converted
-		// dashboard is checked as part of a marked document.
+		// The converter writes the current layout form directly, so the
+		// converted dashboard is checked as part of a marked document.
 		verr := configdoc.Verify(
 			configdoc.Obj{"dashboards": []any{d}},
-			configdoc.Obj{"schemaVersion": configdoc.SchemaVersion, configdoc.GridKey: configdoc.GridUnit, "dashboards": []any{v3}},
+			configdoc.Obj{"schemaVersion": configdoc.SchemaVersion, configdoc.LayoutVersionKey: configdoc.LayoutVersion, "dashboards": []any{v3}},
 		)
 		if verr != nil {
 			var ve *configdoc.VerifyError
@@ -1500,11 +1460,11 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 		slog.Error("import: stored config unreadable", "component", "import", "error", err)
 		return newAPIError(http.StatusInternalServerError, importUnreadableMsg)
 	}, func(stored configdoc.Obj) (configdoc.Obj, interface{}, error) {
-		// Imported dashboards are in the finer-grid form now; never merge them
-		// into a document that is not (the startup update marks it).
-		if unit, gerr := configdoc.GridUnitOf(stored); gerr != nil || unit != configdoc.GridUnit {
-			slog.Error("import: stored config is not in the finer-grid form", "component", "import", "gridUnit", stored[configdoc.GridKey], "error", gerr)
-			return nil, nil, newAPIError(http.StatusInternalServerError, "Stored configuration is not in the current grid form — import refused so nothing is mixed")
+		// Imported dashboards are in this build's layout form; never merge
+		// them into a document that is not (start-up refuses one anyway).
+		if lerr := configdoc.CheckLayoutVersion(stored); lerr != nil {
+			slog.Error("import: stored config is not in this build's layout form", "component", "import", "error", lerr)
+			return nil, nil, newAPIError(http.StatusInternalServerError, "Stored configuration is not in this build's layout form — import refused so nothing is mixed: "+lerr.Error())
 		}
 		existing, _ := stored["dashboards"].([]any)
 		existingPaths := map[string]bool{}
@@ -1579,9 +1539,6 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 		}
 		if iconErr != nil {
 			message += ". Icon auto-matching skipped: " + iconErr.Error()
-		}
-		if len(oddRoots) > 0 {
-			message += ". Check the layout of: " + strings.Join(oddRoots, "; ") + " (kept as it looked; resize it in the editor if needed)"
 		}
 		if len(assetsFailed) > 0 {
 			message += fmt.Sprintf(". %d asset(s) could not be restored: %s", len(assetsFailed), strings.Join(assetsFailed, "; "))

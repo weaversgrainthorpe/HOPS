@@ -86,8 +86,8 @@ func TestRejectedSavesTakeNoBackup(t *testing.T) {
 		body               interface{}
 		want               int
 	}{
-		{"stale dashboard", "PUT", "/api/dashboards/d1", map[string]interface{}{"schema": 3, "dashboard": v3Body(t, c, "d1"), "revision": 99, "gridUnit": 2}, 409},
-		{"unknown dashboard", "PUT", "/api/dashboards/nope", map[string]interface{}{"schema": 3, "dashboard": map[string]interface{}{"id": "nope"}, "revision": 1, "gridUnit": 2}, 404},
+		{"stale dashboard", "PUT", "/api/dashboards/d1", map[string]interface{}{"schema": 3, "dashboard": v3Body(t, c, "d1"), "revision": 99, "layoutVersion": 1}, 409},
+		{"unknown dashboard", "PUT", "/api/dashboards/nope", map[string]interface{}{"schema": 3, "dashboard": map[string]interface{}{"id": "nope"}, "revision": 1, "layoutVersion": 1}, 404},
 		{"legacy shape", "PUT", "/api/dashboards/d1", map[string]interface{}{"dashboard": legacyDash("X"), "revision": 1}, 400},
 		{"path taken", "POST", "/api/dashboards", map[string]interface{}{"name": "Dup", "path": "/d1"}, 409},
 		{"bad order", "PUT", "/api/dashboards/order", map[string]interface{}{"order": []string{"nope"}}, 400},

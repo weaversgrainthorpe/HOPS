@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"math"
 	"net/http"
-	"reflect"
 	"strings"
 	"unicode/utf8"
 
@@ -95,7 +94,7 @@ var transientDashboardKeys = map[string]bool{
 // handlePutDashboardV3 saves a dashboard written by the v3 editor. The body's
 // settings are ignored (they have their own endpoint) and so is its revision
 // beyond the conflict check: the stored one is bumped. The caller has already
-// refused a request without gridUnit: 2 (gridUnitError).
+// refused a request without the current layoutVersion (layoutVersionError).
 func (r *Router) handlePutDashboardV3(w http.ResponseWriter, id string, in configdoc.Obj, revision any) {
 	r.updateDocWithBackup(w, func(stored configdoc.Obj) (configdoc.Obj, interface{}, error) {
 		prev, ok := storedDashboards(stored)[id]
@@ -214,13 +213,9 @@ func (r *Router) handleDashboardsRoot(w http.ResponseWriter, req *http.Request) 
 		}
 		nd := configdoc.Obj{
 			"id": id, "name": name, "path": body.Path, "revision": 1,
-			"order":         nextOrder(stored),
-			"settings":      settings,
-			"defaultLayout": "grid",
-			"tabs": []any{configdoc.Obj{
-				"id": tabID, "name": "Home", "layout": "inherit",
-				"root": configdoc.Obj{"columns": configdoc.RootColumns, "children": []any{}},
-			}},
+			"order":    nextOrder(stored),
+			"settings": settings,
+			"tabs":     []any{newTab(tabID, "Home")},
 		}
 		if err := configdoc.VerifyDashboard(nd); err != nil {
 			return nil, nil, verifyErr(err)
@@ -282,7 +277,7 @@ type transferRequest struct {
 	NodeIDs        []string `json:"nodeIds"`
 	TargetID       string   `json:"targetId"`
 	TargetRevision any      `json:"targetRevision"`
-	GridUnit       any      `json:"gridUnit"` // must be configdoc.GridUnit (Ruling 5)
+	LayoutVersion  any      `json:"layoutVersion"` // must be configdoc.LayoutVersion (M5 §2a)
 	Target         struct {
 		TabID    string `json:"tabId"`
 		FolderID string `json:"folderId"`
@@ -327,8 +322,8 @@ func (r *Router) handleTransferNodes(w http.ResponseWriter, req *http.Request) {
 		}
 		want[id] = true
 	}
-	if ge := gridUnitError(body.GridUnit); ge != nil {
-		writeAPIError(w, ge)
+	if le := layoutVersionError(body.LayoutVersion); le != nil {
+		writeAPIError(w, le)
 		return
 	}
 	r.updateDocWithBackup(w, func(stored configdoc.Obj) (configdoc.Obj, interface{}, error) {
@@ -351,11 +346,14 @@ func (r *Router) handleTransferNodes(w http.ResponseWriter, req *http.Request) {
 		if ae != nil {
 			return nil, nil, ae
 		}
-		container, mode, ae := resolveTarget(dst, body.Target.TabID, body.Target.FolderID)
+		container, tabLevel, ae := resolveTarget(dst, body.Target.TabID, body.Target.FolderID)
 		if ae != nil {
 			return nil, nil, ae
 		}
-		space := newFreeSpaceCols(container, containerCols(container, mode, findTab(dst, body.Target.TabID)), freeCellBudget)
+		var space *freeSpace
+		if tabLevel {
+			space = newFreeSpace(container, freeCellBudget)
+		}
 		for _, id := range body.NodeIDs { // the caller's order
 			n := found[id]
 			if body.Mode == "copy" {
@@ -365,11 +363,18 @@ func (r *Router) handleTransferNodes(w http.ResponseWriter, req *http.Request) {
 				}
 				n = c
 			}
-			from, _ := n["placement"].(configdoc.Obj)
-			if from == nil {
-				return nil, nil, newAPIError(http.StatusBadRequest, fmt.Sprintf("Item %v has no placement", n["id"]))
+			if tabLevel {
+				// Onto the tab: the first free cells at the item's span.
+				w, h, ae := tabSpan(n)
+				if ae != nil {
+					return nil, nil, ae
+				}
+				from, _ := n["placement"].(configdoc.Obj)
+				n["placement"] = space.place(w, h, from)
+			} else {
+				// Into a folder: appended to its ordered list, unplaced.
+				delete(n, "placement")
 			}
-			n["placement"] = space.place(from, mode)
 			kids, _ := container["children"].([]any)
 			container["children"] = append(kids, n)
 		}
@@ -482,66 +487,68 @@ func removeNodes(d configdoc.Obj, want map[string]bool) {
 	})
 }
 
-// resolveTarget finds the container named by tab/folder in d and the layout
-// mode it resolves to (folder chain, then tab, then the dashboard default).
-func resolveTarget(d configdoc.Obj, tabID, folderID string) (configdoc.Obj, string, *apiError) {
-	tabs, _ := d["tabs"].([]any)
-	for _, t := range tabs {
-		tm, ok := t.(configdoc.Obj)
-		if !ok || tm["id"] != tabID {
-			continue
-		}
-		root, ok := tm["root"].(configdoc.Obj)
-		if !ok {
-			break
-		}
-		concrete := func(v any) string {
-			if s, _ := v.(string); s == "grid" || s == "free" {
-				return s
-			}
-			return ""
-		}
-		fallback := concrete(tm["layout"])
-		if fallback == "" {
-			fallback = concrete(d["defaultLayout"])
-		}
-		if fallback == "" {
-			fallback = "grid"
-		}
-		if folderID == "" {
-			return root, fallback, nil
-		}
-		var path func(c configdoc.Obj, mode string) (configdoc.Obj, string)
-		path = func(c configdoc.Obj, mode string) (configdoc.Obj, string) {
-			kids, _ := c["children"].([]any)
-			for _, k := range kids {
-				km, ok := k.(configdoc.Obj)
-				if !ok || km["kind"] != "folder" {
-					continue
-				}
-				m := mode
-				if cm := concrete(km["layout"]); cm != "" {
-					m = cm
-				}
-				content, ok := km["content"].(configdoc.Obj)
-				if !ok {
-					continue
-				}
-				if km["id"] == folderID {
-					return content, m
-				}
-				if f, fm := path(content, m); f != nil {
-					return f, fm
-				}
-			}
-			return nil, ""
-		}
-		if f, m := path(root, fallback); f != nil {
-			return f, m, nil
-		}
-		return nil, "", newAPIError(http.StatusBadRequest, "Target folder not found: "+folderID)
+// resolveTarget finds the container named by tab/folder in d: the tab's
+// root (tabLevel true, items placed on the grid) or a folder's content (an
+// ordered list).
+func resolveTarget(d configdoc.Obj, tabID, folderID string) (container configdoc.Obj, tabLevel bool, ae *apiError) {
+	tab := findTab(d, tabID)
+	root, _ := tab["root"].(configdoc.Obj)
+	if root == nil {
+		return nil, false, newAPIError(http.StatusBadRequest, "Target tab not found: "+tabID)
 	}
-	return nil, "", newAPIError(http.StatusBadRequest, "Target tab not found: "+tabID)
+	if folderID == "" {
+		return root, true, nil
+	}
+	var find func(c configdoc.Obj) configdoc.Obj
+	find = func(c configdoc.Obj) configdoc.Obj {
+		kids, _ := c["children"].([]any)
+		for _, k := range kids {
+			km, ok := k.(configdoc.Obj)
+			if !ok || km["kind"] != "folder" {
+				continue
+			}
+			content, ok := km["content"].(configdoc.Obj)
+			if !ok {
+				continue
+			}
+			if km["id"] == folderID {
+				return content
+			}
+			if f := find(content); f != nil {
+				return f
+			}
+		}
+		return nil
+	}
+	if f := find(root); f != nil {
+		return f, false, nil
+	}
+	return nil, false, newAPIError(http.StatusBadRequest, "Target folder not found: "+folderID)
+}
+
+// tabSpan is the w×h cells node n takes on a tab: a tile its size's standard
+// span (Small 1×1, Medium 2×2, Large 4×4); a folder its kept box when it has
+// one, else (coming out of a folder, M5 §3a.3) its size × 3 wide, × 2 high.
+func tabSpan(n configdoc.Obj) (w, h float64, ae *apiError) {
+	s, ok := configdoc.SizeSpan(n["size"])
+	if !ok {
+		return 0, 0, newAPIError(http.StatusBadRequest, fmt.Sprintf("Item %v has size %v; want small, medium or large", n["id"], n["size"]))
+	}
+	if n["kind"] == "folder" {
+		if _, _, fw, fh, ok := rect(n["placement"]); ok && fw >= 1 && fh >= 1 {
+			return fw, fh, nil
+		}
+		return float64(3 * s), float64(2 * s), nil
+	}
+	return float64(s), float64(s), nil
+}
+
+// newTab is an empty tab in the current layout form: a RootColumns grid.
+func newTab(id, name string) configdoc.Obj {
+	return configdoc.Obj{
+		"id": id, "name": name,
+		"root": configdoc.Obj{"columns": configdoc.RootColumns, "children": []any{}},
+	}
 }
 
 // cloneWithNewIDs deep-copies a node, giving it and every descendant a fresh
@@ -617,7 +624,7 @@ const freeCellBudget = 2_000_000
 
 type box struct{ x, y, w, h float64 }
 
-// freeSpace is a container's occupied boxes, grown as nodes are placed.
+// freeSpace is a tab root's occupied cells, grown as nodes are placed.
 type freeSpace struct {
 	cols   float64
 	taken  []box
@@ -625,18 +632,10 @@ type freeSpace struct {
 	budget int
 }
 
+// newFreeSpace reads tab root c's placed children (every tab is a
+// RootColumns grid).
 func newFreeSpace(c configdoc.Obj, budget int) *freeSpace {
-	cols := float64(configdoc.RootColumns)
-	if n, ok := toFloat(c["columns"]); ok && math.Floor(n) >= 1 {
-		cols = math.Floor(n)
-	}
-	return newFreeSpaceCols(c, cols, budget)
-}
-
-// newFreeSpaceCols is newFreeSpace with an explicit width (a free tab root's
-// extent is its design width, not its nominal columns).
-func newFreeSpaceCols(c configdoc.Obj, cols float64, budget int) *freeSpace {
-	fs := &freeSpace{cols: cols, budget: budget}
+	fs := &freeSpace{cols: configdoc.RootColumns, budget: budget}
 	kids, _ := c["children"].([]any)
 	for _, k := range kids {
 		if km, ok := k.(configdoc.Obj); ok && renderableNode(km) {
@@ -652,8 +651,9 @@ func (fs *freeSpace) add(b box) {
 	fs.bottom = math.Max(fs.bottom, b.y+b.h)
 }
 
-// renderableNode mirrors the frontend's isRenderable: a tile or folder with
-// a finite placement (a folder also needs a content.children array).
+// renderableNode mirrors the frontend's isRenderable for a tab-level node: a
+// tile or folder with a finite placement (a folder also needs a
+// content.children array).
 func renderableNode(n configdoc.Obj) bool {
 	if n["kind"] != "tile" && n["kind"] != "folder" {
 		return false
@@ -670,24 +670,17 @@ func renderableNode(n configdoc.Obj) bool {
 	return true
 }
 
-// place is the Go twin of the frontend's firstFreeCell (treeOps.ts): the first
-// w x h position overlapping nothing, recorded as taken. Grid scans row-major
-// one cell at a time; free scans in tile-sized steps. Width is capped at the
-// column count and w and h are clamped to at least 1, as the frontend does;
-// z is carried.
-func (fs *freeSpace) place(from configdoc.Obj, mode string) configdoc.Obj {
-	w, _ := toFloat(from["w"])
-	h, _ := toFloat(from["h"])
+// place is the Go twin of the frontend's firstFreeCell (treeOps.ts): the
+// first w x h position overlapping nothing, scanning row-major one cell at a
+// time, recorded as taken. Width is capped at the column count and w and h
+// are clamped to at least 1, as the frontend does; from's z is carried.
+func (fs *freeSpace) place(w, h float64, from configdoc.Obj) configdoc.Obj {
 	cw := math.Min(math.Max(1, math.Floor(w)), fs.cols)
 	chh := math.Max(1, math.Floor(h))
-	stepX, stepY := 1.0, 1.0
-	if mode == "free" {
-		stepX, stepY = cw, chh
-	}
-	x, y := 0.0, math.Ceil(fs.bottom/stepY)*stepY
+	x, y := 0.0, math.Ceil(fs.bottom)
 search:
-	for cy := 0.0; cy <= fs.bottom; cy += stepY {
-		for cx := 0.0; cx+cw <= fs.cols; cx += stepX {
+	for cy := 0.0; cy <= fs.bottom; cy++ {
+		for cx := 0.0; cx+cw <= fs.cols; cx++ {
 			free := true
 			for _, t := range fs.taken {
 				if fs.budget--; fs.budget < 0 {
@@ -721,48 +714,4 @@ func findTab(d configdoc.Obj, id string) configdoc.Obj {
 		}
 	}
 	return nil
-}
-
-// freeSideOf is one grid cell in free design units for a tab (Ruling 2):
-// exactly half the old 12-column side, round(designWidth / 12 / 8) / 2 —
-// 6.5 at 1280, 10 at 1920 — the frontend's freeSideOf (geometry.ts). It may
-// be fractional; every conversion rounds its result to whole units.
-//
-// Why half the old side rather than round(designWidth / 24 / 8) (7 at 1280):
-// free layouts made by the old grid→free conversion sit on multiples of the
-// old side, which map to whole doubled cells and back exactly (52 → 8 cells →
-// 52), and a full-width grid row is 24 · 6.5 = 156 units, exactly the old
-// 12 · 13, so it still fits a 1280 free root (160). With 7 the same row would
-// be 168 (wider than the root) and 52 would drift to 49.
-func freeSideOf(tab configdoc.Obj) float64 {
-	dw, ok := toFloat(tab["designWidth"])
-	if !ok || dw <= 0 {
-		dw = 1280
-	}
-	oldSide := math.Max(1, math.Round(dw/(configdoc.RootColumns/configdoc.GridUnit)/8))
-	return oldSide / configdoc.GridUnit
-}
-
-// containerCols is the width placements may use in a container: its columns,
-// except a free tab root, whose extent is the tab's design width in 8 px units.
-func containerCols(c configdoc.Obj, mode string, tab configdoc.Obj) float64 {
-	if root, _ := tab["root"].(configdoc.Obj); mode == "free" && isSameObj(root, c) {
-		dw, ok := toFloat(tab["designWidth"])
-		if !ok || dw <= 0 {
-			dw = 1280
-		}
-		return math.Max(1, math.Floor(dw/8))
-	}
-	if n, ok := toFloat(c["columns"]); ok && math.Floor(n) >= 1 {
-		return math.Floor(n)
-	}
-	return configdoc.RootColumns
-}
-
-// isSameObj reports whether a and b are the same map (not just equal).
-func isSameObj(a, b configdoc.Obj) bool {
-	if a == nil || b == nil {
-		return false
-	}
-	return reflect.ValueOf(a).UnsafePointer() == reflect.ValueOf(b).UnsafePointer()
 }

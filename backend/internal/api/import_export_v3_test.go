@@ -481,7 +481,17 @@ func TestImport_V3ShapeChecks(t *testing.T) {
 		"empty path":       func(c map[string]interface{}) { dashOf(c)["path"] = "" },
 		"no settings":      func(c map[string]interface{}) { delete(dashOf(c), "settings") },
 		"partial settings": func(c map[string]interface{}) { dashOf(c)["settings"] = map[string]interface{}{} },
-		"no defaultLayout": func(c map[string]interface{}) { delete(dashOf(c), "defaultLayout") },
+		"free-layout key":  func(c map[string]interface{}) { dashOf(c)["defaultLayout"] = "free" },
+		"placed folder child": func(c map[string]interface{}) {
+			f := dashOf(c)["tabs"].([]interface{})[0].(map[string]interface{})["root"].(map[string]interface{})["children"].([]interface{})[0].(map[string]interface{})
+			tile := f["content"].(map[string]interface{})["children"].([]interface{})[0].(map[string]interface{})
+			tile["placement"] = map[string]interface{}{"x": 0, "y": 0, "w": 2, "h": 2}
+		},
+		"custom tile span": func(c map[string]interface{}) {
+			root := dashOf(c)["tabs"].([]interface{})[0].(map[string]interface{})["root"].(map[string]interface{})
+			root["children"] = append(root["children"].([]interface{}), map[string]interface{}{"id": "cx", "kind": "tile", "name": "C",
+				"placement": map[string]interface{}{"x": 0, "y": 10, "w": 3, "h": 3}})
+		},
 		"background opacity 2": func(c map[string]interface{}) {
 			dashOf(c)["background"] = map[string]interface{}{"type": "color", "value": "#000", "opacity": 2}
 		},
@@ -550,6 +560,12 @@ func TestImport_V3Showcase(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if !strings.Contains(string(data), `"layoutVersion"`) {
+		// M5 Task 5 rewrites the fixture in the current layout form; until
+		// then it is a pre-M5 export, which import refuses
+		// (TestImport_PreM5ShowcaseRefused asserts that).
+		t.Skip("v3_showcase_export.json is still a pre-M5 export (M5 Task 5 rewrites it)")
+	}
 	router, db := setupTestRouter(t)
 	c := newClient(t, router)
 	code, resp := c.importFile(data)
@@ -584,10 +600,7 @@ func TestImport_V3Showcase(t *testing.T) {
 			t.Errorf("tab %d id = %v, want %s", i, tabs[i].(configdoc.Obj)["id"], id)
 		}
 	}
-	free := tabs[1].(configdoc.Obj)
-	if free["layout"] != "free" || free["designWidth"] != float64(1280) {
-		t.Errorf("free tab layout/designWidth = %v/%v", free["layout"], free["designWidth"])
-	}
+	assertM5Dashboard(t, dash)
 
 	// Depth 3 under the Grid tab, iframe tile inside the collapsed level-3 folder.
 	byID := map[string]configdoc.Obj{}
@@ -676,9 +689,6 @@ func TestImport_V3Showcase(t *testing.T) {
 			}
 		}
 	}
-	if _, changed, err := configdoc.UpdateBackgroundsV4(doc); err != nil || changed {
-		t.Errorf("UpdateBackgroundsV4 on the Showcase: changed=%v err=%v, want a no-op", changed, err)
-	}
 
 	// Layered status checks: a folder with checks off still checks its tile
 	// that is explicitly on; the existing tiles stay unresolved-off.
@@ -722,67 +732,34 @@ func TestImport_V3Showcase(t *testing.T) {
 			t.Errorf("%s: icon %q is not in the offline bundle", id, icon)
 		}
 	}
-
-	// Expanded grid folders: content columns == placement w. (Free tab and
-	// free folders use 8 px units, a different rule.)
-	for _, id := range []string{"sc-tab-grid", "sc-tab-mixed"} {
-		for _, tb := range tabs {
-			if tb.(configdoc.Obj)["id"] != id {
-				continue
-			}
-			var visit func(children []any)
-			visit = func(children []any) {
-				for _, ch := range children {
-					n := ch.(configdoc.Obj)
-					if n["kind"] != "folder" {
-						continue
-					}
-					content := n["content"].(configdoc.Obj)
-					if n["display"] == "expanded" && n["layout"] != "free" {
-						w := n["placement"].(configdoc.Obj)["w"]
-						if content["columns"] != w {
-							t.Errorf("%v: columns %v != w %v", n["id"], content["columns"], w)
-						}
-					}
-					visit(content["children"].([]any))
-				}
-			}
-			visit(tb.(configdoc.Obj)["root"].(configdoc.Obj)["children"].([]any))
-		}
-	}
 }
 
-// An export from a pre-M4 (M1–M3) build carries the retired per-tab background
-// switches; import brings it to the M4 form so an inactive tab picture is kept
-// as inherit, never imported as an active one.
-func TestImport_LegacyTabBackgroundSwitchBecomesInherit(t *testing.T) {
+// The retired per-tab background switches (M4) are not part of the current
+// form: an export carrying them is refused visibly, never imported with an
+// inactive tab picture shown as active.
+func TestImport_LegacyTabBackgroundSwitchRefused(t *testing.T) {
 	router, db := setupTestRouter(t)
 	c := newClient(t, router)
 	seed(t, db)
-	var env map[string]interface{}
-	json.Unmarshal(c.export(""), &env)
-	cfg := env["config"].(map[string]interface{})
-	d := dashOf(cfg)
-	d["perTabBackgrounds"] = false
-	tab := d["tabs"].([]interface{})[0].(map[string]interface{})
-	tab["background"] = map[string]interface{}{"type": "image", "value": "/x.jpg", "fit": "cover"}
-	tab["backgroundEnabled"] = false
-
-	code, resp := c.importFile(v3ExportOf(t, cfg))
-	if code != 200 {
-		t.Fatalf("import: %d %v", code, resp)
-	}
-	ds := dashList(storedDoc(t, db))
-	imp := ds[len(ds)-1]
-	if _, has := imp["perTabBackgrounds"]; has {
-		t.Error("imported dashboard kept perTabBackgrounds")
-	}
-	itab := imp["tabs"].([]interface{})[0].(map[string]interface{})
-	if _, has := itab["backgroundEnabled"]; has {
-		t.Error("imported tab kept backgroundEnabled")
-	}
-	got, _ := json.Marshal(itab["background"])
-	if want := `{"fit":"cover","inherit":true,"type":"image","value":"/x.jpg"}`; string(got) != want {
-		t.Errorf("tab background = %s, want %s", got, want)
+	for _, k := range []string{"perTabBackgrounds", "backgroundEnabled"} {
+		var env map[string]interface{}
+		json.Unmarshal(c.export(""), &env)
+		cfg := env["config"].(map[string]interface{})
+		d := dashOf(cfg)
+		tab := d["tabs"].([]interface{})[0].(map[string]interface{})
+		tab["background"] = map[string]interface{}{"type": "image", "value": "/x.jpg", "fit": "cover"}
+		if k == "perTabBackgrounds" {
+			d[k] = false
+		} else {
+			tab[k] = false
+		}
+		before := storedRaw(db)
+		code, resp := c.importFile(v3ExportOf(t, cfg))
+		if code != 400 || !strings.Contains(resp["error"].(string), k) {
+			t.Errorf("%s: import %d %v, want 400 naming it", k, code, resp)
+		}
+		if storedRaw(db) != before {
+			t.Errorf("%s: config row changed", k)
+		}
 	}
 }

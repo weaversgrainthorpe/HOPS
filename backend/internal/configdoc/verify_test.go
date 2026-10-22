@@ -166,9 +166,9 @@ func TestVerify_RequiresOwnedDashboardKeys(t *testing.T) {
 }
 
 func TestVerifyIDs(t *testing.T) {
-	good := Obj{"schemaVersion": 3, "dashboards": []any{Obj{"id": "d", "tabs": []any{Obj{"id": "t", "root": Obj{"children": []any{
-		Obj{"id": "f", "kind": "folder", "placement": Obj{"x": 0, "y": 0, "w": 4, "h": 2},
-			"content": Obj{"children": []any{Obj{"id": "e", "kind": "tile", "placement": Obj{"x": 0.0, "y": 1.0, "w": 1.0, "h": 1.0}}}}},
+	good := Obj{"schemaVersion": 3, "dashboards": []any{Obj{"id": "d", "tabs": []any{Obj{"id": "t", "root": Obj{"columns": 24.0, "children": []any{
+		Obj{"id": "f", "kind": "folder", "size": "medium", "contentSize": "small", "placement": Obj{"x": 0, "y": 0, "w": 4, "h": 2},
+			"content": Obj{"children": []any{Obj{"id": "e", "kind": "tile"}}}},
 	}}}}}}}
 	if err := VerifyIDs(good); err != nil {
 		t.Fatalf("good doc: %v", err)
@@ -188,9 +188,9 @@ func TestVerifyIDs_AcceptsAnyDepth(t *testing.T) {
 	_, _, _, g1 := findNode(doc, "g1")
 	content := g1["content"].(Obj)
 	content["children"] = append(content["children"].([]any), Obj{
-		"id": "nf", "kind": "folder", "placement": Obj{"x": 0, "y": 5, "w": 1, "h": 1},
-		"content": Obj{"columns": 1, "children": []any{
-			Obj{"id": "nf-e1", "kind": "tile", "placement": Obj{"x": 0, "y": 0, "w": 1, "h": 1}},
+		"id": "nf", "kind": "folder", "size": "large", "contentSize": "small",
+		"content": Obj{"children": []any{
+			Obj{"id": "nf-e1", "kind": "tile", "size": "large"},
 		}}})
 	if err := VerifyIDs(doc); err != nil {
 		t.Fatalf("nested folder / root tile rejected: %v", err)
@@ -199,14 +199,14 @@ func TestVerifyIDs_AcceptsAnyDepth(t *testing.T) {
 	_, _, _, nf := findNode(doc, "nf")
 	inner := nf["content"].(Obj)
 	inner["children"] = append(inner["children"].([]any),
-		Obj{"id": "e1", "kind": "tile", "placement": Obj{"x": 0, "y": 1, "w": 1, "h": 1}},
-		Obj{"id": "w1", "kind": "widget", "placement": Obj{"x": 0, "y": 2, "w": 1, "h": 1}},
-		Obj{"id": "nf2", "kind": "folder", "placement": Obj{"x": 0, "y": 3, "w": 1, "h": 1}, "content": "oops"})
+		Obj{"id": "e1", "kind": "tile"},
+		Obj{"id": "w1", "kind": "widget"},
+		Obj{"id": "nf2", "kind": "folder", "size": "medium", "contentSize": "medium", "content": "oops"})
 	wantProblem(t, VerifyIDs(doc), `duplicate id "e1"`, `"w1": kind is "widget"`, `"nf2": content is string`)
 }
 
-// Every node needs a finite numeric placement {x,y,w,h} (Ruling 24), so no
-// writer or import can store a node the legacy view and renderer cannot place.
+// Every tab-level node needs a finite numeric placement {x,y,w,h} (Ruling 24),
+// so no writer or import can store a node the renderer cannot place.
 func TestVerifyIDs_RequiresPlacement(t *testing.T) {
 	cases := map[string]func(n Obj){
 		"missing":    func(n Obj) { delete(n, "placement") },
@@ -219,8 +219,11 @@ func TestVerifyIDs_RequiresPlacement(t *testing.T) {
 		"y bool":     func(n Obj) { n["placement"].(Obj)["y"] = true },
 	}
 	for name, mutate := range cases {
-		for _, id := range []string{"g1", "e2"} { // a folder and a tile
+		for _, id := range []string{"g1", "rt"} { // a tab-level folder and tile
 			doc := migrated(t, loadJSON(t, "testdata/v2_basic.json"))
+			root := tabN(doc, 1)["root"].(Obj)
+			root["children"] = append(root["children"].([]any),
+				Obj{"id": "rt", "kind": "tile", "placement": Obj{"x": 20, "y": 0, "w": 2, "h": 2}})
 			if err := VerifyIDs(doc); err != nil {
 				t.Fatalf("baseline: %v", err)
 			}
@@ -239,9 +242,9 @@ func TestVerifyIDs_RequiresPlacement(t *testing.T) {
 // v3Dash builds a minimal valid v3 dashboard with the given root children.
 func v3Dash(children []any) Obj {
 	return Obj{
-		"id": "d", "name": "D", "path": "/d", "revision": 1, "defaultLayout": "grid",
+		"id": "d", "name": "D", "path": "/d", "revision": 1,
 		"settings": nullSettings(),
-		"tabs":     []any{Obj{"id": "t", "name": "T", "root": Obj{"columns": 12, "children": children}}},
+		"tabs":     []any{Obj{"id": "t", "name": "T", "root": Obj{"columns": RootColumns, "children": children}}},
 	}
 }
 
@@ -253,8 +256,12 @@ func nullSettings() Obj {
 	return s
 }
 
-func tileNode(id string) Obj {
-	return Obj{"id": id, "kind": "tile", "name": id, "placement": Obj{"x": 0, "y": 0, "w": 1, "h": 1}}
+func tileNode(id string) Obj { return tileAt(id, 0) }
+
+// tileAt is a Small tab-level tile in cell i (row-major on the 24-column grid).
+func tileAt(id string, i int) Obj {
+	return Obj{"id": id, "kind": "tile", "name": id, "size": "small",
+		"placement": Obj{"x": i % RootColumns, "y": i / RootColumns, "w": 1, "h": 1}}
 }
 
 func TestVerifyDashboard_Bounds(t *testing.T) {
@@ -264,7 +271,7 @@ func TestVerifyDashboard_Bounds(t *testing.T) {
 	many := func(n int) []any {
 		out := make([]any, n)
 		for i := range out {
-			out[i] = tileNode("n" + itoa(i))
+			out[i] = tileAt("n"+itoa(i), i)
 		}
 		return out
 	}
@@ -275,10 +282,12 @@ func TestVerifyDashboard_Bounds(t *testing.T) {
 
 	nest := func(depth int) []any { // a chain of `depth` folders, innermost holds one tile
 		node := tileNode("leaf")
+		delete(node, "placement")
 		for i := depth - 1; i >= 1; i-- {
 			node = Obj{"id": "f" + itoa(i), "kind": "folder", "name": "f", "display": "expanded",
-				"placement": Obj{"x": 0, "y": 0, "w": 1, "h": 1}, "content": Obj{"columns": 1, "children": []any{node}}}
+				"size": "medium", "contentSize": "medium", "content": Obj{"children": []any{node}}}
 		}
+		node["placement"] = Obj{"x": 0, "y": 0, "w": 1, "h": 1}
 		return []any{node}
 	}
 	if err := VerifyDashboard(v3Dash(nest(MaxNestingDepth))); err != nil {
@@ -291,7 +300,7 @@ func TestVerifyDashboard_StructureAndPlacement(t *testing.T) {
 	bad := tileNode("a")
 	delete(bad, "placement")
 	wantProblem(t, VerifyDashboard(v3Dash([]any{bad})), "placement")
-	wantProblem(t, VerifyDashboard(v3Dash([]any{tileNode("a"), tileNode("a")})), "duplicate id")
+	wantProblem(t, VerifyDashboard(v3Dash([]any{tileAt("a", 0), tileAt("a", 1)})), "duplicate id")
 	d := v3Dash(nil)
 	d["path"] = ""
 	wantProblem(t, VerifyDashboard(d), "path")
@@ -311,16 +320,16 @@ func itoa(i int) string {
 	return string(b)
 }
 
-// showcaseDash is a Showcase-style dashboard: a free tab with a tile at its root.
+// showcaseDash is a Showcase-style dashboard: a grid tab with a tile at its root.
 func showcaseDash(t *testing.T, id string) Obj {
 	t.Helper()
 	d := Obj{
 		"id": id, "name": "Showcase " + id, "path": "/" + id, "revision": 4,
-		"settings": Obj{"statusChecksEnabled": nil}, "defaultLayout": "grid",
+		"settings": Obj{"statusChecksEnabled": nil},
 		"tabs": []any{Obj{
-			"id": id + "-t1", "name": "Free", "layout": "free", "designWidth": 1280,
-			"root": Obj{"columns": 12, "children": []any{
-				Obj{"id": id + "-e1", "kind": "tile", "name": "X", "placement": Obj{"x": 3, "y": 5, "w": 30, "h": 20, "z": 1}},
+			"id": id + "-t1", "name": "Grid",
+			"root": Obj{"columns": RootColumns, "children": []any{
+				Obj{"id": id + "-e1", "kind": "tile", "name": "X", "size": "large", "placement": Obj{"x": 3, "y": 5, "w": 4, "h": 4, "z": 1}},
 			}},
 		}},
 	}

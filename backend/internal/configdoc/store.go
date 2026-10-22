@@ -55,12 +55,6 @@ type MigrationResult struct {
 	Failed   bool     // true if the stored doc could not be migrated
 	Detail   string   // human-readable failure reason
 	Renames  []Rename // duplicate ids renamed by this start's migration
-	// BackgroundsUpdated is true if this start's one-time M4 background
-	// update (updateBackgroundsOnStartup) rewrote the stored document.
-	BackgroundsUpdated bool
-	// GridUpdated is true if this start's one-time finer-grid update
-	// (updateGridOnStartup) rewrote the stored document.
-	GridUpdated bool
 }
 
 // MigrateOnStartup converts a stored v2 document to v3. If the stored
@@ -142,13 +136,16 @@ func failed(detail string) MigrationResult {
 	return MigrationResult{Failed: true, Detail: detail}
 }
 
-// MigrateWithBackup runs MigrateOnStartup, then the one-time M4 background
-// update (updateBackgroundsOnStartup), then the one-time finer-grid update
-// (updateGridOnStartup), but when the stored document is
+// MigrateWithBackup runs MigrateOnStartup, but when the stored document is
 // still v2 it first calls backup synchronously so the safety backup holds the
 // pre-migration data. If that backup fails the migration is NOT attempted and
 // a Failed result is returned. backedUp reports whether backup was called
 // (and succeeded); when false the caller may take its backup asynchronously.
+//
+// v2→v3 is the only conversion (M5 spec §2a): the converter writes the
+// current layout form directly. A stored v3 document at any other
+// layoutVersion (a pre-release v3 build's data) is never served as if it were
+// current: the result is Failed, naming the versions, and nothing is written.
 func MigrateWithBackup(db *sql.DB, backup func() error) (res MigrationResult, backedUp bool, err error) {
 	if _, lerr := Load(db); errors.Is(lerr, ErrNotV3) {
 		if berr := backup(); berr != nil {
@@ -160,29 +157,15 @@ func MigrateWithBackup(db *sql.DB, backup func() error) (res MigrationResult, ba
 	if err != nil || res.Failed {
 		return res, backedUp, err
 	}
-	// Then, on the (now) v3 document, the one-time M4 background update. A
-	// freshly migrated v2 document is already in the final form, so this is a
-	// no-op for it; a failure blocks the app exactly like a failed migration.
-	bg, err := updateBackgroundsOnStartup(db)
-	if err != nil {
-		return res, backedUp, err
+	doc, lerr := Load(db)
+	if lerr != nil {
+		return res, backedUp, lerr
 	}
-	if bg.Failed {
-		res.Failed, res.Detail = true, bg.Detail
-		return res, backedUp, nil
+	if verr := CheckLayoutVersion(doc); verr != nil {
+		detail := "stored config is not in this build's layout form: " + verr.Error() +
+			". Pre-release v3 data has no update path; move the database aside and import a v2 export instead."
+		slog.Error("stored config layout version mismatch; stored config left untouched", "component", "configdoc", "detail", detail)
+		return MigrationResult{Failed: true, Detail: detail}, backedUp, nil
 	}
-	res.BackgroundsUpdated = bg.BackgroundsUpdated
-	// Then the one-time finer-grid update (spec §9). A freshly migrated v2
-	// document is already marked (convert.go writes the new form), so this is
-	// a no-op for it; a failure blocks the app exactly like a failed migration.
-	gr, err := updateGridOnStartup(db)
-	if err != nil {
-		return res, backedUp, err
-	}
-	if gr.Failed {
-		res.Failed, res.Detail = true, gr.Detail
-		return res, backedUp, nil
-	}
-	res.GridUpdated = gr.GridUpdated
 	return res, backedUp, nil
 }

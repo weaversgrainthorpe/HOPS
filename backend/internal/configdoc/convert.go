@@ -62,7 +62,7 @@ func migrateV2(v2 Obj) (Obj, []Rename, error) {
 	}
 	cp["dashboards"] = out
 	cp["schemaVersion"] = SchemaVersion
-	cp[GridKey] = GridUnit // written straight in the finer-grid form
+	cp[LayoutVersionKey] = LayoutVersion // written straight in the current form
 	return cp, renames, nil
 }
 
@@ -106,7 +106,8 @@ func convertDashboard(d Obj) (Obj, error) {
 		settings[k] = nil
 	}
 	d["settings"] = settings
-	d["defaultLayout"] = "grid"
+	// Every tab is a grid tab (M5): no dashboard default layout.
+	delete(d, "defaultLayout")
 	return d, nil
 }
 
@@ -130,7 +131,7 @@ func convertTab(t Obj, perTab bool) (Obj, error) {
 	delete(t, "groups")
 	children := make([]any, 0, len(groups))
 	sizes := make([][2]int, len(groups))
-	widths := make([]int, len(groups))
+	medium, _ := SizeSpan("medium")
 	for i, g := range groups {
 		gm, ok := g.(Obj)
 		if !ok {
@@ -141,20 +142,22 @@ func convertTab(t Obj, perTab bool) (Obj, error) {
 		if es, ok := gm["entries"].([]any); ok {
 			n = len(es)
 		}
-		widths[i] = perRow
-		// The finer grid (spec §9): each tile is GridUnit×GridUnit cells
-		// (Medium) and the title row is GridTitleRows cells.
-		sizes[i] = [2]int{perRow * GridUnit, max(1, ceilDiv(n, perRow))*GridUnit + GridTitleRows}
+		// The folder's box on the tab: perRow Medium tiles (2×2 cells) per
+		// row and a FolderTitleRows title row, as v2 drew the group. Its
+		// contents flow inside it (M5), so this only sizes the box.
+		sizes[i] = [2]int{perRow * medium, max(1, ceilDiv(n, perRow))*medium + FolderTitleRows}
 	}
 	placed := packRowMajor(sizes, RootColumns)
 	for i, g := range groups {
-		f, err := convertGroup(g.(Obj), widths[i], placed[i])
+		f, err := convertGroup(g.(Obj), placed[i])
 		if err != nil {
 			return nil, fmt.Errorf("groups[%d]: %w", i, err)
 		}
 		children = append(children, f)
 	}
-	t["layout"] = "inherit"
+	// Every tab is a grid tab (M5): no per-tab layout or design width.
+	delete(t, "layout")
+	delete(t, "designWidth")
 	delete(t, legacyEnabledKey)
 	if bg, has := t["background"]; has && !perTab {
 		f, err := inheritForm(bg)
@@ -184,9 +187,11 @@ func placement(x, y, w, h int) Obj {
 	return Obj{"x": x, "y": y, "w": w, "h": h}
 }
 
-// convertGroup turns a v2 group into a folder of perRow tiles per row, each
-// tile GridUnit×GridUnit cells, placed at p.
-func convertGroup(g Obj, perRow int, p [4]int) (Obj, error) {
+// convertGroup turns a v2 group into an M5 folder placed at p: Medium on the
+// tab, Medium contents, and its entries as an ordered list of tiles with no
+// placements, in v2 entry order (array order; v2 `order` is carried, never
+// used to re-sort).
+func convertGroup(g Obj, p [4]int) (Obj, error) {
 	entries, err := listOf(g, "entries")
 	if err != nil {
 		return nil, err
@@ -199,11 +204,12 @@ func convertGroup(g Obj, perRow int, p [4]int) (Obj, error) {
 			return nil, fmt.Errorf("entries[%d] is %T, want object", i, e)
 		}
 		em["kind"] = "tile"
-		em["placement"] = placement(i%perRow*GridUnit, i/perRow*GridUnit, GridUnit, GridUnit)
 		tiles = append(tiles, em)
 	}
 	g["kind"] = "folder"
-	g["layout"] = "inherit"
+	delete(g, "layout")
+	g["size"] = "medium"
+	g["contentSize"] = "medium"
 	if c, _ := g["collapsed"].(bool); c {
 		g["display"] = "collapsed"
 	} else {
@@ -216,7 +222,7 @@ func convertGroup(g Obj, perRow int, p [4]int) (Obj, error) {
 	}
 	g["showTitle"] = true
 	g["placement"] = placement(p[0], p[1], p[2], p[3])
-	g["content"] = Obj{"columns": perRow * GridUnit, "children": tiles}
+	g["content"] = Obj{"children": tiles}
 	return g, nil
 }
 

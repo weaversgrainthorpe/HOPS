@@ -135,7 +135,9 @@ func TestMigrateV2_Basic(t *testing.T) {
 		t.Error("converter kept perTabBackgrounds; M4 writes the final background form")
 	}
 	eq(t, d["revision"], 1, "revision")
-	eq(t, d["defaultLayout"], "grid", "defaultLayout")
+	if _, has := d["defaultLayout"]; has {
+		t.Error("defaultLayout written; every tab is a grid tab (M5)")
+	}
 	settings := d["settings"].(Obj)
 	if len(settings) != 6 {
 		t.Errorf("settings has %d keys", len(settings))
@@ -157,7 +159,9 @@ func TestMigrateV2_Basic(t *testing.T) {
 		if _, has := tab["groups"]; has {
 			t.Error("tab still has groups")
 		}
-		eq(t, tab["layout"], "inherit", "tab.layout")
+		if _, has := tab["layout"]; has {
+			t.Error("tab.layout written; every tab is a grid tab (M5)")
+		}
 		root := tab["root"].(Obj)
 		eq(t, root["columns"], 24, "root.columns")
 	}
@@ -184,14 +188,21 @@ func TestMigrateV2_Basic(t *testing.T) {
 	for i, f := range folders {
 		assertKeysPreserved(t, v2groups[i], f, "folder", "entries")
 		eq(t, f["kind"], "folder", "kind")
-		eq(t, f["layout"], "inherit", "folder.layout")
+		if _, has := f["layout"]; has {
+			t.Error("folder.layout written (M5: folders always flow)")
+		}
+		eq(t, f["size"], "medium", "folder.size")
+		eq(t, f["contentSize"], "medium", "folder.contentSize")
 		eq(t, f["display"], "expanded", "display")
 		eq(t, f["shape"], "rounded", "shape")
 		eq(t, f["showTitle"], true, "showTitle")
 		eq(t, f["placement"], wantPl[i], "placement")
 	}
-	eq(t, folders[0]["content"].(Obj)["columns"], 24, "content.columns")
-	eq(t, folders[1]["content"].(Obj)["columns"], 12, "content.columns")
+	for _, f := range folders {
+		if _, has := f["content"].(Obj)["columns"]; has {
+			t.Errorf("folder %v content has columns (M5: contents flow)", f["id"])
+		}
+	}
 
 	tiles := children(t, folders[0]["content"].(Obj))
 	v2entries := list(t, v2groups[0], "entries")
@@ -201,7 +212,9 @@ func TestMigrateV2_Basic(t *testing.T) {
 	for i, tile := range tiles {
 		assertKeysPreserved(t, v2entries[i], tile, "tile")
 		eq(t, tile["kind"], "tile", "tile.kind")
-		eq(t, tile["placement"], Obj{"x": 2 * i, "y": 0, "w": 2, "h": 2}, "tile.placement")
+		if _, has := tile["placement"]; has {
+			t.Errorf("folder child %v has a placement (M5: an ordered list)", tile["id"])
+		}
 	}
 	// array order, not `order`, drives display: ids e1,e2,e3 despite order 2,1,0.
 	for i, id := range []string{"e1", "e2", "e3"} {
@@ -216,10 +229,14 @@ func TestMigrateV2_Basic(t *testing.T) {
 	eq(t, f["display"], "collapsed", "display")
 	eq(t, f["shape"], "folder-tab", "shape")
 	eq(t, f["placement"], Obj{"x": 0, "y": 0, "w": 8, "h": 6}, "placement") // ceil(5/4)=2 tile rows ×2, +2 title
-	want := [][2]int{{0, 0}, {2, 0}, {4, 0}, {6, 0}, {0, 2}}
-	for i, tile := range children(t, f["content"].(Obj)) {
-		eq(t, tile["placement"], Obj{"x": want[i][0], "y": want[i][1], "w": 2, "h": 2}, "tile placement")
+	var order []string
+	for _, tile := range children(t, f["content"].(Obj)) {
+		order = append(order, tile["id"].(string))
+		if _, has := tile["placement"]; has {
+			t.Errorf("folder child %v has a placement", tile["id"])
+		}
 	}
+	eq(t, order, []string{"e5", "e6", "e7", "e8", "e9"}, "child order")
 }
 
 func TestMigrateV2_MessyInput(t *testing.T) {
@@ -238,9 +255,11 @@ func TestMigrateV2_MessyInput(t *testing.T) {
 		t.Fatalf("dashboards = %d", len(dashes))
 	}
 	d := dashes[0]
-	// Pre-existing v3 keys are overwritten.
+	// Pre-existing v3 keys are overwritten; a v2 defaultLayout is dropped.
 	eq(t, d["revision"], 1, "revision")
-	eq(t, d["defaultLayout"], "grid", "defaultLayout")
+	if _, has := d["defaultLayout"]; has {
+		t.Error("defaultLayout kept")
+	}
 	if len(d["settings"].(Obj)) != 6 {
 		t.Errorf("settings not replaced: %v", d["settings"])
 	}
@@ -279,7 +298,7 @@ func TestMigrateV2_MessyInput(t *testing.T) {
 		t.Errorf("null entries -> %d tiles", n)
 	}
 	// Unknown width falls back to 12 tiles per row (24 columns); non-bool collapsed is not collapsed.
-	eq(t, fs[1]["content"].(Obj)["columns"], 24, "bad width columns")
+	eq(t, fs[1]["placement"], Obj{"x": 0, "y": 4, "w": 24, "h": 4}, "bad width placement")
 	eq(t, fs[1]["display"], "expanded", "display")
 	eq(t, fs[1]["shape"], "rounded", "shape")
 	eq(t, fs[1]["collapsed"], "yes", "collapsed carried")

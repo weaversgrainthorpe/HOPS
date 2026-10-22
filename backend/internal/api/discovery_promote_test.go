@@ -84,8 +84,8 @@ func TestPromoteBumpsRevision(t *testing.T) {
 			t.Fatalf("folder tiles = %v", tiles)
 		}
 		tile := tiles[0].(map[string]interface{})
-		if tile["kind"] != "tile" || tile["placement"] == nil {
-			t.Fatalf("tile missing kind/placement: %v", tile)
+		if _, placed := tile["placement"]; tile["kind"] != "tile" || placed {
+			t.Fatalf("tile kind/placement wrong (folder contents are unplaced): %v", tile)
 		}
 	}
 	if !found {
