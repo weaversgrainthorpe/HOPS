@@ -1055,7 +1055,7 @@ test.describe('§4D Settings is the admin home; / shows a dashboard', () => {
     }
   });
 
-  test('with 8 dashboards at 1280px the navbar keeps the pencil, gear and Log out clickable; the page is no wider than the screen', async ({ page, context }) => {
+  test('with 8 dashboards at 1280px the navbar keeps the pencil, gear and Log out clickable; the page is no wider than the screen; More holds the rest', async ({ page, context }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     const dashes = [];
     for (let i = 0; i < 8; i++) {
@@ -1071,10 +1071,10 @@ test.describe('§4D Settings is the admin home; / shows a dashboard', () => {
     await page.getByRole('button', { name: 'Log out' }).click({ trial: true, timeout: 3000 });
     const widths = await page.evaluate(() => ({ doc: document.documentElement.scrollWidth, view: window.innerWidth }));
     expect(widths.doc).toBeLessThanOrEqual(widths.view);
-    // Nothing in the bar overlaps: logo/version, the links strip, the title, the controls.
+    // Nothing in the bar overlaps: logo/version, the dashboard links (and More), the title, the controls.
     const checkBar = async () => {
       const boxes = await page.evaluate(() =>
-        ['.logo', '.nav-links', '.center-title', '.nav-right'].map((sel) => {
+        ['.logo', '.nav-dash', '.center-title', '.nav-right'].map((sel) => {
           const r = document.querySelector(sel)!.getBoundingClientRect();
           return { sel, left: r.left, right: r.right, width: r.width };
         })
@@ -1082,17 +1082,20 @@ test.describe('§4D Settings is the admin home; / shows a dashboard', () => {
       for (let i = 1; i < boxes.length; i++) {
         expect(boxes[i].left, `${boxes[i].sel} starts after ${boxes[i - 1].sel} ends`).toBeGreaterThanOrEqual(boxes[i - 1].right - 0.5);
       }
-      expect(boxes[1].width, 'the dashboard links keep a visible strip').toBeGreaterThan(100);
     };
     await checkBar();
-    // The strip scrolls, with a plain (vertical) mouse wheel too.
+    // Ruling 12 (M5 walkthrough 1): no scrolling strip — the links that fit, then "More" for the rest.
     const strip = page.locator('.nav-links');
-    await strip.hover();
-    await page.mouse.wheel(0, 400);
-    await expect.poll(() => strip.evaluate((el) => el.scrollLeft)).toBeGreaterThan(0);
-    // Every dashboard link is still reachable (the links scroll), and the pencil really works.
+    if (await strip.count()) expect(await strip.evaluate((el) => getComputedStyle(el).overflowX)).not.toMatch(/auto|scroll/);
+    const more = page.getByRole('button', { name: 'More dashboards' });
+    await expect(more).toBeVisible();
+    // Every dashboard link is still reachable (shown, or in More), and the pencil really works.
+    const shown = await page.locator('.nav-links > .nav-link').evaluateAll((els) => els.map((e) => e.getAttribute('href')));
+    await more.click();
+    const inMore = await page.getByRole('menu', { name: 'More dashboards' }).getByRole('menuitem').evaluateAll((els) => els.map((e) => e.getAttribute('href')));
+    await page.keyboard.press('Escape');
     for (const d of dashes) {
-      await expect(page.locator(`.nav-link[href="${d.path}"]`)).toHaveCount(1);
+      expect([...shown, ...inMore].filter((h) => h === d.path), `${d.path} is one click away`).toHaveLength(1);
     }
     await pencil.click();
     await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
@@ -1101,9 +1104,10 @@ test.describe('§4D Settings is the admin home; / shows a dashboard', () => {
     await checkBar();
     await page.getByRole('link', { name: 'Settings' }).click({ trial: true, timeout: 3000 });
     await page.getByRole('button', { name: 'Log out' }).click({ trial: true, timeout: 3000 });
-    // A link scrolled into its strip still opens its dashboard.
+    // A link in the More menu still opens its dashboard.
     await page.getByRole('button', { name: 'Exit Edit Mode' }).click();
-    await page.locator(`.nav-link[href="${dashes[0].path}"]`).click();
+    await more.click();
+    await page.getByRole('menu', { name: 'More dashboards' }).locator(`[href="${dashes[0].path}"]`).click();
     await expect(page).toHaveURL(new RegExp(`${dashes[0].path}$`));
     await expect(page.locator(`[data-node-id="${dashes[0].id('a')}"]`)).toBeVisible();
   });

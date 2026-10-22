@@ -16,6 +16,7 @@ import type { LayoutDashboard, LayoutTab } from '$lib/types/layout';
 import { begin, session, resetEditSessionForTests } from '$lib/stores/editSession';
 import { selectedNodes, clearSelection } from '$lib/stores/nodeSelection';
 import { toast } from '$lib/stores/toast';
+import { editorDialog } from '$lib/editor/editorUi';
 
 let width = 1440; // 60 px cells: a Medium item is 120 px
 class FakeRO {
@@ -293,16 +294,71 @@ describe('edit mode looks the same (§7.2 WYSIWYG), plus handles', () => {
     expect(get(folderViewFor('d1'))).toEqual({});
     expect(get(selectedNodes).has('f')).toBe(false);
   });
-  it('a click on a minimised folder selects it (it does not open); Enter opens it like the menu\'s Open', async () => {
-    const { container } = await renderEditing([folder('f', kids(2), { display: 'collapsed' })]);
-    const t = screen.getByRole('button', { name: /^f, folder with/ });
-    await fireEvent.click(t);
-    expect(get(selectedNodes).has('f')).toBe(true);
-    expect(el(container, 'f').classList.contains('collapsed')).toBe(true);
-    await fireEvent.keyDown(t, { key: 'Enter' });
-    // The saved default (the draft the Dashboard re-renders from), one undo step.
-    expect((get(session)!.draft.tabs[0].root.children[0] as any).display).toBe('expanded');
+  // Walkthrough 1 (M5 §3a.8): click, Enter and the menu's Open ALL open a minimised folder, in edit
+  // mode too — the draft's saved default, one undo step. A double-click still only edits (§4B).
+  const displayOf = () => (get(session)!.draft.tabs[0].root.children[0] as any).display;
+  it('a click on a minimised folder opens it (the draft, one undo step) and selects it', async () => {
+    vi.useFakeTimers();
+    try {
+      await renderEditing([folder('f', kids(2), { display: 'collapsed' })]);
+      await fireEvent.click(screen.getByRole('button', { name: /^f, folder with/ }), { detail: 1 });
+      expect(get(selectedNodes).has('f')).toBe(true);
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(displayOf()).toBe('expanded');
+      expect(get(session)!.undo).toHaveLength(1);
+      expect(get(session)!.lastLabel).toBe('Open folder');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it('Enter opens it like the menu\'s Open', async () => {
+    await renderEditing([folder('f', kids(2), { display: 'collapsed' })]);
+    await fireEvent.keyDown(screen.getByRole('button', { name: /^f, folder with/ }), { key: 'Enter' });
+    expect(displayOf()).toBe('expanded');
     expect(get(session)!.undo).toHaveLength(1);
+  });
+  it('a double-click edits it and never also opens it', async () => {
+    vi.useFakeTimers();
+    try {
+      await renderEditing([folder('f', kids(2), { display: 'collapsed' })]);
+      const t = screen.getByRole('button', { name: /^f, folder with/ });
+      await fireEvent.click(t, { detail: 1 });
+      await fireEvent.click(t, { detail: 2 });
+      await fireEvent.dblClick(t, { detail: 2 });
+      expect(get(editorDialog)).toEqual({ kind: 'folder', id: 'f' });
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(displayOf()).toBe('collapsed');
+      expect(get(session)!.undo).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+      editorDialog.set(null);
+    }
+  });
+  it('Ctrl+click only adds it to the selection (it does not open)', async () => {
+    vi.useFakeTimers();
+    try {
+      await renderEditing([folder('f', kids(2), { display: 'collapsed' }), tile('t9', 20, 0)]);
+      await fireEvent.click(screen.getByRole('button', { name: /^f, folder with/ }), { detail: 1, ctrlKey: true });
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(get(selectedNodes).has('f')).toBe(true);
+      expect(displayOf()).toBe('collapsed');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it('a click on a sub-folder on a page drills into it (this browser\'s memory), without selecting it', async () => {
+    vi.useFakeTimers();
+    try {
+      const { container } = await renderEditing([folder('f', [kid('a'), sub('s', kids(3, 'x'))])]);
+      await fireEvent.click(screen.getByRole('button', { name: /^s, folder with/ }), { detail: 1 });
+      await vi.advanceTimersByTimeAsync(1000);
+      await tick();
+      expect(page(container).getAttribute('data-folder-id')).toBe('s');
+      expect(get(selectedNodes).has('s')).toBe(false);
+      expect(get(session)!.undo).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
   it('remembered views are not applied while editing (the saved layout shows), so no Restore', async () => {
     setFolderView('d1', 'f', 'collapsed');

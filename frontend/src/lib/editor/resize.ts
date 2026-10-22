@@ -39,7 +39,7 @@ export type ResizeResult = ResizeTarget | { kind: 'invalid'; reason: string };
 /** The phone hint (toolbar) and the reason a resize is refused there. */
 export const NARROW_HINT = 'Resizing needs a wider screen';
 export const COLLAPSED_HINT =
-  'This folder is minimised, so it has no resize handles — choose "Open" in its menu to open it in place and resize it.';
+  'This folder is minimised, so it has no resize handles — click it (or choose "Open" in its menu) to open it in place and resize it.';
 export const GRID_TILE_HINT = 'A tile takes the space of its Size — change its Size in the tile dialog instead.';
 export const IN_FOLDER_HINT = "Items inside a folder take the folder's contents size — set it in the folder's dialog.";
 

@@ -55,7 +55,7 @@
     parent: ContainerMetrics;
     /** An item on another folder's page: always its minimised tile; opening it drills in. */
     item?: boolean;
-    /** Edit mode: click selects, double-click / the handle edits, right-click = item menu. */
+    /** Edit mode: a click selects (a minimised folder: and opens), double-click / the handle edits, right-click = item menu. */
     editing?: boolean;
   }
   let { folder, style = '', plan, dashboard, tab, folderChain, parent, item = false, editing = false }: Props = $props();
@@ -120,6 +120,40 @@
     own(e);
     clearFolderView(dashboard.id, folder.id);
     void thenFocus();
+  }
+  /**
+   * A click on the minimised tile opens it (M5 §3a.8: click, Enter, the menu's Open — in edit mode
+   * too, walkthrough 1). In edit mode a double-click edits it instead (§4B), so the open waits out the
+   * double-click: the dblclick cancels it, and a double-click never also opens. Edit mode also
+   * selects a folder on the tab at once (its outline shows; it is then the open box); a sub-folder on
+   * a page drills in and is not selected (it would be a selection nobody can see). Ctrl/Cmd/Shift
+   * only changes the selection, as on every item.
+   */
+  const OPEN_AFTER_DOUBLE_CLICK_MS = 300;
+  let pendingOpen: ReturnType<typeof setTimeout> | null = null;
+  function cancelPendingOpen() {
+    if (pendingOpen !== null) clearTimeout(pendingOpen);
+    pendingOpen = null;
+  }
+  $effect(() => () => cancelPendingOpen());
+  function onTileClick(e: MouseEvent) {
+    if (!editing) {
+      open();
+      return;
+    }
+    if (e.ctrlKey || e.metaKey || e.shiftKey) {
+      select(e);
+      return;
+    }
+    e.preventDefault();
+    e.stopPropagation(); // an enclosing folder must not select itself too
+    if (e.detail > 1) return; // the second click of a double-click: its dblclick edits
+    if (!item) toggleNode(folder.id, false);
+    cancelPendingOpen();
+    pendingOpen = setTimeout(() => {
+      pendingOpen = null;
+      open();
+    }, OPEN_AFTER_DOUBLE_CLICK_MS);
   }
   function onTileKey(e: KeyboardEvent) {
     if (e.key === 'Enter' || e.key === ' ') {
@@ -254,11 +288,12 @@
       aria-pressed={editing ? selected : undefined}
       aria-describedby={editing && !item ? `resize-hint-${folder.id}` : undefined}
       style:color={textColor}
-      onclick={(e) => (editing ? select(e) : open())}
+      onclick={onTileClick}
       ondblclick={editing
         ? (e) => {
-            // Edit mode: double-click edits, like every item; "Open" is in its menu (§4B).
+            // Edit mode: double-click edits, like every item (§4B) — and cancels the click's open.
             e.stopPropagation();
+            cancelPendingOpen();
             edit();
           }
         : undefined}

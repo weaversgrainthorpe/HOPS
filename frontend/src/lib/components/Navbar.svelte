@@ -1,6 +1,8 @@
 <script lang="ts">
   import { dashboards, currentRoute, dashboardHref } from '$lib/stores/config';
   import { page } from '$app/stores';
+  import { tick, untrack } from 'svelte';
+  import { fitLinks } from '$lib/utils/navFit';
   import type { HeaderConfig } from '$lib/types';
   import { isAuthenticated, logout, whenPasswordSettled } from '$lib/stores/auth';
   import { goto } from '$app/navigation';
@@ -105,23 +107,112 @@
     if (done && isAdminPage) await goto('/');
   }
 
-  // The dashboard links scroll sideways when there are more than fit; a plain mouse wheel
-  // scrolls them too (most mice have no sideways wheel).
-  function scrollLinks(e: WheelEvent) {
-    const el = e.currentTarget as HTMLElement;
-    if (el.scrollWidth <= el.clientWidth || Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
-    e.preventDefault();
-    el.scrollLeft += e.deltaY;
+  // Every dashboard for the nav links, in display order.
+  let navDashboards = $derived($dashboards.map((d) => ({ id: d.id, name: d.name, path: dashboardHref(d.path) })));
+
+  // ---- the dashboard links (Ruling 12): the links that fit, in order; the rest in a "More" menu.
+  // No scrolling strip and no scrollbar. A hidden copy of every link (and of the More button) is
+  // measured; the room is .nav-dash's width, which never depends on how many links show (it takes
+  // the column's spare width), so showing or hiding links never feeds back into the measurement.
+  let dashEl = $state<HTMLElement | null>(null);
+  let measureEl = $state<HTMLElement | null>(null);
+  let shownCount = $state(Number.POSITIVE_INFINITY);
+  let moreWidthPx = $state(0);
+  function measureLinks() {
+    if (!dashEl || !measureEl) return;
+    const widths = Array.from(measureEl.querySelectorAll<HTMLElement>('[data-measure-link]')).map(
+      (e) => e.getBoundingClientRect().width
+    );
+    const more = measureEl.querySelector<HTMLElement>('[data-measure-more]')?.getBoundingClientRect().width ?? 0;
+    const gap = parseFloat(getComputedStyle(dashEl).columnGap) || 0;
+    moreWidthPx = Math.ceil(more);
+    shownCount = fitLinks(widths, gap, more, dashEl.getBoundingClientRect().width);
   }
+  $effect(() => {
+    if (!dashEl || !measureEl) return;
+    void navDashboards; // a renamed, added or removed dashboard: measure again
+    measureLinks();
+    // (No ResizeObserver — very old browsers, test DOMs — measures once per change of the list.)
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => measureLinks());
+    ro.observe(dashEl);
+    ro.observe(measureEl);
+    return () => ro.disconnect();
+  });
+  let shownLinks = $derived(navDashboards.slice(0, Math.min(shownCount, navDashboards.length)));
+  let moreLinks = $derived(navDashboards.slice(shownLinks.length));
+  let moreHasCurrent = $derived(moreLinks.some((d) => d.path === currentPath));
+
+  let moreOpen = $state(false);
+  let moreBtn = $state<HTMLButtonElement | null>(null);
+  let moreMenu = $state<HTMLElement | null>(null);
+  const moreItems = () => Array.from(moreMenu?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? []);
+  async function openMore(focus: 'first' | 'last' | null) {
+    moreOpen = true;
+    await tick();
+    const items = moreItems();
+    if (focus === 'first') items[0]?.focus();
+    else if (focus === 'last') items[items.length - 1]?.focus();
+  }
+  function closeMore(refocus = false) {
+    moreOpen = false;
+    if (refocus) moreBtn?.focus();
+  }
+  function onMoreKey(e: KeyboardEvent) {
+    if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      e.stopPropagation();
+      void openMore('first');
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      e.stopPropagation();
+      void openMore('last');
+    } else if (e.key === 'Escape' && moreOpen) {
+      e.preventDefault();
+      e.stopPropagation();
+      closeMore(true);
+    }
+  }
+  function onMenuKey(e: KeyboardEvent) {
+    const items = moreItems();
+    const at = items.indexOf(document.activeElement as HTMLElement);
+    // The menu's keys are its own (the page's shortcuts, e.g. arrow-key tile moves, never see them).
+    const go = (i: number) => {
+      e.preventDefault();
+      e.stopPropagation();
+      items[(i + items.length) % items.length]?.focus();
+    };
+    if (e.key === 'ArrowDown') go(at + 1);
+    else if (e.key === 'ArrowUp') go(at - 1);
+    else if (e.key === 'Home') go(0);
+    else if (e.key === 'End') go(items.length - 1);
+    else if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      closeMore(true);
+    } else if (e.key === 'Tab') closeMore();
+  }
+  // A press anywhere outside the button and its menu closes it.
+  function onWindowPointerDown(e: PointerEvent) {
+    if (!moreOpen) return;
+    const t = e.target as Node | null;
+    if (t && (moreBtn?.contains(t) || moreMenu?.contains(t))) return;
+    closeMore();
+  }
+  // Going to another page, or every link fitting again, closes it.
+  $effect(() => {
+    void currentPath;
+    untrack(() => closeMore());
+  });
+  $effect(() => {
+    if (moreLinks.length === 0) untrack(() => closeMore());
+  });
 
   let themeIcon = $derived(
     $theme === 'dark' ? 'mdi:weather-night' :
     $theme === 'light' ? 'mdi:weather-sunny' :
     'mdi:theme-light-dark'
   );
-
-  // Every dashboard for the nav links, in display order.
-  let navDashboards = $derived($dashboards.map((d) => ({ id: d.id, name: d.name, path: dashboardHref(d.path) })));
 
   // Header config from the current dashboard (or defaults). While editing, the
   // header shows the edit session's draft (the Header dialog edits the draft).
@@ -135,10 +226,62 @@
   let showCenter = $derived(headerConfig?.showCenter !== false); // Default true
   let leftText = $derived(headerConfig?.leftText);
   let centerTitle = $derived(headerConfig?.centerTitle);
+  // ---- the bar never outgrows the screen: step down (CSS .c1–.c6) until it fits. Measured on the
+  // bar's own width (a window resize) and whenever what it holds changes; all before the next paint
+  // (a ResizeObserver callback, then microtasks), so no level flashes. The bar's width never depends
+  // on the level, so this never loops.
+  const MAX_COMPACT = 6;
+  let navContentEl = $state<HTMLElement | null>(null);
+  let compact = $state(0);
+  let fitting = false;
+  let fitAgain = false;
+  async function fitBar() {
+    if (!navContentEl) return;
+    if (fitting) {
+      fitAgain = true;
+      return;
+    }
+    fitting = true;
+    try {
+      do {
+        fitAgain = false;
+        compact = 0;
+        await tick();
+        while (navContentEl && compact < MAX_COMPACT && navContentEl.scrollWidth > navContentEl.clientWidth + 0.5) {
+          compact++;
+          await tick();
+        }
+      } while (fitAgain);
+    } finally {
+      fitting = false;
+    }
+  }
+  $effect(() => {
+    if (!navContentEl || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => void fitBar());
+    ro.observe(navContentEl);
+    return () => ro.disconnect();
+  });
+  // What the bar holds: edit mode, signed in or not, the page, the title, the text size, the links.
+  $effect(() => {
+    void [$editMode, $isAuthenticated, isDashboardPage, showLeft, showCenter, leftText, centerTitle, pageDashboard?.name, $textSize, moreWidthPx, moreLinks.length];
+    untrack(() => void fitBar());
+  });
 </script>
 
+<svelte:window onpointerdown={onWindowPointerDown} />
+
 <nav class="navbar">
-  <div class="nav-content">
+  <div
+    class="nav-content"
+    class:c1={compact >= 1}
+    class:c2={compact >= 2}
+    class:c3={compact >= 3}
+    class:c4={compact >= 4}
+    class:c5={compact >= 5}
+    class:c6={compact >= 6}
+    bind:this={navContentEl}
+  >
     <div class="nav-left">
       {#if showLeft}
         {#if leftText}
@@ -151,16 +294,74 @@
           </a>
 
           {#if $isAuthenticated && isDashboardPage}
-            <div class="nav-links" onwheel={scrollLinks}>
-              {#each navDashboards as dashboard (dashboard.id)}
-                <a
-                  href={dashboard.path}
-                  class="nav-link"
-                  class:active={currentPath === dashboard.path}
-                >
-                  {dashboard.name}
-                </a>
-              {/each}
+            <div class="nav-dash" bind:this={dashEl} style:min-width="{moreWidthPx}px">
+              <!-- Measured, never seen: every link and the More button at their natural widths. -->
+              <div class="nav-measure-clip" aria-hidden="true">
+                <div class="nav-measure" bind:this={measureEl}>
+                  {#each navDashboards as dashboard (dashboard.id)}
+                    <span class="nav-link" data-measure-link>{dashboard.name}</span>
+                  {/each}
+                  <span class="nav-more-btn" data-measure-more>More <Icon icon="mdi:chevron-down" width="18" height="18" /></span>
+                </div>
+              </div>
+              {#if shownLinks.length > 0}
+                <div class="nav-links">
+                  {#each shownLinks as dashboard (dashboard.id)}
+                    <a
+                      href={dashboard.path}
+                      class="nav-link"
+                      class:active={currentPath === dashboard.path}
+                      aria-current={currentPath === dashboard.path ? 'page' : undefined}
+                    >
+                      {dashboard.name}
+                    </a>
+                  {/each}
+                </div>
+              {/if}
+              {#if moreLinks.length > 0}
+                <div class="nav-more">
+                  <button
+                    type="button"
+                    class="nav-more-btn"
+                    class:active={moreHasCurrent}
+                    bind:this={moreBtn}
+                    aria-label="More dashboards"
+                    aria-haspopup="menu"
+                    aria-expanded={moreOpen}
+                    aria-controls="nav-more-menu"
+                    title="More dashboards"
+                    onclick={() => (moreOpen ? closeMore() : void openMore(null))}
+                    onkeydown={onMoreKey}
+                  >
+                    More <Icon icon="mdi:chevron-down" width="18" height="18" />
+                  </button>
+                  {#if moreOpen}
+                    <!-- svelte-ignore a11y_interactive_supports_focus -->
+                    <div
+                      class="more-menu"
+                      id="nav-more-menu"
+                      role="menu"
+                      aria-label="More dashboards"
+                      bind:this={moreMenu}
+                      onkeydown={onMenuKey}
+                    >
+                      {#each moreLinks as dashboard (dashboard.id)}
+                        <a
+                          href={dashboard.path}
+                          role="menuitem"
+                          tabindex="-1"
+                          class="more-item"
+                          class:active={currentPath === dashboard.path}
+                          aria-current={currentPath === dashboard.path ? 'page' : undefined}
+                          onclick={() => closeMore()}
+                        >
+                          {dashboard.name}
+                        </a>
+                      {/each}
+                    </div>
+                  {/if}
+                </div>
+              {/if}
             </div>
           {/if}
         {/if}
@@ -312,10 +513,10 @@
        don't sit under the rounded screen corners in landscape. */
     padding: 0 max(1rem, env(safe-area-inset-left, 0)) 0 max(1rem, env(safe-area-inset-right, 0));
     display: grid;
-    /* The right-hand controls (pencil, gear, Log out…) always get their full width; the logo
-       and a strip of dashboard links (which scrolls) keep theirs; the centre title shrinks
-       (ellipsis). With room to spare both sides are equal, so the title stays centred.
-       Never wider than the screen, however many dashboards there are. */
+    /* The right-hand controls (pencil, gear, Log out…) always get their full width; the logo and
+       room for the More button keep theirs; the dashboard links take what is left of their side
+       (those that fit; the rest are in More); the centre title shrinks (ellipsis). With room to
+       spare both sides are equal, so the title stays centred. Never wider than the screen. */
     grid-template-columns: minmax(min-content, 1fr) minmax(0, auto) minmax(max-content, 1fr);
     align-items: center;
     gap: 2rem;
@@ -383,19 +584,119 @@
     opacity: 0.8;
   }
 
-  /* Many dashboards: the links scroll sideways inside their own column instead of pushing
-     the page wider or sliding under the controls. */
+  /* The dashboard links and the More button (Ruling 12). It takes the column's spare width — never
+     its content's (width 0, then it grows) — so the column's smallest width is the logo plus room for
+     the More button, and the bar is never wider than the screen however many dashboards there are. */
+  .nav-dash {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 1 1 0;
+    width: 0;
+  }
+
+  /* Only links that fit are drawn, so nothing is cut off; clip (never scroll) a sub-pixel rounding. */
   .nav-links {
     display: flex;
     gap: 0.5rem;
-    /* A fixed preferred width that grows: the column's min-content is the logo plus this
-       strip, never the full list of links. */
-    width: 8rem;
-    min-width: 8rem;
-    flex: 1 1 auto;
-    overflow-x: auto;
-    overflow-y: hidden;
-    scrollbar-width: thin;
+    min-width: 0;
+    overflow: hidden;
+    overflow: clip;
+  }
+
+  /* The measuring copy: laid out at natural widths inside a zero-size clipped box, so it is never
+     seen, never takes space and never widens the page. */
+  .nav-measure-clip {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 0;
+    height: 0;
+    overflow: hidden;
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  .nav-measure {
+    display: flex;
+    gap: 0.5rem;
+    width: max-content;
+  }
+
+  .nav-more {
+    position: relative;
+    flex: none;
+  }
+
+  .nav-more-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.15rem;
+    white-space: nowrap;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.375rem;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-weight: 500;
+    font-size: 1rem;
+    line-height: 1.6;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .nav-more-btn:hover,
+  .nav-more-btn[aria-expanded='true'] {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+  }
+
+  /* The current dashboard is in the menu: the button says so. */
+  .nav-more-btn.active {
+    box-shadow: inset 0 -2px 0 var(--accent);
+    color: var(--text-primary);
+  }
+
+  .more-menu {
+    position: absolute;
+    top: calc(100% + 0.5rem);
+    left: 0;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 12rem;
+    max-width: min(20rem, calc(100vw - 2rem));
+    max-height: min(60vh, 24rem);
+    overflow-y: auto;
+    padding: 0.25rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    box-shadow: 0 8px 24px var(--shadow, rgba(0, 0, 0, 0.35));
+  }
+
+  .more-item {
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.375rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+    text-decoration: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .more-item:hover,
+  .more-item:focus-visible {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    outline: none;
+  }
+
+  .more-item.active {
+    background: var(--accent);
+    color: white;
   }
 
   .nav-link {
@@ -580,10 +881,10 @@
     }
   }
 
-  /* Mobile landscape / small tablet: hide nav links + text-size controls,
-     keep the logo wordmark */
+  /* Mobile landscape / small tablet: hide the dashboard links (and More) and the text-size
+     controls. */
   @media (max-width: 768px) {
-    .nav-links {
+    .nav-dash {
       display: none;
     }
 
@@ -662,5 +963,78 @@
     .logout-btn {
       display: none;
     }
+  }
+  /* The bar never outgrows the screen (walkthrough 1: the page never scrolls sideways), at any width
+     or text size: while it would, it steps down one level at a time (fitBar), least useful first —
+     tighter gaps, no wordmark, no text-size buttons or "Editing" label, smaller buttons and Log out as
+     an icon, no version, then no Help/About (still in Settings' reach for an admin). The pencil, gear
+     and Log out always stay (phones keep their own rules above). */
+  @media (min-width: 481px) {
+    .nav-content.c1 {
+      gap: 1rem;
+      padding: 0 0.75rem;
+    }
+
+    .c1 .nav-left {
+      gap: 1rem;
+    }
+
+    .c1 .nav-right {
+      gap: 0.5rem;
+    }
+  }
+
+  .c2 .wordmark {
+    display: none;
+  }
+
+  .c3 .text-size-controls,
+  .c3 .edit-label {
+    display: none;
+  }
+
+  .nav-content.c4 {
+    gap: 0.375rem;
+    padding: 0 0.5rem;
+  }
+
+  .c4 .nav-left {
+    gap: 0.5rem;
+  }
+
+  .c4 .nav-right {
+    gap: 0.25rem;
+  }
+
+  .c4 .search-btn,
+  .c4 .theme-toggle,
+  .c4 .admin-link,
+  .c4 .export-btn,
+  .c4 .help-btn,
+  .c4 .about-btn {
+    width: 40px;
+    height: 40px;
+  }
+
+  .c4 .edit-toggle {
+    height: 40px;
+    padding: 0 0.6rem;
+  }
+
+  .c4 .logout-label {
+    display: none;
+  }
+
+  .c4 .logout-btn {
+    padding: 0 0.5rem;
+  }
+
+  .c5 .version {
+    display: none;
+  }
+
+  .c6 .help-btn,
+  .c6 .about-btn {
+    display: none;
   }
 </style>
