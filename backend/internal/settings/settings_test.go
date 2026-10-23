@@ -487,3 +487,131 @@ func TestClampedValueStaysVisibleUntilSaved(t *testing.T) {
 		t.Error("after a restart the clamped value must still be in force")
 	}
 }
+
+// --- Ruling 21: a setting still at its previous default moves to the new default ---
+
+// v221Rows is the upload part of a v2.2.1 app_settings table left at its
+// defaults (v2.2.1 seeded every key), plus a few other v2.2.1 rows.
+func v221Rows() map[string]string {
+	return map[string]string{
+		KeyServerPort:               "8080",
+		KeyLogLevel:                 "info",
+		KeyAuthLoginRateLimitPerMin: "20",
+		KeyUploadMaxBytesImport:     "52428800",
+		KeyUploadMaxBytesBackground: "52428800",
+		KeyUploadMaxBytesIcon:       "8388608",
+	}
+}
+
+func storedSetting(t *testing.T, db *sql.DB, key string) string {
+	t.Helper()
+	var v string
+	if err := db.QueryRow(`SELECT value FROM app_settings WHERE key = ?`, key).Scan(&v); err != nil {
+		t.Fatal(err)
+	}
+	return v
+}
+
+func TestUntouchedOldDefaultsMoveToTheNewDefaults(t *testing.T) {
+	s, db := newServiceWithRows(t, v221Rows())
+	if got := s.GetInt(KeyUploadMaxBytesBackground); got != 25*MB {
+		t.Errorf("background = %d, want the new default %d", got, 25*MB)
+	}
+	if got := s.GetInt(KeyUploadMaxBytesIcon); got != 2*MB {
+		t.Errorf("icon = %d, want the new default %d", got, 2*MB)
+	}
+	if got := s.GetInt(KeyUploadMaxBytesImport); got != 50*MB {
+		t.Errorf("import = %d, want 50 MB (its default did not change)", got)
+	}
+	// Written back, so the page no longer shows "Default 25 MB" beside 50 MB.
+	if v := storedSetting(t, db, KeyUploadMaxBytesBackground); v != strconv.Itoa(25*MB) {
+		t.Errorf("stored background = %s", v)
+	}
+	if v := storedSetting(t, db, KeyUploadMaxBytesIcon); v != strconv.Itoa(2*MB) {
+		t.Errorf("stored icon = %s", v)
+	}
+	want := []DefaultMove{
+		{Key: KeyUploadMaxBytesBackground, From: 50 * MB, To: 25 * MB},
+		{Key: KeyUploadMaxBytesIcon, From: 8 * MB, To: 2 * MB},
+	}
+	if got := s.DefaultMoves(); !equalMoves(got, want) {
+		t.Errorf("DefaultMoves = %+v, want %+v", got, want)
+	}
+	if len(s.Adjustments()) != 0 {
+		t.Errorf("a moved default is not a clamp: %v", s.Adjustments())
+	}
+}
+
+func TestAdminSetUploadLimitsAreLeftAlone(t *testing.T) {
+	rows := v221Rows()
+	rows[KeyUploadMaxBytesBackground] = strconv.Itoa(40 * MB)
+	rows[KeyUploadMaxBytesIcon] = "8388607" // one byte off the old default: changed by the admin
+	s, db := newServiceWithRows(t, rows)
+	if v := storedSetting(t, db, KeyUploadMaxBytesBackground); v != strconv.Itoa(40*MB) {
+		t.Errorf("admin-set background changed to %s", v)
+	}
+	if v := storedSetting(t, db, KeyUploadMaxBytesIcon); v != "8388607" {
+		t.Errorf("admin-set icon changed to %s", v)
+	}
+	if got := s.DefaultMoves(); len(got) != 0 {
+		t.Errorf("DefaultMoves = %+v, want none", got)
+	}
+}
+
+func TestDefaultMoveIsIdempotentAndOneTime(t *testing.T) {
+	s1, db := newServiceWithRows(t, v221Rows())
+	first := s1.DefaultMoves()
+	// A second start changes nothing, and still reports the moves (for the
+	// notice, until it is dismissed).
+	s2, err := New(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v := storedSetting(t, db, KeyUploadMaxBytesBackground); v != strconv.Itoa(25*MB) {
+		t.Errorf("second start: background = %s", v)
+	}
+	if !equalMoves(s2.DefaultMoves(), first) {
+		t.Errorf("second start: DefaultMoves = %+v, want %+v", s2.DefaultMoves(), first)
+	}
+	// The admin later chooses exactly the old default: that is their choice
+	// now, and a restart must not move it again.
+	if err := s2.Set(KeyUploadMaxBytesBackground, strconv.Itoa(50*MB)); err != nil {
+		t.Fatal(err)
+	}
+	s3, err := New(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := s3.GetInt(KeyUploadMaxBytesBackground); got != 50*MB {
+		t.Errorf("an admin's later choice of 50 MB was moved again: %d", got)
+	}
+}
+
+func TestFreshInstallHasNoDefaultMoves(t *testing.T) {
+	s, db := newServiceWithRows(t, nil)
+	if got := s.DefaultMoves(); len(got) != 0 {
+		t.Errorf("fresh install: DefaultMoves = %+v", got)
+	}
+	if err := s.Set(KeyUploadMaxBytesIcon, strconv.Itoa(8*MB)); err != nil {
+		t.Fatal(err)
+	}
+	s2, err := New(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := s2.GetInt(KeyUploadMaxBytesIcon); got != 8*MB {
+		t.Errorf("fresh install then admin chose 8 MB: moved to %d", got)
+	}
+}
+
+func equalMoves(a, b []DefaultMove) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}

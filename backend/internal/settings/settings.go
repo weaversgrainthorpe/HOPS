@@ -210,7 +210,36 @@ type Service struct {
 	// setting clamped on load. The clamp is not written back, so the admin is
 	// told (Adjustments) until they save the setting themselves.
 	adjusted map[string]string
+	// moves is what the one-time default move (Ruling 21) changed, read
+	// back from settings_once on every start so the notice can be shown
+	// until it is dismissed.
+	moves []DefaultMove
 }
+
+// DefaultMove is a setting that was still at its previous default and was
+// moved to the new one (Ruling 21). From and To are byte counts.
+type DefaultMove struct {
+	Key  string `json:"key"`
+	From int    `json:"from"`
+	To   int    `json:"to"`
+}
+
+// previousDefaults lists, per setting, the default an older build seeded
+// (v2.2.1 and earlier v3 builds). A stored value exactly equal to it has
+// never been changed, so it moves to the new default once (Ruling 21).
+// Import stays 50 MB, so it is not listed.
+var previousDefaults = []struct {
+	Key  string
+	From int
+}{
+	{KeyUploadMaxBytesBackground, 50 * MB},
+	{KeyUploadMaxBytesIcon, 8 * MB},
+}
+
+// defaultMoveID marks, in settings_once, that the upload-default move has
+// run on this database. It runs once: an admin who later chooses the old
+// value on purpose keeps it.
+const defaultMoveID = "upload-defaults-v3"
 
 // New constructs a Service: ensures the app_settings table is seeded with
 // defaults for any missing keys, then loads every value into the cache.
@@ -229,6 +258,11 @@ func New(db *sql.DB) (*Service, error) {
 }
 
 func (s *Service) seedAndLoad() error {
+	// Move untouched old defaults first (before seeding, so a fresh
+	// install's rows are never mistaken for an old install's).
+	if err := s.moveOldDefaults(); err != nil {
+		return fmt.Errorf("move old defaults: %w", err)
+	}
 	// Insert any missing defaults idempotently.
 	for _, d := range Definitions {
 		if _, err := s.db.Exec(
@@ -252,6 +286,80 @@ func (s *Service) seedAndLoad() error {
 		s.cache[k] = s.clampOnLoad(k, v)
 	}
 	return rows.Err()
+}
+
+// moveOldDefaults runs the one-time Ruling 21 move: each setting in
+// previousDefaults whose stored value is exactly its previous default goes to
+// the current default. The changed values and the record of what moved (for
+// the notice) are written in one transaction, so a move is never made
+// without its notice, nor recorded without being made. Later starts only
+// read the record back.
+func (s *Service) moveOldDefaults() error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(`CREATE TABLE IF NOT EXISTS settings_once (
+		id         TEXT PRIMARY KEY,
+		detail     TEXT NOT NULL DEFAULT '[]',
+		applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	)`); err != nil {
+		return err
+	}
+	var detail string
+	err = tx.QueryRow(`SELECT detail FROM settings_once WHERE id = ?`, defaultMoveID).Scan(&detail)
+	switch {
+	case err == nil:
+		if err := json.Unmarshal([]byte(detail), &s.moves); err != nil {
+			return fmt.Errorf("read the record of moved defaults: %w", err)
+		}
+		return tx.Commit()
+	case err != sql.ErrNoRows:
+		return err
+	}
+	moves := []DefaultMove{}
+	for _, p := range previousDefaults {
+		to, err := strconv.Atoi(defByKey[p.Key].Default)
+		if err != nil {
+			return fmt.Errorf("default of %q: %w", p.Key, err)
+		}
+		res, err := tx.Exec(
+			`UPDATE app_settings SET value = ?, updated_at = datetime('now') WHERE key = ? AND value = ?`,
+			strconv.Itoa(to), p.Key, strconv.Itoa(p.From))
+		if err != nil {
+			return fmt.Errorf("move %q: %w", p.Key, err)
+		}
+		if n, err := res.RowsAffected(); err != nil {
+			return err
+		} else if n > 0 {
+			moves = append(moves, DefaultMove{Key: p.Key, From: p.From, To: to})
+		}
+	}
+	b, err := json.Marshal(moves)
+	if err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`INSERT INTO settings_once (id, detail) VALUES (?, ?)`, defaultMoveID, string(b)); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	for _, m := range moves {
+		slog.Info("setting was at its previous default; moved to the new default",
+			"component", "settings", "key", m.Key, "from", m.From, "to", m.To)
+	}
+	s.moves = moves
+	return nil
+}
+
+// DefaultMoves returns the settings the one-time default move changed on this
+// database (empty when nothing was at an old default).
+func (s *Service) DefaultMoves() []DefaultMove {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return append([]DefaultMove(nil), s.moves...)
 }
 
 // clampOnLoad brings a stored byte-size setting that is outside its bounds

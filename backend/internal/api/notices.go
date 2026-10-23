@@ -12,6 +12,7 @@ import (
 	"sync"
 
 	"github.com/weaversgrainthorpe/HOPS/internal/configdoc"
+	"github.com/weaversgrainthorpe/HOPS/internal/settings"
 )
 
 // notice is a one-time message for the user, shown while it applies to the
@@ -28,9 +29,49 @@ type notice struct {
 // checks are off start being checked.
 const noticeLayeredStatusChecks = "layered-status-checks-v4"
 
+// noticeUploadDefaultsMoved announces Ruling 21: upload limits still at the
+// old defaults were moved to the new ones at startup (settings.DefaultMoves).
+const noticeUploadDefaultsMoved = "upload-defaults-moved-v3"
+
 // knownNotices is every notice id this build can show; dismissing any other
 // id is a 404.
-var knownNotices = map[string]bool{noticeLayeredStatusChecks: true}
+var knownNotices = map[string]bool{noticeLayeredStatusChecks: true, noticeUploadDefaultsMoved: true}
+
+// uploadLimitLabels names each moved setting as the settings page does.
+var uploadLimitLabels = map[string]string{
+	settings.KeyUploadMaxBytesImport:     "Largest file you can import",
+	settings.KeyUploadMaxBytesBackground: "Largest background image",
+	settings.KeyUploadMaxBytesIcon:       "Largest icon file",
+}
+
+// uploadDefaultsNotice describes the one-time default move, or false when
+// nothing moved.
+func uploadDefaultsNotice(moves []settings.DefaultMove) (notice, bool) {
+	if len(moves) == 0 {
+		return notice{}, false
+	}
+	parts := make([]string, 0, len(moves))
+	for _, m := range moves {
+		label := uploadLimitLabels[m.Key]
+		if label == "" {
+			label = m.Key
+		}
+		parts = append(parts, fmt.Sprintf("%s %s → %s", label, mbText(m.From), mbText(m.To)))
+	}
+	return notice{
+		ID: noticeUploadDefaultsMoved,
+		Text: "Upload limits updated to the new defaults: " + strings.Join(parts, "; ") +
+			". Limits you had changed yourself were left as they were.",
+	}, true
+}
+
+// mbText shows a byte count in MB as the settings page does.
+func mbText(b int) string {
+	if b%settings.MB == 0 {
+		return fmt.Sprintf("%d MB", b/settings.MB)
+	}
+	return fmt.Sprintf("%.1f MB", float64(b)/float64(settings.MB))
+}
 
 // noticeTileSizesPrefix starts the id of the tile-size notice (Ruling 3). The
 // rest is a hash of its text, so a later import's tiles get a fresh notice
@@ -181,6 +222,9 @@ func (s *noticeState) dismiss(id string) {
 // (the document the handler just loaded), leaving out dismissed ones.
 func (r *Router) currentNotices(stored configdoc.Obj) []notice {
 	var out []notice
+	if n, ok := uploadDefaultsNotice(r.settings.DefaultMoves()); ok {
+		out = append(out, n)
+	}
 	if n, ok := r.sizeNotes.notice(); ok {
 		out = append(out, n)
 	}
