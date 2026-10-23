@@ -300,7 +300,7 @@ describe('folder layers', () => {
     const { container } = render(TabCanvas, { dashboard: d, tab });
     await settle();
     const f = node(container, 'f1');
-    const surface = f.querySelector<HTMLElement>(':scope > .folder-surface > .folder-surface-color');
+    const surface = f.querySelector<HTMLElement>(':scope > .folder-shape > .folder-surface > .folder-surface-color');
     expect(surface?.style.opacity).toBe('0.5');
     expect(surface?.style.backgroundColor).toBe('rgb(255, 0, 0)');
     // Nothing between the folder and its tile carries an opacity.
@@ -454,7 +454,7 @@ describe('folder layers', () => {
     const { container } = render(TabCanvas, { dashboard: d, tab });
     await settle();
     const box = node(container, 'f1');
-    const root = box.querySelector<HTMLElement>(':scope > .folder-surface .background-root.scope-box');
+    const root = box.querySelector<HTMLElement>(':scope > .folder-shape > .folder-surface .background-root.scope-box');
     expect(root).not.toBeNull();
     expect(root?.style.opacity).toBe('0.7');
     expect(document.querySelector('.overlay-backdrop')).toBeNull();

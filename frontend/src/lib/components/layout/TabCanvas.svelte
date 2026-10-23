@@ -10,6 +10,7 @@
     FOLDER_VIEW_CONTEXT, applyFolderViews, folderViewFor, reconcileNav, type FolderViewContext
   } from '$lib/stores/folderView';
   import ContainerView from './ContainerView.svelte';
+  import { SHAPE_MEASURE_CONTEXT, type ShapeMeasure } from '$lib/layout/shapeMeasure';
 
   interface Props {
     dashboard: LayoutDashboard;
@@ -22,15 +23,41 @@
   let el = $state<HTMLElement | null>(null);
   let width = $state(0);
 
-  // One ResizeObserver per canvas; geometry is derived once per width change.
+  // One ResizeObserver per canvas; geometry is derived once per width change. The same observer
+  // measures every folder shape on the canvas (M6: FolderShape draws at its real size, Tenet 4).
+  let ro: ResizeObserver | null = null;
+  const shapeSizes = new Map<Element, (w: number, h: number) => void>();
+  const num = (n: unknown) => (typeof n === 'number' && Number.isFinite(n) ? n : 0);
   $effect(() => {
     if (!el) return;
-    const ro = new ResizeObserver((entries) => {
-      const w = entries[0]?.contentRect.width;
-      if (typeof w === 'number' && Number.isFinite(w)) width = w;
+    const canvas = el;
+    const obs = new ResizeObserver((entries) => {
+      for (const e of entries) {
+        if (e.target === canvas) {
+          const w = e.contentRect.width;
+          if (typeof w === 'number' && Number.isFinite(w)) width = w;
+        } else {
+          shapeSizes.get(e.target)?.(num(e.contentRect.width), num(e.contentRect.height));
+        }
+      }
     });
-    ro.observe(el);
-    return () => ro.disconnect();
+    ro = obs;
+    obs.observe(canvas);
+    for (const t of shapeSizes.keys()) obs.observe(t);
+    return () => {
+      obs.disconnect();
+      ro = null;
+    };
+  });
+  setContext<ShapeMeasure>(SHAPE_MEASURE_CONTEXT, {
+    observe(target, onSize) {
+      shapeSizes.set(target, onSize);
+      ro?.observe(target);
+      return () => {
+        shapeSizes.delete(target);
+        ro?.unobserve(target);
+      };
+    }
   });
 
   // A config reload (or, in edit mode, an undo or delete in the draft) may remove a sub-folder this

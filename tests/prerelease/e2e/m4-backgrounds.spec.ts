@@ -143,7 +143,7 @@ test.describe('M4 backgrounds in a real browser', () => {
     await expect(titled.getByRole('button', { name: 'Minimise Titled' })).toBeVisible();
     await expect(page.locator('.max-host, .overlay-backdrop')).toHaveCount(0);
     // Its surface is its own (translucent) look, inside its box.
-    await expect(titled.locator(':scope > .folder-surface')).toHaveCount(1);
+    await expect(titled.locator(':scope > .folder-shape .folder-surface')).toHaveCount(1);
   });
 
   // ---- M4 Task 5: the picker at folder level and the corner controls (call 6)

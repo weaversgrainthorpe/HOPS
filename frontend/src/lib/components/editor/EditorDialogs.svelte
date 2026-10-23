@@ -11,7 +11,7 @@
   import NodeContextMenu from './NodeContextMenu.svelte';
   import { editorDialog, editorMenu, openDialog } from '$lib/editor/editorUi';
   import {
-    addNode, blankFolder, blankTile, contentSizeProblem, deleteWithConfirm, duplicate, editFolder, editNode, findIn,
+    addNode, blankFolder, blankTile, contentSizeProblem, shapeProblem, deleteWithConfirm, duplicate, editFolder, editNode, findIn,
     newTileSizeProblem, sizeTarget, type TileSize
   } from '$lib/editor/editorActions';
   import { session } from '$lib/stores/editSession';
@@ -140,6 +140,7 @@
         onMoveCopy={() => openDialog({ kind: 'movecopy', ids: [id] })}
         {statusContext}
         checkContentSize={(cs) => (draft ? contentSizeProblem(draft, id, cs) : 'Not editing: click Edit first.')}
+        checkShape={(sh, pos) => (draft ? shapeProblem(draft, id, sh, pos) : 'Not editing: click Edit first.')}
       />
     {/key}
   {:else if !dlg.id && newFolder}

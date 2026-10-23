@@ -196,7 +196,7 @@ test.describe('M4 layered backgrounds in a real browser', () => {
     return out;
   };
   const folderLayer = (page: Page, folderId: string) =>
-    page.locator(`[data-node-id="${folderId}"] > .folder-surface > .background-root[data-bg-level="folder"]`);
+    page.locator(`[data-node-id="${folderId}"] > .folder-shape .folder-surface > .background-root[data-bg-level="folder"]`);
   const animatingIds = (page: Page) =>
     page.locator('.folder-surface > .background-root[data-bg-level="folder"][data-animate="true"]').evaluateAll((els) =>
       els.map((e) => e.closest('[data-node-id]')?.getAttribute('data-node-id') ?? '?').sort()

@@ -8,7 +8,7 @@
   export type FolderFields = Pick<
     FolderNode,
     | 'name' | 'icon' | 'iconUrl' | 'iconBgColor' | 'color' | 'opacity' | 'textColor' | 'display' | 'showTitle' | 'shape'
-    | 'size' | 'contentSize'
+    | 'tabPosition' | 'size' | 'contentSize'
   > & {
     background?: Background | null;
     /** Status checks (M4 §4b): true/false = set here, null = inherit (key removed), absent = unchanged. */
@@ -27,8 +27,10 @@
   import Modal from '../shared/Modal.svelte';
   import StatusCheckSetting from './StatusCheckSetting.svelte';
   import { containerSetting, type LevelSetting, type StatusContext } from '$lib/editor/statusChecks';
-  import { FOLDER_SHAPES, isFolderShape, sizeOf } from '$lib/layout/geometry';
-  import type { FolderShape, ItemSize } from '$lib/types/layout';
+  import { FOLDER_SHAPES, TAB_POSITIONS, hasTab, isFolderShape, sizeOf } from '$lib/layout/geometry';
+  import { MIN_TEXT_CONTRAST, deriveFolderColours } from '$lib/layout/folderColours';
+  import FolderShapeView from '../layout/FolderShape.svelte';
+  import type { FolderShape, ItemSize, TabPosition } from '$lib/types/layout';
 
   interface Props {
     folder: FolderNode;
@@ -43,9 +45,11 @@
     statusContext?: StatusContext;
     /** Why this contents size can't be used here (no room for its smallest open box), or null. */
     checkContentSize?: (size: ItemSize) => string | null;
+    /** Why this look can't be used here (an unknown one, or no room for its box to grow), or null. */
+    checkShape?: (shape: string, tabPosition: TabPosition) => string | null;
   }
   let {
-    folder, isNew = false, onSave, onCancel, onDelete, onDuplicate, onMoveCopy, statusContext, checkContentSize
+    folder, isNew = false, onSave, onCancel, onDelete, onDuplicate, onMoveCopy, statusContext, checkContentSize, checkShape
   }: Props = $props();
   let showBackgroundConfig = $state(false);
   // A picked background is staged here and saved with the dialog (one undo step);
@@ -89,6 +93,13 @@
   // An unknown stored look (e.g. the retired folder-tab) is kept, shown as unknown and refused on Save
   // with the reason (editFolder, M6 §3a.8) — never silently swapped for another look.
   let shape = $state<string>(folder.shape ?? 'rounded');
+  // svelte-ignore state_referenced_locally
+  let tabPosition = $state<TabPosition>(folder.tabPosition === 'centre' || folder.tabPosition === 'right' ? folder.tabPosition : 'left');
+  const TAB_POSITION_LABELS: Record<TabPosition, string> = { left: 'Left', centre: 'Centre', right: 'Right' };
+  /** The look's colours as drawn (M6 §3a.7): an explicit text colour that fails is warned about here. */
+  const colours = $derived(deriveFolderColours(color, textColor));
+  /** A look refused here (shown under the picker; Save is refused while it stands). */
+  const shapeError = $derived(checkShape ? checkShape(shape, tabPosition) : null);
   const SHAPE_LABELS: Record<FolderShape, string> = {
     rounded: 'Rounded box', 'simple-tab': 'Simple tab', 'folder-flat': 'Folder (flat)', 'folder-paper': 'Folder with paper',
     'folder-outline': 'Folder (outlined)', 'folder-cartoon': 'Folder (cartoon)', 'folder-open': 'Folder (open flap)'
@@ -129,6 +140,7 @@
     }
     problem = '';
     if (contentSizeError) return; // shown under Contents size
+    if (shapeError) return; // shown under the look picker
     onSave({
       name: name.trim(),
       icon: icon || undefined,
@@ -140,6 +152,8 @@
       display,
       showTitle,
       shape: shape as FolderShape,
+      // The tab position is written for a tab shape (or kept when one was stored).
+      ...(hasTab(shape) || folder.tabPosition !== undefined ? { tabPosition } : {}),
       size,
       contentSize,
       ...(stagedBackground ? { background: stagedBackground.value ?? null } : {}),
@@ -197,6 +211,12 @@
           </label>
         {/each}
       </div>
+      {#if colours.contrastWarning}
+        <p class="problem" role="status" data-contrast-warning>
+          {textColor === 'light' ? 'Light' : 'Dark'} text is hard to read on this colour (contrast {colours.contrast.toFixed(1)}:1,
+          needs {MIN_TEXT_CONTRAST}:1). Choose Auto or another colour.
+        </p>
+      {/if}
     </fieldset>
 
     <fieldset class="form-group">
@@ -230,20 +250,46 @@
       </div>
     </div>
 
-    <div class="form-row">
-      <div class="form-group">
-        <label for="folder-shape">Look</label>
-        <select id="folder-shape" bind:value={shape} aria-describedby="folder-shape-note">
-          {#if !isFolderShape(shape)}
-            <option value={shape} disabled>Unknown look ({shape}) — pick one</option>
-          {/if}
-          {#each FOLDER_SHAPES as s (s)}
-            <option value={s}>{SHAPE_LABELS[s]}</option>
-          {/each}
-        </select>
-        <small id="folder-shape-note">Saved now; the folder looks are drawn in a coming update (every folder draws as a rounded box for now).</small>
+    <fieldset class="form-group">
+      <legend id="folder-look-legend">Look</legend>
+      {#if !isFolderShape(shape)}
+        <p class="problem" role="status">Unknown look ({shape}) — it draws as a rounded box. Pick one below.</p>
+      {/if}
+      <!-- Live previews of every look in this folder's colour and tab position (the previews are
+           decoration; each radio is named by its label). -->
+      <div class="shape-picker" role="radiogroup" aria-labelledby="folder-look-legend">
+        {#each FOLDER_SHAPES as s (s)}
+          <label class="shape-choice" class:chosen={shape === s}>
+            <input type="radio" name="folder-shape" value={s} bind:group={shape} />
+            <span class="shape-preview" class:rounded={s === 'rounded'}>
+              <FolderShapeView
+                look={{ shape: s, tabPosition, color, textColor, opacity }}
+                variant="minimised"
+                dashboardId=""
+                widthPx={72}
+                heightPx={56}
+              />
+            </span>
+            <span class="shape-label">{SHAPE_LABELS[s]}</span>
+          </label>
+        {/each}
       </div>
-    </div>
+      {#if shapeError}<p class="problem" role="alert">{shapeError}</p>{/if}
+    </fieldset>
+
+    {#if hasTab(shape)}
+      <fieldset class="form-group">
+        <legend id="folder-tab-legend">Tab position</legend>
+        <div class="choice-row" role="radiogroup" aria-labelledby="folder-tab-legend">
+          {#each TAB_POSITIONS as p (p)}
+            <label class="choice">
+              <input type="radio" name="folder-tab-position" value={p} bind:group={tabPosition} />
+              {TAB_POSITION_LABELS[p]}
+            </label>
+          {/each}
+        </div>
+      </fieldset>
+    {/if}
 
     <label class="check">
       <input type="checkbox" bind:checked={showTitle} /> Show title bar
@@ -370,6 +416,51 @@
   }
   .check {
     margin-bottom: 1.25rem;
+  }
+  .shape-picker {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+    gap: 0.5rem;
+  }
+  .shape-choice {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.5rem 0.25rem;
+    border: 2px solid var(--border);
+    border-radius: 0.5rem;
+    cursor: pointer;
+    font-weight: 400;
+    font-size: 0.8rem;
+    text-align: center;
+  }
+  .shape-choice.chosen {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+  }
+  .shape-choice:focus-within {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  /* The radio is the real control (keyboard, screen readers); the preview shows the choice. */
+  .shape-choice input {
+    position: absolute;
+    opacity: 0;
+    width: 1px;
+    height: 1px;
+    margin: 0;
+  }
+  .shape-preview {
+    position: relative;
+    isolation: isolate;
+    width: 72px;
+    height: 56px;
+  }
+  .shape-preview.rounded {
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
   }
   .icon-summary {
     display: flex;

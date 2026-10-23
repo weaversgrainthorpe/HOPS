@@ -46,7 +46,7 @@ describe('FolderEditModal', () => {
     await fireEvent.click(screen.getByRole('radio', { name: 'Collapsed' }));
     expect(screen.queryByLabelText('Layout')).toBeNull(); // M5: folders always flow; no layout
     await fireEvent.click(screen.getByLabelText('Show title bar'));
-    await fireEvent.change(screen.getByLabelText('Look'), { target: { value: 'folder-paper' } });
+    await fireEvent.click(screen.getByRole('radio', { name: 'Folder with paper' }));
     await fireEvent.click(screen.getByRole('button', { name: /^Save/ }));
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
       name: 'Media', display: 'collapsed', showTitle: false, shape: 'folder-paper',

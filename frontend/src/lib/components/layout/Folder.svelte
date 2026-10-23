@@ -24,9 +24,12 @@
   import type { FolderNode, LayoutDashboard, LayoutTab } from '$lib/types/layout';
   import type { CanvasPlan, ContainerMetrics } from '$lib/layout/geometry';
   import {
-    FOLDER_CHROME, NESTED_CHROME, NESTED_LEVEL_Y_PX, folderFlowMetrics, nestedPaging, nodeBox, openFolderContentBox, phoneFlowMetrics,
-    phonePaging, previewChildren, sizeSpan
+    FOLDER_CHROME, NESTED_CHROME, NESTED_LEVEL_Y_PX, folderFlowMetrics, folderTabRect, hasTab, isFolderShape, nestedPaging, nodeBox,
+    openFolderContentBox, phoneFlowMetrics, phonePaging, previewChildren, shapeOf, sizeSpan
   } from '$lib/layout/geometry';
+  import { deriveFolderColours } from '$lib/layout/folderColours';
+  import { MINI_NAME_MIN_TILE_PX, shapeParts, tabWantPx } from '$lib/layout/folderShapePaths';
+  import FolderShape from './FolderShape.svelte';
   import { getTextColorValue } from '$lib/utils/colorContrast';
   import Icon from '@iconify/svelte';
   import ColoredIcon from '../ColoredIcon.svelte';
@@ -45,7 +48,6 @@
   import { focusFolderControl } from '$lib/utils/overlayActions';
   import ResizeHandles from '../editor/ResizeHandles.svelte';
   import EditHandle from '../editor/EditHandle.svelte';
-  import FolderSurface from '../background/FolderSurface.svelte';
   import BackgroundFailedBadge from '../background/BackgroundFailedBadge.svelte';
 
   interface Props {
@@ -178,14 +180,49 @@
     }
   }
 
-  // ---- look
+  // ---- look (M6): the folder's shape is drawn by FolderShape behind its content, in every state. Its
+  // colour look applies to the SHAPE only, never to the tiles inside.
   const showTitle = $derived(folder.showTitle !== false);
-  const textColor = $derived(folder.color ? getTextColorValue(folder.textColor || 'auto', folder.color) : 'inherit');
-  // The folder's colour look applies to its SURFACE only (FolderSurface), never to the tiles inside.
-  const surfaceColor = $derived(folder.color || 'var(--bg-secondary)');
-  const surfaceOpacity = $derived(folder.opacity !== undefined ? folder.opacity : 0.95);
+  /** Tab shapes put the name on the tab and the controls at the top-right of the body (§3a.2). */
+  const tabbed = $derived(hasTab(folder.shape));
+  const tabPos = $derived(folder.tabPosition === 'centre' || folder.tabPosition === 'right' ? folder.tabPosition : 'left');
+  /** The text colour on a look: Rounded keeps M5's; a tab shape uses its contrast-safe colour (§3a.7). */
+  function lookText(f: FolderNode): string | undefined {
+    if (!hasTab(f.shape)) return f.color ? getTextColorValue(f.textColor || 'auto', f.color) : undefined;
+    if (shapeOf(f.shape) === 'folder-outline') return undefined; // see-through: the text of what shows through
+    const c = deriveFolderColours(f.color, f.textColor);
+    return c.text === 'inherit' ? undefined : c.text;
+  }
+  const textColor = $derived(lookText(folder) ?? 'inherit');
+  /** Never silent (§3.9): a stored look or colour that can't be drawn says so in edit mode. */
+  function lookProblems(f: FolderNode): { unknownShape: string | null; unreadableColour: boolean } {
+    return {
+      unknownShape: f.shape !== undefined && !isFolderShape(f.shape) ? String(f.shape) : null,
+      unreadableColour: deriveFolderColours(f.color, f.textColor).invalid
+    };
+  }
+  const problems = $derived(lookProblems(folder));
+  /** The width a tab's label asks for: its name (and icon); an untitled tab asks for none. */
+  function wantOf(f: FolderNode, compact = false): number {
+    return f.showTitle === false ? 0 : tabWantPx(f.name ?? '', !compact && !!(f.iconUrl || f.icon), compact);
+  }
 
-  // ---- minimised tile
+  // ---- minimised tile: a compact version of its shape (measured: its size depends on where it is)
+  let tileW = $state(0);
+  let tileH = $state(0);
+  /** The Small silhouette (§3a.6): too small for a 12 px name, so only the shape and its icons. */
+  const silhouette = $derived(tabbed && tileH > 0 && tileH < MINI_NAME_MIN_TILE_PX);
+  /** A tab shape's tile lays its name and icons out on the front panel, below the tab. */
+  const miniFrontPx = $derived(
+    tabbed ? shapeParts(folder.shape, folder.tabPosition, 'minimised', { widthPx: tileW || 120, heightPx: tileH || 120 }).frontRect.topPx : 0
+  );
+  /**
+   * A tab shape's icons fit the front panel under its name: the grid (square) is no taller than the
+   * room left below the tab, the name (~18 px + gap) and the bottom padding.
+   */
+  const miniGridPx = $derived(
+    tabbed && tileH > 0 ? Math.max(12, Math.min(64, tileH - miniFrontPx - 2 - 8 - (silhouette ? 0 : 22))) : undefined
+  );
   const previews = $derived(previewChildren(folder));
   const itemCount = $derived(Array.isArray(folder.content?.children) ? folder.content.children.length : 0);
   // Children exist but none can be drawn: say so, never "Empty folder" (no silent failures).
@@ -208,9 +245,23 @@
   // keeps and its items are tab cells at its contents size. One page model each (geometry.ts).
   const stacked = $derived(plan.kind === 'stacked' || !folder.placement);
   const phoneCanvasPx = $derived(plan.kind === 'stacked' ? (plan.widthPx ?? 0) : 0);
+  // The open box: its content inset is its shape's (shapeInset), so a tab shape's page is the tab
+  // allowance shorter than Rounded's (M6 §3a.4).
+  const openBoxWidthPx = $derived(stacked ? phoneCanvasPx : nodeBox(folder.placement!, parent).widthPx);
   const contentWidthPx = $derived(
-    stacked ? Math.max(0, phoneCanvasPx - FOLDER_CHROME.padXPx) : openFolderContentBox(nodeBox(folder.placement!, parent)).widthPx
+    stacked
+      ? Math.max(0, phoneCanvasPx - FOLDER_CHROME.padXPx)
+      : openFolderContentBox(nodeBox(folder.placement!, parent), folder.shape, folder.tabPosition).widthPx
   );
+  /** Where the open folder's tab and its name sit (the same rect FolderShape draws). */
+  const topTab = $derived(
+    tabbed ? folderTabRect(folder.shape, folder.tabPosition, { widthPx: openBoxWidthPx, heightPx: 0 }, wantOf(folder)) : null
+  );
+  /** A nested level's box (level k fills the body of level k - 1) and its tab. */
+  function nestedTab(f: FolderNode, k: number) {
+    const widthPx = Math.max(0, contentWidthPx - (k - 1) * NESTED_CHROME.padXPx);
+    return folderTabRect(f.shape, f.tabPosition, { widthPx, heightPx: 0 }, wantOf(f, true));
+  }
   // The innermost box's content width: one inset box (NESTED_CHROME) comes off each level (M5 §7).
   const innerWidthPx = $derived(Math.max(0, contentWidthPx - levels * NESTED_CHROME.padXPx));
   const asked = $derived($nav.page[current.id] ?? 0);
@@ -224,7 +275,7 @@
             // Each inset level's tab allowance, bar and padding come off the screen a page may use.
             heightPx:
               plan.kind === 'stacked'
-                ? Math.max(0, (plan.viewportHeightPx ?? 0) - levels * NESTED_LEVEL_Y_PX)
+                ? Math.max(0, (plan.viewportHeightPx ?? 0) - levels * NESTED_LEVEL_Y_PX - (tabbed ? FOLDER_CHROME.tabPx : 0))
                 : 0
           },
           current.contentSize,
@@ -236,7 +287,7 @@
   const paging = $derived(
     phone
       ? { ...phone, noRoom: false, noRoomInside: false }
-      : nestedPaging(openFolderContentBox(nodeBox(folder.placement!, parent)), levels, current.contentSize, parent.unitPx, kids.length, asked)
+      : nestedPaging(openFolderContentBox(nodeBox(folder.placement!, parent), folder.shape, folder.tabPosition), levels, current.contentSize, parent.unitPx, kids.length, asked)
   );
   const metrics = $derived(phone ? phoneFlowMetrics(phone, innerWidthPx) : folderFlowMetrics(paging, parent.unitPx, innerWidthPx));
   const pageKids = $derived(kids.slice(paging.start, paging.end));
@@ -338,6 +389,21 @@
   </span>
 {/snippet}
 
+<!-- Edit mode only: a look that can't be drawn as stored says so (M6 §3.9) — never a silent swap. -->
+{#snippet lookNotes(f: FolderNode, cls: string)}
+  {#if editing}
+    {@const p = lookProblems(f)}
+    {#if p.unknownShape !== null}
+      <span class="look-note {cls}" role="status" data-shape-unknown={f.id} title="Pick a look in its dialog"
+        >Unknown look “{p.unknownShape}” — drawn as Rounded</span
+      >
+    {/if}
+    {#if p.unreadableColour}
+      <span class="look-note {cls}" role="status" data-colour-unreadable={f.id}>Colour can't be read — theme colour shown</span>
+    {/if}
+  {/if}
+{/snippet}
+
 {#snippet pageArea()}
   {#if paging.tooSmall && levels === 0}
     <!-- Never a silent clip (Important 2): a box below its minimum says so, and how to fix it. -->
@@ -415,28 +481,29 @@
   {@const untitled = sub.showTitle === false || !sub.name?.trim()}
   {@const shownName = untitled ? 'Untitled folder' : sub.name}
   {@const ownLook = !!sub.color || !!(sub.background && !sub.background.inherit && sub.background.type)}
+  {@const subTabbed = hasTab(sub.shape)}
+  {@const subTab = subTabbed ? nestedTab(sub, k) : null}
+  {@const subPos = sub.tabPosition === 'centre' || sub.tabPosition === 'right' ? sub.tabPosition : 'left'}
+  <!-- A tab shape's tab fills the level's tab allowance; a Rounded box keeps it as spare room in its
+       body (one minimum for every shape, §3a.4) — never an empty band above the box (Ruling 1). -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
     class="nested-box"
+    class:tabbed={subTabbed}
     class:dragging={editing && ($drag?.ids.includes(sub.id) ?? false)}
     data-nested-folder={sub.id}
-    style:color={sub.color ? getTextColorValue(sub.textColor || 'auto', sub.color) : undefined}
+    style:color={lookText(sub)}
     ondblclick={editing ? (e) => editSub(e, sub.id) : undefined}
   >
-    {#if ownLook}
-      <FolderSurface
-        background={sub.background}
-        color={sub.color || 'var(--bg-secondary)'}
-        colorOpacity={sub.opacity !== undefined ? sub.opacity : 0.95}
-        mode="animated"
-        dashboardId={dashboard.id}
-      />
+    {#if subTabbed || ownLook}
+      <FolderShape look={sub} variant="nested" dashboardId={dashboard.id} tabRect={subTab} />
     {/if}
-    <!-- The bar IS the sub-folder (Ruling 14): it drags that sub-folder and its menu is the sub-folder's. -->
+    <!-- The bar IS the sub-folder (Ruling 14): it drags that sub-folder and its menu is the sub-folder's.
+         On a tab shape the name is on its tab (part of the bar), the controls at the bar's right. -->
     <div
       class="nested-header"
-      class:holding={!innermost && holdingKey === crumbDwellKey(folder.id, sub.id)}
-      data-crumb={innermost ? undefined : sub.id}
+      class:holding={!subTabbed && !innermost && holdingKey === crumbDwellKey(folder.id, sub.id)}
+      data-crumb={subTabbed || innermost ? undefined : sub.id}
       data-folder-bar={innermost ? sub.id : undefined}
       oncontextmenu={editing ? (e) => subMenu(e, sub.id) : undefined}
       use:dragSource={{
@@ -447,7 +514,30 @@
       }}
     >
       <!-- An untitled sub-folder still says what it is (muted), so an outer one can be clicked to go up. -->
-      {#if innermost}
+      {#if subTabbed && subTab}
+        <div
+          class="shape-tab nested-tab"
+          class:holding={!innermost && holdingKey === crumbDwellKey(folder.id, sub.id)}
+          data-folder-tab={sub.id}
+          data-tab-position={subPos}
+          data-crumb={innermost ? undefined : sub.id}
+          style:left="{subTab.leftPx}px"
+          style:width="{subTab.widthPx}px"
+        >
+          {#if untitled}
+            <!-- An untitled tab is small and empty; its name is still the controls' and the go-up's. -->
+            {#if !innermost}
+              <button type="button" class="title-button tab-fill" aria-label="Back to {shownName}" title="Back to {shownName}" onclick={(e) => goUp(e, k)} ondblclick={own}></button>
+            {/if}
+          {:else if innermost}
+            <span class="tab-name" aria-current="page">{shownName}</span>
+          {:else}
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <button type="button" class="title-button tab-name" title="Back to {shownName}" onclick={(e) => goUp(e, k)} ondblclick={own}>{shownName}</button>
+          {/if}
+        </div>
+        <span class="title-space"></span>
+      {:else if innermost}
         <span class="nested-name" class:muted={untitled} aria-current="page">{shownName}</span>
       {:else}
         <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -460,6 +550,7 @@
           ondblclick={own}>{shownName}</button
         >
       {/if}
+      {@render lookNotes(sub, 'bar-note')}
       {#if editing}
         <span class="handle-slot">
           <EditHandle name={sub.name} onEdit={() => editSub(null, sub.id)} placement="inline" />
@@ -497,6 +588,9 @@
   >
     <div
       class="folder tile-face folder-collapsed-tile"
+      class:tabbed
+      class:silhouette
+      style:padding-top={tabbed ? `${miniFrontPx + 2}px` : undefined}
       role="button"
       tabindex="0"
       aria-label={collapsedLabel}
@@ -514,15 +608,24 @@
         : undefined}
       onkeydown={onTileKey}
     >
-      <!-- The first image, still, behind the mini preview. -->
-      <FolderSurface background={folder.background} color={surfaceColor} colorOpacity={surfaceOpacity} mode="still" dashboardId={dashboard.id} />
-      <span class="collapsed-name">{folder.name}</span>
+      <!-- Its shape, compact (the first image, still, on its front); the name and icons on the front.
+           The Small silhouette shows only the icons: the name stays its accessible name (§3a.6). -->
+      <FolderShape
+        look={folder}
+        variant="minimised"
+        dashboardId={dashboard.id}
+        onSize={(mw, mh) => {
+          tileW = mw;
+          tileH = mh;
+        }}
+      />
+      {#if !silhouette}<span class="collapsed-name">{folder.name}</span>{/if}
       {#if unreadable}
         <span class="empty-note unreadable">Can't display this folder's contents</span>
       {:else if previews.length === 0}
         <span class="empty-note">Empty folder</span>
       {:else}
-        <div class="preview-grid">
+        <div class="preview-grid" style:max-width={miniGridPx !== undefined ? `${miniGridPx}px` : undefined}>
           {#each previews as p (p.id)}
             <span class="preview-cell">
               {#if p.iconUrl}
@@ -539,6 +642,9 @@
     </div>
     <!-- Edit mode: a failed background image, flagged on a tab outside the tile (never on its content). -->
     <BackgroundFailedBadge background={folder.background} {editing} level="folder" placement="corner" />
+    {#if editing && (problems.unknownShape !== null || problems.unreadableColour)}
+      <span class="tile-notes">{@render lookNotes(folder, 'tile-note')}</span>
+    {/if}
     {#if editing}
       {#if !item}
         <!-- The tooltip's hint, also for touch and screen readers (a minimised folder has no handles). -->
@@ -558,6 +664,7 @@
   <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
   <div
     class="folder open"
+    class:tabbed
     class:selected
     class:editable={editing}
     class:dragging
@@ -577,17 +684,45 @@
     style:--group-bg={folder.color || 'var(--bg-secondary)'}
     style:color={textColor}
   >
-    <FolderSurface background={folder.background} color={surfaceColor} colorOpacity={surfaceOpacity} mode="animated" dashboardId={dashboard.id} />
+    <FolderShape look={folder} variant="open" dashboardId={dashboard.id} tabRect={topTab} />
     <!-- Every open folder has its bar (M5 §3a.7): an untitled one shows only its controls. Its title
-         is never replaced (M5 §7): drilled in, the whole bar is the go-up target and the name goes up. -->
+         is never replaced (M5 §7): drilled in, the title (Rounded: the whole bar; a tab shape: its tab)
+         is the go-up target and the name goes up. A tab shape's bar is its tab (the name) plus the
+         body's controls row (the minimise control and edit handle at its top-right, §3a.2). -->
     <div
       class="folder-header"
-      class:custom-color={folder.color}
-      class:holding={levels > 0 && holdingKey === crumbDwellKey(folder.id, folder.id)}
+      class:holding={!tabbed && levels > 0 && holdingKey === crumbDwellKey(folder.id, folder.id)}
       data-folder-bar={levels === 0 ? folder.id : undefined}
-      data-crumb={levels > 0 ? folder.id : undefined}
+      data-crumb={!tabbed && levels > 0 ? folder.id : undefined}
     >
-      {#if showTitle}
+      {#if tabbed && topTab}
+        <div
+          class="shape-tab"
+          class:holding={levels > 0 && holdingKey === crumbDwellKey(folder.id, folder.id)}
+          data-folder-tab={folder.id}
+          data-tab-position={tabPos}
+          data-crumb={levels > 0 ? folder.id : undefined}
+          style:left="{topTab.leftPx}px"
+          style:width="{topTab.widthPx}px"
+        >
+          {#if showTitle}
+            {#if folder.iconUrl}
+              <img src={folder.iconUrl} alt="" class="tab-icon" />
+            {:else if folder.icon}
+              <Icon icon={folder.icon} width="16" class="tab-icon" />
+            {/if}
+            {#if levels > 0}
+              <!-- svelte-ignore a11y_no_static_element_interactions -->
+              <button type="button" class="title-button tab-name" title="Back to {folder.name}" onclick={(e) => goUp(e, 0)} ondblclick={own}>{folder.name}</button>
+            {:else}
+              <span class="tab-name">{folder.name}</span>
+            {/if}
+          {:else if levels > 0}
+            <button type="button" class="title-button tab-fill" aria-label="Back to {boxName}" title="Back to {boxName}" onclick={(e) => goUp(e, 0)} ondblclick={own}></button>
+          {/if}
+        </div>
+        <span class="title-space"></span>
+      {:else if showTitle}
         {#if folder.iconUrl || folder.icon}
           <span class="folder-icon-backing" class:has-bg={folder.iconBgColor} style:background-color={folder.iconBgColor}>
             {#if folder.iconUrl}
@@ -610,6 +745,7 @@
       {:else}
         <span class="title-space"></span>
       {/if}
+      {@render lookNotes(folder, 'bar-note')}
       {#if editing}
         <!-- A zero-width slot at the end of the title: the handle hangs from it over the title's end
              (never over the failed-background warning, the controls or an inner item, and taking no
@@ -671,9 +807,6 @@
     box-sizing: border-box;
     flex: none;
   }
-  .folder-header.custom-color {
-    border-color: rgba(255, 255, 255, 0.2);
-  }
   h3 {
     margin: 0;
     font-size: 1.25rem;
@@ -720,11 +853,11 @@
   .title-button:focus-visible {
     text-decoration: underline;
   }
-  /* geometry.NESTED_CHROME: one inset box a drilled level — the 24px tab allowance above it (M6 §3a.4:
-     its shape's tab goes there), a 1px border, a 28px bar, 8px body padding; it fills the body of the
-     level above (M5 §7). M6 Task 3 draws folder shapes; this is the plain box. */
+  /* geometry.NESTED_CHROME: one inset box a drilled level — the 24px tab allowance (M6 §3a.4), a 1px
+     border, a 28px bar, 8px body padding; it fills the body of the level above (M5 §7). Rounded: the
+     M5 box, its tab allowance spare room at the bottom of its body (no band above it, Ruling 1); a tab
+     shape: its tab fills the allowance (.tabbed). */
   .nested-box {
-    margin-top: 24px;
     position: relative;
     isolation: isolate;
     flex: 1;
@@ -746,6 +879,96 @@
     box-sizing: border-box;
     flex: none;
     min-width: 0;
+  }
+  /* M6 tab shapes (geometry.shapeInset): the shape is drawn by FolderShape, so no CSS border; the tab
+     allowance (24px) plus the 1px edge on top, the 1px edge on the other sides — the same content
+     inset as the drawn shape, and the same totals as FOLDER_CHROME / NESTED_CHROME. */
+  .folder.open.tabbed,
+  .nested-box.tabbed {
+    border: none;
+    border-radius: 0;
+    padding: 25px 1px 1px;
+  }
+  .folder.tile-face.tabbed {
+    border: none;
+    border-radius: 0;
+  }
+  /* The keyboard focus ring is the shape's own silhouette (FolderShape's focus ring). */
+  .folder.tile-face.tabbed:focus-visible {
+    outline: none;
+  }
+  .folder.tile-face.silhouette .preview-grid {
+    width: 70%;
+  }
+  /* The tab: the tab allowance high, at its rect (geometry.folderTabRect); the name is real text. */
+  .shape-tab {
+    position: absolute;
+    top: 0;
+    height: 24px;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0 0.6rem;
+    min-width: 0;
+    overflow: hidden;
+    z-index: 1;
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 24px;
+  }
+  .shape-tab.nested-tab {
+    font-size: 0.8125rem;
+  }
+  .shape-tab.holding {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
+  .tab-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .tab-fill {
+    position: absolute;
+    inset: 0;
+  }
+  .shape-tab :global(.tab-icon) {
+    width: 16px;
+    height: 16px;
+    flex: none;
+    object-fit: contain;
+  }
+  .look-note {
+    flex: none;
+    max-width: 60%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    font-style: normal;
+    line-height: 1.3;
+    padding: 0.05rem 0.35rem;
+    border-radius: 0.25rem;
+    color: #fff;
+    background: var(--color-warning, #b45309);
+  }
+  .tile-notes {
+    position: absolute;
+    left: 0.15rem;
+    bottom: 0.15rem;
+    right: 0.15rem;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.1rem;
+    z-index: 3;
+    pointer-events: none;
+  }
+  .tile-notes .look-note {
+    max-width: 100%;
   }
   .nested-name.muted {
     font-weight: 400;
