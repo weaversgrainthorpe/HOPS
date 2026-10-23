@@ -60,7 +60,7 @@ export interface HitResult {
    */
   folderBar?: { folderId: string; rect: Box };
   /**
-   * A go-up target of a drilled-in open folder (`data-crumb`, M5 §7: an outer box's title bar or a ‹):
+   * A go-up target of a drilled-in open folder (`data-crumb`, M5 §7: an outer box's title bar):
    * the open folder (the nearest `data-node-id`; inset boxes have none) and the level it goes back to.
    */
   folderCrumb?: { folderId: string; to: string; rect: Box };
@@ -155,7 +155,7 @@ export function hitTest(x: number, y: number, dragged: ReadonlySet<string>, env:
     const r = env.rectOf(el);
     return { left: r.left, top: r.top, width: r.width ?? 0, height: r.height ?? 0 };
   };
-  // An open folder's own targets (M5): its go-up targets (outer box titles, ‹), its innermost title bar, its page bar.
+  // An open folder's own targets (M5): its go-up targets (outer box titles), its innermost title bar, its page bar.
   const nav: Pick<HitResult, 'folderBar' | 'folderCrumb' | 'pageBar'> = {};
   const crumb = start.closest('[data-crumb]');
   const open = crumb?.closest('[data-node-id]');

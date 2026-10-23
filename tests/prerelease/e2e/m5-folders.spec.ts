@@ -163,7 +163,7 @@ test.describe('M5 one Folder component', () => {
     await expect(lots.locator('[data-folder-page]')).not.toHaveAttribute('data-folder-page', '0');
   });
 
-  test('drilling into a sub-folder draws it inside the parent; ‹ and the title go back up; nothing moves', async ({ page, context }) => {
+  test('drilling into a sub-folder draws it inside the parent; minimise and the title go back up; nothing moves', async ({ page, context }) => {
     const f = await importDash(page, context, (id) => [
       folder(id('f'), 'Services', { x: 0, y: 0, w: 12, h: 6 }, [
         kid(id('a'), 'Alpha'),
@@ -191,9 +191,9 @@ test.describe('M5 one Folder component', () => {
     await page.getByRole('button', { name: /^Backups, folder with 1 item/ }).click();
     await expect(current).toHaveText('Backups');
     expect(await shown(page, f.id('f'))).toEqual([f.id('deep')]);
-    await svc.getByRole('button', { name: 'Back to Storage' }).click();
+    await svc.getByRole('button', { name: 'Minimise Backups' }).click();
     expect(await shown(page, f.id('f'))).toEqual([f.id('nas'), f.id('s2')]);
-    await svc.getByRole('button', { name: 'Back to Services' }).click();
+    await svc.getByRole('button', { name: 'Minimise Storage' }).click();
     await expect(svc.locator('.nested-box')).toHaveCount(0);
     await expect(svc.locator('.folder-header h3')).toHaveText('Services');
     expect(await shown(page, f.id('f'))).toEqual([f.id('a'), f.id('s')]);
@@ -352,7 +352,7 @@ test.describe('M5 one Folder component', () => {
     await page.getByRole('button', { name: /^Sub, folder with 1 item/ }).click();
     await expect(node(page, f.id('f')).locator('.nested-header')).toContainText('Sub');
     await expect(bar).not.toContainText('Hidden'); // its title is never a breadcrumb (M5 §7)
-    await expect(node(page, f.id('f')).getByRole('button', { name: 'Back to Hidden' })).toBeVisible();
+    await expect(node(page, f.id('f')).locator('.nested-header').getByRole('button', { name: 'Minimise Sub' })).toBeVisible();
     await bar.getByRole('button', { name: 'Minimise folder' }).click();
     await expect(node(page, f.id('f'))).toHaveClass(/collapsed/);
   });

@@ -8,14 +8,15 @@
    *   of its items at its contents size (only the current page is drawn, Tenet 4) and a page bar
    *   only when there is more than one page;
    * - drilled (M5 §7): a folder inside a folder — every opened sub-folder level is an inset box inside
-   *   the last (‹, its name, its own colour), and only the innermost box holds a page. The top
-   *   folder's title bar stays its own; an outer box's title (or a ‹) goes back up to that level.
+   *   the last (its own colour), and only the innermost box holds a page. Every box's title bar is the
+   *   top folder's (Ruling 15): its name on the left, the same minimise on the right (on an inset box it
+   *   returns it to its tile in the parent: up one level). An outer box's title goes back up to that level.
    * Click, Enter, the menu's "Open" and Restore all open a folder in place: nothing pops over.
    * Page and drill-down are this browser's memory (folderView), never saved to the layout.
    * The drag (hitTest, Task 4) reads data-folder-id / data-folder-page / data-folder-per-page (the
    * page shown: a drop goes at the pointer's place in it), data-folder-bar (the title bar: a drop
    * goes at the end of the folder shown), data-page-bar ("prev" / "next": held, it flips the page)
-   * and data-crumb (the folder id an outer box's title bar or a ‹ goes back to: held, it goes up; a
+   * and data-crumb (the folder id an outer box's title bar goes back to: held, it goes up; a
    * drop goes at its end). Only the innermost box's bar is data-folder-bar; inset boxes carry
    * data-nested-folder, never data-node-id (they are levels of this folder, not items).
    */
@@ -246,7 +247,7 @@
     const p = Math.min(Math.max(0, n), paging.pages - 1);
     setFolderPage(dashboard.id, current.id, p);
   }
-  /** Back up to that level (0 = this folder itself): a ‹, or an outer box's title. */
+  /** Back up to that level (0 = this folder itself): an inset box's minimise, or an outer box's title. */
   function goUp(e: Event, level: number) {
     own(e);
     setFolderDrill(dashboard.id, folder.id, drilled.slice(0, level).map((f) => f.id));
@@ -266,7 +267,22 @@
     const side = stacked ? (phone?.itemPx ?? 120) : sizeSpan(parentFolder.contentSize) * parent.unitPx;
     return { left: x - side / 2, top: y - side / 2, width: side, height: side };
   }
-  /** ‹ is only "back up": a press on it never drags the sub-folder or the open folder. */
+  /**
+   * An inset box's minimise (Ruling 15): it returns to its tile in the parent — up one level, this
+   * browser's memory (in edit mode too, never the draft). Focus goes to that tile (or, when it is on
+   * another page of the parent, to the folder's own control).
+   */
+  function minimiseSub(e: Event, k: number, id: string) {
+    goUp(e, k - 1);
+    void tick().then(() => {
+      const tile = Array.from(document.querySelectorAll<HTMLElement>('[data-node-id]'))
+        .find((n) => n.getAttribute('data-node-id') === id && !n.closest('[role="dialog"]'))
+        ?.querySelector<HTMLElement>('.folder-collapsed-tile');
+      if (tile) tile.focus();
+      else focusFolderControl(folder.id);
+    });
+  }
+  /** An inset box's minimise is only "minimise": a press on it never drags the sub-folder or the open folder. */
   function noDrag(e: PointerEvent) {
     if (editing) e.stopPropagation();
   }
@@ -295,18 +311,15 @@
   });
 </script>
 
-{#snippet controls()}
+<!-- Every box's controls (Ruling 15): the top folder's bar and each inset box's bar draw the same
+     minimise, last in the bar. `label` names the box (an inset box: "Minimise <its name>"). -->
+{#snippet controls(label: string, title: string, onMinimise: (e: Event) => void, inset: boolean)}
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <span class="folder-controls" ondblclick={own}>
-    <button
-      type="button"
-      aria-label="Minimise folder"
-      title={editing ? 'Minimise folder (sets how it starts)' : 'Minimise folder'}
-      onclick={minimise}
-    >
+    <button type="button" aria-label={label} {title} onclick={onMinimise} onpointerdown={inset ? noDrag : undefined}>
       <Icon icon="mdi:window-minimize" width="18" />
     </button>
-    {#if showRestore}
+    {#if showRestore && !inset}
       <button type="button" aria-label="Restore folder" title="Restore folder" onclick={restore}>
         <Icon icon="mdi:restore" width="18" />
       </button>
@@ -381,8 +394,9 @@
 {/snippet}
 
 <!-- One drilled level (M5 §7): sub-folder drilled[k - 1] as an inset box in the level above, with its
-     own bar (‹ back up one level, its name) and its own colour; it holds the next level, or (the
-     innermost) the page. Not an item: no data-node-id, so a press still drags the open folder. -->
+     own bar — the top folder's (Ruling 15): its name, its edit handle, the same minimise (back to its
+     tile, up one level) — and its own colour; it holds the next level, or (the innermost) the page.
+     Not an item: no data-node-id. -->
 {#snippet level(k: number)}
   {@const sub = drilled[k - 1]}
   {@const up = k === 1 ? folder : drilled[k - 2]}
@@ -421,18 +435,6 @@
         measure: (x, y) => grabbedTile(x, y, up)
       }}
     >
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <button
-        type="button"
-        class="back"
-        aria-label="Back to {up.name?.trim() ? up.name : 'Untitled'}"
-        title="Back to {up.name?.trim() ? up.name : 'Untitled'}"
-        data-crumb={up.id}
-        class:holding={holdingKey === crumbDwellKey(folder.id, up.id)}
-        onpointerdown={noDrag}
-        onclick={(e) => goUp(e, k - 1)}
-        ondblclick={own}>‹</button
-      >
       <!-- An untitled sub-folder still says what it is (muted), so an outer one can be clicked to go up. -->
       {#if innermost}
         <span class="nested-name" class:muted={untitled} aria-current="page">{shownName}</span>
@@ -453,6 +455,7 @@
         </span>
       {/if}
       <BackgroundFailedBadge background={sub.background} {editing} level="folder" placement="inline" />
+      {@render controls(`Minimise ${shownName}`, `Minimise ${shownName} (back to ${up.name?.trim() ? up.name : 'Untitled folder'})`, (e) => minimiseSub(e, k, sub.id), true)}
     </div>
     {#if innermost}
       <div class="nested-body" data-folder-id={current.id} data-folder-page={paging.page} data-folder-per-page={paging.perPage}>
@@ -605,7 +608,7 @@
         </span>
       {/if}
       <BackgroundFailedBadge background={folder.background} {editing} level="folder" placement="inline" />
-      {@render controls()}
+      {@render controls('Minimise folder', editing ? 'Minimise folder (sets how it starts)' : 'Minimise folder', minimise, false)}
     </div>
     <!-- data-drop-area: the whole body is a drop target for the folder shown (the innermost), not just
          its items' rows. -->
@@ -719,12 +722,14 @@
     border: 1px solid color-mix(in srgb, currentColor 45%, transparent);
     border-radius: 0.5rem;
   }
+  /* The same bar as .folder-header (Ruling 15) — name, handle and minimise in the same places — only
+     compact (28px, NESTED_CHROME.titlePx). */
   .nested-header {
     display: flex;
     align-items: center;
-    gap: 0.25rem;
+    gap: 0.5rem;
     height: 28px;
-    padding: 0 0.5rem 0 0.25rem;
+    padding: 0 1rem;
     box-sizing: border-box;
     flex: none;
     min-width: 0;
@@ -742,26 +747,6 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-  .back {
-    flex: none;
-    background: none;
-    border: none;
-    color: inherit;
-    font: inherit;
-    font-size: 1.25rem;
-    line-height: 1;
-    width: 1.5rem;
-    height: 1.5rem;
-    padding: 0;
-    border-radius: 0.25rem;
-    cursor: pointer;
-    opacity: 0.85;
-  }
-  .back:hover,
-  .back:focus-visible {
-    opacity: 1;
-    background: rgba(128, 128, 128, 0.25);
   }
   .nested-body {
     position: relative;
@@ -837,7 +822,6 @@
   /* A drag holding here: it goes up / turns the page once the hold ripens (OPEN_DWELL_MS). */
   .folder-header.holding,
   .nested-header.holding,
-  .back.holding,
   .page-bar button.holding {
     opacity: 1;
     outline: 2px solid var(--accent);

@@ -1789,8 +1789,8 @@ test.describe('§7.2 nested untitled folders on a touch device', () => {
 
   // M5: an untitled folder inside an untitled folder is an item on its page (its minimised tile, its
   // handle in its own corner); opening it drills in — an inset box inside the parent (M5 §7) with its
-  // own ‹ and handle. Neither level's handles, controls or ‹ overlap.
-  test('an untitled folder inside an untitled folder: no handle, control or ‹ overlaps another, before and after drilling in', async ({ page, context }) => {
+  // own minimise and handle (Ruling 15). Neither level's handles or controls overlap.
+  test('an untitled folder inside an untitled folder: no handle or control overlaps another, before and after drilling in', async ({ page, context }) => {
     const f = await importDash(page, context, [{
       name: 'Main',
       children: (id) => [
@@ -1826,8 +1826,8 @@ test.describe('§7.2 nested untitled folders on a touch device', () => {
     await menu.getByRole('menuitem', { name: 'Open', exact: true }).tap();
     const inset = outer.locator(`.nested-box[data-nested-folder="${f.id('inner')}"]`);
     await expect(inset).toBeVisible();
-    const back = inset.getByRole('button', { name: 'Back to Outer' });
-    await noOverlaps(['Edit Outer', 'Edit InnerF', 'Edit Deep'], [await minimise(), ['Back to Outer', (await back.boundingBox())!]]);
+    const innerMin = inset.locator(':scope > .nested-header').getByRole('button', { name: 'Minimise Untitled folder' });
+    await noOverlaps(['Edit Outer', 'Edit InnerF', 'Edit Deep'], [await minimise(), ['Inner Minimise', (await innerMin.boundingBox())!]]);
   });
 });
 

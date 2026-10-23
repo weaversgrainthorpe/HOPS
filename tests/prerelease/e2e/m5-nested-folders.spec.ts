@@ -3,8 +3,9 @@ import { getCsrfToken } from '../helpers';
 
 // M5 §7 (Jonathan's walkthrough 2, design/feedback/2026-10-22-m5-walkthrough2/image-3.png): a drilled-in
 // sub-folder is a folder inside a folder. The top folder keeps its own title; every opened sub-folder
-// level is an inset box inside the last, with its own bar (‹ and its name), holding — the innermost —
-// one page of its contents. ‹ or an outer box's title goes back up. In a REAL browser: layout, drag
+// level is an inset box inside the last, with its own bar — identical to a top folder's (Ruling 15):
+// its name on the left, the same minimise (–) on the right — holding, the innermost, one page of its
+// contents. Minimise on a box, or an outer box's title, goes back up. In a REAL browser: layout, drag
 // and search need Chromium.
 
 let seq = 0;
@@ -107,7 +108,7 @@ const services = (id: (s: string) => string) => [
 test.describe('M5 §7: a sub-folder opens as a folder inside a folder', () => {
   test.use({ viewport: { width: 1280, height: 900 } });
 
-  test("Services › New folder: Services' own title, plus an inset New folder box with ‹ and its name holding the items", async ({ page, context }) => {
+  test("Services › New folder: Services' own title, plus an inset New folder box with its name and minimise holding the items", async ({ page, context }) => {
     const f = await importDash(page, context, services);
     await page.goto(f.path);
     const svc = node(page, f.id('svc'));
@@ -115,10 +116,12 @@ test.describe('M5 §7: a sub-folder opens as a folder inside a folder', () => {
     // The top folder keeps its title; there is no breadcrumb.
     await expect(svc.locator('.folder-header h3')).toHaveText('Services');
     await expect(svc.getByRole('navigation', { name: 'Folder path' })).toHaveCount(0);
-    // The inset box: inside Services' body, with ‹ and its name in its own bar.
+    // The inset box: inside Services' body, with its name and minimise in its own bar (no ‹, Ruling 15).
     const nf = nested(svc, f.id('nf'));
     await expect(nf).toBeVisible();
-    await expect(header(nf).getByRole('button', { name: 'Back to Services' })).toHaveText('‹');
+    await expect(header(nf).getByRole('button', { name: 'Minimise New folder' })).toBeVisible();
+    await expect(header(nf).getByRole('button', { name: /^Back to/ })).toHaveCount(0);
+    await expect(header(nf)).not.toContainText('‹');
     await expect(header(nf)).toContainText('New folder');
     const body = await box(svc.locator(':scope > .folder-body'));
     const nb = await box(nf);
@@ -162,14 +165,14 @@ test.describe('M5 §7: a sub-folder opens as a folder inside a folder', () => {
     await expect(svc.locator('[data-folder-page]')).toHaveCount(1);
   });
 
-  test('‹ goes up one level; an outer box\'s title goes back to that level', async ({ page, context }) => {
+  test('minimise on an inset box goes up one level; an outer box\'s title goes back to that level', async ({ page, context }) => {
     const f = await importDash(page, context, services);
     await page.goto(f.path);
     await drilled(page, f.id('dash'), f.id('svc'), [f.id('nf'), f.id('deeper')]);
     await page.reload();
     const svc = node(page, f.id('svc'));
-    // ‹ on Deeper → New folder.
-    await header(nested(svc, f.id('deeper'))).getByRole('button', { name: 'Back to New folder' }).click();
+    // Minimise on Deeper → New folder.
+    await header(nested(svc, f.id('deeper'))).getByRole('button', { name: 'Minimise Deeper' }).click();
     await expect(nested(svc, f.id('deeper'))).toHaveCount(0);
     expect(await shown(page, f.id('svc'))).toEqual(['yt', 'gh', 'deeper'].map(f.id));
     // In again, then New folder's title (an outer box) → New folder.
@@ -324,6 +327,80 @@ test.describe('M5 §7: a sub-folder opens as a folder inside a folder', () => {
     expect(find(root, f.id('svc'))!.content!.children.map((n) => n.id)).toEqual(['plex', 'nf'].map(f.id));
     expect(errors).toEqual([]);
   });
+
+  // Ruling 15 (Jonathan, walkthrough 3): every box's title bar is the top folder's — its name on the
+  // left, the same minimise (–) on the right at the same place, the edit handle placed the same way.
+  // Minimise on an inner box returns it to its tile in the parent: up one level.
+  test('Ruling 15: every box has the same minimise at the same place; on an inner box it goes up one level', async ({ page, context }) => {
+    const f = await importDash(page, context, services);
+    await page.goto(f.path);
+    await drilled(page, f.id('dash'), f.id('svc'), [f.id('nf'), f.id('deeper')]);
+    await page.reload();
+    const svc = node(page, f.id('svc'));
+    const bars: [string, Locator, Locator, string][] = [
+      ['Services', svc.locator(':scope > .folder-header'), svc.locator(':scope > .folder-header h3'), 'Minimise folder'],
+      ['New folder', header(nested(svc, f.id('nf'))), header(nested(svc, f.id('nf'))).locator('.nested-name'), 'Minimise New folder'],
+      ['Deeper', header(nested(svc, f.id('deeper'))), header(nested(svc, f.id('deeper'))).locator('.nested-name'), 'Minimise Deeper']
+    ];
+    /** Where the minimise sits in its bar, and where the name starts: the same for every box. */
+    const placeOf = async (bar: Locator, name: Locator, label: string) => {
+      const b = await box(bar);
+      const m = await box(bar.getByRole('button', { name: label, exact: true }));
+      const n = await box(name);
+      // No other control of the bar lies right of minimise (it is the bar's last control).
+      const right = await bar.locator('button:visible').evaluateAll((els) => Math.max(...els.map((e) => e.getBoundingClientRect().right)));
+      return { fromRight: b.x + b.width - (m.x + m.width), midY: m.y + m.height / 2 - (b.y + b.height / 2), w: m.width, h: m.height, nameLeft: n.x - b.x, last: right - (m.x + m.width) };
+    };
+    const check = async (mode: string) => {
+      const places = [];
+      for (const [what, bar, name, label] of bars) places.push([what, await placeOf(bar, name, label)] as const);
+      const [, top] = places[0];
+      for (const [what, p] of places) {
+        near(p.fromRight, top.fromRight, `${mode} ${what}: minimise's distance from the bar's right edge`);
+        near(p.midY, 0, `${mode} ${what}: minimise centred in its bar`);
+        near(p.w, top.w, `${mode} ${what}: minimise width`);
+        near(p.h, top.h, `${mode} ${what}: minimise height`);
+        near(p.nameLeft, top.nameLeft, `${mode} ${what}: name on the left, as the top folder's`);
+        expect(p.last, `${mode} ${what}: minimise is the bar's rightmost control`).toBeLessThanOrEqual(0.5);
+      }
+      // No separate ‹ anywhere.
+      await expect(svc.getByRole('button', { name: /^Back to/ })).toHaveCount(0);
+    };
+    await check('view');
+    await enterEdit(page);
+    await check('edit');
+    // The edit handle is placed the same way: just left of the minimise, the same gap in every bar.
+    const handleGap = async (bar: Locator, name: string, label: string) => {
+      const h = await box(bar.getByRole('button', { name: `Edit ${name}`, exact: true }));
+      const m = await box(bar.getByRole('button', { name: label, exact: true }));
+      return m.x - (h.x + h.width);
+    };
+    const topGap = await handleGap(bars[0][1], 'Services', bars[0][3]);
+    expect(topGap).toBeGreaterThanOrEqual(0);
+    for (const [what, bar, , label] of bars.slice(1)) near(await handleGap(bar, what, label), topGap, `${what}: handle beside minimise as on the top bar`);
+    // In edit mode minimise on an inner box goes up (this browser's memory, never the draft).
+    await header(nested(svc, f.id('deeper'))).getByRole('button', { name: 'Minimise Deeper' }).click();
+    await expect(nested(svc, f.id('deeper'))).toHaveCount(0);
+    expect(await shown(page, f.id('svc'))).toEqual(['yt', 'gh', 'deeper'].map(f.id));
+    await expect(page.getByRole('toolbar', { name: 'Editing' }).getByRole('button', { name: 'Undo' })).toBeDisabled();
+    await page.getByRole('button', { name: 'Exit Edit Mode' }).click();
+    await expect(page.getByRole('toolbar', { name: 'Editing' })).toHaveCount(0);
+    // View mode, by keyboard: a labelled button; Enter on it goes up one level, focus to its tile.
+    await page.reload();
+    await expect(nested(svc, f.id('nf'))).toBeVisible();
+    const nfMin = header(nested(svc, f.id('nf'))).getByRole('button', { name: 'Minimise New folder' });
+    await nfMin.focus();
+    await page.keyboard.press('Enter');
+    await expect(svc.locator('.nested-box')).toHaveCount(0);
+    expect(await shown(page, f.id('svc'))).toEqual(['plex', 'nf'].map(f.id));
+    await expect(node(page, f.id('nf')).locator('.folder-collapsed-tile')).toBeFocused();
+    // Remembered per browser, exactly as going up.
+    const nav = await page.evaluate((d) => JSON.parse(localStorage.getItem(`hops.folderNav.${d}`) ?? '{}'), f.id('dash'));
+    expect(nav.drill?.[f.id('svc')] ?? []).toEqual([]);
+    // The top folder's minimise still minimises the whole folder.
+    await svc.locator(':scope > .folder-header').getByRole('button', { name: 'Minimise folder' }).click();
+    await expect(node(page, f.id('svc'))).toHaveClass(/collapsed/);
+  });
 });
 
 test.describe('M5 §7 on a 390 x 844 phone: the same nesting at full width', () => {
@@ -343,7 +420,7 @@ test.describe('M5 §7 on a 390 x 844 phone: the same nesting at full width', () 
     inside(await box(dp), await box(nf.locator(':scope > .nested-body')), 8, 'Deeper in New folder');
     inside(await box(node(page, f.id('wiki'))), await box(dp), 8, 'Wiki inside Deeper');
     expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
-    await header(dp).getByRole('button', { name: 'Back to New folder' }).click();
+    await header(dp).getByRole('button', { name: 'Minimise Deeper' }).click();
     await expect(dp).toHaveCount(0);
     expect(await shown(page, f.id('svc'))).toEqual(['yt', 'gh', 'deeper'].map(f.id));
   });
@@ -359,7 +436,7 @@ async function travel(page: Page, from: { x: number; y: number }, to: { x: numbe
   }
 }
 const mid = (b: Box) => ({ x: b.x + b.width / 2, y: b.y + b.height / 2 });
-/** The name part of an inset box's bar: a press there is a press on the sub-folder (not on ‹ or the handle). */
+/** The name part of an inset box's bar: a press there is a press on the sub-folder (not on minimise or the handle). */
 const barGrip = async (l: Locator) => {
   const h = await box(header(l));
   return { x: h.x + h.width * 0.6, y: h.y + h.height / 2 };

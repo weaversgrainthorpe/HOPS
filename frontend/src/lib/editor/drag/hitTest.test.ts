@@ -230,18 +230,19 @@ describe('hitTest', () => {
       expect(h.folderCrumb).toEqual({ folderId: 'f1', to: 'f1', rect: { left: 20, top: 55, width: 60, height: 30 } });
     });
 
-    // M5 §7: drilled in, every level is an inset box (Folder.svelte's DOM): the outer bars and each ‹
-    // are go-up targets of the TOP folder (inset boxes carry no data-node-id); the page, and the
-    // outer body's padding, are the innermost box's.
-    it('nested boxes: outer bars and ‹ go up (for the top folder); a drop anywhere in the body is the innermost', () => {
+    // M5 §7: drilled in, every level is an inset box (Folder.svelte's DOM): the outer bars are go-up
+    // targets of the TOP folder (inset boxes carry no data-node-id); each box's minimise (Ruling 15) is
+    // part of its bar, never a target of its own; the page, and the outer body's padding, are the
+    // innermost box's.
+    it('nested boxes: outer bars go up (for the top folder); a drop anywhere in the body is the innermost', () => {
       const items = ['k1', 'k2'].map((id) => el({ 'data-node-id': id }, el({ class: 'face' })));
       const flow = el({ 'data-container-id': 's2' }, ...items);
-      const back2 = el({ class: 'back', 'data-crumb': 's1' });
-      const head2 = el({ class: 'nested-header', 'data-folder-bar': 's2' }, back2);
+      const min2 = el({ class: 'folder-controls' }, el({ 'aria-label': 'Minimise s2' }));
+      const head2 = el({ class: 'nested-header', 'data-folder-bar': 's2' }, min2);
       const body2 = el({ class: 'nested-body', 'data-folder-id': 's2', 'data-folder-page': '0', 'data-folder-per-page': '6' }, el({ class: 'page' }, flow));
       const box2 = el({ class: 'nested-box', 'data-nested-folder': 's2' }, head2, body2);
-      const back1 = el({ class: 'back', 'data-crumb': 'f1' });
-      const head1 = el({ class: 'nested-header', 'data-crumb': 's1' }, back1);
+      const min1 = el({ class: 'folder-controls' }, el({ 'aria-label': 'Minimise s1' }));
+      const head1 = el({ class: 'nested-header', 'data-crumb': 's1' }, min1);
       const box1 = el({ class: 'nested-box', 'data-nested-folder': 's1' }, head1, el({ class: 'nested-body' }, box2));
       const top = el({ class: 'folder-header', 'data-crumb': 'f1' });
       const body = el({ class: 'folder-body', 'data-drop-area': '', 'data-folder-id': 's2' }, box1);
@@ -253,8 +254,9 @@ describe('hitTest', () => {
       const at = (under: Element) => hitTest(150, 150, new Set(), { elementFromPoint: () => under, rectOf: () => ({ left: 0, top: 0, width: 10, height: 10 }) });
       expect(at(top).folderCrumb).toMatchObject({ folderId: 'f1', to: 'f1' });
       expect(at(head1).folderCrumb).toMatchObject({ folderId: 'f1', to: 's1' });
-      expect(at(back1).folderCrumb).toMatchObject({ folderId: 'f1', to: 'f1' });
-      expect(at(back2).folderCrumb).toMatchObject({ folderId: 'f1', to: 's1' });
+      expect(at(min1.firstElementChild!).folderCrumb).toMatchObject({ folderId: 'f1', to: 's1' });
+      expect(at(min2.firstElementChild!).folderBar).toMatchObject({ folderId: 's2' });
+      expect(at(min2.firstElementChild!).folderCrumb).toBeUndefined();
       expect(at(head2).folderBar).toMatchObject({ folderId: 's2' });
       expect(at(head2).folderCrumb).toBeUndefined();
       expect(at(items[1].firstElementChild!).flowPage).toMatchObject({ folderId: 's2', page: 0, perPage: 6 });

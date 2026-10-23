@@ -21,7 +21,7 @@
  *   holding over a minimised folder no longer opens a pop-over, §3a.4.)
  * M5 Task 4 (ordered, paged folders; targets.ts): a drop on an open folder's page goes in at the
  * pointer's place in its order (`place` with an index and an insertion marker); its title bar, a
- * go-up target (an outer box's title bar or a ‹, M5 §7) or an empty open folder → `into-folder` (the end). Holding over the page
+ * go-up target (an outer box's title bar, M5 §7) or an empty open folder → `into-folder` (the end). Holding over the page
  * bar's ‹ › flips the page, and over a crumb goes back up to it (this browser's memory); the drag
  * goes on there. A sub-folder dropped on the tab is minimised there and this browser forgets its
  * open / page / drill memory (§3a.3).
@@ -368,7 +368,7 @@ export function resolveDrop(state: DragState, hit: HitResult, draft: LayoutDashb
   if (state.tab !== undefined) return resolveTabOrder(state, hit, draft);
   if (hit.crumb !== undefined) return invalid('Dropping on the path changes nothing — hold over a crumb to go back to that level.');
   if (hit.tabId !== undefined) return resolveTabAppend(state, hit.tabId, draft);
-  // An open folder's own targets (M5 §3.4, §3a.4, §7): a go-up target (outer box title / ‹), its innermost title bar, its empty body.
+  // An open folder's own targets (M5 §3.4, §3a.4, §7): a go-up target (outer box title), its innermost title bar, its empty body.
   if (hit.folderCrumb) return resolveIntoFolder(state, hit.folderCrumb.to, draft);
   if (hit.folderBar) return resolveIntoFolder(state, hit.folderBar.folderId, draft);
   if (hit.emptyFolder !== undefined) return resolveIntoFolder(state, hit.emptyFolder.folderId, draft);
@@ -1097,7 +1097,7 @@ function dwellKey(s: DragState, hit: HitResult, d: LayoutDashboard): { key: stri
   if (s.tab !== undefined) return null;
   if (hit.crumb !== undefined) return crumbAction(hit.crumb) ? { key: `crumb:${hit.crumb}`, ms: OPEN_DWELL_MS } : null;
   if (hit.tabId !== undefined) return hit.tabId !== activeTab ? { key: `tab:${hit.tabId}`, ms: OPEN_DWELL_MS } : null;
-  // An open folder's page bar: ‹ / › flips the page (none at that end); an outer box's title or a ‹ goes back up.
+  // An open folder's page bar: ‹ / › flips the page (none at that end); an outer box's title goes back up.
   if (hit.pageBar) {
     const b = hit.pageBar;
     const to = b.page + (b.dir === 'next' ? 1 : -1);
@@ -1185,7 +1185,7 @@ function goUpCrumb(d: LayoutDashboard, arg: string): void {
 
 /**
  * What a drag-breadcrumb crumb returns to: "tab:<id>" → that tab (switch to it). Null when it is
- * the tab the drag is already on. (A folder's go-up targets — outer box titles, ‹ — are `fcrumb` dwells.)
+ * the tab the drag is already on. (A folder's go-up targets — outer box titles — are `fcrumb` dwells.)
  */
 export function crumbAction(crumb: string): (() => void) | null {
   if (crumb.startsWith('tab:')) {

@@ -277,7 +277,7 @@ export function openFolderContentBox(box: { widthPx: number; heightPx: number })
 
 /**
  * A drilled-in sub-folder's inset box (M5 §7: a folder inside a folder, one box a level). Folder.svelte's
- * .nested-box CSS: a 1px border, a compact 28px title bar (‹ and its name), 8px body padding. It fills
+ * .nested-box CSS: a 1px border, a compact 28px title bar (its name and minimise, Ruling 15), 8px body padding. It fills
  * the body of the level above it.
  */
 export const NESTED_CHROME = { titlePx: 28, padPx: 8, borderPx: 1, padXPx: 2 * 8 + 2 * 1, padYPx: 2 * 8 + 2 * 1 } as const;
