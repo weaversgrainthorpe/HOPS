@@ -280,6 +280,12 @@ describe('showMigrationFailedPage', () => {
   it('is false on /settings (the admin home: sign-in and Backups, the remedy)', () => {
     expect(showMigrationFailedPage('/settings', 'bad')).toBe(false);
   });
+  it('is false on every settings page (M5 §9): each shows the notice on top, with Backups reachable', () => {
+    for (const p of ['/settings/dashboards', '/settings/global', '/settings/backups', '/settings/password', '/settings/reset']) {
+      expect(showMigrationFailedPage(p, 'bad')).toBe(false);
+    }
+    expect(showMigrationFailedPage('/settingsx', 'bad')).toBe(true);
+  });
   it('is true on the other admin pages', () => {
     expect(showMigrationFailedPage('/admin/discovery', 'bad')).toBe(true);
   });

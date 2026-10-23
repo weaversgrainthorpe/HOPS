@@ -17,10 +17,19 @@ test('Settings (the admin home) loads with the core admin controls', async ({ pa
   await openSettings(page);
   await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
   await expect(page.getByRole('button', { name: /new dashboard/i })).toBeVisible();
-  await expect(page.getByRole('link', { name: /open discovery/i })).toBeVisible();
-  await expect(page.getByRole('button', { name: /open backups/i })).toBeVisible();
-  await expect(page.getByRole('button', { name: /change password/i })).toBeVisible();
-  await expect(page.getByRole('button', { name: /factory reset/i })).toBeVisible();
+  // Each other admin control is one sidebar click away, on its own page (M5 §9).
+  const side = page.getByRole('navigation', { name: 'Settings sections' });
+  await expect(side.getByRole('link', { name: 'Discovery', exact: true })).toHaveAttribute('href', '/admin/discovery');
+  await expect(side.getByRole('button', { name: 'Log out' })).toBeVisible();
+  for (const [item, path, control] of [
+    ['Backups', '/settings/backups', /open backups/i],
+    ['Password', '/settings/password', /change password/i],
+    ['Factory reset', '/settings/reset', /factory reset/i],
+  ] as const) {
+    await side.getByRole('link', { name: item, exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`${path}$`));
+    await expect(page.getByRole('button', { name: control })).toBeVisible();
+  }
 });
 
 test('dashboard CRUD round-trip via UI: create → rename → delete', async ({ page }) => {

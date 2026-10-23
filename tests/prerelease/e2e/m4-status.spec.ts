@@ -111,7 +111,7 @@ test.describe('M4 layered status checks in a real browser', () => {
 
     // Dismissed on the server: still gone after a reload.
     await page.reload();
-    await expect(page.getByRole('heading', { name: 'Global settings', level: 2 })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Dashboards', level: 2 })).toBeVisible();
     await expect(page.locator('.server-notice')).toHaveCount(0);
     const cfg = await (await page.request.get('/api/config')).json();
     expect(cfg.notices ?? []).toEqual([]);

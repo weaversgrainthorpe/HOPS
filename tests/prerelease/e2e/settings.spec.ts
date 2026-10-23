@@ -7,11 +7,14 @@ import { setSetting } from '../helpers';
 // validation feedback, runtime-vs-restart classification.
 
 test('settings page loads and shows all expected groups', async ({ page }) => {
-  await page.goto('/settings');
+  await page.goto('/settings/global');
   // Page heading
   await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible({ timeout: 10_000 });
-  // Several group h2s should be present once the page renders
-  await expect(page.getByRole('heading', { level: 2 }).first()).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole('heading', { name: 'Global settings', level: 2 })).toBeVisible({ timeout: 10_000 });
+  // The setting groups render once the settings have loaded.
+  for (const g of ['Server', 'Logging', 'Authentication']) {
+    await expect(page.getByRole('heading', { name: g, level: 3, exact: true })).toBeVisible({ timeout: 10_000 });
+  }
 });
 
 // The setting the second test changes, and its stored value to put back. Restored in afterEach
@@ -41,6 +44,6 @@ test('updating a setting via API is reflected on the settings page', async ({ pa
   expect(String(item.value)).toBe(String(newValue));
 
   // And the Settings page shows it.
-  await page.goto('/settings');
+  await page.goto('/settings/global');
   await expect(page.locator(`[id="setting-${KEY}"]`)).toHaveValue(String(newValue));
 });

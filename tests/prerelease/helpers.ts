@@ -62,10 +62,12 @@ export async function signInDialog(page: Page, username = ADMIN_USERNAME, passwo
   await expect(dlg).toHaveCount(0);
 }
 
-/** Settings (the admin home), signed in: wait for its sections. */
+/** Settings → Dashboards (the dashboard list, M5 §9), signed in: wait for the list. */
 export async function openSettings(page: Page) {
-  await page.goto('/settings');
-  await expect(page.getByRole('heading', { name: 'Global settings', level: 2 })).toBeVisible();
+  await page.goto('/settings/dashboards');
+  await expect(page.getByRole('navigation', { name: 'Settings sections' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Dashboards', level: 2 })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'New Dashboard' })).toBeVisible();
 }
 
 /**
@@ -126,7 +128,10 @@ export async function deleteDashboardsNamed(page: Page, names: string[]) {
 export async function login(page: Page, username = ADMIN_USERNAME, password = ADMIN_TEST_PASSWORD) {
   await page.goto('/settings');
   await signInDialog(page, username, password);
-  await expect(page.getByRole('heading', { name: 'Global settings', level: 2 })).toBeVisible();
+  // /settings opens its first page, Dashboards, signed in (M5 §9).
+  await expect(page).toHaveURL(/\/settings\/dashboards$/);
+  await expect(page.getByRole('navigation', { name: 'Settings sections' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Dashboards', level: 2 })).toBeVisible();
 }
 
 /**

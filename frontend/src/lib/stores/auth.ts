@@ -44,22 +44,27 @@ export async function waitForAuthChecked(): Promise<void> {
 let authCheckedValue = false;
 authChecked.subscribe((v) => { authCheckedValue = v; });
 
+/** Settings, the admin home: /settings and each of its pages (M5 §9). */
+export function isSettingsPath(path: string): boolean {
+  return path === '/settings' || path.startsWith('/settings/');
+}
+
 // Paths that require an authenticated admin: Settings (the admin home) and the
 // tools under /admin.
 export function isAdminOnlyPath(path: string): boolean {
-  return path === '/settings' || path.startsWith('/settings/') || path === '/admin' || path.startsWith('/admin/');
+  return isSettingsPath(path) || path === '/admin' || path.startsWith('/admin/');
 }
 
 /**
  * Where a page goes when its session expires: null = stay. A dashboard stays
- * (HOPS dashboards work anonymously; the navbar flips to signed out). Settings
- * stays too: it asks for the password again in place. The other admin pages
+ * (HOPS dashboards work anonymously; the navbar flips to signed out). Every Settings
+ * page stays too: it asks for the password again in place. The other admin pages
  * can't work signed out and have no sign-in of their own, so they go to Settings
  * to sign in there (as a signed-out visit to them does), not to / (which forwards
  * to a dashboard with no sign-in prompt).
  */
 export function sessionExpiredRedirect(path: string): string | null {
-  if (path === '/settings') return null;
+  if (isSettingsPath(path)) return null;
   return isAdminOnlyPath(path) ? '/settings' : null;
 }
 

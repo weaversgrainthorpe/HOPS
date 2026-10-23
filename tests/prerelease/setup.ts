@@ -27,8 +27,10 @@ setup('authenticate and save state', async ({ page }) => {
   await page.click('button:has-text("Set Password")');
 
   // Modal auto-dismisses ~1.5s after success. Don't race the success-message
-  // animation — just wait for Settings to load its sections (it waits for the change).
-  await expect(page.getByRole('heading', { name: 'Global settings', level: 2 })).toBeVisible({ timeout: 15_000 });
+  // animation — just wait for Settings to show its first page (it waits for the change).
+  await expect(page).toHaveURL(/\/settings\/dashboards$/);
+  await expect(page.getByRole('navigation', { name: 'Settings sections' })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole('heading', { name: 'Dashboards', level: 2 })).toBeVisible({ timeout: 15_000 });
   // Give the modal teardown a beat so its DOM is gone before we save state.
   await page.waitForTimeout(500);
 

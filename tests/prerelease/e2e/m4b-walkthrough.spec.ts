@@ -849,13 +849,15 @@ test.describe('§4D Settings is the admin home; / shows a dashboard', () => {
       await expect(anon.locator(`[data-node-id="${f.id('a')}"]`)).toBeVisible();
       await expect(anon.getByRole('button', { name: 'Log out' })).toHaveCount(0);
       await anon.getByRole('link', { name: 'Settings' }).click();
-      await expect(anon).toHaveURL(/\/settings$/);
+      // The gear's /settings opens its first page, Dashboards (M5 §9).
+      await expect(anon).toHaveURL(/\/settings\/dashboards$/);
       const dlg = anon.getByRole('dialog', { name: 'Sign in' });
       await expect(dlg).toBeVisible();
       await expect(dlg).toContainText('Sign in to open Settings.');
       await expect(dlg.getByLabel('Username')).toBeFocused();
-      // Nothing admin shows behind the dialog.
-      await expect(anon.getByRole('heading', { name: 'Global settings' })).toHaveCount(0);
+      // Nothing admin shows behind the dialog: no sidebar, no dashboard list.
+      await expect(anon.getByRole('navigation', { name: 'Settings sections' })).toHaveCount(0);
+      await expect(anon.getByRole('button', { name: 'New Dashboard' })).toHaveCount(0);
 
       // A wrong password: the reason shows once, in the dialog (no second copy in a toast), and
       // the cursor is back in the password field.
@@ -871,10 +873,12 @@ test.describe('§4D Settings is the admin home; / shows a dashboard', () => {
       await dlg.getByLabel('Password').fill(ADMIN_TEST_PASSWORD);
       await dlg.getByLabel('Password').press('Enter');
       await expect(dlg).toHaveCount(0);
-      await expect(anon).toHaveURL(/\/settings$/);
-      for (const h of ['Dashboards', 'Global settings', 'Discovery', 'Backups', 'Password', 'Factory reset', 'Log out']) {
-        await expect(anon.getByRole('heading', { name: h, level: 2, exact: true })).toBeVisible();
-      }
+      await expect(anon).toHaveURL(/\/settings\/dashboards$/);
+      // Every section is in the sidebar (M5 §9); this page is Dashboards.
+      const side = anon.getByRole('navigation', { name: 'Settings sections' });
+      await expect(side.getByRole('link')).toHaveText(['Dashboards', 'Global settings', 'Discovery', 'Backups', 'Password', 'Factory reset']);
+      await expect(side.getByRole('button', { name: 'Log out' })).toBeVisible();
+      await expect(anon.getByRole('heading', { name: 'Dashboards', level: 2, exact: true })).toBeVisible();
       await expect(anon.getByRole('heading', { name: `M4 walkthrough ${f.path.slice(1)}`, level: 3 })).toBeVisible();
       await expect(anon.getByRole('button', { name: 'Log out' }).first()).toBeVisible();
     } finally {
@@ -904,14 +908,14 @@ test.describe('§4D Settings is the admin home; / shows a dashboard', () => {
 
   test('"/" lands on the first dashboard (logged in and logged out), replacing itself in history', async ({ page, browser }) => {
     const first = await firstDashboard(page);
-    await page.goto('/settings');
+    await page.goto('/settings/global');
     await expect(page.getByRole('heading', { name: 'Global settings', level: 2 })).toBeVisible();
     await page.goto('/');
     await expect(page).toHaveURL(new RegExp(`${first.path}$`));
     await expect(page.locator('.center-title')).toHaveText(first.name);
     // "/" replaced itself: Back goes to the page before it, not to "/" (which would forward again).
     await page.goBack();
-    await expect(page).toHaveURL(/\/settings$/);
+    await expect(page).toHaveURL(/\/settings\/global$/);
 
     const { page: anon, ctx } = await anonPage(browser);
     try {
@@ -945,8 +949,8 @@ test.describe('§4D Settings is the admin home; / shows a dashboard', () => {
       await expect(page.getByRole('heading', { name: 'No dashboards yet' })).toBeVisible();
       await expect(page).toHaveURL(/\/$/);
       await page.getByRole('button', { name: 'Open Settings' }).click();
-      await expect(page).toHaveURL(/\/settings$/);
-      await expect(page.getByRole('heading', { name: 'Global settings', level: 2 })).toBeVisible();
+      await expect(page).toHaveURL(/\/settings\/dashboards$/);
+      await expect(page.getByRole('heading', { name: 'Dashboards', level: 2 })).toBeVisible();
       await expect(page.getByRole('button', { name: 'New Dashboard' })).toBeVisible();
 
       // Logged out: the same empty state; its button opens Settings, which signs in in place.
@@ -956,11 +960,11 @@ test.describe('§4D Settings is the admin home; / shows a dashboard', () => {
         await expect(anon.getByRole('heading', { name: 'No dashboards yet' })).toBeVisible();
         await expect(anon).toHaveURL(/\/$/);
         await anon.getByRole('button', { name: 'Open Settings' }).click();
-        await expect(anon).toHaveURL(/\/settings$/);
-        await expect(anon.getByRole('heading', { name: 'Global settings', level: 2 })).toHaveCount(0);
+        await expect(anon).toHaveURL(/\/settings\/dashboards$/);
+        await expect(anon.getByRole('heading', { name: 'Dashboards', level: 2 })).toHaveCount(0);
         await signInDialog(anon);
-        await expect(anon).toHaveURL(/\/settings$/);
-        await expect(anon.getByRole('heading', { name: 'Global settings', level: 2 })).toBeVisible();
+        await expect(anon).toHaveURL(/\/settings\/dashboards$/);
+        await expect(anon.getByRole('heading', { name: 'Dashboards', level: 2 })).toBeVisible();
         await expect(anon.getByRole('button', { name: 'New Dashboard' })).toBeVisible();
       } finally {
         await ctx.close();
@@ -991,12 +995,12 @@ test.describe('§4D Settings is the admin home; / shows a dashboard', () => {
       await expect(own.getByRole('button', { name: 'Enter Edit Mode' })).toHaveAttribute('title', 'Sign in to edit this dashboard');
       expect((await (await own.request.get('/api/auth/check')).json()).authenticated).toBe(false);
 
-      // Again, from the Settings section: Settings is left (no sign-in dialog pops up).
+      // Again, from the Settings sidebar: Settings is left (no sign-in dialog pops up).
       await own.goto('/settings');
       await signInDialog(own);
-      await expect(own.getByRole('heading', { name: 'Log out', level: 2 })).toBeVisible();
-      await own.locator('#logout').getByRole('button', { name: 'Log out' }).click();
-      await expect(own).not.toHaveURL(/\/settings$/);
+      const side = own.getByRole('navigation', { name: 'Settings sections' });
+      await side.getByRole('button', { name: 'Log out' }).click();
+      await expect(own).not.toHaveURL(/\/settings(\/|$)/);
       await expect(own.getByRole('dialog', { name: 'Sign in' })).toHaveCount(0);
       await expect(own.getByRole('button', { name: 'Log out' })).toHaveCount(0);
       expect((await (await own.request.get('/api/auth/check')).json()).authenticated).toBe(false);
@@ -1012,7 +1016,7 @@ test.describe('§4D Settings is the admin home; / shows a dashboard', () => {
       await anon.goto(first.path);
       await expect(anon.locator('.center-title')).toHaveText(first.name);
       await anon.goto('/admin/discovery');
-      await expect(anon).toHaveURL(/\/settings$/);
+      await expect(anon).toHaveURL(/\/settings\/dashboards$/);
       const dlg = anon.getByRole('dialog', { name: 'Sign in' });
       await expect(dlg).toBeVisible();
       await dlg.getByRole('button', { name: 'Cancel' }).click();
@@ -1021,9 +1025,9 @@ test.describe('§4D Settings is the admin home; / shows a dashboard', () => {
       // Back: the redirect replaced /admin/discovery, so it never sends you into it again.
       await anon.goBack();
       await expect(anon).not.toHaveURL(/\/admin\/discovery$/);
-      if (/\/settings$/.test(anon.url())) {
+      if (/\/settings(\/|$)/.test(anon.url())) {
         await anon.getByRole('dialog', { name: 'Sign in' }).getByRole('button', { name: 'Cancel' }).click();
-        await expect(anon).not.toHaveURL(/\/(settings|admin\/discovery)$/);
+        await expect(anon).not.toHaveURL(/\/(settings|admin\/discovery)(\/|$)/);
       }
     } finally {
       await ctx.close();
@@ -1034,6 +1038,8 @@ test.describe('§4D Settings is the admin home; / shows a dashboard', () => {
     const { page: own, ctx } = await anonPage(browser);
     try {
       await login(own);
+      await own.getByRole('navigation', { name: 'Settings sections' }).getByRole('link', { name: 'Global settings' }).click();
+      await expect(own.getByRole('heading', { name: 'Global settings', level: 2 })).toBeVisible();
       const csrf = (await ctx.cookies()).find((c) => c.name === 'hops_csrf')!.value;
       const out = await own.request.post('/api/auth/logout', { headers: { 'X-CSRF-Token': csrf } });
       expect(out.ok()).toBeTruthy();
@@ -1045,7 +1051,7 @@ test.describe('§4D Settings is the admin home; / shows a dashboard', () => {
       const dlg = own.getByRole('dialog', { name: 'Sign in' });
       await expect(dlg).toBeVisible();
       await own.waitForTimeout(1000); // the old handler left after 300 ms
-      await expect(own).toHaveURL(/\/settings$/);
+      await expect(own).toHaveURL(/\/settings\/global$/);
       await expect(dlg).toBeVisible();
       await signInDialog(own);
       await expect(own.getByRole('heading', { name: 'Global settings', level: 2 })).toBeVisible();
@@ -1120,7 +1126,7 @@ test.describe('§4D Settings is the admin home; / shows a dashboard', () => {
     const { page: anon, ctx } = await anonPage(browser);
     try {
       await anon.goto('/admin/discovery');
-      await expect(anon).toHaveURL(/\/settings$/);
+      await expect(anon).toHaveURL(/\/settings\/dashboards$/);
       await expect(anon.getByRole('dialog', { name: 'Sign in' })).toBeVisible();
     } finally {
       await ctx.close();
@@ -1143,9 +1149,9 @@ test.describe('one sign-in dialog at a time: navigating closes the pencil\'s', (
     try {
       await anon.goto(f.path);
       await expect(anon.locator(`[data-node-id="${f.id('a')}"]`)).toBeVisible();
-      // Client-side history: dashboard → /settings → (Cancel) dashboard.
+      // Client-side history: dashboard → /settings (→ /settings/dashboards) → (Cancel) dashboard.
       await anon.getByRole('link', { name: 'Settings' }).click();
-      await expect(anon).toHaveURL(/\/settings$/);
+      await expect(anon).toHaveURL(/\/settings\/dashboards$/);
       await anon.getByRole('dialog', { name: 'Sign in' }).getByRole('button', { name: 'Cancel' }).click();
       await expect(anon).toHaveURL(new RegExp(`${f.path}$`));
       await expect(anon.getByRole('dialog', { name: 'Sign in' })).toHaveCount(0);
@@ -1156,7 +1162,7 @@ test.describe('one sign-in dialog at a time: navigating closes the pencil\'s', (
       await expect(dlg).toContainText('Sign in to edit this dashboard.');
 
       await anon.goBack();
-      await expect(anon).toHaveURL(/\/settings$/);
+      await expect(anon).toHaveURL(/\/settings\/dashboards$/);
       await expect(dlg).toHaveCount(1);
       await expect(dlg).toContainText('Sign in to open Settings.');
       expect(await anon.locator('form').count(), 'one sign-in form in the page').toBe(1);
@@ -1166,8 +1172,8 @@ test.describe('one sign-in dialog at a time: navigating closes the pencil\'s', (
       await dlg.getByLabel('Password').fill(ADMIN_TEST_PASSWORD);
       await dlg.getByRole('button', { name: 'Sign in' }).click();
       await expect(dlg).toHaveCount(0);
-      await expect(anon.getByRole('heading', { name: 'Global settings', level: 2 })).toBeVisible();
-      await expect(anon).toHaveURL(/\/settings$/);
+      await expect(anon.getByRole('heading', { name: 'Dashboards', level: 2 })).toBeVisible();
+      await expect(anon).toHaveURL(/\/settings\/dashboards$/);
       await expect(anon.getByText("There's no dashboard here to edit")).toHaveCount(0);
       await expect(anon.getByRole('toolbar', { name: 'Editing' })).toHaveCount(0);
     } finally {
@@ -1259,10 +1265,10 @@ test.describe('phones: the page is never wider than the screen', () => {
       if (await navLogout.isVisible()) await inside(page, navLogout, `${width}px dashboard: navbar Log out`);
 
       await page.getByRole('link', { name: 'Settings' }).click();
-      await expect(page.getByRole('heading', { name: 'Global settings', level: 2 })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Dashboards', level: 2 })).toBeVisible();
       await fits(page, `${width}px, logged in, /settings`);
-      // Log out is always reachable on a phone: in Settings (the navbar's may be hidden there).
-      await inside(page, page.locator('#logout').getByRole('button', { name: 'Log out' }), `${width}px /settings: Log out`);
+      // Log out is always reachable on a phone: in the Settings section menu (the navbar's may be hidden there).
+      await inside(page, page.getByRole('navigation', { name: 'Settings sections' }).getByRole('button', { name: 'Log out' }), `${width}px /settings: Log out`);
       await page.evaluate(() => window.scrollTo(0, 0));
       await fits(page, `${width}px, logged in, /settings (after scrolling)`);
     }

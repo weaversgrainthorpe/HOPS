@@ -213,6 +213,12 @@ describe('sessionExpiredRedirect (where an expired session sends the page)', () 
 		const { sessionExpiredRedirect } = await import('./auth');
 		expect(sessionExpiredRedirect('/settings')).toBeNull();
 	});
+	it('every settings page stays too (M5 §9: each section is its own page; never bounced to /settings)', async () => {
+		const { sessionExpiredRedirect } = await import('./auth');
+		for (const p of ['/settings/dashboards', '/settings/global', '/settings/backups', '/settings/password', '/settings/reset']) {
+			expect(sessionExpiredRedirect(p)).toBeNull();
+		}
+	});
 	it('the other admin pages go to Settings, to sign in there (not to /, which loses the place)', async () => {
 		const { sessionExpiredRedirect } = await import('./auth');
 		expect(sessionExpiredRedirect('/admin/discovery')).toBe('/settings');

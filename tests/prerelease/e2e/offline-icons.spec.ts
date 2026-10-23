@@ -16,7 +16,7 @@ test('UI icons render with the Iconify API fully blocked (offline)', async ({ pa
     return route.abort();
   });
 
-  await page.goto('/settings');
+  await page.goto('/settings/global');
   await expect(page.getByRole('heading', { name: 'Global settings', level: 2 })).toBeVisible();
 
   // @iconify/svelte renders each icon as an inline <svg>. With the API blocked,
@@ -24,12 +24,19 @@ test('UI icons render with the Iconify API fully blocked (offline)', async ({ pa
   // an <img>, not inline svg, so inline <svg> count ≈ Iconify icons drawn.
   await expect.poll(() => page.locator('svg').count(), { timeout: 5_000 }).toBeGreaterThan(5);
 
-  // The admin buttons on Settings (Backups=mdi:backup-restore, Discovery=mdi:radar, …)
-  // and the navbar gear (mdi:cog) must each have drawn their icon.
-  for (const section of ['#discovery', '#backups', '#password', '#reset', '#logout']) {
-    await expect(page.locator(`${section} svg`).first()).toBeVisible();
+  // Every Settings sidebar item (Backups=mdi:backup-restore, Discovery=mdi:radar, …), the
+  // section pages' buttons and the navbar gear (mdi:cog) must each have drawn their icon.
+  const side = page.getByRole('navigation', { name: 'Settings sections' });
+  const items = side.locator('a, button');
+  await expect(items).toHaveCount(7);
+  for (let i = 0; i < 7; i++) {
+    await expect(items.nth(i).locator('svg')).toBeVisible();
   }
-  await expect(page.getByRole('link', { name: 'Settings' }).locator('svg')).toBeVisible();
+  for (const [item, button] of [['Backups', 'Open Backups'], ['Password', 'Change Password'], ['Factory reset', 'Factory Reset']]) {
+    await side.getByRole('link', { name: item, exact: true }).click();
+    await expect(page.getByRole('button', { name: button }).locator('svg')).toBeVisible();
+  }
+  await expect(page.getByRole('link', { name: 'Settings', exact: true }).locator('svg')).toBeVisible();
 
   // Even if some request was attempted and aborted, the icons rendered — but in
   // practice nothing should have reached out at all.
