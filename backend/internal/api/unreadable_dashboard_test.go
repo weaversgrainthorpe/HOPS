@@ -31,7 +31,7 @@ func TestImport_V3NodeWithoutPlacementIs400(t *testing.T) {
 	}
 	var before string
 	db.QueryRow("SELECT data FROM config WHERE id = 1").Scan(&before)
-	code, resp := c.importFile(v3ExportOf(t, map[string]interface{}{"layoutVersion": 1, "dashboards": []interface{}{d}}))
+	code, resp := c.importFile(v3ExportOf(t, map[string]interface{}{"layoutVersion": configdoc.LayoutVersion, "dashboards": []interface{}{d}}))
 	msg := fmt.Sprint(resp["error"])
 	if code != 400 || !strings.Contains(msg, "pz-a") || !strings.Contains(msg, "placement") {
 		t.Fatalf("got %d %v, want 400 naming pz-a's placement", code, resp)
@@ -77,7 +77,7 @@ func TestGetConfig_UnplacedNodeIsServedNot500(t *testing.T) {
 		t.Fatalf("pz served without its unplaced tile: %s", b)
 	}
 	// Saving it as-is is refused visibly, naming the node.
-	code, resp := c.do("PUT", "/api/dashboards/pz", map[string]interface{}{"schema": 3, "dashboard": dashes[1], "revision": 1, "layoutVersion": 1})
+	code, resp := c.do("PUT", "/api/dashboards/pz", map[string]interface{}{"schema": 3, "dashboard": dashes[1], "revision": 1, "layoutVersion": configdoc.LayoutVersion})
 	if msg := fmt.Sprint(resp["error"]); code != 400 || !strings.Contains(msg, "pz-a") || !strings.Contains(msg, "placement") {
 		t.Fatalf("save of unplaced tile: %d %v", code, resp)
 	}

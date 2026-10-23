@@ -12,7 +12,8 @@ import (
 // and Heimdall imports), and the converter writes the current form directly.
 // Anything at another layoutVersion is refused visibly, never guessed at.
 //
-// The current form (layoutVersion 1, the one folder model):
+// The current form (layoutVersion 2: M5's one folder model, with M6's
+// tab-aware folder minimum and fixed shape list):
 //   - every tab is a grid tab: its root has RootColumns columns and no
 //     `layout` or `designWidth`; a dashboard has no `defaultLayout`;
 //   - a tab-level tile is exactly Small 1×1, Medium 2×2 or Large 4×4 cells,
@@ -20,13 +21,17 @@ import (
 //     overlap and sit on whole cells inside the RootColumns columns;
 //   - a folder has `size` and `contentSize` (small, medium or large), no
 //     `layout`, and its content has no `columns`: its children are an
-//     ordered list with no placements.
+//     ordered list with no placements;
+//   - a folder's `shape`, when present, is one of FolderShapes and its
+//     `tabPosition`, when present, one of FolderTabPositions (M6 §3a.8);
+//   - a tab-level folder's open box is at least FolderMinCellsOf, which
+//     counts a tab-height allowance for every shape (M6 §3a.4).
 //
 // In an export envelope the marker travels inside "config" (the document, or
 // {dashboards: [one]} for a single-dashboard export).
 const (
 	// LayoutVersion is the layout form this build reads and writes.
-	LayoutVersion = 1
+	LayoutVersion = 2
 	// LayoutVersionKey is the document key of the layout-form marker.
 	LayoutVersionKey = "layoutVersion"
 )
@@ -38,6 +43,11 @@ const (
 const (
 	// FolderTitlePx is an open folder's title bar.
 	FolderTitlePx = 40
+	// FolderTabPx is the tab-height allowance (M6 §3a.4): a tab shape draws
+	// its tab above the body. ONE constant for every shape (Rounded too), so
+	// the minimum has no shape parameter and a shape change never needs a
+	// different minimum table. Twin of geometry.ts FOLDER_CHROME.tabPx.
+	FolderTabPx = 24
 	// FolderPadPx is an open folder's body padding plus border, each way.
 	FolderPadPx = 2*8 + 2*1
 	// PageBarPx is the page bar, drawn when a folder has more than one page.
@@ -59,14 +69,18 @@ func sizeOf(size any) string {
 
 func ceilCells(px int) int { return (px + MinGridCellPx - 1) / MinGridCellPx }
 
+// folderChromeYPx is an open folder's height that is not items: its bar, the
+// tab allowance, border and padding (the page bar is added where it counts).
+const folderChromeYPx = FolderTitlePx + FolderTabPx + FolderPadPx
+
 // FolderMinCells is THE smallest open folder box on a tab, in cells, for
-// items of contentSize (M5 §3.5, Ruling 7): its bar, border and padding, ONE
-// item and the page bar, counted at the narrowest grid cell so it holds at
-// every grid width. Small 2×4, Medium 3×5, Large 5×7. Twin of geometry.ts
-// minOpenFolderCells.
+// items of contentSize (M5 §3.5, Ruling 7; M6 §3a.4): its bar, the tab
+// allowance, border and padding, ONE item and the page bar, counted at the
+// narrowest grid cell so it holds at every grid width. Small 2×5, Medium
+// 3×6, Large 5×8, for every shape. Twin of geometry.ts minOpenFolderCells.
 func FolderMinCells(contentSize any) (w, h int) {
 	span := sizeSpans[sizeOf(contentSize)]
-	return span + ceilCells(FolderPadPx), span + ceilCells(FolderTitlePx+FolderPadPx+PageBarPx)
+	return span + ceilCells(FolderPadPx), span + ceilCells(folderChromeYPx+PageBarPx)
 }
 
 // LargestContentSize is the largest contents size of folder and every folder
@@ -116,9 +130,27 @@ func FolderBoxFor(folder Obj, n, w int) (int, int) {
 	w = min(RootColumns, max(w, mw))
 	fit := max(1, (w*MinGridCellPx-FolderPadPx)/(span*MinGridCellPx))
 	rows := max(1, (n+fit-1)/fit)
-	h := rows*span + ceilCells(FolderTitlePx+FolderPadPx+PageBarPx)
+	h := rows*span + ceilCells(folderChromeYPx+PageBarPx)
 	return w, max(h, mh)
 }
+
+// FolderShapes is the fixed list of folder shapes (M6 §2, §3.9): Rounded,
+// Simple tab and the five real-folder looks. A shape is only ever one of
+// these names, never user-supplied markup; anything else is refused on save
+// and import (§3a.8). Twin of the frontend's FolderShape union.
+var FolderShapes = []string{"rounded", "simple-tab", "folder-flat", "folder-paper", "folder-outline", "folder-cartoon", "folder-open"}
+
+// FolderTabPositions is where a tab shape's tab sits (M6 §3.2). Absent means
+// left.
+var FolderTabPositions = []string{"left", "centre", "right"}
+
+// Default shapes (M6 §3a.5): folders made in HOPS (new, merge, Discovery
+// promote) start Flat; converted folders (v2, Homer, Dashy, Heimdall) are
+// Rounded, except v2 folder-style groups, which are Flat (§3a.1).
+const (
+	ShapeCreated   = "folder-flat"
+	ShapeConverted = "rounded"
+)
 
 // sizeSpans is the side, in grid cells, of each standard size.
 var sizeSpans = map[string]int{"small": 1, "medium": 2, "large": 4}

@@ -30,7 +30,7 @@ func v3Body(t *testing.T, c *apiClient, id string) map[string]interface{} {
 }
 
 func v3Put(c *apiClient, id string, d map[string]interface{}, rev interface{}) (int, map[string]interface{}) {
-	return c.do("PUT", "/api/dashboards/"+id, map[string]interface{}{"schema": 3, "dashboard": d, "revision": rev, "layoutVersion": 1})
+	return c.do("PUT", "/api/dashboards/"+id, map[string]interface{}{"schema": 3, "dashboard": d, "revision": rev, "layoutVersion": configdoc.LayoutVersion})
 }
 
 // inFolder strips n's placement: folder contents are an ordered list (M5).
@@ -61,7 +61,7 @@ func TestV3Put_RoundTripKeepsSettingsAndBumpsRevision(t *testing.T) {
 	d := v3Body(t, c, "d1")
 	d["name"] = "Renamed"
 	kids := rootOf(d)["children"].([]interface{})
-	rootOf(d)["children"] = append(kids, tileJSON("tile-new", 5, 5))
+	rootOf(d)["children"] = append(kids, tileJSON("tile-new", 5, 6)) // below the seeded 24×6 folder
 	d["settings"] = map[string]interface{}{"statusChecksEnabled": true} // must be ignored
 	n := backupCount(t, c)
 	code, resp := v3Put(c, "d1", d, 2)
@@ -281,7 +281,7 @@ func TestOrderDashboards(t *testing.T) {
 func transferBody(m map[string]interface{}) map[string]interface{} {
 	b := map[string]interface{}{"mode": "copy", "sourceId": "d1", "sourceRevision": 1,
 		"nodeIds": []string{"e1"}, "targetId": "d2", "targetRevision": 1,
-		"target": map[string]interface{}{"tabId": "t2"}, "layoutVersion": 1}
+		"target": map[string]interface{}{"tabId": "t2"}, "layoutVersion": configdoc.LayoutVersion}
 	for k, v := range m {
 		b[k] = v
 	}
@@ -396,7 +396,7 @@ func TestTransfer_CopyFolderGetsFreshIDsForDescendants(t *testing.T) {
 	rootOf(d)["children"] = append(rootOf(d)["children"].([]interface{}), map[string]interface{}{
 		"id": "fold1", "kind": "folder", "name": "F", "display": "expanded",
 		"size": "medium", "contentSize": "medium",
-		"placement": map[string]interface{}{"x": 0, "y": 9, "w": 3, "h": 5},
+		"placement": map[string]interface{}{"x": 0, "y": 9, "w": 3, "h": 6},
 		"content":   map[string]interface{}{"children": []interface{}{inFolder(tileJSON("inner1", 0, 0))}}})
 	if code, r := v3Put(c, "d1", d, 1); code != 200 {
 		t.Fatalf("%d %v", code, r)

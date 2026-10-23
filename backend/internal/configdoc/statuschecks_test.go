@@ -175,7 +175,7 @@ func TestVerifyDashboard_StatusChecksTriState(t *testing.T) {
 			tile["statusCheck"] = tileSC
 		}
 		folder := Obj{"kind": "folder", "id": "f", "size": "medium", "contentSize": "medium",
-			"placement": Obj{"x": 0, "y": 0, "w": 3, "h": 5},
+			"placement": Obj{"x": 0, "y": 0, "w": 3, "h": 6},
 			"content":   Obj{"children": []any{tile}}}
 		if folderV != "absent" {
 			folder["statusChecksEnabled"] = folderV

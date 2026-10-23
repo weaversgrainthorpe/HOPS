@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -68,12 +69,13 @@ func TestLayoutVersionGuard_RefusesMismatchedWrites(t *testing.T) {
 		{"save, no layoutVersion", "PUT", "/api/dashboards/d1", without(saveBody())},
 		{"save, pre-M5 gridUnit only", "PUT", "/api/dashboards/d1", with(saveBody(), "gridUnit", 2)},
 		{"save, layoutVersion 0", "PUT", "/api/dashboards/d1", with(saveBody(), "layoutVersion", 0)},
-		{"save, layoutVersion 2", "PUT", "/api/dashboards/d1", with(saveBody(), "layoutVersion", 2)},
-		{"save, layoutVersion \"1\"", "PUT", "/api/dashboards/d1", with(saveBody(), "layoutVersion", "1")},
+		{"save, M5 layoutVersion 1", "PUT", "/api/dashboards/d1", with(saveBody(), "layoutVersion", 1)},
+		{"save, newer layoutVersion", "PUT", "/api/dashboards/d1", with(saveBody(), "layoutVersion", configdoc.LayoutVersion+1)},
+		{"save, layoutVersion as a string", "PUT", "/api/dashboards/d1", with(saveBody(), "layoutVersion", fmt.Sprint(configdoc.LayoutVersion))},
 		{"save, layoutVersion null", "PUT", "/api/dashboards/d1", with(saveBody(), "layoutVersion", nil)},
 		{"copy, no layoutVersion", "POST", "/api/dashboards/transfer", without(transferBody(map[string]interface{}{"target": target}))},
 		{"move, gridUnit only", "POST", "/api/dashboards/transfer", with(transferBody(map[string]interface{}{"mode": "move", "target": target}), "gridUnit", 2)},
-		{"move, layoutVersion 2", "POST", "/api/dashboards/transfer", with(transferBody(map[string]interface{}{"mode": "move", "target": target}), "layoutVersion", 2)},
+		{"move, M5 layoutVersion 1", "POST", "/api/dashboards/transfer", with(transferBody(map[string]interface{}{"mode": "move", "target": target}), "layoutVersion", 1)},
 	}
 	before := storedRaw(db)
 	backups := backupCount(t, c)
@@ -102,11 +104,11 @@ func TestLayoutVersionGuard_RefusesMismatchedWrites(t *testing.T) {
 	}
 	// The same writes carrying the current layoutVersion go through.
 	if code, resp := c.do("PUT", "/api/dashboards/d1", saveBody()); code != 200 {
-		t.Fatalf("save with layoutVersion 1: %d %v", code, resp)
+		t.Fatalf("save with the current layoutVersion: %d %v", code, resp)
 	}
 	if code, resp := c.do("POST", "/api/dashboards/transfer", transferBody(map[string]interface{}{
 		"sourceRevision": 2, "target": target})); code != 200 {
-		t.Fatalf("copy with layoutVersion 1: %d %v", code, resp)
+		t.Fatalf("copy with the current layoutVersion: %d %v", code, resp)
 	}
 }
 
@@ -167,6 +169,7 @@ func TestImport_CurrentV3ExportRoundTrips(t *testing.T) {
 // Old (pre-M5) v3 exports and exports from a newer layout form are refused
 // visibly, naming both versions, and nothing is written.
 func TestImport_OtherLayoutVersionRefused(t *testing.T) {
+	cur := fmt.Sprintf("layout version %d", configdoc.LayoutVersion)
 	cases := map[string]struct {
 		set  func(cfg map[string]any)
 		want []string
@@ -174,9 +177,10 @@ func TestImport_OtherLayoutVersionRefused(t *testing.T) {
 		"pre-M5 (gridUnit, no layoutVersion)": {func(cfg map[string]any) {
 			delete(cfg, "layoutVersion")
 			cfg["gridUnit"] = 2
-		}, []string{"layout version 1", "pre-release"}},
-		"no marker at all": {func(cfg map[string]any) { delete(cfg, "layoutVersion") }, []string{"layout version 1"}},
-		"newer":            {func(cfg map[string]any) { cfg["layoutVersion"] = 2 }, []string{"layout version 2", "layout version 1"}},
+		}, []string{cur, "pre-release"}},
+		"no marker at all":             {func(cfg map[string]any) { delete(cfg, "layoutVersion") }, []string{cur}},
+		"M5 export (layout version 1)": {func(cfg map[string]any) { cfg["layoutVersion"] = 1 }, []string{"layout version 1", cur}},
+		"newer":                        {func(cfg map[string]any) { cfg["layoutVersion"] = configdoc.LayoutVersion + 1 }, []string{fmt.Sprintf("layout version %d", configdoc.LayoutVersion+1), cur}},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -231,8 +235,8 @@ func TestImport_PreM5ShowcaseRefused(t *testing.T) {
 	c := newClient(t, router)
 	before := storedRaw(db)
 	code, resp := c.importFile(pre)
-	if code != 400 || !strings.Contains(resp["error"].(string), "layout version 1") {
-		t.Fatalf("import: %d %v, want 400 naming layout version 1", code, resp)
+	if cur := fmt.Sprintf("layout version %d", configdoc.LayoutVersion); code != 400 || !strings.Contains(resp["error"].(string), cur) {
+		t.Fatalf("import: %d %v, want 400 naming %s", code, resp, cur)
 	}
 	if storedRaw(db) != before {
 		t.Error("config row changed")

@@ -643,7 +643,7 @@ func newCategoryFolder(info discovery.CategoryInfo, results []*discovery.Result)
 	return configdoc.Obj{
 		"id": id, "kind": "folder", "name": info.DisplayName, "icon": info.Icon,
 		"size": "medium", "contentSize": "medium",
-		"display": "expanded", "shape": "rounded", "showTitle": true,
+		"display": "expanded", "shape": configdoc.ShapeCreated, "showTitle": true, // made in HOPS: Flat (M6 §3a.5)
 		"placement": configdoc.Obj{"x": 0, "y": 0, "w": w, "h": h},
 		"content":   content,
 	}, nil

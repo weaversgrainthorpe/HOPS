@@ -560,7 +560,7 @@ func TestImport_V3Showcase(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Written natively in the M5 form (layoutVersion 1): no conversion runs on import.
+	// Written natively in the current form (layoutVersion 2): no conversion runs on import.
 	var env map[string]any
 	if err := json.Unmarshal(data, &env); err != nil {
 		t.Fatal(err)

@@ -10,7 +10,7 @@ func tabN(doc Obj, i int) Obj { return dash0(doc)["tabs"].([]any)[i].(Obj) }
 func bgDoc(level string, bg any) Obj {
 	folder := Obj{"kind": "folder", "id": "f1", "name": "F", "display": "expanded",
 		"size": "medium", "contentSize": "medium",
-		"placement": Obj{"x": 0, "y": 0, "w": 4, "h": 5},
+		"placement": Obj{"x": 0, "y": 0, "w": 4, "h": 6},
 		"content":   Obj{"children": []any{}}}
 	tab := Obj{"id": "t1", "name": "T", "root": Obj{"columns": RootColumns, "children": []any{folder}}}
 	dash := Obj{"id": "d1", "name": "D", "path": "/d", "revision": 1,

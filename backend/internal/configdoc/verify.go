@@ -618,6 +618,7 @@ func (v *verifier) checkContainer(owner string, c Obj, note func(string, Obj) st
 		case "folder":
 			v.checkBackground(n, km)
 			v.noKeys(n, km, "layout")
+			v.checkFolderShape(n, km)
 			for _, k := range []string{"size", "contentSize"} {
 				if s, _ := km[k].(string); sizeSpans[s] == 0 {
 					v.add("%s: %s is %s, want \"small\", \"medium\" or \"large\"", n, k, trunc(show(km[k])))
@@ -637,6 +638,43 @@ func (v *verifier) checkContainer(owner string, c Obj, note func(string, Obj) st
 	if tabLevel {
 		v.checkOverlaps(owner, boxes)
 	}
+}
+
+// checkFolderShape requires a folder's shape, when present, to be one of
+// FolderShapes and its tabPosition, when present, one of FolderTabPositions
+// (M6 §3a.8). Anything else (a retired name such as "folder-tab", a typo, a
+// non-string, markup) is refused with a message naming the field, the value
+// and the allowed names: the renderer's "unknown shape" note is only a
+// backstop, never the first line.
+func (v *verifier) checkFolderShape(n string, f Obj) {
+	check := func(key string, allowed []string) {
+		raw, has := f[key]
+		if !has {
+			return
+		}
+		if s, ok := raw.(string); ok {
+			for _, a := range allowed {
+				if s == a {
+					return
+				}
+			}
+		}
+		v.add("%s: %s is %s, want one of %s (or absent)", n, key, trunc(show(raw)), quoteList(allowed))
+	}
+	check("shape", FolderShapes)
+	check("tabPosition", FolderTabPositions)
+}
+
+// quoteList is names as "a", "b" or "c".
+func quoteList(names []string) string {
+	q := make([]string, len(names))
+	for i, s := range names {
+		q[i] = fmt.Sprintf("%q", s)
+	}
+	if len(q) < 2 {
+		return strings.Join(q, "")
+	}
+	return strings.Join(q[:len(q)-1], ", ") + " or " + q[len(q)-1]
 }
 
 // placedBox is a tab-level item's cells, for the overlap check.

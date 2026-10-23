@@ -86,7 +86,7 @@ func TestConvert_RealFoldersMeetMinimumAndFitPageOne(t *testing.T) {
 				span, _ := SizeSpan(node["contentSize"])
 				kids, _ := node["content"].(Obj)["children"].([]any)
 				perRow := itemsPerRow(w, span)
-				rows := (h*MinGridCellPx - FolderTitlePx - FolderPadPx) / (span * MinGridCellPx)
+				rows := (h*MinGridCellPx - FolderTitlePx - FolderTabPx - FolderPadPx) / (span * MinGridCellPx)
 				if perRow*rows < len(kids) {
 					t.Errorf("folder %v box %dx%d holds %d×%d items on page 1, want all %d", node["id"], w, h, perRow, rows, len(kids))
 				}
@@ -124,7 +124,7 @@ func TestVerifyDashboard_RefusesUndersizedFolderBox(t *testing.T) {
 		if err == nil {
 			t.Fatalf("%s: undersized box accepted", name)
 		}
-		for _, part := range []string{"Services", "24×4", "3×5"} {
+		for _, part := range []string{"Services", "24×4", "3×6"} {
 			if !strings.Contains(err.Error(), part) {
 				t.Errorf("%s: %v does not name %q", name, err, part)
 			}
@@ -132,7 +132,7 @@ func TestVerifyDashboard_RefusesUndersizedFolderBox(t *testing.T) {
 	}
 	// At its minimum it is accepted.
 	root := d["tabs"].([]any)[0].(Obj)["root"].(Obj)
-	root["children"].([]any)[0].(Obj)["placement"] = Obj{"x": 0, "y": 0, "w": 3, "h": 5}
+	root["children"].([]any)[0].(Obj)["placement"] = Obj{"x": 0, "y": 0, "w": 3, "h": 6}
 	if err := VerifyDashboard(d); err != nil {
 		t.Fatalf("box at its minimum refused: %v", err)
 	}

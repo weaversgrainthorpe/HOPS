@@ -59,8 +59,8 @@ func TestPromote_RepeatAppendsToCategoryFolder(t *testing.T) {
 	if folder["size"] != "medium" || folder["contentSize"] != "medium" {
 		t.Errorf("folder size/contentSize = %v/%v, want medium/medium", folder["size"], folder["contentSize"])
 	}
-	if _, _, w, h, _ := rect(folder["placement"]); w != 9 || h != 5 {
-		t.Errorf("new folder placement %v, want 9×5 (four Medium tiles and the padding wide, one row + bar, padding and page bar)", folder["placement"])
+	if _, _, w, h, _ := rect(folder["placement"]); w != 9 || h != 6 {
+		t.Errorf("new folder placement %v, want 9×6 (four Medium tiles and the padding wide, one row + bar, tab allowance, padding and page bar)", folder["placement"])
 	}
 	promote("result-0010", "result-0011", "result-0012", "result-0013")
 	d = storedDash(t, db, "d1")

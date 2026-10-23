@@ -259,10 +259,12 @@ func convertGroup(g Obj, p [4]int, path string) (Obj, []SizeChange, error) {
 	} else {
 		g["display"] = "expanded"
 	}
+	// M6 §3a.1, §3a.5: a v2 folder-style group is Flat; every other
+	// converted folder (v2 header groups, Homer, Dashy, Heimdall) Rounded.
 	if g["displayStyle"] == "folder" {
-		g["shape"] = "folder-tab"
+		g["shape"] = ShapeCreated
 	} else {
-		g["shape"] = "rounded"
+		g["shape"] = ShapeConverted
 	}
 	g["showTitle"] = true
 	g["placement"] = placement(p[0], p[1], p[2], p[3])

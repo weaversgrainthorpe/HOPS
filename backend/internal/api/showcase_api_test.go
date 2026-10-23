@@ -161,7 +161,7 @@ func TestImport_TakenPathIsRenamed(t *testing.T) {
 		settings[k] = nil
 	}
 	s1["settings"] = settings
-	code, resp := c.importFile(v3ExportOf(t, map[string]interface{}{"layoutVersion": 1, "dashboards": []interface{}{s1}}))
+	code, resp := c.importFile(v3ExportOf(t, map[string]interface{}{"layoutVersion": configdoc.LayoutVersion, "dashboards": []interface{}{s1}}))
 	if code != 200 {
 		t.Fatalf("import: %d %v", code, resp)
 	}
@@ -181,7 +181,7 @@ func TestImport_TakenPathIsRenamed(t *testing.T) {
 	// The same path without its leading slash routes to the same dashboard,
 	// so it is renamed too.
 	s1["path"] = "showcase"
-	if code, resp = c.importFile(v3ExportOf(t, map[string]interface{}{"layoutVersion": 1, "dashboards": []interface{}{s1}})); code != 200 {
+	if code, resp = c.importFile(v3ExportOf(t, map[string]interface{}{"layoutVersion": configdoc.LayoutVersion, "dashboards": []interface{}{s1}})); code != 200 {
 		t.Fatalf("second import: %d %v", code, resp)
 	}
 	for _, d := range dashList(storedDoc(t, db)) {

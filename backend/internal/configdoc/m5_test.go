@@ -1,6 +1,7 @@
 package configdoc
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -58,17 +59,17 @@ func TestSizeSpan(t *testing.T) {
 }
 
 func TestLayoutVersionCheck(t *testing.T) {
-	if err := CheckLayoutVersion(Obj{LayoutVersionKey: 1.0}); err != nil {
+	if err := CheckLayoutVersion(Obj{LayoutVersionKey: float64(LayoutVersion)}); err != nil {
 		t.Errorf("current version refused: %v", err)
 	}
-	if err := CheckLayoutVersion(Obj{LayoutVersionKey: 1}); err != nil {
+	if err := CheckLayoutVersion(Obj{LayoutVersionKey: LayoutVersion}); err != nil {
 		t.Errorf("current version (int) refused: %v", err)
 	}
 	for name, doc := range map[string]Obj{
 		"missing":                   {},
-		"older":                     {LayoutVersionKey: 0.0},
-		"newer":                     {LayoutVersionKey: 2.0},
-		"string":                    {LayoutVersionKey: "1"},
+		"older":                     {LayoutVersionKey: float64(LayoutVersion - 1)},
+		"newer":                     {LayoutVersionKey: float64(LayoutVersion + 1)},
+		"string":                    {LayoutVersionKey: fmt.Sprint(LayoutVersion)},
 		"gridUnit only (pre-M5 v3)": {"gridUnit": 2.0},
 	} {
 		err := CheckLayoutVersion(doc)
@@ -76,11 +77,11 @@ func TestLayoutVersionCheck(t *testing.T) {
 			t.Errorf("%s: accepted", name)
 			continue
 		}
-		if !strings.Contains(err.Error(), "layout version 1") {
+		if !strings.Contains(err.Error(), fmt.Sprintf("layout version %d", LayoutVersion)) {
 			t.Errorf("%s: %v does not name the current version", name, err)
 		}
 	}
-	if err := CheckLayoutVersion(Obj{LayoutVersionKey: 2.0}); !strings.Contains(err.Error(), "2") {
+	if err := CheckLayoutVersion(Obj{LayoutVersionKey: float64(LayoutVersion + 1)}); !strings.Contains(err.Error(), fmt.Sprint(LayoutVersion+1)) {
 		t.Errorf("newer: %v does not name the export's version", err)
 	}
 }
@@ -158,11 +159,11 @@ func TestMigrateV2_FolderChildrenInEntryOrder(t *testing.T) {
 		ids = append(ids, c["id"].(string))
 	}
 	eq(t, ids, []string{"e1", "e2", "e3"}, "child order")
-	eq(t, folders[0]["placement"], Obj{"x": 0, "y": 0, "w": 24, "h": 5}, "folder placement")
-	eq(t, folders[1]["placement"], Obj{"x": 0, "y": 5, "w": 12, "h": 5}, "folder placement")
+	eq(t, folders[0]["placement"], Obj{"x": 0, "y": 0, "w": 24, "h": 6}, "folder placement")
+	eq(t, folders[1]["placement"], Obj{"x": 0, "y": 6, "w": 12, "h": 6}, "folder placement")
 	f := children(t, tabs[1]["root"].(Obj))[0]
 	eq(t, f["display"], "collapsed", "display")
-	eq(t, f["placement"], Obj{"x": 0, "y": 0, "w": 8, "h": 7}, "collapsed folder placement")
+	eq(t, f["placement"], Obj{"x": 0, "y": 0, "w": 8, "h": 8}, "collapsed folder placement")
 	if n := len(children(t, f["content"].(Obj))); n != 5 {
 		t.Errorf("children = %d, want 5", n)
 	}
@@ -196,8 +197,10 @@ func TestVerifyMigration_RequiresLayoutVersion(t *testing.T) {
 	v3 := migrated(t, v2)
 	delete(v3, LayoutVersionKey)
 	wantProblem(t, Verify(v2, v3), LayoutVersionKey)
-	v3[LayoutVersionKey] = 2
-	wantProblem(t, Verify(v2, v3), LayoutVersionKey)
+	for _, other := range []int{LayoutVersion - 1, LayoutVersion + 1} {
+		v3[LayoutVersionKey] = other
+		wantProblem(t, Verify(v2, v3), LayoutVersionKey)
+	}
 }
 
 func TestVerifyDashboard_AcceptsM5Form(t *testing.T) {
@@ -268,8 +271,9 @@ func rootKids(d Obj) []any { return tabOf(d)["root"].(Obj)["children"].([]any) }
 // is no v3→v3 update to bring it forward).
 func TestMigrateWithBackup_StaleLayoutVersionFailsVisibly(t *testing.T) {
 	for name, doc := range map[string]Obj{
-		"pre-M5 (gridUnit)": {"schemaVersion": 3, "gridUnit": 2, "dashboards": []any{}},
-		"newer":             {"schemaVersion": 3, LayoutVersionKey: 2, "dashboards": []any{}},
+		"pre-M5 (gridUnit)":     {"schemaVersion": 3, "gridUnit": 2, "dashboards": []any{}},
+		"M5 (layout version 1)": {"schemaVersion": 3, LayoutVersionKey: 1, "dashboards": []any{}},
+		"newer":                 {"schemaVersion": 3, LayoutVersionKey: LayoutVersion + 1, "dashboards": []any{}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			db := newStoreDB(t)
