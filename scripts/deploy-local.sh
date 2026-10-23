@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Deploy the locally-built HOPS to prod without going through GitHub Releases,
-# and bring the dev box (source + running hops-dev service) up to date.
+# Deploy the locally-built HOPS without going through GitHub Releases.
 #
-# Two distinct operations in one invocation:
-#   1. PROD_HOST (172.16.0.9) — full deploy: build backend + frontend,
-#      SCP artifacts, swap binary, restart hops, health-check.
-#   2. --dev-only only: MIRROR_HOST (172.16.0.50) — install the build into DEV_DIR and restart
-#      the persistent hops-dev service (scripts/hops-dev.service), against
-#      dev's OWN data dir (never prod's). Disable by setting MIRROR_HOST="".
+# Two separate modes — a run does exactly one:
+#   1. (default, main branch only) PROD_HOST (172.16.0.9) — build backend +
+#      frontend, SCP artifacts, swap binary, restart hops, health-check.
+#   2. --dev-only — build the latest COMMIT in a clean checkout, install it
+#      into DEV_DIR on MIRROR_HOST (172.16.0.50) and restart the persistent
+#      hops-dev service (scripts/hops-dev.service), against dev's OWN data dir
+#      (never prod's). A prod deploy never touches dev.
 #
 # Use this during rapid iteration when the release workflow is disabled.
 # Re-enable the workflow and use ~/deploy-hops.sh <tag> on prod for proper releases.
