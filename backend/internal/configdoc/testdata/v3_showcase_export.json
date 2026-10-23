@@ -1894,6 +1894,591 @@
                 }
               ]
             }
+          },
+          {
+            "id": "sc-tab-shapes",
+            "name": "Shapes",
+            "order": 3,
+            "root": {
+              "columns": 24,
+              "children": [
+                {
+                  "id": "sc-sh-rounded",
+                  "kind": "folder",
+                  "name": "Rounded box",
+                  "display": "expanded",
+                  "shape": "rounded",
+                  "color": "#2563eb",
+                  "showTitle": true,
+                  "size": "medium",
+                  "contentSize": "medium",
+                  "placement": {
+                    "x": 0,
+                    "y": 0,
+                    "w": 8,
+                    "h": 7
+                  },
+                  "content": {
+                    "children": [
+                      {
+                        "id": "sc-sh-rounded-1",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Rounded box 1",
+                        "url": "https://sc-sh-rounded-1.example.lan/",
+                        "icon": "mdi:lan",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 0
+                      },
+                      {
+                        "id": "sc-sh-rounded-2",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Rounded box 2",
+                        "url": "https://sc-sh-rounded-2.example.lan/",
+                        "icon": "mdi:server",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 1
+                      },
+                      {
+                        "id": "sc-sh-rounded-3",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Rounded box 3",
+                        "url": "https://sc-sh-rounded-3.example.lan/",
+                        "icon": "mdi:database",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 2
+                      }
+                    ]
+                  },
+                  "order": 0
+                },
+                {
+                  "id": "sc-sh-simple-tab",
+                  "kind": "folder",
+                  "name": "Simple tab (left)",
+                  "display": "expanded",
+                  "shape": "simple-tab",
+                  "tabPosition": "left",
+                  "color": "#0d9488",
+                  "showTitle": true,
+                  "size": "medium",
+                  "contentSize": "medium",
+                  "placement": {
+                    "x": 8,
+                    "y": 0,
+                    "w": 8,
+                    "h": 7
+                  },
+                  "content": {
+                    "children": [
+                      {
+                        "id": "sc-sh-simple-tab-1",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Simple tab 1",
+                        "url": "https://sc-sh-simple-tab-1.example.lan/",
+                        "icon": "mdi:lan",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 0
+                      },
+                      {
+                        "id": "sc-sh-simple-tab-2",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Simple tab 2",
+                        "url": "https://sc-sh-simple-tab-2.example.lan/",
+                        "icon": "mdi:server",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 1
+                      },
+                      {
+                        "id": "sc-sh-simple-tab-3",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Simple tab 3",
+                        "url": "https://sc-sh-simple-tab-3.example.lan/",
+                        "icon": "mdi:database",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 2
+                      }
+                    ]
+                  },
+                  "order": 1
+                },
+                {
+                  "id": "sc-sh-folder-flat",
+                  "kind": "folder",
+                  "name": "Folder flat (centre)",
+                  "display": "expanded",
+                  "shape": "folder-flat",
+                  "tabPosition": "centre",
+                  "color": "#d97706",
+                  "showTitle": true,
+                  "size": "medium",
+                  "contentSize": "medium",
+                  "placement": {
+                    "x": 16,
+                    "y": 0,
+                    "w": 8,
+                    "h": 7
+                  },
+                  "content": {
+                    "children": [
+                      {
+                        "id": "sc-sh-folder-flat-1",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Folder flat 1",
+                        "url": "https://sc-sh-folder-flat-1.example.lan/",
+                        "icon": "mdi:lan",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 0
+                      },
+                      {
+                        "id": "sc-sh-folder-flat-2",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Folder flat 2",
+                        "url": "https://sc-sh-folder-flat-2.example.lan/",
+                        "icon": "mdi:server",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 1
+                      },
+                      {
+                        "id": "sc-sh-folder-flat-3",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Folder flat 3",
+                        "url": "https://sc-sh-folder-flat-3.example.lan/",
+                        "icon": "mdi:database",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 2
+                      }
+                    ]
+                  },
+                  "order": 2
+                },
+                {
+                  "id": "sc-sh-folder-paper",
+                  "kind": "folder",
+                  "name": "Folder with paper (right)",
+                  "display": "expanded",
+                  "shape": "folder-paper",
+                  "tabPosition": "right",
+                  "color": "#7c3aed",
+                  "showTitle": true,
+                  "size": "medium",
+                  "contentSize": "medium",
+                  "placement": {
+                    "x": 0,
+                    "y": 7,
+                    "w": 8,
+                    "h": 7
+                  },
+                  "content": {
+                    "children": [
+                      {
+                        "id": "sc-sh-folder-paper-1",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Folder with paper 1",
+                        "url": "https://sc-sh-folder-paper-1.example.lan/",
+                        "icon": "mdi:lan",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 0
+                      },
+                      {
+                        "id": "sc-sh-folder-paper-2",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Folder with paper 2",
+                        "url": "https://sc-sh-folder-paper-2.example.lan/",
+                        "icon": "mdi:server",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 1
+                      },
+                      {
+                        "id": "sc-sh-folder-paper-3",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Folder with paper 3",
+                        "url": "https://sc-sh-folder-paper-3.example.lan/",
+                        "icon": "mdi:database",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 2
+                      }
+                    ]
+                  },
+                  "order": 3
+                },
+                {
+                  "id": "sc-sh-folder-outline",
+                  "kind": "folder",
+                  "name": "Folder outlined (left)",
+                  "display": "expanded",
+                  "shape": "folder-outline",
+                  "tabPosition": "left",
+                  "showTitle": true,
+                  "size": "medium",
+                  "contentSize": "medium",
+                  "placement": {
+                    "x": 8,
+                    "y": 7,
+                    "w": 8,
+                    "h": 7
+                  },
+                  "content": {
+                    "children": [
+                      {
+                        "id": "sc-sh-folder-outline-1",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Folder outlined 1",
+                        "url": "https://sc-sh-folder-outline-1.example.lan/",
+                        "icon": "mdi:lan",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 0
+                      },
+                      {
+                        "id": "sc-sh-folder-outline-2",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Folder outlined 2",
+                        "url": "https://sc-sh-folder-outline-2.example.lan/",
+                        "icon": "mdi:server",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 1
+                      },
+                      {
+                        "id": "sc-sh-folder-outline-3",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Folder outlined 3",
+                        "url": "https://sc-sh-folder-outline-3.example.lan/",
+                        "icon": "mdi:database",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 2
+                      }
+                    ]
+                  },
+                  "order": 4
+                },
+                {
+                  "id": "sc-sh-folder-cartoon",
+                  "kind": "folder",
+                  "name": "Folder cartoon (centre)",
+                  "display": "expanded",
+                  "shape": "folder-cartoon",
+                  "tabPosition": "centre",
+                  "color": "#16a34a",
+                  "showTitle": true,
+                  "size": "medium",
+                  "contentSize": "medium",
+                  "placement": {
+                    "x": 16,
+                    "y": 7,
+                    "w": 8,
+                    "h": 7
+                  },
+                  "content": {
+                    "children": [
+                      {
+                        "id": "sc-sh-folder-cartoon-1",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Folder cartoon 1",
+                        "url": "https://sc-sh-folder-cartoon-1.example.lan/",
+                        "icon": "mdi:lan",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 0
+                      },
+                      {
+                        "id": "sc-sh-folder-cartoon-2",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Folder cartoon 2",
+                        "url": "https://sc-sh-folder-cartoon-2.example.lan/",
+                        "icon": "mdi:server",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 1
+                      },
+                      {
+                        "id": "sc-sh-folder-cartoon-3",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Folder cartoon 3",
+                        "url": "https://sc-sh-folder-cartoon-3.example.lan/",
+                        "icon": "mdi:database",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 2
+                      }
+                    ]
+                  },
+                  "order": 5
+                },
+                {
+                  "id": "sc-sh-folder-open",
+                  "kind": "folder",
+                  "name": "Folder open flap (right)",
+                  "display": "expanded",
+                  "shape": "folder-open",
+                  "tabPosition": "right",
+                  "color": "#db2777",
+                  "showTitle": true,
+                  "size": "medium",
+                  "contentSize": "medium",
+                  "placement": {
+                    "x": 0,
+                    "y": 14,
+                    "w": 8,
+                    "h": 7
+                  },
+                  "content": {
+                    "children": [
+                      {
+                        "id": "sc-sh-folder-open-1",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Folder open flap 1",
+                        "url": "https://sc-sh-folder-open-1.example.lan/",
+                        "icon": "mdi:lan",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 0
+                      },
+                      {
+                        "id": "sc-sh-folder-open-2",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Folder open flap 2",
+                        "url": "https://sc-sh-folder-open-2.example.lan/",
+                        "icon": "mdi:server",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 1
+                      },
+                      {
+                        "id": "sc-sh-folder-open-3",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Folder open flap 3",
+                        "url": "https://sc-sh-folder-open-3.example.lan/",
+                        "icon": "mdi:database",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 2
+                      }
+                    ]
+                  },
+                  "order": 6
+                },
+                {
+                  "id": "sc-sh-nest",
+                  "kind": "folder",
+                  "name": "Nested looks (2 deep)",
+                  "display": "expanded",
+                  "shape": "folder-flat",
+                  "tabPosition": "left",
+                  "color": "#0891b2",
+                  "showTitle": true,
+                  "size": "medium",
+                  "contentSize": "medium",
+                  "placement": {
+                    "x": 8,
+                    "y": 14,
+                    "w": 12,
+                    "h": 10
+                  },
+                  "content": {
+                    "children": [
+                      {
+                        "id": "sc-sh-nest-1",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "Outer 1",
+                        "url": "https://sc-sh-nest-1.example.lan/",
+                        "icon": "mdi:lan",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 0
+                      },
+                      {
+                        "id": "sc-sh-nest-a",
+                        "kind": "folder",
+                        "name": "Paper inside",
+                        "display": "expanded",
+                        "shape": "folder-paper",
+                        "tabPosition": "centre",
+                        "color": "#7c3aed",
+                        "showTitle": true,
+                        "size": "medium",
+                        "contentSize": "medium",
+                        "content": {
+                          "children": [
+                            {
+                              "id": "sc-sh-nesta-1",
+                              "kind": "tile",
+                              "type": "link",
+                              "name": "Inner 1",
+                              "url": "https://sc-sh-nesta-1.example.lan/",
+                              "icon": "mdi:lan",
+                              "openMode": "newtab",
+                              "size": "medium",
+                              "order": 0
+                            },
+                            {
+                              "id": "sc-sh-nesta-2",
+                              "kind": "tile",
+                              "type": "link",
+                              "name": "Inner 2",
+                              "url": "https://sc-sh-nesta-2.example.lan/",
+                              "icon": "mdi:server",
+                              "openMode": "newtab",
+                              "size": "medium",
+                              "order": 1
+                            },
+                            {
+                              "id": "sc-sh-nest-b",
+                              "kind": "folder",
+                              "name": "Open flap inside",
+                              "display": "expanded",
+                              "shape": "folder-open",
+                              "tabPosition": "right",
+                              "color": "#db2777",
+                              "showTitle": true,
+                              "size": "medium",
+                              "contentSize": "medium",
+                              "content": {
+                                "children": [
+                                  {
+                                    "id": "sc-sh-nestb-1",
+                                    "kind": "tile",
+                                    "type": "link",
+                                    "name": "Deep 1",
+                                    "url": "https://sc-sh-nestb-1.example.lan/",
+                                    "icon": "mdi:lan",
+                                    "openMode": "newtab",
+                                    "size": "medium",
+                                    "order": 0
+                                  },
+                                  {
+                                    "id": "sc-sh-nestb-2",
+                                    "kind": "tile",
+                                    "type": "link",
+                                    "name": "Deep 2",
+                                    "url": "https://sc-sh-nestb-2.example.lan/",
+                                    "icon": "mdi:server",
+                                    "openMode": "newtab",
+                                    "size": "medium",
+                                    "order": 1
+                                  }
+                                ]
+                              },
+                              "order": 2
+                            }
+                          ]
+                        },
+                        "order": 1
+                      }
+                    ]
+                  },
+                  "order": 7
+                },
+                {
+                  "id": "sc-sh-min-s",
+                  "kind": "folder",
+                  "name": "Minimised Small cartoon",
+                  "display": "collapsed",
+                  "shape": "folder-cartoon",
+                  "tabPosition": "left",
+                  "color": "#16a34a",
+                  "showTitle": true,
+                  "size": "small",
+                  "contentSize": "small",
+                  "placement": {
+                    "x": 20,
+                    "y": 14,
+                    "w": 3,
+                    "h": 5
+                  },
+                  "content": {
+                    "children": [
+                      {
+                        "id": "sc-sh-mins-1",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "MinS 1",
+                        "url": "https://sc-sh-mins-1.example.lan/",
+                        "icon": "mdi:lan",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 0
+                      },
+                      {
+                        "id": "sc-sh-mins-2",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "MinS 2",
+                        "url": "https://sc-sh-mins-2.example.lan/",
+                        "icon": "mdi:server",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 1
+                      },
+                      {
+                        "id": "sc-sh-mins-3",
+                        "kind": "tile",
+                        "type": "link",
+                        "name": "MinS 3",
+                        "url": "https://sc-sh-mins-3.example.lan/",
+                        "icon": "mdi:database",
+                        "openMode": "newtab",
+                        "size": "medium",
+                        "order": 2
+                      }
+                    ]
+                  },
+                  "order": 8
+                },
+                {
+                  "id": "sc-sh-tile",
+                  "kind": "tile",
+                  "type": "link",
+                  "name": "Medium tab tile",
+                  "url": "https://sc-sh-tile.example.lan/",
+                  "icon": "mdi:cloud",
+                  "openMode": "newtab",
+                  "size": "medium",
+                  "order": 9,
+                  "placement": {
+                    "x": 20,
+                    "y": 20,
+                    "w": 2,
+                    "h": 2
+                  }
+                }
+              ]
+            }
           }
         ]
       }

@@ -1,5 +1,7 @@
 import { test, expect, type Page, type BrowserContext, type Locator } from '@playwright/test';
 import { getCsrfToken } from '../helpers';
+// THE page model (the app's own pure geometry): a page's rows are asserted, not guessed.
+import { folderPaging, openFolderContentBox } from '../../../frontend/src/lib/layout/geometry';
 
 // M5 Task 4 (design/specs/2026-10-22-hops-v3-m5-folders-design.md §3.4, §3.5, §3a.3, §3a.4, §3a.9):
 // drag, drop and resize in the ordered, paged folder model. Every test is a REAL mouse drag in
@@ -272,33 +274,40 @@ test.describe('M5 drag and drop in ordered, paged folders', () => {
     expect(errors).toEqual([]);
   });
 
-  test('holding over the outer folder\'s title bar goes back up to it; the drop lands on that level', async ({ page, context }) => {
-    const f = await importDash(page, context, (id) => [
-      tile(id('t'), 'Tee', 0, 0),
-      folder(id('f'), 'Box', { x: 0, y: 3, w: 14, h: 6 }, [kid(id('k1'), 'K1'), folder(id('s'), 'Sub', null, kids(id, 2, 'Z'))])
-    ]);
-    // This browser is drilled into Sub.
-    await page.goto(f.path);
-    await page.evaluate((d) => {
-      localStorage.setItem(`hops.folderNav.${d.dash}`, JSON.stringify({ page: {}, drill: { [d.f]: [d.s] } }));
-    }, { dash: f.id('dash'), f: f.id('f'), s: f.id('s') });
-    const errors = await openEditing(page, f.path, f.id('t'));
-    // Drilled in, the top folder's title bar is the go-up target (M5 §7: no breadcrumb).
-    const crumb = node(page, f.id('f')).locator('.folder-header');
-    await expect(crumb).toHaveAttribute('data-crumb', f.id('f'));
-    const cb = await box(crumb);
-    await dragCentre(page, node(page, f.id('t')), cb.x + cb.width / 2, cb.y + cb.height / 2);
-    await expect(node(page, f.id('f')).locator('.nested-box')).toHaveCount(0, { timeout: 2000 }); // back at the top
-    const to = leftEdge(await box(node(page, f.id('k1'))));
-    await glide(page, { x: cb.x + cb.width / 2, y: cb.y + cb.height / 2 }, to.x, to.y);
-    await page.waitForTimeout(120);
-    await allowedThenDrop(page);
-    await saveDraft(page);
-    const root = await savedRoot(page, f.id('dash'));
-    expect(orderOf(root, f.id('f'))).toEqual(['t', 'k1', 's'].map(f.id));
-    expect(orderOf(root, f.id('s'))).toEqual(['z1', 'z2'].map(f.id));
-    expect(errors).toEqual([]);
-  });
+  // M6: a tab shape's go-up target is its tab (the name lives there); Rounded's is its title bar.
+  for (const shape of ['rounded', 'folder-flat'] as const) {
+    test(`${shape}: holding over the outer folder's ${shape === 'rounded' ? 'title bar' : 'tab'} goes back up to it; the drop lands on that level`, async ({ page, context }) => {
+      const f = await importDash(page, context, (id) => [
+        tile(id('t'), 'Tee', 0, 0),
+        folder(id('f'), 'Box', { x: 0, y: 3, w: 14, h: 6 }, [kid(id('k1'), 'K1'), folder(id('s'), 'Sub', null, kids(id, 2, 'Z'), { shape })], { shape })
+      ]);
+      // This browser is drilled into Sub.
+      await page.goto(f.path);
+      await page.evaluate((d) => {
+        localStorage.setItem(`hops.folderNav.${d.dash}`, JSON.stringify({ page: {}, drill: { [d.f]: [d.s] } }));
+      }, { dash: f.id('dash'), f: f.id('f'), s: f.id('s') });
+      const errors = await openEditing(page, f.path, f.id('t'));
+      // Drilled in, the top folder's title bar (a tab shape: its tab) is the go-up target (M5 §7: no breadcrumb).
+      const head = node(page, f.id('f')).locator(':scope > .folder-header');
+      const crumb = shape === 'rounded' ? head : head.locator(':scope > [data-folder-tab]');
+      await expect(crumb).toHaveAttribute('data-crumb', f.id('f'));
+      await expect(crumb).toContainText('Box');
+      // Exactly one go-up target for the top folder: a tab shape's bar row is not one as well.
+      await expect(node(page, f.id('f')).locator(`[data-crumb="${f.id('f')}"]`)).toHaveCount(1);
+      const cb = await box(crumb);
+      await dragCentre(page, node(page, f.id('t')), cb.x + cb.width / 2, cb.y + cb.height / 2);
+      await expect(node(page, f.id('f')).locator('.nested-box')).toHaveCount(0, { timeout: 2000 }); // back at the top
+      const to = leftEdge(await box(node(page, f.id('k1'))));
+      await glide(page, { x: cb.x + cb.width / 2, y: cb.y + cb.height / 2 }, to.x, to.y);
+      await page.waitForTimeout(120);
+      await allowedThenDrop(page);
+      await saveDraft(page);
+      const root = await savedRoot(page, f.id('dash'));
+      expect(orderOf(root, f.id('f'))).toEqual(['t', 'k1', 's'].map(f.id));
+      expect(orderOf(root, f.id('s'))).toEqual(['z1', 'z2'].map(f.id));
+      expect(errors).toEqual([]);
+    });
+  }
 
   test('merge is unchanged inside a folder: first a "before" marker, then held on the centre a new folder in its place', async ({ page, context }) => {
     const f = await importDash(page, context, (id) => [folder(id('f'), 'Box', { x: 0, y: 0, w: 14, h: 6 }, kids(id, 3))]);
@@ -325,38 +334,48 @@ test.describe('M5 drag and drop in ordered, paged folders', () => {
     expect(errors).toEqual([]);
   });
 
-  test('resize: a corner drag snaps to cells and stops at bar + padding + one item + page bar (§3.5)', async ({ page, context }) => {
-    const f = await importDash(page, context, (id) => [folder(id('f'), 'Box', { x: 0, y: 0, w: 12, h: 8 }, kids(id, 3))]);
-    const errors = await openEditing(page, f.path, f.id('f'));
-    const fbox = node(page, f.id('f'));
-    const corner = fbox.locator('[data-resize="corner"]');
-    await fbox.hover();
-    const cb = await box(corner);
-    const start = await box(fbox);
-    await dragTo(page, cb.x + cb.width / 2, cb.y + cb.height / 2, start.x + 20, start.y + 20); // far below the minimum
-    await page.waitForTimeout(120);
-    await expect(page.locator('.drag-layer .target')).toBeVisible();
-    await page.mouse.up();
-    await saveDraft(page);
-    const saved = find(await savedRoot(page, f.id('dash')), f.id('f'))!;
-    expect(saved.placement).toMatchObject({ x: 0, y: 0, w: 3, h: 6 }); // geometry.minOpenFolderCells('medium') (M6)
-    // Drawn: one whole item and the page bar inside the box (nothing clipped).
-    const fb = await box(fbox);
-    // A Rounded folder does not draw the M6 tab allowance the minimum counts, so at the minimum it may
-    // hold one more row than a tab shape: one row at least, and every item shown is whole, above the bar.
-    const items = fbox.locator('[data-container-id] > [data-node-id]');
-    const bar = await box(fbox.locator('nav.page-bar'));
-    const shownCount = await items.count();
-    expect(shownCount).toBeGreaterThanOrEqual(1);
-    expect(shownCount).toBeLessThan(3); // still paged: the 3 items need a second page
-    for (let i = 0; i < shownCount; i++) {
-      const item = await box(items.nth(i));
-      expect(item.x + item.width).toBeLessThanOrEqual(fb.x + fb.width);
-      expect(item.y + item.height).toBeLessThanOrEqual(bar.y + 1);
-    }
-    expect(bar.y + bar.height).toBeLessThanOrEqual(fb.y + fb.height);
-    expect(errors).toEqual([]);
-  });
+  for (const shape of ['rounded', 'folder-flat'] as const) {
+    test(`${shape}: resize — a corner drag snaps to cells and stops at the one minimum; its page is folderPaging's rows (§3.5, M6 §3a.4)`, async ({ page, context }) => {
+      const f = await importDash(page, context, (id) => [folder(id('f'), 'Box', { x: 0, y: 0, w: 12, h: 8 }, kids(id, 3), { shape })]);
+      const errors = await openEditing(page, f.path, f.id('f'));
+      const fbox = node(page, f.id('f'));
+      const corner = fbox.locator('[data-resize="corner"]');
+      await fbox.hover();
+      const cb = await box(corner);
+      const start = await box(fbox);
+      await dragTo(page, cb.x + cb.width / 2, cb.y + cb.height / 2, start.x + 20, start.y + 20); // far below the minimum
+      await page.waitForTimeout(120);
+      await expect(page.locator('.drag-layer .target')).toBeVisible();
+      await page.mouse.up();
+      await saveDraft(page);
+      const saved = find(await savedRoot(page, f.id('dash')), f.id('f'))!;
+      // geometry.minOpenFolderCells('medium'): one minimum for every shape (M6 §3a.4).
+      expect(saved.placement).toMatchObject({ x: 0, y: 0, w: 3, h: 6 });
+      const fb = await box(fbox);
+      const cell = fb.width / 3;
+      expect(Math.abs(fb.height - 6 * cell), 'the box is 3 x 6 cells').toBeLessThanOrEqual(1);
+      // The page at the minimum, from THE page model: Rounded does not draw the tab allowance the minimum
+      // counts, so it holds two rows (one item each); a tab shape draws it, so one row. Both page: 3 items.
+      const want = folderPaging(openFolderContentBox({ widthPx: fb.width, heightPx: fb.height }, shape), 'medium', cell, 3, 0);
+      expect(want.pageBar, 'still paged: the 3 items need a second page').toBe(true);
+      expect(want.perRow).toBe(1);
+      expect(want.rowsPerPage, 'rows at the minimum (1280 px)').toBe(shape === 'rounded' ? 2 : 1);
+      // Drawn: exactly that page — whole items above the page bar, the bar inside the box (nothing clipped).
+      const items = fbox.locator('[data-container-id] > [data-node-id]');
+      await expect(items).toHaveCount(want.perPage);
+      const bar = await box(fbox.locator('nav.page-bar'));
+      const rows = new Set<number>();
+      for (let i = 0; i < want.perPage; i++) {
+        const item = await box(items.nth(i));
+        rows.add(Math.round(item.y));
+        expect(item.x + item.width).toBeLessThanOrEqual(fb.x + fb.width);
+        expect(item.y + item.height).toBeLessThanOrEqual(bar.y + 1);
+      }
+      expect(rows.size, 'drawn rows').toBe(want.rowsPerPage);
+      expect(bar.y + bar.height).toBeLessThanOrEqual(fb.y + fb.height);
+      expect(errors).toEqual([]);
+    });
+  }
 
   // ---- Fix round 1
 

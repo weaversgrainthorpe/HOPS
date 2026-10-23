@@ -94,16 +94,17 @@ async function shown(page: Page, folderId: string): Promise<string[]> {
 }
 
 /** Services › New folder › Deeper, beside a Medium tab tile (Jonathan's screenshot, one level more). */
-const services = (id: (s: string) => string) => [
+const servicesIn = (shape: string) => (id: (s: string) => string) => [
   tile(id('tabmed'), 'TabMed', 20, 0),
   folder(id('svc'), 'Services', { x: 0, y: 0, w: 18, h: 9 }, [
     kid(id('plex'), 'Plex'),
     folder(id('nf'), 'New folder', null, [
       kid(id('yt'), 'YouTube'), kid(id('gh'), 'GitHub'),
-      folder(id('deeper'), 'Deeper', null, [kid(id('wiki'), 'Wiki')])
-    ])
-  ], { color: '#7c3aed' })
+      folder(id('deeper'), 'Deeper', null, [kid(id('wiki'), 'Wiki')], { shape })
+    ], { shape })
+  ], { color: '#7c3aed', shape })
 ];
+const services = servicesIn('rounded');
 
 test.describe('M5 §7: a sub-folder opens as a folder inside a folder', () => {
   test.use({ viewport: { width: 1280, height: 900 } });
@@ -274,59 +275,66 @@ test.describe('M5 §7: a sub-folder opens as a folder inside a folder', () => {
     await expect(dlg.getByRole('textbox', { name: /^Folder name/ })).toHaveValue('New folder');
   });
 
-  test('holding over an outer box\'s title while dragging goes up to it; the drop inserts into the innermost box', async ({ page, context }) => {
-    const f = await importDash(page, context, services);
-    await page.goto(f.path);
-    await drilled(page, f.id('dash'), f.id('svc'), [f.id('nf'), f.id('deeper')]);
-    const errors: string[] = [];
-    page.on('pageerror', (e) => errors.push(e.message));
-    await page.goto(f.path);
-    await page.locator('[aria-label="Enter Edit Mode"]').click();
-    await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
-    const svc = node(page, f.id('svc'));
-    const nfHead = header(nested(svc, f.id('nf')));
-    await expect(nfHead).toHaveAttribute('data-crumb', f.id('nf'));
-    // Drag the tab tile and hold over New folder's title bar (an outer box): it goes up to New folder.
-    const s = await box(node(page, f.id('tabmed')));
-    const hb = await box(nfHead.getByRole('button', { name: 'New folder', exact: true }));
-    const from = { x: s.x + s.width / 2, y: s.y + s.height / 2 };
-    const at = { x: hb.x + hb.width / 2, y: hb.y + hb.height / 2 };
-    await page.mouse.move(from.x, from.y);
-    await page.mouse.down();
-    for (let i = 1; i <= 20; i++) {
-      await page.mouse.move(from.x + ((at.x - from.x) * i) / 20, from.y + ((at.y - from.y) * i) / 20);
-      await page.waitForTimeout(16);
-    }
-    await expect(nested(svc, f.id('deeper'))).toHaveCount(0, { timeout: 2000 });
-    await expect(nested(svc, f.id('nf'))).toBeVisible();
-    // Then drop on the left half of GitHub in New folder (the innermost box now): it goes before GitHub.
-    const gh = await box(node(page, f.id('gh')));
-    const to = { x: gh.x + 8, y: gh.y + gh.height / 2 };
-    for (let i = 1; i <= 10; i++) {
-      await page.mouse.move(at.x + ((to.x - at.x) * i) / 10, at.y + ((to.y - at.y) * i) / 10);
-      await page.waitForTimeout(16);
-    }
-    await page.waitForTimeout(120);
-    await expect(page.locator('.drag-layer .reason')).toHaveCount(0);
-    await page.mouse.up();
-    const save = page.getByRole('toolbar', { name: 'Editing' }).getByRole('button', { name: /Save/ });
-    const saved = page.waitForResponse((r) => r.request().method() === 'PUT' && /\/api\/dashboards\//.test(r.url()));
-    await save.click();
-    expect((await saved).status()).toBe(200);
-    const cfg = await (await page.request.get('/api/config')).json();
-    const root: AnyNode[] = cfg.dashboards.find((d: { id: string }) => d.id === f.id('dash')).tabs[0].root.children;
-    const find = (ns: AnyNode[], id: string): AnyNode | undefined => {
-      for (const n of ns) {
-        if (n.id === id) return n;
-        const r = n.content ? find(n.content.children, id) : undefined;
-        if (r) return r;
+  // M6: on a tab shape an outer box's go-up target is its tab (its name lives there), not the bar row.
+  for (const shape of ['rounded', 'folder-paper'] as const) {
+    test(`${shape}: holding over an outer box's ${shape === 'rounded' ? 'title' : 'tab'} while dragging goes up to it; the drop inserts into the innermost box`, async ({ page, context }) => {
+      const f = await importDash(page, context, servicesIn(shape));
+      await page.goto(f.path);
+      await drilled(page, f.id('dash'), f.id('svc'), [f.id('nf'), f.id('deeper')]);
+      const errors: string[] = [];
+      page.on('pageerror', (e) => errors.push(e.message));
+      await page.goto(f.path);
+      await page.locator('[aria-label="Enter Edit Mode"]').click();
+      await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
+      const svc = node(page, f.id('svc'));
+      const nfBar = header(nested(svc, f.id('nf')));
+      const nfHead = shape === 'rounded' ? nfBar : nfBar.locator(':scope > [data-folder-tab]');
+      await expect(nfHead).toHaveAttribute('data-crumb', f.id('nf'));
+      await expect(nfHead).toContainText('New folder');
+      // One go-up target per outer box: a tab shape's bar row is not one as well.
+      await expect(svc.locator(`[data-crumb="${f.id('nf')}"]`)).toHaveCount(1);
+      // Drag the tab tile and hold over New folder's title bar (an outer box): it goes up to New folder.
+      const s = await box(node(page, f.id('tabmed')));
+      const hb = await box(nfHead.getByRole('button', { name: 'New folder', exact: true }));
+      const from = { x: s.x + s.width / 2, y: s.y + s.height / 2 };
+      const at = { x: hb.x + hb.width / 2, y: hb.y + hb.height / 2 };
+      await page.mouse.move(from.x, from.y);
+      await page.mouse.down();
+      for (let i = 1; i <= 20; i++) {
+        await page.mouse.move(from.x + ((at.x - from.x) * i) / 20, from.y + ((at.y - from.y) * i) / 20);
+        await page.waitForTimeout(16);
       }
-      return undefined;
-    };
-    expect(find(root, f.id('nf'))!.content!.children.map((n) => n.id)).toEqual(['yt', 'tabmed', 'gh', 'deeper'].map(f.id));
-    expect(find(root, f.id('svc'))!.content!.children.map((n) => n.id)).toEqual(['plex', 'nf'].map(f.id));
-    expect(errors).toEqual([]);
-  });
+      await expect(nested(svc, f.id('deeper'))).toHaveCount(0, { timeout: 2000 });
+      await expect(nested(svc, f.id('nf'))).toBeVisible();
+      // Then drop on the left half of GitHub in New folder (the innermost box now): it goes before GitHub.
+      const gh = await box(node(page, f.id('gh')));
+      const to = { x: gh.x + 8, y: gh.y + gh.height / 2 };
+      for (let i = 1; i <= 10; i++) {
+        await page.mouse.move(at.x + ((to.x - at.x) * i) / 10, at.y + ((to.y - at.y) * i) / 10);
+        await page.waitForTimeout(16);
+      }
+      await page.waitForTimeout(120);
+      await expect(page.locator('.drag-layer .reason')).toHaveCount(0);
+      await page.mouse.up();
+      const save = page.getByRole('toolbar', { name: 'Editing' }).getByRole('button', { name: /Save/ });
+      const saved = page.waitForResponse((r) => r.request().method() === 'PUT' && /\/api\/dashboards\//.test(r.url()));
+      await save.click();
+      expect((await saved).status()).toBe(200);
+      const cfg = await (await page.request.get('/api/config')).json();
+      const root: AnyNode[] = cfg.dashboards.find((d: { id: string }) => d.id === f.id('dash')).tabs[0].root.children;
+      const find = (ns: AnyNode[], id: string): AnyNode | undefined => {
+        for (const n of ns) {
+          if (n.id === id) return n;
+          const r = n.content ? find(n.content.children, id) : undefined;
+          if (r) return r;
+        }
+        return undefined;
+      };
+      expect(find(root, f.id('nf'))!.content!.children.map((n) => n.id)).toEqual(['yt', 'tabmed', 'gh', 'deeper'].map(f.id));
+      expect(find(root, f.id('svc'))!.content!.children.map((n) => n.id)).toEqual(['plex', 'nf'].map(f.id));
+      expect(errors).toEqual([]);
+    });
+  }
 
   // Ruling 15 (Jonathan, walkthrough 3): every box's title bar is the top folder's — its name on the
   // left, the same minimise (–) on the right at the same place, the edit handle placed the same way.

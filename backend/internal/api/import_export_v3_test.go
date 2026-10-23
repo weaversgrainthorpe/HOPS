@@ -593,9 +593,9 @@ func TestImport_V3Showcase(t *testing.T) {
 
 	// Structure later tasks rely on.
 	tabs := dash["tabs"].([]any)
-	wantTabs := []string{"sc-tab-grid", "sc-tab-sizes", "sc-tab-folders"}
-	if len(tabs) != 3 {
-		t.Fatalf("%d tabs, want 3", len(tabs))
+	wantTabs := []string{"sc-tab-grid", "sc-tab-sizes", "sc-tab-folders", "sc-tab-shapes"}
+	if len(tabs) != len(wantTabs) {
+		t.Fatalf("%d tabs, want %d", len(tabs), len(wantTabs))
 	}
 	for i, id := range wantTabs {
 		if tabs[i].(configdoc.Obj)["id"] != id {
@@ -640,6 +640,43 @@ func TestImport_V3Showcase(t *testing.T) {
 	if l4 == nil || l4["display"] != "collapsed" || len(childIDs(l4)) != 2 {
 		t.Errorf("sc-f-l4 should be a collapsed folder with 2 tiles: %v", l4)
 	}
+	// M6 cases (Shapes tab): an open folder in every look, all three tab
+	// positions, looks nested 2 deep, and a Small minimised folder in a tab look.
+	shapesTab := tabs[3].(configdoc.Obj)["root"].(configdoc.Obj)["children"].([]any)
+	looksOpen, positions := map[string]bool{}, map[string]bool{}
+	for _, ch := range shapesTab {
+		n := ch.(configdoc.Obj)
+		if n["kind"] != "folder" {
+			continue
+		}
+		if n["display"] == "expanded" {
+			looksOpen[n["shape"].(string)] = true
+		}
+		if pos, ok := n["tabPosition"].(string); ok && n["shape"] != "rounded" {
+			positions[pos] = true
+		}
+	}
+	for _, s := range configdoc.FolderShapes {
+		if !looksOpen[s] {
+			t.Errorf("Shapes tab: no open folder in the %q look", s)
+		}
+	}
+	for _, p := range configdoc.FolderTabPositions {
+		if !positions[p] {
+			t.Errorf("Shapes tab: no tab-shape folder with its tab at %q", p)
+		}
+	}
+	shNest, shA, shB := byID["sc-sh-nest"], byID["sc-sh-nest-a"], byID["sc-sh-nest-b"]
+	if shNest == nil || shA == nil || shB == nil || !contains(childIDs(shNest), "sc-sh-nest-a") || !contains(childIDs(shA), "sc-sh-nest-b") {
+		t.Fatal("sc-sh-nest > sc-sh-nest-a > sc-sh-nest-b is not 2 deep")
+	}
+	if shNest["shape"] == shA["shape"] || shA["shape"] == shB["shape"] || shNest["shape"] == "rounded" || shA["shape"] == "rounded" || shB["shape"] == "rounded" {
+		t.Errorf("nested looks should be three different tab looks: %v > %v > %v", shNest["shape"], shA["shape"], shB["shape"])
+	}
+	if f := byID["sc-sh-min-s"]; f == nil || f["display"] != "collapsed" || f["size"] != "small" || f["shape"] == "rounded" || len(childIDs(f)) == 0 {
+		t.Errorf("sc-sh-min-s should be a minimised Small folder in a tab look, with items: %v", f)
+	}
+
 	if l3["display"] != "collapsed" {
 		t.Errorf("l3 display = %v", l3["display"])
 	}

@@ -344,7 +344,7 @@ test.describe('walkthrough 1 D (3): on touch, edit handles sit inside their item
       await page.goto(sc.path);
       await page.getByRole('button', { name: 'Enter Edit Mode' }).tap();
       await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
-      for (const tab of ['Grid', 'Sizes', 'Folders']) {
+      for (const tab of ['Grid', 'Sizes', 'Folders', 'Shapes']) {
         await page.getByRole('tab', { name: `Switch to ${tab} tab`, exact: true }).tap();
         await expect(page.locator('.tab-canvas [data-node-id]').first()).toBeVisible();
         await handlesInside(page, `${tab} at ${width}`);

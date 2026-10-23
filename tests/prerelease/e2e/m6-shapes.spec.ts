@@ -1,4 +1,7 @@
 import { test, expect, type Page, type BrowserContext, type Locator } from '@playwright/test';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { getCsrfToken } from '../helpers';
 
 // M6 Task 3 (spec design/specs/2026-10-23-hops-v3-m6-folder-shapes-design.md §2, §3a): ONE FolderShape
@@ -423,5 +426,173 @@ test.describe('M6 tab position and the dialog', () => {
       const c = await node(page, f.id(`f${i}`)).locator('[data-folder-tab]').evaluate((e) => getComputedStyle(e).color);
       expect(c).toBe('rgb(255, 255, 255)');
     }
+  });
+});
+
+// ---- M6 Task 4, Review Focus 1: consistency acceptance. "One view, one code base": in a REAL browser,
+// at 1280 and 1920 px, a Medium tile's box is identical (within 1 px) on the tab and inside every one
+// of the seven shapes — at the folder's own level and one level in (a nested box of the same shape) —
+// in view mode and in edit mode. Edit mode moves nothing: every box is where view mode drew it.
+
+const sameSize = (a: Box, b: Box, what: string) => {
+  near(a.width, b.width, `${what}: width`);
+  near(a.height, b.height, `${what}: height`);
+};
+const sameBox = (a: Box, b: Box, what: string) => {
+  sameSize(a, b, what);
+  near(a.x, b.x, `${what}: x`);
+  near(a.y, b.y, `${what}: y`);
+};
+
+/** Every shape on one tab: an open Medium-contents folder of 2 Medium tiles and a sub-folder (same shape, 2 Medium tiles). */
+const everyShape = (id: (s: string) => string) => [
+  ...SHAPES.map((shape, i) =>
+    folder(id(`f${i}`), `Look ${i}`, { x: (i % 3) * 8, y: Math.floor(i / 3) * 7, w: 8, h: 7 }, [
+      kid(id(`f${i}a`), `A${i}`),
+      kid(id(`f${i}b`), `B${i}`),
+      folder(id(`f${i}s`), `Sub ${i}`, null, [kid(id(`f${i}sa`), `SA${i}`), kid(id(`f${i}sb`), `SB${i}`)], { shape, tabPosition: 'centre' })
+    ], { shape, color: '#0d9488' })
+  ),
+  tile(id('tt'), 'TabTile', 8, 14)
+];
+
+for (const [width, height] of [[1280, 1000], [1920, 1080]] as const) {
+  test.describe(`M6 consistency at ${width}px`, () => {
+    test.use({ viewport: { width, height } });
+
+    test('a Medium tile is the same box on the tab and inside each of the 7 shapes (open and nested), in view and edit mode', async ({ page, context }) => {
+      const errors: string[] = [];
+      page.on('pageerror', (e) => errors.push(e.message));
+      const f = await importDash(page, context, everyShape);
+      const top = SHAPES.flatMap((_, i) => [f.id(`f${i}a`), f.id(`f${i}b`)]);
+      const inner = SHAPES.flatMap((_, i) => [f.id(`f${i}sa`), f.id(`f${i}sb`)]);
+      const measure = async (ids: string[]) => {
+        const out: Record<string, Box> = {};
+        for (const k of [f.id('tt'), ...ids]) out[k] = await box(node(page, k));
+        return out;
+      };
+      const asTabTile = (got: Record<string, Box>, tab: Box, mode: string) => {
+        for (const [k, b] of Object.entries(got)) {
+          const i = SHAPES.findIndex((_, j) => k.startsWith(f.id(`f${j}`)));
+          sameSize(b, tab, `${mode}: ${k} (${i >= 0 ? SHAPES[i] : 'tab'}) = the tab tile`);
+        }
+      };
+
+      // The folder's own level.
+      await page.goto(f.path);
+      await expect(node(page, f.id('tt'))).toBeVisible();
+      for (let i = 0; i < SHAPES.length; i++) {
+        await expect(node(page, f.id(`f${i}`)).locator(':scope > [data-folder-shape]')).toHaveAttribute('data-folder-shape', SHAPES[i]);
+      }
+      const tab = await box(node(page, f.id('tt')));
+      const viewTop = await measure(top);
+      asTabTile(viewTop, tab, 'view, open');
+      await enterEdit(page);
+      const editTop = await measure(top);
+      for (const k of Object.keys(viewTop)) sameBox(editTop[k], viewTop[k], `edit vs view, open: ${k}`);
+      asTabTile(editTop, tab, 'edit, open');
+      await page.locator('[aria-label="Exit Edit Mode"]').click();
+      await expect(page.getByRole('toolbar', { name: 'Editing' })).toHaveCount(0);
+
+      // One level in: this browser is drilled into every sub-folder (each drawn as its parent's shape).
+      await page.evaluate((d) => {
+        localStorage.setItem(`hops.folderNav.${d.dash}`, JSON.stringify({ page: {}, drill: d.drill }));
+      }, { dash: f.id('dash'), drill: Object.fromEntries(SHAPES.map((_, i) => [f.id(`f${i}`), [f.id(`f${i}s`)]])) });
+      await page.reload();
+      for (let i = 0; i < SHAPES.length; i++) {
+        const nest = node(page, f.id(`f${i}`)).locator(`.nested-box[data-nested-folder="${f.id(`f${i}s`)}"]`);
+        await expect(nest).toBeVisible();
+        if (SHAPES[i] !== 'rounded') await expect(nest.locator(':scope > [data-folder-shape]')).toHaveAttribute('data-folder-shape', SHAPES[i]);
+      }
+      sameBox(await box(node(page, f.id('tt'))), tab, 'view, drilled: the tab tile');
+      const viewIn = await measure(inner);
+      asTabTile(viewIn, tab, 'view, nested');
+      await enterEdit(page);
+      const editIn = await measure(inner);
+      for (const k of Object.keys(viewIn)) sameBox(editIn[k], viewIn[k], `edit vs view, nested: ${k}`);
+      asTabTile(editIn, tab, 'edit, nested');
+      expect(errors).toEqual([]);
+    });
+  });
+}
+
+// ---- M6 Task 4: the bundled Showcase's Shapes tab (backend/internal/configdoc/testdata/v3_showcase_export.json)
+// draws what it stores: an open folder in every look, all three tab positions, looks nested 2 deep, and a
+// Small minimised folder as the Small silhouette — every item the tab tile's size, in view and edit mode.
+test.describe('M6 the Showcase Shapes tab', () => {
+  test.use({ viewport: { width: 1280, height: 1400 } });
+
+  test('every look, every tab position, nested looks and a Small minimised folder draw as stored', async ({ page, context }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    const fixture = JSON.parse(fs.readFileSync(
+      path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../backend/internal/configdoc/testdata/v3_showcase_export.json'), 'utf8'));
+    const p = `m6sc${Date.now().toString(36)}${(seq++).toString(36)}`;
+    const dash = fixture.config.dashboards[0];
+    const prefix = (n: { id: string; content?: { children: unknown[] }; root?: { children: unknown[] } }) => {
+      n.id = `${p}-${n.id}`;
+      for (const c of (n.content ?? n.root)?.children ?? []) prefix(c as typeof n);
+    };
+    prefix(dash);
+    for (const t of dash.tabs) prefix(t);
+    dash.path = `/${p}`;
+    dash.name = `M6 Showcase ${p}`;
+    const r = await page.request.post('/api/config/import', {
+      headers: { 'X-CSRF-Token': await getCsrfToken(context) },
+      multipart: { file: { name: 'sc.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ ...fixture, config: { ...fixture.config, dashboards: [dash] } })) } }
+    });
+    expect(r.status(), await r.text()).toBe(200);
+    made.push(dash.id);
+    const id = (s: string) => `${p}-${s}`;
+    const tabKids: Child[] = dash.tabs.find((t: { name: string }) => t.name === 'Shapes').root.children;
+
+    await page.goto(dash.path);
+    await page.getByRole('tab', { name: 'Switch to Shapes tab', exact: true }).click();
+    const ref = node(page, id('sc-sh-tile'));
+    await expect(ref).toBeVisible();
+    for (const mode of ['view', 'edit'] as const) {
+      if (mode === 'edit') await enterEdit(page);
+      const tt = await box(ref);
+      const positions = new Set<string>();
+      for (const shape of SHAPES) {
+        const f = tabKids.find((n) => n.id === id(`sc-sh-${shape}`))!;
+        const o = node(page, f.id as string);
+        await expect(o.locator(':scope > [data-folder-shape]')).toHaveAttribute('data-folder-shape', shape);
+        if (shape !== 'rounded') {
+          await expect(o.locator(':scope > .folder-header > [data-folder-tab]')).toHaveAttribute('data-tab-position', f.tabPosition as string);
+          positions.add(f.tabPosition as string);
+        }
+        await checkInset(page, shape, f.id as string, tt, `Showcase ${shape} ${mode}`);
+      }
+      expect([...positions].sort(), `${mode}: all three tab positions`).toEqual(['centre', 'left', 'right']);
+      // The Small minimised folder: the Small silhouette (no name drawn; it stays the accessible name).
+      const mini = node(page, id('sc-sh-min-s')).locator('.folder-collapsed-tile');
+      await expect(mini.locator(':scope > [data-folder-shape]')).toHaveAttribute('data-shape-state', 'minimised');
+      await expect(mini.locator(':scope > [data-folder-shape]')).toHaveAttribute('data-folder-shape', 'folder-cartoon');
+      const mb = await box(mini);
+      expect(Math.max(mb.width, mb.height), `${mode}: Small is a small tile`).toBeLessThan(84);
+      await expect(mini.locator('.collapsed-name')).toHaveCount(0);
+      await expect(mini).toHaveAccessibleName(/Minimised Small cartoon/);
+    }
+    // Nested looks 2 deep: Flat > Paper > Open flap, each drawn in its own look with its tab.
+    await page.locator('[aria-label="Exit Edit Mode"]').click();
+    await page.evaluate((d) => {
+      localStorage.setItem(`hops.folderNav.${d.dash}`, JSON.stringify({ page: {}, drill: { [d.f]: d.path } }));
+    }, { dash: dash.id, f: id('sc-sh-nest'), path: [id('sc-sh-nest-a'), id('sc-sh-nest-b')] });
+    await page.reload();
+    await page.getByRole('tab', { name: 'Switch to Shapes tab', exact: true }).click();
+    const outer = node(page, id('sc-sh-nest'));
+    await expect(outer.locator(':scope > [data-folder-shape]')).toHaveAttribute('data-folder-shape', 'folder-flat');
+    const tt = await box(ref);
+    for (const [sub, shape, pos] of [['sc-sh-nest-a', 'folder-paper', 'centre'], ['sc-sh-nest-b', 'folder-open', 'right']] as const) {
+      const nest = outer.locator(`.nested-box[data-nested-folder="${id(sub)}"]`);
+      await expect(nest).toBeVisible();
+      await expect(nest.locator(':scope > [data-folder-shape]')).toHaveAttribute('data-folder-shape', shape);
+      await expect(nest.locator(':scope > .nested-header > [data-folder-tab]')).toHaveAttribute('data-tab-position', pos);
+    }
+    const deep = outer.locator(`.nested-box[data-nested-folder="${id('sc-sh-nest-b')}"] [data-folder-page] [data-container-id] > [data-node-id]`);
+    await expect(deep).toHaveCount(2);
+    for (let i = 0; i < 2; i++) sameSize(await box(deep.nth(i)), tt, `nested 2 deep: item ${i} = the tab tile`);
+    expect(errors).toEqual([]);
   });
 });

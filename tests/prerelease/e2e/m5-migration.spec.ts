@@ -1,5 +1,7 @@
 import { test, expect, type Page, type BrowserContext, type Locator } from '@playwright/test';
 import { getCsrfToken } from '../helpers';
+// THE page model (the app's own pure geometry), so a page's size is asserted, not guessed.
+import { folderPaging, openFolderContentBox } from '../../../frontend/src/lib/layout/geometry';
 
 // M5 final review, Important 1 (Ruling 9): a v2 group converts to an open folder box that is never
 // below its minimum, so at every grid width — 1280 and the low-end tablet 1024 — its items and,
@@ -26,10 +28,10 @@ test.afterEach(async ({ page, context }) => {
 const N = 12; // a full v2 row (12 Medium tiles)
 
 /** Import a v2 HOPS dashboard with one full-width group of a full row of entries; it is converted. */
-async function importV2(page: Page, context: BrowserContext) {
+async function importV2(page: Page, context: BrowserContext, n = N) {
   const p = `m5m${Date.now().toString(36)}${(seq++).toString(36)}`;
   const id = (s: string) => `${p}-${s}`;
-  const entries = Array.from({ length: N }, (_, i) => ({
+  const entries = Array.from({ length: n }, (_, i) => ({
     id: id(`e${i}`), name: `Item ${i}`, url: `https://item${i}.example.lan/`, icon: 'mdi:lan', order: i
   }));
   const v2 = {
@@ -111,19 +113,32 @@ for (const width of [1280, 1024]) {
     expect((await reachable(page, f.folderId)).sort()).toEqual([...f.itemIds].sort());
   });
 
-  test(`a converted full-row group at its minimum height at ${width}px shows its page bar; every item is reachable`, async ({ page, context }) => {
+  test(`a converted group at its minimum box (24 x 6) at ${width}px is paged as folderPaging says: a page bar, every item reachable`, async ({ page, context }) => {
     await page.setViewportSize({ width, height: 900 });
-    const f = await importV2(page, context);
-    // 24 x 6: the M6 minimum height (one row, the chrome and the tab allowance). A converted group is
-    // Rounded, which does not draw the tab, so that allowance is spare room: it may hold a second row.
-    // Whatever fits, a page bar shows exactly when the items need more than one page.
+    // 30 items: more than one page of a 24 x 6 box holds at any grid width (two rows of at most 12),
+    // so the page bar is certain, not left to whatever happens to fit.
+    const f = await importV2(page, context, 30);
+    // 24 x 6: the M6 minimum height (one row, the chrome and the tab allowance).
     await putFolderBox(page, context, f.dash.id, f.folderId, 24, 6);
     await page.goto(f.path);
     const node = page.locator(`.tab-canvas [data-node-id="${f.folderId}"]`).first();
-    const per = Number(await node.locator('[data-folder-page]').first().getAttribute('data-folder-per-page'));
-    expect(per, 'a page holds at least one row').toBeGreaterThan(0);
-    if (per < f.itemIds.length) await expect(node.locator('[data-page-bar="next"]')).toBeVisible();
-    else await expect(node.locator('[data-page-bar="next"]')).toHaveCount(0);
+    await expect(node).toBeVisible();
+    const folder = f.dash.tabs[0].root.children.find((n: { id: string }) => n.id === f.folderId);
+    const cell = (await box(page.locator('.tab-canvas'))).width / 24;
+    const nb = await box(node);
+    expect(Math.abs(nb.width - 24 * cell), 'box width = 24 x cell').toBeLessThanOrEqual(1);
+    expect(Math.abs(nb.height - 6 * cell), 'box height = 6 x cell').toBeLessThanOrEqual(1);
+    // A converted group's look (Rounded, or Flat for a v2 folder-style group) sets its content inset.
+    const want = folderPaging(
+      openFolderContentBox({ widthPx: 24 * cell, heightPx: 6 * cell }, folder.shape, folder.tabPosition),
+      folder.contentSize, cell, f.itemIds.length, 0
+    );
+    expect(want.pageBar, 'the 30 items need more than one page').toBe(true);
+    expect(want.pages).toBeGreaterThan(1);
+    const body = node.locator('[data-folder-page]').first();
+    await expect(body).toHaveAttribute('data-folder-per-page', String(want.perPage));
+    await expect(body.locator('[data-container-id] > [data-node-id]')).toHaveCount(want.perPage);
+    await expect(node.locator('[data-page-bar="next"]')).toBeVisible();
     await expect(node.locator('[data-folder-too-small]')).toHaveCount(0);
     expect((await reachable(page, f.folderId)).sort()).toEqual([...f.itemIds].sort());
   });

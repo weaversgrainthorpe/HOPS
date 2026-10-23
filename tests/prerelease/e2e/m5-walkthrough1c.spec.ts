@@ -131,11 +131,12 @@ async function centreReport(page: Page) {
 test.describe('walkthrough 1 C (1): the edit handle never covers an item\'s centre', () => {
   for (const width of [1280, 1920]) {
     test(`at ${width}: on every tab of the Showcase, every item's centre is the item (the handle is in its corner, ≥ 24 px)`, async ({ page, context }) => {
+      test.setTimeout(90_000); // four tabs (M6 adds Shapes), every item hovered one by one
       const sc = await showcase(page, context, 'v3 Showcase');
       await page.setViewportSize({ width, height: 2400 });
       await page.goto(sc.path);
       await enterEdit(page);
-      for (const tab of ['Grid', 'Sizes', 'Folders']) {
+      for (const tab of ['Grid', 'Sizes', 'Folders', 'Shapes']) {
         await page.getByRole('tab', { name: `Switch to ${tab} tab`, exact: true }).click();
         await expect(page.locator('.tab-canvas [data-node-id]').first()).toBeVisible();
         const rep = await centreReport(page);
