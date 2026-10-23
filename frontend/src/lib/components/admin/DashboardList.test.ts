@@ -31,10 +31,10 @@ const showcase = (): LayoutDashboard => ({
   id: 'v3d', name: 'Fancy', path: '/fancy', revision: 6, order: 1,
   tabs: [{ id: 'ft', name: 'Free', root: { columns: 24, children: [] } }]
 });
-const doc = (...ds: LayoutDashboard[]) => ({ schemaVersion: 3 as const, layoutVersion: 1, dashboards: ds });
+const doc = (...ds: LayoutDashboard[]) => ({ schemaVersion: 3 as const, layoutVersion: 2, dashboards: ds });
 
 function cfg(): Config {
-  return { schemaVersion: 3, layoutVersion: 1, dashboards: [home(), showcase()] };
+  return { schemaVersion: 3, layoutVersion: 2, dashboards: [home(), showcase()] };
 }
 
 beforeEach(() => {

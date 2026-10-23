@@ -24,7 +24,7 @@ const folder = (id: string, name: string, box: { x: number; y: number; w: number
 const kids = (id: (s: string) => string, n: number, prefix = 'K') =>
   Array.from({ length: n }, (_, i) => kid(id(`${prefix.toLowerCase()}${i + 1}`), `${prefix}${i + 1}`));
 
-/** Import one dashboard (M5 stored form, layoutVersion 1, one Main tab). */
+/** Import one dashboard (M6 stored form, layoutVersion 2, one Main tab). */
 async function importDash(page: Page, context: BrowserContext, children: (id: (s: string) => string) => Child[]) {
   const p = `m5f${Date.now().toString(36)}${(seq++).toString(36)}`;
   const id = (s: string) => `${p}-${s}`;
@@ -38,7 +38,7 @@ async function importDash(page: Page, context: BrowserContext, children: (id: (s
   };
   const doc = {
     format: 'hops-export', schemaVersion: 3, exportedAt: new Date().toISOString(), exportType: 'single-dashboard',
-    config: { layoutVersion: 1, dashboards: [dash] }
+    config: { layoutVersion: 2, dashboards: [dash] }
   };
   const r = await page.request.post('/api/config/import', {
     headers: { 'X-CSRF-Token': await getCsrfToken(context) },
@@ -209,7 +209,7 @@ test.describe('M5 one Folder component', () => {
       const f = await importDash(page, context, (id) => [
         tile(id('m'), 'TabMed', 0, 0),
         folder(id('f'), 'Box', { x: 4, y: 0, w: 12, h: 6 }, [kid(id('in'), 'InMed', { size: 'large' })]),
-        folder(id('mf'), 'Mini', { x: 18, y: 0, w: 6, h: 5 }, kids(id, 3, 'M'), { display: 'collapsed' })
+        folder(id('mf'), 'Mini', { x: 18, y: 0, w: 6, h: 6 }, kids(id, 3, 'M'), { display: 'collapsed' })
       ]);
       await page.goto(f.path);
       const measure = async () => ({
@@ -396,7 +396,7 @@ test.describe('M5 folders on a phone (stacked)', () => {
   test('the same component at full width, with the same pages', async ({ page, context }) => {
     const f = await importDash(page, context, (id) => [
       folder(id('f'), 'Phone', { x: 0, y: 0, w: 8, h: 6 }, kids(id, 20)),
-      folder(id('m'), 'Mini', { x: 10, y: 0, w: 6, h: 5 }, kids(id, 2, 'M'), { display: 'collapsed' })
+      folder(id('m'), 'Mini', { x: 10, y: 0, w: 6, h: 6 }, kids(id, 2, 'M'), { display: 'collapsed' })
     ]);
     await page.goto(f.path);
     const ph = node(page, f.id('f'));

@@ -11,7 +11,8 @@
  */
 import type { Container, FolderNode, LayoutDashboard, LayoutNode, LayoutTab, Placement } from '../types/layout';
 import {
-  ROOT_COLUMNS, clampPlacement, containerColumns, defaultFolderBox, folderMinCells, isPlaced, largestContentSize, sizeOf, sizeSpan, tabSpan
+  ROOT_COLUMNS, SHAPE_CREATED, clampPlacement, containerColumns, defaultFolderBox, folderMinCells, isFolderShape, isPlaced,
+  isTabPosition, largestContentSize, sizeOf, sizeSpan, tabSpan
 } from '../layout/geometry';
 
 export type ContainerRef = { tabId: string; folderId?: string }; // folderId absent = tab root
@@ -504,7 +505,7 @@ export function mergeIntoNewFolder(
   const size: FolderNode['contentSize'] = parent?.kind === 'folder' ? (parent.contentSize ?? 'medium') : 'medium';
   const folder: FolderNode = {
     kind: 'folder', id: folderId, name: 'New folder', display: 'collapsed', size, contentSize: size,
-    shape: 'rounded', showTitle: true, content: { children: [target, ...dragged].map(unplaced) }
+    shape: SHAPE_CREATED, showTitle: true, content: { children: [target, ...dragged].map(unplaced) }
   };
   const without = removeIds(d, idSet);
   if (ref.folderId !== undefined) {
@@ -618,6 +619,20 @@ export function fitFolderMinimum(d: LayoutDashboard, id: string): LayoutDashboar
   const at: Placement = { x: Math.min(cur.x, cols - w), y: cur.y, w, h: Math.max(cur.h, min.h) };
   if (cur.z !== undefined) at.z = cur.z;
   return placeNode(d, topId, at, pushAside(r.container, new Set([topId]), at));
+}
+
+/**
+ * A folder look from a dialog (M6 §3a.8): `shape` one of the seven names and `tabPosition` left /
+ * centre / right, when given (undefined = unchanged / absent). Anything else is a TreeOpError with the
+ * reason — the server would refuse it on save, so it is refused here, visibly, before it gets there.
+ */
+export function assertFolderLook(patch: { shape?: unknown; tabPosition?: unknown }): void {
+  if (patch.shape !== undefined && !isFolderShape(patch.shape)) {
+    throw new TreeOpError(`That folder look isn't available ("${String(patch.shape)}"). Pick one of the looks in the list.`);
+  }
+  if (patch.tabPosition !== undefined && !isTabPosition(patch.tabPosition)) {
+    throw new TreeOpError(`That tab position isn't available ("${String(patch.tabPosition)}"). Pick left, centre or right.`);
+  }
 }
 
 /**

@@ -74,10 +74,10 @@ describe('editorActions', () => {
     expect('placement' in kids[1]).toBe(false);
   });
 
-  it('a new folder on a tab takes its default box (Medium: 6 x 5, Ruling 7a) at the first free cell, Medium with Medium contents', () => {
+  it('a new folder on a tab takes its default box (Medium: 6 x 6 in M6, Ruling 7a) at the first free cell, Medium with Medium contents', () => {
     const id = addNode({ ...blankFolder(), name: 'G' }, { tabId: 't1' })!;
     const f = nodeIn(draft(), id) as FolderNode;
-    expect(f.placement).toEqual(p(14, 0, 6, 5));
+    expect(f.placement).toEqual(p(14, 0, 6, 6));
     expect(f).toMatchObject({ size: 'medium', contentSize: 'medium', content: { children: [] } });
     expect('columns' in f.content).toBe(false);
     expect('layout' in f).toBe(false);

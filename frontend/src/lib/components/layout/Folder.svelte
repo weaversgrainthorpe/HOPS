@@ -24,7 +24,7 @@
   import type { FolderNode, LayoutDashboard, LayoutTab } from '$lib/types/layout';
   import type { CanvasPlan, ContainerMetrics } from '$lib/layout/geometry';
   import {
-    FOLDER_CHROME, NESTED_CHROME, folderFlowMetrics, nestedPaging, nodeBox, openFolderContentBox, phoneFlowMetrics,
+    FOLDER_CHROME, NESTED_CHROME, NESTED_LEVEL_Y_PX, folderFlowMetrics, nestedPaging, nodeBox, openFolderContentBox, phoneFlowMetrics,
     phonePaging, previewChildren, sizeSpan
   } from '$lib/layout/geometry';
   import { getTextColorValue } from '$lib/utils/colorContrast';
@@ -221,10 +221,10 @@
           phoneCanvasPx,
           {
             widthPx: plan.kind === 'stacked' ? (plan.viewportWidthPx ?? phoneCanvasPx) : 0,
-            // Each inset level's bar and padding come off the screen a page may use.
+            // Each inset level's tab allowance, bar and padding come off the screen a page may use.
             heightPx:
               plan.kind === 'stacked'
-                ? Math.max(0, (plan.viewportHeightPx ?? 0) - levels * (NESTED_CHROME.titlePx + NESTED_CHROME.padYPx))
+                ? Math.max(0, (plan.viewportHeightPx ?? 0) - levels * NESTED_LEVEL_Y_PX)
                 : 0
           },
           current.contentSize,
@@ -720,9 +720,11 @@
   .title-button:focus-visible {
     text-decoration: underline;
   }
-  /* geometry.NESTED_CHROME: one inset box a drilled level — a 1px border, a 28px bar, 8px body
-     padding; it fills the body of the level above (M5 §7). M6 draws folder shapes; this is the plain box. */
+  /* geometry.NESTED_CHROME: one inset box a drilled level — the 24px tab allowance above it (M6 §3a.4:
+     its shape's tab goes there), a 1px border, a 28px bar, 8px body padding; it fills the body of the
+     level above (M5 §7). M6 Task 3 draws folder shapes; this is the plain box. */
   .nested-box {
+    margin-top: 24px;
     position: relative;
     isolation: isolate;
     flex: 1;

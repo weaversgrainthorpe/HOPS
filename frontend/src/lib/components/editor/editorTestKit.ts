@@ -9,6 +9,7 @@ import { resetFolderViewsForTests } from '$lib/stores/folderView';
 import { canvasStacked, editorDialog, editorMenu } from '$lib/editor/editorUi';
 import { confirmModalState, closeConfirmModal } from '$lib/stores/confirmModal';
 import { toast } from '$lib/stores/toast';
+import { LAYOUT_VERSION } from '$lib/layout/geometry';
 import type { Config } from '$lib/types';
 import type { FolderNode, LayoutDashboard, LayoutNode, Placement } from '$lib/types/layout';
 
@@ -56,7 +57,7 @@ export function other(): LayoutDashboard {
 }
 
 export function setLayout(dashes: LayoutDashboard[] = [home(), other()], extra: Partial<Config> = {}): void {
-  config.set({ schemaVersion: 3, layoutVersion: 1, dashboards: dashes, ...extra } as Config);
+  config.set({ schemaVersion: 3, layoutVersion: LAYOUT_VERSION, dashboards: dashes, ...extra } as Config);
 }
 
 export function resetEditor(): void {

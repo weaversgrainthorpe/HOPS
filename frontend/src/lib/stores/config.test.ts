@@ -54,10 +54,10 @@ function dash(id: string, revision: number, extra: Partial<LayoutDashboard> = {}
 }
 
 function makeConfig(...ds: LayoutDashboard[]): Config {
-  return { schemaVersion: 3, layoutVersion: 1, dashboards: ds.length ? ds : [dash('a', 3), dash('b', 7)] };
+  return { schemaVersion: 3, layoutVersion: 2, dashboards: ds.length ? ds : [dash('a', 3), dash('b', 7)] };
 }
 
-const doc = (...ds: LayoutDashboard[]) => ({ schemaVersion: 3 as const, layoutVersion: 1, dashboards: ds });
+const doc = (...ds: LayoutDashboard[]) => ({ schemaVersion: 3 as const, layoutVersion: 2, dashboards: ds });
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -87,7 +87,7 @@ describe('the store is the v3 document', () => {
   it('migration notices from GET are kept when a write response refreshes the document', () => {
     config.set({ ...makeConfig(), migrationNotices: ['renamed'] });
     applySavedLayout({ layout: doc(dash('a', 4)) });
-    expect(get(config)).toEqual({ schemaVersion: 3, layoutVersion: 1, dashboards: [dash('a', 4)], migrationNotices: ['renamed'] });
+    expect(get(config)).toEqual({ schemaVersion: 3, layoutVersion: 2, dashboards: [dash('a', 4)], migrationNotices: ['renamed'] });
   });
 });
 

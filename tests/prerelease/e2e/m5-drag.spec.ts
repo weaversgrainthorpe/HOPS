@@ -22,7 +22,7 @@ const folder = (id: string, name: string, box: { x: number; y: number; w: number
 const kids = (id: (s: string) => string, n: number, prefix = 'K') =>
   Array.from({ length: n }, (_, i) => kid(id(`${prefix.toLowerCase()}${i + 1}`), `${prefix}${i + 1}`));
 
-/** Import one dashboard (M5 stored form, layoutVersion 1, one Main tab). */
+/** Import one dashboard (M6 stored form, layoutVersion 2, one Main tab). */
 async function importDash(page: Page, context: BrowserContext, children: (id: (s: string) => string) => Child[]) {
   const p = `m5d${Date.now().toString(36)}${(seq++).toString(36)}`;
   const id = (s: string) => `${p}-${s}`;
@@ -36,7 +36,7 @@ async function importDash(page: Page, context: BrowserContext, children: (id: (s
   };
   const doc = {
     format: 'hops-export', schemaVersion: 3, exportedAt: new Date().toISOString(), exportType: 'single-dashboard',
-    config: { layoutVersion: 1, dashboards: [dash] }
+    config: { layoutVersion: 2, dashboards: [dash] }
   };
   const r = await page.request.post('/api/config/import', {
     headers: { 'X-CSRF-Token': await getCsrfToken(context) },
@@ -192,8 +192,8 @@ test.describe('M5 drag and drop in ordered, paged folders', () => {
     const root = await savedRoot(page, f.id('dash'));
     expect(root.map((n) => n.id).sort()).toEqual([f.id('f'), f.id('k2'), f.id('s')].sort());
     expect(find(root, f.id('k2'))?.placement).toMatchObject({ w: 2, h: 2 });
-    // Its default open box: Medium x 3 by x 2 (6 x 4), raised to the Medium minimum (5 high, Ruling 7a).
-    expect(find(root, f.id('s'))).toMatchObject({ display: 'collapsed', placement: { w: 6, h: 5 } });
+    // Its default open box: Medium x 3 by x 2 (6 x 4), raised to the Medium minimum (6 high in M6, Ruling 7a).
+    expect(find(root, f.id('s'))).toMatchObject({ display: 'collapsed', placement: { w: 6, h: 6 } });
     expect(orderOf(root, f.id('f'))).toEqual([f.id('k1')]);
     // View mode applies this browser's memory: the moved-out sub-folder is still minimised.
     await page.locator('[aria-label="Exit Edit Mode"]').click();
@@ -339,15 +339,22 @@ test.describe('M5 drag and drop in ordered, paged folders', () => {
     await page.mouse.up();
     await saveDraft(page);
     const saved = find(await savedRoot(page, f.id('dash')), f.id('f'))!;
-    expect(saved.placement).toMatchObject({ x: 0, y: 0, w: 3, h: 5 }); // geometry.minOpenFolderCells('medium')
+    expect(saved.placement).toMatchObject({ x: 0, y: 0, w: 3, h: 6 }); // geometry.minOpenFolderCells('medium') (M6)
     // Drawn: one whole item and the page bar inside the box (nothing clipped).
     const fb = await box(fbox);
-    const item = await box(fbox.locator('[data-container-id] > [data-node-id]').first());
+    // A Rounded folder does not draw the M6 tab allowance the minimum counts, so at the minimum it may
+    // hold one more row than a tab shape: one row at least, and every item shown is whole, above the bar.
+    const items = fbox.locator('[data-container-id] > [data-node-id]');
     const bar = await box(fbox.locator('nav.page-bar'));
-    expect(item.x + item.width).toBeLessThanOrEqual(fb.x + fb.width);
-    expect(item.y + item.height).toBeLessThanOrEqual(bar.y + 1);
+    const shownCount = await items.count();
+    expect(shownCount).toBeGreaterThanOrEqual(1);
+    expect(shownCount).toBeLessThan(3); // still paged: the 3 items need a second page
+    for (let i = 0; i < shownCount; i++) {
+      const item = await box(items.nth(i));
+      expect(item.x + item.width).toBeLessThanOrEqual(fb.x + fb.width);
+      expect(item.y + item.height).toBeLessThanOrEqual(bar.y + 1);
+    }
     expect(bar.y + bar.height).toBeLessThanOrEqual(fb.y + fb.height);
-    await expect(fbox.locator('[data-container-id] > [data-node-id]')).toHaveCount(1);
     expect(errors).toEqual([]);
   });
 
@@ -392,7 +399,7 @@ test.describe('M5 drag and drop in ordered, paged folders', () => {
     expect(errors).toEqual([]);
   });
 
-  test('resize stops at the LARGEST contents size inside: a Large-contents sub-folder keeps a Small folder at 5 x 7', async ({ page, context }) => {
+  test('resize stops at the LARGEST contents size inside: a Large-contents sub-folder keeps a Small folder at 5 x 8', async ({ page, context }) => {
     const f = await importDash(page, context, (id) => [
       folder(id('f'), 'Box', { x: 0, y: 0, w: 12, h: 9 }, [kid(id('k1'), 'K1'), folder(id('s'), 'Sub', null, kids(id, 2, 'Z'), { contentSize: 'large' })], { contentSize: 'small' })
     ]);
@@ -405,7 +412,7 @@ test.describe('M5 drag and drop in ordered, paged folders', () => {
     await page.waitForTimeout(120);
     await page.mouse.up();
     await saveDraft(page);
-    expect(find(await savedRoot(page, f.id('dash')), f.id('f'))!.placement).toMatchObject({ x: 0, y: 0, w: 5, h: 7 });
+    expect(find(await savedRoot(page, f.id('dash')), f.id('f'))!.placement).toMatchObject({ x: 0, y: 0, w: 5, h: 8 });
     // Drilled into the Large sub-folder, one whole Large item still fits in the box.
     await node(page, f.id('s')).locator('.folder-collapsed-tile').focus();
     await page.keyboard.press('Enter');
@@ -419,8 +426,8 @@ test.describe('M5 drag and drop in ordered, paged folders', () => {
 
   test('raising Contents size in the dialog grows a box too small for one item, pushing neighbours; one Undo restores both', async ({ page, context }) => {
     const f = await importDash(page, context, (id) => [
-      folder(id('f'), 'Box', { x: 0, y: 0, w: 3, h: 5 }, kids(id, 2)),
-      tile(id('n'), 'Next', 0, 5)
+      folder(id('f'), 'Box', { x: 0, y: 0, w: 3, h: 6 }, kids(id, 2)),
+      tile(id('n'), 'Next', 0, 6)
     ]);
     const errors = await openEditing(page, f.path, f.id('f'));
     const f0 = await box(node(page, f.id('f')));
@@ -456,9 +463,9 @@ test.describe('M5 drag and drop in ordered, paged folders', () => {
     await saveDraft(page);
     const root = await savedRoot(page, f.id('dash'));
     const saved = find(root, f.id('f'))!;
-    expect(saved).toMatchObject({ placement: { x: 0, y: 0, w: 5, h: 7 } });
+    expect(saved).toMatchObject({ placement: { x: 0, y: 0, w: 5, h: 8 } });
     const n = find(root, f.id('n'))!.placement!;
-    expect(n.x >= 5 || n.y >= 7).toBe(true);
+    expect(n.x >= 5 || n.y >= 8).toBe(true);
     expect(errors).toEqual([]);
   });
 });
@@ -472,7 +479,7 @@ test.describe('M5 drag and drop in ordered, paged folders', () => {
 test.describe('Ruling 7: an open folder box is never below its minimum', () => {
   test.use({ viewport: { width: 1280, height: 1000 } });
 
-  test('a sub-folder with Large contents dragged out to the tab lands with its default box raised to 6 x 7', async ({ page, context }) => {
+  test('a sub-folder with Large contents dragged out to the tab lands with its default box raised to 6 x 8', async ({ page, context }) => {
     const f = await importDash(page, context, (id) => [
       folder(id('f'), 'Box', { x: 0, y: 0, w: 14, h: 8 }, [kid(id('k1'), 'K1'), folder(id('s'), 'Sub', null, kids(id, 2, 'Z'), { contentSize: 'large' })])
     ]);
@@ -482,14 +489,14 @@ test.describe('Ruling 7: an open folder box is never below its minimum', () => {
     await allowedThenDrop(page);
     await saveDraft(page);
     const root = await savedRoot(page, f.id('dash'));
-    expect(find(root, f.id('s'))).toMatchObject({ display: 'collapsed', placement: { w: 6, h: 7 } });
+    expect(find(root, f.id('s'))).toMatchObject({ display: 'collapsed', placement: { w: 6, h: 8 } });
     expect(errors).toEqual([]);
   });
 
-  test('a Large-contents folder dropped into a Medium folder at its minimum grows it to 5 x 7, pushing the neighbour; one Undo restores both', async ({ page, context }) => {
+  test('a Large-contents folder dropped into a Medium folder at its minimum grows it to 5 x 8, pushing the neighbour; one Undo restores both', async ({ page, context }) => {
     const f = await importDash(page, context, (id) => [
-      folder(id('f'), 'Box', { x: 0, y: 0, w: 3, h: 5 }, kids(id, 1)),
-      tile(id('n'), 'Next', 0, 5),
+      folder(id('f'), 'Box', { x: 0, y: 0, w: 3, h: 6 }, kids(id, 1)),
+      tile(id('n'), 'Next', 0, 6),
       folder(id('g'), 'Large', { x: 12, y: 0, w: 8, h: 8 }, kids(id, 1, 'G'), { contentSize: 'large' })
     ]);
     const errors = await openEditing(page, f.path, f.id('f'));
@@ -519,9 +526,9 @@ test.describe('Ruling 7: an open folder box is never below its minimum', () => {
     await saveDraft(page);
     const root = await savedRoot(page, f.id('dash'));
     expect(orderOf(root, f.id('f'))).toEqual([f.id('k1'), f.id('g')]);
-    expect(find(root, f.id('f'))).toMatchObject({ placement: { x: 0, y: 0, w: 5, h: 7 } });
+    expect(find(root, f.id('f'))).toMatchObject({ placement: { x: 0, y: 0, w: 5, h: 8 } });
     const n = find(root, f.id('n'))!.placement!;
-    expect(n.x >= 5 || n.y >= 7).toBe(true);
+    expect(n.x >= 5 || n.y >= 8).toBe(true);
     expect(errors).toEqual([]);
   });
 });

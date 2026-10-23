@@ -1,4 +1,4 @@
-// M5 §2a: a document not at `layoutVersion: 1` is in another layout form (or was served by another
+// M5 §2a: a document not at `layoutVersion: 2` is in another layout form (or was served by another
 // backend). This build writes the M5 form, so it must REFUSE to save into it — visibly — rather than
 // mix forms. Never silent: a toast says why and what to do.
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -44,10 +44,12 @@ beforeEach(() => {
 });
 
 describe('layoutFormProblem', () => {
-  it('is null only for a document at layoutVersion 1', () => {
-    expect(layoutFormProblem({ schemaVersion: 3, layoutVersion: 1, dashboards: [] })).toBeNull();
+  it('is null only for a document at layoutVersion 2 (M6)', () => {
+    expect(layoutFormProblem({ schemaVersion: 3, layoutVersion: 2, dashboards: [] })).toBeNull();
     expect(layoutFormProblem({ schemaVersion: 3, dashboards: [] })).toBe(OLD_LAYOUT_FORM);
-    expect(layoutFormProblem({ schemaVersion: 3, layoutVersion: 2, dashboards: [] })).toBe(OLD_LAYOUT_FORM);
+    // The M5 form (1) and any other version are another form (M6 §3a.4: the minimum changed).
+    expect(layoutFormProblem({ schemaVersion: 3, layoutVersion: 1, dashboards: [] })).toBe(OLD_LAYOUT_FORM);
+    expect(layoutFormProblem({ schemaVersion: 3, layoutVersion: 3, dashboards: [] })).toBe(OLD_LAYOUT_FORM);
     expect(layoutFormProblem(null)).toBe(OLD_LAYOUT_FORM);
   });
   it('tells the user what happened and what to do', () => {
@@ -66,16 +68,16 @@ describe('the editor refuses to save into a document at another layout version',
     expect(err).toHaveBeenCalledWith(OLD_LAYOUT_FORM);
   });
   it('save(): a marked document saves', async () => {
-    load(1);
+    load(2);
     edit();
-    vi.mocked(api.saveDashboardV3).mockResolvedValue({ revision: 8, layout: { schemaVersion: 3, layoutVersion: 1, dashboards: [{ ...dash(), revision: 8 }] } } as never);
+    vi.mocked(api.saveDashboardV3).mockResolvedValue({ revision: 8, layout: { schemaVersion: 3, layoutVersion: 2, dashboards: [{ ...dash(), revision: 8 }] } } as never);
     expect(await save()).toBe('saved');
     expect(api.saveDashboardV3).toHaveBeenCalledTimes(1);
   });
   it('the marker is taken from each write response: a response without it blocks the next save', async () => {
-    load(1);
-    applySavedLayout({ layout: { schemaVersion: 3, layoutVersion: 1, dashboards: [dash()] } } as never);
-    expect(get(config)?.layoutVersion).toBe(1);
+    load(2);
+    applySavedLayout({ layout: { schemaVersion: 3, layoutVersion: 2, dashboards: [dash()] } } as never);
+    expect(get(config)?.layoutVersion).toBe(2);
     applySavedLayout({ layout: { schemaVersion: 3, dashboards: [dash()] } } as never);
     expect(get(config)?.layoutVersion).toBeUndefined();
     edit();
@@ -98,12 +100,12 @@ describe('the editor refuses to save into a document at another layout version',
   });
 });
 
-// Ruling 5: the server refuses a write without layoutVersion: 1 (a page loaded before the update).
+// Ruling 5: the server refuses a write without layoutVersion: 2 (a page loaded before the update).
 // The user sees the reason, and nothing is lost: the draft stays exactly as it was, still dirty.
 describe('the server refuses a write (409 layout_version_mismatch)', () => {
   const REFUSED = 'HOPS was updated since this page was loaded, so this change was not saved. Reload the page, then make the change again.';
   it('save(): the reload message is shown and the draft is kept', async () => {
-    load(1);
+    load(2);
     edit();
     const draft = get(session)?.draft;
     vi.mocked(api.saveDashboardV3).mockRejectedValue(new Error(REFUSED));
@@ -114,7 +116,7 @@ describe('the server refuses a write (409 layout_version_mismatch)', () => {
     expect(get(dirty)).toBe(true);
   });
   it('rename: the reload message is shown and the held document is unchanged', async () => {
-    load(1);
+    load(2);
     const before = structuredClone(get(config));
     vi.mocked(api.saveDashboardV3).mockRejectedValue(new Error(REFUSED));
     const err = vi.spyOn(toast, 'error');
@@ -123,7 +125,7 @@ describe('the server refuses a write (409 layout_version_mismatch)', () => {
     expect(get(config)).toEqual(before);
   });
   it('a move/copy to another dashboard: the reload message is shown', async () => {
-    load(1);
+    load(2);
     vi.mocked(api.transferNodes).mockRejectedValue(new Error(REFUSED));
     const err = vi.spyOn(toast, 'error');
     expect(await transferAndRebase({ mode: 'move' } as never, 'Moved', 'Not moved')).toBe(false);

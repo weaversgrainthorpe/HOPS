@@ -6,7 +6,7 @@ import {
   containerMetrics, previewChildren, ROOT_COLUMNS, nodeBox, FOLDER_CHROME, openFolderContentBox, folderPaging,
   folderFlowMetrics, PAGE_BAR_PX, phoneTrack, phoneColumnPx, phonePaging, PHONE_TILE_MIN_PX, PHONE_PAGE_RESERVE_PX,
   minOpenFolderCells, MIN_GRID_CELL_PX, largestContentSize, folderMinCells, defaultFolderBox, tabSpan,
-  NESTED_CHROME, nestedContentBox, nestedPaging, NO_ROOM_NOTE_PX
+  NESTED_CHROME, nestedContentBox, nestedPaging, NO_ROOM_NOTE_PX, FOLDER_SHAPES
 } from './geometry';
 import type { FolderNode, LayoutNode, LayoutTab } from '../types/layout';
 
@@ -15,8 +15,8 @@ const tile = (id: string, extra: Record<string, unknown> = {}): LayoutNode =>
   ({ kind: 'tile', id, name: id, url: 'http://x', ...extra }) as unknown as LayoutNode;
 
 describe('the layout version marker', () => {
-  it('is 1 (the M5 form the server stores)', () => {
-    expect(LAYOUT_VERSION).toBe(1);
+  it('is 2 (the M6 form the server stores: the minimum counts the tab allowance)', () => {
+    expect(LAYOUT_VERSION).toBe(2);
   });
 });
 
@@ -113,8 +113,8 @@ describe('folder contents have no placements', () => {
 
 // ---- M5 Task 3: one Folder component pages its contents.
 describe('openFolderContentBox: an open folder always has its title bar (M5 §3a.7)', () => {
-  it('takes the bar, the border and the body padding off its box, whatever its look or title', () => {
-    expect(FOLDER_CHROME).toEqual({ titlePx: 40, padXPx: 18, padYPx: 18 });
+  it('takes the bar, the border and the body padding off its box, whatever its title (Rounded, the default look)', () => {
+    expect(FOLDER_CHROME).toEqual({ titlePx: 40, tabPx: 24, padXPx: 18, padYPx: 18 });
     expect(openFolderContentBox({ widthPx: 360, heightPx: 240 })).toEqual({ widthPx: 342, heightPx: 182 });
     expect(openFolderContentBox({ widthPx: 10, heightPx: 10 })).toEqual({ widthPx: 0, heightPx: 0 });
   });
@@ -210,16 +210,16 @@ describe('the pop-over / maximise sizing is gone (M5 §2: one component draws ev
 // one item at its contents size and the page bar — at EVERY grid width (a grid cell is never
 // narrower than PHONE_BREAKPOINT_PX / ROOT_COLUMNS = 32 px; below that the tab stacks).
 describe('minOpenFolderCells: the smallest open folder', () => {
-  it('is title + padding + one item + page bar, in whole cells', () => {
+  it('is title + tab allowance (M6) + padding + one item + page bar, in whole cells', () => {
     expect(MIN_GRID_CELL_PX).toBe(32);
-    expect(minOpenFolderCells('small')).toEqual({ w: 2, h: 4 });
-    expect(minOpenFolderCells('medium')).toEqual({ w: 3, h: 5 });
-    expect(minOpenFolderCells('large')).toEqual({ w: 5, h: 7 });
+    expect(minOpenFolderCells('small')).toEqual({ w: 2, h: 5 });
+    expect(minOpenFolderCells('medium')).toEqual({ w: 3, h: 6 });
+    expect(minOpenFolderCells('large')).toEqual({ w: 5, h: 8 });
   });
-  it.each([32, 40, 50, 80])('at %i px cells, one item and the page bar fit inside that box', (cell) => {
-    for (const size of ['small', 'medium', 'large'] as const) {
+  it.each([32, 40, 50, 80])('at %i px cells, one item and the page bar fit inside that box, in every shape (M6)', (cell) => {
+    for (const [size, shape] of (['small', 'medium', 'large'] as const).flatMap((z) => FOLDER_SHAPES.map((sh) => [z, sh] as const))) {
       const m = minOpenFolderCells(size);
-      const content = openFolderContentBox({ widthPx: m.w * cell, heightPx: m.h * cell });
+      const content = openFolderContentBox({ widthPx: m.w * cell, heightPx: m.h * cell }, shape);
       expect(content.widthPx).toBeGreaterThanOrEqual(sizeSpan(size) * cell);
       expect(content.heightPx - PAGE_BAR_PX).toBeGreaterThanOrEqual(sizeSpan(size) * cell);
       // Overfull: the page bar shows, and the rows shown really fit above it (never a clipped item).
@@ -253,18 +253,18 @@ describe('defaultFolderBox: never below the minimum (Ruling 7a)', () => {
   const f = (size: string, contentSize: string, children: unknown[] = []) =>
     ({ kind: 'folder', id: 'f', name: 'f', display: 'collapsed', size, contentSize, content: { children } }) as unknown as FolderNode;
   it('is max(size x 3 by size x 2, the minimum), each way', () => {
-    expect(defaultFolderBox(f('medium', 'medium'))).toEqual({ w: 6, h: 5 }); // 6 x 4, raised to the 5-high minimum
-    expect(defaultFolderBox(f('small', 'small'))).toEqual({ w: 3, h: 4 }); // 3 x 2, raised to 2 x 4
-    expect(defaultFolderBox(f('large', 'medium'))).toEqual({ w: 12, h: 8 }); // already above 3 x 5
-    expect(defaultFolderBox(f('small', 'large'))).toEqual({ w: 5, h: 7 }); // 3 x 2 is below 5 x 7
+    expect(defaultFolderBox(f('medium', 'medium'))).toEqual({ w: 6, h: 6 }); // 6 x 4, raised to the 6-high minimum (M6)
+    expect(defaultFolderBox(f('small', 'small'))).toEqual({ w: 3, h: 5 }); // 3 x 2, raised to 2 x 5
+    expect(defaultFolderBox(f('large', 'medium'))).toEqual({ w: 12, h: 8 }); // already above 3 x 6
+    expect(defaultFolderBox(f('small', 'large'))).toEqual({ w: 5, h: 8 }); // 3 x 2 is below 5 x 8
   });
   it('takes the largest contents size of any sub-folder, however deep', () => {
     const deep = f('medium', 'small', [tile('t'), f('medium', 'medium', [f('small', 'large')])]);
-    expect(defaultFolderBox(deep)).toEqual({ w: 6, h: 7 });
+    expect(defaultFolderBox(deep)).toEqual({ w: 6, h: 8 });
   });
   it('tabSpan of a folder with no box (it comes from inside a folder) is that default box', () => {
-    expect(tabSpan(f('medium', 'large') as unknown as LayoutNode)).toEqual({ w: 6, h: 7 });
-    expect(tabSpan(f('small', 'small') as unknown as LayoutNode)).toEqual({ w: 3, h: 4 });
+    expect(tabSpan(f('medium', 'large') as unknown as LayoutNode)).toEqual({ w: 6, h: 8 });
+    expect(tabSpan(f('small', 'small') as unknown as LayoutNode)).toEqual({ w: 3, h: 5 });
   });
 });
 
@@ -298,22 +298,22 @@ describe('folderPaging.tooSmall: an undersized box is flagged, never clipped sil
 
 // ---- M5 §7 (walkthrough 2): a drilled-in sub-folder is a folder inside a folder, one inset box a level.
 describe('nested boxes: every drilled level is an inset box inside the last (M5 §7)', () => {
-  it('each level: an 8 px inset (its padding), a 1 px border and a compact 28 px title bar', () => {
-    expect(NESTED_CHROME).toEqual({ titlePx: 28, padPx: 8, borderPx: 1, padXPx: 18, padYPx: 18 });
+  it('each level: an 8 px inset (its padding), a 1 px border, a compact 28 px title bar and the 24 px tab allowance (M6)', () => {
+    expect(NESTED_CHROME).toEqual({ titlePx: 28, tabPx: 24, padPx: 8, borderPx: 1, padXPx: 18, padYPx: 18 });
   });
   it('the inner box metrics: one inset box per level comes off the outer content box', () => {
-    const outer = { widthPx: 702, heightPx: 302 };
+    const outer = { widthPx: 702, heightPx: 350 };
     expect(nestedContentBox(outer, 0)).toEqual(outer);
-    expect(nestedContentBox(outer, 1)).toEqual({ widthPx: 684, heightPx: 256 });
+    expect(nestedContentBox(outer, 1)).toEqual({ widthPx: 684, heightPx: 280 });
     expect(nestedContentBox(outer, 2)).toEqual({ widthPx: 666, heightPx: 210 });
     expect(nestedContentBox({ widthPx: 20, heightPx: 40 }, 3)).toEqual({ widthPx: 0, heightPx: 0 });
     expect(nestedContentBox(outer, -1)).toEqual(outer);
   });
   it('per level: the innermost box pages at its own contents size in its own (smaller) box', () => {
-    const outer = { widthPx: 702, heightPx: 302 };
+    const outer = { widthPx: 702, heightPx: 350 };
     // Level 0 is the folder's own page: 5 x 2 Medium items at 60 px cells.
     expect(nestedPaging(outer, 0, 'medium', 60, 10, 0)).toMatchObject({ perRow: 5, rowsPerPage: 2, perPage: 10, noRoom: false });
-    // One level in: 684 x 256 → 5 a row, 2 rows.
+    // One level in: 684 x 280 → 5 a row, 2 rows.
     expect(nestedPaging(outer, 1, 'medium', 60, 10, 0)).toMatchObject({ perRow: 5, rowsPerPage: 2, perPage: 10, pageBar: false, noRoom: false });
     // Two levels in: 666 x 210 → 5 a row, 1 row; 7 items → a page bar, page 2 holds the rest.
     expect(nestedPaging(outer, 2, 'medium', 60, 7, 1)).toMatchObject({ perRow: 5, rowsPerPage: 1, perPage: 5, pages: 2, pageBar: true, page: 1, start: 5, end: 7 });
@@ -321,16 +321,17 @@ describe('nested boxes: every drilled level is an inset box inside the last (M5 
     expect(nestedPaging(outer, 1, 'small', 60, 1, 0)).toMatchObject({ span: 1, itemPx: 60, perRow: 11, rowsPerPage: 4 });
   });
   it('not enough room: a deep level in a small folder cannot show one item — flagged, never clipped', () => {
-    // A 6 x 5 box at 32 px cells (above its own minimum): 174 x 102 content.
-    const outer = openFolderContentBox({ widthPx: 6 * 32, heightPx: 5 * 32 });
+    // A 6 x 6 box at 32 px cells (its M6 default, at the minimum height): 174 x 134 content.
+    const outer = openFolderContentBox({ widthPx: 6 * 32, heightPx: 6 * 32 });
     expect(nestedPaging(outer, 0, 'medium', 32, 1, 0).noRoom).toBe(false);
-    expect(nestedPaging(outer, 1, 'medium', 32, 1, 0).noRoom).toBe(true); // 156 x 56 < 64
+    expect(nestedPaging(outer, 1, 'medium', 32, 1, 0).noRoom).toBe(false); // 156 x 64: exactly one item
+    expect(nestedPaging(outer, 2, 'medium', 32, 1, 0).noRoom).toBe(true); // 138 x 0 < 64
     // An empty level with no room says so too (its "Empty folder" note would have no room either).
-    expect(nestedPaging(outer, 1, 'medium', 32, 0, 0).noRoom).toBe(true);
+    expect(nestedPaging(outer, 2, 'medium', 32, 0, 0).noRoom).toBe(true);
     // Level 0 never says "not enough room": its own backstop is tooSmall (resize it).
     expect(nestedPaging({ widthPx: 10, heightPx: 10 }, 0, 'medium', 32, 1, 0)).toMatchObject({ noRoom: false, tooSmall: true });
     // Room for exactly one item is room.
-    expect(nestedPaging({ widthPx: 64 + 18, heightPx: 64 + 46 }, 1, 'medium', 32, 1, 0).noRoom).toBe(false);
+    expect(nestedPaging({ widthPx: 64 + 18, heightPx: 64 + 70 }, 1, 'medium', 32, 1, 0).noRoom).toBe(false);
   });
 });
 
@@ -338,22 +339,23 @@ describe('nested boxes: every drilled level is an inset box inside the last (M5 
 describe('nested boxes: not enough room counts the page bar, and says where the note fits', () => {
   it('room for one item but not for the page bar it needs is NOT room (review Important 1)', () => {
     // Inner content 64 x 64 at 32 px cells: one Medium item fits, but 2 items need a 32 px page bar.
-    const g = nestedPaging({ widthPx: 82, heightPx: 110 }, 1, 'medium', 32, 2, 0);
+    const g = nestedPaging({ widthPx: 82, heightPx: 134 }, 1, 'medium', 32, 2, 0);
     expect(g.pageBar).toBe(true);
     expect(g.noRoom).toBe(true);
     // One item, no page bar: room.
-    expect(nestedPaging({ widthPx: 82, heightPx: 110 }, 1, 'medium', 32, 1, 0).noRoom).toBe(false);
+    expect(nestedPaging({ widthPx: 82, heightPx: 134 }, 1, 'medium', 32, 1, 0).noRoom).toBe(false);
     // Room for the item AND the page bar: room.
-    expect(nestedPaging({ widthPx: 82, heightPx: 110 + 32 }, 1, 'medium', 32, 2, 0).noRoom).toBe(false);
+    expect(nestedPaging({ widthPx: 82, heightPx: 134 + 32 }, 1, 'medium', 32, 2, 0).noRoom).toBe(false);
   });
   it('the note goes inside the innermost box when its body is at least NO_ROOM_NOTE_PX tall, else on the top body', () => {
     expect(NO_ROOM_NOTE_PX).toBe(24);
-    // Level 1 in 100 px of content: the innermost body is 100 - 46 + 16 = 70 px → inside.
-    expect(nestedPaging({ widthPx: 300, heightPx: 100 }, 1, 'large', 32, 1, 0)).toMatchObject({ noRoom: true, noRoomInside: true });
-    // Level 2 in 100 px: 100 - 92 + 16 = 24 px → still inside (exactly the note).
-    expect(nestedPaging({ widthPx: 300, heightPx: 100 }, 2, 'medium', 32, 1, 0)).toMatchObject({ noRoom: true, noRoomInside: true });
-    // Level 3 in 100 px: the inset bars themselves no longer fit → on the top body, always seen.
-    expect(nestedPaging({ widthPx: 300, heightPx: 100 }, 3, 'medium', 32, 1, 0)).toMatchObject({ noRoom: true, noRoomInside: false });
+    // A level takes 70 px (M6: 24 tab allowance + 28 bar + 18 border and padding).
+    // Level 1 in 148 px of content: the innermost body is 148 - 70 + 16 = 94 px → inside.
+    expect(nestedPaging({ widthPx: 300, heightPx: 148 }, 1, 'large', 32, 1, 0)).toMatchObject({ noRoom: true, noRoomInside: true });
+    // Level 2 in 148 px: 148 - 140 + 16 = 24 px → still inside (exactly the note).
+    expect(nestedPaging({ widthPx: 300, heightPx: 148 }, 2, 'medium', 32, 1, 0)).toMatchObject({ noRoom: true, noRoomInside: true });
+    // Level 3 in 148 px: the inset bars themselves no longer fit → on the top body, always seen.
+    expect(nestedPaging({ widthPx: 300, heightPx: 148 }, 3, 'medium', 32, 1, 0)).toMatchObject({ noRoom: true, noRoomInside: false });
     // Room: no note anywhere.
     expect(nestedPaging({ widthPx: 300, heightPx: 300 }, 1, 'medium', 32, 1, 0)).toMatchObject({ noRoom: false, noRoomInside: false });
   });

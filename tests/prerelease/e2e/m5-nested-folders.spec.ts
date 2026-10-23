@@ -25,7 +25,7 @@ const folder = (id: string, name: string, box: { x: number; y: number; w: number
 const kids = (id: (s: string) => string, n: number, prefix = 'K') =>
   Array.from({ length: n }, (_, i) => kid(id(`${prefix.toLowerCase()}${i + 1}`), `${prefix}${i + 1}`));
 
-/** Import one dashboard (M5 stored form, layoutVersion 1, one Main tab). */
+/** Import one dashboard (M6 stored form, layoutVersion 2, one Main tab). */
 async function importDash(page: Page, context: BrowserContext, children: (id: (s: string) => string) => Child[]) {
   const p = `m5n${Date.now().toString(36)}${(seq++).toString(36)}`;
   const id = (s: string) => `${p}-${s}`;
@@ -39,7 +39,7 @@ async function importDash(page: Page, context: BrowserContext, children: (id: (s
   };
   const doc = {
     format: 'hops-export', schemaVersion: 3, exportedAt: new Date().toISOString(), exportType: 'single-dashboard',
-    config: { layoutVersion: 1, dashboards: [dash] }
+    config: { layoutVersion: 2, dashboards: [dash] }
   };
   const r = await page.request.post('/api/config/import', {
     headers: { 'X-CSRF-Token': await getCsrfToken(context) },
@@ -193,7 +193,7 @@ test.describe('M5 §7: a sub-folder opens as a folder inside a folder', () => {
 
   test('a small folder with deep nesting says "Not enough room", never clips', async ({ page, context }) => {
     const f = await importDash(page, context, (id) => [
-      folder(id('f'), 'Tiny', { x: 0, y: 0, w: 4, h: 5 }, [
+      folder(id('f'), 'Tiny', { x: 0, y: 0, w: 4, h: 6 }, [
         folder(id('a'), 'A', null, [folder(id('b'), 'B', null, [folder(id('c'), 'C', null, [kid(id('z'), 'Zed')])])])
       ])
     ]);
@@ -209,7 +209,7 @@ test.describe('M5 §7: a sub-folder opens as a folder inside a folder', () => {
     // The saved box is never changed by opening a sub-folder.
     const cfg = await (await page.request.get('/api/config')).json();
     const saved = cfg.dashboards.find((d: { id: string }) => d.id === f.id('dash')).tabs[0].root.children[0];
-    expect(saved.placement).toEqual({ x: 0, y: 0, w: 4, h: 5 });
+    expect(saved.placement).toEqual({ x: 0, y: 0, w: 4, h: 6 });
     // The same in edit mode.
     await page.locator('[aria-label="Enter Edit Mode"]').click();
     await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
@@ -487,15 +487,17 @@ test.describe('M5 §7 fix round 1', () => {
   test('an inset box with room for one item but not the page bar its items need says "Not enough room" (no silent clip)', async ({ page, context }) => {
     const f = await importDash(page, context, (id) => [
       tile(id('m'), 'Med', 20, 0),
-      folder(id('f'), 'Small', { x: 0, y: 0, w: 4, h: 5 }, [folder(id('s'), 'Three', null, kids(id, 3))])
+      // M6: a 4 x 7 box two levels in: each level takes 70 px (tab allowance 24 + bar 28 + border
+      // and padding 18), so the inner content is 7c - 58 - 140.
+      folder(id('f'), 'Small', { x: 0, y: 0, w: 4, h: 7 }, [folder(id('o'), 'Outer', null, [folder(id('s'), 'Three', null, kids(id, 3))])])
     ]);
     await page.goto(f.path);
     const c = (await box(node(page, f.id('m')))).width / 2; // the tab cell
     // Precondition (the arithmetic of this case): the inset content holds one Medium item, but not
     // one plus the 32 px page bar three items need.
-    expect(5 * c - 104, 'one item fits').toBeGreaterThanOrEqual(2 * c);
-    expect(5 * c - 104 - 32, 'item + page bar do not').toBeLessThan(2 * c);
-    await drilled(page, f.id('dash'), f.id('f'), [f.id('s')]);
+    expect(7 * c - 198, 'one item fits').toBeGreaterThanOrEqual(2 * c);
+    expect(7 * c - 198 - 32, 'item + page bar do not').toBeLessThan(2 * c);
+    await drilled(page, f.id('dash'), f.id('f'), [f.id('o'), f.id('s')]);
     await page.reload();
     const small = node(page, f.id('f'));
     await expect(nested(small, f.id('s'))).toBeVisible();
@@ -567,7 +569,7 @@ test.describe('M5 §7 fix round 1', () => {
   test('dragging an inset title onto another folder puts that sub-folder inside it', async ({ page, context }) => {
     const f = await importDash(page, context, (id) => [
       ...services(id),
-      folder(id('other'), 'Other', { x: 20, y: 4, w: 3, h: 5 }, [kid(id('o1'), 'O1')], { display: 'collapsed' })
+      folder(id('other'), 'Other', { x: 20, y: 4, w: 3, h: 6 }, [kid(id('o1'), 'O1')], { display: 'collapsed' })
     ]);
     await page.goto(f.path);
     await drilled(page, f.id('dash'), f.id('svc'), [f.id('nf'), f.id('deeper')]);

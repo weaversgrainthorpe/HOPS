@@ -68,8 +68,8 @@ describe('GET /api/config', () => {
   });
 
   it('keeps the layout version (M5 §2a) so the editor can tell the form; absent stays absent', async () => {
-    respond(200, { ...doc, layoutVersion: 1 });
-    expect(await getConfig()).toEqual({ ...doc, layoutVersion: 1 });
+    respond(200, { ...doc, layoutVersion: 2 });
+    expect(await getConfig()).toEqual({ ...doc, layoutVersion: 2 });
     respond(200, doc);
     expect(await getConfig()).not.toHaveProperty('layoutVersion');
   });
@@ -95,20 +95,20 @@ describe('M5 §2a: every placement-carrying write says which layout version it i
     mode: 'move' as const, sourceId: 'a', sourceRevision: 3, nodeIds: ['n'], targetId: 'b', targetRevision: 1,
     target: { tabId: 't' }
   };
-  it('transferNodes POSTs layoutVersion: 1 with the request', async () => {
+  it('transferNodes POSTs layoutVersion: 2 with the request', async () => {
     respond(200, { sourceRevision: 4, targetRevision: 2, layout: doc });
     await transferNodes(req);
     const [url, init] = vi.mocked(fetch).mock.calls[0] as [string, RequestInit];
     expect(url).toContain('/dashboards/transfer');
-    expect(JSON.parse(init.body as string)).toEqual({ ...req, layoutVersion: 1 });
+    expect(JSON.parse(init.body as string)).toEqual({ ...req, layoutVersion: 2 });
   });
   it('a 409 layout_version_mismatch surfaces the server\'s reload message (and is not a revision conflict)', async () => {
     const detail = 'HOPS was updated since this page was loaded, so this change was not saved. Reload the page.';
-    respond(409, { error: 'layout_version_mismatch', detail, layoutVersion: 1 });
+    respond(409, { error: 'layout_version_mismatch', detail, layoutVersion: 2 });
     const err = await saveDashboardV3('a', dash, 3).catch((e: unknown) => e) as Error;
     expect(err).not.toBeInstanceOf(ConflictError);
     expect(err.message).toBe(detail);
-    respond(409, { error: 'layout_version_mismatch', detail, layoutVersion: 1 });
+    respond(409, { error: 'layout_version_mismatch', detail, layoutVersion: 2 });
     await expect(transferNodes(req)).rejects.toThrow(detail);
   });
   it('a 409 layout_version_mismatch without a detail still says to reload', async () => {
@@ -125,7 +125,7 @@ describe('dashboard writes', () => {
     const [url, init] = vi.mocked(fetch).mock.calls[0] as [string, RequestInit];
     expect(url).toContain('/dashboards/a');
     expect(init.method).toBe('PUT');
-    expect(JSON.parse(init.body as string)).toEqual({ schema: 3, dashboard: dash, revision: 3, layoutVersion: 1 });
+    expect(JSON.parse(init.body as string)).toEqual({ schema: 3, dashboard: dash, revision: 3, layoutVersion: 2 });
   });
 
   it('createDashboard POSTs {name, path} and needs the new id back', async () => {

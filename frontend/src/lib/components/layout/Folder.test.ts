@@ -45,14 +45,14 @@ function mk(children: any[]): { dash: LayoutDashboard; tab: LayoutTab } {
 }
 async function renderTab(children: any[]) {
   const { dash, tab } = mk(children);
-  config.set({ schemaVersion: 3, layoutVersion: 1, dashboards: [dash] } as any);
+  config.set({ schemaVersion: 3, layoutVersion: 2, dashboards: [dash] } as any);
   const r = render(TabCanvas, { dashboard: dash, tab });
   await tick();
   return { ...r, dash, tab };
 }
 async function renderEditing(children: any[]) {
   const { dash } = mk(children);
-  config.set({ schemaVersion: 3, layoutVersion: 1, dashboards: [dash] } as any);
+  config.set({ schemaVersion: 3, layoutVersion: 2, dashboards: [dash] } as any);
   begin('d1');
   editMode.set(true);
   const d = get(session)!.draft;
@@ -322,14 +322,15 @@ describe('drilling into a sub-folder: a folder inside a folder, one inset box a 
   });
   it('not enough room: a deep level in a small folder says so visibly, and draws no clipped items', async () => {
     setFolderDrill('d1', 'f', ['s', 's2']);
-    // 4 x 4 at 60 px cells: content 222 x 182; s 204 x 136 (fits a 120 px item); s2 186 x 90 (does not).
-    const { container } = await renderTab([folder('f', [sub('s', [sub('s2', [kid('deeper')])])], { placement: { x: 0, y: 0, w: 4, h: 4 } })]);
+    // 4 x 5 at 60 px cells: content 222 x 242; a level takes 70 px (M6: 24 tab allowance + 28 bar + 18):
+    // s 204 x 172 (fits a 120 px item); s2 186 x 102 (does not).
+    const { container } = await renderTab([folder('f', [sub('s', [sub('s2', [kid('deeper')])])], { placement: { x: 0, y: 0, w: 4, h: 5 } })]);
     const note = el(container, 'f').querySelector('[data-folder-no-room]') as HTMLElement;
     expect(note).not.toBeNull();
     expect(note.textContent).toMatch(/Not enough room — make the folder bigger/);
     expect(note.getAttribute('role')).toBe('status');
     expect(container.querySelector('[data-node-id="deeper"]')).toBeNull();
-    // s2's body (90 + 16 px) holds the note: it is drawn inside the innermost box (review minor 3).
+    // s2's body (102 + 16 px) holds the note: it is drawn inside the innermost box (review minor 3).
     expect(nested(container, 's2').querySelector(':scope > .nested-body > [data-folder-no-room]')).toBe(note);
     // One level up there is room: no note.
     await fireEvent.click(within(nested(container, 's2')).getByRole('button', { name: 'Minimise s2' }));
@@ -337,16 +338,18 @@ describe('drilling into a sub-folder: a folder inside a folder, one inset box a 
     expect(shownIds(container)).toEqual(['s2']);
   });
   it('room for one item but not for the page bar its items need: "Not enough room", nothing clipped (review Important 1)', async () => {
-    setFolderDrill('d1', 'f', ['s']);
-    // 4 x 4 at 60 px: s's box 204 x 136 holds one 120 px item, but 3 items need a page bar (136 - 32 < 120).
-    const { container } = await renderTab([folder('f', [sub('s', kids(3, 'x'))], { placement: { x: 0, y: 0, w: 4, h: 4 } })]);
+    setFolderDrill('d1', 'f', ['a', 'b', 'c', 's']);
+    // 4 x 8 at 60 px: content 222 x 422; four levels in (70 px each, M6) s's box is 150 x 142: it holds
+    // one 120 px item, but 3 items need a page bar (142 - 32 < 120).
+    const deep = sub('a', [sub('b', [sub('c', [sub('s', kids(3, 'x'))])])]);
+    const { container } = await renderTab([folder('f', [deep], { placement: { x: 0, y: 0, w: 4, h: 8 } })]);
     expect(el(container, 'f').querySelector('[data-folder-no-room]')).not.toBeNull();
     expect(container.querySelector('[data-node-id="x1"]')).toBeNull();
     expect(container.querySelector('[data-page-bar]')).toBeNull();
   });
   it('so deep the inset bars run out of room: the note is on the folder\'s own body, always seen (review minor 4)', async () => {
     setFolderDrill('d1', 'f', ['a', 'b', 'c', 'd']);
-    // 4 x 4 at 60 px: content 182 px high; four inset levels need 4 x 46 = 184 px of bars and padding.
+    // 4 x 4 at 60 px: content 182 px high; four inset levels need 4 x 70 = 280 px of tabs, bars and padding (M6).
     const deep = sub('a', [sub('b', [sub('c', [sub('d', [kid('z')])])])]);
     const { container } = await renderTab([folder('f', [deep], { placement: { x: 0, y: 0, w: 4, h: 4 } })]);
     const note = el(container, 'f').querySelector(':scope > .folder-body > [data-folder-no-room]');
@@ -372,7 +375,7 @@ describe('drilling into a sub-folder: a folder inside a folder, one inset box a 
     const { container, rerender, dash } = await renderTab(tree());
     toast.clear();
     const gone = { ...dash, tabs: [{ ...dash.tabs[0], root: { columns: 24, children: [folder('f', [kid('a')])] } }] };
-    config.set({ schemaVersion: 3, layoutVersion: 1, dashboards: [gone] } as any);
+    config.set({ schemaVersion: 3, layoutVersion: 2, dashboards: [gone] } as any);
     await rerender({ dashboard: gone, tab: gone.tabs[0] });
     await tick();
     expect(shownIds(container)).toEqual(['a']);
@@ -431,8 +434,8 @@ describe('untitled folders (showTitle: false): the bar shows only the controls, 
     expect(bar.getAttribute('data-crumb')).toBe('f'); // still the drag's go-up target
     expect(within(nested(container, 's')).getByRole('button', { name: 'Minimise s' })).toBeInTheDocument();
   });
-  it('the shape is ignored: a "folder-tab" folder draws the same rounded box', async () => {
-    const { container } = await renderTab([folder('f', kids(1), { shape: 'folder-tab' })]);
+  it('until M6 Task 3 draws shapes, a "folder-paper" folder draws the same rounded box', async () => {
+    const { container } = await renderTab([folder('f', kids(1), { shape: 'folder-paper' })]);
     expect(el(container, 'f').classList.contains('folder-style')).toBe(false);
   });
 });

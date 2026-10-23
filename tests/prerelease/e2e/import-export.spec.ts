@@ -4,7 +4,7 @@ import { getCsrfToken, uniqueName, openSettings, deleteDashboardsNamed } from '.
 // Config round-trip. The bug class here is "export silently drops a
 // field that the save pipeline requires, or the save silently rejects a
 // shape that GET produces." v3 saves one dashboard at a time
-// (PUT /api/dashboards/{id} with {schema: 3, dashboard, revision, layoutVersion: 1}); we
+// (PUT /api/dashboards/{id} with {schema: 3, dashboard, revision, layoutVersion: 2}); we
 // exercise GET → PUT → GET through that pipeline (the one the editor uses
 // on every save), plus the admin-export endpoint to confirm it returns a
 // usable bundle.
@@ -37,7 +37,7 @@ test('GET /api/config → PUT /api/dashboards/{id} round-trip preserves the dash
   // PUT the same dashboard back at its revision — the save pipeline the frontend uses
   const putResp = await request.put(`/api/dashboards/${encodeURIComponent(dash.id)}`, {
     headers: { 'X-CSRF-Token': csrf, 'Content-Type': 'application/json' },
-    data: JSON.stringify({ schema: 3, dashboard: dash, revision: dash.revision, layoutVersion: 1 }),
+    data: JSON.stringify({ schema: 3, dashboard: dash, revision: dash.revision, layoutVersion: 2 }),
   });
   expect(putResp.ok(), `${putResp.status()} ${await putResp.text()}`).toBeTruthy();
   const put = await putResp.json();

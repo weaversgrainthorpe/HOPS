@@ -70,7 +70,7 @@ const kid = (id: string, name: string, extra: Child = {}): Child => ({
   openMode: 'newtab', size: 'medium', order: 0, ...extra
 });
 
-/** Import one dashboard (M5 stored form, layoutVersion 1, one Main tab). */
+/** Import one dashboard (M6 stored form, layoutVersion 2, one Main tab). */
 async function importDash(page: Page, context: BrowserContext, children: (id: (s: string) => string) => Child[]) {
   const p = `w1d${Date.now().toString(36)}${(seq++).toString(36)}`;
   const id = (s: string) => `${p}-${s}`;
@@ -84,7 +84,7 @@ async function importDash(page: Page, context: BrowserContext, children: (id: (s
   };
   const doc = {
     format: 'hops-export', schemaVersion: 3, exportedAt: new Date().toISOString(), exportType: 'single-dashboard',
-    config: { layoutVersion: 1, dashboards: [dash] }
+    config: { layoutVersion: 2, dashboards: [dash] }
   };
   const r = await page.request.post('/api/config/import', {
     headers: { 'X-CSRF-Token': await getCsrfToken(context) },

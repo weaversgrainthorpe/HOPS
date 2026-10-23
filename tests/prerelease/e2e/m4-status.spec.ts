@@ -40,7 +40,7 @@ async function importDash(page: Page, context: BrowserContext) {
   };
   const doc = {
     format: 'hops-export', schemaVersion: 3, exportedAt: new Date().toISOString(), exportType: 'single-dashboard',
-    config: { layoutVersion: 1, dashboards: [dash] }
+    config: { layoutVersion: 2, dashboards: [dash] }
   };
   const r = await page.request.post('/api/config/import', {
     headers: { 'X-CSRF-Token': await getCsrfToken(context) },

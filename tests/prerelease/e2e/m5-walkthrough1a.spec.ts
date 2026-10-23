@@ -31,7 +31,7 @@ test.afterEach(async ({ page, context }) => {
 });
 
 async function importDoc(page: Page, context: BrowserContext, dash: Record<string, unknown>) {
-  const doc = { format: 'hops-export', schemaVersion: 3, exportType: 'single-dashboard', config: { layoutVersion: 1, dashboards: [dash] } };
+  const doc = { format: 'hops-export', schemaVersion: 3, exportType: 'single-dashboard', config: { layoutVersion: 2, dashboards: [dash] } };
   const r = await page.request.post('/api/config/import', {
     headers: { 'X-CSRF-Token': await getCsrfToken(context) },
     multipart: { file: { name: 'w1a.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(doc)) } }

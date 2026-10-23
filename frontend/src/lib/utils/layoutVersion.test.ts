@@ -11,7 +11,7 @@ function respond(status: number, body: unknown) {
 afterEach(() => vi.unstubAllGlobals());
 
 const dash: LayoutDashboard = { id: 'a', name: 'a', path: '/a', revision: 3, tabs: [] };
-const doc = { schemaVersion: 3, layoutVersion: 1, dashboards: [dash] };
+const doc = { schemaVersion: 3, layoutVersion: 2, dashboards: [dash] };
 const req = {
   mode: 'move' as const, sourceId: 'a', sourceRevision: 3, nodeIds: ['n'], targetId: 'b', targetRevision: 1,
   target: { tabId: 't' }
@@ -19,15 +19,15 @@ const req = {
 const bodyOf = () => JSON.parse((vi.mocked(fetch).mock.calls[0] as [string, RequestInit])[1].body as string);
 
 describe('the save marker', () => {
-  it('saveDashboardV3 sends layoutVersion 1 (and no gridUnit)', async () => {
+  it('saveDashboardV3 sends layoutVersion 2 (and no gridUnit)', async () => {
     respond(200, { revision: 4, layout: doc });
     await saveDashboardV3('a', dash, 3);
-    expect(bodyOf()).toEqual({ schema: 3, dashboard: dash, revision: 3, layoutVersion: 1 });
+    expect(bodyOf()).toEqual({ schema: 3, dashboard: dash, revision: 3, layoutVersion: 2 });
   });
-  it('transferNodes sends layoutVersion 1 (and no gridUnit)', async () => {
+  it('transferNodes sends layoutVersion 2 (and no gridUnit)', async () => {
     respond(200, { sourceRevision: 4, targetRevision: 2, layout: doc });
     await transferNodes(req);
-    expect(bodyOf()).toEqual({ ...req, layoutVersion: 1 });
+    expect(bodyOf()).toEqual({ ...req, layoutVersion: 2 });
   });
   it('a 409 layout_version_mismatch shows the server\'s reload message, never a revision conflict', async () => {
     const detail = 'HOPS was updated since this page was loaded, so this change was not saved. Reload the page.';
@@ -50,10 +50,12 @@ describe('GET /api/config keeps the marker as sent', () => {
 });
 
 describe('layoutFormProblem', () => {
-  it('is null only for a document at layoutVersion 1', () => {
-    expect(layoutFormProblem({ schemaVersion: 3, layoutVersion: 1, dashboards: [] })).toBeNull();
+  it('is null only for a document at layoutVersion 2 (M6)', () => {
+    expect(layoutFormProblem({ schemaVersion: 3, layoutVersion: 2, dashboards: [] })).toBeNull();
     expect(layoutFormProblem({ schemaVersion: 3, dashboards: [] })).toBe(OLD_LAYOUT_FORM);
-    expect(layoutFormProblem({ schemaVersion: 3, layoutVersion: 2, dashboards: [] })).toBe(OLD_LAYOUT_FORM);
+    // The M5 form (1) and any other version are another form (M6 §3a.4: the minimum changed).
+    expect(layoutFormProblem({ schemaVersion: 3, layoutVersion: 1, dashboards: [] })).toBe(OLD_LAYOUT_FORM);
+    expect(layoutFormProblem({ schemaVersion: 3, layoutVersion: 3, dashboards: [] })).toBe(OLD_LAYOUT_FORM);
     expect(layoutFormProblem({ schemaVersion: 3, gridUnit: 2, dashboards: [] } as never)).toBe(OLD_LAYOUT_FORM);
     expect(layoutFormProblem(null)).toBe(OLD_LAYOUT_FORM);
   });

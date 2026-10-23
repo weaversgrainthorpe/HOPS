@@ -513,8 +513,8 @@ describe('Ruling 7(b) on a drag merge inside a folder', () => {
     resetEditor();
     const d = dash();
     // F at its Medium-contents minimum, G (a folder with Large contents) on the tab beside it.
-    (d.tabs[0].root.children[1] as FolderNode).placement = p(0, 4, 3, 5);
-    d.tabs[0].root.children[3] = folder('G', p(18, 0, 6, 7), [tile('g1')], { contentSize: 'large' });
+    (d.tabs[0].root.children[1] as FolderNode).placement = p(0, 4, 3, 6);
+    d.tabs[0].root.children[3] = folder('G', p(18, 0, 6, 8), [tile('g1')], { contentSize: 'large' });
     setLayout([d]);
     startSession();
     setActiveTab('t1');
@@ -530,7 +530,7 @@ describe('Ruling 7(b) on a drag merge inside a folder', () => {
     const F = nodeIn(draft(), 'F') as FolderNode;
     const made = F.content.children[1] as FolderNode;
     expect(made.content.children.map((n) => n.id)).toEqual(['k2', 'G']);
-    expect(F.placement).toMatchObject({ w: 5, h: 7 }); // Large contents inside: at least 5 x 7
+    expect(F.placement).toMatchObject({ w: 5, h: 8 }); // Large contents inside: at least 5 x 8 (M6)
     undo();
     expect(draft()).toEqual(before);
   });

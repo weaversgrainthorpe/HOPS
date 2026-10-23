@@ -1,4 +1,6 @@
-import type { Container, FolderNode, ItemSize, LayoutNode, LayoutTab, PlacedNode, Placement } from '../types/layout';
+import type {
+  Container, FolderNode, FolderShape, ItemSize, LayoutNode, LayoutTab, PlacedNode, Placement, TabPosition
+} from '../types/layout';
 
 /**
  * A tab's grid: 24 columns (spec §9). Every tab is a grid tab (M5: free layout is removed).
@@ -8,8 +10,9 @@ export const ROOT_COLUMNS = 24;
 /**
  * The stored layout format this build reads and writes (M5 §2a). Every placement-carrying write
  * sends it; the server refuses a mismatch (409). Bumped whenever the stored layout format changes.
+ * 2 (M6 §3a.4): the open-folder minimum counts the tab allowance (configdoc.LayoutVersion).
  */
-export const LAYOUT_VERSION = 1;
+export const LAYOUT_VERSION = 2;
 /** Cells a Medium item spans each way. */
 export const MEDIUM_CELLS = 2;
 export const PHONE_BREAKPOINT_PX = 768;
@@ -214,11 +217,17 @@ export function pointToCell(m: ContainerMetrics, dxPx: number, dyPx: number): { 
 }
 
 /**
- * An open folder's own chrome (Folder.svelte's CSS, global border-box). Every open folder has its
- * title bar, titled or not, since it holds the minimise control and the breadcrumb (M5 §3a.7);
- * `shape` is ignored until M6, so there is one look: a 1px border, a 40px bar, 8px body padding.
+ * An open folder's own chrome (Folder.svelte's CSS, global border-box): a 1px border, a 40px bar
+ * (titled or not, it holds the minimise control and the breadcrumb, M5 §3a.7; on a tab shape it is
+ * the body's controls row, the name being on the tab, M6 §3a.2) and 8px body padding. `tabPx` is the
+ * tab-height allowance (M6 §3a.4): ONE constant for every shape, Rounded too, so the minimum has no
+ * shape parameter. Twin of configdoc.FolderTitlePx / FolderTabPx / FolderPadPx.
  */
-export const FOLDER_CHROME = { titlePx: 40, padXPx: 2 * 8 + 2 * 1, padYPx: 2 * 8 + 2 * 1 } as const;
+const FOLDER_BORDER_PX = 1;
+const FOLDER_PAD_PX = 8;
+export const FOLDER_CHROME = {
+  titlePx: 40, tabPx: 24, padXPx: 2 * FOLDER_PAD_PX + 2 * FOLDER_BORDER_PX, padYPx: 2 * FOLDER_PAD_PX + 2 * FOLDER_BORDER_PX
+} as const;
 /**
  * The page bar (« ‹ 1 2 3 › »), shown only when a folder has more than one page. FOLDER_CHROME,
  * PAGE_BAR_PX and MIN_GRID_CELL_PX have a Go twin (configdoc/layout.go: FolderTitlePx, FolderPadPx,
@@ -232,15 +241,15 @@ export const PAGE_BAR_PX = 32;
  */
 export const MIN_GRID_CELL_PX = PHONE_BREAKPOINT_PX / ROOT_COLUMNS;
 /**
- * The smallest open folder on a tab (M5 §3.5), in whole cells: its bar, border and padding, ONE item
- * at its contents size and the page bar. Counted at the narrowest grid cell (MIN_GRID_CELL_PX), so it
+ * The smallest open folder on a tab (M5 §3.5), in whole cells: its bar, the tab allowance (M6 §3a.4),
+ * border and padding, ONE item at its contents size and the page bar. Counted at the narrowest grid cell (MIN_GRID_CELL_PX), so it
  * holds at every grid width — the layout is the same at every width, and a wider cell only adds room.
  */
 export function minOpenFolderCells(contentSize: unknown): { w: number; h: number } {
   const span = sizeSpan(contentSize);
   return {
     w: span + Math.ceil(FOLDER_CHROME.padXPx / MIN_GRID_CELL_PX),
-    h: span + Math.ceil((FOLDER_CHROME.titlePx + FOLDER_CHROME.padYPx + PAGE_BAR_PX) / MIN_GRID_CELL_PX)
+    h: span + Math.ceil((FOLDER_CHROME.titlePx + FOLDER_CHROME.tabPx + FOLDER_CHROME.padYPx + PAGE_BAR_PX) / MIN_GRID_CELL_PX)
   };
 }
 /**
@@ -267,20 +276,123 @@ export function folderMinCells(folder: FolderNode): { w: number; h: number } {
   return minOpenFolderCells(largestContentSize(folder));
 }
 
-/** The content box inside an open folder's box: its bar, border and padding taken off. */
-export function openFolderContentBox(box: { widthPx: number; heightPx: number }): { widthPx: number; heightPx: number } {
+/**
+ * The content box inside an open folder's box: shapeInset's size. With no shape it is Rounded's (the
+ * M5 bar, border and padding taken off), which is what the renderer draws until it draws shapes.
+ */
+export function openFolderContentBox(
+  box: { widthPx: number; heightPx: number }, shape: unknown = 'rounded', tabPosition?: unknown
+): { widthPx: number; heightPx: number } {
+  const r = shapeInset(shape, tabPosition, box);
+  return { widthPx: r.widthPx, heightPx: r.heightPx };
+}
+
+// ---------------------------------------------------------------- folder shapes (M6)
+
+/** The folder looks, in spec order (M6 §3.9). Twin of configdoc.FolderShapes. */
+export const FOLDER_SHAPES: readonly FolderShape[] = [
+  'rounded', 'simple-tab', 'folder-flat', 'folder-paper', 'folder-outline', 'folder-cartoon', 'folder-open'
+];
+/** Where a tab shape's tab can sit (M6 §3.2). Twin of configdoc.FolderTabPositions. */
+export const TAB_POSITIONS: readonly TabPosition[] = ['left', 'centre', 'right'];
+/** The look of a folder made in HOPS — new, merge, Discovery promote (M6 §3a.5). Twin of configdoc.ShapeCreated. */
+export const SHAPE_CREATED: FolderShape = 'folder-flat';
+
+export function isFolderShape(v: unknown): v is FolderShape {
+  return typeof v === 'string' && (FOLDER_SHAPES as readonly string[]).includes(v);
+}
+export function isTabPosition(v: unknown): v is TabPosition {
+  return typeof v === 'string' && (TAB_POSITIONS as readonly string[]).includes(v);
+}
+/**
+ * The shape a folder is drawn as: its own, or Rounded when missing or unknown. Never a conversion of
+ * stored data: the server refuses an unknown shape, and the renderer shows a note in edit mode for one.
+ */
+export function shapeOf(v: unknown): FolderShape {
+  return isFolderShape(v) ? v : 'rounded';
+}
+/** A tab's position: its own, or left when missing or unknown (M6 §3.2). */
+export function tabPositionOf(v: unknown): TabPosition {
+  return isTabPosition(v) ? v : 'left';
+}
+/** Every shape but Rounded draws a tab above its body (the name sits on it, §3a.2). */
+export function hasTab(shape: unknown): boolean {
+  return shapeOf(shape) !== 'rounded';
+}
+
+/**
+ * Open flap (folder-open): how far in the flap's top edge tilts, each side. The tilt lives in the body
+ * padding (<= 8 px), so tiles sit in the flap's upright area, never skewed (§3a.9), and the one
+ * minimum still holds (§3a.4).
+ */
+export const FLAP_TILT_PX = 8;
+/** A tab's width: an untitled tab is TAB_MIN_PX; a name grows it up to TAB_MAX_PX (then ellipsised). */
+export const TAB_MIN_PX = 48;
+export const TAB_MAX_PX = 240;
+/** A tab never takes more than this share of the box's width, so it reads as a tab. */
+export const TAB_MAX_SHARE = 0.6;
+/** A left or right tab sits this far in from the box's side (it starts past the body's corner). */
+export const TAB_EDGE_PX = 8;
+
+export interface InsetRect { leftPx: number; topPx: number; widthPx: number; heightPx: number }
+
+/**
+ * THE rectangular content area of a folder drawn as `shape` in `box` (px from the box's top-left), the
+ * same open, nested or in the dialog preview (M6 §3a.2, §3a.9):
+ *  - Rounded: the M5 look — 1 px border, the 40 px title bar, 8 px padding. The tab allowance it does
+ *    not draw is spare room at the bottom (the minimum counts it for every shape, §3a.4).
+ *  - Tab shapes: the tab (FOLDER_CHROME.tabPx) above the body; in the body the border, the controls
+ *    row (the minimise control and edit handle at its top-right, §3a.2) and padding.
+ *  - Open flap: as the tab shapes, inset by at least the flap's tilt each side (its upright area).
+ * The tab position moves only the tab. An unknown shape insets as Rounded (it draws Rounded).
+ */
+export function shapeInset(shape: unknown, _tabPosition: unknown, box: { widthPx: number; heightPx: number }): InsetRect {
+  const s = shapeOf(shape);
+  const border = FOLDER_BORDER_PX;
+  const pad = FOLDER_PAD_PX;
+  const tab = s === 'rounded' ? 0 : FOLDER_CHROME.tabPx;
+  const side = border + (s === 'folder-open' ? Math.max(pad, FLAP_TILT_PX) : pad);
+  const top = tab + border + FOLDER_CHROME.titlePx + pad;
   return {
-    widthPx: nonNeg(box.widthPx - FOLDER_CHROME.padXPx),
-    heightPx: nonNeg(box.heightPx - FOLDER_CHROME.titlePx - FOLDER_CHROME.padYPx)
+    leftPx: side,
+    topPx: top,
+    widthPx: nonNeg(nonNeg(box.widthPx) - 2 * side),
+    heightPx: nonNeg(nonNeg(box.heightPx) - top - border - pad)
   };
 }
 
 /**
+ * Where a tab shape draws its tab in `box` (px from the box's top-left), or null for Rounded (and an
+ * unknown shape, which draws Rounded). It is the tab allowance high, at the top. `wantPx` is the width
+ * its name asks for (measured by the component; missing = an untitled tab): at least TAB_MIN_PX, at
+ * most TAB_MAX_PX and TAB_MAX_SHARE of the box, and never wider than fits between the edges.
+ * Left / right sit TAB_EDGE_PX in from that side; centre is centred (§3.2).
+ */
+export function folderTabRect(
+  shape: unknown, tabPosition: unknown, box: { widthPx: number; heightPx: number }, wantPx?: number
+): InsetRect | null {
+  if (!hasTab(shape)) return null;
+  const w = nonNeg(box.widthPx);
+  const room = nonNeg(w - 2 * TAB_EDGE_PX);
+  const max = Math.min(TAB_MAX_PX, TAB_MAX_SHARE * w, room);
+  const min = Math.min(TAB_MIN_PX, max);
+  const width = Math.min(max, Math.max(min, isNum(wantPx) ? wantPx : 0));
+  const pos = tabPositionOf(tabPosition);
+  const leftPx = pos === 'left' ? Math.min(TAB_EDGE_PX, w - width) : pos === 'right' ? Math.max(0, w - width - TAB_EDGE_PX) : (w - width) / 2;
+  return { leftPx, topPx: 0, widthPx: width, heightPx: FOLDER_CHROME.tabPx };
+}
+
+/**
  * A drilled-in sub-folder's inset box (M5 §7: a folder inside a folder, one box a level). Folder.svelte's
- * .nested-box CSS: a 1px border, a compact 28px title bar (its name and minimise, Ruling 15), 8px body padding. It fills
+ * .nested-box CSS: the tab allowance above it (M6 §3a.4: a nested level draws its shape's tab there),
+ * a 1px border, a compact 28px title bar (its name and minimise, Ruling 15), 8px body padding. It fills
  * the body of the level above it.
  */
-export const NESTED_CHROME = { titlePx: 28, padPx: 8, borderPx: 1, padXPx: 2 * 8 + 2 * 1, padYPx: 2 * 8 + 2 * 1 } as const;
+export const NESTED_CHROME = {
+  titlePx: 28, tabPx: FOLDER_CHROME.tabPx, padPx: 8, borderPx: 1, padXPx: 2 * 8 + 2 * 1, padYPx: 2 * 8 + 2 * 1
+} as const;
+/** The height one nested level takes off the level above: its tab allowance, bar, border and padding. */
+export const NESTED_LEVEL_Y_PX = NESTED_CHROME.tabPx + NESTED_CHROME.titlePx + NESTED_CHROME.padYPx;
 
 /** The content box `levels` inset boxes in from an open folder's own content box (level 0 = its own). */
 export function nestedContentBox(content: { widthPx: number; heightPx: number }, levels: number): { widthPx: number; heightPx: number } {
@@ -288,7 +400,7 @@ export function nestedContentBox(content: { widthPx: number; heightPx: number },
   if (n === 0) return { widthPx: content.widthPx, heightPx: content.heightPx };
   return {
     widthPx: nonNeg(content.widthPx - n * NESTED_CHROME.padXPx),
-    heightPx: nonNeg(content.heightPx - n * (NESTED_CHROME.titlePx + NESTED_CHROME.padYPx))
+    heightPx: nonNeg(content.heightPx - n * NESTED_LEVEL_Y_PX)
   };
 }
 
@@ -312,7 +424,7 @@ export function nestedPaging(
   const n = isNum(levels) && levels >= 1 ? Math.floor(levels) : 0;
   const noRoom = n > 0 && (g.tooSmall || inner.widthPx + eps < g.itemPx || inner.heightPx + eps < g.itemPx);
   // The innermost body as drawn: its content height (unclamped) plus its padding.
-  const bodyPx = content.heightPx - n * (NESTED_CHROME.titlePx + NESTED_CHROME.padYPx) + 2 * NESTED_CHROME.padPx;
+  const bodyPx = content.heightPx - n * NESTED_LEVEL_Y_PX + 2 * NESTED_CHROME.padPx;
   return { ...g, noRoom, noRoomInside: noRoom && bodyPx + eps >= NO_ROOM_NOTE_PX };
 }
 

@@ -11,14 +11,14 @@ import type {
 import {
   TreeOpError, cellIsFree, copyNodes, deleteNodes, deleteTab, duplicateNode, duplicateTab, firstFreeCell,
   insertNode, locate, moveNodes, newNodeId, resolveContainer, setFolderDisplay, setZ,
-  addTab, fitFolderMinimum, placeNode, pushAside,
+  addTab, assertFolderLook, fitFolderMinimum, placeNode, pushAside,
   updateNode, updateTab
 } from './treeOps';
 import type {
   Container, FolderNode, ItemSize, LayoutDashboard, LayoutNode, LayoutTab, Placement, TileNode
 } from '$lib/types/layout';
 import type { Background, HeaderConfig } from '$lib/types';
-import { defaultFolderBox, sizeOf, sizeSpan, tabSpan } from '$lib/layout/geometry';
+import { SHAPE_CREATED, defaultFolderBox, sizeOf, sizeSpan, tabSpan } from '$lib/layout/geometry';
 import { config, layoutDoc, findLayoutDashboard, applySavedLayout, loadConfig, layoutFormProblem } from '$lib/stores/config';
 import { apply, session, rebaseCleanSession, sessionConflict } from '$lib/stores/editSession';
 import { transferNodes, ConflictError, type TransferRequest } from '$lib/utils/api';
@@ -187,7 +187,7 @@ export function blankFolder(): FolderNode {
   const box = defaultFolderBox({ size: 'medium', contentSize: 'medium' });
   return {
     kind: 'folder', id: '', name: 'New folder', display: 'expanded', size: 'medium', contentSize: 'medium',
-    shape: 'rounded', showTitle: true, placement: { x: 0, y: 0, ...box }, content: { children: [] }
+    shape: SHAPE_CREATED, showTitle: true, placement: { x: 0, y: 0, ...box }, content: { children: [] }
   };
 }
 
@@ -309,16 +309,37 @@ export function editFolder(
   const patch: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(rest)) if (!LOCKED.includes(k)) patch[k] = v;
   return apply('Edit folder', (dd) => {
+    assertFolderLook(patch);
     let next = updateNode(dd, id, patch as Partial<LayoutNode>);
     if (display !== undefined) next = setFolderDisplay(next, id, display);
     if (background !== undefined) next = folderWithBackground(next, id, background ?? undefined);
     if (statusChecksEnabled !== undefined) {
       next = mapNode(next, id, (f) => withStatusChecks(f, statusChecksEnabled) as LayoutNode);
     }
-    // A larger contents size needs a larger smallest open box (§3.5): grown here, neighbours pushed,
-    // in this same undo step — or the whole Save is refused with the reason (TreeOpError → toast).
-    return 'contentSize' in patch ? fitFolderMinimum(next, id) : next;
+    // A larger contents size needs a larger smallest open box (§3.5), and a shape change needs room
+    // for its tab (M6 §3a.3: a box below the tab-aware minimum): grown here, neighbours pushed, in this
+    // same undo step — or the whole Save is refused with the reason (TreeOpError → toast, Ruling 7).
+    return LOOK_KEYS.some((k) => k in patch) ? fitFolderMinimum(next, id) : next;
   });
+}
+
+/** The dialog fields that can change a folder's smallest open box. */
+const LOOK_KEYS = ['contentSize', 'shape', 'tabPosition'];
+
+/**
+ * Why folder `id` can't take look `shape` (and `tabPosition`), or null: an unknown name, or its open
+ * box can't grow to the minimum on its tab. The trial run of the very op editFolder runs (M6 §3a.3);
+ * the dialog shows it.
+ */
+export function shapeProblem(d: LayoutDashboard, id: string, shape: unknown, tabPosition?: unknown): string | null {
+  try {
+    const patch = { shape, ...(tabPosition !== undefined ? { tabPosition } : {}) };
+    assertFolderLook(patch);
+    fitFolderMinimum(updateNode(d, id, patch as Partial<LayoutNode>), id);
+    return null;
+  } catch (e) {
+    return e instanceof Error && e.message ? e.message : "That look isn't possible here.";
+  }
 }
 
 /**

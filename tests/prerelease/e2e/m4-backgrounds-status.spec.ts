@@ -44,7 +44,7 @@ async function importDash(
   if (opts.background) dash.background = opts.background;
   const doc = {
     format: 'hops-export', schemaVersion: 3, exportedAt: new Date().toISOString(), exportType: 'single-dashboard',
-    config: { layoutVersion: 1, dashboards: [dash] }
+    config: { layoutVersion: 2, dashboards: [dash] }
   };
   const r = await page.request.post('/api/config/import', {
     headers: { 'X-CSRF-Token': await getCsrfToken(context) },
@@ -181,16 +181,16 @@ test.describe('M4 layered backgrounds in a real browser', () => {
 
   const SLIDES = ['/presets/network-grid.jpg', '/presets/dark-gradient.jpg'];
   const slideFolder = (id: (s: string) => string, key: string, x: number, y: number) => ({
-    // Small contents: a 4 x 4 (and the 2 x 4 small ones) box is at least its minimum (Ruling 7, 2 x 4).
+    // Small contents: a 4 x 5 (and the 2 x 5 small ones) box is at least its minimum (Ruling 7; M6: 2 x 5).
     id: id(key), kind: 'folder', name: `Slides ${key}`, display: 'expanded', shape: 'rounded', size: 'medium', contentSize: 'small',
-    showTitle: false, placement: placement(x, y, 4, 4),
+    showTitle: false, placement: placement(x, y, 4, 5),
     background: { type: 'slideshow', images: SLIDES, interval: 30, transition: 'crossfade' },
     content: { children: [kid(id(`${key}-t`), `T${key}`)] }
   });
   /** 10 slideshow folders on the first screen (two rows of five) and 5 more far below. */
   const slideshowDash = (id: (s: string) => string) => {
     const out: Child[] = [];
-    for (let i = 0; i < 10; i++) out.push(slideFolder(id, `top${i}`, (i % 5) * 4, Math.floor(i / 5) * 4));
+    for (let i = 0; i < 10; i++) out.push(slideFolder(id, `top${i}`, (i % 5) * 4, Math.floor(i / 5) * 5));
     for (let i = 0; i < 5; i++) out.push(slideFolder(id, `low${i}`, i * 4, 60));
     out.push(tile(id('anchor'), 'Anchor', 22, 0));
     return out;
@@ -262,7 +262,7 @@ test.describe('M4 layered backgrounds in a real browser', () => {
     const f = await importDash(page, context, (id) => {
       const out: Child[] = [tile(id('anchor'), 'Anchor', 0, 0)];
       for (let i = 0; i < 4; i++) {
-        out.push({ ...slideFolder(id, `small${i}`, 16 + 2 * i, Y - 4), placement: placement(16 + 2 * i, Y - 4, 2, 4),
+        out.push({ ...slideFolder(id, `small${i}`, 16 + 2 * i, Y - 5), placement: placement(16 + 2 * i, Y - 5, 2, 5),
           content: { children: [kid(id(`small${i}-t`), `S${i}`)] } });
       }
       out.push({ ...slideFolder(id, 'big', 0, Y), placement: placement(0, Y, 16, 20),

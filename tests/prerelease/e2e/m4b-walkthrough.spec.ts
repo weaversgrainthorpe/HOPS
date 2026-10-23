@@ -14,7 +14,7 @@ const made: string[] = [];
 const placement = (x: number, y: number, w = 2, h = 2) => ({ x, y, w, h });
 type Child = Record<string, unknown>;
 
-// The M5 stored form (layoutVersion 1): 24-column grid tabs; a tab tile is exactly its Size's span;
+// The M6 stored form (layoutVersion 2): 24-column grid tabs; a tab tile is exactly its Size's span;
 // folder contents are an ordered list with no placements; folders carry size and contentSize.
 const SPAN: Record<string, number> = { small: 1, medium: 2, large: 4 };
 /** A tile as it sits inside a folder: no placement. */
@@ -58,7 +58,7 @@ async function importDash(
   if (opts.background) dash.background = opts.background;
   const doc = {
     format: 'hops-export', schemaVersion: 3, exportedAt: new Date().toISOString(), exportType: 'single-dashboard',
-    config: { layoutVersion: 1, dashboards: [dash] }
+    config: { layoutVersion: 2, dashboards: [dash] }
   };
   const r = await page.request.post('/api/config/import', {
     headers: { 'X-CSRF-Token': await getCsrfToken(context) },
@@ -1358,7 +1358,7 @@ async function importCopy(page: Page, context: BrowserContext, dash: Record<stri
   copy.id = `${p}-dash`;
   copy.path = `/${p}`;
   copy.name = `${label} ${p}`;
-  const config = { layoutVersion: 1, dashboards: [copy] };
+  const config = { layoutVersion: 2, dashboards: [copy] };
   const bundle = { format: 'hops-export', schemaVersion: 3, exportType: 'full', config };
   const r = await page.request.post('/api/config/import', {
     headers: { 'X-CSRF-Token': await getCsrfToken(context) },
@@ -1385,7 +1385,7 @@ async function sampleCopy(page: Page, context: BrowserContext) {
   const cfg = (await exp.json()).config;
   const sample = cfg.dashboards.find((d: { id: string }) => d.id === 'sample');
   expect(sample, 'the test server has the default Sample dashboard').toBeTruthy();
-  expect(cfg.layoutVersion, 'the export carries the layout version').toBe(1);
+  expect(cfg.layoutVersion, 'the export carries the layout version').toBe(2);
   return importCopy(page, context, sample, 'Sample');
 }
 
@@ -2043,7 +2043,7 @@ test.describe('§8 tile size sets the space it takes', () => {
     return importDash(page, context, [{
       name: 'Main',
       children: (id) => [
-        folder(id('services'), 'Services', placement(0, 0, 24, 5), [
+        folder(id('services'), 'Services', placement(0, 0, 24, 6), [
           kid(id('google'), 'Google', { description: 'Search Engine', icon: 'mdi:google' }),
           kid(id('github'), 'GitHub', { description: 'Code Repository', icon: 'mdi:github', order: 1 }),
           kid(id('youtube'), 'YouTube', { description: 'Video Platform', icon: 'mdi:youtube', order: 2 })

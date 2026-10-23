@@ -26,13 +26,13 @@ beforeEach(() => {
   vi.clearAllMocks();
   resetEditSessionForTests();
   layoutStale.set(false);
-  config.set({ schemaVersion: 3, layoutVersion: 1, dashboards: [layoutD()] });
+  config.set({ schemaVersion: 3, layoutVersion: 2, dashboards: [layoutD()] });
 });
 
 /** A write response: the new revision and the committed document. */
 const freshAt = (revision: number, settings: Record<string, unknown> = { editIdleTimeoutMinutes: 30 }) => ({
   revision,
-  layout: { schemaVersion: 3 as const, layoutVersion: 1, dashboards: [{ ...layoutD(), revision, settings }] }
+  layout: { schemaVersion: 3 as const, layoutVersion: 2, dashboards: [{ ...layoutD(), revision, settings }] }
 });
 
 describe('Settings saved during an edit session (Ruling 19)', () => {

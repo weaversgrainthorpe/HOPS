@@ -32,7 +32,7 @@ async function importDash(page: Page, context: BrowserContext, children: (id: (s
   };
   const doc = {
     format: 'hops-export', schemaVersion: 3, exportedAt: new Date().toISOString(), exportType: 'single-dashboard',
-    config: { layoutVersion: 1, dashboards: [dash] }
+    config: { layoutVersion: 2, dashboards: [dash] }
   };
   const r = await page.request.post('/api/config/import', {
     headers: { 'X-CSRF-Token': await getCsrfToken(context) },
@@ -67,14 +67,14 @@ async function importFixture(page: Page, context: BrowserContext) {
           tile(id('anchor'), 'Anchor'),
           folder('ft', 'Titled', 0),
           folder('fu', 'Untitled', 8, { showTitle: false }),
-          folder('fc', 'Collapsed', 16, { display: 'collapsed', placement: placement(16, 2, 4, 5) })
+          folder('fc', 'Collapsed', 16, { display: 'collapsed', placement: placement(16, 2, 4, 6) })
         ]
       }
     }]
   };
   const doc = {
     format: 'hops-export', schemaVersion: 3, exportedAt: new Date().toISOString(), exportType: 'single-dashboard',
-    config: { layoutVersion: 1, dashboards: [dash] }
+    config: { layoutVersion: 2, dashboards: [dash] }
   };
   const r = await page.request.post('/api/config/import', {
     headers: { 'X-CSRF-Token': await getCsrfToken(context) },

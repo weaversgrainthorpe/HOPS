@@ -65,7 +65,7 @@ function dash(): LayoutDashboard {
 	};
 }
 function doc(): LayoutDoc {
-	return { schemaVersion: 3, layoutVersion: 1, dashboards: [dash(), { id: 'other', name: 'O', path: '/o', revision: 1, tabs: [] }] };
+	return { schemaVersion: 3, layoutVersion: 2, dashboards: [dash(), { id: 'other', name: 'O', path: '/o', revision: 1, tabs: [] }] };
 }
 const draft = () => get(session)!.draft;
 const setName = (n: string) => (d: LayoutDashboard) => updateNode(d, 'a', { name: n } as Partial<LayoutNode>);
@@ -263,10 +263,10 @@ describe('save', () => {
 		begin('d');
 		apply('1', setName('one'));
 		const sent = draft();
-		const fresh: LayoutDoc = { schemaVersion: 3, layoutVersion: 1, dashboards: [{ ...sent, revision: 8 }] };
+		const fresh: LayoutDoc = { schemaVersion: 3, layoutVersion: 2, dashboards: [{ ...sent, revision: 8 }] };
 		vi.mocked(api.saveDashboardV3).mockResolvedValue({ revision: 8, layout: fresh });
 		// A follow-up GET refreshes only the notices (M4 Task 7); its document is never taken.
-		vi.mocked(api.getConfig).mockResolvedValue({ schemaVersion: 3, layoutVersion: 1, dashboards: [{ ...sent, name: 'from GET', revision: 99 }] });
+		vi.mocked(api.getConfig).mockResolvedValue({ schemaVersion: 3, layoutVersion: 2, dashboards: [{ ...sent, name: 'from GET', revision: 99 }] });
 		expect(await save()).toBe('saved');
 		expect(api.saveDashboardV3).toHaveBeenCalledWith('d', sent, 7);
 		await new Promise((r) => setTimeout(r, 0));
@@ -315,7 +315,7 @@ describe('save', () => {
 		expect(await save()).toBe('conflict');
 		expect(draft()).toBe(mine);
 		await flush();
-		const fresh: LayoutDoc = { schemaVersion: 3, layoutVersion: 1, dashboards: [{ ...dash(), revision: 9, name: 'theirs' }] };
+		const fresh: LayoutDoc = { schemaVersion: 3, layoutVersion: 2, dashboards: [{ ...dash(), revision: 9, name: 'theirs' }] };
 		vi.mocked(api.getConfig).mockResolvedValue(fresh);
 		await fireEvent.click(screen.getByRole('button', { name: 'Reload (lose my draft)' }));
 		await vi.waitFor(() => expect(get(session)?.baseRevision).toBe(9));
@@ -345,7 +345,7 @@ describe('save', () => {
 		vi.mocked(api.saveDashboardV3).mockRejectedValue(new ConflictError('d', 9));
 		await save();
 		// The dashboard is gone from the reloaded layout.
-		vi.mocked(api.getConfig).mockResolvedValue({ schemaVersion: 3, layoutVersion: 1, dashboards: [] });
+		vi.mocked(api.getConfig).mockResolvedValue({ schemaVersion: 3, layoutVersion: 2, dashboards: [] });
 		await reloadAfterConflict();
 		expect(get(session)).toBeNull();
 		expect(get(editMode)).toBe(false);
@@ -355,7 +355,7 @@ describe('save', () => {
 		begin('d');
 		apply('1', setName('one'));
 		const normalised = { ...draft(), revision: 8, normalisedByServer: true };
-		const fresh: LayoutDoc = { schemaVersion: 3, layoutVersion: 1, dashboards: [normalised] };
+		const fresh: LayoutDoc = { schemaVersion: 3, layoutVersion: 2, dashboards: [normalised] };
 		vi.mocked(api.saveDashboardV3).mockResolvedValue({ revision: 8, layout: fresh });
 		vi.mocked(api.getConfig).mockResolvedValue(fresh);
 		expect(await save()).toBe('saved');
@@ -623,7 +623,7 @@ describe('final fix wave', () => {
 		begin('d');
 		apply('1', setName('one'));
 		const sent = draft();
-		const fresh: LayoutDoc = { schemaVersion: 3, layoutVersion: 1, dashboards: [clone({ ...sent, revision: 8 })] };
+		const fresh: LayoutDoc = { schemaVersion: 3, layoutVersion: 2, dashboards: [clone({ ...sent, revision: 8 })] };
 		vi.mocked(api.saveDashboardV3).mockResolvedValue({ revision: 8, layout: fresh });
 		expect(await save()).toBe('saved');
 		const s = get(session)!;
@@ -638,7 +638,7 @@ describe('final fix wave', () => {
 		begin('d');
 		apply('1', setName('one'));
 		const sent = draft();
-		const fresh: LayoutDoc = { schemaVersion: 3, layoutVersion: 1, dashboards: [{ ...clone(sent), revision: 8, name: 'normalised' }] };
+		const fresh: LayoutDoc = { schemaVersion: 3, layoutVersion: 2, dashboards: [{ ...clone(sent), revision: 8, name: 'normalised' }] };
 		vi.mocked(api.saveDashboardV3).mockResolvedValue({ revision: 8, layout: fresh });
 		await save();
 		expect(draft()).not.toBe(sent);
@@ -655,7 +655,7 @@ describe('final fix wave', () => {
 		const off = disableEditMode();
 		await flush();
 		expect(get(confirmModalState).isOpen).toBe(false); // not asked while the save is unresolved
-		d.resolve({ revision: 8, layout: { schemaVersion: 3, layoutVersion: 1, dashboards: [clone({ ...sent, revision: 8 })] } });
+		d.resolve({ revision: 8, layout: { schemaVersion: 3, layoutVersion: 2, dashboards: [clone({ ...sent, revision: 8 })] } });
 		await saving;
 		expect(await off).toBe(true);
 		expect(get(confirmModalState).isOpen).toBe(false);
@@ -673,7 +673,7 @@ describe('final fix wave', () => {
 		const dropping = discard();
 		await flush();
 		expect(get(confirmModalState).isOpen).toBe(false);
-		d.resolve({ revision: 8, layout: { schemaVersion: 3, layoutVersion: 1, dashboards: [clone({ ...sent, revision: 8 })] } });
+		d.resolve({ revision: 8, layout: { schemaVersion: 3, layoutVersion: 2, dashboards: [clone({ ...sent, revision: 8 })] } });
 		await saving;
 		expect(await dropping).toBe(true);
 		expect(get(toast).at(-1)?.message).toMatch(/already saved, so there was nothing to discard/);
@@ -695,7 +695,7 @@ describe('final fix wave', () => {
 		closeConfirmModal('alternate');
 		await flush();
 		expect(get(session)).not.toBeNull(); // waits for the save
-		d.resolve({ revision: 8, layout: { schemaVersion: 3, layoutVersion: 1, dashboards: [clone({ ...sent, revision: 8 })] } });
+		d.resolve({ revision: 8, layout: { schemaVersion: 3, layoutVersion: 2, dashboards: [clone({ ...sent, revision: 8 })] } });
 		await saving;
 		expect(await off).toBe(true);
 		expect(get(toast).at(-1)?.message).toMatch(/already saved/);
@@ -704,7 +704,7 @@ describe('final fix wave', () => {
 	it('Minor 6: a newer layout revision rebases a CLEAN session, visibly', async () => {
 		begin('d');
 		const theirs = { ...dash(), revision: 9, name: 'theirs' };
-		config.set({ schemaVersion: 3, layoutVersion: 1, dashboards: [theirs] } as unknown as Config);
+		config.set({ schemaVersion: 3, layoutVersion: 2, dashboards: [theirs] } as unknown as Config);
 		await flush();
 		const s = get(session)!;
 		expect(s.baseRevision).toBe(9);
@@ -718,7 +718,7 @@ describe('final fix wave', () => {
 		begin('d');
 		apply('1', setName('mine'));
 		const mine = draft();
-		config.set({ schemaVersion: 3, layoutVersion: 1, dashboards: [{ ...dash(), revision: 9, name: 'theirs' }] } as unknown as Config);
+		config.set({ schemaVersion: 3, layoutVersion: 2, dashboards: [{ ...dash(), revision: 9, name: 'theirs' }] } as unknown as Config);
 		await flush();
 		expect(draft()).toBe(mine);
 		expect(get(session)!.baseRevision).toBe(7);
@@ -729,7 +729,7 @@ describe('final fix wave', () => {
 		apply('1', setName('one'));
 		const sent = draft();
 		vi.mocked(api.saveDashboardV3).mockResolvedValue({
-			revision: 8, layout: { schemaVersion: 3, layoutVersion: 1, dashboards: [clone({ ...sent, revision: 8 })] }
+			revision: 8, layout: { schemaVersion: 3, layoutVersion: 2, dashboards: [clone({ ...sent, revision: 8 })] }
 		});
 		await save();
 		await flush();

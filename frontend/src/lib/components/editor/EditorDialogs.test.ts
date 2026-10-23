@@ -46,10 +46,10 @@ describe('FolderEditModal', () => {
     await fireEvent.click(screen.getByRole('radio', { name: 'Collapsed' }));
     expect(screen.queryByLabelText('Layout')).toBeNull(); // M5: folders always flow; no layout
     await fireEvent.click(screen.getByLabelText('Show title bar'));
-    await fireEvent.change(screen.getByLabelText('Look'), { target: { value: 'folder-tab' } });
+    await fireEvent.change(screen.getByLabelText('Look'), { target: { value: 'folder-paper' } });
     await fireEvent.click(screen.getByRole('button', { name: /^Save/ }));
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
-      name: 'Media', display: 'collapsed', showTitle: false, shape: 'folder-tab',
+      name: 'Media', display: 'collapsed', showTitle: false, shape: 'folder-paper',
       color: '#112233', opacity: 0.5, textColor: 'dark'
     }));
     const patch = onSave.mock.calls[0][0];
@@ -118,10 +118,10 @@ describe('EditorDialogs (the dialogs edit the draft only)', () => {
     await fireEvent.click(screen.getByRole('button', { name: /^Save/ }));
     expect(get(editorDialog)).toBeNull();
     const f = nodeIn(draft(), 'f1') as FolderNode;
-    expect(f).toMatchObject({ contentSize: 'large', placement: p(0, 2, 8, 7) }); // Large minimum is 5 x 7
+    expect(f).toMatchObject({ contentSize: 'large', placement: p(0, 2, 8, 8) }); // Large minimum is 5 x 8 (M6)
     const u = nodeIn(draft(), 'under')!.placement!; // pushed aside (M3 rules), clear of the grown box
     expect(u).not.toEqual(p(0, 8));
-    expect(u.x >= 8 || u.y >= 9 || u.y + u.h <= 2).toBe(true);
+    expect(u.x >= 8 || u.y >= 10 || u.y + u.h <= 2).toBe(true);
     expect(get(session)!.undo).toHaveLength(1);
     undo();
     expect(draft()).toEqual(before);

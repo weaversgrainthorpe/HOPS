@@ -148,9 +148,9 @@ describe('resize handles', () => {
     const t = get(drag)?.target;
     expect(t?.kind).toBe('resize');
     if (t?.kind !== 'resize') throw new Error('not a resize');
-    expect(t.at.h).toBe(5); // geometry.minOpenFolderCells('medium').h
+    expect(t.at.h).toBe(6); // geometry.minOpenFolderCells('medium').h (M6: with the tab allowance)
     document.body.dispatchEvent(pe('pointerup', 240, -122));
-    expect(nodeIn(draft(), 'f1')!.placement).toMatchObject({ w: 8, h: 5 });
+    expect(nodeIn(draft(), 'f1')!.placement).toMatchObject({ w: 8, h: 6 });
   });
 
   it('Escape cancels a resize and leaves the draft unchanged', async () => {

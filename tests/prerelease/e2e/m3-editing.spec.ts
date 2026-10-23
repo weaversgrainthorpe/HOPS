@@ -23,7 +23,7 @@ function placement(x: number, y: number, w = 2, h = 2) {
   return { x, y, w, h };
 }
 
-// The M5 stored form (layoutVersion 1): 24-column grid tabs, a Medium tile 2 x 2 cells; folder contents
+// The M6 stored form (layoutVersion 2): 24-column grid tabs, a Medium tile 2 x 2 cells; folder contents
 // are an ordered list with no placements; folders carry size and contentSize.
 /** A tile inside a folder: no placement. */
 function kid(id: string, name: string, order = 0) {
@@ -62,7 +62,7 @@ async function importFixture(page: Page, context: BrowserContext): Promise<Fixtu
             tile(id('c'), 'Charlie', 4, 0, 2),
             {
               id: id('fk'), kind: 'folder', name: 'Kept', display: 'collapsed', shape: 'rounded', size: 'medium', contentSize: 'medium',
-              showTitle: true, placement: placement(12, 0, 6, 5),
+              showTitle: true, placement: placement(12, 0, 6, 6),
               content: { children: [kid(id('k1'), 'Kilo')] }
             },
             {
@@ -81,7 +81,7 @@ async function importFixture(page: Page, context: BrowserContext): Promise<Fixtu
   };
   const doc = {
     format: 'hops-export', schemaVersion: 3, exportedAt: new Date().toISOString(), exportType: 'single-dashboard',
-    config: { layoutVersion: 1, dashboards: [dash] }
+    config: { layoutVersion: 2, dashboards: [dash] }
   };
   const r = await page.request.post('/api/config/import', {
     headers: { 'X-CSRF-Token': await getCsrfToken(context) },
@@ -359,7 +359,7 @@ test.describe('M3 editor: dragging into and out of folders', () => {
     };
     const doc = {
       format: 'hops-export', schemaVersion: 3, exportedAt: new Date().toISOString(), exportType: 'single-dashboard',
-      config: { layoutVersion: 1, dashboards: [dash] }
+      config: { layoutVersion: 2, dashboards: [dash] }
     };
     const r = await page.request.post('/api/config/import', {
       headers: { 'X-CSRF-Token': await getCsrfToken(context) },

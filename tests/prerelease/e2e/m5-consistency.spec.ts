@@ -34,7 +34,7 @@ const folder = (id: string, name: string, box: { x: number; y: number; w: number
   placement: box, content: { children }, ...extra
 });
 
-/** Import one dashboard (M5 stored form, layoutVersion 1, one Main tab). */
+/** Import one dashboard (M6 stored form, layoutVersion 2, one Main tab). */
 async function importDash(page: Page, context: BrowserContext, children: (id: (s: string) => string) => Child[]) {
   const p = `m5c${Date.now().toString(36)}${(seq++).toString(36)}`;
   const id = (s: string) => `${p}-${s}`;
@@ -48,7 +48,7 @@ async function importDash(page: Page, context: BrowserContext, children: (id: (s
   };
   const doc = {
     format: 'hops-export', schemaVersion: 3, exportedAt: new Date().toISOString(), exportType: 'single-dashboard',
-    config: { layoutVersion: 1, dashboards: [dash] }
+    config: { layoutVersion: 2, dashboards: [dash] }
   };
   const r = await page.request.post('/api/config/import', {
     headers: { 'X-CSRF-Token': await getCsrfToken(context) },
@@ -250,7 +250,7 @@ for (const [width, height] of [[1280, 1000], [1920, 1080]] as const) {
         tile(id('ts'), 'Small tab', 0, 0, 'small'),
         tile(id('tm'), 'Medium tab', 1, 0),
         tile(id('tl'), 'Large tab', 3, 0, 'large'),
-        folder(id('mini'), 'Mini', { x: 8, y: 0, w: 6, h: 5 }, [kid(id('n1'), 'N1'), kid(id('n2'), 'N2')], { display: 'collapsed' }),
+        folder(id('mini'), 'Mini', { x: 8, y: 0, w: 6, h: 6 }, [kid(id('n1'), 'N1'), kid(id('n2'), 'N2')], { display: 'collapsed' }),
         folder(id('fs'), 'Small contents', { x: 0, y: 6, w: 7, h: 6 }, [kid(id('fs1'), 'Fs1')], { contentSize: 'small' }),
         folder(id('fm'), 'Medium contents', { x: 8, y: 6, w: 7, h: 6 }, [kid(id('fm1'), 'Fm1')]),
         folder(id('fl'), 'Large contents', { x: 16, y: 0, w: 8, h: 10 }, [kid(id('fl1'), 'Fl1', { size: 'small' })], { contentSize: 'large' })

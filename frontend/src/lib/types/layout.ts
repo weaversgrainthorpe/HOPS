@@ -26,6 +26,15 @@ export interface TileNode extends Entry {
   placement?: Placement;
 }
 
+/**
+ * A folder's look (M6 §3.9): Rounded, Simple tab, or one of the five real-folder looks. Only ever one
+ * of these names (geometry.FOLDER_SHAPES; the server refuses anything else, §3a.8), never markup.
+ */
+export type FolderShape =
+  | 'rounded' | 'simple-tab' | 'folder-flat' | 'folder-paper' | 'folder-outline' | 'folder-cartoon' | 'folder-open';
+/** Where a tab shape's tab sits (M6 §3.2). Missing = left. */
+export type TabPosition = 'left' | 'centre' | 'right';
+
 export interface FolderNode {
   kind: 'folder';
   id: string;
@@ -41,7 +50,10 @@ export interface FolderNode {
   size?: ItemSize;
   /** The size every item inside it shows at (M5 §2). Missing = Medium. */
   contentSize?: ItemSize;
-  shape?: string;
+  /** Missing = Rounded (an unknown stored value also draws Rounded, with an edit-mode note). */
+  shape?: FolderShape;
+  /** Tab shapes only; missing = left. */
+  tabPosition?: TabPosition;
   showTitle?: boolean;
   /** Folder background (M4); missing or inherit form = none of its own. */
   background?: Background;

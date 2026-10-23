@@ -88,7 +88,7 @@ async function putFolderBox(page: Page, context: BrowserContext, dashId: string,
   folder.placement = { ...folder.placement, w, h };
   const r = await page.request.put(`/api/dashboards/${encodeURIComponent(dashId)}`, {
     headers: { 'X-CSRF-Token': await getCsrfToken(context) },
-    data: { schema: 3, dashboard: dash, revision: dash.revision, layoutVersion: 1 }
+    data: { schema: 3, dashboard: dash, revision: dash.revision, layoutVersion: 2 }
   });
   expect(r.status(), await r.text()).toBe(200);
 }
@@ -114,11 +114,16 @@ for (const width of [1280, 1024]) {
   test(`a converted full-row group at its minimum height at ${width}px shows its page bar; every item is reachable`, async ({ page, context }) => {
     await page.setViewportSize({ width, height: 900 });
     const f = await importV2(page, context);
-    // 24 x 5: one row and the chrome — the full row (12) needs a second page, so a page bar.
-    await putFolderBox(page, context, f.dash.id, f.folderId, 24, 5);
+    // 24 x 6: the M6 minimum height (one row, the chrome and the tab allowance). A converted group is
+    // Rounded, which does not draw the tab, so that allowance is spare room: it may hold a second row.
+    // Whatever fits, a page bar shows exactly when the items need more than one page.
+    await putFolderBox(page, context, f.dash.id, f.folderId, 24, 6);
     await page.goto(f.path);
     const node = page.locator(`.tab-canvas [data-node-id="${f.folderId}"]`).first();
-    await expect(node.locator('[data-page-bar="next"]')).toBeVisible();
+    const per = Number(await node.locator('[data-folder-page]').first().getAttribute('data-folder-per-page'));
+    expect(per, 'a page holds at least one row').toBeGreaterThan(0);
+    if (per < f.itemIds.length) await expect(node.locator('[data-page-bar="next"]')).toBeVisible();
+    else await expect(node.locator('[data-page-bar="next"]')).toHaveCount(0);
     await expect(node.locator('[data-folder-too-small]')).toHaveCount(0);
     expect((await reachable(page, f.folderId)).sort()).toEqual([...f.itemIds].sort());
   });
@@ -129,14 +134,14 @@ test('a box below its minimum is refused on save, naming the folder and both siz
   const cfg = await (await page.request.get('/api/config')).json();
   const dash = cfg.dashboards.find((d: { id: string }) => d.id === f.dash.id);
   const folder = dash.tabs[0].root.children.find((n: { id: string }) => n.id === f.folderId);
-  folder.placement = { ...folder.placement, w: 24, h: 4 };
+  folder.placement = { ...folder.placement, w: 24, h: 5 };
   const r = await page.request.put(`/api/dashboards/${encodeURIComponent(f.dash.id)}`, {
     headers: { 'X-CSRF-Token': await getCsrfToken(context) },
-    data: { schema: 3, dashboard: dash, revision: dash.revision, layoutVersion: 1 }
+    data: { schema: 3, dashboard: dash, revision: dash.revision, layoutVersion: 2 }
   });
   expect(r.status()).toBe(400);
   const msg = (await r.json()).error as string;
   expect(msg).toContain('Row');
-  expect(msg).toContain('24×4');
-  expect(msg).toContain('3×5');
+  expect(msg).toContain('24×5');
+  expect(msg).toContain('3×6');
 });

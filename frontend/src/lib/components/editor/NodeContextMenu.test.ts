@@ -258,12 +258,12 @@ describe('NodeContextMenu — each action calls the right op', () => {
     editorDialog.set({ kind: 'folder', id: 'f1' });
     await tick();
     await fireEvent.click(screen.getByRole('radio', { name: 'Collapsed' }));
-    await fireEvent.change(screen.getByLabelText('Look'), { target: { value: 'folder-tab' } });
+    await fireEvent.change(screen.getByLabelText('Look'), { target: { value: 'folder-paper' } });
     await fireEvent.click(screen.getByRole('button', { name: /^Save/ }));
     expect(ops.setFolderDisplay).toHaveBeenLastCalledWith(expect.anything(), 'f1', 'collapsed');
     const f1 = nodeIn(draft(), 'f1') as FolderNode;
     expect(f1.display).toBe('collapsed');
-    expect(f1.shape).toBe('folder-tab');
+    expect(f1.shape).toBe('folder-paper');
     expect('layout' in f1).toBe(false);
     expect(get(session)!.undo).toHaveLength(1);
     editMode.set(false);

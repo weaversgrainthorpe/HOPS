@@ -141,7 +141,7 @@ test.describe('M5 §10 oversize uploads are refused with a message naming the li
 					showTitle: true, placement: { x: 0, y: 2, w: 8, h: 6 }, content: { children: [kid('ft', 'Inner')] } }
 			] } }]
 		};
-		const doc = { format: 'hops-export', schemaVersion: 3, exportedAt: new Date().toISOString(), exportType: 'single-dashboard', config: { layoutVersion: 1, dashboards: [dash] } };
+		const doc = { format: 'hops-export', schemaVersion: 3, exportedAt: new Date().toISOString(), exportType: 'single-dashboard', config: { layoutVersion: 2, dashboards: [dash] } };
 		const r = await page.request.post('/api/config/import', {
 			headers: { 'X-CSRF-Token': await getCsrfToken(context) },
 			multipart: { file: { name: 'ul.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(doc)) } }

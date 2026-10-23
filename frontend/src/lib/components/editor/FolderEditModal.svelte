@@ -27,8 +27,8 @@
   import Modal from '../shared/Modal.svelte';
   import StatusCheckSetting from './StatusCheckSetting.svelte';
   import { containerSetting, type LevelSetting, type StatusContext } from '$lib/editor/statusChecks';
-  import { sizeOf } from '$lib/layout/geometry';
-  import type { ItemSize } from '$lib/types/layout';
+  import { FOLDER_SHAPES, isFolderShape, sizeOf } from '$lib/layout/geometry';
+  import type { FolderShape, ItemSize } from '$lib/types/layout';
 
   interface Props {
     folder: FolderNode;
@@ -86,7 +86,13 @@
   let size = $state<ItemSize>(sizeOf(folder.size));
   const SIZES: [ItemSize, string][] = [['small', 'Small'], ['medium', 'Medium'], ['large', 'Large']];
   // svelte-ignore state_referenced_locally
-  let shape = $state<'rounded' | 'folder-tab'>(folder.shape === 'folder-tab' ? 'folder-tab' : 'rounded');
+  // An unknown stored look (e.g. the retired folder-tab) is kept, shown as unknown and refused on Save
+  // with the reason (editFolder, M6 §3a.8) — never silently swapped for another look.
+  let shape = $state<string>(folder.shape ?? 'rounded');
+  const SHAPE_LABELS: Record<FolderShape, string> = {
+    rounded: 'Rounded box', 'simple-tab': 'Simple tab', 'folder-flat': 'Folder (flat)', 'folder-paper': 'Folder with paper',
+    'folder-outline': 'Folder (outlined)', 'folder-cartoon': 'Folder (cartoon)', 'folder-open': 'Folder (open flap)'
+  };
   // svelte-ignore state_referenced_locally
   const initialStatus = containerSetting(folder.statusChecksEnabled);
   let statusSetting = $state<LevelSetting>(initialStatus);
@@ -133,7 +139,7 @@
       textColor,
       display,
       showTitle,
-      shape,
+      shape: shape as FolderShape,
       size,
       contentSize,
       ...(stagedBackground ? { background: stagedBackground.value ?? null } : {}),
@@ -228,10 +234,14 @@
       <div class="form-group">
         <label for="folder-shape">Look</label>
         <select id="folder-shape" bind:value={shape} aria-describedby="folder-shape-note">
-          <option value="rounded">Rounded box</option>
-          <option value="folder-tab">Folder tab</option>
+          {#if !isFolderShape(shape)}
+            <option value={shape} disabled>Unknown look ({shape}) — pick one</option>
+          {/if}
+          {#each FOLDER_SHAPES as s (s)}
+            <option value={s}>{SHAPE_LABELS[s]}</option>
+          {/each}
         </select>
-        <small id="folder-shape-note">Kept for a later update: every folder draws as a rounded box for now.</small>
+        <small id="folder-shape-note">Saved now; the folder looks are drawn in a coming update (every folder draws as a rounded box for now).</small>
       </div>
     </div>
 

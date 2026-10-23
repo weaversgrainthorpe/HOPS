@@ -45,7 +45,7 @@ function other(): LayoutDashboard {
     { id: 'ot', name: 'OT', root: { columns: 24, children: [tile('o1', p(0, 0))] } }
   ] };
 }
-const doc = (): LayoutDoc => ({ schemaVersion: 3, layoutVersion: 1, dashboards: [home(), other()] });
+const doc = (): LayoutDoc => ({ schemaVersion: 3, layoutVersion: 2, dashboards: [home(), other()] });
 const draft = () => get(session)!.draft;
 const kidsOf = (folderId: string): LayoutNode[] => {
   const walk = (c: LayoutNode[]): FolderNode | undefined => {
@@ -148,7 +148,7 @@ describe('copy then paste', () => {
   });
 
   it('a collapsed folder\'s reserved footprint counts as taken (Ruling 13)', async () => {
-    config.set({ schemaVersion: 3, layoutVersion: 1, dashboards: [{
+    config.set({ schemaVersion: 3, layoutVersion: 2, dashboards: [{
       ...home(), tabs: [{ id: 't1', name: 'One', root: { columns: 4, children: [
         { ...folder('c', p(0, 0, 4, 4), []), display: 'collapsed' }, tile('a', p(0, 4))
       ] } }]
@@ -229,7 +229,7 @@ describe('across dashboards', () => {
   it('a clean session uses the transfer endpoint with both revisions, then rebases on the fresh layout', async () => {
     copyFromOther('cut');
     const fresh: LayoutDoc = {
-      schemaVersion: 3, layoutVersion: 1,
+      schemaVersion: 3, layoutVersion: 2,
       dashboards: [
         { ...home(), revision: 8, tabs: [{ ...home().tabs[0], root: { columns: 24, children: [
           ...home().tabs[0].root.children, tile('o1', p(4, 0))
@@ -347,7 +347,7 @@ describe('paste of a copy uses the snapshot taken at Copy time (Ruling 18(6))', 
     await pasteInto({ tabId: 't2' });
     const pasted = draft().tabs[1].root.children[0] as FolderNode;
     expect(pasted.display).toBe('collapsed');
-    expect(pasted.placement).toEqual(p(0, 0, 6, 5));
+    expect(pasted.placement).toEqual(p(0, 0, 6, 6));
     expect('placement' in pasted.content.children[0]).toBe(false);
   });
 });
