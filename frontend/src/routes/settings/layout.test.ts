@@ -182,13 +182,13 @@ describe('settings shell, logged out', () => {
 });
 
 describe('settings shell, signed in', () => {
-	it('the sidebar lists the sections in order, with their own addresses; Discovery keeps /admin/discovery', () => {
+	it('the sidebar lists the sections in order, with their own addresses (Discovery at /settings/discovery, M5 §11)', () => {
 		renderShell();
 		const items = within(sidebar()).getAllByRole('link').map((a) => [a.textContent?.trim(), a.getAttribute('href')]);
 		expect(items).toEqual([
 			['Dashboards', '/settings/dashboards'],
 			['Global settings', '/settings/global'],
-			['Discovery', '/admin/discovery'],
+			['Discovery', '/settings/discovery'],
 			['Backups', '/settings/backups'],
 			['Password', '/settings/password'],
 			['Factory reset', '/settings/reset']
@@ -203,6 +203,11 @@ describe('settings shell, signed in', () => {
 	it.each([
 		['/settings/dashboards', 'Dashboards'],
 		['/settings/global', 'Global settings'],
+		['/settings/discovery', 'Discovery'],
+		['/settings/discovery/new', 'Discovery'],
+		['/settings/discovery/diagnostics', 'Discovery'],
+		['/settings/discovery/detectors', 'Discovery'],
+		['/settings/discovery/0123abcd', 'Discovery'],
 		['/settings/backups', 'Backups'],
 		['/settings/password', 'Password'],
 		['/settings/reset', 'Factory reset']

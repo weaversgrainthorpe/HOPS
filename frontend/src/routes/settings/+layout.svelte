@@ -21,11 +21,12 @@
 
   let { children } = $props();
 
-  // The sections, in order. Discovery keeps its own address; Log out is an action (below).
+  // The sections, in order; Log out is an action (below). Discovery is a section like the others
+  // (M5 §11): its sub-pages (/settings/discovery/new, /[id], …) keep it highlighted.
   const sections = [
     { href: '/settings/dashboards', label: 'Dashboards', icon: 'mdi:view-dashboard-outline' },
     { href: '/settings/global', label: 'Global settings', icon: 'mdi:tune' },
-    { href: '/admin/discovery', label: 'Discovery', icon: 'mdi:radar' },
+    { href: '/settings/discovery', label: 'Discovery', icon: 'mdi:radar' },
     { href: '/settings/backups', label: 'Backups', icon: 'mdi:backup-restore' },
     { href: '/settings/password', label: 'Password', icon: 'mdi:key' },
     { href: '/settings/reset', label: 'Factory reset', icon: 'mdi:delete-forever' },
@@ -291,6 +292,27 @@
   .settings-content :global(.section-title) {
     margin: 0 0 0.75rem;
     font-size: 1.4rem;
+  }
+
+  /* A section's header: its title with the section's own actions on the same row (Dashboards'
+     Import / New Dashboard, Discovery's Diagnostics / Manage detectors / New Scan). */
+  .settings-content :global(.section-header) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+  }
+
+  .settings-content :global(.section-header .section-title) {
+    margin: 0;
+  }
+
+  .settings-content :global(.section-actions) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
   }
 
   .settings-content :global(.lede) {

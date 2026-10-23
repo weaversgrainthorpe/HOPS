@@ -45,9 +45,9 @@ test.describe('M5 §9 settings: sidebar and separate pages', () => {
       await sidebar(page).getByRole('link', { name: pg.label, exact: true }).click();
       await expectOn(page, pg);
     }
-    // Discovery keeps its own address.
+    // Discovery is a section too (M5 §11), at /settings/discovery, highlighted like the others.
     await sidebar(page).getByRole('link', { name: 'Discovery', exact: true }).click();
-    await expect(page).toHaveURL(/\/admin\/discovery$/);
+    await expectOn(page, { label: 'Discovery', path: '/settings/discovery', heading: 'Discovery' });
 
     // Back walks the same pages in reverse, each with its highlight; /settings itself is not in
     // the history (it redirected), so Back from Dashboards leaves Settings.

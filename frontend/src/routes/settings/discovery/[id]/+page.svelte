@@ -72,7 +72,7 @@
   });
 
   // SvelteKit reuses this component when navigating between
-  // /admin/discovery/[id] URLs (e.g. after rescan creates a new scan
+  // /settings/discovery/[id] URLs (e.g. after rescan creates a new scan
   // and we goto its page). `onMount` doesn't re-fire in that case, so
   // we need an effect that watches scanId and triggers a fresh load
   // when it changes. Without this, the URL updates but the page still
@@ -319,7 +319,7 @@
       clearTimeout(pollTimer);
       pollTimer = null;
     }
-    goto(`/admin/discovery/new?${params.toString()}`);
+    goto(`/settings/discovery/new?${params.toString()}`);
   }
 
   async function handleRescan() {
@@ -353,7 +353,7 @@
         pollTimer = null;
       }
       toast.success('Started a new scan with the same settings');
-      await goto(`/admin/discovery/${fresh.id}`);
+      await goto(`/settings/discovery/${fresh.id}`);
       // Reset rescanning as a defensive fallback in case the page is
       // still mounted (goto resolved but the component didn't unmount).
       rescanning = false;
@@ -377,7 +377,7 @@
     try {
       await deleteScan(scan.id);
       toast.success('Draft deleted');
-      goto('/admin/discovery');
+      goto('/settings/discovery');
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Delete failed');
     }
@@ -487,7 +487,7 @@
       applySavedLayout(resp);
       // Take the user to where their new tiles now live.
       if (resp.dashboardPath) goto(dashboardHref(resp.dashboardPath));
-      else goto('/admin/discovery');
+      else goto('/settings/discovery');
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Promote failed');
       promoting = false;
@@ -523,11 +523,10 @@
 </svelte:head>
 
 <div class="page">
-  <header class="header">
+  <header class="section-header">
     <div class="title-row">
-      <Button variant="ghost" icon="mdi:arrow-left" onclick={() => goto('/admin/discovery')} ariaLabel="Back to Discovery" />
       <div>
-        <h1>Discovery draft</h1>
+        <h2 class="section-title">Discovery draft</h2>
         {#if scan}
           <div class="sub mono">
             {scan.cidr} · {scan.intensity} · {fmtTime(scan.createdAt)}
@@ -538,7 +537,7 @@
       </div>
     </div>
     {#if scan}
-      <div class="header-actions">
+      <div class="section-actions">
         {#if scan.state === 'running' || scan.state === 'pending'}
           <Button variant="secondary" icon="mdi:stop" onclick={handleCancel}>Cancel scan</Button>
         {:else}
@@ -789,23 +788,9 @@
 {/if}
 
 <style>
-  .page {
-    max-width: 1180px;
-    margin: 0 auto;
-    padding: 2rem 1.5rem;
-    color: var(--text-primary);
-  }
-  .header {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 1rem;
-    margin-bottom: 1rem;
-  }
-  .title-row { display: flex; gap: 0.75rem; align-items: flex-start; }
-  .title-row h1 { margin: 0; font-size: var(--font-h1); }
+  /* Width, title and header-action layout come from the settings shell (M5 §11). */
+  .page { color: var(--text-primary); }
   .sub { color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.2rem; }
-  .header-actions { display: flex; gap: 0.5rem; }
 
   .muted { color: var(--text-secondary); }
   .small { font-size: 0.8rem; }

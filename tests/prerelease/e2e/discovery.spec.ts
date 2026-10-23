@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { getCsrfToken } from '../helpers';
+import { getCsrfToken, openDiscovery } from '../helpers';
 
 // Network Discovery — the 2.0 headline feature. We don't run an actual
 // scan against the LAN (slow, and the test instance has no LAN
@@ -8,13 +8,14 @@ import { getCsrfToken } from '../helpers';
 //   - creating a scan against 127.0.0.1/32 returns a scan id
 //   - the detector list loads and the bundled detector count is sane
 
+// M5 §11: Discovery is a Settings section at /settings/discovery… (the old /admin/discovery…
+// addresses redirect; m5-discovery-settings.spec.ts covers the layout and the redirects).
+
 test('discovery index page loads', async ({ page }) => {
-  await page.goto('/admin/discovery');
+  await openDiscovery(page);
   // Either the empty-state message or the scan-list table
   await expect(
-    page.getByRole('heading', { name: /discovery/i }).or(
-      page.getByText(/network discovery/i).first(),
-    ),
+    page.getByText(/No scans yet/).or(page.locator('table.scans')),
   ).toBeVisible({ timeout: 10_000 });
 });
 
@@ -28,7 +29,8 @@ test('detector list returns the bundled set + sortable list page loads', async (
   expect(body.detectors.length).toBeGreaterThan(30);
 
   // Page renders without errors
-  await page.goto('/admin/discovery/detectors');
+  await page.goto('/settings/discovery/detectors');
+  await expect(page.getByRole('heading', { name: 'Discovery detectors', level: 2 })).toBeVisible({ timeout: 10_000 });
   await expect(page.getByText(/detector/i).first()).toBeVisible({ timeout: 10_000 });
 });
 
@@ -47,6 +49,7 @@ test('create a discovery scan against loopback and confirm it lands', async ({ p
   expect(created.id).toBeTruthy();
 
   // The detail page should be reachable
-  await page.goto(`/admin/discovery/${created.id}`);
+  await page.goto(`/settings/discovery/${created.id}`);
+  await expect(page.getByRole('heading', { name: 'Discovery draft', level: 2 })).toBeVisible({ timeout: 10_000 });
   await expect(page.getByText(/discovery draft|scanning/i).first()).toBeVisible({ timeout: 10_000 });
 });

@@ -1016,7 +1016,8 @@ test.describe('§4D Settings is the admin home; / shows a dashboard', () => {
       await anon.goto(first.path);
       await expect(anon.locator('.center-title')).toHaveText(first.name);
       await anon.goto('/admin/discovery');
-      await expect(anon).toHaveURL(/\/settings\/dashboards$/);
+      // M5 §11: the old address redirects to Discovery's Settings page, which asks in place.
+      await expect(anon).toHaveURL(/\/settings\/discovery$/);
       const dlg = anon.getByRole('dialog', { name: 'Sign in' });
       await expect(dlg).toBeVisible();
       await dlg.getByRole('button', { name: 'Cancel' }).click();
@@ -1126,7 +1127,8 @@ test.describe('§4D Settings is the admin home; / shows a dashboard', () => {
     const { page: anon, ctx } = await anonPage(browser);
     try {
       await anon.goto('/admin/discovery');
-      await expect(anon).toHaveURL(/\/settings\/dashboards$/);
+      // M5 §11: to Discovery's own Settings page (the old address redirects), signing in in place.
+      await expect(anon).toHaveURL(/\/settings\/discovery$/);
       await expect(anon.getByRole('dialog', { name: 'Sign in' })).toBeVisible();
     } finally {
       await ctx.close();

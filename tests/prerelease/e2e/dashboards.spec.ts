@@ -19,7 +19,7 @@ test('Settings (the admin home) loads with the core admin controls', async ({ pa
   await expect(page.getByRole('button', { name: /new dashboard/i })).toBeVisible();
   // Each other admin control is one sidebar click away, on its own page (M5 §9).
   const side = page.getByRole('navigation', { name: 'Settings sections' });
-  await expect(side.getByRole('link', { name: 'Discovery', exact: true })).toHaveAttribute('href', '/admin/discovery');
+  await expect(side.getByRole('link', { name: 'Discovery', exact: true })).toHaveAttribute('href', '/settings/discovery');
   await expect(side.getByRole('button', { name: 'Log out' })).toBeVisible();
   for (const [item, path, control] of [
     ['Backups', '/settings/backups', /open backups/i],

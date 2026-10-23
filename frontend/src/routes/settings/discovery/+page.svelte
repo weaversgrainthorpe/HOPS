@@ -88,19 +88,16 @@
 </svelte:head>
 
 <div class="page">
-  <header class="header">
-    <div class="title-row">
-      <Button variant="ghost" icon="mdi:arrow-left" onclick={() => goto('/settings')} ariaLabel="Back to Settings" />
-      <h1>Network Discovery</h1>
-    </div>
-    <div class="header-actions">
-      <Button variant="secondary" icon="mdi:magnify-scan" onclick={() => goto('/admin/discovery/diagnostics')}>
+  <header class="section-header">
+    <h2 class="section-title">Discovery</h2>
+    <div class="section-actions">
+      <Button variant="secondary" icon="mdi:magnify-scan" onclick={() => goto('/settings/discovery/diagnostics')}>
         Diagnostics
       </Button>
-      <Button variant="secondary" icon="mdi:radar" onclick={() => goto('/admin/discovery/detectors')}>
+      <Button variant="secondary" icon="mdi:radar" onclick={() => goto('/settings/discovery/detectors')}>
         Manage detectors
       </Button>
-      <Button variant="primary" icon="mdi:radar" onclick={() => goto('/admin/discovery/new')}>
+      <Button variant="primary" icon="mdi:radar" onclick={() => goto('/settings/discovery/new')}>
         New Scan
       </Button>
     </div>
@@ -157,7 +154,7 @@
             </td>
             <td>{scan.label ?? ''}</td>
             <td class="actions">
-              <button class="action" onclick={() => goto(`/admin/discovery/${scan.id}`)} title="Open draft" aria-label="Open scan draft">
+              <button class="action" onclick={() => goto(`/settings/discovery/${scan.id}`)} title="Open draft" aria-label="Open scan draft">
                 <Icon icon="mdi:open-in-app" width="18" />
               </button>
               {#if scan.state === 'running' || scan.state === 'pending'}
@@ -177,22 +174,8 @@
 </div>
 
 <style>
-  .page {
-    max-width: 1080px;
-    margin: 0 auto;
-    padding: 2rem 1.5rem;
-    color: var(--text-primary);
-  }
-  .header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 1rem;
-    gap: 1rem;
-  }
-  .header-actions { display: flex; gap: 0.5rem; }
-  .title-row { display: flex; align-items: center; gap: 0.75rem; }
-  .title-row h1 { margin: 0; font-size: var(--font-h1); }
+  /* Width, title and header-action layout come from the settings shell (M5 §11). */
+  .page { color: var(--text-primary); }
   /* .lede and .lede-aside ship from app.css */
   .muted { color: var(--text-secondary); }
   .error {

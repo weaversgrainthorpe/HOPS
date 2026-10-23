@@ -257,12 +257,9 @@
 </svelte:head>
 
 <div class="page">
-  <header class="header">
-    <div class="title-row">
-      <Button variant="ghost" icon="mdi:arrow-left" onclick={() => goto('/admin/discovery')} ariaLabel="Back to Discovery" />
-      <h1>Discovery detectors</h1>
-    </div>
-    <div class="header-actions">
+  <header class="section-header">
+    <h2 class="section-title">Discovery detectors</h2>
+    <div class="section-actions">
       {#if overrideCount > 0}
         <Button variant="secondary" icon="mdi:restart" onclick={handleResetAll}>
           Reset all customizations ({overrideCount})
@@ -409,19 +406,8 @@
 {/if}
 
 <style>
-  .page {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 2rem 1.5rem;
-    color: var(--text-primary);
-  }
-  .header {
-    display: flex; align-items: center; justify-content: space-between;
-    margin-bottom: 1rem; gap: 1rem;
-  }
-  .header-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
-  .title-row { display: flex; align-items: center; gap: 0.75rem; }
-  .title-row h1 { margin: 0; font-size: var(--font-h1); }
+  /* Width, title and header-action layout come from the settings shell (M5 §11). */
+  .page { color: var(--text-primary); }
   /* .lede ships from app.css */
   .muted { color: var(--text-secondary); }
   .muted.small { font-size: 0.82rem; }

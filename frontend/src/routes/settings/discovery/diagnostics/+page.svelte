@@ -121,11 +121,8 @@
 </svelte:head>
 
 <div class="page">
-  <header class="header">
-    <div class="title-row">
-      <Button variant="ghost" icon="mdi:arrow-left" onclick={() => goto('/admin/discovery')} ariaLabel="Back to Discovery" />
-      <h1>Discovery diagnostics</h1>
-    </div>
+  <header class="section-header">
+    <h2 class="section-title">Discovery diagnostics</h2>
   </header>
 
   <p class="lede">
@@ -263,15 +260,8 @@
 {/if}
 
 <style>
-  .page {
-    max-width: 1300px;
-    margin: 0 auto;
-    padding: 2rem 1.5rem;
-    color: var(--text-primary);
-  }
-  .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; gap: 1rem; }
-  .title-row { display: flex; align-items: center; gap: 0.75rem; }
-  .title-row h1 { margin: 0; font-size: var(--font-h1); }
+  /* Width, title and header layout come from the settings shell (M5 §11). */
+  .page { color: var(--text-primary); }
   /* .lede ships from app.css */
   .muted { color: var(--text-secondary); }
   .small { font-size: 0.82rem; }

@@ -71,6 +71,19 @@ export async function openSettings(page: Page) {
 }
 
 /**
+ * Settings → Discovery (M5 §11: a normal Settings section at /settings/discovery), signed in:
+ * wait for the sidebar with Discovery current, the section title and its New Scan action.
+ */
+export async function openDiscovery(page: Page) {
+  await page.goto('/settings/discovery');
+  const side = page.getByRole('navigation', { name: 'Settings sections' });
+  await expect(side).toBeVisible();
+  await expect(side.getByRole('link', { name: 'Discovery', exact: true })).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByRole('heading', { name: 'Discovery', level: 2, exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'New Scan', exact: true })).toBeVisible();
+}
+
+/**
  * Create a dashboard via the UI from Settings (the admin home), open it and turn edit mode on.
  * Returns the URL path the dashboard ended up on. Its name is pushed onto `track` once it
  * exists; the caller deletes those afterwards (deleteDashboardsNamed) so later specs start from

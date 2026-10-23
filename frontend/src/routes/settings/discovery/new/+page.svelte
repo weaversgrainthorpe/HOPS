@@ -267,7 +267,7 @@
         internalDomain: internalDomain.trim().toLowerCase(),
       });
       toast.success('Scan started');
-      goto(`/admin/discovery/${scan.id}`);
+      goto(`/settings/discovery/${scan.id}`);
     } catch (e) {
       formError = e instanceof Error ? e.message : 'Failed to start scan';
       submitting = false;
@@ -280,9 +280,8 @@
 </svelte:head>
 
 <div class="page">
-  <header class="header">
-    <Button variant="ghost" icon="mdi:arrow-left" onclick={() => goto('/admin/discovery')} ariaLabel="Back to Discovery" />
-    <h1>New Discovery Scan</h1>
+  <header class="section-header">
+    <h2 class="section-title">New Discovery Scan</h2>
   </header>
 
   <form onsubmit={submit} class="form">
@@ -426,7 +425,7 @@
     {/if}
 
     <div class="actions">
-      <Button variant="secondary" onclick={() => goto('/admin/discovery')}>Cancel</Button>
+      <Button variant="secondary" onclick={() => goto('/settings/discovery')}>Cancel</Button>
       <Button type="submit" variant="primary" icon="mdi:radar" disabled={submitting || targets.length === 0 || effectiveCount === 0 || includeCount === 0}>
         {submitting ? 'Starting…' : `Start scan (${effectiveCount.toLocaleString()} host${effectiveCount === 1 ? '' : 's'})`}
       </Button>
@@ -435,14 +434,8 @@
 </div>
 
 <style>
-  .page {
-    max-width: 720px;
-    margin: 0 auto;
-    padding: 2rem 1.5rem;
-    color: var(--text-primary);
-  }
-  .header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.5rem; }
-  .header h1 { margin: 0; font-size: var(--font-h1); }
+  /* Width, title and header layout come from the settings shell (M5 §11). */
+  .page { color: var(--text-primary); }
 
   .form { display: flex; flex-direction: column; gap: 1.2rem; }
   .field { display: flex; flex-direction: column; gap: 0.4rem; }
