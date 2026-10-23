@@ -1062,7 +1062,7 @@ test.describe('§4D Settings is the admin home; / shows a dashboard', () => {
     }
   });
 
-  test('with 8 dashboards at 1280px the navbar keeps the pencil, gear and Log out clickable; the page is no wider than the screen; More holds the rest', async ({ page, context }) => {
+  test('with 8 dashboards at 1280px the navbar keeps the pencil, gear and Log out clickable; the page is no wider than the screen; the switcher holds them all', async ({ page, context }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     const dashes = [];
     for (let i = 0; i < 8; i++) {
@@ -1078,10 +1078,10 @@ test.describe('§4D Settings is the admin home; / shows a dashboard', () => {
     await page.getByRole('button', { name: 'Log out' }).click({ trial: true, timeout: 3000 });
     const widths = await page.evaluate(() => ({ doc: document.documentElement.scrollWidth, view: window.innerWidth }));
     expect(widths.doc).toBeLessThanOrEqual(widths.view);
-    // Nothing in the bar overlaps: logo/version, the dashboard links (and More), the title, the controls.
+    // Nothing in the bar overlaps: logo/version, the title (the switcher), the controls.
     const checkBar = async () => {
       const boxes = await page.evaluate(() =>
-        ['.logo', '.nav-dash', '.center-title', '.nav-right'].map((sel) => {
+        ['.logo', '.center-title', '.nav-right'].map((sel) => {
           const r = document.querySelector(sel)!.getBoundingClientRect();
           return { sel, left: r.left, right: r.right, width: r.width };
         })
@@ -1091,18 +1091,18 @@ test.describe('§4D Settings is the admin home; / shows a dashboard', () => {
       }
     };
     await checkBar();
-    // Ruling 12 (M5 walkthrough 1): no scrolling strip — the links that fit, then "More" for the rest.
-    const strip = page.locator('.nav-links');
-    if (await strip.count()) expect(await strip.evaluate((el) => getComputedStyle(el).overflowX)).not.toMatch(/auto|scroll/);
-    const more = page.getByRole('button', { name: 'More dashboards' });
-    await expect(more).toBeVisible();
-    // Every dashboard link is still reachable (shown, or in More), and the pencil really works.
-    const shown = await page.locator('.nav-links > .nav-link').evaluateAll((els) => els.map((e) => e.getAttribute('href')));
-    await more.click();
-    const inMore = await page.getByRole('menu', { name: 'More dashboards' }).getByRole('menuitem').evaluateAll((els) => els.map((e) => e.getAttribute('href')));
+    // Ruling 16 (M5 §8): no link row, no More — signed in, the title is the dashboard switcher.
+    await expect(page.locator('.nav-links, .nav-link')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'More dashboards' })).toHaveCount(0);
+    const switcher = page.locator('.navbar').getByRole('button', { name: /switch dashboard$/ });
+    const menu = page.getByRole('menu', { name: 'Dashboards' });
+    await expect(switcher).toBeVisible();
+    // Every dashboard is reachable (in the switcher, once each), and the pencil really works.
+    await switcher.click();
+    const inMenu0 = await menu.getByRole('menuitem').evaluateAll((els) => els.map((e) => e.getAttribute('href')));
     await page.keyboard.press('Escape');
     for (const d of dashes) {
-      expect([...shown, ...inMore].filter((h) => h === d.path), `${d.path} is one click away`).toHaveLength(1);
+      expect(inMenu0.filter((h) => h === d.path), `${d.path} is one click away`).toHaveLength(1);
     }
     await pencil.click();
     await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
@@ -1111,14 +1111,13 @@ test.describe('§4D Settings is the admin home; / shows a dashboard', () => {
     await checkBar();
     await page.getByRole('link', { name: 'Settings' }).click({ trial: true, timeout: 3000 });
     await page.getByRole('button', { name: 'Log out' }).click({ trial: true, timeout: 3000 });
-    // A link in the More menu still opens its dashboard: one of these 8 that IS in the menu (which
-    // ones are depends on how many links fit, so none is assumed).
+    // A dashboard in the switcher opens: one of these 8 (not the current one).
     await page.getByRole('button', { name: 'Exit Edit Mode' }).click();
-    await more.click();
-    const inMenu = await page.getByRole('menu', { name: 'More dashboards' }).getByRole('menuitem').evaluateAll((els) => els.map((e) => e.getAttribute('href')));
+    await switcher.click();
+    const inMenu = await menu.getByRole('menuitem').evaluateAll((els) => els.map((e) => e.getAttribute('href')));
     const pick = dashes.find((d) => inMenu.includes(d.path) && d !== f);
-    expect(pick, 'one of the 8 (not the current one) is in the More menu').toBeTruthy();
-    await page.getByRole('menu', { name: 'More dashboards' }).locator(`[href="${pick!.path}"]`).click();
+    expect(pick, 'one of the 8 (not the current one) is in the switcher').toBeTruthy();
+    await menu.locator(`[href="${pick!.path}"]`).click();
     await expect(page).toHaveURL(new RegExp(`${pick!.path}$`));
     await expect(page.locator(`[data-node-id="${pick!.id('a')}"]`)).toBeVisible();
   });

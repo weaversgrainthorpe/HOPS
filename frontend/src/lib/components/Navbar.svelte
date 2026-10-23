@@ -2,7 +2,6 @@
   import { dashboards, currentRoute, dashboardHref } from '$lib/stores/config';
   import { page } from '$app/stores';
   import { tick, untrack } from 'svelte';
-  import { fitLinks } from '$lib/utils/navFit';
   import type { HeaderConfig } from '$lib/types';
   import { isAuthenticated, logout, whenPasswordSettled } from '$lib/stores/auth';
   import { goto } from '$app/navigation';
@@ -107,81 +106,56 @@
     if (done && isAdminPage) await goto('/');
   }
 
-  // Every dashboard for the nav links, in display order.
+  // Every dashboard for the switcher, in display (Settings) order.
   let navDashboards = $derived($dashboards.map((d) => ({ id: d.id, name: d.name, path: dashboardHref(d.path) })));
 
-  // ---- the dashboard links (Ruling 12): the links that fit, in order; the rest in a "More" menu.
-  // No scrolling strip and no scrollbar. Ruling 13: the title is not centred — it sits just right of
-  // the links (and More), so the links get the whole middle of the bar but for the title's own width.
-  // A hidden copy of every link (and of the More button) is measured; the room is the middle's width
-  // (.nav-mid, which takes the bar's spare width and never depends on how many links show) less the
-  // title's natural width (its scrollWidth, whole even while it is squeezed) — so showing or hiding
-  // links never feeds back into the measurement.
-  let midEl = $state<HTMLElement | null>(null);
-  let dashEl = $state<HTMLElement | null>(null);
-  let titleEl = $state<HTMLElement | null>(null);
-  let measureEl = $state<HTMLElement | null>(null);
-  let shownCount = $state(Number.POSITIVE_INFINITY);
-  let moreWidthPx = $state(0);
-  function measureLinks() {
-    if (!midEl || !dashEl || !measureEl) return;
-    const widths = Array.from(measureEl.querySelectorAll<HTMLElement>('[data-measure-link]')).map(
-      (e) => e.getBoundingClientRect().width
-    );
-    const more = measureEl.querySelector<HTMLElement>('[data-measure-more]')?.getBoundingClientRect().width ?? 0;
-    const gap = parseFloat(getComputedStyle(dashEl).columnGap) || 0;
-    const titleRoom = titleEl ? titleEl.scrollWidth + (parseFloat(getComputedStyle(midEl).columnGap) || 0) : 0;
-    moreWidthPx = Math.ceil(more);
-    shownCount = fitLinks(widths, gap, more, midEl.getBoundingClientRect().width - titleRoom);
-  }
-  $effect(() => {
-    if (!midEl || !dashEl || !measureEl) return;
-    void navDashboards; // a renamed, added or removed dashboard: measure again
-    void titleEl;
-    measureLinks();
-    // (No ResizeObserver — very old browsers, test DOMs — measures once per change of the list.)
-    if (typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver(() => measureLinks());
-    ro.observe(midEl);
-    ro.observe(measureEl);
-    return () => ro.disconnect();
-  });
-  let shownLinks = $derived(navDashboards.slice(0, Math.min(shownCount, navDashboards.length)));
-  let moreLinks = $derived(navDashboards.slice(shownLinks.length));
-  let moreHasCurrent = $derived(moreLinks.some((d) => d.path === currentPath));
-
-  let moreOpen = $state(false);
-  let moreBtn = $state<HTMLButtonElement | null>(null);
-  let moreMenu = $state<HTMLElement | null>(null);
-  const moreItems = () => Array.from(moreMenu?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? []);
-  async function openMore(focus: 'first' | 'last' | null) {
-    moreOpen = true;
+  // ---- the dashboard switcher (Ruling 16, M5 §8): signed in, the title is a menu button listing every
+  // dashboard, the current one marked; choosing one navigates (a plain link, so the unsaved-changes
+  // guard in +layout applies). Enter, Space or ArrowDown opens it on the current dashboard (ArrowUp on
+  // the last); the arrows, Home and End move (wrapping); Escape closes it and focus returns to the title;
+  // Tab or a press outside closes it. Signed out: a plain title, no switcher (no users or roles).
+  let switcherOpen = $state(false);
+  let switcherBtn = $state<HTMLButtonElement | null>(null);
+  let switcherMenu = $state<HTMLElement | null>(null);
+  /** Keeps the open menu on screen: px it is moved sideways from centred under the title. */
+  let menuShift = $state(0);
+  const switcherItems = () => Array.from(switcherMenu?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? []);
+  async function openSwitcher(focus: 'current' | 'last') {
+    menuShift = 0;
+    switcherOpen = true;
     await tick();
-    const items = moreItems();
-    if (focus === 'first') items[0]?.focus();
-    else if (focus === 'last') items[items.length - 1]?.focus();
+    if (switcherMenu) {
+      const r = switcherMenu.getBoundingClientRect();
+      const view = document.documentElement.clientWidth;
+      const margin = 8;
+      if (r.left < margin) menuShift = margin - r.left;
+      else if (r.right > view - margin) menuShift = Math.max(margin - r.left, view - margin - r.right);
+    }
+    const items = switcherItems();
+    const current = items.findIndex((el) => el.getAttribute('aria-current') === 'page');
+    (focus === 'last' ? items[items.length - 1] : items[current >= 0 ? current : 0])?.focus();
   }
-  function closeMore(refocus = false) {
-    moreOpen = false;
-    if (refocus) moreBtn?.focus();
+  function closeSwitcher(refocus = false) {
+    switcherOpen = false;
+    if (refocus) switcherBtn?.focus();
   }
-  function onMoreKey(e: KeyboardEvent) {
+  function onSwitcherKey(e: KeyboardEvent) {
     if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
       e.stopPropagation();
-      void openMore('first');
+      void openSwitcher('current');
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       e.stopPropagation();
-      void openMore('last');
-    } else if (e.key === 'Escape' && moreOpen) {
+      void openSwitcher('last');
+    } else if (e.key === 'Escape' && switcherOpen) {
       e.preventDefault();
       e.stopPropagation();
-      closeMore(true);
+      closeSwitcher(true);
     }
   }
-  function onMenuKey(e: KeyboardEvent) {
-    const items = moreItems();
+  function onSwitcherMenuKey(e: KeyboardEvent) {
+    const items = switcherItems();
     const at = items.indexOf(document.activeElement as HTMLElement);
     // The menu's keys are its own (the page's shortcuts, e.g. arrow-key tile moves, never see them).
     const go = (i: number) => {
@@ -196,23 +170,27 @@
     else if (e.key === 'Escape') {
       e.preventDefault();
       e.stopPropagation();
-      closeMore(true);
-    } else if (e.key === 'Tab') closeMore();
+      closeSwitcher(true);
+    } else if (e.key === ' ' && at >= 0) {
+      // Space chooses, as Enter does (a link only answers Enter by itself).
+      e.preventDefault();
+      e.stopPropagation();
+      items[at].click();
+    } else if (e.key === 'Enter') {
+      e.stopPropagation(); // the link's own Enter navigates
+    } else if (e.key === 'Tab') closeSwitcher();
   }
-  // A press anywhere outside the button and its menu closes it.
+  // A press anywhere outside the title and its menu closes it.
   function onWindowPointerDown(e: PointerEvent) {
-    if (!moreOpen) return;
+    if (!switcherOpen) return;
     const t = e.target as Node | null;
-    if (t && (moreBtn?.contains(t) || moreMenu?.contains(t))) return;
-    closeMore();
+    if (t && (switcherBtn?.contains(t) || switcherMenu?.contains(t))) return;
+    closeSwitcher();
   }
-  // Going to another page, or every link fitting again, closes it.
+  // Going to another page closes it.
   $effect(() => {
     void currentPath;
-    untrack(() => closeMore());
-  });
-  $effect(() => {
-    if (moreLinks.length === 0) untrack(() => closeMore());
+    untrack(() => closeSwitcher());
   });
 
   let themeIcon = $derived(
@@ -233,31 +211,45 @@
   let showCenter = $derived(headerConfig?.showCenter !== false); // Default true
   let leftText = $derived(headerConfig?.leftText);
   let centerTitle = $derived(headerConfig?.centerTitle);
-  /** The links show beside the logo (signed in, on a dashboard; not with a custom left text). */
-  let showLinks = $derived(showLeft && !leftText && $isAuthenticated && isDashboardPage);
-  /** The title: the header's own, else the dashboard's name (Ruling 13: just right of the links). */
+  /** The title: the header's own, else the dashboard's name — centred in the bar (M5 §8). */
   let titleText = $derived(showCenter ? centerTitle || pageDashboard?.name || '' : '');
-  // ---- the bar never outgrows the screen: step down (CSS .c1–.c7) until it fits. Measured on the
-  // bar's own width (a window resize) and whenever what it holds changes; all before the next paint
-  // (a ResizeObserver callback, then microtasks), so no level flashes. The bar's width never depends
-  // on the level, so this never loops.
-  //
-  // First, the dashboard links (walkthrough 1 C): while some are in More, the right-hand controls go
-  // compact (.tight: icons only — no "Editing" text, Log out as its icon — and tighter gaps) when
-  // that shows more links. Nothing is hidden or moved into a menu: every control stays, smaller.
+  /** Signed in, on a dashboard, the title is the switcher (Ruling 16); signed out it is plain text. */
+  let showSwitcher = $derived(!!titleText && $isAuthenticated && isDashboardPage);
+  $effect(() => {
+    if (!showSwitcher) untrack(() => closeSwitcher());
+  });
+  // ---- the bar never outgrows the screen, and the title stays centred (M5 §8): the lowest level of
+  // compaction (CSS .c1–.c7) at which the bar fits, the title is whole and it sits in the bar's centre.
+  // When no level centres it (a long title on a phone), the lowest level at which the bar fits with the
+  // title whole — the title then sits as near the centre as the wider side allows, never overlapping
+  // it; controls are never dropped for a centring that cannot happen. Measured on the bar's own width (a window resize) and whenever what it holds changes; all before
+  // the next paint (a ResizeObserver callback, then microtasks), so no level flashes. The bar's width
+  // never depends on the level, so this never loops. Nothing is hidden or moved into a menu but the
+  // levels' own (least useful first); the text-size buttons never hide.
   const MAX_COMPACT = 7;
   let navContentEl = $state<HTMLElement | null>(null);
+  let titleEl = $state<HTMLElement | null>(null);
   let compact = $state(0);
-  let tight = $state(false);
   let fitting = false;
   let fitAgain = false;
   /** While fitBar measures, the controls' transitions are off: a button mid-animation (a padding or
    *  width easing to a level's value) would be measured at a size it is about to leave. */
   let measuring = $state(false);
-  /** How many links show now (measured at once, not on the next ResizeObserver round). */
-  function linksShown(): number {
-    measureLinks();
-    return Math.min(shownCount, navDashboards.length);
+  /** How the bar sits now: fits (no sideways overflow, the title whole) and centred (the title's middle
+   *  on the bar's). No title: centred trivially. */
+  function barState(): { fits: boolean; centred: boolean } {
+    const bar = navContentEl;
+    if (!bar) return { fits: true, centred: true };
+    let fits = bar.scrollWidth <= bar.clientWidth + 0.5;
+    const title = titleEl;
+    if (!title) return { fits, centred: true };
+    const text = title.querySelector<HTMLElement>('.title-text');
+    if (text && text.scrollWidth > text.clientWidth + 0.5) fits = false;
+    const cs = getComputedStyle(bar);
+    const b = bar.getBoundingClientRect();
+    const t = title.getBoundingClientRect();
+    const barMid = (b.left + (parseFloat(cs.paddingLeft) || 0) + b.right - (parseFloat(cs.paddingRight) || 0)) / 2;
+    return { fits, centred: Math.abs((t.left + t.right) / 2 - barMid) <= 0.5 };
   }
   async function fitBar() {
     if (!navContentEl) return;
@@ -270,38 +262,23 @@
     try {
       do {
         fitAgain = false;
-        compact = 0;
-        tight = false;
-        await tick();
-        if (midEl && dashEl && measureEl && navDashboards.length > 0) {
-          const roomy = linksShown();
-          if (roomy < navDashboards.length) {
-            tight = true;
-            await tick();
-            // Compact only when it shows more links.
-            if (linksShown() <= roomy) {
-              tight = false;
-              await tick();
-              measureLinks();
-            }
+        let best = -1;
+        let fallback = -1;
+        for (let level = 0; level <= MAX_COMPACT; level++) {
+          compact = level;
+          await tick();
+          const { fits, centred } = barState();
+          if (fits && centred) {
+            best = level;
+            break;
           }
+          if (fits && fallback < 0) fallback = level;
         }
-        // Each level changes the middle's room, so the links are measured again (now, not on the next
-        // ResizeObserver round) before the bar is: the check always sees the links that will show.
-        const overflowing = () => !!navContentEl && navContentEl.scrollWidth > navContentEl.clientWidth + 0.5;
-        const settleLinks = async () => {
-          measureLinks();
+        const pick = best >= 0 ? best : fallback >= 0 ? fallback : MAX_COMPACT;
+        if (compact !== pick) {
+          compact = pick;
           await tick();
-        };
-        await settleLinks();
-        while (compact < MAX_COMPACT && overflowing()) {
-          compact++;
-          await tick();
-          await settleLinks();
         }
-        // Let the effects of this run's own changes (how many links show) settle while it still
-        // counts as fitting, so they never start another run.
-        await tick();
       } while (fitAgain);
     } finally {
       fitting = false;
@@ -314,18 +291,10 @@
     ro.observe(navContentEl);
     return () => ro.disconnect();
   });
-  // What the bar holds: edit mode, signed in or not, the page, the title, the text size, the links.
+  // What the bar holds: edit mode, signed in or not, the page, the title, the text size.
   $effect(() => {
-    void [$editMode, $isAuthenticated, isDashboardPage, showLeft, showCenter, leftText, titleText, $textSize, navDashboards];
+    void [$editMode, $isAuthenticated, isDashboardPage, showLeft, showCenter, leftText, titleText, showSwitcher, $textSize];
     untrack(() => void fitBar());
-  });
-  // The More button coming or going changes what the bar needs. fitBar itself changes how many links
-  // show while it runs (it measures with and without .tight): those changes are its own, not news.
-  $effect(() => {
-    void [moreWidthPx, moreLinks.length];
-    untrack(() => {
-      if (!fitting) void fitBar();
-    });
   });
 </script>
 
@@ -341,7 +310,6 @@
     class:c5={compact >= 5}
     class:c6={compact >= 6}
     class:c7={compact >= 7}
-    class:tight
     class:measuring
     bind:this={navContentEl}
   >
@@ -357,84 +325,62 @@
           </a>
         {/if}
       {/if}
+    </div>
 
-      <!-- The middle (Ruling 13): the dashboard links that fit, More, then the title just right of them. -->
-      <div class="nav-mid" bind:this={midEl} style:--more-w="{showLinks ? moreWidthPx : 0}px">
-        {#if showLinks}
-          <div class="nav-dash" bind:this={dashEl}>
-            <!-- Measured, never seen: every link and the More button at their natural widths. -->
-            <div class="nav-measure-clip" aria-hidden="true">
-              <div class="nav-measure" bind:this={measureEl}>
-                {#each navDashboards as dashboard (dashboard.id)}
-                  <span class="nav-link" data-measure-link>{dashboard.name}</span>
-                {/each}
-                <span class="nav-more-btn" data-measure-more>More <Icon icon="mdi:chevron-down" width="18" height="18" /></span>
-              </div>
-            </div>
-            {#if shownLinks.length > 0}
-              <div class="nav-links">
-                {#each shownLinks as dashboard (dashboard.id)}
-                  <a
-                    href={dashboard.path}
-                    class="nav-link"
-                    class:active={currentPath === dashboard.path}
-                    aria-current={currentPath === dashboard.path ? 'page' : undefined}
-                  >
-                    {dashboard.name}
-                  </a>
-                {/each}
-              </div>
-            {/if}
-            {#if moreLinks.length > 0}
-              <div class="nav-more">
-                <button
-                  type="button"
-                  class="nav-more-btn"
-                  class:active={moreHasCurrent}
-                  bind:this={moreBtn}
-                  aria-label="More dashboards"
-                  aria-haspopup="menu"
-                  aria-expanded={moreOpen}
-                  aria-controls="nav-more-menu"
-                  title="More dashboards"
-                  onclick={() => (moreOpen ? closeMore() : void openMore(null))}
-                  onkeydown={onMoreKey}
-                >
-                  More <Icon icon="mdi:chevron-down" width="18" height="18" />
-                </button>
-                {#if moreOpen}
-                  <!-- svelte-ignore a11y_interactive_supports_focus -->
-                  <div
-                    class="more-menu"
-                    id="nav-more-menu"
-                    role="menu"
-                    aria-label="More dashboards"
-                    bind:this={moreMenu}
-                    onkeydown={onMenuKey}
-                  >
-                    {#each moreLinks as dashboard (dashboard.id)}
-                      <a
-                        href={dashboard.path}
-                        role="menuitem"
-                        tabindex="-1"
-                        class="more-item"
-                        class:active={currentPath === dashboard.path}
-                        aria-current={currentPath === dashboard.path ? 'page' : undefined}
-                        onclick={() => closeMore()}
-                      >
-                        {dashboard.name}
-                      </a>
-                    {/each}
-                  </div>
-                {/if}
-              </div>
-            {/if}
+    <!-- The title, centred (M5 §8). Signed in, it is the dashboard switcher (Ruling 16). -->
+    <div class="nav-center">
+      {#if titleText}
+        <h1 class="center-title" bind:this={titleEl}>
+          {#if showSwitcher}
+            <button
+              type="button"
+              class="switcher-btn"
+              bind:this={switcherBtn}
+              aria-label="{titleText} — switch dashboard"
+              aria-haspopup="menu"
+              aria-expanded={switcherOpen}
+              aria-controls="nav-switcher-menu"
+              title="Switch dashboard"
+              onclick={() => (switcherOpen ? closeSwitcher() : void openSwitcher('current'))}
+              onkeydown={onSwitcherKey}
+            >
+              <span class="title-text">{titleText}</span>
+              <Icon icon="mdi:chevron-down" class="switcher-chevron" width="1em" height="1em" />
+            </button>
+          {:else}
+            <span class="title-text">{titleText}</span>
+          {/if}
+        </h1>
+        {#if showSwitcher && switcherOpen}
+          <!-- svelte-ignore a11y_interactive_supports_focus -->
+          <div
+            class="switcher-menu"
+            id="nav-switcher-menu"
+            role="menu"
+            aria-label="Dashboards"
+            style:--menu-shift="{menuShift}px"
+            bind:this={switcherMenu}
+            onkeydown={onSwitcherMenuKey}
+          >
+            {#each navDashboards as dashboard (dashboard.id)}
+              <a
+                href={dashboard.path}
+                role="menuitem"
+                tabindex="-1"
+                class="switcher-item"
+                class:active={currentPath === dashboard.path}
+                aria-current={currentPath === dashboard.path ? 'page' : undefined}
+                onclick={() => closeSwitcher()}
+              >
+                <span class="switcher-mark" aria-hidden="true">
+                  {#if currentPath === dashboard.path}<Icon icon="mdi:check" width="18" height="18" />{/if}
+                </span>
+                <span class="switcher-name">{dashboard.name}</span>
+              </a>
+            {/each}
           </div>
         {/if}
-        {#if titleText}
-          <h1 class="center-title" bind:this={titleEl}>{titleText}</h1>
-        {/if}
-      </div>
+      {/if}
     </div>
 
     <div class="nav-right">
@@ -571,10 +517,10 @@
     /* Match the navbar safe-area on the sides too, so the brand/actions
        don't sit under the rounded screen corners in landscape. */
     padding: 0 max(1rem, env(safe-area-inset-left, 0)) 0 max(1rem, env(safe-area-inset-right, 0));
-    /* Ruling 13: the logo, then the middle (the dashboard links that fit, More, the title just right of
-       them), then the right-hand controls at their full width. The middle takes what is left; its
-       smallest width is the More button (the title shrinks, with an ellipsis, before anything
-       overlaps), so the bar is never wider than the screen however many dashboards there are. */
+    /* M5 §8: the logo, the title, the right-hand controls. The two sides share the spare width
+       equally (flex: 1 1 0), so the title sits in the bar's centre; a side never shrinks below its
+       own content, so when one is too wide the title moves over rather than overlap it, and fitBar
+       compacts the controls until it is centred again (or the levels run out). */
     display: flex;
     align-items: center;
     gap: 2rem;
@@ -593,25 +539,123 @@
     flex-shrink: 0;
   }
 
-  .nav-mid {
+  /* The title's box: only as wide as the title (it shrinks, with an ellipsis, before anything
+     overlaps); the switcher's menu hangs below it. */
+  .nav-center {
+    position: relative;
     display: flex;
-    align-items: center;
-    gap: 1rem;
-    flex: 1 1 0;
-    width: 0;
-    min-width: var(--more-w, 0px);
+    justify-content: center;
+    flex: 0 1 auto;
+    min-width: 0;
   }
 
   .center-title {
-    flex: 0 1 auto;
+    display: flex;
     min-width: 0;
     margin: 0;
     font-size: 1.5rem;
     font-weight: 600;
     color: var(--text-primary);
     white-space: nowrap;
+  }
+
+  .title-text {
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  /* Signed in: the title is the switcher's button — the title's own look, plus a chevron. */
+  .switcher-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.125rem;
+    min-width: 0;
+    max-width: 100%;
+    padding: 0.125rem 0.25rem 0.125rem 0.5rem;
+    border: none;
+    border-radius: 0.5rem;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .switcher-btn:hover,
+  .switcher-btn[aria-expanded='true'] {
+    background: var(--bg-tertiary);
+  }
+
+  .switcher-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .switcher-btn :global(.switcher-chevron) {
+    flex: none;
+    color: var(--text-secondary);
+  }
+
+  .switcher-menu {
+    position: absolute;
+    top: calc(100% + 0.5rem);
+    left: 50%;
+    transform: translateX(calc(-50% + var(--menu-shift, 0px)));
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 12rem;
+    max-width: min(20rem, calc(100vw - 1rem));
+    max-height: min(60vh, 24rem);
+    overflow-y: auto;
+    padding: 0.25rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    box-shadow: 0 8px 24px var(--shadow, rgba(0, 0, 0, 0.35));
+  }
+
+  .switcher-item {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.5rem 0.75rem 0.5rem 0.375rem;
+    border-radius: 0.375rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .switcher-mark {
+    display: inline-flex;
+    flex: none;
+    width: 18px;
+  }
+
+  .switcher-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .switcher-item:hover,
+  .switcher-item:focus-visible {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    outline: none;
+  }
+
+  /* The current dashboard: marked (the tick) and in the accent colour. */
+  .switcher-item.active {
+    background: var(--accent);
+    color: white;
+  }
+
+  .switcher-item.active:focus-visible {
+    outline: 2px solid var(--text-primary);
+    outline-offset: -2px;
   }
 
   .custom-text {
@@ -646,145 +690,12 @@
     opacity: 0.8;
   }
 
-  /* The dashboard links and the More button (Ruling 12): only as wide as what shows, so the title
-     sits just right of them (Ruling 13). fitLinks keeps it within the middle's room. */
-  .nav-dash {
-    position: relative;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    flex: none;
-  }
-
-  /* Only links that fit are drawn, so nothing is cut off; clip (never scroll) a sub-pixel rounding. */
-  .nav-links {
-    display: flex;
-    gap: 0.5rem;
-    min-width: 0;
-    overflow: hidden;
-    overflow: clip;
-  }
-
-  /* The measuring copy: laid out at natural widths inside a zero-size clipped box, so it is never
-     seen, never takes space and never widens the page. */
-  .nav-measure-clip {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 0;
-    height: 0;
-    overflow: hidden;
-    visibility: hidden;
-    pointer-events: none;
-  }
-
-  .nav-measure {
-    display: flex;
-    gap: 0.5rem;
-    width: max-content;
-  }
-
-  .nav-more {
-    position: relative;
-    flex: none;
-  }
-
-  .nav-more-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.15rem;
-    white-space: nowrap;
-    padding: 0.5rem 0.75rem;
-    border-radius: 0.375rem;
-    border: none;
-    background: transparent;
-    color: var(--text-secondary);
-    font-weight: 500;
-    font-size: 1rem;
-    line-height: 1.6;
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-
-  .nav-more-btn:hover,
-  .nav-more-btn[aria-expanded='true'] {
-    background: var(--bg-tertiary);
-    color: var(--text-primary);
-  }
-
-  /* The current dashboard is in the menu: the button says so. */
-  .nav-more-btn.active {
-    box-shadow: inset 0 -2px 0 var(--accent);
-    color: var(--text-primary);
-  }
-
-  .more-menu {
-    position: absolute;
-    top: calc(100% + 0.5rem);
-    left: 0;
-    z-index: 1;
-    display: flex;
-    flex-direction: column;
-    min-width: 12rem;
-    max-width: min(20rem, calc(100vw - 2rem));
-    max-height: min(60vh, 24rem);
-    overflow-y: auto;
-    padding: 0.25rem;
-    background: var(--bg-secondary);
-    border: 1px solid var(--border);
-    border-radius: 0.5rem;
-    box-shadow: 0 8px 24px var(--shadow, rgba(0, 0, 0, 0.35));
-  }
-
-  .more-item {
-    padding: 0.5rem 0.75rem;
-    border-radius: 0.375rem;
-    color: var(--text-secondary);
-    font-weight: 500;
-    text-decoration: none;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .more-item:hover,
-  .more-item:focus-visible {
-    background: var(--bg-tertiary);
-    color: var(--text-primary);
-    outline: none;
-  }
-
-  .more-item.active {
-    background: var(--accent);
-    color: white;
-  }
-
-  .nav-link {
-    flex-shrink: 0;
-    white-space: nowrap;
-    padding: 0.5rem 1rem;
-    border-radius: 0.375rem;
-    text-decoration: none;
-    color: var(--text-secondary);
-    font-weight: 500;
-    transition: all 0.2s;
-  }
-
-  .nav-link:hover {
-    background: var(--bg-tertiary);
-    color: var(--text-primary);
-  }
-
-  .nav-link.active {
-    background: var(--accent);
-    color: white;
-  }
-
   .nav-right {
     display: flex;
     align-items: center;
     justify-content: flex-end;
     gap: 1rem;
+    flex: 1 1 0;
   }
 
   .search-btn, .theme-toggle, .admin-link, .edit-toggle, .export-btn, .help-btn, .about-btn {
@@ -941,17 +852,9 @@
     }
   }
 
-  /* Mobile landscape / small tablet: hide the dashboard links (and More) and the text-size
-     controls (phones; from 769 px up the text-size buttons never hide). */
+  /* Mobile landscape / small tablet: hide the text-size controls (phones; from 769 px up the
+     text-size buttons never hide). */
   @media (max-width: 768px) {
-    .nav-dash {
-      display: none;
-    }
-
-    .nav-mid {
-      min-width: 0;
-    }
-
     .text-size-controls {
       display: none;
     }
@@ -1050,27 +953,6 @@
     }
   }
 
-  /* Some dashboard links are in More: the controls go compact so more links show (fitBar). Icons
-     only and tighter gaps; every control stays, at its full tap size. */
-  .tight .nav-right {
-    gap: 0.5rem;
-  }
-
-  .tight .edit-label,
-  .tight .logout-label {
-    display: none;
-  }
-
-  .tight .edit-toggle {
-    width: 44px;
-    padding: 0;
-    border-radius: 50%;
-  }
-
-  .tight .logout-btn {
-    padding: 0 0.5rem;
-  }
-
   .c2 .wordmark {
     display: none;
   }
@@ -1105,11 +987,6 @@
   .c4 .edit-toggle {
     height: 40px;
     padding: 0 0.6rem;
-  }
-
-  .c4.tight .edit-toggle {
-    width: 40px;
-    padding: 0;
   }
 
   .c4 .logout-label {

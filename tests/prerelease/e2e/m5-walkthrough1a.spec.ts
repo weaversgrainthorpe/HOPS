@@ -1,8 +1,10 @@
 // M5 walkthrough 1, part A (Jonathan, 2026-10-22):
 //  (1) the navbar's dashboard links were a scrolling strip with a visible scrollbar, and the page could
-//      be wider than the screen (it scrolled sideways). Ruling 12: the links that fit, then a "More ▾"
-//      menu for the rest; nothing in the bar overlaps; the pencil, gear and Log out stay visible; the
-//      page never scrolls sideways.
+//      be wider than the screen (it scrolled sideways). Ruling 12 (links that fit + "More ▾") is
+//      superseded by Ruling 16 (M5 §8): no link row at all — signed in, the title is the dashboard
+//      switcher. Still: nothing in the bar overlaps; the pencil, gear and Log out stay visible; the
+//      page never scrolls sideways; every dashboard is one click away (in the switcher).
+//      m5-switcher.spec.ts holds the switcher's own tests (keys, mouse, order, edit mode, centring).
 //  (2) in edit mode a minimised folder could not be opened by clicking it. M5 §3a.8: click, Enter and
 //      the menu's "Open" all open it in place — in edit mode as the draft's saved default (undoable);
 //      a double-click still edits it (§4B).
@@ -100,8 +102,6 @@ async function barPieces(page: Page) {
       pieces.push({ name, box: { left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width, height: r.height } });
     };
     add('logo', document.querySelector('.navbar .logo'));
-    document.querySelectorAll('.navbar .nav-links > .nav-link').forEach((el) => add(`link ${el.textContent?.trim()}`, el));
-    add('More', document.querySelector('.navbar .nav-more-btn'));
     const title = document.querySelector('.navbar .center-title');
     if (title && title.getBoundingClientRect().width > 1) add('title', title);
     document.querySelectorAll('.navbar .nav-right > *').forEach((el) => add(`control ${el.getAttribute('aria-label') ?? el.className}`, el));
@@ -109,8 +109,8 @@ async function barPieces(page: Page) {
   });
 }
 
-/** Ruling 12's promises at this width. */
-async function headerHolds(page: Page, all: string[], o: { links: boolean }) {
+/** The header's promises at this width (Rulings 12 and 16). */
+async function headerHolds(page: Page, all: string[]) {
   // After a resize the bar is measured again on the next frame (ResizeObservers): let it settle.
   const sideways = () => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   await expect.poll(sideways, { message: 'the page never scrolls sideways', timeout: 2000 }).toBeLessThanOrEqual(0);
@@ -118,6 +118,7 @@ async function headerHolds(page: Page, all: string[], o: { links: boolean }) {
   const w = await page.evaluate(() => ({ doc: document.documentElement.scrollWidth, view: document.documentElement.clientWidth }));
   expect(w.doc, 'the page never scrolls sideways').toBeLessThanOrEqual(w.view);
   const pieces = await barPieces(page);
+  expect(pieces.some((p) => p.name === 'title'), 'the title shows').toBe(true);
   for (const p of pieces) {
     expect(p.box.left, `${p.name} is on screen`).toBeGreaterThanOrEqual(-0.5);
     expect(p.box.right, `${p.name} is on screen`).toBeLessThanOrEqual(w.view + 0.5);
@@ -127,40 +128,23 @@ async function headerHolds(page: Page, all: string[], o: { links: boolean }) {
       expect(overlaps(pieces[i].box, pieces[j].box), `${pieces[i].name} and ${pieces[j].name} overlap`).toBe(false);
     }
   }
-  if (!o.links) {
-    await expect(page.locator('.navbar .nav-link:visible')).toHaveCount(0);
-    return;
-  }
-  // No scroll strip: the links never scroll and show no scrollbar; a shown link is shown whole.
-  const strip = page.locator('.navbar .nav-links');
-  if (await strip.count()) {
-    const s = await strip.evaluate((el) => ({ ox: getComputedStyle(el).overflowX, sl: el.scrollLeft, r: el.getBoundingClientRect().right }));
-    expect(['auto', 'scroll']).not.toContain(s.ox);
-    expect(s.sl).toBe(0);
-    for (const p of pieces.filter((x) => x.name.startsWith('link '))) {
-      expect(p.box.right, `${p.name} is whole, not cut off`).toBeLessThanOrEqual(s.r + 0.5);
-    }
-  }
-  // Every dashboard is one click away: the links shown, then the More menu's, in order, once each.
-  const shown = await page.locator('.navbar .nav-links > .nav-link').allInnerTexts();
-  const more = page.getByRole('button', { name: 'More dashboards' });
-  let rest: string[] = [];
-  if (shown.length < all.length) {
-    await expect(more).toBeVisible();
-    await more.click();
-    const menu = page.getByRole('menu', { name: 'More dashboards' });
-    await expect(menu).toBeVisible();
-    rest = await menu.getByRole('menuitem').allInnerTexts();
-    // The open menu is on screen too.
-    const mb = (await menu.boundingBox())!;
-    expect(mb.x).toBeGreaterThanOrEqual(0);
-    expect(mb.x + mb.width).toBeLessThanOrEqual(w.view + 0.5);
-    await page.keyboard.press('Escape');
-    await expect(menu).toHaveCount(0);
-  } else {
-    await expect(more).toHaveCount(0);
-  }
-  expect([...shown, ...rest].map((t) => t.trim())).toEqual(all);
+  // Ruling 16: no link row and no More, at any width.
+  await expect(page.locator('.navbar .nav-link, .navbar .nav-links, .navbar .nav-more-btn')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'More dashboards' })).toHaveCount(0);
+  // Every dashboard is one click away: in the switcher, in order, once each.
+  const btn = page.locator('.navbar').getByRole('button', { name: /switch dashboard$/ });
+  await expect(btn).toBeVisible();
+  await btn.click();
+  const menu = page.getByRole('menu', { name: 'Dashboards' });
+  await expect(menu).toBeVisible();
+  const listed = await menu.getByRole('menuitem').allInnerTexts();
+  // The open menu is on screen too.
+  const mb = (await menu.boundingBox())!;
+  expect(mb.x).toBeGreaterThanOrEqual(0);
+  expect(mb.x + mb.width).toBeLessThanOrEqual(w.view + 0.5);
+  await page.keyboard.press('Escape');
+  await expect(menu).toHaveCount(0);
+  expect(listed.map((t) => t.trim())).toEqual(all);
 }
 
 async function allNames(page: Page) {
@@ -176,9 +160,9 @@ async function desktopControls(page: Page, editing: boolean) {
   await page.getByRole('button', { name: 'Log out' }).click({ trial: true, timeout: 3000 });
 }
 
-test.describe('walkthrough 1 (1): the header (Ruling 12)', () => {
+test.describe('walkthrough 1 (1): the header (Rulings 12 and 16)', () => {
   for (const total of [4, 8]) {
-    test(`${total} dashboards at 1280, 1416 and 1920: links that fit + More, no strip, nothing overlaps, no sideways scroll (view and edit)`, async ({ page, context }) => {
+    test(`${total} dashboards at 1280, 1416 and 1920: no link row, every dashboard in the switcher, nothing overlaps, no sideways scroll (view and edit)`, async ({ page, context }) => {
       const sc = await dashboards(page, context, total);
       const all = await allNames(page);
       expect(all).toHaveLength(total);
@@ -192,55 +176,12 @@ test.describe('walkthrough 1 (1): the header (Ruling 12)', () => {
         for (const width of [1280, 1416, 1920]) {
           await page.setViewportSize({ width, height: 900 });
           await expect.poll(() => page.evaluate(() => document.documentElement.clientWidth)).toBeLessThanOrEqual(width);
-          await headerHolds(page, all, { links: true });
+          await headerHolds(page, all);
           await desktopControls(page, editing);
         }
       }
     });
   }
-
-  test('the More menu works from the keyboard and is labelled; its links open their dashboards', async ({ page, context }) => {
-    const sc = await dashboards(page, context, 8);
-    const all = await allNames(page);
-    await page.setViewportSize({ width: 1280, height: 900 });
-    await page.goto(sc.path);
-    const more = page.getByRole('button', { name: 'More dashboards' });
-    await expect(more).toBeVisible();
-    await expect(more).toHaveAttribute('aria-haspopup', 'menu');
-    await expect(more).toHaveAttribute('aria-expanded', 'false');
-    await more.focus();
-    await page.keyboard.press('Enter');
-    const menu = page.getByRole('menu', { name: 'More dashboards' });
-    await expect(menu).toBeVisible();
-    await expect(more).toHaveAttribute('aria-expanded', 'true');
-    const items = menu.getByRole('menuitem');
-    await expect(items.first()).toBeFocused();
-    await page.keyboard.press('ArrowDown');
-    await expect(items.nth(1)).toBeFocused();
-    await page.keyboard.press('ArrowUp');
-    await expect(items.first()).toBeFocused();
-    await page.keyboard.press('End');
-    await expect(items.last()).toBeFocused();
-    // The current dashboard (the Showcase, last) is in the menu and says so.
-    await expect(items.last()).toHaveText('v3 Showcase');
-    await expect(items.last()).toHaveAttribute('aria-current', 'page');
-    await page.keyboard.press('Escape');
-    await expect(menu).toHaveCount(0);
-    await expect(more).toBeFocused();
-    // ArrowDown opens it too; Enter on an item opens that dashboard.
-    await page.keyboard.press('ArrowDown');
-    await expect(items.first()).toBeFocused();
-    const target = (await items.first().innerText()).trim();
-    expect(all).toContain(target);
-    await page.keyboard.press('Enter');
-    await expect(page.locator('.navbar .center-title')).toHaveText(target);
-    await expect(menu).toHaveCount(0);
-    // A click outside closes it.
-    await more.click();
-    await expect(menu).toBeVisible();
-    await page.mouse.click(5, 400);
-    await expect(menu).toHaveCount(0);
-  });
 
   test('phones (375) keep the existing hiding rules; tablets (481–1100) never scroll sideways either', async ({ page, context }) => {
     const sc = await dashboards(page, context, 8);
@@ -248,10 +189,9 @@ test.describe('walkthrough 1 (1): the header (Ruling 12)', () => {
     await page.setViewportSize({ width: 375, height: 800 });
     await page.goto(sc.path);
     await expect(page.locator('.navbar .logo')).toBeVisible();
-    await headerHolds(page, all, { links: false });
+    await headerHolds(page, all); // phones too: the switcher (§8), no link row
     await expect(page.getByRole('link', { name: 'Settings' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Enter Edit Mode' })).toBeHidden(); // phones: no editing (existing rule)
-    await expect(page.getByRole('button', { name: 'More dashboards' })).toBeHidden();
     // Every text size (the A buttons scale the whole page), view and edit mode.
     for (const size of ['default', 'largest']) {
       if (size === 'largest') {
@@ -267,7 +207,7 @@ test.describe('walkthrough 1 (1): the header (Ruling 12)', () => {
         }
         for (let width = 1100; width >= 481; width -= 41) {
           await page.setViewportSize({ width, height: 800 });
-          await headerHolds(page, all, { links: width > 768 });
+          await headerHolds(page, all);
           await expect(page.getByRole('link', { name: 'Settings' }), `gear at ${width}`).toBeVisible();
           await expect(page.getByRole('button', { name: editing ? 'Exit Edit Mode' : 'Enter Edit Mode' }), `pencil at ${width}`).toBeVisible();
           await expect(page.getByRole('button', { name: 'Log out' }), `Log out at ${width}`).toBeVisible();

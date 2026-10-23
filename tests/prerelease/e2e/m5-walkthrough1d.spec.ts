@@ -1,7 +1,7 @@
 // M5 walkthrough 1, review round (D, 2026-10-22):
-//  (1) Ruling 13 (Jonathan): the navbar title moves off-centre — it sits just right of the dashboard
-//      links; the logo and version stay; the rest of the links go in "More ▾". 4 links at 1416 in view
-//      mode (3 in edit mode); as many as fit at 1280. Never an overlap, never a sideways scroll.
+//  (1) Ruling 13 (the title off-centre, just right of the dashboard links) is superseded by Ruling 16
+//      (M5 §8): no link row; the title — signed in, the dashboard switcher — is back in the CENTRE of
+//      the bar, whole; the logo and version stay. Never an overlap, never a sideways scroll.
 //  (2) the text-size buttons are the only text-size control: they never hide (769–1200 px at the
 //      enlarged sizes, where the bar used to drop them first), and they work there.
 //  (3) on touch (hover: none) every edit handle sits INSIDE its item's corner: it never overhangs a
@@ -113,7 +113,7 @@ async function barHolds(page: Page, label: string) {
     const view = document.documentElement.clientWidth;
     const shown = (e: Element) => { const b = e.getBoundingClientRect(); return b.width > 0 && b.height > 0 && getComputedStyle(e).visibility !== 'hidden'; };
     const els = [...document.querySelectorAll(
-      '.navbar .logo img, .navbar .wordmark, .navbar .version, .navbar .nav-links > .nav-link, .navbar .nav-more > .nav-more-btn, .navbar .center-title, .navbar .nav-right > *'
+      '.navbar .logo img, .navbar .wordmark, .navbar .version, .navbar .center-title, .navbar .nav-right > *'
     )].filter(shown);
     return {
       view, sideways: document.documentElement.scrollWidth - view,
@@ -133,70 +133,40 @@ async function barHolds(page: Page, label: string) {
   }
 }
 
-/** Shown links, the More menu's, and the geometry Ruling 13 promises. */
-async function navState(page: Page) {
-  return page.evaluate(() => {
-    const q = (s: string) => document.querySelector(s) as HTMLElement | null;
-    const shown = [...document.querySelectorAll('.navbar .nav-links > .nav-link')].map((e) => (e.textContent ?? '').trim());
-    const more = q('.navbar .nav-more > .nav-more-btn');
+/** Ruling 16: no link row; the title centred in the bar and whole; every dashboard once, in order, in the switcher. */
+async function ruling16(page: Page, all: string[], label: string) {
+  const s = await page.evaluate(() => {
+    const q = (sel: string) => document.querySelector(sel) as HTMLElement | null;
     const title = q('.navbar .center-title');
-    const lastLink = [...document.querySelectorAll('.navbar .nav-links > .nav-link')].pop() as HTMLElement | undefined;
-    const before = more ?? lastLink ?? null;
-    const right = q('.navbar .nav-right')!;
-    const widths = [...document.querySelectorAll('[data-measure-link]')].map((e) => e.getBoundingClientRect().width);
-    const moreW = (q('[data-measure-more]')?.getBoundingClientRect().width) ?? 0;
-    const gap = parseFloat(getComputedStyle(q('.navbar .nav-dash')!).columnGap) || 0;
-    const barGap = parseFloat(getComputedStyle(q('.navbar .nav-content')!).columnGap) || 0;
-    const midGap = parseFloat(getComputedStyle(q('.navbar .nav-mid')!).columnGap) || 0;
+    const text = q('.navbar .center-title .title-text');
+    const bar = q('.navbar .nav-content')!;
+    const bs = getComputedStyle(bar), bb = bar.getBoundingClientRect();
+    const tb = title?.getBoundingClientRect();
     return {
-      shown,
-      hasMore: !!more,
-      titleLeft: title?.getBoundingClientRect().left ?? null,
-      titleRight: title?.getBoundingClientRect().right ?? null,
-      titleCut: title ? title.scrollWidth > title.clientWidth + 0.5 : null,
-      beforeRight: before?.getBoundingClientRect().right ?? null,
-      rightLeft: right.getBoundingClientRect().left,
-      widths, moreW, gap, barGap, midGap
+      links: document.querySelectorAll('.navbar .nav-link, .navbar .nav-links, .navbar .nav-more-btn').length,
+      titleMid: tb ? (tb.left + tb.right) / 2 : null,
+      barMid: (bb.left + parseFloat(bs.paddingLeft) + bb.right - parseFloat(bs.paddingRight)) / 2,
+      titleCut: text ? text.scrollWidth > text.clientWidth + 0.5 : null
     };
   });
-}
-
-/** Ruling 13: the title just right of the links (and More), whole, and as many links as fit. */
-async function ruling13(page: Page, all: string[], label: string) {
-  const s = await navState(page);
-  expect(s.titleLeft, `${label}: there is a title`).not.toBeNull();
-  expect(s.beforeRight, `${label}: links or More shown`).not.toBeNull();
-  // Just right of the links: after them, with no more than a gap's slack (the title is not centred).
-  expect(s.titleLeft! - s.beforeRight!, `${label}: the title sits just right of the links`).toBeGreaterThanOrEqual(-0.5);
-  expect(s.titleLeft! - s.beforeRight!, `${label}: the title sits just right of the links`).toBeLessThanOrEqual(s.midGap + 1.5);
+  expect(s.links, `${label}: no link row, no More`).toBe(0);
+  expect(s.titleMid, `${label}: there is a title`).not.toBeNull();
+  expect(Math.abs(s.titleMid! - s.barMid), `${label}: the title is centred`).toBeLessThanOrEqual(1);
   expect(s.titleCut, `${label}: the title is whole`).toBe(false);
-  // As many as fit: the next link (in More) would not fit in the room left before the controls.
-  const n = s.shown.length;
-  if (n < all.length) {
-    expect(s.hasMore, `${label}: More holds the rest`).toBe(true);
-    const free = s.rightLeft - s.barGap - s.titleRight!;
-    const next = s.widths[n] + s.gap - (n + 1 === all.length ? s.moreW + s.gap : 0);
-    expect(free, `${label}: ${n} links shown, but "${all[n]}" (${Math.round(s.widths[n])} px) would fit in ${Math.round(free)} px`).toBeLessThan(next);
-  } else {
-    expect(s.hasMore).toBe(false);
-  }
-  // Every dashboard once, in order: shown, then More's.
-  let rest: string[] = [];
-  if (s.hasMore) {
-    await page.getByRole('button', { name: 'More dashboards' }).click();
-    rest = (await page.getByRole('menu', { name: 'More dashboards' }).getByRole('menuitem').allInnerTexts()).map((x) => x.trim());
-    await page.keyboard.press('Escape');
-    await expect(page.getByRole('menu', { name: 'More dashboards' })).toHaveCount(0);
-  }
-  expect([...s.shown, ...rest], `${label}: every dashboard once, in order`).toEqual(all);
-  return s.shown.length;
+  const btn = page.locator('.navbar').getByRole('button', { name: /switch dashboard$/ });
+  await btn.click();
+  const menu = page.getByRole('menu', { name: 'Dashboards' });
+  const listed = (await menu.getByRole('menuitem').allInnerTexts()).map((x) => x.trim());
+  await page.keyboard.press('Escape');
+  await expect(menu).toHaveCount(0);
+  expect(listed, `${label}: every dashboard once, in order`).toEqual(all);
 }
 
-// ---------------------------------------------------------------- (1) Ruling 13
+// ---------------------------------------------------------------- (1) Ruling 16 (was Ruling 13)
 
-test.describe('walkthrough 1 D (1): Ruling 13 — the title sits just right of the dashboard links', () => {
+test.describe('walkthrough 1 D (1): Ruling 16 — the title is back in the centre; no link row', () => {
   for (const total of [4, 8]) {
-    test(`${total} dashboards at 1280, 1416 and 1920, view and edit: as many links as fit, then the title; logo and version stay; no overlap, no sideways scroll`, async ({ page, context }) => {
+    test(`${total} dashboards at 1280, 1416 and 1920, view and edit: the title centred and whole; logo and version stay; no overlap, no sideways scroll`, async ({ page, context }) => {
       const sc = await dashboards(page, context, total);
       const all = await allNames(page);
       expect(all).toHaveLength(total);
@@ -210,12 +180,7 @@ test.describe('walkthrough 1 D (1): Ruling 13 — the title sits just right of t
           await barHolds(page, label);
           await expect(page.locator('.navbar .logo img'), `${label}: logo`).toBeVisible();
           await expect(page.locator('.navbar .version'), `${label}: version`).toBeVisible();
-          const shown = await ruling13(page, all, label);
-          if (total === 4 && width >= 1416) {
-            // Jonathan's targets: 4 links in view mode, 3 in edit mode (the edit controls are wider).
-            expect(shown, `${label}: links shown`).toBe(editing ? 3 : 4);
-          }
-          if (total === 4 && width === 1280) expect(shown, `${label}: links shown`).toBeGreaterThanOrEqual(2);
+          await ruling16(page, all, label);
           // Every control is still there and clickable.
           for (const name of ['Search', 'Decrease text size', 'Increase text size', 'Theme Settings', editing ? 'Exit Edit Mode' : 'Enter Edit Mode', 'Help', 'About HOPS', 'Log out']) {
             await page.locator('.navbar .nav-right').getByRole('button', { name, exact: true }).click({ trial: true, timeout: 3000 });

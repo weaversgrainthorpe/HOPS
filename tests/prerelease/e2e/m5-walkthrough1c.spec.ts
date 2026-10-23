@@ -4,8 +4,9 @@
 //      the top-right corner, sized to the item, never over its centre; at least 24×24; on an item too
 //      small for that it hangs just outside the corner.
 //  (2) at 1280 in edit mode the navbar's right-hand controls took the room and only "More" showed.
-//      With room short the controls go compact (icons only, no "Editing" text), so the 4 dashboard
-//      links show; "More" only beyond that.
+//      With room short the controls go compact (icons only, no "Editing" text). Ruling 16 (M5 §8)
+//      then removed the link row and More: the controls now compact only as far as the CENTRED
+//      title (the switcher) needs — never more, never a sideways scroll, every control kept.
 //  (3) dragging an item out of a folder onto the tab, the ghost stayed at the folder's item size. Over
 //      the tab it is the item's OWN size; over a folder's page that folder's item size (Ruling 11).
 import { test, expect, type Page, type BrowserContext, type Locator } from '@playwright/test';
@@ -213,7 +214,7 @@ async function barHolds(page: Page, width: number, editing: boolean, label: stri
   expect(sideways, `${label}: no sideways scroll`).toBeLessThanOrEqual(0);
   const pieces = await page.evaluate(() => {
     const els = [
-      ...document.querySelectorAll('.navbar .logo, .navbar .nav-links > .nav-link, .navbar .nav-more-btn:not([data-measure-more]), .navbar .center-title, .navbar .nav-right > *')
+      ...document.querySelectorAll('.navbar .logo, .navbar .center-title, .navbar .nav-right > *')
     ].filter((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0; });
     return els.map((e) => { const r = e.getBoundingClientRect(); return { n: e.className + ' ' + (e.textContent ?? '').trim(), l: r.left, r: r.right, t: r.top, b: r.bottom }; });
   });
@@ -236,28 +237,34 @@ async function barHolds(page: Page, width: number, editing: boolean, label: stri
     expect(Math.min(bb.width, bb.height), `${label}: ${name} stays tappable`).toBeGreaterThanOrEqual(24);
   }
   await page.locator('.navbar .nav-right').getByRole('link', { name: 'Settings' }).click({ trial: true, timeout: 3000 });
-  // The title is still there, whole.
-  const t = await page.locator('.navbar .center-title').evaluate((e) => ({ w: e.clientWidth, sw: e.scrollWidth }));
+  // The title is still there, whole, and centred in the bar (M5 §8).
+  const t = await page.locator('.navbar .center-title').evaluate((e) => {
+    const text = e.querySelector('.title-text') as HTMLElement;
+    const bar = document.querySelector('.navbar .nav-content') as HTMLElement;
+    const bs = getComputedStyle(bar), bb = bar.getBoundingClientRect(), tb = e.getBoundingClientRect();
+    return {
+      w: text.clientWidth, sw: text.scrollWidth, mid: (tb.left + tb.right) / 2,
+      barMid: (bb.left + parseFloat(bs.paddingLeft) + bb.right - parseFloat(bs.paddingRight)) / 2
+    };
+  });
   expect(t.sw, `${label}: the title is not cut off`).toBeLessThanOrEqual(t.w + 0.5);
+  expect(Math.abs(t.mid - t.barMid), `${label}: the title is centred`).toBeLessThanOrEqual(1);
+  // No link row, no More (Ruling 16).
+  await expect(page.locator('.navbar .nav-link, .navbar .nav-links, .navbar .nav-more-btn'), `${label}: no link row`).toHaveCount(0);
 }
 
-async function linksAndMore(page: Page) {
-  const shown = (await page.locator('.navbar .nav-links > .nav-link').allInnerTexts()).map((x) => x.trim());
-  const more = page.getByRole('button', { name: 'More dashboards' });
-  let rest: string[] = [];
-  if (await more.count()) {
-    await more.click();
-    rest = (await page.getByRole('menu', { name: 'More dashboards' }).getByRole('menuitem').allInnerTexts()).map((x) => x.trim());
-    await page.keyboard.press('Escape');
-  }
-  return { shown, rest };
+/** Every dashboard, as the switcher lists them. */
+async function switcherNames(page: Page) {
+  await page.locator('.navbar').getByRole('button', { name: /switch dashboard$/ }).click();
+  const menu = page.getByRole('menu', { name: 'Dashboards' });
+  const names = (await menu.getByRole('menuitem').allInnerTexts()).map((x) => x.trim());
+  await page.keyboard.press('Escape');
+  await expect(menu).toHaveCount(0);
+  return names;
 }
 
-test.describe('walkthrough 1 C (2): with room short, the navbar controls go compact so more dashboard links show', () => {
-  // Walkthrough 1 C measured that a CENTRED title left room for only 2 links. Ruling 13 (review round
-  // D) moved the title just right of the links, so more fit now; m5-walkthrough1d.spec.ts holds the
-  // exact counts (4 in view / 3 in edit at 1416). These keep C's floor: at least 2 links + More.
-  test('4 dashboards at 1280 and 1416, view and edit: the controls compact when that shows more links; at least 2 links + More; nothing overlaps; every control stays', async ({ page, context }) => {
+test.describe('walkthrough 1 C (2): with room short, the navbar controls go compact — as far as the centred title needs', () => {
+  test('4 dashboards at 1280 and 1416, view and edit: every dashboard in the switcher; the title centred and whole; nothing overlaps; every control stays', async ({ page, context }) => {
     const sc = await fourDashboards(page, context);
     const all = ['Sample', 'Weavers', 'Sample (Imported)', 'v3 Showcase'];
     await page.goto(sc.path);
@@ -268,42 +275,40 @@ test.describe('walkthrough 1 C (2): with room short, the navbar controls go comp
         await page.setViewportSize({ width, height: 900 });
         await settle(page);
         const label = `${editing ? 'edit' : 'view'} mode at ${width}`;
-        await expect.poll(async () => (await page.locator('.navbar .nav-links > .nav-link').count()), { message: `${label}: at least 2 links`, timeout: 2000 })
-          .toBeGreaterThanOrEqual(2);
-        const { shown, rest } = await linksAndMore(page);
-        expect([...shown, ...rest], `${label}: every dashboard once, in order`).toEqual(all);
-        if (editing) {
-          // Compact controls: the pencil is its icon (no "Editing" text), Log out its icon.
-          await expect(page.locator('.navbar .edit-label'), `${label}: no "Editing" text`).toBeHidden();
-          await expect(page.locator('.navbar .logout-label'), `${label}: Log out is its icon`).toBeHidden();
-        }
+        await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth),
+          { message: `${label}: no sideways scroll`, timeout: 2000 }).toBeLessThanOrEqual(0);
+        await settle(page);
+        expect(await switcherNames(page), `${label}: every dashboard once, in order`).toEqual(all);
         await barHolds(page, width, editing, label);
       }
     }
   });
 
-  test('when every link fits, the controls keep their labels; compact only when that shows more links', async ({ page, context }) => {
+  test('with room to spare nothing compacts; compact only while the centred title needs it, and back', async ({ page, context }) => {
     const sc = await showcase(page, context, 'v3 Showcase'); // Sample + v3 Showcase
+    await page.setViewportSize({ width: 1920, height: 900 });
+    await page.goto('/');
+    await expect(page.locator('.navbar .center-title')).toHaveText('Sample');
+    await settle(page);
+    // 1920, view mode: room to spare — the wordmark, the version and "Log out" all keep their text.
+    await expect(page.locator('.navbar .wordmark')).toBeVisible();
+    await expect(page.locator('.navbar .version')).toBeVisible();
+    await expect(page.locator('.navbar .logout-label')).toBeVisible();
+    await barHolds(page, 1920, false, 'view at 1920, 2 dashboards');
+    // Edit mode at 1280: the edit controls are wider; they compact so the title stays centred.
     await page.goto(sc.path);
     await enterEdit(page);
-    // 1416: both links fit beside the full controls — "Editing" and "Log out" keep their text.
-    await page.setViewportSize({ width: 1416, height: 900 });
-    await settle(page);
-    await expect(page.locator('.navbar .nav-links > .nav-link')).toHaveText(['Sample', 'v3 Showcase']);
-    await expect(page.locator('.navbar .edit-label')).toBeVisible();
-    await expect(page.locator('.navbar .logout-label')).toBeVisible();
-    await barHolds(page, 1416, true, 'edit at 1416, 2 dashboards');
-    // 1280: only compact controls leave room for both — so they compact, and both links show.
     await page.setViewportSize({ width: 1280, height: 900 });
     await settle(page);
-    await expect(page.locator('.navbar .nav-links > .nav-link')).toHaveText(['Sample', 'v3 Showcase']);
-    await expect(page.getByRole('button', { name: 'More dashboards' })).toHaveCount(0);
-    await expect(page.locator('.navbar .edit-label')).toBeHidden();
     await barHolds(page, 1280, true, 'edit at 1280, 2 dashboards');
-    // And back: wide again, the labels return.
-    await page.setViewportSize({ width: 1416, height: 900 });
+    // And back: view mode at 1920 again, the labels return.
+    await page.getByRole('button', { name: 'Exit Edit Mode' }).click();
+    await page.setViewportSize({ width: 1920, height: 900 });
+    await page.goto('/');
     await settle(page);
-    await expect(page.locator('.navbar .edit-label')).toBeVisible();
+    await expect(page.locator('.navbar .wordmark')).toBeVisible();
+    await expect(page.locator('.navbar .logout-label')).toBeVisible();
+    await barHolds(page, 1920, false, 'view at 1920 again');
   });
 });
 
