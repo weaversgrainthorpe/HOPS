@@ -49,7 +49,6 @@ if [[ "$DEV_ONLY" == 0 && "$BRANCH" != "main" ]]; then
   exit 1
 fi
 
-"$REPO_DIR/scripts/check-versions.sh"
 
 # --dev-only builds from a clean checkout of HEAD, so only COMMITTED code ever
 # reaches dev — never half-finished work sitting in the working tree.
@@ -65,6 +64,8 @@ if [[ "$DEV_ONLY" == 1 ]]; then
   fi
   echo "▸ Building commit $(git -C "$REPO_DIR" rev-parse --short HEAD) in a clean checkout"
 fi
+
+"$BUILD_ROOT/scripts/check-versions.sh"
 
 # Frontend first: it gets embedded into the binary, so it must be built and
 # staged inside the backend module before `go build` runs.
@@ -134,12 +135,20 @@ if [[ "$DEV_ONLY" == 1 && -n "$MIRROR_HOST" ]]; then
   DEV_RESULT=$(ssh "$MIRROR_HOST" "set -e
     chmod +x $DEV_DIR/hops.new
     mv $DEV_DIR/hops.new $DEV_DIR/hops
+    old=\$(systemctl show hops-dev -p MainPID --value)
     sudo systemctl restart hops-dev
+    # Every v3 build reports the same VERSION, so a health answer alone proves
+    # nothing (dev.sh can also listen on :8080). Require a NEW hops-dev process
+    # that is active AND is the one listening on :8080.
     for i in \$(seq 1 40); do
       sleep 1
+      pid=\$(systemctl show hops-dev -p MainPID --value)
+      state=\$(systemctl show hops-dev -p ActiveState --value)
+      [ \"\$pid\" != 0 ] && [ \"\$pid\" != \"\$old\" ] && [ \"\$state\" = active ] || continue
+      ss -ltnpH 'sport = :8080' 2>/dev/null | grep -q \"pid=\$pid,\" || continue
       if v=\$(curl -sf http://localhost:8080/api/health); then echo \"\$v\"; exit 0; fi
     done
-    echo 'NO RESPONSE (hops-dev did not come back within 40s)'") || DEV_RESULT="SSH FAILED"
+    echo \"NOT CONFIRMED (no new active hops-dev process serving :8080 within 40s; MainPID was \$old)\"") || DEV_RESULT="SSH FAILED"
   DEV_VERSION=$(python3 -c "import json,sys; d=json.loads(sys.argv[1]); print(f\"{d['version']} ({d['status']})\")" "$DEV_RESULT" 2>/dev/null || echo "$DEV_RESULT")
   echo "  $DEV_VERSION"
   if [[ "$DEV_VERSION" == "$VERSION (ok)" ]]; then
