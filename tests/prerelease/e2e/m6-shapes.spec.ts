@@ -161,7 +161,7 @@ async function checkTabAndControls(page: Page, shape: Shape, oid: string, name: 
   await expect(s).toHaveAttribute('data-shape-state', 'open');
   await expect(s).toHaveAttribute('aria-hidden', 'true');
   // The SVG is drawn at the box's real size (measured), not a nominal one.
-  const vb = await s.locator('svg').getAttribute('viewBox');
+  const vb = await s.locator('svg.shape-svg').getAttribute('viewBox');
   const [, , vw, vh] = (vb ?? '').split(' ').map(Number);
   near(vw, b.width, `${what}: svg width`, 1.5);
   near(vh, b.height, `${what}: svg height`, 1.5);
@@ -263,6 +263,55 @@ for (const width of [1280, 390]) {
     }
   });
 }
+
+test.describe('M6 keyboard focus ring (WCAG 2.4.7)', () => {
+  test.use({ viewport: { width: 1280, height: 900 } });
+
+  test('a tab-shape tile at opacity 0 and 0.3 shows a fully opaque, high-contrast focus ring on Tab', async ({ page, context }) => {
+    const f = await importDash(page, context, (id) => [
+      folder(id('z'), 'Zero', { x: 0, y: 0, w: 6, h: 7 }, kids(id, 2, 'Z'), { shape: 'folder-flat', display: 'collapsed', color: '#d97706', opacity: 0 }),
+      folder(id('t'), 'Third', { x: 8, y: 0, w: 6, h: 7 }, kids(id, 2, 'T'), { shape: 'folder-cartoon', display: 'collapsed', color: '#1e3a8a', opacity: 0.3 })
+    ]);
+    await page.goto(f.path);
+    for (const k of ['z', 't']) {
+      const face = node(page, f.id(k)).locator('.folder-collapsed-tile');
+      await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+      await expect(face).not.toBeFocused();
+      const before = await face.screenshot();
+      // Keyboard focus: Tab until the tile has it (so :focus-visible applies, as for a real keyboard user).
+      let got = false;
+      for (let i = 0; i < 80 && !got; i++) {
+        await page.keyboard.press('Tab');
+        got = await face.evaluate((e) => document.activeElement === e && e.matches(':focus-visible'));
+      }
+      expect(got, `${k}: reached by Tab`).toBe(true);
+      // The ring: drawn, and its effective opacity (its own and every ancestor's up to the tile) is 1.
+      const ring = await face.evaluate((tile) => {
+        const rings = Array.from(tile.querySelectorAll<SVGElement>('[data-focus-ring] path'));
+        let eff = 1;
+        const strokes: string[] = [];
+        let visible = rings.length > 0;
+        for (const r of rings) {
+          strokes.push(getComputedStyle(r).stroke);
+          for (let e: Element | null = r; e && e !== tile; e = e.parentElement) {
+            const cs = getComputedStyle(e);
+            eff = Math.min(eff, Number(cs.opacity));
+            if (cs.visibility === 'hidden' || cs.display === 'none') visible = false;
+          }
+        }
+        return { n: rings.length, eff, visible, strokes };
+      });
+      expect(ring.n, `${k}: a two-tone ring`).toBe(2);
+      expect(ring.visible).toBe(true);
+      expect(ring.eff, `${k}: ring effective opacity`).toBe(1);
+      // Two tones, black and white (21:1 to each other), so one of them is >= 3:1 against any surrounding colour.
+      expect(ring.strokes.sort()).toEqual(['rgb(0, 0, 0)', 'rgb(255, 255, 255)']);
+      // And it really paints: the tile's pixels change when it is focused.
+      const after = await face.screenshot();
+      expect(Buffer.compare(before, after), `${k}: focused pixels differ`).not.toBe(0);
+    }
+  });
+});
 
 test.describe('M6 tab position and the dialog', () => {
   test.use({ viewport: { width: 1280, height: 900 } });

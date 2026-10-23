@@ -81,9 +81,10 @@
     data-folder-shape={parts.shape}
     data-shape-state={variant}
     data-tab-position={pos}
-    style:opacity={String(opacity)}
     use:measured
   >
+    <!-- The folder's opacity fades the painted shape only (§3a.10) — never the focus ring below. -->
+    <div class="shape-paint" data-shape-paint style:opacity={String(opacity)}>
     <svg class="shape-svg" width="100%" height="100%" viewBox="0 0 {box.widthPx} {box.heightPx}" preserveAspectRatio="none" focusable="false">
       {#if parts.gradient}
         <defs>
@@ -124,7 +125,6 @@
           stroke-linejoin="round"
         />
       {/if}
-      <path class="focus-ring" d={parts.silhouette} fill="none" stroke-width="3" />
     </svg>
     {#if ownBackground}
       <!-- The picture fills the front panel, clipped to it (§3a.10). -->
@@ -141,6 +141,22 @@
         <FolderSurface background={look.background} color={colours.front} colorOpacity={1} {mode} {dashboardId} />
       </div>
     {/if}
+    </div>
+    <!-- The keyboard focus ring follows the shape (WCAG 2.4.7). It is OUTSIDE the faded layer, so it is
+         fully opaque at every folder opacity (0 too), and two-tone — black under white, 21:1 to each
+         other — so one tone is at least 3:1 against whatever surrounds it. -->
+    <svg
+      class="ring-svg"
+      data-focus-ring
+      width="100%"
+      height="100%"
+      viewBox="0 0 {box.widthPx} {box.heightPx}"
+      preserveAspectRatio="none"
+      focusable="false"
+    >
+      <path class="ring-outer" d={parts.silhouette} fill="none" stroke-width="5" stroke-linejoin="round" />
+      <path class="ring-inner" d={parts.silhouette} fill="none" stroke-width="2" stroke-linejoin="round" />
+    </svg>
   </div>
 {/if}
 
@@ -163,12 +179,24 @@
     overflow: hidden;
     isolation: isolate;
   }
-  .focus-ring {
-    stroke: var(--accent, #3b82f6);
-    opacity: 0;
+  .shape-paint {
+    position: absolute;
+    inset: 0;
+  }
+  .ring-svg {
+    position: absolute;
+    inset: 0;
+    display: none;
+    overflow: visible;
+  }
+  .ring-outer {
+    stroke: #000000;
+  }
+  .ring-inner {
+    stroke: #ffffff;
   }
   /* The focus outline follows the shape: the folder tile's keyboard focus shows the silhouette ring. */
-  :global(:focus-visible) > .folder-shape .focus-ring {
-    opacity: 1;
+  :global(:focus-visible) > .folder-shape > .ring-svg {
+    display: block;
   }
 </style>

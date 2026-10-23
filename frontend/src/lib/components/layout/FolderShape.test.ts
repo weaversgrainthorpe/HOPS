@@ -226,7 +226,11 @@ describe('FolderShape alone (the picker previews use it too)', () => {
   });
   it('opacity applies to the whole shape (§3a.10)', () => {
     const r = render(FolderShape, { look: { shape: 'folder-flat', color: '#2563eb', opacity: 0.4 }, variant: 'open', dashboardId: 'd1' });
-    expect((r.container.querySelector('[data-folder-shape]') as HTMLElement).style.opacity).toBe('0.4');
+    expect((r.container.querySelector('[data-shape-paint]') as HTMLElement).style.opacity).toBe('0.4');
+    // The focus ring is outside the faded layer (WCAG 2.4.7): nothing between it and the shape is faded.
+    const ring = r.container.querySelector('[data-focus-ring]') as SVGElement;
+    expect(ring.closest('[data-shape-paint]')).toBeNull();
+    expect((r.container.querySelector('[data-folder-shape]') as HTMLElement).style.opacity).toBe('');
   });
   it('a background picture fills the front panel, clipped to it', () => {
     const r = render(FolderShape, {
