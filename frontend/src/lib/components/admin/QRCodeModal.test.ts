@@ -138,3 +138,38 @@ describe('QRCodeModal', () => {
 		expect(onClose).toHaveBeenCalled();
 	});
 });
+
+describe('QRCodeModal bunny (M5 §12)', () => {
+	it('shows the bunny in the centre of the QR code', async () => {
+		render(QRCodeModal, { props: { dashboard, onClose: () => {} } });
+		await waitFor(() => {
+			expect(document.querySelector('.qr-frame svg svg[data-qr-logo]')).not.toBeNull();
+			expect(document.querySelector('.qr-frame svg rect[data-qr-backing]')).not.toBeNull();
+		});
+	});
+
+	it('the downloaded SVG includes the bunny', async () => {
+		const blobs: Blob[] = [];
+		const origCreate = URL.createObjectURL;
+		const origRevoke = URL.revokeObjectURL;
+		URL.createObjectURL = ((b: Blob) => {
+			blobs.push(b);
+			return 'blob:test';
+		}) as typeof URL.createObjectURL;
+		URL.revokeObjectURL = () => {};
+		const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+		try {
+			render(QRCodeModal, { props: { dashboard, onClose: () => {} } });
+			await waitFor(() => expect(document.querySelector('.qr-frame svg')).not.toBeNull());
+			await fireEvent.click(screen.getByRole('button', { name: /download svg/i }));
+			expect(blobs).toHaveLength(1);
+			const text = await blobs[0].text();
+			expect(text).toContain('data-qr-logo');
+			expect(text).toContain('data-qr-backing');
+		} finally {
+			URL.createObjectURL = origCreate;
+			URL.revokeObjectURL = origRevoke;
+			click.mockRestore();
+		}
+	});
+});

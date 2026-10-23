@@ -1,5 +1,5 @@
 <script lang="ts">
-  import QRCode from 'qrcode';
+  import { buildQrSvg } from '$lib/utils/qrLogo';
   import Icon from '@iconify/svelte';
   import Modal from '$lib/components/shared/Modal.svelte';
   import Button from '$lib/components/shared/Button.svelte';
@@ -27,12 +27,9 @@
   // Regenerate the QR code whenever the URL changes (rare, but handles the
   // case where this modal is reused for different dashboards via key prop).
   $effect(() => {
-    QRCode.toString(fullUrl, {
-      type: 'svg',
-      width: 320,
-      margin: 1,
-      errorCorrectionLevel: 'M'
-    })
+    // Level H with the HOPS bunny in the centre (M5 §12); the bunny is in the SVG, so the
+    // download has it too.
+    buildQrSvg(fullUrl)
       .then((svg) => {
         qrSvg = svg;
         qrError = '';
@@ -92,7 +89,7 @@
         Failed to generate QR code: {qrError}
       </div>
     {:else if qrSvg}
-      <!-- The qrcode library produces sanitized SVG markup; safe to render -->
+      <!-- The qrcode library's SVG plus the bundled HOPS logo (no user input); safe to render -->
       <div class="qr-frame">
         {@html qrSvg}
       </div>
