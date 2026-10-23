@@ -175,11 +175,8 @@
       return;
     }
 
-    // Validate file size (5MB max)
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('File too large. Maximum size is 5MB.');
-      return;
-    }
+    // The size limit is the admin's upload.max_bytes_icon setting; uploadIconImage refuses an
+    // oversize file before sending it, naming the limit and the file's size (M5 §10).
 
     try {
       uploadingIcon = true;
@@ -528,7 +525,7 @@
                     <span>Choose PNG, SVG, or JPG</span>
                   {/if}
                 </label>
-                <small class="help-text-inline">Max 5MB. Will be resized to 128x128.</small>
+                <small class="help-text-inline">Up to the icon size limit in Settings → Global settings. Will be resized to 128x128.</small>
               </div>
             {:else}
               <!-- Iconify Input -->

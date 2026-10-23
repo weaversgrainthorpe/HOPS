@@ -382,3 +382,108 @@ func TestLayoutDefaultModeRemoved(t *testing.T) {
 		t.Error("layout.default_mode is still a setting")
 	}
 }
+
+// --- upload limits (M5 §10) ---
+
+func TestUploadLimitBoundsAndDefaults(t *testing.T) {
+	const mb = 1 << 20
+	cases := []struct {
+		key           string
+		def, min, max int
+	}{
+		{KeyUploadMaxBytesImport, 50 * mb, 1 * mb, 200 * mb},
+		{KeyUploadMaxBytesBackground, 25 * mb, 1 * mb, 100 * mb},
+		{KeyUploadMaxBytesIcon, 2 * mb, 1 * mb, 10 * mb},
+	}
+	for _, c := range cases {
+		d := defByKey[c.key]
+		if d.Default != strconv.Itoa(c.def) || d.Min != c.min || d.Max != c.max {
+			t.Errorf("%s: default/min/max = %s/%d/%d, want %d/%d/%d", c.key, d.Default, d.Min, d.Max, c.def, c.min, c.max)
+		}
+		if err := validate(d, strconv.Itoa(c.max+1)); err == nil {
+			t.Errorf("%s: a value above the ceiling must be refused", c.key)
+		}
+		if err := validate(d, strconv.Itoa(c.min-1)); err == nil {
+			t.Errorf("%s: a value below 1 MB must be refused", c.key)
+		}
+	}
+}
+
+func newServiceWithRows(t *testing.T, rows map[string]string) (*Service, *sql.DB) {
+	t.Helper()
+	db, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	db.SetMaxOpenConns(1)
+	t.Cleanup(func() { db.Close() })
+	if _, err := db.Exec(`CREATE TABLE app_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at DATETIME)`); err != nil {
+		t.Fatal(err)
+	}
+	for k, v := range rows {
+		if _, err := db.Exec(`INSERT INTO app_settings (key, value) VALUES (?, ?)`, k, v); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s, err := New(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s, db
+}
+
+func TestStoredUploadLimitAboveCeilingIsClampedOnLoad(t *testing.T) {
+	s, _ := newServiceWithRows(t, map[string]string{
+		KeyUploadMaxBytesImport: strconv.Itoa(1 << 30), // the old 1 GB ceiling
+		KeyUploadMaxBytesIcon:   strconv.Itoa(2048),    // under the new 1 MB floor
+	})
+	if got := s.GetInt(KeyUploadMaxBytesImport); got != 200<<20 {
+		t.Errorf("import limit = %d, want clamped to %d", got, 200<<20)
+	}
+	if got := s.GetInt(KeyUploadMaxBytesIcon); got != 1<<20 {
+		t.Errorf("icon limit = %d, want raised to %d", got, 1<<20)
+	}
+	adj := s.Adjustments()
+	if adj[KeyUploadMaxBytesImport] != strconv.Itoa(1<<30) {
+		t.Errorf("import adjustment = %q, want the stored value %d", adj[KeyUploadMaxBytesImport], 1<<30)
+	}
+	if adj[KeyUploadMaxBytesIcon] != "2048" {
+		t.Errorf("icon adjustment = %q, want 2048", adj[KeyUploadMaxBytesIcon])
+	}
+	if _, ok := adj[KeyUploadMaxBytesBackground]; ok {
+		t.Errorf("background was in range and must not be reported as adjusted")
+	}
+}
+
+func TestSavingAClampedSettingClearsTheNotice(t *testing.T) {
+	s, db := newServiceWithRows(t, map[string]string{KeyUploadMaxBytesImport: strconv.Itoa(1 << 30)})
+	if err := s.Set(KeyUploadMaxBytesImport, strconv.Itoa(200<<20)); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := s.Adjustments()[KeyUploadMaxBytesImport]; ok {
+		t.Error("the notice must clear once the admin saves the setting")
+	}
+	var stored string
+	if err := db.QueryRow(`SELECT value FROM app_settings WHERE key = ?`, KeyUploadMaxBytesImport).Scan(&stored); err != nil {
+		t.Fatal(err)
+	}
+	if stored != strconv.Itoa(200<<20) {
+		t.Errorf("stored = %q after save", stored)
+	}
+}
+
+func TestClampedValueStaysVisibleUntilSaved(t *testing.T) {
+	// The clamp is not written back on load, so the notice survives a restart
+	// until the admin has seen it and saved the setting.
+	_, db := newServiceWithRows(t, map[string]string{KeyUploadMaxBytesBackground: strconv.Itoa(500 << 20)})
+	s2, err := New(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s2.Adjustments()[KeyUploadMaxBytesBackground] != strconv.Itoa(500<<20) {
+		t.Error("after a restart the clamp notice must still be reported")
+	}
+	if s2.GetInt(KeyUploadMaxBytesBackground) != 100<<20 {
+		t.Error("after a restart the clamped value must still be in force")
+	}
+}

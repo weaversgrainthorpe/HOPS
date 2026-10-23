@@ -76,10 +76,8 @@
       uploadError = 'Invalid file type. Use PNG, JPG, GIF, WebP, or SVG.';
       return;
     }
-    if (file.size > 5 * 1024 * 1024) {
-      uploadError = 'File too large. Maximum size is 5MB.';
-      return;
-    }
+    // The size limit is the admin's upload.max_bytes_icon setting; uploadIconImage refuses an
+    // oversize file before sending it, naming the limit and the file's size (M5 §10).
 
     isUploadingIcon = true;
     uploadError = '';

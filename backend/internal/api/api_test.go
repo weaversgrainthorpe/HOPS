@@ -41,6 +41,13 @@ func setupTestRouterSeeded(t *testing.T, storedConfig string) (http.Handler, *sq
 
 func setupTestRouterFull(t *testing.T, storedConfig string, override *configdoc.MigrationResult) (http.Handler, *sql.DB) {
 	t.Helper()
+	return setupTestRouterWithSettingsRows(t, storedConfig, override, nil)
+}
+
+// setupTestRouterWithSettingsRows also stores settingsRows in app_settings
+// before the settings service loads (e.g. a value saved under older bounds).
+func setupTestRouterWithSettingsRows(t *testing.T, storedConfig string, override *configdoc.MigrationResult, settingsRows map[string]string) (http.Handler, *sql.DB) {
+	t.Helper()
 	db, err := sql.Open("sqlite", ":memory:")
 	if err != nil {
 		t.Fatal(err)
@@ -161,6 +168,12 @@ func setupTestRouterFull(t *testing.T, storedConfig string, override *configdoc.
 	cfg := &config.Config{
 		DataDir:     t.TempDir(),
 		FrontendDir: t.TempDir(),
+	}
+
+	for k, v := range settingsRows {
+		if _, err := db.Exec(`INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)`, k, v); err != nil {
+			t.Fatalf("seed setting %s: %v", k, err)
+		}
 	}
 
 	settingsSvc, err := settings.New(db)

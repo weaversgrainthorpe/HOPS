@@ -17,6 +17,7 @@
   import { toast } from '$lib/stores/toast';
   import { listSettings, type SettingDef } from '$lib/utils/api';
   import { saveGlobalSetting } from '$lib/stores/config';
+  import { bytesToMBText, formatMB, parseMBInput } from '$lib/utils/uploadLimits';
 
   // Settings → Global settings (M5 §9). The settings shell shows this page only once signed in
   // with no pending password change (the server refuses the rest until then), so it loads the
@@ -72,7 +73,7 @@
     try {
       const { settings: list } = await listSettings();
       settings = list;
-      drafts = Object.fromEntries(list.map((s) => [s.key, s.value]));
+      drafts = Object.fromEntries(list.map((s) => [s.key, shown(s, s.value)]));
     } catch (e) {
       loadError = e instanceof Error ? e.message : 'Failed to load settings';
     } finally {
@@ -80,19 +81,56 @@
     }
   }
 
+  // --- byte-size settings (M5 §10): stored in bytes, shown and typed in MB ---
+
+  // Plain labels: each upload setting is an upper limit on one kind of file.
+  const plainLabels: Record<string, string> = {
+    'upload.max_bytes_import': 'Largest file you can import',
+    'upload.max_bytes_background': 'Largest background image',
+    'upload.max_bytes_icon': 'Largest icon file',
+  };
+
+  // What the input shows for a stored value: MB for byte sizes, the value itself otherwise.
+  function shown(s: SettingDef, value: string): string {
+    return s.type === 'bytes' ? bytesToMBText(value) : value;
+  }
+
+  // The notice for a value clamped on load (the stored value was outside the new bounds).
+  function adjustmentNotice(s: SettingDef): string {
+    if (!s.adjustedFrom) return '';
+    const from = Number(s.adjustedFrom);
+    const to = Number(s.value);
+    return from > to
+      ? `Lowered from ${formatMB(from)} to the new maximum ${formatMB(to)}.`
+      : `Raised from ${formatMB(from)} to the new minimum ${formatMB(to)}.`;
+  }
+
+  let adjustedSettings = $derived(settings.filter((s) => s.adjustedFrom));
+
   function isDirty(s: SettingDef): boolean {
-    return drafts[s.key] !== s.value;
+    // A clamped value is saved to acknowledge it, so its Save stays available.
+    return String(drafts[s.key]) !== shown(s, s.value) || !!s.adjustedFrom;
   }
 
   async function save(s: SettingDef) {
-    const value = drafts[s.key];
     perKeyError[s.key] = '';
+    let value = drafts[s.key];
+    if (s.type === 'bytes') {
+      // Refused here, not sent: below 1 MB, empty or not a number (the server checks too).
+      const parsed = parseMBInput(value, { min: s.min, max: s.max });
+      if (!parsed.ok) {
+        perKeyError[s.key] = parsed.error;
+        return;
+      }
+      value = String(parsed.bytes);
+    }
     savingKey = s.key;
     try {
       // Also re-reads what depends on the global values (status-check levels, notices, badges).
       await saveGlobalSetting(s.key, value);
       // Update the in-memory record so the dirty indicator clears.
-      settings = settings.map((x) => (x.key === s.key ? { ...x, value } : x));
+      settings = settings.map((x) => (x.key === s.key ? { ...x, value, adjustedFrom: undefined } : x));
+      drafts[s.key] = shown(s, value);
       if (s.restartRequired && !$pendingRestartKeys.includes(s.key)) {
         $pendingRestartKeys = [...$pendingRestartKeys, s.key];
       }
@@ -107,12 +145,13 @@
   }
 
   function reset(s: SettingDef) {
-    drafts[s.key] = s.value;
+    drafts[s.key] = shown(s, s.value);
     perKeyError[s.key] = '';
   }
 
   function resetToDefault(s: SettingDef) {
-    drafts[s.key] = s.default;
+    drafts[s.key] = shown(s, s.default);
+    perKeyError[s.key] = '';
   }
 
   // Pretty-print a dotted key for messages: "auth.session_lifetime_hours" → "auth · session lifetime hours".
@@ -122,6 +161,7 @@
 
   // Friendly per-setting label for the form row.
   function labelFor(key: string): string {
+    if (plainLabels[key]) return plainLabels[key];
     const tail = key.split('.').slice(1).join('.');
     return tail.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
   }
@@ -206,6 +246,20 @@
   </div>
 {/if}
 
+{#if adjustedSettings.length > 0}
+  <div class="adjusted-banner" role="status">
+    <Icon icon="mdi:information-outline" width="20" />
+    <div>
+      <strong>Some stored limits were outside the allowed range and have been changed. Save each one to confirm.</strong>
+      <ul>
+        {#each adjustedSettings as s (s.key)}
+          <li>{labelFor(s.key)}: {adjustmentNotice(s)}</li>
+        {/each}
+      </ul>
+    </div>
+  </div>
+{/if}
+
 {#if loading}
   <p class="muted">Loading…</p>
 {:else if loadError}
@@ -228,7 +282,11 @@
               </label>
               <div class="desc">{s.description}</div>
               <div class="meta">
-                <span class="meta-defaults">Default <code>{s.default}</code>{#if s.min !== undefined && s.min !== 0} · min {s.min}{/if}{#if s.max !== undefined && s.max !== 0} · max {s.max}{/if}</span>
+                {#if s.type === 'bytes'}
+                  <span class="meta-defaults">Default <code>{formatMB(Number(s.default))}</code>{#if s.max} · can be set up to {formatMB(s.max)}{/if}</span>
+                {:else}
+                  <span class="meta-defaults">Default <code>{s.default}</code>{#if s.min !== undefined && s.min !== 0} · min {s.min}{/if}{#if s.max !== undefined && s.max !== 0} · max {s.max}{/if}</span>
+                {/if}
                 <code class="meta-key" title="Internal setting key — used in scripts and the API">{s.key}</code>
               </div>
             </div>
@@ -284,6 +342,20 @@
                     <div class="error inline">{cidrInputErrors[s.key]}</div>
                   {/if}
                 </div>
+              {:else if s.type === 'bytes'}
+                <div class="mb-input">
+                  <input
+                    id={`setting-${s.key}`}
+                    type="text"
+                    inputmode="decimal"
+                    bind:value={drafts[s.key]}
+                    aria-describedby={`setting-${s.key}-unit`}
+                  />
+                  <span class="mb-unit" id={`setting-${s.key}-unit`}>MB</span>
+                </div>
+                {#if s.adjustedFrom}
+                  <div class="adjusted inline" role="status">{adjustmentNotice(s)} Save to confirm.</div>
+                {/if}
               {:else}
                 <input
                   id={`setting-${s.key}`}
@@ -311,7 +383,7 @@
                 >
                   Revert
                 </Button>
-                {#if drafts[s.key] !== s.default}
+                {#if String(drafts[s.key]) !== shown(s, s.default)}
                   <Button variant="ghost" onclick={() => resetToDefault(s)}>
                     Reset to default
                   </Button>
@@ -505,6 +577,45 @@
      page once a restart-required setting has been saved, and stays
      visible across further edits — the page-level signal is more
      useful than per-key toasts that vanish after a few seconds. */
+  .adjusted-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.85rem 1.1rem;
+    margin: 0 0 1.5rem;
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid var(--accent);
+    border-radius: var(--radius-lg);
+    color: var(--text-primary);
+  }
+  .adjusted-banner :global(svg) {
+    color: var(--accent);
+    flex-shrink: 0;
+    margin-top: 0.1rem;
+  }
+  .adjusted-banner ul {
+    margin: 0.35rem 0 0;
+    padding-left: 1.1rem;
+  }
+  .adjusted.inline {
+    margin-top: 0.4rem;
+    font-size: 0.85rem;
+    color: var(--text-primary);
+  }
+  .mb-input {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .mb-input input {
+    flex: 1;
+    min-width: 0;
+  }
+  .mb-unit {
+    color: var(--text-secondary);
+    font-weight: 600;
+  }
+
   .restart-banner {
     display: flex;
     align-items: flex-start;

@@ -298,6 +298,7 @@ func (r *Router) setupRoutes() {
 	// App settings routes (admin-only). GET lists every setting with its
 	// definition + current value; PUT /api/settings/{key} updates one.
 	r.mux.HandleFunc("/api/settings", r.protected(r.handleSettingsList))
+	r.mux.HandleFunc("/api/upload-limits", r.protected(r.handleUploadLimits))
 	r.mux.HandleFunc("/api/settings/", r.protected(r.handleSettingUpdate))
 
 	// Network discovery routes (admin-only). The collection handler

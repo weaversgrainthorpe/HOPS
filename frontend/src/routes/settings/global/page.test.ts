@@ -68,3 +68,57 @@ describe('/settings/global', () => {
 		await waitFor(() => expect(row.textContent).toContain('out of range'));
 	});
 });
+
+describe('/settings/global upload limits (M5 §10)', () => {
+	const MB = 1048576;
+	const IMPORT = { key: 'upload.max_bytes_import', value: String(50 * MB), default: String(50 * MB), type: 'bytes', min: MB, max: 200 * MB, description: 'Imports bigger than this are refused.', restartRequired: false };
+	const ICON = { key: 'upload.max_bytes_icon', value: String(10 * MB), default: String(2 * MB), type: 'bytes', min: MB, max: 10 * MB, description: 'Icon uploads bigger than this are refused.', restartRequired: false, adjustedFrom: String(1024 * MB) };
+
+	beforeEach(() => listSettings.mockResolvedValue({ settings: [IMPORT, ICON] }));
+
+	it('labels each limit plainly and shows it in MB, with no "min"', async () => {
+		render(Page);
+		const imp = (await screen.findByLabelText(/Largest file you can import/)) as HTMLInputElement;
+		expect(imp.value).toBe('50');
+		expect(screen.getByLabelText(/Largest icon file/)).toBeTruthy();
+		const row = imp.closest('.row') as HTMLElement;
+		expect(row.textContent).toContain('MB');
+		expect(row.textContent).not.toMatch(/\bmin\b/i);
+		expect(row.textContent).not.toContain('52428800');
+	});
+
+	it('Save converts MB to bytes', async () => {
+		render(Page);
+		const imp = (await screen.findByLabelText(/Largest file you can import/)) as HTMLInputElement;
+		await fireEvent.input(imp, { target: { value: '75' } });
+		const row = imp.closest('.row') as HTMLElement;
+		await fireEvent.click(Array.from(row.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Save')!);
+		await waitFor(() => expect(save).toHaveBeenCalledWith('upload.max_bytes_import', String(75 * MB)));
+	});
+
+	for (const bad of ['0.5', '', 'abc']) {
+		it(`refuses ${JSON.stringify(bad)} with "Must be at least 1 MB" and does not save`, async () => {
+			render(Page);
+			const imp = (await screen.findByLabelText(/Largest file you can import/)) as HTMLInputElement;
+			await fireEvent.input(imp, { target: { value: bad } });
+			const row = imp.closest('.row') as HTMLElement;
+			await fireEvent.click(Array.from(row.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Save')!);
+			await waitFor(() => expect(row.textContent).toContain('Must be at least 1 MB'));
+			expect(save).not.toHaveBeenCalled();
+		});
+	}
+
+	it('a value clamped on load shows "Lowered from X MB to the new maximum Y MB"', async () => {
+		render(Page);
+		expect(await screen.findAllByText(/Lowered from 1024 MB to the new maximum 10 MB/)).not.toHaveLength(0);
+		const icon = screen.getByLabelText(/Largest icon file/) as HTMLInputElement;
+		expect(icon.value).toBe('10');
+		// Saving the setting is how the admin acknowledges it, so Save is available.
+		const row = icon.closest('.row') as HTMLElement;
+		const saveBtn = Array.from(row.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Save') as HTMLButtonElement;
+		expect(saveBtn.disabled).toBe(false);
+		await fireEvent.click(saveBtn);
+		await waitFor(() => expect(save).toHaveBeenCalledWith('upload.max_bytes_icon', String(10 * MB)));
+		await waitFor(() => expect(screen.queryByText(/Lowered from/)).toBeNull());
+	});
+});

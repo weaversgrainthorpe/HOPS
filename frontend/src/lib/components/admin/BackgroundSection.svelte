@@ -221,11 +221,6 @@
         continue;
       }
 
-      if (file.size > 50 * 1024 * 1024) {
-        uploadError = 'File size must be less than 50MB';
-        continue;
-      }
-
       try {
         const category = selectedCategory === 'all' ? 'uploaded' : selectedCategory;
         const result = await uploadBackground(file, category);

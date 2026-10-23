@@ -1282,24 +1282,16 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Cap the request body, then parse the multipart form. Limit comes from
-	// the upload.max_bytes_import admin setting.
-	limit := int64(r.settings.GetInt(settings.KeyUploadMaxBytesImport))
-	req.Body = http.MaxBytesReader(w, req.Body, limit)
-	if err := req.ParseMultipartForm(limit); err != nil {
-		writeJSONError(w, "Upload too large or malformed", http.StatusBadRequest)
-		return
-	}
-
-	// Check if auto-match icons is requested
-	autoMatchIcons := req.FormValue("autoMatchIcons") == "true"
-
-	file, _, err := req.FormFile("file")
-	if err != nil {
-		writeJSONError(w, "No file provided", http.StatusBadRequest)
+	// Cap the upload at the upload.max_bytes_import admin setting; an
+	// oversize file is refused naming the limit and its size (M5 §10).
+	file, _, ok := r.readLimitedUpload(w, req, uploadImport)
+	if !ok {
 		return
 	}
 	defer file.Close()
+
+	// Check if auto-match icons is requested
+	autoMatchIcons := req.FormValue("autoMatchIcons") == "true"
 
 	// Read entire file into memory
 	fileData, err := io.ReadAll(file)
@@ -2078,18 +2070,10 @@ func (r *Router) handleUploadBackground(w http.ResponseWriter, req *http.Request
 		return
 	}
 
-	// Cap the request body, then parse the multipart form. Limit from the
-	// upload.max_bytes_background admin setting.
-	limit := int64(r.settings.GetInt(settings.KeyUploadMaxBytesBackground))
-	req.Body = http.MaxBytesReader(w, req.Body, limit)
-	if err := req.ParseMultipartForm(limit); err != nil {
-		writeJSONError(w, "Upload too large or malformed", http.StatusBadRequest)
-		return
-	}
-
-	file, header, err := req.FormFile("file")
-	if err != nil {
-		writeJSONError(w, "No file provided", http.StatusBadRequest)
+	// Cap the upload at the upload.max_bytes_background admin setting; an
+	// oversize file is refused naming the limit and its size (M5 §10).
+	file, header, ok := r.readLimitedUpload(w, req, uploadBackground)
+	if !ok {
 		return
 	}
 	defer file.Close()
@@ -2190,18 +2174,10 @@ func (r *Router) handleUploadIcon(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Cap the request body, then parse the multipart form. Limit from the
-	// upload.max_bytes_icon admin setting.
-	limit := int64(r.settings.GetInt(settings.KeyUploadMaxBytesIcon))
-	req.Body = http.MaxBytesReader(w, req.Body, limit)
-	if err := req.ParseMultipartForm(limit); err != nil {
-		writeJSONError(w, "Upload too large or malformed", http.StatusBadRequest)
-		return
-	}
-
-	file, header, err := req.FormFile("file")
-	if err != nil {
-		writeJSONError(w, "No file provided", http.StatusBadRequest)
+	// Cap the upload at the upload.max_bytes_icon admin setting; an
+	// oversize file is refused naming the limit and its size (M5 §10).
+	file, header, ok := r.readLimitedUpload(w, req, uploadIcon)
+	if !ok {
 		return
 	}
 	defer file.Close()

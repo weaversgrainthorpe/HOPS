@@ -19,6 +19,10 @@ type settingDTO struct {
 	Min             int      `json:"min,omitempty"`
 	Max             int      `json:"max,omitempty"`
 	Enum            []string `json:"enum,omitempty"`
+	// AdjustedFrom is the out-of-range value that was stored when the setting
+	// was clamped on load (M5 §10); empty otherwise. The admin UI shows it
+	// as a notice until the setting is saved.
+	AdjustedFrom string `json:"adjustedFrom,omitempty"`
 }
 
 // handleSettingsList returns every setting's definition + current value.
@@ -31,6 +35,7 @@ func (r *Router) handleSettingsList(w http.ResponseWriter, req *http.Request) {
 
 	defs := r.settings.AllDefinitions()
 	values := r.settings.All()
+	adjusted := r.settings.Adjustments()
 	out := make([]settingDTO, 0, len(defs))
 	for _, d := range defs {
 		out = append(out, settingDTO{
@@ -43,6 +48,7 @@ func (r *Router) handleSettingsList(w http.ResponseWriter, req *http.Request) {
 			Min:             d.Min,
 			Max:             d.Max,
 			Enum:            d.Enum,
+			AdjustedFrom:    adjusted[d.Key],
 		})
 	}
 	writeJSON(w, map[string]any{"settings": out})

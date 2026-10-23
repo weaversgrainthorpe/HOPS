@@ -15,6 +15,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net"
 	"strconv"
 	"strings"
@@ -53,6 +54,9 @@ type Definition struct {
 	// Enum restricts string settings to a fixed set (e.g. log levels).
 	Enum []string
 }
+
+// MB is one megabyte as HOPS shows it (1,048,576 bytes).
+const MB = 1 << 20
 
 // Setting keys. Keep these in sync with the Definitions slice below.
 const (
@@ -126,20 +130,25 @@ var Definitions = []Definition{
 		Description: "HTTP timeout for each status-check request.",
 		Min:         1, Max: 120,
 	},
+	// Upload limits (M5 §10): the largest file each upload accepts. Shown and
+	// typed in MB in the admin UI. The ceilings are sized for the Pi Zero
+	// tenet, because import reads the whole file into memory; the floor is
+	// 1 MB. A stored value outside the bounds is clamped on load (see
+	// clampOnLoad) and reported through Adjustments.
 	{
-		Key: KeyUploadMaxBytesImport, Type: "bytes", Default: "52428800",
-		Description: "Maximum upload size for the config import endpoint.",
-		Min:         1024, Max: 1 << 30,
+		Key: KeyUploadMaxBytesImport, Type: "bytes", Default: strconv.Itoa(50 * MB),
+		Description: "Imports bigger than this are refused.",
+		Min:         1 * MB, Max: 200 * MB,
 	},
 	{
-		Key: KeyUploadMaxBytesBackground, Type: "bytes", Default: "52428800",
-		Description: "Maximum upload size for background images.",
-		Min:         1024, Max: 1 << 30,
+		Key: KeyUploadMaxBytesBackground, Type: "bytes", Default: strconv.Itoa(25 * MB),
+		Description: "Background image uploads bigger than this are refused.",
+		Min:         1 * MB, Max: 100 * MB,
 	},
 	{
-		Key: KeyUploadMaxBytesIcon, Type: "bytes", Default: "8388608",
-		Description: "Maximum upload size for icon images.",
-		Min:         1024, Max: 1 << 30,
+		Key: KeyUploadMaxBytesIcon, Type: "bytes", Default: strconv.Itoa(2 * MB),
+		Description: "Icon uploads bigger than this are refused.",
+		Min:         1 * MB, Max: 10 * MB,
 	},
 	{
 		Key: KeyHTTPReadHeaderTimeoutSeconds, Type: "duration_seconds", Default: "10", RestartRequired: true,
@@ -197,6 +206,10 @@ type Service struct {
 	mu        sync.RWMutex
 	cache     map[string]string
 	listeners map[string][]func(value string)
+	// adjusted maps a key to the out-of-range value stored for it, for each
+	// setting clamped on load. The clamp is not written back, so the admin is
+	// told (Adjustments) until they save the setting themselves.
+	adjusted map[string]string
 }
 
 // New constructs a Service: ensures the app_settings table is seeded with
@@ -207,6 +220,7 @@ func New(db *sql.DB) (*Service, error) {
 		db:        db,
 		cache:     make(map[string]string, len(Definitions)),
 		listeners: make(map[string][]func(string)),
+		adjusted:  make(map[string]string),
 	}
 	if err := s.seedAndLoad(); err != nil {
 		return nil, fmt.Errorf("settings init: %w", err)
@@ -235,9 +249,48 @@ func (s *Service) seedAndLoad() error {
 		if err := rows.Scan(&k, &v); err != nil {
 			return err
 		}
-		s.cache[k] = v
+		s.cache[k] = s.clampOnLoad(k, v)
 	}
 	return rows.Err()
+}
+
+// clampOnLoad brings a stored byte-size setting that is outside its bounds
+// (e.g. a limit saved under an older, higher ceiling) back inside them, and
+// records the stored value so the admin UI can say what was lowered or raised.
+func (s *Service) clampOnLoad(key, value string) string {
+	def, ok := defByKey[key]
+	if !ok || def.Type != "bytes" {
+		return value
+	}
+	v, err := strconv.Atoi(value)
+	if err != nil {
+		return value
+	}
+	clamped := v
+	if def.Max != 0 && v > def.Max {
+		clamped = def.Max
+	} else if def.Min != 0 && v < def.Min {
+		clamped = def.Min
+	}
+	if clamped == v {
+		return value
+	}
+	s.adjusted[key] = value
+	slog.Warn("stored setting outside its bounds; using the nearest allowed value until it is saved",
+		"component", "settings", "key", key, "stored", v, "using", clamped)
+	return strconv.Itoa(clamped)
+}
+
+// Adjustments returns, for each setting clamped on load, the out-of-range
+// value that was stored. A key leaves the map when the setting is saved.
+func (s *Service) Adjustments() map[string]string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make(map[string]string, len(s.adjusted))
+	for k, v := range s.adjusted {
+		out[k] = v
+	}
+	return out
 }
 
 // Definition returns the definition for a key, or false if the key is unknown.
@@ -293,6 +346,7 @@ func (s *Service) Set(key, value string) error {
 		return fmt.Errorf("persist %q: %w", key, err)
 	}
 	s.cache[key] = value
+	delete(s.adjusted, key)
 	listeners := append([]func(string){}, s.listeners[key]...)
 	s.mu.Unlock()
 

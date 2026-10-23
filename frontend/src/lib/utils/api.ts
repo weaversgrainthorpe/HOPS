@@ -2,6 +2,7 @@ import type { Config, DashboardSettings } from '$lib/types';
 import type { LayoutDoc, LayoutDashboard } from '$lib/types/layout';
 import type { ImportResult } from './importResult';
 import { LAYOUT_VERSION } from '$lib/layout/geometry';
+import { checkUploadSize, uploadErrorMessage } from './uploadLimits';
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 
@@ -449,6 +450,9 @@ export async function exportConfig(format: 'json' | 'yaml' = 'json', dashboardId
 }
 
 export async function importConfig(file: File, options?: { autoMatchIcons?: boolean }): Promise<ImportResult> {
+  // M5 §10: a file over the import limit is refused before it is sent, naming the limit and its size.
+  const refusal = await checkUploadSize('import', file);
+  if (refusal) throw new Error(refusal);
   const formData = new FormData();
   formData.append('file', file);
   if (options?.autoMatchIcons) {
@@ -463,8 +467,7 @@ export async function importConfig(file: File, options?: { autoMatchIcons?: bool
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(errorText || `Import failed: ${response.statusText}`);
+    throw new Error(await uploadErrorMessage(response, 'Import failed'));
   }
 
   return response.json();
@@ -522,6 +525,8 @@ export async function deleteIcon(id: string): Promise<void> {
 }
 
 export async function uploadIconImage(file: File): Promise<{ url: string; id: string }> {
+  const refusal = await checkUploadSize('icon', file);
+  if (refusal) throw new Error(refusal);
   const formData = new FormData();
   formData.append('file', file);
 
@@ -533,8 +538,7 @@ export async function uploadIconImage(file: File): Promise<{ url: string; id: st
   });
 
   if (!response.ok) {
-    const text = await response.text();
-    throw new Error(text || 'Upload failed');
+    throw new Error(await uploadErrorMessage(response, 'Upload failed'));
   }
 
   return response.json();
@@ -586,6 +590,8 @@ export async function getBackgrounds(): Promise<BackgroundsResponse> {
 }
 
 export async function uploadBackground(file: File, category: string): Promise<BackgroundImage> {
+  const refusal = await checkUploadSize('background', file);
+  if (refusal) throw new Error(refusal);
   const formData = new FormData();
   formData.append('file', file);
   formData.append('category', category);
@@ -598,8 +604,7 @@ export async function uploadBackground(file: File, category: string): Promise<Ba
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(errorText || `Upload failed: ${response.statusText}`);
+    throw new Error(await uploadErrorMessage(response, 'Upload failed'));
   }
 
   return response.json();
@@ -691,6 +696,8 @@ export interface SettingDef {
   min?: number;
   max?: number;
   enum?: string[];
+  /** The out-of-range value that was stored, when the server clamped it on load (M5 §10). */
+  adjustedFrom?: string;
 }
 
 export async function listSettings(): Promise<{ settings: SettingDef[] }> {
