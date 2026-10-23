@@ -20,8 +20,9 @@ cleanup() {
     if [ ! -z "$FRONTEND_PID" ]; then
         kill $FRONTEND_PID 2>/dev/null
     fi
-    # Also kill any orphaned processes
-    pkill -f "hops .*--data .*hops/data" 2>/dev/null
+    # Also kill orphaned processes of THIS script only (its own binary path).
+    # Never a broad pattern: it once matched the hops-dev service too.
+    pkill -f "^\./hops --data $HOPS_DIR/data " 2>/dev/null
     exit 0
 }
 
