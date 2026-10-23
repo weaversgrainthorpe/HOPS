@@ -348,12 +348,12 @@ test.describe('M5 one Folder component', () => {
     const bar = node(page, f.id('f')).locator('.folder-header');
     await expect(bar).toBeVisible();
     await expect(bar).not.toContainText('Hidden');
-    await expect(bar.getByRole('button', { name: 'Minimise folder' })).toBeVisible();
+    await expect(bar.getByRole('button', { name: 'Minimise Untitled folder' })).toBeVisible();
     await page.getByRole('button', { name: /^Sub, folder with 1 item/ }).click();
     await expect(node(page, f.id('f')).locator('.nested-header')).toContainText('Sub');
     await expect(bar).not.toContainText('Hidden'); // its title is never a breadcrumb (M5 §7)
     await expect(node(page, f.id('f')).locator('.nested-header').getByRole('button', { name: 'Minimise Sub' })).toBeVisible();
-    await bar.getByRole('button', { name: 'Minimise folder' }).click();
+    await bar.getByRole('button', { name: 'Minimise Untitled folder' }).click();
     await expect(node(page, f.id('f'))).toHaveClass(/collapsed/);
   });
 });

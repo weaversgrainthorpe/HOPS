@@ -80,6 +80,27 @@ test.describe('M5 §11 Discovery is a normal Settings section', () => {
 		}
 	});
 
+	// Batch review Minor 7: the draft page lost its own 1180 px width; at 1280 beside the sidebar nothing
+	// in it may spill sideways (the page, the content, or any table inside it).
+	test('the draft page at 1280: nothing overflows sideways beside the sidebar', async ({ page }) => {
+		const id = await scanId(page);
+		await page.setViewportSize({ width: 1280, height: 900 });
+		await page.goto(`/settings/discovery/${id}`);
+		await expectDiscoveryPage(page, new RegExp(`/settings/discovery/${id}$`), 'Discovery draft');
+		await expect(page.getByText(/discovery draft|scanning/i).first()).toBeVisible({ timeout: 10_000 });
+		const m = await page.evaluate(() => {
+			const content = document.querySelector('.settings-content') as HTMLElement;
+			const c = content.getBoundingClientRect();
+			const spill = [...content.querySelectorAll<HTMLElement>('*')]
+				.filter((e) => { const b = e.getBoundingClientRect(); return b.width > 0 && b.right > c.right + 1; })
+				.map((e) => `${e.tagName.toLowerCase()}.${e.className}`.slice(0, 60));
+			return { view: window.innerWidth, doc: document.documentElement.scrollWidth, content: content.scrollWidth - content.clientWidth, spill };
+		});
+		expect(m.doc, 'no sideways page scroll').toBeLessThanOrEqual(m.view);
+		expect(m.content, 'the content does not scroll sideways').toBeLessThanOrEqual(0);
+		expect(m.spill, 'nothing pokes out past the content box').toEqual([]);
+	});
+
 	test('every sub-page keeps the sidebar with Discovery highlighted; navigation is by the header and Back', async ({ page }) => {
 		await openDiscovery(page);
 		await page.locator('.section-header').getByRole('button', { name: 'New Scan', exact: true }).click();

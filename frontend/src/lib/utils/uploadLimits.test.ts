@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { bytesToMBText, formatMB, parseMBInput, uploadTooLargeMessage, checkUploadSize, uploadErrorMessage, MB } from './uploadLimits';
+import { bytesToMBText, formatMB, parseMBInput, uploadTooLargeMessage, checkUploadSize, uploadErrorMessage, sendUpload, MB } from './uploadLimits';
 
 // M5 §10: upload limits are shown and typed in MB, and an oversize file is refused with a
 // message naming the limit and the file's size.
@@ -65,5 +65,22 @@ describe('oversize uploads', () => {
 		expect(await uploadErrorMessage(r, 'Upload failed')).toBe('This file is 3 MB, but the largest icon file allowed is 2 MB.');
 		expect(await uploadErrorMessage(new Response('', { status: 413 }), 'Upload failed')).toBe('That file is bigger than the upload limit.');
 		expect(await uploadErrorMessage(new Response('boom', { status: 500 }), 'Upload failed')).toBe('Upload failed: boom');
+	});
+});
+
+// Batch review Minor 4: the server may refuse an oversize body before reading it, and the browser
+// then reports a dropped connection, not the server's message. Say what that likely means.
+describe('sendUpload: a dropped upload is named, never a bare "Failed to fetch"', () => {
+	afterEach(() => vi.unstubAllGlobals());
+	it('a network failure mid-upload says the upload was cut off and may be over the limit', async () => {
+		vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('Failed to fetch'); }));
+		await expect(sendUpload('/api/backgrounds', { method: 'POST' })).rejects.toThrow(
+			/upload was cut off.*may be over the upload limit/i
+		);
+	});
+	it('a response (even an error) is returned as it is', async () => {
+		const res = new Response('{"error":"x"}', { status: 413 });
+		vi.stubGlobal('fetch', vi.fn(async () => res));
+		await expect(sendUpload('/api/backgrounds', { method: 'POST' })).resolves.toBe(res);
 	});
 });

@@ -2,10 +2,12 @@ package api
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/json"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -145,5 +147,41 @@ func TestSettingsListReportsClampedValues(t *testing.T) {
 	}
 	if imp := findSetting(t, getSettings(t, router, tok, csrf), settings.KeyUploadMaxBytesImport); imp.AdjustedFrom != "" {
 		t.Errorf("after save adjustedFrom = %q, want empty", imp.AdjustedFrom)
+	}
+}
+
+// Batch review Minor 3: the form is parsed with a small in-memory budget, so a
+// large file part spills to a temp file instead of sitting in RAM (an import
+// near its limit would otherwise peak at about twice the limit on a Pi Zero).
+func TestLargeUploadSpillsToDiskNotMemory(t *testing.T) {
+	db, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+	db.SetMaxOpenConns(1)
+	if _, err := db.Exec(`CREATE TABLE app_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP)`); err != nil {
+		t.Fatal(err)
+	}
+	svc, err := settings.New(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := &Router{settings: svc}
+	body, ct := multipartFile(t, "file", "big.json", "application/json", bytes.Repeat([]byte("x"), 3<<20)) // 3 MB
+	req := httptest.NewRequest("POST", "/api/config/import", body)
+	req.Header.Set("Content-Type", ct)
+	w := httptest.NewRecorder()
+	file, header, ok := r.readLimitedUpload(w, req, uploadImport)
+	if !ok {
+		t.Fatalf("a 3 MB import under the limit was refused: %d %s", w.Code, w.Body.String())
+	}
+	defer file.Close()
+	defer req.MultipartForm.RemoveAll()
+	if header.Size != 3<<20 {
+		t.Fatalf("size %d", header.Size)
+	}
+	if _, onDisk := file.(*os.File); !onDisk {
+		t.Fatalf("the 3 MB file part is held in memory (%T); it should spill to a temp file", file)
 	}
 }

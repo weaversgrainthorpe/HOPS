@@ -285,7 +285,7 @@ test.describe('walkthrough 1 (2): opening a folder in edit mode', () => {
       await page.getByRole('menu').getByRole('menuitem', { name: 'Open', exact: true }).click();
       await isOpen(fid);
       // 4. The open box's Minimise toggle puts it back (the same draft value, undoable).
-      await node(page, id(fid)).getByRole('button', { name: 'Minimise folder' }).click();
+      await node(page, id(fid)).getByRole('button', { name: /^Minimise / }).click();
       await isMinimised(fid);
       // 5. A double-click edits it, and never also opens it.
       await face(page, id(fid)).dblclick({ position: { x: 8, y: b.height - 8 } });

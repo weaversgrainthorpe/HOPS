@@ -507,7 +507,7 @@ test.describe('M3 editor: dragging into and out of folders', () => {
     const f2 = await box(page, f.id('f2'));
     await dropAt(page, f.id('c'), f2.x + f2.width - 80, f2.y + f2.height - 60);
     const one = page.locator(`[data-node-id="${f.id('f1')}"]`);
-    await one.getByRole('button', { name: 'Minimise folder' }).click();
+    await one.getByRole('button', { name: 'Minimise One' }).click();
     await expect(page.locator('.folder-slot.collapsed', { hasText: 'One' })).toBeVisible();
     await editModeOn(page);
     await page.locator('.folder-slot.collapsed', { hasText: 'One' }).click({ button: 'right' });
@@ -532,7 +532,7 @@ test.describe('M3 editor: dragging into and out of folders', () => {
     await dropAt(page, f.id('b'), f1.x + f1.width - 80, f1.y + f1.height - 60);
     const two = page.locator(`[data-node-id="${f.id('f2')}"]`);
     await expect(two.getByRole('button', { name: 'Maximise folder' })).toHaveCount(0);
-    await expect(two.getByRole('button', { name: 'Minimise folder' })).toBeVisible();
+    await expect(two.getByRole('button', { name: 'Minimise Two' })).toBeVisible();
     await editModeOn(page);
     await expect(page.getByRole('status').filter({ hasText: 'Unsaved changes' })).toBeVisible();
     const to = await belowEverything(page, f);

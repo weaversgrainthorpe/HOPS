@@ -131,14 +131,14 @@ describe('opening in place: click, Enter and the restore control; neighbours nev
     const { container } = await renderTab([folder('f', kids(3)), tile('n', 14, 0)]);
     expect(screen.queryByRole('button', { name: 'Maximise folder' })).toBeNull();
     const before = el(container, 'n').getAttribute('style');
-    await fireEvent.click(screen.getByRole('button', { name: 'Minimise folder' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Minimise f' }));
     expect(el(container, 'f').classList.contains('collapsed')).toBe(true);
     expect(el(container, 'f').style.gridColumn).toBe('1 / span 2');
     expect(el(container, 'n').getAttribute('style')).toBe(before);
     expect(JSON.parse(localStorage.getItem('hops.folderView.d1')!)).toEqual({ f: 'collapsed' });
-    await fireEvent.click(screen.getByRole('button', { name: 'Restore folder' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Restore f' }));
     expect(el(container, 'f').style.gridColumn).toBe('1 / span 12');
-    expect(document.activeElement?.getAttribute('aria-label')).toBe('Minimise folder');
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('Minimise f');
   });
   it('a remembered "maximised" (an older build) draws open in place', async () => {
     localStorage.setItem('hops.folderView.d1', JSON.stringify({ f: 'maximised' }));
@@ -380,12 +380,52 @@ describe('drilling into a sub-folder: a folder inside a folder, one inset box a 
   });
 });
 
+describe('every box\'s controls are named for their box (I2, Ruling 15): no two controls share a name', () => {
+  const names = (c: ParentNode) =>
+    Array.from(c.querySelectorAll('button')).map((b) => b.getAttribute('aria-label') ?? b.textContent?.trim() ?? '');
+  it('two open folders and a drilled inset box: "Minimise <name>" each, every button name unique', async () => {
+    setFolderDrill('d1', 'Lights', ['Lamps']);
+    const { container } = await renderTab([
+      folder('Lights', [kid('a'), sub('Lamps', [kid('b')])]),
+      folder('Media', kids(2), { placement: { x: 12, y: 0, w: 12, h: 6 } }),
+      folder('', kids(1, 'u'), { id: 'blank', placement: { x: 0, y: 6, w: 12, h: 6 } })
+    ]);
+    expect(screen.getByRole('button', { name: 'Minimise Lights' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Minimise Media' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Minimise Lamps' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Minimise Untitled folder' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Minimise folder' })).toBeNull();
+    const all = names(container);
+    expect(all.length).toBeGreaterThan(3);
+    expect(new Set(all).size, `duplicate names: ${all.join(' | ')}`).toBe(all.length);
+  });
+  it('Restore is "Restore <name>" on the open bar and on the minimised tile', async () => {
+    setFolderView('d1', 'Lights', 'collapsed');
+    setFolderView('d1', 'Media', 'expanded'); // saved minimised, open here: Restore is on its open bar
+    const { container } = await renderTab([
+      folder('Lights', kids(2)),
+      folder('Media', kids(2), { display: 'collapsed', placement: { x: 12, y: 0, w: 12, h: 6 } })
+    ]);
+    expect(el(container, 'Lights').classList.contains('collapsed')).toBe(true);
+    expect(el(container, 'Media').classList.contains('collapsed')).toBe(false);
+    const all = names(container);
+    expect(new Set(all).size, `duplicate names: ${all.join(' | ')}`).toBe(all.length);
+    expect(screen.getByRole('button', { name: 'Restore Lights' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Restore Media' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Restore folder' })).toBeNull();
+    await fireEvent.click(screen.getByRole('button', { name: 'Restore Lights' }));
+    // Back to the saved default (open): focus lands on its own minimise, found by its hook, not its label.
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('Minimise Lights');
+  });
+});
+
 describe('untitled folders (showTitle: false): the bar shows only the controls, drilled in or not', () => {
   it('no name in the bar, but Minimise is there; drilled in, the sub-folder is an inset box', async () => {
     const { container } = await renderTab([folder('f', [sub('s', [kid('deep')])], { showTitle: false, name: 'Hidden' })]);
     const bar = el(container, 'f').querySelector('.folder-header') as HTMLElement;
     expect(within(bar).queryByText('Hidden')).toBeNull();
-    expect(within(bar).getByRole('button', { name: 'Minimise folder' })).toBeInTheDocument();
+    // Named as an inset box is (I2): a hidden title reads "Untitled folder", as it does there.
+    expect(within(bar).getByRole('button', { name: 'Minimise Untitled folder' })).toBeInTheDocument();
     await fireEvent.click(screen.getByRole('button', { name: /^s, folder with/ }));
     expect(within(bar).queryByText('Hidden')).toBeNull(); // never a breadcrumb in its bar
     expect(bar.getAttribute('data-crumb')).toBe('f'); // still the drag's go-up target
@@ -405,7 +445,8 @@ describe('edit mode looks the same (§7.2 WYSIWYG), plus handles', () => {
     expect(nested(container, 's').contains(page(container))).toBe(true);
     expect(container.querySelector('[data-page-bar="next"]')).not.toBeNull();
     expect(screen.getByRole('button', { name: 'Edit f' })).toBeInTheDocument();
-    await fireEvent.click(screen.getByRole('button', { name: 'Minimise folder' }));
+    expect(screen.getByRole('button', { name: 'Minimise f' }).getAttribute('title')).toBe('Minimise f (sets how it starts)');
+    await fireEvent.click(screen.getByRole('button', { name: 'Minimise f' }));
     const s = get(session)!;
     expect((s.draft.tabs[0].root.children[0] as any).display).toBe('collapsed');
     expect(s.undo).toHaveLength(1);
@@ -516,7 +557,7 @@ describe('edit mode looks the same (§7.2 WYSIWYG), plus handles', () => {
     setFolderView('d1', 'f', 'collapsed');
     const { container } = await renderEditing([folder('f', kids(2))]);
     expect(el(container, 'f').classList.contains('collapsed')).toBe(false);
-    expect(screen.queryByRole('button', { name: 'Restore folder' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Restore / })).toBeNull();
   });
 });
 

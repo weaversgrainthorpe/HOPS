@@ -2,7 +2,7 @@ import type { Config, DashboardSettings } from '$lib/types';
 import type { LayoutDoc, LayoutDashboard } from '$lib/types/layout';
 import type { ImportResult } from './importResult';
 import { LAYOUT_VERSION } from '$lib/layout/geometry';
-import { checkUploadSize, uploadErrorMessage } from './uploadLimits';
+import { checkUploadSize, uploadErrorMessage, sendUpload } from './uploadLimits';
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 
@@ -459,7 +459,7 @@ export async function importConfig(file: File, options?: { autoMatchIcons?: bool
     formData.append('autoMatchIcons', 'true');
   }
 
-  const response = await fetch(`${API_BASE}/config/import`, {
+  const response = await sendUpload(`${API_BASE}/config/import`, {
     method: 'POST',
     credentials: 'same-origin',
     headers: withCSRFHeader({}, 'POST'),
@@ -530,7 +530,7 @@ export async function uploadIconImage(file: File): Promise<{ url: string; id: st
   const formData = new FormData();
   formData.append('file', file);
 
-  const response = await fetch(`${API_BASE}/icons/upload`, {
+  const response = await sendUpload(`${API_BASE}/icons/upload`, {
     method: 'POST',
     credentials: 'same-origin',
     headers: withCSRFHeader({}, 'POST'),
@@ -596,7 +596,7 @@ export async function uploadBackground(file: File, category: string): Promise<Ba
   formData.append('file', file);
   formData.append('category', category);
 
-  const response = await fetch(`${API_BASE}/backgrounds`, {
+  const response = await sendUpload(`${API_BASE}/backgrounds`, {
     method: 'POST',
     credentials: 'same-origin',
     headers: withCSRFHeader({}, 'POST'),

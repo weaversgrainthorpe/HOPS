@@ -140,7 +140,7 @@ test.describe('M4 backgrounds in a real browser', () => {
     const titled = page.locator(`[data-node-id="${f.id('ft')}"]`);
     await expect(titled).toBeVisible();
     await expect(titled.getByRole('button', { name: 'Maximise folder' })).toHaveCount(0);
-    await expect(titled.getByRole('button', { name: 'Minimise folder' })).toBeVisible();
+    await expect(titled.getByRole('button', { name: 'Minimise Titled' })).toBeVisible();
     await expect(page.locator('.max-host, .overlay-backdrop')).toHaveCount(0);
     // Its surface is its own (translucent) look, inside its box.
     await expect(titled.locator(':scope > .folder-surface')).toHaveCount(1);
@@ -284,7 +284,7 @@ test.describe('M4 backgrounds in a real browser', () => {
     const bar = page.locator(`${sel} > .folder-header`);
     await expect(bar).toBeVisible();
     await expect(bar).not.toContainText('Folder f0'); // untitled: controls only
-    const min = bar.getByRole('button', { name: 'Minimise folder' });
+    const min = bar.getByRole('button', { name: 'Minimise Untitled folder' });
     await expect(min).toBeVisible();
     const cb = (await min.boundingBox())!;
     const body = await boxOf(page, `${sel} > .folder-body`);
@@ -299,11 +299,11 @@ test.describe('M4 backgrounds in a real browser', () => {
       ([x, y]) => (document.elementFromPoint(x, y)?.closest('button')?.getAttribute('aria-label') ?? null),
       [cb.x + cb.width / 2, cb.y + cb.height / 2]
     );
-    expect(hit).toBe('Minimise folder');
+    expect(hit).toBe('Minimise Untitled folder');
     // And it works (then Restore brings it back).
     await min.click();
     await expect(page.locator(sel)).toHaveClass(/collapsed/);
-    await page.locator(sel).getByRole('button', { name: 'Restore folder' }).click();
+    await page.locator(sel).getByRole('button', { name: 'Restore Untitled folder' }).click();
     await expect(page.locator(`${sel} > .folder-header`)).toBeVisible();
 
     // Edit mode: the failure badge sits in the bar too — clear of the controls and the content.
@@ -311,7 +311,7 @@ test.describe('M4 backgrounds in a real browser', () => {
     const badge = page.locator(`${sel} [data-bg-failed="folder"]`);
     await expect(badge).toBeVisible();
     const bb = (await badge.boundingBox())!;
-    const cb2 = (await page.locator(`${sel} > .folder-header`).getByRole('button', { name: 'Minimise folder' }).boundingBox())!;
+    const cb2 = (await page.locator(`${sel} > .folder-header`).getByRole('button', { name: 'Minimise Untitled folder' }).boundingBox())!;
     expect(intersects(bb, cb2), 'failure badge and controls would collide').toBe(false);
     expect(intersects(bb, await boxOf(page, `${sel} > .folder-body`))).toBe(false);
     expect(bb.y).toBeGreaterThanOrEqual(0);

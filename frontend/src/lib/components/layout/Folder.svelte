@@ -99,6 +99,8 @@
   const remembered = $derived(views?.remembered(folder.id));
   const saved = $derived(views?.saved(folder.id) ?? folder.display);
   const showRestore = $derived(!editing && !item && !!views && differsFromSaved(saved, remembered));
+  /** The folder's name in its controls' labels, as an inset box's ("Untitled folder" when it shows none). */
+  const boxName = $derived(folder.showTitle === false || !folder.name?.trim() ? 'Untitled folder' : folder.name);
 
   /** The clicked control is about to unmount: hand focus to whatever replaces it. */
   async function thenFocus() {
@@ -312,15 +314,24 @@
 </script>
 
 <!-- Every box's controls (Ruling 15): the top folder's bar and each inset box's bar draw the same
-     minimise, last in the bar. `label` names the box (an inset box: "Minimise <its name>"). -->
+     minimise, last in the bar. `label` names the box ("Minimise <its name>", every box alike — I2), so
+     no two folders' controls share a name. The top folder's controls carry a data- hook for
+     focusFolderControl (never found by label). -->
 {#snippet controls(label: string, title: string, onMinimise: (e: Event) => void, inset: boolean)}
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <span class="folder-controls" ondblclick={own}>
-    <button type="button" aria-label={label} {title} onclick={onMinimise} onpointerdown={inset ? noDrag : undefined}>
+    <button
+      type="button"
+      aria-label={label}
+      {title}
+      data-folder-minimise={inset ? undefined : folder.id}
+      onclick={onMinimise}
+      onpointerdown={inset ? noDrag : undefined}
+    >
       <Icon icon="mdi:window-minimize" width="18" />
     </button>
     {#if showRestore && !inset}
-      <button type="button" aria-label="Restore folder" title="Restore folder" onclick={restore}>
+      <button type="button" aria-label="Restore {boxName}" title="Restore {boxName}" data-folder-restore={folder.id} onclick={restore}>
         <Icon icon="mdi:restore" width="18" />
       </button>
     {/if}
@@ -537,7 +548,7 @@
     {/if}
     {#if showRestore}
       <span class="tile-restore">
-        <button type="button" class="restore-btn" aria-label="Restore folder" title="Restore folder" onclick={restore}>
+        <button type="button" class="restore-btn" aria-label="Restore {boxName}" title="Restore {boxName}" data-folder-restore={folder.id} onclick={restore}>
           <Icon icon="mdi:restore" width="18" />
         </button>
       </span>
@@ -608,7 +619,7 @@
         </span>
       {/if}
       <BackgroundFailedBadge background={folder.background} {editing} level="folder" placement="inline" />
-      {@render controls('Minimise folder', editing ? 'Minimise folder (sets how it starts)' : 'Minimise folder', minimise, false)}
+      {@render controls(`Minimise ${boxName}`, editing ? `Minimise ${boxName} (sets how it starts)` : `Minimise ${boxName}`, minimise, false)}
     </div>
     <!-- data-drop-area: the whole body is a drop target for the folder shown (the innermost), not just
          its items' rows. -->

@@ -213,8 +213,10 @@
   let centerTitle = $derived(headerConfig?.centerTitle);
   /** The title: the header's own, else the dashboard's name — centred in the bar (M5 §8). */
   let titleText = $derived(showCenter ? centerTitle || pageDashboard?.name || '' : '');
-  /** Signed in, on a dashboard, the title is the switcher (Ruling 16); signed out it is plain text. */
-  let showSwitcher = $derived(!!titleText && $isAuthenticated && isDashboardPage);
+  /** Signed in, on a dashboard, the title is the switcher (Ruling 16); signed out it is plain text.
+   *  With the title hidden (the header's showCenter off), an admin still gets the switcher — a compact
+   *  "Dashboards ▾" in the title's place (Ruling 20); signed out, nothing is there. */
+  let showSwitcher = $derived($isAuthenticated && isDashboardPage);
   $effect(() => {
     if (!showSwitcher) untrack(() => closeSwitcher());
   });
@@ -241,6 +243,9 @@
     const bar = navContentEl;
     if (!bar) return { fits: true, centred: true };
     let fits = bar.scrollWidth <= bar.clientWidth + 0.5;
+    // The compact "Dashboards ▾" (Ruling 20) never shrinks: squeezed, it spills out of the centre box.
+    const center = bar.querySelector<HTMLElement>('.nav-center');
+    if (center && center.scrollWidth > center.clientWidth + 0.5) fits = false;
     const title = titleEl;
     if (!title) return { fits, centred: true };
     const text = title.querySelector<HTMLElement>('.title-text');
@@ -327,59 +332,72 @@
       {/if}
     </div>
 
-    <!-- The title, centred (M5 §8). Signed in, it is the dashboard switcher (Ruling 16). -->
+    <!-- The title, centred (M5 §8). Signed in, it is the dashboard switcher (Ruling 16); with the title
+         hidden, a compact "Dashboards ▾" switcher takes its place (Ruling 20). -->
+    {#snippet switcherButton(label: string, compactLabel: boolean)}
+      <button
+        type="button"
+        class="switcher-btn"
+        bind:this={switcherBtn}
+        aria-label={label}
+        aria-haspopup="menu"
+        aria-expanded={switcherOpen}
+        aria-controls={switcherOpen ? 'nav-switcher-menu' : undefined}
+        title="Switch dashboard"
+        onclick={() => (switcherOpen ? closeSwitcher() : void openSwitcher('current'))}
+        onkeydown={onSwitcherKey}
+      >
+        {#if compactLabel}
+          <span class="switcher-compact-text">Dashboards</span>
+        {:else}
+          <span class="title-text">{titleText}</span>
+        {/if}
+        <Icon icon="mdi:chevron-down" class="switcher-chevron" width="1em" height="1em" />
+      </button>
+    {/snippet}
     <div class="nav-center">
       {#if titleText}
         <h1 class="center-title" bind:this={titleEl}>
           {#if showSwitcher}
-            <button
-              type="button"
-              class="switcher-btn"
-              bind:this={switcherBtn}
-              aria-label="{titleText} — switch dashboard"
-              aria-haspopup="menu"
-              aria-expanded={switcherOpen}
-              aria-controls="nav-switcher-menu"
-              title="Switch dashboard"
-              onclick={() => (switcherOpen ? closeSwitcher() : void openSwitcher('current'))}
-              onkeydown={onSwitcherKey}
-            >
-              <span class="title-text">{titleText}</span>
-              <Icon icon="mdi:chevron-down" class="switcher-chevron" width="1em" height="1em" />
-            </button>
+            {@render switcherButton(`${titleText} — switch dashboard`, false)}
           {:else}
             <span class="title-text">{titleText}</span>
           {/if}
         </h1>
-        {#if showSwitcher && switcherOpen}
-          <!-- svelte-ignore a11y_interactive_supports_focus -->
-          <div
-            class="switcher-menu"
-            id="nav-switcher-menu"
-            role="menu"
-            aria-label="Dashboards"
-            style:--menu-shift="{menuShift}px"
-            bind:this={switcherMenu}
-            onkeydown={onSwitcherMenuKey}
-          >
-            {#each navDashboards as dashboard (dashboard.id)}
-              <a
-                href={dashboard.path}
-                role="menuitem"
-                tabindex="-1"
-                class="switcher-item"
-                class:active={currentPath === dashboard.path}
-                aria-current={currentPath === dashboard.path ? 'page' : undefined}
-                onclick={() => closeSwitcher()}
-              >
-                <span class="switcher-mark" aria-hidden="true">
-                  {#if currentPath === dashboard.path}<Icon icon="mdi:check" width="18" height="18" />{/if}
-                </span>
-                <span class="switcher-name">{dashboard.name}</span>
-              </a>
-            {/each}
-          </div>
-        {/if}
+      {:else if showSwitcher}
+        <!-- Not a title (no h1): the bar's centring treats it as no title (fitBar). -->
+        <div class="switcher-compact">
+          {@render switcherButton('Dashboards — switch dashboard', true)}
+        </div>
+      {/if}
+      {#if showSwitcher && switcherOpen}
+        <!-- svelte-ignore a11y_interactive_supports_focus -->
+        <div
+          class="switcher-menu"
+          id="nav-switcher-menu"
+          role="menu"
+          aria-label="Dashboards"
+          style:--menu-shift="{menuShift}px"
+          bind:this={switcherMenu}
+          onkeydown={onSwitcherMenuKey}
+        >
+          {#each navDashboards as dashboard (dashboard.id)}
+            <a
+              href={dashboard.path}
+              role="menuitem"
+              tabindex="-1"
+              class="switcher-item"
+              class:active={currentPath === dashboard.path}
+              aria-current={currentPath === dashboard.path ? 'page' : undefined}
+              onclick={() => closeSwitcher()}
+            >
+              <span class="switcher-mark" aria-hidden="true">
+                {#if currentPath === dashboard.path}<Icon icon="mdi:check" width="18" height="18" />{/if}
+              </span>
+              <span class="switcher-name">{dashboard.name}</span>
+            </a>
+          {/each}
+        </div>
       {/if}
     </div>
 
@@ -580,6 +598,16 @@
     font: inherit;
     cursor: pointer;
     transition: background 0.2s;
+  }
+
+  /* The title hidden (Ruling 20): a compact "Dashboards ▾", smaller than a title, never shrinking. */
+  .switcher-compact {
+    display: flex;
+    flex: none;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
   }
 
   .switcher-btn:hover,

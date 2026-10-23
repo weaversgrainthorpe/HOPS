@@ -338,7 +338,7 @@ test.describe('M5 §7: a sub-folder opens as a folder inside a folder', () => {
     await page.reload();
     const svc = node(page, f.id('svc'));
     const bars: [string, Locator, Locator, string][] = [
-      ['Services', svc.locator(':scope > .folder-header'), svc.locator(':scope > .folder-header h3'), 'Minimise folder'],
+      ['Services', svc.locator(':scope > .folder-header'), svc.locator(':scope > .folder-header h3'), 'Minimise Services'],
       ['New folder', header(nested(svc, f.id('nf'))), header(nested(svc, f.id('nf'))).locator('.nested-name'), 'Minimise New folder'],
       ['Deeper', header(nested(svc, f.id('deeper'))), header(nested(svc, f.id('deeper'))).locator('.nested-name'), 'Minimise Deeper']
     ];
@@ -365,6 +365,18 @@ test.describe('M5 §7: a sub-folder opens as a folder inside a folder', () => {
       }
       // No separate ‹ anywhere.
       await expect(svc.getByRole('button', { name: /^Back to/ })).toHaveCount(0);
+      // Every box's minimise names its box (I2): no two controls on the page share a name (WCAG 2.4.6).
+      const dupes = await page.evaluate(() => {
+        const seen = new Map<string, number>();
+        for (const e of document.querySelectorAll<HTMLElement>('button, a[href], [role="button"], [role="tab"], [role="menuitem"]')) {
+          const b = e.getBoundingClientRect();
+          if (b.width === 0 || b.height === 0) continue;
+          const name = (e.getAttribute('aria-label') ?? e.textContent ?? '').replace(/\s+/g, ' ').trim();
+          seen.set(name, (seen.get(name) ?? 0) + 1);
+        }
+        return [...seen].filter(([, n]) => n > 1).map(([name, n]) => `${name} ×${n}`);
+      });
+      expect(dupes, `${mode}: controls sharing a name`).toEqual([]);
     };
     await check('view');
     await enterEdit(page);
@@ -398,7 +410,7 @@ test.describe('M5 §7: a sub-folder opens as a folder inside a folder', () => {
     const nav = await page.evaluate((d) => JSON.parse(localStorage.getItem(`hops.folderNav.${d}`) ?? '{}'), f.id('dash'));
     expect(nav.drill?.[f.id('svc')] ?? []).toEqual([]);
     // The top folder's minimise still minimises the whole folder.
-    await svc.locator(':scope > .folder-header').getByRole('button', { name: 'Minimise folder' }).click();
+    await svc.locator(':scope > .folder-header').getByRole('button', { name: 'Minimise Services' }).click();
     await expect(node(page, f.id('svc'))).toHaveClass(/collapsed/);
   });
 });

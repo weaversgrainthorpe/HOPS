@@ -1579,29 +1579,29 @@ test.describe('§7.2 edit mode keeps the view layout', () => {
     await page.goto(f.path);
     const grp = page.locator(`[data-node-id="${f.id('grp')}"]`);
     const plain = page.locator(`[data-node-id="${f.id('plain')}"]`);
-    await expect(grp.getByRole('button', { name: 'Minimise folder' })).toBeVisible();
+    await expect(grp.getByRole('button', { name: 'Minimise Group' })).toBeVisible();
     await enterEdit(page);
-    await expect(grp.getByRole('button', { name: 'Minimise folder' })).toBeVisible();
+    await expect(grp.getByRole('button', { name: 'Minimise Group' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Maximise folder' })).toHaveCount(0);
     await plain.hover({ position: { x: 4, y: 60 } });
-    await expect(plain.getByRole('button', { name: 'Minimise folder' })).toBeVisible();
+    await expect(plain.getByRole('button', { name: 'Minimise Untitled folder' })).toBeVisible();
     // Neither folder's controls overlap its edit handle (focus shows the handle without a hover).
     for (const [loc, name] of [[grp, 'Edit Group'], [plain, 'Edit Plain']] as const) {
       const handle = page.getByRole('button', { name, exact: true });
       await handle.focus();
       await expect(handle).toHaveCSS('opacity', '1');
       const hb = (await handle.boundingBox())!;
-      const cb = (await loc.getByRole('button', { name: 'Minimise folder' }).boundingBox())!;
-      expect(overlaps(hb, cb), `${name} vs Minimise folder`).toBe(false);
+      const cb = (await loc.getByRole('button', { name: /^Minimise / }).boundingBox())!;
+      expect(overlaps(hb, cb), `${name} vs its Minimise`).toBe(false);
     }
     // Minimise in edit mode sets the draft's saved default: undoable, and the folder is not also selected.
     await page.mouse.move(2, 2);
-    await grp.getByRole('button', { name: 'Minimise folder' }).click();
+    await grp.getByRole('button', { name: 'Minimise Group' }).click();
     await expect(page.locator(`[data-node-id="${f.id('grp')}"].folder-slot.collapsed`)).toBeVisible();
     await expect(page.locator(`[data-node-id="${f.id('grp')}"].selected`)).toHaveCount(0);
     const bar = page.getByRole('toolbar', { name: 'Editing' });
     await bar.getByRole('button', { name: 'Undo', exact: true }).click();
-    await expect(grp.getByRole('button', { name: 'Minimise folder' })).toBeVisible();
+    await expect(grp.getByRole('button', { name: 'Minimise Group' })).toBeVisible();
   });
 });
 
@@ -1762,7 +1762,7 @@ test.describe('§7.2 fix round 1', () => {
     await expect(handle).toHaveCSS('opacity', '1');
     const hb = (await handle.boundingBox())!;
     expect(overlaps(hb, (await badge.boundingBox())!), 'the handle covers the warning').toBe(false);
-    expect(overlaps(hb, (await grp.getByRole('button', { name: 'Minimise folder' }).boundingBox())!), 'the handle covers Minimise').toBe(false);
+    expect(overlaps(hb, (await grp.getByRole('button', { name: 'Minimise Group' }).boundingBox())!), 'the handle covers Minimise').toBe(false);
   });
 });
 
@@ -1782,8 +1782,10 @@ test.describe('§7.2 on a touch device (hover: none)', () => {
       boxes.push([n, (await h.boundingBox())!]);
     }
     // M5: one control per open folder (Minimise), in its bar; no Maximise.
-    const ctl = page.locator('.tab-canvas').getByRole('button', { name: /^(Minimise|Maximise) folder$/ });
+    // Each names its folder (I2): Group, and Plain (untitled — its title is hidden).
+    const ctl = page.locator('.tab-canvas').getByRole('button', { name: /^Minimise (Group|Untitled folder)$/ });
     await expect(ctl).toHaveCount(2);
+    await expect(page.locator('.tab-canvas').getByRole('button', { name: /^Maximise/ })).toHaveCount(0);
     for (let i = 0; i < 2; i++) boxes.push([`folder control ${i}`, (await ctl.nth(i).boundingBox())!]);
     for (let i = 0; i < boxes.length; i++)
       for (let j = i + 1; j < boxes.length; j++)
@@ -1822,7 +1824,7 @@ test.describe('§7.2 nested untitled folders on a touch device', () => {
           expect(overlaps(boxes[i][1], boxes[j][1]), `${boxes[i][0]} vs ${boxes[j][0]}`).toBe(false);
     };
     const minimise = async (): Promise<[string, Box]> =>
-      ['Outer Minimise folder', (await outer.locator('.folder-header').getByRole('button', { name: 'Minimise folder' }).boundingBox())!];
+      ['Outer Minimise', (await outer.locator('.folder-header').getByRole('button', { name: 'Minimise Untitled folder' }).boundingBox())!];
     // The inner folder is an item: its minimised tile, its handle in its own corner; Outer's in its bar.
     await expect(page.locator(`[data-node-id="${f.id('inner')}"]`)).toHaveClass(/collapsed/);
     await noOverlaps(['Edit Outer', 'Edit InnerF'], [await minimise()]);

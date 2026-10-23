@@ -56,10 +56,10 @@ async function showcase(page: Page, context: BrowserContext, name: string) {
 }
 
 /** A small one-tab dashboard called `name`. */
-async function plainDash(page: Page, context: BrowserContext, name: string) {
+async function plainDash(page: Page, context: BrowserContext, name: string, header?: Record<string, unknown>) {
   const p = `sw${Date.now().toString(36)}${(seq++).toString(36)}`;
   await importDoc(page, context, {
-    id: `${p}-dash`, name, order: 0, path: `/${p}`, revision: 1,
+    id: `${p}-dash`, name, order: 0, path: `/${p}`, revision: 1, ...(header ? { header } : {}),
     settings: {
       statusChecksEnabled: null, statusCheckIntervalMinutes: null, statusCheckTimeoutSeconds: null,
       editIdleTimeoutMinutes: null, animatedFolderBackgrounds: null
@@ -238,6 +238,8 @@ test.describe('§8 the dashboard switcher (Ruling 16)', () => {
     const btn = switcher(page);
     await expect(btn).toHaveAttribute('aria-haspopup', 'menu');
     await expect(btn).toHaveAttribute('aria-expanded', 'false');
+    // aria-controls names the menu only while it exists (batch review Minor 6).
+    await expect(btn).not.toHaveAttribute('aria-controls');
     await btn.focus();
     await page.keyboard.press('Enter');
     await expect(menu(page)).toBeVisible();
@@ -266,6 +268,7 @@ test.describe('§8 the dashboard switcher (Ruling 16)', () => {
     await expect(menu(page)).toHaveCount(0);
     await expect(btn).toBeFocused();
     await expect(btn).toHaveAttribute('aria-expanded', 'false');
+    await expect(btn).not.toHaveAttribute('aria-controls');
     // Space opens it too; Tab closes it.
     await page.keyboard.press(' ');
     await expect(menu(page)).toBeVisible();
@@ -432,6 +435,133 @@ test.describe('§8 the dashboard switcher (Ruling 16)', () => {
       await anon.locator('.navbar .center-title').click();
       await expect(anon.getByRole('menu')).toHaveCount(0);
       await expect(anon).toHaveURL(new RegExp(`${sc.path}$`));
+    } finally {
+      await ctx.close();
+    }
+  });
+});
+
+// Ruling 20 (Jonathan, 2026-10-23; batch review I1): a dashboard whose header hides its title still
+// gives a signed-in admin the switcher — a compact "Dashboards ▾" in the title's place, the same menu,
+// keys and unsaved-changes guard. Signed out: nothing there (no title, no switcher).
+test.describe('Ruling 20: the title hidden — a compact "Dashboards ▾" switcher for an admin', () => {
+  // Named as the title switcher is ("<what it shows> — switch dashboard"), so its visible text is in its
+  // name (WCAG 2.5.3, label in name).
+  const compact = (page: Page) => page.locator('.navbar').getByRole('button', { name: 'Dashboards — switch dashboard', exact: true });
+
+  async function headless(page: Page, context: BrowserContext) {
+    const d = await plainDash(page, context, 'No title here', { showLeft: true, showCenter: false });
+    const cfg = await (await page.request.get('/api/config')).json();
+    const stored = cfg.dashboards.find((x: { id: string }) => x.id === d.dashId);
+    expect(stored?.header?.showCenter, 'the dashboard stores its title as hidden').toBe(false);
+    return d;
+  }
+
+  test('signed in, view mode: "Dashboards ▾" in the title\'s place; its menu, keys and choosing a dashboard; the bar holds at every width', async ({ page, context }) => {
+    const hd = await headless(page, context);
+    const all = await ordered(page);
+    const names = all.map((d) => d.name);
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto(hd.path);
+    await expect(page.locator('.tab-canvas [data-node-id]').first()).toBeVisible();
+    // No title (hidden), but the compact switcher, named for what it does, centred where the title was.
+    await expect(page.locator('.navbar .center-title')).toHaveCount(0);
+    const btn = compact(page);
+    await expect(btn).toBeVisible();
+    await expect(btn).toHaveText('Dashboards');
+    await expect(btn).toHaveAttribute('aria-haspopup', 'menu');
+    await expect(btn).toHaveAttribute('aria-expanded', 'false');
+    await expect(btn).not.toHaveAttribute('aria-controls');
+    for (const width of [1920, 1416, 1280, 375]) {
+      await page.setViewportSize({ width, height: 900 });
+      await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth),
+        { message: `${width}: no sideways scroll` }).toBeLessThanOrEqual(0);
+      await settle(page);
+      await expect(btn, `${width}: the compact switcher`).toBeVisible();
+      const r = await page.evaluate(() => {
+        const b = document.querySelector('.navbar .switcher-compact')!.getBoundingClientRect();
+        const others = [...document.querySelectorAll('.navbar .logo img, .navbar .wordmark, .navbar .version, .navbar .nav-right > *')]
+          .map((e) => e.getBoundingClientRect()).filter((x) => x.width > 0 && x.height > 0);
+        const hit = others.some((o) => Math.min(o.right, b.right) - Math.max(o.left, b.left) > 0.5 && Math.min(o.bottom, b.bottom) - Math.max(o.top, b.top) > 0.5);
+        return { left: b.left, right: b.right, view: document.documentElement.clientWidth, hit };
+      });
+      expect(r.left, `${width}: on screen`).toBeGreaterThanOrEqual(-0.5);
+      expect(r.right, `${width}: on screen`).toBeLessThanOrEqual(r.view + 0.5);
+      expect(r.hit, `${width}: it overlaps nothing`).toBe(false);
+    }
+    await page.setViewportSize({ width: 1280, height: 900 });
+    // The keys: Enter opens it on the current dashboard; Escape closes it and focus returns.
+    await btn.focus();
+    await page.keyboard.press('Enter');
+    await expect(menu(page)).toBeVisible();
+    await expect(btn).toHaveAttribute('aria-expanded', 'true');
+    await expect(btn).toHaveAttribute('aria-controls', (await menu(page).getAttribute('id'))!);
+    await expect(items(page)).toHaveText(names);
+    await expect(menu(page).locator('[aria-current="page"]')).toHaveText('No title here');
+    await expect(menu(page).locator('[aria-current="page"]')).toBeFocused();
+    await page.keyboard.press('Home');
+    await expect(items(page).first()).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(menu(page)).toHaveCount(0);
+    await expect(btn).toBeFocused();
+    // Choosing one opens it; there the title (shown) is the switcher again.
+    const other = all.find((d) => d.id !== hd.dashId)!;
+    await btn.click();
+    await items(page).filter({ hasText: other.name }).click();
+    await expect(page).toHaveURL(new RegExp(`${other.path}$`));
+    await expect(switcher(page)).toHaveAccessibleName(`${other.name} — switch dashboard`);
+    await expect(compact(page)).toHaveCount(0);
+    // And back with it.
+    await switcher(page).click();
+    await items(page).filter({ hasText: 'No title here' }).click();
+    await expect(page).toHaveURL(new RegExp(`${hd.path}$`));
+    await expect(compact(page)).toBeVisible();
+  });
+
+  test('signed in, edit mode: the same; with unsaved changes the guard asks first (Stay, then Leave)', async ({ page, context }) => {
+    const hd = await headless(page, context);
+    const other = (await ordered(page)).find((d) => d.id !== hd.dashId)!;
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto(hd.path);
+    await enterEdit(page);
+    const toolbar = page.getByRole('toolbar', { name: 'Editing' });
+    await expect(compact(page)).toBeVisible();
+    await toolbar.getByRole('button', { name: 'Add tab' }).click();
+    const tabDlg = page.getByRole('dialog', { name: 'New Tab' });
+    await tabDlg.locator('input#name').fill('Unsaved tab');
+    await tabDlg.getByRole('button', { name: 'Create' }).click();
+    await expect(toolbar.getByRole('button', { name: 'Save' })).toBeEnabled();
+    await compact(page).click();
+    await items(page).filter({ hasText: other.name }).click();
+    const ask = page.getByRole('dialog', { name: 'Leave without saving?' });
+    await expect(ask).toBeVisible();
+    await ask.getByRole('button', { name: 'Stay' }).click();
+    await expect(page).toHaveURL(new RegExp(`${hd.path}$`));
+    await expect(toolbar.getByRole('button', { name: 'Save' })).toBeEnabled();
+    await compact(page).focus();
+    await page.keyboard.press('Enter');
+    await items(page).filter({ hasText: other.name }).focus();
+    await page.keyboard.press('Enter');
+    await expect(ask).toBeVisible();
+    await ask.getByRole('button', { name: 'Leave' }).click();
+    await expect(page).toHaveURL(new RegExp(`${other.path}$`));
+    await expect(switcher(page)).toHaveAccessibleName(`${other.name} — switch dashboard`);
+    await expect(toolbar).toBeVisible();
+  });
+
+  test('signed out: nothing in the title\'s place — no switcher, no menu, no title', async ({ page, context, browser }) => {
+    const hd = await headless(page, context);
+    const { page: anon, ctx } = await anonPage(browser);
+    try {
+      for (const width of [1920, 375]) {
+        await anon.setViewportSize({ width, height: 900 });
+        if (width === 1920) await anon.goto(hd.path);
+        await expect(anon.locator('.tab-canvas [data-node-id]').first()).toBeVisible();
+        await expect(anon.locator('.navbar').getByRole('button', { name: /switch dashboard/i }), `${width}: no switcher`).toHaveCount(0);
+        await expect(anon.locator('.navbar [aria-haspopup]')).toHaveCount(0);
+        await expect(anon.locator('.navbar .center-title')).toHaveCount(0);
+        await expect(anon.locator('.navbar .nav-center')).not.toContainText('Dashboards');
+      }
     } finally {
       await ctx.close();
     }

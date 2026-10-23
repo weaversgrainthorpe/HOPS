@@ -50,6 +50,10 @@ func uploadTooLargeMessage(kind uploadKind, size, limit int64) string {
 		sizeText, kind.largest, formatMB(limit))
 }
 
+// uploadMaxMemory is how much of a multipart form ParseMultipartForm keeps in
+// memory; the rest goes to temp files.
+const uploadMaxMemory = 1 << 20
+
 // readLimitedUpload caps the request body, parses the multipart form and
 // returns the "file" part. A file over the limit is refused with 413 and a
 // message naming the limit and the file's size; a malformed form is a 400.
@@ -63,7 +67,10 @@ func (r *Router) readLimitedUpload(w http.ResponseWriter, req *http.Request, kin
 		return nil, nil, false
 	}
 	req.Body = http.MaxBytesReader(w, req.Body, bodyCap)
-	if err := req.ParseMultipartForm(limit); err != nil {
+	// A small in-memory budget: a larger file part spills to a temp file (removed
+	// by net/http when the request ends), so an upload near its limit never
+	// sits in RAM whole before the handler reads it (Pi Zero; batch review Minor 3).
+	if err := req.ParseMultipartForm(uploadMaxMemory); err != nil {
 		var mbe *http.MaxBytesError
 		if errors.As(err, &mbe) {
 			writeJSONError(w, uploadTooLargeMessage(kind, 0, limit), http.StatusRequestEntityTooLarge)

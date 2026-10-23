@@ -88,3 +88,19 @@ export async function uploadErrorMessage(response: Response, fallback: string): 
 	if (response.status === 413) return 'That file is bigger than the upload limit.';
 	return text ? `${fallback}: ${text}` : `${fallback} (${response.status} ${response.statusText})`.trim();
 }
+
+/**
+ * Sends an upload. The server may refuse an oversize body before reading it (a limit changed since
+ * the pre-check, or the limits could not be read), and the browser then reports only a dropped
+ * connection; that is named here rather than surfacing a bare "Failed to fetch" (batch review Minor 4).
+ */
+export async function sendUpload(url: string, init: RequestInit): Promise<Response> {
+	try {
+		return await fetch(url, init);
+	} catch (e) {
+		const why = e instanceof Error && e.message ? ` (${e.message})` : '';
+		throw new Error(
+			`The upload was cut off before the server answered${why}. The file may be over the upload limit, or the connection dropped.`
+		);
+	}
+}

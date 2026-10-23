@@ -13,9 +13,12 @@ export function focusFolderControl(folderId: string): void {
     (e) => e.getAttribute('data-node-id') === folderId && !e.closest('[role="dialog"]')
   );
   if (!slot) return;
+  // By the controls' data- hooks (their labels name the folder): this folder's own, never a sub-folder's.
+  const own = (attr: string) =>
+    Array.from(slot.querySelectorAll<HTMLElement>(`[${attr}]`)).find((e) => e.getAttribute(attr) === folderId);
   const target =
-    slot.querySelector<HTMLElement>('button[aria-label="Restore folder"]') ??
+    own('data-folder-restore') ??
     slot.querySelector<HTMLElement>('.folder-collapsed-tile') ??
-    slot.querySelector<HTMLElement>('button[aria-label="Minimise folder"]');
+    own('data-folder-minimise');
   target?.focus();
 }
