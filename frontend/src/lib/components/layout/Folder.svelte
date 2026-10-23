@@ -7,20 +7,24 @@
    * - open: a box with a title bar (name or breadcrumb, edit handle in edit mode, minimise), ONE page
    *   of its items at its contents size (only the current page is drawn, Tenet 4) and a page bar
    *   only when there is more than one page;
-   * - drilled: a sub-folder fills the box; the title bar becomes a breadcrumb back up.
+   * - drilled (M5 §7): a folder inside a folder — every opened sub-folder level is an inset box inside
+   *   the last (‹, its name, its own colour), and only the innermost box holds a page. The top
+   *   folder's title bar stays its own; an outer box's title (or a ‹) goes back up to that level.
    * Click, Enter, the menu's "Open" and Restore all open a folder in place: nothing pops over.
    * Page and drill-down are this browser's memory (folderView), never saved to the layout.
    * The drag (hitTest, Task 4) reads data-folder-id / data-folder-page / data-folder-per-page (the
    * page shown: a drop goes at the pointer's place in it), data-folder-bar (the title bar: a drop
    * goes at the end of the folder shown), data-page-bar ("prev" / "next": held, it flips the page)
-   * and data-crumb (the folder id a crumb goes back to: held, it goes up; a drop goes at its end).
+   * and data-crumb (the folder id an outer box's title bar or a ‹ goes back to: held, it goes up; a
+   * drop goes at its end). Only the innermost box's bar is data-folder-bar; inset boxes carry
+   * data-nested-folder, never data-node-id (they are levels of this folder, not items).
    */
   import { getContext, tick, untrack } from 'svelte';
   import type { FolderNode, LayoutDashboard, LayoutTab } from '$lib/types/layout';
   import type { CanvasPlan, ContainerMetrics } from '$lib/layout/geometry';
   import {
-    FOLDER_CHROME, folderFlowMetrics, folderPaging, nodeBox, openFolderContentBox, phoneFlowMetrics, phonePaging,
-    previewChildren
+    FOLDER_CHROME, NESTED_CHROME, folderFlowMetrics, nestedPaging, nodeBox, openFolderContentBox, phoneFlowMetrics,
+    phonePaging, previewChildren
   } from '$lib/layout/geometry';
   import { getTextColorValue } from '$lib/utils/colorContrast';
   import Icon from '@iconify/svelte';
@@ -193,6 +197,8 @@
   const drilled = $derived(minimised ? [] : resolveDrill(folder, $nav.drill[folder.id]));
   const current = $derived(drilled.length > 0 ? drilled[drilled.length - 1] : folder);
   const chainShown = $derived([...folderChain, folder, ...drilled]);
+  /** How many inset boxes deep the page is drawn (0 = this folder's own body). */
+  const levels = $derived(drilled.length);
   const kids = $derived(Array.isArray(current.content?.children) ? current.content.children : []);
   // On a phone an open folder spans the stacked canvas (its width and the viewport come with the plan:
   // no extra observer, Tenet 4) and its items are the phone tab's tiles; on a tab it fills the box it
@@ -202,15 +208,21 @@
   const contentWidthPx = $derived(
     stacked ? Math.max(0, phoneCanvasPx - FOLDER_CHROME.padXPx) : openFolderContentBox(nodeBox(folder.placement!, parent)).widthPx
   );
+  // The innermost box's content width: one inset box (NESTED_CHROME) comes off each level (M5 §7).
+  const innerWidthPx = $derived(Math.max(0, contentWidthPx - levels * NESTED_CHROME.padXPx));
   const asked = $derived($nav.page[current.id] ?? 0);
   const phone = $derived(
     stacked
       ? phonePaging(
-          contentWidthPx,
+          innerWidthPx,
           phoneCanvasPx,
           {
             widthPx: plan.kind === 'stacked' ? (plan.viewportWidthPx ?? phoneCanvasPx) : 0,
-            heightPx: plan.kind === 'stacked' ? (plan.viewportHeightPx ?? 0) : 0
+            // Each inset level's bar and padding come off the screen a page may use.
+            heightPx:
+              plan.kind === 'stacked'
+                ? Math.max(0, (plan.viewportHeightPx ?? 0) - levels * (NESTED_CHROME.titlePx + NESTED_CHROME.padYPx))
+                : 0
           },
           current.contentSize,
           kids.length,
@@ -219,10 +231,11 @@
       : null
   );
   const paging = $derived(
-    phone ??
-      folderPaging(openFolderContentBox(nodeBox(folder.placement!, parent)), current.contentSize, parent.unitPx, kids.length, asked)
+    phone
+      ? { ...phone, noRoom: false }
+      : nestedPaging(openFolderContentBox(nodeBox(folder.placement!, parent)), levels, current.contentSize, parent.unitPx, kids.length, asked)
   );
-  const metrics = $derived(phone ? phoneFlowMetrics(phone, contentWidthPx) : folderFlowMetrics(paging, parent.unitPx, contentWidthPx));
+  const metrics = $derived(phone ? phoneFlowMetrics(phone, innerWidthPx) : folderFlowMetrics(paging, parent.unitPx, innerWidthPx));
   const pageKids = $derived(kids.slice(paging.start, paging.end));
   const pageNumbers = $derived(paging.pages <= 7 ? Array.from({ length: paging.pages }, (_, i) => i) : []);
   /** The dwell a drag is holding over this folder's page arrows or crumbs (shown, so the hold is visible). */
@@ -233,10 +246,18 @@
     const p = Math.min(Math.max(0, n), paging.pages - 1);
     setFolderPage(dashboard.id, current.id, p);
   }
-  /** A crumb: back up to that level (0 = this folder itself). */
+  /** Back up to that level (0 = this folder itself): a ‹, or an outer box's title. */
   function goUp(e: Event, level: number) {
     own(e);
     setFolderDrill(dashboard.id, folder.id, drilled.slice(0, level).map((f) => f.id));
+  }
+  /** An inset box's edit handle / double-click edits THAT sub-folder (M5 §7.6). */
+  function editSub(e: Event | null, id: string) {
+    if (e) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    openDialog({ kind: 'folder', id });
   }
 
   // Search reveal (M5 §3a.5): the folder holding the item flips to the item's page once it is shown.
@@ -272,6 +293,140 @@
       </button>
     {/if}
   </span>
+{/snippet}
+
+{#snippet pageArea()}
+  {#if paging.tooSmall && levels === 0}
+    <!-- Never a silent clip (Important 2): a box below its minimum says so, and how to fix it. -->
+    <p class="too-small" role="status" data-folder-too-small>
+      Too small to show its contents — resize it{editing ? '' : ' in edit mode'}.
+    </p>
+  {/if}
+  {#if paging.noRoom}
+    <!-- No room for one item here: nothing is drawn clipped; the folder's body says so. -->
+  {:else if kids.length === 0}
+    <span class="empty-note open-empty">Empty folder</span>
+  {:else}
+    <div class="page">
+      <ContainerView
+        container={{ children: pageKids }}
+        {metrics}
+        {plan}
+        {dashboard}
+        {tab}
+        folderChain={chainShown}
+        {editing}
+      />
+    </div>
+  {/if}
+  {#if paging.pageBar && !paging.noRoom}
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <nav class="page-bar" aria-label="{current.name} pages" ondblclick={own}>
+      <button type="button" aria-label="First page" disabled={paging.page === 0} onclick={(e) => goPage(e, 0)}>«</button>
+      <button
+        type="button"
+        aria-label="Previous page"
+        data-page-bar="prev"
+        class:holding={holdingKey === pageDwellKey(current.id, paging.page - 1)}
+        disabled={paging.page === 0}
+        onclick={(e) => goPage(e, paging.page - 1)}>‹</button
+      >
+      {#if pageNumbers.length > 0}
+        {#each pageNumbers as n (n)}
+          <button
+            type="button"
+            class="page-num"
+            aria-label="Page {n + 1}"
+            aria-current={n === paging.page ? 'page' : undefined}
+            onclick={(e) => goPage(e, n)}>{n + 1}</button
+          >
+        {/each}
+      {:else}
+        <span class="page-of" aria-live="polite">Page {paging.page + 1} of {paging.pages}</span>
+      {/if}
+      <button
+        type="button"
+        aria-label="Next page"
+        data-page-bar="next"
+        class:holding={holdingKey === pageDwellKey(current.id, paging.page + 1)}
+        disabled={paging.page >= paging.pages - 1}
+        onclick={(e) => goPage(e, paging.page + 1)}>›</button
+      >
+      <button type="button" aria-label="Last page" disabled={paging.page >= paging.pages - 1} onclick={(e) => goPage(e, paging.pages - 1)}>»</button>
+    </nav>
+  {/if}
+{/snippet}
+
+<!-- One drilled level (M5 §7): sub-folder drilled[k - 1] as an inset box in the level above, with its
+     own bar (‹ back up one level, its name) and its own colour; it holds the next level, or (the
+     innermost) the page. Not an item: no data-node-id, so a press still drags the open folder. -->
+{#snippet level(k: number)}
+  {@const sub = drilled[k - 1]}
+  {@const up = k === 1 ? folder : drilled[k - 2]}
+  {@const innermost = k === drilled.length}
+  {@const ownLook = !!sub.color || !!(sub.background && !sub.background.inherit && sub.background.type)}
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div
+    class="nested-box"
+    data-nested-folder={sub.id}
+    style:color={sub.color ? getTextColorValue(sub.textColor || 'auto', sub.color) : undefined}
+    ondblclick={editing ? (e) => editSub(e, sub.id) : undefined}
+  >
+    {#if ownLook}
+      <FolderSurface
+        background={sub.background}
+        color={sub.color || 'var(--bg-secondary)'}
+        colorOpacity={sub.opacity !== undefined ? sub.opacity : 0.95}
+        mode="animated"
+        dashboardId={dashboard.id}
+      />
+    {/if}
+    <div
+      class="nested-header"
+      class:holding={!innermost && holdingKey === crumbDwellKey(folder.id, sub.id)}
+      data-crumb={innermost ? undefined : sub.id}
+      data-folder-bar={innermost ? sub.id : undefined}
+    >
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <button
+        type="button"
+        class="back"
+        aria-label="Back to {up.name?.trim() ? up.name : 'Untitled'}"
+        title="Back to {up.name?.trim() ? up.name : 'Untitled'}"
+        data-crumb={up.id}
+        class:holding={holdingKey === crumbDwellKey(folder.id, up.id)}
+        onclick={(e) => goUp(e, k - 1)}
+        ondblclick={own}>‹</button
+      >
+      {#if sub.showTitle !== false}
+        {#if innermost}
+          <span class="nested-name" aria-current="page">{sub.name}</span>
+        {:else}
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <button type="button" class="title-button nested-name" title="Back to {sub.name}" onclick={(e) => goUp(e, k)} ondblclick={own}
+            >{sub.name}</button
+          >
+        {/if}
+      {:else}
+        <span class="title-space"></span>
+      {/if}
+      {#if editing}
+        <span class="handle-slot">
+          <EditHandle name={sub.name} onEdit={() => editSub(null, sub.id)} placement="inline" />
+        </span>
+      {/if}
+      <BackgroundFailedBadge background={sub.background} {editing} level="folder" placement="inline" />
+    </div>
+    {#if innermost}
+      <div class="nested-body" data-folder-id={current.id} data-folder-page={paging.page} data-folder-per-page={paging.perPage}>
+        {@render pageArea()}
+      </div>
+    {:else}
+      <div class="nested-body">
+        {@render level(k + 1)}
+      </div>
+    {/if}
+  </div>
 {/snippet}
 
 {#if minimised}
@@ -372,28 +527,16 @@
     style:color={textColor}
   >
     <FolderSurface background={folder.background} color={surfaceColor} colorOpacity={surfaceOpacity} mode="animated" dashboardId={dashboard.id} />
-    <!-- Every open folder has its bar (M5 §3a.7): an untitled one shows only its controls, or the
-         breadcrumb when drilled in. -->
-    <div class="folder-header" class:custom-color={folder.color} data-folder-bar={current.id}>
-      {#if drilled.length > 0}
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <nav class="crumbs" aria-label="Folder path" ondblclick={own}>
-          {#each [folder, ...drilled] as c, i (c.id)}
-            {#if i > 0}<span class="sep" aria-hidden="true">›</span>{/if}
-            {#if i === drilled.length}
-              <span class="crumb current" aria-current="page">{c.name}</span>
-            {:else}
-              <button
-                type="button"
-                class="crumb"
-                class:holding={holdingKey === crumbDwellKey(folder.id, c.id)}
-                data-crumb={c.id}
-                onclick={(e) => goUp(e, i)}>{c.name}</button
-              >
-            {/if}
-          {/each}
-        </nav>
-      {:else if showTitle}
+    <!-- Every open folder has its bar (M5 §3a.7): an untitled one shows only its controls. Its title
+         is never replaced (M5 §7): drilled in, the whole bar is the go-up target and the name goes up. -->
+    <div
+      class="folder-header"
+      class:custom-color={folder.color}
+      class:holding={levels > 0 && holdingKey === crumbDwellKey(folder.id, folder.id)}
+      data-folder-bar={levels === 0 ? folder.id : undefined}
+      data-crumb={levels > 0 ? folder.id : undefined}
+    >
+      {#if showTitle}
         {#if folder.iconUrl || folder.icon}
           <span class="folder-icon-backing" class:has-bg={folder.iconBgColor} style:background-color={folder.iconBgColor}>
             {#if folder.iconUrl}
@@ -403,7 +546,16 @@
             {/if}
           </span>
         {/if}
-        <h3>{folder.name}</h3>
+        <h3>
+          {#if levels > 0}
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <button type="button" class="title-button" title="Back to {folder.name}" onclick={(e) => goUp(e, 0)} ondblclick={own}
+              >{folder.name}</button
+            >
+          {:else}
+            {folder.name}
+          {/if}
+        </h3>
       {:else}
         <span class="title-space"></span>
       {/if}
@@ -418,72 +570,27 @@
       <BackgroundFailedBadge background={folder.background} {editing} level="folder" placement="inline" />
       {@render controls()}
     </div>
-    <!-- data-drop-area: the whole body is this folder's drop target, not just its items' rows. -->
-    <div
-      class="folder-body"
-      data-drop-area={editing ? '' : undefined}
-      data-folder-id={current.id}
-      data-folder-page={paging.page}
-      data-folder-per-page={paging.perPage}
-    >
-      {#if paging.tooSmall}
-        <!-- Never a silent clip (Important 2): a box below its minimum says so, and how to fix it. -->
-        <p class="too-small" role="status" data-folder-too-small>
-          Too small to show its contents — resize it{editing ? '' : ' in edit mode'}.
-        </p>
-      {/if}
-      {#if kids.length === 0}
-        <span class="empty-note open-empty">Empty folder</span>
-      {:else}
-        <div class="page">
-          <ContainerView
-            container={{ children: pageKids }}
-            {metrics}
-            {plan}
-            {dashboard}
-            {tab}
-            folderChain={chainShown}
-            {editing}
-          />
-        </div>
-      {/if}
-      {#if paging.pageBar}
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <nav class="page-bar" aria-label="{current.name} pages" ondblclick={own}>
-          <button type="button" aria-label="First page" disabled={paging.page === 0} onclick={(e) => goPage(e, 0)}>«</button>
-          <button
-            type="button"
-            aria-label="Previous page"
-            data-page-bar="prev"
-            class:holding={holdingKey === pageDwellKey(current.id, paging.page - 1)}
-            disabled={paging.page === 0}
-            onclick={(e) => goPage(e, paging.page - 1)}>‹</button
-          >
-          {#if pageNumbers.length > 0}
-            {#each pageNumbers as n (n)}
-              <button
-                type="button"
-                class="page-num"
-                aria-label="Page {n + 1}"
-                aria-current={n === paging.page ? 'page' : undefined}
-                onclick={(e) => goPage(e, n)}>{n + 1}</button
-              >
-            {/each}
-          {:else}
-            <span class="page-of" aria-live="polite">Page {paging.page + 1} of {paging.pages}</span>
-          {/if}
-          <button
-            type="button"
-            aria-label="Next page"
-            data-page-bar="next"
-            class:holding={holdingKey === pageDwellKey(current.id, paging.page + 1)}
-            disabled={paging.page >= paging.pages - 1}
-            onclick={(e) => goPage(e, paging.page + 1)}>›</button
-          >
-          <button type="button" aria-label="Last page" disabled={paging.page >= paging.pages - 1} onclick={(e) => goPage(e, paging.pages - 1)}>»</button>
-        </nav>
-      {/if}
-    </div>
+    <!-- data-drop-area: the whole body is a drop target for the folder shown (the innermost), not just
+         its items' rows. -->
+    {#if levels === 0}
+      <div
+        class="folder-body"
+        data-drop-area={editing ? '' : undefined}
+        data-folder-id={current.id}
+        data-folder-page={paging.page}
+        data-folder-per-page={paging.perPage}
+      >
+        {@render pageArea()}
+      </div>
+    {:else}
+      <div class="folder-body" data-drop-area={editing ? '' : undefined} data-folder-id={current.id}>
+        {@render level(1)}
+        {#if paging.noRoom}
+          <!-- Never a silent clip (M5 §7.2): drawn over this folder's own body, so it shows however deep. -->
+          <p class="too-small" role="status" data-folder-no-room>Not enough room — make the folder bigger.</p>
+        {/if}
+      </div>
+    {/if}
     {#if editing && plan.kind !== 'stacked' && folder.placement}
       <!-- Handles on the rendered (open) box on a tab; a minimised folder has none (Ruling 13). -->
       <ResizeHandles id={folder.id} name={folder.name} metrics={parent} />
@@ -542,41 +649,85 @@
     padding: 0.3rem;
     border-radius: 0.35rem;
   }
-  .crumbs {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
-    overflow: hidden;
-    white-space: nowrap;
-    font-size: 1rem;
-  }
-  .crumb {
+  /* Drilled in, an outer title goes back up to its level (M5 §7): a plain-looking button. */
+  .title-button {
     background: none;
     border: none;
     color: inherit;
-    opacity: 0.75;
     font: inherit;
+    padding: 0;
+    margin: 0;
     cursor: pointer;
-    padding: 0.1rem 0.25rem;
-    border-radius: 0.25rem;
-    min-width: 0;
+    max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: left;
   }
-  .crumb:hover,
-  .crumb:focus-visible {
-    opacity: 1;
+  .title-button:hover,
+  .title-button:focus-visible {
     text-decoration: underline;
   }
-  .crumb.current {
-    opacity: 1;
-    font-weight: 600;
-    cursor: default;
+  /* geometry.NESTED_CHROME: one inset box a drilled level — a 1px border, a 28px bar, 8px body
+     padding; it fills the body of the level above (M5 §7). M6 draws folder shapes; this is the plain box. */
+  .nested-box {
+    position: relative;
+    isolation: isolate;
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid color-mix(in srgb, currentColor 45%, transparent);
+    border-radius: 0.5rem;
   }
-  .sep {
-    opacity: 0.6;
+  .nested-header {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    height: 28px;
+    padding: 0 0.5rem 0 0.25rem;
+    box-sizing: border-box;
+    flex: none;
+    min-width: 0;
+  }
+  .nested-name {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .back {
+    flex: none;
+    background: none;
+    border: none;
+    color: inherit;
+    font: inherit;
+    font-size: 1.25rem;
+    line-height: 1;
+    width: 1.5rem;
+    height: 1.5rem;
+    padding: 0;
+    border-radius: 0.25rem;
+    cursor: pointer;
+    opacity: 0.85;
+  }
+  .back:hover,
+  .back:focus-visible {
+    opacity: 1;
+    background: rgba(128, 128, 128, 0.25);
+  }
+  .nested-body {
+    position: relative;
+    padding: 0.5rem;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
   }
   .folder-body {
     position: relative;
@@ -641,7 +792,9 @@
     opacity: 1;
   }
   /* A drag holding here: it goes up / turns the page once the hold ripens (OPEN_DWELL_MS). */
-  .crumb.holding,
+  .folder-header.holding,
+  .nested-header.holding,
+  .back.holding,
   .page-bar button.holding {
     opacity: 1;
     outline: 2px solid var(--accent);
@@ -751,8 +904,11 @@
     transform: translateY(-50%);
     z-index: 4;
   }
-  .folder:hover:not(:has([data-node-id]:hover)) > .folder-header > .handle-slot > :global(.edit-handle),
-  .folder:focus-within:not(:has([data-node-id]:focus-within)) > .folder-header > .handle-slot > :global(.edit-handle) {
+  .folder:hover:not(:has([data-node-id]:hover, .nested-box:hover)) > .folder-header > .handle-slot > :global(.edit-handle),
+  .folder:focus-within:not(:has([data-node-id]:focus-within, .nested-box:focus-within)) > .folder-header > .handle-slot > :global(.edit-handle),
+  /* An inset box's own handle (M5 §7.6): on its hover or focus, never while a deeper box or an item is. */
+  .nested-box:hover:not(:has([data-node-id]:hover, .nested-box:hover)) > .nested-header > .handle-slot > :global(.edit-handle),
+  .nested-box:focus-within:not(:has([data-node-id]:focus-within, .nested-box:focus-within)) > .nested-header > .handle-slot > :global(.edit-handle) {
     opacity: 1;
     pointer-events: auto;
   }

@@ -4,7 +4,7 @@ import { getCsrfToken } from '../helpers';
 // M5 Task 3 (design/specs/2026-10-22-hops-v3-m5-folders-design.md §2, §3, §3a): ONE Folder component
 // draws every folder — minimised (a tile with its name and up to four icons), open in place (one page
 // of items at its contents size, a page bar only when there is more than one page) and drilled into a
-// sub-folder (it fills the box; the title bar is a breadcrumb). No pop-over, no maximise. In a REAL
+// sub-folder (a folder inside a folder, M5 §7: m5-nested-folders.spec.ts). No pop-over, no maximise. In a REAL
 // browser: layout, paging and focus need Chromium.
 
 let seq = 0;
@@ -163,7 +163,7 @@ test.describe('M5 one Folder component', () => {
     await expect(lots.locator('[data-folder-page]')).not.toHaveAttribute('data-folder-page', '0');
   });
 
-  test('drilling into a sub-folder fills the parent; the breadcrumb goes back up', async ({ page, context }) => {
+  test('drilling into a sub-folder draws it inside the parent; ‹ and the title go back up; nothing moves', async ({ page, context }) => {
     const f = await importDash(page, context, (id) => [
       folder(id('f'), 'Services', { x: 0, y: 0, w: 12, h: 6 }, [
         kid(id('a'), 'Alpha'),
@@ -175,11 +175,11 @@ test.describe('M5 one Folder component', () => {
     const svc = node(page, f.id('f'));
     const before = { box: await box(svc), body: await box(svc.locator('.folder-body')), n: await box(node(page, f.id('n'))) };
     await page.getByRole('button', { name: /^Storage, folder with 2 items/ }).click();
-    const crumbs = svc.getByRole('navigation', { name: 'Folder path' });
-    await expect(crumbs).toBeVisible();
-    await expect(crumbs.locator('[aria-current="page"]')).toHaveText('Storage');
+    const current = svc.locator('.nested-header [aria-current="page"]');
+    await expect(current).toHaveText('Storage');
+    await expect(svc.locator('.folder-header h3')).toHaveText('Services');
     expect(await shown(page, f.id('f'))).toEqual([f.id('nas'), f.id('s2')]);
-    // It fills the parent's box: the same box and body; nothing else moves.
+    // It is drawn inside the parent's box: the same box and body; nothing else moves.
     const after = { box: await box(svc), body: await box(svc.locator('.folder-body')), n: await box(node(page, f.id('n'))) };
     for (const k of ['box', 'body', 'n'] as const) {
       near(after[k].x, before[k].x, `${k} x`);
@@ -187,20 +187,20 @@ test.describe('M5 one Folder component', () => {
       near(after[k].width, before[k].width, `${k} w`);
       near(after[k].height, before[k].height, `${k} h`);
     }
-    // Deeper, then back up one crumb at a time.
+    // Deeper, then back up one level at a time.
     await page.getByRole('button', { name: /^Backups, folder with 1 item/ }).click();
-    await expect(crumbs.locator('[aria-current="page"]')).toHaveText('Backups');
+    await expect(current).toHaveText('Backups');
     expect(await shown(page, f.id('f'))).toEqual([f.id('deep')]);
-    await crumbs.locator(`[data-crumb="${f.id('s')}"]`).click();
+    await svc.getByRole('button', { name: 'Back to Storage' }).click();
     expect(await shown(page, f.id('f'))).toEqual([f.id('nas'), f.id('s2')]);
-    await crumbs.locator(`[data-crumb="${f.id('f')}"]`).click();
-    await expect(svc.getByRole('navigation', { name: 'Folder path' })).toHaveCount(0);
+    await svc.getByRole('button', { name: 'Back to Services' }).click();
+    await expect(svc.locator('.nested-box')).toHaveCount(0);
     await expect(svc.locator('.folder-header h3')).toHaveText('Services');
     expect(await shown(page, f.id('f'))).toEqual([f.id('a'), f.id('s')]);
     // Enter drills in too (keyboard).
     await page.getByRole('button', { name: /^Storage, folder with/ }).focus();
     await page.keyboard.press('Enter');
-    await expect(crumbs.locator('[aria-current="page"]')).toHaveText('Storage');
+    await expect(current).toHaveText('Storage');
   });
 
   for (const width of [1280, 1920]) {
@@ -333,14 +333,14 @@ test.describe('M5 one Folder component', () => {
     await page.getByRole('button', { name: /Needlefind/ }).click();
     const outer = node(page, f.id('f'));
     await expect(outer).toHaveAttribute('role', 'group'); // opened in place
-    await expect(outer.getByRole('navigation', { name: 'Folder path' }).locator('[aria-current="page"]')).toHaveText('Inner');
+    await expect(outer.locator('.nested-header [aria-current="page"]')).toHaveText('Inner');
     await expect(outer.locator('[data-folder-page]')).not.toHaveAttribute('data-folder-page', '0');
     await expect(node(page, f.id('needle'))).toBeVisible();
     await expect.poll(() => page.evaluate((id) => !!document.activeElement?.closest(`[data-node-id="${id}"]`), f.id('needle'))).toBe(true);
     await expect(page.locator('.overlay-panel, [role="dialog"][aria-modal="true"]')).toHaveCount(0);
   });
 
-  test('untitled: the open folder still has its bar (controls only), with the breadcrumb when drilled', async ({ page, context }) => {
+  test('untitled: the open folder still has its bar (controls only), drilled in or not', async ({ page, context }) => {
     const f = await importDash(page, context, (id) => [
       folder(id('f'), 'Hidden', { x: 0, y: 0, w: 12, h: 6 }, [folder(id('s'), 'Sub', null, [kid(id('z'), 'Zed')])], { showTitle: false })
     ]);
@@ -350,7 +350,9 @@ test.describe('M5 one Folder component', () => {
     await expect(bar).not.toContainText('Hidden');
     await expect(bar.getByRole('button', { name: 'Minimise folder' })).toBeVisible();
     await page.getByRole('button', { name: /^Sub, folder with 1 item/ }).click();
-    await expect(bar.locator(`[data-crumb="${f.id('f')}"]`)).toHaveText('Hidden');
+    await expect(node(page, f.id('f')).locator('.nested-header')).toContainText('Sub');
+    await expect(bar).not.toContainText('Hidden'); // its title is never a breadcrumb (M5 §7)
+    await expect(node(page, f.id('f')).getByRole('button', { name: 'Back to Hidden' })).toBeVisible();
     await bar.getByRole('button', { name: 'Minimise folder' }).click();
     await expect(node(page, f.id('f'))).toHaveClass(/collapsed/);
   });

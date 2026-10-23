@@ -1,7 +1,7 @@
 // M5 Task 3: ONE Folder component draws every folder, everywhere — minimised (a tile of its size with
 // its name and up to four icons), open (a box with a title bar, one page of items at its contents
-// size, and a page bar only when there is more than one page) and drilled into a sub-folder (which
-// fills the box, with a breadcrumb). No pop-over and no maximise.
+// size, and a page bar only when there is more than one page) and drilled into a sub-folder (a folder
+// inside a folder: an inset box a level, M5 §7). No pop-over and no maximise.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/svelte';
 import { tick } from 'svelte';
@@ -202,33 +202,87 @@ describe('pages: only the current page renders', () => {
   });
 });
 
-describe('drilling into a sub-folder: it fills the box, the title becomes a breadcrumb', () => {
+// M5 §7 (walkthrough 2): a drilled-in sub-folder is a folder inside a folder — every level is an inset
+// box inside the last, with its own title bar (‹ and its name). The top folder's title stays its own.
+const nested = (c: ParentNode, id: string) => c.querySelector(`.nested-box[data-nested-folder="${id}"]`) as HTMLElement;
+const barName = (c: ParentNode) => (c.querySelector('.folder-header h3, .folder-header .title-button') as HTMLElement | null)?.textContent?.trim();
+describe('drilling into a sub-folder: a folder inside a folder, one inset box a level (M5 §7)', () => {
   const tree = () => [folder('f', [kid('a'), sub('s', [kid('deep'), sub('s2', [kid('deeper')])], { display: 'expanded' })])];
   it('a sub-folder shows in the page as its minimised tile, whatever its saved display', async () => {
     const { container } = await renderTab(tree());
     expect(el(container, 's').classList.contains('collapsed')).toBe(true);
     expect(container.querySelector('[data-node-id="deep"]')).toBeNull();
+    expect(container.querySelector('.nested-box')).toBeNull();
   });
-  it('a click drills in; the breadcrumb goes back up; this browser remembers the path', async () => {
+  it('a click drills in: the top title stays, the sub-folder is an inset box with ‹ and its name holding the page', async () => {
     const { container } = await renderTab(tree());
     await fireEvent.click(screen.getByRole('button', { name: /^s, folder with/ }));
-    expect(shownIds(container)).toEqual(['deep', 's2']);
-    expect(page(container).getAttribute('data-folder-id')).toBe('s');
     expect(get(folderNavFor('d1')).drill).toEqual({ f: ['s'] });
-    const crumbs = container.querySelector('nav.crumbs') as HTMLElement;
-    expect(crumbs.getAttribute('aria-label')).toBe('Folder path');
-    expect(within(crumbs).getByText('s').getAttribute('aria-current')).toBe('page');
-    // deeper
-    await fireEvent.click(screen.getByRole('button', { name: /^s2, folder with/ }));
-    expect(shownIds(container)).toEqual(['deeper']);
-    expect(get(folderNavFor('d1')).drill).toEqual({ f: ['s', 's2'] });
-    // any crumb goes back up to that level
-    await fireEvent.click(container.querySelector('[data-crumb="s"]')!);
+    expect(container.querySelector('nav.crumbs')).toBeNull(); // no breadcrumb any more
+    expect(barName(el(container, 'f'))).toBe('f'); // the top folder keeps its own title
+    const box = nested(el(container, 'f'), 's');
+    expect(box).not.toBeNull();
+    expect(el(container, 'f').querySelector('.folder-body')!.contains(box)).toBe(true);
+    const head = box.querySelector(':scope > .nested-header') as HTMLElement;
+    expect(within(head).getByRole('button', { name: 'Back to f' }).textContent).toContain('‹');
+    expect(within(head).getByText('s')).toBeInTheDocument();
+    // The items sit inside the inset box.
+    expect(box.contains(page(container))).toBe(true);
+    expect(page(container).getAttribute('data-folder-id')).toBe('s');
     expect(shownIds(container)).toEqual(['deep', 's2']);
-    await fireEvent.click(container.querySelector('[data-crumb="f"]')!);
-    expect(shownIds(container)).toEqual(['a', 's']);
-    expect(container.querySelector('nav.crumbs')).toBeNull();
+  });
+  it('2 deep: three titled boxes, each inside the last; the page is in the innermost', async () => {
+    setFolderDrill('d1', 'f', ['s', 's2']);
+    const { container } = await renderTab(tree());
+    const s = nested(el(container, 'f'), 's');
+    const s2 = nested(s, 's2');
+    expect(s2).not.toBeNull();
+    expect(barName(el(container, 'f'))).toBe('f');
+    expect((s.querySelector(':scope > .nested-header') as HTMLElement).textContent).toContain('s');
+    expect((s2.querySelector(':scope > .nested-header') as HTMLElement).textContent).toContain('s2');
+    expect(s2.contains(page(container))).toBe(true);
+    expect(shownIds(container)).toEqual(['deeper']);
+    expect(container.querySelectorAll('[data-folder-page]')).toHaveLength(1); // only the innermost page is drawn
+  });
+  it('‹ goes up one level; an outer box\'s title goes back to that level; this browser remembers', async () => {
+    setFolderDrill('d1', 'f', ['s', 's2']);
+    const { container } = await renderTab(tree());
+    await fireEvent.click(within(nested(container, 's2')).getByRole('button', { name: 'Back to s' }));
+    expect(get(folderNavFor('d1')).drill).toEqual({ f: ['s'] });
+    expect(nested(container, 's2')).toBeNull();
+    expect(shownIds(container)).toEqual(['deep', 's2']);
+    // Deeper again, then the TOP title goes all the way back.
+    setFolderDrill('d1', 'f', ['s', 's2']);
+    await tick();
+    await fireEvent.click(nested(container, 's').querySelector(':scope > .nested-header .title-button')!);
+    expect(get(folderNavFor('d1')).drill).toEqual({ f: ['s'] });
+    setFolderDrill('d1', 'f', ['s', 's2']);
+    await tick();
+    await fireEvent.click(el(container, 'f').querySelector('.folder-header .title-button')!);
     expect(get(folderNavFor('d1')).drill).toEqual({});
+    expect(container.querySelector('.nested-box')).toBeNull();
+    expect(shownIds(container)).toEqual(['a', 's']);
+  });
+  it('the outer title bars are the go-up targets (data-crumb); the innermost bar is the folder shown (data-folder-bar)', async () => {
+    setFolderDrill('d1', 'f', ['s', 's2']);
+    const { container } = await renderTab(tree());
+    const top = el(container, 'f').querySelector('.folder-header') as HTMLElement;
+    expect(top.getAttribute('data-crumb')).toBe('f');
+    expect(top.hasAttribute('data-folder-bar')).toBe(false);
+    const sHead = nested(container, 's').querySelector(':scope > .nested-header') as HTMLElement;
+    expect(sHead.getAttribute('data-crumb')).toBe('s');
+    const s2Head = nested(container, 's2').querySelector(':scope > .nested-header') as HTMLElement;
+    expect(s2Head.getAttribute('data-folder-bar')).toBe('s2');
+    expect(s2Head.hasAttribute('data-crumb')).toBe(false);
+    // Its ‹ goes up to the level above it.
+    expect(within(s2Head).getByRole('button', { name: 'Back to s' }).getAttribute('data-crumb')).toBe('s');
+    // No inset box is an item: the drag never takes it for a node.
+    expect(container.querySelector('.nested-box[data-node-id]')).toBeNull();
+  });
+  it('an inset box shows its own colour', async () => {
+    setFolderDrill('d1', 'f', ['s']);
+    const { container } = await renderTab([folder('f', [sub('s', [kid('x')], { color: '#123456' })])]);
+    expect(nested(container, 's').querySelector('.folder-surface, [style*="#123456"], [style*="rgb(18, 52, 86)"]')).not.toBeNull();
   });
   it('Enter drills in too; the box (and the neighbours) never change', async () => {
     const { container } = await renderTab([...tree(), tile('n', 14, 0)]);
@@ -241,15 +295,33 @@ describe('drilling into a sub-folder: it fills the box, the title becomes a brea
     setFolderDrill('d1', 'f', ['s', 'gone']);
     const { container } = await renderTab(tree());
     expect(page(container).getAttribute('data-folder-id')).toBe('s');
+    expect(nested(container, 's')).not.toBeNull();
   });
-  it('each level remembers its own page', async () => {
+  it('each level remembers its own page; the inset box pages in its own (smaller) box', async () => {
     setFolderDrill('d1', 'f', ['s']);
-    setFolderPage('d1', 's', 0);
+    setFolderPage('d1', 's', 1);
     setFolderPage('d1', 'f', 1);
-    const { container } = await renderTab([folder('f', [...kids(11), sub('s', kids(3, 'x'))])]);
-    expect(shownIds(container)).toEqual(['x1', 'x2', 'x3']);
-    await fireEvent.click(container.querySelector('[data-crumb="f"]')!);
+    // f's content 702 x 302; s's box inside it 684 x 256 → 5 a row, 2 rows; 12 items → page bar → 1 row of 5.
+    const { container } = await renderTab([folder('f', [...kids(11), sub('s', kids(12, 'x'))])]);
+    expect(page(container).getAttribute('data-folder-per-page')).toBe('5');
+    expect(shownIds(container)).toEqual(['x6', 'x7', 'x8', 'x9', 'x10']);
+    expect(nested(container, 's').querySelector('[data-page-bar="next"]')).not.toBeNull();
+    await fireEvent.click(el(container, 'f').querySelector('.folder-header .title-button')!);
     expect(shownIds(container)).toEqual(['k11', 's']); // f's own page 2
+  });
+  it('not enough room: a deep level in a small folder says so visibly, and draws no clipped items', async () => {
+    setFolderDrill('d1', 'f', ['s', 's2']);
+    // 4 x 4 at 60 px cells: content 222 x 182; s 204 x 136 (fits a 120 px item); s2 186 x 90 (does not).
+    const { container } = await renderTab([folder('f', [sub('s', [sub('s2', [kid('deeper')])])], { placement: { x: 0, y: 0, w: 4, h: 4 } })]);
+    const note = el(container, 'f').querySelector('[data-folder-no-room]') as HTMLElement;
+    expect(note).not.toBeNull();
+    expect(note.textContent).toMatch(/Not enough room — make the folder bigger/);
+    expect(note.getAttribute('role')).toBe('status');
+    expect(container.querySelector('[data-node-id="deeper"]')).toBeNull();
+    // One level up there is room: no note.
+    await fireEvent.click(within(nested(container, 's2')).getByRole('button', { name: 'Back to s' }));
+    expect(el(container, 'f').querySelector('[data-folder-no-room]')).toBeNull();
+    expect(shownIds(container)).toEqual(['s2']);
   });
   it('a sub-folder deleted elsewhere closes, saying so', async () => {
     setFolderDrill('d1', 'f', ['s']);
@@ -264,15 +336,16 @@ describe('drilling into a sub-folder: it fills the box, the title becomes a brea
   });
 });
 
-describe('untitled folders (showTitle: false): the bar shows only the controls, or the breadcrumb when drilled', () => {
-  it('no name in the bar, but Minimise is there', async () => {
+describe('untitled folders (showTitle: false): the bar shows only the controls, drilled in or not', () => {
+  it('no name in the bar, but Minimise is there; drilled in, the sub-folder is an inset box', async () => {
     const { container } = await renderTab([folder('f', [sub('s', [kid('deep')])], { showTitle: false, name: 'Hidden' })]);
     const bar = el(container, 'f').querySelector('.folder-header') as HTMLElement;
     expect(within(bar).queryByText('Hidden')).toBeNull();
     expect(within(bar).getByRole('button', { name: 'Minimise folder' })).toBeInTheDocument();
     await fireEvent.click(screen.getByRole('button', { name: /^s, folder with/ }));
-    expect(within(bar).getByText('Hidden')).toBeInTheDocument(); // the root crumb
-    expect(container.querySelector('[data-crumb="f"]')).not.toBeNull();
+    expect(within(bar).queryByText('Hidden')).toBeNull(); // never a breadcrumb in its bar
+    expect(bar.getAttribute('data-crumb')).toBe('f'); // still the drag's go-up target
+    expect(within(nested(container, 's')).getByRole('button', { name: 'Back to Hidden' })).toBeInTheDocument();
   });
   it('the shape is ignored: a "folder-tab" folder draws the same rounded box', async () => {
     const { container } = await renderTab([folder('f', kids(1), { shape: 'folder-tab' })]);
@@ -281,10 +354,11 @@ describe('untitled folders (showTitle: false): the bar shows only the controls, 
 });
 
 describe('edit mode looks the same (§7.2 WYSIWYG), plus handles', () => {
-  it('the page bar and breadcrumb are the same; Minimise sets the draft\'s saved default (one undo step)', async () => {
+  it('the page bar and nested boxes are the same; Minimise sets the draft\'s saved default (one undo step)', async () => {
     setFolderDrill('d1', 'f', ['s']);
     const { container } = await renderEditing([folder('f', [kid('a'), sub('s', kids(12, 'x'))])]);
     expect(page(container).getAttribute('data-folder-id')).toBe('s'); // drill-down works while editing
+    expect(nested(container, 's').contains(page(container))).toBe(true);
     expect(container.querySelector('[data-page-bar="next"]')).not.toBeNull();
     expect(screen.getByRole('button', { name: 'Edit f' })).toBeInTheDocument();
     await fireEvent.click(screen.getByRole('button', { name: 'Minimise folder' }));
@@ -293,6 +367,25 @@ describe('edit mode looks the same (§7.2 WYSIWYG), plus handles', () => {
     expect(s.undo).toHaveLength(1);
     expect(get(folderViewFor('d1'))).toEqual({});
     expect(get(selectedNodes).has('f')).toBe(false);
+  });
+  it('each inset box has its own edit handle, which edits that sub-folder', async () => {
+    setFolderDrill('d1', 'f', ['s']);
+    const { container } = await renderEditing([folder('f', [kid('a'), sub('s', kids(2, 'x'))])]);
+    const head = nested(container, 's').querySelector(':scope > .nested-header') as HTMLElement;
+    try {
+      await fireEvent.click(within(head).getByRole('button', { name: 'Edit s' }));
+      expect(get(editorDialog)).toEqual({ kind: 'folder', id: 's' });
+      expect(get(selectedNodes).has('f')).toBe(false); // the click is the handle's own
+      // ‹ in edit mode goes up, and never selects or edits the folder.
+      editorDialog.set(null);
+      await fireEvent.click(within(head).getByRole('button', { name: 'Back to f' }));
+      expect(get(folderNavFor('d1')).drill).toEqual({});
+      expect(get(editorDialog)).toBeNull();
+      expect(get(selectedNodes).has('f')).toBe(false);
+      expect(get(session)!.undo).toHaveLength(0);
+    } finally {
+      editorDialog.set(null);
+    }
   });
   // Walkthrough 1 (M5 §3a.8): click, Enter and the menu's Open ALL open a minimised folder, in edit
   // mode too — the draft's saved default, one undo step. A double-click still only edits (§4B).
@@ -398,11 +491,12 @@ describe('the pop-over and maximise are gone', () => {
 // M5 Task 4: the drag reads the folder's own targets from the DOM (hitTest), and holding a crumb
 // or a page arrow during a drag shows which one is being held.
 describe('drag targets on an open folder (M5 Task 4)', () => {
-  it('its title bar names the folder it shows: itself, or the sub-folder drilled into', async () => {
+  it('the innermost title bar names the folder it shows: itself, or the sub-folder drilled into', async () => {
     const { container } = await renderTab([folder('f', [kid('a'), sub('s', [kid('deep')])])]);
     expect(container.querySelector('.folder-header')!.getAttribute('data-folder-bar')).toBe('f');
     await fireEvent.click(screen.getByRole('button', { name: /^s, folder with/ }));
-    expect(container.querySelector('.folder-header')!.getAttribute('data-folder-bar')).toBe('s');
+    expect(container.querySelectorAll('[data-folder-bar]')).toHaveLength(1);
+    expect(container.querySelector('.nested-header')!.getAttribute('data-folder-bar')).toBe('s');
   });
   it('a minimised folder has no title bar target', async () => {
     const { container } = await renderTab([folder('f', kids(2), { display: 'collapsed' })]);

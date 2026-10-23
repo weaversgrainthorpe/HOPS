@@ -5,7 +5,8 @@ import {
   LAYOUT_VERSION, sizeSpan, folderPage, minimisedPlacement, planCanvas, isRenderable, isPlaced,
   containerMetrics, previewChildren, ROOT_COLUMNS, nodeBox, FOLDER_CHROME, openFolderContentBox, folderPaging,
   folderFlowMetrics, PAGE_BAR_PX, phoneTrack, phoneColumnPx, phonePaging, PHONE_TILE_MIN_PX, PHONE_PAGE_RESERVE_PX,
-  minOpenFolderCells, MIN_GRID_CELL_PX, largestContentSize, folderMinCells, defaultFolderBox, tabSpan
+  minOpenFolderCells, MIN_GRID_CELL_PX, largestContentSize, folderMinCells, defaultFolderBox, tabSpan,
+  NESTED_CHROME, nestedContentBox, nestedPaging
 } from './geometry';
 import type { FolderNode, LayoutNode, LayoutTab } from '../types/layout';
 
@@ -292,5 +293,43 @@ describe('folderPaging.tooSmall: an undersized box is flagged, never clipped sil
   });
   it('phone paging is never flagged (it sizes its own rows)', () => {
     expect(phonePaging(300, 360, { widthPx: 360, heightPx: 700 }, 'large', 10, 0).tooSmall).toBe(false);
+  });
+});
+
+// ---- M5 §7 (walkthrough 2): a drilled-in sub-folder is a folder inside a folder, one inset box a level.
+describe('nested boxes: every drilled level is an inset box inside the last (M5 §7)', () => {
+  it('each level: an 8 px inset (its padding), a 1 px border and a compact 28 px title bar', () => {
+    expect(NESTED_CHROME).toEqual({ titlePx: 28, padPx: 8, borderPx: 1, padXPx: 18, padYPx: 18 });
+  });
+  it('the inner box metrics: one inset box per level comes off the outer content box', () => {
+    const outer = { widthPx: 702, heightPx: 302 };
+    expect(nestedContentBox(outer, 0)).toEqual(outer);
+    expect(nestedContentBox(outer, 1)).toEqual({ widthPx: 684, heightPx: 256 });
+    expect(nestedContentBox(outer, 2)).toEqual({ widthPx: 666, heightPx: 210 });
+    expect(nestedContentBox({ widthPx: 20, heightPx: 40 }, 3)).toEqual({ widthPx: 0, heightPx: 0 });
+    expect(nestedContentBox(outer, -1)).toEqual(outer);
+  });
+  it('per level: the innermost box pages at its own contents size in its own (smaller) box', () => {
+    const outer = { widthPx: 702, heightPx: 302 };
+    // Level 0 is the folder's own page: 5 x 2 Medium items at 60 px cells.
+    expect(nestedPaging(outer, 0, 'medium', 60, 10, 0)).toMatchObject({ perRow: 5, rowsPerPage: 2, perPage: 10, noRoom: false });
+    // One level in: 684 x 256 → 5 a row, 2 rows.
+    expect(nestedPaging(outer, 1, 'medium', 60, 10, 0)).toMatchObject({ perRow: 5, rowsPerPage: 2, perPage: 10, pageBar: false, noRoom: false });
+    // Two levels in: 666 x 210 → 5 a row, 1 row; 7 items → a page bar, page 2 holds the rest.
+    expect(nestedPaging(outer, 2, 'medium', 60, 7, 1)).toMatchObject({ perRow: 5, rowsPerPage: 1, perPage: 5, pages: 2, pageBar: true, page: 1, start: 5, end: 7 });
+    // Its own contents size: Small in a Large-contents parent.
+    expect(nestedPaging(outer, 1, 'small', 60, 1, 0)).toMatchObject({ span: 1, itemPx: 60, perRow: 11, rowsPerPage: 4 });
+  });
+  it('not enough room: a deep level in a small folder cannot show one item — flagged, never clipped', () => {
+    // A 6 x 5 box at 32 px cells (above its own minimum): 174 x 102 content.
+    const outer = openFolderContentBox({ widthPx: 6 * 32, heightPx: 5 * 32 });
+    expect(nestedPaging(outer, 0, 'medium', 32, 1, 0).noRoom).toBe(false);
+    expect(nestedPaging(outer, 1, 'medium', 32, 1, 0).noRoom).toBe(true); // 156 x 56 < 64
+    // An empty level with no room says so too (its "Empty folder" note would have no room either).
+    expect(nestedPaging(outer, 1, 'medium', 32, 0, 0).noRoom).toBe(true);
+    // Level 0 never says "not enough room": its own backstop is tooSmall (resize it).
+    expect(nestedPaging({ widthPx: 10, heightPx: 10 }, 0, 'medium', 32, 1, 0)).toMatchObject({ noRoom: false, tooSmall: true });
+    // Room for exactly one item is room.
+    expect(nestedPaging({ widthPx: 64 + 18, heightPx: 64 + 46 }, 1, 'medium', 32, 1, 0).noRoom).toBe(false);
   });
 });

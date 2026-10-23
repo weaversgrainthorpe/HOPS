@@ -1788,9 +1788,9 @@ test.describe('§7.2 nested untitled folders on a touch device', () => {
   test.use({ hasTouch: true, isMobile: true, viewport: { width: 1280, height: 900 } });
 
   // M5: an untitled folder inside an untitled folder is an item on its page (its minimised tile, its
-  // handle in its own corner); opening it drills in, filling the parent, and the parent's bar (which
-  // every open folder has) shows the breadcrumb. Neither level's handles or controls overlap.
-  test('an untitled folder inside an untitled folder: no handle, control or crumb overlaps another, before and after drilling in', async ({ page, context }) => {
+  // handle in its own corner); opening it drills in — an inset box inside the parent (M5 §7) with its
+  // own ‹ and handle. Neither level's handles, controls or ‹ overlap.
+  test('an untitled folder inside an untitled folder: no handle, control or ‹ overlaps another, before and after drilling in', async ({ page, context }) => {
     const f = await importDash(page, context, [{
       name: 'Main',
       children: (id) => [
@@ -1819,15 +1819,15 @@ test.describe('§7.2 nested untitled folders on a touch device', () => {
     // The inner folder is an item: its minimised tile, its handle in its own corner; Outer's in its bar.
     await expect(page.locator(`[data-node-id="${f.id('inner')}"]`)).toHaveClass(/collapsed/);
     await noOverlaps(['Edit Outer', 'Edit InnerF'], [await minimise()]);
-    // Drill in through the item menu a REAL touch long-press opens (its Open): Deep fills Outer's box.
+    // Drill in through the item menu a REAL touch long-press opens (its Open): an inset box in Outer's.
     await longPress(page, page.locator(`[data-node-id="${f.id('inner')}"] .folder-collapsed-tile`));
     const menu = page.getByRole('menu');
     await expect(menu).toBeVisible();
     await menu.getByRole('menuitem', { name: 'Open', exact: true }).tap();
-    const crumbs = outer.getByRole('navigation', { name: 'Folder path' });
-    await expect(crumbs.locator('[aria-current="page"]')).toHaveText('InnerF');
-    const back = crumbs.locator(`[data-crumb="${f.id('outer')}"]`);
-    await noOverlaps(['Edit Outer', 'Edit Deep'], [await minimise(), ['Outer crumb', (await back.boundingBox())!]]);
+    const inset = outer.locator(`.nested-box[data-nested-folder="${f.id('inner')}"]`);
+    await expect(inset).toBeVisible();
+    const back = inset.getByRole('button', { name: 'Back to Outer' });
+    await noOverlaps(['Edit Outer', 'Edit InnerF', 'Edit Deep'], [await minimise(), ['Back to Outer', (await back.boundingBox())!]]);
   });
 });
 

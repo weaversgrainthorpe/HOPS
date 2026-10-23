@@ -357,14 +357,15 @@ test.describe('walkthrough 1 (2): opening a folder in edit mode', () => {
       await isMinimised(fid);
     }
 
-    // A sub-folder on a page: a click drills in (this browser's memory), the crumb goes back up.
+    // A sub-folder on a page: a click drills in (this browser's memory) — a folder inside a folder
+    // (M5 §7) — and the outer folder's title goes back up.
     const sub = face(page, id('sc-f-large-sub'));
     await sub.scrollIntoViewIfNeeded();
     const sb = (await sub.boundingBox())!;
     await page.mouse.click(sb.x + 8, sb.y + sb.height - 8);
-    const crumbs = node(page, id('sc-f-large')).getByRole('navigation', { name: 'Folder path' });
-    await expect(crumbs).toContainText('Small-contents sub-folder');
-    await crumbs.getByRole('button', { name: 'Large contents' }).click();
+    const inset = node(page, id('sc-f-large')).locator(`.nested-box[data-nested-folder="${id('sc-f-large-sub')}"]`);
+    await expect(inset.locator('.nested-header')).toContainText('Small-contents sub-folder');
+    await node(page, id('sc-f-large')).locator('.folder-header').getByRole('button', { name: 'Large contents', exact: true }).click();
     await expect(sub).toBeVisible();
 
     // Opening goes into the draft: open one by a click and save — it is stored open.

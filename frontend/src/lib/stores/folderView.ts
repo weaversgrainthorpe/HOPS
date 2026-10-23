@@ -155,7 +155,7 @@ export function drillTo(dashboardId: string, chain: string[]): void {
 }
 
 /**
- * Back up the breadcrumb of open folder `folderId` to crumb `to` (the folder itself, or a sub-folder
+ * Back up open folder `folderId` to level `to` (the folder itself, or a sub-folder
  * on its remembered path): the drag's crumb dwell (M5 §3a.4). False, with nothing changed, when `to`
  * is not on the path (the crumb is stale) — the caller says so.
  */

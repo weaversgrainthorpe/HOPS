@@ -254,11 +254,13 @@ describe('route resolution and reveal lifetime', () => {
     const { container } = render(Dashboard, { dashboard: deep });
     await tick();
     requestReveal({ dashboardId: 'd1', tabId: 't2', folderIds: ['box2', 'sb'], tileId: 'k12' });
-    // An 8 x 6 box at 60 px cells: 462 x 302 content → 3 a row; overfull, so 2 rows (6) a page: k12 is on page 2.
+    // An 8 x 6 box at 60 px cells: 462 x 302 content; Sub's inset box inside it (M5 §7) 444 x 256 → 3 a
+    // row; overfull, so the page bar leaves 1 row (3) a page: k12 is on page 4.
     await waitFor(() => expect(container.querySelector('.tab-canvas [data-node-id="k12"]')).not.toBeNull());
     expect(get(folderViewFor('d1'))).toEqual({ box2: 'expanded' });
-    expect(get(folderNavFor('d1'))).toEqual({ drill: { box2: ['sb'] }, page: { sb: 1 } });
-    expect(container.querySelector('[data-folder-page]')!.getAttribute('data-folder-page')).toBe('1');
+    expect(get(folderNavFor('d1'))).toEqual({ drill: { box2: ['sb'] }, page: { sb: 3 } });
+    expect(container.querySelector('[data-folder-page]')!.getAttribute('data-folder-page')).toBe('3');
+    expect(container.querySelector('.nested-box[data-nested-folder="sb"] [data-node-id="k12"]')).not.toBeNull(); // in Sub's inset box
     expect(container.querySelector('.tab-canvas [data-node-id="k1"]')).toBeNull(); // only the current page renders
     await waitFor(() => expect(container.querySelector('[data-node-id="k12"]')!.contains(document.activeElement)).toBe(true));
     expect(document.querySelector('[role="dialog"]')).toBeNull();

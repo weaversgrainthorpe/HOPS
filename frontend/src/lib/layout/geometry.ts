@@ -275,6 +275,40 @@ export function openFolderContentBox(box: { widthPx: number; heightPx: number })
   };
 }
 
+/**
+ * A drilled-in sub-folder's inset box (M5 §7: a folder inside a folder, one box a level). Folder.svelte's
+ * .nested-box CSS: a 1px border, a compact 28px title bar (‹ and its name), 8px body padding. It fills
+ * the body of the level above it.
+ */
+export const NESTED_CHROME = { titlePx: 28, padPx: 8, borderPx: 1, padXPx: 2 * 8 + 2 * 1, padYPx: 2 * 8 + 2 * 1 } as const;
+
+/** The content box `levels` inset boxes in from an open folder's own content box (level 0 = its own). */
+export function nestedContentBox(content: { widthPx: number; heightPx: number }, levels: number): { widthPx: number; heightPx: number } {
+  const n = isNum(levels) && levels > 0 ? Math.floor(levels) : 0;
+  if (n === 0) return { widthPx: content.widthPx, heightPx: content.heightPx };
+  return {
+    widthPx: nonNeg(content.widthPx - n * NESTED_CHROME.padXPx),
+    heightPx: nonNeg(content.heightPx - n * (NESTED_CHROME.titlePx + NESTED_CHROME.padYPx))
+  };
+}
+
+/**
+ * The page of the innermost box, `levels` deep inside an open folder whose content box is `content`
+ * (folderPaging in nestedContentBox). `noRoom`: a drilled level whose box cannot show even one item at
+ * its contents size (deep nesting in a small folder) — Folder.svelte then says "Not enough room" and
+ * draws no clipped items. Opening a sub-folder never resizes the saved box, so this is the only answer.
+ */
+export function nestedPaging(
+  content: { widthPx: number; heightPx: number }, levels: number, contentSize: unknown, cellPx: number, count: number, page: number
+): FolderPaging & { noRoom: boolean } {
+  const inner = nestedContentBox(content, levels);
+  const g = folderPaging(inner, contentSize, cellPx, count, page);
+  const eps = 0.5;
+  const deep = isNum(levels) && levels >= 1;
+  const noRoom = deep && (inner.widthPx + eps < g.itemPx || inner.heightPx + eps < g.itemPx);
+  return { ...g, noRoom };
+}
+
 /** One page of an open folder (M5 §2): which items show, and whether there is a page bar. */
 export interface FolderPaging {
   /** Cells each item spans each way (its contents size) and its side in px. */

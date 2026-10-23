@@ -272,7 +272,7 @@ test.describe('M5 drag and drop in ordered, paged folders', () => {
     expect(errors).toEqual([]);
   });
 
-  test('holding over a breadcrumb crumb goes back up to it; the drop lands on that level', async ({ page, context }) => {
+  test('holding over the outer folder\'s title bar goes back up to it; the drop lands on that level', async ({ page, context }) => {
     const f = await importDash(page, context, (id) => [
       tile(id('t'), 'Tee', 0, 0),
       folder(id('f'), 'Box', { x: 0, y: 3, w: 14, h: 6 }, [kid(id('k1'), 'K1'), folder(id('s'), 'Sub', null, kids(id, 2, 'Z'))])
@@ -283,11 +283,12 @@ test.describe('M5 drag and drop in ordered, paged folders', () => {
       localStorage.setItem(`hops.folderNav.${d.dash}`, JSON.stringify({ page: {}, drill: { [d.f]: [d.s] } }));
     }, { dash: f.id('dash'), f: f.id('f'), s: f.id('s') });
     const errors = await openEditing(page, f.path, f.id('t'));
-    const crumb = node(page, f.id('f')).locator(`[data-crumb="${f.id('f')}"]`);
-    await expect(crumb).toBeVisible();
+    // Drilled in, the top folder's title bar is the go-up target (M5 §7: no breadcrumb).
+    const crumb = node(page, f.id('f')).locator('.folder-header');
+    await expect(crumb).toHaveAttribute('data-crumb', f.id('f'));
     const cb = await box(crumb);
     await dragCentre(page, node(page, f.id('t')), cb.x + cb.width / 2, cb.y + cb.height / 2);
-    await expect(node(page, f.id('f')).locator('nav.crumbs')).toHaveCount(0, { timeout: 2000 }); // back at the top
+    await expect(node(page, f.id('f')).locator('.nested-box')).toHaveCount(0, { timeout: 2000 }); // back at the top
     const to = leftEdge(await box(node(page, f.id('k1'))));
     await glide(page, { x: cb.x + cb.width / 2, y: cb.y + cb.height / 2 }, to.x, to.y);
     await page.waitForTimeout(120);
