@@ -5,7 +5,7 @@
 # Two distinct operations in one invocation:
 #   1. PROD_HOST (172.16.0.9) — full deploy: build backend + frontend,
 #      SCP artifacts, swap binary, restart hops, health-check.
-#   2. MIRROR_HOST (172.16.0.50) — install the build into DEV_DIR and restart
+#   2. --dev-only only: MIRROR_HOST (172.16.0.50) — install the build into DEV_DIR and restart
 #      the persistent hops-dev service (scripts/hops-dev.service), against
 #      dev's OWN data dir (never prod's). Disable by setting MIRROR_HOST="".
 #
@@ -126,7 +126,9 @@ fi  # end prod-only section (skipped by --dev-only)
 # data, never prod's. Nothing else writes DEV_DIR, so tests and builds in the
 # working tree can never change what dev serves.
 
-if [[ -n "$MIRROR_HOST" ]]; then
+# Only --dev-only touches dev. A prod deploy builds main, and main's build must
+# never land on dev (dev runs v3 against v3 data — dev/prod isolation).
+if [[ "$DEV_ONLY" == 1 && -n "$MIRROR_HOST" ]]; then
   echo "▸ Installing into $MIRROR_HOST:$DEV_DIR and restarting hops-dev"
   scp -q /tmp/hops-linux-amd64 "$MIRROR_HOST:$DEV_DIR/hops.new"
   DEV_RESULT=$(ssh "$MIRROR_HOST" "set -e
