@@ -26,7 +26,7 @@ import { logError } from '$lib/utils/errors';
 import { confirm } from '$lib/stores/confirmModal';
 import { toast } from '$lib/stores/toast';
 import { clearSelection, toggleNode } from '$lib/stores/nodeSelection';
-import { forgetFolderMemory } from '$lib/stores/folderView';
+import { closeDrilledInto, forgetFolderMemory } from '$lib/stores/folderView';
 import { isValidUrl } from '$lib/utils/url';
 
 export type Cell = { x: number; y: number };
@@ -351,12 +351,16 @@ export function containerOfNode(d: LayoutDashboard, id: string): ContainerRef | 
 }
 
 /**
- * After `ids` were MOVED to `to`: each folder among them that came out of a folder onto a tab is a
+ * After `ids` were MOVED to `to`: a drilled-into folder among them closes (closeDrilledInto, Ruling
+ * 14), and each folder among them that came out of a folder onto a tab is a
  * minimised folder there (M5 §3a.3, treeOps.placedOnTab), so this browser forgets its open / page /
  * drill memory — an "open" remembered from before must not draw it open. `before` is the draft the
  * move was made from.
  */
 export function forgetMovedOutFolders(before: LayoutDashboard, ids: string[], to: ContainerRef): void {
+  // A folder this browser is drilled into (an inset box, M5 §7) closes when it moves, wherever to.
+  const folders = ids.filter((id) => findIn(before, id)?.kind === 'folder');
+  if (folders.length > 0) closeDrilledInto(before.id, folders);
   if (to.folderId !== undefined) return;
   const out = ids.filter((id) => findIn(before, id)?.kind === 'folder' && (locate(before, id)?.folderChain.length ?? 0) > 0);
   if (out.length > 0) forgetFolderMemory(before.id, out);

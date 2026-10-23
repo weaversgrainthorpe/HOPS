@@ -24,7 +24,7 @@
   import type { CanvasPlan, ContainerMetrics } from '$lib/layout/geometry';
   import {
     FOLDER_CHROME, NESTED_CHROME, folderFlowMetrics, nestedPaging, nodeBox, openFolderContentBox, phoneFlowMetrics,
-    phonePaging, previewChildren
+    phonePaging, previewChildren, sizeSpan
   } from '$lib/layout/geometry';
   import { getTextColorValue } from '$lib/utils/colorContrast';
   import Icon from '@iconify/svelte';
@@ -232,7 +232,7 @@
   );
   const paging = $derived(
     phone
-      ? { ...phone, noRoom: false }
+      ? { ...phone, noRoom: false, noRoomInside: false }
       : nestedPaging(openFolderContentBox(nodeBox(folder.placement!, parent)), levels, current.contentSize, parent.unitPx, kids.length, asked)
   );
   const metrics = $derived(phone ? phoneFlowMetrics(phone, innerWidthPx) : folderFlowMetrics(paging, parent.unitPx, innerWidthPx));
@@ -250,6 +250,25 @@
   function goUp(e: Event, level: number) {
     own(e);
     setFolderDrill(dashboard.id, folder.id, drilled.slice(0, level).map((f) => f.id));
+  }
+  /** An inset box's bar is that sub-folder (Ruling 14): its right-click / long-press menu is the sub-folder's. */
+  function subMenu(e: MouseEvent, id: string) {
+    e.preventDefault();
+    e.stopPropagation();
+    openMenu({ ...menuPointFor(e, e.currentTarget as Element), target: { kind: 'node', id } });
+  }
+  /**
+   * An inset box's bar grabbed (Ruling 14): the sub-folder is dragged as the tile it is on its parent's
+   * page — that parent's item size (a phone tab column there), centred on the pointer — never as the
+   * wide bar, so the ghost and the drop it aims are the sub-folder's own.
+   */
+  function grabbedTile(x: number, y: number, parentFolder: FolderNode) {
+    const side = stacked ? (phone?.itemPx ?? 120) : sizeSpan(parentFolder.contentSize) * parent.unitPx;
+    return { left: x - side / 2, top: y - side / 2, width: side, height: side };
+  }
+  /** ‹ is only "back up": a press on it never drags the sub-folder or the open folder. */
+  function noDrag(e: PointerEvent) {
+    if (editing) e.stopPropagation();
   }
   /** An inset box's edit handle / double-click edits THAT sub-folder (M5 §7.6). */
   function editSub(e: Event | null, id: string) {
@@ -303,7 +322,11 @@
     </p>
   {/if}
   {#if paging.noRoom}
-    <!-- No room for one item here: nothing is drawn clipped; the folder's body says so. -->
+    <!-- No room for this level's page (one item, or the page bar it needs): nothing is drawn clipped.
+         The note is here when this box can hold it, else on the folder's own body. -->
+    {#if paging.noRoomInside}
+      <p class="too-small" role="status" data-folder-no-room>Not enough room — make the folder bigger.</p>
+    {/if}
   {:else if kids.length === 0}
     <span class="empty-note open-empty">Empty folder</span>
   {:else}
@@ -364,10 +387,13 @@
   {@const sub = drilled[k - 1]}
   {@const up = k === 1 ? folder : drilled[k - 2]}
   {@const innermost = k === drilled.length}
+  {@const untitled = sub.showTitle === false || !sub.name?.trim()}
+  {@const shownName = untitled ? 'Untitled folder' : sub.name}
   {@const ownLook = !!sub.color || !!(sub.background && !sub.background.inherit && sub.background.type)}
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
     class="nested-box"
+    class:dragging={editing && ($drag?.ids.includes(sub.id) ?? false)}
     data-nested-folder={sub.id}
     style:color={sub.color ? getTextColorValue(sub.textColor || 'auto', sub.color) : undefined}
     ondblclick={editing ? (e) => editSub(e, sub.id) : undefined}
@@ -381,11 +407,19 @@
         dashboardId={dashboard.id}
       />
     {/if}
+    <!-- The bar IS the sub-folder (Ruling 14): it drags that sub-folder and its menu is the sub-folder's. -->
     <div
       class="nested-header"
       class:holding={!innermost && holdingKey === crumbDwellKey(folder.id, sub.id)}
       data-crumb={innermost ? undefined : sub.id}
       data-folder-bar={innermost ? sub.id : undefined}
+      oncontextmenu={editing ? (e) => subMenu(e, sub.id) : undefined}
+      use:dragSource={{
+        id: sub.id,
+        enabled: editing,
+        onMenu: (x, y) => openMenu({ x, y, target: { kind: 'node', id: sub.id } }),
+        measure: (x, y) => grabbedTile(x, y, up)
+      }}
     >
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <button
@@ -395,20 +429,23 @@
         title="Back to {up.name?.trim() ? up.name : 'Untitled'}"
         data-crumb={up.id}
         class:holding={holdingKey === crumbDwellKey(folder.id, up.id)}
+        onpointerdown={noDrag}
         onclick={(e) => goUp(e, k - 1)}
         ondblclick={own}>‹</button
       >
-      {#if sub.showTitle !== false}
-        {#if innermost}
-          <span class="nested-name" aria-current="page">{sub.name}</span>
-        {:else}
-          <!-- svelte-ignore a11y_no_static_element_interactions -->
-          <button type="button" class="title-button nested-name" title="Back to {sub.name}" onclick={(e) => goUp(e, k)} ondblclick={own}
-            >{sub.name}</button
-          >
-        {/if}
+      <!-- An untitled sub-folder still says what it is (muted), so an outer one can be clicked to go up. -->
+      {#if innermost}
+        <span class="nested-name" class:muted={untitled} aria-current="page">{shownName}</span>
       {:else}
-        <span class="title-space"></span>
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <button
+          type="button"
+          class="title-button nested-name"
+          class:muted={untitled}
+          title="Back to {shownName}"
+          onclick={(e) => goUp(e, k)}
+          ondblclick={own}>{shownName}</button
+        >
       {/if}
       {#if editing}
         <span class="handle-slot">
@@ -585,8 +622,9 @@
     {:else}
       <div class="folder-body" data-drop-area={editing ? '' : undefined} data-folder-id={current.id}>
         {@render level(1)}
-        {#if paging.noRoom}
-          <!-- Never a silent clip (M5 §7.2): drawn over this folder's own body, so it shows however deep. -->
+        {#if paging.noRoom && !paging.noRoomInside}
+          <!-- Never a silent clip (M5 §7.2): so deep that the inset bars themselves run out of room, the
+               note is drawn over this folder's own body, where it is always seen. -->
           <p class="too-small" role="status" data-folder-no-room>Not enough room — make the folder bigger.</p>
         {/if}
       </div>
@@ -690,6 +728,11 @@
     box-sizing: border-box;
     flex: none;
     min-width: 0;
+  }
+  .nested-name.muted {
+    font-weight: 400;
+    font-style: italic;
+    opacity: 0.7;
   }
   .nested-name {
     flex: 1;
@@ -873,7 +916,8 @@
     -webkit-touch-callout: none;
   }
   .folder.dragging,
-  .folder-slot.dragging {
+  .folder-slot.dragging,
+  .nested-box.dragging {
     opacity: 0.4;
   }
   .folder-slot {

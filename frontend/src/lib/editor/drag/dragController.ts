@@ -1371,7 +1371,10 @@ function detach() {
   window.removeEventListener('scroll', onScroll);
 }
 
-function begin(e: PointerEvent, el: HTMLElement, id: string | undefined, onMenu: Press['onMenu'], tab?: string) {
+function begin(
+  e: PointerEvent, el: HTMLElement, id: string | undefined, onMenu: Press['onMenu'], tab?: string,
+  measure?: DragSourceParams['measure']
+) {
   const touch = e.pointerType === 'touch';
   press = {
     pointerId: e.pointerId,
@@ -1382,7 +1385,7 @@ function begin(e: PointerEvent, el: HTMLElement, id: string | undefined, onMenu:
     id,
     tab,
     // Measured on press (never in pointermove): the grab point and the ghost's size.
-    rect: id || tab !== undefined ? env.measure(el) : undefined,
+    rect: id || tab !== undefined ? (measure ? measure(e.clientX, e.clientY) : env.measure(el)) : undefined,
     onMenu,
     ready: false,
     timer: null
@@ -1438,6 +1441,12 @@ export interface DragSourceParams {
   enabled: boolean;
   /** Touch long-press released without moving: open this item's menu. */
   onMenu?: (x: number, y: number) => void;
+  /**
+   * The grabbed item's box at a press at (x, y), when the element pressed is not the item's own box
+   * (an inset box's title bar is its sub-folder, Ruling 14: it is grabbed as that sub-folder's tile).
+   * Default: the element's rendered box.
+   */
+  measure?: (x: number, y: number) => { left: number; top: number; width: number; height: number };
 }
 
 /** Svelte action for an item in the editing renderer: drag it (and the selection), or long-press for its menu. */
@@ -1446,7 +1455,7 @@ export function dragSource(el: HTMLElement, params: DragSourceParams) {
   const down = (e: PointerEvent) => {
     if (!prm.enabled || !ownsTarget(el, e.target) || !claimable(e)) return;
     claimed.add(e);
-    begin(e, el, prm.id, prm.onMenu ? (x, y) => prm.onMenu!(x, y) : undefined);
+    begin(e, el, prm.id, prm.onMenu ? (x, y) => prm.onMenu!(x, y) : undefined, undefined, prm.measure);
   };
   // A link or image inside a tile must not start the browser's own drag (it would cancel ours).
   const nativeDrag = (e: DragEvent) => {

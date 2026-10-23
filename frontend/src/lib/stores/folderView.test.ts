@@ -3,7 +3,7 @@ import { get } from 'svelte/store';
 import {
   folderViewFor, setFolderView, clearFolderView, effectiveDisplay, applyFolderViews, resetFolderViewsForTests,
   folderNavFor, setFolderPage, setFolderDrill, resolveDrill, reconcileNav, revealInFolders, pageReveal, takePageReveal,
-  drillTo, drillUpTo, forgetFolderMemory
+  drillTo, drillUpTo, forgetFolderMemory, closeDrilledInto
 } from './folderView';
 import type { LayoutDashboard } from '$lib/types/layout';
 
@@ -254,5 +254,29 @@ describe('forgetFolderMemory', () => {
     const spy = vi.spyOn(Storage.prototype, 'setItem');
     forgetFolderMemory('d1', ['none']);
     expect(spy).not.toHaveBeenCalled();
+  });
+});
+
+describe('closeDrilledInto: a drilled-into folder that moves away closes (Ruling 14)', () => {
+  it('cuts every drill path at the first moved folder, and forgets the moved folders\' own page and drill', () => {
+    setFolderDrill('d1', 'top', ['s', 's2']);
+    setFolderDrill('d1', 'other', ['x']);
+    setFolderPage('d1', 's', 2);
+    setFolderPage('d1', 's2', 1);
+    setFolderPage('d1', 'top', 1);
+    expect(closeDrilledInto('d1', ['s'])).toEqual(['top']);
+    expect(get(folderNavFor('d1'))).toEqual({ page: { top: 1 }, drill: { other: ['x'] } });
+  });
+  it('a deeper one keeps the levels above it', () => {
+    setFolderDrill('d1', 'top', ['s', 's2']);
+    expect(closeDrilledInto('d1', ['s2'])).toEqual(['top']);
+    expect(get(folderNavFor('d1')).drill).toEqual({ top: ['s'] });
+  });
+  it('not drilled into: nothing changes and nothing is written', () => {
+    setFolderDrill('d1', 'top', ['s']);
+    const spy = vi.spyOn(Storage.prototype, 'setItem');
+    expect(closeDrilledInto('d1', ['zz'])).toEqual([]);
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
   });
 });

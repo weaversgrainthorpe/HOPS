@@ -16,7 +16,7 @@ import type { LayoutDashboard, LayoutTab } from '$lib/types/layout';
 import { begin, session, resetEditSessionForTests } from '$lib/stores/editSession';
 import { selectedNodes, clearSelection } from '$lib/stores/nodeSelection';
 import { toast } from '$lib/stores/toast';
-import { editorDialog } from '$lib/editor/editorUi';
+import { editorDialog, editorMenu } from '$lib/editor/editorUi';
 
 let width = 1440; // 60 px cells: a Medium item is 120 px
 class FakeRO {
@@ -318,10 +318,41 @@ describe('drilling into a sub-folder: a folder inside a folder, one inset box a 
     expect(note.textContent).toMatch(/Not enough room — make the folder bigger/);
     expect(note.getAttribute('role')).toBe('status');
     expect(container.querySelector('[data-node-id="deeper"]')).toBeNull();
+    // s2's body (90 + 16 px) holds the note: it is drawn inside the innermost box (review minor 3).
+    expect(nested(container, 's2').querySelector(':scope > .nested-body > [data-folder-no-room]')).toBe(note);
     // One level up there is room: no note.
     await fireEvent.click(within(nested(container, 's2')).getByRole('button', { name: 'Back to s' }));
     expect(el(container, 'f').querySelector('[data-folder-no-room]')).toBeNull();
     expect(shownIds(container)).toEqual(['s2']);
+  });
+  it('room for one item but not for the page bar its items need: "Not enough room", nothing clipped (review Important 1)', async () => {
+    setFolderDrill('d1', 'f', ['s']);
+    // 4 x 4 at 60 px: s's box 204 x 136 holds one 120 px item, but 3 items need a page bar (136 - 32 < 120).
+    const { container } = await renderTab([folder('f', [sub('s', kids(3, 'x'))], { placement: { x: 0, y: 0, w: 4, h: 4 } })]);
+    expect(el(container, 'f').querySelector('[data-folder-no-room]')).not.toBeNull();
+    expect(container.querySelector('[data-node-id="x1"]')).toBeNull();
+    expect(container.querySelector('[data-page-bar]')).toBeNull();
+  });
+  it('so deep the inset bars run out of room: the note is on the folder\'s own body, always seen (review minor 4)', async () => {
+    setFolderDrill('d1', 'f', ['a', 'b', 'c', 'd']);
+    // 4 x 4 at 60 px: content 182 px high; four inset levels need 4 x 46 = 184 px of bars and padding.
+    const deep = sub('a', [sub('b', [sub('c', [sub('d', [kid('z')])])])]);
+    const { container } = await renderTab([folder('f', [deep], { placement: { x: 0, y: 0, w: 4, h: 4 } })]);
+    const note = el(container, 'f').querySelector(':scope > .folder-body > [data-folder-no-room]');
+    expect(note).not.toBeNull();
+    expect(note!.textContent).toMatch(/Not enough room — make the folder bigger/);
+    expect(el(container, 'f').querySelectorAll('[data-folder-no-room]')).toHaveLength(1);
+  });
+  it('an untitled sub-folder\'s inset bar says "Untitled folder" (muted), and an outer one goes up', async () => {
+    setFolderDrill('d1', 'f', ['s', 's2']);
+    const { container } = await renderTab([folder('f', [sub('s', [sub('s2', [kid('z')])], { showTitle: false })])]);
+    const head = nested(container, 's').querySelector(':scope > .nested-header') as HTMLElement;
+    const label = within(head).getByRole('button', { name: 'Untitled folder' });
+    expect(label.classList.contains('muted')).toBe(true);
+    await fireEvent.click(label);
+    expect(get(folderNavFor('d1')).drill).toEqual({ f: ['s'] });
+    const inner = nested(container, 's').querySelector(':scope > .nested-header') as HTMLElement;
+    expect(within(inner).getByText('Untitled folder').classList.contains('muted')).toBe(true);
   });
   it('a sub-folder deleted elsewhere closes, saying so', async () => {
     setFolderDrill('d1', 'f', ['s']);
@@ -367,6 +398,21 @@ describe('edit mode looks the same (§7.2 WYSIWYG), plus handles', () => {
     expect(s.undo).toHaveLength(1);
     expect(get(folderViewFor('d1'))).toEqual({});
     expect(get(selectedNodes).has('f')).toBe(false);
+  });
+  it('right-click on an inset box\'s bar opens THAT sub-folder\'s menu (Ruling 14)', async () => {
+    setFolderDrill('d1', 'f', ['s']);
+    const { container } = await renderEditing([folder('f', [kid('a'), sub('s', kids(2, 'x'))])]);
+    const head = nested(container, 's').querySelector(':scope > .nested-header') as HTMLElement;
+    try {
+      await fireEvent.contextMenu(head, { clientX: 50, clientY: 60 });
+      expect(get(editorMenu)?.target).toEqual({ kind: 'node', id: 's' });
+      // On the top folder's own bar it is still the top folder's.
+      editorMenu.set(null);
+      await fireEvent.contextMenu(el(container, 'f').querySelector('.folder-header')!, { clientX: 50, clientY: 20 });
+      expect(get(editorMenu)?.target).toEqual({ kind: 'node', id: 'f' });
+    } finally {
+      editorMenu.set(null);
+    }
   });
   it('each inset box has its own edit handle, which edits that sub-folder', async () => {
     setFolderDrill('d1', 'f', ['s']);

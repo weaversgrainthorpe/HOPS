@@ -27,7 +27,7 @@ import NodeContextMenu from './NodeContextMenu.svelte';
 import { editorDialog, type MenuRequest } from '$lib/editor/editorUi';
 import { nodeClipboard } from '$lib/stores/nodeClipboard';
 import { selectedNodes, toggleNode } from '$lib/stores/nodeSelection';
-import { folderNavFor, resetFolderViewsForTests } from '$lib/stores/folderView';
+import { folderNavFor, resetFolderViewsForTests, setFolderDrill } from '$lib/stores/folderView';
 import { undo, session } from '$lib/stores/editSession';
 import { editMode } from '$lib/stores/editMode';
 import EditorDialogs from './EditorDialogs.svelte';
@@ -213,6 +213,21 @@ describe('NodeContextMenu — each action calls the right op', () => {
     expect(get(session)!.undo).toHaveLength(0);
   });
 
+  it('a sub-folder shown as an inset box (drilled into): Close goes back up to its parent level, no Open (Ruling 14)', async () => {
+    const d = home();
+    (d.tabs[0].root.children[2] as FolderNode).content.children.push(folder('s', undefined, [folder('s2', undefined, [tile('z')])]));
+    setLayout([d]);
+    resetEditor();
+    startSession();
+    setFolderDrill('d1', 'f1', ['s', 's2']);
+    const before = draft();
+    open({ kind: 'node', id: 's' });
+    expect(screen.queryByRole('menuitem', { name: 'Open' })).toBeNull();
+    await fireEvent.click(item('Close'));
+    expect(get(folderNavFor('d1')).drill).toEqual({});
+    expect(draft()).toEqual(before);
+    expect(get(session)!.undo).toHaveLength(0);
+  });
   it('empty space: Add tile here / Add folder here open the new-item dialog at that cell; Paste here pastes there', async () => {
     let r = open({ kind: 'container', ref: { tabId: 't1' }, cell: { x: 18, y: 0 } });
     await fireEvent.click(item('Add tile here'));

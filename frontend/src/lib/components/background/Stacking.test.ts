@@ -15,7 +15,7 @@ import TabCanvas from '../layout/TabCanvas.svelte';
 import { config } from '$lib/stores/config';
 import { editMode } from '$lib/stores/editMode';
 import { isAuthenticated } from '$lib/stores/auth';
-import { resetFolderViewsForTests } from '$lib/stores/folderView';
+import { resetFolderViewsForTests, setFolderDrill } from '$lib/stores/folderView';
 import { failedBackgroundUrls, clearBackgroundErrors } from '$lib/stores/backgroundErrors';
 import { begin, resetEditSessionForTests } from '$lib/stores/editSession';
 import type { Background } from '$lib/types';
@@ -515,6 +515,21 @@ describe('folder lazy loading', () => {
     expect(node(container, 'fi').querySelector<HTMLElement>('.background-root')?.dataset.animate).toBe('false');
   });
 
+  it('nested inset boxes (M5 §7) share the cap: of 5 animated slideshows drilled one inside another, 4 animate', async () => {
+    const show = (id: string) => slideshow([`/backgrounds/${id}-1.jpg`, `/backgrounds/${id}-2.jpg`]);
+    const sub = (id: string, children: any[]) => ({ ...folder(id, id.toUpperCase(), children, { background: show(id) }), placement: undefined });
+    const chain = sub('n1', [sub('n2', [sub('n3', [sub('n4', [tile('z', 'Z')])])])]);
+    const { d, tab } = mkTab([{ ...folder('top', 'Top', [chain], { background: show('top') }), placement: { x: 0, y: 0, w: 24, h: 20 } }]);
+    setFolderDrill(d.id, 'top', ['n1', 'n2', 'n3', 'n4']);
+    const { container } = render(TabCanvas, { dashboard: d, tab });
+    await settle();
+    const surfaces = Array.from(container.querySelectorAll<HTMLElement>('.folder-surface'));
+    expect(surfaces).toHaveLength(5); // the top box and four inset boxes, each with its own background
+    surfaces.forEach((el, i) => emitVisible(el, 1000 - i)); // every one registered with the one controller
+    await settle();
+    const animating = surfaces.filter((el) => el.querySelector<HTMLElement>('.background-root')?.dataset.animate === 'true');
+    expect(animating).toHaveLength(4);
+  });
   it('an off-screen single-image folder never loads', async () => {
     const { d, tab } = mkTab([folder('fi', 'Single', [tile('s', 'S')], { background: image('/backgrounds/far.jpg') })]);
     const { container } = render(TabCanvas, { dashboard: d, tab });

@@ -292,21 +292,28 @@ export function nestedContentBox(content: { widthPx: number; heightPx: number },
   };
 }
 
+/** The "Not enough room" note's height: it goes inside the innermost box only when its body is this tall. */
+export const NO_ROOM_NOTE_PX = 24;
+
 /**
  * The page of the innermost box, `levels` deep inside an open folder whose content box is `content`
- * (folderPaging in nestedContentBox). `noRoom`: a drilled level whose box cannot show even one item at
- * its contents size (deep nesting in a small folder) — Folder.svelte then says "Not enough room" and
- * draws no clipped items. Opening a sub-folder never resizes the saved box, so this is the only answer.
+ * (folderPaging in nestedContentBox). `noRoom`: a drilled level whose box cannot show its page — not
+ * even one item at its contents size, or not the page bar its items need (tooSmall) — so Folder.svelte
+ * says "Not enough room" and draws no clipped items. `noRoomInside`: the innermost box's body is tall
+ * enough to hold that note; otherwise (the inset bars themselves run out of room) the note goes on the
+ * folder's own body, where it is always seen. Opening a sub-folder never resizes the saved box.
  */
 export function nestedPaging(
   content: { widthPx: number; heightPx: number }, levels: number, contentSize: unknown, cellPx: number, count: number, page: number
-): FolderPaging & { noRoom: boolean } {
+): FolderPaging & { noRoom: boolean; noRoomInside: boolean } {
   const inner = nestedContentBox(content, levels);
   const g = folderPaging(inner, contentSize, cellPx, count, page);
   const eps = 0.5;
-  const deep = isNum(levels) && levels >= 1;
-  const noRoom = deep && (inner.widthPx + eps < g.itemPx || inner.heightPx + eps < g.itemPx);
-  return { ...g, noRoom };
+  const n = isNum(levels) && levels >= 1 ? Math.floor(levels) : 0;
+  const noRoom = n > 0 && (g.tooSmall || inner.widthPx + eps < g.itemPx || inner.heightPx + eps < g.itemPx);
+  // The innermost body as drawn: its content height (unclamped) plus its padding.
+  const bodyPx = content.heightPx - n * (NESTED_CHROME.titlePx + NESTED_CHROME.padYPx) + 2 * NESTED_CHROME.padPx;
+  return { ...g, noRoom, noRoomInside: noRoom && bodyPx + eps >= NO_ROOM_NOTE_PX };
 }
 
 /** One page of an open folder (M5 §2): which items show, and whether there is a page bar. */

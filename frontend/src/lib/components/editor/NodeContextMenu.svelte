@@ -10,7 +10,8 @@
   import { session } from '$lib/stores/editSession';
   import { selectedNodes, toggleNode } from '$lib/stores/nodeSelection';
   import { nodeClipboard, copySelection, cutSelection, pasteInto } from '$lib/stores/nodeClipboard';
-  import { drillTo } from '$lib/stores/folderView';
+  import { drillTo, folderNavFor, setFolderDrill } from '$lib/stores/folderView';
+  import { get } from 'svelte/store';
   import { portal } from '$lib/utils/portal';
   import { toast } from '$lib/stores/toast';
 
@@ -91,7 +92,15 @@
     // the tab opens into the space it kept — in edit mode, as its saved default (undoable).
     const chain = locate(d, id)?.folderChain ?? [];
     const nested = chain.length > 0;
-    if (!many && node.kind === 'folder' && (nested || node.display === 'collapsed')) {
+    // A sub-folder this browser is drilled into is open already, as an inset box (M5 §7): its menu
+    // closes it (back up to the level above), never Open (Ruling 14).
+    const drilledBy = nested
+      ? Object.entries(get(folderNavFor(d.id)).drill).find(([, path]) => path.includes(id))
+      : undefined;
+    if (!many && drilledBy) {
+      const [top, path] = drilledBy;
+      out.push({ label: 'Close', icon: 'mdi:folder', run: () => setFolderDrill(d.id, top, path.slice(0, path.indexOf(id))) });
+    } else if (!many && node.kind === 'folder' && (nested || node.display === 'collapsed')) {
       out.push({
         label: 'Open',
         icon: 'mdi:folder-open',

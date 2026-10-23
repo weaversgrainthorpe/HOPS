@@ -348,3 +348,180 @@ test.describe('M5 §7 on a 390 x 844 phone: the same nesting at full width', () 
     expect(await shown(page, f.id('svc'))).toEqual(['yt', 'gh', 'deeper'].map(f.id));
   });
 });
+
+// ---- Task 7 fix round 1 (review Important 1, Ruling 14).
+
+/** Press at `from` and travel in small steps to `to` (still pressed). */
+async function travel(page: Page, from: { x: number; y: number }, to: { x: number; y: number }, steps = 20) {
+  for (let i = 1; i <= steps; i++) {
+    await page.mouse.move(from.x + ((to.x - from.x) * i) / steps, from.y + ((to.y - from.y) * i) / steps);
+    await page.waitForTimeout(16);
+  }
+}
+const mid = (b: Box) => ({ x: b.x + b.width / 2, y: b.y + b.height / 2 });
+/** The name part of an inset box's bar: a press there is a press on the sub-folder (not on ‹ or the handle). */
+const barGrip = async (l: Locator) => {
+  const h = await box(header(l));
+  return { x: h.x + h.width * 0.6, y: h.y + h.height / 2 };
+};
+async function enterEdit(page: Page) {
+  await page.locator('[aria-label="Enter Edit Mode"]').click();
+  await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
+}
+async function saveDraft(page: Page) {
+  const save = page.getByRole('toolbar', { name: 'Editing' }).getByRole('button', { name: /Save/ });
+  await expect(save).toBeEnabled();
+  const saved = page.waitForResponse((r) => r.request().method() === 'PUT' && /\/api\/dashboards\//.test(r.url()));
+  await save.click();
+  expect((await saved).status()).toBe(200);
+}
+async function savedRoot(page: Page, dashId: string): Promise<AnyNode[]> {
+  const cfg = await (await page.request.get('/api/config')).json();
+  return cfg.dashboards.find((d: { id: string }) => d.id === dashId).tabs[0].root.children;
+}
+function findNode(ns: AnyNode[], id: string): AnyNode | undefined {
+  for (const n of ns) {
+    if (n.id === id) return n;
+    const r = n.content ? findNode(n.content.children, id) : undefined;
+    if (r) return r;
+  }
+  return undefined;
+}
+const childIds = (ns: AnyNode[], id: string) => (findNode(ns, id)?.content?.children ?? []).map((n) => n.id);
+async function navOf(page: Page, dash: string) {
+  return page.evaluate((k) => JSON.parse(localStorage.getItem(`hops.folderNav.${k}`) ?? '{"page":{},"drill":{}}'), dash);
+}
+
+test.describe('M5 §7 fix round 1', () => {
+  test.use({ viewport: { width: 1024, height: 900 } });
+
+  test('an inset box with room for one item but not the page bar its items need says "Not enough room" (no silent clip)', async ({ page, context }) => {
+    const f = await importDash(page, context, (id) => [
+      tile(id('m'), 'Med', 20, 0),
+      folder(id('f'), 'Small', { x: 0, y: 0, w: 4, h: 5 }, [folder(id('s'), 'Three', null, kids(id, 3))])
+    ]);
+    await page.goto(f.path);
+    const c = (await box(node(page, f.id('m')))).width / 2; // the tab cell
+    // Precondition (the arithmetic of this case): the inset content holds one Medium item, but not
+    // one plus the 32 px page bar three items need.
+    expect(5 * c - 104, 'one item fits').toBeGreaterThanOrEqual(2 * c);
+    expect(5 * c - 104 - 32, 'item + page bar do not').toBeLessThan(2 * c);
+    await drilled(page, f.id('dash'), f.id('f'), [f.id('s')]);
+    await page.reload();
+    const small = node(page, f.id('f'));
+    await expect(nested(small, f.id('s'))).toBeVisible();
+    await expect(small.locator('[data-folder-no-room]')).toBeVisible();
+    await expect(small.locator('[data-folder-no-room]')).toHaveText(/Not enough room — make the folder bigger/);
+    // Nothing is drawn clipped: no item, no page bar.
+    await expect(small.locator(`[data-node-id="${f.id('k1')}"]`)).toHaveCount(0);
+    await expect(small.locator('[data-page-bar]')).toHaveCount(0);
+  });
+
+  test('right-click on an inset box\'s title: that sub-folder\'s own menu (Close goes back up; Edit edits it)', async ({ page, context }) => {
+    const f = await importDash(page, context, services);
+    await page.goto(f.path);
+    await drilled(page, f.id('dash'), f.id('svc'), [f.id('nf'), f.id('deeper')]);
+    await page.goto(f.path);
+    await enterEdit(page);
+    const svc = node(page, f.id('svc'));
+    await page.mouse.click((await barGrip(nested(svc, f.id('nf')))).x, (await barGrip(nested(svc, f.id('nf')))).y, { button: 'right' });
+    const menu = page.getByRole('menu');
+    await expect(menu).toBeVisible();
+    await expect(menu.getByRole('menuitem', { name: 'Open', exact: true })).toHaveCount(0);
+    await menu.getByRole('menuitem', { name: 'Edit', exact: true }).click();
+    const dlg = page.getByRole('dialog', { name: 'Edit Folder' });
+    await expect(dlg.getByRole('textbox', { name: /^Folder name/ })).toHaveValue('New folder');
+    await dlg.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(dlg).toHaveCount(0);
+    // Close: back up to Services' own level (this browser's memory; the draft is unchanged).
+    const g = await barGrip(nested(svc, f.id('nf')));
+    await page.mouse.click(g.x, g.y, { button: 'right' });
+    await page.getByRole('menu').getByRole('menuitem', { name: 'Close', exact: true }).click();
+    await expect(svc.locator('.nested-box')).toHaveCount(0);
+    expect(await shown(page, f.id('svc'))).toEqual(['plex', 'nf'].map(f.id));
+    await expect(page.getByRole('status').filter({ hasText: 'Unsaved changes' })).toHaveCount(0);
+  });
+
+  test('dragging an inset box\'s title out to the tab moves THAT sub-folder; nothing is left drilled into it', async ({ page, context }) => {
+    const f = await importDash(page, context, services);
+    await page.goto(f.path);
+    await drilled(page, f.id('dash'), f.id('svc'), [f.id('nf'), f.id('deeper')], { [f.id('nf')]: 0 });
+    const errors: string[] = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await page.goto(f.path);
+    await enterEdit(page);
+    const svc = node(page, f.id('svc'));
+    const from = await barGrip(nested(svc, f.id('nf')));
+    const med = await box(node(page, f.id('tabmed')));
+    const to = { x: med.x + med.width / 2, y: med.y + med.height * 3.5 }; // empty cells below TabMed
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    await travel(page, from, to);
+    await page.waitForTimeout(120);
+    await expect(page.locator('.drag-layer .reason')).toHaveCount(0);
+    await page.mouse.up();
+    // Services is back at its own level; the moved folder is a minimised folder on the tab.
+    await expect(svc.locator('.nested-box')).toHaveCount(0);
+    await expect(node(page, f.id('nf'))).toHaveClass(/collapsed/);
+    await saveDraft(page);
+    const root = await savedRoot(page, f.id('dash'));
+    expect(root.map((n) => n.id)).toContain(f.id('nf'));
+    expect(childIds(root, f.id('svc'))).toEqual([f.id('plex')]);
+    expect(childIds(root, f.id('nf'))).toEqual(['yt', 'gh', 'deeper'].map(f.id));
+    const nav = await navOf(page, f.id('dash'));
+    expect(nav.drill).toEqual({});
+    // Never mistaken for "changed elsewhere".
+    await expect(page.getByText(/A folder you had open/)).toHaveCount(0);
+    expect(errors).toEqual([]);
+  });
+
+  test('dragging an inset title onto another folder puts that sub-folder inside it', async ({ page, context }) => {
+    const f = await importDash(page, context, (id) => [
+      ...services(id),
+      folder(id('other'), 'Other', { x: 20, y: 4, w: 3, h: 5 }, [kid(id('o1'), 'O1')], { display: 'collapsed' })
+    ]);
+    await page.goto(f.path);
+    await drilled(page, f.id('dash'), f.id('svc'), [f.id('nf'), f.id('deeper')]);
+    await page.goto(f.path);
+    await enterEdit(page);
+    const svc = node(page, f.id('svc'));
+    const from = await barGrip(nested(svc, f.id('deeper')));
+    const to = mid(await box(node(page, f.id('other')).locator('.folder-collapsed-tile')));
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    await travel(page, from, to);
+    await page.waitForTimeout(120);
+    await expect(page.locator('.drag-layer .reason')).toHaveCount(0);
+    await page.mouse.up();
+    await expect(nested(svc, f.id('deeper'))).toHaveCount(0);
+    await expect(nested(svc, f.id('nf'))).toBeVisible(); // back up one level: New folder still open
+    await saveDraft(page);
+    const root = await savedRoot(page, f.id('dash'));
+    expect(childIds(root, f.id('other'))).toEqual(['o1', 'deeper'].map(f.id));
+    expect(childIds(root, f.id('nf'))).toEqual(['yt', 'gh'].map(f.id));
+    expect((await navOf(page, f.id('dash'))).drill).toEqual({ [f.id('svc')]: [f.id('nf')] });
+  });
+
+  test('dragging an inset title, holding over the outer title to go up, then dropping reorders it there', async ({ page, context }) => {
+    const f = await importDash(page, context, services);
+    await page.goto(f.path);
+    await drilled(page, f.id('dash'), f.id('svc'), [f.id('nf'), f.id('deeper')]);
+    await page.goto(f.path);
+    await enterEdit(page);
+    const svc = node(page, f.id('svc'));
+    const from = await barGrip(nested(svc, f.id('deeper')));
+    const nfTitle = mid(await box(header(nested(svc, f.id('nf'))).getByRole('button', { name: 'New folder', exact: true })));
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    await travel(page, from, nfTitle);
+    await expect(nested(svc, f.id('deeper'))).toHaveCount(0, { timeout: 2000 }); // held: up to New folder
+    const yt = await box(node(page, f.id('yt')));
+    const to = { x: yt.x + 8, y: yt.y + yt.height / 2 };
+    await travel(page, nfTitle, to, 10);
+    await page.waitForTimeout(120);
+    await expect(page.locator('.drag-layer .reason')).toHaveCount(0);
+    await page.mouse.up();
+    await saveDraft(page);
+    expect(childIds(await savedRoot(page, f.id('dash')), f.id('nf'))).toEqual(['deeper', 'yt', 'gh'].map(f.id));
+  });
+});

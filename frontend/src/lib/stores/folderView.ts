@@ -198,6 +198,34 @@ export function forgetFolderMemory(dashboardId: string, folderIds: string[]): vo
 }
 
 /**
+ * Folders `folderIds` moved away (a drag, cut/paste or Move to, Ruling 14): an open folder drilled
+ * into one of them goes back up to the level above it, and the levels cut off — the moved folder and
+ * any below it — forget their page and drill memory. Done with the move, so it is never mistaken for
+ * "changed elsewhere". Returns the open folders whose path was cut; nothing remembered → no write.
+ */
+export function closeDrilledInto(dashboardId: string, folderIds: string[]): string[] {
+  const moved = new Set(folderIds);
+  const nav = get(navOf(dashboardId));
+  const cuts: { id: string; keep: string[]; gone: string[] }[] = [];
+  for (const [id, path] of Object.entries(nav.drill)) {
+    const i = path.findIndex((p) => moved.has(p));
+    if (i >= 0) cuts.push({ id, keep: path.slice(0, i), gone: path.slice(i) });
+  }
+  if (cuts.length === 0) return [];
+  setNav(dashboardId, (n) => {
+    for (const c of cuts) {
+      if (c.keep.length === 0) delete n.drill[c.id];
+      else n.drill[c.id] = c.keep;
+      for (const g of c.gone) {
+        delete n.page[g];
+        delete n.drill[g];
+      }
+    }
+  });
+  return cuts.map((c) => c.id);
+}
+
+/**
  * The remembered drill path below `folder`, as far as it still holds: each id must be a sub-folder
  * directly inside the one before. Stops at the first that is not (gone, moved or now a tile).
  */

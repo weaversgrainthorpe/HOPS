@@ -6,7 +6,7 @@ import {
   containerMetrics, previewChildren, ROOT_COLUMNS, nodeBox, FOLDER_CHROME, openFolderContentBox, folderPaging,
   folderFlowMetrics, PAGE_BAR_PX, phoneTrack, phoneColumnPx, phonePaging, PHONE_TILE_MIN_PX, PHONE_PAGE_RESERVE_PX,
   minOpenFolderCells, MIN_GRID_CELL_PX, largestContentSize, folderMinCells, defaultFolderBox, tabSpan,
-  NESTED_CHROME, nestedContentBox, nestedPaging
+  NESTED_CHROME, nestedContentBox, nestedPaging, NO_ROOM_NOTE_PX
 } from './geometry';
 import type { FolderNode, LayoutNode, LayoutTab } from '../types/layout';
 
@@ -331,5 +331,30 @@ describe('nested boxes: every drilled level is an inset box inside the last (M5 
     expect(nestedPaging({ widthPx: 10, heightPx: 10 }, 0, 'medium', 32, 1, 0)).toMatchObject({ noRoom: false, tooSmall: true });
     // Room for exactly one item is room.
     expect(nestedPaging({ widthPx: 64 + 18, heightPx: 64 + 46 }, 1, 'medium', 32, 1, 0).noRoom).toBe(false);
+  });
+});
+
+// ---- Task 7 fix round 1: a page bar counts; where the note goes.
+describe('nested boxes: not enough room counts the page bar, and says where the note fits', () => {
+  it('room for one item but not for the page bar it needs is NOT room (review Important 1)', () => {
+    // Inner content 64 x 64 at 32 px cells: one Medium item fits, but 2 items need a 32 px page bar.
+    const g = nestedPaging({ widthPx: 82, heightPx: 110 }, 1, 'medium', 32, 2, 0);
+    expect(g.pageBar).toBe(true);
+    expect(g.noRoom).toBe(true);
+    // One item, no page bar: room.
+    expect(nestedPaging({ widthPx: 82, heightPx: 110 }, 1, 'medium', 32, 1, 0).noRoom).toBe(false);
+    // Room for the item AND the page bar: room.
+    expect(nestedPaging({ widthPx: 82, heightPx: 110 + 32 }, 1, 'medium', 32, 2, 0).noRoom).toBe(false);
+  });
+  it('the note goes inside the innermost box when its body is at least NO_ROOM_NOTE_PX tall, else on the top body', () => {
+    expect(NO_ROOM_NOTE_PX).toBe(24);
+    // Level 1 in 100 px of content: the innermost body is 100 - 46 + 16 = 70 px → inside.
+    expect(nestedPaging({ widthPx: 300, heightPx: 100 }, 1, 'large', 32, 1, 0)).toMatchObject({ noRoom: true, noRoomInside: true });
+    // Level 2 in 100 px: 100 - 92 + 16 = 24 px → still inside (exactly the note).
+    expect(nestedPaging({ widthPx: 300, heightPx: 100 }, 2, 'medium', 32, 1, 0)).toMatchObject({ noRoom: true, noRoomInside: true });
+    // Level 3 in 100 px: the inset bars themselves no longer fit → on the top body, always seen.
+    expect(nestedPaging({ widthPx: 300, heightPx: 100 }, 3, 'medium', 32, 1, 0)).toMatchObject({ noRoom: true, noRoomInside: false });
+    // Room: no note anywhere.
+    expect(nestedPaging({ widthPx: 300, heightPx: 300 }, 1, 'medium', 32, 1, 0)).toMatchObject({ noRoom: false, noRoomInside: false });
   });
 });
