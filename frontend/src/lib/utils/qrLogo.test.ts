@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import QRCode from 'qrcode';
-import { buildQrSvg, QR_ERROR_CORRECTION, LOGO_FRACTION, BACKING_FRACTION } from './qrLogo';
+import { buildQrSvg, QR_ERROR_CORRECTION, LOGO_FRACTION, BACKING_FRACTION, BACKING_COLOUR } from './qrLogo';
 
 // M5 §12: the dashboard QR code carries a small HOPS bunny in its centre, on a white rounded
 // square, inside the generated SVG (so the download has it), at error-correction level H.
@@ -31,7 +31,7 @@ describe('buildQrSvg', () => {
 		expect(modules(svg)).not.toBe(modules(m));
 	});
 
-	it('centres the bunny, no wider than 20% of the code, on a white rounded backing behind it', async () => {
+	it('centres the bunny, no wider than 20% of the code, on a dark rounded backing behind it', async () => {
 		const doc = parse(await buildQrSvg(URL_));
 		const n = viewBoxSize(doc);
 		const logo = doc.querySelector('svg[data-qr-logo]')!;
@@ -53,8 +53,9 @@ describe('buildQrSvg', () => {
 		expect(bw).toBeLessThanOrEqual(0.2 * n + 1e-9);
 		expect(bw * bh).toBeLessThanOrEqual(0.04 * n * n + 1e-9);
 		expect(LOGO_FRACTION).toBeLessThan(BACKING_FRACTION);
-		// The backing is white, rounded, and leaves a quiet margin round the logo.
-		expect(backing.getAttribute('fill')).toBe('#ffffff');
+		// The backing is dark blue, rounded, and leaves a quiet margin round the logo.
+		expect(backing.getAttribute('fill')).toBe(BACKING_COLOUR);
+		expect(BACKING_COLOUR).toBe('#1e293b'); // the theme's --bg-secondary (dark HOPS blue)
 		expect(Number(backing.getAttribute('rx'))).toBeGreaterThan(0);
 		expect(lx).toBeGreaterThan(bx);
 		expect(lx + lw).toBeLessThan(bx + bw);
@@ -75,5 +76,21 @@ describe('buildQrSvg', () => {
 		expect(svg).not.toMatch(/url\(#bunnyGradient\)/);
 		expect(svg).not.toMatch(/<animate/);
 		expect(doc.querySelector('parsererror')).toBeNull();
+	});
+
+	it('the bunny stands out: its lightest and darkest fills have contrast >= 4.5:1 on the backing', () => {
+		const lum = (hex: string) => {
+			const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+				.map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+			return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+		};
+		const ratio = (a: string, b: string) => {
+			const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
+			return (hi + 0.05) / (lo + 0.05);
+		};
+		// The bunny's gradient runs #f8f9fa to #e9ecef (static/logo.svg); white is the reference.
+		for (const bunny of ['#ffffff', '#f8f9fa', '#e9ecef']) {
+			expect(ratio(bunny, BACKING_COLOUR)).toBeGreaterThanOrEqual(4.5);
+		}
 	});
 });

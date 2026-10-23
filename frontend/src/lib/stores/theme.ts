@@ -164,6 +164,9 @@ const themePresets: Record<string, ThemePreset> = {
   }
 };
 
+/** HOPS's dark brand blue: the default preset's dark secondary background (the --bg-secondary token). */
+export const HOPS_DARK_BLUE = themePresets.default.dark.secondary;
+
 // Get initial theme from localStorage or default to 'dark'
 const getInitialTheme = (): Theme => {
   if (!browser) return 'dark';

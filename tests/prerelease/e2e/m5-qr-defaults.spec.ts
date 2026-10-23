@@ -51,7 +51,7 @@ test.describe('M5 §12 QR code with the HOPS bunny', () => {
 		const dlg = page.getByRole('dialog', { name: 'QR Code' });
 		await expect(dlg).toBeVisible();
 
-		// The bunny is drawn, in the centre, no wider than 20% of the code, on its white backing.
+		// The bunny is drawn, in the centre, no wider than 20% of the code, on its dark blue backing.
 		const qr = dlg.locator('.qr-frame > svg');
 		const logo = qr.locator('svg[data-qr-logo]');
 		const backing = qr.locator('rect[data-qr-backing]');
@@ -64,7 +64,7 @@ test.describe('M5 §12 QR code with the HOPS bunny', () => {
 		expect(Math.abs(l.x + l.width / 2 - (q.x + q.width / 2))).toBeLessThan(1);
 		expect(Math.abs(l.y + l.height / 2 - (q.y + q.height / 2))).toBeLessThan(1);
 		expect(l.width).toBeLessThanOrEqual(q.width * 0.2 + 0.5);
-		expect(await backing.evaluate((el) => getComputedStyle(el).fill)).toBe('rgb(255, 255, 255)');
+		expect(await backing.evaluate((el) => getComputedStyle(el).fill)).toBe('rgb(30, 41, 59)');
 
 		// The URL the modal shows (and the code must carry): this server's origin + the dashboard.
 		const shown = (await dlg.locator('.url-text').getAttribute('title'))!;
