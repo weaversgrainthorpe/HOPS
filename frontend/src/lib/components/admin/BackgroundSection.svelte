@@ -679,7 +679,7 @@
     <label for="color">Background Color</label>
     <div class="color-row">
       <input id="color" type="color" bind:value={colorValue} class="color-input" />
-      <input type="text" bind:value={colorValue} placeholder="#1e293b" class="color-text" />
+      <input type="text" bind:value={colorValue} placeholder="#1e293b" class="color-text bg-field" />
     </div>
   </div>
 {/if}
@@ -765,6 +765,7 @@
     <label for="imageUrl">Image URL</label>
     <input
       id="imageUrl"
+      class="bg-field"
       type="text"
       bind:value={singleImageUrl}
       placeholder="https://example.com/image.jpg or /backgrounds/image.jpg"
@@ -812,6 +813,7 @@
     <label for="interval">Rotation Interval (seconds, {INTERVAL_MIN}–{INTERVAL_MAX})</label>
     <input
       id="interval"
+      class="bg-field"
       type="number"
       bind:value={slideshowInterval}
       min={INTERVAL_MIN}
@@ -1015,6 +1017,7 @@
     <div class="url-input-group">
       <input
         id="custom-image-url"
+        class="bg-field"
         type="text"
         bind:value={customImageUrl}
         placeholder="https://example.com/image.jpg"
@@ -1099,10 +1102,10 @@
           type="text"
           bind:value={newCategoryName}
           placeholder="Category name"
-          class="new-category-input"
+          class="new-category-input bg-field"
           onkeydown={(e) => e.key === 'Enter' && handleCreateCategory()}
         />
-        <select bind:value={newCategoryIcon} class="icon-select">
+        <select bind:value={newCategoryIcon} class="icon-select bg-field">
           <option value="mdi:folder-image">Folder</option>
           <option value="mdi:image-multiple">Images</option>
           <option value="mdi:camera">Camera</option>
@@ -1223,7 +1226,7 @@
 
   .field-error {
     margin: 0.4rem 0 0;
-    color: var(--color-error, #dc2626);
+    color: var(--bgsec-error-text);
     font-size: 0.85rem;
   }
 
@@ -1452,20 +1455,52 @@
     font-size: 0.85rem;
   }
 
+  /*
+   * The section's own fields (URL, colour, interval, category). One shared component, so they look
+   * the same in every dialog that hosts it: their colours are the section's own tokens, resolved once
+   * on :root from the theme (below), so a host that restyles or re-scopes theme tokens around the
+   * section can't change them. Readable on every preset, light and dark: the value >= 4.5:1 on the
+   * field, the placeholder and the border >= 3:1 (checked in m6-background-url-contrast.spec.ts).
+   */
+  :global(:root) {
+    --bgsec-field-bg: var(--bg-primary);
+    --bgsec-field-text: var(--text-primary);
+    --bgsec-field-placeholder: var(--text-secondary); /* as in Edit Folder (§7.3): >= 4.5:1 */
+    --bgsec-field-border: color-mix(in srgb, var(--text-secondary) 70%, transparent);
+    --bgsec-field-focus: var(--accent-solid);
+    --bgsec-error-text: var(--color-error-text);
+  }
+
   .form-group input[type="text"],
   .form-group input[type="number"] {
     width: 100%;
     padding: 0.75rem;
-    background: var(--bg-tertiary);
-    border: 1px solid var(--border);
     border-radius: 0.375rem;
-    color: var(--text-primary);
     font-size: 0.875rem;
   }
 
-  .form-group input:focus {
+  .bg-field,
+  .form-group .bg-field {
+    background: var(--bgsec-field-bg);
+    color: var(--bgsec-field-text);
+    border: 1px solid var(--bgsec-field-border);
+    opacity: 1;
+  }
+
+  .bg-field::placeholder {
+    color: var(--bgsec-field-placeholder);
+    opacity: 1;
+  }
+
+  .bg-field:focus,
+  .form-group .bg-field:focus {
     outline: none;
-    border-color: var(--accent);
+    border-color: var(--bgsec-field-focus);
+    box-shadow: 0 0 0 1px var(--bgsec-field-focus);
+  }
+
+  .bg-field[aria-invalid="true"] {
+    border-color: var(--bgsec-error-text);
   }
 
   .type-buttons, .fit-buttons, .transition-buttons {
@@ -1782,24 +1817,13 @@
     flex: 1;
     min-width: 150px;
     padding: 0.5rem 0.75rem;
-    background: var(--bg-primary);
-    border: 1px solid var(--border);
     border-radius: 0.375rem;
-    color: var(--text-primary);
     font-size: 0.875rem;
-  }
-
-  .new-category-input:focus {
-    outline: none;
-    border-color: var(--accent);
   }
 
   .icon-select {
     padding: 0.5rem 0.75rem;
-    background: var(--bg-primary);
-    border: 1px solid var(--border);
     border-radius: 0.375rem;
-    color: var(--text-primary);
     font-size: 0.875rem;
     cursor: pointer;
   }
