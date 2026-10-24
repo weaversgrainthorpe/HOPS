@@ -55,6 +55,13 @@ type Definition struct {
 	Enum []string
 }
 
+// The values of the "Animations" setting (Ruling 5).
+const (
+	AnimationsOn     = "on"
+	AnimationsOff    = "off"
+	AnimationsAlways = "always"
+)
+
 // MB is one megabyte as HOPS shows it (1,048,576 bytes).
 const MB = 1 << 20
 
@@ -188,13 +195,14 @@ var Definitions = []Definition{
 		Key: KeyFoldersAnimatedBackgrounds, Type: "bool", Default: "true",
 		Description: "Whether folders may show animated (video/GIF) backgrounds. Individual dashboards can override this.",
 	},
-	// M6 §7.13: the editor's drop and merge animations. Read live by the
-	// editor through each dashboard's computed display block.
+	// M6 §7.13 / Ruling 5: the editor's drop and merge animations. Read live
+	// by the editor through each dashboard's computed display block.
 	{
-		Key: KeyDisplayAnimations, Type: "bool", Default: "true",
-		Description: "Short animations in the editor: a tile dropped into a folder shrinks into it, and two tiles merged " +
-			"into a new folder are drawn together before the folder pops out. Turn this off for no animation at all. " +
-			"Animations are always skipped on devices set to reduce motion, and they never delay your change.",
+		Key: KeyDisplayAnimations, Type: "enum", Default: AnimationsOn,
+		Enum: []string{AnimationsOn, AnimationsOff, AnimationsAlways},
+		Description: "Animations in the editor: a tile dropped into a folder flies into it and the folder gulps it in; two tiles " +
+			"merged into a new folder are drawn together before the folder pops out. On plays them unless your device asks " +
+			"for reduced motion; Always plays them even then; Off never does. They never delay your change.",
 	},
 }
 
@@ -271,6 +279,16 @@ func (s *Service) seedAndLoad() error {
 	// install's rows are never mistaken for an old install's).
 	if err := s.moveOldDefaults(); err != nil {
 		return fmt.Errorf("move old defaults: %w", err)
+	}
+	// Ruling 5: "Animations" was a bool; keep the saved choice (true → on,
+	// false → off). Idempotent, so it runs on every start.
+	for from, to := range map[string]string{"true": AnimationsOn, "false": AnimationsOff} {
+		if _, err := s.db.Exec(
+			`UPDATE app_settings SET value = ?, updated_at = datetime('now') WHERE key = ? AND value = ?`,
+			to, KeyDisplayAnimations, from,
+		); err != nil {
+			return fmt.Errorf("migrate %q: %w", KeyDisplayAnimations, err)
+		}
 	}
 	// Insert any missing defaults idempotently.
 	for _, d := range Definitions {

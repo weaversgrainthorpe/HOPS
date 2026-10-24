@@ -15,21 +15,24 @@ import type { HitResult } from './hitTest';
 import { drag, dragSource, setDragEnv, resetDragForTests, setActiveTab, MERGE_DWELL_MS } from './dragController';
 import {
   animationsSetting, animationsAllowed, playDropAnimation, setAnimationEnv, resetDropAnimationForTests,
-  sayAnimationFailure, MERGE_DIALOG_CAP_MS, DROP_MS, GATHER_MS, POP_MS, type AnimationEnv
+  sayAnimationFailure, MERGE_DIALOG_CAP_MS, DROP_MS, GULP_MS, GULP_DELAY_MS, INTO_TOTAL_MS, GATHER_MS, POP_MS,
+  POP_DELAY_MS, MERGE_TOTAL_MS, type AnimationEnv, type AnimationsMode
 } from './dropAnimation';
 import { editorDialog } from '../editorUi';
 import { setLayout, resetEditor, startSession, draft, nodeIn, home, other } from '$lib/components/editor/editorTestKit';
 
-// M6 §7.13: drop and merge animations. Decoration only: the draft changes at once, the animation is
-// drawn from the old and new boxes, ≤ 300 ms, transforms and opacity only; never under reduced motion
-// or with the global "Animations" setting off.
+// M6 §7.13 + Ruling 5: drop and merge animations. Decoration only: the draft changes at once. Clearly
+// visible (~500 ms): a drop flies along a curve into the folder, which gulps; a merge draws both tiles
+// together, then the new folder pops. Transforms and opacity only. The setting is On / Off / Always:
+// On never plays under reduced motion, Always does, Off never does.
 
 const GRID = containerMetrics({ columns: 24, children: [] }, 1200);
 
 /** home() with the server-computed display block carrying the global Animations value. */
-function withAnimations(on: boolean | undefined): LayoutDashboard[] {
+function withAnimations(on: boolean | AnimationsMode | undefined): LayoutDashboard[] {
   const d = home();
-  if (on !== undefined) d.display = { animatedFolderBackgrounds: false, animations: on };
+  const mode: AnimationsMode | undefined = on === true ? 'on' : on === false ? 'off' : on;
+  if (mode !== undefined) d.display = { animatedFolderBackgrounds: false, animations: mode };
   return [d, other()];
 }
 
@@ -93,69 +96,211 @@ afterEach(() => {
 });
 
 describe('the setting is read', () => {
-  it('reads the global Animations value from the dashboard display block', () => {
-    setLayout(withAnimations(true));
-    expect(animationsSetting('d1')).toBe(true);
-    setLayout(withAnimations(false));
-    expect(animationsSetting('d1')).toBe(false);
+  it('reads the global Animations value (on / off / always) from the dashboard display block', () => {
+    for (const m of ['on', 'off', 'always'] as const) {
+      setLayout(withAnimations(m));
+      expect(animationsSetting('d1')).toBe(m);
+    }
   });
 
-  it('unknown (no display block yet, or no such dashboard) is off: never a guessed animation', () => {
+  it('unknown (no display block yet, no such dashboard, or a value it does not know) is off: never a guessed animation', () => {
     setLayout(withAnimations(undefined));
-    expect(animationsSetting('d1')).toBe(false);
-    expect(animationsSetting('nope')).toBe(false);
+    expect(animationsSetting('d1')).toBe('off');
+    expect(animationsSetting('nope')).toBe('off');
+    const d = home();
+    d.display = { animatedFolderBackgrounds: false, animations: true as unknown as AnimationsMode }; // the old bool
+    setLayout([d, other()]);
+    expect(animationsSetting('d1')).toBe('off');
   });
 
-  it('reduced motion turns them off even when the setting is on', () => {
-    setLayout(withAnimations(true));
+  it('On plays unless the device asks for reduced motion; Always plays even then; Off never', () => {
+    setLayout(withAnimations('on'));
     expect(animationsAllowed('d1')).toBe(true);
     reduced = true;
     expect(animationsAllowed('d1')).toBe(false);
+    setLayout(withAnimations('always'));
+    expect(animationsAllowed('d1')).toBe(true);
+    reduced = false;
+    expect(animationsAllowed('d1')).toBe(true);
+    setLayout(withAnimations('off'));
+    expect(animationsAllowed('d1')).toBe(false);
+  });
+
+  it('Always plays even when the device cannot say whether it wants reduced motion', () => {
+    animEnv({ reducedMotion: () => { throw new Error('no matchMedia'); } });
+    setLayout(withAnimations('always'));
+    expect(animationsAllowed('d1')).toBe(true);
+    setLayout(withAnimations('on'));
+    expect(animationsAllowed('d1')).toBe(false);
   });
 });
+
+/** The translate(x, y) of a keyframe's transform. */
+function xy(f: Keyframe): { x: number; y: number } {
+  const m = /translate\((-?[\d.]+)px, (-?[\d.]+)px\)/.exec(String(f.transform));
+  return m ? { x: Number(m[1]), y: Number(m[2]) } : { x: 0, y: 0 };
+}
+function scaleOf(f: Keyframe): number {
+  const m = /scale\((-?[\d.]+)\)/.exec(String(f.transform));
+  return m ? Number(m[1]) : 1;
+}
+/** The largest distance of any keyframe from the straight line between the first and last. */
+function bulge(kf: Keyframe[]): number {
+  const a = xy(kf[0]), b = xy(kf[kf.length - 1]);
+  const len = Math.hypot(b.x - a.x, b.y - a.y);
+  return Math.max(...kf.map((f) => {
+    const p = xy(f);
+    if (len < 1e-6) return Math.hypot(p.x - a.x, p.y - a.y);
+    return Math.abs((b.x - a.x) * (a.y - p.y) - (a.x - p.x) * (b.y - a.y)) / len;
+  }));
+}
+const peakTravel = (kf: Keyframe[]) => Math.max(...kf.map((f) => Math.hypot(xy(f).x, xy(f).y)));
 
 describe('playDropAnimation', () => {
   const from = { left: 10, top: 20, width: 100, height: 100 };
   const to = { left: 500, top: 100, width: 100, height: 100 };
 
-  it('into a folder: a ghost shrinks into the folder box within 300 ms, transforms and opacity only', () => {
-    setLayout(withAnimations(true));
-    expect(playDropAnimation('d1', { kind: 'into', from, to, label: 'A' })).toBe(true);
-    expect(layerEls()).toHaveLength(1);
-    expect(calls).toHaveLength(1);
-    const c = calls[0];
-    expect(Number(c.opts.duration)).toBeLessThanOrEqual(300);
-    expect(DROP_MS).toBeLessThanOrEqual(300);
-    onlyTransformOpacity(c.frames);
-    const last = c.frames[c.frames.length - 1];
-    expect(String(last.transform)).toMatch(/scale\(0\.\d+\)/); // it shrinks
-    expect(Number(last.opacity)).toBe(0);
-    c.anim.finish();
-    expect(layerEls()).toHaveLength(0); // removed when it finishes
+  it('the timings: about 500 ms in all, clearly longer than the old 300 ms', () => {
+    expect(DROP_MS).toBeGreaterThanOrEqual(400);
+    expect(INTO_TOTAL_MS).toBe(Math.max(DROP_MS, GULP_DELAY_MS + GULP_MS));
+    expect(INTO_TOTAL_MS).toBeGreaterThanOrEqual(450);
+    expect(INTO_TOTAL_MS).toBeLessThanOrEqual(600);
+    expect(MERGE_TOTAL_MS).toBe(Math.max(GATHER_MS, POP_DELAY_MS + POP_MS));
+    expect(MERGE_TOTAL_MS).toBeGreaterThanOrEqual(450);
+    expect(MERGE_TOTAL_MS).toBeLessThanOrEqual(600);
+    expect(GULP_DELAY_MS).toBeLessThan(DROP_MS); // the gulp starts as the tile arrives
+    expect(POP_DELAY_MS).toBeLessThanOrEqual(GATHER_MS); // the pop starts as the tiles meet
   });
 
-  it('merge: both tiles drawn together, then the new folder pops; the whole thing within 300 ms', () => {
+  it('into a folder: the ghost flies along a curve into the folder, shrinking and fading there', () => {
+    setLayout(withAnimations(true));
+    expect(playDropAnimation('d1', { kind: 'into', from, to, label: 'A', folderId: 'c1' })).toBe(true);
+    expect(layerEls()).toHaveLength(1);
+    flushFrames();
+    const c = calls.find((x) => x.el.dataset.testid === 'drop-anim')!;
+    expect(Number(c.opts.duration)).toBe(DROP_MS);
+    onlyTransformOpacity(c.frames);
+    expect(c.frames.length).toBeGreaterThanOrEqual(5);
+    // It ends on the folder's centre…
+    const end = xy(c.frames[c.frames.length - 1]);
+    expect(end.x).toBeCloseTo(490, 0);
+    expect(end.y).toBeCloseTo(80, 0);
+    // …along a curve (not a straight line), …
+    expect(bulge(c.frames)).toBeGreaterThanOrEqual(40);
+    // …shrunk into it and faded out there, visible for most of the way.
+    expect(scaleOf(c.frames[c.frames.length - 1])).toBeLessThanOrEqual(0.4);
+    expect(Number(c.frames[c.frames.length - 1].opacity)).toBe(0);
+    expect(Number(c.frames[Math.floor(c.frames.length / 2)].opacity)).toBeGreaterThan(0.8);
+    expect(c.opts.fill).toBe('forwards'); // never snaps back before it is removed
+  });
+
+  it('into a folder dropped right on it (no distance to go): it still visibly hops in (>= 40 px)', () => {
+    setLayout(withAnimations(true));
+    playDropAnimation('d1', { kind: 'into', from, to: from, label: 'A', folderId: 'c1' });
+    flushFrames();
+    const c = calls.find((x) => x.el.dataset.testid === 'drop-anim')!;
+    expect(peakTravel(c.frames)).toBeGreaterThanOrEqual(40);
+  });
+
+  it('into a folder: the folder then gulps (scale 1 → 0.94 → 1) as the tile arrives', () => {
     setLayout(withAnimations(true));
     const folderEl = document.createElement('div');
     document.body.appendChild(folderEl);
-    animEnv({ findNode: (id) => (id === 'nf' ? folderEl : null) });
+    animEnv({ findNode: (id) => (id === 'c1' ? folderEl : null) });
+    const onEnd = vi.fn();
+    playDropAnimation('d1', { kind: 'into', from, to, label: 'A', folderId: 'c1', onEnd });
+    flushFrames();
+    const g = calls.find((x) => x.el === folderEl)!;
+    expect(g).toBeTruthy();
+    onlyTransformOpacity(g.frames);
+    expect(g.frames.map(scaleOf)).toEqual([1, 0.94, 1]);
+    expect(Number(g.opts.duration)).toBe(GULP_MS);
+    expect(Number(g.opts.delay)).toBe(GULP_DELAY_MS);
+    expect(folderEl.hasAttribute('data-drop-gulp')).toBe(true);
+    calls.forEach((x) => x.anim.finish());
+    expect(onEnd).toHaveBeenCalledTimes(1);
+    expect(layerEls()).toHaveLength(0);
+    expect(folderEl.hasAttribute('data-drop-gulp')).toBe(false);
+    folderEl.remove();
+  });
+
+  it("into a drilled-in folder's inner box: the box itself gulps (found by data-nested-folder)", () => {
+    setLayout(withAnimations(true));
+    const box = document.createElement('div');
+    box.setAttribute('data-nested-folder', 'nb');
+    document.body.appendChild(box);
+    animEnv({ findNode: undefined });
+    playDropAnimation('d1', { kind: 'into', from, to, label: 'A', folderId: 'nb' });
+    flushFrames();
+    expect(calls.some((x) => x.el === box)).toBe(true);
+    box.remove();
+  });
+
+  it('into a folder whose element is not drawn: the flight still plays (no gulp, nothing silent to report)', () => {
+    setLayout(withAnimations(true));
+    const onEnd = vi.fn();
+    expect(playDropAnimation('d1', { kind: 'into', from, to, label: 'A', folderId: 'gone', onEnd })).toBe(true);
+    flushFrames();
+    expect(calls).toHaveLength(1);
+    calls[0].anim.finish();
+    expect(onEnd).toHaveBeenCalledTimes(1);
+  });
+
+  it('merge: both tiles are drawn together onto the new folder, which then pops (0.6 → 1.05 → 1)', () => {
+    setLayout(withAnimations(true));
+    const folderEl = document.createElement('div');
+    document.body.appendChild(folderEl);
+    const folderBox = { left: 200, top: 300, width: 100, height: 100 };
+    animEnv({ findNode: (id) => (id === 'nf' ? folderEl : null), measure: () => folderBox });
     expect(playDropAnimation('d1', { kind: 'merge', from, to, label: 'A', targetLabel: 'B', folderId: 'nf' })).toBe(true);
     expect(layerEls()).toHaveLength(2); // the dragged tile and the target tile
-    flushFrames(); // the new folder is drawn: it pops
+    flushFrames(); // the new folder is drawn: measured, then the gather and the pop start
     expect(calls).toHaveLength(3);
-    expect(GATHER_MS + POP_MS).toBeLessThanOrEqual(300);
-    for (const c of calls) {
+    const [dragged, target] = layerEls().map((el) => calls.find((c) => c.el === el)!);
+    for (const c of [dragged, target]) {
       onlyTransformOpacity(c.frames);
-      expect(Number(c.opts.duration) + Number(c.opts.delay ?? 0)).toBeLessThanOrEqual(300);
+      expect(Number(c.opts.duration)).toBe(GATHER_MS);
+      expect(c.opts.fill).toBe('forwards');
+      expect(Number(c.frames[c.frames.length - 1].opacity)).toBe(0);
+      expect(scaleOf(c.frames[c.frames.length - 1])).toBeCloseTo(0.6, 2);
     }
+    // They meet on the new folder's centre (250, 350): from (60, 70) and (550, 150).
+    expect(xy(dragged.frames[dragged.frames.length - 1])).toEqual({ x: 190, y: 280 });
+    expect(xy(target.frames[target.frames.length - 1])).toEqual({ x: -300, y: 200 });
     const pop = calls.find((c) => c.el === folderEl)!;
-    expect(pop).toBeTruthy();
-    expect(Number(pop.opts.delay)).toBe(GATHER_MS);
+    onlyTransformOpacity(pop.frames);
+    expect(pop.frames.map(scaleOf)).toEqual([0.6, 1.05, 1]);
+    expect(Number(pop.opts.duration)).toBe(POP_MS);
+    expect(Number(pop.opts.delay)).toBe(POP_DELAY_MS);
+    expect(pop.opts.fill).toBe('backwards'); // hidden until the tiles meet
     expect(folderEl.hasAttribute('data-drop-pop')).toBe(true);
     calls.forEach((c) => c.anim.finish());
     expect(layerEls()).toHaveLength(0);
     expect(folderEl.hasAttribute('data-drop-pop')).toBe(false);
     folderEl.remove();
+  });
+
+  it('merge dropped right on the target (the two ghosts on top of each other): they still visibly move (>= 40 px)', () => {
+    setLayout(withAnimations(true));
+    const folderEl = document.createElement('div');
+    document.body.appendChild(folderEl);
+    animEnv({ findNode: (id) => (id === 'nf' ? folderEl : null), measure: () => from });
+    playDropAnimation('d1', { kind: 'merge', from, to: from, label: 'A', targetLabel: 'B', folderId: 'nf' });
+    flushFrames();
+    const ghosts = layerEls().map((el) => calls.find((c) => c.el === el)!);
+    for (const g of ghosts) expect(peakTravel(g.frames)).toBeGreaterThanOrEqual(20);
+    // Apart from each other by >= 40 px at the widest.
+    const apart = Math.max(...ghosts[0].frames.map((f, i) => Math.hypot(xy(f).x - xy(ghosts[1].frames[i]).x, xy(f).y - xy(ghosts[1].frames[i]).y)));
+    expect(apart).toBeGreaterThanOrEqual(40);
+    folderEl.remove();
+  });
+
+  it('merge: when the new folder is not drawn, the tiles gather on the target instead', () => {
+    setLayout(withAnimations(true));
+    playDropAnimation('d1', { kind: 'merge', from, to, label: 'A', targetLabel: 'B', folderId: 'nf' });
+    flushFrames();
+    const [dragged] = layerEls().map((el) => calls.find((c) => c.el === el)!);
+    expect(xy(dragged.frames[dragged.frames.length - 1])).toEqual({ x: 490, y: 80 });
   });
 
   it('merge: onEnd runs once, when the gather and the pop have both ended', () => {
@@ -171,7 +316,7 @@ describe('playDropAnimation', () => {
     expect(onEnd).not.toHaveBeenCalled(); // the pop is still running
     calls[2].anim.finish();
     expect(onEnd).toHaveBeenCalledTimes(1);
-    vi.advanceTimersByTime(1000);
+    vi.advanceTimersByTime(2000);
     expect(onEnd).toHaveBeenCalledTimes(1);
     folderEl.remove();
   });
@@ -181,13 +326,13 @@ describe('playDropAnimation', () => {
     const onEnd = vi.fn();
     playDropAnimation('d1', { kind: 'merge', from, to, label: 'A', targetLabel: 'B', folderId: 'nf', onEnd });
     flushFrames();
-    vi.advanceTimersByTime(GATHER_MS + POP_MS + 500);
+    vi.advanceTimersByTime(MERGE_TOTAL_MS + 500);
     expect(onEnd).toHaveBeenCalledTimes(1);
   });
 
   it('the animation layer sits below dialogs (never drawn over one)', () => {
     setLayout(withAnimations(true));
-    playDropAnimation('d1', { kind: 'into', from, to, label: 'A' });
+    playDropAnimation('d1', { kind: 'into', from, to, label: 'A', folderId: 'c1' });
     const z = layerEls()[0].style.zIndex;
     expect(z).toContain('--z-modal');
     expect(z).not.toContain('--z-toast');
@@ -201,39 +346,43 @@ describe('playDropAnimation', () => {
     warn.mockRestore();
   });
 
-  it('setting off: nothing at all', () => {
-    setLayout(withAnimations(false));
-    expect(playDropAnimation('d1', { kind: 'into', from, to, label: 'A' })).toBe(false);
-    expect(playDropAnimation('d1', { kind: 'merge', from, to, label: 'A', targetLabel: 'B', folderId: 'nf' })).toBe(false);
-    flushFrames();
-    expect(layerEls()).toHaveLength(0);
-    expect(calls).toHaveLength(0);
-  });
+  for (const how of ['setting off', 'On under reduced motion'] as const) {
+    it(`${how}: nothing at all`, () => {
+      setLayout(withAnimations(how === 'setting off' ? 'off' : 'on'));
+      reduced = how !== 'setting off';
+      expect(playDropAnimation('d1', { kind: 'into', from, to, label: 'A', folderId: 'c1' })).toBe(false);
+      expect(playDropAnimation('d1', { kind: 'merge', from, to, label: 'A', targetLabel: 'B', folderId: 'nf' })).toBe(false);
+      flushFrames();
+      expect(layerEls()).toHaveLength(0);
+      expect(calls).toHaveLength(0);
+    });
+  }
 
-  it('reduced motion: nothing at all', () => {
-    setLayout(withAnimations(true));
+  it('Always under reduced motion: it plays', () => {
+    setLayout(withAnimations('always'));
     reduced = true;
-    expect(playDropAnimation('d1', { kind: 'into', from, to, label: 'A' })).toBe(false);
+    expect(playDropAnimation('d1', { kind: 'into', from, to, label: 'A', folderId: 'c1' })).toBe(true);
     flushFrames();
-    expect(layerEls()).toHaveLength(0);
-    expect(calls).toHaveLength(0);
+    expect(calls.length).toBeGreaterThan(0);
   });
 
   it('the ghost is removed even if the animation never reports its end', () => {
     setLayout(withAnimations(true));
-    playDropAnimation('d1', { kind: 'into', from, to, label: 'A' });
+    playDropAnimation('d1', { kind: 'into', from, to, label: 'A', folderId: 'c1' });
+    flushFrames();
     expect(layerEls()).toHaveLength(1);
-    vi.advanceTimersByTime(DROP_MS + 500);
+    vi.advanceTimersByTime(INTO_TOTAL_MS + 500);
     expect(layerEls()).toHaveLength(0);
   });
 
   it('a failing animation never throws, leaves no ghost behind and is said once (not silent)', () => {
     setLayout(withAnimations(true));
     animEnv({ animate: () => { throw new Error('boom'); } });
-    expect(() => playDropAnimation('d1', { kind: 'into', from, to, label: 'A' })).not.toThrow();
+    expect(() => { playDropAnimation('d1', { kind: 'into', from, to, label: 'A', folderId: 'c1' }); flushFrames(); }).not.toThrow();
     expect(layerEls()).toHaveLength(0);
     expect(get(toast).filter((t) => /animation/i.test(t.message))).toHaveLength(1);
-    playDropAnimation('d1', { kind: 'into', from, to, label: 'A' });
+    playDropAnimation('d1', { kind: 'into', from, to, label: 'A', folderId: 'c1' });
+    flushFrames();
     expect(get(toast).filter((t) => /animation/i.test(t.message))).toHaveLength(1);
   });
 });
@@ -286,7 +435,7 @@ function dragOnto(id: string, from: [number, number], to: [number, number]) {
 const dropAt = (x: number, y: number) => document.body.dispatchEvent(pe('pointerup', x, y));
 
 describe('a drop never waits for its animation', () => {
-  function start(on: boolean) {
+  function start(on: boolean | AnimationsMode) {
     setLayout(withAnimations(on));
     startSession();
     setActiveTab('t1');
@@ -302,7 +451,7 @@ describe('a drop never waits for its animation', () => {
       // Synchronously, no frames flushed and no timers run: the change is already in the draft.
       expect((nodeIn(draft(), 'c1') as FolderNode).content.children.map((n) => n.id)).toEqual(['y', 'a']);
       expect(layerEls()).toHaveLength(on ? 1 : 0);
-      expect(calls.length).toBe(on ? 1 : 0);
+      expect(calls.length).toBe(0); // nothing has even started yet: the animation follows the change
     });
   }
 
@@ -341,9 +490,9 @@ describe('a drop never waits for its animation', () => {
     expect(get(editorDialog)).toEqual({ kind: 'folder', id: made.id });
   });
 
-  it('merge, animations on: the dialog still opens (300 ms + a 50 ms margin) if the animation never reports its end', () => {
+  it('merge, animations on: the dialog still opens (the animation + a 100 ms margin) if the animation never reports its end', () => {
     const made = mergeDrop(true);
-    expect(MERGE_DIALOG_CAP_MS).toBe(GATHER_MS + POP_MS + 50);
+    expect(MERGE_DIALOG_CAP_MS).toBe(MERGE_TOTAL_MS + 100);
     vi.advanceTimersByTime(MERGE_DIALOG_CAP_MS - 1);
     expect(get(editorDialog)).toBeNull();
     vi.advanceTimersByTime(1);
@@ -353,6 +502,21 @@ describe('a drop never waits for its animation', () => {
   it('merge, animations off: the folder dialog opens at once', () => {
     const made = mergeDrop(false);
     expect(get(editorDialog)).toEqual({ kind: 'folder', id: made.id });
+  });
+
+  it('merge, Always under reduced motion: the dialog waits for the animation', () => {
+    reduced = true;
+    start('always');
+    dragOnto('a', [50, 50], [150, 50]);
+    vi.advanceTimersByTime(MERGE_DWELL_MS);
+    const f = dragFrames;
+    dragFrames = [];
+    f.forEach((cb) => cb(0));
+    dropAt(150, 50);
+    expect(get(editorDialog)).toBeNull();
+    flushFrames();
+    calls.forEach((c) => c.anim.finish());
+    expect(get(editorDialog)?.kind).toBe('folder');
   });
 
   it('merge, reduced motion: the folder dialog opens at once', () => {

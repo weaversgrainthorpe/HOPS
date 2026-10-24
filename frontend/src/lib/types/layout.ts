@@ -89,8 +89,8 @@ export interface LayoutDashboard {
   /** Read-only, computed by GET /api/config from the effective settings (Ruling 9); never stored. */
   display?: {
     animatedFolderBackgrounds?: boolean;
-    /** The global "Animations" setting (M6 §7.13): the editor's drop and merge animations. */
-    animations?: boolean;
+    /** The global "Animations" setting (M6 §7.13, Ruling 5): the editor's drop and merge animations. */
+    animations?: 'on' | 'off' | 'always';
   };
   tabs: LayoutTab[];
   [k: string]: unknown;

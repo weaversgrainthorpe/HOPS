@@ -727,7 +727,7 @@ export function commitDrop(state: DragState): void {
     clearSelection();
     announce(label, before);
     // Name it straight away: the dialog opens with "New folder" selected; Cancel keeps that name.
-    // Ruling 3: when the merge animates, the dialog opens as the animation ends (<= 300 ms, never
+    // Ruling 3: when the merge animates, the dialog opens as the animation ends (~500 ms, never
     // later than MERGE_DIALOG_CAP_MS), so the pop is not hidden behind it; at once otherwise. Only the
     // dialog waits, never the edit. Undone meanwhile (the folder is gone), or another dialog opened:
     // nothing to name here.
@@ -790,8 +790,8 @@ export function commitDrop(state: DragState): void {
     forgetMovedOutFolders(before, state.ids, to); // §3a.3: drawn minimised on the tab
   }
   announce(label, before);
-  // M6 §7.13: into a folder (a minimised one, an open one's bar or page, a sub-folder) the dropped item
-  // shrinks into it. A reorder inside the same folder is not a drop "into", so it is not animated.
+  // M6 §7.13 / Ruling 5: into a folder (a minimised one, an open one's bar or page, a sub-folder tile,
+  // a drilled-in inner box) the dropped item flies into it and the folder gulps. A reorder inside the same folder is not a drop "into", so it is not animated.
   if (to.folderId !== undefined && (state.copy || !state.ids.every((id) => sameRef(containerOfNode(before, id), to)))) {
     const folderId = to.folderId;
     const landed = state.copy ? newIds[0] : state.ids[0];
@@ -800,7 +800,7 @@ export function commitDrop(state: DragState): void {
       if (!from) return;
       const over = t.kind === 'into-folder' ? state.over : undefined;
       playDropAnimation(d.id, {
-        kind: 'into', from, label: state.ghost?.label ?? '',
+        kind: 'into', from, label: state.ghost?.label ?? '', folderId,
         // The cue's box when there was one; otherwise where the item is now drawn (an open folder's
         // page), else the folder itself. Measured once, on the next frame, after the draft has rendered.
         to: over ?? (() => boxOfNode(landed) ?? boxOfNode(folderId))

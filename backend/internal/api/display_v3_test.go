@@ -110,13 +110,16 @@ func TestGetConfig_DisplayAnimationsFollowsTheGlobalSetting(t *testing.T) {
 	router, db := setupTestRouter(t)
 	c := newClient(t, router)
 	seed(t, db)
-	if got := displayOf(t, getView(t, c), "d1")["animations"]; got != true {
-		t.Fatalf("default: animations = %v, want true", got)
+	if got := displayOf(t, getView(t, c), "d1")["animations"]; got != "on" {
+		t.Fatalf("default: animations = %v, want on", got)
 	}
-	if w := putSetting(t, router, c.token, c.csrf, "display.animations", "false"); w.Code != 200 {
-		t.Fatalf("put setting: %d %s", w.Code, w.Body.String())
-	}
-	if got := displayOf(t, getView(t, c), "d1")["animations"]; got != false {
-		t.Fatalf("after setting off: animations = %v, want false", got)
+	// Ruling 5: On / Off / Always, carried as the setting's own value.
+	for _, v := range []string{"off", "always", "on"} {
+		if w := putSetting(t, router, c.token, c.csrf, "display.animations", v); w.Code != 200 {
+			t.Fatalf("put setting %s: %d %s", v, w.Code, w.Body.String())
+		}
+		if got := displayOf(t, getView(t, c), "d1")["animations"]; got != v {
+			t.Fatalf("after setting %s: animations = %v", v, got)
+		}
 	}
 }

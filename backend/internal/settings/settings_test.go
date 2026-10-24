@@ -616,9 +616,10 @@ func equalMoves(a, b []DefaultMove) bool {
 	return true
 }
 
-// M6 §7.13: "Animations" is a global on/off setting, on by default. It is
+// M6 §7.13 / Ruling 5: "Animations" is a global On / Off / Always setting, On
+// by default (Always plays even when the device asks for reduced motion). It is
 // GUI-set (Settings → Global settings) and stored like every other setting.
-func TestAnimationsSettingIsAGlobalBoolDefaultOn(t *testing.T) {
+func TestAnimationsSettingIsOnOffAlwaysDefaultOn(t *testing.T) {
 	if KeyDisplayAnimations != "display.animations" {
 		t.Fatalf("key = %q, want display.animations", KeyDisplayAnimations)
 	}
@@ -626,20 +627,46 @@ func TestAnimationsSettingIsAGlobalBoolDefaultOn(t *testing.T) {
 	if !ok {
 		t.Fatal("display.animations has no definition")
 	}
-	if def.Type != "bool" || def.Default != "true" || def.RestartRequired {
-		t.Fatalf("definition = %+v, want bool, default true, applies live", def)
+	if def.Type != "enum" || def.Default != AnimationsOn || def.RestartRequired ||
+		strings.Join(def.Enum, ",") != "on,off,always" {
+		t.Fatalf("definition = %+v, want enum on/off/always, default on, applies live", def)
 	}
 	if def.Description == "" {
 		t.Fatal("display.animations has no description for the admin UI")
 	}
 	s := newTestService(t)
-	if !s.GetBool(KeyDisplayAnimations) {
-		t.Fatal("fresh install: animations should be on")
+	if got := s.Get(KeyDisplayAnimations); got != "on" {
+		t.Fatalf("fresh install: animations = %q, want on", got)
 	}
-	if err := s.Set(KeyDisplayAnimations, "false"); err != nil {
-		t.Fatal(err)
+	for _, v := range []string{"off", "always", "on"} {
+		if err := s.Set(KeyDisplayAnimations, v); err != nil {
+			t.Fatalf("Set %q: %v", v, err)
+		}
+		if got := s.Get(KeyDisplayAnimations); got != v {
+			t.Fatalf("after Set %q: %q", v, got)
+		}
 	}
-	if s.GetBool(KeyDisplayAnimations) {
-		t.Fatal("after Set false: animations still on")
+	for _, bad := range []string{"true", "false", "", "ON"} {
+		if err := s.Set(KeyDisplayAnimations, bad); err == nil {
+			t.Errorf("Set %q: accepted, want refused", bad)
+		}
+	}
+}
+
+// Ruling 5: the old boolean value is migrated on start — true → on, false → off —
+// so a saved choice is kept, and the stored row (not just the cache) is rewritten.
+func TestAnimationsOldBooleanIsMigrated(t *testing.T) {
+	for old, want := range map[string]string{"true": "on", "false": "off", "always": "always", "off": "off"} {
+		s, db := newServiceWithRows(t, map[string]string{KeyDisplayAnimations: old})
+		if got := s.Get(KeyDisplayAnimations); got != want {
+			t.Errorf("stored %q: animations = %q, want %q", old, got, want)
+		}
+		var stored string
+		if err := db.QueryRow(`SELECT value FROM app_settings WHERE key = ?`, KeyDisplayAnimations).Scan(&stored); err != nil {
+			t.Fatal(err)
+		}
+		if stored != want {
+			t.Errorf("stored %q: row now %q, want %q", old, stored, want)
+		}
 	}
 }

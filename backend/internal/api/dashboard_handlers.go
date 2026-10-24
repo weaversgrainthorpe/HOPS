@@ -237,7 +237,7 @@ func (r *Router) publicDoc(stored configdoc.Obj) map[string]interface{} {
 		out["display"] = map[string]interface{}{
 			"animatedFolderBackgrounds": eff.AnimatedFolderBackgrounds,
 			// The global "Animations" setting (M6 §7.13); no per-dashboard override.
-			"animations": r.settings.GetBool(settings.KeyDisplayAnimations),
+			"animations": r.settings.Get(settings.KeyDisplayAnimations), // "on" | "off" | "always" (Ruling 5)
 		}
 		dashes = append(dashes, out)
 	}

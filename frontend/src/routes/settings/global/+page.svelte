@@ -106,6 +106,22 @@
       : `Raised from ${formatMB(from)} to the new minimum ${formatMB(to)}.`;
   }
 
+  // Ruling 5: the "Animations" setting's choices, and whether this device asks for reduced motion
+  // (so On is visibly off here, never a silent no-op).
+  const optionLabels: Record<string, Record<string, string>> = {
+    'display.animations': { on: 'On', off: 'Off', always: 'Always' },
+  };
+  const REDUCED_MOTION_NOTE = 'Your device asks for reduced motion — animations are off on this device';
+  let reducedMotion = $state(false);
+  onMount(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    reducedMotion = mq.matches;
+    const onChange = () => (reducedMotion = mq.matches);
+    mq.addEventListener?.('change', onChange);
+    return () => mq.removeEventListener?.('change', onChange);
+  });
+
   let adjustedSettings = $derived(settings.filter((s) => s.adjustedFrom));
 
   function isDirty(s: SettingDef): boolean {
@@ -282,6 +298,11 @@
                 {/if}
               </label>
               <div class="desc">{s.description}</div>
+              {#if s.key === 'display.animations' && drafts[s.key] === 'on' && reducedMotion}
+                <p class="motion-note" role="status">
+                  <Icon icon="mdi:information-outline" width="16" /> {REDUCED_MOTION_NOTE}
+                </p>
+              {/if}
               <div class="meta">
                 {#if s.type === 'bytes'}
                   <span class="meta-defaults">Default <code>{formatMB(Number(s.default))}</code>{#if s.max} · can be set up to {formatMB(s.max)}{/if}</span>
@@ -295,7 +316,7 @@
               {#if (s.type === 'log_level' || s.type === 'enum') && s.enum}
                 <select id={`setting-${s.key}`} bind:value={drafts[s.key]}>
                   {#each s.enum as opt (opt)}
-                    <option value={opt}>{opt}</option>
+                    <option value={opt}>{optionLabels[s.key]?.[opt] ?? opt}</option>
                   {/each}
                 </select>
               {:else if s.type === 'bool'}
@@ -447,6 +468,20 @@
     color: var(--text-secondary);
     font-size: 0.92rem;
     margin: 0.25rem 0 0.5rem;
+  }
+
+  /* Ruling 5: On, but this device asks for reduced motion — said where the setting is. */
+  .motion-note {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0 0 0.5rem;
+    padding: 0.4rem 0.6rem;
+    border-left: 3px solid var(--warning);
+    border-radius: 0.25rem;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    font-size: 0.92rem;
   }
 
   .meta {

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
 
 // /settings/global (M5 §9): the global settings, on their own page. The shell only shows a page
@@ -123,19 +123,52 @@ describe('/settings/global upload limits (M5 §10)', () => {
 	});
 });
 
-describe('/settings/global Animations (M6 §7.13)', () => {
-	const ANIM = { key: 'display.animations', value: 'true', default: 'true', type: 'bool', description: 'Short animations in the editor.', restartRequired: false };
+describe('/settings/global Animations (M6 §7.13, Ruling 5)', () => {
+	const ANIM = {
+		key: 'display.animations', value: 'on', default: 'on', type: 'enum', enum: ['on', 'off', 'always'],
+		description: 'Animations in the editor.', restartRequired: false
+	};
+	const NOTE = 'Your device asks for reduced motion — animations are off on this device';
+	const realMatchMedia = window.matchMedia;
+	function reducedMotion(reduce: boolean) {
+		window.matchMedia = ((q: string) => ({
+			matches: reduce && /prefers-reduced-motion:\s*reduce/.test(q), media: q, onchange: null,
+			addEventListener: () => {}, removeEventListener: () => {}, addListener: () => {}, removeListener: () => {},
+			dispatchEvent: () => false
+		})) as unknown as typeof window.matchMedia;
+	}
 	beforeEach(() => listSettings.mockResolvedValue({ settings: [ANIM] }));
+	afterEach(() => { window.matchMedia = realMatchMedia; });
 
-	it('shows an "Animations" switch under Display, on by default, and saves it off', async () => {
+	it('shows "Animations" under Display as On / Off / Always, On by default, and saves a choice', async () => {
+		reducedMotion(false);
 		render(Page);
 		expect(await screen.findByRole('heading', { name: 'Display', level: 3 })).toBeTruthy();
-		const box = screen.getByLabelText(/^Animations/) as HTMLInputElement;
-		expect(box.type).toBe('checkbox');
-		expect(box.checked).toBe(true);
-		await fireEvent.click(box);
-		const row = box.closest('.row') as HTMLElement;
+		const sel = screen.getByLabelText(/^Animations/) as HTMLSelectElement;
+		expect(sel.tagName).toBe('SELECT');
+		expect(Array.from(sel.options).map((o) => [o.value, o.textContent?.trim()])).toEqual([
+			['on', 'On'], ['off', 'Off'], ['always', 'Always']
+		]);
+		expect(sel.value).toBe('on');
+		expect(screen.queryByText(NOTE)).toBeNull(); // the device does not ask for reduced motion
+		await fireEvent.change(sel, { target: { value: 'always' } });
+		const row = sel.closest('.row') as HTMLElement;
 		await fireEvent.click(Array.from(row.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Save')!);
-		await waitFor(() => expect(save).toHaveBeenCalledWith('display.animations', 'false'));
+		await waitFor(() => expect(save).toHaveBeenCalledWith('display.animations', 'always'));
+	});
+
+	it('On while the device asks for reduced motion: a visible note says animations are off here (never silent)', async () => {
+		reducedMotion(true);
+		render(Page);
+		const sel = (await screen.findByLabelText(/^Animations/)) as HTMLSelectElement;
+		const note = await screen.findByText(NOTE);
+		expect(note.closest('.row')).toBe(sel.closest('.row'));
+		// Always plays anyway, and Off plays nothing on any device: no note for either.
+		await fireEvent.change(sel, { target: { value: 'always' } });
+		await waitFor(() => expect(screen.queryByText(NOTE)).toBeNull());
+		await fireEvent.change(sel, { target: { value: 'off' } });
+		expect(screen.queryByText(NOTE)).toBeNull();
+		await fireEvent.change(sel, { target: { value: 'on' } });
+		expect(await screen.findByText(NOTE)).toBeTruthy();
 	});
 });
