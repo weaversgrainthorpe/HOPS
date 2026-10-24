@@ -16,8 +16,10 @@ import { drag, dragSource, setDragEnv, resetDragForTests, setActiveTab, MERGE_DW
 import {
   animationsSetting, animationsAllowed, playDropAnimation, setAnimationEnv, resetDropAnimationForTests,
   sayAnimationFailure, MERGE_DIALOG_CAP_MS, DROP_MS, GULP_MS, GULP_DELAY_MS, INTO_TOTAL_MS, GATHER_MS, POP_MS,
-  POP_DELAY_MS, MERGE_TOTAL_MS, type AnimationEnv, type AnimationsMode
+  POP_DELAY_MS, MERGE_TOTAL_MS, OUT_MS, RELEASE_MS, OUT_GULP_DELAY_MS, OUT_TOTAL_MS, GULP_MAX_EDGE_PX, releaseScale,
+  type AnimationEnv, type AnimationsMode
 } from './dropAnimation';
+import { moveOrCopyTo } from '../editorActions';
 import { editorDialog } from '../editorUi';
 import { setLayout, resetEditor, startSession, draft, nodeIn, home, other } from '$lib/components/editor/editorTestKit';
 
@@ -571,4 +573,232 @@ describe('gulpScale (a big folder never wobbles)', () => {
     const edgeMove = ((1 - gulpScale(w, h)) * Math.max(w, h)) / 2;
     expect(edgeMove).toBeLessThanOrEqual(GULP_MAX_EDGE_PX + 1e-9);
   });
+});
+
+// ------------------------------------------------------------------ §8.1: out of a folder
+
+describe('out of a folder (§8.1)', () => {
+  const src = { left: 100, top: 300, width: 100, height: 100 }; // where the item was, in its folder
+  const spot = { left: 700, top: 50, width: 120, height: 120 }; // where it is drawn now
+  /** Elements for findNode, each with its own measured box. */
+  function world(boxes: Record<string, { left: number; top: number; width: number; height: number }>) {
+    const els: Record<string, HTMLElement> = {};
+    for (const id of Object.keys(boxes)) {
+      els[id] = document.createElement('div');
+      els[id].dataset.id = id;
+      document.body.appendChild(els[id]);
+    }
+    animEnv({
+      findNode: (id) => els[id] ?? null,
+      measure: (el) => boxes[(el as HTMLElement).dataset.id ?? ''] ?? { left: 0, top: 0, width: 0, height: 0 }
+    });
+    return els;
+  }
+  afterEach(() => document.querySelectorAll('[data-id]').forEach((e) => e.remove()));
+
+  it('the timings: about 500 ms, the destination gulp starting as it arrives', () => {
+    expect(OUT_MS).toBeGreaterThanOrEqual(400);
+    expect(RELEASE_MS).toBeLessThan(OUT_MS);
+    expect(OUT_GULP_DELAY_MS).toBeLessThan(OUT_MS);
+    expect(OUT_TOTAL_MS).toBe(Math.max(OUT_MS, RELEASE_MS, OUT_GULP_DELAY_MS + GULP_MS));
+    expect(OUT_TOTAL_MS).toBeGreaterThanOrEqual(450);
+    expect(OUT_TOTAL_MS).toBeLessThanOrEqual(650);
+  });
+
+  it('the item rises out of the source, then hops on a curve to its new spot, landing at its new size', () => {
+    setLayout(withAnimations('on'));
+    world({ x: spot, f1: { left: 0, top: 250, width: 600, height: 300 } });
+    expect(playDropAnimation('d1', { kind: 'out', from: src, label: 'X', sourceId: 'f1', landedId: 'x' })).toBe(true);
+    const g = layerEls();
+    expect(g).toHaveLength(1);
+    expect(g[0].dataset.kind).toBe('out');
+    flushFrames();
+    const c = calls.find((x) => x.el.dataset.testid === 'drop-anim')!;
+    onlyTransformOpacity(c.frames);
+    expect(Number(c.opts.duration)).toBe(OUT_MS);
+    expect(c.opts.fill).toBe('forwards');
+    // It starts inside the source, smaller…
+    expect(xy(c.frames[0])).toEqual({ x: 0, y: 0 });
+    expect(scaleOf(c.frames[0])).toBeLessThan(1);
+    // …rises out of it (up, while still over the source)…
+    const rise = c.frames.find((f) => Number(f.offset) > 0 && Number(f.offset) <= 0.25)!;
+    expect(xy(rise).y).toBeLessThanOrEqual(-20);
+    expect(Math.abs(xy(rise).x)).toBeLessThan(1);
+    expect(Number(rise.opacity)).toBeGreaterThan(0.8);
+    // …and lands on the new spot's centre, along a curve.
+    const end = c.frames[c.frames.length - 1];
+    expect(xy(end).x).toBeCloseTo(610, 0);
+    expect(xy(end).y).toBeCloseTo(-240, 0);
+    expect(scaleOf(end)).toBeCloseTo(1.2, 2);
+    expect(bulge(c.frames.filter((f) => Number(f.offset) >= Number(rise.offset)))).toBeGreaterThanOrEqual(40);
+  });
+
+  it('the source does a small release puff (capped like the gulp), marked while it runs', () => {
+    setLayout(withAnimations('on'));
+    const els = world({ x: spot, f1: { left: 0, top: 0, width: 1200, height: 400 }, small: { left: 0, top: 0, width: 100, height: 100 } });
+    const onEnd = vi.fn();
+    playDropAnimation('d1', { kind: 'out', from: src, label: 'X', sourceId: 'f1', landedId: 'x', onEnd });
+    flushFrames();
+    const puff = calls.find((x) => x.el === els.f1)!;
+    expect(puff).toBeTruthy();
+    onlyTransformOpacity(puff.frames);
+    const peak = Math.max(...puff.frames.map(scaleOf));
+    expect(peak).toBeGreaterThan(1);
+    expect(((peak - 1) * 1200) / 2).toBeLessThanOrEqual(GULP_MAX_EDGE_PX + 1e-9);
+    expect(Number(puff.opts.duration)).toBe(RELEASE_MS);
+    expect(els.f1.hasAttribute('data-drop-release')).toBe(true);
+    calls.forEach((x) => x.anim.finish());
+    expect(onEnd).toHaveBeenCalledTimes(1);
+    expect(els.f1.hasAttribute('data-drop-release')).toBe(false);
+    expect(layerEls()).toHaveLength(0);
+    expect(releaseScale(100, 100)).toBeCloseTo(1.06, 5); // a small source puffs by the full 6%
+  });
+
+  it('the item at its new spot is hidden under the ghost and revealed as it lands (opacity only)', () => {
+    setLayout(withAnimations('on'));
+    const els = world({ x: spot, f1: { left: 0, top: 250, width: 600, height: 300 } });
+    playDropAnimation('d1', { kind: 'out', from: src, label: 'X', sourceId: 'f1', landedId: 'x' });
+    flushFrames();
+    const reveal = calls.find((x) => x.el === els.x)!;
+    expect(reveal).toBeTruthy();
+    onlyTransformOpacity(reveal.frames);
+    expect(Number(reveal.frames[0].opacity)).toBe(0);
+    expect(Number(reveal.frames[reveal.frames.length - 1].opacity)).toBe(1);
+    expect(Number(reveal.opts.duration)).toBe(OUT_MS);
+    expect(reveal.opts.fill ?? 'none').toBe('none'); // never left hidden after it
+  });
+
+  it('into a different folder where the item is not drawn: it hops into that folder, which gulps', () => {
+    setLayout(withAnimations('on'));
+    const els = world({ c1: { left: 500, top: 100, width: 100, height: 100 }, f1: { left: 0, top: 250, width: 600, height: 300 } });
+    playDropAnimation('d1', { kind: 'out', from: src, label: 'X', sourceId: 'f1', landedId: 'x', intoId: 'c1' });
+    flushFrames();
+    const c = calls.find((x) => x.el.dataset.testid === 'drop-anim')!;
+    const end = c.frames[c.frames.length - 1];
+    expect(xy(end).x).toBeCloseTo(400, 0);
+    expect(xy(end).y).toBeCloseTo(-200, 0);
+    expect(scaleOf(end)).toBeLessThanOrEqual(0.4);
+    expect(Number(end.opacity)).toBe(0);
+    const gulp = calls.find((x) => x.el === els.c1)!;
+    expect(gulp.frames.map(scaleOf)).toEqual([1, 0.94, 1]);
+    expect(Number(gulp.opts.delay)).toBe(OUT_GULP_DELAY_MS);
+    expect(calls.some((x) => x.el === els.f1)).toBe(true); // and the source puffed
+  });
+
+  it('nowhere to land on screen (another tab): it still pops out of the source and fades, then is removed', () => {
+    setLayout(withAnimations('on'));
+    world({ f1: { left: 0, top: 250, width: 600, height: 300 } });
+    const onEnd = vi.fn();
+    expect(playDropAnimation('d1', { kind: 'out', from: src, label: 'X', sourceId: 'f1', landedId: 'x', onEnd })).toBe(true);
+    flushFrames();
+    const c = calls.find((x) => x.el.dataset.testid === 'drop-anim')!;
+    expect(peakTravel(c.frames)).toBeGreaterThanOrEqual(40);
+    expect(Number(c.frames[c.frames.length - 1].opacity)).toBe(0);
+    vi.advanceTimersByTime(OUT_TOTAL_MS + 300);
+    expect(layerEls()).toHaveLength(0);
+    expect(onEnd).toHaveBeenCalledTimes(1);
+  });
+
+  it('Off, and On under reduced motion, play nothing; Always under reduced motion plays', () => {
+    world({ x: spot, f1: src });
+    for (const [mode, red, plays] of [['off', false, false], ['on', true, false], ['always', true, true]] as const) {
+      calls = [];
+      reduced = red;
+      setLayout(withAnimations(mode));
+      expect(playDropAnimation('d1', { kind: 'out', from: src, label: 'X', sourceId: 'f1', landedId: 'x' })).toBe(plays);
+      flushFrames();
+      expect(calls.length > 0).toBe(plays);
+      resetDropAnimationForTests();
+      world({ x: spot, f1: src });
+    }
+  });
+});
+
+describe('items leaving a folder animate out, and the draft changes at once', () => {
+  const src = { left: 0, top: 200, width: 100, height: 100 };
+  function start(on: boolean | AnimationsMode, boxes: Record<string, { left: number; top: number; width: number; height: number }> = {}) {
+    setLayout(withAnimations(on));
+    startSession();
+    setActiveTab('t1');
+    dragEnv();
+    const els: Record<string, HTMLElement> = {};
+    for (const id of Object.keys(boxes)) {
+      els[id] = document.createElement('div');
+      els[id].dataset.id = id;
+      document.body.appendChild(els[id]);
+    }
+    animEnv({
+      findNode: (id) => els[id] ?? null,
+      measure: (el) => boxes[(el as HTMLElement).dataset.id ?? ''] ?? { left: 0, top: 0, width: 0, height: 0 }
+    });
+    return els;
+  }
+  afterEach(() => document.querySelectorAll('[data-id]').forEach((e) => e.remove()));
+
+  it('dragged out of a folder onto the tab: the change is made at the drop, then the item pops out of the folder', () => {
+    const els = start('on', { x: src, f1: { left: 0, top: 200, width: 800, height: 600 } });
+    dragOnto('x', [50, 250], [1500, 1500]);
+    expect(get(drag)!.target?.kind).toBe('place');
+    dropAt(1500, 1500);
+    expect(nodeIn(draft(), 'x')).toBeTruthy();
+    expect((nodeIn(draft(), 'f1') as FolderNode).content.children).toHaveLength(0);
+    expect(calls).toHaveLength(0); // nothing started before the change
+    const g = layerEls();
+    expect(g.map((e) => e.dataset.kind)).toEqual(['out']);
+    // It starts where the item was in the folder (measured before the change was drawn).
+    expect(g[0].style.left).toBe('0px');
+    expect(g[0].style.top).toBe('200px');
+    flushFrames();
+    expect(calls.some((c) => c.el === els.f1)).toBe(true); // the folder's release puff
+  });
+
+  it('dragged from one folder into another: out (not into), and the destination gulps', () => {
+    const els = start('on', { x: src, f1: { left: 0, top: 200, width: 800, height: 600 }, c1: { left: 500, top: 100, width: 100, height: 100 } });
+    dragOnto('x', [50, 50], [550, 150]);
+    expect(get(drag)!.target?.kind).toBe('into-folder');
+    dropAt(550, 150);
+    expect((nodeIn(draft(), 'c1') as FolderNode).content.children.map((n) => n.id)).toEqual(['y', 'x']);
+    expect(layerEls().map((e) => e.dataset.kind)).toEqual(['out']);
+    flushFrames();
+    expect(calls.some((c) => c.el === els.c1)).toBe(true);
+    expect(calls.some((c) => c.el === els.f1)).toBe(true);
+  });
+
+  it('a drop from the tab into a folder is still "into", not "out"', () => {
+    start('on');
+    dragOnto('a', [50, 50], [550, 150]);
+    dropAt(550, 150);
+    expect(layerEls().map((e) => e.dataset.kind)).toEqual(['into']);
+  });
+
+  for (const mode of ['move', 'copy'] as const) {
+    it(`menu ${mode === 'move' ? 'Move' : 'Copy'} out of a folder: the change is made at once, then it pops out`, () => {
+      start('on', { x: src, f1: { left: 0, top: 200, width: 800, height: 600 } });
+      expect(moveOrCopyTo(['x'], { tabId: 't1' }, mode)).toBe(true);
+      const kids = (nodeIn(draft(), 'f1') as FolderNode).content.children;
+      expect(kids).toHaveLength(mode === 'move' ? 0 : 1);
+      expect(calls).toHaveLength(0);
+      expect(layerEls().map((e) => e.dataset.kind)).toEqual(['out']);
+    });
+  }
+
+  it('menu Move between places on the tab is not "out of a folder": nothing plays', () => {
+    start('on', { a: src });
+    expect(moveOrCopyTo(['a'], { tabId: 't1', folderId: 'f1' }, 'move')).toBe(true);
+    expect(layerEls().map((e) => e.dataset.kind)).not.toContain('out');
+  });
+
+  for (const [mode, red] of [['off', false], ['on', true]] as const) {
+    it(`${mode}${red ? ' under reduced motion' : ''}: out of a folder by drag or menu plays nothing, and the change is the same`, () => {
+      reduced = red;
+      start(mode, { x: src, f1: { left: 0, top: 200, width: 800, height: 600 } });
+      dragOnto('x', [50, 250], [1500, 1500]);
+      dropAt(1500, 1500);
+      expect((nodeIn(draft(), 'f1') as FolderNode).content.children).toHaveLength(0);
+      expect(moveOrCopyTo(['x'], { tabId: 't1', folderId: 'f1' }, 'copy')).toBe(true);
+      flushFrames();
+      expect(layerEls()).toHaveLength(0);
+      expect(calls).toHaveLength(0);
+    });
+  }
 });

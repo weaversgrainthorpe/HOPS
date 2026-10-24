@@ -55,7 +55,7 @@ import { clearSelection, selectionInDraft, toggleNode } from '$lib/stores/nodeSe
 import { hitTest as domHitTest, type HitResult } from './hitTest';
 import { crumbDwellKey, dwellArgs, flowIndex, flowMarker, pageDwellKey } from './targets';
 import { drillUpTo, setFolderPage } from '$lib/stores/folderView';
-import { playDropAnimation, sayAnimationFailure, MERGE_DIALOG_CAP_MS, type Box as AnimBox } from './dropAnimation';
+import { outStartBox, playDropAnimation, sayAnimationFailure, MERGE_DIALOG_CAP_MS, type Box as AnimBox } from './dropAnimation';
 
 // ---------------------------------------------------------------- types
 
@@ -775,6 +775,12 @@ export function commitDrop(state: DragState): void {
     at = t.at;
   }
   const label = `${state.copy ? 'Copied' : 'Moved'} ${describe(d, state.ids)} to ${destName(d, to)}`;
+  // §8.1: leaving a folder (for the tab, another folder or an outer box) — where it was is measured
+  // now, before the change is drawn, so it can pop out of there.
+  const src = containerOfNode(d, state.ids[0]);
+  const leaving = src?.folderId !== undefined && !sameRef(src, to) ? src.folderId : undefined;
+  let outFrom: AnimBox | null = null;
+  if (leaving) decorate(() => { outFrom = outStartBox(d.id, state.ids[0], leaving); });
   let newIds: string[] = [];
   const ok = apply(label, (dd) => {
     if (!state.copy) return moveBetween(dd, state.ids, to, at, push);
@@ -790,9 +796,19 @@ export function commitDrop(state: DragState): void {
     forgetMovedOutFolders(before, state.ids, to); // §3a.3: drawn minimised on the tab
   }
   announce(label, before);
+  if (leaving) {
+    const landed = state.copy ? newIds[0] : state.ids[0];
+    decorate(() => {
+      const from = outFrom ?? ghostBox(state);
+      if (!from) return;
+      playDropAnimation(d.id, {
+        kind: 'out', from, label: state.ghost?.label ?? '', sourceId: leaving, landedId: landed, intoId: to.folderId
+      });
+    });
+  }
   // M6 §7.13 / Ruling 5: into a folder (a minimised one, an open one's bar or page, a sub-folder tile,
   // a drilled-in inner box) the dropped item flies into it and the folder gulps. A reorder inside the same folder is not a drop "into", so it is not animated.
-  if (to.folderId !== undefined && (state.copy || !state.ids.every((id) => sameRef(containerOfNode(before, id), to)))) {
+  else if (to.folderId !== undefined && (state.copy || !state.ids.every((id) => sameRef(containerOfNode(before, id), to)))) {
     const folderId = to.folderId;
     const landed = state.copy ? newIds[0] : state.ids[0];
     decorate(() => {

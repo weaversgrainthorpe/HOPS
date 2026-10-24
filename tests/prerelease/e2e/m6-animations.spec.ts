@@ -78,7 +78,7 @@ async function showcase(page: Page, context: BrowserContext) {
   });
   expect(r.status(), await r.text()).toBe(200);
   made.push(dash.id);
-  return { path: dash.path as string, id: (s: string) => `${p}-${s}` };
+  return { path: dash.path as string, id: (s: string) => `${p}-${s}`, prefix: p };
 }
 
 async function setAnimations(page: Page, context: BrowserContext, mode: Mode | boolean) {
@@ -116,7 +116,8 @@ async function recordAnimations(page: Page) {
       for (const m of muts) {
         if (m.type === 'attributes') {
           const el = m.target as HTMLElement;
-          log.push({ what: el.hasAttribute('data-drop-pop') ? 'pop-start' : 'pop-end', t });
+          const what = m.attributeName === 'data-drop-release' ? 'release' : 'pop';
+          log.push({ what: `${what}-${el.hasAttribute(m.attributeName!) ? 'start' : 'end'}`, t });
           continue;
         }
         m.addedNodes.forEach((n) => {
@@ -131,7 +132,7 @@ async function recordAnimations(page: Page) {
           if (n instanceof HTMLElement && n.dataset.testid === 'drop-anim') log.push({ what: 'remove', kind: n.dataset.kind, t });
         });
       }
-    }).observe(document, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-drop-pop'] });
+    }).observe(document, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-drop-pop', 'data-drop-release'] });
     // Every frame: where each animation ghost is drawn (its centre, transforms included) and how opaque.
     const frames: { t: number; ghosts: { kind?: string; x: number; y: number; op: number }[]; gulp: boolean }[] = [];
     (window as unknown as { __frames: typeof frames }).__frames = frames;
@@ -493,7 +494,158 @@ test.describe('M6 drop and merge animations (§7.13)', () => {
     const ib = await box(inner);
     await dragCentre(page, node(page, sc.id('sc-mf-1')), ib.x + 120, ib.y + 160);
     await page.mouse.up();
-    await check('drilled-in inner box', ['into'], 'gulp');
+    // Mixed 1 leaves the Mixed folder for another folder, so it pops out first (§8.1); the box still gulps.
+    await check('drilled-in inner box', ['out'], 'gulp');
     expect(errors).toEqual([]);
+  });
+});
+
+// ------------------------------------------------------------------ §8.1: out of a folder
+
+/** Ghost on screen >= 400 ms, moving >= 40 px, and the source's release puff; nothing left behind. */
+async function expectOut(page: Page, what: string) {
+  await page.waitForTimeout(900);
+  const log = anim(await animLog(page));
+  expect(log.filter((e) => e.what === 'add').map((e) => e.kind), `${what}: it pops out`).toEqual(['out']);
+  const m = measure(await sampled(page));
+  expect(m.ms, `${what}: on screen >= 400 ms`).toBeGreaterThanOrEqual(400);
+  const out = log.filter((e) => e.kind === 'out');
+  expect(out[1].t - out[0].t, `${what}: and done in about 500 ms`).toBeLessThanOrEqual(750);
+  expect(m.travel, `${what}: it travels >= 40 px`).toBeGreaterThanOrEqual(40);
+  expect(log.filter((e) => e.what === 'release-start'), `${what}: the source puffs`).toHaveLength(1);
+  expect(log.filter((e) => e.what === 'release-end')).toHaveLength(1);
+  await expect(page.locator('[data-testid="drop-anim"], [data-drop-gulp], [data-drop-release]')).toHaveCount(0);
+}
+
+/** An empty spot on the Grid tab: row 0, well right of Example (sc-r3). */
+async function emptyGridSpot(page: Page, sc: { id: (s: string) => string }) {
+  const r3 = await box(node(page, sc.id('sc-r3')));
+  return { x: r3.x + r3.width + 420, y: r3.y + r3.height / 2 };
+}
+
+async function menuTo(page: Page, l: Locator, dest: RegExp, mode: 'Move' | 'Copy', inTab?: RegExp) {
+  await l.click({ button: 'right' });
+  await page.getByRole('menuitem', { name: 'Move/Copy to…' }).click();
+  const dlg = page.getByRole('dialog', { name: 'Move or copy' });
+  await expect(dlg).toBeVisible();
+  if (inTab) await dlg.getByRole('treeitem', { name: inTab }).getByRole('button', { name: 'Expand' }).click();
+  await dlg.getByRole('treeitem', { name: dest }).first().click();
+  await dlg.getByRole('button', { name: mode, exact: true }).click();
+  await expect(dlg).toBeHidden();
+}
+
+/**
+ * Every way out of a folder, on the Showcase (`after` runs after each, e.g. the animation check):
+ * an open folder's tile dragged to the tab and to another folder; a minimised sub-folder dragged out;
+ * menu Copy out of a folder; menu Move of a minimised sub-folder; a drilled-in inner box's tile dragged
+ * to its outer box (its title bar).
+ */
+async function everyWayOut(page: Page, sc: { id: (s: string) => string }, after: (what: string) => Promise<void>) {
+  const cue = page.locator('.drag-layer .cue');
+  const step = async (what: string, act: () => Promise<void>) => {
+    await clearLog(page);
+    await act();
+    await after(what);
+  };
+  await step('open folder → the tab', async () => {
+    const at = await emptyGridSpot(page, sc);
+    await dragCentre(page, node(page, sc.id('sc-l1-t1')), at.x, at.y);
+    await page.mouse.up();
+    await expect(node(page, sc.id('sc-l1-t1'))).toBeVisible();
+  });
+  await step('open folder → another folder', async () => {
+    const six = await box(node(page, sc.id('sc-f-six')));
+    await dragCentre(page, node(page, sc.id('sc-l1-t2')), six.x + six.width / 2, six.y + six.height / 2);
+    await expect(cue).toContainText('Into "Six tiles (collapsed)"');
+    await page.mouse.up();
+  });
+  await step('minimised sub-folder dragged out to the tab', async () => {
+    const at = await emptyGridSpot(page, sc);
+    await dragCentre(page, node(page, sc.id('sc-f-l2')), at.x + 220, at.y);
+    await page.mouse.up();
+  });
+  await step('menu Copy out of a folder (to another folder)', async () => {
+    await menuTo(page, node(page, sc.id('sc-l1-t3')), /Slideshow folder$/, 'Copy', /(^|\s)Grid$/);
+  });
+  // Folders tab: Nested sizes drilled into its Small-contents child (set before editing began).
+  await page.getByRole('button', { name: 'Folders', exact: true }).or(page.getByText('Folders', { exact: true })).first().click();
+  const inner = page.locator(`.nested-box[data-nested-folder="${sc.id('sc-f-nest-a')}"]`).first();
+  await expect(inner).toBeVisible();
+  await step('menu Move of a minimised sub-folder out of a drilled-in box (to the tab)', async () => {
+    await menuTo(page, node(page, sc.id('sc-f-nest-b')), /(^|\s)Folders$/, 'Move');
+    await expect(node(page, sc.id('sc-f-nest-b'))).toBeVisible();
+  });
+  await step('drilled-in inner box → its outer box', async () => {
+    const bar = node(page, sc.id('sc-f-nest')).locator(`[data-crumb="${sc.id('sc-f-nest')}"]`).first();
+    const b = await box(bar);
+    await dragCentre(page, node(page, sc.id('sc-nesta-1')), b.x + b.width / 2, b.y + b.height / 2);
+    await expect(cue).toContainText('Into "Nested sizes');
+    await page.mouse.up();
+  });
+}
+
+async function openShowcaseOut(page: Page, context: BrowserContext, mode: Mode, reduced = false) {
+  await setAnimations(page, context, mode);
+  if (reduced) await page.emulateMedia({ reducedMotion: 'reduce' });
+  const sc = await showcase(page, context);
+  await recordAnimations(page);
+  await page.goto(sc.path);
+  await page.evaluate((d) => localStorage.setItem(`hops.folderNav.${d.dash}`, JSON.stringify({ page: {}, drill: { [d.f]: [d.a] } })),
+    { dash: sc.id('sc-dash'), f: sc.id('sc-f-nest'), a: sc.id('sc-f-nest-a') });
+  const errors = await openEditing(page, sc.path, sc.id('sc-r1'));
+  return { sc, errors };
+}
+
+test.describe('M6 §8.1: items animate out of folders', () => {
+  test.use({ viewport: { width: 1280, height: 1000 } });
+
+  test('every way out of a folder pops out of the source and hops to its new spot (>= 400 ms, >= 40 px)', async ({ page, context }) => {
+    const { sc, errors } = await openShowcaseOut(page, context, 'on');
+    await everyWayOut(page, sc, (what) => expectOut(page, what));
+    expect(errors).toEqual([]);
+  });
+
+  for (const [mode, reduced] of [['off', false], ['on', true]] as const) {
+    test(`${mode === 'off' ? 'Off' : 'On under reduced motion'}: nothing plays for any way out of a folder`, async ({ page, context }) => {
+      const { sc, errors } = await openShowcaseOut(page, context, mode, reduced);
+      await everyWayOut(page, sc, async (what) => {
+        await page.waitForTimeout(300);
+        expect(anim(await animLog(page)), `${what}: no animation`).toEqual([]);
+      });
+      expect(errors).toEqual([]);
+    });
+  }
+
+  test('the saved result is identical with and without the out-of-folder animations', async ({ page, context }) => {
+    test.setTimeout(90_000); // every way out, twice
+    const shapes: unknown[] = [];
+    for (const mode of ['on', 'off'] as const) {
+      const { sc } = await openShowcaseOut(page, context, mode);
+      let played = 0;
+      await everyWayOut(page, sc, async () => {
+        await page.waitForTimeout(mode === 'on' ? 900 : 200);
+        played += anim(await animLog(page)).filter((e) => e.what === 'add').length;
+      });
+      expect(played > 0, `animations ${mode === 'on' ? 'played' : 'did not play'}`).toBe(mode === 'on');
+      await saveDraft(page);
+      const d = (await (await page.request.get('/api/config')).json()).dashboards.find((x: { id: string }) => x.id === sc.id('sc-dash'));
+      const norm = (ns: AnyNode[]): unknown =>
+        ns.map((n) => ({
+          ...n,
+          id: n.id.startsWith(`${sc.prefix}-`) ? n.id.slice(sc.prefix.length + 1) : 'NEW',
+          ...(n.content ? { content: { ...n.content, children: norm(n.content.children) } } : {})
+        }));
+      shapes.push(d.tabs.map((t: { root: { children: AnyNode[] } }) => norm(t.root.children)));
+    }
+    expect(shapes[0]).toEqual(shapes[1]);
+    // And it is the expected edit: L1 tile 1 and Level 2 on the Grid tab, L1 tile 2 in Six tiles, a
+    // copy of L1 tile 3 in the Slideshow folder, Grand-child on the Folders tab, Child 1 in Nested sizes.
+    const [grid, , folders] = shapes[0] as AnyNode[][];
+    expect(grid.map((n) => n.id)).toEqual(expect.arrayContaining(['sc-l1-t1', 'sc-f-l2']));
+    expect(grid.find((n) => n.id === 'sc-f-six')!.content!.children.map((n) => n.id)).toContain('sc-l1-t2');
+    expect(grid.find((n) => n.id === 'sc-f-l1')!.content!.children.map((n) => n.id)).toEqual(['sc-l1-t3']);
+    expect(grid.find((n) => n.id === 'sc-f-slide')!.content!.children.map((n) => n.id)).toEqual(['sc-slide-1', 'sc-slide-2', 'NEW']);
+    expect(folders.map((n) => n.id)).toContain('sc-f-nest-b');
+    expect(folders.find((n) => n.id === 'sc-f-nest')!.content!.children.map((n) => n.id)).toContain('sc-nesta-1');
   });
 });

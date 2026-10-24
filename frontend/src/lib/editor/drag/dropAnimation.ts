@@ -13,6 +13,10 @@
  *     tile, or a drilled-in inner box) then gulps (scale 1 → 0.94 → 1).
  *   - Merge: the dragged tile and the target tile part a little, then are drawn together onto the new
  *     folder, which pops in (scale 0.6 → 1.05 → 1). The folder dialog opens when it has ended.
+ *   - Out of a folder (§8.1: to the tab, another folder or an outer box, by drag or menu Move/Copy):
+ *     the source folder (or box) puffs (a small scale-up, capped like the gulp) as the item rises out
+ *     of where it was, then hops on a curve to its new spot, where the item is revealed as it lands;
+ *     into a folder where it isn't drawn, it shrinks into that folder, which gulps.
  * - The global "Animations" setting (display.animations, Settings → Global settings) is On / Off /
  *   Always. On plays unless the device asks for reduced motion (the setting then says so, visibly);
  *   Always plays even then; Off never. The editor reads it from each dashboard's server-computed
@@ -38,6 +42,18 @@ export function gulpScale(width: number, height: number): number {
   return Math.max(0.94, 1 - (2 * GULP_MAX_EDGE_PX) / Math.max(1, width, height));
 }
 export const INTO_TOTAL_MS = Math.max(DROP_MS, GULP_DELAY_MS + GULP_MS);
+/** Out of a folder (§8.1): the item's rise and hop… */
+export const OUT_MS = 480;
+/** …the source's release puff, at once… */
+export const RELEASE_MS = 200;
+/** …and, into another folder, its gulp as the item arrives (counted from the drop). */
+export const OUT_GULP_DELAY_MS = 400;
+export const OUT_TOTAL_MS = Math.max(OUT_MS, RELEASE_MS, OUT_GULP_DELAY_MS + GULP_MS);
+
+/** The release puff's largest scale for a source this size: 1.06, or less for big folders (edges move <= GULP_MAX_EDGE_PX). */
+export function releaseScale(width: number, height: number): number {
+  return Math.min(1.06, 1 + (2 * GULP_MAX_EDGE_PX) / Math.max(1, width, height));
+}
 /** Merge: the two tiles drawn together… */
 export const GATHER_MS = 320;
 /** …then the new folder pops, starting as they meet (counted from the drop). */
@@ -123,7 +139,21 @@ export function animationsAllowed(dashboardId: string): boolean {
 
 export type DropAnimation =
   | { kind: 'into'; from: Box; to: Box | (() => Box | null); label: string; folderId: string; onEnd?: () => void }
+  | {
+      kind: 'out';
+      /** Where the item was in its folder (measured before the change was drawn; see outStartBox). */
+      from: Box; label: string;
+      /** The folder (or drilled-in box) it left: it puffs. */
+      sourceId: string;
+      /** The item where it is now (the moved one, or the copy): it lands there when it is drawn. */
+      landedId?: string;
+      /** The folder it went into, if any: it gulps, and is where it lands when the item isn't drawn. */
+      intoId?: string;
+      onEnd?: () => void;
+    }
   | { kind: 'merge'; from: Box; to: Box; label: string; targetLabel: string; folderId: string; onEnd?: () => void };
+
+const folderOf = (a: DropAnimation): string | undefined => (a.kind === 'out' ? a.intoId : a.folderId);
 
 const ok = (b: Box | null | undefined): b is Box =>
   !!b && [b.left, b.top, b.width, b.height].every(Number.isFinite) && b.width > 0 && b.height > 0;
@@ -197,6 +227,56 @@ const towards = (a: Box, b: Box) => ({
 });
 
 /**
+ * Out of a folder (§8.1), from (0, 0): it rises `rise` px out of the source (growing to full size),
+ * then hops on an eased quadratic curve to (dx, dy), ending at scale (sx, sy). `land`: 'spot' fades
+ * only at the very end (the item is revealed under it), 'into' shrinks and fades into a folder, 'away'
+ * fades out over the second half (nowhere on screen to land).
+ */
+function outFrames(dx: number, dy: number, sx: number, sy: number, rise: number, hop: number, land: 'spot' | 'into' | 'away'): Keyframe[] {
+  const R = 0.2; // the rise's share of the time
+  const out: Keyframe[] = [
+    { transform: tf2(0, 0, 0.8, 0.8), opacity: 0.4, offset: 0 },
+    { transform: tf2(0, -rise, 1, 1), opacity: 0.95, offset: R }
+  ];
+  const ey = dy + rise; // the hop's end, from the risen point
+  const cx = dx / 2, cy = (4 * (Math.min(0, ey) - hop) - ey) / 2;
+  for (let i = 1; i <= STEPS; i++) {
+    const t = ease(i / STEPS);
+    const x = 2 * (1 - t) * t * cx + t * t * dx;
+    const y = -rise + 2 * (1 - t) * t * cy + t * t * ey;
+    const k = land === 'into' ? t * t : t;
+    const opacity =
+      land === 'spot' ? (t < 0.85 ? 0.95 : 0.95 * (1 - (t - 0.85) / 0.15)) :
+      land === 'into' ? (t < 0.6 ? 0.95 : 0.95 * (1 - (t - 0.6) / 0.4)) :
+      (t < 0.4 ? 0.95 : 0.95 * (1 - (t - 0.4) / 0.6));
+    out.push({
+      transform: tf2(x, y, 1 + (sx - 1) * k, 1 + (sy - 1) * k),
+      opacity: Number(n(Math.max(0, opacity))),
+      offset: Number(n(R + (1 - R) * (i / STEPS)))
+    });
+  }
+  return out;
+}
+/** A transform with one scale when both are equal (so scale(s) reads the same as the other paths). */
+const tf2 = (x: number, y: number, sx: number, sy: number) =>
+  Math.abs(sx - sy) < 1e-9 ? tf(x, y, sx) : `translate(${n(x)}px, ${n(y)}px) scale(${n(sx)}, ${n(sy)})`;
+
+/**
+ * Out of a folder (§8.1): where the item is drawn now, else its source folder (or box) — measured
+ * BEFORE the change is drawn, so the animation can start there. Null when animations won't play
+ * (no layout read for nothing) or neither is drawn.
+ */
+export function outStartBox(dashboardId: string, itemId: string, sourceId: string): Box | null {
+  if (typeof document === 'undefined' || !animationsAllowed(dashboardId)) return null;
+  for (const id of [itemId, sourceId]) {
+    const el = env.findNode(id);
+    const b = el ? env.measure(el) : null;
+    if (ok(b)) return { left: b.left, top: b.top, width: b.width, height: b.height };
+  }
+  return null;
+}
+
+/**
  * Say an animation failure once per page (a toast, and the log); the edit it decorated is untouched.
  * Also used by the drag controller when building an animation's arguments throws.
  */
@@ -255,8 +335,8 @@ export function playDropAnimation(dashboardId: string, a: DropAnimation): boolea
   };
 
   /** The folder's own element starts its part (gulp / pop), marked by `attr` while it runs. */
-  const onFolder = (attr: string, frames: Keyframe[], duration: number, delayFromDrop: number, fill: FillMode) => {
-    const el = done ? null : env.findNode(a.folderId);
+  const onFolder = (attr: string, frames: Keyframe[], duration: number, delayFromDrop: number, fill: FillMode, id = folderOf(a)) => {
+    const el = done || !id ? null : env.findNode(id);
     if (!el) return;
     el.setAttribute(attr, '');
     cleanups.push(() => el.removeAttribute(attr));
@@ -265,6 +345,68 @@ export function playDropAnimation(dashboardId: string, a: DropAnimation): boolea
   };
 
   try {
+    if (a.kind === 'out') {
+      const g = ghost(a.from, a.label, 'out');
+      made.push(g);
+      pending++; // held until the frame below has started what it starts
+      env.raf(() => {
+        try {
+          if (done) return;
+          const measured = (id: string | undefined) => {
+            const el = id ? env.findNode(id) : null;
+            const b = el ? env.measure(el) : null;
+            return el && ok(b) ? { el, b } : null;
+          };
+          // The source puffs at once: a small scale-up, its edges moving at most GULP_MAX_EDGE_PX.
+          const source = measured(a.sourceId);
+          if (source) {
+            const s = releaseScale(source.b.width, source.b.height);
+            onFolder('data-drop-release', [
+              { transform: 'scale(1)' }, { transform: `scale(${n(s)})`, offset: 0.4 }, { transform: 'scale(1)' }
+            ], RELEASE_MS, 0, 'none', a.sourceId);
+          }
+          const landed = measured(a.landedId);
+          const into = landed ? null : measured(a.intoId);
+          const to = landed?.b ?? into?.b ?? null;
+          const land = landed ? 'spot' : into ? 'into' : 'away';
+          const rise = Math.max(28, 0.3 * a.from.height);
+          const hop = Math.max(MIN_HOP_PX, 0.5 * a.from.height);
+          let dx = 0, dy = -rise, sx = 1, sy = 1;
+          if (to) {
+            ({ dx, dy } = towards(a.from, to));
+            if (land === 'spot') {
+              sx = to.width / a.from.width;
+              sy = to.height / a.from.height;
+            } else {
+              sx = sy = Math.max(0.12, Math.min(0.35, 0.4 * Math.min(to.width / a.from.width, to.height / a.from.height)));
+            }
+          }
+          if (!run(g, outFrames(dx, dy, sx, sy, rise, hop, land), { duration: OUT_MS, easing: 'linear', fill: 'forwards' })) {
+            pending--;
+            return cleanup();
+          }
+          // The item at its new spot stays hidden under the ghost and is revealed as it lands.
+          if (landed) {
+            run(landed.el, [{ opacity: 0 }, { opacity: 0, offset: 0.85 }, { opacity: 1 }], { duration: OUT_MS, easing: 'linear' });
+          }
+          // Into another folder: it gulps as the item arrives.
+          const dest = a.intoId ? (into ?? measured(a.intoId)) : null;
+          if (dest) {
+            const gulp = gulpScale(dest.b.width, dest.b.height);
+            onFolder('data-drop-gulp', [
+              { transform: 'scale(1)' }, { transform: `scale(${gulp})`, offset: 0.45 }, { transform: 'scale(1)' }
+            ], GULP_MS, OUT_GULP_DELAY_MS, 'none', a.intoId);
+          }
+        } catch (e) {
+          fail(e);
+          return;
+        }
+        if (--pending <= 0) cleanup();
+      });
+      setTimeout(cleanup, OUT_TOTAL_MS + 300);
+      return !done;
+    }
+
     if (a.kind === 'into') {
       const g = ghost(a.from, a.label, 'into');
       made.push(g);
