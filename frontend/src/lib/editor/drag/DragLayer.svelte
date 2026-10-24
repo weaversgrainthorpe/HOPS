@@ -11,6 +11,7 @@
    */
   import { drag, setActiveTab, setTabSwitcher, MERGE_DWELL_MS } from './dragController';
   import DragBreadcrumb from './DragBreadcrumb.svelte';
+  import { cancelDropAnimations } from './dropAnimation';
 
   interface Props {
     /** The editor's active tab: a change during a drag cancels it (unless the drag switched it). */
@@ -20,6 +21,8 @@
   }
   let { tabId = null, onSwitchTab }: Props = $props();
   $effect(() => setActiveTab(tabId));
+  // The editor's canvas going away (leaving edit mode or the dashboard) stops any drop animation.
+  $effect(() => () => cancelDropAnimations());
   $effect(() => {
     setTabSwitcher(onSwitchTab ?? null);
     return () => setTabSwitcher(null);

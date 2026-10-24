@@ -107,7 +107,7 @@ test.afterEach(async ({ page, context }) => {
 /** Record, with timestamps, every animation ghost added / removed and every folder pop started / ended. */
 async function recordAnimations(page: Page) {
   await page.addInitScript(() => {
-    const log: { what: string; kind?: string; t: number; z?: number }[] = [];
+    const log: { what: string; kind?: string; t: number; z?: number; ended?: string }[] = [];
     (window as unknown as { __anim: typeof log }).__anim = log;
     // Ruling 3: when the drop ended, and when a dialog appeared (relative to the animation).
     window.addEventListener('pointerup', () => log.push({ what: 'pointerup', t: performance.now() }), true);
@@ -129,7 +129,7 @@ async function recordAnimations(page: Page) {
           }
         });
         m.removedNodes.forEach((n) => {
-          if (n instanceof HTMLElement && n.dataset.testid === 'drop-anim') log.push({ what: 'remove', kind: n.dataset.kind, t });
+          if (n instanceof HTMLElement && n.dataset.testid === 'drop-anim') log.push({ what: 'remove', kind: n.dataset.kind, t, ended: n.dataset.ended });
         });
       }
     }).observe(document, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-drop-pop', 'data-drop-release'] });
@@ -170,7 +170,7 @@ function measure(frames: Frame[]) {
   }
   return { ms, travel, gulp: frames.some((f) => f.gulp) };
 }
-type AnimEvent = { what: string; kind?: string; t: number; z?: number };
+type AnimEvent = { what: string; kind?: string; t: number; z?: number; ended?: string };
 const animLog = (page: Page) =>
   page.evaluate(() => (window as unknown as { __anim: AnimEvent[] }).__anim.slice());
 const anim = (log: AnimEvent[]) => log.filter((e) => e.what !== 'pointerup' && e.what !== 'dialog');
@@ -510,7 +510,9 @@ async function expectOut(page: Page, what: string) {
   const m = measure(await sampled(page));
   expect(m.ms, `${what}: on screen >= 400 ms`).toBeGreaterThanOrEqual(400);
   const out = log.filter((e) => e.kind === 'out');
-  expect(out[1].t - out[0].t, `${what}: and done in about 500 ms`).toBeLessThanOrEqual(750);
+  // Ended by its own animations finishing (onEnd), never by the fallback timer (OUT_TOTAL_MS + 300).
+  expect(out[1].ended, `${what}: it ends when its animations finish, not at the fallback`).toBe('finished');
+  expect(out[1].t - out[0].t, `${what}: and done in about 500 ms`).toBeLessThanOrEqual(800);
   expect(m.travel, `${what}: it travels >= 40 px`).toBeGreaterThanOrEqual(40);
   expect(log.filter((e) => e.what === 'release-start'), `${what}: the source puffs`).toHaveLength(1);
   expect(log.filter((e) => e.what === 'release-end')).toHaveLength(1);
@@ -647,5 +649,50 @@ test.describe('M6 §8.1: items animate out of folders', () => {
     expect(grid.find((n) => n.id === 'sc-f-slide')!.content!.children.map((n) => n.id)).toEqual(['sc-slide-1', 'sc-slide-2', 'NEW']);
     expect(folders.map((n) => n.id)).toContain('sc-f-nest-b');
     expect(folders.find((n) => n.id === 'sc-f-nest')!.content!.children.map((n) => n.id)).toContain('sc-nesta-1');
+  });
+
+  test('grabbing the just-landed item mid-animation stops it: the item is visible (opacity 1) and drags', async ({ page, context }) => {
+    const { sc, errors } = await openShowcaseOut(page, context, 'on');
+    await clearLog(page);
+    const at = await emptyGridSpot(page, sc);
+    await dragCentre(page, node(page, sc.id('sc-l1-t1')), at.x, at.y);
+    await page.mouse.up();
+    const landed = node(page, sc.id('sc-l1-t1'));
+    await expect(landed).toBeVisible();
+    await page.waitForTimeout(100); // well inside the 480 ms hop
+    const opacityOf = () => landed.evaluate((el) => {
+      // The item itself, or the cell it is drawn in, whichever carries the reveal.
+      const anims = [el, el.parentElement].flatMap((e) => (e ? e.getAnimations() : []));
+      return { op: Number(getComputedStyle(el).opacity), anims: anims.length };
+    });
+    const mid = await opacityOf();
+    expect(mid.anims, 'the reveal is running on the landed item').toBeGreaterThan(0);
+    expect(mid.op, 'still hidden under its ghost').toBeLessThan(0.5);
+    await expect(page.locator('[data-testid="drop-anim"]')).toHaveCount(1);
+
+    // Grab it and start a new drag: the animation stops at once.
+    const b = await box(landed);
+    const x0 = b.x + b.width / 2, y0 = b.y + b.height / 2;
+    await page.mouse.move(x0, y0);
+    await page.mouse.down();
+    for (let i = 1; i <= 4; i++) await page.mouse.move(x0 + i * 5, y0);
+    await expect(page.locator('.drag-layer')).toBeVisible();
+    await expect(page.locator('[data-testid="drop-anim"]')).toHaveCount(0);
+    expect((await opacityOf()).anims, 'nothing is left animating the real item').toBe(0);
+    const log = await animLog(page);
+    expect(log.filter((e) => e.what === 'remove').map((e) => e.ended)).toEqual(['interrupted']);
+    await expect(page.locator('[data-drop-release], [data-drop-gulp]')).toHaveCount(0);
+
+    // And it drags: drop it 3 cells further right.
+    for (let i = 1; i <= 10; i++) {
+      await page.mouse.move(x0 + 20 + i * 16, y0);
+      await page.waitForTimeout(16);
+    }
+    await page.waitForTimeout(120);
+    await page.mouse.up();
+    await expect.poll(async () => (await box(landed)).x, { message: 'it moved' }).toBeGreaterThan(b.x + 100);
+    await page.waitForTimeout(100);
+    expect((await opacityOf()).op, 'and is fully visible').toBe(1);
+    expect(errors).toEqual([]);
   });
 });

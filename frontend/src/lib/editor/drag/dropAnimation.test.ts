@@ -16,10 +16,11 @@ import { drag, dragSource, setDragEnv, resetDragForTests, setActiveTab, MERGE_DW
 import {
   animationsSetting, animationsAllowed, playDropAnimation, setAnimationEnv, resetDropAnimationForTests,
   sayAnimationFailure, MERGE_DIALOG_CAP_MS, DROP_MS, GULP_MS, GULP_DELAY_MS, INTO_TOTAL_MS, GATHER_MS, POP_MS,
-  POP_DELAY_MS, MERGE_TOTAL_MS, OUT_MS, RELEASE_MS, OUT_GULP_DELAY_MS, OUT_TOTAL_MS, GULP_MAX_EDGE_PX, releaseScale,
+  POP_DELAY_MS, MERGE_TOTAL_MS, OUT_MS, RELEASE_MS, OUT_GULP_DELAY_MS, OUT_TOTAL_MS, GULP_MAX_EDGE_PX, releaseScale, cancelDropAnimations, OUT_MAX_ITEMS,
   type AnimationEnv, type AnimationsMode
 } from './dropAnimation';
 import { moveOrCopyTo } from '../editorActions';
+import { toggleNode } from '$lib/stores/nodeSelection';
 import { editorDialog } from '../editorUi';
 import { setLayout, resetEditor, startSession, draft, nodeIn, home, other } from '$lib/components/editor/editorTestKit';
 
@@ -290,7 +291,14 @@ describe('playDropAnimation', () => {
     playDropAnimation('d1', { kind: 'merge', from, to: from, label: 'A', targetLabel: 'B', folderId: 'nf' });
     flushFrames();
     const ghosts = layerEls().map((el) => calls.find((c) => c.el === el)!);
-    for (const g of ghosts) expect(peakTravel(g.frames)).toBeGreaterThanOrEqual(20);
+    for (const g of ghosts) {
+      // Each ghost alone moves comfortably past 40 px (>= 56), and HOLDS there (>= 10% of the time,
+      // still opaque) so a ~60 fps sampler can't miss the peak (a real-browser run measured 39.92 px).
+      const far = g.frames.filter((f) => Math.hypot(xy(f).x, xy(f).y) >= 56 && Number(f.opacity) > 0.8);
+      expect(far.length, 'at least two keyframes out at >= 56 px').toBeGreaterThanOrEqual(2);
+      const offs = far.map((f) => Number(f.offset));
+      expect(Math.max(...offs) - Math.min(...offs)).toBeGreaterThanOrEqual(0.1);
+    }
     // Apart from each other by >= 40 px at the widest.
     const apart = Math.max(...ghosts[0].frames.map((f, i) => Math.hypot(xy(f).x - xy(ghosts[1].frames[i]).x, xy(f).y - xy(ghosts[1].frames[i]).y)));
     expect(apart).toBeGreaterThanOrEqual(40);
@@ -600,9 +608,35 @@ describe('out of a folder (§8.1)', () => {
     expect(OUT_MS).toBeGreaterThanOrEqual(400);
     expect(RELEASE_MS).toBeLessThan(OUT_MS);
     expect(OUT_GULP_DELAY_MS).toBeLessThan(OUT_MS);
-    expect(OUT_TOTAL_MS).toBe(Math.max(OUT_MS, RELEASE_MS, OUT_GULP_DELAY_MS + GULP_MS));
     expect(OUT_TOTAL_MS).toBeGreaterThanOrEqual(450);
     expect(OUT_TOTAL_MS).toBeLessThanOrEqual(650);
+  });
+
+  it('it is over when its animations finish (well before the fallback), and says how it ended', () => {
+    setLayout(withAnimations('on'));
+    const els = world({ x: spot, f1: { left: 0, top: 250, width: 600, height: 300 }, c1: { left: 500, top: 100, width: 100, height: 100 } });
+    const onEnd = vi.fn();
+    playDropAnimation('d1', { kind: 'out', from: src, label: 'X', sourceId: 'f1', landedId: 'x', intoId: 'c1', onEnd });
+    flushFrames();
+    const g = layerEls()[0];
+    // The fallback is only a backstop: every part (flight, reveal, puff, gulp) ends inside OUT_TOTAL_MS.
+    for (const c of calls) expect(Number(c.opts.delay ?? 0) + Number(c.opts.duration)).toBeLessThanOrEqual(OUT_TOTAL_MS);
+    calls.forEach((c) => c.anim.finish());
+    expect(onEnd).toHaveBeenCalledTimes(1);
+    expect(g.isConnected).toBe(false);
+    expect(g.dataset.ended).toBe('finished');
+    void els;
+  });
+
+  it('the fallback removes it if the browser never reports the end, and says so', () => {
+    setLayout(withAnimations('on'));
+    world({ x: spot, f1: { left: 0, top: 250, width: 600, height: 300 } });
+    playDropAnimation('d1', { kind: 'out', from: src, label: 'X', sourceId: 'f1', landedId: 'x' });
+    flushFrames();
+    const g = layerEls()[0];
+    vi.advanceTimersByTime(OUT_TOTAL_MS + 300);
+    expect(g.isConnected).toBe(false);
+    expect(g.dataset.ended).toBe('fallback');
   });
 
   it('the item rises out of the source, then hops on a curve to its new spot, landing at its new size', () => {
@@ -664,6 +698,20 @@ describe('out of a folder (§8.1)', () => {
     onlyTransformOpacity(reveal.frames);
     expect(Number(reveal.frames[0].opacity)).toBe(0);
     expect(Number(reveal.frames[reveal.frames.length - 1].opacity)).toBe(1);
+  });
+
+  it("the reveal ends at the element's own (computed) opacity, not 1", () => {
+    setLayout(withAnimations('on'));
+    const els = world({ x: spot, f1: { left: 0, top: 250, width: 600, height: 300 } });
+    animEnv({
+      findNode: (id) => els[id] ?? null,
+      measure: (el) => ({ x: spot, f1: { left: 0, top: 250, width: 600, height: 300 } } as Record<string, { left: number; top: number; width: number; height: number }>)[(el as HTMLElement).dataset.id ?? ''],
+      opacity: (el) => ((el as HTMLElement).dataset.id === 'x' ? 0.55 : 1)
+    });
+    playDropAnimation('d1', { kind: 'out', from: src, label: 'X', sourceId: 'f1', landedId: 'x' });
+    flushFrames();
+    const reveal = calls.find((x) => x.el === els.x)!;
+    expect(Number(reveal.frames[reveal.frames.length - 1].opacity)).toBe(0.55);
     expect(Number(reveal.opts.duration)).toBe(OUT_MS);
     expect(reveal.opts.fill ?? 'none').toBe('none'); // never left hidden after it
   });
@@ -789,16 +837,198 @@ describe('items leaving a folder animate out, and the draft changes at once', ()
   });
 
   for (const [mode, red] of [['off', false], ['on', true]] as const) {
-    it(`${mode}${red ? ' under reduced motion' : ''}: out of a folder by drag or menu plays nothing, and the change is the same`, () => {
+    it(`${mode}${red ? ' under reduced motion' : ''}: a drag out of a folder plays nothing, and the change is the same`, () => {
       reduced = red;
       start(mode, { x: src, f1: { left: 0, top: 200, width: 800, height: 600 } });
       dragOnto('x', [50, 250], [1500, 1500]);
       dropAt(1500, 1500);
       expect((nodeIn(draft(), 'f1') as FolderNode).content.children).toHaveLength(0);
-      expect(moveOrCopyTo(['x'], { tabId: 't1', folderId: 'f1' }, 'copy')).toBe(true);
+      expect(nodeIn(draft(), 'x')).toBeTruthy();
       flushFrames();
       expect(layerEls()).toHaveLength(0);
       expect(calls).toHaveLength(0);
     });
+
+    for (const how of ['move', 'copy'] as const) {
+      it(`${mode}${red ? ' under reduced motion' : ''}: menu ${how} OUT of a folder plays nothing, and the change is the same`, () => {
+        reduced = red;
+        start(mode, { x: src, f1: { left: 0, top: 200, width: 800, height: 600 } });
+        expect(moveOrCopyTo(['x'], { tabId: 't1' }, how)).toBe(true);
+        expect((nodeIn(draft(), 'f1') as FolderNode).content.children).toHaveLength(how === 'move' ? 0 : 1);
+        expect(draft().tabs[0].root.children.some((n) => n.id === 'x' || (n.kind === 'tile' && n.name === 'X'))).toBe(true);
+        flushFrames();
+        expect(layerEls()).toHaveLength(0);
+        expect(calls).toHaveLength(0);
+      });
+    }
   }
+});
+
+describe('cleanup never leaves a real element animated (§8.1 fix round 1)', () => {
+  const src = { left: 100, top: 300, width: 100, height: 100 };
+  const spot = { left: 700, top: 50, width: 120, height: 120 };
+  type Live = FakeAnim & { cancelled?: boolean };
+  function world2() {
+    const boxes: Record<string, typeof src> = { x: spot, f1: { left: 0, top: 250, width: 600, height: 300 }, c1: { left: 500, top: 100, width: 100, height: 100 } };
+    const els: Record<string, HTMLElement> = {};
+    for (const id of Object.keys(boxes)) {
+      els[id] = document.createElement('div');
+      els[id].dataset.id = id;
+      document.body.appendChild(els[id]);
+    }
+    animEnv({
+      findNode: (id) => els[id] ?? null,
+      measure: (el) => boxes[(el as HTMLElement).dataset.id ?? ''] ?? { left: 0, top: 0, width: 0, height: 0 },
+      animate: (el, kf, opts) => {
+        const anim = new FakeAnim() as Live;
+        anim.cancel = () => { anim.cancelled = true; anim.oncancel?.(); };
+        calls.push({ el, frames: kf, opts, anim });
+        return anim as unknown as Animation;
+      }
+    });
+    return els;
+  }
+  afterEach(() => document.querySelectorAll('[data-id]').forEach((e) => e.remove()));
+  const onReal = (els: Record<string, HTMLElement>) => calls.filter((c) => Object.values(els).includes(c.el));
+
+  it('when the fallback ends it, the reveal, puff and gulp on real elements are cancelled (never left at opacity 0)', () => {
+    setLayout(withAnimations('on'));
+    const els = world2();
+    playDropAnimation('d1', { kind: 'out', from: src, label: 'X', sourceId: 'f1', landedId: 'x', intoId: 'c1' });
+    flushFrames();
+    // The ghost's flight finishes; nothing else reports its end.
+    calls.find((c) => c.el.dataset.testid === 'drop-anim')!.anim.finish();
+    vi.advanceTimersByTime(OUT_TOTAL_MS + 300);
+    const real = onReal(els);
+    expect(real.length).toBeGreaterThanOrEqual(2);
+    for (const c of real) expect((c.anim as Live).cancelled, `${c.el.dataset.id} cancelled`).toBe(true);
+  });
+
+  it('cancelDropAnimations() stops every running drop, merge and out animation at once and restores the real elements', () => {
+    setLayout(withAnimations('on'));
+    const els = world2();
+    const ends = [vi.fn(), vi.fn(), vi.fn()];
+    playDropAnimation('d1', { kind: 'out', from: src, label: 'X', sourceId: 'f1', landedId: 'x', intoId: 'c1', onEnd: ends[0] });
+    playDropAnimation('d1', { kind: 'into', from: src, to: spot, label: 'A', folderId: 'c1', onEnd: ends[1] });
+    playDropAnimation('d1', { kind: 'merge', from: src, to: spot, label: 'A', targetLabel: 'B', folderId: 'c1', onEnd: ends[2] });
+    flushFrames();
+    expect(layerEls().length).toBe(4);
+    cancelDropAnimations();
+    expect(layerEls()).toHaveLength(0);
+    for (const c of calls) expect((c.anim as Live).cancelled).toBe(true);
+    for (const el of Object.values(els)) {
+      for (const a of ['data-drop-gulp', 'data-drop-pop', 'data-drop-release']) expect(el.hasAttribute(a)).toBe(false);
+    }
+    ends.forEach((e) => expect(e).toHaveBeenCalledTimes(1));
+  });
+
+  it('a drop whose first frame has not run yet is cancelled too (nothing starts afterwards)', () => {
+    setLayout(withAnimations('on'));
+    world2();
+    playDropAnimation('d1', { kind: 'out', from: src, label: 'X', sourceId: 'f1', landedId: 'x' });
+    cancelDropAnimations();
+    flushFrames();
+    expect(calls).toHaveLength(0);
+    expect(layerEls()).toHaveLength(0);
+  });
+
+  it('setAnimationEnv cancels running animations', () => {
+    setLayout(withAnimations('on'));
+    world2();
+    playDropAnimation('d1', { kind: 'out', from: src, label: 'X', sourceId: 'f1', landedId: 'x' });
+    flushFrames();
+    const started = calls.slice();
+    setAnimationEnv(null);
+    expect(layerEls()).toHaveLength(0);
+    for (const c of started) expect((c.anim as Live).cancelled).toBe(true);
+  });
+
+  for (const to of ['off', 'reduced'] as const) {
+    it(`turning animations ${to === 'off' ? 'Off' : 'unavailable (reduced motion, On)'} mid-animation cancels it`, () => {
+      setLayout(withAnimations('on'));
+      world2();
+      playDropAnimation('d1', { kind: 'out', from: src, label: 'X', sourceId: 'f1', landedId: 'x' });
+      flushFrames();
+      if (to === 'reduced') reduced = true;
+      setLayout(withAnimations(to === 'off' ? 'off' : 'on'));
+      expect(layerEls()).toHaveLength(0);
+      expect(calls.every((c) => (c.anim as Live).cancelled)).toBe(true);
+    });
+  }
+
+  it('starting a new drag cancels running animations: the just-landed item is visible again', () => {
+    setLayout(withAnimations('on'));
+    startSession();
+    setActiveTab('t1');
+    dragEnv();
+    const els = world2();
+    playDropAnimation('d1', { kind: 'out', from: src, label: 'X', sourceId: 'f1', landedId: 'x' });
+    flushFrames();
+    const reveal = calls.find((c) => c.el === els.x)!;
+    dragOnto('a', [50, 50], [550, 150]);
+    expect(get(drag)).not.toBeNull();
+    expect((reveal.anim as Live).cancelled).toBe(true);
+    expect(layerEls()).toHaveLength(0);
+  });
+});
+
+describe('multi-select out of folders (§8.1 fix round 1)', () => {
+  function startMany(n: number, mode: AnimationsMode = 'on') {
+    const d = home();
+    const f1 = d.tabs[0].root.children.find((x) => x.id === 'f1') as FolderNode;
+    const x = f1.content.children[0];
+    f1.content.children = Array.from({ length: n }, (_, i) => ({ ...x, id: `x${i}`, name: `X${i}` }));
+    setLayout([{ ...d, display: { animatedFolderBackgrounds: false, animations: mode } }, other()]);
+    startSession();
+    setActiveTab('t1');
+    dragEnv();
+    const els: Record<string, HTMLElement> = {};
+    const boxes: Record<string, { left: number; top: number; width: number; height: number }> = {
+      f1: { left: 0, top: 200, width: 800, height: 600 }, c1: { left: 500, top: 100, width: 100, height: 100 }, y: { left: 520, top: 120, width: 60, height: 60 }
+    };
+    for (let i = 0; i < n; i++) boxes[`x${i}`] = { left: 10 + 50 * i, top: 210, width: 40, height: 40 };
+    for (const id of Object.keys(boxes)) {
+      els[id] = document.createElement('div');
+      els[id].dataset.id = id;
+      document.body.appendChild(els[id]);
+    }
+    animEnv({
+      findNode: (id) => els[id] ?? null,
+      measure: (el) => boxes[(el as HTMLElement).dataset.id ?? ''] ?? { left: 0, top: 0, width: 0, height: 0 }
+    });
+    return els;
+  }
+  afterEach(() => document.querySelectorAll('[data-id]').forEach((e) => e.remove()));
+
+  it('menu Move of several items out of folders: each pops out of its own spot and source; the source puffs once', () => {
+    const els = startMany(3);
+    expect(moveOrCopyTo(['x0', 'x1', 'y'], { tabId: 't1' }, 'move')).toBe(true);
+    const g = layerEls();
+    expect(g.map((e) => e.dataset.kind)).toEqual(['out', 'out', 'out']);
+    expect(g.map((e) => e.style.left)).toEqual(['10px', '60px', '520px']);
+    flushFrames();
+    expect(calls.filter((c) => c.el === els.f1)).toHaveLength(1);
+    expect(calls.filter((c) => c.el === els.c1)).toHaveLength(1);
+  });
+
+  it('a multi-select drag out of folders animates every moved item, each from its own source', () => {
+    startMany(3);
+    toggleNode('x0', true);
+    toggleNode('x2', true);
+    toggleNode('y', true);
+    dragOnto('x0', [50, 50], [1500, 1500]);
+    expect(get(drag)!.ids.sort()).toEqual(['x0', 'x2', 'y']);
+    dropAt(1500, 1500);
+    const g = layerEls();
+    expect(g).toHaveLength(3);
+    expect(g.map((e) => e.style.left).sort()).toEqual(['10px', '110px', '520px']);
+  });
+
+  it('at most 12 animate; the rest simply appear', () => {
+    startMany(15);
+    expect(moveOrCopyTo(Array.from({ length: 15 }, (_, i) => `x${i}`), { tabId: 't1' }, 'move')).toBe(true);
+    expect(OUT_MAX_ITEMS).toBe(12);
+    expect(layerEls()).toHaveLength(12);
+    expect((nodeIn(draft(), 'f1') as FolderNode).content.children).toHaveLength(0);
+  });
 });

@@ -67,8 +67,11 @@ export const MERGE_TOTAL_MS = Math.max(GATHER_MS, POP_DELAY_MS + POP_MS);
 export const MERGE_DIALOG_CAP_MS = MERGE_TOTAL_MS + 100;
 /** The least height of the drop's hop, so a tile dropped right on its folder still visibly travels. */
 const MIN_HOP_PX = 56;
-/** How far each merged tile first moves away from the other (at least), before they are drawn together. */
-const MIN_PART_PX = 44;
+/**
+ * How far each merged tile first moves away from the other (at least), before they are drawn
+ * together: comfortably past the 40 px "visibly moves" bar, and held there for a moment (gatherFrames).
+ */
+const MIN_PART_PX = 60;
 
 /** The "Animations" setting (Ruling 5). */
 export type AnimationsMode = 'on' | 'off' | 'always';
@@ -86,6 +89,8 @@ export interface AnimationEnv {
    */
   findNode(id: string): HTMLElement | null;
   measure(el: Element): Box;
+  /** The element's own (computed) opacity, which a reveal ends at. */
+  opacity(el: Element): number;
 }
 
 const domEnv: AnimationEnv = {
@@ -101,19 +106,36 @@ const domEnv: AnimationEnv = {
       ) ?? null;
     return live('data-node-id') ?? live('data-nested-folder');
   },
-  measure: (el) => el.getBoundingClientRect()
+  measure: (el) => el.getBoundingClientRect(),
+  opacity: (el) => Number.parseFloat(getComputedStyle(el).opacity)
 };
 let env: AnimationEnv = domEnv;
 let failureSaid = false;
+/** Every drop / merge / out animation now running: its cleanup, given why it ended. */
+const live = new Set<(why: Ended) => void>();
+/** Why an animation ended (on each ghost as data-ended when it is removed). */
+type Ended = 'finished' | 'fallback' | 'failed' | 'interrupted' | 'setting';
 
-/** Tests: replace parts of the browser environment (null restores it). */
+/**
+ * Stop every running drop, merge and out animation now: the ghosts are removed and every animation
+ * on a real element (reveal, puff, gulp, pop) is cancelled, so each is drawn as it is (never left
+ * hidden or squeezed). Each one's onEnd still runs once. Called when a new drag starts, the route
+ * changes, the animation environment changes, or the editor's canvas goes away.
+ */
+export function cancelDropAnimations(): void {
+  for (const stop of Array.from(live)) stop('interrupted');
+}
+
+/** Tests: replace parts of the browser environment (null restores it). Running animations stop. */
 export function setAnimationEnv(partial: Partial<AnimationEnv> | null): void {
+  cancelDropAnimations();
   // A part given as undefined keeps the browser's own.
   const own = Object.fromEntries(Object.entries(partial ?? {}).filter(([, v]) => v !== undefined));
   env = partial ? { ...domEnv, ...own } : domEnv;
 }
 
 export function resetDropAnimationForTests(): void {
+  cancelDropAnimations();
   env = domEnv;
   failureSaid = false;
   if (typeof document !== 'undefined') document.querySelectorAll('[data-testid="drop-anim"]').forEach((e) => e.remove());
@@ -149,6 +171,9 @@ export type DropAnimation =
       landedId?: string;
       /** The folder it went into, if any: it gulps, and is where it lands when the item isn't drawn. */
       intoId?: string;
+      /** False: the source does not puff / the destination does not gulp (another item of a multi-select does). */
+      puff?: boolean;
+      gulp?: boolean;
       onEnd?: () => void;
     }
   | { kind: 'merge'; from: Box; to: Box; label: string; targetLabel: string; folderId: string; onEnd?: () => void };
@@ -214,8 +239,10 @@ function flightFrames(dx: number, dy: number, s: number, hop: number): Keyframe[
 function gatherFrames(dx: number, dy: number, ux: number, uy: number, part: number): Keyframe[] {
   return [
     { transform: tf(0, 0, 1), opacity: 0.95, offset: 0 },
-    { transform: tf(ux * part, uy * part, 1.02), opacity: 0.95, offset: 0.3, easing: 'ease-in' },
-    { transform: tf(dx * 0.85, dy * 0.85, 0.75), opacity: 0.9, offset: 0.8 },
+    { transform: tf(ux * part, uy * part, 1.02), opacity: 0.95, offset: 0.28 },
+    // A short hold, parted, so the move apart is seen (and a 60 fps sampler can't miss its peak).
+    { transform: tf(ux * part, uy * part, 1.02), opacity: 0.95, offset: 0.42, easing: 'ease-in' },
+    { transform: tf(dx * 0.85, dy * 0.85, 0.75), opacity: 0.9, offset: 0.85 },
     { transform: tf(dx, dy, 0.6), opacity: 0, offset: 1 }
   ];
 }
@@ -261,19 +288,53 @@ function outFrames(dx: number, dy: number, sx: number, sy: number, rise: number,
 const tf2 = (x: number, y: number, sx: number, sy: number) =>
   Math.abs(sx - sy) < 1e-9 ? tf(x, y, sx) : `translate(${n(x)}px, ${n(y)}px) scale(${n(sx)}, ${n(sy)})`;
 
+/** A multi-select out of folders animates at most this many items; the rest simply appear. */
+export const OUT_MAX_ITEMS = 12;
+
+/** An item leaving a folder, and where it starts: where it is drawn now, else its source folder (or box). */
+export type OutStart = { id: string; sourceId: string; from: Box | null };
+
 /**
- * Out of a folder (§8.1): where the item is drawn now, else its source folder (or box) — measured
- * BEFORE the change is drawn, so the animation can start there. Null when animations won't play
- * (no layout read for nothing) or neither is drawn.
+ * Out of a folder (§8.1): measure where each leaving item starts (at most OUT_MAX_ITEMS), BEFORE the
+ * change is drawn. Empty when animations won't play (no layout reads for nothing).
  */
-export function outStartBox(dashboardId: string, itemId: string, sourceId: string): Box | null {
-  if (typeof document === 'undefined' || !animationsAllowed(dashboardId)) return null;
-  for (const id of [itemId, sourceId]) {
-    const el = env.findNode(id);
-    const b = el ? env.measure(el) : null;
-    if (ok(b)) return { left: b.left, top: b.top, width: b.width, height: b.height };
+export function outStarts(dashboardId: string, leaving: { id: string; sourceId: string }[]): OutStart[] {
+  if (typeof document === 'undefined' || leaving.length === 0 || !animationsAllowed(dashboardId)) return [];
+  return leaving.slice(0, OUT_MAX_ITEMS).map(({ id, sourceId }) => {
+    for (const at of [id, sourceId]) {
+      const el = env.findNode(at);
+      const b = el ? env.measure(el) : null;
+      if (ok(b)) return { id, sourceId, from: { left: b.left, top: b.top, width: b.width, height: b.height } };
+    }
+    return { id, sourceId, from: null };
+  });
+}
+
+/**
+ * Play the out animation of each measured item (after the change is in the draft): each from its own
+ * spot, each source puffing once and the destination gulping once.
+ */
+export function playOutOfFolders(
+  dashboardId: string,
+  starts: OutStart[],
+  o: { landed: (id: string) => string | undefined; label: (id: string) => string; intoId?: string; fallbackFrom?: (id: string) => Box | null }
+): void {
+  const puffed = new Set<string>();
+  let gulped = false;
+  for (const st of starts) {
+    try {
+      const from = st.from ?? o.fallbackFrom?.(st.id) ?? null;
+      if (!from) continue;
+      playDropAnimation(dashboardId, {
+        kind: 'out', from, label: o.label(st.id), sourceId: st.sourceId, landedId: o.landed(st.id), intoId: o.intoId,
+        puff: !puffed.has(st.sourceId), gulp: !gulped
+      });
+      puffed.add(st.sourceId);
+      gulped = true;
+    } catch (e) {
+      sayAnimationFailure(e); // playDropAnimation never throws; this covers the arguments
+    }
   }
-  return null;
 }
 
 /**
@@ -295,14 +356,32 @@ export function sayAnimationFailure(e: unknown): void {
  */
 export function playDropAnimation(dashboardId: string, a: DropAnimation): boolean {
   if (typeof document === 'undefined' || !animationsAllowed(dashboardId) || !ok(a.from)) return false;
+  if (a.kind === 'merge' && !ok(a.to)) return false;
   const made: HTMLElement[] = [];
   const cleanups: (() => void)[] = [];
+  /** Every animation started, on a ghost or a REAL element: all cancelled at the end. */
+  const anims: Animation[] = [];
   let done = false;
   const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
-  const cleanup = () => {
+  const cleanup = (why: Ended = 'finished') => {
     if (done) return;
     done = true;
-    made.forEach((e) => e.remove());
+    live.delete(cleanup);
+    made.forEach((e) => {
+      e.dataset.ended = why;
+      e.remove();
+    });
+    // Cancel what is still applied to real elements (a reveal at opacity 0, a puff, a gulp), so none
+    // is ever left mid-way; a finished one is unaffected.
+    for (const an of anims) {
+      try {
+        an.onfinish = null;
+        an.oncancel = null;
+        an.cancel();
+      } catch {
+        /* already gone with its element */
+      }
+    }
     cleanups.forEach((f) => {
       try {
         f();
@@ -317,14 +396,20 @@ export function playDropAnimation(dashboardId: string, a: DropAnimation): boolea
     }
   };
   const fail = (e: unknown) => {
-    cleanup();
+    cleanup('failed');
     sayAnimationFailure(e);
   };
+  live.add(cleanup);
+  // The setting turned Off (or no longer allowed) mid-animation: stop at once.
+  cleanups.push(config.subscribe(() => {
+    if (!done && !animationsAllowed(dashboardId)) cleanup('setting');
+  }));
   /** Start one animation; false when the browser can't animate (no element.animate). */
   let pending = 0;
   const run = (el: HTMLElement, frames: Keyframe[], opts: KeyframeAnimationOptions): boolean => {
     const anim = env.animate(el, frames, { easing: 'ease-in-out', ...opts });
     if (!anim) return false;
+    anims.push(anim);
     pending++;
     const end = () => {
       if (--pending <= 0) cleanup();
@@ -358,7 +443,7 @@ export function playDropAnimation(dashboardId: string, a: DropAnimation): boolea
             return el && ok(b) ? { el, b } : null;
           };
           // The source puffs at once: a small scale-up, its edges moving at most GULP_MAX_EDGE_PX.
-          const source = measured(a.sourceId);
+          const source = a.puff === false ? null : measured(a.sourceId);
           if (source) {
             const s = releaseScale(source.b.width, source.b.height);
             onFolder('data-drop-release', [
@@ -386,11 +471,14 @@ export function playDropAnimation(dashboardId: string, a: DropAnimation): boolea
             return cleanup();
           }
           // The item at its new spot stays hidden under the ghost and is revealed as it lands.
+          // It ends at the element's own opacity (a see-through tile stays see-through).
           if (landed) {
-            run(landed.el, [{ opacity: 0 }, { opacity: 0, offset: 0.85 }, { opacity: 1 }], { duration: OUT_MS, easing: 'linear' });
+            const own = env.opacity(landed.el);
+            const end = Number.isFinite(own) ? Math.min(1, Math.max(0, own)) : 1;
+            run(landed.el, [{ opacity: 0 }, { opacity: 0, offset: 0.85 }, { opacity: end }], { duration: OUT_MS, easing: 'linear' });
           }
           // Into another folder: it gulps as the item arrives.
-          const dest = a.intoId ? (into ?? measured(a.intoId)) : null;
+          const dest = a.intoId && a.gulp !== false ? (into ?? measured(a.intoId)) : null;
           if (dest) {
             const gulp = gulpScale(dest.b.width, dest.b.height);
             onFolder('data-drop-gulp', [
@@ -403,7 +491,7 @@ export function playDropAnimation(dashboardId: string, a: DropAnimation): boolea
         }
         if (--pending <= 0) cleanup();
       });
-      setTimeout(cleanup, OUT_TOTAL_MS + 300);
+      setTimeout(() => cleanup('fallback'), OUT_TOTAL_MS + 300);
       return !done;
     }
 
@@ -438,13 +526,12 @@ export function playDropAnimation(dashboardId: string, a: DropAnimation): boolea
         }
         if (--pending <= 0) cleanup();
       });
-      setTimeout(cleanup, INTO_TOTAL_MS + 300);
+      setTimeout(() => cleanup('fallback'), INTO_TOTAL_MS + 300);
       return !done;
     }
 
     // Merge: both tiles drawn together onto the new folder (measured once it is drawn), then it pops.
-    if (!ok(a.to)) return false;
-    const target = a.to;
+    const target = a.to as Box;
     const dragged = ghost(a.from, a.label, 'merge');
     const targetGhost = ghost(target, a.targetLabel, 'merge');
     made.push(dragged, targetGhost);
@@ -485,7 +572,7 @@ export function playDropAnimation(dashboardId: string, a: DropAnimation): boolea
       }
       if (--pending <= 0) cleanup();
     });
-    setTimeout(cleanup, MERGE_TOTAL_MS + 300);
+    setTimeout(() => cleanup('fallback'), MERGE_TOTAL_MS + 300);
     return true;
   } catch (e) {
     fail(e);

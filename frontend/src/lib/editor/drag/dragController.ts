@@ -55,7 +55,10 @@ import { clearSelection, selectionInDraft, toggleNode } from '$lib/stores/nodeSe
 import { hitTest as domHitTest, type HitResult } from './hitTest';
 import { crumbDwellKey, dwellArgs, flowIndex, flowMarker, pageDwellKey } from './targets';
 import { drillUpTo, setFolderPage } from '$lib/stores/folderView';
-import { outStartBox, playDropAnimation, sayAnimationFailure, MERGE_DIALOG_CAP_MS, type Box as AnimBox } from './dropAnimation';
+import {
+  cancelDropAnimations, outStarts, playDropAnimation, playOutOfFolders, sayAnimationFailure, MERGE_DIALOG_CAP_MS,
+  type Box as AnimBox, type OutStart
+} from './dropAnimation';
 
 // ---------------------------------------------------------------- types
 
@@ -736,7 +739,8 @@ export function commitDrop(state: DragState): void {
       if (opened) return;
       opened = true;
       const now = currentDraft();
-      if (!now || !locate(now, folderId) || get(editorDialog) !== null) return;
+      // Not over a new drag that interrupted the animation (cancelDropAnimations ends it early).
+      if (!now || !locate(now, folderId) || get(editorDialog) !== null || current !== null) return;
       openDialog({ kind: 'folder', id: folderId });
     };
     let animating = false;
@@ -775,12 +779,11 @@ export function commitDrop(state: DragState): void {
     at = t.at;
   }
   const label = `${state.copy ? 'Copied' : 'Moved'} ${describe(d, state.ids)} to ${destName(d, to)}`;
-  // §8.1: leaving a folder (for the tab, another folder or an outer box) — where it was is measured
-  // now, before the change is drawn, so it can pop out of there.
-  const src = containerOfNode(d, state.ids[0]);
-  const leaving = src?.folderId !== undefined && !sameRef(src, to) ? src.folderId : undefined;
-  let outFrom: AnimBox | null = null;
-  if (leaving) decorate(() => { outFrom = outStartBox(d.id, state.ids[0], leaving); });
+  // §8.1: the items leaving a folder (for the tab, another folder or an outer box) — where each was
+  // is measured now, before the change is drawn, so each can pop out of there.
+  const leaving = leavingFolders(d, state.ids, to);
+  let starts: OutStart[] = [];
+  if (leaving.length) decorate(() => { starts = outStarts(d.id, leaving); });
   let newIds: string[] = [];
   const ok = apply(label, (dd) => {
     if (!state.copy) return moveBetween(dd, state.ids, to, at, push);
@@ -796,15 +799,14 @@ export function commitDrop(state: DragState): void {
     forgetMovedOutFolders(before, state.ids, to); // §3a.3: drawn minimised on the tab
   }
   announce(label, before);
-  if (leaving) {
-    const landed = state.copy ? newIds[0] : state.ids[0];
-    decorate(() => {
-      const from = outFrom ?? ghostBox(state);
-      if (!from) return;
-      playDropAnimation(d.id, {
-        kind: 'out', from, label: state.ghost?.label ?? '', sourceId: leaving, landedId: landed, intoId: to.folderId
-      });
-    });
+  if (leaving.length) {
+    decorate(() => playOutOfFolders(d.id, starts, {
+      landed: (id) => (state.copy ? newIds[state.ids.indexOf(id)] : id),
+      label: (id) => findIn(d, id)?.name ?? '',
+      intoId: to.folderId,
+      // The grabbed item, if it isn't drawn: where its ghost was at the drop.
+      fallbackFrom: (id) => (id === state.ids[0] ? ghostBox(state) : null)
+    }));
   }
   // M6 §7.13 / Ruling 5: into a folder (a minimised one, an open one's bar or page, a sub-folder tile,
   // a drilled-in inner box) the dropped item flies into it and the folder gulps. A reorder inside the same folder is not a drop "into", so it is not animated.
@@ -842,6 +844,16 @@ function decorate(fn: () => void): void {
   } catch (e) {
     sayAnimationFailure(e); // said once per page with a toast, not only logged (review M1)
   }
+}
+
+/** §8.1: the moved items that leave a folder for somewhere else, each with the folder it leaves. */
+function leavingFolders(d: LayoutDashboard, ids: string[], to: ContainerRef): { id: string; sourceId: string }[] {
+  const out: { id: string; sourceId: string }[] = [];
+  for (const id of ids) {
+    const src = containerOfNode(d, id);
+    if (src?.folderId !== undefined && !sameRef(src, to)) out.push({ id, sourceId: src.folderId });
+  }
+  return out;
 }
 
 /** Where the ghost was drawn at the drop (viewport px), as DragLayer draws it. */
@@ -941,6 +953,9 @@ function beginDragging(d: LayoutDashboard, s: DragState) {
     else document.body.classList.add('hops-dragging');
   }
   setState(s);
+  // A new drag stops any drop animation still running: the item just landed is drawn as it is
+  // (never left hidden under a ghost) and can be dragged again at once.
+  cancelDropAnimations();
   pending = { ...s.pointer };
   schedule();
 }

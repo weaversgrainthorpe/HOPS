@@ -6,6 +6,7 @@
 	import { onMount } from 'svelte';
 	import { config, currentRoute, loadConfig, migrationFailure, resolveDashboardRoute, showMigrationFailedPage } from '$lib/stores/config';
 	import { beforeNavigate, goto } from '$app/navigation';
+	import { cancelDropAnimations } from '$lib/editor/drag/dropAnimation';
 	import { get } from 'svelte/store';
 	import { untrack } from 'svelte';
 	import { guardNavigation, guardUnload } from '$lib/stores/editSession';
@@ -36,6 +37,7 @@
 	// them). The reveal bookkeeping below only runs for a navigation that goes ahead.
 	beforeNavigate((nav) => {
 		if (guardNavigation(nav, (href) => goto(href))) return;
+		cancelDropAnimations(); // §8.1: no drop animation outlives the page it was drawn on
 		const { to } = nav;
 		const seg = to?.params?.dashboard;
 		const cfg = get(config);

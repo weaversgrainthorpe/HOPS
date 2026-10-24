@@ -27,7 +27,7 @@ import { confirm } from '$lib/stores/confirmModal';
 import { toast } from '$lib/stores/toast';
 import { clearSelection, toggleNode } from '$lib/stores/nodeSelection';
 import { closeDrilledInto, forgetFolderMemory } from '$lib/stores/folderView';
-import { outStartBox, playDropAnimation, sayAnimationFailure } from './drag/dropAnimation';
+import { outStarts, playOutOfFolders, sayAnimationFailure, type OutStart } from './drag/dropAnimation';
 import { isValidUrl } from '$lib/utils/url';
 
 export type Cell = { x: number; y: number };
@@ -463,10 +463,13 @@ export function zOrderSelection(ids: string[], _dir: 'forward' | 'back'): boolea
 export function moveOrCopyTo(ids: string[], to: ContainerRef, mode: 'move' | 'copy'): boolean {
   const d = currentDraft();
   if (!d || ids.length === 0) return false;
-  // §8.1: out of a folder, it pops out of where it was (measured now, before the change is drawn).
-  const src = containerOfNode(d, ids[0]);
-  const leaving = src?.folderId !== undefined && (src.folderId !== to.folderId || src.tabId !== to.tabId) ? src.folderId : undefined;
-  const outFrom = leaving ? safely(() => outStartBox(d.id, ids[0], leaving)) : null;
+  // §8.1: each item leaving a folder pops out of where it was (measured now, before the change is drawn).
+  const leaving: { id: string; sourceId: string }[] = [];
+  for (const id of ids) {
+    const src = containerOfNode(d, id);
+    if (src?.folderId !== undefined && (src.folderId !== to.folderId || src.tabId !== to.tabId)) leaving.push({ id, sourceId: src.folderId });
+  }
+  const starts: OutStart[] = leaving.length ? (safely(() => outStarts(d.id, leaving)) ?? []) : [];
   let newIds: string[] = [];
   const ok = apply(mode === 'move' ? 'Move' : 'Copy', (dd) => {
     const nodes = nodesOf(dd, ids);
@@ -483,11 +486,11 @@ export function moveOrCopyTo(ids: string[], to: ContainerRef, mode: 'move' | 'co
     newIds.forEach((id) => toggleNode(id, true));
   }
   if (ok && mode === 'move') forgetMovedOutFolders(d, ids, to);
-  if (ok && leaving && outFrom) {
-    const from = outFrom;
-    safely(() => playDropAnimation(d.id, {
-      kind: 'out', from, label: findIn(d, ids[0])?.name ?? '', sourceId: leaving,
-      landedId: mode === 'copy' ? newIds[0] : ids[0], intoId: to.folderId
+  if (ok && starts.length) {
+    safely(() => playOutOfFolders(d.id, starts, {
+      landed: (id) => (mode === 'copy' ? newIds[ids.indexOf(id)] : id),
+      label: (id) => findIn(d, id)?.name ?? '',
+      intoId: to.folderId
     }));
   }
   return ok;
