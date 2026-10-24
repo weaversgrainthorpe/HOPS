@@ -10,7 +10,6 @@
   import BackupModal from '$lib/components/admin/BackupModal.svelte';
   import MigrationFailed from '$lib/components/MigrationFailed.svelte';
   import NoticesBanner from '$lib/components/NoticesBanner.svelte';
-  import BackendStatus from '$lib/components/BackendStatus.svelte';
   import { provideSettingsShell } from './settingsShell';
 
   // Settings is the one admin home (spec §4D), one page per section (M5 §9): this shell is shared
@@ -151,7 +150,6 @@
         <p class="muted" role="status">Checking sign-in…</p>
       {:else if needsLogin}
         <p class="muted">Sign in to manage HOPS.</p>
-        <div class="status-section"><BackendStatus /></div>
       {:else if $mustChangePassword}
         <p class="muted" role="status">Set a new password to continue.</p>
       {:else}
@@ -163,7 +161,6 @@
           {@render children()}
         </div>
 
-        <div class="status-section"><BackendStatus /></div>
       {/if}
     </div>
   </div>
@@ -323,11 +320,6 @@
 
   .muted {
     color: var(--text-secondary);
-  }
-
-  .status-section {
-    margin-top: 2.5rem;
-    max-width: 300px;
   }
 
   .offline-banner {

@@ -1,9 +1,11 @@
 <script lang="ts">
-  import Icon from '@iconify/svelte';
   import { onMount, onDestroy } from 'svelte';
   import { backendStatus } from '$lib/stores/backendStatus';
-  import { COLORS } from '$lib/constants/colors';
 
+  // A small status dot for the page header (M6 §7.12): green online, red offline, amber when the
+  // check itself errored, grey while checking. The version and round-trip time live in a tooltip
+  // that hover, keyboard focus or a tap opens. The colour is never the only signal: the button's
+  // accessible name says the state, so the failure is not silent.
   onMount(() => {
     backendStatus.startPolling(30000);
   });
@@ -12,131 +14,149 @@
     backendStatus.stopPolling();
   });
 
-  const statusIcon = $derived(
-    $backendStatus.status === 'checking' ? 'mdi:loading' :
-    $backendStatus.status === 'online' ? 'mdi:check-circle' :
-    $backendStatus.status === 'offline' ? 'mdi:close-circle' :
-    'mdi:alert-circle'
+  const tipId = `backend-status-tip-${Math.random().toString(36).slice(2, 8)}`;
+  let hovered = $state(false);
+  let focused = $state(false);
+  let pinned = $state(false);
+  let open = $derived(hovered || focused || pinned);
+
+  const label = $derived(
+    $backendStatus.status === 'checking' ? 'Backend checking' :
+    $backendStatus.status === 'online' ? 'Backend online' :
+    $backendStatus.status === 'offline' ? 'Backend offline' :
+    'Backend error'
   );
 
-  const statusColor = $derived(
-    $backendStatus.status === 'checking' ? 'var(--text-secondary)' :
-    $backendStatus.status === 'online' ? COLORS.success.alt :
-    $backendStatus.status === 'offline' ? COLORS.error.DEFAULT :
-    COLORS.warning.DEFAULT
-  );
-
-  const statusText = $derived(
-    $backendStatus.status === 'checking' ? 'Backend: Checking...' :
-    $backendStatus.status === 'online' ? 'Backend: Online' :
-    $backendStatus.status === 'offline' ? 'Backend: Offline' :
-    'Backend: Error'
-  );
+  function onKey(e: KeyboardEvent) {
+    if (e.key === 'Escape' && open) {
+      hovered = focused = pinned = false;
+    }
+  }
+  // A press elsewhere un-pins a tapped tooltip.
+  function onWindowPointerDown(e: PointerEvent) {
+    const t = e.target as HTMLElement | null;
+    if (pinned && !t?.closest?.('.backend-dot-wrap')) pinned = false;
+  }
 </script>
 
-<div class="backend-status">
-  <div class="status-indicator" style:--status-color={statusColor}>
-    <Icon icon={statusIcon} width="20" class={$backendStatus.status === 'checking' ? 'spin' : ''} />
-    <span class="status-text">{statusText}</span>
-  </div>
+<svelte:window onpointerdown={onWindowPointerDown} />
 
-  {#if $backendStatus.status === 'online'}
-    <div class="status-details">
-      {#if $backendStatus.version}
-        <span class="detail">
-          <Icon icon="mdi:tag" width="14" />
-          v{$backendStatus.version}
-        </span>
+<span
+  class="backend-dot-wrap"
+  role="presentation"
+  onmouseenter={() => (hovered = true)}
+  onmouseleave={() => (hovered = false)}
+>
+  <button
+    type="button"
+    class="backend-dot-btn"
+    data-status={$backendStatus.status}
+    aria-label={label}
+    aria-describedby={open ? tipId : undefined}
+    onfocus={() => (focused = true)}
+    onblur={() => (focused = false)}
+    onclick={() => (pinned = !pinned)}
+    onkeydown={onKey}
+  >
+    <span class="backend-dot" class:pulse={$backendStatus.status === 'checking'} aria-hidden="true"></span>
+  </button>
+
+  {#if open}
+    <div class="backend-tip" role="tooltip" id={tipId}>
+      <strong>{label}</strong>
+      {#if $backendStatus.status === 'online'}
+        {#if $backendStatus.version}<span>v{$backendStatus.version}</span>{/if}
+        {#if $backendStatus.responseTime !== null}<span>{$backendStatus.responseTime} ms</span>{/if}
+      {:else if $backendStatus.status === 'offline'}
+        <span>Backend unreachable</span>
+        <button type="button" class="retry-btn" onclick={() => backendStatus.check()}>Retry</button>
+      {:else if $backendStatus.status === 'error'}
+        <span>The status check failed</span>
+        <button type="button" class="retry-btn" onclick={() => backendStatus.check()}>Retry</button>
       {/if}
-      {#if $backendStatus.responseTime !== null}
-        <span class="detail">
-          <Icon icon="mdi:clock-fast" width="14" />
-          {$backendStatus.responseTime}ms
-        </span>
-      {/if}
-    </div>
-  {:else if $backendStatus.status === 'offline'}
-    <div class="status-error">
-      <span>Backend unreachable at :8080</span>
-      <button class="retry-btn" onclick={() => backendStatus.check()}>
-        <Icon icon="mdi:refresh" width="14" />
-        Retry
-      </button>
     </div>
   {/if}
-</div>
+</span>
 
 <style>
-  .backend-status {
+  .backend-dot-wrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  /* 24px target around a 12px dot. */
+  .backend-dot-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    background: none;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+  }
+
+  .backend-dot-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+
+  .backend-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #6b7280;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+  }
+
+  [data-status='online'] .backend-dot { background: #22c55e; }
+  [data-status='offline'] .backend-dot { background: #ef4444; }
+  [data-status='error'] .backend-dot { background: #f59e0b; }
+
+  .pulse {
+    animation: backend-pulse 1s ease-in-out infinite;
+  }
+
+  @keyframes backend-pulse {
+    50% { opacity: 0.4; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pulse { animation: none; }
+  }
+
+  .backend-tip {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    z-index: 60;
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
-    padding: 0.75rem 1rem;
-    background: var(--bg-tertiary);
-    border-radius: 0.5rem;
+    gap: 0.2rem;
+    min-width: max-content;
+    padding: 0.4rem 0.6rem;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
     border: 1px solid var(--border);
-  }
-
-  .status-indicator {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    color: var(--status-color);
-    font-weight: 600;
-  }
-
-  .status-text {
-    font-size: 0.875rem;
-  }
-
-  .status-details {
-    display: flex;
-    gap: 1rem;
-    padding-left: 1.75rem;
-  }
-
-  .detail {
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
-    font-size: 0.75rem;
-    color: var(--text-secondary);
-  }
-
-  .status-error {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding-left: 1.75rem;
-    font-size: 0.75rem;
-    color: var(--text-secondary);
+    border-radius: 0.4rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    font-size: 0.8rem;
+    font-weight: 400;
+    white-space: nowrap;
   }
 
   .retry-btn {
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
-    padding: 0.25rem 0.5rem;
-    background: var(--bg-secondary);
+    align-self: flex-start;
+    padding: 0.15rem 0.5rem;
+    background: var(--bg-tertiary);
     border: 1px solid var(--border);
     border-radius: 0.25rem;
     color: var(--text-primary);
     font-size: 0.75rem;
     cursor: pointer;
-    transition: all 0.2s;
-  }
-
-  .retry-btn:hover {
-    background: var(--bg-primary);
-    border-color: var(--accent);
-  }
-
-  :global(.spin) {
-    animation: spin 1s linear infinite;
-  }
-
-  @keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
   }
 </style>

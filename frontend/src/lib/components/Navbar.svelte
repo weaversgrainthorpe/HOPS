@@ -16,6 +16,7 @@
   import HelpModal from './HelpModal.svelte';
   import AboutModal from './AboutModal.svelte';
   import LoginDialog from './LoginDialog.svelte';
+  import BackendStatus from './BackendStatus.svelte';
 
   let { onSearch }: { onSearch?: () => void } = $props();
 
@@ -330,6 +331,8 @@
           </a>
         {/if}
       {/if}
+      <!-- The backend status dot (M6 §7.12) sits next to the logo, and stays even when the logo is hidden. -->
+      <BackendStatus />
     </div>
 
     <!-- The title, centred (M5 §8). Signed in, it is the dashboard switcher (Ruling 16); with the title
@@ -548,7 +551,7 @@
   .nav-left {
     display: flex;
     align-items: center;
-    gap: 2rem;
+    gap: 0.25rem;
     justify-content: flex-start;
     flex: 1 1 0;
   }
@@ -868,7 +871,7 @@
     }
 
     .nav-left {
-      gap: 1rem;
+      gap: 0.125rem;
     }
 
     .center-title {
@@ -973,7 +976,7 @@
     }
 
     .c1 .nav-left {
-      gap: 1rem;
+      gap: 0.125rem;
     }
 
     .c1 .nav-right {
@@ -995,7 +998,7 @@
   }
 
   .c4 .nav-left {
-    gap: 0.5rem;
+    gap: 0.125rem;
   }
 
   .c4 .nav-right {

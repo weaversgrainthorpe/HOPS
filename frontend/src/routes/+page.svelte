@@ -6,7 +6,6 @@
     config, configLoading, configError, migrationFailure, dashboards, dashboardHref, loadConfig
   } from '$lib/stores/config';
   import MigrationFailed from '$lib/components/MigrationFailed.svelte';
-  import BackendStatus from '$lib/components/BackendStatus.svelte';
   import Button from '$lib/components/shared/Button.svelte';
 
   // "/" shows a dashboard (spec §4D): it forwards to the first one, in display order. The admin
@@ -48,7 +47,6 @@
           Retry
         </Button>
       </div>
-      <BackendStatus />
     </div>
   {:else if first && redirectError}
     <div class="card load-failed" role="alert">
