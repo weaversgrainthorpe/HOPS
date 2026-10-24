@@ -68,3 +68,4 @@ test-results/
 # superpowers scratch (brainstorm mockups, SDD ledgers)
 /.superpowers/
 data.moved-*/
+design/feedback/
