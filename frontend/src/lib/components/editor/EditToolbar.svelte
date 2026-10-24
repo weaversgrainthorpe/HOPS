@@ -10,6 +10,7 @@
   import { get } from 'svelte/store';
   import { drag } from '$lib/editor/drag/dragController';
   import EditHandle from './EditHandle.svelte';
+  import { playSavedTick } from '$lib/editor/drag/flourishes';
   import BackgroundFailedBadge from '../background/BackgroundFailedBadge.svelte';
   import type { Background } from '$lib/types';
 
@@ -50,11 +51,15 @@
   const canUndo = $derived(($session?.undo.length ?? 0) > 0);
   const canRedo = $derived(($session?.redo.length ?? 0) > 0);
 
+  let tickEl = $state<HTMLElement | null>(null);
   async function doSave() {
     if (saving) return;
     saving = true;
+    const dashboardId = $session?.dashboardId;
+    const wasDirty = get(dirty);
     try {
-      await save();
+      // §9: the tick shows only after a save that really wrote something; a failure keeps its error.
+      if ((await save()) === 'saved' && wasDirty) playSavedTick(dashboardId, tickEl);
     } finally {
       saving = false;
     }
@@ -142,9 +147,13 @@
 <div class="edit-toolbar" role="toolbar" aria-label="Editing" bind:this={barEl}>
   <div class="controls">
     <div class="group">
-      <button type="button" class="tb primary" onclick={doSave} disabled={!$dirty || saving} title="Save (Ctrl+S)">
-        <Icon icon="mdi:content-save" width="18" /> Save
-      </button>
+      <span class="save-slot">
+        <button type="button" class="tb primary" onclick={doSave} disabled={!$dirty || saving} title="Save (Ctrl+S)">
+          <Icon icon="mdi:content-save" width="18" /> Save
+        </button>
+        <!-- §9: drawn only while its flourish plays (invisible otherwise); the toast says "Changes saved" either way. -->
+        <span class="saved-tick" data-saved-tick aria-hidden="true" bind:this={tickEl}><Icon icon="mdi:check-circle" width="20" /></span>
+      </span>
       <button type="button" class="tb" onclick={() => discard()} disabled={!$dirty || saving} title="Discard all unsaved changes">
         <Icon icon="mdi:close-circle-outline" width="18" /> Discard
       </button>
@@ -254,6 +263,23 @@
     font-size: 0.875rem;
     white-space: nowrap;
     cursor: pointer;
+  }
+  .save-slot {
+    position: relative;
+    display: inline-flex;
+  }
+  .saved-tick {
+    position: absolute;
+    top: -0.55rem;
+    right: -0.55rem;
+    display: inline-flex;
+    color: #fff;
+    background: var(--success-solid, #15803d);
+    border-radius: 50%;
+    padding: 1px;
+    opacity: 0;
+    pointer-events: none;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
   }
   .tb:hover:not(:disabled) {
     border-color: var(--accent);

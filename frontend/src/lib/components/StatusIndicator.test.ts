@@ -8,6 +8,11 @@ import { getStatus } from '$lib/utils/api';
 import Entry from './Entry.svelte';
 import { config } from '$lib/stores/config';
 import type { Entry as EntryType } from '$lib/types';
+import { get } from 'svelte/store';
+import { tick } from 'svelte';
+import { statusStore, type StatusInfo } from '$lib/stores/status';
+import { FOLDER_VIEW_CONTEXT } from '$lib/stores/folderView';
+import { setAnimationEnv } from '$lib/editor/drag/dropAnimation';
 
 // M4 Task 7: the badge follows the RESOLVED setting (status response), not just an explicit
 // tile flag; a 'disabled' tile says which level switched it off.
@@ -81,5 +86,54 @@ describe('status badge and tooltip', () => {
       )
     );
     expect(badge(container)!.classList.contains('invalid')).toBe(true);
+  });
+});
+
+describe('§9 status change pulse', () => {
+  const pulses: Element[] = [];
+  const ctx = () => new Map<string, unknown>([[FOLDER_VIEW_CONTEXT, { dashboardId: 'd1', remembered: () => undefined, saved: () => undefined }]]);
+  beforeEach(() => {
+    pulses.length = 0;
+    setAnimationEnv({
+      reducedMotion: () => false,
+      animate: (el) => {
+        pulses.push(el);
+        return { onfinish: null, oncancel: null, cancel() {} } as unknown as Animation;
+      }
+    });
+    const c = get(config)!;
+    config.set({ ...c, dashboards: c.dashboards.map((d) => ({ ...d, display: { animatedFolderBackgrounds: false, animations: 'on' } })) });
+  });
+
+  const setStatus = (s: StatusInfo['status']) =>
+    statusStore.update((m) => new Map(m).set('e1', { status: s }));
+
+  it('no pulse on first load; two changes (offline, then back) pulse the dot each time; the same status again does not', async () => {
+    vi.mocked(getStatus).mockResolvedValue({ status: 'up' });
+    const { container } = render(Entry, { props: { entry: withCheck(true) }, context: ctx() });
+    await waitFor(() => expect(badge(container)?.getAttribute('title')).toBe('Online'));
+    await tick();
+    expect(pulses).toHaveLength(0);
+    setStatus('down');
+    await tick();
+    expect(pulses).toHaveLength(1);
+    expect(pulses[0]).toBe(container.querySelector('.status-badge'));
+    setStatus('down');
+    await tick();
+    expect(pulses).toHaveLength(1);
+    setStatus('up');
+    await tick();
+    expect(pulses).toHaveLength(2);
+  });
+
+  it('animations Off: no pulse; drawn outside a dashboard canvas (no context): no pulse', async () => {
+    const c = get(config)!;
+    config.set({ ...c, dashboards: c.dashboards.map((d) => ({ ...d, display: { animatedFolderBackgrounds: false, animations: 'off' } })) });
+    vi.mocked(getStatus).mockResolvedValue({ status: 'up' });
+    const { container } = render(Entry, { props: { entry: withCheck(true) }, context: ctx() });
+    await waitFor(() => expect(badge(container)?.getAttribute('title')).toBe('Online'));
+    setStatus('down');
+    await tick();
+    expect(pulses).toHaveLength(0);
   });
 });

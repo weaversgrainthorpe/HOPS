@@ -59,6 +59,11 @@ export const DELETE_SCALE = 0.6;
 export const GLIDE_MS = 220;
 /** 7. A new item (and an undone delete) pops in: scale 0.6 → 1.05 → 1. */
 export const POP_IN_MS = 280;
+/** 6. The Save tick. */
+export const SAVED_MS = 900;
+/** 9. The status dot's double pulse, and its largest scale. */
+export const PULSE_MS = 900;
+export const PULSE_SCALE = 1.6;
 /** Tenet 4: at most this many items animate for one edit. The rest snap. */
 export const MAX_ANIMATED = 40;
 
@@ -450,6 +455,49 @@ export function watchEdits(): () => void {
       sayAnimationFailure(e); // the edit itself is already made
     }
   });
+}
+
+// ---- 6. Saved -----------------------------------------------------------------------------------
+
+/** After a successful save only: the tick by the Save control appears, settles and fades. */
+export function playSavedTick(dashboardId: string | undefined, el: HTMLElement | null): boolean {
+  if (!el || !allowed(dashboardId)) return false;
+  return !!run(dashboardId, [{
+    el, kind: 'saved', opts: { duration: SAVED_MS, easing: 'ease-out' },
+    frames: [
+      { transform: 'scale(0.5)', opacity: 0 },
+      { transform: 'scale(1.15)', opacity: 1, offset: 0.25 },
+      { transform: 'scale(1)', opacity: 1, offset: 0.45 },
+      { transform: 'scale(1)', opacity: 1, offset: 0.75 },
+      { transform: 'scale(1)', opacity: 0 }
+    ]
+  }]);
+}
+
+// ---- 9. Status change ---------------------------------------------------------------------------
+
+/** The statuses a pulse is for: a real result, never "checking" or "checks are off". */
+const REAL = new Set(['up', 'down', 'error', 'unknown']);
+
+/**
+ * True when a status change deserves a pulse: from one real result to a different one. The first
+ * result after loading is not a change.
+ */
+export function statusChanged(prev: string | undefined, next: string | undefined): boolean {
+  return !!prev && !!next && prev !== next && REAL.has(prev) && REAL.has(next);
+}
+
+/** A status dot pulses twice, then settles. */
+export function playStatusPulse(dashboardId: string | undefined, el: HTMLElement | null): boolean {
+  if (!el || !allowed(dashboardId)) return false;
+  const s = `scale(${PULSE_SCALE})`;
+  return !!run(dashboardId, [{
+    el, kind: 'status-pulse', opts: { duration: PULSE_MS, easing: 'ease-in-out' },
+    frames: [
+      { transform: 'scale(1)' }, { transform: s, offset: 0.25 }, { transform: 'scale(1)', offset: 0.5 },
+      { transform: s, offset: 0.75 }, { transform: 'scale(1)' }
+    ]
+  }]);
 }
 
 onAnimationReset(() => {

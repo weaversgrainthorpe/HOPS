@@ -459,4 +459,121 @@ test.describe('M6 §9 visual flourishes', () => {
     await page.mouse.up();
   });
 
+  test('6: the Save tick shows after a successful save, and never after a failed one', async ({ page, context }) => {
+    await setAnimations(page, context, 'on');
+    const f = await importDash(page, context);
+    await record(page);
+    await open(page, f);
+    await enterEdit(page);
+
+    // A failed save: the error is visible, no tick.
+    await node(page, f.id('t')).click();
+    await page.keyboard.press('Delete');
+    await page.getByRole('dialog', { name: /Delete/ }).getByRole('button', { name: 'Delete' }).click();
+    await settle(page);
+    await page.route('**/api/dashboards/**', (r) =>
+      r.request().method() === 'PUT' ? r.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"disk full"}' }) : r.fallback());
+    await clear(page);
+    await page.getByRole('toolbar', { name: 'Editing' }).getByRole('button', { name: /^Save/ }).click();
+    await expect(page.getByText(/Failed to save changes/)).toBeVisible();
+    await settle(page, 1100);
+    expect(stats(await samples(page), 'saved').n, 'no tick after a failed save').toBe(0);
+    await page.unroute('**/api/dashboards/**');
+
+    // A successful save: the tick appears, settles and fades (~900 ms).
+    await clear(page);
+    await save(page);
+    const t = stats(await samples(page), 'saved');
+    expect(t.dur).toBe(900);
+    expect(t.ms).toBeGreaterThanOrEqual(600);
+    expect(t.maxOp, 'it is seen').toBeGreaterThan(0.9);
+    expect(t.scale, 'it pops').toBeGreaterThan(0.1);
+    await expect(page.locator('[data-saved-tick]')).toHaveCSS('opacity', '0');
+  });
+
+  test('9: a status change pulses the dot twice; first load never does (view mode)', async ({ page, context }) => {
+    await setAnimations(page, context, 'on');
+    const f = await importDash(page, context);
+    let status = 'up';
+    await page.route('**/api/status/**', (r) => r.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({ status, responseTime: 12, lastChecked: new Date().toISOString(), intervalMinutes: 60, source: 'tile', sourceId: '' })
+    }));
+    await page.clock.install();
+    await record(page);
+    await open(page, f);
+    const dot = node(page, f.id('s')).locator('.status-badge > [role="img"]');
+    await expect(dot).toHaveAttribute('title', /Online/);
+    await page.waitForTimeout(1200);
+    expect(stats(await samples(page), 'status-pulse').n, 'no pulse on first load').toBe(0);
+
+    status = 'down';
+    await page.clock.fastForward(31_000); // the 30 s poll
+    await expect(dot).toHaveAttribute('title', /Offline/);
+    await page.waitForTimeout(1200);
+    const s = await samples(page);
+    const p = stats(s, 'status-pulse', 'status');
+    expect(p.dur).toBe(900);
+    expect(p.ms).toBeGreaterThanOrEqual(500);
+    expect(p.scale, 'it pulses (scale up to 1.6)').toBeGreaterThan(0.3);
+    // Two pulses: two peaks of its size, with a dip between them.
+    const ws = s.filter((x) => x.kind === 'status-pulse').map((x) => x.w);
+    const base = Math.min(...ws), top = Math.max(...ws);
+    let peaks = 0, up = false;
+    for (const w of ws) {
+      if (!up && w > base + (top - base) * 0.7) { peaks++; up = true; }
+      if (up && w < base + (top - base) * 0.3) up = false;
+    }
+    expect(peaks, 'twice').toBe(2);
+    await expect(page.locator('[data-flourish]')).toHaveCount(0);
+
+    // The same status again: no pulse.
+    await clear(page);
+    await page.clock.fastForward(31_000);
+    await page.waitForTimeout(1200);
+    expect(stats(await samples(page), 'status-pulse').n, 'no pulse without a change').toBe(0);
+  });
+
+  for (const how of ['off', 'reduced motion'] as const) {
+    test(`${how === 'off' ? 'Off' : 'On under reduced motion'}: no flourish plays for any of them`, async ({ page, context }) => {
+      await setAnimations(page, context, how === 'off' ? 'off' : 'on');
+      if (how === 'reduced motion') await page.emulateMedia({ reducedMotion: 'reduce' });
+      const f = await importDash(page, context);
+      let status = 'up';
+      await page.route('**/api/status/**', (r) => r.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({ status, lastChecked: new Date().toISOString(), intervalMinutes: 60 })
+      }));
+      await page.clock.install();
+      await record(page);
+      const errors = await open(page, f);
+      await expect(node(page, f.id('s')).locator('.status-badge > [role="img"]')).toHaveAttribute('title', /Online/);
+      await clear(page);
+      status = 'down';
+      await page.clock.fastForward(31_000);
+      await expect(node(page, f.id('s')).locator('.status-badge > [role="img"]')).toHaveAttribute('title', /Offline/);
+      await viewFlows(page, f);
+      await enterEdit(page);
+      await editFlows(page, f);
+      await save(page);
+      expect(await samples(page), 'nothing animated').toEqual([]);
+      await expect(page.locator('[data-testid="flourish-ghost"]')).toHaveCount(0);
+      expect(errors).toEqual([]);
+    });
+  }
+
+  test('the saved result is identical with animations On and Off', async ({ page, context }) => {
+    const shapes: unknown[] = [];
+    for (const mode of ['on', 'off'] as const) {
+      await setAnimations(page, context, mode);
+      const f = await importDash(page, context);
+      await open(page, f);
+      await viewFlows(page, f);
+      await enterEdit(page);
+      await editFlows(page, f);
+      await save(page);
+      shapes.push(await savedShape(page, f));
+    }
+    expect(shapes[0]).toEqual(shapes[1]);
+  });
 });

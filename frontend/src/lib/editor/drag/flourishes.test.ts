@@ -14,8 +14,8 @@ import {
   setAnimationEnv, resetDropAnimationForTests, cancelDropAnimations, claimFlourish, type AnimationEnv, type AnimationsMode, type Box
 } from './dropAnimation';
 import {
-  playFolderToggle, playDrill, playPageSlide, playEdit, watchEdits, flipFrom,
-  FOLDER_TOGGLE_MS, DRILL_MS, RECEDE_SCALE, PAGE_MS, GLIDE_MS, DELETE_MS, POP_IN_MS, MAX_ANIMATED
+  playFolderToggle, playDrill, playPageSlide, playEdit, watchEdits, playSavedTick, playStatusPulse, statusChanged, flipFrom,
+  FOLDER_TOGGLE_MS, DRILL_MS, RECEDE_SCALE, PAGE_MS, GLIDE_MS, DELETE_MS, POP_IN_MS, SAVED_MS, PULSE_MS, MAX_ANIMATED
 } from './flourishes';
 
 // M6 §9: visual flourishes on the drop animations' engine. Decoration only: the change is made first,
@@ -430,5 +430,52 @@ describe('4, 5, 7. edits: delete, glide, pop-in (and undo / redo)', () => {
     env({ drawnNodes: () => { throw new Error('boom'); } });
     expect(() => apply('Move', moveTo('b', p(6, 0)))).not.toThrow();
     expect(() => playEdit('d1', home(), home())).toThrow(); // direct call surfaces it; the watcher catches it
+  });
+});
+
+describe('6. saved tick', () => {
+  it('plays on the tick (~900 ms, transform/opacity) and not when animations are off', () => {
+    const el = document.createElement('span');
+    document.body.appendChild(el);
+    expect(playSavedTick('d1', el)).toBe(true);
+    expect(calls[0].opts.duration).toBe(SAVED_MS);
+    expect(el.getAttribute('data-flourish')).toBe('saved');
+    onlyTransformOpacity(calls[0].frames);
+    expect(calls[0].frames[0].opacity).toBe(0);
+    expect(calls[0].frames[calls[0].frames.length - 1].opacity).toBe(0);
+    setLayout(withAnimations('off'));
+    expect(el.hasAttribute('data-flourish')).toBe(false); // the setting change stopped it
+    expect(playSavedTick('d1', el)).toBe(false);
+    expect(playSavedTick(undefined, el)).toBe(false);
+  });
+});
+
+describe('9. status change pulse', () => {
+  it('a change is from one real result to another: never the first result, "checking" or "off"', () => {
+    expect(statusChanged(undefined, 'up')).toBe(false);
+    expect(statusChanged('loading', 'up')).toBe(false);
+    expect(statusChanged('up', 'up')).toBe(false);
+    expect(statusChanged('up', 'down')).toBe(true);
+    expect(statusChanged('down', 'up')).toBe(true);
+    expect(statusChanged('up', 'error')).toBe(true);
+    expect(statusChanged('disabled', 'up')).toBe(false);
+    expect(statusChanged('up', 'disabled')).toBe(false);
+  });
+
+  it('pulses twice (two peaks), then settles; nothing under Off or reduced motion; Always plays', () => {
+    const el = document.createElement('span');
+    document.body.appendChild(el);
+    expect(playStatusPulse('d1', el)).toBe(true);
+    const tf = calls[0].frames.map((f) => f.transform);
+    expect(tf.filter((t) => t !== 'scale(1)')).toHaveLength(2);
+    expect(tf[tf.length - 1]).toBe('scale(1)');
+    expect(calls[0].opts.duration).toBe(PULSE_MS);
+    onlyTransformOpacity(calls[0].frames);
+    reduced = true;
+    expect(playStatusPulse('d1', el)).toBe(false);
+    setLayout(withAnimations('always'));
+    expect(playStatusPulse('d1', el)).toBe(true);
+    setLayout(withAnimations('off'));
+    expect(playStatusPulse('d1', el)).toBe(false);
   });
 });

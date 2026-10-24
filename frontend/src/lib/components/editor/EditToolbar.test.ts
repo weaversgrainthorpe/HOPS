@@ -20,6 +20,7 @@ import { selectedNodes, toggleNode } from '$lib/stores/nodeSelection';
 import { nodeClipboard } from '$lib/stores/nodeClipboard';
 import { confirmModalState } from '$lib/stores/confirmModal';
 import { setLayout, resetEditor, startSession, draft, nodeIn, answerConfirm } from './editorTestKit';
+import * as kit from './editorTestKit';
 import type { FolderNode, LayoutNode } from '$lib/types/layout';
 import type { Background } from '$lib/types';
 import { reportBackgroundError, clearBackgroundErrors } from '$lib/stores/backgroundErrors';
@@ -222,5 +223,61 @@ describe('EditToolbar', () => {
     expect(get(confirmModalState).isOpen).toBe(false);
     expect(nodeIn(draft(), 'a')!.name).toBe('Changed');
     expect(get(nodeClipboard)).toBeNull();
+  });
+});
+
+describe('§9 saved tick', () => {
+  const animated: { el: Element; kind: string | null }[] = [];
+  beforeEach(async () => {
+    animated.length = 0;
+    const { setAnimationEnv } = await import('$lib/editor/drag/dropAnimation');
+    setAnimationEnv({
+      reducedMotion: () => false,
+      animate: (el) => {
+        animated.push({ el, kind: (el as HTMLElement).dataset.savedTick !== undefined ? 'tick' : null });
+        return { onfinish: null, oncancel: null, cancel() {} } as unknown as Animation;
+      }
+    });
+    setLayoutWithAnimations('on');
+  });
+  const setLayoutWithAnimations = (mode: 'on' | 'off') => {
+    resetEditor();
+    const { home, other } = kit;
+    const h = home();
+    h.display = { animatedFolderBackgrounds: false, animations: mode };
+    setLayout([h, other()]);
+    startSession();
+  };
+
+  it('a successful save shows the tick on the Save control', async () => {
+    vi.mocked(api.saveDashboardV3).mockResolvedValue({ revision: 6 });
+    render(EditToolbar, { tabId: 't1', onAddTab: vi.fn() });
+    rename('a', 'Changed');
+    await tick();
+    await fireEvent.click(screen.getByRole('button', { name: /^Save/ }));
+    await vi.waitFor(() => expect(animated.filter((a) => a.kind === 'tick')).toHaveLength(1));
+  });
+
+  it('a failed save never shows it (the failure keeps its visible error)', async () => {
+    vi.mocked(api.saveDashboardV3).mockRejectedValue(new Error('disk full'));
+    render(EditToolbar, { tabId: 't1', onAddTab: vi.fn() });
+    rename('a', 'Changed');
+    await tick();
+    await fireEvent.click(screen.getByRole('button', { name: /^Save/ }));
+    await vi.waitFor(() => expect(api.saveDashboardV3).toHaveBeenCalled());
+    await new Promise((r) => setTimeout(r, 0));
+    expect(animated.filter((a) => a.kind === 'tick')).toHaveLength(0);
+    expect(get(dirty)).toBe(true);
+  });
+
+  it('animations Off: a successful save shows no tick', async () => {
+    setLayoutWithAnimations('off');
+    vi.mocked(api.saveDashboardV3).mockResolvedValue({ revision: 6 });
+    render(EditToolbar, { tabId: 't1', onAddTab: vi.fn() });
+    rename('a', 'Changed');
+    await tick();
+    await fireEvent.click(screen.getByRole('button', { name: /^Save/ }));
+    await vi.waitFor(() => expect(get(dirty)).toBe(false));
+    expect(animated).toHaveLength(0);
   });
 });
