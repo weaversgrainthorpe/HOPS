@@ -534,6 +534,28 @@ test.describe('M6 §9 visual flourishes', () => {
     expect(stats(await samples(page), 'status-pulse').n, 'no pulse without a change').toBe(0);
   });
 
+  test('9: a failed first fetch followed by a reconnect is not a change: no pulse', async ({ page, context }) => {
+    await setAnimations(page, context, 'on');
+    const f = await importDash(page, context);
+    let reachable = false;
+    await page.route('**/api/status/**', (r) => reachable
+      ? r.fulfill({
+          status: 200, contentType: 'application/json',
+          body: JSON.stringify({ status: 'up', responseTime: 12, lastChecked: new Date().toISOString(), intervalMinutes: 60, source: 'tile', sourceId: '' })
+        })
+      : r.abort('failed'));
+    await page.clock.install();
+    await record(page);
+    await open(page, f);
+    const dot = node(page, f.id('s')).locator('.status-badge > [role="img"]');
+    await expect(dot).toHaveAttribute('title', /unavailable/i); // the failed fetch is shown, never hidden
+    reachable = true;
+    await page.clock.fastForward(31_000); // the 30 s poll reconnects
+    await expect(dot).toHaveAttribute('title', /Online/);
+    await page.waitForTimeout(1200);
+    expect(stats(await samples(page), 'status-pulse').n, 'no pulse: the first real result is not a change').toBe(0);
+  });
+
   for (const how of ['off', 'reduced motion'] as const) {
     test(`${how === 'off' ? 'Off' : 'On under reduced motion'}: no flourish plays for any of them`, async ({ page, context }) => {
       await setAnimations(page, context, how === 'off' ? 'off' : 'on');

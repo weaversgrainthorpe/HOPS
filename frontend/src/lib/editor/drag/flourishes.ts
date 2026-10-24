@@ -144,7 +144,12 @@ function run(dashboardId: string, parts: Part[], ghosts: HTMLElement[] = []): ((
     stop();
     return null;
   }
-  setTimeout(() => stop('fallback'), longest + 300);
+  const fallback = setTimeout(() => stop('fallback'), longest + 300);
+  const clearFallback = untrack;
+  untrack = () => {
+    clearTimeout(fallback);
+    clearFallback();
+  };
   return () => stop('interrupted');
 }
 
@@ -227,9 +232,15 @@ function nextFrame(fn: () => void, onCancel?: () => void): void {
  */
 export function playFolderToggle(dashboardId: string, folderId: string, to: 'open' | 'minimise'): void {
   if (!allowed(dashboardId)) return;
-  const before = measured(folderId);
-  if (!before) return;
-  claimFlourish([folderId]);
+  let before: { el: HTMLElement; box: Box } | null;
+  try {
+    before = measured(folderId);
+    if (!before) return;
+    claimFlourish([folderId]);
+  } catch (e) {
+    sayAnimationFailure(e); // never stops the open or minimise itself
+    return;
+  }
   nextFrame(() => {
     const after = measured(folderId);
     if (!after) return;
@@ -249,8 +260,14 @@ export function playFolderToggle(dashboardId: string, folderId: string, to: 'ope
  */
 export function playDrill(dashboardId: string, subId: string, outerId: string, dir: 'in' | 'up'): void {
   if (!allowed(dashboardId)) return;
-  const before = measured(subId);
-  claimFlourish([subId, outerId]);
+  let before: { el: HTMLElement; box: Box } | null;
+  try {
+    before = measured(subId);
+    claimFlourish([subId, outerId]);
+  } catch (e) {
+    sayAnimationFailure(e); // never stops the drill itself
+    return;
+  }
   nextFrame(() => {
     const parts: Part[] = [];
     const after = before ? measured(subId) : null;
@@ -439,6 +456,21 @@ export function playEdit(dashboardId: string, before: LayoutDashboard, after: La
   }, () => ghostEls.forEach((g) => g.remove()));
 }
 
+/** What decides where everything is drawn: each node's id, container, placement, sizes and view. */
+function layoutKey(d: LayoutDashboard): string {
+  const out: unknown[] = [];
+  const walk = (c: Container | undefined, at: string) => {
+    for (const n of Array.isArray(c?.children) ? c!.children : []) {
+      if (!n) continue;
+      const x = n as unknown as Record<string, unknown>;
+      out.push([at, x.id, x.kind, x.placement, x.size, x.display, x.contentSize, x.shape, x.tabPosition]);
+      if (n.kind === 'folder') walk(n.content, String(x.id));
+    }
+  };
+  for (const t of Array.isArray(d?.tabs) ? d.tabs : []) walk(t.root, `tab:${t.id}:${t.root?.columns}`);
+  return JSON.stringify(out);
+}
+
 /**
  * Watch the edit session: every change of the draft (an edit, Undo, Redo, Discard) is drawn with
  * playEdit. Starting a session or switching dashboards is not an edit. Returns the unsubscribe.
@@ -449,6 +481,9 @@ export function watchEdits(): () => void {
     const p = prev;
     prev = s;
     if (!s || !p || p.dashboardId !== s.dashboardId || p.draft === s.draft) return;
+    // A save that took the server's copy of the draft: when its layout is the one on screen, nothing
+    // moved, so no pass runs (it would only snap the glides still playing).
+    if (s.saved !== p.saved && s.draft === s.saved && layoutKey(p.draft) === layoutKey(s.draft)) return;
     try {
       playEdit(s.dashboardId, p.draft, s.draft);
     } catch (e) {
@@ -477,7 +512,7 @@ export function playSavedTick(dashboardId: string | undefined, el: HTMLElement |
 // ---- 9. Status change ---------------------------------------------------------------------------
 
 /** The statuses a pulse is for: a real result, never "checking" or "checks are off". */
-const REAL = new Set(['up', 'down', 'error', 'unknown']);
+const REAL = new Set(['up', 'down', 'error']); // 'unknown' (a failed or first-ever fetch) is no result
 
 /**
  * True when a status change deserves a pulse: from one real result to a different one. The first

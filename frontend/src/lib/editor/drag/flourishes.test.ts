@@ -6,7 +6,10 @@ vi.mock('$lib/utils/api', async () => ({
   getConfig: vi.fn(async () => { throw new Error('offline in tests'); })
 }));
 
-import { apply, undo, redo } from '$lib/stores/editSession';
+import { apply, undo, redo, save } from '$lib/stores/editSession';
+import * as api from '$lib/utils/api';
+import { get } from 'svelte/store';
+import { session } from '$lib/stores/editSession';
 import { deleteNodes } from '$lib/editor/treeOps';
 import type { LayoutDashboard, LayoutNode } from '$lib/types/layout';
 import { setLayout, resetEditor, startSession, home, other, tile, p } from '$lib/components/editor/editorTestKit';
@@ -151,6 +154,27 @@ describe('1. folder open / minimise', () => {
       flush();
       expect(calls.length > 0, `${mode} reduced=${red}`).toBe(plays);
     }
+  });
+});
+
+describe('guards', () => {
+  it('a failing measurement before an open, minimise or drill never stops the change (said, not thrown)', () => {
+    env({ findNode: () => { throw new Error('boom'); } });
+    expect(() => playFolderToggle('d1', 'f', 'open')).not.toThrow();
+    expect(() => playDrill('d1', 'sub', 'top', 'in')).not.toThrow();
+    expect(() => playDrill('d1', 'sub', 'top', 'up')).not.toThrow();
+    flush();
+    expect(calls).toHaveLength(0);
+  });
+
+  it('the fallback timer is cleared when a flourish ends', () => {
+    const el = document.createElement('span');
+    document.body.appendChild(el);
+    const before = vi.getTimerCount();
+    playStatusPulse('d1', el);
+    expect(vi.getTimerCount()).toBe(before + 1);
+    calls[0].anim.finish();
+    expect(vi.getTimerCount()).toBe(before);
   });
 });
 
@@ -416,6 +440,24 @@ describe('4, 5, 7. edits: delete, glide, pop-in (and undo / redo)', () => {
     expect(calls).toHaveLength(0);
   });
 
+  it('a save that brings back the same layout (the server\'s copy) never snaps a running glide', async () => {
+    const b = node('b', B(120, 0));
+    apply('Move', moveTo('b', p(6, 0)));
+    boxes.set(b, B(360, 0));
+    flush();
+    const glide = calls[0];
+    expect(glide.el).toBe(b);
+    // The server's normalised copy: the same layout, one field filled in (so a new object, not the draft).
+    const stored = { ...structuredClone(get(session)!.draft), revision: 6 };
+    (stored.tabs[0].root.children[0] as unknown as Record<string, unknown>).textOpacity = 1;
+    vi.mocked(api.saveDashboardV3).mockResolvedValue({ revision: 6, layout: { layoutVersion: 2, dashboards: [stored, other()] } } as never);
+    expect(await save()).toBe('saved');
+    expect(get(session)!.draft).not.toBe(stored); // the draft was replaced by a copy of the stored layout
+    flush();
+    expect(glide.anim.cancelled, 'the glide keeps running').toBe(false);
+    expect(calls).toHaveLength(1);
+  });
+
   it('a new edit stops the last one first, so it measures resting boxes', () => {
     const b = node('b', B(120, 0));
     apply('Move', moveTo('b', p(6, 0)));
@@ -460,6 +502,10 @@ describe('9. status change pulse', () => {
     expect(statusChanged('up', 'error')).toBe(true);
     expect(statusChanged('disabled', 'up')).toBe(false);
     expect(statusChanged('up', 'disabled')).toBe(false);
+    // "unknown" is no result: a failed first fetch (or a first-ever probe) then a real one is not a change.
+    expect(statusChanged('unknown', 'up')).toBe(false);
+    expect(statusChanged('up', 'unknown')).toBe(false);
+    expect(statusChanged('unknown', 'down')).toBe(false);
   });
 
   it('pulses twice (two peaks), then settles; nothing under Off or reduced motion; Always plays', () => {
