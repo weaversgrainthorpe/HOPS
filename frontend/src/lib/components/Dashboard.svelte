@@ -398,6 +398,7 @@
               aria-label={`Switch to ${tab.name} tab`}
               title={editing ? 'Drag to reorder (or Alt+Left / Alt+Right); drop items here to move them to this tab' : undefined}
               data-drag-tab={editing ? tab.id : undefined}
+              data-tab-button={tab.id}
               use:tabSource={{ tabId: tab.id, enabled: editing }}
               onclick={() => handleTabClick(index)}
               ondblclick={editing ? () => editTabAt(tab.id) : undefined}

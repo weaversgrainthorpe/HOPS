@@ -464,10 +464,11 @@ export function moveOrCopyTo(ids: string[], to: ContainerRef, mode: 'move' | 'co
   const d = currentDraft();
   if (!d || ids.length === 0) return false;
   // §8.1: each item leaving a folder pops out of where it was (measured now, before the change is drawn).
-  const leaving: { id: string; sourceId: string }[] = [];
+  // Each with its tab: when the source isn't drawn (it is on another tab), it starts from that tab's button.
+  const leaving: { id: string; sourceId: string; tabId: string }[] = [];
   for (const id of ids) {
     const src = containerOfNode(d, id);
-    if (src?.folderId !== undefined && (src.folderId !== to.folderId || src.tabId !== to.tabId)) leaving.push({ id, sourceId: src.folderId });
+    if (src?.folderId !== undefined && (src.folderId !== to.folderId || src.tabId !== to.tabId)) leaving.push({ id, sourceId: src.folderId, tabId: src.tabId });
   }
   const starts: OutStart[] = leaving.length ? (safely(() => outStarts(d.id, leaving)) ?? []) : [];
   let newIds: string[] = [];

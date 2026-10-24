@@ -17,6 +17,7 @@ import {
   animationsSetting, animationsAllowed, playDropAnimation, setAnimationEnv, resetDropAnimationForTests,
   sayAnimationFailure, MERGE_DIALOG_CAP_MS, DROP_MS, GULP_MS, GULP_DELAY_MS, INTO_TOTAL_MS, GATHER_MS, POP_MS,
   POP_DELAY_MS, MERGE_TOTAL_MS, OUT_MS, RELEASE_MS, OUT_GULP_DELAY_MS, OUT_TOTAL_MS, GULP_MAX_EDGE_PX, releaseScale, cancelDropAnimations, OUT_MAX_ITEMS,
+  playOutOfFolders, MIN_LAND_PX, type OutStart,
   type AnimationEnv, type AnimationsMode
 } from './dropAnimation';
 import { moveOrCopyTo } from '../editorActions';
@@ -1030,5 +1031,242 @@ describe('multi-select out of folders (§8.1 fix round 1)', () => {
     expect(OUT_MAX_ITEMS).toBe(12);
     expect(layerEls()).toHaveLength(12);
     expect((nodeIn(draft(), 'f1') as FolderNode).content.children).toHaveLength(0);
+  });
+});
+
+describe('out of a folder to another tab: the source is not drawn (walkthrough fix)', () => {
+  // The bug: a drag that dwelt on a tab button switched the tab, so at the drop neither the item nor
+  // its folder was drawn and the hop started at the release point — already the destination — so only
+  // the landing showed. Now it starts from the source tab's BUTTON, which puffs; with no button drawn
+  // it drops in from >= MIN_LAND_PX away. It never travels 0 px.
+  const tabBtn = { left: 40, top: 10, width: 120, height: 40 }; // the Grid tab button, in the tab bar
+  const spot = { left: 700, top: 300, width: 120, height: 120 }; // where the item landed, on the shown tab
+  type B = { left: number; top: number; width: number; height: number };
+  /** Nodes not drawn yet: the moved item, until the change is drawn (cleared before each frame flush). */
+  const notYet = new Set<string>();
+  beforeEach(() => notYet.clear());
+  /** Drawn nodes (findNode) and drawn tab buttons that are not the shown tab (findTabButton), each measured. */
+  function world(nodes: Record<string, B>, tabs: Record<string, B> = {}) {
+    const els: Record<string, HTMLElement> = {};
+    const boxes: Record<string, B> = {};
+    for (const [id, b] of Object.entries(nodes)) {
+      els[id] = document.createElement('div');
+      els[id].dataset.id = id;
+      boxes[id] = b;
+      document.body.appendChild(els[id]);
+    }
+    for (const [id, b] of Object.entries(tabs)) {
+      els[`tab:${id}`] = document.createElement('div');
+      els[`tab:${id}`].dataset.id = `tab:${id}`;
+      boxes[`tab:${id}`] = b;
+      document.body.appendChild(els[`tab:${id}`]);
+    }
+    animEnv({
+      findNode: (id) => (notYet.has(id) ? null : els[id] ?? null),
+      findTabButton: (id) => els[`tab:${id}`] ?? null,
+      measure: (el) => boxes[(el as HTMLElement).dataset.id ?? ''] ?? { left: 0, top: 0, width: 0, height: 0 }
+    });
+    return els;
+  }
+  afterEach(() => document.querySelectorAll('[data-id], [data-tab-button]').forEach((e) => e.remove()));
+  const ghostCall = () => calls.find((c) => c.el.dataset.testid === 'drop-anim')!;
+  const opts = (fallback?: B) => ({ landed: (id: string) => id, label: () => 'X', fallbackFrom: fallback ? () => fallback : undefined });
+  const notDrawn: OutStart = { id: 'x', sourceId: 'f1', tabId: 't1', from: null };
+
+  it('starts from the source tab button and hops to the landed spot, landing at its size (>= 40 px)', () => {
+    setLayout(withAnimations('on'));
+    world({ x: spot }, { t1: tabBtn });
+    playOutOfFolders('d1', [notDrawn], opts({ left: 690, top: 290, width: 120, height: 120 }));
+    const g = layerEls();
+    expect(g.map((e) => e.dataset.kind)).toEqual(['out']);
+    // Drawn at the tab button, not at the release point (the ghost box is ignored).
+    expect([g[0].style.left, g[0].style.top, g[0].style.width, g[0].style.height]).toEqual(['40px', '10px', '120px', '40px']);
+    flushFrames();
+    const c = ghostCall();
+    onlyTransformOpacity(c.frames);
+    expect(Number(c.opts.duration)).toBe(OUT_MS);
+    const end = c.frames[c.frames.length - 1];
+    expect(xy(end).x).toBeCloseTo(660, 0); // centre 100,30 → 760,360
+    expect(xy(end).y).toBeCloseTo(330, 0);
+    expect(peakTravel(c.frames)).toBeGreaterThanOrEqual(40);
+  });
+
+  it('the tab button puffs (capped like the gulp: edges move <= 6 px), marked while it runs; the folder does not', () => {
+    setLayout(withAnimations('on'));
+    const wide = { left: 0, top: 0, width: 400, height: 40 };
+    const els = world({ x: spot, f1: { left: 0, top: 0, width: 600, height: 300 } }, { t1: wide });
+    // The folder IS found here only to prove the tab is used when the item and folder weren't measured.
+    playOutOfFolders('d1', [notDrawn], opts());
+    flushFrames();
+    const puff = calls.find((c) => c.el === els['tab:t1'])!;
+    expect(puff).toBeTruthy();
+    onlyTransformOpacity(puff.frames);
+    const peak = Math.max(...puff.frames.map(scaleOf));
+    expect(peak).toBeGreaterThan(1);
+    expect(((peak - 1) * 400) / 2).toBeLessThanOrEqual(GULP_MAX_EDGE_PX + 1e-9);
+    expect(Number(puff.opts.duration)).toBe(RELEASE_MS);
+    expect(els['tab:t1'].hasAttribute('data-drop-release')).toBe(true);
+    expect(calls.some((c) => c.el === els.f1)).toBe(false);
+    calls.forEach((c) => c.anim.finish());
+    expect(els['tab:t1'].hasAttribute('data-drop-release')).toBe(false);
+    expect(layerEls()).toHaveLength(0);
+  });
+
+  it('several items from the same tab: each starts at its button, which puffs once', () => {
+    setLayout(withAnimations('on'));
+    const els = world({ x: spot, y: { left: 900, top: 300, width: 120, height: 120 } }, { t1: tabBtn });
+    playOutOfFolders('d1', [notDrawn, { id: 'y', sourceId: 'f2', tabId: 't1', from: null }], opts());
+    expect(layerEls().map((e) => e.style.left)).toEqual(['40px', '40px']);
+    flushFrames();
+    expect(calls.filter((c) => c.el === els['tab:t1'])).toHaveLength(1);
+  });
+
+  it("a source that IS drawn still starts where it is (the tab button isn't used)", () => {
+    setLayout(withAnimations('on'));
+    const els = world({ x: spot, f1: { left: 0, top: 200, width: 600, height: 300 } }, { t1: tabBtn });
+    playOutOfFolders('d1', [{ ...notDrawn, from: { left: 100, top: 250, width: 100, height: 100 } }], opts());
+    expect(layerEls()[0].style.left).toBe('100px');
+    flushFrames();
+    expect(calls.some((c) => c.el === els.f1)).toBe(true);
+    expect(calls.some((c) => c.el === els['tab:t1'])).toBe(false);
+  });
+
+  it('the shown tab\'s button (aria-selected) and a button inside a dialog are never a start (browser lookup)', () => {
+    setLayout(withAnimations('on'));
+    animEnv({ findTabButton: undefined }); // the real DOM lookup
+    const mk = (id: string, selected: boolean) => {
+      const b = document.createElement('div');
+      b.setAttribute('data-tab-button', id);
+      b.setAttribute('role', 'tab');
+      b.setAttribute('aria-selected', String(selected));
+      document.body.appendChild(b);
+      return b;
+    };
+    mk('t1', true);
+    const dlg = document.createElement('div');
+    dlg.setAttribute('role', 'dialog');
+    dlg.appendChild(mk('t3', false));
+    document.body.appendChild(dlg);
+    const t2 = mk('t2', false);
+    playOutOfFolders('d1', [notDrawn, { ...notDrawn, id: 'y', tabId: 't3' }], opts());
+    expect(layerEls()[0]?.style.left ?? '').not.toBe('40px');
+    dlg.remove();
+    resetDropAnimationForTests();
+    expect(t2.isConnected).toBe(true);
+  });
+
+  it('no tab button drawn (a phone layout): it drops in onto its spot from the ghost, settling (>= MIN_LAND_PX)', () => {
+    setLayout(withAnimations('on'));
+    const els = world({ x: spot });
+    const ghostAt = { left: 400, top: 100, width: 120, height: 120 }; // far from the spot
+    playOutOfFolders('d1', [notDrawn], opts(ghostAt));
+    flushFrames();
+    const g = layerEls()[0];
+    // Drawn on the spot, starting at the ghost (its offset), overshooting a little, then at rest.
+    expect([g.style.left, g.style.top]).toEqual(['700px', '300px']);
+    const c = ghostCall();
+    onlyTransformOpacity(c.frames);
+    expect(xy(c.frames[0])).toEqual({ x: -300, y: -200 });
+    expect(peakTravel(c.frames)).toBeGreaterThanOrEqual(MIN_LAND_PX);
+    const end = c.frames[c.frames.length - 1];
+    expect(xy(end)).toEqual({ x: 0, y: 0 });
+    expect(Number(end.opacity)).toBe(0);
+    // The settle: just past the spot (along its path) before coming to rest.
+    const past = c.frames.find((f) => xy(f).x > 0 && xy(f).y > 0);
+    expect(past).toBeTruthy();
+    expect(Math.hypot(xy(past!).x, xy(past!).y)).toBeLessThanOrEqual(8);
+    // The item is revealed under it as it lands; nothing puffs (no source is drawn).
+    const reveal = calls.find((x) => x.el === els.x)!;
+    expect(Number(reveal.frames[0].opacity)).toBe(0);
+    expect(calls.filter((x) => x.el !== g && x.el !== els.x)).toHaveLength(0);
+    calls.forEach((x) => x.anim.finish());
+    expect(layerEls()).toHaveLength(0);
+  });
+
+  for (const [how, fb] of [['the ghost was right on the spot', { left: 705, top: 298, width: 120, height: 120 }], ['no ghost is known', undefined]] as const) {
+    it(`no tab button and ${how}: it drops in from MIN_LAND_PX above (never 0 px)`, () => {
+      setLayout(withAnimations('on'));
+      world({ x: spot });
+      playOutOfFolders('d1', [notDrawn], opts(fb));
+      flushFrames();
+      const g = layerEls()[0];
+      expect(g.style.visibility).toBe('');
+      expect([g.style.left, g.style.top]).toEqual(['700px', '300px']);
+      const c = ghostCall();
+      expect(xy(c.frames[0])).toEqual({ x: 0, y: -MIN_LAND_PX });
+      expect(peakTravel(c.frames)).toBeGreaterThanOrEqual(40);
+      expect(Number(c.opts.duration)).toBe(OUT_MS);
+    });
+  }
+
+  it('no tab button and the item is not drawn either: the ghost is removed at once (nothing left behind)', () => {
+    setLayout(withAnimations('on'));
+    world({});
+    const onEndCount = layerEls().length;
+    playOutOfFolders('d1', [notDrawn], opts());
+    flushFrames();
+    expect(layerEls()).toHaveLength(onEndCount);
+  });
+
+  for (const [mode, red] of [['off', false], ['on', true]] as const) {
+    it(`${mode}${red ? ' under reduced motion' : ''}: nothing plays from the tab button`, () => {
+      reduced = red;
+      setLayout(withAnimations(mode));
+      world({ x: spot }, { t1: tabBtn });
+      playOutOfFolders('d1', [notDrawn], opts());
+      flushFrames();
+      expect(layerEls()).toHaveLength(0);
+      expect(calls).toHaveLength(0);
+    });
+  }
+
+  describe('through a drag and menu Move/Copy', () => {
+    function start(on: AnimationsMode, nodes: Record<string, B>, tabs: Record<string, B>) {
+      setLayout(withAnimations(on));
+      startSession();
+      setActiveTab('t1');
+      dragEnv();
+      return world(nodes, tabs);
+    }
+
+    it('a drag whose source is no longer drawn starts from the source tab\'s button, not the drop point', () => {
+      const els = start('on', { x: spot }, { t1: tabBtn });
+      dragOnto('x', [50, 250], [1500, 1500]);
+      // At the drop neither the item nor its folder is drawn (the drag switched tab in the real app).
+      notYet.add('x');
+      dropAt(1500, 1500);
+      notYet.clear(); // the change is drawn: the item is on its new spot
+      expect(nodeIn(draft(), 'x')).toBeTruthy();
+      const g = layerEls();
+      expect(g.map((e) => e.dataset.kind)).toEqual(['out']);
+      expect([g[0].style.left, g[0].style.top]).toEqual(['40px', '10px']);
+      flushFrames();
+      expect(calls.some((c) => c.el === els['tab:t1'])).toBe(true);
+    });
+
+    it('a drag with no tab button drawn drops in onto its spot from the ghost', () => {
+      start('on', { x: spot }, {});
+      dragOnto('x', [50, 250], [1500, 1500]);
+      notYet.add('x');
+      dropAt(1500, 1500);
+      notYet.clear();
+      flushFrames();
+      const g = layerEls();
+      expect(g).toHaveLength(1);
+      expect([g[0].style.left, g[0].style.top]).toEqual(['700px', '300px']);
+      expect(peakTravel(ghostCall().frames)).toBeGreaterThanOrEqual(MIN_LAND_PX);
+    });
+
+    for (const mode of ['move', 'copy'] as const) {
+      it(`menu ${mode === 'move' ? 'Move' : 'Copy'} whose source is not drawn starts from the source tab's button`, () => {
+        const els = start('on', { x: spot }, { t1: tabBtn });
+        notYet.add('x'); // e.g. the selection was kept while another tab is shown
+        expect(moveOrCopyTo(['x'], { tabId: 't2' }, mode)).toBe(true);
+        notYet.clear();
+        expect(layerEls().map((e) => e.style.left)).toEqual(['40px']);
+        flushFrames();
+        expect(calls.some((c) => c.el === els['tab:t1'])).toBe(true);
+      });
+    }
   });
 });

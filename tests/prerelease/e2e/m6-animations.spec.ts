@@ -107,7 +107,7 @@ test.afterEach(async ({ page, context }) => {
 /** Record, with timestamps, every animation ghost added / removed and every folder pop started / ended. */
 async function recordAnimations(page: Page) {
   await page.addInitScript(() => {
-    const log: { what: string; kind?: string; t: number; z?: number; ended?: string }[] = [];
+    const log: { what: string; kind?: string; t: number; z?: number; ended?: string; on?: string }[] = [];
     (window as unknown as { __anim: typeof log }).__anim = log;
     // Ruling 3: when the drop ended, and when a dialog appeared (relative to the animation).
     window.addEventListener('pointerup', () => log.push({ what: 'pointerup', t: performance.now() }), true);
@@ -117,7 +117,8 @@ async function recordAnimations(page: Page) {
         if (m.type === 'attributes') {
           const el = m.target as HTMLElement;
           const what = m.attributeName === 'data-drop-release' ? 'release' : 'pop';
-          log.push({ what: `${what}-${el.hasAttribute(m.attributeName!) ? 'start' : 'end'}`, t });
+          // `on`: what puffed — a tab button in the tab bar, or a folder / box on the page.
+          log.push({ what: `${what}-${el.hasAttribute(m.attributeName!) ? 'start' : 'end'}`, t, on: el.closest('[role="tab"]') ? 'tab' : 'node' });
           continue;
         }
         m.addedNodes.forEach((n) => {
@@ -170,7 +171,7 @@ function measure(frames: Frame[]) {
   }
   return { ms, travel, gulp: frames.some((f) => f.gulp) };
 }
-type AnimEvent = { what: string; kind?: string; t: number; z?: number; ended?: string };
+type AnimEvent = { what: string; kind?: string; t: number; z?: number; ended?: string; on?: string };
 const animLog = (page: Page) =>
   page.evaluate(() => (window as unknown as { __anim: AnimEvent[] }).__anim.slice());
 const anim = (log: AnimEvent[]) => log.filter((e) => e.what !== 'pointerup' && e.what !== 'dialog');
@@ -649,6 +650,97 @@ test.describe('M6 §8.1: items animate out of folders', () => {
     expect(grid.find((n) => n.id === 'sc-f-slide')!.content!.children.map((n) => n.id)).toEqual(['sc-slide-1', 'sc-slide-2', 'NEW']);
     expect(folders.map((n) => n.id)).toContain('sc-f-nest-b');
     expect(folders.find((n) => n.id === 'sc-f-nest')!.content!.children.map((n) => n.id)).toContain('sc-nesta-1');
+  });
+
+  /**
+   * Walkthrough bug: "I'm only seeing the end of dragging from a folder to another tab." The drag
+   * dwells on the Sizes tab button, the tab switches, and the tile is dropped there: its folder is no
+   * longer drawn, so the item starts from the Grid tab's BUTTON (where it came from), which puffs,
+   * and hops to where it landed.
+   */
+  async function dragOutToOtherTab(page: Page, sc: { id: (s: string) => string }) {
+    const item = node(page, sc.id('sc-l1-t1'));
+    const s = await box(item);
+    const tabBtn = page.locator(`[data-drag-tab="${sc.id('sc-tab-sizes')}"]`);
+    const tb = await box(tabBtn);
+    const x0 = s.x + s.width / 2, y0 = s.y + s.height / 2;
+    const x1 = tb.x + tb.width / 2, y1 = tb.y + tb.height / 2;
+    await page.mouse.move(x0, y0);
+    await page.mouse.down();
+    for (let i = 1; i <= 20; i++) {
+      await page.mouse.move(x0 + ((x1 - x0) * i) / 20, y0 + ((y1 - y0) * i) / 20);
+      await page.waitForTimeout(16);
+    }
+    // Dwell on the tab button until the drag switches to it (OPEN_DWELL_MS).
+    await expect(page.locator(`.tab-canvas[data-tab-id="${sc.id('sc-tab-sizes')}"]`)).toBeVisible({ timeout: 3000 });
+    await expect(page.locator(`.tab-canvas[data-tab-id="${sc.id('sc-tab-grid')}"]`)).toHaveCount(0);
+    // An empty spot on Sizes: row 0, right of the 8×6 folder (columns 18+).
+    const ff = await box(node(page, sc.id('sc-ff')));
+    const x2 = ff.x + ff.width + 80, y2 = ff.y + 40;
+    for (let i = 1; i <= 20; i++) {
+      await page.mouse.move(x1 + ((x2 - x1) * i) / 20, y1 + ((y2 - y1) * i) / 20);
+      await page.waitForTimeout(16);
+    }
+    await page.waitForTimeout(150);
+    await page.mouse.up();
+    await expect(node(page, sc.id('sc-l1-t1'))).toBeVisible();
+  }
+
+  test('a tile dragged out of a folder to another tab starts from its tab button, which puffs (>= 400 ms, >= 40 px)', async ({ page, context }) => {
+    const { sc, errors } = await openShowcaseOut(page, context, 'on');
+    await clearLog(page);
+    // The Grid tab button, where the item comes from (measured before the drag: the bar doesn't move).
+    const gridBtn = await box(page.locator(`[data-drag-tab="${sc.id('sc-tab-grid')}"]`));
+    await dragOutToOtherTab(page, sc);
+    await page.waitForTimeout(900);
+    const log = anim(await animLog(page));
+    expect(log.filter((e) => e.what === 'add').map((e) => e.kind), 'it pops out').toEqual(['out']);
+    const frames = await sampled(page);
+    const m = measure(frames);
+    expect(m.ms, 'on screen >= 400 ms').toBeGreaterThanOrEqual(400);
+    expect(m.travel, 'it travels >= 40 px').toBeGreaterThanOrEqual(40);
+    // It starts at the source tab's button (within the rise of the first frames), not at the drop.
+    const first = frames.find((f) => f.ghosts.length)!.ghosts[0];
+    expect(Math.abs(first.x - (gridBtn.x + gridBtn.width / 2)), 'it starts at the Grid tab button (x)').toBeLessThan(gridBtn.width / 2 + 8);
+    expect(Math.abs(first.y - (gridBtn.y + gridBtn.height / 2)), 'it starts at the Grid tab button (y)').toBeLessThan(gridBtn.height + 40);
+    // …and ends on the landed item.
+    const landed = await box(node(page, sc.id('sc-l1-t1')));
+    const lastWith = frames.filter((f) => f.ghosts.length).at(-1)!.ghosts[0];
+    expect(Math.hypot(lastWith.x - (landed.x + landed.width / 2), lastWith.y - (landed.y + landed.height / 2)), 'it lands on the item').toBeLessThan(30);
+    const puffs = log.filter((e) => e.what === 'release-start');
+    expect(puffs.map((e) => e.on), 'the source tab button puffs').toEqual(['tab']);
+    expect(log.filter((e) => e.what === 'release-end')).toHaveLength(1);
+    const out = log.filter((e) => e.kind === 'out');
+    expect(out[1].ended, 'it ends when its animations finish').toBe('finished');
+    await expect(page.locator('[data-testid="drop-anim"], [data-drop-gulp], [data-drop-release]')).toHaveCount(0);
+    expect(errors).toEqual([]);
+  });
+
+  test('out of a folder to another tab: the saved result is identical with animations Off', async ({ page, context }) => {
+    test.setTimeout(60_000);
+    const shapes: unknown[] = [];
+    for (const mode of ['on', 'off'] as const) {
+      const { sc, errors } = await openShowcaseOut(page, context, mode);
+      await clearLog(page);
+      await dragOutToOtherTab(page, sc);
+      await page.waitForTimeout(mode === 'on' ? 900 : 300);
+      const added = anim(await animLog(page)).filter((e) => e.what === 'add').length;
+      expect(added > 0, `animations ${mode === 'on' ? 'played' : 'did not play'}`).toBe(mode === 'on');
+      await saveDraft(page);
+      const d = (await (await page.request.get('/api/config')).json()).dashboards.find((x: { id: string }) => x.id === sc.id('sc-dash'));
+      const norm = (ns: AnyNode[]): unknown =>
+        ns.map((n) => ({
+          ...n,
+          id: n.id.startsWith(`${sc.prefix}-`) ? n.id.slice(sc.prefix.length + 1) : 'NEW',
+          ...(n.content ? { content: { ...n.content, children: norm(n.content.children) } } : {})
+        }));
+      shapes.push(d.tabs.map((t: { root: { children: AnyNode[] } }) => norm(t.root.children)));
+      expect(errors).toEqual([]);
+    }
+    expect(shapes[0]).toEqual(shapes[1]);
+    const [grid, sizes] = shapes[0] as AnyNode[][];
+    expect(sizes.map((n) => n.id), 'the tile is on the Sizes tab').toContain('sc-l1-t1');
+    expect(grid.find((n) => n.id === 'sc-f-l1')!.content!.children.map((n) => n.id)).not.toContain('sc-l1-t1');
   });
 
   test('grabbing the just-landed item mid-animation stops it: the item is visible (opacity 1) and drags', async ({ page, context }) => {

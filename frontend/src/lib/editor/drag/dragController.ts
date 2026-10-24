@@ -804,7 +804,8 @@ export function commitDrop(state: DragState): void {
       landed: (id) => (state.copy ? newIds[state.ids.indexOf(id)] : id),
       label: (id) => findIn(d, id)?.name ?? '',
       intoId: to.folderId,
-      // The grabbed item, if it isn't drawn: where its ghost was at the drop.
+      // The grabbed item, if neither it, its folder nor its tab's button is drawn: it drops in onto
+      // its spot from where its ghost was at the drop (or from above it, when that is the same place).
       fallbackFrom: (id) => (id === state.ids[0] ? ghostBox(state) : null)
     }));
   }
@@ -847,11 +848,11 @@ function decorate(fn: () => void): void {
 }
 
 /** §8.1: the moved items that leave a folder for somewhere else, each with the folder it leaves. */
-function leavingFolders(d: LayoutDashboard, ids: string[], to: ContainerRef): { id: string; sourceId: string }[] {
-  const out: { id: string; sourceId: string }[] = [];
+function leavingFolders(d: LayoutDashboard, ids: string[], to: ContainerRef): { id: string; sourceId: string; tabId: string }[] {
+  const out: { id: string; sourceId: string; tabId: string }[] = [];
   for (const id of ids) {
     const src = containerOfNode(d, id);
-    if (src?.folderId !== undefined && !sameRef(src, to)) out.push({ id, sourceId: src.folderId });
+    if (src?.folderId !== undefined && !sameRef(src, to)) out.push({ id, sourceId: src.folderId, tabId: src.tabId });
   }
   return out;
 }

@@ -16,7 +16,11 @@
  *   - Out of a folder (§8.1: to the tab, another folder or an outer box, by drag or menu Move/Copy):
  *     the source folder (or box) puffs (a small scale-up, capped like the gulp) as the item rises out
  *     of where it was, then hops on a curve to its new spot, where the item is revealed as it lands;
- *     into a folder where it isn't drawn, it shrinks into that folder, which gulps.
+ *     into a folder where it isn't drawn, it shrinks into that folder, which gulps. When the source is
+ *     no longer drawn because it lives on another tab (a drag that dwelt on a tab button switched the
+ *     tab), the item starts from that tab's BUTTON in the tab bar, which puffs; if that button isn't
+ *     drawn either (a phone layout), the item drops in onto its spot from at least MIN_LAND_PX away,
+ *     with a small settle. It never "travels" 0 px.
  * - The global "Animations" setting (display.animations, Settings → Global settings) is On / Off /
  *   Always. On plays unless the device asks for reduced motion (the setting then says so, visibly);
  *   Always plays even then; Off never. The editor reads it from each dashboard's server-computed
@@ -67,6 +71,10 @@ export const MERGE_TOTAL_MS = Math.max(GATHER_MS, POP_DELAY_MS + POP_MS);
 export const MERGE_DIALOG_CAP_MS = MERGE_TOTAL_MS + 100;
 /** The least height of the drop's hop, so a tile dropped right on its folder still visibly travels. */
 const MIN_HOP_PX = 56;
+/** Out of a folder with nothing of the source drawn: the drop-in starts at least this far from the spot. */
+export const MIN_LAND_PX = 56;
+/** …and settles this far past it before coming to rest. */
+const SETTLE_PX = 6;
 /**
  * How far each merged tile first moves away from the other (at least), before they are drawn
  * together: comfortably past the 40 px "visibly moves" bar, and held there for a moment (gatherFrames).
@@ -91,6 +99,11 @@ export interface AnimationEnv {
   measure(el: Element): Box;
   /** The element's own (computed) opacity, which a reveal ends at. */
   opacity(el: Element): number;
+  /**
+   * A tab's button in the dashboard's tab bar (data-tab-button), when it is drawn and NOT the tab now
+   * shown (aria-selected); null otherwise.
+   */
+  findTabButton(tabId: string): HTMLElement | null;
 }
 
 const domEnv: AnimationEnv = {
@@ -107,7 +120,12 @@ const domEnv: AnimationEnv = {
     return live('data-node-id') ?? live('data-nested-folder');
   },
   measure: (el) => el.getBoundingClientRect(),
-  opacity: (el) => Number.parseFloat(getComputedStyle(el).opacity)
+  opacity: (el) => Number.parseFloat(getComputedStyle(el).opacity),
+  findTabButton: (tabId) =>
+    Array.from(document.querySelectorAll<HTMLElement>('[data-tab-button]')).find(
+      (n) => n.getAttribute('data-tab-button') === tabId && n.getAttribute('aria-selected') !== 'true' &&
+        !n.closest('[inert], [role="dialog"]')
+    ) ?? null
 };
 let env: AnimationEnv = domEnv;
 let failureSaid = false;
@@ -163,10 +181,21 @@ export type DropAnimation =
   | { kind: 'into'; from: Box; to: Box | (() => Box | null); label: string; folderId: string; onEnd?: () => void }
   | {
       kind: 'out';
-      /** Where the item was in its folder (measured before the change was drawn; see outStartBox). */
-      from: Box; label: string;
+      /**
+       * Where the item was in its folder (measured before the change was drawn; see outStarts), or
+       * the button of the tab it came from (sourceTab). With arrive 'drop': where the drag's ghost was
+       * (or null when unknown), which the drop-in starts from when it is far enough from the spot.
+       */
+      from: Box | null; label: string;
       /** The folder (or drilled-in box) it left: it puffs. */
       sourceId: string;
+      /** It starts from this tab's button (its source isn't drawn: it is on that tab), which puffs instead. */
+      sourceTab?: string;
+      /**
+       * 'drop': nothing of the source is drawn, so the item drops in onto its new spot from at least
+       * MIN_LAND_PX away (from above when the ghost was on it) and settles. Default 'hop'.
+       */
+      arrive?: 'hop' | 'drop';
       /** The item where it is now (the moved one, or the copy): it lands there when it is drawn. */
       landedId?: string;
       /** The folder it went into, if any: it gulps, and is where it lands when the item isn't drawn. */
@@ -288,31 +317,60 @@ function outFrames(dx: number, dy: number, sx: number, sy: number, rise: number,
 const tf2 = (x: number, y: number, sx: number, sy: number) =>
   Math.abs(sx - sy) < 1e-9 ? tf(x, y, sx) : `translate(${n(x)}px, ${n(y)}px) scale(${n(sx)}, ${n(sy)})`;
 
+/**
+ * Out of a folder with nothing of the source drawn (§8.1, arrive 'drop'): the item, drawn at its new
+ * spot, drops in from (x0, y0) at scale s0, overshoots by SETTLE_PX along its path and settles there;
+ * it fades only at the very end (the item is revealed under it).
+ */
+function landFrames(x0: number, y0: number, s0: number): Keyframe[] {
+  const len = Math.max(1, Math.hypot(x0, y0));
+  const ox = (-x0 / len) * SETTLE_PX, oy = (-y0 / len) * SETTLE_PX;
+  return [
+    { transform: tf(x0, y0, s0), opacity: 0.4, offset: 0 },
+    { transform: tf(x0 * 0.85, y0 * 0.85, s0 + (1 - s0) * 0.15), opacity: 0.95, offset: 0.15, easing: 'ease-in' },
+    { transform: tf(ox, oy, 1.02), opacity: 0.95, offset: 0.62, easing: 'ease-out' },
+    { transform: tf(0, 0, 1), opacity: 0.95, offset: 0.85 },
+    { transform: tf(0, 0, 1), opacity: 0, offset: 1 }
+  ];
+}
+
 /** A multi-select out of folders animates at most this many items; the rest simply appear. */
 export const OUT_MAX_ITEMS = 12;
 
-/** An item leaving a folder, and where it starts: where it is drawn now, else its source folder (or box). */
-export type OutStart = { id: string; sourceId: string; from: Box | null };
+/**
+ * An item leaving a folder, and where it starts: where it is drawn now, else its source folder (or
+ * box); null when neither is drawn. `tabId`: the tab it leaves from (its button is the start then).
+ */
+export type OutStart = { id: string; sourceId: string; tabId?: string; from: Box | null };
 
 /**
  * Out of a folder (§8.1): measure where each leaving item starts (at most OUT_MAX_ITEMS), BEFORE the
  * change is drawn. Empty when animations won't play (no layout reads for nothing).
  */
-export function outStarts(dashboardId: string, leaving: { id: string; sourceId: string }[]): OutStart[] {
+export function outStarts(dashboardId: string, leaving: { id: string; sourceId: string; tabId?: string }[]): OutStart[] {
   if (typeof document === 'undefined' || leaving.length === 0 || !animationsAllowed(dashboardId)) return [];
-  return leaving.slice(0, OUT_MAX_ITEMS).map(({ id, sourceId }) => {
+  return leaving.slice(0, OUT_MAX_ITEMS).map(({ id, sourceId, tabId }) => {
     for (const at of [id, sourceId]) {
       const el = env.findNode(at);
       const b = el ? env.measure(el) : null;
-      if (ok(b)) return { id, sourceId, from: { left: b.left, top: b.top, width: b.width, height: b.height } };
+      if (ok(b)) return { id, sourceId, tabId, from: { left: b.left, top: b.top, width: b.width, height: b.height } };
     }
-    return { id, sourceId, from: null };
+    return { id, sourceId, tabId, from: null };
   });
+}
+
+/** A drawn tab button's box (not the shown tab's), or null. */
+function tabButtonBox(tabId: string | undefined): Box | null {
+  const el = tabId ? env.findTabButton(tabId) : null;
+  const b = el ? env.measure(el) : null;
+  return ok(b) ? { left: b.left, top: b.top, width: b.width, height: b.height } : null;
 }
 
 /**
  * Play the out animation of each measured item (after the change is in the draft): each from its own
- * spot, each source puffing once and the destination gulping once.
+ * spot, each source puffing once and the destination gulping once. An item whose source isn't drawn
+ * starts from its source tab's button (which puffs once) when that tab isn't the one shown; else it
+ * drops in onto its new spot (from `fallbackFrom`, the drag's ghost, when given).
  */
 export function playOutOfFolders(
   dashboardId: string,
@@ -323,13 +381,20 @@ export function playOutOfFolders(
   let gulped = false;
   for (const st of starts) {
     try {
-      const from = st.from ?? o.fallbackFrom?.(st.id) ?? null;
-      if (!from) continue;
-      playDropAnimation(dashboardId, {
-        kind: 'out', from, label: o.label(st.id), sourceId: st.sourceId, landedId: o.landed(st.id), intoId: o.intoId,
-        puff: !puffed.has(st.sourceId), gulp: !gulped
-      });
-      puffed.add(st.sourceId);
+      const common = { kind: 'out' as const, label: o.label(st.id), sourceId: st.sourceId, landedId: o.landed(st.id), intoId: o.intoId, gulp: !gulped };
+      if (st.from) {
+        playDropAnimation(dashboardId, { ...common, from: st.from, puff: !puffed.has(st.sourceId) });
+        puffed.add(st.sourceId);
+      } else {
+        const tab = tabButtonBox(st.tabId);
+        if (tab) {
+          const key = `tab:${st.tabId}`;
+          playDropAnimation(dashboardId, { ...common, from: tab, sourceTab: st.tabId, puff: !puffed.has(key) });
+          puffed.add(key);
+        } else {
+          playDropAnimation(dashboardId, { ...common, from: o.fallbackFrom?.(st.id) ?? null, arrive: 'drop', puff: false });
+        }
+      }
       gulped = true;
     } catch (e) {
       sayAnimationFailure(e); // playDropAnimation never throws; this covers the arguments
@@ -355,7 +420,9 @@ export function sayAnimationFailure(e: unknown): void {
  * draft change it decorates has already been made.
  */
 export function playDropAnimation(dashboardId: string, a: DropAnimation): boolean {
-  if (typeof document === 'undefined' || !animationsAllowed(dashboardId) || !ok(a.from)) return false;
+  if (typeof document === 'undefined' || !animationsAllowed(dashboardId)) return false;
+  // Only the drop-in may start without a box (it is drawn at the spot it lands on).
+  if (!ok(a.from) && !(a.kind === 'out' && a.arrive === 'drop')) return false;
   if (a.kind === 'merge' && !ok(a.to)) return false;
   const made: HTMLElement[] = [];
   const cleanups: (() => void)[] = [];
@@ -419,9 +486,9 @@ export function playDropAnimation(dashboardId: string, a: DropAnimation): boolea
     return true;
   };
 
-  /** The folder's own element starts its part (gulp / pop), marked by `attr` while it runs. */
-  const onFolder = (attr: string, frames: Keyframe[], duration: number, delayFromDrop: number, fill: FillMode, id = folderOf(a)) => {
-    const el = done || !id ? null : env.findNode(id);
+  /** The folder's own element (or a given one) starts its part (gulp / pop / puff), marked by `attr` while it runs. */
+  const onFolder = (attr: string, frames: Keyframe[], duration: number, delayFromDrop: number, fill: FillMode, id = folderOf(a), given?: HTMLElement) => {
+    const el = done ? null : (given ?? (id ? env.findNode(id) : null));
     if (!el) return;
     el.setAttribute(attr, '');
     cleanups.push(() => el.removeAttribute(attr));
@@ -430,8 +497,54 @@ export function playDropAnimation(dashboardId: string, a: DropAnimation): boolea
   };
 
   try {
+    if (a.kind === 'out' && a.arrive === 'drop') {
+      // Nothing of the source is drawn: the item drops in onto its new spot and settles there.
+      const from = ok(a.from) ? a.from : null;
+      const g = ghost(from ?? { left: 0, top: 0, width: 1, height: 1 }, a.label, 'out');
+      if (!from) g.style.visibility = 'hidden'; // until it is placed on its spot, on the next frame
+      made.push(g);
+      pending++;
+      env.raf(() => {
+        try {
+          if (done) return;
+          const el = a.landedId ? env.findNode(a.landedId) : null;
+          const to = el ? env.measure(el) : null;
+          if (!el || !ok(to)) {
+            pending--;
+            return cleanup(); // not drawn here: nothing to land on (the change is made all the same)
+          }
+          // The ghost is drawn at the spot; it starts where the drag's ghost was, unless that is too
+          // close to see a move — then from MIN_LAND_PX above the spot.
+          Object.assign(g.style, { left: `${to.left}px`, top: `${to.top}px`, width: `${to.width}px`, height: `${to.height}px`, visibility: '' });
+          let x0 = 0, y0 = -MIN_LAND_PX, s0 = 0.9;
+          if (from) {
+            const t = towards(to, from);
+            if (Math.hypot(t.dx, t.dy) >= MIN_LAND_PX) {
+              x0 = t.dx;
+              y0 = t.dy;
+            }
+            s0 = Math.max(0.5, Math.min(1.5, from.width / to.width));
+          }
+          if (!run(g, landFrames(x0, y0, s0), { duration: OUT_MS, easing: 'linear', fill: 'forwards' })) {
+            pending--;
+            return cleanup();
+          }
+          const own = env.opacity(el);
+          const end = Number.isFinite(own) ? Math.min(1, Math.max(0, own)) : 1;
+          run(el, [{ opacity: 0 }, { opacity: 0, offset: 0.85 }, { opacity: end }], { duration: OUT_MS, easing: 'linear' });
+        } catch (e) {
+          fail(e);
+          return;
+        }
+        if (--pending <= 0) cleanup();
+      });
+      setTimeout(() => cleanup('fallback'), OUT_TOTAL_MS + 300);
+      return !done;
+    }
+
     if (a.kind === 'out') {
-      const g = ghost(a.from, a.label, 'out');
+      const aFrom = a.from as Box; // checked above: only the drop-in starts without one
+      const g = ghost(aFrom, a.label, 'out');
       made.push(g);
       pending++; // held until the frame below has started what it starts
       env.raf(() => {
@@ -442,28 +555,33 @@ export function playDropAnimation(dashboardId: string, a: DropAnimation): boolea
             const b = el ? env.measure(el) : null;
             return el && ok(b) ? { el, b } : null;
           };
-          // The source puffs at once: a small scale-up, its edges moving at most GULP_MAX_EDGE_PX.
-          const source = a.puff === false ? null : measured(a.sourceId);
+          // The source (or the button of the tab it came from) puffs at once: a small scale-up, its
+          // edges moving at most GULP_MAX_EDGE_PX.
+          const tabEl = a.sourceTab !== undefined ? env.findTabButton(a.sourceTab) : null;
+          const tabB = tabEl ? env.measure(tabEl) : null;
+          const source = a.puff === false ? null
+            : a.sourceTab !== undefined ? (tabEl && ok(tabB) ? { el: tabEl, b: tabB } : null)
+            : measured(a.sourceId);
           if (source) {
             const s = releaseScale(source.b.width, source.b.height);
             onFolder('data-drop-release', [
               { transform: 'scale(1)' }, { transform: `scale(${n(s)})`, offset: 0.4 }, { transform: 'scale(1)' }
-            ], RELEASE_MS, 0, 'none', a.sourceId);
+            ], RELEASE_MS, 0, 'none', a.sourceId, source.el);
           }
           const landed = measured(a.landedId);
           const into = landed ? null : measured(a.intoId);
           const to = landed?.b ?? into?.b ?? null;
           const land = landed ? 'spot' : into ? 'into' : 'away';
-          const rise = Math.max(28, 0.3 * a.from.height);
-          const hop = Math.max(MIN_HOP_PX, 0.5 * a.from.height);
+          const rise = Math.max(28, 0.3 * aFrom.height);
+          const hop = Math.max(MIN_HOP_PX, 0.5 * aFrom.height);
           let dx = 0, dy = -rise, sx = 1, sy = 1;
           if (to) {
-            ({ dx, dy } = towards(a.from, to));
+            ({ dx, dy } = towards(aFrom, to));
             if (land === 'spot') {
-              sx = to.width / a.from.width;
-              sy = to.height / a.from.height;
+              sx = to.width / aFrom.width;
+              sy = to.height / aFrom.height;
             } else {
-              sx = sy = Math.max(0.12, Math.min(0.35, 0.4 * Math.min(to.width / a.from.width, to.height / a.from.height)));
+              sx = sy = Math.max(0.12, Math.min(0.35, 0.4 * Math.min(to.width / aFrom.width, to.height / aFrom.height)));
             }
           }
           if (!run(g, outFrames(dx, dy, sx, sy, rise, hop, land), { duration: OUT_MS, easing: 'linear', fill: 'forwards' })) {
