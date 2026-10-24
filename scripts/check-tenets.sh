@@ -38,7 +38,8 @@ fi
 
 echo "▸ Tenet 10 (No telemetry): no analytics / telemetry / update-check hosts in source"
 if grep -rniE 'sentry\.io|posthog|google-analytics|googletagmanager|mixpanel|amplitude|api\.github\.com/repos' \
-     backend frontend/src --include='*.go' --include='*.ts' --include='*.svelte' 2>/dev/null | grep -v '_test.go'; then
+     backend frontend/src --include='*.go' --include='*.ts' --include='*.svelte' 2>/dev/null | grep -v '_test.go' \
+     | grep -v '^frontend/src/lib/icons/icon-names.ts:'; then  # generated icon-name list (has an mdi "google-analytics" icon), not a host
   fail=1; note "✗ telemetry/analytics/update-check reference found — HOPS must never phone home (TENET 10)."
 else
   note "✓ no telemetry/analytics/update-check references"
