@@ -365,7 +365,7 @@ test.describe('M6 tab position and the dialog', () => {
     for (const s of SHAPES) {
       const choice = looks.locator('label').filter({ has: page.getByRole('radio', { name: LABEL[s], exact: true }) });
       await expect(choice.locator('[data-folder-shape]')).toHaveAttribute('data-folder-shape', s);
-      const pb = await box(choice.locator('.shape-preview'));
+      const pb = await box(choice.locator('.look-shape'));
       expect(pb.width).toBeGreaterThan(40);
     }
     // The previews are in the folder's colour (its back panel: the colour darkened).

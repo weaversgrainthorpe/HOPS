@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/svelte';
+import { render, screen, fireEvent, within } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import { tick } from 'svelte';
 
@@ -333,11 +333,12 @@ describe('FolderEditModal background (M4 Task 5, Ruling 11(5))', () => {
       Promise.resolve(new Response(JSON.stringify({ categories: [], images: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
     );
   });
-  /** Open the folder picker from the dialog, pick Colour at 50%, Save the picker. */
-  async function pickColour() {
+  /** Open the folder picker from the dialog, pick its own picture (an image) at 50%, Save the picker. */
+  async function pickPicture() {
     await fireEvent.click(screen.getByRole('button', { name: /Background/ }));
     expect(screen.getByRole('heading', { name: /Folder background/i })).toBeInTheDocument();
-    await fireEvent.click(screen.getByRole('button', { name: /^Color$/ }));
+    await fireEvent.click(screen.getByRole('radio', { name: 'Its own picture' }));
+    await fireEvent.input(screen.getByLabelText(/^Image URL/), { target: { value: '/presets/network-grid.jpg' } });
     expect(screen.queryByText(/Overlay Darkness/i)).toBeNull();
     await fireEvent.input(screen.getByLabelText(/^Background opacity/), { target: { value: '0.5' } });
     await fireEvent.click(screen.getByRole('button', { name: /^Save Background/ }));
@@ -353,9 +354,9 @@ describe('FolderEditModal background (M4 Task 5, Ruling 11(5))', () => {
 
   it('a picked background is staged: the status shows it, but the draft is untouched until the dialog saves', async () => {
     await show({ kind: 'folder', id: 'f1' });
-    expect(screen.getByText(/No background of its own/i)).toBeInTheDocument();
-    await pickColour();
-    expect(screen.getByText(/Colour .*50% opacity/i, { selector: '.background-status' }).textContent).toMatch(/applies when you save/i);
+    expect(screen.getByText(/No picture of its own/i)).toBeInTheDocument();
+    await pickPicture();
+    expect(screen.getByText(/Image, 50% opacity/i, { selector: '.background-status' }).textContent).toMatch(/applies when you save/i);
     expect((nodeIn(draft(), 'f1') as FolderNode).background).toBeUndefined();
     expect(get(session)!.undo).toHaveLength(0);
   });
@@ -364,7 +365,7 @@ describe('FolderEditModal background (M4 Task 5, Ruling 11(5))', () => {
     await show({ kind: 'folder', id: 'f1' });
     const before = draft();
     await fireEvent.input(screen.getByLabelText(/Folder name/), { target: { value: 'Renamed' } });
-    await pickColour();
+    await pickPicture();
     await fireEvent.click(screen.getByRole('button', { name: /^Cancel$/ }));
     expect(get(editorDialog)).toBeNull();
     expect(draft()).toBe(before);
@@ -376,11 +377,11 @@ describe('FolderEditModal background (M4 Task 5, Ruling 11(5))', () => {
   it('Save applies the fields and the background as ONE undo step; undo reverts both', async () => {
     await show({ kind: 'folder', id: 'f1' });
     await fireEvent.input(screen.getByLabelText(/Folder name/), { target: { value: 'Renamed' } });
-    await pickColour();
+    await pickPicture();
     await fireEvent.click(screen.getByRole('button', { name: /^Save$/ }));
     const f = nodeIn(draft(), 'f1') as FolderNode;
     expect(f.name).toBe('Renamed');
-    expect(f.background).toMatchObject({ type: 'color', opacity: 0.5 });
+    expect(f.background).toMatchObject({ type: 'image', value: '/presets/network-grid.jpg', opacity: 0.5 });
     expect(get(session)!.undo).toHaveLength(1);
     noWrites();
     undo();
@@ -390,15 +391,16 @@ describe('FolderEditModal background (M4 Task 5, Ruling 11(5))', () => {
     expect(get(dirty)).toBe(false);
   });
 
-  it('picking None removes an existing background on Save (key gone)', async () => {
+  it('"No picture of its own" + "Remove it" removes an existing picture on Save (key gone)', async () => {
     const d = home();
-    (d.tabs[0].root.children.find((n) => n.id === 'f1') as FolderNode).background = { type: 'color', value: '#000000' };
+    (d.tabs[0].root.children.find((n) => n.id === 'f1') as FolderNode).background = { type: 'image', value: '/presets/network-grid.jpg' };
     resetEditor();
     setLayout([d]);
     startSession();
     await show({ kind: 'folder', id: 'f1' });
     await fireEvent.click(screen.getByRole('button', { name: /Background/ }));
-    await fireEvent.click(screen.getByRole('button', { name: /^None$/ }));
+    await fireEvent.click(screen.getByRole('radio', { name: "No picture of its own — show what's behind" }));
+    await fireEvent.click(screen.getByRole('button', { name: /^Remove it/ }));
     await fireEvent.click(screen.getByRole('button', { name: /^Save Background/ }));
     await fireEvent.click(screen.getByRole('button', { name: /^Save$/ }));
     expect(nodeIn(draft(), 'f1')).not.toHaveProperty('background');
@@ -408,11 +410,57 @@ describe('FolderEditModal background (M4 Task 5, Ruling 11(5))', () => {
   it('a new folder can get a background, set on Create', async () => {
     await show({ kind: 'folder', to: { tabId: 't1' } });
     await fireEvent.input(screen.getByLabelText(/Folder name/), { target: { value: 'Tools' } });
-    await pickColour();
+    await pickPicture();
     await fireEvent.click(screen.getByRole('button', { name: /^Create/ }));
     const root = draft().tabs[0].root.children;
     const f = root[root.length - 1] as FolderNode;
     expect(f.name).toBe('Tools');
-    expect(f.background).toMatchObject({ type: 'color', opacity: 0.5 });
+    expect(f.background).toMatchObject({ type: 'image', opacity: 0.5 });
+  });
+
+  // M6 §7.5: a colour background stored before §7.5 is never dropped silently; one click moves it
+  // to the folder colour, saved with the dialog as ONE undo step.
+  describe('a stored colour background', () => {
+    async function withColourBackground(bg: FolderNode['background']) {
+      const d = home();
+      (d.tabs[0].root.children.find((n) => n.id === 'f1') as FolderNode).background = bg;
+      resetEditor();
+      setLayout([d]);
+      startSession();
+      await show({ kind: 'folder', id: 'f1' });
+    }
+
+    it('is shown in the dialog, and an untouched Save keeps it exactly', async () => {
+      await withColourBackground({ type: 'color', value: '#123456', opacity: 0.6 });
+      expect(screen.getByText(/Colour background #123456 \(set the folder colour instead\)/)).toBeInTheDocument();
+      await fireEvent.click(screen.getByRole('button', { name: /^Save$/ }));
+      expect((nodeIn(draft(), 'f1') as FolderNode).background).toEqual({ type: 'color', value: '#123456', opacity: 0.6 });
+    });
+
+    it('"Use as folder colour" sets the colour and opacity and removes the background, as one undo step', async () => {
+      await withColourBackground({ type: 'color', value: '#123456', opacity: 0.6 });
+      await fireEvent.click(screen.getByRole('button', { name: 'Use as folder colour' }));
+      expect(screen.getByText(/Folder colour set to #123456 at 60% opacity/)).toBeInTheDocument();
+      await fireEvent.click(screen.getByRole('button', { name: /^Save$/ }));
+      const f = nodeIn(draft(), 'f1') as FolderNode;
+      expect(f.color).toBe('#123456');
+      expect(f.opacity).toBe(0.6);
+      expect(f).not.toHaveProperty('background');
+      expect(get(session)!.undo).toHaveLength(1);
+      undo();
+      expect((nodeIn(draft(), 'f1') as FolderNode).background).toEqual({ type: 'color', value: '#123456', opacity: 0.6 });
+    });
+
+    it('"Use as folder colour" works from the background picker too', async () => {
+      await withColourBackground({ type: 'color', value: '#abcdef' });
+      await fireEvent.click(screen.getByRole('button', { name: /Background…/ }));
+      const picker = screen.getByRole('dialog', { name: /Folder background/i });
+      await fireEvent.click(within(picker).getByRole('button', { name: 'Use as folder colour' }));
+      expect(screen.queryByRole('dialog', { name: /Folder background/i })).toBeNull();
+      await fireEvent.click(screen.getByRole('button', { name: /^Save$/ }));
+      const f = nodeIn(draft(), 'f1') as FolderNode;
+      expect(f.color).toBe('#abcdef');
+      expect(f).not.toHaveProperty('background');
+    });
   });
 });

@@ -138,8 +138,10 @@
   .retry-btn {
     margin-left: 0.5rem;
   }
+  /* Disabled stays readable (M6 §7.3: text >= 4.5:1): no fading — a dashed edge says it is off. */
   .reset-btn:disabled {
-    opacity: 0.4;
+    opacity: 1;
+    border-style: dashed;
     cursor: default;
   }
   .row-text {

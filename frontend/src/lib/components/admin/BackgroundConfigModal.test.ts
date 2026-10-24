@@ -18,10 +18,10 @@ beforeEach(() => {
 });
 
 type Level = 'dashboard' | 'tab' | 'folder';
-function open(level: Level, background?: Background, parentName?: string) {
+function open(level: Level, background?: Background) {
   const onSave = vi.fn();
   const onCancel = vi.fn();
-  render(BackgroundConfigModal, { level, background, onSave, onCancel, parentName });
+  render(BackgroundConfigModal, { level, background, onSave, onCancel });
   return { onSave, onCancel };
 }
 const save = () => fireEvent.click(screen.getByRole('button', { name: /^Save Background/ }));
@@ -30,14 +30,19 @@ const save = () => fireEvent.click(screen.getByRole('button', { name: /^Save Bac
 const sameOption = () => screen.getByRole('radio', { name: /^Same as / }) as HTMLInputElement;
 const ownOption = () => screen.getByRole('radio', { name: 'Its own background' }) as HTMLInputElement;
 const showSwitch = () => screen.getByRole('switch', { name: 'Show background picture' }) as HTMLInputElement;
+// Folder level (M6 §7.5): pictures only — "No picture of its own — show what's behind" / "Its own picture".
+const behindOption = () => screen.getByRole('radio', { name: "No picture of its own — show what's behind" }) as HTMLInputElement;
+const pictureOption = () => screen.getByRole('radio', { name: 'Its own picture' }) as HTMLInputElement;
 /** Is "inherit" currently on, whichever control this level has? */
 function inheritIsOn(level: Level): boolean {
-  return level === 'dashboard' ? !showSwitch().checked : sameOption().checked;
+  return level === 'dashboard' ? !showSwitch().checked : level === 'folder' ? behindOption().checked : sameOption().checked;
 }
 /** Click the control that turns inherit on (to = true) or off. */
 async function setInherit(level: Level, to: boolean) {
   if (level === 'dashboard') {
     if (showSwitch().checked === to) await fireEvent.click(showSwitch());
+  } else if (level === 'folder') {
+    await fireEvent.click(to ? behindOption() : pictureOption());
   } else {
     await fireEvent.click(to ? sameOption() : ownOption());
   }
@@ -69,7 +74,8 @@ describe('BackgroundConfigModal at every level', () => {
   });
 
   it('folder level never writes overlay fields (a picture picked there has none)', async () => {
-    const { onSave } = open('folder', { type: 'color', value: '#112233' });
+    const { onSave } = open('folder');
+    await fireEvent.click(pictureOption());
     await fireEvent.click(screen.getByRole('button', { name: /^Image$/ }));
     await fireEvent.input(screen.getByLabelText(/^Image URL/), { target: { value: '/presets/network-grid.jpg' } });
     await save();
@@ -115,33 +121,35 @@ describe('BackgroundConfigModal at every level', () => {
       expect(sameOption().checked).toBe(true);
       expect(screen.getByText("This tab's own picture is kept for when you switch back.")).toBeInTheDocument();
     });
-    it('folder: "Same as <name>" names the tab or folder it sits in, as text', () => {
-      open('folder', kept, 'Media <b>x</b>');
-      expect(sameOption().labels?.[0].textContent?.trim()).toBe('Same as Media <b>x</b>');
-      expect(document.querySelector('.modal-body b')).toBeNull();
+    it('folder: "No picture of its own — show what\'s behind" / "Its own picture" (M6 §7.5)', () => {
+      open('folder', kept);
+      expect(screen.getByRole('radiogroup', { name: /folder background/i })).toBeInTheDocument();
+      expect(behindOption().checked).toBe(true);
+      expect(pictureOption().checked).toBe(false);
+      expect(screen.queryByRole('radio', { name: /^Same as / })).toBeNull();
       expect(screen.getByText("This folder's own picture is kept for when you switch back.")).toBeInTheDocument();
     });
-    it('folder with no parent name falls back to a plain phrase', () => {
-      open('folder', pic);
-      expect(sameOption().labels?.[0].textContent?.trim()).toBe('Same as the folder it sits in');
+    it('folder with no background starts on "No picture of its own"', () => {
+      open('folder');
+      expect(behindOption().checked).toBe(true);
     });
     it('no level, in either state, says "uses the background below"', () => {
       for (const level of ['dashboard', 'tab', 'folder'] as const) {
         for (const bg of [pic, kept]) {
-          const { unmount } = render(BackgroundConfigModal, { level, background: bg, parentName: 'Media', onSave: vi.fn(), onCancel: vi.fn() });
+          const { unmount } = render(BackgroundConfigModal, { level, background: bg, onSave: vi.fn(), onCancel: vi.fn() });
           expect(document.body.textContent).not.toMatch(/uses the background below/i);
           unmount();
         }
       }
     });
     it('choosing "Same as" sets inherit:true and keeps the picture; switching back restores it', async () => {
-      const { onSave } = open('folder', { ...pic, opacity: 0.4 }, 'Media');
-      await fireEvent.click(sameOption());
+      const { onSave } = open('folder', { ...pic, opacity: 0.4 });
+      await fireEvent.click(behindOption());
       await save();
       expect(onSave.mock.calls[0][0]).toEqual({ ...pic, opacity: 0.4, inherit: true });
       document.body.innerHTML = '';
-      const r = open('folder', structuredClone(onSave.mock.calls[0][0]), 'Media');
-      await fireEvent.click(ownOption());
+      const r = open('folder', structuredClone(onSave.mock.calls[0][0]));
+      await fireEvent.click(pictureOption());
       await save();
       expect(r.onSave.mock.calls[0][0]).toEqual({ ...pic, opacity: 0.4 });
     });
@@ -250,8 +258,8 @@ describe('BackgroundConfigModal at every level', () => {
     expect((onSave.mock.calls[0][0] as Background).opacity).toBe(1);
   });
 
-  it('a colour background gets the opacity slider too', () => {
-    open('folder', { type: 'color', value: '#112233' });
+  it('a colour background gets the opacity slider too (dashboard and tab levels)', () => {
+    open('tab', { type: 'color', value: '#112233' });
     expect(screen.getByLabelText(/^Background opacity/)).toBeInTheDocument();
   });
 
@@ -297,8 +305,8 @@ describe('BackgroundConfigModal at every level', () => {
     expect(screen.getByRole('alert').textContent).toMatch(/at least one image/i);
   });
 
-  it('None saves no background', async () => {
-    const { onSave } = open('folder', { type: 'image', value: '/presets/network-grid.jpg' });
+  it('None saves no background (tab level)', async () => {
+    const { onSave } = open('tab', { type: 'image', value: '/presets/network-grid.jpg' });
     await fireEvent.click(screen.getByRole('button', { name: /^None$/ }));
     await save();
     expect(onSave).toHaveBeenCalledWith(undefined);
@@ -355,6 +363,104 @@ describe('BackgroundConfigModal at every level', () => {
       expect(screen.queryByText(/is outside/i)).toBeNull();
       await save();
       expect(onSave.mock.calls[0][0]).toEqual(bg);
+    });
+  });
+});
+
+// M6 §7.5: the folder background is pictures only. Edit Folder owns the folder's colour; the
+// dashboard and tab levels keep every option; a stored folder colour background is never dropped.
+describe('folder background: pictures only (M6 §7.5)', () => {
+  const typeButtons = () =>
+    Array.from(document.querySelectorAll('[aria-labelledby="bg-type-label"] button')).map((b) => b.textContent?.trim());
+
+  it('"Its own picture" offers Image and Slideshow only — no Color, no None', async () => {
+    open('folder');
+    expect(screen.queryByRole('button', { name: /^Image$/ })).toBeNull(); // nothing to pick until "Its own picture"
+    await fireEvent.click(pictureOption());
+    expect(typeButtons()).toEqual(['Image', 'Slideshow']);
+    expect(screen.queryByRole('button', { name: /^Color$/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^None$/ })).toBeNull();
+  });
+
+  it('the dashboard and tab levels keep None, Color, Image and Slideshow', () => {
+    for (const level of ['dashboard', 'tab'] as const) {
+      const { unmount } = render(BackgroundConfigModal, { level, onSave: vi.fn(), onCancel: vi.fn() });
+      expect(typeButtons()).toEqual(['None', 'Color', 'Image', 'Slideshow']);
+      unmount();
+    }
+  });
+
+  it('"Its own picture" with nothing picked is refused visibly (never saved as nothing)', async () => {
+    const { onSave } = open('folder');
+    await fireEvent.click(pictureOption());
+    await save();
+    expect(onSave).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert').textContent).toMatch(/Choose an image/i);
+  });
+
+  it('no background, untouched: Save gives back no background', async () => {
+    const { onSave } = open('folder');
+    await save();
+    expect(onSave).toHaveBeenCalledWith(undefined);
+  });
+
+  it('a kept picture can be removed for good ("Remove it")', async () => {
+    const { onSave } = open('folder', { inherit: true, type: 'image', value: '/presets/network-grid.jpg' });
+    await fireEvent.click(screen.getByRole('button', { name: /^Remove it/ }));
+    expect(screen.queryByText(/own picture is kept/i)).toBeNull();
+    await save();
+    expect(onSave).toHaveBeenCalledWith(undefined);
+  });
+
+  describe('a stored colour background (from before §7.5)', () => {
+    const colourBg: Background = { type: 'color', value: '#123456', opacity: 0.6 };
+    const legacyOption = () => screen.getByRole('radio', { name: /^Colour background \(set the folder colour instead\)/ }) as HTMLInputElement;
+
+    it('is shown as "Colour background (set the folder colour instead)", ticked, with its colour', () => {
+      open('folder', colourBg);
+      expect(legacyOption().checked).toBe(true);
+      expect(screen.getByText(/#123456/)).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /^Color$/ })).toBeNull();
+    });
+
+    it('is kept exactly when saved untouched (never dropped silently), switched on or off', async () => {
+      for (const bg of [colourBg, { ...colourBg, inherit: true }, { ...colourBg, future: 1 } as unknown as Background]) {
+        const { onSave } = open('folder', structuredClone(bg));
+        await save();
+        expect(onSave.mock.calls[0][0]).toEqual(bg);
+        document.body.innerHTML = '';
+      }
+    });
+
+    it('"Use as folder colour" hands the colour to the folder dialog', async () => {
+      const onUseAsFolderColour = vi.fn();
+      render(BackgroundConfigModal, { level: 'folder', background: colourBg, onSave: vi.fn(), onCancel: vi.fn(), onUseAsFolderColour });
+      await fireEvent.click(screen.getByRole('button', { name: 'Use as folder colour' }));
+      expect(onUseAsFolderColour).toHaveBeenCalledTimes(1);
+    });
+
+    it('a colour that is not #rrggbb says why it cannot be used (no button)', () => {
+      render(BackgroundConfigModal, {
+        level: 'folder', background: { type: 'color', value: 'rebeccapurple' }, onSave: vi.fn(), onCancel: vi.fn(), onUseAsFolderColour: vi.fn()
+      });
+      expect(screen.queryByRole('button', { name: 'Use as folder colour' })).toBeNull();
+      expect(screen.getByText(/rebeccapurple.*can't be used as the folder colour/)).toBeInTheDocument();
+    });
+
+    it('choosing "No picture of its own" removes it, and says so before Save', async () => {
+      const { onSave } = open('folder', colourBg);
+      await fireEvent.click(behindOption());
+      expect(screen.getByText(/colour background is removed when you save/i)).toBeInTheDocument();
+      await save();
+      expect(onSave).toHaveBeenCalledWith(undefined);
+    });
+
+    it('choosing "Its own picture" replaces it with a picture', async () => {
+      const { onSave } = open('folder', colourBg);
+      await fireEvent.click(pictureOption());
+      await fireEvent.input(screen.getByLabelText(/^Image URL/), { target: { value: '/presets/network-grid.jpg' } });
+      await save();
+      expect(onSave.mock.calls[0][0]).toMatchObject({ type: 'image', value: '/presets/network-grid.jpg' });
     });
   });
 });

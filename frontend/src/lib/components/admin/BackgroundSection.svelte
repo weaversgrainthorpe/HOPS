@@ -22,6 +22,7 @@
   import { logError } from '$lib/utils/errors';
   import { isSafeBackgroundUrl, cssUrl } from '$lib/components/background/backgroundUrl';
   import { galleryImages } from '$lib/components/background/galleryImages';
+  import { folderColourFromBackground } from '$lib/components/background/legacyFolderColour';
   import {
     slideshowInterval as clampInterval,
     slideshowTransitionDuration as clampDuration,
@@ -35,18 +36,48 @@
     background?: Background;
     /** Which level this picker edits (design §4a): folders get no overlay or blur of their own. */
     level: 'dashboard' | 'tab' | 'folder';
-    /** Folder level: the name of the tab or folder it sits in ("Same as <name>"); blank = unnamed. */
-    parentName?: string;
+    /**
+     * Folder level, a stored colour background (M6 §7.5): "Use as folder colour" hands it to the folder
+     * dialog, which owns the folder's colour. Without it the button is not offered.
+     */
+    onUseAsFolderColour?: () => void;
   }
 
-  let { background, level, parentName }: Props = $props();
+  let { background, level, onUseAsFolderColour }: Props = $props();
 
   /** The slideshow limit the server's document rules enforce. */
   const MAX_IMAGES = 200;
-  const sameAs = $derived(
-    level === 'tab' ? 'Same as the dashboard' : `Same as ${parentName?.trim() || 'the folder it sits in'}`
-  );
   const hasOverlay = $derived(level !== 'folder');
+  // svelte-ignore state_referenced_locally
+  const isFolder = level === 'folder';
+  // M6 §7.5: a folder background is pictures only (Edit Folder owns the colour). A colour background
+  // stored before that keeps rendering and is shown as its own choice — never dropped silently.
+  // svelte-ignore state_referenced_locally
+  const legacyColour = isFolder && background?.type === 'color';
+  // svelte-ignore state_referenced_locally
+  const legacyColourUse = legacyColour ? folderColourFromBackground(background) : null;
+  /** Folder level: no picture of its own (what's behind shows), its own picture, or the stored colour. */
+  // svelte-ignore state_referenced_locally
+  let folderChoice = $state<'behind' | 'picture' | 'colour'>(
+    legacyColour ? 'colour'
+    : background?.inherit === true || !(background?.type === 'image' || background?.type === 'slideshow') ? 'behind'
+    : 'picture'
+  );
+
+  function chooseFolder(c: 'behind' | 'picture' | 'colour') {
+    folderChoice = c;
+    if (c === 'behind') {
+      inheritOn = true;
+      // A colour is not a picture to keep: choosing "No picture" removes it (said before Save).
+      if (backgroundType === 'color') backgroundType = 'none';
+    } else if (c === 'picture') {
+      inheritOn = false;
+      if (!keptPicture) backgroundType = 'image';
+    } else {
+      inheritOn = stored.inherit === true;
+      backgroundType = 'color';
+    }
+  }
 
   const clamp01 = (n: unknown, d: number) =>
     typeof n === 'number' && Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : d;
@@ -63,6 +94,9 @@
   let backgroundType = $state<'none' | 'color' | 'image' | 'slideshow'>(
     background?.type || 'none'
   );
+  /** The picture controls: always at the dashboard and tab levels; at folder level, for "Its own picture". */
+  const showPictureControls = $derived(!isFolder || folderChoice === 'picture');
+  const keptPicture = $derived(backgroundType === 'image' || backgroundType === 'slideshow');
   // svelte-ignore state_referenced_locally
   let backgroundFit = $state<'cover' | 'contain' | 'fill'>(
     background?.fit || 'cover'
@@ -438,6 +472,15 @@
    * Inherit off later never brings back something unusable (and nothing is dropped silently).
    */
   export function build(): { ok: true; value: Background | undefined } | { ok: false; problem: string } {
+    if (isFolder) {
+      // The stored colour background, untouched: kept exactly (switched on or off).
+      if (folderChoice === 'colour') return { ok: true, value: background ? { ...stored } : undefined };
+      // No picture of its own and none kept: the bare inherit form round-trips; otherwise nothing.
+      if (folderChoice === 'behind' && !keptPicture) {
+        const bare = stored.inherit === true && !stored.type;
+        return { ok: true, value: bare ? { ...stored } : undefined };
+      }
+    }
     const { bg, problem } = buildPicture();
     if (problem) return { ok: false, problem: inheritOn ? `The kept picture can't be saved: ${problem}` : problem };
     // Off but kept (call 5): { inherit: true, …picture }; None + Inherit = the bare inherit form.
@@ -533,11 +576,48 @@
         Shown behind the whole dashboard.
       {/if}
     </p>
+  {:else if isFolder}
+    <!-- M6 §7.5: pictures only. The folder's colour and opacity are set in Edit Folder. -->
+    <div class="inherit-radios" role="radiogroup" aria-label="Folder background">
+      {#if legacyColour}
+        <label class="inherit-radio">
+          <input type="radio" name="bg-source" checked={folderChoice === 'colour'} onchange={() => chooseFolder('colour')} />
+          <span>Colour background (set the folder colour instead)</span>
+        </label>
+      {/if}
+      <label class="inherit-radio">
+        <input type="radio" name="bg-source" checked={folderChoice === 'behind'} onchange={() => chooseFolder('behind')} />
+        <span>No picture of its own — show what's behind</span>
+      </label>
+      <label class="inherit-radio">
+        <input type="radio" name="bg-source" checked={folderChoice === 'picture'} onchange={() => chooseFolder('picture')} />
+        <span>Its own picture</span>
+      </label>
+    </div>
+    {#if folderChoice === 'colour'}
+      <div class="legacy-colour" data-legacy-colour>
+        <span class="legacy-swatch" style:background-color={legacyColourUse?.ok ? legacyColourUse.color : undefined} aria-hidden="true"></span>
+        <p class="radio-hint-text">
+          This folder has a colour background ({background?.value ?? 'no value'}){background?.inherit ? ', switched off' : ''}.
+          Folders take their colour from Edit Folder now; it keeps showing until you change it.
+        </p>
+        {#if legacyColourUse && !legacyColourUse.ok}
+          <p class="radio-hint-text">{legacyColourUse.problem}</p>
+        {:else if onUseAsFolderColour}
+          <button type="button" class="use-colour-btn" onclick={() => onUseAsFolderColour?.()}>Use as folder colour</button>
+        {/if}
+      </div>
+    {:else if folderChoice === 'behind' && legacyColour}
+      <p class="toggle-hint radio-hint" role="status">The colour background is removed when you save.</p>
+    {:else if folderChoice === 'behind' && keptPicture}
+      <p class="toggle-hint radio-hint" id="bg-inherit-hint">This folder's own picture is kept for when you switch back.</p>
+      <button type="button" class="remove-kept-btn" onclick={() => (backgroundType = 'none')}>Remove it</button>
+    {/if}
   {:else}
-    <div class="inherit-radios" role="radiogroup" aria-label="{level === 'tab' ? 'Tab' : 'Folder'} background" aria-describedby={inheritOn ? 'bg-inherit-hint' : undefined}>
+    <div class="inherit-radios" role="radiogroup" aria-label="Tab background" aria-describedby={inheritOn ? 'bg-inherit-hint' : undefined}>
       <label class="inherit-radio">
         <input type="radio" name="bg-source" checked={inheritOn} onchange={() => (inheritOn = true)} />
-        <span>{sameAs}</span>
+        <span>Same as the dashboard</span>
       </label>
       <label class="inherit-radio">
         <input type="radio" name="bg-source" checked={!inheritOn} onchange={() => (inheritOn = false)} />
@@ -550,19 +630,22 @@
   {/if}
 </div>
 
+{#if showPictureControls}
 <!-- Background Type Selection -->
 <div class="form-group">
   <!-- svelte-ignore a11y_label_has_associated_control -->
-  <label id="bg-type-label">Background Type {#if inheritOn}<span class="label-hint">(kept, not shown while inheriting)</span>{/if}</label>
+  <label id="bg-type-label">{isFolder ? 'Picture type' : 'Background Type'} {#if inheritOn}<span class="label-hint">(kept, not shown while inheriting)</span>{/if}</label>
   <div class="type-buttons" role="group" aria-labelledby="bg-type-label">
-    <button class="type-btn" class:active={backgroundType === 'none'} onclick={() => backgroundType = 'none'}>
-      <Icon icon="mdi:close-circle-outline" width="24" />
-      <span>None</span>
-    </button>
-    <button class="type-btn" class:active={backgroundType === 'color'} onclick={() => backgroundType = 'color'}>
-      <Icon icon="mdi:palette" width="24" />
-      <span>Color</span>
-    </button>
+    {#if !isFolder}
+      <button class="type-btn" class:active={backgroundType === 'none'} onclick={() => backgroundType = 'none'}>
+        <Icon icon="mdi:close-circle-outline" width="24" />
+        <span>None</span>
+      </button>
+      <button class="type-btn" class:active={backgroundType === 'color'} onclick={() => backgroundType = 'color'}>
+        <Icon icon="mdi:palette" width="24" />
+        <span>Color</span>
+      </button>
+    {/if}
     <button class="type-btn" class:active={backgroundType === 'image'} onclick={() => backgroundType = 'image'}>
       <Icon icon="mdi:image" width="24" />
       <span>Image</span>
@@ -1042,6 +1125,8 @@
 {/if}
 
 <!-- Hover preview -->
+{/if}
+
 {#if hoverPreviewUrl}
   <div
     class="hover-preview"
@@ -1194,6 +1279,44 @@
 
   .toggle-hint.radio-hint {
     padding-left: 0;
+  }
+
+  .legacy-colour {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+    margin-top: 0.75rem;
+  }
+  .legacy-swatch {
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 0.25rem;
+    border: 1px solid var(--text-secondary);
+    flex-shrink: 0;
+  }
+  .radio-hint-text {
+    margin: 0;
+    flex: 1 1 16rem;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+  }
+  .use-colour-btn,
+  .remove-kept-btn {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    border-radius: 0.375rem;
+    padding: 0.4rem 0.8rem;
+    font-size: 0.875rem;
+    cursor: pointer;
+  }
+  .remove-kept-btn {
+    margin-top: 0.5rem;
+  }
+  .use-colour-btn:hover,
+  .remove-kept-btn:hover {
+    border-color: var(--accent);
   }
 
   .label-hint {

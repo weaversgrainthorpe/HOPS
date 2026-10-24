@@ -79,7 +79,8 @@
   .reset-btn {
     background: none;
     border: none;
-    color: var(--accent);
+    /* Readable link text (>= 4.5:1) in both themes; the plain accent is 3.4–4:1. */
+    color: #93c5fd;
     font-size: 0.75rem;
     cursor: pointer;
     padding: 0.25rem 0.5rem;
@@ -140,5 +141,8 @@
     font-size: 0.75rem;
     color: var(--text-secondary);
     margin-top: 0.25rem;
+  }
+  :global([data-theme='light']) .reset-btn {
+    color: #1d4ed8;
   }
 </style>

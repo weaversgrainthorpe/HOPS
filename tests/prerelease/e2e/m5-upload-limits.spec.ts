@@ -162,6 +162,7 @@ test.describe('M5 §10 oversize uploads are refused with a message naming the li
 		const dlg = page.getByRole('dialog', { name: 'Edit Folder' });
 		await dlg.getByRole('button', { name: /^Background/ }).click();
 		const picker = page.getByRole('dialog', { name: 'Folder background' });
+		await picker.getByRole('radio', { name: 'Its own picture' }).check();
 		await picker.getByRole('button', { name: /^Image$/ }).click();
 		await picker.locator('input#bg-file-upload').setInputFiles(big('huge.png', 'image/png'));
 		await expect(picker.locator('.upload-error')).toContainText(/This file is 1\.5 MB, but the largest background image allowed is 1 MB/);

@@ -24,12 +24,13 @@
   import IconEditModal from '../admin/IconEditModal.svelte';
   import BackgroundConfigModal from '../admin/BackgroundConfigModal.svelte';
   import { backgroundSummary } from '../background/backgroundSummary';
+  import { folderColourFromBackground, isLegacyFolderColour } from '../background/legacyFolderColour';
   import Modal from '../shared/Modal.svelte';
   import StatusCheckSetting from './StatusCheckSetting.svelte';
   import { containerSetting, type LevelSetting, type StatusContext } from '$lib/editor/statusChecks';
   import { FOLDER_SHAPES, TAB_POSITIONS, hasTab, isFolderShape, sizeOf } from '$lib/layout/geometry';
   import { MIN_TEXT_CONTRAST, deriveFolderColours } from '$lib/layout/folderColours';
-  import FolderShapeView from '../layout/FolderShape.svelte';
+  import LookPreview from './LookPreview.svelte';
   import type { FolderShape, ItemSize, TabPosition } from '$lib/types/layout';
 
   interface Props {
@@ -55,13 +56,13 @@
   // A picked background is staged here and saved with the dialog (one undo step);
   // Cancel discards it (Ruling 11(5)).
   let stagedBackground = $state<{ value: Background | undefined } | null>(null);
-  // "Same as <name>": the folder it sits in, else the tab (an unnamed one reads as a plain phrase).
-  const parentName = $derived.by(() => {
-    const above = statusContext?.folders[statusContext.folders.length - 1];
-    if (above) return above.name?.trim() || 'the folder it sits in';
-    return statusContext?.tab?.name?.trim() || 'the tab it sits in';
-  });
   const shownBackground = $derived(stagedBackground ? stagedBackground.value : folder.background);
+  // M6 §7.5: a colour background stored before folders took their colour from this dialog. It keeps
+  // rendering and is shown here with a one-click "Use as folder colour" — never dropped silently.
+  const legacyColour = $derived(isLegacyFolderColour(shownBackground));
+  const legacyColourUse = $derived(legacyColour ? folderColourFromBackground(shownBackground) : null);
+  /** What "Use as folder colour" did (shown until Save or Cancel). */
+  let colourNote = $state('');
 
   // Form state starts from the folder (intentionally captures the initial values).
   // svelte-ignore state_referenced_locally
@@ -133,6 +134,20 @@
     return true;
   }
 
+  /** "Use as folder colour": the colour background becomes the folder colour, and is removed (staged). */
+  function useAsFolderColour() {
+    const r = folderColourFromBackground(shownBackground);
+    showBackgroundConfig = false;
+    if (!r.ok) {
+      colourNote = r.problem;
+      return;
+    }
+    color = r.color;
+    if (r.opacity !== undefined) opacity = r.opacity;
+    stagedBackground = { value: undefined };
+    colourNote = `Folder colour set to ${r.color}${r.opacity !== undefined ? ` at ${Math.round(r.opacity * 100)}% opacity` : ''} from its colour background, which is removed — applies when you ${isNew ? 'create' : 'save'} this folder.`;
+  }
+
   function handleSave() {
     if (!name.trim()) {
       problem = 'A folder needs a name.';
@@ -198,118 +213,142 @@
       </button>
     </div>
 
-    <ColorPicker selectedColor={color} onSelect={(c) => (color = c)} />
-    <OpacitySlider {opacity} onSelect={(o) => (opacity = o)} />
-
-    <fieldset class="form-group">
-      <legend>Text colour</legend>
-      <div class="choice-row">
-        {#each [['auto', 'Auto'], ['light', 'Light'], ['dark', 'Dark']] as [v, label] (v)}
-          <label class="choice">
-            <input type="radio" name="folder-text-color" value={v} bind:group={textColor} />
-            {label}
-          </label>
-        {/each}
-      </div>
-      {#if colours.contrastWarning}
-        <p class="problem" role="status" data-contrast-warning>
-          {textColor === 'light' ? 'Light' : 'Dark'} text is hard to read on this colour (contrast {colours.contrast.toFixed(1)}:1,
-          needs {MIN_TEXT_CONTRAST}:1). Choose Auto or another colour.
-        </p>
-      {/if}
-    </fieldset>
-
-    <fieldset class="form-group">
-      <legend>Starts</legend>
-      <div class="choice-row">
-        <label class="choice">
-          <input type="radio" name="folder-display" value="expanded" bind:group={display} /> Expanded
-        </label>
-        <label class="choice">
-          <input type="radio" name="folder-display" value="collapsed" bind:group={display} /> Collapsed
-        </label>
-      </div>
-      <small>How the folder looks to anyone who hasn't minimised or expanded it themselves.</small>
-    </fieldset>
-
-    <div class="form-row">
-      <div class="form-group">
-        <label for="folder-content-size">Contents size</label>
-        <select id="folder-content-size" bind:value={contentSize}>
-          {#each SIZES as [v, label] (v)}<option value={v}>{label}</option>{/each}
-        </select>
-        <small>Every tile and folder inside is shown at this size.</small>
-        {#if contentSizeError}<p class="problem" role="alert">{contentSizeError}</p>{/if}
-      </div>
-      <div class="form-group">
-        <label for="folder-size">Size when minimised</label>
-        <select id="folder-size" bind:value={size}>
-          {#each SIZES as [v, label] (v)}<option value={v}>{label}</option>{/each}
-        </select>
-        <small>Its tile on the tab, inside the space it keeps.</small>
-      </div>
-    </div>
-
-    <fieldset class="form-group">
-      <legend id="folder-look-legend">Look</legend>
+    <!-- M6 §7.1: the look sits right under the icon, before the colour and the background. -->
+    <section class="dialog-section" aria-labelledby="folder-look-heading">
+      <h3 id="folder-look-heading" class="part-title">Look</h3>
       {#if !isFolderShape(shape)}
         <p class="problem" role="status">Unknown look ({shape}) — it draws as a rounded box. Pick one below.</p>
       {/if}
-      <!-- Live previews of every look in this folder's colour and tab position (the previews are
-           decoration; each radio is named by its label). -->
-      <div class="shape-picker" role="radiogroup" aria-labelledby="folder-look-legend">
+      <!-- Live previews of every look in this folder's colour and tab position, each on a light card
+           (§7.2). The previews are decoration; each radio is named by its label. -->
+      <div class="shape-picker" role="radiogroup" aria-labelledby="folder-look-heading">
         {#each FOLDER_SHAPES as s (s)}
           <label class="shape-choice" class:chosen={shape === s}>
             <input type="radio" name="folder-shape" value={s} bind:group={shape} />
-            <span class="shape-preview" class:rounded={s === 'rounded'}>
-              <FolderShapeView
-                look={{ shape: s, tabPosition, color, textColor, opacity }}
-                variant="minimised"
-                dashboardId=""
-                widthPx={72}
-                heightPx={56}
-              />
-            </span>
+            <LookPreview shape={s} {tabPosition} {color} {textColor} />
             <span class="shape-label">{SHAPE_LABELS[s]}</span>
           </label>
         {/each}
       </div>
       {#if shapeError}<p class="problem" role="alert">{shapeError}</p>{/if}
-    </fieldset>
 
-    {#if hasTab(shape)}
+      {#if hasTab(shape)}
+        <fieldset class="form-group tab-position">
+          <legend id="folder-tab-legend">Tab position</legend>
+          <div class="choice-row" role="radiogroup" aria-labelledby="folder-tab-legend">
+            {#each TAB_POSITIONS as p (p)}
+              <label class="choice">
+                <input type="radio" name="folder-tab-position" value={p} bind:group={tabPosition} />
+                {TAB_POSITION_LABELS[p]}
+              </label>
+            {/each}
+          </div>
+        </fieldset>
+      {/if}
+    </section>
+
+    <section class="dialog-section" aria-labelledby="folder-colour-heading">
+      <h3 id="folder-colour-heading" class="part-title">Colour</h3>
+      <ColorPicker label="Folder colour" selectedColor={color} onSelect={(c) => { color = c; colourNote = ''; }} />
+      <OpacitySlider {opacity} onSelect={(o) => (opacity = o)} />
+
       <fieldset class="form-group">
-        <legend id="folder-tab-legend">Tab position</legend>
-        <div class="choice-row" role="radiogroup" aria-labelledby="folder-tab-legend">
-          {#each TAB_POSITIONS as p (p)}
+        <legend>Text colour</legend>
+        <div class="choice-row">
+          {#each [['auto', 'Auto'], ['light', 'Light'], ['dark', 'Dark']] as [v, label] (v)}
             <label class="choice">
-              <input type="radio" name="folder-tab-position" value={p} bind:group={tabPosition} />
-              {TAB_POSITION_LABELS[p]}
+              <input type="radio" name="folder-text-color" value={v} bind:group={textColor} />
+              {label}
             </label>
           {/each}
         </div>
+        {#if colours.contrastWarning}
+          <p class="problem" role="status" data-contrast-warning>
+            {textColor === 'light' ? 'Light' : 'Dark'} text is hard to read on this colour (contrast {colours.contrast.toFixed(1)}:1,
+            needs {MIN_TEXT_CONTRAST}:1). Choose Auto or another colour.
+          </p>
+        {/if}
       </fieldset>
-    {/if}
+    </section>
 
-    <label class="check">
-      <input type="checkbox" bind:checked={showTitle} /> Show title bar
-    </label>
+    <section class="dialog-section" aria-labelledby="folder-display-heading">
+      <h3 id="folder-display-heading" class="part-title">Display</h3>
+      <fieldset class="form-group">
+        <legend>Starts</legend>
+        <div class="choice-row">
+          <label class="choice">
+            <input type="radio" name="folder-display" value="expanded" bind:group={display} /> Expanded
+          </label>
+          <label class="choice">
+            <input type="radio" name="folder-display" value="collapsed" bind:group={display} /> Collapsed
+          </label>
+        </div>
+        <small>How the folder looks to anyone who hasn't minimised or expanded it themselves.</small>
+      </fieldset>
 
-    <StatusCheckSetting level="folder" bind:value={statusSetting} context={statusContext} />
+      <div class="form-row">
+        <div class="form-group">
+          <label for="folder-content-size">Contents size</label>
+          <select id="folder-content-size" bind:value={contentSize}>
+            {#each SIZES as [v, label] (v)}<option value={v}>{label}</option>{/each}
+          </select>
+          <small>Every tile and folder inside is shown at this size.</small>
+          {#if contentSizeError}<p class="problem" role="alert">{contentSizeError}</p>{/if}
+        </div>
+        <div class="form-group">
+          <label for="folder-size">Size when minimised</label>
+          <select id="folder-size" bind:value={size}>
+            {#each SIZES as [v, label] (v)}<option value={v}>{label}</option>{/each}
+          </select>
+          <small>Its tile on the tab, inside the space it keeps.</small>
+        </div>
+      </div>
 
-    <div class="form-group">
-      <button type="button" class="btn-secondary background-btn" onclick={() => (showBackgroundConfig = true)}>
-        <Icon icon="mdi:image-multiple" width="18" /> Background…
-      </button>
-      <small class="background-status">
-        {backgroundSummary(shownBackground, 'No background of its own')}{stagedBackground ? ` — applies when you ${isNew ? 'create' : 'save'} this folder` : ''}
-      </small>
-    </div>
+      <label class="check">
+        <input type="checkbox" bind:checked={showTitle} /> Show title bar
+      </label>
+    </section>
+
+    <!-- §7.4: each part its own section, so the status-check text never sits against the Background button. -->
+    <section class="dialog-section status-section">
+      <StatusCheckSetting level="folder" bind:value={statusSetting} context={statusContext} />
+    </section>
+
+    <section class="dialog-section" aria-labelledby="folder-background-heading">
+      <h3 id="folder-background-heading" class="part-title">Background</h3>
+      {#if legacyColour}
+        <div class="legacy-colour" data-legacy-colour>
+          <span class="legacy-swatch" style:background-color={legacyColourUse?.ok ? legacyColourUse.color : undefined} aria-hidden="true"></span>
+          <p class="legacy-text">
+            Colour background {shownBackground?.value ?? ''}{shownBackground?.inherit ? ' (switched off)' : ''} (set the folder colour instead)
+          </p>
+          {#if legacyColourUse?.ok}
+            <button type="button" class="btn-secondary" onclick={useAsFolderColour}>Use as folder colour</button>
+          {:else if legacyColourUse}
+            <p class="legacy-text">{legacyColourUse.problem}</p>
+          {/if}
+        </div>
+      {/if}
+      <div class="background-row">
+        <button type="button" class="btn-secondary background-btn" onclick={() => (showBackgroundConfig = true)}>
+          <Icon icon="mdi:image-multiple" width="18" /> Background…
+        </button>
+        {#if !legacyColour}
+          <small class="background-status">
+            {backgroundSummary(shownBackground, "No picture of its own — shows what's behind")}{stagedBackground ? ` — applies when you ${isNew ? 'create' : 'save'} this folder` : ''}
+          </small>
+        {/if}
+      </div>
+      {#if colourNote}<p class="colour-note" role="status">{colourNote}</p>{/if}
+    </section>
 
     {#if onMoveCopy && !isNew}
-      <button type="button" class="btn-secondary move-btn" onclick={onMoveCopy}>
-        <Icon icon="mdi:folder-move" width="18" /> Move or copy to…
-      </button>
+      <section class="dialog-section" aria-labelledby="folder-move-heading">
+        <h3 id="folder-move-heading" class="part-title">Move or copy</h3>
+        <button type="button" class="btn-secondary move-btn" onclick={onMoveCopy}>
+          <Icon icon="mdi:folder-move" width="18" /> Move or copy to…
+        </button>
+      </section>
     {/if}
   </form>
 
@@ -337,7 +376,7 @@
   <BackgroundConfigModal
     background={shownBackground}
     level="folder"
-    {parentName}
+    onUseAsFolderColour={useAsFolderColour}
     onSave={(bg) => {
       stagedBackground = { value: bg };
       showBackgroundConfig = false;
@@ -397,10 +436,14 @@
   small {
     color: var(--text-secondary);
   }
+  /* §7.3: text in this dialog reaches 4.5:1 in both themes (the plain error and accent colours don't). */
   .problem {
     margin: 0;
-    color: var(--color-error, #dc2626);
+    color: #fca5a5;
     font-size: 0.875rem;
+  }
+  :global([data-theme='light']) .problem {
+    color: #b91c1c;
   }
   .choice-row {
     display: flex;
@@ -415,7 +458,7 @@
     font-weight: 400;
   }
   .check {
-    margin-bottom: 1.25rem;
+    margin-bottom: 0.25rem;
   }
   .shape-picker {
     display: grid;
@@ -451,16 +494,6 @@
     width: 1px;
     height: 1px;
     margin: 0;
-  }
-  .shape-preview {
-    position: relative;
-    isolation: isolate;
-    width: 72px;
-    height: 56px;
-  }
-  .shape-preview.rounded {
-    border: 1px solid var(--border);
-    border-radius: 0.5rem;
   }
   .icon-summary {
     display: flex;
@@ -505,17 +538,69 @@
     display: inline-flex;
     align-items: center;
     gap: 0.3rem;
-    color: var(--accent);
+    color: #93c5fd;
     font-size: 0.875rem;
+  }
+  :global([data-theme='light']) .edit-cta {
+    color: #1d4ed8;
+  }
+  /* §7.4: each part of the dialog is its own section, with a heading and room around it. */
+  .dialog-section {
+    margin: 1.5rem 0 0;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--border);
+  }
+  .part-title,
+  .status-section :global(.status-checks legend) {
+    margin: 0 0 0.85rem;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  .shape-picker {
+    margin-bottom: 0.25rem;
+  }
+  .tab-position {
+    margin: 1rem 0 0;
+  }
+  .background-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1rem;
   }
   .background-btn {
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
-    align-self: flex-start;
   }
   .background-status {
-    font-size: 0.8rem;
+    font-size: 0.875rem;
+  }
+  .legacy-colour {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+    margin-bottom: 0.85rem;
+  }
+  .legacy-swatch {
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 0.25rem;
+    border: 1px solid var(--text-secondary);
+    flex-shrink: 0;
+  }
+  .legacy-text {
+    margin: 0;
+    flex: 1 1 14rem;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+  }
+  .colour-note {
+    margin: 0.75rem 0 0;
+    font-size: 0.875rem;
+    color: var(--text-primary);
   }
   .move-btn {
     display: inline-flex;
@@ -538,5 +623,17 @@
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
+  }
+  /* White on the plain accent is 3.7:1; a darker shade of it reaches 4.5:1 (§7.3). */
+  .modal-actions .btn-primary {
+    background: color-mix(in srgb, var(--accent) 78%, black);
+  }
+  .modal-actions .btn-primary:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--accent-hover) 78%, black);
+  }
+  /* Placeholders readable (>= 4.5:1, M6 §7.3); the browser default grey is 3.2–4.2:1. */
+  input::placeholder {
+    color: color-mix(in srgb, var(--text-secondary) 75%, var(--bg-secondary));
+    opacity: 1;
   }
 </style>

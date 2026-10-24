@@ -438,7 +438,7 @@
     display: inline-flex;
     align-items: center;
     gap: 0.3rem;
-    color: var(--accent);
+    color: #93c5fd;
     font-size: 0.875rem;
     font-weight: 500;
   }
@@ -447,6 +447,9 @@
     margin: 0;
     font-size: 0.8rem;
     color: var(--color-error-text);
+  }
+  :global([data-theme='light']) .field-error {
+    color: #b91c1c;
   }
 
   small {
@@ -551,6 +554,23 @@
     color: var(--accent);
   }
 
+  /* Placeholders readable (>= 4.5:1, M6 §7.3); the browser default grey is 3.2–4.2:1. */
+  input::placeholder,
+  textarea::placeholder {
+    color: color-mix(in srgb, var(--text-secondary) 75%, var(--bg-secondary));
+    opacity: 1;
+  }
+  /* §7.3: readable accent text in both themes (the plain accent is 3.4–4:1). */
+  :global([data-theme='light']) .edit-cta {
+    color: #1d4ed8;
+  }
+  /* White on the plain accent is 3.7:1; a darker shade of it reaches 4.5:1 (§7.3). */
+  .modal-actions .btn-primary {
+    background: color-mix(in srgb, var(--accent) 78%, black);
+  }
+  .modal-actions .btn-primary:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--accent-hover) 78%, black);
+  }
 </style>
 
 {#if showIconEditor}

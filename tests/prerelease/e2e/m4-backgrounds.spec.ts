@@ -194,7 +194,8 @@ test.describe('M4 backgrounds in a real browser', () => {
     // Cancel discards a picked background (Ruling 11(5)): nothing reaches the draft.
     {
       const { dlg, picker } = await openFolderPicker(page, sel);
-      await picker.getByRole('button', { name: /^Color$/ }).click();
+      await picker.getByRole('radio', { name: 'Its own picture' }).check();
+      await picker.locator(`.image-card img[src="${PRESET}"]`).first().click();
       await picker.getByRole('button', { name: /^Save Background/ }).click();
       await expect(picker).toBeHidden();
       await expect(dlg.locator('.background-status')).toContainText(/applies when you save/);
@@ -204,8 +205,9 @@ test.describe('M4 backgrounds in a real browser', () => {
       await expect(page.locator(`${sel} .folder-surface .background-root`)).toHaveCount(0);
     }
     const { dlg, picker } = await openFolderPicker(page, sel);
-    await expect(dlg.locator('.background-status')).toContainText(/No background of its own/);
-    // Folder level: no overlay or blur of its own (call 1).
+    await expect(dlg.locator('.background-status')).toContainText(/No picture of its own/);
+    // Folder level: no overlay or blur of its own (call 1); pictures only (M6 §7.5).
+    await picker.getByRole('radio', { name: 'Its own picture' }).check();
     await picker.getByRole('button', { name: /^Image$/ }).click();
     await expect(picker.getByText(/Overlay Darkness/i)).toHaveCount(0);
     await expect(picker.getByText(/Overlay Blur/i)).toHaveCount(0);
@@ -247,7 +249,7 @@ test.describe('M4 backgrounds in a real browser', () => {
     await enterEdit(page);
 
     let { dlg, picker } = await openFolderPicker(page, sel);
-    const same = picker.getByRole('radio', { name: /^Same as / });
+    const same = picker.getByRole('radio', { name: "No picture of its own — show what's behind" });
     await expect(same).not.toBeChecked();
     await same.check();
     await expect(same).toBeChecked();
@@ -261,8 +263,8 @@ test.describe('M4 backgrounds in a real browser', () => {
     await expect(page.locator(`${sel} .folder-surface .background-root`)).toHaveCount(0);
 
     ({ dlg, picker } = await openFolderPicker(page, sel));
-    await expect(picker.getByRole('radio', { name: /^Same as / })).toBeChecked();
-    await picker.getByRole('radio', { name: 'Its own background' }).check();
+    await expect(picker.getByRole('radio', { name: "No picture of its own — show what's behind" })).toBeChecked();
+    await picker.getByRole('radio', { name: 'Its own picture' }).check();
     await picker.getByRole('button', { name: /^Save Background/ }).click();
     await dlg.getByRole('button', { name: /^Save/ }).click();
     await saveDraft(page);

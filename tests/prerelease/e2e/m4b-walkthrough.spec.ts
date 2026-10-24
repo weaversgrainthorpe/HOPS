@@ -166,6 +166,7 @@ test.describe('M4 walkthrough changes in a real browser', () => {
     await dlg.getByRole('button', { name: /^Background/ }).click();
     const picker = page.getByRole('dialog', { name: 'Folder background' });
     await expect(picker).toBeVisible();
+    await picker.getByRole('radio', { name: 'Its own picture' }).check();
     await picker.getByRole('button', { name: /^Image$/ }).click();
 
     // /presets/network-grid.jpg is in the catalogue three times (Network Grid, Server Room, ...).
@@ -1300,7 +1301,7 @@ test.describe('phones: the page is never wider than the screen', () => {
 // ---- §7.1: plain words for the background on/off control at every level
 
 test.describe('§7.1 background on/off wording', () => {
-  test('the folder dialog says "Same as <tab name>"; the tab and dashboard dialogs use their own words', async ({ page, context }) => {
+  test('the folder dialog says "No picture of its own" / "Its own picture" (M6 §7.5); the tab and dashboard dialogs use their own words', async ({ page, context }) => {
     const f = await importDash(page, context, [{
       name: 'Main',
       children: (id) => [
@@ -1313,15 +1314,15 @@ test.describe('§7.1 background on/off wording', () => {
     await expect(page.locator(sel)).toBeVisible();
     await enterEdit(page);
 
-    // Folder: a radio group naming the tab it sits in.
+    // Folder: pictures only (M6 §7.5) — no picture of its own (what's behind shows), or its own picture.
     await page.locator(sel).dblclick({ position: { x: 20, y: 20 } });
     const dlg = page.getByRole('dialog', { name: 'Edit Folder' });
     await dlg.getByRole('button', { name: /^Background/ }).click();
     const picker = page.getByRole('dialog', { name: 'Folder background' });
     await expect(picker.getByRole('radiogroup', { name: 'Folder background' })).toBeVisible();
-    await expect(picker.getByRole('radio', { name: 'Same as Main' })).toBeVisible();
-    await picker.getByRole('radio', { name: 'Same as Main' }).check();
-    await expect(picker.getByText("This folder's own picture is kept for when you switch back.")).toBeVisible();
+    await expect(picker.getByRole('radio', { name: "No picture of its own — show what's behind" })).toBeChecked();
+    await expect(picker.getByRole('radio', { name: 'Its own picture' })).toBeVisible();
+    await expect(picker.getByRole('radio', { name: /^Same as/ })).toHaveCount(0);
     await page.keyboard.press('Escape');
     await page.keyboard.press('Escape');
     await expect(dlg).toHaveCount(0);
