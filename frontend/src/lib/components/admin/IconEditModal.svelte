@@ -1,10 +1,16 @@
 <script lang="ts">
-  import Icon from '@iconify/svelte';
+  import Icon, { listIcons } from '@iconify/svelte';
   import Modal from '../shared/Modal.svelte';
   import ColoredIcon from '../ColoredIcon.svelte';
   import ColorPicker from './ColorPicker.svelte';
   import IconPickerModal from './IconPickerModal.svelte';
-  import { createIcon, uploadIconImage } from '$lib/utils/api';
+  import { createIcon, getIcons, uploadIconImage } from '$lib/utils/api';
+  import {
+    rankIconSuggestions,
+    bundledSuggestions,
+    dashboardSuggestions,
+    type IconSuggestion,
+  } from '$lib/utils/iconSuggest';
   import { toast } from '$lib/stores/toast';
   import { logWarn } from '$lib/utils/errors';
 
@@ -54,6 +60,99 @@
   $effect(() => {
     iconSearch = icon || '';
   });
+
+  // ── Type-ahead (M6 §7.7) ────────────────────────────────────────────
+  // Suggestions come only from icons HOPS has offline: the bundled Iconify set (registered by
+  // $lib/icons/offline-bundle at start-up) and the imported dashboard-icons (served by HOPS
+  // from /api/icons). Neither needs the internet. A failure to load the dashboard-icons list,
+  // or an empty list, is shown in the suggestions — never silently treated as "no icons".
+  const bundled = bundledSuggestions(listIcons(''));
+  let dashboard = $state<IconSuggestion[]>([]);
+  let dashboardState = $state<'idle' | 'loading' | 'ok' | 'empty' | 'failed'>('idle');
+  let dashboardError = $state('');
+  let suggestOpen = $state(false);
+  let activeIndex = $state(0);
+
+  async function loadDashboardIcons() {
+    if (dashboardState !== 'idle') return;
+    dashboardState = 'loading';
+    try {
+      const rows = await getIcons();
+      dashboard = dashboardSuggestions(rows);
+      dashboardState = dashboard.length > 0 ? 'ok' : 'empty';
+    } catch (err) {
+      dashboardError = err instanceof Error ? err.message : String(err);
+      dashboardState = 'failed';
+      logWarn(`Icon suggestions: could not load the dashboard-icons list: ${dashboardError}`);
+    }
+  }
+
+  const suggestions = $derived(rankIconSuggestions([...bundled, ...dashboard], iconSearch));
+  const listShown = $derived(suggestOpen && iconSearch.trim() !== '');
+  const hasActive = $derived(listShown && suggestions.length > 0);
+
+  const suggestStatus = $derived.by(() => {
+    const parts: string[] = [];
+    if (listShown && suggestions.length === 0) parts.push('No matching icons.');
+    if (bundled.length === 0) parts.push('The offline icon set is not loaded, so only dashboard-icons are suggested.');
+    if (dashboardState === 'failed') parts.push(`Couldn't load the icon list (dashboard-icons): ${dashboardError}`);
+    else if (dashboardState === 'empty') parts.push('The imported dashboard-icons list is empty.');
+    else if (dashboardState === 'loading' && listShown) parts.push('Loading dashboard-icons…');
+    return parts.join(' ');
+  });
+
+  const statusVisible = $derived(listShown || dashboardState === 'failed' || dashboardState === 'empty');
+
+  function openSuggestions() {
+    suggestOpen = true;
+    activeIndex = 0;
+    loadDashboardIcons();
+  }
+
+  function acceptSuggestion(s: IconSuggestion) {
+    if (s.imageUrl) {
+      onIconUrlChange(s.imageUrl);
+      onIconChange('');
+      iconSearch = '';
+    } else if (s.icon) {
+      iconSearch = s.icon;
+      onIconChange(s.icon);
+      onIconUrlChange(undefined);
+    }
+    suggestOpen = false;
+  }
+
+  function handleIconKeydown(e: KeyboardEvent) {
+    if (e.isComposing) return;
+    switch (e.key) {
+      case 'ArrowDown':
+      case 'ArrowUp': {
+        e.preventDefault();
+        if (!listShown) {
+          if (iconSearch.trim() !== '') openSuggestions();
+          return;
+        }
+        const n = suggestions.length;
+        if (n === 0) return;
+        activeIndex = (activeIndex + (e.key === 'ArrowDown' ? 1 : -1) + n) % n;
+        return;
+      }
+      case 'Enter':
+      case 'Tab':
+        if (hasActive && !e.shiftKey) {
+          e.preventDefault();
+          acceptSuggestion(suggestions[Math.min(activeIndex, suggestions.length - 1)]);
+        }
+        return;
+      case 'Escape':
+        if (listShown) {
+          // Close only the list; the dialog's own Escape handling skips a prevented event.
+          e.preventDefault();
+          suggestOpen = false;
+        }
+        return;
+    }
+  }
 
   function handleIconSelect(selection: { icon: string; imageUrl?: string }) {
     onIconChange(selection.icon);
@@ -138,8 +237,18 @@
         <input
           id="icon-edit-input"
           type="text"
+          role="combobox"
+          autocomplete="off"
+          spellcheck="false"
+          aria-autocomplete="list"
+          aria-controls="icon-suggest-list"
+          aria-expanded={listShown}
+          aria-activedescendant={hasActive ? `icon-suggest-${activeIndex}` : undefined}
+          aria-describedby="icon-suggest-status"
           bind:value={iconSearch}
-          oninput={() => { onIconChange(iconSearch); onIconUrlChange(undefined); }}
+          oninput={() => { onIconChange(iconSearch); onIconUrlChange(undefined); openSuggestions(); }}
+          onkeydown={handleIconKeydown}
+          onblur={() => { suggestOpen = false; }}
           placeholder="mdi:server"
           aria-label="Iconify icon name (e.g. mdi:server)"
           disabled={isUploadingIcon}
@@ -150,6 +259,34 @@
                style:background-color={iconBgColor}>
             <ColoredIcon {icon} width="32" />
           </div>
+        {/if}
+        {#if hasActive}
+          <ul id="icon-suggest-list" role="listbox" aria-label="Icon suggestions" class="suggestions">
+            {#each suggestions as s, i (s.label + (s.imageUrl ?? ''))}
+              <!-- Mouse users click a suggestion; keyboard users use ↑/↓ and Tab/Enter on the
+                   field (the combobox pattern), so the option itself takes no key events. -->
+              <!-- svelte-ignore a11y_click_events_have_key_events -->
+              <li
+                id="icon-suggest-{i}"
+                role="option"
+                aria-selected={i === activeIndex}
+                class:active={i === activeIndex}
+                onmousedown={(e) => e.preventDefault()}
+                onclick={() => acceptSuggestion(s)}
+                onmousemove={() => { activeIndex = i; }}
+              >
+                <span class="suggestion-icon" aria-hidden="true">
+                  {#if s.imageUrl}
+                    <img src={s.imageUrl} alt="" width="20" height="20" />
+                  {:else if s.icon}
+                    <Icon icon={s.icon} width="20" />
+                  {/if}
+                </span>
+                <span class="suggestion-label">{s.label}</span>
+                {#if s.source}<span class="suggestion-source">{s.source}</span>{/if}
+              </li>
+            {/each}
+          </ul>
         {/if}
       </div>
       <button
@@ -186,11 +323,14 @@
       />
     </div>
 
+    <!-- Always present so screen readers hear it change; empty while there is nothing to say. -->
+    <p id="icon-suggest-status" class="suggest-status" role="status">{statusVisible ? suggestStatus : ''}</p>
+
     {#if uploadError}
-      <small class="error-text">{uploadError}</small>
+      <small class="error-text" role="alert">{uploadError}</small>
     {/if}
 
-    <small>Browse the icon library, enter an icon name from <a href="https://icon-sets.iconify.design/" target="_blank" rel="noopener">iconify.design</a>, or upload your own</small>
+    <small class="hint">Type a name for suggestions (↑/↓ to move, Tab or Enter to accept), browse the icon library, use any name from <a href="https://icon-sets.iconify.design/" target="_blank" rel="noopener">iconify.design</a>, or upload your own</small>
 
     <div class="icon-bg-section">
       <ColorPicker
@@ -294,6 +434,96 @@
     color: var(--text-primary);
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 0.9rem;
+  }
+
+  /* M6 §7.6: the placeholder is readable — the theme's secondary text colour at full
+     opacity (≥ 8:1 on --bg-secondary in both themes; the browser default was ~2:1). */
+  .icon-input input::placeholder {
+    color: var(--text-secondary);
+    opacity: 1;
+    font-style: italic;
+  }
+
+  .hint {
+    color: var(--text-secondary);
+  }
+
+  /* The accent blue is ~3.9:1 on the dark --bg-secondary, and theme presets change that
+     background; the hint's link uses the primary text colour, underlined, so it stays
+     readable on every preset. */
+  .hint a {
+    color: var(--text-primary);
+    text-decoration: underline;
+  }
+
+  .suggestions {
+    position: absolute;
+    top: calc(100% + 0.25rem);
+    left: 0;
+    right: 0;
+    z-index: 5;
+    list-style: none;
+    margin: 0;
+    padding: 0.25rem;
+    border: 1px solid var(--border);
+    border-radius: 0.4rem;
+    background: var(--bg-primary);
+    box-shadow: 0 6px 18px var(--shadow);
+  }
+
+  .suggestions li {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.35rem 0.5rem;
+    border-radius: 0.3rem;
+    cursor: pointer;
+    color: var(--text-primary);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.85rem;
+  }
+
+  .suggestions li.active {
+    background: var(--bg-tertiary);
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
+
+  .suggestion-icon {
+    display: inline-flex;
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+  }
+
+  .suggestion-icon img {
+    width: 20px;
+    height: 20px;
+    object-fit: contain;
+  }
+
+  .suggestion-label {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .suggestion-source {
+    font-family: inherit;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+  }
+
+  .suggest-status {
+    margin: 0;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+  }
+
+  /* Empty, it stays in the accessibility tree (a live region) but out of the flex flow. */
+  .suggest-status:empty {
+    position: absolute;
   }
 
   .icon-input input:focus {
