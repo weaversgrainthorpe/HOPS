@@ -1,5 +1,7 @@
 <script lang="ts">
-  import Icon, { listIcons } from '@iconify/svelte';
+  import Icon, { addIcon, iconLoaded, listIcons, loadIcon } from '@iconify/svelte';
+  import { onDestroy, untrack } from 'svelte';
+  import { loadIconNames } from '$lib/icons/iconNames';
   import Modal from '../shared/Modal.svelte';
   import ColoredIcon from '../ColoredIcon.svelte';
   import ColorPicker from './ColorPicker.svelte';
@@ -19,7 +21,9 @@
   // inline icon section but in a focused sub-modal — keeps the parent
   // form concerned only with its own properties.
   //
-  // Changes propagate live to the parent via the per-field callbacks.
+  // Changes propagate to the parent via the per-field callbacks. A typed icon name reaches the
+  // parent once it can be drawn without a per-keystroke fetch (see "Live preview" below) and
+  // in any case when the field loses focus or the dialog closes, so nothing typed is dropped.
   // The parent's outer Save/Cancel still controls when the whole tile
   // / group / tab is persisted, so closing this modal with "Done" is a
   // pure UI concern.
@@ -46,8 +50,7 @@
     onClose,
   }: Props = $props();
 
-  // Local copy of the iconify name so typing feels snappy. We push every
-  // keystroke up to the parent so the preview elsewhere stays in sync.
+  // Local copy of the iconify name so typing feels snappy.
   // svelte-ignore state_referenced_locally
   let iconSearch = $state(icon || '');
   let showIconPicker = $state(false);
@@ -61,12 +64,29 @@
     iconSearch = icon || '';
   });
 
-  // ── Type-ahead (M6 §7.7) ────────────────────────────────────────────
-  // Suggestions come only from icons HOPS has offline: the bundled Iconify set (registered by
-  // $lib/icons/offline-bundle at start-up) and the imported dashboard-icons (served by HOPS
-  // from /api/icons). Neither needs the internet. A failure to load the dashboard-icons list,
-  // or an empty list, is shown in the suggestions — never silently treated as "no icons".
+  // ── Type-ahead (M6 §7.7, fix round 1) ───────────────────────────────
+  // Suggestions search, with no internet: the bundled Iconify set (registered by
+  // $lib/icons/offline-bundle at start-up), every name in the full mdi and simple-icons sets
+  // (a names-only list in its own lazily loaded chunk, $lib/icons/iconNames) and the imported
+  // dashboard-icons (served by HOPS from /api/icons). A failure to load either list, or an
+  // empty list, is shown in the suggestions — never silently treated as "no icons".
   const bundled = bundledSuggestions(listIcons(''));
+  let allNames = $state<IconSuggestion[]>([]);
+  let knownNames = $state<Set<string> | null>(null);
+  let namesState = $state<'loading' | 'ok' | 'failed'>('loading');
+  let namesError = $state('');
+  loadIconNames().then(
+    (n) => {
+      allNames = bundledSuggestions(n.suggest);
+      knownNames = n.known;
+      namesState = 'ok';
+    },
+    (err) => {
+      namesError = err instanceof Error ? err.message : String(err);
+      namesState = 'failed';
+      logWarn(`Icon suggestions: could not load the full icon names list: ${namesError}`);
+    }
+  );
   let dashboard = $state<IconSuggestion[]>([]);
   let dashboardState = $state<'idle' | 'loading' | 'ok' | 'empty' | 'failed'>('idle');
   let dashboardError = $state('');
@@ -87,21 +107,117 @@
     }
   }
 
-  const suggestions = $derived(rankIconSuggestions([...bundled, ...dashboard], iconSearch));
+  const pool = $derived([...bundled, ...dashboard, ...allNames]);
+  const suggestions = $derived(rankIconSuggestions(pool, iconSearch));
   const listShown = $derived(suggestOpen && iconSearch.trim() !== '');
   const hasActive = $derived(listShown && suggestions.length > 0);
 
   const suggestStatus = $derived.by(() => {
     const parts: string[] = [];
     if (listShown && suggestions.length === 0) parts.push('No matching icons.');
-    if (bundled.length === 0) parts.push('The offline icon set is not loaded, so only dashboard-icons are suggested.');
+    if (bundled.length === 0) parts.push('The offline icon set is not loaded.');
+    if (namesState === 'failed') parts.push(`Couldn't load the full icon names list: ${namesError}`);
     if (dashboardState === 'failed') parts.push(`Couldn't load the icon list (dashboard-icons): ${dashboardError}`);
     else if (dashboardState === 'empty') parts.push('The imported dashboard-icons list is empty.');
     else if (dashboardState === 'loading' && listShown) parts.push('Loading dashboard-icons…');
     return parts.join(' ');
   });
 
-  const statusVisible = $derived(listShown || dashboardState === 'failed' || dashboardState === 'empty');
+  const statusVisible = $derived(listShown || dashboardState === 'failed' || dashboardState === 'empty' || namesState === 'failed');
+
+  // ── Live preview (fix round 1) ──────────────────────────────────────
+  // Never a fetch per keystroke, never a fetch for a name that does not exist:
+  //  - a name already in memory (the offline bundle, or fetched earlier) draws at once;
+  //  - any other name is fetched only after a PREVIEW_PAUSE_MS pause in typing, and only if
+  //    it is in the full names list;
+  //  - offline or a failed fetch says "Preview unavailable (offline)" — never a blank.
+  const PREVIEW_PAUSE_MS = 400;
+  const PREVIEW_TIMEOUT_MS = 8000;
+  const CHECKED_PREFIXES = ['mdi', 'simple-icons'];
+  type PreviewState = 'none' | 'ready' | 'waiting' | 'loading' | 'unknown' | 'unchecked' | 'offline' | 'nolist';
+  let previewState = $state<PreviewState>('none');
+  let previewName = $state('');
+  let previewTimer: ReturnType<typeof setTimeout> | undefined;
+  let previewToken = 0;
+  onDestroy(() => clearTimeout(previewTimer));
+
+  /** Hand a typed name to the parent (its tile/folder/tab preview draws it). */
+  function pushIcon(name: string) {
+    if (name !== (untrack(() => icon) || '')) onIconChange(name);
+  }
+
+  function loadWithTimeout(name: string): Promise<unknown> {
+    return Promise.race([
+      loadIcon(name),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timed out')), PREVIEW_TIMEOUT_MS)),
+    ]);
+  }
+
+  $effect(() => {
+    const name = iconSearch.trim();
+    const names = knownNames;
+    const ns = namesState;
+    clearTimeout(previewTimer);
+    const token = ++previewToken;
+    if (name === '') {
+      previewState = 'none';
+      untrack(() => pushIcon(''));
+      return;
+    }
+    if (iconLoaded(name)) {
+      previewName = name;
+      previewState = 'ready';
+      untrack(() => pushIcon(name));
+      return;
+    }
+    previewState = 'waiting';
+    previewTimer = setTimeout(async () => {
+      if (token !== previewToken) return;
+      if (ns === 'loading') return; // the effect runs again when the list arrives
+      if (ns === 'failed' || !names) { previewState = 'nolist'; return; }
+      if (!names.has(name)) {
+        previewState = CHECKED_PREFIXES.includes(name.split(':')[0]) ? 'unknown' : 'unchecked';
+        return;
+      }
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) { previewState = 'offline'; return; }
+      previewState = 'loading';
+      try {
+        await loadWithTimeout(name);
+        if (token !== previewToken) return;
+        previewName = name;
+        previewState = 'ready';
+        pushIcon(name);
+      } catch {
+        if (token === previewToken) previewState = 'offline';
+      }
+    }, PREVIEW_PAUSE_MS);
+  });
+
+  const previewMessage = $derived(
+    previewState === 'offline' ? 'Preview unavailable (offline).'
+    : previewState === 'unknown' ? 'No preview: not a known icon name.'
+    : previewState === 'unchecked' ? 'No preview here: only mdi and simple-icons names can be checked.'
+    : previewState === 'nolist' ? "Preview unavailable: couldn't load the icon names list."
+    : previewState === 'loading' ? 'Loading preview…'
+    : ''
+  );
+
+  /** On leaving the field or closing the dialog, the parent gets whatever was typed. A name in
+   *  a fully listed set (mdi, simple-icons) that is not in the list is marked missing first, so
+   *  drawing it never asks the Iconify API for a name that does not exist. */
+  function commitTyped() {
+    const name = iconSearch.trim();
+    if (name && knownNames && !iconLoaded(name) && !knownNames.has(name)
+        && CHECKED_PREFIXES.includes(name.split(':')[0])) {
+      addIcon(name, null);
+    }
+    pushIcon(name);
+  }
+
+  function close() {
+    commitTyped();
+    onClose();
+  }
 
   function openSuggestions() {
     suggestOpen = true;
@@ -115,8 +231,9 @@
       onIconChange('');
       iconSearch = '';
     } else if (s.icon) {
+      // The live preview hands it to the parent: at once if it is in memory, otherwise after
+      // the pause (or when the dialog closes).
       iconSearch = s.icon;
-      onIconChange(s.icon);
       onIconUrlChange(undefined);
     }
     suggestOpen = false;
@@ -211,7 +328,7 @@
   }
 </script>
 
-<Modal id="icon-edit" {title} titleIcon="mdi:image-edit-outline" {onClose} maxWidth="560px">
+<Modal id="icon-edit" {title} titleIcon="mdi:image-edit-outline" onClose={close} maxWidth="560px">
   <div class="body">
     {#if iconUrl}
       <!-- Custom uploaded icon — preview reflects the chosen icon
@@ -244,20 +361,20 @@
           aria-controls="icon-suggest-list"
           aria-expanded={listShown}
           aria-activedescendant={hasActive ? `icon-suggest-${activeIndex}` : undefined}
-          aria-describedby="icon-suggest-status"
+          aria-describedby="icon-suggest-status icon-preview-status"
           bind:value={iconSearch}
-          oninput={() => { onIconChange(iconSearch); onIconUrlChange(undefined); openSuggestions(); }}
+          oninput={() => { if (iconUrl) onIconUrlChange(undefined); openSuggestions(); }}
           onkeydown={handleIconKeydown}
-          onblur={() => { suggestOpen = false; }}
+          onblur={() => { suggestOpen = false; commitTyped(); }}
           placeholder="mdi:server"
           aria-label="Iconify icon name (e.g. mdi:server)"
           disabled={isUploadingIcon}
         />
-        {#if icon && !iconUrl}
+        {#if previewState === 'ready' && previewName && !iconUrl}
           <div class="icon-preview"
                class:has-bg={iconBgColor}
                style:background-color={iconBgColor}>
-            <ColoredIcon {icon} width="32" />
+            <ColoredIcon icon={previewName} width="32" />
           </div>
         {/if}
         {#if hasActive}
@@ -278,8 +395,11 @@
                 <span class="suggestion-icon" aria-hidden="true">
                   {#if s.imageUrl}
                     <img src={s.imageUrl} alt="" width="20" height="20" />
-                  {:else if s.icon}
+                  {:else if s.icon && iconLoaded(s.icon)}
                     <Icon icon={s.icon} width="20" />
+                  {:else}
+                    <!-- Not in memory: a placeholder, never a fetch per suggestion. -->
+                    <span class="suggestion-placeholder"></span>
                   {/if}
                 </span>
                 <span class="suggestion-label">{s.label}</span>
@@ -325,6 +445,7 @@
 
     <!-- Always present so screen readers hear it change; empty while there is nothing to say. -->
     <p id="icon-suggest-status" class="suggest-status" role="status">{statusVisible ? suggestStatus : ''}</p>
+    <p id="icon-preview-status" class="suggest-status" role="status">{previewMessage}</p>
 
     {#if uploadError}
       <small class="error-text" role="alert">{uploadError}</small>
@@ -341,7 +462,7 @@
     </div>
 
     <div class="footer">
-      <button type="button" class="btn-primary" onclick={onClose}>Done</button>
+      <button type="button" class="btn-primary" onclick={close}>Done</button>
     </div>
   </div>
 </Modal>
@@ -500,6 +621,14 @@
     width: 20px;
     height: 20px;
     object-fit: contain;
+  }
+
+  .suggestion-placeholder {
+    width: 16px;
+    height: 16px;
+    margin: 2px;
+    border: 1px dashed var(--text-secondary);
+    border-radius: 3px;
   }
 
   .suggestion-label {

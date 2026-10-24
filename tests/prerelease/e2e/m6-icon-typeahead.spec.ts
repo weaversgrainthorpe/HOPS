@@ -39,6 +39,12 @@ async function seedAndOpenIconEditor(page: Page, context: BrowserContext): Promi
 	return field;
 }
 
+// No test here may reach the internet: Iconify hosts are refused unless a test routes them
+// itself (a later page.route takes precedence).
+test.beforeEach(async ({ page }) => {
+	await page.route(ICONIFY_HOSTS, (route) => route.abort());
+});
+
 test.afterEach(async ({ page, context }) => {
 	if (!made) return;
 	const id = made;
@@ -100,58 +106,120 @@ test.describe('M6 §7.6 icon field is readable', () => {
 });
 
 test.describe('M6 §7.7 icon type-ahead', () => {
-	test('suggests the top 5 offline names and narrows as you type (Iconify API blocked)', async ({ page, context }) => {
+	test('suggests the top 5 from every icon name and narrows as you type (Iconify API blocked)', async ({ page, context }) => {
 		const external: string[] = [];
 		await page.route(ICONIFY_HOSTS, (route) => { external.push(route.request().url()); return route.abort(); });
 		const field = await seedAndOpenIconEditor(page, context);
 		await field.focus();
 		await page.keyboard.press('ControlOrMeta+a');
 		await page.keyboard.press('Backspace');
-		// The spec's example: every offline match for mdi:ser (three in the bundle), exact name first.
+		// The spec's example: mdi:ser gives the top 5 of every mdi name, exact name first.
 		await page.keyboard.type('mdi:ser');
 		const list = page.getByRole('listbox', { name: 'Icon suggestions' });
 		await expect(list).toBeVisible();
 		await expect(field).toHaveAttribute('aria-expanded', 'true');
 		const options = list.getByRole('option');
 		const labels = () => options.locator('.suggestion-label').allTextContents();
-		await expect(options).toHaveCount(3);
-		expect(await labels()).toEqual(['mdi:server', 'mdi:server-network', 'mdi:server-network-outline']);
+		await expect(options).toHaveCount(5);
 		await expect(options.first()).toHaveAttribute('aria-selected', 'true');
-		// Every suggestion draws its icon from the offline bundle.
-		for (let i = 0; i < 3; i++) await expect(options.nth(i).locator('svg')).toBeVisible();
+		expect(await labels()).toEqual(['mdi:server', 'mdi:server-off', 'mdi:serial-port', 'mdi:server-plus', 'mdi:server-minus']);
+		// A bundled icon draws straight away; a name from the full list shows a placeholder
+		// rather than fetching its picture.
+		await expect(options.first().locator('svg')).toBeVisible();
 
-		// A broad query is capped at the top 5, and narrows as typing continues.
-		await page.keyboard.press('ControlOrMeta+a');
-		await page.keyboard.type('mdi:cl');
-		await expect(options).toHaveCount(5);
-		await page.keyboard.type('oud-');
-		await expect(options).toHaveCount(5);
-		expect((await labels()).every((t) => t.startsWith('mdi:cloud-'))).toBe(true);
-		await page.keyboard.type('up');
+		// Narrows as typing continues.
+		await page.keyboard.type('ver-m');
 		await expect(options).toHaveCount(2);
-		expect(await labels()).toEqual(['mdi:cloud-upload', 'mdi:cloud-upload-outline']);
+		expect(await labels()).toEqual(['mdi:server-minus', 'mdi:server-minus-outline']);
 
-		// Prefix matches come before contains matches.
+		// Nothing was fetched while typing: no suggestion and no half-typed name went online.
+		await page.waitForTimeout(800);
+		expect(external).toEqual([]);
+	});
+
+	test('no network request while typing a half name; a known name is fetched once after a pause', async ({ page, context }) => {
+		const requested: string[] = [];
+		await page.route(ICONIFY_HOSTS, (route) => {
+			const icons = new URL(route.request().url()).searchParams.get('icons') || '';
+			requested.push(icons);
+			return route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({ prefix: 'mdi', width: 24, height: 24, icons: Object.fromEntries(icons.split(',').map((n) => [n, { body: '<path d="M2 2h20v20H2z" fill="currentColor"/>' }])) })
+			});
+		});
+		const field = await seedAndOpenIconEditor(page, context);
+		await field.focus();
 		await page.keyboard.press('ControlOrMeta+a');
-		await page.keyboard.type('mdi:lan');
-		await expect(options).toHaveCount(3);
-		const lan = await labels();
-		expect(lan.slice(0, 2)).toEqual(['mdi:lan', 'mdi:landscape']);
-		expect(lan[2].startsWith('mdi:lan')).toBe(false);
-		expect(lan[2]).toContain('lan');
-		// No suggestion fetched its icon from the internet. (The field's live preview of a
-		// half-typed name, e.g. "mdi:se", still asks the Iconify API for it: that is the
-		// pre-existing online-only nicety for names outside the bundle, not the suggestions.)
-		const fetched = new Set(external.flatMap((u) => (new URL(u).searchParams.get('icons') || '').split(',')));
-		const shown = ['server', 'server-network', 'server-network-outline', 'cloud-upload', 'cloud-upload-outline', 'lan', 'landscape', lan[2].split(':')[1]];
-		for (const name of shown) expect(fetched.has(name), `${name} fetched online`).toBe(false);
+		await page.keyboard.type('mdi:account-cowb');
+		await page.waitForTimeout(1200); // well past the pause: a half name is never fetched
+		expect(requested).toEqual([]);
+		await expect(page.locator('#icon-preview-status')).toContainText('not a known icon name');
+		await page.keyboard.type('oy-hat');
+		await expect(page.locator('.icon-preview svg')).toBeVisible();
+		expect(requested).toEqual(['account-cowboy-hat']);
+		await expect(page.locator('#icon-preview-status')).toBeEmpty();
+	});
+
+	test('offline: a known name that is not bundled shows "preview unavailable (offline)", never a blank', async ({ page, context }) => {
+		const requested: string[] = [];
+		await page.route(ICONIFY_HOSTS, (route) => { requested.push(new URL(route.request().url()).searchParams.get('icons') || ''); return route.abort(); });
+		const field = await seedAndOpenIconEditor(page, context);
+		await field.focus();
+		await page.keyboard.press('ControlOrMeta+a');
+		await page.keyboard.type('mdi:account-cowboy-hat');
+		await expect(page.locator('#icon-preview-status')).toContainText('Preview unavailable (offline)', { timeout: 15_000 });
+		await expect(page.locator('.icon-preview svg')).toHaveCount(0);
+		expect(new Set(requested.flatMap((r) => r.split(',')))).toEqual(new Set(['account-cowboy-hat']));
+		// A bundled icon still previews at once, offline.
+		await page.keyboard.press('ControlOrMeta+a');
+		await page.keyboard.type('mdi:server');
+		await expect(page.locator('.icon-preview svg')).toBeVisible();
+		await expect(page.locator('#icon-preview-status')).toBeEmpty();
+	});
+
+	test('the names list is its own chunk: not loaded with the dashboard, loaded when the icon editor opens', async ({ page, context }) => {
+		const chunks: { url: string; names: boolean }[] = [];
+		page.on('response', async (res) => {
+			if (!/\/_app\/immutable\/.*\.js$/.test(res.url())) return;
+			const body = await res.text().catch(() => '');
+			chunks.push({ url: res.url(), names: body.includes('account-cowboy-hat') });
+		});
+		const field = await seedAndOpenIconEditor(page, context);
+		await expect(field).toBeVisible();
+		await expect.poll(() => chunks.filter((c) => c.names).length).toBe(1);
+		const namesChunk = chunks.find((c) => c.names)!.url;
+		// Reload the dashboard in view mode: the names chunk is not fetched.
+		chunks.length = 0;
+		await page.reload();
+		await expect(page.locator('[aria-label="Enter Edit Mode"]')).toBeVisible();
+		await page.waitForLoadState('networkidle');
+		expect(chunks.length).toBeGreaterThan(0);
+		expect(chunks.some((c) => c.url === namesChunk || c.names)).toBe(false);
+	});
+
+	test('a failure to load the full names list is shown, bundled names still suggested', async ({ page, context }) => {
+		// The names list is a hashed chunk; recognise it by its content and refuse it.
+		await page.route('**/_app/immutable/**/*.js', async (route) => {
+			const res = await route.fetch();
+			const body = await res.text();
+			if (body.includes('account-cowboy-hat')) return route.abort();
+			return route.fulfill({ response: res, body });
+		});
+		const field = await seedAndOpenIconEditor(page, context);
+		await field.focus();
+		await page.keyboard.press('ControlOrMeta+a');
+		await page.keyboard.type('mdi:serv');
+		const list = page.getByRole('listbox', { name: 'Icon suggestions' });
+		await expect(list.getByRole('option').first()).toContainText('mdi:server');
+		await expect(page.locator('#icon-suggest-status')).toContainText("Couldn't load the full icon names list");
 	});
 
 	test('arrow keys move, Tab accepts the highlighted suggestion', async ({ page, context }) => {
 		const field = await seedAndOpenIconEditor(page, context);
 		await field.focus();
 		await page.keyboard.press('ControlOrMeta+a');
-		await page.keyboard.type('mdi:server-net');
+		await page.keyboard.type('mdi:server-m');
 		const options = page.getByRole('listbox', { name: 'Icon suggestions' }).getByRole('option');
 		await expect(options).toHaveCount(2);
 		await page.keyboard.press('ArrowDown');
@@ -164,7 +232,7 @@ test.describe('M6 §7.7 icon type-ahead', () => {
 		await page.keyboard.press('ArrowUp'); // wraps back
 		await expect(options.nth(1)).toHaveAttribute('aria-selected', 'true');
 		await page.keyboard.press('Tab');
-		await expect(field).toHaveValue('mdi:server-network-outline');
+		await expect(field).toHaveValue('mdi:server-minus-outline');
 		await expect(field).toBeFocused();
 		await expect(page.getByRole('listbox', { name: 'Icon suggestions' })).toHaveCount(0);
 		await expect(field).toHaveAttribute('aria-expanded', 'false');
@@ -175,7 +243,7 @@ test.describe('M6 §7.7 icon type-ahead', () => {
 		// The tile editor picked the accepted icon up: Done, then the tile preview shows it.
 		await page.getByRole('dialog', { name: 'Edit icon' }).getByRole('button', { name: 'Done' }).click();
 		await page.getByRole('dialog', { name: 'Edit Tile' }).getByRole('button', { name: 'Edit icon' }).click();
-		await expect(page.getByRole('combobox', { name: /Iconify icon name/ })).toHaveValue('mdi:server-network-outline');
+		await expect(page.getByRole('combobox', { name: /Iconify icon name/ })).toHaveValue('mdi:server-minus-outline');
 	});
 
 	test('Enter accepts, Escape closes the list but not the dialog', async ({ page, context }) => {
