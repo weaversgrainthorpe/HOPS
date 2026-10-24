@@ -268,8 +268,8 @@
     border-top: 1px solid var(--sb-hover-bg);
   }
 
-  /* The content fills the space to the right of the sidebar, up to ~1100px of content, starting
-     right beside the sidebar: no centred narrow column with big empty margins. */
+  /* The content fills ALL the space to the right of the sidebar (M6 §7.8–7.10), starting right
+     beside it: no capped or centred column leaving an empty band. */
   .settings-main {
     flex: 1 1 auto;
     min-width: 0;
@@ -277,7 +277,47 @@
   }
 
   .settings-content {
-    max-width: 1100px;
+    min-width: 0;
+  }
+
+  /* THE width rule for every settings page (M6 §7.10), one place for all of them:
+       - paragraphs (and the paragraph-like intro, aside, hint and description texts) keep a
+         reading measure of about 75 characters;
+       - everything else (boxes, tables, cards, sections, forms, headers) uses the full width.
+     The empty-state box is a box, so it spans the width too; its sentence stays centred. */
+  .page-body :global(:is(p, .lede, .lede-aside, .hint, .desc)) {
+    max-width: 75ch;
+  }
+
+  .page-body :global(.empty-state) {
+    max-width: none;
+  }
+
+  .page-body :global(.empty-state p) {
+    margin-inline: auto;
+  }
+
+  /* "‹ Discovery" (M6 §7.9): the way back from a Discovery sub-page, above its title. */
+  .settings-content :global(.back-link) {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin: 0 0 0.75rem;
+    padding: 0.25rem 0.1rem;
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    font-weight: 500;
+    text-decoration: none;
+  }
+
+  .settings-content :global(.back-link:hover) {
+    color: var(--text-primary);
+    text-decoration: underline;
+  }
+
+  .settings-content :global(.back-link .chevron) {
+    font-size: 1.3em;
+    line-height: 1;
   }
 
   .page-title {
@@ -314,7 +354,7 @@
 
   .settings-content :global(.lede) {
     color: var(--text-secondary);
-    max-width: 640px;
+    max-width: 75ch;
     margin: 0 0 1rem;
   }
 

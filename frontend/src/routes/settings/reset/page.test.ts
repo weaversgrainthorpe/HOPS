@@ -34,12 +34,28 @@ describe('/settings/reset', () => {
 		render(Page);
 		expect(screen.getByRole('heading', { name: 'Factory reset', level: 2 })).toBeTruthy();
 		expect(screen.getByText(/Delete every dashboard and start again/)).toBeTruthy();
-		expect(screen.getAllByRole('button').map((b) => b.textContent?.trim())).toEqual(['Factory Reset']);
+		const buttons = screen.getAllByRole('button');
+		expect(buttons).toHaveLength(1);
+		expect(screen.getByRole('button', { name: 'Factory reset' })).toBe(buttons[0]);
+	});
+
+	it('is an emergency-stop button drawn with CSS/SVG only (M6 §7.11)', () => {
+		const { container } = render(Page);
+		const btn = screen.getByRole('button', { name: 'Factory reset' });
+		expect(btn.classList.contains('estop')).toBe(true);
+		expect(btn.querySelector('.estop-housing')).toBeTruthy();
+		expect(btn.querySelector('.estop-cap')).toBeTruthy();
+		expect(container.querySelector('img')).toBeNull();
+		// Keyboard: pressing shows it pressed in, releasing lets it back out.
+		fireEvent.keyDown(btn, { key: 'Enter' });
+		expect(btn.classList.contains('pressing')).toBe(true);
+		fireEvent.keyUp(btn, { key: 'Enter' });
+		expect(btn.classList.contains('pressing')).toBe(false);
 	});
 
 	it('the confirmation describes the v3 content, and Cancel resets nothing', async () => {
 		render(Page);
-		await fireEvent.click(screen.getByRole('button', { name: /Factory Reset/ }));
+		await fireEvent.click(screen.getByRole('button', { name: 'Factory reset' }));
 		await vi.waitFor(() => expect(get(confirmModalState).isOpen).toBe(true));
 		const msg = get(confirmModalState).options?.message ?? '';
 		expect(msg).toMatch(/dashboards, tabs, folders and tiles/);
@@ -53,7 +69,7 @@ describe('/settings/reset', () => {
 		(api.resetConfig as unknown as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('database is locked'));
 		const { seen, unsub } = watchToasts();
 		render(Page);
-		await fireEvent.click(screen.getByRole('button', { name: /Factory Reset/ }));
+		await fireEvent.click(screen.getByRole('button', { name: 'Factory reset' }));
 		await vi.waitFor(() => expect(get(confirmModalState).isOpen).toBe(true));
 		closeConfirmModal(true);
 		await waitFor(() => expect(seen.some((t) => t.startsWith('error:') && t.includes('database is locked'))).toBe(true));
@@ -65,7 +81,7 @@ describe('/settings/reset', () => {
 		(api.getConfig as unknown as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('server unreachable'));
 		const { seen, unsub } = watchToasts();
 		render(Page);
-		await fireEvent.click(screen.getByRole('button', { name: /Factory Reset/ }));
+		await fireEvent.click(screen.getByRole('button', { name: 'Factory reset' }));
 		await vi.waitFor(() => expect(get(confirmModalState).isOpen).toBe(true));
 		closeConfirmModal(true);
 		await waitFor(() => expect(api.resetConfig).toHaveBeenCalled());

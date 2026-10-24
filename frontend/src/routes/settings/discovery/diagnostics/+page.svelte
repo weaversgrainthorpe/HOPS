@@ -121,6 +121,8 @@
 </svelte:head>
 
 <div class="page">
+  <!-- M6 §7.9: the way back to the Discovery list, at the top. -->
+  <a class="back-link" href="/settings/discovery"><span class="chevron" aria-hidden="true">‹</span> Discovery</a>
   <header class="section-header">
     <h2 class="section-title">Discovery diagnostics</h2>
   </header>

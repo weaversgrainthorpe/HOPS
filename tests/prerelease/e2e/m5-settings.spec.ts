@@ -87,12 +87,11 @@ test.describe('M5 §9 settings: sidebar and separate pages', () => {
       expect(m.sideLeft, 'the sidebar sits at the left edge').toBeLessThanOrEqual(1);
       // The content starts right beside the sidebar: no big empty margin between them.
       expect(m.content.left - m.sideRight, 'gap between the sidebar and the content').toBeLessThanOrEqual(48);
-      // And it is as wide as the space allows, up to about 1100px.
+      // And it is as wide as the space allows. M6 §7.8 superseded the old ~1100px cap: the content
+      // uses the FULL width beside the sidebar (paragraphs keep their own 75ch measure).
       const room = m.view - m.sideRight - 2 * 32;
-      const expected = Math.min(1100, room);
-      expect(m.content.width, `content width at ${width}px`).toBeGreaterThanOrEqual(expected - 2);
-      expect(m.content.width).toBeLessThanOrEqual(1100 + 0.5);
-      if (width >= 1920) expect(m.content.width).toBeGreaterThanOrEqual(1090);
+      expect(m.content.width, `content width at ${width}px`).toBeGreaterThanOrEqual(room - 2);
+      expect(m.content.width).toBeLessThanOrEqual(room + 0.5);
       // The setting rows really use it (not a narrow column inside a wide box).
       expect(m.row.width, 'a setting row fills the content width').toBeGreaterThanOrEqual(m.content.width - 2);
     });
