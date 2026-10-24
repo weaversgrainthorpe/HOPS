@@ -42,6 +42,7 @@
   import { editorMenu, openDialog, openMenu, menuPointFor } from '$lib/editor/editorUi';
   import { get } from 'svelte/store';
   import { setDisplay } from '$lib/editor/editorActions';
+  import { playDrill, playFolderToggle, playPageSlide } from '$lib/editor/drag/flourishes';
   import { drag, dragSource } from '$lib/editor/drag/dragController';
   import { crumbDwellKey, pageDwellKey } from '$lib/editor/drag/targets';
   import { COLLAPSED_HINT } from '$lib/editor/resize';
@@ -117,21 +118,26 @@
    */
   function open() {
     if (item) {
+      // §9: the inner box zooms forward from this tile; the open folder holding it recedes slightly.
+      if (folderChain[0]) playDrill(dashboard.id, folder.id, folderChain[0].id, 'in');
       drillTo(dashboard.id, [...folderChain.map((f) => f.id), folder.id]);
       return;
     }
+    playFolderToggle(dashboard.id, folder.id, 'open'); // §9: it grows from its tile into its box
     if (editing) setDisplay(folder.id, 'expanded');
     else setFolderView(dashboard.id, folder.id, 'expanded');
     void thenFocus();
   }
   function minimise(e: Event) {
     own(e);
+    playFolderToggle(dashboard.id, folder.id, 'minimise'); // §9: it shrinks back into its tile
     if (editing) setDisplay(folder.id, 'collapsed');
     else setFolderView(dashboard.id, folder.id, 'collapsed');
     void thenFocus();
   }
   function restore(e: Event) {
     own(e);
+    playFolderToggle(dashboard.id, folder.id, minimised ? 'open' : 'minimise');
     clearFolderView(dashboard.id, folder.id);
     void thenFocus();
   }
@@ -298,11 +304,17 @@
   function goPage(e: Event, n: number) {
     own(e);
     const p = Math.min(Math.max(0, n), paging.pages - 1);
+    const from = paging.page;
     setFolderPage(dashboard.id, current.id, p);
+    // §9: the new page slides in from the side it comes from (next from the right); a jump slides once.
+    if (p !== from) playPageSlide(dashboard.id, current.id, p > from ? 1 : -1);
   }
   /** Back up to that level (0 = this folder itself): an inset box's minimise, or an outer box's title. */
   function goUp(e: Event, level: number) {
     own(e);
+    // §9: the box left shrinks back into its tile in the level above; the folder comes forward again.
+    const leaving = drilled[level];
+    if (leaving) playDrill(dashboard.id, leaving.id, folder.id, 'up');
     setFolderDrill(dashboard.id, folder.id, drilled.slice(0, level).map((f) => f.id));
   }
   /** An inset box's bar is that sub-folder (Ruling 14): its right-click / long-press menu is the sub-folder's. */
@@ -420,7 +432,7 @@
   {:else if kids.length === 0}
     <span class="empty-note open-empty">Empty folder</span>
   {:else}
-    <div class="page">
+    <div class="page" data-folder-page-content={current.id}>
       <ContainerView
         container={{ children: pageKids }}
         {metrics}

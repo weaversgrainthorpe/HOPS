@@ -104,6 +104,13 @@ export interface AnimationEnv {
    * shown (aria-selected); null otherwise.
    */
   findTabButton(tabId: string): HTMLElement | null;
+  /**
+   * §9: every item drawn on the page now (data-node-id, not inside a dialog or an inert copy), in
+   * document order: the edit glide measures them once before an edit is drawn and once after.
+   */
+  drawnNodes(): HTMLElement[];
+  /** §9: the page a folder shows (data-folder-page-content), when it is drawn. */
+  findPage(folderId: string): HTMLElement | null;
 }
 
 const domEnv: AnimationEnv = {
@@ -125,6 +132,12 @@ const domEnv: AnimationEnv = {
     Array.from(document.querySelectorAll<HTMLElement>('[data-tab-button]')).find(
       (n) => n.getAttribute('data-tab-button') === tabId && n.getAttribute('aria-selected') !== 'true' &&
         !n.closest('[inert], [role="dialog"]')
+    ) ?? null,
+  drawnNodes: () =>
+    Array.from(document.querySelectorAll<HTMLElement>('[data-node-id]')).filter((n) => !n.closest('[inert], [role="dialog"]')),
+  findPage: (folderId) =>
+    Array.from(document.querySelectorAll<HTMLElement>('[data-folder-page-content]')).find(
+      (n) => n.getAttribute('data-folder-page-content') === folderId && !n.closest('[inert], [role="dialog"]')
     ) ?? null
 };
 let env: AnimationEnv = domEnv;
@@ -132,7 +145,48 @@ let failureSaid = false;
 /** Every drop / merge / out animation now running: its cleanup, given why it ended. */
 const live = new Set<(why: Ended) => void>();
 /** Why an animation ended (on each ghost as data-ended when it is removed). */
-type Ended = 'finished' | 'fallback' | 'failed' | 'interrupted' | 'setting';
+export type Ended = 'finished' | 'fallback' | 'failed' | 'interrupted' | 'setting';
+
+/**
+ * §9: the one engine. The visual flourishes (flourishes.ts) share this module's environment, its
+ * gating (animationsAllowed) and its cancel registry, so cancelDropAnimations() stops them too.
+ */
+export function animationEnv(): AnimationEnv {
+  return env;
+}
+/** §9: register a running flourish's stop; cancelDropAnimations() calls it. Returns its unregister. */
+export function trackAnimation(stop: (why: Ended) => void): () => void {
+  live.add(stop);
+  return () => live.delete(stop);
+}
+/**
+ * §9 "don't double-animate": items that already have their own animation for the edit being drawn
+ * (the dropped or merged item, the folder that gulps or pops, a folder opening) are claimed; the
+ * edit glide and pop-in skip them. A claim lasts until the frame after the next one: the glide that
+ * reads it runs on the next frame, after the change has been drawn.
+ */
+const claims = new Set<string>();
+let claimClear = 0;
+export function claimFlourish(ids: Iterable<string | undefined>): void {
+  for (const id of ids) if (id) claims.add(id);
+  const mine = ++claimClear;
+  try {
+    env.raf(() => env.raf(() => {
+      if (mine === claimClear) claims.clear();
+    }));
+  } catch {
+    /* no frames: the claims stay until the next glide reads them, which is harmless */
+  }
+}
+/** The ids claimed for the edit being drawn (read by the glide). */
+export function claimedIds(): ReadonlySet<string> {
+  return claims;
+}
+/** Called with every reset (tests): the flourishes forget their claims and pending work. */
+const resetHooks = new Set<() => void>();
+export function onAnimationReset(fn: () => void): void {
+  resetHooks.add(fn);
+}
 
 /**
  * Stop every running drop, merge and out animation now: the ghosts are removed and every animation
@@ -156,6 +210,8 @@ export function resetDropAnimationForTests(): void {
   cancelDropAnimations();
   env = domEnv;
   failureSaid = false;
+  claims.clear();
+  resetHooks.forEach((f) => f());
   if (typeof document !== 'undefined') document.querySelectorAll('[data-testid="drop-anim"]').forEach((e) => e.remove());
 }
 
@@ -424,6 +480,8 @@ export function playDropAnimation(dashboardId: string, a: DropAnimation): boolea
   // Only the drop-in may start without a box (it is drawn at the spot it lands on).
   if (!ok(a.from) && !(a.kind === 'out' && a.arrive === 'drop')) return false;
   if (a.kind === 'merge' && !ok(a.to)) return false;
+  // §9: the edit glide leaves alone what this animation draws.
+  claimFlourish(a.kind === 'out' ? [a.sourceId, a.landedId, a.intoId] : [a.folderId]);
   const made: HTMLElement[] = [];
   const cleanups: (() => void)[] = [];
   /** Every animation started, on a ghost or a REAL element: all cancelled at the end. */

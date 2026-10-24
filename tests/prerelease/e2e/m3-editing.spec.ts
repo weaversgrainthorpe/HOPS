@@ -1,5 +1,5 @@
 import { test, expect, type Page, type BrowserContext } from '@playwright/test';
-import { getCsrfToken } from '../helpers';
+import { getCsrfToken, flourishesDone } from '../helpers';
 
 // M3 editor, in a REAL browser (Ruling 29). The jsdom suites stub hit-testing and layout, so they
 // cannot see CSS stacking (tab controls over a tab button), real store wiring (the context menu
@@ -108,6 +108,7 @@ const node = (page: Page, id: string) => page.locator(`[data-node-id="${id}"]`).
 const tabButton = (page: Page, name: string) => page.getByRole('tab', { name: `Switch to ${name} tab` });
 
 async function box(page: Page, id: string) {
+  await flourishesDone(page); // §9: boxes at rest
   const b = await node(page, id).boundingBox();
   if (!b) throw new Error(`no box for ${id}`);
   return b;

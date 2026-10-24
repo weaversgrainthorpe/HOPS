@@ -11,6 +11,7 @@
   import { selectedNodes, toggleNode } from '$lib/stores/nodeSelection';
   import { nodeClipboard, copySelection, cutSelection, pasteInto } from '$lib/stores/nodeClipboard';
   import { drillTo, folderNavFor, setFolderDrill } from '$lib/stores/folderView';
+  import { playDrill, playFolderToggle } from '$lib/editor/drag/flourishes';
   import { get } from 'svelte/store';
   import { portal } from '$lib/utils/portal';
   import { toast } from '$lib/stores/toast';
@@ -99,12 +100,23 @@
       : undefined;
     if (!many && drilledBy) {
       const [top, path] = drilledBy;
-      out.push({ label: 'Close', icon: 'mdi:folder', run: () => setFolderDrill(d.id, top, path.slice(0, path.indexOf(id))) });
+      out.push({ label: 'Close', icon: 'mdi:folder', run: () => {
+        playDrill(d.id, id, top, 'up');
+        setFolderDrill(d.id, top, path.slice(0, path.indexOf(id)));
+      } });
     } else if (!many && node.kind === 'folder' && (nested || node.display === 'collapsed')) {
       out.push({
         label: 'Open',
         icon: 'mdi:folder-open',
-        run: () => (nested ? drillTo(d.id, [...chain, id]) : setDisplay(id, 'expanded'))
+        run: () => {
+          if (nested) {
+            if (chain[0]) playDrill(d.id, id, chain[0], 'in');
+            drillTo(d.id, [...chain, id]);
+            return;
+          }
+          playFolderToggle(d.id, id, 'open');
+          return setDisplay(id, 'expanded');
+        }
       });
     }
     if (!many) out.push({ label: 'Duplicate', icon: 'mdi:content-duplicate', run: () => duplicate(id) });
@@ -125,7 +137,10 @@
       { label: 'Move/Copy to…', icon: 'mdi:folder-move', run: () => openDialog({ kind: 'movecopy', ids }) }
     );
     if (!many && node.kind === 'folder' && !nested && node.display !== 'collapsed') {
-      out.push({ label: 'Minimise', icon: 'mdi:window-minimize', run: () => setDisplay(id, 'collapsed'), separatorBefore: true });
+      out.push({ label: 'Minimise', icon: 'mdi:window-minimize', run: () => {
+        playFolderToggle(d.id, id, 'minimise');
+        return setDisplay(id, 'collapsed');
+      }, separatorBefore: true });
     }
     out.push({
       label: many ? `Delete ${targetIds.length} items` : 'Delete',

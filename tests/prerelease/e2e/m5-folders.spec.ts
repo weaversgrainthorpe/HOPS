@@ -1,5 +1,5 @@
 import { test, expect, type Page, type BrowserContext, type Locator } from '@playwright/test';
-import { getCsrfToken } from '../helpers';
+import { getCsrfToken, flourishesDone } from '../helpers';
 
 // M5 Task 3 (design/specs/2026-10-22-hops-v3-m5-folders-design.md §2, §3, §3a): ONE Folder component
 // draws every folder — minimised (a tile with its name and up to four icons), open in place (one page
@@ -63,7 +63,10 @@ test.afterEach(async ({ page, context }) => {
 });
 
 const node = (page: Page, id: string) => page.locator(`.tab-canvas [data-node-id="${id}"]`);
-const box = async (l: Locator) => (await l.boundingBox())!;
+const box = async (l: Locator) => {
+  await flourishesDone(l.page()); // §9: boxes at rest
+  return (await l.boundingBox())!;
+};
 const near = (a: number, b: number, what: string) => expect(Math.abs(a - b), `${what}: ${a} vs ${b}`).toBeLessThanOrEqual(1);
 /** The ids drawn on the folder's current page (only that page is in the DOM). */
 async function shown(page: Page, folderId: string): Promise<string[]> {

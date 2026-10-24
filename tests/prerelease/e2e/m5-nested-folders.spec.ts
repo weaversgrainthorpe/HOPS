@@ -1,5 +1,5 @@
 import { test, expect, type Page, type BrowserContext, type Locator } from '@playwright/test';
-import { getCsrfToken } from '../helpers';
+import { getCsrfToken, flourishesDone } from '../helpers';
 
 // M5 §7 (Jonathan's walkthrough 2, design/feedback/2026-10-22-m5-walkthrough2/image-3.png): a drilled-in
 // sub-folder is a folder inside a folder. The top folder keeps its own title; every opened sub-folder
@@ -67,6 +67,7 @@ const node = (page: Page, id: string) => page.locator(`.tab-canvas [data-node-id
 const nested = (scope: Page | Locator, id: string) => scope.locator(`.nested-box[data-nested-folder="${id}"]`).first();
 const header = (l: Locator) => l.locator(':scope > .nested-header');
 const box = async (l: Locator) => {
+  await flourishesDone(l.page()); // §9: boxes at rest
   const b = await l.boundingBox();
   if (!b) throw new Error('no box');
   return b;

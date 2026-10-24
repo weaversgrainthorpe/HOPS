@@ -1,5 +1,5 @@
 import { test, expect, type Page, type BrowserContext, type Locator } from '@playwright/test';
-import { getCsrfToken } from '../helpers';
+import { getCsrfToken, flourishesDone } from '../helpers';
 // THE page model (the app's own pure geometry): a page's rows are asserted, not guessed.
 import { folderPaging, openFolderContentBox } from '../../../frontend/src/lib/layout/geometry';
 
@@ -64,6 +64,7 @@ test.afterEach(async ({ page, context }) => {
 
 const node = (page: Page, id: string) => page.locator(`.tab-canvas [data-node-id="${id}"]`).first();
 const box = async (l: Locator) => {
+  await flourishesDone(l.page()); // §9: boxes at rest
   const b = await l.boundingBox();
   if (!b) throw new Error('no box');
   return b;

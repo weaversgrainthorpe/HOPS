@@ -2,7 +2,7 @@ import { test, expect, type Page, type BrowserContext, type Browser } from '@pla
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { getCsrfToken, login, longPress, signInDialog, setSetting } from '../helpers';
+import { getCsrfToken, flourishesDone, login, longPress, signInDialog, setSetting } from '../helpers';
 import { ADMIN_USERNAME, ADMIN_TEST_PASSWORD } from '../constants';
 
 // M4 walkthrough changes (design/specs/2026-10-21-hops-v3-m4-walkthrough-changes-design.md §1–3, §6),
@@ -1845,7 +1845,10 @@ test.describe('§7.2 nested untitled folders on a touch device', () => {
 // exports, which the import doubles (finer grid, spec §9): a Medium is 2 x 2 cells, Large 4 x 4, Small 1 x 1.
 
 test.describe('§8 tile size sets the space it takes', () => {
-  const box = async (page: Page, id: string) => (await page.locator(`.tab-canvas [data-node-id="${id}"]`).boundingBox())!;
+  const box = async (page: Page, id: string) => {
+    await flourishesDone(page); // §9: boxes at rest
+    return (await page.locator(`.tab-canvas [data-node-id="${id}"]`).boundingBox())!;
+  };
   const near = (a: number, b: number, what: string) => expect(Math.abs(a - b), `${what}: ${a} vs ${b}`).toBeLessThanOrEqual(1.5);
 
   async function sizeDash(page: Page, context: BrowserContext) {

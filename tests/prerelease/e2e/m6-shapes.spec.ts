@@ -2,7 +2,7 @@ import { test, expect, type Page, type BrowserContext, type Locator } from '@pla
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { getCsrfToken } from '../helpers';
+import { getCsrfToken, flourishesDone } from '../helpers';
 
 // M6 Task 3 (spec design/specs/2026-10-23-hops-v3-m6-folder-shapes-design.md §2, §3a): ONE FolderShape
 // draws every folder state in each of the seven looks. In a REAL browser (layout needs Chromium):
@@ -78,6 +78,7 @@ test.afterEach(async ({ page, context }) => {
 type Box = { x: number; y: number; width: number; height: number };
 const node = (page: Page, id: string) => page.locator(`.tab-canvas [data-node-id="${id}"]`).first();
 const box = async (l: Locator): Promise<Box> => {
+  await flourishesDone(l.page()); // §9: boxes at rest
   const b = await l.boundingBox();
   if (!b) throw new Error('no box');
   return b;

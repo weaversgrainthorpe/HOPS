@@ -183,3 +183,13 @@ export async function longPress(page: Page, target: Locator, ms = 650, at: { fx:
     await cdp.detach();
   }
 }
+
+/**
+ * M6 §9: wait until no visual flourish is playing (a folder opening, a drill, a page slide, an edit's
+ * glide / pop-in / delete copy). Geometry checks measure the boxes at rest, never mid-animation.
+ */
+export async function flourishesDone(page: Page): Promise<void> {
+  // A flourish starts on the frame after its change is drawn: let two frames pass first.
+  await page.evaluate(() => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))));
+  await expect(page.locator('[data-flourish], [data-testid="flourish-ghost"]')).toHaveCount(0);
+}
