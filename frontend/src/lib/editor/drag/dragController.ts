@@ -46,7 +46,7 @@ import {
 import {
   containerOfNode, currentDraft, documentIds, findIn, forgetMovedOutFolders, nodesOf, placementsFor, sizeFor
 } from '../editorActions';
-import { canvasStacked, editorMenu, openDialog, ownsTarget } from '../editorUi';
+import { canvasStacked, editorDialog, editorMenu, openDialog, ownsTarget } from '../editorUi';
 import { commitResize, resizeBlocked, resizeTarget, type ResizeEdge, type ResizeTarget } from '../resize';
 import { readingIds, stackPlans } from './stacked';
 import { apply, session, undo } from '$lib/stores/editSession';
@@ -55,7 +55,7 @@ import { clearSelection, selectionInDraft, toggleNode } from '$lib/stores/nodeSe
 import { hitTest as domHitTest, type HitResult } from './hitTest';
 import { crumbDwellKey, dwellArgs, flowIndex, flowMarker, pageDwellKey } from './targets';
 import { drillUpTo, setFolderPage } from '$lib/stores/folderView';
-import { playDropAnimation, type Box as AnimBox } from './dropAnimation';
+import { playDropAnimation, sayAnimationFailure, MERGE_DIALOG_CAP_MS, type Box as AnimBox } from './dropAnimation';
 
 // ---------------------------------------------------------------- types
 
@@ -726,17 +726,31 @@ export function commitDrop(state: DragState): void {
     if (!ok) return; // apply has already said why
     clearSelection();
     announce(label, before);
+    // Name it straight away: the dialog opens with "New folder" selected; Cancel keeps that name.
+    // Ruling 3: when the merge animates, the dialog opens as the animation ends (<= 300 ms, never
+    // later than MERGE_DIALOG_CAP_MS), so the pop is not hidden behind it; at once otherwise. Only the
+    // dialog waits, never the edit. Undone meanwhile (the folder is gone), or another dialog opened:
+    // nothing to name here.
+    let opened = false;
+    const nameIt = () => {
+      if (opened) return;
+      opened = true;
+      const now = currentDraft();
+      if (!now || !locate(now, folderId) || get(editorDialog) !== null) return;
+      openDialog({ kind: 'folder', id: folderId });
+    };
+    let animating = false;
     decorate(() => {
       const from = ghostBox(state);
       if (from && state.over) {
-        playDropAnimation(d.id, {
+        animating = playDropAnimation(d.id, {
           kind: 'merge', from, to: state.over, label: state.ghost?.label ?? '',
-          targetLabel: findIn(d, t.targetTileId)?.name ?? '', folderId
+          targetLabel: findIn(d, t.targetTileId)?.name ?? '', folderId, onEnd: nameIt
         });
       }
     });
-    // Name it straight away: the dialog opens with "New folder" selected; Cancel keeps that name.
-    openDialog({ kind: 'folder', id: folderId });
+    if (animating) setTimeout(nameIt, MERGE_DIALOG_CAP_MS);
+    else nameIt();
     return;
   }
 
@@ -810,7 +824,7 @@ function decorate(fn: () => void): void {
   try {
     fn();
   } catch (e) {
-    console.warn('Drop animation skipped:', e);
+    sayAnimationFailure(e); // said once per page with a toast, not only logged (review M1)
   }
 }
 

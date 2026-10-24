@@ -92,6 +92,58 @@ test.describe('settings widths', () => {
 		}
 	}
 
+	// Ruling 4: each Global settings row is two columns — the description (<= 75ch) with its control
+	// right beside it, never ~500 px away at 1920; one column on a narrow screen.
+	for (const width of [1280, 1920]) {
+		test(`Global settings at ${width}: every control sits right beside its description`, async ({ page }) => {
+			await page.setViewportSize({ width, height: 900 });
+			await open(page, '/settings/global', 'Global settings');
+			const rows = await page.locator('.row').evaluateAll((els) =>
+				els.map((row) => {
+					const label = row.querySelector('.row-label')!.getBoundingClientRect();
+					const desc = row.querySelector('.desc')!.getBoundingClientRect();
+					const input = row.querySelector('.row-input')!.getBoundingClientRect();
+					const probe = document.createElement('span');
+					probe.textContent = '0'.repeat(100);
+					probe.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap';
+					probe.style.font = getComputedStyle(row.querySelector('.desc')!).font;
+					document.body.appendChild(probe);
+					const ch = probe.getBoundingClientRect().width / 100;
+					probe.remove();
+					return {
+						name: row.querySelector('.label-text')!.textContent!.trim(),
+						gap: input.left - Math.max(desc.right, label.left),
+						labelWidth: label.width,
+						maxLabel: 76 * ch,
+						sideBySide: Math.abs(input.top - label.top) < 4
+					};
+				})
+			);
+			expect(rows.length).toBeGreaterThan(5);
+			for (const r of rows) {
+				expect(r.sideBySide, `${r.name}: control beside its description`).toBe(true);
+				expect(r.gap, `${r.name}: gap between description and control`).toBeLessThanOrEqual(40);
+				expect(r.gap, `${r.name}: no overlap`).toBeGreaterThanOrEqual(8);
+				expect(r.labelWidth, `${r.name}: description column <= 75ch`).toBeLessThanOrEqual(r.maxLabel);
+			}
+		});
+	}
+
+	test('Global settings on a phone: one column, the control under its description', async ({ page }) => {
+		await page.setViewportSize({ width: 390, height: 800 });
+		await open(page, '/settings/global', 'Global settings');
+		const rows = await page.locator('.row').evaluateAll((els) =>
+			els.map((row) => {
+				const label = row.querySelector('.row-label')!.getBoundingClientRect();
+				const input = row.querySelector('.row-input')!.getBoundingClientRect();
+				return { below: input.top >= label.bottom - 1 };
+			})
+		);
+		expect(rows.length).toBeGreaterThan(5);
+		expect(rows.every((r) => r.below)).toBe(true);
+		expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+	});
+
 	test('the empty Discovery list box uses the full width', async ({ page }) => {
 		await page.setViewportSize({ width: 1920, height: 900 });
 		await page.route('**/api/discovery/scans', (r) =>

@@ -134,7 +134,7 @@
         <div class="offline-banner" role="alert">
           <Icon icon="mdi:cloud-off-outline" width="24" />
           <div class="offline-content">
-            <strong>Backend Offline</strong>
+            <strong>{$backendStatus.status === 'error' ? 'Backend answering with errors' : 'Backend Offline'}</strong>
             <span>All admin functions are disabled until the backend is available.</span>
           </div>
           <button class="retry-btn" onclick={() => backendStatus.check()}>

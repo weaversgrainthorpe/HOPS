@@ -1368,9 +1368,9 @@
   }
 
   .type-btn.active, .fit-btn.active, .transition-btn.active {
-    background: var(--accent);
-    border-color: var(--accent);
-    color: white;
+    background: var(--accent-solid);
+    border-color: var(--accent-solid);
+    color: var(--on-accent);
   }
 
   /* Special styling for Random transition button */
@@ -1526,8 +1526,8 @@
     align-items: center;
     gap: 0.25rem;
     padding: 0.75rem 1rem;
-    background: var(--accent);
-    color: white;
+    background: var(--accent-solid);
+    color: var(--on-accent);
     border: none;
     border-radius: 0.375rem;
     cursor: pointer;
@@ -1536,7 +1536,7 @@
   }
 
   .add-btn:hover {
-    background: var(--accent-hover);
+    background: var(--accent-solid-hover);
   }
 
   .gallery-section {
@@ -1574,8 +1574,8 @@
     align-items: center;
     gap: 0.5rem;
     padding: 0.5rem 1rem;
-    background: var(--accent);
-    color: white;
+    background: var(--accent-solid);
+    color: var(--on-accent);
     border-radius: 0.375rem;
     cursor: pointer;
     font-weight: 500;
@@ -1583,7 +1583,7 @@
   }
 
   .upload-btn:hover {
-    background: var(--accent-hover);
+    background: var(--accent-solid-hover);
   }
 
   .upload-error {
@@ -1620,9 +1620,9 @@
   }
 
   .category-tab.active {
-    background: var(--accent);
-    border-color: var(--accent);
-    color: white;
+    background: var(--accent-solid);
+    border-color: var(--accent-solid);
+    color: var(--on-accent);
   }
 
   .category-tab .count {
@@ -1687,8 +1687,8 @@
     align-items: center;
     gap: 0.375rem;
     padding: 0.5rem 0.75rem;
-    background: var(--accent);
-    color: white;
+    background: var(--accent-solid);
+    color: var(--on-accent);
     border: none;
     border-radius: 0.375rem;
     cursor: pointer;
@@ -1698,7 +1698,7 @@
   }
 
   .create-category-btn:hover {
-    background: var(--accent-hover);
+    background: var(--accent-solid-hover);
   }
 
   .loading {

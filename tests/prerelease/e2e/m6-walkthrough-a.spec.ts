@@ -281,10 +281,43 @@ test.describe('§7.2 look previews on a light card', () => {
   }
 });
 
+// Batch-review I1 / ruling 1: the audit runs on EVERY theme preset, light and dark — the gradient
+// presets (an accent that is a gradient, so never a text background) and the coloured dark ones
+// (ocean, forest) included.
+const PRESETS = ['default', 'metallic', 'modern', 'subtle', 'cyberpunk', 'sunset', 'ocean', 'forest'] as const;
+
+/** The dialog's Save button: an opaque fill, and its label >= 4.5:1 on it. */
+async function saveButtonContrast(dlg: Locator) {
+  return dlg.locator('.modal-actions .btn-primary').first().evaluate((el) => {
+    const probe = document.createElement('canvas').getContext('2d', { willReadFrequently: true })!;
+    const px = (css: string) => {
+      probe.clearRect(0, 0, 1, 1);
+      probe.fillStyle = '#000';
+      probe.fillStyle = css;
+      probe.fillRect(0, 0, 1, 1);
+      return Array.from(probe.getImageData(0, 0, 1, 1).data);
+    };
+    const lum = (c: number[]) => {
+      const [r, g, b] = c.slice(0, 3).map((x) => {
+        const s = x / 255;
+        return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    const cs = getComputedStyle(el);
+    const bg = px(cs.backgroundColor), fg = px(cs.color);
+    const x = lum(bg), y = lum(fg);
+    return { alpha: bg[3], image: cs.backgroundImage, ratio: (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05) };
+  });
+}
+
 test.describe('§7.3 text contrast in the Edit Folder and Edit Tile dialogs', () => {
-  for (const theme of ['dark', 'light'] as const) {
-    test(`${theme} theme: no text below 4.5:1 (disabled "Reset to inherit" included)`, async ({ page, context }) => {
-      await page.addInitScript((t) => localStorage.setItem('hops_theme', t), theme);
+  for (const preset of PRESETS) for (const theme of ['dark', 'light'] as const) {
+    test(`${preset} preset, ${theme} theme: no text below 4.5:1 (disabled "Reset to inherit" included)`, async ({ page, context }) => {
+      await page.addInitScript(([t, p]) => {
+        localStorage.setItem('hops_theme', t);
+        localStorage.setItem('hops_theme_preset', p);
+      }, [theme, preset]);
       const f = await importDash(page, context, fixture);
       await page.goto(f.path);
       await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
@@ -299,6 +332,10 @@ test.describe('§7.3 text contrast in the Edit Folder and Edit Tile dialogs', ()
       const a = await lowContrastText(folderDlg);
       expect(a.checked, 'texts checked in Edit Folder').toBeGreaterThan(25);
       expect(a.bad, 'Edit Folder text below AA').toEqual([]);
+      const save = await saveButtonContrast(folderDlg);
+      expect(save.alpha, 'Edit Folder Save has an opaque fill').toBe(255);
+      expect(save.image, 'Edit Folder Save is a solid fill').toBe('none');
+      expect(save.ratio, 'Edit Folder Save label').toBeGreaterThanOrEqual(4.5);
       await folderDlg.getByRole('button', { name: 'Cancel' }).click();
       await expect(folderDlg).toHaveCount(0);
 
@@ -307,6 +344,9 @@ test.describe('§7.3 text contrast in the Edit Folder and Edit Tile dialogs', ()
       const b = await lowContrastText(tileDlg);
       expect(b.checked, 'texts checked in Edit Tile').toBeGreaterThan(15);
       expect(b.bad, 'Edit Tile text below AA').toEqual([]);
+      const tsave = await saveButtonContrast(tileDlg);
+      expect(tsave.alpha, 'Edit Tile Save has an opaque fill').toBe(255);
+      expect(tsave.ratio, 'Edit Tile Save label').toBeGreaterThanOrEqual(4.5);
     });
   }
 });

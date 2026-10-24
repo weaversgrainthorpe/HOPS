@@ -27,6 +27,11 @@ export const DROP_MS = 240;
 export const GATHER_MS = 150;
 /** …then the new folder pops (starts when the gather ends; GATHER_MS + POP_MS ≤ 300). */
 export const POP_MS = 150;
+/**
+ * Ruling 3: after a merge the folder dialog opens when the animation ends. This is the latest it
+ * waits if the browser never reports that end (the animation's 300 ms plus a frame-timing margin).
+ */
+export const MERGE_DIALOG_CAP_MS = GATHER_MS + POP_MS + 50;
 
 export type Box = { left: number; top: number; width: number; height: number };
 
@@ -83,8 +88,8 @@ export function animationsAllowed(dashboardId: string): boolean {
 }
 
 export type DropAnimation =
-  | { kind: 'into'; from: Box; to: Box | (() => Box | null); label: string }
-  | { kind: 'merge'; from: Box; to: Box; label: string; targetLabel: string; folderId: string };
+  | { kind: 'into'; from: Box; to: Box | (() => Box | null); label: string; onEnd?: () => void }
+  | { kind: 'merge'; from: Box; to: Box; label: string; targetLabel: string; folderId: string; onEnd?: () => void };
 
 const ok = (b: Box | null | undefined): b is Box =>
   !!b && [b.left, b.top, b.width, b.height].every(Number.isFinite) && b.width > 0 && b.height > 0;
@@ -99,7 +104,8 @@ function ghost(box: Box, label: string, kind: string): HTMLElement {
   el.setAttribute('aria-hidden', 'true');
   el.style.cssText = [
     'position:fixed', `left:${box.left}px`, `top:${box.top}px`, `width:${box.width}px`, `height:${box.height}px`,
-    'box-sizing:border-box', 'pointer-events:none', 'z-index:calc(var(--z-toast, 1000) - 10)',
+    // Below dialogs (ruling 3: no animation is ever drawn over one), above the page, navbar and toolbar.
+    'box-sizing:border-box', 'pointer-events:none', 'z-index:calc(var(--z-modal, 1000) - 10)',
     'display:flex', 'align-items:center', 'justify-content:center', 'padding:0.25rem',
     'border-radius:0.75rem', 'border:2px solid var(--accent)',
     'background:color-mix(in srgb, var(--bg-secondary) 85%, transparent)', 'color:var(--text-primary)',
@@ -120,14 +126,28 @@ const towards = (a: Box, b: Box) => ({
 });
 
 /**
- * Play the drop's animation, if allowed. Returns whether it started. Never throws: the draft change
- * it decorates has already been made.
+ * Say an animation failure once per page (a toast, and the log); the edit it decorated is untouched.
+ * Also used by the drag controller when building an animation's arguments throws.
+ */
+export function sayAnimationFailure(e: unknown): void {
+  logError('Drop animation', e);
+  if (!failureSaid) {
+    failureSaid = true;
+    toast.info("Animations couldn't play here, so they are skipped. Your change was made as usual.");
+  }
+}
+
+/**
+ * Play the drop's animation, if allowed. Returns whether it started; when it did, `onEnd` runs once
+ * when it has ended (finished, cancelled, failed, or at the fallback timeout). Never throws: the
+ * draft change it decorates has already been made.
  */
 export function playDropAnimation(dashboardId: string, a: DropAnimation): boolean {
   if (typeof document === 'undefined' || !animationsAllowed(dashboardId) || !ok(a.from)) return false;
   const made: HTMLElement[] = [];
   const cleanups: (() => void)[] = [];
   let done = false;
+  const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
   const cleanup = () => {
     if (done) return;
     done = true;
@@ -139,14 +159,15 @@ export function playDropAnimation(dashboardId: string, a: DropAnimation): boolea
         /* the element is already gone */
       }
     });
+    try {
+      a.onEnd?.();
+    } catch (e) {
+      sayAnimationFailure(e);
+    }
   };
   const fail = (e: unknown) => {
     cleanup();
-    logError('Drop animation', e);
-    if (!failureSaid) {
-      failureSaid = true;
-      toast.info("Animations couldn't play here, so they are skipped. Your change was made as usual.");
-    }
+    sayAnimationFailure(e);
   };
   /** Start one animation; false when the browser can't animate (no element.animate). */
   let pending = 0;
@@ -220,7 +241,13 @@ export function playDropAnimation(dashboardId: string, a: DropAnimation): boolea
             { transform: 'scale(0.5)', opacity: 0 },
             { transform: 'scale(1.06)', opacity: 1, offset: 0.7 },
             { transform: 'scale(1)', opacity: 1 }
-          ], { duration: POP_MS, delay: GATHER_MS, fill: 'backwards', easing: 'ease-out' });
+          ], {
+            duration: POP_MS,
+            // Starts as the gather ends, counted from the drop (not from this frame): <= 300 ms in all.
+            delay: Math.max(0, GATHER_MS - Math.max(0, (typeof performance !== 'undefined' ? performance.now() : 0) - t0)),
+            fill: 'backwards',
+            easing: 'ease-out'
+          });
         }
       } catch (e) {
         fail(e);

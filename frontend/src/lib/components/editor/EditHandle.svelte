@@ -133,9 +133,9 @@
     padding: 0 0.6rem;
   }
   .edit-handle:hover {
-    background: var(--accent);
-    color: #fff;
-    border-color: var(--accent);
+    background: var(--accent-solid);
+    color: var(--on-accent);
+    border-color: var(--accent-solid);
   }
   .edit-handle:focus-visible {
     outline: 2px solid var(--accent);

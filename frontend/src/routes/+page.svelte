@@ -39,8 +39,10 @@
       <Icon icon={$isBackendOffline ? 'mdi:cloud-off-outline' : 'mdi:alert-circle-outline'} width="32" />
       <h1>Couldn't load your dashboards</h1>
       <p>{$configError ?? 'The configuration has not been loaded.'}</p>
-      {#if $isBackendOffline}
+      {#if $backendStatus.status === 'offline'}
         <p class="muted">The HOPS server can't be reached. Check that it's running and your network is up.</p>
+      {:else if $backendStatus.status === 'error'}
+        <p class="muted">The HOPS server was reached but answered with an error. Check its logs.</p>
       {/if}
       <div class="actions">
         <Button variant="primary" icon="mdi:refresh" onclick={() => { backendStatus.check(); void loadConfig(); }}>

@@ -139,7 +139,7 @@
   }
   .target {
     border: 2px solid var(--accent);
-    background: color-mix(in srgb, var(--accent) 18%, transparent);
+    background: color-mix(in srgb, var(--accent-solid) 18%, transparent);
     border-radius: 0.75rem;
   }
   .push {
@@ -180,21 +180,21 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: var(--accent);
-    color: white;
+    background: var(--accent-solid);
+    color: var(--on-accent);
     font-weight: 700;
   }
   .cue {
     border: 3px solid var(--accent);
     border-radius: 0.75rem;
-    background: color-mix(in srgb, var(--accent) 25%, transparent);
+    background: color-mix(in srgb, var(--accent-solid) 25%, transparent);
     display: flex;
     align-items: flex-end;
     justify-content: center;
   }
   .cue.hold {
     border-style: dashed;
-    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    background: color-mix(in srgb, var(--accent-solid) 12%, transparent);
   }
   /* The merge dwell's progress: a bar filling along the tile's top edge over MERGE_DWELL_MS. */
   .cue-progress {
@@ -218,8 +218,8 @@
     margin-bottom: -1.6rem;
     padding: 0.15rem 0.5rem;
     border-radius: 0.375rem;
-    background: var(--accent);
-    color: white;
+    background: var(--accent-solid);
+    color: var(--on-accent);
     font-size: 0.8125rem;
     font-weight: 600;
     white-space: nowrap;

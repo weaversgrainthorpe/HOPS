@@ -5,7 +5,7 @@ import { render, screen, fireEvent } from '@testing-library/svelte';
 // MigrationFailed notice can open the same dialog from any settings page).
 vi.mock('$lib/utils/api', async () => ({
 	...(await vi.importActual<object>('$lib/utils/api')),
-	getBackendVersion: vi.fn(async () => { throw new Error('down'); })
+	getBackendVersion: vi.fn(async () => { throw new TypeError('Failed to fetch'); })
 }));
 
 import { backendStatus } from '$lib/stores/backendStatus';

@@ -111,12 +111,12 @@
 
   /* Variants */
   .btn-primary {
-    background: var(--accent);
-    color: white;
+    background: var(--accent-solid);
+    color: var(--on-accent);
   }
 
   .btn-primary:hover:not(:disabled) {
-    background: var(--accent-hover);
+    background: var(--accent-solid-hover);
   }
 
   .btn-secondary {

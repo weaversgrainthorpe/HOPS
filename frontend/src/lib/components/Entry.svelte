@@ -429,7 +429,7 @@
 
   .entry.selected {
     border-color: var(--accent);
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-solid) 30%, transparent);
   }
 
   /* Custom color styles */

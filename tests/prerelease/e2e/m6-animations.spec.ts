@@ -76,8 +76,10 @@ test.afterEach(async ({ page, context }) => {
 /** Record, with timestamps, every animation ghost added / removed and every folder pop started / ended. */
 async function recordAnimations(page: Page) {
   await page.addInitScript(() => {
-    const log: { what: string; kind?: string; t: number }[] = [];
+    const log: { what: string; kind?: string; t: number; z?: number }[] = [];
     (window as unknown as { __anim: typeof log }).__anim = log;
+    // Ruling 3: when the drop ended, and when a dialog appeared (relative to the animation).
+    window.addEventListener('pointerup', () => log.push({ what: 'pointerup', t: performance.now() }), true);
     new MutationObserver((muts) => {
       const t = performance.now();
       for (const m of muts) {
@@ -87,7 +89,12 @@ async function recordAnimations(page: Page) {
           continue;
         }
         m.addedNodes.forEach((n) => {
-          if (n instanceof HTMLElement && n.dataset.testid === 'drop-anim') log.push({ what: 'add', kind: n.dataset.kind, t });
+          if (n instanceof HTMLElement && n.dataset.testid === 'drop-anim') {
+            log.push({ what: 'add', kind: n.dataset.kind, t, z: Number(getComputedStyle(n).zIndex) });
+          }
+          if (n instanceof HTMLElement && (n.matches('[role="dialog"]') || n.querySelector('[role="dialog"]'))) {
+            log.push({ what: 'dialog', t });
+          }
         });
         m.removedNodes.forEach((n) => {
           if (n instanceof HTMLElement && n.dataset.testid === 'drop-anim') log.push({ what: 'remove', kind: n.dataset.kind, t });
@@ -96,8 +103,10 @@ async function recordAnimations(page: Page) {
     }).observe(document, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-drop-pop'] });
   });
 }
+type AnimEvent = { what: string; kind?: string; t: number; z?: number };
 const animLog = (page: Page) =>
-  page.evaluate(() => (window as unknown as { __anim: { what: string; kind?: string; t: number }[] }).__anim.slice());
+  page.evaluate(() => (window as unknown as { __anim: AnimEvent[] }).__anim.slice());
+const anim = (log: AnimEvent[]) => log.filter((e) => e.what !== 'pointerup' && e.what !== 'dialog');
 const clearLog = (page: Page) => page.evaluate(() => { (window as unknown as { __anim: unknown[] }).__anim.length = 0; });
 
 const node = (page: Page, id: string) => page.locator(`.tab-canvas [data-node-id="${id}"]`).first();
@@ -188,7 +197,7 @@ test.describe('M6 drop and merge animations (§7.13)', () => {
     await dragCentre(page, node(page, f.id('t')), c.x + c.width / 2, c.y + c.height / 2);
     await page.mouse.up();
     await page.waitForTimeout(600);
-    let log = await animLog(page);
+    let log = anim(await animLog(page));
     const into = log.filter((e) => e.kind === 'into');
     expect(into.map((e) => e.what)).toEqual(['add', 'remove']);
     expect(into[1].t - into[0].t, 'the drop animation lasts at most ~300 ms').toBeLessThanOrEqual(350);
@@ -200,7 +209,7 @@ test.describe('M6 drop and merge animations (§7.13)', () => {
     await page.waitForTimeout(700);
     await page.mouse.up();
     await page.waitForTimeout(600);
-    log = await animLog(page);
+    log = anim(await animLog(page));
     const adds = log.filter((e) => e.what === 'add');
     expect(adds.map((e) => e.kind)).toEqual(['merge', 'merge']); // the dragged tile and the target tile
     expect(log.filter((e) => e.what === 'pop-start'), 'the new folder pops').toHaveLength(1);
@@ -213,6 +222,58 @@ test.describe('M6 drop and merge animations (§7.13)', () => {
     expect(errors).toEqual([]);
   });
 
+  // Ruling 3: after a merge the folder dialog opens only once the animation has ended (<= 300 ms),
+  // at once when animations are off or under reduced motion; no animation layer ever draws above it.
+  test('merge: the folder dialog opens when the animation ends, and nothing animates above it', async ({ page, context }) => {
+    await setAnimations(page, context, true);
+    const f = await importDash(page, context);
+    await recordAnimations(page);
+    await openEditing(page, f.path, f.id('t'));
+    const v = await box(node(page, f.id('v')));
+    await dragCentre(page, node(page, f.id('u')), v.x + v.width / 2, v.y + v.height / 2);
+    await page.waitForTimeout(700);
+    await expect(page.locator('.drag-layer .cue')).toHaveText(/^\s*Make a folder\s*$/i);
+    await clearLog(page);
+    await page.mouse.up();
+    const dlg = page.getByRole('dialog', { name: 'Edit Folder' });
+    await expect(dlg).toBeVisible();
+    // Visible, so nothing from the animation is left on screen with it.
+    await expect(page.locator('[data-testid="drop-anim"]')).toHaveCount(0);
+    await expect(page.locator('[data-drop-pop]')).toHaveCount(0);
+    const log = await animLog(page);
+    const up = log.find((e) => e.what === 'pointerup')!.t;
+    const opened = log.find((e) => e.what === 'dialog')!.t;
+    const ghosts = log.filter((e) => e.what === 'add');
+    expect(ghosts.length, 'the merge animated').toBe(2);
+    const modalZ = await page.evaluate(() => Number(getComputedStyle(document.documentElement).getPropertyValue('--z-modal')));
+    for (const g of ghosts) expect(g.z!, 'an animation ghost sits below dialogs').toBeLessThan(modalZ);
+    const lastAnim = Math.max(...log.filter((e) => e.what === 'remove' || e.what === 'pop-end').map((e) => e.t));
+    expect(opened, 'the dialog opens after the animation has ended').toBeGreaterThanOrEqual(lastAnim);
+    expect(opened - up, 'and no later than ~300 ms after the drop').toBeLessThanOrEqual(400);
+    await dlg.getByRole('button', { name: 'Cancel' }).click();
+  });
+
+  for (const how of ['off', 'reduced motion'] as const) {
+    test(`merge with animations ${how}: the folder dialog opens at once`, async ({ page, context }) => {
+      await setAnimations(page, context, how !== 'off');
+      if (how === 'reduced motion') await page.emulateMedia({ reducedMotion: 'reduce' });
+      const f = await importDash(page, context);
+      await recordAnimations(page);
+      await openEditing(page, f.path, f.id('t'));
+      const v = await box(node(page, f.id('v')));
+      await dragCentre(page, node(page, f.id('u')), v.x + v.width / 2, v.y + v.height / 2);
+      await page.waitForTimeout(700);
+      await clearLog(page);
+      await page.mouse.up();
+      await expect(page.getByRole('dialog', { name: 'Edit Folder' })).toBeVisible();
+      const log = await animLog(page);
+      expect(anim(log)).toEqual([]);
+      const up = log.find((e) => e.what === 'pointerup')!.t;
+      const opened = log.find((e) => e.what === 'dialog')!.t;
+      expect(opened - up, 'opened straight away, not after an animation delay').toBeLessThan(120);
+    });
+  }
+
   test('the setting off: no animation at all, for a drop or a merge', async ({ page, context }) => {
     await setAnimations(page, context, false);
     const f = await importDash(page, context);
@@ -220,7 +281,7 @@ test.describe('M6 drop and merge animations (§7.13)', () => {
     const errors = await openEditing(page, f.path, f.id('t'));
     await clearLog(page);
     await dropThenMerge(page, f);
-    expect(await animLog(page)).toEqual([]);
+    expect(anim(await animLog(page))).toEqual([]);
     expect(errors).toEqual([]);
   });
 
@@ -232,7 +293,7 @@ test.describe('M6 drop and merge animations (§7.13)', () => {
     const errors = await openEditing(page, f.path, f.id('t'));
     await clearLog(page);
     await dropThenMerge(page, f);
-    expect(await animLog(page)).toEqual([]);
+    expect(anim(await animLog(page))).toEqual([]);
     expect(errors).toEqual([]);
   });
 
@@ -245,7 +306,7 @@ test.describe('M6 drop and merge animations (§7.13)', () => {
       await openEditing(page, f.path, f.id('t'));
       await clearLog(page);
       await dropThenMerge(page, f);
-      expect((await animLog(page)).length > 0, `animations ${on ? 'played' : 'did not play'}`).toBe(on);
+      expect(anim(await animLog(page)).length > 0, `animations ${on ? 'played' : 'did not play'}`).toBe(on);
       await saveDraft(page);
       shapes.push(await savedShape(page, f.id('dash'), f.prefix));
     }

@@ -150,7 +150,8 @@
   .about-header h1 {
     font-size: 2rem;
     margin: 0 0 0.25rem 0;
-    background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+    /* Solid stops: --accent is itself a gradient on three presets, and a gradient of gradients is invalid. */
+    background: linear-gradient(135deg, var(--accent-solid), var(--accent-solid-hover));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -255,8 +256,8 @@
   }
 
   .link-btn:hover {
-    background: var(--accent);
-    color: white;
+    background: var(--accent-solid);
+    color: var(--on-accent);
   }
 
   .credits {

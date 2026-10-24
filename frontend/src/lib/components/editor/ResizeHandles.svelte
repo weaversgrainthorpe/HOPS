@@ -77,7 +77,7 @@
   }
   .rh-right:hover,
   .rh-bottom:hover {
-    background: color-mix(in srgb, var(--accent) 35%, transparent);
+    background: color-mix(in srgb, var(--accent-solid) 35%, transparent);
   }
   .rh-corner:hover {
     opacity: 1;

@@ -46,13 +46,13 @@
   .not-found a {
     margin-top: 1rem;
     padding: 0.75rem 1.5rem;
-    background: var(--accent);
-    color: white;
+    background: var(--accent-solid);
+    color: var(--on-accent);
     border-radius: 0.5rem;
     text-decoration: none;
   }
 
   .not-found a:hover {
-    background: var(--accent-hover);
+    background: var(--accent-solid-hover);
   }
 </style>

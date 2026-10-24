@@ -407,8 +407,8 @@
   }
 
   .tab.active {
-    background: var(--accent);
-    color: white;
+    background: var(--accent-solid);
+    color: var(--on-accent);
   }
 
   .modal-body {

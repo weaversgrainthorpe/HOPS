@@ -753,9 +753,9 @@
   }
 
   .category-tab.active {
-    background: var(--accent);
-    border-color: var(--accent);
-    color: white;
+    background: var(--accent-solid);
+    border-color: var(--accent-solid);
+    color: var(--on-accent);
   }
 
   .icon-grid {
@@ -786,9 +786,9 @@
   }
 
   .icon-card.selected {
-    background: var(--accent);
-    border-color: var(--accent);
-    color: white;
+    background: var(--accent-solid);
+    border-color: var(--accent-solid);
+    color: var(--on-accent);
   }
 
   .icon-preview {
@@ -890,23 +890,23 @@
   }
 
   .add-category-tab:hover {
-    background: var(--accent);
-    border-color: var(--accent);
-    color: white;
+    background: var(--accent-solid);
+    border-color: var(--accent-solid);
+    color: var(--on-accent);
   }
 
   .special-tab {
-    background: color-mix(in srgb, var(--accent) 10%, var(--bg-tertiary));
-    border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
+    background: color-mix(in srgb, var(--accent-solid) 10%, var(--bg-tertiary));
+    border-color: color-mix(in srgb, var(--accent-solid) 30%, var(--border));
   }
 
   .special-tab:hover {
-    background: color-mix(in srgb, var(--accent) 20%, var(--bg-primary));
+    background: color-mix(in srgb, var(--accent-solid) 20%, var(--bg-primary));
   }
 
   .badge {
-    background: var(--accent);
-    color: white;
+    background: var(--accent-solid);
+    color: var(--on-accent);
     font-size: 0.75rem;
     padding: 0.125rem 0.4rem;
     border-radius: 9999px;
@@ -984,10 +984,10 @@
     align-items: center;
     gap: 0.5rem;
     padding: 0.5rem 1rem;
-    background: var(--accent);
+    background: var(--accent-solid);
     border: none;
     border-radius: 0.5rem;
-    color: white;
+    color: var(--on-accent);
     font-weight: 500;
     font-size: 0.875rem;
     cursor: pointer;
@@ -1111,9 +1111,9 @@
   }
 
   .toggle-btn.active {
-    background: var(--accent);
-    border-color: var(--accent);
-    color: white;
+    background: var(--accent-solid);
+    border-color: var(--accent-solid);
+    color: var(--on-accent);
   }
 
   .upload-section {

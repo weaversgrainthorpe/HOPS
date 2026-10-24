@@ -417,9 +417,13 @@
     gap: 0.75rem;
   }
 
+  /* Ruling 4: two columns — the description (at most 75ch of its 0.92rem text, i.e. 69ch of the
+     row's font) with its control right beside it; the card still spans the column, so at 1920 the
+     spare room is at the row's end, never between a description and its control. */
   .row {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(280px, 380px);
+    grid-template-columns: fit-content(69ch) minmax(280px, 380px);
+    justify-content: start;
     gap: 1.5rem;
     background: var(--bg-secondary);
     border: 1px solid var(--border);
@@ -663,9 +667,10 @@
     color: var(--text-secondary);
   }
 
-  @media (max-width: 720px) {
+  /* Narrow (a phone, or a tablet beside the settings sidebar): one column, the control under its text. */
+  @media (max-width: 900px) {
     .row {
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr);
     }
   }
 </style>

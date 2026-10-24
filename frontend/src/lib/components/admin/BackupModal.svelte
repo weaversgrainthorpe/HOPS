@@ -209,8 +209,8 @@
     align-items: flex-start;
     gap: 0.75rem;
     padding: 0.75rem 1rem;
-    background: color-mix(in srgb, var(--accent) 10%, var(--bg-secondary));
-    border: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
+    background: color-mix(in srgb, var(--accent-solid) 10%, var(--bg-secondary));
+    border: 1px solid color-mix(in srgb, var(--accent-solid) 20%, transparent);
     border-radius: 0.5rem;
     font-size: 0.8125rem;
     color: var(--text-secondary);

@@ -680,8 +680,8 @@
 
   /* The current dashboard: marked (the tick) and in the accent colour. */
   .switcher-item.active {
-    background: var(--accent);
-    color: white;
+    background: var(--accent-solid);
+    color: var(--on-accent);
   }
 
   .switcher-item.active:focus-visible {
@@ -756,8 +756,8 @@
   }
 
   .search-btn:hover, .theme-toggle:hover, .admin-link:hover, .edit-toggle:hover, .export-btn:hover, .help-btn:hover, .about-btn:hover {
-    background: var(--accent);
-    color: white;
+    background: var(--accent-solid);
+    color: var(--on-accent);
   }
 
   .edit-toggle {
@@ -834,8 +834,8 @@
   }
 
   .text-size-btn:hover:not(:disabled) {
-    background: var(--accent);
-    color: white;
+    background: var(--accent-solid);
+    color: var(--on-accent);
   }
 
   .text-size-btn:disabled {

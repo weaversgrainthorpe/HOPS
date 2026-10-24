@@ -436,14 +436,11 @@
   small {
     color: var(--text-secondary);
   }
-  /* §7.3: text in this dialog reaches 4.5:1 in both themes (the plain error and accent colours don't). */
+  /* §7.3: text in this dialog reaches 4.5:1 on every preset, light and dark (theme tokens; the plain error and accent colours don't). */
   .problem {
     margin: 0;
-    color: #fca5a5;
+    color: var(--color-error-text);
     font-size: 0.875rem;
-  }
-  :global([data-theme='light']) .problem {
-    color: #b91c1c;
   }
   .choice-row {
     display: flex;
@@ -481,7 +478,7 @@
   }
   .shape-choice.chosen {
     border-color: var(--accent);
-    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    background: color-mix(in srgb, var(--accent-solid) 12%, transparent);
   }
   .shape-choice:focus-within {
     outline: 2px solid var(--accent);
@@ -538,11 +535,8 @@
     display: inline-flex;
     align-items: center;
     gap: 0.3rem;
-    color: #93c5fd;
+    color: var(--accent-text);
     font-size: 0.875rem;
-  }
-  :global([data-theme='light']) .edit-cta {
-    color: #1d4ed8;
   }
   /* §7.4: each part of the dialog is its own section, with a heading and room around it. */
   .dialog-section {
@@ -624,16 +618,9 @@
     align-items: center;
     gap: 0.5rem;
   }
-  /* White on the plain accent is 3.7:1; a darker shade of it reaches 4.5:1 (§7.3). */
-  .modal-actions .btn-primary {
-    background: color-mix(in srgb, var(--accent) 78%, black);
-  }
-  .modal-actions .btn-primary:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--accent-hover) 78%, black);
-  }
-  /* Placeholders readable (>= 4.5:1, M6 §7.3); the browser default grey is 3.2–4.2:1. */
+  /* Placeholders readable (>= 4.5:1 on every preset, M6 §7.3); the browser default grey is 3.2–4.2:1. */
   input::placeholder {
-    color: color-mix(in srgb, var(--text-secondary) 75%, var(--bg-secondary));
+    color: var(--text-secondary);
     opacity: 1;
   }
 </style>

@@ -391,7 +391,7 @@
   }
   .btn-cancel { background: transparent; color: var(--text-primary); }
   .btn-cancel:hover { background: var(--bg-tertiary); }
-  .btn-save { background: var(--accent); color: white; border-color: var(--accent); }
+  .btn-save { background: var(--accent-solid); color: var(--on-accent); border-color: var(--accent-solid); }
   .btn-save:hover:not(:disabled) { filter: brightness(1.1); }
   .btn-save:disabled, .btn-cancel:disabled { opacity: 0.6; cursor: not-allowed; }
 </style>

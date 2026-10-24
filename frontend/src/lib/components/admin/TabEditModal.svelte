@@ -370,9 +370,9 @@
   }
 
   .btn-background:hover {
-    background: var(--accent);
-    color: white;
-    border-color: var(--accent);
+    background: var(--accent-solid);
+    color: var(--on-accent);
+    border-color: var(--accent-solid);
   }
 
   .background-status {

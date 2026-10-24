@@ -15,8 +15,9 @@ import type { HitResult } from './hitTest';
 import { drag, dragSource, setDragEnv, resetDragForTests, setActiveTab, MERGE_DWELL_MS } from './dragController';
 import {
   animationsSetting, animationsAllowed, playDropAnimation, setAnimationEnv, resetDropAnimationForTests,
-  DROP_MS, GATHER_MS, POP_MS, type AnimationEnv
+  sayAnimationFailure, MERGE_DIALOG_CAP_MS, DROP_MS, GATHER_MS, POP_MS, type AnimationEnv
 } from './dropAnimation';
+import { editorDialog } from '../editorUi';
 import { setLayout, resetEditor, startSession, draft, nodeIn, home, other } from '$lib/components/editor/editorTestKit';
 
 // M6 §7.13: drop and merge animations. Decoration only: the draft changes at once, the animation is
@@ -157,6 +158,49 @@ describe('playDropAnimation', () => {
     folderEl.remove();
   });
 
+  it('merge: onEnd runs once, when the gather and the pop have both ended', () => {
+    setLayout(withAnimations(true));
+    const folderEl = document.createElement('div');
+    document.body.appendChild(folderEl);
+    animEnv({ findNode: (id) => (id === 'nf' ? folderEl : null) });
+    const onEnd = vi.fn();
+    expect(playDropAnimation('d1', { kind: 'merge', from, to, label: 'A', targetLabel: 'B', folderId: 'nf', onEnd })).toBe(true);
+    flushFrames();
+    calls[0].anim.finish();
+    calls[1].anim.finish();
+    expect(onEnd).not.toHaveBeenCalled(); // the pop is still running
+    calls[2].anim.finish();
+    expect(onEnd).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(1000);
+    expect(onEnd).toHaveBeenCalledTimes(1);
+    folderEl.remove();
+  });
+
+  it('merge: onEnd still runs (at the fallback) when the animation never reports its end', () => {
+    setLayout(withAnimations(true));
+    const onEnd = vi.fn();
+    playDropAnimation('d1', { kind: 'merge', from, to, label: 'A', targetLabel: 'B', folderId: 'nf', onEnd });
+    flushFrames();
+    vi.advanceTimersByTime(GATHER_MS + POP_MS + 500);
+    expect(onEnd).toHaveBeenCalledTimes(1);
+  });
+
+  it('the animation layer sits below dialogs (never drawn over one)', () => {
+    setLayout(withAnimations(true));
+    playDropAnimation('d1', { kind: 'into', from, to, label: 'A' });
+    const z = layerEls()[0].style.zIndex;
+    expect(z).toContain('--z-modal');
+    expect(z).not.toContain('--z-toast');
+  });
+
+  it('a failure while preparing an animation is said once with the same toast (not only logged)', () => {
+    const warn = vi.spyOn(console, 'error').mockImplementation(() => {});
+    sayAnimationFailure(new Error('bad args'));
+    sayAnimationFailure(new Error('again'));
+    expect(get(toast).filter((t) => /animation/i.test(t.message))).toHaveLength(1);
+    warn.mockRestore();
+  });
+
   it('setting off: nothing at all', () => {
     setLayout(withAnimations(false));
     expect(playDropAnimation('d1', { kind: 'into', from, to, label: 'A' })).toBe(false);
@@ -274,6 +318,56 @@ describe('a drop never waits for its animation', () => {
     const merged = draft().tabs[0].root.children.find((n) => n.kind === 'folder' && n.id !== 'f1' && n.id !== 'c1') as FolderNode;
     expect(merged.content.children.map((n) => n.id)).toEqual(['b', 'a']);
     expect(layerEls()).toHaveLength(2);
+  });
+
+  // Ruling 3: the folder dialog opens when the merge animation ends (<= 300 ms); at once when off.
+  function mergeDrop(on: boolean) {
+    start(on);
+    dragOnto('a', [50, 50], [150, 50]);
+    vi.advanceTimersByTime(MERGE_DWELL_MS);
+    const f = dragFrames;
+    dragFrames = [];
+    f.forEach((cb) => cb(0));
+    expect(get(drag)!.target?.kind).toBe('merge');
+    dropAt(150, 50);
+    return draft().tabs[0].root.children.find((n) => n.kind === 'folder' && n.id !== 'f1' && n.id !== 'c1') as FolderNode;
+  }
+
+  it('merge, animations on: the folder dialog waits for the animation, then opens', () => {
+    const made = mergeDrop(true);
+    expect(get(editorDialog)).toBeNull();
+    flushFrames();
+    calls.forEach((c) => c.anim.finish());
+    expect(get(editorDialog)).toEqual({ kind: 'folder', id: made.id });
+  });
+
+  it('merge, animations on: the dialog still opens (300 ms + a 50 ms margin) if the animation never reports its end', () => {
+    const made = mergeDrop(true);
+    expect(MERGE_DIALOG_CAP_MS).toBe(GATHER_MS + POP_MS + 50);
+    vi.advanceTimersByTime(MERGE_DIALOG_CAP_MS - 1);
+    expect(get(editorDialog)).toBeNull();
+    vi.advanceTimersByTime(1);
+    expect(get(editorDialog)).toEqual({ kind: 'folder', id: made.id });
+  });
+
+  it('merge, animations off: the folder dialog opens at once', () => {
+    const made = mergeDrop(false);
+    expect(get(editorDialog)).toEqual({ kind: 'folder', id: made.id });
+  });
+
+  it('merge, reduced motion: the folder dialog opens at once', () => {
+    reduced = true;
+    const made = mergeDrop(true);
+    expect(get(editorDialog)).toEqual({ kind: 'folder', id: made.id });
+  });
+
+  it('merge then Undo before the animation ends: no dialog for the folder that is gone', () => {
+    mergeDrop(true);
+    undo();
+    flushFrames();
+    calls.forEach((c) => c.anim.finish());
+    vi.advanceTimersByTime(1000);
+    expect(get(editorDialog)).toBeNull();
   });
 
   it('Undo mid-animation restores the draft; the animation finishing later changes nothing', () => {

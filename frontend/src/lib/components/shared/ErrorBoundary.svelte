@@ -81,8 +81,8 @@
     align-items: center;
     gap: 0.5rem;
     padding: 0.625rem 1.25rem;
-    background: var(--accent);
-    color: white;
+    background: var(--accent-solid);
+    color: var(--on-accent);
     border: none;
     border-radius: 0.375rem;
     font-weight: 500;
@@ -91,6 +91,6 @@
   }
 
   .retry-btn:hover {
-    background: var(--accent-hover);
+    background: var(--accent-solid-hover);
   }
 </style>

@@ -438,7 +438,7 @@
     display: inline-flex;
     align-items: center;
     gap: 0.3rem;
-    color: #93c5fd;
+    color: var(--accent-text);
     font-size: 0.875rem;
     font-weight: 500;
   }
@@ -447,9 +447,6 @@
     margin: 0;
     font-size: 0.8rem;
     color: var(--color-error-text);
-  }
-  :global([data-theme='light']) .field-error {
-    color: #b91c1c;
   }
 
   small {
@@ -542,7 +539,8 @@
     background: var(--bg-tertiary);
     border: 1px dashed var(--border);
     border-radius: 0.375rem;
-    color: var(--text-secondary);
+    /* On --bg-tertiary: the secondary text is 3.9:1 on the forest dark preset; the primary passes. */
+    color: var(--text-primary);
     font-size: 0.875rem;
     cursor: pointer;
     transition: all 0.2s;
@@ -550,26 +548,15 @@
 
   .btn-move-toggle:hover {
     background: var(--bg-secondary);
-    border-color: var(--accent);
+    border-color: var(--accent-solid);
     color: var(--accent);
   }
 
-  /* Placeholders readable (>= 4.5:1, M6 §7.3); the browser default grey is 3.2–4.2:1. */
+  /* Placeholders readable (>= 4.5:1 on every preset, M6 §7.3); the browser default grey is 3.2–4.2:1. */
   input::placeholder,
   textarea::placeholder {
-    color: color-mix(in srgb, var(--text-secondary) 75%, var(--bg-secondary));
+    color: var(--text-secondary);
     opacity: 1;
-  }
-  /* §7.3: readable accent text in both themes (the plain accent is 3.4–4:1). */
-  :global([data-theme='light']) .edit-cta {
-    color: #1d4ed8;
-  }
-  /* White on the plain accent is 3.7:1; a darker shade of it reaches 4.5:1 (§7.3). */
-  .modal-actions .btn-primary {
-    background: color-mix(in srgb, var(--accent) 78%, black);
-  }
-  .modal-actions .btn-primary:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--accent-hover) 78%, black);
   }
 </style>
 

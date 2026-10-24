@@ -32,7 +32,7 @@ describe('BackendStatus header dot', () => {
 	});
 
 	it('is red and says so when offline, with a Retry in the tooltip', async () => {
-		getBackendVersion.mockRejectedValue(new Error('down'));
+		getBackendVersion.mockRejectedValue(new TypeError('Failed to fetch')); // unreachable
 		render(BackendStatus);
 		await settle();
 		const dot = screen.getByRole('button', { name: /backend offline/i });
@@ -43,6 +43,29 @@ describe('BackendStatus header dot', () => {
 		await fireEvent.click(screen.getByRole('button', { name: /retry/i }));
 		await settle();
 		expect(screen.getByRole('button', { name: /backend online/i })).toBeTruthy();
+	});
+
+	it('reached but answering with an error is degraded (amber "!"), not offline', async () => {
+		getBackendVersion.mockRejectedValue(new Error('Server error (500)'));
+		render(BackendStatus);
+		await settle();
+		const dot = screen.getByRole('button', { name: /backend degraded/i });
+		expect(dot.getAttribute('data-status')).toBe('error');
+		expect(dot.querySelector('svg[data-glyph="degraded"]')).toBeTruthy();
+		await fireEvent.click(dot);
+		expect(screen.getByRole('tooltip').textContent).toMatch(/answered with an error/i);
+		expect(screen.getByRole('button', { name: /retry/i })).toBeTruthy();
+	});
+
+	it('each state has its own glyph, not only a colour', async () => {
+		getBackendVersion.mockResolvedValue({ version: '3.0.0' });
+		render(BackendStatus);
+		await settle();
+		expect(screen.getByRole('button', { name: /backend online/i }).querySelector('svg[data-glyph="online"]')).toBeTruthy();
+		getBackendVersion.mockRejectedValue(new TypeError('Failed to fetch'));
+		await backendStatus.check();
+		await settle();
+		expect(screen.getByRole('button', { name: /backend offline/i }).querySelector('svg[data-glyph="offline"]')).toBeTruthy();
 	});
 
 	it('tap toggles the tooltip and Escape closes it', async () => {

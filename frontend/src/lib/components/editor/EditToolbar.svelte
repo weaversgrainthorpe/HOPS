@@ -267,9 +267,9 @@
     cursor: default;
   }
   .tb.primary:not(:disabled) {
-    background: var(--accent);
-    border-color: var(--accent);
-    color: #fff;
+    background: var(--accent-solid);
+    border-color: var(--accent-solid);
+    color: var(--on-accent);
   }
   .narrow-hint {
     display: inline-flex;

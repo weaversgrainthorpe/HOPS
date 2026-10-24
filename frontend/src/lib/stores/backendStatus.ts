@@ -27,18 +27,22 @@ function createBackendStatusStore() {
     try {
       const result = await getBackendVersion();
       const endTime = performance.now();
+      // Reached, but no version in the answer: degraded, never "online, version unknown".
+      const version = result && typeof result.version === 'string' && result.version ? result.version : null;
 
       update(state => ({
         ...state,
-        status: 'online',
-        version: result.version || 'unknown',
+        status: version ? 'online' : 'error',
+        version,
         responseTime: Math.round(endTime - startTime),
         lastCheck: new Date()
       }));
-    } catch {
+    } catch (e) {
+      // fetch rejects with a TypeError when the server can't be reached at all (offline); any other
+      // error means it answered, with an error status (degraded). The two are shown differently.
       update(state => ({
         ...state,
-        status: 'offline',
+        status: e instanceof TypeError ? 'offline' : 'error',
         version: null,
         responseTime: null,
         lastCheck: new Date()
@@ -83,9 +87,11 @@ export const isBackendOnline = derived(
   $status => $status.status === 'online'
 );
 
+// Unusable for actions that need the backend: unreachable (offline) or answering with errors
+// (degraded). Both were "offline" before the two were told apart; the guards keep that behaviour.
 export const isBackendOffline = derived(
   backendStatus,
-  $status => $status.status === 'offline'
+  $status => $status.status === 'offline' || $status.status === 'error'
 );
 
 export const isBackendChecking = derived(

@@ -774,8 +774,8 @@
     align-items: center;
     gap: 0.5rem;
     padding: 0.75rem 1.5rem;
-    background: var(--accent);
-    color: white;
+    background: var(--accent-solid);
+    color: var(--on-accent);
     border: none;
     border-radius: 0.5rem;
     text-decoration: none;
@@ -787,7 +787,7 @@
 
   .empty-dashboard a:hover,
   .add-first-tab-btn:hover {
-    background: var(--accent-hover);
+    background: var(--accent-solid-hover);
   }
 
   /* Party mode wiggle effect */

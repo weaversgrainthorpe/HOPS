@@ -719,8 +719,8 @@
     padding: 0.5rem 1.25rem;
     border: none;
     border-radius: 0.4rem;
-    background: var(--accent);
-    color: white;
+    background: var(--accent-solid);
+    color: var(--on-accent);
     font-weight: 500;
     cursor: pointer;
   }

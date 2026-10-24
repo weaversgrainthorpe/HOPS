@@ -11,6 +11,9 @@ interface ThemePreset {
     tertiary: string;
     accent: string;
     accentHover: string;
+    /** A solid accent for fills that carry text (--accent-solid): >= 4.5:1 with --on-accent, >= 3:1 on the page. */
+    accentSolid: string;
+    accentSolidHover: string;
   };
   light: {
     primary: string;
@@ -18,6 +21,9 @@ interface ThemePreset {
     tertiary: string;
     accent: string;
     accentHover: string;
+    /** A solid accent for fills that carry text (--accent-solid): >= 4.5:1 with --on-accent, >= 3:1 on the page. */
+    accentSolid: string;
+    accentSolidHover: string;
   };
   gradient?: boolean;
 }
@@ -30,14 +36,18 @@ const themePresets: Record<string, ThemePreset> = {
       secondary: '#1e293b',
       tertiary: '#334155',
       accent: '#3b82f6',
-      accentHover: '#2563eb'
+      accentHover: '#2563eb',
+      accentSolid: '#3b82f6',
+      accentSolidHover: '#60a5fa'
     },
     light: {
       primary: '#f8fafc',
       secondary: '#f1f5f9',
       tertiary: '#e2e8f0',
       accent: '#3b82f6',
-      accentHover: '#2563eb'
+      accentHover: '#2563eb',
+      accentSolid: '#2563eb',
+      accentSolidHover: '#1d4ed8'
     }
   },
   metallic: {
@@ -47,14 +57,18 @@ const themePresets: Record<string, ThemePreset> = {
       secondary: '#27272a',
       tertiary: '#3f3f46',
       accent: '#a1a1aa',
-      accentHover: '#71717a'
+      accentHover: '#71717a',
+      accentSolid: '#a1a1aa',
+      accentSolidHover: '#d4d4d8'
     },
     light: {
       primary: '#fafafa',
       secondary: '#f4f4f5',
       tertiary: '#e4e4e7',
       accent: '#71717a',
-      accentHover: '#52525b'
+      accentHover: '#52525b',
+      accentSolid: '#71717a',
+      accentSolidHover: '#52525b'
     }
   },
   modern: {
@@ -64,14 +78,18 @@ const themePresets: Record<string, ThemePreset> = {
       secondary: '#1f2937',
       tertiary: '#374151',
       accent: '#6366f1',
-      accentHover: '#4f46e5'
+      accentHover: '#4f46e5',
+      accentSolid: '#818cf8',
+      accentSolidHover: '#a5b4fc'
     },
     light: {
       primary: '#ffffff',
       secondary: '#f9fafb',
       tertiary: '#f3f4f6',
       accent: '#6366f1',
-      accentHover: '#4f46e5'
+      accentHover: '#4f46e5',
+      accentSolid: '#4f46e5',
+      accentSolidHover: '#4338ca'
     }
   },
   subtle: {
@@ -81,14 +99,18 @@ const themePresets: Record<string, ThemePreset> = {
       secondary: '#292524',
       tertiary: '#44403c',
       accent: '#a78bfa',
-      accentHover: '#8b5cf6'
+      accentHover: '#8b5cf6',
+      accentSolid: '#a78bfa',
+      accentSolidHover: '#c4b5fd'
     },
     light: {
       primary: '#fef7f3',
       secondary: '#fef3f0',
       tertiary: '#fde8e0',
       accent: '#c084fc',
-      accentHover: '#a855f7'
+      accentHover: '#a855f7',
+      accentSolid: '#9333ea',
+      accentSolidHover: '#7e22ce'
     }
   },
   cyberpunk: {
@@ -98,14 +120,18 @@ const themePresets: Record<string, ThemePreset> = {
       secondary: '#111827',
       tertiary: '#1e293b',
       accent: '#ec4899',
-      accentHover: '#db2777'
+      accentHover: '#db2777',
+      accentSolid: '#ec4899',
+      accentSolidHover: '#f472b6'
     },
     light: {
       primary: '#fdf4ff',
       secondary: '#fae8ff',
       tertiary: '#f5d0fe',
       accent: '#d946ef',
-      accentHover: '#c026d3'
+      accentHover: '#c026d3',
+      accentSolid: '#a21caf',
+      accentSolidHover: '#86198f'
     }
   },
   sunset: {
@@ -116,14 +142,18 @@ const themePresets: Record<string, ThemePreset> = {
       secondary: '#312e81',
       tertiary: '#4c1d95',
       accent: 'linear-gradient(135deg, #f97316 0%, #ec4899 100%)',
-      accentHover: 'linear-gradient(135deg, #ea580c 0%, #db2777 100%)'
+      accentHover: 'linear-gradient(135deg, #ea580c 0%, #db2777 100%)',
+      accentSolid: '#ec4899',
+      accentSolidHover: '#f472b6'
     },
     light: {
       primary: '#fef3c7',
       secondary: '#fde68a',
       tertiary: '#fcd34d',
       accent: 'linear-gradient(135deg, #f97316 0%, #ec4899 100%)',
-      accentHover: 'linear-gradient(135deg, #ea580c 0%, #db2777 100%)'
+      accentHover: 'linear-gradient(135deg, #ea580c 0%, #db2777 100%)',
+      accentSolid: '#be185d',
+      accentSolidHover: '#9d174d'
     }
   },
   ocean: {
@@ -134,14 +164,18 @@ const themePresets: Record<string, ThemePreset> = {
       secondary: '#075985',
       tertiary: '#0369a1',
       accent: 'linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%)',
-      accentHover: 'linear-gradient(135deg, #0891b2 0%, #2563eb 100%)'
+      accentHover: 'linear-gradient(135deg, #0891b2 0%, #2563eb 100%)',
+      accentSolid: '#22d3ee',
+      accentSolidHover: '#67e8f9'
     },
     light: {
       primary: '#e0f2fe',
       secondary: '#bae6fd',
       tertiary: '#7dd3fc',
       accent: 'linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%)',
-      accentHover: 'linear-gradient(135deg, #0891b2 0%, #2563eb 100%)'
+      accentHover: 'linear-gradient(135deg, #0891b2 0%, #2563eb 100%)',
+      accentSolid: '#0e7490',
+      accentSolidHover: '#155e75'
     }
   },
   forest: {
@@ -152,17 +186,71 @@ const themePresets: Record<string, ThemePreset> = {
       secondary: '#166534',
       tertiary: '#15803d',
       accent: 'linear-gradient(135deg, #22c55e 0%, #84cc16 100%)',
-      accentHover: 'linear-gradient(135deg, #16a34a 0%, #65a30d 100%)'
+      accentHover: 'linear-gradient(135deg, #16a34a 0%, #65a30d 100%)',
+      accentSolid: '#4ade80',
+      accentSolidHover: '#86efac'
     },
     light: {
       primary: '#f0fdf4',
       secondary: '#dcfce7',
       tertiary: '#bbf7d0',
       accent: 'linear-gradient(135deg, #22c55e 0%, #84cc16 100%)',
-      accentHover: 'linear-gradient(135deg, #16a34a 0%, #65a30d 100%)'
+      accentHover: 'linear-gradient(135deg, #16a34a 0%, #65a30d 100%)',
+      accentSolid: '#15803d',
+      accentSolidHover: '#166534'
     }
   }
 };
+
+/**
+ * Tokens shared by every preset in one mode (M6 batch-review rulings 1 and 2). Each is checked in
+ * theme.test.ts against every preset's page and surface colours:
+ *  --on-accent          text/icons on --accent-solid (>= 4.5:1);
+ *  --accent-text        accent-coloured link text (>= 4.5:1 on the page and surface);
+ *  --color-error-text   error text (>= 4.5:1 on the page and surface);
+ *  --status-*           the header status dot fills (>= 3:1 on the navbar), --status-glyph on them.
+ */
+const modeTokens: Record<'light' | 'dark', Record<string, string>> = {
+  dark: {
+    '--on-accent': '#0f172a',
+    '--accent-text': '#bfdbfe',
+    '--color-error-text': '#fecaca',
+    '--status-online': '#4ade80',
+    '--status-degraded': '#fbbf24',
+    '--status-offline': '#fca5a5',
+    '--status-checking': '#cbd5e1',
+    '--status-glyph': '#0f172a'
+  },
+  light: {
+    '--on-accent': '#ffffff',
+    '--accent-text': '#1d4ed8',
+    '--color-error-text': '#b91c1c',
+    '--status-online': '#15803d',
+    '--status-degraded': '#b45309',
+    '--status-offline': '#b91c1c',
+    '--status-checking': '#64748b',
+    '--status-glyph': '#ffffff'
+  }
+};
+
+export const THEME_PRESET_IDS: readonly string[] = Object.keys(themePresets);
+
+/** Every CSS custom property a preset sets on <html> in one mode, or null for an unknown preset. */
+export function themeTokens(presetId: string, mode: 'light' | 'dark'): Record<string, string> | null {
+  const preset = themePresets[presetId];
+  if (!preset) return null;
+  const c = mode === 'dark' ? preset.dark : preset.light;
+  return {
+    '--bg-primary': c.primary,
+    '--bg-secondary': c.secondary,
+    '--bg-tertiary': c.tertiary,
+    '--accent': c.accent,
+    '--accent-hover': c.accentHover,
+    '--accent-solid': c.accentSolid,
+    '--accent-solid-hover': c.accentSolidHover,
+    ...modeTokens[mode]
+  };
+}
 
 /** HOPS's dark brand blue: the default preset's dark secondary background (the --bg-secondary token). */
 export const HOPS_DARK_BLUE = themePresets.default.dark.secondary;
@@ -215,22 +303,11 @@ export function applyThemePreset(presetId: string, mode: 'light' | 'dark') {
   const preset = themePresets[presetId];
   if (!preset) return;
 
-  const colors = mode === 'dark' ? preset.dark : preset.light;
+  const tokens = themeTokens(presetId, mode)!;
   const root = document.documentElement;
-
-  root.style.setProperty('--bg-primary', colors.primary);
-  root.style.setProperty('--bg-secondary', colors.secondary);
-  root.style.setProperty('--bg-tertiary', colors.tertiary);
-
-  if (preset.gradient) {
-    root.style.setProperty('--accent', colors.accent);
-    root.style.setProperty('--accent-hover', colors.accentHover);
-    root.setAttribute('data-gradient-theme', 'true');
-  } else {
-    root.style.setProperty('--accent', colors.accent);
-    root.style.setProperty('--accent-hover', colors.accentHover);
-    root.removeAttribute('data-gradient-theme');
-  }
+  for (const [k, v] of Object.entries(tokens)) root.style.setProperty(k, v);
+  if (preset.gradient) root.setAttribute('data-gradient-theme', 'true');
+  else root.removeAttribute('data-gradient-theme');
 
   localStorage.setItem('hops_theme_preset', presetId);
 }

@@ -253,6 +253,8 @@ test.describe('M4 backgrounds in a real browser', () => {
     await expect(same).not.toBeChecked();
     await same.check();
     await expect(same).toBeChecked();
+    // Batch-review M3: the folder-level hint that its own picture is kept (was asserted in m4b §7.1).
+    await expect(picker.getByText("This folder's own picture is kept for when you switch back.")).toBeVisible();
     await picker.getByRole('button', { name: /^Save Background/ }).click();
     await expect(dlg.locator('.background-status')).toContainText(/kept/);
     await dlg.getByRole('button', { name: /^Save/ }).click();

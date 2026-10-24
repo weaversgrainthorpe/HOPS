@@ -2,10 +2,11 @@
   import { onMount, onDestroy } from 'svelte';
   import { backendStatus } from '$lib/stores/backendStatus';
 
-  // A small status dot for the page header (M6 §7.12): green online, red offline, amber when the
-  // check itself errored, grey while checking. The version and round-trip time live in a tooltip
-  // that hover, keyboard focus or a tap opens. The colour is never the only signal: the button's
-  // accessible name says the state, so the failure is not silent.
+  // A small status dot for the page header (M6 §7.12): green online, red offline (can't reach it),
+  // amber degraded (reached, but it answered with an error), grey while checking. The version and
+  // round-trip time live in a tooltip that hover, keyboard focus or a tap opens. Colour is never the
+  // only signal (ruling 2): a glyph inside the dot (tick / ! / cross) and the button's accessible
+  // name say the state. The fills are per-theme tokens, >= 3:1 on the navbar on every preset.
   onMount(() => {
     backendStatus.startPolling(30000);
   });
@@ -24,7 +25,7 @@
     $backendStatus.status === 'checking' ? 'Backend checking' :
     $backendStatus.status === 'online' ? 'Backend online' :
     $backendStatus.status === 'offline' ? 'Backend offline' :
-    'Backend error'
+    'Backend degraded'
   );
 
   function onKey(e: KeyboardEvent) {
@@ -58,7 +59,15 @@
     onclick={() => (pinned = !pinned)}
     onkeydown={onKey}
   >
-    <span class="backend-dot" class:pulse={$backendStatus.status === 'checking'} aria-hidden="true"></span>
+    <span class="backend-dot" class:pulse={$backendStatus.status === 'checking'} aria-hidden="true">
+      {#if $backendStatus.status === 'online'}
+        <svg viewBox="0 0 10 10" data-glyph="online"><path d="M2.2 5.3 4.2 7.2 7.8 3" /></svg>
+      {:else if $backendStatus.status === 'offline'}
+        <svg viewBox="0 0 10 10" data-glyph="offline"><path d="M3 3 7 7M7 3 3 7" /></svg>
+      {:else if $backendStatus.status === 'error'}
+        <svg viewBox="0 0 10 10" data-glyph="degraded"><path d="M5 2.2V5.6" /><circle cx="5" cy="7.7" r="0.5" /></svg>
+      {/if}
+    </span>
   </button>
 
   {#if open}
@@ -71,7 +80,7 @@
         <span>Backend unreachable</span>
         <button type="button" class="retry-btn" onclick={() => backendStatus.check()}>Retry</button>
       {:else if $backendStatus.status === 'error'}
-        <span>The status check failed</span>
+        <span>Reached, but it answered with an error</span>
         <button type="button" class="retry-btn" onclick={() => backendStatus.check()}>Retry</button>
       {/if}
     </div>
@@ -105,17 +114,35 @@
     outline-offset: 1px;
   }
 
+  /* 14px so the glyph inside reads; the fills are >= 3:1 on the navbar on every preset (theme.ts). */
   .backend-dot {
-    width: 12px;
-    height: 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
     border-radius: 50%;
-    background: #6b7280;
-    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+    background: var(--status-checking);
+    color: var(--status-glyph);
   }
 
-  [data-status='online'] .backend-dot { background: #22c55e; }
-  [data-status='offline'] .backend-dot { background: #ef4444; }
-  [data-status='error'] .backend-dot { background: #f59e0b; }
+  [data-status='online'] .backend-dot { background: var(--status-online); }
+  [data-status='offline'] .backend-dot { background: var(--status-offline); }
+  [data-status='error'] .backend-dot { background: var(--status-degraded); }
+
+  .backend-dot svg {
+    width: 10px;
+    height: 10px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .backend-dot svg circle {
+    fill: currentColor;
+    stroke: none;
+  }
 
   .pulse {
     animation: backend-pulse 1s ease-in-out infinite;
