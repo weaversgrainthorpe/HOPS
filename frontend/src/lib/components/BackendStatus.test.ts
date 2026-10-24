@@ -2,7 +2,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/svelte';
 
 const getBackendVersion = vi.fn();
-vi.mock('$lib/utils/api', () => ({ getBackendVersion: (...a: unknown[]) => getBackendVersion(...a) }));
+vi.mock('$lib/utils/api', async () => ({
+	HttpStatusError: (await vi.importActual<typeof import('$lib/utils/api')>('$lib/utils/api')).HttpStatusError,
+	getBackendVersion: (...a: unknown[]) => getBackendVersion(...a)
+}));
 
 import BackendStatus from './BackendStatus.svelte';
 import { backendStatus } from '$lib/stores/backendStatus';

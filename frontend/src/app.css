@@ -52,6 +52,16 @@
   --color-success-alt: #22c55e;
   --color-primary: #3b82f6;
   --color-primary-dark: #2563eb;
+  /* Solid status fills for WHITE text (>= 4.5:1, checked in theme.test.ts). The plain status colours
+     above are 2.1–3.8:1 with white, so they are for icons, borders and tints only. */
+  --success-solid: #15803d;
+  --success-solid-hover: #166534;
+  --warning-solid: #b45309;
+  --warning-solid-hover: #92400e;
+  --danger-solid: #b91c1c;
+  --danger-solid-hover: #991b1b;
+  --info-solid: #1d4ed8;
+  --info-solid-hover: #1e40af;
 
   /* Accent palette */
   --color-accent-indigo: #6366f1;
@@ -323,7 +333,8 @@ a:focus-visible {
   margin: 0 0 var(--space-3);
   padding-bottom: var(--space-2);
   border-bottom: 1px solid var(--border);
-  color: var(--accent);
+  /* --accent is a gradient on three presets and 2.5:1 on subtle light; the text token passes everywhere. */
+  color: var(--accent-text);
 }
 
 /* Lede paragraph — page intro text. Single canonical max-width across

@@ -165,8 +165,27 @@ async function fetchAPI(endpoint: string, options: RequestInit = {}) {
 
 // Public API calls
 
-export async function getBackendVersion(): Promise<{ version: string }> {
-  return fetchAPI('/version');
+/** An HTTP error answer, carrying its status (the status probe tells a down proxy from a backend error). */
+export class HttpStatusError extends Error {
+  constructor(message: string, public readonly status: number) {
+    super(message);
+    this.name = 'HttpStatusError';
+  }
+}
+
+/**
+ * GET /api/version, the backend status probe. A network failure rejects with fetch's TypeError; an
+ * error answer rejects with HttpStatusError (its status says whether a proxy found the backend down).
+ */
+export async function getBackendVersion(): Promise<{ version?: string }> {
+  const response = await fetch(`${API_BASE}/version`, { credentials: 'same-origin' });
+  if (!response.ok) throw new HttpStatusError(`The server answered ${response.status}`, response.status);
+  const text = await response.text();
+  try {
+    return text ? JSON.parse(text) : {};
+  } catch {
+    return {}; // not JSON: no version, shown as degraded
+  }
 }
 
 /**

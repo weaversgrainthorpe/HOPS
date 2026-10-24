@@ -232,7 +232,7 @@
     max-width: 280px;
     padding: 0.35rem 0.6rem;
     border-radius: 0.375rem;
-    background: var(--color-error, #ef4444);
+    background: var(--danger-solid);
     color: white;
     font-size: 0.8125rem;
   }

@@ -181,11 +181,11 @@
   }
 
   .btn-warning {
-    background: var(--color-warning, #f59e0b);
+    background: var(--warning-solid);
     color: white;
   }
 
   .btn-warning:hover {
-    background: var(--color-warning-dark, #d97706);
+    background: var(--warning-solid-hover);
   }
 </style>

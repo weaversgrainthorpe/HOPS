@@ -953,7 +953,7 @@
     padding: 0.05rem 0.35rem;
     border-radius: 0.25rem;
     color: #fff;
-    background: var(--color-warning, #b45309);
+    background: var(--warning-solid);
   }
   .tile-notes {
     position: absolute;
@@ -1013,7 +1013,7 @@
     line-height: 1.2;
     text-align: center;
     color: #fff;
-    background: var(--color-error, #dc2626);
+    background: var(--danger-solid);
     pointer-events: none;
   }
   .page {

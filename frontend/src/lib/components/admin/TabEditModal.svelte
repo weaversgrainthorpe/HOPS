@@ -353,12 +353,12 @@
   /* .btn-primary, .btn-secondary, .btn-danger styles are defined globally in app.css */
 
   .btn-duplicate {
-    background: var(--color-success);
+    background: var(--success-solid);
     color: white;
   }
 
   .btn-duplicate:hover {
-    background: var(--color-success-dark);
+    background: var(--success-solid-hover);
   }
 
   .btn-background {

@@ -34,7 +34,7 @@
     font-size: 0.72rem;
     line-height: 1.35;
     font-weight: 500;
-    background: var(--color-error, #dc2626);
+    background: var(--danger-solid);
     color: #fff;
     white-space: nowrap;
     overflow: hidden;

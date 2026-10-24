@@ -213,7 +213,7 @@
   .row { display: flex; align-items: center; gap: 0.25rem; padding: 0.25rem 0.4rem; border-radius: 0.25rem; cursor: pointer; color: var(--text-primary); font-size: 0.9rem; }
   .row:hover { background: var(--bg-tertiary, rgba(127, 127, 127, 0.12)); }
   .row:focus-visible { outline: 2px solid var(--accent, #3b82f6); outline-offset: -2px; }
-  .row.sel { background: var(--accent, #3b82f6); color: #fff; }
+  .row.sel { background: var(--accent-solid); color: var(--on-accent); }
   .row.off { color: var(--text-secondary); }
   .row.off:not(:has(.chev button)) { cursor: default; }
   .name { display: inline-flex; align-items: center; gap: 0.35rem; }

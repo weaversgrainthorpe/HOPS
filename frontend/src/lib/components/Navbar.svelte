@@ -767,7 +767,7 @@
   }
 
   .edit-toggle.active {
-    background: var(--color-warning);
+    background: var(--warning-solid);
     color: white;
   }
 

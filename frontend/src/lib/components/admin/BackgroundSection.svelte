@@ -1489,7 +1489,7 @@
     position: absolute;
     top: 0.25rem;
     right: 0.25rem;
-    background: color-mix(in srgb, var(--color-error) 90%, transparent);
+    background: var(--danger-solid);
     color: white;
     border: none;
     border-radius: 0.25rem;
@@ -1777,7 +1777,7 @@
     position: absolute;
     top: 0.25rem;
     left: 0.25rem;
-    background: var(--color-warning);
+    background: var(--warning-solid);
     color: white;
     padding: 0.125rem 0.25rem;
     border-radius: 0.25rem;
@@ -1798,7 +1798,7 @@
     border-radius: 50%;
     border: 2px solid white;
     cursor: pointer;
-    background: var(--color-error);
+    background: var(--danger-solid);
     color: white;
     opacity: 0;
     transition: all 0.2s;
@@ -1811,7 +1811,7 @@
   }
 
   .delete-btn:hover {
-    background: var(--color-error-dark);
+    background: var(--danger-solid-hover);
     transform: scale(1.15);
   }
 
@@ -1819,7 +1819,7 @@
     position: absolute;
     bottom: 0.25rem;
     right: 0.25rem;
-    background: var(--color-success-alt);
+    background: var(--success-solid);
     color: white;
     width: 22px;
     height: 22px;

@@ -129,30 +129,30 @@
   }
 
   .btn-danger {
-    background: var(--color-error, #ef4444);
+    background: var(--danger-solid);
     color: white;
   }
 
   .btn-danger:hover:not(:disabled) {
-    background: var(--color-error-dark, #dc2626);
+    background: var(--danger-solid-hover);
   }
 
   .btn-warning {
-    background: var(--color-warning, #f59e0b);
+    background: var(--warning-solid);
     color: white;
   }
 
   .btn-warning:hover:not(:disabled) {
-    background: var(--color-warning-dark, #d97706);
+    background: var(--warning-solid-hover);
   }
 
   .btn-success {
-    background: var(--color-success-alt, #22c55e);
+    background: var(--success-solid);
     color: white;
   }
 
   .btn-success:hover:not(:disabled) {
-    background: var(--color-success-dark, #059669);
+    background: var(--success-solid-hover);
   }
 
   .btn-ghost {

@@ -818,7 +818,7 @@
   }
 
   .icon-card.selected .icon-name {
-    color: white;
+    color: var(--on-accent);
   }
 
   .empty-message {
@@ -968,7 +968,7 @@
   }
 
   .delete-icon-btn:hover {
-    background: var(--color-error);
+    background: var(--danger-solid);
     border-color: var(--color-error-text);
     color: white;
   }

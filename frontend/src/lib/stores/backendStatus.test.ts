@@ -4,9 +4,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
 
 const getBackendVersion = vi.fn();
-vi.mock('$lib/utils/api', () => ({ getBackendVersion: () => getBackendVersion() }));
+vi.mock('$lib/utils/api', async () => ({
+  HttpStatusError: (await vi.importActual<typeof import('$lib/utils/api')>('$lib/utils/api')).HttpStatusError,
+  getBackendVersion: () => getBackendVersion()
+}));
 
 import { backendStatus } from './backendStatus';
+import { HttpStatusError } from '$lib/utils/api';
 
 beforeEach(() => {
   backendStatus.reset();
@@ -29,6 +33,20 @@ describe('backend status', () => {
 
   it('an HTTP error answer is degraded (status error), not offline', async () => {
     getBackendVersion.mockRejectedValue(new Error('Server error (500)'));
+    await backendStatus.check();
+    expect(get(backendStatus).status).toBe('error');
+  });
+
+  for (const status of [502, 503, 504]) {
+    it(`a proxy ${status} (the backend behind it is down) is offline, not degraded`, async () => {
+      getBackendVersion.mockRejectedValue(new HttpStatusError(`The server answered ${status}`, status));
+      await backendStatus.check();
+      expect(get(backendStatus).status).toBe('offline');
+    });
+  }
+
+  it('a 500 from the backend itself stays degraded', async () => {
+    getBackendVersion.mockRejectedValue(new HttpStatusError('The server answered 500', 500));
     await backendStatus.check();
     expect(get(backendStatus).status).toBe('error');
   });

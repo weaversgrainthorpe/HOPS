@@ -1,5 +1,5 @@
 import { writable, derived } from 'svelte/store';
-import { getBackendVersion } from '$lib/utils/api';
+import { getBackendVersion, HttpStatusError } from '$lib/utils/api';
 
 export type BackendStatusType = 'checking' | 'online' | 'offline' | 'error';
 
@@ -38,11 +38,13 @@ function createBackendStatusStore() {
         lastCheck: new Date()
       }));
     } catch (e) {
-      // fetch rejects with a TypeError when the server can't be reached at all (offline); any other
-      // error means it answered, with an error status (degraded). The two are shown differently.
+      // Offline: fetch rejects with a TypeError (the server can't be reached at all), or a proxy in
+      // front answers 502/503/504 (the backend behind it is down). Any other error means the backend
+      // answered, with an error (degraded). The two are shown differently.
+      const down = e instanceof TypeError || (e instanceof HttpStatusError && [502, 503, 504].includes(e.status));
       update(state => ({
         ...state,
-        status: e instanceof TypeError ? 'offline' : 'error',
+        status: down ? 'offline' : 'error',
         version: null,
         responseTime: null,
         lastCheck: new Date()

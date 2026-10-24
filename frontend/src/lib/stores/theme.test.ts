@@ -66,6 +66,19 @@ describe('theme tokens: every preset × light/dark', () => {
   }
 });
 
+describe('solid status fills carry white text at >= 4.5:1', () => {
+  const app = readFileSync(join(resolve(process.cwd(), 'src'), 'app.css'), 'utf8');
+  for (const k of ['success', 'warning', 'danger', 'info']) {
+    for (const v of ['', '-hover']) {
+      it(`--${k}-solid${v}`, () => {
+        const m = app.match(new RegExp(`--${k}-solid${v}:\\s*(#[0-9a-f]{6})`, 'i'));
+        expect(m, `--${k}-solid${v} defined in app.css`).toBeTruthy();
+        expect(ratio('#ffffff', m![1])).toBeGreaterThanOrEqual(4.5);
+      });
+    }
+  }
+});
+
 // The tokens are the only way white-ish text meets the accent: a guard against the patterns the
 // review found (colour-mix of a possibly-gradient accent, hard-coded light text colours, white on
 // the raw accent).
@@ -98,12 +111,29 @@ describe('no colour wired to one preset', () => {
     const hits: string[] = [];
     for (const { f, text } of files) {
       for (const block of text.match(/\{[^{}]*\}/g) ?? []) {
-        const accentFill = /background(-color)?:\s*var\(--accent(-hover)?\)/.test(block);
+        const accentFill = /background(-color)?:\s*var\(--accent(-hover)?[,)]/.test(block);
         const white = /(^|[\s;{])color:\s*(white|#fff\b|#ffffff)/i.test(block);
         if (accentFill && white) hits.push(`${f}: ${block.replace(/\s+/g, ' ').slice(0, 80)}`);
       }
     }
     expect(hits).toEqual([]);
+  });
+
+  it('no rule puts white text on a raw status colour (--color-error/warning/success/primary)', () => {
+    const hits: string[] = [];
+    for (const { f, text } of files) {
+      for (const block of text.match(/\{[^{}]*\}/g) ?? []) {
+        const fill = /background(-color)?:[^;]*var\(--color-(error|warning|success|success-alt|primary)[,)]/.test(block);
+        const white = /(^|[\s;{])color:\s*(white|#fff\b|#ffffff)/i.test(block);
+        if (fill && white) hits.push(`${f}: ${block.replace(/\s+/g, ' ').slice(0, 80)}`);
+      }
+    }
+    expect(hits).toEqual([]);
+  });
+
+  it('section titles use the accent text token, not the raw accent', () => {
+    const app = readFileSync(join(SRC, 'app.css'), 'utf8');
+    expect(app.match(/\.section-title \{[^}]*\}/)![0]).toContain('color: var(--accent-text)');
   });
 
   it('the bare button and .btn-primary use the solid accent tokens', () => {

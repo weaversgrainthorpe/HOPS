@@ -16,7 +16,7 @@
   onMount(async () => {
     try {
       const data = await getBackendVersion();
-      backendVersion = data.version;
+      backendVersion = data.version || 'Unknown (the server sent no version)';
     } catch (e) {
       backendVersion = 'Error';
     }
