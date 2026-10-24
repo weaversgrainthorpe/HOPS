@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/weaversgrainthorpe/HOPS/internal/configdoc"
+	"github.com/weaversgrainthorpe/HOPS/internal/settings"
 )
 
 const migrationBackupHint = "Admin → Backups holds the automatic pre-v3-migration and startup backups"
@@ -217,7 +218,7 @@ type docAfterFn func(tx *sql.Tx) error
 //
 // Each dashboard also carries a read-only `display` block computed from its
 // effective settings (Ruling 9): what every viewer, signed in or not, needs to
-// render it (today only animatedFolderBackgrounds). It is never stored: a write
+// render it (animatedFolderBackgrounds, and the global animations switch). It is never stored: a write
 // drops it (transientDashboardKeys).
 func (r *Router) publicDoc(stored configdoc.Obj) map[string]interface{} {
 	raw, _ := stored["dashboards"].([]any)
@@ -233,7 +234,11 @@ func (r *Router) publicDoc(stored configdoc.Obj) map[string]interface{} {
 			out[k] = v
 		}
 		eff := configdoc.Resolve(r.settings, dm)
-		out["display"] = map[string]interface{}{"animatedFolderBackgrounds": eff.AnimatedFolderBackgrounds}
+		out["display"] = map[string]interface{}{
+			"animatedFolderBackgrounds": eff.AnimatedFolderBackgrounds,
+			// The global "Animations" setting (M6 §7.13); no per-dashboard override.
+			"animations": r.settings.GetBool(settings.KeyDisplayAnimations),
+		}
 		dashes = append(dashes, out)
 	}
 	out := map[string]interface{}{"schemaVersion": configdoc.SchemaVersion, "dashboards": dashes}

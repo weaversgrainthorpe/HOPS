@@ -102,3 +102,21 @@ func TestImport_DropsDisplay(t *testing.T) {
 		}
 	}
 }
+
+// M6 §7.13: each dashboard's display block carries the global "Animations"
+// setting (display.animations), so the editor can read it; a Settings save
+// changes it for every dashboard. It has no per-dashboard override.
+func TestGetConfig_DisplayAnimationsFollowsTheGlobalSetting(t *testing.T) {
+	router, db := setupTestRouter(t)
+	c := newClient(t, router)
+	seed(t, db)
+	if got := displayOf(t, getView(t, c), "d1")["animations"]; got != true {
+		t.Fatalf("default: animations = %v, want true", got)
+	}
+	if w := putSetting(t, router, c.token, c.csrf, "display.animations", "false"); w.Code != 200 {
+		t.Fatalf("put setting: %d %s", w.Code, w.Body.String())
+	}
+	if got := displayOf(t, getView(t, c), "d1")["animations"]; got != false {
+		t.Fatalf("after setting off: animations = %v, want false", got)
+	}
+}

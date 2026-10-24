@@ -87,7 +87,11 @@ export interface LayoutDashboard {
   /** Dashboard background (M4); missing or inherit form = the global one. */
   background?: Background;
   /** Read-only, computed by GET /api/config from the effective settings (Ruling 9); never stored. */
-  display?: { animatedFolderBackgrounds?: boolean };
+  display?: {
+    animatedFolderBackgrounds?: boolean;
+    /** The global "Animations" setting (M6 §7.13): the editor's drop and merge animations. */
+    animations?: boolean;
+  };
   tabs: LayoutTab[];
   [k: string]: unknown;
 }

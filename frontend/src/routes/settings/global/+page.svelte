@@ -37,6 +37,7 @@
     upload: 'Uploads',
     http: 'HTTP server timeouts',
     folders: 'Folders',
+    display: 'Display',
     layout: 'Layout',
   };
 

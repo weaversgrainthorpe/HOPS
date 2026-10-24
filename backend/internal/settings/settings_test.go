@@ -50,7 +50,7 @@ func TestEveryKeyHasADefinition(t *testing.T) {
 		KeyHTTPReadHeaderTimeoutSeconds, KeyHTTPReadTimeoutSeconds,
 		KeyHTTPWriteTimeoutSeconds, KeyHTTPIdleTimeoutSeconds,
 		KeyDiscoveryMaxParallelProbes, KeyDiscoveryPerHostTimeoutSecs,
-		KeyFoldersAnimatedBackgrounds,
+		KeyFoldersAnimatedBackgrounds, KeyDisplayAnimations,
 	}
 	for _, k := range keys {
 		if _, ok := defByKey[k]; !ok {
@@ -614,4 +614,32 @@ func equalMoves(a, b []DefaultMove) bool {
 		}
 	}
 	return true
+}
+
+// M6 §7.13: "Animations" is a global on/off setting, on by default. It is
+// GUI-set (Settings → Global settings) and stored like every other setting.
+func TestAnimationsSettingIsAGlobalBoolDefaultOn(t *testing.T) {
+	if KeyDisplayAnimations != "display.animations" {
+		t.Fatalf("key = %q, want display.animations", KeyDisplayAnimations)
+	}
+	def, ok := defByKey[KeyDisplayAnimations]
+	if !ok {
+		t.Fatal("display.animations has no definition")
+	}
+	if def.Type != "bool" || def.Default != "true" || def.RestartRequired {
+		t.Fatalf("definition = %+v, want bool, default true, applies live", def)
+	}
+	if def.Description == "" {
+		t.Fatal("display.animations has no description for the admin UI")
+	}
+	s := newTestService(t)
+	if !s.GetBool(KeyDisplayAnimations) {
+		t.Fatal("fresh install: animations should be on")
+	}
+	if err := s.Set(KeyDisplayAnimations, "false"); err != nil {
+		t.Fatal(err)
+	}
+	if s.GetBool(KeyDisplayAnimations) {
+		t.Fatal("after Set false: animations still on")
+	}
 }

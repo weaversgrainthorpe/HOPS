@@ -122,3 +122,20 @@ describe('/settings/global upload limits (M5 §10)', () => {
 		await waitFor(() => expect(screen.queryByText(/Lowered from/)).toBeNull());
 	});
 });
+
+describe('/settings/global Animations (M6 §7.13)', () => {
+	const ANIM = { key: 'display.animations', value: 'true', default: 'true', type: 'bool', description: 'Short animations in the editor.', restartRequired: false };
+	beforeEach(() => listSettings.mockResolvedValue({ settings: [ANIM] }));
+
+	it('shows an "Animations" switch under Display, on by default, and saves it off', async () => {
+		render(Page);
+		expect(await screen.findByRole('heading', { name: 'Display', level: 3 })).toBeTruthy();
+		const box = screen.getByLabelText(/^Animations/) as HTMLInputElement;
+		expect(box.type).toBe('checkbox');
+		expect(box.checked).toBe(true);
+		await fireEvent.click(box);
+		const row = box.closest('.row') as HTMLElement;
+		await fireEvent.click(Array.from(row.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Save')!);
+		await waitFor(() => expect(save).toHaveBeenCalledWith('display.animations', 'false'));
+	});
+});

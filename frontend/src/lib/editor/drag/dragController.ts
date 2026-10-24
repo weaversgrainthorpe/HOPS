@@ -55,6 +55,7 @@ import { clearSelection, selectionInDraft, toggleNode } from '$lib/stores/nodeSe
 import { hitTest as domHitTest, type HitResult } from './hitTest';
 import { crumbDwellKey, dwellArgs, flowIndex, flowMarker, pageDwellKey } from './targets';
 import { drillUpTo, setFolderPage } from '$lib/stores/folderView';
+import { playDropAnimation, type Box as AnimBox } from './dropAnimation';
 
 // ---------------------------------------------------------------- types
 
@@ -725,6 +726,15 @@ export function commitDrop(state: DragState): void {
     if (!ok) return; // apply has already said why
     clearSelection();
     announce(label, before);
+    decorate(() => {
+      const from = ghostBox(state);
+      if (from && state.over) {
+        playDropAnimation(d.id, {
+          kind: 'merge', from, to: state.over, label: state.ghost?.label ?? '',
+          targetLabel: findIn(d, t.targetTileId)?.name ?? '', folderId
+        });
+      }
+    });
     // Name it straight away: the dialog opens with "New folder" selected; Cancel keeps that name.
     openDialog({ kind: 'folder', id: folderId });
     return;
@@ -766,12 +776,61 @@ export function commitDrop(state: DragState): void {
     forgetMovedOutFolders(before, state.ids, to); // §3a.3: drawn minimised on the tab
   }
   announce(label, before);
+  // M6 §7.13: into a folder (a minimised one, an open one's bar or page, a sub-folder) the dropped item
+  // shrinks into it. A reorder inside the same folder is not a drop "into", so it is not animated.
+  if (to.folderId !== undefined && (state.copy || !state.ids.every((id) => sameRef(containerOfNode(before, id), to)))) {
+    const folderId = to.folderId;
+    const landed = state.copy ? newIds[0] : state.ids[0];
+    decorate(() => {
+      const from = ghostBox(state);
+      if (!from) return;
+      const over = t.kind === 'into-folder' ? state.over : undefined;
+      playDropAnimation(d.id, {
+        kind: 'into', from, label: state.ghost?.label ?? '',
+        // The cue's box when there was one; otherwise where the item is now drawn (an open folder's
+        // page), else the folder itself. Measured once, on the next frame, after the draft has rendered.
+        to: over ?? (() => boxOfNode(landed) ?? boxOfNode(folderId))
+      });
+    });
+  }
   // Ruling 24: the first phone (stacked) reorder of a session says what else it changes. A folder's
   // order (an index) is the same at every width, so it changes nothing else.
   if (t.kind === 'place' && t.marker && t.index === undefined && !phoneNoticeShown) {
     phoneNoticeShown = true;
     toast.info(PHONE_REORDER_NOTICE);
   }
+}
+
+/**
+ * Run a drop's decoration (M6 §7.13) after its change is already in the draft. Nothing it does can
+ * undo or delay that change: a throw here is caught (playDropAnimation itself never throws and says
+ * a failure once; this guard covers building its arguments).
+ */
+function decorate(fn: () => void): void {
+  try {
+    fn();
+  } catch (e) {
+    console.warn('Drop animation skipped:', e);
+  }
+}
+
+/** Where the ghost was drawn at the drop (viewport px), as DragLayer draws it. */
+function ghostBox(s: DragState): AnimBox | null {
+  if (!s.ghost) return null;
+  const g = s.grab ?? { fx: 0, fy: 0 };
+  const size = s.ghostShown ?? s.ghost;
+  return { left: s.pointer.x - g.fx * size.widthPx, top: s.pointer.y - g.fy * size.heightPx, width: size.widthPx, height: size.heightPx };
+}
+
+/** A node's rendered box now (one layout read, on the frame after a drop), or null when it isn't drawn. */
+function boxOfNode(id: string | undefined): AnimBox | null {
+  if (!id || typeof document === 'undefined') return null;
+  const el = Array.from(document.querySelectorAll<HTMLElement>('[data-node-id]')).find(
+    (n) => n.getAttribute('data-node-id') === id && !n.closest('[inert], [role="dialog"]')
+  );
+  if (!el) return null;
+  const r = env.measure(el);
+  return r.width > 0 && r.height > 0 ? { left: r.left, top: r.top, width: r.width, height: r.height } : null;
 }
 
 /** Shown once per edit session, on its first stacked (phone) reorder (Ruling 24). */

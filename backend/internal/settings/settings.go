@@ -79,6 +79,7 @@ const (
 	KeyDiscoveryMaxParallelProbes   = "discovery.max_parallel_probes"
 	KeyDiscoveryPerHostTimeoutSecs  = "discovery.per_host_timeout_seconds"
 	KeyFoldersAnimatedBackgrounds   = "folders.animated_backgrounds"
+	KeyDisplayAnimations            = "display.animations"
 )
 
 // Definitions is the authoritative list of every setting HOPS exposes.
@@ -186,6 +187,14 @@ var Definitions = []Definition{
 	{
 		Key: KeyFoldersAnimatedBackgrounds, Type: "bool", Default: "true",
 		Description: "Whether folders may show animated (video/GIF) backgrounds. Individual dashboards can override this.",
+	},
+	// M6 §7.13: the editor's drop and merge animations. Read live by the
+	// editor through each dashboard's computed display block.
+	{
+		Key: KeyDisplayAnimations, Type: "bool", Default: "true",
+		Description: "Short animations in the editor: a tile dropped into a folder shrinks into it, and two tiles merged " +
+			"into a new folder are drawn together before the folder pops out. Turn this off for no animation at all. " +
+			"Animations are always skipped on devices set to reduce motion, and they never delay your change.",
 	},
 }
 
