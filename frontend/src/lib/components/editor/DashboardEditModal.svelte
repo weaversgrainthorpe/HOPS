@@ -21,9 +21,15 @@
     header?: HeaderConfig;
     background?: Background;
     onClose: () => void;
+    /** The section shown on open (default Header). */
+    initialSection?: SectionId;
+    /** A setting (DashboardSettingsSection key) to bring into view and mark once the settings load. */
+    focusSetting?: string;
+    /** Opened from a background picker (M6 §8.2): shown above it, below confirm dialogs. */
+    raised?: boolean;
   }
 
-  let { dashboardId, header, background, onClose }: Props = $props();
+  let { dashboardId, header, background, onClose, initialSection = 'header', focusSetting, raised = false }: Props = $props();
 
   type SectionId = 'header' | 'background' | 'settings';
   const SECTIONS: { id: SectionId; label: string }[] = [
@@ -31,11 +37,32 @@
     { id: 'background', label: 'Background' },
     { id: 'settings', label: 'Settings' }
   ];
-  let active = $state<SectionId>('header');
+  // svelte-ignore state_referenced_locally
+  let active = $state<SectionId>(initialSection);
   // The background picker (and its gallery request) is made on first view, then kept.
   let backgroundShown = $state(false);
   $effect(() => {
     if (active === 'background') backgroundShown = true;
+  });
+
+  // The asked-for setting (opened from a folder picker's note): shown and marked once it loads.
+  let settingsPanel = $state<HTMLElement>();
+  $effect(() => {
+    const panel = settingsPanel;
+    if (!panel || !focusSetting) return;
+    const reveal = () => {
+      const row = panel.querySelector(`[id="lbl-${focusSetting}"]`)?.closest('.row');
+      if (!row) return false;
+      row.scrollIntoView({ block: 'center' });
+      row.classList.add('asked-for');
+      return true;
+    };
+    if (reveal()) return;
+    const mo = new MutationObserver(() => {
+      if (reveal()) mo.disconnect();
+    });
+    mo.observe(panel, { childList: true, subtree: true });
+    return () => mo.disconnect();
   });
 
   let headerSection = $state<HeaderSection>();
@@ -113,6 +140,7 @@
   {onClose}
   onBeforeClose={() => !saving}
   maxWidth="1000px"
+  zIndex={raised ? 'calc(var(--z-modal-overlay) + 50)' : undefined}
 >
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="body" onkeydown={onBodyKey}>
@@ -150,11 +178,11 @@
         bind:this={backgroundSection}
         {background}
         level="dashboard"
-        runtime={{ folderAnimationsOn: false, reducedMotion: $reducedMotion }}
+        runtime={{ reducedMotion: $reducedMotion }}
       />
     {/if}
   </div>
-  <div role="tabpanel" id="dash-edit-panel-settings" aria-labelledby="dash-edit-tab-settings" hidden={active !== 'settings'}>
+  <div role="tabpanel" id="dash-edit-panel-settings" aria-labelledby="dash-edit-tab-settings" hidden={active !== 'settings'} bind:this={settingsPanel}>
     <DashboardSettingsSection
       bind:this={settingsSection}
       bind:invalid={settingsInvalid}
@@ -177,6 +205,12 @@
 </Modal>
 
 <style>
+  /* The setting a folder picker's note pointed to. */
+  [role='tabpanel'] :global(.row.asked-for) {
+    outline: 2px solid var(--accent);
+    outline-offset: 0.25rem;
+    border-radius: 0.375rem;
+  }
   .tabs {
     display: flex;
     gap: 0.25rem;

@@ -5,7 +5,8 @@ import { getCsrfToken } from '../helpers';
 // driven by a capability table — no control where it has no effect. In a REAL browser:
 //  - a folder slideshow on a dashboard with "Animated folder backgrounds" off shows the note (with a
 //    way to Dashboard settings) and no transition picker, interval or duration;
-//  - turning the setting on from that link shows the controls, live;
+//  - that link opens the one Dashboard dialog on Settings; turning the setting on shows the controls, live;
+//  - a see-through tab: a note in place of darkness and blur (the dashboard's are used);
 //  - the dashboard and tab pickers are unchanged;
 //  - reduced motion: the same kind of note at every level;
 //  - a Save with the controls hidden keeps the stored timing exactly.
@@ -122,36 +123,74 @@ test.describe('M6 §8.2 background dialog driven by the capability table', () =>
     await expect(picker.getByText(/^Overlay Darkness/)).toHaveCount(0);
   });
 
-  test('turning the setting on from the note shows the controls (live, the folder dialog stays open)', async ({ page, context }) => {
+  test('the note opens THE Dashboard dialog on Settings; turning the setting on shows the controls (live)', async ({ page, context }) => {
     const f = await importDash(page, context, false);
     await page.goto(f.path);
     await enterEdit(page);
     const { dlg, picker } = await openFolderPicker(page, f.id('f'));
     await picker.getByRole('button', { name: 'Open Dashboard settings' }).click();
-    const settings = page.getByRole('dialog', { name: 'Dashboard settings' });
-    await expect(settings).toBeVisible();
-    // The setting the note named is brought into view and marked. On top of the picker: its
+    // The one Dashboard dialog (no separate settings dialog), opened at its Settings section.
+    const dash = page.getByRole('dialog', { name: 'Edit Dashboard' });
+    await expect(dash).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'Dashboard settings' })).toHaveCount(0);
+    await expect(dash.getByRole('tab', { name: 'Settings' })).toHaveAttribute('aria-selected', 'true');
+    const panel = dash.getByRole('tabpanel', { name: 'Settings' });
+    // The setting the note named is brought into view and marked; the dialog is on top, so its
     // controls take the clicks.
-    await expect(settings.locator('.row.asked-for')).toContainText('Animated folder backgrounds');
-    await expect(settings.locator('.row.asked-for')).toBeInViewport();
-    const override = settings.getByRole('checkbox', { name: 'Override for this dashboard: Animated folder backgrounds' });
+    await expect(panel.locator('.row.asked-for')).toContainText('Animated folder backgrounds');
+    await expect(panel.locator('.row.asked-for')).toBeInViewport();
+    const override = panel.getByRole('checkbox', { name: 'Override for this dashboard: Animated folder backgrounds' });
     await expect(override).toBeChecked();
-    const value = settings.getByRole('checkbox', { name: 'Animated folder backgrounds', exact: true });
+    const value = panel.getByRole('checkbox', { name: 'Animated folder backgrounds', exact: true });
     await expect(value).not.toBeChecked();
     await value.check();
     const saved = page.waitForResponse((r) => r.request().method() === 'PUT' && /\/settings/.test(r.url()));
-    await settings.getByRole('button', { name: 'Save settings' }).click();
+    await dash.getByRole('button', { name: /^Save/ }).click();
     expect((await saved).status()).toBe(200);
-    await expect(settings).toHaveCount(0);
-    // The picker (still open) now offers the motion controls; the note has gone.
+    await expect(dash).toHaveCount(0);
+    // Back in the picker (still open): the motion controls, the note gone.
     await expect(picker).toBeVisible();
     await expect(dlg).toBeVisible();
     await expect(picker.getByText(FOLDER_NOTE)).toHaveCount(0);
     await expectMotion(picker, true);
     await expect(picker.getByRole('group', { name: 'Transition Effect' }).getByRole('button', { name: 'Flip' })).toHaveClass(/active/);
+    // The untouched header and background did not make the draft dirty.
+    await expect(page.getByRole('toolbar', { name: 'Editing' }).getByRole('button', { name: /^Save/ })).toBeDisabled();
     // Saved on the server.
     const cfg = await (await page.request.get('/api/config')).json();
     expect(cfg.dashboards.find((d: { id: string }) => d.id === f.id('dash')).display.animatedFolderBackgrounds).toBe(true);
+  });
+
+  test('the toolbar still opens the Dashboard dialog on Header', async ({ page, context }) => {
+    const f = await importDash(page, context, false);
+    await page.goto(f.path);
+    await enterEdit(page);
+    // Opened at Settings from a folder first, then closed: the toolbar opens it as before.
+    const { dlg, picker } = await openFolderPicker(page, f.id('f'));
+    await picker.getByRole('button', { name: 'Open Dashboard settings' }).click();
+    await page.getByRole('dialog', { name: 'Edit Dashboard' }).getByRole('button', { name: 'Cancel' }).click();
+    await picker.getByRole('button', { name: 'Cancel' }).click();
+    await dlg.getByRole('button', { name: 'Cancel' }).click();
+    await page.getByRole('button', { name: 'Edit Dashboard' }).click();
+    await expect(page.getByRole('dialog', { name: 'Edit Dashboard' }).getByRole('tab', { name: 'Header' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  test('tab: a see-through tab shows the note in place of darkness and blur, live with the slider', async ({ page, context }) => {
+    const f = await importDash(page, context, true);
+    await page.goto(f.path);
+    await enterEdit(page);
+    const tab = await openTabPicker(page);
+    const note = tab.getByText("A see-through tab uses the dashboard's darkness and blur.");
+    await expect(tab.getByText(/^Overlay Darkness/)).toBeVisible();
+    await expect(note).toHaveCount(0);
+    const slider = tab.getByLabel(/^Background opacity/);
+    await slider.fill('0.5');
+    await expect(note).toBeVisible();
+    await expect(tab.getByText(/^Overlay Darkness/)).toHaveCount(0);
+    await expect(tab.getByText(/^Overlay Blur/)).toHaveCount(0);
+    await slider.fill('1');
+    await expect(note).toHaveCount(0);
+    await expect(tab.getByText(/^Overlay Darkness/)).toBeVisible();
   });
 
   test('folder, folder animations on: the controls, no note', async ({ page, context }) => {

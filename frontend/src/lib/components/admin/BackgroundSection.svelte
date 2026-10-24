@@ -59,11 +59,13 @@
 
   /** The slideshow limit the server's document rules enforce. */
   const MAX_IMAGES = 200;
-  /**
+  /*
    * Everything this dialog shows comes from the one capability table (M6 §8.2): no level checks
-   * below. It follows the context live (e.g. the dashboard's setting turned on while open).
+   * below. `caps` (after the form state it reads) follows the context and the form live; `openCaps`
+   * is the table at open, for the level-only rows the form's initial state is built from.
    */
-  const caps = $derived(backgroundCapabilities(level, runtime));
+  // svelte-ignore state_referenced_locally
+  const openCaps = backgroundCapabilities(level, runtime);
   const TYPE_BUTTONS: Record<PictureType, { icon: string; label: string }> = {
     none: { icon: 'mdi:close-circle-outline', label: 'None' },
     color: { icon: 'mdi:palette', label: 'Color' },
@@ -72,11 +74,11 @@
   };
   /** The level picks a picture or shows what's behind (folders); its picture controls follow that choice. */
   // svelte-ignore state_referenced_locally
-  const pictureOrBehind = untrack(() => caps.inherit.kind === 'picture-or-behind');
+  const pictureOrBehind = openCaps.inherit.kind === 'picture-or-behind';
   // M6 §7.5: a stored type this level no longer offers (a folder's colour background) keeps
   // rendering and is shown as its own choice — never dropped silently.
   // svelte-ignore state_referenced_locally
-  const legacyColour = pictureOrBehind && background?.type === 'color' && !untrack(() => caps.pictureTypes.includes('color'));
+  const legacyColour = pictureOrBehind && background?.type === 'color' && !openCaps.pictureTypes.includes('color');
   // svelte-ignore state_referenced_locally
   const legacyColourUse = legacyColour ? folderColourFromBackground(background) : null;
   /** Folder level: no picture of its own (what's behind shows), its own picture, or the stored colour. */
@@ -111,6 +113,10 @@
   // One show-through opacity per level (call 2), 0–1, default 1.
   // svelte-ignore state_referenced_locally
   let surfaceOpacity = $state(clamp01(background?.opacity, 1));
+  /** The table, live: the runtime context and the form's own state (see-through as the slider moves). */
+  const caps = $derived(
+    backgroundCapabilities(level, runtime, { seeThrough: clamp01(Number(surfaceOpacity), 1) < 1 })
+  );
 
   // Form state initialized from props (intentionally captures initial values)
   // svelte-ignore state_referenced_locally
@@ -716,7 +722,15 @@
   </div>
 {/if}
 
-<!-- Overlay darkness and blur, where the level has its own (not folders: one overlay, at canvas level — call 1) -->
+<!-- Overlay darkness and blur, where the level has its own (not folders: one overlay, at canvas level — call 1;
+     not a see-through tab: the canvas overlay then comes from the dashboard). -->
+{#if caps.overlayNote === 'seeThroughTab' && (backgroundType === 'image' || backgroundType === 'slideshow')}
+  <p class="overlay-note" role="note" data-overlay-note>
+    <Icon icon="mdi:information-outline" width="18" />
+    <span>A see-through tab uses the dashboard's darkness and blur.</span>
+    <span class="overlay-note-kept">This tab's own darkness and blur are kept for when it is solid again.</span>
+  </p>
+{/if}
 {#if caps.overlay && (backgroundType === 'image' || backgroundType === 'slideshow')}
   <div class="form-group">
     <div class="slider-header">
@@ -1403,6 +1417,33 @@
   }
   .open-settings-btn:hover {
     border-color: var(--accent);
+  }
+
+  .overlay-note {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 0.25rem 0.5rem;
+    margin: 0 0 1.25rem;
+    padding: 0.6rem 0.9rem;
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 0.5rem;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    max-width: 75ch;
+  }
+  .overlay-note :global(svg) {
+    flex-shrink: 0;
+    margin-top: 0.1rem;
+    color: var(--accent);
+  }
+  .overlay-note-kept {
+    flex-basis: 100%;
+    padding-left: 1.6rem;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
   }
 
   .label-hint {

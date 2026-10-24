@@ -23,8 +23,10 @@
   interface Props {
     /** The active tab (for context only; targets come with each request). */
     tabId: string;
+    /** Opens the one Dashboard dialog at its Settings, over the folder dialog (M6 §8.2). */
+    onOpenDashboardSettings?: () => void;
   }
-  let { tabId }: Props = $props();
+  let { tabId, onOpenDashboardSettings }: Props = $props();
 
   const dlg = $derived($editorDialog);
   const draft = $derived($session?.draft ?? null);
@@ -140,12 +142,13 @@
         onMoveCopy={() => openDialog({ kind: 'movecopy', ids: [id] })}
         {statusContext}
         dashboardId={$session?.dashboardId}
+        {onOpenDashboardSettings}
         checkContentSize={(cs) => (draft ? contentSizeProblem(draft, id, cs) : 'Not editing: click Edit first.')}
         checkShape={(sh, pos) => (draft ? shapeProblem(draft, id, sh, pos) : 'Not editing: click Edit first.')}
       />
     {/key}
   {:else if !dlg.id && newFolder}
-    <FolderEditModal folder={newFolder} isNew onSave={saveFolder} onCancel={close} {statusContext} dashboardId={$session?.dashboardId} />
+    <FolderEditModal folder={newFolder} isNew onSave={saveFolder} onCancel={close} {statusContext} dashboardId={$session?.dashboardId} {onOpenDashboardSettings} />
   {/if}
 {:else if dlg?.kind === 'movecopy'}
   <MoveCopyDialog ids={dlg.ids} onClose={close} />

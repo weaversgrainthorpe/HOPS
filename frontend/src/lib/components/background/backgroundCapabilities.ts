@@ -1,6 +1,6 @@
 /**
- * What the background dialog offers, per level and runtime context (M6 §8.2): one table, so the
- * one BackgroundSection component shows a control only where it has an effect.
+ * What the background dialog offers, per level, runtime context and form state (M6 §8.2): one
+ * table, so the one BackgroundSection component shows a control only where it has an effect.
  *
  * Why each row is what it is (the renderers are the source of truth):
  * - Folders are pictures only (§7.5): Edit Folder owns the folder's colour, so no Color / None.
@@ -10,17 +10,33 @@
  *   the case under prefers-reduced-motion at every level (Dashboard.svelte), and for folders when the
  *   dashboard's "Animated folder backgrounds" is off (FolderSurface / backgroundAnimation).
  *   Then the controls are replaced by a note, and their stored values are kept as they are.
+ * - The canvas overlay comes from the topmost FULLY OPAQUE layer (Dashboard.svelte): a see-through
+ *   tab (opacity below 1) uses the dashboard's darkness and blur, so its own are replaced by a note.
  */
 
 export type BackgroundLevel = 'dashboard' | 'tab' | 'folder';
 export type PictureType = 'none' | 'color' | 'image' | 'slideshow';
 
+/** Runtime conditions, from the host dialog. */
 export interface BackgroundContext {
-  /** The dashboard's effective "Animated folder backgrounds" setting (only folders read it). */
-  folderAnimationsOn: boolean;
-  /** This device asks for reduced motion (prefers-reduced-motion). */
+  /** This device asks for reduced motion (prefers-reduced-motion). Every level. */
   reducedMotion: boolean;
+  /**
+   * FOLDER LEVEL ONLY: the dashboard's effective "Animated folder backgrounds" setting. The other
+   * levels ignore it, and their hosts don't pass it. At folder level, missing means off — a folder
+   * slideshow shows its first image still until the setting is known (as the folder surface does).
+   */
+  folderAnimationsOn?: boolean;
 }
+
+/** The form's own state the table reads (it changes as the user edits). */
+export interface BackgroundFormState {
+  /** This level's opacity is below 1: what is behind shows through. */
+  seeThrough?: boolean;
+}
+
+/** Why the overlay controls are not shown, where that needs saying. */
+export type OverlayNote = 'seeThroughTab';
 
 /** Why the slideshow motion controls are not shown: each one is a visible note. */
 export type MotionNote = 'folderAnimationsOff' | 'reducedMotion';
@@ -46,6 +62,8 @@ export interface BackgroundCapabilities {
   opacityNoun: string;
   /** Overlay darkness and blur. */
   overlay: boolean;
+  /** Shown in place of the overlay controls (null: none, e.g. folders, which never have them). */
+  overlayNote: OverlayNote | null;
   transitionPicker: boolean;
   interval: boolean;
   duration: boolean;
@@ -57,10 +75,30 @@ export interface BackgroundCapabilities {
 
 export const BACKGROUND_LEVELS: readonly BackgroundLevel[] = Object.freeze(['dashboard', 'tab', 'folder'] as const);
 
-/** Every runtime context, for tests that walk the whole table. */
-export const ALL_BACKGROUND_CONTEXTS: readonly BackgroundContext[] = Object.freeze(
-  [true, false].flatMap((folderAnimationsOn) =>
-    [false, true].map((reducedMotion) => Object.freeze({ folderAnimationsOn, reducedMotion }))
+/** One cell of the table, for tests that walk all of it. */
+export interface BackgroundCase {
+  level: BackgroundLevel;
+  runtime: BackgroundContext;
+  form: BackgroundFormState;
+}
+
+/**
+ * Every case: each level x reduced motion x see-through, and for folders also x "Animated folder
+ * backgrounds" (the other levels' runtime never carries it).
+ */
+export const BACKGROUND_CASES: readonly BackgroundCase[] = Object.freeze(
+  BACKGROUND_LEVELS.flatMap((level) =>
+    (level === 'folder' ? [true, false] : [undefined]).flatMap((folderAnimationsOn) =>
+      [false, true].flatMap((reducedMotion) =>
+        [false, true].map((seeThrough) =>
+          Object.freeze({
+            level,
+            runtime: Object.freeze(folderAnimationsOn === undefined ? { reducedMotion } : { reducedMotion, folderAnimationsOn }),
+            form: Object.freeze({ seeThrough })
+          })
+        )
+      )
+    )
   )
 );
 
@@ -90,11 +128,16 @@ const INHERIT: Record<BackgroundLevel, InheritWording> = {
   }
 };
 
-export function backgroundCapabilities(level: BackgroundLevel, context: BackgroundContext): BackgroundCapabilities {
+export function backgroundCapabilities(
+  level: BackgroundLevel,
+  context: BackgroundContext,
+  form: BackgroundFormState = {}
+): BackgroundCapabilities {
   const isFolder = level === 'folder';
   const notes: MotionNote[] = [];
-  if (isFolder && !context.folderAnimationsOn) notes.push('folderAnimationsOff');
+  if (isFolder && context.folderAnimationsOn !== true) notes.push('folderAnimationsOff');
   if (context.reducedMotion) notes.push('reducedMotion');
+  const seeThroughTab = level === 'tab' && form.seeThrough === true;
   const motion = notes.length === 0;
   return Object.freeze({
     pictureTypes: isFolder ? PICTURES_ONLY : ALL_TYPES,
@@ -103,7 +146,8 @@ export function backgroundCapabilities(level: BackgroundLevel, context: Backgrou
     fit: true,
     opacity: true,
     opacityNoun: level,
-    overlay: !isFolder,
+    overlay: !isFolder && !seeThroughTab,
+    overlayNote: seeThroughTab ? 'seeThroughTab' : null,
     transitionPicker: motion,
     interval: motion,
     duration: motion,

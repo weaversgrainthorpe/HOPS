@@ -208,7 +208,7 @@
   <BackgroundConfigModal
     background={shownBackground}
     level="tab"
-    runtime={{ folderAnimationsOn: false, reducedMotion: $reducedMotion }}
+    runtime={{ reducedMotion: $reducedMotion }}
     onSave={handleBackgroundSave}
     onCancel={() => showBackgroundConfig = false}
   />

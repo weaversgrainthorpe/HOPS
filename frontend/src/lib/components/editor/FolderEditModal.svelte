@@ -23,7 +23,6 @@
   import OpacitySlider from '../admin/OpacitySlider.svelte';
   import IconEditModal from '../admin/IconEditModal.svelte';
   import BackgroundConfigModal from '../admin/BackgroundConfigModal.svelte';
-  import DashboardSettingsModal from './DashboardSettingsModal.svelte';
   import { animatedFolderBackgroundsFor } from '$lib/stores/config';
   import { reducedMotion } from '$lib/stores/backgroundAnimation';
   import { backgroundSummary } from '../background/backgroundSummary';
@@ -53,16 +52,17 @@
     checkShape?: (shape: string, tabPosition: TabPosition) => string | null;
     /**
      * The dashboard the folder is on: its "Animated folder backgrounds" decides what the background
-     * picker offers (M6 §8.2), and its settings open from there.
+     * picker offers (M6 §8.2).
      */
     dashboardId?: string;
+    /** Opens the one Dashboard dialog at its Settings (the picker's folder-animations note). */
+    onOpenDashboardSettings?: () => void;
   }
   let {
     folder, isNew = false, onSave, onCancel, onDelete, onDuplicate, onMoveCopy, statusContext, checkContentSize, checkShape,
-    dashboardId
+    dashboardId, onOpenDashboardSettings
   }: Props = $props();
   let showBackgroundConfig = $state(false);
-  let showDashboardSettings = $state(false);
   // The dashboard's effective setting, as the folder surface reads it (unknown = off: a still first
   // image, which is what the picker then says). Live: saving the setting updates the picker.
   // svelte-ignore state_referenced_locally
@@ -391,7 +391,7 @@
     background={shownBackground}
     level="folder"
     runtime={{ folderAnimationsOn: $folderAnimations, reducedMotion: $reducedMotion }}
-    onOpenDashboardSettings={dashboardId ? () => (showDashboardSettings = true) : undefined}
+    {onOpenDashboardSettings}
     onUseAsFolderColour={useAsFolderColour}
     onSave={(bg) => {
       stagedBackground = { value: bg };
@@ -399,10 +399,6 @@
     }}
     onCancel={() => (showBackgroundConfig = false)}
   />
-{/if}
-
-{#if showDashboardSettings && dashboardId}
-  <DashboardSettingsModal {dashboardId} focusKey="animatedFolderBackgrounds" onClose={() => (showDashboardSettings = false)} />
 {/if}
 
 {#if showIconEditor}

@@ -183,6 +183,17 @@
   let showAddTabModal = $state(false);
   /** The one dashboard dialog (Header, Background, Settings — walkthrough §4C). */
   let showDashboardEdit = $state(false);
+  /**
+   * How it opens: from the toolbar at Header; from a folder background picker's note (M6 §8.2) at
+   * Settings with the named setting shown, above that picker.
+   */
+  let dashboardEditFrom = $state<{ section: 'header' | 'settings'; focusSetting?: string; raised: boolean }>({
+    section: 'header', raised: false
+  });
+  function openDashboardEdit(from: typeof dashboardEditFrom) {
+    dashboardEditFrom = from;
+    showDashboardEdit = true;
+  }
   // Edit mode ending (Exit, idle timeout) closes it for good: it never reopens on the next entry.
   $effect(() => {
     if (!editing) untrack(() => (showDashboardEdit = false));
@@ -421,7 +432,7 @@
       <EditToolbar
         tabId={activeTabId ?? ''}
         onAddTab={handleAddTab}
-        onEditDashboard={() => (showDashboardEdit = true)}
+        onEditDashboard={() => openDashboardEdit({ section: 'header', raised: false })}
         {dashboardBackground}
         {tabBackground}
         onReach={onToolbarReach}
@@ -448,7 +459,11 @@
           </button>
         </div>
       {/if}
-      <EditorDialogs tabId={activeTabId ?? ''} />
+      <EditorDialogs
+        tabId={activeTabId ?? ''}
+        onOpenDashboardSettings={() =>
+          openDashboardEdit({ section: 'settings', focusSetting: 'animatedFolderBackgrounds', raised: true })}
+      />
       <DragLayer tabId={activeTabId ?? null} onSwitchTab={showTabForDrag} />
     {:else}
       <!-- Edit mode is on but no session is open for this dashboard yet (it follows the route). -->
@@ -509,6 +524,9 @@
 {#if editing && draft && showDashboardEdit}
   <DashboardEditModal
     dashboardId={dashboard.id}
+    initialSection={dashboardEditFrom.section}
+    focusSetting={dashboardEditFrom.focusSetting}
+    raised={dashboardEditFrom.raised}
     header={look.header}
     background={look.background}
     onClose={() => (showDashboardEdit = false)}
