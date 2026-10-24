@@ -89,6 +89,26 @@ function within(inner: Box, outer: { left: number; top: number; right: number; b
   expect(inner.x + inner.width, `${what}: right`).toBeLessThanOrEqual(outer.right + 0.5);
   expect(inner.y + inner.height, `${what}: bottom`).toBeLessThanOrEqual(outer.bottom + 0.5);
 }
+/**
+ * After a window resize, wait until the canvas has re-planned for its new width. setViewportSize
+ * resolves before the next rendering frame: a layout forced in between (any boundingBox) already
+ * has the new width while TabCanvas's ResizeObserver, which re-plans the canvas, has not run yet
+ * (it runs in that frame, before paint, so users never see it). Until then the items keep the
+ * old width's grid boxes, or none yet in a canvas that was just mounted. The real condition: every
+ * named item is drawn, and inside the canvas.
+ */
+async function laidOutWithin(page: Page, ids: string[]) {
+  await expect.poll(() => page.evaluate((ids) => {
+    const c = document.querySelector('.tab-canvas')?.getBoundingClientRect();
+    if (!c) return 'no canvas';
+    for (const id of ids) {
+      const b = document.querySelector(`.tab-canvas [data-node-id="${id}"]`)?.getBoundingClientRect();
+      if (!b) return `${id}: not drawn`;
+      if (b.left < c.left - 0.5 || b.right > c.right + 0.5) return `${id}: ${b.left}..${b.right} outside canvas ${c.left}..${c.right}`;
+    }
+    return 'ok';
+  }, ids), 'canvas re-planned for the new width').toBe('ok');
+}
 async function enterEdit(page: Page) {
   await page.locator('[aria-label="Enter Edit Mode"]').click();
   await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
@@ -243,7 +263,10 @@ for (const width of [1280, 390]) {
             // tablet rotating) — the same folders must draw the same in it.
             if (width < 768) await page.setViewportSize({ width: 1280, height: 900 });
             await enterEdit(page);
-            if (width < 768) await page.setViewportSize({ width, height: 900 });
+            if (width < 768) {
+              await page.setViewportSize({ width, height: 900 });
+              await laidOutWithin(page, [f.id('tt'), f.id('m'), f.id('o')]);
+            }
           }
           const tt = await box(node(page, f.id('tt')));
           const what = `${shape} ${width} ${mode}`;
