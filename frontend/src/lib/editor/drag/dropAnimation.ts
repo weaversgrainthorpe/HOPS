@@ -30,6 +30,13 @@ export const DROP_MS = 440;
 /** …then the folder's gulp, starting as the tile arrives (counted from the drop). */
 export const GULP_DELAY_MS = 360;
 export const GULP_MS = 180;
+/** The gulp is a 6% squeeze, but a big folder's edges never move more than this. */
+export const GULP_MAX_EDGE_PX = 6;
+
+/** The gulp's smallest scale for a target this size: 0.94, or less of a squeeze for big folders. */
+export function gulpScale(width: number, height: number): number {
+  return Math.max(0.94, 1 - (2 * GULP_MAX_EDGE_PX) / Math.max(1, width, height));
+}
 export const INTO_TOTAL_MS = Math.max(DROP_MS, GULP_DELAY_MS + GULP_MS);
 /** Merge: the two tiles drawn together… */
 export const GATHER_MS = 320;
@@ -278,8 +285,10 @@ export function playDropAnimation(dashboardId: string, a: DropAnimation): boolea
             pending--;
             return cleanup();
           }
+          // A big open folder must not wobble: its edges move at most GULP_MAX_EDGE_PX.
+          const gulp = gulpScale(to.width, to.height);
           onFolder('data-drop-gulp', [
-            { transform: 'scale(1)' }, { transform: 'scale(0.94)', offset: 0.45 }, { transform: 'scale(1)' }
+            { transform: 'scale(1)' }, { transform: `scale(${gulp})`, offset: 0.45 }, { transform: 'scale(1)' }
           ], GULP_MS, GULP_DELAY_MS, 'none');
         } catch (e) {
           fail(e);

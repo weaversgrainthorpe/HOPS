@@ -559,3 +559,16 @@ describe('a drop never waits for its animation', () => {
     expect(get(toast).some((t) => t.message === 'Moved "A" to C1')).toBe(true);
   });
 });
+
+describe('gulpScale (a big folder never wobbles)', () => {
+  it('squeezes a tile-sized target by the full 6%', async () => {
+    const { gulpScale } = await import('./dropAnimation');
+    expect(gulpScale(120, 120)).toBeCloseTo(0.94, 5);
+  });
+  it('moves a big open folder\'s edges by at most GULP_MAX_EDGE_PX', async () => {
+    const { gulpScale, GULP_MAX_EDGE_PX } = await import('./dropAnimation');
+    const w = 1200, h = 600;
+    const edgeMove = ((1 - gulpScale(w, h)) * Math.max(w, h)) / 2;
+    expect(edgeMove).toBeLessThanOrEqual(GULP_MAX_EDGE_PX + 1e-9);
+  });
+});
