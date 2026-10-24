@@ -6,14 +6,16 @@ vi.mock('$lib/utils/api', async () => ({
   getConfig: vi.fn(async () => { throw new Error('offline in tests'); })
 }));
 
-import type { LayoutDashboard } from '$lib/types/layout';
-import { setLayout, resetEditor, home, other } from '$lib/components/editor/editorTestKit';
+import { apply, undo, redo } from '$lib/stores/editSession';
+import { deleteNodes } from '$lib/editor/treeOps';
+import type { LayoutDashboard, LayoutNode } from '$lib/types/layout';
+import { setLayout, resetEditor, startSession, home, other, tile, p } from '$lib/components/editor/editorTestKit';
 import {
-  setAnimationEnv, resetDropAnimationForTests, type AnimationEnv, type AnimationsMode, type Box
+  setAnimationEnv, resetDropAnimationForTests, cancelDropAnimations, claimFlourish, type AnimationEnv, type AnimationsMode, type Box
 } from './dropAnimation';
 import {
-  playFolderToggle, playDrill, playPageSlide, flipFrom,
-  FOLDER_TOGGLE_MS, DRILL_MS, RECEDE_SCALE, PAGE_MS
+  playFolderToggle, playDrill, playPageSlide, playEdit, watchEdits, flipFrom,
+  FOLDER_TOGGLE_MS, DRILL_MS, RECEDE_SCALE, PAGE_MS, GLIDE_MS, DELETE_MS, POP_IN_MS, MAX_ANIMATED
 } from './flourishes';
 
 // M6 §9: visual flourishes on the drop animations' engine. Decoration only: the change is made first,
@@ -225,5 +227,208 @@ describe('3. page change', () => {
     playPageSlide('d1', 'f', 1);
     flush();
     expect(calls).toHaveLength(0);
+  });
+});
+
+/** The draft with tile `id` moved to `pl` on tab t1. */
+const moveTo = (id: string, pl: ReturnType<typeof p>) => (d: LayoutDashboard): LayoutDashboard => {
+  const c = structuredClone(d);
+  const n = c.tabs[0].root.children.find((x) => x.id === id)!;
+  (n as { placement: unknown }).placement = pl;
+  return c;
+};
+const addTile = (t: LayoutNode) => (d: LayoutDashboard): LayoutDashboard => {
+  const c = structuredClone(d);
+  c.tabs[0].root.children.push(t);
+  return c;
+};
+
+describe('4, 5, 7. edits: delete, glide, pop-in (and undo / redo)', () => {
+  let stop: () => void;
+  beforeEach(() => {
+    startSession();
+    stop = watchEdits();
+  });
+  afterEach(() => stop());
+
+  it('5. a box changed by an edit glides from its old box (~220 ms); unchanged boxes do not move; the draft changes at once', () => {
+    const a = node('a', B(0, 0));
+    const b = node('b', B(120, 0));
+    expect(apply('Move', moveTo('b', p(6, 0)))).toBe(true);
+    expect(calls).toHaveLength(0);
+    boxes.set(b, B(360, 0)); // drawn at its new spot
+    flush();
+    expect(calls).toHaveLength(1);
+    expect(calls[0].el).toBe(b);
+    expect(calls[0].opts.duration).toBe(GLIDE_MS);
+    expect(calls[0].frames[0].transform).toBe('translate(-240.000px, 0.000px) scale(1.000, 1.000)');
+    expect(b.getAttribute('data-flourish')).toBe('glide');
+    expect(a.hasAttribute('data-flourish')).toBe(false);
+  });
+
+  it('undo and redo glide too', () => {
+    const b = node('b', B(120, 0));
+    apply('Move', moveTo('b', p(6, 0)));
+    boxes.set(b, B(360, 0));
+    flush();
+    calls = [];
+    undo();
+    boxes.set(b, B(120, 0));
+    flush();
+    expect(calls[0].frames[0].transform).toBe('translate(240.000px, 0.000px) scale(1.000, 1.000)');
+    calls = [];
+    redo();
+    boxes.set(b, B(360, 0));
+    flush();
+    expect(calls[0].frames[0].transform).toBe('translate(-240.000px, 0.000px) scale(1.000, 1.000)');
+  });
+
+  it('4. a deleted item shrinks and fades as a detached copy (no node ids); its undo pops it back in', () => {
+    const a = node('a', B(0, 0));
+    apply('Delete', (d) => deleteNodes(d, ['a']));
+    const ghost = document.querySelector<HTMLElement>('[data-testid="flourish-ghost"]')!;
+    expect(ghost).toBeTruthy();
+    expect(ghost.getAttribute('aria-hidden')).toBe('true');
+    expect(ghost.querySelector('[data-node-id]')).toBeNull();
+    expect(ghost.style.left).toBe('0px');
+    a.remove(); // Svelte removes it
+    flush();
+    const del = calls.find((c) => c.el === ghost)!;
+    expect(del.opts.duration).toBe(DELETE_MS);
+    expect(del.frames[del.frames.length - 1]).toMatchObject({ opacity: 0 });
+    onlyTransformOpacity(del.frames);
+    del.anim.finish();
+    expect(document.querySelector('[data-testid="flourish-ghost"]')).toBeNull();
+
+    calls = [];
+    undo();
+    const back = node('a', B(0, 0));
+    flush();
+    expect(calls).toHaveLength(1);
+    expect(calls[0].el).toBe(back);
+    expect(calls[0].opts.duration).toBe(POP_IN_MS);
+    expect(calls[0].frames.map((f) => f.transform)).toEqual(['scale(0.6)', 'scale(1.05)', 'scale(1)']);
+    expect(back.getAttribute('data-flourish')).toBe('pop-in');
+  });
+
+  it('7. a new item pops in at its spot', () => {
+    apply('Add tile', addTile(tile('n1', p(20, 0))));
+    const n1 = node('n1', B(500, 0));
+    flush();
+    expect(calls.map((c) => c.el)).toEqual([n1]);
+    expect(n1.getAttribute('data-flourish')).toBe('pop-in');
+  });
+
+  it('the dropped / claimed item keeps its own animation: the glide and pop-in skip it', () => {
+    const a = node('a', B(0, 0));
+    const b = node('b', B(120, 0));
+    claimFlourish(['b']);
+    apply('Move', (d) => moveTo('a', p(10, 0))(moveTo('b', p(6, 0))(d)));
+    boxes.set(a, B(240, 0));
+    boxes.set(b, B(360, 0));
+    flush();
+    expect(calls.map((c) => c.el)).toEqual([a]);
+  });
+
+  it('an item inside a moving folder moves with it (never two transforms at once)', () => {
+    const f = node('f1', B(0, 200, 400, 300));
+    const x = node('x', B(10, 250), f);
+    apply('Move', moveTo('f1', p(0, 4, 8, 6)));
+    boxes.set(f, B(0, 300, 400, 300));
+    boxes.set(x, B(10, 350));
+    flush();
+    expect(calls.map((c) => c.el)).toEqual([f]);
+  });
+
+  it(`Tenet 4: at most ${MAX_ANIMATED} items animate for one edit; the rest snap`, () => {
+    const many = Array.from({ length: 60 }, (_, i) => tile(`m${i}`, p(0, 10 + i * 2)));
+    const els = many.map((t, i) => node(t.id, B(0, 100 + i * 10, 50, 10)));
+    apply('Add many', (d) => { const c = structuredClone(d); c.tabs[0].root.children.push(...many); return c; });
+    flush();
+    calls = [];
+    apply('Shift all', (d) => {
+      const c = structuredClone(d);
+      for (const n of c.tabs[0].root.children) if (n.id.startsWith('m')) (n.placement as { x: number }).x = 4;
+      return c;
+    });
+    els.forEach((el, i) => boxes.set(el, B(200, 100 + i * 10, 50, 10)));
+    flush();
+    expect(calls).toHaveLength(MAX_ANIMATED);
+  });
+
+  it('Off and On under reduced motion: nothing is measured, copied or animated', () => {
+    for (const [mode, red] of [['off', false], ['on', true]] as const) {
+      reduced = red;
+      setLayout(withAnimations(mode));
+      const a = node('a', B(0, 0));
+      apply('Delete', (d) => deleteNodes(d, ['a']));
+      flush();
+      expect(document.querySelector('[data-testid="flourish-ghost"]')).toBeNull();
+      expect(calls).toHaveLength(0);
+      a.remove();
+      undo();
+    }
+  });
+
+  it('the shared cancel (drag start, navigation) and a setting change stop it at once, leaving nothing behind', () => {
+    const b = node('b', B(120, 0));
+    const a = node('a', B(0, 0));
+    apply('Delete a, move b', (d) => moveTo('b', p(6, 0))(deleteNodes(d, ['a'])));
+    a.remove();
+    boxes.set(b, B(360, 0));
+    flush();
+    expect(calls.length).toBe(2);
+    cancelDropAnimations();
+    expect(calls.every((c) => c.anim.cancelled)).toBe(true);
+    expect(b.hasAttribute('data-flourish')).toBe(false);
+    expect(document.querySelector('[data-testid="flourish-ghost"]')).toBeNull();
+
+    calls = [];
+    undo();
+    boxes.set(b, B(120, 0));
+    node('a', B(0, 0));
+    flush();
+    expect(calls.length).toBeGreaterThan(0);
+    setLayout(withAnimations('off'));
+    expect(calls.every((c) => c.anim.cancelled)).toBe(true);
+  });
+
+  it('an edit interrupted before its frame (a drag starts at once) never starts later, and leaves no copy', () => {
+    const a = node('a', B(0, 0));
+    const b = node('b', B(120, 0));
+    apply('Delete a, move b', (d) => moveTo('b', p(6, 0))(deleteNodes(d, ['a'])));
+    expect(document.querySelector('[data-testid="flourish-ghost"]')).toBeTruthy();
+    cancelDropAnimations();
+    expect(document.querySelector('[data-testid="flourish-ghost"]')).toBeNull();
+    a.remove();
+    boxes.set(b, B(360, 0));
+    flush();
+    expect(calls).toHaveLength(0);
+  });
+
+  it('a folder toggle interrupted before its frame never starts', () => {
+    const t = node('f', B(0, 0));
+    playFolderToggle('d1', 'f', 'open');
+    cancelDropAnimations();
+    t.remove();
+    node('f', B(0, 0, 400, 300));
+    flush();
+    expect(calls).toHaveLength(0);
+  });
+
+  it('a new edit stops the last one first, so it measures resting boxes', () => {
+    const b = node('b', B(120, 0));
+    apply('Move', moveTo('b', p(6, 0)));
+    boxes.set(b, B(360, 0));
+    flush();
+    const first = calls[0];
+    apply('Move', moveTo('b', p(10, 0)));
+    expect(first.anim.cancelled).toBe(true);
+  });
+
+  it('playEdit never throws on a failing browser call (the edit is already made)', () => {
+    env({ drawnNodes: () => { throw new Error('boom'); } });
+    expect(() => apply('Move', moveTo('b', p(6, 0)))).not.toThrow();
+    expect(() => playEdit('d1', home(), home())).toThrow(); // direct call surfaces it; the watcher catches it
   });
 });

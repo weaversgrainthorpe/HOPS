@@ -124,10 +124,19 @@ async function record(page: Page) {
       requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
+    // When a drag begins (the shared cancel runs then).
+    new MutationObserver(() => {
+      const w = window as unknown as { __dragAt?: number };
+      if (document.body.classList.contains('hops-dragging') && w.__dragAt === undefined) w.__dragAt = performance.now();
+    }).observe(document, { attributes: true, subtree: true, attributeFilter: ['class'] });
   });
 }
 const samples = (page: Page) => page.evaluate(() => (window as unknown as { __fl: Sample[] }).__fl.slice());
-const clear = (page: Page) => page.evaluate(() => { (window as unknown as { __fl: unknown[] }).__fl.length = 0; });
+const clear = (page: Page) => page.evaluate(() => {
+  const w = window as unknown as { __fl: unknown[]; __dragAt?: number };
+  w.__fl.length = 0;
+  delete w.__dragAt;
+});
 
 /**
  * One flourish kind, measured: how long it was on screen (ms), its programmed duration, the furthest
@@ -301,6 +310,97 @@ test.describe('M6 §9 visual flourishes', () => {
     expect(errors).toEqual([]);
   });
 
+  test('4, 5, 7: delete shrinks and fades, undo pops back, paste pops in, undo / redo glide; the dropped item keeps its own landing', async ({ page, context }) => {
+    await setAnimations(page, context, 'on');
+    const f = await importDash(page, context);
+    await record(page);
+    const errors = await open(page, f);
+    await enterEdit(page);
+    await clear(page);
+
+    // 4. Delete: a copy of Tee shrinks and fades where it was.
+    await node(page, f.id('t')).click();
+    await page.keyboard.press('Delete');
+    await page.getByRole('dialog', { name: /Delete/ }).getByRole('button', { name: 'Delete' }).click();
+    await expect(node(page, f.id('t'))).toHaveCount(0, { timeout: 150 }); // the draft changed at once
+    await settle(page);
+    let s = await samples(page);
+    const del = stats(s, 'delete');
+    expect(del.dur).toBe(240);
+    expect(del.ms).toBeGreaterThanOrEqual(150);
+    expect(del.scale, 'it shrinks').toBeGreaterThan(0.25);
+    expect(del.minOp, 'and fades').toBeLessThan(0.3);
+    await expect(page.locator('[data-testid="flourish-ghost"]')).toHaveCount(0);
+
+    // 4. Undo of the delete: Tee pops back in at its spot.
+    await clear(page);
+    await page.keyboard.press('Control+z');
+    await expect(node(page, f.id('t'))).toBeVisible();
+    await settle(page);
+    s = await samples(page);
+    const back = stats(s, 'pop-in', f.id('t'));
+    expect(back.dur).toBe(280);
+    expect(back.ms).toBeGreaterThanOrEqual(150);
+    expect(back.scale, 'it pops (scale 0.6 → 1.05 → 1)').toBeGreaterThan(0.25);
+
+    // 7. Paste: the new tile pops in.
+    await clear(page);
+    await node(page, f.id('u')).click();
+    await page.keyboard.press('Control+c');
+    await page.keyboard.press('Control+v');
+    await settle(page);
+    s = await samples(page);
+    const pasted = s.filter((x) => x.kind === 'pop-in');
+    expect(pasted.length, 'the pasted tile pops in').toBeGreaterThan(0);
+    expect(pasted[0].id.startsWith(f.prefix), 'it is the NEW tile').toBe(false);
+    expect(stats(s, 'pop-in').scale).toBeGreaterThan(0.25);
+    await page.keyboard.press('Escape');
+
+    // The dropped item keeps its own landing: no glide on Vee at the drop.
+    await clear(page);
+    const v0 = await box(node(page, f.id('v')));
+    await dragTo(page, node(page, f.id('v')), v0.x + v0.width / 2 + 700, v0.y + v0.height / 2);
+    await settle(page);
+    s = await samples(page);
+    expect(stats(s, 'glide', f.id('v')).n, 'the dropped item does not glide').toBe(0);
+    const v1 = await box(node(page, f.id('v')));
+    expect(v1.x - v0.x).toBeGreaterThan(300);
+
+    // 5. Undo / redo: Vee glides back and forth (~220 ms).
+    await clear(page);
+    await page.keyboard.press('Control+z');
+    await settle(page);
+    s = await samples(page);
+    const undoGlide = stats(s, 'glide', f.id('v'));
+    expect(undoGlide.dur).toBe(220);
+    expect(undoGlide.ms).toBeGreaterThanOrEqual(130);
+    expect(undoGlide.travel, 'undo: it glides back').toBeGreaterThanOrEqual(40);
+    await clear(page);
+    await page.keyboard.press('Control+Shift+z');
+    await settle(page);
+    s = await samples(page);
+    expect(stats(s, 'glide', f.id('v')).travel, 'redo: it glides again').toBeGreaterThanOrEqual(40);
+    await expect(page.locator('[data-flourish]')).toHaveCount(0);
+    expect(errors).toEqual([]);
+  });
+
+  test('5: neighbours reflowed by a delete inside a folder glide to their new spots', async ({ page, context }) => {
+    await setAnimations(page, context, 'on');
+    const f = await importDash(page, context);
+    await record(page);
+    await open(page, f);
+    await enterEdit(page);
+    await clear(page);
+    await node(page, f.id('p0')).click({ button: 'right' });
+    await page.getByRole('menuitem', { name: 'Delete' }).click();
+    await page.getByRole('dialog', { name: /Delete/ }).getByRole('button', { name: 'Delete' }).click();
+    await settle(page);
+    const s = await samples(page);
+    const g = stats(s, 'glide', f.id('p1'));
+    expect(g.dur).toBe(220);
+    expect(g.travel, 'P1 glides into P0\'s spot').toBeGreaterThanOrEqual(40);
+  });
+
   test('1 in edit mode: a click opens the folder with the open flourish (not the glide)', async ({ page, context }) => {
     await setAnimations(page, context, 'on');
     const f = await importDash(page, context);
@@ -326,6 +426,37 @@ test.describe('M6 §9 visual flourishes', () => {
     await node(page, f.id('c')).locator('.folder-collapsed-tile').click();
     await settle(page);
     expect(stats(await samples(page), 'folder-open', f.id('c')).scale).toBeGreaterThan(0.3);
+  });
+
+  test('a drag start stops a running flourish at once (shared cancel): nothing is left transformed', async ({ page, context }) => {
+    await setAnimations(page, context, 'on');
+    const f = await importDash(page, context);
+    await record(page);
+    await open(page, f);
+    await enterEdit(page);
+    const v0 = await box(node(page, f.id('v')));
+    await dragTo(page, node(page, f.id('v')), v0.x + v0.width / 2 + 700, v0.y + v0.height / 2);
+    await settle(page);
+    const u = await box(node(page, f.id('u')));
+    await page.mouse.move(u.x + u.width / 2, u.y + u.height / 2);
+    await clear(page);
+    // Undo starts Vee's glide; You is grabbed and dragged while it runs, which stops it.
+    await page.keyboard.press('Control+z');
+    await page.waitForFunction((id) => document.querySelector(`[data-node-id="${id}"]`)?.getAttribute('data-flourish') === 'glide',
+      f.id('v'), { polling: 'raf' });
+    await page.waitForTimeout(50); // one sampled frame of it, well inside its 220 ms
+    await page.mouse.down();
+    await page.mouse.move(u.x + u.width / 2 + 40, u.y + u.height / 2 + 40, { steps: 2 });
+    await expect(page.locator('body.hops-dragging')).toHaveCount(1);
+    const dragAt = await page.evaluate(() => (window as unknown as { __dragAt?: number }).__dragAt ?? 0);
+    await expect(page.locator('[data-flourish]')).toHaveCount(0);
+    expect(await node(page, f.id('v')).evaluate((el) => el.getAnimations().length), 'nothing left on Vee').toBe(0);
+    const g = (await samples(page)).filter((x) => x.kind === 'glide' && x.id === f.id('v'));
+    expect(g.length, 'the glide had started').toBeGreaterThan(0);
+    expect(g[0].t + 220, 'it was still running when the drag began').toBeGreaterThan(dragAt);
+    expect(g[g.length - 1].t, 'and nothing of it was drawn after that').toBeLessThanOrEqual(dragAt + 20);
+    await page.keyboard.press('Escape');
+    await page.mouse.up();
   });
 
 });

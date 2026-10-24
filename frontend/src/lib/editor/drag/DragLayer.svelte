@@ -12,6 +12,7 @@
   import { drag, setActiveTab, setTabSwitcher, MERGE_DWELL_MS } from './dragController';
   import DragBreadcrumb from './DragBreadcrumb.svelte';
   import { cancelDropAnimations } from './dropAnimation';
+  import { watchEdits } from './flourishes';
 
   interface Props {
     /** The editor's active tab: a change during a drag cancels it (unless the drag switched it). */
@@ -23,6 +24,8 @@
   $effect(() => setActiveTab(tabId));
   // The editor's canvas going away (leaving edit mode or the dashboard) stops any drop animation.
   $effect(() => () => cancelDropAnimations());
+  // §9: every edit while the editor is open glides, pops in or fades out (decoration only).
+  $effect(() => watchEdits());
   $effect(() => {
     setTabSwitcher(onSwitchTab ?? null);
     return () => setTabSwitcher(null);

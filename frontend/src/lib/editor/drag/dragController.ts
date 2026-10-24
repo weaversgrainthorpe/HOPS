@@ -56,7 +56,7 @@ import { hitTest as domHitTest, type HitResult } from './hitTest';
 import { crumbDwellKey, dwellArgs, flowIndex, flowMarker, pageDwellKey } from './targets';
 import { drillUpTo, setFolderPage } from '$lib/stores/folderView';
 import {
-  cancelDropAnimations, outStarts, playDropAnimation, playOutOfFolders, sayAnimationFailure, MERGE_DIALOG_CAP_MS,
+  cancelDropAnimations, claimFlourish, outStarts, playDropAnimation, playOutOfFolders, sayAnimationFailure, MERGE_DIALOG_CAP_MS,
   type Box as AnimBox, type OutStart
 } from './dropAnimation';
 
@@ -704,6 +704,9 @@ export function commitDrop(state: DragState): void {
     return;
   }
   const before = d;
+  // §9: the dropped (or resized, or merged) items keep their own landing; the edit glide moves only
+  // the neighbours the drop pushed or reflowed.
+  claimFlourish(t.kind === 'resize' ? [t.id] : t.kind === 'merge' ? [...state.ids, t.targetTileId] : state.ids);
 
   if (t.kind === 'resize') {
     const label = commitResize(t); // '' = the same size: no change, no undo step
@@ -727,6 +730,7 @@ export function commitDrop(state: DragState): void {
       return r.dashboard;
     });
     if (!ok) return; // apply has already said why
+    claimFlourish([folderId]); // it pops with the merge, never also with the pop-in
     clearSelection();
     announce(label, before);
     // Name it straight away: the dialog opens with "New folder" selected; Cancel keeps that name.
@@ -792,6 +796,7 @@ export function commitDrop(state: DragState): void {
     return r.dashboard;
   });
   if (!ok) return; // apply has already said why
+  claimFlourish(newIds); // the copies land where they were dropped: no pop-in as well
   if (state.copy) {
     clearSelection();
     newIds.forEach((id) => toggleNode(id, true));

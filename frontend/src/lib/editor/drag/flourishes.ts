@@ -32,8 +32,10 @@
  * carries data-testid="flourish-ghost" (it is aria-hidden and inert, and has no node ids).
  */
 import { config } from '$lib/stores/config';
+import { session, type EditSession } from '$lib/stores/editSession';
+import type { Container, LayoutDashboard } from '$lib/types/layout';
 import {
-  animationEnv, animationsAllowed, claimFlourish, sayAnimationFailure, trackAnimation,
+  animationEnv, animationsAllowed, claimFlourish, claimedIds, onAnimationReset, sayAnimationFailure, trackAnimation,
   type Box, type Ended
 } from './dropAnimation';
 
@@ -50,6 +52,15 @@ export const RECEDE_SCALE = 0.97;
 export const PAGE_MS = 250;
 export const PAGE_SHIFT = 0.5;
 export const PAGE_SHIFT_MAX_PX = 280;
+/** 4. A deleted item shrinks to this scale as it fades out. */
+export const DELETE_MS = 240;
+export const DELETE_SCALE = 0.6;
+/** 5. The edit glide. */
+export const GLIDE_MS = 220;
+/** 7. A new item (and an undone delete) pops in: scale 0.6 → 1.05 → 1. */
+export const POP_IN_MS = 280;
+/** Tenet 4: at most this many items animate for one edit. The rest snap. */
+export const MAX_ANIMATED = 40;
 
 const EASE_OUT = 'cubic-bezier(0.2, 0.8, 0.2, 1)';
 const valid = (b: Box | null | undefined): b is Box =>
@@ -174,10 +185,21 @@ function allowed(dashboardId: string | undefined): dashboardId is string {
   return typeof document !== 'undefined' && !!dashboardId && animationsAllowed(dashboardId);
 }
 
-/** Run on the next frame, after the change has been drawn. Never throws. */
-function nextFrame(fn: () => void): void {
+/**
+ * Run on the next frame, after the change has been drawn. Never throws. The shared cancel (a drag
+ * starting, navigation) also cancels a flourish still waiting for its frame: it never starts after
+ * the interrupt. `onCancel` then tidies up what was prepared for it.
+ */
+function nextFrame(fn: () => void, onCancel?: () => void): void {
+  let cancelled = false;
+  const untrack = trackAnimation(() => {
+    cancelled = true;
+    onCancel?.();
+  });
   try {
     animationEnv().raf(() => {
+      untrack();
+      if (cancelled) return;
       try {
         fn();
       } catch (e) {
@@ -185,6 +207,8 @@ function nextFrame(fn: () => void): void {
       }
     });
   } catch (e) {
+    untrack();
+    onCancel?.();
     sayAnimationFailure(e);
   }
 }
@@ -264,3 +288,170 @@ export function playPageSlide(dashboardId: string, folderId: string, dir: 1 | -1
     }]);
   });
 }
+
+// ---- 4, 5, 7. Edits: delete, glide, pop-in -------------------------------------------------------
+
+/** Every node id in a dashboard (all its tabs, every folder's contents). */
+function idsOf(d: LayoutDashboard): Set<string> {
+  const out = new Set<string>();
+  const walk = (c: Container | undefined) => {
+    for (const n of Array.isArray(c?.children) ? c!.children : []) {
+      if (!n || typeof (n as { id?: unknown }).id !== 'string') continue;
+      out.add(n.id);
+      if (n.kind === 'folder') walk(n.content);
+    }
+  };
+  for (const t of Array.isArray(d?.tabs) ? d.tabs : []) walk(t.root);
+  return out;
+}
+
+const NODE_ATTRS = ['id', 'data-node-id', 'data-folder-id', 'data-nested-folder', 'data-folder-bar', 'data-crumb', 'data-folder-page-content', 'data-flourish', 'data-drop-area', 'tabindex'];
+
+/**
+ * A detached copy of a deleted item, drawn where it was (inline styles: it lives on <body>, below
+ * dialogs). It has no node ids, so nothing mistakes it for the item, and it is hidden from
+ * assistive technology.
+ */
+function deleteGhost(el: HTMLElement, box: Box): HTMLElement {
+  const wrap = document.createElement('div');
+  wrap.setAttribute('data-testid', 'flourish-ghost');
+  wrap.setAttribute('data-kind', 'delete');
+  wrap.setAttribute('aria-hidden', 'true');
+  wrap.setAttribute('inert', '');
+  wrap.style.cssText = [
+    'position:fixed', `left:${box.left}px`, `top:${box.top}px`, `width:${box.width}px`, `height:${box.height}px`,
+    'box-sizing:border-box', 'margin:0', 'display:flex', 'pointer-events:none', 'z-index:calc(var(--z-modal, 1000) - 10)',
+    'transform-origin:50% 50%', 'will-change:transform,opacity'
+  ].join(';');
+  const copy = el.cloneNode(true) as HTMLElement;
+  for (const n of [copy, ...Array.from(copy.querySelectorAll<HTMLElement>('*'))]) {
+    for (const a of NODE_ATTRS) n.removeAttribute(a);
+  }
+  copy.classList.remove('selected', 'dragging'); // the copy is the item, not its edit-mode state
+  copy.style.width = '100%';
+  copy.style.height = '100%';
+  copy.style.flex = '1';
+  copy.style.gridColumn = '';
+  copy.style.gridRow = '';
+  wrap.appendChild(copy);
+  document.body.appendChild(wrap);
+  return wrap;
+}
+
+/** The innermost drawn node around `el` (not `el` itself). */
+function enclosingNodeIds(el: HTMLElement): string[] {
+  const out: string[] = [];
+  let at = el.parentElement?.closest<HTMLElement>('[data-node-id]') ?? null;
+  while (at) {
+    const id = at.getAttribute('data-node-id');
+    if (id) out.push(id);
+    at = at.parentElement?.closest<HTMLElement>('[data-node-id]') ?? null;
+  }
+  return out;
+}
+
+let stopEditFlourish: (() => void) | null = null;
+
+/**
+ * One edit, drawn next: `before` is the draft on screen now and `after` the one about to be drawn.
+ * Called synchronously when the draft changes, before the page is redrawn. The boxes are measured
+ * now, the deleted items are copied now, and on the next frame the boxes are measured again. Then
+ * every changed box glides from its old box, every new item pops in, and every deleted copy shrinks
+ * and fades.
+ */
+export function playEdit(dashboardId: string, before: LayoutDashboard, after: LayoutDashboard): void {
+  if (!allowed(dashboardId)) return;
+  const env = animationEnv();
+  // Where everything is drawn now (mid-glide items where they are seen, so a new glide continues smoothly).
+  const was = new Map<string, Box>();
+  const wasEl = new Map<string, HTMLElement>();
+  for (const el of env.drawnNodes()) {
+    const id = el.getAttribute('data-node-id');
+    if (!id || was.has(id)) continue;
+    const b = boxOf(el);
+    if (b) {
+      was.set(id, b);
+      wasEl.set(id, el);
+    }
+  }
+  // The last edit's flourish stops now, so the boxes measured after this edit are its resting boxes.
+  stopEditFlourish?.();
+  stopEditFlourish = null;
+  const oldIds = idsOf(before);
+  const newIds = idsOf(after);
+  // 4. Deleted: copied now, while they are still drawn (at most MAX_ANIMATED; the rest just go).
+  const ghosts: Part[] = [];
+  for (const [id, el] of wasEl) {
+    if (ghosts.length >= MAX_ANIMATED) break;
+    if (newIds.has(id) || !oldIds.has(id)) continue;
+    // An item inside a deleted folder goes with its folder's copy.
+    if (enclosingNodeIds(el).some((p) => !newIds.has(p) && wasEl.has(p))) continue;
+    const box = was.get(id)!;
+    ghosts.push({
+      el: deleteGhost(el, box), kind: 'delete', opts: { duration: DELETE_MS, easing: 'ease-in', fill: 'forwards' },
+      frames: [{ transform: 'scale(1)', opacity: 1 }, { transform: `scale(${DELETE_SCALE})`, opacity: 0 }]
+    });
+  }
+  const ghostEls = ghosts.map((g) => g.el);
+  nextFrame(() => {
+    const claimed = claimedIds();
+    const parts: Part[] = [...ghosts];
+    const animated = new Set<string>();
+    const vw = typeof window !== 'undefined' ? window.innerWidth : Infinity;
+    const vh = typeof window !== 'undefined' ? window.innerHeight : Infinity;
+    const offscreen = (b: Box) => b.left + b.width < 0 || b.top + b.height < 0 || b.left > vw || b.top > vh;
+    for (const el of env.drawnNodes()) {
+      if (parts.length >= MAX_ANIMATED) break; // Tenet 4: the rest snap
+      const id = el.getAttribute('data-node-id');
+      if (!id || claimed.has(id) || animated.has(id)) continue;
+      // Inside an item that is itself animating: it moves with it (never two transforms at once).
+      if (enclosingNodeIds(el).some((p) => animated.has(p) || claimed.has(p))) continue;
+      const now = boxOf(el);
+      if (!now) continue;
+      const old = was.get(id);
+      if (!oldIds.has(id) && newIds.has(id)) {
+        // 7. New (added, pasted, duplicated), or 4. back by an undo of its delete: it pops in.
+        if (offscreen(now)) continue;
+        animated.add(id);
+        parts.push({
+          el, kind: 'pop-in', opts: { duration: POP_IN_MS, easing: 'ease-out' },
+          frames: [
+            { transform: 'scale(0.6)', opacity: 0 },
+            { transform: 'scale(1.05)', opacity: 1, offset: 0.6 },
+            { transform: 'scale(1)', opacity: 1 }
+          ]
+        });
+        continue;
+      }
+      // 5. Its box changed: it glides from the old box to the new one.
+      if (!old || (offscreen(old) && offscreen(now))) continue;
+      const part = flipPart(el, old, now, 'glide', GLIDE_MS);
+      if (!part) continue;
+      animated.add(id);
+      parts.push(part);
+    }
+    stopEditFlourish = run(dashboardId, parts, ghostEls);
+  }, () => ghostEls.forEach((g) => g.remove()));
+}
+
+/**
+ * Watch the edit session: every change of the draft (an edit, Undo, Redo, Discard) is drawn with
+ * playEdit. Starting a session or switching dashboards is not an edit. Returns the unsubscribe.
+ */
+export function watchEdits(): () => void {
+  let prev: EditSession | null = null;
+  return session.subscribe((s) => {
+    const p = prev;
+    prev = s;
+    if (!s || !p || p.dashboardId !== s.dashboardId || p.draft === s.draft) return;
+    try {
+      playEdit(s.dashboardId, p.draft, s.draft);
+    } catch (e) {
+      sayAnimationFailure(e); // the edit itself is already made
+    }
+  });
+}
+
+onAnimationReset(() => {
+  stopEditFlourish = null;
+});
