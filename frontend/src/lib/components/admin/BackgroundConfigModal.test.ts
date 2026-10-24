@@ -18,10 +18,12 @@ beforeEach(() => {
 });
 
 type Level = 'dashboard' | 'tab' | 'folder';
+/** Slideshows animate here (M6 §8.2): every control the level has is shown. */
+const MOVING = { folderAnimationsOn: true, reducedMotion: false };
 function open(level: Level, background?: Background) {
   const onSave = vi.fn();
   const onCancel = vi.fn();
-  render(BackgroundConfigModal, { level, background, onSave, onCancel });
+  render(BackgroundConfigModal, { runtime: MOVING, level, background, onSave, onCancel });
   return { onSave, onCancel };
 }
 const save = () => fireEvent.click(screen.getByRole('button', { name: /^Save Background/ }));
@@ -51,7 +53,7 @@ async function setInherit(level: Level, to: boolean) {
 describe('BackgroundConfigModal at every level', () => {
   it('has a title per level', () => {
     for (const [level, title] of [['dashboard', 'Dashboard background'], ['tab', 'Tab background'], ['folder', 'Folder background']] as const) {
-      const { unmount } = render(BackgroundConfigModal, { level, onSave: vi.fn(), onCancel: vi.fn() });
+      const { unmount } = render(BackgroundConfigModal, { runtime: MOVING, level, onSave: vi.fn(), onCancel: vi.fn() });
       expect(screen.getByRole('heading', { level: 2 }).textContent).toMatch(new RegExp(title, 'i'));
       unmount();
     }
@@ -64,7 +66,7 @@ describe('BackgroundConfigModal at every level', () => {
 
   it('folder level hides the overlay darkness and blur; tab level shows them', () => {
     const bg: Background = { type: 'image', value: '/presets/network-grid.jpg' };
-    const { unmount } = render(BackgroundConfigModal, { level: 'folder', background: bg, onSave: vi.fn(), onCancel: vi.fn() });
+    const { unmount } = render(BackgroundConfigModal, { runtime: MOVING, level: 'folder', background: bg, onSave: vi.fn(), onCancel: vi.fn() });
     expect(screen.queryByText(/Overlay Darkness/i)).toBeNull();
     expect(screen.queryByText(/Overlay Blur/i)).toBeNull();
     unmount();
@@ -136,7 +138,7 @@ describe('BackgroundConfigModal at every level', () => {
     it('no level, in either state, says "uses the background below"', () => {
       for (const level of ['dashboard', 'tab', 'folder'] as const) {
         for (const bg of [pic, kept]) {
-          const { unmount } = render(BackgroundConfigModal, { level, background: bg, onSave: vi.fn(), onCancel: vi.fn() });
+          const { unmount } = render(BackgroundConfigModal, { runtime: MOVING, level, background: bg, onSave: vi.fn(), onCancel: vi.fn() });
           expect(document.body.textContent).not.toMatch(/uses the background below/i);
           unmount();
         }
@@ -384,7 +386,7 @@ describe('folder background: pictures only (M6 §7.5)', () => {
 
   it('the dashboard and tab levels keep None, Color, Image and Slideshow', () => {
     for (const level of ['dashboard', 'tab'] as const) {
-      const { unmount } = render(BackgroundConfigModal, { level, onSave: vi.fn(), onCancel: vi.fn() });
+      const { unmount } = render(BackgroundConfigModal, { runtime: MOVING, level, onSave: vi.fn(), onCancel: vi.fn() });
       expect(typeButtons()).toEqual(['None', 'Color', 'Image', 'Slideshow']);
       unmount();
     }
@@ -434,13 +436,13 @@ describe('folder background: pictures only (M6 §7.5)', () => {
 
     it('"Use as folder colour" hands the colour to the folder dialog', async () => {
       const onUseAsFolderColour = vi.fn();
-      render(BackgroundConfigModal, { level: 'folder', background: colourBg, onSave: vi.fn(), onCancel: vi.fn(), onUseAsFolderColour });
+      render(BackgroundConfigModal, { runtime: MOVING, level: 'folder', background: colourBg, onSave: vi.fn(), onCancel: vi.fn(), onUseAsFolderColour });
       await fireEvent.click(screen.getByRole('button', { name: 'Use as folder colour' }));
       expect(onUseAsFolderColour).toHaveBeenCalledTimes(1);
     });
 
     it('a colour that is not #rrggbb says why it cannot be used (no button)', () => {
-      render(BackgroundConfigModal, {
+      render(BackgroundConfigModal, { runtime: MOVING,
         level: 'folder', background: { type: 'color', value: 'rebeccapurple' }, onSave: vi.fn(), onCancel: vi.fn(), onUseAsFolderColour: vi.fn()
       });
       expect(screen.queryByRole('button', { name: 'Use as folder colour' })).toBeNull();

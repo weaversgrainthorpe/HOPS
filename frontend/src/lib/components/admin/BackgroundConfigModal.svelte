@@ -10,18 +10,23 @@
   import { portal } from '$lib/utils/portal';
   import { dialogContentKeydown, dialogWindowEscape } from '$lib/utils/dialogKeys';
   import BackgroundSection, { LEVEL_TEXT } from './BackgroundSection.svelte';
+  import type { BackgroundContext } from '$lib/components/background/backgroundCapabilities';
 
   interface Props {
     background?: Background;
     onSave: (background: Background | undefined) => void;
     onCancel: () => void;
-    /** Which level this picker edits (design §4a): folders get no overlay or blur of their own. */
+    /** Which level this picker edits (design §4a); what it offers comes from backgroundCapabilities. */
     level: 'dashboard' | 'tab' | 'folder';
+    /** The capability table's runtime conditions (M6 §8.2), from the host. */
+    runtime: BackgroundContext;
+    /** Opens the dashboard's settings (the folder-animations note's link). */
+    onOpenDashboardSettings?: () => void;
     /** Folder level, a stored colour background: hand it to the folder dialog as the folder's colour (M6 §7.5). */
     onUseAsFolderColour?: () => void;
   }
 
-  let { background, onSave, onCancel, level, onUseAsFolderColour }: Props = $props();
+  let { background, onSave, onCancel, level, runtime, onUseAsFolderColour, onOpenDashboardSettings }: Props = $props();
 
   let section = $state<BackgroundSection>();
   /** A refused Save, shown by the buttons (no silent failures). */
@@ -79,7 +84,7 @@
     </div>
 
     <div class="modal-body">
-      <BackgroundSection bind:this={section} {background} {level} {onUseAsFolderColour} />
+      <BackgroundSection bind:this={section} {background} {level} {runtime} {onUseAsFolderColour} {onOpenDashboardSettings} />
     </div>
 
     <div class="modal-footer">

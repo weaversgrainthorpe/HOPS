@@ -13,6 +13,7 @@
   import BackgroundSection from '../admin/BackgroundSection.svelte';
   import DashboardSettingsSection from '../admin/DashboardSettingsSection.svelte';
   import { setLook } from '$lib/editor/editorActions';
+  import { reducedMotion } from '$lib/stores/backgroundAnimation';
 
   interface Props {
     dashboardId: string;
@@ -145,7 +146,12 @@
   </div>
   <div role="tabpanel" id="dash-edit-panel-background" aria-labelledby="dash-edit-tab-background" hidden={active !== 'background'}>
     {#if backgroundShown}
-      <BackgroundSection bind:this={backgroundSection} {background} level="dashboard" />
+      <BackgroundSection
+        bind:this={backgroundSection}
+        {background}
+        level="dashboard"
+        runtime={{ folderAnimationsOn: false, reducedMotion: $reducedMotion }}
+      />
     {/if}
   </div>
   <div role="tabpanel" id="dash-edit-panel-settings" aria-labelledby="dash-edit-tab-settings" hidden={active !== 'settings'}>

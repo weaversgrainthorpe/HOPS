@@ -139,12 +139,13 @@
         }}
         onMoveCopy={() => openDialog({ kind: 'movecopy', ids: [id] })}
         {statusContext}
+        dashboardId={$session?.dashboardId}
         checkContentSize={(cs) => (draft ? contentSizeProblem(draft, id, cs) : 'Not editing: click Edit first.')}
         checkShape={(sh, pos) => (draft ? shapeProblem(draft, id, sh, pos) : 'Not editing: click Edit first.')}
       />
     {/key}
   {:else if !dlg.id && newFolder}
-    <FolderEditModal folder={newFolder} isNew onSave={saveFolder} onCancel={close} {statusContext} />
+    <FolderEditModal folder={newFolder} isNew onSave={saveFolder} onCancel={close} {statusContext} dashboardId={$session?.dashboardId} />
   {/if}
 {:else if dlg?.kind === 'movecopy'}
   <MoveCopyDialog ids={dlg.ids} onClose={close} />

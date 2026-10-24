@@ -23,6 +23,9 @@
   import OpacitySlider from '../admin/OpacitySlider.svelte';
   import IconEditModal from '../admin/IconEditModal.svelte';
   import BackgroundConfigModal from '../admin/BackgroundConfigModal.svelte';
+  import DashboardSettingsModal from './DashboardSettingsModal.svelte';
+  import { animatedFolderBackgroundsFor } from '$lib/stores/config';
+  import { reducedMotion } from '$lib/stores/backgroundAnimation';
   import { backgroundSummary } from '../background/backgroundSummary';
   import { folderColourFromBackground, isLegacyFolderColour } from '../background/legacyFolderColour';
   import Modal from '../shared/Modal.svelte';
@@ -48,11 +51,22 @@
     checkContentSize?: (size: ItemSize) => string | null;
     /** Why this look can't be used here (an unknown one, or no room for its box to grow), or null. */
     checkShape?: (shape: string, tabPosition: TabPosition) => string | null;
+    /**
+     * The dashboard the folder is on: its "Animated folder backgrounds" decides what the background
+     * picker offers (M6 §8.2), and its settings open from there.
+     */
+    dashboardId?: string;
   }
   let {
-    folder, isNew = false, onSave, onCancel, onDelete, onDuplicate, onMoveCopy, statusContext, checkContentSize, checkShape
+    folder, isNew = false, onSave, onCancel, onDelete, onDuplicate, onMoveCopy, statusContext, checkContentSize, checkShape,
+    dashboardId
   }: Props = $props();
   let showBackgroundConfig = $state(false);
+  let showDashboardSettings = $state(false);
+  // The dashboard's effective setting, as the folder surface reads it (unknown = off: a still first
+  // image, which is what the picker then says). Live: saving the setting updates the picker.
+  // svelte-ignore state_referenced_locally
+  const folderAnimations = animatedFolderBackgroundsFor(dashboardId ?? '');
   // A picked background is staged here and saved with the dialog (one undo step);
   // Cancel discards it (Ruling 11(5)).
   let stagedBackground = $state<{ value: Background | undefined } | null>(null);
@@ -376,6 +390,8 @@
   <BackgroundConfigModal
     background={shownBackground}
     level="folder"
+    runtime={{ folderAnimationsOn: $folderAnimations, reducedMotion: $reducedMotion }}
+    onOpenDashboardSettings={dashboardId ? () => (showDashboardSettings = true) : undefined}
     onUseAsFolderColour={useAsFolderColour}
     onSave={(bg) => {
       stagedBackground = { value: bg };
@@ -383,6 +399,10 @@
     }}
     onCancel={() => (showBackgroundConfig = false)}
   />
+{/if}
+
+{#if showDashboardSettings && dashboardId}
+  <DashboardSettingsModal {dashboardId} focusKey="animatedFolderBackgrounds" onClose={() => (showDashboardSettings = false)} />
 {/if}
 
 {#if showIconEditor}

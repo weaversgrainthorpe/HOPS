@@ -31,11 +31,23 @@
     DURATION_MIN,
     DURATION_MAX
   } from '$lib/components/background/backgroundTiming';
+  import {
+    backgroundCapabilities,
+    type BackgroundContext,
+    type PictureType
+  } from '$lib/components/background/backgroundCapabilities';
 
   interface Props {
     background?: Background;
-    /** Which level this picker edits (design §4a): folders get no overlay or blur of their own. */
+    /** Which level this picker edits (design §4a). What it offers there comes from backgroundCapabilities. */
     level: 'dashboard' | 'tab' | 'folder';
+    /**
+     * Runtime conditions the capability table reads (M6 §8.2), from the host: the dashboard's
+     * "Animated folder backgrounds" and this device's reduced-motion preference.
+     */
+    runtime: BackgroundContext;
+    /** Opens the dashboard's settings (the folder-animations note's link). Without it the link is not offered. */
+    onOpenDashboardSettings?: () => void;
     /**
      * Folder level, a stored colour background (M6 §7.5): "Use as folder colour" hands it to the folder
      * dialog, which owns the folder's colour. Without it the button is not offered.
@@ -43,17 +55,28 @@
     onUseAsFolderColour?: () => void;
   }
 
-  let { background, level, onUseAsFolderColour }: Props = $props();
+  let { background, level, runtime, onUseAsFolderColour, onOpenDashboardSettings }: Props = $props();
 
   /** The slideshow limit the server's document rules enforce. */
   const MAX_IMAGES = 200;
-  const hasOverlay = $derived(level !== 'folder');
+  /**
+   * Everything this dialog shows comes from the one capability table (M6 §8.2): no level checks
+   * below. It follows the context live (e.g. the dashboard's setting turned on while open).
+   */
+  const caps = $derived(backgroundCapabilities(level, runtime));
+  const TYPE_BUTTONS: Record<PictureType, { icon: string; label: string }> = {
+    none: { icon: 'mdi:close-circle-outline', label: 'None' },
+    color: { icon: 'mdi:palette', label: 'Color' },
+    image: { icon: 'mdi:image', label: 'Image' },
+    slideshow: { icon: 'mdi:view-carousel', label: 'Slideshow' }
+  };
+  /** The level picks a picture or shows what's behind (folders); its picture controls follow that choice. */
   // svelte-ignore state_referenced_locally
-  const isFolder = level === 'folder';
-  // M6 §7.5: a folder background is pictures only (Edit Folder owns the colour). A colour background
-  // stored before that keeps rendering and is shown as its own choice — never dropped silently.
+  const pictureOrBehind = untrack(() => caps.inherit.kind === 'picture-or-behind');
+  // M6 §7.5: a stored type this level no longer offers (a folder's colour background) keeps
+  // rendering and is shown as its own choice — never dropped silently.
   // svelte-ignore state_referenced_locally
-  const legacyColour = isFolder && background?.type === 'color';
+  const legacyColour = pictureOrBehind && background?.type === 'color' && !untrack(() => caps.pictureTypes.includes('color'));
   // svelte-ignore state_referenced_locally
   const legacyColourUse = legacyColour ? folderColourFromBackground(background) : null;
   /** Folder level: no picture of its own (what's behind shows), its own picture, or the stored colour. */
@@ -94,8 +117,8 @@
   let backgroundType = $state<'none' | 'color' | 'image' | 'slideshow'>(
     background?.type || 'none'
   );
-  /** The picture controls: always at the dashboard and tab levels; at folder level, for "Its own picture". */
-  const showPictureControls = $derived(!isFolder || folderChoice === 'picture');
+  /** The picture controls: always, except where the level is showing what's behind (folders). */
+  const showPictureControls = $derived(!pictureOrBehind || folderChoice === 'picture');
   const keptPicture = $derived(backgroundType === 'image' || backgroundType === 'slideshow');
   // svelte-ignore state_referenced_locally
   let backgroundFit = $state<'cover' | 'contain' | 'fill'>(
@@ -450,16 +473,19 @@
         slideshowImages.length !== initial.images.length || slideshowImages.some((u, i) => u !== initial.images[i]);
       if (owns(imagesChanged)) out.images = [...slideshowImages];
       // Clamped (Ruling 14); written when changed, or when the stored value needed clamping.
+      // A control that isn't shown (M6 §8.2) never writes: its stored value is kept exactly.
       slideshowInterval = clampInterval(Number(slideshowInterval));
       transitionDuration = clampDuration(Number(transitionDuration));
-      if (owns(slideshowInterval !== initial.interval) || intervalNormalised !== null) out.interval = slideshowInterval;
-      if (owns(transitionEffect !== initial.transition)) out.transition = transitionEffect;
-      if (owns(transitionDuration !== initial.transitionDuration) || durationNormalised !== null) {
+      if (caps.interval && (owns(slideshowInterval !== initial.interval) || intervalNormalised !== null)) {
+        out.interval = slideshowInterval;
+      }
+      if (caps.transitionPicker && owns(transitionEffect !== initial.transition)) out.transition = transitionEffect;
+      if (caps.duration && (owns(transitionDuration !== initial.transitionDuration) || durationNormalised !== null)) {
         out.transitionDuration = transitionDuration;
       }
     }
-    // Folders have no overlay or blur of their own (call 1): the picker never writes them there.
-    if (hasOverlay && (backgroundType === 'image' || backgroundType === 'slideshow')) {
+    // No overlay or blur of its own here (folders, call 1): the picker never writes them.
+    if (caps.overlay && (backgroundType === 'image' || backgroundType === 'slideshow')) {
       if (owns(overlayOpacity !== initial.overlayOpacity)) out.overlayOpacity = overlayOpacity;
       if (owns(overlayBlur !== initial.overlayBlur)) out.overlayBlur = overlayBlur;
     }
@@ -472,7 +498,7 @@
    * Inherit off later never brings back something unusable (and nothing is dropped silently).
    */
   export function build(): { ok: true; value: Background | undefined } | { ok: false; problem: string } {
-    if (isFolder) {
+    if (pictureOrBehind) {
       // The stored colour background, untouched: kept exactly (switched on or off).
       if (folderChoice === 'colour') return { ok: true, value: background ? { ...stored } : undefined };
       // No picture of its own and none kept: the bare inherit form round-trips; otherwise nothing.
@@ -496,7 +522,7 @@
       previewIntervalId = undefined;
     }
 
-    if (backgroundType === 'slideshow' && slideshowImages.length > 1) {
+    if (backgroundType === 'slideshow' && slideshowImages.length > 1 && caps.transitionPicker) {
       previewIndex = 0;
       previewLayer1Image = slideshowImages[0];
       previewLayer1Visible = true;
@@ -553,12 +579,12 @@
 <!-- On/off, in plain words per level (§7.1). Off but kept (call 5): the picture below stays stored
      while the parent's shows. Data: { inherit: true, …picture }. -->
 <div class="form-group toggle-group">
-  {#if level === 'dashboard'}
+  {#if caps.inherit.kind === 'switch'}
     <label class="toggle-label">
       <span class="toggle-switch" class:enabled={!inheritOn} aria-hidden="true">
         <span class="toggle-knob"></span>
       </span>
-      <span class="toggle-text">Show background picture</span>
+      <span class="toggle-text">{caps.inherit.ownLabel}</span>
       <input
         type="checkbox"
         role="switch"
@@ -570,15 +596,11 @@
       />
     </label>
     <p class="toggle-hint" id="bg-inherit-hint">
-      {#if inheritOn}
-        No picture. Your chosen picture is kept, so turning this back on restores it.
-      {:else}
-        Shown behind the whole dashboard.
-      {/if}
+      {inheritOn ? caps.inherit.inheritHint : caps.inherit.ownHint}
     </p>
-  {:else if isFolder}
+  {:else if caps.inherit.kind === 'picture-or-behind'}
     <!-- M6 §7.5: pictures only. The folder's colour and opacity are set in Edit Folder. -->
-    <div class="inherit-radios" role="radiogroup" aria-label="Folder background">
+    <div class="inherit-radios" role="radiogroup" aria-label={caps.inherit.groupLabel}>
       {#if legacyColour}
         <label class="inherit-radio">
           <input type="radio" name="bg-source" checked={folderChoice === 'colour'} onchange={() => chooseFolder('colour')} />
@@ -587,11 +609,11 @@
       {/if}
       <label class="inherit-radio">
         <input type="radio" name="bg-source" checked={folderChoice === 'behind'} onchange={() => chooseFolder('behind')} />
-        <span>No picture of its own — show what's behind</span>
+        <span>{caps.inherit.inheritLabel}</span>
       </label>
       <label class="inherit-radio">
         <input type="radio" name="bg-source" checked={folderChoice === 'picture'} onchange={() => chooseFolder('picture')} />
-        <span>Its own picture</span>
+        <span>{caps.inherit.ownLabel}</span>
       </label>
     </div>
     {#if folderChoice === 'colour'}
@@ -610,22 +632,22 @@
     {:else if folderChoice === 'behind' && legacyColour}
       <p class="toggle-hint radio-hint" role="status">The colour background is removed when you save.</p>
     {:else if folderChoice === 'behind' && keptPicture}
-      <p class="toggle-hint radio-hint" id="bg-inherit-hint">This folder's own picture is kept for when you switch back.</p>
+      <p class="toggle-hint radio-hint" id="bg-inherit-hint">{caps.inherit.keptHint}</p>
       <button type="button" class="remove-kept-btn" onclick={() => (backgroundType = 'none')}>Remove it</button>
     {/if}
   {:else}
-    <div class="inherit-radios" role="radiogroup" aria-label="Tab background" aria-describedby={inheritOn ? 'bg-inherit-hint' : undefined}>
+    <div class="inherit-radios" role="radiogroup" aria-label={caps.inherit.groupLabel} aria-describedby={inheritOn ? 'bg-inherit-hint' : undefined}>
       <label class="inherit-radio">
         <input type="radio" name="bg-source" checked={inheritOn} onchange={() => (inheritOn = true)} />
-        <span>Same as the dashboard</span>
+        <span>{caps.inherit.inheritLabel}</span>
       </label>
       <label class="inherit-radio">
         <input type="radio" name="bg-source" checked={!inheritOn} onchange={() => (inheritOn = false)} />
-        <span>Its own background</span>
+        <span>{caps.inherit.ownLabel}</span>
       </label>
     </div>
     {#if inheritOn}
-      <p class="toggle-hint radio-hint" id="bg-inherit-hint">This {level}'s own picture is kept for when you switch back.</p>
+      <p class="toggle-hint radio-hint" id="bg-inherit-hint">{caps.inherit.keptHint}</p>
     {/if}
   {/if}
 </div>
@@ -634,26 +656,14 @@
 <!-- Background Type Selection -->
 <div class="form-group">
   <!-- svelte-ignore a11y_label_has_associated_control -->
-  <label id="bg-type-label">{isFolder ? 'Picture type' : 'Background Type'} {#if inheritOn}<span class="label-hint">(kept, not shown while inheriting)</span>{/if}</label>
+  <label id="bg-type-label">{caps.typeLabel} {#if inheritOn}<span class="label-hint">(kept, not shown while inheriting)</span>{/if}</label>
   <div class="type-buttons" role="group" aria-labelledby="bg-type-label">
-    {#if !isFolder}
-      <button class="type-btn" class:active={backgroundType === 'none'} onclick={() => backgroundType = 'none'}>
-        <Icon icon="mdi:close-circle-outline" width="24" />
-        <span>None</span>
+    {#each caps.pictureTypes as t (t)}
+      <button class="type-btn" class:active={backgroundType === t} onclick={() => (backgroundType = t)}>
+        <Icon icon={TYPE_BUTTONS[t].icon} width="24" />
+        <span>{TYPE_BUTTONS[t].label}</span>
       </button>
-      <button class="type-btn" class:active={backgroundType === 'color'} onclick={() => backgroundType = 'color'}>
-        <Icon icon="mdi:palette" width="24" />
-        <span>Color</span>
-      </button>
-    {/if}
-    <button class="type-btn" class:active={backgroundType === 'image'} onclick={() => backgroundType = 'image'}>
-      <Icon icon="mdi:image" width="24" />
-      <span>Image</span>
-    </button>
-    <button class="type-btn" class:active={backgroundType === 'slideshow'} onclick={() => backgroundType = 'slideshow'}>
-      <Icon icon="mdi:view-carousel" width="24" />
-      <span>Slideshow</span>
-    </button>
+    {/each}
   </div>
 </div>
 
@@ -669,7 +679,7 @@
 {/if}
 
 <!-- Image Fit Option -->
-{#if backgroundType === 'image' || backgroundType === 'slideshow'}
+{#if caps.fit && (backgroundType === 'image' || backgroundType === 'slideshow')}
   <div class="form-group">
     <!-- svelte-ignore a11y_label_has_associated_control -->
     <label id="image-fit-label">Image Fit</label>
@@ -691,7 +701,7 @@
 {/if}
 
 <!-- One show-through opacity for this level's surface (call 2). -->
-{#if backgroundType !== 'none'}
+{#if caps.opacity && backgroundType !== 'none'}
   <div class="form-group">
     <div class="slider-header">
       <label for="bg-opacity">Background opacity: {Math.round(Number(surfaceOpacity) * 100)}%</label>
@@ -702,12 +712,12 @@
       <span>See-through</span>
       <span>Solid</span>
     </div>
-    <p class="slider-hint" id="bg-opacity-hint">Lower lets what is behind this {level} show through.</p>
+    <p class="slider-hint" id="bg-opacity-hint">Lower lets what is behind this {caps.opacityNoun} show through.</p>
   </div>
 {/if}
 
-<!-- Overlay Controls (not for folders: one overlay, at canvas level — call 1) -->
-{#if hasOverlay && (backgroundType === 'image' || backgroundType === 'slideshow')}
+<!-- Overlay darkness and blur, where the level has its own (not folders: one overlay, at canvas level — call 1) -->
+{#if caps.overlay && (backgroundType === 'image' || backgroundType === 'slideshow')}
   <div class="form-group">
     <div class="slider-header">
       <!-- svelte-ignore a11y_label_has_associated_control -->
@@ -761,6 +771,29 @@
 
 <!-- Slideshow Configuration -->
 {#if backgroundType === 'slideshow'}
+  {#if caps.motionNotes.length > 0}
+    <!-- M6 §8.2: the motion controls would have no effect here; say why, and keep their stored values. -->
+    <div class="motion-notes" data-motion-notes>
+      {#each caps.motionNotes as note (note)}
+        <p class="motion-note" role="note">
+          <Icon icon="mdi:pause-circle-outline" width="18" />
+          {#if note === 'folderAnimationsOff'}
+            <span>Pictures show as the first image, still, on this dashboard. Turn on 'Animated folder backgrounds' in Dashboard settings to play them.</span>
+          {:else}
+            <span>Pictures show as the first image, still, on this device, because it asks for reduced motion. Turn off reduced motion in the device's settings to play them.</span>
+          {/if}
+        </p>
+        {#if note === 'folderAnimationsOff' && onOpenDashboardSettings}
+          <button type="button" class="open-settings-btn" onclick={() => onOpenDashboardSettings?.()}>
+            <Icon icon="mdi:cog-outline" width="16" />
+            Open Dashboard settings
+          </button>
+        {/if}
+      {/each}
+      <p class="motion-note-kept">The slideshow's interval and transition are kept as they are.</p>
+    </div>
+  {/if}
+  {#if caps.interval}
   <div class="form-group">
     <label for="interval">Rotation Interval (seconds, {INTERVAL_MIN}–{INTERVAL_MAX})</label>
     <input
@@ -778,7 +811,9 @@
       </p>
     {/if}
   </div>
+  {/if}
 
+  {#if caps.transitionPicker}
   <div class="form-group">
     <!-- svelte-ignore a11y_label_has_associated_control -->
     <label id="transition-effect-label">Transition Effect</label>
@@ -851,10 +886,12 @@
         <Icon icon="mdi:television-classic" width="20" />
         <span>Glitch</span>
       </button>
+      {#if caps.kenBurns}
       <button class="transition-btn" class:active={transitionEffect === 'kenburns'} onclick={() => transitionEffect = 'kenburns'} title="Ken Burns">
         <Icon icon="mdi:movie" width="20" />
         <span>Ken Burns</span>
       </button>
+      {/if}
       <button class="transition-btn" class:active={transitionEffect === 'none'} onclick={() => transitionEffect = 'none'} title="Instant">
         <Icon icon="mdi:flash-off" width="20" />
         <span>Instant</span>
@@ -865,7 +902,9 @@
       </button>
     </div>
   </div>
+  {/if}
 
+  {#if caps.duration}
   <div class="form-group">
     <label for="transitionDuration">Transition Duration ({transitionDuration}s)</label>
     <input id="transitionDuration" type="range" bind:value={transitionDuration} min={DURATION_MIN} max={DURATION_MAX} step="0.5" class="range-input" disabled={transitionEffect === 'none'} />
@@ -879,9 +918,10 @@
       </p>
     {/if}
   </div>
+  {/if}
 
   <!-- Transition Preview - positioned right after effect selection -->
-  {#if slideshowImages.length > 1}
+  {#if caps.transitionPicker && slideshowImages.length > 1}
     <div class="transition-preview">
       <label><Icon icon="mdi:eye" width="16" /> Transition Preview ({transitionEffect}{transitionEffect === 'random' ? ` → ${effectiveTransition}` : ''})</label>
       <div class="preview-container">
@@ -1316,6 +1356,52 @@
   }
   .use-colour-btn:hover,
   .remove-kept-btn:hover {
+    border-color: var(--accent);
+  }
+
+  /* M6 §8.2: in place of the slideshow motion controls where they would have no effect. */
+  .motion-notes {
+    margin: 0 0 1.25rem;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 0.5rem;
+    background: var(--bg-tertiary);
+    max-width: 75ch;
+  }
+  .motion-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    margin: 0 0 0.5rem;
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    line-height: 1.45;
+  }
+  .motion-note :global(svg) {
+    flex-shrink: 0;
+    margin-top: 0.1rem;
+    color: var(--accent);
+  }
+  .motion-note-kept {
+    margin: 0.5rem 0 0;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+  }
+  .open-settings-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin: 0 0 0.5rem 1.6rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    border-radius: 0.375rem;
+    padding: 0.4rem 0.8rem;
+    font-size: 0.875rem;
+    cursor: pointer;
+  }
+  .open-settings-btn:hover {
     border-color: var(--accent);
   }
 

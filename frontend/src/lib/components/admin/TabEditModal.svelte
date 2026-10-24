@@ -9,6 +9,7 @@
   import type { Background } from '$lib/types';
   import { editMode } from '$lib/stores/editMode';
   import { backgroundSummary } from '../background/backgroundSummary';
+  import { reducedMotion } from '$lib/stores/backgroundAnimation';
   import StatusCheckSetting from '../editor/StatusCheckSetting.svelte';
   import { containerSetting, type LevelSetting, type StatusContext } from '$lib/editor/statusChecks';
 
@@ -207,6 +208,7 @@
   <BackgroundConfigModal
     background={shownBackground}
     level="tab"
+    runtime={{ folderAnimationsOn: false, reducedMotion: $reducedMotion }}
     onSave={handleBackgroundSave}
     onCancel={() => showBackgroundConfig = false}
   />
