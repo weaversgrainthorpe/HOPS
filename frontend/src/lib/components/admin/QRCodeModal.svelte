@@ -133,11 +133,16 @@
     padding: 0.5rem 0;
   }
 
+  /* The dashboard name labels the code (walkthrough: "a little bigger"): large and in the
+     primary text colour, wrapping rather than truncating a long name. */
   .dashboard-name {
     margin: 0;
-    font-size: 1rem;
-    font-weight: 500;
-    color: var(--text-secondary);
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1.25;
+    text-align: center;
+    overflow-wrap: anywhere;
+    color: var(--text-primary);
   }
 
   .qr-frame {

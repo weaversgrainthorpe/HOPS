@@ -49,6 +49,10 @@ test.describe('M5 §12 QR code with the HOPS bunny', () => {
 		await openSettings(page);
 		await page.getByRole('button', { name: `Show QR code for ${dash.name}`, exact: true }).click();
 		const dlg = page.getByRole('dialog', { name: 'QR Code' });
+		// Walkthrough: the dashboard name labels the code, so it is large (>= 22px) and full-contrast text.
+		const nameEl = dlg.locator('.dashboard-name');
+		await expect(nameEl).toHaveText(dash.name);
+		expect(parseFloat(await nameEl.evaluate((el) => getComputedStyle(el).fontSize))).toBeGreaterThanOrEqual(22);
 		await expect(dlg).toBeVisible();
 
 		// The bunny is drawn, in the centre, no wider than 20% of the code, on its dark blue backing.
