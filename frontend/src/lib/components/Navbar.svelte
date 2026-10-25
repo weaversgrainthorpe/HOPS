@@ -183,6 +183,10 @@
   }
   // A press anywhere outside the title and its menu closes it.
   function onWindowPointerDown(e: PointerEvent) {
+    if (textSizeOpen) {
+      const t = e.target as Node | null;
+      if (!(t && textSizeWrap?.contains(t))) closeTextSize();
+    }
     if (!switcherOpen) return;
     const t = e.target as Node | null;
     if (t && (switcherBtn?.contains(t) || switcherMenu?.contains(t))) return;
@@ -228,8 +232,13 @@
   // it; controls are never dropped for a centring that cannot happen. Measured on the bar's own width (a window resize) and whenever what it holds changes; all before
   // the next paint (a ResizeObserver callback, then microtasks), so no level flashes. The bar's width
   // never depends on the level, so this never loops. Nothing is hidden or moved into a menu but the
-  // levels' own (least useful first); the text-size buttons never hide.
-  const MAX_COMPACT = 7;
+  // levels' own (least useful first); the text-size buttons never hide. The last level (CSS .c8) is a
+  // phone's narrowest screens only (under 360 px): the two text-size buttons fold into one "Text size"
+  // button that opens them in a small menu. It is taken only when it makes the title whole; when even
+  // it cannot, the bar stays at the level before it, the buttons in the bar — unless the bar would then
+  // spill sideways (a title shortened to its least, beside every control) and folding stops that.
+  const MAX_COMPACT = 8;
+  const FOLDED = 8;
   let navContentEl = $state<HTMLElement | null>(null);
   let titleEl = $state<HTMLElement | null>(null);
   let compact = $state(0);
@@ -239,23 +248,24 @@
    *  width easing to a level's value) would be measured at a size it is about to leave. */
   let measuring = $state(false);
   /** How the bar sits now: fits (no sideways overflow, the title whole) and centred (the title's middle
-   *  on the bar's). No title: centred trivially. */
-  function barState(): { fits: boolean; centred: boolean } {
+   *  on the bar's). No title: centred trivially. `spills`: the bar or its centre box overflows sideways. */
+  function barState(): { fits: boolean; centred: boolean; spills: boolean } {
     const bar = navContentEl;
-    if (!bar) return { fits: true, centred: true };
-    let fits = bar.scrollWidth <= bar.clientWidth + 0.5;
+    if (!bar) return { fits: true, centred: true, spills: false };
+    let spills = bar.scrollWidth > bar.clientWidth + 0.5;
     // The compact "Dashboards ▾" (Ruling 20) never shrinks: squeezed, it spills out of the centre box.
     const center = bar.querySelector<HTMLElement>('.nav-center');
-    if (center && center.scrollWidth > center.clientWidth + 0.5) fits = false;
+    if (center && center.scrollWidth > center.clientWidth + 0.5) spills = true;
+    let fits = !spills;
     const title = titleEl;
-    if (!title) return { fits, centred: true };
+    if (!title) return { fits, centred: true, spills };
     const text = title.querySelector<HTMLElement>('.title-text');
     if (text && text.scrollWidth > text.clientWidth + 0.5) fits = false;
     const cs = getComputedStyle(bar);
     const b = bar.getBoundingClientRect();
     const t = title.getBoundingClientRect();
     const barMid = (b.left + (parseFloat(cs.paddingLeft) || 0) + b.right - (parseFloat(cs.paddingRight) || 0)) / 2;
-    return { fits, centred: Math.abs((t.left + t.right) / 2 - barMid) <= 0.5 };
+    return { fits, centred: Math.abs((t.left + t.right) / 2 - barMid) <= 0.5, spills };
   }
   async function fitBar() {
     if (!navContentEl) return;
@@ -270,22 +280,31 @@
         fitAgain = false;
         let best = -1;
         let fallback = -1;
+        let lastSpills = false;
+        let foldedSpills = true;
         for (let level = 0; level <= MAX_COMPACT; level++) {
           compact = level;
           await tick();
-          const { fits, centred } = barState();
+          const { fits, centred, spills } = barState();
           if (fits && centred) {
             best = level;
             break;
           }
           if (fits && fallback < 0) fallback = level;
+          if (level === FOLDED - 1) lastSpills = spills;
+          if (level === FOLDED) foldedSpills = spills;
         }
-        const pick = best >= 0 ? best : fallback >= 0 ? fallback : MAX_COMPACT;
+        // Nothing fits: the last unfolded level, the title shortened — folded only if that alone keeps
+        // the bar from spilling sideways (and only where the fold exists: under 360 px).
+        const lastResort = lastSpills && !foldedSpills ? FOLDED : FOLDED - 1;
+        const pick = best >= 0 ? best : fallback >= 0 ? fallback : lastResort;
         if (compact !== pick) {
           compact = pick;
           await tick();
         }
       } while (fitAgain);
+      // Unfolded (a wider screen, or room again at a lower level): the folded menu has nothing to show.
+      if (!isFolded()) textSizeOpen = false;
     } finally {
       fitting = false;
       measuring = false;
@@ -297,6 +316,34 @@
     ro.observe(navContentEl);
     return () => ro.disconnect();
   });
+  // ---- the folded text-size buttons (.c8, under 360 px): the "Text size" button opens them below it;
+  // a press outside, Escape or the bar unfolding closes them. Pressing one keeps them open (a user often
+  // steps more than once).
+  let textSizeOpen = $state(false);
+  let textSizeWrap = $state<HTMLElement | null>(null);
+  let textSizeMoreBtn = $state<HTMLButtonElement | null>(null);
+  /** Folded: the bar is at the fold level and the "Text size" button shows (a phone under 360 px). */
+  function isFolded() {
+    return !!textSizeMoreBtn && textSizeMoreBtn.getClientRects().length > 0;
+  }
+  function closeTextSize(refocus = false) {
+    if (!textSizeOpen) return;
+    textSizeOpen = false;
+    if (refocus) textSizeMoreBtn?.focus();
+  }
+  function onTextSizeKey(e: KeyboardEvent) {
+    if (e.key === 'Escape' && textSizeOpen) {
+      e.preventDefault();
+      e.stopPropagation();
+      closeTextSize(true);
+    }
+  }
+  // Going to another page closes it.
+  $effect(() => {
+    void currentPath;
+    untrack(() => closeTextSize());
+  });
+
   // What the bar holds: edit mode, signed in or not, the page, the title, the text size.
   $effect(() => {
     void [$editMode, $isAuthenticated, isDashboardPage, showLeft, showCenter, leftText, titleText, showSwitcher, $textSize];
@@ -316,6 +363,7 @@
     class:c5={compact >= 5}
     class:c6={compact >= 6}
     class:c7={compact >= 7}
+    class:c8={compact >= 8}
     class:measuring
     bind:this={navContentEl}
   >
@@ -351,6 +399,8 @@
         onkeydown={onSwitcherKey}
       >
         {#if compactLabel}
+          <!-- A phone's tightest levels show the icon in place of the word (the name keeps it). -->
+          <Icon icon="mdi:view-dashboard-outline" class="switcher-compact-icon" width="24" height="24" />
           <span class="switcher-compact-text">Dashboards</span>
         {:else}
           <span class="title-text">{titleText}</span>
@@ -412,27 +462,43 @@
       </button>
 
       {#if isDashboardPage}
-        <div class="text-size-controls" title="Text Size: {textSizeConfigs[$textSize].label}">
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div class="text-size" class:open={textSizeOpen} bind:this={textSizeWrap} onkeydown={onTextSizeKey}>
+          <!-- Folded (a phone under 360 px, .c8): one button that opens the two below it. -->
           <button
-            onclick={decreaseTextSize}
-            class="text-size-btn"
-            disabled={!canDecrease($textSize)}
-            aria-label="Decrease text size"
-            title="Decrease text size"
+            type="button"
+            class="text-size-more"
+            bind:this={textSizeMoreBtn}
+            aria-label="Text size"
+            aria-expanded={textSizeOpen}
+            aria-controls="nav-text-size"
+            title="Text Size: {textSizeConfigs[$textSize].label}"
+            onclick={() => (textSizeOpen = isFolded() ? !textSizeOpen : false)}
           >
-            <span class="text-size-icon small">A</span>
-            <Icon icon="mdi:arrow-down" width="10" height="10" class="text-size-arrow" />
+            <Icon icon="mdi:format-size" width="26" height="26" />
           </button>
-          <button
-            onclick={increaseTextSize}
-            class="text-size-btn"
-            disabled={!canIncrease($textSize)}
-            aria-label="Increase text size"
-            title="Increase text size"
-          >
-            <span class="text-size-icon large">A</span>
-            <Icon icon="mdi:arrow-up" width="10" height="10" class="text-size-arrow" />
-          </button>
+          <div class="text-size-controls" id="nav-text-size" title="Text Size: {textSizeConfigs[$textSize].label}">
+            <button
+              onclick={decreaseTextSize}
+              class="text-size-btn"
+              disabled={!canDecrease($textSize)}
+              aria-label="Decrease text size"
+              title="Decrease text size"
+            >
+              <span class="text-size-icon small">A</span>
+              <Icon icon="mdi:arrow-down" width="10" height="10" class="text-size-arrow" />
+            </button>
+            <button
+              onclick={increaseTextSize}
+              class="text-size-btn"
+              disabled={!canIncrease($textSize)}
+              aria-label="Increase text size"
+              title="Increase text size"
+            >
+              <span class="text-size-icon large">A</span>
+              <Icon icon="mdi:arrow-up" width="10" height="10" class="text-size-arrow" />
+            </button>
+          </div>
         </div>
 
         <button onclick={() => showThemePicker = true} class="theme-toggle" title="Theme Settings" aria-label="Theme Settings">
@@ -610,6 +676,11 @@
     font-weight: 600;
     color: var(--text-primary);
     white-space: nowrap;
+  }
+
+  .switcher-btn :global(.switcher-compact-icon) {
+    display: none;
+    flex: none;
   }
 
   .switcher-btn:hover,
@@ -882,13 +953,9 @@
     }
   }
 
-  /* Mobile landscape / small tablet: hide the text-size controls (phones; from 769 px up the
-     text-size buttons never hide). */
+  /* Mobile landscape / small tablet. The text-size buttons show here too (they never hide, at any
+     width): on a phone they fit through the compaction ladder below. */
   @media (max-width: 768px) {
-    .text-size-controls {
-      display: none;
-    }
-
     .center-title {
       font-size: 1.125rem;
     }
@@ -939,6 +1006,24 @@
       width: 40px;
       height: 40px;
     }
+
+    /* The title's switcher: a 40 px tap target (its width is the title's, shortened to no less). */
+    .switcher-btn {
+      min-height: 40px;
+      min-width: 40px;
+    }
+
+    /* The text-size buttons: each a 40 px tap target, the pair one pill with no padding or gap. */
+    .text-size-controls {
+      gap: 0;
+      padding: 0;
+      border-radius: 20px;
+    }
+
+    .text-size-btn {
+      width: 40px;
+      height: 40px;
+    }
   }
 
   /* Tiny phones (<360px): drop the version chip and the secondary action icons
@@ -964,10 +1049,13 @@
   /* The bar never outgrows the screen (walkthrough 1: the page never scrolls sideways), at any width
      or text size: while it would, it steps down one level at a time (fitBar), least useful first —
      tighter gaps, no wordmark, no "Editing" label, smaller buttons and Log out as an icon, no
-     Help/About (still in Settings' reach for an admin), smaller text-size buttons, and last the
-     version. The text-size buttons are NEVER hidden (they are the only text-size control: a user who
-     enlarged the text must always be able to make it smaller again); the pencil, gear and Log out
-     always stay (phones keep their own rules above). */
+     Help/About (still in Settings' reach for an admin), smaller text-size buttons (a phone keeps them
+     at 40 px and tightens the gaps, padding and the title's own chrome instead), and last the version
+     (a phone: the title a touch smaller, a hidden title's "Dashboards" an icon). The text-size buttons
+     are NEVER hidden, phones included (they are the only text-size control: a user who enlarged the
+     text must always be able to make it smaller again); only under 360 px may they fold into one
+     "Text size" button that opens them (.c8, see fitBar). The pencil, gear and Log out always stay
+     (phones keep their own rules above). */
   @media (min-width: 481px) {
     .nav-content.c1 {
       gap: 1rem;
@@ -1036,18 +1124,117 @@
     display: none;
   }
 
-  /* Smaller, never hidden: still a 28 px tap target each. */
-  .c6 .text-size-controls {
-    gap: 0;
-    padding: 0.125rem;
+  /* Smaller, never hidden: still a 28 px tap target each (wider screens; a phone keeps 40 px). */
+  @media (min-width: 481px) {
+    .c6 .text-size-controls {
+      gap: 0;
+      padding: 0.125rem;
+    }
+
+    .c6 .text-size-btn {
+      width: 28px;
+      height: 28px;
+    }
   }
 
-  .c6 .text-size-btn {
-    width: 28px;
-    height: 28px;
+  /* Phones: the controls never go under 40 px, so the last steps take the room from around them —
+     the gaps and the bar's side padding. */
+  @media (max-width: 480px) {
+    .nav-content.c6 {
+      gap: 0.25rem;
+      padding: 0 0.25rem;
+    }
+
+    .c6 .nav-left {
+      gap: 0;
+    }
+
+    .c6 .nav-right {
+      gap: 2px;
+    }
+
+    /* The title's own chrome: the switcher's padding and its chevron's gap. */
+    .c6 .switcher-btn {
+      gap: 0;
+      padding: 0.125rem 0 0.125rem 0.25rem;
+    }
+
+    .nav-content.c7 {
+      gap: 2px;
+    }
+
+    .c7 .center-title {
+      font-size: 0.9375rem;
+    }
+
+    /* The compact "Dashboards ▾" (Ruling 20) never shrinks, so at the last level it becomes an icon. */
+    .c7 .switcher-compact-text {
+      display: none;
+    }
+
+    .c7 .switcher-btn :global(.switcher-compact-icon) {
+      display: block;
+    }
   }
 
   .c7 .version {
     display: none;
+  }
+
+  /* The text-size buttons' wrapper: their own box in the bar; the anchor of their folded menu. */
+  .text-size {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  .text-size-more {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .text-size-more:hover,
+  .text-size.open .text-size-more {
+    background: var(--accent-solid);
+    color: var(--on-accent);
+  }
+
+  /* Folded — a phone's narrowest screens only (under 360 px), and only when that makes the title whole
+     (fitBar): one "Text size" button; the pair opens below it, the same two 40 px buttons. */
+  @media (max-width: 359px) {
+    .c8 .text-size-more {
+      display: flex;
+    }
+
+    .c8 .text-size-controls {
+      display: none;
+    }
+
+    .c8 .text-size.open .text-size-controls {
+      display: flex;
+      position: absolute;
+      top: calc(100% + 0.5rem);
+      right: 0;
+      z-index: var(--z-dropdown);
+      padding: 0.25rem;
+      gap: 0.25rem;
+      border-radius: 24px;
+      border: 1px solid var(--border);
+      background: var(--bg-secondary);
+      box-shadow: 0 8px 24px var(--shadow, rgba(0, 0, 0, 0.35));
+    }
+
+    .c8 .text-size.open .text-size-btn {
+      background: var(--bg-tertiary);
+    }
   }
 </style>

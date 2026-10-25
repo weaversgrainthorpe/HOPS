@@ -114,9 +114,11 @@ const overlaps = (a: Box, b: Box) =>
  * The bar holds (§8): no link row and no More; the title whole and centred in the bar (±1 px); nothing
  * overlaps or leaves the screen; the page never scrolls sideways. `strict: false` (a long title on a
  * phone, where no compaction level leaves room to centre it whole): centred, or else as near the centre
- * as the wider side allows — right up against that side (one bar gap from it).
+ * as the wider side allows — right up against that side (one bar gap from it). `whole: false` (a
+ * phone, since M6 gave it the text-size buttons: a longer title such as "v3 Showcase ▾" shortens with an
+ * ellipsis below 414 px — m6-phone-text-size.spec.ts): the title may be shortened, never overlapping.
  */
-async function barHolds(page: Page, label: string, o: { strict: boolean } = { strict: true }) {
+async function barHolds(page: Page, label: string, o: { strict: boolean; whole?: boolean } = { strict: true }) {
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth),
     { message: `${label}: no sideways scroll`, timeout: 2000 }).toBeLessThanOrEqual(0);
   await settle(page);
@@ -147,7 +149,7 @@ async function barHolds(page: Page, label: string, o: { strict: boolean } = { st
   expect(r.linkRow, `${label}: no dashboard link row, no More`).toBe(0);
   await expect(page.getByRole('button', { name: 'More dashboards' }), `${label}: no More`).toHaveCount(0);
   expect(r.title, `${label}: there is a title`).not.toBeNull();
-  expect(r.titleCut, `${label}: the title is whole`).toBe(false);
+  if (o.whole !== false) expect(r.titleCut, `${label}: the title is whole`).toBe(false);
   const mid = (r.title!.left + r.title!.right) / 2;
   const off = Math.abs(mid - r.barMid);
   if (o.strict || off <= 1) {
@@ -204,9 +206,10 @@ test.describe('§8 the dashboard switcher (Ruling 16)', () => {
         for (const width of [1920, 1416, 1280, 375]) {
           await page.setViewportSize({ width, height: 900 });
           const label = `${total} dashboards, ${editing ? 'edit' : 'view'} at ${width}`;
-          // 375: "v3 Showcase" + the chevron cannot be centred whole beside a phone's controls (the short
-          // title test below holds 375 to the exact centre).
-          await barHolds(page, label, { strict: width > 480 });
+          // 375: "v3 Showcase" + the chevron cannot be centred beside a phone's controls, and since M6 gave
+          // phones the text-size buttons it shortens with an ellipsis there (whole from 414 px:
+          // m6-phone-text-size.spec.ts); the short title test below holds 375 to a whole title.
+          await barHolds(page, label, { strict: width > 480, whole: width > 480 });
           await expect(switcher(page), `${label}: the switcher`).toBeVisible();
           await expect(switcher(page)).toHaveAccessibleName('v3 Showcase — switch dashboard');
           await expect(page.locator('.navbar .center-title')).toHaveText('v3 Showcase');
@@ -218,11 +221,9 @@ test.describe('§8 the dashboard switcher (Ruling 16)', () => {
             await expect(page.locator('.navbar .logo img'), `${label}: logo`).toBeVisible();
             await expect(page.locator('.navbar .version'), `${label}: version`).toBeVisible();
           }
-          if (width > 768) {
-            // The text-size buttons never hide from 769 px up (walkthrough 1 D).
-            await page.getByRole('button', { name: 'Decrease text size' }).click({ trial: true, timeout: 3000 });
-            await page.getByRole('button', { name: 'Increase text size' }).click({ trial: true, timeout: 3000 });
-          }
+          // The text-size buttons never hide (walkthrough 1 D), phones included since M6.
+          await page.getByRole('button', { name: 'Decrease text size' }).click({ trial: true, timeout: 3000 });
+          await page.getByRole('button', { name: 'Increase text size' }).click({ trial: true, timeout: 3000 });
         }
         await page.setViewportSize({ width: 1920, height: 900 });
       }
@@ -391,7 +392,10 @@ test.describe('§8 the dashboard switcher (Ruling 16)', () => {
     await expect(page.getByRole('tab', { name: 'Switch to Unsaved tab tab' })).toHaveCount(0);
   });
 
-  test('on a phone (375), a short title is exactly centred — signed in (the switcher) and signed out, view and edit', async ({ page, context, browser }) => {
+  // Since M6 a phone's bar also carries the two text-size buttons, so its right-hand side is too wide for
+  // any title to sit in the exact centre at 375: a short title stays whole, as near the centre as that
+  // side allows (barHolds' strict: false), and the switcher's menu still holds.
+  test('on a phone (375), a short title is whole and as near the centre as the controls allow — signed in (the switcher) and signed out, view and edit', async ({ page, context, browser }) => {
     await dashboards(page, context, 4);
     const sample = (await ordered(page)).find((d) => d.name === 'Sample')!;
     await page.setViewportSize({ width: 1920, height: 900 });
@@ -403,7 +407,7 @@ test.describe('§8 the dashboard switcher (Ruling 16)', () => {
         await enterEdit(page);
       }
       await page.setViewportSize({ width: 375, height: 800 });
-      await barHolds(page, `signed in, ${editing ? 'edit' : 'view'} at 375`);
+      await barHolds(page, `signed in, ${editing ? 'edit' : 'view'} at 375`, { strict: false });
       await menuHolds(page, (await ordered(page)).map((d) => d.name), 'Sample', `signed in, ${editing ? 'edit' : 'view'} at 375`);
     }
     const { page: anon, ctx } = await anonPage(browser);
@@ -411,7 +415,7 @@ test.describe('§8 the dashboard switcher (Ruling 16)', () => {
       await anon.setViewportSize({ width: 375, height: 800 });
       await anon.goto(sample.path);
       await expect(anon.locator('.navbar .center-title')).toHaveText('Sample');
-      await barHolds(anon, 'signed out at 375');
+      await barHolds(anon, 'signed out at 375', { strict: false });
     } finally {
       await ctx.close();
     }
@@ -428,7 +432,7 @@ test.describe('§8 the dashboard switcher (Ruling 16)', () => {
         await expect(anon.locator('.navbar .center-title').getByRole('button'), `${width}: no switcher`).toHaveCount(0);
         await expect(anon.locator('.navbar').getByRole('button', { name: /switch dashboard/ })).toHaveCount(0);
         await expect(anon.locator('.navbar [aria-haspopup]')).toHaveCount(0);
-        await barHolds(anon, `signed out at ${width}`, { strict: width > 480 });
+        await barHolds(anon, `signed out at ${width}`, { strict: width > 480, whole: width > 480 });
       }
       // Clicking the title does nothing.
       await anon.setViewportSize({ width: 1280, height: 900 });
