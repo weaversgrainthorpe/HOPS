@@ -108,7 +108,7 @@ func (r *Router) handleConfig(w http.ResponseWriter, req *http.Request) {
 // from the stored document. Every dashboard's revision must be readable: a
 // client saves against it, so an unreadable one is a visible 500, never a
 // silent 0.
-func (r *Router) handleGetConfig(w http.ResponseWriter, _ *http.Request) {
+func (r *Router) handleGetConfig(w http.ResponseWriter, req *http.Request) {
 	if !r.migrationGuard(w) {
 		return
 	}
@@ -127,8 +127,9 @@ func (r *Router) handleGetConfig(w http.ResponseWriter, _ *http.Request) {
 	if len(r.migration.Renames) > 0 {
 		view["migrationNotices"] = migrationNotices(r.migration.Renames, stored)
 	}
-	// One-time notices (notices.go), like migrationNotices only when any.
-	if ns := r.currentNotices(stored); len(ns) > 0 {
+	// One-time notices (notices.go), like migrationNotices only when any;
+	// backup problems first, and only for a signed-in admin (backup_notices.go).
+	if ns := append(r.backupNotices(req), r.currentNotices(stored)...); len(ns) > 0 {
 		view["notices"] = ns
 	}
 	writeJSON(w, view)
@@ -825,10 +826,13 @@ func (r *Router) handleResetConfig(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Create a backup before resetting
+	// A safety backup first; without one the reset is refused (nothing is
+	// changed), never done regardless.
 	if r.backupManager != nil {
 		if _, err := r.backupManager.CreateBackupWithDB(r.db, "pre-factory-reset"); err != nil {
-			slog.Warn("failed to create backup before reset", "component", "backup", "error", err)
+			slog.Error("factory reset refused: pre-factory-reset backup failed", "component", "backup", "error", err)
+			writeJSONError(w, "Couldn't take a safety backup first, so nothing was reset: "+err.Error(), http.StatusInternalServerError)
+			return
 		}
 	}
 
@@ -2614,109 +2618,3 @@ func (r *Router) handleBackgroundCategoryActions(w http.ResponseWriter, req *htt
 	}
 }
 
-// handleBackups handles listing backups and creating new ones
-func (r *Router) handleBackups(w http.ResponseWriter, req *http.Request) {
-	switch req.Method {
-	case http.MethodGet:
-		// List all backups
-		backups, err := r.backupManager.ListBackups()
-		if err != nil {
-			slog.Error("failed to list backups", "component", "backup", "error", err)
-			writeJSONError(w, "Failed to list backups", http.StatusInternalServerError)
-			return
-		}
-		writeJSON(w, map[string]interface{}{
-			"backups": backups,
-		})
-
-	case http.MethodPost:
-		// Create a manual backup
-		var reqData struct {
-			Reason string `json:"reason"`
-		}
-		if err := json.NewDecoder(req.Body).Decode(&reqData); err != nil {
-			reqData.Reason = "manual"
-		}
-		if reqData.Reason == "" {
-			reqData.Reason = "manual"
-		}
-
-		backupPath, err := r.backupManager.CreateBackupWithDB(r.db, reqData.Reason)
-		if err != nil {
-			slog.Error("failed to create backup", "component", "backup", "error", err)
-			writeJSONError(w, "Failed to create backup", http.StatusInternalServerError)
-			return
-		}
-
-		writeJSON(w, map[string]interface{}{
-			"success": true,
-			"path":    backupPath,
-			"message": "Backup created successfully",
-		})
-
-	default:
-		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
-	}
-}
-
-// handleBackupActions handles restore and delete operations on individual backups
-func (r *Router) handleBackupActions(w http.ResponseWriter, req *http.Request) {
-	backupName := filepath.Base(req.URL.Path)
-	if backupName == "" || backupName == "backups" {
-		writeJSONError(w, "Backup name required", http.StatusBadRequest)
-		return
-	}
-
-	switch req.Method {
-	case http.MethodPost:
-		// Restore from backup
-		if err := r.backupManager.RestoreBackup(backupName); err != nil {
-			slog.Error("failed to restore backup", "component", "backup", "error", err)
-			writeJSONError(w, "Failed to restore backup", http.StatusInternalServerError)
-			return
-		}
-
-		writeJSON(w, map[string]interface{}{
-			"success":    true,
-			"restarting": true,
-			"message":    "Backup restored. The server is restarting — it should be back in a few seconds.",
-		})
-
-		// Restoring a SQLite file under an open connection leaves the
-		// running process with a stale view (the WAL/shm files no
-		// longer match the new main file). Schedule a graceful
-		// shutdown 1 s after the response flushes; the service manager
-		// (systemd / docker compose / launchd) auto-restarts the
-		// process, which re-runs runMigrations() on the now-restored
-		// DB and resumes cleanly. Documented requirement: the unit /
-		// compose service has Restart=on-failure or similar.
-		go func() {
-			time.Sleep(1 * time.Second)
-			slog.Info("triggering shutdown after backup restore",
-				"component", "backup", "name", backupName)
-			r.RequestShutdown()
-		}()
-
-	case http.MethodDelete:
-		// Delete a backup
-		if err := r.backupManager.DeleteBackup(backupName); err != nil {
-			if strings.Contains(err.Error(), "not found") {
-				writeJSONError(w, "Backup not found", http.StatusNotFound)
-			} else if strings.Contains(err.Error(), "invalid") {
-				writeJSONError(w, "Invalid backup name", http.StatusBadRequest)
-			} else {
-				slog.Error("failed to delete backup", "component", "backup", "error", err)
-				writeJSONError(w, "Failed to delete backup", http.StatusInternalServerError)
-			}
-			return
-		}
-
-		writeJSON(w, map[string]interface{}{
-			"success": true,
-			"message": "Backup deleted successfully",
-		})
-
-	default:
-		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
-	}
-}

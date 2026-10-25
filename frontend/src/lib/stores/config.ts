@@ -252,6 +252,25 @@ export function applySavedLayout(fresh: FreshLayout | undefined): void {
  * response resolving last never overwrites a newer one.
  */
 let refreshSeq = 0;
+
+/**
+ * Re-read the server notices now (e.g. once the admin has signed in: backup problems are only
+ * sent to a signed-in admin, so a page loaded signed-out holds none).
+ */
+export function refreshServerNotices(): Promise<void> {
+  return refreshNotices();
+}
+
+/**
+ * Show a write's `warning` (the safety backup before it failed, but the change was saved). It
+ * stays until closed (never a 4-second flash), and the notices are re-read so the persistent
+ * backup notice appears in Settings too.
+ */
+export function showSaveWarning(warning: string): void {
+  toast.warning(warning, 0);
+  if (get(config)) void refreshNotices();
+}
+
 async function refreshNotices(): Promise<void> {
   const mine = ++refreshSeq;
   try {
@@ -339,7 +358,7 @@ export async function createDashboard(name: string, path: string): Promise<strin
       const resp = await apiCreateDashboard(name, path);
       applySavedLayout(resp);
       toast.success(`Dashboard "${name}" created`);
-      if (resp.warning) toast.warning(resp.warning);
+      if (resp.warning) showSaveWarning(resp.warning);
       return resp.id;
     } catch (error) {
       logError('Dashboard create', error);
@@ -363,7 +382,7 @@ export async function renameDashboard(id: string, changes: { name: string; path:
       const resp = await saveDashboardV3(id, { ...d, name: changes.name, path: changes.path }, d.revision);
       applySavedLayout(resp);
       toast.success('Changes saved');
-      if (resp.warning) toast.warning(resp.warning);
+      if (resp.warning) showSaveWarning(resp.warning);
     } catch (error) {
       logError('Dashboard rename', error);
       noteSaveFailure(error);
@@ -386,7 +405,7 @@ export async function deleteDashboard(id: string): Promise<void> {
       const resp = await apiDeleteDashboard(id, d.revision);
       applySavedLayout(resp);
       toast.success('Dashboard deleted');
-      if (resp.warning) toast.warning(resp.warning);
+      if (resp.warning) showSaveWarning(resp.warning);
     } catch (error) {
       logError('Dashboard delete', error);
       noteSaveFailure(error);
@@ -402,7 +421,7 @@ export async function reorderDashboards(ids: string[]): Promise<void> {
     try {
       const resp = await apiReorderDashboards(ids);
       applySavedLayout(resp);
-      if (resp.warning) toast.warning(resp.warning);
+      if (resp.warning) showSaveWarning(resp.warning);
     } catch (error) {
       logError('Dashboard reorder', error);
       noteSaveFailure(error);

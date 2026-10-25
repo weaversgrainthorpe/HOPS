@@ -22,7 +22,7 @@ describe('/settings/backups', () => {
 	it('has its heading and explanation, and Open Backups opens the shell\'s backups dialog', async () => {
 		renderPage();
 		expect(screen.getByRole('heading', { name: 'Backups', level: 2 })).toBeTruthy();
-		expect(screen.getByText(/backs up the database on startup/)).toBeTruthy();
+		expect(screen.getByText(/backs up the database when it starts, before every save, before a restore or reset, and before an upgrade/)).toBeTruthy();
 		await fireEvent.click(screen.getByRole('button', { name: /Open Backups/ }));
 		expect(shell.openBackups).toHaveBeenCalledTimes(1);
 	});

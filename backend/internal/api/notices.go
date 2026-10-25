@@ -22,6 +22,10 @@ import (
 type notice struct {
 	ID   string `json:"id"`
 	Text string `json:"text"`
+	// Level is "warning" for a problem (shown as one); empty is information.
+	Level string `json:"level,omitempty"`
+	// Sticky notices cannot be dismissed: they go when their cause is fixed.
+	Sticky bool `json:"sticky,omitempty"`
 }
 
 // noticeLayeredStatusChecks announces the M4 change to status checks: the
@@ -308,6 +312,10 @@ func (r *Router) handleNotices(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	// The tile-size notice is one-time: dismissing it clears its list.
+	if isBackupNoticeID(id) {
+		writeJSONError(w, "This notice stays until the backup problem is fixed", http.StatusConflict)
+		return
+	}
 	if !knownNotices[id] && !r.sizeNotes.isCurrent(id) {
 		writeJSONError(w, "Notice not found: "+id, http.StatusNotFound)
 		return

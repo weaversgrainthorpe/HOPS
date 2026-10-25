@@ -199,9 +199,10 @@ func NewRouter(db *sql.DB, authService *auth.Service, cfg *config.Config, settin
 		rateLimit = 20
 	}
 
-	// Initialize backup manager
+	// The backup manager is shared with main.go (startup backup, restore at
+	// start), so the failures it records reach the UI.
 	dbPath := filepath.Join(cfg.DataDir, "hops.db")
-	backupManager := database.NewBackupManager(dbPath)
+	backupManager := database.SharedBackupManager(dbPath)
 
 	r := &Router{
 		db:             db,

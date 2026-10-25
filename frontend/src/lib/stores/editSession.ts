@@ -12,7 +12,8 @@ import {
   migrationFailure,
   setSettingsSavedHook,
   config,
-  layoutFormProblem
+  layoutFormProblem,
+  showSaveWarning
 } from './config';
 import { confirm, confirmChoice } from './confirmModal';
 import { toast } from './toast';
@@ -317,7 +318,7 @@ async function doSave(): Promise<'saved' | 'conflict' | 'error'> {
     sessionConflict.set(null);
     applySavedLayout(resp);
     toast.success('Changes saved');
-    if (resp.warning) toast.warning(resp.warning);
+    if (resp.warning) showSaveWarning(resp.warning);
     return 'saved';
   } catch (error) {
     logError('Dashboard save', error);

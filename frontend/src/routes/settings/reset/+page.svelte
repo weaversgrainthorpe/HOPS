@@ -4,7 +4,7 @@
   import { confirm } from '$lib/stores/confirmModal';
   import { isBackendOffline } from '$lib/stores/backendStatus';
   import { resetConfig } from '$lib/utils/api';
-  import { loadConfig, configError } from '$lib/stores/config';
+  import { loadConfig, configError, refreshServerNotices } from '$lib/stores/config';
 
   // Settings → Factory reset (M5 §9): on its own page, never next to everyday settings.
   // M6 §7.11: the button is an emergency stop — a round red mushroom cap on a yellow housing, drawn
@@ -21,7 +21,7 @@
   async function handleFactoryReset() {
     const confirmed = await confirm({
       title: 'Factory Reset',
-      message: 'This will permanently delete all dashboards, tabs, folders and tiles, resetting everything to defaults. A backup will be created automatically. This action cannot be undone.',
+      message: 'This will permanently delete all dashboards, tabs, folders and tiles, resetting everything to defaults. A safety backup is taken first; if that fails, nothing is reset. This action cannot be undone.',
       confirmText: 'Reset Everything',
       confirmStyle: 'danger',
     });
@@ -29,7 +29,11 @@
     try {
       await resetConfig();
     } catch (e) {
-      toast.error(`Factory reset failed: ${e instanceof Error && e.message ? e.message : 'the request failed'}. Nothing was changed.`);
+      const msg = e instanceof Error && e.message ? e.message : 'the request failed';
+      // The server's sentence may already say nothing was changed ("…so nothing was reset: …").
+      toast.error(/nothing was (reset|changed)/i.test(msg) ? msg : `Factory reset failed: ${msg}. Nothing was changed.`, 0);
+      // A failed safety backup is also a Settings notice until a backup works.
+      void refreshServerNotices();
       return;
     }
     // The reset itself is done; re-reading the dashboards is a separate step that can fail on

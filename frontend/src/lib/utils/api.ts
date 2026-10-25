@@ -211,7 +211,15 @@ export async function getConfig(): Promise<Config> {
       (n): n is { id: string; text: string } =>
         !!n && typeof (n as { id?: unknown }).id === 'string' && typeof (n as { text?: unknown }).text === 'string'
     );
-    out.notices = good.map((n) => ({ id: n.id, text: n.text }));
+    out.notices = good.map((n) => {
+      const raw = n as { level?: unknown; sticky?: unknown };
+      return {
+        id: n.id,
+        text: n.text,
+        ...(raw.level === 'warning' ? { level: 'warning' as const } : {}),
+        ...(raw.sticky === true ? { sticky: true } : {})
+      };
+    });
     const bad = list.length - good.length;
     if (!Array.isArray(resp.notices) || bad > 0) {
       out.noticesUnreadable = Array.isArray(resp.notices) ? bad : 1;
@@ -379,7 +387,7 @@ export interface TransferRequest {
  */
 export async function transferNodes(
   req: TransferRequest
-): Promise<{ sourceRevision: number; targetRevision: number } & FreshLayout> {
+): Promise<{ sourceRevision: number; targetRevision: number; warning?: string } & FreshLayout> {
   const body: TransferRequest = { ...req, target: { tabId: req.target.tabId } };
   if (req.target.folderId) body.target.folderId = req.target.folderId;
   // layoutVersion: see saveDashboardV3 (M5 §2a).
@@ -390,7 +398,7 @@ export async function transferNodes(
   if (!resp || typeof resp.sourceRevision !== 'number' || typeof resp.targetRevision !== 'number') {
     throw new Error('The server did not confirm the new dashboard revisions.');
   }
-  return { sourceRevision: resp.sourceRevision, targetRevision: resp.targetRevision, ...freshOf(resp) };
+  return { sourceRevision: resp.sourceRevision, targetRevision: resp.targetRevision, ...warningOf(resp), ...freshOf(resp) };
 }
 
 /**
@@ -675,10 +683,28 @@ export interface BackupInfo {
   path: string;
   size: number;
   createdAt: string;
+  pinned?: boolean;
 }
 
-export async function listBackups(): Promise<{ backups: BackupInfo[] }> {
-  return fetchAPI('/backups');
+/** A backup failure the admin must see (GET /api/backups `problems`); stays until fixed. */
+export interface BackupProblem {
+  kind: 'backup-failed' | 'rotation-failed' | 'restore-failed' | string;
+  trigger?: string;
+  at: string;
+  reason: string;
+}
+
+export interface BackupList {
+  backups: BackupInfo[];
+  problems: BackupProblem[];
+}
+
+export async function listBackups(): Promise<BackupList> {
+  const resp = await fetchAPI('/backups');
+  if (!resp || !Array.isArray(resp.backups)) {
+    throw new Error('The server sent a backup list this version of HOPS cannot read.');
+  }
+  return { backups: resp.backups, problems: Array.isArray(resp.problems) ? resp.problems : [] };
 }
 
 export async function createBackup(reason?: string): Promise<{ success: boolean; path: string; message: string }> {
@@ -688,7 +714,7 @@ export async function createBackup(reason?: string): Promise<{ success: boolean;
   });
 }
 
-export async function restoreBackup(backupName: string): Promise<{ success: boolean; message: string }> {
+export async function restoreBackup(backupName: string): Promise<{ success: boolean; message: string; restarting?: boolean }> {
   return fetchAPI(`/backups/${encodeURIComponent(backupName)}`, {
     method: 'POST',
   });

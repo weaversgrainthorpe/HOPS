@@ -1,6 +1,7 @@
 package database
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -193,9 +194,12 @@ func TestRestoreBackup(t *testing.T) {
 	}
 	db.Close()
 
-	// Restore the backup
-	if err := bm.RestoreBackup(backupName); err != nil {
+	// Restore the backup (staged), then apply it as the next start does.
+	if err := bm.RestoreBackup(nil, backupName); err != nil {
 		t.Fatalf("RestoreBackup failed: %v", err)
+	}
+	if applied, err := ApplyPendingRestore(dbPath); err != nil || !applied {
+		t.Fatalf("ApplyPendingRestore: %v %v", applied, err)
 	}
 
 	// Verify the modified data was reverted
@@ -217,7 +221,7 @@ func TestRestoreBackup(t *testing.T) {
 func TestRestoreBackupNonexistent(t *testing.T) {
 	bm, _ := setupBackupTest(t)
 
-	err := bm.RestoreBackup("hops-backup-2099-01-01_00-00-00_nonexistent.db")
+	err := bm.RestoreBackup(nil, "hops-backup-2099-01-01_00-00-00_nonexistent.db")
 	if err == nil {
 		t.Error("expected RestoreBackup to fail for nonexistent backup")
 	}
@@ -229,13 +233,13 @@ func TestRestoreBackupPathTraversal(t *testing.T) {
 	// Try to restore with a path traversal attempt
 	// The fix uses filepath.Base() so traversal segments are stripped,
 	// resulting in a "not found" error instead of escaping the backup directory
-	err := bm.RestoreBackup("../../../etc/passwd")
+	err := bm.RestoreBackup(nil, "../../../etc/passwd")
 	if err == nil {
 		t.Error("expected RestoreBackup to fail for path traversal attempt")
 	}
-	// Verify the error mentions "not found", not a successful restore
-	if !strings.Contains(err.Error(), "not found") {
-		t.Errorf("expected 'not found' error, got: %v", err)
+	// The name is refused outright (never resolved outside the backups dir).
+	if !errors.Is(err, ErrInvalidBackupName) {
+		t.Errorf("expected an invalid-name error, got: %v", err)
 	}
 }
 
@@ -293,7 +297,7 @@ func TestDeleteBackupNonexistent(t *testing.T) {
 func TestCleanupOldBackupsBelowLimit(t *testing.T) {
 	bm, _ := setupBackupTest(t)
 
-	// Create fewer backups than MaxBackups
+	// Create fewer backups than DefaultKeepCount
 	for i := 0; i < 3; i++ {
 		if _, err := bm.CreateBackup("test"); err != nil {
 			t.Fatalf("CreateBackup failed: %v", err)
@@ -314,9 +318,9 @@ func TestCleanupOldBackupsBelowLimit(t *testing.T) {
 func TestCleanupOldBackupsRemovesExcess(t *testing.T) {
 	bm, _ := setupBackupTest(t)
 
-	// Create one more than MaxBackups by manually placing files with distinct mod times.
+	// Create one more than DefaultKeepCount by manually placing files with distinct mod times.
 	// We avoid CreateBackup here to keep the test fast (no per-iteration sleep).
-	for i := 0; i < MaxBackups+3; i++ {
+	for i := 0; i < DefaultKeepCount+3; i++ {
 		name := filepath.Join(bm.backupDir, BackupPrefix+
 			"2026-01-01_00-00-"+padZero(i)+"_test"+BackupSuffix)
 		if err := os.MkdirAll(bm.backupDir, 0755); err != nil {
@@ -337,8 +341,8 @@ func TestCleanupOldBackupsRemovesExcess(t *testing.T) {
 	}
 
 	backups, _ := bm.ListBackups()
-	if len(backups) != MaxBackups {
-		t.Errorf("expected %d backups after cleanup, got %d", MaxBackups, len(backups))
+	if len(backups) != DefaultKeepCount {
+		t.Errorf("expected %d backups after cleanup, got %d", DefaultKeepCount, len(backups))
 	}
 }
 
@@ -389,7 +393,7 @@ func TestCleanupOldBackupsKeepsPreV3MigrationBackup(t *testing.T) {
 	if err := os.Chtimes(pinned, old, old); err != nil {
 		t.Fatalf("chtimes: %v", err)
 	}
-	for i := 0; i < MaxBackups+3; i++ {
+	for i := 0; i < DefaultKeepCount+3; i++ {
 		name := filepath.Join(bm.backupDir, BackupPrefix+"2026-01-01_00-00-"+padZero(i)+"_pre-config-update"+BackupSuffix)
 		if err := os.WriteFile(name, []byte("dummy"), 0644); err != nil {
 			t.Fatalf("write: %v", err)
@@ -406,8 +410,8 @@ func TestCleanupOldBackupsKeepsPreV3MigrationBackup(t *testing.T) {
 		t.Fatalf("pre-v3-migration backup was rotated away: %v", err)
 	}
 	backups, _ := bm.ListBackups()
-	if len(backups) != MaxBackups+1 {
-		t.Errorf("expected %d rotated backups + the pinned one, got %d", MaxBackups, len(backups))
+	if len(backups) != DefaultKeepCount+1 {
+		t.Errorf("expected %d rotated backups + the pinned one, got %d", DefaultKeepCount, len(backups))
 	}
 }
 

@@ -84,8 +84,19 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Initialize database
+	// A restore staged by the Backups page is applied now, before the
+	// database is opened (never under an open WAL connection). A failure
+	// leaves the current data in place and is shown to the admin as a notice.
 	dbPath := filepath.Join(cfg.DataDir, "hops.db")
+	backupManager := database.SharedBackupManager(dbPath)
+	if applied, err := database.ApplyPendingRestore(dbPath); err != nil {
+		slog.Error("the staged restore could not be applied; running on the current data", "component", "backup", "error", err)
+		backupManager.RecordRestoreFailure(err)
+	} else if applied {
+		slog.Info("applied the staged restore", "component", "backup")
+	}
+
+	// Initialize database
 	db, err := database.Initialize(dbPath)
 	if err != nil {
 		slog.Error("failed to initialize database", "error", err)
@@ -93,12 +104,11 @@ func main() {
 	}
 	defer db.Close()
 
-	// Create automatic backup on startup. Run async so a large DB or
-	// slow filesystem doesn't block server boot — the backup is a
-	// safety net, not a prerequisite. Failures stay best-effort with
-	// a slog warning; success is logged at INFO so admins can confirm
-	// the rotation worked.
-	backupManager := database.NewBackupManager(dbPath)
+	// Create automatic backup on startup. Run async (once the router is up,
+	// so rotation uses the configured retention) so a large DB or slow
+	// filesystem doesn't block server boot. A failure is recorded by the
+	// backup manager and shown to the admin as a notice until a backup
+	// succeeds; success is logged at INFO.
 	startupBackup := func() error {
 		path, err := backupManager.CreateBackupWithDB(db, "startup")
 		if err != nil {
@@ -127,13 +137,6 @@ func main() {
 	if err != nil {
 		slog.Error("config migration could not run", "error", err)
 		os.Exit(1)
-	}
-	if !backedUp {
-		go func() {
-			if err := startupBackup(); err != nil {
-				slog.Warn("failed to create startup backup", "component", "backup", "error", err)
-			}
-		}()
 	}
 
 	// Initialize the settings service (seeds defaults, loads into cache).
@@ -197,6 +200,14 @@ func main() {
 	startTime := time.Now()
 	apiRouter, router := api.NewRouter(db, authService, cfg, settingsSvc, startTime, discoveryStore, discoveryOrch, migration)
 	defer apiRouter.Stop()
+
+	if !backedUp {
+		go func() {
+			if err := startupBackup(); err != nil {
+				slog.Warn("failed to create startup backup", "component", "backup", "error", err)
+			}
+		}()
+	}
 
 	// Configure HTTP server. Port + timeouts come from settings — changing
 	// them in the GUI requires a server restart (the server has already

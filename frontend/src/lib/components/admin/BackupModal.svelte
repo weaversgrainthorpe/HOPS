@@ -1,7 +1,8 @@
 <script lang="ts">
   import Icon from '@iconify/svelte';
   import Modal from '$lib/components/shared/Modal.svelte';
-  import { listBackups, createBackup, restoreBackup, deleteBackup, type BackupInfo } from '$lib/utils/api';
+  import { listBackups, createBackup, restoreBackup, deleteBackup, type BackupInfo, type BackupProblem } from '$lib/utils/api';
+  import { refreshServerNotices } from '$lib/stores/config';
   import { confirm } from '$lib/stores/confirmModal';
   import { toast } from '$lib/stores/toast';
   import { onMount } from 'svelte';
@@ -13,8 +14,11 @@
   let { onClose }: Props = $props();
 
   let backups = $state<BackupInfo[]>([]);
+  let problems = $state<BackupProblem[]>([]);
   let loading = $state(true);
   let error = $state('');
+  // The last action's failure, shown in the dialog until the next action (a toast alone can be missed).
+  let actionError = $state('');
   let creating = $state(false);
   let actionInProgress = $state<string | null>(null);
   let actionType = $state<'restore' | 'delete' | null>(null);
@@ -23,36 +27,43 @@
     loadBackups();
   });
 
+  const why = (err: unknown, fallback: string) => (err instanceof Error && err.message ? err.message : fallback);
+
   async function loadBackups() {
     loading = true;
     error = '';
     try {
       const result = await listBackups();
-      backups = result.backups || [];
+      backups = result.backups;
+      problems = result.problems;
     } catch (err) {
-      error = err instanceof Error ? err.message : 'Failed to load backups.';
+      error = why(err, 'Failed to load backups.');
     } finally {
       loading = false;
     }
+    // A backup problem may have appeared or cleared: the Settings notices follow.
+    void refreshServerNotices();
   }
 
   async function handleCreate() {
     creating = true;
+    actionError = '';
     try {
       await createBackup('manual');
       toast.success('Backup created');
-      await loadBackups();
     } catch (err) {
-      toast.error('Failed to create backup');
+      actionError = `Couldn't create the backup: ${why(err, 'the request failed')}`;
+      toast.error(actionError);
     } finally {
       creating = false;
     }
+    await loadBackups();
   }
 
   async function handleRestore(backup: BackupInfo) {
     const confirmed = await confirm({
       title: 'Restore Backup',
-      message: `Restore from "${backup.name}"? The current configuration will be backed up automatically. You may need to restart the server after restoring.`,
+      message: `Restore from "${backup.name}"? A safety backup of the current data is taken first; if that fails, nothing is restored. HOPS then restarts to apply the restore.`,
       confirmText: 'Restore',
       confirmStyle: 'warning',
     });
@@ -61,16 +72,19 @@
 
     actionInProgress = backup.name;
     actionType = 'restore';
+    actionError = '';
     try {
       const result = await restoreBackup(backup.name);
-      toast.success(result.message || 'Backup restored. Please restart the server.');
-      await loadBackups();
+      toast.success(result.message || 'Restoring the backup: the server is restarting to apply it.', 10000);
     } catch (err) {
-      toast.error('Failed to restore backup');
+      // The server's own sentence, e.g. "Couldn't take a safety backup first, so nothing was restored: …".
+      actionError = why(err, "Couldn't restore the backup, so nothing was restored.");
+      toast.error(actionError);
     } finally {
       actionInProgress = null;
       actionType = null;
     }
+    await loadBackups();
   }
 
   async function handleDelete(backup: BackupInfo) {
@@ -85,16 +99,31 @@
 
     actionInProgress = backup.name;
     actionType = 'delete';
+    actionError = '';
     try {
       await deleteBackup(backup.name);
       toast.success('Backup deleted');
-      await loadBackups();
     } catch (err) {
-      toast.error('Failed to delete backup');
+      actionError = `Couldn't delete the backup: ${why(err, 'the request failed')}`;
+      toast.error(actionError);
     } finally {
       actionInProgress = null;
       actionType = null;
     }
+    await loadBackups();
+  }
+
+  function problemText(p: BackupProblem): string {
+    const when = formatDate(p.at);
+    if (p.kind === 'rotation-failed') return `Old backups couldn't be deleted (${when}): ${p.reason}`;
+    if (p.kind === 'restore-failed') return `A restore couldn't be applied when HOPS restarted (${when}): ${p.reason}`;
+    const what =
+      p.trigger === 'startup' ? 'The backup when HOPS started' :
+      p.trigger === 'pre-config-update' ? 'The safety backup before a save' :
+      p.trigger === 'pre-restore' ? 'The safety backup before a restore' :
+      p.trigger === 'pre-factory-reset' ? 'The safety backup before a factory reset' :
+      'A backup';
+    return `${what} failed (${when}): ${p.reason}`;
   }
 
   function formatSize(bytes: number): string {
@@ -122,8 +151,26 @@
   <div class="backup-content">
     <div class="info-box">
       <Icon icon="mdi:information-outline" width="18" />
-      <span>Backups are created automatically before config updates and resets. Restoring a backup may require a server restart.</span>
+      <span>
+        HOPS backs up its database automatically: when it starts, before every save, before a restore or a
+        factory reset, and before an upgrade. You can also create one yourself. Restoring takes a safety backup
+        first, then restarts HOPS to apply it.
+      </span>
     </div>
+
+    {#each problems as p (p.kind + p.at)}
+      <div class="problem" role="alert">
+        <Icon icon="mdi:alert-outline" width="18" />
+        <span>{problemText(p)}</span>
+      </div>
+    {/each}
+
+    {#if actionError}
+      <div class="error-message action-error" role="alert">
+        <Icon icon="mdi:alert-circle" width="18" />
+        <span>{actionError}</span>
+      </div>
+    {/if}
 
     <div class="actions-bar">
       <button class="btn-primary" onclick={handleCreate} disabled={creating || loading}>
@@ -143,7 +190,7 @@
         <span>Loading backups...</span>
       </div>
     {:else if error}
-      <div class="error-message">
+      <div class="error-message" role="alert">
         <Icon icon="mdi:alert-circle" width="18" />
         {error}
       </div>
@@ -151,13 +198,13 @@
       <div class="empty-state">
         <Icon icon="mdi:database-off-outline" width="32" />
         <p>No backups found</p>
-        <p class="hint">Backups are created automatically before configuration changes. Use the button above to create one manually.</p>
+        <p class="hint">HOPS takes one when it starts and before every save. Use the button above to create one now.</p>
       </div>
     {:else}
       <div class="backup-list">
         {#each backups as backup (backup.name)}
           {@const busy = actionInProgress === backup.name}
-          <div class="backup-item" class:busy>
+          <div class="backup-item" class:busy data-backup-name={backup.name}>
             <div class="backup-info">
               <span class="backup-name" title={backup.name}>{backup.name}</span>
               <span class="backup-meta">
@@ -168,6 +215,7 @@
               <button
                 class="btn-icon"
                 title="Restore"
+                aria-label={`Restore ${backup.name}`}
                 onclick={() => handleRestore(backup)}
                 disabled={!!actionInProgress}
               >
@@ -180,6 +228,7 @@
               <button
                 class="btn-icon btn-icon-danger"
                 title="Delete"
+                aria-label={`Delete ${backup.name}`}
                 onclick={() => handleDelete(backup)}
                 disabled={!!actionInProgress}
               >
@@ -221,6 +270,31 @@
     flex-shrink: 0;
     margin-top: 1px;
     color: var(--accent);
+  }
+
+  .problem {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    padding: 0.75rem 1rem;
+    background: #78350f;
+    color: #fef3c7;
+    border: 1px solid #f59e0b;
+    border-radius: 0.5rem;
+    font-size: 0.8125rem;
+    line-height: 1.4;
+    word-break: break-word;
+  }
+
+  .problem :global(svg),
+  .action-error :global(svg) {
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  .action-error {
+    align-items: flex-start;
+    word-break: break-word;
   }
 
   .actions-bar {

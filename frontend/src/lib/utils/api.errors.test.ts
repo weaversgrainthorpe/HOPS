@@ -67,6 +67,11 @@ describe('GET /api/config', () => {
     expect(await getConfig()).toEqual({ ...doc, notices: [], noticesUnreadable: 1 });
   });
 
+  it('keeps a notice\'s warning level and stickiness (backup problems); unknown values are dropped', async () => {
+    respond(200, { ...doc, notices: [{ id: 'backup-x', text: 'Backup failed', level: 'warning', sticky: true }, { id: 'n', text: 't', level: 'loud', sticky: 'yes' }] });
+    expect(await getConfig()).toEqual({ ...doc, notices: [{ id: 'backup-x', text: 'Backup failed', level: 'warning', sticky: true }, { id: 'n', text: 't' }] });
+  });
+
   it('keeps the layout version (M5 §2a) so the editor can tell the form; absent stays absent', async () => {
     respond(200, { ...doc, layoutVersion: 2 });
     expect(await getConfig()).toEqual({ ...doc, layoutVersion: 2 });

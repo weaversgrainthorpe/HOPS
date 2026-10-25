@@ -5,7 +5,7 @@
   import { toast } from '$lib/stores/toast';
   import { isAuthenticated, authChecked, mustChangePassword, logout, isAdminOnlyPath } from '$lib/stores/auth';
   import { isBackendOffline, backendStatus } from '$lib/stores/backendStatus';
-  import { migrationFailure } from '$lib/stores/config';
+  import { migrationFailure, refreshServerNotices } from '$lib/stores/config';
   import LoginDialog from '$lib/components/LoginDialog.svelte';
   import BackupModal from '$lib/components/admin/BackupModal.svelte';
   import MigrationFailed from '$lib/components/MigrationFailed.svelte';
@@ -70,6 +70,11 @@
   // own dialogs (Change Password) go with the page, which is only shown while ready.
   $effect(() => {
     if (!ready) showBackupModal = false;
+  });
+  // Backup problems are only sent to a signed-in admin, so the notices are read again once
+  // signed in (the page may have loaded signed out). A failed read says so (refreshNotices).
+  $effect(() => {
+    if (ready) void refreshServerNotices();
   });
 
   async function handleLogout() {

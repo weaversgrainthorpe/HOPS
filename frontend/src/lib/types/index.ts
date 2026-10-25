@@ -94,4 +94,8 @@ export interface Config extends LayoutDoc {
 export interface ServerNotice {
   id: string;
   text: string;
+  /** 'warning' for a problem (e.g. a failed backup); absent = information. */
+  level?: 'warning';
+  /** Cannot be dismissed: it goes when its cause is fixed (e.g. the next backup that works). */
+  sticky?: boolean;
 }

@@ -8,7 +8,7 @@
 </script>
 
 <h2 class="section-title">Backups</h2>
-<p class="lede">HOPS backs up the database on startup and before config changes. Restore or delete them here.</p>
+<p class="lede">HOPS backs up the database when it starts, before every save, before a restore or reset, and before an upgrade. Create, restore or delete backups here.</p>
 <Button variant="secondary" icon="mdi:backup-restore" onclick={() => shell.openBackups()} disabled={$isBackendOffline}>
   Open Backups
 </Button>

@@ -130,3 +130,25 @@ describe('NoticesBanner: never presents doubtful notices as fresh (fix round 1)'
     expect(screen.getByRole('alert').textContent).toMatch(/2 notices from the server couldn't be read/i);
   });
 });
+
+describe('NoticesBanner: sticky warnings (backup problems)', () => {
+  beforeEach(() => {
+    config.set(null);
+  });
+
+  it('shows a backup problem as an alert with no Dismiss, next to an ordinary notice that has one', () => {
+    config.set({
+      schemaVersion: 3,
+      dashboards: [],
+      notices: [
+        { id: 'backup-backup-failed-1', text: 'The automatic backup taken when HOPS started failed at 25 Oct 2026 10:00:00 UTC: disk full.', level: 'warning', sticky: true },
+        { id: 'layered-status-checks-v4', text: 'Status checks now follow the most specific setting.' }
+      ]
+    });
+    render(NoticesBanner);
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveTextContent('when HOPS started failed at 25 Oct 2026 10:00:00 UTC: disk full.');
+    expect(alert.querySelector('button')).toBeNull();
+    expect(screen.getAllByRole('button', { name: 'Dismiss' })).toHaveLength(1);
+  });
+});

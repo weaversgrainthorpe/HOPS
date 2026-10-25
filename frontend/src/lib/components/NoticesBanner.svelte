@@ -28,8 +28,15 @@
 </script>
 
 {#each serverNotices as notice (notice.id)}
-  <div class="migration-notices server-notice" role="status">
-    <Icon icon="mdi:information-outline" width="20" />
+  <!-- A warning (e.g. a failed backup) is an alert; a sticky one has no Dismiss: it goes when its
+       cause is fixed. -->
+  <div
+    class="migration-notices server-notice"
+    class:warning={notice.level === 'warning'}
+    role={notice.level === 'warning' ? 'alert' : 'status'}
+    data-notice-id={notice.id}
+  >
+    <Icon icon={notice.level === 'warning' ? 'mdi:alert-outline' : 'mdi:information-outline'} width="20" />
     <!-- Rendered as text: the server's notice text is never markup. -->
     <div class="text">
       {notice.text}
@@ -37,14 +44,16 @@
         <em class="stale">This notice may be out of date: it couldn't be refreshed after your last change ({$noticesStale}). Reload the page to update it.</em>
       {/if}
     </div>
-    <button
-      type="button"
-      class="dismiss"
-      disabled={dismissing[notice.id]}
-      onclick={() => dismiss(notice.id)}
-    >
-      Dismiss
-    </button>
+    {#if !notice.sticky}
+      <button
+        type="button"
+        class="dismiss"
+        disabled={dismissing[notice.id]}
+        onclick={() => dismiss(notice.id)}
+      >
+        Dismiss
+      </button>
+    {/if}
   </div>
 {/each}
 
@@ -91,6 +100,13 @@
     border: 1px solid #3b82f6;
     border-radius: 0.5rem;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  }
+
+  /* A problem: dark amber, light text (#fef3c7 on #78350f ≈ 9:1). */
+  .migration-notices.warning {
+    background: linear-gradient(180deg, #78350f 0%, #92400e 100%);
+    color: #fef3c7;
+    border-color: #f59e0b;
   }
 
   .text {

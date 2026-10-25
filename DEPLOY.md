@@ -353,7 +353,9 @@ HOPS does not handle SSL/TLS directly. Use a reverse proxy (Caddy, nginx, Traefi
 
 ### Automatic Backups
 
-HOPS creates an automatic backup of the database every time the server starts. Backups are stored in your data directory under `backups/`.
+HOPS backs up the database automatically when the server starts, before every save, before a restore or a factory reset, and before an upgrade. Backups are stored in your data directory under `backups/`.
+
+A backup that fails is never silent: Settings shows a warning (with the time and the reason) until a backup succeeds. A restore or factory reset whose safety backup fails is refused, and nothing is changed.
 
 HOPS keeps the 10 most recent backups and deletes older ones, with one exception: the **pre-v3-migration** backup (`hops-backup-<date>_pre-v3-migration.db`). It is taken just before HOPS 3 converts a 2.x configuration and is never rotated away, because it is the only way back to 2.x.
 
@@ -371,7 +373,7 @@ Changes made under 3.x are not carried back. Don't restore this backup from the 
 
 From the Admin panel, click **Backups** to:
 - View all available backups
-- Restore a previous backup
+- Restore a previous backup (a safety backup of the current data is taken first; HOPS then restarts and applies the restore before it opens the database, so the service must be set to restart automatically, e.g. `Restart=on-failure`)
 - Delete old backups
 
 ### Manual Backup
@@ -445,7 +447,7 @@ HOPS ships with several security mechanisms enabled by default:
 - **HttpOnly session cookies** — `hops_session` cannot be read by JavaScript, mitigating XSS-based session theft.
 - **CSRF protection** — double-submit cookie pattern. The server issues a `hops_csrf` cookie on login; the frontend echoes it back in the `X-CSRF-Token` header for all mutation requests. The server validates with constant-time comparison.
 - **Per-IP login rate limiting** — 20 attempts per minute by default, with automatic cleanup of stale entries.
-- **Path-traversal hardening** — backup restore/delete sanitize user-supplied filenames with `filepath.Base`.
+- **Path-traversal hardening** — backup names taken from requests must match a strict pattern (no separators, no `..`) and must be regular files in the backups folder (no symlinks).
 - **Graceful shutdown** — `SIGINT`/`SIGTERM` drain in-flight requests for up to 30s; HTTP server has read/write/idle timeouts (slow-loris mitigation).
 - **Security headers** — `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`.
 - **SQLite foreign keys enabled** with `ON DELETE CASCADE` where appropriate (sessions, icons).

@@ -7,7 +7,7 @@
   import { isAuthenticated, waitForAuthChecked } from '$lib/stores/auth';
   import { toast } from '$lib/stores/toast';
   import { confirm } from '$lib/stores/confirmModal';
-  import { loadConfig, applySavedLayout, dashboardHref } from '$lib/stores/config';
+  import { loadConfig, applySavedLayout, dashboardHref, showSaveWarning } from '$lib/stores/config';
   import {
     getScan, cancelScan, deleteScan, updateScanResult, promoteScan, createScan,
     createDetector,
@@ -481,7 +481,7 @@
     try {
       const resp = await promoteScan(scan.id, target, ids);
       toast.success(`${resp.promoted} tile${resp.promoted === 1 ? '' : 's'} added to the dashboard`);
-      if (resp.warning) toast.warning(resp.warning);
+      if (resp.warning) showSaveWarning(resp.warning);
       // Take the committed document (a response without one marks the held
       // one stale and reloads it), so the pre-promote tiles never show as current.
       applySavedLayout(resp);

@@ -421,11 +421,12 @@ describe('deleteDashboard', () => {
     err.mockRestore();
   });
 
-  it('surfaces the server warning when the pre-update backup failed', async () => {
+  it('surfaces the server warning when the pre-update backup failed, until closed', async () => {
     const warn = vi.spyOn(toast, 'warning');
     vi.mocked(api.deleteDashboard).mockResolvedValue({ warning: 'Pre-update backup failed: disk full. Config saved anyway.', layout: doc(dash('b', 7)) });
     await deleteDashboard('a');
-    expect(warn).toHaveBeenCalledWith('Pre-update backup failed: disk full. Config saved anyway.');
+    // Duration 0: the toast stays until the user closes it (never a 4-second flash).
+    expect(warn).toHaveBeenCalledWith('Pre-update backup failed: disk full. Config saved anyway.', 0);
     warn.mockRestore();
   });
 });

@@ -19,7 +19,7 @@ import type {
 } from '$lib/types/layout';
 import type { Background, HeaderConfig } from '$lib/types';
 import { SHAPE_CREATED, defaultFolderBox, sizeOf, sizeSpan, tabSpan } from '$lib/layout/geometry';
-import { config, layoutDoc, findLayoutDashboard, applySavedLayout, loadConfig, layoutFormProblem } from '$lib/stores/config';
+import { config, layoutDoc, findLayoutDashboard, applySavedLayout, loadConfig, layoutFormProblem, showSaveWarning } from '$lib/stores/config';
 import { apply, session, rebaseCleanSession, sessionConflict } from '$lib/stores/editSession';
 import { transferNodes, ConflictError, type TransferRequest } from '$lib/utils/api';
 import { logError } from '$lib/utils/errors';
@@ -680,6 +680,7 @@ export async function transferAndRebase(req: TransferRequest, success: string, f
   try {
     const resp = await transferNodes(req);
     applySavedLayout(resp);
+    if (resp.warning) showSaveWarning(resp.warning);
     if (!rebaseCleanSession(resp.layout)) {
       // No fresh layout came back (or edits arrived meanwhile): the layout is
       // marked stale and reloading; say so rather than show the old draft as current.
