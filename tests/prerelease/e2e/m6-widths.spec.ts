@@ -33,6 +33,7 @@ const PAGES = [
 	{ path: '/settings/discovery/SCAN', heading: 'Discovery draft' },
 	{ path: '/settings/backups', heading: 'Backups' },
 	{ path: '/settings/logs', heading: 'Logs' },
+	{ path: '/settings/icons', heading: 'Icons' },
 	{ path: '/settings/password', heading: 'Password' },
 	{ path: '/settings/reset', heading: 'Factory reset' }
 ];

@@ -22,10 +22,11 @@
 
   let { children } = $props();
 
-  // The sections, in order; Log out is an action (below). Discovery is a section like the others
+  // The sections, in order (Icons after Dashboards: approved by Jonathan); Log out is an action (below). Discovery is a section like the others
   // (M5 §11): its sub-pages (/settings/discovery/new, /[id], …) keep it highlighted.
   const sections = [
     { href: '/settings/dashboards', label: 'Dashboards', icon: 'mdi:view-dashboard-outline' },
+    { href: '/settings/icons', label: 'Icons', icon: 'mdi:image-multiple-outline' },
     { href: '/settings/global', label: 'Global settings', icon: 'mdi:tune' },
     { href: '/settings/discovery', label: 'Discovery', icon: 'mdi:radar' },
     { href: '/settings/backups', label: 'Backups', icon: 'mdi:backup-restore' },

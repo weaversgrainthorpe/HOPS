@@ -6,7 +6,9 @@
   import ColoredIcon from '../ColoredIcon.svelte';
   import ColorPicker from './ColorPicker.svelte';
   import IconPickerModal from './IconPickerModal.svelte';
-  import { createIcon, getIcons, uploadIconImage } from '$lib/utils/api';
+  import { getIcons, uploadIcon } from '$lib/utils/api';
+  import { loadIconLibrary } from '$lib/icons/iconLibrary';
+  import { nameFromFile } from '$lib/icons/iconManage';
   import {
     rankIconSuggestions,
     bundledSuggestions,
@@ -332,26 +334,16 @@
     uploadError = '';
 
     try {
-      const result = await uploadIconImage(file);
+      // One step: the server stores the image and registers it under "My Uploads" (Settings ›
+      // Icons), or refuses both, so an upload is never kept half-saved.
+      const fileName = nameFromFile(file.name);
+      const iconName = fileName.charAt(0).toUpperCase() + fileName.slice(1).replace(/[-_]/g, ' ');
+      const result = await uploadIcon(file, { categoryId: 'containers', name: iconName });
       onIconUrlChange(result.url);
       onIconChange('');
       iconSearch = '';
-
-      const fileName = file.name.replace(/\.[^/.]+$/, '');
-      const iconName = fileName.charAt(0).toUpperCase() + fileName.slice(1).replace(/[-_]/g, ' ');
-
-      try {
-        await createIcon({
-          id: result.id,
-          name: iconName,
-          icon: '',
-          categoryId: 'containers',
-          imageUrl: result.url,
-        });
-        toast.success('Icon saved to "My Uploads"');
-      } catch {
-        logWarn('Could not save icon to database');
-      }
+      toast.success('Icon saved to "My Uploads"');
+      void loadIconLibrary();
     } catch (err) {
       uploadError = err instanceof Error ? err.message : 'Upload failed';
     } finally {

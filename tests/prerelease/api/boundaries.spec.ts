@@ -19,6 +19,7 @@ test('protected endpoints reject unauthenticated GET with 401', async ({ request
     '/api/settings',
     '/api/backups',
     '/api/logs',
+    '/api/icons/usage',
     '/api/discovery/scans',
     '/api/discovery/detectors',
   ];

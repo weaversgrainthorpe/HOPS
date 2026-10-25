@@ -5,7 +5,7 @@ import { render, screen, fireEvent, waitFor, within } from '@testing-library/sve
 
 // The Settings shell (spec §4D + M5 §9): every settings page shares this layout. Logged out it
 // asks for the password in place (the same LoginDialog as the pencil) on ANY settings address;
-// signed in it shows the sidebar (Dashboards, Global settings, Discovery, Backups, Logs, Password,
+// signed in it shows the sidebar (Dashboards, Icons, Global settings, Discovery, Backups, Logs, Password,
 // Factory reset, Log out) beside the page, with MigrationFailed / notices on top.
 const nav = vi.hoisted(() => ({ after: [] as Array<(n: unknown) => void> }));
 vi.mock('$app/navigation', () => ({
@@ -190,6 +190,7 @@ describe('settings shell, signed in', () => {
 		const items = within(sidebar()).getAllByRole('link').map((a) => [a.textContent?.trim(), a.getAttribute('href')]);
 		expect(items).toEqual([
 			['Dashboards', '/settings/dashboards'],
+			['Icons', '/settings/icons'],
 			['Global settings', '/settings/global'],
 			['Discovery', '/settings/discovery'],
 			['Backups', '/settings/backups'],
@@ -213,6 +214,7 @@ describe('settings shell, signed in', () => {
 		['/settings/discovery/detectors', 'Discovery'],
 		['/settings/discovery/0123abcd', 'Discovery'],
 		['/settings/backups', 'Backups'],
+		['/settings/icons', 'Icons'],
 		['/settings/logs', 'Logs'],
 		['/settings/password', 'Password'],
 		['/settings/reset', 'Factory reset']

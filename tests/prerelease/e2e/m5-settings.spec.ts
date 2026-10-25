@@ -12,8 +12,9 @@ const PAGES = [
   { label: 'Backups', path: '/settings/backups', heading: 'Backups' },
   { label: 'Password', path: '/settings/password', heading: 'Password' },
   { label: 'Factory reset', path: '/settings/reset', heading: 'Factory reset' },
+  { label: 'Icons', path: '/settings/icons', heading: 'Icons' },
 ];
-const ALL_ITEMS = ['Dashboards', 'Global settings', 'Discovery', 'Backups', 'Logs', 'Password', 'Factory reset', 'Log out'];
+const ALL_ITEMS = ['Dashboards', 'Icons', 'Global settings', 'Discovery', 'Backups', 'Logs', 'Password', 'Factory reset', 'Log out'];
 
 const sidebar = (p: Page) => p.getByRole('navigation', { name: 'Settings sections' });
 const urlOf = (path: string) => new RegExp(`${path.replace(/\//g, '\\/')}$`);

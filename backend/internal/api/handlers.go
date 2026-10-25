@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"unicode/utf8"
 	"time"
 
 	_ "image/gif"
@@ -1807,168 +1808,6 @@ func (r *Router) handleCreateIcon(w http.ResponseWriter, req *http.Request) {
 	writeJSONSuccess(w)
 }
 
-// handleUpdateIcon updates an existing icon (admin only)
-func (r *Router) handleUpdateIcon(w http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodPut {
-		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	iconID := req.URL.Path[len("/api/icons/"):]
-	if iconID == "" {
-		writeJSONError(w, "Icon ID required", http.StatusBadRequest)
-		return
-	}
-
-	var iconData struct {
-		Name       string  `json:"name"`
-		Icon       string  `json:"icon"`
-		CategoryID string  `json:"categoryId"`
-		Color      *string `json:"color"`
-	}
-
-	if err := json.NewDecoder(req.Body).Decode(&iconData); err != nil {
-		writeJSONError(w, "Invalid JSON", http.StatusBadRequest)
-		return
-	}
-
-	var color sql.NullString
-	if iconData.Color != nil && *iconData.Color != "" {
-		color = sql.NullString{String: *iconData.Color, Valid: true}
-	}
-
-	_, err := r.db.Exec(
-		"UPDATE icons SET name = ?, icon = ?, category_id = ?, color = ? WHERE id = ?",
-		iconData.Name, iconData.Icon, iconData.CategoryID, color, iconID,
-	)
-	if err != nil {
-		writeJSONError(w, "Failed to update icon", http.StatusInternalServerError)
-		return
-	}
-
-	writeJSONSuccess(w)
-}
-
-// handleDeleteIcon deletes an icon (admin only, only user-created icons)
-func (r *Router) handleDeleteIcon(w http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodDelete {
-		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	iconID := req.URL.Path[len("/api/icons/"):]
-	if iconID == "" {
-		writeJSONError(w, "Icon ID required", http.StatusBadRequest)
-		return
-	}
-
-	// Only allow deletion of user-created icons (not presets)
-	_, err := r.db.Exec("DELETE FROM icons WHERE id = ? AND is_preset = 0", iconID)
-	if err != nil {
-		writeJSONError(w, "Failed to delete icon", http.StatusInternalServerError)
-		return
-	}
-
-	writeJSONSuccess(w)
-}
-
-// handleCreateIconCategory creates a new icon category (admin only)
-func (r *Router) handleCreateIconCategory(w http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodPost {
-		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	var categoryData struct {
-		ID    string `json:"id"`
-		Name  string `json:"name"`
-		Icon  string `json:"icon"`
-		Order int    `json:"order"`
-	}
-
-	if err := json.NewDecoder(req.Body).Decode(&categoryData); err != nil {
-		writeJSONError(w, "Invalid JSON", http.StatusBadRequest)
-		return
-	}
-
-	// Validate required fields
-	if categoryData.ID == "" || categoryData.Name == "" || categoryData.Icon == "" {
-		writeJSONError(w, "Missing required fields", http.StatusBadRequest)
-		return
-	}
-
-	_, err := r.db.Exec(
-		"INSERT INTO icon_categories (id, name, icon, order_num, is_preset) VALUES (?, ?, ?, ?, 0)",
-		categoryData.ID, categoryData.Name, categoryData.Icon, categoryData.Order,
-	)
-	if err != nil {
-		writeJSONError(w, "Failed to create category", http.StatusInternalServerError)
-		return
-	}
-
-	writeJSONSuccess(w)
-}
-
-// handleUpdateIconCategory updates an existing icon category (admin only)
-func (r *Router) handleUpdateIconCategory(w http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodPut {
-		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	categoryID := req.URL.Path[len("/api/icon-categories/"):]
-	if categoryID == "" {
-		writeJSONError(w, "Category ID required", http.StatusBadRequest)
-		return
-	}
-
-	var categoryData struct {
-		Name  string `json:"name"`
-		Icon  string `json:"icon"`
-		Order int    `json:"order"`
-	}
-
-	if err := json.NewDecoder(req.Body).Decode(&categoryData); err != nil {
-		writeJSONError(w, "Invalid JSON", http.StatusBadRequest)
-		return
-	}
-
-	_, err := r.db.Exec(
-		"UPDATE icon_categories SET name = ?, icon = ?, order_num = ? WHERE id = ?",
-		categoryData.Name, categoryData.Icon, categoryData.Order, categoryID,
-	)
-	if err != nil {
-		writeJSONError(w, "Failed to update category", http.StatusInternalServerError)
-		return
-	}
-
-	writeJSONSuccess(w)
-}
-
-// handleDeleteIconCategory deletes a category (admin only, only user-created categories)
-func (r *Router) handleDeleteIconCategory(w http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodDelete {
-		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	categoryID := req.URL.Path[len("/api/icon-categories/"):]
-	if categoryID == "" {
-		writeJSONError(w, "Category ID required", http.StatusBadRequest)
-		return
-	}
-
-	// Only allow deletion of user-created categories (not presets)
-	// This will also cascade delete all icons in the category
-	_, err := r.db.Exec("DELETE FROM icon_categories WHERE id = ? AND is_preset = 0", categoryID)
-	if err != nil {
-		writeJSONError(w, "Failed to delete category", http.StatusInternalServerError)
-		return
-	}
-
-	writeJSONSuccess(w)
-}
-
 // writeJSONSuccess writes a standard {"success": true} response for mutations
 func writeJSONSuccess(w http.ResponseWriter) {
 	writeJSON(w, map[string]bool{"success": true})
@@ -2208,6 +2047,40 @@ func (r *Router) handleUploadIcon(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// With a categoryId (Settings › Icons, the icon editor) the upload is also
+	// registered as the user's icon in one step: checked before the file is
+	// written, and the file is removed again if the row can't be stored, so
+	// an upload is never left half-done.
+	categoryID := req.FormValue("categoryId")
+	iconName := ""
+	if categoryID != "" {
+		ok, err := r.categoryExists(r.db, categoryID)
+		if err != nil {
+			writeJSONError(w, "Failed to check the category", http.StatusInternalServerError)
+			return
+		}
+		if !ok {
+			writeJSONError(w, "That category doesn't exist", http.StatusBadRequest)
+			return
+		}
+		raw := req.FormValue("name")
+		if strings.TrimSpace(raw) == "" {
+			raw = strings.TrimSuffix(filepath.Base(header.Filename), filepath.Ext(header.Filename))
+			if utf8.RuneCountInString(raw) > maxIconNameLen {
+				raw = string([]rune(raw)[:maxIconNameLen])
+			}
+			if strings.TrimSpace(raw) == "" {
+				raw = "Uploaded icon"
+			}
+		}
+		n, err := cleanDisplayName(raw, "The icon")
+		if err != nil {
+			writeJSONError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		iconName = n
+	}
+
 	// Create icons directory if it doesn't exist
 	iconsDir := filepath.Join(r.config.DataDir, "icons")
 	if err := os.MkdirAll(iconsDir, 0755); err != nil {
@@ -2262,9 +2135,10 @@ func (r *Router) handleUploadIcon(w http.ResponseWriter, req *http.Request) {
 			writeJSONError(w, "Failed to create file", http.StatusInternalServerError)
 			return
 		}
-		defer destFile.Close()
-
-		if err := png.Encode(destFile, resized); err != nil {
+		encErr := png.Encode(destFile, resized)
+		closeErr := destFile.Close()
+		if encErr != nil || closeErr != nil {
+			_ = os.Remove(destPath)
 			writeJSONError(w, "Failed to encode image", http.StatusInternalServerError)
 			return
 		}
@@ -2273,10 +2147,30 @@ func (r *Router) handleUploadIcon(w http.ResponseWriter, req *http.Request) {
 	// Return the URL path for the uploaded icon
 	urlPath := "/icons/" + filename
 
+	if categoryID == "" {
+		writeJSON(w, map[string]interface{}{
+			"success": true,
+			"id":      iconID,
+			"url":     urlPath,
+		})
+		return
+	}
+	if _, err := r.db.Exec(
+		"INSERT INTO icons (id, name, icon, category_id, image_url, is_preset) VALUES (?, ?, '', ?, ?, 0)",
+		iconID, iconName, categoryID, urlPath,
+	); err != nil {
+		if rerr := os.Remove(destPath); rerr != nil {
+			slog.Warn("icon upload: could not remove the file after a failed save", "component", "icons", "path", destPath, "error", rerr)
+		}
+		writeJSONError(w, "The image was received but could not be saved as an icon", http.StatusInternalServerError)
+		return
+	}
 	writeJSON(w, map[string]interface{}{
-		"success": true,
-		"id":      iconID,
-		"url":     urlPath,
+		"success":    true,
+		"id":         iconID,
+		"url":        urlPath,
+		"name":       iconName,
+		"categoryId": categoryID,
 	})
 }
 

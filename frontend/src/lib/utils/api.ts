@@ -4,6 +4,7 @@ import type { ImportResult } from './importResult';
 import { LAYOUT_VERSION } from '$lib/layout/geometry';
 import { checkUploadSize, uploadErrorMessage, sendUpload } from './uploadLimits';
 import { parseLogsResponse, type LogsResponse, type LogLevel, type LineLimit } from '$lib/logs/logView';
+import { parseUsageResponse, type IconUsage, type IconUse } from '$lib/icons/iconManage';
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 
@@ -66,6 +67,26 @@ export class MigrationFailedError extends Error {
     super(detail || 'Configuration migration failed');
     this.name = 'MigrationFailedError';
     this.detail = detail;
+  }
+}
+
+/** 409 from DELETE /api/icons/{id}: the icon is in use; `usage` lists the places. */
+export class IconInUseError extends Error {
+  usage: IconUse[];
+  constructor(message: string, usage: IconUse[]) {
+    super(message);
+    this.name = 'IconInUseError';
+    this.usage = usage;
+  }
+}
+
+/** 409 from DELETE /api/icon-categories/{id}: it still has icons; choose where they go. */
+export class CategoryNotEmptyError extends Error {
+  iconCount: number;
+  constructor(message: string, iconCount: number) {
+    super(message);
+    this.name = 'CategoryNotEmptyError';
+    this.iconCount = iconCount;
   }
 }
 
@@ -135,6 +156,12 @@ async function fetchAPI(endpoint: string, options: RequestInit = {}) {
     // path_taken (and other 409s with a sentence): show the server's detail.
     if (response.status === 409 && typeof parsedBody?.detail === 'string' && parsedBody.detail) {
       throw new Error(parsedBody.detail);
+    }
+    if (response.status === 409 && Array.isArray(parsedBody?.usage)) {
+      throw new IconInUseError(serverMsg || 'This icon is in use.', parsedBody.usage as IconUse[]);
+    }
+    if (response.status === 409 && typeof parsedBody?.iconCount === 'number') {
+      throw new CategoryNotEmptyError(serverMsg || 'This category still has icons.', parsedBody.iconCount);
     }
     if (response.status === 503 && parsedBody?.error === 'migration_failed') {
       throw new MigrationFailedError(typeof parsedBody.detail === 'string' ? parsedBody.detail : '');
@@ -540,16 +567,49 @@ export async function createIcon(icon: Omit<Icon, 'isPreset' | 'createdAt'>): Pr
 }
 
 export async function updateIcon(id: string, icon: Partial<Omit<Icon, 'id' | 'isPreset' | 'createdAt'>>): Promise<void> {
-  await fetchAPI(`/icons/${id}`, {
+  await fetchAPI(`/icons/${encodeURIComponent(id)}`, {
     method: 'PUT',
     body: JSON.stringify(icon),
   });
 }
 
-export async function deleteIcon(id: string): Promise<void> {
-  await fetchAPI(`/icons/${id}`, {
+/**
+ * DELETE /api/icons/{id}. An icon in use is refused with IconInUseError (listing the places)
+ * unless `force` is set — only after the user has seen that list and confirmed.
+ */
+export async function deleteIcon(id: string, opts: { force?: boolean } = {}): Promise<void> {
+  await fetchAPI(`/icons/${encodeURIComponent(id)}${opts.force ? '?force=1' : ''}`, {
     method: 'DELETE',
   });
+}
+
+/** GET /api/icons/usage (admin): where each uploaded icon is used. A failure throws. */
+export async function getIconUsage(): Promise<IconUsage> {
+  return parseUsageResponse(await fetchAPI('/icons/usage'));
+}
+
+/**
+ * Uploads an image and registers it as the user's icon in one step (POST /api/icons/upload with
+ * a categoryId): the server never keeps a file it could not register. Refuses an oversize file
+ * before sending it.
+ */
+export async function uploadIcon(file: File, opts: { categoryId: string; name?: string }): Promise<{ id: string; url: string; name: string; categoryId: string }> {
+  const refusal = await checkUploadSize('icon', file);
+  if (refusal) throw new Error(refusal);
+  const formData = new FormData();
+  formData.append('categoryId', opts.categoryId);
+  if (opts.name) formData.append('name', opts.name);
+  formData.append('file', file);
+  const response = await sendUpload(`${API_BASE}/icons/upload`, {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: withCSRFHeader({}, 'POST'),
+    body: formData,
+  });
+  if (!response.ok) {
+    throw new Error(await uploadErrorMessage(response, 'Upload failed'));
+  }
+  return response.json();
 }
 
 export async function uploadIconImage(file: File): Promise<{ url: string; id: string }> {
@@ -580,14 +640,19 @@ export async function createIconCategory(category: Omit<IconCategory, 'isPreset'
 }
 
 export async function updateIconCategory(id: string, category: Partial<Omit<IconCategory, 'id' | 'isPreset' | 'createdAt'>>): Promise<void> {
-  await fetchAPI(`/icon-categories/${id}`, {
+  await fetchAPI(`/icon-categories/${encodeURIComponent(id)}`, {
     method: 'PUT',
     body: JSON.stringify(category),
   });
 }
 
-export async function deleteIconCategory(id: string): Promise<void> {
-  await fetchAPI(`/icon-categories/${id}`, {
+/**
+ * DELETE /api/icon-categories/{id}. A category with icons is refused (CategoryNotEmptyError)
+ * unless `moveTo` names the category they go to. Icons are never deleted with it.
+ */
+export async function deleteIconCategory(id: string, opts: { moveTo?: string } = {}): Promise<void> {
+  const q = opts.moveTo ? `?moveTo=${encodeURIComponent(opts.moveTo)}` : '';
+  await fetchAPI(`/icon-categories/${encodeURIComponent(id)}${q}`, {
     method: 'DELETE',
   });
 }

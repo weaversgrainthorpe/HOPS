@@ -97,6 +97,13 @@ func TestSmokeRoutesNoFiveHundred(t *testing.T) {
 		// Icons + categories.
 		{method: "GET", path: "/api/icon-categories"},
 		{method: "GET", path: "/api/icons"},
+		{method: "GET", path: "/api/icons/usage"},
+		{method: "PUT", path: "/api/icons/does-not-exist", body: `{"name":"x"}`},
+		{method: "DELETE", path: "/api/icons/does-not-exist"},
+		{method: "POST", path: "/api/icons/upload"},
+		{method: "POST", path: "/api/icon-categories", body: `{"name":""}`},
+		{method: "PUT", path: "/api/icon-categories/does-not-exist", body: `{"name":"x"}`},
+		{method: "DELETE", path: "/api/icon-categories/does-not-exist?moveTo=containers"},
 
 		// Backgrounds.
 		{method: "GET", path: "/api/backgrounds"},
@@ -176,6 +183,7 @@ func TestSmokeUnauthenticatedRoutesReject(t *testing.T) {
 		"/api/backups/hops-backup-2026-01-01_00-00-00_manual.db",
 		"/api/settings",
 		"/api/logs",
+		"/api/icons/usage",
 		"/api/discovery/scans",
 		"/api/discovery/detectors",
 		"/api/discovery/diagnostics",
@@ -187,6 +195,13 @@ func TestSmokeUnauthenticatedRoutesReject(t *testing.T) {
 		{"POST", "/api/backups/upload"},
 		{"POST", "/api/backups/cleanup"},
 		{"DELETE", "/api/backups/hops-backup-2026-01-01_00-00-00_manual.db"},
+		// Settings › Icons writes.
+		{"POST", "/api/icons/upload"},
+		{"PUT", "/api/icons/some-icon"},
+		{"DELETE", "/api/icons/some-icon"},
+		{"POST", "/api/icon-categories"},
+		{"PUT", "/api/icon-categories/some-cat"},
+		{"DELETE", "/api/icon-categories/some-cat"},
 	} {
 		req := httptest.NewRequest(mp[0], mp[1], nil)
 		w := httptest.NewRecorder()

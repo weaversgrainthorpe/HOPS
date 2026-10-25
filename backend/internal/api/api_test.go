@@ -898,7 +898,9 @@ func TestDeleteIconRequiresAuth(t *testing.T) {
 
 // --- Foreign Key Cascade Tests ---
 
-func TestCascadeDeleteIconsOnCategoryDelete(t *testing.T) {
+// Deleting a category never deletes its icons (Settings › Icons): without a
+// destination for them it is refused with 409 and both icons stay.
+func TestCategoryDeleteNeverCascadesIcons(t *testing.T) {
 	router, db := setupTestRouter(t)
 	token, csrf := loginTestUserWithCSRF(t, router)
 
@@ -909,20 +911,16 @@ func TestCascadeDeleteIconsOnCategoryDelete(t *testing.T) {
 	db.Exec("INSERT INTO icons (id, name, icon, category_id) VALUES (?, ?, ?, ?)",
 		"cascade-icon-2", "Icon 2", "mdi:two", "cascade-cat")
 
-	// Delete the category
 	req := authedRequest("DELETE", "/api/icon-categories/cascade-cat", nil, token, csrf)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("delete category: expected 200, got %d", w.Code)
+	if w.Code != http.StatusConflict {
+		t.Fatalf("delete non-empty category: expected 409, got %d", w.Code)
 	}
-
-	// Icons should be cascaded
 	var count int
 	db.QueryRow("SELECT COUNT(*) FROM icons WHERE category_id = 'cascade-cat'").Scan(&count)
-	if count != 0 {
-		t.Fatalf("expected cascade delete to remove icons, but %d remain", count)
+	if count != 2 {
+		t.Fatalf("expected both icons kept, %d remain", count)
 	}
 }
 

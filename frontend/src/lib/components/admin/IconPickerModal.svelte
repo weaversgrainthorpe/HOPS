@@ -1,7 +1,9 @@
 <script lang="ts">
   import Icon from '@iconify/svelte';
   import ColoredIcon from '../ColoredIcon.svelte';
-  import { getIconCategories, getIcons, createIcon, createIconCategory, deleteIcon, deleteIconCategory, uploadIconImage, type IconCategory, type Icon as IconType } from '$lib/utils/api';
+  import { createIcon, createIconCategory, deleteIcon, deleteIconCategory, uploadIconImage, IconInUseError, CategoryNotEmptyError, type Icon as IconType } from '$lib/utils/api';
+  import { iconLibrary, loadIconLibrary } from '$lib/icons/iconLibrary';
+  import { isUploadedIcon } from '$lib/icons/iconManage';
   import { confirm } from '$lib/stores/confirmModal';
   import { toast } from '$lib/stores/toast';
   import { onMount } from 'svelte';
@@ -25,10 +27,11 @@
 
   let selectedCategory = $state('my-uploads');
   let searchQuery = $state('');
-  let categories = $state<IconCategory[]>([]);
-  let icons = $state<IconType[]>([]);
-  let loading = $state(true);
-  let error = $state<string | null>(null);
+  // The lists come from the shared icon library (also used by Settings › Icons), reloaded on open.
+  let categories = $derived($iconLibrary.categories);
+  let icons = $derived($iconLibrary.icons);
+  let loading = $derived($iconLibrary.state === 'idle' || ($iconLibrary.state === 'loading' && !$iconLibrary.loadedAt));
+  let error = $derived($iconLibrary.state === 'failed' ? `Couldn't load the icons: ${$iconLibrary.error}` : null);
 
   // Special virtual categories
   const SPECIAL_CATEGORIES = {
@@ -88,21 +91,11 @@
   });
 
   async function loadData() {
-    try {
-      loading = true;
-      categories = await getIconCategories();
-      icons = await getIcons();
-      loading = false;
-    } catch (err) {
-      error = err instanceof Error ? err.message : 'Failed to load icons';
-      loading = false;
-    }
+    await loadIconLibrary();
   }
 
-  // Get uploaded icons (icons with imageUrl that are not presets)
-  const uploadedIcons = $derived(
-    icons.filter(icon => icon.imageUrl && !icon.isPreset)
-  );
+  // Get uploaded icons (the same rule as Settings › Icons)
+  const uploadedIcons = $derived(icons.filter(isUploadedIcon));
 
   // Get recently used icons
   const recentIcons = $derived(
@@ -280,7 +273,11 @@
       await deleteIcon(iconId);
       await loadData();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to delete icon');
+      if (err instanceof IconInUseError) {
+        toast.error(`${err.message} Settings › Icons shows where it is used.`);
+      } else {
+        toast.error(err instanceof Error ? err.message : 'Failed to delete icon');
+      }
     } finally {
       deletingIconId = null;
     }
@@ -294,7 +291,7 @@
 
     const confirmed = await confirm({
       title: 'Delete Category',
-      message: 'Delete this category and all its icons?',
+      message: 'Delete this category? Its icons are never deleted with it: a category that has icons is deleted from Settings › Icons, which asks where they go.',
       confirmText: 'Delete',
       confirmStyle: 'danger'
     });
@@ -306,7 +303,11 @@
       await loadData();
       selectedCategory = 'containers';
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to delete category');
+      if (err instanceof CategoryNotEmptyError) {
+        toast.error(`${err.message} Use Settings › Icons to move them.`);
+      } else {
+        toast.error(err instanceof Error ? err.message : 'Failed to delete category');
+      }
     } finally {
       deletingCategoryId = null;
     }

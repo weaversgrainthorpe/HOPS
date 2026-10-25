@@ -877,7 +877,7 @@ test.describe('§4D Settings is the admin home; / shows a dashboard', () => {
       await expect(anon).toHaveURL(/\/settings\/dashboards$/);
       // Every section is in the sidebar (M5 §9); this page is Dashboards.
       const side = anon.getByRole('navigation', { name: 'Settings sections' });
-      await expect(side.getByRole('link')).toHaveText(['Dashboards', 'Global settings', 'Discovery', 'Backups', 'Logs', 'Password', 'Factory reset']);
+      await expect(side.getByRole('link')).toHaveText(['Dashboards', 'Icons', 'Global settings', 'Discovery', 'Backups', 'Logs', 'Password', 'Factory reset']);
       await expect(side.getByRole('button', { name: 'Log out' })).toBeVisible();
       await expect(anon.getByRole('heading', { name: 'Dashboards', level: 2, exact: true })).toBeVisible();
       await expect(anon.getByRole('heading', { name: `M4 walkthrough ${f.path.slice(1)}`, level: 3 })).toBeVisible();
