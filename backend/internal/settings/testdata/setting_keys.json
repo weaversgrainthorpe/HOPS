@@ -1,0 +1,24 @@
+{
+  "keys": [
+    "server.port",
+    "log.level",
+    "proxy.trusted_cidrs",
+    "auth.login_rate_limit_per_min",
+    "auth.session_lifetime_hours",
+    "editmode.idle_timeout_minutes",
+    "status.checks_enabled",
+    "status.check_interval_minutes",
+    "status.check_timeout_seconds",
+    "upload.max_bytes_import",
+    "upload.max_bytes_background",
+    "upload.max_bytes_icon",
+    "http.read_header_timeout_seconds",
+    "http.read_timeout_seconds",
+    "http.write_timeout_seconds",
+    "http.idle_timeout_seconds",
+    "discovery.max_parallel_probes",
+    "discovery.per_host_timeout_seconds",
+    "folders.animated_backgrounds",
+    "display.animations"
+  ]
+}

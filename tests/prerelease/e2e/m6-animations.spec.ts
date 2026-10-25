@@ -432,7 +432,7 @@ test.describe('M6 drop and merge animations (§7.13)', () => {
     await expect(sel).toBeVisible();
     await expect(sel).toHaveValue('on');
     await expect(sel.locator('option')).toHaveText(['On', 'Off', 'Always']);
-    await expect(page.getByRole('heading', { name: 'Display', level: 3 })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Look & motion', level: 3 })).toBeVisible(); // M6 §10 group
     await expect(page.getByText('Your device asks for reduced motion — animations are off on this device')).toHaveCount(0);
   });
 

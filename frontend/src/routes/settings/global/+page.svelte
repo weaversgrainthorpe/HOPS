@@ -11,35 +11,19 @@
 </script>
 
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import Icon from '@iconify/svelte';
   import Button from '$lib/components/shared/Button.svelte';
   import { toast } from '$lib/stores/toast';
   import { listSettings, type SettingDef } from '$lib/utils/api';
   import { saveGlobalSetting } from '$lib/stores/config';
   import { bytesToMBText, formatMB, parseMBInput } from '$lib/utils/uploadLimits';
+  import { groupSettings } from '$lib/settings/globalGroups';
+  import { globalNav, jumpToGroup, onGroupLinkClick, watchGroups } from '$lib/settings/globalNav';
 
   // Settings → Global settings (M5 §9). The settings shell shows this page only once signed in
   // with no pending password change (the server refuses the rest until then), so it loads the
   // settings as soon as it opens.
-
-  // Settings are grouped by the dotted prefix of their key — server.*, log.*,
-  // auth.*, status.*, upload.*, http.*. The labels here drive the section
-  // headings rendered below. proxy.* keys roll up into Authentication (the
-  // proxy.trusted_cidrs setting is auth-adjacent and doesn't earn its own
-  // single-row group).
-  const groupLabels: Record<string, string> = {
-    server: 'Server',
-    log: 'Logging',
-    auth: 'Authentication',
-    editmode: 'Edit mode',
-    status: 'Status checks',
-    upload: 'Uploads',
-    http: 'HTTP server timeouts',
-    folders: 'Folders',
-    display: 'Display',
-    layout: 'Layout',
-  };
 
   let settings = $state<SettingDef[]>([]);
   let drafts = $state<Record<string, string>>({});
@@ -48,21 +32,72 @@
   let loadError = $state('');
   let loading = $state(true);
 
-  // Group settings by the prefix before the first '.'.
-  // proxy.* rolls up into auth — a single trusted_cidrs setting doesn't
-  // earn its own group, and reverse-proxy context is naturally an
-  // authentication concern (it's about deciding which X-Forwarded-For
-  // hops to trust during login).
-  let grouped = $derived(
-    Object.entries(
-      settings.reduce<Record<string, SettingDef[]>>((acc, s) => {
-        const prefix = s.key.split('.')[0];
-        const group = prefix === 'proxy' ? 'auth' : prefix;
-        (acc[group] ??= []).push(s);
-        return acc;
-      }, {})
-    )
-  );
+  // The settings in their logical groups (M6 §10): ONE table, in globalGroups.ts. A key the table
+  // doesn't know yet is shown in "Other", last — never hidden.
+  let grouped = $derived(groupSettings(settings));
+
+  // The sidebar's sub-list (and this page's phone chips) link to the groups. The saved Animations
+  // choice decides whether a link glides or jumps.
+  let groupLinks = $derived(grouped.map((g) => ({ id: g.id, label: g.label })));
+  let groupKey = $derived(groupLinks.map((g) => g.id).join(' '));
+  let savedAnimations = $derived(settings.find((s) => s.key === 'display.animations')?.value);
+  $effect(() => {
+    const links = groupLinks;
+    const animations = savedAnimations;
+    globalNav.update((s) => ({
+      groups: links,
+      active: s.active && links.some((g) => g.id === s.active) ? s.active : (links[0]?.id ?? null),
+      animations
+    }));
+  });
+  onDestroy(() => globalNav.set({ groups: [], active: null }));
+
+  // Once the groups are drawn: a deep link (#uploads) moves to its group, and the group in view is
+  // highlighted as the page scrolls. Re-run only when the set of groups changes, not on each save.
+  let groupsEl = $state<HTMLElement | null>(null);
+  let chipsEl = $state<HTMLElement | null>(null);
+  let deepLinked = false;
+  $effect(() => {
+    void groupKey;
+    void navbarH;
+    const el = groupsEl;
+    if (!el) return;
+    const sections = Array.from(el.querySelectorAll<HTMLElement>(':scope > section.group'));
+    if (!deepLinked) {
+      deepLinked = true;
+      const hash = decodeURIComponent(location.hash.slice(1));
+      if (hash && sections.some((s) => s.id === hash)) jumpToGroup(hash, { updateHash: false, behaviour: 'auto' });
+    }
+    return watchGroups(sections, coveredTop());
+  });
+
+  // The sticky navbar's height: the chip row sits under it, and a group's heading comes in below it.
+  let navbarH = $state(0);
+  onMount(() => {
+    const nav = document.querySelector('nav.navbar');
+    if (!(nav instanceof HTMLElement) || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => (navbarH = nav.getBoundingClientRect().height));
+    ro.observe(nav);
+    return () => ro.disconnect();
+  });
+
+  // How much of the window's top is covered: the navbar, and on phones the sticky chip row.
+  function coveredTop(): number {
+    let top = navbarH;
+    if (chipsEl && getComputedStyle(chipsEl).display !== 'none') top += chipsEl.getBoundingClientRect().height;
+    return top + 8;
+  }
+
+  // On phones, keep the highlighted chip in view inside its row (the row scrolls sideways).
+  $effect(() => {
+    const id = $globalNav.active;
+    const row = chipsEl;
+    if (!row || !id || getComputedStyle(row).display === 'none') return;
+    const chip = row.querySelector<HTMLElement>(`a[data-group="${CSS.escape(id)}"]`);
+    if (!chip) return;
+    const left = chip.offsetLeft - (row.clientWidth - chip.offsetWidth) / 2;
+    row.scrollTo?.({ left: Math.max(0, left), behavior: 'auto' });
+  });
 
   onMount(() => {
     void loadSettings();
@@ -131,7 +166,8 @@
 
   async function save(s: SettingDef) {
     perKeyError[s.key] = '';
-    let value = drafts[s.key];
+    // A number input binds a number: compare and store the text, or the row stays "unsaved".
+    let value = String(drafts[s.key]);
     if (s.type === 'bytes') {
       // Refused here, not sent: below 1 MB, empty or not a number (the server checks too).
       const parsed = parseMBInput(value, { min: s.min, max: s.max });
@@ -244,6 +280,20 @@
 </script>
 
 <h2 class="section-title">Global settings</h2>
+{#if !loading && !loadError && grouped.length > 0}
+  <!-- Phones (M6 §10): the groups as a chip row at the top of the page; wider, the sidebar lists them. -->
+  <nav class="group-chips" aria-label="Setting groups" bind:this={chipsEl} style:--chips-top={navbarH ? `${navbarH}px` : undefined}>
+    {#each grouped as g (g.id)}
+      <a
+        class="group-chip"
+        href={`/settings/global#${g.id}`}
+        data-group={g.id}
+        aria-current={$globalNav.active === g.id ? 'location' : undefined}
+        onclick={(e) => onGroupLinkClick(e, g.id)}
+      >{g.label}</a>
+    {/each}
+  </nav>
+{/if}
 <p class="lede">
   Most settings apply immediately; a few are marked
   <span class="badge badge--warning badge--pill">Restart required</span> — they only
@@ -282,11 +332,12 @@
 {:else if loadError}
   <p class="error">Failed to load settings: {loadError}</p>
 {:else}
-  {#each grouped as [groupKey, items] (groupKey)}
-    <div class="group">
-      <h3>{groupLabels[groupKey] ?? groupKey}</h3>
+  <div class="groups" bind:this={groupsEl} style:--chips-top={navbarH ? `${navbarH}px` : undefined}>
+  {#each grouped as g (g.id)}
+    <section class="group" id={g.id} aria-labelledby={`group-${g.id}-heading`}>
+      <h3 id={`group-${g.id}-heading`} tabindex="-1" data-group-heading>{g.label}</h3>
       <div class="rows">
-        {#each items as s (s.key)}
+        {#each g.items as s (s.key)}
           <div class="row" class:dirty={isDirty(s)}>
             <div class="row-label">
               <label class="label-text" for={`setting-${s.key}`}>
@@ -415,13 +466,30 @@
           </div>
         {/each}
       </div>
-    </div>
+    </section>
   {/each}
+  </div>
 {/if}
 
 <style>
   .group {
     margin-bottom: 2.5rem;
+    /* A link brings the heading in under the sticky navbar, not behind it. */
+    scroll-margin-top: calc(var(--chips-top, 70px) + 1rem);
+  }
+
+  .group h3:focus {
+    outline: none;
+  }
+
+  .group h3:focus-visible {
+    outline: 3px solid var(--accent);
+    outline-offset: 3px;
+  }
+
+  /* The chip row is the phones' form (below); wider, the sidebar lists the groups. */
+  .group-chips {
+    display: none;
   }
 
   .group h3 {
@@ -700,6 +768,53 @@
 
   .muted {
     color: var(--text-secondary);
+  }
+
+  /* Phones (M6 §10): the groups as one row of chips that scrolls sideways, kept at the top while
+     the page scrolls. */
+  @media (max-width: 640px) {
+    .group-chips {
+      display: flex;
+      gap: 0.4rem;
+      position: sticky;
+      top: var(--chips-top, 60px);
+      z-index: 5;
+      margin: 0 -1rem 1rem;
+      padding: 0.5rem 1rem;
+      overflow-x: auto;
+      scrollbar-width: none;
+      background: var(--bg-primary);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .group-chip {
+      flex: none;
+      padding: 0.4rem 0.75rem;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      font-size: 0.875rem;
+      white-space: nowrap;
+      text-decoration: none;
+    }
+
+    /* Text on the accent: --accent-solid with --on-accent (>= 4.5:1 on every preset). */
+    .group-chip[aria-current='location'] {
+      background: var(--accent-solid);
+      border-color: var(--accent-solid);
+      color: var(--on-accent);
+      font-weight: 600;
+    }
+
+    .group-chip:focus-visible {
+      outline: 3px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    .group {
+      scroll-margin-top: calc(var(--chips-top, 60px) + 3.5rem);
+    }
   }
 
   /* Narrow (a phone, or a tablet beside the settings sidebar): one column, the control under its text. */

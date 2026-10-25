@@ -27,7 +27,8 @@ test('UI icons render with the Iconify API fully blocked (offline)', async ({ pa
   // Every Settings sidebar item (Backups=mdi:backup-restore, Discovery=mdi:radar, …), the
   // section pages' buttons and the navbar gear (mdi:cog) must each have drawn their icon.
   const side = page.getByRole('navigation', { name: 'Settings sections' });
-  const items = side.locator('a, button');
+  // The section items only (M6 §10: Global settings' group sub-list has no icons).
+  const items = side.locator('.side-item');
   await expect(items).toHaveCount(7);
   for (let i = 0; i < 7; i++) {
     await expect(items.nth(i).locator('svg')).toBeVisible();

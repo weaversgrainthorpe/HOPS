@@ -3,7 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
 
 // /settings/global (M5 §9): the global settings, on their own page. The shell only shows a page
 // once signed in (with no pending password change), so the page loads its settings when it opens.
-vi.mock('$app/navigation', () => ({ goto: vi.fn(async () => {}), beforeNavigate: vi.fn(), afterNavigate: vi.fn() }));
+vi.mock('$app/navigation', () => ({ goto: vi.fn(async () => {}), replaceState: vi.fn(), beforeNavigate: vi.fn(), afterNavigate: vi.fn() }));
 vi.mock('$lib/utils/api', async () => ({
 	...(await vi.importActual<object>('$lib/utils/api')),
 	listSettings: vi.fn(),
@@ -16,6 +16,9 @@ vi.mock('$lib/stores/config', async () => ({
 
 import * as api from '$lib/utils/api';
 import { saveGlobalSetting } from '$lib/stores/config';
+import { get } from 'svelte/store';
+import { replaceState } from '$app/navigation';
+import { globalNav, resetGlobalNavForTests } from '$lib/settings/globalNav';
 import Page from './+page.svelte';
 
 const listSettings = api.listSettings as unknown as ReturnType<typeof vi.fn>;
@@ -26,6 +29,7 @@ const PORT = { key: 'server.port', value: '8080', default: '8080', type: 'int', 
 
 beforeEach(() => {
 	vi.clearAllMocks();
+	resetGlobalNavForTests();
 	listSettings.mockResolvedValue({ settings: [LOG, PORT] });
 });
 
@@ -33,8 +37,9 @@ describe('/settings/global', () => {
 	it('loads the settings once and shows them grouped', async () => {
 		render(Page);
 		expect(screen.getByRole('heading', { name: 'Global settings', level: 2 })).toBeTruthy();
-		expect(await screen.findByRole('heading', { name: 'Logging', level: 3 })).toBeTruthy();
-		expect(screen.getByRole('heading', { name: 'Server', level: 3 })).toBeTruthy();
+		// M6 §10: log level and port are both in "Server".
+		expect(await screen.findByRole('heading', { name: 'Server', level: 3 })).toBeTruthy();
+		expect(screen.getAllByRole('heading', { level: 3 })).toHaveLength(1);
 		expect(listSettings).toHaveBeenCalledTimes(1);
 		expect((screen.getByLabelText(/Level/) as HTMLSelectElement).value).toBe('info');
 	});
@@ -56,6 +61,10 @@ describe('/settings/global', () => {
 		expect(save.mock.calls[0][0]).toBe('server.port');
 		expect(String(save.mock.calls[0][1])).toBe('9090');
 		expect(await screen.findByText(/need.? a HOPS restart/)).toBeTruthy();
+		// Saved: the row is no longer "unsaved" (a number input's value is stored as its text).
+		const saveBtn = Array.from(row.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Save') as HTMLButtonElement;
+		await waitFor(() => expect(saveBtn.disabled).toBe(true));
+		expect(row.classList.contains('dirty')).toBe(false);
 	});
 
 	it('a refused save shows the reason on the row', async () => {
@@ -140,10 +149,10 @@ describe('/settings/global Animations (M6 §7.13, Ruling 5)', () => {
 	beforeEach(() => listSettings.mockResolvedValue({ settings: [ANIM] }));
 	afterEach(() => { window.matchMedia = realMatchMedia; });
 
-	it('shows "Animations" under Display as On / Off / Always, On by default, and saves a choice', async () => {
+	it('shows "Animations" under Look & motion as On / Off / Always, On by default, and saves a choice', async () => {
 		reducedMotion(false);
 		render(Page);
-		expect(await screen.findByRole('heading', { name: 'Display', level: 3 })).toBeTruthy();
+		expect(await screen.findByRole('heading', { name: 'Look & motion', level: 3 })).toBeTruthy();
 		const sel = screen.getByLabelText(/^Animations/) as HTMLSelectElement;
 		expect(sel.tagName).toBe('SELECT');
 		expect(Array.from(sel.options).map((o) => [o.value, o.textContent?.trim()])).toEqual([
@@ -170,5 +179,71 @@ describe('/settings/global Animations (M6 §7.13, Ruling 5)', () => {
 		expect(screen.queryByText(NOTE)).toBeNull();
 		await fireEvent.change(sel, { target: { value: 'on' } });
 		expect(await screen.findByText(NOTE)).toBeTruthy();
+	});
+});
+
+// M6 §10: the settings in logical groups (one table), each a section the sidebar / chips jump to.
+describe('/settings/global groups (M6 §10)', () => {
+	const ANIM = { key: 'display.animations', value: 'off', default: 'on', type: 'enum', enum: ['on', 'off', 'always'], description: 'Animations.', restartRequired: false };
+	const IDLE = { key: 'editmode.idle_timeout_minutes', value: '15', default: '15', type: 'duration_minutes', min: 0, max: 1440, description: 'Idle.', restartRequired: false };
+	const NEW = { key: 'brand.new_thing', value: '3', default: '3', type: 'int', min: 1, max: 9, description: 'A setting the table does not know yet.', restartRequired: false };
+
+	it('shows the groups in table order as sections with their hash ids; an unknown key is in "Other", last, and editable', async () => {
+		listSettings.mockResolvedValue({ settings: [NEW, PORT, IDLE, ANIM, LOG] });
+		render(Page);
+		await screen.findByRole('heading', { name: 'Other', level: 3 });
+		const headings = screen.getAllByRole('heading', { level: 3 });
+		expect(headings.map((h) => h.textContent?.trim())).toEqual(['Server', 'Editing', 'Look & motion', 'Other']);
+		expect(headings.map((h) => h.closest('section')?.id)).toEqual(['server', 'editing', 'look-motion', 'other']);
+		// Within a group, the table's order: port before log level.
+		const server = headings[0].closest('section')!;
+		expect(Array.from(server.querySelectorAll('.meta-key')).map((c) => c.textContent)).toEqual(['server.port', 'log.level']);
+		// The unknown setting is never hidden, and saves like any other.
+		const other = headings[3].closest('section')!;
+		const input = other.querySelector('input') as HTMLInputElement;
+		await fireEvent.input(input, { target: { value: '5' } });
+		await fireEvent.click(Array.from(other.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Save')!);
+		await waitFor(() => expect(save).toHaveBeenCalled());
+		expect(save.mock.calls[0][0]).toBe('brand.new_thing');
+		expect(String(save.mock.calls[0][1])).toBe('5');
+	});
+
+	it('tells the sidebar its groups and the saved Animations choice; leaving the page clears them', async () => {
+		listSettings.mockResolvedValue({ settings: [PORT, ANIM] });
+		const { unmount } = render(Page);
+		await screen.findByRole('heading', { name: 'Look & motion', level: 3 });
+		await waitFor(() => expect(get(globalNav).groups).toEqual([
+			{ id: 'server', label: 'Server' },
+			{ id: 'look-motion', label: 'Look & motion' }
+		]));
+		expect(get(globalNav).active).toBe('server');
+		expect(get(globalNav).animations).toBe('off');
+		unmount();
+		expect(get(globalNav).groups).toEqual([]);
+	});
+
+	it('has a chip row of the groups (shown on phones); a chip moves to its group', async () => {
+		listSettings.mockResolvedValue({ settings: [PORT, ANIM] });
+		render(Page);
+		const chips = await screen.findByRole('navigation', { name: 'Setting groups' });
+		const links = Array.from(chips.querySelectorAll('a'));
+		expect(links.map((a) => [a.textContent?.trim(), a.getAttribute('href')])).toEqual([
+			['Server', '/settings/global#server'],
+			['Look & motion', '/settings/global#look-motion']
+		]);
+		expect(links[0].getAttribute('aria-current')).toBe('location');
+		await fireEvent.click(links[1]);
+		expect(get(globalNav).active).toBe('look-motion');
+		await waitFor(() => expect(links[1].getAttribute('aria-current')).toBe('location'));
+		expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Look & motion', level: 3 }));
+		expect(replaceState).toHaveBeenCalledWith('#look-motion', {});
+	});
+
+	it('a failed load lists no groups (never a sidebar of groups with nothing behind them)', async () => {
+		listSettings.mockRejectedValueOnce(new Error('down'));
+		render(Page);
+		await screen.findByText(/Failed to load settings: down/);
+		expect(screen.queryByRole('navigation', { name: 'Setting groups' })).toBeNull();
+		expect(get(globalNav).groups).toEqual([]);
 	});
 });

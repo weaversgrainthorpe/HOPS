@@ -11,6 +11,7 @@
   import MigrationFailed from '$lib/components/MigrationFailed.svelte';
   import NoticesBanner from '$lib/components/NoticesBanner.svelte';
   import { provideSettingsShell } from './settingsShell';
+  import { globalNav, onGroupLinkClick } from '$lib/settings/globalNav';
 
   // Settings is the one admin home (spec §4D), one page per section (M5 §9): this shell is shared
   // by all of them. It holds what every settings page needs: the sidebar, the MigrationFailed and
@@ -105,6 +106,21 @@
                   <Icon icon={sec.icon} width="18" />
                   <span>{sec.label}</span>
                 </a>
+                {#if sec.href === '/settings/global' && isCurrent(sec.href) && $globalNav.groups.length > 0}
+                  <!-- M6 §10: Global settings' groups, only while on it; each jumps to its section. -->
+                  <ul class="sub-list" aria-label="Global settings groups">
+                    {#each $globalNav.groups as g (g.id)}
+                      <li>
+                        <a
+                          class="sub-item"
+                          href={`/settings/global#${g.id}`}
+                          aria-current={$globalNav.active === g.id ? 'location' : undefined}
+                          onclick={(e) => onGroupLinkClick(e, g.id)}
+                        >{g.label}</a>
+                      </li>
+                    {/each}
+                  </ul>
+                {/if}
               </li>
             {/each}
             <li class="logout-item">
@@ -260,6 +276,42 @@
 
   .side-item :global(svg) {
     flex-shrink: 0;
+  }
+
+  /* Global settings' groups (M6 §10): indented under it. The group in view gets the light bar and
+     white bold text on the hover colour (#ffffff on #1e293b ≈ 14:1); the others #e2e8f0 ≈ 15:1. */
+  .sidebar .sub-list {
+    gap: 0.1rem;
+    margin: 0.25rem 0 0.35rem 1.6rem;
+    padding-left: 0.5rem;
+    border-left: 1px solid var(--sb-border);
+  }
+
+  .sub-item {
+    display: block;
+    padding: 0.35rem 0.6rem;
+    border-left: 3px solid transparent;
+    border-radius: 0.3rem;
+    color: var(--sb-text);
+    font-size: 0.875rem;
+    text-decoration: none;
+  }
+
+  .sub-item:hover {
+    background: var(--sb-hover-bg);
+    color: #ffffff;
+  }
+
+  .sub-item[aria-current='location'] {
+    background: var(--sb-hover-bg);
+    border-left-color: var(--sb-current-bar);
+    color: #ffffff;
+    font-weight: 600;
+  }
+
+  .sub-item:focus-visible {
+    outline: 3px solid var(--sb-focus);
+    outline-offset: -3px;
   }
 
   .logout-item {
@@ -432,6 +484,11 @@
 
     .sidebar-inner {
       position: static;
+    }
+
+    /* Phones: the groups are a chip row on the Global settings page instead. */
+    .sidebar .sub-list {
+      display: none;
     }
 
     .sidebar-title {

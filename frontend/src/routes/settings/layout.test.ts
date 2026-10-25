@@ -10,6 +10,7 @@ import { render, screen, fireEvent, waitFor, within } from '@testing-library/sve
 const nav = vi.hoisted(() => ({ after: [] as Array<(n: unknown) => void> }));
 vi.mock('$app/navigation', () => ({
 	goto: vi.fn(async () => {}),
+	replaceState: vi.fn(),
 	beforeNavigate: vi.fn(),
 	afterNavigate: vi.fn((cb: (n: unknown) => void) => nav.after.push(cb))
 }));
@@ -37,6 +38,7 @@ import { config, migrationFailure } from '$lib/stores/config';
 import { confirmModalState, closeConfirmModal } from '$lib/stores/confirmModal';
 import { begin, apply, resetEditSessionForTests, dirty } from '$lib/stores/editSession';
 import { updateNode } from '$lib/editor/treeOps';
+import { globalNav, resetGlobalNavForTests } from '$lib/settings/globalNav';
 import Layout from './+layout.svelte';
 import type { Config } from '$lib/types';
 import type { LayoutNode } from '$lib/types/layout';
@@ -87,6 +89,7 @@ beforeEach(() => {
 	mustChangePassword.set(false);
 	authChecked.set(true);
 	isAuthenticated.set(true);
+	resetGlobalNavForTests();
 });
 
 describe('settings shell, logged out', () => {
@@ -307,5 +310,58 @@ describe('settings shell, signed in', () => {
 		expect(childShown()).toBe(false);
 		expect(toastError).toHaveBeenCalledWith(expect.stringContaining('navigation aborted'));
 		toastError.mockRestore();
+	});
+});
+
+// M6 §10: Global settings' groups are a sub-list under "Global settings", only while on that page.
+describe('settings shell, Global settings groups', () => {
+	const groups = [
+		{ id: 'server', label: 'Server' },
+		{ id: 'look-motion', label: 'Look & motion' }
+	];
+	const subList = () => screen.queryByRole('list', { name: 'Global settings groups' });
+
+	it('on Global settings the groups are listed under it, linking to their sections', async () => {
+		at('/settings/global');
+		globalNav.set({ groups, active: 'look-motion' });
+		renderShell();
+		const list = subList()!;
+		expect(list).toBeTruthy();
+		expect(list.closest('li')!.querySelector('a.side-item')!.textContent?.trim()).toBe('Global settings');
+		const links = within(list).getAllByRole('link');
+		expect(links.map((a) => [a.textContent?.trim(), a.getAttribute('href')])).toEqual([
+			['Server', '/settings/global#server'],
+			['Look & motion', '/settings/global#look-motion']
+		]);
+		expect(links.map((a) => a.getAttribute('aria-current'))).toEqual([null, 'location']);
+		globalNav.update((s) => ({ ...s, active: 'server' }));
+		await flush();
+		expect(links.map((a) => a.getAttribute('aria-current'))).toEqual(['location', null]);
+	});
+
+	it('on any other settings page there is no sub-list', () => {
+		at('/settings/dashboards');
+		globalNav.set({ groups, active: 'look-motion' });
+		renderShell();
+		expect(subList()).toBeNull();
+	});
+
+	it('a group link moves to its section: highlighted, heading focused, address hash updated', async () => {
+		at('/settings/global');
+		globalNav.set({ groups, active: 'look-motion' });
+		renderShell();
+		const section = document.createElement('section');
+		section.id = 'server';
+		section.innerHTML = '<h3 tabindex="-1" data-group-heading>Server</h3>';
+		document.body.appendChild(section);
+		try {
+			await fireEvent.click(within(subList()!).getByRole('link', { name: 'Server' }));
+			expect(get(globalNav).active).toBe('server');
+			expect(document.activeElement).toBe(section.querySelector('h3'));
+			const { replaceState } = await import('$app/navigation');
+			expect(replaceState).toHaveBeenCalledWith('#server', {});
+		} finally {
+			section.remove();
+		}
 	});
 });

@@ -12,7 +12,7 @@ test('settings page loads and shows all expected groups', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible({ timeout: 10_000 });
   await expect(page.getByRole('heading', { name: 'Global settings', level: 2 })).toBeVisible({ timeout: 10_000 });
   // The setting groups render once the settings have loaded.
-  for (const g of ['Server', 'Logging', 'Authentication']) {
+  for (const g of ['Server', 'Sign-in & security', 'Uploads', 'Editing', 'Look & motion', 'Status checks', 'Discovery']) {
     await expect(page.getByRole('heading', { name: g, level: 3, exact: true })).toBeVisible({ timeout: 10_000 });
   }
 });
