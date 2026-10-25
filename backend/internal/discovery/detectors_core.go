@@ -81,6 +81,8 @@ func coreDetectors() []Detector {
 			// Emby on the same port answers /System/Info/Public too.
 			bodyContains:  []string{"Jellyfin", "jellyfin-web", "\"ProductName\":\"Jellyfin"},
 			titleContains: []string{"Jellyfin"},
+			// An Emby page can mention Jellyfin; veto on Emby's title.
+			excludeTitleContains: []string{"Emby"},
 			confidence:    ConfidenceHigh,
 		},
 		httpFingerprintDetector{
@@ -136,8 +138,8 @@ func coreDetectors() []Detector {
 			bodyContains:  []string{"Overseerr"},
 			titleContains: []string{"Overseerr"},
 			// Jellyseerr (a fork, same port) has its own detector and
-			// can still mention Overseerr on its pages.
-			excludeContains: []string{"Jellyseerr"},
+			// can still mention Overseerr on its pages; veto on its title.
+			excludeTitleContains: []string{"Jellyseerr"},
 			confidence:    ConfidenceHigh,
 		},
 		httpFingerprintDetector{
@@ -722,8 +724,9 @@ func coreDetectors() []Detector {
 			id: "core/monit", name: "Monit", icon: "mdi:heart-pulse", category: CategoryMonitoring,
 			description: "Monit process and system monitor",
 			ports:       []int{2812},
-			// Monit answers / with 401 Basic auth; its Server header and
-			// realm both say "monit".
+			// Monit answers / with 401 Basic auth. The primary signal is
+			// its Server header ("monit 5.x"); the Basic realm "monit" is
+			// a secondary match for a proxy that strips Server.
 			headerKeys: []string{"server: monit", "www-authenticate: realm=\"monit\""},
 			confidence: ConfidenceHigh,
 		},
@@ -803,19 +806,19 @@ func coreDetectors() []Detector {
 			ports:       []int{8096},
 			// Same port as Jellyfin (a fork of Emby) whose web client
 			// still uses emby-* element names, so match only Emby's
-			// <title> and veto anything naming Jellyfin.
-			paths:           []string{"/web/index.html"},
-			titleContains:   []string{"Emby"},
-			excludeContains: []string{"Jellyfin", "jellyfin"},
+			// <title>, and veto a title naming Jellyfin.
+			paths:                []string{"/web/index.html"},
+			titleContains:        []string{"Emby"},
+			excludeTitleContains: []string{"Jellyfin"},
 			confidence:      ConfidenceHigh,
 		},
 		httpFingerprintDetector{
 			id: "core/jellyseerr", name: "Jellyseerr", icon: "jellyseerr", category: CategoryDownloads,
 			description:   "Media request management for Jellyfin / Emby",
 			ports:         []int{5055},
-			paths:         []string{"/login"},
+			paths: []string{"/login"},
+			// Title only: an Overseerr page can mention Jellyseerr.
 			titleContains: []string{"Jellyseerr"},
-			bodyContains:  []string{"Jellyseerr"},
 			confidence:    ConfidenceHigh,
 		},
 		httpFingerprintDetector{

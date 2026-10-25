@@ -2,6 +2,7 @@ package discovery
 
 import (
 	"context"
+	"errors"
 	"io/fs"
 	"os"
 	"regexp"
@@ -113,6 +114,10 @@ var fingerprintFixtures = []fixture{
 	{name: "monit", port: 2812, want: "core/monit",
 		root: fxResp{status: 401, headers: map[string]string{"Server": "monit 5.33.0", "WWW-Authenticate": `Basic realm="monit"`},
 			body: `<html><head><title>401 Unauthorized</title></head><body><h2>Unauthorized</h2>You are not authorized to access monit.</body></html>`}},
+	{name: "monit by server header alone", port: 2812, want: "core/monit",
+		root: fxResp{status: 401, headers: map[string]string{"Server": "monit 5.26.0", "WWW-Authenticate": `Basic realm="admin"`}}},
+	{name: "monit by realm alone (secondary)", port: 2812, want: "core/monit",
+		root: fxResp{status: 401, headers: map[string]string{"Server": "", "WWW-Authenticate": `Basic realm="monit"`}}},
 	{name: "monit look-alike: other basic-auth service", port: 2812,
 		root: fxResp{status: 401, headers: map[string]string{"Server": "nginx", "WWW-Authenticate": `Basic realm="Restricted"`},
 			body: `<html><head><title>401 Authorization Required</title></head><body>401</body></html>`}},
@@ -124,6 +129,11 @@ var fingerprintFixtures = []fixture{
 		root: fxResp{body: html("Open WebUI", "")}},
 	{name: "grafana on 3000 is not open webui", port: 3000, want: "core/grafana",
 		root: fxResp{headers: map[string]string{"X-Grafana-Version": "11.0.0"}, body: html("Grafana", "")}},
+
+	{name: "open webui look-alike on 3000", port: 3000,
+		root: fxResp{body: html("Open Source Web Portal", `<p>open web ui kit</p>`)}},
+	{name: "localai look-alike on 3000", port: 3000,
+		root: fxResp{body: html("Local AI Notes", `<p>notes about local ai</p>`)}},
 
 	{name: "localai", port: 8080, want: "core/localai",
 		root: fxResp{body: html("LocalAI API - v2.24.2", `<h1>Welcome to your LocalAI instance!</h1>`)}},
@@ -143,6 +153,8 @@ var fingerprintFixtures = []fixture{
 	// ---- Smart home ----
 	{name: "zigbee2mqtt", port: 8080, want: "core/zigbee2mqtt",
 		root: fxResp{body: html("Zigbee2MQTT", "")}},
+	{name: "zigbee2mqtt look-alike on 8080", port: 8080,
+		root: fxResp{body: html("MQTT Explorer", `<p>zigbee devices over mqtt</p>`)}},
 	{name: "qbittorrent on 8080 is not zigbee2mqtt", port: 8080, want: "core/qbittorrent",
 		root: fxResp{body: html("qBittorrent Web UI", "")}},
 
@@ -189,6 +201,15 @@ var fingerprintFixtures = []fixture{
 	{name: "overseerr is not jellyseerr", port: 5055, want: "core/overseerr",
 		root:  fxResp{status: 307, headers: map[string]string{"Location": "/login"}},
 		paths: map[string]fxResp{"/login": {body: html("Sign In - Overseerr", "")}}},
+
+	// Vetoes are title-only: a page merely mentioning the sibling app
+	// in its body still belongs to its own detector.
+	{name: "emby page mentioning jellyfin", port: 8096, want: "core/emby",
+		root:  fxResp{status: 302, headers: map[string]string{"Location": "/web/index.html"}},
+		paths: map[string]fxResp{"/web/index.html": {body: html("Emby", `<p>Moving from Jellyfin (jellyfin)? Import your library.</p>`)}}},
+	{name: "overseerr page mentioning jellyseerr", port: 5055, want: "core/overseerr",
+		root:  fxResp{status: 307, headers: map[string]string{"Location": "/login"}},
+		paths: map[string]fxResp{"/login": {body: html("Sign In - Overseerr", `<p>Not Jellyseerr — see the docs.</p>`)}}},
 
 	{name: "readarr", port: 8787, want: "core/readarr",
 		root:  fxResp{body: html("Readarr", "")},
@@ -408,13 +429,14 @@ func TestHeaderValueSignature(t *testing.T) {
 	}
 }
 
-func TestExcludeVetoesMatch(t *testing.T) {
-	d := httpFingerprintDetector{titleContains: []string{"Overseerr"}, excludeContains: []string{"Jellyseerr"}}
+func TestExcludeTitleVetoesMatch(t *testing.T) {
+	d := httpFingerprintDetector{titleContains: []string{"Overseerr"}, bodyContains: []string{"Overseerr"},
+		excludeTitleContains: []string{"Jellyseerr"}}
 	if d.matches(&HTTPSnapshot{Body: []byte(html("Jellyseerr", "Overseerr"))}) {
-		t.Error("exclude should veto the match")
+		t.Error("an excluded title should veto the match")
 	}
-	if !d.matches(&HTTPSnapshot{Body: []byte(html("Overseerr", ""))}) {
-		t.Error("no excluded string present, should match")
+	if !d.matches(&HTTPSnapshot{Body: []byte(html("Overseerr", "migrating from Jellyseerr"))}) {
+		t.Error("the excluded word in the body (not the title) must not veto")
 	}
 }
 
@@ -490,5 +512,70 @@ func TestBundledDetectorsWellFormed(t *testing.T) {
 		} else if _, err := fs.Stat(assets.DashboardIcons, "dashboard-icons/"+hp.icon+".svg"); err != nil {
 			t.Errorf("%s: dashboard icon %q not bundled", hp.id, hp.icon)
 		}
+	}
+}
+
+// ---- Per-probe HTTP cache ----
+
+type countingFetch struct {
+	calls map[string]int
+	fail  bool
+}
+
+func (c *countingFetch) fetch(_ context.Context, port int, path string, tlsOn bool) (*HTTPSnapshot, error) {
+	c.calls[path]++
+	if c.fail {
+		return nil, errors.New("connection reset")
+	}
+	if path == "/web/index.html" {
+		return &HTTPSnapshot{Status: 200, Headers: map[string]string{}, Body: []byte(html("Emby", ""))}, nil
+	}
+	return &HTTPSnapshot{Status: 404, Headers: map[string]string{}, Body: []byte("not found")}, nil
+}
+
+// Emby and Jellyfin both try /web/index.html on 8096: one fetch serves both.
+func TestProbeHTTPCacheOneFetchPerPath(t *testing.T) {
+	cf := &countingFetch{calls: map[string]int{}}
+	p := &Probe{
+		Host:      fxHost,
+		OpenPorts: []int{8096},
+		HTTPResponses: map[int]*HTTPSnapshot{8096: {Status: 302,
+			Headers: map[string]string{"location": "/web/index.html"}}},
+		HTTP: cachedProbeHTTP(cf.fetch),
+	}
+	for _, d := range coreDetectors() {
+		if d.ID() == "core/emby" || d.ID() == "core/jellyfin" {
+			d.Run(context.Background(), p)
+		}
+	}
+	if n := cf.calls["/web/index.html"]; n != 1 {
+		t.Fatalf("/web/index.html fetched %d times, want 1", n)
+	}
+}
+
+// A failed fetch is remembered as a failure (never as an empty success)
+// and isn't retried within the same probe.
+func TestProbeHTTPCacheKeepsFailure(t *testing.T) {
+	cf := &countingFetch{calls: map[string]int{}, fail: true}
+	get := cachedProbeHTTP(cf.fetch)
+	for i := 0; i < 2; i++ {
+		snap, err := get(context.Background(), 8096, "/x")
+		if err == nil || snap != nil {
+			t.Fatalf("call %d: snap=%v err=%v, want the failure", i, snap, err)
+		}
+	}
+	if cf.calls["/x"] != 1 {
+		t.Fatalf("failed path fetched %d times, want 1", cf.calls["/x"])
+	}
+	// Different port or path is a different key.
+	_, _ = get(context.Background(), 8097, "/x")
+	_, _ = get(context.Background(), 8096, "/y")
+	if cf.calls["/x"] != 2 || cf.calls["/y"] != 1 {
+		t.Fatalf("calls = %v", cf.calls)
+	}
+	// A fresh probe (new cache) fetches again.
+	_, _ = cachedProbeHTTP(cf.fetch)(context.Background(), 8096, "/x")
+	if cf.calls["/x"] != 3 {
+		t.Fatalf("a new probe should not see the old probe's failure: %v", cf.calls)
 	}
 }

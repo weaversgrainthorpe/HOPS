@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -35,12 +36,17 @@ func portsForIntensity(intensity string) []int {
 	}
 }
 
-// lightActivePorts is the TCP allowlist for the "light active" scan
-// intensity. Every port here is the default for at least one common
-// homelab service the bundled detectors recognise. Probing more ports
-// finds more services but inflates worst-case scan time linearly — keep
-// the list tight and only add ports that a bundled detector actually
-// consumes.
+// lightActivePorts is the base TCP allowlist for the "light active" scan
+// intensity: the default ports of the most common homelab services.
+//
+// Policy: this is NOT the whole light scan. effectivePortsForScan (in
+// orchestrator.go) adds every port declared by every specific detector —
+// bundled and admin-defined — to every non-passive scan, light included.
+// So a bundled detector's port is probed in a light scan whether or not
+// it is listed here; listing it only documents that it's a common one.
+// Each extra port inflates worst-case scan time linearly (Pi Zero
+// tenet), so keep both this list and bundled detectors' port lists
+// tight.
 var lightActivePorts = []int{
 	80,    // generic HTTP — Pi-hole, NPM (admin alt), Vaultwarden, TrueNAS, …
 	81,    // Nginx Proxy Manager admin
@@ -54,7 +60,7 @@ var lightActivePorts = []int{
 	5001,  // Synology DSM (HTTPS)
 	5050,  // pgAdmin default
 	5055,  // Overseerr / Jellyseerr
-	5800,  // Tdarr / FileRun alt
+	5800,  // noVNC / VNC-over-web consoles (generic HTTP fallback)
 	6052,  // ESPHome dashboard — the standard HA add-on/container for ESP devices
 	6767,  // Bazarr
 	7575,  // homepage / homarr
@@ -360,4 +366,42 @@ func httpGetProbe(ctx context.Context, host string, port int, path string, tlsOn
 		}
 	}
 	return snap, nil
+}
+
+// cachedProbeHTTP wraps a single-host fetch so each (port, scheme, path)
+// is requested at most once per host probe. The cache lives in the
+// returned closure, so it is scoped to one Probe and discarded with it.
+// A failed fetch is cached as that same failure (error, nil snapshot) —
+// never as an empty success — so every detector asking for the path
+// sees the failure, and nothing outlives the probe.
+func cachedProbeHTTP(fetch func(ctx context.Context, port int, path string, tlsOn bool) (*HTTPSnapshot, error)) func(ctx context.Context, port int, path string) (*HTTPSnapshot, error) {
+	type entry struct {
+		once sync.Once
+		snap *HTTPSnapshot
+		err  error
+	}
+	var mu sync.Mutex
+	cache := map[string]*entry{}
+	return func(ctx context.Context, port int, path string) (*HTTPSnapshot, error) {
+		tlsOn := isTLSExpectedPort(port)
+		scheme := "http"
+		if tlsOn {
+			scheme = "https"
+		}
+		key := fmt.Sprintf("%d|%s|%s", port, scheme, path)
+		mu.Lock()
+		e, ok := cache[key]
+		if !ok {
+			e = &entry{}
+			cache[key] = e
+		}
+		mu.Unlock()
+		e.once.Do(func() {
+			e.snap, e.err = fetch(ctx, port, path, tlsOn)
+			if e.err == nil && e.snap == nil {
+				e.err = fmt.Errorf("discovery: no response for %s %d%s", scheme, port, path)
+			}
+		})
+		return e.snap, e.err
+	}
 }

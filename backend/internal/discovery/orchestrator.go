@@ -558,9 +558,12 @@ func (o *Orchestrator) probeHost(ctx context.Context, scanID, host string, ports
 	probe := &Probe{
 		Host:          host,
 		HTTPResponses: make(map[int]*HTTPSnapshot),
-		HTTP: func(c context.Context, port int, path string) (*HTTPSnapshot, error) {
-			return httpGetProbe(c, host, port, path, isTLSExpectedPort(port), timeout)
-		},
+		// One fetch per (port, scheme, path) for this host probe:
+		// detectors sharing a path (Emby/Jellyfin /web/index.html, the
+		// *arr /login, …) reuse the first response.
+		HTTP: cachedProbeHTTP(func(c context.Context, port int, path string, tlsOn bool) (*HTTPSnapshot, error) {
+			return httpGetProbe(c, host, port, path, tlsOn, timeout)
+		}),
 	}
 
 	// Hostname enrichment: prefer mDNS-derived names (already

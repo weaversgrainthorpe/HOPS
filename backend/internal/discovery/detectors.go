@@ -214,11 +214,13 @@ type httpFingerprintDetector struct {
 	// "server: CouchDB/". Header names can't contain ':', so the two
 	// forms never collide.
 	headerKeys []string
-	// excludeContains vetoes a match on a response whose body contains
-	// any of these (case-sensitive bytes). Bundled-only: separates a fork
-	// from its parent when the fork still carries the parent's name
-	// (Jellyseerr pages can mention Overseerr).
-	excludeContains []string
+	// excludeTitleContains vetoes a match on a response whose <title>
+	// contains any of these (case-insensitive). Title-only on purpose:
+	// a page that merely mentions a sibling app in its body still
+	// belongs to its own detector. Bundled-only: separates a fork from
+	// its parent on the same port (Jellyseerr vs Overseerr, Jellyfin vs
+	// Emby).
+	excludeTitleContains []string
 	// faviconHashes are signed-int32 MurmurHash3 hashes (Shodan
 	// convention) of the favicon. Not consulted in Run() — matched
 	// separately by the orchestrator's favicon-hash pass after body/
@@ -265,9 +267,12 @@ func (d httpFingerprintDetector) matches(snap *HTTPSnapshot) bool {
 	if snap == nil {
 		return false
 	}
-	for _, veto := range d.excludeContains {
-		if bytes.Contains(snap.Body, []byte(veto)) {
-			return false
+	if len(d.excludeTitleContains) > 0 {
+		title := strings.ToLower(extractHTMLTitle(snap.Body))
+		for _, veto := range d.excludeTitleContains {
+			if title != "" && strings.Contains(title, strings.ToLower(veto)) {
+				return false
+			}
 		}
 	}
 	for _, needle := range d.bodyContains {
