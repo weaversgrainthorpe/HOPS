@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { goto, afterNavigate } from '$app/navigation';
   import { page } from '$app/stores';
   import Icon from '@iconify/svelte';
@@ -34,6 +35,32 @@
 
   let pathname = $derived($page.url.pathname);
   const isCurrent = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
+
+  // Discovery's pages, shown under "Discovery" (and as a chip row on phones) on any Discovery page.
+  // Scan also covers /new and /[id] (a scan's own pages).
+  const discoveryPages = [
+    { href: '/settings/discovery', label: 'Scan' },
+    { href: '/settings/discovery/diagnostics', label: 'Diagnostics' },
+    { href: '/settings/discovery/detectors', label: 'Manage detectors' },
+  ];
+  let onDiscovery = $derived(isCurrent('/settings/discovery'));
+  let discoveryCurrent = $derived(
+    isCurrent('/settings/discovery/diagnostics')
+      ? '/settings/discovery/diagnostics'
+      : isCurrent('/settings/discovery/detectors')
+        ? '/settings/discovery/detectors'
+        : '/settings/discovery'
+  );
+
+  // The navbar's height: the phones' chip row sticks just under it (as on Global settings).
+  let navbarH = $state(0);
+  onMount(() => {
+    const nav = document.querySelector('nav.navbar');
+    if (!(nav instanceof HTMLElement) || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => (navbarH = nav.getBoundingClientRect().height));
+    ro.observe(nav);
+    return () => ro.disconnect();
+  });
 
   // Where Cancel on the sign-in dialog goes: the page you came from, else "/". Never an admin
   // page (another settings page included): signed out, it would send you straight back here
@@ -94,6 +121,23 @@
   }
 </script>
 
+<!-- One sub-list for every section that has one (Global settings' groups, Discovery's pages): the
+     same markup and styles. `current` marks the link in view (aria-current="location"). -->
+{#snippet subList(label: string, links: Array<{ href: string; label: string; id: string; onclick?: (e: MouseEvent) => void }>, current: string | null)}
+  <ul class="sub-list" aria-label={label}>
+    {#each links as l (l.id)}
+      <li>
+        <a
+          class="sub-item"
+          href={l.href}
+          aria-current={current === l.id ? 'location' : undefined}
+          onclick={l.onclick}
+        >{l.label}</a>
+      </li>
+    {/each}
+  </ul>
+{/snippet}
+
 <div class="settings-shell" class:has-sidebar={showShell}>
   {#if showShell}
     <aside class="sidebar">
@@ -113,18 +157,18 @@
                 </a>
                 {#if sec.href === '/settings/global' && isCurrent(sec.href) && $globalNav.groups.length > 0}
                   <!-- M6 §10: Global settings' groups, only while on it; each jumps to its section. -->
-                  <ul class="sub-list" aria-label="Global settings groups">
-                    {#each $globalNav.groups as g (g.id)}
-                      <li>
-                        <a
-                          class="sub-item"
-                          href={`/settings/global#${g.id}`}
-                          aria-current={$globalNav.active === g.id ? 'location' : undefined}
-                          onclick={(e) => onGroupLinkClick(e, g.id)}
-                        >{g.label}</a>
-                      </li>
-                    {/each}
-                  </ul>
+                  {@render subList(
+                    'Global settings groups',
+                    $globalNav.groups.map((g) => ({ id: g.id, label: g.label, href: `/settings/global#${g.id}`, onclick: (e: MouseEvent) => onGroupLinkClick(e, g.id) })),
+                    $globalNav.active
+                  )}
+                {:else if sec.href === '/settings/discovery' && onDiscovery}
+                  <!-- Discovery's pages, while on any of them. -->
+                  {@render subList(
+                    'Discovery pages',
+                    discoveryPages.map((d) => ({ id: d.href, label: d.label, href: d.href })),
+                    discoveryCurrent
+                  )}
                 {/if}
               </li>
             {/each}
@@ -176,6 +220,19 @@
       {:else}
         {#if !$migrationFailure}
           <NoticesBanner />
+        {/if}
+
+        {#if onDiscovery}
+          <!-- Phones: Discovery's pages as a chip row on the page (the sidebar list is hidden). -->
+          <nav class="group-chips" aria-label="Discovery pages" style:--chips-top={navbarH ? `${navbarH}px` : undefined}>
+            {#each discoveryPages as d (d.href)}
+              <a
+                class="group-chip"
+                href={d.href}
+                aria-current={discoveryCurrent === d.href ? 'location' : undefined}
+              >{d.label}</a>
+            {/each}
+          </nav>
         {/if}
 
         <div class="page-body" class:greyed-out={$isBackendOffline}>
@@ -319,6 +376,12 @@
     outline-offset: -3px;
   }
 
+  /* The phones' chip row for a section's sub-pages (Global settings' groups, Discovery's pages):
+     shared here. Wider than a phone the sidebar's sub-list does this job. */
+  .settings-content :global(.group-chips) {
+    display: none;
+  }
+
   .logout-item {
     margin-top: 0.75rem;
     padding-top: 0.75rem;
@@ -337,15 +400,10 @@
     min-width: 0;
   }
 
-  /* THE width rule for every settings page (M6 §7.10), one place for all of them:
-       - paragraphs (and the paragraph-like intro, aside, hint and description texts) keep a
-         reading measure of about 75 characters;
-       - everything else (boxes, tables, cards, sections, forms, headers) uses the full width.
+  /* THE width rule for every settings page (M6 §7.10), one place for all of them: text and boxes
+     alike use the full width. There is no reading-measure cap on prose (Jonathan's ruling: intro
+     and heading text must not bunch into the first third of a wide screen).
      The empty-state box is a box, so it spans the width too; its sentence stays centred. */
-  .page-body :global(:is(p, .lede, .lede-aside, .hint, .desc)) {
-    max-width: 75ch;
-  }
-
   .page-body :global(.empty-state) {
     max-width: none;
   }
@@ -411,7 +469,6 @@
 
   .settings-content :global(.lede) {
     color: var(--text-secondary);
-    max-width: 75ch;
     margin: 0 0 1rem;
   }
 
@@ -491,7 +548,7 @@
       position: static;
     }
 
-    /* Phones: the groups are a chip row on the Global settings page instead. */
+    /* Phones: the sub-pages are a chip row on the page instead. */
     .sidebar .sub-list {
       display: none;
     }
@@ -529,6 +586,46 @@
 
     .settings-main {
       padding: 1.25rem 1rem 3rem;
+    }
+
+    /* One row of chips that scrolls sideways, kept at the top while the page scrolls. */
+    .settings-content :global(.group-chips) {
+      display: flex;
+      gap: 0.4rem;
+      position: sticky;
+      top: var(--chips-top, 60px);
+      z-index: 5;
+      margin: 0 -1rem 1rem;
+      padding: 0.5rem 1rem;
+      overflow-x: auto;
+      scrollbar-width: none;
+      background: var(--bg-primary);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .settings-content :global(.group-chip) {
+      flex: none;
+      padding: 0.4rem 0.75rem;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      font-size: 0.875rem;
+      white-space: nowrap;
+      text-decoration: none;
+    }
+
+    /* Text on the accent: --accent-solid with --on-accent (>= 4.5:1 on every preset). */
+    .settings-content :global(.group-chip[aria-current='location']) {
+      background: var(--accent-solid);
+      border-color: var(--accent-solid);
+      color: var(--on-accent);
+      font-weight: 600;
+    }
+
+    .settings-content :global(.group-chip:focus-visible) {
+      outline: 3px solid var(--accent);
+      outline-offset: 2px;
     }
 
     .offline-banner {

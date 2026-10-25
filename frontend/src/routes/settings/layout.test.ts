@@ -365,3 +365,50 @@ describe('settings shell, Global settings groups', () => {
 		}
 	});
 });
+
+// Discovery's pages are a sub-list under "Discovery" (same look as Global settings' groups), shown
+// on every Discovery page with the current one marked; phones get a chip row on the page instead.
+describe('settings shell, Discovery pages', () => {
+	const subList = () => screen.queryByRole('list', { name: 'Discovery pages' });
+	const chipRow = () => screen.queryByRole('navigation', { name: 'Discovery pages' });
+	const cases: Array<[string, string]> = [
+		['/settings/discovery', 'Scan'],
+		['/settings/discovery/new', 'Scan'],
+		['/settings/discovery/abc123', 'Scan'],
+		['/settings/discovery/diagnostics', 'Diagnostics'],
+		['/settings/discovery/detectors', 'Manage detectors']
+	];
+
+	for (const [path, current] of cases) {
+		it(`${path}: the three pages are listed under Discovery, ${current} marked`, () => {
+			at(path);
+			renderShell();
+			const list = subList()!;
+			expect(list).toBeTruthy();
+			expect(list.className).toContain('sub-list');
+			expect(list.closest('li')!.querySelector('a.side-item')!.textContent?.trim()).toBe('Discovery');
+			const links = within(list).getAllByRole('link');
+			expect(links.map((a) => [a.textContent?.trim(), a.getAttribute('href')])).toEqual([
+				['Scan', '/settings/discovery'],
+				['Diagnostics', '/settings/discovery/diagnostics'],
+				['Manage detectors', '/settings/discovery/detectors']
+			]);
+			expect(links.every((a) => a.className.includes('sub-item'))).toBe(true);
+			expect(links.filter((a) => a.getAttribute('aria-current') === 'location').map((a) => a.textContent?.trim())).toEqual([current]);
+			// The phone chip row carries the same links and mark.
+			const chips = within(chipRow()!).getAllByRole('link');
+			expect(chips.map((a) => a.textContent?.trim())).toEqual(['Scan', 'Diagnostics', 'Manage detectors']);
+			expect(chips.filter((a) => a.getAttribute('aria-current') === 'location').map((a) => a.textContent?.trim())).toEqual([current]);
+		});
+	}
+
+	it('on any other settings page there is neither list nor chip row', () => {
+		for (const path of ['/settings/dashboards', '/settings/global', '/settings/backups']) {
+			at(path);
+			const { unmount } = renderShell();
+			expect(subList()).toBeNull();
+			expect(chipRow()).toBeNull();
+			unmount();
+		}
+	});
+});

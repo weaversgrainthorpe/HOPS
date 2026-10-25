@@ -337,12 +337,10 @@ a:focus-visible {
   color: var(--accent-text);
 }
 
-/* Lede paragraph — page intro text. Single canonical max-width across
-   every admin page (was 640px / 70ch / 80ch on different pages). */
+/* Lede paragraph — page intro text. Full width: no reading-measure cap. */
 .lede {
   color: var(--text-secondary);
   margin: 0 0 var(--space-6);
-  max-width: 75ch;
   line-height: 1.55;
 }
 .lede-aside {
@@ -351,7 +349,6 @@ a:focus-visible {
   background: rgba(245, 158, 11, 0.05);
   color: var(--text-secondary);
   margin: 0 0 var(--space-6);
-  max-width: 75ch;
   border-radius: 0 var(--radius-md) var(--radius-md) 0;
   line-height: 1.55;
 }

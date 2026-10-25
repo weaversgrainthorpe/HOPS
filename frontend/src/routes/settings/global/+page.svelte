@@ -503,11 +503,6 @@
     outline-offset: 3px;
   }
 
-  /* The chip row is the phones' form (below); wider, the sidebar lists the groups. */
-  .group-chips {
-    display: none;
-  }
-
   .group h3 {
     margin: 0 0 0.75rem;
     font-size: 1.15rem;
@@ -786,48 +781,8 @@
     color: var(--text-secondary);
   }
 
-  /* Phones (M6 §10): the groups as one row of chips that scrolls sideways, kept at the top while
-     the page scrolls. */
+  /* Phones (M6 §10): the chip row's look is the settings shell's; the groups clear it when jumped to. */
   @media (max-width: 640px) {
-    .group-chips {
-      display: flex;
-      gap: 0.4rem;
-      position: sticky;
-      top: var(--chips-top, 60px);
-      z-index: 5;
-      margin: 0 -1rem 1rem;
-      padding: 0.5rem 1rem;
-      overflow-x: auto;
-      scrollbar-width: none;
-      background: var(--bg-primary);
-      border-bottom: 1px solid var(--border);
-    }
-
-    .group-chip {
-      flex: none;
-      padding: 0.4rem 0.75rem;
-      border: 1px solid var(--border);
-      border-radius: 999px;
-      background: var(--bg-secondary);
-      color: var(--text-primary);
-      font-size: 0.875rem;
-      white-space: nowrap;
-      text-decoration: none;
-    }
-
-    /* Text on the accent: --accent-solid with --on-accent (>= 4.5:1 on every preset). */
-    .group-chip[aria-current='location'] {
-      background: var(--accent-solid);
-      border-color: var(--accent-solid);
-      color: var(--on-accent);
-      font-weight: 600;
-    }
-
-    .group-chip:focus-visible {
-      outline: 3px solid var(--accent);
-      outline-offset: 2px;
-    }
-
     .group {
       scroll-margin-top: calc(var(--chips-top, 60px) + 3.5rem);
     }

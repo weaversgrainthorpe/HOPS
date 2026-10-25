@@ -1384,7 +1384,6 @@
     border-left: 3px solid var(--accent);
     border-radius: 0.5rem;
     background: var(--bg-tertiary);
-    max-width: 75ch;
   }
   .motion-note {
     display: flex;
@@ -1435,7 +1434,6 @@
     background: var(--bg-tertiary);
     color: var(--text-primary);
     font-size: 0.9rem;
-    max-width: 75ch;
   }
   .overlay-note :global(svg) {
     flex-shrink: 0;

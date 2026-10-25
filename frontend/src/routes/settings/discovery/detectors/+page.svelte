@@ -13,6 +13,7 @@
     type DiscoveryDetector, type DiscoveryDetectorInput, type DiscoveryCategory,
   } from '$lib/utils/api';
   import DetectorEditModal from '$lib/components/admin/DetectorEditModal.svelte';
+  import DetectorHonestyNote from '$lib/components/settings/DetectorHonestyNote.svelte';
 
   let detectors = $state<DiscoveryDetector[]>([]);
   let loading = $state(true);
@@ -281,6 +282,7 @@
     start — if a scan is already running, let it finish (or cancel it)
     first.
   </p>
+  <DetectorHonestyNote />
 
   <div class="filter-bar">
     <button class:active={filter === 'all'} onclick={() => (filter = 'all')}>

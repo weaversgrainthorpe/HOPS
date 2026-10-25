@@ -1,6 +1,7 @@
 // M6 §7.8–7.11 (design/specs/2026-10-23-hops-v3-m6-folder-shapes-design.md):
 //  - Discovery and every settings page use the full content width; one rule for all of them:
-//    paragraphs keep a reading measure of about 75ch, boxes/tables/cards/sections use the full width.
+//    prose and boxes alike use the full width (no 75ch cap: Jonathan's ruling, Discovery sub-menu
+//    round); only a Global settings row's description column keeps its measure (Ruling 4, below).
 //  - Discovery's sub-pages have a "‹ Discovery" link back at the top.
 //  - The sidebar is always there, at the left edge, on Discovery pages (no sideways shift).
 //  - Factory reset is an emergency-stop button (CSS/SVG only) and still asks for confirmation.
@@ -55,6 +56,7 @@ async function measure(page: Page) {
 		let widest = 0;
 		const tooWide: string[] = [];
 		const isPara = (el: Element) => el.matches('p, .lede, .lede-aside, .hint, .desc');
+		const isRowDesc = (el: Element) => el.matches('.row .desc');
 		for (const el of Array.from(body.querySelectorAll('*')) as HTMLElement[]) {
 			const r = el.getBoundingClientRect();
 			if (!r.width || !r.height) continue;
@@ -68,7 +70,7 @@ async function measure(page: Page) {
 				probe.remove();
 				const pcs = getComputedStyle(el);
 				const textW = r.width - parseFloat(pcs.paddingLeft) - parseFloat(pcs.paddingRight);
-				if (textW > 76 * ch) tooWide.push(`${el.tagName}.${el.className} ${Math.round(textW)}px > 76ch (${Math.round(76 * ch)}px)`);
+				if (isRowDesc(el) && textW > 76 * ch) tooWide.push(`${el.tagName}.${el.className} ${Math.round(textW)}px > 76ch (${Math.round(76 * ch)}px)`);
 			} else if (r.left - left < 2) {
 				widest = Math.max(widest, r.width);
 			}
@@ -80,7 +82,7 @@ async function measure(page: Page) {
 test.describe('settings widths', () => {
 	for (const width of [1280, 1920]) {
 		for (const pg of PAGES) {
-			test(`${pg.path} at ${width}: content fills the column, paragraphs ≤ 75ch`, async ({ page }) => {
+			test(`${pg.path} at ${width}: content fills the column`, async ({ page }) => {
 				await page.setViewportSize({ width, height: 900 });
 				await open(page, pg.path, pg.heading);
 				const m = await measure(page);

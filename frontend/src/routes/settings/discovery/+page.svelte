@@ -3,6 +3,7 @@
   import { goto } from '$app/navigation';
   import Icon from '@iconify/svelte';
   import Button from '$lib/components/shared/Button.svelte';
+  import DetectorHonestyNote from '$lib/components/settings/DetectorHonestyNote.svelte';
   import { isAuthenticated, waitForAuthChecked } from '$lib/stores/auth';
   import { toast } from '$lib/stores/toast';
   import { confirm } from '$lib/stores/confirmModal';
@@ -116,6 +117,7 @@
     lands on a dashboard; use the <b>Diagnostics</b> view to teach HOPS
     about anything it didn't recognise.
   </p>
+  <DetectorHonestyNote />
 
   {#if loading}
     <p class="muted">Loading…</p>
