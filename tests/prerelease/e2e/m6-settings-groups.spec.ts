@@ -112,6 +112,18 @@ test.describe('M6 §10 global settings groups', () => {
     await expectCurrent(subList(page), 'Server');
   });
 
+  test('scrolling by hand to the bottom highlights the last group, and back up moves it off', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await open(page);
+    await page.mouse.move(800, 400);
+    await page.mouse.wheel(0, 100_000);
+    await expect.poll(() => page.evaluate(() => window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2)).toBe(true);
+    await expectCurrent(subList(page), 'Discovery');
+    // A little way back up, the highlight leaves the last group again.
+    await page.mouse.wheel(0, -400);
+    await expect(subList(page).getByRole('link', { name: 'Discovery', exact: true })).not.toHaveAttribute('aria-current', 'location');
+  });
+
   test('phone (390): the groups are a chip row at the top of the page, and the chips work', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await open(page);

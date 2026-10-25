@@ -67,6 +67,16 @@ describe('/settings/global', () => {
 		expect(row.classList.contains('dirty')).toBe(false);
 	});
 
+	it('a cleared number is refused on the row ("Enter a number") and never sent', async () => {
+		render(Page);
+		const port = (await screen.findByLabelText(/Port/)) as HTMLInputElement;
+		await fireEvent.input(port, { target: { value: '' } });
+		const row = port.closest('.row') as HTMLElement;
+		await fireEvent.click(Array.from(row.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Save')!);
+		await waitFor(() => expect(row.textContent).toContain('Enter a number'));
+		expect(save).not.toHaveBeenCalled();
+	});
+
 	it('a refused save shows the reason on the row', async () => {
 		save.mockRejectedValueOnce(new Error('out of range'));
 		render(Page);

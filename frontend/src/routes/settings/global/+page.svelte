@@ -166,8 +166,14 @@
 
   async function save(s: SettingDef) {
     perKeyError[s.key] = '';
+    const raw: unknown = drafts[s.key];
+    if (usesNumberInput(s) && (raw === null || raw === undefined || String(raw).trim() === '' || !Number.isFinite(Number(raw)))) {
+      // A cleared number input binds null: refused here, never sent as "null".
+      perKeyError[s.key] = 'Enter a number';
+      return;
+    }
     // A number input binds a number: compare and store the text, or the row stays "unsaved".
-    let value = String(drafts[s.key]);
+    let value = String(raw);
     if (s.type === 'bytes') {
       // Refused here, not sent: below 1 MB, empty or not a number (the server checks too).
       const parsed = parseMBInput(value, { min: s.min, max: s.max });
@@ -195,6 +201,12 @@
     } finally {
       savingKey = null;
     }
+  }
+
+  // The plain number input: every type without its own control (below).
+  function usesNumberInput(s: SettingDef): boolean {
+    if ((s.type === 'log_level' || s.type === 'enum') && s.enum) return false;
+    return s.type !== 'bool' && s.type !== 'cidr_list' && s.type !== 'bytes';
   }
 
   function reset(s: SettingDef) {

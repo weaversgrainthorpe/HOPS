@@ -81,9 +81,14 @@ export function watchGroups(sections: HTMLElement[], topPx: number): () => void 
 	// half is current.
 	const headingsIn = new Set<string>();
 	const sectionsIn = new Set<string>();
+	const bottomNow = () => window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2;
+	let atBottom = false;
 	const recompute = () => {
 		if (pinned) return;
-		let next = order.find((id) => headingsIn.has(id)) ?? order.find((id) => sectionsIn.has(id));
+		// Scrolled to the very bottom: the last group, which may be too short to reach the bands.
+		let next = atBottom
+			? order[order.length - 1]
+			: (order.find((id) => headingsIn.has(id)) ?? order.find((id) => sectionsIn.has(id)));
 		// Nothing in either band (above the first group): the first.
 		if (!next && window.scrollY < 8) next = order[0];
 		if (next) globalNav.update((s) => (s.active === next ? s : { ...s, active: next }));
@@ -115,8 +120,14 @@ export function watchGroups(sections: HTMLElement[], topPx: number): () => void 
 	const onScrollEnd = () => {
 		if (pinned) jumpScrollEnded = true;
 	};
+	// One comparison per scroll event; recompute only when "at the bottom" flips.
 	const onScroll = () => {
 		if (pinned && jumpScrollEnded) unpin();
+		const b = bottomNow();
+		if (b !== atBottom) {
+			atBottom = b;
+			recompute();
+		}
 	};
 	const opts = { passive: true } as const;
 	window.addEventListener('wheel', unpin, opts);
