@@ -63,3 +63,36 @@ export async function buildQrSvg(url: string): Promise<string> {
 	});
 	return withCentreLogo(svg);
 }
+
+function escapeXml(s: string): string {
+	return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[c]!);
+}
+
+/**
+ * A downloadable copy of a QR code SVG labelled with its dashboard's name above it, on white, so a
+ * printed code says what it opens. The code itself (with its bunny) is unchanged; the name is text,
+ * escaped, and shrinks to fit the code's width when long.
+ */
+export function withNameLabel(qrSvg: string, name: string): string {
+	const open = qrSvg.match(/<svg\b[^>]*>/);
+	const vb = open?.[0].match(/\bviewBox="0 0 (\d+(?:\.\d+)?) (\d+(?:\.\d+)?)"/);
+	const pxW = Number(open?.[0].match(/\bwidth="(\d+(?:\.\d+)?)"/)?.[1] ?? 320);
+	if (!open || !vb || vb[1] !== vb[2]) throw new Error('Unexpected QR code SVG');
+	const n = Number(vb[1]);
+	const label = n * 0.2; // the band above the code
+	// About 0.55em per character in a sans-serif; never larger than the band allows.
+	const fontSize = Math.min(label * 0.6, (n * 0.92) / Math.max(1, name.length * 0.55));
+	const total = n + label;
+	const inner =
+		open[0]
+			.replace(/\s(width|height|x|y)="[^"]*"/g, '')
+			.replace(/^<svg\b/, `<svg data-qr-code="" x="0" y="${label}" width="${n}" height="${n}"`) +
+		qrSvg.slice(open[0].length);
+	return (
+		`<svg xmlns="http://www.w3.org/2000/svg" width="${pxW}" height="${(pxW * total) / n}" viewBox="0 0 ${n} ${total}">` +
+		`<rect data-qr-label-bg="" x="0" y="0" width="${n}" height="${total}" fill="#ffffff"/>` +
+		`<text data-qr-name="" x="${n / 2}" y="${label * 0.68}" text-anchor="middle" font-size="${fontSize}" ` +
+		`font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-weight="700" fill="#111827">` +
+		`${escapeXml(name)}</text>${inner}</svg>`
+	);
+}

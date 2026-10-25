@@ -82,6 +82,9 @@ test.describe('M5 §12 QR code with the HOPS bunny', () => {
 		expect(svg).toContain('data-qr-logo');
 		expect(svg).toContain('data-qr-backing');
 		expect(svg).toContain('hopsqr-bunnyGradient');
+		// Labelled with the dashboard's name above the code, so a printed copy says what it opens.
+		expect(svg).toContain('data-qr-name');
+		expect(svg).toContain(`>${dash.name}</text>`);
 		for (const size of [320, 200]) {
 			expect(await decodeSvg(page, svg, size), `decodes at ${size}px`).toBe(shown);
 		}

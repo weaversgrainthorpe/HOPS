@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { buildQrSvg } from '$lib/utils/qrLogo';
+  import { buildQrSvg, withNameLabel } from '$lib/utils/qrLogo';
   import Icon from '@iconify/svelte';
   import Modal from '$lib/components/shared/Modal.svelte';
   import Button from '$lib/components/shared/Button.svelte';
@@ -51,7 +51,16 @@
   function handleDownload() {
     if (!qrSvg) return;
 
-    const blob = new Blob([qrSvg], { type: 'image/svg+xml' });
+    // The download is labelled with the dashboard's name above the code, so a printed copy says
+    // what it opens.
+    let labelled: string;
+    try {
+      labelled = withNameLabel(qrSvg, dashboard.name);
+    } catch (err) {
+      toast.error(`Couldn't make the download: ${err instanceof Error ? err.message : String(err)}`);
+      return;
+    }
+    const blob = new Blob([labelled], { type: 'image/svg+xml' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;

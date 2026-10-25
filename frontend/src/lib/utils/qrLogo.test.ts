@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import QRCode from 'qrcode';
-import { buildQrSvg, QR_ERROR_CORRECTION, LOGO_FRACTION, BACKING_FRACTION, BACKING_COLOUR } from './qrLogo';
+import { buildQrSvg, withNameLabel, QR_ERROR_CORRECTION, LOGO_FRACTION, BACKING_FRACTION, BACKING_COLOUR } from './qrLogo';
 
 // M5 §12: the dashboard QR code carries a small HOPS bunny in its centre, on a white rounded
 // square, inside the generated SVG (so the download has it), at error-correction level H.
@@ -92,5 +92,39 @@ describe('buildQrSvg', () => {
 		for (const bunny of ['#ffffff', '#f8f9fa', '#e9ecef']) {
 			expect(ratio(bunny, BACKING_COLOUR)).toBeGreaterThanOrEqual(4.5);
 		}
+	});
+});
+
+// Walkthrough: a downloaded (printed) code is labelled with its dashboard's name above it.
+describe('withNameLabel', () => {
+	it('puts the name above the code on white, the code itself unchanged below it', async () => {
+		const qr = await buildQrSvg(URL_);
+		const doc = parse(withNameLabel(qr, 'Home Lab'));
+		const root = doc.documentElement;
+		expect(root.querySelector('parsererror')).toBeNull();
+		const [, , w, h] = root.getAttribute('viewBox')!.split(' ').map(Number);
+		expect(h).toBeGreaterThan(w); // room for the label on top
+		const text = root.querySelector('text[data-qr-name]')!;
+		expect(text.textContent).toBe('Home Lab');
+		expect(text.getAttribute('text-anchor')).toBe('middle');
+		const inner = root.querySelector('svg[data-qr-code]')!;
+		expect(Number(inner.getAttribute('y'))).toBeGreaterThan(Number(text.getAttribute('y')));
+		expect(inner.querySelector('svg[data-qr-logo]')).not.toBeNull(); // the bunny is kept
+		expect(root.querySelector('rect[data-qr-label-bg]')!.getAttribute('fill')).toBe('#ffffff');
+	});
+
+	it('escapes the name (it is text, never markup)', async () => {
+		const qr = await buildQrSvg(URL_);
+		const doc = parse(withNameLabel(qr, '<script>&"x"</script>'));
+		expect(doc.documentElement.querySelector('parsererror')).toBeNull();
+		expect(doc.documentElement.querySelector('script')).toBeNull();
+		expect(doc.documentElement.querySelector('text[data-qr-name]')!.textContent).toBe('<script>&"x"</script>');
+	});
+
+	it('shrinks a long name to fit the code width', async () => {
+		const qr = await buildQrSvg(URL_);
+		const size = (name: string) =>
+			Number(parse(withNameLabel(qr, name)).documentElement.querySelector('text[data-qr-name]')!.getAttribute('font-size'));
+		expect(size('A very long dashboard name for the downstairs wall tablet')).toBeLessThan(size('Home'));
 	});
 });
