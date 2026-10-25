@@ -118,7 +118,7 @@ const overlaps = (a: Box, b: Box) =>
  * phone, since M6 gave it the text-size buttons: a longer title such as "v3 Showcase ▾" shortens with an
  * ellipsis below 414 px — m6-phone-text-size.spec.ts): the title may be shortened, never overlapping.
  */
-async function barHolds(page: Page, label: string, o: { strict: boolean; whole?: boolean } = { strict: true }) {
+async function barHolds(page: Page, label: string, o: { strict: boolean; whole?: boolean; maxOff?: number } = { strict: true }) {
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth),
     { message: `${label}: no sideways scroll`, timeout: 2000 }).toBeLessThanOrEqual(0);
   await settle(page);
@@ -155,7 +155,9 @@ async function barHolds(page: Page, label: string, o: { strict: boolean; whole?:
   if (o.strict || off <= 1) {
     expect(off, `${label}: the title is centred (its middle ${mid.toFixed(1)}, the bar's ${r.barMid.toFixed(1)})`).toBeLessThanOrEqual(1);
   } else {
-    // As near the centre as it can be: off towards the narrower side, right up against the wider one.
+    // As near the centre as it can be: off towards the narrower side, right up against the wider one —
+    // and, where given, never further off than `maxOff`.
+    if (o.maxOff !== undefined) expect(off, `${label}: off centre by ${off.toFixed(1)} px, at most ${o.maxOff}`).toBeLessThanOrEqual(o.maxOff);
     const rightWider = r.rightSide.width > r.leftSide.width;
     expect(mid < r.barMid, `${label}: off centre only away from the wider side`).toBe(rightWider);
     const slack = rightWider ? r.rightSide.left - r.title!.right : r.title!.left - r.leftSide.right;
@@ -175,6 +177,13 @@ async function barHolds(page: Page, label: string, o: { strict: boolean; whole?:
     }
   }
 }
+
+/**
+ * How far off centre a short title ("Sample ▾") may sit at 375 since the phone bar carries the text-size
+ * pair: the right side is five 40 px controls (206 px) against the logo and status dot, so the title's
+ * middle cannot come nearer than about 61 px (signed in; 51 signed out). Held to about a button and a half.
+ */
+const PHONE_MAX_OFF = 64;
 
 /** The menu: open, on screen, every dashboard once in Settings order, the current one marked; closed again. */
 async function menuHolds(page: Page, names: string[], current: string, label: string) {
@@ -209,7 +218,8 @@ test.describe('§8 the dashboard switcher (Ruling 16)', () => {
           // 375: "v3 Showcase" + the chevron cannot be centred beside a phone's controls, and since M6 gave
           // phones the text-size buttons it shortens with an ellipsis there (whole from 414 px:
           // m6-phone-text-size.spec.ts); the short title test below holds 375 to a whole title.
-          await barHolds(page, label, { strict: width > 480, whole: width > 480 });
+          // Only 375 is relaxed: the phone widths (320–414) are held by m6-phone-text-size.spec.ts.
+          await barHolds(page, label, { strict: width !== 375, whole: width !== 375 });
           await expect(switcher(page), `${label}: the switcher`).toBeVisible();
           await expect(switcher(page)).toHaveAccessibleName('v3 Showcase — switch dashboard');
           await expect(page.locator('.navbar .center-title')).toHaveText('v3 Showcase');
@@ -394,7 +404,8 @@ test.describe('§8 the dashboard switcher (Ruling 16)', () => {
 
   // Since M6 a phone's bar also carries the two text-size buttons, so its right-hand side is too wide for
   // any title to sit in the exact centre at 375: a short title stays whole, as near the centre as that
-  // side allows (barHolds' strict: false), and the switcher's menu still holds.
+  // side allows (barHolds' strict: false) and never more than PHONE_MAX_OFF from it, and the switcher's
+  // menu still holds.
   test('on a phone (375), a short title is whole and as near the centre as the controls allow — signed in (the switcher) and signed out, view and edit', async ({ page, context, browser }) => {
     await dashboards(page, context, 4);
     const sample = (await ordered(page)).find((d) => d.name === 'Sample')!;
@@ -407,7 +418,7 @@ test.describe('§8 the dashboard switcher (Ruling 16)', () => {
         await enterEdit(page);
       }
       await page.setViewportSize({ width: 375, height: 800 });
-      await barHolds(page, `signed in, ${editing ? 'edit' : 'view'} at 375`, { strict: false });
+      await barHolds(page, `signed in, ${editing ? 'edit' : 'view'} at 375`, { strict: false, maxOff: PHONE_MAX_OFF });
       await menuHolds(page, (await ordered(page)).map((d) => d.name), 'Sample', `signed in, ${editing ? 'edit' : 'view'} at 375`);
     }
     const { page: anon, ctx } = await anonPage(browser);
@@ -415,7 +426,7 @@ test.describe('§8 the dashboard switcher (Ruling 16)', () => {
       await anon.setViewportSize({ width: 375, height: 800 });
       await anon.goto(sample.path);
       await expect(anon.locator('.navbar .center-title')).toHaveText('Sample');
-      await barHolds(anon, 'signed out at 375', { strict: false });
+      await barHolds(anon, 'signed out at 375', { strict: false, maxOff: PHONE_MAX_OFF });
     } finally {
       await ctx.close();
     }
@@ -432,7 +443,7 @@ test.describe('§8 the dashboard switcher (Ruling 16)', () => {
         await expect(anon.locator('.navbar .center-title').getByRole('button'), `${width}: no switcher`).toHaveCount(0);
         await expect(anon.locator('.navbar').getByRole('button', { name: /switch dashboard/ })).toHaveCount(0);
         await expect(anon.locator('.navbar [aria-haspopup]')).toHaveCount(0);
-        await barHolds(anon, `signed out at ${width}`, { strict: width > 480, whole: width > 480 });
+        await barHolds(anon, `signed out at ${width}`, { strict: width !== 375, whole: width !== 375 });
       }
       // Clicking the title does nothing.
       await anon.setViewportSize({ width: 1280, height: 900 });

@@ -10,7 +10,7 @@
 import { test, expect, type Page, type BrowserContext, type Browser } from '@playwright/test';
 import { getCsrfToken } from '../helpers';
 
-const WIDTHS = [320, 360, 390, 414];
+const WIDTHS = [320, 360, 375, 390, 414];
 const MIN_TAP = 40;
 
 let seq = 0;
@@ -289,10 +289,14 @@ test.describe('M6: the text-size buttons on phones', () => {
     await expect(page.locator('.tab-canvas [data-node-id]').first()).toBeVisible();
     await expect(more(page), 'folded at 320 with "Home ▾"').toBeVisible();
     await expect(more(page)).toHaveAttribute('aria-expanded', 'false');
+    // Closed, it names no element to control (the pair is not shown).
+    await expect(more(page)).not.toHaveAttribute('aria-controls');
     await expect(down(page)).toBeHidden();
     await expect(up(page)).toBeHidden();
     await more(page).click();
     await expect(more(page)).toHaveAttribute('aria-expanded', 'true');
+    await expect(more(page)).toHaveAttribute('aria-controls', (await page.locator('.navbar .text-size-controls').getAttribute('id'))!);
+    await expect(down(page), 'opening moves focus to A-').toBeFocused();
     await phoneBarHolds(page, 'folded at 320, open');
     // The pair hangs below the bar, on screen.
     const bar = (await page.locator('.navbar').boundingBox())!;
@@ -310,6 +314,23 @@ test.describe('M6: the text-size buttons on phones', () => {
     await page.locator('.tab-canvas').click({ position: { x: 5, y: 5 } });
     await expect(more(page), 'a press outside closes it').toHaveAttribute('aria-expanded', 'false');
     await expect(up(page)).toBeHidden();
+    // Escape with focus on the toggle itself closes it too.
+    await more(page).click();
+    await expect(up(page)).toBeVisible();
+    await more(page).focus();
+    await page.keyboard.press('Escape');
+    await expect(more(page), 'Escape on the toggle closes it').toHaveAttribute('aria-expanded', 'false');
+    await expect(up(page)).toBeHidden();
+    // Tab out of the pair closes it: A- → A+ (still open) → the next control (closed).
+    await more(page).click();
+    await expect(down(page)).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(up(page)).toBeFocused();
+    await expect(more(page), 'tabbing within keeps it open').toHaveAttribute('aria-expanded', 'true');
+    await page.keyboard.press('Tab');
+    await expect(more(page), 'tabbing out closes it').toHaveAttribute('aria-expanded', 'false');
+    await expect(up(page)).toBeHidden();
+    await expect(page.getByRole('button', { name: 'Theme Settings' }), 'focus moved on to the next control').toBeFocused();
     await page.setViewportSize({ width: 360, height: 800 });
     await expect(more(page), 'unfolded at 360').toBeHidden();
     await expect(up(page)).toBeVisible();
@@ -333,5 +354,52 @@ test.describe('M6: the text-size buttons on phones', () => {
         await buttonsWork(page, label, { whole: true });
       }
     }
+  });
+  test('a shortened title is never silent: its full text is the tooltip — signed in (the switcher) and signed out', async ({ page, context, browser }) => {
+    const d = await phoneDash(page, context, 'v3 Showcase');
+    await page.setViewportSize({ width: 360, height: 800 });
+    await page.goto(d.path);
+    await expect(page.locator('.tab-canvas [data-node-id]').first()).toBeVisible();
+    const sw = page.locator('.navbar').getByRole('button', { name: 'v3 Showcase — switch dashboard', exact: true });
+    await expect(sw).toHaveAttribute('title', 'v3 Showcase — switch dashboard');
+    const cut = await page.locator('.navbar .title-text').evaluate((e) => e.scrollWidth > e.clientWidth + 0.5);
+    expect(cut, 'shortened at 360 signed in (else this test proves nothing)').toBe(true);
+    await expect(page.locator('.navbar .title-text')).toHaveAttribute('title', 'v3 Showcase');
+    const { page: anon, ctx } = await anonPage(browser);
+    try {
+      await anon.setViewportSize({ width: 360, height: 800 });
+      await anon.goto(d.path);
+      await expect(anon.locator('.navbar .center-title')).toHaveAttribute('title', 'v3 Showcase');
+      await expect(anon.locator('.navbar .title-text')).toHaveAttribute('title', 'v3 Showcase');
+      expect(await anon.locator('.navbar .title-text').evaluate((e) => e.scrollWidth > e.clientWidth + 0.5), 'shortened at 360 signed out').toBe(true);
+    } finally {
+      await ctx.close();
+    }
+  });
+
+  test('the bar fits again once web fonts load (a font swap changes the title width without resizing the bar)', async ({ page, context }) => {
+    const d = await phoneDash(page, context, 'Sample');
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto(d.path);
+    await expect(page.locator('.tab-canvas [data-node-id]').first()).toBeVisible();
+    const level = () => page.evaluate(() => [...document.querySelector('.navbar .nav-content')!.classList].filter((c) => /^c\d$/.test(c)).length);
+    await settle(page);
+    const base = await level();
+    // A "fallback font" far wider than the real one, fitted to by a resize; then the real font arrives.
+    await page.addStyleTag({ content: '.navbar .title-text { letter-spacing: 40px; }' });
+    // (A frame between the two sizes, so the bar's ResizeObserver sees both.)
+    await page.setViewportSize({ width: 1240, height: 800 });
+    await settle(page);
+    await page.waitForTimeout(100);
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await expect.poll(level, { message: 'the wide stand-in font needs more compaction' }).toBeGreaterThan(base);
+    await page.waitForTimeout(300); // fitBar has settled (not a level it passed through while measuring)
+    expect(await level(), 'settled on more compaction').toBeGreaterThan(base);
+    await page.evaluate(() => document.querySelectorAll('style').forEach((s) => { if (s.textContent?.includes('letter-spacing: 40px')) s.remove(); }));
+    await settle(page);
+    await page.waitForTimeout(300);
+    expect(await level(), 'nothing else re-fits the bar (the case under test)').toBeGreaterThan(base);
+    await page.evaluate(() => document.fonts.dispatchEvent(new Event('loadingdone')));
+    await expect.poll(level, { message: 'fonts loaded: the bar re-fits, back where it started' }).toBe(base);
   });
 });

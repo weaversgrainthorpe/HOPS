@@ -316,9 +316,24 @@
     ro.observe(navContentEl);
     return () => ro.disconnect();
   });
-  // ---- the folded text-size buttons (.c8, under 360 px): the "Text size" button opens them below it;
-  // a press outside, Escape or the bar unfolding closes them. Pressing one keeps them open (a user often
-  // steps more than once).
+  // Web fonts change the title's width without resizing the bar: fit again once they load.
+  $effect(() => {
+    if (typeof document === 'undefined' || !document.fonts) return;
+    const fonts = document.fonts;
+    const refit = () => void fitBar();
+    let live = true;
+    void fonts.ready.then(() => {
+      if (live) refit();
+    });
+    fonts.addEventListener('loadingdone', refit);
+    return () => {
+      live = false;
+      fonts.removeEventListener('loadingdone', refit);
+    };
+  });
+  // ---- the folded text-size buttons (.c8, under 360 px): the "Text size" button opens them below it,
+  // focus moving to A- (A+ when A- is disabled); a press outside, Escape, Tab out of them or the bar
+  // unfolding closes them. Pressing one keeps them open (a user often steps more than once).
   let textSizeOpen = $state(false);
   let textSizeWrap = $state<HTMLElement | null>(null);
   let textSizeMoreBtn = $state<HTMLButtonElement | null>(null);
@@ -330,6 +345,22 @@
     if (!textSizeOpen) return;
     textSizeOpen = false;
     if (refocus) textSizeMoreBtn?.focus();
+  }
+  async function toggleTextSize() {
+    if (!isFolded()) {
+      textSizeOpen = false;
+      return;
+    }
+    textSizeOpen = !textSizeOpen;
+    if (!textSizeOpen) return;
+    await tick();
+    const first = [...(textSizeWrap?.querySelectorAll<HTMLButtonElement>('.text-size-btn') ?? [])].find((b) => !b.disabled);
+    first?.focus();
+  }
+  // Focus leaving the toggle and its pair (Tab past A+, or Shift+Tab before the toggle) closes it.
+  function onTextSizeFocusOut(e: FocusEvent) {
+    const to = e.relatedTarget as Node | null;
+    if (textSizeOpen && to && !textSizeWrap?.contains(to)) closeTextSize();
   }
   function onTextSizeKey(e: KeyboardEvent) {
     if (e.key === 'Escape' && textSizeOpen) {
@@ -394,7 +425,7 @@
         aria-haspopup="menu"
         aria-expanded={switcherOpen}
         aria-controls={switcherOpen ? 'nav-switcher-menu' : undefined}
-        title="Switch dashboard"
+        title={label}
         onclick={() => (switcherOpen ? closeSwitcher() : void openSwitcher('current'))}
         onkeydown={onSwitcherKey}
       >
@@ -403,18 +434,19 @@
           <Icon icon="mdi:view-dashboard-outline" class="switcher-compact-icon" width="24" height="24" />
           <span class="switcher-compact-text">Dashboards</span>
         {:else}
-          <span class="title-text">{titleText}</span>
+          <!-- Shortened with an ellipsis on a narrow bar: the full title is its tooltip (never silent). -->
+          <span class="title-text" title={titleText}>{titleText}</span>
         {/if}
         <Icon icon="mdi:chevron-down" class="switcher-chevron" width="1em" height="1em" />
       </button>
     {/snippet}
     <div class="nav-center">
       {#if titleText}
-        <h1 class="center-title" bind:this={titleEl}>
+        <h1 class="center-title" bind:this={titleEl} title={showSwitcher ? undefined : titleText}>
           {#if showSwitcher}
             {@render switcherButton(`${titleText} — switch dashboard`, false)}
           {:else}
-            <span class="title-text">{titleText}</span>
+            <span class="title-text" title={titleText}>{titleText}</span>
           {/if}
         </h1>
       {:else if showSwitcher}
@@ -463,7 +495,7 @@
 
       {#if isDashboardPage}
         <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <div class="text-size" class:open={textSizeOpen} bind:this={textSizeWrap} onkeydown={onTextSizeKey}>
+        <div class="text-size" class:open={textSizeOpen} bind:this={textSizeWrap} onkeydown={onTextSizeKey} onfocusout={onTextSizeFocusOut}>
           <!-- Folded (a phone under 360 px, .c8): one button that opens the two below it. -->
           <button
             type="button"
@@ -471,9 +503,9 @@
             bind:this={textSizeMoreBtn}
             aria-label="Text size"
             aria-expanded={textSizeOpen}
-            aria-controls="nav-text-size"
+            aria-controls={textSizeOpen ? 'nav-text-size' : undefined}
             title="Text Size: {textSizeConfigs[$textSize].label}"
-            onclick={() => (textSizeOpen = isFolded() ? !textSizeOpen : false)}
+            onclick={() => void toggleTextSize()}
           >
             <Icon icon="mdi:format-size" width="26" height="26" />
           </button>
