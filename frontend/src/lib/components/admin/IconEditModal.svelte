@@ -1,5 +1,5 @@
 <script lang="ts">
-  import Icon, { addIcon, iconLoaded, listIcons, loadIcon } from '@iconify/svelte';
+  import Icon, { addIcon, iconLoaded, listIcons, loadIcon, loadIcons } from '@iconify/svelte';
   import { onDestroy, untrack } from 'svelte';
   import { loadIconNames } from '$lib/icons/iconNames';
   import Modal from '../shared/Modal.svelte';
@@ -13,6 +13,7 @@
     dashboardSuggestions,
     type IconSuggestion,
   } from '$lib/utils/iconSuggest';
+  import { SuggestionPreviewLoader } from '$lib/utils/suggestionPreview';
   import { toast } from '$lib/stores/toast';
   import { logWarn } from '$lib/utils/errors';
 
@@ -124,6 +125,38 @@
   });
 
   const statusVisible = $derived(listShown || dashboardState === 'failed' || dashboardState === 'empty' || namesState === 'failed');
+
+  // ── Suggestion pictures (walkthrough fix) ───────────────────────────
+  // Most suggestions come from the names-only list, so their pictures are not in memory. Once the
+  // list has been stable for a pause in typing, the visible ones are loaded in ONE batched call
+  // (loadIcons batches per prefix) — only whole names from the list, never the half-typed text,
+  // nothing while typing continues. Until then a subtle loading mark shows; offline or a failed
+  // load shows an "unavailable" glyph (failures are remembered for the session, so they are not
+  // asked for again). iconLoaded is not reactive, so `previewTick` re-renders the list.
+  let previewTick = $state(0);
+  const isOnline = () => typeof navigator === 'undefined' || navigator.onLine !== false;
+  const suggestionPictures = new SuggestionPreviewLoader({
+    load: (names, done) =>
+      loadIcons(names, (loaded, missing, pending) => {
+        const full = (l: { prefix: string; name: string }[]) => l.map((i) => `${i.prefix}:${i.name}`);
+        done(full(loaded), full(missing), full(pending));
+      }),
+    isLoaded: (name) => iconLoaded(name),
+    isOnline,
+    onChange: () => { previewTick++; },
+  });
+  onDestroy(() => suggestionPictures.dispose());
+
+  $effect(() => {
+    if (!hasActive) return;
+    const names = suggestions.filter((s) => s.icon && !s.imageUrl).map((s) => s.icon as string);
+    untrack(() => suggestionPictures.schedule(names));
+  });
+
+  function pictureState(name: string) {
+    void previewTick;
+    return suggestionPictures.state(name);
+  }
 
   // ── Live preview (fix round 1) ──────────────────────────────────────
   // Never a fetch per keystroke, never a fetch for a name that does not exist:
@@ -328,6 +361,8 @@
   }
 </script>
 
+<svelte:window ononline={() => previewTick++} onoffline={() => previewTick++} />
+
 <Modal id="icon-edit" {title} titleIcon="mdi:image-edit-outline" onClose={close} maxWidth="560px">
   <div class="body">
     {#if iconUrl}
@@ -392,16 +427,28 @@
                 onclick={() => acceptSuggestion(s)}
                 onmousemove={() => { activeIndex = i; }}
               >
-                <span class="suggestion-icon" aria-hidden="true">
-                  {#if s.imageUrl}
+                {#if s.imageUrl}
+                  <span class="suggestion-icon" aria-hidden="true">
                     <img src={s.imageUrl} alt="" width="20" height="20" />
-                  {:else if s.icon && iconLoaded(s.icon)}
-                    <Icon icon={s.icon} width="20" />
+                  </span>
+                {:else if s.icon}
+                  {@const pic = pictureState(s.icon)}
+                  {#if pic === 'ready'}
+                    <span class="suggestion-icon" data-preview="ready" aria-hidden="true">
+                      <Icon icon={s.icon} width="20" />
+                    </span>
+                  {:else if pic === 'loading'}
+                    <!-- Asked for once typing pauses; a subtle mark until it arrives. -->
+                    <span class="suggestion-icon" data-preview="loading" role="img" aria-label="Loading preview" title="Loading preview">
+                      <span class="suggestion-loading"></span>
+                    </span>
                   {:else}
-                    <!-- Not in memory: a placeholder, never a fetch per suggestion. -->
-                    <span class="suggestion-placeholder"></span>
+                    {@const why = pic === 'offline' ? 'Preview unavailable (offline)' : 'Preview unavailable'}
+                    <span class="suggestion-icon suggestion-unavailable" data-preview={pic} role="img" aria-label={why} title={why}>
+                      <Icon icon="mdi:image-off-outline" width="20" />
+                    </span>
                   {/if}
-                </span>
+                {/if}
                 <span class="suggestion-label">{s.label}</span>
                 {#if s.source}<span class="suggestion-source">{s.source}</span>{/if}
               </li>
@@ -623,12 +670,26 @@
     object-fit: contain;
   }
 
-  .suggestion-placeholder {
+  .suggestion-loading {
     width: 16px;
     height: 16px;
     margin: 2px;
-    border: 1px dashed var(--text-secondary);
     border-radius: 3px;
+    background: var(--text-secondary);
+    opacity: 0.25;
+    animation: suggestion-pulse 1.2s ease-in-out infinite;
+  }
+
+  @keyframes suggestion-pulse {
+    50% { opacity: 0.1; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .suggestion-loading { animation: none; }
+  }
+
+  .suggestion-unavailable {
+    color: var(--text-secondary);
   }
 
   .suggestion-label {

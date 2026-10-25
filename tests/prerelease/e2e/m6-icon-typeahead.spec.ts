@@ -9,6 +9,65 @@ const ICONIFY_HOSTS = /(api\.)?(iconify\.design|simplesvg\.com|unisvg\.com)/;
 
 let made = '';
 
+interface IconifyRequest { host: string; prefix: string; names: string[] }
+
+/** An Iconify API request: https://<host>/<prefix>.json?icons=a,b */
+function parseIconifyRequest(url: string): IconifyRequest {
+	const u = new URL(url);
+	return {
+		host: u.host,
+		prefix: u.pathname.replace(/^\//, '').replace(/\.json$/, ''),
+		names: (u.searchParams.get('icons') || '').split(',').filter(Boolean)
+	};
+}
+
+/** A successful Iconify answer drawing a square for every requested name. */
+function svgResponse(r: IconifyRequest) {
+	return {
+		status: 200,
+		contentType: 'application/json',
+		body: JSON.stringify({
+			prefix: r.prefix, width: 24, height: 24,
+			icons: Object.fromEntries(r.names.map((n) => [n, { body: '<path d="M2 2h20v20H2z" fill="currentColor"/>' }]))
+		})
+	};
+}
+
+/** Waits until every suggestion's picture slot shows an icon or the "unavailable" glyph (with
+ *  the given label) — never loading, never blank. Returns the unavailable names (no prefix). */
+async function expectEveryPictureSettled(options: Locator, unavailableLabel: string): Promise<{ unavailable: string[] }> {
+	const unavailable: string[] = [];
+	const n = await options.count();
+	for (let i = 0; i < n; i++) {
+		const opt = options.nth(i);
+		const slot = opt.locator('[data-preview]');
+		await expect(slot).toHaveAttribute('data-preview', /^(ready|unavailable|offline)$/, { timeout: 15_000 });
+		await expect(slot.locator('svg')).toBeVisible();
+		const state = await slot.getAttribute('data-preview');
+		if (state !== 'ready') {
+			await expect(slot).toHaveAttribute('aria-label', unavailableLabel);
+			await expect(slot).toHaveAttribute('title', unavailableLabel);
+			const label = (await opt.locator('.suggestion-label').textContent()) || '';
+			unavailable.push(label.replace(/^[^:]+:/, ''));
+		}
+	}
+	return { unavailable };
+}
+
+/** Requests hold only names from the visible list, at most one batch per prefix per API host
+ *  (Iconify tries its fallback hosts when one is unreachable), and every expected name was asked. */
+function expectBatched(reqs: IconifyRequest[], expected: string[], visible: string[]) {
+	const perHostPrefix = new Map<string, number>();
+	for (const r of reqs) {
+		const k = `${r.host}|${r.prefix}`;
+		perHostPrefix.set(k, (perHostPrefix.get(k) || 0) + 1);
+		for (const n of r.names) expect(visible).toContain(`${r.prefix}:${n}`);
+	}
+	for (const [k, c] of perHostPrefix) expect(c, `requests for ${k}`).toBe(1);
+	const asked = new Set(reqs.flatMap((r) => r.names));
+	for (const n of expected) expect(asked.has(n), `${n} was asked for`).toBe(true);
+}
+
 async function seedAndOpenIconEditor(page: Page, context: BrowserContext): Promise<Locator> {
 	const p = `m6ta${Date.now().toString(36)}`;
 	const id = (s: string) => `${p}-${s}`;
@@ -106,15 +165,17 @@ test.describe('M6 §7.6 icon field is readable', () => {
 });
 
 test.describe('M6 §7.7 icon type-ahead', () => {
-	test('suggests the top 5 from every icon name and narrows as you type (Iconify API blocked)', async ({ page, context }) => {
-		const external: string[] = [];
-		await page.route(ICONIFY_HOSTS, (route) => { external.push(route.request().url()); return route.abort(); });
+	test('suggests the top 5 from every icon name and narrows as you type; pictures load after a pause (Iconify API blocked)', async ({ page, context }) => {
+		const external: IconifyRequest[] = [];
+		await page.route(ICONIFY_HOSTS, (route) => { external.push(parseIconifyRequest(route.request().url())); return route.abort(); });
 		const field = await seedAndOpenIconEditor(page, context);
 		await field.focus();
 		await page.keyboard.press('ControlOrMeta+a');
 		await page.keyboard.press('Backspace');
 		// The spec's example: mdi:ser gives the top 5 of every mdi name, exact name first.
 		await page.keyboard.type('mdi:ser');
+		// Nothing goes online while typing.
+		expect(external).toEqual([]);
 		const list = page.getByRole('listbox', { name: 'Icon suggestions' });
 		await expect(list).toBeVisible();
 		await expect(field).toHaveAttribute('aria-expanded', 'true');
@@ -122,60 +183,156 @@ test.describe('M6 §7.7 icon type-ahead', () => {
 		const labels = () => options.locator('.suggestion-label').allTextContents();
 		await expect(options).toHaveCount(5);
 		await expect(options.first()).toHaveAttribute('aria-selected', 'true');
-		expect(await labels()).toEqual(['mdi:server', 'mdi:server-off', 'mdi:serial-port', 'mdi:server-plus', 'mdi:server-minus']);
-		// A bundled icon draws straight away; a name from the full list shows a placeholder
-		// rather than fetching its picture.
-		await expect(options.first().locator('svg')).toBeVisible();
+		const first = await labels();
+		expect(first).toEqual(['mdi:server', 'mdi:server-off', 'mdi:serial-port', 'mdi:server-plus', 'mdi:server-minus']);
+		// A bundled icon draws straight away.
+		await expect(options.first().locator('[data-preview="ready"] svg')).toBeVisible();
+		// After the pause the others were asked for in one batch; the API is unreachable, so each
+		// shows the "unavailable" glyph — never an empty box.
+		const stage1 = await expectEveryPictureSettled(options, 'Preview unavailable');
+		expect(stage1.unavailable.length).toBeGreaterThan(0);
+		expectBatched(external, stage1.unavailable, first);
+		const stage1Count = external.length;
 
-		// Narrows as typing continues.
+		// Narrows as typing continues; again nothing while typing.
 		await page.keyboard.type('ver-m');
+		expect(external.length).toBe(stage1Count);
 		await expect(options).toHaveCount(2);
-		expect(await labels()).toEqual(['mdi:server-minus', 'mdi:server-minus-outline']);
-
-		// Nothing was fetched while typing: no suggestion and no half-typed name went online.
+		const second = await labels();
+		expect(second).toEqual(['mdi:server-minus', 'mdi:server-minus-outline']);
+		const stage2 = await expectEveryPictureSettled(options, 'Preview unavailable');
 		await page.waitForTimeout(800);
-		expect(external).toEqual([]);
+		// Only names not tried before were asked for (failures are remembered), only from this list,
+		// and the half-typed text never went online.
+		const fresh = external.slice(stage1Count);
+		const tried = new Set(stage1.unavailable);
+		expectBatched(fresh, stage2.unavailable.filter((n) => !tried.has(n)), second);
+		for (const r of external) expect(r.names).not.toContain('server-m');
+		await expect(list.locator('.suggestion-placeholder')).toHaveCount(0);
 	});
 
-	test('no network request while typing a half name; a known name is fetched once after a pause', async ({ page, context }) => {
-		const requested: string[] = [];
+	test('a half name is never fetched; the visible suggestions are, after a pause; a known name previews', async ({ page, context }) => {
+		const requested: IconifyRequest[] = [];
 		await page.route(ICONIFY_HOSTS, (route) => {
-			const icons = new URL(route.request().url()).searchParams.get('icons') || '';
-			requested.push(icons);
-			return route.fulfill({
-				status: 200,
-				contentType: 'application/json',
-				body: JSON.stringify({ prefix: 'mdi', width: 24, height: 24, icons: Object.fromEntries(icons.split(',').map((n) => [n, { body: '<path d="M2 2h20v20H2z" fill="currentColor"/>' }])) })
-			});
+			const r = parseIconifyRequest(route.request().url());
+			requested.push(r);
+			return route.fulfill(svgResponse(r));
 		});
 		const field = await seedAndOpenIconEditor(page, context);
 		await field.focus();
 		await page.keyboard.press('ControlOrMeta+a');
 		await page.keyboard.type('mdi:account-cowb');
-		await page.waitForTimeout(1200); // well past the pause: a half name is never fetched
-		expect(requested).toEqual([]);
+		expect(requested).toEqual([]); // nothing while typing
+		const options = page.getByRole('listbox', { name: 'Icon suggestions' }).getByRole('option');
+		await expect(options.first()).toBeVisible();
+		await page.waitForTimeout(1200); // well past the pause
+		const visible = await options.locator('.suggestion-label').allTextContents();
+		const names = requested.flatMap((r) => r.names);
+		expect(names).not.toContain('account-cowb');
+		for (const n of names) expect(visible).toContain(`mdi:${n}`);
 		await expect(page.locator('#icon-preview-status')).toContainText('not a known icon name');
 		await page.keyboard.type('oy-hat');
 		await expect(page.locator('.icon-preview svg')).toBeVisible();
-		expect(requested).toEqual(['account-cowboy-hat']);
+		expect(requested.flatMap((r) => r.names).filter((n) => n === 'account-cowboy-hat')).toHaveLength(1);
+		expect(requested.flatMap((r) => r.names)).not.toContain('account-cowb');
 		await expect(page.locator('#icon-preview-status')).toBeEmpty();
 	});
 
-	test('offline: a known name that is not bundled shows "preview unavailable (offline)", never a blank', async ({ page, context }) => {
-		const requested: string[] = [];
-		await page.route(ICONIFY_HOSTS, (route) => { requested.push(new URL(route.request().url()).searchParams.get('icons') || ''); return route.abort(); });
+	test('API unreachable: a known name that is not bundled shows "preview unavailable (offline)", never a blank', async ({ page, context }) => {
+		const requested: IconifyRequest[] = [];
+		await page.route(ICONIFY_HOSTS, (route) => { requested.push(parseIconifyRequest(route.request().url())); return route.abort(); });
 		const field = await seedAndOpenIconEditor(page, context);
 		await field.focus();
 		await page.keyboard.press('ControlOrMeta+a');
 		await page.keyboard.type('mdi:account-cowboy-hat');
 		await expect(page.locator('#icon-preview-status')).toContainText('Preview unavailable (offline)', { timeout: 15_000 });
 		await expect(page.locator('.icon-preview svg')).toHaveCount(0);
-		expect(new Set(requested.flatMap((r) => r.split(',')))).toEqual(new Set(['account-cowboy-hat']));
-		// A bundled icon still previews at once, offline.
+		const options = page.getByRole('listbox', { name: 'Icon suggestions' }).getByRole('option');
+		const visible = await options.locator('.suggestion-label').allTextContents();
+		const names = new Set(requested.flatMap((r) => r.names));
+		expect(names.has('account-cowboy-hat')).toBe(true);
+		for (const n of names) expect(visible).toContain(`mdi:${n}`);
+		await expectEveryPictureSettled(options, 'Preview unavailable');
+		// A bundled icon still previews at once.
 		await page.keyboard.press('ControlOrMeta+a');
 		await page.keyboard.type('mdi:server');
 		await expect(page.locator('.icon-preview svg')).toBeVisible();
 		await expect(page.locator('#icon-preview-status')).toBeEmpty();
+	});
+
+	test('browser offline: suggestions request nothing and show "Preview unavailable (offline)"', async ({ page, context }) => {
+		const requested: IconifyRequest[] = [];
+		await page.route(ICONIFY_HOSTS, (route) => { requested.push(parseIconifyRequest(route.request().url())); return route.abort(); });
+		const field = await seedAndOpenIconEditor(page, context);
+		await field.focus();
+		// Let the names list and the dashboard-icons list load while online.
+		await page.keyboard.press('ControlOrMeta+a');
+		await page.keyboard.type('mdi:serv');
+		const options = page.getByRole('listbox', { name: 'Icon suggestions' }).getByRole('option');
+		await expect(options.first()).toContainText('mdi:server');
+		await expect(page.locator('#icon-suggest-status')).not.toContainText('Loading dashboard-icons');
+		await page.waitForTimeout(800);
+		requested.length = 0;
+		await context.setOffline(true);
+		try {
+			await page.keyboard.press('ControlOrMeta+a');
+			await page.keyboard.type('mdi:account-cowb');
+			await expect(options.first()).toBeVisible();
+			const settled = await expectEveryPictureSettled(options, 'Preview unavailable (offline)');
+			expect(settled.unavailable.length).toBeGreaterThan(0);
+			await page.waitForTimeout(800);
+			expect(requested).toEqual([]);
+		} finally {
+			await context.setOffline(false);
+		}
+	});
+
+	test('with the API answering, every suggestion draws its icon after the pause; retyping asks again for nothing', async ({ page, context }) => {
+		const requested: IconifyRequest[] = [];
+		await page.route(ICONIFY_HOSTS, (route) => {
+			const r = parseIconifyRequest(route.request().url());
+			requested.push(r);
+			return route.fulfill(svgResponse(r));
+		});
+		const field = await seedAndOpenIconEditor(page, context);
+		await field.focus();
+		await page.keyboard.press('ControlOrMeta+a');
+		await page.keyboard.type('mdi:ser');
+		expect(requested).toEqual([]);
+		const options = page.getByRole('listbox', { name: 'Icon suggestions' }).getByRole('option');
+		await expect(options).toHaveCount(5);
+		for (let i = 0; i < 5; i++) await expect(options.nth(i).locator('[data-preview="ready"] svg')).toBeVisible();
+		const visible = await options.locator('.suggestion-label').allTextContents();
+		// One batched request for the prefix, holding only names from the list.
+		expect(requested).toHaveLength(1);
+		expect(requested[0].prefix).toBe('mdi');
+		expect(requested[0].names.length).toBeGreaterThan(0);
+		for (const n of requested[0].names) expect(visible).toContain(`mdi:${n}`);
+		// Retype the same prefix: the pictures are in memory, nothing is asked again.
+		await page.keyboard.press('ControlOrMeta+a');
+		await page.keyboard.press('Backspace');
+		await page.keyboard.type('mdi:ser');
+		for (let i = 0; i < 5; i++) await expect(options.nth(i).locator('[data-preview="ready"] svg')).toBeVisible();
+		await page.waitForTimeout(800);
+		expect(requested).toHaveLength(1);
+	});
+
+	test('a slow API shows the loading mark, then the icons', async ({ page, context }) => {
+		await page.route(ICONIFY_HOSTS, async (route) => {
+			await new Promise((r) => setTimeout(r, 1500));
+			await route.fulfill(svgResponse(parseIconifyRequest(route.request().url()))).catch(() => {});
+		});
+		const field = await seedAndOpenIconEditor(page, context);
+		await field.focus();
+		await page.keyboard.press('ControlOrMeta+a');
+		await page.keyboard.type('mdi:account-cowb');
+		const options = page.getByRole('listbox', { name: 'Icon suggestions' }).getByRole('option');
+		await expect(options.first()).toBeVisible();
+		await page.waitForTimeout(500); // past the pause, before the answer
+		await expect(options.locator('[data-preview="loading"]').first()).toBeVisible();
+		await expect(options.locator('[data-preview="loading"]').first()).toHaveAttribute('aria-label', 'Loading preview');
+		const n = await options.count();
+		for (let i = 0; i < n; i++) await expect(options.nth(i).locator('[data-preview="ready"] svg')).toBeVisible({ timeout: 10_000 });
 	});
 
 	test('the names list is its own chunk: not loaded with the dashboard, loaded when the icon editor opens', async ({ page, context }) => {
