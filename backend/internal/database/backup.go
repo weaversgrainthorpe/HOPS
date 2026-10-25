@@ -53,12 +53,6 @@ var requiredTables = []string{"users", "config", "app_settings"}
 // name can never leave the backups directory.
 var backupNamePattern = regexp.MustCompile(`^` + regexp.QuoteMeta(BackupPrefix) + `[A-Za-z0-9._-]+` + regexp.QuoteMeta(BackupSuffix) + `$`)
 
-// isPinnedBackup reports whether rotation must keep this backup regardless
-// of age (only the admin may delete it, from the Backups page).
-func isPinnedBackup(name string) bool {
-	return strings.HasSuffix(name, "_"+PreV3MigrationReason+BackupSuffix)
-}
-
 // ValidateBackupName refuses anything that is not a plain backup file name
 // (used for every name taken from a request: restore, delete, download).
 func ValidateBackupName(name string) error {
@@ -74,6 +68,9 @@ const (
 	ProblemBackupFailed   = "backup-failed"
 	ProblemRotationFailed = "rotation-failed"
 	ProblemRestoreFailed  = "restore-failed"
+	// ProblemCeilingDeleted is not a failure but must be seen: backups newer
+	// than keep_days were deleted to stay under max_count.
+	ProblemCeilingDeleted = "ceiling-deleted"
 )
 
 // BackupProblem is a backup failure the admin must see: what failed, when,
@@ -117,11 +114,12 @@ type BackupManager struct {
 	backupDir string
 
 	mu        sync.Mutex
-	keepCount func() int
+	retention func() RetentionPolicy
 	hooks     FailureHooks
 	backupErr *BackupProblem // the latest failed backup, until one succeeds
-	rotateErr *BackupProblem // the latest rotation that could not delete, until one works
+	rotateErr *BackupProblem // the latest cleanup that could not delete, until one works
 	restore   *BackupProblem // a staged restore that could not be applied at startup
+	ceiling   *BackupProblem // backups within keep_days deleted for max_count, until dismissed
 }
 
 // NewBackupManager creates a new backup manager
@@ -155,12 +153,12 @@ func SharedBackupManager(dbPath string) *BackupManager {
 	return bm
 }
 
-// SetKeepCount sets where the keep-count comes from (the backup.keep_count
-// setting). The value is clamped to [MinKeepCount, MaxKeepCount].
-func (bm *BackupManager) SetKeepCount(fn func() int) {
+// SetRetention sets where the retention policy comes from (the backup.*
+// settings). The policy is normalized (RetentionPolicy.Normalized).
+func (bm *BackupManager) SetRetention(fn func() RetentionPolicy) {
 	bm.mu.Lock()
 	defer bm.mu.Unlock()
-	bm.keepCount = fn
+	bm.retention = fn
 }
 
 // SetFailureHooks installs test failure hooks.
@@ -170,22 +168,16 @@ func (bm *BackupManager) SetFailureHooks(h FailureHooks) {
 	bm.hooks = h
 }
 
-// KeepCount is how many (unpinned) backups rotation keeps.
-func (bm *BackupManager) KeepCount() int {
+// Retention is the policy cleanup applies now.
+func (bm *BackupManager) Retention() RetentionPolicy {
 	bm.mu.Lock()
-	fn := bm.keepCount
+	fn := bm.retention
 	bm.mu.Unlock()
-	n := DefaultKeepCount
+	p := DefaultRetention
 	if fn != nil {
-		n = fn()
+		p = fn()
 	}
-	if n < MinKeepCount {
-		n = MinKeepCount
-	}
-	if n > MaxKeepCount {
-		n = MaxKeepCount
-	}
-	return n
+	return p.Normalized()
 }
 
 // Problems returns the backup failures the admin must see, oldest first.
@@ -193,13 +185,23 @@ func (bm *BackupManager) Problems() []BackupProblem {
 	bm.mu.Lock()
 	defer bm.mu.Unlock()
 	var out []BackupProblem
-	for _, p := range []*BackupProblem{bm.restore, bm.backupErr, bm.rotateErr} {
+	for _, p := range []*BackupProblem{bm.restore, bm.backupErr, bm.rotateErr, bm.ceiling} {
 		if p != nil {
 			out = append(out, *p)
 		}
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].At.Before(out[j].At) })
 	return out
+}
+
+// ClearCeilingNotice drops the "deleted backups within keep_days" note
+// (the admin dismissed it). It reports whether there was one.
+func (bm *BackupManager) ClearCeilingNotice() bool {
+	bm.mu.Lock()
+	defer bm.mu.Unlock()
+	had := bm.ceiling != nil
+	bm.ceiling = nil
+	return had
 }
 
 // RecordRestoreFailure records that a staged restore could not be applied
@@ -358,7 +360,7 @@ func (bm *BackupManager) ListBackups() ([]BackupInfo, error) {
 			Path:      filepath.Join(bm.backupDir, name),
 			Size:      info.Size(),
 			CreatedAt: info.ModTime(),
-			Pinned:    isPinnedBackup(name),
+			Protected: IsProtectedBackup(name),
 		})
 	}
 
@@ -537,52 +539,90 @@ func (bm *BackupManager) DeleteBackup(backupName string) error {
 	return nil
 }
 
-// CleanupOldBackups removes backups beyond the keep-count. Pinned backups
-// (the pre-v3-migration one) are neither counted nor removed. A backup it
-// cannot delete is recorded (Problems) until a later rotation works, and
-// returned as an error.
+// CleanupOldBackups deletes what the retention policy says (PlanRetention).
+// A backup it cannot delete is recorded (Problems) until a later cleanup
+// works, and returned as an error; deletions within keep_days (for the
+// ceiling) are recorded as a notice too.
 func (bm *BackupManager) CleanupOldBackups() error {
-	err := bm.cleanupOldBackups()
+	plan, err := bm.PlanCleanup()
+	if err != nil {
+		bm.noteCleanup(err)
+		return err
+	}
+	_, err = bm.deletePlanned(plan)
+	return err
+}
+
+// PlanCleanup is what a cleanup would delete now, and why ("Clean up now"
+// shows it before anything is deleted).
+func (bm *BackupManager) PlanCleanup() ([]RetentionDeletion, error) {
+	all, err := bm.ListBackups()
+	if err != nil {
+		return nil, err
+	}
+	return PlanRetention(all, bm.Retention(), time.Now()), nil
+}
+
+// CleanupConfirmed deletes those of names that the policy still deletes now
+// (re-planned, so nothing outside the rules is ever deleted, even if the
+// list the user confirmed is stale). It returns what was deleted.
+func (bm *BackupManager) CleanupConfirmed(names []string) ([]string, error) {
+	plan, err := bm.PlanCleanup()
+	if err != nil {
+		bm.noteCleanup(err)
+		return nil, err
+	}
+	want := map[string]bool{}
+	for _, n := range names {
+		want[n] = true
+	}
+	var chosen []RetentionDeletion
+	for _, d := range plan {
+		if want[d.Name] {
+			chosen = append(chosen, d)
+		}
+	}
+	return bm.deletePlanned(chosen)
+}
+
+func (bm *BackupManager) deletePlanned(plan []RetentionDeletion) ([]string, error) {
+	var deleted, failed []string
+	ceiling := 0
+	for _, d := range plan {
+		if err := bm.remove(filepath.Join(bm.backupDir, d.Name)); err != nil {
+			slog.Warn("failed to remove old backup", "component", "backup", "name", d.Name, "error", err)
+			failed = append(failed, d.Name+": "+errText(err))
+			continue
+		}
+		slog.Info("removed old backup", "component", "backup", "name", d.Name, "reason", d.Reason)
+		deleted = append(deleted, d.Name)
+		if d.OverCeiling {
+			ceiling++
+		}
+	}
+	var err error
+	if len(failed) > 0 {
+		err = fmt.Errorf("could not delete %d old backup(s): %s", len(failed), strings.Join(failed, "; "))
+	}
+	bm.noteCleanup(err)
+	if ceiling > 0 {
+		p := bm.Retention()
+		bm.mu.Lock()
+		bm.ceiling = &BackupProblem{Kind: ProblemCeilingDeleted, At: time.Now(),
+			Reason: fmt.Sprintf("Deleted %d backup(s) newer than %d days to stay under the %d-backup ceiling", ceiling, p.KeepDays, p.MaxCount)}
+		bm.mu.Unlock()
+	}
+	return deleted, err
+}
+
+func (bm *BackupManager) noteCleanup(err error) {
 	bm.mu.Lock()
+	defer bm.mu.Unlock()
 	if err != nil {
 		bm.rotateErr = &BackupProblem{Kind: ProblemRotationFailed, At: time.Now(), Reason: err.Error()}
 	} else {
 		bm.rotateErr = nil
 	}
-	bm.mu.Unlock()
-	return err
-}
-
-func (bm *BackupManager) cleanupOldBackups() error {
-	all, err := bm.ListBackups()
-	if err != nil {
-		return err
-	}
-	backups := make([]BackupInfo, 0, len(all))
-	for _, b := range all {
-		if !b.Pinned {
-			backups = append(backups, b)
-		}
-	}
-
-	keep := bm.KeepCount()
-	if len(backups) <= keep {
-		return nil
-	}
-
-	var failed []string
-	for _, backup := range backups[keep:] {
-		if err := bm.remove(backup.Path); err != nil {
-			slog.Warn("failed to remove old backup", "component", "backup", "name", backup.Name, "error", err)
-			failed = append(failed, backup.Name+": "+errText(err))
-		} else {
-			slog.Info("removed old backup", "component", "backup", "name", backup.Name)
-		}
-	}
-	if len(failed) > 0 {
-		return fmt.Errorf("could not delete %d old backup(s): %s", len(failed), strings.Join(failed, "; "))
-	}
-	return nil
 }
 
 // errText is an error's text without the path os errors repeat.
@@ -600,7 +640,9 @@ type BackupInfo struct {
 	Path      string    `json:"path"`
 	Size      int64     `json:"size"`
 	CreatedAt time.Time `json:"createdAt"`
-	Pinned    bool      `json:"pinned"`
+	// Protected backups are never deleted automatically (pre-v3-migration,
+	// manual, uploaded): "kept until you delete it".
+	Protected bool `json:"protected"`
 }
 
 // copyFile copies a file from src to dst

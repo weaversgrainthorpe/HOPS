@@ -322,7 +322,7 @@ func TestCleanupOldBackupsRemovesExcess(t *testing.T) {
 	// We avoid CreateBackup here to keep the test fast (no per-iteration sleep).
 	for i := 0; i < DefaultKeepCount+3; i++ {
 		name := filepath.Join(bm.backupDir, BackupPrefix+
-			"2026-01-01_00-00-"+padZero(i)+"_test"+BackupSuffix)
+			"2026-01-01_00-00-"+padZero(i)+"_startup"+BackupSuffix)
 		if err := os.MkdirAll(bm.backupDir, 0755); err != nil {
 			t.Fatalf("mkdir: %v", err)
 		}

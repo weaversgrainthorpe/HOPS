@@ -1,7 +1,10 @@
 <script lang="ts">
   import Icon from '@iconify/svelte';
   import Modal from '$lib/components/shared/Modal.svelte';
-  import { listBackups, createBackup, restoreBackup, deleteBackup, type BackupInfo, type BackupProblem } from '$lib/utils/api';
+  import {
+    listBackups, createBackup, restoreBackup, deleteBackup, uploadBackup, previewBackupCleanup, confirmBackupCleanup,
+    backupDownloadUrl, type BackupInfo, type BackupProblem, type BackupRetention, type CleanupDeletion
+  } from '$lib/utils/api';
   import { refreshServerNotices } from '$lib/stores/config';
   import { confirm } from '$lib/stores/confirmModal';
   import { toast } from '$lib/stores/toast';
@@ -15,6 +18,12 @@
 
   let backups = $state<BackupInfo[]>([]);
   let problems = $state<BackupProblem[]>([]);
+  let retention = $state<BackupRetention | null>(null);
+  let uploading = $state(false);
+  let fileInput = $state<HTMLInputElement | null>(null);
+  // "Clean up now": the preview (exactly what would be deleted, and why) shown before anything is deleted.
+  let cleanupPreview = $state<CleanupDeletion[] | null>(null);
+  let cleaning = $state(false);
   let loading = $state(true);
   let error = $state('');
   // The last action's failure, shown in the dialog until the next action (a toast alone can be missed).
@@ -36,6 +45,7 @@
       const result = await listBackups();
       backups = result.backups;
       problems = result.problems;
+      retention = result.retention ?? null;
     } catch (err) {
       error = why(err, 'Failed to load backups.');
     } finally {
@@ -113,9 +123,65 @@
     await loadBackups();
   }
 
+  async function handleUpload(e: Event) {
+    const input = e.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+    uploading = true;
+    actionError = '';
+    try {
+      const r = await uploadBackup(file);
+      toast.success(`Uploaded as ${r.name}. Restore it from the list when you want to.`);
+    } catch (err) {
+      actionError = `Couldn't upload the backup: ${why(err, 'the request failed')}`;
+      toast.error(actionError);
+    } finally {
+      uploading = false;
+    }
+    await loadBackups();
+  }
+
+  async function handleCleanupPreview() {
+    cleaning = true;
+    actionError = '';
+    try {
+      cleanupPreview = await previewBackupCleanup();
+    } catch (err) {
+      actionError = `Couldn't work out what to clean up: ${why(err, 'the request failed')}`;
+    } finally {
+      cleaning = false;
+    }
+  }
+
+  async function handleCleanupConfirm() {
+    if (!cleanupPreview) return;
+    cleaning = true;
+    actionError = '';
+    try {
+      const deleted = await confirmBackupCleanup(cleanupPreview.map((d) => d.name));
+      toast.success(deleted.length === 1 ? 'Deleted 1 backup' : `Deleted ${deleted.length} backups`);
+      cleanupPreview = null;
+    } catch (err) {
+      actionError = `Clean up didn't finish: ${why(err, 'the request failed')}`;
+      toast.error(actionError);
+      cleanupPreview = null;
+    } finally {
+      cleaning = false;
+    }
+    await loadBackups();
+  }
+
+  function retentionText(r: BackupRetention): string {
+    let t = `Keeping the newest ${r.keepCount} automatic backups`;
+    if (r.keepDays > 0) t += `, plus any newer than ${r.keepDays} ${r.keepDays === 1 ? 'day' : 'days'} (at most ${r.maxCount})`;
+    return `${t}. Backups you create or upload are kept until you delete them.`;
+  }
+
   function problemText(p: BackupProblem): string {
     const when = formatDate(p.at);
     if (p.kind === 'rotation-failed') return `Old backups couldn't be deleted (${when}): ${p.reason}`;
+    if (p.kind === 'ceiling-deleted') return `${p.reason} (${when}).`;
     if (p.kind === 'restore-failed') return `A restore couldn't be applied when HOPS restarted (${when}): ${p.reason}`;
     const what =
       p.trigger === 'startup' ? 'The backup when HOPS started' :
@@ -172,7 +238,59 @@
       </div>
     {/if}
 
+    {#if retention}
+      <p class="retention" data-testid="backup-retention">
+        {retentionText(retention)}
+        <a href="/settings/global#server" onclick={onClose}>Change</a>
+      </p>
+    {/if}
+
+    {#if cleanupPreview}
+      <div class="cleanup-preview" role="region" aria-label="Clean up preview">
+        {#if cleanupPreview.length === 0}
+          <p>Nothing to clean up: the retention rules keep every backup.</p>
+          <div class="preview-actions">
+            <button class="btn-secondary" onclick={() => (cleanupPreview = null)}>Close</button>
+          </div>
+        {:else}
+          <p><strong>These {cleanupPreview.length} backups would be deleted:</strong></p>
+          <ul>
+            {#each cleanupPreview as d (d.name)}
+              <li><span class="backup-name">{d.name}</span> <span class="why">— {d.reason}</span></li>
+            {/each}
+          </ul>
+          <div class="preview-actions">
+            <button class="btn-secondary" onclick={() => (cleanupPreview = null)} disabled={cleaning}>Cancel</button>
+            <button class="btn-danger" onclick={handleCleanupConfirm} disabled={cleaning}>
+              Delete {cleanupPreview.length === 1 ? 'it' : `these ${cleanupPreview.length}`}
+            </button>
+          </div>
+        {/if}
+      </div>
+    {/if}
+
     <div class="actions-bar">
+      <input
+        type="file"
+        accept=".db,application/vnd.sqlite3,application/x-sqlite3"
+        class="visually-hidden-input"
+        aria-label="Backup file to upload"
+        bind:this={fileInput}
+        onchange={handleUpload}
+      />
+      <button class="btn-secondary" onclick={handleCleanupPreview} disabled={cleaning || loading}>
+        <Icon icon="mdi:broom" width="18" />
+        Clean up now
+      </button>
+      <button class="btn-secondary" onclick={() => fileInput?.click()} disabled={uploading || loading}>
+        {#if uploading}
+          <Icon icon="mdi:loading" width="18" class="spin" />
+          Uploading...
+        {:else}
+          <Icon icon="mdi:upload" width="18" />
+          Upload a backup
+        {/if}
+      </button>
       <button class="btn-primary" onclick={handleCreate} disabled={creating || loading}>
         {#if creating}
           <Icon icon="mdi:loading" width="18" class="spin" />
@@ -198,7 +316,7 @@
       <div class="empty-state">
         <Icon icon="mdi:database-off-outline" width="32" />
         <p>No backups found</p>
-        <p class="hint">HOPS takes one when it starts and before every save. Use the button above to create one now.</p>
+        <p class="hint">HOPS takes one when it starts and before every save. Use the buttons above to create or upload one now.</p>
       </div>
     {:else}
       <div class="backup-list">
@@ -209,9 +327,19 @@
               <span class="backup-name" title={backup.name}>{backup.name}</span>
               <span class="backup-meta">
                 {formatSize(backup.size)} &middot; {formatDate(backup.createdAt)}
+                {#if backup.protected}&middot; <span class="kept">kept until you delete it</span>{/if}
               </span>
             </div>
             <div class="backup-actions">
+              <a
+                class="btn-icon"
+                title="Download"
+                aria-label={`Download ${backup.name}`}
+                href={backupDownloadUrl(backup.name)}
+                download={backup.name}
+              >
+                <Icon icon="mdi:download" width="18" />
+              </a>
               <button
                 class="btn-icon"
                 title="Restore"
@@ -300,6 +428,62 @@
   .actions-bar {
     display: flex;
     justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .visually-hidden-input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .retention {
+    margin: 0;
+    font-size: 0.8125rem;
+    color: var(--text-secondary);
+    line-height: 1.4;
+  }
+
+  .retention a {
+    color: var(--accent);
+    margin-left: 0.25rem;
+  }
+
+  .cleanup-preview {
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    background: var(--bg-tertiary);
+    font-size: 0.8125rem;
+  }
+
+  .cleanup-preview p {
+    margin: 0 0 0.5rem;
+  }
+
+  .cleanup-preview ul {
+    margin: 0 0 0.75rem;
+    padding-left: 1.1rem;
+    max-height: 12rem;
+    overflow-y: auto;
+    word-break: break-word;
+  }
+
+  .cleanup-preview .why {
+    color: var(--text-secondary);
+  }
+
+  .preview-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+  }
+
+  .kept {
+    font-style: italic;
   }
 
   /* .btn-primary styles are defined globally in app.css */

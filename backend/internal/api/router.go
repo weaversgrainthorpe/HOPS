@@ -59,6 +59,7 @@ type Router struct {
 	mu             sync.RWMutex  // guards trustedProxies (rebuilt on settings change requires restart, but the slice itself is accessed concurrently)
 	trustedProxies []*net.IPNet  // parsed at construction from settings.proxy.trusted_cidrs
 	notices        noticeState   // dismissed one-time notices (notices.go)
+	cleanupStop    chan struct{} // stops the daily backup cleanup
 	sizeNotes      sizeNoteState // tiles whose unknown size became Medium (notices.go)
 }
 
@@ -86,6 +87,26 @@ func (r *Router) ShutdownRequested() <-chan struct{} { return r.shutdownReq }
 func (r *Router) Stop() {
 	if r.rateLimiter != nil {
 		r.rateLimiter.Stop()
+	}
+	if r.cleanupStop != nil {
+		close(r.cleanupStop)
+		r.cleanupStop = nil
+	}
+}
+
+// dailyBackupCleanup applies the retention rules every interval until Stop.
+func (r *Router) dailyBackupCleanup(interval time.Duration, stop <-chan struct{}) {
+	t := time.NewTicker(interval)
+	defer t.Stop()
+	for {
+		select {
+		case <-t.C:
+			if err := r.backupManager.CleanupOldBackups(); err != nil {
+				slog.Warn("daily backup cleanup could not delete everything", "component", "backup", "error", err)
+			}
+		case <-stop:
+			return
+		}
 	}
 }
 
@@ -203,6 +224,13 @@ func NewRouter(db *sql.DB, authService *auth.Service, cfg *config.Config, settin
 	// start), so the failures it records reach the UI.
 	dbPath := filepath.Join(cfg.DataDir, "hops.db")
 	backupManager := database.SharedBackupManager(dbPath)
+	backupManager.SetRetention(func() database.RetentionPolicy {
+		return database.RetentionPolicy{
+			KeepCount: settingsSvc.GetInt(settings.KeyBackupKeepCount),
+			KeepDays:  settingsSvc.GetInt(settings.KeyBackupKeepDays),
+			MaxCount:  settingsSvc.GetInt(settings.KeyBackupMaxCount),
+		}
+	})
 
 	r := &Router{
 		db:             db,
@@ -217,6 +245,7 @@ func NewRouter(db *sql.DB, authService *auth.Service, cfg *config.Config, settin
 		discoveryStore: discoveryStore,
 		discoveryOrch:  discoveryOrch,
 		shutdownReq:    make(chan struct{}),
+		cleanupStop:    make(chan struct{}),
 		trustedProxies: parseTrustedProxyCIDRs(settingsSvc.GetStringList(settings.KeyProxyTrustedCIDRs)),
 	}
 
@@ -237,6 +266,10 @@ func NewRouter(db *sql.DB, authService *auth.Service, cfg *config.Config, settin
 		}
 		r.sizeNotes.add(sizeNoteItems(migration.SizeChanges, doc)...)
 	}
+
+	// Retention also runs once a day, so keep_days takes effect even when no
+	// new backup is taken (M6 §11). A failure is recorded as a notice.
+	go r.dailyBackupCleanup(24*time.Hour, r.cleanupStop)
 
 	r.setupRoutes()
 	return r, r.securityHeadersMiddleware(r.corsMiddleware(r.recoverMiddleware(r.loggingMiddleware(r.mux))))
@@ -291,6 +324,9 @@ func (r *Router) setupRoutes() {
 	// Backup management routes. Note the asymmetry, kept deliberately:
 	//   POST /api/backups            → create a new backup
 	//   POST /api/backups/{name}     → RESTORE the named backup
+	//   GET  /api/backups/{name}     → download it
+	//   GET/POST /api/backups/cleanup, POST /api/backups/upload are
+	//   sentinels (never valid backup names), see handleBackupActions.
 	// Splitting the restore into /api/backups/{name}/restore is the kind
 	// of "tidy" that breaks every client. Leave it alone.
 	r.mux.HandleFunc("/api/backups", r.protected(r.handleBackups))

@@ -357,7 +357,14 @@ HOPS backs up the database automatically when the server starts, before every sa
 
 A backup that fails is never silent: Settings shows a warning (with the time and the reason) until a backup succeeds. A restore or factory reset whose safety backup fails is refused, and nothing is changed.
 
-HOPS keeps the 10 most recent backups and deletes older ones, with one exception: the **pre-v3-migration** backup (`hops-backup-<date>_pre-v3-migration.db`). It is taken just before HOPS 3 converts a 2.x configuration and is never rotated away, because it is the only way back to 2.x.
+**Retention** is set in Settings › Global settings › Server:
+- **Always keep the newest** (default 10): the newest automatic backups are never deleted, however old.
+- **Also keep backups newer than** (days; default 0 = off).
+- **Most automatic backups** (default 100): a ceiling that protects the disk. If there are still more automatic backups than this, the oldest are deleted even if they are within the days above (never the newest ones), and Settings shows a notice saying so.
+
+Cleanup runs after every backup, once a day, and from **Clean up now** in the Backups dialog, which first lists exactly what it would delete, and why.
+
+Backups you **create** or **upload**, and the **pre-v3-migration** backup (`hops-backup-<date>_pre-v3-migration.db`), are never deleted automatically and don't count toward these numbers. The pre-v3-migration backup is taken just before HOPS 3 converts a 2.x configuration; it is the only way back to 2.x.
 
 ### Rolling back from 3.x to 2.2.1
 
@@ -374,6 +381,8 @@ Changes made under 3.x are not carried back. Don't restore this backup from the 
 From the Admin panel, click **Backups** to:
 - View all available backups
 - Restore a previous backup (a safety backup of the current data is taken first; HOPS then restarts and applies the restore before it opens the database, so the service must be set to restart automatically, e.g. `Restart=on-failure`)
+- Download a backup (a `.db` file)
+- Upload a backup file: it is checked (it must be a HOPS database) and listed as `…_uploaded.db`; it is not restored until you restore it
 - Delete old backups
 
 ### Manual Backup

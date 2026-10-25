@@ -124,6 +124,10 @@
     'upload.max_bytes_import': 'Largest file you can import',
     'upload.max_bytes_background': 'Largest background image',
     'upload.max_bytes_icon': 'Largest icon file',
+    // Backup retention (M6 §11).
+    'backup.keep_count': 'Always keep the newest (backups)',
+    'backup.keep_days': 'Also keep backups newer than (days)',
+    'backup.max_count': 'Most automatic backups (disk ceiling)',
   };
 
   // What the input shows for a stored value: MB for byte sizes, the value itself otherwise.

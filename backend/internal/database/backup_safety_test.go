@@ -217,12 +217,12 @@ func TestStartupBackupFailureRecordedUntilNextSuccess(t *testing.T) {
 
 func TestRotationFailureRecorded(t *testing.T) {
 	bm, _ := setupBackupTest(t)
-	bm.SetKeepCount(func() int { return 3 })
+	bm.SetRetention(func() RetentionPolicy { return RetentionPolicy{KeepCount: 3, MaxCount: 100} })
 	if err := os.MkdirAll(bm.backupDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	for i := 0; i < 5; i++ {
-		name := filepath.Join(bm.backupDir, BackupPrefix+"2026-01-01_00-00-"+padZero(i)+"_test"+BackupSuffix)
+		name := filepath.Join(bm.backupDir, BackupPrefix+"2026-01-01_00-00-"+padZero(i)+"_startup"+BackupSuffix)
 		if err := os.WriteFile(name, []byte("x"), 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -237,7 +237,7 @@ func TestRotationFailureRecorded(t *testing.T) {
 	if len(probs) != 1 || probs[0].Kind != ProblemRotationFailed || !strings.Contains(probs[0].Reason, "read-only file system") {
 		t.Fatalf("rotation failure not recorded: %+v", probs)
 	}
-	if !strings.Contains(probs[0].Reason, "_test.db") {
+	if !strings.Contains(probs[0].Reason, "_startup.db") {
 		t.Fatalf("the problem does not name the backups: %+v", probs[0])
 	}
 	// A later rotation that works clears it.
@@ -254,22 +254,32 @@ func TestRotationFailureRecorded(t *testing.T) {
 	}
 }
 
-func TestKeepCountClampedAndPinnedNotCounted(t *testing.T) {
+func TestRetentionNormalizedAndProtectedNotCounted(t *testing.T) {
 	bm, _ := setupBackupTest(t)
-	for _, tc := range []struct{ in, want int }{{0, MinKeepCount}, {1, MinKeepCount}, {7, 7}, {1000, MaxKeepCount}} {
-		bm.SetKeepCount(func() int { return tc.in })
-		if got := bm.KeepCount(); got != tc.want {
-			t.Errorf("keep %d: got %d want %d", tc.in, got, tc.want)
+	if got := bm.Retention(); got != DefaultRetention {
+		t.Fatalf("default retention %+v", got)
+	}
+	for _, tc := range []struct{ in, want RetentionPolicy }{
+		{RetentionPolicy{0, -5, 0}, RetentionPolicy{MinKeepCount, 0, MinKeepCount}},
+		{RetentionPolicy{7, 30, 5}, RetentionPolicy{7, 30, 7}}, // ceiling never below keep
+		{RetentionPolicy{1000, 99999, 99999}, RetentionPolicy{MaxKeepCount, MaxKeepDays, MaxMaxCount}},
+	} {
+		in := tc.in
+		bm.SetRetention(func() RetentionPolicy { return in })
+		if got := bm.Retention(); got != tc.want {
+			t.Errorf("%+v: got %+v want %+v", tc.in, got, tc.want)
 		}
 	}
-	bm.SetKeepCount(func() int { return 3 })
+	bm.SetRetention(func() RetentionPolicy { return RetentionPolicy{KeepCount: 3, MaxCount: 3} })
 	os.MkdirAll(bm.backupDir, 0o755)
-	pinned := filepath.Join(bm.backupDir, BackupPrefix+"2025-01-01_00-00-00_"+PreV3MigrationReason+BackupSuffix)
-	os.WriteFile(pinned, []byte("v2"), 0o644)
 	old := time.Now().Add(-time.Hour)
-	os.Chtimes(pinned, old, old)
+	for _, reason := range []string{PreV3MigrationReason, "manual", UploadedReason} {
+		p := filepath.Join(bm.backupDir, BackupPrefix+"2025-01-01_00-00-00_"+reason+BackupSuffix)
+		os.WriteFile(p, []byte("x"), 0o644)
+		os.Chtimes(p, old, old)
+	}
 	for i := 0; i < 5; i++ {
-		name := filepath.Join(bm.backupDir, BackupPrefix+"2026-01-01_00-00-"+padZero(i)+"_test"+BackupSuffix)
+		name := filepath.Join(bm.backupDir, BackupPrefix+"2026-01-01_00-00-"+padZero(i)+"_startup"+BackupSuffix)
 		os.WriteFile(name, []byte("x"), 0o644)
 		mt := time.Now().Add(time.Duration(i) * time.Second)
 		os.Chtimes(name, mt, mt)
@@ -278,8 +288,13 @@ func TestKeepCountClampedAndPinnedNotCounted(t *testing.T) {
 		t.Fatal(err)
 	}
 	list, _ := bm.ListBackups()
-	if len(list) != 4 {
-		t.Fatalf("want 3 + pinned, got %d", len(list))
+	if len(list) != 6 {
+		t.Fatalf("want 3 newest + 3 protected, got %d", len(list))
+	}
+	for _, b := range list {
+		if b.Protected != IsProtectedBackup(b.Name) {
+			t.Fatalf("%s protected flag wrong", b.Name)
+		}
 	}
 }
 

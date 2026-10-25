@@ -29,7 +29,9 @@ describe('global settings grouping table', () => {
 		]);
 		const server = keysOf('server');
 		expect(server.slice(0, 2)).toEqual(['server.port', 'log.level']);
-		expect(server.slice(2).every((k) => k.startsWith('http.') && k.endsWith('timeout_seconds'))).toBe(true);
+		expect(server.slice(2, 6).every((k) => k.startsWith('http.') && k.endsWith('timeout_seconds'))).toBe(true);
+		// M6 §11: backup retention, in the Server group.
+		expect(server.slice(6)).toEqual(['backup.keep_count', 'backup.keep_days', 'backup.max_count']);
 	});
 
 	it('lists each key once, and group ids are unique and not "other"', () => {

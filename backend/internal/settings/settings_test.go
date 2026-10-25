@@ -50,7 +50,7 @@ func TestEveryKeyHasADefinition(t *testing.T) {
 		KeyHTTPReadHeaderTimeoutSeconds, KeyHTTPReadTimeoutSeconds,
 		KeyHTTPWriteTimeoutSeconds, KeyHTTPIdleTimeoutSeconds,
 		KeyDiscoveryMaxParallelProbes, KeyDiscoveryPerHostTimeoutSecs,
-		KeyFoldersAnimatedBackgrounds, KeyDisplayAnimations,
+		KeyFoldersAnimatedBackgrounds, KeyDisplayAnimations, KeyBackupKeepCount, KeyBackupKeepDays, KeyBackupMaxCount,
 	}
 	for _, k := range keys {
 		if _, ok := defByKey[k]; !ok {
@@ -668,5 +668,30 @@ func TestAnimationsOldBooleanIsMigrated(t *testing.T) {
 		if stored != want {
 			t.Errorf("stored %q: row now %q, want %q", old, stored, want)
 		}
+	}
+}
+
+func TestBackupCeilingNeverBelowKeepCount(t *testing.T) {
+	s := newTestService(t)
+	if err := s.Set(KeyBackupMaxCount, "5"); err == nil {
+		t.Fatal("ceiling 5 below keep 10 accepted")
+	}
+	if err := s.Validate(KeyBackupMaxCount, "5"); err == nil {
+		t.Fatal("Validate accepted ceiling below keep")
+	}
+	if err := s.Set(KeyBackupMaxCount, "10"); err != nil {
+		t.Fatalf("ceiling = keep refused: %v", err)
+	}
+	if err := s.Set(KeyBackupKeepCount, "11"); err == nil {
+		t.Fatal("keep above ceiling accepted")
+	}
+	if err := s.Set(KeyBackupKeepCount, "3"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Set(KeyBackupKeepDays, "0"); err != nil {
+		t.Fatalf("keep_days 0 (off) refused: %v", err)
+	}
+	if err := s.Set(KeyBackupKeepDays, "3651"); err == nil {
+		t.Fatal("keep_days above 3650 accepted")
 	}
 }

@@ -87,6 +87,9 @@ const (
 	KeyDiscoveryPerHostTimeoutSecs  = "discovery.per_host_timeout_seconds"
 	KeyFoldersAnimatedBackgrounds   = "folders.animated_backgrounds"
 	KeyDisplayAnimations            = "display.animations"
+	KeyBackupKeepCount              = "backup.keep_count"
+	KeyBackupKeepDays               = "backup.keep_days"
+	KeyBackupMaxCount               = "backup.max_count"
 )
 
 // Definitions is the authoritative list of every setting HOPS exposes.
@@ -157,6 +160,27 @@ var Definitions = []Definition{
 		Key: KeyUploadMaxBytesIcon, Type: "bytes", Default: strconv.Itoa(2 * MB),
 		Description: "Icon uploads bigger than this are refused.",
 		Min:         1 * MB, Max: 10 * MB,
+	},
+	// Backup retention (M6 §11). The bounds match database.RetentionPolicy;
+	// max_count may never be below keep_count (crossCheck). Protected
+	// backups (before an upgrade, manual, uploaded) are never deleted
+	// automatically and count toward neither.
+	{
+		Key: KeyBackupKeepCount, Type: "int", Default: "10",
+		Description: "The newest this-many automatic backups are always kept, however old they are. " +
+			"Backups you create or upload, and the one taken before an upgrade, are kept until you delete them and don't count.",
+		Min: 3, Max: 100,
+	},
+	{
+		Key: KeyBackupKeepDays, Type: "int", Default: "0",
+		Description: "Also keep every automatic backup newer than this many days. 0 = off: only the newest ones above are kept.",
+		Min: 0, Max: 3650,
+	},
+	{
+		Key: KeyBackupMaxCount, Type: "int", Default: "100",
+		Description: "A ceiling that protects the disk: if there are still more automatic backups than this, the oldest are deleted " +
+			"even if they are newer than the days above (you'll see a notice). Never fewer than the newest kept above.",
+		Min: 3, Max: 1000,
 	},
 	{
 		Key: KeyHTTPReadHeaderTimeoutSeconds, Type: "duration_seconds", Default: "10", RestartRequired: true,
@@ -470,6 +494,9 @@ func (s *Service) Set(key, value string) error {
 	if err := validate(def, value); err != nil {
 		return err
 	}
+	if err := s.crossCheck(key, value); err != nil {
+		return err
+	}
 
 	s.mu.Lock()
 	if _, err := s.db.Exec(
@@ -498,7 +525,27 @@ func (s *Service) Validate(key, value string) error {
 	if !ok {
 		return fmt.Errorf("unknown setting key %q", key)
 	}
-	return validate(def, value)
+	if err := validate(def, value); err != nil {
+		return err
+	}
+	return s.crossCheck(key, value)
+}
+
+// crossCheck enforces rules between settings: the backup ceiling
+// (backup.max_count) is never below backup.keep_count.
+func (s *Service) crossCheck(key, value string) error {
+	v, _ := strconv.Atoi(value) // validate already checked it is an integer
+	switch key {
+	case KeyBackupMaxCount:
+		if keep := s.GetInt(KeyBackupKeepCount); v < keep {
+			return fmt.Errorf("%s: %d is below the number of newest backups always kept (%d)", key, v, keep)
+		}
+	case KeyBackupKeepCount:
+		if ceiling := s.GetInt(KeyBackupMaxCount); v > ceiling {
+			return fmt.Errorf("%s: %d is above the backup ceiling (%d); raise that first", key, v, ceiling)
+		}
+	}
+	return nil
 }
 
 // Subscribe registers a callback that is invoked synchronously after every

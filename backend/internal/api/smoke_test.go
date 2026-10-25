@@ -64,6 +64,10 @@ func TestSmokeRoutesNoFiveHundred(t *testing.T) {
 		// Backups.
 		{method: "GET", path: "/api/backups"},
 		{method: "GET", path: "/api/backups/nonexistent-backup-id"},
+		{method: "GET", path: "/api/backups/hops-backup-2099-01-01_00-00-00_none.db"},
+		{method: "GET", path: "/api/backups/cleanup"},
+		{method: "POST", path: "/api/backups/cleanup", body: `{"names":[]}`},
+		{method: "POST", path: "/api/backups/upload"},
 
 		// Settings.
 		{method: "GET", path: "/api/settings"},
@@ -162,6 +166,9 @@ func TestSmokeUnauthenticatedRoutesReject(t *testing.T) {
 		"/api/auth/change-password",
 		"/api/config/export",
 		"/api/backups",
+		"/api/backups/cleanup",
+		"/api/backups/upload",
+		"/api/backups/hops-backup-2026-01-01_00-00-00_manual.db",
 		"/api/settings",
 		"/api/discovery/scans",
 		"/api/discovery/detectors",

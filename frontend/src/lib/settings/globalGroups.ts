@@ -26,7 +26,10 @@ export const GLOBAL_SETTING_GROUPS: readonly SettingGroupDef[] = [
 			'http.read_header_timeout_seconds',
 			'http.read_timeout_seconds',
 			'http.write_timeout_seconds',
-			'http.idle_timeout_seconds'
+			'http.idle_timeout_seconds',
+			'backup.keep_count',
+			'backup.keep_days',
+			'backup.max_count'
 		]
 	},
 	{

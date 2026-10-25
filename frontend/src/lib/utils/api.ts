@@ -683,7 +683,24 @@ export interface BackupInfo {
   path: string;
   size: number;
   createdAt: string;
-  pinned?: boolean;
+  /** Never deleted automatically (before an upgrade, manual, uploaded): "kept until you delete it". */
+  protected?: boolean;
+}
+
+/** The retention settings (M6 §11) as the server applies them. */
+export interface BackupRetention {
+  keepCount: number;
+  keepDays: number;
+  maxCount: number;
+}
+
+/** One backup "Clean up now" would delete, and why. */
+export interface CleanupDeletion {
+  name: string;
+  createdAt: string;
+  size: number;
+  reason: string;
+  overCeiling: boolean;
 }
 
 /** A backup failure the admin must see (GET /api/backups `problems`); stays until fixed. */
@@ -697,6 +714,7 @@ export interface BackupProblem {
 export interface BackupList {
   backups: BackupInfo[];
   problems: BackupProblem[];
+  retention?: BackupRetention;
 }
 
 export async function listBackups(): Promise<BackupList> {
@@ -704,7 +722,59 @@ export async function listBackups(): Promise<BackupList> {
   if (!resp || !Array.isArray(resp.backups)) {
     throw new Error('The server sent a backup list this version of HOPS cannot read.');
   }
-  return { backups: resp.backups, problems: Array.isArray(resp.problems) ? resp.problems : [] };
+  return {
+    backups: resp.backups,
+    problems: Array.isArray(resp.problems) ? resp.problems : [],
+    ...(resp.retention && typeof resp.retention.keepCount === 'number' ? { retention: resp.retention } : {})
+  };
+}
+
+/** Where a backup downloads from (GET, admin session cookie). */
+export function backupDownloadUrl(name: string): string {
+  return `${API_BASE}/backups/${encodeURIComponent(name)}`;
+}
+
+/** What "Clean up now" would delete, and why (nothing is deleted). */
+export async function previewBackupCleanup(): Promise<CleanupDeletion[]> {
+  const resp = await fetchAPI('/backups/cleanup');
+  if (!resp || !Array.isArray(resp.deletions)) throw new Error('The server sent a cleanup preview this version of HOPS cannot read.');
+  return resp.deletions;
+}
+
+/**
+ * Delete the confirmed backups (the server deletes only those its rules still delete). A partial
+ * failure is thrown with the server's reason, never reported as done.
+ */
+export async function confirmBackupCleanup(names: string[]): Promise<string[]> {
+  const resp = await fetchAPI('/backups/cleanup', { method: 'POST', body: JSON.stringify({ names }) });
+  if (!resp || !Array.isArray(resp.deleted)) throw new Error('The server did not confirm the cleanup.');
+  if (typeof resp.error === 'string' && resp.error) {
+    throw new Error(`${resp.error} (${resp.deleted.length} deleted)`);
+  }
+  return resp.deleted;
+}
+
+/**
+ * Upload a backup file: stored as a new "…_uploaded" backup, never restored automatically. It
+ * shares the import size limit, refused before sending when over it.
+ */
+export async function uploadBackup(file: File): Promise<{ name: string; message: string }> {
+  const refusal = await checkUploadSize('import', file);
+  if (refusal) throw new Error(refusal);
+  const formData = new FormData();
+  formData.append('file', file);
+  const response = await sendUpload(`${API_BASE}/backups/upload`, {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: withCSRFHeader({}, 'POST'),
+    body: formData,
+  });
+  if (!response.ok) {
+    throw new Error(await uploadErrorMessage(response, 'Upload failed'));
+  }
+  const resp = await response.json();
+  if (!resp || typeof resp.name !== 'string') throw new Error('The server did not confirm the upload.');
+  return { name: resp.name, message: typeof resp.message === 'string' ? resp.message : 'Backup uploaded' };
 }
 
 export async function createBackup(reason?: string): Promise<{ success: boolean; path: string; message: string }> {

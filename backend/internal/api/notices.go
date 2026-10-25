@@ -312,6 +312,15 @@ func (r *Router) handleNotices(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	// The tile-size notice is one-time: dismissing it clears its list.
+	if isCeilingNoticeID(id) {
+		// Shown once per process until dismissed (it reports what happened).
+		if !r.backupManager.ClearCeilingNotice() {
+			writeJSONError(w, "Notice not found: "+id, http.StatusNotFound)
+			return
+		}
+		writeJSONSuccess(w)
+		return
+	}
 	if isBackupNoticeID(id) {
 		writeJSONError(w, "This notice stays until the backup problem is fixed", http.StatusConflict)
 		return

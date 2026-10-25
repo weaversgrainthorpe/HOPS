@@ -27,8 +27,9 @@ func (r *Router) handleBackups(w http.ResponseWriter, req *http.Request) {
 			problems = []database.BackupProblem{}
 		}
 		writeJSON(w, map[string]interface{}{
-			"backups":  backups,
-			"problems": problems,
+			"backups":   backups,
+			"problems":  problems,
+			"retention": r.backupManager.Retention(),
 		})
 
 	case http.MethodPost:
@@ -84,16 +85,36 @@ func writeBackupNameError(w http.ResponseWriter, err error, msg string) {
 	}
 }
 
-// handleBackupActions handles POST /api/backups/{name} (restore) and
-// DELETE /api/backups/{name}.
+// handleBackupActions handles, for /api/backups/{name}:
+//   GET    → download the backup
+//   POST   → RESTORE it (see the note in setupRoutes)
+//   DELETE → delete it
+// and two sentinels that are never valid backup names:
+//   GET/POST /api/backups/cleanup → preview / confirmed "Clean up now"
+//   POST     /api/backups/upload  → store an uploaded backup (not restored)
 func (r *Router) handleBackupActions(w http.ResponseWriter, req *http.Request) {
 	backupName, ok := backupNameFromPath(req.URL.Path)
 	if !ok {
 		writeJSONError(w, "Invalid backup name", http.StatusBadRequest)
 		return
 	}
+	switch backupName {
+	case "cleanup":
+		r.handleBackupCleanup(w, req)
+		return
+	case "upload":
+		if req.Method != http.MethodPost {
+			writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		r.handleUploadBackup(w, req)
+		return
+	}
 
 	switch req.Method {
+	case http.MethodGet:
+		r.handleDownloadBackup(w, req, backupName)
+
 	case http.MethodPost:
 		r.handleRestoreBackup(w, backupName)
 
@@ -150,4 +171,88 @@ func (r *Router) handleRestoreBackup(w http.ResponseWriter, backupName string) {
 			"component", "backup", "name", backupName)
 		r.RequestShutdown()
 	}()
+}
+
+// handleDownloadBackup streams a backup file as an attachment. The name is
+// strictly validated (no separators, no "..", regular files only), so it is
+// also a safe download filename.
+func (r *Router) handleDownloadBackup(w http.ResponseWriter, req *http.Request, name string) {
+	f, fi, err := r.backupManager.OpenBackup(name)
+	if err != nil {
+		writeBackupNameError(w, err, "Couldn't read the backup: ")
+		return
+	}
+	defer f.Close()
+	w.Header().Set("Content-Type", "application/vnd.sqlite3")
+	w.Header().Set("Content-Disposition", `attachment; filename="`+name+`"`)
+	w.Header().Set("Cache-Control", "no-store")
+	http.ServeContent(w, req, name, fi.ModTime(), f)
+}
+
+// uploadBackupKind: an uploaded backup shares the import size limit.
+var uploadBackupKind = uploadKind{uploadImport.key, "backup you can upload (it shares the import limit)"}
+
+// handleUploadBackup stores an uploaded HOPS database as a new "…_uploaded"
+// backup. It is validated (SQLite, HOPS tables) and never restored here:
+// the admin restores it like any other backup.
+func (r *Router) handleUploadBackup(w http.ResponseWriter, req *http.Request) {
+	file, _, ok := r.readLimitedUpload(w, req, uploadBackupKind)
+	if !ok {
+		return
+	}
+	defer file.Close()
+	name, err := r.backupManager.StoreUploadedBackup(file)
+	if err != nil {
+		var ibe *database.InvalidBackupError
+		if errors.As(err, &ibe) {
+			writeJSONError(w, "This file can't be used as a backup: "+ibe.Reason+". Nothing was stored.", http.StatusUnprocessableEntity)
+			return
+		}
+		slog.Error("failed to store uploaded backup", "component", "backup", "error", err)
+		writeJSONError(w, "Couldn't store the uploaded backup: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, map[string]interface{}{
+		"success": true,
+		"name":    name,
+		"message": "Backup uploaded. It is listed with the others; restore it from there when you want to.",
+	})
+}
+
+// handleBackupCleanup serves "Clean up now": GET returns exactly what the
+// retention rules would delete now, and why; POST {"names": [...]} deletes
+// those of the confirmed names that the rules still delete (re-planned, so
+// nothing outside the rules is ever deleted).
+func (r *Router) handleBackupCleanup(w http.ResponseWriter, req *http.Request) {
+	switch req.Method {
+	case http.MethodGet:
+		plan, err := r.backupManager.PlanCleanup()
+		if err != nil {
+			writeJSONError(w, "Couldn't work out what to clean up: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if plan == nil {
+			plan = []database.RetentionDeletion{}
+		}
+		writeJSON(w, map[string]interface{}{"deletions": plan, "retention": r.backupManager.Retention()})
+	case http.MethodPost:
+		var body struct {
+			Names []string `json:"names"`
+		}
+		if ae := decodeBody(w, req, maxSmallBodyBytes, &body); ae != nil {
+			writeAPIError(w, ae)
+			return
+		}
+		deleted, err := r.backupManager.CleanupConfirmed(body.Names)
+		if deleted == nil {
+			deleted = []string{}
+		}
+		if err != nil {
+			writeJSON(w, map[string]interface{}{"deleted": deleted, "error": "Some backups couldn't be deleted: " + err.Error()})
+			return
+		}
+		writeJSON(w, map[string]interface{}{"deleted": deleted})
+	default:
+		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
 }

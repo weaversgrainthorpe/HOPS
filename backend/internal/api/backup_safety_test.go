@@ -236,7 +236,7 @@ func TestRotationFailureNotice(t *testing.T) {
 	c := newClient(t, router)
 	dir, bm, _ := backupsOf(t, c)
 	for i := 0; i < 12; i++ {
-		os.WriteFile(filepath.Join(dir, "hops-backup-2020-01-01_00-00-"+twoDigits(i)+"_old.db"), []byte("x"), 0o644)
+		os.WriteFile(filepath.Join(dir, "hops-backup-2020-01-01_00-00-"+twoDigits(i)+"_startup.db"), []byte("x"), 0o644)
 	}
 	bm.SetFailureHooks(database.FailureHooks{Remove: func(string) error { return errors.New("read-only file system") }})
 	if code, resp := c.do("POST", "/api/backups", map[string]string{"reason": "manual"}); code != 200 {

@@ -51,6 +51,14 @@ func backupProblemNotice(p database.BackupProblem) notice {
 	case database.ProblemRestoreFailed:
 		text = fmt.Sprintf("The restore you asked for couldn't be applied when HOPS restarted (%s): %s. HOPS is still running on "+
 			"the data it had before the restore.", at, p.Reason)
+	case database.ProblemCeilingDeleted:
+		// Not a failure, so it can be dismissed; but it must be seen.
+		return notice{
+			ID: fmt.Sprintf("%s%s-%d", noticeBackupPrefix, p.Kind, p.At.Unix()),
+			Text: fmt.Sprintf("%s (%s). To keep more, raise the ceiling or lower the days in Settings › Global settings › Server.",
+				p.Reason, at),
+			Level: "warning",
+		}
 	default:
 		text = fmt.Sprintf("A backup problem at %s: %s.", at, p.Reason)
 	}
@@ -90,5 +98,11 @@ func (r *Router) isAdminRequest(req *http.Request) bool {
 	return err == nil && !must
 }
 
-// isBackupNoticeID reports whether id names a backup notice (never dismissible).
+// isBackupNoticeID reports whether id names a backup notice.
 func isBackupNoticeID(id string) bool { return strings.HasPrefix(id, noticeBackupPrefix) }
+
+// isCeilingNoticeID reports whether id names the (dismissible) notice about
+// backups deleted for the ceiling.
+func isCeilingNoticeID(id string) bool {
+	return strings.HasPrefix(id, noticeBackupPrefix+database.ProblemCeilingDeleted+"-")
+}
