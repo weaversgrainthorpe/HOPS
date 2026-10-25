@@ -92,11 +92,28 @@ func main() {
 	if err := database.SweepStaleTempFiles(dbPath); err != nil {
 		slog.Warn("startup sweep", "component", "backup", "error", err)
 	}
-	if applied, err := database.ApplyPendingRestore(dbPath); err != nil {
+	res, err := database.RecoverAndApplyRestore(dbPath)
+	var unsafe *database.UnsafeStartError
+	switch {
+	case errors.As(err, &unsafe):
+		// Never open the database here: that would create an empty one and
+		// serve it as real data. The message names the files and what to do.
+		slog.Error("refusing to start", "component", "backup", "error", err)
+		fmt.Fprintln(os.Stderr, err.Error())
+		os.Exit(1)
+	case err != nil:
 		slog.Error("the staged restore could not be applied; running on the current data", "component", "backup", "error", err)
 		backupManager.RecordRestoreFailure(err)
-	} else if applied {
+	}
+	switch res.Outcome {
+	case database.OutcomeApplied:
 		slog.Info("applied the staged restore", "component", "backup")
+	case database.OutcomeRecoveredApplied:
+		slog.Warn("a restore interrupted by a crash or stop was completed at this start", "component", "backup")
+		backupManager.RecordRestoreRecovery(res.Outcome)
+	case database.OutcomeUndone:
+		slog.Warn("a restore interrupted by a crash or stop was undone; running on the data from before it", "component", "backup")
+		backupManager.RecordRestoreRecovery(res.Outcome)
 	}
 
 	// Initialize database

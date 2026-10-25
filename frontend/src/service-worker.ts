@@ -105,6 +105,10 @@ sw.addEventListener('fetch', (event) => {
           if (swMayCache(fresh)) {
             const cache = await caches.open(RUNTIME);
             cache.put(request, fresh.clone());
+          } else if (fresh.ok) {
+            // A no-store answer (admin notices): drop any copy kept earlier too.
+            const cache = await caches.open(RUNTIME);
+            await cache.delete(request);
           }
           return fresh;
         } catch {

@@ -377,3 +377,22 @@ func TestDiscardStagedRestoreAndDismissRestoreFailed(t *testing.T) {
 		t.Fatalf("still shown: %v", n)
 	}
 }
+
+// Fix round 2: what startup did with an interrupted restore is a visible, dismissible notice.
+func TestRestoreRecoveryNotice(t *testing.T) {
+	router, db := setupTestRouter(t)
+	seed(t, db)
+	c := newClient(t, router)
+	_, bm, _ := backupsOf(t, c)
+	bm.RecordRestoreRecovery(database.OutcomeUndone)
+	n := backupNotice(t, c)
+	if n == nil || !strings.Contains(n["text"].(string), "An interrupted restore was undone") || n["sticky"] == true {
+		t.Fatalf("recovery notice: %v", n)
+	}
+	if code, r := c.do("POST", "/api/notices/"+n["id"].(string)+"/dismiss", nil); code != 200 {
+		t.Fatalf("dismiss: %d %v", code, r)
+	}
+	if n := backupNotice(t, c); n != nil {
+		t.Fatalf("still shown: %v", n)
+	}
+}

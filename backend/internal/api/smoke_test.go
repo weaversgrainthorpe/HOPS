@@ -68,6 +68,7 @@ func TestSmokeRoutesNoFiveHundred(t *testing.T) {
 		{method: "GET", path: "/api/backups/cleanup"},
 		{method: "POST", path: "/api/backups/cleanup", body: `{"names":[]}`},
 		{method: "POST", path: "/api/backups/upload"},
+		{method: "DELETE", path: "/api/backups/pending-restore"},
 
 		// Settings.
 		{method: "GET", path: "/api/settings"},
@@ -174,6 +175,20 @@ func TestSmokeUnauthenticatedRoutesReject(t *testing.T) {
 		"/api/discovery/detectors",
 		"/api/discovery/diagnostics",
 		"/api/notices/layered-status-checks-v4/dismiss",
+	}
+	// Backup mutations by their own method: 401 before anything else.
+	for _, mp := range [][2]string{
+		{"DELETE", "/api/backups/pending-restore"},
+		{"POST", "/api/backups/upload"},
+		{"POST", "/api/backups/cleanup"},
+		{"DELETE", "/api/backups/hops-backup-2026-01-01_00-00-00_manual.db"},
+	} {
+		req := httptest.NewRequest(mp[0], mp[1], nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		if w.Code != http.StatusUnauthorized {
+			t.Errorf("%s %s anonymous request returned %d, expected 401", mp[0], mp[1], w.Code)
+		}
 	}
 	for _, path := range protected {
 		t.Run(path, func(t *testing.T) {

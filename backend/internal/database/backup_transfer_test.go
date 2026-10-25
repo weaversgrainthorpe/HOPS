@@ -1,6 +1,7 @@
 package database
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -76,5 +77,33 @@ func TestPlaceExclusiveNeverReplaces(t *testing.T) {
 	}
 	if b, _ := os.ReadFile(dst); string(b) != "new" {
 		t.Fatal("not placed")
+	}
+}
+
+// Fix round 2: without hard links, placing falls back to an exclusive copy.
+func TestPlaceExclusiveWithoutHardLinks(t *testing.T) {
+	linkFile = func(string, string) error {
+		return &os.LinkError{Op: "link", Err: errors.New("operation not supported")}
+	}
+	t.Cleanup(func() { linkFile = os.Link })
+	dir := t.TempDir()
+	src, dst := filepath.Join(dir, "src"), filepath.Join(dir, "dst")
+	os.WriteFile(src, []byte("new"), 0o644)
+	os.WriteFile(dst, []byte("old"), 0o644)
+	if err := placeExclusive(src, dst); err == nil {
+		t.Fatal("replaced an existing file")
+	}
+	if b, _ := os.ReadFile(dst); string(b) != "old" {
+		t.Fatal("existing file changed")
+	}
+	os.Remove(dst)
+	if err := placeExclusive(src, dst); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(dst); string(b) != "new" {
+		t.Fatal("not placed")
+	}
+	if _, err := os.Stat(src); !os.IsNotExist(err) {
+		t.Fatal("source left behind")
 	}
 }

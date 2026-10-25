@@ -64,6 +64,15 @@ func backupProblemNotice(p database.BackupProblem) notice {
 				p.Reason, at),
 			Level: "warning",
 		}
+	case database.ProblemRestoreRecovered, database.ProblemNoticesUnreadable:
+		// Reports of what happened: dismissible.
+		return notice{
+			ID:    fmt.Sprintf("%s%s-%d", noticeBackupPrefix, p.Kind, p.At.Unix()),
+			Text:  fmt.Sprintf("%s (%s).", capitalize(p.Reason), at),
+			Level: "warning",
+		}
+	case database.ProblemNoticesUnsaved:
+		text = fmt.Sprintf("%s (%s). Check that HOPS can write to its backups folder.", capitalize(p.Reason), at)
 	default:
 		text = fmt.Sprintf("A backup problem at %s: %s.", at, p.Reason)
 	}
@@ -110,10 +119,19 @@ func isBackupNoticeID(id string) bool { return strings.HasPrefix(id, noticeBacku
 // notice (backups deleted for the ceiling, a restore that couldn't be
 // applied), and its kind.
 func dismissibleBackupNotice(id string) (string, bool) {
-	for _, kind := range []string{database.ProblemCeilingDeleted, database.ProblemRestoreFailed} {
+	for _, kind := range []string{database.ProblemCeilingDeleted, database.ProblemRestoreFailed,
+		database.ProblemRestoreRecovered, database.ProblemNoticesUnreadable} {
 		if strings.HasPrefix(id, noticeBackupPrefix+kind+"-") {
 			return kind, true
 		}
 	}
 	return "", false
+}
+
+// capitalize upper-cases the first letter of a sentence (ASCII).
+func capitalize(s string) string {
+	if s == "" || s[0] < 'a' || s[0] > 'z' {
+		return s
+	}
+	return string(s[0]-32) + s[1:]
 }

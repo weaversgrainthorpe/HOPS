@@ -167,11 +167,15 @@ func TestApplyRecoversInterruptedAside(t *testing.T) {
 	if err := os.Rename(dbPath, dbPath+".pre-apply"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ApplyPendingRestore(dbPath); err != nil {
-		t.Fatal(err)
+	// Files moved aside with no journal: ambiguous, so HOPS refuses to
+	// start and deletes nothing (fix round 2).
+	_, err := ApplyPendingRestore(dbPath)
+	var u *UnsafeStartError
+	if !errors.As(err, &u) {
+		t.Fatalf("want refuse-to-start, got %v", err)
 	}
-	if err := ValidateHOPSDatabase(dbPath); err != nil {
-		t.Fatalf("interrupted apply not recovered: %v", err)
+	if _, err := os.Stat(dbPath + ".pre-apply"); err != nil {
+		t.Fatal("the original was deleted")
 	}
 }
 
