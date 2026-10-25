@@ -4,6 +4,7 @@
 /// <reference lib="webworker" />
 
 import { build, files, version } from '$service-worker';
+import { swMayCache } from '$lib/utils/swCache';
 
 // HOPS PWA service worker.
 //
@@ -100,7 +101,8 @@ sw.addEventListener('fetch', (event) => {
       (async () => {
         try {
           const fresh = await fetch(request);
-          if (fresh.ok) {
+          // no-store responses (admin-only notices) are never kept.
+          if (swMayCache(fresh)) {
             const cache = await caches.open(RUNTIME);
             cache.put(request, fresh.clone());
           }

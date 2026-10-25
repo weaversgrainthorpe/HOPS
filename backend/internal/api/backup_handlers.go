@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -30,6 +31,8 @@ func (r *Router) handleBackups(w http.ResponseWriter, req *http.Request) {
 			"backups":   backups,
 			"problems":  problems,
 			"retention": r.backupManager.Retention(),
+			// A restore staged but not yet applied (the server hasn't restarted).
+			"pendingRestore": r.backupManager.PendingRestore(),
 		})
 
 	case http.MethodPost:
@@ -86,12 +89,16 @@ func writeBackupNameError(w http.ResponseWriter, err error, msg string) {
 }
 
 // handleBackupActions handles, for /api/backups/{name}:
-//   GET    → download the backup
-//   POST   → RESTORE it (see the note in setupRoutes)
-//   DELETE → delete it
+//
+//	GET    → download the backup
+//	POST   → RESTORE it (see the note in setupRoutes)
+//	DELETE → delete it
+//
 // and two sentinels that are never valid backup names:
-//   GET/POST /api/backups/cleanup → preview / confirmed "Clean up now"
-//   POST     /api/backups/upload  → store an uploaded backup (not restored)
+//
+//	GET/POST /api/backups/cleanup → preview / confirmed "Clean up now"
+//	POST     /api/backups/upload  → store an uploaded backup (not restored)
+//	DELETE   /api/backups/pending-restore → discard a staged restore
 func (r *Router) handleBackupActions(w http.ResponseWriter, req *http.Request) {
 	backupName, ok := backupNameFromPath(req.URL.Path)
 	if !ok {
@@ -99,6 +106,21 @@ func (r *Router) handleBackupActions(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	switch backupName {
+	case "pending-restore":
+		if req.Method != http.MethodDelete {
+			writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		if err := r.backupManager.DiscardPendingRestore(); err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				writeJSONError(w, "No restore is waiting to be applied", http.StatusNotFound)
+				return
+			}
+			writeJSONError(w, "Couldn't discard the staged restore: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		writeJSON(w, map[string]interface{}{"success": true, "message": "The staged restore was discarded; nothing will be restored."})
+		return
 	case "cleanup":
 		r.handleBackupCleanup(w, req)
 		return

@@ -380,7 +380,7 @@ Changes made under 3.x are not carried back. Don't restore this backup from the 
 
 From the Admin panel, click **Backups** to:
 - View all available backups
-- Restore a previous backup (a safety backup of the current data is taken first; HOPS then restarts and applies the restore before it opens the database, so the service must be set to restart automatically, e.g. `Restart=on-failure`)
+- Restore a previous backup (a safety backup of the current data is taken first; HOPS then restarts and applies the restore before it opens the database, so the service must be set to restart automatically, e.g. `Restart=on-failure`. Changes made in the few seconds before the restart are not included. If the restore can't be applied, HOPS keeps running on its current data, keeps the staged file as `hops.db.restore-failed` and says so in Settings; a restore that is waiting for a restart can be discarded from the Backups dialog)
 - Download a backup (a `.db` file)
 - Upload a backup file: it is checked (it must be a HOPS database) and listed as `…_uploaded.db`; it is not restored until you restore it
 - Delete old backups

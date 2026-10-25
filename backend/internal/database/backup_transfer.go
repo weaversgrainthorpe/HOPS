@@ -56,9 +56,17 @@ func (bm *BackupManager) StoreUploadedBackup(src io.Reader) (string, error) {
 	if err := ValidateHOPSDatabase(tmpPath); err != nil {
 		return "", err
 	}
-	name, path := bm.newBackupPath(UploadedReason)
-	if err := os.Rename(tmpPath, path); err != nil {
-		return "", fmt.Errorf("cannot store the upload: %w", err)
+	var name string
+	for attempt := 0; ; attempt++ {
+		n, path := bm.newBackupPath(UploadedReason)
+		err := placeExclusive(tmpPath, path)
+		if err == nil {
+			name = n
+			break
+		}
+		if !os.IsExist(err) || attempt >= 5 {
+			return "", fmt.Errorf("cannot store the upload: %w", err)
+		}
 	}
 	keep = true
 	slog.Info("stored uploaded backup", "component", "backup", "name", name)
@@ -66,4 +74,17 @@ func (bm *BackupManager) StoreUploadedBackup(src io.Reader) (string, error) {
 		slog.Warn("failed to cleanup old backups", "component", "backup", "error", err)
 	}
 	return name, nil
+}
+
+// placeExclusive moves src to dst only if dst doesn't exist (a hard link
+// fails on an existing name, unlike rename, which would replace it).
+func placeExclusive(src, dst string) error {
+	if err := os.Link(src, dst); err != nil {
+		return err
+	}
+	if err := os.Remove(src); err != nil {
+		// Placed; the leftover temp name is swept at the next start.
+		slog.Warn("could not remove the upload's temporary file", "component", "backup", "file", src, "error", err)
+	}
+	return nil
 }

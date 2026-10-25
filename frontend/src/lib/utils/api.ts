@@ -715,6 +715,8 @@ export interface BackupList {
   backups: BackupInfo[];
   problems: BackupProblem[];
   retention?: BackupRetention;
+  /** A restore is staged but not yet applied (HOPS hasn't restarted). */
+  pendingRestore?: boolean;
 }
 
 export async function listBackups(): Promise<BackupList> {
@@ -725,8 +727,14 @@ export async function listBackups(): Promise<BackupList> {
   return {
     backups: resp.backups,
     problems: Array.isArray(resp.problems) ? resp.problems : [],
-    ...(resp.retention && typeof resp.retention.keepCount === 'number' ? { retention: resp.retention } : {})
+    ...(resp.retention && typeof resp.retention.keepCount === 'number' ? { retention: resp.retention } : {}),
+    ...(resp.pendingRestore === true ? { pendingRestore: true } : {})
   };
+}
+
+/** Discard a staged restore that hasn't been applied yet (nothing is restored). */
+export async function discardPendingRestore(): Promise<void> {
+  await fetchAPI('/backups/pending-restore', { method: 'DELETE' });
 }
 
 /** Where a backup downloads from (GET, admin session cookie). */

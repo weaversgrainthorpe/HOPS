@@ -89,6 +89,9 @@ func main() {
 	// leaves the current data in place and is shown to the admin as a notice.
 	dbPath := filepath.Join(cfg.DataDir, "hops.db")
 	backupManager := database.SharedBackupManager(dbPath)
+	if err := database.SweepStaleTempFiles(dbPath); err != nil {
+		slog.Warn("startup sweep", "component", "backup", "error", err)
+	}
 	if applied, err := database.ApplyPendingRestore(dbPath); err != nil {
 		slog.Error("the staged restore could not be applied; running on the current data", "component", "backup", "error", err)
 		backupManager.RecordRestoreFailure(err)

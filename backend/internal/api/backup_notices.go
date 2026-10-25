@@ -49,8 +49,13 @@ func backupProblemNotice(p database.BackupProblem) notice {
 		text = fmt.Sprintf("HOPS couldn't delete old backups at %s: %s. Old backups will keep piling up and may fill the disk. "+
 			"Delete them in Settings › Backups, or check that HOPS can write to its backups folder.", at, p.Reason)
 	case database.ProblemRestoreFailed:
-		text = fmt.Sprintf("The restore you asked for couldn't be applied when HOPS restarted (%s): %s. HOPS is still running on "+
-			"the data it had before the restore.", at, p.Reason)
+		// A report of what happened (the stage is set aside, not retried): dismissible.
+		return notice{
+			ID: fmt.Sprintf("%s%s-%d", noticeBackupPrefix, p.Kind, p.At.Unix()),
+			Text: fmt.Sprintf("The restore you asked for couldn't be applied when HOPS restarted (%s): %s. HOPS is still running on "+
+				"the data it had before the restore. You can try the restore again from Settings › Backups.", at, p.Reason),
+			Level: "warning",
+		}
 	case database.ProblemCeilingDeleted:
 		// Not a failure, so it can be dismissed; but it must be seen.
 		return notice{
@@ -101,8 +106,14 @@ func (r *Router) isAdminRequest(req *http.Request) bool {
 // isBackupNoticeID reports whether id names a backup notice.
 func isBackupNoticeID(id string) bool { return strings.HasPrefix(id, noticeBackupPrefix) }
 
-// isCeilingNoticeID reports whether id names the (dismissible) notice about
-// backups deleted for the ceiling.
-func isCeilingNoticeID(id string) bool {
-	return strings.HasPrefix(id, noticeBackupPrefix+database.ProblemCeilingDeleted+"-")
+// dismissibleBackupNotice reports whether id names a dismissible backup
+// notice (backups deleted for the ceiling, a restore that couldn't be
+// applied), and its kind.
+func dismissibleBackupNotice(id string) (string, bool) {
+	for _, kind := range []string{database.ProblemCeilingDeleted, database.ProblemRestoreFailed} {
+		if strings.HasPrefix(id, noticeBackupPrefix+kind+"-") {
+			return kind, true
+		}
+	}
+	return "", false
 }

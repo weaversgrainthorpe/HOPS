@@ -92,6 +92,11 @@ type RetentionDeletion struct {
 	OverCeiling bool `json:"overCeiling"`
 }
 
+// Ages come from each file's modification time (BackupInfo.CreatedAt), which
+// HOPS sets when it writes the backup and never touches again. Anyone who can
+// change mtimes in the data directory can already delete backups outright, so
+// this trusts them; a file with a future mtime simply counts as newest (kept).
+//
 // PlanRetention returns the backups the policy deletes, oldest last. A
 // backup is deleted only if it is not protected, not among the newest
 // KeepCount auto-deletable backups, and older than KeepDays (or KeepDays is

@@ -8,13 +8,15 @@ vi.mock('$lib/utils/api', () => ({
   uploadBackup: vi.fn(),
   previewBackupCleanup: vi.fn(),
   confirmBackupCleanup: vi.fn(),
+  discardPendingRestore: vi.fn(async () => {}),
   backupDownloadUrl: (n: string) => `/api/backups/${encodeURIComponent(n)}`
 }));
 vi.mock('$lib/stores/confirmModal', () => ({ confirm: vi.fn(async () => true) }));
 vi.mock('$lib/stores/config', () => ({ refreshServerNotices: vi.fn(async () => {}) }));
 import { render, screen, fireEvent } from '@testing-library/svelte';
 import BackupModal from './BackupModal.svelte';
-import { listBackups, restoreBackup, uploadBackup, previewBackupCleanup, confirmBackupCleanup } from '$lib/utils/api';
+import { listBackups, restoreBackup, uploadBackup, previewBackupCleanup, confirmBackupCleanup, discardPendingRestore } from '$lib/utils/api';
+import { confirm } from '$lib/stores/confirmModal';
 
 const backup = { name: 'hops-backup-2026-10-25_10-00-00_manual.db', path: '/x', size: 2048, createdAt: '2026-10-25T10:00:00Z' };
 
@@ -84,5 +86,21 @@ describe('BackupModal', () => {
     Object.defineProperty(input, 'files', { value: [file] });
     await fireEvent.change(input);
     expect(await screen.findByText(/Couldn't upload the backup: This file can't be used as a backup: this is not a HOPS database/)).toBeTruthy();
+  });
+
+  it('warns that changes in the next few seconds are not included in a restore', async () => {
+    vi.mocked(restoreBackup).mockResolvedValue({ success: true, message: 'ok', restarting: true });
+    render(BackupModal, { onClose: () => {} });
+    await fireEvent.click(await screen.findByRole('button', { name: `Restore ${backup.name}` }));
+    expect(vi.mocked(confirm).mock.calls.at(-1)![0].message).toContain("changes made in the next few seconds won't be included");
+  });
+
+  it('shows a staged restore that is waiting, and discards it', async () => {
+    vi.mocked(listBackups).mockResolvedValue({ backups: [backup], problems: [], pendingRestore: true });
+    render(BackupModal, { onClose: () => {} });
+    expect(await screen.findByText(/A restore is waiting to be applied/)).toBeTruthy();
+    vi.mocked(listBackups).mockResolvedValue({ backups: [backup], problems: [] });
+    await fireEvent.click(screen.getByRole('button', { name: 'Discard staged restore' }));
+    expect(discardPendingRestore).toHaveBeenCalled();
   });
 });

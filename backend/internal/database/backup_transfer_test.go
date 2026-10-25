@@ -53,3 +53,28 @@ func TestStoreUploadedBackup(t *testing.T) {
 		t.Fatalf("invalid upload left files behind: %d -> %d", len(before), len(after))
 	}
 }
+
+// M4: the upload's final name is taken exclusively: an existing file is never replaced.
+func TestPlaceExclusiveNeverReplaces(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "src")
+	dst := filepath.Join(dir, "dst")
+	os.WriteFile(src, []byte("new"), 0o644)
+	os.WriteFile(dst, []byte("old"), 0o644)
+	if err := placeExclusive(src, dst); err == nil {
+		t.Fatal("replaced an existing file")
+	}
+	if b, _ := os.ReadFile(dst); string(b) != "old" {
+		t.Fatal("existing file changed")
+	}
+	os.Remove(dst)
+	if err := placeExclusive(src, dst); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(src); !os.IsNotExist(err) {
+		t.Fatal("source left behind")
+	}
+	if b, _ := os.ReadFile(dst); string(b) != "new" {
+		t.Fatal("not placed")
+	}
+}

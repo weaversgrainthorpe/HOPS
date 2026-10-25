@@ -129,7 +129,14 @@ func (r *Router) handleGetConfig(w http.ResponseWriter, req *http.Request) {
 	}
 	// One-time notices (notices.go), like migrationNotices only when any;
 	// backup problems first, and only for a signed-in admin (backup_notices.go).
-	if ns := append(r.backupNotices(req), r.currentNotices(stored)...); len(ns) > 0 {
+	adminNotices := r.backupNotices(req)
+	if len(adminNotices) > 0 {
+		// Admin-only content: never stored by a shared cache or the service
+		// worker (which skips no-store responses), and varies by session.
+		w.Header().Set("Cache-Control", "private, no-store")
+		w.Header().Add("Vary", "Cookie, Authorization")
+	}
+	if ns := append(adminNotices, r.currentNotices(stored)...); len(ns) > 0 {
 		view["notices"] = ns
 	}
 	writeJSON(w, view)

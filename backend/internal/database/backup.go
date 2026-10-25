@@ -3,6 +3,7 @@ package database
 import (
 	"bytes"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -39,6 +40,15 @@ const (
 	// PendingRestoreSuffix is appended to the DB path for a restore staged
 	// to be applied on the next start (see RestoreBackup).
 	PendingRestoreSuffix = ".restore-pending"
+	// FailedRestoreSuffix is where a stage that could not be applied is set
+	// aside (so it is not retried on every start), for the admin to inspect.
+	FailedRestoreSuffix = ".restore-failed"
+	// preApplySuffix: the current database (and its -wal/-shm) is moved
+	// aside to this while a staged restore is put in place.
+	preApplySuffix = ".pre-apply"
+	// noticesFile (in the backups dir) keeps the dismissible backup notices
+	// across restarts.
+	noticesFile = ".notices.json"
 	// maxBackupNameLen bounds a backup name taken from a request.
 	maxBackupNameLen = 200
 )
@@ -125,9 +135,62 @@ type BackupManager struct {
 // NewBackupManager creates a new backup manager
 func NewBackupManager(dbPath string) *BackupManager {
 	backupDir := filepath.Join(filepath.Dir(dbPath), "backups")
-	return &BackupManager{
+	bm := &BackupManager{
 		dbPath:    dbPath,
 		backupDir: backupDir,
+	}
+	bm.loadNotices()
+	return bm
+}
+
+// persistedNotices is backups/.notices.json: the dismissible notices
+// (restore-failed, ceiling-deleted), kept until the admin dismisses them.
+type persistedNotices struct {
+	Restore *BackupProblem `json:"restore,omitempty"`
+	Ceiling *BackupProblem `json:"ceiling,omitempty"`
+}
+
+// loadNotices reads the persisted notices. An unreadable file is itself
+// shown (as a restore-failed-kind notice would be silent otherwise).
+func (bm *BackupManager) loadNotices() {
+	raw, err := os.ReadFile(filepath.Join(bm.backupDir, noticesFile))
+	if err != nil {
+		if !os.IsNotExist(err) {
+			slog.Error("cannot read the saved backup notices", "component", "backup", "error", err)
+			bm.rotateErr = &BackupProblem{Kind: ProblemRotationFailed, At: time.Now(),
+				Reason: "the saved backup notices could not be read (" + errText(err) + "); a notice may be missing"}
+		}
+		return
+	}
+	var pn persistedNotices
+	if err := json.Unmarshal(raw, &pn); err != nil {
+		slog.Error("the saved backup notices are damaged", "component", "backup", "error", err)
+		bm.rotateErr = &BackupProblem{Kind: ProblemRotationFailed, At: time.Now(),
+			Reason: "the saved backup notices are damaged (" + err.Error() + "); a notice may be missing"}
+		return
+	}
+	bm.restore, bm.ceiling = pn.Restore, pn.Ceiling
+}
+
+// saveNoticesLocked writes the dismissible notices (bm.mu held). A write
+// failure is logged; the notice itself is still shown from memory.
+func (bm *BackupManager) saveNoticesLocked() {
+	path := filepath.Join(bm.backupDir, noticesFile)
+	if bm.restore == nil && bm.ceiling == nil {
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			slog.Error("cannot clear the saved backup notices", "component", "backup", "error", err)
+		}
+		return
+	}
+	raw, _ := json.Marshal(persistedNotices{Restore: bm.restore, Ceiling: bm.ceiling})
+	if err := os.MkdirAll(bm.backupDir, 0755); err == nil {
+		tmp := path + ".tmp"
+		if err = os.WriteFile(tmp, raw, 0644); err == nil {
+			err = os.Rename(tmp, path)
+		}
+		if err != nil {
+			slog.Error("cannot save the backup notices; they are shown until HOPS restarts", "component", "backup", "error", err)
+		}
 	}
 }
 
@@ -194,13 +257,24 @@ func (bm *BackupManager) Problems() []BackupProblem {
 	return out
 }
 
-// ClearCeilingNotice drops the "deleted backups within keep_days" note
-// (the admin dismissed it). It reports whether there was one.
-func (bm *BackupManager) ClearCeilingNotice() bool {
+// DismissProblem drops a dismissible notice (ceiling-deleted or
+// restore-failed) and forgets it across restarts. It reports whether there
+// was one; failures (backup, cleanup) are not dismissible.
+func (bm *BackupManager) DismissProblem(kind string) bool {
 	bm.mu.Lock()
 	defer bm.mu.Unlock()
-	had := bm.ceiling != nil
-	bm.ceiling = nil
+	var had bool
+	switch kind {
+	case ProblemCeilingDeleted:
+		had, bm.ceiling = bm.ceiling != nil, nil
+	case ProblemRestoreFailed:
+		had, bm.restore = bm.restore != nil, nil
+	default:
+		return false
+	}
+	if had {
+		bm.saveNoticesLocked()
+	}
 	return had
 }
 
@@ -210,6 +284,7 @@ func (bm *BackupManager) RecordRestoreFailure(err error) {
 	bm.mu.Lock()
 	defer bm.mu.Unlock()
 	bm.restore = &BackupProblem{Kind: ProblemRestoreFailed, At: time.Now(), Reason: err.Error()}
+	bm.saveNoticesLocked()
 }
 
 func (bm *BackupManager) noteBackup(reason string, err error) {
@@ -399,22 +474,38 @@ func PendingRestorePath(dbPath string) string { return dbPath + PendingRestoreSu
 //
 // Order, each step refusing the restore when it fails (nothing changed):
 //  1. the name is valid and the backup is a regular file here;
-//  2. the backup is a real HOPS database (ValidateHOPSDatabase);
+//  2. the backup is copied to a temporary stage, and that copy is checked
+//     to be a real HOPS database (ValidateHOPSDatabase) — copied FIRST, so
+//     the safety backup's cleanup can never delete the target (e.g. the
+//     oldest backup kept);
 //  3. a "pre-restore" safety backup of the current data is taken (with db,
 //     through VACUUM INTO so the WAL is included) — a failure is a
 //     *SafetyBackupError and the restore is refused;
-//  4. the backup is copied to PendingRestorePath.
+//  4. the stage is renamed to PendingRestorePath.
 //
 // The database file is never replaced under the open connection: in WAL mode
 // the old WAL would be checkpointed into the new file and corrupt it. The
 // caller restarts the process, and ApplyPendingRestore swaps the file in
-// before the database is opened.
+// before the database is opened. Writes made between the safety backup and
+// the restart are not in either copy (the confirmation says so).
 func (bm *BackupManager) RestoreBackup(db *sql.DB, backupName string) error {
 	backupPath, _, err := bm.backupFile(backupName)
 	if err != nil {
 		return err
 	}
-	if err := ValidateHOPSDatabase(backupPath); err != nil {
+	pending := PendingRestorePath(bm.dbPath)
+	tmp := pending + ".tmp"
+	if err := copyFile(backupPath, tmp); err != nil {
+		os.Remove(tmp)
+		return fmt.Errorf("failed to stage the restore: %w", err)
+	}
+	staged := false
+	defer func() {
+		if !staged {
+			os.Remove(tmp)
+		}
+	}()
+	if err := ValidateHOPSDatabase(tmp); err != nil {
 		return err
 	}
 
@@ -429,26 +520,49 @@ func (bm *BackupManager) RestoreBackup(db *sql.DB, backupName string) error {
 		return &SafetyBackupError{Err: safetyErr}
 	}
 
-	pending := PendingRestorePath(bm.dbPath)
-	tmp := pending + ".tmp"
-	if err := copyFile(backupPath, tmp); err != nil {
-		os.Remove(tmp)
-		return fmt.Errorf("failed to stage the restore: %w", err)
-	}
 	if err := os.Rename(tmp, pending); err != nil {
-		os.Remove(tmp)
 		return fmt.Errorf("failed to stage the restore: %w", err)
 	}
-
+	staged = true
 	slog.Info("restore staged; applied on the next start", "component", "backup", "name", backupName)
 	return nil
 }
 
+// PendingRestore reports whether a restore is staged (applied on the next start).
+func (bm *BackupManager) PendingRestore() bool {
+	_, err := os.Lstat(PendingRestorePath(bm.dbPath))
+	return err == nil
+}
+
+// DiscardPendingRestore removes a staged restore (os.ErrNotExist if none).
+func (bm *BackupManager) DiscardPendingRestore() error {
+	err := os.Remove(PendingRestorePath(bm.dbPath))
+	if err == nil {
+		slog.Info("staged restore discarded", "component", "backup")
+	}
+	return err
+}
+
+// renameFile is os.Rename; tests inject failures.
+var renameFile = os.Rename
+
+// dbFileSuffixes are the database file and its WAL-mode companions.
+var dbFileSuffixes = []string{"", "-wal", "-shm"}
+
 // ApplyPendingRestore swaps a staged restore in for the database file. It
 // must run before the database is opened. It reports whether a restore was
-// applied; on error the current database is left in place (and the staged
-// file kept, so the next start tries again) and the caller must surface it.
+// applied.
+//
+// The current database, -wal and -shm are moved aside (hops.db.pre-apply*),
+// the stage is renamed in, and only then are the aside files removed. On
+// any failure the aside files are moved back, so the current data —
+// including writes still in its WAL — is intact. A stage that cannot be
+// applied is renamed to FailedRestoreSuffix (never retried on every start).
+// An apply interrupted after moving files aside is recovered first.
 func ApplyPendingRestore(dbPath string) (bool, error) {
+	if err := recoverAside(dbPath); err != nil {
+		return false, err
+	}
 	pending := PendingRestorePath(dbPath)
 	if _, err := os.Lstat(pending); err != nil {
 		if os.IsNotExist(err) {
@@ -456,20 +570,94 @@ func ApplyPendingRestore(dbPath string) (bool, error) {
 		}
 		return false, fmt.Errorf("cannot read the staged restore: %w", err)
 	}
-	if err := ValidateHOPSDatabase(pending); err != nil {
-		return false, fmt.Errorf("the staged restore is not usable: %w", err)
+	fail := func(err error) (bool, error) {
+		if rerr := renameFile(pending, dbPath+FailedRestoreSuffix); rerr != nil {
+			return false, fmt.Errorf("%w (and the staged file could not be set aside: %v)", err, rerr)
+		}
+		return false, fmt.Errorf("%w; the staged file was kept as %s", err, filepath.Base(dbPath+FailedRestoreSuffix))
 	}
-	// The old database's WAL and shared-memory files belong to the old file;
-	// left in place they would be replayed into the restored one.
-	for _, suffix := range []string{"-wal", "-shm"} {
-		if err := os.Remove(dbPath + suffix); err != nil && !os.IsNotExist(err) {
-			return false, fmt.Errorf("cannot remove the old %s file: %w", suffix, err)
+	if err := ValidateHOPSDatabase(pending); err != nil {
+		return fail(fmt.Errorf("the staged restore is not usable: %w", err))
+	}
+
+	var moved []string
+	putBack := func() error {
+		var errs []string
+		for _, suf := range moved {
+			if err := renameFile(dbPath+preApplySuffix+suf, dbPath+suf); err != nil {
+				errs = append(errs, err.Error())
+			}
+		}
+		if len(errs) > 0 {
+			return fmt.Errorf("could not put the current database back: %s", strings.Join(errs, "; "))
+		}
+		return nil
+	}
+	for _, suf := range dbFileSuffixes {
+		if err := renameFile(dbPath+suf, dbPath+preApplySuffix+suf); err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			if perr := putBack(); perr != nil {
+				return false, fmt.Errorf("cannot move the current database aside: %v; %w", err, perr)
+			}
+			return fail(fmt.Errorf("cannot move the current database aside: %w", err))
+		}
+		moved = append(moved, suf)
+	}
+	if err := renameFile(pending, dbPath); err != nil {
+		if perr := putBack(); perr != nil {
+			return false, fmt.Errorf("cannot put the restored database in place: %v; %w", err, perr)
+		}
+		return fail(fmt.Errorf("cannot put the restored database in place: %w", err))
+	}
+	for _, suf := range moved {
+		if err := os.Remove(dbPath + preApplySuffix + suf); err != nil && !os.IsNotExist(err) {
+			slog.Warn("could not remove the replaced database file", "component", "backup", "file", dbPath+preApplySuffix+suf, "error", err)
 		}
 	}
-	if err := os.Rename(pending, dbPath); err != nil {
-		return false, fmt.Errorf("cannot put the restored database in place: %w", err)
-	}
 	return true, nil
+}
+
+// recoverAside undoes an apply interrupted after the current database was
+// moved aside but before the stage was put in (no database in place).
+func recoverAside(dbPath string) error {
+	if _, err := os.Lstat(dbPath + preApplySuffix); err != nil {
+		return nil
+	}
+	if _, err := os.Lstat(dbPath); err == nil {
+		// The restore was put in place; the aside copies are leftovers.
+		for _, suf := range dbFileSuffixes {
+			os.Remove(dbPath + preApplySuffix + suf)
+		}
+		return nil
+	}
+	for _, suf := range dbFileSuffixes {
+		if err := renameFile(dbPath+preApplySuffix+suf, dbPath+suf); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("cannot recover the database from an interrupted restore: %w", err)
+		}
+	}
+	slog.Warn("recovered the database from an interrupted restore", "component", "backup")
+	return nil
+}
+
+// SweepStaleTempFiles removes temp files an interrupted stage or upload left
+// behind (hops.db.restore-pending.tmp, backups/.upload-*.tmp). Run at start.
+func SweepStaleTempFiles(dbPath string) error {
+	var errs []string
+	stale := []string{PendingRestorePath(dbPath) + ".tmp"}
+	if m, err := filepath.Glob(filepath.Join(filepath.Dir(dbPath), "backups", ".upload-*.tmp")); err == nil {
+		stale = append(stale, m...)
+	}
+	for _, f := range stale {
+		if err := os.Remove(f); err != nil && !os.IsNotExist(err) {
+			errs = append(errs, err.Error())
+		}
+	}
+	if len(errs) > 0 {
+		return fmt.Errorf("could not remove stale temporary files: %s", strings.Join(errs, "; "))
+	}
+	return nil
 }
 
 // sqliteMagic starts every SQLite 3 database file.
@@ -610,6 +798,7 @@ func (bm *BackupManager) deletePlanned(plan []RetentionDeletion) ([]string, erro
 		bm.mu.Lock()
 		bm.ceiling = &BackupProblem{Kind: ProblemCeilingDeleted, At: time.Now(),
 			Reason: fmt.Sprintf("Deleted %d backup(s) newer than %d days to stay under the %d-backup ceiling", ceiling, p.KeepDays, p.MaxCount)}
+		bm.saveNoticesLocked()
 		bm.mu.Unlock()
 	}
 	return deleted, err

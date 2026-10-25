@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -321,4 +322,58 @@ func tempBackupDB(t *testing.T) (*sql.DB, string) {
 	}
 	t.Cleanup(func() { db.Close() })
 	return db, p
+}
+
+// Fix round 1, M1: a GET /api/config carrying admin notices is never cached.
+func TestConfigWithAdminNoticesNotCached(t *testing.T) {
+	router, db := setupTestRouter(t)
+	seed(t, db)
+	c := newClient(t, router)
+	_, bm, _ := backupsOf(t, c)
+	w := c.rawReq("GET", "/api/config", nil, "")
+	if w.Header().Get("Cache-Control") == "private, no-store" {
+		t.Fatal("no-store without admin notices (offline copy would be lost for nothing)")
+	}
+	bm.SetFailureHooks(failReason("startup"))
+	bm.CreateBackupWithDB(db, "startup")
+	w = c.rawReq("GET", "/api/config", nil, "")
+	if w.Header().Get("Cache-Control") != "private, no-store" || !strings.Contains(w.Header().Get("Vary"), "Cookie") {
+		t.Fatalf("admin notices cacheable: %q / %q", w.Header().Get("Cache-Control"), w.Header().Get("Vary"))
+	}
+}
+
+// Fix round 1, I2: a staged restore can be discarded; a restore-failed notice can be dismissed.
+func TestDiscardStagedRestoreAndDismissRestoreFailed(t *testing.T) {
+	router, db := setupTestRouter(t)
+	seed(t, db)
+	c := newClient(t, router)
+	_, bm, name := backupsOf(t, c)
+	if code, _ := c.do("DELETE", "/api/backups/pending-restore", nil); code != 404 {
+		t.Fatalf("discard with nothing staged: %d", code)
+	}
+	if code, r := c.do("POST", "/api/backups/"+name, nil); code != 200 {
+		t.Fatalf("restore: %d %v", code, r)
+	}
+	_, l := c.do("GET", "/api/backups", nil)
+	if l["pendingRestore"] != true {
+		t.Fatalf("pending restore not reported: %v", l["pendingRestore"])
+	}
+	if code, r := c.do("DELETE", "/api/backups/pending-restore", nil); code != 200 {
+		t.Fatalf("discard: %d %v", code, r)
+	}
+	if _, l = c.do("GET", "/api/backups", nil); l["pendingRestore"] != false {
+		t.Fatal("still pending after discard")
+	}
+
+	bm.RecordRestoreFailure(errors.New("the staged restore is not usable"))
+	n := backupNotice(t, c)
+	if n == nil || !strings.Contains(n["text"].(string), "couldn't be applied") || n["sticky"] == true {
+		t.Fatalf("restore-failed notice: %v", n)
+	}
+	if code, r := c.do("POST", "/api/notices/"+n["id"].(string)+"/dismiss", nil); code != 200 {
+		t.Fatalf("dismiss: %d %v", code, r)
+	}
+	if n := backupNotice(t, c); n != nil {
+		t.Fatalf("still shown: %v", n)
+	}
 }

@@ -3,7 +3,7 @@
   import Modal from '$lib/components/shared/Modal.svelte';
   import {
     listBackups, createBackup, restoreBackup, deleteBackup, uploadBackup, previewBackupCleanup, confirmBackupCleanup,
-    backupDownloadUrl, type BackupInfo, type BackupProblem, type BackupRetention, type CleanupDeletion
+    backupDownloadUrl, discardPendingRestore, type BackupInfo, type BackupProblem, type BackupRetention, type CleanupDeletion
   } from '$lib/utils/api';
   import { refreshServerNotices } from '$lib/stores/config';
   import { confirm } from '$lib/stores/confirmModal';
@@ -19,6 +19,7 @@
   let backups = $state<BackupInfo[]>([]);
   let problems = $state<BackupProblem[]>([]);
   let retention = $state<BackupRetention | null>(null);
+  let pendingRestore = $state(false);
   let uploading = $state(false);
   let fileInput = $state<HTMLInputElement | null>(null);
   // "Clean up now": the preview (exactly what would be deleted, and why) shown before anything is deleted.
@@ -46,6 +47,7 @@
       backups = result.backups;
       problems = result.problems;
       retention = result.retention ?? null;
+      pendingRestore = result.pendingRestore === true;
     } catch (err) {
       error = why(err, 'Failed to load backups.');
     } finally {
@@ -73,7 +75,7 @@
   async function handleRestore(backup: BackupInfo) {
     const confirmed = await confirm({
       title: 'Restore Backup',
-      message: `Restore from "${backup.name}"? A safety backup of the current data is taken first; if that fails, nothing is restored. HOPS then restarts to apply the restore.`,
+      message: `Restore from "${backup.name}"? A safety backup of the current data is taken first; if that fails, nothing is restored. HOPS then restarts to apply the restore: changes made in the next few seconds won't be included.`,
       confirmText: 'Restore',
       confirmStyle: 'warning',
     });
@@ -119,6 +121,18 @@
     } finally {
       actionInProgress = null;
       actionType = null;
+    }
+    await loadBackups();
+  }
+
+  async function handleDiscardPending() {
+    actionError = '';
+    try {
+      await discardPendingRestore();
+      toast.success('The staged restore was discarded; nothing will be restored.');
+    } catch (err) {
+      actionError = `Couldn't discard the staged restore: ${why(err, 'the request failed')}`;
+      toast.error(actionError);
     }
     await loadBackups();
   }
@@ -230,6 +244,14 @@
         <span>{problemText(p)}</span>
       </div>
     {/each}
+
+    {#if pendingRestore}
+      <div class="problem pending" role="alert">
+        <Icon icon="mdi:alert-outline" width="18" />
+        <span>A restore is waiting to be applied when HOPS restarts (it hasn't restarted yet). Restart HOPS to apply it, or discard it.</span>
+        <button class="btn-secondary" onclick={handleDiscardPending}>Discard staged restore</button>
+      </div>
+    {/if}
 
     {#if actionError}
       <div class="error-message action-error" role="alert">
@@ -418,6 +440,16 @@
   .action-error :global(svg) {
     flex-shrink: 0;
     margin-top: 1px;
+  }
+
+  .problem.pending {
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .problem.pending span {
+    flex: 1;
+    min-width: 12rem;
   }
 
   .action-error {
