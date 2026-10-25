@@ -396,3 +396,16 @@ func TestRestoreRecoveryNotice(t *testing.T) {
 		t.Fatalf("still shown: %v", n)
 	}
 }
+
+// Fix round 3: a restore journal that couldn't be removed is a sticky notice.
+func TestJournalLeftNotice(t *testing.T) {
+	router, db := setupTestRouter(t)
+	seed(t, db)
+	c := newClient(t, router)
+	_, bm, _ := backupsOf(t, c)
+	bm.RecordJournalLeft("permission denied")
+	n := backupNotice(t, c)
+	if n == nil || !strings.Contains(n["text"].(string), "restore journal") || !strings.Contains(n["text"].(string), "permission denied") || n["sticky"] != true {
+		t.Fatalf("journal-left notice: %v", n)
+	}
+}

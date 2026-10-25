@@ -20,6 +20,7 @@ import (
 	"github.com/weaversgrainthorpe/HOPS/internal/configdoc"
 	"github.com/weaversgrainthorpe/HOPS/internal/database"
 	"github.com/weaversgrainthorpe/HOPS/internal/discovery"
+	"github.com/weaversgrainthorpe/HOPS/internal/safemode"
 	"github.com/weaversgrainthorpe/HOPS/internal/settings"
 	"github.com/weaversgrainthorpe/HOPS/internal/status"
 	"github.com/weaversgrainthorpe/HOPS/internal/version"
@@ -97,13 +98,18 @@ func main() {
 	switch {
 	case errors.As(err, &unsafe):
 		// Never open the database here: that would create an empty one and
-		// serve it as real data. The message names the files and what to do.
+		// serve it as real data. Serve the help page instead (every route
+		// 503), and stay up so the service manager doesn't restart-loop.
 		slog.Error("refusing to start", "component", "backup", "error", err)
 		fmt.Fprintln(os.Stderr, err.Error())
-		os.Exit(1)
+		runSafeMode(cfg, unsafe)
+		return
 	case err != nil:
 		slog.Error("the staged restore could not be applied; running on the current data", "component", "backup", "error", err)
 		backupManager.RecordRestoreFailure(err)
+	}
+	if res.JournalLeft != "" {
+		backupManager.RecordJournalLeft(res.JournalLeft)
 	}
 	switch res.Outcome {
 	case database.OutcomeApplied:
@@ -113,7 +119,7 @@ func main() {
 		backupManager.RecordRestoreRecovery(res.Outcome)
 	case database.OutcomeUndone:
 		slog.Warn("a restore interrupted by a crash or stop was undone; running on the data from before it", "component", "backup")
-		backupManager.RecordRestoreRecovery(res.Outcome)
+		backupManager.RecordRestoreRecovery(res.Outcome, res.Detail)
 	}
 
 	// Initialize database
@@ -234,6 +240,10 @@ func main() {
 	// bound by the time a setting change would arrive). The bind host comes
 	// from the --host flag; empty means "all interfaces".
 	addr := fmt.Sprintf("%s:%d", cfg.BindHost, settingsSvc.GetInt(settings.KeyServerPort))
+	// Safe mode can't read the port from the database, so remember it.
+	if err := safemode.RememberPort(cfg.DataDir, settingsSvc.GetInt(settings.KeyServerPort)); err != nil {
+		slog.Warn("could not remember the port for the recovery page (it would use 8080)", "error", err)
+	}
 	srv := &http.Server{
 		Addr:              addr,
 		Handler:           router,
@@ -301,4 +311,18 @@ func main() {
 	if restartRequested {
 		os.Exit(75)
 	}
+}
+
+// runSafeMode serves the "HOPS can't start safely" page on the last port
+// HOPS used until SIGINT/SIGTERM. The database is never opened. If the port
+// can't be bound, it logs that and still waits (no restart loop).
+func runSafeMode(cfg *config.Config, unsafe *database.UnsafeStartError) {
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+	addr := fmt.Sprintf("%s:%d", cfg.BindHost, safemode.Port(cfg.DataDir))
+	if err := safemode.Serve(ctx, addr, unsafe); err != nil {
+		slog.Error("could not serve the recovery page; HOPS stays stopped until you fix the files (see the error above)", "addr", addr, "error", err)
+		<-ctx.Done()
+	}
+	slog.Info("stopped (recovery page)")
 }

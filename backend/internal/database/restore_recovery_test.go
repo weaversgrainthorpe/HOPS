@@ -130,7 +130,7 @@ func TestRestoreCrashAfterEachStep(t *testing.T) {
 		{"aside-shm", OutcomeUndone, "current-in-wal"},
 		{"rename-in", OutcomeRecoveredApplied, "restored"},
 		{"mark-applied", OutcomeRecoveredApplied, "restored"},
-		{"cleanup", OutcomeRecoveredApplied, "restored"},
+		{"cleanup", OutcomeNone, "restored"}, // only the journal was left: the restore had finished
 	}
 	for _, tc := range steps {
 		t.Run(tc.step, func(t *testing.T) {
@@ -275,10 +275,13 @@ func TestNoticesFileProblems(t *testing.T) {
 	if !has(m, ProblemNoticesUnreadable) {
 		t.Fatal("cleared by a cleanup success")
 	}
-	// A successful save clears it.
+	// A successful save doesn't clear it either: only dismissing does.
 	m.RecordRestoreFailure(errors.New("x"))
-	if has(m, ProblemNoticesUnreadable) {
-		t.Fatal("not cleared by a successful save")
+	if !has(m, ProblemNoticesUnreadable) {
+		t.Fatal("cleared by a save; it should stay until dismissed")
+	}
+	if !m.DismissProblem(ProblemNoticesUnreadable) || has(m, ProblemNoticesUnreadable) {
+		t.Fatal("not dismissible")
 	}
 
 	// A save that fails is a non-dismissible notice until a save works.
@@ -298,5 +301,113 @@ func TestNoticesFileProblems(t *testing.T) {
 	m.DismissProblem(ProblemRestoreFailed) // triggers a save (clearing → remove file)
 	if has(m, ProblemNoticesUnsaved) {
 		t.Fatal("not cleared by the next successful save")
+	}
+}
+
+// Fix round 3: the journal that couldn't be removed is reported, and removed
+// before the next restore is staged.
+func TestJournalLeftReportedAndRetriedBeforeNextRestore(t *testing.T) {
+	dbPath := restoreFixture(t)
+	removeFile = func(p string) error {
+		if strings.HasSuffix(p, restoreJournalSuffix) {
+			return errors.New("injected")
+		}
+		return os.Remove(p)
+	}
+	t.Cleanup(func() { removeFile = os.Remove })
+	res, err := RecoverAndApplyRestore(dbPath)
+	if err != nil || res.Outcome != OutcomeApplied || !strings.Contains(res.JournalLeft, "injected") {
+		t.Fatalf("%+v %v", res, err)
+	}
+	bm := NewBackupManager(dbPath)
+	bm.RecordJournalLeft(res.JournalLeft)
+	found := false
+	for _, p := range bm.Problems() {
+		if p.Kind == ProblemJournalLeft {
+			found = true
+		}
+	}
+	if !found || bm.DismissProblem(ProblemJournalLeft) {
+		t.Fatal("journal-left notice missing or dismissible")
+	}
+	// The next restore removes it first (refused while it can't).
+	p, err := bm.CreateBackup("manual")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := bm.RestoreBackup(nil, filepath.Base(p)); err == nil || !strings.Contains(err.Error(), "journal") {
+		t.Fatalf("a restore was staged over a journal that can't be removed: %v", err)
+	}
+	removeFile = os.Remove
+	if err := bm.RestoreBackup(nil, filepath.Base(p)); err != nil {
+		t.Fatalf("restore after the journal can be removed: %v", err)
+	}
+	if _, err := os.Stat(dbPath + restoreJournalSuffix); !os.IsNotExist(err) {
+		t.Fatal("journal not removed before staging")
+	}
+	for _, p := range bm.Problems() {
+		if p.Kind == ProblemJournalLeft {
+			t.Fatal("journal-left notice not cleared")
+		}
+	}
+}
+
+// Fix round 3: on the undone path, a stage that can't be set aside is in the notice detail.
+func TestUndoneStageSetAsideFailureInDetail(t *testing.T) {
+	dbPath := restoreFixture(t)
+	crashAfter = func(step string) bool { return step == "aside" }
+	RecoverAndApplyRestore(dbPath)
+	crashAfter = nil
+	renameFile = func(from, to string) error {
+		if strings.HasSuffix(to, FailedRestoreSuffix) {
+			return errors.New("injected")
+		}
+		return os.Rename(from, to)
+	}
+	res, err := RecoverAndApplyRestore(dbPath)
+	if err != nil || res.Outcome != OutcomeUndone || !strings.Contains(res.Detail, "injected") {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if _, err := os.Stat(PendingRestorePath(dbPath)); !os.IsNotExist(err) {
+		t.Fatal("undone stage left pending")
+	}
+	bm := NewBackupManager(dbPath)
+	bm.RecordRestoreRecovery(res.Outcome, res.Detail)
+	if ps := bm.Problems(); len(ps) != 1 || !strings.Contains(ps[0].Reason, "injected") {
+		t.Fatalf("%+v", ps)
+	}
+}
+
+// Fix round 3: the refuse-to-start steps are tailored to the files present.
+func TestUnsafeStartStepsTailored(t *testing.T) {
+	dbPath := restoreFixture(t)
+	renameFile = func(from, to string) error {
+		if from == PendingRestorePath(dbPath) || from == dbPath+preApplySuffix+"-wal" {
+			return errors.New("injected")
+		}
+		return os.Rename(from, to)
+	}
+	_, err := RecoverAndApplyRestore(dbPath)
+	var u *UnsafeStartError
+	if !errors.As(err, &u) {
+		t.Fatal(err)
+	}
+	steps := strings.Join(u.Steps, "\n")
+	for _, want := range []string{
+		"rename " + dbPath + preApplySuffix + "-wal to " + dbPath + "-wal",
+		"rename " + PendingRestorePath(dbPath) + " to " + dbPath + FailedRestoreSuffix,
+		"delete " + dbPath + restoreJournalSuffix,
+		"start HOPS again",
+	} {
+		if !strings.Contains(steps, want) {
+			t.Errorf("missing step %q in:\n%s", want, steps)
+		}
+	}
+	// hops.db was moved back, so it is not a step to rename it; and .pre-apply (main) isn't present.
+	if strings.Contains(steps, "rename "+dbPath+preApplySuffix+" to") {
+		t.Errorf("step for a file that isn't there:\n%s", steps)
+	}
+	if !strings.Contains(u.Msg, "Nothing was deleted") {
+		t.Error("message doesn't say nothing was deleted")
 	}
 }

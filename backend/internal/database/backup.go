@@ -17,6 +17,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -92,6 +93,9 @@ const (
 	// ProblemNoticesUnsaved: notices couldn't be saved and will be lost on
 	// restart. Not dismissible; cleared by the next successful save.
 	ProblemNoticesUnsaved = "notices-unsaved"
+	// ProblemJournalLeft: the restore journal couldn't be removed. Not
+	// dismissible; retried before the next restore and at the next start.
+	ProblemJournalLeft = "restore-journal-left"
 )
 
 // BackupProblem is a backup failure the admin must see: what failed, when,
@@ -147,6 +151,7 @@ type BackupManager struct {
 	// (not dismissible; cleared by the next successful save).
 	noticesLoadErr *BackupProblem
 	noticesSaveErr *BackupProblem
+	journalErr     *BackupProblem // the restore journal couldn't be removed (retried before the next restore)
 }
 
 // NewBackupManager creates a new backup manager
@@ -219,7 +224,7 @@ func (bm *BackupManager) saveNoticesLocked() {
 			Reason: "backup notices couldn't be saved and will be lost on restart: " + errText(err)}
 		return
 	}
-	bm.noticesSaveErr, bm.noticesLoadErr = nil, nil
+	bm.noticesSaveErr = nil // the load error stays until dismissed
 }
 
 var (
@@ -276,7 +281,7 @@ func (bm *BackupManager) Problems() []BackupProblem {
 	bm.mu.Lock()
 	defer bm.mu.Unlock()
 	var out []BackupProblem
-	for _, p := range []*BackupProblem{bm.restore, bm.backupErr, bm.rotateErr, bm.ceiling, bm.recovered, bm.noticesLoadErr, bm.noticesSaveErr} {
+	for _, p := range []*BackupProblem{bm.restore, bm.backupErr, bm.rotateErr, bm.ceiling, bm.recovered, bm.noticesLoadErr, bm.noticesSaveErr, bm.journalErr} {
 		if p != nil {
 			out = append(out, *p)
 		}
@@ -311,9 +316,19 @@ func (bm *BackupManager) DismissProblem(kind string) bool {
 	return had
 }
 
+// RecordJournalLeft records that the restore journal couldn't be removed.
+func (bm *BackupManager) RecordJournalLeft(reason string) {
+	bm.mu.Lock()
+	defer bm.mu.Unlock()
+	bm.journalErr = &BackupProblem{Kind: ProblemJournalLeft, At: time.Now(),
+		Reason: "the restore journal (" + filepath.Base(bm.dbPath+restoreJournalSuffix) + ") couldn't be removed: " + reason +
+			". HOPS tries again before the next restore and at the next start; until it is gone, a new restore may be refused"}
+}
+
 // RecordRestoreRecovery records what startup did with an interrupted
-// restore, as a dismissible notice kept across restarts.
-func (bm *BackupManager) RecordRestoreRecovery(o Outcome) {
+// restore, as a dismissible notice kept across restarts. detail (optional)
+// is appended.
+func (bm *BackupManager) RecordRestoreRecovery(o Outcome, detail ...string) {
 	var reason string
 	switch o {
 	case OutcomeUndone:
@@ -322,6 +337,11 @@ func (bm *BackupManager) RecordRestoreRecovery(o Outcome) {
 		reason = "The restore was applied (HOPS had stopped part-way through putting it in place, and finished it at this start)"
 	default:
 		return
+	}
+	for _, d := range detail {
+		if d != "" {
+			reason += ". " + d
+		}
 	}
 	bm.mu.Lock()
 	defer bm.mu.Unlock()
@@ -544,6 +564,12 @@ func (bm *BackupManager) RestoreBackup(db *sql.DB, backupName string) error {
 	if err != nil {
 		return err
 	}
+	if err := ClearLeftoverJournal(bm.dbPath); err != nil {
+		return err
+	}
+	bm.mu.Lock()
+	bm.journalErr = nil
+	bm.mu.Unlock()
 	pending := PendingRestorePath(bm.dbPath)
 	tmp := pending + ".tmp"
 	if err := copyFile(backupPath, tmp); err != nil {
@@ -622,26 +648,61 @@ type restoreJournal struct {
 // certainty after an interrupted or half-failed restore. HOPS must NOT start
 // (opening the database would create an empty one and serve it as real
 // data); the message names the files and what to do.
-type UnsafeStartError struct{ Msg string }
+type UnsafeStartError struct {
+	Msg   string
+	What  string   // what went wrong
+	Files []string // the files present (full paths)
+	Steps []string // numbered recovery steps for exactly those files
+}
 
 func (e *UnsafeStartError) Error() string { return e.Msg }
 
 func unsafeStart(dbPath, what string) error {
+	exists := func(f string) bool { _, err := os.Lstat(f); return err == nil }
 	var present []string
 	for _, f := range []string{dbPath, PendingRestorePath(dbPath), dbPath + restoreJournalSuffix} {
-		if _, err := os.Lstat(f); err == nil {
+		if exists(f) {
 			present = append(present, f)
 		}
 	}
+	var asides []string
 	for _, suf := range dbFileSuffixes {
-		if _, err := os.Lstat(dbPath + preApplySuffix + suf); err == nil {
+		if exists(dbPath + preApplySuffix + suf) {
 			present = append(present, dbPath+preApplySuffix+suf)
+			asides = append(asides, suf)
 		}
 	}
-	return &UnsafeStartError{Msg: fmt.Sprintf("HOPS will not start: a restore was interrupted and %s. Nothing has been deleted. "+
-		"Files present: %s. To keep the data you had before the restore, stop HOPS and rename each %s* file back to the same name "+
-		"without %q (moving any file already at that name out of the way), then delete %s and %s and start HOPS again.",
-		what, strings.Join(present, ", "), dbPath+preApplySuffix, preApplySuffix, dbPath+restoreJournalSuffix, PendingRestorePath(dbPath))}
+	// Steps for exactly the files present.
+	var steps []string
+	if len(asides) > 0 {
+		for _, suf := range asides {
+			if exists(dbPath + suf) {
+				steps = append(steps, fmt.Sprintf("move %s out of the way (e.g. rename it to %s.unknown)", dbPath+suf, dbPath+suf))
+			}
+		}
+		for _, suf := range asides {
+			steps = append(steps, fmt.Sprintf("rename %s to %s (this is the data you had before the restore)", dbPath+preApplySuffix+suf, dbPath+suf))
+		}
+	} else if exists(dbPath) {
+		steps = append(steps, fmt.Sprintf("check that %s is the data you want HOPS to use (keep a copy of it first)", dbPath))
+	}
+	if exists(PendingRestorePath(dbPath)) {
+		steps = append(steps, fmt.Sprintf("rename %s to %s to keep it (you can restore again later)", PendingRestorePath(dbPath), dbPath+FailedRestoreSuffix))
+	}
+	if exists(dbPath + restoreJournalSuffix) {
+		steps = append(steps, fmt.Sprintf("delete %s", dbPath+restoreJournalSuffix))
+	}
+	steps = append(steps, "start HOPS again")
+	for n := range steps {
+		steps[n] = fmt.Sprintf("%d. %s", n+1, steps[n])
+	}
+	return &UnsafeStartError{
+		Msg: fmt.Sprintf("HOPS will not start: a restore was interrupted and %s. Nothing was deleted. Files present: %s. "+
+			"To recover, stop HOPS, then: %s.", what, strings.Join(present, ", "), strings.Join(steps, "; ")),
+		Files: present,
+		Steps: steps,
+		What:  what,
+	}
 }
 
 // Outcome is what RecoverAndApplyRestore did.
@@ -654,8 +715,14 @@ const (
 	OutcomeUndone                          // an interrupted apply was undone: the data is as before the restore
 )
 
-// RestoreResult reports RecoverAndApplyRestore's outcome.
-type RestoreResult struct{ Outcome Outcome }
+// RestoreResult reports RecoverAndApplyRestore's outcome. Detail adds what
+// the admin must know about it (e.g. the stage couldn't be set aside);
+// JournalLeft is set when the restore journal couldn't be removed.
+type RestoreResult struct {
+	Outcome     Outcome
+	Detail      string
+	JournalLeft string
+}
 
 // ApplyPendingRestore is RecoverAndApplyRestore reporting only whether the
 // staged restore is now in place.
@@ -718,54 +785,125 @@ func RecoverAndApplyRestore(dbPath string) (RestoreResult, error) {
 		if err := moveAsideBack(dbPath); err != nil {
 			return unsafeStart(dbPath, fmt.Sprintf("it failed (%v) and moving the current database back failed too (%v)", cause, err))
 		}
-		os.Remove(dbPath + restoreJournalSuffix)
+		if err := removeJournal(dbPath); err != nil {
+			slog.Error("could not remove the restore journal", "component", "backup", "error", err)
+		}
 		return setAside(cause)
 	}
 	for _, suf := range dbFileSuffixes {
 		if err := renameFile(dbPath+suf, dbPath+preApplySuffix+suf); err != nil && !os.IsNotExist(err) {
 			return RestoreResult{}, undo(fmt.Errorf("cannot move the current database aside: %w", err))
 		}
+		if err := syncDir(filepath.Dir(dbPath)); err != nil {
+			slog.Warn("could not sync the data directory", "component", "backup", "error", err)
+		}
 		if crashed("aside" + suf) {
 			return RestoreResult{}, errSimulatedCrash
 		}
 	}
+	if err := syncFile(pending); err != nil {
+		return RestoreResult{}, undo(fmt.Errorf("cannot flush the staged restore to disk: %w", err))
+	}
 	if err := renameFile(pending, dbPath); err != nil {
 		return RestoreResult{}, undo(fmt.Errorf("cannot put the restored database in place: %w", err))
+	}
+	if err := syncDir(filepath.Dir(dbPath)); err != nil {
+		slog.Warn("could not sync the data directory", "component", "backup", "error", err)
 	}
 	if crashed("rename-in") {
 		return RestoreResult{}, errSimulatedCrash
 	}
-	if err := finishApplied(dbPath, sum); err != nil {
+	left, err := finishApplied(dbPath, sum)
+	if err != nil {
 		return RestoreResult{}, err
 	}
-	return RestoreResult{Outcome: OutcomeApplied}, nil
+	return RestoreResult{Outcome: OutcomeApplied, JournalLeft: left}, nil
 }
 
 // finishApplied marks the journal applied, then removes the aside files and
 // the journal. If the journal can't be marked, HOPS must not start: opening
 // the restored DB would change it, and the next start could no longer prove
 // it is the restored file, leaving the originals unresolvable.
-func finishApplied(dbPath, sum string) error {
+func finishApplied(dbPath, sum string) (string, error) {
 	if err := writeJournal(dbPath, restoreJournal{StageSHA256: sum, State: "applied"}); err != nil {
-		return unsafeStart(dbPath, "the restored database is in place but the restore journal could not be updated ("+err.Error()+")")
+		return "", unsafeStart(dbPath, "the restored database is in place but the restore journal could not be updated ("+err.Error()+")")
 	}
 	if crashed("mark-applied") {
-		return errSimulatedCrash
+		return "", errSimulatedCrash
 	}
 	for _, suf := range dbFileSuffixes {
 		if err := os.Remove(dbPath + preApplySuffix + suf); err != nil && !os.IsNotExist(err) {
 			// Journal stays "applied": the next start removes them.
 			slog.Warn("could not remove the replaced database file; retried at the next start", "component", "backup", "file", dbPath+preApplySuffix+suf, "error", err)
-			return nil
+			return "", nil
 		}
 	}
 	if crashed("cleanup") {
-		return errSimulatedCrash
+		return "", errSimulatedCrash
 	}
-	if err := os.Remove(dbPath + restoreJournalSuffix); err != nil && !os.IsNotExist(err) {
-		slog.Warn("could not remove the restore journal; retried at the next start", "component", "backup", "error", err)
+	if err := removeJournal(dbPath); err != nil {
+		slog.Warn("could not remove the restore journal; retried before the next restore and at the next start", "component", "backup", "error", err)
+		return err.Error(), nil
+	}
+	return "", nil
+}
+
+// removeJournal deletes the restore journal (fine if absent).
+func removeJournal(dbPath string) error {
+	if err := removeFile(dbPath + restoreJournalSuffix); err != nil && !os.IsNotExist(err) {
+		return err
 	}
 	return nil
+}
+
+// removeFile is os.Remove; tests inject failures.
+var removeFile = os.Remove
+
+// ClearLeftoverJournal removes a journal left by a completed restore (state
+// "applied", nothing moved aside, nothing staged). RestoreBackup calls it
+// before staging; a journal it can't remove refuses the new restore.
+func ClearLeftoverJournal(dbPath string) error {
+	raw, err := os.ReadFile(dbPath + restoreJournalSuffix)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	var j restoreJournal
+	if err != nil || json.Unmarshal(raw, &j) != nil || j.State != "applied" {
+		return fmt.Errorf("an earlier restore's journal (%s) is still there and isn't from a finished restore; restart HOPS to resolve it first", dbPath+restoreJournalSuffix)
+	}
+	for _, suf := range dbFileSuffixes {
+		if _, err := os.Lstat(dbPath + preApplySuffix + suf); err == nil {
+			return fmt.Errorf("an earlier restore isn't finished (%s exists); restart HOPS to resolve it first", dbPath+preApplySuffix+suf)
+		}
+	}
+	if err := removeJournal(dbPath); err != nil {
+		return fmt.Errorf("an earlier restore's journal couldn't be removed: %w", err)
+	}
+	return nil
+}
+
+// syncDir fsyncs a directory so renames in it are durable. Filesystems that
+// can't sync a directory (EINVAL) are tolerated.
+func syncDir(dir string) error {
+	d, err := os.Open(dir)
+	if err != nil {
+		return err
+	}
+	defer d.Close()
+	if err := d.Sync(); err != nil && !errors.Is(err, syscall.EINVAL) && !errors.Is(err, syscall.ENOTSUP) {
+		return err
+	}
+	return nil
+}
+
+// syncFile fsyncs a file's contents.
+func syncFile(path string) error {
+	f, err := os.OpenFile(path, os.O_RDWR, 0)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	return f.Sync()
 }
 
 // moveAsideBack renames each hops.db.pre-apply* file back, refusing to
@@ -828,11 +966,17 @@ func recoverInterrupted(dbPath string) (RestoreResult, bool, error) {
 		if !dbThere {
 			return RestoreResult{}, true, unsafeStart(dbPath, "the journal says it was applied but there is no database")
 		}
-		if err := finishApplied(dbPath, j.StageSHA256); err != nil {
+		hadAsides := asides
+		left, err := finishApplied(dbPath, j.StageSHA256)
+		if err != nil {
 			return RestoreResult{}, true, err
 		}
+		if !hadAsides {
+			// Only the journal was left (its removal failed last time): no news.
+			return RestoreResult{JournalLeft: left}, true, nil
+		}
 		slog.Warn("completed a restore that was interrupted after the restored database was put in place", "component", "backup")
-		return RestoreResult{Outcome: OutcomeRecoveredApplied}, true, nil
+		return RestoreResult{Outcome: OutcomeRecoveredApplied, JournalLeft: left}, true, nil
 	}
 
 	if stageThere {
@@ -847,13 +991,20 @@ func recoverInterrupted(dbPath string) (RestoreResult, bool, error) {
 		if _, err := os.Lstat(dbPath); err != nil {
 			return RestoreResult{}, true, unsafeStart(dbPath, "there is no database to go back to")
 		}
-		os.Remove(journalPath)
+		res := RestoreResult{Outcome: OutcomeUndone}
+		if err := removeJournal(dbPath); err != nil {
+			res.JournalLeft = err.Error()
+		}
 		if err := renameFile(pending, dbPath+FailedRestoreSuffix); err != nil {
 			slog.Error("could not set the undone restore aside", "component", "backup", "error", err)
-			os.Remove(pending) // never retried silently: the notice says to try again
+			if rerr := os.Remove(pending); rerr != nil { // never retried silently
+				res.Detail = fmt.Sprintf("The staged restore couldn't be set aside (%v) or removed (%v): delete %s", err, rerr, pending)
+			} else {
+				res.Detail = fmt.Sprintf("The staged restore couldn't be kept as %s (%v), so it was removed", filepath.Base(dbPath+FailedRestoreSuffix), err)
+			}
 		}
 		slog.Warn("undid an interrupted restore; running on the data from before it", "component", "backup")
-		return RestoreResult{Outcome: OutcomeUndone}, true, nil
+		return res, true, nil
 	}
 
 	// The stage is gone: the rename-in happened if hops.db is the staged file.
@@ -864,11 +1015,12 @@ func recoverInterrupted(dbPath string) (RestoreResult, bool, error) {
 	if err != nil || sum != j.StageSHA256 {
 		return RestoreResult{}, true, unsafeStart(dbPath, "the database in place can't be proven to be the restored file")
 	}
-	if err := finishApplied(dbPath, j.StageSHA256); err != nil {
+	left, err := finishApplied(dbPath, j.StageSHA256)
+	if err != nil {
 		return RestoreResult{}, true, err
 	}
 	slog.Warn("completed a restore that was interrupted after the restored database was put in place", "component", "backup")
-	return RestoreResult{Outcome: OutcomeRecoveredApplied}, true, nil
+	return RestoreResult{Outcome: OutcomeRecoveredApplied, JournalLeft: left}, true, nil
 }
 
 func writeJournal(dbPath string, j restoreJournal) error {
@@ -889,7 +1041,10 @@ func writeJournal(dbPath string, j restoreJournal) error {
 	if err := f.Close(); err != nil {
 		return err
 	}
-	return os.Rename(tmp, dbPath+restoreJournalSuffix)
+	if err := os.Rename(tmp, dbPath+restoreJournalSuffix); err != nil {
+		return err
+	}
+	return syncDir(filepath.Dir(dbPath))
 }
 
 func fileSHA256(path string) (string, error) {

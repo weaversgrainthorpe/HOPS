@@ -71,6 +71,8 @@ func backupProblemNotice(p database.BackupProblem) notice {
 			Text:  fmt.Sprintf("%s (%s).", capitalize(p.Reason), at),
 			Level: "warning",
 		}
+	case database.ProblemJournalLeft:
+		text = fmt.Sprintf("%s (%s).", capitalize(p.Reason), at)
 	case database.ProblemNoticesUnsaved:
 		text = fmt.Sprintf("%s (%s). Check that HOPS can write to its backups folder.", capitalize(p.Reason), at)
 	default:

@@ -382,7 +382,7 @@ From the Admin panel, click **Backups** to:
 - View all available backups
 - Restore a previous backup (a safety backup of the current data is taken first; HOPS then restarts and applies the restore before it opens the database, so the service must be set to restart automatically, e.g. `Restart=on-failure`. Changes made in the few seconds before the restart are not included. If the restore can't be applied, HOPS keeps running on its current data, keeps the staged file as `hops.db.restore-failed` and says so in Settings; a restore that is waiting for a restart can be discarded from the Backups dialog)
 
-If HOPS is stopped part-way through applying a restore, the next start finishes it or undoes it (Settings says which). In the rare case where it can't tell which files are safe to keep, HOPS refuses to start rather than open an empty database. The error names the files and says how to put your data back; nothing is deleted.
+If HOPS is stopped part-way through applying a restore, the next start finishes it or undoes it (Settings says which). In the rare case where it can't tell which files are safe to keep, HOPS doesn't open its database at all (it would otherwise create an empty one). Instead, on the port it last used, it serves a page saying it can't start safely: it lists the files present and the exact steps to put your data back, and nothing is deleted. Every address, including `/api/health`, answers 503 until the files are fixed and HOPS is restarted. HOPS keeps that port in `data/.last-port` for this purpose.
 - Download a backup (a `.db` file)
 - Upload a backup file: it is checked (it must be a HOPS database) and listed as `…_uploaded.db`; it is not restored until you restore it
 - Delete old backups
