@@ -533,11 +533,10 @@
   }
 
   .nav-content {
-    max-width: 1400px;
-    margin: 0 auto;
-    /* Match the navbar safe-area on the sides too, so the brand/actions
-       don't sit under the rounded screen corners in landscape. */
-    padding: 0 max(1rem, env(safe-area-inset-left, 0)) 0 max(1rem, env(safe-area-inset-right, 0));
+    /* The full width, with the same 2rem side gutter as the tab bar and canvas below, so the logo
+       lines up with the first tab and the controls with the canvas's right edge. Match the navbar
+       safe-area on the sides too, so the brand/actions don't sit under the rounded screen corners. */
+    padding: 0 max(2rem, env(safe-area-inset-left, 0)) 0 max(2rem, env(safe-area-inset-right, 0));
     /* M5 §8: the logo, the title, the right-hand controls. The two sides share the spare width
        equally (flex: 1 1 0), so the title sits in the bar's centre; a side never shrinks below its
        own content, so when one is too wide the title moves over rather than overlap it, and fitBar
