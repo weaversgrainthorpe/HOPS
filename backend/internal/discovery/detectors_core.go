@@ -77,7 +77,9 @@ func coreDetectors() []Detector {
 			description:   "Jellyfin media server",
 			ports:         []int{8096},
 			paths:         []string{"/web/index.html", "/System/Info/Public"},
-			bodyContains:  []string{"Jellyfin", "jellyfin-web", "ProductName"},
+			// `"ProductName":"Jellyfin` rather than bare "ProductName":
+			// Emby on the same port answers /System/Info/Public too.
+			bodyContains:  []string{"Jellyfin", "jellyfin-web", "\"ProductName\":\"Jellyfin"},
 			titleContains: []string{"Jellyfin"},
 			confidence:    ConfidenceHigh,
 		},
@@ -131,8 +133,11 @@ func coreDetectors() []Detector {
 			description:   "Media request management",
 			ports:         []int{5055},
 			paths:         []string{"/login", "/api/v1/status"},
-			bodyContains:  []string{"Overseerr", "Jellyseerr"},
-			titleContains: []string{"Overseerr", "Jellyseerr"},
+			bodyContains:  []string{"Overseerr"},
+			titleContains: []string{"Overseerr"},
+			// Jellyseerr (a fork, same port) has its own detector and
+			// can still mention Overseerr on its pages.
+			excludeContains: []string{"Jellyseerr"},
 			confidence:    ConfidenceHigh,
 		},
 		httpFingerprintDetector{
@@ -675,6 +680,237 @@ func coreDetectors() []Detector {
 			urlPath:       "/adminer/",
 			titleContains: []string{"Adminer"},
 			bodyContains:  []string{"Adminer", "adminer"},
+			confidence:    ConfidenceHigh,
+		},
+		// ---- Batch: AI category and more web UIs (v3) ----
+		// Principle: HOPS launches web UIs, so every detector here is a
+		// UI a user opens in a browser — no raw APIs, databases, brokers
+		// or game servers. Icons with a ':' are Iconify names (no
+		// dashboard-icons SVG exists); they're kept in the offline bundle
+		// via frontend/scripts/icon-keep.txt.
+		httpFingerprintDetector{
+			id: "core/node-red", name: "Node-RED", icon: "node-red", category: CategoryAutomation,
+			description:   "Node-RED flow-based automation",
+			ports:         []int{1880},
+			titleContains: []string{"Node-RED"},
+			bodyContains:  []string{"red/red.min.js"},
+			confidence:    ConfidenceHigh,
+		},
+		httpFingerprintDetector{
+			id: "core/couchdb", name: "CouchDB Fauxton", icon: "couchdb", category: CategoryOther,
+			description: "Apache CouchDB — Fauxton web admin",
+			ports:       []int{5984},
+			// GET / is CouchDB's JSON welcome; the browser UI lives at
+			// /_utils/ (Fauxton), so that's where the tile opens.
+			paths:         []string{"/_utils/"},
+			urlPath:       "/_utils/",
+			bodyContains:  []string{"\"couchdb\":\"Welcome\""},
+			titleContains: []string{"Project Fauxton"},
+			headerKeys:    []string{"server: CouchDB/"},
+			confidence:    ConfidenceHigh,
+		},
+		httpFingerprintDetector{
+			id: "core/homepage", name: "Homepage", icon: "mdi:view-dashboard", category: CategoryOther,
+			description: "Homepage (gethomepage) application dashboard",
+			ports:       []int{3000, 7575},
+			// The <title> is just "Homepage" (and user-editable), far too
+			// generic. The default meta description is specific.
+			bodyContains: []string{"A highly customizable homepage (or startpage / application dashboard)"},
+			confidence:   ConfidenceHigh,
+		},
+		httpFingerprintDetector{
+			id: "core/monit", name: "Monit", icon: "mdi:heart-pulse", category: CategoryMonitoring,
+			description: "Monit process and system monitor",
+			ports:       []int{2812},
+			// Monit answers / with 401 Basic auth; its Server header and
+			// realm both say "monit".
+			headerKeys: []string{"server: monit", "www-authenticate: realm=\"monit\""},
+			confidence: ConfidenceHigh,
+		},
+		// ---- AI ----
+		httpFingerprintDetector{
+			id: "core/open-webui", name: "Open WebUI", icon: "open-webui", category: CategoryAI,
+			description:   "Open WebUI chat interface for local LLMs",
+			ports:         []int{3000, 8080},
+			paths:         []string{"/api/config"},
+			titleContains: []string{"Open WebUI"},
+			bodyContains:  []string{"\"name\":\"Open WebUI\""},
+			confidence:    ConfidenceHigh,
+		},
+		httpFingerprintDetector{
+			id: "core/localai", name: "LocalAI", icon: "mdi:brain", category: CategoryAI,
+			description:   "LocalAI model server web UI",
+			ports:         []int{8080},
+			titleContains: []string{"LocalAI"},
+			confidence:    ConfidenceHigh,
+		},
+		httpFingerprintDetector{
+			id: "core/sd-webui", name: "Stable Diffusion WebUI", icon: "mdi:palette", category: CategoryAI,
+			description: "AUTOMATIC1111 Stable Diffusion web UI",
+			ports:       []int{7860},
+			// A Gradio app: 7860 is Gradio's default, shared by many AI
+			// UIs, so match the app title (in <title> or gradio_config),
+			// never Gradio itself.
+			titleContains: []string{"Stable Diffusion"},
+			bodyContains:  []string{"\"title\":\"Stable Diffusion\"", "\"title\": \"Stable Diffusion\""},
+			confidence:    ConfidenceHigh,
+		},
+		httpFingerprintDetector{
+			id: "core/comfyui", name: "ComfyUI", icon: "mdi:graph", category: CategoryAI,
+			description:   "ComfyUI node-based diffusion UI",
+			ports:         []int{8188},
+			paths:         []string{"/system_stats"},
+			titleContains: []string{"ComfyUI"},
+			bodyContains:  []string{"\"comfyui_version\""},
+			confidence:    ConfidenceHigh,
+		},
+		// ---- Smart home ----
+		httpFingerprintDetector{
+			id: "core/zigbee2mqtt", name: "Zigbee2MQTT", icon: "zigbee2mqtt", category: CategoryAutomation,
+			description:   "Zigbee2MQTT frontend",
+			ports:         []int{8080},
+			titleContains: []string{"Zigbee2MQTT"},
+			confidence:    ConfidenceHigh,
+		},
+		httpFingerprintDetector{
+			id: "core/esphome", name: "ESPHome", icon: "esphome", category: CategoryAutomation,
+			description:   "ESPHome device dashboard",
+			ports:         []int{6052},
+			titleContains: []string{"ESPHome"},
+			confidence:    ConfidenceHigh,
+		},
+		httpFingerprintDetector{
+			id: "core/scrypted", name: "Scrypted", icon: "mdi:cctv", category: CategoryAutomation,
+			description: "Scrypted home video integration",
+			ports:       []int{10443, 11080},
+			// / redirects into the core plugin's public endpoint.
+			paths:         []string{"/endpoint/@scrypted/core/public/"},
+			titleContains: []string{"Scrypted"},
+			headerKeys:    []string{"location: /endpoint/@scrypted/"},
+			confidence:    ConfidenceHigh,
+		},
+		httpFingerprintDetector{
+			id: "core/homebridge", name: "Homebridge", icon: "homebridge", category: CategoryAutomation,
+			description:   "Homebridge UI",
+			ports:         []int{8581},
+			titleContains: []string{"Homebridge"},
+			confidence:    ConfidenceHigh,
+		},
+		// ---- Media ----
+		httpFingerprintDetector{
+			id: "core/emby", name: "Emby", icon: "emby", category: CategoryMedia,
+			description: "Emby media server",
+			ports:       []int{8096},
+			// Same port as Jellyfin (a fork of Emby) whose web client
+			// still uses emby-* element names, so match only Emby's
+			// <title> and veto anything naming Jellyfin.
+			paths:           []string{"/web/index.html"},
+			titleContains:   []string{"Emby"},
+			excludeContains: []string{"Jellyfin", "jellyfin"},
+			confidence:      ConfidenceHigh,
+		},
+		httpFingerprintDetector{
+			id: "core/jellyseerr", name: "Jellyseerr", icon: "jellyseerr", category: CategoryDownloads,
+			description:   "Media request management for Jellyfin / Emby",
+			ports:         []int{5055},
+			paths:         []string{"/login"},
+			titleContains: []string{"Jellyseerr"},
+			bodyContains:  []string{"Jellyseerr"},
+			confidence:    ConfidenceHigh,
+		},
+		httpFingerprintDetector{
+			id: "core/readarr", name: "Readarr", icon: "readarr", category: CategoryDownloads,
+			description:   "Book automation",
+			ports:         []int{8787},
+			paths:         []string{"/login", "/initialize.js"},
+			bodyContains:  []string{"Readarr"},
+			titleContains: []string{"Readarr"},
+			confidence:    ConfidenceHigh,
+		},
+		httpFingerprintDetector{
+			id: "core/kavita", name: "Kavita", icon: "kavita", category: CategoryMedia,
+			description:   "Kavita reading server (comics, manga, books)",
+			ports:         []int{5000},
+			titleContains: []string{"Kavita"},
+			confidence:    ConfidenceHigh,
+		},
+		httpFingerprintDetector{
+			id: "core/komga", name: "Komga", icon: "komga", category: CategoryMedia,
+			description:   "Komga comics / manga server",
+			ports:         []int{25600},
+			titleContains: []string{"Komga"},
+			confidence:    ConfidenceHigh,
+		},
+		httpFingerprintDetector{
+			id: "core/stash", name: "Stash", icon: "stash", category: CategoryMedia,
+			description: "Stash media organiser",
+			ports:       []int{9999},
+			// Exact title: a substring "stash" would also catch
+			// Filestash, Bytestash, …
+			bodyContains: []string{"<title>Stash</title>"},
+			confidence:   ConfidenceHigh,
+		},
+		httpFingerprintDetector{
+			id: "core/tdarr", name: "Tdarr", icon: "mdi:file-video", category: CategoryMedia,
+			description:   "Tdarr distributed transcoding",
+			ports:         []int{8265},
+			titleContains: []string{"Tdarr"},
+			confidence:    ConfidenceHigh,
+		},
+		httpFingerprintDetector{
+			id: "core/unmanic", name: "Unmanic", icon: "mdi:movie-cog", category: CategoryMedia,
+			description:   "Unmanic library optimiser",
+			ports:         []int{8888},
+			titleContains: []string{"Unmanic"},
+			confidence:    ConfidenceHigh,
+		},
+		// ---- Network ----
+		httpFingerprintDetector{
+			id: "core/technitium", name: "Technitium DNS", icon: "mdi:dns", category: CategoryNetwork,
+			description:   "Technitium DNS Server",
+			ports:         []int{5380},
+			titleContains: []string{"Technitium"},
+			confidence:    ConfidenceHigh,
+		},
+		httpFingerprintDetector{
+			id: "core/wg-easy", name: "wg-easy", icon: "wireguard", category: CategoryNetwork,
+			description: "wg-easy WireGuard admin UI",
+			ports:       []int{51821},
+			// Older builds title the page just "WireGuard" — too generic
+			// alone; the project name appears in the page.
+			titleContains: []string{"wg-easy"},
+			bodyContains:  []string{"wg-easy"},
+			confidence:    ConfidenceHigh,
+		},
+		httpFingerprintDetector{
+			id: "core/openwrt", name: "OpenWrt LuCI", icon: "openwrt", category: CategoryNetwork,
+			description: "OpenWrt router (LuCI web interface)",
+			ports:       []int{80, 443},
+			// / is a meta-refresh to cgi-bin/luci/ naming LuCI; the login
+			// page (403 until signed in) loads /luci-static/ assets.
+			// Never match the bare path text: verbose 403s echo it.
+			paths:         []string{"/cgi-bin/luci/"},
+			urlPath:       "/cgi-bin/luci/",
+			titleContains: []string{" - LuCI"},
+			bodyContains:  []string{"LuCI - Lua Configuration Interface", "/luci-static/"},
+			confidence:    ConfidenceHigh,
+		},
+		httpFingerprintDetector{
+			id: "core/mikrotik", name: "MikroTik WebFig", icon: "mikrotik", category: CategoryNetwork,
+			description:   "MikroTik RouterOS WebFig",
+			ports:         []int{80, 443},
+			titleContains: []string{"RouterOS"},
+			confidence:    ConfidenceHigh,
+		},
+		httpFingerprintDetector{
+			id: "core/omada", name: "Omada Controller", icon: "omada", category: CategoryNetwork,
+			description: "TP-Link Omada SDN controller",
+			ports:       []int{8043, 8088},
+			// / redirects to /<omadacId>/login; /api/info names the
+			// controller id without auth.
+			paths:         []string{"/api/info"},
+			titleContains: []string{"Omada"},
+			bodyContains:  []string{"\"omadacId\""},
 			confidence:    ConfidenceHigh,
 		},
 	}

@@ -208,7 +208,17 @@ type httpFingerprintDetector struct {
 	urlPath       string   // path appended to the suggested URL (defaults to /)
 	bodyContains  []string // any of these in body → match (case-sensitive bytes)
 	titleContains []string // any of these in <title> → match (case-insensitive)
-	headerKeys    []string // any of these header keys present → match
+	// headerKeys: any entry matching → match. A bare key ("x-plex-
+	// protocol") matches on presence; "key: value" matches when that
+	// header's value contains value (case-insensitive) — e.g.
+	// "server: CouchDB/". Header names can't contain ':', so the two
+	// forms never collide.
+	headerKeys []string
+	// excludeContains vetoes a match on a response whose body contains
+	// any of these (case-sensitive bytes). Bundled-only: separates a fork
+	// from its parent when the fork still carries the parent's name
+	// (Jellyseerr pages can mention Overseerr).
+	excludeContains []string
 	// faviconHashes are signed-int32 MurmurHash3 hashes (Shodan
 	// convention) of the favicon. Not consulted in Run() — matched
 	// separately by the orchestrator's favicon-hash pass after body/
@@ -255,6 +265,11 @@ func (d httpFingerprintDetector) matches(snap *HTTPSnapshot) bool {
 	if snap == nil {
 		return false
 	}
+	for _, veto := range d.excludeContains {
+		if bytes.Contains(snap.Body, []byte(veto)) {
+			return false
+		}
+	}
 	for _, needle := range d.bodyContains {
 		if bytes.Contains(snap.Body, []byte(needle)) {
 			return true
@@ -271,11 +286,28 @@ func (d httpFingerprintDetector) matches(snap *HTTPSnapshot) bool {
 		}
 	}
 	for _, h := range d.headerKeys {
-		if _, ok := snap.Headers[strings.ToLower(h)]; ok {
+		if headerSignatureMatches(snap.Headers, h) {
 			return true
 		}
 	}
 	return false
+}
+
+// headerSignatureMatches applies one headerKeys entry: a bare key
+// matches on presence, "key: value" on a case-insensitive substring of
+// that header's value. Headers carry lowercased keys.
+func headerSignatureMatches(headers map[string]string, sig string) bool {
+	key, want, hasValue := strings.Cut(sig, ":")
+	key = strings.ToLower(strings.TrimSpace(key))
+	want = strings.ToLower(strings.TrimSpace(want))
+	got, ok := headers[key]
+	if !ok {
+		return false
+	}
+	if !hasValue || want == "" {
+		return true
+	}
+	return strings.Contains(strings.ToLower(got), want)
 }
 
 func (d httpFingerprintDetector) emit(p *Probe, port int, snap *HTTPSnapshot) EmittedHit {

@@ -141,3 +141,47 @@ func TestPromote_UnreadableRevisionIs500AndWritesNothing(t *testing.T) {
 		t.Fatalf("result marked promoted despite error: %v %v", res, err)
 	}
 }
+
+// A result in the AI category promotes into a new "AI" folder carrying the
+// category's icon.
+func TestPromote_AICategoryCreatesAIGroup(t *testing.T) {
+	router, db := setupTestRouter(t)
+	c := newClient(t, router)
+	seed(t, db)
+	st := discovery.NewStore(db)
+	scanID, rid := "scan-ai-01", "result-ai-01"
+	if _, err := st.CreateScan(scanID, "192.0.2.0/24", "light", "t", "", 1); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.InsertResult(&discovery.Result{
+		ID: rid, ScanID: scanID, Host: "192.0.2.20", Port: 8188, DetectorID: "core/comfyui",
+		Confidence: "high", Category: discovery.CategoryAI, SuggestedName: "ComfyUI",
+		SuggestedURL: "http://192.0.2.20:8188/", CurateState: discovery.CuratePending,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SetScanState(scanID, discovery.StateComplete, ""); err != nil {
+		t.Fatal(err)
+	}
+	code, resp := c.do("POST", "/api/discovery/scans/"+scanID+"/promote", promoteBody(rid))
+	if code != 200 {
+		t.Fatalf("promote: %d %v", code, resp)
+	}
+	root := storedDash(t, db, "d1")["tabs"].([]interface{})[0].(map[string]interface{})["root"].(map[string]interface{})
+	for _, ch := range root["children"].([]interface{}) {
+		f := ch.(map[string]interface{})
+		if f["kind"] != "folder" || f["name"] != "AI" {
+			continue
+		}
+		if f["icon"] != "mdi:robot" {
+			t.Fatalf("AI folder icon = %v", f["icon"])
+		}
+		tiles := f["content"].(map[string]interface{})["children"].([]interface{})
+		if len(tiles) != 1 || tiles[0].(map[string]interface{})["name"] != "ComfyUI" {
+			t.Fatalf("AI folder tiles = %v", tiles)
+		}
+		return
+	}
+	b, _ := json.Marshal(root)
+	t.Fatalf("no AI folder: %s", b)
+}

@@ -16,6 +16,7 @@ package discovery
 // set; rows from outside it default to CategoryOther.
 
 const (
+	CategoryAI             = "ai"
 	CategoryNetwork        = "network"
 	CategoryAutomation     = "automation"
 	CategoryMedia          = "media"
@@ -48,6 +49,7 @@ type CategoryInfo struct {
 // entries quickly. ("Other" sits naturally between Notifications and
 // Photos.)
 var categoryCatalogue = []CategoryInfo{
+	{CategoryAI, "AI", "mdi:robot"},
 	{CategoryAuth, "Authentication", "mdi:lock"},
 	{CategoryCode, "Code", "mdi:source-branch"},
 	{CategoryDocuments, "Documents", "mdi:file-document"},

@@ -45,6 +45,7 @@ var lightActivePorts = []int{
 	80,    // generic HTTP — Pi-hole, NPM (admin alt), Vaultwarden, TrueNAS, …
 	81,    // Nginx Proxy Manager admin
 	443,   // generic HTTPS
+	1880,  // Node-RED — near-universal companion to Home Assistant setups
 	2283,  // Immich
 	3000,  // Grafana, Uptime Kuma, AdGuard Home (and many others — body match disambiguates)
 	3001,  // Uptime Kuma (alt)
@@ -54,6 +55,7 @@ var lightActivePorts = []int{
 	5050,  // pgAdmin default
 	5055,  // Overseerr / Jellyseerr
 	5800,  // Tdarr / FileRun alt
+	6052,  // ESPHome dashboard — the standard HA add-on/container for ESP devices
 	6767,  // Bazarr
 	7575,  // homepage / homarr
 	7878,  // Radarr
@@ -67,6 +69,7 @@ var lightActivePorts = []int{
 	8181,  // Tautulli
 	8384,  // Syncthing
 	8443,  // generic HTTPS alt (UniFi Controller, Portainer HTTPS, …)
+	8581,  // Homebridge UI — the common HomeKit bridge, own port
 	8686,  // Lidarr
 	8765,  // Audiobookshelf alt
 	8971,  // Frigate (https alt)
@@ -97,6 +100,8 @@ var tlsExpectedPorts = map[int]bool{
 	8443:  true, // generic HTTPS alt (UniFi, Portainer HTTPS, …)
 	8971:  true, // Frigate HTTPS
 	9443:  true, // Portainer
+	8043:  true, // TP-Link Omada controller (8088 is its plain-HTTP port)
+	10443: true, // Scrypted (11080 is its plain-HTTP port)
 	32400: true, // Plex
 }
 
@@ -120,6 +125,9 @@ var fullActivePorts = []int{
 	8200, 8443, 8500, 8686, 8765, 8800, 8888, 8989,
 	9000, 9090, 9091, 9100, 9117, 9200, 9443, 9696, 9981,
 	10000, 11434, // ollama
+	// Web-UI detector ports (v3 batch): Technitium, ESPHome, SD WebUI,
+	// ComfyUI, Tdarr, Homebridge, Readarr, Stash, Scrypted, Komga, wg-easy.
+	5380, 6052, 7860, 8188, 8265, 8581, 8787, 9999, 10443, 11080, 25600, 51821,
 	19999, 25565, // minecraft
 	27017, // mongo
 	32400, 32469,

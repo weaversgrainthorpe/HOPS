@@ -8,3 +8,15 @@ mdi:home
 mdi:chevron-up
 mdi:eye-outline
 mdi:page-layout-header
+
+# Network Discovery detector icons (backend/internal/discovery/detectors_core.go)
+# for apps with no dashboard-icons SVG — promoted tiles carry these names.
+mdi:view-dashboard
+mdi:heart-pulse
+mdi:brain
+mdi:palette
+mdi:graph
+mdi:cctv
+mdi:file-video
+mdi:movie-cog
+mdi:dns

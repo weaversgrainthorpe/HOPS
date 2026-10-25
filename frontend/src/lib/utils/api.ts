@@ -765,7 +765,7 @@ export interface DiscoveryScan {
 // backend/internal/discovery/categories.go. Keep in sync — server-side
 // validation rejects anything not in this set.
 export type DiscoveryCategory =
-  | 'network' | 'automation' | 'media' | 'downloads' | 'storage'
+  | 'ai' | 'network' | 'automation' | 'media' | 'downloads' | 'storage'
   | 'surveillance' | 'monitoring' | 'virtualization' | 'photos'
   | 'documents' | 'code' | 'auth' | 'notifications' | 'iot' | 'other';
 
@@ -773,6 +773,7 @@ export type DiscoveryCategory =
 // Alphabetical by label so the dropdown is scan-able. Used by the curate
 // table's per-row category picker and the promote modal's group preview.
 export const CATEGORY_LIST: { slug: DiscoveryCategory; label: string; icon: string }[] = [
+  { slug: 'ai',             label: 'AI',             icon: 'mdi:robot' },
   { slug: 'auth',           label: 'Authentication', icon: 'mdi:lock' },
   { slug: 'code',           label: 'Code',           icon: 'mdi:source-branch' },
   { slug: 'documents',      label: 'Documents',      icon: 'mdi:file-document' },
