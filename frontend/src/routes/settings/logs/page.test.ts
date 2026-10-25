@@ -123,4 +123,21 @@ describe('/settings/logs', () => {
 		expect(click).toHaveBeenCalled();
 		click.mockRestore();
 	});
+
+	it('a filter change during a fetch is queued, never dropped; until it lands the page says it is updating', async () => {
+		render(Page);
+		await screen.findByRole('log');
+		let release!: (v: unknown) => void;
+		getLogs.mockImplementationOnce(() => new Promise((res) => (release = res)));
+		await fireEvent.click(screen.getByRole('button', { name: /Refresh/ })); // slow fetch in flight
+		await fireEvent.change(screen.getByLabelText('Level'), { target: { value: 'error' } });
+		expect(screen.getByText(/Updating to match the filter/)).toBeTruthy();
+		const warnOnly = { ...structuredClone(base), matching: 1, records: [base.records[1]] };
+		getLogs.mockResolvedValueOnce(warnOnly);
+		release(structuredClone(base)); // the old (unfiltered) answer arrives first
+		await waitFor(() => expect(getLogs).toHaveBeenLastCalledWith({ limit: 500, level: 'error' }));
+		await waitFor(() => expect(screen.getByRole('log').querySelectorAll('li')).toHaveLength(1));
+		expect(screen.queryByText(/Updating to match the filter/)).toBeNull();
+		expect(screen.getByRole('log').querySelector('li.lvl-info')).toBeNull();
+	});
 });

@@ -617,7 +617,13 @@ func (r *Router) loggingMiddleware(next http.Handler) http.Handler {
 		start := time.Now()
 		sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(sw, req)
-		slog.Info("http request",
+		// The Logs page's own reads (every 5 s with auto-refresh) are logged
+		// at debug, so they don't push the lines it shows out of the buffer.
+		level := slog.LevelInfo
+		if path == "/api/logs" && req.Method == http.MethodGet {
+			level = slog.LevelDebug
+		}
+		slog.Log(req.Context(), level, "http request",
 			"method", req.Method,
 			"path", path,
 			"status", sw.status,

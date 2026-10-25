@@ -96,4 +96,26 @@ test.describe('Settings › Logs', () => {
 		expect(text).toMatch(/^# HOPS log — Showing lines since HOPS started at /);
 		expect(text).toMatch(/\n\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} (INFO |WARN |ERROR|DEBUG) /);
 	});
+	test('a level change while a slow fetch is in flight is not dropped: the list ends up at the new level', async ({ page }) => {
+		let delayNext = false;
+		const asked: string[] = [];
+		await page.route((u) => u.pathname === '/api/logs', async (route) => {
+			asked.push(new URL(route.request().url()).searchParams.get('level') ?? '');
+			if (delayNext) {
+				delayNext = false;
+				await new Promise((r) => setTimeout(r, 1500));
+			}
+			await route.continue();
+		});
+		await openLogs(page);
+		await expect(logList(page).locator('li.lvl-info').first()).toBeVisible();
+		delayNext = true;
+		await page.getByRole('button', { name: 'Refresh' }).click(); // the slow fetch (level debug)
+		await page.getByLabel('Level').selectOption('warn');
+		await expect(page.getByRole('status').filter({ hasText: 'Updating to match the filter' })).toBeVisible();
+		await expect(page.getByText('Updating to match the filter')).toHaveCount(0, { timeout: 10_000 });
+		await expect(logList(page).locator('li.lvl-info')).toHaveCount(0);
+		await expect(page.getByLabel('Level')).toHaveValue('warn');
+		expect(asked[asked.length - 1]).toBe('warn');
+	});
 });

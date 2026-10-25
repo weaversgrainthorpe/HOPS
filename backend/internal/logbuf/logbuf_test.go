@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"sync"
 	"testing"
 	"time"
+	"unicode/utf8"
 )
 
 // newTestLogger returns a logger teeing into a fresh buffer of the given
@@ -175,12 +177,14 @@ func TestRedactsSensitiveKeysInBufferAndStderr(t *testing.T) {
 
 func TestIsSensitiveKey(t *testing.T) {
 	for _, k := range []string{"password", "Password", "old_password", "passwd", "secret", "token", "csrfToken", "X-CSRF-Token",
-		"cookie", "Set-Cookie", "authorization", "session", "session_id", "sessionID", "api_key", "apiKey", "credentials", "private_key"} {
+		"cookie", "Set-Cookie", "authorization", "session", "session_id", "sessionID", "sessionid", "hops_session", "SessionKey",
+		"api_key", "apiKey", "credentials", "private_key", "bearer", "bearer_token", "jwt", "id_jwt", "pass", "db_pass", "PassPhrase", "smtpPass"} {
 		if !IsSensitiveKey(k) {
 			t.Errorf("%q should be sensitive", k)
 		}
 	}
-	for _, k := range []string{"component", "error", "path", "status", "user_id", "key", "hash", "host", "name", "level", "value"} {
+	for _, k := range []string{"component", "error", "path", "status", "user_id", "key", "hash", "host", "name", "level", "value",
+		"session_count", "sessions", "sessionCount", "passive", "bypass", "compass", "passes", "intensity"} {
 		if IsSensitiveKey(k) {
 			t.Errorf("%q should not be sensitive", k)
 		}
@@ -223,5 +227,90 @@ func TestHandlerEnabledFollowsLevel(t *testing.T) {
 	}
 	if !h.Enabled(context.Background(), slog.LevelError) {
 		t.Fatal("error not enabled")
+	}
+}
+
+func TestPerRecordCapOnAttrCount(t *testing.T) {
+	log, buf, out, _ := newTestLogger(5, slog.LevelDebug)
+	args := []any{}
+	for i := 0; i < 40; i++ {
+		args = append(args, fmt.Sprintf("k%02d", i), i)
+	}
+	log.Info("many attrs", args...)
+	r := buf.Snapshot().Records[0]
+	if len(r.Attrs) != MaxAttrs+1 {
+		t.Fatalf("kept %d attrs, want %d + the marker", len(r.Attrs), MaxAttrs)
+	}
+	last := r.Attrs[len(r.Attrs)-1]
+	if last.Key != TruncatedKey || !strings.Contains(last.Value, "8 more attributes") {
+		t.Fatalf("marker %+v", last)
+	}
+	if !strings.Contains(out.String(), "k39=39") {
+		t.Fatal("stderr keeps every attr")
+	}
+}
+
+func TestPerRecordCapOnTotalBytes(t *testing.T) {
+	log, buf, _, _ := newTestLogger(5, slog.LevelDebug)
+	big := strings.Repeat("y", MaxValueBytes)
+	log.Info("big values", "a", big, "b", big, "c", big, "d", big, "e", big, "f", "small")
+	r := buf.Snapshot().Records[0]
+	total := len(r.Message)
+	for _, a := range r.Attrs {
+		total += len(a.Key) + len(a.Value)
+	}
+	if total > MaxRecordBytes+512 {
+		t.Fatalf("record holds %d bytes, cap %d", total, MaxRecordBytes)
+	}
+	last := r.Attrs[len(r.Attrs)-1]
+	if last.Key != TruncatedKey || !strings.Contains(last.Value, "more attributes") {
+		t.Fatalf("marker %+v", last)
+	}
+}
+
+func TestTruncationIsUTF8Safe(t *testing.T) {
+	log, buf, _, _ := newTestLogger(5, slog.LevelDebug)
+	// "é" is 2 bytes: with an odd prefix the cut lands mid-rune unless it backs off.
+	long := "x" + strings.Repeat("é", MaxValueBytes)
+	log.Info(long, "v", long)
+	r := buf.Snapshot().Records[0]
+	if !utf8.ValidString(r.Message) || !utf8.ValidString(r.Attrs[0].Value) {
+		t.Fatal("truncated value is not valid UTF-8")
+	}
+	if !strings.Contains(r.Attrs[0].Value, "truncated") {
+		t.Fatal("no truncation marker")
+	}
+}
+
+func TestConcurrentLogging(t *testing.T) {
+	log, buf, _, lv := newTestLogger(500, slog.LevelDebug)
+	const goroutines, each = 32, 200
+	var wg sync.WaitGroup
+	for g := 0; g < goroutines; g++ {
+		wg.Add(1)
+		go func(g int) {
+			defer wg.Done()
+			l := log.With("g", g)
+			for i := 0; i < each; i++ {
+				l.Info("concurrent", "i", i, "password", "hunter2")
+				if i%50 == 0 {
+					_ = buf.Snapshot()
+					lv.Set(slog.LevelDebug)
+				}
+			}
+		}(g)
+	}
+	wg.Wait()
+	s := buf.Snapshot()
+	if len(s.Records) != 500 {
+		t.Fatalf("records %d", len(s.Records))
+	}
+	if s.Dropped != goroutines*each-500 {
+		t.Fatalf("dropped %d, want %d", s.Dropped, goroutines*each-500)
+	}
+	for _, r := range s.Records {
+		if v, _ := attr(r, "password"); v != Redacted {
+			t.Fatalf("password %q", v)
+		}
 	}
 }

@@ -30,8 +30,12 @@
   let limit = $state<LineLimit>(500);
   let level = $state<LogLevel>('debug');
   let data = $state<LogsResponse | null>(null);
-  // The filter the shown data was fetched with (the notices describe that, not a pending change).
+  // The controls the shown data was fetched with (the notices describe that, not a pending change).
   let dataLevel = $state<LogLevel>('debug');
+  let dataLimit = $state<LineLimit>(500);
+  // A load asked for while one is in flight (a Lines/Level change, Refresh, auto-refresh) runs
+  // as soon as it ends, with the controls as they are then: never dropped.
+  let queued = false;
   let error = $state<string | null>(null);
   let loading = $state(false);
   let autoRefresh = $state(false);
@@ -40,9 +44,14 @@
 
   let notices = $derived(data ? logNotices(data, dataLevel) : []);
   let empty = $derived(data ? emptyMessage(data, dataLevel) : null);
+  // The list shown was fetched for other Lines/Level than the controls show: say so until it matches.
+  let behindControls = $derived(!!data && (dataLevel !== level || dataLimit !== limit));
 
   async function load() {
-    if (loading) return;
+    if (loading) {
+      queued = true;
+      return;
+    }
     loading = true;
     const wanted = { limit, level };
     // Keep following the newest line if the view was already at the bottom (or is new).
@@ -51,6 +60,7 @@
       const resp = await getLogs(wanted);
       data = resp;
       dataLevel = wanted.level;
+      dataLimit = wanted.limit;
       error = null;
       await tick();
       if (atBottom && box) box.scrollTop = box.scrollHeight;
@@ -58,6 +68,10 @@
       error = e instanceof Error && e.message ? e.message : 'the request failed';
     } finally {
       loading = false;
+      if (queued) {
+        queued = false;
+        void load();
+      }
     }
   }
 
@@ -157,13 +171,16 @@
   <div class="alert-error load-error" role="alert">
     Couldn't load the log lines: {error}
     {#if data}
-      <br />The lines below were loaded at {formatWhen(data.fetchedAt)} and may be out of date.
+      <br />The lines below were loaded at {formatWhen(data.fetchedAt)} and may be out of date{#if behindControls}; they are for the previous Lines/Level choice{/if}.
     {/if}
   </div>
 {/if}
 
 {#if data}
-  <div class="meta" class:stale={!!error}>
+  {#if behindControls && !error}
+    <p class="updating" role="status">Updating to match the filter… the lines below are for the previous Lines/Level choice.</p>
+  {/if}
+  <div class="meta" class:stale={!!error || behindControls}>
     <p class="since">{sinceLine(data)}</p>
     {#each notices as n, i (i)}
       <p class="notice">
@@ -176,9 +193,9 @@
   </div>
 
   {#if empty}
-    <div class="empty-state" class:stale={!!error}><p>{empty}</p></div>
+    <div class="empty-state" class:stale={!!error || behindControls}><p>{empty}</p></div>
   {:else}
-    <div class="log-box" class:stale={!!error} bind:this={box}>
+    <div class="log-box" class:stale={!!error || behindControls} bind:this={box}>
       <ol class="log-lines" role="log" aria-live="off" aria-label="Log lines, newest last">
         {#each data.records as r, i (i)}
           <li class="line lvl-{r.level}"><span class="t">{formatTime(r.time)}</span> <span class="lvl">{r.level.toUpperCase().padEnd(5)}</span> <span class="msg">{r.message}</span>{#if r.attrs.length}{' '}<span class="attrs">{formatAttrs(r.attrs)}</span>{/if}</li>
@@ -257,6 +274,13 @@
   .notice a {
     color: inherit;
     text-decoration: underline;
+  }
+
+  .updating {
+    margin: 0 0 0.5rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-primary);
   }
 
   .stale {

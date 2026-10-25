@@ -156,3 +156,50 @@ func TestLogsMethodNotAllowed(t *testing.T) {
 		t.Errorf("POST /api/logs: %d", code)
 	}
 }
+
+// The page's own polling stays out of the log at info: a GET /api/logs is
+// logged at debug, other requests at info as before.
+func TestLogsOwnRequestsLoggedAtDebug(t *testing.T) {
+	router, _ := setupTestRouter(t)
+	c := newClient(t, router)
+
+	lv := &slog.LevelVar{}
+	lv.Set(slog.LevelDebug)
+	buf := logbuf.New(100, time.Now())
+	prev := slog.Default()
+	slog.SetDefault(slog.New(logbuf.NewHandler(slog.NewTextHandler(io.Discard, nil), buf, lv)))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	if code, _, _ := getLogs(t, router, c, "?limit=10"); code != 200 {
+		t.Fatalf("status %d", code)
+	}
+	if code, _ := c.do("GET", "/api/settings", nil); code != 200 {
+		t.Fatalf("settings %d", code)
+	}
+	var logsInfo, logsDebug, settingsInfo int
+	for _, r := range buf.Snapshot().Records {
+		if r.Message != "http request" {
+			continue
+		}
+		path := ""
+		for _, a := range r.Attrs {
+			if a.Key == "path" {
+				path = a.Value
+			}
+		}
+		switch {
+		case path == "/api/logs" && r.Level == "info":
+			logsInfo++
+		case path == "/api/logs" && r.Level == "debug":
+			logsDebug++
+		case path == "/api/settings" && r.Level == "info":
+			settingsInfo++
+		}
+	}
+	if logsInfo != 0 || logsDebug != 1 {
+		t.Errorf("GET /api/logs: %d info, %d debug records; want 0 and 1", logsInfo, logsDebug)
+	}
+	if settingsInfo != 1 {
+		t.Errorf("other requests stay at info: %d", settingsInfo)
+	}
+}

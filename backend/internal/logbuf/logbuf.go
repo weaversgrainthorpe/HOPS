@@ -22,6 +22,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
+	"unicode/utf8"
 )
 
 // Capacity is how many records the shared buffer keeps. It is a constant,
@@ -32,6 +34,15 @@ const Capacity = 2000
 // burst of huge values (panic stacks) can't grow memory. stderr keeps the
 // full value; the buffered copy says it was cut.
 const MaxValueBytes = 4096
+
+// MaxAttrs and MaxRecordBytes cap one buffered record: at most MaxAttrs
+// attributes and MaxRecordBytes of message + keys + values. What doesn't fit
+// is replaced by one TruncatedKey attribute saying how many were left out.
+const (
+	MaxAttrs       = 32
+	MaxRecordBytes = 16 * 1024
+	TruncatedKey   = "…"
+)
 
 // Redacted replaces a sensitive attribute's value.
 const Redacted = "[REDACTED]"
@@ -104,11 +115,47 @@ func (b *Buffer) Snapshot() Snapshot {
 
 // ---- sensitive keys ----
 
-// sensitiveParts are matched against the key lowercased with everything but
-// letters and digits removed ("X-CSRF-Token" → "xcsrftoken").
+// sensitiveParts are matched anywhere in the key lowercased with everything
+// but letters and digits removed ("X-CSRF-Token" → "xcsrftoken").
 var sensitiveParts = []string{
 	"password", "passwd", "passphrase", "secret", "token", "cookie",
-	"authorization", "csrf", "session", "apikey", "credential", "privatekey",
+	"authorization", "csrf", "apikey", "credential", "privatekey", "bearer", "jwt",
+}
+
+// sensitiveSuffixes match the end of the normalised key: "session" names a
+// session ID (hops_session, session_id, sessionKey) but session_count doesn't.
+var sensitiveSuffixes = []string{"session", "sessionid", "sessionkey"}
+
+// sensitiveWords match one whole word of the key (split at punctuation and
+// camelCase): "pass" in db_pass or smtpPass, not in passive or bypass.
+var sensitiveWords = []string{"pass", "pwd"}
+
+// keyWords splits a key into lower-case words at non-alphanumerics and at
+// lower→upper camelCase boundaries.
+func keyWords(key string) []string {
+	var words []string
+	var cur []rune
+	var prev rune
+	flush := func() {
+		if len(cur) > 0 {
+			words = append(words, strings.ToLower(string(cur)))
+			cur = cur[:0]
+		}
+	}
+	for _, c := range key {
+		switch {
+		case !unicode.IsLetter(c) && !unicode.IsDigit(c):
+			flush()
+		case unicode.IsUpper(c) && (unicode.IsLower(prev) || unicode.IsDigit(prev)):
+			flush()
+			cur = append(cur, c)
+		default:
+			cur = append(cur, c)
+		}
+		prev = c
+	}
+	flush()
+	return words
 }
 
 // IsSensitiveKey reports whether an attribute with this key must never be
@@ -121,12 +168,21 @@ func IsSensitiveKey(key string) bool {
 		}
 	}
 	k := b.String()
-	if k == "pwd" {
-		return true
-	}
 	for _, p := range sensitiveParts {
 		if strings.Contains(k, p) {
 			return true
+		}
+	}
+	for _, sfx := range sensitiveSuffixes {
+		if strings.HasSuffix(k, sfx) {
+			return true
+		}
+	}
+	for _, w := range keyWords(key) {
+		for _, sw := range sensitiveWords {
+			if w == sw {
+				return true
+			}
 		}
 	}
 	return false
@@ -156,7 +212,28 @@ func capValue(s string) string {
 	if len(s) <= MaxValueBytes {
 		return s
 	}
-	return fmt.Sprintf("%s… [truncated: %d bytes in all; the full line is in the system log]", s[:MaxValueBytes], len(s))
+	cut := MaxValueBytes
+	for cut > 0 && !utf8.RuneStart(s[cut]) {
+		cut-- // never split a multi-byte character
+	}
+	return fmt.Sprintf("%s… [truncated: %d bytes in all; the full line is in the system log]", s[:cut], len(s))
+}
+
+// capRecord keeps at most MaxAttrs attributes and MaxRecordBytes in all
+// (message included), replacing the rest with one TruncatedKey marker.
+func capRecord(msg string, attrs []Attr) []Attr {
+	total := len(msg)
+	for i, a := range attrs {
+		size := len(a.Key) + len(a.Value)
+		if i >= MaxAttrs || total+size > MaxRecordBytes {
+			n := len(attrs) - i
+			kept := append(attrs[:i:i], Attr{Key: TruncatedKey, Value: fmt.Sprintf(
+				"truncated: %d more attributes not kept here; the full line is in the system log", n)})
+			return kept
+		}
+		total += size
+	}
+	return attrs
 }
 
 // flatten appends a (already redacted) to dst with groups as dotted keys.
@@ -210,7 +287,8 @@ func (h *handler) Handle(ctx context.Context, r slog.Record) error {
 	if t.IsZero() {
 		t = time.Now()
 	}
-	h.buf.add(Record{Time: t, Level: LevelName(r.Level), Message: capValue(r.Message), Attrs: attrs, level: r.Level})
+	msg := capValue(r.Message)
+	h.buf.add(Record{Time: t, Level: LevelName(r.Level), Message: msg, Attrs: capRecord(msg, attrs), level: r.Level})
 	return h.inner.Handle(ctx, red)
 }
 
