@@ -131,6 +131,11 @@ func (r *Router) handleGetConfig(w http.ResponseWriter, req *http.Request) {
 	// One-time notices (notices.go), like migrationNotices only when any;
 	// backup problems first, and only for a signed-in admin (backup_notices.go).
 	adminNotices := r.backupNotices(req)
+	if r.isAdminRequest(req) {
+		if n, ok := r.iconLeftoverNotice(); ok {
+			adminNotices = append(adminNotices, n)
+		}
+	}
 	if len(adminNotices) > 0 {
 		// Admin-only content: never stored by a shared cache or the service
 		// worker (which skips no-store responses), and varies by session.
@@ -1751,61 +1756,6 @@ func (r *Router) handleGetIcons(w http.ResponseWriter, req *http.Request) {
 	}
 
 	writeJSON(w, icons)
-}
-
-// handleCreateIcon creates a new icon (admin only)
-func (r *Router) handleCreateIcon(w http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodPost {
-		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	var iconData struct {
-		ID         string  `json:"id"`
-		Name       string  `json:"name"`
-		Icon       string  `json:"icon"`
-		CategoryID string  `json:"categoryId"`
-		Color      *string `json:"color"`
-		ImageURL   *string `json:"imageUrl"`
-	}
-
-	if err := json.NewDecoder(req.Body).Decode(&iconData); err != nil {
-		writeJSONError(w, "Invalid JSON", http.StatusBadRequest)
-		return
-	}
-
-	// Validate required fields - icon is optional if imageUrl is provided
-	if iconData.ID == "" || iconData.Name == "" || iconData.CategoryID == "" {
-		writeJSONError(w, "Missing required fields", http.StatusBadRequest)
-		return
-	}
-
-	// Must have either icon or imageUrl
-	if iconData.Icon == "" && (iconData.ImageURL == nil || *iconData.ImageURL == "") {
-		writeJSONError(w, "Either icon or imageUrl is required", http.StatusBadRequest)
-		return
-	}
-
-	var color sql.NullString
-	if iconData.Color != nil && *iconData.Color != "" {
-		color = sql.NullString{String: *iconData.Color, Valid: true}
-	}
-
-	var imageURL sql.NullString
-	if iconData.ImageURL != nil && *iconData.ImageURL != "" {
-		imageURL = sql.NullString{String: *iconData.ImageURL, Valid: true}
-	}
-
-	_, err := r.db.Exec(
-		"INSERT INTO icons (id, name, icon, category_id, color, image_url, is_preset) VALUES (?, ?, ?, ?, ?, ?, 0)",
-		iconData.ID, iconData.Name, iconData.Icon, iconData.CategoryID, color, imageURL,
-	)
-	if err != nil {
-		writeJSONError(w, "Failed to create icon", http.StatusInternalServerError)
-		return
-	}
-
-	writeJSONSuccess(w)
 }
 
 // writeJSONSuccess writes a standard {"success": true} response for mutations

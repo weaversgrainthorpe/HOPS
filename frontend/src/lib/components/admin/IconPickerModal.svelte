@@ -301,7 +301,7 @@
     try {
       await deleteIconCategory(categoryId);
       await loadData();
-      selectedCategory = 'containers';
+      selectedCategory = 'my-uploads';
     } catch (err) {
       if (err instanceof CategoryNotEmptyError) {
         toast.error(`${err.message} Use Settings › Icons to move them.`);

@@ -10,7 +10,10 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
+	"sort"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -25,6 +28,36 @@ import (
 
 // maxIconNameLen bounds icon and category names (characters).
 const maxIconNameLen = 100
+
+var (
+	// An uploaded icon's URL: a plain file name under /icons/ (what uploads
+	// produce), never a path, a hidden file or another origin.
+	iconImageURLPattern = regexp.MustCompile(`^/icons/[A-Za-z0-9_-][A-Za-z0-9._-]{0,127}$`)
+	// An Iconify name, prefix:name, lower case.
+	iconifyNamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,49}:[a-z0-9][a-z0-9_-]{0,99}$`)
+	// A colour: #rgb, #rgba, #rrggbb or #rrggbbaa.
+	iconColorPattern = regexp.MustCompile(`^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$`)
+	// An icon id as it appears in /api/icons/{id}.
+	iconIDPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`)
+)
+
+// Ids that would collide with the fixed /api/icons/... routes.
+var reservedIconIDs = map[string]bool{"usage": true, "upload": true, "dashboard": true}
+
+func validIconImageURL(u string) bool {
+	return iconImageURLPattern.MatchString(u) && !strings.Contains(u, "..")
+}
+
+// checkIconFields validates an Iconify name and a colour ("" = none).
+func checkIconFields(icon, color string) error {
+	if icon != "" && !iconifyNamePattern.MatchString(icon) {
+		return fmt.Errorf("%q isn't an icon name (use prefix:name, e.g. mdi:server)", icon)
+	}
+	if color != "" && !iconColorPattern.MatchString(color) {
+		return fmt.Errorf("%q isn't a colour (use #rgb or #rrggbb)", color)
+	}
+	return nil
+}
 
 // iconUse is one place that shows an image: a tile, folder, tab or dashboard.
 type iconUse struct {
@@ -167,11 +200,84 @@ func (r *Router) categoryExists(q interface {
 // iconFilePath maps an uploaded icon's URL (/icons/<file>) to its file in the
 // data directory, or "" when the URL is not a plain uploaded-icon path.
 func (r *Router) iconFilePath(imageURL string) string {
-	name, ok := strings.CutPrefix(imageURL, "/icons/")
-	if !ok || name == "" || strings.ContainsAny(name, `/\`) || name == "." || name == ".." {
+	if !validIconImageURL(imageURL) {
 		return ""
 	}
-	return filepath.Join(r.config.DataDir, "icons", name)
+	return filepath.Join(r.config.DataDir, "icons", strings.TrimPrefix(imageURL, "/icons/"))
+}
+
+// handleCreateIcon: POST /api/icons (admin). The same checks as uploads and
+// edits: a valid id and name, an existing category, an uploaded-icon URL or
+// an Iconify name, and a valid colour.
+func (r *Router) handleCreateIcon(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var body struct {
+		ID         string  `json:"id"`
+		Name       string  `json:"name"`
+		Icon       string  `json:"icon"`
+		CategoryID string  `json:"categoryId"`
+		Color      *string `json:"color"`
+		ImageURL   *string `json:"imageUrl"`
+	}
+	if err := decodeJSONBody(req, &body); err != nil {
+		writeJSONError(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+	if !iconIDPattern.MatchString(body.ID) || reservedIconIDs[body.ID] {
+		writeJSONError(w, "Missing or invalid icon id", http.StatusBadRequest)
+		return
+	}
+	name, err := cleanDisplayName(body.Name, "The icon")
+	if err != nil {
+		writeJSONError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	color, img := "", ""
+	if body.Color != nil {
+		color = *body.Color
+	}
+	if body.ImageURL != nil {
+		img = *body.ImageURL
+	}
+	if err := checkIconFields(body.Icon, color); err != nil {
+		writeJSONError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if img != "" && !validIconImageURL(img) {
+		writeJSONError(w, "The image must be an uploaded icon (/icons/<file>)", http.StatusBadRequest)
+		return
+	}
+	if body.Icon == "" && img == "" {
+		writeJSONError(w, "Either icon or imageUrl is required", http.StatusBadRequest)
+		return
+	}
+	if ok, err := r.categoryExists(r.db, body.CategoryID); err != nil {
+		writeJSONError(w, "Failed to check the category", http.StatusInternalServerError)
+		return
+	} else if !ok {
+		writeJSONError(w, "That category doesn't exist", http.StatusBadRequest)
+		return
+	}
+	var n int
+	if err := r.db.QueryRow(`SELECT COUNT(*) FROM icons WHERE id = ?`, body.ID).Scan(&n); err != nil {
+		writeJSONError(w, "Failed to check the icon", http.StatusInternalServerError)
+		return
+	} else if n > 0 {
+		writeJSONError(w, "An icon with that id already exists", http.StatusConflict)
+		return
+	}
+	nullable := func(s string) sql.NullString { return sql.NullString{String: s, Valid: s != ""} }
+	if _, err := r.db.Exec(
+		"INSERT INTO icons (id, name, icon, category_id, color, image_url, is_preset) VALUES (?, ?, ?, ?, ?, ?, 0)",
+		body.ID, name, body.Icon, body.CategoryID, nullable(color), nullable(img),
+	); err != nil {
+		writeJSONError(w, "Failed to create icon", http.StatusInternalServerError)
+		return
+	}
+	writeJSONSuccess(w)
 }
 
 // handleUpdateIcon: PUT /api/icons/{id} (admin). Fields that are sent are
@@ -194,12 +300,28 @@ func (r *Router) handleUpdateIcon(w http.ResponseWriter, req *http.Request) {
 	}
 	var name, icon, cat string
 	var color sql.NullString
-	err := r.db.QueryRow(`SELECT name, icon, category_id, color FROM icons WHERE id = ?`, iconID).Scan(&name, &icon, &cat, &color)
+	var preset bool
+	err := r.db.QueryRow(`SELECT name, icon, category_id, color, is_preset FROM icons WHERE id = ?`, iconID).Scan(&name, &icon, &cat, &color, &preset)
 	if errors.Is(err, sql.ErrNoRows) {
 		writeJSONError(w, "That icon no longer exists", http.StatusNotFound)
 		return
 	} else if err != nil {
 		writeJSONError(w, "Failed to load the icon", http.StatusInternalServerError)
+		return
+	}
+	if preset {
+		writeJSONError(w, "Built-in icons can't be changed", http.StatusBadRequest)
+		return
+	}
+	newIcon, newColor := "", ""
+	if body.Icon != nil {
+		newIcon = *body.Icon
+	}
+	if body.Color != nil {
+		newColor = *body.Color
+	}
+	if err := checkIconFields(newIcon, newColor); err != nil {
+		writeJSONError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	if body.Name != nil {
@@ -317,7 +439,10 @@ func (r *Router) handleDeleteIcon(w http.ResponseWriter, req *http.Request) {
 	}
 	if aside != "" {
 		if err := os.Remove(aside); err != nil {
+			// The icon is gone; its file couldn't be. Shown as an admin notice
+			// until it is removed (retried each time the notice is built).
 			slog.Warn("icon delete: row deleted but the file stayed", "component", "icons", "path", aside, "error", err)
+			r.iconLeftovers.add(aside, err)
 		}
 	}
 	slog.Info("icon deleted", "component", "icons", "id", iconID)
@@ -536,4 +661,73 @@ func writeJSONBody(w http.ResponseWriter, v any) {
 	if err := json.NewEncoder(w).Encode(v); err != nil {
 		slog.Error("failed to encode JSON response", "error", err)
 	}
+}
+
+// leftoverState holds icon files that were deleted but couldn't be removed
+// from disk (path → reason).
+type leftoverState struct {
+	mu    sync.Mutex
+	files map[string]string
+}
+
+func (s *leftoverState) add(path string, err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.files == nil {
+		s.files = map[string]string{}
+	}
+	s.files[path] = err.Error()
+}
+
+// retry tries each leftover again and returns those that remain, sorted.
+func (s *leftoverState) retry() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []string
+	for path, reason := range s.files {
+		err := os.Remove(path)
+		if err == nil || errors.Is(err, os.ErrNotExist) {
+			delete(s.files, path)
+			continue
+		}
+		s.files[path] = err.Error()
+		out = append(out, fmt.Sprintf("%s (%s)", filepath.Base(path), reason))
+	}
+	sort.Strings(out)
+	return out
+}
+
+// sweepIconLeftovers removes "*.deleting" files that an interrupted icon
+// delete left in <data>/icons; any it can't remove become an admin notice.
+func (r *Router) sweepIconLeftovers() {
+	dir := filepath.Join(r.config.DataDir, "icons")
+	matches, err := filepath.Glob(filepath.Join(dir, "*.deleting"))
+	if err != nil {
+		return
+	}
+	for _, m := range matches {
+		if err := os.Remove(m); err != nil && !errors.Is(err, os.ErrNotExist) {
+			slog.Warn("icons: could not remove a leftover from an interrupted delete", "component", "icons", "path", m, "error", err)
+			r.iconLeftovers.add(m, err)
+		} else if err == nil {
+			slog.Info("icons: removed a leftover from an interrupted delete", "component", "icons", "path", m)
+		}
+	}
+}
+
+// iconLeftoverNotice is the sticky admin notice for icon files that couldn't
+// be removed, if any remain.
+func (r *Router) iconLeftoverNotice() (notice, bool) {
+	left := r.iconLeftovers.retry()
+	if len(left) == 0 {
+		return notice{}, false
+	}
+	return notice{
+		ID: "icon-leftover-files",
+		Text: fmt.Sprintf("HOPS couldn't remove %d deleted icon file%s from %s: %s. Delete %s by hand, or check that HOPS can write to that folder; "+
+			"HOPS tries again each time this page loads.", len(left), plural(len(left)), filepath.Join(r.config.DataDir, "icons"),
+			strings.Join(left, ", "), map[bool]string{true: "it", false: "them"}[len(left) == 1]),
+		Level:  "warning",
+		Sticky: true,
+	}, true
 }

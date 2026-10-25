@@ -5,6 +5,9 @@ import (
 	"fmt"
 )
 
+// UploadsCategoryID is the built-in category uploaded icons go into by default.
+const UploadsCategoryID = "uploads"
+
 // seedIconData seeds the database with icon categories and generic category icons.
 // App-specific icons are loaded from the embedded filesystem by ImportDashboardIcons.
 //
@@ -27,6 +30,9 @@ func seedIconData(db *sql.DB) error {
 		Icon  string
 		Order int
 	}{
+		// Where uploads go by default (Settings › Icons, the icon editor):
+		// built in, so it can't be renamed or deleted; no app meaning.
+		{UploadsCategoryID, "Uploads", "mdi:cloud-upload-outline", -1},
 		{"containers", "Containers", "mdi:docker", 0},
 		{"media", "Media & Streaming", "mdi:play-circle", 1},
 		{"downloads", "Downloads", "mdi:download", 2},

@@ -35,6 +35,7 @@ import { resetIconLibrary } from '$lib/icons/iconLibrary';
 import { IconInUseError, CategoryNotEmptyError } from '$lib/utils/api';
 
 const cats = [
+	{ id: 'uploads', name: 'Uploads', icon: 'mdi:cloud-upload-outline', order: -1, isPreset: true, createdAt: '' },
 	{ id: 'containers', name: 'Containers', icon: 'mdi:docker', order: 0, isPreset: true, createdAt: '' },
 	{ id: 'mine', name: 'Mine', icon: 'mdi:folder', order: 20, isPreset: false, createdAt: '' },
 	{ id: 'spare', name: 'Spare', icon: 'mdi:folder', order: 21, isPreset: false, createdAt: '' }
@@ -258,6 +259,47 @@ describe('/settings/icons', () => {
 		await fireEvent.click(screen.getByRole('button', { name: 'Delete category Spare' }));
 		const dlg = await screen.findByRole('dialog', { name: /Delete category/ });
 		expect(dlg.textContent).toContain('"Spare" has 4 icons');
+	});
+
+	it('uploads go to the built-in Uploads category by default', async () => {
+		api.uploadIcon.mockResolvedValue({ id: 'x', url: '/icons/x.png', name: 'one', categoryId: 'uploads' });
+		render(Page);
+		await screen.findByRole('list', { name: 'Uploaded icons' });
+		expect((screen.getByLabelText('Upload into') as HTMLSelectElement).value).toBe('uploads');
+		const input = screen.getByLabelText('Choose icon images to upload') as HTMLInputElement;
+		Object.defineProperty(input, 'files', { value: [new File(['a'], 'one.png', { type: 'image/png' })], configurable: true });
+		await fireEvent.change(input);
+		await waitFor(() => expect(api.uploadIcon).toHaveBeenCalled());
+		expect(api.uploadIcon.mock.calls[0][1]).toEqual({ categoryId: 'uploads', name: 'one' });
+	});
+
+	it('deleting a category offers Uploads for its icons first', async () => {
+		render(Page);
+		await screen.findByRole('list', { name: 'Your categories' });
+		await fireEvent.click(screen.getByRole('button', { name: 'Delete category Mine' }));
+		const dlg = await screen.findByRole('dialog', { name: /Delete category/ });
+		expect((within(dlg).getByLabelText('Move its icons to') as HTMLSelectElement).value).toBe('uploads');
+	});
+
+	it('a failed usage refresh marks every "where used" as possibly out of date', async () => {
+		api.getIconUsage.mockResolvedValueOnce(structuredClone(usage)).mockRejectedValueOnce(new Error('timed out'));
+		api.getIcons
+			.mockResolvedValueOnce(structuredClone(icons))
+			.mockResolvedValue([...structuredClone(icons), { id: 'ic', name: 'Charlie', icon: '', categoryId: 'uploads', imageUrl: '/icons/c.png', isPreset: false, createdAt: '' }]);
+		api.uploadIcon.mockResolvedValue({ id: 'ic', url: '/icons/c.png', name: 'Charlie', categoryId: 'uploads' });
+		render(Page);
+		await screen.findByRole('list', { name: 'Uploaded icons' });
+		expect(card('Bravo').textContent).toContain('Not used');
+		// An upload reloads the icons and the usage; the usage refresh fails.
+		const input = screen.getByLabelText('Choose icon images to upload') as HTMLInputElement;
+		Object.defineProperty(input, 'files', { value: [new File(['c'], 'Charlie.png', { type: 'image/png' })], configurable: true });
+		await fireEvent.change(input);
+		const alert = await screen.findByText(/Couldn't work out where the icons are used: timed out/);
+		expect(alert.textContent).toContain('may be out of date');
+		await waitFor(() => expect(card('Bravo').textContent).toContain('Not used (may be out of date)'));
+		expect(card('Alpha <b>bold</b>').textContent).toContain('Used by 3 tiles on Home, Media (may be out of date)');
+		// The new icon was never checked: unknown, not "Not used".
+		expect(card('Charlie').textContent).toContain('Where used: unknown');
 	});
 
 	it('the offline note links to Global settings › Uploads', async () => {

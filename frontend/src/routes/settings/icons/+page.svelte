@@ -43,7 +43,7 @@
   // server from the stored dashboards; deleting one that is in use lists those places first.
   // Every failure is shown on the page; names are text only.
 
-  const DEFAULT_CATEGORY = 'containers'; // where the icon editor puts uploads, too
+  const DEFAULT_CATEGORY = 'uploads'; // the built-in Uploads category; the icon editor uses it too
   const UPLOADS_GROUP = GLOBAL_SETTING_GROUPS.find((g) => g.id === 'uploads')!;
 
   let usage = $state<IconUsage | null>(null);
@@ -95,7 +95,15 @@
   let dashboardIconCount = $derived(lib.icons.filter((i) => i.isPreset && i.imageUrl?.startsWith('/api/icons/dashboard/')).length);
 
   const categoryName = (id: string) => lib.categories.find((c) => c.id === id)?.name ?? id;
-  const usesOf = (id: string): IconUse[] | null => (usage ? (usage.icons[id] ?? []) : null);
+  // Unknown (null) when the usage couldn't be read or doesn't cover this icon yet (never "Not used").
+  const usesOf = (id: string): IconUse[] | null => (usage && Object.hasOwn(usage.icons, id) ? usage.icons[id] : null);
+  // The last usage refresh failed: what is shown is from an earlier check and may be out of date.
+  let usageStale = $derived(!!usageError && !!usage);
+  // Where a deleted category's icons go by default: Uploads, else the first other category.
+  const moveTarget = (fromId: string) =>
+    (fromId !== DEFAULT_CATEGORY && categories.some((x) => x.id === DEFAULT_CATEGORY)
+      ? DEFAULT_CATEGORY
+      : categories.find((x) => x.id !== fromId)?.id) ?? '';
   const errText = (e: unknown, fallback: string) => (e instanceof Error && e.message ? e.message : fallback);
 
   async function loadUsage() {
@@ -287,7 +295,7 @@
     const count = counts.get(c.id) ?? 0;
     if (count > 0) {
       catDelete = { category: c, count };
-      catDeleteTarget = categories.find((x) => x.id !== c.id)?.id ?? '';
+      catDeleteTarget = moveTarget(c.id);
       catDeleteError = '';
       return;
     }
@@ -314,7 +322,7 @@
       if (err instanceof CategoryNotEmptyError) {
         // It gained icons since the page loaded: ask where they go.
         catDelete = { category: c, count: err.iconCount };
-        catDeleteTarget = categories.find((x) => x.id !== c.id)?.id ?? '';
+        catDeleteTarget = moveTarget(c.id);
         catDeleteError = '';
       } else if (catDelete) {
         catDeleteError = `Couldn't delete the category: ${errText(err, 'the request failed')}`;
@@ -344,7 +352,7 @@
 {/if}
 {#if usageError}
   <div class="alert-error block" role="alert">
-    Couldn't work out where the icons are used: {usageError}. Deleting still checks first.
+    Couldn't work out where the icons are used: {usageError}.{#if usage}{' '}What each icon shows is from an earlier check and may be out of date.{/if}{' '}Deleting still checks first.
     <Button variant="secondary" size="small" icon="mdi:refresh" onclick={() => void loadUsage()}>Retry</Button>
   </div>
 {/if}
@@ -426,8 +434,8 @@
             <div class="meta">
               <p class="name">{icon.name}</p>
               <p class="cat">{categoryName(icon.categoryId)}</p>
-              <p class="used" class:in-use={uses && uses.length > 0} class:unknown={!uses}>
-                {uses ? usageSummary(uses) : 'Where used: unknown'}
+              <p class="used" class:in-use={uses && uses.length > 0} class:unknown={!uses} class:stale={uses && usageStale}>
+                {uses ? usageSummary(uses) : 'Where used: unknown'}{uses && usageStale ? ' (may be out of date)' : ''}
               </p>
             </div>
             <div class="actions">
@@ -749,7 +757,8 @@
     color: var(--text-primary);
   }
 
-  .used.unknown {
+  .used.unknown,
+  .used.stale {
     font-style: italic;
   }
 

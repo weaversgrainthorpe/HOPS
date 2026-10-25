@@ -32,7 +32,7 @@ test.describe('Settings › Icons', () => {
 		return { 'X-CSRF-Token': await getCsrfToken(page.context()) };
 	}
 
-	async function apiUpload(page: Page, name: string, categoryId = 'containers') {
+	async function apiUpload(page: Page, name: string, categoryId = 'uploads') {
 		const r = await page.request.post('/api/icons/upload', {
 			headers: await csrf(page),
 			multipart: { categoryId, name, file: png(`${name}.png`) }
@@ -63,7 +63,7 @@ test.describe('Settings › Icons', () => {
 			expect([200, 404], `cleanup icon ${id}: ${await r.text()}`).toContain(r.status());
 		}
 		for (const id of madeCats.splice(0)) {
-			const r = await page.request.delete(`/api/icon-categories/${id}?moveTo=containers`, { headers: await csrf(page) });
+			const r = await page.request.delete(`/api/icon-categories/${id}?moveTo=uploads`, { headers: await csrf(page) });
 			expect([200, 404], `cleanup category ${id}: ${await r.text()}`).toContain(r.status());
 		}
 		if (madeDashes.length) await deleteDashboardsNamed(page, madeDashes.splice(0));
@@ -80,7 +80,7 @@ test.describe('Settings › Icons', () => {
 		await expect(page.getByRole('heading', { name: 'Icons', level: 2, exact: true })).toBeVisible();
 	});
 
-	test('upload one icon: it appears, unused, and the picker’s My Uploads has it', async ({ page }) => {
+	test('upload one icon: it appears, unused, in the Uploads category', async ({ page }) => {
 		const name = `up1-${tag()}`;
 		await openIcons(page);
 		await page.getByLabel('Choose icon images to upload').setInputFiles(png(`${name}.png`));
@@ -88,7 +88,7 @@ test.describe('Settings › Icons', () => {
 		await trackByPrefix(page, name);
 		await expect(card(page, name)).toBeVisible();
 		await expect(card(page, name)).toContainText('Not used');
-		await expect(card(page, name)).toContainText('Containers');
+		await expect(card(page, name)).toContainText('Uploads');
 	});
 
 	test('upload several icons at once', async ({ page }) => {
@@ -220,10 +220,11 @@ test.describe('Settings › Icons', () => {
 		await page.getByRole('button', { name: `Delete category Ours ${t}` }).click();
 		const dlg = page.getByRole('dialog', { name: 'Delete category' });
 		await expect(dlg).toContainText(`"Ours ${t}" has 1 icon`);
-		await dlg.getByLabel('Move its icons to').selectOption({ label: 'Containers' });
+		// Uploads is offered first.
+		await expect(dlg.getByLabel('Move its icons to')).toHaveValue('uploads');
 		await dlg.getByRole('button', { name: 'Move icons and delete' }).click();
 		await expect(row2).toHaveCount(0);
-		await expect(card(page, iconName)).toContainText('Containers');
+		await expect(card(page, iconName)).toContainText('Uploads');
 	});
 
 	test('search narrows the grid by name', async ({ page }) => {

@@ -48,6 +48,19 @@ func setupTestRouterFull(t *testing.T, storedConfig string, override *configdoc.
 // before the settings service loads (e.g. a value saved under older bounds).
 func setupTestRouterWithSettingsRows(t *testing.T, storedConfig string, override *configdoc.MigrationResult, settingsRows map[string]string) (http.Handler, *sql.DB) {
 	t.Helper()
+	_, h, db := setupTestRouterCore(t, storedConfig, override, settingsRows, t.TempDir())
+	return h, db
+}
+
+// setupTestRouterInDir is setupTestRouter with a given data directory (prepared
+// before the router starts), also returning the *Router.
+func setupTestRouterInDir(t *testing.T, dataDir string) (*Router, http.Handler, *sql.DB) {
+	t.Helper()
+	return setupTestRouterCore(t, "", nil, nil, dataDir)
+}
+
+func setupTestRouterCore(t *testing.T, storedConfig string, override *configdoc.MigrationResult, settingsRows map[string]string, dataDir string) (*Router, http.Handler, *sql.DB) {
+	t.Helper()
 	db, err := sql.Open("sqlite", ":memory:")
 	if err != nil {
 		t.Fatal(err)
@@ -166,7 +179,7 @@ func setupTestRouterWithSettingsRows(t *testing.T, storedConfig string, override
 	}
 
 	cfg := &config.Config{
-		DataDir:     t.TempDir(),
+		DataDir:     dataDir,
 		FrontendDir: t.TempDir(),
 	}
 
@@ -184,9 +197,9 @@ func setupTestRouterWithSettingsRows(t *testing.T, storedConfig string, override
 	authService := auth.NewService(db)
 	discoveryStore := discovery.NewStore(db)
 	discoveryOrch := discovery.NewOrchestrator(discoveryStore, settingsSvc)
-	_, router := NewRouter(db, authService, cfg, settingsSvc, time.Now(), discoveryStore, discoveryOrch, migration)
+	r, router := NewRouter(db, authService, cfg, settingsSvc, time.Now(), discoveryStore, discoveryOrch, migration)
 
-	return router, db
+	return r, router, db
 }
 
 // loginTestUser logs in the default test user and returns just the session token.

@@ -334,15 +334,16 @@
     uploadError = '';
 
     try {
-      // One step: the server stores the image and registers it under "My Uploads" (Settings ›
-      // Icons), or refuses both, so an upload is never kept half-saved.
+      // One step: the server stores the image and adds it to the built-in Uploads category (shown in
+      // Settings › Icons and the picker's uploads), or refuses both, so an upload is never kept
+      // half-saved.
       const fileName = nameFromFile(file.name);
       const iconName = fileName.charAt(0).toUpperCase() + fileName.slice(1).replace(/[-_]/g, ' ');
-      const result = await uploadIcon(file, { categoryId: 'containers', name: iconName });
+      const result = await uploadIcon(file, { categoryId: 'uploads', name: iconName });
       onIconUrlChange(result.url);
       onIconChange('');
       iconSearch = '';
-      toast.success('Icon saved to "My Uploads"');
+      toast.success(`Uploaded "${result.name}" to the Uploads category (Settings › Icons)`);
       void loadIconLibrary();
     } catch (err) {
       uploadError = err instanceof Error ? err.message : 'Upload failed';

@@ -61,6 +61,7 @@ type Router struct {
 	notices        noticeState   // dismissed one-time notices (notices.go)
 	cleanupStop    chan struct{} // stops the daily backup cleanup
 	sizeNotes      sizeNoteState // tiles whose unknown size became Medium (notices.go)
+	iconLeftovers  leftoverState // deleted icon files that couldn't be removed (icons_manage.go)
 }
 
 // RequestShutdown is the API-side handle for the shutdown channel.
@@ -257,6 +258,7 @@ func NewRouter(db *sql.DB, authService *auth.Service, cfg *config.Config, settin
 	})
 
 	r.notices.load(db) // a failure is logged and retried on GET /api/config
+	r.sweepIconLeftovers() // interrupted icon deletes; failures become an admin notice
 	if len(migration.SizeChanges) > 0 {
 		// Name each tile's dashboard from the migrated document; if it cannot
 		// be read the dashboard id stands in (the notice is never dropped).
