@@ -32,6 +32,7 @@ const PAGES = [
 	{ path: '/settings/discovery/new', heading: 'New Discovery Scan' },
 	{ path: '/settings/discovery/SCAN', heading: 'Discovery draft' },
 	{ path: '/settings/backups', heading: 'Backups' },
+	{ path: '/settings/logs', heading: 'Logs' },
 	{ path: '/settings/password', heading: 'Password' },
 	{ path: '/settings/reset', heading: 'Factory reset' }
 ];

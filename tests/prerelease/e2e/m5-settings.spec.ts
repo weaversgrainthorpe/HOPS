@@ -13,7 +13,7 @@ const PAGES = [
   { label: 'Password', path: '/settings/password', heading: 'Password' },
   { label: 'Factory reset', path: '/settings/reset', heading: 'Factory reset' },
 ];
-const ALL_ITEMS = ['Dashboards', 'Global settings', 'Discovery', 'Backups', 'Password', 'Factory reset', 'Log out'];
+const ALL_ITEMS = ['Dashboards', 'Global settings', 'Discovery', 'Backups', 'Logs', 'Password', 'Factory reset', 'Log out'];
 
 const sidebar = (p: Page) => p.getByRole('navigation', { name: 'Settings sections' });
 const urlOf = (path: string) => new RegExp(`${path.replace(/\//g, '\\/')}$`);

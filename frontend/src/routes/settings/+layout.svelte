@@ -29,6 +29,7 @@
     { href: '/settings/global', label: 'Global settings', icon: 'mdi:tune' },
     { href: '/settings/discovery', label: 'Discovery', icon: 'mdi:radar' },
     { href: '/settings/backups', label: 'Backups', icon: 'mdi:backup-restore' },
+    { href: '/settings/logs', label: 'Logs', icon: 'mdi:text-box-search-outline' },
     { href: '/settings/password', label: 'Password', icon: 'mdi:key' },
     { href: '/settings/reset', label: 'Factory reset', icon: 'mdi:delete-forever' },
   ];

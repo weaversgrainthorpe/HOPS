@@ -5,7 +5,7 @@ import { render, screen, fireEvent, waitFor, within } from '@testing-library/sve
 
 // The Settings shell (spec §4D + M5 §9): every settings page shares this layout. Logged out it
 // asks for the password in place (the same LoginDialog as the pencil) on ANY settings address;
-// signed in it shows the sidebar (Dashboards, Global settings, Discovery, Backups, Password,
+// signed in it shows the sidebar (Dashboards, Global settings, Discovery, Backups, Logs, Password,
 // Factory reset, Log out) beside the page, with MigrationFailed / notices on top.
 const nav = vi.hoisted(() => ({ after: [] as Array<(n: unknown) => void> }));
 vi.mock('$app/navigation', () => ({
@@ -193,6 +193,7 @@ describe('settings shell, signed in', () => {
 			['Global settings', '/settings/global'],
 			['Discovery', '/settings/discovery'],
 			['Backups', '/settings/backups'],
+			['Logs', '/settings/logs'],
 			['Password', '/settings/password'],
 			['Factory reset', '/settings/reset']
 		]);
@@ -212,6 +213,7 @@ describe('settings shell, signed in', () => {
 		['/settings/discovery/detectors', 'Discovery'],
 		['/settings/discovery/0123abcd', 'Discovery'],
 		['/settings/backups', 'Backups'],
+		['/settings/logs', 'Logs'],
 		['/settings/password', 'Password'],
 		['/settings/reset', 'Factory reset']
 	])('on %s the current item is %s (aria-current), and only that one', (path, label) => {

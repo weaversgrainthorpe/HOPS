@@ -117,7 +117,8 @@ func (s *Service) ValidateSession(sessionID string) (int, error) {
 	if time.Now().After(expiresAt) {
 		// Clean up expired session
 		if _, err := s.db.Exec("DELETE FROM sessions WHERE id = ?", sessionID); err != nil {
-			slog.Warn("failed to delete expired session", "component", "auth", "session_id", sessionID, "error", err)
+			// Never log the session ID: it is the bearer secret.
+			slog.Warn("failed to delete expired session", "component", "auth", "error", err)
 		}
 		return 0, fmt.Errorf("session expired")
 	}

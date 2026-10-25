@@ -338,6 +338,9 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/upload-limits", r.protected(r.handleUploadLimits))
 	r.mux.HandleFunc("/api/settings/", r.protected(r.handleSettingUpdate))
 
+	// Recent log lines (admin-only, GET only): Settings › Logs.
+	r.mux.HandleFunc("/api/logs", r.protected(r.handleLogs))
+
 	// Network discovery routes (admin-only). The collection handler
 	// dispatches by method; the item handler parses /{id}/... .
 	//

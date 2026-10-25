@@ -54,6 +54,9 @@ Thumbs.db
 # Logs
 *.log
 logs/
+# …but not the Settings › Logs page and its code (source, not log output).
+!frontend/src/routes/settings/logs/
+!frontend/src/lib/logs/
 
 # Environment
 .env

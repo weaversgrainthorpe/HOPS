@@ -72,6 +72,10 @@ func TestSmokeRoutesNoFiveHundred(t *testing.T) {
 
 		// Settings.
 		{method: "GET", path: "/api/settings"},
+
+		// Logs (read-only).
+		{method: "GET", path: "/api/logs"},
+		{method: "GET", path: "/api/logs?limit=100&level=warn"},
 		{method: "PUT", path: "/api/settings/discovery.max_parallel_probes", body: `{"value":"64"}`},
 
 		// Discovery — scans.
@@ -171,6 +175,7 @@ func TestSmokeUnauthenticatedRoutesReject(t *testing.T) {
 		"/api/backups/upload",
 		"/api/backups/hops-backup-2026-01-01_00-00-00_manual.db",
 		"/api/settings",
+		"/api/logs",
 		"/api/discovery/scans",
 		"/api/discovery/detectors",
 		"/api/discovery/diagnostics",

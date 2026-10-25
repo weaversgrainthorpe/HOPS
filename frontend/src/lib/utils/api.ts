@@ -3,6 +3,7 @@ import type { LayoutDoc, LayoutDashboard } from '$lib/types/layout';
 import type { ImportResult } from './importResult';
 import { LAYOUT_VERSION } from '$lib/layout/geometry';
 import { checkUploadSize, uploadErrorMessage, sendUpload } from './uploadLimits';
+import { parseLogsResponse, type LogsResponse, type LogLevel, type LineLimit } from '$lib/logs/logView';
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 
@@ -677,6 +678,15 @@ export async function resetConfig(): Promise<unknown> {
 }
 
 // Backup API calls
+
+/**
+ * GET /api/logs (admin): the most recent buffered log lines and what is missing from them. A
+ * failure or an unreadable answer throws; it is never returned as an empty list.
+ */
+export async function getLogs(opts: { limit: LineLimit; level: LogLevel }): Promise<LogsResponse> {
+  const q = new URLSearchParams({ limit: String(opts.limit), level: opts.level });
+  return parseLogsResponse(await fetchAPI(`/logs?${q}`));
+}
 
 export interface BackupInfo {
   name: string;

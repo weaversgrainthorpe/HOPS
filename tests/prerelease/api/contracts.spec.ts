@@ -63,6 +63,23 @@ test('GET /api/backups returns a list with name+size+createdAt', async ({ reques
   expect(first).toHaveProperty('createdAt');
 });
 
+test('GET /api/logs returns records plus what is missing (start, dropped, capacity, level)', async ({ request }) => {
+  const r = await request.get('/api/logs?limit=100&level=debug');
+  expect(r.status()).toBe(200);
+  expect(r.headers()['cache-control']).toBe('no-store');
+  const body = await r.json();
+  for (const k of ['startedAt', 'fetchedAt', 'capacity', 'dropped', 'buffered', 'matching', 'level', 'records']) {
+    expect(body, k).toHaveProperty(k);
+  }
+  expect(body.capacity).toBe(2000);
+  expect(Array.isArray(body.records)).toBeTruthy();
+  // A running server has logged at least its own startup.
+  expect(body.records.length).toBeGreaterThan(0);
+  const rec = body.records[0];
+  for (const k of ['time', 'level', 'message', 'attrs']) expect(rec, k).toHaveProperty(k);
+  expect((await request.get('/api/logs?level=loud')).status()).toBe(400);
+});
+
 test('GET /api/discovery/scans returns a scans array', async ({ request }) => {
   const r = await request.get('/api/discovery/scans');
   expect(r.status()).toBe(200);

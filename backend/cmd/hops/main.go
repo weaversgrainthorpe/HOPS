@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"strings"
 	"syscall"
 	"time"
 
@@ -20,31 +19,28 @@ import (
 	"github.com/weaversgrainthorpe/HOPS/internal/configdoc"
 	"github.com/weaversgrainthorpe/HOPS/internal/database"
 	"github.com/weaversgrainthorpe/HOPS/internal/discovery"
+	"github.com/weaversgrainthorpe/HOPS/internal/logbuf"
 	"github.com/weaversgrainthorpe/HOPS/internal/safemode"
 	"github.com/weaversgrainthorpe/HOPS/internal/settings"
 	"github.com/weaversgrainthorpe/HOPS/internal/status"
 	"github.com/weaversgrainthorpe/HOPS/internal/version"
 )
 
-// setLogLevel (re)installs the global slog logger at the given level.
+// setLogLevel sets the log level, installing the logger on first use.
 // Accepts: debug, info, warn, error (default on unknown: info).
 //
-// HOPS calls this twice: once at startup with "info" before the DB is open,
-// then again after the settings service loads with the persisted value from
-// `log.level`. It's also wired as a subscriber so admin changes take effect
-// immediately.
+// Records go to stderr as text (journald gets everything) and are also kept
+// in a small in-memory buffer for Settings › Logs; both are redacted
+// (internal/logbuf). HOPS calls this once at startup with "info" before the
+// DB is open, then again after the settings service loads with the persisted
+// value from `log.level`. It's also wired as a subscriber so admin changes
+// take effect immediately.
 func setLogLevel(name string) {
-	level := slog.LevelInfo
-	switch strings.ToLower(name) {
-	case "debug":
-		level = slog.LevelDebug
-	case "warn", "warning":
-		level = slog.LevelWarn
-	case "error":
-		level = slog.LevelError
+	level, ok := logbuf.ParseLevel(name)
+	if !ok {
+		level = slog.LevelInfo
 	}
-	handler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level})
-	slog.SetDefault(slog.New(handler))
+	logbuf.Install(os.Stderr, level)
 }
 
 func main() {

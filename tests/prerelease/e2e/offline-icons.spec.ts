@@ -30,11 +30,11 @@ test('UI icons render with the Iconify API fully blocked (offline)', async ({ pa
   // The section items only (M6 §10: sub-lists under Global settings / Discovery have no icons and
   // are .sub-item, not .side-item).
   const items = side.locator('.side-item');
-  await expect(items).toHaveCount(7);
-  for (let i = 0; i < 7; i++) {
+  await expect(items).toHaveCount(8);
+  for (let i = 0; i < 8; i++) {
     await expect(items.nth(i).locator('svg')).toBeVisible();
   }
-  for (const [item, button] of [['Backups', 'Open Backups'], ['Password', 'Change Password'], ['Factory reset', 'Factory Reset']]) {
+  for (const [item, button] of [['Backups', 'Open Backups'], ['Logs', 'Refresh'], ['Password', 'Change Password'], ['Factory reset', 'Factory Reset']]) {
     await side.getByRole('link', { name: item, exact: true }).click();
     await expect(page.getByRole('button', { name: button }).locator('svg')).toBeVisible();
   }

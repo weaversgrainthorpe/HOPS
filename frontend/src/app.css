@@ -47,6 +47,7 @@
   --color-error-dark: #dc2626;
   --color-warning: #f59e0b;
   --color-warning-dark: #d97706;
+  --color-warning-text: #fcd34d; /* warning-coloured TEXT on the page background (≈ 11:1 on #0f172a) */
   --color-success: #10b981;
   --color-success-dark: #059669;
   --color-success-alt: #22c55e;
@@ -154,6 +155,7 @@
   --on-accent: #ffffff;
   --accent-text: #1d4ed8;
   --color-error-text: #b91c1c;
+  --color-warning-text: #92400e; /* ≈ 7:1 on #f1f5f9 */
   --status-online: #15803d;
   --status-degraded: #b45309;
   --status-offline: #b91c1c;
