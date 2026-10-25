@@ -168,3 +168,14 @@ test.describe('Detector honesty note', () => {
     });
   }
 });
+
+// The detectors page states the real number of bundled detectors (it was a hard-coded "~70" that went
+// stale when the list grew), matching the "Bundled (N)" filter count.
+test('the detectors intro states the live bundled-detector count', async ({ page }) => {
+  await page.goto('/settings/discovery/detectors');
+  const bundled = page.getByRole('button', { name: /^Bundled \(\d+\)$/ });
+  await expect(bundled).toBeVisible();
+  const n = Number((await bundled.textContent())!.match(/\((\d+)\)/)![1]);
+  expect(n).toBeGreaterThan(80);
+  await expect(page.locator('p.lede')).toContainText(`detectors for ${n} common homelab services`);
+});

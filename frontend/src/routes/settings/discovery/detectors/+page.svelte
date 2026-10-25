@@ -275,7 +275,7 @@
   </header>
 
   <p class="lede">
-    HOPS comes with detectors for ~70 common homelab services. You can
+    HOPS comes with detectors for {counts.bundled > 0 ? counts.bundled : 'many'} common homelab services. You can
     tweak any of them, and any tweak you make can be undone in one click
     ("reset to bundled"). Add your own to recognise things HOPS doesn't
     ship support for yet. Changes apply to the <em>next</em> scan you

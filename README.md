@@ -64,7 +64,7 @@ Already using Homer, Dashy, or Heimdall? HOPS can import your existing configura
     </td>
     <td width="33%" valign="top">
       <a href="docs/screenshots/admin-discovery-detectors.png"><img src="docs/screenshots/admin-discovery-detectors.png" alt="Discovery detectors — bundled and custom" /></a>
-      <p align="center"><sub><b>Detectors</b> — ~70 services recognised out of the box, tweak any of them</sub></p>
+      <p align="center"><sub><b>Detectors</b> — 90+ services recognised out of the box, tweak any of them</sub></p>
     </td>
   </tr>
 </table>
