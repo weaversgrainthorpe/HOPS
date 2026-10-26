@@ -236,19 +236,127 @@ test('opened by the bookmark in a new tab (no history): Cancel closes it or says
   }
 });
 
-test('a dashboard being edited in another tab is not saved over from /add', async ({ page, context }) => {
+// ---------------------------------------------------------------- an edit open in ANOTHER tab
+// Two pages in one context share BroadcastChannel, like two tabs of one browser.
+
+const bar = (p: Page) => p.getByRole('toolbar', { name: 'Editing' });
+
+/** A change in the editor: a tile added through the toolbar's Add tile (an undoable draft edit). */
+async function addTileInEditor(p: Page, name: string) {
+  await bar(p).getByRole('button', { name: 'Add tile' }).click();
+  const dlg = p.getByRole('dialog', { name: 'New Tile' });
+  await dlg.locator('input#name').fill(name);
+  await dlg.locator('input#url').fill(`https://${name.toLowerCase().replace(/\W+/g, '')}.addh.test/`);
+  await dlg.getByRole('button', { name: 'Create' }).click();
+  await expect(p.getByText(name, { exact: true })).toBeVisible();
+}
+
+const tilesNamed = (dash: { tabs: { root: unknown }[] }, name: string) => JSON.stringify(dash.tabs).split(`"name":"${name}"`).length - 1;
+
+test('an edit with unsaved changes in another tab: told up front; Add hands the tile to that draft (undoable, nothing saved)', async ({ page, context }) => {
+  const d = await importDash(page, context);
+  await openEditing(page, d.path, 'Main');
+  await addTileInEditor(page, 'Mine First');
+  const rev = (await storedDash(page, d.id)).revision;
+  const puts: string[] = [];
+  page.on('request', (r) => { if (r.method() === 'PUT') puts.push(r.url()); });
+  const b = await context.newPage();
+  b.on('request', (r) => { if (r.method() === 'PUT') puts.push(r.url()); });
+  try {
+    await b.goto(addUrl({ url: 'https://grafana.addh.test/', name: 'Grafana' }));
+    const f = addForm(b);
+    await f.getByLabel('Dashboard').selectOption(d.id);
+    // Before any input: the note says where the tile will go.
+    await expect(b.getByTestId('presence-note')).toHaveText(`${d.name} is open for editing in another tab — the tile will be added to that edit.`);
+    await expect(b.getByText("Using HOPS's bundled icon for this service.")).toBeVisible(); // a relative icon address still submits
+    await f.getByRole('button', { name: 'Add' }).click();
+    await expect(b.getByText(`Added to your edit of ${d.name} in your other tab. You can close this tab.`)).toBeVisible();
+
+    // In A: part of the draft, toasted, unsaved; Undo removes it (and only it); nothing was saved.
+    await expect(page.getByText('Added “Grafana” from Add to HOPS — save to keep it.')).toBeVisible();
+    await expect(page.getByText('Grafana', { exact: true })).toBeVisible();
+    await expect(bar(page).getByRole('status')).toHaveText(/Unsaved changes/);
+    await bar(page).getByRole('button', { name: /Undo/ }).click();
+    await expect(page.getByText('Grafana', { exact: true })).toHaveCount(0);
+    await expect(page.getByText('Mine First', { exact: true })).toBeVisible();
+    await expect(bar(page).getByRole('status')).toHaveText(/Unsaved changes/);
+    expect(puts).toEqual([]);
+    expect((await storedDash(page, d.id)).revision).toBe(rev);
+  } finally {
+    await b.close();
+  }
+});
+
+test('a clean edit in another tab: Add saves directly; that tab follows the new revision and its next Save does not conflict', async ({ page, context }) => {
   const d = await importDash(page, context);
   await openEditing(page, d.path, 'Main');
   const rev = (await storedDash(page, d.id)).revision;
-  const p = await context.newPage();
+  const b = await context.newPage();
   try {
-    await p.goto(addUrl({ url: 'https://clash.addh.test/', name: 'Zqx Clash' }));
-    const f = addForm(p);
+    await b.goto(addUrl({ url: 'https://direct.addh.test/', name: 'Direct One' }));
+    const f = addForm(b);
     await f.getByLabel('Dashboard').selectOption(d.id);
+    await expect(b.getByTestId('presence-note')).toHaveText(`${d.name} is open for editing in another tab with no unsaved changes — the tile will be saved and that tab updated.`);
     await f.getByRole('button', { name: 'Add' }).click();
-    await expect(f.locator('#add-error')).toContainText('has an edit open in another HOPS tab');
-    expect((await storedDash(page, d.id)).revision).toBe(rev);
+    await expect(b.getByText(`Added “Direct One” to ${d.name}. The tab editing it was updated.`)).toBeVisible();
+    expect((await storedDash(page, d.id)).revision).toBeGreaterThan(rev);
+
+    // A follows (still editing, still clean), then a change of its own saves without a conflict.
+    await expect(page.getByText('A tile was added from Add to HOPS', { exact: false })).toBeVisible();
+    await expect(page.getByText('Direct One', { exact: true })).toBeVisible();
+    await expect(bar(page)).toBeVisible();
+    await addTileInEditor(page, 'After Follow');
+    const saved = page.waitForResponse((r) => r.request().method() === 'PUT' && /\/api\/dashboards\//.test(r.url()));
+    await bar(page).getByRole('button', { name: /Save/ }).click();
+    expect((await saved).status()).toBe(200);
+    const stored = await storedDash(page, d.id);
+    expect(tilesNamed(stored, 'Direct One')).toBe(1);
+    expect(tilesNamed(stored, 'After Follow')).toBe(1);
   } finally {
-    await p.close();
+    await b.close();
+  }
+});
+
+test('the hand-off is not acknowledged: a visible failure with Copy / Try again; the retry adds nothing twice', async ({ page, context }) => {
+  const d = await importDash(page, context);
+  const a = await context.newPage();
+  await openEditing(a, d.path, 'Main');
+  await addTileInEditor(a, 'Mine First');
+  // A takes the tile but its ACK is lost (the tab died or hung mid-flight, as far as /add can tell).
+  await a.evaluate(() => {
+    const w = window as unknown as { __post: typeof BroadcastChannel.prototype.postMessage };
+    w.__post = BroadcastChannel.prototype.postMessage;
+    BroadcastChannel.prototype.postMessage = function (m: { type?: string }) {
+      if (m?.type !== 'added') w.__post.call(this, m);
+    };
+  });
+  const b = await context.newPage();
+  try {
+    await b.goto(addUrl({ url: 'https://handoff.addh.test/', name: 'Zqx Handoff' }));
+    const f = addForm(b);
+    await f.getByLabel('Dashboard').selectOption(d.id);
+    await expect(b.getByTestId('presence-note')).toContainText('the tile will be added to that edit');
+    await f.getByRole('button', { name: 'Add' }).click();
+    await expect(f.locator('#add-error')).toContainText("didn't confirm it took the tile", { timeout: 6000 });
+    await expect(f.getByRole('button', { name: 'Copy the details' })).toBeVisible();
+    expect(JSON.stringify(await storedDash(page, d.id))).not.toContain('Zqx Handoff');
+
+    // The ACKs work again; Try again re-sends the same idempotency id: ACKed, not added a second time.
+    await a.evaluate(() => {
+      BroadcastChannel.prototype.postMessage = (window as unknown as { __post: typeof BroadcastChannel.prototype.postMessage }).__post;
+    });
+    await f.getByRole('button', { name: 'Try again' }).click();
+    await expect(b.getByText(`Added to your edit of ${d.name} in your other tab. You can close this tab.`)).toBeVisible();
+    await expect(a.getByText('Zqx Handoff', { exact: true })).toHaveCount(1);
+    expect(JSON.stringify(await storedDash(page, d.id))).not.toContain('Zqx Handoff');
+
+    // Saved from A: exactly one.
+    const saved = a.waitForResponse((r) => r.request().method() === 'PUT' && /\/api\/dashboards\//.test(r.url()));
+    await bar(a).getByRole('button', { name: /Save/ }).click();
+    expect((await saved).status()).toBe(200);
+    expect(tilesNamed(await storedDash(page, d.id), 'Zqx Handoff')).toBe(1);
+  } finally {
+    await b.close();
+    await a.close();
   }
 });

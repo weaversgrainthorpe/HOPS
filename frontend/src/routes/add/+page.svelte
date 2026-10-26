@@ -4,8 +4,12 @@
   // clicks Add. The tile is placed by the tile dialog's own rules (withNewTile). Where it goes:
   // - the target has an edit session or parked draft in this tab: INTO THE DRAFT (an undoable edit,
   //   saved with the rest), then back to the editor;
-  // - the target is being edited in another tab: refused, saying why (a direct save would clash);
-  // - otherwise the normal dashboard save (PUT /api/dashboards/{id}, CSRF + revision check).
+  // - the target is being edited in another tab WITH unsaved changes: the checked tile is handed to
+  //   that tab (editPresence), which adds it to its draft and acknowledges (3 s); no ACK is a visible
+  //   failure with Copy / Try again, and the idempotency id means a retry never adds twice;
+  // - otherwise the normal dashboard save (PUT /api/dashboards/{id}, CSRF + revision check), after
+  //   asking the other tabs once more; a CLEAN edit elsewhere is then told the new revision.
+  // Which of these happens is asked on load and shown at the top before the form is filled in.
   // The default target is the dashboard you came from (resolveAddDefault). Cancel goes back where
   // you came from inside HOPS; opened by the bookmark in a new tab, it closes it (or says to).
   import { onMount, untrack } from 'svelte';
@@ -23,7 +27,7 @@
   import { session, parkedDraft, begin, apply } from '$lib/stores/editSession';
   import { editMode } from '$lib/stores/editMode';
   import { toast } from '$lib/stores/toast';
-  import { editedInOtherTabs } from '$lib/utils/editPresence';
+  import { watchPresence, chooseRoute, newId, type Presence, type PresenceWatch, type AddRoute } from '$lib/utils/editPresence';
   import {
     parseAddParams, pickDashboardIcon, foldersOf, readLastTarget, writeLastTarget, readLastViewed, resolveAddDefault,
     cleanName, URL_MAX
@@ -84,6 +88,13 @@
 
   const ready = $derived($authChecked && $isAuthenticated && !$mustChangePassword);
 
+  // Other tabs editing dashboards (asked on load, then kept current by their announcements).
+  // `presenceChecked` false: still asking; `presence` null: this browser can't ask.
+  let presence = $state<Presence | null>(new Map());
+  let presenceChecked = $state(false);
+  let watch: PresenceWatch | null = null;
+  const route = $derived<AddRoute>(chooseRoute(dashboardId, editingId, presence));
+
   // Prefer HOPS's bundled Dashboard Icon when the page's name or host matches one exactly.
   let iconChecked = false;
   $effect(() => {
@@ -104,16 +115,34 @@
 
   let busy = $state(false);
   let error = $state('');
-  let added = $state<{ href: string; dashboardName: string } | null>(null);
+  let added = $state<{ href: string; dashboardName: string; how: 'saved' | 'saved-notified' | 'handoff'; note?: string } | null>(null);
   let closeNote = $state('');
+  // The hand-off got no answer: offer Copy the details / Try again. The id stays the same for a retry
+  // (the editing tab ignores an id it has already taken), and is renewed when the form changes.
+  let handoffFailed = $state(false);
+  let copyNote = $state('');
+  let addId = '';
+  $effect(() => {
+    void [name, url, iconUrl, dashboardId, tabId, folderId];
+    addId = '';
+    handoffFailed = false;
+  });
 
   onMount(() => {
     // The layout loads the config; a stale one is reloaded so Add starts from the current layout.
     if ($layoutStale) void loadConfig({ background: true });
+    watch = watchPresence((p) => (presence = p));
+    if (!watch) {
+      presence = null;
+      presenceChecked = true;
+    } else {
+      void watch.query(1000).then(() => (presenceChecked = true));
+    }
+    return () => watch?.close();
   });
 
-  async function add(e: Event) {
-    e.preventDefault();
+  async function add(e?: Event, recheck = false) {
+    e?.preventDefault();
     if (busy) return;
     error = '';
     const target = $layoutDoc ? findLayoutDashboard(dashboardId, $layoutDoc) : undefined;
@@ -154,19 +183,35 @@
       error = err instanceof Error && err.message ? err.message : "That tile can't be added.";
       return;
     }
+    if (!addId) addId = newId();
     busy = true;
+    error = '';
+    handoffFailed = false;
     try {
-      // Being edited in another tab: a save here would clash with that draft's save. Say so instead.
-      const elsewhere = await editedInOtherTabs();
-      if (elsewhere?.has(target.id)) {
-        error = `${target.name} has an edit open in another HOPS tab, so the tile was not added here (saving it now would clash with those unsaved changes). Go to that tab and click the Add to HOPS bookmark there, or save or discard those changes first.`;
+      // Ask once more just before saving (an edit may have started, or become dirty, since load).
+      let decided = route;
+      let note = '';
+      if (recheck || decided.kind === 'save' || decided.kind === 'save-notify') {
+        const fresh = watch ? await watch.query(1000) : null;
+        if (watch) presence = fresh;
+        const again = chooseRoute(target.id, editingId, fresh);
+        if (again.kind === 'handoff' && decided.kind !== 'handoff') {
+          note = `${target.name} has unsaved changes in another tab now, so the tile went to that edit instead of being saved here.`;
+        }
+        decided = again;
+      }
+      if (decided.kind === 'handoff') {
+        await handOff(target, tile, to, decided.tabKey, note);
         return;
       }
       const resp = await saveDashboardV3(target.id, next.dashboard, target.revision);
       applySavedLayout(resp);
       if (resp.warning) showSaveWarning(resp.warning);
       writeLastTarget({ dashboardId: target.id, tabId, ...(folderId ? { folderId } : {}) });
-      added = { href: dashboardHref(target.path), dashboardName: target.name };
+      const notify = decided.kind === 'save-notify';
+      if (notify && typeof resp.revision === 'number') watch?.announceSaved(target.id, resp.revision);
+      addId = '';
+      added = { href: dashboardHref(target.path), dashboardName: target.name, how: notify ? 'saved-notified' : 'saved' };
     } catch (err) {
       if (err instanceof ConflictError) {
         error = 'That dashboard was changed somewhere else, so the tile was not added. It has been reloaded: click Add again.';
@@ -178,6 +223,36 @@
       }
     } finally {
       busy = false;
+    }
+  }
+
+  /** Hand the checked tile to the tab editing `target` with unsaved changes, and wait for its answer. */
+  async function handOff(target: LayoutDashboard, tile: TileNode, to: { tabId: string; folderId?: string }, tabKey: string, note: string) {
+    const r = watch ? await watch.handOff({ addId, tabKey, dashboardId: target.id, tile, to }, 3000) : 'timeout';
+    if (r === 'timeout') {
+      handoffFailed = true;
+      error = `Your other tab editing ${target.name} didn't confirm it took the tile (no answer within 3 seconds; it may have been closed), so it may not have been added. Nothing was saved from here.`;
+      return;
+    }
+    if (!r.ok) {
+      addId = ''; // refused: nothing was added, so a retry is a new attempt
+      handoffFailed = true;
+      error = `Your other tab editing ${target.name} couldn't take the tile: ${r.reason}. Nothing was added.`;
+      return;
+    }
+    writeLastTarget({ dashboardId: target.id, tabId, ...(folderId ? { folderId } : {}) });
+    addId = '';
+    added = { href: dashboardHref(target.path), dashboardName: target.name, how: 'handoff', ...(note ? { note } : {}) };
+  }
+
+  /** The tile's details as text, to paste somewhere when the hand-off failed. */
+  async function copyDetails() {
+    const text = [`Name: ${cleanName(name)}`, `Address: ${url.trim()}`, ...(iconUrl.trim() ? [`Icon: ${iconUrl.trim()}`] : [])].join('\n');
+    try {
+      await navigator.clipboard.writeText(text);
+      copyNote = 'Copied the name and address.';
+    } catch {
+      copyNote = `Couldn't copy (the browser refused). The details: ${text.replace(/\n/g, ' · ')}`;
     }
   }
 
@@ -244,7 +319,12 @@
     <h1 id="add-title">Add to HOPS</h1>
     {#if ready && stored && !added}
       <p class="target" data-testid="add-target">Adding to <strong>{stored.name}</strong></p>
-      {#if intoDraft}<p class="draft-note" role="note">Adds to your unsaved changes on {stored.name}.</p>{/if}
+      {#if intoDraft}<p class="draft-note" role="note">Adds to your unsaved changes on {stored.name}.</p>
+      {:else if !presenceChecked}<p class="muted presence" role="status">Checking whether another tab is editing {stored.name}…</p>
+      {:else if presence === null}<p class="draft-note" role="note" data-testid="presence-note">This browser can't check other tabs for an open edit of {stored.name}, so the tile will be saved directly. An edit open elsewhere will report a conflict when it is saved.</p>
+      {:else if route.kind === 'handoff'}<p class="draft-note" role="note" data-testid="presence-note">{stored.name} is open for editing in another tab — the tile will be added to that edit.</p>
+      {:else if route.kind === 'save-notify'}<p class="draft-note" role="note" data-testid="presence-note">{stored.name} is open for editing in another tab with no unsaved changes — the tile will be saved and that tab updated.</p>
+      {:else}<p class="muted presence" role="note" data-testid="presence-note">No other tab is editing {stored.name}, so the tile will be saved directly (HOPS checks again just before saving).</p>{/if}
     {/if}
 
     {#if !$authChecked}
@@ -254,11 +334,20 @@
     {:else if $mustChangePassword}
       <p class="muted" role="status">Set a new password to continue.</p>
     {:else if added}
-      <p class="ok" role="status">Added “{cleanName(name)}” to {added.dashboardName}.</p>
-      <div class="actions">
-        <a class="btn-primary" href={added.href}>Open the dashboard</a>
-        <button type="button" class="btn-secondary" onclick={closeWindow}>Close</button>
-      </div>
+      {#if added.how === 'handoff'}
+        <p class="ok" role="status">Added to your edit of {added.dashboardName} in your other tab. You can close this tab.</p>
+        {#if added.note}<p class="muted">{added.note}</p>{/if}
+        <p class="muted small">It is part of that tab's unsaved changes: save there to keep it.</p>
+        <div class="actions">
+          <button type="button" class="btn-primary" onclick={closeWindow}>Close</button>
+        </div>
+      {:else}
+        <p class="ok" role="status">Added “{cleanName(name)}” to {added.dashboardName}.{added.how === 'saved-notified' ? ' The tab editing it was updated.' : ''}</p>
+        <div class="actions">
+          <a class="btn-primary" href={added.href}>Open the dashboard</a>
+          <button type="button" class="btn-secondary" onclick={closeWindow}>Close</button>
+        </div>
+      {/if}
       {#if closeNote}<p class="muted" role="status">{closeNote}</p>{/if}
     {:else if $configError && !$config}
       <p class="error" role="alert">Your dashboards couldn't be loaded: {$configError}</p>
@@ -299,11 +388,19 @@
         <label for="add-icon">Icon image address (optional)</label>
         <div class="icon-row">
           {#if iconUrl}<img src={iconUrl} alt="" width="32" height="32" />{/if}
-          <input id="add-icon" type="url" bind:value={iconUrl} maxlength={URL_MAX} autocomplete="off" />
+          <!-- text, not type=url: a bundled icon is a relative /api/icons/… address, which the browser's URL check would refuse silently (the form would not submit). Checked in add(). -->
+          <input id="add-icon" type="text" inputmode="url" bind:value={iconUrl} maxlength={URL_MAX} autocomplete="off" />
         </div>
         {#if iconNote}<p class="muted small">{iconNote}</p>{/if}
 
         {#if error}<p class="error" role="alert" id="add-error">{error}</p>{/if}
+        {#if handoffFailed}
+          <div class="actions">
+            <button type="button" class="btn-secondary" onclick={copyDetails}>Copy the details</button>
+            <button type="button" class="btn-secondary" disabled={busy} onclick={() => add(undefined, true)}>Try again</button>
+          </div>
+          {#if copyNote}<p class="muted small" role="status">{copyNote}</p>{/if}
+        {/if}
 
         <div class="actions">
           <button type="submit" class="btn-primary" disabled={busy}>{busy ? 'Adding…' : 'Add'}</button>
@@ -398,6 +495,10 @@
   .target {
     margin: -0.5rem 0 0.75rem;
     font-size: 1.1rem;
+  }
+  .presence {
+    margin: 0 0 0.75rem;
+    font-size: 0.9rem;
   }
   .draft-note {
     margin: 0 0 0.75rem;

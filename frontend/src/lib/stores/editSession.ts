@@ -227,9 +227,21 @@ function followLayout(): void {
   if (!s || isDirty(s) || get(layoutStale)) return;
   const d = findLayoutDashboard(s.dashboardId, get(layoutDoc));
   if (!d || typeof d.revision !== 'number' || d.revision <= s.baseRevision) return;
+  const known = externalSave && externalSave.dashboardId === s.dashboardId && d.revision >= externalSave.revision ? externalSave : null;
   if (rebaseCleanSession(get(layoutDoc) ?? undefined)) {
-    toast.info('This dashboard was changed somewhere else; you are now editing the latest version.');
+    if (known) externalSave = null;
+    toast.info(known?.message ?? 'This dashboard was changed somewhere else; you are now editing the latest version.');
   }
+}
+
+let externalSave: { dashboardId: string; revision: number; message: string } | null = null;
+
+/**
+ * A save of `dashboardId` at `revision` was made from another tab that said why (Add to HOPS).
+ * When the clean session follows that revision, its notice says `message` instead of the generic one.
+ */
+export function expectExternalSave(dashboardId: string, revision: number, message: string): void {
+  externalSave = { dashboardId, revision, message };
 }
 layoutDoc.subscribe(() => queueMicrotask(followLayout));
 
@@ -591,6 +603,7 @@ setSettingsSavedHook(absorbSettingsSave);
 
 /** Tests only: forget the session, any parked draft and the conflict. */
 export function resetEditSessionForTests(): void {
+  externalSave = null;
   close();
   parkedState.set(null);
 }
