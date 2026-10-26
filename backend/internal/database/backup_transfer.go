@@ -23,57 +23,11 @@ func (bm *BackupManager) OpenBackup(name string) (*os.File, os.FileInfo, error) 
 	return f, fi, nil
 }
 
-// StoreUploadedBackup validates an uploaded database and stores it as a new
-// "…_uploaded" backup. It is never restored automatically. On any failure
-// nothing is left behind.
+// StoreUploadedBackup stores an uploaded backup (an archive or a legacy
+// database) with no size caps of its own; see StoreUpload.
 func (bm *BackupManager) StoreUploadedBackup(src io.Reader) (string, error) {
-	if err := os.MkdirAll(bm.backupDir, 0755); err != nil {
-		return "", fmt.Errorf("failed to create backup directory: %w", err)
-	}
-	// A dot-name that is not a backup name: never listed while it is written.
-	tmp, err := os.CreateTemp(bm.backupDir, ".upload-*.tmp")
-	if err != nil {
-		return "", fmt.Errorf("cannot store the upload: %w", err)
-	}
-	tmpPath := tmp.Name()
-	keep := false
-	defer func() {
-		if !keep {
-			os.Remove(tmpPath)
-		}
-	}()
-	if _, err := io.Copy(tmp, src); err != nil {
-		tmp.Close()
-		return "", fmt.Errorf("cannot store the upload: %w", err)
-	}
-	if err := tmp.Sync(); err != nil {
-		tmp.Close()
-		return "", fmt.Errorf("cannot store the upload: %w", err)
-	}
-	if err := tmp.Close(); err != nil {
-		return "", fmt.Errorf("cannot store the upload: %w", err)
-	}
-	if err := ValidateHOPSDatabase(tmpPath); err != nil {
-		return "", err
-	}
-	var name string
-	for attempt := 0; ; attempt++ {
-		n, path := bm.newBackupPath(UploadedReason)
-		err := placeExclusive(tmpPath, path)
-		if err == nil {
-			name = n
-			break
-		}
-		if !os.IsExist(err) || attempt >= 5 {
-			return "", fmt.Errorf("cannot store the upload: %w", err)
-		}
-	}
-	keep = true
-	slog.Info("stored uploaded backup", "component", "backup", "name", name)
-	if err := bm.CleanupOldBackups(); err != nil {
-		slog.Warn("failed to cleanup old backups", "component", "backup", "error", err)
-	}
-	return name, nil
+	r, err := bm.StoreUpload(src, UploadCaps{})
+	return r.Name, err
 }
 
 // linkFile is os.Link; tests simulate a filesystem without hard links.

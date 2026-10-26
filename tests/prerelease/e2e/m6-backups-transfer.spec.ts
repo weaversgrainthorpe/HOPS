@@ -85,16 +85,16 @@ test.describe('M6 backups: retention, download, upload', () => {
 		expect(after.backups.filter((b) => b.protected).length).toBe(before.backups.filter((b) => b.protected).length);
 	});
 
-	test('a backup downloads as a file', async ({ page }) => {
+	test('a backup downloads as one archive (.zip)', async ({ page }) => {
 		await openBackups(page);
 		const dlg = backupsDialog(page);
 		const name = (await dlg.locator('.backup-item').first().getAttribute('data-backup-name'))!;
 		const download = page.waitForEvent('download');
 		await dlg.getByRole('link', { name: `Download ${name}` }).click();
 		const d = await download;
-		expect(d.suggestedFilename()).toBe(name);
+		expect(d.suggestedFilename()).toBe(name.replace(/\.db$/, '.zip'));
 		const file = await d.path();
-		expect(fs.readFileSync(file).subarray(0, 16).toString('latin1')).toBe('SQLite format 3\u0000');
+		expect(fs.readFileSync(file).subarray(0, 4).toString('latin1')).toBe('PK\u0003\u0004');
 	});
 
 	test('a valid uploaded backup is listed; an invalid one shows why it was refused', async ({ page }) => {
@@ -105,7 +105,7 @@ test.describe('M6 backups: retention, download, upload', () => {
 			// A valid one: a backup downloaded from this HOPS.
 			const name = (await dlg.locator('.backup-item').first().getAttribute('data-backup-name'))!;
 			const bytes = await (await page.request.get(`/api/backups/${encodeURIComponent(name)}`)).body();
-			const good = path.join(dir, 'my-hops.db');
+			const good = path.join(dir, 'my-hops.zip');
 			fs.writeFileSync(good, bytes);
 			const n = (await list(page)).backups.length;
 			await dlg.getByLabel('Backup file to upload').setInputFiles(good);
@@ -119,7 +119,7 @@ test.describe('M6 backups: retention, download, upload', () => {
 			const text = path.join(dir, 'notes.db');
 			fs.writeFileSync(text, 'these are my notes, not a database');
 			await dlg.getByLabel('Backup file to upload').setInputFiles(text);
-			await expect(dlg.locator('.action-error')).toContainText("Couldn't upload the backup: This file can't be used as a backup: this file is not a SQLite database");
+			await expect(dlg.locator('.action-error')).toContainText("Couldn't upload the backup: This file can't be used as a backup: this file is not a HOPS backup archive (.zip) and not a SQLite database");
 			// A SQLite database that isn't HOPS's.
 			const other = path.join(dir, 'other.db');
 			execFileSync('python3', ['-c', 'import sqlite3,sys; c=sqlite3.connect(sys.argv[1]); c.execute("CREATE TABLE recipes (id INTEGER PRIMARY KEY, name TEXT)"); c.commit()', other]);

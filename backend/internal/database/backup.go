@@ -152,6 +152,17 @@ type BackupManager struct {
 	noticesLoadErr *BackupProblem
 	noticesSaveErr *BackupProblem
 	journalErr     *BackupProblem // the restore journal couldn't be removed (retried before the next restore)
+
+	// Uploaded images (M6 §12): the attic sweep's notices, and the restore's
+	// image report (dismissible, kept across restarts).
+	atticBlocked  *BackupProblem
+	atticFailed   *BackupProblem
+	atticLargeP   *BackupProblem
+	restoreImages *BackupProblem
+	liveDB        *sql.DB
+	refCache      map[string]cachedRefs
+	// atticMu serialises moves into and out of the attic with its sweep.
+	atticMu sync.Mutex
 }
 
 // NewBackupManager creates a new backup manager
@@ -171,6 +182,7 @@ type persistedNotices struct {
 	Restore   *BackupProblem `json:"restore,omitempty"`
 	Ceiling   *BackupProblem `json:"ceiling,omitempty"`
 	Recovered *BackupProblem `json:"recovered,omitempty"`
+	Images    *BackupProblem `json:"images,omitempty"`
 }
 
 // loadNotices reads the persisted notices. An unreadable file is itself
@@ -192,7 +204,7 @@ func (bm *BackupManager) loadNotices() {
 			Reason: "the saved backup notices are damaged (" + err.Error() + "); a notice may be missing"}
 		return
 	}
-	bm.restore, bm.ceiling, bm.recovered = pn.Restore, pn.Ceiling, pn.Recovered
+	bm.restore, bm.ceiling, bm.recovered, bm.restoreImages = pn.Restore, pn.Ceiling, pn.Recovered, pn.Images
 }
 
 // saveNoticesLocked writes the dismissible notices (bm.mu held). A failure
@@ -201,13 +213,13 @@ func (bm *BackupManager) loadNotices() {
 func (bm *BackupManager) saveNoticesLocked() {
 	path := filepath.Join(bm.backupDir, noticesFile)
 	err := func() error {
-		if bm.restore == nil && bm.ceiling == nil && bm.recovered == nil {
+		if bm.restore == nil && bm.ceiling == nil && bm.recovered == nil && bm.restoreImages == nil {
 			if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 				return err
 			}
 			return nil
 		}
-		raw, _ := json.Marshal(persistedNotices{Restore: bm.restore, Ceiling: bm.ceiling, Recovered: bm.recovered})
+		raw, _ := json.Marshal(persistedNotices{Restore: bm.restore, Ceiling: bm.ceiling, Recovered: bm.recovered, Images: bm.restoreImages})
 		if err := os.MkdirAll(bm.backupDir, 0755); err != nil {
 			return err
 		}
@@ -281,7 +293,8 @@ func (bm *BackupManager) Problems() []BackupProblem {
 	bm.mu.Lock()
 	defer bm.mu.Unlock()
 	var out []BackupProblem
-	for _, p := range []*BackupProblem{bm.restore, bm.backupErr, bm.rotateErr, bm.ceiling, bm.recovered, bm.noticesLoadErr, bm.noticesSaveErr, bm.journalErr} {
+	for _, p := range []*BackupProblem{bm.restore, bm.backupErr, bm.rotateErr, bm.ceiling, bm.recovered, bm.noticesLoadErr, bm.noticesSaveErr, bm.journalErr,
+		bm.atticBlocked, bm.atticFailed, bm.atticLargeP, bm.restoreImages} {
 		if p != nil {
 			out = append(out, *p)
 		}
@@ -304,6 +317,8 @@ func (bm *BackupManager) DismissProblem(kind string) bool {
 		had, bm.restore = bm.restore != nil, nil
 	case ProblemRestoreRecovered:
 		had, bm.recovered = bm.recovered != nil, nil
+	case ProblemRestoreImages:
+		had, bm.restoreImages = bm.restoreImages != nil, nil
 	case ProblemNoticesUnreadable:
 		had, bm.noticesLoadErr = bm.noticesLoadErr != nil, nil
 		return had // nothing in the file changes
@@ -597,7 +612,13 @@ func (bm *BackupManager) RestoreBackup(db *sql.DB, backupName string) error {
 		return &SafetyBackupError{Err: safetyErr}
 	}
 
+	// Which backup is restored: its own images (an uploaded archive's) are
+	// installed at the next start, after the restore is applied.
+	if err := writeRestoreImagesMarker(bm.dbPath, backupName); err != nil {
+		return fmt.Errorf("failed to stage the restore: %w", err)
+	}
 	if err := os.Rename(tmp, pending); err != nil {
+		os.Remove(restoreImagesMarkerPath(bm.dbPath))
 		return fmt.Errorf("failed to stage the restore: %w", err)
 	}
 	staged = true
@@ -616,6 +637,9 @@ func (bm *BackupManager) DiscardPendingRestore() error {
 	err := os.Remove(PendingRestorePath(bm.dbPath))
 	if err == nil {
 		slog.Info("staged restore discarded", "component", "backup")
+		if rerr := os.Remove(restoreImagesMarkerPath(bm.dbPath)); rerr != nil && !os.IsNotExist(rerr) {
+			slog.Warn("could not remove the discarded restore's image marker", "component", "backup", "error", rerr)
+		}
 	}
 	return err
 }
@@ -1068,8 +1092,11 @@ func SweepStaleTempFiles(dbPath string) error {
 	if m, err := filepath.Glob(filepath.Join(filepath.Dir(dbPath), "backups", ".upload-*.tmp")); err == nil {
 		stale = append(stale, m...)
 	}
+	if m, err := filepath.Glob(filepath.Join(filepath.Dir(dbPath), "backups", ".download-*.tmp")); err == nil {
+		stale = append(stale, m...)
+	}
 	for _, f := range stale {
-		if err := os.Remove(f); err != nil && !os.IsNotExist(err) {
+		if err := os.RemoveAll(f); err != nil && !os.IsNotExist(err) {
 			errs = append(errs, err.Error())
 		}
 	}
@@ -1138,11 +1165,17 @@ func (bm *BackupManager) DeleteBackup(backupName string) error {
 	if err != nil {
 		return err
 	}
+	// An uploaded backup's own images go with it (first, so a failure never
+	// leaves images with no backup).
+	if err := os.RemoveAll(bm.stagedImagesPath(backupName)); err != nil {
+		return fmt.Errorf("failed to delete the backup's images: %w", err)
+	}
 	if err := os.Remove(backupPath); err != nil {
 		return fmt.Errorf("failed to delete backup: %w", err)
 	}
 
 	slog.Info("deleted backup", "component", "backup", "name", backupName)
+	bm.sweepAfterCleanup()
 	return nil
 }
 
@@ -1157,6 +1190,7 @@ func (bm *BackupManager) CleanupOldBackups() error {
 		return err
 	}
 	_, err = bm.deletePlanned(plan)
+	bm.sweepAfterCleanup()
 	return err
 }
 
@@ -1189,13 +1223,19 @@ func (bm *BackupManager) CleanupConfirmed(names []string) ([]string, error) {
 			chosen = append(chosen, d)
 		}
 	}
-	return bm.deletePlanned(chosen)
+	deleted, err := bm.deletePlanned(chosen)
+	bm.sweepAfterCleanup()
+	return deleted, err
 }
 
 func (bm *BackupManager) deletePlanned(plan []RetentionDeletion) ([]string, error) {
 	var deleted, failed []string
 	ceiling := 0
 	for _, d := range plan {
+		if err := os.RemoveAll(bm.stagedImagesPath(d.Name)); err != nil {
+			failed = append(failed, d.Name+" (its images): "+errText(err))
+			continue
+		}
 		if err := bm.remove(filepath.Join(bm.backupDir, d.Name)); err != nil {
 			slog.Warn("failed to remove old backup", "component", "backup", "name", d.Name, "error", err)
 			failed = append(failed, d.Name+": "+errText(err))

@@ -3,9 +3,11 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -27,13 +29,21 @@ func (r *Router) handleBackups(w http.ResponseWriter, req *http.Request) {
 		if problems == nil {
 			problems = []database.BackupProblem{}
 		}
-		writeJSON(w, map[string]interface{}{
+		resp := map[string]interface{}{
 			"backups":   backups,
 			"problems":  problems,
 			"retention": r.backupManager.Retention(),
 			// A restore staged but not yet applied (the server hasn't restarted).
 			"pendingRestore": r.backupManager.PendingRestore(),
-		})
+		}
+		// Deleted images kept for older backups (M6 §12); an unreadable attic
+		// is said, never shown as empty.
+		if u, err := r.backupManager.AtticUsage(); err != nil {
+			resp["atticError"] = "Couldn't read the attic (" + r.backupManager.AtticDir() + "): " + err.Error()
+		} else {
+			resp["attic"] = u
+		}
+		writeJSON(w, resp)
 
 	case http.MethodPost:
 		var reqData struct {
@@ -195,27 +205,56 @@ func (r *Router) handleRestoreBackup(w http.ResponseWriter, backupName string) {
 	}()
 }
 
-// handleDownloadBackup streams a backup file as an attachment. The name is
-// strictly validated (no separators, no "..", regular files only), so it is
-// also a safe download filename.
+// handleDownloadBackup serves a backup as one archive (M6 §12): the
+// database, every uploaded image it refers to, and a manifest with SHA-256s.
+// The archive is built completely before anything is sent. The name is
+// strictly validated (no separators, no "..", regular files only), so the
+// archive name is also a safe download filename.
+//
+// GET /api/backups/{name}?images=1 instead answers which images the archive
+// will hold and which are missing, so the UI can warn.
 func (r *Router) handleDownloadBackup(w http.ResponseWriter, req *http.Request, name string) {
-	f, fi, err := r.backupManager.OpenBackup(name)
-	if err != nil {
-		writeBackupNameError(w, err, "Couldn't read the backup: ")
+	if req.URL.Query().Get("images") == "1" {
+		plan, err := r.backupManager.PlanBackupImages(name)
+		if err != nil {
+			writeBackupNameError(w, err, "Couldn't check the backup's images: ")
+			return
+		}
+		w.Header().Set("Cache-Control", "no-store")
+		writeJSON(w, plan)
 		return
 	}
-	defer f.Close()
-	w.Header().Set("Content-Type", "application/vnd.sqlite3")
-	w.Header().Set("Content-Disposition", `attachment; filename="`+name+`"`)
+	f, man, done, err := r.backupManager.BuildBackupArchive(name)
+	if err != nil {
+		slog.Error("backup download failed", "component", "backup", "name", name, "error", err)
+		writeBackupNameError(w, err, "Couldn't build the backup archive: ")
+		return
+	}
+	defer done()
+	fi, err := f.Stat()
+	if err != nil {
+		writeJSONError(w, "Couldn't build the backup archive: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	archive := database.ArchiveName(name)
+	if len(man.Missing) > 0 {
+		slog.Warn("backup downloaded without some images it refers to", "component", "backup", "name", name, "missing", strings.Join(man.Missing, ", "))
+		w.Header().Set("X-HOPS-Missing-Images", strconv.Itoa(len(man.Missing)))
+	}
+	slog.Info("backup downloaded", "component", "backup", "name", archive, "files", len(man.Files))
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", `attachment; filename="`+archive+`"`)
 	w.Header().Set("Cache-Control", "no-store")
-	http.ServeContent(w, req, name, fi.ModTime(), f)
+	http.ServeContent(w, req, archive, fi.ModTime(), f)
 }
 
 // uploadBackupKind: an uploaded backup shares the import size limit.
 var uploadBackupKind = uploadKind{uploadImport.key, "backup you can upload (it shares the import limit)"}
 
-// handleUploadBackup stores an uploaded HOPS database as a new "…_uploaded"
-// backup. It is validated (SQLite, HOPS tables) and never restored here:
+// handleUploadBackup stores an uploaded backup as a new "…_uploaded" backup:
+// a HOPS backup archive (.zip: manifest, paths, sizes and SHA-256s checked,
+// images staged with it) or a legacy plain database (accepted with a
+// warning). It is validated (SQLite, HOPS tables) and never restored here:
 // the admin restores it like any other backup.
 func (r *Router) handleUploadBackup(w http.ResponseWriter, req *http.Request) {
 	file, _, ok := r.readLimitedUpload(w, req, uploadBackupKind)
@@ -223,10 +262,18 @@ func (r *Router) handleUploadBackup(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	defer file.Close()
-	name, err := r.backupManager.StoreUploadedBackup(file)
+	perImage := int64(r.settings.GetInt(uploadBackground.key))
+	if n := int64(r.settings.GetInt(uploadIcon.key)); n > perImage {
+		perImage = n
+	}
+	res, err := r.backupManager.StoreUpload(file, database.UploadCaps{
+		Total:    int64(r.settings.GetInt(uploadBackupKind.key)),
+		PerImage: perImage,
+	})
 	if err != nil {
 		var ibe *database.InvalidBackupError
 		if errors.As(err, &ibe) {
+			slog.Warn("uploaded backup refused", "component", "backup", "reason", ibe.Reason)
 			writeJSONError(w, "This file can't be used as a backup: "+ibe.Reason+". Nothing was stored.", http.StatusUnprocessableEntity)
 			return
 		}
@@ -234,11 +281,20 @@ func (r *Router) handleUploadBackup(w http.ResponseWriter, req *http.Request) {
 		writeJSONError(w, "Couldn't store the uploaded backup: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	writeJSON(w, map[string]interface{}{
+	out := map[string]interface{}{
 		"success": true,
-		"name":    name,
+		"name":    res.Name,
+		"images":  res.Images,
+		"missing": res.Missing,
 		"message": "Backup uploaded. It is listed with the others; restore it from there when you want to.",
-	})
+	}
+	switch {
+	case res.Legacy:
+		out["warning"] = database.LegacyUploadWarning
+	case len(res.Missing) > 0:
+		out["warning"] = fmt.Sprintf("This backup was made without %d image(s) it uses (%s); they will show as broken after a restore", len(res.Missing), strings.Join(res.Missing, ", "))
+	}
+	writeJSON(w, out)
 }
 
 // handleBackupCleanup serves "Clean up now": GET returns exactly what the

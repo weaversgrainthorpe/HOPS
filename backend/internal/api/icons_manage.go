@@ -363,7 +363,8 @@ func (r *Router) handleUpdateIcon(w http.ResponseWriter, req *http.Request) {
 // handleDeleteIcon: DELETE /api/icons/{id}[?force=1] (admin). Built-in icons
 // can't be deleted. An icon that the layout uses is refused with 409 and the
 // list of places unless force=1 (the user saw that list and confirmed). The
-// uploaded file is removed too, unless another icon row points at it.
+// uploaded file moves to the attic (kept while a backup refers to it), unless
+// another icon row points at it.
 func (r *Router) handleDeleteIcon(w http.ResponseWriter, req *http.Request) {
 	iconID := strings.TrimPrefix(req.URL.Path, "/api/icons/")
 	if iconID == "" {
@@ -404,48 +405,43 @@ func (r *Router) handleDeleteIcon(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	// The file goes too, unless another icon row shares it. It is moved aside
-	// first and put back if the row can't be deleted, so a failure never
+	// The file goes too, unless another icon row shares it. It MOVES to the
+	// attic (M6 §12: a backup may still refer to it) before the row is
+	// deleted, and comes back if the row can't be deleted, so a failure never
 	// leaves a row whose file is gone.
-	path := ""
+	file := ""
 	if img.Valid {
 		var others int
 		if err := r.db.QueryRow(`SELECT COUNT(*) FROM icons WHERE image_url = ? AND id != ?`, img.String, iconID).Scan(&others); err != nil {
 			writeJSONError(w, "Failed to check the icon file", http.StatusInternalServerError)
 			return
 		}
-		if others == 0 {
-			path = r.iconFilePath(img.String)
+		if others == 0 && r.iconFilePath(img.String) != "" {
+			file = strings.TrimPrefix(img.String, "/icons/")
 		}
 	}
-	aside := ""
-	if path != "" {
-		aside = path + ".deleting"
-		if err := os.Rename(path, aside); err != nil {
+	moved := false
+	if file != "" {
+		if err := r.backupManager.MoveToAttic("icons", file); err != nil {
 			if !errors.Is(err, os.ErrNotExist) {
-				slog.Error("icon delete: could not move the file aside", "component", "icons", "path", path, "error", err)
-				writeJSONError(w, "Couldn't remove the icon's file, so it was not deleted: "+err.Error(), http.StatusInternalServerError)
+				slog.Error("icon delete: could not move the file to the attic", "component", "icons", "file", file, "error", err)
+				writeJSONError(w, "Couldn't move the icon's file aside, so it was not deleted: "+err.Error(), http.StatusInternalServerError)
 				return
 			}
-			aside = ""
+		} else {
+			moved = true
 		}
 	}
 	if _, err := r.db.Exec(`DELETE FROM icons WHERE id = ? AND is_preset = 0`, iconID); err != nil {
-		if aside != "" {
-			if rerr := os.Rename(aside, path); rerr != nil {
-				slog.Error("icon delete: could not restore the file", "component", "icons", "path", path, "error", rerr)
+		msg := "Failed to delete icon"
+		if moved {
+			if rerr := r.backupManager.RestoreFromAttic("icons", file); rerr != nil {
+				slog.Error("icon delete: could not put the file back", "component", "icons", "file", file, "error", rerr)
+				msg += "; its file is in " + filepath.Join(r.backupManager.AtticDir(), "icons") + " and couldn't be put back (" + rerr.Error() + ")"
 			}
 		}
-		writeJSONError(w, "Failed to delete icon", http.StatusInternalServerError)
+		writeJSONError(w, msg, http.StatusInternalServerError)
 		return
-	}
-	if aside != "" {
-		if err := os.Remove(aside); err != nil {
-			// The icon is gone; its file couldn't be. Shown as an admin notice
-			// until it is removed (retried each time the notice is built).
-			slog.Warn("icon delete: row deleted but the file stayed", "component", "icons", "path", aside, "error", err)
-			r.iconLeftovers.add(aside, err)
-		}
 	}
 	slog.Info("icon deleted", "component", "icons", "id", iconID)
 	writeJSONSuccess(w)

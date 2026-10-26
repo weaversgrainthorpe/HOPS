@@ -792,12 +792,21 @@ export interface BackupProblem {
   reason: string;
 }
 
+/** Deleted images kept because older backups still refer to them (M6 §12). */
+export interface AtticUsage {
+  files: number;
+  bytes: number;
+}
+
 export interface BackupList {
   backups: BackupInfo[];
   problems: BackupProblem[];
   retention?: BackupRetention;
   /** A restore is staged but not yet applied (HOPS hasn't restarted). */
   pendingRestore?: boolean;
+  attic?: AtticUsage;
+  /** The attic couldn't be read (never shown as empty). */
+  atticError?: string;
 }
 
 export async function listBackups(): Promise<BackupList> {
@@ -809,8 +818,19 @@ export async function listBackups(): Promise<BackupList> {
     backups: resp.backups,
     problems: Array.isArray(resp.problems) ? resp.problems : [],
     ...(resp.retention && typeof resp.retention.keepCount === 'number' ? { retention: resp.retention } : {}),
-    ...(resp.pendingRestore === true ? { pendingRestore: true } : {})
+    ...(resp.pendingRestore === true ? { pendingRestore: true } : {}),
+    ...(resp.attic && typeof resp.attic.files === 'number' && typeof resp.attic.bytes === 'number' ? { attic: resp.attic } : {}),
+    ...(typeof resp.atticError === 'string' && resp.atticError ? { atticError: resp.atticError } : {})
   };
+}
+
+/** Which images a backup's download will include, and which it refers to but can't be found. */
+export async function checkBackupImages(name: string): Promise<{ included: string[]; missing: string[] }> {
+  const resp = await fetchAPI(`/backups/${encodeURIComponent(name)}?images=1`);
+  if (!resp || !Array.isArray(resp.included) || !Array.isArray(resp.missing)) {
+    throw new Error('The server sent an image check this version of HOPS cannot read.');
+  }
+  return { included: resp.included, missing: resp.missing };
 }
 
 /** Discard a staged restore that hasn't been applied yet (nothing is restored). */
@@ -818,7 +838,7 @@ export async function discardPendingRestore(): Promise<void> {
   await fetchAPI('/backups/pending-restore', { method: 'DELETE' });
 }
 
-/** Where a backup downloads from (GET, admin session cookie). */
+/** Where a backup downloads from (GET, admin session cookie): one .zip with the database and its images. */
 export function backupDownloadUrl(name: string): string {
   return `${API_BASE}/backups/${encodeURIComponent(name)}`;
 }
@@ -843,11 +863,17 @@ export async function confirmBackupCleanup(names: string[]): Promise<string[]> {
   return resp.deleted;
 }
 
+/** The archive name a backup downloads as ("…_manual.db" → "…_manual.zip"). */
+export function backupArchiveName(name: string): string {
+  return name.replace(/\.db$/, '.zip');
+}
+
 /**
- * Upload a backup file: stored as a new "…_uploaded" backup, never restored automatically. It
- * shares the import size limit, refused before sending when over it.
+ * Upload a backup file: a HOPS backup archive (.zip) or a legacy plain database (.db, with a
+ * `warning` that it has no images). Stored as a new "…_uploaded" backup, never restored
+ * automatically. It shares the import size limit, refused before sending when over it.
  */
-export async function uploadBackup(file: File): Promise<{ name: string; message: string }> {
+export async function uploadBackup(file: File): Promise<{ name: string; message: string; warning?: string }> {
   const refusal = await checkUploadSize('import', file);
   if (refusal) throw new Error(refusal);
   const formData = new FormData();
@@ -863,7 +889,11 @@ export async function uploadBackup(file: File): Promise<{ name: string; message:
   }
   const resp = await response.json();
   if (!resp || typeof resp.name !== 'string') throw new Error('The server did not confirm the upload.');
-  return { name: resp.name, message: typeof resp.message === 'string' ? resp.message : 'Backup uploaded' };
+  return {
+    name: resp.name,
+    message: typeof resp.message === 'string' ? resp.message : 'Backup uploaded',
+    ...(typeof resp.warning === 'string' && resp.warning ? { warning: resp.warning } : {})
+  };
 }
 
 export async function createBackup(reason?: string): Promise<{ success: boolean; path: string; message: string }> {

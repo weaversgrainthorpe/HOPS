@@ -2294,17 +2294,24 @@ func (r *Router) handleDeleteBackground(w http.ResponseWriter, req *http.Request
 		}
 	}
 
-	// If not in metadata, check for orphan file on disk (file exists but not tracked)
+	// If not in metadata, check for orphan file on disk (file exists but not
+	// tracked). Deleted files MOVE to the attic (M6 §12: a backup may still
+	// refer to them); a failure refuses the delete, visibly.
 	if imageToDelete == nil {
 		backgroundsDir := filepath.Join(r.config.DataDir, "backgrounds")
 		extensions := []string{".png", ".jpg", ".jpeg", ".gif", ".webp"}
 		for _, ext := range extensions {
-			filePath := filepath.Join(backgroundsDir, imageID+ext)
-			if _, err := os.Stat(filePath); err == nil {
-				if err := os.Remove(filePath); err != nil {
-					writeJSONError(w, "Failed to delete file", http.StatusInternalServerError)
+			name := imageID + ext
+			if !database.ValidImageName(name) {
+				break
+			}
+			if _, err := os.Lstat(filepath.Join(backgroundsDir, name)); err == nil {
+				if err := r.backupManager.MoveToAttic("backgrounds", name); err != nil {
+					slog.Error("background delete: could not move the file to the attic", "component", "backgrounds", "file", name, "error", err)
+					writeJSONError(w, "Couldn't move the background's file aside, so it was not deleted: "+err.Error(), http.StatusInternalServerError)
 					return
 				}
+				slog.Info("background deleted", "component", "backgrounds", "file", name)
 				writeJSONSuccess(w)
 				return
 			}
@@ -2313,23 +2320,38 @@ func (r *Router) handleDeleteBackground(w http.ResponseWriter, req *http.Request
 		return
 	}
 
-	// Only delete uploaded images from disk
+	// Only uploaded images have a file of ours: it moves to the attic first,
+	// and comes back if the metadata can't be saved.
+	moved := ""
 	if imageToDelete.Source == "uploaded" && strings.HasPrefix(imageToDelete.URL, "/backgrounds/") {
-		filename := filepath.Base(imageToDelete.URL)
-		backgroundsDir := filepath.Join(r.config.DataDir, "backgrounds")
-		filePath := filepath.Join(backgroundsDir, filename)
-
-		if err := os.Remove(filePath); err != nil && !os.IsNotExist(err) {
-			slog.Warn("failed to delete file", "component", "backgrounds", "path", filePath, "error", err)
+		name := strings.TrimPrefix(imageToDelete.URL, "/backgrounds/")
+		if database.ValidImageName(name) {
+			if err := r.backupManager.MoveToAttic("backgrounds", name); err != nil {
+				if !errors.Is(err, os.ErrNotExist) {
+					slog.Error("background delete: could not move the file to the attic", "component", "backgrounds", "file", name, "error", err)
+					writeJSONError(w, "Couldn't move the background's file aside, so it was not deleted: "+err.Error(), http.StatusInternalServerError)
+					return
+				}
+			} else {
+				moved = name
+			}
 		}
 	}
 
 	// Remove from metadata
 	bgData.Images = append(bgData.Images[:imageIndex], bgData.Images[imageIndex+1:]...)
 	if err := r.saveBackgroundData(bgData); err != nil {
-		writeJSONError(w, "Failed to save background data", http.StatusInternalServerError)
+		msg := "Failed to save background data"
+		if moved != "" {
+			if rerr := r.backupManager.RestoreFromAttic("backgrounds", moved); rerr != nil {
+				slog.Error("background delete: could not put the file back", "component", "backgrounds", "file", moved, "error", rerr)
+				msg += "; its file is in " + filepath.Join(r.backupManager.AtticDir(), "backgrounds") + " and couldn't be put back (" + rerr.Error() + ")"
+			}
+		}
+		writeJSONError(w, msg, http.StatusInternalServerError)
 		return
 	}
+	slog.Info("background deleted", "component", "backgrounds", "id", imageID)
 
 	writeJSONSuccess(w)
 }

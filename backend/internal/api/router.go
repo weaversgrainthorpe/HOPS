@@ -233,6 +233,9 @@ func NewRouter(db *sql.DB, authService *auth.Service, cfg *config.Config, settin
 		}
 	})
 
+	// The attic sweep reads what the running app references (M6 §12).
+	backupManager.SetLiveDB(db)
+
 	r := &Router{
 		db:             db,
 		migration:      migration,

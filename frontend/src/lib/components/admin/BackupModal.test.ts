@@ -9,13 +9,15 @@ vi.mock('$lib/utils/api', () => ({
   previewBackupCleanup: vi.fn(),
   confirmBackupCleanup: vi.fn(),
   discardPendingRestore: vi.fn(async () => {}),
-  backupDownloadUrl: (n: string) => `/api/backups/${encodeURIComponent(n)}`
+  backupDownloadUrl: (n: string) => `/api/backups/${encodeURIComponent(n)}`,
+  backupArchiveName: (n: string) => n.replace(/\.db$/, '.zip'),
+  checkBackupImages: vi.fn(async () => ({ included: [], missing: [] }))
 }));
 vi.mock('$lib/stores/confirmModal', () => ({ confirm: vi.fn(async () => true) }));
 vi.mock('$lib/stores/config', () => ({ refreshServerNotices: vi.fn(async () => {}) }));
 import { render, screen, fireEvent } from '@testing-library/svelte';
 import BackupModal from './BackupModal.svelte';
-import { listBackups, restoreBackup, uploadBackup, previewBackupCleanup, confirmBackupCleanup, discardPendingRestore } from '$lib/utils/api';
+import { listBackups, restoreBackup, uploadBackup, previewBackupCleanup, confirmBackupCleanup, discardPendingRestore, checkBackupImages } from '$lib/utils/api';
 import { confirm } from '$lib/stores/confirmModal';
 
 const backup = { name: 'hops-backup-2026-10-25_10-00-00_manual.db', path: '/x', size: 2048, createdAt: '2026-10-25T10:00:00Z' };
@@ -102,5 +104,44 @@ describe('BackupModal', () => {
     vi.mocked(listBackups).mockResolvedValue({ backups: [backup], problems: [] });
     await fireEvent.click(screen.getByRole('button', { name: 'Discard staged restore' }));
     expect(discardPendingRestore).toHaveBeenCalled();
+  });
+
+  it('downloads an archive and warns which images it is missing', async () => {
+    vi.mocked(checkBackupImages).mockResolvedValue({ included: ['icons/a.png'], missing: ['icons/lost.png'] });
+    render(BackupModal, { onClose: () => {} });
+    const link = await screen.findByRole('link', { name: `Download ${backup.name}` });
+    expect(link.getAttribute('download')).toBe('hops-backup-2026-10-25_10-00-00_manual.zip');
+    link.addEventListener('click', (e) => e.preventDefault()); // jsdom can't navigate
+    await fireEvent.click(link);
+    const warn = await screen.findByText(/is missing 1 image it uses.*icons\/lost\.png/);
+    expect(warn.closest('[role="alert"]')).toBeTruthy();
+  });
+
+  it('shows the warning for a legacy upload with no images', async () => {
+    vi.mocked(uploadBackup).mockResolvedValue({ name: 'hops-backup-x_uploaded.db', message: 'ok', warning: 'This backup has no images; missing images will show as broken' });
+    render(BackupModal, { onClose: () => {} });
+    const input = (await screen.findByLabelText('Backup file to upload')) as HTMLInputElement;
+    expect(input.accept).toContain('.zip');
+    Object.defineProperty(input, 'files', { value: [new File(['x'], 'old.db')] });
+    await fireEvent.change(input);
+    const warn = await screen.findByText(/This backup has no images; missing images will show as broken/, { selector: 'span' });
+    expect(warn.closest('[role="alert"]')).toBeTruthy();
+  });
+
+  it('shows the attic size, an unreadable attic, and image problems', async () => {
+    vi.mocked(listBackups).mockResolvedValue({
+      backups: [backup],
+      attic: { files: 2, bytes: 3 * 1024 * 1024 },
+      problems: [{ kind: 'attic-blocked', at: '2026-10-25T10:00:00Z', reason: '1 backup couldn\'t be read, so no image in the attic was deleted' }]
+    });
+    const { unmount } = render(BackupModal, { onClose: () => {} });
+    expect((await screen.findByTestId('backup-attic')).textContent).toMatch(/2 files, 3\.0 MB/);
+    expect(await screen.findByText(/Deleted images couldn't be cleaned up, so none were deleted/)).toBeTruthy();
+    unmount();
+    vi.mocked(listBackups).mockResolvedValue({ backups: [backup], problems: [], atticError: "Couldn't read the attic (/data/attic): permission denied" });
+    render(BackupModal, { onClose: () => {} });
+    const err = await screen.findByTestId('backup-attic');
+    expect(err.textContent).toContain('permission denied');
+    expect(err.getAttribute('role')).toBe('alert');
   });
 });

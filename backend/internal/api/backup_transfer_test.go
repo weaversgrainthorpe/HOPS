@@ -54,11 +54,12 @@ func TestDownloadBackup(t *testing.T) {
 	if w.Code != 200 {
 		t.Fatalf("download: %d %s", w.Code, w.Body.String())
 	}
-	if cd := w.Header().Get("Content-Disposition"); cd != `attachment; filename="`+name+`"` {
+	if cd := w.Header().Get("Content-Disposition"); cd != `attachment; filename="`+database.ArchiveName(name)+`"` {
 		t.Fatalf("Content-Disposition %q", cd)
 	}
-	if !bytes.HasPrefix(w.Body.Bytes(), []byte("SQLite format 3\x00")) {
-		t.Fatal("download is not the SQLite file")
+	// M6 §12: a download is one archive (the DB, its images, a manifest).
+	if !bytes.HasPrefix(w.Body.Bytes(), []byte("PK\x03\x04")) || w.Header().Get("Content-Type") != "application/zip" {
+		t.Fatal("download is not the backup archive")
 	}
 	if w.Header().Get("Cache-Control") != "no-store" {
 		t.Fatal("download may be cached")
@@ -77,7 +78,7 @@ func TestDownloadBackup(t *testing.T) {
 		if w.Code == 200 {
 			t.Errorf("GET %s served a file", p)
 		}
-		if bytes.HasPrefix(w.Body.Bytes(), []byte("SQLite")) {
+		if bytes.HasPrefix(w.Body.Bytes(), []byte("SQLite")) || bytes.HasPrefix(w.Body.Bytes(), []byte("PK")) {
 			t.Errorf("GET %s leaked a database", p)
 		}
 	}

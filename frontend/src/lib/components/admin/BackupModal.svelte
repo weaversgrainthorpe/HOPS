@@ -3,7 +3,8 @@
   import Modal from '$lib/components/shared/Modal.svelte';
   import {
     listBackups, createBackup, restoreBackup, deleteBackup, uploadBackup, previewBackupCleanup, confirmBackupCleanup,
-    backupDownloadUrl, discardPendingRestore, type BackupInfo, type BackupProblem, type BackupRetention, type CleanupDeletion
+    backupDownloadUrl, backupArchiveName, checkBackupImages, discardPendingRestore,
+    type AtticUsage, type BackupInfo, type BackupProblem, type BackupRetention, type CleanupDeletion
   } from '$lib/utils/api';
   import { refreshServerNotices } from '$lib/stores/config';
   import { confirm } from '$lib/stores/confirmModal';
@@ -20,6 +21,10 @@
   let problems = $state<BackupProblem[]>([]);
   let retention = $state<BackupRetention | null>(null);
   let pendingRestore = $state(false);
+  let attic = $state<AtticUsage | null>(null);
+  let atticError = $state('');
+  // A warning from the last upload or download (e.g. images it is missing): shown until the next action.
+  let actionWarning = $state('');
   let uploading = $state(false);
   let fileInput = $state<HTMLInputElement | null>(null);
   // "Clean up now": the preview (exactly what would be deleted, and why) shown before anything is deleted.
@@ -48,6 +53,8 @@
       problems = result.problems;
       retention = result.retention ?? null;
       pendingRestore = result.pendingRestore === true;
+      attic = result.attic ?? null;
+      atticError = result.atticError ?? '';
     } catch (err) {
       error = why(err, 'Failed to load backups.');
     } finally {
@@ -137,6 +144,21 @@
     await loadBackups();
   }
 
+  // The download itself is the link (the browser saves the .zip); alongside it, the images the
+  // archive can't include are checked and said, so a download never silently lacks images.
+  async function handleDownload(backup: BackupInfo) {
+    actionError = '';
+    actionWarning = '';
+    try {
+      const { missing } = await checkBackupImages(backup.name);
+      if (missing.length > 0) {
+        actionWarning = `${backupArchiveName(backup.name)} is missing ${missing.length === 1 ? '1 image' : `${missing.length} images`} it uses (they couldn't be found, so they will show as broken after a restore): ${missing.join(', ')}.`;
+      }
+    } catch (err) {
+      actionWarning = `Couldn't check which images ${backupArchiveName(backup.name)} includes: ${why(err, 'the request failed')}`;
+    }
+  }
+
   async function handleUpload(e: Event) {
     const input = e.currentTarget as HTMLInputElement;
     const file = input.files?.[0];
@@ -144,9 +166,14 @@
     if (!file) return;
     uploading = true;
     actionError = '';
+    actionWarning = '';
     try {
       const r = await uploadBackup(file);
       toast.success(`Uploaded as ${r.name}. Restore it from the list when you want to.`);
+      if (r.warning) {
+        actionWarning = `${r.name}: ${r.warning}.`;
+        toast.warning(actionWarning);
+      }
     } catch (err) {
       actionError = `Couldn't upload the backup: ${why(err, 'the request failed')}`;
       toast.error(actionError);
@@ -197,6 +224,11 @@
     if (p.kind === 'rotation-failed') return `Old backups couldn't be deleted (${when}): ${p.reason}`;
     if (p.kind === 'ceiling-deleted') return `${p.reason} (${when}).`;
     if (p.kind === 'restore-failed') return `A restore couldn't be applied when HOPS restarted (${when}): ${p.reason}`;
+    if (p.kind === 'restore-images') return `${p.reason} (${when}).`;
+    if (p.kind === 'attic-blocked') return `Deleted images couldn't be cleaned up, so none were deleted (${when}): ${p.reason}`;
+    if (p.kind === 'attic-delete-failed') return `Deleted images couldn't be cleaned up (${when}): ${p.reason}`;
+    if (p.kind === 'attic-large') return `${p.reason} (${when}).`;
+    if (p.kind === 'restore-recovered' || p.kind === 'notices-unreadable' || p.kind === 'notices-unsaved' || p.kind === 'restore-journal-left') return `${p.reason} (${when}).`;
     const what =
       p.trigger === 'startup' ? 'The backup when HOPS started' :
       p.trigger === 'pre-config-update' ? 'The safety backup before a save' :
@@ -260,10 +292,30 @@
       </div>
     {/if}
 
+    {#if actionWarning}
+      <div class="problem action-warning" role="alert">
+        <Icon icon="mdi:alert-outline" width="18" />
+        <span>{actionWarning}</span>
+      </div>
+    {/if}
+
     {#if retention}
       <p class="retention" data-testid="backup-retention">
         {retentionText(retention)}
         <a href="/settings/global#server" onclick={onClose}>Change</a>
+      </p>
+    {/if}
+
+    {#if atticError}
+      <p class="retention attic-error" role="alert" data-testid="backup-attic">{atticError}</p>
+    {:else if attic}
+      <p class="retention" data-testid="backup-attic">
+        {#if attic.files === 0}
+          Downloads include the images each backup uses. No deleted images are being kept for older backups.
+        {:else}
+          Downloads include the images each backup uses. Deleted images kept for older backups:
+          {attic.files === 1 ? '1 file' : `${attic.files} files`}, {formatSize(attic.bytes)}. They go once no backup uses them.
+        {/if}
       </p>
     {/if}
 
@@ -294,7 +346,7 @@
     <div class="actions-bar">
       <input
         type="file"
-        accept=".db,application/vnd.sqlite3,application/x-sqlite3"
+        accept=".zip,.db,application/zip,application/vnd.sqlite3,application/x-sqlite3"
         class="visually-hidden-input"
         aria-label="Backup file to upload"
         bind:this={fileInput}
@@ -358,7 +410,8 @@
                 title="Download"
                 aria-label={`Download ${backup.name}`}
                 href={backupDownloadUrl(backup.name)}
-                download={backup.name}
+                download={backupArchiveName(backup.name)}
+                onclick={() => void handleDownload(backup)}
               >
                 <Icon icon="mdi:download" width="18" />
               </a>
@@ -420,6 +473,10 @@
     flex-shrink: 0;
     margin-top: 1px;
     color: var(--accent);
+  }
+
+  .attic-error {
+    color: var(--color-error, #dc2626);
   }
 
   .problem {

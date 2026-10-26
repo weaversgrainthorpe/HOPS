@@ -71,6 +71,20 @@ func backupProblemNotice(p database.BackupProblem) notice {
 			Text:  fmt.Sprintf("%s (%s).", capitalize(p.Reason), at),
 			Level: "warning",
 		}
+	case database.ProblemRestoreImages:
+		// A report of what a restore found: dismissible.
+		return notice{
+			ID:    fmt.Sprintf("%s%s-%d", noticeBackupPrefix, p.Kind, p.At.Unix()),
+			Text:  fmt.Sprintf("%s (%s).", p.Reason, at),
+			Level: "warning",
+		}
+	case database.ProblemAtticBlocked:
+		text = fmt.Sprintf("Deleted images kept for older backups couldn't be cleaned up (%s): %s. Nothing was deleted; HOPS tries again after "+
+			"the next backup and once a day. Delete or replace the unreadable backup in Settings › Backups.", at, p.Reason)
+	case database.ProblemAtticDeleteFailed:
+		text = fmt.Sprintf("HOPS couldn't clean up deleted images (%s): %s. Check that HOPS can write to its data folder; it tries again after the next backup and once a day.", at, p.Reason)
+	case database.ProblemAtticLarge:
+		text = fmt.Sprintf("%s (%s).", capitalize(p.Reason), at)
 	case database.ProblemJournalLeft:
 		text = fmt.Sprintf("%s (%s).", capitalize(p.Reason), at)
 	case database.ProblemNoticesUnsaved:
@@ -122,7 +136,7 @@ func isBackupNoticeID(id string) bool { return strings.HasPrefix(id, noticeBacku
 // applied), and its kind.
 func dismissibleBackupNotice(id string) (string, bool) {
 	for _, kind := range []string{database.ProblemCeilingDeleted, database.ProblemRestoreFailed,
-		database.ProblemRestoreRecovered, database.ProblemNoticesUnreadable} {
+		database.ProblemRestoreRecovered, database.ProblemNoticesUnreadable, database.ProblemRestoreImages} {
 		if strings.HasPrefix(id, noticeBackupPrefix+kind+"-") {
 			return kind, true
 		}
