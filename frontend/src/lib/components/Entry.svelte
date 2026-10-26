@@ -9,6 +9,8 @@
   import { safeOpenUrl, isValidUrl } from '$lib/utils/url';
   import { isSshUrl, openSshInPlace } from '$lib/utils/ssh';
   import { tileMayBeChecked } from '$lib/editor/statusChecks';
+  import { tileOpenUrl, hasAwayUrl } from '$lib/utils/tileUrl';
+  import { awayMode } from '$lib/stores/awayMode';
 
   interface Props {
     entry: Entry;
@@ -37,6 +39,9 @@
   // undefined so configs from older HOPS releases keep their existing
   // tile semantics.
   let isNote = $derived(entry.type === 'note');
+  // Home/Away (per browser): the address this tile opens now, the same for every way of opening it.
+  const openUrl = $derived(tileOpenUrl(entry, $awayMode));
+  const usingAway = $derived($awayMode && hasAwayUrl(entry));
 
   function handleClick() {
     // Note tiles are inert — no URL to open.
@@ -44,17 +49,17 @@
 
     // ssh:// goes to the computer's SSH app in place: no empty new tab, and
     // never into the iframe/popup modals (whatever mode is stored).
-    if (isSshUrl(entry.url)) {
-      if (isValidUrl(entry.url)) openSshInPlace(entry.url);
+    if (isSshUrl(openUrl)) {
+      if (isValidUrl(openUrl)) openSshInPlace(openUrl);
       return;
     }
 
     switch (entry.openMode) {
       case 'newtab':
-        safeOpenUrl(entry.url, '_blank');
+        safeOpenUrl(openUrl, '_blank');
         break;
       case 'sametab':
-        safeOpenUrl(entry.url, '_self');
+        safeOpenUrl(openUrl, '_self');
         break;
       case 'iframe':
         showIframeModal = true;
@@ -64,10 +69,18 @@
         break;
       default:
         // Default to new tab if no mode specified
-        safeOpenUrl(entry.url, '_blank');
+        safeOpenUrl(openUrl, '_blank');
         break;
     }
   }
+
+  // The hover title. Away, a tile opening its away address says so, and that its status dot is
+  // still the server's check of the home address (the server is at home; no Away status is faked).
+  const tileTitle = $derived(
+    usingAway
+      ? `${entry.description || entry.name}\nOpens away address: ${openUrl}${tileMayBeChecked(entry) ? '\nStatus checked at home address' : ''}`
+      : entry.description || entry.name
+  );
 
   // Walkthrough §2: opacity fades the tile's BACKGROUND only (a separate layer, as in
   // FolderSurface); the text and the icon have their own; the status badge never fades.
@@ -95,8 +108,8 @@
     class:selected={editorSelected === true}
     class:entry-note={isNote}
     onclick={handleClick}
-    title={entry.description || entry.name}
-    aria-label={inEditor || isNote ? entry.name : `Open ${entry.name}`}
+    title={tileTitle}
+    aria-label={inEditor || isNote ? entry.name : `Open ${entry.name}${usingAway ? ' (away address)' : ''}`}
     aria-pressed={inEditor ? editorSelected : undefined}
   >
     <span class="entry-bg" aria-hidden="true" style:background-color={entry.color} style:opacity={bgOpacity}></span>
@@ -145,11 +158,11 @@
 </div>
 
 {#if showIframeModal}
-  <IframeModal url={entry.url} title={entry.name} onClose={() => showIframeModal = false} />
+  <IframeModal url={openUrl} title={entry.name} onClose={() => showIframeModal = false} />
 {/if}
 
 {#if showPopupModal}
-  <PopupModal url={entry.url} title={entry.name} onClose={() => showPopupModal = false} />
+  <PopupModal url={openUrl} title={entry.name} onClose={() => showPopupModal = false} />
 {/if}
 
 <style>

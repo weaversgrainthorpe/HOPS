@@ -62,6 +62,7 @@ func VerifyImportedDashboard(d Obj) error {
 	v.checkOwned(id, d)
 	v.checkIDs(Obj{"dashboards": []any{d}})
 	v.checkStatusChecks(d)
+	v.checkAwayURLs(d)
 	v.checkFolderMinimums(d)
 	if len(v.problems) > 0 {
 		return &VerifyError{Problems: v.problems}

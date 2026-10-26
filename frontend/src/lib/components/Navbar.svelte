@@ -10,6 +10,8 @@
   import { session } from '$lib/stores/editSession';
   import { textSize, increaseTextSize, decreaseTextSize, canIncrease, canDecrease, textSizeConfigs } from '$lib/stores/textSize';
   import { triggerHopAnimation } from '$lib/stores/easterEggs';
+  import { awayMode, setAway } from '$lib/stores/awayMode';
+  import { dashboardHasAway } from '$lib/utils/tileUrl';
   import Icon from '@iconify/svelte';
   import ThemePickerModal from './admin/ThemePickerModal.svelte';
   import ExportModal from './admin/ExportModal.svelte';
@@ -212,6 +214,12 @@
       ? $session.draft.header
       : pageDashboard?.header) as HeaderConfig | undefined
   );
+  // Home/Away (per browser, signed in or not): shown only on a dashboard with at least one tile that
+  // has an away address (while editing, the draft's), so it is never a control that does nothing.
+  let showAway = $derived(
+    isDashboardPage &&
+      dashboardHasAway($editMode && $session && pageDashboard && $session.dashboardId === pageDashboard.id ? $session.draft : pageDashboard)
+  );
   let showLeft = $derived(headerConfig?.showLeft !== false); // Default true
   let showCenter = $derived(headerConfig?.showCenter !== false); // Default true
   let leftText = $derived(headerConfig?.leftText);
@@ -377,7 +385,7 @@
 
   // What the bar holds: edit mode, signed in or not, the page, the title, the text size.
   $effect(() => {
-    void [$editMode, $isAuthenticated, isDashboardPage, showLeft, showCenter, leftText, titleText, showSwitcher, $textSize];
+    void [$editMode, $isAuthenticated, isDashboardPage, showLeft, showCenter, leftText, titleText, showSwitcher, $textSize, showAway, $awayMode];
     untrack(() => void fitBar());
   });
 </script>
@@ -487,6 +495,23 @@
     </div>
 
     <div class="nav-right">
+      {#if showAway}
+        <!-- Home/Away: which address tiles open in this browser. Away is a filled, labelled pill at
+             every width, so the state is never just an icon. -->
+        <button
+          type="button"
+          class="away-toggle"
+          class:away={$awayMode}
+          onclick={() => setAway(!$awayMode)}
+          title={$awayMode
+            ? 'Away: tiles open their away address (status is still checked at the home address). Click for Home.'
+            : 'Home: tiles open their home address. Click for Away (your Tailscale, VPN or public address).'}
+          aria-label={$awayMode ? 'Away mode on: tiles open away addresses. Switch to Home' : 'Home mode: tiles open home addresses. Switch to Away'}
+        >
+          <Icon icon={$awayMode ? 'mdi:earth' : 'mdi:home-outline'} width="24" height="24" />
+          <span class="away-label">{$awayMode ? 'Away' : 'Home'}</span>
+        </button>
+      {/if}
       <button type="button" onclick={() => onSearch?.()} class="search-btn" title="Search (/)" aria-label="Search">
         <span class="icon-wrapper">
           <Icon icon="mdi:magnify" width="32" height="32" />
@@ -878,6 +903,54 @@
     font-weight: 500;
   }
 
+  /* Home/Away: a pill like the pencil's. Away is filled and labelled at every width. */
+  .away-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    height: 44px;
+    min-width: 44px;
+    padding: 0 0.85rem;
+    border-radius: 2rem;
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    border: none;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: all 0.2s;
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+
+  .away-toggle:hover {
+    background: var(--accent-solid);
+    color: var(--on-accent);
+  }
+
+  .away-toggle.away {
+    background: var(--warning-solid);
+    color: white;
+  }
+
+  .c3 .away-toggle:not(.away) .away-label {
+    display: none;
+  }
+
+  .c3 .away-toggle:not(.away) {
+    padding: 0;
+  }
+
+  .c4 .away-toggle {
+    height: 40px;
+    min-width: 40px;
+  }
+
+  .c4 .away-toggle.away {
+    padding: 0 0.6rem;
+  }
+
   /* Small: a text button next to the gear, not another big round icon. */
   .logout-btn {
     display: flex;
@@ -1055,6 +1128,21 @@
     .text-size-btn {
       width: 40px;
       height: 40px;
+    }
+
+    /* Home/Away on a phone: a 40 px target; Home an icon, Away still a labelled pill. */
+    .away-toggle {
+      height: 40px;
+      min-width: 40px;
+      padding: 0 0.55rem;
+    }
+
+    .away-toggle:not(.away) {
+      padding: 0;
+    }
+
+    .away-toggle:not(.away) .away-label {
+      display: none;
     }
   }
 

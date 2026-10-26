@@ -27,6 +27,8 @@ export interface Entry {
   type?: 'link' | 'note';
   name: string;
   url: string;
+  /** Optional away address (Tailscale/VPN/public): opened instead of url when this browser is set to Away. Absent = none. Status checks always use url. */
+  awayUrl?: string;
   icon: string;
   iconUrl?: string;
   description?: string;

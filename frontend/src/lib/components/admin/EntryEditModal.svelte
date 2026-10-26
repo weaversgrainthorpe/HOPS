@@ -12,6 +12,7 @@
   import { tileSetting, type LevelSetting, type StatusContext } from '$lib/editor/statusChecks';
   import { tileSizeOf, type TileSize } from '$lib/editor/editorActions';
   import { isSshUrl, parseSshUrl, buildSshUrl, validateSsh, SSH_DEFAULT_PORT } from '$lib/utils/ssh';
+  import { awayUrlProblem } from '$lib/utils/tileUrl';
 
   interface Props {
     entry: Entry;
@@ -67,6 +68,10 @@
     sshHost = f?.host ?? '';
     sshPort = f?.port ?? SSH_DEFAULT_PORT;
     sshUser = f?.user ?? '';
+    const af = parseSshUrl(entry.awayUrl ?? '');
+    sshAwayHost = af?.host ?? '';
+    sshAwayPort = af?.port ?? SSH_DEFAULT_PORT;
+    awayUrlText = entry.awayUrl ?? '';
   });
 
   // The Tile type dropdown: Link, SSH (a link tile whose ssh:// URL is built from
@@ -86,6 +91,20 @@
   // Errors show once a field is left or Save is tried (never silently refused).
   let sshShowErrors = $state(false);
   const sshErrors = $derived(validateSsh({ host: sshHost, port: sshPort, user: sshUser }));
+  // Home/Away: an SSH tile's away address is its own host and port (same user), built into an
+  // ssh:// awayUrl exactly like the home one. Blank away host: no away address.
+  // svelte-ignore state_referenced_locally
+  const initialAwaySsh = parseSshUrl(entry.awayUrl ?? '');
+  let sshAwayHost = $state(initialAwaySsh?.host ?? '');
+  let sshAwayPort = $state(initialAwaySsh?.port ?? SSH_DEFAULT_PORT);
+  const sshAwayErrors = $derived(
+    sshAwayHost.trim() ? validateSsh({ host: sshAwayHost, port: sshAwayPort, user: sshUser }) : {}
+  );
+  // A link tile's away address: optional, checked like any tile address.
+  let awayShowError = $state(false);
+  // svelte-ignore state_referenced_locally
+  let awayUrlText = $state(entry.awayUrl ?? '');
+  const awayError = $derived(awayUrlProblem(awayUrlText));
   const isSsh = $derived(kind === 'ssh');
   // ssh:// can't be framed: the iframe and popup modes are unavailable for it.
   const sshLike = $derived(isSsh || (kind === 'link' && isSshUrl(editedEntry.url)));
@@ -96,10 +115,15 @@
       const f = parseSshUrl(editedEntry.url ?? '');
       if (f) { sshHost = f.host; sshPort = f.port; sshUser = f.user; }
       if (!editedEntry.icon && !editedEntry.iconUrl) editedEntry.icon = 'mdi:console';
+      const af = parseSshUrl(awayUrlText);
+      if (af) { sshAwayHost = af.host; sshAwayPort = af.port; }
     } else if (kind === 'link' && sshHost.trim() && Object.keys(sshErrors).length === 0
       && (!editedEntry.url || isSshUrl(editedEntry.url))) {
       // SSH -> Link keeps what was typed, as the URL.
       editedEntry.url = buildSshUrl({ host: sshHost, port: sshPort, user: sshUser });
+      if (sshAwayHost.trim() && Object.keys(sshAwayErrors).length === 0 && (!awayUrlText.trim() || isSshUrl(awayUrlText))) {
+        awayUrlText = buildSshUrl({ host: sshAwayHost, port: sshAwayPort, user: sshUser });
+      }
     }
   }
 
@@ -125,9 +149,17 @@
   function handleSave() {
     if (isSsh) {
       sshShowErrors = true;
-      if (Object.keys(sshErrors).length > 0) return;
+      if (Object.keys(sshErrors).length > 0 || Object.keys(sshAwayErrors).length > 0) return;
       editedEntry.type = 'link';
       editedEntry.url = buildSshUrl({ host: sshHost, port: sshPort, user: sshUser });
+      if (sshAwayHost.trim()) editedEntry.awayUrl = buildSshUrl({ host: sshAwayHost, port: sshAwayPort, user: sshUser });
+      else delete editedEntry.awayUrl;
+    } else if (!isNote) {
+      awayShowError = true;
+      if (awayError) return;
+      // Optional: a blank away address is absent, never an empty string.
+      if (awayUrlText.trim()) editedEntry.awayUrl = awayUrlText.trim();
+      else delete editedEntry.awayUrl;
     }
     if (sshLike && (editedEntry.openMode === 'iframe' || editedEntry.openMode === 'popup')) {
       editedEntry.openMode = 'sametab';
@@ -143,6 +175,7 @@
     // behind from a previous link form).
     if (isNote) {
       editedEntry.url = '';
+      delete editedEntry.awayUrl;
       editedEntry.icon = '';
       editedEntry.iconUrl = '';
       editedEntry.openMode = 'newtab';
@@ -269,6 +302,29 @@
             <small>Opens <code data-testid="ssh-url-preview">{buildSshUrl({ host: sshHost, port: sshPort, user: sshUser })}</code></small>
           {/if}
         </div>
+        <div class="form-group">
+          <label for="ssh-away-host">Away host (optional)</label>
+          <input id="ssh-away-host" type="text" bind:value={sshAwayHost} placeholder="nas.your-tailnet.ts.net"
+            autocomplete="off" spellcheck="false" onblur={() => sshShowErrors = true}
+            aria-invalid={sshShowErrors && sshAwayErrors.host ? 'true' : undefined}
+            aria-describedby={sshShowErrors && sshAwayErrors.host ? 'ssh-away-host-error' : 'away-hint'} />
+          {#if sshShowErrors && sshAwayErrors.host}
+            <p id="ssh-away-host-error" class="field-error" role="alert">{sshAwayErrors.host}</p>
+          {/if}
+        </div>
+        <div class="form-group">
+          <label for="ssh-away-port">Away port</label>
+          <input id="ssh-away-port" type="text" inputmode="numeric" bind:value={sshAwayPort} placeholder="22"
+            onblur={() => sshShowErrors = true}
+            aria-invalid={sshShowErrors && sshAwayErrors.port ? 'true' : undefined}
+            aria-describedby={sshShowErrors && sshAwayErrors.port ? 'ssh-away-port-error' : undefined} />
+          {#if sshShowErrors && sshAwayErrors.port}
+            <p id="ssh-away-port-error" class="field-error" role="alert">{sshAwayErrors.port}</p>
+          {/if}
+        </div>
+        <div class="form-group full-width away-hint-row">
+          <small id="away-hint">Used when this browser is set to Away, e.g. your Tailscale or public address. Same user as above.</small>
+        </div>
       {:else if !isNote}
         <div class="form-group full-width">
           <label for="url">URL *</label>
@@ -279,6 +335,22 @@
             required
             placeholder="https://example.com"
           />
+        </div>
+        <div class="form-group full-width">
+          <label for="away-url">Away address (optional)</label>
+          <input
+            id="away-url"
+            type="url"
+            bind:value={awayUrlText}
+            placeholder="https://nas.your-tailnet.ts.net"
+            onblur={() => awayShowError = true}
+            aria-invalid={awayShowError && awayError ? 'true' : undefined}
+            aria-describedby={awayShowError && awayError ? 'away-url-error away-hint' : 'away-hint'}
+          />
+          {#if awayShowError && awayError}
+            <p id="away-url-error" class="field-error" role="alert">{awayError}</p>
+          {/if}
+          <small id="away-hint">Used when this browser is set to Away, e.g. your Tailscale or public address.</small>
         </div>
       {/if}
 
