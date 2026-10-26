@@ -71,6 +71,15 @@ fi
 # staged inside the backend module before `go build` runs.
 echo "▸ Building frontend"
 (cd "$BUILD_ROOT/frontend" && npm run build >/dev/null)
+# The build regenerates the offline icon bundle. If that changed a committed file, an icon the code
+# now uses is missing from the commit: the deployed UI would fetch it online (or show nothing
+# offline). Refuse, so it gets committed, rather than deploy a quietly incomplete bundle.
+if [[ "$BUILD_ROOT" != "$REPO_DIR" ]] && ! git -C "$BUILD_ROOT" diff --quiet -- frontend/src/lib/icons/offline-bundle.ts; then
+  echo "✗ The committed offline icon bundle is out of date (the build added icons):" >&2
+  git -C "$BUILD_ROOT" diff --stat -- frontend/src/lib/icons/offline-bundle.ts >&2
+  echo "  Run 'npm run icons:bundle' in frontend/, commit frontend/src/lib/icons/offline-bundle.ts, and deploy again." >&2
+  exit 1
+fi
 
 echo "▸ Embedding frontend into backend module"
 rm -rf "$BUILD_ROOT/backend/internal/web/build"
