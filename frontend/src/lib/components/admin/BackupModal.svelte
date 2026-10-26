@@ -4,6 +4,7 @@
   import {
     listBackups, createBackup, restoreBackup, deleteBackup, uploadBackup, previewBackupCleanup, confirmBackupCleanup,
     backupDownloadUrl, backupArchiveName, checkBackupImages, discardPendingRestore,
+    previewUnknownCleanup, confirmUnknownCleanup, type UnknownImage,
     type AtticUsage, type BackupInfo, type BackupProblem, type BackupRetention, type CleanupDeletion
   } from '$lib/utils/api';
   import { refreshServerNotices } from '$lib/stores/config';
@@ -23,6 +24,10 @@
   let pendingRestore = $state(false);
   let attic = $state<AtticUsage | null>(null);
   let atticError = $state('');
+  let atticUnknown = $state(0);
+  // "Clean up unknown images": the preview, shown before anything is deleted.
+  let unknownPreview = $state<{ items: UnknownImage[]; warnings: string[] } | null>(null);
+  let unknownBusy = $state(false);
   // A warning from the last upload or download (e.g. images it is missing): shown until the next action.
   let actionWarning = $state('');
   let uploading = $state(false);
@@ -55,6 +60,7 @@
       pendingRestore = result.pendingRestore === true;
       attic = result.attic ?? null;
       atticError = result.atticError ?? '';
+      atticUnknown = result.atticUnknown ?? 0;
     } catch (err) {
       error = why(err, 'Failed to load backups.');
     } finally {
@@ -173,6 +179,35 @@
     } catch (err) {
       actionWarning = `Couldn't check which images ${archive} includes: ${why(err, 'the request failed')}`;
     }
+  }
+
+  async function handleUnknownPreview() {
+    unknownBusy = true;
+    actionError = '';
+    try {
+      unknownPreview = await previewUnknownCleanup();
+    } catch (err) {
+      actionError = `Couldn't work out which unknown images can be cleaned up: ${why(err, 'the request failed')}`;
+    } finally {
+      unknownBusy = false;
+    }
+  }
+
+  async function handleUnknownConfirm() {
+    if (!unknownPreview) return;
+    unknownBusy = true;
+    actionError = '';
+    try {
+      const deleted = await confirmUnknownCleanup(unknownPreview.items.map((i) => i.id));
+      toast.success(deleted.length === 1 ? 'Cleaned up 1 unknown image' : `Cleaned up ${deleted.length} unknown images`);
+    } catch (err) {
+      actionError = `Clean up didn't finish: ${why(err, 'the request failed')}`;
+      toast.error(actionError);
+    } finally {
+      unknownPreview = null;
+      unknownBusy = false;
+    }
+    await loadBackups();
   }
 
   async function handleUpload(e: Event) {
@@ -335,6 +370,48 @@
       </p>
     {/if}
 
+    {#if atticUnknown > 0 && !unknownPreview}
+      <div class="retention unknown-row">
+        <span>
+          {atticUnknown === 1 ? '1 deleted image' : `${atticUnknown} deleted images`} couldn't be matched to {atticUnknown === 1 ? 'its name' : 'their names'};
+          HOPS keeps them until it is sure no backup needs them.
+        </span>
+        <button class="btn-secondary" onclick={handleUnknownPreview} disabled={unknownBusy}>Clean up unknown images</button>
+      </div>
+    {/if}
+
+    {#if unknownPreview}
+      <div class="cleanup-preview" role="region" aria-label="Unknown images preview">
+        {#if unknownPreview.items.length === 0}
+          <p>Nothing to clean up: no unknown images are left.</p>
+          <div class="preview-actions">
+            <button class="btn-secondary" onclick={() => (unknownPreview = null)}>Close</button>
+          </div>
+        {:else}
+          <p><strong>These {unknownPreview.items.length} deleted image{unknownPreview.items.length === 1 ? '' : 's'} would be deleted for good:</strong></p>
+          <ul>
+            {#each unknownPreview.items as it (it.id)}
+              <li>{it.kind === 'icons' ? 'An icon' : 'A background'}, {formatSize(it.size)}, deleted {formatDate(it.modifiedAt)}</li>
+            {/each}
+          </ul>
+          {#if unknownPreview.warnings.length > 0}
+            <p class="why">HOPS kept them because:</p>
+            <ul>
+              {#each unknownPreview.warnings as w (w)}
+                <li class="why">{w}</li>
+              {/each}
+            </ul>
+          {/if}
+          <div class="preview-actions">
+            <button class="btn-secondary" onclick={() => (unknownPreview = null)} disabled={unknownBusy}>Cancel</button>
+            <button class="btn-danger" onclick={handleUnknownConfirm} disabled={unknownBusy}>
+              Delete {unknownPreview.items.length === 1 ? 'it' : `these ${unknownPreview.items.length}`}
+            </button>
+          </div>
+        {/if}
+      </div>
+    {/if}
+
     {#if cleanupPreview}
       <div class="cleanup-preview" role="region" aria-label="Clean up preview">
         {#if cleanupPreview.length === 0}
@@ -489,6 +566,13 @@
     flex-shrink: 0;
     margin-top: 1px;
     color: var(--accent);
+  }
+
+  .unknown-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
   }
 
   .attic-error {

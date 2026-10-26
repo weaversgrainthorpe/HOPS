@@ -807,6 +807,8 @@ export interface BackupList {
   attic?: AtticUsage;
   /** The attic couldn't be read (never shown as empty). */
   atticError?: string;
+  /** Deleted image versions that couldn't be matched to a name (after the attic index was rebuilt). */
+  atticUnknown?: number;
 }
 
 export async function listBackups(): Promise<BackupList> {
@@ -820,8 +822,34 @@ export async function listBackups(): Promise<BackupList> {
     ...(resp.retention && typeof resp.retention.keepCount === 'number' ? { retention: resp.retention } : {}),
     ...(resp.pendingRestore === true ? { pendingRestore: true } : {}),
     ...(resp.attic && typeof resp.attic.files === 'number' && typeof resp.attic.bytes === 'number' ? { attic: resp.attic } : {}),
-    ...(typeof resp.atticError === 'string' && resp.atticError ? { atticError: resp.atticError } : {})
+    ...(typeof resp.atticError === 'string' && resp.atticError ? { atticError: resp.atticError } : {}),
+    ...(typeof resp.atticUnknown === 'number' && resp.atticUnknown > 0 ? { atticUnknown: resp.atticUnknown } : {})
   };
+}
+
+/** One deleted image version that couldn't be matched to a name. */
+export interface UnknownImage {
+  id: string;
+  kind: string;
+  size: number;
+  modifiedAt: string;
+}
+
+/** What "Clean up unknown images" would delete, and why HOPS keeps them by itself (nothing is deleted). */
+export async function previewUnknownCleanup(): Promise<{ items: UnknownImage[]; warnings: string[] }> {
+  const resp = await fetchAPI('/backups/attic-unknown');
+  if (!resp || !Array.isArray(resp.items) || !Array.isArray(resp.warnings)) {
+    throw new Error('The server sent a preview this version of HOPS cannot read.');
+  }
+  return { items: resp.items, warnings: resp.warnings };
+}
+
+/** Delete the confirmed unknown images; a partial failure is thrown with the server's reason. */
+export async function confirmUnknownCleanup(ids: string[]): Promise<string[]> {
+  const resp = await fetchAPI('/backups/attic-unknown', { method: 'POST', body: JSON.stringify({ ids }) });
+  if (!resp || !Array.isArray(resp.deleted)) throw new Error('The server did not confirm the clean up.');
+  if (typeof resp.error === 'string' && resp.error) throw new Error(`${resp.error} (${resp.deleted.length} deleted)`);
+  return resp.deleted;
 }
 
 /** Which images a backup's download will include, and which it refers to but can't be found. */

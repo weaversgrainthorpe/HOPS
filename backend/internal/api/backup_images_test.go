@@ -15,6 +15,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -315,5 +316,50 @@ func TestArchiveImagesAreProcessedLikeUploads(t *testing.T) {
 	// An SVG icon is kept as is, like an SVG upload.
 	if out, err := processArchiveImage("icons", "i.svg", []byte("<svg/>")); err != nil || string(out) != "<svg/>" {
 		t.Fatalf("svg: %v", err)
+	}
+}
+
+func TestCleanUpUnknownImagesAPI(t *testing.T) {
+	dir := t.TempDir()
+	_, router, db := setupTestRouterInDir(t, dir)
+	c := newClient(t, router)
+	// An attic version no name can be matched to (as after an index rebuild).
+	if _, err := db.Exec(`INSERT OR REPLACE INTO config (id, data) VALUES (1, '{"schemaVersion":3,"dashboards":[{"id":"d","name":"D","iconUrl":"/icons/missing.png"}]}')`); err != nil {
+		t.Fatal(err)
+	}
+	data := []byte("UNKNOWN")
+	os.MkdirAll(filepath.Join(dir, "attic", "icons"), 0o755)
+	os.WriteFile(filepath.Join(dir, "attic", "icons", sha(data)), data, 0o644)
+
+	code, prev := c.do("GET", "/api/backups/attic-unknown", nil)
+	if code != 200 {
+		t.Fatalf("preview: %d %v", code, prev)
+	}
+	items := prev["items"].([]interface{})
+	if len(items) != 1 || items[0].(map[string]interface{})["id"] != "icons/"+sha(data) {
+		t.Fatalf("items %v", prev["items"])
+	}
+	if ws := prev["warnings"].([]interface{}); len(ws) == 0 || !strings.Contains(ws[0].(string), "icons/missing.png") {
+		t.Fatalf("warnings %v", prev["warnings"])
+	}
+	// Confirmed: deleted. Without CSRF or signed in: refused.
+	body := map[string]interface{}{"ids": []string{"icons/" + sha(data)}}
+	raw, _ := json.Marshal(body)
+	req := httptest.NewRequest("POST", "/api/backups/attic-unknown", bytes.NewReader(raw))
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	rw := httptest.NewRecorder()
+	router.ServeHTTP(rw, req)
+	if rw.Code != http.StatusForbidden {
+		t.Fatalf("without CSRF: %d", rw.Code)
+	}
+	code, resp := c.do("POST", "/api/backups/attic-unknown", body)
+	if code != 200 || len(resp["deleted"].([]interface{})) != 1 {
+		t.Fatalf("clean: %d %v", code, resp)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "attic", "icons", sha(data))); !os.IsNotExist(err) {
+		t.Fatal("not deleted")
+	}
+	if w := c.rawReq("DELETE", "/api/backups/attic-unknown", nil, ""); w.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("DELETE: %d", w.Code)
 	}
 }

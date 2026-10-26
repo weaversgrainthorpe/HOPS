@@ -11,13 +11,15 @@ vi.mock('$lib/utils/api', () => ({
   discardPendingRestore: vi.fn(async () => {}),
   backupDownloadUrl: (n: string) => `/api/backups/${encodeURIComponent(n)}`,
   backupArchiveName: (n: string) => n.replace(/\.db$/, '.zip'),
-  checkBackupImages: vi.fn(async () => ({ included: [], missing: [], ambiguous: [] }))
+  checkBackupImages: vi.fn(async () => ({ included: [], missing: [], ambiguous: [] })),
+  previewUnknownCleanup: vi.fn(),
+  confirmUnknownCleanup: vi.fn()
 }));
 vi.mock('$lib/stores/confirmModal', () => ({ confirm: vi.fn(async () => true) }));
 vi.mock('$lib/stores/config', () => ({ refreshServerNotices: vi.fn(async () => {}) }));
 import { render, screen, fireEvent } from '@testing-library/svelte';
 import BackupModal from './BackupModal.svelte';
-import { listBackups, restoreBackup, uploadBackup, previewBackupCleanup, confirmBackupCleanup, discardPendingRestore, checkBackupImages } from '$lib/utils/api';
+import { listBackups, restoreBackup, uploadBackup, previewBackupCleanup, confirmBackupCleanup, discardPendingRestore, checkBackupImages, previewUnknownCleanup, confirmUnknownCleanup } from '$lib/utils/api';
 import { confirm } from '$lib/stores/confirmModal';
 
 const backup = { name: 'hops-backup-2026-10-25_10-00-00_manual.db', path: '/x', size: 2048, createdAt: '2026-10-25T10:00:00Z' };
@@ -143,5 +145,23 @@ describe('BackupModal', () => {
     const err = await screen.findByTestId('backup-attic');
     expect(err.textContent).toContain('permission denied');
     expect(err.getAttribute('role')).toBe('alert');
+  });
+
+  it('Clean up unknown images previews first, with why they were kept, and deletes only after confirming', async () => {
+    vi.mocked(listBackups).mockResolvedValue({ backups: [backup], problems: [], attic: { files: 1, bytes: 2048 }, atticUnknown: 1 });
+    vi.mocked(previewUnknownCleanup).mockResolvedValue({
+      items: [{ id: 'icons/' + 'a'.repeat(64), kind: 'icons', size: 2048, modifiedAt: '2026-10-25T10:00:00Z' }],
+      warnings: ['1 backup(s) have no record of their images (hops-backup-x.db); restoring one may need them']
+    });
+    vi.mocked(confirmUnknownCleanup).mockResolvedValue(['icons/' + 'a'.repeat(64)]);
+    render(BackupModal, { onClose: () => {} });
+    await fireEvent.click(await screen.findByRole('button', { name: 'Clean up unknown images' }));
+    const region = await screen.findByRole('region', { name: 'Unknown images preview' });
+    expect(region.textContent).toContain('An icon, 2.0 KB');
+    expect(region.textContent).toContain('restoring one may need them');
+    expect(region.textContent).not.toContain('a'.repeat(64)); // readable, no raw hashes
+    expect(confirmUnknownCleanup).not.toHaveBeenCalled();
+    await fireEvent.click(screen.getByRole('button', { name: 'Delete it' }));
+    expect(confirmUnknownCleanup).toHaveBeenCalledWith(['icons/' + 'a'.repeat(64)]);
   });
 });

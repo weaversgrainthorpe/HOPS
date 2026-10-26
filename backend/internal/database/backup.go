@@ -161,7 +161,8 @@ type BackupManager struct {
 	restoreImages *BackupProblem
 	liveDB        *sql.DB
 	refCache      map[string]cachedRefs
-	indexRebuilt  *BackupProblem // the attic index was rebuilt (dismissible, kept across restarts)
+	indexRebuilt  *BackupProblem       // the attic index was rebuilt (dismissible, kept across restarts)
+	hashCache     map[string]hashEntry // image hashes by path, valid while the file's fingerprint matches
 	// atticMu serialises moves into and out of the attic with its sweep.
 	atticMu sync.Mutex
 }

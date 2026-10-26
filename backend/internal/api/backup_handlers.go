@@ -43,6 +43,7 @@ func (r *Router) handleBackups(w http.ResponseWriter, req *http.Request) {
 		} else {
 			resp["attic"] = u
 		}
+		resp["atticUnknown"] = r.backupManager.AtticUnknownCount()
 		writeJSON(w, resp)
 
 	case http.MethodPost:
@@ -133,6 +134,9 @@ func (r *Router) handleBackupActions(w http.ResponseWriter, req *http.Request) {
 		return
 	case "cleanup":
 		r.handleBackupCleanup(w, req)
+		return
+	case "attic-unknown":
+		r.handleAtticUnknown(w, req)
 		return
 	case "upload":
 		if req.Method != http.MethodPost {
@@ -331,6 +335,44 @@ func (r *Router) handleBackupCleanup(w http.ResponseWriter, req *http.Request) {
 			writeJSON(w, map[string]interface{}{"deleted": deleted, "error": "Some backups couldn't be deleted: " + err.Error()})
 			return
 		}
+		writeJSON(w, map[string]interface{}{"deleted": deleted})
+	default:
+		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+// handleAtticUnknown serves "Clean up unknown images" (M6 §12 fix round 3):
+// GET lists the attic versions no name could be matched to (after an index
+// rebuild) and why HOPS keeps them by itself; POST {"ids": [...]} deletes
+// those of the confirmed ids that are still unknown (re-checked; a version a
+// backup's record names is never deleted).
+func (r *Router) handleAtticUnknown(w http.ResponseWriter, req *http.Request) {
+	switch req.Method {
+	case http.MethodGet:
+		prev, err := r.backupManager.PreviewUnknownCleanup()
+		if err != nil {
+			writeJSONError(w, "Couldn't work out which unknown images can be cleaned up: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		writeJSON(w, prev)
+	case http.MethodPost:
+		var body struct {
+			IDs []string `json:"ids"`
+		}
+		if ae := decodeBody(w, req, maxSmallBodyBytes, &body); ae != nil {
+			writeAPIError(w, ae)
+			return
+		}
+		deleted, err := r.backupManager.CleanUpUnknown(body.IDs)
+		if deleted == nil {
+			deleted = []string{}
+		}
+		if err != nil {
+			slog.Error("clean up unknown images", "component", "backup", "error", err)
+			writeJSON(w, map[string]interface{}{"deleted": deleted, "error": "Some unknown images couldn't be cleaned up: " + err.Error()})
+			return
+		}
+		slog.Info("cleaned up unknown images", "component", "backup", "deleted", len(deleted))
 		writeJSON(w, map[string]interface{}{"deleted": deleted})
 	default:
 		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)

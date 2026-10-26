@@ -1048,7 +1048,7 @@ func TestLostAtticIndexIsRebuiltAndNothingIsLost(t *testing.T) {
 		if err != nil || strings.Join(idx.Names["icons/rec.png"], ",") != hRec {
 			t.Fatalf("%s: index not rebuilt from the records: %+v %v", damage, idx, err)
 		}
-		if !hasProblem(bm, ProblemAtticIndexRebuilt, "1 image version") {
+		if !hasProblem(bm, ProblemAtticIndexRebuilt, "1 deleted image version") {
 			t.Fatalf("%s: no visible notice: %+v", damage, bm.Problems())
 		}
 		bm.DismissProblem(ProblemAtticIndexRebuilt)
@@ -1156,5 +1156,157 @@ func TestRecordHashesFresh(t *testing.T) {
 	rec, _ := bm.readRecord(filepath.Base(b2))
 	if rec.Images["icons/x.png"] != sum([]byte("BBBB")) {
 		t.Fatal("a stale cached hash was recorded")
+	}
+}
+
+// Fix round 3 (1): hashes are cached again, keyed on the file's full
+// fingerprint (device, inode, size, mtime and ctime in ns); a change with the
+// same size and a reset mtime still re-hashes (ctime moves).
+func TestHashCacheDetectsSameSizeChangeWithResetMtime(t *testing.T) {
+	if !fingerprintSupported {
+		t.Skip("no file fingerprint on this platform (always hashed fresh)")
+	}
+	bm, dbPath := setupBackupTest(t)
+	p := filepath.Join(filepath.Dir(dbPath), "icons", "x.png")
+	writeFile(t, p, "AAAA")
+	mt := time.Unix(1700000000, 0)
+	os.Chtimes(p, mt, mt)
+	h1, err := bm.liveHash(p)
+	if err != nil || h1 != sum([]byte("AAAA")) {
+		t.Fatal(err)
+	}
+	if bm.cachedHashes() != 1 {
+		t.Fatal("not cached")
+	}
+	time.Sleep(20 * time.Millisecond) // ctime has ns resolution, but be sure it moves
+	f, _ := os.OpenFile(p, os.O_WRONLY, 0)
+	f.WriteAt([]byte("BBBB"), 0)
+	f.Close()
+	os.Chtimes(p, mt, mt)
+	h2, err := bm.liveHash(p)
+	if err != nil || h2 != sum([]byte("BBBB")) {
+		t.Fatalf("a same-size change with its mtime reset was missed: %s", h2)
+	}
+	// Replaced by another file (new inode), same size and mtime.
+	tmp := p + ".new"
+	writeFile(t, tmp, "CCCC")
+	os.Chtimes(tmp, mt, mt)
+	os.Rename(tmp, p)
+	if h3, _ := bm.liveHash(p); h3 != sum([]byte("CCCC")) {
+		t.Fatal("a replaced file was missed")
+	}
+}
+
+// Fix round 3 (2): an unknown attic version is dropped automatically only
+// when nothing could still need it: every backup has a record, no staged
+// restore names it, and every image the live data uses is in place.
+func TestUnknownVersionsClearOnlyWhenSafe(t *testing.T) {
+	bm, dbPath := setupBackupTest(t)
+	db := openDB(t, dbPath)
+	bm.SetLiveDB(db)
+	dir := filepath.Dir(dbPath)
+	setConfig(t, db, "/icons/live.png")
+	writeFile(t, bm.liveImagePath("icons", "live.png"), "LIVE")
+	// A record-less backup (as if made before records existed).
+	p, err := bm.CreateBackupWithDB(db, "manual")
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Remove(bm.recordPath(filepath.Base(p)))
+	hU := toAttic(t, bm, "icons", "old.png", "OLD")
+	os.Remove(filepath.Join(dir, "attic", "index.json")) // the rebuild can't name it: unknown
+	if _, err := bm.SweepAttic(); err != nil {
+		t.Fatal(err)
+	}
+	if !exists(bm.atticHashPath("icons", hU)) {
+		t.Fatal("dropped while a backup has no record")
+	}
+	// A live reference not in place: kept (checked by the sweep after the delete).
+	setConfig(t, db, "/icons/live.png", "/icons/gone.png")
+	if err := bm.DeleteBackup(filepath.Base(p)); err != nil {
+		t.Fatal(err)
+	}
+	if !exists(bm.atticHashPath("icons", hU)) {
+		t.Fatal("dropped while a live image is missing")
+	}
+	// Everything accounted for: dropped, and gone from the index.
+	setConfig(t, db, "/icons/live.png")
+	if _, err := bm.SweepAttic(); err != nil {
+		t.Fatal(err)
+	}
+	if exists(bm.atticHashPath("icons", hU)) {
+		t.Fatal("not dropped although nothing can need it")
+	}
+	bm.atticMu.Lock()
+	idx, _ := bm.loadIndexLocked()
+	bm.atticMu.Unlock()
+	if len(idx.Unknown) != 0 {
+		t.Fatalf("index still lists %v", idx.Unknown)
+	}
+}
+
+func TestCleanUpUnknownImagesPreviewThenConfirm(t *testing.T) {
+	bm, dbPath := setupBackupTest(t)
+	db := openDB(t, dbPath)
+	bm.SetLiveDB(db)
+	dir := filepath.Dir(dbPath)
+	setConfig(t, db, "/icons/missing.png") // keeps unknowns from clearing by themselves
+	hU := toAttic(t, bm, "icons", "old.png", "OLD")
+	os.Remove(filepath.Join(dir, "attic", "index.json"))
+	if _, err := bm.SweepAttic(); err != nil {
+		t.Fatal(err)
+	}
+	prev, err := bm.PreviewUnknownCleanup()
+	if err != nil || len(prev.Items) != 1 || prev.Items[0].ID != "icons/"+hU || prev.Items[0].Size != 3 {
+		t.Fatalf("preview %+v %v", prev, err)
+	}
+	if !strings.Contains(strings.Join(prev.Warnings, " "), "icons/missing.png") {
+		t.Fatalf("warnings %v", prev.Warnings)
+	}
+	if !exists(bm.atticHashPath("icons", hU)) {
+		t.Fatal("the preview deleted something")
+	}
+	// A confirmed id that isn't unknown (made up) is never deleted.
+	deleted, err := bm.CleanUpUnknown([]string{"icons/" + hU, "icons/" + strings.Repeat("0", 64)})
+	if err != nil || strings.Join(deleted, ",") != "icons/"+hU {
+		t.Fatalf("deleted %v %v", deleted, err)
+	}
+	if exists(bm.atticHashPath("icons", hU)) {
+		t.Fatal("not deleted")
+	}
+	if p, _ := bm.PreviewUnknownCleanup(); len(p.Items) != 0 {
+		t.Fatal("still listed")
+	}
+}
+
+// Fix round 3 (3): restoring a backup without a record after an index
+// rebuild: an unknown version of that kind may be the one it used, so the
+// name is ambiguous, not silently the live version.
+func TestRecordlessRestoreAfterIndexRebuildIsAmbiguous(t *testing.T) {
+	bm, dbPath := setupBackupTest(t)
+	db := openDB(t, dbPath)
+	bm.SetLiveDB(db)
+	dir := filepath.Dir(dbPath)
+	setConfig(t, db, "/icons/x.png")
+	writeFile(t, bm.liveImagePath("icons", "x.png"), "version A")
+	b, err := bm.CreateBackupWithDB(db, "manual")
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Remove(bm.recordPath(filepath.Base(b)))
+	if _, err := bm.MoveToAttic("icons", "x.png"); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, bm.liveImagePath("icons", "x.png"), "version C")
+	os.Remove(filepath.Join(dir, "attic", "index.json"))
+	if _, err := bm.SweepAttic(); err != nil { // rebuilds: version A is unknown
+		t.Fatal(err)
+	}
+	r := restoreAndApply(t, bm, db, dbPath, filepath.Base(b))
+	if strings.Join(r.Ambiguous, ",") != "icons/x.png" || !hasProblem(bm, ProblemRestoreImages, "can't tell which version") {
+		t.Fatalf("not ambiguous: %+v %+v", r, bm.Problems())
+	}
+	if readString(t, bm.liveImagePath("icons", "x.png")) != "version C" {
+		t.Fatal("the file in place was changed")
 	}
 }

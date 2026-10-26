@@ -338,4 +338,45 @@ with zipfile.ZipFile(src) as zin, zipfile.ZipFile(dst, "w") as zout:
 		expect(served.status()).toBe(200);
 		expect(Buffer.from(await served.body()).equals(A)).toBe(true);
 	});
+
+	test('unknown images after a lost attic index: kept, explained, and cleared only after a confirmed preview', async () => {
+		test.setTimeout(60_000);
+		// A dashboard uses an image that isn't in place, so HOPS can't clear unknowns by itself.
+		const dash = {
+			id: 'unk-dash', name: 'Unknown e2e', order: 0, path: '/unk', revision: 1,
+			settings: { statusChecksEnabled: null, statusCheckIntervalMinutes: null, statusCheckTimeoutSeconds: null, editIdleTimeoutMinutes: null, animatedFolderBackgrounds: null },
+			tabs: [{ id: 'unk-tab', name: 'Main', order: 0, root: { columns: 24, children: [
+				{ id: 'unk-t1', kind: 'tile', type: 'link', name: 'Gone', url: 'https://gone.example.lan/', iconUrl: '/icons/never-there.png',
+					openMode: 'newtab', size: 'small', order: 0, placement: { x: 0, y: 0, w: 1, h: 1 } }
+			] } }]
+		};
+		const doc = { format: 'hops-export', schemaVersion: 3, exportedAt: new Date().toISOString(), exportType: 'single-dashboard', config: { layoutVersion: 2, dashboards: [dash] } };
+		const imp = await page.request.post('/api/config/import', { headers: await csrf(), multipart: { file: { name: 'unk.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(doc)) } } });
+		expect(imp.status(), await imp.text()).toBe(200);
+		// An attic version nothing names, and a lost index.
+		const bytes = Buffer.from('synthetic unknown image');
+		const sha = createHash('sha256').update(bytes).digest('hex');
+		const file = path.join(dataDir, 'attic', 'icons', sha);
+		fs.mkdirSync(path.dirname(file), { recursive: true });
+		fs.writeFileSync(file, bytes);
+		fs.rmSync(path.join(dataDir, 'attic', 'index.json'), { force: true });
+
+		await openBackups();
+		await backupsDialog().getByRole('button', { name: 'Create Backup' }).click(); // its cleanup rebuilds the index
+		await expect(page.locator('.toast', { hasText: 'Backup created' })).toBeVisible();
+		expect(fs.existsSync(file), 'kept while a dashboard image is missing').toBe(true);
+		const notice = backupsDialog().locator('.problem', { hasText: 'rebuilt it from the backups' });
+		await expect(notice).toBeVisible();
+		await expect(notice).toContainText('Clean up unknown images');
+		await expect(notice).not.toContainText(sha);
+
+		await backupsDialog().getByRole('button', { name: 'Clean up unknown images' }).click();
+		const preview = backupsDialog().getByRole('region', { name: 'Unknown images preview' });
+		await expect(preview).toContainText('An icon');
+		await expect(preview).toContainText('icons/never-there.png');
+		expect(fs.existsSync(file), 'nothing deleted by the preview').toBe(true);
+		await preview.getByRole('button', { name: /^Delete (it|these \d+)$/ }).click();
+		await expect(page.locator('.toast', { hasText: /Cleaned up \d+ unknown images?/ })).toBeVisible();
+		expect(fs.existsSync(file)).toBe(false);
+	});
 });
