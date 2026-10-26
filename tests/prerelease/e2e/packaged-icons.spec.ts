@@ -201,7 +201,6 @@ test.describe('Settings › Icons › Packaged icons', () => {
 
 	test('the "Offline and limits" note states the real shipped counts', async ({ page }) => {
 		const info = await (await page.request.get('/api/icons/packaged')).json();
-		const variants = (info.dashboardIcons.names as string[]).filter((n) => /-(dark|light)$/.test(n)).length;
 		// The real Dashboard Icons collection: over two thousand SVGs, not the library's subset.
 		expect(info.dashboardIcons.count).toBeGreaterThan(2000);
 		expect(info.presetRows).toBeGreaterThan(100);
@@ -209,7 +208,7 @@ test.describe('Settings › Icons › Packaged icons', () => {
 		await openIcons(page);
 		const note = page.getByTestId('shipped-counts');
 		await expect(note).toHaveText(
-			`Shipped with HOPS: ${fmt(info.dashboardIcons.count)} Dashboard Icons (${fmt(info.dashboardIcons.count - variants)} logos and ${fmt(variants)} light or dark variants), served by this HOPS server; ` +
+			`Shipped with HOPS: ${fmt(info.dashboardIcons.count)} Dashboard Icons (including light and dark variants of some logos), served by this HOPS server; ` +
 				`${fmt(info.presetRows)} preset library icons; ${fmt(b.mdi + b.si)} Iconify icons in the offline bundle (${fmt(b.mdi)} Material Design, ${fmt(b.si)} Simple Icons).`,
 			{ useInnerText: true }
 		);

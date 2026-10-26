@@ -319,7 +319,7 @@ describe('/settings/icons', () => {
 		const note = () => document.querySelector('.offline-note')?.textContent?.replace(/\s+/g, ' ');
 		await waitFor(() =>
 			expect(note()).toContain(
-				'Shipped with HOPS: 3 Dashboard Icons (2 logos and 1 light or dark variants), served by this HOPS server; 1 preset library icons; 2 Iconify icons in the offline bundle (2 Material Design, 0 Simple Icons).'
+				'Shipped with HOPS: 3 Dashboard Icons (including light and dark variants of some logos), served by this HOPS server; 1 preset library icons; 2 Iconify icons in the offline bundle (2 Material Design, 0 Simple Icons).'
 			)
 		);
 		expect(screen.queryByRole('alert')).toBeNull();

@@ -100,8 +100,6 @@
   // The offline Iconify bundle, counted from what is registered in this page.
   const bundledCounts = packagedCounts(listIcons(''));
   const bundledCount = bundledCounts.total;
-  // Dashboard Icons light/dark variants (the library imports only the plain logo of each).
-  let dashboardVariants = $derived(packaged ? packaged.dashboardNames.filter((n) => /-(dark|light)$/.test(n)).length : 0);
   const fmt = (n: number) => n.toLocaleString('en-GB');
 
   const categoryName = (id: string) => lib.categories.find((c) => c.id === id)?.name ?? id;
@@ -534,7 +532,7 @@
   <h3 id="offline-heading" class="sub-title">Offline and limits</h3>
   <p class="offline-note" data-testid="shipped-counts">
     Shipped with HOPS:
-    {#if packaged}{fmt(packaged.dashboardCount)} Dashboard Icons ({fmt(packaged.dashboardCount - dashboardVariants)} logos and {fmt(dashboardVariants)} light or dark variants), served by this HOPS server;
+    {#if packaged}{fmt(packaged.dashboardCount)} Dashboard Icons (including light and dark variants of some logos), served by this HOPS server;
       {fmt(packaged.presetRows)} preset library icons;{:else if packagedError}Dashboard Icons and preset library icons: couldn't be counted ({packagedError});{:else}Dashboard Icons and preset library icons: counting…;{/if}
     {#if bundledCount > 0}{fmt(bundledCount)} Iconify icons in the offline bundle ({fmt(bundledCounts.mdi)} Material Design, {fmt(bundledCounts['simple-icons'])} Simple Icons).{:else}Iconify icons in the offline bundle: couldn't be counted.{/if}
   </p>
