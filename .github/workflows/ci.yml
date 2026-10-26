@@ -108,6 +108,19 @@ jobs:
       - name: Static tenet guards
         run: ./scripts/check-tenets.sh
 
+      - name: Release build has no dev-only disk UI server
+        # --frontend is compiled in only with -tags dev; a release build
+        # must reject it and carry no trace of its help text.
+        run: |
+          (cd backend && CGO_ENABLED=0 go build -o /tmp/hops-rel ./cmd/hops)
+          if /tmp/hops-rel --frontend /tmp >/dev/null 2>&1; then
+            echo "✗ release build accepted --frontend"; exit 1
+          fi
+          if strings /tmp/hops-rel | grep -q -- '--frontend'; then
+            echo "✗ release binary mentions --frontend"; exit 1
+          fi
+          (cd backend && go build -tags dev ./... && go vet -tags dev ./cmd/... ./internal/api)
+
       - name: Single-file binary serves the embedded UI (no --frontend)
         # The regression guard for TENET 2: the binary alone — with no
         # frontend/ folder on disk and no --frontend flag — must serve the UI.

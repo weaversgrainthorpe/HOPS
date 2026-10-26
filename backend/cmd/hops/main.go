@@ -55,19 +55,18 @@ func main() {
 	// interface is an operator security decision, not a user preference,
 	// and it must be settable without first being able to reach the GUI.
 	dataDir := flag.String("data", "../data", "Data directory for SQLite database")
-	// The UI is embedded in the binary; this flag is an optional dev override
-	// that serves the SPA from a build directory on disk instead (so the UI
-	// can be rebuilt without rebuilding the binary). Empty = use embedded UI.
-	frontendDir := flag.String("frontend", "", "Optional: serve the UI from this build directory on disk instead of the embedded copy")
+	// Dev-only flags (--frontend) exist only in `-tags dev` builds.
+	applyDevFlags := registerDevFlags()
 	host := flag.String("host", "", "Interface to bind to (e.g. 127.0.0.1 for loopback-only). Empty (default) binds all interfaces.")
 	flag.Parse()
 
 	// Initialize configuration
 	cfg := &config.Config{
-		BindHost:    *host,
-		DataDir:     *dataDir,
-		FrontendDir: *frontendDir,
+		BindHost: *host,
+		DataDir:  *dataDir,
 	}
+
+	applyDevFlags()
 
 	// Validate config before doing any work
 	if err := cfg.Validate(); err != nil {
@@ -208,23 +207,6 @@ func main() {
 	discoveryOrch.Start()
 	defer discoveryOrch.Stop()
 
-	// The UI is embedded in the binary, so it's always available. Only when a
-	// dev override (--frontend) is given do we sanity-check that the directory
-	// actually has a build in it; if not, serveSPA falls back to the embedded
-	// copy, so warn rather than fail.
-	if cfg.FrontendDir != "" {
-		indexPath := filepath.Join(cfg.FrontendDir, "index.html")
-		if _, err := os.Stat(indexPath); os.IsNotExist(err) {
-			slog.Warn("--frontend dir has no index.html, using embedded UI", "path", cfg.FrontendDir)
-		} else {
-			// Not the normal mode: a leftover --frontend in a service unit
-			// silently pins an old UI on top of a new binary. Say so.
-			slog.Warn("serving UI from disk (--frontend), NOT the copy embedded in this binary — "+
-				"it may be older than the server; remove --frontend unless you are developing the UI",
-				"path", cfg.FrontendDir)
-		}
-	}
-
 	// Initialize API router
 	startTime := time.Now()
 	apiRouter, router := api.NewRouter(db, authService, cfg, settingsSvc, startTime, discoveryStore, discoveryOrch, migration)
@@ -260,7 +242,6 @@ func main() {
 		"version", version.Full(),
 		"addr", addr,
 		"data_dir", cfg.DataDir,
-		"frontend_dir", cfg.FrontendDir,
 	)
 
 	// Start server in a goroutine so we can listen for shutdown signals

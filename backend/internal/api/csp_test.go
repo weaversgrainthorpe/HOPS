@@ -112,29 +112,6 @@ func TestAppCSPHashesInlineScripts(t *testing.T) {
 	}
 }
 
-// With --frontend on disk (dev), index.html is hashed as served, so a UI
-// rebuild while the server runs stays allowed.
-func TestDiskFrontendCSPFollowsIndexHTML(t *testing.T) {
-	rt, h, _ := setupTestRouterInDir(t, t.TempDir())
-	dir := t.TempDir()
-	rt.config.FrontendDir = dir
-	write := func(body string) {
-		if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte("<script>"+body+"</script>"), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	for _, body := range []string{"first()", "second()"} {
-		write(body)
-		for _, p := range []string{"/", "/index.html", "/d/kitchen"} {
-			w := httptest.NewRecorder()
-			h.ServeHTTP(w, httptest.NewRequest("GET", p, nil))
-			if csp := w.Header().Get("Content-Security-Policy"); !strings.Contains(csp, cspHash(body)) {
-				t.Errorf("GET %s after writing %q: CSP %q lacks its hash", p, body, csp)
-			}
-		}
-	}
-}
-
 // Every write goes through the standard protected wrapper at registration:
 // no handler may gate a method by calling r.protected itself.
 func TestNoInlineProtectedGates(t *testing.T) {

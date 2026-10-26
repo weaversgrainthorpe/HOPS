@@ -4,6 +4,7 @@ hops-linux-*
 hops-darwin-*
 hops-windows-*
 backend/hops
+backend/hops-testdev
 backend/*.db
 *.exe
 *.exe~

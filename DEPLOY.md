@@ -186,7 +186,6 @@ GUI — see [Runtime Configuration](#runtime-configuration) below.
 |------|---------|-------------|
 | `--data` | `../data` | Data directory for SQLite database, backups, and uploads |
 | `--host` | _(empty)_ | Interface to bind to. Empty = all interfaces (default). Set to `127.0.0.1` to bind loopback-only when HOPS sits behind a reverse proxy on the same host and shouldn't be reachable directly. |
-| `--frontend` | _(empty)_ | Optional dev override: serve the UI from this build directory on disk instead of the copy embedded in the binary. Leave unset for normal use. |
 
 ## Runtime Configuration
 

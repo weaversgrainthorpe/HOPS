@@ -6,8 +6,6 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
-	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 )
@@ -104,35 +102,18 @@ func setSecurityHeaders(w http.ResponseWriter, csp string) {
 	h.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), hid=(), bluetooth=()")
 }
 
-// spaIndexHTML reads the index.html the router will serve (the --frontend
-// directory on disk when set, otherwise the embedded build). A missing
+// spaIndexHTML reads the index.html the router will serve (the embedded build; in a
+// -tags dev build, the --frontend directory when set). A missing
 // index.html (a Go test build without the UI) yields an empty policy hash
 // list; that is logged, not hidden, since a real build would then fail to
 // boot its UI.
 func (r *Router) spaIndexHTML() []byte {
-	if r.config != nil && r.config.FrontendDir != "" {
-		if fi, err := os.Stat(r.config.FrontendDir); err == nil && fi.IsDir() {
-			b, err := os.ReadFile(filepath.Join(r.config.FrontendDir, "index.html"))
-			if err != nil {
-				slog.Warn("CSP: cannot read index.html from --frontend; inline scripts will be blocked", "component", "http", "error", err)
-			}
-			return b
-		}
+	if b, ok := devSPAIndexHTML(); ok {
+		return b
 	}
 	b, err := fs.ReadFile(spaFS, "index.html")
 	if err != nil {
 		slog.Warn("CSP: embedded UI has no index.html; inline scripts will be blocked", "component", "http", "error", err)
 	}
 	return b
-}
-
-// setDiskIndexCSP recomputes the CSP for an index.html served from the
-// --frontend directory (dev override), so rebuilding the UI while the server
-// runs keeps the inline-script hash in step.
-func setDiskIndexCSP(w http.ResponseWriter, indexPath string) {
-	b, err := os.ReadFile(indexPath)
-	if err != nil {
-		return // ServeFile will answer the missing file itself
-	}
-	w.Header().Set("Content-Security-Policy", appContentSecurityPolicy(b))
 }

@@ -23,7 +23,7 @@ UI. No YAML, no JSON, no TOML, no env-var soup.
 rate limits, timeouts, upload caps, session lifetime — live on the Settings page
 and persist in SQLite. The only command-line inputs are the bootstrap paths that
 must exist *before* the database is open: `--data` (and `--host` as an operator
-security choice; `--frontend` is a dev-only override).
+security choice; `--frontend` exists only in `-tags dev` builds).
 
 **Violated by.** Introducing a config file users are expected to edit; requiring
 an env var to enable a feature; adding a setting that can *only* be changed via

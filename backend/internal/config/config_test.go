@@ -10,8 +10,7 @@ import (
 // to verify each individual validation rule in isolation.
 func validConfig() *Config {
 	return &Config{
-		DataDir:     "/tmp/hops",
-		FrontendDir: "/tmp/hops/frontend",
+		DataDir: "/tmp/hops",
 	}
 }
 
@@ -34,15 +33,5 @@ func TestValidateRequiresDataDir(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "data directory") {
 		t.Errorf("error should mention data directory, got: %v", err)
-	}
-}
-
-// FrontendDir is optional now that the UI is embedded in the binary — an
-// empty value means "serve the embedded UI", so it must still validate.
-func TestValidateAllowsEmptyFrontendDir(t *testing.T) {
-	cfg := validConfig()
-	cfg.FrontendDir = ""
-	if err := cfg.Validate(); err != nil {
-		t.Errorf("expected empty frontend dir to be valid, got: %v", err)
 	}
 }

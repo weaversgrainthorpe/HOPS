@@ -7,6 +7,7 @@
 # These are STATIC checks (greps) and run fast with no toolchain. The
 # single-file *runtime* smoke (binary serves the embedded UI with no
 # --frontend) lives in the CI `tenets` job, which has Go + Node available.
+# (--frontend itself exists only in `-tags dev` builds; release builds reject it.)
 #
 # Run locally any time:  ./scripts/check-tenets.sh
 set -uo pipefail

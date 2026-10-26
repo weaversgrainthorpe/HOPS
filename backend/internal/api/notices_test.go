@@ -78,7 +78,7 @@ func restartRouter(t *testing.T, db *sql.DB) http.Handler {
 		t.Fatal(err)
 	}
 	store := discovery.NewStore(db)
-	cfg := &config.Config{DataDir: t.TempDir(), FrontendDir: t.TempDir()}
+	cfg := &config.Config{DataDir: t.TempDir()}
 	_, h := NewRouter(db, auth.NewService(db), cfg, svc, time.Now(), store, discovery.NewOrchestrator(store, svc), migration)
 	return h
 }

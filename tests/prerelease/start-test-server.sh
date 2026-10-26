@@ -18,10 +18,12 @@ PORT="${HOPS_TEST_PORT:-18080}"
 log() { echo "[start-test-server] $*" >&2; }
 
 # Ensure backend binary exists
-BIN="$REPO_DIR/backend/hops"
-if [[ ! -x "$BIN" ]] || [[ "$REPO_DIR/backend/cmd/hops/main.go" -nt "$BIN" ]]; then
-  log "Building backend"
-  (cd "$REPO_DIR/backend" && CGO_ENABLED=0 go build -o hops ./cmd/hops) >&2
+# A separate -tags dev binary: --frontend does not exist in release builds
+# (backend/hops from build.sh), so the harness never shares that binary.
+BIN="$REPO_DIR/backend/hops-testdev"
+if [[ ! -x "$BIN" ]] || [[ -n "$(find "$REPO_DIR/backend/cmd" "$REPO_DIR/backend/internal" -name '*.go' -newer "$BIN" -print -quit)" ]]; then
+  log "Building backend (-tags dev)"
+  (cd "$REPO_DIR/backend" && CGO_ENABLED=0 go build -tags dev -o hops-testdev ./cmd/hops) >&2
 fi
 
 # Ensure frontend build exists
@@ -55,7 +57,7 @@ EOF
 
 log "Starting hops on port $PORT"
 # The UI is embedded in the binary, but the harness serves it from disk via
-# the --frontend dev override so the frontend can be rebuilt without rebuilding
+# the --frontend dev override (-tags dev build) so the frontend can be rebuilt without rebuilding
 # the Go binary. This is intentional — don't drop the flag.
 exec "$BIN" \
   --data "$DATA_DIR" \

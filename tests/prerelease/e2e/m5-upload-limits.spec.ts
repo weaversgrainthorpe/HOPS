@@ -198,7 +198,7 @@ c.execute("INSERT OR REPLACE INTO app_settings(key, value) VALUES('server.port',
 c.execute("INSERT OR REPLACE INTO app_settings(key, value) VALUES('upload.max_bytes_import', ?)", (str(1 << 30),))
 c.commit()
 `, path.join(dataDir, 'hops.db'), PORT]);
-		child = spawn(path.join(REPO, 'backend/hops'), ['--data', dataDir, '--frontend', path.join(REPO, 'frontend/build'), '--host', '127.0.0.1'], { stdio: 'ignore' });
+		child = spawn(path.join(REPO, 'backend/hops-testdev'), ['--data', dataDir, '--frontend', path.join(REPO, 'frontend/build'), '--host', '127.0.0.1'], { stdio: 'ignore' });
 		const deadline = Date.now() + 20_000;
 		for (;;) {
 			try {

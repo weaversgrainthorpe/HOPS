@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
-	"os"
 	"path"
 	"path/filepath"
 	"runtime/debug"
@@ -526,56 +525,14 @@ func (r *Router) serveDashboardIcons(w http.ResponseWriter, req *http.Request) {
 // serveSPA serves the Single Page Application with fallback to index.html.
 //
 // The UI is embedded into the binary, so the default path serves from the
-// embedded filesystem. As a dev convenience, if --frontend points at a real
-// directory on disk we serve from there instead — letting the UI be iterated
-// (npm run build) without rebuilding the Go binary.
+// embedded filesystem. In a `-tags dev` build only, a --frontend directory
+// serves the UI from disk instead (see spa_dev.go); release builds have no
+// such path.
 func (r *Router) serveSPA(w http.ResponseWriter, req *http.Request) {
-	if r.config.FrontendDir != "" {
-		if fi, err := os.Stat(r.config.FrontendDir); err == nil && fi.IsDir() {
-			r.serveSPADisk(w, req)
-			return
-		}
+	if serveSPADev(w, req) {
+		return
 	}
 	serveSPAFromFS(w, req, spaFS)
-}
-
-// serveSPADisk serves the SPA from r.config.FrontendDir on disk (dev override).
-func (r *Router) serveSPADisk(w http.ResponseWriter, req *http.Request) {
-	// Get the absolute path to prevent directory traversal
-	// Confined to the build dir: clean as a rooted path (drops any ".."), then
-	// verify the prefix as a belt-and-braces check.
-	root := filepath.Clean(r.config.FrontendDir)
-	p := filepath.Join(root, filepath.FromSlash(path.Clean("/"+req.URL.Path)))
-	if p != root && !strings.HasPrefix(p, root+string(filepath.Separator)) {
-		http.NotFound(w, req)
-		return
-	}
-
-	// Check if path is a file
-	fi, err := os.Stat(p)
-	if err == nil && !fi.IsDir() {
-		// File exists, serve it
-		if filepath.Base(p) == "index.html" {
-			setDiskIndexCSP(w, p)
-		}
-		http.ServeFile(w, req, p)
-		return
-	}
-
-	// Check if it's a directory and index.html exists
-	if err == nil && fi.IsDir() {
-		indexPath := filepath.Join(p, "index.html")
-		if _, err := os.Stat(indexPath); err == nil {
-			setDiskIndexCSP(w, indexPath)
-			http.ServeFile(w, req, indexPath)
-			return
-		}
-	}
-
-	// File doesn't exist or it's a SPA route, serve index.html
-	indexPath := filepath.Join(r.config.FrontendDir, "index.html")
-	setDiskIndexCSP(w, indexPath)
-	http.ServeFile(w, req, indexPath)
 }
 
 // serveSPAFromFS serves the SPA from an io/fs filesystem (the embedded build),

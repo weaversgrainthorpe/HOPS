@@ -25,7 +25,7 @@ let dataDir = '';
 let backupsDir = '';
 
 async function startServer() {
-	child = spawn(path.join(REPO, 'backend/hops'), ['--data', dataDir, '--frontend', path.join(REPO, 'frontend/build'), '--host', '127.0.0.1'], { stdio: 'ignore' });
+	child = spawn(path.join(REPO, 'backend/hops-testdev'), ['--data', dataDir, '--frontend', path.join(REPO, 'frontend/build'), '--host', '127.0.0.1'], { stdio: 'ignore' });
 	const deadline = Date.now() + 20_000;
 	for (;;) {
 		try {

@@ -31,7 +31,7 @@ trap cleanup SIGINT SIGTERM
 # Build and start backend
 echo "Building and starting backend on :8080..."
 cd "$HOPS_DIR/backend"
-go build -o hops ./cmd/hops
+go build -tags dev -o hops ./cmd/hops   # -tags dev: --frontend exists only in dev builds
 ./hops --data "$HOPS_DIR/data" --frontend "$HOPS_DIR/frontend/build" &
 BACKEND_PID=$!
 

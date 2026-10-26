@@ -179,8 +179,7 @@ func setupTestRouterCore(t *testing.T, storedConfig string, override *configdoc.
 	}
 
 	cfg := &config.Config{
-		DataDir:     dataDir,
-		FrontendDir: t.TempDir(),
+		DataDir: dataDir,
 	}
 
 	for k, v := range settingsRows {
