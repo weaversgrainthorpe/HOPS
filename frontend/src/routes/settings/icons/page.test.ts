@@ -7,6 +7,7 @@ const api = vi.hoisted(() => ({
 	getIcons: vi.fn(),
 	getIconCategories: vi.fn(),
 	getIconUsage: vi.fn(),
+	getPackagedIcons: vi.fn(),
 	uploadIcon: vi.fn(),
 	updateIcon: vi.fn(),
 	deleteIcon: vi.fn(),
@@ -30,6 +31,9 @@ vi.mock('@iconify/svelte', async () => ({
 	listIcons: () => bundled.names
 }));
 
+const names = vi.hoisted(() => ({ load: vi.fn() }));
+vi.mock('$lib/icons/iconNames', () => ({ loadIconNames: names.load }));
+
 import Page from './+page.svelte';
 import { resetIconLibrary } from '$lib/icons/iconLibrary';
 import { IconInUseError, CategoryNotEmptyError } from '$lib/utils/api';
@@ -43,8 +47,10 @@ const cats = [
 const icons = [
 	{ id: 'ia', name: 'Alpha <b>bold</b>', icon: '', categoryId: 'mine', imageUrl: '/icons/a.png', isPreset: false, createdAt: '' },
 	{ id: 'ib', name: 'Bravo', icon: '', categoryId: 'containers', imageUrl: '/icons/b.png', isPreset: false, createdAt: '' },
-	{ id: 'dock', name: 'Docker', icon: '', categoryId: 'containers', imageUrl: '/api/icons/dashboard/docker.svg', isPreset: true, createdAt: '' }
+	{ id: 'dock', name: 'Docker', icon: '', categoryId: 'containers', imageUrl: '/api/icons/dashboard/docker.svg', isPreset: true, createdAt: '' },
+	{ id: 'containers-generic', name: 'Container', icon: 'mdi:one', categoryId: 'containers', isPreset: true, createdAt: '' }
 ];
+const packagedInfo = { fetchedAt: 'now', dashboardNames: ['docker', 'docker-dark', 'plex'], dashboardCount: 3, dashboardRows: 1, presetRows: 1 };
 const usage = {
 	fetchedAt: 'now',
 	icons: {
@@ -66,6 +72,9 @@ beforeEach(() => {
 	api.getIcons.mockResolvedValue(structuredClone(icons));
 	api.getIconCategories.mockResolvedValue(structuredClone(cats));
 	api.getIconUsage.mockResolvedValue(structuredClone(usage));
+	api.getPackagedIcons.mockResolvedValue(structuredClone(packagedInfo));
+	names.load.mockReset();
+	names.load.mockResolvedValue({ suggest: ['mdi:one', 'mdi:two', 'mdi:plex', 'simple-icons:plex'], known: new Set() });
 	confirmMock.mockResolvedValue(true);
 	bundled.names = ['mdi:one', 'mdi:two'];
 });
@@ -81,7 +90,7 @@ describe('/settings/icons', () => {
 		expect(a.textContent).toContain('Used by 3 tiles on Home, Media');
 		expect(a.textContent).toContain('Mine');
 		expect(card('Bravo').textContent).toContain('Not used');
-		expect(screen.queryByText('Docker')).toBeNull();
+		expect(within(grid).queryByText('Docker')).toBeNull();
 	});
 
 	it('search filters by name and says when nothing matches', async () => {
@@ -307,9 +316,25 @@ describe('/settings/icons', () => {
 		await screen.findByRole('list', { name: 'Uploaded icons' });
 		const link = screen.getByRole('link', { name: 'Global settings › Uploads' });
 		expect(link.getAttribute('href')).toBe('/settings/global#uploads');
-		const note = document.querySelector('.offline-note')?.textContent?.replace(/\s+/g, ' ');
-		expect(note).toMatch(/2 interface icons and 1 dashboard-icons are bundled with HOPS/);
+		const note = () => document.querySelector('.offline-note')?.textContent?.replace(/\s+/g, ' ');
+		await waitFor(() =>
+			expect(note()).toContain(
+				'Shipped with HOPS: 3 Dashboard Icons (2 logos and 1 light or dark variants), served by this HOPS server; 1 preset library icons; 2 Iconify icons in the offline bundle (2 Material Design, 0 Simple Icons).'
+			)
+		);
 		expect(screen.queryByRole('alert')).toBeNull();
+	});
+
+	it('counts that could not be loaded say so, never 0', async () => {
+		api.getPackagedIcons.mockRejectedValue(new Error('server down'));
+		render(Page);
+		await screen.findByRole('list', { name: 'Uploaded icons' });
+		await waitFor(() =>
+			expect(document.querySelector('.offline-note')?.textContent).toContain("Dashboard Icons and preset library icons: couldn't be counted (server down)")
+		);
+		expect(screen.getByText(/Couldn't load the Dashboard Icons list from the server: server down/)).toBeTruthy();
+		// The library's Dashboard Icons are still listed.
+		expect(within(screen.getByRole('list', { name: 'Packaged icons' })).getByText('Docker')).toBeTruthy();
 	});
 
 	it('an offline set that did not load is said, not shown as "0 icons bundled"', async () => {
@@ -317,5 +342,91 @@ describe('/settings/icons', () => {
 		render(Page);
 		await screen.findByRole('list', { name: 'Uploaded icons' });
 		expect(screen.getByRole('alert').textContent).toContain('The offline icon set is not loaded');
+		expect(document.querySelector('.offline-note')?.textContent).toContain("Iconify icons in the offline bundle: couldn't be counted.");
+	});
+
+	describe('packaged icons', () => {
+		const list = () => screen.findByRole('list', { name: 'Packaged icons' });
+		const pcard = (key: string) => document.querySelector(`[data-key="${key}"]`) as HTMLElement;
+
+		it('lists every source with its set and whether it works offline; read-only', async () => {
+			render(Page);
+			const l = await list();
+			await waitFor(() => expect(pcard('simple-icons:plex')).toBeTruthy());
+			expect(pcard('dashboard:plex').textContent).toContain('Dashboard Icons');
+			expect(pcard('dashboard:plex').textContent).toContain('Offline');
+			expect(pcard('dashboard:docker').textContent).toContain('Docker');
+			expect(pcard('dashboard:docker').textContent).toContain('Containers');
+			expect(pcard('preset:containers-generic').textContent).toContain('Preset library');
+			expect(pcard('mdi:one').textContent).toContain('Material Design');
+			expect(pcard('mdi:one').textContent).toContain('Offline');
+			expect(pcard('mdi:plex').textContent).toContain('Online only');
+			expect(pcard('simple-icons:plex').textContent).toContain('Simple Icons');
+			expect(within(l).queryAllByRole('button', { name: /Edit|Delete|Rename/ })).toHaveLength(0);
+			expect(within(l).getByRole('button', { name: 'Copy name mdi:plex' })).toBeTruthy();
+		});
+
+		it('one search across the sources, Dashboard Icons first; the source filter narrows it', async () => {
+			render(Page);
+			await list();
+			await waitFor(() => expect(pcard('simple-icons:plex')).toBeTruthy());
+			await fireEvent.input(screen.getByLabelText('Search packaged icons'), { target: { value: 'plex' } });
+			const keys = () => [...document.querySelectorAll('[aria-label="Packaged icons"] [data-key]')].map((e) => e.getAttribute('data-key'));
+			expect(keys()).toEqual(['dashboard:plex', 'mdi:plex', 'simple-icons:plex']);
+			await fireEvent.change(screen.getByLabelText('Source'), { target: { value: 'simple-icons' } });
+			expect(keys()).toEqual(['simple-icons:plex']);
+			await fireEvent.change(screen.getByLabelText('Source'), { target: { value: 'preset' } });
+			expect(screen.getByText('No packaged icons match "plex" in Preset library.')).toBeTruthy();
+		});
+
+		it('shows one page at a time', async () => {
+			names.load.mockResolvedValue({ suggest: Array.from({ length: 120 }, (_, i) => `mdi:n${i}`), known: new Set() });
+			render(Page);
+			await list();
+			await waitFor(() => expect(screen.getByText(/^Showing 1–48 of 1/)).toBeTruthy());
+			expect(document.querySelectorAll('[aria-label="Packaged icons"] > li')).toHaveLength(48);
+			await fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+			expect(screen.getByText(/^Showing 49–96 of/)).toBeTruthy();
+			expect(screen.getByText(/^Page 2 of/)).toBeTruthy();
+		});
+
+		it('says where a packaged icon is used, and "unknown" without the usage', async () => {
+			api.getIconUsage.mockResolvedValue({
+				...structuredClone(usage),
+				packaged: {
+					images: { '/api/icons/dashboard/plex.svg': [{ kind: 'tile', name: 'Plex', dashboard: 'Home', dashboardId: 'd1' }, { kind: 'tile', name: 'P2', dashboard: 'Home', dashboardId: 'd1' }] },
+					names: {}
+				}
+			});
+			render(Page);
+			await list();
+			await waitFor(() => expect(pcard('dashboard:plex').textContent).toContain('Used by 2 tiles on Home'));
+			expect(pcard('dashboard:docker').textContent).toContain('Not used');
+		});
+
+		it('without the packaged usage, packaged icons say "unknown"', async () => {
+			render(Page);
+			await list();
+			await waitFor(() => expect(pcard('dashboard:plex').textContent).toContain('Where used: unknown'));
+		});
+
+		it('built-in categories are listed with counts, viewable, not editable', async () => {
+			render(Page);
+			const cats = await screen.findByRole('list', { name: 'Built-in categories' });
+			const row = within(cats).getByText('Containers').closest('li') as HTMLElement;
+			await waitFor(() => expect(row.textContent).toContain('2 packaged icons'));
+			expect(within(cats).queryAllByRole('button', { name: /Rename|Delete/ })).toHaveLength(0);
+			await fireEvent.click(within(row).getByRole('button', { name: 'Show Containers' }));
+			const keys = [...document.querySelectorAll('[aria-label="Packaged icons"] [data-key]')].map((e) => e.getAttribute('data-key'));
+			expect(keys).toEqual(['dashboard:docker', 'preset:containers-generic']);
+		});
+
+		it('a names list that failed to load is said, with the offline icons still listed', async () => {
+			names.load.mockRejectedValue(new Error('chunk missing'));
+			render(Page);
+			await list();
+			await waitFor(() => expect(screen.getByText(/Couldn't load the full Material Design and Simple Icons name lists: chunk missing/)).toBeTruthy());
+			expect(pcard('mdi:one')).toBeTruthy();
+		});
 	});
 });

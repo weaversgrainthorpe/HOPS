@@ -373,6 +373,8 @@ func (r *Router) setupRoutes() {
 	r.mux.HandleFunc("/api/icons/upload", r.protected(r.handleUploadIcon))
 	// Where each uploaded icon is used (admin-only, GET only): Settings › Icons.
 	r.mux.HandleFunc("/api/icons/usage", r.protected(r.handleIconUsage))
+	// What ships with HOPS, counted from the real sources (admin-only, GET only).
+	r.mux.HandleFunc("/api/icons/packaged", r.protected(r.handlePackagedIcons))
 	r.mux.HandleFunc("/api/icons/", r.protected(r.handleIconActions))
 
 	// Serve uploaded icons from data directory

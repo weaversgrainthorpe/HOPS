@@ -42,7 +42,7 @@ var (
 )
 
 // Ids that would collide with the fixed /api/icons/... routes.
-var reservedIconIDs = map[string]bool{"usage": true, "upload": true, "dashboard": true}
+var reservedIconIDs = map[string]bool{"usage": true, "upload": true, "dashboard": true, "packaged": true}
 
 func validIconImageURL(u string) bool {
 	return iconImageURLPattern.MatchString(u) && !strings.Contains(u, "..")
@@ -126,18 +126,19 @@ func (r *Router) loadIconUsage() (map[string][]iconUse, error) {
 
 // handleIconUsage: GET /api/icons/usage (admin). For every uploaded icon
 // (not built-in, with an image), the places that use it; an unused icon has
-// an empty list. Not cached.
+// an empty list. "packaged" covers the packaged icons. Not cached.
 func (r *Router) handleIconUsage(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodGet {
 		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	usage, err := r.loadIconUsage()
+	doc, err := configdoc.Load(r.db)
 	if err != nil {
 		slog.Error("icon usage: could not read the layout", "component", "icons", "error", err)
 		writeJSONError(w, "Couldn't read the dashboards to work out where icons are used: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+	usage := iconUsageByURL(doc)
 	rows, err := r.db.Query(`SELECT id, image_url FROM icons WHERE is_preset = 0 AND image_url IS NOT NULL AND image_url != '' LIMIT 10000`)
 	if err != nil {
 		writeJSONError(w, "Failed to load icons", http.StatusInternalServerError)
@@ -162,7 +163,8 @@ func (r *Router) handleIconUsage(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
-	writeJSON(w, map[string]any{"fetchedAt": time.Now().UTC().Format(time.RFC3339), "icons": icons})
+	// "packaged": where the packaged icons are used (icons_packaged.go).
+	writeJSON(w, map[string]any{"fetchedAt": time.Now().UTC().Format(time.RFC3339), "icons": icons, "packaged": packagedIconUsage(doc, usage)})
 }
 
 // cleanDisplayName trims a user-typed icon/category name and checks it: not

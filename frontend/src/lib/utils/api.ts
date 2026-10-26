@@ -5,6 +5,7 @@ import { LAYOUT_VERSION } from '$lib/layout/geometry';
 import { checkUploadSize, uploadErrorMessage, sendUpload } from './uploadLimits';
 import { parseLogsResponse, type LogsResponse, type LogLevel, type LineLimit } from '$lib/logs/logView';
 import { parseUsageResponse, type IconUsage, type IconUse } from '$lib/icons/iconManage';
+import { parsePackagedResponse, type PackagedInfo } from '$lib/icons/packagedIcons';
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 
@@ -586,6 +587,11 @@ export async function deleteIcon(id: string, opts: { force?: boolean } = {}): Pr
 /** GET /api/icons/usage (admin): where each uploaded icon is used. A failure throws. */
 export async function getIconUsage(): Promise<IconUsage> {
   return parseUsageResponse(await fetchAPI('/icons/usage'));
+}
+
+/** What ships with HOPS (admin): the Dashboard Icons files and the preset library's size. */
+export async function getPackagedIcons(): Promise<PackagedInfo> {
+  return parsePackagedResponse(await fetchAPI('/icons/packaged'));
 }
 
 /**

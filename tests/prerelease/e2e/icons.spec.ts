@@ -241,9 +241,8 @@ test.describe('Settings › Icons', () => {
 
 	test('the offline note gives the bundled counts and links to Global settings › Uploads', async ({ page }) => {
 		await openIcons(page);
-		await expect(page.getByText(/^\d+ interface icons and \d+ dashboard-icons are bundled with HOPS/)).toBeVisible();
-		const n = Number((await page.locator('.offline-note').first().textContent())!.trim().split(' ')[0]);
-		expect(n).toBeGreaterThan(100);
+		// The exact counts are checked in packaged-icons.spec.ts.
+		await expect(page.getByTestId('shipped-counts')).toContainText(/Shipped with HOPS: [\d,]+ Dashboard Icons .* [\d,]+ Iconify icons in the offline bundle/s);
 		await page.getByRole('link', { name: 'Global settings › Uploads' }).click();
 		await expect(page).toHaveURL(/\/settings\/global#uploads$/);
 		await expect(page.getByRole('heading', { name: 'Uploads' })).toBeVisible();

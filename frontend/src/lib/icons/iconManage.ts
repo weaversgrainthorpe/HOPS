@@ -19,6 +19,11 @@ export interface IconUsage {
 	fetchedAt: string;
 	/** Icon id → the places using it (an empty list = unused). */
 	icons: Record<string, IconUse[]>;
+	/**
+	 * The packaged icons in use: Dashboard Icons by image URL, Iconify icons by name. Only used
+	 * icons are keys (the whole layout was read, so absent = not used). Missing = unknown.
+	 */
+	packaged?: { images: Record<string, IconUse[]>; names: Record<string, IconUse[]> };
 }
 
 const KINDS = ['tile', 'folder', 'tab', 'dashboard'] as const;
@@ -47,12 +52,22 @@ export function parseUsageResponse(raw: unknown): IconUsage {
 	if (typeof o.fetchedAt !== 'string' || !o.icons || typeof o.icons !== 'object' || Array.isArray(o.icons)) {
 		throw new Error('the server sent an unreadable answer');
 	}
-	const icons: Record<string, IconUse[]> = {};
-	for (const [id, list] of Object.entries(o.icons as Record<string, unknown>)) {
+	const icons = useMap(o.icons);
+	if (o.packaged === undefined) return { fetchedAt: o.fetchedAt, icons };
+	const p = o.packaged as Record<string, unknown> | null;
+	if (!p || typeof p !== 'object' || Array.isArray(p)) throw new Error('the server sent an unreadable answer');
+	return { fetchedAt: o.fetchedAt, icons, packaged: { images: useMap(p.images), names: useMap(p.names) } };
+}
+
+/** A key → places map from the usage answer; anything else throws. */
+function useMap(raw: unknown): Record<string, IconUse[]> {
+	if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('the server sent an unreadable answer');
+	const out: Record<string, IconUse[]> = {};
+	for (const [k, list] of Object.entries(raw as Record<string, unknown>)) {
 		if (!Array.isArray(list) || !list.every(isUse)) throw new Error('the server sent an unreadable answer');
-		icons[id] = list;
+		out[k] = list;
 	}
-	return { fetchedAt: o.fetchedAt, icons };
+	return out;
 }
 
 function count(n: number, word: string): string {

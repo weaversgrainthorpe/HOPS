@@ -125,6 +125,19 @@ describe('parseUsageResponse', () => {
 		'refuses %j (never "unused")',
 		(raw) => expect(() => parseUsageResponse(raw)).toThrow(/unreadable/)
 	);
+	it('reads the packaged icons\' usage when present, and leaves it unknown when absent', () => {
+		const r = parseUsageResponse({
+			fetchedAt: 'now',
+			icons: {},
+			packaged: { images: { '/api/icons/dashboard/plex.svg': [use('tile', 'Plex', 'Home')] }, names: {} }
+		});
+		expect(r.packaged?.images['/api/icons/dashboard/plex.svg']).toHaveLength(1);
+		expect(r.packaged?.names).toEqual({});
+		expect(parseUsageResponse({ fetchedAt: 'now', icons: {} }).packaged).toBeUndefined();
+	});
+	it.each([{ images: [] }, { images: {}, names: { a: 'x' } }, { names: {} }, 'x'])('refuses a broken packaged part %j', (packaged) =>
+		expect(() => parseUsageResponse({ fetchedAt: 'now', icons: {}, packaged })).toThrow(/unreadable/)
+	);
 });
 
 describe('uploads', () => {

@@ -10,6 +10,7 @@
     updateIcon,
     deleteIcon,
     getIconUsage,
+    getPackagedIcons,
     createIconCategory,
     updateIconCategory,
     deleteIconCategory,
@@ -37,9 +38,11 @@
     type UploadOutcome
   } from '$lib/icons/iconManage';
   import { GLOBAL_SETTING_GROUPS } from '$lib/settings/globalGroups';
+  import PackagedIcons from '$lib/components/admin/PackagedIcons.svelte';
+  import { packagedCounts, type PackagedInfo } from '$lib/icons/packagedIcons';
 
   // Settings › Icons: the user's uploaded icons (the picker's "My Uploads", read from the same
-  // shared library) and their own categories. Each icon says where it is used, computed by the
+  // shared library) and their own categories, then the packaged icons (read-only, searchable). Each icon says where it is used, computed by the
   // server from the stored dashboards; deleting one that is in use lists those places first.
   // Every failure is shown on the page; names are text only.
 
@@ -48,6 +51,9 @@
 
   let usage = $state<IconUsage | null>(null);
   let usageError = $state<string | null>(null);
+  // What ships with HOPS, counted by the server (the Dashboard Icons files, the preset rows).
+  let packaged = $state<PackagedInfo | null>(null);
+  let packagedError = $state<string | null>(null);
 
   let query = $state('');
   let filterCategory = $state('');
@@ -91,8 +97,12 @@
   let uploadCounts = $derived(categoryCounts(uploads));
   let mine = $derived(userCategories(lib.categories));
   let builtIns = $derived(categories.filter((c) => c.isPreset));
-  let bundledCount = $derived(listIcons('').length);
-  let dashboardIconCount = $derived(lib.icons.filter((i) => i.isPreset && i.imageUrl?.startsWith('/api/icons/dashboard/')).length);
+  // The offline Iconify bundle, counted from what is registered in this page.
+  const bundledCounts = packagedCounts(listIcons(''));
+  const bundledCount = bundledCounts.total;
+  // Dashboard Icons light/dark variants (the library imports only the plain logo of each).
+  let dashboardVariants = $derived(packaged ? packaged.dashboardNames.filter((n) => /-(dark|light)$/.test(n)).length : 0);
+  const fmt = (n: number) => n.toLocaleString('en-GB');
 
   const categoryName = (id: string) => lib.categories.find((c) => c.id === id)?.name ?? id;
   // Unknown (null) when the usage couldn't be read or doesn't cover this icon yet (never "Not used").
@@ -115,12 +125,22 @@
     }
   }
 
+  async function loadPackaged() {
+    try {
+      packaged = await getPackagedIcons();
+      packagedError = null;
+    } catch (e) {
+      packagedError = errText(e, 'the request failed');
+    }
+  }
+
   async function reload() {
     await Promise.all([loadIconLibrary(), loadUsage()]);
   }
 
   onMount(() => {
     void reload();
+    void loadPackaged();
   });
 
   // ── Upload (one or several) ──────────────────────────────────────────
@@ -340,7 +360,7 @@
 </header>
 <p class="lede">
   The icons you have uploaded, and your own categories for them. They appear under "My Uploads" in the icon picker. Each icon
-  shows where it is used, so deleting one never breaks an image without warning.
+  shows where it is used, so deleting one never breaks an image without warning. Below them, search the icons that come with HOPS.
 </p>
 
 {#if loadFailed}
@@ -500,8 +520,7 @@
     {#if categoryError}<p class="field-error" role="alert">{categoryError}</p>{/if}
     {#if builtIns.length > 0}
       <p class="muted small">
-        Built-in categories can't be renamed or deleted, but your icons can go in them:
-        {builtIns.map((c) => `${c.name} (${counts.get(c.id) ?? 0})`).join(', ')}.
+        Built-in categories can't be renamed or deleted, but your icons can go in them. They are listed under Packaged icons.
       </p>
     {/if}
   {:else if !loadFailed}
@@ -509,11 +528,19 @@
   {/if}
 </section>
 
+<PackagedIcons info={packaged} infoError={packagedError} onRetryInfo={() => void loadPackaged()} {usage} {usageStale} />
+
 <section class="block note" aria-labelledby="offline-heading">
   <h3 id="offline-heading" class="sub-title">Offline and limits</h3>
+  <p class="offline-note" data-testid="shipped-counts">
+    Shipped with HOPS:
+    {#if packaged}{fmt(packaged.dashboardCount)} Dashboard Icons ({fmt(packaged.dashboardCount - dashboardVariants)} logos and {fmt(dashboardVariants)} light or dark variants), served by this HOPS server;
+      {fmt(packaged.presetRows)} preset library icons;{:else if packagedError}Dashboard Icons and preset library icons: couldn't be counted ({packagedError});{:else}Dashboard Icons and preset library icons: counting…;{/if}
+    {#if bundledCount > 0}{fmt(bundledCount)} Iconify icons in the offline bundle ({fmt(bundledCounts.mdi)} Material Design, {fmt(bundledCounts['simple-icons'])} Simple Icons).{:else}Iconify icons in the offline bundle: couldn't be counted.{/if}
+  </p>
   <p class="offline-note">
-    {bundledCount} interface icons{#if loaded}{` and ${dashboardIconCount} dashboard-icons`}{/if} are bundled with HOPS, so they draw with no internet
-    connection. Uploaded icons are stored on this HOPS server. Other Iconify names are fetched from the internet when first used.
+    Dashboard Icons and the offline bundle draw with no internet connection; uploaded icons are stored on this HOPS server. Any other
+    Iconify name, including a preset library icon that is not in the offline bundle, is fetched from the internet when first used.
   </p>
   {#if bundledCount === 0}
     <p class="field-error" role="alert">The offline icon set is not loaded in this page, so interface icons need the internet. Reload the page; if it stays, the HOPS build is incomplete.</p>
