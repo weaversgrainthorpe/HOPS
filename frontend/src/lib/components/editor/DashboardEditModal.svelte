@@ -235,7 +235,7 @@
     color: var(--text-primary);
   }
   .tabs button.active {
-    color: var(--accent);
+    color: var(--accent-text);
     border-bottom-color: var(--accent);
   }
   .tabs button:focus-visible {

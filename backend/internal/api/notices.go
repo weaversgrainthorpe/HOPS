@@ -43,9 +43,9 @@ var knownNotices = map[string]bool{noticeLayeredStatusChecks: true, noticeUpload
 
 // uploadLimitLabels names each moved setting as the settings page does.
 var uploadLimitLabels = map[string]string{
-	settings.KeyUploadMaxBytesImport:     "Largest file you can import",
-	settings.KeyUploadMaxBytesBackground: "Largest background image",
-	settings.KeyUploadMaxBytesIcon:       "Largest icon file",
+	settings.KeyUploadMaxBytesImport:     "Largest import",
+	settings.KeyUploadMaxBytesBackground: "Largest background upload",
+	settings.KeyUploadMaxBytesIcon:       "Largest icon upload",
 }
 
 // uploadDefaultsNotice describes the one-time default move, or false when

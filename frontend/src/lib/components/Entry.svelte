@@ -265,7 +265,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--accent);
+    color: var(--accent-text);
     flex: 0 0 auto;
   }
 

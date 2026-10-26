@@ -796,7 +796,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--accent);
+    color: var(--accent-text);
   }
 
   .icon-card.selected .icon-preview {
@@ -808,7 +808,7 @@
 
   .icon-card.selected .icon-preview :global(svg) {
     /* Ensure SVG icons are visible on the white background */
-    color: var(--accent);
+    color: var(--accent-text);
   }
 
   .icon-name {
@@ -918,7 +918,7 @@
 
   .category-tab.active .badge {
     background: white;
-    color: var(--accent);
+    color: var(--accent-text);
   }
 
   .category-divider {
@@ -1049,7 +1049,7 @@
   }
 
   .help-text-inline a {
-    color: var(--accent);
+    color: var(--accent-text);
     text-decoration: none;
   }
 
@@ -1146,7 +1146,7 @@
 
   .upload-btn:hover {
     border-color: var(--accent);
-    color: var(--accent);
+    color: var(--accent-text);
   }
 
   .upload-preview {

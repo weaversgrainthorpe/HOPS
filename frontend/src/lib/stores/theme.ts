@@ -14,6 +14,8 @@ interface ThemePreset {
     /** A solid accent for fills that carry text (--accent-solid): >= 4.5:1 with --on-accent, >= 3:1 on the page. */
     accentSolid: string;
     accentSolidHover: string;
+    /** --text-secondary when the shared one is under 4.5:1 on this preset's surfaces. */
+    textSecondary?: string;
   };
   light: {
     primary: string;
@@ -24,6 +26,7 @@ interface ThemePreset {
     /** A solid accent for fills that carry text (--accent-solid): >= 4.5:1 with --on-accent, >= 3:1 on the page. */
     accentSolid: string;
     accentSolidHover: string;
+    textSecondary?: string;
   };
   gradient?: boolean;
 }
@@ -188,7 +191,9 @@ const themePresets: Record<string, ThemePreset> = {
       accent: 'linear-gradient(135deg, #22c55e 0%, #84cc16 100%)',
       accentHover: 'linear-gradient(135deg, #16a34a 0%, #65a30d 100%)',
       accentSolid: '#4ade80',
-      accentSolidHover: '#86efac'
+      accentSolidHover: '#86efac',
+      // The shared #dbe4f0 is 3.9:1 on this tertiary green; this is >= 4.5:1 on all three.
+      textSecondary: '#f8fafc'
     },
     light: {
       primary: '#f0fdf4',
@@ -248,6 +253,8 @@ export function themeTokens(presetId: string, mode: 'light' | 'dark'): Record<st
     '--accent-hover': c.accentHover,
     '--accent-solid': c.accentSolid,
     '--accent-solid-hover': c.accentSolidHover,
+    // Always set, so switching presets never leaves another preset's value behind.
+    '--text-secondary': c.textSecondary ?? (mode === 'dark' ? '#dbe4f0' : '#334155'),
     ...modeTokens[mode]
   };
 }

@@ -87,10 +87,6 @@
     white-space: nowrap;
   }
 
-  .btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
 
   /* Sizes */
   .btn-small {
@@ -164,6 +160,22 @@
   .btn-ghost:hover:not(:disabled) {
     background: var(--bg-tertiary);
     color: var(--text-primary);
+  }
+
+  /* Disabled: readable (>= 3:1), shown by a muted fill, a dashed edge, no shadow and the cursor —
+     not by fading. Every variant's hover is :not(:disabled), so hovering one changes nothing. */
+  .btn:disabled {
+    opacity: 1;
+    background: var(--disabled-bg);
+    color: var(--disabled-text);
+    outline: 1px dashed var(--disabled-edge);
+    outline-offset: -1px;
+    box-shadow: none;
+    cursor: not-allowed;
+  }
+
+  .btn-ghost:disabled {
+    background: transparent;
   }
 
   /* Modifiers */

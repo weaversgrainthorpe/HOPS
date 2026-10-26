@@ -149,7 +149,7 @@
   }
 
   .logo {
-    color: var(--accent);
+    color: var(--accent-text);
     margin-bottom: 0.5rem;
   }
 
@@ -164,7 +164,7 @@
   }
 
   .acronym {
-    color: var(--accent);
+    color: var(--accent-text);
     font-size: 0.85rem;
     font-weight: 500;
     margin: 0 0 0.25rem 0;
@@ -203,7 +203,7 @@
     font-size: 1.25rem;
     font-weight: 600;
     font-family: monospace;
-    color: var(--accent);
+    color: var(--accent-text);
   }
 
   .features {
@@ -235,7 +235,7 @@
   }
 
   .features li :global(svg) {
-    color: var(--accent);
+    color: var(--accent-text);
     flex-shrink: 0;
   }
 

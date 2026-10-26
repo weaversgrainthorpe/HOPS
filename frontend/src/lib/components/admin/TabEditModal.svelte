@@ -260,7 +260,7 @@
     width: 2.25rem;
     height: 2.25rem;
     border-radius: 0.4rem;
-    color: var(--accent);
+    color: var(--accent-text);
     flex-shrink: 0;
   }
 
@@ -290,7 +290,7 @@
     display: inline-flex;
     align-items: center;
     gap: 0.3rem;
-    color: var(--accent);
+    color: var(--accent-text);
     font-size: 0.875rem;
     font-weight: 500;
   }

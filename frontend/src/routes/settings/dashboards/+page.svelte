@@ -46,7 +46,7 @@
     }
     .phone-edit-note :global(svg) {
       flex-shrink: 0;
-      color: var(--accent);
+      color: var(--accent-text);
       margin-top: 0.1rem;
     }
   }

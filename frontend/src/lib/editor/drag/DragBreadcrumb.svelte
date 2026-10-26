@@ -95,7 +95,7 @@
   }
   .crumb.holding {
     border-color: var(--accent);
-    color: var(--accent);
+    color: var(--accent-text);
   }
   .sep {
     color: var(--text-secondary);

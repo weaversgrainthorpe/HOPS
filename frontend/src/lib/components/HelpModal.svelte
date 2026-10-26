@@ -498,7 +498,7 @@
 
   .feature > :global(svg) {
     flex-shrink: 0;
-    color: var(--accent);
+    color: var(--accent-text);
   }
 
   .feature strong {

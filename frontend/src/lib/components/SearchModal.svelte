@@ -308,7 +308,7 @@
   }
 
   .result-icon {
-    color: var(--accent);
+    color: var(--accent-text);
     display: flex;
     align-items: center;
     flex-shrink: 0;

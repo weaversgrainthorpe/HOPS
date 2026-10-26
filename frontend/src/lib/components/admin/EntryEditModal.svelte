@@ -504,7 +504,7 @@
     width: 2.5rem;
     height: 2.5rem;
     border-radius: 0.4rem;
-    color: var(--accent);
+    color: var(--accent-text);
     flex-shrink: 0;
   }
 
@@ -555,7 +555,7 @@
   }
 
   small a {
-    color: var(--accent);
+    color: var(--accent-text);
     text-decoration: none;
   }
 
@@ -649,7 +649,7 @@
   .btn-move-toggle:hover {
     background: var(--bg-secondary);
     border-color: var(--accent-solid);
-    color: var(--accent);
+    color: var(--accent-text);
   }
 
   /* Placeholders readable (>= 4.5:1 on every preset, M6 §7.3); the browser default grey is 3.2–4.2:1. */

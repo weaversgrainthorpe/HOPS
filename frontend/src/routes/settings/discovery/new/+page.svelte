@@ -459,16 +459,16 @@
     border-radius: var(--radius-sm);
     font-size: 0.83rem;
   }
-  .err { color: var(--color-error, #ef4444); margin-left: 0.5rem; }
+  .err { color: var(--color-error-text); margin-left: 0.5rem; }
   .count-good {
     margin-top: 0.4rem;
-    color: #22c55e;
+    color: var(--color-success-text);
     font-size: 0.85rem;
     font-weight: 500;
   }
   .count-bad {
     margin-top: 0.4rem;
-    color: #ef4444;
+    color: var(--color-error-text);
     font-size: 0.85rem;
     font-weight: 500;
   }

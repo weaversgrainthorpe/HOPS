@@ -570,7 +570,7 @@
   .info-box :global(svg) {
     flex-shrink: 0;
     margin-top: 1px;
-    color: var(--accent);
+    color: var(--accent-text);
   }
 
   .unknown-row {
@@ -642,7 +642,7 @@
   }
 
   .retention a {
-    color: var(--accent);
+    color: var(--accent-text);
     margin-left: 0.25rem;
   }
 

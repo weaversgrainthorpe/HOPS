@@ -41,7 +41,7 @@ describe('/settings/global', () => {
 		expect(await screen.findByRole('heading', { name: 'Server', level: 3 })).toBeTruthy();
 		expect(screen.getAllByRole('heading', { level: 3 })).toHaveLength(1);
 		expect(listSettings).toHaveBeenCalledTimes(1);
-		expect((screen.getByLabelText(/Level/) as HTMLSelectElement).value).toBe('info');
+		expect((screen.getByLabelText(/Log level/) as HTMLSelectElement).value).toBe('info');
 	});
 
 	it('a failed load says so (never an empty page as if there were no settings)', async () => {
@@ -97,9 +97,9 @@ describe('/settings/global upload limits (M5 §10)', () => {
 
 	it('labels each limit plainly and shows it in MB, with no "min"', async () => {
 		render(Page);
-		const imp = (await screen.findByLabelText(/Largest file you can import/)) as HTMLInputElement;
+		const imp = (await screen.findByLabelText(/Largest import/)) as HTMLInputElement;
 		expect(imp.value).toBe('50');
-		expect(screen.getByLabelText(/Largest icon file/)).toBeTruthy();
+		expect(screen.getByLabelText(/Largest icon upload/)).toBeTruthy();
 		const row = imp.closest('.row') as HTMLElement;
 		expect(row.textContent).toContain('MB');
 		expect(row.textContent).not.toMatch(/\bmin\b/i);
@@ -108,7 +108,7 @@ describe('/settings/global upload limits (M5 §10)', () => {
 
 	it('Save converts MB to bytes', async () => {
 		render(Page);
-		const imp = (await screen.findByLabelText(/Largest file you can import/)) as HTMLInputElement;
+		const imp = (await screen.findByLabelText(/Largest import/)) as HTMLInputElement;
 		await fireEvent.input(imp, { target: { value: '75' } });
 		const row = imp.closest('.row') as HTMLElement;
 		await fireEvent.click(Array.from(row.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Save')!);
@@ -118,7 +118,7 @@ describe('/settings/global upload limits (M5 §10)', () => {
 	for (const bad of ['0.5', '', 'abc']) {
 		it(`refuses ${JSON.stringify(bad)} with "Must be at least 1 MB" and does not save`, async () => {
 			render(Page);
-			const imp = (await screen.findByLabelText(/Largest file you can import/)) as HTMLInputElement;
+			const imp = (await screen.findByLabelText(/Largest import/)) as HTMLInputElement;
 			await fireEvent.input(imp, { target: { value: bad } });
 			const row = imp.closest('.row') as HTMLElement;
 			await fireEvent.click(Array.from(row.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Save')!);
@@ -130,7 +130,7 @@ describe('/settings/global upload limits (M5 §10)', () => {
 	it('a value clamped on load shows "Lowered from X MB to the new maximum Y MB"', async () => {
 		render(Page);
 		expect(await screen.findAllByText(/Lowered from 1024 MB to the new maximum 10 MB/)).not.toHaveLength(0);
-		const icon = screen.getByLabelText(/Largest icon file/) as HTMLInputElement;
+		const icon = screen.getByLabelText(/Largest icon upload/) as HTMLInputElement;
 		expect(icon.value).toBe('10');
 		// Saving the setting is how the admin acknowledges it, so Save is available.
 		const row = icon.closest('.row') as HTMLElement;

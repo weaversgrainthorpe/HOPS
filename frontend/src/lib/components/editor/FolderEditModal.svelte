@@ -531,7 +531,7 @@
     width: 2.25rem;
     height: 2.25rem;
     border-radius: 0.4rem;
-    color: var(--accent);
+    color: var(--accent-text);
     flex-shrink: 0;
   }
   .icon-preview-tile.has-bg {

@@ -470,7 +470,7 @@
   }
 
   :global(.check-icon) {
-    color: var(--accent);
+    color: var(--accent-text);
   }
 
   .preset-grid {

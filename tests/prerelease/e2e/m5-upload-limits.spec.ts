@@ -35,9 +35,9 @@ test.describe('M5 §10 upload limits in the settings page', () => {
 		await page.goto('/settings/global');
 		await expect(page.getByRole('heading', { name: 'Uploads', level: 3 })).toBeVisible();
 		const cases: [string, string, string][] = [
-			['Largest file you can import', '50', '200 MB'],
-			['Largest background image', '25', '100 MB'],
-			['Largest icon file', '2', '10 MB']
+			['Largest import', '50', '200 MB'],
+			['Largest background upload', '25', '100 MB'],
+			['Largest icon upload', '2', '10 MB']
 		];
 		for (const [label, value, ceiling] of cases) {
 			const { input, row } = await rowFor(page, label);
@@ -51,7 +51,7 @@ test.describe('M5 §10 upload limits in the settings page', () => {
 
 	test('a value under 1 MB, empty or invalid is refused with a message and not saved; a good one saves in bytes', async ({ page }) => {
 		await page.goto('/settings/global');
-		const { input, row } = await rowFor(page, 'Largest file you can import');
+		const { input, row } = await rowFor(page, 'Largest import');
 		const before = await storedValue(page, KEYS.import);
 		for (const bad of ['0.5', '', 'abc']) {
 			await input.fill(bad);
@@ -235,7 +235,7 @@ c.commit()
 
 			const notice = 'Lowered from 1024 MB to the new maximum 200 MB.';
 			await expect(page.locator('.adjusted-banner')).toContainText(notice);
-			const { input, row } = await rowFor(page, 'Largest file you can import');
+			const { input, row } = await rowFor(page, 'Largest import');
 			await expect(input).toHaveValue('200');
 			await expect(row).toContainText(notice);
 			// The server is already using the lowered limit.
@@ -248,7 +248,7 @@ c.commit()
 			await row.getByRole('button', { name: 'Save', exact: true }).click();
 			await expect(page.locator('.adjusted-banner')).toHaveCount(0);
 			await page.reload();
-			await expect(page.getByLabel('Largest file you can import', { exact: true })).toHaveValue('200');
+			await expect(page.getByLabel('Largest import', { exact: true })).toHaveValue('200');
 			await expect(page.locator('.adjusted-banner')).toHaveCount(0);
 		} finally {
 			await ctx.close();

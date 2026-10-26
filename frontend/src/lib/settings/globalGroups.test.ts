@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import registry from '../../../../backend/internal/settings/testdata/setting_keys.json';
-import { GLOBAL_SETTING_GROUPS, OTHER_GROUP, groupSettings, jumpBehaviour } from './globalGroups';
+import { GLOBAL_SETTING_GROUPS, OTHER_GROUP, SETTING_LABELS, groupSettings, jumpBehaviour, settingLabel } from './globalGroups';
 
 // M6 §10: THE grouping table for Global settings (group → ordered keys). The server registry's key
 // list is shared with the Go suite through backend/internal/settings/testdata/setting_keys.json
@@ -95,5 +95,25 @@ describe('jumpBehaviour', () => {
 		expect(jumpBehaviour('off', false)).toBe('auto');
 		expect(jumpBehaviour(undefined, false)).toBe('auto');
 		expect(jumpBehaviour('weird', false)).toBe('auto');
+	});
+});
+
+describe('global setting labels', () => {
+	it('gives every server registry key a human label (never the generated one)', () => {
+		const missing = registry.keys.filter((k: string) => !SETTING_LABELS[k]?.trim());
+		expect(missing).toEqual([]);
+	});
+
+	it('uses the agreed wording', () => {
+		expect(settingLabel('proxy.trusted_cidrs')).toBe('Trusted proxy ranges (CIDR)');
+		expect(settingLabel('auth.login_rate_limit_per_min')).toBe('Failed sign-ins allowed per minute');
+		expect(settingLabel('auth.session_lifetime_hours')).toBe('Stay signed in for (hours)');
+		expect(settingLabel('upload.max_bytes_import')).toBe('Largest import');
+	});
+
+	it('labels are unique, and a key it does not know still reads as words', () => {
+		const labels = Object.values(SETTING_LABELS);
+		expect(new Set(labels).size).toBe(labels.length);
+		expect(settingLabel('new.some_thing')).toBe('Some thing');
 	});
 });

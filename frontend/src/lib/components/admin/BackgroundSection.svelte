@@ -1397,7 +1397,7 @@
   .motion-note :global(svg) {
     flex-shrink: 0;
     margin-top: 0.1rem;
-    color: var(--accent);
+    color: var(--accent-text);
   }
   .motion-note-kept {
     margin: 0.5rem 0 0;
@@ -1438,7 +1438,7 @@
   .overlay-note :global(svg) {
     flex-shrink: 0;
     margin-top: 0.1rem;
-    color: var(--accent);
+    color: var(--accent-text);
   }
   .overlay-note-kept {
     flex-basis: 100%;
@@ -2367,7 +2367,7 @@
   .reset-link {
     background: none;
     border: none;
-    color: var(--accent);
+    color: var(--accent-text);
     cursor: pointer;
     font-size: 0.8rem;
     padding: 0;

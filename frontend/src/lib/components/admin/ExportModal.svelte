@@ -176,7 +176,7 @@
 
   .dashboard-path {
     font-size: 0.75rem;
-    color: var(--accent);
+    color: var(--accent-text);
     font-family: monospace;
   }
 

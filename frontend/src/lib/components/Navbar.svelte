@@ -815,8 +815,8 @@
   .version {
     font-size: 0.75rem;
     font-weight: 500;
-    color: var(--text-secondary);
-    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    background: var(--bg-primary);
     padding: 0.125rem 0.375rem;
     border-radius: 0.25rem;
     margin-left: 0.25rem;

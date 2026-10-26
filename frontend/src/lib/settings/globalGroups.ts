@@ -48,6 +48,41 @@ export const GLOBAL_SETTING_GROUPS: readonly SettingGroupDef[] = [
 	{ id: 'discovery', label: 'Discovery', keys: ['discovery.max_parallel_probes', 'discovery.per_host_timeout_seconds'] }
 ];
 
+/**
+ * Each global setting's human label, shown on its row (the raw key stays beside it as a chip).
+ * globalGroups.test.ts fails when a server registry key has no label here.
+ */
+export const SETTING_LABELS: Readonly<Record<string, string>> = {
+	'server.port': 'Port',
+	'log.level': 'Log level',
+	'http.read_header_timeout_seconds': 'Wait for request headers (seconds)',
+	'http.read_timeout_seconds': 'Wait for a whole request (seconds)',
+	'http.write_timeout_seconds': 'Time to send a response (seconds)',
+	'http.idle_timeout_seconds': 'Keep idle connections open for (seconds)',
+	'backup.keep_count': 'Keep the newest backups',
+	'backup.keep_days': 'Also keep backups newer than (days)',
+	'backup.max_count': 'Most backups kept',
+	'auth.session_lifetime_hours': 'Stay signed in for (hours)',
+	'auth.login_rate_limit_per_min': 'Failed sign-ins allowed per minute',
+	'proxy.trusted_cidrs': 'Trusted proxy ranges (CIDR)',
+	'upload.max_bytes_background': 'Largest background upload',
+	'upload.max_bytes_icon': 'Largest icon upload',
+	'upload.max_bytes_import': 'Largest import',
+	'editmode.idle_timeout_minutes': 'Edit mode times out after (minutes)',
+	'display.animations': 'Animations',
+	'folders.animated_backgrounds': 'Animated folder backgrounds',
+	'status.checks_enabled': 'Status checks',
+	'status.check_interval_minutes': 'Check every (minutes)',
+	'status.check_timeout_seconds': 'Give up after (seconds)',
+	'discovery.max_parallel_probes': 'Parallel probes',
+	'discovery.per_host_timeout_seconds': 'Time per host (seconds)'
+};
+
+/** A setting's label; a key without one (a newer server) reads as its words, never hidden. */
+export function settingLabel(key: string): string {
+	return SETTING_LABELS[key] ?? key.split('.').slice(1).join(' ').replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
+}
+
 /** Where keys missing from the table go: last, never hidden. */
 export const OTHER_GROUP = { id: 'other', label: 'Other' } as const;
 

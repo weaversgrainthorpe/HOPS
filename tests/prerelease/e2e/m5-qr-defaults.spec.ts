@@ -177,16 +177,16 @@ c.commit()
 		const { ctx, page } = await signIn(browser);
 		try {
 			const text =
-				'Upload limits updated to the new defaults: Largest background image 50 MB → 25 MB. Limits you had changed yourself were left as they were.';
+				'Upload limits updated to the new defaults: Largest background upload 50 MB → 25 MB. Limits you had changed yourself were left as they were.';
 			const notice = page.locator('.server-notice').filter({ hasText: 'Upload limits updated to the new defaults' });
 			await expect(notice).toHaveCount(1);
 			await expect(notice).toContainText(text);
 
-			const bg = page.getByLabel('Largest background image', { exact: true });
+			const bg = page.getByLabel('Largest background upload', { exact: true });
 			await expect(bg).toHaveValue('25');
 			await expect(page.locator('.row').filter({ has: bg })).toContainText('Default 25 MB');
-			await expect(page.getByLabel('Largest icon file', { exact: true })).toHaveValue('4');
-			await expect(page.getByLabel('Largest file you can import', { exact: true })).toHaveValue('50');
+			await expect(page.getByLabel('Largest icon upload', { exact: true })).toHaveValue('4');
+			await expect(page.getByLabel('Largest import', { exact: true })).toHaveValue('50');
 			const list = await (await page.request.get('/api/settings')).json();
 			const val = (k: string) => String(list.settings.find((s: { key: string }) => s.key === k).value);
 			expect(val('upload.max_bytes_background')).toBe(String(25 * MB));
@@ -199,19 +199,19 @@ c.commit()
 			await page.reload();
 			await expect(notice).toHaveCount(1);
 			await expect(notice).toContainText(text);
-			await expect(page.getByLabel('Largest background image', { exact: true })).toHaveValue('25');
-			await expect(page.getByLabel('Largest icon file', { exact: true })).toHaveValue('4');
+			await expect(page.getByLabel('Largest background upload', { exact: true })).toHaveValue('25');
+			await expect(page.getByLabel('Largest icon upload', { exact: true })).toHaveValue('4');
 
 			// Dismissed: gone, and still gone after a reload and a restart.
 			await notice.getByRole('button', { name: 'Dismiss' }).click();
 			await expect(notice).toHaveCount(0);
 			await page.reload();
-			await expect(page.getByLabel('Largest background image', { exact: true })).toHaveValue('25');
+			await expect(page.getByLabel('Largest background upload', { exact: true })).toHaveValue('25');
 			await expect(notice).toHaveCount(0);
 			await stop();
 			await start();
 			await page.reload();
-			await expect(page.getByLabel('Largest background image', { exact: true })).toHaveValue('25');
+			await expect(page.getByLabel('Largest background upload', { exact: true })).toHaveValue('25');
 			await expect(notice).toHaveCount(0);
 		} finally {
 			await ctx.close();

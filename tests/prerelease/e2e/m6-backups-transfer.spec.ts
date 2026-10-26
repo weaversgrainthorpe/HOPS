@@ -54,7 +54,7 @@ test.describe('M6 backups: retention, download, upload', () => {
 
 		// Set it in Global settings › Server, as the admin would.
 		await page.goto('/settings/global');
-		const input = page.getByLabel('Always keep the newest (backups)', { exact: true });
+		const input = page.getByLabel('Keep the newest backups', { exact: true });
 		await expect(input).toBeVisible();
 		await input.fill('3');
 		const row = page.locator('.row').filter({ has: input });

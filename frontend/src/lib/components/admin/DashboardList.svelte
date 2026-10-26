@@ -364,7 +364,7 @@
 
   .path {
     margin: 0.25rem 0;
-    color: var(--accent);
+    color: var(--accent-text);
     font-size: 0.875rem;
     font-family: monospace;
   }

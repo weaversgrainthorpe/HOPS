@@ -36,6 +36,16 @@
   --border: #475569;
   --shadow: rgba(0, 0, 0, 0.3);
 
+  /* Form controls (Settings polish): a field's edge and its placeholder are >= 3:1 on every preset,
+     because they derive from --text-secondary (which every preset keeps >= 4.5:1 on its surfaces). */
+  --field-border: color-mix(in srgb, var(--text-secondary) 75%, transparent);
+  --placeholder: var(--text-secondary);
+  /* Disabled controls: still readable (>= 3:1), shown by a muted fill, a dashed edge, no shadow and
+     the not-allowed cursor, never by fading alone. */
+  --disabled-bg: var(--bg-tertiary);
+  --disabled-text: var(--text-secondary);
+  --disabled-edge: var(--field-border);
+
   /* Semantic colors.
      --color-error  is for fills + icon strokes (where 4:1 contrast on
                     a 1em surface is enough).
@@ -51,6 +61,7 @@
   --color-success: #10b981;
   --color-success-dark: #059669;
   --color-success-alt: #22c55e;
+  --color-success-text: #86efac; /* success-coloured TEXT on the page and surfaces (>= 4.5:1) */
   --color-primary: #3b82f6;
   --color-primary-dark: #2563eb;
   /* Solid status fills for WHITE text (>= 4.5:1, checked in theme.test.ts). The plain status colours
@@ -156,6 +167,7 @@
   --accent-text: #1d4ed8;
   --color-error-text: #b91c1c;
   --color-warning-text: #92400e; /* ≈ 7:1 on #f1f5f9 */
+  --color-success-text: #166534;
   --status-online: #15803d;
   --status-degraded: #b45309;
   --status-offline: #b91c1c;
@@ -177,7 +189,7 @@ body {
 }
 
 a {
-  color: var(--accent);
+  color: var(--accent-text);
   text-decoration: none;
 }
 
@@ -196,13 +208,33 @@ button {
   transition: background-color 0.2s;
 }
 
-button:hover {
+/* Hover is for controls that respond: never a disabled one. */
+button:hover:where(:not(:disabled):not([aria-disabled="true"])) {
   background: var(--accent-solid-hover);
 }
 
-button:disabled {
-  opacity: 0.5;
+button:disabled,
+button[aria-disabled="true"] {
+  opacity: 1;
+  background: var(--disabled-bg);
+  color: var(--disabled-text);
+  outline: 1px dashed var(--disabled-edge);
+  outline-offset: -1px;
+  box-shadow: none;
   cursor: not-allowed;
+}
+
+::placeholder {
+  color: var(--placeholder);
+  opacity: 1;
+}
+
+/* Every text field's edge is >= 3:1 against what is around it (WCAG 1.4.11). Focus and error
+   styles keep their own colours. */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not(:focus):not([aria-invalid="true"]):not(.error):not(.invalid),
+select:not(:focus):not([aria-invalid="true"]):not(.error),
+textarea:not(:focus):not([aria-invalid="true"]):not(.error) {
+  border-color: var(--field-border);
 }
 
 input,
@@ -395,13 +427,15 @@ a:focus-visible {
 }
 .badge--neutral  { color: var(--text-secondary); background: rgba(148, 163, 184, 0.18); }
 .badge--info     { color: var(--accent-text);  background: rgba(59, 130, 246, 0.18); }
-.badge--success  { color: #6ee7b7;             background: rgba(34, 197, 94, 0.18); }
-.badge--warning  { color: #fcd34d;             background: rgba(245, 158, 11, 0.18); }
+.badge--success  { color: color-mix(in srgb, var(--color-success-text) 60%, white);             background: rgba(34, 197, 94, 0.18); }
+/* Badge text stays >= 4.5:1 over its tint on the most saturated presets (ocean, forest, sunset). */
+.badge--warning  { color: color-mix(in srgb, var(--color-warning-text) 60%, white); background: rgba(245, 158, 11, 0.18); }
 .badge--danger   { color: var(--color-error-text); background: rgba(239, 68, 68, 0.18); }
 .badge--accent   { color: #c4b5fd;             background: rgba(139, 92, 246, 0.18); }
 /* The light-on-dark badge text above is 1.5–2:1 on a light page; darker shades in the light theme. */
-[data-theme="light"] .badge--success { color: #047857; }
+[data-theme="light"] .badge--success { color: color-mix(in srgb, var(--color-success-text) 80%, black); }
 [data-theme="light"] .badge--warning { color: #92400e; }
+[data-theme="light"] .badge--info    { color: color-mix(in srgb, var(--accent-text) 75%, black); }
 [data-theme="light"] .badge--accent  { color: #6d28d9; }
 /* "Modified" / "Restart" small uppercase pill variant of warning. */
 .badge--pill {
@@ -486,7 +520,12 @@ a:focus-visible {
 .btn-primary:disabled,
 .btn-secondary:disabled,
 .btn-danger:disabled {
-  opacity: 0.6;
+  opacity: 1;
+  background: var(--disabled-bg);
+  color: var(--disabled-text);
+  outline: 1px dashed var(--disabled-edge);
+  outline-offset: -1px;
+  box-shadow: none;
   cursor: not-allowed;
 }
 

@@ -23,7 +23,7 @@ func TestNotices_UploadDefaultsMovedShowsUntilDismissed(t *testing.T) {
 	if len(ns) != 1 || ns[0]["id"] != noticeUploadDefaultsMoved {
 		t.Fatalf("notices = %v, want the one upload-defaults notice", ns)
 	}
-	want := "Upload limits updated to the new defaults: Largest background image 50 MB → 25 MB; Largest icon file 8 MB → 2 MB. Limits you had changed yourself were left as they were."
+	want := "Upload limits updated to the new defaults: Largest background upload 50 MB → 25 MB; Largest icon upload 8 MB → 2 MB. Limits you had changed yourself were left as they were."
 	if ns[0]["text"] != want {
 		t.Errorf("text = %q\nwant  %q", ns[0]["text"], want)
 	}
@@ -69,7 +69,7 @@ func TestNotices_UploadDefaultsNamesOnlyWhatMoved(t *testing.T) {
 	}
 	router, _ := setupTestRouterWithSettingsRows(t, "", nil, rows)
 	ns := noticesOf(t, getView(t, newClient(t, router)))
-	want := "Upload limits updated to the new defaults: Largest background image 50 MB → 25 MB. Limits you had changed yourself were left as they were."
+	want := "Upload limits updated to the new defaults: Largest background upload 50 MB → 25 MB. Limits you had changed yourself were left as they were."
 	if len(ns) != 1 || ns[0]["text"] != want {
 		t.Errorf("notices = %v\nwant text %q", ns, want)
 	}

@@ -719,7 +719,7 @@
     right: 0.5rem;
     top: 50%;
     transform: translateY(-50%);
-    color: var(--accent);
+    color: var(--accent-text);
     border-radius: 0.4rem;
     display: inline-flex;
     align-items: center;

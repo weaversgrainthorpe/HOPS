@@ -296,7 +296,7 @@
   .action.primary {
     background: rgba(79,140,255,0.15);
     border-color: rgba(79,140,255,0.35);
-    color: var(--accent);
+    color: var(--accent-text);
   }
   .action.primary:hover { background: rgba(79,140,255,0.25); }
   .hash { font-size: 0.72rem; color: var(--text-secondary); }

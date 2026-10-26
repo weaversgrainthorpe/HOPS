@@ -18,7 +18,7 @@
   import { listSettings, type SettingDef } from '$lib/utils/api';
   import { saveGlobalSetting } from '$lib/stores/config';
   import { bytesToMBText, formatMB, parseMBInput } from '$lib/utils/uploadLimits';
-  import { groupSettings } from '$lib/settings/globalGroups';
+  import { groupSettings, settingLabel } from '$lib/settings/globalGroups';
   import { globalNav, jumpToGroup, onGroupLinkClick, watchGroups } from '$lib/settings/globalNav';
 
   // Settings → Global settings (M5 §9). The settings shell shows this page only once signed in
@@ -119,17 +119,6 @@
 
   // --- byte-size settings (M5 §10): stored in bytes, shown and typed in MB ---
 
-  // Plain labels: each upload setting is an upper limit on one kind of file.
-  const plainLabels: Record<string, string> = {
-    'upload.max_bytes_import': 'Largest file you can import',
-    'upload.max_bytes_background': 'Largest background image',
-    'upload.max_bytes_icon': 'Largest icon file',
-    // Backup retention (M6 §11).
-    'backup.keep_count': 'Always keep the newest (backups)',
-    'backup.keep_days': 'Also keep backups newer than (days)',
-    'backup.max_count': 'Most automatic backups (disk ceiling)',
-  };
-
   // What the input shows for a stored value: MB for byte sizes, the value itself otherwise.
   function shown(s: SettingDef, value: string): string {
     return s.type === 'bytes' ? bytesToMBText(value) : value;
@@ -197,7 +186,7 @@
       if (s.restartRequired && !$pendingRestartKeys.includes(s.key)) {
         $pendingRestartKeys = [...$pendingRestartKeys, s.key];
       }
-      toast.success(`Saved ${formatKey(s.key)}.`);
+      toast.success(`Saved ${labelFor(s.key)}.`);
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Save failed';
       perKeyError[s.key] = msg;
@@ -228,12 +217,8 @@
     return key.replace(/\./g, ' · ').replace(/_/g, ' ');
   }
 
-  // Friendly per-setting label for the form row.
-  function labelFor(key: string): string {
-    if (plainLabels[key]) return plainLabels[key];
-    const tail = key.split('.').slice(1).join('.');
-    return tail.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-  }
+  // The row's human label: one table, in globalGroups.ts.
+  const labelFor = settingLabel;
 
   // --- cidr_list list-builder ---
 
@@ -506,7 +491,7 @@
   .group h3 {
     margin: 0 0 0.75rem;
     font-size: 1.15rem;
-    color: var(--accent);
+    color: var(--accent-text);
     border-bottom: 1px solid var(--border);
     padding-bottom: 0.4rem;
   }
@@ -564,7 +549,7 @@
   }
 
   .meta {
-    color: var(--text-tertiary, var(--text-secondary));
+    color: var(--text-secondary);
     font-size: 0.78rem;
     display: flex;
     align-items: center;
@@ -579,13 +564,10 @@
   /* Raw setting key is an implementation detail — keep it accessible
      (for scripting / API users) but visually demote it so the panel
      reads less like sysadmin tooling at a glance. */
+  /* Not interactive, so it looks the same hovered or not; readable (>= 4.5:1) but quieter. */
   .meta-key {
-    opacity: 0.35;
-    transition: opacity 0.15s;
-  }
-  .row:hover .meta-key,
-  .row:focus-within .meta-key {
-    opacity: 0.8;
+    color: var(--text-secondary);
+    font-size: 0.95em;
   }
 
   .row-input {
@@ -708,7 +690,7 @@
     color: var(--text-primary);
   }
   .adjusted-banner :global(svg) {
-    color: var(--accent);
+    color: var(--accent-text);
     flex-shrink: 0;
     margin-top: 0.1rem;
   }
