@@ -3,6 +3,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getCsrfToken } from '../helpers';
+import { recordWaapi, waapi, clearWaapi, waapiSettled, drawn, ran, reachedEnd, endedAtItsEnd, type WaapiRecord } from '../waapi';
 
 // M6 §7.13 (design/specs/2026-10-23-hops-v3-m6-folder-shapes-design.md) + Ruling 5: drop and merge
 // animations, clearly visible (~500 ms).
@@ -104,13 +105,25 @@ test.afterEach(async ({ page, context }) => {
   }
 });
 
-/** Record, with timestamps, every animation ghost added / removed and every folder pop started / ended. */
+/**
+ * Record, with timestamps, every animation ghost added / removed and every folder pop started / ended,
+ * and every animation the page starts (recordWaapi: its declared timing, keyframes and how it ended).
+ * The animations are measured through the Web Animations API, never by sampling frames: under load a
+ * frame sampler is starved and misses most of what was drawn (see ../waapi.ts).
+ */
 async function recordAnimations(page: Page) {
+  await recordWaapi(page);
   await page.addInitScript(() => {
     const log: { what: string; kind?: string; t: number; z?: number; ended?: string; on?: string }[] = [];
     (window as unknown as { __anim: typeof log }).__anim = log;
+    // A marker one task later: whatever is logged before it happened in the same task (it waited for
+    // nothing: no timer, no frame), however slow the machine is.
+    const nextTask = (what: string) => setTimeout(() => log.push({ what, t: performance.now() }), 0);
     // Ruling 3: when the drop ended, and when a dialog appeared (relative to the animation).
-    window.addEventListener('pointerup', () => log.push({ what: 'pointerup', t: performance.now() }), true);
+    window.addEventListener('pointerup', () => {
+      log.push({ what: 'pointerup', t: performance.now() });
+      nextTask('task-after-pointerup');
+    }, true);
     new MutationObserver((muts) => {
       const t = performance.now();
       for (const m of muts) {
@@ -130,55 +143,47 @@ async function recordAnimations(page: Page) {
           }
         });
         m.removedNodes.forEach((n) => {
-          if (n instanceof HTMLElement && n.dataset.testid === 'drop-anim') log.push({ what: 'remove', kind: n.dataset.kind, t, ended: n.dataset.ended });
+          if (n instanceof HTMLElement && n.dataset.testid === 'drop-anim') {
+            log.push({ what: 'remove', kind: n.dataset.kind, t, ended: n.dataset.ended });
+            nextTask('task-after-remove');
+          }
         });
       }
     }).observe(document, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-drop-pop', 'data-drop-release'] });
-    // Every frame: where each animation ghost is drawn (its centre, transforms included) and how opaque.
-    const frames: { t: number; ghosts: { kind?: string; x: number; y: number; op: number }[]; gulp: boolean }[] = [];
-    (window as unknown as { __frames: typeof frames }).__frames = frames;
-    const tick = () => {
-      const gs = Array.from(document.querySelectorAll<HTMLElement>('[data-testid="drop-anim"]'));
-      const gulp = !!document.querySelector('[data-drop-gulp]');
-      if (gs.length || gulp) {
-        frames.push({
-          t: performance.now(), gulp,
-          ghosts: gs.map((g) => {
-            const r = g.getBoundingClientRect();
-            return { kind: g.dataset.kind, x: r.left + r.width / 2, y: r.top + r.height / 2, op: Number(getComputedStyle(g).opacity) };
-          })
-        });
-      }
-      requestAnimationFrame(tick);
-    };
-    requestAnimationFrame(tick);
   });
 }
-type Frame = { t: number; ghosts: { kind?: string; x: number; y: number; op: number }[]; gulp: boolean };
-const sampled = (page: Page) => page.evaluate(() => (window as unknown as { __frames: Frame[] }).__frames.slice());
-const clearFrames = (page: Page) => page.evaluate(() => { (window as unknown as { __frames: unknown[] }).__frames.length = 0; });
-/** How long animation ghosts were on screen, and the furthest any visible one moved from where it began. */
-function measure(frames: Frame[]) {
-  const withGhosts = frames.filter((f) => f.ghosts.length > 0);
-  if (withGhosts.length === 0) return { ms: 0, travel: 0, gulp: frames.some((f) => f.gulp) };
-  const ms = withGhosts[withGhosts.length - 1].t - withGhosts[0].t;
-  let travel = 0;
-  const start = withGhosts[0].ghosts;
-  for (const f of withGhosts) {
-    f.ghosts.forEach((g, i) => {
-      if (start[i] && g.op > 0.2) travel = Math.max(travel, Math.hypot(g.x - start[i].x, g.y - start[i].y));
-    });
-  }
-  return { ms, travel, gulp: frames.some((f) => f.gulp) };
+/**
+ * What the drop's animation ghosts drew, from their own animations: whether every one ran to its
+ * declared end on the timeline (never cut short; see reachedEnd), the longest one ran (ms, on the document timeline), the furthest
+ * any visible one (opacity > 0.2) travels in its keyframes, whether the folder's gulp played to its
+ * end, and the latest any of the drop's animations is declared to end (delay + duration).
+ */
+function measure(recs: WaapiRecord[]) {
+  const ghosts = recs.filter((r) => r.what.startsWith('ghost:'));
+  const gulp = recs.some((r) => r.what === 'gulp' && reachedEnd(r));
+  const declared = Math.max(0, ...recs.filter((r) => r.what !== 'other' || r.id).map((r) => r.endTime).filter(Number.isFinite));
+  if (ghosts.length === 0) return { finished: false, ms: 0, travel: 0, gulp, declared };
+  return {
+    finished: ghosts.every(reachedEnd),
+    ms: Math.max(...ghosts.map(ran)),
+    travel: Math.max(...ghosts.map((r) => drawn(r, 0.2).travel)),
+    gulp,
+    declared
+  };
 }
 type AnimEvent = { what: string; kind?: string; t: number; z?: number; ended?: string; on?: string };
 const animLog = (page: Page) =>
   page.evaluate(() => (window as unknown as { __anim: AnimEvent[] }).__anim.slice());
-const anim = (log: AnimEvent[]) => log.filter((e) => e.what !== 'pointerup' && e.what !== 'dialog');
+const anim = (log: AnimEvent[]) => log.filter((e) => e.what !== 'pointerup' && e.what !== 'dialog' && !e.what.startsWith('task-'));
 const clearLog = async (page: Page) => {
   await page.evaluate(() => { (window as unknown as { __anim: unknown[] }).__anim.length = 0; });
-  await clearFrames(page);
+  await clearWaapi(page);
 };
+/** Wait, however long the page takes, until every animation has ended and nothing of them is left. */
+async function animationsEnded(page: Page) {
+  await waapiSettled(page);
+  await expect(page.locator('[data-testid="drop-anim"], [data-drop-gulp], [data-drop-pop], [data-drop-release]')).toHaveCount(0, { timeout: 10_000 });
+}
 
 const node = (page: Page, id: string) => page.locator(`.tab-canvas [data-node-id="${id}"]`).first();
 const box = async (l: Locator) => {
@@ -218,7 +223,8 @@ async function dropThenMerge(page: Page, f: { id: (s: string) => string }) {
   await page.mouse.up();
   // The change is made at the drop, not after the animation: the item is out of the tab at once.
   await expect(node(page, f.id('t'))).toHaveCount(0, { timeout: 200 });
-  await page.waitForTimeout(500);
+  // Its animation (if any) plays to its end before the next drag (which would stop it).
+  await animationsEnded(page);
 
   const v = await box(node(page, f.id('v')));
   await dragCentre(page, node(page, f.id('u')), v.x + v.width / 2, v.y + v.height / 2);
@@ -267,13 +273,16 @@ test.describe('M6 drop and merge animations (§7.13)', () => {
     const c = await box(node(page, f.id('c')));
     await dragCentre(page, node(page, f.id('t')), c.x + c.width / 2, c.y + c.height / 2);
     await page.mouse.up();
-    await page.waitForTimeout(900);
+    await animationsEnded(page);
     let log = anim(await animLog(page));
     const into = log.filter((e) => e.kind === 'into');
     expect(into.map((e) => e.what)).toEqual(['add', 'remove']);
-    let m = measure(await sampled(page));
+    let m = measure(await waapi(page));
+    expect(m.finished, 'the drop animation runs to its end (never cut short)').toBe(true);
+    expect(endedAtItsEnd(into[1].ended, await waapi(page)), `it ends when its animations finish, never cut short (ended: ${into[1].ended})`).toBe(true);
     expect(m.ms, 'the drop animation is on screen for at least 400 ms').toBeGreaterThanOrEqual(400);
-    expect(into[1].t - into[0].t, 'and done in about 500 ms').toBeLessThanOrEqual(700);
+    expect(into[1].t - into[0].t, 'the ghost is on screen for at least 400 ms').toBeGreaterThanOrEqual(400);
+    expect(m.declared, 'and done in about 500 ms').toBeLessThanOrEqual(700);
     expect(m.travel, 'the dropped tile visibly travels').toBeGreaterThanOrEqual(40);
     expect(m.gulp, 'the folder gulps').toBe(true);
     await expect(page.locator('[data-testid="drop-anim"]')).toHaveCount(0);
@@ -284,19 +293,24 @@ test.describe('M6 drop and merge animations (§7.13)', () => {
     await dragCentre(page, node(page, f.id('u')), v.x + v.width / 2, v.y + v.height / 2);
     await page.waitForTimeout(700);
     await page.mouse.up();
-    await page.waitForTimeout(900);
+    await animationsEnded(page);
     log = anim(await animLog(page));
     const adds = log.filter((e) => e.what === 'add');
     expect(adds.map((e) => e.kind)).toEqual(['merge', 'merge']); // the dragged tile and the target tile
     expect(log.filter((e) => e.what === 'pop-start'), 'the new folder pops').toHaveLength(1);
     expect(log.filter((e) => e.what === 'pop-end')).toHaveLength(1);
-    m = measure(await sampled(page));
+    const recs = await waapi(page);
+    m = measure(recs);
+    expect(m.finished, 'the merge runs to its end (never cut short)').toBe(true);
+    const pops = recs.filter((r) => r.what === 'pop');
+    expect(pops, 'one pop').toHaveLength(1);
+    expect(reachedEnd(pops[0]), `the pop runs to its end (the merge ended: ${log.filter((e) => e.what === 'remove').map((e) => e.ended)})`).toBe(true);
     expect(m.ms, 'the merge is on screen for at least 300 ms before the pop').toBeGreaterThanOrEqual(300);
     expect(m.travel, 'the merged tiles visibly move').toBeGreaterThanOrEqual(40);
     const start = Math.min(...log.map((e) => e.t));
     const end = Math.max(...log.map((e) => e.t));
     expect(end - start, 'gather + pop last at least 400 ms').toBeGreaterThanOrEqual(400);
-    expect(end - start, 'and about 500 ms in all').toBeLessThanOrEqual(700);
+    expect(m.declared, 'and about 500 ms in all').toBeLessThanOrEqual(700);
     await expect(page.locator('[data-testid="drop-anim"]')).toHaveCount(0);
     await expect(page.locator('[data-drop-pop]')).toHaveCount(0);
     const dlg = page.getByRole('dialog', { name: 'Edit Folder' });
@@ -323,8 +337,9 @@ test.describe('M6 drop and merge animations (§7.13)', () => {
     // Visible, so nothing from the animation is left on screen with it.
     await expect(page.locator('[data-testid="drop-anim"]')).toHaveCount(0);
     await expect(page.locator('[data-drop-pop]')).toHaveCount(0);
+    // The marker queued as the animation ended has run (it is one task after the end).
+    await expect.poll(async () => (await animLog(page)).some((e) => e.what === 'task-after-remove')).toBe(true);
     const log = await animLog(page);
-    const up = log.find((e) => e.what === 'pointerup')!.t;
     const opened = log.find((e) => e.what === 'dialog')!.t;
     const ghosts = log.filter((e) => e.what === 'add');
     expect(ghosts.length, 'the merge animated').toBe(2);
@@ -332,7 +347,13 @@ test.describe('M6 drop and merge animations (§7.13)', () => {
     for (const g of ghosts) expect(g.z!, 'an animation ghost sits below dialogs').toBeLessThan(modalZ);
     const lastAnim = Math.max(...log.filter((e) => e.what === 'remove' || e.what === 'pop-end').map((e) => e.t));
     expect(opened, 'the dialog opens after the animation has ended').toBeGreaterThanOrEqual(lastAnim);
-    expect(opened - up, 'and no later than ~500 ms after the drop').toBeLessThanOrEqual(700);
+    const m = measure(await waapi(page));
+    expect(m.finished, 'the merge ran to its end before the dialog opened (not cut short by the cap)').toBe(true);
+    // No later than ~500 ms after the drop: the merge is declared to take about 500 ms, and the dialog
+    // opens in the same task as it ends (before the marker queued at its end: no timer, no frame).
+    expect(m.declared, 'the merge takes about 500 ms').toBeLessThanOrEqual(700);
+    const ended = Math.max(...log.filter((e) => e.what === 'task-after-remove').map((e) => e.t));
+    expect(opened, 'and the dialog opens as it ends, waiting for nothing else').toBeLessThan(ended);
     await dlg.getByRole('button', { name: 'Cancel' }).click();
   });
 
@@ -349,11 +370,17 @@ test.describe('M6 drop and merge animations (§7.13)', () => {
       await clearLog(page);
       await page.mouse.up();
       await expect(page.getByRole('dialog', { name: 'Edit Folder' })).toBeVisible();
+      await expect.poll(async () => (await animLog(page)).some((e) => e.what === 'task-after-pointerup')).toBe(true);
       const log = await animLog(page);
       expect(anim(log)).toEqual([]);
+      expect(await waapi(page).then((rs) => rs.filter((r) => r.what !== 'other')), 'nothing animated').toEqual([]);
       const up = log.find((e) => e.what === 'pointerup')!.t;
       const opened = log.find((e) => e.what === 'dialog')!.t;
-      expect(opened - up, 'opened straight away, not after an animation delay').toBeLessThan(120);
+      const nextTask = log.find((e) => e.what === 'task-after-pointerup')!.t;
+      // Straight away: in the drop's own task (before the marker queued at the pointerup), so after
+      // no animation delay, timer or frame, however slow the machine is.
+      expect(opened, 'opened straight away, not after an animation delay').toBeGreaterThanOrEqual(up);
+      expect(opened, 'opened straight away, not after an animation delay').toBeLessThan(nextTask);
     });
   }
 
@@ -399,7 +426,10 @@ test.describe('M6 drop and merge animations (§7.13)', () => {
     const log = anim(await animLog(page));
     expect(log.filter((e) => e.what === 'add').map((e) => e.kind)).toEqual(['into', 'merge', 'merge']);
     expect(log.filter((e) => e.what === 'pop-start')).toHaveLength(1);
-    expect(measure(await sampled(page)).travel).toBeGreaterThanOrEqual(40);
+    await animationsEnded(page);
+    const m = measure(await waapi(page));
+    expect(m.finished, `they run to their end (ended: ${log.filter((e) => e.what === 'remove').map((e) => e.ended)})`).toBe(true);
+    expect(m.travel).toBeGreaterThanOrEqual(40);
     expect(errors).toEqual([]);
     await page.goto('/settings/global');
     await expect(page.getByLabel('Animations', { exact: true })).toHaveValue('always');
@@ -448,10 +478,11 @@ test.describe('M6 drop and merge animations (§7.13)', () => {
     const errors = await openEditing(page, sc.path, sc.id('sc-r1'));
     const cue = page.locator('.drag-layer .cue');
     const check = async (what: string, kinds: string[], gulpOrPop: 'gulp' | 'pop') => {
-      await page.waitForTimeout(900);
+      await animationsEnded(page);
       const log = anim(await animLog(page));
       expect(log.filter((e) => e.what === 'add').map((e) => e.kind), `${what}: animated`).toEqual(kinds);
-      const m = measure(await sampled(page));
+      const m = measure(await waapi(page));
+      expect(m.finished, `${what}: runs to its end`).toBe(true);
       expect(m.ms, `${what}: on screen >= 300 ms`).toBeGreaterThanOrEqual(gulpOrPop === 'gulp' ? 400 : 300);
       expect(m.travel, `${what}: moves >= 40 px`).toBeGreaterThanOrEqual(40);
       if (gulpOrPop === 'gulp') expect(m.gulp, `${what}: the folder gulps`).toBe(true);
@@ -505,15 +536,17 @@ test.describe('M6 drop and merge animations (§7.13)', () => {
 
 /** Ghost on screen >= 400 ms, moving >= 40 px, and the source's release puff; nothing left behind. */
 async function expectOut(page: Page, what: string) {
-  await page.waitForTimeout(900);
+  await animationsEnded(page);
   const log = anim(await animLog(page));
   expect(log.filter((e) => e.what === 'add').map((e) => e.kind), `${what}: it pops out`).toEqual(['out']);
-  const m = measure(await sampled(page));
+  const m = measure(await waapi(page));
+  expect(m.finished, `${what}: runs to its end`).toBe(true);
   expect(m.ms, `${what}: on screen >= 400 ms`).toBeGreaterThanOrEqual(400);
   const out = log.filter((e) => e.kind === 'out');
-  // Ended by its own animations finishing (onEnd), never by the fallback timer (OUT_TOTAL_MS + 300).
-  expect(out[1].ended, `${what}: it ends when its animations finish, not at the fallback`).toBe('finished');
-  expect(out[1].t - out[0].t, `${what}: and done in about 500 ms`).toBeLessThanOrEqual(800);
+  // Ended by its own animations finishing (onEnd), never cut short by the safety net (see endedAtItsEnd).
+  expect(endedAtItsEnd(out[1].ended, await waapi(page)), `${what}: it ends when its animations finish, never cut short (ended: ${out[1].ended})`).toBe(true);
+  expect(out[1].t - out[0].t, `${what}: the ghost is on screen >= 400 ms`).toBeGreaterThanOrEqual(400);
+  expect(m.declared, `${what}: and done in about 500 ms`).toBeLessThanOrEqual(800);
   expect(m.travel, `${what}: it travels >= 40 px`).toBeGreaterThanOrEqual(40);
   expect(log.filter((e) => e.what === 'release-start'), `${what}: the source puffs`).toHaveLength(1);
   expect(log.filter((e) => e.what === 'release-end')).toHaveLength(1);
@@ -692,26 +725,33 @@ test.describe('M6 §8.1: items animate out of folders', () => {
     // The Grid tab button, where the item comes from (measured before the drag: the bar doesn't move).
     const gridBtn = await box(page.locator(`[data-drag-tab="${sc.id('sc-tab-grid')}"]`));
     await dragOutToOtherTab(page, sc);
-    await page.waitForTimeout(900);
+    await animationsEnded(page);
     const log = anim(await animLog(page));
     expect(log.filter((e) => e.what === 'add').map((e) => e.kind), 'it pops out').toEqual(['out']);
-    const frames = await sampled(page);
-    const m = measure(frames);
+    const recs = await waapi(page);
+    const m = measure(recs);
+    expect(m.finished, 'it runs to its end').toBe(true);
     expect(m.ms, 'on screen >= 400 ms').toBeGreaterThanOrEqual(400);
     expect(m.travel, 'it travels >= 40 px').toBeGreaterThanOrEqual(40);
-    // It starts at the source tab's button (within the rise of the first frames), not at the drop.
-    const first = frames.find((f) => f.ghosts.length)!.ghosts[0];
+    // Where the ghost is drawn at its first and last keyframes (its box, moved by the keyframe; the
+    // scale is about its centre, so it doesn't move the centre).
+    const g = recs.filter((r) => r.what === 'ghost:out');
+    expect(g, 'one ghost').toHaveLength(1);
+    const at = (k: { x: number; y: number }) => ({ x: g[0].box!.left + g[0].box!.width / 2 + k.x, y: g[0].box!.top + g[0].box!.height / 2 + k.y });
+    const path = drawn(g[0]);
+    // It starts at the source tab's button, not at the drop.
+    const first = at(path.first);
     expect(Math.abs(first.x - (gridBtn.x + gridBtn.width / 2)), 'it starts at the Grid tab button (x)').toBeLessThan(gridBtn.width / 2 + 8);
     expect(Math.abs(first.y - (gridBtn.y + gridBtn.height / 2)), 'it starts at the Grid tab button (y)').toBeLessThan(gridBtn.height + 40);
     // …and ends on the landed item.
     const landed = await box(node(page, sc.id('sc-l1-t1')));
-    const lastWith = frames.filter((f) => f.ghosts.length).at(-1)!.ghosts[0];
+    const lastWith = at(path.last);
     expect(Math.hypot(lastWith.x - (landed.x + landed.width / 2), lastWith.y - (landed.y + landed.height / 2)), 'it lands on the item').toBeLessThan(30);
     const puffs = log.filter((e) => e.what === 'release-start');
     expect(puffs.map((e) => e.on), 'the source tab button puffs').toEqual(['tab']);
     expect(log.filter((e) => e.what === 'release-end')).toHaveLength(1);
     const out = log.filter((e) => e.kind === 'out');
-    expect(out[1].ended, 'it ends when its animations finish').toBe('finished');
+    expect(endedAtItsEnd(out[1].ended, recs), `it ends when its animations finish, never cut short (ended: ${out[1].ended})`).toBe(true);
     await expect(page.locator('[data-testid="drop-anim"], [data-drop-gulp], [data-drop-release]')).toHaveCount(0);
     expect(errors).toEqual([]);
   });

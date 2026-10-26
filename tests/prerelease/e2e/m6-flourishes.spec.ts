@@ -1,10 +1,13 @@
 import { test, expect, type Page, type BrowserContext, type Locator } from '@playwright/test';
 import { getCsrfToken } from '../helpers';
+import { recordWaapi, waapi, clearWaapi, waapiSettled, drawn, ran, parseTransform, reachedEnd, type WaapiRecord } from '../waapi';
 
 // M6 §9 (design/specs/2026-10-23-hops-v3-m6-folder-shapes-design.md): visual flourishes, in a REAL
 // browser. For each one we check three things:
-// - it really runs: we sample it every frame and measure how long it is on screen and how far it
-//   travels or scales;
+// - it really runs: we record it through the Web Animations API (its declared timing and keyframes,
+//   and that it ran to its end on the document timeline) and measure how long it ran and how far it
+//   travels or scales. Never by sampling frames: under load a frame sampler is starved and misses most
+//   of what was drawn (see ../waapi.ts);
 // - it plays nothing under Off, or under On with reduced motion;
 // - the saved result is identical with and without animations.
 // The flourishes:
@@ -97,63 +100,47 @@ test.afterEach(async ({ page, context }) => {
   }
 });
 
-type Sample = { t: number; kind: string; id: string; x: number; y: number; w: number; h: number; op: number; dur: number };
-
-/** Every frame: each element a flourish is playing on (data-flourish, or a delete's copy), as drawn. */
+/** Every animation the page starts (recordWaapi), and when a drag begins (the shared cancel runs then). */
 async function record(page: Page) {
+  await recordWaapi(page);
   await page.addInitScript(() => {
-    const out: Sample[] = [];
-    (window as unknown as { __fl: Sample[] }).__fl = out;
-    type Sample = { t: number; kind: string; id: string; x: number; y: number; w: number; h: number; op: number; dur: number };
-    const tick = () => {
-      const els = document.querySelectorAll<HTMLElement>('[data-flourish], [data-testid="flourish-ghost"]');
-      if (els.length) {
-        const t = performance.now();
-        els.forEach((el) => {
-          const r = el.getBoundingClientRect();
-          const a = el.getAnimations()[0];
-          out.push({
-            t, kind: el.getAttribute('data-flourish') ?? el.dataset.kind ?? '?',
-            id: el.getAttribute('data-node-id') ?? el.getAttribute('data-nested-folder') ?? el.getAttribute('data-folder-page-content') ??
-              (el.hasAttribute('data-saved-tick') ? 'saved' : el.classList.contains('status-badge') ? 'status' : ''),
-            x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width, h: r.height,
-            op: Number(getComputedStyle(el).opacity), dur: a ? Number(a.effect?.getTiming().duration ?? 0) : 0
-          });
-        });
-      }
-      requestAnimationFrame(tick);
-    };
-    requestAnimationFrame(tick);
-    // When a drag begins (the shared cancel runs then).
     new MutationObserver(() => {
       const w = window as unknown as { __dragAt?: number };
-      if (document.body.classList.contains('hops-dragging') && w.__dragAt === undefined) w.__dragAt = performance.now();
+      // On the document timeline, the clock the animations run on (recordWaapi's times).
+      if (document.body.classList.contains('hops-dragging') && w.__dragAt === undefined) w.__dragAt = Number(document.timeline.currentTime ?? 0);
     }).observe(document, { attributes: true, subtree: true, attributeFilter: ['class'] });
   });
 }
-const samples = (page: Page) => page.evaluate(() => (window as unknown as { __fl: Sample[] }).__fl.slice());
-const clear = (page: Page) => page.evaluate(() => {
-  const w = window as unknown as { __fl: unknown[]; __dragAt?: number };
-  w.__fl.length = 0;
-  delete w.__dragAt;
-});
+/** The flourishes recorded so far (every animation on a data-flourish element or a delete's copy), once they have all ended. */
+async function samples(page: Page): Promise<WaapiRecord[]> {
+  await waapiSettled(page);
+  return (await waapi(page)).filter((r) => r.what !== 'other');
+}
+const clear = async (page: Page) => {
+  await clearWaapi(page);
+  await page.evaluate(() => { delete (window as unknown as { __dragAt?: number }).__dragAt; });
+};
 
 /**
- * One flourish kind, measured: how long it was on screen (ms), its programmed duration, the furthest
- * its centre moved, the largest size change against where it ended (a ratio), and the opacity range.
+ * One flourish kind, measured from its animations: how many played, whether each reached its declared end (reachedEnd),
+ * how long the longest ran on the document timeline (ms), its programmed duration, the furthest its
+ * centre travels in its keyframes, the largest size change against where it starts or ends (a
+ * ratio), and the opacity range.
  */
-function stats(all: Sample[], kind: string, id?: string) {
-  const s = all.filter((x) => x.kind === kind && (id === undefined || x.id === id));
-  if (s.length === 0) return { n: 0, ms: 0, dur: 0, travel: 0, scale: 0, minOp: 1, maxOp: 0 };
-  const first = s[0], last = s[s.length - 1];
-  let travel = 0, scale = 0, minOp = 1, maxOp = 0;
-  for (const x of s) {
-    travel = Math.max(travel, Math.hypot(x.x - first.x, x.y - first.y));
-    scale = Math.max(scale, Math.abs(x.w / Math.max(1, last.w) - 1), Math.abs(x.h / Math.max(1, last.h) - 1), Math.abs(x.w / Math.max(1, first.w) - 1));
-    minOp = Math.min(minOp, x.op);
-    maxOp = Math.max(maxOp, x.op);
-  }
-  return { n: s.length, ms: last.t - first.t, dur: Math.max(...s.map((x) => x.dur)), travel, scale, minOp, maxOp };
+function stats(all: WaapiRecord[], kind: string, id?: string) {
+  const s = all.filter((x) => x.what === kind && (id === undefined || x.id === id));
+  if (s.length === 0) return { n: 0, finished: false, ms: 0, dur: 0, travel: 0, scale: 0, minOp: 1, maxOp: 0 };
+  const d = s.map((x) => drawn(x));
+  return {
+    n: s.length,
+    finished: s.every(reachedEnd),
+    ms: Math.max(...s.map(ran)),
+    dur: Math.max(...s.map((x) => x.duration)),
+    travel: Math.max(...d.map((x) => x.travel)),
+    scale: Math.max(...d.map((x) => x.scale)),
+    minOp: Math.min(...d.map((x) => x.minOp)),
+    maxOp: Math.max(...d.map((x) => x.maxOp))
+  };
 }
 
 const node = (page: Page, id: string) => page.locator(`.tab-canvas [data-node-id="${id}"]`).first();
@@ -275,18 +262,22 @@ test.describe('M6 §9 visual flourishes', () => {
 
     const opened = stats(s, 'folder-open', f.id('c'));
     expect(opened.dur, 'open: about 300 ms').toBe(300);
+    expect(opened.finished, 'open: it runs to its end').toBe(true);
     expect(opened.ms, 'open: on screen for most of it').toBeGreaterThanOrEqual(180);
     expect(opened.scale, 'open: it grows from its tile (its size changes by > 30%)').toBeGreaterThan(0.3);
     const minimised = stats(s, 'folder-minimise', f.id('c'));
     expect(minimised.dur).toBe(300);
+    expect(minimised.finished).toBe(true);
     expect(minimised.ms).toBeGreaterThanOrEqual(180);
     expect(minimised.scale, 'minimise: it shrinks back into its tile').toBeGreaterThan(0.3);
 
     const drillIn = stats(s, 'drill-in', f.id('sub'));
     expect(drillIn.dur).toBe(300);
+    expect(drillIn.finished).toBe(true);
     expect(drillIn.ms).toBeGreaterThanOrEqual(180);
     expect(drillIn.scale, 'drill in: the inner box zooms forward from its tile').toBeGreaterThan(0.3);
     const drillUp = stats(s, 'drill-up', f.id('sub'));
+    expect(drillUp.finished).toBe(true);
     expect(drillUp.ms).toBeGreaterThanOrEqual(180);
     expect(drillUp.scale, 'drill up: the tile shrinks back from the box').toBeGreaterThan(0.3);
     const recede = stats(s, 'recede', f.id('c'));
@@ -294,18 +285,20 @@ test.describe('M6 §9 visual flourishes', () => {
     expect(recede.scale, 'slightly (2-4%)').toBeGreaterThan(0.015);
     expect(recede.scale).toBeLessThan(0.06);
 
-    const pg = s.filter((x) => x.kind === 'page' && x.id === f.id('pg'));
+    const pg = s.filter((x) => x.what === 'page' && x.id === f.id('pg'));
     expect(pg.length).toBeGreaterThan(0);
     // Two slides: next (from the right, moving left), then previous (from the left, moving right).
-    const split = pg.findIndex((x, i) => i > 0 && x.t - pg[i - 1].t > 200);
-    expect(split, 'two page slides').toBeGreaterThan(0);
-    const next = stats(pg.slice(0, split), 'page'), prev = stats(pg.slice(split), 'page');
+    expect(pg.length, 'two page slides').toBe(2);
+    const next = stats([pg[0]], 'page'), prev = stats([pg[1]], 'page');
     expect(next.dur).toBe(250);
+    expect(next.finished).toBe(true);
     expect(next.ms).toBeGreaterThanOrEqual(150);
     expect(next.travel, 'the page visibly slides').toBeGreaterThanOrEqual(40);
-    expect(pg[0].x, 'next: it comes in from the right').toBeGreaterThan(pg[split - 1].x);
+    const nextPath = drawn(pg[0]), prevPath = drawn(pg[1]);
+    expect(nextPath.first.x, 'next: it comes in from the right').toBeGreaterThan(nextPath.last.x);
+    expect(prev.finished).toBe(true);
     expect(prev.travel).toBeGreaterThanOrEqual(40);
-    expect(pg[split].x, 'previous: it comes in from the left').toBeLessThan(pg[pg.length - 1].x);
+    expect(prevPath.first.x, 'previous: it comes in from the left').toBeLessThan(prevPath.last.x);
     await expect(page.locator('[data-flourish]')).toHaveCount(0);
     expect(errors).toEqual([]);
   });
@@ -327,6 +320,7 @@ test.describe('M6 §9 visual flourishes', () => {
     let s = await samples(page);
     const del = stats(s, 'delete');
     expect(del.dur).toBe(240);
+    expect(del.finished).toBe(true);
     expect(del.ms).toBeGreaterThanOrEqual(150);
     expect(del.scale, 'it shrinks').toBeGreaterThan(0.25);
     expect(del.minOp, 'and fades').toBeLessThan(0.3);
@@ -340,6 +334,7 @@ test.describe('M6 §9 visual flourishes', () => {
     s = await samples(page);
     const back = stats(s, 'pop-in', f.id('t'));
     expect(back.dur).toBe(280);
+    expect(back.finished).toBe(true);
     expect(back.ms).toBeGreaterThanOrEqual(150);
     expect(back.scale, 'it pops (scale 0.6 → 1.05 → 1)').toBeGreaterThan(0.25);
 
@@ -350,7 +345,7 @@ test.describe('M6 §9 visual flourishes', () => {
     await page.keyboard.press('Control+v');
     await settle(page);
     s = await samples(page);
-    const pasted = s.filter((x) => x.kind === 'pop-in');
+    const pasted = s.filter((x) => x.what === 'pop-in');
     expect(pasted.length, 'the pasted tile pops in').toBeGreaterThan(0);
     expect(pasted[0].id.startsWith(f.prefix), 'it is the NEW tile').toBe(false);
     expect(stats(s, 'pop-in').scale).toBeGreaterThan(0.25);
@@ -373,6 +368,7 @@ test.describe('M6 §9 visual flourishes', () => {
     s = await samples(page);
     const undoGlide = stats(s, 'glide', f.id('v'));
     expect(undoGlide.dur).toBe(220);
+    expect(undoGlide.finished).toBe(true);
     expect(undoGlide.ms).toBeGreaterThanOrEqual(130);
     expect(undoGlide.travel, 'undo: it glides back').toBeGreaterThanOrEqual(40);
     await clear(page);
@@ -444,17 +440,18 @@ test.describe('M6 §9 visual flourishes', () => {
     await page.keyboard.press('Control+z');
     await page.waitForFunction((id) => document.querySelector(`[data-node-id="${id}"]`)?.getAttribute('data-flourish') === 'glide',
       f.id('v'), { polling: 'raf' });
-    await page.waitForTimeout(50); // one sampled frame of it, well inside its 220 ms
     await page.mouse.down();
     await page.mouse.move(u.x + u.width / 2 + 40, u.y + u.height / 2 + 40, { steps: 2 });
     await expect(page.locator('body.hops-dragging')).toHaveCount(1);
     const dragAt = await page.evaluate(() => (window as unknown as { __dragAt?: number }).__dragAt ?? 0);
     await expect(page.locator('[data-flourish]')).toHaveCount(0);
     expect(await node(page, f.id('v')).evaluate((el) => el.getAnimations().length), 'nothing left on Vee').toBe(0);
-    const g = (await samples(page)).filter((x) => x.kind === 'glide' && x.id === f.id('v'));
+    const g = (await samples(page)).filter((x) => x.what === 'glide' && x.id === f.id('v'));
     expect(g.length, 'the glide had started').toBeGreaterThan(0);
-    expect(g[0].t + 220, 'it was still running when the drag began').toBeGreaterThan(dragAt);
-    expect(g[g.length - 1].t, 'and nothing of it was drawn after that').toBeLessThanOrEqual(dragAt + 20);
+    // Times on the document timeline (the clock the glide runs on).
+    expect(g[0].state, 'it was still running when the drag began: it was stopped, never finished').toBe('cancelled');
+    expect((g[0].startTime ?? g[0].createdAt) + 220, 'it was still running when the drag began').toBeGreaterThan(dragAt);
+    expect(g[g.length - 1].endedAt!, 'and nothing of it was drawn after that').toBeLessThanOrEqual(dragAt + 20);
     await page.keyboard.press('Escape');
     await page.mouse.up();
   });
@@ -485,6 +482,7 @@ test.describe('M6 §9 visual flourishes', () => {
     await save(page);
     const t = stats(await samples(page), 'saved');
     expect(t.dur).toBe(900);
+    expect(t.finished).toBe(true);
     expect(t.ms).toBeGreaterThanOrEqual(600);
     expect(t.maxOp, 'it is seen').toBeGreaterThan(0.9);
     expect(t.scale, 'it pops').toBeGreaterThan(0.1);
@@ -514,10 +512,12 @@ test.describe('M6 §9 visual flourishes', () => {
     const s = await samples(page);
     const p = stats(s, 'status-pulse', 'status');
     expect(p.dur).toBe(900);
+    expect(p.finished).toBe(true);
     expect(p.ms).toBeGreaterThanOrEqual(500);
     expect(p.scale, 'it pulses (scale up to 1.6)').toBeGreaterThan(0.3);
     // Two pulses: two peaks of its size, with a dip between them.
-    const ws = s.filter((x) => x.kind === 'status-pulse').map((x) => x.w);
+    // Its size at each keyframe, in order (the keyframes are what it draws).
+    const ws = s.filter((x) => x.what === 'status-pulse').flatMap((x) => x.keyframes.map((k) => parseTransform(k.transform).sx));
     const base = Math.min(...ws), top = Math.max(...ws);
     let peaks = 0, up = false;
     for (const w of ws) {

@@ -184,6 +184,9 @@ test.describe('walkthrough 1 (1): the header (Rulings 12 and 16)', () => {
   }
 
   test('phones (375) keep the existing hiding rules; tablets (481–1100) never scroll sideways either', async ({ page, context }) => {
+    // 64 widths x (resize, settle, open and close the switcher): a long walk that a busy machine
+    // (the full suite under load) can't fit in the default 30 s. The checks at each width are unchanged.
+    test.setTimeout(120_000);
     const sc = await dashboards(page, context, 8);
     const all = await allNames(page);
     await page.setViewportSize({ width: 375, height: 800 });

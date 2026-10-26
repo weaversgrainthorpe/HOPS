@@ -15,7 +15,7 @@ import type { HitResult } from './hitTest';
 import { drag, dragSource, setDragEnv, resetDragForTests, setActiveTab, MERGE_DWELL_MS } from './dragController';
 import {
   animationsSetting, animationsAllowed, playDropAnimation, setAnimationEnv, resetDropAnimationForTests,
-  sayAnimationFailure, MERGE_DIALOG_CAP_MS, DROP_MS, GULP_MS, GULP_DELAY_MS, INTO_TOTAL_MS, GATHER_MS, POP_MS,
+  sayAnimationFailure, safetyNet, MERGE_DIALOG_CAP_MS, DROP_MS, GULP_MS, GULP_DELAY_MS, INTO_TOTAL_MS, GATHER_MS, POP_MS,
   POP_DELAY_MS, MERGE_TOTAL_MS, OUT_MS, RELEASE_MS, OUT_GULP_DELAY_MS, OUT_TOTAL_MS, GULP_MAX_EDGE_PX, releaseScale, cancelDropAnimations, OUT_MAX_ITEMS,
   playOutOfFolders, MIN_LAND_PX, type OutStart,
   type AnimationEnv, type AnimationsMode
@@ -501,9 +501,12 @@ describe('a drop never waits for its animation', () => {
     expect(get(editorDialog)).toEqual({ kind: 'folder', id: made.id });
   });
 
-  it('merge, animations on: the dialog still opens (the animation + a 100 ms margin) if the animation never reports its end', () => {
+  it('merge, animations on: the dialog still opens (the animation + a 100 ms margin, from its start) if the animation never reports its end', () => {
     const made = mergeDrop(true);
     expect(MERGE_DIALOG_CAP_MS).toBe(MERGE_TOTAL_MS + 100);
+    vi.advanceTimersByTime(2000);
+    expect(get(editorDialog), 'counted from when the animation starts (its first frame), not from the drop').toBeNull();
+    flushFrames();
     vi.advanceTimersByTime(MERGE_DIALOG_CAP_MS - 1);
     expect(get(editorDialog)).toBeNull();
     vi.advanceTimersByTime(1);
@@ -555,7 +558,9 @@ describe('a drop never waits for its animation', () => {
     expect((nodeIn(draft(), 'c1') as FolderNode).content.children.map((n) => n.id)).toEqual(['y']);
     expect(nodeIn(draft(), 'a')).toBeTruthy();
     const afterUndo = draft();
-    calls.forEach((c) => c.anim.finish());
+    flushFrames(); // its animations start on the next frame…
+    expect(calls.length).toBeGreaterThan(0);
+    calls.forEach((c) => c.anim.finish()); // …and finish later
     vi.advanceTimersByTime(1000);
     expect(draft()).toBe(afterUndo);
     expect(layerEls()).toHaveLength(0);
@@ -637,7 +642,7 @@ describe('out of a folder (§8.1)', () => {
     const g = layerEls()[0];
     vi.advanceTimersByTime(OUT_TOTAL_MS + 300);
     expect(g.isConnected).toBe(false);
-    expect(g.dataset.ended).toBe('fallback');
+    expect(g.dataset.ended).toBe('safety-net');
   });
 
   it('the item rises out of the source, then hops on a curve to its new spot, landing at its new size', () => {
@@ -1268,5 +1273,59 @@ describe('out of a folder to another tab: the source is not drawn (walkthrough f
         expect(calls.some((c) => c.el === els['tab:t1'])).toBe(true);
       });
     }
+  });
+});
+
+// A busy device (slow frames) must still see every animation to its end: the safety net for an end
+// the browser never reports is counted from the start, and never cuts short one that is still playing.
+describe('the safety net', () => {
+  /** An animation as the browser reports it: running, `t` ms into its `end` ms. */
+  const playing = (at: { t: number; end: number; state?: AnimationPlayState }) =>
+    ({
+      get playState() { return at.state ?? 'running'; },
+      get currentTime() { return at.t; },
+      effect: { getComputedTiming: () => ({ endTime: at.end }) }
+    }) as unknown as Animation;
+
+  it('fires at its time when nothing reports being in play (the end was never reported)', () => {
+    const fire = vi.fn();
+    safetyNet([new FakeAnim() as unknown as Animation], 500, 300, fire);
+    vi.advanceTimersByTime(499);
+    expect(fire).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect(fire).toHaveBeenCalledTimes(1);
+  });
+
+  it('a slow device: still playing and moving on at its time, it waits for what remains instead of cutting it short', () => {
+    const fire = vi.fn();
+    const at: { t: number; end: number; state?: AnimationPlayState } = { t: 150, end: 440 }; // its first frame came late: only 150 ms in when the net is due
+    safetyNet([playing(at)], 740, 300, fire);
+    vi.advanceTimersByTime(740);
+    expect(fire, 'not cut short while it plays').not.toHaveBeenCalled();
+    at.t = 420; // further on: still playing
+    vi.advanceTimersByTime(290 + 300);
+    expect(fire).not.toHaveBeenCalled();
+    at.state = 'finished'; // the end, never reported
+    vi.advanceTimersByTime(20 + 300);
+    expect(fire).toHaveBeenCalledTimes(1);
+  });
+
+  it('no frames (it is not moving on): it waits, since nothing of it is drawn either, and ends once it is no longer playing', () => {
+    const fire = vi.fn();
+    const at: { t: number; end: number; state?: AnimationPlayState } = { t: 100, end: 440 };
+    safetyNet([playing(at)], 740, 300, fire);
+    vi.advanceTimersByTime(740 + 3 * (340 + 300)); // still at 100 ms
+    expect(fire).not.toHaveBeenCalled();
+    at.state = 'paused'; // stopped short of its end: no longer playing
+    vi.advanceTimersByTime(340 + 300);
+    expect(fire).toHaveBeenCalledTimes(1);
+  });
+
+  it('its clear stops it', () => {
+    const fire = vi.fn();
+    const clear = safetyNet([new FakeAnim() as unknown as Animation], 500, 300, fire);
+    clear();
+    vi.advanceTimersByTime(5000);
+    expect(fire).not.toHaveBeenCalled();
   });
 });

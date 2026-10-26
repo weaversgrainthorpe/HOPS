@@ -66,7 +66,8 @@ export const POP_MS = 260;
 export const MERGE_TOTAL_MS = Math.max(GATHER_MS, POP_DELAY_MS + POP_MS);
 /**
  * Ruling 3: after a merge the folder dialog opens when the animation ends. This is the latest it
- * waits if the browser never reports that end (the animation plus a frame-timing margin).
+ * waits if the browser never reports that end (the animation plus a frame-timing margin): the merge's
+ * safety net (see safetyNet), counted from when the animation starts.
  */
 export const MERGE_DIALOG_CAP_MS = MERGE_TOTAL_MS + 100;
 /** The least height of the drop's hop, so a tile dropped right on its folder still visibly travels. */
@@ -80,6 +81,39 @@ const SETTLE_PX = 6;
  * together: comfortably past the 40 px "visibly moves" bar, and held there for a moment (gatherFrames).
  */
 const MIN_PART_PX = 60;
+
+/**
+ * The safety net for an animation whose end the browser never reports: `fire` runs `ms` after it is
+ * armed, which is when the animations have been started (on their first frame), never at the drop.
+ * When it is due and any of them is still playing — running and short of its end on its timeline —
+ * it looks again once what remains has had time to play (plus `margin`), instead of cutting it short.
+ * So a busy device (slow frames: a Pi Zero, a loaded machine) still sees every animation to its end,
+ * while one that has reached its end (or stopped: paused, idle) without reporting it is ended. An
+ * animation only moves on when the page draws frames; without frames nothing of it is seen either,
+ * and it carries on (and ends) when they come back. Returns its clear.
+ */
+export function safetyNet(anims: readonly Animation[], ms: number, margin: number, fire: () => void): () => void {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const look = () => {
+    let left = -1;
+    for (const a of anims) {
+      try {
+        const t = Number(a.currentTime ?? Number.NaN);
+        const end = Number(a.effect?.getComputedTiming().endTime ?? Number.NaN);
+        if (a.playState === 'running' && Number.isFinite(t) && Number.isFinite(end) && t < end) left = Math.max(left, end - t);
+      } catch {
+        /* can't tell: not playing */
+      }
+    }
+    if (left >= 0) {
+      timer = setTimeout(look, left + margin);
+      return;
+    }
+    fire();
+  };
+  timer = setTimeout(look, ms);
+  return () => clearTimeout(timer);
+}
 
 /** The "Animations" setting (Ruling 5). */
 export type AnimationsMode = 'on' | 'off' | 'always';
@@ -145,7 +179,7 @@ let failureSaid = false;
 /** Every drop / merge / out animation now running: its cleanup, given why it ended. */
 const live = new Set<(why: Ended) => void>();
 /** Why an animation ended (on each ghost as data-ended when it is removed). */
-export type Ended = 'finished' | 'fallback' | 'failed' | 'interrupted' | 'setting';
+export type Ended = 'finished' | 'safety-net' | 'failed' | 'interrupted' | 'setting';
 
 /**
  * §9: the one engine. The visual flourishes (flourishes.ts) share this module's environment, its
@@ -472,7 +506,7 @@ export function sayAnimationFailure(e: unknown): void {
 
 /**
  * Play the drop's animation, if allowed. Returns whether it started; when it did, `onEnd` runs once
- * when it has ended (finished, cancelled, failed, or at the fallback timeout). Never throws: the
+ * when it has ended (finished, cancelled, failed, or at its safety net). Never throws: the
  * draft change it decorates has already been made.
  */
 export function playDropAnimation(dashboardId: string, a: DropAnimation): boolean {
@@ -525,6 +559,10 @@ export function playDropAnimation(dashboardId: string, a: DropAnimation): boolea
     sayAnimationFailure(e);
   };
   live.add(cleanup);
+  /** Arm the safety net once the animations have been started (see safetyNet). */
+  const armNet = (ms: number, margin = 300) => {
+    if (!done) cleanups.push(safetyNet(anims, ms, margin, () => cleanup('safety-net')));
+  };
   // The setting turned Off (or no longer allowed) mid-animation: stop at once.
   cleanups.push(config.subscribe(() => {
     if (!done && !animationsAllowed(dashboardId)) cleanup('setting');
@@ -590,13 +628,13 @@ export function playDropAnimation(dashboardId: string, a: DropAnimation): boolea
           const own = env.opacity(el);
           const end = Number.isFinite(own) ? Math.min(1, Math.max(0, own)) : 1;
           run(el, [{ opacity: 0 }, { opacity: 0, offset: 0.85 }, { opacity: end }], { duration: OUT_MS, easing: 'linear' });
+          armNet(OUT_TOTAL_MS + 300);
         } catch (e) {
           fail(e);
           return;
         }
         if (--pending <= 0) cleanup();
       });
-      setTimeout(() => cleanup('fallback'), OUT_TOTAL_MS + 300);
       return !done;
     }
 
@@ -661,13 +699,13 @@ export function playDropAnimation(dashboardId: string, a: DropAnimation): boolea
               { transform: 'scale(1)' }, { transform: `scale(${gulp})`, offset: 0.45 }, { transform: 'scale(1)' }
             ], GULP_MS, OUT_GULP_DELAY_MS, 'none', a.intoId);
           }
+          armNet(OUT_TOTAL_MS + 300);
         } catch (e) {
           fail(e);
           return;
         }
         if (--pending <= 0) cleanup();
       });
-      setTimeout(() => cleanup('fallback'), OUT_TOTAL_MS + 300);
       return !done;
     }
 
@@ -696,13 +734,13 @@ export function playDropAnimation(dashboardId: string, a: DropAnimation): boolea
           onFolder('data-drop-gulp', [
             { transform: 'scale(1)' }, { transform: `scale(${gulp})`, offset: 0.45 }, { transform: 'scale(1)' }
           ], GULP_MS, GULP_DELAY_MS, 'none');
+          armNet(INTO_TOTAL_MS + 300);
         } catch (e) {
           fail(e);
           return;
         }
         if (--pending <= 0) cleanup();
       });
-      setTimeout(() => cleanup('fallback'), INTO_TOTAL_MS + 300);
       return !done;
     }
 
@@ -742,13 +780,14 @@ export function playDropAnimation(dashboardId: string, a: DropAnimation): boolea
           { transform: 'scale(1.05)', opacity: 1, offset: 0.6 },
           { transform: 'scale(1)', opacity: 1 }
         ], POP_MS, POP_DELAY_MS, 'backwards');
+        // Ruling 3: the folder dialog opens at this end (onEnd), so its cap is this net.
+        armNet(MERGE_DIALOG_CAP_MS, MERGE_DIALOG_CAP_MS - MERGE_TOTAL_MS);
       } catch (e) {
         fail(e);
         return;
       }
       if (--pending <= 0) cleanup();
     });
-    setTimeout(() => cleanup('fallback'), MERGE_TOTAL_MS + 300);
     return true;
   } catch (e) {
     fail(e);

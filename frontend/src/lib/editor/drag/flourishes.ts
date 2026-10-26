@@ -35,7 +35,7 @@ import { config } from '$lib/stores/config';
 import { session, type EditSession } from '$lib/stores/editSession';
 import type { Container, LayoutDashboard } from '$lib/types/layout';
 import {
-  animationEnv, animationsAllowed, claimFlourish, claimedIds, onAnimationReset, sayAnimationFailure, trackAnimation,
+  animationEnv, animationsAllowed, claimFlourish, claimedIds, onAnimationReset, safetyNet, sayAnimationFailure, trackAnimation,
   type Box, type Ended
 } from './dropAnimation';
 
@@ -75,7 +75,7 @@ const r3 = (v: number) => (Math.round(v * 1000) / 1000).toFixed(3);
 type Part = { el: HTMLElement; frames: Keyframe[]; opts: KeyframeAnimationOptions; kind: FlourishKind };
 
 /**
- * Start `parts` as one flourish. It ends when all of them have finished, at a fallback timeout, when
+ * Start `parts` as one flourish. It ends when all of them have finished, at its safety net, when
  * the setting stops allowing it, or when cancelDropAnimations() runs. Every animation is cancelled
  * at the end, so no element is left part-way, and every ghost is removed. Returns its stop, or null
  * when nothing started. It never throws: a failure is said once and the change is untouched.
@@ -144,11 +144,13 @@ function run(dashboardId: string, parts: Part[], ghosts: HTMLElement[] = []): ((
     stop();
     return null;
   }
-  const fallback = setTimeout(() => stop('fallback'), longest + 300);
-  const clearFallback = untrack;
+  // The safety net for an end the browser never reports; it never cuts short a flourish still
+  // playing on a busy device (slow frames), see safetyNet.
+  const clearNet = safetyNet(anims, longest + 300, 300, () => stop('safety-net'));
+  const clearTrack = untrack;
   untrack = () => {
-    clearTimeout(fallback);
-    clearFallback();
+    clearNet();
+    clearTrack();
   };
   return () => stop('interrupted');
 }

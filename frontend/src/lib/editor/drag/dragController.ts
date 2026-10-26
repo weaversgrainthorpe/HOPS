@@ -56,7 +56,7 @@ import { hitTest as domHitTest, type HitResult } from './hitTest';
 import { crumbDwellKey, dwellArgs, flowIndex, flowMarker, pageDwellKey } from './targets';
 import { drillUpTo, setFolderPage } from '$lib/stores/folderView';
 import {
-  cancelDropAnimations, claimFlourish, outStarts, playDropAnimation, playOutOfFolders, sayAnimationFailure, MERGE_DIALOG_CAP_MS,
+  cancelDropAnimations, claimFlourish, outStarts, playDropAnimation, playOutOfFolders, sayAnimationFailure,
   type Box as AnimBox, type OutStart
 } from './dropAnimation';
 
@@ -734,10 +734,11 @@ export function commitDrop(state: DragState): void {
     clearSelection();
     announce(label, before);
     // Name it straight away: the dialog opens with "New folder" selected; Cancel keeps that name.
-    // Ruling 3: when the merge animates, the dialog opens as the animation ends (~500 ms, never
-    // later than MERGE_DIALOG_CAP_MS), so the pop is not hidden behind it; at once otherwise. Only the
-    // dialog waits, never the edit. Undone meanwhile (the folder is gone), or another dialog opened:
-    // nothing to name here.
+    // Ruling 3: when the merge animates, the dialog opens as the animation ends (~500 ms; its onEnd,
+    // which always runs: finished, interrupted, failed, or at its safety net, MERGE_DIALOG_CAP_MS after
+    // it starts when the browser never reports the end), so the pop is not hidden behind it; at once
+    // otherwise. Only the dialog waits, never the edit. Undone meanwhile (the folder is gone), or
+    // another dialog opened: nothing to name here.
     let opened = false;
     const nameIt = () => {
       if (opened) return;
@@ -757,8 +758,9 @@ export function commitDrop(state: DragState): void {
         });
       }
     });
-    if (animating) setTimeout(nameIt, MERGE_DIALOG_CAP_MS);
-    else nameIt();
+    // A cap timed from the drop would open the dialog over a merge still playing whenever its first
+    // frame comes late (a busy device): the animation's own safety net is the cap (see safetyNet).
+    if (!animating) nameIt();
     return;
   }
 
