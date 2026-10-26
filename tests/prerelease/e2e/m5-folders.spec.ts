@@ -294,7 +294,7 @@ test.describe('M5 one Folder component', () => {
     await expect(node(page, f.id('f'))).toHaveClass(/collapsed/);
     await page.keyboard.press('/');
     await page.getByRole('textbox', { name: /search tiles/i }).fill('editneedle');
-    await page.getByRole('button', { name: /Editneedle/ }).click();
+    await page.getByRole('button', { name: /Editneedle/ }).click({ modifiers: ['Shift'] });
     await expect(node(page, f.id('f'))).toHaveAttribute('role', 'group'); // opened in place
     await expect(node(page, f.id('needle'))).toBeVisible();
     await expect.poll(() => page.evaluate((id) => !!document.activeElement?.closest(`[data-node-id="${id}"]`), f.id('needle'))).toBe(true);
@@ -333,7 +333,7 @@ test.describe('M5 one Folder component', () => {
     const input = page.getByRole('textbox', { name: /search tiles/i });
     await expect(input).toBeVisible();
     await input.fill('needlefind');
-    await page.getByRole('button', { name: /Needlefind/ }).click();
+    await page.getByRole('button', { name: /Needlefind/ }).click({ modifiers: ['Shift'] });
     const outer = node(page, f.id('f'));
     await expect(outer).toHaveAttribute('role', 'group'); // opened in place
     await expect(outer.locator('.nested-header [aria-current="page"]')).toHaveText('Inner');

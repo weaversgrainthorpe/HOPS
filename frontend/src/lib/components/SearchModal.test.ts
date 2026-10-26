@@ -14,6 +14,8 @@ vi.mock('$app/stores', async () => {
 const setPage = (params: Record<string, string>) =>
   pageStore.set!({ url: new URL('http://localhost/'), params, route: { id: '/' }, status: 200, error: null, data: {}, form: undefined });
 
+vi.mock('$lib/utils/url', async (orig) => ({ ...(await orig<typeof import('$lib/utils/url')>()), safeOpenUrl: vi.fn() }));
+import { safeOpenUrl } from '$lib/utils/url';
 import { goto } from '$app/navigation';
 import SearchModal from './SearchModal.svelte';
 import Dashboard from './Dashboard.svelte';
@@ -96,7 +98,7 @@ describe('SearchModal recursive search', () => {
     const result = screen.getByRole('button', { name: /Deep Thing/ });
     expect(result).toHaveTextContent('Second › Outer › Mid › Inner');
 
-    await fireEvent.click(result);
+    await fireEvent.click(result, { shiftKey: true });
     expect(onClose).toHaveBeenCalled();
     // Switched to the tile's tab, opened the outermost folder in place and drilled down to Inner
     // (this browser's memory, as if the user had done it) — nothing pops over.
@@ -181,5 +183,55 @@ describe('SearchModal scope', () => {
     render(SearchModal, { onClose: () => {} });
     await tick();
     expect(screen.getByRole('alert')).toHaveTextContent(/unavailable/i);
+  });
+});
+
+describe('SearchModal open vs show', () => {
+  const type = async (v: string) => {
+    await fireEvent.input(screen.getByRole('textbox', { name: /search/i }), { target: { value: v } });
+    await tick();
+  };
+  const key = (init: KeyboardEventInit) => fireEvent.keyDown(screen.getByRole('textbox', { name: /search/i }), init);
+
+  it('Enter opens the tile (plain url) without revealing; Escape closes', async () => {
+    const onClose = vi.fn();
+    render(SearchModal, { onClose });
+    await tick();
+    await type('deep');
+    await key({ key: 'Enter' });
+    expect(safeOpenUrl).toHaveBeenCalledWith('http://deep.test/deep', '_blank');
+    expect(get(revealRequest)).toBeNull();
+    expect(onClose).toHaveBeenCalled();
+    onClose.mockClear();
+    await key({ key: 'Escape' });
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('Shift+Enter shows it: tab, folder chain and tile in the reveal request', async () => {
+    render(SearchModal, { onClose: () => {} });
+    await tick();
+    await type('deep');
+    await key({ key: 'Enter', shiftKey: true });
+    expect(safeOpenUrl).not.toHaveBeenCalled();
+    expect(get(revealRequest)).toMatchObject({ tabId: 't2', folderIds: ['outer', 'mid', 'inner'], tileId: 'deep', kind: 'tile' });
+  });
+
+  it('a folder is a result; Enter shows (opens) it', async () => {
+    render(SearchModal, { onClose: () => {} });
+    await tick();
+    await type('inner');
+    expect(screen.getByRole('button', { name: /Inner/ })).toHaveTextContent('Second › Outer › Mid › Inner');
+    await key({ key: 'Enter' });
+    expect(safeOpenUrl).not.toHaveBeenCalled();
+    expect(get(revealRequest)).toMatchObject({ kind: 'folder', folderIds: ['outer', 'mid', 'inner'], tileId: 'inner' });
+  });
+
+  it('arrow keys move the selection', async () => {
+    render(SearchModal, { onClose: () => {} });
+    await tick();
+    await type('t'); // Top Tile, Deep Thing, ...
+    await key({ key: 'ArrowDown' });
+    const selected = document.querySelector('.search-results li.selected');
+    expect(selected).toBe(document.querySelectorAll('.search-results li')[1]);
   });
 });

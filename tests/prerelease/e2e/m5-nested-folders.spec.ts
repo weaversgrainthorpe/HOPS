@@ -231,7 +231,7 @@ test.describe('M5 §7: a sub-folder opens as a folder inside a folder', () => {
     const input = page.getByRole('textbox', { name: /search tiles/i });
     await expect(input).toBeVisible();
     await input.fill('needlefind');
-    await page.getByRole('button', { name: /Needlefind/ }).click();
+    await page.getByRole('button', { name: /Needlefind/ }).click({ modifiers: ['Shift'] }); // Shift: show it (a plain click opens the tile)
     const outer = node(page, f.id('f'));
     await expect(outer).toHaveAttribute('role', 'group');
     await expect(outer.locator('.folder-header h3')).toHaveText('Outer');

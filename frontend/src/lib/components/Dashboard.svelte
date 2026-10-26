@@ -7,6 +7,7 @@
   import HopAnimation from './HopAnimation.svelte';
   import { layoutStale, loadConfig } from '$lib/stores/config';
   import { revealRequest, takeReveal, type RevealRequest } from '$lib/stores/reveal';
+  import { animationsAllowed } from '$lib/editor/drag/dropAnimation';
   import { clearPageReveal, revealInFolders } from '$lib/stores/folderView';
   import { editMode } from '$lib/stores/editMode';
   import { session, apply } from '$lib/stores/editSession';
@@ -145,10 +146,15 @@
     }
     // (Edit mode never writes this viewer's open/minimised view; the drill and page memory it does.)
     revealInFolders(dashboard.id, req.folderIds, req.tileId, { view: !editing });
+    // A folder result: opening it is the whole job (no tile to find a page for); the box to mark is
+    // the top folder, which the chain has just opened.
+    const isFolder = req.kind === 'folder';
+    if (isFolder) clearPageReveal();
+    const wantId = isFolder ? (req.folderIds[0] ?? req.tileId) : req.tileId;
     let el: HTMLElement | null = null;
     for (let i = 0; i < 60 && !el; i++) {
       await tick();
-      el = findTileEl(req.tileId);
+      el = findTileEl(wantId);
       if (!el) await nextFrame();
     }
     if (!el) {
@@ -163,6 +169,17 @@
     if (target === el && !el.hasAttribute('tabindex')) el.setAttribute('tabindex', '-1');
     target.focus();
     target.scrollIntoView?.({ block: 'nearest' });
+    markFound(el);
+    if (req.activate && !isFolder) target.click();
+  }
+
+  // Mark what search found for a moment so the eye can land on it. A static ring always; the pulse
+  // only where the Animations setting allows motion.
+  const HIT_MS = 2500;
+  function markFound(el: HTMLElement) {
+    document.querySelectorAll('[data-search-hit]').forEach((n) => n.removeAttribute('data-search-hit'));
+    el.setAttribute('data-search-hit', animationsAllowed(dashboard.id) ? 'pulse' : 'still');
+    setTimeout(() => el.removeAttribute('data-search-hit'), HIT_MS);
   }
   // The tab being edited: one editor dialog request ({kind:'tab'}), opened by the tab's handle,
   // a double-click or its menu's Edit — the same flow as every item (§4B).
@@ -535,6 +552,18 @@
 {/if}
 
 <style>
+  /* What search found (Dashboard.markFound). */
+  :global([data-search-hit]) {
+    outline: 3px solid var(--accent, #3b82f6);
+    outline-offset: 3px;
+    border-radius: 0.5rem;
+  }
+  :global([data-search-hit='pulse']) {
+    animation: search-hit-pulse 0.9s ease-in-out 2;
+  }
+  @keyframes search-hit-pulse {
+    50% { outline-offset: 8px; outline-color: transparent; }
+  }
   /* A column filling the page area below the navbar (the layout's .app-page), so the
      tab panel can take the rest of the screen (walkthrough §3). */
   .dashboard {

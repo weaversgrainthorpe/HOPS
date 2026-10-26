@@ -14,6 +14,10 @@ export interface RevealRequest {
   /** Every folder enclosing the tile, outermost first (empty: it is on the tab). */
   folderIds: string[];
   tileId: string;
+  /** 'folder': `folderIds` ends with the folder itself and `tileId` is its id (open it, no tile to focus). */
+  kind?: 'tile' | 'folder';
+  /** Click the tile once shown (a tile that opens in its own dialog). */
+  activate?: boolean;
 }
 export const REVEAL_TTL_MS = 5000;
 const reveal = writable<RevealRequest | null>(null);
