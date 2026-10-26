@@ -293,9 +293,10 @@
     font-size: 0.85rem;
   }
   .action:hover { background: var(--bg-tertiary); }
-  /* Tinted from the theme's accent (not a fixed blue), light enough that --accent-text keeps 4.5:1. */
+  /* Accent text on the page itself (no tint, which cost contrast in some themes); the accent border
+     marks it as the primary action. */
   .action.primary {
-    background: color-mix(in srgb, var(--accent-solid) 8%, transparent);
+    background: transparent;
     border-color: color-mix(in srgb, var(--accent-solid) 40%, transparent);
     color: var(--accent-text);
   }

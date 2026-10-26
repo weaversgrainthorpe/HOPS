@@ -182,6 +182,22 @@ test.afterAll(async ({ browser }) => {
 test('every Settings page and dialog is readable on every preset × mode; hover leaves disabled controls alone', async ({ page }) => {
   test.setTimeout(300_000);
   await page.route(/api\.iconify\.design|api\.simplesvg\.com|api\.unisvg\.com/, (route) => route.abort());
+  // Discovery pages show their scan badges and "Create detector" rows only when there is scan data,
+  // which otherwise depends on what earlier tests left behind. Supply it, so every run checks them.
+  const now = new Date().toISOString();
+  await page.route((u) => u.pathname === '/api/discovery/scans', (route) =>
+    route.request().method() === 'GET'
+      ? route.fulfill({ json: { scans: [
+          { id: 'scan-c', createdAt: now, cidr: '192.0.2.0/28', intensity: 'light', state: 'complete', progressTotal: 16, progressDone: 16, finishedAt: now },
+          { id: 'scan-f', createdAt: now, cidr: '192.0.2.16/28', intensity: 'light', state: 'failed', progressTotal: 16, progressDone: 3, errorMessage: 'synthetic failure' }
+        ] } })
+      : route.fallback());
+  await page.route((u) => u.pathname === '/api/discovery/diagnostics', (route) =>
+    route.fulfill({ json: {
+      unidentified: [{ id: 'r1', scanId: 'scan-c', host: '192.0.2.5', port: 8080, detectorId: 'generic/http', confidence: 'low',
+        category: 'other', suggestedName: 'Web service on 192.0.2.5', suggestedUrl: 'http://192.0.2.5:8080', curateState: 'pending', createdAt: now }],
+      summary: [{ detectorId: 'core/pihole', count: 2, distinctHosts: 1, lastSeen: now }]
+    } }));
   const tokens = presetTokens();
   const findings: Finding[] = [];
 
@@ -222,6 +238,7 @@ test('every Settings page and dialog is readable on every preset × mode; hover 
   await visit('/settings/discovery/new', /Discovery/);
   await sweep('Discovery new scan');
   await visit('/settings/discovery/diagnostics', /Discovery|Diagnostics/);
+  await expect(page.getByRole('button', { name: /Create detector/ }).first()).toBeVisible();
   await sweep('Discovery diagnostics');
   await visit('/settings/discovery/detectors', /Discovery|detectors/i);
   await sweep('Discovery detectors');

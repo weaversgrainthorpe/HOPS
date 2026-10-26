@@ -435,6 +435,7 @@ a:focus-visible {
 /* The light-on-dark badge text above is 1.5–2:1 on a light page; darker shades in the light theme. */
 [data-theme="light"] .badge--success { color: color-mix(in srgb, var(--color-success-text) 80%, black); }
 [data-theme="light"] .badge--warning { color: #92400e; }
+[data-theme="light"] .badge--danger  { color: color-mix(in srgb, var(--color-error-text) 75%, black); }
 [data-theme="light"] .badge--info    { color: color-mix(in srgb, var(--accent-text) 75%, black); }
 [data-theme="light"] .badge--accent  { color: #6d28d9; }
 /* "Modified" / "Restart" small uppercase pill variant of warning. */
