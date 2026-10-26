@@ -223,11 +223,11 @@ func (bm *BackupManager) saveNoticesLocked() {
 			return nil
 		}
 		raw, _ := json.Marshal(persistedNotices{Restore: bm.restore, Ceiling: bm.ceiling, Recovered: bm.recovered, Images: bm.restoreImages, Index: bm.indexRebuilt})
-		if err := os.MkdirAll(bm.backupDir, 0755); err != nil {
+		if err := os.MkdirAll(bm.backupDir, 0700); err != nil {
 			return err
 		}
 		tmp := path + ".tmp"
-		if err := os.WriteFile(tmp, raw, 0644); err != nil {
+		if err := os.WriteFile(tmp, raw, 0600); err != nil {
 			os.Remove(tmp)
 			return err
 		}
@@ -469,7 +469,7 @@ func (bm *BackupManager) createBackup(reason string, db *sql.DB) (string, error)
 	if err := bm.createHook(reason); err != nil {
 		return "", err
 	}
-	if err := os.MkdirAll(bm.backupDir, 0755); err != nil {
+	if err := os.MkdirAll(bm.backupDir, 0700); err != nil {
 		return "", fmt.Errorf("failed to create backup directory: %w", err)
 	}
 
@@ -481,6 +481,10 @@ func (bm *BackupManager) createBackup(reason string, db *sql.DB) (string, error)
 		if _, err := db.Exec(fmt.Sprintf("VACUUM INTO '%s'", sanitizedPath)); err != nil {
 			os.Remove(backupPath) // never leave a partial file listed as a backup
 			return "", fmt.Errorf("failed to write backup: %w", err)
+		}
+		if err := os.Chmod(backupPath, 0o600); err != nil { // VACUUM INTO honours the umask (0644)
+			os.Remove(backupPath)
+			return "", fmt.Errorf("failed to restrict backup permissions: %w", err)
 		}
 	} else if err := copyFile(bm.dbPath, backupPath); err != nil {
 		os.Remove(backupPath)
@@ -1321,7 +1325,7 @@ func copyFile(src, dst string) error {
 	}
 	defer sourceFile.Close()
 
-	destFile, err := os.Create(dst)
+	destFile, err := os.OpenFile(dst, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o600)
 	if err != nil {
 		return err
 	}

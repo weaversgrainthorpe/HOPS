@@ -234,7 +234,7 @@ func (bm *BackupManager) rebuildIndexLocked(cause string, files []atticFile) (at
 }
 
 func (bm *BackupManager) saveIndexLocked(idx atticIndex) error {
-	if err := os.MkdirAll(bm.AtticDir(), 0o755); err != nil {
+	if err := os.MkdirAll(bm.AtticDir(), 0o700); err != nil {
 		return err
 	}
 	idx.Version = 1
@@ -353,7 +353,7 @@ func (bm *BackupManager) MoveToAttic(kind, name string) (string, error) {
 		return "", fmt.Errorf("cannot record %s in the attic index: %w", name, err)
 	}
 	dir := filepath.Join(bm.AtticDir(), kind)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", fmt.Errorf("cannot create the attic folder: %w", err)
 	}
 	dst := filepath.Join(dir, sum)
@@ -405,7 +405,7 @@ func installAtomic(src, dst, want string) error {
 		return fmt.Errorf("%s: %w", filepath.Base(dst), os.ErrExist)
 	}
 	dir := filepath.Dir(dst)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
 	in, err := os.Open(src)
@@ -565,7 +565,7 @@ func (bm *BackupManager) moveStagedToAtticLocked(name string) error {
 		}
 		for _, it := range items {
 			dir := filepath.Join(bm.AtticDir(), it.kind)
-			if err := os.MkdirAll(dir, 0o755); err != nil {
+			if err := os.MkdirAll(dir, 0o700); err != nil {
 				return err
 			}
 			dst := filepath.Join(dir, it.sum)

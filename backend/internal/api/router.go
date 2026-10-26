@@ -542,7 +542,14 @@ func (r *Router) serveSPA(w http.ResponseWriter, req *http.Request) {
 // serveSPADisk serves the SPA from r.config.FrontendDir on disk (dev override).
 func (r *Router) serveSPADisk(w http.ResponseWriter, req *http.Request) {
 	// Get the absolute path to prevent directory traversal
-	p := filepath.Join(r.config.FrontendDir, req.URL.Path)
+	// Confined to the build dir: clean as a rooted path (drops any ".."), then
+	// verify the prefix as a belt-and-braces check.
+	root := filepath.Clean(r.config.FrontendDir)
+	p := filepath.Join(root, filepath.FromSlash(path.Clean("/"+req.URL.Path)))
+	if p != root && !strings.HasPrefix(p, root+string(filepath.Separator)) {
+		http.NotFound(w, req)
+		return
+	}
 
 	// Check if path is a file
 	fi, err := os.Stat(p)

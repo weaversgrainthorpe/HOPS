@@ -96,18 +96,22 @@ func Handler(e *database.UnsafeStartError) http.Handler {
 		if r.URL.Path == "/api/health" || strings.HasPrefix(r.URL.Path, "/api/") {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusServiceUnavailable)
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			if err := json.NewEncoder(w).Encode(map[string]interface{}{
 				"status": "unsafe-to-start",
 				"reason": e.Msg,
 				"files":  e.Files,
 				"steps":  e.Steps,
-			})
+			}); err != nil {
+				slog.Warn("safe-mode: cannot write the JSON response", "component", "safemode", "error", err)
+			}
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'")
 		w.WriteHeader(http.StatusServiceUnavailable)
-		page.Execute(w, map[string]interface{}{"What": e.What, "Files": e.Files, "Steps": steps})
+		if err := page.Execute(w, map[string]interface{}{"What": e.What, "Files": e.Files, "Steps": steps}); err != nil {
+			slog.Warn("safe-mode: cannot render the help page", "component", "safemode", "error", err)
+		}
 	})
 }
 
@@ -123,7 +127,9 @@ func Serve(ctx context.Context, addr string, e *database.UnsafeStartError) error
 		<-ctx.Done()
 		sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		srv.Shutdown(sctx)
+		if err := srv.Shutdown(sctx); err != nil {
+			slog.Warn("safe-mode: shutdown did not complete cleanly", "component", "safemode", "error", err)
+		}
 	}()
 	slog.Error("serving the 'HOPS can't start safely' page", "component", "safemode", "addr", ln.Addr().String())
 	if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {

@@ -253,7 +253,7 @@ var zipMagic = []byte("PK\x03\x04")
 // the upload with an *InvalidBackupError naming the reason, and on any
 // failure nothing is left behind. It is never restored here.
 func (bm *BackupManager) StoreUpload(src io.Reader, caps UploadCaps) (UploadResult, error) {
-	if err := os.MkdirAll(bm.backupDir, 0o755); err != nil {
+	if err := os.MkdirAll(bm.backupDir, 0o700); err != nil {
 		return UploadResult{}, fmt.Errorf("failed to create backup directory: %w", err)
 	}
 	tmp, err := os.CreateTemp(bm.backupDir, ".upload-*.tmp")
@@ -472,7 +472,7 @@ func (bm *BackupManager) storeArchive(zipPath string, caps UploadCaps) (UploadRe
 	sort.Strings(names)
 	for _, n := range names {
 		kind, file := splitImageKey(n)
-		if err := os.MkdirAll(filepath.Join(imgStage, kind), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Join(imgStage, kind), 0o700); err != nil {
 			return UploadResult{}, fmt.Errorf("cannot store the upload: %w", err)
 		}
 		dst := filepath.Join(imgStage, kind, file)
@@ -488,7 +488,7 @@ func (bm *BackupManager) storeArchive(zipPath string, caps UploadCaps) (UploadRe
 			if err != nil {
 				return UploadResult{}, invalid("%s isn't a usable image (%v)", n, err)
 			}
-			if err := os.WriteFile(dst, out, 0o644); err != nil {
+			if err := os.WriteFile(dst, out, 0o600); err != nil {
 				return UploadResult{}, fmt.Errorf("cannot store the upload: %w", err)
 			}
 		}
@@ -519,7 +519,7 @@ func (bm *BackupManager) storeArchive(zipPath string, caps UploadCaps) (UploadRe
 	}
 	if len(names) > 0 {
 		dst := bm.stagedImagesPath(name)
-		err := os.MkdirAll(filepath.Dir(dst), 0o755)
+		err := os.MkdirAll(filepath.Dir(dst), 0o700)
 		if err == nil {
 			err = os.Rename(imgStage, dst)
 		}
@@ -591,7 +591,7 @@ func extractChecked(f *zip.File, dst string, want ArchiveFile, limit int64) erro
 		return invalid("%s can't be read from the archive (%v)", f.Name, err)
 	}
 	defer rc.Close()
-	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
 		return fmt.Errorf("cannot store the upload: %w", err)
 	}
