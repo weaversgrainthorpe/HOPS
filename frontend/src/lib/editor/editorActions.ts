@@ -211,6 +211,33 @@ export function tileProblem(t: Partial<TileNode>): string | null {
 }
 
 /**
+ * Insert an already-id'd new item into `to` (pure): a tile takes its Size's span on a tab (too
+ * narrow a tab refuses, saying why) at `cell` if free, else the first free cell; in a folder it goes
+ * at the end of the order (no placement). Shared by addNode and the "Add to HOPS" page.
+ */
+export function insertNew(d: LayoutDashboard, placed: LayoutNode, to: ContainerRef, cell?: Cell): LayoutDashboard {
+  if (placed.kind === 'tile') {
+    const why = newTileSizeProblem(d, to, placed.size);
+    if (why) throw new TreeOpError(why);
+  }
+  if (to.folderId !== undefined) return insertNode(d, placed, to, Number.MAX_SAFE_INTEGER);
+  const [at] = placementsFor(d, to, [placed], cell);
+  return insertNode(d, placed, to, at);
+}
+
+/**
+ * A new tile added to a STORED dashboard outside any edit session ("Add to HOPS"): the same checks
+ * (tileProblem, size) and placement as the tile dialog's Add. Returns the new dashboard and id, or
+ * throws a TreeOpError saying why not. Pure apart from reading the document's ids.
+ */
+export function withNewTile(d: LayoutDashboard, tile: TileNode, to: ContainerRef): { dashboard: LayoutDashboard; id: string } {
+  const why = tileProblem(tile);
+  if (why) throw new TreeOpError(why);
+  const id = freshId('tile');
+  return { dashboard: insertNew(plain(d), { ...plain(tile), id }, to), id };
+}
+
+/**
  * Add a new tile or folder to `to`: on a tab at `cell` if free there, else the first free cell; in
  * a folder at the end of its order. The new id avoids every id in the document. Selects the new
  * item. Returns its id, or null if refused.
@@ -245,13 +272,7 @@ export function addNode(node: LayoutNode, to: ContainerRef, cell?: Cell): string
   const ok = apply(node.kind === 'tile' ? 'Add tile' : 'Add folder', (dd) => {
     // A new tile takes the span of its Size on a tab (spec §8); too narrow a tab refuses, saying why.
     // In a folder it goes at the end of the order (no placement).
-    if (placed.kind === 'tile') {
-      const why = newTileSizeProblem(dd, to, placed.size);
-      if (why) throw new TreeOpError(why);
-    }
-    if (to.folderId !== undefined) return insertNode(dd, placed, to, Number.MAX_SAFE_INTEGER);
-    const [at] = placementsFor(dd, to, [placed], cell);
-    return insertNode(dd, placed, to, at);
+    return insertNew(dd, placed, to, cell);
   });
   if (!ok) return null;
   toggleNode(id, false);
