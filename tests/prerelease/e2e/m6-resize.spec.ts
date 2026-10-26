@@ -292,3 +292,73 @@ test('in edit mode the resize grips are visible without hovering, clear of the c
   await expect(node(page, f.id('t')).locator('[data-resize]')).toHaveCount(0);
   expect(errors).toEqual([]);
 });
+
+// Follow-up (Jonathan): the minimum is ONE value on every drag of a nested folder (tiles + a
+// sub-folder); the refusal shows only at that minimum, and the release lands exactly on it.
+const nestedFolder = (id: (s: string) => string) => [
+  tile(id('t'), 'Tee', 0, 0),
+  // As on Jonathan's dev: a Simple tab folder holding an Open flap sub-folder, nested 4 deep.
+  folder(id('f'), 'Level 1', { x: 0, y: 2, w: 22, h: 10 }, [
+    kid(id('a'), 'A'), kid(id('b'), 'B'), kid(id('c'), 'C'),
+    folder(id('s'), 'Level 2', null, [
+      kid(id('d'), 'D'), kid(id('e'), 'E'),
+      folder(id('s3'), 'Level 3', null, [...kids(id, 3, 'Z'), folder(id('s4'), 'Level 4', null, [folder(id('s5'), 'New folder', null, [], { display: 'collapsed', shape: 'folder-flat' })], { display: 'collapsed' })], { display: 'collapsed', shape: 'folder-outline' })
+    ], { shape: 'folder-open' })
+  ], { shape: 'simple-tab' })
+];
+
+/** Drag `id`'s bottom edge up in 8 px steps; the height (cells) of the target where the refusal first shows, and the steps. */
+async function dragUpUntilRefused(page: Page, fbox: Locator, cell: number, maxPx: number) {
+  const bb = await box(fbox.locator('[data-resize="bottom"]'));
+  const x = bb.x + bb.width / 3, y = bb.y + bb.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  const seen: number[] = [];
+  let refusedAt: number | null = null;
+  for (let dy = 8; dy <= maxPx; dy += 8) {
+    await page.mouse.move(x, y - dy);
+    await page.waitForTimeout(25);
+    const t = page.locator('.drag-layer .target');
+    const h = (await t.count()) ? Math.round((await t.first().boundingBox())!.height / cell) : NaN;
+    seen.push(h);
+    if (await page.locator('[data-resize-limit]').count()) {
+      refusedAt = h;
+      break;
+    }
+  }
+  return { refusedAt, seen };
+}
+
+test('a nested folder: the minimum is the same on every drag, the refusal shows only there, and the release lands on it', async ({ page, context }) => {
+  await page.setViewportSize({ width: 1280, height: 1100 });
+  const f = await importDash(page, context, nestedFolder);
+  const errors = await openEditing(page, f.path, f.id('t'));
+  const fbox = node(page, f.id('f'));
+  const cell = (await box(fbox)).width / 22;
+  const MIN_H = 6; // geometry.folderMinCells: Medium contents everywhere inside
+
+  // 1. Taller than the minimum: no refusal on the way down to it; refused only at it.
+  const first = await dragUpUntilRefused(page, fbox, cell, 9 * cell);
+  expect(first.refusedAt, 'refused at the minimum').toBe(MIN_H);
+  expect(first.seen.slice(0, -1).every((h) => h >= MIN_H), `never below the minimum: ${first.seen}`).toBe(true);
+  await page.mouse.up();
+  // The release agrees with the cue: exactly the minimum, drawn and in the draft.
+  await expect.poll(async () => Math.round((await box(fbox)).height / cell)).toBe(MIN_H);
+
+  // 2. Again (and once more drilled into the sub-folder): refused straight away, never smaller.
+  for (const drilled of [false, true]) {
+    if (drilled) {
+      await node(page, f.id('s')).locator('.folder-collapsed-tile').focus();
+      await page.keyboard.press('Enter');
+      await expect(fbox.locator(`[data-folder-page][data-folder-id="${f.id('s')}"]`)).toBeVisible();
+    }
+    const again = await dragUpUntilRefused(page, fbox, cell, 4 * cell);
+    expect(again.refusedAt, `refused again${drilled ? ' (drilled in)' : ''}`).toBe(MIN_H);
+    await page.mouse.up();
+    await expect.poll(async () => Math.round((await box(fbox)).height / cell)).toBe(MIN_H);
+  }
+  await saveDraft(page);
+  expect(find(await savedRoot(page, f.id('dash')), f.id('f'))!.placement).toMatchObject({ w: 22, h: MIN_H });
+  expect(errors).toEqual([]);
+});
+
