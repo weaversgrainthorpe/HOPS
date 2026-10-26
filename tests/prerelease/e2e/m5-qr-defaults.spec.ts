@@ -19,7 +19,8 @@ async function decodeSvg(page: Page, svg: string, size: number): Promise<string 
 	const rgba = await page.evaluate(
 		async ({ svg, size }) => {
 			const img = new Image();
-			const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
+			// A data: URL (the page's CSP allows data: images, not blob:).
+			const url = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
 			await new Promise<void>((res, rej) => {
 				img.onload = () => res();
 				img.onerror = () => rej(new Error('the SVG did not load as an image'));
