@@ -3,11 +3,13 @@ package database
 import (
 	"archive/zip"
 	"bytes"
+	"compress/flate"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"hash/crc32"
 	"io"
 	"io/fs"
 	"os"
@@ -77,72 +79,138 @@ func TestImageRefsInText(t *testing.T) {
 	}
 }
 
+// toAttic puts content live as <kind>/<name>, then deletes it into the attic.
+func toAttic(t *testing.T, bm *BackupManager, kind, name, content string) string {
+	t.Helper()
+	writeFile(t, bm.liveImagePath(kind, name), content)
+	h, err := bm.MoveToAttic(kind, name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return h
+}
+
+func atticCount(t *testing.T, bm *BackupManager) int {
+	t.Helper()
+	u, err := bm.AtticUsage()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return u.Files
+}
+
 func TestDeleteMovesTheFileToTheAttic(t *testing.T) {
 	bm, dbPath := setupBackupTest(t)
 	dir := filepath.Dir(dbPath)
 	writeFile(t, filepath.Join(dir, "icons", "a.png"), "AAA")
-	if err := bm.MoveToAttic("icons", "a.png"); err != nil {
+	h1, err := bm.MoveToAttic("icons", "a.png")
+	if err != nil {
 		t.Fatal(err)
 	}
 	if exists(filepath.Join(dir, "icons", "a.png")) {
 		t.Fatal("the live file is still there")
 	}
-	if got := readString(t, filepath.Join(dir, "attic", "icons", "a.png")); got != "AAA" {
-		t.Fatalf("attic copy %q", got)
+	// Keyed by content.
+	if h1 != sum([]byte("AAA")) || readString(t, filepath.Join(dir, "attic", "icons", h1)) != "AAA" {
+		t.Fatalf("attic copy not at its hash: %s", h1)
 	}
-	// A different file with the same name later: both are kept.
-	writeFile(t, filepath.Join(dir, "icons", "a.png"), "BBB")
-	if err := bm.MoveToAttic("icons", "a.png"); err != nil {
-		t.Fatal(err)
+	// A different file with the same name later: both versions are kept, each
+	// at its own hash, and the index lists both for the name.
+	h2 := toAttic(t, bm, "icons", "a.png", "BBB")
+	if h2 == h1 || readString(t, filepath.Join(dir, "attic", "icons", h2)) != "BBB" || readString(t, filepath.Join(dir, "attic", "icons", h1)) != "AAA" {
+		t.Fatal("an older version was replaced")
 	}
-	if got := readString(t, filepath.Join(dir, "attic", "icons", "a.png")); got != "BBB" {
-		t.Fatalf("newest attic copy %q", got)
+	bm.atticMu.Lock()
+	idx, err := bm.loadIndexLocked()
+	bm.atticMu.Unlock()
+	if err != nil || strings.Join(idx.Names["icons/a.png"], ",") != h1+","+h2 {
+		t.Fatalf("index %v %v", idx.Names, err)
 	}
-	m, _ := filepath.Glob(filepath.Join(dir, "attic", "icons", "a.png~*"))
-	if len(m) != 1 || readString(t, m[0]) != "AAA" {
-		t.Fatalf("older copy not kept: %v", m)
+	// The same version again: kept once.
+	toAttic(t, bm, "icons", "a.png", "AAA")
+	if atticCount(t, bm) != 2 {
+		t.Fatal("an identical version was stored twice")
 	}
 	// Unsafe names never touch anything.
 	for _, n := range []string{"../hops.db", ".hidden", "a/b.png", ""} {
-		if err := bm.MoveToAttic("icons", n); err == nil {
+		if _, err := bm.MoveToAttic("icons", n); err == nil {
 			t.Errorf("MoveToAttic(%q) accepted", n)
 		}
 	}
-	if err := bm.MoveToAttic("other", "a.png"); err == nil {
+	if _, err := bm.MoveToAttic("other", "a.png"); err == nil {
 		t.Error("unknown kind accepted")
 	}
-	if err := bm.MoveToAttic("icons", "none.png"); !errors.Is(err, fs.ErrNotExist) {
+	if _, err := bm.MoveToAttic("icons", "none.png"); !errors.Is(err, fs.ErrNotExist) {
 		t.Errorf("missing file: %v", err)
+	}
+	// An unreadable index: nothing is moved (the delete is refused).
+	writeFile(t, filepath.Join(dir, "attic", "index.json"), "{not json")
+	writeFile(t, filepath.Join(dir, "icons", "c.png"), "C")
+	if _, err := bm.MoveToAttic("icons", "c.png"); err == nil || !exists(filepath.Join(dir, "icons", "c.png")) {
+		t.Fatalf("moved despite an unreadable index: %v", err)
+	}
+}
+
+func TestEveryBackupRecordsItsImageVersions(t *testing.T) {
+	bm, dbPath := setupBackupTest(t)
+	dir := filepath.Dir(dbPath)
+	db := openDB(t, dbPath)
+	bm.SetLiveDB(db)
+	writeFile(t, filepath.Join(dir, "icons", "a.png"), "A")
+	setConfig(t, db, "/icons/a.png", "/icons/lost.png")
+	p, err := bm.CreateBackupWithDB(db, "manual")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec, err := bm.readRecord(filepath.Base(p))
+	if err != nil || rec == nil {
+		t.Fatalf("no record: %v", err)
+	}
+	if rec.Images["icons/a.png"] != sum([]byte("A")) || strings.Join(rec.Unresolved, ",") != "icons/lost.png" {
+		t.Fatalf("record %+v", rec)
+	}
+	// Deleting the backup removes its record.
+	if err := bm.DeleteBackup(filepath.Base(p)); err != nil {
+		t.Fatal(err)
+	}
+	if exists(bm.recordPath(filepath.Base(p))) {
+		t.Fatal("record left behind")
 	}
 }
 
 func TestSweepKeepsReferencedAndRemovesUnreferenced(t *testing.T) {
 	bm, dbPath := setupBackupTest(t)
-	dir := filepath.Dir(dbPath)
 	db := openDB(t, dbPath)
 	bm.SetLiveDB(db)
 
-	// A protected (manual) backup refers to kept.png and bg.jpg.
+	// A protected (manual) backup uses kept.png and bg.jpg (recorded by hash).
+	writeFile(t, bm.liveImagePath("icons", "kept.png"), "KEPT")
+	writeFile(t, bm.liveImagePath("backgrounds", "bg.jpg"), "BG")
 	setConfig(t, db, "/icons/kept.png", "/backgrounds/bg.jpg")
 	if _, err := bm.CreateBackupWithDB(db, "manual"); err != nil {
 		t.Fatal(err)
 	}
-	// The live DB now refers to live.png only.
+	// The live DB now uses live.png only.
 	setConfig(t, db, "/icons/live.png")
-	for _, f := range []string{"icons/kept.png", "icons/gone.png", "icons/live.png", "backgrounds/bg.jpg", "backgrounds/old.jpg"} {
-		writeFile(t, filepath.Join(dir, "attic", f), f)
-	}
+	hKept := toAttic(t, bm, "icons", "kept.png", "KEPT")
+	hBg := toAttic(t, bm, "backgrounds", "bg.jpg", "BG")
+	hLive := toAttic(t, bm, "icons", "live.png", "LIVE")
+	hGone := toAttic(t, bm, "icons", "gone.png", "GONE")
+	// A later version of kept.png that no backup used.
+	hKept2 := toAttic(t, bm, "icons", "kept.png", "KEPT-v2")
 	removed, err := bm.SweepAttic()
 	if err != nil {
 		t.Fatal(err)
 	}
 	sort.Strings(removed)
-	if strings.Join(removed, ",") != "backgrounds/old.jpg,icons/gone.png" {
-		t.Fatalf("removed %v", removed)
+	want := []string{"icons/" + hGone, "icons/" + hKept2}
+	sort.Strings(want)
+	if strings.Join(removed, ",") != strings.Join(want, ",") {
+		t.Fatalf("removed %v, want %v", removed, want)
 	}
-	for _, f := range []string{"icons/kept.png", "icons/live.png", "backgrounds/bg.jpg"} {
-		if !exists(filepath.Join(dir, "attic", f)) {
-			t.Errorf("%s was removed although referenced", f)
+	for _, p := range []string{bm.atticHashPath("icons", hKept), bm.atticHashPath("backgrounds", hBg), bm.atticHashPath("icons", hLive)} {
+		if !exists(p) {
+			t.Errorf("%s was removed although referenced", p)
 		}
 	}
 	// Once the backup is deleted and the live DB moves on, the rest go.
@@ -156,49 +224,61 @@ func TestSweepKeepsReferencedAndRemovesUnreferenced(t *testing.T) {
 	if _, err := bm.SweepAttic(); err != nil {
 		t.Fatal(err)
 	}
-	if u, _ := bm.AtticUsage(); u.Files != 0 {
-		t.Fatalf("attic still holds %d files", u.Files)
+	if atticCount(t, bm) != 0 {
+		t.Fatal("attic not emptied")
 	}
 }
 
 func TestSweepRunsAfterEveryBackupCleanup(t *testing.T) {
 	bm, dbPath := setupBackupTest(t)
-	dir := filepath.Dir(dbPath)
 	db := openDB(t, dbPath)
 	bm.SetLiveDB(db)
-	writeFile(t, filepath.Join(dir, "attic", "icons", "orphan.png"), "x")
+	h := toAttic(t, bm, "icons", "orphan.png", "x")
 	if _, err := bm.CreateBackupWithDB(db, "startup"); err != nil {
 		t.Fatal(err)
 	}
-	if exists(filepath.Join(dir, "attic", "icons", "orphan.png")) {
+	if exists(bm.atticHashPath("icons", h)) {
 		t.Fatal("the cleanup after a backup didn't sweep the attic")
 	}
 }
 
 func TestUnreadableBackupBlocksTheSweepWithANotice(t *testing.T) {
 	bm, dbPath := setupBackupTest(t)
-	dir := filepath.Dir(dbPath)
 	db := openDB(t, dbPath)
 	bm.SetLiveDB(db)
-	writeFile(t, filepath.Join(dir, "attic", "icons", "orphan.png"), "x")
+	h := toAttic(t, bm, "icons", "orphan.png", "x")
 	bad := BackupPrefix + "2026-01-01_00-00-00_manual" + BackupSuffix
 	writeFile(t, filepath.Join(bm.backupDir, bad), "this is not a database at all, just junk text")
 
 	if _, err := bm.SweepAttic(); err == nil {
 		t.Fatal("the sweep went ahead with an unreadable backup")
 	}
-	if !exists(filepath.Join(dir, "attic", "icons", "orphan.png")) {
+	if !exists(bm.atticHashPath("icons", h)) {
 		t.Fatal("an attic file was deleted although a backup couldn't be read")
 	}
 	if !hasProblem(bm, ProblemAtticBlocked, bad) {
 		t.Fatalf("no visible notice naming the backup: %+v", bm.Problems())
 	}
-	// Fixed: the next sweep works and the notice goes.
+	// A damaged image record blocks it too.
 	os.Remove(filepath.Join(bm.backupDir, bad))
+	p, err := bm.CreateBackupWithDB(db, "manual")
+	if err != nil {
+		t.Fatal(err)
+	}
+	h = toAttic(t, bm, "icons", "orphan.png", "x")
+	writeFile(t, bm.recordPath(filepath.Base(p)), "{damaged")
+	if _, err := bm.SweepAttic(); err == nil || !exists(bm.atticHashPath("icons", h)) {
+		t.Fatal("swept with a damaged record")
+	}
+	if !hasProblem(bm, ProblemAtticBlocked, "image record is damaged") {
+		t.Fatalf("no notice: %+v", bm.Problems())
+	}
+	// Fixed: the next sweep works and the notice goes.
+	os.Remove(bm.recordPath(filepath.Base(p)))
 	if _, err := bm.SweepAttic(); err != nil {
 		t.Fatal(err)
 	}
-	if exists(filepath.Join(dir, "attic", "icons", "orphan.png")) {
+	if exists(bm.atticHashPath("icons", h)) {
 		t.Fatal("not swept once readable")
 	}
 	if hasProblem(bm, ProblemAtticBlocked, "") {
@@ -208,9 +288,8 @@ func TestUnreadableBackupBlocksTheSweepWithANotice(t *testing.T) {
 
 func TestSweepDeleteFailureIsANotice(t *testing.T) {
 	bm, dbPath := setupBackupTest(t)
-	dir := filepath.Dir(dbPath)
 	bm.SetLiveDB(openDB(t, dbPath))
-	writeFile(t, filepath.Join(dir, "attic", "icons", "orphan.png"), "x")
+	toAttic(t, bm, "icons", "orphan.png", "x")
 	bm.SetFailureHooks(FailureHooks{Remove: func(string) error { return errors.New("disk says no") }})
 	if _, err := bm.SweepAttic(); err == nil {
 		t.Fatal("no error")
@@ -222,13 +301,11 @@ func TestSweepDeleteFailureIsANotice(t *testing.T) {
 
 func TestLargeAtticIsANotice(t *testing.T) {
 	bm, dbPath := setupBackupTest(t)
-	dir := filepath.Dir(dbPath)
 	db := openDB(t, dbPath)
 	bm.SetLiveDB(db)
 	setConfig(t, db, "/backgrounds/huge.jpg")
-	p := filepath.Join(dir, "attic", "backgrounds", "huge.jpg")
-	writeFile(t, p, "")
-	if err := os.Truncate(p, AtticLargeBytes+1); err != nil {
+	h := toAttic(t, bm, "backgrounds", "huge.jpg", "big")
+	if err := os.Truncate(bm.atticHashPath("backgrounds", h), AtticLargeBytes+1); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := bm.SweepAttic(); err != nil {
@@ -243,6 +320,20 @@ func TestLargeAtticIsANotice(t *testing.T) {
 	}
 }
 
+// restoreAndApply restores a backup (staged), closes the live DB, applies it
+// as the next start would, and runs AfterRestore.
+func restoreAndApply(t *testing.T, bm *BackupManager, db *sql.DB, dbPath, name string) RestoredImages {
+	t.Helper()
+	if err := bm.RestoreBackup(db, name); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+	if applied, err := ApplyPendingRestore(dbPath); err != nil || !applied {
+		t.Fatalf("apply: %v %v", applied, err)
+	}
+	return bm.AfterRestore(true)
+}
+
 func TestRestoreBringsAtticImagesBackAndReportsMissing(t *testing.T) {
 	bm, dbPath := setupBackupTest(t)
 	dir := filepath.Dir(dbPath)
@@ -255,12 +346,11 @@ func TestRestoreBringsAtticImagesBackAndReportsMissing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The images are deleted (to the attic) and the layout moves on.
 	setConfig(t, db)
-	if err := bm.MoveToAttic("icons", "a.png"); err != nil {
+	if _, err := bm.MoveToAttic("icons", "a.png"); err != nil {
 		t.Fatal(err)
 	}
-	if err := bm.MoveToAttic("backgrounds", "b.jpg"); err != nil {
+	if _, err := bm.MoveToAttic("backgrounds", "b.jpg"); err != nil {
 		t.Fatal(err)
 	}
 	if err := bm.RestoreBackup(db, filepath.Base(p)); err != nil {
@@ -271,8 +361,7 @@ func TestRestoreBringsAtticImagesBackAndReportsMissing(t *testing.T) {
 		t.Fatal(err)
 	}
 	db.Close()
-	applied, err := ApplyPendingRestore(dbPath)
-	if err != nil || !applied {
+	if applied, err := ApplyPendingRestore(dbPath); err != nil || !applied {
 		t.Fatalf("apply: %v %v", applied, err)
 	}
 	res := bm.AfterRestore(true)
@@ -282,13 +371,12 @@ func TestRestoreBringsAtticImagesBackAndReportsMissing(t *testing.T) {
 	if got := readString(t, filepath.Join(dir, "backgrounds", "b.jpg")); got != "B" {
 		t.Fatalf("b.jpg %q", got)
 	}
-	if len(res.FromAttic) != 2 || strings.Join(res.Missing, ",") != "icons/lost.png" {
+	if len(res.Installed) != 2 || strings.Join(res.Missing, ",") != "icons/lost.png" {
 		t.Fatalf("result %+v", res)
 	}
 	if !hasProblem(bm, ProblemRestoreImages, "icons/lost.png") {
 		t.Fatalf("missing image not a visible notice: %+v", bm.Problems())
 	}
-	// The notice survives a restart and is dismissible.
 	bm2 := NewBackupManager(dbPath)
 	if !hasProblem(bm2, ProblemRestoreImages, "icons/lost.png") {
 		t.Fatal("notice not kept across a restart")
@@ -298,6 +386,164 @@ func TestRestoreBringsAtticImagesBackAndReportsMissing(t *testing.T) {
 	}
 	if exists(restoreImagesMarkerPath(dbPath)) {
 		t.Fatal("marker left behind")
+	}
+}
+
+// The review's scenario: B1 uses x.png = A. x.png is deleted, a new x.png (C)
+// is uploaded and deleted too. Restoring B1 must give A, never C.
+func TestRestoreGivesTheExactVersionTheBackupUsed(t *testing.T) {
+	bm, dbPath := setupBackupTest(t)
+	db := openDB(t, dbPath)
+	bm.SetLiveDB(db)
+	setConfig(t, db, "/icons/x.png")
+	writeFile(t, bm.liveImagePath("icons", "x.png"), "version A")
+	b1, err := bm.CreateBackupWithDB(db, "manual")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := bm.MoveToAttic("icons", "x.png"); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, bm.liveImagePath("icons", "x.png"), "version C")
+	if _, err := bm.CreateBackupWithDB(db, "manual"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := bm.MoveToAttic("icons", "x.png"); err != nil {
+		t.Fatal(err)
+	}
+	// The download of B1 holds A.
+	f, _, done, err := bm.BuildBackupArchive(filepath.Base(b1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := string(readZip(t, f)["icons/x.png"]); got != "version A" {
+		t.Fatalf("B1's archive holds %q", got)
+	}
+	done()
+	res := restoreAndApply(t, bm, db, dbPath, filepath.Base(b1))
+	if got := readString(t, bm.liveImagePath("icons", "x.png")); got != "version A" {
+		t.Fatalf("restored %q, want version A (%+v)", got, res)
+	}
+	if hasProblem(bm, ProblemRestoreImages, "") {
+		t.Fatalf("unexpected notice: %+v", bm.Problems())
+	}
+}
+
+func TestRestoreNeverReplacesADifferentVersionInPlace(t *testing.T) {
+	bm, dbPath := setupBackupTest(t)
+	db := openDB(t, dbPath)
+	bm.SetLiveDB(db)
+	setConfig(t, db, "/icons/x.png")
+	writeFile(t, bm.liveImagePath("icons", "x.png"), "version A")
+	b1, err := bm.CreateBackupWithDB(db, "manual")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := bm.MoveToAttic("icons", "x.png"); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, bm.liveImagePath("icons", "x.png"), "version C")
+	res := restoreAndApply(t, bm, db, dbPath, filepath.Base(b1))
+	if got := readString(t, bm.liveImagePath("icons", "x.png")); got != "version C" {
+		t.Fatalf("a file in place was replaced: %q", got)
+	}
+	if strings.Join(res.Clashes, ",") != "icons/x.png" || !hasProblem(bm, ProblemRestoreImages, "different version") {
+		t.Fatalf("clash not visible: %+v %+v", res, bm.Problems())
+	}
+}
+
+func TestBackupWithoutARecordRestoresNothingAmbiguous(t *testing.T) {
+	bm, dbPath := setupBackupTest(t)
+	db := openDB(t, dbPath)
+	bm.SetLiveDB(db)
+	setConfig(t, db, "/icons/x.png", "/icons/one.png")
+	writeFile(t, bm.liveImagePath("icons", "x.png"), "version A")
+	writeFile(t, bm.liveImagePath("icons", "one.png"), "only")
+	b1, err := bm.CreateBackupWithDB(db, "manual")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// As if made before records existed.
+	os.Remove(bm.recordPath(filepath.Base(b1)))
+	if _, err := bm.MoveToAttic("icons", "x.png"); err != nil {
+		t.Fatal(err)
+	}
+	toAttic(t, bm, "icons", "x.png", "version C")
+	if _, err := bm.MoveToAttic("icons", "one.png"); err != nil {
+		t.Fatal(err)
+	}
+	// Its download leaves out the ambiguous image and says so.
+	plan, err := bm.PlanBackupImages(filepath.Base(b1))
+	if err != nil || strings.Join(plan.Ambiguous, ",") != "icons/x.png" || strings.Join(plan.Included, ",") != "icons/one.png" {
+		t.Fatalf("plan %+v %v", plan, err)
+	}
+	res := restoreAndApply(t, bm, db, dbPath, filepath.Base(b1))
+	if exists(bm.liveImagePath("icons", "x.png")) {
+		t.Fatal("an ambiguous image was restored")
+	}
+	if readString(t, bm.liveImagePath("icons", "one.png")) != "only" {
+		t.Fatal("the unambiguous image wasn't restored")
+	}
+	if strings.Join(res.Ambiguous, ",") != "icons/x.png" || !hasProblem(bm, ProblemRestoreImages, "can't tell which version") {
+		t.Fatalf("not visible: %+v %+v", res, bm.Problems())
+	}
+}
+
+func TestInstallFailureLeavesNoPartialFileAndIsANotice(t *testing.T) {
+	bm, dbPath := setupBackupTest(t)
+	db := openDB(t, dbPath)
+	bm.SetLiveDB(db)
+	setConfig(t, db, "/icons/x.png")
+	writeFile(t, bm.liveImagePath("icons", "x.png"), "version A, long enough to be cut part-way")
+	b1, err := bm.CreateBackupWithDB(db, "manual")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := bm.MoveToAttic("icons", "x.png"); err != nil {
+		t.Fatal(err)
+	}
+	installHook = func(string) error { return errors.New("power cut") }
+	t.Cleanup(func() { installHook = nil })
+	res := restoreAndApply(t, bm, db, dbPath, filepath.Base(b1))
+	if exists(bm.liveImagePath("icons", "x.png")) {
+		t.Fatal("a partial image was left under the real name")
+	}
+	if m, _ := filepath.Glob(filepath.Join(filepath.Dir(dbPath), "icons", ".install-*")); len(m) != 0 {
+		t.Fatalf("temp left: %v", m)
+	}
+	if len(res.Failed) != 1 || !hasProblem(bm, ProblemRestoreImages, "power cut") {
+		t.Fatalf("failure not visible: %+v %+v", res, bm.Problems())
+	}
+}
+
+func TestDeleteRemovesTheBackupFirstAndTheSweepCleansLeftovers(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores directory permissions")
+	}
+	bm, _ := setupBackupTest(t)
+	z := buildZip(t, []zipEntry{{name: "hops.db", data: hopsDBBytes(t, "/icons/a.png")}, {name: "icons/a.png", data: []byte("A")}}, nil)
+	res, err := bm.StoreUpload(bytes.NewReader(z), UploadCaps{Total: 8 << 20, PerImage: 1 << 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	staged := filepath.Join(bm.stagedImagesPath(res.Name), "icons")
+	os.Chmod(staged, 0o555)
+	t.Cleanup(func() { os.Chmod(staged, 0o755) })
+	if err := bm.DeleteBackup(res.Name); err != nil {
+		t.Fatal(err)
+	}
+	if exists(filepath.Join(bm.backupDir, res.Name)) {
+		t.Fatal("the backup wasn't deleted")
+	}
+	if !hasProblem(bm, ProblemAtticDeleteFailed, res.Name) {
+		t.Fatalf("leftover not visible: %+v", bm.Problems())
+	}
+	os.Chmod(staged, 0o755)
+	if _, err := bm.SweepAttic(); err != nil {
+		t.Fatal(err)
+	}
+	if exists(bm.stagedImagesPath(res.Name)) || hasProblem(bm, ProblemAtticDeleteFailed, "") {
+		t.Fatal("leftover not swept")
 	}
 }
 
@@ -350,10 +596,13 @@ func TestDownloadArchiveContentsAndManifest(t *testing.T) {
 	bm.SetLiveDB(db)
 	setConfig(t, db, "/icons/a.png", "/backgrounds/b.jpg", "/icons/lost.png")
 	writeFile(t, filepath.Join(dir, "icons", "a.png"), "A-live")
-	writeFile(t, filepath.Join(dir, "attic", "backgrounds", "b.jpg"), "B-attic")
+	writeFile(t, filepath.Join(dir, "backgrounds", "b.jpg"), "B-attic")
 	writeFile(t, filepath.Join(dir, "icons", "unrelated.png"), "U")
 	p, err := bm.CreateBackupWithDB(db, "manual")
 	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := bm.MoveToAttic("backgrounds", "b.jpg"); err != nil {
 		t.Fatal(err)
 	}
 	name := filepath.Base(p)
@@ -638,7 +887,7 @@ func TestUploadedArchiveImagesInstallOnRestoreWithoutOverwriting(t *testing.T) {
 	if strings.Join(r.Clashes, ",") != "icons/c.png" || strings.Join(r.Installed, ",") != "icons/a.png" {
 		t.Fatalf("result %+v", r)
 	}
-	if !hasProblem(bm, ProblemRestoreImages, "icons/c.png") || !hasProblem(bm, ProblemRestoreImages, "different file") {
+	if !hasProblem(bm, ProblemRestoreImages, "icons/c.png") || !hasProblem(bm, ProblemRestoreImages, "different version") {
 		t.Fatalf("clash not a visible notice: %+v", bm.Problems())
 	}
 
@@ -660,5 +909,90 @@ func TestStaleUploadAndDownloadTempsSwept(t *testing.T) {
 	}
 	if m, _ := filepath.Glob(filepath.Join(bm.backupDir, ".*.tmp")); len(m) != 0 {
 		t.Fatalf("left: %v", m)
+	}
+}
+
+func TestUploadRefusesDuplicateEntriesAndSizeBombs(t *testing.T) {
+	bm, _ := setupBackupTest(t)
+	os.MkdirAll(bm.backupDir, 0o755)
+	good := hopsDBBytes(t, "/icons/a.png")
+	caps := UploadCaps{Total: 8 << 20, PerImage: 64 << 10}
+	before := dirSnapshot(t, bm.backupDir)
+	expectRefused := func(name string, z []byte, want string) {
+		t.Helper()
+		_, err := bm.StoreUpload(bytes.NewReader(z), caps)
+		var ibe *InvalidBackupError
+		if !errors.As(err, &ibe) || !strings.Contains(ibe.Reason, want) {
+			t.Errorf("%s: got %v, want a reason containing %q", name, err, want)
+		}
+		if after := dirSnapshot(t, bm.backupDir); after != before {
+			t.Errorf("%s: left files behind:\n%s", name, after)
+		}
+	}
+
+	// The same name twice.
+	expectRefused("duplicate", buildZip(t, []zipEntry{{name: "hops.db", data: good}, {name: "icons/a.png", data: []byte("1")}, {name: "icons/a.png", data: []byte("2")}}, nil), "twice")
+
+	// A declared-size bomb: the header says 10 bytes, the data inflates to 1 MiB.
+	big := bytes.Repeat([]byte{0}, 1<<20)
+	var comp bytes.Buffer
+	fw, _ := flate.NewWriter(&comp, flate.BestCompression)
+	fw.Write(big)
+	fw.Close()
+	man := ArchiveManifest{Format: ArchiveFormat, FormatVersion: 1, Files: []ArchiveFile{
+		{Path: "hops.db", Size: int64(len(good)), SHA256: sum(good)},
+		{Path: "icons/bomb.png", Size: 10, SHA256: sum(big[:10])},
+	}}
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	w, _ := zw.Create("hops.db")
+	w.Write(good)
+	rw, err := zw.CreateRaw(&zip.FileHeader{Name: "icons/bomb.png", Method: zip.Deflate, CRC32: crc32.ChecksumIEEE(big),
+		CompressedSize64: uint64(comp.Len()), UncompressedSize64: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rw.Write(comp.Bytes())
+	raw, _ := json.Marshal(man)
+	w, _ = zw.Create("manifest.json")
+	w.Write(raw)
+	zw.Close()
+	expectRefused("declared-size bomb", buf.Bytes(), "icons/bomb.png")
+
+	// A declared size over the cap: refused before anything is extracted.
+	expectRefused("declared too big", buildZip(t, []zipEntry{{name: "hops.db", data: good}, {name: "icons/a.png", data: make([]byte, 65<<10)}}, nil), "larger than")
+}
+
+func TestZeroCapsRefuse(t *testing.T) {
+	bm, _ := setupBackupTest(t)
+	good := hopsDBBytes(t)
+	if _, err := bm.StoreUpload(bytes.NewReader(good), UploadCaps{Total: 0, PerImage: 1 << 20}); err == nil || !strings.Contains(err.Error(), "turned off") {
+		t.Fatalf("total 0: %v", err)
+	}
+	z := buildZip(t, []zipEntry{{name: "hops.db", data: good}, {name: "icons/a.png", data: []byte("A")}}, nil)
+	if _, err := bm.StoreUpload(bytes.NewReader(z), UploadCaps{Total: 8 << 20, PerImage: 0}); err == nil || !strings.Contains(err.Error(), "images are turned off") {
+		t.Fatalf("per-image 0: %v", err)
+	}
+}
+
+func TestUploadedImagesGoThroughTheUploadProcessing(t *testing.T) {
+	bm, _ := setupBackupTest(t)
+	good := hopsDBBytes(t, "/icons/a.png")
+	z := buildZip(t, []zipEntry{{name: "hops.db", data: good}, {name: "icons/a.png", data: []byte("raw")}}, nil)
+	refuse := func(kind, name string, data []byte) ([]byte, error) { return nil, errors.New("not an image") }
+	if _, err := bm.StoreUpload(bytes.NewReader(z), UploadCaps{Total: 8 << 20, PerImage: 1 << 20, Process: refuse}); err == nil || !strings.Contains(err.Error(), "isn't a usable image (not an image)") {
+		t.Fatalf("refusing processor: %v", err)
+	}
+	normalise := func(kind, name string, data []byte) ([]byte, error) { return []byte("normalised"), nil }
+	res, err := bm.StoreUpload(bytes.NewReader(z), UploadCaps{Total: 8 << 20, PerImage: 1 << 20, Process: normalise})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := readString(t, filepath.Join(bm.stagedImagesPath(res.Name), "icons", "a.png")); got != "normalised" {
+		t.Fatalf("staged %q", got)
+	}
+	rec, err := bm.readRecord(res.Name)
+	if err != nil || rec == nil || rec.Images["icons/a.png"] != sum([]byte("normalised")) {
+		t.Fatalf("record %+v %v", rec, err)
 	}
 }

@@ -825,12 +825,12 @@ export async function listBackups(): Promise<BackupList> {
 }
 
 /** Which images a backup's download will include, and which it refers to but can't be found. */
-export async function checkBackupImages(name: string): Promise<{ included: string[]; missing: string[] }> {
+export async function checkBackupImages(name: string): Promise<{ included: string[]; missing: string[]; ambiguous: string[] }> {
   const resp = await fetchAPI(`/backups/${encodeURIComponent(name)}?images=1`);
   if (!resp || !Array.isArray(resp.included) || !Array.isArray(resp.missing)) {
     throw new Error('The server sent an image check this version of HOPS cannot read.');
   }
-  return { included: resp.included, missing: resp.missing };
+  return { included: resp.included, missing: resp.missing, ambiguous: Array.isArray(resp.ambiguous) ? resp.ambiguous : [] };
 }
 
 /** Discard a staged restore that hasn't been applied yet (nothing is restored). */

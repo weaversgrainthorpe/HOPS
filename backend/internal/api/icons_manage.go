@@ -420,22 +420,22 @@ func (r *Router) handleDeleteIcon(w http.ResponseWriter, req *http.Request) {
 			file = strings.TrimPrefix(img.String, "/icons/")
 		}
 	}
-	moved := false
+	moved, movedSum := false, ""
 	if file != "" {
-		if err := r.backupManager.MoveToAttic("icons", file); err != nil {
+		if sum, err := r.backupManager.MoveToAttic("icons", file); err != nil {
 			if !errors.Is(err, os.ErrNotExist) {
 				slog.Error("icon delete: could not move the file to the attic", "component", "icons", "file", file, "error", err)
 				writeJSONError(w, "Couldn't move the icon's file aside, so it was not deleted: "+err.Error(), http.StatusInternalServerError)
 				return
 			}
 		} else {
-			moved = true
+			moved, movedSum = true, sum
 		}
 	}
 	if _, err := r.db.Exec(`DELETE FROM icons WHERE id = ? AND is_preset = 0`, iconID); err != nil {
 		msg := "Failed to delete icon"
 		if moved {
-			if rerr := r.backupManager.RestoreFromAttic("icons", file); rerr != nil {
+			if rerr := r.backupManager.RestoreFromAttic("icons", file, movedSum); rerr != nil {
 				slog.Error("icon delete: could not put the file back", "component", "icons", "file", file, "error", rerr)
 				msg += "; its file is in " + filepath.Join(r.backupManager.AtticDir(), "icons") + " and couldn't be put back (" + rerr.Error() + ")"
 			}

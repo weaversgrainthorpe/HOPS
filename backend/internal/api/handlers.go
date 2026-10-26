@@ -2306,7 +2306,7 @@ func (r *Router) handleDeleteBackground(w http.ResponseWriter, req *http.Request
 				break
 			}
 			if _, err := os.Lstat(filepath.Join(backgroundsDir, name)); err == nil {
-				if err := r.backupManager.MoveToAttic("backgrounds", name); err != nil {
+				if _, err := r.backupManager.MoveToAttic("backgrounds", name); err != nil {
 					slog.Error("background delete: could not move the file to the attic", "component", "backgrounds", "file", name, "error", err)
 					writeJSONError(w, "Couldn't move the background's file aside, so it was not deleted: "+err.Error(), http.StatusInternalServerError)
 					return
@@ -2322,18 +2322,18 @@ func (r *Router) handleDeleteBackground(w http.ResponseWriter, req *http.Request
 
 	// Only uploaded images have a file of ours: it moves to the attic first,
 	// and comes back if the metadata can't be saved.
-	moved := ""
+	moved, movedSum := "", ""
 	if imageToDelete.Source == "uploaded" && strings.HasPrefix(imageToDelete.URL, "/backgrounds/") {
 		name := strings.TrimPrefix(imageToDelete.URL, "/backgrounds/")
 		if database.ValidImageName(name) {
-			if err := r.backupManager.MoveToAttic("backgrounds", name); err != nil {
+			if sum, err := r.backupManager.MoveToAttic("backgrounds", name); err != nil {
 				if !errors.Is(err, os.ErrNotExist) {
 					slog.Error("background delete: could not move the file to the attic", "component", "backgrounds", "file", name, "error", err)
 					writeJSONError(w, "Couldn't move the background's file aside, so it was not deleted: "+err.Error(), http.StatusInternalServerError)
 					return
 				}
 			} else {
-				moved = name
+				moved, movedSum = name, sum
 			}
 		}
 	}
@@ -2343,7 +2343,7 @@ func (r *Router) handleDeleteBackground(w http.ResponseWriter, req *http.Request
 	if err := r.saveBackgroundData(bgData); err != nil {
 		msg := "Failed to save background data"
 		if moved != "" {
-			if rerr := r.backupManager.RestoreFromAttic("backgrounds", moved); rerr != nil {
+			if rerr := r.backupManager.RestoreFromAttic("backgrounds", moved, movedSum); rerr != nil {
 				slog.Error("background delete: could not put the file back", "component", "backgrounds", "file", moved, "error", rerr)
 				msg += "; its file is in " + filepath.Join(r.backupManager.AtticDir(), "backgrounds") + " and couldn't be put back (" + rerr.Error() + ")"
 			}

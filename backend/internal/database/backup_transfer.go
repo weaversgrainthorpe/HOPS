@@ -24,9 +24,9 @@ func (bm *BackupManager) OpenBackup(name string) (*os.File, os.FileInfo, error) 
 }
 
 // StoreUploadedBackup stores an uploaded backup (an archive or a legacy
-// database) with no size caps of its own; see StoreUpload.
+// database) with generous fixed caps; see StoreUpload.
 func (bm *BackupManager) StoreUploadedBackup(src io.Reader) (string, error) {
-	r, err := bm.StoreUpload(src, UploadCaps{})
+	r, err := bm.StoreUpload(src, UploadCaps{Total: 1 << 40, PerImage: 1 << 30})
 	return r.Name, err
 }
 

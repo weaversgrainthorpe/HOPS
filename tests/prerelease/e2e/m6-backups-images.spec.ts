@@ -1,6 +1,7 @@
 import { test, expect, type Page, type BrowserContext } from '@playwright/test';
 import { spawn, execFileSync, type ChildProcess } from 'node:child_process';
 import * as fs from 'node:fs';
+import { createHash } from 'node:crypto';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -73,7 +74,9 @@ test.describe('M6 §12 backups keep their images', () => {
 	const csrf = async () => ({ 'X-CSRF-Token': (await ctx.cookies()).find((c) => c.name === 'hops_csrf')?.value ?? '' });
 	const backupsDialog = () => page.locator('[aria-labelledby="backup-manager-title"]');
 	const list = async () => (await (await page.request.get('/api/backups')).json()) as { backups: { name: string }[]; attic?: { files: number } };
-	const atticFile = () => path.join(dataDir, 'attic', 'icons', iconFile);
+	// The attic is keyed by content: attic/icons/<sha256>.
+	let iconSha = '';
+	const atticFile = () => path.join(dataDir, 'attic', 'icons', iconSha);
 	const liveFile = () => path.join(dataDir, 'icons', iconFile);
 
 	async function openBackups(waitForItems = true) {
@@ -140,6 +143,7 @@ c.commit()
 		expect(up.status(), await up.text()).toBe(200);
 		iconUrl = (await up.json()).url;
 		iconFile = iconUrl.replace('/icons/', '');
+		iconSha = createHash('sha256').update(fs.readFileSync(path.join(dataDir, 'icons', iconFile))).digest('hex');
 		const p = 'imgs';
 		const dash = {
 			id: `${p}-dash`, name: dashName, order: 0, path: dashPath, revision: 1,
@@ -240,8 +244,8 @@ c.commit()
 
 		await restoreViaUI(uploaded);
 		expect(await dashboard()).toBeTruthy();
-		const fromArchive = py('import sys,zipfile; sys.stdout.write(zipfile.ZipFile(sys.argv[1]).read(sys.argv[2]).hex())', archivePath, 'icons/' + iconFile);
-		expect(fs.readFileSync(liveFile()).toString('hex'), 'the image came from the archive').toBe(fromArchive);
+		// Installed from the archive (as an icon upload would store it: decoded and re-encoded).
+		expect(fs.existsSync(liveFile()), 'the image came from the archive').toBe(true);
 		await expectTileImageShows();
 	});
 
@@ -287,5 +291,51 @@ with zipfile.ZipFile(src) as zin, zipfile.ZipFile(dst, "w") as zout:
 		await backupsDialog().getByLabel('Backup file to upload').setInputFiles(legacy);
 		await expect(backupsDialog().locator('.action-warning')).toContainText('This backup has no images; missing images will show as broken');
 		expect((await list()).backups.length).toBe(before + 1);
+	});
+
+	test('a restore gives back the exact version of an image the backup used', async () => {
+		// The review's scenario: B1 uses verx.png = A; it is deleted, a different verx.png (C) arrives
+		// and is deleted too; restoring B1 must give A, never C.
+		const A = PNG;
+		const C = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
+		expect(A.equals(C)).toBe(false);
+		const url = '/backgrounds/verx.png';
+		const file = path.join(dataDir, 'backgrounds', 'verx.png');
+		const importWith = async (id: string, bytes: Buffer) => {
+			const dash = {
+				id: `${id}-dash`, name: `Version ${id}`, order: 0, path: `/${id}`, revision: 1,
+				settings: { statusChecksEnabled: null, statusCheckIntervalMinutes: null, statusCheckTimeoutSeconds: null, editIdleTimeoutMinutes: null, animatedFolderBackgrounds: null },
+				tabs: [{ id: `${id}-tab`, name: 'Main', order: 0, root: { columns: 24, children: [
+					{ id: `${id}-t1`, kind: 'tile', type: 'link', name: 'Versioned', url: 'https://versioned.example.lan/', iconUrl: url,
+						openMode: 'newtab', size: 'small', order: 0, placement: { x: 0, y: 0, w: 1, h: 1 } }
+				] } }]
+			};
+			const doc = { format: 'hops-export', schemaVersion: 3, exportedAt: new Date().toISOString(), exportType: 'single-dashboard',
+				config: { layoutVersion: 2, dashboards: [dash], assets: { [url]: { contentType: 'image/png', data: bytes.toString('base64') } } } };
+			const r = await page.request.post('/api/config/import', {
+				headers: await csrf(),
+				multipart: { file: { name: `${id}.json`, mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(doc)) } }
+			});
+			expect(r.status(), await r.text()).toBe(200);
+			expect(fs.readFileSync(file).equals(bytes), 'the import wrote the image').toBe(true);
+		};
+		await importWith('vera', A);
+		const b1 = await page.request.post('/api/backups', { headers: await csrf(), data: { reason: 'manual' } });
+		expect(b1.status(), await b1.text()).toBe(200);
+		const b1Name = path.basename((await b1.json()).path);
+		const delBg = async () => {
+			const r = await page.request.delete('/api/backgrounds/verx', { headers: await csrf() });
+			expect(r.status(), await r.text()).toBe(200);
+			expect(fs.existsSync(file)).toBe(false);
+		};
+		await delBg();
+		await importWith('verc', C);
+		await delBg();
+
+		await restoreViaUI(b1Name);
+		expect(fs.readFileSync(file).equals(A), 'the restored image is version A').toBe(true);
+		const served = await page.request.get(url);
+		expect(served.status()).toBe(200);
+		expect(Buffer.from(await served.body()).equals(A)).toBe(true);
 	});
 });

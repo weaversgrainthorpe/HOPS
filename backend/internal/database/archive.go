@@ -47,7 +47,7 @@ const (
 // imageExtensions are the file types each kind may hold (as the upload
 // handlers accept them).
 var imageExtensions = map[string]map[string]bool{
-	"icons":       {".png": true, ".jpg": true, ".jpeg": true, ".gif": true, ".webp": true, ".svg": true, ".ico": true},
+	"icons":       {".png": true, ".jpg": true, ".jpeg": true, ".gif": true, ".webp": true, ".svg": true},
 	"backgrounds": {".png": true, ".jpg": true, ".jpeg": true, ".gif": true, ".webp": true},
 }
 
@@ -70,6 +70,9 @@ type ArchiveManifest struct {
 	// Missing lists images the database refers to that weren't found
 	// anywhere when the archive was made.
 	Missing []string `json:"missing"`
+	// Ambiguous: images the backup had no record of, with several versions
+	// to choose from; none was included.
+	Ambiguous []string `json:"ambiguous,omitempty"`
 }
 
 // ArchiveName is a backup's download name: "…hops-backup-<ts>_<reason>.zip".
@@ -77,70 +80,78 @@ func ArchiveName(backup string) string {
 	return strings.TrimSuffix(backup, BackupSuffix) + ArchiveSuffix
 }
 
-// BackupImages is which images a backup's archive would hold, and which
-// referenced images are missing.
+// BackupImages is which images a backup's archive would hold, which
+// referenced images are missing, and which can't be told apart (a backup
+// with no record of its image versions, and several versions exist).
 type BackupImages struct {
-	Included []string `json:"included"`
-	Missing  []string `json:"missing"`
+	Included  []string `json:"included"`
+	Missing   []string `json:"missing"`
+	Ambiguous []string `json:"ambiguous"`
 }
 
-// imageSource finds an image for a backup's archive: the backup's own
-// staged images first (they belong to it), then the live folder, then the
-// attic. "" when it is nowhere.
-func (bm *BackupManager) imageSource(backup, kind, name string) string {
-	for _, p := range []string{
-		filepath.Join(bm.stagedImagesPath(backup), kind, name),
-		bm.liveImagePath(kind, name),
-		bm.atticImagePath(kind, name),
-	} {
-		if fi, err := os.Lstat(p); err == nil && fi.Mode().IsRegular() {
-			return p
-		}
-	}
-	return ""
-}
+type plannedImage struct{ key, src, sum string }
 
 // PlanBackupImages reports which images the backup's archive will include
-// and which it refers to but can't be found (the UI warns before a download).
+// and which it refers to but can't (the UI warns before a download).
 func (bm *BackupManager) PlanBackupImages(backup string) (BackupImages, error) {
 	p, _, err := bm.backupFile(backup)
 	if err != nil {
 		return BackupImages{}, err
 	}
-	return bm.planImages(backup, p)
+	out, _, err := bm.planImages(backup, p)
+	return out, err
 }
 
-func (bm *BackupManager) planImages(backup, dbFile string) (BackupImages, error) {
+func (bm *BackupManager) planImages(backup, dbFile string) (BackupImages, []plannedImage, error) {
 	all, err := ReadFileImageRefs(dbFile, RefsAll)
 	if err != nil {
-		return BackupImages{}, fmt.Errorf("cannot read the backup's image references: %w", err)
+		return BackupImages{}, nil, fmt.Errorf("cannot read the backup's image references: %w", err)
 	}
 	live, err := ReadFileImageRefs(dbFile, RefsLive)
 	if err != nil {
-		return BackupImages{}, fmt.Errorf("cannot read the backup's image references: %w", err)
+		return BackupImages{}, nil, fmt.Errorf("cannot read the backup's image references: %w", err)
 	}
-	out := BackupImages{Included: []string{}, Missing: []string{}}
+	rec, err := bm.readRecord(backup)
+	if err != nil {
+		return BackupImages{}, nil, err
+	}
+	bm.atticMu.Lock()
+	idx, idxErr := bm.loadIndexLocked()
+	bm.atticMu.Unlock()
+	if idxErr != nil && rec == nil {
+		return BackupImages{}, nil, idxErr
+	}
+	out := BackupImages{Included: []string{}, Missing: []string{}, Ambiguous: []string{}}
+	var plan []plannedImage
 	for _, key := range sortedKeys(all) {
-		kind, name := splitImageKey(key)
-		if bm.imageSource(backup, kind, name) != "" {
+		src, sum, why := bm.imageSourceFor(backup, rec, idx, key)
+		switch why {
+		case "":
 			out.Included = append(out.Included, key)
-		} else if live[key] {
-			out.Missing = append(out.Missing, key)
+			plan = append(plan, plannedImage{key: key, src: src, sum: sum})
+		case "ambiguous":
+			out.Ambiguous = append(out.Ambiguous, key)
+		default:
+			if live[key] {
+				out.Missing = append(out.Missing, key)
+			}
 		}
 	}
-	return out, nil
+	return out, plan, nil
 }
 
 // BuildBackupArchive writes the backup's archive to a temporary file in the
 // backups folder and returns it (open, at offset 0) with its manifest. The
 // caller serves it and calls the cleanup func. It is built completely before
-// anything is sent, so a failure is an error response, never a truncated file.
+// anything is sent, so a failure is an error response, never a truncated
+// file; an image that changes or vanishes while it is built fails it too
+// (never a quietly incomplete archive).
 func (bm *BackupManager) BuildBackupArchive(backup string) (*os.File, ArchiveManifest, func(), error) {
 	dbFile, fi, err := bm.backupFile(backup)
 	if err != nil {
 		return nil, ArchiveManifest{}, nil, err
 	}
-	plan, err := bm.planImages(backup, dbFile)
+	planned, plan, err := bm.planImages(backup, dbFile)
 	if err != nil {
 		return nil, ArchiveManifest{}, nil, err
 	}
@@ -155,10 +166,10 @@ func (bm *BackupManager) BuildBackupArchive(backup string) (*os.File, ArchiveMan
 	man := ArchiveManifest{
 		Format: ArchiveFormat, FormatVersion: ArchiveFormatVersion, HOPSVersion: version.String(),
 		CreatedAt: time.Now().UTC(), Backup: backup, BackupCreatedAt: fi.ModTime().UTC(),
-		Files: []ArchiveFile{}, Missing: plan.Missing,
+		Files: []ArchiveFile{}, Missing: planned.Missing, Ambiguous: planned.Ambiguous,
 	}
 	zw := zip.NewWriter(tmp)
-	add := func(name, src string) error {
+	add := func(name, src, want string) error {
 		f, err := os.Open(src)
 		if err != nil {
 			return err
@@ -173,26 +184,23 @@ func (bm *BackupManager) BuildBackupArchive(backup string) (*os.File, ArchiveMan
 		if err != nil {
 			return err
 		}
-		man.Files = append(man.Files, ArchiveFile{Path: name, Size: n, SHA256: hex.EncodeToString(h.Sum(nil))})
+		sum := hex.EncodeToString(h.Sum(nil))
+		if want != "" && sum != want {
+			return fmt.Errorf("it changed while the archive was being made")
+		}
+		man.Files = append(man.Files, ArchiveFile{Path: name, Size: n, SHA256: sum})
 		return nil
 	}
-	if err := add(archiveDBName, dbFile); err != nil {
+	if err := add(archiveDBName, dbFile, ""); err != nil {
 		cleanup()
 		return nil, ArchiveManifest{}, nil, fmt.Errorf("cannot build the archive: %w", err)
 	}
-	for _, key := range plan.Included {
-		kind, name := splitImageKey(key)
-		src := bm.imageSource(backup, kind, name)
-		if src == "" { // vanished since the plan
-			man.Missing = append(man.Missing, key)
-			continue
-		}
-		if err := add(key, src); err != nil {
+	for _, p := range plan {
+		if err := add(p.key, p.src, p.sum); err != nil {
 			cleanup()
-			return nil, ArchiveManifest{}, nil, fmt.Errorf("cannot add %s to the archive: %w", key, err)
+			return nil, ArchiveManifest{}, nil, fmt.Errorf("cannot add %s to the archive (%v); nothing was downloaded, try again", p.key, err)
 		}
 	}
-	sort.Strings(man.Missing)
 	raw, _ := json.MarshalIndent(man, "", "  ")
 	w, err := zw.CreateHeader(&zip.FileHeader{Name: archiveManifestName, Method: zip.Deflate, Modified: time.Now()})
 	if err == nil {
@@ -208,16 +216,21 @@ func (bm *BackupManager) BuildBackupArchive(backup string) (*os.File, ArchiveMan
 		cleanup()
 		return nil, ArchiveManifest{}, nil, fmt.Errorf("cannot build the archive: %w", err)
 	}
-	slog.Info("built backup archive", "component", "backup", "name", backup, "images", len(man.Files)-1, "missing", len(man.Missing))
+	slog.Info("built backup archive", "component", "backup", "name", backup, "images", len(man.Files)-1, "missing", len(man.Missing), "ambiguous", len(man.Ambiguous))
 	return tmp, man, cleanup, nil
 }
 
 // --- Uploads ---
 
 // UploadCaps bounds an uploaded archive: the whole upload, and each image.
+// A cap of 0 (or less) refuses: no upload, or no images.
 type UploadCaps struct {
 	Total    int64 // the database and all images together
 	PerImage int64 // each image
+	// Process, when set, checks and normalises each image the way a normal
+	// upload of that kind would (decode, re-encode); an error refuses the
+	// upload with that reason.
+	Process func(kind, name string, data []byte) ([]byte, error)
 }
 
 // UploadResult is what StoreUpload stored.
@@ -249,11 +262,11 @@ func (bm *BackupManager) StoreUpload(src io.Reader, caps UploadCaps) (UploadResu
 	}
 	tmpPath := tmp.Name()
 	defer os.Remove(tmpPath)
-	in := src
-	if caps.Total > 0 {
-		in = io.LimitReader(src, caps.Total+1)
+	if caps.Total <= 0 {
+		tmp.Close()
+		return UploadResult{}, invalid("uploading backups is turned off (the size limit is 0)")
 	}
-	n, err := io.Copy(tmp, in)
+	n, err := io.Copy(tmp, io.LimitReader(src, caps.Total+1))
 	if err == nil {
 		err = tmp.Sync()
 	}
@@ -263,7 +276,7 @@ func (bm *BackupManager) StoreUpload(src io.Reader, caps UploadCaps) (UploadResu
 	if err != nil {
 		return UploadResult{}, fmt.Errorf("cannot store the upload: %w", err)
 	}
-	if caps.Total > 0 && n > caps.Total {
+	if n > caps.Total {
 		return UploadResult{}, &InvalidBackupError{Reason: fmt.Sprintf("the upload is larger than the %s limit", formatBytes(caps.Total))}
 	}
 	head := make([]byte, 16)
@@ -388,7 +401,7 @@ func (bm *BackupManager) storeArchive(zipPath string, caps UploadCaps) (UploadRe
 		}
 		seen[f.Name] = true
 		declared += f.UncompressedSize64
-		if caps.Total > 0 && declared > uint64(caps.Total) {
+		if declared > uint64(caps.Total) {
 			return UploadResult{}, invalid("the archive's contents are larger than the %s limit", formatBytes(caps.Total))
 		}
 		switch kind {
@@ -398,7 +411,10 @@ func (bm *BackupManager) storeArchive(zipPath string, caps UploadCaps) (UploadRe
 		case "db":
 			dbEntry = f
 		default:
-			if caps.PerImage > 0 && f.UncompressedSize64 > uint64(caps.PerImage) {
+			if caps.PerImage <= 0 {
+				return UploadResult{}, invalid("the archive has images, but images are turned off (the per-image size limit is 0)")
+			}
+			if f.UncompressedSize64 > uint64(caps.PerImage) {
 				return UploadResult{}, invalid("%s is larger than the %s allowed for an image", f.Name, formatBytes(caps.PerImage))
 			}
 			images[f.Name] = f
@@ -447,6 +463,8 @@ func (bm *BackupManager) storeArchive(zipPath string, caps UploadCaps) (UploadRe
 		return UploadResult{}, err
 	}
 	imgStage := filepath.Join(stage, "images")
+	// The record of exact versions: the images as stored (after Process).
+	record := ImageRecord{Images: map[string]string{}}
 	names := make([]string, 0, len(images))
 	for n := range images {
 		names = append(names, n)
@@ -457,14 +475,47 @@ func (bm *BackupManager) storeArchive(zipPath string, caps UploadCaps) (UploadRe
 		if err := os.MkdirAll(filepath.Join(imgStage, kind), 0o755); err != nil {
 			return UploadResult{}, fmt.Errorf("cannot store the upload: %w", err)
 		}
-		if err := extractChecked(images[n], filepath.Join(imgStage, kind, file), listed[n], caps.PerImage); err != nil {
+		dst := filepath.Join(imgStage, kind, file)
+		if err := extractChecked(images[n], dst, listed[n], caps.PerImage); err != nil {
 			return UploadResult{}, err
 		}
+		if caps.Process != nil {
+			data, err := os.ReadFile(dst)
+			if err != nil {
+				return UploadResult{}, fmt.Errorf("cannot store the upload: %w", err)
+			}
+			out, err := caps.Process(kind, file, data)
+			if err != nil {
+				return UploadResult{}, invalid("%s isn't a usable image (%v)", n, err)
+			}
+			if err := os.WriteFile(dst, out, 0o644); err != nil {
+				return UploadResult{}, fmt.Errorf("cannot store the upload: %w", err)
+			}
+		}
+		sum, err := fileSHA256(dst)
+		if err != nil {
+			return UploadResult{}, fmt.Errorf("cannot store the upload: %w", err)
+		}
+		record.Images[n] = sum
 	}
+	record.Unresolved = append(record.Unresolved, man.Missing...)
 
 	name, err := bm.storeUploadedDB(dbStage)
 	if err != nil {
 		return UploadResult{}, err
+	}
+	undo := func(cause error) (UploadResult, error) {
+		// Never keep a backup without its images or its record.
+		os.Remove(bm.recordPath(name))
+		os.RemoveAll(bm.stagedImagesPath(name))
+		if rerr := os.Remove(filepath.Join(bm.backupDir, name)); rerr != nil {
+			slog.Error("could not remove an uploaded backup whose images couldn't be stored", "component", "backup", "name", name, "error", rerr)
+			return UploadResult{}, fmt.Errorf("cannot store the upload's images (%v), and the backup %s couldn't be removed again (%v): delete it in the Backups dialog", cause, name, rerr)
+		}
+		return UploadResult{}, fmt.Errorf("cannot store the upload's images: %w", cause)
+	}
+	if err := bm.writeRecord(name, record); err != nil {
+		return undo(err)
 	}
 	if len(names) > 0 {
 		dst := bm.stagedImagesPath(name)
@@ -473,12 +524,7 @@ func (bm *BackupManager) storeArchive(zipPath string, caps UploadCaps) (UploadRe
 			err = os.Rename(imgStage, dst)
 		}
 		if err != nil {
-			// Never keep a backup without the images it came with.
-			if rerr := os.Remove(filepath.Join(bm.backupDir, name)); rerr != nil {
-				slog.Error("could not remove an uploaded backup whose images couldn't be stored", "component", "backup", "name", name, "error", rerr)
-				return UploadResult{}, fmt.Errorf("cannot store the upload's images (%v), and the backup %s couldn't be removed again (%v): delete it in the Backups dialog", err, name, rerr)
-			}
-			return UploadResult{}, fmt.Errorf("cannot store the upload's images: %w", err)
+			return undo(err)
 		}
 	}
 	missing := man.Missing
@@ -550,10 +596,7 @@ func extractChecked(f *zip.File, dst string, want ArchiveFile, limit int64) erro
 		return fmt.Errorf("cannot store the upload: %w", err)
 	}
 	var h hash.Hash = sha256.New()
-	var r io.Reader = rc
-	if limit > 0 {
-		r = io.LimitReader(rc, limit+1)
-	}
+	r := io.LimitReader(rc, limit+1)
 	n, err := io.Copy(io.MultiWriter(out, h), r)
 	cerr := out.Close()
 	if err != nil {
@@ -565,7 +608,7 @@ func extractChecked(f *zip.File, dst string, want ArchiveFile, limit int64) erro
 	if cerr != nil {
 		return fmt.Errorf("cannot store the upload: %w", cerr)
 	}
-	if limit > 0 && n > limit {
+	if n > limit {
 		return invalid("%s is larger than the %s allowed", f.Name, formatBytes(limit))
 	}
 	if n != want.Size {

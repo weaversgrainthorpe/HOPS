@@ -149,13 +149,29 @@
   async function handleDownload(backup: BackupInfo) {
     actionError = '';
     actionWarning = '';
-    try {
-      const { missing } = await checkBackupImages(backup.name);
-      if (missing.length > 0) {
-        actionWarning = `${backupArchiveName(backup.name)} is missing ${missing.length === 1 ? '1 image' : `${missing.length} images`} it uses (they couldn't be found, so they will show as broken after a restore): ${missing.join(', ')}.`;
+    const archive = backupArchiveName(backup.name);
+    const missing = new Set<string>();
+    const ambiguous = new Set<string>();
+    const check = async () => {
+      const r = await checkBackupImages(backup.name);
+      r.missing.forEach((m) => missing.add(m));
+      r.ambiguous.forEach((m) => ambiguous.add(m));
+      const parts: string[] = [];
+      if (missing.size > 0) {
+        parts.push(`${archive} is missing ${missing.size === 1 ? '1 image' : `${missing.size} images`} it uses (they couldn't be found, so they will show as broken after a restore): ${[...missing].join(', ')}.`);
       }
+      if (ambiguous.size > 0) {
+        parts.push(`HOPS can't tell which version of these images this backup used, so ${archive} leaves them out: ${[...ambiguous].join(', ')}.`);
+      }
+      actionWarning = parts.join(' ');
+    };
+    try {
+      await check();
+      // Checked again once the download has been built: an image deleted meanwhile is said too.
+      await new Promise((r) => setTimeout(r, 1500));
+      await check();
     } catch (err) {
-      actionWarning = `Couldn't check which images ${backupArchiveName(backup.name)} includes: ${why(err, 'the request failed')}`;
+      actionWarning = `Couldn't check which images ${archive} includes: ${why(err, 'the request failed')}`;
     }
   }
 

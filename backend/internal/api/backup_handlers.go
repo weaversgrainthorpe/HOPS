@@ -237,9 +237,10 @@ func (r *Router) handleDownloadBackup(w http.ResponseWriter, req *http.Request, 
 		return
 	}
 	archive := database.ArchiveName(name)
-	if len(man.Missing) > 0 {
-		slog.Warn("backup downloaded without some images it refers to", "component", "backup", "name", name, "missing", strings.Join(man.Missing, ", "))
-		w.Header().Set("X-HOPS-Missing-Images", strconv.Itoa(len(man.Missing)))
+	if len(man.Missing) > 0 || len(man.Ambiguous) > 0 {
+		slog.Warn("backup downloaded without some images it refers to", "component", "backup", "name", name,
+			"missing", strings.Join(man.Missing, ", "), "ambiguous", strings.Join(man.Ambiguous, ", "))
+		w.Header().Set("X-HOPS-Missing-Images", strconv.Itoa(len(man.Missing)+len(man.Ambiguous)))
 	}
 	slog.Info("backup downloaded", "component", "backup", "name", archive, "files", len(man.Files))
 	w.Header().Set("Content-Type", "application/zip")
@@ -269,6 +270,7 @@ func (r *Router) handleUploadBackup(w http.ResponseWriter, req *http.Request) {
 	res, err := r.backupManager.StoreUpload(file, database.UploadCaps{
 		Total:    int64(r.settings.GetInt(uploadBackupKind.key)),
 		PerImage: perImage,
+		Process:  processArchiveImage,
 	})
 	if err != nil {
 		var ibe *database.InvalidBackupError

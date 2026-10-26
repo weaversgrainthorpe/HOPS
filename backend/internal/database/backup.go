@@ -161,6 +161,7 @@ type BackupManager struct {
 	restoreImages *BackupProblem
 	liveDB        *sql.DB
 	refCache      map[string]cachedRefs
+	hashCache     map[string]hashEntry
 	// atticMu serialises moves into and out of the attic with its sweep.
 	atticMu sync.Mutex
 }
@@ -482,6 +483,13 @@ func (bm *BackupManager) createBackup(reason string, db *sql.DB) (string, error)
 		return "", fmt.Errorf("failed to copy database: %w", err)
 	}
 
+	// Which version of each image it uses (M6 §12): part of the backup.
+	if err := bm.recordBackup(backupName, backupPath); err != nil {
+		os.Remove(backupPath)
+		os.Remove(bm.recordPath(backupName))
+		return "", fmt.Errorf("failed to record the backup's images: %w", err)
+	}
+
 	slog.Info("created backup", "component", "backup", "name", backupName)
 
 	if err := bm.CleanupOldBackups(); err != nil {
@@ -600,6 +608,12 @@ func (bm *BackupManager) RestoreBackup(db *sql.DB, backupName string) error {
 	if err := ValidateHOPSDatabase(tmp); err != nil {
 		return err
 	}
+	// Its image record, read now: the safety backup's cleanup may delete the
+	// backup (and its record) before the restore is staged.
+	rec, err := bm.readRecord(backupName)
+	if err != nil {
+		return fmt.Errorf("the backup %s: %w", backupName, err)
+	}
 
 	var safetyErr error
 	if db != nil {
@@ -614,7 +628,7 @@ func (bm *BackupManager) RestoreBackup(db *sql.DB, backupName string) error {
 
 	// Which backup is restored: its own images (an uploaded archive's) are
 	// installed at the next start, after the restore is applied.
-	if err := writeRestoreImagesMarker(bm.dbPath, backupName); err != nil {
+	if err := bm.writeRestoreMarker(backupName, rec); err != nil {
 		return fmt.Errorf("failed to stage the restore: %w", err)
 	}
 	if err := os.Rename(tmp, pending); err != nil {
@@ -1092,8 +1106,16 @@ func SweepStaleTempFiles(dbPath string) error {
 	if m, err := filepath.Glob(filepath.Join(filepath.Dir(dbPath), "backups", ".upload-*.tmp")); err == nil {
 		stale = append(stale, m...)
 	}
-	if m, err := filepath.Glob(filepath.Join(filepath.Dir(dbPath), "backups", ".download-*.tmp")); err == nil {
-		stale = append(stale, m...)
+	for _, pat := range []string{
+		filepath.Join(filepath.Dir(dbPath), "backups", ".download-*.tmp"),
+		filepath.Join(filepath.Dir(dbPath), "backups", ".*"+imageRecordSuffix+"-*.tmp"),
+		filepath.Join(filepath.Dir(dbPath), "icons", ".install-*.tmp"),
+		filepath.Join(filepath.Dir(dbPath), "backgrounds", ".install-*.tmp"),
+		filepath.Join(filepath.Dir(dbPath), AtticDirName, "."+atticIndexName+"-*.tmp"),
+	} {
+		if m, err := filepath.Glob(pat); err == nil {
+			stale = append(stale, m...)
+		}
 	}
 	for _, f := range stale {
 		if err := os.RemoveAll(f); err != nil && !os.IsNotExist(err) {
@@ -1165,14 +1187,11 @@ func (bm *BackupManager) DeleteBackup(backupName string) error {
 	if err != nil {
 		return err
 	}
-	// An uploaded backup's own images go with it (first, so a failure never
-	// leaves images with no backup).
-	if err := os.RemoveAll(bm.stagedImagesPath(backupName)); err != nil {
-		return fmt.Errorf("failed to delete the backup's images: %w", err)
-	}
 	if err := os.Remove(backupPath); err != nil {
 		return fmt.Errorf("failed to delete backup: %w", err)
 	}
+	// Then its image record and staged images (leftovers: the next sweep).
+	bm.removeBackupExtras(backupName)
 
 	slog.Info("deleted backup", "component", "backup", "name", backupName)
 	bm.sweepAfterCleanup()
@@ -1232,16 +1251,13 @@ func (bm *BackupManager) deletePlanned(plan []RetentionDeletion) ([]string, erro
 	var deleted, failed []string
 	ceiling := 0
 	for _, d := range plan {
-		if err := os.RemoveAll(bm.stagedImagesPath(d.Name)); err != nil {
-			failed = append(failed, d.Name+" (its images): "+errText(err))
-			continue
-		}
 		if err := bm.remove(filepath.Join(bm.backupDir, d.Name)); err != nil {
 			slog.Warn("failed to remove old backup", "component", "backup", "name", d.Name, "error", err)
 			failed = append(failed, d.Name+": "+errText(err))
 			continue
 		}
 		slog.Info("removed old backup", "component", "backup", "name", d.Name, "reason", d.Reason)
+		bm.removeBackupExtras(d.Name)
 		deleted = append(deleted, d.Name)
 		if d.OverCeiling {
 			ceiling++

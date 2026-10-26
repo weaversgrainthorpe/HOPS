@@ -3,7 +3,15 @@ package api
 import (
 	"archive/zip"
 	"bytes"
+	"crypto/sha256"
+	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
+	"hash/crc32"
+	"image"
+	"image/color"
+	"image/jpeg"
+	"image/png"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -60,13 +68,14 @@ func TestIconDeleteMovesTheFileToTheAttic(t *testing.T) {
 	if code, r := c.do("POST", "/api/backups", map[string]string{"reason": "manual"}); code != 200 {
 		t.Fatalf("backup: %d %v", code, r)
 	}
+	before, _ := os.ReadFile(filepath.Join(dir, "icons", file))
 	if code, b := c.do("DELETE", "/api/icons/"+id, nil); code != 200 {
 		t.Fatalf("delete: %d %v", code, b)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "icons", file)); !os.IsNotExist(err) {
 		t.Fatal("the live file is still there")
 	}
-	if _, err := os.Stat(filepath.Join(dir, "attic", "icons", file)); err != nil {
+	if _, err := os.Stat(filepath.Join(dir, "attic", "icons", sha(before))); err != nil {
 		t.Fatalf("not moved to the attic: %v", err)
 	}
 	// The Backups list shows the attic's size.
@@ -103,13 +112,14 @@ func TestBackgroundDeleteMovesTheFileToTheAttic(t *testing.T) {
 	c := newClient(t, router)
 	r := uploadBackgroundForm(t, c, pngBytes(t))
 	file := strings.TrimPrefix(r["url"].(string), "/backgrounds/")
+	before, _ := os.ReadFile(filepath.Join(dir, "backgrounds", file))
 	if code, b := c.do("DELETE", "/api/backgrounds/"+r["id"].(string), nil); code != 200 {
 		t.Fatalf("delete: %d %v", code, b)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "backgrounds", file)); !os.IsNotExist(err) {
 		t.Fatal("the live file is still there")
 	}
-	if _, err := os.Stat(filepath.Join(dir, "attic", "backgrounds", file)); err != nil {
+	if _, err := os.Stat(filepath.Join(dir, "attic", "backgrounds", sha(before))); err != nil {
 		t.Fatalf("not moved to the attic: %v", err)
 	}
 	// An untracked file on disk: the same.
@@ -117,7 +127,7 @@ func TestBackgroundDeleteMovesTheFileToTheAttic(t *testing.T) {
 	if code, b := c.do("DELETE", "/api/backgrounds/0123abcd", nil); code != 200 {
 		t.Fatalf("delete orphan: %d %v", code, b)
 	}
-	if _, err := os.Stat(filepath.Join(dir, "attic", "backgrounds", "0123abcd.jpg")); err != nil {
+	if _, err := os.Stat(filepath.Join(dir, "attic", "backgrounds", sha([]byte("x")))); err != nil {
 		t.Fatalf("orphan not moved to the attic: %v", err)
 	}
 }
@@ -253,5 +263,53 @@ func TestRestoreImagesNoticeIsShownAndDismissible(t *testing.T) {
 		if _, ok := dismissibleBackupNotice(n.ID); ok {
 			t.Errorf("%s is dismissible", k)
 		}
+	}
+}
+
+func sha(b []byte) string { h := sha256.Sum256(b); return hex.EncodeToString(h[:]) }
+
+func TestArchiveImagesAreProcessedLikeUploads(t *testing.T) {
+	// An icon PNG is re-encoded at most 128×128, like an icon upload.
+	big := image.NewRGBA(image.Rect(0, 0, 300, 200))
+	big.Set(5, 5, color.RGBA{0, 0, 255, 255})
+	var pb bytes.Buffer
+	png.Encode(&pb, big)
+	out, err := processArchiveImage("icons", "a.png", pb.Bytes())
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(out))
+	if err != nil || cfg.Width != 128 {
+		t.Fatalf("not resized: %+v %v", cfg, err)
+	}
+	// A background JPEG is decoded and kept as is (backgrounds aren't re-encoded on upload).
+	var jb bytes.Buffer
+	jpeg.Encode(&jb, big, nil)
+	if out, err := processArchiveImage("backgrounds", "b.jpg", jb.Bytes()); err != nil || !bytes.Equal(out, jb.Bytes()) {
+		t.Fatalf("background: %v", err)
+	}
+	// Refused: not an image, the wrong type for its name, a huge claimed size, an SVG background.
+	// A tiny PNG whose header claims 65535×65535 (CRC fixed up).
+	huge := append([]byte(nil), pngBytes(t)...)
+	binary.BigEndian.PutUint32(huge[16:], 65535)
+	binary.BigEndian.PutUint32(huge[20:], 65535)
+	binary.BigEndian.PutUint32(huge[29:], crc32.ChecksumIEEE(huge[12:29]))
+	for _, tc := range []struct {
+		kind, name string
+		data       []byte
+		want       string
+	}{
+		{"icons", "a.png", []byte("not an image"), "can't be decoded"},
+		{"backgrounds", "b.jpg", pb.Bytes(), "not what .jpg says"},
+		{"backgrounds", "h.png", huge, "too large"},
+		{"backgrounds", "s.svg", []byte("<svg/>"), "only icons"},
+	} {
+		if _, err := processArchiveImage(tc.kind, tc.name, tc.data); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: %v, want %q", tc.name, err, tc.want)
+		}
+	}
+	// An SVG icon is kept as is, like an SVG upload.
+	if out, err := processArchiveImage("icons", "i.svg", []byte("<svg/>")); err != nil || string(out) != "<svg/>" {
+		t.Fatalf("svg: %v", err)
 	}
 }

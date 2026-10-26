@@ -11,7 +11,7 @@ vi.mock('$lib/utils/api', () => ({
   discardPendingRestore: vi.fn(async () => {}),
   backupDownloadUrl: (n: string) => `/api/backups/${encodeURIComponent(n)}`,
   backupArchiveName: (n: string) => n.replace(/\.db$/, '.zip'),
-  checkBackupImages: vi.fn(async () => ({ included: [], missing: [] }))
+  checkBackupImages: vi.fn(async () => ({ included: [], missing: [], ambiguous: [] }))
 }));
 vi.mock('$lib/stores/confirmModal', () => ({ confirm: vi.fn(async () => true) }));
 vi.mock('$lib/stores/config', () => ({ refreshServerNotices: vi.fn(async () => {}) }));
@@ -107,13 +107,13 @@ describe('BackupModal', () => {
   });
 
   it('downloads an archive and warns which images it is missing', async () => {
-    vi.mocked(checkBackupImages).mockResolvedValue({ included: ['icons/a.png'], missing: ['icons/lost.png'] });
+    vi.mocked(checkBackupImages).mockResolvedValue({ included: ['icons/a.png'], missing: ['icons/lost.png'], ambiguous: ['icons/x.png'] });
     render(BackupModal, { onClose: () => {} });
     const link = await screen.findByRole('link', { name: `Download ${backup.name}` });
     expect(link.getAttribute('download')).toBe('hops-backup-2026-10-25_10-00-00_manual.zip');
     link.addEventListener('click', (e) => e.preventDefault()); // jsdom can't navigate
     await fireEvent.click(link);
-    const warn = await screen.findByText(/is missing 1 image it uses.*icons\/lost\.png/);
+    const warn = await screen.findByText(/is missing 1 image it uses.*icons\/lost\.png.*can't tell which version.*icons\/x\.png/);
     expect(warn.closest('[role="alert"]')).toBeTruthy();
   });
 
