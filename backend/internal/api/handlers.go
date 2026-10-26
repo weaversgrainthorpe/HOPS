@@ -1317,6 +1317,13 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// Depth and entry caps (and YAML alias bombs) first, with the reason.
+	if err := converters.CheckImportLimits(fileData); err != nil {
+		slog.Warn("import refused: document limits", "component", "import", "error", err)
+		writeJSONError(w, "Import refused — "+err.Error()+".", http.StatusBadRequest)
+		return
+	}
+
 	// Detect the format
 	format, err := converters.DetectFormat(fileData)
 	if err != nil {
@@ -1916,16 +1923,29 @@ func (r *Router) handleUploadBackground(w http.ResponseWriter, req *http.Request
 	filename := hex.EncodeToString(randomBytes) + ext
 	imageID := hex.EncodeToString(randomBytes)
 
-	// Save file
-	destPath := filepath.Join(backgroundsDir, filename)
-	destFile, err := os.Create(destPath)
+	// Read the (size-capped) upload and check its header before it is kept:
+	// a decompression bomb (a small file claiming huge dimensions) or a file
+	// that isn't the image its type says is refused with the reason (§3).
+	fileData, err := io.ReadAll(file)
 	if err != nil {
-		writeJSONError(w, "Failed to create file", http.StatusInternalServerError)
+		writeJSONError(w, "Failed to read file", http.StatusInternalServerError)
 		return
 	}
-	defer destFile.Close()
+	format, err := checkImageHeader(fileData)
+	if err != nil {
+		slog.Warn("background upload refused", "component", "backgrounds", "error", err)
+		writeJSONError(w, "This image can't be used: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if !formatMatchesContentType(format, contentType) {
+		writeJSONError(w, fmt.Sprintf("This image can't be used: it is a %s image, not %s", format, contentType), http.StatusBadRequest)
+		return
+	}
 
-	if _, err := io.Copy(destFile, file); err != nil {
+	// Save file
+	destPath := filepath.Join(backgroundsDir, filename)
+	if err := os.WriteFile(destPath, fileData, 0644); err != nil {
+		_ = os.Remove(destPath)
 		writeJSONError(w, "Failed to save file", http.StatusInternalServerError)
 		return
 	}
@@ -1939,22 +1959,27 @@ func (r *Router) handleUploadBackground(w http.ResponseWriter, req *http.Request
 	urlPath := "/backgrounds/" + filename
 
 	// Add to background metadata
+	// A failed metadata save is an error the user sees (never a "success"
+	// whose background then doesn't appear in the list); the file is removed
+	// so nothing is left half-done.
 	bgData, err := r.loadBackgroundData()
-	if err != nil {
-		// Log error but continue - file was uploaded successfully
-		slog.Warn("failed to load background data", "component", "backgrounds", "error", err)
-	} else {
-		newImage := BackgroundImage{
+	if err == nil {
+		bgData.Images = append(bgData.Images, BackgroundImage{
 			ID:       imageID,
 			Name:     name,
 			URL:      urlPath,
 			Category: category,
 			Source:   "uploaded",
+		})
+		err = r.saveBackgroundData(bgData)
+	}
+	if err != nil {
+		slog.Warn("background upload: could not record the background", "component", "backgrounds", "error", err)
+		if rerr := os.Remove(destPath); rerr != nil {
+			slog.Warn("background upload: could not remove the file after a failed save", "component", "backgrounds", "path", destPath, "error", rerr)
 		}
-		bgData.Images = append(bgData.Images, newImage)
-		if err := r.saveBackgroundData(bgData); err != nil {
-			slog.Warn("failed to save background data", "component", "backgrounds", "error", err)
-		}
+		writeJSONError(w, "The image was received but could not be saved as a background", http.StatusInternalServerError)
+		return
 	}
 
 	writeJSON(w, map[string]interface{}{
@@ -2065,6 +2090,13 @@ func (r *Router) handleUploadIcon(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 	} else {
+		// Check the header first: a decompression bomb (a small file
+		// claiming huge dimensions) is refused before the full decode (§3).
+		if _, err := checkImageHeader(fileData); err != nil {
+			slog.Warn("icon upload refused", "component", "icons", "error", err)
+			writeJSONError(w, "This image can't be used: "+err.Error(), http.StatusBadRequest)
+			return
+		}
 		// Decode and resize raster images
 		img, _, err := image.Decode(bytes.NewReader(fileData))
 		if err != nil {

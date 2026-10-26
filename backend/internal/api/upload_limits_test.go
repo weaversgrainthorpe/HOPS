@@ -91,7 +91,11 @@ func TestUploadJustUnderTheLimitIsAccepted(t *testing.T) {
 	if w := putSetting(t, router, tok, csrf, settings.KeyUploadMaxBytesBackground, strconv.Itoa(1<<20)); w.Code != http.StatusOK {
 		t.Fatal(w.Body.String())
 	}
-	w := postUpload(t, router, tok, csrf, "/api/backgrounds", "image/png", bytes.Repeat([]byte("x"), 1<<20))
+	// A real PNG header (uploads are now checked as images, §3) padded to
+	// exactly the limit.
+	img := pngBytes(t)
+	img = append(img, bytes.Repeat([]byte("x"), 1<<20-len(img))...)
+	w := postUpload(t, router, tok, csrf, "/api/backgrounds", "image/png", img)
 	if w.Code != http.StatusOK {
 		t.Fatalf("a file exactly at the limit must be accepted: %d %s", w.Code, w.Body.String())
 	}

@@ -65,6 +65,9 @@ type DashyItem struct {
 
 // ConvertFromHomer converts Homer config to HOPS format
 func ConvertFromHomer(yamlData []byte) ([]byte, error) {
+	if err := CheckImportLimits(yamlData); err != nil {
+		return nil, err
+	}
 	var homer HomerConfig
 	if err := yaml.Unmarshal(yamlData, &homer); err != nil {
 		return nil, fmt.Errorf("failed to parse Homer config: %w", err)
@@ -134,6 +137,9 @@ func ConvertFromHomer(yamlData []byte) ([]byte, error) {
 
 // ConvertFromDashy converts Dashy config to HOPS format
 func ConvertFromDashy(yamlData []byte) ([]byte, error) {
+	if err := CheckImportLimits(yamlData); err != nil {
+		return nil, err
+	}
 	var dashy DashyConfig
 	if err := yaml.Unmarshal(yamlData, &dashy); err != nil {
 		return nil, fmt.Errorf("failed to parse Dashy config: %w", err)
@@ -237,6 +243,9 @@ type HeimdallItem struct {
 
 // ConvertFromHeimdall converts Heimdall JSON export to HOPS format
 func ConvertFromHeimdall(jsonData []byte) ([]byte, error) {
+	if err := CheckImportLimits(jsonData); err != nil {
+		return nil, err
+	}
 	var items []HeimdallItem
 	if err := json.Unmarshal(jsonData, &items); err != nil {
 		return nil, fmt.Errorf("failed to parse Heimdall config: %w", err)
@@ -307,6 +316,11 @@ func ConvertFromHeimdall(jsonData []byte) ([]byte, error) {
 
 // DetectFormat attempts to detect the dashboard format
 func DetectFormat(data []byte) (string, error) {
+	// Size and depth caps (and YAML alias bombs) are refused before any
+	// decode into Go values.
+	if err := CheckImportLimits(data); err != nil {
+		return "", err
+	}
 	// A v3 export envelope as JSON (checked first: YAML rejects tab indentation).
 	var envMap map[string]interface{}
 	if err := json.Unmarshal(data, &envMap); err == nil &&

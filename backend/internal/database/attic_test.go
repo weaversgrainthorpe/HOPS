@@ -47,7 +47,7 @@ func readString(t *testing.T, p string) string {
 }
 
 // setConfig stores a layout that references the given image URLs.
-func setConfig(t *testing.T, db *sql.DB, urls ...string) {
+func setConfig(t testing.TB, db *sql.DB, urls ...string) {
 	t.Helper()
 	tiles := []string{}
 	for _, u := range urls {
@@ -678,7 +678,7 @@ type zipEntry struct {
 	symlink bool
 }
 
-func buildZip(t *testing.T, entries []zipEntry, mutate func(*ArchiveManifest)) []byte {
+func buildZip(t testing.TB, entries []zipEntry, mutate func(*ArchiveManifest)) []byte {
 	t.Helper()
 	man := ArchiveManifest{Format: ArchiveFormat, FormatVersion: 1, HOPSVersion: "3.0.0", CreatedAt: time.Now(), Files: []ArchiveFile{}}
 	for _, e := range entries {
@@ -712,7 +712,7 @@ func buildZip(t *testing.T, entries []zipEntry, mutate func(*ArchiveManifest)) [
 	return buf.Bytes()
 }
 
-func hopsDBBytes(t *testing.T, urls ...string) []byte {
+func hopsDBBytes(t testing.TB, urls ...string) []byte {
 	t.Helper()
 	p := filepath.Join(t.TempDir(), "src.db")
 	db, err := Initialize(p)
