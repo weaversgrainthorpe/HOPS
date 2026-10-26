@@ -9,6 +9,7 @@
     "status.checks_enabled",
     "status.check_interval_minutes",
     "status.check_timeout_seconds",
+    "status.dead_after_hours",
     "upload.max_bytes_import",
     "upload.max_bytes_background",
     "upload.max_bytes_icon",

@@ -271,7 +271,33 @@ type statusCheckResult struct {
 	// and the check was deliberately not performed. The previous
 	// stored status (if any) stays in scan_cache; the saver skips it.
 	skipped bool
+	// detail says why a check failed ("HTTP 404", the dial error, …); it is
+	// kept as the tile's last error in status_failing.
+	detail string
 }
+
+// FailingSchema holds when each checked tile started failing (dead-link
+// report). It is in the DB, not memory, so a restart doesn't silently reset
+// the clock. A row exists only while the tile's checks keep failing: the
+// first success deletes it. Times are RFC 3339 UTC.
+const FailingSchema = `CREATE TABLE IF NOT EXISTS status_failing (
+	entry_id TEXT PRIMARY KEY,
+	since TEXT NOT NULL,
+	last_error TEXT NOT NULL DEFAULT '',
+	last_checked TEXT NOT NULL
+)`
+
+// HistorySchema records when failure tracking began (one row), so the report
+// can say that older failures may be longer than shown.
+const HistorySchema = `CREATE TABLE IF NOT EXISTS status_history (
+	id INTEGER PRIMARY KEY CHECK (id = 1),
+	started_at TEXT NOT NULL
+)`
+
+// isFailure: down and error start (or continue) the failing clock; "up"
+// clears it; anything else (unknown, checking) leaves it alone.
+func isFailure(status string) bool { return status == "down" || status == "error" }
+
 
 // entryBackoff tracks how many consecutive failures an entry has had
 // and when it's eligible to be re-probed. Exponential backoff caps at
@@ -336,7 +362,7 @@ func (c *Checker) checkAllEntries() {
 	wg.Wait()
 
 	// Batch write all results in a single transaction to avoid contention
-	c.saveResults(results)
+	c.saveResults(results, now)
 }
 
 // isDue reports whether the entry has never been probed or its own interval
@@ -439,6 +465,7 @@ func (c *Checker) checkEntry(entry Entry) statusCheckResult {
 	parsed, err := url.Parse(entry.URL)
 	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
 		result.status = "error"
+		result.detail = "Not an http(s) or ssh address"
 		return result
 	}
 
@@ -453,6 +480,7 @@ func (c *Checker) checkEntry(entry Entry) statusCheckResult {
 	req, err := http.NewRequestWithContext(ctx, "HEAD", entry.URL, nil)
 	if err != nil {
 		result.status = "error"
+		result.detail = "Invalid address: " + err.Error()
 		return result
 	}
 
@@ -461,6 +489,7 @@ func (c *Checker) checkEntry(entry Entry) statusCheckResult {
 	resp, err := c.client.Do(req)
 	if err != nil {
 		result.status = "down"
+		result.detail = errText(err)
 		return result
 	}
 	defer resp.Body.Close()
@@ -471,8 +500,10 @@ func (c *Checker) checkEntry(entry Entry) statusCheckResult {
 		result.status = "up"
 	} else if resp.StatusCode >= 400 && resp.StatusCode < 500 {
 		result.status = "error"
+		result.detail = "HTTP " + strconv.Itoa(resp.StatusCode)
 	} else {
 		result.status = "down"
+		result.detail = "HTTP " + strconv.Itoa(resp.StatusCode)
 	}
 
 	return result
@@ -511,6 +542,7 @@ func (c *Checker) checkTCP(entry Entry) statusCheckResult {
 	result := statusCheckResult{entryID: entry.ID, status: "error"}
 	addr, err := sshTarget(entry.URL)
 	if err != nil {
+		result.detail = err.Error()
 		return result
 	}
 	timeout := time.Duration(entry.TimeoutSeconds) * time.Second
@@ -524,6 +556,7 @@ func (c *Checker) checkTCP(entry Entry) statusCheckResult {
 	conn, err := d.DialContext(ctx, "tcp", addr)
 	if err != nil {
 		result.status = "down"
+		result.detail = errText(err)
 		return result
 	}
 	conn.Close()
@@ -532,8 +565,18 @@ func (c *Checker) checkTCP(entry Entry) statusCheckResult {
 	return result
 }
 
-// saveResults writes all status check results in a single transaction
-func (c *Checker) saveResults(results []statusCheckResult) {
+// errText is a failed request's error, kept short for the report.
+func errText(err error) string {
+	s := err.Error()
+	if len(s) > 300 {
+		s = s[:300] + "…"
+	}
+	return s
+}
+
+// saveResults writes all status check results in a single transaction, and
+// keeps the failing-since clock (status_failing) in the same transaction.
+func (c *Checker) saveResults(results []statusCheckResult, now time.Time) {
 	tx, err := c.db.Begin()
 	if err != nil {
 		slog.Error("failed to begin status cache transaction", "component", "status", "error", err)
@@ -555,6 +598,33 @@ func (c *Checker) saveResults(results []statusCheckResult) {
 		tx.Rollback()
 		slog.Error("failed to prune status cache", "component", "status", "error", err)
 		return
+	}
+	// The same for the failing clock: a tile whose checks are off, or that
+	// is gone, isn't tracked.
+	if _, err := tx.Exec(strings.Replace(prune, "status_cache", "status_failing", 1), ids...); err != nil {
+		tx.Rollback()
+		slog.Error("failed to prune failing-since rows", "component", "status", "error", err)
+		return
+	}
+	at := now.UTC().Format(time.RFC3339)
+	for _, r := range results {
+		if r.skipped {
+			continue
+		}
+		var err error
+		switch {
+		case r.status == "up":
+			_, err = tx.Exec("DELETE FROM status_failing WHERE entry_id = ?", r.entryID)
+		case isFailure(r.status):
+			_, err = tx.Exec(`INSERT INTO status_failing (entry_id, since, last_error, last_checked) VALUES (?, ?, ?, ?)
+				ON CONFLICT(entry_id) DO UPDATE SET last_error = excluded.last_error, last_checked = excluded.last_checked`,
+				r.entryID, at, r.detail, at)
+		}
+		if err != nil {
+			tx.Rollback()
+			slog.Error("failed to update failing-since row", "component", "status", "entry_id", r.entryID, "error", err)
+			return
+		}
 	}
 
 	stmt, err := tx.Prepare(`

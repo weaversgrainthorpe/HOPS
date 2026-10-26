@@ -1,12 +1,9 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
   import { get } from 'svelte/store';
-  import { goto } from '$app/navigation';
-  import { page } from '$app/stores';
   import Icon from '@iconify/svelte';
-  import { config, layoutDoc, resolveDashboardRoute, dashboardHref, currentRoute } from '$lib/stores/config';
-  import { requestReveal, revealRequest } from '$lib/stores/reveal';
-  import { toast } from '$lib/stores/toast';
+  import { layoutDoc, currentRoute } from '$lib/stores/config';
+  import { showOnDashboard } from '$lib/utils/showIt';
   import { portal } from '$lib/utils/portal';
   import { safeOpenUrl, isValidUrl } from '$lib/utils/url';
   import { isSshUrl, openSshInPlace } from '$lib/utils/ssh';
@@ -48,32 +45,9 @@
     inputEl?.focus();
   });
 
-  function navigateTo(r: Result) {
-    const cfg = get(config);
-    const seg = get(page).params?.dashboard;
-    const here = cfg && seg ? resolveDashboardRoute(seg, cfg) : undefined;
-    if (here?.id !== r.dashboardId) {
-      goto(dashboardHref(r.dashboardPath)).catch((e) => {
-        revealRequest.set(null);
-        toast.error(`Couldn't open "${r.dashboardName}": ${e instanceof Error ? e.message : 'navigation failed'}`);
-      });
-    }
-  }
-
-  // "Show it": the Dashboard switches to the tile's tab, opens the folders on its path in place
-  // (outermost first), drills down, flips to its page, scrolls to it and highlights it. A folder
-  // result opens that folder. Navigate first when it lives on another dashboard. `activate` also
-  // clicks the tile once shown (for tiles whose open mode needs the tile's own dialog).
+  // "Show it" (shared with the dead-link report): reveal it on its dashboard, then close.
   function showResult(r: Result, activate = false) {
-    requestReveal({
-      dashboardId: r.dashboardId,
-      tabId: r.tabId,
-      folderIds: r.folderIds,
-      tileId: r.id,
-      kind: r.kind,
-      activate: activate && r.kind === 'tile'
-    });
-    navigateTo(r);
+    showOnDashboard(r, activate);
     onClose();
   }
 

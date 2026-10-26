@@ -4,13 +4,13 @@ import (
 	"bytes"
 	"database/sql"
 	"encoding/json"
+	"github.com/weaversgrainthorpe/HOPS/internal/status"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
-	_ "modernc.org/sqlite"
 	"github.com/weaversgrainthorpe/HOPS/internal/auth"
 	"github.com/weaversgrainthorpe/HOPS/internal/config"
 	"github.com/weaversgrainthorpe/HOPS/internal/configdoc"
@@ -18,6 +18,7 @@ import (
 	"github.com/weaversgrainthorpe/HOPS/internal/discovery"
 	"github.com/weaversgrainthorpe/HOPS/internal/settings"
 	"golang.org/x/crypto/bcrypt"
+	_ "modernc.org/sqlite"
 )
 
 func setupTestRouter(t *testing.T) (http.Handler, *sql.DB) {
@@ -106,6 +107,9 @@ func setupTestRouterCore(t *testing.T, storedConfig string, override *configdoc.
 			response_time INTEGER,
 			last_checked DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
+		status.FailingSchema,
+		status.HistorySchema,
+		`INSERT INTO status_history (id, started_at) VALUES (1, '2026-09-01T00:00:00Z')`,
 		`CREATE TABLE icon_categories (
 			id TEXT PRIMARY KEY,
 			name TEXT NOT NULL,

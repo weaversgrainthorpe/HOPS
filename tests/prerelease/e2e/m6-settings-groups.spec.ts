@@ -179,6 +179,11 @@ test.describe('M6 §10 every global setting still saves', () => {
         want = JSON.stringify([...JSON.parse(s.value || '[]'), '10.99.0.0/16']);
         await input.fill('10.99.0.0/16');
         await row.getByRole('button', { name: 'Add' }).click();
+      } else if (s.key === 'status.dead_after_hours') {
+        // Set in hours or days, stored in hours: 2 days → 48.
+        want = s.value === '48' ? '72' : '48';
+        await input.fill(String(Number(want) / 24));
+        await page.locator(`[data-unit-for="${s.key}"]`).selectOption('days');
       } else if (s.type === 'bytes') {
         const mb = Number(s.value) / MB === 1 ? 2 : 1;
         want = String(mb * MB);

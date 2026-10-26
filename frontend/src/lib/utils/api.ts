@@ -1253,3 +1253,34 @@ export async function getDiagnostics(): Promise<{
 }> {
   return fetchAPI('/discovery/diagnostics');
 }
+
+/** One tile whose status check has failed without a break for longer than the set time. */
+export interface DeadLink {
+  id: string;
+  name: string;
+  url: string;
+  dashboardId: string;
+  dashboardPath: string;
+  dashboardName: string;
+  tabId: string;
+  folderIds: string[];
+  /** Names from the dashboard down to the tile's folder: dashboard, tab, folders. */
+  path: string[];
+  failingSince: string;
+  lastChecked: string;
+  lastError: string;
+}
+
+export interface DeadLinksReport {
+  checksEnabled: boolean;
+  thresholdHours: number;
+  /** When failure tracking began ('' if unknown): older failures may be longer than shown. */
+  historyStartedAt: string;
+  /** Tiles whose status check is on. */
+  checkedTiles: number;
+  links: DeadLink[];
+}
+
+export async function getDeadLinks(): Promise<DeadLinksReport> {
+  return fetchAPI('/dead-links');
+}

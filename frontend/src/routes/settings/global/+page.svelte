@@ -18,6 +18,7 @@
   import { listSettings, type SettingDef } from '$lib/utils/api';
   import { saveGlobalSetting } from '$lib/stores/config';
   import { bytesToMBText, formatMB, parseMBInput } from '$lib/utils/uploadLimits';
+  import { splitHours, parseHoursDays, formatHours, type HourUnit } from '$lib/utils/hoursDays';
   import { groupSettings, settingLabel } from '$lib/settings/globalGroups';
   import { globalNav, jumpToGroup, onGroupLinkClick, watchGroups } from '$lib/settings/globalNav';
 
@@ -110,6 +111,7 @@
       const { settings: list } = await listSettings();
       settings = list;
       drafts = Object.fromEntries(list.map((s) => [s.key, shown(s, s.value)]));
+      units = Object.fromEntries(list.filter(isHoursDays).map((s) => [s.key, splitHours(s.value).unit]));
     } catch (e) {
       loadError = e instanceof Error ? e.message : 'Failed to load settings';
     } finally {
@@ -121,7 +123,24 @@
 
   // What the input shows for a stored value: MB for byte sizes, the value itself otherwise.
   function shown(s: SettingDef, value: string): string {
+    if (isHoursDays(s)) return String(splitHours(value).amount);
     return s.type === 'bytes' ? bytesToMBText(value) : value;
+  }
+
+  // --- hours-or-days settings: stored in hours, set as a number with an hours/days selector ---
+  const HOURS_DAYS_KEYS = new Set(['status.dead_after_hours']);
+  function isHoursDays(s: SettingDef): boolean {
+    return HOURS_DAYS_KEYS.has(s.key);
+  }
+  let units = $state<Record<string, HourUnit>>({});
+  // The hours the row would save, or NaN when what's typed isn't a number.
+  function draftHours(s: SettingDef): number {
+    const n = Number(drafts[s.key]);
+    return (units[s.key] ?? 'hours') === 'days' ? n * 24 : n;
+  }
+  function setShown(s: SettingDef, value: string) {
+    drafts[s.key] = shown(s, value);
+    if (isHoursDays(s)) units[s.key] = splitHours(value).unit;
   }
 
   // The notice for a value clamped on load (the stored value was outside the new bounds).
@@ -154,6 +173,7 @@
 
   function isDirty(s: SettingDef): boolean {
     // A clamped value is saved to acknowledge it, so its Save stays available.
+    if (isHoursDays(s)) return draftHours(s) !== Number(s.value) || !!s.adjustedFrom;
     return String(drafts[s.key]) !== shown(s, s.value) || !!s.adjustedFrom;
   }
 
@@ -176,13 +196,21 @@
       }
       value = String(parsed.bytes);
     }
+    if (isHoursDays(s)) {
+      const parsed = parseHoursDays(value, units[s.key] ?? 'hours', { min: s.min, max: s.max });
+      if (!parsed.ok) {
+        perKeyError[s.key] = parsed.error;
+        return;
+      }
+      value = String(parsed.hours);
+    }
     savingKey = s.key;
     try {
       // Also re-reads what depends on the global values (status-check levels, notices, badges).
       await saveGlobalSetting(s.key, value);
       // Update the in-memory record so the dirty indicator clears.
       settings = settings.map((x) => (x.key === s.key ? { ...x, value, adjustedFrom: undefined } : x));
-      drafts[s.key] = shown(s, value);
+      setShown(s, value);
       if (s.restartRequired && !$pendingRestartKeys.includes(s.key)) {
         $pendingRestartKeys = [...$pendingRestartKeys, s.key];
       }
@@ -203,12 +231,12 @@
   }
 
   function reset(s: SettingDef) {
-    drafts[s.key] = shown(s, s.value);
+    setShown(s, s.value);
     perKeyError[s.key] = '';
   }
 
   function resetToDefault(s: SettingDef) {
-    drafts[s.key] = shown(s, s.default);
+    setShown(s, s.default);
     perKeyError[s.key] = '';
   }
 
@@ -356,7 +384,9 @@
                 </p>
               {/if}
               <div class="meta">
-                {#if s.type === 'bytes'}
+                {#if isHoursDays(s)}
+                  <span class="meta-defaults">Default <code>{formatHours(Number(s.default))}</code>{#if s.max} · can be set from {formatHours(s.min || 1)} up to {formatHours(s.max)}{/if}</span>
+                {:else if s.type === 'bytes'}
                   <span class="meta-defaults">Default <code>{formatMB(Number(s.default))}</code>{#if s.max} · can be set up to {formatMB(s.max)}{/if}</span>
                 {:else}
                   <span class="meta-defaults">Default <code>{s.default}</code>{#if s.min !== undefined && s.min !== 0} · min {s.min}{/if}{#if s.max !== undefined && s.max !== 0} · max {s.max}{/if}</span>
@@ -365,7 +395,20 @@
               </div>
             </div>
             <div class="row-input">
-              {#if (s.type === 'log_level' || s.type === 'enum') && s.enum}
+              {#if isHoursDays(s)}
+                <div class="mb-input">
+                  <input
+                    id={`setting-${s.key}`}
+                    type="text"
+                    inputmode="decimal"
+                    bind:value={drafts[s.key]}
+                  />
+                  <select aria-label="Unit" data-unit-for={s.key} bind:value={units[s.key]}>
+                    <option value="hours">hours</option>
+                    <option value="days">days</option>
+                  </select>
+                </div>
+              {:else if (s.type === 'log_level' || s.type === 'enum') && s.enum}
                 <select id={`setting-${s.key}`} bind:value={drafts[s.key]}>
                   {#each s.enum as opt (opt)}
                     <option value={opt}>{optionLabels[s.key]?.[opt] ?? opt}</option>
@@ -457,7 +500,7 @@
                 >
                   Revert
                 </Button>
-                {#if String(drafts[s.key]) !== shown(s, s.default)}
+                {#if isHoursDays(s) ? draftHours(s) !== Number(s.default) : String(drafts[s.key]) !== shown(s, s.default)}
                   <Button variant="ghost" onclick={() => resetToDefault(s)}>
                     Reset to default
                   </Button>

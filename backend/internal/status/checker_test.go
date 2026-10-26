@@ -58,6 +58,8 @@ func newTestCheckerRaw(t *testing.T, configJSON string) (*Checker, *sql.DB, *set
 		`CREATE TABLE app_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
 		`CREATE TABLE config (id INTEGER PRIMARY KEY CHECK (id = 1), data TEXT NOT NULL, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
 		`CREATE TABLE status_cache (entry_id TEXT PRIMARY KEY, status TEXT NOT NULL, response_time INTEGER, last_checked DATETIME DEFAULT CURRENT_TIMESTAMP)`,
+		FailingSchema,
+		HistorySchema,
 	} {
 		if _, err := db.Exec(stmt); err != nil {
 			t.Fatalf("schema: %v", err)

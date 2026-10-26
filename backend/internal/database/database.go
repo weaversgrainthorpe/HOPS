@@ -122,6 +122,22 @@ func runMigrations(db *sql.DB) error {
 			last_checked DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
 
+		// When each checked tile started failing (dead-link report). Kept in
+		// the DB so a restart doesn't reset it; mirrors status.FailingSchema.
+		`CREATE TABLE IF NOT EXISTS status_failing (
+			entry_id TEXT PRIMARY KEY,
+			since TEXT NOT NULL,
+			last_error TEXT NOT NULL DEFAULT '',
+			last_checked TEXT NOT NULL
+		)`,
+
+		// When failure tracking began (one row; mirrors status.HistorySchema).
+		`CREATE TABLE IF NOT EXISTS status_history (
+			id INTEGER PRIMARY KEY CHECK (id = 1),
+			started_at TEXT NOT NULL
+		)`,
+		`INSERT OR IGNORE INTO status_history (id, started_at) VALUES (1, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))`,
+
 		// Icon categories table
 		`CREATE TABLE IF NOT EXISTS icon_categories (
 			id TEXT PRIMARY KEY,

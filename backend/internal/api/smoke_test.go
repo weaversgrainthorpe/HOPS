@@ -76,6 +76,9 @@ func TestSmokeRoutesNoFiveHundred(t *testing.T) {
 		// Logs (read-only).
 		{method: "GET", path: "/api/logs"},
 		{method: "GET", path: "/api/logs?limit=100&level=warn"},
+
+		// Dead-link report (read-only).
+		{method: "GET", path: "/api/dead-links"},
 		{method: "PUT", path: "/api/settings/discovery.max_parallel_probes", body: `{"value":"64"}`},
 
 		// Discovery — scans.

@@ -379,6 +379,9 @@ func (r *Router) setupRoutes() {
 	// Recent log lines (admin-only, GET only): Settings › Logs.
 	r.handle("/api/logs", r.protected(r.handleLogs))
 
+	// Dead-link report (admin-only, GET only): Settings › Dashboards.
+	r.handle("/api/dead-links", r.protected(r.handleDeadLinks))
+
 	// Network discovery routes (admin-only). The collection handler
 	// dispatches by method; the item handler parses /{id}/... .
 	//

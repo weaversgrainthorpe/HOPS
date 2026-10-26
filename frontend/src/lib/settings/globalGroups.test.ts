@@ -20,7 +20,7 @@ describe('global settings grouping table', () => {
 		expect(keysOf('look-motion')).toEqual(['display.animations', 'folders.animated_backgrounds']);
 		expect(keysOf('editing')).toEqual(['editmode.idle_timeout_minutes']);
 		expect(keysOf('status-checks')).toEqual([
-			'status.checks_enabled', 'status.check_interval_minutes', 'status.check_timeout_seconds'
+			'status.checks_enabled', 'status.check_interval_minutes', 'status.check_timeout_seconds', 'status.dead_after_hours'
 		]);
 		expect(keysOf('uploads')).toEqual(['upload.max_bytes_background', 'upload.max_bytes_icon', 'upload.max_bytes_import']);
 		expect(keysOf('discovery')).toEqual(['discovery.max_parallel_probes', 'discovery.per_host_timeout_seconds']);

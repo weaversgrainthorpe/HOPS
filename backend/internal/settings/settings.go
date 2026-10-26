@@ -76,6 +76,7 @@ const (
 	KeyStatusChecksEnabled          = "status.checks_enabled"
 	KeyStatusCheckIntervalMinutes   = "status.check_interval_minutes"
 	KeyStatusCheckTimeoutSeconds    = "status.check_timeout_seconds"
+	KeyStatusDeadAfterHours         = "status.dead_after_hours"
 	KeyUploadMaxBytesImport         = "upload.max_bytes_import"
 	KeyUploadMaxBytesBackground     = "upload.max_bytes_background"
 	KeyUploadMaxBytesIcon           = "upload.max_bytes_icon"
@@ -140,6 +141,12 @@ var Definitions = []Definition{
 		Key: KeyStatusCheckTimeoutSeconds, Type: "duration_seconds", Default: "10",
 		Description: "HTTP timeout for each status-check request.",
 		Min:         1, Max: 120,
+	},
+	{
+		Key: KeyStatusDeadAfterHours, Type: "duration_hours", Default: "168",
+		Description: "A tile whose status check has failed without a break for longer than this is listed " +
+			"as a dead link in Settings › Dashboards, so you can fix or remove it. Stored in hours; set it in hours or days.",
+		Min:         1, Max: 24 * 365,
 	},
 	// Upload limits (M5 §10): the largest file each upload accepts. Shown and
 	// typed in MB in the admin UI. The ceilings are sized for the Pi Zero
