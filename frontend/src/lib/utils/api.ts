@@ -1063,8 +1063,36 @@ export interface DiscoveryResult {
   createdAt: string;
 }
 
-export async function listScans(): Promise<{ scans: DiscoveryScan[] }> {
+export interface DiscoveryScanChanges { new: number; changed: number; gone: number; baselineId: string; }
+
+export async function listScans(): Promise<{
+  scans: DiscoveryScan[];
+  changes?: Record<string, DiscoveryScanChanges>;
+  changesErrors?: Record<string, string>;
+}> {
   return fetchAPI('/discovery/scans');
+}
+
+export type DiffState = 'new' | 'changed' | 'unchanged';
+export interface DiffScanRef { id: string; createdAt: string; cidr: string; state: string; label?: string; }
+export interface DiffGone {
+  host: string; hostname?: string; port: number; detectorId: string;
+  suggestedName: string; suggestedUrl: string; wasPromoted: boolean;
+}
+export interface ScanDiff {
+  scanId: string;
+  comparable: boolean;
+  reason?: 'first' | 'unfinished';
+  baseline: DiffScanRef | null;
+  ignored: DiffScanRef[];
+  states: Record<string, DiffState>;
+  previous: Record<string, { detectorId: string; suggestedName: string }>;
+  gone: DiffGone[];
+  counts: { new: number; changed: number; unchanged: number; gone: number };
+}
+
+export async function getScanDiff(id: string): Promise<ScanDiff> {
+  return fetchAPI(`/discovery/scans/${encodeURIComponent(id)}/diff`);
 }
 
 export async function createScan(input: {

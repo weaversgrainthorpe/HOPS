@@ -79,6 +79,12 @@ func (r *Router) handleDiscoveryScansItem(w http.ResponseWriter, req *http.Reque
 			return
 		}
 		r.handleCancelScan(w, req, scanID)
+	case "diff":
+		if req.Method != http.MethodGet || len(parts) != 2 {
+			writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		r.handleScanDiff(w, scanID)
 	case "promote":
 		if req.Method != http.MethodPost {
 			writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -213,7 +219,44 @@ func (r *Router) handleListScans(w http.ResponseWriter, _ *http.Request) {
 		writeJSONError(w, "Failed to list scans", http.StatusInternalServerError)
 		return
 	}
-	writeJSON(w, map[string]interface{}{"scans": scans})
+	// Per-scan "+N / -M since the previous scan". A scan whose comparison
+	// cannot be computed is listed in changesErrors so the UI says so rather
+	// than showing a blank that reads as "nothing changed".
+	changes := map[string]interface{}{}
+	changesErrors := map[string]string{}
+	for _, sc := range scans {
+		if sc.State != discovery.StateComplete && sc.State != discovery.StatePromoted {
+			continue
+		}
+		d, err := r.discoveryStore.DiffFor(sc.ID)
+		if err != nil {
+			slog.Error("discovery: failed to diff scan", "component", "discovery", "scan_id", sc.ID, "error", err)
+			changesErrors[sc.ID] = "comparison failed"
+			continue
+		}
+		if d.Comparable {
+			changes[sc.ID] = map[string]interface{}{
+				"new": d.Counts.New, "changed": d.Counts.Changed, "gone": d.Counts.Gone, "baselineId": d.Baseline.ID,
+			}
+		}
+	}
+	writeJSON(w, map[string]interface{}{"scans": scans, "changes": changes, "changesErrors": changesErrors})
+}
+
+// handleScanDiff: GET /api/discovery/scans/{id}/diff — what is new, changed
+// and gone compared with the previous completed scan of the same range.
+func (r *Router) handleScanDiff(w http.ResponseWriter, scanID string) {
+	d, err := r.discoveryStore.DiffFor(scanID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeJSONError(w, "Scan not found", http.StatusNotFound)
+			return
+		}
+		slog.Error("discovery: failed to diff scan", "component", "discovery", "scan_id", scanID, "error", err)
+		writeJSONError(w, "Failed to compare with the previous scan", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, d)
 }
 
 // handleGetScan: GET /api/discovery/scans/{id} — returns scan header + results.

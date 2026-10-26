@@ -9,12 +9,14 @@
   import { confirm } from '$lib/stores/confirmModal';
   import {
     listScans, deleteScan, cancelScan,
-    type DiscoveryScan, type ScanState,
+    type DiscoveryScan, type ScanState, type DiscoveryScanChanges,
   } from '$lib/utils/api';
 
   let scans = $state<DiscoveryScan[]>([]);
   let loading = $state(true);
   let loadError = $state('');
+  let changes = $state<Record<string, DiscoveryScanChanges>>({});
+  let changesErrors = $state<Record<string, string>>({});
 
   onMount(async () => {
     await waitForAuthChecked();
@@ -29,8 +31,10 @@
     loading = true;
     loadError = '';
     try {
-      const { scans: list } = await listScans();
+      const { scans: list, changes: changesMap, changesErrors: errMap } = await listScans();
       scans = list;
+      changes = changesMap ?? {};
+      changesErrors = errMap ?? {};
     } catch (e) {
       loadError = e instanceof Error ? e.message : 'Failed to load scans';
     } finally {
@@ -136,6 +140,7 @@
           <th>Targets</th>
           <th>State</th>
           <th>Progress</th>
+          <th>Since previous</th>
           <th>Label</th>
           <th class="actions-col">Actions</th>
         </tr>
@@ -152,6 +157,18 @@
                 {scan.progressDone} / {scan.progressTotal}
               {:else}
                 —
+              {/if}
+            </td>
+            <td class="since">
+              {#if changesErrors[scan.id]}
+                <span class="badge badge--danger" title={changesErrors[scan.id]}>comparison failed</span>
+              {:else if changes[scan.id]}
+                {@const c = changes[scan.id]}
+                <span class="badge badge--success" title="{c.new} new since the previous scan">+{c.new}</span>
+                <span class="badge badge--danger" title="{c.gone} gone since the previous scan">−{c.gone}</span>
+                {#if c.changed > 0}<span class="muted" title="{c.changed} changed"> ~{c.changed}</span>{/if}
+              {:else}
+                <span class="muted">—</span>
               {/if}
             </td>
             <td>{scan.label ?? ''}</td>

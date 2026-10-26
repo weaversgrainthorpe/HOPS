@@ -10,7 +10,8 @@
   import { loadConfig, applySavedLayout, dashboardHref, showSaveWarning } from '$lib/stores/config';
   import {
     getScan, cancelScan, deleteScan, updateScanResult, promoteScan, createScan,
-    createDetector,
+    createDetector, getScanDiff,
+    type ScanDiff,
     CATEGORY_LIST, categoryLabel, categoryIcon,
     type DiscoveryScan, type DiscoveryResult, type DiscoveryCategory,
     type DiscoveryDetector, type DiscoveryDetectorInput, type PromoteTarget,
@@ -56,6 +57,40 @@
   let promoting = $state(false);
   let rescanning = $state(false);
 
+  // What's new since the previous completed scan of this range.
+  type DiffFilter = 'new' | 'all' | 'gone';
+  let diff = $state<ScanDiff | null>(null);
+  let diffError = $state('');
+  let diffFilter = $state<DiffFilter>('all');
+  let diffLoadedFor = '';
+  const finished = $derived(scan?.state === 'complete' || scan?.state === 'promoted');
+  $effect(() => {
+    const id = scan?.id;
+    if (!id || !finished || diffLoadedFor === id) return;
+    diffLoadedFor = id;
+    diff = null;
+    diffError = '';
+    getScanDiff(id).then((d) => {
+      if (scan?.id !== id) return;
+      diff = d;
+      // Default to the changes when there is something to compare against.
+      diffFilter = d.comparable ? 'new' : 'all';
+    }).catch((e) => {
+      if (scan?.id !== id) return;
+      diffError = e instanceof Error ? e.message : 'Could not load the comparison';
+    });
+  });
+  const visibleResults = $derived(
+    diff?.comparable && diffFilter === 'new'
+      ? results.filter((r) => diff!.states[r.id] === 'new' || diff!.states[r.id] === 'changed')
+      : results
+  );
+  function fmtDay(ts?: string): string {
+    if (!ts) return '';
+    const d = new Date(ts);
+    return isNaN(d.getTime()) ? ts : d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+  }
+
   onMount(async () => {
     await waitForAuthChecked();
     if (!$isAuthenticated) {
@@ -90,6 +125,9 @@
     phase = '';
     warnings = [];
     lastResultTs = '';
+    diff = null;
+    diffError = '';
+    diffLoadedFor = '';
     selected = {};
     nameDrafts = {};
     urlDrafts = {};
@@ -593,7 +631,61 @@
       </div>
     {/if}
 
-    {#if results.length === 0}
+    {#if finished}
+      {#if diffError}
+        <div class="error diff-error" role="alert" data-testid="diff-error">
+          Could not compare with the previous scan: {diffError}. The list below is everything this scan found, not just what is new.
+        </div>
+      {:else if diff}
+        <div class="diff-bar" data-testid="diff-bar">
+          {#if diff.comparable && diff.baseline}
+            <div class="diff-summary" data-testid="diff-summary">
+              <strong>{diff.counts.new} new, {diff.counts.gone} gone</strong>{#if diff.counts.changed > 0}, {diff.counts.changed} changed{/if}
+              since the {fmtDay(diff.baseline.createdAt)} scan{#if diff.baseline.label} ({diff.baseline.label}){/if}
+            </div>
+            <div class="diff-filter" role="group" aria-label="Show">
+              <button class:active={diffFilter === 'new'} onclick={() => (diffFilter = 'new')}>New only ({diff.counts.new + diff.counts.changed})</button>
+              <button class:active={diffFilter === 'all'} onclick={() => (diffFilter = 'all')}>All ({results.length})</button>
+              <button class:active={diffFilter === 'gone'} onclick={() => (diffFilter = 'gone')}>Gone ({diff.counts.gone})</button>
+            </div>
+          {:else}
+            <div class="diff-summary" data-testid="diff-summary">First scan of this range — nothing to compare.</div>
+          {/if}
+          {#each diff.ignored as ig (ig.id)}
+            <div class="muted small" data-testid="diff-ignored">
+              Not compared with the {fmtDay(ig.createdAt)} scan of this range — it {ig.state === 'failed' ? 'failed' : 'was cancelled'}, so its list is incomplete.
+            </div>
+          {/each}
+        </div>
+      {/if}
+    {/if}
+
+    {#if diff?.comparable && diffFilter === 'gone'}
+      {#if diff.gone.length === 0}
+        <p class="muted" data-testid="gone-empty">Nothing has disappeared since the {fmtDay(diff.baseline?.createdAt)} scan.</p>
+      {:else}
+        <div class="table-scroll"><table class="data-table results gone-table" data-testid="gone-table">
+          <thead><tr><th>Host</th><th>Port</th><th>Name</th><th>URL</th><th></th></tr></thead>
+          <tbody>
+            {#each diff.gone as g (g.host + ':' + g.port + ':' + g.detectorId)}
+              <tr class="gone-row">
+                <td class="mono">{g.host}{#if g.hostname}<div class="muted small">{g.hostname}</div>{/if}</td>
+                <td class="mono">{g.port}</td>
+                <td>{g.suggestedName}</td>
+                <td class="mono small">{g.suggestedUrl}</td>
+                <td>
+                  {#if g.wasPromoted}
+                    <span class="badge badge--danger" title="This service was a tile on one of your dashboards. It no longer answers, so the tile may be dead.">promoted — tile may be dead</span>
+                  {:else}
+                    <span class="badge badge--neutral">gone</span>
+                  {/if}
+                </td>
+              </tr>
+            {/each}
+          </tbody>
+        </table></div>
+      {/if}
+    {:else if results.length === 0}
       {#if scan.state === 'cancelled'}
         <div class="empty-state">
           <Icon icon="mdi:cancel" width="48" />
@@ -608,6 +700,9 @@
         <p class="muted">No results yet…</p>
       {/if}
     {:else}
+      {#if visibleResults.length === 0}
+        <p class="muted" data-testid="nothing-new">Nothing new since the {fmtDay(diff?.baseline?.createdAt)} scan. Choose "All" to see everything this scan found.</p>
+      {/if}
       <div class="curate-toolbar">
         <div class="bulk">
           <Button variant="ghost" size="small" onclick={() => toggleAll(true)}>Select all</Button>
@@ -637,6 +732,7 @@
             <th class="icon-col"></th>
             <th>Host</th>
             <th>Port</th>
+            {#if diff?.comparable}<th>Since last scan</th>{/if}
             <th>Confidence</th>
             <th>Category</th>
             <th>Name</th>
@@ -646,7 +742,7 @@
           </tr>
         </thead>
         <tbody>
-          {#each results as r (r.id)}
+          {#each visibleResults as r (r.id)}
             {@const isPromoted = r.curateState === 'promoted'}
             {@const iconRef = iconHrefFor(r)}
             <tr class:selected={selected[r.id]} class:promoted={isPromoted}>
@@ -686,6 +782,14 @@
                 {/if}
               </td>
               <td class="mono">{r.port}</td>
+              {#if diff?.comparable}
+                {@const ds = diff.states[r.id]}
+                <td data-testid="diff-state">
+                  {#if ds === 'new'}<span class="badge badge--success">new</span>
+                  {:else if ds === 'changed'}<span class="badge badge--warning" title="Was {diff.previous[r.id]?.suggestedName} ({diff.previous[r.id]?.detectorId})">changed</span>
+                  {:else}<span class="muted small">unchanged</span>{/if}
+                </td>
+              {/if}
               <td>
                 {#if isPromoted}
                   <span class="badge badge--accent" title="This service is already a tile on one of your dashboards — it won't be added again.">promoted</span>
@@ -945,6 +1049,15 @@
 
   /* Promoted rows fade slightly to signal "this one's done"; the icon in
      the checkbox cell takes the row's accent so it doesn't look ticked. */
+  .diff-bar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin: 0 0 12px; }
+  .diff-summary { color: var(--text-primary); }
+  .diff-filter { display: inline-flex; gap: 4px; }
+  .diff-filter button {
+    padding: 4px 10px; border-radius: 6px; cursor: pointer; font: inherit;
+    border: 1px solid var(--border-color, rgba(128,128,128,0.4)); background: transparent; color: var(--text-primary);
+  }
+  .diff-filter button.active { background: var(--accent-solid); color: var(--on-accent); border-color: transparent; }
+  .diff-error { margin-bottom: 12px; }
   table.results tr.promoted { background: rgba(168,85,247,0.04); }
   table.results tr.promoted td { color: var(--text-secondary); }
   table.results tr.promoted :global(.promoted-icon) { color: #a855f7; }
