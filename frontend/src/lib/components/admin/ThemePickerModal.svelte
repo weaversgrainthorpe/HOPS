@@ -5,6 +5,8 @@
   import { focusTrap } from '$lib/utils/focusTrap';
   import { dialogContentKeydown, dialogWindowEscape } from '$lib/utils/dialogKeys';
   import { createGridKeyboardHandler } from '$lib/utils/gridKeyboardNav';
+  import { recentOn, setRecentOn, clearRecent } from '$lib/utils/recentTiles';
+  import { toast } from '$lib/stores/toast';
 
   interface Props {
     onClose: () => void;
@@ -180,9 +182,16 @@
 
   let selectedMode = $state($theme);
   let selectedPreset = $state('default');
+  // "Recently used" row (this browser only): applied with the theme, like every choice here.
+  let showRecent = $state($recentOn);
+  function clearRecentHistory() {
+    clearRecent();
+    toast.success('Recently used history cleared in this browser.');
+  }
 
   function handleApply() {
     setTheme(selectedMode as 'light' | 'dark' | 'auto');
+    setRecentOn(showRecent);
 
     // Determine which mode to apply based on selection
     let effectiveMode: 'light' | 'dark' = 'dark';
@@ -330,6 +339,19 @@
             </button>
           {/each}
         </div>
+      </section>
+
+      <section class="section">
+        <h3>Recently used</h3>
+        <label class="recent-option">
+          <input type="checkbox" bind:checked={showRecent} />
+          <span>Show recently used</span>
+        </label>
+        <p class="recent-note">A row of the tiles you open most, above the tabs. Kept in this browser only; nothing is sent to the server.</p>
+        <button type="button" class="btn-secondary recent-clear" onclick={clearRecentHistory}>
+          <Icon icon="mdi:history" width="18" />
+          Clear history
+        </button>
       </section>
 
       <div class="info-box">
@@ -550,6 +572,28 @@
     position: absolute;
     top: 0.75rem;
     right: 0.75rem;
+  }
+
+  .recent-option {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text-primary);
+    cursor: pointer;
+  }
+  .recent-option input {
+    width: 1.1rem;
+    height: 1.1rem;
+  }
+  .recent-note {
+    margin: 0.5rem 0 0.75rem;
+    font-size: 0.8125rem;
+    color: var(--text-secondary);
+  }
+  .recent-clear {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
   }
 
   .info-box {

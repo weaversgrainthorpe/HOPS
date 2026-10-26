@@ -11,6 +11,8 @@
   import { tileMayBeChecked } from '$lib/editor/statusChecks';
   import { tileOpenUrl, hasAwayUrl } from '$lib/utils/tileUrl';
   import { awayMode } from '$lib/stores/awayMode';
+  import { getContext } from 'svelte';
+  import { RECENT_CONTEXT, type RecentContext } from '$lib/utils/recentTiles';
 
   interface Props {
     entry: Entry;
@@ -43,9 +45,14 @@
   const openUrl = $derived(tileOpenUrl(entry, $awayMode));
   const usingAway = $derived($awayMode && hasAwayUrl(entry));
 
+  // "Recently used" (per browser): the dashboard's recorder. Every way a tile opens (click, Enter,
+  // arrow-key focus then Enter, search's show-and-open, the row itself) comes through handleClick.
+  const recent = getContext<RecentContext | undefined>(RECENT_CONTEXT);
+
   function handleClick() {
     // Note tiles are inert — no URL to open.
     if (isNote) return;
+    if (!inEditor) recent?.record(entry.id);
 
     // ssh:// goes to the computer's SSH app in place: no empty new tab, and
     // never into the iframe/popup modals (whatever mode is stored).

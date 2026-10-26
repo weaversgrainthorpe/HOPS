@@ -27,15 +27,19 @@
   import { reorderTabs } from '$lib/editor/treeOps';
   import { contextForTab } from '$lib/editor/statusChecks';
   import Icon from '@iconify/svelte';
-  import { onMount, onDestroy, tick, untrack } from 'svelte';
+  import { onMount, onDestroy, setContext, tick, untrack } from 'svelte';
   import { get } from 'svelte/store';
   import { toast } from '$lib/stores/toast';
   import { reportBackgroundError, markBackgroundLoaded } from '$lib/stores/backgroundErrors';
   import { reducedMotion } from '$lib/stores/backgroundAnimation';
+  import RecentRow from './RecentRow.svelte';
+  import { recentOn, recordTileOpen, RECENT_CONTEXT, type RecentContext } from '$lib/utils/recentTiles';
 
   // The route's dashboard: the stored v3 dashboard (every dashboard is editable).
   let { dashboard }: { dashboard: LayoutDashboard } = $props();
   let activeTabIndex = $state(0);
+  // "Recently used" (per browser): every tile opened on this dashboard records here, the row's included.
+  setContext<RecentContext>(RECENT_CONTEXT, { record: (tileId) => recordTileOpen(dashboard.id, tileId) });
 
   const editing = $derived($editMode);
 
@@ -391,6 +395,10 @@
 
   <!-- §7.2: the header and tab row are identical in both modes. Every editing control (the Dashboard
        pencil and Add tab included) is in the floating EditToolbar, which takes no layout space. -->
+  <!-- Recently used: above the tabs because it spans every tab; view mode only (never in the layout). -->
+  {#if !editing && $recentOn}
+    <RecentRow {dashboard} />
+  {/if}
   <div class="dashboard-header">
     {#if barTabs.length >= 1}
       <div

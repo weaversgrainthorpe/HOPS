@@ -8,6 +8,9 @@
   import { safeOpenUrl, isValidUrl } from '$lib/utils/url';
   import { isSshUrl, openSshInPlace } from '$lib/utils/ssh';
   import { buildSearchIndex, rankSearch, type SearchItem } from '$lib/utils/searchIndex';
+  import { tileOpenUrl } from '$lib/utils/tileUrl';
+  import { awayMode } from '$lib/stores/awayMode';
+  import { recordTileOpen } from '$lib/utils/recentTiles';
 
   interface Props {
     onClose: () => void;
@@ -56,13 +59,17 @@
   function openResult(r: Result) {
     const e = r.entry;
     if (r.kind !== 'tile' || !e || e.type === 'note') return showResult(r);
-    if (isSshUrl(e.url)) {
-      if (isValidUrl(e.url)) openSshInPlace(e.url);
+    // The dialog kinds are shown and clicked on the dashboard, which records them like any click.
+    if (e.openMode === 'iframe' || e.openMode === 'popup') return showResult(r, true);
+    // Home/Away: the same address a click would open (tileUrl.ts).
+    const url = tileOpenUrl(e, get(awayMode));
+    recordTileOpen(r.dashboardId, e.id);
+    if (isSshUrl(url)) {
+      if (isValidUrl(url)) openSshInPlace(url);
       onClose();
       return;
     }
-    if (e.openMode === 'iframe' || e.openMode === 'popup') return showResult(r, true);
-    safeOpenUrl(e.url, e.openMode === 'sametab' ? '_self' : '_blank');
+    safeOpenUrl(url, e.openMode === 'sametab' ? '_self' : '_blank');
     onClose();
   }
 
