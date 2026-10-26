@@ -131,6 +131,10 @@ func dashboardPathProblem(p string) string {
 	if p != strings.TrimSpace(p) {
 		return "starts or ends with whitespace"
 	}
+	first := strings.ToLower(strings.SplitN(strings.TrimLeft(p, "/"), "/", 2)[0])
+	if reservedDashboardSegments[first] {
+		return fmt.Sprintf("%q is reserved by HOPS (its own page or route), so a dashboard there could not be opened", "/"+first)
+	}
 	for _, r := range p {
 		if r == '\\' {
 			return `contains a backslash ("\")`
@@ -140,6 +144,13 @@ func dashboardPathProblem(p string) string {
 		}
 	}
 	return ""
+}
+
+// reservedDashboardSegments are first path segments HOPS itself serves (frontend pages and server
+// routes): a dashboard there would be shadowed and unreachable.
+var reservedDashboardSegments = map[string]bool{
+	"add": true, "admin": true, "settings": true, "api": true, "icons": true,
+	"backgrounds": true, "presets": true, "_app": true,
 }
 
 // unsafePathError is the 400 for a write that would set an unsafe path on d.

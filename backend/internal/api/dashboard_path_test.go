@@ -119,3 +119,24 @@ func TestPromoteNewDashboard_RejectsUnsafePath(t *testing.T) {
 		}
 	}
 }
+
+// A dashboard path whose first segment is one of HOPS's own pages or server routes would be
+// unreachable (the page or route wins), so it is refused, case-insensitively.
+func TestDashboardPathProblem_ReservedSegments(t *testing.T) {
+	for _, p := range []string{"/add", "add", "/Settings", "/settings/x", "/admin", "/api", "/icons", "/backgrounds", "/presets", "/_app/x"} {
+		if why := dashboardPathProblem(p); !strings.Contains(why, "reserved") {
+			t.Errorf("%q: got %q, want a reserved-path refusal", p, why)
+		}
+	}
+	for _, p := range []string{"/added", "/my-settings", "/apiary", "/home/add"} {
+		if why := dashboardPathProblem(p); why != "" {
+			t.Errorf("%q refused: %s", p, why)
+		}
+	}
+}
+
+func TestEnsureUniqueDashboardPath_AvoidsReserved(t *testing.T) {
+	if got := ensureUniqueDashboardPath(nil, slugifyDashboardPath("Settings")); got != "/settings-2" {
+		t.Errorf("promote of a dashboard named Settings got path %q, want /settings-2", got)
+	}
+}

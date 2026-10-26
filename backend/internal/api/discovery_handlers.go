@@ -729,12 +729,14 @@ func ensureUniqueDashboardPath(dashboards []interface{}, candidate string) strin
 			}
 		}
 	}
-	if !taken[normPath(candidate)] {
+	// A reserved first segment (HOPS's own pages and routes) counts as taken, so "Settings" → "/settings-2".
+	free := func(c string) bool { return !taken[normPath(c)] && dashboardPathProblem(c) == "" }
+	if free(candidate) {
 		return candidate
 	}
 	for i := 2; ; i++ {
 		c := fmt.Sprintf("%s-%d", candidate, i)
-		if !taken[normPath(c)] {
+		if free(c) {
 			return c
 		}
 	}
