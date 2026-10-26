@@ -11,6 +11,7 @@
   import StatusCheckSetting from '../editor/StatusCheckSetting.svelte';
   import { tileSetting, type LevelSetting, type StatusContext } from '$lib/editor/statusChecks';
   import { tileSizeOf, type TileSize } from '$lib/editor/editorActions';
+  import { isSshUrl, parseSshUrl, buildSshUrl, validateSsh, SSH_DEFAULT_PORT } from '$lib/utils/ssh';
 
   interface Props {
     entry: Entry;
@@ -61,7 +62,46 @@
   // pre-v1.7.0 don't carry a `type` field).
   $effect(() => {
     editedEntry = { ...entry, type: entry.type ?? 'link' };
+    kind = kindOf(entry);
+    const f = parseSshUrl(entry.url ?? '');
+    sshHost = f?.host ?? '';
+    sshPort = f?.port ?? SSH_DEFAULT_PORT;
+    sshUser = f?.user ?? '';
   });
+
+  // The Tile type dropdown: Link, SSH (a link tile whose ssh:// URL is built from
+  // Host/Port/User) or Note. A link tile whose URL starts with ssh:// opens as SSH.
+  type Kind = 'link' | 'ssh' | 'note';
+  function kindOf(e: Entry): Kind {
+    if (e.type === 'note') return 'note';
+    return isSshUrl(e.url) ? 'ssh' : 'link';
+  }
+  // svelte-ignore state_referenced_locally
+  let kind = $state<Kind>(kindOf(entry));
+  // svelte-ignore state_referenced_locally
+  const initialSsh = parseSshUrl(entry.url ?? '');
+  let sshHost = $state(initialSsh?.host ?? '');
+  let sshPort = $state(initialSsh?.port ?? SSH_DEFAULT_PORT);
+  let sshUser = $state(initialSsh?.user ?? '');
+  // Errors show once a field is left or Save is tried (never silently refused).
+  let sshShowErrors = $state(false);
+  const sshErrors = $derived(validateSsh({ host: sshHost, port: sshPort, user: sshUser }));
+  const isSsh = $derived(kind === 'ssh');
+  // ssh:// can't be framed: the iframe and popup modes are unavailable for it.
+  const sshLike = $derived(isSsh || (kind === 'link' && isSshUrl(editedEntry.url)));
+
+  function pickKind() {
+    editedEntry.type = kind === 'note' ? 'note' : 'link';
+    if (kind === 'ssh') {
+      const f = parseSshUrl(editedEntry.url ?? '');
+      if (f) { sshHost = f.host; sshPort = f.port; sshUser = f.user; }
+      if (!editedEntry.icon && !editedEntry.iconUrl) editedEntry.icon = 'mdi:console';
+    } else if (kind === 'link' && sshHost.trim() && Object.keys(sshErrors).length === 0
+      && (!editedEntry.url || isSshUrl(editedEntry.url))) {
+      // SSH -> Link keeps what was typed, as the URL.
+      editedEntry.url = buildSshUrl({ host: sshHost, port: sshPort, user: sshUser });
+    }
+  }
 
   // Close modal when edit mode is turned off
   $effect(() => {
@@ -80,9 +120,18 @@
 
   // Derived: are we editing a note tile? Notes have no URL / open-mode /
   // status check / icon, so the form hides those fields when this is true.
-  let isNote = $derived(editedEntry.type === 'note');
+  let isNote = $derived(kind === 'note');
 
   function handleSave() {
+    if (isSsh) {
+      sshShowErrors = true;
+      if (Object.keys(sshErrors).length > 0) return;
+      editedEntry.type = 'link';
+      editedEntry.url = buildSshUrl({ host: sshHost, port: sshPort, user: sshUser });
+    }
+    if (sshLike && (editedEntry.openMode === 'iframe' || editedEntry.openMode === 'popup')) {
+      editedEntry.openMode = 'sametab';
+    }
     if (sizePicked) {
       // Re-checked at Save (the draft may have changed); a refusal stays in the dialog, inline.
       sizeError = checkSize ? checkSize(sizeValue as TileSize) : null;
@@ -142,12 +191,18 @@
         <label for="entry-type">Tile type</label>
         <select
           id="entry-type"
-          bind:value={editedEntry.type}
-          onchange={() => { if (editedEntry.type !== 'note' && editedEntry.type !== 'link') editedEntry.type = 'link'; }}
+          bind:value={kind}
+          onchange={pickKind}
         >
           <option value="link">Link — opens a URL when clicked</option>
+          <option value="ssh">SSH — opens your computer's SSH app</option>
           <option value="note">Note — text only, no link</option>
         </select>
+        {#if isSsh}
+          <small id="ssh-hint" class="ssh-hint">
+            Opens your computer's SSH app. On Windows you may need to set one up first (e.g. PuTTY or Windows Terminal).
+          </small>
+        {/if}
       </div>
 
       <div class="form-group full-width">
@@ -180,7 +235,41 @@
         {/if}
       </div>
 
-      {#if !isNote}
+      {#if isSsh}
+        <div class="form-group">
+          <label for="ssh-host">Host *</label>
+          <input id="ssh-host" type="text" bind:value={sshHost} placeholder="nas.lan, 192.168.1.10 or [fd00::1]"
+            autocomplete="off" spellcheck="false" onblur={() => sshShowErrors = true}
+            aria-invalid={sshShowErrors && sshErrors.host ? 'true' : undefined}
+            aria-describedby={sshShowErrors && sshErrors.host ? 'ssh-host-error' : undefined} />
+          {#if sshShowErrors && sshErrors.host}
+            <p id="ssh-host-error" class="field-error" role="alert">{sshErrors.host}</p>
+          {/if}
+        </div>
+        <div class="form-group">
+          <label for="ssh-port">Port</label>
+          <input id="ssh-port" type="text" inputmode="numeric" bind:value={sshPort} placeholder="22"
+            onblur={() => sshShowErrors = true}
+            aria-invalid={sshShowErrors && sshErrors.port ? 'true' : undefined}
+            aria-describedby={sshShowErrors && sshErrors.port ? 'ssh-port-error' : undefined} />
+          {#if sshShowErrors && sshErrors.port}
+            <p id="ssh-port-error" class="field-error" role="alert">{sshErrors.port}</p>
+          {/if}
+        </div>
+        <div class="form-group full-width">
+          <label for="ssh-user">User</label>
+          <input id="ssh-user" type="text" bind:value={sshUser} placeholder="Optional, e.g. pi"
+            autocomplete="off" spellcheck="false" onblur={() => sshShowErrors = true}
+            aria-invalid={sshShowErrors && sshErrors.user ? 'true' : undefined}
+            aria-describedby={sshShowErrors && sshErrors.user ? 'ssh-user-error' : undefined} />
+          {#if sshShowErrors && sshErrors.user}
+            <p id="ssh-user-error" class="field-error" role="alert">{sshErrors.user}</p>
+          {/if}
+          {#if Object.keys(sshErrors).length === 0}
+            <small>Opens <code data-testid="ssh-url-preview">{buildSshUrl({ host: sshHost, port: sshPort, user: sshUser })}</code></small>
+          {/if}
+        </div>
+      {:else if !isNote}
         <div class="form-group full-width">
           <label for="url">URL *</label>
           <input
@@ -284,12 +373,19 @@
       {#if !isNote}
         <div class="form-group">
           <label for="openMode">Open Mode</label>
-          <select id="openMode" bind:value={editedEntry.openMode}>
-            <option value="newtab">New Tab</option>
-            <option value="sametab">Same Tab</option>
-            <option value="iframe">iFrame Modal</option>
-            <option value="popup">Popup Modal</option>
-          </select>
+          {#if sshLike}
+            <select id="openMode" disabled aria-describedby="openMode-ssh">
+              <option>In place</option>
+            </select>
+            <small id="openMode-ssh">SSH opens your computer's SSH app, so the iFrame and Popup modes aren't available.</small>
+          {:else}
+            <select id="openMode" bind:value={editedEntry.openMode}>
+              <option value="newtab">New Tab</option>
+              <option value="sametab">Same Tab</option>
+              <option value="iframe">iFrame Modal</option>
+              <option value="popup">Popup Modal</option>
+            </select>
+          {/if}
         </div>
 
         <div class="form-group full-width">
@@ -441,6 +537,10 @@
     color: var(--accent-text);
     font-size: 0.875rem;
     font-weight: 500;
+  }
+
+  .ssh-hint {
+    line-height: 1.4;
   }
 
   .field-error {

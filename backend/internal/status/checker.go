@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -62,9 +63,9 @@ func ssrfSafeDialControl(_, address string, _ syscall.RawConn) error {
 // Entry is one tile to probe. Whether it is probed at all is decided by
 // configdoc.EffectiveStatusChecks in getEntriesFromConfig.
 type Entry struct {
-	ID          string `json:"id"`
-	Type        string `json:"type"` // "link" (default) or "note" — notes are skipped
-	URL         string `json:"url"`
+	ID   string `json:"id"`
+	Type string `json:"type"` // "link" (default) or "note" — notes are skipped
+	URL  string `json:"url"`
 
 	// Effective settings of the owning dashboard when the pass started.
 	DashboardID     string `json:"-"`
@@ -428,6 +429,11 @@ func (c *Checker) recordOutcome(e Entry, status string, now time.Time) {
 func (c *Checker) checkEntry(entry Entry) statusCheckResult {
 	result := statusCheckResult{entryID: entry.ID, status: "up"}
 
+	// ssh:// tiles get a TCP connect check (an HTTP request can't work on them).
+	if strings.HasPrefix(strings.ToLower(entry.URL), "ssh://") {
+		return c.checkTCP(entry)
+	}
+
 	// Only http(s) URLs are checkable. Reject other schemes (file://,
 	// gopher://, etc.) outright rather than handing them to the client.
 	parsed, err := url.Parse(entry.URL)
@@ -469,6 +475,60 @@ func (c *Checker) checkEntry(entry Entry) statusCheckResult {
 		result.status = "down"
 	}
 
+	return result
+}
+
+// sshTarget turns ssh://[user@]host[:port] into the host:port to dial; the
+// port defaults to 22 and must be 1-65535.
+func sshTarget(raw string) (string, error) {
+	u, err := url.Parse(raw)
+	if err != nil || !strings.EqualFold(u.Scheme, "ssh") {
+		return "", fmt.Errorf("status check: not an ssh URL")
+	}
+	host := u.Hostname()
+	if host == "" {
+		return "", fmt.Errorf("status check: ssh URL has no host")
+	}
+	port := u.Port()
+	if port == "" {
+		if strings.HasSuffix(u.Host, ":") {
+			return "", fmt.Errorf("status check: ssh URL has an empty port")
+		}
+		port = "22"
+	}
+	n, err := strconv.Atoi(port)
+	if err != nil || n < 1 || n > 65535 {
+		return "", fmt.Errorf("status check: ssh port %q out of range", port)
+	}
+	return net.JoinHostPort(host, port), nil
+}
+
+// checkTCP probes an ssh:// tile: up means host:port accepted a TCP
+// connection within the dashboard's timeout. The dial goes through the same
+// SSRF Control hook as the HTTP checks (the deny-list is applied to the
+// resolved IP); a refused or blocked dial is "down", a malformed URL "error".
+func (c *Checker) checkTCP(entry Entry) statusCheckResult {
+	result := statusCheckResult{entryID: entry.ID, status: "error"}
+	addr, err := sshTarget(entry.URL)
+	if err != nil {
+		return result
+	}
+	timeout := time.Duration(entry.TimeoutSeconds) * time.Second
+	if timeout <= 0 {
+		timeout = 10 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	start := time.Now()
+	d := net.Dialer{Control: ssrfSafeDialControl}
+	conn, err := d.DialContext(ctx, "tcp", addr)
+	if err != nil {
+		result.status = "down"
+		return result
+	}
+	conn.Close()
+	result.status = "up"
+	result.responseTime = time.Since(start).Milliseconds()
 	return result
 }
 
@@ -524,4 +584,3 @@ func (c *Checker) saveResults(results []statusCheckResult) {
 		slog.Error("failed to commit status cache transaction", "component", "status", "error", err)
 	}
 }
-

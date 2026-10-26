@@ -6,7 +6,8 @@
   import IframeModal from './IframeModal.svelte';
   import PopupModal from './PopupModal.svelte';
   import StatusIndicator from './StatusIndicator.svelte';
-  import { safeOpenUrl } from '$lib/utils/url';
+  import { safeOpenUrl, isValidUrl } from '$lib/utils/url';
+  import { isSshUrl, openSshInPlace } from '$lib/utils/ssh';
   import { tileMayBeChecked } from '$lib/editor/statusChecks';
 
   interface Props {
@@ -40,6 +41,13 @@
   function handleClick() {
     // Note tiles are inert — no URL to open.
     if (isNote) return;
+
+    // ssh:// goes to the computer's SSH app in place: no empty new tab, and
+    // never into the iframe/popup modals (whatever mode is stored).
+    if (isSshUrl(entry.url)) {
+      if (isValidUrl(entry.url)) openSshInPlace(entry.url);
+      return;
+    }
 
     switch (entry.openMode) {
       case 'newtab':

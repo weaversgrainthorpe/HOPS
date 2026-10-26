@@ -127,6 +127,7 @@ For full deployment options (systemd, reverse proxy, backups), see the **[Instal
 
 ### Entries/Tiles
 - Two tile types: **link** (default — opens a URL) and **note** (text-only, name + description, no click action)
+- **SSH** preset: Host, Port and User build an `ssh://` link that opens your computer's SSH app in place (Windows needs one set up, e.g. PuTTY or Windows Terminal); its status dot is a TCP connect to host:port
 - Open modes: iframe, new tab, same tab, popup modal
 - HTTP status monitoring with response time
 - Subtitles/descriptions on tiles
