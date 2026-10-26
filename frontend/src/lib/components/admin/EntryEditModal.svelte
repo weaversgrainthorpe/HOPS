@@ -6,7 +6,6 @@
   import OpacitySlider from './OpacitySlider.svelte';
   import IconEditModal from './IconEditModal.svelte';
   import Modal from '../shared/Modal.svelte';
-  import { confirm } from '$lib/stores/confirmModal';
   import { editMode } from '$lib/stores/editMode';
   import StatusCheckSetting from '../editor/StatusCheckSetting.svelte';
   import { tileSetting, type LevelSetting, type StatusContext } from '$lib/editor/statusChecks';
@@ -194,19 +193,10 @@
     onSave(editedEntry, sizePicked ? { size: sizeValue as TileSize } : {});
   }
 
-  async function handleDelete() {
-    if (!onDelete) return;
-
-    const tileName = editedEntry.name?.trim() || 'this tile';
-    const confirmed = await confirm({
-      title: `Delete "${tileName}"?`,
-      message: 'This tile will be removed from the dashboard. You can undo this only by re-creating it.',
-      confirmText: 'Delete',
-      confirmStyle: 'danger'
-    });
-    if (confirmed) {
-      onDelete();
-    }
+  // The editor's delete asks (once, with the same words as right-click › Delete); this dialog
+  // never asks a second time.
+  function handleDelete() {
+    onDelete?.();
   }
 
   // Icon picking, uploading, and clearing all live in IconEditModal now.
