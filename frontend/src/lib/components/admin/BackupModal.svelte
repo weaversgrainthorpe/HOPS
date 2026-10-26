@@ -243,7 +243,7 @@
     if (p.kind === 'restore-images') return `${p.reason} (${when}).`;
     if (p.kind === 'attic-blocked') return `Deleted images couldn't be cleaned up, so none were deleted (${when}): ${p.reason}`;
     if (p.kind === 'attic-delete-failed') return `Deleted images couldn't be cleaned up (${when}): ${p.reason}`;
-    if (p.kind === 'attic-large') return `${p.reason} (${when}).`;
+    if (p.kind === 'attic-large' || p.kind === 'attic-index-rebuilt') return `${p.reason} (${when}).`;
     if (p.kind === 'restore-recovered' || p.kind === 'notices-unreadable' || p.kind === 'notices-unsaved' || p.kind === 'restore-journal-left') return `${p.reason} (${when}).`;
     const what =
       p.trigger === 'startup' ? 'The backup when HOPS started' :

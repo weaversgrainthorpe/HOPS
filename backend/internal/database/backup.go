@@ -161,7 +161,7 @@ type BackupManager struct {
 	restoreImages *BackupProblem
 	liveDB        *sql.DB
 	refCache      map[string]cachedRefs
-	hashCache     map[string]hashEntry
+	indexRebuilt  *BackupProblem // the attic index was rebuilt (dismissible, kept across restarts)
 	// atticMu serialises moves into and out of the attic with its sweep.
 	atticMu sync.Mutex
 }
@@ -184,6 +184,7 @@ type persistedNotices struct {
 	Ceiling   *BackupProblem `json:"ceiling,omitempty"`
 	Recovered *BackupProblem `json:"recovered,omitempty"`
 	Images    *BackupProblem `json:"images,omitempty"`
+	Index     *BackupProblem `json:"index,omitempty"`
 }
 
 // loadNotices reads the persisted notices. An unreadable file is itself
@@ -205,7 +206,7 @@ func (bm *BackupManager) loadNotices() {
 			Reason: "the saved backup notices are damaged (" + err.Error() + "); a notice may be missing"}
 		return
 	}
-	bm.restore, bm.ceiling, bm.recovered, bm.restoreImages = pn.Restore, pn.Ceiling, pn.Recovered, pn.Images
+	bm.restore, bm.ceiling, bm.recovered, bm.restoreImages, bm.indexRebuilt = pn.Restore, pn.Ceiling, pn.Recovered, pn.Images, pn.Index
 }
 
 // saveNoticesLocked writes the dismissible notices (bm.mu held). A failure
@@ -214,13 +215,13 @@ func (bm *BackupManager) loadNotices() {
 func (bm *BackupManager) saveNoticesLocked() {
 	path := filepath.Join(bm.backupDir, noticesFile)
 	err := func() error {
-		if bm.restore == nil && bm.ceiling == nil && bm.recovered == nil && bm.restoreImages == nil {
+		if bm.restore == nil && bm.ceiling == nil && bm.recovered == nil && bm.restoreImages == nil && bm.indexRebuilt == nil {
 			if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 				return err
 			}
 			return nil
 		}
-		raw, _ := json.Marshal(persistedNotices{Restore: bm.restore, Ceiling: bm.ceiling, Recovered: bm.recovered, Images: bm.restoreImages})
+		raw, _ := json.Marshal(persistedNotices{Restore: bm.restore, Ceiling: bm.ceiling, Recovered: bm.recovered, Images: bm.restoreImages, Index: bm.indexRebuilt})
 		if err := os.MkdirAll(bm.backupDir, 0755); err != nil {
 			return err
 		}
@@ -295,7 +296,7 @@ func (bm *BackupManager) Problems() []BackupProblem {
 	defer bm.mu.Unlock()
 	var out []BackupProblem
 	for _, p := range []*BackupProblem{bm.restore, bm.backupErr, bm.rotateErr, bm.ceiling, bm.recovered, bm.noticesLoadErr, bm.noticesSaveErr, bm.journalErr,
-		bm.atticBlocked, bm.atticFailed, bm.atticLargeP, bm.restoreImages} {
+		bm.atticBlocked, bm.atticFailed, bm.atticLargeP, bm.restoreImages, bm.indexRebuilt} {
 		if p != nil {
 			out = append(out, *p)
 		}
@@ -320,6 +321,8 @@ func (bm *BackupManager) DismissProblem(kind string) bool {
 		had, bm.recovered = bm.recovered != nil, nil
 	case ProblemRestoreImages:
 		had, bm.restoreImages = bm.restoreImages != nil, nil
+	case ProblemAtticIndexRebuilt:
+		had, bm.indexRebuilt = bm.indexRebuilt != nil, nil
 	case ProblemNoticesUnreadable:
 		had, bm.noticesLoadErr = bm.noticesLoadErr != nil, nil
 		return had // nothing in the file changes

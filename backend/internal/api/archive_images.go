@@ -14,9 +14,9 @@ import (
 // normal upload of their kind (M6 §12 fix round 1):
 //   - an icon PNG is decoded, resized to fit 128×128 and re-encoded, exactly
 //     as handleUploadIcon does;
-//   - any other raster image (an icon .jpg/.gif/.webp, every background) is
-//     decoded to prove it is the image its extension says; normal background
-//     uploads aren't re-encoded, so neither are these;
+//   - any other raster image (an icon .jpg/.gif/.webp, every background) has
+//     its header decoded (type matches the extension, dimensions bounded) but
+//     is not fully decoded or re-encoded, like a normal background upload;
 //   - an SVG icon is kept as is, like a normal SVG upload (served with the
 //     strict asset CSP, so its script never runs).
 //
@@ -47,18 +47,22 @@ func processArchiveImage(kind, name string, data []byte) ([]byte, error) {
 		cfg.Width*cfg.Height > maxArchiveImagePixels {
 		return nil, fmt.Errorf("its size (%d×%d) is too large", cfg.Width, cfg.Height)
 	}
+	if kind != "icons" || ext != ".png" {
+		// Not re-encoded (like a normal upload of its kind): the header check
+		// above is enough, and a full decode would cost a Pi Zero memory.
+		return data, nil
+	}
 	img, _, err := image.Decode(bytes.NewReader(data))
 	if err != nil {
 		return nil, fmt.Errorf("it can't be decoded as an image: %v", err)
 	}
-	if kind == "icons" && ext == ".png" {
+	{
 		var b bytes.Buffer
 		if err := png.Encode(&b, resizeImage(img, 128, 128)); err != nil {
 			return nil, fmt.Errorf("it can't be re-encoded: %v", err)
 		}
 		return b.Bytes(), nil
 	}
-	return data, nil
 }
 
 func formatMatchesExt(format, ext string) bool {

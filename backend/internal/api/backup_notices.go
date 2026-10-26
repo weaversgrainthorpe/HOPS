@@ -71,7 +71,7 @@ func backupProblemNotice(p database.BackupProblem) notice {
 			Text:  fmt.Sprintf("%s (%s).", capitalize(p.Reason), at),
 			Level: "warning",
 		}
-	case database.ProblemRestoreImages:
+	case database.ProblemRestoreImages, database.ProblemAtticIndexRebuilt:
 		// A report of what a restore found: dismissible.
 		return notice{
 			ID:    fmt.Sprintf("%s%s-%d", noticeBackupPrefix, p.Kind, p.At.Unix()),
@@ -136,7 +136,8 @@ func isBackupNoticeID(id string) bool { return strings.HasPrefix(id, noticeBacku
 // applied), and its kind.
 func dismissibleBackupNotice(id string) (string, bool) {
 	for _, kind := range []string{database.ProblemCeilingDeleted, database.ProblemRestoreFailed,
-		database.ProblemRestoreRecovered, database.ProblemNoticesUnreadable, database.ProblemRestoreImages} {
+		database.ProblemRestoreRecovered, database.ProblemNoticesUnreadable, database.ProblemRestoreImages,
+		database.ProblemAtticIndexRebuilt} {
 		if strings.HasPrefix(id, noticeBackupPrefix+kind+"-") {
 			return kind, true
 		}

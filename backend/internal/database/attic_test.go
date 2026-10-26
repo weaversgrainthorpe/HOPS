@@ -143,11 +143,21 @@ func TestDeleteMovesTheFileToTheAttic(t *testing.T) {
 	if _, err := bm.MoveToAttic("icons", "none.png"); !errors.Is(err, fs.ErrNotExist) {
 		t.Errorf("missing file: %v", err)
 	}
-	// An unreadable index: nothing is moved (the delete is refused).
+	// A damaged index is rebuilt (visibly) before anything is moved.
 	writeFile(t, filepath.Join(dir, "attic", "index.json"), "{not json")
 	writeFile(t, filepath.Join(dir, "icons", "c.png"), "C")
-	if _, err := bm.MoveToAttic("icons", "c.png"); err == nil || !exists(filepath.Join(dir, "icons", "c.png")) {
-		t.Fatalf("moved despite an unreadable index: %v", err)
+	if _, err := bm.MoveToAttic("icons", "c.png"); err != nil || !hasProblem(bm, ProblemAtticIndexRebuilt, "damaged") {
+		t.Fatalf("damaged index: %v %+v", err, bm.Problems())
+	}
+	// A damaged index that can't be rebuilt (a backup's record is damaged too):
+	// nothing is moved, the delete is refused.
+	os.MkdirAll(bm.backupDir, 0o755)
+	writeFile(t, filepath.Join(bm.backupDir, BackupPrefix+"2026-01-01_00-00-00_manual"+BackupSuffix), "x")
+	writeFile(t, bm.recordPath(BackupPrefix+"2026-01-01_00-00-00_manual"+BackupSuffix), "{damaged")
+	writeFile(t, filepath.Join(dir, "attic", "index.json"), "{not json")
+	writeFile(t, filepath.Join(dir, "icons", "d.png"), "D")
+	if _, err := bm.MoveToAttic("icons", "d.png"); err == nil || !exists(filepath.Join(dir, "icons", "d.png")) {
+		t.Fatalf("moved although the index couldn't be rebuilt: %v", err)
 	}
 }
 
@@ -994,5 +1004,157 @@ func TestUploadedImagesGoThroughTheUploadProcessing(t *testing.T) {
 	rec, err := bm.readRecord(res.Name)
 	if err != nil || rec == nil || rec.Images["icons/a.png"] != sum([]byte("normalised")) {
 		t.Fatalf("record %+v %v", rec, err)
+	}
+}
+
+// Fix round 2 (I1): a lost or damaged attic index is never read as "empty":
+// it is rebuilt from the backups' records; versions it can't match to a name
+// are kept, and that is a visible notice.
+func TestLostAtticIndexIsRebuiltAndNothingIsLost(t *testing.T) {
+	bm, dbPath := setupBackupTest(t)
+	db := openDB(t, dbPath)
+	bm.SetLiveDB(db)
+	// live.png: only the live DB uses it (no record names its hash).
+	setConfig(t, db, "/icons/live.png")
+	hLive := toAttic(t, bm, "icons", "live.png", "LIVE")
+	// rec.png: a backup's record names it.
+	writeFile(t, bm.liveImagePath("icons", "rec.png"), "REC")
+	setConfig(t, db, "/icons/live.png", "/icons/rec.png")
+	if _, err := bm.CreateBackupWithDB(db, "manual"); err != nil {
+		t.Fatal(err)
+	}
+	hRec, err := bm.MoveToAttic("icons", "rec.png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, damage := range []string{"missing", "damaged"} {
+		idxPath := filepath.Join(filepath.Dir(dbPath), "attic", "index.json")
+		if damage == "missing" {
+			os.Remove(idxPath)
+		} else {
+			writeFile(t, idxPath, "{not json")
+		}
+		if _, err := bm.SweepAttic(); err != nil {
+			t.Fatalf("%s: %v", damage, err)
+		}
+		for _, h := range []string{hLive, hRec} {
+			if !exists(bm.atticHashPath("icons", h)) {
+				t.Fatalf("%s index: a kept version was deleted", damage)
+			}
+		}
+		bm.atticMu.Lock()
+		idx, err := bm.loadIndexLocked()
+		bm.atticMu.Unlock()
+		if err != nil || strings.Join(idx.Names["icons/rec.png"], ",") != hRec {
+			t.Fatalf("%s: index not rebuilt from the records: %+v %v", damage, idx, err)
+		}
+		if !hasProblem(bm, ProblemAtticIndexRebuilt, "1 image version") {
+			t.Fatalf("%s: no visible notice: %+v", damage, bm.Problems())
+		}
+		bm.DismissProblem(ProblemAtticIndexRebuilt)
+	}
+	// A record that can't be read: the rebuild fails, and the sweep is blocked.
+	list, _ := bm.ListBackups()
+	writeFile(t, bm.recordPath(list[0].Name), "{damaged")
+	os.Remove(filepath.Join(filepath.Dir(dbPath), "attic", "index.json"))
+	if _, err := bm.SweepAttic(); err == nil || !hasProblem(bm, ProblemAtticBlocked, "index") {
+		t.Fatalf("not blocked: %v %+v", err, bm.Problems())
+	}
+	if !exists(bm.atticHashPath("icons", hLive)) || !exists(bm.atticHashPath("icons", hRec)) {
+		t.Fatal("deleted while blocked")
+	}
+}
+
+// Fix round 2 (I2): an uploaded backup's staged images are the only copy;
+// deleting the backup moves them into the attic, so a restore staged before
+// the delete still gets them.
+func TestStagedImagesSurviveTheirBackup(t *testing.T) {
+	bm, dbPath := setupBackupTest(t)
+	db := openDB(t, dbPath)
+	bm.SetLiveDB(db)
+	z := buildZip(t, []zipEntry{{name: "hops.db", data: hopsDBBytes(t, "/icons/up.png")}, {name: "icons/up.png", data: []byte("UPLOADED")}}, nil)
+	res, err := bm.StoreUpload(bytes.NewReader(z), UploadCaps{Total: 8 << 20, PerImage: 1 << 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := bm.RestoreBackup(db, res.Name); err != nil {
+		t.Fatal(err)
+	}
+	if err := bm.DeleteBackup(res.Name); err != nil {
+		t.Fatal(err)
+	}
+	if exists(bm.stagedImagesPath(res.Name)) {
+		t.Fatal("staged images left in place")
+	}
+	if !exists(bm.atticHashPath("icons", sum([]byte("UPLOADED")))) {
+		t.Fatal("staged images weren't moved to the attic")
+	}
+	if _, err := bm.SweepAttic(); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+	if applied, err := ApplyPendingRestore(dbPath); err != nil || !applied {
+		t.Fatal(err)
+	}
+	r := bm.AfterRestore(true)
+	if got := readString(t, bm.liveImagePath("icons", "up.png")); got != "UPLOADED" {
+		t.Fatalf("image %q (%+v)", got, r)
+	}
+}
+
+// M1: a name the record couldn't pin down, with a file in place, is reported
+// as ambiguous, never kept silently. M3: the attic's only version isn't
+// recorded as fact.
+func TestUnresolvedNamesAreReportedAsAmbiguous(t *testing.T) {
+	bm, dbPath := setupBackupTest(t)
+	db := openDB(t, dbPath)
+	bm.SetLiveDB(db)
+	setConfig(t, db, "/icons/x.png")
+	toAttic(t, bm, "icons", "x.png", "ONLY")
+	p, err := bm.CreateBackupWithDB(db, "manual")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec, _ := bm.readRecord(filepath.Base(p))
+	if _, ok := rec.Images["icons/x.png"]; ok || strings.Join(rec.Unresolved, ",") != "icons/x.png" {
+		t.Fatalf("the attic's only version was recorded as fact: %+v", rec)
+	}
+	writeFile(t, bm.liveImagePath("icons", "x.png"), "SOMETHING ELSE")
+	plan, err := bm.PlanBackupImages(filepath.Base(p))
+	if err != nil || strings.Join(plan.Ambiguous, ",") != "icons/x.png" {
+		t.Fatalf("plan %+v %v", plan, err)
+	}
+	r := restoreAndApply(t, bm, db, dbPath, filepath.Base(p))
+	if strings.Join(r.Ambiguous, ",") != "icons/x.png" || !hasProblem(bm, ProblemRestoreImages, "can't tell which version") {
+		t.Fatalf("not reported: %+v %+v", r, bm.Problems())
+	}
+	if readString(t, bm.liveImagePath("icons", "x.png")) != "SOMETHING ELSE" {
+		t.Fatal("the file in place was changed")
+	}
+}
+
+// Cache: a record hashes the file as it is now, even when a replacement
+// keeps the same size and modification time.
+func TestRecordHashesFresh(t *testing.T) {
+	bm, dbPath := setupBackupTest(t)
+	db := openDB(t, dbPath)
+	bm.SetLiveDB(db)
+	setConfig(t, db, "/icons/x.png")
+	p := bm.liveImagePath("icons", "x.png")
+	writeFile(t, p, "AAAA")
+	mt := time.Unix(1700000000, 0)
+	os.Chtimes(p, mt, mt)
+	if _, err := bm.CreateBackupWithDB(db, "manual"); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, p, "BBBB")
+	os.Chtimes(p, mt, mt)
+	b2, err := bm.CreateBackupWithDB(db, "manual")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec, _ := bm.readRecord(filepath.Base(b2))
+	if rec.Images["icons/x.png"] != sum([]byte("BBBB")) {
+		t.Fatal("a stale cached hash was recorded")
 	}
 }

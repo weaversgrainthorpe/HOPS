@@ -123,26 +123,111 @@ func writeFileDurable(path string, raw []byte) error {
 type atticIndex struct {
 	Version int                 `json:"version"`
 	Names   map[string][]string `json:"names"`
+	// Unknown: versions ("<kind>/<sha256>") a rebuild couldn't match to a
+	// name. The sweep always keeps them (it can't tell who uses them).
+	Unknown []string `json:"unknown,omitempty"`
 }
 
 func (bm *BackupManager) indexPath() string { return filepath.Join(bm.AtticDir(), atticIndexName) }
 
-// loadIndexLocked reads the index (atticMu held); a missing index is empty.
+// loadIndexLocked reads the index (atticMu held). A missing, damaged or
+// unreadable index is NEVER read as empty while the attic holds files (the
+// sweep would delete versions kept for names): it is rebuilt from the
+// backups' records, versions it can't match to a name are kept as unknown,
+// and that is a visible notice. If the rebuild fails, the error blocks
+// whatever needed the index.
 func (bm *BackupManager) loadIndexLocked() (atticIndex, error) {
 	idx := atticIndex{Version: 1, Names: map[string][]string{}}
 	raw, err := os.ReadFile(bm.indexPath())
-	if err != nil {
-		if os.IsNotExist(err) {
+	var cause string
+	switch {
+	case err == nil:
+		if jerr := json.Unmarshal(raw, &idx); jerr == nil {
+			if idx.Names == nil {
+				idx.Names = map[string][]string{}
+			}
 			return idx, nil
 		}
-		return idx, fmt.Errorf("the attic index (%s) can't be read: %w", bm.indexPath(), err)
+		idx = atticIndex{Version: 1, Names: map[string][]string{}}
+		cause = "damaged"
+	case os.IsNotExist(err):
+		cause = "missing"
+	default:
+		cause = "unreadable (" + errText(err) + ")"
 	}
-	if err := json.Unmarshal(raw, &idx); err != nil {
-		return idx, fmt.Errorf("the attic index (%s) is damaged: %v", bm.indexPath(), err)
+	files, lerr := bm.listAttic()
+	if lerr != nil {
+		return idx, fmt.Errorf("the attic index (%s) is %s and the attic can't be read to rebuild it: %w", bm.indexPath(), cause, lerr)
 	}
-	if idx.Names == nil {
-		idx.Names = map[string][]string{}
+	if len(files) == 0 {
+		return idx, nil
 	}
+	return bm.rebuildIndexLocked(cause, files)
+}
+
+// rebuildIndexLocked rebuilds the index from the backups' records (and a
+// staged restore's), keeping every version it can't match as unknown.
+func (bm *BackupManager) rebuildIndexLocked(cause string, files []atticFile) (atticIndex, error) {
+	idx := atticIndex{Version: 1, Names: map[string][]string{}}
+	fail := func(err error) (atticIndex, error) {
+		return idx, fmt.Errorf("the attic index (%s) is %s and couldn't be rebuilt: %w", bm.indexPath(), cause, err)
+	}
+	present := map[string]bool{}
+	for _, f := range files {
+		present[f.kind+"/"+f.sum] = true
+	}
+	known := map[string]bool{}
+	addRec := func(rec *ImageRecord) {
+		for k, h := range rec.Images {
+			kind, _ := splitImageKey(k)
+			if present[kind+"/"+h] {
+				idx.Names[k] = addHash(idx.Names[k], h)
+				known[kind+"/"+h] = true
+			}
+		}
+	}
+	backups, err := bm.ListBackups()
+	if err != nil {
+		return fail(err)
+	}
+	for _, b := range backups {
+		rec, err := bm.readRecord(b.Name)
+		if err != nil {
+			return fail(fmt.Errorf("%s: %w", b.Name, err))
+		}
+		if rec != nil {
+			addRec(rec)
+		}
+	}
+	if m, err := readRestoreMarker(bm.dbPath); err != nil {
+		return fail(err)
+	} else if m != nil && m.Record != nil {
+		addRec(m.Record)
+	}
+	for _, f := range files {
+		if !known[f.kind+"/"+f.sum] {
+			idx.Unknown = append(idx.Unknown, f.kind+"/"+f.sum)
+		}
+	}
+	sort.Strings(idx.Unknown)
+	if cause != "missing" {
+		aside := fmt.Sprintf("%s.damaged-%d", bm.indexPath(), time.Now().Unix())
+		if err := os.Rename(bm.indexPath(), aside); err != nil && !os.IsNotExist(err) {
+			return fail(fmt.Errorf("the old index couldn't be set aside: %w", err))
+		}
+	}
+	if err := bm.saveIndexLocked(idx); err != nil {
+		return fail(err)
+	}
+	reason := fmt.Sprintf("The attic index (%s) was %s; HOPS rebuilt it from the backups' records", bm.indexPath(), cause)
+	if n := len(idx.Unknown); n > 0 {
+		reason += fmt.Sprintf(". %d image version(s) couldn't be matched to a name, so they are kept (HOPS won't delete them by itself): %s", n, strings.Join(idx.Unknown, ", "))
+	}
+	slog.Warn("attic index rebuilt", "component", "backup", "cause", cause, "unknown", len(idx.Unknown))
+	bm.mu.Lock()
+	bm.indexRebuilt = &BackupProblem{Kind: ProblemAtticIndexRebuilt, At: time.Now(), Reason: reason}
+	bm.saveNoticesLocked()
+	bm.mu.Unlock()
 	return idx, nil
 }
 
@@ -164,14 +249,10 @@ func addHash(list []string, h string) []string {
 	return append(list, h)
 }
 
-// --- Hashing live files (cached by size and mtime) ---
+// --- Hashing image files ---
 
-type hashEntry struct {
-	size  int64
-	mtime time.Time
-	sum   string
-}
-
+// liveHash hashes a regular file as it is now (never cached: a record must
+// describe the file actually there).
 func (bm *BackupManager) liveHash(path string) (string, error) {
 	fi, err := os.Lstat(path)
 	if err != nil {
@@ -180,23 +261,7 @@ func (bm *BackupManager) liveHash(path string) (string, error) {
 	if !fi.Mode().IsRegular() {
 		return "", fmt.Errorf("%s is not a regular file", path)
 	}
-	bm.mu.Lock()
-	e, ok := bm.hashCache[path]
-	bm.mu.Unlock()
-	if ok && e.size == fi.Size() && e.mtime.Equal(fi.ModTime()) {
-		return e.sum, nil
-	}
-	sum, err := fileSHA256(path)
-	if err != nil {
-		return "", err
-	}
-	bm.mu.Lock()
-	if bm.hashCache == nil {
-		bm.hashCache = map[string]hashEntry{}
-	}
-	bm.hashCache[path] = hashEntry{size: fi.Size(), mtime: fi.ModTime(), sum: sum}
-	bm.mu.Unlock()
-	return sum, nil
+	return fileSHA256(path)
 }
 
 func isRegular(p string) bool {
@@ -352,15 +417,13 @@ func installAtomic(src, dst, want string) error {
 // --- The record taken with each backup ---
 
 // recordFor works out which version of each image a backup file refers to:
-// the live file's hash, else the attic's only version of that name. Anything
-// else is unresolved. atticMu held.
+// the live file's hash; anything not in place is unresolved. atticMu held.
 func (bm *BackupManager) recordFor(dbFile string) (ImageRecord, error) {
 	rec := ImageRecord{Images: map[string]string{}}
 	refs, err := ReadFileImageRefs(dbFile, RefsAll)
 	if err != nil {
 		return rec, fmt.Errorf("cannot read the backup's image references: %w", err)
 	}
-	idx, idxErr := bm.loadIndexLocked()
 	for _, key := range sortedKeys(refs) {
 		kind, name := splitImageKey(key)
 		lp := bm.liveImagePath(kind, name)
@@ -372,19 +435,9 @@ func (bm *BackupManager) recordFor(dbFile string) (ImageRecord, error) {
 			rec.Images[key] = sum
 			continue
 		}
-		var found []string
-		if idxErr == nil {
-			for _, h := range idx.Names[key] {
-				if isRegular(bm.atticHashPath(kind, h)) {
-					found = append(found, h)
-				}
-			}
-		}
-		if len(found) == 1 {
-			rec.Images[key] = found[0]
-		} else {
-			rec.Unresolved = append(rec.Unresolved, key)
-		}
+		// Not in place: which version it means can't be known for certain
+		// (an attic version may be an older one), so it is unresolved.
+		rec.Unresolved = append(rec.Unresolved, key)
 	}
 	return rec, nil
 }
@@ -405,16 +458,81 @@ func (bm *BackupManager) recordBackup(name, path string) error {
 	return nil
 }
 
-// removeBackupExtras removes a deleted backup's image record and staged
-// images. A failure is logged; the sweep removes leftovers later (and shows
-// what it can't remove).
+// removeBackupExtras removes a deleted backup's image record, and MOVES its
+// staged images (an uploaded backup's: the only copy) into the attic, where
+// the sweep decides (a restore staged before the delete still needs them).
+// A failure is logged; the sweep retries leftovers (and shows what it can't).
 func (bm *BackupManager) removeBackupExtras(name string) {
+	bm.atticMu.Lock()
+	defer bm.atticMu.Unlock()
 	if err := os.Remove(bm.recordPath(name)); err != nil && !os.IsNotExist(err) {
 		slog.Warn("could not remove a deleted backup's image record; retried by the next sweep", "component", "backup", "name", name, "error", err)
 	}
-	if err := os.RemoveAll(bm.stagedImagesPath(name)); err != nil {
-		slog.Warn("could not remove a deleted backup's images; retried by the next sweep", "component", "backup", "name", name, "error", err)
+	if err := bm.moveStagedToAtticLocked(name); err != nil {
+		slog.Warn("could not move a deleted backup's images to the attic; retried by the next sweep", "component", "backup", "name", name, "error", err)
 	}
+}
+
+// moveStagedToAtticLocked moves backups/.images/<name>/<kind>/<file> into
+// the attic by content (index first), then removes the emptied folder.
+func (bm *BackupManager) moveStagedToAtticLocked(name string) error {
+	root := bm.stagedImagesPath(name)
+	if _, err := os.Lstat(root); os.IsNotExist(err) {
+		return nil
+	}
+	type item struct{ kind, file, path, sum string }
+	var items []item
+	for _, kind := range ImageKinds {
+		entries, err := os.ReadDir(filepath.Join(root, kind))
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return err
+		}
+		for _, e := range entries {
+			if !e.Type().IsRegular() || !ValidImageName(e.Name()) {
+				continue
+			}
+			p := filepath.Join(root, kind, e.Name())
+			sum, err := fileSHA256(p)
+			if err != nil {
+				return err
+			}
+			items = append(items, item{kind, e.Name(), p, sum})
+		}
+	}
+	if len(items) > 0 {
+		idx, err := bm.loadIndexLocked()
+		if err != nil {
+			return err
+		}
+		for _, it := range items {
+			k := ImageKey(it.kind, it.file)
+			idx.Names[k] = addHash(idx.Names[k], it.sum)
+		}
+		if err := bm.saveIndexLocked(idx); err != nil {
+			return err
+		}
+		for _, it := range items {
+			dir := filepath.Join(bm.AtticDir(), it.kind)
+			if err := os.MkdirAll(dir, 0o755); err != nil {
+				return err
+			}
+			dst := filepath.Join(dir, it.sum)
+			if isRegular(dst) {
+				if err := os.Remove(it.path); err != nil {
+					return err
+				}
+				continue
+			}
+			if err := os.Rename(it.path, dst); err != nil {
+				return err
+			}
+			slog.Info("a deleted backup's image moved to the attic", "component", "backup", "backup", name, "image", ImageKey(it.kind, it.file), "sha256", it.sum)
+		}
+	}
+	return os.RemoveAll(root)
 }
 
 // --- Resolving a backup's images (download and restore) ---
@@ -430,6 +548,16 @@ func (bm *BackupManager) imageSourceFor(backup string, rec *ImageRecord, idx att
 	if rec != nil {
 		want, ok := rec.Images[key]
 		if !ok {
+			// The record couldn't pin it down: any candidate makes it
+			// ambiguous (reported), never silently taken or kept.
+			if isRegular(lp) || isRegular(staged) {
+				return "", "", "ambiguous"
+			}
+			for _, h := range idx.Names[key] {
+				if isRegular(bm.atticHashPath(kind, h)) {
+					return "", "", "ambiguous"
+				}
+			}
 			return "", "", "missing"
 		}
 		for _, p := range []string{lp, staged} {
@@ -739,6 +867,9 @@ func (bm *BackupManager) keepSetLocked() (keepSet, []string) {
 			keep.hashes[kind+"/"+h] = true
 		}
 	}
+	for _, u := range idx.Unknown {
+		keep.hashes[u] = true
+	}
 	// keepSet hashes are "<kind>/<sum>"; the attic listing compares by kind too.
 	out := keepSet{hashes: map[string]bool{}, names: keep.names}
 	for k := range keep.hashes {
@@ -774,7 +905,7 @@ func (bm *BackupManager) removeOrphanExtrasLocked() []string {
 			if _, err := os.Lstat(filepath.Join(bm.backupDir, e.Name())); err == nil || !os.IsNotExist(err) {
 				continue
 			}
-			if err := os.RemoveAll(bm.stagedImagesPath(e.Name())); err != nil {
+			if err := bm.moveStagedToAtticLocked(e.Name()); err != nil {
 				failed = append(failed, filepath.Join(stagedImagesDir, e.Name())+": "+errText(err))
 			} else {
 				slog.Info("removed the images of a deleted backup", "component", "backup", "name", e.Name())
@@ -933,7 +1064,9 @@ func (bm *BackupManager) AfterRestore(applied bool) RestoredImages {
 		if rec != nil {
 			want, ok := rec.Images[key]
 			if !ok {
-				if !isRegular(lp) && live[key] {
+				if _, _, why := bm.imageSourceFor(backup, rec, idx, key); why == "ambiguous" {
+					res.Ambiguous = append(res.Ambiguous, key)
+				} else if live[key] {
 					res.Missing = append(res.Missing, key)
 				}
 				continue
@@ -992,7 +1125,7 @@ func (bm *BackupManager) AfterRestore(applied bool) RestoredImages {
 			len(res.Clashes), strings.Join(res.Clashes, ", ")))
 	}
 	if len(res.Ambiguous) > 0 {
-		parts = append(parts, fmt.Sprintf("HOPS can't tell which version of these images this backup used (it has no record of them), so it changed none of them: %s",
+		parts = append(parts, fmt.Sprintf("HOPS can't tell which version of these images this backup used (it has no record of their exact version), so it changed none of them: %s",
 			strings.Join(res.Ambiguous, ", ")))
 	}
 	if len(res.Failed) > 0 {

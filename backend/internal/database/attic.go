@@ -49,6 +49,9 @@ const (
 	// ProblemRestoreImages: after a restore, images the restored data uses are
 	// missing, or couldn't be installed. Dismissible; kept across restarts.
 	ProblemRestoreImages = "restore-images"
+	// ProblemAtticIndexRebuilt: the attic index was missing or damaged and was
+	// rebuilt from the backups' records. Dismissible; kept across restarts.
+	ProblemAtticIndexRebuilt = "attic-index-rebuilt"
 )
 
 // ImageKinds are the two kinds of uploaded image, as folder names.

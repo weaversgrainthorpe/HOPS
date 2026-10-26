@@ -255,6 +255,10 @@ func TestRestoreImagesNoticeIsShownAndDismissible(t *testing.T) {
 	if kind, ok := dismissibleBackupNotice(n.ID); !ok || kind != database.ProblemRestoreImages {
 		t.Fatal("not dismissible")
 	}
+	ir := backupProblemNotice(database.BackupProblem{Kind: database.ProblemAtticIndexRebuilt, At: time.Now(), Reason: "The attic index was missing; HOPS rebuilt it"})
+	if kind, ok := dismissibleBackupNotice(ir.ID); ir.Sticky || !ok || kind != database.ProblemAtticIndexRebuilt || !strings.Contains(ir.Text, "rebuilt") {
+		t.Fatalf("index-rebuilt notice %+v", ir)
+	}
 	for _, k := range []string{database.ProblemAtticBlocked, database.ProblemAtticDeleteFailed, database.ProblemAtticLarge} {
 		n := backupProblemNotice(database.BackupProblem{Kind: k, At: time.Now(), Reason: "why it happened"})
 		if !n.Sticky || !strings.Contains(strings.ToLower(n.Text), "why it happened") || strings.HasPrefix(n.Text, "A backup problem") {
