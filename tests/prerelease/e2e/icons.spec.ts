@@ -107,7 +107,7 @@ test.describe('Settings › Icons', () => {
 		await page.getByLabel('Choose icon images to upload').setInputFiles({ name: `${p}.png`, mimeType: 'image/png', buffer: Buffer.from('not an image') });
 		const alert = page.getByRole('alert').filter({ hasText: 'The upload failed.' });
 		await expect(alert).toBeVisible();
-		await expect(alert).toContainText(`${p}.png: failed: Could not decode the image file`);
+		await expect(alert).toContainText(`${p}.png: failed: This image can't be used`);
 		// And a server failure is shown too, never swallowed.
 		await page.route((u) => u.pathname === '/api/icons/upload', (route) => route.fulfill({ status: 500, json: { error: 'disk full' } }));
 		await page.getByLabel('Choose icon images to upload').setInputFiles(png(`${p}-2.png`));
