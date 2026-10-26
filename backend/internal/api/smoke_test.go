@@ -173,52 +173,15 @@ func TestPanicRecoverEmits500(t *testing.T) {
 func TestSmokeUnauthenticatedRoutesReject(t *testing.T) {
 	router, _ := setupTestRouter(t)
 
-	// Sample of protected routes — every one should 401 without auth.
-	protected := []string{
-		"/api/auth/logout",
-		"/api/auth/change-password",
-		"/api/config/export",
-		"/api/backups",
-		"/api/backups/cleanup",
-		"/api/backups/upload",
-		"/api/backups/hops-backup-2026-01-01_00-00-00_manual.db",
-		"/api/settings",
-		"/api/logs",
-		"/api/icons/usage",
-		"/api/icons/packaged",
-		"/api/discovery/scans",
-		"/api/discovery/detectors",
-		"/api/discovery/diagnostics",
-		"/api/notices/layered-status-checks-v4/dismiss",
-	}
-	// Backup mutations by their own method: 401 before anything else.
-	for _, mp := range [][2]string{
-		{"DELETE", "/api/backups/pending-restore"},
-		{"POST", "/api/backups/upload"},
-		{"POST", "/api/backups/cleanup"},
-		{"DELETE", "/api/backups/hops-backup-2026-01-01_00-00-00_manual.db"},
-		// Settings › Icons writes.
-		{"POST", "/api/icons/upload"},
-		{"PUT", "/api/icons/some-icon"},
-		{"DELETE", "/api/icons/some-icon"},
-		{"POST", "/api/icon-categories"},
-		{"PUT", "/api/icon-categories/some-cat"},
-		{"DELETE", "/api/icon-categories/some-cat"},
-	} {
-		req := httptest.NewRequest(mp[0], mp[1], nil)
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
-		if w.Code != http.StatusUnauthorized {
-			t.Errorf("%s %s anonymous request returned %d, expected 401", mp[0], mp[1], w.Code)
-		}
-	}
-	for _, path := range protected {
-		t.Run(path, func(t *testing.T) {
-			req := httptest.NewRequest("GET", path, nil)
+	// The probe list is shared with TestRouteAudit (route_audit_test.go),
+	// which also checks every registered route for every method.
+	for _, pr := range sentinelProbes {
+		t.Run(pr[0]+" "+pr[1], func(t *testing.T) {
+			req := httptest.NewRequest(pr[0], pr[1], nil)
 			w := httptest.NewRecorder()
 			router.ServeHTTP(w, req)
 			if w.Code != http.StatusUnauthorized {
-				t.Fatalf("%s anonymous request returned %d, expected 401", path, w.Code)
+				t.Fatalf("%s %s anonymous request returned %d, expected 401", pr[0], pr[1], w.Code)
 			}
 		})
 	}

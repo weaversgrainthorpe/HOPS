@@ -46,6 +46,7 @@ type Router struct {
 	config         *config.Config
 	settings       *settings.Service
 	mux            *http.ServeMux
+	routes         []string // every registered pattern, recorded by handle()
 	rateLimiter    *RateLimiter
 	backupManager  *database.BackupManager
 	startTime      time.Time
@@ -301,30 +302,39 @@ func (r *Router) protected(h http.HandlerFunc) http.HandlerFunc {
 	return r.authMiddleware(r.csrfMiddleware(h))
 }
 
+// handle registers a route on the mux and records its pattern, so the route
+// audit test (route_audit_test.go) can enumerate every registration and demand
+// that each one is classified. All routes MUST be registered through this
+// method, never r.mux directly (a test enforces that).
+func (r *Router) handle(pattern string, h http.HandlerFunc) {
+	r.routes = append(r.routes, pattern)
+	r.mux.HandleFunc(pattern, h)
+}
+
 // setupRoutes configures all API routes
 func (r *Router) setupRoutes() {
 	// Public API routes
-	r.mux.HandleFunc("/api/health", r.handleGetHealth)
-	r.mux.HandleFunc("/api/version", r.handleGetVersion)
-	r.mux.HandleFunc("/api/config", r.handleConfig)
-	r.mux.HandleFunc("/api/dashboards", r.protected(r.handleDashboardsRoot))
-	r.mux.HandleFunc("/api/dashboards/", r.protected(r.handleDashboards))
+	r.handle("/api/health", r.handleGetHealth)
+	r.handle("/api/version", r.handleGetVersion)
+	r.handle("/api/config", r.handleConfig)
+	r.handle("/api/dashboards", r.protected(r.handleDashboardsRoot))
+	r.handle("/api/dashboards/", r.protected(r.handleDashboards))
 	// Intentionally public — the SPA polls this for tile colour indicators
 	// before login so a viewer landing on a public dashboard sees status
 	// dots immediately. Entry IDs are random UUIDs from the user's own
 	// config, so this is not a data-leak surface. Don't "tighten" it
 	// without re-reading the dashboard-render path.
-	r.mux.HandleFunc("/api/status/", r.handleGetStatus)
-	r.mux.HandleFunc("/api/auth/login", r.handleLogin)
-	r.mux.HandleFunc("/api/auth/check", r.handleAuthCheck)
+	r.handle("/api/status/", r.handleGetStatus)
+	r.handle("/api/auth/login", r.handleLogin)
+	r.handle("/api/auth/check", r.handleAuthCheck)
 
 	// Protected API routes (require authentication + CSRF token for mutations)
-	r.mux.HandleFunc("/api/auth/logout", r.protected(r.handleLogout))
-	r.mux.HandleFunc("/api/auth/change-password", r.protected(r.handleChangePassword))
-	r.mux.HandleFunc("/api/config/export", r.protected(r.handleExportConfig))
-	r.mux.HandleFunc("/api/config/import", r.protected(r.handleImportConfig))
-	r.mux.HandleFunc("/api/config/reset", r.protected(r.handleResetConfig))
-	r.mux.HandleFunc("/api/notices/", r.protected(r.handleNotices))
+	r.handle("/api/auth/logout", r.protected(r.handleLogout))
+	r.handle("/api/auth/change-password", r.protected(r.handleChangePassword))
+	r.handle("/api/config/export", r.protected(r.handleExportConfig))
+	r.handle("/api/config/import", r.protected(r.handleImportConfig))
+	r.handle("/api/config/reset", r.protected(r.handleResetConfig))
+	r.handle("/api/notices/", r.protected(r.handleNotices))
 
 	// Backup management routes. Note the asymmetry, kept deliberately:
 	//   POST /api/backups            → create a new backup
@@ -334,17 +344,17 @@ func (r *Router) setupRoutes() {
 	//   sentinels (never valid backup names), see handleBackupActions.
 	// Splitting the restore into /api/backups/{name}/restore is the kind
 	// of "tidy" that breaks every client. Leave it alone.
-	r.mux.HandleFunc("/api/backups", r.protected(r.handleBackups))
-	r.mux.HandleFunc("/api/backups/", r.protected(r.handleBackupActions))
+	r.handle("/api/backups", r.protected(r.handleBackups))
+	r.handle("/api/backups/", r.protected(r.handleBackupActions))
 
 	// App settings routes (admin-only). GET lists every setting with its
 	// definition + current value; PUT /api/settings/{key} updates one.
-	r.mux.HandleFunc("/api/settings", r.protected(r.handleSettingsList))
-	r.mux.HandleFunc("/api/upload-limits", r.protected(r.handleUploadLimits))
-	r.mux.HandleFunc("/api/settings/", r.protected(r.handleSettingUpdate))
+	r.handle("/api/settings", r.protected(r.handleSettingsList))
+	r.handle("/api/upload-limits", r.protected(r.handleUploadLimits))
+	r.handle("/api/settings/", r.protected(r.handleSettingUpdate))
 
 	// Recent log lines (admin-only, GET only): Settings › Logs.
-	r.mux.HandleFunc("/api/logs", r.protected(r.handleLogs))
+	r.handle("/api/logs", r.protected(r.handleLogs))
 
 	// Network discovery routes (admin-only). The collection handler
 	// dispatches by method; the item handler parses /{id}/... .
@@ -362,43 +372,43 @@ func (r *Router) setupRoutes() {
 	//    detector ID but isn't — it's a sentinel that resets every
 	//    override at once. handleDiscoveryDetectorsItem peels off
 	//    that literal before treating the path segment as an ID.
-	r.mux.HandleFunc("/api/discovery/scans", r.protected(r.handleDiscoveryScansCollection))
-	r.mux.HandleFunc("/api/discovery/scans/", r.protected(r.handleDiscoveryScansItem))
-	r.mux.HandleFunc("/api/discovery/detectors", r.protected(r.handleDiscoveryDetectorsCollection))
-	r.mux.HandleFunc("/api/discovery/detectors/", r.protected(r.handleDiscoveryDetectorsItem))
-	r.mux.HandleFunc("/api/discovery/diagnostics", r.protected(r.handleDiscoveryDiagnostics))
-	r.mux.HandleFunc("/api/discovery/suggest-cidr", r.protected(r.handleSuggestCIDR))
+	r.handle("/api/discovery/scans", r.protected(r.handleDiscoveryScansCollection))
+	r.handle("/api/discovery/scans/", r.protected(r.handleDiscoveryScansItem))
+	r.handle("/api/discovery/detectors", r.protected(r.handleDiscoveryDetectorsCollection))
+	r.handle("/api/discovery/detectors/", r.protected(r.handleDiscoveryDetectorsItem))
+	r.handle("/api/discovery/diagnostics", r.protected(r.handleDiscoveryDiagnostics))
+	r.handle("/api/discovery/suggest-cidr", r.protected(r.handleSuggestCIDR))
 
 	// Icon management routes
-	r.mux.HandleFunc("/api/icon-categories", r.handleGetIconCategories)
-	r.mux.HandleFunc("/api/icon-categories/", r.protected(r.handleIconCategoryActions))
-	r.mux.HandleFunc("/api/icons", r.handleGetIcons)
-	r.mux.HandleFunc("/api/icons/upload", r.protected(r.handleUploadIcon))
+	r.handle("/api/icon-categories", r.handleGetIconCategories)
+	r.handle("/api/icon-categories/", r.protected(r.handleIconCategoryActions))
+	r.handle("/api/icons", r.handleGetIcons)
+	r.handle("/api/icons/upload", r.protected(r.handleUploadIcon))
 	// Where each uploaded icon is used (admin-only, GET only): Settings › Icons.
-	r.mux.HandleFunc("/api/icons/usage", r.protected(r.handleIconUsage))
+	r.handle("/api/icons/usage", r.protected(r.handleIconUsage))
 	// What ships with HOPS, counted from the real sources (admin-only, GET only).
-	r.mux.HandleFunc("/api/icons/packaged", r.protected(r.handlePackagedIcons))
-	r.mux.HandleFunc("/api/icons/", r.protected(r.handleIconActions))
+	r.handle("/api/icons/packaged", r.protected(r.handlePackagedIcons))
+	r.handle("/api/icons/", r.protected(r.handleIconActions))
 
 	// Serve uploaded icons from data directory
-	r.mux.HandleFunc("/icons/", r.serveIcons)
+	r.handle("/icons/", r.serveIcons)
 
 	// Serve dashboard icons (from homarr-labs/dashboard-icons)
-	r.mux.HandleFunc("/api/icons/dashboard/", r.serveDashboardIcons)
+	r.handle("/api/icons/dashboard/", r.serveDashboardIcons)
 
 	// Background image routes (GET is public, POST/PUT/DELETE require auth inline)
-	r.mux.HandleFunc("/api/backgrounds", r.handleBackgrounds)
-	r.mux.HandleFunc("/api/backgrounds/categories", r.protected(r.handleBackgroundCategories))
-	r.mux.HandleFunc("/api/backgrounds/categories/", r.protected(r.handleBackgroundCategoryActions))
-	r.mux.HandleFunc("/api/backgrounds/", r.protected(r.handleBackgroundActions))
+	r.handle("/api/backgrounds", r.handleBackgrounds)
+	r.handle("/api/backgrounds/categories", r.protected(r.handleBackgroundCategories))
+	r.handle("/api/backgrounds/categories/", r.protected(r.handleBackgroundCategoryActions))
+	r.handle("/api/backgrounds/", r.protected(r.handleBackgroundActions))
 	// Serve uploaded backgrounds from data directory
-	r.mux.HandleFunc("/backgrounds/", r.serveBackgrounds)
+	r.handle("/backgrounds/", r.serveBackgrounds)
 
 	// Serve preset background images from data/presets directory
-	r.mux.HandleFunc("/presets/", r.servePresets)
+	r.handle("/presets/", r.servePresets)
 
 	// Static file serving (frontend) with SPA support
-	r.mux.HandleFunc("/", r.serveSPA)
+	r.handle("/", r.serveSPA)
 }
 
 // handleBackgrounds routes GET and POST requests for backgrounds
