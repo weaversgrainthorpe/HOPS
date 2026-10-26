@@ -1,0 +1,179 @@
+<script lang="ts">
+  // Settings › Dashboards: tiles that point at the same address (imports, Discovery or copies),
+  // with a merge that keeps one and deletes the others. A merge is a normal layout edit: one
+  // revision-checked save per dashboard, never silent (a preview and a confirmation first), and
+  // refused visibly when a dashboard is being edited or has changed elsewhere.
+  import { get } from 'svelte/store';
+  import Icon from '@iconify/svelte';
+  import { config, applySavedLayout, showSaveWarning, loadConfig, findLayoutDashboard } from '$lib/stores/config';
+  import { session, parkedDraft } from '$lib/stores/editSession';
+  import { saveDashboardV3, ConflictError } from '$lib/utils/api';
+  import { findDuplicates, removeTiles, type DupGroup, type DupTile } from '$lib/utils/duplicates';
+  import { showOnDashboard } from '$lib/utils/showIt';
+  import { toast } from '$lib/stores/toast';
+
+  const report = $derived(findDuplicates($config));
+
+  /** group address -> id of the tile to keep. */
+  let keep = $state<Record<string, string>>({});
+  /** The group whose merge preview is open. */
+  let merging = $state<string | null>(null);
+  let busy = $state(false);
+  let refusal = $state('');
+
+  const tileCount = (n: number) => `${n} tile${n === 1 ? '' : 's'}`;
+  const tilePath = (t: DupTile) => [...t.path, t.name || '(no name)'].join(' › ');
+
+  /** What differs between the copies, so the user can choose which to keep. */
+  function differences(g: DupGroup, t: DupTile): string[] {
+    const out: string[] = [];
+    if (g.tiles.some((o) => o.name !== t.name)) out.push(`name "${t.name || '(none)'}"`);
+    if (g.tiles.some((o) => o.icon !== t.icon || o.iconUrl !== t.iconUrl)) out.push(`icon ${t.iconUrl ? 'custom' : t.icon || '(none)'}`);
+    if (g.tiles.some((o) => o.openMode !== t.openMode)) out.push(`opens ${t.openMode || '(default)'}`);
+    if (g.tiles.some((o) => o.awayUrl !== t.awayUrl)) out.push(`away address ${t.awayUrl || '(none)'}`);
+    if (g.tiles.some((o) => o.url !== t.url)) out.push(`written ${t.url}`);
+    return out;
+  }
+
+  const keeperOf = (g: DupGroup): string => keep[g.address] ?? g.tiles[0].id;
+  const doomed = (g: DupGroup) => g.tiles.filter((t) => t.id !== keeperOf(g));
+
+  function startMerge(g: DupGroup) {
+    refusal = '';
+    merging = g.address;
+  }
+  function cancelMerge() {
+    merging = null;
+    refusal = '';
+  }
+
+  async function confirmMerge(g: DupGroup) {
+    if (busy) return;
+    refusal = '';
+    const gone = doomed(g);
+    const byDash = new Map<string, DupTile[]>();
+    for (const t of gone) byDash.set(t.dashboardId, [...(byDash.get(t.dashboardId) ?? []), t]);
+
+    // Refuse before anything is saved if any affected dashboard is open for editing.
+    const editing = new Set([get(session)?.dashboardId, get(parkedDraft)?.dashboardId].filter(Boolean));
+    const blocked = [...byDash.values()].filter((l) => editing.has(l[0].dashboardId));
+    if (blocked.length) {
+      refusal = `Not merged: "${blocked[0][0].dashboardName}" is being edited (an edit session or unsaved draft is open). Save or discard that first, then merge.`;
+      return;
+    }
+
+    busy = true;
+    const done: string[] = [];
+    try {
+      for (const [dashId, tiles] of byDash) {
+        const d = findLayoutDashboard(dashId, get(config));
+        if (!d) throw new Error(`Dashboard "${tiles[0].dashboardName}" no longer exists. Reload and try again.`);
+        const ids = new Set(tiles.map((t) => t.id));
+        const resp = await saveDashboardV3(d.id, removeTiles(d, ids), d.revision);
+        applySavedLayout(resp);
+        if (resp.warning) showSaveWarning(resp.warning);
+        done.push(d.name);
+      }
+      toast.success(`Merged: kept "${tilePath(g.tiles.find((t) => t.id === keeperOf(g))!)}" and deleted ${tileCount(gone.length)}.`);
+      merging = null;
+    } catch (e) {
+      const partial = done.length ? ` Already saved before this failed: ${done.join(', ')}.` : '';
+      if (e instanceof ConflictError) {
+        refusal = `Not merged: a dashboard was changed somewhere else, so nothing more was deleted. The list below has been reloaded; check it and try again.${partial}`;
+        void loadConfig({ background: true });
+      } else {
+        refusal = `Merge failed: ${e instanceof Error ? e.message : 'request failed'}.${partial}`;
+      }
+    } finally {
+      busy = false;
+    }
+  }
+</script>
+
+<section class="dupes" aria-labelledby="duplicates-title" data-testid="duplicates">
+  <h3 id="duplicates-title">Duplicates</h3>
+  {#if !$config}
+    <p class="muted">Loading…</p>
+  {:else}
+    <p class="muted">
+      Tiles that point at the same address, on any dashboard, tab or folder. Addresses are compared ignoring capitals,
+      a default port and a trailing slash; <code>www.</code> counts as a different address.
+    </p>
+    {#if report.groups.length === 0}
+      <p class="state ok" role="status" data-state="none">No duplicate addresses across {tileCount(report.totalTiles)}</p>
+    {:else}
+      {#each report.groups as g (g.address)}
+        <div class="group" data-dup-group={g.address}>
+          <div class="addr"><code>{g.address}</code> <span class="muted">{g.tiles.length} tiles</span></div>
+          <ul class="rows">
+            {#each g.tiles as t (t.id)}
+              {@const diffs = differences(g, t)}
+              <li class="row" data-dup-tile={t.id}>
+                <label class="what">
+                  <input
+                    type="radio"
+                    name={`keep-${g.address}`}
+                    value={t.id}
+                    checked={keeperOf(g) === t.id}
+                    disabled={busy}
+                    onchange={() => { keep[g.address] = t.id; if (merging === g.address) refusal = ''; }}
+                  />
+                  <span class="icon">
+                    {#if t.iconUrl}<img src={t.iconUrl} alt="" width="20" height="20" />{:else if t.icon}<Icon icon={t.icon} width="20" height="20" />{/if}
+                  </span>
+                  <span class="text">
+                    <span class="name">{t.name || '(no name)'}</span>
+                    <span class="path">{t.path.join(' › ')}</span>
+                    {#if diffs.length}<span class="diff">{diffs.join(' · ')}</span>{/if}
+                    {#if t.awayUrl && !diffs.some((x) => x.startsWith('away'))}<span class="diff">away address {t.awayUrl}</span>{/if}
+                  </span>
+                </label>
+                <button type="button" class="btn-secondary" onclick={() => showOnDashboard({ kind: 'tile', id: t.id, dashboardId: t.dashboardId, dashboardPath: t.dashboardPath, dashboardName: t.dashboardName, tabId: t.tabId, folderIds: t.folderIds })}>Show it</button>
+              </li>
+            {/each}
+          </ul>
+          {#if merging === g.address}
+            <div class="preview" role="group" aria-label="Merge preview" data-merge-preview>
+              <p>
+                <strong>Keeps</strong> {tilePath(g.tiles.find((t) => t.id === keeperOf(g))!)}.<br />
+                <strong data-merge-deletes>Deletes {tileCount(doomed(g).length)}: {doomed(g).map((t) => `${t.path[0]} › ${t.name || '(no name)'}`).join(', ')}</strong>
+              </p>
+              <p class="muted">
+                Saved as a normal edit of each affected dashboard, so the dashboard's backup taken just before the save
+                holds the deleted tiles and you can restore them from there.
+              </p>
+              <div class="btns">
+                <button type="button" class="btn-primary" disabled={busy} onclick={() => confirmMerge(g)}>{busy ? 'Merging…' : `Delete ${tileCount(doomed(g).length)}`}</button>
+                <button type="button" class="btn-secondary" disabled={busy} onclick={cancelMerge}>Cancel</button>
+              </div>
+            </div>
+          {:else}
+            <div class="btns">
+              <button type="button" class="btn-secondary" disabled={busy} onclick={() => startMerge(g)}>Merge, keeping the selected tile…</button>
+            </div>
+          {/if}
+          {#if refusal && merging === g.address}<p class="error" role="alert" data-merge-refusal>{refusal}</p>{/if}
+        </div>
+      {/each}
+    {/if}
+  {/if}
+</section>
+
+<style>
+  .dupes { margin-top: 2rem; padding-top: 1.25rem; border-top: 1px solid var(--border); }
+  h3 { margin: 0 0 0.5rem; }
+  p { margin: 0.4rem 0; line-height: 1.45; }
+  .muted { color: var(--text-secondary); font-size: 0.9rem; }
+  .error { color: var(--color-error, #ef4444); }
+  .state { padding: 0.6rem 0.8rem; border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 0.4rem; }
+  .group { margin: 0.75rem 0; padding: 0.6rem 0.8rem; border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 0.4rem; }
+  .addr code { overflow-wrap: anywhere; }
+  .rows { list-style: none; margin: 0.5rem 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
+  .row { display: flex; flex-wrap: wrap; gap: 0.75rem; justify-content: space-between; align-items: flex-start; }
+  .what { display: flex; gap: 0.5rem; align-items: flex-start; min-width: 0; flex: 1 1 18rem; cursor: pointer; }
+  .text { display: flex; flex-direction: column; min-width: 0; }
+  .name { font-weight: 600; }
+  .path, .diff { color: var(--text-secondary); font-size: 0.85rem; overflow-wrap: anywhere; }
+  .preview { margin-top: 0.5rem; padding: 0.6rem 0.8rem; border: 1px solid var(--color-error, #ef4444); border-radius: 0.4rem; }
+  .btns { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.4rem; }
+</style>
