@@ -809,6 +809,8 @@ export interface BackupList {
   atticError?: string;
   /** Deleted image versions that couldn't be matched to a name (after the attic index was rebuilt). */
   atticUnknown?: number;
+  /** The unknown images couldn't be counted (never shown as none). */
+  atticUnknownError?: string;
 }
 
 export async function listBackups(): Promise<BackupList> {
@@ -823,7 +825,8 @@ export async function listBackups(): Promise<BackupList> {
     ...(resp.pendingRestore === true ? { pendingRestore: true } : {}),
     ...(resp.attic && typeof resp.attic.files === 'number' && typeof resp.attic.bytes === 'number' ? { attic: resp.attic } : {}),
     ...(typeof resp.atticError === 'string' && resp.atticError ? { atticError: resp.atticError } : {}),
-    ...(typeof resp.atticUnknown === 'number' && resp.atticUnknown > 0 ? { atticUnknown: resp.atticUnknown } : {})
+    ...(typeof resp.atticUnknown === 'number' && resp.atticUnknown > 0 ? { atticUnknown: resp.atticUnknown } : {}),
+    ...(typeof resp.atticUnknownError === 'string' && resp.atticUnknownError ? { atticUnknownError: resp.atticUnknownError } : {})
   };
 }
 

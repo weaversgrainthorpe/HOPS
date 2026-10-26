@@ -147,6 +147,17 @@ describe('BackupModal', () => {
     expect(err.getAttribute('role')).toBe('alert');
   });
 
+  it('an unknown-images count that could not be read is shown as an error, never as none', async () => {
+    vi.mocked(listBackups).mockResolvedValue({
+      backups: [backup], problems: [], attic: { files: 1, bytes: 2048 },
+      atticUnknownError: "Couldn't count the unknown images (the attic index can't be read): bad json"
+    });
+    render(BackupModal, { onClose: () => {} });
+    const err = await screen.findByTestId('backup-attic-unknown-error');
+    expect(err.textContent).toContain("Couldn't count the unknown images");
+    expect(err.getAttribute('role')).toBe('alert');
+  });
+
   it('Clean up unknown images previews first, with why they were kept, and deletes only after confirming', async () => {
     vi.mocked(listBackups).mockResolvedValue({ backups: [backup], problems: [], attic: { files: 1, bytes: 2048 }, atticUnknown: 1 });
     vi.mocked(previewUnknownCleanup).mockResolvedValue({

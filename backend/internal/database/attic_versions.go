@@ -1407,14 +1407,13 @@ func sortedKeys(m map[string]bool) []string {
 
 // AtticUnknownCount is how many unknown versions the attic index lists (the
 // Backups dialog offers "Clean up unknown images" when there are any). It
-// reads the index as it is; an unreadable index counts as none here (the
-// sweep reports it).
-func (bm *BackupManager) AtticUnknownCount() int {
+// reads the index as it is; an unreadable index is an error, never "none".
+func (bm *BackupManager) AtticUnknownCount() (int, error) {
 	bm.atticMu.Lock()
 	defer bm.atticMu.Unlock()
 	idx, err := bm.readIndexOnlyLocked()
 	if err != nil {
-		return 0
+		return 0, err
 	}
-	return len(idx.Unknown)
+	return len(idx.Unknown), nil
 }

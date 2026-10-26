@@ -1310,3 +1310,17 @@ func TestRecordlessRestoreAfterIndexRebuildIsAmbiguous(t *testing.T) {
 		t.Fatal("the file in place was changed")
 	}
 }
+
+// The Backups dialog's "unknown images" count: an unreadable attic index is an error the
+// dialog shows, never a count of 0 (no silent "nothing to clean up").
+func TestAtticUnknownCountReportsAnUnreadableIndex(t *testing.T) {
+	bm, _ := setupBackupTest(t)
+	toAttic(t, bm, "icons", "x.png", "X")
+	if n, err := bm.AtticUnknownCount(); err != nil || n != 0 {
+		t.Fatalf("readable index: got %d, %v; want 0, nil", n, err)
+	}
+	writeFile(t, bm.indexPath(), "{not json")
+	if _, err := bm.AtticUnknownCount(); err == nil {
+		t.Fatal("a damaged index must be reported, not counted as 0 unknown images")
+	}
+}

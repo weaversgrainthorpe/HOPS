@@ -24,6 +24,7 @@
   let pendingRestore = $state(false);
   let attic = $state<AtticUsage | null>(null);
   let atticError = $state('');
+  let atticUnknownError = $state('');
   let atticUnknown = $state(0);
   // "Clean up unknown images": the preview, shown before anything is deleted.
   let unknownPreview = $state<{ items: UnknownImage[]; warnings: string[] } | null>(null);
@@ -61,6 +62,7 @@
       attic = result.attic ?? null;
       atticError = result.atticError ?? '';
       atticUnknown = result.atticUnknown ?? 0;
+      atticUnknownError = result.atticUnknownError ?? '';
     } catch (err) {
       error = why(err, 'Failed to load backups.');
     } finally {
@@ -370,6 +372,9 @@
       </p>
     {/if}
 
+    {#if atticUnknownError}
+      <p class="retention attic-error" role="alert" data-testid="backup-attic-unknown-error">{atticUnknownError}</p>
+    {/if}
     {#if atticUnknown > 0 && !unknownPreview}
       <div class="retention unknown-row">
         <span>

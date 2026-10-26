@@ -43,7 +43,11 @@ func (r *Router) handleBackups(w http.ResponseWriter, req *http.Request) {
 		} else {
 			resp["attic"] = u
 		}
-		resp["atticUnknown"] = r.backupManager.AtticUnknownCount()
+		if n, err := r.backupManager.AtticUnknownCount(); err != nil {
+			resp["atticUnknownError"] = "Couldn't count the unknown images (the attic index can't be read): " + err.Error()
+		} else {
+			resp["atticUnknown"] = n
+		}
 		writeJSON(w, resp)
 
 	case http.MethodPost:
