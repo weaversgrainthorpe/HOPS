@@ -57,6 +57,7 @@ type Router struct {
 	// file under an open connection leaves the running process with a
 	// stale view). main.go selects on it alongside SIGTERM.
 	shutdownReq    chan struct{}
+	appCSP         string        // CSP for app pages and API responses, with the SPA's inline-script hashes (csp.go)
 	mu             sync.RWMutex  // guards trustedProxies (rebuilt on settings change requires restart, but the slice itself is accessed concurrently)
 	trustedProxies []*net.IPNet  // parsed at construction from settings.proxy.trusted_cidrs
 	notices        noticeState   // dismissed one-time notices (notices.go)
@@ -278,6 +279,7 @@ func NewRouter(db *sql.DB, authService *auth.Service, cfg *config.Config, settin
 	go r.dailyBackupCleanup(24*time.Hour, r.cleanupStop)
 
 	r.setupRoutes()
+	r.appCSP = appContentSecurityPolicy(r.spaIndexHTML())
 	return r, r.securityHeadersMiddleware(r.corsMiddleware(r.recoverMiddleware(r.loggingMiddleware(r.mux))))
 }
 
@@ -300,6 +302,28 @@ func parseTrustedProxyCIDRs(cidrs []string) []*net.IPNet {
 // to use on read-only handlers too.
 func (r *Router) protected(h http.HandlerFunc) http.HandlerFunc {
 	return r.authMiddleware(r.csrfMiddleware(h))
+}
+
+// publicRead serves a route whose GET is public and whose writes are admin-only.
+// The split happens here, at registration, so every write goes through the
+// standard protected wrapper (auth + CSRF) and no handler gates a method
+// inline. Methods in neither get nor writes answer 405.
+func (r *Router) publicRead(get http.HandlerFunc, writes map[string]http.HandlerFunc) http.HandlerFunc {
+	guarded := make(map[string]http.HandlerFunc, len(writes))
+	for m, h := range writes {
+		guarded[m] = r.protected(h)
+	}
+	return func(w http.ResponseWriter, req *http.Request) {
+		if req.Method == http.MethodGet {
+			get(w, req)
+			return
+		}
+		if h, ok := guarded[req.Method]; ok {
+			h(w, req)
+			return
+		}
+		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
 }
 
 // handle registers a route on the mux and records its pattern, so the route
@@ -380,9 +404,13 @@ func (r *Router) setupRoutes() {
 	r.handle("/api/discovery/suggest-cidr", r.protected(r.handleSuggestCIDR))
 
 	// Icon management routes
-	r.handle("/api/icon-categories", r.handleGetIconCategories)
+	r.handle("/api/icon-categories", r.publicRead(r.handleGetIconCategories, map[string]http.HandlerFunc{
+		http.MethodPost: r.handleCreateIconCategory,
+	}))
 	r.handle("/api/icon-categories/", r.protected(r.handleIconCategoryActions))
-	r.handle("/api/icons", r.handleGetIcons)
+	r.handle("/api/icons", r.publicRead(r.handleGetIcons, map[string]http.HandlerFunc{
+		http.MethodPost: r.handleCreateIcon,
+	}))
 	r.handle("/api/icons/upload", r.protected(r.handleUploadIcon))
 	// Where each uploaded icon is used (admin-only, GET only): Settings › Icons.
 	r.handle("/api/icons/usage", r.protected(r.handleIconUsage))
@@ -396,8 +424,11 @@ func (r *Router) setupRoutes() {
 	// Serve dashboard icons (from homarr-labs/dashboard-icons)
 	r.handle("/api/icons/dashboard/", r.serveDashboardIcons)
 
-	// Background image routes (GET is public, POST/PUT/DELETE require auth inline)
-	r.handle("/api/backgrounds", r.handleBackgrounds)
+	// Background image routes: GET (list) is public; upload, update and
+	// delete go through the standard protected wrapper.
+	r.handle("/api/backgrounds", r.publicRead(r.handleListBackgrounds, map[string]http.HandlerFunc{
+		http.MethodPost: r.handleUploadBackground,
+	}))
 	r.handle("/api/backgrounds/categories", r.protected(r.handleBackgroundCategories))
 	r.handle("/api/backgrounds/categories/", r.protected(r.handleBackgroundCategoryActions))
 	r.handle("/api/backgrounds/", r.protected(r.handleBackgroundActions))
@@ -409,18 +440,6 @@ func (r *Router) setupRoutes() {
 
 	// Static file serving (frontend) with SPA support
 	r.handle("/", r.serveSPA)
-}
-
-// handleBackgrounds routes GET and POST requests for backgrounds
-func (r *Router) handleBackgrounds(w http.ResponseWriter, req *http.Request) {
-	switch req.Method {
-	case http.MethodGet:
-		r.handleListBackgrounds(w, req)
-	case http.MethodPost:
-		r.protected(r.handleUploadBackground)(w, req)
-	default:
-		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
-	}
 }
 
 // handleBackgroundActions routes PUT and DELETE for individual backgrounds
@@ -529,6 +548,9 @@ func (r *Router) serveSPADisk(w http.ResponseWriter, req *http.Request) {
 	fi, err := os.Stat(p)
 	if err == nil && !fi.IsDir() {
 		// File exists, serve it
+		if filepath.Base(p) == "index.html" {
+			setDiskIndexCSP(w, p)
+		}
 		http.ServeFile(w, req, p)
 		return
 	}
@@ -537,13 +559,16 @@ func (r *Router) serveSPADisk(w http.ResponseWriter, req *http.Request) {
 	if err == nil && fi.IsDir() {
 		indexPath := filepath.Join(p, "index.html")
 		if _, err := os.Stat(indexPath); err == nil {
+			setDiskIndexCSP(w, indexPath)
 			http.ServeFile(w, req, indexPath)
 			return
 		}
 	}
 
 	// File doesn't exist or it's a SPA route, serve index.html
-	http.ServeFile(w, req, filepath.Join(r.config.FrontendDir, "index.html"))
+	indexPath := filepath.Join(r.config.FrontendDir, "index.html")
+	setDiskIndexCSP(w, indexPath)
+	http.ServeFile(w, req, indexPath)
 }
 
 // serveSPAFromFS serves the SPA from an io/fs filesystem (the embedded build),
@@ -667,38 +692,13 @@ func (r *Router) corsMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// securityHeadersMiddleware adds standard security headers to all responses
-// appContentSecurityPolicy is the CSP applied to the app's own pages and API
-// responses. 'unsafe-inline' is required for script (SvelteKit's hydration
-// bootstrap) and style (the app's pervasive inline `style:` theming), so this
-// is not a complete XSS seal — but it still blocks loading external scripts,
-// <object>/<embed> plugins, <base> hijacking, cross-origin form posts, and
-// data exfiltration to hosts other than the Iconify icon CDNs. Asset routes
-// (icons/backgrounds) override this with a much stricter policy via
-// setAssetCSP, so an uploaded SVG cannot execute script regardless.
-const appContentSecurityPolicy = "default-src 'self'; " +
-	"script-src 'self' 'unsafe-inline'; " +
-	"style-src 'self' 'unsafe-inline'; " +
-	"img-src 'self' data: blob: http: https:; " +
-	"font-src 'self' data:; " +
-	"connect-src 'self' https://api.iconify.design https://api.simplesvg.com https://api.unisvg.com; " +
-	"frame-src *; " +
-	"object-src 'none'; " +
-	"base-uri 'self'; " +
-	"form-action 'self'; " +
-	"frame-ancestors 'self'"
-
+// securityHeadersMiddleware adds the browser security headers (csp.go) to
+// every response. Asset handlers (serveIcons/serveBackgrounds/servePresets/
+// serveDashboardIcons) then overwrite the CSP with the stricter setAssetCSP
+// sandbox policy.
 func (r *Router) securityHeadersMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		w.Header().Set("X-Content-Type-Options", "nosniff")
-		w.Header().Set("X-Frame-Options", "SAMEORIGIN")
-		w.Header().Set("X-XSS-Protection", "0")
-		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
-		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
-		// Default CSP for app pages and API responses. Asset handlers
-		// (serveIcons/serveBackgrounds/servePresets/serveDashboardIcons)
-		// overwrite this with the stricter setAssetCSP policy.
-		w.Header().Set("Content-Security-Policy", appContentSecurityPolicy)
+		setSecurityHeaders(w, r.appCSP)
 		next.ServeHTTP(w, req)
 	})
 }

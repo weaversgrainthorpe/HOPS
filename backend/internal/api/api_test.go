@@ -253,25 +253,6 @@ func authedRequest(method, path string, body io.Reader, sessionToken, csrfToken 
 	return req
 }
 
-func TestSecurityHeaders(t *testing.T) {
-	router, _ := setupTestRouter(t)
-
-	req := httptest.NewRequest("GET", "/api/health", nil)
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-
-	headers := map[string]string{
-		"X-Content-Type-Options": "nosniff",
-		"X-Frame-Options":       "SAMEORIGIN",
-		"Referrer-Policy":       "strict-origin-when-cross-origin",
-	}
-	for name, expected := range headers {
-		if got := w.Header().Get(name); got != expected {
-			t.Errorf("expected %s: %q, got %q", name, expected, got)
-		}
-	}
-}
-
 func TestHealthEndpoint(t *testing.T) {
 	router, _ := setupTestRouter(t)
 

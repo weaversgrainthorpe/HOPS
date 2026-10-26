@@ -1645,11 +1645,6 @@ func (r *Router) handleIconCategoryActions(w http.ResponseWriter, req *http.Requ
 
 // handleGetIconCategories returns all icon categories or creates a new one
 func (r *Router) handleGetIconCategories(w http.ResponseWriter, req *http.Request) {
-	if req.Method == http.MethodPost {
-		r.protected(r.handleCreateIconCategory)(w, req)
-		return
-	}
-
 	if req.Method != http.MethodGet {
 		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -1693,11 +1688,6 @@ func (r *Router) handleGetIconCategories(w http.ResponseWriter, req *http.Reques
 
 // handleGetIcons returns all icons, optionally filtered by category, or creates a new icon
 func (r *Router) handleGetIcons(w http.ResponseWriter, req *http.Request) {
-	if req.Method == http.MethodPost {
-		r.protected(r.handleCreateIcon)(w, req)
-		return
-	}
-
 	if req.Method != http.MethodGet {
 		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return

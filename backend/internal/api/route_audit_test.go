@@ -46,8 +46,9 @@ type routeRule struct {
 	class  routeClass
 	reason string
 	// protectedMethods: for a public route that also accepts admin-only
-	// methods (the handler gates them inline), the methods that must behave as
-	// protected: 401 anonymous, 403 without CSRF.
+	// methods (split at registration by Router.publicRead, which sends them
+	// through Router.protected), the methods that must behave as protected:
+	// 401 anonymous, 403 without CSRF.
 	protectedMethods []string
 }
 
@@ -58,11 +59,11 @@ var routeClasses = map[string]routeRule{
 	"/api/config":           {class: classPublic, reason: "dashboards are public to view (SECURITY.md); serves dashboard content only, GET only"},
 	"/api/status/":          {class: classPublic, reason: "tile status dots for viewers on public dashboards; keyed by random entry ids"},
 	"/api/auth/check":       {class: classPublic, reason: "tells the SPA whether the caller holds a session; reveals nothing else"},
-	"/api/icon-categories":  {class: classPublic, reason: "icon picker data for public rendering; POST (create) is admin-gated inline", protectedMethods: []string{"POST"}},
-	"/api/icons":            {class: classPublic, reason: "icon list needed to render tiles; POST is admin-gated inline", protectedMethods: []string{"POST"}},
+	"/api/icon-categories":  {class: classPublic, reason: "icon picker data for public rendering; POST (create) goes through protected via publicRead", protectedMethods: []string{"POST"}},
+	"/api/icons":            {class: classPublic, reason: "icon list needed to render tiles; POST goes through protected via publicRead", protectedMethods: []string{"POST"}},
 	"/icons/":               {class: classPublic, reason: "uploaded icon files rendered in tiles (served with a sandboxing CSP)"},
 	"/api/icons/dashboard/": {class: classPublic, reason: "bundled dashboard-icons set rendered in tiles (sandboxing CSP)"},
-	"/api/backgrounds":      {class: classPublic, reason: "GET lists backgrounds for rendering; POST (upload) is admin-gated inline", protectedMethods: []string{"POST"}},
+	"/api/backgrounds":      {class: classPublic, reason: "GET lists backgrounds for rendering; POST (upload) goes through protected via publicRead", protectedMethods: []string{"POST"}},
 	"/backgrounds/":         {class: classPublic, reason: "uploaded background images rendered on dashboards (sandboxing CSP)"},
 	"/presets/":             {class: classPublic, reason: "bundled preset background images"},
 	"/":                     {class: classPublic, reason: "the embedded SPA shell and its static assets"},
@@ -259,11 +260,11 @@ func TestRouteAudit(t *testing.T) {
 	for _, pr := range sentinelProbes {
 		_, pat := rt.mux.Handler(httptest.NewRequest(pr[0], pr[1], nil))
 		r, ok := routeClasses[pat]
-		inlineGated := false
+		splitGuarded := false
 		for _, m := range r.protectedMethods {
-			inlineGated = inlineGated || m == pr[0]
+			splitGuarded = splitGuarded || m == pr[0]
 		}
-		if !ok || (r.class != classProtected && !inlineGated) {
+		if !ok || (r.class != classProtected && !splitGuarded) {
 			t.Errorf("probe %s %s resolves to %q, which is not a protected route", pr[0], pr[1], pat)
 			continue
 		}
