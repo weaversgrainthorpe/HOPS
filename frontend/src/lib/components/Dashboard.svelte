@@ -17,6 +17,7 @@
   import EditToolbar from './editor/EditToolbar.svelte';
   import EditorDialogs from './editor/EditorDialogs.svelte';
   import EditHandle from './editor/EditHandle.svelte';
+  import { writeLastViewed } from '$lib/utils/addToHops';
   import { editorDialog, openDialog, openMenu, menuPointFor, showTabRequest } from '$lib/editor/editorUi';
   import DragLayer from '$lib/editor/drag/DragLayer.svelte';
   import { tabSource } from '$lib/editor/drag/dragController';
@@ -74,6 +75,8 @@
   // is followed by id.
   const activeTabId = $derived(barTabs[activeTabIndex]?.id);
   const layoutTab = $derived(dashboard.tabs.find((t) => t.id === activeTabId));
+  // "Add to HOPS" proposes the dashboard and tab this browser last showed (a per-browser convenience).
+  $effect(() => writeLastViewed({ dashboardId: dashboard.id, ...(activeTabId ? { tabId: activeTabId } : {}) }));
   /** A tab the renderer can draw: it has a root container with a children list. */
   const drawable = (t: LayoutTab | undefined): t is LayoutTab =>
     !!t && !!t.root && typeof t.root === 'object' && Array.isArray(t.root.children);

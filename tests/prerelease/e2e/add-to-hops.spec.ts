@@ -154,3 +154,101 @@ test('Settings › Dashboards shows the draggable Add to HOPS bookmark', async (
   await expect(page.getByText(/Some sites block bookmarks like this one/)).toBeVisible();
   await expect(page.getByText(/For desktop browsers/)).toBeVisible();
 });
+
+// ---------------------------------------------------------------- the dashboard you came from
+
+/** The bookmark clicked on a HOPS page: HOPS opens /add in place (in-app, keeping an edit). */
+async function bookmarkOnHops(page: Page, o: Record<string, string>) {
+  await page.evaluate((u) => (window as unknown as { hopsAdd: (u: string) => void }).hopsAdd(u), new URL(addUrl(o), page.url()).href);
+  await expect(page).toHaveURL(/\/add\?/);
+  await expect(addForm(page)).toBeVisible();
+}
+
+async function openEditing(page: Page, path: string, tab: string) {
+  await page.goto(path);
+  await page.getByRole('tab', { name: tab }).click();
+  await page.locator('[aria-label="Enter Edit Mode"]').click();
+  await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
+}
+
+test('while editing: /add proposes that dashboard and tab, adds INTO the draft (undoable, nothing PUT), and Cancel returns to the editor', async ({ page, context }) => {
+  const d = await importDash(page, context);
+  await openEditing(page, d.path, 'Second');
+  const rev = (await storedDash(page, d.id)).revision;
+  const puts: string[] = [];
+  page.on('request', (r) => { if (r.method() === 'PUT') puts.push(r.url()); });
+
+  // Cancel goes back to the dashboard, still editing — never "/".
+  await bookmarkOnHops(page, { url: 'https://cancel.addh.test/', name: 'Zqx Cancelled' });
+  await page.getByRole('button', { name: 'Cancel' }).click();
+  await expect(page).toHaveURL(new RegExp(`${d.path}$`));
+  await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
+
+  await bookmarkOnHops(page, { url: 'https://showcase.addh.test/', name: 'Showcase Tool' });
+  const f = addForm(page);
+  await expect(f.getByLabel('Dashboard')).toHaveValue(d.id);
+  await expect(f.getByLabel('Tab')).toHaveValue(d.t2);
+  await expect(page.getByTestId('add-target')).toHaveText(`Adding to ${d.name}`);
+  await expect(page.getByText(`Adds to your unsaved changes on ${d.name}.`)).toBeVisible();
+  await f.getByRole('button', { name: 'Add' }).click();
+
+  // Back in the editor on that dashboard and tab, the tile part of the unsaved changes.
+  await expect(page).toHaveURL(new RegExp(`${d.path}$`));
+  const bar = page.getByRole('toolbar', { name: 'Editing' });
+  await expect(bar).toBeVisible();
+  await expect(bar.getByRole('status')).toHaveText(/Unsaved changes/);
+  await expect(page.getByText('Showcase Tool', { exact: true })).toBeVisible();
+  expect(puts).toEqual([]);
+  expect((await storedDash(page, d.id)).revision).toBe(rev);
+
+  // Undo removes it, like any edit.
+  await bar.getByRole('button', { name: /Undo/ }).click();
+  await expect(page.getByText('Showcase Tool', { exact: true })).toHaveCount(0);
+  await expect(bar.getByRole('status')).toHaveCount(0);
+  expect(puts).toEqual([]);
+  expect(JSON.stringify(await storedDash(page, d.id))).not.toContain('Showcase Tool');
+});
+
+test('not editing: /add proposes the dashboard last viewed in this browser', async ({ page, context }) => {
+  const d = await importDash(page, context);
+  // Another dashboard was the last add target (any id; a missing one is skipped); the viewed one wins.
+  await page.goto(d.path);
+  await page.evaluate(() => localStorage.setItem('hops.addToHops.last', JSON.stringify({ dashboardId: 'sample' })));
+  await page.getByRole('tab', { name: 'Second' }).click();
+  await page.goto(addUrl({ url: 'https://viewed.addh.test/', name: 'Viewed' }));
+  const f = addForm(page);
+  await expect(f.getByLabel('Dashboard')).toHaveValue(d.id);
+  await expect(f.getByLabel('Tab')).toHaveValue(d.t2);
+  await expect(page.getByTestId('add-target')).toHaveText(`Adding to ${d.name}`);
+  await expect(page.getByText(/Adds to your unsaved changes/)).toHaveCount(0);
+});
+
+test('opened by the bookmark in a new tab (no history): Cancel closes it or says you can', async ({ context }) => {
+  const p = await context.newPage();
+  await p.goto(addUrl({ url: 'https://newtab.addh.test/', name: 'New Tab' }));
+  await expect(addForm(p)).toBeVisible();
+  await p.getByRole('button', { name: 'Cancel' }).click();
+  // Either the browser let the page close itself, or it says so — never off to another dashboard.
+  await expect.poll(async () => p.isClosed() || (await p.getByText('You can close this tab.').isVisible())).toBe(true);
+  if (!p.isClosed()) {
+    await expect(p).toHaveURL(/\/add\?/);
+    await p.close();
+  }
+});
+
+test('a dashboard being edited in another tab is not saved over from /add', async ({ page, context }) => {
+  const d = await importDash(page, context);
+  await openEditing(page, d.path, 'Main');
+  const rev = (await storedDash(page, d.id)).revision;
+  const p = await context.newPage();
+  try {
+    await p.goto(addUrl({ url: 'https://clash.addh.test/', name: 'Zqx Clash' }));
+    const f = addForm(p);
+    await f.getByLabel('Dashboard').selectOption(d.id);
+    await f.getByRole('button', { name: 'Add' }).click();
+    await expect(f.locator('#add-error')).toContainText('has an edit open in another HOPS tab');
+    expect((await storedDash(page, d.id)).revision).toBe(rev);
+  } finally {
+    await p.close();
+  }
+});

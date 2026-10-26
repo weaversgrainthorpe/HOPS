@@ -1,7 +1,8 @@
 import { writable, get } from 'svelte/store';
 import { isAuthenticated } from './auth';
 import { currentRoute } from './config';
-import { begin, end, abandon, park, session, setSessionLostHandler } from './editSession';
+import { begin, end, abandon, park, session, setSessionLostHandler, isAddPage } from './editSession';
+import { page } from '$app/stores';
 import { toast } from './toast';
 import { logWarn } from '$lib/utils/errors';
 
@@ -61,6 +62,8 @@ export function followRoute(): void {
   const id = routeDashboardId();
   const s = get(session);
   if (s && s.dashboardId === id) return;
+  // On "Add to HOPS" the session waits: the tile may go into this draft, then you come back.
+  if (!id && isAddPage(get(page).url)) return;
   if (s && abandon()) toast.warning('Left the dashboard \u2014 your unsaved changes were discarded.');
   if (!id) return;
   begin(id);

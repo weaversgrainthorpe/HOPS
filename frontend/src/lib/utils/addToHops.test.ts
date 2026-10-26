@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
 	buildBookmarklet, parseAddParams, cleanName, dashboardIconCandidates, pickDashboardIcon, foldersOf,
-	NAME_MAX, URL_MAX
+	resolveAddDefault, NAME_MAX, URL_MAX
 } from './addToHops';
 import type { LayoutDashboard } from '$lib/types/layout';
 
@@ -52,6 +52,44 @@ describe('buildBookmarklet', () => {
 		const fn = new Function('document', 'location', 'window', decodeURIComponent(b.slice('javascript:'.length)));
 		fn({ title: 'x', querySelector: () => null }, { href: 'http://n.lan/', origin: 'http://n.lan' }, { open: (...a: unknown[]) => opened.push(a) });
 		expect(new URL(String(opened[0][0])).searchParams.get('icon')).toBe('http://n.lan/favicon.ico');
+	});
+	it('on a HOPS page (window.hopsAdd present) hands the address to HOPS instead of opening a tab', () => {
+		const opened: unknown[][] = [];
+		const handed: string[] = [];
+		const fn = new Function('document', 'location', 'window', decodeURIComponent(b.slice('javascript:'.length)));
+		fn({ title: 'x', querySelector: () => null }, { href: 'http://n.lan/', origin: 'http://n.lan' }, {
+			open: (...a: unknown[]) => opened.push(a), hopsAdd: (u: string) => handed.push(u)
+		});
+		expect(opened).toHaveLength(0);
+		expect(handed).toHaveLength(1);
+		expect(new URL(handed[0]).searchParams.get('url')).toBe('http://n.lan/');
+	});
+});
+
+describe('resolveAddDefault (the dashboard /add proposes)', () => {
+	const ids = ['a', 'b', 'c'];
+	it('prefers the dashboard with an edit session or parked draft here, on the tab last viewed', () => {
+		expect(resolveAddDefault({ ids, editingId: 'b', lastViewed: { dashboardId: 'b', tabId: 'b2' }, lastTarget: { dashboardId: 'c', tabId: 'c1' } }))
+			.toEqual({ dashboardId: 'b', tabId: 'b2', reason: 'editing' });
+		expect(resolveAddDefault({ ids, editingId: 'b', lastViewed: { dashboardId: 'a' } })).toEqual({ dashboardId: 'b', reason: 'editing' });
+	});
+	it('else the dashboard last viewed in this browser', () => {
+		expect(resolveAddDefault({ ids, lastViewed: { dashboardId: 'a', tabId: 'a1' }, lastTarget: { dashboardId: 'c', tabId: 'c1' } }))
+			.toEqual({ dashboardId: 'a', tabId: 'a1', reason: 'viewed' });
+	});
+	it('else the last add target (with its tab and folder)', () => {
+		expect(resolveAddDefault({ ids, lastTarget: { dashboardId: 'c', tabId: 'c1', folderId: 'f' } }))
+			.toEqual({ dashboardId: 'c', tabId: 'c1', folderId: 'f', reason: 'last-add' });
+	});
+	it('skips ids that no longer exist, then falls back to the first dashboard', () => {
+		expect(resolveAddDefault({ ids, editingId: 'gone', lastViewed: { dashboardId: 'gone2' }, lastTarget: { dashboardId: 'c' } }))
+			.toEqual({ dashboardId: 'c', reason: 'last-add' });
+		expect(resolveAddDefault({ ids, editingId: 'x', lastViewed: null, lastTarget: null })).toEqual({ dashboardId: 'a', reason: 'first' });
+		expect(resolveAddDefault({ ids: [] })).toBeNull();
+	});
+	it('the last viewed tab wins over the last add tab on the same dashboard', () => {
+		expect(resolveAddDefault({ ids, lastViewed: { dashboardId: 'a', tabId: 'a2' }, lastTarget: { dashboardId: 'a', tabId: 'a1', folderId: 'f' } }))
+			.toEqual({ dashboardId: 'a', tabId: 'a2', reason: 'viewed' });
 	});
 });
 

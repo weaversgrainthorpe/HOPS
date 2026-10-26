@@ -492,6 +492,11 @@ export async function reloadAfterConflict(): Promise<void> {
   if (!get(state)) sessionLostHandler?.();
 }
 
+/** The in-app "Add to HOPS" page, which an edit session survives (editMode.followRoute too). */
+export function isAddPage(url: URL): boolean {
+  return url.pathname === '/add' && (typeof location === 'undefined' || url.origin === location.origin);
+}
+
 /** The subset of SvelteKit's BeforeNavigate that guardNavigation uses. */
 export interface NavigationLike {
   willUnload: boolean;
@@ -506,10 +511,19 @@ export interface NavigationLike {
  * external link) is cancelled, which makes the browser ask "leave site?"; an
  * in-app navigation is cancelled and the user asked in the app's own dialog —
  * leaving anyway discards the draft and then navigates via `go`. Returns
- * true when it cancelled the navigation.
+ * true when it cancelled the navigation. `toDashboardId` is the destination's dashboard, if any.
  */
-export function guardNavigation(nav: NavigationLike, go: (href: string) => Promise<void>): boolean {
+export function guardNavigation(
+  nav: NavigationLike,
+  go: (href: string) => Promise<void>,
+  toDashboardId?: string | null
+): boolean {
   if (!get(dirty)) return false;
+  // A navigation the session survives needs no asking: to "Add to HOPS" (/add, which adds into
+  // this draft) and back to this session's own dashboard (followRoute keeps the session there).
+  if (!nav.willUnload && nav.to && (isAddPage(nav.to.url) || (!!toDashboardId && toDashboardId === get(state)?.dashboardId))) {
+    return false;
+  }
   nav.cancel();
   if (nav.willUnload || !nav.to) return true;
   const url = nav.to.url;

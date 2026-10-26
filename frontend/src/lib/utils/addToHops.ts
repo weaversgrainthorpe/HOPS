@@ -13,15 +13,17 @@ export const URL_MAX = 2048;
 /**
  * The bookmarklet for a HOPS at `origin`: opens `<origin>/add?url=…&name=…&icon=…` in a new tab,
  * with no opener. The icon is the page's apple-touch-icon, else its rel=icon, else /favicon.ico.
- * No external script, no whitespace.
+ * No external script, no whitespace. Clicked on a HOPS page itself (HOPS sets window.hopsAdd), it
+ * hands the address to that page instead, which opens /add in place, keeping any edit in progress.
  */
 export function buildBookmarklet(origin: string): string {
 	const target = JSON.stringify(`${origin.replace(/\/+$/, '')}/add?url=`);
 	const code =
-		'(function(d,l,i){' +
+		'(function(d,l,i,u){' +
 		"l=d.querySelector('link[rel~=apple-touch-icon]')||d.querySelector('link[rel~=icon]')," +
 		"i=l&&l.href?l.href:location.origin+'/favicon.ico';" +
-		`window.open(${target}+encodeURIComponent(location.href)+'&name='+encodeURIComponent(d.title)+'&icon='+encodeURIComponent(i),'_blank','noopener')` +
+		`u=${target}+encodeURIComponent(location.href)+'&name='+encodeURIComponent(d.title)+'&icon='+encodeURIComponent(i);` +
+		"window.hopsAdd?window.hopsAdd(u):window.open(u,'_blank','noopener')" +
 		'})(document)';
 	return 'javascript:' + code;
 }
@@ -140,4 +142,62 @@ export function writeLastTarget(t: LastTarget): void {
 	} catch {
 		/* a per-browser convenience only: the tile was still added */
 	}
+}
+
+const VIEWED_KEY = 'hops.lastViewedDashboard';
+
+export interface LastViewed {
+	dashboardId: string;
+	tabId?: string;
+}
+
+/** Remember the dashboard (and tab) this browser last showed, for /add's default. A convenience only. */
+export function writeLastViewed(v: LastViewed): void {
+	try {
+		localStorage.setItem(VIEWED_KEY, JSON.stringify(v));
+	} catch {
+		/* per-browser convenience: /add falls back to the last add target */
+	}
+}
+
+export function readLastViewed(): LastViewed | null {
+	try {
+		const v = JSON.parse(localStorage.getItem(VIEWED_KEY) ?? 'null');
+		return v && typeof v.dashboardId === 'string' ? (v as LastViewed) : null;
+	} catch {
+		return null;
+	}
+}
+
+export interface AddDefault {
+	dashboardId: string;
+	tabId?: string;
+	folderId?: string;
+	/** Why this dashboard: it has an open edit (session or parked draft) here, was last viewed, last added to, or is first. */
+	reason: 'editing' | 'viewed' | 'last-add' | 'first';
+}
+
+/**
+ * /add's default target, in order: the dashboard with an edit session or parked draft in this
+ * browser; the dashboard last viewed here; the last add target; the first dashboard. Only ids that
+ * still exist count. The tab is the one last viewed (or last added to) on that dashboard, if known.
+ */
+export function resolveAddDefault(o: {
+	ids: readonly string[];
+	editingId?: string | null;
+	lastViewed?: LastViewed | null;
+	lastTarget?: LastTarget | null;
+}): AddDefault | null {
+	const has = (id: string | null | undefined): id is string => !!id && o.ids.includes(id);
+	const tabFor = (id: string): Pick<AddDefault, 'tabId' | 'folderId'> => {
+		if (o.lastViewed?.dashboardId === id && o.lastViewed.tabId) return { tabId: o.lastViewed.tabId };
+		if (o.lastTarget?.dashboardId === id && o.lastTarget.tabId) {
+			return { tabId: o.lastTarget.tabId, ...(o.lastTarget.folderId ? { folderId: o.lastTarget.folderId } : {}) };
+		}
+		return {};
+	};
+	if (has(o.editingId)) return { dashboardId: o.editingId, ...tabFor(o.editingId), reason: 'editing' };
+	if (has(o.lastViewed?.dashboardId)) return { dashboardId: o.lastViewed.dashboardId, ...tabFor(o.lastViewed.dashboardId), reason: 'viewed' };
+	if (has(o.lastTarget?.dashboardId)) return { dashboardId: o.lastTarget.dashboardId, ...tabFor(o.lastTarget.dashboardId), reason: 'last-add' };
+	return o.ids.length ? { dashboardId: o.ids[0], reason: 'first' } : null;
 }

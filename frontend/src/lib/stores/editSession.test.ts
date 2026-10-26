@@ -458,6 +458,22 @@ describe('end and edit mode', () => {
 		expect(api.saveDashboardV3).not.toHaveBeenCalled();
 	});
 
+	it('guardNavigation lets the session through to /add and back to its own dashboard, without asking', () => {
+		begin('d');
+		apply('1', setName('mine'));
+		const go = vi.fn(async () => {});
+		const toAdd = { willUnload: false, to: { url: new URL('/add?url=x', location.origin) }, cancel: vi.fn() };
+		expect(guardNavigation(toAdd, go)).toBe(false);
+		const back = { willUnload: false, to: { url: new URL('/d', location.origin) }, cancel: vi.fn() };
+		expect(guardNavigation(back, go, 'd')).toBe(false);
+		expect(toAdd.cancel).not.toHaveBeenCalled();
+		expect(back.cancel).not.toHaveBeenCalled();
+		const other = { willUnload: false, to: { url: new URL('/e', location.origin) }, cancel: vi.fn() };
+		expect(guardNavigation(other, go, 'e')).toBe(true); // another dashboard still asks
+		closeConfirmModal(false);
+		expect(get(dirty)).toBe(true);
+	});
+
 	it('guardNavigation: leaving on back/forward repeats the history step instead of pushing', async () => {
 		begin('d');
 		apply('1', setName('mine'));

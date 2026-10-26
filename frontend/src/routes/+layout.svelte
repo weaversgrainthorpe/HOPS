@@ -27,6 +27,7 @@
 	import { navigateTiles } from '$lib/utils/tileNav';
 	import SearchModal from '$lib/components/SearchModal.svelte';
 	import { editMode, followRoute } from '$lib/stores/editMode';
+	import { initEditPresence } from '$lib/utils/editPresence';
 	import '../app.css';
 
 	let { children } = $props();
@@ -36,12 +37,12 @@
 	// Unsaved edit-session changes: ask before leaving (leaving anyway discards
 	// them). The reveal bookkeeping below only runs for a navigation that goes ahead.
 	beforeNavigate((nav) => {
-		if (guardNavigation(nav, (href) => goto(href))) return;
-		cancelDropAnimations(); // §8.1: no drop animation outlives the page it was drawn on
 		const { to } = nav;
 		const seg = to?.params?.dashboard;
 		const cfg = get(config);
 		const r = seg && cfg ? resolveDashboardRoute(seg, cfg) : undefined;
+		if (guardNavigation(nav, (href) => goto(href), r?.id ?? null)) return;
+		cancelDropAnimations(); // §8.1: no drop animation outlives the page it was drawn on
 		revealNavigation(r ? r.id : null);
 	});
 
@@ -53,10 +54,27 @@
 	});
 
 	onMount(() => {
+		// The "Add to HOPS" bookmark clicked on a HOPS page hands its /add address here, so /add opens
+		// in place (keeping an edit in progress and the way back) instead of in a new tab.
+		const w = window as Window & { hopsAdd?: (u: string) => void };
+		w.hopsAdd = (u: string) => {
+			try {
+				const to = new URL(u);
+				if (to.origin === location.origin && to.pathname === '/add') {
+					void goto(to.pathname + to.search);
+					return;
+				}
+			} catch {
+				/* not an address: open it as the bookmark would have */
+			}
+			window.open(u, '_blank', 'noopener');
+		};
+		const stopPresence = initEditPresence();
 		initAuth();
 		loadConfig();
 		initNetworkWatcher();
 		initEditModeIdleWatcher();
+		return stopPresence;
 	});
 
 	// True when the user is typing into a real input — search hotkey must

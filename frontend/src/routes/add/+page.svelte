@@ -1,11 +1,16 @@
 <script lang="ts">
   // "Add to HOPS" (/add): where the bookmarklet lands. The query parameters only PREFILL this form
   // (as plain text, checked: addToHops.parseAddParams); nothing is created until a signed-in user
-  // clicks Add, which saves the dashboard through the normal save (PUT /api/dashboards/{id}, with
-  // CSRF and the revision check). The tile is placed by the tile dialog's own rules (withNewTile).
-  import { onMount } from 'svelte';
+  // clicks Add. The tile is placed by the tile dialog's own rules (withNewTile). Where it goes:
+  // - the target has an edit session or parked draft in this tab: INTO THE DRAFT (an undoable edit,
+  //   saved with the rest), then back to the editor;
+  // - the target is being edited in another tab: refused, saying why (a direct save would clash);
+  // - otherwise the normal dashboard save (PUT /api/dashboards/{id}, CSRF + revision check).
+  // The default target is the dashboard you came from (resolveAddDefault). Cancel goes back where
+  // you came from inside HOPS; opened by the bookmark in a new tab, it closes it (or says to).
+  import { onMount, untrack } from 'svelte';
   import { page } from '$app/stores';
-  import { goto } from '$app/navigation';
+  import { goto, afterNavigate } from '$app/navigation';
   import LoginDialog from '$lib/components/LoginDialog.svelte';
   import { isAuthenticated, authChecked, mustChangePassword } from '$lib/stores/auth';
   import {
@@ -14,8 +19,16 @@
   } from '$lib/stores/config';
   import { saveDashboardV3, getPackagedIcons, ConflictError } from '$lib/utils/api';
   import { blankTile, withNewTile } from '$lib/editor/editorActions';
-  import { parseAddParams, pickDashboardIcon, foldersOf, readLastTarget, writeLastTarget, cleanName, URL_MAX } from '$lib/utils/addToHops';
-  import type { TileNode } from '$lib/types/layout';
+  import { showTabRequest } from '$lib/editor/editorUi';
+  import { session, parkedDraft, begin, apply } from '$lib/stores/editSession';
+  import { editMode } from '$lib/stores/editMode';
+  import { toast } from '$lib/stores/toast';
+  import { editedInOtherTabs } from '$lib/utils/editPresence';
+  import {
+    parseAddParams, pickDashboardIcon, foldersOf, readLastTarget, writeLastTarget, readLastViewed, resolveAddDefault,
+    cleanName, URL_MAX
+  } from '$lib/utils/addToHops';
+  import type { LayoutDashboard, TileNode } from '$lib/types/layout';
 
   const params = parseAddParams($page.url.searchParams);
   let name = $state(params.name);
@@ -23,25 +36,46 @@
   let iconUrl = $state(params.iconUrl);
   let iconNote = $state('');
   const last = readLastTarget();
+  const lastViewed = readLastViewed();
+
+  // Where /add was reached from inside HOPS (an in-app navigation), to go back to; null when it was
+  // loaded fresh (the bookmark's new tab).
+  let cameFrom = $state<string | null>(null);
+  afterNavigate(({ from }) => {
+    if (from?.url && from.url.pathname !== '/add') cameFrom = from.url.pathname + from.url.search + from.url.hash;
+  });
 
   const list = $derived(sortedDashboards($config?.dashboards));
+  // The dashboard with an edit session (or a parked draft) in this tab: adds there go into the draft.
+  const editingDraft = $derived<LayoutDashboard | null>($session?.draft ?? $parkedDraft?.draft ?? null);
+  const editingId = $derived($session?.dashboardId ?? $parkedDraft?.dashboardId ?? null);
   let dashboardId = $state('');
   let tabId = $state('');
   let folderId = $state('');
-  const dash = $derived(list.find((d) => d.id === dashboardId));
+  const stored = $derived(list.find((d) => d.id === dashboardId));
+  const intoDraft = $derived(!!stored && dashboardId === editingId);
+  // Into a draft, its tabs and folders are the draft's (it may have new ones).
+  const dash = $derived(intoDraft && editingDraft ? editingDraft : stored);
   const tabs = $derived(dash?.tabs ?? []);
   const folders = $derived(dash && tabId ? foldersOf(dash, tabId) : []);
 
-  // Defaults: the last dashboard/tab/folder this browser added to, while they still exist.
+  // Default: the dashboard you came from (resolveAddDefault: open edit, last viewed, last added to).
+  let defaulted = false;
   $effect(() => {
-    if (!dashboardId && list.length) {
-      dashboardId = list.some((d) => d.id === last?.dashboardId) ? last!.dashboardId : list[0].id;
-    }
+    if (defaulted || !list.length) return;
+    defaulted = true;
+    const d = untrack(() => resolveAddDefault({ ids: list.map((x) => x.id), editingId, lastViewed, lastTarget: last }));
+    if (!d) return;
+    dashboardId = d.dashboardId;
+    tabId = d.tabId ?? '';
+    folderId = d.folderId ?? '';
   });
+  // A dashboard picked (or a remembered tab gone): its remembered tab, else its first.
   $effect(() => {
     if (dash && !tabs.some((t) => t.id === tabId)) {
-      tabId = dash.id === last?.dashboardId && tabs.some((t) => t.id === last?.tabId) ? last!.tabId! : (tabs[0]?.id ?? '');
-      folderId = dash.id === last?.dashboardId && last?.tabId === tabId && last?.folderId ? last.folderId : '';
+      const known = [lastViewed, last].find((m) => m?.dashboardId === dash.id && tabs.some((t) => t.id === m.tabId));
+      tabId = known?.tabId ?? tabs[0]?.id ?? '';
+      folderId = known === last && last?.tabId === tabId && last?.folderId ? last.folderId : '';
     }
   });
   $effect(() => {
@@ -87,6 +121,10 @@
       error = 'Pick a dashboard and a tab first.';
       return;
     }
+    if (intoDraft) {
+      addIntoDraft(target);
+      return;
+    }
     if ($layoutStale) {
       error = 'The layout is refreshing. Try again in a moment.';
       return;
@@ -118,6 +156,12 @@
     }
     busy = true;
     try {
+      // Being edited in another tab: a save here would clash with that draft's save. Say so instead.
+      const elsewhere = await editedInOtherTabs();
+      if (elsewhere?.has(target.id)) {
+        error = `${target.name} has an edit open in another HOPS tab, so the tile was not added here (saving it now would clash with those unsaved changes). Go to that tab and click the Add to HOPS bookmark there, or save or discard those changes first.`;
+        return;
+      }
       const resp = await saveDashboardV3(target.id, next.dashboard, target.revision);
       applySavedLayout(resp);
       if (resp.warning) showSaveWarning(resp.warning);
@@ -137,10 +181,57 @@
     }
   }
 
+  /** Into this tab's edit draft (an undoable edit, saved with the rest), then back to the editor on it. */
+  function addIntoDraft(target: LayoutDashboard) {
+    const tile: TileNode = { ...blankTile(), name: cleanName(name), url: url.trim(), ...(iconUrl.trim() ? { iconUrl: iconUrl.trim() } : {}) };
+    if (tile.url.length > URL_MAX) {
+      error = `That address is too long (over ${URL_MAX} characters).`;
+      return;
+    }
+    if (tile.iconUrl && !/^(https?:\/\/|\/api\/icons\/)/i.test(tile.iconUrl)) {
+      error = 'The icon must be an http:// or https:// image address (or leave it empty).';
+      return;
+    }
+    // A parked draft (kept from before a sign-out) comes back into the session first.
+    if ($session?.dashboardId !== target.id) begin(target.id);
+    const draft = $session?.dashboardId === target.id ? $session.draft : null;
+    if (!draft) {
+      error = `Your unsaved changes on ${target.name} couldn't be reopened, so the tile was not added.`;
+      return;
+    }
+    let next: LayoutDashboard;
+    try {
+      next = withNewTile(draft, tile, folderId ? { tabId, folderId } : { tabId }).dashboard;
+    } catch (err) {
+      error = err instanceof Error && err.message ? err.message : "That tile can't be added.";
+      return;
+    }
+    if (!apply('Add tile', () => next)) {
+      error = "The tile couldn't be added to your unsaved changes.";
+      return;
+    }
+    editMode.set(true);
+    writeLastTarget({ dashboardId: target.id, tabId, ...(folderId ? { folderId } : {}) });
+    toast.success(`Added “${tile.name}” to your unsaved changes on ${target.name}. Save to keep it.`);
+    showTabRequest.set(tabId);
+    void goto(dashboardHref(target.path));
+  }
+
+  /** Cancel: back where you came from inside HOPS (still editing, if you were); else close this tab. */
+  function leave() {
+    if (cameFrom) {
+      const s = $session;
+      if (s && lastViewed?.dashboardId === s.dashboardId && lastViewed.tabId) showTabRequest.set(lastViewed.tabId);
+      void goto(cameFrom);
+      return;
+    }
+    closeWindow();
+  }
+
   function closeWindow() {
     window.close();
-    // Browsers only let a page close a window a script opened; say so when it stays open.
-    setTimeout(() => (closeNote = 'Your browser kept this tab open: you can close it yourself.'), 200);
+    // Browsers only let a page close a tab a script opened (the bookmark's); say so when it stays open.
+    setTimeout(() => (closeNote = 'You can close this tab.'), 200);
   }
 </script>
 
@@ -151,6 +242,10 @@
 <main class="add-page">
   <section class="card" aria-labelledby="add-title">
     <h1 id="add-title">Add to HOPS</h1>
+    {#if ready && stored && !added}
+      <p class="target" data-testid="add-target">Adding to <strong>{stored.name}</strong></p>
+      {#if intoDraft}<p class="draft-note" role="note">Adds to your unsaved changes on {stored.name}.</p>{/if}
+    {/if}
 
     {#if !$authChecked}
       <p class="muted" role="status">Checking sign-in…</p>
@@ -212,15 +307,16 @@
 
         <div class="actions">
           <button type="submit" class="btn-primary" disabled={busy}>{busy ? 'Adding…' : 'Add'}</button>
-          <button type="button" class="btn-secondary" onclick={() => goto('/')}>Cancel</button>
+          <button type="button" class="btn-secondary" onclick={leave}>Cancel</button>
         </div>
       </form>
+      {#if closeNote}<p class="muted" role="status">{closeNote}</p>{/if}
     {/if}
   </section>
 </main>
 
 {#if $authChecked && !$isAuthenticated}
-  <LoginDialog intro="Sign in to add this page to HOPS." onSuccess={() => {}} onCancel={() => goto('/')} />
+  <LoginDialog intro="Sign in to add this page to HOPS." onSuccess={() => {}} onCancel={leave} />
 {/if}
 
 <style>
@@ -298,5 +394,15 @@
   }
   .ok {
     color: var(--text-primary);
+  }
+  .target {
+    margin: -0.5rem 0 0.75rem;
+    font-size: 1.1rem;
+  }
+  .draft-note {
+    margin: 0 0 0.75rem;
+    padding: 0.5rem 0.7rem;
+    border-left: 3px solid var(--accent-solid);
+    background: var(--bg-primary);
   }
 </style>
