@@ -293,11 +293,12 @@
     font-size: 0.85rem;
   }
   .action:hover { background: var(--bg-tertiary); }
+  /* Tinted from the theme's accent (not a fixed blue), light enough that --accent-text keeps 4.5:1. */
   .action.primary {
-    background: rgba(79,140,255,0.15);
-    border-color: rgba(79,140,255,0.35);
+    background: color-mix(in srgb, var(--accent-solid) 8%, transparent);
+    border-color: color-mix(in srgb, var(--accent-solid) 40%, transparent);
     color: var(--accent-text);
   }
-  .action.primary:hover { background: rgba(79,140,255,0.25); }
+  .action.primary:hover { background: color-mix(in srgb, var(--accent-solid) 14%, transparent); }
   .hash { font-size: 0.72rem; color: var(--text-secondary); }
 </style>
