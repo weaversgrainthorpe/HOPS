@@ -57,6 +57,8 @@
     `left:${px(left + b.leftPx)};top:${px(top + b.topPx)};width:${px(b.widthPx)};height:${px(b.heightPx)};`;
 
   const invalid = $derived(s?.target?.kind === 'invalid' ? s.target.reason : null);
+  /** A resize held at a limit (the folder's minimum, the tab's width): said where the pointer is. */
+  const limit = $derived(s?.target?.kind === 'resize' ? (s.target.limit ?? null) : null);
   /** A merge dwell is running (the dragged item's centre is in a tile's centre zone): show progress. */
   const holding = $derived(!!s?.dwell && s.dwell.key.startsWith('merge:') && !s.dwell.ripe && s.target?.kind === 'place');
   const cue = $derived.by((): string | null => {
@@ -124,6 +126,9 @@
         <span class="ghost-label">{s.ghost?.label ?? ''}</span>
         {#if s.copy}<span class="badge" title="Copy">+</span>{/if}
       </div>
+    {/if}
+    {#if limit !== null && s}
+      <div class="reason limit" role="status" data-resize-limit style="left:{px(s.pointer.x + 16)};top:{px(s.pointer.y + 16)};">{limit}</div>
     {/if}
     {#if invalid !== null}
       <div class="reason" style="left:{px(s.pointer.x + 16)};top:{px(s.pointer.y + 16)};">{invalid}</div>
@@ -241,6 +246,11 @@
     background: var(--danger-solid);
     color: white;
     font-size: 0.8125rem;
+  }
+  /* While a resize is held, room below the tab so the page can scroll on and a folder grow past the
+     bottom of the screen (dragController auto-scrolls near the window's edge). */
+  :global(body.hops-resizing .tab-canvas.editing) {
+    padding-bottom: 100vh;
   }
   :global(body.hops-resizing) {
     user-select: none;

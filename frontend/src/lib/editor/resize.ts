@@ -33,6 +33,8 @@ export interface ResizeTarget {
   at: Placement;
   /** Neighbours pushed aside (Ruling 11). */
   push: Map<string, Placement>;
+  /** Set when the asked-for size was clamped (the folder's minimum, the tab's width): shown, never silent. */
+  limit?: string;
 }
 export type ResizeResult = ResizeTarget | { kind: 'invalid'; reason: string };
 
@@ -66,10 +68,22 @@ export function resizeTarget(d: LayoutDashboard, id: string, w: number, h: numbe
     const at = resizedPlacement(d, id, w, h);
     const push = pushAside(r.container, new Set([id]), at);
     resizeNode(d, id, at.w, at.h, push); // the very op the commit runs: a shown target never throws
-    return { kind: 'resize', id, to, at, push };
+    const limit = limitNote(at, w, h);
+    return limit ? { kind: 'resize', id, to, at, push, limit } : { kind: 'resize', id, to, at, push };
   } catch (e) {
     return { kind: 'invalid', reason: e instanceof Error && e.message ? e.message : "That size isn't possible here." };
   }
+}
+
+/** Why the size `at` differs from the asked-for w x h, or undefined when it doesn't. */
+function limitNote(at: Placement, w: number, h: number): string | undefined {
+  const notes: string[] = [];
+  if (at.h > h) notes.push("can't be any shorter: it needs room for its title, one item and the page bar");
+  if (at.w > w) notes.push("can't be any narrower: it needs room for one item");
+  if (at.w < w) notes.push("can't be any wider here: it reaches the edge of the tab");
+  if (!notes.length) return undefined;
+  const text = notes.join('; and ');
+  return text[0].toUpperCase() + text.slice(1);
 }
 
 /** True when the target changes nothing (same size, nothing pushed). */

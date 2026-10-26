@@ -1070,6 +1070,9 @@ function frame() {
     if (r.view0) next.view = { left: r.view0.left - (r.sx - r.sx0), top: r.view0.top - (r.sy - r.sy0), metrics: r.metrics };
     next.target = resolveResize(next, d);
     setState(next);
+    // Held near the window's top or bottom edge, the page scrolls on, so a folder can grow past the
+    // bottom of the screen (or shrink from below it) — never stuck at the window's edge.
+    autoScroll(at.x, at.y);
     return;
   }
   const next: DragState = { ...s, pointer: { x: at.x, y: at.y } };

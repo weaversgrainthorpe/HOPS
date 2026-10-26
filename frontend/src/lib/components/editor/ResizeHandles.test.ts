@@ -102,10 +102,12 @@ describe('resize handles', () => {
   it('an expanded folder has corner, right and bottom handles with labels; a grid tile has none', async () => {
     const { container } = canvas();
     await tick();
+    const what = { corner: 'width and height', right: 'width', bottom: 'height' } as const;
     for (const edge of ['corner', 'right', 'bottom'] as const) {
       const h = handle(container, 'f1', edge);
       expect(h).not.toBeNull();
-      expect(h!.getAttribute('aria-label')).toMatch(/^Resize F1/);
+      expect(h!.getAttribute('aria-label')).toBe(`Drag to change ${what[edge]} of F1`);
+      expect(h!.getAttribute('title')).toMatch(new RegExp(`^Drag to change ${what[edge]} `));
     }
     expect(container.querySelector('[data-node-id="a"] [data-resize]')).toBeNull();
   });

@@ -25,6 +25,8 @@
     { edge: 'bottom', what: 'height' },
     { edge: 'corner', what: 'width and height' }
   ];
+  // Always drawn in edit mode (not only on hover): a grip on the right edge, one on the bottom edge
+  // and the corner, each a >= 12 px hit area kept clear of the title bar, edit handle and page bar.
 </script>
 
 {#each edges as h (h.edge)}
@@ -33,14 +35,17 @@
     class="rh rh-{h.edge}"
     data-resize={h.edge}
     tabindex="-1"
-    aria-label="Resize {name || 'Untitled'}: {h.what}"
-    title="Drag to resize — or select it and press Shift+Arrow keys"
+    aria-label="Drag to change {h.what} of {name || 'Untitled'}"
+    title="Drag to change {h.what} — or select it and press Shift+Arrow keys"
     use:resizeSource={{ id, edge: h.edge, metrics, enabled: true }}
     ondblclick={(e) => e.stopPropagation()}
   ></button>
 {/each}
 
 <style>
+  /* Hit areas straddle the box's edge: 3 px outside, 9 px inside (the folder's 8 px padding + 1 px
+     border; the offsets of -4 px count from inside that border), so they never cover its items,
+     page bar, title bar or edit handle. */
   .rh {
     position: absolute;
     z-index: 5;
@@ -50,40 +55,75 @@
     background: transparent;
     touch-action: none;
   }
+  /* The visible grip: accent with a page-coloured ring, so it reads (>= 3:1) on the folder and the page. */
+  .rh::before {
+    content: '';
+    position: absolute;
+    border-radius: 2px;
+    background: var(--accent-solid);
+    box-shadow: 0 0 0 1px var(--bg-primary);
+    opacity: 0.9;
+  }
   .rh-right {
-    top: 0;
-    right: -5px;
-    width: 10px;
-    height: 100%;
+    top: 64px; /* below the title bar (and a tab shape's tab) and the edit handle */
+    bottom: 44px; /* above the page bar (32 px) and the bottom padding */
+    right: -4px;
+    width: 12px;
     cursor: ew-resize;
   }
+  .rh-right::before {
+    left: 4px;
+    top: 50%;
+    width: 4px;
+    height: 28px;
+    max-height: 100%;
+    transform: translateY(-50%);
+  }
   .rh-bottom {
-    left: 0;
-    bottom: -5px;
-    width: 100%;
-    height: 10px;
+    left: 20px;
+    right: 20px;
+    bottom: -4px;
+    height: 12px;
     cursor: ns-resize;
   }
+  .rh-bottom::before {
+    top: 4px;
+    left: 50%;
+    width: 28px;
+    height: 4px;
+    transform: translateX(-50%);
+  }
   .rh-corner {
-    right: -7px;
-    bottom: -7px;
-    width: 16px;
-    height: 16px;
-    border-radius: 3px;
-    border: 2px solid var(--accent);
-    background: var(--bg-primary);
+    right: -4px;
+    bottom: -4px;
+    width: 12px;
+    height: 12px;
     cursor: nwse-resize;
-    opacity: 0.55;
   }
-  .rh-right:hover,
-  .rh-bottom:hover {
-    background: color-mix(in srgb, var(--accent-solid) 35%, transparent);
+  .rh-corner::before {
+    right: 2px;
+    bottom: 2px;
+    width: 10px;
+    height: 10px;
+    border-radius: 0 0 3px 0;
+    background: transparent;
+    border-right: 4px solid var(--accent-solid);
+    border-bottom: 4px solid var(--accent-solid);
+    box-sizing: border-box;
+    box-shadow: none;
+    filter: drop-shadow(0 0 1px var(--bg-primary));
   }
-  .rh-corner:hover {
+  .rh:hover::before,
+  .rh:focus-visible::before,
+  :global(.selected) > .rh::before {
     opacity: 1;
   }
-  /* The selected item shows its corner handle fully. */
-  :global(.selected) > .rh-corner {
-    opacity: 1;
+  .rh-right:hover::before {
+    width: 6px;
+    left: 3px;
+  }
+  .rh-bottom:hover::before {
+    height: 6px;
+    top: 3px;
   }
 </style>
