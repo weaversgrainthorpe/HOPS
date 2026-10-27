@@ -17,6 +17,21 @@ PORT="${HOPS_TEST_PORT:-18080}"
 
 log() { echo "[start-test-server] $*" >&2; }
 
+RELEASE=0
+[[ "${HOPS_TEST_BUILD:-dev}" == "release" ]] && RELEASE=1
+
+if [[ $RELEASE == 1 ]]; then
+  # Release mode: the real shipped artifact (scripts/build.sh: UI embedded, no -tags dev,
+  # no --frontend flag). Rebuilt unless backend/hops is newer than every backend + frontend source.
+  # backend/hops is also what specs that spawn their own HOPS use (hops-bin.ts).
+  BIN="$REPO_DIR/backend/hops"
+  if [[ ! -x "$BIN" ]] || [[ -n "$(find "$REPO_DIR/backend/cmd" "$REPO_DIR/backend/internal" "$REPO_DIR/frontend/src" "$REPO_DIR/frontend/static" -type f -newer "$BIN" -not -path '*/internal/web/build/*' -print -quit)" ]]; then
+    log "Building the release binary (scripts/build.sh)"
+    (cd "$REPO_DIR" && ./scripts/build.sh) >&2
+  fi
+  log "Release mode: UI embedded, no --frontend"
+  FRONTEND_ARGS=()
+else
 # Ensure backend binary exists
 # A separate -tags dev binary: --frontend does not exist in release builds
 # (backend/hops from build.sh), so the harness never shares that binary.
@@ -31,6 +46,8 @@ FRONTEND_BUILD="$REPO_DIR/frontend/build"
 if [[ ! -f "$FRONTEND_BUILD/index.html" ]]; then
   log "Building frontend"
   (cd "$REPO_DIR/frontend" && npm run build) >&2
+fi
+FRONTEND_ARGS=(--frontend "$FRONTEND_BUILD")
 fi
 
 # Fresh tempdir per run — discarded on exit
@@ -61,5 +78,5 @@ log "Starting hops on port $PORT"
 # the Go binary. This is intentional — don't drop the flag.
 exec "$BIN" \
   --data "$DATA_DIR" \
-  --frontend "$FRONTEND_BUILD" \
+  "${FRONTEND_ARGS[@]}" \
   --host 127.0.0.1

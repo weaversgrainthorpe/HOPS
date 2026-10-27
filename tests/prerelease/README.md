@@ -92,3 +92,7 @@ what unit tests can't catch.
   surface for an admin tool, and adding browsers triples runtime.
 - Accessibility audits (axe-core). Worth doing once on a major release;
   noisy as a per-release gate.
+
+## Running against the real release build
+
+`HOPS_TEST_BUILD=release npm run test:release` builds the shipped artifact (`scripts/build.sh`: UI embedded, no `-tags dev`, no `--frontend`) and runs the whole suite against it, including the specs that spawn their own HOPS. Harness-only switch, not an app setting. Specs that need the dev build skip visibly with a reason (see `hops-bin.ts`).

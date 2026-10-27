@@ -5,6 +5,7 @@
   "description": "End-to-end and contract tests that run against a fresh HOPS instance before release",
   "scripts": {
     "test": "playwright test",
+    "test:release": "HOPS_TEST_BUILD=release playwright test",
     "test:headed": "playwright test --headed",
     "test:ui": "playwright test --ui",
     "show-report": "playwright show-report"

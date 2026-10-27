@@ -1,4 +1,5 @@
 import { test, expect, type Page, type Browser } from '@playwright/test';
+import { hopsCommand } from '../hops-bin';
 import { spawn, execFileSync, type ChildProcess } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -105,7 +106,7 @@ test.describe('M5 §13 settings at an old default move to the new default', () =
 	let dataDir = '';
 
 	async function start() {
-		child = spawn(path.join(REPO, 'backend/hops-testdev'), ['--data', dataDir, '--frontend', path.join(REPO, 'frontend/build'), '--host', '127.0.0.1'], { stdio: 'ignore' });
+		child = spawn(...hopsCommand(dataDir), { stdio: 'ignore' });
 		const deadline = Date.now() + 20_000;
 		for (;;) {
 			try {

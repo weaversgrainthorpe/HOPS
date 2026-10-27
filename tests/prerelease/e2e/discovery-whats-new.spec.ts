@@ -1,4 +1,5 @@
 import { test, expect, type Page, type BrowserContext } from '@playwright/test';
+import { hopsCommand } from '../hops-bin';
 import { spawn, execFileSync, type ChildProcess } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -55,7 +56,7 @@ c.execute("CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY, value 
 c.execute("INSERT OR REPLACE INTO app_settings(key, value) VALUES('server.port', ?)", (sys.argv[2],))
 c.commit()
 `, path.join(dataDir, 'hops.db'), PORT]);
-		child = spawn(path.join(REPO, 'backend/hops-testdev'), ['--data', dataDir, '--frontend', path.join(REPO, 'frontend/build'), '--host', '127.0.0.1'], { stdio: 'ignore' });
+		child = spawn(...hopsCommand(dataDir), { stdio: 'ignore' });
 		const deadline = Date.now() + 20_000;
 		for (;;) {
 			try { if ((await fetch(`${BASE}/api/health`)).ok) break; } catch { /* not up yet */ }

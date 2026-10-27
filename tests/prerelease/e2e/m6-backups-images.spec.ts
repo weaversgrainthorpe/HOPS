@@ -1,4 +1,5 @@
 import { test, expect, type Page, type BrowserContext } from '@playwright/test';
+import { hopsCommand } from '../hops-bin';
 import { spawn, execFileSync, type ChildProcess } from 'node:child_process';
 import * as fs from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -30,7 +31,7 @@ let dataDir = '';
 let workDir = '';
 
 async function startServer() {
-	child = spawn(path.join(REPO, 'backend/hops-testdev'), ['--data', dataDir, '--frontend', path.join(REPO, 'frontend/build'), '--host', '127.0.0.1'], { stdio: 'ignore' });
+	child = spawn(...hopsCommand(dataDir), { stdio: 'ignore' });
 	const deadline = Date.now() + 20_000;
 	for (;;) {
 		try {
