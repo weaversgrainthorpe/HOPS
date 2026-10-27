@@ -10,6 +10,7 @@
   import { tick } from 'svelte';
   import Icon from '@iconify/svelte';
   import ImportModal from './ImportModal.svelte';
+  import { suggestDashboardPath } from '$lib/utils/dashboardPath';
   import QRCodeModal from './QRCodeModal.svelte';
 
   // Every write goes through its own endpoint (create, rename at the stored
@@ -24,12 +25,15 @@
   let creatingNew = $state(false);
   let newName = $state('');
   let newPath = $state('');
+  // The path follows the name until the user types in the path field themselves.
+  let pathEdited = $state(false);
   let busy = $state(false);
 
   async function handleNew() {
     creatingNew = true;
     newName = '';
-    newPath = `/dashboard-${Date.now()}`;
+    newPath = '';
+    pathEdited = false;
     // Programmatic focus after the next render — friendlier than `autofocus`
     // which steals focus mid-page-read for screen-reader users (WCAG 2.4.3).
     await tick();
@@ -46,13 +50,21 @@
     if (!newName.trim() || busy) return;
     busy = true;
     try {
-      await createDashboard(newName.trim(), newPath.trim() || `/dashboard-${Date.now()}`);
+      await createDashboard(newName.trim(), newPath.trim() || suggestedPath());
     } catch {
       return; // not created; the store already showed why. Keep the form as-is.
     } finally {
       busy = false;
     }
     cancelNew();
+  }
+
+  function suggestedPath() {
+    return suggestDashboardPath(newName, $dashboards.map((d) => d.path));
+  }
+
+  function onNewNameInput() {
+    if (!pathEdited) newPath = newName.trim() ? suggestedPath() : '';
   }
 
   async function handleDelete(dashboard: LayoutDashboard) {
@@ -168,15 +180,17 @@
               id="new-name"
               type="text"
               bind:value={newName}
+              oninput={onNewNameInput}
               placeholder="e.g., Home"
             />
           </div>
           <div class="field">
-            <label for="new-path">URL Path <span class="optional">(auto-generated, change if needed)</span></label>
+            <label for="new-path">URL Path <span class="optional">(from the name; change if needed)</span></label>
             <input
               id="new-path"
               type="text"
               bind:value={newPath}
+              oninput={() => (pathEdited = true)}
               placeholder="/my-dashboard"
             />
           </div>

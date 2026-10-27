@@ -64,6 +64,24 @@ test('dashboard CRUD round-trip via UI: create → rename → delete', async ({ 
   made.splice(made.indexOf(renamed), 1); // deleted by the test itself
 });
 
+test('a new dashboard\'s URL path follows its name until the path is edited', async ({ page }) => {
+  const name = uniqueName('Media Room');
+  const slug = `/${name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`;
+  await openSettings(page);
+  await page.click('button:has-text("New Dashboard")');
+  await page.fill('input#new-name', name);
+  await expect(page.locator('input#new-path')).toHaveValue(slug);
+  // Once the path is typed in by hand, renaming no longer overwrites it.
+  await page.fill('input#new-path', `${slug}-mine`);
+  await page.fill('input#new-name', `${name} x`);
+  await expect(page.locator('input#new-path')).toHaveValue(`${slug}-mine`);
+  await page.click('.new-dashboard-form button.btn-primary:has-text("Save")');
+  made.push(`${name} x`);
+  await expect(page.getByRole('heading', { name: `${name} x`, level: 3 })).toBeVisible();
+  const cfg = await (await page.request.get('/api/config')).json();
+  expect(cfg.dashboards.find((d: { name: string }) => d.name === `${name} x`)?.path).toBe(`${slug}-mine`);
+});
+
 async function saveDraft(page: Page) {
   const saved = page.waitForResponse((r) => r.request().method() === 'PUT' && /\/api\/dashboards\//.test(r.url()));
   await page.getByRole('toolbar', { name: 'Editing' }).getByRole('button', { name: /Save/ }).click();
