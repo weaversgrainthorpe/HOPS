@@ -152,7 +152,7 @@ export async function login(username: string, password: string, opts: { quietErr
   }
 }
 
-// Called by ChangePasswordModal after a successful password change to clear the flag
+// Called by ChangePasswordForm after a successful password change to clear the flag
 export function clearMustChangePassword() {
   mustChangePassword.set(false);
 }

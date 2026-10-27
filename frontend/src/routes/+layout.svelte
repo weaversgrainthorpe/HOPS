@@ -23,7 +23,7 @@
 	import MigrationFailed from '$lib/components/MigrationFailed.svelte';
 	import Toast from '$lib/components/Toast.svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
-	import ChangePasswordModal from '$lib/components/admin/ChangePasswordModal.svelte';
+	import ForcedPasswordModal from '$lib/components/admin/ForcedPasswordModal.svelte';
 	import { navigateTiles } from '$lib/utils/tileNav';
 	import { safeOpenUrl } from '$lib/utils/url';
 	import SearchModal from '$lib/components/SearchModal.svelte';
@@ -153,7 +153,7 @@
 </div>
 
 {#if $mustChangePassword}
-	<ChangePasswordModal forced={true} onClose={() => {}} />
+	<ForcedPasswordModal onClose={() => {}} />
 {/if}
 
 {#if showSearch}
