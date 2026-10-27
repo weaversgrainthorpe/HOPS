@@ -37,7 +37,8 @@ echo "==> Embedding frontend"
 rm -rf backend/internal/web/build
 mkdir -p backend/internal/web/build
 cp -r frontend/build/. backend/internal/web/build/
-touch backend/internal/web/build/.gitkeep
+# Put the tracked placeholder back (rm -rf above removed it).
+git checkout -- backend/internal/web/build/.gitkeep || die "could not restore backend/internal/web/build/.gitkeep"
 
 ldflags="-s -w -X github.com/weaversgrainthorpe/HOPS/internal/version.Prerelease=$label"
 
@@ -71,10 +72,24 @@ echo "==> Adding install.sh and hops-proxmox.sh"
 cp packaging/install.sh "$out/install.sh" || die "could not copy packaging/install.sh"
 cp packaging/proxmox/hops-proxmox.sh "$out/hops-proxmox.sh" || die "could not copy packaging/proxmox/hops-proxmox.sh"
 
+echo "==> Writing BUILD-INFO"
+commit=$(git rev-parse HEAD) || die "could not read the git commit"
+dirty=no
+if [[ -n $(git status --porcelain --untracked-files=no) ]]; then dirty=yes; fi
+{
+  echo "version: $version-$label"
+  echo "commit: $commit"
+  echo "dirty: $dirty"
+  echo "built: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+} > "$out/BUILD-INFO"
+
 echo "==> Writing SHA256SUMS"
-(cd "$out" && sha256sum hops-* install.sh > SHA256SUMS) || die "sha256sum failed"
+(cd "$out" && sha256sum hops-* install.sh BUILD-INFO > SHA256SUMS) || die "sha256sum failed"
 (cd "$out" && sha256sum -c --quiet SHA256SUMS) || die "SHA256SUMS does not verify"
 
 echo
+if [[ $dirty == yes ]]; then
+  echo "WARNING: built from a working tree with UNCOMMITTED changes (recorded as dirty: yes in BUILD-INFO)." >&2
+fi
 echo "Built HOPS v$version-$label into dist/$label:"
 ls -l "$out"
