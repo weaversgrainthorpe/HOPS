@@ -213,7 +213,7 @@
   .state { padding: 0.6rem 0.8rem; border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 0.4rem; }
   .scope { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin: 0.6rem 0; }
   .seg { position: relative; padding: 0.25rem 0.8rem; border: 1px solid var(--border); border-radius: 0.4rem; cursor: pointer; }
-  .seg.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .seg.on { background: var(--accent-solid); color: var(--on-accent); border-color: var(--accent-solid); }
   .seg input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
   .seg:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
   .group { margin: 0.75rem 0; padding: 0.6rem 0.8rem; border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 0.4rem; }
