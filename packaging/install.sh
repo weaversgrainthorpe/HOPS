@@ -113,10 +113,16 @@ primary_ip() {
 
 # The address HOPS binds, from the effective ExecStart (a drop-in may add
 # --host). Empty / wildcard means "all interfaces" → probe 127.0.0.1.
-health_host() {
+bound_host() {
   local exec h=""
   exec=$(systemctl show -p ExecStart "$SERVICE" 2>/dev/null) || exec=""
   if [[ $exec =~ --host[=[:space:]]+([^[:space:];]+) ]]; then h=${BASH_REMATCH[1]}; fi
+  echo "$h"
+}
+
+health_host() {
+  local h
+  h=$(bound_host)
   case $h in
     ""|0.0.0.0|::|"[::]") echo 127.0.0.1 ;;
     *:*) echo "[${h#[}" | sed 's/\]*$/]/' ;;
@@ -441,7 +447,7 @@ main() {
   trap 'exit 130' INT TERM HUP
 
   log "architecture: $asset ($how)"
-  log "downloading from $url"
+  log "downloading from $url (with $fetcher)"
   fetch "$url/$asset" "$tmp/$asset"
   fetch "$url/SHA256SUMS" "$tmp/SHA256SUMS"
 
@@ -529,7 +535,9 @@ main() {
   if wait_healthy "$version"; then
     critical=0
     local ip
-    ip=$(primary_ip)
+    ip=$(health_host)
+    # Bound to all interfaces → show the LAN address; else the bound one.
+    if [[ $ip == 127.0.0.1 && -z $(bound_host) ]]; then ip=$(primary_ip); fi
     echo
     if (( upgrade )); then log "HOPS upgraded and healthy."; else log "HOPS installed and healthy."; fi
     log "health: $health_body"
