@@ -43,7 +43,7 @@ func TestEveryKeyHasADefinition(t *testing.T) {
 	// an empty string with no error.
 	keys := []string{
 		KeyServerPort, KeyLogLevel, KeyProxyTrustedCIDRs,
-		KeyAuthLoginRateLimitPerMin, KeyAuthSessionLifetimeHours,
+		KeyAuthLoginRateLimitPerMin, KeyAuthSessionLifetimeHours, KeyAuthSessionIdleHours,
 		KeyEditModeIdleTimeoutMinutes,
 		KeyStatusChecksEnabled, KeyStatusCheckIntervalMinutes, KeyStatusCheckTimeoutSeconds, KeyStatusDeadAfterHours,
 		KeyUploadMaxBytesImport, KeyUploadMaxBytesBackground, KeyUploadMaxBytesIcon,

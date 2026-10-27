@@ -27,7 +27,7 @@ describe('global settings grouping table', () => {
 			'discovery.max_parallel_probes', 'discovery.per_host_timeout_seconds', 'discovery.max_scan_minutes'
 		]);
 		expect(keysOf('sign-in-security')).toEqual([
-			'auth.session_lifetime_hours', 'auth.login_rate_limit_per_min', 'proxy.trusted_cidrs'
+			'auth.session_lifetime_hours', 'auth.session_idle_hours', 'auth.login_rate_limit_per_min', 'proxy.trusted_cidrs'
 		]);
 		const server = keysOf('server');
 		expect(server.slice(0, 2)).toEqual(['server.port', 'log.level']);
@@ -110,6 +110,7 @@ describe('global setting labels', () => {
 		expect(settingLabel('proxy.trusted_cidrs')).toBe('Trusted proxy ranges (CIDR)');
 		expect(settingLabel('auth.login_rate_limit_per_min')).toBe('Failed sign-ins allowed per minute');
 		expect(settingLabel('auth.session_lifetime_hours')).toBe('Stay signed in for (hours)');
+		expect(settingLabel('auth.session_idle_hours')).toBe('Sign out after being idle for');
 		expect(settingLabel('upload.max_bytes_import')).toBe('Largest import');
 	});
 

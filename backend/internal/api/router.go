@@ -254,6 +254,11 @@ func NewRouter(db *sql.DB, authService *auth.Service, cfg *config.Config, settin
 		trustedProxies: parseTrustedProxyCIDRs(settingsSvc.GetStringList(settings.KeyProxyTrustedCIDRs)),
 	}
 
+	// Optional idle sign-out, read on every validation so a change applies at once.
+	authService.SetIdleLimit(func() time.Duration {
+		return time.Duration(settingsSvc.GetInt(settings.KeyAuthSessionIdleHours)) * time.Hour
+	})
+
 	// Live-update the rate limit when the admin changes it via Settings.
 	settingsSvc.Subscribe(settings.KeyAuthLoginRateLimitPerMin, func(value string) {
 		if n, err := strconv.Atoi(value); err == nil && n > 0 {
@@ -670,6 +675,15 @@ func (r *Router) securityHeadersMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// isStateChangingMethod: anything but GET, HEAD and OPTIONS.
+func isStateChangingMethod(m string) bool {
+	switch m {
+	case http.MethodGet, http.MethodHead, http.MethodOptions:
+		return false
+	}
+	return true
+}
+
 // authMiddleware validates session token for protected routes
 func (r *Router) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
@@ -679,7 +693,16 @@ func (r *Router) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		userID, err := r.authService.ValidateSession(sessionID)
+		// Idle sign-out (auth.session_idle_hours): only state-changing requests
+		// count as the admin using HOPS. Reads, including every background
+		// poll (logs auto-refresh, scan progress, dead links, the auth check,
+		// GET /api/config), never extend a session, so a left-open tab still
+		// idles out. Login and a password change start a fresh session.
+		validate := r.authService.ValidateSession
+		if isStateChangingMethod(req.Method) {
+			validate = r.authService.ValidateSessionActivity
+		}
+		userID, err := validate(sessionID)
 		if err != nil {
 			writeJSONError(w, "Unauthorized", http.StatusUnauthorized)
 			return

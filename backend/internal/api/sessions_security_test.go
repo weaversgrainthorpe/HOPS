@@ -286,3 +286,54 @@ func TestLoginRateLimitNotSpoofable(t *testing.T) {
 		}
 	})
 }
+
+// Idle sign-out (auth.session_idle_hours) over HTTP, with a fake clock: reads
+// and polls never extend a session, a state-changing request does, and an
+// idle session gets the normal 401.
+func TestIdleSignOutOverHTTP(t *testing.T) {
+	rt, h, _ := setupTestRouterCore(t, "", nil, map[string]string{"auth.session_idle_hours": "1"}, t.TempDir())
+	clk := time.Now()
+	rt.authService.SetClock(func() time.Time { return clk })
+	s, csrf := loginTestUserWithCSRF(t, h)
+
+	poll := func() int {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest("GET", "/api/logs", nil)
+		req.AddCookie(&http.Cookie{Name: "hops_session", Value: s})
+		h.ServeHTTP(w, req)
+		return w.Code
+	}
+	for i := 0; i < 59; i++ { // a log page auto-refreshing for 59 minutes
+		clk = clk.Add(time.Minute)
+		if c := poll(); c != http.StatusOK {
+			t.Fatalf("poll at %d min = %d", i+1, c)
+		}
+	}
+	// A change at 59 min counts as use (it reaches the handler: 400 for the bad body).
+	if w := postJSON(h, "/api/dashboards", "not a dashboard", s, csrf); w.Code == http.StatusUnauthorized || w.Code == http.StatusForbidden {
+		t.Fatalf("activity request refused: %d", w.Code)
+	}
+	clk = clk.Add(59 * time.Minute)
+	if c := poll(); c != http.StatusOK {
+		t.Fatalf("activity did not extend the session: %d", c)
+	}
+	clk = clk.Add(2 * time.Minute)
+	if c := poll(); c != http.StatusUnauthorized {
+		t.Fatalf("idle session = %d, want 401", c)
+	}
+	if sessionWorks(t, h, s) {
+		t.Fatal("idle session still works")
+	}
+}
+
+// Off (the default): hours of polling only, still signed in.
+func TestIdleSignOutOffByDefault(t *testing.T) {
+	rt, h, _ := setupTestRouterInDir(t, t.TempDir())
+	clk := time.Now()
+	rt.authService.SetClock(func() time.Time { return clk })
+	s, _ := loginTestUserWithCSRF(t, h)
+	clk = clk.Add(30 * 24 * time.Hour)
+	if !sessionWorks(t, h, s) {
+		t.Fatal("idle sign-out applied while off")
+	}
+}

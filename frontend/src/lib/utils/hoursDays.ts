@@ -1,16 +1,20 @@
-// A setting stored in hours but set in hours or days (status.dead_after_hours), and the
+// A setting stored in hours but set in hours or days (status.dead_after_hours,
+// auth.session_idle_hours, where 0 is "Off"), and the
 // "for 9 days" wording of the dead-link report.
 
-export type HourUnit = 'hours' | 'days';
+export type HourUnit = 'hours' | 'days' | 'off';
 
 /** Stored hours → what the input shows: whole days as days, anything else as hours. */
-export function splitHours(hours: string | number): { amount: number; unit: HourUnit } {
+/** With allowOff, 0 is shown as the "Off" choice. */
+export function splitHours(hours: string | number, allowOff = false): { amount: number; unit: HourUnit } {
   const h = Number(hours);
+  if (allowOff && h === 0) return { amount: 0, unit: 'off' };
   if (Number.isFinite(h) && h > 0 && h % 24 === 0) return { amount: h / 24, unit: 'days' };
   return { amount: h, unit: 'hours' };
 }
 
 export function toHours(amount: number, unit: HourUnit): number {
+  if (unit === 'off') return 0;
   return unit === 'days' ? amount * 24 : amount;
 }
 
@@ -18,6 +22,7 @@ export type HoursParse = { ok: true; hours: number } | { ok: false; error: strin
 
 /** What the admin typed, in the chosen unit → whole hours, refusing empty or out-of-range values. */
 export function parseHoursDays(text: string | number | null | undefined, unit: HourUnit, bounds: { min?: number; max?: number }): HoursParse {
+  if (unit === 'off') return { ok: true, hours: 0 };
   const raw = String(text ?? '').trim();
   if (!/^\d+(\.\d+)?$/.test(raw)) return { ok: false, error: 'Enter a number' };
   const hours = toHours(Number(raw), unit);
@@ -30,8 +35,9 @@ export function parseHoursDays(text: string | number | null | undefined, unit: H
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
-/** 168 → "7 days", 30 → "30 hours". */
+/** 168 → "7 days", 30 → "30 hours", 0 → "Off". */
 export function formatHours(hours: number): string {
+  if (hours === 0) return 'Off';
   return hours % 24 === 0 ? plural(hours / 24, 'day') : plural(hours, 'hour');
 }
 

@@ -35,7 +35,7 @@ export const GLOBAL_SETTING_GROUPS: readonly SettingGroupDef[] = [
 	{
 		id: 'sign-in-security',
 		label: 'Sign-in & security',
-		keys: ['auth.session_lifetime_hours', 'auth.login_rate_limit_per_min', 'proxy.trusted_cidrs']
+		keys: ['auth.session_lifetime_hours', 'auth.session_idle_hours', 'auth.login_rate_limit_per_min', 'proxy.trusted_cidrs']
 	},
 	{ id: 'uploads', label: 'Uploads', keys: ['upload.max_bytes_background', 'upload.max_bytes_icon', 'upload.max_bytes_import'] },
 	{ id: 'editing', label: 'Editing', keys: ['editmode.idle_timeout_minutes'] },
@@ -63,6 +63,7 @@ export const SETTING_LABELS: Readonly<Record<string, string>> = {
 	'backup.keep_days': 'Also keep backups newer than (days)',
 	'backup.max_count': 'Most backups kept',
 	'auth.session_lifetime_hours': 'Stay signed in for (hours)',
+	'auth.session_idle_hours': 'Sign out after being idle for',
 	'auth.login_rate_limit_per_min': 'Failed sign-ins allowed per minute',
 	'proxy.trusted_cidrs': 'Trusted proxy ranges (CIDR)',
 	'upload.max_bytes_background': 'Largest background upload',

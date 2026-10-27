@@ -38,3 +38,16 @@ describe('hours/days conversion', () => {
     expect(failingFor('2026-10-25T12:00:00Z', now)).toBe('1 day');
   });
 });
+
+describe('"Off" (0) for settings where 0 means off (auth.session_idle_hours)', () => {
+  it('shows 0 as Off only when allowed', () => {
+    expect(splitHours(0, true)).toEqual({ amount: 0, unit: 'off' });
+    expect(splitHours(0).unit).toBe('hours');
+    expect(splitHours(48, true)).toEqual({ amount: 2, unit: 'days' });
+  });
+  it('Off saves 0 whatever is typed', () => {
+    expect(parseHoursDays('', 'off', { min: 0, max: 8760 })).toEqual({ ok: true, hours: 0 });
+    expect(toHours(5, 'off')).toBe(0);
+    expect(formatHours(0)).toBe('Off');
+  });
+});

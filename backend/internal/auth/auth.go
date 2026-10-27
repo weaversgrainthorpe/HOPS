@@ -15,13 +15,32 @@ import (
 
 // Service handles authentication operations
 type Service struct {
-	db *sql.DB
+	db  *sql.DB
+	now func() time.Time
+	// idleLimit returns the idle sign-out limit (auth.session_idle_hours);
+	// 0 or less means off.
+	idleLimit func() time.Duration
 }
 
 // NewService creates a new auth service
 func NewService(db *sql.DB) *Service {
-	return &Service{db: db}
+	return &Service{db: db, now: time.Now, idleLimit: func() time.Duration { return 0 }}
 }
+
+// SetClock replaces the clock (tests).
+func (s *Service) SetClock(now func() time.Time) { s.now = now }
+
+// SetIdleLimit sets where the idle sign-out limit is read from (the router
+// passes the auth.session_idle_hours setting, read on every validation so a
+// change applies at once).
+func (s *Service) SetIdleLimit(f func() time.Duration) { s.idleLimit = f }
+
+// touchEvery bounds how often an activity request rewrites last_used_at: at
+// most once a minute per session, never on every request.
+const touchEvery = time.Minute
+
+// ErrSessionIdle: the session was not used for longer than the idle limit.
+var ErrSessionIdle = errors.New("session idle too long")
 
 // LoginResult holds the result of a successful login
 type LoginResult struct {
@@ -107,7 +126,7 @@ func (s *Service) LoginReplacing(username, password string, lifetimeHours int, p
 			return LoginResult{}, fmt.Errorf("failed to end the previous session: %w", err)
 		}
 	}
-	sessionID, err := insertSession(tx, userID, lifetimeHours)
+	sessionID, err := insertSession(tx, userID, lifetimeHours, s.now())
 	if err != nil {
 		return LoginResult{}, err
 	}
@@ -122,7 +141,7 @@ func (s *Service) LoginReplacing(username, password string, lifetimeHours int, p
 }
 
 // insertSession creates a session row with a fresh random id.
-func insertSession(tx *sql.Tx, userID, lifetimeHours int) (string, error) {
+func insertSession(tx *sql.Tx, userID, lifetimeHours int, now time.Time) (string, error) {
 	sessionID, err := generateSessionID()
 	if err != nil {
 		return "", fmt.Errorf("failed to generate session: %w", err)
@@ -133,10 +152,10 @@ func insertSession(tx *sql.Tx, userID, lifetimeHours int) (string, error) {
 	if lifetimeHours <= 0 {
 		lifetimeHours = 24
 	}
-	expiresAt := time.Now().Add(time.Duration(lifetimeHours) * time.Hour)
+	expiresAt := now.Add(time.Duration(lifetimeHours) * time.Hour)
 	if _, err := tx.Exec(
-		"INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)",
-		sessionID, userID, expiresAt,
+		"INSERT INTO sessions (id, user_id, expires_at, last_used_at) VALUES (?, ?, ?, ?)",
+		sessionID, userID, expiresAt, now,
 	); err != nil {
 		return "", fmt.Errorf("failed to create session: %w", err)
 	}
@@ -156,15 +175,30 @@ func (s *Service) MustChangePassword(userID int) (bool, error) {
 	return mustChange == 1, nil
 }
 
-// ValidateSession checks if a session is valid
+// ValidateSession checks that a session exists, is within its absolute
+// lifetime and, when idle sign-out is on, was used recently enough. It does
+// NOT count as activity: background reads (polling, the auth check, the
+// public config's admin notices) use it, so they never keep a session alive.
 func (s *Service) ValidateSession(sessionID string) (int, error) {
+	return s.validate(sessionID, false)
+}
+
+// ValidateSessionActivity is ValidateSession for a request that counts as
+// the admin using HOPS (see Router.authMiddleware): it also records the use,
+// at most once a minute.
+func (s *Service) ValidateSessionActivity(sessionID string) (int, error) {
+	return s.validate(sessionID, true)
+}
+
+func (s *Service) validate(sessionID string, activity bool) (int, error) {
 	var userID int
 	var expiresAt time.Time
+	var lastUsed sql.NullTime
 
 	err := s.db.QueryRow(
-		"SELECT user_id, expires_at FROM sessions WHERE id = ?",
+		"SELECT user_id, expires_at, last_used_at FROM sessions WHERE id = ?",
 		sessionID,
-	).Scan(&userID, &expiresAt)
+	).Scan(&userID, &expiresAt, &lastUsed)
 
 	if err == sql.ErrNoRows {
 		return 0, fmt.Errorf("invalid session")
@@ -173,16 +207,34 @@ func (s *Service) ValidateSession(sessionID string) (int, error) {
 		return 0, fmt.Errorf("database error: %w", err)
 	}
 
-	if time.Now().After(expiresAt) {
-		// Clean up expired session
-		if _, err := s.db.Exec("DELETE FROM sessions WHERE id = ?", sessionID); err != nil {
-			// Never log the session ID: it is the bearer secret.
-			slog.Warn("failed to delete expired session", "component", "auth", "error", err)
-		}
+	now := s.now()
+	if now.After(expiresAt) {
+		s.deleteSession(sessionID, "expired")
 		return 0, fmt.Errorf("session expired")
+	}
+	if idle := s.idleLimit(); idle > 0 && lastUsed.Valid && now.Sub(lastUsed.Time) > idle {
+		s.deleteSession(sessionID, "idle")
+		return 0, ErrSessionIdle
+	}
+
+	// A row from before last_used_at existed counts from its first use; an
+	// activity request refreshes the time at most once a minute.
+	if !lastUsed.Valid || (activity && now.Sub(lastUsed.Time) >= touchEvery) {
+		if _, err := s.db.Exec("UPDATE sessions SET last_used_at = ? WHERE id = ?", now, sessionID); err != nil {
+			// The request itself is fine; the cost is an earlier idle sign-out.
+			slog.Warn("failed to record session use", "component", "auth", "error", err)
+		}
 	}
 
 	return userID, nil
+}
+
+func (s *Service) deleteSession(sessionID, why string) {
+	if _, err := s.db.Exec("DELETE FROM sessions WHERE id = ?", sessionID); err != nil {
+		// Never log the session ID: it is the bearer secret. The session is
+		// refused either way.
+		slog.Warn("failed to delete session", "component", "auth", "reason", why, "error", err)
+	}
 }
 
 // Logout removes a session
@@ -237,7 +289,7 @@ func (s *Service) ChangePassword(userID int, oldPassword, newPassword string, li
 	if _, err := tx.Exec("DELETE FROM sessions WHERE user_id = ?", userID); err != nil {
 		return "", fmt.Errorf("failed to end sessions: %w", err)
 	}
-	sessionID, err := insertSession(tx, userID, lifetimeHours)
+	sessionID, err := insertSession(tx, userID, lifetimeHours, s.now())
 	if err != nil {
 		return "", err
 	}
@@ -258,7 +310,13 @@ func generateSessionID() (string, error) {
 
 // CleanupExpiredSessions removes all expired sessions
 func (s *Service) CleanupExpiredSessions() error {
-	_, err := s.db.Exec("DELETE FROM sessions WHERE expires_at < ?", time.Now())
+	_, err := s.db.Exec("DELETE FROM sessions WHERE expires_at < ?", s.now())
+	if err != nil {
+		return err
+	}
+	if idle := s.idleLimit(); idle > 0 {
+		_, err = s.db.Exec("DELETE FROM sessions WHERE last_used_at IS NOT NULL AND last_used_at < ?", s.now().Add(-idle))
+	}
 	return err
 }
 

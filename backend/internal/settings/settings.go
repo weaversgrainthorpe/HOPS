@@ -72,6 +72,7 @@ const (
 	KeyProxyTrustedCIDRs            = "proxy.trusted_cidrs"
 	KeyAuthLoginRateLimitPerMin     = "auth.login_rate_limit_per_min"
 	KeyAuthSessionLifetimeHours     = "auth.session_lifetime_hours"
+	KeyAuthSessionIdleHours         = "auth.session_idle_hours"
 	KeyEditModeIdleTimeoutMinutes   = "editmode.idle_timeout_minutes"
 	KeyStatusChecksEnabled          = "status.checks_enabled"
 	KeyStatusCheckIntervalMinutes   = "status.check_interval_minutes"
@@ -119,6 +120,12 @@ var Definitions = []Definition{
 		Key: KeyAuthSessionLifetimeHours, Type: "duration_hours", Default: "8760",
 		Description: "How long to stay signed in after logging in (hours). Defaults to one year — HOPS keeps you signed in until you click Logout. Lower this if you want signed-in admins to re-authenticate periodically.",
 		Min:         1, Max: 24 * 365 * 5,
+	},
+	{
+		Key: KeyAuthSessionIdleHours, Type: "duration_hours", Default: "0",
+		Description: "Sign out a session that hasn't been used for this long (hours or days; 0 = off, the default). Only things you do count as use — saving, deleting, starting a scan and other changes; " +
+			"background refreshes (status dots, config refresh, log auto-refresh) and just viewing pages don't. Off, you stay signed in until the sign-in lifetime above runs out or you log out.",
+		Min:         0, Max: 24 * 365,
 	},
 	{
 		Key: KeyEditModeIdleTimeoutMinutes, Type: "duration_minutes", Default: "15",

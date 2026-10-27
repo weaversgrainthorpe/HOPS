@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	_ "modernc.org/sqlite"
 	"golang.org/x/crypto/bcrypt"
+	_ "modernc.org/sqlite"
 )
 
 func setupTestDB(t *testing.T) *sql.DB {
@@ -32,6 +32,7 @@ func setupTestDB(t *testing.T) *sql.DB {
 			user_id INTEGER NOT NULL,
 			expires_at DATETIME NOT NULL,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			last_used_at DATETIME,
 			FOREIGN KEY (user_id) REFERENCES users(id)
 		)`,
 	}
@@ -377,5 +378,119 @@ func TestAbsoluteExpiry(t *testing.T) {
 	db.QueryRow("SELECT COUNT(*) FROM sessions WHERE id = ?", r.SessionID).Scan(&n)
 	if n != 0 {
 		t.Error("expired session row was not deleted")
+	}
+}
+
+// fakeClock is a settable clock for idle-expiry tests.
+type fakeClock struct{ t time.Time }
+
+func (c *fakeClock) now() time.Time          { return c.t }
+func (c *fakeClock) advance(d time.Duration) { c.t = c.t.Add(d) }
+
+func idleService(t *testing.T, idle time.Duration) (*Service, *fakeClock, *sql.DB) {
+	db := setupTestDB(t)
+	svc := NewService(db)
+	clk := &fakeClock{t: time.Now()}
+	svc.SetClock(clk.now)
+	svc.SetIdleLimit(func() time.Duration { return idle })
+	return svc, clk, db
+}
+
+// Idle sign-out: a session not used (by an activity request) for longer than
+// the limit is refused and deleted.
+func TestIdleExpiry(t *testing.T) {
+	svc, clk, db := idleService(t, 2*time.Hour)
+	r, _ := svc.Login("admin", "testpass", 24)
+	clk.advance(2*time.Hour - time.Minute)
+	if _, err := svc.ValidateSession(r.SessionID); err != nil {
+		t.Fatalf("session refused before the idle limit: %v", err)
+	}
+	clk.advance(2 * time.Minute)
+	if _, err := svc.ValidateSession(r.SessionID); !errors.Is(err, ErrSessionIdle) {
+		t.Fatalf("idle session: err = %v, want ErrSessionIdle", err)
+	}
+	var n int
+	db.QueryRow("SELECT COUNT(*) FROM sessions WHERE id = ?", r.SessionID).Scan(&n)
+	if n != 0 {
+		t.Error("idle session row was not deleted")
+	}
+}
+
+// Activity resets the idle clock; non-activity (polling) reads do not.
+func TestIdleActivityVersusPolling(t *testing.T) {
+	svc, clk, _ := idleService(t, time.Hour)
+	r, _ := svc.Login("admin", "testpass", 24)
+	// Polling every 30s for 59 minutes does not count...
+	for i := 0; i < 118; i++ {
+		clk.advance(30 * time.Second)
+		if _, err := svc.ValidateSession(r.SessionID); err != nil {
+			t.Fatalf("poll %d refused: %v", i, err)
+		}
+	}
+	// ...one activity request at 59 min resets it.
+	if _, err := svc.ValidateSessionActivity(r.SessionID); err != nil {
+		t.Fatal(err)
+	}
+	clk.advance(59 * time.Minute)
+	if _, err := svc.ValidateSession(r.SessionID); err != nil {
+		t.Fatalf("activity did not extend the session: %v", err)
+	}
+	// Only polling from here: it idles out at the hour.
+	var err error
+	for i := 0; i < 4 && err == nil; i++ {
+		clk.advance(30 * time.Second)
+		_, err = svc.ValidateSession(r.SessionID)
+	}
+	if !errors.Is(err, ErrSessionIdle) {
+		t.Fatalf("polling kept the session alive: err = %v", err)
+	}
+}
+
+// last_used_at is written at most once a minute per session.
+func TestIdleTouchThrottled(t *testing.T) {
+	svc, clk, db := idleService(t, time.Hour)
+	r, _ := svc.Login("admin", "testpass", 24)
+	read := func() time.Time {
+		var tm time.Time
+		db.QueryRow("SELECT last_used_at FROM sessions WHERE id = ?", r.SessionID).Scan(&tm)
+		return tm
+	}
+	first := read()
+	clk.advance(30 * time.Second)
+	svc.ValidateSessionActivity(r.SessionID)
+	if !read().Equal(first) {
+		t.Error("last_used_at rewritten within a minute")
+	}
+	clk.advance(31 * time.Second)
+	svc.ValidateSessionActivity(r.SessionID)
+	if !read().After(first) {
+		t.Error("last_used_at not updated after a minute")
+	}
+}
+
+// Off (0, the default) means only the absolute expiry applies.
+func TestIdleOff(t *testing.T) {
+	svc, clk, _ := idleService(t, 0)
+	r, _ := svc.Login("admin", "testpass", 24)
+	clk.advance(23 * time.Hour)
+	if _, err := svc.ValidateSession(r.SessionID); err != nil {
+		t.Fatalf("idle off: session refused: %v", err)
+	}
+	clk.advance(2 * time.Hour)
+	if _, err := svc.ValidateSession(r.SessionID); err == nil {
+		t.Fatal("absolute expiry not applied")
+	}
+}
+
+// A row from before last_used_at existed (NULL) counts from its first use.
+func TestIdleLegacyRow(t *testing.T) {
+	svc, clk, db := idleService(t, time.Hour)
+	db.Exec("INSERT INTO sessions (id, user_id, expires_at) VALUES ('legacy', 1, ?)", clk.t.Add(24*time.Hour))
+	if _, err := svc.ValidateSession("legacy"); err != nil {
+		t.Fatalf("legacy row refused: %v", err)
+	}
+	clk.advance(61 * time.Minute)
+	if _, err := svc.ValidateSession("legacy"); !errors.Is(err, ErrSessionIdle) {
+		t.Fatalf("legacy row never idles: %v", err)
 	}
 }

@@ -111,7 +111,7 @@
       const { settings: list } = await listSettings();
       settings = list;
       drafts = Object.fromEntries(list.map((s) => [s.key, shown(s, s.value)]));
-      units = Object.fromEntries(list.filter(isHoursDays).map((s) => [s.key, splitHours(s.value).unit]));
+      units = Object.fromEntries(list.filter(isHoursDays).map((s) => [s.key, splitHours(s.value, allowsOff(s)).unit]));
     } catch (e) {
       loadError = e instanceof Error ? e.message : 'Failed to load settings';
     } finally {
@@ -123,24 +123,28 @@
 
   // What the input shows for a stored value: MB for byte sizes, the value itself otherwise.
   function shown(s: SettingDef, value: string): string {
-    if (isHoursDays(s)) return String(splitHours(value).amount);
+    if (isHoursDays(s)) return String(splitHours(value, allowsOff(s)).amount);
     return s.type === 'bytes' ? bytesToMBText(value) : value;
   }
 
   // --- hours-or-days settings: stored in hours, set as a number with an hours/days selector ---
-  const HOURS_DAYS_KEYS = new Set(['status.dead_after_hours']);
+  const HOURS_DAYS_KEYS = new Set(['status.dead_after_hours', 'auth.session_idle_hours']);
+  // Hours-or-days settings where 0 means off get an "Off" choice in the unit selector.
+  const allowsOff = (s: SettingDef) => !s.min; // min 0 is omitted from the API
   function isHoursDays(s: SettingDef): boolean {
     return HOURS_DAYS_KEYS.has(s.key);
   }
   let units = $state<Record<string, HourUnit>>({});
   // The hours the row would save, or NaN when what's typed isn't a number.
   function draftHours(s: SettingDef): number {
+    const unit = units[s.key] ?? 'hours';
+    if (unit === 'off') return 0;
     const n = Number(drafts[s.key]);
-    return (units[s.key] ?? 'hours') === 'days' ? n * 24 : n;
+    return unit === 'days' ? n * 24 : n;
   }
   function setShown(s: SettingDef, value: string) {
     drafts[s.key] = shown(s, value);
-    if (isHoursDays(s)) units[s.key] = splitHours(value).unit;
+    if (isHoursDays(s)) units[s.key] = splitHours(value, allowsOff(s)).unit;
   }
 
   // The notice for a value clamped on load (the stored value was outside the new bounds).
@@ -402,8 +406,10 @@
                     type="text"
                     inputmode="decimal"
                     bind:value={drafts[s.key]}
+                    disabled={units[s.key] === 'off'}
                   />
                   <select aria-label="Unit" data-unit-for={s.key} bind:value={units[s.key]}>
+                    {#if allowsOff(s)}<option value="off">Off</option>{/if}
                     <option value="hours">hours</option>
                     <option value="days">days</option>
                   </select>

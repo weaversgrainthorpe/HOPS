@@ -285,6 +285,12 @@ func runMigrations(db *sql.DB) error {
 		return fmt.Errorf("failed to add scans.internal_domain column: %w", err)
 	}
 
+	// sessions.last_used_at (optional idle sign-out, auth.session_idle_hours).
+	// Nullable: a row from before the column counts from its first use after it.
+	if err := addColumnIfMissing(db, "sessions", "last_used_at", "DATETIME"); err != nil {
+		return fmt.Errorf("failed to add sessions.last_used_at column: %w", err)
+	}
+
 	// config_archive.notes (v3 migration renames). Nullable, no default.
 	if err := addColumnIfMissing(db, "config_archive", "notes", "TEXT"); err != nil {
 		return fmt.Errorf("failed to add config_archive.notes column: %w", err)

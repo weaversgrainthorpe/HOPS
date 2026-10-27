@@ -5,6 +5,7 @@
     "proxy.trusted_cidrs",
     "auth.login_rate_limit_per_min",
     "auth.session_lifetime_hours",
+    "auth.session_idle_hours",
     "editmode.idle_timeout_minutes",
     "status.checks_enabled",
     "status.check_interval_minutes",
