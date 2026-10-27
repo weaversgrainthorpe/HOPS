@@ -29,9 +29,15 @@
      * Undefined outside the editor.
      */
     editorSelected?: boolean;
+    /**
+     * The "Recently used" strip: a one-line chip (icon, name, status) instead of the tile. The
+     * same entry and the same open path (handleClick below), so Home/Away, open mode, the address
+     * check and the recorder behave exactly as on the grid.
+     */
+    chip?: boolean;
   }
 
-  let { entry, fit, editorSelected }: Props = $props();
+  let { entry, fit, editorSelected, chip = false }: Props = $props();
   const inEditor = $derived(editorSelected !== undefined);
   const compact = $derived(fit === 'compact');
   let showIframeModal = $state(false);
@@ -118,6 +124,28 @@
   const sizeClass = $derived(entry.size === 'small' || entry.size === 'large' ? entry.size : 'medium');
 </script>
 
+{#if chip}
+  <button
+    type="button"
+    class="recent-chip"
+    class:url-broken={!!urlProblem}
+    onclick={handleClick}
+    title={urlProblem ? `${tileTitle}\n${urlProblemText}` : tileTitle}
+    aria-label={`Open ${entry.name}${usingAway ? ' (away address)' : ''}`}
+  >
+    <span class="chip-icon" aria-hidden="true">
+      {#if entry.iconUrl}
+        <img src={entry.iconUrl} alt="" />
+      {:else}
+        <ColoredIcon icon={entry.icon || 'mdi:application'} width="20" />
+      {/if}
+    </span>
+    <span class="title chip-name">{entry.name}</span>
+    {#if tileMayBeChecked(entry)}
+      <StatusIndicator entryId={entry.id} />
+    {/if}
+  </button>
+{:else}
 <div class="entry-container" class:sized={!!fit} style:height={fit ? '100%' : undefined}>
   <button
     class="entry {sizeClass}"
@@ -184,6 +212,7 @@
     {/if}
   </button>
 </div>
+{/if}
 
 {#if showIframeModal}
   <IframeModal url={openUrl} title={entry.name} onClose={() => showIframeModal = false} />
@@ -194,6 +223,52 @@
 {/if}
 
 <style>
+  /* Recently used chip: 40px tall (the phone tap target), one line, the name truncated. Theme
+     tokens only: --text-primary on --bg-secondary is the same pair every dialog uses (>= 4.5:1). */
+  .recent-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex: 0 0 auto;
+    height: 40px;
+    min-width: 40px;
+    max-width: 12rem;
+    padding: 0 0.6rem;
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    cursor: pointer;
+  }
+  .recent-chip:hover,
+  .recent-chip:focus-visible {
+    background: var(--bg-tertiary);
+  }
+  .recent-chip.url-broken {
+    border-style: dashed;
+  }
+  .chip-icon {
+    display: inline-flex;
+    flex: 0 0 20px;
+    width: 20px;
+    height: 20px;
+  }
+  .chip-icon img {
+    width: 20px;
+    height: 20px;
+    object-fit: contain;
+  }
+  .chip-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .recent-chip :global(.status-badge) {
+    position: static;
+    flex: 0 0 auto;
+  }
   .url-problem {
     position: absolute;
     left: 0.25rem;

@@ -398,9 +398,9 @@
 
   <!-- §7.2: the header and tab row are identical in both modes. Every editing control (the Dashboard
        pencil and Add tab included) is in the floating EditToolbar, which takes no layout space. -->
-  <!-- Recently used: above the tabs because it spans every tab; view mode only (never in the layout). -->
-  {#if !editing && $recentOn}
-    <RecentRow {dashboard} />
+  <!-- Recently used: above the tabs because it spans every tab; stays (dimmed, inert) in edit mode so nothing jumps; never in the layout. -->
+  {#if $recentOn}
+    <RecentRow {dashboard} {editing} />
   {/if}
   <div class="dashboard-header">
     {#if barTabs.length >= 1}

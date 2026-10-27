@@ -3,7 +3,8 @@ import { getCsrfToken } from '../helpers';
 
 // "Recently used": an optional per-browser row of the tiles this viewer opens most, above the tabs.
 // Kept in localStorage only (no accounts, nothing sent to the server). Off until turned on in
-// Theme Settings (or hidden again from the row's own menu); hidden while editing.
+// Theme Settings (or hidden again from the row's own menu). A slim one-line strip of chips; in edit
+// mode it stays (dimmed, inert) so nothing below it moves.
 
 const madeIds: string[] = [];
 
@@ -104,10 +105,10 @@ test('off by default (nothing recorded); on: shows opened tiles by frecency, ope
   await expect(row(page)).toBeVisible();
   await expect(row(page).getByRole('heading', { name: 'Recently used' })).toBeVisible();
   expect(await rowNames(page)).toEqual(['Charlie', 'Bravo', 'Alpha']);
-  // Row tiles are the ordinary tile (Small): same name, same open.
-  await expect(row(page).locator('button.entry.small')).toHaveCount(3);
+  // Row chips are the ordinary tile in chip form: same name, same open.
+  await expect(row(page).locator('button.recent-chip')).toHaveCount(3);
 
-  expect(await open(page, row(page).locator('[data-recent-id] button.entry', { hasText: 'Bravo' }))).toBe(urlOf('Bravo'));
+  expect(await open(page, row(page).locator('[data-recent-id] button.recent-chip', { hasText: 'Bravo' }))).toBe(urlOf('Bravo'));
   await expect.poll(() => rowNames(page)).toEqual(['Bravo', 'Charlie', 'Alpha']);
 
   // Search's Enter opens a tile too, and counts.
@@ -157,20 +158,59 @@ test('Clear history empties the row; the toggle persists across reloads (Theme S
   await expect(row(page)).toHaveCount(0);
 });
 
-test('hidden in edit mode, back after', async ({ page, context }) => {
+async function topOf(page: Page, sel: string) {
+  return page.evaluate((q) => document.querySelector(q)!.getBoundingClientRect().top, sel);
+}
+
+test('edit mode: the row stays (dimmed, inert, not in the layout) and nothing below it moves', async ({ page, context }) => {
   await fakeHosts(context);
   const f = await importDash(page, context);
   await page.goto(f.path);
   await setShowRecent(page, true);
   await openTile(page, 'Alpha');
   await expect(row(page)).toBeVisible();
+  const tabSel = '[data-dashboard-tabs] [role=tab]';
+  const before = { tab: await topOf(page, tabSel), rowBox: await row(page).boundingBox() };
   await page.locator('[aria-label="Enter Edit Mode"]').click();
   await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
-  await expect(row(page)).toHaveCount(0);
+  await expect(row(page)).toBeVisible();
+  await expect(row(page)).toHaveAttribute('data-recent-editing', '');
+  await expect(row(page).locator('[data-recent-note]')).toHaveText('Recently used — not part of the layout');
+  expect(Number(await row(page).evaluate((e) => getComputedStyle(e).opacity))).toBeLessThan(0.6);
+  // Inert: no tab stops, and a click does not open the tile.
+  expect(await row(page).evaluate((e) => e.matches('[inert]'))).toBe(true);
+  await row(page).locator('button.recent-chip').click({ force: true, timeout: 1500 }).catch(() => {}); // inert: swallowed, nothing opens
+  const during = { tab: await topOf(page, tabSel), rowBox: await row(page).boundingBox() };
+  expect(Math.abs(during.tab - before.tab)).toBeLessThanOrEqual(1);
+  expect(Math.abs(during.rowBox!.y - before.rowBox!.y)).toBeLessThanOrEqual(1);
+  expect(Math.abs(during.rowBox!.height - before.rowBox!.height)).toBeLessThanOrEqual(1);
+  // The canvas top (the editing canvas vs the view canvas) is where it was.
+  const canvasTop = await page.evaluate(() => document.querySelector('.canvas-panel')!.getBoundingClientRect().top);
   await page.locator('[aria-label="Exit Edit Mode"]').click();
   await expect(page.locator('[aria-label="Enter Edit Mode"]')).toBeVisible();
   await expect(row(page)).toBeVisible();
+  await expect(row(page)).not.toHaveAttribute('data-recent-editing', '');
+  const after = { tab: await topOf(page, tabSel), canvas: await topOf(page, '.canvas-panel') };
+  expect(Math.abs(after.tab - before.tab)).toBeLessThanOrEqual(1);
+  expect(Math.abs(after.canvas - canvasTop)).toBeLessThanOrEqual(1);
 });
+
+for (const [w, h] of [[1920, 1000], [390, 844]]) {
+  test(`${w} px: the strip is one slim line (at most 56px tall)`, async ({ page, context }) => {
+    await fakeHosts(context);
+    const f = await importDash(page, context);
+    await page.setViewportSize({ width: w, height: h });
+    await page.goto(f.path);
+    await expect(tileNamed(page, 'Alpha')).toBeVisible();
+    await setShowRecent(page, true);
+    for (const n of NAMES) await openTile(page, n);
+    await expect(row(page)).toBeVisible();
+    const box = (await row(page).boundingBox())!;
+    expect(box.height).toBeLessThanOrEqual(56);
+    const chip = (await row(page).locator('button.recent-chip').first().boundingBox())!;
+    expect(chip.height).toBeGreaterThanOrEqual(40);
+  });
+}
 
 test('signed-out viewers can use it', async ({ page, context, browser }) => {
   const f = await importDash(page, context);
@@ -185,13 +225,13 @@ test('signed-out viewers can use it', async ({ page, context, browser }) => {
     await openTile(p, 'Charlie');
     await openTile(p, 'Alpha');
     expect(await rowNames(p)).toEqual(['Alpha', 'Charlie']);
-    expect(await open(p, row(p).locator('button.entry', { hasText: 'Charlie' }))).toBe(urlOf('Charlie'));
+    expect(await open(p, row(p).locator('button.recent-chip', { hasText: 'Charlie' }))).toBe(urlOf('Charlie'));
   } finally {
     await anon.close();
   }
 });
 
-test('390 px phone: the row fits, no sideways page scroll', async ({ page, context }) => {
+test('390 px phone: the strip scrolls sideways on one line, the page does not', async ({ page, context }) => {
   await fakeHosts(context);
   const f = await importDash(page, context);
   await page.setViewportSize({ width: 390, height: 844 });
@@ -202,19 +242,16 @@ test('390 px phone: the row fits, no sideways page scroll', async ({ page, conte
   await expect(row(page)).toBeVisible();
   const geo = await page.evaluate(() => {
     const r = document.querySelector('[data-recent-row]')!.getBoundingClientRect();
-    const shown = Array.from(document.querySelectorAll('[data-recent-row] [data-recent-id]'))
-      .map((e) => e.getBoundingClientRect())
-      .filter((b) => b.width > 0 && b.height > 0);
+    const strip = document.querySelector('[data-recent-row] ul')!;
+    const tops = new Set(Array.from(strip.querySelectorAll('button.recent-chip')).map((e) => Math.round(e.getBoundingClientRect().top)));
     return {
-      left: r.left, right: r.right, shown: shown.length,
-      maxRight: Math.max(...shown.map((b) => b.right)), minW: Math.min(...shown.map((b) => b.width)),
-      scroll: document.documentElement.scrollWidth
+      left: r.left, right: r.right, lines: tops.size,
+      scrolls: strip.scrollWidth > strip.clientWidth, page: document.documentElement.scrollWidth
     };
   });
-  expect(geo.shown).toBe(4);
   expect(geo.left).toBeGreaterThanOrEqual(0);
   expect(geo.right).toBeLessThanOrEqual(390);
-  expect(geo.maxRight).toBeLessThanOrEqual(390);
-  expect(geo.minW).toBeGreaterThanOrEqual(60);
-  expect(geo.scroll).toBeLessThanOrEqual(390);
+  expect(geo.lines).toBe(1);
+  expect(geo.scrolls).toBe(true);
+  expect(geo.page).toBeLessThanOrEqual(390);
 });
