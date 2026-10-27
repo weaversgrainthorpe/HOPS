@@ -13,7 +13,7 @@ die() { echo "serve-rc: ERROR: $*" >&2; exit 1; }
 label=$1
 port=${2:-8099}
 [[ $label =~ ^[A-Za-z0-9][A-Za-z0-9.]*$ ]] || die "invalid label '$label'"
-[[ $port =~ ^[0-9]+$ ]] && (( port >= 1 && port <= 65535 )) || die "invalid port '$port'"
+if ! [[ $port =~ ^[0-9]+$ ]] || (( port < 1 || port > 65535 )); then die "invalid port '$port'"; fi
 
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 dir="$REPO_DIR/dist/$label"
