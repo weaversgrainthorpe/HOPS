@@ -643,6 +643,12 @@ describe('an undersized open box is flagged, never clipped silently', () => {
     expect(el(container, 'f').querySelector('[data-folder-taller-here]')).toBeNull();
     expect(el(container, 'f').querySelector('[data-folder-below-min]')).not.toBeNull();
   });
+  it('edit mode: a MINIMISED folder is its own-size tile, never covered by the below-minimum note', async () => {
+    width = 1280;
+    const { container } = await renderEditing([folder('f', kids(3), { display: 'collapsed', placement: { x: 0, y: 0, w: 3, h: 5 } })]);
+    expect(el(container, 'f').querySelector('[data-folder-below-min]')).toBeNull();
+    expect(container.querySelector('[data-folder-below-min]')).toBeNull();
+  });
   it('the same folder one row taller has no note, in either mode', async () => {
     width = 1024;
     const { container } = await renderTab([folder('f', kids(12), { placement: { x: 0, y: 0, w: 24, h: 5 } })]);

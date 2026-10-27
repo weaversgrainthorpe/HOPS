@@ -215,7 +215,9 @@
    * before the minimum — edits can't make one) is flagged in edit mode, with a one-click fix.
    */
   const belowMin = $derived.by(() => {
-    if (!editing || item || !folder.placement) return null;
+    // A minimised folder is drawn as its own-size tile (applyFolderViews shrinks its placement), so its
+    // open box is not what is drawn: it is checked when opened, and the note never covers the tile.
+    if (!editing || item || minimised || !folder.placement) return null;
     const m = folderMinCells(folder);
     const p = folder.placement;
     return p.w < m.w || p.h < m.h ? m : null;

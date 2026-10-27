@@ -6,10 +6,19 @@ import { getCsrfToken } from '../helpers';
 
 let made: string | null = null;
 
+// Cleanup is checked, never silent: a delete needs the stored revision, and a leftover dashboard
+// changes later specs' navbar (it once failed silently here and cascaded into the switcher specs).
 test.afterEach(async ({ page, context }) => {
 	if (!made) return;
-	await page.request.delete(`/api/dashboards/${made}`, { headers: { 'X-CSRF-Token': await getCsrfToken(context) } });
+	const id = made;
 	made = null;
+	const cfg = await (await page.request.get('/api/config')).json();
+	const rev = cfg.dashboards.find((d: { id: string }) => d.id === id)?.revision;
+	expect(typeof rev, `cleanup: dashboard ${id} has a revision`).toBe('number');
+	const r = await page.request.delete(`/api/dashboards/${encodeURIComponent(id)}?revision=${rev}`, {
+		headers: { 'X-CSRF-Token': await getCsrfToken(context) }
+	});
+	expect(r.ok(), `cleanup: delete dashboard ${id}: ${r.status()} ${await r.text()}`).toBeTruthy();
 });
 
 async function seedDash(page: Page, context: BrowserContext) {
