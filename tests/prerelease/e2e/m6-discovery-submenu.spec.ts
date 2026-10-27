@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { getCsrfToken } from '../helpers';
+import { getCsrfToken, startScan } from '../helpers';
 
 // Discovery's sub-menu under "Discovery" in the Settings sidebar (same look as Global settings'
 // group list; phones: a chip row on the page), full-width Settings prose, and the detector
@@ -18,12 +18,7 @@ let scanId = '';
 async function ensureScan(page: Page): Promise<string> {
   if (scanId) return scanId;
   await page.goto('/settings/discovery');
-  const r = await page.request.post('/api/discovery/scans', {
-    headers: { 'X-CSRF-Token': await getCsrfToken(page.context()), 'Content-Type': 'application/json' },
-    data: JSON.stringify({ cidr: '127.0.0.1/32', intensity: 'light' }),
-  });
-  expect(r.ok(), await r.text()).toBeTruthy();
-  scanId = (await r.json()).id;
+    scanId = await startScan(page);
   return scanId;
 }
 

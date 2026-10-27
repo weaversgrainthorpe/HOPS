@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { getCsrfToken, openDiscovery } from '../helpers';
+import { getCsrfToken, openDiscovery, startScan } from '../helpers';
 
 // Network Discovery — the 2.0 headline feature. We don't run an actual
 // scan against the LAN (slow, and the test instance has no LAN
@@ -35,17 +35,7 @@ test('detector list returns the bundled set + sortable list page loads', async (
 });
 
 test('create a discovery scan against loopback and confirm it lands', async ({ page, context, request }) => {
-  const csrf = await getCsrfToken(context);
-
-  const create = await request.post('/api/discovery/scans', {
-    headers: { 'X-CSRF-Token': csrf, 'Content-Type': 'application/json' },
-    data: JSON.stringify({
-      cidr: '127.0.0.1/32',
-      intensity: 'light',
-    }),
-  });
-  expect(create.ok()).toBeTruthy();
-  const created = await create.json();
+  const created = { id: await startScan(page) };
   expect(created.id).toBeTruthy();
 
   // The detail page should be reachable

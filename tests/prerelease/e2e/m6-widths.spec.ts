@@ -7,19 +7,14 @@
 //  - Factory reset is an emergency-stop button (CSS/SVG only) and still asks for confirmation.
 // Real browser: widths, fonts and :active need Chromium.
 import { test, expect, type Page } from '@playwright/test';
-import { getCsrfToken } from '../helpers';
+import { getCsrfToken, startScan } from '../helpers';
 
 let scanId = '';
 
 async function ensureScan(page: Page): Promise<string> {
 	if (scanId) return scanId;
 	await page.goto('/settings/discovery');
-	const r = await page.request.post('/api/discovery/scans', {
-		headers: { 'X-CSRF-Token': await getCsrfToken(page.context()), 'Content-Type': 'application/json' },
-		data: JSON.stringify({ cidr: '127.0.0.1/32', intensity: 'light' })
-	});
-	expect(r.ok(), await r.text()).toBeTruthy();
-	scanId = (await r.json()).id;
+	scanId = await startScan(page);
 	return scanId;
 }
 

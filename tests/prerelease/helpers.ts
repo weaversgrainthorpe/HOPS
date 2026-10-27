@@ -193,3 +193,34 @@ export async function flourishesDone(page: Page): Promise<void> {
   await page.evaluate(() => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))));
   await expect(page.locator('[data-flourish], [data-testid="flourish-ghost"]')).toHaveCount(0);
 }
+
+/**
+ * Start a light loopback discovery scan and return its id. HOPS allows ONE scan at a time (a second
+ * gets 409), so any scan an earlier spec left running or pending is cancelled first, waiting until it
+ * has actually stopped. With `leaveRunning: false` (the default) the new scan is cancelled too, so it
+ * never blocks a later spec; pages that only need a scan to exist work the same.
+ */
+export async function startScan(page: Page, opts: { leaveRunning?: boolean } = {}): Promise<string> {
+	const headers = { 'X-CSRF-Token': await getCsrfToken(page.context()), 'Content-Type': 'application/json' };
+	const active = async (): Promise<string[]> => {
+		const list = await page.request.get('/api/discovery/scans');
+		expect(list.ok(), `list scans: ${list.status()}`).toBeTruthy();
+		return ((await list.json()).scans ?? [])
+			.filter((s: { state: string }) => s.state === 'running' || s.state === 'pending')
+			.map((s: { id: string }) => s.id);
+	};
+	const cancel = async (id: string) => {
+		const c = await page.request.post(`/api/discovery/scans/${id}/cancel`, { headers });
+		expect([200, 202, 204, 409].includes(c.status()), `cancel scan ${id}: ${c.status()} ${await c.text()}`).toBeTruthy();
+	};
+	for (const id of await active()) await cancel(id);
+	await expect.poll(active, { message: 'earlier scans stopped', timeout: 15_000 }).toEqual([]);
+	const r = await page.request.post('/api/discovery/scans', { headers, data: JSON.stringify({ cidr: '127.0.0.1/32', intensity: 'light' }) });
+	expect(r.ok(), await r.text()).toBeTruthy();
+	const id: string = (await r.json()).id;
+	if (!opts.leaveRunning) {
+		await cancel(id);
+		await expect.poll(active, { message: `scan ${id} stopped`, timeout: 15_000 }).toEqual([]);
+	}
+	return id;
+}

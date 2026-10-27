@@ -1,5 +1,5 @@
 import { test, expect, type Page, type Browser, type BrowserContext } from '@playwright/test';
-import { getCsrfToken, signInDialog, openDiscovery } from '../helpers';
+import { getCsrfToken, signInDialog, openDiscovery, startScan } from '../helpers';
 
 // M5 §11 (design/specs/2026-10-22-hops-v3-m5-folders-design.md): Discovery is a normal Settings
 // section. It and its sub-pages live at /settings/discovery…, inside the settings layout: the
@@ -9,13 +9,9 @@ import { getCsrfToken, signInDialog, openDiscovery } from '../helpers';
 
 const sidebar = (p: Page) => p.getByRole('navigation', { name: 'Settings sections' });
 
+/** A scan to visit (started, then cancelled, by the shared helper: one scan at a time). */
 async function scanId(page: Page): Promise<string> {
-	const r = await page.request.post('/api/discovery/scans', {
-		headers: { 'X-CSRF-Token': await getCsrfToken(page.context()), 'Content-Type': 'application/json' },
-		data: JSON.stringify({ cidr: '127.0.0.1/32', intensity: 'light' })
-	});
-	expect(r.ok(), await r.text()).toBeTruthy();
-	return (await r.json()).id;
+	return startScan(page);
 }
 
 /** On a Discovery page inside the settings layout: the sidebar with Discovery current, the h2 title, no back arrow. */
