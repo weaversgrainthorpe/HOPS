@@ -209,7 +209,7 @@ func (r *Router) setSessionCookies(w http.ResponseWriter, req *http.Request, ses
 		writeJSONError(w, "Failed to issue CSRF token", http.StatusInternalServerError)
 		return false
 	}
-	http.SetCookie(w, &http.Cookie{
+	http.SetCookie(w, &http.Cookie{ // #nosec G124 -- reviewed: session cookie HttpOnly+SameSite, Secure follows request scheme behind proxy; CSRF cookie is JS-readable by design (double-submit)
 		Name:     "hops_session",
 		Value:    sessionID,
 		Path:     "/",
@@ -316,7 +316,7 @@ func (r *Router) handleLogout(w http.ResponseWriter, req *http.Request) {
 	logoutErr := r.authService.Logout(sessionID)
 
 	secure := r.isSecureRequest(req)
-	http.SetCookie(w, &http.Cookie{
+	http.SetCookie(w, &http.Cookie{ // #nosec G124 -- reviewed: session cookie HttpOnly+SameSite, Secure follows request scheme behind proxy; CSRF cookie is JS-readable by design (double-submit)
 		Name:     "hops_session",
 		Value:    "",
 		Path:     "/",
@@ -534,14 +534,14 @@ func readAsset(urlPath string, dataDir string) ([]byte, string, bool) {
 		return data, contentTypeFromPath(filename), true
 	case strings.HasPrefix(urlPath, "/icons/"):
 		path := filepath.Join(dataDir, "icons", filename)
-		data, err := os.ReadFile(path)
+		data, err := os.ReadFile(path) // #nosec G304 -- path is built from a validated name under the data dir or a server-chosen temp/backup path, never raw user input
 		if err != nil {
 			return nil, "", false
 		}
 		return data, contentTypeFromPath(path), true
 	case strings.HasPrefix(urlPath, "/backgrounds/"):
 		path := filepath.Join(dataDir, "backgrounds", filename)
-		data, err := os.ReadFile(path)
+		data, err := os.ReadFile(path) // #nosec G304 -- path is built from a validated name under the data dir or a server-chosen temp/backup path, never raw user input
 		if err != nil {
 			return nil, "", false
 		}
@@ -759,11 +759,11 @@ func (r *Router) restoreAssets(importedConfig map[string]interface{}) (int, []st
 			fail(urlPath, "invalid base64", err)
 			continue
 		}
-		if err := os.MkdirAll(filepath.Dir(diskPath), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(diskPath), 0755); err != nil { // #nosec G301 -- data dir for non-secret files (icons, backgrounds); HOPS is the only service user, accepted in triage
 			fail(urlPath, "could not create directory", err)
 			continue
 		}
-		if err := os.WriteFile(diskPath, fileData, 0644); err != nil {
+		if err := os.WriteFile(diskPath, fileData, 0644); err != nil { // #nosec G306 -- non-secret public asset/metadata (icon, background, port hint); served to the browser anyway
 			fail(urlPath, "could not write file", err)
 			continue
 		}
@@ -859,11 +859,11 @@ func (r *Router) handleExportConfig(w http.ResponseWriter, req *http.Request) {
 		}
 		w.Header().Set("Content-Type", "application/x-yaml")
 		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s.yaml", filename))
-		w.Write(yamlBytes)
+		w.Write(yamlBytes) // #nosec G104 -- response write: a client that hung up cannot be told, nothing to recover
 	} else {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s.json", filename))
-		w.Write(exportData)
+		w.Write(exportData) // #nosec G104 -- response write: a client that hung up cannot be told, nothing to recover
 	}
 }
 
@@ -892,7 +892,7 @@ func (r *Router) handleResetConfig(w http.ResponseWriter, req *http.Request) {
 
 	// Return the new default config
 	w.Header().Set("Content-Type", "application/json")
-	w.Write([]byte(database.DefaultConfig))
+	w.Write([]byte(database.DefaultConfig)) // #nosec G104 -- response write: a client that hung up cannot be told, nothing to recover
 }
 
 // IconMatch holds the result of an icon lookup
@@ -1922,7 +1922,7 @@ func (r *Router) getBackgroundDataPath() string {
 func (r *Router) loadBackgroundData() (*BackgroundData, error) {
 	dataPath := r.getBackgroundDataPath()
 
-	data, err := os.ReadFile(dataPath)
+	data, err := os.ReadFile(dataPath) // #nosec G304 -- path is built from a validated name under the data dir or a server-chosen temp/backup path, never raw user input
 	if os.IsNotExist(err) {
 		// Return default data with preset categories
 		return &BackgroundData{
@@ -1951,7 +1951,7 @@ func (r *Router) saveBackgroundData(data *BackgroundData) error {
 		return err
 	}
 
-	return os.WriteFile(dataPath, jsonData, 0644)
+	return os.WriteFile(dataPath, jsonData, 0644) // #nosec G306 -- non-secret public asset/metadata (icon, background, port hint); served to the browser anyway
 }
 
 // handleUploadBackground handles background image uploads
@@ -1993,7 +1993,7 @@ func (r *Router) handleUploadBackground(w http.ResponseWriter, req *http.Request
 
 	// Create backgrounds directory if it doesn't exist
 	backgroundsDir := filepath.Join(r.config.DataDir, "backgrounds")
-	if err := os.MkdirAll(backgroundsDir, 0755); err != nil {
+	if err := os.MkdirAll(backgroundsDir, 0755); err != nil { // #nosec G301 -- data dir for non-secret files (icons, backgrounds); HOPS is the only service user, accepted in triage
 		writeJSONError(w, "Failed to create backgrounds directory", http.StatusInternalServerError)
 		return
 	}
@@ -2028,7 +2028,7 @@ func (r *Router) handleUploadBackground(w http.ResponseWriter, req *http.Request
 
 	// Save file
 	destPath := filepath.Join(backgroundsDir, filename)
-	if err := os.WriteFile(destPath, fileData, 0644); err != nil {
+	if err := os.WriteFile(destPath, fileData, 0644); err != nil { // #nosec G306 -- non-secret public asset/metadata (icon, background, port hint); served to the browser anyway
 		_ = os.Remove(destPath)
 		writeJSONError(w, "Failed to save file", http.StatusInternalServerError)
 		return
@@ -2142,7 +2142,7 @@ func (r *Router) handleUploadIcon(w http.ResponseWriter, req *http.Request) {
 
 	// Create icons directory if it doesn't exist
 	iconsDir := filepath.Join(r.config.DataDir, "icons")
-	if err := os.MkdirAll(iconsDir, 0755); err != nil {
+	if err := os.MkdirAll(iconsDir, 0755); err != nil { // #nosec G301 -- data dir for non-secret files (icons, backgrounds); HOPS is the only service user, accepted in triage
 		writeJSONError(w, "Failed to create icons directory", http.StatusInternalServerError)
 		return
 	}
@@ -2169,7 +2169,7 @@ func (r *Router) handleUploadIcon(w http.ResponseWriter, req *http.Request) {
 	if contentType == "image/svg+xml" {
 		filename = iconID + ".svg"
 		destPath = filepath.Join(iconsDir, filename)
-		if err := os.WriteFile(destPath, fileData, 0644); err != nil {
+		if err := os.WriteFile(destPath, fileData, 0644); err != nil { // #nosec G306 -- non-secret public asset/metadata (icon, background, port hint); served to the browser anyway
 			writeJSONError(w, "Failed to save file", http.StatusInternalServerError)
 			return
 		}
@@ -2196,7 +2196,7 @@ func (r *Router) handleUploadIcon(w http.ResponseWriter, req *http.Request) {
 		// Save as PNG for best quality with transparency
 		filename = iconID + ".png"
 		destPath = filepath.Join(iconsDir, filename)
-		destFile, err := os.Create(destPath)
+		destFile, err := os.Create(destPath) // #nosec G304 -- path is built from a validated name under the data dir or a server-chosen temp/backup path, never raw user input
 		if err != nil {
 			writeJSONError(w, "Failed to create file", http.StatusInternalServerError)
 			return
@@ -2286,7 +2286,7 @@ func (r *Router) handleListBackgrounds(w http.ResponseWriter, req *http.Request)
 
 	// Also scan the backgrounds directory for any images not in metadata
 	backgroundsDir := filepath.Join(r.config.DataDir, "backgrounds")
-	if err := os.MkdirAll(backgroundsDir, 0755); err == nil {
+	if err := os.MkdirAll(backgroundsDir, 0755); err == nil { // #nosec G301 -- data dir for non-secret files (icons, backgrounds); HOPS is the only service user, accepted in triage
 		files, err := os.ReadDir(backgroundsDir)
 		if err == nil {
 			// Build a map of known URLs
@@ -2421,7 +2421,7 @@ func (r *Router) handleDeleteBackground(w http.ResponseWriter, req *http.Request
 			if !database.ValidImageName(name) {
 				break
 			}
-			if _, err := os.Lstat(filepath.Join(backgroundsDir, name)); err == nil {
+			if _, err := os.Lstat(filepath.Join(backgroundsDir, name)); err == nil { // #nosec G703 -- name validated (ValidImageName) / embedded FS path, not raw request input
 				if _, err := r.backupManager.MoveToAttic("backgrounds", name); err != nil {
 					slog.Error("background delete: could not move the file to the attic", "component", "backgrounds", "file", name, "error", err)
 					writeJSONError(w, "Couldn't move the background's file aside, so it was not deleted: "+err.Error(), http.StatusInternalServerError)

@@ -136,7 +136,7 @@ func ReadImageRefs(db *sql.DB, scope RefScope) (map[string]bool, error) {
 	for rows.Next() {
 		var n string
 		if err := rows.Scan(&n); err != nil {
-			rows.Close()
+			rows.Close() // #nosec G104 -- Close on an error path or after a read-only/bounded read; the primary error is already surfaced and nothing was written
 			return nil, err
 		}
 		if scope == RefsAll || liveRefTables[n] {
@@ -144,10 +144,10 @@ func ReadImageRefs(db *sql.DB, scope RefScope) (map[string]bool, error) {
 		}
 	}
 	if err := rows.Err(); err != nil {
-		rows.Close()
+		rows.Close() // #nosec G104 -- Close on an error path or after a read-only/bounded read; the primary error is already surfaced and nothing was written
 		return nil, err
 	}
-	rows.Close()
+	rows.Close() // #nosec G104 -- Close on an error path or after a read-only/bounded read; the primary error is already surfaced and nothing was written
 	refs := map[string]bool{}
 	for _, t := range tables {
 		if err := scanTableRefs(db, t, refs); err != nil {
@@ -158,7 +158,7 @@ func ReadImageRefs(db *sql.DB, scope RefScope) (map[string]bool, error) {
 }
 
 func scanTableRefs(db *sql.DB, table string, refs map[string]bool) error {
-	rows, err := db.Query(`SELECT * FROM "` + strings.ReplaceAll(table, `"`, `""`) + `"`)
+	rows, err := db.Query(`SELECT * FROM "` + strings.ReplaceAll(table, `"`, `""`) + `"`) // #nosec G202 -- only ? placeholder lists or a fixed/quote-escaped table name, never user input
 	if err != nil {
 		return err
 	}

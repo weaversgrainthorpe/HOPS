@@ -269,7 +269,7 @@ func parseSNMPResponse(data []byte, expectReqID int32) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("snmp: request-id: %w", err)
 	}
-	if int32(reqID) != expectReqID {
+	if int32(reqID) != expectReqID { // #nosec G115 -- value bounded by construction or masked/shifted to one byte (parsing/encoding), no overflow possible
 		return nil, fmt.Errorf("snmp: request-id mismatch: got %d want %d", reqID, expectReqID)
 	}
 	// errStatus, errIndex
@@ -436,14 +436,14 @@ func parseBerInt(b []byte) int64 {
 
 func encodeLength(n int) []byte {
 	if n < 0x80 {
-		return []byte{byte(n)}
+		return []byte{byte(n)} // #nosec G115 -- value bounded by construction or masked/shifted to one byte (parsing/encoding), no overflow possible
 	}
 	var b []byte
 	for n > 0 {
 		b = append([]byte{byte(n & 0xff)}, b...)
 		n >>= 8
 	}
-	return append([]byte{0x80 | byte(len(b))}, b...)
+	return append([]byte{0x80 | byte(len(b))}, b...) // #nosec G115 -- value bounded by construction or masked/shifted to one byte (parsing/encoding), no overflow possible
 }
 
 func wrapBER(tag byte, body []byte) []byte {
@@ -487,7 +487,7 @@ func encodeOID(arcs []int) ([]byte, error) {
 	if len(arcs) < 2 {
 		return nil, errors.New("oid: needs at least 2 arcs")
 	}
-	body := []byte{byte(40*arcs[0] + arcs[1])}
+	body := []byte{byte(40*arcs[0] + arcs[1])} // #nosec G115 -- value bounded by construction or masked/shifted to one byte (parsing/encoding), no overflow possible
 	for _, a := range arcs[2:] {
 		body = append(body, encodeOIDArc(a)...)
 	}

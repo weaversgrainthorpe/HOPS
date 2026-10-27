@@ -57,18 +57,18 @@ func (r *Router) handleDeadLinks(w http.ResponseWriter, req *http.Request) {
 	for rows.Next() {
 		var id, since, checked, lastErr string
 		if err := rows.Scan(&id, &since, &checked, &lastErr); err != nil {
-			rows.Close()
+			rows.Close() // #nosec G104 -- Close on an error path or after a read-only/bounded read; the primary error is already surfaced and nothing was written
 			writeJSONError(w, "Failure history unreadable", http.StatusInternalServerError)
 			return
 		}
 		failing[id] = [3]string{since, checked, lastErr}
 	}
 	if err := rows.Err(); err != nil {
-		rows.Close()
+		rows.Close() // #nosec G104 -- Close on an error path or after a read-only/bounded read; the primary error is already surfaced and nothing was written
 		writeJSONError(w, "Failure history unreadable", http.StatusInternalServerError)
 		return
 	}
-	rows.Close()
+	rows.Close() // #nosec G104 -- Close on an error path or after a read-only/bounded read; the primary error is already surfaced and nothing was written
 
 	var started sql.NullString
 	if err := r.db.QueryRow("SELECT started_at FROM status_history WHERE id = 1").Scan(&started); err != nil && err != sql.ErrNoRows {

@@ -30,7 +30,7 @@ func generateCSRFToken() (string, error) {
 // maxAge matches the session lifetime, taken from the auth.session_lifetime_hours
 // admin setting.
 func setCSRFCookie(w http.ResponseWriter, token string, secure bool, maxAge int) {
-	http.SetCookie(w, &http.Cookie{
+	http.SetCookie(w, &http.Cookie{ // #nosec G124 -- reviewed: session cookie HttpOnly+SameSite, Secure follows request scheme behind proxy; CSRF cookie is JS-readable by design (double-submit)
 		Name:     csrfCookieName,
 		Value:    token,
 		Path:     "/",
@@ -43,7 +43,7 @@ func setCSRFCookie(w http.ResponseWriter, token string, secure bool, maxAge int)
 
 // clearCSRFCookie removes the CSRF cookie (paired with logout).
 func clearCSRFCookie(w http.ResponseWriter, secure bool) {
-	http.SetCookie(w, &http.Cookie{
+	http.SetCookie(w, &http.Cookie{ // #nosec G124 -- reviewed: session cookie HttpOnly+SameSite, Secure follows request scheme behind proxy; CSRF cookie is JS-readable by design (double-submit)
 		Name:     csrfCookieName,
 		Value:    "",
 		Path:     "/",

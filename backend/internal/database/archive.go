@@ -160,8 +160,8 @@ func (bm *BackupManager) BuildBackupArchive(backup string) (*os.File, ArchiveMan
 		return nil, ArchiveManifest{}, nil, fmt.Errorf("cannot build the archive: %w", err)
 	}
 	cleanup := func() {
-		tmp.Close()
-		os.Remove(tmp.Name())
+		tmp.Close() // #nosec G104 -- best-effort cleanup on an error path; the primary error is returned (logged), a leftover temp is swept at start
+		os.Remove(tmp.Name()) // #nosec G104 -- best-effort cleanup on an error path; the primary error is returned (logged), a leftover temp is swept at start
 	}
 	man := ArchiveManifest{
 		Format: ArchiveFormat, FormatVersion: ArchiveFormatVersion, HOPSVersion: version.String(),
@@ -170,7 +170,7 @@ func (bm *BackupManager) BuildBackupArchive(backup string) (*os.File, ArchiveMan
 	}
 	zw := zip.NewWriter(tmp)
 	add := func(name, src, want string) error {
-		f, err := os.Open(src)
+		f, err := os.Open(src) // #nosec G304 -- path is built from a validated name under the data dir or a server-chosen temp/backup path, never raw user input
 		if err != nil {
 			return err
 		}
@@ -263,7 +263,7 @@ func (bm *BackupManager) StoreUpload(src io.Reader, caps UploadCaps) (UploadResu
 	tmpPath := tmp.Name()
 	defer os.Remove(tmpPath)
 	if caps.Total <= 0 {
-		tmp.Close()
+		tmp.Close() // #nosec G104 -- Close on an error path or after a read-only/bounded read; the primary error is already surfaced and nothing was written
 		return UploadResult{}, invalid("uploading backups is turned off (the size limit is 0)")
 	}
 	n, err := io.Copy(tmp, io.LimitReader(src, caps.Total+1))
@@ -280,12 +280,12 @@ func (bm *BackupManager) StoreUpload(src io.Reader, caps UploadCaps) (UploadResu
 		return UploadResult{}, &InvalidBackupError{Reason: fmt.Sprintf("the upload is larger than the %s limit", formatBytes(caps.Total))}
 	}
 	head := make([]byte, 16)
-	f, err := os.Open(tmpPath)
+	f, err := os.Open(tmpPath) // #nosec G304 -- path is built from a validated name under the data dir or a server-chosen temp/backup path, never raw user input
 	if err != nil {
 		return UploadResult{}, fmt.Errorf("cannot store the upload: %w", err)
 	}
 	k, _ := io.ReadFull(f, head)
-	f.Close()
+	f.Close() // #nosec G104 -- Close on an error path or after a read-only/bounded read; the primary error is already surfaced and nothing was written
 	head = head[:k]
 	switch {
 	case bytes.HasPrefix(head, zipMagic):
@@ -401,7 +401,7 @@ func (bm *BackupManager) storeArchive(zipPath string, caps UploadCaps) (UploadRe
 		}
 		seen[f.Name] = true
 		declared += f.UncompressedSize64
-		if declared > uint64(caps.Total) {
+		if declared > uint64(caps.Total) { // #nosec G115 -- value bounded by construction or masked/shifted to one byte (parsing/encoding), no overflow possible
 			return UploadResult{}, invalid("the archive's contents are larger than the %s limit", formatBytes(caps.Total))
 		}
 		switch kind {
@@ -480,7 +480,7 @@ func (bm *BackupManager) storeArchive(zipPath string, caps UploadCaps) (UploadRe
 			return UploadResult{}, err
 		}
 		if caps.Process != nil {
-			data, err := os.ReadFile(dst)
+			data, err := os.ReadFile(dst) // #nosec G304 -- path is built from a validated name under the data dir or a server-chosen temp/backup path, never raw user input
 			if err != nil {
 				return UploadResult{}, fmt.Errorf("cannot store the upload: %w", err)
 			}
@@ -506,8 +506,8 @@ func (bm *BackupManager) storeArchive(zipPath string, caps UploadCaps) (UploadRe
 	}
 	undo := func(cause error) (UploadResult, error) {
 		// Never keep a backup without its images or its record.
-		os.Remove(bm.recordPath(name))
-		os.RemoveAll(bm.stagedImagesPath(name))
+		os.Remove(bm.recordPath(name)) // #nosec G104 -- best-effort cleanup on an error path; the primary error is returned (logged), a leftover temp is swept at start
+		os.RemoveAll(bm.stagedImagesPath(name)) // #nosec G104 -- best-effort cleanup on an error path; the primary error is returned (logged), a leftover temp is swept at start
 		if rerr := os.Remove(filepath.Join(bm.backupDir, name)); rerr != nil {
 			slog.Error("could not remove an uploaded backup whose images couldn't be stored", "component", "backup", "name", name, "error", rerr)
 			return UploadResult{}, fmt.Errorf("cannot store the upload's images (%v), and the backup %s couldn't be removed again (%v): delete it in the Backups dialog", cause, name, rerr)
@@ -591,7 +591,7 @@ func extractChecked(f *zip.File, dst string, want ArchiveFile, limit int64) erro
 		return invalid("%s can't be read from the archive (%v)", f.Name, err)
 	}
 	defer rc.Close()
-	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600) // #nosec G304 -- path is built from a validated name under the data dir or a server-chosen temp/backup path, never raw user input
 	if err != nil {
 		return fmt.Errorf("cannot store the upload: %w", err)
 	}

@@ -560,7 +560,7 @@ func serveSPAFromFS(w http.ResponseWriter, req *http.Request, fsys fs.FS) {
 		if strings.HasPrefix(name, "_app/immutable/") {
 			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 		}
-		http.ServeFileFS(w, req, fsys, name)
+		http.ServeFileFS(w, req, fsys, name) // #nosec G703 -- name validated (ValidImageName) / embedded FS path, not raw request input
 		return
 	}
 

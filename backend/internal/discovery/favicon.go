@@ -161,12 +161,12 @@ func murmur3_32(data []byte, seed uint32) int32 {
 		h ^= k
 	}
 
-	h ^= uint32(len(data))
+	h ^= uint32(len(data)) // #nosec G115 -- value bounded by construction or masked/shifted to one byte (parsing/encoding), no overflow possible
 	h ^= h >> 16
 	h *= 0x85ebca6b
 	h ^= h >> 13
 	h *= 0xc2b2ae35
 	h ^= h >> 16
 
-	return int32(h)
+	return int32(h) // #nosec G115 -- value bounded by construction or masked/shifted to one byte (parsing/encoding), no overflow possible
 }

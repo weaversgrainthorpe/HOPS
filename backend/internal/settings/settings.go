@@ -83,7 +83,7 @@ const (
 	KeyUploadMaxBytesIcon           = "upload.max_bytes_icon"
 	KeyHTTPReadHeaderTimeoutSeconds = "http.read_header_timeout_seconds"
 	KeyHTTPReadTimeoutSeconds       = "http.read_timeout_seconds"
-	KeyHTTPWriteTimeoutSeconds      = "http.write_timeout_seconds"
+	KeyHTTPWriteTimeoutSeconds      = "http.write_timeout_seconds" // #nosec G101 -- settings key name, not a credential
 	KeyHTTPIdleTimeoutSeconds       = "http.idle_timeout_seconds"
 	KeyDiscoveryMaxParallelProbes   = "discovery.max_parallel_probes"
 	KeyDiscoveryPerHostTimeoutSecs  = "discovery.per_host_timeout_seconds"

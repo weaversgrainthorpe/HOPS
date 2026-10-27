@@ -85,7 +85,7 @@ func (r *Router) readLimitedUpload(w http.ResponseWriter, req *http.Request, kin
 		return nil, nil, false
 	}
 	if header.Size > limit {
-		file.Close()
+		file.Close() // #nosec G104 -- Close on an error path or after a read-only/bounded read; the primary error is already surfaced and nothing was written
 		writeJSONError(w, uploadTooLargeMessage(kind, header.Size, limit), http.StatusRequestEntityTooLarge)
 		return nil, nil, false
 	}

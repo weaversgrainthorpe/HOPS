@@ -172,7 +172,7 @@ func httpClient(timeout time.Duration) *http.Client {
 			Proxy:       nil, // never via an environment proxy: the guard must see the real target
 			DialContext: dialer(timeout).DialContext,
 			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: true, //nolint:gosec // homelab self-signed certs are the norm
+				InsecureSkipVerify: true, // #nosec G402 -- homelab self-signed certs are the norm; discovery/status probes only read and send no credentials
 			},
 			ResponseHeaderTimeout: timeout,
 		},
@@ -222,7 +222,7 @@ func httpFollowRedirects(ctx context.Context, startURL string, _ bool, timeout t
 		Proxy:       nil,
 		DialContext: dialer(timeout).DialContext,
 		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: true, //nolint:gosec
+			InsecureSkipVerify: true, // #nosec G402 -- homelab self-signed certs are the norm; discovery/status probes only read and send no credentials
 		},
 		ResponseHeaderTimeout: timeout,
 	}
@@ -252,7 +252,7 @@ func httpFollowRedirects(ctx context.Context, startURL string, _ bool, timeout t
 			return nil, currentURL, err
 		}
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, httpBodyReadCap))
-		resp.Body.Close()
+		resp.Body.Close() // #nosec G104 -- Close on an error path or after a read-only/bounded read; the primary error is already surfaced and nothing was written
 
 		snap := &HTTPSnapshot{
 			Status:  resp.StatusCode,

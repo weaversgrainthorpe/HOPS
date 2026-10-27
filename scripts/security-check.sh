@@ -42,7 +42,8 @@ fi
 
 echo "== gosec"
 if need gosec "go install github.com/securego/gosec/v2/cmd/gosec@latest" gosec; then
-  # Reviewed suppressions go here as -exclude=Gxxx with a reason; none yet.
+  # Reviewed findings are excused INLINE at the code with `// #nosec Gxxx -- reason`, so the
+  # justification sits next to the line. Anything without one is NEW and fails this check.
   (cd backend && gosec -quiet -fmt=text -out="$OUT/gosec.txt" ./... ) >"$OUT/gosec.log" 2>&1; rc=$?
   cat "$OUT/gosec.txt" 2>/dev/null; cat "$OUT/gosec.log"
   n=$(grep -c '^\[.*\] - G[0-9]' "$OUT/gosec.txt" 2>/dev/null || true)
@@ -76,9 +77,11 @@ fi
 RULES='AKIA[0-9A-Z]{16}|-----BEGIN ([A-Z]+ )?PRIVATE KEY-----|gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{50,}|xox[baprs]-[A-Za-z0-9-]{10,}|sk-[A-Za-z0-9]{32,}|AIza[0-9A-Za-z_-]{35}|eyJ[A-Za-z0-9_-]{15,}[.]eyJ[A-Za-z0-9_-]{15,}[.][A-Za-z0-9_-]{10,}|(api[_-]?key|secret|token|passw(or)?d|bearer)["'"'"' ]*[:=]["'"'"' ]*[A-Za-z0-9/+_=.-]{20,}["'"'"']'
 echo "== secrets"
 if command -v gitleaks >/dev/null 2>&1; then
-  gitleaks dir . --no-banner --redact -v >"$OUT/gl-tree.txt" 2>&1; rc1=$?
-  [ $QUICK -eq 0 ] && { gitleaks git . --no-banner --redact -v --log-opts="--all -- . :(exclude)tests/prerelease/hopsexport :(exclude)design/feedback" >"$OUT/gl-hist.txt" 2>&1; rc2=$?; } || rc2=0
+  gitleaks dir . -c .gitleaks.toml --no-banner --redact -v >"$OUT/gl-tree.txt" 2>&1; rc1=$?
+  [ $QUICK -eq 0 ] && { gitleaks git . -c .gitleaks.toml --no-banner --redact -v --log-opts="--all -- . :(exclude)tests/prerelease/hopsexport :(exclude)design/feedback" >"$OUT/gl-hist.txt" 2>&1; rc2=$?; } || rc2=0
+  # Exclusions and reasoned allowlists live in .gitleaks.toml. Exit 1 = leaks; any other non-zero = tool error.
   n1=$(grep -c '^Finding:' "$OUT/gl-tree.txt"); n2=$(grep -c '^Finding:' "$OUT/gl-hist.txt" 2>/dev/null || echo 0)
+  [ "$n1" -eq 0 ] && [ $rc1 -ne 0 ] && n1="?"; [ "$n2" -eq 0 ] && [ $rc2 -ne 0 ] && n2="?"
   [ $rc1 -eq 0 ] && record "secrets: tree (gitleaks)" PASS 0 || record "secrets: tree (gitleaks)" FAIL "$n1"
   if [ $QUICK -eq 1 ]; then record "secrets: history (gitleaks)" SKIP "-" "--quick requested"
   elif [ $rc2 -eq 0 ]; then record "secrets: history (gitleaks)" PASS 0; else record "secrets: history (gitleaks)" FAIL "$n2"; fi

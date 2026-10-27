@@ -1433,7 +1433,7 @@ func ipToUint32(ip net.IP) uint32 {
 }
 
 func uint32ToIP(n uint32) net.IP {
-	return net.IPv4(byte(n>>24), byte(n>>16), byte(n>>8), byte(n))
+	return net.IPv4(byte(n>>24), byte(n>>16), byte(n>>8), byte(n)) // #nosec G115 -- value bounded by construction or masked/shifted to one byte (parsing/encoding), no overflow possible
 }
 
 // newID returns a 16-hex-character random identifier. Not a UUID — just

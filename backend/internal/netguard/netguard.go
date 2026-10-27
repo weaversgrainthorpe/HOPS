@@ -158,7 +158,7 @@ func parseLegacyIPv4(s string) (netip.Addr, bool) {
 		return netip.Addr{}, false
 	}
 	n |= vals[last]
-	return netip.AddrFrom4([4]byte{byte(n >> 24), byte(n >> 16), byte(n >> 8), byte(n)}), true
+	return netip.AddrFrom4([4]byte{byte(n >> 24), byte(n >> 16), byte(n >> 8), byte(n)}), true // #nosec G115 -- value bounded by construction or masked/shifted to one byte (parsing/encoding), no overflow possible
 }
 
 // CheckHost refuses a host (URL hostname or dial host) that is an IP

@@ -158,8 +158,8 @@ func attemptAXFR(ctx context.Context, resolverIP, zone string, allow hostAllowli
 		return fmt.Errorf("pack: %w", err)
 	}
 	frame := make([]byte, 2+len(pkt))
-	frame[0] = byte(len(pkt) >> 8)
-	frame[1] = byte(len(pkt))
+	frame[0] = byte(len(pkt) >> 8) // #nosec G115 -- value bounded by construction or masked/shifted to one byte (parsing/encoding), no overflow possible
+	frame[1] = byte(len(pkt)) // #nosec G115 -- value bounded by construction or masked/shifted to one byte (parsing/encoding), no overflow possible
 	copy(frame[2:], pkt)
 	if _, err := conn.Write(frame); err != nil {
 		return fmt.Errorf("write: %w", err)

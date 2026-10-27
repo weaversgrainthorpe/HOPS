@@ -34,12 +34,12 @@ const DefaultPort = 8080
 // RememberPort records the port for safe mode (errors are returned for the
 // caller to log; a missing file only means safe mode falls back to 8080).
 func RememberPort(dataDir string, port int) error {
-	return os.WriteFile(filepath.Join(dataDir, LastPortFile), []byte(strconv.Itoa(port)+"\n"), 0644)
+	return os.WriteFile(filepath.Join(dataDir, LastPortFile), []byte(strconv.Itoa(port)+"\n"), 0644) // #nosec G306 -- non-secret public asset/metadata (icon, background, port hint); served to the browser anyway
 }
 
 // Port is the port to serve safe mode on: the last one HOPS used, else 8080.
 func Port(dataDir string) int {
-	raw, err := os.ReadFile(filepath.Join(dataDir, LastPortFile))
+	raw, err := os.ReadFile(filepath.Join(dataDir, LastPortFile)) // #nosec G304 -- path is built from a validated name under the data dir or a server-chosen temp/backup path, never raw user input
 	if err != nil {
 		return DefaultPort
 	}
@@ -123,7 +123,7 @@ func Serve(ctx context.Context, addr string, e *database.UnsafeStartError) error
 		return err
 	}
 	srv := &http.Server{Handler: Handler(e), ReadHeaderTimeout: 10 * time.Second}
-	go func() {
+	go func() { // #nosec G118 -- shutdown goroutine waits on the caller's ctx, which is the lifetime
 		<-ctx.Done()
 		sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()

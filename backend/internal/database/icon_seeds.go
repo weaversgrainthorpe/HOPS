@@ -249,7 +249,7 @@ func seedIconData(db *sql.DB) error {
 	// seeded before the fix are repointed. (Name built in two parts so icons:check, which scans
 	// this file for icon references, does not flag the retired name.) Preset rows only, so a user's own choice is untouched.
 	for _, table := range []string{"icons", "icon_categories"} {
-		if _, err := tx.Exec("UPDATE "+table+" SET icon = 'mdi:monitor-multiple' WHERE icon = 'mdi:'||'virtual-server' AND is_preset = 1"); err != nil {
+		if _, err := tx.Exec("UPDATE "+table+" SET icon = 'mdi:monitor-multiple' WHERE icon = 'mdi:'||'virtual-server' AND is_preset = 1"); err != nil { // #nosec G202 -- only ? placeholder lists or a fixed/quote-escaped table name, never user input
 			return fmt.Errorf("failed to repair preset icon in %s: %w", table, err)
 		}
 	}

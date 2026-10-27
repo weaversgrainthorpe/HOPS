@@ -75,7 +75,7 @@ func main() {
 	}
 
 	// Ensure data directory exists
-	if err := os.MkdirAll(cfg.DataDir, 0755); err != nil {
+	if err := os.MkdirAll(cfg.DataDir, 0755); err != nil { // #nosec G301 -- data dir for non-secret files (icons, backgrounds); HOPS is the only service user, accepted in triage
 		slog.Error("failed to create data directory", "error", err)
 		os.Exit(1)
 	}

@@ -111,7 +111,7 @@ func writeFileDurable(path string, raw []byte) error {
 		err = os.Rename(name, path)
 	}
 	if err != nil {
-		os.Remove(name)
+		os.Remove(name) // #nosec G104 -- best-effort cleanup on an error path; the primary error is returned (logged), a leftover temp is swept at start
 		return err
 	}
 	_ = syncDir(filepath.Dir(path))
@@ -408,7 +408,7 @@ func installAtomic(src, dst, want string) error {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
-	in, err := os.Open(src)
+	in, err := os.Open(src) // #nosec G304 -- path is built from a validated name under the data dir or a server-chosen temp/backup path, never raw user input
 	if err != nil {
 		return err
 	}
@@ -423,12 +423,12 @@ func installAtomic(src, dst, want string) error {
 	w := io.MultiWriter(tmp, h)
 	_, err = io.CopyN(w, in, 1)
 	if err != nil && err != io.EOF {
-		tmp.Close()
+		tmp.Close() // #nosec G104 -- Close on an error path or after a read-only/bounded read; the primary error is already surfaced and nothing was written
 		return err
 	}
 	if installHook != nil {
 		if herr := installHook(dst); herr != nil {
-			tmp.Close()
+			tmp.Close() // #nosec G104 -- Close on an error path or after a read-only/bounded read; the primary error is already surfaced and nothing was written
 			return herr
 		}
 	}

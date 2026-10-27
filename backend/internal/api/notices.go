@@ -106,7 +106,7 @@ func (s *sizeNoteState) notice() (notice, bool) {
 	text := "Some tiles had a size HOPS does not recognise, so they are now Medium (change them in the editor if needed): " +
 		strings.Join(s.items, "; ") + "."
 	h := fnv.New32a()
-	h.Write([]byte(text))
+	h.Write([]byte(text)) // #nosec G104 -- hash.Hash.Write never returns an error
 	return notice{ID: fmt.Sprintf("%s%08x", noticeTileSizesPrefix, h.Sum32()), Text: text}, true
 }
 

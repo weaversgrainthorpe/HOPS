@@ -155,13 +155,13 @@ func (s *Store) DiffFor(scanID string) (*Diff, error) {
 	for rows.Next() {
 		var ref DiffScanRef
 		if err := rows.Scan(&ref.ID, &ref.CreatedAt, &ref.CIDR, &ref.State, &ref.Label); err != nil {
-			rows.Close()
+			rows.Close() // #nosec G104 -- Close on an error path or after a read-only/bounded read; the primary error is already surfaced and nothing was written
 			return nil, err
 		}
 		earlier = append(earlier, ref)
 	}
 	err = rows.Err()
-	rows.Close() // release the connection before the result queries below
+	rows.Close() // #nosec G104 -- Close on an error path or after a read-only/bounded read; the primary error is already surfaced and nothing was written (note: release the connection before the result queries below)
 	if err != nil {
 		return nil, err
 	}

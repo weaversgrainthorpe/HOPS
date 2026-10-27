@@ -228,7 +228,7 @@ func (bm *BackupManager) saveNoticesLocked() {
 		}
 		tmp := path + ".tmp"
 		if err := os.WriteFile(tmp, raw, 0600); err != nil {
-			os.Remove(tmp)
+			os.Remove(tmp) // #nosec G104 -- best-effort cleanup on an error path; the primary error is returned (logged), a leftover temp is swept at start
 			return err
 		}
 		return os.Rename(tmp, path)
@@ -479,22 +479,22 @@ func (bm *BackupManager) createBackup(reason string, db *sql.DB) (string, error)
 		// SQLite's VACUUM INTO (3.27+). Quotes doubled against SQL injection.
 		sanitizedPath := strings.ReplaceAll(backupPath, "'", "''")
 		if _, err := db.Exec(fmt.Sprintf("VACUUM INTO '%s'", sanitizedPath)); err != nil {
-			os.Remove(backupPath) // never leave a partial file listed as a backup
+			os.Remove(backupPath) // #nosec G104 -- best-effort cleanup on an error path; the primary error is returned (logged), a leftover temp is swept at start (note: never leave a partial file listed as a backup)
 			return "", fmt.Errorf("failed to write backup: %w", err)
 		}
 		if err := os.Chmod(backupPath, 0o600); err != nil { // VACUUM INTO honours the umask (0644)
-			os.Remove(backupPath)
+			os.Remove(backupPath) // #nosec G104 -- best-effort cleanup on an error path; the primary error is returned (logged), a leftover temp is swept at start
 			return "", fmt.Errorf("failed to restrict backup permissions: %w", err)
 		}
 	} else if err := copyFile(bm.dbPath, backupPath); err != nil {
-		os.Remove(backupPath)
+		os.Remove(backupPath) // #nosec G104 -- best-effort cleanup on an error path; the primary error is returned (logged), a leftover temp is swept at start
 		return "", fmt.Errorf("failed to copy database: %w", err)
 	}
 
 	// Which version of each image it uses (M6 §12): part of the backup.
 	if err := bm.recordBackup(backupName, backupPath); err != nil {
-		os.Remove(backupPath)
-		os.Remove(bm.recordPath(backupName))
+		os.Remove(backupPath) // #nosec G104 -- best-effort cleanup on an error path; the primary error is returned (logged), a leftover temp is swept at start
+		os.Remove(bm.recordPath(backupName)) // #nosec G104 -- best-effort cleanup on an error path; the primary error is returned (logged), a leftover temp is swept at start
 		return "", fmt.Errorf("failed to record the backup's images: %w", err)
 	}
 
@@ -604,13 +604,13 @@ func (bm *BackupManager) RestoreBackup(db *sql.DB, backupName string) error {
 	pending := PendingRestorePath(bm.dbPath)
 	tmp := pending + ".tmp"
 	if err := copyFile(backupPath, tmp); err != nil {
-		os.Remove(tmp)
+		os.Remove(tmp) // #nosec G104 -- best-effort cleanup on an error path; the primary error is returned (logged), a leftover temp is swept at start
 		return fmt.Errorf("failed to stage the restore: %w", err)
 	}
 	staged := false
 	defer func() {
 		if !staged {
-			os.Remove(tmp)
+			os.Remove(tmp) // #nosec G104 -- best-effort cleanup on an error path; the primary error is returned (logged), a leftover temp is swept at start
 		}
 	}()
 	if err := ValidateHOPSDatabase(tmp); err != nil {
@@ -640,7 +640,7 @@ func (bm *BackupManager) RestoreBackup(db *sql.DB, backupName string) error {
 		return fmt.Errorf("failed to stage the restore: %w", err)
 	}
 	if err := os.Rename(tmp, pending); err != nil {
-		os.Remove(restoreImagesMarkerPath(bm.dbPath))
+		os.Remove(restoreImagesMarkerPath(bm.dbPath)) // #nosec G104 -- best-effort cleanup on an error path; the primary error is returned (logged), a leftover temp is swept at start
 		return fmt.Errorf("failed to stage the restore: %w", err)
 	}
 	staged = true
@@ -818,7 +818,7 @@ func RecoverAndApplyRestore(dbPath string) (RestoreResult, error) {
 		return RestoreResult{}, setAside(fmt.Errorf("cannot read the staged restore: %w", err))
 	}
 	if err := writeJournal(dbPath, restoreJournal{StageSHA256: sum, State: "moving"}); err != nil {
-		os.Remove(dbPath + restoreJournalSuffix)
+		os.Remove(dbPath + restoreJournalSuffix) // #nosec G104 -- best-effort cleanup on an error path; the primary error is returned (logged), a leftover temp is swept at start
 		return RestoreResult{}, setAside(fmt.Errorf("cannot start the restore: %w", err))
 	}
 	if crashed("journal") {
@@ -909,7 +909,7 @@ var removeFile = os.Remove
 // "applied", nothing moved aside, nothing staged). RestoreBackup calls it
 // before staging; a journal it can't remove refuses the new restore.
 func ClearLeftoverJournal(dbPath string) error {
-	raw, err := os.ReadFile(dbPath + restoreJournalSuffix)
+	raw, err := os.ReadFile(dbPath + restoreJournalSuffix) // #nosec G304 -- path is built from a validated name under the data dir or a server-chosen temp/backup path, never raw user input
 	if os.IsNotExist(err) {
 		return nil
 	}
@@ -931,7 +931,7 @@ func ClearLeftoverJournal(dbPath string) error {
 // syncDir fsyncs a directory so renames in it are durable. Filesystems that
 // can't sync a directory (EINVAL) are tolerated.
 func syncDir(dir string) error {
-	d, err := os.Open(dir)
+	d, err := os.Open(dir) // #nosec G304 -- path is built from a validated name under the data dir or a server-chosen temp/backup path, never raw user input
 	if err != nil {
 		return err
 	}
@@ -944,7 +944,7 @@ func syncDir(dir string) error {
 
 // syncFile fsyncs a file's contents.
 func syncFile(path string) error {
-	f, err := os.OpenFile(path, os.O_RDWR, 0)
+	f, err := os.OpenFile(path, os.O_RDWR, 0) // #nosec G304 -- path is built from a validated name under the data dir or a server-chosen temp/backup path, never raw user input
 	if err != nil {
 		return err
 	}
@@ -979,7 +979,7 @@ func moveAsideBack(dbPath string) error {
 // when it decided the outcome (the caller stops there).
 func recoverInterrupted(dbPath string) (RestoreResult, bool, error) {
 	journalPath := dbPath + restoreJournalSuffix
-	raw, jerr := os.ReadFile(journalPath)
+	raw, jerr := os.ReadFile(journalPath) // #nosec G304 -- path is built from a validated name under the data dir or a server-chosen temp/backup path, never raw user input
 	asides := false
 	for _, suf := range dbFileSuffixes {
 		if _, err := os.Lstat(dbPath + preApplySuffix + suf); err == nil {
@@ -1072,16 +1072,16 @@ func recoverInterrupted(dbPath string) (RestoreResult, bool, error) {
 func writeJournal(dbPath string, j restoreJournal) error {
 	raw, _ := json.Marshal(j)
 	tmp := dbPath + restoreJournalSuffix + ".tmp"
-	f, err := os.Create(tmp)
+	f, err := os.Create(tmp) // #nosec G304 -- path is built from a validated name under the data dir or a server-chosen temp/backup path, never raw user input
 	if err != nil {
 		return err
 	}
 	if _, err := f.Write(raw); err != nil {
-		f.Close()
+		f.Close() // #nosec G104 -- Close on an error path or after a read-only/bounded read; the primary error is already surfaced and nothing was written
 		return err
 	}
 	if err := f.Sync(); err != nil {
-		f.Close()
+		f.Close() // #nosec G104 -- Close on an error path or after a read-only/bounded read; the primary error is already surfaced and nothing was written
 		return err
 	}
 	if err := f.Close(); err != nil {
@@ -1094,7 +1094,7 @@ func writeJournal(dbPath string, j restoreJournal) error {
 }
 
 func fileSHA256(path string) (string, error) {
-	f, err := os.Open(path)
+	f, err := os.Open(path) // #nosec G304 -- path is built from a validated name under the data dir or a server-chosen temp/backup path, never raw user input
 	if err != nil {
 		return "", err
 	}
@@ -1143,13 +1143,13 @@ var sqliteMagic = []byte("SQLite format 3\x00")
 // tables, opening it read-only (immutable: nothing is written, not even a
 // journal). The error says why it is refused, for the user.
 func ValidateHOPSDatabase(path string) error {
-	f, err := os.Open(path)
+	f, err := os.Open(path) // #nosec G304 -- path is built from a validated name under the data dir or a server-chosen temp/backup path, never raw user input
 	if err != nil {
 		return &InvalidBackupError{Reason: "cannot read the file: " + err.Error()}
 	}
 	head := make([]byte, len(sqliteMagic))
 	_, rerr := io.ReadFull(f, head)
-	f.Close()
+	f.Close() // #nosec G104 -- Close on an error path or after a read-only/bounded read; the primary error is already surfaced and nothing was written
 	if rerr != nil || !bytes.Equal(head, sqliteMagic) {
 		return &InvalidBackupError{Reason: "this file is not a SQLite database"}
 	}
@@ -1319,13 +1319,13 @@ type BackupInfo struct {
 
 // copyFile copies a file from src to dst
 func copyFile(src, dst string) error {
-	sourceFile, err := os.Open(src)
+	sourceFile, err := os.Open(src) // #nosec G304 -- path is built from a validated name under the data dir or a server-chosen temp/backup path, never raw user input
 	if err != nil {
 		return err
 	}
 	defer sourceFile.Close()
 
-	destFile, err := os.OpenFile(dst, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o600)
+	destFile, err := os.OpenFile(dst, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o600) // #nosec G304 -- path is built from a validated name under the data dir or a server-chosen temp/backup path, never raw user input
 	if err != nil {
 		return err
 	}

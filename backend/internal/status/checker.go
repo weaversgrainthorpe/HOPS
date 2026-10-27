@@ -547,7 +547,7 @@ func (c *Checker) checkTCP(entry Entry) statusCheckResult {
 		result.detail = errText(err)
 		return result
 	}
-	conn.Close()
+	conn.Close() // #nosec G104 -- Close on an error path or after a read-only/bounded read; the primary error is already surfaced and nothing was written
 	result.status = "up"
 	result.responseTime = time.Since(start).Milliseconds()
 	return result
@@ -580,17 +580,17 @@ func (c *Checker) saveResults(results []statusCheckResult, now time.Time) {
 	}
 	prune := "DELETE FROM status_cache"
 	if len(ids) > 0 {
-		prune += " WHERE entry_id NOT IN (?" + strings.Repeat(",?", len(ids)-1) + ")"
+		prune += " WHERE entry_id NOT IN (?" + strings.Repeat(",?", len(ids)-1) + ")" // #nosec G202 -- only ? placeholder lists or a fixed/quote-escaped table name, never user input
 	}
 	if _, err := tx.Exec(prune, ids...); err != nil {
-		tx.Rollback()
+		tx.Rollback() // #nosec G104 -- Rollback on an error path; the original error is already logged
 		slog.Error("failed to prune status cache", "component", "status", "error", err)
 		return
 	}
 	// The same for the failing clock: a tile whose checks are off, or that
 	// is gone, isn't tracked.
 	if _, err := tx.Exec(strings.Replace(prune, "status_cache", "status_failing", 1), ids...); err != nil {
-		tx.Rollback()
+		tx.Rollback() // #nosec G104 -- Rollback on an error path; the original error is already logged
 		slog.Error("failed to prune failing-since rows", "component", "status", "error", err)
 		return
 	}
@@ -609,7 +609,7 @@ func (c *Checker) saveResults(results []statusCheckResult, now time.Time) {
 				r.entryID, at, r.detail, at)
 		}
 		if err != nil {
-			tx.Rollback()
+			tx.Rollback() // #nosec G104 -- Rollback on an error path; the original error is already logged
 			slog.Error("failed to update failing-since row", "component", "status", "entry_id", r.entryID, "error", err)
 			return
 		}
@@ -620,7 +620,7 @@ func (c *Checker) saveResults(results []statusCheckResult, now time.Time) {
 		VALUES (?, ?, ?, datetime('now'))
 	`)
 	if err != nil {
-		tx.Rollback()
+		tx.Rollback() // #nosec G104 -- Rollback on an error path; the original error is already logged
 		slog.Error("failed to prepare status cache statement", "component", "status", "error", err)
 		return
 	}

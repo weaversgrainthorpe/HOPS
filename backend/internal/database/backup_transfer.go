@@ -16,7 +16,7 @@ func (bm *BackupManager) OpenBackup(name string) (*os.File, os.FileInfo, error) 
 	if err != nil {
 		return nil, nil, err
 	}
-	f, err := os.Open(path)
+	f, err := os.Open(path) // #nosec G304 -- path is built from a validated name under the data dir or a server-chosen temp/backup path, never raw user input
 	if err != nil {
 		return nil, nil, fmt.Errorf("cannot open backup %s: %w", name, err)
 	}
@@ -54,27 +54,27 @@ func placeExclusive(src, dst string) error {
 
 // copyExclusive copies src to a NEW file dst (O_EXCL: never an existing one).
 func copyExclusive(src, dst string) error {
-	in, err := os.Open(src)
+	in, err := os.Open(src) // #nosec G304 -- path is built from a validated name under the data dir or a server-chosen temp/backup path, never raw user input
 	if err != nil {
 		return err
 	}
 	defer in.Close()
-	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600) // #nosec G304 -- path is built from a validated name under the data dir or a server-chosen temp/backup path, never raw user input
 	if err != nil {
 		return err
 	}
 	if _, err := io.Copy(out, in); err != nil {
-		out.Close()
-		os.Remove(dst)
+		out.Close() // #nosec G104 -- best-effort cleanup on an error path; the primary error is returned (logged), a leftover temp is swept at start
+		os.Remove(dst) // #nosec G104 -- best-effort cleanup on an error path; the primary error is returned (logged), a leftover temp is swept at start
 		return err
 	}
 	if err := out.Sync(); err != nil {
-		out.Close()
-		os.Remove(dst)
+		out.Close() // #nosec G104 -- best-effort cleanup on an error path; the primary error is returned (logged), a leftover temp is swept at start
+		os.Remove(dst) // #nosec G104 -- best-effort cleanup on an error path; the primary error is returned (logged), a leftover temp is swept at start
 		return err
 	}
 	if err := out.Close(); err != nil {
-		os.Remove(dst)
+		os.Remove(dst) // #nosec G104 -- best-effort cleanup on an error path; the primary error is returned (logged), a leftover temp is swept at start
 		return err
 	}
 	return nil

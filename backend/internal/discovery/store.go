@@ -441,6 +441,7 @@ func (s *Store) MarkResultsPromoted(tx *sql.Tx, scanID string, resultIDs []strin
 		placeholders[i] = "?"
 		args = append(args, id)
 	}
+	// #nosec G202 -- only ? placeholder lists or a fixed/quote-escaped table name, never user input
 	query := `UPDATE scan_results SET curate_state = ?
 	          WHERE scan_id = ? AND id IN (` +
 		strings.Join(placeholders, ",") + `)`
