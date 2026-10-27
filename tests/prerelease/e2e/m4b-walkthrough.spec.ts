@@ -19,7 +19,7 @@ type Child = Record<string, unknown>;
 const SPAN: Record<string, number> = { small: 1, medium: 2, large: 4 };
 /** A tile as it sits inside a folder: no placement. */
 const kid = (id: string, name: string, extra: Child = {}): Child => ({
-  id, kind: 'tile', type: 'link', name, url: `https://${name.toLowerCase()}.example.lan/`, icon: 'mdi:lan',
+  id, kind: 'tile', type: 'link', name, url: `https://${name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}.example.lan/`, icon: 'mdi:lan',
   openMode: 'newtab', size: 'medium', order: 0, ...extra
 });
 /** A tile on a tab at cell (x, y) of the 24-column grid, its Size's span each way. */

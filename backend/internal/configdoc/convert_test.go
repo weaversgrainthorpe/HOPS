@@ -1,6 +1,7 @@
 package configdoc
 
 import (
+	"strings"
 	"encoding/json"
 	"os"
 	"reflect"
@@ -88,6 +89,9 @@ func assertKeysPreserved(t *testing.T, orig, got Obj, what string, skip ...strin
 		if !ok {
 			t.Errorf("%s: key %q lost", what, k)
 			continue
+		}
+		if s, isStr := v.(string); isStr && (k == "url" || k == AwayURLKey) {
+			v = strings.TrimSpace(s) // the conversion trims tile addresses
 		}
 		eq(t, gv, v, what+"."+k)
 	}

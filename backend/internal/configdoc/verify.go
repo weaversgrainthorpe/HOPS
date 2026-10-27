@@ -516,6 +516,9 @@ next:
 			v.add("%s: key %q was dropped", what, k)
 			continue
 		}
+		if (k == "url" || k == AwayURLKey) && trimmedEqual(av, bv) {
+			continue // the conversion trims stray whitespace around a tile address
+		}
 		if show(av) != show(bv) {
 			v.add("%s: key %q changed (v2 %s, v3 %s)", what, k, trunc(show(av)), trunc(show(bv)))
 		}
@@ -789,4 +792,12 @@ func trunc(s string) string {
 		return s[:77] + "..."
 	}
 	return s
+}
+
+// trimmedEqual reports whether a and b are strings equal once surrounding
+// whitespace is removed (the one change the conversion makes to a tile address).
+func trimmedEqual(a, b any) bool {
+	as, ok1 := a.(string)
+	bs, ok2 := b.(string)
+	return ok1 && ok2 && strings.TrimSpace(as) == strings.TrimSpace(bs)
 }

@@ -23,7 +23,7 @@ test('Settings (the admin home) loads with the core admin controls', async ({ pa
   await expect(side.getByRole('button', { name: 'Log out' })).toBeVisible();
   for (const [item, path, control] of [
     ['Icons', '/settings/icons', /upload icons/i],
-    ['Backups', '/settings/backups', /open backups/i],
+    ['Backups', '/settings/backups', /create backup/i],
     ['Logs', '/settings/logs', /refresh/i],
     ['Password', '/settings/password', /change password/i],
     ['Factory reset', '/settings/reset', /factory reset/i],

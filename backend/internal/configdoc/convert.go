@@ -3,6 +3,7 @@ package configdoc
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 )
 
 func deepCopy(o Obj) (Obj, error) {
@@ -151,7 +152,25 @@ func convertDashboard(d Obj, path string) (Obj, []SizeChange, error) {
 	d["settings"] = settings
 	// Every tab is a grid tab (M5): no dashboard default layout.
 	delete(d, "defaultLayout")
+	trimTileURLs(d)
 	return d, sizes, nil
+}
+
+// trimTileURLs strips leading/trailing whitespace from every tile's url and
+// awayUrl. v2 stored whatever was typed; a stray space around an otherwise
+// valid address must not make the upgrade or an import refuse the tile.
+func trimTileURLs(d Obj) {
+	Walk(Obj{"dashboards": []any{d}}, func(_, _ Obj, _ []Obj, n Obj) bool {
+		if n["kind"] != "tile" {
+			return true
+		}
+		for _, k := range []string{"url", AwayURLKey} {
+			if s, ok := n[k].(string); ok {
+				n[k] = strings.TrimSpace(s)
+			}
+		}
+		return true
+	})
 }
 
 func listOf(o Obj, key string) ([]any, error) {

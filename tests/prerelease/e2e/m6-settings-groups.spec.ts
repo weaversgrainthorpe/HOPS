@@ -184,6 +184,11 @@ test.describe('M6 §10 every global setting still saves', () => {
         want = s.value === '48' ? '72' : '48';
         await input.fill(String(Number(want) / 24));
         await page.locator(`[data-unit-for="${s.key}"]`).selectOption('days');
+      } else if (s.key === 'auth.session_idle_hours') {
+        // 0 is "Off": the number box is disabled until a unit is chosen.
+        want = s.value === '1' ? '2' : '1';
+        await page.locator(`[data-unit-for="${s.key}"]`).selectOption('hours');
+        await input.fill(want);
       } else if (s.type === 'bytes') {
         const mb = Number(s.value) / MB === 1 ? 2 : 1;
         want = String(mb * MB);

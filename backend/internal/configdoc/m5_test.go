@@ -417,3 +417,28 @@ func TestDefaultLayoutSettingRemoved(t *testing.T) {
 		t.Error("a defaultLayout override was accepted")
 	}
 }
+
+// Real v2 data can hold a tile address with stray spaces around it. The v2
+// import (and the upgrade) must still accept it, storing the trimmed address.
+func TestConvertDashboardV2Full_TrimsTileURLWhitespace(t *testing.T) {
+	d := loadJSON(t, "testdata/v2_basic.json")["dashboards"].([]any)[0].(Obj)
+	e := d["tabs"].([]any)[0].(Obj)["groups"].([]any)[0].(Obj)["entries"].([]any)[0].(Obj)
+	e["url"] = "  https://x.example.lan/  "
+	nd, _, err := ConvertDashboardV2Full(d)
+	if err != nil {
+		t.Fatalf("import refused a padded url: %v", err)
+	}
+	found := false
+	Walk(Obj{"dashboards": []any{nd}}, func(_, _ Obj, _ []Obj, n Obj) bool {
+		if n["id"] == e["id"] {
+			found = true
+			if n["url"] != "https://x.example.lan/" {
+				t.Errorf("stored url = %q, want trimmed", n["url"])
+			}
+		}
+		return true
+	})
+	if !found {
+		t.Fatal("tile not found after conversion")
+	}
+}

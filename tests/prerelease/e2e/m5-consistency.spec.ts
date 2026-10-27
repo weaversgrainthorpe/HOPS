@@ -23,7 +23,7 @@ type Box = { x: number; y: number; width: number; height: number };
 type AnyNode = { id: string; size?: string; placement?: unknown; content?: { children: AnyNode[] } };
 
 const kid = (id: string, name: string, extra: Child = {}): Child => ({
-  id, kind: 'tile', type: 'link', name, url: `https://${name.toLowerCase()}.example.lan/`, icon: 'mdi:lan',
+  id, kind: 'tile', type: 'link', name, url: `https://${name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}.example.lan/`, icon: 'mdi:lan',
   openMode: 'newtab', size: 'medium', order: 0, ...extra
 });
 const SPAN: Record<string, number> = { small: 1, medium: 2, large: 4 };
