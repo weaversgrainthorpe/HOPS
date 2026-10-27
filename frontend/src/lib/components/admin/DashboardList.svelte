@@ -234,7 +234,7 @@
             <button class="dashboard-info" onclick={() => openDashboard(dashboard)} title="Open dashboard">
               <h3>{dashboard.name}</h3>
               <p class="path">{dashboard.path}</p>
-              <p class="meta">{dashboard.tabs.length} tabs</p>
+              <p class="meta">{dashboard.tabs.length} {dashboard.tabs.length === 1 ? 'tab' : 'tabs'}</p>
             </button>
 
             <div class="dashboard-actions">
