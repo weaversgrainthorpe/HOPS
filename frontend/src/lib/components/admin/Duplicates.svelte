@@ -8,11 +8,44 @@
   import { config, applySavedLayout, showSaveWarning, loadConfig, findLayoutDashboard } from '$lib/stores/config';
   import { session, parkedDraft } from '$lib/stores/editSession';
   import { saveDashboardV3, ConflictError } from '$lib/utils/api';
-  import { findDuplicates, removeTiles, type DupGroup, type DupTile } from '$lib/utils/duplicates';
+  import { findDuplicates, removeTiles, scopeGroups, DUP_SCOPES, type DupScope, type ScopedGroup as DupGroup, type DupTile } from '$lib/utils/duplicates';
   import { showOnDashboard } from '$lib/utils/showIt';
   import { toast } from '$lib/stores/toast';
 
   const report = $derived(findDuplicates($config));
+
+  const SCOPE_KEY = 'hops.duplicates.scope';
+  function loadScope(): DupScope {
+    try {
+      const v = localStorage.getItem(SCOPE_KEY);
+      if (DUP_SCOPES.some((x) => x.id === v)) return v as DupScope;
+    } catch {
+      /* storage unavailable: the default is fine, this is only a viewer convenience */
+    }
+    return 'all';
+  }
+  let scope = $state<DupScope>(loadScope());
+  const scopeInfo = $derived(DUP_SCOPES.find((x) => x.id === scope)!);
+  const shown = $derived(scopeGroups(report.groups, scope));
+  function setScope(s: DupScope) {
+    scope = s;
+    merging = null;
+    refusal = '';
+    try {
+      localStorage.setItem(SCOPE_KEY, s);
+    } catch {
+      /* not remembered; still works for this visit */
+    }
+  }
+  function scopeKeys(e: KeyboardEvent) {
+    const i = DUP_SCOPES.findIndex((x) => x.id === scope);
+    const d = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0;
+    if (!d) return;
+    e.preventDefault();
+    const next = DUP_SCOPES[(i + d + DUP_SCOPES.length) % DUP_SCOPES.length].id;
+    setScope(next);
+    (e.currentTarget as HTMLElement).querySelector<HTMLInputElement>(`input[value="${next}"]`)?.focus();
+  }
 
   /** group address -> id of the tile to keep. */
   let keep = $state<Record<string, string>>({});
@@ -35,12 +68,12 @@
     return out;
   }
 
-  const keeperOf = (g: DupGroup): string => keep[g.address] ?? g.tiles[0].id;
+  const keeperOf = (g: DupGroup): string => keep[g.key] ?? g.tiles[0].id;
   const doomed = (g: DupGroup) => g.tiles.filter((t) => t.id !== keeperOf(g));
 
   function startMerge(g: DupGroup) {
     refusal = '';
-    merging = g.address;
+    merging = g.key;
   }
   function cancelMerge() {
     merging = null;
@@ -99,10 +132,22 @@
       Tiles that point at the same address, on any dashboard, tab or folder. Addresses are compared ignoring capitals,
       a default port and a trailing slash; <code>www.</code> counts as a different address.
     </p>
-    {#if report.groups.length === 0}
-      <p class="state ok" role="status" data-state="none">No duplicate addresses across {tileCount(report.totalTiles)}</p>
+    <div class="scope" role="radiogroup" aria-label="Show duplicates" tabindex="-1" onkeydown={scopeKeys}>
+      <span class="muted">Show</span>
+      {#each DUP_SCOPES as o (o.id)}
+        <label class="seg" class:on={scope === o.id}>
+          <input type="radio" name="dup-scope" value={o.id} checked={scope === o.id} disabled={busy} onchange={() => setScope(o.id)} />
+          {o.label}
+        </label>
+      {/each}
+    </div>
+    {#if shown.length === 0}
+      <p class="state ok" role="status" data-state="none">
+        {scope === 'all' ? `No duplicate addresses across ${tileCount(report.totalTiles)}` : `No duplicates ${scopeInfo.within}`}
+      </p>
     {:else}
-      {#each report.groups as g (g.address)}
+      <p class="muted" role="status" data-dup-count>{shown.length} group{shown.length === 1 ? '' : 's'} {scopeInfo.within}</p>
+      {#each shown as g (g.key)}
         <div class="group" data-dup-group={g.address}>
           <div class="addr"><code>{g.address}</code> <span class="muted">{g.tiles.length} tiles</span></div>
           <ul class="rows">
@@ -112,11 +157,11 @@
                 <label class="what">
                   <input
                     type="radio"
-                    name={`keep-${g.address}`}
+                    name={`keep-${g.key}`}
                     value={t.id}
                     checked={keeperOf(g) === t.id}
                     disabled={busy}
-                    onchange={() => { keep[g.address] = t.id; if (merging === g.address) refusal = ''; }}
+                    onchange={() => { keep[g.key] = t.id; if (merging === g.key) refusal = ''; }}
                   />
                   <span class="icon">
                     {#if t.iconUrl}<img src={t.iconUrl} alt="" width="20" height="20" />{:else if t.icon}<Icon icon={t.icon} width="20" height="20" />{/if}
@@ -132,7 +177,7 @@
               </li>
             {/each}
           </ul>
-          {#if merging === g.address}
+          {#if merging === g.key}
             <div class="preview" role="group" aria-label="Merge preview" data-merge-preview>
               <p>
                 <strong>Keeps</strong> {tilePath(g.tiles.find((t) => t.id === keeperOf(g))!)}.<br />
@@ -152,7 +197,7 @@
               <button type="button" class="btn-secondary" disabled={busy} onclick={() => startMerge(g)}>Merge, keeping the selected tile…</button>
             </div>
           {/if}
-          {#if refusal && merging === g.address}<p class="error" role="alert" data-merge-refusal>{refusal}</p>{/if}
+          {#if refusal && merging === g.key}<p class="error" role="alert" data-merge-refusal>{refusal}</p>{/if}
         </div>
       {/each}
     {/if}
@@ -166,6 +211,11 @@
   .muted { color: var(--text-secondary); font-size: 0.9rem; }
   .error { color: var(--color-error, #ef4444); }
   .state { padding: 0.6rem 0.8rem; border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 0.4rem; }
+  .scope { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin: 0.6rem 0; }
+  .seg { position: relative; padding: 0.25rem 0.8rem; border: 1px solid var(--border); border-radius: 0.4rem; cursor: pointer; }
+  .seg.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .seg input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+  .seg:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
   .group { margin: 0.75rem 0; padding: 0.6rem 0.8rem; border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 0.4rem; }
   .addr code { overflow-wrap: anywhere; }
   .rows { list-style: none; margin: 0.5rem 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }

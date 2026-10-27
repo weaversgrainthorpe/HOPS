@@ -109,3 +109,47 @@ export function removeTiles(d: LayoutDashboard, ids: ReadonlySet<string>): Layou
   });
   return { ...d, tabs: d.tabs.map((t) => ({ ...t, root: prune(t.root) })) };
 }
+
+/** How far apart two copies may be and still be shown together. */
+export type DupScope = 'all' | 'dashboard' | 'tab' | 'folder';
+
+export const DUP_SCOPES: ReadonlyArray<{ id: DupScope; label: string; within: string }> = [
+  { id: 'all', label: 'All', within: 'across all dashboards' },
+  { id: 'dashboard', label: 'Dashboard', within: 'within the same dashboard' },
+  { id: 'tab', label: 'Tab', within: 'within the same tab' },
+  { id: 'folder', label: 'Folder', within: 'within the same folder' }
+];
+
+export interface ScopedGroup extends DupGroup {
+  /** Unique per displayed group (the address plus the container for narrower scopes). */
+  key: string;
+}
+
+function containerKey(t: DupTile, scope: DupScope): string {
+  switch (scope) {
+    case 'all':
+      return '';
+    case 'dashboard':
+      return t.dashboardId;
+    case 'tab':
+      return `${t.dashboardId}\u0000${t.tabId}`;
+    case 'folder':
+      return t.folderIds.length ? `f:${t.folderIds[t.folderIds.length - 1]}` : `t:${t.dashboardId}\u0000${t.tabId}`;
+  }
+}
+
+/** Pure display: regroup each address group by the scope's container; keep sub-groups of 2+. */
+export function scopeGroups(groups: readonly DupGroup[], scope: DupScope): ScopedGroup[] {
+  const out: ScopedGroup[] = [];
+  for (const g of groups) {
+    const by = new Map<string, DupTile[]>();
+    for (const t of g.tiles) {
+      const k = containerKey(t, scope);
+      const l = by.get(k);
+      if (l) l.push(t);
+      else by.set(k, [t]);
+    }
+    for (const [k, tiles] of by) if (tiles.length > 1) out.push({ address: g.address, tiles, key: `${g.address}\u0000${k}` });
+  }
+  return out;
+}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeAddress, findDuplicates, removeTiles } from './duplicates';
+import { normalizeAddress, findDuplicates, removeTiles, scopeGroups } from './duplicates';
 import type { LayoutDoc } from '$lib/types/layout';
 
 const tile = (id: string, name: string, url: string, extra: Record<string, unknown> = {}) =>
@@ -77,5 +77,40 @@ describe('removeTiles', () => {
     expect(kids.map((n) => n.id)).toEqual(['f1']);
     expect(kids[0].content!.children.map((n) => n.id)).toEqual(['k']);
     expect((d.tabs[0].root.children as unknown[]).length).toBe(2); // input untouched
+  });
+});
+
+describe('scopeGroups', () => {
+  const U = 'https://x.example.lan/';
+  // Dashboard A: tab1 loose + folder F1 (2 copies) + folder F2 (1 copy); tab2 loose. Dashboard B: loose + folder F3.
+  const d = doc([
+    dash('a', 'A', [tile('a1', 'one', U), tile('a2', 'two', U), folder('f1', 'F1', [tile('a3', 'three', U), tile('a4', 'four', U)]), folder('f2', 'F2', [tile('a5', 'five', U)])], [tile('a6', 'six', U)]),
+    dash('b', 'B', [tile('b1', 'b-one', U), folder('f3', 'F3', [tile('b2', 'b-two', U)])])
+  ]);
+  const groups = findDuplicates(d).groups;
+  const ids = (s: Parameters<typeof scopeGroups>[1]) => scopeGroups(groups, s).map((g) => g.tiles.map((t) => t.id).sort());
+
+  it('all is the unchanged groups', () => {
+    expect(ids('all')).toEqual([['a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'b1', 'b2']]);
+  });
+  it('dashboard splits by dashboard', () => {
+    expect(ids('dashboard').sort()).toEqual([['a1', 'a2', 'a3', 'a4', 'a5', 'a6'], ['b1', 'b2']]);
+  });
+  it('tab splits by dashboard and tab', () => {
+    expect(ids('tab').sort()).toEqual([['a1', 'a2', 'a3', 'a4', 'a5'], ['b1', 'b2']]);
+  });
+  it('folder keeps only same immediate container', () => {
+    // a1+a2 loose in the tab root, a3+a4 in F1; a5, b2 alone in a folder, a6 and b1 alone in their roots.
+    expect(ids('folder').sort()).toEqual([['a1', 'a2'], ['a3', 'a4']]);
+  });
+  it('sub-groups have distinct keys and keep the address', () => {
+    const g = scopeGroups(groups, 'folder');
+    expect(new Set(g.map((x) => x.key)).size).toBe(2);
+    expect(g.every((x) => x.address === 'https://x.example.lan')).toBe(true);
+  });
+  it('drops sub-groups of one tile', () => {
+    const one = findDuplicates(doc([dash('a', 'A', [tile('p', 'p', U)]), dash('b', 'B', [tile('q', 'q', U)])])).groups;
+    expect(scopeGroups(one, 'all')).toHaveLength(1);
+    expect(scopeGroups(one, 'dashboard')).toHaveLength(0);
   });
 });
