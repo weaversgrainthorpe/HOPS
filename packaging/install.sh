@@ -167,6 +167,24 @@ show_logs() {
   echo "---------------------------------------------------------" >&2
 }
 
+# ---- port ------------------------------------------------------------------
+
+# The port HOPS will listen on. It is a HOPS setting; HOPS records the port
+# it last used in $DATA_DIR/.last-port, and a brand-new install uses 8080.
+last_port=""
+if [[ -r $DATA_DIR/.last-port ]]; then
+  last_port=$(tr -dc '0-9' < "$DATA_DIR/.last-port")
+fi
+expect_port=${last_port:-8080}
+if [[ -z $port ]]; then
+  port=$expect_port
+elif [[ $port != "$expect_port" ]]; then
+  if [[ -z $last_port ]]; then
+    die "--port $port: a new HOPS install always starts on 8080. Install without --port, then change the port in HOPS under Settings."
+  fi
+  die "--port $port, but HOPS is configured to listen on $expect_port (from $DATA_DIR/.last-port). Change the port in HOPS under Settings, or re-run without --port."
+fi
+
 # ---- download + verify -----------------------------------------------------
 
 tmp=$(mktemp -d)
@@ -210,22 +228,6 @@ fi
 
 install -d -m 0755 "$INSTALL_DIR" || die "could not create $INSTALL_DIR"
 install -d -o "$SVC_USER" -g "$SVC_USER" -m 0750 "$DATA_DIR" || die "could not create $DATA_DIR"
-
-# The port HOPS will listen on. It is a HOPS setting; HOPS records the port
-# it last used in $DATA_DIR/.last-port, and a brand-new install uses 8080.
-last_port=""
-if [[ -r $DATA_DIR/.last-port ]]; then
-  last_port=$(tr -dc '0-9' < "$DATA_DIR/.last-port")
-fi
-expect_port=${last_port:-8080}
-if [[ -z $port ]]; then
-  port=$expect_port
-elif [[ $port != "$expect_port" ]]; then
-  if [[ -z $last_port ]]; then
-    die "--port $port: a new HOPS install always starts on 8080. Install without --port, then change the port in HOPS under Settings."
-  fi
-  die "--port $port, but HOPS is configured to listen on $expect_port (from $DATA_DIR/.last-port). Change the port in HOPS under Settings, or re-run without --port."
-fi
 
 # ---- systemd unit ----------------------------------------------------------
 
