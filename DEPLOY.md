@@ -8,7 +8,9 @@ This guide covers installing and running HOPS. For a quick first-time walkthroug
 
 | Method | Best For |
 |--------|----------|
-| [Binary download](#binary-download) | Most setups — one self-contained file, nothing to install |
+| [Linux install script](#linux-install-script-installsh) | Linux and Raspberry Pi with systemd — installs a service, re-run to upgrade |
+| [Proxmox container](#proxmox-container-hops-proxmoxsh) | Proxmox VE — creates a small Debian 12 container with HOPS in it |
+| [Binary download](#binary-download) | Any OS — one self-contained file, nothing to install |
 | [Docker](#docker) | If you already run a Docker / Compose stack |
 | [Build from source](#build-from-source) | Contributors and custom builds |
 
@@ -31,12 +33,24 @@ curl -fsSL https://github.com/weaversgrainthorpe/HOPS/releases/latest/download/i
 - It finishes only when `/api/health` answers, then prints the address.
   A new install listens on port 8080; change the port in HOPS under
   Settings.
-- Options: `--url <base>` (download from somewhere else), `--version <x.y.z>`
-  (install that release and require it on health), `--port <n>` (the port
-  to check health on; it must match the one HOPS uses).
+- It needs root, `curl` or `wget`, `sha256sum` and systemd. It works out the
+  architecture as `amd64`, `arm64` or `armv6` (any 32-bit ARM userland,
+  armv6l/armv7l included). It refuses armel (ARMv5) and 32-bit x86.
+- Options go after `bash -s --`, for example
+  `curl -fsSL <url>/install.sh | sudo bash -s -- --version 3.0.0`:
+
+  | Option | Meaning |
+  |--------|---------|
+  | `--url <base>` | Download from this directory instead of the latest GitHub release. It must hold `hops-linux-<arch>` and `SHA256SUMS`. |
+  | `--version <x.y.z>` | Install release `v<x.y.z>` (when `--url` is not given). HOPS must then report this version on `/api/health`, or the install counts as failed. |
+  | `--port <n>` | The port to check health on. Default: the port HOPS last used, else 8080. This does **not** set HOPS's port (that is a Settings item); it must match it. |
+  | `-h`, `--help` | Show the help. |
+
 - **Upgrading:** re-run the same command. The previous binary and unit are
   kept as `/opt/hops/hops.prev` and `hops.service.prev`; if the new version
-  does not come up healthy, both are put back and the script fails loudly.
+  does not come up healthy, both are put back and the script fails loudly
+  (and says so if the old version does not come back either). HOPS itself
+  takes a backup before it upgrades the data.
 - **Customising the service:** do not edit `/etc/systemd/system/hops.service`.
   The installer rewrites it on every run and prints what it replaced. Put
   local changes in a drop-in, which the installer never touches:
@@ -76,6 +90,53 @@ To move it to the install.sh layout afterwards (optional):
    `sudo mkdir -p /var/lib/hops && sudo cp -a <old-data>/. /var/lib/hops/ && sudo chown -R hops:hops /var/lib/hops && sudo chmod 0750 /var/lib/hops`
 4. Run install.sh. It refuses with a `chown` hint if any file under
    `/var/lib/hops` is not owned by `hops`.
+
+## Proxmox container (hops-proxmox.sh)
+
+Run this in the **Proxmox VE host shell** as root (the node's **Shell** in
+the Proxmox web UI, or SSH to the host). It refuses to run anywhere else.
+
+```bash
+curl -fsSLO https://github.com/weaversgrainthorpe/HOPS/releases/latest/download/hops-proxmox.sh
+bash hops-proxmox.sh            # asks with menus
+bash hops-proxmox.sh --yes      # no questions: flags and defaults
+bash hops-proxmox.sh --dry-run  # print what it would do, change nothing
+```
+
+Download it first rather than piping it to `bash`: the menus need the
+terminal.
+
+It creates an unprivileged Debian 12 LXC container (`nesting=1`, starts on
+boot), downloading the Debian 12 template if it isn't there yet. It then
+downloads `install.sh`, checks it against `SHA256SUMS`, runs it inside the
+container, and waits until HOPS answers on `http://<container-ip>:8080`
+from the host. It prints that address and the container ID.
+
+| Option | Default |
+|--------|---------|
+| `--id <n>` | the next free ID |
+| `--hostname <name>` | `hops` |
+| `--cores <n>` | 1 |
+| `--memory <MB>` | 256 |
+| `--disk <GB>` | 2 |
+| `--storage <name>` | `local-lvm` if present, else the first active storage that can hold containers |
+| `--bridge <name>` | `vmbr0` (DHCP) |
+| `--template-storage <name>` | `local` (where the Debian 12 template is kept) |
+| `--url <base>` | the latest GitHub release (passed through to install.sh) |
+| `--version <x.y.z>` | none; when given, HOPS must report this version |
+| `--ssh-key <file>` | none; a public key to allow root SSH into the container |
+| `--yes` | ask with menus (needed when there is no terminal) |
+| `--dry-run` | off; prints every `pct`/`pveam`/`pvesm`/`pvesh` command instead |
+
+- **No root password** is set in the container. Get a shell with
+  `pct enter <ID>` on the host (or SSH with `--ssh-key`).
+- **If a step fails**, the script stops with the reason. A container it
+  already created is left in place for you to inspect (`pct enter <ID>`);
+  remove it with `pct destroy <ID>` when you are done.
+- **Upgrading:** `pct enter <ID>`, then run the install.sh command from
+  [Linux install script](#linux-install-script-installsh).
+- HOPS starts on port 8080. Change it in HOPS under Settings, then
+  `systemctl restart hops` in the container.
 
 ## Binary Download
 
@@ -421,9 +482,9 @@ HOPS backs up the database automatically when the server starts, before every sa
 A backup that fails is never silent: Settings shows a warning (with the time and the reason) until a backup succeeds. A restore or factory reset whose safety backup fails is refused, and nothing is changed.
 
 **Retention** is set in Settings › Global settings › Server:
-- **Always keep the newest** (default 10): the newest automatic backups are never deleted, however old.
-- **Also keep backups newer than** (days; default 0 = off).
-- **Most automatic backups** (default 100): a ceiling that protects the disk. If there are still more automatic backups than this, the oldest are deleted even if they are within the days above (never the newest ones), and Settings shows a notice saying so.
+- **Keep the newest backups** (default 10): the newest automatic backups are never deleted, however old.
+- **Also keep backups newer than (days)** (default 0 = off).
+- **Most backups kept** (default 100): a ceiling that protects the disk. If there are still more automatic backups than this, the oldest are deleted even if they are within the days above (never the newest ones), and Settings shows a notice saying so.
 
 Cleanup runs after every backup, once a day, and from **Clean up now** in the Backups dialog, which first lists exactly what it would delete, and why.
 

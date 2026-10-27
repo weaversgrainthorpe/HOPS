@@ -1,86 +1,89 @@
 # Zero to Dashboard Hero
 
-A step-by-step guide to getting HOPS running and creating your first dashboard. No experience required.
+Get HOPS running, sign in, look around the Sample, and build your first
+dashboard. No experience needed.
 
-## What You'll Need
+## What you need
 
-- A computer running **Linux**, **macOS**, or **Windows**
-- 5 minutes
+- A computer that stays on: a Raspberry Pi, a spare PC, a VM or container, or
+  your own laptop to try it out.
+- About 10 minutes.
 
-That's it. HOPS is a single binary with no dependencies — no database server, no runtime, no containers required (though Docker is available if you prefer it).
+HOPS is one file. It has its own database (SQLite) and its own web
+interface built in, so there is nothing else to install.
 
-### Supported Platforms
+| You have | Download |
+|----------|----------|
+| Linux on a normal PC or server (x86-64) | `hops-linux-amd64` |
+| 64-bit ARM: Raspberry Pi 3, 4, 5 or Zero 2 W with a **64-bit** OS, and other ARM64 boards | `hops-linux-arm64` |
+| 32-bit ARM: the original Pi Zero / Zero W, or any Pi running **32-bit** Raspberry Pi OS | `hops-linux-armv6` |
+| macOS (Intel) | `hops-darwin-amd64` |
+| macOS (Apple Silicon) | `hops-darwin-arm64` |
+| Windows (x86-64) | `hops-windows-amd64.exe` |
 
-| Platform | Architectures |
-|----------|--------------|
-| Linux | x86-64, ARM64 (Raspberry Pi 3B+/4/5/Zero 2 W) |
-| macOS | Intel, Apple Silicon |
-| Windows | x86-64 |
-
-### Minimum Requirements
-
-- **CPU**: Any single-core processor
-- **RAM**: 256 MB
-- **Disk**: 50 MB (more if you upload custom backgrounds/icons)
+Not sure which Pi OS you have? Run `getconf LONG_BIT` on the Pi: `64` means
+arm64, `32` means armv6. (The one-line installer below works this out for
+you.)
 
 ## Step 1: Install HOPS
 
-Choose whichever method suits you best.
+Pick one.
 
-### Option A: Download
+### Option A: One-line installer (Linux, Raspberry Pi)
 
-1. Go to the [Releases](https://github.com/weaversgrainthorpe/HOPS/releases) page
-2. Download the single binary for your platform (the web UI is built in — there's nothing to extract):
-   - `hops-linux-amd64` — Linux x86-64
-   - `hops-linux-arm64` — Linux ARM64 (Raspberry Pi 3B+/4/5/Zero 2 W)
-   - `hops-darwin-amd64` — macOS Intel
-   - `hops-darwin-arm64` — macOS Apple Silicon
-   - `hops-windows-amd64.exe` — Windows x86-64
+For Linux machines with systemd: Debian, Ubuntu, Raspberry Pi OS, a Proxmox
+container. It installs HOPS as a service that starts on boot.
 
-   Or download directly from the command line (replace the filename with your platform):
-   ```bash
-   curl -LO https://github.com/weaversgrainthorpe/HOPS/releases/latest/download/hops-linux-amd64
-   ```
-
-3. Run it:
-
-**Linux / macOS:**
 ```bash
-# Make it executable
+curl -fsSL https://github.com/weaversgrainthorpe/HOPS/releases/latest/download/install.sh | sudo bash
+```
+
+It picks the right download for your machine, checks it against the
+published checksums, starts HOPS, and waits until HOPS answers. It ends by
+printing the address to open, for example `http://192.168.1.20:8080`.
+If anything goes wrong it stops and says what, rather than leaving a
+half-installed HOPS.
+
+Where things go: the program is `/opt/hops/hops`, your data is in
+`/var/lib/hops`, and the service is `hops.service`
+(`sudo systemctl status hops`). For options and details, see
+[Linux install script](DEPLOY.md#linux-install-script-installsh).
+
+### Option B: Download and run the file (Linux, macOS, Windows)
+
+Good for trying HOPS out. It runs while the terminal is open.
+
+**Linux / macOS** (use the file name for your machine from the table above):
+
+```bash
+curl -LO https://github.com/weaversgrainthorpe/HOPS/releases/latest/download/hops-linux-amd64
 chmod +x hops-linux-amd64
-
-# Create a data directory
 mkdir -p data
-
-# Start HOPS
 ./hops-linux-amd64 --data ./data
 ```
 
-**Windows:**
-```powershell
-# Create a data directory
-mkdir data
+**Windows** (PowerShell):
 
-# Start HOPS
+```powershell
+curl.exe -LO https://github.com/weaversgrainthorpe/HOPS/releases/latest/download/hops-windows-amd64.exe
+mkdir data
 .\hops-windows-amd64.exe --data .\data
 ```
 
-You should see structured-log output like:
-```
-time=2026-05-29T10:00:00.000Z level=INFO msg="server starting" version="HOPS v3.0.0" addr=:8080 data_dir=./data frontend_dir=""
-```
+Always give `--data`: it is the folder that holds your dashboards, backups
+and uploads. HOPS prints a line like
+`msg="server starting" version="HOPS v3.0.0" addr=:8080` when it is ready.
 
-> **Tip:** Once you're logged in to the admin panel, the log level is one of the runtime settings on the **Settings** page (`/settings`). Switch it to `debug` for verbose output or `warn`/`error` for quieter logs — no restart needed.
+> On macOS, a file downloaded with a web browser may be blocked as "from an
+> unidentified developer". Downloading with `curl` as above avoids that.
 
-> **Note:** You may see a message about "Dashboard icons directory not found" on first run. This is normal — the directory is created automatically when you upload your first custom icon.
+To run it permanently as a service, see the
+[Installation & Deployment Guide](DEPLOY.md).
 
-> **Note:** This runs HOPS in the foreground — it will stop when you close the terminal. To run HOPS as a background service, see the [Installation & Deployment Guide](DEPLOY.md).
+### Option C: Docker
 
-Once HOPS is running, continue to [Step 2](#step-2-log-in).
-
-### Option B: Docker
-
-Prefer Docker, or already running a Compose stack? Create a `docker-compose.yml` file:
+For x86-64 and 64-bit ARM machines that already run Docker. Save this as
+`docker-compose.yml`:
 
 ```yaml
 services:
@@ -97,147 +100,257 @@ volumes:
   hops-data:
 ```
 
-Start it:
+Then start it:
 
 ```bash
 docker compose up -d
 ```
 
-The image is multi-arch (linux/amd64 + linux/arm64), so the same tag works on x86-64 servers and Raspberry Pi 3B+/4/5/Zero 2 W.
+Your data lives in the `hops-data` volume. (Network Discovery sees less from
+inside Docker; see [Network Discovery on Docker](DEPLOY.md#network-discovery-on-docker--important).)
 
-> **Pin a version instead of `:latest`?** Use `ghcr.io/weaversgrainthorpe/hops:v3.0.0` (or any tagged release).
+### Option D: Proxmox VE container
 
-## Step 2: Log In
+In the **Proxmox host shell** (the node's Shell in the Proxmox web UI, or SSH
+to the host as root):
 
-1. Open your browser and go to **http://\<your-server-ip\>:8080** (or **http://localhost:8080** if running on the same machine). You'll land on the **admin login page** — that's HOPS's home screen until you've created some dashboards.
-2. Log in with the default credentials:
-   - Username: `admin`
-   - Password: `admin`
-
-> HOPS ships with a small "Sample" dashboard pre-installed so you can see what one looks like — visit `http://\<your-server-ip\>:8080/sample-1` to view it. The admin page (`/`) is where you create and manage dashboards.
-
-## Step 3: Change Your Password
-
-On first login with the default `admin`/`admin` credentials, HOPS will **automatically prompt you to set a new password** — the modal can't be dismissed until you do. Type your new password and click **Set Password**.
-
-> If you ever want to change it later, click the **Change Password** button on the Admin page.
-
-## A Quick Mental Model
-
-Before you start clicking, here's how HOPS organises things — four layers, each contained by the one above:
-
-```
-Dashboard            (e.g. "Home")           — one URL like /home
-└── Tab              (e.g. "Services")       — horizontal tab at the top
-    └── Group        (e.g. "Media")          — labelled section with a coloured header
-        └── Tile     (e.g. "Plex")           — the clickable link to a service
+```bash
+curl -fsSLO https://github.com/weaversgrainthorpe/HOPS/releases/latest/download/hops-proxmox.sh
+bash hops-proxmox.sh
 ```
 
-- A **Dashboard** is a single page with its own URL. You can have many — one for the family, one for admin tools, one for a project.
-- A **Tab** is a section within a dashboard. Click between tabs to switch views without changing pages.
-- A **Group** is a labelled cluster of tiles inside a tab. Use groups to categorise — e.g. *Media*, *Network*, *Smart Home*.
-- A **Tile** is one clickable link to a service. It has a name, a URL, and usually an icon.
+It asks a few questions (container ID, name, cores, memory, disk, storage,
+bridge), then creates a small unprivileged Debian 12 container
+(1 core, 256 MB RAM, 2 GB disk, DHCP on `vmbr0` by default), installs HOPS
+in it with the installer from Option A, and prints the address to open.
+For a root shell in the container, run `pct enter <container ID>` on the
+host. For all the options, see [Proxmox container](DEPLOY.md#proxmox-container-hops-proxmoxsh).
 
-You'll create one of each as you work through the next steps.
+## Step 2: Sign in
 
-### URLs at a glance
+1. Open **http://\<your-server-address\>:8080** in a browser (on the same
+   machine: **http://localhost:8080**).
+2. You land on the **Sample** dashboard. Anyone on your network can view
+   dashboards; you only sign in to change things.
+3. To sign in, click the **pencil** button in the top bar (its tooltip says
+   *Sign in to edit this dashboard*), or the **gear** (Settings).
+4. Sign in with username `admin` and password `admin`.
+5. HOPS asks you to **Set a New Password** straight away, and you can't
+   carry on until you do. Type `admin` as the current password, then your
+   new one twice (8 to 72 characters), and click **Set Password**.
 
-HOPS serves two kinds of URL on the same port:
+You can change the password later under **Settings › Password**. A
+**Log out** button sits at the right of the top bar.
 
-| URL                                        | Shows                              | Login required?                          |
-|--------------------------------------------|------------------------------------|------------------------------------------|
-| `http://<host>:8080/`                      | Admin page (manage dashboards)     | **Yes**                                  |
-| `http://<host>:8080/<dashboard-path>`      | A dashboard (e.g. `/home`)         | **No** — anyone on the network can view  |
+## Step 3: Look around the Sample
 
-This means you can pin a dashboard URL on a phone or wall tablet (or share it with family) without exposing admin access. The admin page only needs to be reached when you're creating or changing things.
+The Sample shows what HOPS can do. Its addresses are made-up
+(`*.example.lan`), so the tiles don't go anywhere real. It has three tabs
+across the top:
 
-## Step 4: Create Your First Dashboard
+- **Home**: tiles in all three sizes (Small, Medium, Large) placed straight
+  on the tab, and folders. *Media* holds a folder inside a folder (*More to
+  watch*). *Monitoring*, *Databases* and *Cloud* start **minimised**: each
+  shows as a single folder tile (in three sizes) until you click it.
+- **Folders**: folders inside folders. *Projects › Lab › Dashboards* goes
+  three deep. The minimise button on a folder's title bar shrinks it to a
+  folder tile; click that tile to open it again. Each browser remembers
+  what its viewer minimised.
+- **Shapes**: every folder **Look**: Rounded box, Simple tab, and the folder
+  styles (flat, with paper, outlined, cartoon, open flap). *Upstairs* nests
+  shapes inside shapes.
 
-1. On the Admin page, click **+ New Dashboard**
-2. Enter a name, for example: `Home`
-3. The URL path is auto-generated — change it if you like (e.g., `/home`)
-4. Click **Save**
-5. Click the dashboard name to open it — this also enables Edit Mode automatically
+Other things in the top bar: **Search** (or press `/`) finds any tile on any
+dashboard; the two **A** buttons change text size; **Theme Settings** picks
+light, dark and colour themes; **Help** (once signed in) lists keyboard
+shortcuts.
 
-> **Tip:** You can rename a dashboard or change its path later by clicking the **pencil icon** next to it in the Admin page.
+Done with the Sample? Delete it from **Settings › Dashboards**, or keep it
+to look back at.
 
-> **Already got a homelab full of services?** Skip the manual tile-by-tile walkthrough below and jump to [Got a homelab full of stuff already?](#got-a-homelab-full-of-stuff-already) — HOPS can scan your LAN, identify what's running, and bulk-populate this dashboard for you. You'll still want to know the manual flow (renames, custom icons, status checks), so come back to Step 5 afterwards.
+## Step 4: Build your first dashboard
 
-## Step 5: Edit Mode
+### How HOPS is organised
 
-You should now be looking at your empty dashboard with Edit Mode already enabled — you'll see an orange **Editing** indicator in the top bar.
+```
+Dashboard        one page with its own address, e.g. /home
+└── Tab          the row of tabs across the top
+    ├── Tile     a link to one of your services (Small, Medium or Large)
+    └── Folder   a box of tiles (and other folders) with a title
+        └── Tile / Folder ...
+```
 
-You can toggle Edit Mode on and off at any time using the **pencil icon** in the navbar.
+Tiles and folders sit on a grid on each tab. Folders can hold folders.
 
-## Step 6: Add a Tab
+### Create the dashboard
 
-On a brand new dashboard you'll see a centred **"Add Your First Tab"** button. Click it. Once you have one tab, future tabs can be added via the **+ Add Tab** button at the end of the tab bar.
+1. Click the **gear** (Settings). You are on **Dashboards**.
+2. Click **New Dashboard**.
+3. Type a **Name**, for example `Home`.
+4. The **URL Path** is filled in with something like `/dashboard-1793124317105`.
+   Change it to something you will remember, such as `/home`.
+5. Click **Save**.
+6. Click the new dashboard in the list to open it. It starts with one empty
+   tab called *Home*.
 
-1. Click **Add Your First Tab** (or **+ Add Tab** if you already have one)
-2. The **New Tab** modal opens. Enter a name, for example: `Services`
-3. Optionally pick an icon and/or a background colour (with opacity) — both can be changed later
-4. Click **Create**
+The buttons next to each dashboard in the list let you move it up or down,
+rename it (and change its path), export it, show a **QR code** to open it on
+your phone, open it in a new browser tab, or delete it. Your first dashboard
+in the list is the one `http://<server>:8080/` opens.
 
-Your tab appears at the top of the dashboard.
+### Edit mode
 
-## Step 7: Add a Group
+Click the **pencil** in the top bar. It turns into an **Editing** badge and
+a toolbar appears under the tabs:
 
-Groups organize your tiles within a tab.
+- **Save** (Ctrl+S) and **Discard**: nothing you change is kept until you
+  click **Save**. Discard throws away everything since the last save.
+- **Undo** (Ctrl+Z) and **Redo** (Ctrl+Shift+Z or Ctrl+Y).
+- **Add tile**, **Add folder**, **Add tab**.
+- **Dashboard**: the dashboard's own settings (header, background,
+  settings).
 
-1. Click **Add Group** (at the bottom of the tab area)
-2. The **New Group** modal opens. Enter a name, for example: `Media`
-3. Optionally customise:
-   - **Icon** — type an icon name or click **Browse** to search the library
-   - **Background Color** + opacity slider
-   - **Text Color** — Auto picks light/dark based on the background, or force Light/Dark
-   - **Display Style** — **Full Header** spans the group's width, **Folder Tab** is a compact tab-style header
-4. Click **Create**
+Click **Editing** again to leave edit mode. Edit mode also switches itself
+off after a while with no activity (Settings › Global settings › Editing).
 
-> All of these can be changed later via the group's edit button.
+### Add a tile
 
-## Step 8: Add Your First Tile
+1. Click **Add tile**.
+2. Fill in **Name** (e.g. `Router`) and **URL** (e.g. `http://192.168.1.1`).
+   Those are the only required fields.
+3. Optional: a **Subtitle/Description**; an **Icon** (click **Edit icon**
+   to search the built-in icons or upload your own); a **Background Color**;
+   the **Size** (*Small*, *Medium* or *Large*; Medium is the default);
+   the **Open Mode** (*New Tab* is the default; also *Same Tab*,
+   *iFrame Modal*, *Popup Modal*); and **Status checks**, which show
+   whether the service is up.
+4. Click **Create**, then **Save**.
 
-1. Click **Add Tile** inside the group you just created
-2. Fill in the details:
-   - **Tile type** *(default: Link)*: leave as **Link** for a clickable bookmark, or pick **Note** for a text-only tile (great for section headers or scratchpad text — no URL required)
-   - **Name** *(required)*: the display name (e.g., `Plex`)
-   - **Subtitle/Description** *(optional)*: small text under the name (longer body text if this is a Note)
-   - **URL** *(required for Link)*: the address of the service (e.g., `http://plex.local:32400`)
-   - **Icon**: type an icon name like `simple-icons:plex`, click **Browse** to search the Iconify library, or **Upload** your own image
-   - **Background Color** + opacity slider — leave blank to inherit the group's colour
-   - **Size**: Small, Medium, or Large
-   - **Open Mode**: how the link opens — New Tab is usually the best choice
-   - **Enable Status Check**: HOPS will ping the URL and show an up/down indicator on the tile
-3. Click **Create**
+**Tile type** at the top also offers **SSH** (opens your computer's SSH
+app) and **Note** (text only, no link). **Away address** is for when you are
+away from home: once a dashboard has a tile with one, a **Home** / **Away**
+button appears in the top bar to switch this browser between the two.
 
-Your first tile appears in the group.
+### Add a folder
 
-> Only **Name** and **URL** are required for Link tiles (Notes need just a Name) — everything else can be added or changed later via the tile's edit button.
+1. Click **Add folder**, type a **Folder name** (e.g. `Media`).
+2. Choose a **Look** (*Folder (flat)* is the default; *Rounded box*,
+   *Simple tab* and the other folder styles are there too) and a colour.
+3. **Display**: whether it **Starts** *Expanded* or *Collapsed*.
+   **Contents size** sets the size of every tile inside it, and
+   **Size when minimised** the size of its tile when collapsed.
+4. Click **Create**, then **Save**.
 
-To test that the link works, **toggle Edit Mode off** first (click the orange **pencil icon** in the navbar — the **Editing** indicator should disappear). Now clicking the tile follows its URL instead of opening the edit modal.
+To put things in a folder, drag them onto it. To make a new folder from two
+tiles, drag one onto the middle of the other and hold it there: the cue
+says *Hold to make a folder*, then *Make a folder*. Let go, and the new
+folder's settings open. Hold a dragged item over
+another tab's name to switch to that tab and drop it there. Right-click inside a folder
+(or a tab) for **Add tile here**, **Add folder here** and **Paste here**.
+Right-click a tile or folder for **Edit**, **Duplicate**, **Cut**, **Copy**,
+**Move/Copy to…**, **Minimise** and **Delete**. Every item also has a small
+pencil button that opens its settings.
 
-## Step 9: Make It Yours
+Resize a folder by dragging its edges (or select it and press
+Shift+Arrow keys). Drag items to move them around the grid. Every move
+can be undone.
 
-Now that you have the basics, try a few things:
+### Add a tab
 
-- **Add more tiles** to your group, or create new groups
-- **Press `/`** anywhere outside Edit Mode to open global search — type to find any tile across any dashboard
-- **Use arrow keys** to move focus between tiles in browse mode; **Enter** activates the focused tile
-- **Multi-column groups**: edit a group and set **Row Width** to **Half** or **Third** to put groups side-by-side instead of stacking
-- **Drag and drop** tiles to reorder them, or drag between groups
-- **Set a background**: click the **Background** button in Edit Mode and choose from the preset library or upload your own
-- **Try a theme**: click the **theme icon** in the header to switch between light/dark modes and colour presets
-- **Right-click a tile** for copy, cut, and paste options
-- **Open on your phone via QR**: on the Admin page, click the **QR icon** next to any dashboard to get a scannable code — point your phone camera at it to open the dashboard without typing the URL
+Click **Add tab**, give it a **Tab Name** (and an icon or colour if you
+like), and click **Create**. Drag tabs to reorder them.
 
-## Got a homelab full of stuff already?
+### Editing on phones and tablets
 
-Skip the manual tile-by-tile setup. **Admin → Network Discovery → New Scan** scans your LAN, identifies common services (Pi-hole, Plex, Proxmox, *arr, Home Assistant, NAS GUIs, and dozens more), and bulk-promotes the ones you want into dashboard tiles — auto-grouped by category.
+On screens 480 pixels wide or narrower (phones), the edit button is hidden:
+phones are for viewing. On tablets and other touch screens wider than that,
+editing works, but dragging and the larger dialogs are fiddly, so a
+computer with a mouse is recommended.
 
-A few honest caveats: discovery is a head-start, not a magic wand. Results depend on your network (firewalls, VLAN segmentation, host AV) and whether services actually respond to unauthenticated probes. Expect some false positives and some legitimate services that don't show up. That's why every scan is a reviewable draft — nothing lands on your dashboard without your tick. See the [User Guide's Network Discovery chapter](USER_GUIDE.md#network-discovery) for the full walkthrough.
+## Step 5: Fill it faster
 
-## What's Next?
+### Add to HOPS bookmark
 
-- **[User Guide](USER_GUIDE.md)** — Full feature reference: themes, backgrounds, slideshows, import/export, keyboard shortcuts, network discovery, and more
-- **[Installation & Deployment Guide](DEPLOY.md)** — Permanent setup: systemd services, reverse proxies, and backups
-- **[README](README.md)** — Project overview and feature list
+On **Settings › Dashboards**, under **Add to HOPS bookmark**, drag the
+**Add to HOPS** button to your browser's bookmarks bar. Then, on any
+service's web page, click that bookmark: HOPS opens with the page's address,
+name and icon filled in. Pick the **Dashboard**, **Tab** and (optionally)
+**Folder**, and click **Add**. (Desktop browsers; a few sites block it.)
+
+### Network Discovery
+
+**Settings › Discovery › New Scan** scans your network for services with a
+web page (NAS, router, Proxmox, Home Assistant, media servers and many
+more). Enter the **Targets to scan** (e.g. `192.168.1.0/24`), choose a
+**Scan intensity** (*Light active* is the default), and click
+**Start scan**. Each scan is a draft: you tick the results you want and add
+them to a dashboard. Nothing is added without you. Results depend on your
+network, so expect a few misses and a few false finds. See the
+[User Guide](USER_GUIDE.md#network-discovery) for more.
+
+### Icons
+
+HOPS comes with thousands of icons that work with no internet connection.
+Search them, or upload your own (PNG, JPG, GIF, WebP or SVG), under
+**Settings › Icons**, or from a tile's **Edit icon** button.
+
+## Step 6: Keep it safe
+
+HOPS backs up its database by itself: when it starts, before every save,
+before a restore or factory reset, and before an upgrade.
+
+On **Settings › Backups** you can:
+
+- **Create Backup** at any time.
+- **Download** a backup (the download includes the images it uses). Keep a
+  copy somewhere other than the HOPS machine.
+- **Upload a backup**, and **Restore** one. Restoring takes a safety backup
+  first, then restarts HOPS.
+- **Clean up now**: it shows exactly what it would delete first.
+
+By default HOPS keeps the newest 10 automatic backups. To change that, click
+**Change** on the Backups page (it opens Settings › Global settings ›
+Server: **Keep the newest backups**, **Also keep backups newer than (days)**
+and **Most backups kept**). Backups you create or upload, and the one taken
+before an upgrade from v2, are never deleted automatically.
+
+If a backup ever fails, HOPS shows a warning in Settings until one succeeds.
+
+## Change the port
+
+HOPS listens on port 8080. To use another port:
+
+1. **Settings › Global settings › Server › Port**: type the new port and
+   click **Save**. It is marked **Restart required**.
+2. Restart HOPS: `sudo systemctl restart hops` for the installer and Proxmox
+   options; stop and start it again for Option B; for Docker, change the
+   `ports:` line instead (see [Customising the Port](DEPLOY.md#customising-the-port)).
+3. Open HOPS on the new port.
+
+If you used the installer, pass the new port when you next upgrade, so its
+health check looks in the right place:
+`curl -fsSL https://github.com/weaversgrainthorpe/HOPS/releases/latest/download/install.sh | sudo bash -s -- --port 8181`
+(it also finds the port by itself if HOPS was last running on it).
+
+## Upgrading
+
+- **Installer or Proxmox:** run the Option A command again (inside the
+  container for Proxmox: `pct enter <ID>` first). It keeps the previous
+  version and puts it back if the new one does not start properly.
+- **Downloaded file:** stop HOPS, replace the file, start it again with the
+  same `--data` folder.
+- **Docker:** `docker compose pull && docker compose up -d`.
+
+**From HOPS 2.x:** HOPS 3 converts your 2.x dashboards automatically the
+first time it starts. Just before it does, it takes a protected backup
+(`hops-backup-<date>_pre-v3-migration.db`) that is never deleted
+automatically; it is your way back to 2.x. If you installed 2.x as a service
+yourself, the installer will not take it over; see
+[Upgrading from v2 with install.sh](DEPLOY.md#upgrading-from-v2-with-installsh)
+and [Rolling back from 3.x to 2.2.1](DEPLOY.md#rolling-back-from-3x-to-221).
+
+## Where next
+
+- **[User Guide](USER_GUIDE.md)**: everything HOPS does, in detail.
+- **[Installation & Deployment Guide](DEPLOY.md)**: services, reverse
+  proxies, HTTPS, backups and security.
