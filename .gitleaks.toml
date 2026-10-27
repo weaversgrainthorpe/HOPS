@@ -14,6 +14,7 @@ paths = [
   '''(^|/)\.git/''',
   '''(^|/)(dist|build|\.svelte-kit)/''',
   '''package-lock\.json$''',
+  '''(^|/)\.superpowers/''',                # gitignored local scratch (brainstorm server logs hold its throwaway access key)
 ]
 
 # Known false positives. Each entry: one placeholder, with the reason.
