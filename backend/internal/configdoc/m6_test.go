@@ -136,6 +136,20 @@ func TestConvert_RealV2FolderStyleBecomesFlat(t *testing.T) {
 	for _, file := range []string{"testdata/real_weavers.json", "testdata/real_sample.json", "testdata/v2_basic.json", "testdata/v2_messy.json"} {
 		t.Run(file, func(t *testing.T) {
 			v2 := realV2(t, file)
+			styleOf := map[string]any{} // v2 group id -> displayStyle, read before converting
+			for _, d := range v2["dashboards"].([]any) {
+				tabs, _ := d.(Obj)["tabs"].([]any)
+				for _, tb := range tabs {
+					gs, _ := tb.(Obj)["groups"].([]any)
+					for _, g := range gs {
+						if gm, ok := g.(Obj); ok {
+							if id, ok := gm["id"].(string); ok {
+								styleOf[id] = gm["displayStyle"]
+							}
+						}
+					}
+				}
+			}
 			v3, _, sizes, err := MigrateV2Full(v2)
 			if err != nil {
 				t.Fatal(err)
@@ -149,14 +163,17 @@ func TestConvert_RealV2FolderStyleBecomesFlat(t *testing.T) {
 					return true
 				}
 				want := "rounded"
-				if n["displayStyle"] == "folder" {
+				if _, has := n["displayStyle"]; has {
+					t.Errorf("folder %v kept the v2 displayStyle key", n["id"])
+				}
+				if styleOf[n["id"].(string)] == "folder" {
 					want = "folder-flat"
 					flat++
 				} else {
 					rounded++
 				}
 				if n["shape"] != want {
-					t.Errorf("folder %v (displayStyle %v): shape %v, want %s", n["id"], n["displayStyle"], n["shape"], want)
+					t.Errorf("folder %v (v2 displayStyle %v): shape %v, want %s", n["id"], styleOf[n["id"].(string)], n["shape"], want)
 				}
 				if _, has := n["tabPosition"]; has {
 					t.Errorf("folder %v: converter wrote tabPosition %v (absent means left)", n["id"], n["tabPosition"])

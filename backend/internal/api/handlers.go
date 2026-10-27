@@ -708,8 +708,7 @@ func (r *Router) restoreAssets(importedConfig map[string]interface{}) (int, []st
 
 		diskPath, ok := userAssetWritePath(urlPath, r.config.DataDir)
 		if !ok {
-			// Either an unrecognized path or a bundled asset that's already
-			// in the binary — nothing to write to disk.
+			fail(urlPath, "not an icon or background path, so it was not restored", nil)
 			continue
 		}
 
@@ -1242,7 +1241,9 @@ func collectIDs(doc configdoc.Obj) map[string]bool {
 // makeIDsUnique renames, with a numeric suffix, every id in dashboard d that is
 // already in used (or repeats within d), and records all of d's ids in used.
 // Ids are unique across the whole document, so a re-import must not collide.
-func makeIDsUnique(d configdoc.Obj, used map[string]bool) {
+// It returns how many ids it renamed.
+func makeIDsUnique(d configdoc.Obj, used map[string]bool) int {
+	renamed := 0
 	uniq := func(o configdoc.Obj) {
 		id, ok := o["id"].(string)
 		if !ok || id == "" {
@@ -1251,6 +1252,9 @@ func makeIDsUnique(d configdoc.Obj, used map[string]bool) {
 		cand := id
 		for n := 1; used[cand]; n++ {
 			cand = fmt.Sprintf("%s-%d", id, n)
+		}
+		if cand != id {
+			renamed++
 		}
 		o["id"] = cand
 		used[cand] = true
@@ -1266,6 +1270,7 @@ func makeIDsUnique(d configdoc.Obj, used map[string]bool) {
 		uniq(n)
 		return true
 	})
+	return renamed
 }
 
 // verifyProblems flattens a *VerifyError into one line.
@@ -1493,8 +1498,10 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 
 	var sizeItems []string
 	var renames []string
+	var idRenames int
 	r.updateDocWithLoadErr(w, func(err error) *apiError {
 		renames = nil // the merge callback may run again; start clean
+		idRenames = 0
 		slog.Error("import: stored config unreadable", "component", "import", "error", err)
 		return newAPIError(http.StatusInternalServerError, importUnreadableMsg)
 	}, func(stored configdoc.Obj) (configdoc.Obj, interface{}, error) {
@@ -1540,6 +1547,7 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 				suffix++
 			}
 			if path != originalPath {
+				renames = append(renames, fmt.Sprintf("Dashboard '%s' moved to %s because %s is already taken", dashboardLabel(d), path, originalPath))
 				d["path"] = path
 				d["id"] = strings.TrimPrefix(path, "/")
 				if name, ok := d["name"].(string); ok {
@@ -1547,7 +1555,7 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 				}
 			}
 			existingPaths[normPath(path)] = true
-			makeIDsUnique(d, used)
+			idRenames += makeIDsUnique(d, used)
 			existing = append(existing, d)
 			names = append(names, dashboardLabel(d))
 		}
@@ -1595,7 +1603,11 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 		if len(enlarged) > 0 {
 			message += fmt.Sprintf(". %d folder(s) were enlarged: %s", len(enlarged), strings.Join(enlarged, "; "))
 		}
-		for _, rn := range renames {
+		allRenames := append([]string{}, renames...)
+		if idRenames > 0 {
+			allRenames = append(allRenames, fmt.Sprintf("%d internal id(s) were renamed to avoid clashes with existing dashboards", idRenames))
+		}
+		for _, rn := range allRenames {
 			message += ". " + rn
 		}
 		if len(skipped) > 0 {
@@ -1626,7 +1638,7 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 			"foldersEnlarged": enlarged,
 			"iconsMatched":    iconMatchCount,
 			"assetsRestored":  assetsRestored,
-			"renamed":         append([]string{}, renames...),
+			"renamed":         allRenames,
 		}
 		if iconErr != nil {
 			resp["iconMatchError"] = iconErr.Error()

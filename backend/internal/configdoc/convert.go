@@ -266,6 +266,11 @@ func convertGroup(g Obj, p [4]int, path string) (Obj, []SizeChange, error) {
 	} else {
 		g["shape"] = ShapeConverted
 	}
+	// The v2 keys are now mapped to v3 fields (display, shape, placement); drop
+	// them so nothing can read a stale second copy.
+	delete(g, "collapsed")
+	delete(g, "displayStyle")
+	delete(g, "width")
 	g["showTitle"] = true
 	g["placement"] = placement(p[0], p[1], p[2], p[3])
 	g["content"] = Obj{"children": tiles}

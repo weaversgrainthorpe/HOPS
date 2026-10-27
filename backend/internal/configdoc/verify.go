@@ -340,7 +340,18 @@ func (v *verifier) compareTabs(dashID, dashPath string, a, b Obj) {
 		}
 		v.compareLevel("group", "tab "+tid, tpath+".groups", v2g, v3g, "folder", func(ga, gb Obj, gid, gpath string) {
 			// A folder has no layout of its own (M5; checkIDs requires it gone).
-			v.compareKeys("group "+gid, ga, gb, "entries", "layout")
+			// width, displayStyle and collapsed are mapped to placement, shape and
+			// display by the converter and must be gone: a stale second copy
+			// could disagree with the v3 field.
+			v.compareKeys("group "+gid, ga, gb, "entries", "layout", "width", "displayStyle", "collapsed")
+			v.noKeys("folder "+gid, gb, "width", "displayStyle", "collapsed")
+			wantDisplay := "expanded"
+			if c, _ := ga["collapsed"].(bool); c {
+				wantDisplay = "collapsed"
+			}
+			if gb["display"] != wantDisplay {
+				v.add("folder %s: display is %v, want %s (from the v2 collapsed flag)", gid, gb["display"], wantDisplay)
+			}
 			v2e, _ := asList(ga["entries"])
 			content, _ := gb["content"].(Obj)
 			v3e, ok := asList(content["children"])

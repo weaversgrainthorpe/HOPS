@@ -867,3 +867,77 @@ func contains(list []string, s string) bool {
 	return false
 }
 
+
+// A synthetic v2 export: ids and path collide with the built-in sample, one
+// asset has an unrecognised path. Every rename and the unrestored image must be
+// in the result, and converted folders carry only v3 keys.
+func TestImport_ReportsRenamesAndUnrestoredImages(t *testing.T) {
+	router, db := setupTestRouter(t)
+	c := newClient(t, router)
+	stored := dashList(storedDoc(t, db))
+	if len(stored) == 0 {
+		t.Fatal("expected a built-in dashboard")
+	}
+	path, _ := stored[0]["path"].(string)
+	id, _ := stored[0]["id"].(string)
+	v2 := map[string]interface{}{
+		"dashboards": []interface{}{map[string]interface{}{
+			"id": id, "name": "Synthetic", "path": path,
+			"tabs": []interface{}{map[string]interface{}{
+				"id": "main", "name": "Main", "order": 0,
+				"groups": []interface{}{
+					map[string]interface{}{"id": "grp1", "name": "G", "width": "half", "collapsed": true, "displayStyle": "folder",
+						"entries": []interface{}{map[string]interface{}{"id": "ent1", "name": "A", "url": "http://a.invalid"}}},
+					map[string]interface{}{"id": "grp2", "name": "H", "width": "third",
+						"entries": []interface{}{}},
+				},
+			}},
+		}},
+		"assets": map[string]interface{}{
+			"/weird/x.png": map[string]interface{}{"contentType": "image/png", "data": "AAAA"},
+		},
+	}
+	b, _ := json.Marshal(v2)
+	code, resp := c.importFile(b)
+	if code != 200 {
+		t.Fatalf("import: %d %v", code, resp)
+	}
+	msg, _ := resp["message"].(string)
+	renamed, _ := resp["renamed"].([]interface{})
+	var sawMove, sawIDs bool
+	for _, r := range renamed {
+		s, _ := r.(string)
+		if strings.Contains(s, "moved to") && strings.Contains(s, "already taken") {
+			sawMove = true
+		}
+		if strings.Contains(s, "internal id(s) were renamed") {
+			sawIDs = true
+		}
+	}
+	if !sawMove || !sawIDs || !strings.Contains(msg, "internal id(s) were renamed") || !strings.Contains(msg, "already taken") {
+		t.Errorf("renames not reported: renamed=%v message=%q", renamed, msg)
+	}
+	failed, _ := resp["assetsFailed"].([]interface{})
+	if len(failed) != 1 || !strings.Contains(msg, "could not be restored") || !strings.Contains(msg, "/weird/x.png") || !strings.Contains(msg, "not an icon or background") {
+		t.Errorf("unrestored image not reported: failed=%v message=%q", failed, msg)
+	}
+	ds := dashList(storedDoc(t, db))
+	n := 0
+	configdoc.Walk(configdoc.Obj{"dashboards": []any{ds[len(ds)-1]}}, func(_, _ configdoc.Obj, _ []configdoc.Obj, nd configdoc.Obj) bool {
+		if nd["kind"] == "folder" {
+			n++
+			for _, k := range []string{"collapsed", "displayStyle", "width"} {
+				if _, has := nd[k]; has {
+					t.Errorf("folder %v still has v2 key %q", nd["id"], k)
+				}
+			}
+			if nd["display"] == nil {
+				t.Errorf("folder %v has no display", nd["id"])
+			}
+		}
+		return true
+	})
+	if n != 2 {
+		t.Errorf("folders %d, want 2", n)
+	}
+}

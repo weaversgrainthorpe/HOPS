@@ -151,8 +151,7 @@ func TestImport_ReservedPathIsRenamedAndReported(t *testing.T) {
 		if !strings.Contains(msg, "moved to "+want) || !strings.Contains(msg, "is a HOPS page") {
 			t.Errorf("message does not report the rename to %s: %q", want, msg)
 		}
-		ren, _ := resp["renamed"].([]interface{})
-		if len(ren) != 1 {
+		if n := pathMoves(resp); n != 1 {
 			t.Errorf("renamed = %v", resp["renamed"])
 		}
 	}
@@ -202,7 +201,7 @@ func TestImport_ReservedPathIsRenamedAndReported(t *testing.T) {
 		if !strings.Contains(msg, "Dashboard 'Admin Board' moved to /Admin-2/x because /admin is a HOPS page") {
 			t.Errorf("message: %q", msg)
 		}
-		if ren, _ := resp["renamed"].([]interface{}); len(ren) != 1 {
+		if pathMoves(resp) != 1 {
 			t.Errorf("renamed = %v", resp["renamed"])
 		}
 		assertUniqueIDs(t, storedDoc(t, db))
@@ -223,7 +222,7 @@ func TestImport_ReservedPathIsRenamedAndReported(t *testing.T) {
 				t.Errorf("stored a reserved path %q", p)
 			}
 		}
-		if ren, _ := resp["renamed"].([]interface{}); len(ren) != 0 {
+		if pathMoves(resp) != 0 {
 			t.Errorf("renamed = %v", resp["renamed"])
 		}
 	})
@@ -239,4 +238,17 @@ func TestImport_ReservedPathIsRenamedAndReported(t *testing.T) {
 			t.Errorf("%d %v", code, resp)
 		}
 	})
+}
+
+// pathMoves counts the dashboard path moves in an import result's renamed list
+// (it also holds one summary line when internal ids were renamed).
+func pathMoves(resp map[string]interface{}) int {
+	n := 0
+	ren, _ := resp["renamed"].([]interface{})
+	for _, r := range ren {
+		if s, _ := r.(string); strings.Contains(s, "moved to") {
+			n++
+		}
+	}
+	return n
 }

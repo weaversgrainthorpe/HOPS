@@ -186,7 +186,12 @@ func TestMigrateV2_Basic(t *testing.T) {
 		{"x": 12, "y": 6, "w": 12, "h": 6},
 	}
 	for i, f := range folders {
-		assertKeysPreserved(t, v2groups[i], f, "folder", "entries")
+		assertKeysPreserved(t, v2groups[i], f, "folder", "entries", "width", "collapsed", "displayStyle")
+		for _, k := range []string{"width", "collapsed", "displayStyle"} {
+			if _, has := f[k]; has {
+				t.Errorf("folder kept v2 key %q", k)
+			}
+		}
 		eq(t, f["kind"], "folder", "kind")
 		if _, has := f["layout"]; has {
 			t.Error("folder.layout written (M5: folders always flow)")
@@ -301,7 +306,9 @@ func TestMigrateV2_MessyInput(t *testing.T) {
 	eq(t, fs[1]["placement"], Obj{"x": 0, "y": 6, "w": 24, "h": 6}, "bad width placement")
 	eq(t, fs[1]["display"], "expanded", "display")
 	eq(t, fs[1]["shape"], "rounded", "shape")
-	eq(t, fs[1]["collapsed"], "yes", "collapsed carried")
+	if _, has := fs[1]["collapsed"]; has {
+		t.Error("v2 collapsed key kept on the folder")
+	}
 	eq(t, fs[2]["placement"], Obj{"x": 0, "y": 12, "w": 8, "h": 6}, "third placement")
 	eq(t, fs[3]["placement"], Obj{"x": 8, "y": 12, "w": 12, "h": 6}, "half placement")
 
