@@ -455,6 +455,15 @@ export function setDisplay(id: string, display: FolderNode['display']): boolean 
   return apply(display === 'collapsed' ? 'Minimise folder' : 'Open folder', (dd) => setFolderDisplay(dd, id, display));
 }
 
+/**
+ * "Make it big enough": a folder stored below its smallest open box (imported, converted, or saved
+ * before the minimum) grown to it, neighbours pushed aside by the M3 rules — one undo step, the same
+ * growth path as a contents-size change (fitFolderMinimum); no room: toasted with the reason.
+ */
+export function makeFolderBigEnough(id: string): boolean {
+  return apply('Make folder big enough', (dd) => fitFolderMinimum(dd, id));
+}
+
 /** Bring forward / Send back (menu and Ctrl+] / Ctrl+[): one undo step, or a toast when already there. */
 export function zOrder(id: string, dir: 'forward' | 'back'): boolean {
   const before = currentDraft();

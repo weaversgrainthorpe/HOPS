@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -124,5 +125,90 @@ func TestPut_UndersizedFolderBoxRefused(t *testing.T) {
 		if !strings.Contains(msg, part) {
 			t.Errorf("message %q does not name %q", msg, part)
 		}
+	}
+}
+
+// A HOPS export whose folder box is below its minimum (hand-made, or stored
+// before the minimum) is enlarged on import, its neighbour pushed aside, and
+// the import result lists it — never imported squashed, never silent.
+func TestImport_V3UndersizedFolderEnlargedAndListed(t *testing.T) {
+	router, db := setupTestRouter(t)
+	c := newClient(t, router)
+	seed(t, db)
+	var env map[string]interface{}
+	if err := json.Unmarshal(c.export(""), &env); err != nil {
+		t.Fatal(err)
+	}
+	cfg := env["config"].(map[string]interface{})
+	d := cfg["dashboards"].([]interface{})[0].(map[string]interface{})
+	root := d["tabs"].([]interface{})[0].(map[string]interface{})["root"].(map[string]interface{})
+	var kids []interface{}
+	for _, k := range root["children"].([]interface{}) {
+		if k.(map[string]interface{})["kind"] == "folder" {
+			g := k.(map[string]interface{})
+			g["name"] = "Media"
+			g["contentSize"] = "medium"
+			g["placement"] = map[string]interface{}{"x": 0, "y": 0, "w": 2, "h": 4}
+			kids = append(kids, g)
+			break
+		}
+	}
+	if len(kids) == 0 {
+		t.Fatal("seed has no tab-level folder")
+	}
+	kids = append(kids, tileJSON("neighbour", 0, 4))
+	root["children"] = kids
+	code, resp := c.importFile(v3ExportOf(t, cfg))
+	if code != 200 {
+		t.Fatalf("import: %d %v", code, resp)
+	}
+	msg, _ := resp["message"].(string)
+	if !strings.Contains(msg, `Folder "Media" was smaller than it can be drawn (2×4); it was enlarged to 3×6`) {
+		t.Errorf("message does not say the folder was enlarged: %q", msg)
+	}
+	list, _ := resp["foldersEnlarged"].([]interface{})
+	if len(list) != 1 {
+		t.Fatalf("foldersEnlarged %v, want one entry", resp["foldersEnlarged"])
+	}
+	ds := dashList(storedDoc(t, db))
+	imp := ds[len(ds)-1]
+	kidsOut := imp["tabs"].([]any)[0].(configdoc.Obj)["root"].(configdoc.Obj)["children"].([]any)
+	var gx, gy, gw, gh, nx, ny, nw, nh float64
+	for _, k := range kidsOut {
+		m := k.(configdoc.Obj)
+		x, y, w, h, _ := rect(m["placement"])
+		if m["kind"] == "folder" {
+			gx, gy, gw, gh = x, y, w, h
+		} else {
+			nx, ny, nw, nh = x, y, w, h
+		}
+	}
+	if gw != 3 || gh != 6 {
+		t.Errorf("folder box %v×%v, want 3×6", gw, gh)
+	}
+	if nx < gx+gw && gx < nx+nw && ny < gy+gh && gy < ny+nh {
+		t.Errorf("neighbour (%v,%v %v×%v) still overlaps the enlarged folder", nx, ny, nw, nh)
+	}
+}
+
+// A v2 import converts every group to at least its minimum box, so nothing
+// needs enlarging; the result still carries the (empty) list.
+func TestImport_V2GroupsAreNeverUndersized(t *testing.T) {
+	router, db := setupTestRouter(t)
+	c := newClient(t, router)
+	v2 := []byte(`{"dashboards":[{"id":"x","name":"X","path":"/x","order":0,"tabs":[{"id":"t","name":"T","order":0,
+	  "groups":[{"id":"g","name":"Media","order":0,"width":"third","entries":[{"id":"e","name":"A","url":"https://a","order":0}]}]}]}]}`)
+	code, resp := c.importFile(v2)
+	if code != 200 {
+		t.Fatalf("import: %d %v", code, resp)
+	}
+	if l, ok := resp["foldersEnlarged"].([]interface{}); !ok || len(l) != 0 {
+		t.Errorf("foldersEnlarged %v, want an empty list", resp["foldersEnlarged"])
+	}
+	ds := dashList(storedDoc(t, db))
+	g := ds[len(ds)-1]["tabs"].([]any)[0].(configdoc.Obj)["root"].(configdoc.Obj)["children"].([]any)[0].(configdoc.Obj)
+	mw, mh := configdoc.FolderMinCellsOf(g)
+	if _, _, w, h, _ := rect(g["placement"]); w < float64(mw) || h < float64(mh) {
+		t.Errorf("converted box %v×%v below its minimum %d×%d", w, h, mw, mh)
 	}
 }

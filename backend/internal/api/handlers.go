@@ -20,8 +20,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"unicode/utf8"
 	"time"
+	"unicode/utf8"
 
 	_ "image/gif"
 	_ "image/jpeg"
@@ -33,8 +33,8 @@ import (
 	"github.com/weaversgrainthorpe/HOPS/internal/settings"
 	"github.com/weaversgrainthorpe/HOPS/internal/version"
 	"golang.org/x/image/draw"
-	"gopkg.in/yaml.v3"
 	_ "golang.org/x/image/webp"
+	"gopkg.in/yaml.v3"
 )
 
 const bearerPrefix = "Bearer "
@@ -1401,7 +1401,8 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 
 	// Bring every imported dashboard to the v3 shape.
 	var imported []configdoc.Obj
-	var sizeChanges []importedSizes // tiles whose unknown size became Medium (Ruling 3)
+	var sizeChanges []importedSizes   // tiles whose unknown size became Medium (Ruling 3)
+	var grownFolders []importedGrowth // folders stored below their minimum, enlarged (never silent)
 	var skipped []string
 	for i, raw := range rawDashboards {
 		d, ok := raw.(configdoc.Obj)
@@ -1423,6 +1424,11 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 			}
 			// New to this install: revision restarts at 1; settings are kept.
 			d["revision"] = 1
+			// A folder stored below its minimum is enlarged (neighbours pushed
+			// aside) and listed in the result, never imported squashed.
+			if g := configdoc.GrowFolderMinimums(d); len(g) > 0 {
+				grownFolders = append(grownFolders, importedGrowth{dash: d, grown: g})
+			}
 			if verr := configdoc.VerifyImportedDashboard(d); verr != nil {
 				writeJSONError(w, fmt.Sprintf("Import refused — dashboard %q is malformed: %s", dashboardLabel(d), verifyProblems(verr)), http.StatusBadRequest)
 				return
@@ -1434,6 +1440,9 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 		if err != nil {
 			writeJSONError(w, fmt.Sprintf("Import refused — dashboard %q could not be converted: %v", dashboardLabel(d), err), http.StatusBadRequest)
 			return
+		}
+		if g := configdoc.GrowFolderMinimums(v3); len(g) > 0 { // the converter's backstop
+			grownFolders = append(grownFolders, importedGrowth{dash: v3, grown: g})
 		}
 		// The converter writes the current layout form directly, so the
 		// converted dashboard is checked as part of a marked document.
@@ -1561,6 +1570,15 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 		if len(sizeItems) > 0 {
 			message += fmt.Sprintf(". %d tile(s) had a size HOPS does not recognise and are now Medium: %s", len(sizeItems), strings.Join(sizeItems, "; "))
 		}
+		enlarged := []string{}
+		for _, ig := range grownFolders {
+			for _, g := range ig.grown {
+				enlarged = append(enlarged, fmt.Sprintf("%s (dashboard %q)", g, dashboardLabel(ig.dash)))
+			}
+		}
+		if len(enlarged) > 0 {
+			message += fmt.Sprintf(". %d folder(s) were enlarged: %s", len(enlarged), strings.Join(enlarged, "; "))
+		}
 		if len(skipped) > 0 {
 			message += fmt.Sprintf(". Skipped %d item(s): %s", len(skipped), strings.Join(skipped, "; "))
 		}
@@ -1580,14 +1598,15 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 			assetsFailed = []string{}
 		}
 		resp := map[string]interface{}{
-			"success":        true,
-			"assetsFailed":   assetsFailed,
-			"message":        message,
-			"imported":       len(names),
-			"dashboards":     names,
-			"skipped":        skipped,
-			"iconsMatched":   iconMatchCount,
-			"assetsRestored": assetsRestored,
+			"success":         true,
+			"assetsFailed":    assetsFailed,
+			"message":         message,
+			"imported":        len(names),
+			"dashboards":      names,
+			"skipped":         skipped,
+			"foldersEnlarged": enlarged,
+			"iconsMatched":    iconMatchCount,
+			"assetsRestored":  assetsRestored,
 		}
 		if iconErr != nil {
 			resp["iconMatchError"] = iconErr.Error()
@@ -1606,6 +1625,13 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 type importedSizes struct {
 	dash    configdoc.Obj
 	changes []configdoc.SizeChange
+}
+
+// importedGrowth pairs an imported dashboard with the folders enlarged to
+// their minimum on import.
+type importedGrowth struct {
+	dash  configdoc.Obj
+	grown []configdoc.FolderGrowth
 }
 
 // withDashID returns changes with DashboardID set to dash's (current) id.
@@ -2000,10 +2026,10 @@ func (r *Router) handleUploadIcon(w http.ResponseWriter, req *http.Request) {
 	// Validate file type
 	contentType := header.Header.Get("Content-Type")
 	validTypes := map[string]bool{
-		"image/jpeg": true,
-		"image/png":  true,
-		"image/gif":  true,
-		"image/webp": true,
+		"image/jpeg":    true,
+		"image/png":     true,
+		"image/gif":     true,
+		"image/webp":    true,
 		"image/svg+xml": true,
 	}
 
@@ -2512,4 +2538,3 @@ func (r *Router) handleBackgroundCategoryActions(w http.ResponseWriter, req *htt
 		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
 }
-

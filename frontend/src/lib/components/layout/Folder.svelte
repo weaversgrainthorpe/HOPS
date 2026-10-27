@@ -25,7 +25,7 @@
   import type { CanvasPlan, ContainerMetrics } from '$lib/layout/geometry';
   import {
     FOLDER_CHROME, NESTED_CHROME, NESTED_LEVEL_Y_PX, folderFlowMetrics, folderTabRect, hasTab, isFolderShape, nestedPaging, nodeBox,
-    openFolderContentBox, phoneFlowMetrics, phonePaging, previewChildren, shapeOf, sizeSpan
+    folderMinCells, openFolderContentBox, phoneFlowMetrics, phonePaging, previewChildren, shapeOf, sizeSpan
   } from '$lib/layout/geometry';
   import { deriveFolderColours } from '$lib/layout/folderColours';
   import { MINI_NAME_MIN_TILE_PX, shapeParts, tabWantPx } from '$lib/layout/folderShapePaths';
@@ -41,7 +41,7 @@
   import { selectedNodes, toggleNode } from '$lib/stores/nodeSelection';
   import { editorMenu, openDialog, openMenu, menuPointFor } from '$lib/editor/editorUi';
   import { get } from 'svelte/store';
-  import { setDisplay } from '$lib/editor/editorActions';
+  import { makeFolderBigEnough, setDisplay } from '$lib/editor/editorActions';
   import { playDrill, playFolderToggle, playPageSlide } from '$lib/editor/drag/flourishes';
   import { drag, dragSource } from '$lib/editor/drag/dragController';
   import { crumbDwellKey, pageDwellKey } from '$lib/editor/drag/targets';
@@ -208,6 +208,16 @@
     };
   }
   const problems = $derived(lookProblems(folder));
+  /**
+   * Never silent: a tab-level folder STORED below its smallest open box (imported, converted, or saved
+   * before the minimum — edits can't make one) is flagged in edit mode, with a one-click fix.
+   */
+  const belowMin = $derived.by(() => {
+    if (!editing || item || !folder.placement) return null;
+    const m = folderMinCells(folder);
+    const p = folder.placement;
+    return p.w < m.w || p.h < m.h ? m : null;
+  });
   /** The width a tab's label asks for: its name (and icon); an untitled tab asks for none. */
   function wantOf(f: FolderNode, compact = false): number {
     return f.showTitle === false ? 0 : tabWantPx(f.name ?? '', !compact && !!(f.iconUrl || f.icon), compact);
@@ -416,6 +426,19 @@
   {/if}
 {/snippet}
 
+<!-- Edit mode: a box stored below its minimum says so, why, and fixes it in one undoable step. -->
+{#snippet minNote()}
+  {#if belowMin}
+    <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
+    <div class="min-note" role="status" data-folder-below-min={folder.id}
+      onclick={(e) => e.stopPropagation()} onpointerdown={(e) => e.stopPropagation()}>
+      <span>Smaller than it can be drawn ({folder.placement?.w}×{folder.placement?.h}; needs at least {belowMin.w}×{belowMin.h})</span>
+      <button type="button" data-folder-make-big-enough={folder.id}
+        onclick={(e) => { e.stopPropagation(); makeFolderBigEnough(folder.id); }}>Make it big enough</button>
+    </div>
+  {/if}
+{/snippet}
+
 {#snippet pageArea()}
   {#if paging.tooSmall && levels === 0}
     <!-- Never a silent clip (Important 2): a box below its minimum says so, and how to fix it. -->
@@ -423,8 +446,8 @@
       Too small to show its contents — resize it{editing ? '' : ' in edit mode'}.
     </p>
   {/if}
-  {#if paging.noRoom}
-    <!-- No room for this level's page (one item, or the page bar it needs): nothing is drawn clipped.
+  {#if paging.noRoom || (paging.tooSmall && levels === 0)}
+    <!-- No room for this level's page (or a box below its minimum, noted above) (one item, or the page bar it needs): nothing is drawn clipped.
          The note is here when this box can hold it, else on the folder's own body. -->
     {#if paging.noRoomInside}
       <p class="too-small" role="status" data-folder-no-room>Not enough room — make the folder bigger.</p>
@@ -444,7 +467,7 @@
       />
     </div>
   {/if}
-  {#if paging.pageBar && !paging.noRoom}
+  {#if paging.pageBar && !paging.noRoom && !(paging.tooSmall && levels === 0)}
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <nav class="page-bar" aria-label="{current.name} pages" ondblclick={own}>
       <button type="button" aria-label="First page" disabled={paging.page === 0} onclick={(e) => goPage(e, 0)}>«</button>
@@ -654,6 +677,7 @@
     </div>
     <!-- Edit mode: a failed background image, flagged on a tab outside the tile (never on its content). -->
     <BackgroundFailedBadge background={folder.background} {editing} level="folder" placement="corner" />
+    {@render minNote()}
     {#if editing && (problems.unknownShape !== null || problems.unreadableColour)}
       <span class="tile-notes">{@render lookNotes(folder, 'tile-note')}</span>
     {/if}
@@ -795,6 +819,7 @@
       <!-- Handles on the rendered (open) box on a tab; a minimised folder has none (Ruling 13). -->
       <ResizeHandles id={folder.id} name={folder.name} metrics={parent} />
     {/if}
+    {@render minNote()}
   </div>
 {/if}
 
@@ -966,6 +991,33 @@
     border-radius: 0.25rem;
     color: #fff;
     background: var(--warning-solid);
+  }
+  .min-note {
+    position: absolute;
+    top: 0.15rem;
+    left: 0.15rem;
+    right: 0.15rem;
+    z-index: 5;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.2rem 0.35rem;
+    padding: 0.15rem 0.35rem;
+    border-radius: 0.25rem;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    line-height: 1.3;
+    color: #fff;
+    background: var(--warning-solid);
+  }
+  .min-note button {
+    font: inherit;
+    padding: 0.05rem 0.4rem;
+    border-radius: 0.25rem;
+    border: 1px solid rgba(255, 255, 255, 0.8);
+    background: rgba(0, 0, 0, 0.25);
+    color: inherit;
+    cursor: pointer;
   }
   .tile-notes {
     position: absolute;

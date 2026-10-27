@@ -8,6 +8,8 @@ export interface ImportResult {
   iconMatchError?: string;
   /** Items in the file that were not dashboards and were left out. */
   skipped?: string[] | null;
+  /** Folders stored below their smallest open box, enlarged on import (one line each). */
+  foldersEnlarged?: string[] | null;
   /** The pre-import backup failed (the import went through anyway). */
   warning?: string;
 }
@@ -30,6 +32,8 @@ export function importProblems(r: ImportResult): string[] {
   if (skipped.length > 0) {
     out.push(`Skipped ${skipped.length} item(s): ${skipped.join('; ')}`);
   }
+  // Changed from the file, so shown (never a self-closing success).
+  for (const line of r.foldersEnlarged ?? []) out.push(line);
   if (r.warning) {
     out.push(r.warning);
   }

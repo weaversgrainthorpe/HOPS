@@ -22,6 +22,11 @@ describe('importProblems', () => {
     expect(p[3]).toBe('Pre-update backup failed: disk full. Config saved anyway.');
   });
 
+  it('lists every folder enlarged on import', () => {
+    const line = 'Folder "Media" was smaller than it can be drawn (2×4); it was enlarged to 3×6 (dashboard "Home")';
+    expect(importProblems({ success: true, message: 'ok', foldersEnlarged: [line] })).toEqual([line]);
+  });
+
   it('tolerates null/absent optional fields', () => {
     expect(importProblems({ success: true, message: 'ok', skipped: null })).toEqual([]);
   });

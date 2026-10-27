@@ -616,6 +616,9 @@ describe('an undersized open box is flagged, never clipped silently', () => {
     const note = el(container, 'f').querySelector('[data-folder-too-small]');
     expect(note).not.toBeNull();
     expect(note!.textContent).toMatch(/Too small to show its contents — resize it/);
+    // Nothing is drawn clipped behind the note: no page of items, no page bar.
+    expect(el(container, 'f').querySelector('[data-folder-page-content]')).toBeNull();
+    expect(el(container, 'f').querySelector('.page-bar')).toBeNull();
   });
   it('the same folder at its minimum and more has no note', async () => {
     width = 1024;
