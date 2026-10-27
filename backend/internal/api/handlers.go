@@ -925,7 +925,7 @@ func (r *Router) handleResetConfig(w http.ResponseWriter, req *http.Request) {
 
 	// Return the new default config
 	w.Header().Set("Content-Type", "application/json")
-	w.Write([]byte(database.DefaultConfig)) // #nosec G104 -- response write: a client that hung up cannot be told, nothing to recover
+	w.Write([]byte(database.SampleConfig)) // #nosec G104 -- response write: a client that hung up cannot be told, nothing to recover
 }
 
 // IconMatch holds the result of an icon lookup

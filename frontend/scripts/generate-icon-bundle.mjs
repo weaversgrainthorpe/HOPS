@@ -22,6 +22,7 @@
 //   - backend/internal/**/testdata/*.json — fixtures, incl. the v3 Showcase
 //     export (TestImport_V3Showcase asserts every icon in it is bundled);
 //   - backend/internal/database/*.go     — the DB icon seeds (icon_seeds.go);
+//   - backend/internal/database/*.json   — the fresh-install Sample (sample.json);
 //   - scripts/icon-keep.txt              — an explicit keep-list, one
 //     `prefix:name` per line (`#` starts a comment). Add an icon there when
 //     it must stay bundled but nothing above references it (e.g. a very common
@@ -106,7 +107,7 @@ for (const required of [BACKEND_INTERNAL, SEEDS_DIR, KEEP_LIST]) {
 const dataFiles = [
   ...walkTestdata(BACKEND_INTERNAL),
   ...readdirSync(SEEDS_DIR)
-    .filter((f) => f.endsWith('.go') && !f.endsWith('_test.go'))
+    .filter((f) => (f.endsWith('.go') && !f.endsWith('_test.go')) || f.endsWith('.json'))
     .map((f) => join(SEEDS_DIR, f)),
 ];
 for (const file of dataFiles) {

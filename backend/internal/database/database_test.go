@@ -374,9 +374,9 @@ func TestResetConfigWritesV3(t *testing.T) {
 	}
 }
 
-// A reset converts the default v2 config through the release path and
-// verifies it, exactly as start-up does: a conversion that does not verify is
-// a visible error and the stored config is left untouched.
+// A reset verifies the shipped Sample before writing it, exactly as the
+// fresh-install seed does: a document that does not verify is a visible
+// error and the stored config is left untouched.
 func TestResetConfigFrom_VerifiesAndWritesNothingOnFailure(t *testing.T) {
 	db, err := Initialize(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
@@ -387,13 +387,17 @@ func TestResetConfigFrom_VerifiesAndWritesNothingOnFailure(t *testing.T) {
 	if err := db.QueryRow("SELECT data FROM config WHERE id = 1").Scan(&before); err != nil {
 		t.Fatal(err)
 	}
-	// A v2 entry carrying a placement converts into a placed folder child,
-	// which the M5 form forbids: verification must refuse it.
-	bad := `{"dashboards":[{"id":"d","name":"D","path":"/d","tabs":[{"id":"t","name":"T","groups":[
-		{"id":"g","name":"G","entries":[{"id":"e","name":"E","placement":{"x":0,"y":0,"w":2,"h":2}}]}]}]}]}`
-	err = resetConfigFrom(db, bad)
-	if err == nil || !strings.Contains(err.Error(), "verification failed") || !strings.Contains(err.Error(), "placement") {
-		t.Fatalf("resetConfigFrom = %v, want a visible verification failure naming the placement", err)
+	// Two tabs sharing one id: verification must refuse it.
+	doc, err := SampleDoc()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tabs := doc["dashboards"].([]any)[0].(map[string]any)["tabs"].([]any)
+	tabs[1].(map[string]any)["id"] = tabs[0].(map[string]any)["id"]
+	b, _ := json.Marshal(doc)
+	err = resetConfigFrom(db, string(b))
+	if err == nil || !strings.Contains(err.Error(), "verification failed") {
+		t.Fatalf("resetConfigFrom = %v, want a visible verification failure", err)
 	}
 	var after string
 	if err := db.QueryRow("SELECT data FROM config WHERE id = 1").Scan(&after); err != nil {
@@ -406,7 +410,7 @@ func TestResetConfigFrom_VerifiesAndWritesNothingOnFailure(t *testing.T) {
 	if err := ResetConfig(db); err != nil {
 		t.Fatal(err)
 	}
-	doc, err := configdoc.Load(db)
+	doc, err = configdoc.Load(db)
 	if err != nil {
 		t.Fatal(err)
 	}

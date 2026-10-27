@@ -1,0 +1,1452 @@
+{
+  "schemaVersion": 3,
+  "layoutVersion": 2,
+  "dashboards": [
+    {
+      "id": "sample",
+      "name": "Sample",
+      "order": 0,
+      "path": "/sample",
+      "revision": 1,
+      "settings": {
+        "statusChecksEnabled": null,
+        "statusCheckIntervalMinutes": null,
+        "statusCheckTimeoutSeconds": null,
+        "editIdleTimeoutMinutes": null,
+        "animatedFolderBackgrounds": null
+      },
+      "background": {
+        "type": "image",
+        "value": "/presets/dark-gradient.jpg",
+        "images": [],
+        "interval": 0,
+        "fit": "cover",
+        "transition": "fade",
+        "transitionDuration": 0,
+        "overlayOpacity": 0.3,
+        "overlayBlur": 0,
+        "opacity": 1
+      },
+      "tabs": [
+        {
+          "id": "sample-tab-home",
+          "name": "Home",
+          "order": 0,
+          "background": {
+            "type": "image",
+            "value": "/presets/galaxy.jpg",
+            "images": [],
+            "interval": 0,
+            "fit": "cover",
+            "transition": "fade",
+            "transitionDuration": 0,
+            "overlayOpacity": 0,
+            "overlayBlur": 0,
+            "opacity": 0.6
+          },
+          "root": {
+            "columns": 24,
+            "children": [
+              {
+                "id": "sample-fa",
+                "kind": "tile",
+                "type": "link",
+                "name": "Containers",
+                "url": "https://containers.example.lan/",
+                "icon": "mdi:docker",
+                "openMode": "newtab",
+                "size": "medium",
+                "order": 0,
+                "placement": {
+                  "x": 0,
+                  "y": 0,
+                  "w": 2,
+                  "h": 2
+                },
+                "description": "Container manager"
+              },
+              {
+                "id": "sample-fb",
+                "kind": "tile",
+                "type": "link",
+                "name": "Backups",
+                "url": "https://backups.example.lan/",
+                "icon": "mdi:harddisk",
+                "openMode": "newtab",
+                "size": "medium",
+                "order": 1,
+                "placement": {
+                  "x": 2,
+                  "y": 0,
+                  "w": 2,
+                  "h": 2
+                },
+                "description": "Nightly backups"
+              },
+              {
+                "id": "sample-big",
+                "kind": "tile",
+                "type": "link",
+                "name": "Cameras",
+                "url": "https://cameras.example.lan/",
+                "icon": "mdi:camera",
+                "openMode": "newtab",
+                "size": "large",
+                "order": 2,
+                "placement": {
+                  "x": 4,
+                  "y": 0,
+                  "w": 4,
+                  "h": 4
+                },
+                "description": "Large tile"
+              },
+              {
+                "id": "sample-sz-s",
+                "kind": "tile",
+                "type": "link",
+                "name": "Home",
+                "url": "https://home.example.lan/",
+                "icon": "mdi:home",
+                "openMode": "newtab",
+                "size": "small",
+                "placement": {
+                  "x": 8,
+                  "y": 0,
+                  "w": 1,
+                  "h": 1
+                },
+                "order": 3,
+                "description": "Small tile"
+              },
+              {
+                "id": "sample-ff",
+                "kind": "folder",
+                "name": "Infrastructure",
+                "display": "expanded",
+                "shape": "rounded",
+                "showTitle": true,
+                "size": "medium",
+                "contentSize": "medium",
+                "placement": {
+                  "x": 10,
+                  "y": 0,
+                  "w": 8,
+                  "h": 6
+                },
+                "content": {
+                  "children": [
+                    {
+                      "id": "sample-ff-1",
+                      "kind": "tile",
+                      "type": "link",
+                      "name": "Hypervisor",
+                      "url": "https://hypervisor.example.lan/",
+                      "icon": "mdi:server",
+                      "openMode": "newtab",
+                      "size": "medium",
+                      "order": 0
+                    },
+                    {
+                      "id": "sample-ff-2",
+                      "kind": "tile",
+                      "type": "link",
+                      "name": "Storage",
+                      "url": "https://storage.example.lan/",
+                      "icon": "mdi:nas",
+                      "openMode": "newtab",
+                      "size": "large",
+                      "order": 1
+                    }
+                  ]
+                },
+                "order": 4
+              },
+              {
+                "id": "sample-f-small",
+                "kind": "folder",
+                "name": "Network",
+                "display": "expanded",
+                "shape": "rounded",
+                "showTitle": true,
+                "size": "medium",
+                "contentSize": "small",
+                "placement": {
+                  "x": 0,
+                  "y": 6,
+                  "w": 6,
+                  "h": 5
+                },
+                "content": {
+                  "children": [
+                    {
+                      "id": "sample-sm-1",
+                      "kind": "tile",
+                      "type": "link",
+                      "name": "Switch",
+                      "url": "https://switch.example.lan/",
+                      "icon": "mdi:lan",
+                      "openMode": "newtab",
+                      "size": "medium",
+                      "order": 0
+                    },
+                    {
+                      "id": "sample-sm-2",
+                      "kind": "tile",
+                      "type": "link",
+                      "name": "Build box",
+                      "url": "https://build-box.example.lan/",
+                      "icon": "mdi:server",
+                      "openMode": "newtab",
+                      "size": "medium",
+                      "order": 1
+                    },
+                    {
+                      "id": "sample-sm-3",
+                      "kind": "tile",
+                      "type": "link",
+                      "name": "Postgres",
+                      "url": "https://postgres.example.lan/",
+                      "icon": "mdi:database",
+                      "openMode": "newtab",
+                      "size": "medium",
+                      "order": 2
+                    },
+                    {
+                      "id": "sample-sm-4",
+                      "kind": "tile",
+                      "type": "link",
+                      "name": "Sync",
+                      "url": "https://sync.example.lan/",
+                      "icon": "mdi:cloud",
+                      "openMode": "newtab",
+                      "size": "medium",
+                      "order": 3
+                    },
+                    {
+                      "id": "sample-sm-5",
+                      "kind": "tile",
+                      "type": "link",
+                      "name": "Reverse proxy",
+                      "url": "https://reverse-proxy.example.lan/",
+                      "icon": "mdi:web",
+                      "openMode": "newtab",
+                      "size": "medium",
+                      "order": 4
+                    },
+                    {
+                      "id": "sample-sm-6",
+                      "kind": "tile",
+                      "type": "link",
+                      "name": "Router",
+                      "url": "https://router.example.lan/",
+                      "icon": "mdi:router",
+                      "openMode": "newtab",
+                      "size": "medium",
+                      "order": 5
+                    }
+                  ]
+                },
+                "order": 5
+              },
+              {
+                "id": "sample-f-large",
+                "kind": "folder",
+                "name": "Media",
+                "display": "expanded",
+                "shape": "rounded",
+                "showTitle": true,
+                "size": "medium",
+                "contentSize": "large",
+                "placement": {
+                  "x": 8,
+                  "y": 6,
+                  "w": 16,
+                  "h": 10
+                },
+                "content": {
+                  "children": [
+                    {
+                      "id": "sample-lg-1",
+                      "kind": "tile",
+                      "type": "link",
+                      "name": "Movies",
+                      "url": "https://movies.example.lan/",
+                      "icon": "mdi:movie",
+                      "openMode": "newtab",
+                      "size": "medium",
+                      "order": 0
+                    },
+                    {
+                      "id": "sample-lg-2",
+                      "kind": "tile",
+                      "type": "link",
+                      "name": "Music",
+                      "url": "https://music.example.lan/",
+                      "icon": "mdi:music",
+                      "openMode": "newtab",
+                      "size": "small",
+                      "order": 1
+                    },
+                    {
+                      "id": "sample-f-large-sub",
+                      "kind": "folder",
+                      "name": "Media tools",
+                      "display": "expanded",
+                      "shape": "rounded",
+                      "showTitle": true,
+                      "size": "medium",
+                      "contentSize": "small",
+                      "content": {
+                        "children": [
+                          {
+                            "id": "sample-lgs-1",
+                            "kind": "tile",
+                            "type": "link",
+                            "name": "Wi-Fi",
+                            "url": "https://wi-fi.example.lan/",
+                            "icon": "mdi:lan",
+                            "openMode": "newtab",
+                            "size": "medium",
+                            "order": 0
+                          },
+                          {
+                            "id": "sample-lgs-2",
+                            "kind": "tile",
+                            "type": "link",
+                            "name": "Mini PC",
+                            "url": "https://mini-pc.example.lan/",
+                            "icon": "mdi:server",
+                            "openMode": "newtab",
+                            "size": "medium",
+                            "order": 1
+                          },
+                          {
+                            "id": "sample-lgs-3",
+                            "kind": "tile",
+                            "type": "link",
+                            "name": "Time series",
+                            "url": "https://time-series.example.lan/",
+                            "icon": "mdi:database",
+                            "openMode": "newtab",
+                            "size": "medium",
+                            "order": 2
+                          },
+                          {
+                            "id": "sample-lgs-4",
+                            "kind": "tile",
+                            "type": "link",
+                            "name": "Object store",
+                            "url": "https://object-store.example.lan/",
+                            "icon": "mdi:cloud",
+                            "openMode": "newtab",
+                            "size": "medium",
+                            "order": 3
+                          },
+                          {
+                            "id": "sample-lgs-5",
+                            "kind": "tile",
+                            "type": "link",
+                            "name": "Wiki",
+                            "url": "https://wiki.example.lan/",
+                            "icon": "mdi:web",
+                            "openMode": "newtab",
+                            "size": "medium",
+                            "order": 4
+                          }
+                        ]
+                      },
+                      "order": 2
+                    }
+                  ]
+                },
+                "order": 6
+              },
+              {
+                "id": "sample-f-min-s",
+                "kind": "folder",
+                "name": "Monitoring",
+                "display": "collapsed",
+                "shape": "rounded",
+                "showTitle": true,
+                "size": "small",
+                "contentSize": "small",
+                "placement": {
+                  "x": 0,
+                  "y": 16,
+                  "w": 3,
+                  "h": 5
+                },
+                "content": {
+                  "children": [
+                    {
+                      "id": "sample-mins-1",
+                      "kind": "tile",
+                      "type": "link",
+                      "name": "VPN",
+                      "url": "https://vpn.example.lan/",
+                      "icon": "mdi:lan",
+                      "openMode": "newtab",
+                      "size": "medium",
+                      "order": 0
+                    },
+                    {
+                      "id": "sample-mins-2",
+                      "kind": "tile",
+                      "type": "link",
+                      "name": "Rack node",
+                      "url": "https://rack-node.example.lan/",
+                      "icon": "mdi:server",
+                      "openMode": "newtab",
+                      "size": "medium",
+                      "order": 1
+                    },
+                    {
+                      "id": "sample-mins-3",
+                      "kind": "tile",
+                      "type": "link",
+                      "name": "Key-value",
+                      "url": "https://key-value.example.lan/",
+                      "icon": "mdi:database",
+                      "openMode": "newtab",
+                      "size": "medium",
+                      "order": 2
+                    }
+                  ]
+                },
+                "order": 7
+              },
+              {
+                "id": "sample-f-min-m",
+                "kind": "folder",
+                "name": "Databases",
+                "display": "collapsed",
+                "shape": "rounded",
+                "showTitle": true,
+                "size": "medium",
+                "contentSize": "medium",
+                "placement": {
+                  "x": 3,
+                  "y": 16,
+                  "w": 6,
+                  "h": 6
+                },
+                "content": {
+                  "children": [
+                    {
+                      "id": "sample-minm-1",
+                      "kind": "tile",
+                      "type": "link",
+                      "name": "DHCP",
+                      "url": "https://dhcp.example.lan/",
+                      "icon": "mdi:lan",
+                      "openMode": "newtab",
+                      "size": "medium",
+                      "order": 0
+                    },
+                    {
+                      "id": "sample-minm-2",
+                      "kind": "tile",
+                      "type": "link",
+                      "name": "Test VM",
+                      "url": "https://test-vm.example.lan/",
+                      "icon": "mdi:server",
+                      "openMode": "newtab",
+                      "size": "medium",
+                      "order": 1
+                    },
+                    {
+                      "id": "sample-minm-3",
+                      "kind": "tile",
+                      "type": "link",
+                      "name": "Search index",
+                      "url": "https://search-index.example.lan/",
+                      "icon": "mdi:database",
+                      "openMode": "newtab",
+                      "size": "medium",
+                      "order": 2
+                    },
+                    {
+                      "id": "sample-minm-4",
+                      "kind": "tile",
+                      "type": "link",
+                      "name": "Offsite",
+                      "url": "https://offsite.example.lan/",
+                      "icon": "mdi:cloud",
+                      "openMode": "newtab",
+                      "size": "medium",
+                      "order": 3
+                    }
+                  ]
+                },
+                "order": 8
+              },
+              {
+                "id": "sample-f-min-l",
+                "kind": "folder",
+                "name": "Cloud",
+                "display": "collapsed",
+                "shape": "rounded",
+                "showTitle": true,
+                "size": "large",
+                "contentSize": "medium",
+                "placement": {
+                  "x": 9,
+                  "y": 16,
+                  "w": 12,
+                  "h": 8
+                },
+                "content": {
+                  "children": [
+                    {
+                      "id": "sample-minl-1",
+                      "kind": "tile",
+                      "type": "link",
+                      "name": "Patch panel",
+                      "url": "https://patch-panel.example.lan/",
+                      "icon": "mdi:lan",
+                      "openMode": "newtab",
+                      "size": "medium",
+                      "order": 0
+                    },
+                    {
+                      "id": "sample-minl-2",
+                      "kind": "tile",
+                      "type": "link",
+                      "name": "Jump host",
+                      "url": "https://jump-host.example.lan/",
+                      "icon": "mdi:server",
+                      "openMode": "newtab",
+                      "size": "medium",
+                      "order": 1
+                    },
+                    {
+                      "id": "sample-minl-3",
+                      "kind": "tile",
+                      "type": "link",
+                      "name": "Reports",
+                      "url": "https://reports.example.lan/",
+                      "icon": "mdi:database",
+                      "openMode": "newtab",
+                      "size": "medium",
+                      "order": 2
+                    },
+                    {
+                      "id": "sample-minl-4",
+                      "kind": "tile",
+                      "type": "link",
+                      "name": "Mirror",
+                      "url": "https://mirror.example.lan/",
+                      "icon": "mdi:cloud",
+                      "openMode": "newtab",
+                      "size": "medium",
+                      "order": 3
+                    },
+                    {
+                      "id": "sample-minl-5",
+                      "kind": "tile",
+                      "type": "link",
+                      "name": "Blog",
+                      "url": "https://blog.example.lan/",
+                      "icon": "mdi:web",
+                      "openMode": "newtab",
+                      "size": "medium",
+                      "order": 4
+                    }
+                  ]
+                },
+                "order": 9
+              }
+            ]
+          }
+        },
+        {
+          "id": "sample-tab-folders",
+          "name": "Folders",
+          "order": 1,
+          "root": {
+            "columns": 24,
+            "children": [
+              {
+                "id": "sample-mf",
+                "kind": "folder",
+                "name": "Smart home",
+                "display": "expanded",
+                "shape": "rounded",
+                "showTitle": true,
+                "size": "medium",
+                "contentSize": "medium",
+                "placement": {
+                  "x": 0,
+                  "y": 0,
+                  "w": 12,
+                  "h": 8
+                },
+                "content": {
+                  "children": [
+                    {
+                      "id": "sample-mf-1",
+                      "kind": "tile",
+                      "type": "link",
+                      "name": "Registry",
+                      "url": "https://registry.example.lan/",
+                      "icon": "mdi:docker",
+                      "openMode": "newtab",
+                      "size": "medium",
+                      "order": 0
+                    },
+                    {
+                      "id": "sample-mf-2",
+                      "kind": "tile",
+                      "type": "link",
+                      "name": "NAS",
+                      "url": "https://nas.example.lan/",
+                      "icon": "mdi:nas",
+                      "openMode": "newtab",
+                      "size": "medium",
+                      "order": 1
+                    },
+                    {
+                      "id": "sample-mf-3",
+                      "kind": "tile",
+                      "type": "link",
+                      "name": "Mesh",
+                      "url": "https://mesh.example.lan/",
+                      "icon": "mdi:lan",
+                      "openMode": "newtab",
+                      "size": "medium",
+                      "order": 2
+                    }
+                  ]
+                },
+                "order": 0
+              },
+              {
+                "id": "sample-mg",
+                "kind": "folder",
+                "name": "Productivity",
+                "display": "expanded",
+                "shape": "rounded",
+                "showTitle": true,
+                "size": "medium",
+                "contentSize": "medium",
+                "placement": {
+                  "x": 12,
+                  "y": 0,
+                  "w": 12,
+                  "h": 6
+                },
+                "content": {
+                  "children": [
+                    {
+                      "id": "sample-mg-1",
+                      "kind": "tile",
+                      "type": "link",
+                      "name": "Stacks",
+                      "url": "https://stacks.example.lan/",
+                      "icon": "mdi:docker",
+                      "openMode": "newtab",
+                      "size": "medium",
+                      "order": 0
+                    },
+                    {
+                      "id": "sample-mg-2",
+                      "kind": "tile",
+                      "type": "link",
+                      "name": "File shares",
+                      "url": "https://file-shares.example.lan/",
+                      "icon": "mdi:nas",
+                      "openMode": "newtab",
+                      "size": "medium",
+                      "order": 1
+                    },
+                    {
+                      "id": "sample-mg-3",
+                      "kind": "tile",
+                      "type": "link",
+                      "name": "VLANs",
+                      "url": "https://vlans.example.lan/",
+                      "icon": "mdi:lan",
+                      "openMode": "newtab",
+                      "size": "medium",
+                      "order": 2
+                    },
+                    {
+                      "id": "sample-mg-4",
+                      "kind": "tile",
+                      "type": "link",
+                      "name": "Doorbell",
+                      "url": "https://doorbell.example.lan/",
+                      "icon": "mdi:camera",
+                      "openMode": "newtab",
+                      "size": "medium",
+                      "order": 3
+                    }
+                  ]
+                },
+                "order": 1
+              },
+              {
+                "id": "sample-f-nest",
+                "kind": "folder",
+                "name": "Projects",
+                "display": "expanded",
+                "shape": "rounded",
+                "showTitle": true,
+                "size": "medium",
+                "contentSize": "medium",
+                "placement": {
+                  "x": 12,
+                  "y": 8,
+                  "w": 12,
+                  "h": 8
+                },
+                "content": {
+                  "children": [
+                    {
+                      "id": "sample-nest-1",
+                      "kind": "tile",
+                      "type": "link",
+                      "name": "Settings",
+                      "url": "https://settings.example.lan/",
+                      "icon": "mdi:cog",
+                      "openMode": "newtab",
+                      "size": "medium",
+                      "order": 0
+                    },
+                    {
+                      "id": "sample-f-nest-a",
+                      "kind": "folder",
+                      "name": "Lab",
+                      "display": "expanded",
+                      "shape": "rounded",
+                      "showTitle": true,
+                      "size": "medium",
+                      "contentSize": "small",
+                      "content": {
+                        "children": [
+                          {
+                            "id": "sample-nesta-1",
+                            "kind": "tile",
+                            "type": "link",
+                            "name": "Uplink",
+                            "url": "https://uplink.example.lan/",
+                            "icon": "mdi:lan",
+                            "openMode": "newtab",
+                            "size": "medium",
+                            "order": 0
+                          },
+                          {
+                            "id": "sample-nesta-2",
+                            "kind": "tile",
+                            "type": "link",
+                            "name": "Spare node",
+                            "url": "https://spare-node.example.lan/",
+                            "icon": "mdi:server",
+                            "openMode": "newtab",
+                            "size": "medium",
+                            "order": 1
+                          },
+                          {
+                            "id": "sample-nesta-3",
+                            "kind": "tile",
+                            "type": "link",
+                            "name": "Warehouse",
+                            "url": "https://warehouse.example.lan/",
+                            "icon": "mdi:database",
+                            "openMode": "newtab",
+                            "size": "medium",
+                            "order": 2
+                          },
+                          {
+                            "id": "sample-nesta-4",
+                            "kind": "tile",
+                            "type": "link",
+                            "name": "CDN",
+                            "url": "https://cdn.example.lan/",
+                            "icon": "mdi:cloud",
+                            "openMode": "newtab",
+                            "size": "medium",
+                            "order": 3
+                          },
+                          {
+                            "id": "sample-nesta-5",
+                            "kind": "tile",
+                            "type": "link",
+                            "name": "Status",
+                            "url": "https://status.example.lan/",
+                            "icon": "mdi:web",
+                            "openMode": "newtab",
+                            "size": "medium",
+                            "order": 4
+                          },
+                          {
+                            "id": "sample-nesta-6",
+                            "kind": "tile",
+                            "type": "link",
+                            "name": "Modem",
+                            "url": "https://modem.example.lan/",
+                            "icon": "mdi:router",
+                            "openMode": "newtab",
+                            "size": "medium",
+                            "order": 5
+                          },
+                          {
+                            "id": "sample-nesta-7",
+                            "kind": "tile",
+                            "type": "link",
+                            "name": "Firewall",
+                            "url": "https://firewall.example.lan/",
+                            "icon": "mdi:lan",
+                            "openMode": "newtab",
+                            "size": "medium",
+                            "order": 6
+                          },
+                          {
+                            "id": "sample-nesta-8",
+                            "kind": "tile",
+                            "type": "link",
+                            "name": "Edge box",
+                            "url": "https://edge-box.example.lan/",
+                            "icon": "mdi:server",
+                            "openMode": "newtab",
+                            "size": "medium",
+                            "order": 7
+                          },
+                          {
+                            "id": "sample-f-nest-b",
+                            "kind": "folder",
+                            "name": "Dashboards",
+                            "display": "expanded",
+                            "shape": "rounded",
+                            "showTitle": true,
+                            "size": "medium",
+                            "contentSize": "large",
+                            "content": {
+                              "children": [
+                                {
+                                  "id": "sample-nestb-1",
+                                  "kind": "tile",
+                                  "type": "link",
+                                  "name": "Weather",
+                                  "url": "https://weather.example.lan/",
+                                  "icon": "mdi:weather-sunny",
+                                  "openMode": "newtab",
+                                  "size": "medium",
+                                  "order": 0
+                                },
+                                {
+                                  "id": "sample-nestb-2",
+                                  "kind": "tile",
+                                  "type": "link",
+                                  "name": "Metrics",
+                                  "url": "https://metrics.example.lan/",
+                                  "icon": "mdi:chart-line",
+                                  "openMode": "newtab",
+                                  "size": "medium",
+                                  "order": 1
+                                }
+                              ]
+                            },
+                            "order": 8
+                          }
+                        ]
+                      },
+                      "order": 1
+                    }
+                  ]
+                },
+                "order": 3
+              }
+            ]
+          }
+        },
+        {
+          "id": "sample-tab-shapes",
+          "name": "Shapes",
+          "order": 2,
+          "root": {
+            "columns": 24,
+            "children": [
+              {
+                "id": "sample-sh-rounded",
+                "kind": "folder",
+                "name": "Rounded box",
+                "display": "expanded",
+                "shape": "rounded",
+                "color": "#2563eb",
+                "showTitle": true,
+                "size": "medium",
+                "contentSize": "medium",
+                "placement": {
+                  "x": 0,
+                  "y": 0,
+                  "w": 8,
+                  "h": 7
+                },
+                "content": {
+                  "children": [
+                    {
+                      "id": "sample-sh-rounded-1",
+                      "kind": "tile",
+                      "type": "link",
+                      "name": "Access points",
+                      "url": "https://access-points.example.lan/",
+                      "icon": "mdi:lan",
+                      "openMode": "newtab",
+                      "size": "medium",
+                      "order": 0
+                    },
+                    {
+                      "id": "sample-sh-rounded-2",
+                      "kind": "tile",
+                      "type": "link",
+                      "name": "Cluster",
+                      "url": "https://cluster.example.lan/",
+                      "icon": "mdi:server",
+                      "openMode": "newtab",
+                      "size": "medium",
+                      "order": 1
+                    },
+                    {
+                      "id": "sample-sh-rounded-3",
+                      "kind": "tile",
+                      "type": "link",
+                      "name": "Cache",
+                      "url": "https://cache.example.lan/",
+                      "icon": "mdi:database",
+                      "openMode": "newtab",
+                      "size": "medium",
+                      "order": 2
+                    }
+                  ]
+                },
+                "order": 0
+              },
+              {
+                "id": "sample-sh-simple-tab",
+                "kind": "folder",
+                "name": "Simple tab",
+                "display": "expanded",
+                "shape": "simple-tab",
+                "tabPosition": "left",
+                "color": "#0d9488",
+                "showTitle": true,
+                "size": "medium",
+                "contentSize": "medium",
+                "placement": {
+                  "x": 8,
+                  "y": 0,
+                  "w": 8,
+                  "h": 7
+                },
+                "content": {
+                  "children": [
+                    {
+                      "id": "sample-sh-simple-tab-1",
+                      "kind": "tile",
+                      "type": "link",
+                      "name": "Ports",
+                      "url": "https://ports.example.lan/",
+                      "icon": "mdi:lan",
+                      "openMode": "newtab",
+                      "size": "medium",
+                      "order": 0
+                    },
+                    {
+                      "id": "sample-sh-simple-tab-2",
+                      "kind": "tile",
+                      "type": "link",
+                      "name": "Worker",
+                      "url": "https://worker.example.lan/",
+                      "icon": "mdi:server",
+                      "openMode": "newtab",
+                      "size": "medium",
+                      "order": 1
+                    },
+                    {
+                      "id": "sample-sh-simple-tab-3",
+                      "kind": "tile",
+                      "type": "link",
+                      "name": "Ledger",
+                      "url": "https://ledger.example.lan/",
+                      "icon": "mdi:database",
+                      "openMode": "newtab",
+                      "size": "medium",
+                      "order": 2
+                    }
+                  ]
+                },
+                "order": 1
+              },
+              {
+                "id": "sample-sh-folder-flat",
+                "kind": "folder",
+                "name": "Flat folder",
+                "display": "expanded",
+                "shape": "folder-flat",
+                "tabPosition": "centre",
+                "color": "#d97706",
+                "showTitle": true,
+                "size": "medium",
+                "contentSize": "medium",
+                "placement": {
+                  "x": 16,
+                  "y": 0,
+                  "w": 8,
+                  "h": 7
+                },
+                "content": {
+                  "children": [
+                    {
+                      "id": "sample-sh-folder-flat-1",
+                      "kind": "tile",
+                      "type": "link",
+                      "name": "Bridge",
+                      "url": "https://bridge.example.lan/",
+                      "icon": "mdi:lan",
+                      "openMode": "newtab",
+                      "size": "medium",
+                      "order": 0
+                    },
+                    {
+                      "id": "sample-sh-folder-flat-2",
+                      "kind": "tile",
+                      "type": "link",
+                      "name": "Bastion",
+                      "url": "https://bastion.example.lan/",
+                      "icon": "mdi:server",
+                      "openMode": "newtab",
+                      "size": "medium",
+                      "order": 1
+                    },
+                    {
+                      "id": "sample-sh-folder-flat-3",
+                      "kind": "tile",
+                      "type": "link",
+                      "name": "Archive",
+                      "url": "https://archive.example.lan/",
+                      "icon": "mdi:database",
+                      "openMode": "newtab",
+                      "size": "medium",
+                      "order": 2
+                    }
+                  ]
+                },
+                "order": 2
+              },
+              {
+                "id": "sample-sh-folder-paper",
+                "kind": "folder",
+                "name": "Folder with paper",
+                "display": "expanded",
+                "shape": "folder-paper",
+                "tabPosition": "right",
+                "color": "#7c3aed",
+                "showTitle": true,
+                "size": "medium",
+                "contentSize": "medium",
+                "placement": {
+                  "x": 0,
+                  "y": 7,
+                  "w": 8,
+                  "h": 7
+                },
+                "content": {
+                  "children": [
+                    {
+                      "id": "sample-sh-folder-paper-1",
+                      "kind": "tile",
+                      "type": "link",
+                      "name": "Gateway",
+                      "url": "https://gateway.example.lan/",
+                      "icon": "mdi:lan",
+                      "openMode": "newtab",
+                      "size": "medium",
+                      "order": 0
+                    },
+                    {
+                      "id": "sample-sh-folder-paper-2",
+                      "kind": "tile",
+                      "type": "link",
+                      "name": "Lab VM",
+                      "url": "https://lab-vm.example.lan/",
+                      "icon": "mdi:server",
+                      "openMode": "newtab",
+                      "size": "medium",
+                      "order": 1
+                    },
+                    {
+                      "id": "sample-sh-folder-paper-3",
+                      "kind": "tile",
+                      "type": "link",
+                      "name": "Inventory",
+                      "url": "https://inventory.example.lan/",
+                      "icon": "mdi:database",
+                      "openMode": "newtab",
+                      "size": "medium",
+                      "order": 2
+                    }
+                  ]
+                },
+                "order": 3
+              },
+              {
+                "id": "sample-sh-folder-outline",
+                "kind": "folder",
+                "name": "Outlined folder",
+                "display": "expanded",
+                "shape": "folder-outline",
+                "tabPosition": "left",
+                "showTitle": true,
+                "size": "medium",
+                "contentSize": "medium",
+                "placement": {
+                  "x": 8,
+                  "y": 7,
+                  "w": 8,
+                  "h": 7
+                },
+                "content": {
+                  "children": [
+                    {
+                      "id": "sample-sh-folder-outline-1",
+                      "kind": "tile",
+                      "type": "link",
+                      "name": "Tunnel",
+                      "url": "https://tunnel.example.lan/",
+                      "icon": "mdi:lan",
+                      "openMode": "newtab",
+                      "size": "medium",
+                      "order": 0
+                    },
+                    {
+                      "id": "sample-sh-folder-outline-2",
+                      "kind": "tile",
+                      "type": "link",
+                      "name": "Media server",
+                      "url": "https://media-server.example.lan/",
+                      "icon": "mdi:server",
+                      "openMode": "newtab",
+                      "size": "medium",
+                      "order": 1
+                    },
+                    {
+                      "id": "sample-sh-folder-outline-3",
+                      "kind": "tile",
+                      "type": "link",
+                      "name": "Recipes",
+                      "url": "https://recipes.example.lan/",
+                      "icon": "mdi:database",
+                      "openMode": "newtab",
+                      "size": "medium",
+                      "order": 2
+                    }
+                  ]
+                },
+                "order": 4
+              },
+              {
+                "id": "sample-sh-folder-cartoon",
+                "kind": "folder",
+                "name": "Cartoon folder",
+                "display": "expanded",
+                "shape": "folder-cartoon",
+                "tabPosition": "centre",
+                "color": "#16a34a",
+                "showTitle": true,
+                "size": "medium",
+                "contentSize": "medium",
+                "placement": {
+                  "x": 16,
+                  "y": 7,
+                  "w": 8,
+                  "h": 7
+                },
+                "content": {
+                  "children": [
+                    {
+                      "id": "sample-sh-folder-cartoon-1",
+                      "kind": "tile",
+                      "type": "link",
+                      "name": "Switch 64",
+                      "url": "https://switch-64.example.lan/",
+                      "icon": "mdi:lan",
+                      "openMode": "newtab",
+                      "size": "medium",
+                      "order": 0
+                    },
+                    {
+                      "id": "sample-sh-folder-cartoon-2",
+                      "kind": "tile",
+                      "type": "link",
+                      "name": "Pi",
+                      "url": "https://pi.example.lan/",
+                      "icon": "mdi:server",
+                      "openMode": "newtab",
+                      "size": "medium",
+                      "order": 1
+                    },
+                    {
+                      "id": "sample-sh-folder-cartoon-3",
+                      "kind": "tile",
+                      "type": "link",
+                      "name": "Catalogue",
+                      "url": "https://catalogue.example.lan/",
+                      "icon": "mdi:database",
+                      "openMode": "newtab",
+                      "size": "medium",
+                      "order": 2
+                    }
+                  ]
+                },
+                "order": 5
+              },
+              {
+                "id": "sample-sh-folder-open",
+                "kind": "folder",
+                "name": "Open-flap folder",
+                "display": "expanded",
+                "shape": "folder-open",
+                "tabPosition": "right",
+                "color": "#db2777",
+                "showTitle": true,
+                "size": "medium",
+                "contentSize": "medium",
+                "placement": {
+                  "x": 0,
+                  "y": 14,
+                  "w": 8,
+                  "h": 7
+                },
+                "content": {
+                  "children": [
+                    {
+                      "id": "sample-sh-folder-open-1",
+                      "kind": "tile",
+                      "type": "link",
+                      "name": "Switch 67",
+                      "url": "https://switch-67.example.lan/",
+                      "icon": "mdi:lan",
+                      "openMode": "newtab",
+                      "size": "medium",
+                      "order": 0
+                    },
+                    {
+                      "id": "sample-sh-folder-open-2",
+                      "kind": "tile",
+                      "type": "link",
+                      "name": "Hypervisor 68",
+                      "url": "https://hypervisor-68.example.lan/",
+                      "icon": "mdi:server",
+                      "openMode": "newtab",
+                      "size": "medium",
+                      "order": 1
+                    },
+                    {
+                      "id": "sample-sh-folder-open-3",
+                      "kind": "tile",
+                      "type": "link",
+                      "name": "Notes DB",
+                      "url": "https://notes-db.example.lan/",
+                      "icon": "mdi:database",
+                      "openMode": "newtab",
+                      "size": "medium",
+                      "order": 2
+                    }
+                  ]
+                },
+                "order": 6
+              },
+              {
+                "id": "sample-sh-nest",
+                "kind": "folder",
+                "name": "Folders in folders",
+                "display": "expanded",
+                "shape": "folder-flat",
+                "tabPosition": "left",
+                "color": "#0891b2",
+                "showTitle": true,
+                "size": "medium",
+                "contentSize": "medium",
+                "placement": {
+                  "x": 8,
+                  "y": 14,
+                  "w": 12,
+                  "h": 10
+                },
+                "content": {
+                  "children": [
+                    {
+                      "id": "sample-sh-nest-1",
+                      "kind": "tile",
+                      "type": "link",
+                      "name": "Switch 70",
+                      "url": "https://switch-70.example.lan/",
+                      "icon": "mdi:lan",
+                      "openMode": "newtab",
+                      "size": "medium",
+                      "order": 0
+                    },
+                    {
+                      "id": "sample-sh-nest-a",
+                      "kind": "folder",
+                      "name": "Paper inside",
+                      "display": "expanded",
+                      "shape": "folder-paper",
+                      "tabPosition": "centre",
+                      "color": "#7c3aed",
+                      "showTitle": true,
+                      "size": "medium",
+                      "contentSize": "medium",
+                      "content": {
+                        "children": [
+                          {
+                            "id": "sample-sh-nesta-1",
+                            "kind": "tile",
+                            "type": "link",
+                            "name": "Switch 71",
+                            "url": "https://switch-71.example.lan/",
+                            "icon": "mdi:lan",
+                            "openMode": "newtab",
+                            "size": "medium",
+                            "order": 0
+                          },
+                          {
+                            "id": "sample-sh-nesta-2",
+                            "kind": "tile",
+                            "type": "link",
+                            "name": "Hypervisor 72",
+                            "url": "https://hypervisor-72.example.lan/",
+                            "icon": "mdi:server",
+                            "openMode": "newtab",
+                            "size": "medium",
+                            "order": 1
+                          },
+                          {
+                            "id": "sample-sh-nest-b",
+                            "kind": "folder",
+                            "name": "Open flap inside",
+                            "display": "expanded",
+                            "shape": "folder-open",
+                            "tabPosition": "right",
+                            "color": "#db2777",
+                            "showTitle": true,
+                            "size": "medium",
+                            "contentSize": "medium",
+                            "content": {
+                              "children": [
+                                {
+                                  "id": "sample-sh-nestb-1",
+                                  "kind": "tile",
+                                  "type": "link",
+                                  "name": "Switch 73",
+                                  "url": "https://switch-73.example.lan/",
+                                  "icon": "mdi:lan",
+                                  "openMode": "newtab",
+                                  "size": "medium",
+                                  "order": 0
+                                },
+                                {
+                                  "id": "sample-sh-nestb-2",
+                                  "kind": "tile",
+                                  "type": "link",
+                                  "name": "Hypervisor 74",
+                                  "url": "https://hypervisor-74.example.lan/",
+                                  "icon": "mdi:server",
+                                  "openMode": "newtab",
+                                  "size": "medium",
+                                  "order": 1
+                                }
+                              ]
+                            },
+                            "order": 2
+                          }
+                        ]
+                      },
+                      "order": 1
+                    }
+                  ]
+                },
+                "order": 7
+              },
+              {
+                "id": "sample-sh-min-s",
+                "kind": "folder",
+                "name": "Minimised",
+                "display": "collapsed",
+                "shape": "folder-cartoon",
+                "tabPosition": "left",
+                "color": "#16a34a",
+                "showTitle": true,
+                "size": "small",
+                "contentSize": "small",
+                "placement": {
+                  "x": 20,
+                  "y": 14,
+                  "w": 3,
+                  "h": 5
+                },
+                "content": {
+                  "children": [
+                    {
+                      "id": "sample-sh-mins-1",
+                      "kind": "tile",
+                      "type": "link",
+                      "name": "Switch 75",
+                      "url": "https://switch-75.example.lan/",
+                      "icon": "mdi:lan",
+                      "openMode": "newtab",
+                      "size": "medium",
+                      "order": 0
+                    },
+                    {
+                      "id": "sample-sh-mins-2",
+                      "kind": "tile",
+                      "type": "link",
+                      "name": "Hypervisor 76",
+                      "url": "https://hypervisor-76.example.lan/",
+                      "icon": "mdi:server",
+                      "openMode": "newtab",
+                      "size": "medium",
+                      "order": 1
+                    },
+                    {
+                      "id": "sample-sh-mins-3",
+                      "kind": "tile",
+                      "type": "link",
+                      "name": "Bookmarks",
+                      "url": "https://bookmarks.example.lan/",
+                      "icon": "mdi:database",
+                      "openMode": "newtab",
+                      "size": "medium",
+                      "order": 2
+                    }
+                  ]
+                },
+                "order": 8
+              },
+              {
+                "id": "sample-sh-tile",
+                "kind": "tile",
+                "type": "link",
+                "name": "Status page",
+                "url": "https://status-page.example.lan/",
+                "icon": "mdi:cloud",
+                "openMode": "newtab",
+                "size": "medium",
+                "order": 9,
+                "placement": {
+                  "x": 20,
+                  "y": 20,
+                  "w": 2,
+                  "h": 2
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

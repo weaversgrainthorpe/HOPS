@@ -3,7 +3,6 @@ package database
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"io/fs"
 	"time"
@@ -337,10 +336,15 @@ func runMigrations(db *sql.DB) error {
 		return fmt.Errorf("failed to check config: %w", err)
 	}
 
+	// A fresh data dir (no config row) is seeded with the native v3 Sample,
+	// verified first, so a fresh install never runs the v2→v3 converter and
+	// never archives an "original". An existing config row is never touched.
 	if configCount == 0 {
-		defaultConfig := DefaultConfig
-		_, err := db.Exec("INSERT INTO config (id, data) VALUES (1, ?)", defaultConfig)
+		doc, err := SampleDoc()
 		if err != nil {
+			return fmt.Errorf("failed to create default config: %w", err)
+		}
+		if err := configdoc.Save(db, doc); err != nil {
 			return fmt.Errorf("failed to create default config: %w", err)
 		}
 	}
@@ -348,26 +352,19 @@ func runMigrations(db *sql.DB) error {
 	return nil
 }
 
-// ResetConfig resets the configuration to the default state: the default v2
-// config converted and verified through the release path, as start-up does.
-// Any failure is returned (the caller shows it) and nothing is written.
+// ResetConfig resets the configuration to the default state: the shipped v3
+// Sample, verified before it is written. Any failure is returned (the caller
+// shows it) and nothing is written.
 func ResetConfig(db *sql.DB) error {
-	return resetConfigFrom(db, DefaultConfig)
+	return resetConfigFrom(db, SampleConfig)
 }
 
 func resetConfigFrom(db *sql.DB, raw string) error {
-	var v2 map[string]any
-	if err := json.Unmarshal([]byte(raw), &v2); err != nil {
-		return fmt.Errorf("default config is not valid JSON: %w", err)
-	}
-	v3, renames, sizes, err := configdoc.MigrateV2Full(v2)
+	doc, err := parseSample(raw)
 	if err != nil {
-		return fmt.Errorf("failed to convert default config to v3: %w", err)
+		return err
 	}
-	if err := configdoc.VerifyMigrationFull(v2, v3, renames, sizes); err != nil {
-		return fmt.Errorf("default config verification failed: %w", err)
-	}
-	return configdoc.Save(db, v3)
+	return configdoc.Save(db, doc)
 }
 
 // addColumnIfMissing adds a column to a table only if it doesn't already exist.
@@ -400,135 +397,3 @@ func addColumnIfMissing(db *sql.DB, table, column, definition string) error {
 	_, err = db.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", table, column, definition))
 	return err
 }
-
-// DefaultConfig is the initial configuration for a fresh HOPS installation
-const DefaultConfig = `{
-  "dashboards": [
-    {
-      "id": "sample",
-      "name": "Sample",
-      "path": "/sample",
-      "order": 0,
-      "tabs": [
-        {
-          "id": "main",
-          "name": "Main",
-          "color": "#3b82f6",
-          "opacity": 0.95,
-          "order": 0,
-          "groups": [
-            {
-              "id": "services",
-              "name": "Services",
-              "color": "#8b5cf6",
-              "opacity": 0.95,
-              "collapsed": false,
-              "order": 0,
-              "entries": [
-                {
-                  "id": "google",
-                  "name": "Google",
-                  "url": "https://google.com",
-                  "icon": "mdi:google",
-                  "description": "Search Engine",
-                  "openMode": "newtab",
-                  "size": "medium",
-                  "order": 0
-                },
-                {
-                  "id": "github",
-                  "name": "GitHub",
-                  "url": "https://github.com",
-                  "icon": "mdi:github",
-                  "description": "Code Repository",
-                  "openMode": "newtab",
-                  "size": "medium",
-                  "order": 1
-                },
-                {
-                  "id": "youtube",
-                  "name": "YouTube",
-                  "url": "https://youtube.com",
-                  "icon": "mdi:youtube",
-                  "description": "Video Platform",
-                  "openMode": "newtab",
-                  "size": "medium",
-                  "order": 2
-                }
-              ]
-            },
-            {
-              "id": "tools",
-              "name": "Development Tools",
-              "color": "#10b981",
-              "opacity": 0.95,
-              "collapsed": false,
-              "order": 1,
-              "entries": [
-                {
-                  "id": "stackoverflow",
-                  "name": "Stack Overflow",
-                  "url": "https://stackoverflow.com",
-                  "icon": "mdi:stack-overflow",
-                  "description": "Q&A for Developers",
-                  "openMode": "newtab",
-                  "size": "medium",
-                  "order": 0
-                },
-                {
-                  "id": "mdn",
-                  "name": "MDN Web Docs",
-                  "url": "https://developer.mozilla.org",
-                  "icon": "mdi:firefox",
-                  "description": "Web Development Documentation",
-                  "openMode": "newtab",
-                  "size": "medium",
-                  "order": 1
-                }
-              ]
-            }
-          ]
-        },
-        {
-          "id": "media",
-          "name": "Media",
-          "color": "#f59e0b",
-          "opacity": 0.95,
-          "order": 1,
-          "groups": [
-            {
-              "id": "streaming",
-              "name": "Streaming Services",
-              "color": "#ef4444",
-              "opacity": 0.95,
-              "collapsed": false,
-              "order": 0,
-              "entries": [
-                {
-                  "id": "netflix",
-                  "name": "Netflix",
-                  "url": "https://netflix.com",
-                  "icon": "mdi:netflix",
-                  "description": "Streaming Service",
-                  "openMode": "newtab",
-                  "size": "large",
-                  "order": 0
-                },
-                {
-                  "id": "spotify",
-                  "name": "Spotify",
-                  "url": "https://spotify.com",
-                  "icon": "mdi:spotify",
-                  "description": "Music Streaming",
-                  "openMode": "newtab",
-                  "size": "medium",
-                  "order": 1
-                }
-              ]
-            }
-          ]
-        }
-      ]
-    }
-  ]
-}`
