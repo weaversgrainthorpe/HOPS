@@ -5,8 +5,8 @@
 #
 # Builds the frontend once, embeds it, then cross-builds the release binary
 # (no `dev` build tag) for each target with the version stamped
-# <VERSION>-<label>. Output: dist/<label>/hops-<os>-<arch>[.exe], install.sh
-# and SHA256SUMS.
+# <VERSION>-<label>. Output: dist/<label>/hops-<os>-<arch>[.exe], install.sh,
+# hops-proxmox.sh and SHA256SUMS.
 # Any failure stops the script with a non-zero exit; a partial dist/<label>
 # is removed before the build starts so stale binaries can never pass as new.
 set -euo pipefail
@@ -67,8 +67,9 @@ for t in "${targets[@]}"; do
   [[ -s $bin ]] || die "build for $name produced no binary"
 done
 
-echo "==> Adding install.sh"
+echo "==> Adding install.sh and hops-proxmox.sh"
 cp packaging/install.sh "$out/install.sh" || die "could not copy packaging/install.sh"
+cp packaging/proxmox/hops-proxmox.sh "$out/hops-proxmox.sh" || die "could not copy packaging/proxmox/hops-proxmox.sh"
 
 echo "==> Writing SHA256SUMS"
 (cd "$out" && sha256sum hops-* install.sh > SHA256SUMS) || die "sha256sum failed"
