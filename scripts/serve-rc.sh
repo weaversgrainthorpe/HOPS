@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Serve a built release candidate (dist/<label>) over HTTP on the LAN so
-# install.sh / the Proxmox script / the OVA build can download it.
+# install.sh and the Proxmox script can download it.
 #
 #   scripts/serve-rc.sh <label> [port]      (port defaults to 8099)
 #

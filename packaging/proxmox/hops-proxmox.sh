@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# HOPS on Proxmox VE — creates an LXC container (default) or a VM and installs
-# HOPS in it with the shared installer (install.sh).
+# HOPS on Proxmox VE — creates an unprivileged Debian 12 LXC container and
+# installs HOPS in it with the shared installer (install.sh).
 #
 # Run as root in the Proxmox host shell:
 #
@@ -8,13 +8,13 @@
 #   bash hops-proxmox.sh --url http://172.16.0.50:8099 --yes
 #
 # Options (install options only; HOPS settings live in its own GUI):
-#   --type ct|vm        Container (default) or virtual machine.
-#   --id <n>            CT/VM ID. Default: the next free ID.
+#   --id <n>            Container ID. Default: the next free ID.
 #   --hostname <name>   Default: hops.
 #   --cores <n>         Default: 1.
-#   --memory <MB>       Default: 256 (CT) or 512 (VM).
-#   --disk <GB>         Default: 2 (CT) or 4 (VM).
-#   --storage <name>    Storage for the CT/VM disk. Default: local-lvm if
+#   --memory <MB>       Default: 256.
+#   --disk <GB>         Default: 2.
+#   --storage <name>    Storage for the container disk (must be active and
+#                       allow container content). Default: local-lvm if
 #                       present, else the first storage that can hold it.
 #   --bridge <name>     Network bridge (DHCP). Default: vmbr0.
 #   --url <base>        Where install.sh, SHA256SUMS and the HOPS binaries
@@ -22,40 +22,37 @@
 #                       release (or the --version release).
 #   --version <x.y.z>   Install this HOPS version; it must report it on
 #                       /api/health or the install counts as failed.
-#   --ssh-key <file>    Public key file to authorise for root (CT) or the
-#                       default 'debian' user (VM). Without it there is no
-#                       SSH login and no password: use the Proxmox console.
-#   --template-storage <name>  CT only: where the Debian 12 template is kept.
+#   --ssh-key <file>    Public key file to authorise for root SSH. No root
+#                       password is set; `pct enter <id>` on this host
+#                       always gives a root shell.
+#   --template-storage <name>  Where the Debian 12 template is kept.
 #                       Default: local.
-#   --snippet-storage <name>   VM only: storage with 'snippets' content for
-#                       the cloud-init user-data. Default: local.
 #   --yes               Do not ask; use the flags and defaults as given.
 #                       Needed when there is no terminal.
-#   --dry-run           Print every pct/qm/pveam/pvesm/pvesh command that
+#   --dry-run           Print every pct/pveam/pvesm/pvesh command that
 #                       would run, change nothing, and exit 0.
 #   -h, --help          Show this help.
 #
 # HOPS listens on port 8080 on a fresh install (change it later in HOPS,
-# under Settings). The script finishes only when http://<guest-ip>:8080/api/health
+# under Settings). The script finishes only when http://<ct-ip>:8080/api/health
 # answers from this host; anything less is reported as a failure.
+#
+# The whole script is one main() called on the last line, so a truncated
+# download piped to bash runs nothing.
 set -Eeuo pipefail
 
 DEFAULT_URL="https://github.com/weaversgrainthorpe/HOPS/releases/latest/download"
 RELEASE_URL_PREFIX="https://github.com/weaversgrainthorpe/HOPS/releases/download"
-DEBIAN_IMG_BASE="https://cloud.debian.org/images/cloud/bookworm/latest"
-DEBIAN_IMG="debian-12-genericcloud-amd64.qcow2"
 HOPS_PORT=8080
 CT_NET_TIMEOUT=90
 CT_HEALTH_TIMEOUT=60
-VM_IP_TIMEOUT=600
-VM_HEALTH_TIMEOUT=900
 
 # ---- output / failure ------------------------------------------------------
 
 step="start-up"
-created=""          # "ct" or "vm" once the guest exists
-snippet_file=""     # VM user-data snippet written by this run
+created=0           # 1 once the container exists
 tmp=""
+id=""
 
 log()  { echo "hops-proxmox: $*"; }
 warn() { echo "hops-proxmox: WARNING: $*" >&2; }
@@ -66,15 +63,9 @@ fail() {
   echo >&2
   echo "hops-proxmox: ERROR during step '$step': $1" >&2
   [[ -n ${2:-} ]] && echo "hops-proxmox: what to do: $2" >&2
-  if [[ $created == ct ]]; then
-    echo "hops-proxmox: container $id WAS CREATED and is left as it is for inspection (pct enter $id)." >&2
+  if (( created )); then
+    echo "hops-proxmox: container $id WAS CREATED and is left as it is for inspection (root shell: pct enter $id)." >&2
     echo "hops-proxmox: to remove it:  pct destroy $id --purge --force" >&2
-  elif [[ $created == vm ]]; then
-    echo "hops-proxmox: VM $id WAS CREATED and is left as it is for inspection (Proxmox console)." >&2
-    echo "hops-proxmox: to remove it:  qm destroy $id --purge" >&2
-  fi
-  if [[ -n $snippet_file ]]; then
-    echo "hops-proxmox: and its cloud-init snippet:  rm -f $snippet_file" >&2
   fi
   echo "hops-proxmox: HOPS was NOT installed successfully." >&2
   exit 1
@@ -87,17 +78,48 @@ on_err() {
 trap 'on_err $? $LINENO "$BASH_COMMAND"' ERR
 trap 'if [[ -n $tmp ]]; then rm -rf "$tmp"; fi' EXIT
 
-usage() { sed -n '2,/^set -Eeuo/{/^set -Eeuo/d;s/^# \{0,1\}//;p}' "$0" 2>/dev/null || true; }
+usage() {
+  cat <<'EOF'
+HOPS on Proxmox VE: creates an unprivileged Debian 12 LXC container and
+installs HOPS in it with install.sh. Run as root in the Proxmox host shell.
 
-# ---- options ---------------------------------------------------------------
+  bash hops-proxmox.sh                                   # menus (whiptail)
+  bash hops-proxmox.sh --url http://172.16.0.50:8099 --yes
 
-type="" id="" hostname="hops" cores="1" memory="" disk="" storage="" bridge="vmbr0"
-url="" version="" ssh_key="" tstore="local" sstore="local" yes=0 dry=0
+Options:
+  --id <n>                  Container ID (default: next free)
+  --hostname <name>         Default: hops
+  --cores <n>               Default: 1
+  --memory <MB>             Default: 256
+  --disk <GB>               Default: 2
+  --storage <name>          Container disk storage (default: local-lvm, else
+                            the first active storage for containers)
+  --bridge <name>           Network bridge, DHCP (default: vmbr0)
+  --url <base>              Where install.sh, SHA256SUMS and the binaries are
+                            (default: the latest GitHub release)
+  --version <x.y.z>         Require this HOPS version on /api/health
+  --ssh-key <file>          Public key for root SSH (no password is set;
+                            `pct enter <id>` always gives a shell)
+  --template-storage <name> Where the Debian 12 template is kept (default: local)
+  --yes                     No questions; use flags and defaults
+  --dry-run                 Print the commands that would run; change nothing
+  -h, --help                This help
+EOF
+}
+
+# ct_storages — active storages that can hold container disks.
+ct_storages() { pvesm status -content rootdir 2>/dev/null | awk 'NR>1 && $3=="active" {print $1}'; }
 
 need() { [[ $# -ge 2 ]] || fail "$1 needs a value" "see --help"; }
+
+main() {
+# ---- options ---------------------------------------------------------------
+
+hostname="hops" cores="1" memory="256" disk="2" storage="" bridge="vmbr0"
+url="" version="" ssh_key="" tstore="local" yes=0 dry=0
+
 while [[ $# -gt 0 ]]; do
   case $1 in
-    --type) need "$@"; type=$2; shift 2 ;;
     --id) need "$@"; id=$2; shift 2 ;;
     --hostname) need "$@"; hostname=$2; shift 2 ;;
     --cores) need "$@"; cores=$2; shift 2 ;;
@@ -109,7 +131,6 @@ while [[ $# -gt 0 ]]; do
     --version) need "$@"; version=$2; shift 2 ;;
     --ssh-key) need "$@"; ssh_key=$2; shift 2 ;;
     --template-storage) need "$@"; tstore=$2; shift 2 ;;
-    --snippet-storage) need "$@"; sstore=$2; shift 2 ;;
     --yes|-y) yes=1; shift ;;
     --dry-run) dry=1; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -147,7 +168,7 @@ query() {
 
 step="preflight"
 is_pve=1
-for c in pveversion pct qm pveam pvesm pvesh; do
+for c in pveversion pct pveam pvesm pvesh; do
   command -v "$c" >/dev/null 2>&1 || is_pve=0
 done
 if (( is_pve )); then
@@ -157,7 +178,7 @@ if (( ! is_pve )); then
   if (( dry )); then
     warn "this is not a Proxmox VE host; --dry-run uses placeholders for Proxmox queries"
   else
-    fail "this is not a Proxmox VE host (pveversion/pct/qm/pveam/pvesm/pvesh not all found)" \
+    fail "this is not a Proxmox VE host (pveversion/pct/pveam/pvesm/pvesh not all found)" \
       "run this script in the shell of a Proxmox VE node (Datacenter > node > Shell)"
   fi
 else
@@ -188,30 +209,16 @@ step="choices"
 wt() { whiptail --backtitle "HOPS on Proxmox VE" "$@" 3>&1 1>&2 2>&3; }
 cancelled() { echo "hops-proxmox: cancelled; nothing was changed." >&2; exit 1; }
 
-if [[ -z $type ]] && (( interactive )); then
-  type=$(wt --title "Install HOPS" --menu "Install HOPS in:" 12 64 2 \
-    ct "LXC container (recommended, 256 MB)" \
-    vm "Virtual machine (Debian 12 cloud image, 512 MB)") || cancelled
-fi
-type=${type:-ct}
-[[ $type == ct || $type == vm ]] || fail "--type must be ct or vm (got '$type')"
-
-if [[ $type == ct ]]; then memory=${memory:-256}; disk=${disk:-2}; else memory=${memory:-512}; disk=${disk:-4}; fi
-
 if [[ -z $id ]]; then
   id=$(query "<next-free-id>" pvesh get /cluster/nextid) || fail "could not get the next free ID (pvesh get /cluster/nextid)" "pass one with --id"
 fi
 
-# first_storage <content> — prints the preferred active storage for a content type.
-first_storage() {
-  local want=$1 prefer=$2 list
-  list=$(pvesm status -content "$want" 2>/dev/null | awk 'NR>1 && $3=="active" {print $1}') || list=""
-  if grep -qx "$prefer" <<<"$list"; then echo "$prefer"; else head -n1 <<<"$list"; fi
-}
 if [[ -z $storage ]]; then
   if (( is_pve )); then
-    if [[ $type == ct ]]; then storage=$(first_storage rootdir local-lvm); else storage=$(first_storage images local-lvm); fi
-    [[ -n $storage ]] || fail "no active storage can hold a $type disk" "pass one with --storage (see: pvesm status)"
+    local list
+    list=$(ct_storages) || list=""
+    if grep -qx local-lvm <<<"$list"; then storage=local-lvm; else storage=$(head -n1 <<<"$list"); fi
+    [[ -n $storage ]] || fail "no active storage can hold a container disk" "pass one with --storage (see: pvesm status -content rootdir)"
   else
     storage="<storage>"
   fi
@@ -220,11 +227,11 @@ url=${url%/}
 
 if (( interactive )); then
   summary() {
-    printf 'Type: %s\nID: %s\nHostname: %s\nCores: %s\nMemory: %s MB\nDisk: %s GB on %s\nNetwork: DHCP on %s\nDownload from: %s\n' \
-      "$type" "$id" "$hostname" "$cores" "$memory" "$disk" "$storage" "$bridge" "${url:-GitHub release}"
+    printf 'Container ID: %s\nHostname: %s\nCores: %s\nMemory: %s MB\nDisk: %s GB on %s\nNetwork: DHCP on %s\nDownload from: %s\n' \
+      "$id" "$hostname" "$cores" "$memory" "$disk" "$storage" "$bridge" "${url:-GitHub release}"
   }
   if ! wt --title "Settings" --yes-button "Install" --no-button "Change" --yesno "$(summary)" 18 70; then
-    id=$(wt --inputbox "ID" 8 60 "$id") || cancelled
+    id=$(wt --inputbox "Container ID" 8 60 "$id") || cancelled
     hostname=$(wt --inputbox "Hostname" 8 60 "$hostname") || cancelled
     cores=$(wt --inputbox "CPU cores" 8 60 "$cores") || cancelled
     memory=$(wt --inputbox "Memory (MB)" 8 60 "$memory") || cancelled
@@ -269,11 +276,12 @@ if (( is_pve )); then
   if [[ $id != "<next-free-id>" ]]; then
     pvesh get /cluster/nextid --vmid "$id" >/dev/null 2>&1 || fail "ID $id is already in use" "choose another --id, or leave it out for the next free one"
   fi
-  pvesm status -storage "$storage" >/dev/null 2>&1 || fail "storage '$storage' does not exist or is not active" "see: pvesm status"
+  ct_storages | grep -qx -- "$storage" \
+    || fail "storage '$storage' does not exist, is not active, or does not allow container disks" "see: pvesm status -content rootdir; pass --storage"
   ip link show "$bridge" >/dev/null 2>&1 || fail "network bridge '$bridge' does not exist on this host" "see: ip link (or Datacenter > node > Network); pass --bridge"
 fi
 
-log "plan: $type $id '$hostname', $cores core(s), ${memory} MB, ${disk} GB on $storage, DHCP on $bridge"
+log "plan: CT $id '$hostname', $cores core(s), ${memory} MB, ${disk} GB on $storage, DHCP on $bridge"
 log "HOPS download: $url${version:+ (version $version)}"
 (( dry )) && log "DRY RUN — the commands below are printed, not run."
 
@@ -306,7 +314,7 @@ health_body=""
 health_from_host() {
   local ip=$1 deadline=$((SECONDS + $2))
   while (( SECONDS < deadline )); do
-    if health_body=$(curl -fsS --max-time 5 "http://$ip:$HOPS_PORT/api/health" 2>/dev/null) \
+    if health_body=$(curl -fsS --noproxy '*' --max-time 5 "http://$ip:$HOPS_PORT/api/health" 2>/dev/null) \
        && [[ $health_body == *'"status":"ok"'* ]] \
        && [[ -z $version || $health_body == *"\"version\":\"$version\""* ]]; then
       return 0
@@ -318,12 +326,12 @@ health_from_host() {
 
 done_banner() {
   echo
-  log "HOPS is installed and healthy in $1 $id ($hostname)."
+  log "HOPS is installed and healthy in CT $id ($hostname)."
   log "health: $health_body"
   echo
-  echo "  Open HOPS:  http://$2:$HOPS_PORT"
+  echo "  Open HOPS:  http://$1:$HOPS_PORT"
   echo
-  echo "  No password is set. Console: Proxmox > $id > Console${ssh_pub:+ (or SSH with your key)}."
+  echo "  Shell in the container: pct enter $id  (on this host; no root password is set${ssh_pub:+, or SSH as root with your key})"
   echo
 }
 
@@ -339,6 +347,8 @@ install_ct() {
     run pveam update || fail "pveam update failed" "check this host's internet access, then re-run"
     if (( is_pve )); then
       tmpl=$(pveam available --section system | awk '{print $2}' | grep '^debian-12-standard_' | sort -V | tail -n1) || tmpl=""
+      # --dry-run skips 'pveam update', so the index may be empty here.
+      if [[ -z $tmpl ]] && (( dry )); then tmpl="debian-12-standard_<latest>_amd64.tar.zst"; fi
       [[ -n $tmpl ]] || fail "no Debian 12 template is listed by 'pveam available --section system'" "run 'pveam update' and check its output"
     else
       tmpl="debian-12-standard_<ver>_amd64.tar.zst"
@@ -357,7 +367,7 @@ install_ct() {
     --description "HOPS (installed by hops-proxmox.sh)")
   [[ -n $ssh_key ]] && create+=(--ssh-public-keys "$ssh_key")
   run "${create[@]}" || fail "pct create failed (see the message above)" "fix the cause (storage, ID, template) and re-run"
-  (( dry )) || created=ct
+  (( dry )) || created=1
 
   step="pct start"
   run pct start "$id" || fail "pct start $id failed" "see: pct start $id --debug"
@@ -399,171 +409,12 @@ install_ct() {
   health_from_host "$ip" "$CT_HEALTH_TIMEOUT" \
     || fail "HOPS is healthy inside CT $id but http://$ip:$HOPS_PORT/api/health does not answer${version:+ version $version} from this host${health_body:+ (last answer: $health_body)}" \
       "check firewalls between this host and the CT (Proxmox firewall on net0)"
-  done_banner CT "$ip"
+  done_banner "$ip"
 }
 
-# ---- VM --------------------------------------------------------------------
-
-# user_data — prints the cloud-init user-data for the VM.
-user_data() {
-  local q_url q_sha q_ver
-  q_url=$(printf '%q' "$url"); q_sha=$(printf '%q' "$install_sha"); q_ver=$(printf '%q' "$version")
-  cat <<EOF
-#cloud-config
-# Written by hops-proxmox.sh for VM $id. No password is set for any user.
-hostname: $hostname
-manage_etc_hosts: true
-package_update: true
-packages:
-  - curl
-  - ca-certificates
-  - qemu-guest-agent
-EOF
-  if [[ -n $ssh_pub ]]; then
-    printf "ssh_authorized_keys:\n  - '%s'\n" "$ssh_pub"
-  fi
-  cat <<EOF
-write_files:
-  - path: /usr/local/sbin/hops-firstboot.sh
-    permissions: '0755'
-    content: |
-      #!/bin/bash
-      set -euo pipefail
-      url=$q_url
-      want=$q_sha
-      version=$q_ver
-EOF
-  sed 's/^/      /' <<'EOF'
-d=$(mktemp -d)
-curl -fsSL --retry 5 --connect-timeout 15 -o "$d/install.sh" "$url/install.sh"
-curl -fsSL --retry 5 --connect-timeout 15 -o "$d/SHA256SUMS" "$url/SHA256SUMS"
-listed=$(awk '$2=="install.sh" || $2=="*install.sh" {print $1; exit}' "$d/SHA256SUMS")
-got=$(sha256sum "$d/install.sh" | awk '{print $1}')
-if [ -z "$listed" ] || [ "$got" != "$listed" ] || [ "$got" != "$want" ]; then
-  echo "hops-firstboot: install.sh checksum mismatch (got $got, SHA256SUMS $listed, host verified $want)" >&2
-  exit 1
-fi
-args=(--url "$url")
-[ -n "$version" ] && args+=(--version "$version")
-bash "$d/install.sh" "${args[@]}"
-EOF
-  cat <<'EOF'
-runcmd:
-  - [systemctl, enable, --now, qemu-guest-agent]
-  - [bash, -c, '/usr/local/sbin/hops-firstboot.sh > /var/log/hops-firstboot.log 2>&1; echo $? > /var/log/hops-firstboot.status']
-EOF
-}
-
-# guest_out <cmd...> — runs a command in the VM via the guest agent and prints
-# its stdout ("" if the agent cannot run it).
-guest_out() {
-  local json
-  json=$(qm guest exec "$id" -- "$@" 2>/dev/null) || return 1
-  [[ $json == *'"exitcode" : 0'* || $json == *'"exitcode":0'* ]] || return 1
-  printf '%b' "$(sed -n 's/.*"out-data" *: *"\(.*\)".*/\1/p' <<<"$json" | head -n1)"
-}
-
-install_vm() {
-  step="snippet storage"
-  local sdir="" sname="hops-$id-user.yaml"
-  if (( is_pve )); then
-    pvesm status -content snippets 2>/dev/null | awk 'NR>1 {print $1}' | grep -qx "$sstore" \
-      || fail "storage '$sstore' does not allow 'snippets' content, which the VM's cloud-init user-data needs" \
-        "enable it in Datacenter > Storage > $sstore > Content > Snippets (or: pvesm set $sstore --content <existing>,snippets), or pass --snippet-storage <storage-with-snippets>. Nothing was created."
-    snippet_path=$(pvesm path "$sstore:snippets/$sname") || fail "could not resolve the snippet path for $sstore:snippets/$sname"
-    sdir=$(dirname "$snippet_path")
-  else
-    snippet_path="<$sstore-snippets-dir>/$sname"
-  fi
-
-  step="Debian image"
-  echo "+ curl -fsSL $DEBIAN_IMG_BASE/$DEBIAN_IMG  (verified against $DEBIAN_IMG_BASE/SHA512SUMS)"
-  if (( ! dry )); then
-    curl -fsSL --retry 3 --connect-timeout 15 -o "$tmp/SHA512SUMS" "$DEBIAN_IMG_BASE/SHA512SUMS" \
-      || fail "could not download Debian's SHA512SUMS from $DEBIAN_IMG_BASE" "check this host's internet access"
-    local want got
-    want=$(awk -v f="$DEBIAN_IMG" '$2==f || $2=="*" f {print $1; exit}' "$tmp/SHA512SUMS")
-    [[ -n $want ]] || fail "Debian's SHA512SUMS has no entry for $DEBIAN_IMG"
-    log "downloading $DEBIAN_IMG (about 350 MB) ..."
-    curl -fSL --retry 3 --connect-timeout 15 -o "$tmp/$DEBIAN_IMG" "$DEBIAN_IMG_BASE/$DEBIAN_IMG" \
-      || fail "could not download $DEBIAN_IMG_BASE/$DEBIAN_IMG" "check this host's internet access and free space in $tmp"
-    got=$(sha512sum "$tmp/$DEBIAN_IMG" | awk '{print $1}')
-    [[ $got == "$want" ]] || fail "$DEBIAN_IMG checksum mismatch (expected $want, got $got)" "re-run; if it repeats, the mirror or download is bad"
-    log "$DEBIAN_IMG checksum OK"
-  fi
-
-  step="cloud-init snippet"
-  echo "+ write $snippet_path:"
-  user_data | sed 's/^/    | /'
-  if (( ! dry )); then
-    [[ -d $sdir ]] || fail "snippet directory $sdir does not exist"
-    [[ ! -e $snippet_path ]] || fail "$snippet_path already exists (left by an earlier VM $id?)" "remove it if VM $id is gone, then re-run"
-    user_data > "$snippet_path" || fail "could not write $snippet_path"
-    snippet_file=$snippet_path
-  fi
-
-  step="qm create"
-  run qm create "$id" --name "$hostname" --cores "$cores" --memory "$memory" \
-    --net0 "virtio,bridge=$bridge" --scsihw virtio-scsi-pci --ostype l26 \
-    --serial0 socket --vga serial0 --agent enabled=1 --onboot 1 \
-    --description "HOPS (installed by hops-proxmox.sh)" \
-    || fail "qm create failed (see the message above)" "fix the cause and re-run"
-  (( dry )) || created=vm
-
-  step="import disk"
-  run qm set "$id" --scsi0 "$storage:0,import-from=$tmp/$DEBIAN_IMG,discard=on" \
-    || fail "importing the Debian image into $storage failed" "check free space on '$storage' (pvesm status)"
-  run qm resize "$id" scsi0 "${disk}G" \
-    || fail "resizing the disk to ${disk} GB failed" "the image may already be larger; use a bigger --disk"
-
-  step="cloud-init drive"
-  run qm set "$id" --ide2 "$storage:cloudinit" --boot order=scsi0 --ipconfig0 ip=dhcp \
-    --cicustom "user=$sstore:snippets/$sname" \
-    || fail "adding the cloud-init drive failed"
-
-  step="qm start"
-  run qm start "$id" || fail "qm start $id failed" "see the VM's task log in the Proxmox GUI"
-
-  step="VM address"
-  echo "+ wait up to ${VM_IP_TIMEOUT}s for the guest agent to report an IPv4 address (qm guest cmd $id network-get-interfaces)"
-  local ip="<vm-ip>"
-  if (( ! dry )); then
-    ip=""
-    local deadline=$((SECONDS + VM_IP_TIMEOUT)) json
-    while (( SECONDS < deadline )); do
-      if json=$(qm guest cmd "$id" network-get-interfaces 2>/dev/null); then
-        ip=$(grep -oE '"ip-address" *: *"[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+"' <<<"$json" | grep -oE '[0-9]+(\.[0-9]+){3}' | grep -v '^127\.' | head -n1) || ip=""
-        [[ -n $ip ]] && break
-      fi
-      sleep 5
-    done
-    [[ -n $ip ]] || fail "VM $id did not report an IPv4 address within ${VM_IP_TIMEOUT}s (guest agent)" \
-      "open the VM console (Proxmox > $id > Console) and check that it booted, got DHCP on '$bridge' and installed qemu-guest-agent (cloud-init: /var/log/cloud-init-output.log)"
-    log "VM $id address: $ip"
-  fi
-
-  step="HOPS first-boot install"
-  echo "+ poll http://$ip:$HOPS_PORT/api/health from this host (up to ${VM_HEALTH_TIMEOUT}s), checking /var/log/hops-firstboot.status in the guest"
-  if (( dry )); then return 0; fi
-  local deadline=$((SECONDS + VM_HEALTH_TIMEOUT)) status
-  while (( SECONDS < deadline )); do
-    if health_from_host "$ip" 15; then
-      done_banner VM "$ip"
-      return 0
-    fi
-    status=$(guest_out cat /var/log/hops-firstboot.status 2>/dev/null | tr -dc '0-9') || status=""
-    if [[ -n $status && $status != 0 ]]; then
-      echo "---- /var/log/hops-firstboot.log (last lines, from the guest) ----" >&2
-      guest_out tail -n 40 /var/log/hops-firstboot.log >&2 || echo "(could not read it via the guest agent)" >&2
-      echo "------------------------------------------------------------------" >&2
-      fail "install.sh in VM $id failed on first boot (exit code $status)" \
-        "see the log above; in the VM console: cat /var/log/hops-firstboot.log /var/log/cloud-init-output.log"
-    fi
-  done
-  fail "HOPS in VM $id did not answer http://$ip:$HOPS_PORT/api/health${version:+ with version $version} within ${VM_HEALTH_TIMEOUT}s${health_body:+ (last answer: $health_body)}" \
-    "in the VM console: cat /var/log/hops-firstboot.log /var/log/cloud-init-output.log; check firewalls"
-}
-
-if [[ $type == ct ]]; then install_ct; else install_vm; fi
+install_ct
 (( dry )) && log "dry run complete; nothing was changed."
 exit 0
+}
+
+main "$@"

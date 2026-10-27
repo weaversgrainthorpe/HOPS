@@ -3,7 +3,7 @@
 #
 #   packaging/proxmox/test/run-tests.sh
 #
-# Puts stub pct/qm/pveam/pvesm/pvesh/pveversion/curl/id/ip/sleep commands
+# Puts stub pct/pveam/pvesm/pvesh/pveversion/curl/id/ip/sleep commands
 # first on PATH. Each stub logs its argv to a log file; the tests then check
 # what the script ran (or did not run) and its exit code and messages.
 # STUB_* variables below are test-harness plumbing only.
@@ -17,13 +17,11 @@ INSTALL_SH="$HERE/../../install.sh"
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 stubs="$work/stubs"
-mkdir -p "$stubs" "$work/snippets" "$work/served"
+mkdir -p "$stubs" "$work/served" "$work/empty-path"
 
 # What the fake download server holds.
 cp "$INSTALL_SH" "$work/served/install.sh"
 (cd "$work/served" && sha256sum install.sh > SHA256SUMS)
-printf 'fake qcow2\n' > "$work/served/debian.qcow2"
-echo "$(sha512sum "$work/served/debian.qcow2" | awk '{print $1}')  debian-12-genericcloud-amd64.qcow2" > "$work/served/SHA512SUMS"
 
 stub() { # stub <name> <body>
   { echo '#!/usr/bin/env bash'
@@ -42,18 +40,13 @@ if [[ $* == "get /cluster/nextid --vmid "* ]]; then echo "${4}"; exit 0; fi
 exit 0'
 stub pvesm '
 case "$*" in
-  "status -content rootdir"|"status -content images")
-    printf "Name Type Status Total Used Available %%\nlocal dir active 1 1 1 1%%\nlocal-lvm lvmthin active 1 1 1 1%%\n" ;;
-  "status -content snippets")
-    if [[ ${STUB_NO_SNIPPETS:-} == 1 ]]; then printf "Name Type Status Total Used Available %%\n"
-    else printf "Name Type Status Total Used Available %%\nlocal dir active 1 1 1 1%%\n"; fi ;;
-  "status -storage "*) exit 0 ;;
-  "path local:snippets/"*) echo "$STUB_DIR/snippets/${2#local:snippets/}" ;;
+  "status -content rootdir")
+    printf "Name Type Status Total Used Available %%\nlocal-lvm lvmthin active 1 1 1 1%%\nslow dir disabled 0 0 0 0%%\n" ;;
 esac'
 stub pveam '
 case "$1" in
   list) echo "NAME SIZE" ;;
-  available) printf "system          alpine-3.20-default_20240908_amd64.tar.xz\nsystem          debian-12-standard_12.7-1_amd64.tar.zst\nsystem          debian-11-standard_11.7-1_amd64.tar.zst\n" ;;
+  available) [[ ${STUB_EMPTY_INDEX:-} == 1 ]] && exit 0; printf "system          alpine-3.20-default_20240908_amd64.tar.xz\nsystem          debian-12-standard_12.7-1_amd64.tar.zst\nsystem          debian-11-standard_11.7-1_amd64.tar.zst\n" ;;
 esac'
 stub pct '
 case "$1" in
@@ -61,13 +54,6 @@ case "$1" in
     if [[ $* == *"hostname -I"* ]]; then echo "10.0.0.42 "; exit 0; fi
     if [[ $* == *hops-install.sh* ]]; then echo "hops-install: HOPS installed and healthy."; exit "${STUB_INSTALL_RC:-0}"; fi ;;
 esac'
-stub qm '
-if [[ $1 == guest && $2 == cmd ]]; then
-  printf "[{\"name\":\"lo\",\"ip-addresses\":[{\"ip-address\":\"127.0.0.1\",\"ip-address-type\":\"ipv4\"}]},{\"name\":\"eth0\",\"ip-addresses\":[{\"ip-address\" : \"10.0.0.43\",\"ip-address-type\":\"ipv4\"}]}]\n"
-fi
-if [[ $1 == guest && $2 == exec ]]; then
-  printf "{\n   \"exitcode\" : 0,\n   \"exited\" : 1,\n   \"out-data\" : \"0\\\\n\"\n}\n"
-fi'
 stub curl '
 out=""; url=""
 while [[ $# -gt 0 ]]; do
@@ -75,8 +61,6 @@ while [[ $# -gt 0 ]]; do
 done
 case $url in
   */api/health) echo "{\"status\":\"ok\",\"version\":\"${STUB_HOPS_VERSION:-3.0.0-rc1}\"}"; exit 0 ;;
-  */SHA512SUMS) src=SHA512SUMS ;;
-  */debian-12-genericcloud-amd64.qcow2) src=debian.qcow2 ;;
   */install.sh) src=install.sh ;;
   */SHA256SUMS) src=SHA256SUMS ;;
   *) echo "curl stub: unknown url $url" >&2; exit 22 ;;
@@ -98,7 +82,7 @@ runit() {
   local rc=0
   env PATH="$stubs:$PATH" STUB_LOG="$work/$name.log" STUB_DIR="$work" \
     STUB_FAIL="${STUB_FAIL:-}" STUB_INSTALL_RC="${STUB_INSTALL_RC:-0}" STUB_TAMPER="${STUB_TAMPER:-}" \
-    STUB_NO_SNIPPETS="${STUB_NO_SNIPPETS:-}" \
+    STUB_EMPTY_INDEX="${STUB_EMPTY_INDEX:-}" \
     bash "$SCRIPT" "$@" < /dev/null > "$work/$name.out" 2>&1 || rc=$?
   if [[ $rc != "$want" ]]; then
     bad "$name: exit $rc, wanted $want"; sed 's/^/    /' "$work/$name.out"; return 1
@@ -108,7 +92,7 @@ runit() {
 has()    { grep -qE -- "$3" "$work/$1.$2" || { bad "$1: $2 lacks /$3/"; return 1; }; }
 hasnt()  { ! grep -qE -- "$3" "$work/$1.$2" || { bad "$1: $2 unexpectedly has /$3/"; return 1; }; }
 
-MUTATING='^(pct (create|start|exec|push|destroy)|qm (create|set|resize|start|destroy|importdisk)|pveam (update|download)|curl )'
+MUTATING='^(pct (create|start|exec|push|destroy)|pveam (update|download)|curl )'
 
 echo "== syntax + shellcheck"
 if bash -n "$SCRIPT"; then ok "bash -n"; else bad "bash -n"; fi
@@ -138,19 +122,6 @@ else
   bad "dry-run without Proxmox (rc $rc)"; sed 's/^/    /' "$work/noprox.out"
 fi
 
-echo "== dry-run VM"
-if runit dry_vm 0 --dry-run --type vm --id 120 --url http://172.16.0.50:8099 --version 3.0.0-rc1; then
-  t=dry_vm
-  has $t out '^\+ qm create 120 .*--cores 1 --memory 512 .*virtio,bridge=vmbr0 .*--serial0 socket .*--agent enabled=1' &&
-  has $t out '^\+ qm set 120 --scsi0 local-lvm:0,import-from=.*debian-12-genericcloud-amd64.qcow2' &&
-  has $t out '^\+ qm set 120 --ide2 local-lvm:cloudinit .*--cicustom user=local:snippets/hops-120-user.yaml' &&
-  has $t out '^\+ qm start 120' &&
-  has $t out 'qemu-guest-agent' &&
-  has $t out 'version=3.0.0-rc1' &&
-  hasnt $t log "$MUTATING" &&
-  [[ -z $(ls -A "$work/snippets") ]] && ok "dry-run VM prints commands + user-data, writes nothing"
-fi
-
 echo "== full CT run (stubs succeed)"
 if runit full_ct 0 --yes --url http://172.16.0.50:8099 --hostname hops-trial; then
   t=full_ct
@@ -161,7 +132,9 @@ if runit full_ct 0 --yes --url http://172.16.0.50:8099 --hostname hops-trial; th
   has $t log '^pct exec 105 -- bash /root/hops-install.sh --url http://172.16.0.50:8099$' &&
   has $t log '^curl .*http://10.0.0.42:8080/api/health' &&
   has $t out 'install.sh checksum OK' &&
-  has $t out 'Open HOPS:  http://10.0.0.42:8080' && ok "full CT run installs, checks health from host, prints URL"
+  has $t log '^curl .*--noproxy' &&
+  has $t out 'Open HOPS:  http://10.0.0.42:8080' &&
+  has $t out 'pct enter 105' && hasnt $t out 'Console' && ok "full CT run installs, checks health from host, prints URL + pct enter"
 fi
 
 echo "== CT: pct start fails after create"
@@ -196,33 +169,17 @@ fi
 echo "== ID in use, no TTY without --yes, bad options"
 runit idused 1 --yes --id 200 --url http://172.16.0.50:8099 && has idused out 'ID 200 is already in use' && hasnt idused log '^pct create' && ok "ID in use refused"
 runit notty 1 --url http://172.16.0.50:8099 && has notty out 'no terminal' && ok "no TTY needs --yes"
-runit badtype 1 --yes --type lxc && has badtype out 'must be ct or vm' && ok "bad --type refused"
+runit badtype 1 --yes --type vm && has badtype out "unknown option '--type'" && ok "--type (VM path) is gone"
+runit badstore 1 --yes --storage slow --url http://172.16.0.50:8099 && has badstore out "storage 'slow' does not exist, is not active" && hasnt badstore log '^pct create' && ok "inactive storage refused before creation"
 
-echo "== not a Proxmox host (real PATH)"
-rc=0; bash "$SCRIPT" --yes > "$work/nopve.out" 2>&1 < /dev/null || rc=$?
+echo "== dry-run with an empty template index (pveam update is skipped)"
+if STUB_EMPTY_INDEX=1 runit dry_noindex 0 --dry-run --url http://172.16.0.50:8099; then
+  has dry_noindex out '^\+ pct create 105 local:vztmpl/debian-12-standard_<latest>_amd64.tar.zst' && ok "dry-run uses a template placeholder"
+fi
+
+echo "== not a Proxmox host (empty PATH, so even on a PVE node nothing real runs)"
+rc=0; env -i PATH="$work/empty-path" "$BASH" "$SCRIPT" --yes > "$work/nopve.out" 2>&1 < /dev/null || rc=$?
 [[ $rc == 1 ]] && has nopve out 'not a Proxmox VE host' && ok "refuses off Proxmox"
-
-echo "== full VM run (stubs succeed)"
-if runit full_vm 0 --yes --type vm --url http://172.16.0.50:8099; then
-  t=full_vm
-  has $t log '^qm create 105 ' && has $t log '^qm set 105 --scsi0 ' && has $t log '^qm start 105' &&
-  has $t log '^qm guest cmd 105 network-get-interfaces' &&
-  has $t out 'debian-12-genericcloud-amd64.qcow2 checksum OK' &&
-  has $t out 'Open HOPS:  http://10.0.0.43:8080' &&
-  grep -q '^#cloud-config' "$work/snippets/hops-105-user.yaml" &&
-  grep -q 'want=' "$work/snippets/hops-105-user.yaml" && ok "full VM run writes snippet, gets IP via agent, checks health"
-fi
-if [[ -f $work/snippets/hops-105-user.yaml ]] && command -v python3 >/dev/null && python3 -c 'import yaml' 2>/dev/null; then
-  if python3 -I -c 'import sys,yaml; d=yaml.safe_load(open(sys.argv[1])); assert d["packages"] and d["runcmd"] and d["write_files"][0]["content"].startswith("#!/bin/bash")' \
-    "$work/snippets/hops-105-user.yaml"; then ok "user-data is valid YAML"; else bad "user-data YAML"; fi
-  python3 -I -c 'import sys,yaml; print(yaml.safe_load(open(sys.argv[1]))["write_files"][0]["content"])' "$work/snippets/hops-105-user.yaml" > "$work/firstboot.sh"
-  if bash -n "$work/firstboot.sh" && grep -q 'sha256sum' "$work/firstboot.sh"; then ok "first-boot script parses"; else bad "first-boot script syntax"; fi
-fi
-
-echo "== VM: no snippets storage"
-if STUB_NO_SNIPPETS=1 runit nosnip 1 --yes --type vm --url http://172.16.0.50:8099; then
-  has nosnip out "does not allow 'snippets'" && hasnt nosnip log '^qm create' && ok "missing snippets storage stops before creation"
-fi
 
 echo
 echo "passed: $pass, failed: $failn"

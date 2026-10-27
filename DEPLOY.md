@@ -17,7 +17,7 @@ This guide covers installing and running HOPS. For a quick first-time walkthroug
 ## Linux install script (install.sh)
 
 On a Linux machine with systemd (Debian, Ubuntu, Raspberry Pi OS, a Proxmox
-CT/VM), one script installs HOPS as a service, and re-running it upgrades:
+container), one script installs HOPS as a service, and re-running it upgrades:
 
 ```bash
 curl -fsSL https://github.com/weaversgrainthorpe/HOPS/releases/latest/download/install.sh | sudo bash
