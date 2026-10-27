@@ -91,7 +91,7 @@ wget_https() {
     loc=$(printf '%s\n' "$hdrs" | awk 'tolower($1) == "location:" {l=$2} END {print l}' | tr -d '\r')
     if [[ $status != 3?? || -z $loc ]]; then
       # -q hides wget's reason (DNS, refused, TLS, timeout): ask once more.
-      detail=$(wget --max-redirect=0 --tries=1 --timeout=15 -O /dev/null "$u" 2>&1 | grep -v '^ ' | grep -v '^$' | tail -n 2 | tr '\n' ' ') || detail=""
+      detail=$({ wget --max-redirect=0 --tries=1 --timeout=15 -O /dev/null "$u" 2>&1 || true; } | grep -v -e '^ ' -e '^$' | tail -n 2 | tr '\n' ' ') || detail=""
       die "download failed: $u (wget exit $rc${status:+, HTTP $status})${detail:+: $detail}"
     fi
     case $loc in
