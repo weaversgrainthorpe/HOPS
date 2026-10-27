@@ -59,11 +59,23 @@ curl -fsSL https://github.com/weaversgrainthorpe/HOPS/releases/latest/download/i
 
 install.sh refuses to touch a `hops.service` it did not write. A v2 install
 set up with `scripts/install-service.sh`, or with the manual unit below, is
-stopped with an error that names that unit. Upgrade a v2 install in place
-instead: stop it, replace its binary with the v3 one, and start it again.
-v3 converts the v2 data on first start and takes a backup first. To move it
-to the install.sh layout, upgrade it in place first. Then stop it, copy its
-data folder to `/var/lib/hops`, remove the old unit, and run install.sh.
+stopped with an error that names that unit. Nothing is changed.
+
+To upgrade a v2 install, upgrade it **in place** first: stop it, replace its
+binary with the v3 one, and start it again. v3 converts the v2 data on first
+start and takes a backup first.
+
+To move it to the install.sh layout afterwards (optional):
+
+1. Stop and remove the old service:
+   `sudo systemctl disable --now hops && sudo rm /etc/systemd/system/hops.service && sudo systemctl daemon-reload`
+2. Create the service user:
+   `sudo useradd --system --user-group --home-dir /var/lib/hops --no-create-home --shell /usr/sbin/nologin hops`
+3. Copy the data, then hand it to that user (`<old-data>` is the old
+   `--data` folder):
+   `sudo mkdir -p /var/lib/hops && sudo cp -a <old-data>/. /var/lib/hops/ && sudo chown -R hops:hops /var/lib/hops && sudo chmod 0750 /var/lib/hops`
+4. Run install.sh. It refuses with a `chown` hint if any file under
+   `/var/lib/hops` is not owned by `hops`.
 
 ## Binary Download
 

@@ -26,11 +26,15 @@ ip=$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src"
 [[ -n $ip ]] || ip=$(hostname -I 2>/dev/null | awk '{print $1}')
 [[ -n $ip ]] || ip="<this-host-ip>"
 
-version=$(tr -d '[:space:]' < "$REPO_DIR/VERSION")
+# The version the served binaries report comes from their BUILD-INFO, not
+# from the repo's VERSION file (which may have moved on since the build).
+[[ -r $dir/BUILD-INFO ]] || die "$dir/BUILD-INFO is missing — rebuild with scripts/build-rc.sh $label"
+version=$(awk -F': ' '$1=="version"{print $2}' "$dir/BUILD-INFO")
+[[ -n $version ]] || die "$dir/BUILD-INFO has no version line — rebuild"
 echo "Serving $dir"
 if [[ -r $dir/BUILD-INFO ]]; then sed 's/^/  /' "$dir/BUILD-INFO"; fi
 echo "  Base URL: http://$ip:$port"
-echo "  Install:  curl -fsSL http://$ip:$port/install.sh | sudo bash -s -- --url http://$ip:$port --version $version-$label"
+echo "  Install:  curl -fsSL http://$ip:$port/install.sh | sudo bash -s -- --url http://$ip:$port --version $version"
 echo "  Note: plain http proves nothing about who served the files (LAN trials only)."
 echo "Ctrl+C to stop."
 exec python3 -m http.server "$port" --bind 0.0.0.0 --directory "$dir"

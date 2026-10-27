@@ -66,12 +66,34 @@ fetch() {
     local proto=()
     if [[ $src == https://* ]]; then proto=(--proto "=https" --proto-redir "=https"); fi
     curl -fsSL "${proto[@]}" --retry 3 --connect-timeout 15 -o "$dest" "$src" || die "download failed: $src"
+  elif [[ $src == https://* ]]; then
+    wget_https "$src" "$dest"
   else
-    local proto=()
-    if [[ $src == https://* ]]; then proto=(--https-only); fi
-    wget -q "${proto[@]}" --tries=3 --timeout=15 -O "$dest" "$src" || die "download failed: $src"
+    wget -q --tries=3 --timeout=15 -O "$dest" "$src" || die "download failed: $src"
   fi
   [[ -s $dest ]] || die "download was empty: $src"
+}
+
+# wget_https <url> <dest> — wget follows redirects to plain http even with
+# --https-only (that flag only affects recursive mode), so redirects are
+# followed here by hand and every hop must stay on https.
+wget_https() {
+  local u=$1 dest=$2 hop hdrs status loc
+  for hop in 1 2 3 4 5 6; do
+    if hdrs=$(wget -q --max-redirect=0 --server-response --tries=3 --timeout=15 -O "$dest" "$u" 2>&1); then
+      return 0
+    fi
+    status=$(printf '%s\n' "$hdrs" | awk '$1 ~ /^HTTP\// {s=$2} END {print s}')
+    loc=$(printf '%s\n' "$hdrs" | awk 'tolower($1) == "location:" {l=$2} END {print l}' | tr -d '\r')
+    if [[ $status != 3?? || -z $loc ]]; then
+      die "download failed: $u${status:+ (HTTP $status)}"
+    fi
+    if [[ $loc == /* ]]; then loc="${u%%://*}://$(echo "${u#*://}" | cut -d/ -f1)$loc"; fi
+    [[ $loc == https://* ]] || die "download of $1 was redirected to a non-https address ($loc) — refusing"
+    u=$loc
+    (( hop < 6 )) || break
+  done
+  die "download of $1: too many redirects"
 }
 
 # http_get <url> — prints the body; non-zero on failure. Never via a proxy.
@@ -171,6 +193,20 @@ show_logs() {
   } >&2
 }
 
+# Message tail for failures before the service is touched.
+unchanged="Nothing was changed."
+
+# Every file under the data directory must belong to the service user, or
+# HOPS cannot write it (e.g. data copied in by root from a v2 install).
+check_data_owner() {
+  local bad
+  [[ -d $DATA_DIR ]] || return 0
+  bad=$(find "$DATA_DIR" ! -user "$SVC_USER" -print -quit 2>/dev/null) || bad=""
+  if [[ -n $bad ]]; then
+    die "$bad is owned by '$(stat -c %U "$bad")', not '$SVC_USER', so HOPS could not write its data. Fix with: chown -R $SVC_USER:$svc_group $DATA_DIR   then re-run. $unchanged"
+  fi
+}
+
 # ---- the critical section guard --------------------------------------------
 # Between stopping the service and a verified result, any exit (die, signal,
 # set -e) must leave the machine as it was: old binary + unit back, service
@@ -181,22 +217,46 @@ swapped_unit=0
 was_active=0
 upgrade=0
 
+# restore_previous — the caller stops the service first. Never writes over a
+# file in place: copy to .restore, then rename (atomic; allowed even over a
+# running executable; a full disk fails the copy, not the target).
 restore_previous() {
   if (( swapped_bin )); then
-    cp -p "$BIN" "$FAILED" 2>/dev/null || true
-    cp -p "$PREV" "$BIN" || return 1
+    cp -p "$BIN" "$FAILED.tmp" 2>/dev/null && mv -f "$FAILED.tmp" "$FAILED" 2>/dev/null
+    rm -f "$FAILED.tmp" 2>/dev/null
+    if ! { cp -p "$PREV" "$BIN.restore" && mv -f "$BIN.restore" "$BIN"; }; then
+      rm -f "$BIN.restore"
+      return 1
+    fi
     swapped_bin=0
   fi
   if (( swapped_unit )); then
-    if [[ -e $UNIT_PREV ]]; then cp -p "$UNIT_PREV" "$UNIT_FILE" || return 1; fi
+    if [[ -e $UNIT_PREV ]]; then
+      if ! { cp -p "$UNIT_PREV" "$UNIT_FILE.restore" && mv -f "$UNIT_FILE.restore" "$UNIT_FILE"; }; then
+        rm -f "$UNIT_FILE.restore"
+        return 1
+      fi
+    fi
     swapped_unit=0
   fi
   systemctl daemon-reload || return 1
 }
 
+# say — a message from the exit trap. It must never fail (a dropped SSH
+# session makes writes to the terminal fail), and it is also appended to
+# $TRAP_LOG so the outcome can be read after reconnecting.
+TRAP_LOG="$INSTALL_DIR/install-interrupted.log"
+# shellcheck disable=SC2317  # called from the trap handler
+say() {
+  echo "hops-install: $*" >&2 2>/dev/null || true
+  { echo "$(date '+%F %T' 2>/dev/null) $*" >> "$TRAP_LOG"; } 2>/dev/null || true
+}
+
 uninstall_failed_fresh() {
-  systemctl disable --now "$SERVICE" >/dev/null 2>&1 || true
-  if [[ -e $BIN ]]; then mv -f "$BIN" "$FAILED" 2>/dev/null || rm -f "$BIN"; fi
+  if (( swapped_unit )) || [[ -e $UNIT_FILE ]]; then
+    systemctl disable --now "$SERVICE" >/dev/null 2>&1 || true
+  fi
+  if (( swapped_bin )) && [[ -e $BIN ]]; then mv -f "$BIN" "$FAILED" 2>/dev/null || rm -f "$BIN"; fi
   rm -f "$UNIT_FILE"
   systemctl daemon-reload >/dev/null 2>&1 || true
 }
@@ -204,27 +264,35 @@ uninstall_failed_fresh() {
 # shellcheck disable=SC2317  # invoked via trap
 on_exit() {
   local rc=$?
-  rm -rf "${tmp:-/nonexistent}" "$BIN.new" "$UNIT_FILE.new" 2>/dev/null || true
+  set +e
+  trap '' INT TERM HUP   # finish restoring even if interrupted again
+  rm -rf "${tmp:-/nonexistent}" "$BIN.new" "$UNIT_FILE.new" 2>/dev/null
   if (( critical )); then
     critical=0
     if (( upgrade )); then
-      echo "hops-install: the upgrade stopped part-way — putting the previous HOPS back." >&2
+      say "the upgrade stopped part-way (exit $rc) — putting the previous HOPS back."
+      systemctl stop "$SERVICE" >/dev/null 2>&1
       if restore_previous; then
         if (( was_active )); then
-          if systemctl restart "$SERVICE"; then
-            echo "hops-install: previous binary and unit restored; $SERVICE restarted. Nothing else changed." >&2
+          if systemctl restart "$SERVICE" >/dev/null 2>&1; then
+            say "previous binary and unit restored; $SERVICE restarted on the previous version. The upgrade did NOT happen."
           else
-            echo "hops-install: previous binary and unit restored, but $SERVICE did NOT restart. Check: journalctl -u $SERVICE -n 30" >&2
+            say "previous binary and unit restored, but $SERVICE did NOT restart. Check: journalctl -u $SERVICE -n 30"
           fi
         else
-          echo "hops-install: previous binary and unit restored ($SERVICE was not running before, so it was left stopped)." >&2
+          say "previous binary and unit restored ($SERVICE was not running before, so it was left stopped). The upgrade did NOT happen."
         fi
       else
-        echo "hops-install: RESTORE FAILED — HOPS may be broken. Previous binary: $PREV, previous unit: $UNIT_PREV." >&2
+        say "RESTORE FAILED — HOPS may be broken. Previous binary: $PREV, previous unit: $UNIT_PREV."
       fi
     else
+      local had_bin=$swapped_bin
       uninstall_failed_fresh
-      echo "hops-install: the install stopped part-way; it was undone (service disabled and removed; binary moved to $FAILED)." >&2
+      if (( had_bin )); then
+        say "the install stopped part-way (exit $rc); it was undone: service disabled and removed, binary moved to $FAILED."
+      else
+        say "the install stopped before HOPS was put in place (exit $rc); no service or binary was installed."
+      fi
     fi
     (( rc != 0 )) || rc=1
   fi
@@ -362,8 +430,9 @@ main() {
     case $dpkg_arch in
       amd64) arch=amd64 ;;
       arm64) arch=arm64 ;;
-      armhf|armel) arch=armv6 ;;
-      *) die "unsupported architecture '$dpkg_arch' (supported: amd64, arm64, armhf/armel)" ;;
+      armhf) arch=armv6 ;;
+      armel) die "this system's userland is armel (ARMv5/soft-float). HOPS needs ARMv6 with VFP (armhf) or newer; it will not run here." ;;
+      *) die "unsupported architecture '$dpkg_arch' (supported: amd64, arm64, armhf)" ;;
     esac
   else
     bits=$(getconf LONG_BIT 2>/dev/null) || bits=""
@@ -395,7 +464,7 @@ main() {
   fi
   if [[ -e $UNIT_FILE ]]; then
     local old_exec
-    old_exec=$(grep -m1 '^ExecStart=' "$UNIT_FILE" | cut -d= -f2-)
+    old_exec=$(grep -m1 '^ExecStart=' "$UNIT_FILE" | cut -d= -f2-) || old_exec=""
     if [[ $old_exec != "$BIN --data $DATA_DIR" ]]; then
       die "$UNIT_FILE was edited: its ExecStart is '$old_exec' (install.sh writes '$BIN --data $DATA_DIR'). Re-running would drop that change. Move it to a drop-in (sudo systemctl edit $SERVICE: an empty 'ExecStart=' line, then your ExecStart line), restore the ExecStart line in $UNIT_FILE, and re-run. Nothing was changed."
     fi
@@ -416,13 +485,7 @@ main() {
       warn "the existing '$SVC_USER' account (uid $uid, shell $shell) looks like a login user, not a system account. HOPS will run as it."
     fi
   fi
-  if [[ -e $DATA_DIR/hops.db ]] && getent passwd "$SVC_USER" >/dev/null; then
-    local owner
-    owner=$(stat -c %U "$DATA_DIR/hops.db")
-    if [[ $owner != "$SVC_USER" ]]; then
-      die "$DATA_DIR/hops.db is owned by '$owner', not '$SVC_USER', so HOPS could not open it. Fix with: chown -R $SVC_USER:$svc_group $DATA_DIR   then re-run. Nothing was changed."
-    fi
-  fi
+  if getent passwd "$SVC_USER" >/dev/null; then check_data_owner; fi
 
   # The port HOPS will listen on is a HOPS setting. HOPS records the port it
   # last used in .last-port; a brand-new install uses 8080.
@@ -438,6 +501,10 @@ main() {
     die "--port $port_arg, but HOPS is configured to listen on $expect_port (from $DATA_DIR/.last-port). Change the port in HOPS under Settings, or re-run without --port."
   else
     port=$port_arg
+  fi
+  # A new install has nothing to stop, so a busy port can be refused now.
+  if [[ ! -e $BIN ]] && port_in_use "$port"; then
+    die "port $port is already in use by $(port_holder "$port"); HOPS starts on $port. Free the port and re-run. $unchanged"
   fi
 
   # ---- download + verify -----------------------------------------------------
@@ -481,11 +548,15 @@ main() {
 
   install -d -m 0755 "$INSTALL_DIR" || die "could not create $INSTALL_DIR"
   install -d -o "$SVC_USER" -g "$svc_group" -m 0750 "$DATA_DIR" || die "could not create $DATA_DIR"
+  if (( ! upgrade )); then
+    unchanged="Only the '$SVC_USER' user and the directories $INSTALL_DIR and $DATA_DIR were created; nothing else changed."
+  fi
+  check_data_owner
 
   # New binary and unit staged next to their targets (a full disk fails here).
-  install -m 0755 "$tmp/$asset" "$BIN.new" || die "could not write $BIN.new (disk full?). Nothing was changed."
+  install -m 0755 "$tmp/$asset" "$BIN.new" || die "could not write $BIN.new (disk full?). $unchanged"
   write_unit "$tmp/hops.service" "$container" "$native"
-  install -m 0644 "$tmp/hops.service" "$UNIT_FILE.new" || die "could not write $UNIT_FILE.new. Nothing was changed."
+  install -m 0644 "$tmp/hops.service" "$UNIT_FILE.new" || die "could not write $UNIT_FILE.new. $unchanged"
   if [[ $container != none ]]; then
     log "running in a container ($container): unit leaves out device/kernel/clock/hostname protections"
   fi
@@ -537,7 +608,7 @@ main() {
     local ip
     ip=$(health_host)
     # Bound to all interfaces → show the LAN address; else the bound one.
-    if [[ $ip == 127.0.0.1 && -z $(bound_host) ]]; then ip=$(primary_ip); fi
+    case $(bound_host) in ""|0.0.0.0|::|"[::]") ip=$(primary_ip) ;; esac
     echo
     if (( upgrade )); then log "HOPS upgraded and healthy."; else log "HOPS installed and healthy."; fi
     log "health: $health_body"
