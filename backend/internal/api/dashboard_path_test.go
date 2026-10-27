@@ -1,6 +1,7 @@
 package api
 
 import (
+	"os"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -139,4 +140,103 @@ func TestEnsureUniqueDashboardPath_AvoidsReserved(t *testing.T) {
 	if got := ensureUniqueDashboardPath(nil, slugifyDashboardPath("Settings")); got != "/settings-2" {
 		t.Errorf("promote of a dashboard named Settings got path %q, want /settings-2", got)
 	}
+}
+
+// Importing a dashboard whose path is a HOPS page renames it to the next free path and says so;
+// the same path written directly (PUT) is still refused.
+func TestImport_ReservedPathIsRenamedAndReported(t *testing.T) {
+	check := func(t *testing.T, resp map[string]interface{}, want string) {
+		t.Helper()
+		msg, _ := resp["message"].(string)
+		if !strings.Contains(msg, "moved to "+want) || !strings.Contains(msg, "is a HOPS page") {
+			t.Errorf("message does not report the rename to %s: %q", want, msg)
+		}
+		ren, _ := resp["renamed"].([]interface{})
+		if len(ren) != 1 {
+			t.Errorf("renamed = %v", resp["renamed"])
+		}
+	}
+	t.Run("v2 export", func(t *testing.T) {
+		data, err := os.ReadFile("../configdoc/testdata/real_sample.json")
+		if err != nil {
+			t.Fatal(err)
+		}
+		var cfg map[string]interface{}
+		if err := json.Unmarshal(data, &cfg); err != nil {
+			t.Fatal(err)
+		}
+		cfg["dashboards"].([]interface{})[0].(map[string]interface{})["path"] = "/settings"
+		data, _ = json.Marshal(cfg)
+		router, db := setupTestRouter(t)
+		c := newClient(t, router)
+		code, resp := c.importFile(data)
+		if code != 200 {
+			t.Fatalf("import: %d %v", code, resp)
+		}
+		check(t, resp, "/settings-2")
+		ds := dashList(storedDoc(t, db))
+		if got := ds[len(ds)-1]["path"]; got != "/settings-2" {
+			t.Errorf("stored path %v", got)
+		}
+		assertUniqueIDs(t, storedDoc(t, db))
+	})
+
+	t.Run("HOPS export", func(t *testing.T) {
+		router, db := setupTestRouter(t)
+		c := newClient(t, router)
+		seed(t, db)
+		var env map[string]interface{}
+		if err := json.Unmarshal(c.export(""), &env); err != nil {
+			t.Fatal(err)
+		}
+		cfg := env["config"].(map[string]interface{})
+		ds := cfg["dashboards"].([]interface{})
+		d := ds[len(ds)-1].(map[string]interface{})
+		d["path"] = "/Admin/x"
+		d["name"] = "Admin Board"
+		code, resp := c.importFile(v3ExportOf(t, cfg))
+		if code != 200 {
+			t.Fatalf("import: %d %v", code, resp)
+		}
+		msg := resp["message"].(string)
+		if !strings.Contains(msg, "Dashboard 'Admin Board' moved to /Admin-2/x because /admin is a HOPS page") {
+			t.Errorf("message: %q", msg)
+		}
+		if ren, _ := resp["renamed"].([]interface{}); len(ren) != 1 {
+			t.Errorf("renamed = %v", resp["renamed"])
+		}
+		assertUniqueIDs(t, storedDoc(t, db))
+	})
+
+	// The Homer/Dashy/Heimdall converters write fixed paths (/home, /heimdall), none reserved, so
+	// they need no rename; the guard is that they still import and report nothing renamed.
+	t.Run("converter (Homer) needs no rename", func(t *testing.T) {
+		router, db := setupTestRouter(t)
+		c := newClient(t, router)
+		homer := []byte("title: Settings\nservices:\n  - name: Media\n    items:\n      - name: Plex\n        url: https://plex.example\n")
+		code, resp := c.importFile(homer)
+		if code != 200 {
+			t.Fatalf("import: %d %v", code, resp)
+		}
+		for _, d := range dashList(storedDoc(t, db)) {
+			if p, _ := d["path"].(string); dashboardPathProblem(p) != "" {
+				t.Errorf("stored a reserved path %q", p)
+			}
+		}
+		if ren, _ := resp["renamed"].([]interface{}); len(ren) != 0 {
+			t.Errorf("renamed = %v", resp["renamed"])
+		}
+	})
+
+	t.Run("direct PUT still refuses", func(t *testing.T) {
+		router, db := setupTestRouter(t)
+		c := newClient(t, router)
+		seed(t, db)
+		d := v3Body(t, c, "d1")
+		d["path"] = "/settings"
+		code, resp := v3Put(c, "d1", d, 1)
+		if code != 400 || !strings.Contains(resp["error"].(string), "reserved") {
+			t.Errorf("%d %v", code, resp)
+		}
+	})
 }

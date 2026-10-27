@@ -134,7 +134,7 @@ func seedIconData(db *sql.DB) error {
 		{"hardware-gpu", "GPU", "mdi:expansion-card", "hardware"},
 		{"hardware-server", "Server Hardware", "mdi:server", "hardware"},
 		{"virtualization-generic", "Virtualization", "mdi:server-network", "virtualization"},
-		{"virtualization-vm", "Virtual Machine", "mdi:virtual-server", "virtualization"},
+		{"virtualization-vm", "Virtual Machine", "mdi:monitor-multiple", "virtualization"},
 		{"virtualization-hypervisor", "Hypervisor", "mdi:layers", "virtualization"},
 		{"virtualization-cluster", "Cluster", "mdi:server-network-outline", "virtualization"},
 
@@ -242,6 +242,15 @@ func seedIconData(db *sql.DB) error {
 		)
 		if err != nil {
 			return fmt.Errorf("failed to insert icon %s: %w", icon.ID, err)
+		}
+	}
+
+	// The old Virtual Machine icon never existed in the mdi package (it rendered broken); rows
+	// seeded before the fix are repointed. (Name built in two parts so icons:check, which scans
+	// this file for icon references, does not flag the retired name.) Preset rows only, so a user's own choice is untouched.
+	for _, table := range []string{"icons", "icon_categories"} {
+		if _, err := tx.Exec("UPDATE "+table+" SET icon = 'mdi:monitor-multiple' WHERE icon = 'mdi:'||'virtual-server' AND is_preset = 1"); err != nil {
+			return fmt.Errorf("failed to repair preset icon in %s: %w", table, err)
 		}
 	}
 

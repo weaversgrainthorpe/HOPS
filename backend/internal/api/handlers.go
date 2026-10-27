@@ -1411,7 +1411,9 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 			continue
 		}
 		if p, ok := d["path"].(string); ok {
-			if why := dashboardPathProblem(p); why != "" {
+			// A reserved first segment is not refused on import: the dashboard is moved to the
+			// next free path when it is merged, and the result says so.
+			if why := dashboardPathProblem(p); why != "" && !reservedPath(p) {
 				writeJSONError(w, fmt.Sprintf("Import refused — dashboard %q has an unsafe path: the path %s", dashboardLabel(d), why), http.StatusBadRequest)
 				return
 			}
@@ -1490,7 +1492,9 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 	}
 
 	var sizeItems []string
+	var renames []string
 	r.updateDocWithLoadErr(w, func(err error) *apiError {
+		renames = nil // the merge callback may run again; start clean
 		slog.Error("import: stored config unreadable", "component", "import", "error", err)
 		return newAPIError(http.StatusInternalServerError, importUnreadableMsg)
 	}, func(stored configdoc.Obj) (configdoc.Obj, interface{}, error) {
@@ -1518,6 +1522,18 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 		for _, d := range imported {
 			path, _ := d["path"].(string)
 			originalPath := path
+			if reservedPath(path) {
+				// HOPS's own page: move to the next free path, and say so in the result.
+				taken := make([]any, 0, len(existingPaths))
+				for ep := range existingPaths {
+					taken = append(taken, map[string]interface{}{"path": ep})
+				}
+				path = ensureUniqueDashboardPath(taken, path)
+				d["path"] = path
+				d["id"] = strings.TrimPrefix(path, "/")
+				renames = append(renames, fmt.Sprintf("Dashboard '%s' moved to %s because %s is a HOPS page", dashboardLabel(d), path, "/"+strings.ToLower(strings.SplitN(strings.TrimLeft(originalPath, "/"), "/", 2)[0])))
+				originalPath = path
+			}
 			suffix := 1
 			for existingPaths[normPath(path)] {
 				path = fmt.Sprintf("%s-%d", originalPath, suffix)
@@ -1579,6 +1595,9 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 		if len(enlarged) > 0 {
 			message += fmt.Sprintf(". %d folder(s) were enlarged: %s", len(enlarged), strings.Join(enlarged, "; "))
 		}
+		for _, rn := range renames {
+			message += ". " + rn
+		}
 		if len(skipped) > 0 {
 			message += fmt.Sprintf(". Skipped %d item(s): %s", len(skipped), strings.Join(skipped, "; "))
 		}
@@ -1607,6 +1626,7 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 			"foldersEnlarged": enlarged,
 			"iconsMatched":    iconMatchCount,
 			"assetsRestored":  assetsRestored,
+			"renamed":         append([]string{}, renames...),
 		}
 		if iconErr != nil {
 			resp["iconMatchError"] = iconErr.Error()
@@ -2537,4 +2557,9 @@ func (r *Router) handleBackgroundCategoryActions(w http.ResponseWriter, req *htt
 	default:
 		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+// reservedPath reports whether p's first segment is one HOPS itself serves.
+func reservedPath(p string) bool {
+	return reservedDashboardSegments[strings.ToLower(strings.SplitN(strings.TrimLeft(p, "/"), "/", 2)[0])]
 }

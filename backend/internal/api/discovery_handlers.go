@@ -779,6 +779,15 @@ func ensureUniqueDashboardPath(dashboards []interface{}, candidate string) strin
 	}
 	for i := 2; ; i++ {
 		c := fmt.Sprintf("%s-%d", candidate, i)
+		if reservedPath(candidate) {
+			// The suffix goes on the first segment ("/admin/x" → "/admin-2/x"); on the end it would stay reserved.
+			lead := len(candidate) - len(strings.TrimLeft(candidate, "/"))
+			seg, rest, more := strings.Cut(candidate[lead:], "/")
+			c = candidate[:lead] + fmt.Sprintf("%s-%d", seg, i)
+			if more {
+				c += "/" + rest
+			}
+		}
 		if free(c) {
 			return c
 		}
