@@ -10,8 +10,11 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
+
+	"github.com/weaversgrainthorpe/HOPS/internal/netguard"
 )
 
 // SSDP / UPnP discovery. Sends a multicast M-SEARCH to
@@ -191,6 +194,19 @@ func fetchSSDPDeviceDescription(ctx context.Context, location, expectedIP, serve
 	fctx, cancel := context.WithTimeout(ctx, ssdpFetchTimeout)
 	defer cancel()
 
+	// Refuse, BEFORE any request, a LOCATION whose host isn't the SSDP
+	// responder's own IP (compared after normalisation; hostnames never
+	// match). A hostile responder can't point us at another address.
+	u, err := url.Parse(location)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") {
+		return ssdpDevice{}, false
+	}
+	locIP, ok1 := netguard.ParseIP(u.Hostname())
+	respIP, ok2 := netguard.ParseIP(expectedIP)
+	if !ok1 || !ok2 || locIP != respIP || netguard.Blocked(locIP) {
+		return ssdpDevice{}, false
+	}
+
 	req, err := http.NewRequestWithContext(fctx, http.MethodGet, location, nil)
 	if err != nil {
 		return ssdpDevice{}, false
@@ -201,17 +217,6 @@ func fetchSSDPDeviceDescription(ctx context.Context, location, expectedIP, serve
 		return ssdpDevice{}, false
 	}
 	defer resp.Body.Close()
-
-	// Refuse to chase a LOCATION whose host doesn't match the SSDP
-	// responder. Limits the damage if a hostile responder tries to
-	// point us at an arbitrary internal IP.
-	if u := req.URL; u != nil {
-		if host, _, err := net.SplitHostPort(u.Host); err == nil {
-			if host != expectedIP {
-				return ssdpDevice{}, false
-			}
-		}
-	}
 
 	// Cap the XML at 64 KB — device-description docs are normally
 	// 1-4 KB; anything larger is either pathological or a trap.

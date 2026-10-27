@@ -11,10 +11,10 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/weaversgrainthorpe/HOPS/internal/configdoc"
+	"github.com/weaversgrainthorpe/HOPS/internal/netguard"
 	"github.com/weaversgrainthorpe/HOPS/internal/settings"
 )
 
@@ -22,43 +22,15 @@ import (
 // carries its own (per-dashboard) interval; a tick only probes those due.
 const tickEvery = time.Minute
 
-// isBlockedIP reports whether an IP must not be reached by the status checker.
-//
-// HOPS is a homelab dashboard: tiles legitimately point at LAN services on
-// private (RFC1918) addresses and at services on the HOPS host itself
-// (loopback), so those are explicitly ALLOWED — blocking them would break the
-// core use case. What is blocked is the link-local range (169.254.0.0/16 and
-// IPv6 fe80::/10), which is where cloud-metadata endpoints such as
-// 169.254.169.254 live and is never a legitimate dashboard target, plus the
-// unspecified address and multicast. This keeps the high-value SSRF
-// escalation path closed without crippling LAN monitoring.
-func isBlockedIP(ip net.IP) bool {
-	return ip.IsLinkLocalUnicast() ||
-		ip.IsLinkLocalMulticast() ||
-		ip.IsInterfaceLocalMulticast() ||
-		ip.IsUnspecified() ||
-		ip.IsMulticast()
-}
+// maxRedirects bounds the redirect hops a status check follows.
+const maxRedirects = 5
 
-// ssrfSafeDialControl is a net.Dialer Control hook. It runs after DNS
-// resolution with the concrete IP about to be dialed, so it rejects the
-// connection if that IP is internal — for the initial request, for every
-// redirect hop (each dials anew), and for DNS-rebinding attempts (the real
-// resolved IP is checked, not a stale pre-validated one).
-func ssrfSafeDialControl(_, address string, _ syscall.RawConn) error {
-	host, _, err := net.SplitHostPort(address)
-	if err != nil {
-		return fmt.Errorf("status check: invalid dial address %q", address)
-	}
-	ip := net.ParseIP(host)
-	if ip == nil {
-		return fmt.Errorf("status check: unresolved dial host %q", host)
-	}
-	if isBlockedIP(ip) {
-		return fmt.Errorf("status check: blocked internal/loopback/link-local target %s", ip)
-	}
-	return nil
-}
+// SSRF policy: every outbound dial goes through netguard (link-local, cloud
+// metadata, multicast, unspecified and reserved addresses are refused in any
+// spelling; RFC 1918 and loopback are allowed because homelab tiles point at
+// them). The dialer resolves once and connects to the vetted IP, so DNS
+// rebinding can't swap in a refused address, and every redirect hop is
+// re-checked (URL host in CheckRedirect, resolved IP at dial).
 
 // Entry is one tile to probe. Whether it is probed at all is decided by
 // configdoc.EffectiveStatusChecks in getEntriesFromConfig.
@@ -103,6 +75,10 @@ type Checker struct {
 	// now is the clock; tests inject a fake one.
 	now func() time.Time
 
+	// lookup resolves hostnames for the SSRF-safe dialer; nil means the
+	// system resolver. Tests inject one to simulate DNS rebinding.
+	lookup netguard.LookupFunc
+
 	// lastChecked records when each entry was last probed (in memory only; an
 	// empty map means everything is due). Guarded by lastMu.
 	lastMu      sync.Mutex
@@ -146,21 +122,26 @@ func NewChecker(db *sql.DB, settingsSvc *settings.Service) *Checker {
 func (c *Checker) buildClient() *http.Client {
 	return &http.Client{
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			// Cap redirects at 10. Each hop still dials through the
-			// SSRF-safe Control hook, so a redirect to an internal
-			// host is refused at connection time.
-			if len(via) >= 10 {
-				return http.ErrUseLastResponse
+			if len(via) > maxRedirects {
+				return fmt.Errorf("status check: more than %d redirects", maxRedirects)
 			}
-			return nil
+			if req.URL.Scheme != "http" && req.URL.Scheme != "https" {
+				return fmt.Errorf("status check: redirect to non-http(s) address refused")
+			}
+			// The hop's IP literal (any spelling) is refused here; a
+			// hostname is judged on its resolved IP at dial time.
+			return netguard.CheckHost(req.URL.Hostname())
 		},
 		Transport: &http.Transport{
-			DialContext: (&net.Dialer{
-				Timeout: 30 * time.Second,
-				Control: ssrfSafeDialControl,
-			}).DialContext,
+			Proxy:       nil, // never via an environment proxy: the guard must see the real target
+			DialContext: c.dialer(30 * time.Second).DialContext,
 		},
 	}
+}
+
+// dialer is the SSRF-safe dialer used by HTTP and TCP checks.
+func (c *Checker) dialer(timeout time.Duration) *netguard.Dialer {
+	return &netguard.Dialer{Timeout: timeout, Lookup: c.lookup}
 }
 
 // Start begins the background status checking loop
@@ -297,7 +278,6 @@ const HistorySchema = `CREATE TABLE IF NOT EXISTS status_history (
 // isFailure: down and error start (or continue) the failing clock; "up"
 // clears it; anything else (unknown, checking) leaves it alone.
 func isFailure(status string) bool { return status == "down" || status == "error" }
-
 
 // entryBackoff tracks how many consecutive failures an entry has had
 // and when it's eligible to be re-probed. Exponential backoff caps at
@@ -468,6 +448,11 @@ func (c *Checker) checkEntry(entry Entry) statusCheckResult {
 		result.detail = "Not an http(s) or ssh address"
 		return result
 	}
+	if err := netguard.CheckHost(parsed.Hostname()); err != nil {
+		result.status = "error"
+		result.detail = "Refused: " + err.Error()
+		return result
+	}
 
 	start := time.Now()
 
@@ -536,13 +521,17 @@ func sshTarget(raw string) (string, error) {
 
 // checkTCP probes an ssh:// tile: up means host:port accepted a TCP
 // connection within the dashboard's timeout. The dial goes through the same
-// SSRF Control hook as the HTTP checks (the deny-list is applied to the
+// SSRF-safe netguard dialer as the HTTP checks (the deny-list is applied to the
 // resolved IP); a refused or blocked dial is "down", a malformed URL "error".
 func (c *Checker) checkTCP(entry Entry) statusCheckResult {
 	result := statusCheckResult{entryID: entry.ID, status: "error"}
 	addr, err := sshTarget(entry.URL)
 	if err != nil {
 		result.detail = err.Error()
+		return result
+	}
+	if host, _, _ := net.SplitHostPort(addr); netguard.CheckHost(host) != nil {
+		result.detail = "Refused: " + netguard.CheckHost(host).Error()
 		return result
 	}
 	timeout := time.Duration(entry.TimeoutSeconds) * time.Second
@@ -552,8 +541,7 @@ func (c *Checker) checkTCP(entry Entry) statusCheckResult {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	start := time.Now()
-	d := net.Dialer{Control: ssrfSafeDialControl}
-	conn, err := d.DialContext(ctx, "tcp", addr)
+	conn, err := c.dialer(timeout).DialContext(ctx, "tcp", addr)
 	if err != nil {
 		result.status = "down"
 		result.detail = errText(err)

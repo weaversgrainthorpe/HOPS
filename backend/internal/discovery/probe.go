@@ -8,10 +8,12 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
+
+	"github.com/weaversgrainthorpe/HOPS/internal/netguard"
 )
 
 // httpBodyReadCap is the maximum body bytes captured for fingerprinting.
@@ -140,44 +142,19 @@ var fullActivePorts = []int{
 	51820, // wireguard (probably won't answer TCP but doesn't hurt)
 }
 
-// isBlockedIP mirrors the policy in internal/status/checker.go: block
-// link-local (cloud metadata, IPv6 fe80::/10), multicast, and the
-// unspecified address; permit RFC1918 private ranges and loopback because
-// homelab dashboards legitimately point at them.
-func isBlockedIP(ip net.IP) bool {
-	return ip.IsLinkLocalUnicast() ||
-		ip.IsLinkLocalMulticast() ||
-		ip.IsInterfaceLocalMulticast() ||
-		ip.IsUnspecified() ||
-		ip.IsMulticast()
-}
+// isBlockedIP applies the shared SSRF policy (internal/netguard): link-local
+// (cloud metadata), known metadata addresses, multicast, unspecified and
+// reserved are refused in any spelling; RFC 1918 and loopback are allowed
+// because homelab dashboards point at them.
+func isBlockedIP(ip net.IP) bool { return netguard.BlockedIP(ip) }
 
-// ssrfSafeDialControl is a net.Dialer Control hook that rejects dials to
-// link-local / multicast / unspecified addresses after DNS resolution.
-// Reused for every outbound connection the discovery scanner makes so the
-// SSRF guard is impossible to forget on a new code path.
-func ssrfSafeDialControl(_, address string, _ syscall.RawConn) error {
-	host, _, err := net.SplitHostPort(address)
-	if err != nil {
-		return fmt.Errorf("discovery: invalid dial address %q", address)
-	}
-	ip := net.ParseIP(host)
-	if ip == nil {
-		return fmt.Errorf("discovery: unresolved dial host %q", host)
-	}
-	if isBlockedIP(ip) {
-		return fmt.Errorf("discovery: blocked target %s", ip)
-	}
-	return nil
-}
-
-// dialer returns a per-host net.Dialer with the SSRF guard and the
-// configured timeout. Built per-probe so timeout settings can change live.
-func dialer(timeout time.Duration) *net.Dialer {
-	return &net.Dialer{
-		Timeout: timeout,
-		Control: ssrfSafeDialControl,
-	}
+// dialer returns the SSRF-safe dialer with the configured timeout. Every
+// outbound connection the discovery scanner makes goes through it: it
+// resolves once, refuses the host if any resolved address is blocked, and
+// connects to the vetted IP (no DNS-rebinding window). Built per probe so
+// timeout settings can change live.
+func dialer(timeout time.Duration) *netguard.Dialer {
+	return &netguard.Dialer{Timeout: timeout}
 }
 
 // httpClient returns an HTTP client for probes. TLS verification is
@@ -192,6 +169,7 @@ func httpClient(timeout time.Duration) *http.Client {
 			return http.ErrUseLastResponse
 		},
 		Transport: &http.Transport{
+			Proxy:       nil, // never via an environment proxy: the guard must see the real target
 			DialContext: dialer(timeout).DialContext,
 			TLSClientConfig: &tls.Config{
 				InsecureSkipVerify: true, //nolint:gosec // homelab self-signed certs are the norm
@@ -234,10 +212,14 @@ func httpFollowRedirects(ctx context.Context, startURL string, _ bool, timeout t
 		return nil, "", err
 	}
 	origHost := u.Hostname()
+	if err := netguard.CheckHost(origHost); err != nil {
+		return nil, startURL, err
+	}
 	currentURL := startURL
 	visited := make(map[string]bool)
 
 	transport := &http.Transport{
+		Proxy:       nil,
 		DialContext: dialer(timeout).DialContext,
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: true, //nolint:gosec
@@ -325,7 +307,7 @@ func httpGetProbe(ctx context.Context, host string, port int, path string, tlsOn
 	if tlsOn {
 		scheme = "https"
 	}
-	url := fmt.Sprintf("%s://%s:%d%s", scheme, host, port, path)
+	url := scheme + "://" + net.JoinHostPort(host, strconv.Itoa(port)) + path
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err

@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/weaversgrainthorpe/HOPS/internal/netguard"
 	"github.com/weaversgrainthorpe/HOPS/internal/settings"
 )
 
@@ -32,6 +33,10 @@ type Orchestrator struct {
 
 	mu      sync.Mutex
 	running map[string]context.CancelFunc // scanID → cancel fn for the running scan
+	busy    bool                          // the single scan slot is taken (Reserve/Release)
+
+	// minute is the unit of discovery.max_scan_minutes; tests shrink it.
+	minute time.Duration
 
 	// recent tracks the most recent in-flight hosts per running scan so
 	// the UI can show live activity. Bounded ring (newest first), in
@@ -79,6 +84,7 @@ func NewOrchestrator(store *Store, settingsSvc *settings.Service) *Orchestrator 
 		settings:       settingsSvc,
 		registry:       NewRegistry(store),
 		running:        make(map[string]context.CancelFunc),
+		minute:         time.Minute,
 		recent:         make(map[string][]string),
 		phase:          make(map[string]string),
 		warnings:       make(map[string][]string),
@@ -207,13 +213,36 @@ func (o *Orchestrator) Stop() {
 	slog.Info("discovery orchestrator stopped", "component", "discovery")
 }
 
+// Reserve claims the single scan slot: HOPS runs one discovery scan at a
+// time. It returns false while another scan holds the slot. A successful
+// Reserve must be followed by Submit (which frees the slot when the scan
+// ends) or Release.
+func (o *Orchestrator) Reserve() bool {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if o.busy {
+		return false
+	}
+	o.busy = true
+	return true
+}
+
+// Release frees the scan slot without running a scan.
+func (o *Orchestrator) Release() {
+	o.mu.Lock()
+	o.busy = false
+	o.mu.Unlock()
+}
+
 // Submit kicks off the worker goroutine for an already-persisted scan
-// (one created by the API handler). Returns immediately; the worker runs
-// until completion, cancellation, or shutdown.
+// (one created by the API handler, after Reserve). Returns immediately; the
+// worker runs until completion, cancellation, shutdown or the maximum scan
+// duration, then frees the scan slot.
 func (o *Orchestrator) Submit(scanID string) {
 	o.wg.Add(1)
 	go func() {
 		defer o.wg.Done()
+		defer o.Release()
 		o.runScan(scanID)
 	}()
 }
@@ -255,6 +284,13 @@ func (o *Orchestrator) runScan(scanID string) {
 	// API can hit via Cancel().
 	ctx, cancel := context.WithCancel(o.shutdownCtx)
 	defer cancel()
+	// Hard ceiling on the whole scan (GUI setting discovery.max_scan_minutes).
+	maxMinutes := o.settings.GetInt(settings.KeyDiscoveryMaxScanMinutes)
+	if maxMinutes <= 0 {
+		maxMinutes = 30
+	}
+	ctx, cancelLimit := context.WithTimeoutCause(ctx, time.Duration(maxMinutes)*o.minute, errScanTimeLimit)
+	defer cancelLimit()
 
 	o.mu.Lock()
 	o.running[scanID] = cancel
@@ -437,6 +473,11 @@ func (o *Orchestrator) runScan(scanID string) {
 		// shutdownCtx was cancelled — the server is going down.
 		state = StateFailed
 		errMsg = "scan was interrupted by a server shutdown"
+	case errors.Is(context.Cause(ctx), errScanTimeLimit):
+		// Hit the maximum scan duration: stop, keep what was found, and
+		// say so — a truncated scan must not read as complete.
+		state = StateFailed
+		errMsg = fmt.Sprintf("scan stopped after reaching the %d-minute limit (Settings → Discovery); results found so far are kept but the scan is incomplete", maxMinutes)
 	case errors.Is(ctx.Err(), context.Canceled):
 		// per-scan ctx cancelled — admin pressed Cancel.
 		state = StateCancelled
@@ -1166,6 +1207,10 @@ func constructURL(scheme, host string, port int) string {
 	return fmt.Sprintf("%s://%s:%d", scheme, host, port)
 }
 
+// errScanTimeLimit is the cancellation cause when a scan runs past
+// discovery.max_scan_minutes.
+var errScanTimeLimit = errors.New("discovery: maximum scan duration reached")
+
 // maxScanHosts caps the total number of distinct hosts a single scan
 // can expand to. /16 = 65,536; bigger than that and the scan runs for
 // hours, the UI feels stuck, and the admin probably typed something
@@ -1242,7 +1287,24 @@ func expandTargets(input string) ([]string, error) {
 	if len(out) == 0 {
 		return nil, fmt.Errorf("after applying exclusions, no hosts remain to scan")
 	}
+	// SSRF policy (internal/netguard): a scan never probes link-local /
+	// cloud-metadata, multicast, broadcast, reserved or unspecified
+	// addresses. Refuse rather than silently drop, naming the address so
+	// the admin can narrow the range or exclude it with "!".
+	for _, h := range out {
+		if a, ok := netguard.ParseIP(h); !ok || netguard.Blocked(a) {
+			return nil, fmt.Errorf("targets include %s, which is never scanned (link-local, cloud metadata, multicast, broadcast, reserved or unspecified) — narrow the range or exclude it with !%s", h, h)
+		}
+	}
 	return out, nil
+}
+
+// ValidateTargets reports whether a scan's targets string would expand to
+// a legal host list. It runs the same expansion the worker does, so the
+// API refuses (400) exactly what a scan would refuse.
+func ValidateTargets(input string) error {
+	_, err := expandTargets(input)
+	return err
 }
 
 // stripExcludePrefix peels a leading `!`, `NOT `, or `not ` off a

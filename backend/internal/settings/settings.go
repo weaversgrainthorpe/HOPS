@@ -86,6 +86,7 @@ const (
 	KeyHTTPIdleTimeoutSeconds       = "http.idle_timeout_seconds"
 	KeyDiscoveryMaxParallelProbes   = "discovery.max_parallel_probes"
 	KeyDiscoveryPerHostTimeoutSecs  = "discovery.per_host_timeout_seconds"
+	KeyDiscoveryMaxScanMinutes      = "discovery.max_scan_minutes"
 	KeyFoldersAnimatedBackgrounds   = "folders.animated_backgrounds"
 	KeyDisplayAnimations            = "display.animations"
 	KeyBackupKeepCount              = "backup.keep_count"
@@ -221,6 +222,12 @@ var Definitions = []Definition{
 			"and seeing things you know are running get missed. Raising this also makes scans take longer overall, " +
 			"because the scanner waits this long on every host that isn't responding.",
 		Min:         1, Max: 60,
+	},
+	{
+		Key: KeyDiscoveryMaxScanMinutes, Type: "int", Default: "30",
+		Description: "The longest a discovery scan may run. A scan that reaches it stops, keeps what it found, " +
+			"and is marked as stopped early. A home /24 normally takes well under a minute; a /16 can take much longer.",
+		Min: 1, Max: 240,
 	},
 	{
 		Key: KeyFoldersAnimatedBackgrounds, Type: "bool", Default: "true",

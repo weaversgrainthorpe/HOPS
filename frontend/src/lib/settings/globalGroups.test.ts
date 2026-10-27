@@ -23,7 +23,9 @@ describe('global settings grouping table', () => {
 			'status.checks_enabled', 'status.check_interval_minutes', 'status.check_timeout_seconds', 'status.dead_after_hours'
 		]);
 		expect(keysOf('uploads')).toEqual(['upload.max_bytes_background', 'upload.max_bytes_icon', 'upload.max_bytes_import']);
-		expect(keysOf('discovery')).toEqual(['discovery.max_parallel_probes', 'discovery.per_host_timeout_seconds']);
+		expect(keysOf('discovery')).toEqual([
+			'discovery.max_parallel_probes', 'discovery.per_host_timeout_seconds', 'discovery.max_scan_minutes'
+		]);
 		expect(keysOf('sign-in-security')).toEqual([
 			'auth.session_lifetime_hours', 'auth.login_rate_limit_per_min', 'proxy.trusted_cidrs'
 		]);

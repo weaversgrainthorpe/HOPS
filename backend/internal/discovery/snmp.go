@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/weaversgrainthorpe/HOPS/internal/netguard"
 )
 
 // Minimal SNMPv2c GET probe — the bare slice of the protocol needed to
@@ -94,14 +96,11 @@ func snmpProbeHosts(ctx context.Context, hosts []string) []snmpResult {
 func snmpGetSysInfo(ctx context.Context, host string) (snmpResult, bool) {
 	// Refuse to dial blocked targets — mirrors the SSRF policy used
 	// for TCP probes.
-	if ip := net.ParseIP(host); ip != nil && isBlockedIP(ip) {
+	a, ok := netguard.ParseIP(host)
+	if !ok || !a.Is4() || netguard.Blocked(a) {
 		return snmpResult{}, false
 	}
-
-	addr := &net.UDPAddr{IP: net.ParseIP(host), Port: snmpPort}
-	if addr.IP == nil {
-		return snmpResult{}, false
-	}
+	addr := &net.UDPAddr{IP: net.IP(a.AsSlice()), Port: snmpPort}
 	conn, err := net.DialUDP("udp4", nil, addr)
 	if err != nil {
 		return snmpResult{}, false

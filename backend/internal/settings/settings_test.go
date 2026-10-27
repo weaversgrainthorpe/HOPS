@@ -49,7 +49,7 @@ func TestEveryKeyHasADefinition(t *testing.T) {
 		KeyUploadMaxBytesImport, KeyUploadMaxBytesBackground, KeyUploadMaxBytesIcon,
 		KeyHTTPReadHeaderTimeoutSeconds, KeyHTTPReadTimeoutSeconds,
 		KeyHTTPWriteTimeoutSeconds, KeyHTTPIdleTimeoutSeconds,
-		KeyDiscoveryMaxParallelProbes, KeyDiscoveryPerHostTimeoutSecs,
+		KeyDiscoveryMaxParallelProbes, KeyDiscoveryPerHostTimeoutSecs, KeyDiscoveryMaxScanMinutes,
 		KeyFoldersAnimatedBackgrounds, KeyDisplayAnimations, KeyBackupKeepCount, KeyBackupKeepDays, KeyBackupMaxCount,
 	}
 	for _, k := range keys {

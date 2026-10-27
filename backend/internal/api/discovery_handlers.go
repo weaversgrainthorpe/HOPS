@@ -158,9 +158,16 @@ func (r *Router) handleCreateScan(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
+	// One scan at a time: a second scan while one runs is refused (409),
+	// not queued behind it or run in parallel.
+	if !r.discoveryOrch.Reserve() {
+		writeJSONError(w, "A discovery scan is already running. Wait for it to finish or cancel it first.", http.StatusConflict)
+		return
+	}
 	id := newScanID()
 	scan, err := r.discoveryStore.CreateScan(id, body.CIDR, intensity, body.Label, internalDomain, createdBy)
 	if err != nil {
+		r.discoveryOrch.Release()
 		slog.Error("discovery: failed to create scan", "component", "discovery", "error", err)
 		writeJSONError(w, "Failed to create scan", http.StatusInternalServerError)
 		return
@@ -897,7 +904,9 @@ func validateTargets(input string) error {
 	if !sawInclude {
 		return errors.New("at least one target without a ! / NOT prefix is required")
 	}
-	return nil
+	// The authoritative check: the exact expansion the scan worker runs
+	// (size cap, blocked addresses after exclusions).
+	return discovery.ValidateTargets(input)
 }
 
 func validateOneTarget(t string) error {

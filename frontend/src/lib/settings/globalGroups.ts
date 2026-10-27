@@ -45,7 +45,7 @@ export const GLOBAL_SETTING_GROUPS: readonly SettingGroupDef[] = [
 		label: 'Status checks',
 		keys: ['status.checks_enabled', 'status.check_interval_minutes', 'status.check_timeout_seconds', 'status.dead_after_hours']
 	},
-	{ id: 'discovery', label: 'Discovery', keys: ['discovery.max_parallel_probes', 'discovery.per_host_timeout_seconds'] }
+	{ id: 'discovery', label: 'Discovery', keys: ['discovery.max_parallel_probes', 'discovery.per_host_timeout_seconds', 'discovery.max_scan_minutes'] }
 ];
 
 /**
@@ -76,7 +76,8 @@ export const SETTING_LABELS: Readonly<Record<string, string>> = {
 	'status.check_timeout_seconds': 'Give up after (seconds)',
 	'status.dead_after_hours': 'Treat a link as dead after',
 	'discovery.max_parallel_probes': 'Parallel probes',
-	'discovery.per_host_timeout_seconds': 'Time per host (seconds)'
+	'discovery.per_host_timeout_seconds': 'Time per host (seconds)',
+	'discovery.max_scan_minutes': 'Longest scan (minutes)'
 };
 
 /** A setting's label; a key without one (a newer server) reads as its words, never hidden. */
