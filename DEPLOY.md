@@ -51,6 +51,12 @@ curl -fsSL https://github.com/weaversgrainthorpe/HOPS/releases/latest/download/i
   does not come up healthy, both are put back and the script fails loudly
   (and says so if the old version does not come back either). HOPS itself
   takes a backup before it upgrades the data.
+- **Interrupted upgrades:** if an upgrade is interrupted after HOPS was
+  stopped (Ctrl+C, or your SSH session drops), install.sh puts the previous
+  binary and service unit back, restarts HOPS if it was running, and checks
+  it answers. It records what it did in `/opt/hops/install-interrupted.log`:
+  if you lost the session, read that file. The next run points to it, and a
+  successful run moves it aside to `install-interrupted.log.old`.
 - **Customising the service:** do not edit `/etc/systemd/system/hops.service`.
   The installer rewrites it on every run and prints what it replaced. Put
   local changes in a drop-in, which the installer never touches:
