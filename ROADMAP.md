@@ -6,6 +6,7 @@ get bumped by a real-world bug or a change of mind.
 
 Items are grouped by rough size, not by importance. A small item near
 the top might matter more to you than a sprawling one near the bottom.
+What has already shipped is in the [CHANGELOG](CHANGELOG.md).
 
 > Bug reports and feature suggestions are welcome via
 > [GitHub Issues](https://github.com/weaversgrainthorpe/HOPS/issues).
@@ -21,57 +22,6 @@ HOPS's own screens, and it runs happily on something as small as a
 Raspberry Pi Zero. Ideas are judged against that. See
 [Not planned](#not-planned-and-why) at the bottom for things that would
 turn HOPS into something else.
-
----
-
-## Already shipped
-
-What was on the list and is now in released code. Full release notes
-live in the [CHANGELOG](CHANGELOG.md).
-
-### v3
-
-- **Folders.** They replace v2's groups. Folders can be nested and
-  paged, and minimised to a single tile showing a preview of what's
-  inside. They come in a choice of shapes, and look the same while you
-  view and while you edit.
-- **Direct editing.** Drag and drop things where you want them, resize
-  folders, merge two tiles into a folder, and move or copy items in and
-  out of folders. **Undo and redo** cover the whole editing session.
-  **Select several items at once** to move, copy or delete them together.
-- **Home and Away addresses.** A tile can have a second address, such as
-  your Tailscale or VPN address. Each browser picks Home or Away.
-- **"Add to HOPS" bookmark.** Click it on any web page to add that page
-  as a tile, with its name and icon already filled in.
-- **Search everywhere.** Search reaches inside every folder and shows
-  where each tile lives. You can open a tile or jump to it.
-- **Recently used.** An optional row of the tiles you open most. It's
-  kept on each device and never leaves it.
-- **SSH tiles.** These open your computer's SSH app, with a status check
-  on the SSH port.
-- **Dead-link report and duplicate finder.** These spot tiles that have
-  been failing for a while, and tiles that point at the same address.
-- **Network Discovery, extended.** Over 90 services are recognised out
-  of the box, now including AI tools. Re-scans show what's new, changed
-  or gone since last time.
-- **Settings, reorganised.** Grouped global settings, a page for managing
-  icons (your uploads and everything packaged), and a log viewer.
-- **Backups you can trust.** Retention rules, download and upload
-  (images included), and restores that never lose your data. Every
-  failure is shown, never hidden.
-- **Animations**, which you can turn off, plus a security pass:
-  stricter browser security headers, hardened uploads and imports, and
-  up-to-date dependencies.
-
-### Earlier
-
-- **Network Discovery** *(v2.0.0)*. Point HOPS at your home network and
-  let it find what's already running, with a draft and curate step, so
-  nothing lands on your dashboard until you tick it.
-- **Install on a phone or tablet** *(v2.1)*. HOPS works as a web app.
-  Use "Add to Home Screen" for a full-screen icon, handy for a
-  wall-mounted tablet. If you go offline, a banner says so, and tiles
-  keep their last known status.
 
 ---
 
