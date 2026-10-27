@@ -12,7 +12,9 @@ REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 version_file=$(<"$REPO_DIR/VERSION")
 version_file=${version_file//[$'\t\r\n ']/}
 
-go_string=$(grep -oE 'return "[0-9]+\.[0-9]+\.[0-9]+"' \
+# String() is `return withPrerelease("X.Y.Z")` (Prerelease is stamped at build
+# time for release candidates); accept the older bare `return "X.Y.Z"` too.
+go_string=$(grep -oE 'return (withPrerelease\()?"[0-9]+\.[0-9]+\.[0-9]+"' \
   "$REPO_DIR/backend/internal/version/version.go" | head -1 | \
   grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
 

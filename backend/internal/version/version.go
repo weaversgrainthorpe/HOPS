@@ -10,12 +10,24 @@ const (
 	Patch = 0
 )
 
+// Prerelease is an optional pre-release label (e.g. "rc1") stamped at build
+// time with -ldflags "-X github.com/weaversgrainthorpe/HOPS/internal/version.Prerelease=rc1"
+// by scripts/build-rc.sh. Empty for a normal release build.
+var Prerelease = ""
+
 // String returns the version as a semantic version string
 func String() string {
-	return "3.0.0"
+	return withPrerelease("3.0.0")
 }
 
 // Full returns the full version string with build info
 func Full() string {
-	return "HOPS v3.0.0"
+	return "HOPS v" + String()
+}
+
+func withPrerelease(base string) string {
+	if Prerelease == "" {
+		return base
+	}
+	return base + "-" + Prerelease
 }

@@ -37,7 +37,7 @@ jobs:
           path: hops-frontend.tar.gz
 
   build:
-    name: Build ${{ matrix.os }}-${{ matrix.arch }}
+    name: Build ${{ matrix.os }}-${{ matrix.name || matrix.arch }}
     runs-on: ubuntu-latest
     # The UI is embedded into the binary via //go:embed, so the frontend build
     # must exist before `go build`. Reuse the single build-frontend artifact
@@ -51,6 +51,13 @@ jobs:
             ext: ''
           - os: linux
             arch: arm64
+            ext: ''
+          # 32-bit ARM (original Pi Zero / Zero W; also 32-bit Pi OS on
+          # Pi 2/3). Published as hops-linux-armv6.
+          - os: linux
+            arch: arm
+            goarm: '6'
+            name: armv6
             ext: ''
           - os: darwin
             arch: amd64
@@ -84,13 +91,14 @@ jobs:
         env:
           GOOS: ${{ matrix.os }}
           GOARCH: ${{ matrix.arch }}
+          GOARM: ${{ matrix.goarm }}
           CGO_ENABLED: '0'
-        run: go build -ldflags="-s -w" -o ../hops-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.ext }} ./cmd/hops
+        run: go build -trimpath -ldflags="-s -w" -o ../hops-${{ matrix.os }}-${{ matrix.name || matrix.arch }}${{ matrix.ext }} ./cmd/hops
 
       - uses: actions/upload-artifact@v4
         with:
-          name: hops-${{ matrix.os }}-${{ matrix.arch }}
-          path: hops-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.ext }}
+          name: hops-${{ matrix.os }}-${{ matrix.name || matrix.arch }}
+          path: hops-${{ matrix.os }}-${{ matrix.name || matrix.arch }}${{ matrix.ext }}
 
   docker-publish:
     name: Publish Docker image to GHCR
@@ -163,8 +171,13 @@ jobs:
           # Docker users still get the compose file.
           cp docker-compose.yml packages/
 
-          # Checksums for integrity verification of the bare binaries.
-          (cd packages && sha256sum hops-* > SHA256SUMS.txt)
+          # The Linux installer (packaging/install.sh) downloads
+          # hops-linux-<arch> + SHA256SUMS from releases/latest/download.
+          cp packaging/install.sh packages/install.sh
+
+          # Checksums for integrity verification. install.sh reads this
+          # exact name (SHA256SUMS, sha256sum format, bare filenames).
+          (cd packages && sha256sum hops-* install.sh > SHA256SUMS)
 
           ls -la packages/
 

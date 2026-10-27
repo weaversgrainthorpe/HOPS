@@ -14,6 +14,69 @@ This guide covers installing and running HOPS. For a quick first-time walkthroug
 
 ---
 
+## Linux install script (install.sh)
+
+On a Linux machine with systemd (Debian, Ubuntu, Raspberry Pi OS, a Proxmox
+container), one script installs HOPS as a service, and re-running it upgrades:
+
+```bash
+curl -fsSL https://github.com/weaversgrainthorpe/HOPS/releases/latest/download/install.sh | sudo bash
+```
+
+- It picks the binary for your **userland** (so 32-bit Raspberry Pi OS on a
+  64-bit kernel gets `hops-linux-armv6`), downloads it with `SHA256SUMS` and
+  refuses to install on a checksum mismatch.
+- Binary: `/opt/hops/hops`. Data: `/var/lib/hops`. Service: `hops.service`,
+  run as the `hops` system user with systemd hardening.
+- It finishes only when `/api/health` answers, then prints the address.
+  A new install listens on port 8080; change the port in HOPS under
+  Settings.
+- Options: `--url <base>` (download from somewhere else), `--version <x.y.z>`
+  (install that release and require it on health), `--port <n>` (the port
+  to check health on; it must match the one HOPS uses).
+- **Upgrading:** re-run the same command. The previous binary and unit are
+  kept as `/opt/hops/hops.prev` and `hops.service.prev`; if the new version
+  does not come up healthy, both are put back and the script fails loudly.
+- **Customising the service:** do not edit `/etc/systemd/system/hops.service`.
+  The installer rewrites it on every run and prints what it replaced. Put
+  local changes in a drop-in, which the installer never touches:
+  `sudo systemctl edit hops`. For example, to listen on loopback only:
+
+  ```ini
+  [Service]
+  ExecStart=
+  ExecStart=/opt/hops/hops --data /var/lib/hops --host 127.0.0.1
+  ```
+
+  The health check follows `--host`.
+- **Trust:** the checksum proves the download is intact, not who served it.
+  Over `https://` (the default) the transport is authenticated and the
+  script refuses redirects to plain http. A plain `http://` `--url` (for
+  example a LAN test server) gives no such guarantee. The script warns
+  when you use one.
+
+### Upgrading from v2 with install.sh
+
+install.sh refuses to touch a `hops.service` it did not write. A v2 install
+set up with `scripts/install-service.sh`, or with the manual unit below, is
+stopped with an error that names that unit. Nothing is changed.
+
+To upgrade a v2 install, upgrade it **in place** first: stop it, replace its
+binary with the v3 one, and start it again. v3 converts the v2 data on first
+start and takes a backup first.
+
+To move it to the install.sh layout afterwards (optional):
+
+1. Stop and remove the old service:
+   `sudo systemctl disable --now hops && sudo rm /etc/systemd/system/hops.service && sudo systemctl daemon-reload`
+2. Create the service user:
+   `sudo useradd --system --user-group --home-dir /var/lib/hops --no-create-home --shell /usr/sbin/nologin hops`
+3. Copy the data, then hand it to that user (`<old-data>` is the old
+   `--data` folder):
+   `sudo mkdir -p /var/lib/hops && sudo cp -a <old-data>/. /var/lib/hops/ && sudo chown -R hops:hops /var/lib/hops && sudo chmod 0750 /var/lib/hops`
+4. Run install.sh. It refuses with a `chown` hint if any file under
+   `/var/lib/hops` is not owned by `hops`.
+
 ## Binary Download
 
 HOPS is a single binary with no runtime dependencies. No database server, no runtime environment, nothing to install — download and run.
@@ -23,12 +86,13 @@ HOPS is a single binary with no runtime dependencies. No database server, no run
 Go to the [Releases](https://github.com/weaversgrainthorpe/HOPS/releases) page and download the binary for your platform:
 
 - `hops-linux-amd64` — Linux x86-64
-- `hops-linux-arm64` — Linux ARM64 (Raspberry Pi 3B+/4/5/Zero 2 W)
+- `hops-linux-arm64` — Linux ARM64 (Raspberry Pi 3B+/4/5/Zero 2 W running a 64-bit OS)
+- `hops-linux-armv6` — Linux 32-bit ARM (original Raspberry Pi Zero / Zero W, and any Pi running 32-bit Raspberry Pi OS)
 - `hops-darwin-amd64` — macOS Intel
 - `hops-darwin-arm64` — macOS Apple Silicon
 - `hops-windows-amd64.exe` — Windows x86-64
 
-Each download is a single self-contained binary with the web interface built in — there's nothing to extract. (A `SHA256SUMS.txt` is published alongside the binaries if you want to verify the download.)
+Each download is a single self-contained binary with the web interface built in — there's nothing to extract. (A `SHA256SUMS` file is published alongside the binaries if you want to verify the download.)
 
 Or download directly from the command line (replace the filename with your platform):
 ```bash

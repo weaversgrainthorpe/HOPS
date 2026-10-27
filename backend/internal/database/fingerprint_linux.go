@@ -19,7 +19,7 @@ func fileFingerprint(fi os.FileInfo) (fingerprint, bool) {
 	}
 	return fingerprint{
 		dev: uint64(st.Dev), ino: uint64(st.Ino), size: st.Size,
-		mtimeNs: st.Mtim.Sec*1e9 + int64(st.Mtim.Nsec),
-		ctimeNs: st.Ctim.Sec*1e9 + int64(st.Ctim.Nsec),
+		mtimeNs: int64(st.Mtim.Sec)*1e9 + int64(st.Mtim.Nsec), // int32 fields on 32-bit Linux
+		ctimeNs: int64(st.Ctim.Sec)*1e9 + int64(st.Ctim.Nsec),
 	}, true
 }
