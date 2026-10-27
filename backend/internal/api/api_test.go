@@ -227,19 +227,18 @@ func loginTestUserWithCSRF(t *testing.T, router http.Handler) (string, string) {
 		t.Fatalf("login failed with status %d: %s", w.Code, w.Body.String())
 	}
 
-	var resp map[string]string
-	json.Unmarshal(w.Body.Bytes(), &resp)
-
-	// Extract CSRF token from cookies
-	var csrfToken string
+	// The session id is only in the HttpOnly cookie, never the body.
+	var sessionID, csrfToken string
 	for _, c := range w.Result().Cookies() {
-		if c.Name == "hops_csrf" {
+		switch c.Name {
+		case "hops_csrf":
 			csrfToken = c.Value
-			break
+		case "hops_session":
+			sessionID = c.Value
 		}
 	}
 
-	return resp["sessionId"], csrfToken
+	return sessionID, csrfToken
 }
 
 // authedRequest creates an authenticated, CSRF-protected request for tests.
@@ -311,10 +310,13 @@ func TestLoginSuccess(t *testing.T) {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 
-	var resp map[string]string
+	var resp map[string]any
 	json.Unmarshal(w.Body.Bytes(), &resp)
-	if resp["sessionId"] == "" {
-		t.Fatal("expected sessionId in response")
+	if _, leaked := resp["sessionId"]; leaked {
+		t.Fatal("the session id must not be in the response body (it is HttpOnly-cookie only)")
+	}
+	if _, ok := resp["mustChangePassword"]; !ok {
+		t.Fatal("expected mustChangePassword in response")
 	}
 }
 

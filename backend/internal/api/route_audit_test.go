@@ -21,7 +21,8 @@ import (
 //   - a protected route answers an anonymous request with anything but 401,
 //     for any method,
 //   - a state-changing method on a protected route is accepted with a session
-//     but no CSRF token (must be 403),
+//     but no CSRF token, a mismatched token, or a header with no CSRF cookie
+//     (must be 403),
 //   - a public route answers an anonymous state-changing request with success
 //     (it must be classified csrfExempt, with a reason, to do that).
 
@@ -209,6 +210,20 @@ func TestRouteAudit(t *testing.T) {
 		if isStateChanging(method) {
 			if w := serve(method, path, true, false); w.Code != http.StatusForbidden {
 				t.Errorf("%s: %s %s with a session but NO CSRF token returned %d, want 403", label, method, path, w.Code)
+			}
+			// A token that doesn't match the cookie (or a header with no
+			// cookie) is refused too, not just a missing one.
+			req := httptest.NewRequest(method, path, strings.NewReader(""))
+			req.Header.Set("Cookie", "hops_session="+session+"; hops_csrf="+csrf)
+			req.Header.Set("X-CSRF-Token", csrf+"x")
+			if w := httptest.NewRecorder(); func() int { h.ServeHTTP(w, req); return w.Code }() != http.StatusForbidden {
+				t.Errorf("%s: %s %s with a MISMATCHED CSRF token returned %d, want 403", label, method, path, w.Code)
+			}
+			req = httptest.NewRequest(method, path, strings.NewReader(""))
+			req.Header.Set("Cookie", "hops_session="+session)
+			req.Header.Set("X-CSRF-Token", csrf)
+			if w := httptest.NewRecorder(); func() int { h.ServeHTTP(w, req); return w.Code }() != http.StatusForbidden {
+				t.Errorf("%s: %s %s with a CSRF header but no CSRF cookie returned %d, want 403", label, method, path, w.Code)
 			}
 		}
 	}

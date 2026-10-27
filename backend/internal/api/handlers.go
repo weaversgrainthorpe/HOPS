@@ -27,6 +27,7 @@ import (
 	_ "image/jpeg"
 
 	"github.com/weaversgrainthorpe/HOPS/internal/assets"
+	"github.com/weaversgrainthorpe/HOPS/internal/auth"
 	"github.com/weaversgrainthorpe/HOPS/internal/configdoc"
 	"github.com/weaversgrainthorpe/HOPS/internal/converters"
 	"github.com/weaversgrainthorpe/HOPS/internal/database"
@@ -173,36 +174,52 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 	}
 
 	lifetimeHours := r.settings.GetInt(settings.KeyAuthSessionLifetimeHours)
-	result, err := r.authService.Login(credentials.Username, credentials.Password, lifetimeHours)
-	if err != nil {
+	// The session the client presented (if any) is ended by the login, so a
+	// pre-login session id never survives it (no session fixation).
+	result, err := r.authService.LoginReplacing(credentials.Username, credentials.Password, lifetimeHours, extractSessionID(req))
+	if errors.Is(err, auth.ErrInvalidCredentials) {
 		writeJSONError(w, "Invalid credentials", http.StatusUnauthorized)
 		return
 	}
+	if err != nil {
+		slog.Error("login failed", "component", "auth", "error", err)
+		writeJSONError(w, "Sign-in failed: the server could not create a session", http.StatusInternalServerError)
+		return
+	}
 
+	if !r.setSessionCookies(w, req, result.SessionID, lifetimeHours) {
+		return
+	}
+
+	// The session id travels only in the HttpOnly cookie: it is never put in
+	// a response body, where script could read it.
+	writeJSON(w, map[string]interface{}{
+		"mustChangePassword": result.MustChangePassword,
+	})
+}
+
+// setSessionCookies sets the HttpOnly session cookie and a fresh CSRF cookie
+// paired with it (login and password-change rotation). On failure it has
+// written the error response and returns false.
+func (r *Router) setSessionCookies(w http.ResponseWriter, req *http.Request, sessionID string, lifetimeHours int) bool {
 	secure := r.isSecureRequest(req)
 	maxAge := lifetimeHours * 3600
+	csrfToken, err := generateCSRFToken()
+	if err != nil {
+		writeJSONError(w, "Failed to issue CSRF token", http.StatusInternalServerError)
+		return false
+	}
 	http.SetCookie(w, &http.Cookie{
 		Name:     "hops_session",
-		Value:    result.SessionID,
+		Value:    sessionID,
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   secure,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   maxAge,
 	})
-
-	// Issue a fresh CSRF token paired with this session.
-	csrfToken, err := generateCSRFToken()
-	if err != nil {
-		writeJSONError(w, "Failed to issue CSRF token", http.StatusInternalServerError)
-		return
-	}
 	setCSRFCookie(w, csrfToken, secure, maxAge)
-
-	writeJSON(w, map[string]interface{}{
-		"sessionId":          result.SessionID,
-		"mustChangePassword": result.MustChangePassword,
-	})
+	return true
 }
 
 // clientIP extracts the client IP address used for rate limiting.
@@ -216,17 +233,23 @@ func (r *Router) clientIP(req *http.Request) string {
 	remoteIP := remoteAddrIP(req.RemoteAddr)
 
 	if r.isTrustedProxy(remoteIP) {
-		// First entry of X-Forwarded-For is the original client.
+		// Walk X-Forwarded-For from the right: each trusted proxy appends the
+		// address it received from, so the rightmost entry that is NOT a
+		// trusted proxy is the real client. The leftmost entries are whatever
+		// the client itself sent and must not pick the rate-limit bucket.
 		if xff := req.Header.Get("X-Forwarded-For"); xff != "" {
-			first := xff
-			if idx := strings.Index(xff, ","); idx != -1 {
-				first = xff[:idx]
-			}
-			if ip := strings.TrimSpace(first); ip != "" {
-				return ip
+			parts := strings.Split(xff, ",")
+			for i := len(parts) - 1; i >= 0; i-- {
+				ip := strings.TrimSpace(parts[i])
+				if net.ParseIP(ip) == nil {
+					break // malformed: fall back to X-Real-IP / the proxy
+				}
+				if !r.isTrustedProxy(ip) {
+					return ip
+				}
 			}
 		}
-		if xri := strings.TrimSpace(req.Header.Get("X-Real-IP")); xri != "" {
+		if xri := strings.TrimSpace(req.Header.Get("X-Real-IP")); net.ParseIP(xri) != nil {
 			return xri
 		}
 	}
@@ -290,7 +313,7 @@ func (r *Router) handleLogout(w http.ResponseWriter, req *http.Request) {
 	}
 
 	sessionID := extractSessionID(req)
-	r.authService.Logout(sessionID)
+	logoutErr := r.authService.Logout(sessionID)
 
 	secure := r.isSecureRequest(req)
 	http.SetCookie(w, &http.Cookie{
@@ -304,6 +327,13 @@ func (r *Router) handleLogout(w http.ResponseWriter, req *http.Request) {
 	})
 	clearCSRFCookie(w, secure)
 
+	// The cookies are cleared either way, but if the server-side session could
+	// not be ended it is still valid until it expires: say so, never "logged out".
+	if logoutErr != nil {
+		slog.Error("logout: could not end the session", "component", "auth", "error", logoutErr)
+		writeJSONError(w, "Signed out in this browser, but the server could not end the session; it stays valid until it expires. Sign in and out again, or change the password to end every session.", http.StatusInternalServerError)
+		return
+	}
 	writeJSONSuccess(w)
 }
 
@@ -368,19 +398,25 @@ func (r *Router) handleChangePassword(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
-	if err := r.authService.ChangePassword(userID, data.OldPassword, data.NewPassword); err != nil {
+	// Every session of the user ends, the caller's included; the caller gets
+	// a fresh (rotated) session, so a session stolen before the change stops
+	// working and the old id is dead too.
+	lifetimeHours := r.settings.GetInt(settings.KeyAuthSessionLifetimeHours)
+	newSessionID, err := r.authService.ChangePassword(userID, data.OldPassword, data.NewPassword, lifetimeHours)
+	switch {
+	case errors.Is(err, auth.ErrInvalidCurrentPassword), errors.Is(err, auth.ErrPasswordTooShort),
+		errors.Is(err, auth.ErrPasswordTooLong), errors.Is(err, auth.ErrPasswordUnchanged):
 		writeJSONError(w, err.Error(), http.StatusBadRequest)
+		return
+	case err != nil:
+		slog.Error("password change failed", "component", "auth", "error", err)
+		writeJSONError(w, "The password could not be changed (server error); it is unchanged", http.StatusInternalServerError)
 		return
 	}
 
-	// Revoke all other sessions for this user so a session stolen before the
-	// change cannot continue to be used. The current session is kept so the
-	// user stays logged in.
-	if err := r.authService.InvalidateOtherSessions(userID, sessionID); err != nil {
-		slog.Warn("failed to invalidate other sessions after password change",
-			"component", "auth", "user_id", userID, "error", err)
+	if !r.setSessionCookies(w, req, newSessionID, lifetimeHours) {
+		return
 	}
-
 	writeJSONSuccess(w)
 }
 

@@ -168,7 +168,10 @@ export async function logout(): Promise<boolean> {
     await apiLogout();
     toast.info('Logged out');
   } catch (error) {
+    // Never a silent "logged out": the server may still hold the session.
     logError('Logout', error);
+    const detail = error instanceof Error && error.message ? error.message : 'the server could not be reached';
+    toast.error(`Signed out in this browser, but the server did not confirm it: ${detail}`);
   } finally {
     isAuthenticated.set(false);
     mustChangePassword.set(false);

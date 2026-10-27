@@ -4,9 +4,11 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
+	"unicode/utf8"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -27,14 +29,53 @@ type LoginResult struct {
 	MustChangePassword bool
 }
 
-// Login authenticates a user and creates a session.
+// Password policy for a new password. The minimum is a length floor, not a
+// complexity rule: HOPS has one admin and is meant for a LAN or behind an
+// auth-aware proxy (design/security/v3-security-assurance.md §2). The maximum
+// is bcrypt's: it ignores (and x/crypto rejects) input past 72 bytes.
+const (
+	MinPasswordLength   = 8
+	MaxPasswordBytes    = 72
+	passwordHashingCost = bcrypt.DefaultCost // 10; checked by TestPasswordHashCost
+)
+
+// Errors a caller may show the user as-is; any other error is internal.
+var (
+	ErrInvalidCredentials     = errors.New("invalid credentials")
+	ErrInvalidCurrentPassword = errors.New("current password is incorrect")
+	ErrPasswordTooShort       = fmt.Errorf("new password must be at least %d characters", MinPasswordLength)
+	ErrPasswordTooLong        = fmt.Errorf("new password must be at most %d bytes", MaxPasswordBytes)
+	ErrPasswordUnchanged      = errors.New("new password must be different from the current password")
+)
+
+// ValidateNewPassword applies the password policy.
+func ValidateNewPassword(newPassword string) error {
+	if utf8.RuneCountInString(newPassword) < MinPasswordLength {
+		return ErrPasswordTooShort
+	}
+	if len(newPassword) > MaxPasswordBytes {
+		return ErrPasswordTooLong
+	}
+	return nil
+}
+
+// Login authenticates a user and creates a session. See LoginReplacing.
+func (s *Service) Login(username, password string, lifetimeHours int) (LoginResult, error) {
+	return s.LoginReplacing(username, password, lifetimeHours, "")
+}
+
+// LoginReplacing authenticates a user and creates a session with a fresh
+// random id. The id is always new (never one the client supplied), and
+// priorSessionID, the session the client presented with the login request if
+// any, is deleted in the same transaction, so no pre-login session id survives
+// a login (no session fixation).
 //
 // lifetimeHours controls how long the session row stays valid in the DB —
 // it must match the cookie MaxAge the caller sets, otherwise a long-lived
 // cookie can outlive its DB row (or vice versa) and the user gets kicked
 // out at the shorter of the two. The caller derives this from the
 // auth.session_lifetime_hours admin setting.
-func (s *Service) Login(username, password string, lifetimeHours int) (LoginResult, error) {
+func (s *Service) LoginReplacing(username, password string, lifetimeHours int, priorSessionID string) (LoginResult, error) {
 	var userID int
 	var passwordHash string
 	var mustChange int
@@ -45,7 +86,7 @@ func (s *Service) Login(username, password string, lifetimeHours int) (LoginResu
 	).Scan(&userID, &passwordHash, &mustChange)
 
 	if err == sql.ErrNoRows {
-		return LoginResult{}, fmt.Errorf("invalid credentials")
+		return LoginResult{}, ErrInvalidCredentials
 	}
 	if err != nil {
 		return LoginResult{}, fmt.Errorf("database error: %w", err)
@@ -53,28 +94,24 @@ func (s *Service) Login(username, password string, lifetimeHours int) (LoginResu
 
 	// Verify password
 	if err := bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(password)); err != nil {
-		return LoginResult{}, fmt.Errorf("invalid credentials")
+		return LoginResult{}, ErrInvalidCredentials
 	}
 
-	// Create session
-	sessionID, err := generateSessionID()
+	tx, err := s.db.Begin()
 	if err != nil {
-		return LoginResult{}, fmt.Errorf("failed to generate session: %w", err)
+		return LoginResult{}, fmt.Errorf("failed to create session: %w", err)
 	}
-
-	// Belt-and-braces: if a caller passes 0 or negative we still produce
-	// a sane non-immediate-expiry row rather than handing back a session
-	// the DB will reject on the very next request.
-	if lifetimeHours <= 0 {
-		lifetimeHours = 24
+	defer tx.Rollback()
+	if priorSessionID != "" {
+		if _, err := tx.Exec("DELETE FROM sessions WHERE id = ?", priorSessionID); err != nil {
+			return LoginResult{}, fmt.Errorf("failed to end the previous session: %w", err)
+		}
 	}
-	expiresAt := time.Now().Add(time.Duration(lifetimeHours) * time.Hour)
-
-	_, err = s.db.Exec(
-		"INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)",
-		sessionID, userID, expiresAt,
-	)
+	sessionID, err := insertSession(tx, userID, lifetimeHours)
 	if err != nil {
+		return LoginResult{}, err
+	}
+	if err := tx.Commit(); err != nil {
 		return LoginResult{}, fmt.Errorf("failed to create session: %w", err)
 	}
 
@@ -82,6 +119,28 @@ func (s *Service) Login(username, password string, lifetimeHours int) (LoginResu
 		SessionID:          sessionID,
 		MustChangePassword: mustChange == 1,
 	}, nil
+}
+
+// insertSession creates a session row with a fresh random id.
+func insertSession(tx *sql.Tx, userID, lifetimeHours int) (string, error) {
+	sessionID, err := generateSessionID()
+	if err != nil {
+		return "", fmt.Errorf("failed to generate session: %w", err)
+	}
+	// Belt-and-braces: if a caller passes 0 or negative we still produce
+	// a sane non-immediate-expiry row rather than handing back a session
+	// the DB will reject on the very next request.
+	if lifetimeHours <= 0 {
+		lifetimeHours = 24
+	}
+	expiresAt := time.Now().Add(time.Duration(lifetimeHours) * time.Hour)
+	if _, err := tx.Exec(
+		"INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)",
+		sessionID, userID, expiresAt,
+	); err != nil {
+		return "", fmt.Errorf("failed to create session: %w", err)
+	}
+	return sessionID, nil
 }
 
 // MustChangePassword returns true if the user is required to change their password
@@ -132,8 +191,12 @@ func (s *Service) Logout(sessionID string) error {
 	return err
 }
 
-// ChangePassword updates a user's password
-func (s *Service) ChangePassword(userID int, oldPassword, newPassword string) error {
+// ChangePassword verifies the current password, applies the password policy
+// and stores the new hash. In the same transaction it ends EVERY session of
+// the user, the caller's included, and creates one fresh session, whose id it
+// returns: a session stolen before the change stops working, and the caller's
+// own session id is rotated rather than kept (the caller sets the new cookie).
+func (s *Service) ChangePassword(userID int, oldPassword, newPassword string, lifetimeHours int) (string, error) {
 	var currentHash string
 	err := s.db.QueryRow(
 		"SELECT password_hash FROM users WHERE id = ?",
@@ -141,41 +204,47 @@ func (s *Service) ChangePassword(userID int, oldPassword, newPassword string) er
 	).Scan(&currentHash)
 
 	if err != nil {
-		return fmt.Errorf("user not found: %w", err)
+		return "", fmt.Errorf("user not found: %w", err)
 	}
 
 	// Verify old password
 	if err := bcrypt.CompareHashAndPassword([]byte(currentHash), []byte(oldPassword)); err != nil {
-		return fmt.Errorf("invalid current password")
+		return "", ErrInvalidCurrentPassword
+	}
+	if err := ValidateNewPassword(newPassword); err != nil {
+		return "", err
+	}
+	if newPassword == oldPassword {
+		return "", ErrPasswordUnchanged
 	}
 
-	// Hash new password
-	newHash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	newHash, err := bcrypt.GenerateFromPassword([]byte(newPassword), passwordHashingCost)
 	if err != nil {
-		return fmt.Errorf("failed to hash password: %w", err)
+		return "", fmt.Errorf("failed to hash password: %w", err)
 	}
 
-	_, err = s.db.Exec(
+	tx, err := s.db.Begin()
+	if err != nil {
+		return "", fmt.Errorf("failed to update password: %w", err)
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(
 		"UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ?",
 		newHash, userID,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to update password: %w", err)
+	); err != nil {
+		return "", fmt.Errorf("failed to update password: %w", err)
 	}
-
-	return nil
-}
-
-// InvalidateOtherSessions revokes every session belonging to a user except
-// the one supplied (typically the caller's current session). Use this after
-// a password change so that any session stolen beforehand stops working,
-// while the user who just changed their password stays logged in.
-func (s *Service) InvalidateOtherSessions(userID int, keepSessionID string) error {
-	_, err := s.db.Exec(
-		"DELETE FROM sessions WHERE user_id = ? AND id != ?",
-		userID, keepSessionID,
-	)
-	return err
+	if _, err := tx.Exec("DELETE FROM sessions WHERE user_id = ?", userID); err != nil {
+		return "", fmt.Errorf("failed to end sessions: %w", err)
+	}
+	sessionID, err := insertSession(tx, userID, lifetimeHours)
+	if err != nil {
+		return "", err
+	}
+	if err := tx.Commit(); err != nil {
+		return "", fmt.Errorf("failed to update password: %w", err)
+	}
+	return sessionID, nil
 }
 
 // generateSessionID creates a random session ID

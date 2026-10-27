@@ -182,6 +182,9 @@ describe('auth store', () => {
 			// Frontend must always clear local state — server might be unreachable
 			// but the user expects to be logged out
 			expect(get(isAuthenticated)).toBe(false);
+			// ...and is told the server did not confirm it (no silent failure).
+			expect(get(toast).some((t) => t.type === 'error' && t.message.includes('network error'))).toBe(true);
+			expect(get(toast).some((t) => t.type === 'info')).toBe(false);
 		});
 
 		it('shows info toast on successful logout', async () => {

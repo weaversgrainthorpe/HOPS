@@ -2,6 +2,8 @@ package auth
 
 import (
 	"database/sql"
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -145,7 +147,7 @@ func TestChangePassword(t *testing.T) {
 	db := setupTestDB(t)
 	svc := NewService(db)
 
-	if err := svc.ChangePassword(1, "testpass", "newpass"); err != nil {
+	if _, err := svc.ChangePassword(1, "testpass", "newpass1", 24); err != nil {
 		t.Fatalf("change password failed: %v", err)
 	}
 
@@ -156,7 +158,7 @@ func TestChangePassword(t *testing.T) {
 	}
 
 	// New password should work
-	_, err = svc.Login("admin", "newpass", 24)
+	_, err = svc.Login("admin", "newpass1", 24)
 	if err != nil {
 		t.Fatalf("expected new password to work, got: %v", err)
 	}
@@ -166,8 +168,8 @@ func TestChangePasswordWrongOld(t *testing.T) {
 	db := setupTestDB(t)
 	svc := NewService(db)
 
-	err := svc.ChangePassword(1, "wrong", "newpass")
-	if err == nil {
+	_, err := svc.ChangePassword(1, "wrong", "newpass1", 24)
+	if !errors.Is(err, ErrInvalidCurrentPassword) {
 		t.Fatal("expected error for wrong old password")
 	}
 }
@@ -199,7 +201,7 @@ func TestChangePasswordClearsMustChangeFlag(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := svc.ChangePassword(1, "testpass", "newpass"); err != nil {
+	if _, err := svc.ChangePassword(1, "testpass", "newpass1", 24); err != nil {
 		t.Fatalf("change password failed: %v", err)
 	}
 
@@ -212,7 +214,7 @@ func TestChangePasswordClearsMustChangeFlag(t *testing.T) {
 	}
 
 	// Subsequent login should not require password change
-	result, _ := svc.Login("admin", "newpass", 24)
+	result, _ := svc.Login("admin", "newpass1", 24)
 	if result.MustChangePassword {
 		t.Fatal("expected fresh login to not require password change")
 	}
@@ -259,5 +261,121 @@ func TestCleanupExpiredSessions(t *testing.T) {
 	db.QueryRow("SELECT COUNT(*) FROM sessions WHERE id = 'old-session'").Scan(&count)
 	if count != 0 {
 		t.Fatal("expired session should have been cleaned up")
+	}
+}
+
+// §2: a password change ends every session of the user, the caller's too, and
+// hands back one fresh session (the caller's id is rotated, not kept).
+func TestChangePasswordEndsAllSessionsAndRotates(t *testing.T) {
+	db := setupTestDB(t)
+	svc := NewService(db)
+	a, _ := svc.Login("admin", "testpass", 24)
+	b, _ := svc.Login("admin", "testpass", 24)
+
+	fresh, err := svc.ChangePassword(1, "testpass", "newpass1", 24)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fresh == "" || fresh == a.SessionID || fresh == b.SessionID {
+		t.Fatalf("expected a new session id, got %q", fresh)
+	}
+	for _, old := range []string{a.SessionID, b.SessionID} {
+		if _, err := svc.ValidateSession(old); err == nil {
+			t.Error("a session from before the password change still works")
+		}
+	}
+	if _, err := svc.ValidateSession(fresh); err != nil {
+		t.Errorf("the rotated session does not work: %v", err)
+	}
+}
+
+// A refused change leaves the password and every session as they were.
+func TestChangePasswordPolicy(t *testing.T) {
+	db := setupTestDB(t)
+	svc := NewService(db)
+	a, _ := svc.Login("admin", "testpass", 24)
+	cases := []struct {
+		old, new string
+		want     error
+	}{
+		{"wrong", "newpass1", ErrInvalidCurrentPassword},
+		{"", "newpass1", ErrInvalidCurrentPassword},
+		{"testpass", "short7c", ErrPasswordTooShort},
+		{"testpass", "", ErrPasswordTooShort},
+		{"testpass", strings.Repeat("x", MaxPasswordBytes+1), ErrPasswordTooLong},
+		{"testpass", "testpass", ErrPasswordUnchanged},
+	}
+	for _, c := range cases {
+		if _, err := svc.ChangePassword(1, c.old, c.new, 24); !errors.Is(err, c.want) {
+			t.Errorf("ChangePassword(%q, %q) = %v, want %v", c.old, c.new, err, c.want)
+		}
+	}
+	if _, err := svc.ValidateSession(a.SessionID); err != nil {
+		t.Error("a refused password change ended the session")
+	}
+	if _, err := svc.Login("admin", "testpass", 24); err != nil {
+		t.Error("a refused password change altered the password")
+	}
+}
+
+// bcrypt cost: stored hashes use the library default (10), never MinCost.
+func TestPasswordHashCost(t *testing.T) {
+	db := setupTestDB(t)
+	svc := NewService(db)
+	if _, err := svc.ChangePassword(1, "testpass", "newpass1", 24); err != nil {
+		t.Fatal(err)
+	}
+	var hash string
+	db.QueryRow("SELECT password_hash FROM users WHERE id = 1").Scan(&hash)
+	cost, err := bcrypt.Cost([]byte(hash))
+	if err != nil || cost < 10 {
+		t.Fatalf("bcrypt cost = %d (%v), want >= 10", cost, err)
+	}
+}
+
+// §2: login always mints a new id and ends the session presented with it, so
+// no pre-login session id survives (no fixation).
+func TestLoginReplacingEndsPriorSession(t *testing.T) {
+	db := setupTestDB(t)
+	svc := NewService(db)
+	prior, _ := svc.Login("admin", "testpass", 24)
+	next, err := svc.LoginReplacing("admin", "testpass", 24, prior.SessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if next.SessionID == prior.SessionID {
+		t.Fatal("login reused the presented session id")
+	}
+	if _, err := svc.ValidateSession(prior.SessionID); err == nil {
+		t.Error("the session presented at login survived it")
+	}
+	// A failed login leaves the presented session alone.
+	if _, err := svc.LoginReplacing("admin", "wrong", 24, next.SessionID); err == nil {
+		t.Fatal("wrong password accepted")
+	}
+	if _, err := svc.ValidateSession(next.SessionID); err != nil {
+		t.Error("a failed login ended the presented session")
+	}
+}
+
+// §2 absolute expiry: the row's expires_at is login time + lifetime, and a
+// session past it is refused (and deleted) server-side, whatever the cookie.
+func TestAbsoluteExpiry(t *testing.T) {
+	db := setupTestDB(t)
+	svc := NewService(db)
+	r, _ := svc.Login("admin", "testpass", 3)
+	var exp time.Time
+	db.QueryRow("SELECT expires_at FROM sessions WHERE id = ?", r.SessionID).Scan(&exp)
+	if d := time.Until(exp); d < 3*time.Hour-time.Minute || d > 3*time.Hour+time.Minute {
+		t.Fatalf("expires in %v, want ~3h", d)
+	}
+	db.Exec("UPDATE sessions SET expires_at = ? WHERE id = ?", time.Now().Add(-time.Second), r.SessionID)
+	if _, err := svc.ValidateSession(r.SessionID); err == nil {
+		t.Fatal("expired session accepted")
+	}
+	var n int
+	db.QueryRow("SELECT COUNT(*) FROM sessions WHERE id = ?", r.SessionID).Scan(&n)
+	if n != 0 {
+		t.Error("expired session row was not deleted")
 	}
 }

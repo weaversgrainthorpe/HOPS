@@ -21,7 +21,7 @@
   let isSubmitting = $state(false);
 
   // Derived validation states
-  let newPasswordValidation = $derived(validatePassword(newPassword, { minLength: 4 }));
+  let newPasswordValidation = $derived(validatePassword(newPassword, { minLength: 8 })); // matches the server (auth.MinPasswordLength)
   let confirmValidation = $derived(validateMatch(newPassword, confirmPassword, 'passwords'));
 
   async function handleSubmit(e: Event) {
