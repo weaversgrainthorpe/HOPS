@@ -28,7 +28,7 @@ Go to the [Releases](https://github.com/weaversgrainthorpe/HOPS/releases) page a
 - `hops-darwin-arm64` — macOS Apple Silicon
 - `hops-windows-amd64.exe` — Windows x86-64
 
-Each download is a single self-contained binary with the web interface built in — there's nothing to extract. (A `SHA256SUMS.txt` is published alongside the binaries if you want to verify the download.)
+Each download is a single self-contained binary with the web interface built in — there's nothing to extract. (A `SHA256SUMS` file is published alongside the binaries if you want to verify the download.)
 
 Or download directly from the command line (replace the filename with your platform):
 ```bash
