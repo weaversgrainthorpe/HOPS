@@ -60,7 +60,7 @@ describe('DashboardList: every dashboard is a normal, editable row', () => {
     for (const label of ['Rename Fancy', 'Export Fancy', 'Show QR code for Fancy', 'Delete Fancy']) {
       expect(w.getByRole('button', { name: label })).toBeInTheDocument();
     }
-    expect(w.getByText('1 tabs')).toBeInTheDocument();
+    expect(w.getByText('1 tab')).toBeInTheDocument();
   });
 });
 

@@ -42,10 +42,11 @@ doc_versions[DEPLOY.md]=$(grep -oE '\*\*Version [0-9]+\.[0-9]+\.[0-9]+\*\*' "$RE
 doc_versions[USER_GUIDE.md]=$(grep -oE '\(v[0-9]+\.[0-9]+\.[0-9]+\)' "$REPO_DIR/USER_GUIDE.md" 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || echo "MISSING")
 doc_versions[ICON_MANAGEMENT.md]=$(grep -oE '\(v[0-9]+\.[0-9]+\.[0-9]+\)' "$REPO_DIR/ICON_MANAGEMENT.md" 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || echo "MISSING")
 doc_versions[docs/index.html]=$(grep -oE 'class="badge">v[0-9]+\.[0-9]+\.[0-9]+' "$REPO_DIR/docs/index.html" 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || echo "MISSING")
-# QUICKSTART has two inline references — log-output example and docker image pin.
-# Both should match the current version; pick whichever's first.
+# QUICKSTART's log-output example must match the current version.
 doc_versions["QUICKSTART.md log example"]=$(grep -oE 'version="HOPS v[0-9]+\.[0-9]+\.[0-9]+"' "$REPO_DIR/QUICKSTART.md" 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || echo "MISSING")
-doc_versions["QUICKSTART.md docker pin"]=$(grep -oE 'hops:v[0-9]+\.[0-9]+\.[0-9]+' "$REPO_DIR/QUICKSTART.md" 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || echo "MISSING")
+# The docker pin is optional (the v3 guide uses :latest); when one is written, it must match.
+docker_pin=$(grep -oE 'hops:v[0-9]+\.[0-9]+\.[0-9]+' "$REPO_DIR/QUICKSTART.md" 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || true)
+[[ -n "$docker_pin" ]] && doc_versions["QUICKSTART.md docker pin"]=$docker_pin
 
 doc_problems=()
 for f in "${!doc_versions[@]}"; do
