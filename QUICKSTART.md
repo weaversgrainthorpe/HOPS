@@ -187,8 +187,8 @@ Tiles and folders sit on a grid on each tab. Folders can hold folders.
 1. Click the **gear** (Settings). You are on **Dashboards**.
 2. Click **New Dashboard**.
 3. Type a **Name**, for example `Home`.
-4. The **URL Path** is filled in with something like `/dashboard-1793124317105`.
-   Change it to something you will remember, such as `/home`.
+4. The **URL Path** fills itself in from the name as you type (`Home` becomes
+   `/home`). You can change it if you'd like a different address.
 5. Click **Save**.
 6. Click the new dashboard in the list to open it. It starts with one empty
    tab called *Home*.
