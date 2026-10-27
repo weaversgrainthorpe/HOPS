@@ -12,11 +12,10 @@ import { getCsrfToken, setSetting } from '../helpers';
 // - a valid uploaded backup is listed (not restored); an invalid one shows a visible reason.
 // Synthetic data only.
 
-const backupsDialog = (page: Page) => page.locator('[aria-labelledby="backup-manager-title"]');
+const backupsDialog = (page: Page) => page.locator('#backups');
 
 async function openBackups(page: Page) {
 	await page.goto('/settings/backups');
-	await page.getByRole('button', { name: 'Open Backups' }).click();
 	await expect(backupsDialog(page).locator('.backup-item').first()).toBeVisible();
 }
 

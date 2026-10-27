@@ -3,12 +3,12 @@
   import Icon from '@iconify/svelte';
 
   interface Props {
-    /** When given (Settings), render a button that opens the backups UI instead of a link. */
-    onOpenBackups?: () => void;
+    /** Signed in on Settings: link straight to the Backups page. */
+    signedIn?: boolean;
     /** Shown on Settings itself (signed out): say to sign in here, not link to this same page. */
     onSettingsPage?: boolean;
   }
-  let { onOpenBackups, onSettingsPage = false }: Props = $props();
+  let { signedIn = false, onSettingsPage = false }: Props = $props();
 </script>
 
 <!-- Full-page notice shown instead of the app while the stored config could
@@ -26,8 +26,8 @@
   {/if}
   <p>
     Settings → Backups holds the automatic pre-v3-migration and startup backups.
-    {#if onOpenBackups}
-      <button type="button" class="open-backups" onclick={onOpenBackups}>Open Backups</button>
+    {#if signedIn}
+      <a class="open-backups" href="/settings/backups">Open Backups</a>
     {:else if onSettingsPage}
       Sign in, then open Backups on this page.
     {:else}
@@ -64,6 +64,8 @@
   }
 
   .open-backups {
+    display: inline-block;
+    text-decoration: none;
     margin-left: 0.5rem;
     padding: 0.3rem 0.9rem;
     border-radius: 0.25rem;

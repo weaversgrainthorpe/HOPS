@@ -73,7 +73,7 @@ test.describe('M6 §12 backups keep their images', () => {
 	const dashPath = '/imgs';
 
 	const csrf = async () => ({ 'X-CSRF-Token': (await ctx.cookies()).find((c) => c.name === 'hops_csrf')?.value ?? '' });
-	const backupsDialog = () => page.locator('[aria-labelledby="backup-manager-title"]');
+	const backupsDialog = () => page.locator('#backups');
 	const list = async () => (await (await page.request.get('/api/backups')).json()) as { backups: { name: string }[]; attic?: { files: number } };
 	// The attic is keyed by content: attic/icons/<sha256>.
 	let iconSha = '';
@@ -82,7 +82,6 @@ test.describe('M6 §12 backups keep their images', () => {
 
 	async function openBackups(waitForItems = true) {
 		await page.goto('/settings/backups');
-		await page.getByRole('button', { name: 'Open Backups' }).click();
 		if (waitForItems) await expect(backupsDialog().locator('.backup-item').first()).toBeVisible();
 		else await expect(backupsDialog().getByRole('button', { name: 'Create Backup' })).toBeEnabled();
 	}

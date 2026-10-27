@@ -244,10 +244,8 @@ test('every Settings page and dialog is readable on every preset × mode; hover 
   await sweep('Discovery detectors');
   await visit('/settings/backups', /Backups/);
   await sweep('Backups');
-  await page.getByRole('button', { name: 'Open Backups' }).click();
-  await expect(page.getByRole('dialog').first()).toBeVisible();
-  await page.waitForTimeout(400);
-  await sweep('Backups dialog', '[role="dialog"]');
+  await expect(page.locator('#backups .backup-item').first()).toBeVisible();
+  await sweep('Backups list', '#backups');
   await visit('/settings/logs', /Logs/);
   await sweep('Logs');
   await visit('/settings/password', /Password/);

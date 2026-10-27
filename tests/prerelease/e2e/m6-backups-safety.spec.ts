@@ -138,8 +138,7 @@ c.commit()
 
 	test('a restore is refused when the safety backup fails, and the dialog says so', async () => {
 		await page.goto('/settings/backups');
-		await page.getByRole('button', { name: 'Open Backups' }).click();
-		const modal = page.locator('[aria-labelledby="backup-manager-title"]');
+		const modal = page.locator('#backups');
 		const name = backupFiles()[0];
 		await modal.getByRole('button', { name: `Restore ${name}` }).click();
 		const confirmDlg = page.locator('[aria-labelledby="confirm-title"]');
@@ -155,7 +154,7 @@ c.commit()
 
 	test('the notice goes once a backup works again', async () => {
 		fs.chmodSync(backupsDir, 0o755);
-		const modal = page.locator('[aria-labelledby="backup-manager-title"]');
+		const modal = page.locator('#backups');
 		await modal.getByRole('button', { name: 'Create Backup' }).click();
 		await expect(page.locator('.toast', { hasText: 'Backup created' })).toBeVisible();
 		await expect(modal.locator('.problem')).toHaveCount(0);
@@ -175,8 +174,7 @@ c.commit()
 		const manual = backupFiles().filter((n) => n.endsWith('_manual.db')).sort().pop()!;
 		const exited = new Promise<number | null>((r) => child!.once('exit', (code) => r(code)));
 		await page.goto('/settings/backups');
-		await page.getByRole('button', { name: 'Open Backups' }).click();
-		const modal = page.locator('[aria-labelledby="backup-manager-title"]');
+		const modal = page.locator('#backups');
 		await modal.getByRole('button', { name: `Restore ${manual}` }).click();
 		await page.locator('[aria-labelledby="confirm-title"]').getByRole('button', { name: 'Restore', exact: true }).click();
 		await expect(page.locator('.toast', { hasText: 'restarting to apply it' })).toBeVisible();

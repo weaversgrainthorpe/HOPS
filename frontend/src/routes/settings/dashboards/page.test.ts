@@ -33,7 +33,6 @@ describe('/settings/dashboards', () => {
 	it('holds only the dashboards: no global settings, backups or factory reset here', () => {
 		render(Page);
 		expect(screen.queryByRole('button', { name: /Factory Reset/ })).toBeNull();
-		expect(screen.queryByRole('button', { name: /Open Backups/ })).toBeNull();
 		expect(screen.queryByRole('heading', { name: 'Global settings' })).toBeNull();
 	});
 });

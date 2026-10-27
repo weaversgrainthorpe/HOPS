@@ -225,10 +225,10 @@ test.describe('M5 §9 settings: sidebar and separate pages', () => {
       await expect(anon).toHaveURL(/\/settings\/backups$/);
       // Nothing admin behind the dialog.
       await expect(sidebar(anon)).toHaveCount(0);
-      await expect(anon.getByRole('button', { name: 'Open Backups' })).toHaveCount(0);
+      await expect(anon.getByRole('button', { name: 'Create Backup' })).toHaveCount(0);
       await signInDialog(anon);
       await expectOn(anon, PAGES[2]);
-      await expect(anon.getByRole('button', { name: 'Open Backups' })).toBeVisible();
+      await expect(anon.getByRole('button', { name: 'Create Backup' })).toBeVisible();
     } finally {
       await ctx.close();
     }
@@ -244,5 +244,16 @@ test.describe('M5 §9 settings: sidebar and separate pages', () => {
       if (pg.path === '/settings/reset') await expect(reset).toHaveCount(1);
       else await expect(reset, `no Factory Reset on ${pg.path}`).toHaveCount(0);
     }
+  });
+});
+
+test.describe('Settings › Backups is the backups page itself', () => {
+  test('the list and its actions are on the page directly: no button that opens a popup', async ({ page }) => {
+    await page.goto('/settings/backups');
+    await expect(page.getByRole('heading', { name: 'Backups', level: 2 })).toBeVisible();
+    await expect(page.locator('#backups .backup-item').first()).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Create Backup' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Open Backups' })).toHaveCount(0);
+    await expect(page.getByRole('dialog')).toHaveCount(0);
   });
 });

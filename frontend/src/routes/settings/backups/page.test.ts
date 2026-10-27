@@ -1,36 +1,24 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/svelte';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen } from '@testing-library/svelte';
 
-// /settings/backups (M5 §9): opens the backups dialog, which the settings shell owns (so the
-// MigrationFailed notice can open the same dialog from any settings page).
+// /settings/backups: the backups themselves are on the page; there is no button that opens a popup.
 vi.mock('$lib/utils/api', async () => ({
 	...(await vi.importActual<object>('$lib/utils/api')),
-	getBackendVersion: vi.fn(async () => { throw new TypeError('Failed to fetch'); })
+	listBackups: vi.fn(async () => ({
+		backups: [{ name: 'hops-1.db', createdAt: '2026-10-01T10:00:00Z', size: 1024, kind: 'manual' }],
+		problems: []
+	}))
 }));
 
-import { backendStatus } from '$lib/stores/backendStatus';
-import { SETTINGS_SHELL, type SettingsShell } from '../settingsShell';
 import Page from './+page.svelte';
 
-let shell: SettingsShell;
-beforeEach(() => {
-	shell = { openBackups: vi.fn() };
-});
-const renderPage = () => render(Page, { context: new Map([[SETTINGS_SHELL, shell]]) });
-
 describe('/settings/backups', () => {
-	it('has its heading and explanation, and Open Backups opens the shell\'s backups dialog', async () => {
-		renderPage();
+	it('has its heading and shows the backups list directly, with no button that opens a popup', async () => {
+		render(Page);
 		expect(screen.getByRole('heading', { name: 'Backups', level: 2 })).toBeTruthy();
-		expect(screen.getByText(/backs up the database when it starts, before every save, before a restore or reset, and before an upgrade/)).toBeTruthy();
-		await fireEvent.click(screen.getByRole('button', { name: /Open Backups/ }));
-		expect(shell.openBackups).toHaveBeenCalledTimes(1);
-	});
-
-	it('Open Backups is disabled while the backend is offline', async () => {
-		await backendStatus.check(); // the version probe fails: offline
-		renderPage();
-		expect((screen.getByRole('button', { name: /Open Backups/ }) as HTMLButtonElement).disabled).toBe(true);
-		backendStatus.reset();
+		expect(screen.getByText(/HOPS backs up its database automatically/)).toBeTruthy();
+		expect(screen.queryByRole('button', { name: /Open Backups/ })).toBeNull();
+		expect(screen.queryByRole('dialog')).toBeNull();
+		expect(await screen.findByRole('button', { name: /Create/ })).toBeTruthy();
 	});
 });

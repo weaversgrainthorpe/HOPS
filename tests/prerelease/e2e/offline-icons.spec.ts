@@ -34,7 +34,7 @@ test('UI icons render with the Iconify API fully blocked (offline)', async ({ pa
   for (let i = 0; i < 9; i++) {
     await expect(items.nth(i).locator('svg')).toBeVisible();
   }
-  for (const [item, button] of [['Icons', 'Upload icons'], ['Backups', 'Open Backups'], ['Logs', 'Refresh'], ['Password', 'Change Password'], ['Factory reset', 'Factory Reset']]) {
+  for (const [item, button] of [['Icons', 'Upload icons'], ['Backups', 'Create Backup'], ['Logs', 'Refresh'], ['Password', 'Change Password'], ['Factory reset', 'Factory Reset']]) {
     await side.getByRole('link', { name: item, exact: true }).click();
     await expect(page.getByRole('button', { name: button }).locator('svg')).toBeVisible();
   }

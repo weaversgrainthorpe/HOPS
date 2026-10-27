@@ -8,10 +8,8 @@
   import { isBackendOffline, backendStatus } from '$lib/stores/backendStatus';
   import { migrationFailure, refreshServerNotices } from '$lib/stores/config';
   import LoginDialog from '$lib/components/LoginDialog.svelte';
-  import BackupModal from '$lib/components/admin/BackupModal.svelte';
   import MigrationFailed from '$lib/components/MigrationFailed.svelte';
   import NoticesBanner from '$lib/components/NoticesBanner.svelte';
-  import { provideSettingsShell } from './settingsShell';
   import { globalNav, onGroupLinkClick } from '$lib/settings/globalNav';
 
   // Settings is the one admin home (spec §4D), one page per section (M5 §9): this shell is shared
@@ -89,17 +87,6 @@
     void goto(previous ?? '/');
   }
 
-  // The backups dialog is the shell's: the MigrationFailed notice opens it from any page, and
-  // the Backups page opens it too.
-  let showBackupModal = $state(false);
-  const openBackups = () => (showBackupModal = true);
-  provideSettingsShell({ openBackups });
-  // It needs the session too: when the session ends (idle expiry, a Log out from the navbar) it
-  // closes with the rest of the admin content, and signing back in doesn't reopen it. A page's
-  // own dialogs (Change Password) go with the page, which is only shown while ready.
-  $effect(() => {
-    if (!ready) showBackupModal = false;
-  });
   // Backup problems are only sent to a signed-in admin, so the notices are read again once
   // signed in (the page may have loaded signed out). A failed read says so (refreshNotices).
   $effect(() => {
@@ -194,7 +181,7 @@
 
       {#if $migrationFailure}
         <!-- On top: the stored config could not be migrated; Backups is the remedy. -->
-        <MigrationFailed onOpenBackups={ready ? openBackups : undefined} onSettingsPage />
+        <MigrationFailed onSettingsPage signedIn={ready} />
       {/if}
 
       {#if $isBackendOffline}
@@ -248,10 +235,6 @@
 
 {#if needsLogin && !leaving}
   <LoginDialog intro="Sign in to open Settings." onSuccess={() => {}} onCancel={cancelLogin} />
-{/if}
-
-{#if ready && showBackupModal}
-  <BackupModal onClose={() => (showBackupModal = false)} />
 {/if}
 
 <style>

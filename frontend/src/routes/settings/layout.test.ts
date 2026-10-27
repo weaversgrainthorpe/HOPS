@@ -241,32 +241,26 @@ describe('settings shell, signed in', () => {
 		expect(notice.compareDocumentPosition(pageEl) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 	});
 
-	it('a failed migration: MigrationFailed on top with Open Backups, which opens the backups dialog on any page', async () => {
+	it('a failed migration: MigrationFailed on top with an Open Backups link to /settings/backups, on any page', () => {
 		at('/settings/password');
 		migrationFailure.set('could not migrate');
 		config.set(null);
 		renderShell();
 		const notice = screen.getByRole('alert');
 		expect(within(notice).getByRole('heading', { name: /couldn't migrate your configuration/ })).toBeTruthy();
-		await fireEvent.click(within(notice).getByRole('button', { name: 'Open Backups' }));
-		expect(await screen.findByRole('dialog', { name: /Backup/ })).toBeTruthy();
+		expect(within(notice).getByRole('link', { name: 'Open Backups' }).getAttribute('href')).toBe('/settings/backups');
+		expect(screen.queryByRole('dialog', { name: /Backup/ })).toBeNull();
 	});
 
-	it('the session ending hides the page and closes the backups dialog; signing back in does not reopen it', async () => {
+	it('signed out: the migration notice has no Backups link; signing in is asked for', async () => {
 		migrationFailure.set('could not migrate');
 		renderShell();
-		await fireEvent.click(within(screen.getByRole('alert')).getByRole('button', { name: 'Open Backups' }));
-		expect(await screen.findByRole('dialog', { name: /Backup/ })).toBeTruthy();
 		isAuthenticated.set(false);
-		await waitFor(() => expect(screen.queryByRole('dialog', { name: /Backup/ })).toBeNull());
 		expect(await screen.findByRole('dialog', { name: 'Sign in' })).toBeTruthy();
+		expect(screen.queryByRole('link', { name: 'Open Backups' })).toBeNull();
 		expect(childShown()).toBe(false);
-		expect(screen.queryByRole('navigation', { name: 'Settings sections' })).toBeNull();
-		isAuthenticated.set(true);
-		await flush();
-		expect(screen.queryByRole('dialog', { name: /Backup/ })).toBeNull();
-		expect(childShown()).toBe(true);
 	});
+
 
 	it('Log out signs out and goes to /', async () => {
 		renderShell();

@@ -1,6 +1,5 @@
 <script lang="ts">
   import Icon from '@iconify/svelte';
-  import Modal from '$lib/components/shared/Modal.svelte';
   import {
     listBackups, createBackup, restoreBackup, deleteBackup, uploadBackup, previewBackupCleanup, confirmBackupCleanup,
     backupDownloadUrl, backupArchiveName, checkBackupImages, discardPendingRestore,
@@ -11,12 +10,6 @@
   import { confirm } from '$lib/stores/confirmModal';
   import { toast } from '$lib/stores/toast';
   import { onMount } from 'svelte';
-
-  interface Props {
-    onClose: () => void;
-  }
-
-  let { onClose }: Props = $props();
 
   let backups = $state<BackupInfo[]>([]);
   let problems = $state<BackupProblem[]>([]);
@@ -306,14 +299,7 @@
   }
 </script>
 
-<Modal
-  id="backup-manager"
-  title="Backups"
-  titleIcon="mdi:backup-restore"
-  onClose={onClose}
-  maxWidth="600px"
->
-  <div class="backup-content">
+<div class="backup-content" id="backups">
     <div class="info-box">
       <Icon icon="mdi:information-outline" width="18" />
       <span>
@@ -355,7 +341,7 @@
     {#if retention}
       <p class="retention" data-testid="backup-retention">
         {retentionText(retention)}
-        <a href="/settings/global#server" onclick={onClose}>Change</a>
+        <a href="/settings/global#server">Change</a>
       </p>
     {/if}
 
@@ -544,8 +530,7 @@
         {/each}
       </div>
     {/if}
-  </div>
-</Modal>
+</div>
 
 <style>
   .backup-content {
