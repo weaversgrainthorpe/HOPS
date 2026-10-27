@@ -880,11 +880,13 @@ func TestImport_ReportsRenamesAndUnrestoredImages(t *testing.T) {
 	}
 	path, _ := stored[0]["path"].(string)
 	id, _ := stored[0]["id"].(string)
+	// The tab reuses the built-in Sample's first tab id, so internal ids collide.
+	tabID, _ := stored[0]["tabs"].([]interface{})[0].(map[string]interface{})["id"].(string)
 	v2 := map[string]interface{}{
 		"dashboards": []interface{}{map[string]interface{}{
 			"id": id, "name": "Synthetic", "path": path,
 			"tabs": []interface{}{map[string]interface{}{
-				"id": "main", "name": "Main", "order": 0,
+				"id": tabID, "name": "Main", "order": 0,
 				"groups": []interface{}{
 					map[string]interface{}{"id": "grp1", "name": "G", "width": "half", "collapsed": true, "displayStyle": "folder",
 						"entries": []interface{}{map[string]interface{}{"id": "ent1", "name": "A", "url": "http://a.invalid"}}},
