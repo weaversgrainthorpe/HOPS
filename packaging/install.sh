@@ -653,7 +653,7 @@ main() {
   show_logs
 
   if (( upgrade )); then
-    { echo "hops-install: $why — rolling back to the previous binary and unit." >&2; } 2>/dev/null || true
+    echo "hops-install: $why — rolling back to the previous binary and unit." >&2 || true
     systemctl stop "$SERVICE" >/dev/null 2>&1 || true
     restore_previous || die "ROLLBACK FAILED: could not restore $PREV / $UNIT_PREV. HOPS is NOT running. The failed binary is at $FAILED."
     if (( ! was_active )); then
