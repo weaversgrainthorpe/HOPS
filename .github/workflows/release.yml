@@ -174,10 +174,12 @@ jobs:
           # The Linux installer (packaging/install.sh) downloads
           # hops-linux-<arch> + SHA256SUMS from releases/latest/download.
           cp packaging/install.sh packages/install.sh
+          # The Proxmox VE helper (creates a CT and runs install.sh in it).
+          cp packaging/proxmox/hops-proxmox.sh packages/hops-proxmox.sh
 
           # Checksums for integrity verification. install.sh reads this
           # exact name (SHA256SUMS, sha256sum format, bare filenames).
-          (cd packages && sha256sum hops-* install.sh > SHA256SUMS)
+          (cd packages && sha256sum hops-* install.sh > SHA256SUMS)  # hops-* includes hops-proxmox.sh
 
           ls -la packages/
 
