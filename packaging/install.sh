@@ -265,7 +265,7 @@ uninstall_failed_fresh() {
 on_exit() {
   local rc=$?
   set +e
-  trap '' INT TERM HUP   # finish restoring even if interrupted again
+  trap '' INT TERM HUP PIPE   # finish restoring even if interrupted again or the output is gone
   rm -rf "${tmp:-/nonexistent}" "$BIN.new" "$UNIT_FILE.new" 2>/dev/null
   if (( critical )); then
     critical=0
@@ -511,7 +511,7 @@ main() {
 
   tmp=$(mktemp -d)
   trap on_exit EXIT
-  trap 'exit 130' INT TERM HUP
+  trap 'exit 130' INT; trap 'exit 143' TERM; trap 'exit 129' HUP
 
   log "architecture: $asset ($how)"
   log "downloading from $url (with $fetcher)"
