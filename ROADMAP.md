@@ -70,13 +70,6 @@ Bigger, but each one is self-contained.
   reset for the "I broke it" moment. It would have to work within
   HOPS's browser security policy.
 
-## Bigger things: multiple weeks
-
-These are still self-contained, but harder to get right.
-
-- **Easy install.** A one-command Proxmox VM/container script and a
-  ready-made appliance image (OVA), alongside the single file and Docker.
-
 ## Stretch things: much bigger jobs
 
 These would each stretch what HOPS is. They're worth thinking about,
