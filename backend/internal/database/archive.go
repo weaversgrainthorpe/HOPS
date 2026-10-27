@@ -51,6 +51,10 @@ var imageExtensions = map[string]map[string]bool{
 	"backgrounds": {".png": true, ".jpg": true, ".jpeg": true, ".gif": true, ".webp": true},
 }
 
+// AllowedImageExt says whether ext (lower-case, with the dot) is a file type
+// the kind ("icons" or "backgrounds") may hold, as the upload handlers accept.
+func AllowedImageExt(kind, ext string) bool { return imageExtensions[kind][ext] }
+
 // ArchiveFile is one file in an archive's manifest.
 type ArchiveFile struct {
 	Path   string `json:"path"`

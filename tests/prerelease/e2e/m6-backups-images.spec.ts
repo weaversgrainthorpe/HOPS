@@ -136,6 +136,15 @@ c.commit()
 		await page.click('button:has-text("Set Password")');
 		await expect(page.getByRole('heading', { name: 'Set a New Password' })).toHaveCount(0, { timeout: 15_000 });
 
+		// A fresh install has no attic yet: that is an empty attic, never the false
+		// "the attic index can't be read" error (pentest 2026-10-27 Info).
+		const fresh = await (await page.request.get('/api/backups')).json();
+		expect(fresh.atticUnknownError, 'no false attic error on a fresh install').toBeUndefined();
+		expect(fresh.atticError).toBeUndefined();
+		expect(fresh.atticUnknown).toBe(0);
+		await openBackups(false);
+		await expect(backupsDialog().getByTestId('backup-attic-unknown-error')).toHaveCount(0);
+
 		// An uploaded icon, used by a tile on a dashboard.
 		const up = await page.request.post('/api/icons/upload', {
 			headers: await csrf(),

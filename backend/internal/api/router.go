@@ -478,6 +478,12 @@ func (r *Router) serveBackgrounds(w http.ResponseWriter, req *http.Request) {
 	// Construct path to backgrounds directory
 	backgroundsDir := filepath.Join(r.config.DataDir, "backgrounds")
 	filePath := filepath.Join(backgroundsDir, filename)
+	// Only image files are served: anything else on disk (e.g. planted by an
+	// older import, pentest 2026-10-27 M1) is never served as text/html.
+	if !database.AllowedImageExt("backgrounds", strings.ToLower(filepath.Ext(filename))) {
+		http.NotFound(w, req)
+		return
+	}
 
 	setAssetCSP(w)
 
@@ -504,6 +510,12 @@ func (r *Router) serveIcons(w http.ResponseWriter, req *http.Request) {
 	// Construct path to icons directory
 	iconsDir := filepath.Join(r.config.DataDir, "icons")
 	filePath := filepath.Join(iconsDir, filename)
+	// Only image files are served: anything else on disk (e.g. planted by an
+	// older import, pentest 2026-10-27 M1) is never served as text/html.
+	if !database.AllowedImageExt("icons", strings.ToLower(filepath.Ext(filename))) {
+		http.NotFound(w, req)
+		return
+	}
 
 	// Set cache headers for uploaded icons
 	w.Header().Set("Cache-Control", "public, max-age=86400")

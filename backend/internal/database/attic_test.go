@@ -1324,3 +1324,20 @@ func TestAtticUnknownCountReportsAnUnreadableIndex(t *testing.T) {
 		t.Fatal("a damaged index must be reported, not counted as 0 unknown images")
 	}
 }
+
+// A fresh install has no attic and no index: that is an empty attic (0
+// unknown images), not the "attic index can't be read" error. A missing
+// index while the attic holds files is still an error.
+func TestAtticUnknownCountFreshInstallIsEmpty(t *testing.T) {
+	bm, _ := setupBackupTest(t)
+	if n, err := bm.AtticUnknownCount(); err != nil || n != 0 {
+		t.Fatalf("fresh install: got %d, %v; want 0, nil", n, err)
+	}
+	toAttic(t, bm, "icons", "x.png", "X")
+	if err := os.Remove(bm.indexPath()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := bm.AtticUnknownCount(); err == nil {
+		t.Fatal("a missing index while the attic holds files must be reported")
+	}
+}

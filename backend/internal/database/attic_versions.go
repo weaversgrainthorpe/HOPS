@@ -1413,6 +1413,20 @@ func (bm *BackupManager) AtticUnknownCount() (int, error) {
 	defer bm.atticMu.Unlock()
 	idx, err := bm.readIndexOnlyLocked()
 	if err != nil {
+		// No index and no attic files is a fresh install (nothing deleted
+		// yet): an empty attic, not an error. A missing index while the attic
+		// holds files is still an error (the index was lost), as is a damaged
+		// or unreadable one.
+		if errors.Is(err, fs.ErrNotExist) {
+			files, lerr := bm.listAttic()
+			if lerr != nil {
+				return 0, fmt.Errorf("the attic index is missing and the attic can't be read: %w", lerr)
+			}
+			if len(files) == 0 {
+				return 0, nil
+			}
+			return 0, fmt.Errorf("the attic index (%s) is missing but the attic holds %d image versions: %w", bm.indexPath(), len(files), err)
+		}
 		return 0, err
 	}
 	return len(idx.Unknown), nil

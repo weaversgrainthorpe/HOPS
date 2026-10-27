@@ -1,7 +1,6 @@
 package api
 
 import (
-	"bytes"
 	"context"
 	"crypto/rand"
 	"database/sql"
@@ -11,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"image"
-	"image/png"
 	"io"
 	"log/slog"
 	"net"
@@ -551,19 +549,17 @@ func readAsset(urlPath string, dataDir string) ([]byte, string, bool) {
 	}
 }
 
-// userAssetWritePath returns the disk path to write a user-writable asset to
-// during config import. Bundled assets (dashboard icons, presets) return
-// ("", false) so the import skips them — they're already in the binary.
-func userAssetWritePath(urlPath string, dataDir string) (string, bool) {
-	filename := filepath.Base(urlPath)
-	switch {
-	case strings.HasPrefix(urlPath, "/icons/"):
-		return filepath.Join(dataDir, "icons", filename), true
-	case strings.HasPrefix(urlPath, "/backgrounds/"):
-		return filepath.Join(dataDir, "backgrounds", filename), true
-	default:
-		return "", false
+// userAssetKindName splits an imported asset path into its kind ("icons" or
+// "backgrounds") and file name. Bundled assets (dashboard icons, presets) and
+// anything with more path after the kind ("/icons/a/b.png",
+// "/backgrounds/../x") return ok=false; the name itself is checked by the caller.
+func userAssetKindName(urlPath string) (kind, name string, ok bool) {
+	for _, k := range []string{"icons", "backgrounds"} {
+		if rest, found := strings.CutPrefix(urlPath, "/"+k+"/"); found {
+			return k, rest, true
+		}
 	}
+	return "", "", false
 }
 
 // contentTypeFromPath infers MIME type from file extension.
@@ -742,11 +738,24 @@ func (r *Router) restoreAssets(importedConfig map[string]interface{}) (int, []st
 			continue
 		}
 
-		diskPath, ok := userAssetWritePath(urlPath, r.config.DataDir)
+		kind, name, ok := userAssetKindName(urlPath)
 		if !ok {
 			fail(urlPath, "not an icon or background path, so it was not restored", nil)
 			continue
 		}
+		// The same checks as a normal upload of its kind (pentest 2026-10-27
+		// M1): a safe name, an allowed type, the size cap, the header and
+		// dimension check, the type matching the name, an icon PNG
+		// re-encoded. Anything refused is listed, never written.
+		if !database.ValidImageName(name) {
+			fail(urlPath, "not a safe file name, so it was not restored", nil)
+			continue
+		}
+		if !database.AllowedImageExt(kind, strings.ToLower(filepath.Ext(name))) {
+			fail(urlPath, "not an allowed image type for "+kind+", so it was not restored", nil)
+			continue
+		}
+		diskPath := filepath.Join(r.config.DataDir, kind, name)
 
 		// Skip if file already exists
 		if _, err := os.Stat(diskPath); err == nil {
@@ -754,9 +763,26 @@ func (r *Router) restoreAssets(importedConfig map[string]interface{}) (int, []st
 			continue
 		}
 
+		limit := int64(r.settings.GetInt(uploadBackground.key))
+		if kind == "icons" {
+			limit = int64(r.settings.GetInt(uploadIcon.key))
+		}
+		if int64(base64.StdEncoding.DecodedLen(len(dataStr))) > limit+2 {
+			fail(urlPath, fmt.Sprintf("larger than the %s upload limit (%s), so it was not restored", strings.TrimSuffix(kind, "s"), formatMB(limit)), nil)
+			continue
+		}
 		fileData, err := base64.StdEncoding.DecodeString(dataStr)
 		if err != nil {
 			fail(urlPath, "invalid base64", err)
+			continue
+		}
+		if int64(len(fileData)) > limit {
+			fail(urlPath, fmt.Sprintf("larger than the %s upload limit (%s), so it was not restored", strings.TrimSuffix(kind, "s"), formatMB(limit)), nil)
+			continue
+		}
+		fileData, err = processArchiveImage(kind, name, fileData)
+		if err != nil {
+			fail(urlPath, "this image can't be used", err)
 			continue
 		}
 		if err := os.MkdirAll(filepath.Dir(diskPath), 0755); err != nil { // #nosec G301 -- data dir for non-secret files (icons, backgrounds); HOPS is the only service user, accepted in triage
@@ -2176,36 +2202,25 @@ func (r *Router) handleUploadIcon(w http.ResponseWriter, req *http.Request) {
 	} else {
 		// Check the header first: a decompression bomb (a small file
 		// claiming huge dimensions) is refused before the full decode (§3).
-		if _, err := checkImageHeader(fileData); err != nil {
+		if _, err := checkIconHeader(fileData); err != nil {
 			slog.Warn("icon upload refused", "component", "icons", "error", err)
 			writeJSONError(w, "This image can't be used: "+err.Error(), http.StatusBadRequest)
 			return
 		}
-		// Decode and resize raster images
-		img, _, err := image.Decode(bytes.NewReader(fileData))
+		// Decode, resize to 128×128 and re-encode as PNG (one decode at a time).
+		encoded, err := decodeIconPNG(fileData)
 		if err != nil {
 			slog.Warn("icon upload: image decode failed", "component", "icons", "error", err)
 			writeJSONError(w, "Could not decode the image file. Supported: JPEG, PNG, GIF, WebP, SVG.", http.StatusBadRequest)
 			return
 		}
 
-		// Resize to 128x128 (good size for icons)
-		targetSize := 128
-		resized := resizeImage(img, targetSize, targetSize)
-
 		// Save as PNG for best quality with transparency
 		filename = iconID + ".png"
 		destPath = filepath.Join(iconsDir, filename)
-		destFile, err := os.Create(destPath) // #nosec G304 -- path is built from a validated name under the data dir or a server-chosen temp/backup path, never raw user input
-		if err != nil {
-			writeJSONError(w, "Failed to create file", http.StatusInternalServerError)
-			return
-		}
-		encErr := png.Encode(destFile, resized)
-		closeErr := destFile.Close()
-		if encErr != nil || closeErr != nil {
+		if err := os.WriteFile(destPath, encoded, 0644); err != nil { // #nosec G306 -- non-secret public asset/metadata (icon, background, port hint); served to the browser anyway
 			_ = os.Remove(destPath)
-			writeJSONError(w, "Failed to encode image", http.StatusInternalServerError)
+			writeJSONError(w, "Failed to save file", http.StatusInternalServerError)
 			return
 		}
 	}
