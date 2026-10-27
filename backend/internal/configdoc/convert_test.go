@@ -181,9 +181,10 @@ func TestMigrateV2_Basic(t *testing.T) {
 	}
 	wantPl := []Obj{
 		// Finer grid (spec §9): 2×2 tiles, a 2-cell title row, 24 columns.
-		{"x": 0, "y": 0, "w": 24, "h": 6}, // 3 entries, 11 a row: 1 tile row (2) + chrome (4: bar, tab allowance, padding, page bar)
-		{"x": 0, "y": 6, "w": 12, "h": 6},
-		{"x": 12, "y": 6, "w": 12, "h": 6},
+		// M6 §13: counted at the reference cell (77 px), all on page 1, so no page bar.
+		{"x": 0, "y": 0, "w": 24, "h": 4}, // 3 entries, 11 a row: 1 tile row (2) + chrome (2: bar, tab allowance, padding)
+		{"x": 0, "y": 4, "w": 12, "h": 4},
+		{"x": 12, "y": 4, "w": 12, "h": 4},
 	}
 	for i, f := range folders {
 		assertKeysPreserved(t, v2groups[i], f, "folder", "entries", "width", "collapsed", "displayStyle")
@@ -233,7 +234,7 @@ func TestMigrateV2_Basic(t *testing.T) {
 	f := children(t, tabs[1]["root"].(Obj))[0]
 	eq(t, f["display"], "collapsed", "display")
 	eq(t, f["shape"], "folder-flat", "shape") // M6 §3a.1: v2 folder style is Flat
-	eq(t, f["placement"], Obj{"x": 0, "y": 0, "w": 8, "h": 8}, "placement") // 3 a row (padding takes a column): 2 tile rows ×2, +4 chrome
+	eq(t, f["placement"], Obj{"x": 0, "y": 0, "w": 8, "h": 6}, "placement") // 3 a row (padding takes a column): 2 tile rows ×2, +2 chrome at the reference cell (M6 §13)
 	var order []string
 	for _, tile := range children(t, f["content"].(Obj)) {
 		order = append(order, tile["id"].(string))
@@ -298,19 +299,19 @@ func TestMigrateV2_MessyInput(t *testing.T) {
 		t.Fatalf("folders = %d", len(fs))
 	}
 	eq(t, fs[0]["order"], 9, "order carried verbatim")
-	eq(t, fs[0]["placement"], Obj{"x": 0, "y": 0, "w": 24, "h": 6}, "NoWidth placement") // null entries
+	eq(t, fs[0]["placement"], Obj{"x": 0, "y": 0, "w": 24, "h": 4}, "NoWidth placement") // null entries
 	if n := len(children(t, fs[0]["content"].(Obj))); n != 0 {
 		t.Errorf("null entries -> %d tiles", n)
 	}
 	// Unknown width falls back to 12 tiles per row (24 columns); non-bool collapsed is not collapsed.
-	eq(t, fs[1]["placement"], Obj{"x": 0, "y": 6, "w": 24, "h": 6}, "bad width placement")
+	eq(t, fs[1]["placement"], Obj{"x": 0, "y": 4, "w": 24, "h": 4}, "bad width placement")
 	eq(t, fs[1]["display"], "expanded", "display")
 	eq(t, fs[1]["shape"], "rounded", "shape")
 	if _, has := fs[1]["collapsed"]; has {
 		t.Error("v2 collapsed key kept on the folder")
 	}
-	eq(t, fs[2]["placement"], Obj{"x": 0, "y": 12, "w": 8, "h": 6}, "third placement")
-	eq(t, fs[3]["placement"], Obj{"x": 8, "y": 12, "w": 12, "h": 6}, "half placement")
+	eq(t, fs[2]["placement"], Obj{"x": 0, "y": 8, "w": 8, "h": 4}, "third placement")
+	eq(t, fs[3]["placement"], Obj{"x": 8, "y": 8, "w": 12, "h": 4}, "half placement")
 
 	tile := children(t, fs[2]["content"].(Obj))[0]
 	eq(t, tile["x-extra"], []any{1, Obj{"y": nil}}, "tile extras")

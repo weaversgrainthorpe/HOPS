@@ -50,7 +50,7 @@ async function importDash(page: Page, context: BrowserContext) {
   return { path: `/${p}`, id };
 }
 
-/** Serve the stored folder `folderId` as if saved at 2×4 (below Medium's 3×6). */
+/** Serve the stored folder `folderId` as if saved at 2×4 (narrower than Medium's 3×4, M6 §13). */
 async function storedTooSmall(page: Page, folderId: string) {
   await page.route('**/api/config', async (route) => {
     if (route.request().method() !== 'GET') return route.continue();
@@ -100,7 +100,7 @@ test('edit mode: the warning names the sizes; "Make it big enough" fixes it, und
   await expect(bar).toBeVisible();
 
   const note = page.locator(`[data-folder-below-min="${id('media')}"]`);
-  await expect(note).toContainText('Smaller than it can be drawn (2×4; needs at least 3×6)');
+  await expect(note).toContainText('Smaller than it can be drawn (2×4; needs at least 3×4)');
   await note.getByRole('button', { name: 'Make it big enough' }).click();
   await expect(note).toHaveCount(0);
   await expect(page.locator(`.tab-canvas [data-node-id="${id('media')}"] [data-folder-page-content]`)).toHaveCount(1);
@@ -111,7 +111,7 @@ test('edit mode: the warning names the sizes; "Make it big enough" fixes it, und
   await bar.getByRole('button', { name: /Redo/ }).click();
   await expect(note).toHaveCount(0);
 
-  // Saved: the server takes the enlarged box (3×6, neighbour clear of it).
+  // Saved: the server takes the enlarged box (3×4, M6 §13).
   const saved = page.waitForResponse((r) => r.request().method() === 'PUT' && /\/api\/dashboards\//.test(r.url()));
   await bar.getByRole('button', { name: /Save/ }).click();
   const r = await saved;
@@ -121,5 +121,5 @@ test('edit mode: the warning names the sizes; "Make it big enough" fixes it, und
   const body = JSON.parse(r.request().postData() ?? '{}');
   const kids = (body.dashboard ?? body).tabs[0].root.children as { id: string; placement: { w: number; h: number } }[];
   const m = kids.find((k) => k.id === id('media'))!;
-  expect([m.placement.w, m.placement.h]).toEqual([3, 6]);
+  expect([m.placement.w, m.placement.h]).toEqual([3, 4]);
 });

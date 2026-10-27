@@ -241,15 +241,21 @@ export const PAGE_BAR_PX = 32;
  */
 export const MIN_GRID_CELL_PX = PHONE_BREAKPOINT_PX / ROOT_COLUMNS;
 /**
+ * M6 §13 rule 1: the desktop cell the minimum is counted at. A 1920 px screen's tab canvas is 1856 px
+ * (the page's 32 px gutters), so 1856 / 24 = 77.3, floored. Twin of configdoc.ReferenceCellPx.
+ */
+export const REFERENCE_CELL_PX = 77;
+/**
  * The smallest open folder on a tab (M5 §3.5), in whole cells: its bar, the tab allowance (M6 §3a.4),
- * border and padding, ONE item at its contents size and the page bar. Counted at the narrowest grid cell (MIN_GRID_CELL_PX), so it
- * holds at every grid width — the layout is the same at every width, and a wider cell only adds room.
+ * border and padding, ONE item at its contents size and the page bar. Counted at the desktop reference
+ * cell (REFERENCE_CELL_PX, M6 §13): Small 2×3, Medium 3×4, Large 5×6. On a narrower grid a box at its
+ * minimum may be too short; it is then drawn taller there (screenGrowth), never clipped or squashed.
  */
 export function minOpenFolderCells(contentSize: unknown): { w: number; h: number } {
   const span = sizeSpan(contentSize);
   return {
-    w: span + Math.ceil(FOLDER_CHROME.padXPx / MIN_GRID_CELL_PX),
-    h: span + Math.ceil((FOLDER_CHROME.titlePx + FOLDER_CHROME.tabPx + FOLDER_CHROME.padYPx + PAGE_BAR_PX) / MIN_GRID_CELL_PX)
+    w: span + Math.ceil(FOLDER_CHROME.padXPx / REFERENCE_CELL_PX),
+    h: span + Math.ceil((FOLDER_CHROME.titlePx + FOLDER_CHROME.tabPx + FOLDER_CHROME.padYPx + PAGE_BAR_PX) / REFERENCE_CELL_PX)
   };
 }
 /**
@@ -488,12 +494,6 @@ function pageOf(n: number, perPage: number, page: number): { pages: number; page
 /** A phone tab tile's height by size: the unfitted tile's own minimum (Entry.svelte .small/.medium/.large). */
 export const PHONE_TILE_MIN_PX: Record<ItemSize, number> = { small: 100, medium: 120, large: 160 };
 /**
- * The viewport height a phone page does not get: the top bar, the tab bar, the folder's own bar, its
- * page bar and padding. A page is at most the viewport less this, so it fits on screen.
- */
-export const PHONE_PAGE_RESERVE_PX = 220;
-
-/**
  * The phone tab grid (ContainerView .container-stacked, the same media queries): its column minimum
  * and gap at this viewport width.
  */
@@ -514,8 +514,8 @@ export function phoneColumnPx(canvasWidthPx: number, track: { minPx: number; gap
 /**
  * THE page model of an open folder on a phone. Items are the phone tab's tiles: a tab column wide
  * (phoneColumnPx of the canvas) and their size's height (PHONE_TILE_MIN_PX), as many a row as fit the
- * folder's content width. Rows per page come from a pixel budget (the viewport height less
- * PHONE_PAGE_RESERVE_PX, at least one row), so a page fits the screen, Large included.
+ * folder's content width. Never paged (M6 §13 rule 4): the folder grows to show every item, nested
+ * levels too, so one page holds them all. Only the viewport's width is read (its track); its height is not.
  */
 export function phonePaging(
   contentWidthPx: number, canvasWidthPx: number, viewport: { widthPx: number; heightPx: number },
@@ -526,10 +526,10 @@ export function phonePaging(
   const gap = track.gapPx;
   const perRow = col > 0 ? Math.max(1, Math.floor((nonNeg(contentWidthPx) + gap) / (col + gap) + 1e-9)) : 1;
   const rowPx = PHONE_TILE_MIN_PX[sizeOf(contentSize)];
-  const budget = Math.max(rowPx, nonNeg(viewport.heightPx) - PHONE_PAGE_RESERVE_PX);
-  const rowsPerPage = Math.max(1, Math.floor((budget + gap) / (rowPx + gap) + 1e-9));
-  const perPage = perRow * rowsPerPage;
   const n = isNum(count) && count > 0 ? Math.floor(count) : 0;
+  // M6 §13 rule 4: on a phone an open folder grows to show every item; it never pages.
+  const rowsPerPage = Math.max(1, Math.ceil(n / perRow));
+  const perPage = perRow * rowsPerPage;
   return {
     span: 1, itemPx: col, rowPx, gapPx: gap, perRow, rowsPerPage, perPage, pageBar: n > perPage, ...pageOf(n, perPage, page),
     tooSmall: false
@@ -629,4 +629,51 @@ export function tabSpan(
   const p = n.placement;
   if (p && isNum(p.w) && isNum(p.h)) return { w: Math.max(1, Math.floor(p.w)), h: Math.max(1, Math.floor(p.h)) };
   return defaultFolderBox(n as FolderNode);
+}
+
+// ---------------------------------------------------------------- render-only growth (spike §13 rule 3)
+
+/**
+ * M6 §13 rule 3: an open folder on a tab whose STORED box is too short at THIS screen's cell (its
+ * page cannot show one row, or one row plus the page bar it needs) is drawn taller, row by row, until
+ * it can; everything below it in the columns it covers moves down by the same amount, transitively
+ * (an item is pushed by the most any item above it in an overlapping column was pushed or grew).
+ * Render-only: never saved, never in edit mode (edit mode shows the stored box and says it is taller
+ * here). Proof of no new overlap: if A is above B in a shared column (A.y + A.h <= B.y) then
+ * delta(B) >= delta(A) + extra(A), so B.y' >= A.y' + A.h'. Items in disjoint columns cannot meet.
+ * Returns only the nodes whose drawn placement differs, by id, with `extra` rows of growth.
+ */
+export function screenGrowth(kids: unknown[], m: ContainerMetrics): Map<string, { placement: Placement; extra: number }> {
+  const out = new Map<string, { placement: Placement; extra: number }>();
+  if (!(m.unitPx > 0) || m.flow) return out;
+  type N = { id: string; p: Placement; extra: number; delta: number };
+  const nodes: N[] = [];
+  for (const k of kids) {
+    if (!isPlaced(k)) continue;
+    const p = clampPlacement(k.placement, m.columns);
+    let extra = 0;
+    if (k.kind === 'folder' && (k as FolderNode).display !== 'collapsed') {
+      const f = k as FolderNode;
+      const count = Array.isArray(f.content?.children) ? f.content.children.length : 0;
+      const content = (h: number) => openFolderContentBox(nodeBox({ ...p, h }, m), f.shape, f.tabPosition);
+      const short = (h: number) => folderPaging(content(h), f.contentSize, m.unitPx, count, 0).tooSmall;
+      // Only height is grown: a box too NARROW for one item keeps its visible "too small" note.
+      const narrow = content(p.h).widthPx + 0.5 < sizeSpan(f.contentSize) * m.unitPx;
+      while (!narrow && extra < 24 && short(p.h + extra)) extra++;
+    }
+    nodes.push({ id: (k as { id: string }).id, p, extra, delta: 0 });
+  }
+  nodes.sort((a, b) => a.p.y - b.p.y || a.p.x - b.p.x);
+  for (let i = 0; i < nodes.length; i++) {
+    const b = nodes[i];
+    for (let j = 0; j < i; j++) {
+      const a = nodes[j];
+      const colsMeet = a.p.x < b.p.x + b.p.w && b.p.x < a.p.x + a.p.w;
+      if (colsMeet && a.p.y + a.p.h <= b.p.y) b.delta = Math.max(b.delta, a.delta + a.extra);
+    }
+    if (b.delta > 0 || b.extra > 0) {
+      out.set(b.id, { placement: { ...b.p, y: b.p.y + b.delta, h: b.p.h + b.extra }, extra: b.extra });
+    }
+  }
+  return out;
 }

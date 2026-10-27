@@ -37,8 +37,9 @@ func TestFolderMinCells_IncludesTabAllowance(t *testing.T) {
 			t.Errorf("FolderMinCells(%s) h = %d, want %d (bar, tab, padding, one item, page bar)", size, h, want)
 		}
 	}
-	// Small 2×5, Medium 3×6, Large 5×8: one row taller than M5's 2×4, 3×5, 5×7.
-	for size, want := range map[string][2]int{"small": {2, 5}, "medium": {3, 6}, "large": {5, 8}} {
+	// Counted at the reference cell (M6 §13): Small 2×3, Medium 3×4, Large 5×6 —
+	// still a row more than without the tab allowance (114 px > 77 px).
+	for size, want := range map[string][2]int{"small": {2, 3}, "medium": {3, 4}, "large": {5, 6}} {
 		if w, h := FolderMinCells(size); w != want[0] || h != want[1] {
 			t.Errorf("FolderMinCells(%s) = %d×%d, want %d×%d", size, w, h, want[0], want[1])
 		}
@@ -51,8 +52,8 @@ func TestFolderBoxFor_CountsTab(t *testing.T) {
 	f := Obj{"contentSize": "medium"}
 	for n := 1; n <= 30; n++ {
 		w, h := FolderBoxFor(f, n, 12)
-		perRow := (w*MinGridCellPx - FolderPadPx) / (2 * MinGridCellPx)
-		rows := (h*MinGridCellPx - FolderTitlePx - FolderTabPx - FolderPadPx) / (2 * MinGridCellPx)
+		perRow := (w*ReferenceCellPx - FolderPadPx) / (2 * ReferenceCellPx)
+		rows := (h*ReferenceCellPx - FolderTitlePx - FolderTabPx - FolderPadPx) / (2 * ReferenceCellPx)
 		if perRow*rows < n {
 			t.Errorf("FolderBoxFor(%d) = %d×%d holds %d×%d, want all %d with the tab", n, w, h, perRow, rows, n)
 		}

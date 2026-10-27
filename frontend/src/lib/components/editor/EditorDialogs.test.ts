@@ -107,7 +107,9 @@ describe('EditorDialogs (the dialogs edit the draft only)', () => {
   // one item grows to the new minimum, pushing its neighbours, in the same undo step as the Save.
   it('raising Contents size grows a box too small for one item (neighbours pushed) — ONE undo step with the Save', async () => {
     const d = home();
-    d.tabs[0].root.children.push(tile('under', p(0, 8)));
+    // f1 at its Medium minimum (8 x 4 at the M6 §13 reference cell); Large contents need 6 high.
+    d.tabs[0].root.children.find((n) => n.id === 'f1')!.placement = p(0, 2, 8, 4);
+    d.tabs[0].root.children.push(tile('under', p(0, 6)));
     resetEditor();
     setLayout([d]);
     startSession();
@@ -118,10 +120,10 @@ describe('EditorDialogs (the dialogs edit the draft only)', () => {
     await fireEvent.click(screen.getByRole('button', { name: /^Save/ }));
     expect(get(editorDialog)).toBeNull();
     const f = nodeIn(draft(), 'f1') as FolderNode;
-    expect(f).toMatchObject({ contentSize: 'large', placement: p(0, 2, 8, 8) }); // Large minimum is 5 x 8 (M6)
+    expect(f).toMatchObject({ contentSize: 'large', placement: p(0, 2, 8, 6) }); // Large minimum is 5 x 6 (M6 §13)
     const u = nodeIn(draft(), 'under')!.placement!; // pushed aside (M3 rules), clear of the grown box
-    expect(u).not.toEqual(p(0, 8));
-    expect(u.x >= 8 || u.y >= 10 || u.y + u.h <= 2).toBe(true);
+    expect(u).not.toEqual(p(0, 6));
+    expect(u.x >= 8 || u.y >= 8 || u.y + u.h <= 2).toBe(true);
     expect(get(session)!.undo).toHaveLength(1);
     undo();
     expect(draft()).toEqual(before);

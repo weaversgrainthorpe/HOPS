@@ -530,7 +530,7 @@ describe('Ruling 7(b) on a drag merge inside a folder', () => {
     const F = nodeIn(draft(), 'F') as FolderNode;
     const made = F.content.children[1] as FolderNode;
     expect(made.content.children.map((n) => n.id)).toEqual(['k2', 'G']);
-    expect(F.placement).toMatchObject({ w: 5, h: 8 }); // Large contents inside: at least 5 x 8 (M6)
+    expect(F.placement).toMatchObject({ w: 5, h: 6 }); // Large contents inside: at least 5 x 6 (M6 §13)
     undo();
     expect(draft()).toEqual(before);
   });

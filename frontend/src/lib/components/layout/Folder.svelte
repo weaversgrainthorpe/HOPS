@@ -66,8 +66,10 @@
     item?: boolean;
     /** Edit mode: a click selects (a minimised folder: and opens), double-click / the handle edits, right-click = item menu. */
     editing?: boolean;
+    /** M6 §13: rows this folder is drawn taller on this screen outside edit mode (render-only, never saved; 0 = as stored). */
+    screenExtraRows?: number;
   }
-  let { folder, style = '', plan, dashboard, tab, folderChain, parent, item = false, editing = false }: Props = $props();
+  let { folder, style = '', plan, dashboard, tab, folderChain, parent, item = false, editing = false, screenExtraRows = 0 }: Props = $props();
 
   const minimised = $derived(item || folder.display === 'collapsed');
 
@@ -440,7 +442,13 @@
 {/snippet}
 
 {#snippet pageArea()}
-  {#if paging.tooSmall && levels === 0}
+  {#if paging.tooSmall && levels === 0 && editing && screenExtraRows > 0 && !belowMin}
+    <!-- M6 §13 (option A): edit mode draws the SAVED box so drag/drop geometry is exact; outside edit
+         mode this screen draws it taller (screenGrowth). Said in place of its contents, never clipped. -->
+    <p class="too-small taller-here" role="status" data-folder-too-small data-folder-taller-here={folder.id}>
+      Taller on this screen — shown at its saved size while editing. Edit on a wider screen, or make it bigger.
+    </p>
+  {:else if paging.tooSmall && levels === 0}
     <!-- Never a silent clip (Important 2): a box below its minimum says so, and how to fix it. -->
     <p class="too-small" role="status" data-folder-too-small>
       Too small to show its contents — resize it{editing ? '' : ' in edit mode'}.
@@ -708,6 +716,7 @@
     role="group"
     aria-label="{folder.name} folder"
     {style}
+    data-render-grown={!editing && screenExtraRows > 0 ? screenExtraRows : undefined}
     onclick={editing ? select : undefined}
     ondblclick={editing
       ? (e) => {

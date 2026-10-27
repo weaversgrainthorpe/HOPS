@@ -3,7 +3,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   FOLDER_CHROME, NESTED_CHROME, FOLDER_SHAPES, TAB_POSITIONS, SHAPE_CREATED, FLAP_TILT_PX, LAYOUT_VERSION,
-  MIN_GRID_CELL_PX, PAGE_BAR_PX, TAB_MIN_PX, TAB_MAX_PX, TAB_EDGE_PX,
+  REFERENCE_CELL_PX, PAGE_BAR_PX, TAB_MIN_PX, TAB_MAX_PX, TAB_EDGE_PX,
   isFolderShape, shapeOf, tabPositionOf, hasTab, shapeInset, folderTabRect, openFolderContentBox,
   minOpenFolderCells, nestedContentBox, nestedPaging, sizeSpan
 } from './geometry';
@@ -52,17 +52,17 @@ describe('the tab allowance (§3a.4): one constant, no shape parameter', () => {
     expect(FOLDER_CHROME.tabPx).toBe(24);
     expect(NESTED_CHROME.tabPx).toBe(24);
   });
-  it('the minimum counts bar + tab + padding + page bar at the narrowest grid cell', () => {
+  it('the minimum counts bar + tab + padding + page bar at the desktop reference cell (M6 §13)', () => {
     for (const size of ['small', 'medium', 'large'] as const) {
       const span = sizeSpan(size);
       expect(minOpenFolderCells(size)).toEqual({
-        w: span + Math.ceil(FOLDER_CHROME.padXPx / MIN_GRID_CELL_PX),
-        h: span + Math.ceil((FOLDER_CHROME.titlePx + FOLDER_CHROME.tabPx + FOLDER_CHROME.padYPx + PAGE_BAR_PX) / MIN_GRID_CELL_PX)
+        w: span + Math.ceil(FOLDER_CHROME.padXPx / REFERENCE_CELL_PX),
+        h: span + Math.ceil((FOLDER_CHROME.titlePx + FOLDER_CHROME.tabPx + FOLDER_CHROME.padYPx + PAGE_BAR_PX) / REFERENCE_CELL_PX)
       });
     }
-    expect(minOpenFolderCells('small')).toEqual({ w: 2, h: 5 });
-    expect(minOpenFolderCells('medium')).toEqual({ w: 3, h: 6 });
-    expect(minOpenFolderCells('large')).toEqual({ w: 5, h: 8 });
+    expect(minOpenFolderCells('small')).toEqual({ w: 2, h: 3 });
+    expect(minOpenFolderCells('medium')).toEqual({ w: 3, h: 4 });
+    expect(minOpenFolderCells('large')).toEqual({ w: 5, h: 6 });
   });
   it('the nested inset per level takes the tab allowance too (M5 §7 + §3a.4)', () => {
     const outer = { widthPx: 702, heightPx: 400 };
@@ -108,8 +108,8 @@ describe('shapeInset: the rectangular content area of each shape (§3a.2, §3a.9
   it('every shape\'s inset at its minimum box still holds one item and the page bar (one minimum for all, §3a.4)', () => {
     for (const size of ['small', 'medium', 'large'] as const) {
       const min = minOpenFolderCells(size);
-      const b = { widthPx: min.w * MIN_GRID_CELL_PX, heightPx: min.h * MIN_GRID_CELL_PX };
-      const item = sizeSpan(size) * MIN_GRID_CELL_PX;
+      const b = { widthPx: min.w * REFERENCE_CELL_PX, heightPx: min.h * REFERENCE_CELL_PX };
+      const item = sizeSpan(size) * REFERENCE_CELL_PX;
       for (const s of FOLDER_SHAPES) {
         const r = shapeInset(s, 'centre', b);
         expect(r.widthPx, `${s} ${size}`).toBeGreaterThanOrEqual(item);

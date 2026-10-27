@@ -195,8 +195,8 @@ test.describe('M5 drag and drop in ordered, paged folders', () => {
     const root = await savedRoot(page, f.id('dash'));
     expect(root.map((n) => n.id).sort()).toEqual([f.id('f'), f.id('k2'), f.id('s')].sort());
     expect(find(root, f.id('k2'))?.placement).toMatchObject({ w: 2, h: 2 });
-    // Its default open box: Medium x 3 by x 2 (6 x 4), raised to the Medium minimum (6 high in M6, Ruling 7a).
-    expect(find(root, f.id('s'))).toMatchObject({ display: 'collapsed', placement: { w: 6, h: 6 } });
+    // Its default open box: Medium x 3 by x 2 (6 x 4), already the Medium minimum (4 high at the M6 §13 reference cell, Ruling 7a).
+    expect(find(root, f.id('s'))).toMatchObject({ display: 'collapsed', placement: { w: 6, h: 4 } });
     expect(orderOf(root, f.id('f'))).toEqual([f.id('k1')]);
     // View mode applies this browser's memory: the moved-out sub-folder is still minimised.
     await page.locator('[aria-label="Exit Edit Mode"]').click();
@@ -337,6 +337,9 @@ test.describe('M5 drag and drop in ordered, paged folders', () => {
 
   for (const shape of ['rounded', 'folder-flat'] as const) {
     test(`${shape}: resize — a corner drag snaps to cells and stops at the one minimum; its page is folderPaging's rows (§3.5, M6 §3a.4)`, async ({ page, context }) => {
+      // At the reference width (1920, M6 §13) the minimum box draws its page as saved; narrower grids
+      // draw it taller in view mode and say so in edit mode (m6-reference-cell.spec.ts).
+      await page.setViewportSize({ width: 1920, height: 1100 });
       const f = await importDash(page, context, (id) => [folder(id('f'), 'Box', { x: 0, y: 0, w: 12, h: 8 }, kids(id, 3), { shape })]);
       const errors = await openEditing(page, f.path, f.id('f'));
       const fbox = node(page, f.id('f'));
@@ -351,16 +354,16 @@ test.describe('M5 drag and drop in ordered, paged folders', () => {
       await saveDraft(page);
       const saved = find(await savedRoot(page, f.id('dash')), f.id('f'))!;
       // geometry.minOpenFolderCells('medium'): one minimum for every shape (M6 §3a.4).
-      expect(saved.placement).toMatchObject({ x: 0, y: 0, w: 3, h: 6 });
+      expect(saved.placement).toMatchObject({ x: 0, y: 0, w: 3, h: 4 });
       const fb = await box(fbox);
       const cell = fb.width / 3;
-      expect(Math.abs(fb.height - 6 * cell), 'the box is 3 x 6 cells').toBeLessThanOrEqual(1);
-      // The page at the minimum, from THE page model: Rounded does not draw the tab allowance the minimum
-      // counts, so it holds two rows (one item each); a tab shape draws it, so one row. Both page: 3 items.
+      expect(Math.abs(fb.height - 4 * cell), 'the box is 3 x 4 cells').toBeLessThanOrEqual(1);
+      // The page at the minimum, from THE page model, at the reference cell: one row (one item) for
+      // every shape, Rounded too (M6 §13: the reference cell leaves no spare row). Both page: 3 items.
       const want = folderPaging(openFolderContentBox({ widthPx: fb.width, heightPx: fb.height }, shape), 'medium', cell, 3, 0);
       expect(want.pageBar, 'still paged: the 3 items need a second page').toBe(true);
       expect(want.perRow).toBe(1);
-      expect(want.rowsPerPage, 'rows at the minimum (1280 px)').toBe(shape === 'rounded' ? 2 : 1);
+      expect(want.rowsPerPage, 'rows at the minimum (1920 px, the reference)').toBe(1);
       // Drawn: exactly that page — whole items above the page bar, the bar inside the box (nothing clipped).
       const items = fbox.locator('[data-container-id] > [data-node-id]');
       await expect(items).toHaveCount(want.perPage);
@@ -419,7 +422,8 @@ test.describe('M5 drag and drop in ordered, paged folders', () => {
     expect(errors).toEqual([]);
   });
 
-  test('resize stops at the LARGEST contents size inside: a Large-contents sub-folder keeps a Small folder at 5 x 8', async ({ page, context }) => {
+  test('resize stops at the LARGEST contents size inside: a Large-contents sub-folder keeps a Small folder at 5 x 6', async ({ page, context }) => {
+    await page.setViewportSize({ width: 1920, height: 1100 }); // the reference width (M6 §13)
     const f = await importDash(page, context, (id) => [
       folder(id('f'), 'Box', { x: 0, y: 0, w: 12, h: 9 }, [kid(id('k1'), 'K1'), folder(id('s'), 'Sub', null, kids(id, 2, 'Z'), { contentSize: 'large' })], { contentSize: 'small' })
     ]);
@@ -432,22 +436,27 @@ test.describe('M5 drag and drop in ordered, paged folders', () => {
     await page.waitForTimeout(120);
     await page.mouse.up();
     await saveDraft(page);
-    expect(find(await savedRoot(page, f.id('dash')), f.id('f'))!.placement).toMatchObject({ x: 0, y: 0, w: 5, h: 8 });
-    // Drilled into the Large sub-folder, one whole Large item still fits in the box.
+    expect(find(await savedRoot(page, f.id('dash')), f.id('f'))!.placement).toMatchObject({ x: 0, y: 0, w: 5, h: 6 });
+    // Drilled into the Large sub-folder: never clipped. At the reference cell the minimum has no slack
+    // for the inset box's own bar (M6 §13), so the inset level says "Not enough room" instead of a page.
     await node(page, f.id('s')).locator('.folder-collapsed-tile').focus();
     await page.keyboard.press('Enter');
-    await expect(fbox.locator(`[data-folder-page][data-folder-id="${f.id('s')}"]`)).toBeVisible();
     const fb = await box(fbox);
-    const item = await box(fbox.locator('[data-container-id] > [data-node-id]').first());
-    expect(item.x + item.width).toBeLessThanOrEqual(fb.x + fb.width);
-    expect(item.y + item.height).toBeLessThanOrEqual(fb.y + fb.height);
+    const items = fbox.locator('[data-container-id] > [data-node-id]');
+    if ((await items.count()) === 0) {
+      await expect(fbox.locator('[data-folder-no-room]')).toBeVisible();
+    } else {
+      const item = await box(items.first());
+      expect(item.x + item.width).toBeLessThanOrEqual(fb.x + fb.width);
+      expect(item.y + item.height).toBeLessThanOrEqual(fb.y + fb.height);
+    }
     expect(errors).toEqual([]);
   });
 
   test('raising Contents size in the dialog grows a box too small for one item, pushing neighbours; one Undo restores both', async ({ page, context }) => {
     const f = await importDash(page, context, (id) => [
-      folder(id('f'), 'Box', { x: 0, y: 0, w: 3, h: 6 }, kids(id, 2)),
-      tile(id('n'), 'Next', 0, 6)
+      folder(id('f'), 'Box', { x: 0, y: 0, w: 3, h: 4 }, kids(id, 2)), // the Medium minimum (M6 §13)
+      tile(id('n'), 'Next', 0, 4)
     ]);
     const errors = await openEditing(page, f.path, f.id('f'));
     const f0 = await box(node(page, f.id('f')));
@@ -483,9 +492,9 @@ test.describe('M5 drag and drop in ordered, paged folders', () => {
     await saveDraft(page);
     const root = await savedRoot(page, f.id('dash'));
     const saved = find(root, f.id('f'))!;
-    expect(saved).toMatchObject({ placement: { x: 0, y: 0, w: 5, h: 8 } });
+    expect(saved).toMatchObject({ placement: { x: 0, y: 0, w: 5, h: 6 } }); // the Large minimum (M6 §13)
     const n = find(root, f.id('n'))!.placement!;
-    expect(n.x >= 5 || n.y >= 8).toBe(true);
+    expect(n.x >= 5 || n.y >= 6).toBe(true);
     expect(errors).toEqual([]);
   });
 });
@@ -499,7 +508,7 @@ test.describe('M5 drag and drop in ordered, paged folders', () => {
 test.describe('Ruling 7: an open folder box is never below its minimum', () => {
   test.use({ viewport: { width: 1280, height: 1000 } });
 
-  test('a sub-folder with Large contents dragged out to the tab lands with its default box raised to 6 x 8', async ({ page, context }) => {
+  test('a sub-folder with Large contents dragged out to the tab lands with its default box raised to 6 x 6', async ({ page, context }) => {
     const f = await importDash(page, context, (id) => [
       folder(id('f'), 'Box', { x: 0, y: 0, w: 14, h: 8 }, [kid(id('k1'), 'K1'), folder(id('s'), 'Sub', null, kids(id, 2, 'Z'), { contentSize: 'large' })])
     ]);
@@ -509,14 +518,14 @@ test.describe('Ruling 7: an open folder box is never below its minimum', () => {
     await allowedThenDrop(page);
     await saveDraft(page);
     const root = await savedRoot(page, f.id('dash'));
-    expect(find(root, f.id('s'))).toMatchObject({ display: 'collapsed', placement: { w: 6, h: 8 } });
+    expect(find(root, f.id('s'))).toMatchObject({ display: 'collapsed', placement: { w: 6, h: 6 } }); // 6 x 4 raised to the Large minimum 5 x 6 (M6 §13)
     expect(errors).toEqual([]);
   });
 
-  test('a Large-contents folder dropped into a Medium folder at its minimum grows it to 5 x 8, pushing the neighbour; one Undo restores both', async ({ page, context }) => {
+  test('a Large-contents folder dropped into a Medium folder at its minimum grows it to 5 x 6, pushing the neighbour; one Undo restores both', async ({ page, context }) => {
     const f = await importDash(page, context, (id) => [
-      folder(id('f'), 'Box', { x: 0, y: 0, w: 3, h: 6 }, kids(id, 1)),
-      tile(id('n'), 'Next', 0, 6),
+      folder(id('f'), 'Box', { x: 0, y: 0, w: 3, h: 4 }, kids(id, 1)), // the Medium minimum (M6 §13)
+      tile(id('n'), 'Next', 0, 4),
       folder(id('g'), 'Large', { x: 12, y: 0, w: 8, h: 8 }, kids(id, 1, 'G'), { contentSize: 'large' })
     ]);
     const errors = await openEditing(page, f.path, f.id('f'));
@@ -546,9 +555,9 @@ test.describe('Ruling 7: an open folder box is never below its minimum', () => {
     await saveDraft(page);
     const root = await savedRoot(page, f.id('dash'));
     expect(orderOf(root, f.id('f'))).toEqual([f.id('k1'), f.id('g')]);
-    expect(find(root, f.id('f'))).toMatchObject({ placement: { x: 0, y: 0, w: 5, h: 8 } });
+    expect(find(root, f.id('f'))).toMatchObject({ placement: { x: 0, y: 0, w: 5, h: 6 } });
     const n = find(root, f.id('n'))!.placement!;
-    expect(n.x >= 5 || n.y >= 8).toBe(true);
+    expect(n.x >= 5 || n.y >= 6).toBe(true);
     expect(errors).toEqual([]);
   });
 });

@@ -23,8 +23,8 @@ describe('new items', () => {
     expect(blankTile().size).toBe('medium');
     expect('placement' in blankTile()).toBe(false);
   });
-  it('a new folder is Medium with Medium contents and the default open box (6 x 6: 6 x 4 raised to the M6 Medium minimum, Ruling 7a), Flat', () => {
-    expect(blankFolder()).toMatchObject({ size: 'medium', contentSize: 'medium', placement: { x: 0, y: 0, w: 6, h: 6 }, shape: 'folder-flat' });
+  it('a new folder is Medium with Medium contents and the default open box (6 x 4: size x 3 by size x 2, above the M6 §13 Medium minimum 3 x 4, Ruling 7a), Flat', () => {
+    expect(blankFolder()).toMatchObject({ size: 'medium', contentSize: 'medium', placement: { x: 0, y: 0, w: 6, h: 4 }, shape: 'folder-flat' });
     expect(blankFolder().content).toEqual({ children: [] });
   });
 });

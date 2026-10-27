@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Container, FolderNode, LayoutDashboard, LayoutNode, LayoutTab } from '$lib/types/layout';
   import type { CanvasPlan, ContainerMetrics } from '$lib/layout/geometry';
-  import { clampPlacement, hasPosition, isPlaced, isRenderable, readingOrder, nodeFit, spanFit } from '$lib/layout/geometry';
+  import { clampPlacement, hasPosition, isPlaced, isRenderable, readingOrder, nodeFit, spanFit, screenGrowth } from '$lib/layout/geometry';
   import type { Placement } from '$lib/types/layout';
   import Entry from '../Entry.svelte';
   import Folder from './Folder.svelte';
@@ -111,8 +111,21 @@
       `grid-auto-rows:${px(metrics.rowPx)};`
   );
 
+  // M6 §13 rule 3: render-only growth on a tab grid. View mode draws it; edit mode draws the SAVED
+  // boxes (drag/drop geometry stays exact) and a folder that would grow says so in place (option A).
+  const growth = $derived(!isFolder && effective === 'grid' ? screenGrowth(ordered, metrics) : new Map());
+  const drawGrowth = $derived(!editing);
+  /** The placement drawn on this screen: the stored one, or the grown one in view mode. */
+  function drawnPlacement(n: LayoutNode): Placement {
+    const g = drawGrowth ? growth.get(n.id) : undefined;
+    return g ? g.placement : (n.placement as Placement);
+  }
+  function grownNode(n: LayoutNode): FolderNode {
+    const g = drawGrowth ? growth.get(n.id) : undefined;
+    return (g ? { ...n, placement: g.placement } : n) as FolderNode;
+  }
   function cellStyle(n: LayoutNode): string {
-    const p = clampPlacement(n.placement as Placement, columns);
+    const p = clampPlacement(drawnPlacement(n), columns);
     return `grid-column: ${p.x + 1} / span ${p.w}; grid-row: ${p.y + 1} / span ${p.h};` +
       (p.z !== undefined ? ` z-index: ${p.z};` : '');
   }
@@ -194,7 +207,8 @@
       {:else}
         <!-- A sub-folder on a folder's page is an item: its minimised tile (M5 §2); opening it drills in. -->
         <Folder
-          folder={node as FolderNode}
+          folder={grownNode(node)}
+          screenExtraRows={growth.get(node.id)?.extra ?? 0}
           style={folderStyle(node)}
           {plan}
           {dashboard}

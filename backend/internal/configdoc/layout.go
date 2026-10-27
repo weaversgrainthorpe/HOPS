@@ -36,9 +36,9 @@ const (
 	LayoutVersionKey = "layoutVersion"
 )
 
-// The open folder's chrome and the narrowest grid cell, in px: the exact twin
-// of frontend/src/lib/layout/geometry.ts (FOLDER_CHROME, PAGE_BAR_PX,
-// MIN_GRID_CELL_PX). testdata/folder_min_cases.json is run by both suites
+// The open folder's chrome, the narrowest grid cell and the reference cell,
+// in px: the exact twin of frontend/src/lib/layout/geometry.ts (FOLDER_CHROME,
+// PAGE_BAR_PX, MIN_GRID_CELL_PX, REFERENCE_CELL_PX). testdata/folder_min_cases.json is run by both suites
 // (Ruling 9), so the two minimum tables cannot drift.
 const (
 	// FolderTitlePx is an open folder's title bar.
@@ -56,6 +56,13 @@ const (
 	PhoneBreakpointPx = 768
 	// MinGridCellPx is the narrowest a tab's grid cell gets.
 	MinGridCellPx = PhoneBreakpointPx / RootColumns
+	// ReferenceCellPx (M6 §13 rule 1) is the desktop cell the minimum and
+	// the converter are counted at: a 1920 px screen's tab canvas is 1856 px
+	// (32 px page gutter each side), so a cell is 1856/24 = 77.3, floored.
+	// Every cell from 57 to 113 px gives the same minimum table, so 77 sits
+	// mid-band. Narrower grids draw a too-short folder taller (render-only,
+	// geometry.ts screenGrowth); phones never page (§13 rule 4).
+	ReferenceCellPx = 77
 )
 
 // sizeOf is a contents size as the client draws it: small or large as given,
@@ -67,7 +74,7 @@ func sizeOf(size any) string {
 	return "medium"
 }
 
-func ceilCells(px int) int { return (px + MinGridCellPx - 1) / MinGridCellPx }
+func ceilCells(px int) int { return (px + ReferenceCellPx - 1) / ReferenceCellPx }
 
 // folderChromeYPx is an open folder's height that is not items: its bar, the
 // tab allowance, border and padding (the page bar is added where it counts).
@@ -76,8 +83,8 @@ const folderChromeYPx = FolderTitlePx + FolderTabPx + FolderPadPx
 // FolderMinCells is THE smallest open folder box on a tab, in cells, for
 // items of contentSize (M5 §3.5, Ruling 7; M6 §3a.4): its bar, the tab
 // allowance, border and padding, ONE item and the page bar, counted at the
-// narrowest grid cell so it holds at every grid width. Small 2×5, Medium
-// 3×6, Large 5×8, for every shape. Twin of geometry.ts minOpenFolderCells.
+// desktop reference cell (ReferenceCellPx, M6 §13). Small 2×3, Medium 3×4,
+// Large 5×6, for every shape. Twin of geometry.ts minOpenFolderCells.
 func FolderMinCells(contentSize any) (w, h int) {
 	span := sizeSpans[sizeOf(contentSize)]
 	return span + ceilCells(FolderPadPx), span + ceilCells(folderChromeYPx+PageBarPx)
@@ -114,23 +121,24 @@ func FolderMinCellsOf(folder Obj) (w, h int) {
 }
 
 // FolderWidthFor is the open box width, in cells, that holds perRow items of
-// contentSize to a row at every grid width: the items and the padding.
+// contentSize to a row at the reference cell: the items and the padding.
 func FolderWidthFor(contentSize any, perRow int) int {
 	return max(1, perRow)*sizeSpans[sizeOf(contentSize)] + ceilCells(FolderPadPx)
 }
 
 // FolderBoxFor is the open box, in cells, of folder holding its n items all on
-// page 1 at every grid width (the narrowest cell is the worst case), given a
-// wanted width w: w is raised to the minimum and capped at RootColumns, the
-// items fill it row by row, and the height takes as many rows as they need
-// plus the chrome rows. Never below FolderMinCellsOf(folder) either way.
+// page 1 at the reference cell (M6 §13 rule 2), given a wanted width w: w is
+// raised to the minimum and capped at RootColumns, the items fill it row by
+// row, and the height takes as many rows as they need plus the chrome rows (no
+// page bar: they are all on one page). Never below FolderMinCellsOf(folder).
 func FolderBoxFor(folder Obj, n, w int) (int, int) {
 	span := sizeSpans[sizeOf(folder["contentSize"])]
 	mw, mh := FolderMinCellsOf(folder)
 	w = min(RootColumns, max(w, mw))
-	fit := max(1, (w*MinGridCellPx-FolderPadPx)/(span*MinGridCellPx))
+	fit := max(1, (w*ReferenceCellPx-FolderPadPx)/(span*ReferenceCellPx))
 	rows := max(1, (n+fit-1)/fit)
-	h := rows*span + ceilCells(folderChromeYPx+PageBarPx)
+	// All n on one page at the reference, so no page bar (M6 §13 rule 2).
+	h := rows*span + ceilCells(folderChromeYPx)
 	return w, max(h, mh)
 }
 

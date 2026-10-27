@@ -249,7 +249,7 @@ test('below the minimum height the resize stops there and says so', async ({ pag
   await expect(limit).toContainText(/can't be any shorter/i);
   await page.mouse.up();
   await saveDraft(page);
-  expect(find(await savedRoot(page, f.id('dash')), f.id('f'))!.placement).toMatchObject({ w: 12, h: 6 }); // minOpenFolderCells('medium')
+  expect(find(await savedRoot(page, f.id('dash')), f.id('f'))!.placement).toMatchObject({ w: 12, h: 4 }); // minOpenFolderCells('medium') at the M6 §13 reference cell
   expect(errors).toEqual([]);
 });
 
@@ -335,7 +335,7 @@ test('a nested folder: the minimum is the same on every drag, the refusal shows 
   const errors = await openEditing(page, f.path, f.id('t'));
   const fbox = node(page, f.id('f'));
   const cell = (await box(fbox)).width / 22;
-  const MIN_H = 6; // geometry.folderMinCells: Medium contents everywhere inside
+  const MIN_H = 4; // geometry.folderMinCells: Medium contents everywhere inside (M6 §13 reference cell)
 
   // 1. Taller than the minimum: no refusal on the way down to it; refused only at it.
   const first = await dragUpUntilRefused(page, fbox, cell, 9 * cell);

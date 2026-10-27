@@ -4,8 +4,8 @@ import { describe, it, expect } from 'vitest';
 import {
   LAYOUT_VERSION, sizeSpan, folderPage, minimisedPlacement, planCanvas, isRenderable, isPlaced,
   containerMetrics, previewChildren, ROOT_COLUMNS, nodeBox, FOLDER_CHROME, openFolderContentBox, folderPaging,
-  folderFlowMetrics, PAGE_BAR_PX, phoneTrack, phoneColumnPx, phonePaging, PHONE_TILE_MIN_PX, PHONE_PAGE_RESERVE_PX,
-  minOpenFolderCells, MIN_GRID_CELL_PX, largestContentSize, folderMinCells, defaultFolderBox, tabSpan,
+  folderFlowMetrics, PAGE_BAR_PX, phoneTrack, phoneColumnPx, phonePaging, PHONE_TILE_MIN_PX,
+  minOpenFolderCells, MIN_GRID_CELL_PX, REFERENCE_CELL_PX, screenGrowth, largestContentSize, folderMinCells, defaultFolderBox, tabSpan,
   NESTED_CHROME, nestedContentBox, nestedPaging, NO_ROOM_NOTE_PX, FOLDER_SHAPES
 } from './geometry';
 import type { FolderNode, LayoutNode, LayoutTab } from '../types/layout';
@@ -158,7 +158,7 @@ describe('folderPaging: one page at a time, a page bar only when there is more t
   });
 });
 
-describe('phone (stacked): folder items are the phone tab tiles, paged to fit the viewport', () => {
+describe('phone (stacked): folder items are the phone tab tiles, never paged (M6 §13 rule 4)', () => {
   it('the phone tab grid per viewport width (ContainerView .container-stacked): column minimum and gap', () => {
     expect(phoneTrack(390)).toEqual({ minPx: 100, gapPx: 12 });
     expect(phoneTrack(700)).toEqual({ minPx: 120, gapPx: 12 });
@@ -176,19 +176,18 @@ describe('phone (stacked): folder items are the phone tab tiles, paged to fit th
     expect(g.rowPx).toBe(PHONE_TILE_MIN_PX.medium);
     expect(g.gapPx).toBe(12);
     expect(g.perRow).toBe(2); // 340 px < 3 columns + 2 gaps
-    expect(g.pageBar).toBe(true);
+    expect(g).toMatchObject({ pages: 1, pageBar: false, start: 0, end: 30 }); // all 30 on one page
   });
-  it('rows come from a pixel budget so a page fits the viewport — Large included', () => {
-    const vp = { widthPx: 390, heightPx: 844 };
-    for (const size of ['small', 'medium', 'large'] as const) {
-      const g = phonePaging(340, 358, vp, size, 100, 0);
-      const pageH = g.rowsPerPage * g.rowPx + (g.rowsPerPage - 1) * g.gapPx;
-      expect(pageH + PHONE_PAGE_RESERVE_PX, size).toBeLessThanOrEqual(844);
-      expect(g.rowsPerPage, size).toBeGreaterThanOrEqual(1);
+  it('every item shows on one page whatever the viewport height — Large included, and a tiny viewport', () => {
+    for (const vp of [{ widthPx: 390, heightPx: 844 }, { widthPx: 390, heightPx: 100 }]) {
+      for (const size of ['small', 'medium', 'large'] as const) {
+        const g = phonePaging(340, 358, vp, size, 100, 0);
+        expect(g, size).toMatchObject({ pages: 1, pageBar: false, start: 0, end: 100 });
+        expect(g.rowsPerPage * g.perRow, size).toBeGreaterThanOrEqual(100);
+      }
     }
-    expect(phonePaging(340, 358, vp, 'large', 100, 0).rowsPerPage).toBeLessThan(phonePaging(340, 358, vp, 'small', 100, 0).rowsPerPage);
-    // A tiny viewport still shows one row (never zero).
-    expect(phonePaging(340, 358, { widthPx: 390, heightPx: 100 }, 'large', 5, 0).rowsPerPage).toBe(1);
+    // An empty folder still has one (empty) row, never zero.
+    expect(phonePaging(340, 358, { widthPx: 390, heightPx: 844 }, 'large', 0, 0).rowsPerPage).toBe(1);
   });
   it('the page is clamped as on a tab', () => {
     const vp = { widthPx: 390, heightPx: 844 };
@@ -206,17 +205,37 @@ describe('the pop-over / maximise sizing is gone (M5 §2: one component draws ev
   });
 });
 
-// M5 Task 4 (§3.5, Task 2 review): the smallest open folder holds its bar, its border and padding,
-// one item at its contents size and the page bar — at EVERY grid width (a grid cell is never
-// narrower than PHONE_BREAKPOINT_PX / ROOT_COLUMNS = 32 px; below that the tab stacks).
+// M5 Task 4 (§3.5, Task 2 review), M6 §13: the smallest open folder holds its bar, its border and
+// padding, one item at its contents size and the page bar — at the desktop reference cell
+// (REFERENCE_CELL_PX = 77, a 1920 screen) and every wider one. Narrower grids grow it (screenGrowth).
 describe('minOpenFolderCells: the smallest open folder', () => {
   it('is title + tab allowance (M6) + padding + one item + page bar, in whole cells', () => {
     expect(MIN_GRID_CELL_PX).toBe(32);
-    expect(minOpenFolderCells('small')).toEqual({ w: 2, h: 5 });
-    expect(minOpenFolderCells('medium')).toEqual({ w: 3, h: 6 });
-    expect(minOpenFolderCells('large')).toEqual({ w: 5, h: 8 });
+    expect(REFERENCE_CELL_PX).toBe(77); // (1920 - 64) / 24 = 77.3, floored
+    expect(minOpenFolderCells('small')).toEqual({ w: 2, h: 3 });
+    expect(minOpenFolderCells('medium')).toEqual({ w: 3, h: 4 });
+    expect(minOpenFolderCells('large')).toEqual({ w: 5, h: 6 });
   });
-  it.each([32, 40, 50, 80])('at %i px cells, one item and the page bar fit inside that box, in every shape (M6)', (cell) => {
+  it('every reference cell from 57 to 113 px gives the same table (77 sits mid-band)', () => {
+    const at = (cell: number, span: number) => span + Math.ceil((FOLDER_CHROME.titlePx + FOLDER_CHROME.tabPx + FOLDER_CHROME.padYPx + PAGE_BAR_PX) / cell);
+    for (const cell of [57, 77, 113]) expect([at(cell, 1), at(cell, 2), at(cell, 4)]).toEqual([3, 4, 6]);
+    expect(at(56, 2)).toBe(5);
+    expect(at(114, 2)).toBe(3);
+  });
+  it.each([32, 40, 50])('at %i px cells (narrower than the reference) a minimum box is drawn taller until one item and the page bar fit, in every shape', (cell) => {
+    for (const [size, shape] of (['small', 'medium', 'large'] as const).flatMap((z) => FOLDER_SHAPES.map((sh) => [z, sh] as const))) {
+      const m = minOpenFolderCells(size);
+      const kids = Array.from({ length: 50 }, (_, i) => ({ kind: 'tile', id: `t${i}`, name: 't' }));
+      const node = { kind: 'folder', id: 'f', name: 'f', display: 'expanded', size: 'medium', contentSize: size, shape,
+        placement: { x: 0, y: 0, w: m.w, h: m.h }, content: { children: kids } };
+      const metrics = { columns: 24, unitPx: cell, rowPx: cell, innerWidthPx: 24 * cell };
+      const grown = screenGrowth([node], metrics).get('f')?.placement ?? node.placement;
+      const content = openFolderContentBox({ widthPx: grown.w * cell, heightPx: grown.h * cell }, shape);
+      expect(content.heightPx - PAGE_BAR_PX, `${size} ${shape}`).toBeGreaterThanOrEqual(sizeSpan(size) * cell);
+      expect(folderPaging(content, size, cell, 50, 0).tooSmall, `${size} ${shape}`).toBe(false);
+    }
+  });
+  it.each([77, 80, 104])('at %i px cells, one item and the page bar fit inside that box, in every shape (M6)', (cell) => {
     for (const [size, shape] of (['small', 'medium', 'large'] as const).flatMap((z) => FOLDER_SHAPES.map((sh) => [z, sh] as const))) {
       const m = minOpenFolderCells(size);
       const content = openFolderContentBox({ widthPx: m.w * cell, heightPx: m.h * cell }, shape);
@@ -253,29 +272,33 @@ describe('defaultFolderBox: never below the minimum (Ruling 7a)', () => {
   const f = (size: string, contentSize: string, children: unknown[] = []) =>
     ({ kind: 'folder', id: 'f', name: 'f', display: 'collapsed', size, contentSize, content: { children } }) as unknown as FolderNode;
   it('is max(size x 3 by size x 2, the minimum), each way', () => {
-    expect(defaultFolderBox(f('medium', 'medium'))).toEqual({ w: 6, h: 6 }); // 6 x 4, raised to the 6-high minimum (M6)
-    expect(defaultFolderBox(f('small', 'small'))).toEqual({ w: 3, h: 5 }); // 3 x 2, raised to 2 x 5
-    expect(defaultFolderBox(f('large', 'medium'))).toEqual({ w: 12, h: 8 }); // already above 3 x 6
-    expect(defaultFolderBox(f('small', 'large'))).toEqual({ w: 5, h: 8 }); // 3 x 2 is below 5 x 8
+    expect(defaultFolderBox(f('medium', 'medium'))).toEqual({ w: 6, h: 4 }); // 6 x 4, already the 4-high minimum (M6 §13)
+    expect(defaultFolderBox(f('small', 'small'))).toEqual({ w: 3, h: 3 }); // 3 x 2, raised to 2 x 3
+    expect(defaultFolderBox(f('large', 'medium'))).toEqual({ w: 12, h: 8 }); // already above 3 x 4
+    expect(defaultFolderBox(f('small', 'large'))).toEqual({ w: 5, h: 6 }); // 3 x 2 is below 5 x 6
   });
   it('takes the largest contents size of any sub-folder, however deep', () => {
     const deep = f('medium', 'small', [tile('t'), f('medium', 'medium', [f('small', 'large')])]);
-    expect(defaultFolderBox(deep)).toEqual({ w: 6, h: 8 });
+    expect(defaultFolderBox(deep)).toEqual({ w: 6, h: 6 });
   });
   it('tabSpan of a folder with no box (it comes from inside a folder) is that default box', () => {
-    expect(tabSpan(f('medium', 'large') as unknown as LayoutNode)).toEqual({ w: 6, h: 8 });
-    expect(tabSpan(f('small', 'small') as unknown as LayoutNode)).toEqual({ w: 3, h: 5 });
+    expect(tabSpan(f('medium', 'large') as unknown as LayoutNode)).toEqual({ w: 6, h: 6 });
+    expect(tabSpan(f('small', 'small') as unknown as LayoutNode)).toEqual({ w: 3, h: 3 });
   });
 });
 
 // Important 2 backstop: a box that cannot show one item (and the page bar it needs) says so,
 // never clips silently. Content boxes are in px; cells 32 px; a Medium item is 64 px.
 describe('folderPaging.tooSmall: an undersized box is flagged, never clipped silently', () => {
-  it('a box at its minimum is not too small, with or without a page bar', () => {
+  it('a box at its minimum is not too small at the reference cell, with or without a page bar', () => {
     const min = minOpenFolderCells('medium');
-    const box = openFolderContentBox({ widthPx: min.w * 32, heightPx: min.h * 32 });
-    expect(folderPaging(box, 'medium', 32, 1, 0).tooSmall).toBe(false);
-    expect(folderPaging(box, 'medium', 32, 50, 0).tooSmall).toBe(false);
+    const c = REFERENCE_CELL_PX;
+    const box = openFolderContentBox({ widthPx: min.w * c, heightPx: min.h * c });
+    expect(folderPaging(box, 'medium', c, 1, 0).tooSmall).toBe(false);
+    expect(folderPaging(box, 'medium', c, 50, 0).tooSmall).toBe(false);
+    // At a 32 px cell the same box is too small for the page bar: screenGrowth draws it taller there.
+    const narrow = openFolderContentBox({ widthPx: min.w * 32, heightPx: min.h * 32 });
+    expect(folderPaging(narrow, 'medium', 32, 50, 0).tooSmall).toBe(true);
   });
   it('24 x 4 at a 32 px cell: one row fits, but the page bar a full row needs does not', () => {
     const box = openFolderContentBox({ widthPx: 24 * 32, heightPx: 4 * 32 });

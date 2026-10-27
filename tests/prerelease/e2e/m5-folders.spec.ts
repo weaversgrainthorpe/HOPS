@@ -361,7 +361,7 @@ test.describe('M5 one Folder component', () => {
   });
 });
 
-test.describe('M5 folders on a 390 x 844 phone: the phone tab\'s tiles, a page fits the screen', () => {
+test.describe('M5 folders on a 390 x 844 phone: the phone tab\'s tiles; a folder shows ALL its items (M6 §13 rule 4)', () => {
   test.use({ viewport: { width: 390, height: 844 } });
   test('a Medium item in a phone folder is the same box as a Medium phone tab tile', async ({ page, context }) => {
     const f = await importDash(page, context, (id) => [
@@ -373,30 +373,30 @@ test.describe('M5 folders on a 390 x 844 phone: the phone tab\'s tiles, a page f
     const ib = await box(node(page, f.id('k1')).locator('button.entry'));
     near(ib.width, tb.width, 'width');
     near(ib.height, tb.height, 'height');
-    const fb = await box(node(page, f.id('f')));
-    expect(fb.height).toBeLessThanOrEqual(844);
+    // Never paged: the folder grows to hold all 30 (the page scrolls on).
+    await expect(node(page, f.id('f')).locator('[data-page-bar]')).toHaveCount(0);
+    await expect(node(page, f.id('f')).locator('[data-folder-page] [data-node-id]')).toHaveCount(30);
   });
   for (const size of ['small', 'medium', 'large'] as const) {
-    test(`a page of ${size} items fits the viewport and pages the rest`, async ({ page, context }) => {
+    test(`${size} items: every one shows, no page bar, the folder grows past the viewport`, async ({ page, context }) => {
       const f = await importDash(page, context, (id) => [
         folder(id('f'), 'Fit', { x: 0, y: 0, w: 8, h: 8 }, kids(id, 40), { contentSize: size })
       ]);
       await page.goto(f.path);
       const g = node(page, f.id('f'));
-      await expect(g.locator('[data-page-bar="next"]')).toBeVisible();
+      await expect(g.locator('[data-page-bar]')).toHaveCount(0);
+      await expect(g.locator('[data-folder-page]')).toHaveAttribute('data-folder-per-page', /^\d+$/);
+      expect(Number(await g.locator('[data-folder-page]').getAttribute('data-folder-per-page'))).toBeGreaterThanOrEqual(40);
+      await expect(g.locator('[data-node-id]')).toHaveCount(40);
       const gb = await box(g);
-      // The whole open folder (bar, page and page bar) is on screen below the top bar and the tab bar.
-      expect(gb.y + gb.height, `${size}: the open folder's bottom edge`).toBeLessThanOrEqual(844);
-      const per = Number(await g.locator('[data-folder-page]').getAttribute('data-folder-per-page'));
-      expect(per).toBeGreaterThanOrEqual(1);
-      await expect(g.locator('[data-node-id]')).toHaveCount(per);
+      expect(gb.height, `${size}: taller than the screen, not paged`).toBeGreaterThan(844);
     });
   }
 });
 
 test.describe('M5 folders on a phone (stacked)', () => {
   test.use({ viewport: { width: 420, height: 900 } });
-  test('the same component at full width, with the same pages', async ({ page, context }) => {
+  test('the same component at full width, every item on one page', async ({ page, context }) => {
     const f = await importDash(page, context, (id) => [
       folder(id('f'), 'Phone', { x: 0, y: 0, w: 8, h: 6 }, kids(id, 20)),
       folder(id('m'), 'Mini', { x: 10, y: 0, w: 6, h: 6 }, kids(id, 2, 'M'), { display: 'collapsed' })
@@ -406,11 +406,9 @@ test.describe('M5 folders on a phone (stacked)', () => {
     const canvas = await box(page.locator('.tab-canvas'));
     const pb = await box(ph);
     near(pb.width, canvas.width, 'full width');
-    await expect(ph.locator('[data-page-bar="next"]')).toBeVisible();
-    const per = Number(await ph.locator('[data-folder-page]').getAttribute('data-folder-per-page'));
-    await expect(ph.locator('[data-node-id]')).toHaveCount(per);
-    await ph.locator('[data-page-bar="next"]').click();
-    expect((await shown(page, f.id('f')))[0]).toBe(f.id(`k${per + 1}`));
+    await expect(ph.locator('[data-page-bar]')).toHaveCount(0);
+    await expect(ph.locator('[data-node-id]')).toHaveCount(20);
+    expect((await shown(page, f.id('f')))[19]).toBe(f.id('k20'));
     await expect(node(page, f.id('m'))).toHaveClass(/collapsed/);
   });
 });

@@ -10,13 +10,13 @@ import { toast } from '$lib/stores/toast';
 import { setLayout, resetEditor, startSession, draft, nodeIn, p, tile, folder } from '$lib/components/editor/editorTestKit';
 import type { FolderNode, LayoutDashboard } from '$lib/types/layout';
 
-/** One tab: folder g at 3 x 5 (an M5 box: below the M6 Medium minimum 3 x 6) with tile `below` under it. */
+/** One tab: folder g at 3 x 3 (below the M6 §13 Medium minimum 3 x 4) with tile `below` under it. */
 function tight(columns = 24): LayoutDashboard {
   return {
     id: 'd1', name: 'Home', path: '/home', revision: 5,
     tabs: [{ id: 't1', name: 'Main', root: { columns, children: [
-      folder('g', p(0, 0, Math.min(3, columns), 5), [tile('x')], { shape: 'rounded' }),
-      tile('below', p(0, 5))
+      folder('g', p(0, 0, Math.min(3, columns), 3), [tile('x')], { shape: 'rounded' }),
+      tile('below', p(0, 3))
     ] } }]
   };
 }
@@ -34,12 +34,12 @@ describe('a shape change grows the box to the minimum, or refuses visibly (§3a.
     const g = nodeIn(draft(), 'g') as FolderNode;
     expect(g.shape).toBe('folder-paper');
     expect(g.tabPosition).toBe('right');
-    expect(g.placement).toEqual(p(0, 0, 3, 6));
+    expect(g.placement).toEqual(p(0, 0, 3, 4));
     const below = nodeIn(draft(), 'below')!.placement!;
-    expect(below.x >= 3 || below.y >= 6).toBe(true); // pushed clear of the grown box
+    expect(below.x >= 3 || below.y >= 4).toBe(true); // pushed clear of the grown box
     expect(get(session)!.undo).toHaveLength(1);
     undo();
-    expect((nodeIn(draft(), 'g') as FolderNode).placement).toEqual(p(0, 0, 3, 5));
+    expect((nodeIn(draft(), 'g') as FolderNode).placement).toEqual(p(0, 0, 3, 3));
     expect((nodeIn(draft(), 'g') as FolderNode).shape).toBe('rounded');
   });
 
@@ -48,7 +48,7 @@ describe('a shape change grows the box to the minimum, or refuses visibly (§3a.
     startSession();
     expect(editFolder('g', { shape: 'folder-flat' })).toBe(true);
     expect(editFolder('g', { shape: 'simple-tab' })).toBe(true);
-    expect((nodeIn(draft(), 'g') as FolderNode).placement).toEqual(p(0, 0, 3, 6));
+    expect((nodeIn(draft(), 'g') as FolderNode).placement).toEqual(p(0, 0, 3, 4));
   });
 
   it('no room: the Save is refused with the reason, nothing changes (no undo step)', () => {

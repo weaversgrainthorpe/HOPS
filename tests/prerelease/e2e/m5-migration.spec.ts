@@ -113,12 +113,12 @@ for (const width of [1280, 1024]) {
     expect((await reachable(page, f.folderId)).sort()).toEqual([...f.itemIds].sort());
   });
 
-  test(`a converted group at its minimum box (24 x 6) at ${width}px is paged as folderPaging says: a page bar, every item reachable`, async ({ page, context }) => {
+  test(`a converted group in a 24 x 6 box at ${width}px is paged as folderPaging says: a page bar, every item reachable`, async ({ page, context }) => {
     await page.setViewportSize({ width, height: 900 });
     // 30 items: more than one page of a 24 x 6 box holds at any grid width (two rows of at most 12),
     // so the page bar is certain, not left to whatever happens to fit.
     const f = await importV2(page, context, 30);
-    // 24 x 6: the M6 minimum height (one row, the chrome and the tab allowance).
+    // 24 x 6: above the M6 §13 minimum (24 x 4), so it is drawn as saved here (no screen growth).
     await putFolderBox(page, context, f.dash.id, f.folderId, 24, 6);
     await page.goto(f.path);
     const node = page.locator(`.tab-canvas [data-node-id="${f.folderId}"]`).first();
@@ -149,7 +149,7 @@ test('a box below its minimum is refused on save, naming the folder and both siz
   const cfg = await (await page.request.get('/api/config')).json();
   const dash = cfg.dashboards.find((d: { id: string }) => d.id === f.dash.id);
   const folder = dash.tabs[0].root.children.find((n: { id: string }) => n.id === f.folderId);
-  folder.placement = { ...folder.placement, w: 24, h: 5 };
+  folder.placement = { ...folder.placement, w: 24, h: 3 };
   const r = await page.request.put(`/api/dashboards/${encodeURIComponent(f.dash.id)}`, {
     headers: { 'X-CSRF-Token': await getCsrfToken(context) },
     data: { schema: 3, dashboard: dash, revision: dash.revision, layoutVersion: 2 }
@@ -157,6 +157,6 @@ test('a box below its minimum is refused on save, naming the folder and both siz
   expect(r.status()).toBe(400);
   const msg = (await r.json()).error as string;
   expect(msg).toContain('Row');
-  expect(msg).toContain('24×5');
-  expect(msg).toContain('3×6');
+  expect(msg).toContain('24×3');
+  expect(msg).toContain('3×4'); // the Medium minimum at the M6 §13 reference cell
 });
