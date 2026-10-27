@@ -4,6 +4,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -103,7 +104,10 @@ func sampleNodes(t *testing.T) []map[string]any {
 // The Sample shows off v3: several tabs, every folder shape, small/medium/
 // large folder contents, nesting, a minimised folder and every tile size.
 func TestSample_ShowsV3Features(t *testing.T) {
-	doc, _ := SampleDoc()
+	doc, err := SampleDoc()
+	if err != nil {
+		t.Fatal(err)
+	}
 	tabs := doc["dashboards"].([]any)[0].(map[string]any)["tabs"].([]any)
 	if len(tabs) < 3 {
 		t.Errorf("Sample has %d tabs, want at least 3", len(tabs))
@@ -180,16 +184,21 @@ func TestSample_IconsAndPicturesArePackaged(t *testing.T) {
 			t.Errorf("%v: icon %q is not in the offline bundle", n["id"], icon)
 		}
 	}
+	// Every string anywhere in the document that names a picture (a picture
+	// key, an images list, or any image-looking path) must be a packaged preset.
 	var pics []string
 	var find func(any)
 	find = func(x any) {
 		switch v := x.(type) {
+		case string:
+			if strings.HasPrefix(v, "/") || imageExt.MatchString(v) {
+				pics = append(pics, v)
+			}
 		case map[string]any:
 			for k, c := range v {
-				if s, ok := c.(string); ok && (k == "value" || k == "url") && strings.HasPrefix(s, "/") {
-					pics = append(pics, s)
+				if k != "path" { // the dashboard's own path, not a picture
+					find(c)
 				}
-				find(c)
 			}
 		case []any:
 			for _, c := range v {
@@ -197,7 +206,10 @@ func TestSample_IconsAndPicturesArePackaged(t *testing.T) {
 			}
 		}
 	}
-	doc, _ := SampleDoc()
+	doc, err := SampleDoc()
+	if err != nil {
+		t.Fatal(err)
+	}
 	find(doc)
 	if len(pics) == 0 {
 		t.Fatal("the Sample has no background picture")
@@ -212,3 +224,5 @@ func TestSample_IconsAndPicturesArePackaged(t *testing.T) {
 		}
 	}
 }
+
+var imageExt = regexp.MustCompile(`(?i)\.(jpe?g|png|gif|webp|svg|avif|bmp|ico)$`)

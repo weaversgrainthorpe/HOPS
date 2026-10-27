@@ -1991,26 +1991,26 @@ test.describe('§8 tile size sets the space it takes', () => {
     await allApart(page, ['a', 'b', 'd', 'e', 'f'].map(f.id));
   });
 
-  test("a stored large tile inside a folder (Sample's Netflix) shows the folder's contents size; its own size stays Large", async ({ page, context }) => {
+  test("a stored large tile inside a folder (the Sample's Storage, in Infrastructure) shows the folder's contents size; its own size stays Large", async ({ page, context }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
     const s = await sampleCopy(page, context);
     await page.goto(s.path);
-    await page.getByRole('tab', { name: 'Switch to Media tab' }).click();
-    const netflix = page.locator('.tab-canvas [data-node-id]', { has: page.getByRole('button', { name: 'Open Netflix' }) }).last();
-    const spotify = page.locator('.tab-canvas [data-node-id]', { has: page.getByRole('button', { name: 'Open Spotify' }) }).last();
-    await expect(netflix).toBeVisible();
-    const [n, sp] = [(await netflix.boundingBox())!, (await spotify.boundingBox())!];
+    await page.getByRole('tab', { name: 'Switch to Home tab', exact: true }).click();
+    const storage = page.locator('.tab-canvas [data-node-id]', { has: page.getByRole('button', { name: 'Open Storage', exact: true }) }).last();
+    const hypervisor = page.locator('.tab-canvas [data-node-id]', { has: page.getByRole('button', { name: 'Open Hypervisor', exact: true }) }).last();
+    await expect(storage).toBeVisible();
+    const [n, sp] = [(await storage.boundingBox())!, (await hypervisor.boundingBox())!];
     // M5 §2: inside a folder every item shows the folder's contents size (Medium), whatever its own.
-    near(n.width, sp.width, 'Netflix is drawn at the contents size, like Spotify');
-    near(n.height, sp.height, 'Netflix is drawn at the contents size, like Spotify');
-    await expect(netflix.locator('button.entry')).toHaveClass(/\bmedium\b/);
+    near(n.width, sp.width, 'Storage is drawn at the contents size, like Hypervisor');
+    near(n.height, sp.height, 'Storage is drawn at the contents size, like Hypervisor');
+    await expect(storage.locator('button.entry')).toHaveClass(/\bmedium\b/);
     // Stored: its own size, Large, and no placement inside the folder (nothing silently resized).
     const cfg = await (await page.request.get('/api/config')).json();
     const dash = cfg.dashboards.find((d: { id: string }) => d.id === s.id);
     const found: { size?: string; placement?: unknown }[] = [];
     const walk = (c: { children?: unknown[] } | undefined, inFolder: boolean) => {
       for (const x of (c?.children ?? []) as { name?: string; kind?: string; content?: { children?: unknown[] } }[]) {
-        if (x.kind === 'tile' && x.name === 'Netflix' && inFolder) found.push(x as never);
+        if (x.kind === 'tile' && x.name === 'Storage' && inFolder) found.push(x as never);
         if (x.kind === 'folder') walk(x.content, true);
       }
     };
@@ -2021,7 +2021,7 @@ test.describe('§8 tile size sets the space it takes', () => {
 
     // The dialog shows its own size (Large; no "Custom"). Picking Small changes the stored size only:
     // the drawn box stays the contents size. Undo restores Large.
-    const nid = await netflix.getAttribute('data-node-id');
+    const nid = await storage.getAttribute('data-node-id');
     const nf = page.locator(`.tab-canvas [data-node-id="${nid}"]`);
     await enterEdit(page);
     await nf.dblclick();

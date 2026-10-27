@@ -226,6 +226,9 @@ func (s *noticeState) dismiss(id string) {
 // (the document the handler just loaded), leaving out dismissed ones.
 func (r *Router) currentNotices(stored configdoc.Obj) []notice {
 	var out []notice
+	if n, ok := r.sampleNotice(); ok {
+		out = append(out, n)
+	}
 	if n, ok := uploadDefaultsNotice(r.settings.DefaultMoves()); ok {
 		out = append(out, n)
 	}

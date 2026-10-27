@@ -917,6 +917,13 @@ func (r *Router) handleResetConfig(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
+	// The Sample must pass the same checks as a save, or nothing is reset.
+	if err := sampleSaveProblem(r.settings); err != nil {
+		slog.Error("factory reset refused: the built-in Sample fails the save checks", "component", "api", "error", err)
+		writeJSONError(w, "Factory reset refused (nothing was changed): the built-in Sample fails HOPS's save checks: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	if err := database.ResetConfig(r.db); err != nil {
 		slog.Error("factory reset failed; stored config left untouched", "component", "api", "error", err)
 		writeJSONError(w, "Failed to reset configuration (nothing was changed): "+err.Error(), http.StatusInternalServerError)

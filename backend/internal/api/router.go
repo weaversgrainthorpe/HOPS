@@ -60,6 +60,7 @@ type Router struct {
 	mu             sync.RWMutex  // guards trustedProxies (rebuilt on settings change requires restart, but the slice itself is accessed concurrently)
 	trustedProxies []*net.IPNet  // parsed at construction from settings.proxy.trusted_cidrs
 	notices        noticeState   // dismissed one-time notices (notices.go)
+	sampleProblem  string        // why the built-in Sample fails the save checks, or "" (sample_check.go)
 	cleanupStop    chan struct{} // stops the daily backup cleanup
 	sizeNotes      sizeNoteState // tiles whose unknown size became Medium (notices.go)
 	iconLeftovers  leftoverState // deleted icon files that couldn't be removed (icons_manage.go)
@@ -268,7 +269,8 @@ func NewRouter(db *sql.DB, authService *auth.Service, cfg *config.Config, settin
 		}
 	})
 
-	r.notices.load(db) // a failure is logged and retried on GET /api/config
+	r.notices.load(db)     // a failure is logged and retried on GET /api/config
+	r.checkSample()        // a bad built-in Sample is a sticky notice (sample_check.go)
 	r.sweepIconLeftovers() // interrupted icon deletes; failures become an admin notice
 	if len(migration.SizeChanges) > 0 {
 		// Name each tile's dashboard from the migrated document; if it cannot
