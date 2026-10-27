@@ -40,6 +40,8 @@ if [[ $* == "get /cluster/nextid --vmid "* ]]; then echo "${4}"; exit 0; fi
 exit 0'
 stub pvesm '
 case "$*" in
+  "status -content vztmpl")
+    printf "Name Type Status Total Used Available %%\nlocal dir active 1 1 1 1%%\n" ;;
   "status -content rootdir")
     printf "Name Type Status Total Used Available %%\nlocal-lvm lvmthin active 1 1 1 1%%\nslow dir disabled 0 0 0 0%%\n" ;;
 esac'
@@ -171,6 +173,8 @@ runit idused 1 --yes --id 200 --url http://172.16.0.50:8099 && has idused out 'I
 runit notty 1 --url http://172.16.0.50:8099 && has notty out 'no terminal' && ok "no TTY needs --yes"
 runit badtype 1 --yes --type vm && has badtype out "unknown option '--type'" && ok "--type (VM path) is gone"
 runit badstore 1 --yes --storage slow --url http://172.16.0.50:8099 && has badstore out "storage 'slow' does not exist, is not active" && hasnt badstore log '^pct create' && ok "inactive storage refused before creation"
+
+runit badtstore 1 --yes --template-storage nope --url http://172.16.0.50:8099 && has badtstore out "template storage 'nope' does not exist" && hasnt badtstore log '^pveam (update|download)' && ok "bad template storage refused before pveam update"
 
 echo "== dry-run with an empty template index (pveam update is skipped)"
 if STUB_EMPTY_INDEX=1 runit dry_noindex 0 --dry-run --url http://172.16.0.50:8099; then

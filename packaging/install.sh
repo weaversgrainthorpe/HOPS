@@ -49,6 +49,10 @@ run as the `hops` system user. Re-running upgrades in place: the previous
 binary and unit are kept (hops.prev, hops.service.prev) and put back if the
 new version does not become healthy. Local service changes belong in a
 drop-in (systemctl edit hops); the installer rewrites hops.service itself.
+
+If a run is interrupted (Ctrl+C, a dropped SSH session) after the service was
+stopped, it puts the previous version back and records what it did in
+/opt/hops/install-interrupted.log.
 EOF
 }
 
@@ -78,18 +82,23 @@ fetch() {
 # --https-only (that flag only affects recursive mode), so redirects are
 # followed here by hand and every hop must stay on https.
 wget_https() {
-  local u=$1 dest=$2 hop hdrs status loc
+  local u=$1 dest=$2 hop hdrs status loc rc detail
   for hop in 1 2 3 4 5 6; do
-    if hdrs=$(wget -q --max-redirect=0 --server-response --tries=3 --timeout=15 -O "$dest" "$u" 2>&1); then
-      return 0
-    fi
+    rc=0
+    hdrs=$(wget -q --max-redirect=0 --server-response --tries=3 --timeout=15 -O "$dest" "$u" 2>&1) || rc=$?
+    if (( rc == 0 )); then return 0; fi
     status=$(printf '%s\n' "$hdrs" | awk '$1 ~ /^HTTP\// {s=$2} END {print s}')
     loc=$(printf '%s\n' "$hdrs" | awk 'tolower($1) == "location:" {l=$2} END {print l}' | tr -d '\r')
     if [[ $status != 3?? || -z $loc ]]; then
-      die "download failed: $u${status:+ (HTTP $status)}"
+      # -q hides wget's reason (DNS, refused, TLS, timeout): ask once more.
+      detail=$(wget --max-redirect=0 --tries=1 --timeout=15 -O /dev/null "$u" 2>&1 | grep -v '^ ' | grep -v '^$' | tail -n 2 | tr '\n' ' ') || detail=""
+      die "download failed: $u (wget exit $rc${status:+, HTTP $status})${detail:+: $detail}"
     fi
-    if [[ $loc == /* ]]; then loc="${u%%://*}://$(echo "${u#*://}" | cut -d/ -f1)$loc"; fi
-    [[ $loc == https://* ]] || die "download of $1 was redirected to a non-https address ($loc) — refusing"
+    case $loc in
+      //*) loc="https:$loc" ;;                                                  # protocol-relative
+      /*) loc="${u%%://*}://$(echo "${u#*://}" | cut -d/ -f1)$loc" ;;          # host-relative
+    esac
+    [[ $loc == https://* ]] || die "download of $1 was redirected to '$loc', which is not an absolute https:// address — refusing"
     u=$loc
     (( hop < 6 )) || break
   done
@@ -215,6 +224,7 @@ critical=0
 swapped_bin=0
 swapped_unit=0
 was_active=0
+was_enabled=0
 upgrade=0
 
 # restore_previous — the caller stops the service first. Never writes over a
@@ -240,6 +250,7 @@ restore_previous() {
     swapped_unit=0
   fi
   systemctl daemon-reload || return 1
+  if (( ! was_enabled )); then systemctl disable "$SERVICE" >/dev/null 2>&1 || return 1; fi
 }
 
 # say — a message from the exit trap. It must never fail (a dropped SSH
@@ -275,7 +286,11 @@ on_exit() {
       if restore_previous; then
         if (( was_active )); then
           if systemctl restart "$SERVICE" >/dev/null 2>&1; then
-            say "previous binary and unit restored; $SERVICE restarted on the previous version. The upgrade did NOT happen."
+            if HEALTH_TIMEOUT=30 wait_healthy ""; then
+              say "previous binary and unit restored; the previous version is running and healthy on port $health_port. The upgrade did NOT happen."
+            else
+              say "previous binary and unit restored and $SERVICE restarted, but it is NOT answering /api/health. Check: journalctl -u $SERVICE -n 30"
+            fi
           else
             say "previous binary and unit restored, but $SERVICE did NOT restart. Check: journalctl -u $SERVICE -n 30"
           fi
@@ -294,6 +309,7 @@ on_exit() {
         say "the install stopped before HOPS was put in place (exit $rc); no service or binary was installed."
       fi
     fi
+    say "(this outcome is also recorded in $TRAP_LOG)"
     (( rc != 0 )) || rc=1
   fi
   exit "$rc"
@@ -406,6 +422,9 @@ main() {
 
   if [[ $(id -u) -ne 0 ]]; then
     die "must run as root: curl -fsSL <base-url>/install.sh | sudo bash -s -- [options]   (or: sudo bash install.sh [options])"
+  fi
+  if [[ -s $TRAP_LOG ]]; then
+    log "note: an earlier run was interrupted; what it did is recorded in $TRAP_LOG"
   fi
   [[ $(uname -s) == Linux ]] || die "this installer is for Linux; see DEPLOY.md for other systems"
   [[ -d /run/systemd/system ]] || die "systemd is not running on this machine; install.sh needs systemd (see DEPLOY.md for other options)"
@@ -586,6 +605,7 @@ main() {
   # ---- critical section: stop → swap → start --------------------------------
 
   if systemctl is-active --quiet "$SERVICE"; then was_active=1; fi
+  if systemctl is-enabled --quiet "$SERVICE" 2>/dev/null; then was_enabled=1; fi
   critical=1
   if (( was_active )); then
     systemctl stop "$SERVICE" || die "could not stop $SERVICE"
@@ -616,6 +636,7 @@ main() {
       log "note: HOPS came up on port $health_port, not $port (a port change saved in Settings took effect on restart)."
     fi
     rm -f "$INSTALL_DIR/hops.failed"
+    if [[ -e $TRAP_LOG ]]; then mv -f "$TRAP_LOG" "$TRAP_LOG.old" || true; fi
     echo
     echo "  Open HOPS:  http://$ip:$health_port"
     echo
@@ -627,17 +648,20 @@ main() {
   local why="HOPS did not report healthy on port $health_port within ${HEALTH_TIMEOUT}s"
   [[ -n $version ]] && why="$why (expected version $version)"
   [[ -n $health_body ]] && why="$why; last health answer: $health_body"
+  # `critical` stays set until the undo below has finished, so a signal or a
+  # failed write in this stretch still ends in the exit trap's restore.
   show_logs
-  critical=0
 
   if (( upgrade )); then
-    echo "hops-install: $why — rolling back to the previous binary and unit." >&2
+    { echo "hops-install: $why — rolling back to the previous binary and unit." >&2; } 2>/dev/null || true
     systemctl stop "$SERVICE" >/dev/null 2>&1 || true
     restore_previous || die "ROLLBACK FAILED: could not restore $PREV / $UNIT_PREV. HOPS is NOT running. The failed binary is at $FAILED."
     if (( ! was_active )); then
+      critical=0
       die "upgrade FAILED: $why. Previous binary and unit restored; $SERVICE was not running before, so it was left stopped. Failed binary: $FAILED."
     fi
     systemctl restart "$SERVICE" || true
+    critical=0
     if wait_healthy ""; then
       die "upgrade FAILED and was rolled back: $why. The previous HOPS is running again on port $health_port ($health_body). The failed binary is kept at $FAILED."
     fi
@@ -646,6 +670,7 @@ main() {
   fi
 
   uninstall_failed_fresh
+  critical=0
   die "install FAILED: $why. The service was disabled and removed and the binary moved to $FAILED, so a re-run starts clean. See the log lines above."
 }
 

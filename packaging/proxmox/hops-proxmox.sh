@@ -76,6 +76,7 @@ on_err() {
   fail "unexpected failure (exit $1) at line $2 running: $3" "re-run with the same options; if it fails again, report this message"
 }
 trap 'on_err $? $LINENO "$BASH_COMMAND"' ERR
+trap 'step="$step (interrupted)"; fail "interrupted by a signal" "re-run when ready"' INT TERM HUP
 trap 'if [[ -n $tmp ]]; then rm -rf "$tmp"; fi' EXIT
 
 usage() {
@@ -276,6 +277,8 @@ if (( is_pve )); then
   if [[ $id != "<next-free-id>" ]]; then
     pvesh get /cluster/nextid --vmid "$id" >/dev/null 2>&1 || fail "ID $id is already in use" "choose another --id, or leave it out for the next free one"
   fi
+  pvesm status -content vztmpl 2>/dev/null | awk 'NR>1 && $3=="active" {print $1}' | grep -qx -- "$tstore" \
+    || fail "template storage '$tstore' does not exist, is not active, or does not allow container templates" "see: pvesm status -content vztmpl; pass --template-storage"
   ct_storages | grep -qx -- "$storage" \
     || fail "storage '$storage' does not exist, is not active, or does not allow container disks" "see: pvesm status -content rootdir; pass --storage"
   ip link show "$bridge" >/dev/null 2>&1 || fail "network bridge '$bridge' does not exist on this host" "see: ip link (or Datacenter > node > Network); pass --bridge"
