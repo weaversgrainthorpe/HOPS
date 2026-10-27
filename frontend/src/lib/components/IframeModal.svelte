@@ -2,6 +2,7 @@
   import Icon from '@iconify/svelte';
   import { focusTrap } from '$lib/utils/focusTrap';
   import { dialogContentKeydown, dialogWindowEscape } from '$lib/utils/dialogKeys';
+  import { safeFrameUrl } from '$lib/utils/url';
 
   interface Props {
     url: string;
@@ -10,6 +11,9 @@
   }
 
   let { url, title, onClose }: Props = $props();
+  // Only an http(s) address is ever framed (pentest L1): javascript:, data:,
+  // ssh:, ftp: and the rest are refused here, whatever the caller passed.
+  const frameSrc = $derived(safeFrameUrl(url));
 
   let dialogEl = $state<HTMLElement>();
   // Escape: the content element handles it (dialogKeys); window is the fallback for focus outside.
@@ -41,7 +45,11 @@
     </div>
 
     <div class="iframe-container">
-      <iframe src={url} title={title} sandbox="allow-same-origin allow-scripts allow-forms allow-popups"></iframe>
+      {#if frameSrc}
+        <iframe src={frameSrc} title={title} sandbox="allow-same-origin allow-scripts allow-forms allow-popups"></iframe>
+      {:else}
+        <p class="frame-refused" role="alert">This tile's address can't be shown here: only http and https addresses open in a frame. Edit the tile to fix its address.</p>
+      {/if}
     </div>
   </div>
 </div>
@@ -110,6 +118,11 @@
     position: relative;
     overflow: hidden;
     border-radius: 0 0 0.75rem 0.75rem;
+  }
+
+  .frame-refused {
+    margin: 1.5rem;
+    color: var(--text-primary);
   }
 
   iframe {

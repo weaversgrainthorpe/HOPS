@@ -2,7 +2,7 @@
   import Icon from '@iconify/svelte';
   import { focusTrap } from '$lib/utils/focusTrap';
   import { dialogContentKeydown, dialogWindowEscape } from '$lib/utils/dialogKeys';
-  import { isValidUrl, safeOpenUrl } from '$lib/utils/url';
+  import { safeFrameUrl, safeOpenUrl } from '$lib/utils/url';
 
   interface Props {
     url: string;
@@ -18,7 +18,9 @@
   // scheme even if the onclick handler somehow doesn't fire (right-click
   // open-in-new-tab, ctrl-click, prefetch, etc.). The visible URL text in
   // the modal still shows whatever the admin typed.
-  let safeHref = $derived(isValidUrl(url) ? url : '#');
+  // The popup offers only http(s) addresses (pentest L1).
+  let webUrl = $derived(safeFrameUrl(url));
+  let safeHref = $derived(webUrl ?? '#');
 
   let dialogEl = $state<HTMLElement>();
   // Escape: the content element handles it (dialogKeys); window is the fallback for focus outside.
@@ -27,13 +29,13 @@
   }
 
   function openInNewTab() {
-    safeOpenUrl(url, '_blank');
+    if (webUrl) safeOpenUrl(webUrl, '_blank');
     onClose();
   }
 
   function open(target: '_blank' | '_self', e: MouseEvent) {
     e.preventDefault();
-    safeOpenUrl(url, target);
+    if (webUrl) safeOpenUrl(webUrl, target);
     onClose();
   }
 </script>
@@ -71,6 +73,9 @@
         <div>
           <p><strong>Opening:</strong> {title}</p>
           <p style="margin-top: 0.5rem; color: var(--text-secondary);">{url}</p>
+          {#if !webUrl}
+            <p role="alert" style="margin-top: 0.5rem;">This address can't be opened from a popup: only http and https addresses are allowed.</p>
+          {/if}
         </div>
       </div>
 

@@ -63,6 +63,8 @@ type Router struct {
 	cleanupStop    chan struct{} // stops the daily backup cleanup
 	sizeNotes      sizeNoteState // tiles whose unknown size became Medium (notices.go)
 	iconLeftovers  leftoverState // deleted icon files that couldn't be removed (icons_manage.go)
+	csrfKeyMu      sync.Mutex    // guards csrfKey
+	csrfKey        []byte        // the HMAC key binding CSRF tokens to sessions, loaded once (csrf.go)
 }
 
 // RequestShutdown is the API-side handle for the shutdown channel.

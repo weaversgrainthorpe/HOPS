@@ -2,6 +2,8 @@
 // from Host / Port / User fields. The browser hands ssh:// to the computer's
 // own SSH app; HOPS stores no credentials and runs no terminal.
 
+import { isValidUrl } from './url';
+
 export interface SshFields {
 	host: string;
 	/** Blank means 22. */
@@ -100,6 +102,9 @@ export function parseSshUrl(url: string): SshFields | null {
  * work: Chromium blocks subframe URLs carrying a user@ and the CSP's
  * frame-src allows only http(s).
  */
-export function openSshInPlace(url: string): void {
+export function openSshInPlace(url: string): boolean {
+	// Only an allow-listed ssh:// address ever reaches location (pentest L1).
+	if (!isSshUrl(url) || !isValidUrl(url)) return false;
 	window.location.href = url.trim();
+	return true;
 }

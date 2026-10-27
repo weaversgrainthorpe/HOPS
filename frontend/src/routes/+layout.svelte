@@ -25,6 +25,7 @@
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import ChangePasswordModal from '$lib/components/admin/ChangePasswordModal.svelte';
 	import { navigateTiles } from '$lib/utils/tileNav';
+	import { safeOpenUrl } from '$lib/utils/url';
 	import SearchModal from '$lib/components/SearchModal.svelte';
 	import { editMode, followRoute } from '$lib/stores/editMode';
 	import { initEditPresence } from '$lib/utils/editPresence';
@@ -67,7 +68,7 @@
 			} catch {
 				/* not an address: open it as the bookmark would have */
 			}
-			window.open(u, '_blank', 'noopener');
+			safeOpenUrl(u, '_blank');
 		};
 		const stopPresence = initEditPresence();
 		initAuth();

@@ -36,3 +36,33 @@ func TestValidTileURL(t *testing.T) {
 		}
 	}
 }
+
+// Pentest L1: a tile's url is checked with the same allow-list as awayUrl on
+// saves, imports and transfers. Absent or blank is a tile with nothing to open.
+func TestVerifyDashboard_TileURL(t *testing.T) {
+	withURL := func(v any) Obj {
+		n := tileNode("a")
+		n["url"] = v
+		return v3Dash([]any{n})
+	}
+	for _, ok := range []any{"https://nas.lan", "http://10.0.0.1:8080/x", "ssh://me@nas:2222", "mailto:a@b.c", "nas.lan", " http://lead.space/", "", nil} {
+		if err := VerifyDashboard(withURL(ok)); err != nil {
+			t.Errorf("url %q should pass: %v", ok, err)
+		}
+	}
+	for _, bad := range []any{"javascript:alert(document.domain)", " JaVaScRiPt:x", "data:text/html,<script>x</script>", "vbscript:x", "file:///etc/passwd", "chrome://settings", 42} {
+		wantProblem(t, VerifyDashboard(withURL(bad)), "url is", "javascript:")
+	}
+}
+
+// The v2 import converter refuses a javascript: tile url; the whole-document
+// startup migration keeps it (shown as unsafe, never dropped silently).
+func TestConvertDashboardV2_RefusesUnsafeURL(t *testing.T) {
+	v2 := Obj{"id": "d", "name": "D", "path": "/d", "tabs": []any{Obj{"id": "t", "name": "T",
+		"groups": []any{Obj{"id": "g", "name": "G", "entries": []any{Obj{"id": "e", "name": "E", "url": "javascript:alert(1)"}}}}}}}
+	_, err := ConvertDashboardV2(v2)
+	wantProblem(t, err, "tile", "url is")
+	if _, err := MigrateV2(Obj{"dashboards": []any{v2}}); err != nil {
+		t.Errorf("startup migration should keep the tile, got %v", err)
+	}
+}

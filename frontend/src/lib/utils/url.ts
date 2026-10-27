@@ -111,3 +111,30 @@ export function safeOpenUrl(url: string, target: '_blank' | '_self' = '_blank'):
 
   return true;
 }
+
+/**
+ * The http(s) address a tile may show inside HOPS (iframe mode) or offer from
+ * its popup, or null. Only http and https (and protocol-relative, root-relative
+ * or bare-host forms, which open as https or on this origin) are allowed:
+ * never javascript:, data:, ftp:, ssh:, mailto: or anything else (pentest L1).
+ */
+export function safeFrameUrl(url: string | undefined | null): string | null {
+  if (typeof url !== 'string' || !isValidUrl(url)) return null;
+  const n = normalizeUrl(url);
+  if (n.startsWith('/') && !n.startsWith('//')) return n;
+  try {
+    const u = new URL(n);
+    return u.protocol === 'http:' || u.protocol === 'https:' ? n : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Why a tile address cannot be opened, or null when it can: blank, or a
+ * scheme outside the allow-list (an "unsafe address", e.g. javascript:).
+ */
+export function tileUrlProblem(url: string | undefined | null): 'blank' | 'unsafe' | null {
+  if (typeof url !== 'string' || url.trim() === '') return 'blank';
+  return isValidUrl(url) ? null : 'unsafe';
+}

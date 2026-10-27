@@ -91,13 +91,26 @@ func ConvertDashboardV2(d Obj) (Obj, error) {
 
 // ConvertDashboardV2Full converts one v2 dashboard (deep copy) to v3 with
 // revision 1 and all-null settings. The size report's paths treat it as
-// dashboards[0] of a one-dashboard document.
+// dashboards[0] of a one-dashboard document. It is the v2 import path, so a
+// tile url outside the allow-list (javascript:, data:, …) is refused here
+// with a *VerifyError, as a v3 import is (pentest L1). The whole-document
+// startup migration (MigrateV2Full) keeps such a tile; the dashboard shows
+// it as an unsafe address that does not open.
 func ConvertDashboardV2Full(d Obj) (Obj, []SizeChange, error) {
 	cp, err := deepCopy(d)
 	if err != nil {
 		return nil, nil, fmt.Errorf("configdoc: copy dashboard: %w", err)
 	}
-	return convertDashboard(cp, "dashboards[0]")
+	nd, sizes, err := convertDashboard(cp, "dashboards[0]")
+	if err != nil {
+		return nil, nil, err
+	}
+	v := &verifier{}
+	v.checkTileURLs(nd)
+	if len(v.problems) > 0 {
+		return nil, nil, &VerifyError{Problems: v.problems}
+	}
+	return nd, sizes, nil
 }
 
 // convertDashboard converts an already-copied dashboard in place.

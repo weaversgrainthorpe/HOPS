@@ -6,7 +6,8 @@
   import IframeModal from './IframeModal.svelte';
   import PopupModal from './PopupModal.svelte';
   import StatusIndicator from './StatusIndicator.svelte';
-  import { safeOpenUrl, isValidUrl } from '$lib/utils/url';
+  import { safeOpenUrl, isValidUrl, safeFrameUrl, tileUrlProblem } from '$lib/utils/url';
+  import { toast } from '$lib/stores/toast';
   import { isSshUrl, openSshInPlace } from '$lib/utils/ssh';
   import { tileMayBeChecked } from '$lib/editor/statusChecks';
   import { tileOpenUrl, hasAwayUrl } from '$lib/utils/tileUrl';
@@ -44,6 +45,13 @@
   // Home/Away (per browser): the address this tile opens now, the same for every way of opening it.
   const openUrl = $derived(tileOpenUrl(entry, $awayMode));
   const usingAway = $derived($awayMode && hasAwayUrl(entry));
+  // Pentest L1: an address outside the allow-list (javascript:, data:, …; the
+  // server refuses new ones, but stored data may predate that) is never opened.
+  // The tile stays visible, says so in edit mode, and a click explains why.
+  const urlProblem = $derived(isNote ? null : tileUrlProblem(openUrl));
+  const urlProblemText = $derived(
+    urlProblem === 'unsafe' ? 'Unsafe address: this tile will not open' : urlProblem === 'blank' ? 'No address: this tile will not open' : ''
+  );
 
   // "Recently used" (per browser): the dashboard's recorder. Every way a tile opens (click, Enter,
   // arrow-key focus then Enter, search's show-and-open, the row itself) comes through handleClick.
@@ -52,6 +60,10 @@
   function handleClick() {
     // Note tiles are inert — no URL to open.
     if (isNote) return;
+    if (urlProblem) {
+      if (!inEditor) toast.error(`"${entry.name}" was not opened: ${urlProblem === 'unsafe' ? "its address isn't one HOPS will open (only http, https, ftp, ssh and mailto)" : 'it has no address'}.`);
+      return;
+    }
     if (!inEditor) recent?.record(entry.id);
 
     // ssh:// goes to the computer's SSH app in place: no empty new tab, and
@@ -69,10 +81,14 @@
         safeOpenUrl(openUrl, '_self');
         break;
       case 'iframe':
-        showIframeModal = true;
-        break;
       case 'popup':
-        showPopupModal = true;
+        // The dialogs show only http(s) addresses; anything else is refused here too.
+        if (!safeFrameUrl(openUrl)) {
+          toast.error(`"${entry.name}" was not opened: only http and https addresses open in a ${entry.openMode === 'iframe' ? 'frame' : 'popup'}.`);
+          break;
+        }
+        if (entry.openMode === 'iframe') showIframeModal = true;
+        else showPopupModal = true;
         break;
       default:
         // Default to new tab if no mode specified
@@ -114,8 +130,9 @@
     class:custom-color={entry.color}
     class:selected={editorSelected === true}
     class:entry-note={isNote}
+    class:url-broken={!!urlProblem}
     onclick={handleClick}
-    title={tileTitle}
+    title={urlProblem ? `${tileTitle}\n${urlProblemText}` : tileTitle}
     aria-label={inEditor || isNote ? entry.name : `Open ${entry.name}${usingAway ? ' (away address)' : ''}`}
     aria-pressed={inEditor ? editorSelected : undefined}
   >
@@ -157,6 +174,10 @@
 
       <!-- Layered status checks (M4 §4b): a tile switched on or set to inherit asks the
            server, which resolves the levels; an unset or switched-off tile is never checked. -->
+      {#if inEditor && urlProblem}
+        <span class="url-problem" data-testid="tile-url-problem" role="note">{urlProblemText}</span>
+      {/if}
+
       {#if tileMayBeChecked(entry)}
         <StatusIndicator entryId={entry.id} showOff={inEditor} />
       {/if}
@@ -173,6 +194,26 @@
 {/if}
 
 <style>
+  .url-problem {
+    position: absolute;
+    left: 0.25rem;
+    right: 0.25rem;
+    bottom: 0.25rem;
+    padding: 0.125rem 0.25rem;
+    border-radius: 0.25rem;
+    background: var(--danger, #b91c1c);
+    color: #fff;
+    font-size: 0.7rem;
+    line-height: 1.2;
+    text-align: center;
+    z-index: 2;
+  }
+
+  .entry.url-broken {
+    outline: 2px dashed var(--danger, #b91c1c);
+    outline-offset: -2px;
+  }
+
   .entry-container {
     position: relative;
     width: 100%;

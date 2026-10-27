@@ -72,6 +72,29 @@ func looksLikeHostPort(s string) bool {
 	return true
 }
 
+// checkTileURLs requires every tile's url, when present and not blank, to be
+// a string that ValidTileURL accepts (pentest L1: url was never checked, so
+// "javascript:" was stored and served). An absent or blank url is a tile with
+// nothing to open (a note tile has none). Run on saves, imports and transfers
+// (VerifyImportedDashboard), never on the whole stored document.
+func (v *verifier) checkTileURLs(d Obj) {
+	Walk(Obj{"dashboards": []any{d}}, func(_, _ Obj, _ []Obj, n Obj) bool {
+		if n["kind"] != "tile" {
+			return true
+		}
+		raw, has := n["url"]
+		if !has || raw == nil {
+			return true
+		}
+		s, ok := raw.(string)
+		if ok && (strings.TrimSpace(s) == "" || ValidTileURL(s)) {
+			return true
+		}
+		v.add("tile %s: url is %s, want an http(s), ftp(s), ssh or mailto address (javascript:, data: and other schemes are refused)", show(n["id"]), trunc(show(raw)))
+		return true
+	})
+}
+
 // checkAwayURLs requires every tile's awayUrl, when present, to be a non-empty
 // string that ValidTileURL accepts. Run on saves and imports.
 func (v *verifier) checkAwayURLs(d Obj) {

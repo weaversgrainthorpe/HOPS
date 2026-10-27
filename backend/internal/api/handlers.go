@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"crypto/rand"
+	"crypto/subtle"
 	"database/sql"
 	"encoding/base64"
 	"encoding/hex"
@@ -202,8 +203,9 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 func (r *Router) setSessionCookies(w http.ResponseWriter, req *http.Request, sessionID string, lifetimeHours int) bool {
 	secure := r.isSecureRequest(req)
 	maxAge := lifetimeHours * 3600
-	csrfToken, err := generateCSRFToken()
+	csrfToken, err := r.csrfTokenFor(sessionID)
 	if err != nil {
+		slog.Error("issue CSRF token", "component", "auth", "error", err)
 		writeJSONError(w, "Failed to issue CSRF token", http.StatusInternalServerError)
 		return false
 	}
@@ -354,13 +356,18 @@ func (r *Router) handleAuthCheck(w http.ResponseWriter, req *http.Request) {
 				mustChangePassword = mustChange
 			}
 
-			// Ensure the authenticated client has a CSRF token. If the cookie
-			// is missing (session pre-dates CSRF, or browser cleared it),
-			// issue a fresh one paired with this session.
-			if cookie, err := req.Cookie(csrfCookieName); err != nil || cookie.Value == "" {
-				if token, err := generateCSRFToken(); err == nil {
-					setCSRFCookie(w, token, r.isSecureRequest(req), r.sessionCookieMaxAge())
-				}
+			// Ensure the authenticated client holds this session's CSRF
+			// token. If the cookie is missing or is not the token bound to
+			// this session (the browser cleared it, it pre-dates session
+			// binding, or another site planted one), issue the right one.
+			token, terr := r.csrfTokenFor(sessionID)
+			if terr != nil {
+				slog.Error("auth check: could not issue CSRF token", "component", "auth", "error", terr)
+				writeJSONError(w, "Signed in, but the server could not issue a CSRF token, so changes would be refused. See the server log.", http.StatusInternalServerError)
+				return
+			}
+			if cookie, err := req.Cookie(csrfCookieName); err != nil || subtle.ConstantTimeCompare([]byte(cookie.Value), []byte(token)) != 1 {
+				setCSRFCookie(w, token, r.isSecureRequest(req), r.sessionCookieMaxAge())
 			}
 		}
 	}

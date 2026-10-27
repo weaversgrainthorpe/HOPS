@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { isValidUrl, safeOpenUrl } from './url';
+import { isValidUrl, safeOpenUrl, safeFrameUrl, tileUrlProblem } from './url';
+import { openSshInPlace } from './ssh';
 
 describe('isValidUrl', () => {
 	it('accepts standard https URLs', () => {
@@ -112,5 +113,41 @@ describe('safeOpenUrl', () => {
 
 		expect(safeOpenUrl('')).toBe(false);
 		expect(openSpy).not.toHaveBeenCalled();
+	});
+});
+
+// Pentest L1: every open helper refuses javascript: and data:; the iframe and
+// popup helper allows only http(s).
+describe('open helpers refuse unsafe schemes (L1)', () => {
+	const unsafe = ['javascript:alert(document.domain)', ' JaVaScRiPt:alert(1)', 'data:text/html,<script>alert(1)</script>', 'vbscript:x'];
+
+	it('safeFrameUrl allows only http(s)', () => {
+		expect(safeFrameUrl('https://nas.lan/x')).toBe('https://nas.lan/x');
+		expect(safeFrameUrl('http://10.0.0.1:8080')).toBe('http://10.0.0.1:8080');
+		expect(safeFrameUrl('nas.lan')).toBe('https://nas.lan');
+		expect(safeFrameUrl('/local')).toBe('/local');
+		for (const u of [...unsafe, 'ssh://me@nas', 'ftp://files', 'mailto:a@b.c', 'file:///etc/passwd', '', null, undefined]) {
+			expect(safeFrameUrl(u as string), String(u)).toBeNull();
+		}
+	});
+
+	it('safeOpenUrl never opens javascript: or data:', () => {
+		const open = vi.spyOn(window, 'open').mockImplementation(() => null);
+		for (const u of unsafe) expect(safeOpenUrl(u, '_blank')).toBe(false);
+		expect(open).not.toHaveBeenCalled();
+		open.mockRestore();
+	});
+
+	it('openSshInPlace opens only a valid ssh:// address', () => {
+		expect(openSshInPlace('javascript:alert(1)')).toBe(false);
+		expect(openSshInPlace('data:text/html,x')).toBe(false);
+		expect(openSshInPlace('https://x')).toBe(false);
+	});
+
+	it('tileUrlProblem names blank and unsafe addresses', () => {
+		expect(tileUrlProblem('https://x')).toBeNull();
+		expect(tileUrlProblem('')).toBe('blank');
+		expect(tileUrlProblem('  ')).toBe('blank');
+		for (const u of unsafe) expect(tileUrlProblem(u)).toBe('unsafe');
 	});
 });
