@@ -145,6 +145,11 @@ func TestNotices_LayeredStatusChecksListsDashboardsAndDismissPersists(t *testing
 		t.Errorf("text = %q\nwant  %q", ns[0]["text"], want)
 	}
 
+	link, _ := ns[0]["link"].(map[string]interface{})
+	if link["href"] != "/settings/dashboards/status-overrides" || link["label"] != "Review status check overrides" {
+		t.Errorf("link = %v, want the status-overrides page", ns[0]["link"])
+	}
+
 	// Anonymous viewers see it too (GET /api/config is public).
 	req := httptest.NewRequest("GET", "/api/config", nil)
 	w := httptest.NewRecorder()
@@ -397,5 +402,15 @@ func TestGetStatus_InvalidValueIsSurfaced(t *testing.T) {
 	_ = json.Unmarshal(w.Body.Bytes(), &got)
 	if w.Code != 200 || got["status"] != "disabled" || got["source"] != "invalid" || got["sourceId"] != folder["id"] {
 		t.Errorf("got %d %v, want disabled/invalid/%v", w.Code, got, folder["id"])
+	}
+}
+
+// Only the layered-status notice points at a page; the others carry no link.
+func TestNotices_OnlyLayeredStatusNoticeHasALink(t *testing.T) {
+	for _, n := range []notice{{ID: "x", Text: "t"}} {
+		b, _ := json.Marshal(n)
+		if strings.Contains(string(b), "link") {
+			t.Errorf("a notice without a link serialized one: %s", b)
+		}
 	}
 }

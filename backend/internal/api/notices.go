@@ -26,6 +26,15 @@ type notice struct {
 	Level string `json:"level,omitempty"`
 	// Sticky notices cannot be dismissed: they go when their cause is fixed.
 	Sticky bool `json:"sticky,omitempty"`
+	// Link points at the settings page where the notice can be acted on.
+	Link *noticeLink `json:"link,omitempty"`
+}
+
+// noticeLink is a labelled in-app link (the page renders it as text + <a>,
+// never from markup in the notice text).
+type noticeLink struct {
+	Href  string `json:"href"`
+	Label string `json:"label"`
 }
 
 // noticeLayeredStatusChecks announces the M4 change to status checks: the
@@ -240,6 +249,7 @@ func (r *Router) currentNotices(stored configdoc.Obj) []notice {
 			ID: noticeLayeredStatusChecks,
 			Text: "Status checks now follow the most specific setting. These dashboards have tiles switched on " +
 				"while the dashboard is off, so those tiles are now checked: " + strings.Join(names, ", ") + ".",
+			Link: &noticeLink{Href: "/settings/dashboards/status-overrides", Label: "Review status check overrides"},
 		})
 	}
 	if len(out) == 0 {

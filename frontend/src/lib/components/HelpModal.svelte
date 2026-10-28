@@ -219,7 +219,7 @@
               <Icon icon="mdi:heart-pulse" width="24" />
               <div>
                 <strong>Status Checks</strong>
-                <p>Optional HTTP monitoring shows up/down status and response time next to each tile.</p>
+                <p>Optional HTTP monitoring shows up/down status and response time next to each tile. Set them per dashboard, tab, folder or tile; Settings › Dashboards › Status check overrides lists every place that doesn't follow the level above.</p>
               </div>
             </div>
             <div class="feature">

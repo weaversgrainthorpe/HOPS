@@ -152,3 +152,38 @@ describe('NoticesBanner: sticky warnings (backup problems)', () => {
     expect(screen.getAllByRole('button', { name: 'Dismiss' })).toHaveLength(1);
   });
 });
+
+describe('NoticesBanner: notice link', () => {
+  const base = { id: 'layered-status-checks-v4', text: 'Status checks now follow the most specific setting.' };
+
+  it('renders the link after the text', () => {
+    config.set({
+      schemaVersion: 3,
+      dashboards: [],
+      notices: [{ ...base, link: { href: '/settings/dashboards/status-overrides', label: 'Review status check overrides' } }]
+    });
+    render(NoticesBanner);
+    const a = screen.getByRole('link', { name: 'Review status check overrides' });
+    expect(a).toHaveAttribute('href', '/settings/dashboards/status-overrides');
+  });
+
+  it('does not render a link whose href is outside /settings/', () => {
+    config.set({
+      schemaVersion: 3,
+      dashboards: [],
+      notices: [
+        { ...base, link: { href: 'https://evil.example/', label: 'Click me' } },
+        { id: 'other', text: 'Other', link: { href: 'javascript:alert(1)', label: 'Run' } }
+      ]
+    });
+    render(NoticesBanner);
+    expect(screen.queryByRole('link')).toBeNull();
+    expect(screen.getByText(base.text)).toBeInTheDocument();
+  });
+
+  it('renders no link when the notice has none', () => {
+    config.set({ schemaVersion: 3, dashboards: [], notices: [base] });
+    render(NoticesBanner);
+    expect(screen.queryByRole('link')).toBeNull();
+  });
+});

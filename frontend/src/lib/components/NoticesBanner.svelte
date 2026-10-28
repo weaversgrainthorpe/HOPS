@@ -40,6 +40,9 @@
     <!-- Rendered as text: the server's notice text is never markup. -->
     <div class="text">
       {notice.text}
+      {#if notice.link?.href.startsWith('/settings/')}
+        <a class="notice-link" href={notice.link.href}>{notice.link.label}</a>
+      {/if}
       {#if $noticesStale}
         <em class="stale">This notice may be out of date: it couldn't be refreshed after your last change ({$noticesStale}). Reload the page to update it.</em>
       {/if}
@@ -128,6 +131,13 @@
     color: #1e3a8a;
     font-weight: 600;
     cursor: pointer;
+  }
+
+  .notice-link {
+    color: inherit;
+    font-weight: 600;
+    text-decoration: underline;
+    white-space: nowrap;
   }
 
   .stale {

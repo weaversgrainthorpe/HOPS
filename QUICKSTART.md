@@ -354,6 +354,10 @@ Each tile, folder and tab has a **Status checks** row with **Inherit**,
   **Status checks** setting (Settings › Global settings › Status checks).
   That global switch is on by default; turn it off and no checks run at all.
 
+**Settings › Dashboards › Status check overrides** lists every dashboard, tab,
+folder and tile that sets its own On or Off, shows what restoring inheritance
+would change, and lets you restore several at once.
+
 The line under the choices always says what is in effect and where it comes
 from, for example *Inherited from the tab: on*. **Reset to inherit** puts a
 row back to Inherit. How often checks run is under Settings › Global

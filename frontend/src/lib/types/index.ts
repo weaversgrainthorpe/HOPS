@@ -100,4 +100,6 @@ export interface ServerNotice {
   level?: 'warning';
   /** Cannot be dismissed: it goes when its cause is fixed (e.g. the next backup that works). */
   sticky?: boolean;
+  /** An in-app page the notice can be acted on from; the banner only renders hrefs under /settings/. */
+  link?: { href: string; label: string };
 }
