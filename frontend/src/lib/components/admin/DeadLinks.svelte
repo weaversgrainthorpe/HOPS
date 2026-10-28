@@ -73,8 +73,8 @@
       </p>
     {:else if report.checkedTiles === 0}
       <p class="state" role="status" data-state="none-checked">
-        No tiles have status checks turned on, so there's nothing to watch. Turn on "Enable Status Check"
-        on a tile (or for a whole dashboard, tab or folder) to have it watched.
+        No tiles have status checks turned on, so there's nothing to watch. Set "Status checks" to On
+        for a tile (or for a whole dashboard, tab or folder) to have it watched.
       </p>
     {:else if report.links.length === 0}
       <p class="state ok" role="status" data-state="none-dead">

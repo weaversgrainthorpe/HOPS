@@ -358,7 +358,7 @@
         <Icon icon="mdi:information" width="20" />
         <div>
           <p><strong>How it works:</strong> Select a brightness mode (Dark/Light/Auto) and a theme preset. Each preset adapts to both light and dark modes with carefully chosen colors.</p>
-          <p style="margin-top: 0.5rem;">Theme applies globally across all dashboards. Per-dashboard customization coming soon!</p>
+          <p style="margin-top: 0.5rem;">Your theme is saved in this browser, so each device can have its own.</p>
         </div>
       </div>
     </div>
