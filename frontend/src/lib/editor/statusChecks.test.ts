@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import fixture from '../../../../backend/internal/configdoc/testdata/status_checks_cases.json';
 import {
-  dashboardBase, resolveStatusChecks, statusRowText, tileSetting, containerSetting, levelNameIn, disabledTooltip,
+  dashboardBase, isCheckableTile, resolveStatusChecks, statusRowText, tileSetting, containerSetting, levelNameIn, disabledTooltip,
   type Resolution
 } from './statusChecks';
 import type { LayoutDashboard } from '$lib/types/layout';
@@ -152,5 +152,21 @@ describe('level names and the badge tooltip', () => {
       'Status checks are off for this tile: invalid setting on Media'
     );
     expect(disabledTooltip([dash], undefined, undefined)).toBe('Status checks are off for this tile');
+  });
+});
+
+// The twin of Go's configdoc.IsCheckableTile (same cases): the checker skips notes and URL-less tiles.
+describe('isCheckableTile', () => {
+  it.each([
+    [{ url: 'http://a' }, true],
+    [{ type: 'link', url: 'http://a' }, true],
+    [{ type: 'note', url: 'http://a' }, false],
+    [{ type: 'note' }, false],
+    [{ url: '' }, false],
+    [{}, false],
+    [{ url: 7 }, false],
+    [null, false]
+  ])('%j → %s', (tile, want) => {
+    expect(isCheckableTile(tile as never)).toBe(want);
   });
 });

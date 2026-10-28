@@ -6,7 +6,7 @@
  */
 import type { FolderNode, LayoutDashboard, LayoutNode, LayoutTab } from '$lib/types/layout';
 import {
-  containerSetting, resolveStatusChecks, tileSetting, type DashboardBase, type Resolution
+  containerSetting, isCheckableTile, resolveStatusChecks, tileSetting, type DashboardBase, type Resolution
 } from './statusChecks';
 
 export type OverrideLevel = 'dashboard' | 'tab' | 'folder' | 'tile';
@@ -79,37 +79,46 @@ function without<T extends object>(o: T): T {
   return c as T;
 }
 
-/** Every tile of one dashboard, resolved with the keyed settings removed (or as they are, with none). */
+/** The tiles the checker could probe (isCheckableTile): only these are ever counted or listed. */
+const checkableTiles = (items: Item[]): Item[] =>
+  items.filter((it) => it.level === 'tile' && isCheckableTile(it.node as { type?: unknown; url?: unknown }));
+
+const refOf = (d: LayoutDashboard, it: Item): TileRef => ({ dashboardId: d.id, id: (it.node as LayoutNode).id, path: it.path });
+
+/** The given tiles of one dashboard, resolved with the keyed settings removed (or as they are, with none). */
 function resolveTiles(
-  d: LayoutDashboard, items: Item[], base: DashboardBase | null, global: boolean | null, removed: Set<string>
-): { ref: TileRef; res: Resolution | null }[] {
+  d: LayoutDashboard, tiles: Item[], base: DashboardBase | null, global: boolean | null, removed: Set<string>
+): (Resolution | null)[] {
   // Restoring the dashboard override makes the dashboard level fall to the global setting.
   const b: DashboardBase | null = removed.has(keyOf(d.id, 'dashboard', d.id))
     ? global === null ? null : { on: global, source: 'global', dashboardId: d.id }
     : base;
   const strip = (level: 'tab' | 'folder', n: { id: string }) => (removed.has(keyOf(d.id, level, n.id)) ? without(n) : n);
-  return items.filter((it) => it.level === 'tile').map((it) => {
+  return tiles.map((it) => {
     const tile = it.node as LayoutNode;
-    const res = resolveStatusChecks(
+    return resolveStatusChecks(
       b,
       strip('tab', it.tab),
       it.folders.map((f) => strip('folder', f)),
       removed.has(keyOf(d.id, 'tile', tile.id)) ? without(tile) : tile
     );
-    return { ref: { dashboardId: d.id, id: tile.id, path: it.path }, res };
   });
 }
 
-function diff(d: LayoutDashboard, items: Item[], base: DashboardBase | null, global: boolean | null, removed: Set<string>) {
-  const before = resolveTiles(d, items, base, global, new Set());
-  const after = resolveTiles(d, items, base, global, removed);
+/** Which of `tiles` start and stop, given their resolutions now (`before`) and with `removed` restored. */
+function diff(
+  d: LayoutDashboard, tiles: Item[], before: (Resolution | null)[], base: DashboardBase | null,
+  global: boolean | null, removed: Set<string>
+) {
+  const after = resolveTiles(d, tiles, base, global, removed);
   const start: TileRef[] = [];
   const stop: TileRef[] = [];
-  before.forEach((b, i) => {
+  tiles.forEach((it, i) => {
+    const b = before[i];
     const a = after[i];
-    if (!b.res || !a.res) return; // unknown: never counted
-    if (!b.res.on && a.res.on) start.push(a.ref);
-    else if (b.res.on && !a.res.on) stop.push(a.ref);
+    if (!b || !a) return; // unknown: never counted
+    if (!b.on && a.on) start.push(refOf(d, it));
+    else if (b.on && !a.on) stop.push(refOf(d, it));
   });
   return { start, stop };
 }
@@ -119,36 +128,50 @@ export function findOverrides(dashboards: LayoutDashboard[], bases: Bases, globa
   for (const d of dashboards) {
     const base = bases[d.id] ?? null;
     const items = walk(d);
-    const effectOf = (key: string, canKnow: boolean): Effect | null => {
-      if (!canKnow) return null;
-      const { start, stop } = diff(d, items, base, global, new Set([key]));
-      return { start: start.length, stop: stop.length };
-    };
-    const push = (r: Omit<OverrideRow, 'key' | 'dashboardId' | 'changes' | 'effect'>, canKnow: boolean) => {
-      const key = keyOf(d.id, r.level, r.id);
-      const effect = effectOf(key, canKnow);
+    const tiles = checkableTiles(items);
+    // Each tile resolved once as it is now; every row's effect is measured against this.
+    const before = resolveTiles(d, tiles, base, global, new Set());
+    const push = (r: Omit<OverrideRow, 'key' | 'dashboardId' | 'changes' | 'effect'>, effect: Effect | null) => {
       rows.push({
-        ...r, key, dashboardId: d.id, effect,
+        ...r, key: keyOf(d.id, r.level, r.id), dashboardId: d.id, effect,
         changes: r.now === 'invalid' || (effect ? effect.start + effect.stop > 0 : false)
       });
+    };
+    // Restoring a container re-resolves only the tiles under it (or, for the dashboard, all of them).
+    const containerEffect = (key: string, under: (it: Item) => boolean): Effect => {
+      const idx = tiles.flatMap((it, i) => (under(it) ? [i] : []));
+      const { start, stop } = diff(d, idx.map((i) => tiles[i]), idx.map((i) => before[i]), base, global, new Set([key]));
+      return { start: start.length, stop: stop.length };
     };
 
     if (base && base.source === 'dashboard') {
       push({
         level: 'dashboard', id: d.id, path: [], now: base.on ? 'on' : 'off',
         inherited: global === null ? null : { on: global, source: 'global', sourceId: '' }
-      }, global !== null);
+      }, global === null ? null : containerEffect(keyOf(d.id, 'dashboard', d.id), () => true));
     }
     for (const it of items) {
       const s = settingOf(it);
       if (s === 'inherit') continue;
+      if (it.level === 'tile' && !isCheckableTile(it.node as { type?: unknown; url?: unknown })) continue;
       const id = (it.node as { id: string }).id;
       // What this level would get if it inherited: the levels above it, tile = null.
       const tab = it.level === 'tab' ? null : it.tab; // it.folders already excludes the folder itself
-      push({
-        level: it.level, id, path: it.path, now: nowOf(s),
-        inherited: base ? resolveStatusChecks(base, tab, it.folders, null) : null
-      }, !!base);
+      const inherited = base ? resolveStatusChecks(base, tab, it.folders, null) : null;
+      let effect: Effect | null = null;
+      if (base && inherited) {
+        if (it.level === 'tile') {
+          // A tile without its own setting resolves to exactly `inherited`, so compare directly.
+          const now = before[tiles.indexOf(it)];
+          effect = { start: now && !now.on && inherited.on ? 1 : 0, stop: now && now.on && !inherited.on ? 1 : 0 };
+        } else {
+          const node = it.node;
+          effect = containerEffect(keyOf(d.id, it.level, id), it.level === 'tab'
+            ? (t) => t.tab === node
+            : (t) => t.folders.includes(node as FolderNode));
+        }
+      }
+      push({ level: it.level, id, path: it.path, now: nowOf(s), inherited }, effect);
     }
   }
   return rows;
@@ -172,7 +195,8 @@ export function previewRestore(
       mine.add(k);
     }
     if (!mine.size) continue;
-    const r = diff(d, walk(d), base, global, mine);
+    const tiles = checkableTiles(walk(d));
+    const r = diff(d, tiles, resolveTiles(d, tiles, base, global, new Set()), base, global, mine);
     start.push(...r.start);
     stop.push(...r.stop);
   }

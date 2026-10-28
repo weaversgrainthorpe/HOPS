@@ -103,6 +103,17 @@ export function resolveStatusChecks(
     : { on: base.on, source: 'global', sourceId: '' };
 }
 
+/**
+ * True when the checker could ever probe this tile: not a note, and with a non-empty URL. The twin
+ * of Go's configdoc.IsCheckableTile; anything else is skipped whatever its setting says, so it is
+ * never counted as starting or stopping.
+ */
+export function isCheckableTile(tile: { type?: unknown; url?: unknown } | null | undefined): boolean {
+  if (!tile || typeof tile !== 'object') return false;
+  if (tile.type === 'note') return false;
+  return typeof tile.url === 'string' && tile.url !== '';
+}
+
 /** True when the tile's own setting could let it be checked (so its status is worth asking for). */
 export function tileMayBeChecked(tile: { statusCheck?: unknown }): boolean {
   const s = tileSetting(tile);

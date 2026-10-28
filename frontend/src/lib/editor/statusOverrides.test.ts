@@ -4,7 +4,7 @@ import type { DashboardBase } from './statusChecks';
 import type { LayoutDashboard } from '$lib/types/layout';
 
 const tile = (id: string, enabled?: unknown, extra: Record<string, unknown> = {}) => ({
-  kind: 'tile', id, name: id, ...(enabled === undefined && !Object.keys(extra).length ? {} : { statusCheck: { ...extra, ...(enabled === undefined ? {} : { enabled }) } })
+  kind: 'tile', id, name: id, url: `http://${id}.example.lan`, ...(enabled === undefined && !Object.keys(extra).length ? {} : { statusCheck: { ...extra, ...(enabled === undefined ? {} : { enabled }) } })
 });
 const folder = (id: string, children: unknown[], on?: unknown) => ({
   kind: 'folder', id, name: id, ...(on === undefined ? {} : { statusChecksEnabled: on }), content: { children }
@@ -43,7 +43,7 @@ describe('findOverrides', () => {
   });
 
   it('an invalid tile', () => {
-    const d = dash('d', [tab('t', [{ kind: 'tile', id: 'a', name: 'a', statusCheck: 'yes' }])]);
+    const d = dash('d', [tab('t', [{ kind: 'tile', id: 'a', name: 'a', url: 'http://a', statusCheck: 'yes' }])]);
     const rows = findOverrides([d], { d: base('d', true, 'global') }, true);
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ now: 'invalid', changes: true });
@@ -91,6 +91,28 @@ describe('findOverrides', () => {
     expect(rows.find((r) => r.id === 'b')!.path).toEqual(['t1', 'f1', 'f2', 'b']);
     expect(rows.find((r) => r.id === 't1')!.path).toEqual(['t1']);
     expect(new Set(rows.map((r) => r.key)).size).toBe(rows.length);
+  });
+});
+
+describe('tiles the checker never checks', () => {
+  // A note and a tile with no URL are skipped by the checker, so they are never counted or listed.
+  const note = (id: string, enabled?: unknown) => ({ ...tile(id, enabled), type: 'note' });
+  const bare = (id: string, enabled?: unknown) => ({ ...tile(id, enabled), url: '' });
+  const d = dash('d', [tab('t', [folder('f', [tile('a'), note('n'), bare('u'), note('n2', true), bare('u2', false)], false)])]);
+  const bases: Bases = { d: base('d', true, 'global') };
+  it('gives no rows and is not counted in a folder row', () => {
+    const rows = findOverrides([d], bases, true);
+    expect(rows.map((r) => r.key)).toEqual(['d:folder:f']);
+    expect(rows[0].effect).toEqual({ start: 1, stop: 0 });
+  });
+  it('is not counted in a dashboard row', () => {
+    const rows = findOverrides([d], { d: base('d', false, 'dashboard') }, true);
+    expect(rows.find((r) => r.level === 'dashboard')!.effect).toEqual({ start: 0, stop: 0 });
+  });
+  it('is left out of the preview', () => {
+    const r = previewRestore([d], bases, true, ['d:folder:f', 'd:tile:n2', 'd:tile:u2']);
+    expect(r.start.map((t) => t.id)).toEqual(['a']);
+    expect(r.stop).toEqual([]);
   });
 });
 
