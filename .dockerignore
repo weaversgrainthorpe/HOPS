@@ -12,3 +12,10 @@ frontend/build/
 .env.local
 *.md
 LICENSE
+dist/
+design/
+docs/
+tests/
+.superpowers/
+.claude/
+backend/hops-*
