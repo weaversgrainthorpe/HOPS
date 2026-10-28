@@ -1,0 +1,451 @@
+{
+  "app": "ntfy",
+  "image": "binwiederhier/ntfy:latest@sha256:901e14503d3f",
+  "version": "2.34.0",
+  "captured": "2026-10-28",
+  "port": 80,
+  "want": "core/ntfy",
+  "notes": "ntfy serve, defaults",
+  "responses": {
+    "/": {
+      "status": 200,
+      "headers": {
+        "accept-ranges": "bytes",
+        "content-type": "text/html; charset=utf-8",
+        "last-modified": "Wed, 28 Oct 2026 07:05:59 GMT"
+      },
+      "body": "73793bacc593"
+    },
+    "/#/login": {
+      "status": 200,
+      "headers": {
+        "accept-ranges": "bytes",
+        "content-type": "text/html; charset=utf-8",
+        "last-modified": "Wed, 28 Oct 2026 07:05:59 GMT"
+      },
+      "body": "73793bacc593"
+    },
+    "/-/health": {
+      "status": 404,
+      "headers": {
+        "access-control-allow-origin": "*",
+        "content-length": "51",
+        "content-type": "application/json"
+      },
+      "body": "502c66a082bb"
+    },
+    "/ViewPower/": {
+      "status": 404,
+      "headers": {
+        "access-control-allow-origin": "*",
+        "content-length": "51",
+        "content-type": "application/json"
+      },
+      "body": "502c66a082bb"
+    },
+    "/ViewPower/isInitialized": {
+      "status": 404,
+      "headers": {
+        "access-control-allow-origin": "*",
+        "content-length": "51",
+        "content-type": "application/json"
+      },
+      "body": "502c66a082bb"
+    },
+    "/accounts/login/": {
+      "status": 404,
+      "headers": {
+        "access-control-allow-origin": "*",
+        "content-length": "51",
+        "content-type": "application/json"
+      },
+      "body": "502c66a082bb"
+    },
+    "/admin/": {
+      "status": 404,
+      "headers": {
+        "access-control-allow-origin": "*",
+        "content-length": "51",
+        "content-type": "application/json"
+      },
+      "body": "502c66a082bb"
+    },
+    "/adminer.php": {
+      "status": 404,
+      "headers": {
+        "access-control-allow-origin": "*",
+        "content-length": "51",
+        "content-type": "application/json"
+      },
+      "body": "502c66a082bb"
+    },
+    "/adminer/": {
+      "status": 404,
+      "headers": {
+        "access-control-allow-origin": "*",
+        "content-length": "51",
+        "content-type": "application/json"
+      },
+      "body": "502c66a082bb"
+    },
+    "/alive": {
+      "status": 200,
+      "headers": {
+        "accept-ranges": "bytes",
+        "content-type": "text/html; charset=utf-8",
+        "last-modified": "Wed, 28 Oct 2026 07:05:59 GMT"
+      },
+      "body": "73793bacc593"
+    },
+    "/api/app/about": {
+      "status": 404,
+      "headers": {
+        "access-control-allow-origin": "*",
+        "content-length": "51",
+        "content-type": "application/json"
+      },
+      "body": "502c66a082bb"
+    },
+    "/api/health": {
+      "status": 404,
+      "headers": {
+        "access-control-allow-origin": "*",
+        "content-length": "51",
+        "content-type": "application/json"
+      },
+      "body": "502c66a082bb"
+    },
+    "/api/info": {
+      "status": 404,
+      "headers": {
+        "access-control-allow-origin": "*",
+        "content-length": "51",
+        "content-type": "application/json"
+      },
+      "body": "502c66a082bb"
+    },
+    "/api/json": {
+      "status": 200,
+      "headers": {
+        "access-control-allow-origin": "*",
+        "content-type": "application/x-ndjson; charset=utf-8",
+        "incremental": "?1"
+      }
+    },
+    "/api/ping": {
+      "status": 404,
+      "headers": {
+        "access-control-allow-origin": "*",
+        "content-length": "51",
+        "content-type": "application/json"
+      },
+      "body": "502c66a082bb"
+    },
+    "/api/server/ping": {
+      "status": 404,
+      "headers": {
+        "access-control-allow-origin": "*",
+        "content-length": "51",
+        "content-type": "application/json"
+      },
+      "body": "502c66a082bb"
+    },
+    "/api/v1/info": {
+      "status": 404,
+      "headers": {
+        "access-control-allow-origin": "*",
+        "content-length": "51",
+        "content-type": "application/json"
+      },
+      "body": "502c66a082bb"
+    },
+    "/api/v4/system/ping": {
+      "status": 404,
+      "headers": {
+        "access-control-allow-origin": "*",
+        "content-length": "51",
+        "content-type": "application/json"
+      },
+      "body": "502c66a082bb"
+    },
+    "/api/version": {
+      "status": 404,
+      "headers": {
+        "access-control-allow-origin": "*",
+        "content-length": "51",
+        "content-type": "application/json"
+      },
+      "body": "502c66a082bb"
+    },
+    "/api2/ping/": {
+      "status": 404,
+      "headers": {
+        "access-control-allow-origin": "*",
+        "content-length": "51",
+        "content-type": "application/json"
+      },
+      "body": "502c66a082bb"
+    },
+    "/app/": {
+      "status": 404,
+      "headers": {
+        "access-control-allow-origin": "*",
+        "content-length": "51",
+        "content-type": "application/json"
+      },
+      "body": "502c66a082bb"
+    },
+    "/auth/login": {
+      "status": 404,
+      "headers": {
+        "access-control-allow-origin": "*",
+        "content-length": "51",
+        "content-type": "application/json"
+      },
+      "body": "502c66a082bb"
+    },
+    "/cgi-bin/": {
+      "status": 404,
+      "headers": {
+        "access-control-allow-origin": "*",
+        "content-length": "51",
+        "content-type": "application/json"
+      },
+      "body": "502c66a082bb"
+    },
+    "/cgi-bin/authLogin.cgi": {
+      "status": 404,
+      "headers": {
+        "access-control-allow-origin": "*",
+        "content-length": "51",
+        "content-type": "application/json"
+      },
+      "body": "502c66a082bb"
+    },
+    "/cgi-bin/luci/": {
+      "status": 404,
+      "headers": {
+        "access-control-allow-origin": "*",
+        "content-length": "51",
+        "content-type": "application/json"
+      },
+      "body": "502c66a082bb"
+    },
+    "/control/status": {
+      "status": 404,
+      "headers": {
+        "access-control-allow-origin": "*",
+        "content-length": "51",
+        "content-type": "application/json"
+      },
+      "body": "502c66a082bb"
+    },
+    "/dashboard/": {
+      "status": 404,
+      "headers": {
+        "access-control-allow-origin": "*",
+        "content-length": "51",
+        "content-type": "application/json"
+      },
+      "body": "502c66a082bb"
+    },
+    "/favicon.ico": {
+      "status": 404,
+      "headers": {
+        "access-control-allow-origin": "*",
+        "content-length": "51",
+        "content-type": "application/json"
+      },
+      "body": "502c66a082bb"
+    },
+    "/guacamole/": {
+      "status": 404,
+      "headers": {
+        "access-control-allow-origin": "*",
+        "content-length": "51",
+        "content-type": "application/json"
+      },
+      "body": "502c66a082bb"
+    },
+    "/guacamole/#/": {
+      "status": 404,
+      "headers": {
+        "access-control-allow-origin": "*",
+        "content-length": "51",
+        "content-type": "application/json"
+      },
+      "body": "502c66a082bb"
+    },
+    "/healthcheck": {
+      "status": 200,
+      "headers": {
+        "accept-ranges": "bytes",
+        "content-type": "text/html; charset=utf-8",
+        "last-modified": "Wed, 28 Oct 2026 07:05:59 GMT"
+      },
+      "body": "73793bacc593"
+    },
+    "/healthz": {
+      "status": 200,
+      "headers": {
+        "accept-ranges": "bytes",
+        "content-type": "text/html; charset=utf-8",
+        "last-modified": "Wed, 28 Oct 2026 07:05:59 GMT"
+      },
+      "body": "73793bacc593"
+    },
+    "/i/": {
+      "status": 404,
+      "headers": {
+        "access-control-allow-origin": "*",
+        "content-length": "51",
+        "content-type": "application/json"
+      },
+      "body": "502c66a082bb"
+    },
+    "/login": {
+      "status": 200,
+      "headers": {
+        "accept-ranges": "bytes",
+        "content-type": "text/html; charset=utf-8",
+        "last-modified": "Wed, 28 Oct 2026 07:05:59 GMT"
+      },
+      "body": "73793bacc593"
+    },
+    "/login/": {
+      "status": 404,
+      "headers": {
+        "access-control-allow-origin": "*",
+        "content-length": "51",
+        "content-type": "application/json"
+      },
+      "body": "502c66a082bb"
+    },
+    "/minio/health/live": {
+      "status": 404,
+      "headers": {
+        "access-control-allow-origin": "*",
+        "content-length": "51",
+        "content-type": "application/json"
+      },
+      "body": "502c66a082bb"
+    },
+    "/p/i/": {
+      "status": 404,
+      "headers": {
+        "access-control-allow-origin": "*",
+        "content-length": "51",
+        "content-type": "application/json"
+      },
+      "body": "502c66a082bb"
+    },
+    "/pgadmin4/": {
+      "status": 404,
+      "headers": {
+        "access-control-allow-origin": "*",
+        "content-length": "51",
+        "content-type": "application/json"
+      },
+      "body": "502c66a082bb"
+    },
+    "/pgadmin4/login": {
+      "status": 404,
+      "headers": {
+        "access-control-allow-origin": "*",
+        "content-length": "51",
+        "content-type": "application/json"
+      },
+      "body": "502c66a082bb"
+    },
+    "/phpmyadmin/": {
+      "status": 404,
+      "headers": {
+        "access-control-allow-origin": "*",
+        "content-length": "51",
+        "content-type": "application/json"
+      },
+      "body": "502c66a082bb"
+    },
+    "/phpmyadmin/index.php": {
+      "status": 404,
+      "headers": {
+        "access-control-allow-origin": "*",
+        "content-length": "51",
+        "content-type": "application/json"
+      },
+      "body": "502c66a082bb"
+    },
+    "/ping": {
+      "status": 200,
+      "headers": {
+        "accept-ranges": "bytes",
+        "content-type": "text/html; charset=utf-8",
+        "last-modified": "Wed, 28 Oct 2026 07:05:59 GMT"
+      },
+      "body": "73793bacc593"
+    },
+    "/rest/login": {
+      "status": 404,
+      "headers": {
+        "access-control-allow-origin": "*",
+        "content-length": "51",
+        "content-type": "application/json"
+      },
+      "body": "502c66a082bb"
+    },
+    "/status.php": {
+      "status": 404,
+      "headers": {
+        "access-control-allow-origin": "*",
+        "content-length": "51",
+        "content-type": "application/json"
+      },
+      "body": "502c66a082bb"
+    },
+    "/users/sign_in": {
+      "status": 404,
+      "headers": {
+        "access-control-allow-origin": "*",
+        "content-length": "51",
+        "content-type": "application/json"
+      },
+      "body": "502c66a082bb"
+    },
+    "/v1/health": {
+      "status": 200,
+      "headers": {
+        "access-control-allow-origin": "*",
+        "content-length": "33",
+        "content-type": "application/json"
+      },
+      "body": "1a7050213972"
+    },
+    "/version": {
+      "status": 200,
+      "headers": {
+        "accept-ranges": "bytes",
+        "content-type": "text/html; charset=utf-8",
+        "last-modified": "Wed, 28 Oct 2026 07:05:59 GMT"
+      },
+      "body": "73793bacc593"
+    },
+    "/webpages/index.html": {
+      "status": 404,
+      "headers": {
+        "access-control-allow-origin": "*",
+        "content-length": "51",
+        "content-type": "application/json"
+      },
+      "body": "502c66a082bb"
+    },
+    "/webpages/login.html": {
+      "status": 404,
+      "headers": {
+        "access-control-allow-origin": "*",
+        "content-length": "51",
+        "content-type": "application/json"
+      },
+      "body": "502c66a082bb"
+    }
+  }
+}

@@ -18,6 +18,7 @@ package discovery
 // secret-looking values and container/LAN IPs.
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -57,6 +58,13 @@ var (
 )
 
 func redact(b []byte) []byte {
+	// The loopback port the container was published on is an artefact
+	// of the capture; the app itself is on its default port.
+	if *capHostPort != *capPort {
+		for _, h := range []string{"127.0.0.1:", "localhost:"} {
+			b = bytes.ReplaceAll(b, []byte(h+strconv.Itoa(*capHostPort)), []byte(h+strconv.Itoa(*capPort)))
+		}
+	}
 	for _, re := range redactValue {
 		b = re.ReplaceAll(b, []byte("${1}REDACTED${3}"))
 	}
@@ -111,7 +119,7 @@ func TestCaptureRealApp(t *testing.T) {
 		tlsOn, plain = false, true
 	}
 	if root, err := fetch("/"); err == nil && root.Status >= 300 && root.Status < 400 {
-		if loc := localRedirectPath(root.Headers["location"]); loc != "" {
+		if loc := localRedirectPath(root.Headers["location"], "127.0.0.1", *capHostPort); loc != "" {
 			paths[loc] = true
 		}
 	}

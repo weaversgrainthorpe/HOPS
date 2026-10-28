@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"net/url"
+	"strconv"
 	"strings"
 )
 
@@ -241,6 +243,13 @@ func (d httpFingerprintDetector) Run(ctx context.Context, p *Probe) []EmittedHit
 		if snap != nil && d.matches(snap) {
 			return []EmittedHit{d.emit(p, port, snap)}
 		}
+		// Many apps answer / with a bare redirect to their real first
+		// page — a fresh Home Assistant to /onboarding.html, AdGuard
+		// Home's setup wizard to /install.html. Match on that page too
+		// (fetched once per probe and shared by every detector).
+		if s := followRootRedirect(ctx, p, port, snap); s != nil && d.matches(s) {
+			return []EmittedHit{d.emit(p, port, s)}
+		}
 		// Fall through to per-detector additional paths.
 		for _, path := range d.paths {
 			s, err := p.HTTP(ctx, port, path)
@@ -261,6 +270,25 @@ func (d httpFingerprintDetector) Run(ctx context.Context, p *Probe) []EmittedHit
 		}
 	}
 	return nil
+}
+
+// followRootRedirect returns the page a same-host root redirect points
+// at, or nil when the root isn't a redirect, the target is off-host or
+// / itself, or the target answered with an error (the same 4xx rule as
+// detector paths: verbose 404 pages echo the path).
+func followRootRedirect(ctx context.Context, p *Probe, port int, root *HTTPSnapshot) *HTTPSnapshot {
+	if root == nil || root.Status < 300 || root.Status >= 400 || p.HTTP == nil {
+		return nil
+	}
+	path := localRedirectPath(root.Headers["location"], p.Host, port)
+	if path == "" || path == "/" {
+		return nil
+	}
+	s, err := p.HTTP(ctx, port, path)
+	if err != nil || s == nil || (s.Status >= 400 && s.Status != 401 && s.Status != 403) {
+		return nil
+	}
+	return s
 }
 
 func (d httpFingerprintDetector) matches(snap *HTTPSnapshot) bool {
@@ -384,7 +412,7 @@ func (d httpFallbackDetector) Run(ctx context.Context, p *Probe) []EmittedHit {
 		// see the real content.
 		if snap.Status >= 300 && snap.Status < 400 {
 			if loc := snap.Headers["location"]; loc != "" {
-				path := localRedirectPath(loc)
+				path := localRedirectPath(loc, p.Host, port)
 				if path != "" {
 					if followed, err := p.HTTP(ctx, port, path); err == nil && followed != nil {
 						snap = followed
@@ -449,29 +477,42 @@ func (d httpFallbackDetector) Run(ctx context.Context, p *Probe) []EmittedHit {
 	return out
 }
 
-// localRedirectPath returns the path component of a Location header
-// if and only if the redirect target is same-host (relative URL or
-// absolute URL pointing back at the same hostname). Returns "" for
-// off-host redirects (we don't follow those) and for blank Locations.
-// Used by the HTTP fallback detector to land on the real content of
-// services whose root path is a redirect (Uptime Kuma → /dashboard,
-// GitLab → /users/sign_in, etc.).
-func localRedirectPath(loc string) string {
+// localRedirectPath returns the path (plus query) a Location header
+// points at when the redirect stays on the probed host:port, or ""
+// for off-host redirects (never followed) and blank Locations. Used to
+// land on the real content of services whose root is a redirect
+// (Uptime Kuma → /dashboard, Home Assistant → /onboarding.html).
+// Accepts the three shapes real apps send: "/dashboard", a bare
+// relative "web/" (Jellyfin), and an absolute URL back to the same
+// host and port ("http://<host>:8080/dashboard/", Traefik).
+func localRedirectPath(loc, host string, port int) string {
 	loc = strings.TrimSpace(loc)
 	if loc == "" {
 		return ""
 	}
-	// Relative redirect: take as-is.
-	if strings.HasPrefix(loc, "/") {
-		return loc
+	u, err := url.Parse(loc)
+	if err != nil {
+		return ""
 	}
-	// Absolute redirect: only follow if it's HTTP(S) and same-host
-	// detection lives at the caller (we don't know the original host
-	// here, so refuse anything we can't classify as definitely-local).
-	// Safe approach: require a leading slash. The orchestrator's
-	// dialer guard would catch off-host fetches anyway, but this
-	// avoids spurious off-host requests in the first place.
-	return ""
+	if u.Scheme != "" || u.Host != "" {
+		if u.Scheme != "http" && u.Scheme != "https" {
+			return ""
+		}
+		if !strings.EqualFold(u.Hostname(), host) {
+			return ""
+		}
+		want := u.Port()
+		if want == "" {
+			want = "80"
+			if u.Scheme == "https" {
+				want = "443"
+			}
+		}
+		if want != strconv.Itoa(port) {
+			return ""
+		}
+	}
+	return (&url.URL{Path: "/"}).ResolveReference(&url.URL{Path: u.Path, RawPath: u.RawPath, RawQuery: u.RawQuery}).RequestURI()
 }
 
 // tlsCertHint extracts a meaningful name from a cert subject CN / SAN

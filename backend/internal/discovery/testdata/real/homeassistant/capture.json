@@ -1,0 +1,50 @@
+{
+  "app": "homeassistant",
+  "image": "homeassistant/home-assistant:stable@sha256:23f4dfbb69ce",
+  "version": "2026.10.4",
+  "captured": "2026-10-28",
+  "port": 8123,
+  "want": "core/homeassistant",
+  "notes": "Fresh install: / 302s to onboarding",
+  "responses": {
+    "/": {
+      "status": 302,
+      "headers": {
+        "content-length": "0",
+        "location": "/onboarding.html",
+        "referrer-policy": "no-referrer",
+        "server": "",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN"
+      }
+    },
+    "/favicon.ico": {
+      "status": 404,
+      "headers": {
+        "content-length": "14",
+        "content-type": "text/plain; charset=utf-8",
+        "referrer-policy": "no-referrer",
+        "server": "",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN"
+      },
+      "body": "d5558cd419c8"
+    },
+    "/onboarding.html": {
+      "status": 200,
+      "headers": {
+        "accept-ranges": "bytes",
+        "cache-control": "public, max-age=2678400",
+        "content-type": "text/html",
+        "etag": "\"18e1900c42822200-564\"",
+        "last-modified": "Sat, 24 Oct 2026 20:08:29 GMT",
+        "referrer-policy": "no-referrer",
+        "server": "",
+        "vary": "Accept-Encoding",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN"
+      },
+      "body": "188c2aab870a"
+    }
+  }
+}

@@ -1,0 +1,895 @@
+{
+  "app": "vaultwarden",
+  "image": "vaultwarden/server:latest@sha256:efb3cde96201",
+  "version": "1.37.4",
+  "captured": "2026-10-28",
+  "port": 80,
+  "want": "core/vaultwarden",
+  "notes": "Fresh install",
+  "faviconMmh3": -1637834761,
+  "responses": {
+    "/": {
+      "status": 200,
+      "headers": {
+        "cache-control": "public, max-age=600",
+        "content-length": "23139",
+        "content-security-policy": "default-src 'none'; font-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; media-src 'self'; object-src 'self' blob:; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; child-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-ancestors 'self' chrome-extension://nngceckbapebfimnlniiiahkandclblb chrome-extension://jbkfoedolllekgbhcbcoahefnbanhhlh moz-extension://* ; img-src 'self' data: https://haveibeenpwned.com ; connect-src 'self' https://api.pwnedpasswords.com https://api.2fa.directory https://app.simplelogin.io/api/ https://app.addy.io/api/ https://api.fastmail.com/ https://api.forwardemail.net ;",
+        "content-type": "text/html; charset=utf-8",
+        "cross-origin-resource-policy": "same-origin",
+        "expires": "Wed, 28 Oct 2026 07:16:24 GMT",
+        "permissions-policy": "accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), camera=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(), geolocation=(), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=()",
+        "referrer-policy": "same-origin",
+        "server": "Rocket",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-robots-tag": "noindex, nofollow",
+        "x-xss-protection": "0"
+      },
+      "body": "b0d7fc4c3438"
+    },
+    "/#/login": {
+      "status": 200,
+      "headers": {
+        "cache-control": "public, max-age=600",
+        "content-length": "23139",
+        "content-security-policy": "default-src 'none'; font-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; media-src 'self'; object-src 'self' blob:; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; child-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-ancestors 'self' chrome-extension://nngceckbapebfimnlniiiahkandclblb chrome-extension://jbkfoedolllekgbhcbcoahefnbanhhlh moz-extension://* ; img-src 'self' data: https://haveibeenpwned.com ; connect-src 'self' https://api.pwnedpasswords.com https://api.2fa.directory https://app.simplelogin.io/api/ https://app.addy.io/api/ https://api.fastmail.com/ https://api.forwardemail.net ;",
+        "content-type": "text/html; charset=utf-8",
+        "cross-origin-resource-policy": "same-origin",
+        "expires": "Wed, 28 Oct 2026 07:16:24 GMT",
+        "permissions-policy": "accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), camera=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(), geolocation=(), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=()",
+        "referrer-policy": "same-origin",
+        "server": "Rocket",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-robots-tag": "noindex, nofollow",
+        "x-xss-protection": "0"
+      },
+      "body": "b0d7fc4c3438"
+    },
+    "/-/health": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, max-age=0",
+        "content-length": "1834",
+        "content-security-policy": "default-src 'none'; font-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; media-src 'self'; object-src 'self' blob:; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; child-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-ancestors 'self' chrome-extension://nngceckbapebfimnlniiiahkandclblb chrome-extension://jbkfoedolllekgbhcbcoahefnbanhhlh moz-extension://* ; img-src 'self' data: https://haveibeenpwned.com ; connect-src 'self' https://api.pwnedpasswords.com https://api.2fa.directory https://app.simplelogin.io/api/ https://app.addy.io/api/ https://api.fastmail.com/ https://api.forwardemail.net ;",
+        "content-type": "text/html; charset=utf-8",
+        "cross-origin-resource-policy": "same-origin",
+        "permissions-policy": "accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), camera=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(), geolocation=(), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=()",
+        "referrer-policy": "same-origin",
+        "server": "Rocket",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-robots-tag": "noindex, nofollow",
+        "x-xss-protection": "0"
+      },
+      "body": "c0897956e262"
+    },
+    "/ViewPower/": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, max-age=0",
+        "content-length": "1834",
+        "content-security-policy": "default-src 'none'; font-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; media-src 'self'; object-src 'self' blob:; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; child-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-ancestors 'self' chrome-extension://nngceckbapebfimnlniiiahkandclblb chrome-extension://jbkfoedolllekgbhcbcoahefnbanhhlh moz-extension://* ; img-src 'self' data: https://haveibeenpwned.com ; connect-src 'self' https://api.pwnedpasswords.com https://api.2fa.directory https://app.simplelogin.io/api/ https://app.addy.io/api/ https://api.fastmail.com/ https://api.forwardemail.net ;",
+        "content-type": "text/html; charset=utf-8",
+        "cross-origin-resource-policy": "same-origin",
+        "permissions-policy": "accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), camera=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(), geolocation=(), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=()",
+        "referrer-policy": "same-origin",
+        "server": "Rocket",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-robots-tag": "noindex, nofollow",
+        "x-xss-protection": "0"
+      },
+      "body": "c0897956e262"
+    },
+    "/ViewPower/isInitialized": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, max-age=0",
+        "content-length": "1834",
+        "content-security-policy": "default-src 'none'; font-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; media-src 'self'; object-src 'self' blob:; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; child-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-ancestors 'self' chrome-extension://nngceckbapebfimnlniiiahkandclblb chrome-extension://jbkfoedolllekgbhcbcoahefnbanhhlh moz-extension://* ; img-src 'self' data: https://haveibeenpwned.com ; connect-src 'self' https://api.pwnedpasswords.com https://api.2fa.directory https://app.simplelogin.io/api/ https://app.addy.io/api/ https://api.fastmail.com/ https://api.forwardemail.net ;",
+        "content-type": "text/html; charset=utf-8",
+        "cross-origin-resource-policy": "same-origin",
+        "permissions-policy": "accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), camera=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(), geolocation=(), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=()",
+        "referrer-policy": "same-origin",
+        "server": "Rocket",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-robots-tag": "noindex, nofollow",
+        "x-xss-protection": "0"
+      },
+      "body": "c0897956e262"
+    },
+    "/accounts/login/": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, max-age=0",
+        "content-length": "1834",
+        "content-security-policy": "default-src 'none'; font-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; media-src 'self'; object-src 'self' blob:; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; child-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-ancestors 'self' chrome-extension://nngceckbapebfimnlniiiahkandclblb chrome-extension://jbkfoedolllekgbhcbcoahefnbanhhlh moz-extension://* ; img-src 'self' data: https://haveibeenpwned.com ; connect-src 'self' https://api.pwnedpasswords.com https://api.2fa.directory https://app.simplelogin.io/api/ https://app.addy.io/api/ https://api.fastmail.com/ https://api.forwardemail.net ;",
+        "content-type": "text/html; charset=utf-8",
+        "cross-origin-resource-policy": "same-origin",
+        "permissions-policy": "accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), camera=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(), geolocation=(), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=()",
+        "referrer-policy": "same-origin",
+        "server": "Rocket",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-robots-tag": "noindex, nofollow",
+        "x-xss-protection": "0"
+      },
+      "body": "c0897956e262"
+    },
+    "/admin/": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache, no-store, max-age=0",
+        "content-length": "85",
+        "content-security-policy": "default-src 'none'; font-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; media-src 'self'; object-src 'self' blob:; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; child-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-ancestors 'self' chrome-extension://nngceckbapebfimnlniiiahkandclblb chrome-extension://jbkfoedolllekgbhcbcoahefnbanhhlh moz-extension://* ; img-src 'self' data: https://haveibeenpwned.com ; connect-src 'self' https://api.pwnedpasswords.com https://api.2fa.directory https://app.simplelogin.io/api/ https://app.addy.io/api/ https://api.fastmail.com/ https://api.forwardemail.net ;",
+        "content-type": "text/plain; charset=utf-8",
+        "cross-origin-resource-policy": "same-origin",
+        "permissions-policy": "accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), camera=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(), geolocation=(), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=()",
+        "referrer-policy": "same-origin",
+        "server": "Rocket",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-robots-tag": "noindex, nofollow",
+        "x-xss-protection": "0"
+      },
+      "body": "1568804cb70c"
+    },
+    "/adminer.php": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, max-age=0",
+        "content-length": "1834",
+        "content-security-policy": "default-src 'none'; font-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; media-src 'self'; object-src 'self' blob:; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; child-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-ancestors 'self' chrome-extension://nngceckbapebfimnlniiiahkandclblb chrome-extension://jbkfoedolllekgbhcbcoahefnbanhhlh moz-extension://* ; img-src 'self' data: https://haveibeenpwned.com ; connect-src 'self' https://api.pwnedpasswords.com https://api.2fa.directory https://app.simplelogin.io/api/ https://app.addy.io/api/ https://api.fastmail.com/ https://api.forwardemail.net ;",
+        "content-type": "text/html; charset=utf-8",
+        "cross-origin-resource-policy": "same-origin",
+        "permissions-policy": "accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), camera=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(), geolocation=(), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=()",
+        "referrer-policy": "same-origin",
+        "server": "Rocket",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-robots-tag": "noindex, nofollow",
+        "x-xss-protection": "0"
+      },
+      "body": "c0897956e262"
+    },
+    "/adminer/": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, max-age=0",
+        "content-length": "1834",
+        "content-security-policy": "default-src 'none'; font-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; media-src 'self'; object-src 'self' blob:; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; child-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-ancestors 'self' chrome-extension://nngceckbapebfimnlniiiahkandclblb chrome-extension://jbkfoedolllekgbhcbcoahefnbanhhlh moz-extension://* ; img-src 'self' data: https://haveibeenpwned.com ; connect-src 'self' https://api.pwnedpasswords.com https://api.2fa.directory https://app.simplelogin.io/api/ https://app.addy.io/api/ https://api.fastmail.com/ https://api.forwardemail.net ;",
+        "content-type": "text/html; charset=utf-8",
+        "cross-origin-resource-policy": "same-origin",
+        "permissions-policy": "accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), camera=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(), geolocation=(), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=()",
+        "referrer-policy": "same-origin",
+        "server": "Rocket",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-robots-tag": "noindex, nofollow",
+        "x-xss-protection": "0"
+      },
+      "body": "c0897956e262"
+    },
+    "/alive": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache, no-store, max-age=0",
+        "content-length": "29",
+        "content-security-policy": "default-src 'none'; font-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; media-src 'self'; object-src 'self' blob:; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; child-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-ancestors 'self' chrome-extension://nngceckbapebfimnlniiiahkandclblb chrome-extension://jbkfoedolllekgbhcbcoahefnbanhhlh moz-extension://* ; img-src 'self' data: https://haveibeenpwned.com ; connect-src 'self' https://api.pwnedpasswords.com https://api.2fa.directory https://app.simplelogin.io/api/ https://app.addy.io/api/ https://api.fastmail.com/ https://api.forwardemail.net ;",
+        "content-type": "application/json",
+        "cross-origin-resource-policy": "same-origin",
+        "permissions-policy": "accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), camera=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(), geolocation=(), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=()",
+        "referrer-policy": "same-origin",
+        "server": "Rocket",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-robots-tag": "noindex, nofollow",
+        "x-xss-protection": "0"
+      },
+      "body": "c1ae8e3c81a8"
+    },
+    "/api/app/about": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, max-age=0",
+        "content-length": "102",
+        "content-security-policy": "default-src 'none'; font-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; media-src 'self'; object-src 'self' blob:; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; child-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-ancestors 'self' chrome-extension://nngceckbapebfimnlniiiahkandclblb chrome-extension://jbkfoedolllekgbhcbcoahefnbanhhlh moz-extension://* ; img-src 'self' data: https://haveibeenpwned.com ; connect-src 'self' https://api.pwnedpasswords.com https://api.2fa.directory https://app.simplelogin.io/api/ https://app.addy.io/api/ https://api.fastmail.com/ https://api.forwardemail.net ;",
+        "content-type": "application/json",
+        "cross-origin-resource-policy": "same-origin",
+        "permissions-policy": "accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), camera=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(), geolocation=(), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=()",
+        "referrer-policy": "same-origin",
+        "server": "Rocket",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-robots-tag": "noindex, nofollow",
+        "x-xss-protection": "0"
+      },
+      "body": "203b748d0097"
+    },
+    "/api/health": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, max-age=0",
+        "content-length": "102",
+        "content-security-policy": "default-src 'none'; font-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; media-src 'self'; object-src 'self' blob:; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; child-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-ancestors 'self' chrome-extension://nngceckbapebfimnlniiiahkandclblb chrome-extension://jbkfoedolllekgbhcbcoahefnbanhhlh moz-extension://* ; img-src 'self' data: https://haveibeenpwned.com ; connect-src 'self' https://api.pwnedpasswords.com https://api.2fa.directory https://app.simplelogin.io/api/ https://app.addy.io/api/ https://api.fastmail.com/ https://api.forwardemail.net ;",
+        "content-type": "application/json",
+        "cross-origin-resource-policy": "same-origin",
+        "permissions-policy": "accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), camera=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(), geolocation=(), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=()",
+        "referrer-policy": "same-origin",
+        "server": "Rocket",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-robots-tag": "noindex, nofollow",
+        "x-xss-protection": "0"
+      },
+      "body": "203b748d0097"
+    },
+    "/api/info": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, max-age=0",
+        "content-length": "102",
+        "content-security-policy": "default-src 'none'; font-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; media-src 'self'; object-src 'self' blob:; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; child-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-ancestors 'self' chrome-extension://nngceckbapebfimnlniiiahkandclblb chrome-extension://jbkfoedolllekgbhcbcoahefnbanhhlh moz-extension://* ; img-src 'self' data: https://haveibeenpwned.com ; connect-src 'self' https://api.pwnedpasswords.com https://api.2fa.directory https://app.simplelogin.io/api/ https://app.addy.io/api/ https://api.fastmail.com/ https://api.forwardemail.net ;",
+        "content-type": "application/json",
+        "cross-origin-resource-policy": "same-origin",
+        "permissions-policy": "accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), camera=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(), geolocation=(), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=()",
+        "referrer-policy": "same-origin",
+        "server": "Rocket",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-robots-tag": "noindex, nofollow",
+        "x-xss-protection": "0"
+      },
+      "body": "203b748d0097"
+    },
+    "/api/json": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, max-age=0",
+        "content-length": "102",
+        "content-security-policy": "default-src 'none'; font-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; media-src 'self'; object-src 'self' blob:; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; child-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-ancestors 'self' chrome-extension://nngceckbapebfimnlniiiahkandclblb chrome-extension://jbkfoedolllekgbhcbcoahefnbanhhlh moz-extension://* ; img-src 'self' data: https://haveibeenpwned.com ; connect-src 'self' https://api.pwnedpasswords.com https://api.2fa.directory https://app.simplelogin.io/api/ https://app.addy.io/api/ https://api.fastmail.com/ https://api.forwardemail.net ;",
+        "content-type": "application/json",
+        "cross-origin-resource-policy": "same-origin",
+        "permissions-policy": "accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), camera=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(), geolocation=(), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=()",
+        "referrer-policy": "same-origin",
+        "server": "Rocket",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-robots-tag": "noindex, nofollow",
+        "x-xss-protection": "0"
+      },
+      "body": "203b748d0097"
+    },
+    "/api/ping": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, max-age=0",
+        "content-length": "102",
+        "content-security-policy": "default-src 'none'; font-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; media-src 'self'; object-src 'self' blob:; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; child-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-ancestors 'self' chrome-extension://nngceckbapebfimnlniiiahkandclblb chrome-extension://jbkfoedolllekgbhcbcoahefnbanhhlh moz-extension://* ; img-src 'self' data: https://haveibeenpwned.com ; connect-src 'self' https://api.pwnedpasswords.com https://api.2fa.directory https://app.simplelogin.io/api/ https://app.addy.io/api/ https://api.fastmail.com/ https://api.forwardemail.net ;",
+        "content-type": "application/json",
+        "cross-origin-resource-policy": "same-origin",
+        "permissions-policy": "accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), camera=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(), geolocation=(), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=()",
+        "referrer-policy": "same-origin",
+        "server": "Rocket",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-robots-tag": "noindex, nofollow",
+        "x-xss-protection": "0"
+      },
+      "body": "203b748d0097"
+    },
+    "/api/server/ping": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, max-age=0",
+        "content-length": "102",
+        "content-security-policy": "default-src 'none'; font-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; media-src 'self'; object-src 'self' blob:; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; child-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-ancestors 'self' chrome-extension://nngceckbapebfimnlniiiahkandclblb chrome-extension://jbkfoedolllekgbhcbcoahefnbanhhlh moz-extension://* ; img-src 'self' data: https://haveibeenpwned.com ; connect-src 'self' https://api.pwnedpasswords.com https://api.2fa.directory https://app.simplelogin.io/api/ https://app.addy.io/api/ https://api.fastmail.com/ https://api.forwardemail.net ;",
+        "content-type": "application/json",
+        "cross-origin-resource-policy": "same-origin",
+        "permissions-policy": "accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), camera=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(), geolocation=(), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=()",
+        "referrer-policy": "same-origin",
+        "server": "Rocket",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-robots-tag": "noindex, nofollow",
+        "x-xss-protection": "0"
+      },
+      "body": "203b748d0097"
+    },
+    "/api/v1/info": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, max-age=0",
+        "content-length": "102",
+        "content-security-policy": "default-src 'none'; font-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; media-src 'self'; object-src 'self' blob:; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; child-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-ancestors 'self' chrome-extension://nngceckbapebfimnlniiiahkandclblb chrome-extension://jbkfoedolllekgbhcbcoahefnbanhhlh moz-extension://* ; img-src 'self' data: https://haveibeenpwned.com ; connect-src 'self' https://api.pwnedpasswords.com https://api.2fa.directory https://app.simplelogin.io/api/ https://app.addy.io/api/ https://api.fastmail.com/ https://api.forwardemail.net ;",
+        "content-type": "application/json",
+        "cross-origin-resource-policy": "same-origin",
+        "permissions-policy": "accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), camera=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(), geolocation=(), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=()",
+        "referrer-policy": "same-origin",
+        "server": "Rocket",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-robots-tag": "noindex, nofollow",
+        "x-xss-protection": "0"
+      },
+      "body": "203b748d0097"
+    },
+    "/api/v4/system/ping": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, max-age=0",
+        "content-length": "102",
+        "content-security-policy": "default-src 'none'; font-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; media-src 'self'; object-src 'self' blob:; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; child-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-ancestors 'self' chrome-extension://nngceckbapebfimnlniiiahkandclblb chrome-extension://jbkfoedolllekgbhcbcoahefnbanhhlh moz-extension://* ; img-src 'self' data: https://haveibeenpwned.com ; connect-src 'self' https://api.pwnedpasswords.com https://api.2fa.directory https://app.simplelogin.io/api/ https://app.addy.io/api/ https://api.fastmail.com/ https://api.forwardemail.net ;",
+        "content-type": "application/json",
+        "cross-origin-resource-policy": "same-origin",
+        "permissions-policy": "accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), camera=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(), geolocation=(), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=()",
+        "referrer-policy": "same-origin",
+        "server": "Rocket",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-robots-tag": "noindex, nofollow",
+        "x-xss-protection": "0"
+      },
+      "body": "203b748d0097"
+    },
+    "/api/version": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache, no-store, max-age=0",
+        "content-length": "8",
+        "content-security-policy": "default-src 'none'; font-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; media-src 'self'; object-src 'self' blob:; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; child-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-ancestors 'self' chrome-extension://nngceckbapebfimnlniiiahkandclblb chrome-extension://jbkfoedolllekgbhcbcoahefnbanhhlh moz-extension://* ; img-src 'self' data: https://haveibeenpwned.com ; connect-src 'self' https://api.pwnedpasswords.com https://api.2fa.directory https://app.simplelogin.io/api/ https://app.addy.io/api/ https://api.fastmail.com/ https://api.forwardemail.net ;",
+        "content-type": "application/json",
+        "cross-origin-resource-policy": "same-origin",
+        "permissions-policy": "accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), camera=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(), geolocation=(), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=()",
+        "referrer-policy": "same-origin",
+        "server": "Rocket",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-robots-tag": "noindex, nofollow",
+        "x-xss-protection": "0"
+      },
+      "body": "b583825bad87"
+    },
+    "/api2/ping/": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, max-age=0",
+        "content-length": "1834",
+        "content-security-policy": "default-src 'none'; font-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; media-src 'self'; object-src 'self' blob:; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; child-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-ancestors 'self' chrome-extension://nngceckbapebfimnlniiiahkandclblb chrome-extension://jbkfoedolllekgbhcbcoahefnbanhhlh moz-extension://* ; img-src 'self' data: https://haveibeenpwned.com ; connect-src 'self' https://api.pwnedpasswords.com https://api.2fa.directory https://app.simplelogin.io/api/ https://app.addy.io/api/ https://api.fastmail.com/ https://api.forwardemail.net ;",
+        "content-type": "text/html; charset=utf-8",
+        "cross-origin-resource-policy": "same-origin",
+        "permissions-policy": "accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), camera=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(), geolocation=(), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=()",
+        "referrer-policy": "same-origin",
+        "server": "Rocket",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-robots-tag": "noindex, nofollow",
+        "x-xss-protection": "0"
+      },
+      "body": "c0897956e262"
+    },
+    "/app/": {
+      "status": 200,
+      "headers": {
+        "cache-control": "public, immutable, max-age=604800",
+        "content-length": "9223372036854775807",
+        "content-security-policy": "default-src 'none'; font-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; media-src 'self'; object-src 'self' blob:; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; child-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-ancestors 'self' chrome-extension://nngceckbapebfimnlniiiahkandclblb chrome-extension://jbkfoedolllekgbhcbcoahefnbanhhlh moz-extension://* ; img-src 'self' data: https://haveibeenpwned.com ; connect-src 'self' https://api.pwnedpasswords.com https://api.2fa.directory https://app.simplelogin.io/api/ https://app.addy.io/api/ https://api.fastmail.com/ https://api.forwardemail.net ;",
+        "cross-origin-resource-policy": "same-origin",
+        "expires": "Wed, 4 Nov 2026 07:06:24 GMT",
+        "permissions-policy": "accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), camera=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(), geolocation=(), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=()",
+        "referrer-policy": "same-origin",
+        "server": "Rocket",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-robots-tag": "noindex, nofollow",
+        "x-xss-protection": "0"
+      }
+    },
+    "/auth/login": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, max-age=0",
+        "content-length": "1834",
+        "content-security-policy": "default-src 'none'; font-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; media-src 'self'; object-src 'self' blob:; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; child-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-ancestors 'self' chrome-extension://nngceckbapebfimnlniiiahkandclblb chrome-extension://jbkfoedolllekgbhcbcoahefnbanhhlh moz-extension://* ; img-src 'self' data: https://haveibeenpwned.com ; connect-src 'self' https://api.pwnedpasswords.com https://api.2fa.directory https://app.simplelogin.io/api/ https://app.addy.io/api/ https://api.fastmail.com/ https://api.forwardemail.net ;",
+        "content-type": "text/html; charset=utf-8",
+        "cross-origin-resource-policy": "same-origin",
+        "permissions-policy": "accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), camera=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(), geolocation=(), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=()",
+        "referrer-policy": "same-origin",
+        "server": "Rocket",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-robots-tag": "noindex, nofollow",
+        "x-xss-protection": "0"
+      },
+      "body": "c0897956e262"
+    },
+    "/cgi-bin/": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, max-age=0",
+        "content-length": "1834",
+        "content-security-policy": "default-src 'none'; font-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; media-src 'self'; object-src 'self' blob:; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; child-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-ancestors 'self' chrome-extension://nngceckbapebfimnlniiiahkandclblb chrome-extension://jbkfoedolllekgbhcbcoahefnbanhhlh moz-extension://* ; img-src 'self' data: https://haveibeenpwned.com ; connect-src 'self' https://api.pwnedpasswords.com https://api.2fa.directory https://app.simplelogin.io/api/ https://app.addy.io/api/ https://api.fastmail.com/ https://api.forwardemail.net ;",
+        "content-type": "text/html; charset=utf-8",
+        "cross-origin-resource-policy": "same-origin",
+        "permissions-policy": "accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), camera=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(), geolocation=(), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=()",
+        "referrer-policy": "same-origin",
+        "server": "Rocket",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-robots-tag": "noindex, nofollow",
+        "x-xss-protection": "0"
+      },
+      "body": "c0897956e262"
+    },
+    "/cgi-bin/authLogin.cgi": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, max-age=0",
+        "content-length": "1834",
+        "content-security-policy": "default-src 'none'; font-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; media-src 'self'; object-src 'self' blob:; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; child-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-ancestors 'self' chrome-extension://nngceckbapebfimnlniiiahkandclblb chrome-extension://jbkfoedolllekgbhcbcoahefnbanhhlh moz-extension://* ; img-src 'self' data: https://haveibeenpwned.com ; connect-src 'self' https://api.pwnedpasswords.com https://api.2fa.directory https://app.simplelogin.io/api/ https://app.addy.io/api/ https://api.fastmail.com/ https://api.forwardemail.net ;",
+        "content-type": "text/html; charset=utf-8",
+        "cross-origin-resource-policy": "same-origin",
+        "permissions-policy": "accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), camera=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(), geolocation=(), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=()",
+        "referrer-policy": "same-origin",
+        "server": "Rocket",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-robots-tag": "noindex, nofollow",
+        "x-xss-protection": "0"
+      },
+      "body": "c0897956e262"
+    },
+    "/cgi-bin/luci/": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, max-age=0",
+        "content-length": "1834",
+        "content-security-policy": "default-src 'none'; font-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; media-src 'self'; object-src 'self' blob:; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; child-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-ancestors 'self' chrome-extension://nngceckbapebfimnlniiiahkandclblb chrome-extension://jbkfoedolllekgbhcbcoahefnbanhhlh moz-extension://* ; img-src 'self' data: https://haveibeenpwned.com ; connect-src 'self' https://api.pwnedpasswords.com https://api.2fa.directory https://app.simplelogin.io/api/ https://app.addy.io/api/ https://api.fastmail.com/ https://api.forwardemail.net ;",
+        "content-type": "text/html; charset=utf-8",
+        "cross-origin-resource-policy": "same-origin",
+        "permissions-policy": "accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), camera=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(), geolocation=(), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=()",
+        "referrer-policy": "same-origin",
+        "server": "Rocket",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-robots-tag": "noindex, nofollow",
+        "x-xss-protection": "0"
+      },
+      "body": "c0897956e262"
+    },
+    "/control/status": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, max-age=0",
+        "content-length": "1834",
+        "content-security-policy": "default-src 'none'; font-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; media-src 'self'; object-src 'self' blob:; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; child-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-ancestors 'self' chrome-extension://nngceckbapebfimnlniiiahkandclblb chrome-extension://jbkfoedolllekgbhcbcoahefnbanhhlh moz-extension://* ; img-src 'self' data: https://haveibeenpwned.com ; connect-src 'self' https://api.pwnedpasswords.com https://api.2fa.directory https://app.simplelogin.io/api/ https://app.addy.io/api/ https://api.fastmail.com/ https://api.forwardemail.net ;",
+        "content-type": "text/html; charset=utf-8",
+        "cross-origin-resource-policy": "same-origin",
+        "permissions-policy": "accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), camera=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(), geolocation=(), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=()",
+        "referrer-policy": "same-origin",
+        "server": "Rocket",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-robots-tag": "noindex, nofollow",
+        "x-xss-protection": "0"
+      },
+      "body": "c0897956e262"
+    },
+    "/dashboard/": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, max-age=0",
+        "content-length": "1834",
+        "content-security-policy": "default-src 'none'; font-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; media-src 'self'; object-src 'self' blob:; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; child-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-ancestors 'self' chrome-extension://nngceckbapebfimnlniiiahkandclblb chrome-extension://jbkfoedolllekgbhcbcoahefnbanhhlh moz-extension://* ; img-src 'self' data: https://haveibeenpwned.com ; connect-src 'self' https://api.pwnedpasswords.com https://api.2fa.directory https://app.simplelogin.io/api/ https://app.addy.io/api/ https://api.fastmail.com/ https://api.forwardemail.net ;",
+        "content-type": "text/html; charset=utf-8",
+        "cross-origin-resource-policy": "same-origin",
+        "permissions-policy": "accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), camera=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(), geolocation=(), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=()",
+        "referrer-policy": "same-origin",
+        "server": "Rocket",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-robots-tag": "noindex, nofollow",
+        "x-xss-protection": "0"
+      },
+      "body": "c0897956e262"
+    },
+    "/favicon.ico": {
+      "status": 200,
+      "headers": {
+        "cache-control": "public, immutable, max-age=604800",
+        "content-length": "1150",
+        "content-security-policy": "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; script-src 'none'; frame-src 'none'; object-src 'none",
+        "content-type": "image/x-icon",
+        "expires": "Wed, 4 Nov 2026 07:06:24 GMT",
+        "permissions-policy": "accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), camera=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(), geolocation=(), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=()",
+        "referrer-policy": "same-origin",
+        "server": "Rocket",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-robots-tag": "noindex, nofollow",
+        "x-xss-protection": "0"
+      },
+      "body": "f65459e2b849"
+    },
+    "/guacamole/": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, max-age=0",
+        "content-length": "1834",
+        "content-security-policy": "default-src 'none'; font-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; media-src 'self'; object-src 'self' blob:; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; child-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-ancestors 'self' chrome-extension://nngceckbapebfimnlniiiahkandclblb chrome-extension://jbkfoedolllekgbhcbcoahefnbanhhlh moz-extension://* ; img-src 'self' data: https://haveibeenpwned.com ; connect-src 'self' https://api.pwnedpasswords.com https://api.2fa.directory https://app.simplelogin.io/api/ https://app.addy.io/api/ https://api.fastmail.com/ https://api.forwardemail.net ;",
+        "content-type": "text/html; charset=utf-8",
+        "cross-origin-resource-policy": "same-origin",
+        "permissions-policy": "accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), camera=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(), geolocation=(), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=()",
+        "referrer-policy": "same-origin",
+        "server": "Rocket",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-robots-tag": "noindex, nofollow",
+        "x-xss-protection": "0"
+      },
+      "body": "c0897956e262"
+    },
+    "/guacamole/#/": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, max-age=0",
+        "content-length": "1834",
+        "content-security-policy": "default-src 'none'; font-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; media-src 'self'; object-src 'self' blob:; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; child-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-ancestors 'self' chrome-extension://nngceckbapebfimnlniiiahkandclblb chrome-extension://jbkfoedolllekgbhcbcoahefnbanhhlh moz-extension://* ; img-src 'self' data: https://haveibeenpwned.com ; connect-src 'self' https://api.pwnedpasswords.com https://api.2fa.directory https://app.simplelogin.io/api/ https://app.addy.io/api/ https://api.fastmail.com/ https://api.forwardemail.net ;",
+        "content-type": "text/html; charset=utf-8",
+        "cross-origin-resource-policy": "same-origin",
+        "permissions-policy": "accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), camera=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(), geolocation=(), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=()",
+        "referrer-policy": "same-origin",
+        "server": "Rocket",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-robots-tag": "noindex, nofollow",
+        "x-xss-protection": "0"
+      },
+      "body": "c0897956e262"
+    },
+    "/healthcheck": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, max-age=0",
+        "content-length": "1834",
+        "content-security-policy": "default-src 'none'; font-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; media-src 'self'; object-src 'self' blob:; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; child-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-ancestors 'self' chrome-extension://nngceckbapebfimnlniiiahkandclblb chrome-extension://jbkfoedolllekgbhcbcoahefnbanhhlh moz-extension://* ; img-src 'self' data: https://haveibeenpwned.com ; connect-src 'self' https://api.pwnedpasswords.com https://api.2fa.directory https://app.simplelogin.io/api/ https://app.addy.io/api/ https://api.fastmail.com/ https://api.forwardemail.net ;",
+        "content-type": "text/html; charset=utf-8",
+        "cross-origin-resource-policy": "same-origin",
+        "permissions-policy": "accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), camera=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(), geolocation=(), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=()",
+        "referrer-policy": "same-origin",
+        "server": "Rocket",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-robots-tag": "noindex, nofollow",
+        "x-xss-protection": "0"
+      },
+      "body": "c0897956e262"
+    },
+    "/healthz": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, max-age=0",
+        "content-length": "1834",
+        "content-security-policy": "default-src 'none'; font-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; media-src 'self'; object-src 'self' blob:; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; child-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-ancestors 'self' chrome-extension://nngceckbapebfimnlniiiahkandclblb chrome-extension://jbkfoedolllekgbhcbcoahefnbanhhlh moz-extension://* ; img-src 'self' data: https://haveibeenpwned.com ; connect-src 'self' https://api.pwnedpasswords.com https://api.2fa.directory https://app.simplelogin.io/api/ https://app.addy.io/api/ https://api.fastmail.com/ https://api.forwardemail.net ;",
+        "content-type": "text/html; charset=utf-8",
+        "cross-origin-resource-policy": "same-origin",
+        "permissions-policy": "accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), camera=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(), geolocation=(), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=()",
+        "referrer-policy": "same-origin",
+        "server": "Rocket",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-robots-tag": "noindex, nofollow",
+        "x-xss-protection": "0"
+      },
+      "body": "c0897956e262"
+    },
+    "/i/": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, max-age=0",
+        "content-length": "1834",
+        "content-security-policy": "default-src 'none'; font-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; media-src 'self'; object-src 'self' blob:; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; child-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-ancestors 'self' chrome-extension://nngceckbapebfimnlniiiahkandclblb chrome-extension://jbkfoedolllekgbhcbcoahefnbanhhlh moz-extension://* ; img-src 'self' data: https://haveibeenpwned.com ; connect-src 'self' https://api.pwnedpasswords.com https://api.2fa.directory https://app.simplelogin.io/api/ https://app.addy.io/api/ https://api.fastmail.com/ https://api.forwardemail.net ;",
+        "content-type": "text/html; charset=utf-8",
+        "cross-origin-resource-policy": "same-origin",
+        "permissions-policy": "accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), camera=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(), geolocation=(), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=()",
+        "referrer-policy": "same-origin",
+        "server": "Rocket",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-robots-tag": "noindex, nofollow",
+        "x-xss-protection": "0"
+      },
+      "body": "c0897956e262"
+    },
+    "/login": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, max-age=0",
+        "content-length": "1834",
+        "content-security-policy": "default-src 'none'; font-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; media-src 'self'; object-src 'self' blob:; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; child-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-ancestors 'self' chrome-extension://nngceckbapebfimnlniiiahkandclblb chrome-extension://jbkfoedolllekgbhcbcoahefnbanhhlh moz-extension://* ; img-src 'self' data: https://haveibeenpwned.com ; connect-src 'self' https://api.pwnedpasswords.com https://api.2fa.directory https://app.simplelogin.io/api/ https://app.addy.io/api/ https://api.fastmail.com/ https://api.forwardemail.net ;",
+        "content-type": "text/html; charset=utf-8",
+        "cross-origin-resource-policy": "same-origin",
+        "permissions-policy": "accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), camera=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(), geolocation=(), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=()",
+        "referrer-policy": "same-origin",
+        "server": "Rocket",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-robots-tag": "noindex, nofollow",
+        "x-xss-protection": "0"
+      },
+      "body": "c0897956e262"
+    },
+    "/login/": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, max-age=0",
+        "content-length": "1834",
+        "content-security-policy": "default-src 'none'; font-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; media-src 'self'; object-src 'self' blob:; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; child-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-ancestors 'self' chrome-extension://nngceckbapebfimnlniiiahkandclblb chrome-extension://jbkfoedolllekgbhcbcoahefnbanhhlh moz-extension://* ; img-src 'self' data: https://haveibeenpwned.com ; connect-src 'self' https://api.pwnedpasswords.com https://api.2fa.directory https://app.simplelogin.io/api/ https://app.addy.io/api/ https://api.fastmail.com/ https://api.forwardemail.net ;",
+        "content-type": "text/html; charset=utf-8",
+        "cross-origin-resource-policy": "same-origin",
+        "permissions-policy": "accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), camera=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(), geolocation=(), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=()",
+        "referrer-policy": "same-origin",
+        "server": "Rocket",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-robots-tag": "noindex, nofollow",
+        "x-xss-protection": "0"
+      },
+      "body": "c0897956e262"
+    },
+    "/minio/health/live": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, max-age=0",
+        "content-length": "1834",
+        "content-security-policy": "default-src 'none'; font-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; media-src 'self'; object-src 'self' blob:; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; child-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-ancestors 'self' chrome-extension://nngceckbapebfimnlniiiahkandclblb chrome-extension://jbkfoedolllekgbhcbcoahefnbanhhlh moz-extension://* ; img-src 'self' data: https://haveibeenpwned.com ; connect-src 'self' https://api.pwnedpasswords.com https://api.2fa.directory https://app.simplelogin.io/api/ https://app.addy.io/api/ https://api.fastmail.com/ https://api.forwardemail.net ;",
+        "content-type": "text/html; charset=utf-8",
+        "cross-origin-resource-policy": "same-origin",
+        "permissions-policy": "accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), camera=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(), geolocation=(), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=()",
+        "referrer-policy": "same-origin",
+        "server": "Rocket",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-robots-tag": "noindex, nofollow",
+        "x-xss-protection": "0"
+      },
+      "body": "c0897956e262"
+    },
+    "/p/i/": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, max-age=0",
+        "content-length": "1834",
+        "content-security-policy": "default-src 'none'; font-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; media-src 'self'; object-src 'self' blob:; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; child-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-ancestors 'self' chrome-extension://nngceckbapebfimnlniiiahkandclblb chrome-extension://jbkfoedolllekgbhcbcoahefnbanhhlh moz-extension://* ; img-src 'self' data: https://haveibeenpwned.com ; connect-src 'self' https://api.pwnedpasswords.com https://api.2fa.directory https://app.simplelogin.io/api/ https://app.addy.io/api/ https://api.fastmail.com/ https://api.forwardemail.net ;",
+        "content-type": "text/html; charset=utf-8",
+        "cross-origin-resource-policy": "same-origin",
+        "permissions-policy": "accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), camera=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(), geolocation=(), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=()",
+        "referrer-policy": "same-origin",
+        "server": "Rocket",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-robots-tag": "noindex, nofollow",
+        "x-xss-protection": "0"
+      },
+      "body": "c0897956e262"
+    },
+    "/pgadmin4/": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, max-age=0",
+        "content-length": "1834",
+        "content-security-policy": "default-src 'none'; font-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; media-src 'self'; object-src 'self' blob:; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; child-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-ancestors 'self' chrome-extension://nngceckbapebfimnlniiiahkandclblb chrome-extension://jbkfoedolllekgbhcbcoahefnbanhhlh moz-extension://* ; img-src 'self' data: https://haveibeenpwned.com ; connect-src 'self' https://api.pwnedpasswords.com https://api.2fa.directory https://app.simplelogin.io/api/ https://app.addy.io/api/ https://api.fastmail.com/ https://api.forwardemail.net ;",
+        "content-type": "text/html; charset=utf-8",
+        "cross-origin-resource-policy": "same-origin",
+        "permissions-policy": "accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), camera=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(), geolocation=(), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=()",
+        "referrer-policy": "same-origin",
+        "server": "Rocket",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-robots-tag": "noindex, nofollow",
+        "x-xss-protection": "0"
+      },
+      "body": "c0897956e262"
+    },
+    "/pgadmin4/login": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, max-age=0",
+        "content-length": "1834",
+        "content-security-policy": "default-src 'none'; font-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; media-src 'self'; object-src 'self' blob:; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; child-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-ancestors 'self' chrome-extension://nngceckbapebfimnlniiiahkandclblb chrome-extension://jbkfoedolllekgbhcbcoahefnbanhhlh moz-extension://* ; img-src 'self' data: https://haveibeenpwned.com ; connect-src 'self' https://api.pwnedpasswords.com https://api.2fa.directory https://app.simplelogin.io/api/ https://app.addy.io/api/ https://api.fastmail.com/ https://api.forwardemail.net ;",
+        "content-type": "text/html; charset=utf-8",
+        "cross-origin-resource-policy": "same-origin",
+        "permissions-policy": "accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), camera=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(), geolocation=(), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=()",
+        "referrer-policy": "same-origin",
+        "server": "Rocket",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-robots-tag": "noindex, nofollow",
+        "x-xss-protection": "0"
+      },
+      "body": "c0897956e262"
+    },
+    "/phpmyadmin/": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, max-age=0",
+        "content-length": "1834",
+        "content-security-policy": "default-src 'none'; font-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; media-src 'self'; object-src 'self' blob:; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; child-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-ancestors 'self' chrome-extension://nngceckbapebfimnlniiiahkandclblb chrome-extension://jbkfoedolllekgbhcbcoahefnbanhhlh moz-extension://* ; img-src 'self' data: https://haveibeenpwned.com ; connect-src 'self' https://api.pwnedpasswords.com https://api.2fa.directory https://app.simplelogin.io/api/ https://app.addy.io/api/ https://api.fastmail.com/ https://api.forwardemail.net ;",
+        "content-type": "text/html; charset=utf-8",
+        "cross-origin-resource-policy": "same-origin",
+        "permissions-policy": "accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), camera=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(), geolocation=(), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=()",
+        "referrer-policy": "same-origin",
+        "server": "Rocket",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-robots-tag": "noindex, nofollow",
+        "x-xss-protection": "0"
+      },
+      "body": "c0897956e262"
+    },
+    "/phpmyadmin/index.php": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, max-age=0",
+        "content-length": "1834",
+        "content-security-policy": "default-src 'none'; font-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; media-src 'self'; object-src 'self' blob:; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; child-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-ancestors 'self' chrome-extension://nngceckbapebfimnlniiiahkandclblb chrome-extension://jbkfoedolllekgbhcbcoahefnbanhhlh moz-extension://* ; img-src 'self' data: https://haveibeenpwned.com ; connect-src 'self' https://api.pwnedpasswords.com https://api.2fa.directory https://app.simplelogin.io/api/ https://app.addy.io/api/ https://api.fastmail.com/ https://api.forwardemail.net ;",
+        "content-type": "text/html; charset=utf-8",
+        "cross-origin-resource-policy": "same-origin",
+        "permissions-policy": "accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), camera=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(), geolocation=(), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=()",
+        "referrer-policy": "same-origin",
+        "server": "Rocket",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-robots-tag": "noindex, nofollow",
+        "x-xss-protection": "0"
+      },
+      "body": "c0897956e262"
+    },
+    "/ping": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, max-age=0",
+        "content-length": "1834",
+        "content-security-policy": "default-src 'none'; font-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; media-src 'self'; object-src 'self' blob:; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; child-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-ancestors 'self' chrome-extension://nngceckbapebfimnlniiiahkandclblb chrome-extension://jbkfoedolllekgbhcbcoahefnbanhhlh moz-extension://* ; img-src 'self' data: https://haveibeenpwned.com ; connect-src 'self' https://api.pwnedpasswords.com https://api.2fa.directory https://app.simplelogin.io/api/ https://app.addy.io/api/ https://api.fastmail.com/ https://api.forwardemail.net ;",
+        "content-type": "text/html; charset=utf-8",
+        "cross-origin-resource-policy": "same-origin",
+        "permissions-policy": "accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), camera=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(), geolocation=(), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=()",
+        "referrer-policy": "same-origin",
+        "server": "Rocket",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-robots-tag": "noindex, nofollow",
+        "x-xss-protection": "0"
+      },
+      "body": "c0897956e262"
+    },
+    "/rest/login": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, max-age=0",
+        "content-length": "1834",
+        "content-security-policy": "default-src 'none'; font-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; media-src 'self'; object-src 'self' blob:; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; child-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-ancestors 'self' chrome-extension://nngceckbapebfimnlniiiahkandclblb chrome-extension://jbkfoedolllekgbhcbcoahefnbanhhlh moz-extension://* ; img-src 'self' data: https://haveibeenpwned.com ; connect-src 'self' https://api.pwnedpasswords.com https://api.2fa.directory https://app.simplelogin.io/api/ https://app.addy.io/api/ https://api.fastmail.com/ https://api.forwardemail.net ;",
+        "content-type": "text/html; charset=utf-8",
+        "cross-origin-resource-policy": "same-origin",
+        "permissions-policy": "accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), camera=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(), geolocation=(), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=()",
+        "referrer-policy": "same-origin",
+        "server": "Rocket",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-robots-tag": "noindex, nofollow",
+        "x-xss-protection": "0"
+      },
+      "body": "c0897956e262"
+    },
+    "/status.php": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, max-age=0",
+        "content-length": "1834",
+        "content-security-policy": "default-src 'none'; font-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; media-src 'self'; object-src 'self' blob:; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; child-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-ancestors 'self' chrome-extension://nngceckbapebfimnlniiiahkandclblb chrome-extension://jbkfoedolllekgbhcbcoahefnbanhhlh moz-extension://* ; img-src 'self' data: https://haveibeenpwned.com ; connect-src 'self' https://api.pwnedpasswords.com https://api.2fa.directory https://app.simplelogin.io/api/ https://app.addy.io/api/ https://api.fastmail.com/ https://api.forwardemail.net ;",
+        "content-type": "text/html; charset=utf-8",
+        "cross-origin-resource-policy": "same-origin",
+        "permissions-policy": "accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), camera=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(), geolocation=(), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=()",
+        "referrer-policy": "same-origin",
+        "server": "Rocket",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-robots-tag": "noindex, nofollow",
+        "x-xss-protection": "0"
+      },
+      "body": "c0897956e262"
+    },
+    "/users/sign_in": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, max-age=0",
+        "content-length": "1834",
+        "content-security-policy": "default-src 'none'; font-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; media-src 'self'; object-src 'self' blob:; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; child-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-ancestors 'self' chrome-extension://nngceckbapebfimnlniiiahkandclblb chrome-extension://jbkfoedolllekgbhcbcoahefnbanhhlh moz-extension://* ; img-src 'self' data: https://haveibeenpwned.com ; connect-src 'self' https://api.pwnedpasswords.com https://api.2fa.directory https://app.simplelogin.io/api/ https://app.addy.io/api/ https://api.fastmail.com/ https://api.forwardemail.net ;",
+        "content-type": "text/html; charset=utf-8",
+        "cross-origin-resource-policy": "same-origin",
+        "permissions-policy": "accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), camera=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(), geolocation=(), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=()",
+        "referrer-policy": "same-origin",
+        "server": "Rocket",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-robots-tag": "noindex, nofollow",
+        "x-xss-protection": "0"
+      },
+      "body": "c0897956e262"
+    },
+    "/v1/health": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, max-age=0",
+        "content-length": "1834",
+        "content-security-policy": "default-src 'none'; font-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; media-src 'self'; object-src 'self' blob:; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; child-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-ancestors 'self' chrome-extension://nngceckbapebfimnlniiiahkandclblb chrome-extension://jbkfoedolllekgbhcbcoahefnbanhhlh moz-extension://* ; img-src 'self' data: https://haveibeenpwned.com ; connect-src 'self' https://api.pwnedpasswords.com https://api.2fa.directory https://app.simplelogin.io/api/ https://app.addy.io/api/ https://api.fastmail.com/ https://api.forwardemail.net ;",
+        "content-type": "text/html; charset=utf-8",
+        "cross-origin-resource-policy": "same-origin",
+        "permissions-policy": "accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), camera=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(), geolocation=(), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=()",
+        "referrer-policy": "same-origin",
+        "server": "Rocket",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-robots-tag": "noindex, nofollow",
+        "x-xss-protection": "0"
+      },
+      "body": "c0897956e262"
+    },
+    "/version": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, max-age=0",
+        "content-length": "1834",
+        "content-security-policy": "default-src 'none'; font-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; media-src 'self'; object-src 'self' blob:; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; child-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-ancestors 'self' chrome-extension://nngceckbapebfimnlniiiahkandclblb chrome-extension://jbkfoedolllekgbhcbcoahefnbanhhlh moz-extension://* ; img-src 'self' data: https://haveibeenpwned.com ; connect-src 'self' https://api.pwnedpasswords.com https://api.2fa.directory https://app.simplelogin.io/api/ https://app.addy.io/api/ https://api.fastmail.com/ https://api.forwardemail.net ;",
+        "content-type": "text/html; charset=utf-8",
+        "cross-origin-resource-policy": "same-origin",
+        "permissions-policy": "accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), camera=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(), geolocation=(), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=()",
+        "referrer-policy": "same-origin",
+        "server": "Rocket",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-robots-tag": "noindex, nofollow",
+        "x-xss-protection": "0"
+      },
+      "body": "c0897956e262"
+    },
+    "/webpages/index.html": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, max-age=0",
+        "content-length": "1834",
+        "content-security-policy": "default-src 'none'; font-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; media-src 'self'; object-src 'self' blob:; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; child-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-ancestors 'self' chrome-extension://nngceckbapebfimnlniiiahkandclblb chrome-extension://jbkfoedolllekgbhcbcoahefnbanhhlh moz-extension://* ; img-src 'self' data: https://haveibeenpwned.com ; connect-src 'self' https://api.pwnedpasswords.com https://api.2fa.directory https://app.simplelogin.io/api/ https://app.addy.io/api/ https://api.fastmail.com/ https://api.forwardemail.net ;",
+        "content-type": "text/html; charset=utf-8",
+        "cross-origin-resource-policy": "same-origin",
+        "permissions-policy": "accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), camera=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(), geolocation=(), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=()",
+        "referrer-policy": "same-origin",
+        "server": "Rocket",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-robots-tag": "noindex, nofollow",
+        "x-xss-protection": "0"
+      },
+      "body": "c0897956e262"
+    },
+    "/webpages/login.html": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, max-age=0",
+        "content-length": "1834",
+        "content-security-policy": "default-src 'none'; font-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; media-src 'self'; object-src 'self' blob:; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; child-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-src 'self' https://*.duosecurity.com https://*.duofederal.com; frame-ancestors 'self' chrome-extension://nngceckbapebfimnlniiiahkandclblb chrome-extension://jbkfoedolllekgbhcbcoahefnbanhhlh moz-extension://* ; img-src 'self' data: https://haveibeenpwned.com ; connect-src 'self' https://api.pwnedpasswords.com https://api.2fa.directory https://app.simplelogin.io/api/ https://app.addy.io/api/ https://api.fastmail.com/ https://api.forwardemail.net ;",
+        "content-type": "text/html; charset=utf-8",
+        "cross-origin-resource-policy": "same-origin",
+        "permissions-policy": "accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), camera=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(), geolocation=(), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), payment=(), picture-in-picture=(), screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=()",
+        "referrer-policy": "same-origin",
+        "server": "Rocket",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-robots-tag": "noindex, nofollow",
+        "x-xss-protection": "0"
+      },
+      "body": "c0897956e262"
+    }
+  }
+}

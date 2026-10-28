@@ -1,0 +1,128 @@
+{
+  "app": "gitea",
+  "image": "gitea/gitea:latest@sha256:30777c91280d",
+  "captured": "2026-10-28",
+  "port": 3000,
+  "want": "core/gitea",
+  "notes": "Fresh install: initial configuration page",
+  "responses": {
+    "/": {
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8",
+        "set-cookie": "i_like_gitea=REDACTED; Path=/; HttpOnly; SameSite=Lax",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN"
+      },
+      "body": "8caada7e99d9"
+    },
+    "/api/badge": {
+      "status": 404,
+      "headers": {
+        "content-length": "46",
+        "content-type": "text/html; charset=utf-8",
+        "refresh": "1; url=/",
+        "set-cookie": "i_like_gitea=REDACTED; Path=/; HttpOnly; SameSite=Lax",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN"
+      },
+      "body": "bcf86604d99f"
+    },
+    "/api/config": {
+      "status": 404,
+      "headers": {
+        "content-length": "46",
+        "content-type": "text/html; charset=utf-8",
+        "refresh": "1; url=/",
+        "set-cookie": "i_like_gitea=REDACTED; Path=/; HttpOnly; SameSite=Lax",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN"
+      },
+      "body": "bcf86604d99f"
+    },
+    "/api/health": {
+      "status": 404,
+      "headers": {
+        "content-length": "46",
+        "content-type": "text/html; charset=utf-8",
+        "refresh": "1; url=/",
+        "set-cookie": "i_like_gitea=REDACTED; Path=/; HttpOnly; SameSite=Lax",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN"
+      },
+      "body": "bcf86604d99f"
+    },
+    "/api/info": {
+      "status": 404,
+      "headers": {
+        "content-length": "46",
+        "content-type": "text/html; charset=utf-8",
+        "refresh": "1; url=/",
+        "set-cookie": "i_like_gitea=REDACTED; Path=/; HttpOnly; SameSite=Lax",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN"
+      },
+      "body": "bcf86604d99f"
+    },
+    "/control/status": {
+      "status": 404,
+      "headers": {
+        "content-length": "46",
+        "content-type": "text/html; charset=utf-8",
+        "refresh": "1; url=/",
+        "set-cookie": "i_like_gitea=REDACTED; Path=/; HttpOnly; SameSite=Lax",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN"
+      },
+      "body": "bcf86604d99f"
+    },
+    "/dashboard": {
+      "status": 404,
+      "headers": {
+        "content-length": "46",
+        "content-type": "text/html; charset=utf-8",
+        "refresh": "1; url=/",
+        "set-cookie": "i_like_gitea=REDACTED; Path=/; HttpOnly; SameSite=Lax",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN"
+      },
+      "body": "bcf86604d99f"
+    },
+    "/favicon.ico": {
+      "status": 404,
+      "headers": {
+        "content-length": "46",
+        "content-type": "text/html; charset=utf-8",
+        "refresh": "1; url=/",
+        "set-cookie": "i_like_gitea=REDACTED; Path=/; HttpOnly; SameSite=Lax",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN"
+      },
+      "body": "bcf86604d99f"
+    },
+    "/healthz": {
+      "status": 404,
+      "headers": {
+        "content-length": "46",
+        "content-type": "text/html; charset=utf-8",
+        "refresh": "1; url=/",
+        "set-cookie": "i_like_gitea=REDACTED; Path=/; HttpOnly; SameSite=Lax",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN"
+      },
+      "body": "bcf86604d99f"
+    },
+    "/login": {
+      "status": 404,
+      "headers": {
+        "content-length": "46",
+        "content-type": "text/html; charset=utf-8",
+        "refresh": "1; url=/",
+        "set-cookie": "i_like_gitea=REDACTED; Path=/; HttpOnly; SameSite=Lax",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN"
+      },
+      "body": "bcf86604d99f"
+    }
+  }
+}
