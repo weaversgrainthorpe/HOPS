@@ -2,8 +2,11 @@ package status
 
 import (
 	"context"
+	"crypto/tls"
 	"database/sql"
+	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -24,6 +27,10 @@ const tickEvery = time.Minute
 
 // maxRedirects bounds the redirect hops a status check follows.
 const maxRedirects = 5
+
+// maxFallbackBody caps how much of a GET-fallback response body is read (and
+// discarded) — enough to let the connection be reused, never a whole page.
+const maxFallbackBody = 4 << 10
 
 // SSRF policy: every outbound dial goes through netguard (link-local, cloud
 // metadata, multicast, unspecified and reserved addresses are refused in any
@@ -135,6 +142,12 @@ func (c *Checker) buildClient() *http.Client {
 		Transport: &http.Transport{
 			Proxy:       nil, // never via an environment proxy: the guard must see the real target
 			DialContext: c.dialer(30 * time.Second).DialContext,
+			// A status check asks "is it reachable and answering", not "is
+			// its certificate trusted": self-signed HTTPS (Proxmox, UniFi,
+			// TrueNAS, OPNsense…) is the homelab norm. Discovery does the same.
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true, // #nosec G402 -- homelab self-signed certs are the norm; status checks only read and send no credentials
+			},
 		},
 	}
 }
@@ -462,17 +475,22 @@ func (c *Checker) checkEntry(entry Entry) statusCheckResult {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, "HEAD", entry.URL, nil)
-	if err != nil {
-		result.status = "error"
-		result.detail = "Invalid address: " + err.Error()
-		return result
+	resp, err := c.do(ctx, http.MethodHead, entry.URL)
+	if err == nil && (resp.StatusCode == http.StatusMethodNotAllowed || resp.StatusCode == http.StatusNotImplemented) {
+		// Some apps refuse HEAD but answer GET: retry once with GET.
+		resp.Body.Close() // #nosec G104 -- Close on a HEAD response with no body; nothing was written
+		resp, err = c.do(ctx, http.MethodGet, entry.URL)
+		if err == nil {
+			_, _ = io.CopyN(io.Discard, resp.Body, maxFallbackBody)
+		}
 	}
-
-	req.Header.Set("User-Agent", "HOPS-StatusChecker/1.0")
-
-	resp, err := c.client.Do(req)
 	if err != nil {
+		var invalid *invalidRequestError
+		if errors.As(err, &invalid) {
+			result.status = "error"
+			result.detail = "Invalid address: " + invalid.err.Error()
+			return result
+		}
 		result.status = "down"
 		result.detail = errText(err)
 		return result
@@ -480,18 +498,40 @@ func (c *Checker) checkEntry(entry Entry) statusCheckResult {
 	defer resp.Body.Close()
 
 	result.responseTime = time.Since(start).Milliseconds()
-
-	if resp.StatusCode >= 200 && resp.StatusCode < 400 {
-		result.status = "up"
-	} else if resp.StatusCode >= 400 && resp.StatusCode < 500 {
-		result.status = "error"
-		result.detail = "HTTP " + strconv.Itoa(resp.StatusCode)
-	} else {
-		result.status = "down"
-		result.detail = "HTTP " + strconv.Itoa(resp.StatusCode)
-	}
-
+	result.status, result.detail = judgeHTTP(resp.StatusCode)
 	return result
+}
+
+// judgeHTTP maps an HTTP status code to a check outcome. 2xx/3xx is up; 401
+// and 403 are up too (the service is answering, it just wants a login first)
+// with the code kept as detail; any other 4xx is an error; 5xx is down.
+func judgeHTTP(code int) (status, detail string) {
+	switch {
+	case code >= 200 && code < 400:
+		return "up", ""
+	case code == http.StatusUnauthorized || code == http.StatusForbidden:
+		return "up", "HTTP " + strconv.Itoa(code) + " (asks for login)"
+	case code >= 400 && code < 500:
+		return "error", "HTTP " + strconv.Itoa(code)
+	default:
+		return "down", "HTTP " + strconv.Itoa(code)
+	}
+}
+
+// invalidRequestError marks a request that couldn't even be built (a bad
+// address), as opposed to one that was sent and failed.
+type invalidRequestError struct{ err error }
+
+func (e *invalidRequestError) Error() string { return e.err.Error() }
+
+// do sends one status-check request through the guarded client.
+func (c *Checker) do(ctx context.Context, method, target string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, method, target, nil)
+	if err != nil {
+		return nil, &invalidRequestError{err}
+	}
+	req.Header.Set("User-Agent", "HOPS-StatusChecker/1.0")
+	return c.client.Do(req)
 }
 
 // sshTarget turns ssh://[user@]host[:port] into the host:port to dial; the
