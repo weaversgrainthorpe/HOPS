@@ -25,9 +25,12 @@ const made: string[] = [];
 type Child = Record<string, unknown>;
 type AnyNode = { id: string; kind: string; content?: { children: AnyNode[] } };
 
+// Every tile's status check is Off unless it says otherwise: a tile with no setting inherits (rc5),
+// and under the global On it would be checked too. Only Stat has a dot, so the status flourish
+// measured below is Stat's alone.
 const kid = (id: string, name: string, extra: Child = {}): Child => ({
   id, kind: 'tile', type: 'link', name, url: `https://${name.toLowerCase()}.example.lan/`, icon: 'mdi:lan',
-  openMode: 'newtab', size: 'medium', order: 0, ...extra
+  openMode: 'newtab', size: 'medium', order: 0, statusCheck: { enabled: false }, ...extra
 });
 const tile = (id: string, name: string, x: number, y: number, extra: Child = {}): Child =>
   kid(id, name, { placement: { x, y, w: 2, h: 2 }, ...extra });
@@ -502,6 +505,8 @@ test.describe('M6 §9 visual flourishes', () => {
     await open(page, f);
     const dot = node(page, f.id('s')).locator('.status-badge > [role="img"]');
     await expect(dot).toHaveAttribute('title', /Online/);
+    // Stat's is the only dot on the page: every pulse recorded below is its own.
+    await expect(page.locator('.status-badge > [role="img"]')).toHaveCount(1);
     await page.waitForTimeout(1200);
     expect(stats(await samples(page), 'status-pulse').n, 'no pulse on first load').toBe(0);
 
@@ -515,6 +520,7 @@ test.describe('M6 §9 visual flourishes', () => {
     expect(p.finished).toBe(true);
     expect(p.ms).toBeGreaterThanOrEqual(500);
     expect(p.scale, 'it pulses (scale up to 1.6)').toBeGreaterThan(0.3);
+    expect(p.n, 'one pulse animation, on the one dot that changed').toBe(1);
     // Two pulses: two peaks of its size, with a dip between them.
     // Its size at each keyframe, in order (the keyframes are what it draws).
     const ws = s.filter((x) => x.what === 'status-pulse').flatMap((x) => x.keyframes.map((k) => parseTransform(k.transform).sx));
