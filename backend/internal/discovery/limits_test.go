@@ -1,6 +1,7 @@
 package discovery
 
 import (
+	"context"
 	"database/sql"
 	"strconv"
 	"strings"
@@ -78,6 +79,13 @@ func TestScanStopsAtMaxDurationAndSaysSo(t *testing.T) {
 		t.Fatal(err)
 	}
 	o.minute = 50 * time.Millisecond
+	// A passive source that takes its whole listen window (as real mDNS does), with no network.
+	old := browseMDNS
+	browseMDNS = func(ctx context.Context, _ hostAllowlist) ([]mdnsInstance, error) {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
+	t.Cleanup(func() { browseMDNS = old })
 	if _, err := store.CreateScan("lim", "127.0.0.1", IntensityPassive, "", "", 0); err != nil {
 		t.Fatal(err)
 	}
@@ -110,4 +118,3 @@ func TestScanStopsAtMaxDurationAndSaysSo(t *testing.T) {
 	}
 	o.Release()
 }
-

@@ -872,6 +872,13 @@ func (o *Orchestrator) probeHost(ctx context.Context, scanID, host string, ports
 	return anyEmit
 }
 
+// The two passive sources that multicast onto the LAN, as variables so the tests (and a dev
+// build's --no-lan-multicast) can keep a test run off the real network.
+var (
+	browseMDNS = browseMDNSForHosts
+	browseSSDP = browseSSDPForHosts
+)
+
 // runPassivePrelude collects passive-discovery hints scoped to the
 // scan's target set. Each source is best-effort — a failure becomes a
 // scan warning (shown on the Discovery page) and the other sources continue. Returns a non-nil PassiveHints even
@@ -890,7 +897,7 @@ func (o *Orchestrator) runPassivePrelude(ctx context.Context, scanID string, all
 	// huge.
 	mctx, mcancel := context.WithTimeout(ctx, mdnsListenWindow+500*time.Millisecond)
 	defer mcancel()
-	entries, err := browseMDNSForHosts(mctx, allow)
+	entries, err := browseMDNS(mctx, allow)
 	if err != nil {
 		slog.Debug("discovery: mDNS browse failed",
 			"component", "discovery", "error", err)
@@ -921,7 +928,7 @@ func (o *Orchestrator) runPassivePrelude(ctx context.Context, scanID string, all
 	// known port and would otherwise be invisible to the active loop.
 	// Bounded by a 6s child ctx (listen window + fetch round-trips).
 	sctx, scancel := context.WithTimeout(ctx, ssdpListenWindow+3*time.Second)
-	devs, err := browseSSDPForHosts(sctx, allow)
+	devs, err := browseSSDP(sctx, allow)
 	if err != nil {
 		slog.Debug("discovery: SSDP browse failed",
 			"component", "discovery", "error", err)

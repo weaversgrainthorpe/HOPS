@@ -47,7 +47,7 @@ if [[ ! -f "$FRONTEND_BUILD/index.html" ]]; then
   log "Building frontend"
   (cd "$REPO_DIR/frontend" && npm run build) >&2
 fi
-FRONTEND_ARGS=(--frontend "$FRONTEND_BUILD")
+FRONTEND_ARGS=(--frontend "$FRONTEND_BUILD" --no-lan-multicast)  # dev build: Discovery sends nothing onto the real LAN
 fi
 
 # Fresh tempdir per run — discarded on exit

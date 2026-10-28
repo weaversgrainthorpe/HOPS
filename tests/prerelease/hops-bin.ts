@@ -11,7 +11,8 @@ const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 export function hopsCommand(dataDir: string): [string, string[]] {
 	const base = ['--data', dataDir, '--host', '127.0.0.1'];
 	if (RELEASE) return [path.join(REPO, 'backend/hops'), base];
-	return [path.join(REPO, 'backend/hops-testdev'), [...base, '--frontend', path.join(REPO, 'frontend/build')]];
+	// --no-lan-multicast: Discovery sends no mDNS/SSDP onto the real LAN from a test run.
+	return [path.join(REPO, 'backend/hops-testdev'), [...base, '--frontend', path.join(REPO, 'frontend/build'), '--no-lan-multicast']];
 }
 
 /** Specs that truly need the dev build skip visibly in release mode (never silently). */
