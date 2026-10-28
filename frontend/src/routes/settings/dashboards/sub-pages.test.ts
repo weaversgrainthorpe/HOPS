@@ -2,11 +2,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/svelte';
 
 // The Dashboards sub-pages: Dead links and Duplicates each have their own page (moved off the
-// list page); Status check overrides is a placeholder until its page is built.
+// list page), as does Status check overrides.
 vi.mock('$app/navigation', () => ({ goto: vi.fn(async () => {}), beforeNavigate: vi.fn(), afterNavigate: vi.fn() }));
 vi.mock('$lib/utils/api', async () => ({
 	...(await vi.importActual<object>('$lib/utils/api')),
-	getDeadLinks: vi.fn(() => new Promise(() => {}))
+	getDeadLinks: vi.fn(() => new Promise(() => {})),
+	listSettings: vi.fn(() => new Promise(() => {})),
+	getDashboardSettings: vi.fn(() => new Promise(() => {}))
 }));
 
 import { config, migrationFailure } from '$lib/stores/config';
@@ -38,12 +40,13 @@ describe('Dashboards sub-pages', () => {
 		expect(screen.getByRole('heading', { name: 'Duplicates' })).toBeTruthy();
 	});
 
-	it('Status check overrides placeholder has its heading', () => {
+	it('Status check overrides page shows its section', () => {
 		render(OverridesPage);
-		expect(screen.getByRole('heading', { name: 'Status check overrides', level: 2 })).toBeTruthy();
+		expect(screen.getByRole('heading', { name: 'Status check overrides' })).toBeTruthy();
+		expect(screen.getByTestId('status-overrides')).toBeTruthy();
 	});
 
-	for (const [name, Page] of [['Dead links', DeadLinksPage], ['Duplicates', DuplicatesPage]] as const) {
+	for (const [name, Page] of [['Dead links', DeadLinksPage], ['Duplicates', DuplicatesPage], ['Status check overrides', OverridesPage]] as const) {
 		it(`${name}: a failed migration says it cannot be shown, never an empty result`, () => {
 			migrationFailure.set('could not migrate');
 			config.set(null);
