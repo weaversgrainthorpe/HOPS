@@ -1,7 +1,7 @@
 {
   "app": "bazarr",
   "image": "lscr.io/linuxserver/bazarr:latest@sha256:9a625883f054",
-  "version": "v1.6.2-ls370Linuxserver.io version:- v1.6.2-ls370 Build-date:- 2026-10-28T00:30:53+00:00",
+  "version": "v1.6.2-ls370",
   "captured": "2026-10-28",
   "port": 6767,
   "want": "core/bazarr",

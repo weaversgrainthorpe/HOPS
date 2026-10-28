@@ -1,7 +1,7 @@
 {
   "app": "radarr",
   "image": "lscr.io/linuxserver/radarr:latest@sha256:084b3b2ab1d0",
-  "version": "6.4.4.10685-ls324Linuxserver.io version:- 6.4.4.10685-ls324 Build-date:- 2026-10-25T19:21:49+00:00",
+  "version": "6.4.4.10685-ls324",
   "captured": "2026-10-28",
   "port": 7878,
   "want": "core/radarr",

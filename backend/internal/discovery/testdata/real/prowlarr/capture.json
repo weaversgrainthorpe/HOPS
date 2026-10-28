@@ -1,7 +1,7 @@
 {
   "app": "prowlarr",
   "image": "lscr.io/linuxserver/prowlarr:latest@sha256:04be30163fba",
-  "version": "2.7.0.5723-ls166Linuxserver.io version:- 2.7.0.5723-ls166 Build-date:- 2026-10-27T21:16:22+00:00",
+  "version": "2.7.0.5723-ls166",
   "captured": "2026-10-28",
   "port": 9696,
   "want": "core/prowlarr",

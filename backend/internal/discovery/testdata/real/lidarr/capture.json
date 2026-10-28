@@ -1,7 +1,7 @@
 {
   "app": "lidarr",
   "image": "lscr.io/linuxserver/lidarr:latest@sha256:9fddcf5c6133",
-  "version": "3.1.6.5079-ls46Linuxserver.io version:- 3.1.6.5079-ls46 Build-date:- 2026-10-26T02:00:00+00:00",
+  "version": "3.1.6.5079-ls46",
   "captured": "2026-10-28",
   "port": 8686,
   "want": "core/lidarr",

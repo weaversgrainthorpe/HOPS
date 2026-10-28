@@ -1,7 +1,7 @@
 {
   "app": "sonarr",
   "image": "lscr.io/linuxserver/sonarr:latest@sha256:48e36b608b46",
-  "version": "4.0.20.3014-ls1Linuxserver.io version:- 4.0.20.3014-ls1 Build-date:- 2026-10-24T01:45:43+00:00",
+  "version": "4.0.20.3014-ls1",
   "captured": "2026-10-28",
   "port": 8989,
   "want": "core/sonarr",

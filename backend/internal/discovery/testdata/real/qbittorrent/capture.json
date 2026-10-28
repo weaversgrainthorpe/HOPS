@@ -1,7 +1,7 @@
 {
   "app": "qbittorrent",
   "image": "lscr.io/linuxserver/qbittorrent:latest@sha256:75ecbb1c89ab",
-  "version": "5.3.0_v2.1.2-ls485Linuxserver.io version:- 5.3.0_v2.1.2-ls485 Build-date:- 2026-10-25T12:05:03+00:00",
+  "version": "5.3.0_v2.1.2-ls485",
   "captured": "2026-10-28",
   "port": 8090,
   "want": "core/qbittorrent",
