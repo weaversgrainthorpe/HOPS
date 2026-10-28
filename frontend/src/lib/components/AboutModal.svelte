@@ -75,9 +75,11 @@
         <li><Icon icon="mdi:format-size" width="18" /> Text size controls</li>
         <li><Icon icon="mdi:folder-multiple" width="18" /> Folders (nested, paged)</li>
         <li><Icon icon="mdi:radar" width="18" /> Network Discovery</li>
+        <li><Icon icon="mdi:bookmark-plus-outline" width="18" /> Add to HOPS from any web page</li>
+        <li><Icon icon="mdi:home-export-outline" width="18" /> Home & away addresses</li>
         <li><Icon icon="mdi:keyboard" width="18" /> Search & keyboard navigation</li>
         <li><Icon icon="mdi:undo-variant" width="18" /> Undo / redo while editing</li>
-        <li><Icon icon="mdi:cellphone-arrow-down" width="18" /> Install on phone or tablet</li>
+        <li><Icon icon="mdi:cellphone-arrow-down" width="18" /> Add to your phone's home screen</li>
         <li><Icon icon="mdi:animation-play" width="18" /> Animations (optional)</li>
       </ul>
     </div>
