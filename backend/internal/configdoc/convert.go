@@ -316,8 +316,12 @@ func convertGroup(g Obj, p [4]int, path string) (Obj, []SizeChange, error) {
 // the user never asked for. So every tile not explicitly on is pinned Off,
 // keeping its other statusCheck fields. An explicit null is kept: the
 // Homer/Dashy/Heimdall converters write it so their tiles inherit. A
-// wrong-typed statusCheck is left for verify to report.
+// wrong-typed statusCheck is left for verify to report. A note tile is never
+// checked whatever it says, so it is left exactly as it was.
 func pinStatusCheck(tile Obj) {
+	if t, _ := tile["type"].(string); t == "note" {
+		return
+	}
 	sc, present := tile["statusCheck"]
 	if !present || sc == nil {
 		tile["statusCheck"] = Obj{"enabled": false}

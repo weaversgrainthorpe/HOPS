@@ -243,3 +243,27 @@ func TestFindTileWithAncestors(t *testing.T) {
 		t.Error("a folder id matched as a tile")
 	}
 }
+
+// IsCheckableTile is the one "could this tile ever be probed" rule (the
+// checker, the notices and the frontend's overrides page agree on it): a note
+// is never checked, and nor is a tile with no URL.
+func TestIsCheckableTile(t *testing.T) {
+	cases := []struct {
+		tile Obj
+		want bool
+	}{
+		{Obj{"kind": "tile", "url": "http://a"}, true},
+		{Obj{"kind": "tile", "type": "link", "url": "http://a"}, true},
+		{Obj{"kind": "tile", "type": "note", "url": "http://a"}, false},
+		{Obj{"kind": "tile", "type": "note"}, false},
+		{Obj{"kind": "tile", "url": ""}, false},
+		{Obj{"kind": "tile"}, false},
+		{Obj{"kind": "tile", "url": 7}, false},
+		{nil, false},
+	}
+	for i, c := range cases {
+		if got := IsCheckableTile(c.tile); got != c.want {
+			t.Errorf("case %d %v: got %v, want %v", i, c.tile, got, c.want)
+		}
+	}
+}

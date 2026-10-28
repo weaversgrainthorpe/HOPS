@@ -1,10 +1,10 @@
 package configdoc
 
 import (
-	"strings"
 	"encoding/json"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -237,7 +237,7 @@ func TestMigrateV2_Basic(t *testing.T) {
 	// Tab 2: collapsed folder-style third with 5 entries.
 	f := children(t, tabs[1]["root"].(Obj))[0]
 	eq(t, f["display"], "collapsed", "display")
-	eq(t, f["shape"], "folder-flat", "shape") // M6 §3a.1: v2 folder style is Flat
+	eq(t, f["shape"], "folder-flat", "shape")                               // M6 §3a.1: v2 folder style is Flat
 	eq(t, f["placement"], Obj{"x": 0, "y": 0, "w": 8, "h": 6}, "placement") // 3 a row (padding takes a column): 2 tile rows ×2, +2 chrome at the reference cell (M6 §13)
 	var order []string
 	for _, tile := range children(t, f["content"].(Obj)) {
@@ -469,7 +469,12 @@ func TestConvertPinsV2StatusChecks(t *testing.T) {
 			{"id": "none", "name": "None", "url": "http://a"},
 			{"id": "off", "name": "Off", "url": "http://b", "statusCheck": {"type": "http", "enabled": false, "interval": 60}},
 			{"id": "on", "name": "On", "url": "http://c", "statusCheck": {"type": "http", "enabled": true, "interval": 60}},
-			{"id": "inh", "name": "Inherit", "url": "http://d", "statusCheck": {"enabled": null}}
+			{"id": "inh", "name": "Inherit", "url": "http://d", "statusCheck": {"enabled": null}},
+			{"id": "nul", "name": "Null", "url": "http://e", "statusCheck": null},
+			{"id": "yes", "name": "Yes", "url": "http://f", "statusCheck": {"type": "http", "enabled": "yes"}},
+			{"id": "note", "name": "Note", "type": "note", "content": "hi"},
+			{"id": "noteon", "name": "Note on", "type": "note", "content": "hi", "statusCheck": {"enabled": true}},
+			{"id": "notebad", "name": "Note bad", "type": "note", "content": "hi", "statusCheck": {"enabled": "yes"}}
 		]}]}]}]}`), &v2); err != nil {
 		t.Fatal(err)
 	}
@@ -482,12 +487,25 @@ func TestConvertPinsV2StatusChecks(t *testing.T) {
 		"off":  Obj{"type": "http", "enabled": false, "interval": 60},
 		"on":   Obj{"type": "http", "enabled": true, "interval": 60},
 		"inh":  Obj{"enabled": nil},
+		// statusCheck null is no setting, so it is pinned like an absent one.
+		"nul": Obj{"enabled": false},
+		// A non-bool enabled was not true, so v2 never checked it: Off, type kept.
+		"yes": Obj{"type": "http", "enabled": false},
+		// Notes are never checked, so they are left exactly as they were.
+		"note":    nil,
+		"noteon":  Obj{"enabled": true},
+		"notebad": Obj{"enabled": "yes"},
 	}
 	seen := 0
 	Walk(v3, func(_, _ Obj, _ []Obj, n Obj) bool {
 		if n["kind"] == "tile" {
 			seen++
 			id := n["id"].(string)
+			if _, has := n["statusCheck"]; !has && want[id] != nil {
+				t.Errorf("tile %s has no statusCheck, want %v", id, want[id])
+			} else if has && want[id] == nil {
+				t.Errorf("tile %s gained statusCheck %v, want none", id, n["statusCheck"])
+			}
 			eq(t, n["statusCheck"], want[id], "tile "+id+" statusCheck")
 		}
 		return true

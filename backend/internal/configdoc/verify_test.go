@@ -377,6 +377,10 @@ func TestVerify_BackgroundFinalForm(t *testing.T) {
 	}
 }
 
+// nullSC marks a TestVerify_StatusCheckPin case whose v2 entry has
+// "statusCheck": null (nil there means the key is absent).
+type nullSC struct{}
+
 // Spec Part A: the migration check holds the status-check pin to its rule. A
 // v3 tile is on exactly when the v2 tile was, inherits (null) exactly when
 // the v2 tile said null, is otherwise false, and keeps every other field.
@@ -386,25 +390,40 @@ func TestVerify_StatusCheckPin(t *testing.T) {
 		v2         any // the v2 entry's statusCheck; absent when nil
 		tamper     func(Obj)
 		want       string
+		note       bool // the v2 entry (e3) is a note tile, which is never pinned
 	}{
-		{"absent turned on", "e2", nil, func(tl Obj) { tl["statusCheck"] = Obj{"enabled": true} }, "enabled"},
-		{"absent left inheriting", "e2", nil, func(tl Obj) { tl["statusCheck"] = Obj{"enabled": nil} }, "enabled"},
-		{"absent left absent", "e2", nil, func(tl Obj) { delete(tl, "statusCheck") }, "statusCheck"},
-		{"absent gains a field", "e2", nil, func(tl Obj) { tl["statusCheck"] = Obj{"enabled": false, "interval": 5} }, "interval"},
-		{"absent pinned to a non-bool", "e2", nil, func(tl Obj) { tl["statusCheck"] = Obj{"enabled": "no"} }, "enabled"},
-		{"on turned off", "e1", nil, func(tl Obj) { tl["statusCheck"].(Obj)["enabled"] = false }, "enabled"},
-		{"on loses its interval", "e1", nil, func(tl Obj) { delete(tl["statusCheck"].(Obj), "interval") }, "interval"},
-		{"on changes its type", "e1", nil, func(tl Obj) { tl["statusCheck"].(Obj)["type"] = "ping" }, "type"},
-		{"null pinned off", "e3", Obj{"enabled": nil}, func(tl Obj) { tl["statusCheck"].(Obj)["enabled"] = false }, "enabled"},
-		{"no enabled turned on", "e3", Obj{"type": "http"}, func(tl Obj) { tl["statusCheck"].(Obj)["enabled"] = true }, "enabled"},
-		{"wrong type changed", "e3", "yes", func(tl Obj) { tl["statusCheck"] = "no" }, "statusCheck"},
+		{"absent turned on", "e2", nil, func(tl Obj) { tl["statusCheck"] = Obj{"enabled": true} }, "enabled", false},
+		{"absent left inheriting", "e2", nil, func(tl Obj) { tl["statusCheck"] = Obj{"enabled": nil} }, "enabled", false},
+		{"absent left absent", "e2", nil, func(tl Obj) { delete(tl, "statusCheck") }, "statusCheck", false},
+		{"absent gains a field", "e2", nil, func(tl Obj) { tl["statusCheck"] = Obj{"enabled": false, "interval": 5} }, "interval", false},
+		{"absent pinned to a non-bool", "e2", nil, func(tl Obj) { tl["statusCheck"] = Obj{"enabled": "no"} }, "enabled", false},
+		{"on turned off", "e1", nil, func(tl Obj) { tl["statusCheck"].(Obj)["enabled"] = false }, "enabled", false},
+		{"on loses its interval", "e1", nil, func(tl Obj) { delete(tl["statusCheck"].(Obj), "interval") }, "interval", false},
+		{"on changes its type", "e1", nil, func(tl Obj) { tl["statusCheck"].(Obj)["type"] = "ping" }, "type", false},
+		{"null pinned off", "e3", Obj{"enabled": nil}, func(tl Obj) { tl["statusCheck"].(Obj)["enabled"] = false }, "enabled", false},
+		{"no enabled turned on", "e3", Obj{"type": "http"}, func(tl Obj) { tl["statusCheck"].(Obj)["enabled"] = true }, "enabled", false},
+		{"wrong type changed", "e3", "yes", func(tl Obj) { tl["statusCheck"] = "no" }, "statusCheck", false},
+		{"statusCheck null turned on", "e3", nullSC{}, func(tl Obj) { tl["statusCheck"].(Obj)["enabled"] = true }, "enabled", false},
+		{"statusCheck null left inheriting", "e3", nullSC{}, func(tl Obj) { tl["statusCheck"].(Obj)["enabled"] = nil }, "enabled", false},
+		{"non-bool enabled kept", "e3", Obj{"type": "http", "enabled": "yes"}, func(tl Obj) { tl["statusCheck"].(Obj)["enabled"] = "yes" }, "enabled", false},
+		{"non-bool enabled loses its type", "e3", Obj{"type": "http", "enabled": "yes"}, func(tl Obj) { delete(tl["statusCheck"].(Obj), "type") }, "type", false},
+		{"note pinned off", "e3", nil, func(tl Obj) { tl["statusCheck"] = Obj{"enabled": false} }, "statusCheck", true},
+		{"note on turned off", "e3", Obj{"enabled": true}, func(tl Obj) { tl["statusCheck"].(Obj)["enabled"] = false }, "statusCheck", true},
+		{"note invalid fixed", "e3", Obj{"enabled": "yes"}, func(tl Obj) { tl["statusCheck"].(Obj)["enabled"] = false }, "statusCheck", true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			v2 := loadJSON(t, "testdata/v2_basic.json")
-			if tc.v2 != nil {
-				entry := list(t, list(t, list(t, v2, "dashboards")[0], "tabs")[0], "groups")[0]["entries"].([]any)[2].(Obj)
+			entry := list(t, list(t, list(t, v2, "dashboards")[0], "tabs")[0], "groups")[0]["entries"].([]any)[2].(Obj)
+			switch tc.v2.(type) {
+			case nil:
+			case nullSC:
+				entry["statusCheck"] = nil
+			default:
 				entry["statusCheck"] = tc.v2
+			}
+			if tc.note {
+				entry["type"] = "note"
 			}
 			doc := migrated(t, v2)
 			if err := Verify(v2, doc); err != nil {

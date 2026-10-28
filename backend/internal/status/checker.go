@@ -221,13 +221,13 @@ func (c *Checker) getEntriesFromConfig() ([]Entry, error) {
 		if node["kind"] != "tile" {
 			return true
 		}
-		// Skip note tiles entirely — they have no URL to check.
-		if t, _ := node["type"].(string); t == "note" {
+		// Note tiles and tiles with no URL have nothing to check.
+		if !configdoc.IsCheckableTile(node) {
 			return true
 		}
 		id, _ := node["id"].(string)
 		u, _ := node["url"].(string)
-		if id == "" || u == "" {
+		if id == "" {
 			return true
 		}
 		if on, _, _ := configdoc.EffectiveStatusChecks(c.settings, dash, tab, path, node); !on {

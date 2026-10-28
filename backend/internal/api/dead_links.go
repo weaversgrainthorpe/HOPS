@@ -88,12 +88,12 @@ func (r *Router) handleDeadLinks(w http.ResponseWriter, req *http.Request) {
 		if node["kind"] != "tile" {
 			return true
 		}
-		if t, _ := node["type"].(string); t == "note" {
+		if !configdoc.IsCheckableTile(node) {
 			return true
 		}
 		id, _ := node["id"].(string)
 		u, _ := node["url"].(string)
-		if id == "" || u == "" {
+		if id == "" {
 			return true
 		}
 		if on, _, _ := configdoc.EffectiveStatusChecks(r.settings, dash, tab, path, node); !on {

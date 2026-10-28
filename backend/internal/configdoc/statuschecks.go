@@ -67,6 +67,18 @@ func tileTri(tile Obj) tri {
 	return containerTri(v)
 }
 
+// IsCheckableTile reports whether a tile could ever be probed: not a note,
+// and with a non-empty URL. The checker skips every other tile whatever its
+// setting, so counts of what a setting changes (the notices, and the
+// frontend's isCheckableTile twin on the overrides page) skip them too.
+func IsCheckableTile(tile Obj) bool {
+	if t, _ := tile["type"].(string); t == "note" {
+		return false
+	}
+	u, _ := tile["url"].(string)
+	return u != ""
+}
+
 // invalidWarned de-duplicates the invalid-value WARN: once per (tile, level)
 // per process, not on every checker pass or status request.
 var invalidWarned sync.Map

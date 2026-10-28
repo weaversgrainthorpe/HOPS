@@ -277,13 +277,10 @@ func dashboardsWithTilesOnUnderOff(r *Router, doc configdoc.Obj) []string {
 		if n["kind"] != "tile" {
 			return true
 		}
-		if t, _ := n["type"].(string); t == "note" {
+		if !configdoc.IsCheckableTile(n) {
 			return true
 		}
 		if id, _ := n["id"].(string); id == "" {
-			return true
-		}
-		if u, _ := n["url"].(string); u == "" {
 			return true
 		}
 		dashID, _ := dash["id"].(string)

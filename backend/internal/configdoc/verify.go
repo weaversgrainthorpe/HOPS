@@ -393,10 +393,17 @@ func (v *verifier) compareTabs(dashID, dashPath string, a, b Obj) {
 // to its rule: the v3 tile is on exactly when the v2 tile was, inherits
 // (null) exactly when the v2 tile said null, is otherwise false, and keeps
 // every other statusCheck field unchanged. A wrong-typed v2 statusCheck is
-// not pinned, so it must be carried over unchanged.
+// not pinned, and nor is a note tile's (notes are never checked), so those
+// must be carried over unchanged.
 func (v *verifier) compareStatusCheck(eid string, ea, eb Obj) {
 	av, had := ea["statusCheck"]
 	bv, has := eb["statusCheck"]
+	if t, _ := ea["type"].(string); t == "note" {
+		if had != has || show(av) != show(bv) {
+			v.add("entry %s: key \"statusCheck\" changed on a note tile (v2 %s, v3 %s)", eid, trunc(show(av)), trunc(show(bv)))
+		}
+		return
+	}
 	am, aObj := av.(Obj)
 	if had && av != nil && !aObj {
 		if !has || show(av) != show(bv) {
