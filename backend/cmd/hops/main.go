@@ -71,11 +71,20 @@ func run() bool {
 	// /api/settings. --host is a flag because restricting the bind
 	// interface is an operator security decision, not a user preference,
 	// and it must be settable without first being able to reach the GUI.
-	dataDir := flag.String("data", "../data", "Data directory for SQLite database")
+	dataDir := flag.String("data", "", `Data directory for the database, backups and uploads (default: a "data" folder next to the hops program)`)
 	// Dev-only flags (--frontend) exist only in `-tags dev` builds.
 	applyDevFlags := registerDevFlags()
 	host := flag.String("host", "", "Interface to bind to (e.g. 127.0.0.1 for loopback-only). Empty (default) binds all interfaces.")
 	flag.Parse()
+
+	if *dataDir == "" {
+		d, err := defaultDataDir()
+		if err != nil {
+			slog.Error("cannot work out where the hops program is, so there is no default data folder; start it with --data <folder>", "error", err)
+			os.Exit(1)
+		}
+		*dataDir = d
+	}
 
 	// Initialize configuration
 	cfg := &config.Config{

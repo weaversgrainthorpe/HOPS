@@ -61,16 +61,18 @@ go mod download
 ### Running in Development
 
 ```bash
-go run cmd/hops/main.go --port 8080 --data ../data
+go run -tags dev cmd/hops/main.go --data ../data --frontend ../frontend/build
 ```
 
 Command-line flags:
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--port` | `8080` | Port the HTTP server listens on |
-| `--data` | `../data` | Data directory (SQLite database, backups, uploads) |
-| `--frontend` | `../frontend/build` | Path to the frontend `build/` directory |
+| `--data` | `data` next to the hops program | Data directory (SQLite database, backups, uploads) |
+| `--host` | _(empty: all interfaces)_ | Interface to bind to |
+| `--frontend` | _(the embedded UI)_ | Dev builds only (`-tags dev`): serve the UI from this `build/` folder instead |
+
+The port is a setting (Settings › Global), not a flag.
 
 Environment variables:
 

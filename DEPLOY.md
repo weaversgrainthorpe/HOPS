@@ -315,7 +315,7 @@ GUI — see [Runtime Configuration](#runtime-configuration) below.
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--data` | `../data` | Data directory for SQLite database, backups, and uploads |
+| `--data` | a `data` folder next to the hops program | Data directory for SQLite database, backups, and uploads |
 | `--host` | _(empty)_ | Interface to bind to. Empty = all interfaces (default). Set to `127.0.0.1` to bind loopback-only when HOPS sits behind a reverse proxy on the same host and shouldn't be reachable directly. |
 
 ## Runtime Configuration
