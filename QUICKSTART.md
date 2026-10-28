@@ -591,7 +591,8 @@ to the dashboard's address, such as `http://<server>:8080/media`.
 
 ### Dead links and duplicates
 
-Both checks are on **Settings › Dashboards**, under your dashboard list.
+Each has its own page under **Settings › Dashboards**: **Dead links** and
+**Duplicates**.
 
 - **Dead links** lists tiles whose status check has failed without a break
   for more than a week. Change that with **Treat a link as dead after**

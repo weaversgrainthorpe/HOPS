@@ -68,7 +68,7 @@ test.afterEach(async ({ page, context }) => {
 test.describe('duplicate finder', () => {
   test('lists the group with paths and differences; www is not a duplicate', async ({ page, context }) => {
     const f = await setup(page, context);
-    await page.goto('/settings/dashboards');
+    await page.goto('/settings/dashboards/duplicates');
     const group = page.locator(`[data-dup-group="https://${f.host}"]`);
     await expect(group).toBeVisible();
     await expect(group.locator('[data-dup-tile]')).toHaveCount(2);
@@ -82,7 +82,7 @@ test.describe('duplicate finder', () => {
 
   test('merge keeps the chosen tile, deletes the others after confirmation', async ({ page, context }) => {
     const f = await setup(page, context);
-    await page.goto('/settings/dashboards');
+    await page.goto('/settings/dashboards/duplicates');
     const group = page.locator(`[data-dup-group="https://${f.host}"]`);
     await group.locator(`[data-dup-tile="${f.p}-plex2"] input[type=radio]`).check();
     await group.getByRole('button', { name: /Merge/ }).click();
@@ -98,7 +98,7 @@ test.describe('duplicate finder', () => {
 
   test('cancel leaves everything as it was', async ({ page, context }) => {
     const f = await setup(page, context);
-    await page.goto('/settings/dashboards');
+    await page.goto('/settings/dashboards/duplicates');
     const group = page.locator(`[data-dup-group="https://${f.host}"]`);
     await group.getByRole('button', { name: /Merge/ }).click();
     await expect(group.locator('[data-merge-preview]')).toBeVisible();
@@ -111,7 +111,7 @@ test.describe('duplicate finder', () => {
 
   test('a dashboard changed elsewhere refuses the merge visibly and deletes nothing', async ({ page, context }) => {
     const f = await setup(page, context);
-    await page.goto('/settings/dashboards');
+    await page.goto('/settings/dashboards/duplicates');
     const group = page.locator(`[data-dup-group="https://${f.host}"]`);
     await group.getByRole('button', { name: /Merge/ }).click();
     // Another browser saved dashboard B (the one the merge deletes from) meanwhile: the server answers the revision clash with 409.
@@ -125,7 +125,7 @@ test.describe('duplicate finder', () => {
 
   test('scope control narrows the groups and the count; folder shows only same-folder copies', async ({ page, context }) => {
     const f = await setup(page, context, true);
-    await page.goto('/settings/dashboards');
+    await page.goto('/settings/dashboards/duplicates');
     const group = page.locator(`[data-dup-group="https://${f.host}"]`);
     const count = page.locator('[data-dup-count]');
     await expect(page.getByRole('radio', { name: 'All' })).toBeChecked();
@@ -151,7 +151,7 @@ test.describe('duplicate finder', () => {
 
   test('scope with nothing left shows a scope-specific empty state', async ({ page, context }) => {
     await setup(page, context); // one copy per dashboard
-    await page.goto('/settings/dashboards');
+    await page.goto('/settings/dashboards/duplicates');
     await page.getByRole('radio', { name: 'Dashboard' }).check();
     await expect(page.locator('[data-state="none"]')).toContainText('No duplicates within the same dashboard');
     await page.getByRole('radio', { name: 'All' }).check();
@@ -159,7 +159,7 @@ test.describe('duplicate finder', () => {
 
   test('merge at the dashboard scope deletes only the shown copies', async ({ page, context }) => {
     const f = await setup(page, context, true);
-    await page.goto('/settings/dashboards');
+    await page.goto('/settings/dashboards/duplicates');
     await page.getByRole('radio', { name: 'Dashboard' }).check();
     const group = page.locator(`[data-dup-group="https://${f.host}"]`);
     await group.getByRole('button', { name: /Merge/ }).click();

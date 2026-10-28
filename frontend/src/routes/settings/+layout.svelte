@@ -44,13 +44,19 @@
     { href: '/settings/discovery/detectors', label: 'Manage detectors' },
   ];
   let onDiscovery = $derived(isCurrent('/settings/discovery'));
-  let discoveryCurrent = $derived(
-    isCurrent('/settings/discovery/diagnostics')
-      ? '/settings/discovery/diagnostics'
-      : isCurrent('/settings/discovery/detectors')
-        ? '/settings/discovery/detectors'
-        : '/settings/discovery'
-  );
+  // Dashboards' pages, the same way. The list page is /settings/dashboards itself.
+  const dashboardPages = [
+    { href: '/settings/dashboards', label: 'Dashboards' },
+    { href: '/settings/dashboards/dead-links', label: 'Dead links' },
+    { href: '/settings/dashboards/duplicates', label: 'Duplicates' },
+    { href: '/settings/dashboards/status-overrides', label: 'Status check overrides' },
+  ];
+  let onDashboards = $derived(isCurrent('/settings/dashboards'));
+  // The page in view: the longest address that matches, else the section's first page.
+  const currentOf = (pages: Array<{ href: string }>, path: string) =>
+    pages.filter((p) => path === p.href || path.startsWith(`${p.href}/`)).sort((x, y) => y.href.length - x.href.length)[0]?.href ?? pages[0].href;
+  let discoveryCurrent = $derived(currentOf(discoveryPages, pathname));
+  let dashboardsCurrent = $derived(currentOf(dashboardPages, pathname));
 
   // The navbar's height: the phones' chip row sticks just under it (as on Global settings).
   let navbarH = $state(0);
@@ -127,6 +133,19 @@
   </ul>
 {/snippet}
 
+<!-- Phones: a section's pages as a chip row on the page (the sidebar list is hidden). -->
+{#snippet chipRow(label: string, pages: Array<{ href: string; label: string }>, current: string)}
+  <nav class="group-chips" aria-label={label} style:--chips-top={navbarH ? `${navbarH}px` : undefined}>
+    {#each pages as p (p.href)}
+      <a
+        class="group-chip"
+        href={p.href}
+        aria-current={current === p.href ? 'location' : undefined}
+      >{p.label}</a>
+    {/each}
+  </nav>
+{/snippet}
+
 <div class="settings-shell" class:has-sidebar={showShell}>
   {#if showShell}
     <aside class="sidebar">
@@ -157,6 +176,13 @@
                     'Discovery pages',
                     discoveryPages.map((d) => ({ id: d.href, label: d.label, href: d.href })),
                     discoveryCurrent
+                  )}
+                {:else if sec.href === '/settings/dashboards' && onDashboards}
+                  <!-- Dashboards' pages, while on any of them. -->
+                  {@render subList(
+                    'Dashboards pages',
+                    dashboardPages.map((d) => ({ id: d.href, label: d.label, href: d.href })),
+                    dashboardsCurrent
                   )}
                 {/if}
               </li>
@@ -212,16 +238,9 @@
         {/if}
 
         {#if onDiscovery}
-          <!-- Phones: Discovery's pages as a chip row on the page (the sidebar list is hidden). -->
-          <nav class="group-chips" aria-label="Discovery pages" style:--chips-top={navbarH ? `${navbarH}px` : undefined}>
-            {#each discoveryPages as d (d.href)}
-              <a
-                class="group-chip"
-                href={d.href}
-                aria-current={discoveryCurrent === d.href ? 'location' : undefined}
-              >{d.label}</a>
-            {/each}
-          </nav>
+          {@render chipRow('Discovery pages', discoveryPages, discoveryCurrent)}
+        {:else if onDashboards}
+          {@render chipRow('Dashboards pages', dashboardPages, dashboardsCurrent)}
         {/if}
 
         <div class="page-body" class:greyed-out={$isBackendOffline}>

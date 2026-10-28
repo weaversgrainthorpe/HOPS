@@ -187,7 +187,7 @@ describe('settings shell, logged out', () => {
 describe('settings shell, signed in', () => {
 	it('the sidebar lists the sections in order, with their own addresses (Discovery at /settings/discovery, M5 §11)', () => {
 		renderShell();
-		const items = within(sidebar()).getAllByRole('link').map((a) => [a.textContent?.trim(), a.getAttribute('href')]);
+		const items = within(sidebar()).getAllByRole('link').filter((a) => a.classList.contains('side-item')).map((a) => [a.textContent?.trim(), a.getAttribute('href')]);
 		expect(items).toEqual([
 			['Dashboards', '/settings/dashboards'],
 			['Icons', '/settings/icons'],
@@ -401,12 +401,53 @@ describe('settings shell, Discovery pages', () => {
 	}
 
 	it('on any other settings page there is neither list nor chip row', () => {
-		for (const path of ['/settings/dashboards', '/settings/global', '/settings/backups']) {
+		for (const path of ['/settings/global', '/settings/backups']) {
 			at(path);
 			const { unmount } = renderShell();
 			expect(subList()).toBeNull();
 			expect(chipRow()).toBeNull();
 			unmount();
 		}
+	});
+});
+
+// Dashboards' pages work the same way: a sub-list under "Dashboards", a chip row on phones.
+describe('settings shell, Dashboards pages', () => {
+	const subList = () => screen.queryByRole('list', { name: 'Dashboards pages' });
+	const chipRow = () => screen.queryByRole('navigation', { name: 'Dashboards pages' });
+	const cases: Array<[string, string]> = [
+		['/settings/dashboards', 'Dashboards'],
+		['/settings/dashboards/dead-links', 'Dead links'],
+		['/settings/dashboards/duplicates', 'Duplicates'],
+		['/settings/dashboards/status-overrides', 'Status check overrides']
+	];
+	const labels = ['Dashboards', 'Dead links', 'Duplicates', 'Status check overrides'];
+
+	for (const [path, current] of cases) {
+		it(`${path}: the four pages are listed under Dashboards, ${current} marked`, () => {
+			at(path);
+			renderShell();
+			const list = subList()!;
+			expect(list).toBeTruthy();
+			expect(list.closest('li')!.querySelector('a.side-item')!.textContent?.trim()).toBe('Dashboards');
+			const links = within(list).getAllByRole('link');
+			expect(links.map((a) => [a.textContent?.trim(), a.getAttribute('href')])).toEqual([
+				['Dashboards', '/settings/dashboards'],
+				['Dead links', '/settings/dashboards/dead-links'],
+				['Duplicates', '/settings/dashboards/duplicates'],
+				['Status check overrides', '/settings/dashboards/status-overrides']
+			]);
+			expect(links.filter((a) => a.getAttribute('aria-current') === 'location').map((a) => a.textContent?.trim())).toEqual([current]);
+			const chips = within(chipRow()!).getAllByRole('link');
+			expect(chips.map((a) => a.textContent?.trim())).toEqual(labels);
+			expect(chips.filter((a) => a.getAttribute('aria-current') === 'location').map((a) => a.textContent?.trim())).toEqual([current]);
+		});
+	}
+
+	it('the Duplicates page marks the Dashboards section current', () => {
+		at('/settings/dashboards/duplicates');
+		renderShell();
+		const item = within(sidebar()).getAllByRole('link').find((a) => a.classList.contains('side-item') && a.textContent?.trim() === 'Dashboards')!;
+		expect(item.getAttribute('aria-current')).toBe('page');
 	});
 });

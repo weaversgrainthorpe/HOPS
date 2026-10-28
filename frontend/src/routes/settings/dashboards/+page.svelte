@@ -3,8 +3,6 @@
   import { migrationFailure } from '$lib/stores/config';
   import DashboardList from '$lib/components/admin/DashboardList.svelte';
   import AddToHopsBookmark from '$lib/components/admin/AddToHopsBookmark.svelte';
-  import DeadLinks from '$lib/components/admin/DeadLinks.svelte';
-  import Duplicates from '$lib/components/admin/Duplicates.svelte';
 
   // Settings → Dashboards (spec §4D, M5 §9): add, rename, reorder, delete, import and export.
 </script>
@@ -20,8 +18,6 @@
     <span>Editing dashboards needs a tablet or desktop — drag-and-drop is awkward on a phone. You can still manage everything else here.</span>
   </div>
   <DashboardList />
-  <DeadLinks />
-  <Duplicates />
   <AddToHopsBookmark />
 {/if}
 

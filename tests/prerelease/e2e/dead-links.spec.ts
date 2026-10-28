@@ -75,7 +75,7 @@ test.describe('dead-link report', () => {
         }]
       })
     }));
-    await page.goto('/settings/dashboards');
+    await page.goto('/settings/dashboards/dead-links');
     const row = page.locator(`[data-dead-link="${f.id('nas')}"]`);
     await expect(row).toContainText('Deadnas');
     await expect(row).toContainText(`${f.name} › Media › Servers`);
@@ -94,7 +94,7 @@ test.describe('dead-link report', () => {
   test('says so when status checks are off globally', async ({ page, context }) => {
     await setSetting(page, context, 'status.checks_enabled', 'false');
     try {
-      await page.goto('/settings/dashboards');
+      await page.goto('/settings/dashboards/dead-links');
       const state = page.locator('[data-state="checks-off"]');
       await expect(state).toContainText('Status checks are turned off');
       await expect(state.getByRole('link', { name: /Global settings/ })).toHaveAttribute('href', '/settings/global#status-checks');

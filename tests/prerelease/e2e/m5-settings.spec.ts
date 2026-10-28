@@ -17,6 +17,8 @@ const PAGES = [
 const ALL_ITEMS = ['Dashboards', 'Icons', 'Global settings', 'Discovery', 'Backups', 'Logs', 'Password', 'Factory reset', 'Log out'];
 
 const sidebar = (p: Page) => p.getByRole('navigation', { name: 'Settings sections' });
+// The section links only (a section's sub-pages list repeats names such as "Dashboards").
+const sideItem = (p: Page, name: string) => sidebar(p).locator('a.side-item').filter({ hasText: new RegExp(`^\\s*${name}\\s*$`) });
 const urlOf = (path: string) => new RegExp(`${path.replace(/\//g, '\\/')}$`);
 
 async function expectOn(p: Page, pg: (typeof PAGES)[number]) {
@@ -24,7 +26,7 @@ async function expectOn(p: Page, pg: (typeof PAGES)[number]) {
   await expect(p.getByRole('heading', { name: pg.heading, level: 2, exact: true })).toBeVisible();
   // Exactly one current item, and it is this page's.
   await expect(sidebar(p).locator('[aria-current="page"]')).toHaveCount(1);
-  await expect(sidebar(p).getByRole('link', { name: pg.label, exact: true })).toHaveAttribute('aria-current', 'page');
+  await expect(sideItem(p, pg.label)).toHaveAttribute('aria-current', 'page');
 }
 
 async function anonPage(browser: Browser): Promise<{ page: Page; ctx: BrowserContext }> {
@@ -39,15 +41,15 @@ test.describe('M5 §9 settings: sidebar and separate pages', () => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto('/settings');
     await expectOn(page, PAGES[0]);
-    await expect(sidebar(page).locator('a, button')).toHaveText(ALL_ITEMS);
+    await expect(sidebar(page).locator('.side-item')).toHaveText(ALL_ITEMS);
 
     // Forward through every section by the sidebar.
     for (const pg of PAGES.slice(1)) {
-      await sidebar(page).getByRole('link', { name: pg.label, exact: true }).click();
+      await sideItem(page, pg.label).click();
       await expectOn(page, pg);
     }
     // Discovery is a section too (M5 §11), at /settings/discovery, highlighted like the others.
-    await sidebar(page).getByRole('link', { name: 'Discovery', exact: true }).click();
+    await sideItem(page, 'Discovery').click();
     await expectOn(page, { label: 'Discovery', path: '/settings/discovery', heading: 'Discovery' });
 
     // Back walks the same pages in reverse, each with its highlight; /settings itself is not in
@@ -156,7 +158,7 @@ test.describe('M5 §9 settings: sidebar and separate pages', () => {
       });
     }, sel);
 
-    const items = await measure('nav[aria-label="Settings sections"] :is(a, button)');
+    const items = await measure('nav[aria-label="Settings sections"] .side-item');
     expect(items.map((i) => i.name)).toEqual(ALL_ITEMS);
     for (const i of items) expect(i.text, `${i.name}: text contrast`).toBeGreaterThanOrEqual(4.5);
     const [title] = await measure('aside h1');
@@ -171,7 +173,7 @@ test.describe('M5 §9 settings: sidebar and separate pages', () => {
     expect(cur.text, 'current item text').toBeGreaterThanOrEqual(4.5);
 
     // Hover keeps AA.
-    await sidebar(page).getByRole('link', { name: 'Password', exact: true }).hover();
+    await sideItem(page, 'Password').hover();
     const hovered = (await measure('nav[aria-label="Settings sections"] a:hover'))[0];
     expect(hovered.name).toBe('Password');
     expect(hovered.text, 'hovered item text').toBeGreaterThanOrEqual(4.5);
@@ -179,10 +181,10 @@ test.describe('M5 §9 settings: sidebar and separate pages', () => {
 
     // Keyboard focus is visible: a ring (≥ 3:1 against the sidebar, WCAG 1.4.11) on every item,
     // the current one included, and the focused item's text keeps AA.
-    await sidebar(page).getByRole('link', { name: 'Dashboards', exact: true }).focus();
+    await sideItem(page, 'Dashboards').focus();
     for (const name of ALL_ITEMS) {
       if (name !== 'Dashboards') await page.keyboard.press('Tab');
-      const [f] = await measure('nav[aria-label="Settings sections"] :is(a, button):focus-visible');
+      const [f] = await measure('nav[aria-label="Settings sections"] .side-item:focus-visible');
       expect(f?.name, `Tab reaches ${name}`).toBe(name);
       expect(f.outline, `${name}: focus ring vs the sidebar`).toBeGreaterThanOrEqual(3);
       expect(f.outlineVsItem, `${name}: focus ring vs its own background`).toBeGreaterThanOrEqual(3);
@@ -201,7 +203,7 @@ test.describe('M5 §9 settings: sidebar and separate pages', () => {
     expect(h2.x, 'the content is not pushed aside by a sidebar').toBeLessThan(40);
     const w = await page.evaluate(() => ({ doc: document.documentElement.scrollWidth, view: window.innerWidth }));
     expect(w.doc, 'no sideways scroll').toBeLessThanOrEqual(w.view);
-    const items = menu.locator('a, button');
+    const items = menu.locator('.side-item');
     await expect(items).toHaveText(ALL_ITEMS);
     for (let i = 0; i < ALL_ITEMS.length; i++) {
       const b = (await items.nth(i).boundingBox())!;
