@@ -1,0 +1,501 @@
+{
+  "app": "filebrowser",
+  "image": "filebrowser/filebrowser:latest@sha256:a469ea076d4a",
+  "version": "2.63.23",
+  "captured": "2026-10-28",
+  "port": 80,
+  "want": "core/filebrowser",
+  "notes": "Fresh install",
+  "responses": {
+    "/": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "bfa4c0704c56"
+    },
+    "/#/login": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "bfa4c0704c56"
+    },
+    "/-/health": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "bfa4c0704c56"
+    },
+    "/ViewPower/": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "bfa4c0704c56"
+    },
+    "/ViewPower/isInitialized": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "bfa4c0704c56"
+    },
+    "/accounts/login/": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "bfa4c0704c56"
+    },
+    "/admin/": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "bfa4c0704c56"
+    },
+    "/adminer.php": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "bfa4c0704c56"
+    },
+    "/adminer/": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "bfa4c0704c56"
+    },
+    "/alive": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "bfa4c0704c56"
+    },
+    "/api/app/about": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "bfa4c0704c56"
+    },
+    "/api/health": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "bfa4c0704c56"
+    },
+    "/api/info": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "bfa4c0704c56"
+    },
+    "/api/json": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "bfa4c0704c56"
+    },
+    "/api/ping": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "bfa4c0704c56"
+    },
+    "/api/server/ping": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "bfa4c0704c56"
+    },
+    "/api/v1/info": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "bfa4c0704c56"
+    },
+    "/api/v4/system/ping": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "bfa4c0704c56"
+    },
+    "/api/version": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "bfa4c0704c56"
+    },
+    "/api2/ping/": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "bfa4c0704c56"
+    },
+    "/app/": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "bfa4c0704c56"
+    },
+    "/auth/login": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "bfa4c0704c56"
+    },
+    "/cgi-bin/": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "bfa4c0704c56"
+    },
+    "/cgi-bin/authLogin.cgi": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "bfa4c0704c56"
+    },
+    "/cgi-bin/luci/": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "bfa4c0704c56"
+    },
+    "/control/status": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "bfa4c0704c56"
+    },
+    "/dashboard/": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "bfa4c0704c56"
+    },
+    "/favicon.ico": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "bfa4c0704c56"
+    },
+    "/guacamole/": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "bfa4c0704c56"
+    },
+    "/guacamole/#/": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "bfa4c0704c56"
+    },
+    "/healthcheck": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "bfa4c0704c56"
+    },
+    "/healthz": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "bfa4c0704c56"
+    },
+    "/i/": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "bfa4c0704c56"
+    },
+    "/login": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "bfa4c0704c56"
+    },
+    "/login/": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "bfa4c0704c56"
+    },
+    "/minio/health/live": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "bfa4c0704c56"
+    },
+    "/p/i/": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "bfa4c0704c56"
+    },
+    "/pgadmin4/": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "bfa4c0704c56"
+    },
+    "/pgadmin4/login": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "bfa4c0704c56"
+    },
+    "/phpmyadmin/": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "bfa4c0704c56"
+    },
+    "/phpmyadmin/index.php": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "bfa4c0704c56"
+    },
+    "/ping": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "bfa4c0704c56"
+    },
+    "/rest/login": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "bfa4c0704c56"
+    },
+    "/status.php": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "bfa4c0704c56"
+    },
+    "/users/sign_in": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "bfa4c0704c56"
+    },
+    "/v1/health": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "bfa4c0704c56"
+    },
+    "/version": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "bfa4c0704c56"
+    },
+    "/webpages/index.html": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "bfa4c0704c56"
+    },
+    "/webpages/login.html": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "x-content-type-options": "nosniff",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "bfa4c0704c56"
+    }
+  }
+}

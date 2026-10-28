@@ -1,0 +1,15 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><meta name="theme-color" content="#e66001"/><meta name="msapplication-navbutton-color" content="#464b51"/><meta name="mobile-web-app-capable" content="yes"/><meta name="apple-mobile-web-app-capable" content="yes"/><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/><meta name="format-detection" content="telephone=no"><meta name="description" content="Prowlarr"/><link rel="apple-touch-icon" sizes="180x180" href="/Content/Images/Icons/apple-touch-icon.png?h=6OFTjFECz9UsB7H/TlShUg"/><link rel="icon" type="image/png" sizes="32x32" href="/Content/Images/Icons/favicon-32x32.png?h=lmqCw7GaBq+Sl0mzceEopQ"/><link rel="icon" type="image/png" sizes="16x16" href="/Content/Images/Icons/favicon-16x16.png?h=eoRdw1mTmIIEK5L0pTH5mw"/><link rel="manifest" href="/Content/manifest.json?h=9rX1zcejLhv6e5hZHkCydQ" crossorigin="use-credentials"/><link rel="mask-icon" href="/Content/Images/Icons/safari-pinned-tab.svg?h=D8kxvQdNZQhWkyStrIiagA" color="#00ccff"/><link rel="shortcut icon" type="image/ico" href="/favicon.ico"/><meta name="msapplication-config" content="/Content/browserconfig.xml"/><link rel="stylesheet" href="/Content/Fonts/fonts.css?h=ZYP7+3tB+/eme7MGOlDOLg"><script>window.Prowlarr = {
+        urlBase: ''
+      };</script><script src="/index-e830f1ffa371aa17da0c.js"></script><link href="/Content/styles.css?h=zd/NtvlL8ktbpoBZYtb1Yw" rel="stylesheet"><title>Prowlarr</title><style>.root {
+        overflow: hidden;
+        height: 100%; /* needed for proper layout */
+      }
+
+      @media only screen and (max-width: 768px) {
+        .root {
+          display: flex;
+          flex-direction: column;
+          min-height: 100%;
+          height: auto;
+        }
+      }</style></head><body><div id="portal-root"></div><div id="root" class="root"></div></body></html>

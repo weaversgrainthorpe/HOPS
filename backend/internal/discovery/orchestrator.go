@@ -599,13 +599,14 @@ func (o *Orchestrator) probeHost(ctx context.Context, scanID, host string, ports
 	probe := &Probe{
 		Host:          host,
 		HTTPResponses: make(map[int]*HTTPSnapshot),
-		// One fetch per (port, scheme, path) for this host probe:
-		// detectors sharing a path (Emby/Jellyfin /web/index.html, the
-		// *arr /login, …) reuse the first response.
-		HTTP: cachedProbeHTTP(func(c context.Context, port int, path string, tlsOn bool) (*HTTPSnapshot, error) {
-			return httpGetProbe(c, host, port, path, tlsOn, timeout)
-		}),
+		plainHTTP:     make(map[int]bool),
 	}
+	// One fetch per (port, scheme, path) for this host probe:
+	// detectors sharing a path (Emby/Jellyfin /web/index.html, the
+	// *arr /login, …) reuse the first response.
+	probe.HTTP = cachedProbeHTTP(func(c context.Context, port int, path string, tlsOn bool) (*HTTPSnapshot, error) {
+		return httpGetProbe(c, host, port, path, tlsOn, timeout)
+	}, probe.tlsFor)
 
 	// Hostname enrichment: prefer mDNS-derived names (already
 	// human-friendly), fall back to ARP-derived, then reverse DNS as
@@ -639,8 +640,9 @@ func (o *Orchestrator) probeHost(ctx context.Context, scanID, host string, ports
 	// alone can run (the HTTPResponses map just won't have an entry
 	// for that port).
 	type portHit struct {
-		port int
-		snap *HTTPSnapshot
+		port  int
+		snap  *HTTPSnapshot
+		plain bool // TLS-expected port that only answered plain HTTP
 	}
 	const perHostPortConcurrency = 8
 	portSem := make(chan struct{}, perHostPortConcurrency)
@@ -662,15 +664,16 @@ func (o *Orchestrator) probeHost(ctx context.Context, scanID, host string, ports
 			// http://. Apps that self-sign on non-standard ports
 			// (Sonarr v4 etc.) are out of scope until Phase 4 lets
 			// detectors declare a per-port protocol.
-			tlsOn := isTLSExpectedPort(p)
-			snap, err := httpGetProbe(ctx, host, p, "/", tlsOn, timeout)
+			snap, plain, err := fetchRoot(isTLSExpectedPort(p), func(tlsOn bool) (*HTTPSnapshot, error) {
+				return httpGetProbe(ctx, host, p, "/", tlsOn, timeout)
+			})
 			if err != nil {
 				// TCP open but HTTP failed — still record as open
 				// so TCP-only or port-based detectors can match.
 				hitsCh <- portHit{port: p, snap: nil}
 				return
 			}
-			hitsCh <- portHit{port: p, snap: snap}
+			hitsCh <- portHit{port: p, snap: snap, plain: plain}
 		}(port)
 	}
 	pwg.Wait()
@@ -680,6 +683,9 @@ func (o *Orchestrator) probeHost(ctx context.Context, scanID, host string, ports
 		probe.OpenPorts = append(probe.OpenPorts, h.port)
 		if h.snap != nil {
 			probe.HTTPResponses[h.port] = h.snap
+		}
+		if h.plain {
+			probe.plainHTTP[h.port] = true
 		}
 	}
 
@@ -702,7 +708,7 @@ func (o *Orchestrator) probeHost(ctx context.Context, scanID, host string, ports
 		if fp == nil {
 			fp = map[string]interface{}{}
 		}
-		tlsOn := isTLSExpectedPort(hit.Port)
+		tlsOn := probe.tlsFor(hit.Port)
 		if dataURL, hash, ok := faviconFetch(ctx, host, hit.Port, tlsOn, timeout); ok {
 			fp["favicon_data_url"] = dataURL
 			fp["favicon_mmh3"] = hash
@@ -742,6 +748,9 @@ func (o *Orchestrator) probeHost(ctx context.Context, scanID, host string, ports
 		}
 		for _, hit := range det.Run(ctx, probe) {
 			claimedPorts[hit.Port] = true
+			for _, also := range hit.AlsoPorts {
+				claimedPorts[also] = true
+			}
 			persistHit(det, hit)
 			anyEmit = true
 		}
@@ -760,7 +769,7 @@ func (o *Orchestrator) probeHost(ctx context.Context, scanID, host string, ports
 		if claimedPorts[port] || probe.HTTPResponses[port] == nil {
 			continue
 		}
-		tlsOn := isTLSExpectedPort(port)
+		tlsOn := probe.tlsFor(port)
 		dataURL, hash, ok := faviconFetch(ctx, host, port, tlsOn, timeout)
 		if !ok {
 			continue

@@ -1,0 +1,51 @@
+{
+  "app": "plex",
+  "image": "plexinc/pms-docker:latest@sha256:6d778d41daae",
+  "version": "1.43.5.11079-b3b13e506",
+  "captured": "2026-10-28",
+  "port": 32400,
+  "want": "core/plex",
+  "notes": "Fresh, unclaimed server: no TLS certificate yet, so 32400 only answers plain HTTP",
+  "plainHTTP": true,
+  "responses": {
+    "/": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache",
+        "connection": "Keep-Alive",
+        "content-type": "text/xml;charset=utf-8",
+        "keep-alive": "timeout=20",
+        "x-plex-content-compressed-length": "2420",
+        "x-plex-content-original-length": "4998",
+        "x-plex-protocol": "1.0"
+      },
+      "body": "250902a54dbe"
+    },
+    "/favicon.ico": {
+      "status": 200,
+      "headers": {
+        "accept-ranges": "bytes",
+        "cache-control": "no-cache",
+        "connection": "Keep-Alive",
+        "content-length": "5430",
+        "content-type": "application/octet-stream",
+        "keep-alive": "timeout=20",
+        "x-plex-protocol": "1.0"
+      },
+      "body": "f3365df9357f"
+    },
+    "/identity": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache",
+        "connection": "Keep-Alive",
+        "content-type": "text/xml;charset=utf-8",
+        "keep-alive": "timeout=20",
+        "x-plex-content-compressed-length": "179",
+        "x-plex-content-original-length": "208",
+        "x-plex-protocol": "1.0"
+      },
+      "body": "039ea5d65aa8"
+    }
+  }
+}

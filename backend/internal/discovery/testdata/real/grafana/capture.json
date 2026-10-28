@@ -1,0 +1,133 @@
+{
+  "app": "grafana",
+  "image": "grafana/grafana:latest@sha256:488984b716c0",
+  "captured": "2026-10-28",
+  "port": 3000,
+  "want": "core/grafana",
+  "notes": "Fresh install: / 302s to /login",
+  "responses": {
+    "/": {
+      "status": 302,
+      "headers": {
+        "cache-control": "no-store",
+        "content-type": "text/html; charset=utf-8",
+        "location": "/login",
+        "vary": "Accept-Encoding",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "deny",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "0d1cfad8b38b"
+    },
+    "/api/badge": {
+      "status": 401,
+      "headers": {
+        "cache-control": "no-store",
+        "content-type": "application/json; charset=UTF-8",
+        "vary": "Accept-Encoding",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "deny",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "1cca749aa226"
+    },
+    "/api/config": {
+      "status": 401,
+      "headers": {
+        "cache-control": "no-store",
+        "content-type": "application/json; charset=UTF-8",
+        "vary": "Accept-Encoding",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "deny",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "1cca749aa226"
+    },
+    "/api/health": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-store",
+        "content-type": "application/json; charset=UTF-8",
+        "vary": "Accept-Encoding",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "deny",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "42182cd69938"
+    },
+    "/api/info": {
+      "status": 401,
+      "headers": {
+        "cache-control": "no-store",
+        "content-type": "application/json; charset=UTF-8",
+        "vary": "Accept-Encoding",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "deny",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "1cca749aa226"
+    },
+    "/control/status": {
+      "status": 302,
+      "headers": {
+        "cache-control": "no-store",
+        "content-type": "text/html; charset=utf-8",
+        "location": "/login?redirectTo=%2Fcontrol%2Fstatus",
+        "vary": "Accept-Encoding",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "deny",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "a23fdde1eb12"
+    },
+    "/dashboard": {
+      "status": 302,
+      "headers": {
+        "cache-control": "no-store",
+        "content-type": "text/html; charset=utf-8",
+        "location": "/login?redirectTo=%2Fdashboard",
+        "vary": "Accept-Encoding",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "deny",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "8e81c2d982fd"
+    },
+    "/favicon.ico": {
+      "status": 302,
+      "headers": {
+        "cache-control": "no-store",
+        "content-type": "text/html; charset=utf-8",
+        "location": "/login?redirectTo=%2Ffavicon.ico",
+        "vary": "Accept-Encoding",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "deny",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "2160318f39c9"
+    },
+    "/healthz": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-store",
+        "vary": "Accept-Encoding",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "deny",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "843ac01149cc"
+    },
+    "/login": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-store",
+        "content-type": "text/html; charset=UTF-8",
+        "vary": "Accept-Encoding",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "deny",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "4b50f1d4570b"
+    }
+  }
+}

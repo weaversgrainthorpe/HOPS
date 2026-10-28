@@ -1,0 +1,233 @@
+{
+  "app": "traefik",
+  "image": "traefik:latest@sha256:1336e85aaed2",
+  "version": "v3.7.16",
+  "captured": "2026-10-28",
+  "port": 8080,
+  "want": "core/traefik",
+  "notes": "--api.insecure=true: dashboard on the traefik entrypoint :8080",
+  "faviconMmh3": 1752131761,
+  "responses": {
+    "/": {
+      "status": 301,
+      "headers": {
+        "content-length": "17",
+        "location": "http://127.0.0.1:8080/dashboard/"
+      },
+      "body": "d18ed36671b8"
+    },
+    "/#/login": {
+      "status": 301,
+      "headers": {
+        "content-length": "17",
+        "location": "http://127.0.0.1:8080/dashboard/"
+      },
+      "body": "d18ed36671b8"
+    },
+    "/ViewPower/": {
+      "status": 404,
+      "headers": {
+        "content-length": "19",
+        "content-security-policy": "frame-src 'self' https://traefik.io https://*.traefik.io;",
+        "content-type": "text/plain; charset=utf-8",
+        "x-content-type-options": "nosniff"
+      },
+      "body": "b16e15764b8b"
+    },
+    "/ViewPower/isInitialized": {
+      "status": 404,
+      "headers": {
+        "content-length": "19",
+        "content-security-policy": "frame-src 'self' https://traefik.io https://*.traefik.io;",
+        "content-type": "text/plain; charset=utf-8",
+        "x-content-type-options": "nosniff"
+      },
+      "body": "b16e15764b8b"
+    },
+    "/adminer.php": {
+      "status": 404,
+      "headers": {
+        "content-length": "19",
+        "content-security-policy": "frame-src 'self' https://traefik.io https://*.traefik.io;",
+        "content-type": "text/plain; charset=utf-8",
+        "x-content-type-options": "nosniff"
+      },
+      "body": "b16e15764b8b"
+    },
+    "/adminer/": {
+      "status": 404,
+      "headers": {
+        "content-length": "19",
+        "content-security-policy": "frame-src 'self' https://traefik.io https://*.traefik.io;",
+        "content-type": "text/plain; charset=utf-8",
+        "x-content-type-options": "nosniff"
+      },
+      "body": "b16e15764b8b"
+    },
+    "/alive": {
+      "status": 404,
+      "headers": {
+        "content-length": "19",
+        "content-security-policy": "frame-src 'self' https://traefik.io https://*.traefik.io;",
+        "content-type": "text/plain; charset=utf-8",
+        "x-content-type-options": "nosniff"
+      },
+      "body": "b16e15764b8b"
+    },
+    "/api/config": {
+      "status": 404,
+      "headers": {
+        "content-length": "19",
+        "content-type": "text/plain; charset=utf-8",
+        "x-content-type-options": "nosniff"
+      },
+      "body": "b16e15764b8b"
+    },
+    "/api/json": {
+      "status": 404,
+      "headers": {
+        "content-length": "19",
+        "content-type": "text/plain; charset=utf-8",
+        "x-content-type-options": "nosniff"
+      },
+      "body": "b16e15764b8b"
+    },
+    "/api/version": {
+      "status": 200,
+      "headers": {
+        "content-length": "86",
+        "content-type": "application/json; charset=UTF-8"
+      },
+      "body": "f8a0019999f9"
+    },
+    "/cgi-bin/": {
+      "status": 404,
+      "headers": {
+        "content-length": "19",
+        "content-security-policy": "frame-src 'self' https://traefik.io https://*.traefik.io;",
+        "content-type": "text/plain; charset=utf-8",
+        "x-content-type-options": "nosniff"
+      },
+      "body": "b16e15764b8b"
+    },
+    "/cgi-bin/authLogin.cgi": {
+      "status": 404,
+      "headers": {
+        "content-length": "19",
+        "content-security-policy": "frame-src 'self' https://traefik.io https://*.traefik.io;",
+        "content-type": "text/plain; charset=utf-8",
+        "x-content-type-options": "nosniff"
+      },
+      "body": "b16e15764b8b"
+    },
+    "/dashboard/": {
+      "status": 200,
+      "headers": {
+        "content-length": "689",
+        "content-security-policy": "frame-src 'self' https://traefik.io https://*.traefik.io;",
+        "content-type": "text/html; charset=utf-8"
+      },
+      "body": "e533baa03c91"
+    },
+    "/favicon.ico": {
+      "status": 200,
+      "headers": {
+        "accept-ranges": "bytes",
+        "content-length": "15406",
+        "content-security-policy": "frame-src 'self' https://traefik.io https://*.traefik.io;",
+        "content-type": "image/vnd.microsoft.icon"
+      },
+      "body": "7b9791c66bfb"
+    },
+    "/guacamole/": {
+      "status": 404,
+      "headers": {
+        "content-length": "19",
+        "content-security-policy": "frame-src 'self' https://traefik.io https://*.traefik.io;",
+        "content-type": "text/plain; charset=utf-8",
+        "x-content-type-options": "nosniff"
+      },
+      "body": "b16e15764b8b"
+    },
+    "/guacamole/#/": {
+      "status": 404,
+      "headers": {
+        "content-length": "19",
+        "content-security-policy": "frame-src 'self' https://traefik.io https://*.traefik.io;",
+        "content-type": "text/plain; charset=utf-8",
+        "x-content-type-options": "nosniff"
+      },
+      "body": "b16e15764b8b"
+    },
+    "/healthcheck": {
+      "status": 404,
+      "headers": {
+        "content-length": "19",
+        "content-security-policy": "frame-src 'self' https://traefik.io https://*.traefik.io;",
+        "content-type": "text/plain; charset=utf-8",
+        "x-content-type-options": "nosniff"
+      },
+      "body": "b16e15764b8b"
+    },
+    "/login": {
+      "status": 404,
+      "headers": {
+        "content-length": "19",
+        "content-security-policy": "frame-src 'self' https://traefik.io https://*.traefik.io;",
+        "content-type": "text/plain; charset=utf-8",
+        "x-content-type-options": "nosniff"
+      },
+      "body": "b16e15764b8b"
+    },
+    "/pgadmin4/": {
+      "status": 404,
+      "headers": {
+        "content-length": "19",
+        "content-security-policy": "frame-src 'self' https://traefik.io https://*.traefik.io;",
+        "content-type": "text/plain; charset=utf-8",
+        "x-content-type-options": "nosniff"
+      },
+      "body": "b16e15764b8b"
+    },
+    "/pgadmin4/login": {
+      "status": 404,
+      "headers": {
+        "content-length": "19",
+        "content-security-policy": "frame-src 'self' https://traefik.io https://*.traefik.io;",
+        "content-type": "text/plain; charset=utf-8",
+        "x-content-type-options": "nosniff"
+      },
+      "body": "b16e15764b8b"
+    },
+    "/phpmyadmin/": {
+      "status": 404,
+      "headers": {
+        "content-length": "19",
+        "content-security-policy": "frame-src 'self' https://traefik.io https://*.traefik.io;",
+        "content-type": "text/plain; charset=utf-8",
+        "x-content-type-options": "nosniff"
+      },
+      "body": "b16e15764b8b"
+    },
+    "/phpmyadmin/index.php": {
+      "status": 404,
+      "headers": {
+        "content-length": "19",
+        "content-security-policy": "frame-src 'self' https://traefik.io https://*.traefik.io;",
+        "content-type": "text/plain; charset=utf-8",
+        "x-content-type-options": "nosniff"
+      },
+      "body": "b16e15764b8b"
+    },
+    "/v1/health": {
+      "status": 404,
+      "headers": {
+        "content-length": "19",
+        "content-security-policy": "frame-src 'self' https://traefik.io https://*.traefik.io;",
+        "content-type": "text/plain; charset=utf-8",
+        "x-content-type-options": "nosniff"
+      },
+      "body": "b16e15764b8b"
+    }
+  }
+}

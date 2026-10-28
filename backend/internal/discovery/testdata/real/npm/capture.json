@@ -1,0 +1,62 @@
+{
+  "app": "npm",
+  "image": "jc21/nginx-proxy-manager:latest@sha256:4393e642e233",
+  "captured": "2026-10-28",
+  "port": 81,
+  "want": "core/npm",
+  "notes": "Fresh install, admin UI port",
+  "responses": {
+    "/": {
+      "status": 200,
+      "headers": {
+        "connection": "keep-alive",
+        "content-type": "text/html",
+        "etag": "W/\"6ab4ed42-61f\"",
+        "last-modified": "Thu, 24 Sep 2026 09:28:34 GMT",
+        "server": "openresty"
+      },
+      "body": "79b89ab25fa1"
+    },
+    "/api/": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache, no-store, max-age=0, must-revalidate",
+        "connection": "keep-alive",
+        "content-length": "75",
+        "content-type": "application/json; charset=utf-8",
+        "etag": "W/\"4b-M5ft355/VgNYyffXyxrMRkr070w\"",
+        "expires": "0",
+        "pragma": "no-cache",
+        "server": "openresty",
+        "vary": "Accept-Encoding",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "x-served-by": "127.0.0.1",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "7184dcfc1b29"
+    },
+    "/favicon.ico": {
+      "status": 200,
+      "headers": {
+        "connection": "keep-alive",
+        "content-type": "text/html",
+        "etag": "W/\"6ab4ed42-61f\"",
+        "last-modified": "Thu, 24 Sep 2026 09:28:34 GMT",
+        "server": "openresty"
+      },
+      "body": "79b89ab25fa1"
+    },
+    "/login": {
+      "status": 200,
+      "headers": {
+        "connection": "keep-alive",
+        "content-type": "text/html",
+        "etag": "W/\"6ab4ed42-61f\"",
+        "last-modified": "Thu, 24 Sep 2026 09:28:34 GMT",
+        "server": "openresty"
+      },
+      "body": "79b89ab25fa1"
+    }
+  }
+}

@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <title>Bazarr</title>
+    <base href="/" />
+    <meta charset="utf-8" />
+    <link rel="icon" type="image/x-icon" href="./images/favicon.ico" />
+    <link
+      rel="apple-touch-icon"
+      href="./images/apple-touch-icon-180x180.png"
+      sizes="180x180"
+    />
+    <link
+      rel="mask-icon"
+      href="./images/maskable-icon-512x512.png"
+      color="#FFFFFF"
+    />
+    <meta name="theme-color" content="#be4bdb" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1"
+    />
+    <meta
+      name="description"
+      content="Bazarr is a companion application to Sonarr and Radarr. It manages and downloads subtitles based on your requirements. You define your preferences by TV show or movie and Bazarr takes care of everything for you."
+    />
+    <script type="module" crossorigin src="./assets/index-BHmsRkPA.js"></script>
+    <link rel="modulepreload" crossorigin href="./assets/rolldown-runtime-hePW80VL.js">
+    <link rel="modulepreload" crossorigin href="./assets/@mantine/spotlight-D4Fx3ggr.js">
+    <link rel="modulepreload" crossorigin href="./assets/vendors-CUEKfF0K.js">
+    <link rel="modulepreload" crossorigin href="./assets/ui-J5EvLUxO.js">
+    <link rel="modulepreload" crossorigin href="./assets/query-ChBpY5Gh.js">
+    <link rel="modulepreload" crossorigin href="./assets/socket.io-parser-DJlPn-3O.js">
+    <link rel="modulepreload" crossorigin href="./assets/utils-DCPMpyLX.js">
+    <link rel="modulepreload" crossorigin href="./assets/async-CNHqEObF.js">
+    <link rel="modulepreload" crossorigin href="./assets/react-timeago-BUP5llqv.js">
+    <link rel="modulepreload" crossorigin href="./assets/dompurify-Cx-3ymZN.js">
+    <link rel="stylesheet" crossorigin href="./assets/@mantine/spotlight-BvNUpTS_.css">
+    <link rel="stylesheet" crossorigin href="./assets/ui-BZPL0216.css">
+    <link rel="stylesheet" crossorigin href="./assets/async-1z_5PXrV.css">
+    <link rel="stylesheet" crossorigin href="./assets/index-CWFlFI7V.css">
+  <link rel="manifest" href="./manifest.webmanifest"><script id="vite-plugin-pwa:register-sw" src="./registerSW.js"></script></head>
+  <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root"></div>
+    <script>
+      try {
+        window.Bazarr = JSON.parse(`{"apiKey": "REDACTED", "baseUrl": "", "canUpdate": false, "hasUpdate": false, "isConfigured": false}`);
+      } catch (error) {}
+    </script>
+  </body>
+</html>

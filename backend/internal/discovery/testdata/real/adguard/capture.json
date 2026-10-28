@@ -1,0 +1,110 @@
+{
+  "app": "adguard",
+  "image": "adguard/adguardhome:latest@sha256:aba9e3bf0613",
+  "version": "v0.107.79",
+  "captured": "2026-10-28",
+  "port": 3000,
+  "want": "core/adguard",
+  "notes": "Fresh install: setup wizard on 3000 (/ 302s to /install.html)",
+  "responses": {
+    "/": {
+      "status": 302,
+      "headers": {
+        "content-length": "36",
+        "content-type": "text/html; charset=utf-8",
+        "location": "/install.html"
+      },
+      "body": "e169e82a123e"
+    },
+    "/api/badge": {
+      "status": 302,
+      "headers": {
+        "content-length": "40",
+        "content-type": "text/html; charset=utf-8",
+        "location": "/api/install.html"
+      },
+      "body": "f6047e0e8e39"
+    },
+    "/api/config": {
+      "status": 302,
+      "headers": {
+        "content-length": "40",
+        "content-type": "text/html; charset=utf-8",
+        "location": "/api/install.html"
+      },
+      "body": "f6047e0e8e39"
+    },
+    "/api/health": {
+      "status": 302,
+      "headers": {
+        "content-length": "40",
+        "content-type": "text/html; charset=utf-8",
+        "location": "/api/install.html"
+      },
+      "body": "f6047e0e8e39"
+    },
+    "/api/info": {
+      "status": 302,
+      "headers": {
+        "content-length": "40",
+        "content-type": "text/html; charset=utf-8",
+        "location": "/api/install.html"
+      },
+      "body": "f6047e0e8e39"
+    },
+    "/control/status": {
+      "status": 302,
+      "headers": {
+        "content-length": "44",
+        "content-type": "text/html; charset=utf-8",
+        "location": "/control/install.html"
+      },
+      "body": "59face03e0c1"
+    },
+    "/dashboard": {
+      "status": 302,
+      "headers": {
+        "content-length": "36",
+        "content-type": "text/html; charset=utf-8",
+        "location": "/install.html"
+      },
+      "body": "e169e82a123e"
+    },
+    "/favicon.ico": {
+      "status": 302,
+      "headers": {
+        "content-length": "36",
+        "content-type": "text/html; charset=utf-8",
+        "location": "/install.html"
+      },
+      "body": "e169e82a123e"
+    },
+    "/healthz": {
+      "status": 302,
+      "headers": {
+        "content-length": "36",
+        "content-type": "text/html; charset=utf-8",
+        "location": "/install.html"
+      },
+      "body": "e169e82a123e"
+    },
+    "/install.html": {
+      "status": 200,
+      "headers": {
+        "accept-ranges": "bytes",
+        "content-length": "879",
+        "content-type": "text/html; charset=utf-8"
+      },
+      "body": "d5b140eca8ac"
+    },
+    "/login": {
+      "status": 302,
+      "headers": {
+        "content-length": "36",
+        "content-type": "text/html; charset=utf-8",
+        "location": "/install.html"
+      },
+      "body": "e169e82a123e"
+    }
+  }
+}

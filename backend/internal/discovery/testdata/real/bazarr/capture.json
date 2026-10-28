@@ -1,0 +1,43 @@
+{
+  "app": "bazarr",
+  "image": "lscr.io/linuxserver/bazarr:latest@sha256:9a625883f054",
+  "version": "v1.6.2-ls370",
+  "captured": "2026-10-28",
+  "port": 6767,
+  "want": "core/bazarr",
+  "notes": "Fresh install",
+  "responses": {
+    "/": {
+      "status": 200,
+      "headers": {
+        "access-control-allow-origin": "*",
+        "content-type": "text/html; charset=utf-8",
+        "server": "waitress",
+        "vary": "Accept-Encoding"
+      },
+      "body": "9eb641a9d79b"
+    },
+    "/favicon.ico": {
+      "status": 200,
+      "headers": {
+        "access-control-allow-origin": "*",
+        "content-type": "text/html; charset=utf-8",
+        "server": "waitress",
+        "vary": "Accept-Encoding"
+      },
+      "body": "9eb641a9d79b"
+    },
+    "/login": {
+      "status": 302,
+      "headers": {
+        "access-control-allow-origin": "*",
+        "content-length": "189",
+        "content-type": "text/html; charset=utf-8",
+        "location": "/",
+        "server": "waitress",
+        "vary": "Accept-Encoding"
+      },
+      "body": "9cd515fe301e"
+    }
+  }
+}

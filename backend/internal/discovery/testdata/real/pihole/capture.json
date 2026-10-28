@@ -1,0 +1,838 @@
+{
+  "app": "pihole",
+  "image": "pihole/pihole:latest@sha256:d34134716fc3",
+  "version": "2026.10.0",
+  "captured": "2026-10-28",
+  "port": 80,
+  "want": "core/pihole",
+  "notes": "Pi-hole v6 (FTL web server): / is a 404 page that is the full Pi-hole shell; /admin/ 302s to /admin/login. No x-pi-hole header any more.",
+  "responses": {
+    "/": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate, private, max-age=0",
+        "content-security-policy": "default-src 'none'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; img-src 'self'; manifest-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; form-action 'self'",
+        "content-type": "text/html; charset=utf-8",
+        "expires": "0",
+        "pragma": "no-cache",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-frame-options": "DENY",
+        "x-xss-protection": "0"
+      },
+      "body": "4239d52686c4"
+    },
+    "/#/login": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate, private, max-age=0",
+        "content-security-policy": "default-src 'none'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; img-src 'self'; manifest-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; form-action 'self'",
+        "content-type": "text/html; charset=utf-8",
+        "expires": "0",
+        "pragma": "no-cache",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-frame-options": "DENY",
+        "x-xss-protection": "0"
+      },
+      "body": "4239d52686c4"
+    },
+    "/-/health": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate, private, max-age=0",
+        "content-security-policy": "default-src 'none'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; img-src 'self'; manifest-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; form-action 'self'",
+        "content-type": "text/html; charset=utf-8",
+        "expires": "0",
+        "pragma": "no-cache",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-frame-options": "DENY",
+        "x-xss-protection": "0"
+      },
+      "body": "4239d52686c4"
+    },
+    "/ViewPower/": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate, private, max-age=0",
+        "content-security-policy": "default-src 'none'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; img-src 'self'; manifest-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; form-action 'self'",
+        "content-type": "text/html; charset=utf-8",
+        "expires": "0",
+        "pragma": "no-cache",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-frame-options": "DENY",
+        "x-xss-protection": "0"
+      },
+      "body": "4239d52686c4"
+    },
+    "/ViewPower/isInitialized": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate, private, max-age=0",
+        "content-security-policy": "default-src 'none'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; img-src 'self'; manifest-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; form-action 'self'",
+        "content-type": "text/html; charset=utf-8",
+        "expires": "0",
+        "pragma": "no-cache",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-frame-options": "DENY",
+        "x-xss-protection": "0"
+      },
+      "body": "4239d52686c4"
+    },
+    "/accounts/login/": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate, private, max-age=0",
+        "content-security-policy": "default-src 'none'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; img-src 'self'; manifest-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; form-action 'self'",
+        "content-type": "text/html; charset=utf-8",
+        "expires": "0",
+        "pragma": "no-cache",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-frame-options": "DENY",
+        "x-xss-protection": "0"
+      },
+      "body": "4239d52686c4"
+    },
+    "/admin/": {
+      "status": 302,
+      "headers": {
+        "access-control-allow-headers": "*",
+        "access-control-allow-methods": "*",
+        "cache-control": "no-cache, no-store, must-revalidate, private, max-age=0",
+        "connection": "keep-alive",
+        "content-length": "0",
+        "content-security-policy": "default-src 'none'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; img-src 'self'; manifest-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; form-action 'self'",
+        "expires": "0",
+        "location": "/admin/login",
+        "pragma": "no-cache",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-frame-options": "DENY",
+        "x-xss-protection": "0"
+      }
+    },
+    "/adminer.php": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate, private, max-age=0",
+        "content-security-policy": "default-src 'none'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; img-src 'self'; manifest-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; form-action 'self'",
+        "content-type": "text/html; charset=utf-8",
+        "expires": "0",
+        "pragma": "no-cache",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-frame-options": "DENY",
+        "x-xss-protection": "0"
+      },
+      "body": "4239d52686c4"
+    },
+    "/adminer/": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate, private, max-age=0",
+        "content-security-policy": "default-src 'none'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; img-src 'self'; manifest-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; form-action 'self'",
+        "content-type": "text/html; charset=utf-8",
+        "expires": "0",
+        "pragma": "no-cache",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-frame-options": "DENY",
+        "x-xss-protection": "0"
+      },
+      "body": "4239d52686c4"
+    },
+    "/alive": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate, private, max-age=0",
+        "content-security-policy": "default-src 'none'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; img-src 'self'; manifest-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; form-action 'self'",
+        "content-type": "text/html; charset=utf-8",
+        "expires": "0",
+        "pragma": "no-cache",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-frame-options": "DENY",
+        "x-xss-protection": "0"
+      },
+      "body": "4239d52686c4"
+    },
+    "/api/app/about": {
+      "status": 404,
+      "headers": {
+        "access-control-allow-headers": "*",
+        "access-control-allow-methods": "*",
+        "cache-control": "no-cache, no-store, must-revalidate, private, max-age=0",
+        "connection": "keep-alive",
+        "content-length": "103",
+        "content-security-policy": "default-src 'none'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; img-src 'self'; manifest-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; form-action 'self'",
+        "content-type": "application/json; charset=utf-8",
+        "expires": "0",
+        "pragma": "no-cache",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-frame-options": "DENY",
+        "x-xss-protection": "0"
+      },
+      "body": "c1e1208f07c5"
+    },
+    "/api/health": {
+      "status": 404,
+      "headers": {
+        "access-control-allow-headers": "*",
+        "access-control-allow-methods": "*",
+        "cache-control": "no-cache, no-store, must-revalidate, private, max-age=0",
+        "connection": "keep-alive",
+        "content-length": "102",
+        "content-security-policy": "default-src 'none'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; img-src 'self'; manifest-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; form-action 'self'",
+        "content-type": "application/json; charset=utf-8",
+        "expires": "0",
+        "pragma": "no-cache",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-frame-options": "DENY",
+        "x-xss-protection": "0"
+      },
+      "body": "85bb5338582f"
+    },
+    "/api/info": {
+      "status": 404,
+      "headers": {
+        "access-control-allow-headers": "*",
+        "access-control-allow-methods": "*",
+        "cache-control": "no-cache, no-store, must-revalidate, private, max-age=0",
+        "connection": "keep-alive",
+        "content-length": "100",
+        "content-security-policy": "default-src 'none'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; img-src 'self'; manifest-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; form-action 'self'",
+        "content-type": "application/json; charset=utf-8",
+        "expires": "0",
+        "pragma": "no-cache",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-frame-options": "DENY",
+        "x-xss-protection": "0"
+      },
+      "body": "25b4656d0532"
+    },
+    "/api/json": {
+      "status": 404,
+      "headers": {
+        "access-control-allow-headers": "*",
+        "access-control-allow-methods": "*",
+        "cache-control": "no-cache, no-store, must-revalidate, private, max-age=0",
+        "connection": "keep-alive",
+        "content-length": "99",
+        "content-security-policy": "default-src 'none'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; img-src 'self'; manifest-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; form-action 'self'",
+        "content-type": "application/json; charset=utf-8",
+        "expires": "0",
+        "pragma": "no-cache",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-frame-options": "DENY",
+        "x-xss-protection": "0"
+      },
+      "body": "039b829aff56"
+    },
+    "/api/ping": {
+      "status": 404,
+      "headers": {
+        "access-control-allow-headers": "*",
+        "access-control-allow-methods": "*",
+        "cache-control": "no-cache, no-store, must-revalidate, private, max-age=0",
+        "connection": "keep-alive",
+        "content-length": "97",
+        "content-security-policy": "default-src 'none'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; img-src 'self'; manifest-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; form-action 'self'",
+        "content-type": "application/json; charset=utf-8",
+        "expires": "0",
+        "pragma": "no-cache",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-frame-options": "DENY",
+        "x-xss-protection": "0"
+      },
+      "body": "0ed31e58425a"
+    },
+    "/api/server/ping": {
+      "status": 404,
+      "headers": {
+        "access-control-allow-headers": "*",
+        "access-control-allow-methods": "*",
+        "cache-control": "no-cache, no-store, must-revalidate, private, max-age=0",
+        "connection": "keep-alive",
+        "content-length": "106",
+        "content-security-policy": "default-src 'none'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; img-src 'self'; manifest-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; form-action 'self'",
+        "content-type": "application/json; charset=utf-8",
+        "expires": "0",
+        "pragma": "no-cache",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-frame-options": "DENY",
+        "x-xss-protection": "0"
+      },
+      "body": "9de5cf92fa3a"
+    },
+    "/api/v1/info": {
+      "status": 404,
+      "headers": {
+        "access-control-allow-headers": "*",
+        "access-control-allow-methods": "*",
+        "cache-control": "no-cache, no-store, must-revalidate, private, max-age=0",
+        "connection": "keep-alive",
+        "content-length": "102",
+        "content-security-policy": "default-src 'none'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; img-src 'self'; manifest-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; form-action 'self'",
+        "content-type": "application/json; charset=utf-8",
+        "expires": "0",
+        "pragma": "no-cache",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-frame-options": "DENY",
+        "x-xss-protection": "0"
+      },
+      "body": "a1887e8cb18d"
+    },
+    "/api/v4/system/ping": {
+      "status": 404,
+      "headers": {
+        "access-control-allow-headers": "*",
+        "access-control-allow-methods": "*",
+        "cache-control": "no-cache, no-store, must-revalidate, private, max-age=0",
+        "connection": "keep-alive",
+        "content-length": "108",
+        "content-security-policy": "default-src 'none'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; img-src 'self'; manifest-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; form-action 'self'",
+        "content-type": "application/json; charset=utf-8",
+        "expires": "0",
+        "pragma": "no-cache",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-frame-options": "DENY",
+        "x-xss-protection": "0"
+      },
+      "body": "e86e9312a845"
+    },
+    "/api/version": {
+      "status": 404,
+      "headers": {
+        "access-control-allow-headers": "*",
+        "access-control-allow-methods": "*",
+        "cache-control": "no-cache, no-store, must-revalidate, private, max-age=0",
+        "connection": "keep-alive",
+        "content-length": "101",
+        "content-security-policy": "default-src 'none'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; img-src 'self'; manifest-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; form-action 'self'",
+        "content-type": "application/json; charset=utf-8",
+        "expires": "0",
+        "pragma": "no-cache",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-frame-options": "DENY",
+        "x-xss-protection": "0"
+      },
+      "body": "55ea21cd5223"
+    },
+    "/api2/ping/": {
+      "status": 404,
+      "headers": {
+        "access-control-allow-headers": "*",
+        "access-control-allow-methods": "*",
+        "cache-control": "no-cache, no-store, must-revalidate, private, max-age=0",
+        "connection": "keep-alive",
+        "content-length": "102",
+        "content-security-policy": "default-src 'none'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; img-src 'self'; manifest-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; form-action 'self'",
+        "content-type": "application/json; charset=utf-8",
+        "expires": "0",
+        "pragma": "no-cache",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-frame-options": "DENY",
+        "x-xss-protection": "0"
+      },
+      "body": "deb6b9c9a409"
+    },
+    "/app/": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate, private, max-age=0",
+        "content-security-policy": "default-src 'none'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; img-src 'self'; manifest-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; form-action 'self'",
+        "content-type": "text/html; charset=utf-8",
+        "expires": "0",
+        "pragma": "no-cache",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-frame-options": "DENY",
+        "x-xss-protection": "0"
+      },
+      "body": "4239d52686c4"
+    },
+    "/auth/login": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate, private, max-age=0",
+        "content-security-policy": "default-src 'none'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; img-src 'self'; manifest-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; form-action 'self'",
+        "content-type": "text/html; charset=utf-8",
+        "expires": "0",
+        "pragma": "no-cache",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-frame-options": "DENY",
+        "x-xss-protection": "0"
+      },
+      "body": "4239d52686c4"
+    },
+    "/cgi-bin/": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate, private, max-age=0",
+        "content-security-policy": "default-src 'none'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; img-src 'self'; manifest-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; form-action 'self'",
+        "content-type": "text/html; charset=utf-8",
+        "expires": "0",
+        "pragma": "no-cache",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-frame-options": "DENY",
+        "x-xss-protection": "0"
+      },
+      "body": "4239d52686c4"
+    },
+    "/cgi-bin/authLogin.cgi": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate, private, max-age=0",
+        "content-security-policy": "default-src 'none'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; img-src 'self'; manifest-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; form-action 'self'",
+        "content-type": "text/html; charset=utf-8",
+        "expires": "0",
+        "pragma": "no-cache",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-frame-options": "DENY",
+        "x-xss-protection": "0"
+      },
+      "body": "4239d52686c4"
+    },
+    "/cgi-bin/luci/": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate, private, max-age=0",
+        "content-security-policy": "default-src 'none'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; img-src 'self'; manifest-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; form-action 'self'",
+        "content-type": "text/html; charset=utf-8",
+        "expires": "0",
+        "pragma": "no-cache",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-frame-options": "DENY",
+        "x-xss-protection": "0"
+      },
+      "body": "4239d52686c4"
+    },
+    "/control/status": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate, private, max-age=0",
+        "content-security-policy": "default-src 'none'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; img-src 'self'; manifest-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; form-action 'self'",
+        "content-type": "text/html; charset=utf-8",
+        "expires": "0",
+        "pragma": "no-cache",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-frame-options": "DENY",
+        "x-xss-protection": "0"
+      },
+      "body": "4239d52686c4"
+    },
+    "/dashboard/": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate, private, max-age=0",
+        "content-security-policy": "default-src 'none'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; img-src 'self'; manifest-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; form-action 'self'",
+        "content-type": "text/html; charset=utf-8",
+        "expires": "0",
+        "pragma": "no-cache",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-frame-options": "DENY",
+        "x-xss-protection": "0"
+      },
+      "body": "4239d52686c4"
+    },
+    "/favicon.ico": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate, private, max-age=0",
+        "content-security-policy": "default-src 'none'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; img-src 'self'; manifest-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; form-action 'self'",
+        "content-type": "text/html; charset=utf-8",
+        "expires": "0",
+        "pragma": "no-cache",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-frame-options": "DENY",
+        "x-xss-protection": "0"
+      },
+      "body": "4239d52686c4"
+    },
+    "/guacamole/": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate, private, max-age=0",
+        "content-security-policy": "default-src 'none'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; img-src 'self'; manifest-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; form-action 'self'",
+        "content-type": "text/html; charset=utf-8",
+        "expires": "0",
+        "pragma": "no-cache",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-frame-options": "DENY",
+        "x-xss-protection": "0"
+      },
+      "body": "4239d52686c4"
+    },
+    "/guacamole/#/": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate, private, max-age=0",
+        "content-security-policy": "default-src 'none'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; img-src 'self'; manifest-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; form-action 'self'",
+        "content-type": "text/html; charset=utf-8",
+        "expires": "0",
+        "pragma": "no-cache",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-frame-options": "DENY",
+        "x-xss-protection": "0"
+      },
+      "body": "4239d52686c4"
+    },
+    "/healthcheck": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate, private, max-age=0",
+        "content-security-policy": "default-src 'none'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; img-src 'self'; manifest-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; form-action 'self'",
+        "content-type": "text/html; charset=utf-8",
+        "expires": "0",
+        "pragma": "no-cache",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-frame-options": "DENY",
+        "x-xss-protection": "0"
+      },
+      "body": "4239d52686c4"
+    },
+    "/healthz": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate, private, max-age=0",
+        "content-security-policy": "default-src 'none'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; img-src 'self'; manifest-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; form-action 'self'",
+        "content-type": "text/html; charset=utf-8",
+        "expires": "0",
+        "pragma": "no-cache",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-frame-options": "DENY",
+        "x-xss-protection": "0"
+      },
+      "body": "4239d52686c4"
+    },
+    "/i/": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate, private, max-age=0",
+        "content-security-policy": "default-src 'none'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; img-src 'self'; manifest-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; form-action 'self'",
+        "content-type": "text/html; charset=utf-8",
+        "expires": "0",
+        "pragma": "no-cache",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-frame-options": "DENY",
+        "x-xss-protection": "0"
+      },
+      "body": "4239d52686c4"
+    },
+    "/login": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate, private, max-age=0",
+        "content-security-policy": "default-src 'none'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; img-src 'self'; manifest-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; form-action 'self'",
+        "content-type": "text/html; charset=utf-8",
+        "expires": "0",
+        "pragma": "no-cache",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-frame-options": "DENY",
+        "x-xss-protection": "0"
+      },
+      "body": "4239d52686c4"
+    },
+    "/login/": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate, private, max-age=0",
+        "content-security-policy": "default-src 'none'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; img-src 'self'; manifest-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; form-action 'self'",
+        "content-type": "text/html; charset=utf-8",
+        "expires": "0",
+        "pragma": "no-cache",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-frame-options": "DENY",
+        "x-xss-protection": "0"
+      },
+      "body": "4239d52686c4"
+    },
+    "/minio/health/live": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate, private, max-age=0",
+        "content-security-policy": "default-src 'none'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; img-src 'self'; manifest-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; form-action 'self'",
+        "content-type": "text/html; charset=utf-8",
+        "expires": "0",
+        "pragma": "no-cache",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-frame-options": "DENY",
+        "x-xss-protection": "0"
+      },
+      "body": "4239d52686c4"
+    },
+    "/p/i/": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate, private, max-age=0",
+        "content-security-policy": "default-src 'none'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; img-src 'self'; manifest-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; form-action 'self'",
+        "content-type": "text/html; charset=utf-8",
+        "expires": "0",
+        "pragma": "no-cache",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-frame-options": "DENY",
+        "x-xss-protection": "0"
+      },
+      "body": "4239d52686c4"
+    },
+    "/pgadmin4/": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate, private, max-age=0",
+        "content-security-policy": "default-src 'none'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; img-src 'self'; manifest-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; form-action 'self'",
+        "content-type": "text/html; charset=utf-8",
+        "expires": "0",
+        "pragma": "no-cache",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-frame-options": "DENY",
+        "x-xss-protection": "0"
+      },
+      "body": "4239d52686c4"
+    },
+    "/pgadmin4/login": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate, private, max-age=0",
+        "content-security-policy": "default-src 'none'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; img-src 'self'; manifest-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; form-action 'self'",
+        "content-type": "text/html; charset=utf-8",
+        "expires": "0",
+        "pragma": "no-cache",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-frame-options": "DENY",
+        "x-xss-protection": "0"
+      },
+      "body": "4239d52686c4"
+    },
+    "/phpmyadmin/": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate, private, max-age=0",
+        "content-security-policy": "default-src 'none'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; img-src 'self'; manifest-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; form-action 'self'",
+        "content-type": "text/html; charset=utf-8",
+        "expires": "0",
+        "pragma": "no-cache",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-frame-options": "DENY",
+        "x-xss-protection": "0"
+      },
+      "body": "4239d52686c4"
+    },
+    "/phpmyadmin/index.php": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate, private, max-age=0",
+        "content-security-policy": "default-src 'none'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; img-src 'self'; manifest-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; form-action 'self'",
+        "content-type": "text/html; charset=utf-8",
+        "expires": "0",
+        "pragma": "no-cache",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-frame-options": "DENY",
+        "x-xss-protection": "0"
+      },
+      "body": "4239d52686c4"
+    },
+    "/ping": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate, private, max-age=0",
+        "content-security-policy": "default-src 'none'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; img-src 'self'; manifest-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; form-action 'self'",
+        "content-type": "text/html; charset=utf-8",
+        "expires": "0",
+        "pragma": "no-cache",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-frame-options": "DENY",
+        "x-xss-protection": "0"
+      },
+      "body": "4239d52686c4"
+    },
+    "/rest/login": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate, private, max-age=0",
+        "content-security-policy": "default-src 'none'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; img-src 'self'; manifest-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; form-action 'self'",
+        "content-type": "text/html; charset=utf-8",
+        "expires": "0",
+        "pragma": "no-cache",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-frame-options": "DENY",
+        "x-xss-protection": "0"
+      },
+      "body": "4239d52686c4"
+    },
+    "/status.php": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate, private, max-age=0",
+        "content-security-policy": "default-src 'none'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; img-src 'self'; manifest-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; form-action 'self'",
+        "content-type": "text/html; charset=utf-8",
+        "expires": "0",
+        "pragma": "no-cache",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-frame-options": "DENY",
+        "x-xss-protection": "0"
+      },
+      "body": "4239d52686c4"
+    },
+    "/users/sign_in": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate, private, max-age=0",
+        "content-security-policy": "default-src 'none'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; img-src 'self'; manifest-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; form-action 'self'",
+        "content-type": "text/html; charset=utf-8",
+        "expires": "0",
+        "pragma": "no-cache",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-frame-options": "DENY",
+        "x-xss-protection": "0"
+      },
+      "body": "4239d52686c4"
+    },
+    "/v1/health": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate, private, max-age=0",
+        "content-security-policy": "default-src 'none'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; img-src 'self'; manifest-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; form-action 'self'",
+        "content-type": "text/html; charset=utf-8",
+        "expires": "0",
+        "pragma": "no-cache",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-frame-options": "DENY",
+        "x-xss-protection": "0"
+      },
+      "body": "4239d52686c4"
+    },
+    "/version": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate, private, max-age=0",
+        "content-security-policy": "default-src 'none'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; img-src 'self'; manifest-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; form-action 'self'",
+        "content-type": "text/html; charset=utf-8",
+        "expires": "0",
+        "pragma": "no-cache",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-frame-options": "DENY",
+        "x-xss-protection": "0"
+      },
+      "body": "4239d52686c4"
+    },
+    "/webpages/index.html": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate, private, max-age=0",
+        "content-security-policy": "default-src 'none'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; img-src 'self'; manifest-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; form-action 'self'",
+        "content-type": "text/html; charset=utf-8",
+        "expires": "0",
+        "pragma": "no-cache",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-frame-options": "DENY",
+        "x-xss-protection": "0"
+      },
+      "body": "4239d52686c4"
+    },
+    "/webpages/login.html": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, no-store, must-revalidate, private, max-age=0",
+        "content-security-policy": "default-src 'none'; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; img-src 'self'; manifest-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; form-action 'self'",
+        "content-type": "text/html; charset=utf-8",
+        "expires": "0",
+        "pragma": "no-cache",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-content-type-options": "nosniff",
+        "x-dns-prefetch-control": "off",
+        "x-frame-options": "DENY",
+        "x-xss-protection": "0"
+      },
+      "body": "4239d52686c4"
+    }
+  }
+}

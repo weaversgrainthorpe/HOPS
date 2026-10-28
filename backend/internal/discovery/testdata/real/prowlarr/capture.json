@@ -1,0 +1,57 @@
+{
+  "app": "prowlarr",
+  "image": "lscr.io/linuxserver/prowlarr:latest@sha256:04be30163fba",
+  "version": "2.7.0.5723-ls166",
+  "captured": "2026-10-28",
+  "port": 9696,
+  "want": "core/prowlarr",
+  "notes": "Fresh install",
+  "faviconMmh3": 62727937,
+  "responses": {
+    "/": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache, no-store",
+        "content-type": "text/html",
+        "expires": "-1",
+        "pragma": "no-cache",
+        "server": "Kestrel",
+        "vary": "Accept-Encoding"
+      },
+      "body": "4174bb6c3371"
+    },
+    "/favicon.ico": {
+      "status": 200,
+      "headers": {
+        "cache-control": "max-age=31536000, public",
+        "content-length": "15086",
+        "content-type": "image/x-icon",
+        "last-modified": "Mon, 26 Oct 2026 18:07:00 GMT",
+        "server": "Kestrel"
+      },
+      "body": "d076abcf9afc"
+    },
+    "/initialize.js": {
+      "status": 404,
+      "headers": {
+        "cache-control": "max-age=31536000, public",
+        "content-type": "application/problem+json; charset=utf-8",
+        "last-modified": "Mon, 26 Oct 2026 18:07:00 GMT",
+        "server": "Kestrel"
+      },
+      "body": "ef3e0a4266ee"
+    },
+    "/login": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache, no-store",
+        "content-type": "text/html",
+        "expires": "-1",
+        "pragma": "no-cache",
+        "server": "Kestrel",
+        "vary": "Accept-Encoding"
+      },
+      "body": "797b778fff08"
+    }
+  }
+}
