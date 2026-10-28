@@ -31,4 +31,14 @@ describe('uiVersionMismatch', () => {
     const mod = await loadWithServerVersion('test');
     expect(get(mod.uiVersionMismatch)).toBeNull();
   });
+
+  it('ignores a pre-release label only the server carries (rc builds)', async () => {
+    const mod = await loadWithServerVersion('test-rc1');
+    expect(get(mod.uiVersionMismatch)).toBeNull();
+  });
+
+  it('still reports a different base version that has a pre-release label', async () => {
+    const mod = await loadWithServerVersion('2.2.0-rc1');
+    expect(get(mod.uiVersionMismatch)).toBe('2.2.0-rc1');
+  });
 });

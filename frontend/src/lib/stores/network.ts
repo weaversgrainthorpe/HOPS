@@ -29,9 +29,13 @@ export const offlineSince = writable<Date | null>(null);
  */
 export const serverVersion = writable<string | null>(null);
 
-/** The server version when it differs from this UI's build, else null. */
+/**
+ * The server version when it differs from this UI's build, else null.
+ * A pre-release label ("-rc1") is stamped onto the server binary only, so
+ * it is ignored: the UI and server are built from the same source.
+ */
 export const uiVersionMismatch = derived(serverVersion, ($v) =>
-  $v && $v !== __APP_VERSION__ ? $v : null
+  $v && $v.split('-')[0] !== __APP_VERSION__ ? $v : null
 );
 
 let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
