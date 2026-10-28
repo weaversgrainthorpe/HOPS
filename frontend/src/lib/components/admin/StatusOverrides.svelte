@@ -6,7 +6,7 @@
   // says what was already saved. An unknown dashboard or global value is never guessed.
   import { get } from 'svelte/store';
   import { untrack } from 'svelte';
-  import { config, applySavedLayout, showSaveWarning, loadConfig, findLayoutDashboard, dashboardHref } from '$lib/stores/config';
+  import { config, configError, applySavedLayout, showSaveWarning, loadConfig, findLayoutDashboard, dashboardHref } from '$lib/stores/config';
   import { session, parkedDraft } from '$lib/stores/editSession';
   import { saveDashboardV3, saveDashboardSettings, listSettings, ConflictError } from '$lib/utils/api';
   import { statusBaseFor, refreshStatusBase, type BaseState } from '$lib/stores/statusCheckBase';
@@ -135,6 +135,8 @@
   const dashName = (id: string) => dashboards.find((d) => d.id === id)?.name || '(no name)';
   const rowPath = (r: OverrideRow) => (r.level === 'dashboard' ? dashName(r.dashboardId) : r.path.map((p) => p || '(no name)').join(' › '));
   const refPath = (t: TileRef) => t.path.map((p) => p || '(no name)').join(' › ');
+  // In the Starts/Stops lists too, a path names its dashboard when the ticked rows span several.
+  const refLabel = (t: TileRef, manyDashboards: boolean) => `${manyDashboards ? `${dashName(t.dashboardId)}: ` : ''}${refPath(t)}`;
   // The preview names every ticked row, including ticks the current filter hides.
   const pickedRows = $derived(rows.filter((r) => selected.includes(r.key)));
   const pickedManyDashboards = $derived(new Set(pickedRows.map((r) => r.dashboardId)).size > 1);
@@ -198,6 +200,7 @@
 
     busy = true;
     const done: string[] = [];
+    let failure: unknown = null;
     try {
       for (const { id, name, layoutKeys, own } of byDash) {
         const d = findLayoutDashboard(id, get(config)); // the store's plain value: structuredClone-safe
@@ -220,16 +223,27 @@
       previewing = false;
       ticked = [];
     } catch (e) {
-      const partial = done.length ? ` Already saved before this failed: ${done.join(', ')}.` : '';
-      refusal = e instanceof ConflictError
-        ? `Not restored: a dashboard was changed somewhere else, so nothing more was saved. The list below has been reloaded; check it and try again.${partial}`
-        : `Restore failed: ${e instanceof Error ? e.message : 'request failed'}.${partial}`;
-    } finally {
-      busy = false;
-      // Recompute from what was actually saved: the stored document and the dashboards' own levels.
-      void loadConfig({ background: true });
-      for (const d of byDash) void refreshStatusBase(d.id);
+      failure = e;
     }
+    // Recompute from what was actually saved: the stored document and the dashboards' own levels.
+    // (A dashboard level that fails to reload says so in its group header, with Retry.)
+    const reload = loadConfig({ background: true });
+    for (const d of byDash) void refreshStatusBase(d.id);
+    if (failure === null) {
+      busy = false;
+      return;
+    }
+    // After a failure the message says whether the list below is current, so it waits for the reload.
+    await reload;
+    const reloadError = get(configError);
+    busy = false;
+    const partial = done.length ? ` Already saved before this failed: ${done.join(', ')}.` : '';
+    const reloaded = reloadError
+      ? ` The list below couldn't be reloaded (${reloadError}), so it may be out of date: reload the page before trying again.`
+      : '';
+    refusal = failure instanceof ConflictError
+      ? `Not restored: a dashboard was changed somewhere else, so nothing more was saved.${reloadError ? reloaded : ' The list below has been reloaded; check it and try again.'}${partial}`
+      : `Restore failed: ${failure instanceof Error ? failure.message : 'request failed'}.${reloaded}${partial}`;
   }
 </script>
 
@@ -332,7 +346,7 @@
           {#each [{ label: 'Starts checking', list: preview.start }, { label: 'Stops checking', list: preview.stop }] as part (part.label)}
             {#if part.list.length}
               <p class="muted">
-                {part.label}: {part.list.slice(0, 10).map(refPath).join(', ')}{part.list.length > 10 ? `, and ${part.list.length - 10} more` : ''}
+                {part.label}: {part.list.slice(0, 10).map((t) => refLabel(t, pickedManyDashboards)).join(', ')}{part.list.length > 10 ? `, and ${part.list.length - 10} more` : ''}
               </p>
             {/if}
           {/each}
@@ -362,20 +376,24 @@
   .seg:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
   .group { margin: 0.75rem 0; padding: 0.6rem 0.8rem; border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 0.4rem; }
   .head { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; align-items: baseline; justify-content: space-between; }
-  .rows { list-style: none; margin: 0.5rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
-  .row { display: grid; grid-template-columns: auto minmax(10rem, 2fr) minmax(10rem, 2fr) minmax(7rem, 1fr); gap: 0.5rem 0.75rem; align-items: baseline; }
+  /* The list is its own size container: the rows lay out by the width they actually get (the
+     settings content area is narrow at iPad-portrait widths), never by the viewport. */
+  .rows { list-style: none; margin: 0.5rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; container-type: inline-size; }
+  .row { display: grid; grid-template-columns: auto minmax(0, 2fr) minmax(0, 2fr) minmax(0, 1fr); gap: 0.5rem 0.75rem; align-items: baseline; }
   .row.warn { border-left: 3px solid var(--color-warning, #f59e0b); padding-left: 0.4rem; }
   .warn-text { color: var(--color-warning, #f59e0b); font-weight: 600; }
   .what, .change { display: flex; flex-wrap: wrap; gap: 0.25rem 0.5rem; min-width: 0; overflow-wrap: anywhere; }
+  .effect { min-width: 0; overflow-wrap: anywhere; }
   .link { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; text-align: left; font: inherit; overflow-wrap: anywhere; }
   .link:hover, .what a:hover { text-decoration: underline; }
   .small { padding: 0.1rem 0.6rem; font-size: 0.85rem; }
   .preview { margin-top: 0.5rem; padding: 0.6rem 0.8rem; border: 1px solid var(--accent); border-radius: 0.4rem; }
   .picked { margin: 0.3rem 0; padding-left: 1.2rem; overflow-wrap: anywhere; }
   .btns { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.6rem; }
-  /* Phone: the path, then Now → If inherited, then the effect, under the checkbox. */
-  @media (max-width: 480px) {
-    .row { grid-template-columns: auto 1fr; }
+  /* Narrow (a phone, or the content area beside the settings menu on a tablet): the path, then
+     Now → If inherited, then the effect, under the checkbox. */
+  @container (max-width: 34rem) {
+    .row { grid-template-columns: auto minmax(0, 1fr); }
     .change, .effect { grid-column: 2; }
   }
 </style>

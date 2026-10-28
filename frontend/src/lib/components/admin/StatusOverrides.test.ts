@@ -194,6 +194,19 @@ describe('StatusOverrides: preview and saving', () => {
     const hidden = prev.querySelector('[data-so-picked="d1:tile:a"]');
     expect(hidden).toHaveTextContent('Home: Main › A (tile): On (set here) (not shown under this filter)');
     expect(prev.querySelector('[data-so-picked="d2:tile:m"]')).toHaveTextContent('Media: Main › M (tile): On (set here)');
+    // Rows from two dashboards: the tile lists name the dashboard too.
+    expect(prev).toHaveTextContent('Stops checking: Home: Main › A');
+  });
+
+  it('the tile lists name no dashboard when every ticked row is on one', async () => {
+    setConfig(home(), media());
+    render(StatusOverrides);
+    await ready('d1:tile:a');
+    await fireEvent.click(within(row('d1:tile:a')!).getByRole('checkbox'));
+    await fireEvent.click(screen.getByRole('button', { name: 'Restore inheritance for 1 selected' }));
+    const prev = screen.getByTestId('so-preview');
+    expect(prev).toHaveTextContent('Stops checking: Main › A');
+    expect(prev).not.toHaveTextContent('Stops checking: Home:');
   });
 
   it('a conflict on the second dashboard refuses visibly, naming the first one saved', async () => {
@@ -217,6 +230,47 @@ describe('StatusOverrides: preview and saving', () => {
     expect([id, rev]).toEqual(['d1', 2]);
     expect((saved.tabs[0].root.children[0] as { statusCheck?: unknown }).statusCheck).toEqual({ type: 'http' });
     expect(api.getConfig).toHaveBeenCalled(); // the list reloads
+  });
+
+  /** Tick d1's tile and d2's tile and open the preview; d2's save will be refused as a conflict. */
+  async function conflictOnSecond() {
+    bases.d2 = { override: null, effective: true };
+    setConfig(home(), dash('d2', 'Media', [tile('m', true)]));
+    vi.mocked(api.saveDashboardV3)
+      .mockResolvedValueOnce({ revision: 3 })
+      .mockRejectedValueOnce(new api.ConflictError('d2', 9));
+    render(StatusOverrides);
+    await ready('d1:tile:a');
+    await fireEvent.click(within(screen.getByTestId('so-filter')).getByRole('radio', { name: /^All/ }));
+    await ready('d2:tile:m');
+    await fireEvent.click(within(row('d1:tile:a')!).getByRole('checkbox'));
+    await fireEvent.click(within(row('d2:tile:m')!).getByRole('checkbox'));
+    await fireEvent.click(screen.getByRole('button', { name: /^Restore inheritance for 2/ }));
+  }
+  const confirm = () => fireEvent.click(within(screen.getByTestId('so-preview')).getByRole('button', { name: 'Confirm' }));
+
+  it('a conflict says "has been reloaded" only once the reload has finished', async () => {
+    let finish!: () => void;
+    const c = { schemaVersion: 3, layoutVersion: 2, dashboards: [home(), dash('d2', 'Media', [tile('m', true)])] } as Config;
+    await conflictOnSecond();
+    // The reload after the conflict waits until finish() is called.
+    vi.mocked(api.getConfig).mockImplementation(() => new Promise((res) => { finish = () => res(c); }));
+    await confirm();
+    await vi.waitFor(() => expect(finish).toBeTypeOf('function'));
+    expect(screen.queryByTestId('so-refusal')).toBeNull();
+    finish();
+    await vi.waitFor(() => expect(screen.getByTestId('so-refusal')).toHaveTextContent('The list below has been reloaded'));
+  });
+
+  it('a conflict whose reload fails says the list could not be reloaded', async () => {
+    await conflictOnSecond();
+    vi.mocked(api.getConfig).mockRejectedValue(new Error('offline'));
+    await confirm();
+    await vi.waitFor(() => expect(screen.getByTestId('so-refusal')).toHaveTextContent('changed somewhere else'));
+    const text = screen.getByTestId('so-refusal').textContent ?? '';
+    expect(text).not.toContain('has been reloaded');
+    expect(text).toContain("couldn't be reloaded (offline)");
+    expect(text).toContain('Already saved before this failed: "Home" (tabs, folders and tiles).');
   });
 
   it('a dashboard row saves the layout first, then the settings at the new revision', async () => {

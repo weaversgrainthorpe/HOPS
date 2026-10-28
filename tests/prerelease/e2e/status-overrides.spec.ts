@@ -242,6 +242,29 @@ test.describe('Status check overrides page', () => {
     });
   });
 
+  test('iPad portrait width (768 px): no sideways scrolling', async ({ page, context }) => {
+    // Between the phone layout and a wide screen the settings content area is narrower than the
+    // row's four columns once needed; the rows must wrap or stack, never push the page sideways.
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await withFixture(page, context, async (f) => {
+      await open(page, f);
+      await filter(page, /^All/).check();
+      await expect(group(page, f).getByTestId('so-row')).toHaveCount(3); // the dashboard, tile On, folder Lab
+      await group(page, f).getByTestId('so-row').first().getByRole('checkbox').check();
+      await page.getByRole('button', { name: 'Restore inheritance for 1 selected' }).click();
+      await expect(page.getByTestId('so-preview')).toBeVisible();
+      const overflow = await page.evaluate(() => {
+        const doc = document.documentElement;
+        const wide = [...document.querySelectorAll<HTMLElement>('[data-testid="status-overrides"] *')]
+          .filter((el) => el.getBoundingClientRect().right > doc.clientWidth + 0.5)
+          .map((el) => `${el.tagName.toLowerCase()}.${el.className}`);
+        return { scroll: doc.scrollWidth, client: doc.clientWidth, wide: wide.slice(0, 5) };
+      });
+      expect(overflow.wide, 'elements past the right edge').toEqual([]);
+      expect(overflow.scroll).toBeLessThanOrEqual(overflow.client);
+    });
+  });
+
   test('phone width: rows stack and restoring the dashboard override works', async ({ page, context }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await withFixture(page, context, async (f) => {
