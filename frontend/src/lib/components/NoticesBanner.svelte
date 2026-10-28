@@ -40,7 +40,8 @@
     <!-- Rendered as text: the server's notice text is never markup. -->
     <div class="text">
       {notice.text}
-      {#if notice.link?.href.startsWith('/settings/')}
+      <!-- Server data: a link is shown only when its href is a string inside /settings/. -->
+      {#if typeof notice.link?.href === 'string' && notice.link.href.startsWith('/settings/')}
         <a class="notice-link" href={notice.link.href}>{notice.link.label}</a>
       {/if}
       {#if $noticesStale}

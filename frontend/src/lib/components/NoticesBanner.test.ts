@@ -181,6 +181,17 @@ describe('NoticesBanner: notice link', () => {
     expect(screen.getByText(base.text)).toBeInTheDocument();
   });
 
+  it('renders the notice with no link when the href is not a string', () => {
+    config.set({
+      schemaVersion: 3,
+      dashboards: [],
+      notices: [{ ...base, link: { href: 42, label: 'Number' } as unknown as { href: string; label: string } }]
+    });
+    render(NoticesBanner);
+    expect(screen.getByText(base.text)).toBeInTheDocument();
+    expect(screen.queryByRole('link')).toBeNull();
+  });
+
   it('renders no link when the notice has none', () => {
     config.set({ schemaVersion: 3, dashboards: [], notices: [base] });
     render(NoticesBanner);
