@@ -193,13 +193,13 @@ Tiles and folders sit on a grid on each tab. Folders can hold folders.
 4. The **URL Path** fills itself in from the name as you type (`Home` becomes
    `/home`). You can change it if you'd like a different address.
 5. Click **Save**.
-6. Click the new dashboard in the list to open it. It starts with one empty
+6. The new dashboard is now in the list. The buttons next to each dashboard
+   let you move it up or down, rename it (and change its path), export it,
+   show a **QR code** to open it on your phone, open it in a new browser
+   tab, or delete it. Your first dashboard in the list is the one
+   `http://<server>:8080/` opens.
+7. Click the new dashboard in the list to open it. It starts with one empty
    tab called *Home*.
-
-The buttons next to each dashboard in the list let you move it up or down,
-rename it (and change its path), export it, show a **QR code** to open it on
-your phone, open it in a new browser tab, or delete it. Your first dashboard
-in the list is the one `http://<server>:8080/` opens.
 
 ### Edit mode
 
