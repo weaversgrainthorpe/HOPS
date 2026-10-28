@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -1154,12 +1153,11 @@ func ValidateHOPSDatabase(path string) error {
 		return &InvalidBackupError{Reason: "this file is not a SQLite database"}
 	}
 
-	abs, err := filepath.Abs(path)
+	uri, err := sqliteFileURI(path, "mode=ro&immutable=1")
 	if err != nil {
 		return &InvalidBackupError{Reason: "cannot read the file: " + err.Error()}
 	}
-	u := url.URL{Scheme: "file", Path: abs, RawQuery: "mode=ro&immutable=1"}
-	db, err := sql.Open("sqlite", u.String())
+	db, err := sql.Open("sqlite", uri)
 	if err != nil {
 		return &InvalidBackupError{Reason: "this file is not a readable SQLite database: " + err.Error()}
 	}

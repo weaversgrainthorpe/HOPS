@@ -190,13 +190,33 @@ func scanTableRefs(db *sql.DB, table string, refs map[string]bool) error {
 
 // openReadOnly opens a database file read-only and immutable (nothing is
 // written, not even a journal): for backups and stages, which never change.
-func openReadOnly(path string) (*sql.DB, error) {
+// sqliteURI is a SQLite "file:" URI for an absolute path (slashes as
+// filepath.ToSlash gives them). A Windows path needs the leading slash
+// (file:///C:/…): without it "C:" was read as a host, SQLite couldn't open
+// the file, and every backup failed on Windows (rc2 trial F).
+func sqliteURI(slashPath, query string) string {
+	if !strings.HasPrefix(slashPath, "/") {
+		slashPath = "/" + slashPath
+	}
+	u := url.URL{Scheme: "file", Path: slashPath, RawQuery: query}
+	return u.String()
+}
+
+// sqliteFileURI is sqliteURI for any path.
+func sqliteFileURI(path, query string) (string, error) {
 	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	return sqliteURI(filepath.ToSlash(abs), query), nil
+}
+
+func openReadOnly(path string) (*sql.DB, error) {
+	uri, err := sqliteFileURI(path, "mode=ro&immutable=1")
 	if err != nil {
 		return nil, err
 	}
-	u := url.URL{Scheme: "file", Path: abs, RawQuery: "mode=ro&immutable=1"}
-	db, err := sql.Open("sqlite", u.String())
+	db, err := sql.Open("sqlite", uri)
 	if err != nil {
 		return nil, err
 	}
@@ -256,12 +276,11 @@ func (bm *BackupManager) liveRefs(scope RefScope) (map[string]bool, error) {
 	if _, err := os.Lstat(bm.dbPath); err != nil {
 		return nil, fmt.Errorf("the live database can't be read: %w", err)
 	}
-	abs, err := filepath.Abs(bm.dbPath)
+	uri, err := sqliteFileURI(bm.dbPath, "mode=ro")
 	if err != nil {
 		return nil, err
 	}
-	u := url.URL{Scheme: "file", Path: abs, RawQuery: "mode=ro"}
-	fdb, err := sql.Open("sqlite", u.String())
+	fdb, err := sql.Open("sqlite", uri)
 	if err != nil {
 		return nil, err
 	}
