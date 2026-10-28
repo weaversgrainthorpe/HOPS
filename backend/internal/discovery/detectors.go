@@ -595,6 +595,7 @@ var httpNoisePatterns = [][]byte{
 	[]byte("If you see this page, the nginx web server is successfully installed"),
 	[]byte("This is the default web page for this server"),
 	[]byte("IIS Windows Server"),
+	[]byte("The plain HTTP request was sent to HTTPS port"), // nginx, plain http:// to its https port
 }
 
 // isHTTPNoise returns true for responses that look like a default

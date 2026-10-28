@@ -361,6 +361,26 @@ func httpGetProbe(ctx context.Context, host string, port int, path string, tlsOn
 	return snap, nil
 }
 
+// fetchRoot does a port's GET / in the scheme the port is expected to
+// speak. On a TLS-expected port whose TLS handshake fails it retries in
+// plain HTTP (an unclaimed Plex has no certificate yet and only answers
+// http:// on 32400) and reports plain=true so the rest of the probe
+// stays on http://. The plain answer only counts when it's a real page:
+// an HTTPS-only server that merely complains about plain HTTP (nginx's
+// "400 The plain HTTP request was sent to HTTPS port") keeps the TLS
+// failure — the port is open but there's nothing to show.
+func fetchRoot(tlsExpected bool, get func(tlsOn bool) (*HTTPSnapshot, error)) (snap *HTTPSnapshot, plain bool, err error) {
+	snap, err = get(tlsExpected)
+	if err == nil || !tlsExpected {
+		return snap, false, err
+	}
+	p, perr := get(false)
+	if perr != nil || p == nil || (p.Status >= 400 && p.Status != 401 && p.Status != 403) {
+		return nil, false, err
+	}
+	return p, true, nil
+}
+
 // cachedProbeHTTP wraps a single-host fetch so each (port, scheme, path)
 // is requested at most once per host probe. The cache lives in the
 // returned closure, so it is scoped to one Probe and discarded with it.

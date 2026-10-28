@@ -664,23 +664,16 @@ func (o *Orchestrator) probeHost(ctx context.Context, scanID, host string, ports
 			// http://. Apps that self-sign on non-standard ports
 			// (Sonarr v4 etc.) are out of scope until Phase 4 lets
 			// detectors declare a per-port protocol.
-			tlsOn := isTLSExpectedPort(p)
-			snap, err := httpGetProbe(ctx, host, p, "/", tlsOn, timeout)
-			if err != nil && tlsOn {
-				// No TLS here after all (unclaimed Plex on 32400):
-				// try plain HTTP before giving up on the port.
-				if plain, perr := httpGetProbe(ctx, host, p, "/", false, timeout); perr == nil {
-					hitsCh <- portHit{port: p, snap: plain, plain: true}
-					return
-				}
-			}
+			snap, plain, err := fetchRoot(isTLSExpectedPort(p), func(tlsOn bool) (*HTTPSnapshot, error) {
+				return httpGetProbe(ctx, host, p, "/", tlsOn, timeout)
+			})
 			if err != nil {
 				// TCP open but HTTP failed — still record as open
 				// so TCP-only or port-based detectors can match.
 				hitsCh <- portHit{port: p, snap: nil}
 				return
 			}
-			hitsCh <- portHit{port: p, snap: snap}
+			hitsCh <- portHit{port: p, snap: snap, plain: plain}
 		}(port)
 	}
 	pwg.Wait()
