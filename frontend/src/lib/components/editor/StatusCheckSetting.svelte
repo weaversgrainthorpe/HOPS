@@ -3,7 +3,6 @@
   // Off, plus one line saying where the effective value comes from and what this level does to
   // it. The value is the dialog's own state (draft-only: it is saved with the dialog, one undo
   // step; Cancel discards it).
-  import { untrack } from 'svelte';
   import {
     contextNameOf, resolveStatusChecks, statusRowText, type LevelSetting, type StatusContext
   } from '$lib/editor/statusChecks';
@@ -11,20 +10,18 @@
 
   interface Props {
     level: 'tile' | 'folder' | 'tab';
-    /** This level's setting. A tile's 'unset' shows as Off (the default for tiles). */
+    /** This level's setting. A tile with no setting is 'inherit', like a folder. */
     value: LevelSetting;
     /** The levels above; without it the row can only say it cannot tell. */
     context?: StatusContext;
   }
   let { level, value = $bindable(), context }: Props = $props();
 
-  // A tile that started unset and is put back on Off stays unset (no change saved).
-  const startedUnset = untrack(() => value === 'unset');
   const uid = `status-checks-${Math.random().toString(36).slice(2, 9)}`;
-  const choice = $derived(value === 'unset' ? 'off' : value === 'invalid' ? null : value);
+  const choice = $derived(value === 'invalid' ? null : value);
 
   function pick(v: 'inherit' | 'on' | 'off') {
-    value = v === 'off' && startedUnset ? 'unset' : v;
+    value = v;
   }
 
   // What this level would get by inheriting, without the dashboard level first.

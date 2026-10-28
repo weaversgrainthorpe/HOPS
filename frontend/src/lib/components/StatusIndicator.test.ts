@@ -40,10 +40,11 @@ beforeEach(() => {
 const badge = (c: HTMLElement) => c.querySelector('.status-badge [role="img"]') as HTMLElement | null;
 
 describe('status badge and tooltip', () => {
-  it('an unset tile never asks for a status and shows no badge', async () => {
+  it('a tile with no setting inherits: it asks the server, and shows no badge when that resolves off', async () => {
+    vi.mocked(getStatus).mockResolvedValue({ status: 'disabled', source: 'dashboard', sourceId: 'd1' });
     const { container } = render(Entry, { entry: base });
+    await waitFor(() => expect(getStatus).toHaveBeenCalled());
     await new Promise((r) => setTimeout(r, 0));
-    expect(getStatus).not.toHaveBeenCalled();
     expect(badge(container)).toBeNull();
   });
 

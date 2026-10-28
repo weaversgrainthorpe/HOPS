@@ -11,8 +11,8 @@ Each case: `{name, global, dashboardOverride, tab, folders, tile, want: {on, sou
 - `tile`:
   - `true` / `false` → `statusCheck: {type: "http", enabled: <value>}`;
   - `null` → `statusCheck: {type: "http", enabled: null}` (explicit inherit);
-  - `"absent"` → no `statusCheck` key (unset tile: **off**, source `tile`);
-  - `"noEnabled"` → `statusCheck: {type: "http"}` (unset tile: **off**, source `tile`);
+  - `"absent"` → no `statusCheck` key (absent setting: **inherits**);
+  - `"noEnabled"` → `statusCheck: {type: "http"}` (absent setting: **inherits**);
   - `"invalid"` → `statusCheck: {type: "http", enabled: "yes"}` (a wrong type).
 - A wrong-typed value on the tile, a folder or the tab (Ruling 13) makes the tile **off** with source `invalid`; the most specific invalid level is named. Those cases carry `want.sourceId` explicitly.
 - Fixed ids of the built objects: dashboard `d`, tab `t`, folders `f0`..`fN` (index = position in `folders`), tile `x`.

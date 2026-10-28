@@ -201,7 +201,7 @@
       {/if}
 
       <!-- Layered status checks (M4 §4b): a tile switched on or set to inherit asks the
-           server, which resolves the levels; an unset or switched-off tile is never checked. -->
+           server, which resolves the levels; a switched-off tile is never checked. -->
       {#if inEditor && urlProblem}
         <span class="url-problem" data-testid="tile-url-problem" role="note">{urlProblemText}</span>
       {/if}

@@ -74,12 +74,13 @@ describe('resolveStatusChecks without the dashboard base', () => {
 });
 
 describe('the settings as the dialogs see them', () => {
-  it('tile: on / off / inherit / unset / invalid', () => {
+  it('tile: on / off / inherit (including absent) / invalid', () => {
     expect(tileSetting({ statusCheck: { type: 'http', enabled: true } })).toBe('on');
     expect(tileSetting({ statusCheck: { type: 'http', enabled: false } })).toBe('off');
     expect(tileSetting({ statusCheck: { type: 'http', enabled: null } })).toBe('inherit');
-    expect(tileSetting({})).toBe('unset');
-    expect(tileSetting({ statusCheck: { type: 'http' } })).toBe('unset');
+    expect(tileSetting({})).toBe('inherit');
+    expect(tileSetting({ statusCheck: null })).toBe('inherit');
+    expect(tileSetting({ statusCheck: { type: 'http' } })).toBe('inherit');
     expect(tileSetting({ statusCheck: { type: 'http', enabled: 'yes' } })).toBe('invalid');
   });
   it('tab/folder: absent = inherit', () => {
@@ -108,9 +109,6 @@ describe('statusRowText', () => {
     expect(statusRowText('off', folderOn, names).text).toBe('Overridden here: off (the folder is on)');
     expect(statusRowText('on', globalOff, names).text).toBe('Overridden here: on (the global setting is off)');
     expect(statusRowText('on', dashOn, names).text).toBe('Overridden here: on (the dashboard is on too)');
-  });
-  it('an unset tile is off by default, whatever its containers say', () => {
-    expect(statusRowText('unset', null, names).text).toBe('Off (status checks only run where you turn them on)');
   });
   it('unknown parent (base still loading) is pending, never a guess', () => {
     expect(statusRowText('inherit', null, names)).toEqual({ text: 'Checking…', tone: 'pending' });

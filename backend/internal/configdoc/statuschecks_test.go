@@ -118,8 +118,8 @@ func TestEffectiveStatusChecks_SharedMatrix(t *testing.T) {
 	}
 }
 
-// Ruling 12: only an explicit statusCheck.enabled: null inherits; every
-// "unset" form of a tile is off (source tile). A nil tile (no tile level, e.g.
+// Every "absent" form of a tile (no statusCheck, null, no enabled) inherits,
+// like an explicit statusCheck.enabled: null. A nil tile (no tile level, e.g.
 // an id not in the config) inherits.
 func TestEffectiveStatusChecks_TileForms(t *testing.T) {
 	svc := newSvc(t)
@@ -130,8 +130,8 @@ func TestEffectiveStatusChecks_TileForms(t *testing.T) {
 		{"id": "x", "statusCheck": Obj{"type": "http"}},
 	} {
 		on, src, id := EffectiveStatusChecks(svc, dash, Obj{"id": "t"}, []Obj{{"id": "f0", "statusChecksEnabled": true}}, tile)
-		if on || src != SourceTile || id != "x" {
-			t.Errorf("unset form %d: got (%v, %q, %q), want off/tile", i, on, src, id)
+		if !on || src != SourceFolder || id != "f0" {
+			t.Errorf("absent form %d: got (%v, %q, %q), want on/folder f0", i, on, src, id)
 		}
 	}
 	on, src, id := EffectiveStatusChecks(svc, dash, Obj{"id": "t", "statusChecksEnabled": nil}, []Obj{{"id": "f0"}},

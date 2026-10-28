@@ -187,7 +187,7 @@
       contentSize,
       ...(stagedBackground ? { background: stagedBackground.value ?? null } : {}),
       // Only a changed choice is written (an untouched invalid value stays as stored).
-      ...(statusSetting !== initialStatus && statusSetting !== 'invalid' && statusSetting !== 'unset'
+      ...(statusSetting !== initialStatus && statusSetting !== 'invalid'
         ? { statusChecksEnabled: statusSetting === 'inherit' ? null : statusSetting === 'on' }
         : {})
     });

@@ -11,6 +11,7 @@ import { dirty, session, undo } from '$lib/stores/editSession';
 import { toast } from '$lib/stores/toast';
 import { setLayout, resetEditor, startSession, draft, nodeIn, home, answerConfirm, p, noRequestsButSettingsRead, folder, tile } from './editorTestKit';
 import type { FolderNode, TileNode } from '$lib/types/layout';
+import { resetStatusBaseCache } from '$lib/stores/statusCheckBase';
 
 let fetchSpy: ReturnType<typeof vi.fn>;
 beforeEach(() => {
@@ -18,6 +19,7 @@ beforeEach(() => {
   setLayout();
   startSession();
   editMode.set(true);
+  resetStatusBaseCache();
   fetchSpy = vi.fn(() => Promise.reject(new Error('no network in tests')));
   vi.stubGlobal('fetch', fetchSpy);
 });
@@ -206,6 +208,13 @@ describe('EditorDialogs (the dialogs edit the draft only)', () => {
   });
 
   it('tile dialog Size inside a folder: any size is accepted, nothing is placed, the folder is untouched', async () => {
+    // The tile has no status-check setting, so its row reads the dashboard's setting; let it.
+    fetchSpy.mockImplementation(() =>
+      Promise.resolve(new Response(JSON.stringify({
+        overrides: { statusChecksEnabled: null, statusCheckIntervalMinutes: null, statusCheckTimeoutSeconds: null, editIdleTimeoutMinutes: null, animatedFolderBackgrounds: null },
+        effective: { statusChecksEnabled: false, statusCheckIntervalMinutes: 5, statusCheckTimeoutSeconds: 10, editIdleTimeoutMinutes: 15, animatedFolderBackgrounds: false },
+        revision: 'r'
+      }), { status: 200 })));
     await show({ kind: 'tile', id: 'x' });
     const folderBefore = (nodeIn(draft(), 'f1') as FolderNode).placement;
     await fireEvent.change(screen.getByLabelText(/^Size/), { target: { value: 'large' } });
@@ -349,7 +358,8 @@ describe('FolderEditModal background (M4 Task 5, Ruling 11(5))', () => {
   }
   const noWrites = () => {
     for (const [url, init] of fetchSpy.mock.calls) {
-      expect(String(url)).toMatch(/\/api\/backgrounds$/);
+      // Reads only: the backgrounds list, and the status-check row's read of the dashboard's settings.
+      expect(String(url)).toMatch(/\/api\/(backgrounds|dashboards\/[^/]+\/settings)$/);
       expect((init as RequestInit | undefined)?.method ?? 'GET').toBe('GET');
     }
   };

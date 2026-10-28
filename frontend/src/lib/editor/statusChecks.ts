@@ -5,9 +5,8 @@
  * backend/internal/configdoc/testdata/status_checks_cases.json (Ruling 2).
  *
  * The most specific level that sets it wins: the tile, its folders (innermost first), the
- * tab, the dashboard's override, then the global setting. A tile only follows its containers
- * when its statusCheck.enabled is explicitly null; an unset tile is OFF (v2.2.1: "status
- * checks only go where you asked them to"). A wrong-typed value on the tile, a folder or the
+ * tab, the dashboard's override, then the global setting. A tile with no setting of its own
+ * (no statusCheck, no enabled, or enabled null) inherits from its containers. A wrong-typed value on the tile, a folder or the
  * tab makes the tile off with source "invalid" naming that level.
  */
 import type { FolderNode, LayoutDashboard, LayoutNode, LayoutTab } from '$lib/types/layout';
@@ -32,8 +31,8 @@ export interface DashboardBase {
 
 /** A tab or folder's own setting: absent = inherit. */
 export type ContainerSetting = 'inherit' | 'on' | 'off' | 'invalid';
-/** A tile's own setting: 'unset' (no statusCheck / no enabled) is off, never inherit. */
-export type TileSetting = 'unset' | ContainerSetting;
+/** A tile's own setting: the same as a folder's; absent (no statusCheck / no enabled) is inherit. */
+export type TileSetting = ContainerSetting;
 export type LevelSetting = TileSetting;
 
 type Level = { id?: unknown; statusChecksEnabled?: unknown; statusCheck?: unknown };
@@ -47,12 +46,9 @@ export function containerSetting(v: unknown): ContainerSetting {
 
 export function tileSetting(tile: { statusCheck?: unknown }): TileSetting {
   const raw = tile.statusCheck;
-  if (raw === undefined || raw === null) return 'unset';
+  if (raw === undefined || raw === null) return 'inherit';
   if (typeof raw !== 'object' || Array.isArray(raw)) return 'invalid';
-  if (!('enabled' in raw)) return 'unset';
-  const v = (raw as { enabled?: unknown }).enabled;
-  if (v === undefined) return 'unset';
-  return containerSetting(v);
+  return containerSetting((raw as { enabled?: unknown }).enabled);
 }
 
 /**
@@ -91,7 +87,7 @@ export function resolveStatusChecks(
   if (tile) {
     const s = tileSetting(tile);
     if (s === 'on') return { on: true, source: 'tile', sourceId: idOf(tile) };
-    if (s === 'off' || s === 'unset') return { on: false, source: 'tile', sourceId: idOf(tile) };
+    if (s === 'off') return { on: false, source: 'tile', sourceId: idOf(tile) };
   }
   for (let i = folders.length - 1; i >= 0; i--) {
     const s = containerSetting(folders[i].statusChecksEnabled);
@@ -136,7 +132,6 @@ export function statusRowText(
   if (own === 'invalid') {
     return { text: 'Invalid setting here: treated as off. Choose Inherit, On or Off to fix it.', tone: 'warn' };
   }
-  if (own === 'unset') return { text: 'Off (status checks only run where you turn them on)', tone: 'normal' };
   if (!parent) return { text: 'Checking…', tone: 'pending' };
   if (parent.source === 'invalid') {
     return { text: `Off: invalid setting on ${nameOf(parent)} (open it and choose Inherit, On or Off)`, tone: 'warn' };

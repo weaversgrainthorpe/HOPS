@@ -78,12 +78,12 @@ async function show(d: Parameters<typeof editorDialog.set>[0]) {
 const radio = (name: 'Inherit' | 'On' | 'Off') => screen.getByRole('radio', { name }) as HTMLInputElement;
 
 describe('tile dialog: tri-state status checks', () => {
-  it('an unset tile shows Off by default and fetches nothing', async () => {
-    withF1();
-    await show({ kind: 'tile', id: 'a' });
+  it('a tile with no setting shows Inherit and names where it follows', async () => {
+    withF1({ statusChecksEnabled: false } as Partial<FolderNode>);
+    await show({ kind: 'tile', id: 'x' });
     expect(screen.getByRole('group', { name: 'Status checks' })).toBeInTheDocument();
-    expect(radio('Off').checked).toBe(true);
-    expect(screen.getByText('Off (status checks only run where you turn them on)')).toBeInTheDocument();
+    expect(radio('Inherit').checked).toBe(true);
+    expect(screen.getByText('Inherited from F1: off')).toBeInTheDocument();
     expect(settingsCalls()).toHaveLength(0);
   });
 
@@ -102,7 +102,7 @@ describe('tile dialog: tri-state status checks', () => {
   });
 
   it('Inherit names the folder it follows and stores enabled: null', async () => {
-    withF1({ statusChecksEnabled: false } as Partial<FolderNode>);
+    withF1({ statusChecksEnabled: false } as Partial<FolderNode>, { statusCheck: { type: 'http', enabled: true, interval: 60 } });
     await show({ kind: 'tile', id: 'x' });
     await fireEvent.click(radio('Inherit'));
     expect(screen.getByText('Inherited from F1: off')).toBeInTheDocument();
@@ -129,12 +129,11 @@ describe('tile dialog: tri-state status checks', () => {
     expect(draft()).toBe(before);
   });
 
-  it('leaving an unset tile on Off changes nothing (exact round trip)', async () => {
+  it('leaving a tile with no setting on Inherit changes nothing (exact round trip)', async () => {
     withF1();
     await show({ kind: 'tile', id: 'a' });
     await fireEvent.click(radio('On'));
-    await fireEvent.click(radio('Off'));
-    expect(screen.getByText('Off (status checks only run where you turn them on)')).toBeInTheDocument();
+    await fireEvent.click(radio('Inherit'));
     await fireEvent.click(screen.getByRole('button', { name: /^Save/ }));
     expect(nodeIn(draft(), 'a')).not.toHaveProperty('statusCheck');
   });

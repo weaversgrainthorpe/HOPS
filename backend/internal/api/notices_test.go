@@ -107,7 +107,7 @@ func layeredStatusFixture(t *testing.T) string {
 	return statusDoc(t, []map[string]interface{}{
 		statusDash("da", "Alpha", on, ""),     // off + tile on: listed
 		statusDash("db", "Beta", inherit, ""), // off + tile inherits: not listed
-		statusDash("df", "Zeta", nil, ""),     // on + tile unset (off): not listed
+		statusDash("df", "Zeta", nil, ""),     // on + tile with no setting (inherits): not listed
 		statusDash("dc", "Gamma", on, ""),     // on + tile on: not listed
 		statusDash("dd", "Delta", on, "note"), // off + note tile ticked: notes are never checked
 		statusDash("de", "Epsilon", on, ""),   // off + tile on: listed
@@ -262,7 +262,7 @@ func TestGetStatus_LayeredSource(t *testing.T) {
 		"da-e": {"up", "tile", "da-e"},          // tile on under dashboard off
 		"db-e": {"disabled", "dashboard", "db"}, // inherits the off dashboard
 		"dc-e": {"unknown", "tile", "dc-e"},     // tile on under dashboard on, no result yet
-		"df-e": {"disabled", "tile", "df-e"},    // unset tile under dashboard on: off (Ruling 12)
+		"df-e": {"unknown", "dashboard", "df"},  // tile with no setting under dashboard on: inherits, no result yet
 	} {
 		got := get(id)
 		if fmt.Sprint(got["status"]) != want[0] || got["source"] != want[1] || got["sourceId"] != want[2] {
@@ -272,8 +272,8 @@ func TestGetStatus_LayeredSource(t *testing.T) {
 }
 
 // inheritTileCheck sets tile id's statusCheck.enabled to null (explicit
-// inherit, Ruling 12) in the stored document, so its checks follow the
-// dashboard. An unset tile is off.
+// inherit) in the stored document, so its checks follow the dashboard. A tile
+// with no setting does the same; this just makes it explicit.
 func inheritTileCheck(t *testing.T, db *sql.DB, id string) {
 	t.Helper()
 	doc, err := configdoc.Load(db)

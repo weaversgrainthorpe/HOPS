@@ -47,14 +47,14 @@ func containerTri(v any) tri {
 	return triInvalid
 }
 
-// tileTri is the tile's own setting (Ruling 12, keeping v2.2.1's "status
-// checks only go where you asked them to"): statusCheck.enabled true/false is
-// on/off; an explicit null inherits; no statusCheck, statusCheck null, or no
-// enabled is OFF (an unset tile is never checked); anything else is invalid.
+// tileTri is the tile's own setting: statusCheck.enabled true/false is
+// on/off; absent or null inherits (no statusCheck, statusCheck null, no
+// enabled, or enabled null: the tile follows its folders, tab and dashboard);
+// anything else is invalid.
 func tileTri(tile Obj) tri {
 	raw, has := tile["statusCheck"]
 	if !has || raw == nil {
-		return triOff
+		return triInherit
 	}
 	sc, ok := raw.(Obj)
 	if !ok {
@@ -62,7 +62,7 @@ func tileTri(tile Obj) tri {
 	}
 	v, has := sc["enabled"]
 	if !has {
-		return triOff
+		return triInherit
 	}
 	return containerTri(v)
 }
@@ -82,9 +82,8 @@ func warnInvalid(tileID, level, levelID string, v any) {
 // EffectiveStatusChecks resolves whether tile is status-checked: the most
 // specific level that sets it wins — the tile, then its folders from the
 // innermost out (folderChain is outermost first, as Walk's path), then the
-// tab, then the dashboard's override, then the global setting. A tile only
-// inherits when its statusCheck.enabled is explicitly null; an unset tile is
-// off. If the tile, a folder or the tab holds a wrong-typed value, the tile is
+// tab, then the dashboard's override, then the global setting. A tile with
+// no setting (absent or null) inherits from the levels above it. If the tile, a folder or the tab holds a wrong-typed value, the tile is
 // off with SourceInvalid and that level's id (WARN logged once). It returns
 // the deciding level and that level's id ("" for the global). dash, tab and
 // folderChain may be nil (that level inherits); a nil tile means "no tile

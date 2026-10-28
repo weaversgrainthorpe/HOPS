@@ -785,7 +785,7 @@ func TestImport_V3Showcase(t *testing.T) {
 	}
 
 	// Layered status checks: a folder with checks off still checks its tile
-	// that is explicitly on; the existing tiles stay unresolved-off.
+	// that is explicitly on; a tile with no setting inherits.
 	scSvc, err := settings.New(db)
 	if err != nil {
 		t.Fatal(err)
@@ -800,14 +800,14 @@ func TestImport_V3Showcase(t *testing.T) {
 		t.Errorf("sc-off-on resolves to %v/%s/%s, want true/tile/sc-off-on", on, src, by)
 	}
 	on, src, _ = configdoc.EffectiveStatusChecks(scSvc, dash, gridTab, []configdoc.Obj{offFolder}, byID["sc-off-plain"])
-	if on || src != configdoc.SourceTile {
-		t.Errorf("sc-off-plain resolves to %v/%s, want false/tile (unset tile is off)", on, src)
+	if on || src != configdoc.SourceFolder {
+		t.Errorf("sc-off-plain resolves to %v/%s, want false/folder (a tile with no setting inherits its folder)", on, src)
 	}
-	// Unchanged: tiles with no statusCheck stay off, sourced to the tile.
+	// Tiles with no statusCheck inherit; with nothing above them set, that is the global.
 	for _, id := range []string{"sc-r1", "sc-r2", "sc-r3", "sc-l1-t1"} {
 		on, src, _ := configdoc.EffectiveStatusChecks(scSvc, dash, gridTab, nil, byID[id])
-		if on || src != configdoc.SourceTile {
-			t.Errorf("%s resolves to %v/%s, want false/tile", id, on, src)
+		if !on || src != configdoc.SourceGlobal {
+			t.Errorf("%s resolves to %v/%s, want true/global", id, on, src)
 		}
 	}
 

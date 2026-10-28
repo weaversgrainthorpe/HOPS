@@ -30,7 +30,7 @@ async function importDash(page: Page, context: BrowserContext) {
         children: [
           // ... but this tile is explicitly switched on (so it is checked: the most specific wins).
           tile('on', 'Checked', 0, { statusCheck: { type: 'http', enabled: true, interval: 60 } }),
-          // An unset tile: off, never checked.
+          // An absent setting: inherits (the dashboard is off here, so no badge).
           tile('unset', 'Plain', 2),
           // Inherits: follows the off dashboard.
           tile('inh', 'Follower', 4, { statusCheck: { type: 'http', enabled: null, interval: 60 } })

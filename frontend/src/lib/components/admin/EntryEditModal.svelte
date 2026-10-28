@@ -51,7 +51,7 @@
   // svelte-ignore state_referenced_locally
   let editedEntry = $state<Entry>({ ...entry });
   let showIconEditor = $state(false);
-  // Status checks: Inherit / On / Off (unset = Off, the tile default). Saved with the dialog.
+  // Status checks: Inherit / On / Off (a tile with no setting is Inherit). Saved with the dialog.
   // svelte-ignore state_referenced_locally
   const initialStatus = tileSetting(entry);
   let statusSetting = $state<LevelSetting>(initialStatus);
@@ -180,8 +180,8 @@
       editedEntry.openMode = 'newtab';
       editedEntry.statusCheck = undefined;
       editedEntry.showStatus = false;
-    } else if (statusSetting !== initialStatus && statusSetting !== 'unset' && statusSetting !== 'invalid') {
-      // Only a changed choice is written; unchanged (including unset and an invalid stored
+    } else if (statusSetting !== initialStatus && statusSetting !== 'invalid') {
+      // Only a changed choice is written; unchanged (including an absent setting and an invalid stored
       // value) keeps the stored statusCheck exactly.
       const prev = editedEntry.statusCheck && typeof editedEntry.statusCheck === 'object' ? editedEntry.statusCheck : undefined;
       editedEntry.statusCheck = {

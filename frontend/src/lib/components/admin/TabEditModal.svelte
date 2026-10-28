@@ -86,7 +86,7 @@
     const bg = stagedBackground ? (stagedBackground.value ?? null) : undefined;
     // Only a changed choice is written (an untouched invalid value stays as stored).
     const sc =
-      statusSetting !== initialStatus && statusSetting !== 'invalid' && statusSetting !== 'unset'
+      statusSetting !== initialStatus && statusSetting !== 'invalid'
         ? statusSetting === 'inherit' ? null : statusSetting === 'on'
         : undefined;
     onSave(name.trim(), icon || undefined, iconUrl || undefined, iconBgColor, color, opacity, bg, sc);

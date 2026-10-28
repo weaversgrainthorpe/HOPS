@@ -343,9 +343,9 @@ with a 5xx server error.
 Each tile, folder and tab has a **Status checks** row with **Inherit**,
 **On** and **Off**. In plain words:
 
-- A new tile starts **Off**: checks only run where you turn them on.
-- Choose **On** to check that tile. Choose **Inherit** to let it follow the
-  folder, tab or dashboard it is in.
+- A new tile starts on **Inherit**: it follows the folder, tab or dashboard it
+  is in.
+- Choose **On** or **Off** to decide for that tile alone.
 - A folder or tab set to **On** or **Off** decides for every tile inside
   it that is set to **Inherit**. The nearest setting wins: the tile's own,
   then its folder, then the tab, then the dashboard.

@@ -12,7 +12,7 @@ const deadLinksFixture = `{"dashboards":[{"id":"dl","name":"Home","path":"/home"
 	{"id":"g1","name":"Servers","entries":[
 		{"id":"nas","name":"Old NAS","url":"http://192.0.2.10","statusCheck":{"enabled":true}},
 		{"id":"fresh","name":"Router","url":"http://192.0.2.1","statusCheck":{"enabled":true}},
-		{"id":"quiet","name":"Unchecked","url":"http://192.0.2.2"}
+		{"id":"quiet","name":"Inherits","url":"http://192.0.2.2"}
 	]}]}]}]}`
 
 type deadLinksResp struct {
@@ -68,7 +68,7 @@ func TestDeadLinks_ThresholdFilterAndPath(t *testing.T) {
 				}
 			}
 			out := getDeadLinks(t, router)
-			if !out.ChecksEnabled || out.ThresholdHours != tc.threshold || out.CheckedTiles != 2 {
+			if !out.ChecksEnabled || out.ThresholdHours != tc.threshold || out.CheckedTiles != 3 {
 				t.Fatalf("header: %+v", out)
 			}
 			if out.HistoryStartedAt != "2026-09-01T00:00:00Z" {

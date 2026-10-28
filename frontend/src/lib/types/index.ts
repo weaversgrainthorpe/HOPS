@@ -77,7 +77,7 @@ export interface StatusCheck {
   type: 'http';
   /**
    * Layered (M4 §4b, Ruling 12): true = on, false = off, null = inherit (follow the folder, tab,
-   * dashboard or global setting). Missing = off: status checks only run where turned on.
+   * dashboard or global setting). Missing = null: inherit.
    */
   enabled?: boolean | null;
   interval: number;
