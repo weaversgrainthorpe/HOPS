@@ -115,6 +115,7 @@ var SpecificApps = map[string]string{
 	"virtualbox": "virtualization",
 
 	// Monitoring
+	"hops":       "monitoring", // contains "os"; HOPS is a dashboard, not an OS
 	"grafana":    "monitoring",
 	"prometheus": "monitoring",
 	"uptime-kuma": "monitoring",
@@ -127,29 +128,36 @@ var SpecificApps = map[string]string{
 	"filebrowser": "storage",
 }
 
-// ImportDashboardIcons imports all SVG icons from the supplied filesystem.
-// Pass an fs.FS rooted at the directory containing the .svg files (typically
-// the embedded dashboard-icons collection).
+// ImportDashboardIcons adds every SVG icon from the supplied filesystem that
+// the database doesn't have yet, so an upgraded install also gets icons a
+// newer release packages. Pass an fs.FS rooted at the directory containing
+// the .svg files (typically the embedded dashboard-icons collection). An
+// existing icon with the same id (including a user's own) is left alone.
 func ImportDashboardIcons(db *sql.DB, iconsFS fs.FS) error {
-	// Check if dashboard icons have already been imported
-	var dashboardIconCount int
-	err := db.QueryRow("SELECT COUNT(*) FROM icons WHERE image_url LIKE '/api/icons/dashboard/%'").Scan(&dashboardIconCount)
+	have := map[string]bool{}
+	rows, err := db.Query("SELECT id FROM icons")
 	if err != nil {
 		return fmt.Errorf("failed to check dashboard icons: %w", err)
 	}
-
-	if dashboardIconCount > 0 {
-		slog.Info("dashboard icons already imported", "component", "icons", "count", dashboardIconCount)
-		return nil
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return fmt.Errorf("failed to check dashboard icons: %w", err)
+		}
+		have[id] = true
 	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return fmt.Errorf("failed to check dashboard icons: %w", err)
+	}
+	rows.Close()
 
 	// Read all SVG files from the filesystem
 	entries, err := fs.ReadDir(iconsFS, ".")
 	if err != nil {
 		return fmt.Errorf("failed to read dashboard icons filesystem: %w", err)
 	}
-
-	slog.Info("found files in dashboard-icons filesystem", "component", "icons", "count", len(entries))
 
 	// Begin transaction for import
 	tx, err := db.Begin()
@@ -182,6 +190,9 @@ func ImportDashboardIcons(db *sql.DB, iconsFS fs.FS) error {
 
 		// Generate icon ID (same as Python script - just the base name, lowercase)
 		iconID := strings.ToLower(baseName)
+		if have[iconID] {
+			continue
+		}
 
 		// Create display name from filename
 		displayName := formatDisplayName(baseName)
@@ -211,6 +222,10 @@ func ImportDashboardIcons(db *sql.DB, iconsFS fs.FS) error {
 		return fmt.Errorf("failed to commit dashboard icons: %w", err)
 	}
 
+	if imported == 0 {
+		slog.Info("dashboard icons already imported", "component", "icons", "count", len(have))
+		return nil
+	}
 	slog.Info("imported dashboard icons", "component", "icons", "imported", imported, "skipped", skipped)
 	return nil
 }

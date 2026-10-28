@@ -198,3 +198,52 @@ func TestImportDashboardIconsIdempotent(t *testing.T) {
 		t.Errorf("expected idempotent import, count went from %d to %d", count1, count2)
 	}
 }
+
+func TestImportDashboardIconsAddsNewPackagedIconsToExistingInstall(t *testing.T) {
+	db := newSchemaDB(t)
+
+	if err := ImportDashboardIcons(db, fstest.MapFS{"docker.svg": {Data: []byte("<svg></svg>")}}); err != nil {
+		t.Fatalf("first import: %v", err)
+	}
+	// A later release ships one more packaged icon: an upgraded install gets it too.
+	if err := ImportDashboardIcons(db, fstest.MapFS{
+		"docker.svg": {Data: []byte("<svg></svg>")},
+		"hops.svg":   {Data: []byte("<svg></svg>")},
+	}); err != nil {
+		t.Fatalf("second import: %v", err)
+	}
+	var url string
+	if err := db.QueryRow("SELECT image_url FROM icons WHERE id = 'hops' AND is_preset = 1").Scan(&url); err != nil {
+		t.Fatalf("hops icon not added on the second import: %v", err)
+	}
+	if url != "/api/icons/dashboard/hops.svg" {
+		t.Errorf("hops image_url = %q", url)
+	}
+}
+
+func TestImportDashboardIconsKeepsUserIconWithSameID(t *testing.T) {
+	db := newSchemaDB(t)
+
+	if _, err := db.Exec(`INSERT INTO icons (id, name, icon, category_id, image_url, is_preset)
+		VALUES ('hops', 'My HOPS', '', 'development', '/api/icons/custom/mine.png', 0)`); err != nil {
+		t.Fatalf("seed user icon: %v", err)
+	}
+	if err := ImportDashboardIcons(db, fstest.MapFS{"hops.svg": {Data: []byte("<svg></svg>")}}); err != nil {
+		t.Fatalf("import: %v", err)
+	}
+	var url string
+	var preset bool
+	if err := db.QueryRow("SELECT image_url, is_preset FROM icons WHERE id = 'hops'").Scan(&url, &preset); err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	if url != "/api/icons/custom/mine.png" || preset {
+		t.Errorf("user icon overwritten: url=%q preset=%v", url, preset)
+	}
+}
+
+func TestCategorizeIconHops(t *testing.T) {
+	// "hops" contains the "os" keyword; HOPS itself is not an operating system.
+	if got := categorizeIcon("hops"); got != "monitoring" {
+		t.Errorf("categorizeIcon(hops) = %q, want monitoring", got)
+	}
+}
