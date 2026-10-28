@@ -12,7 +12,7 @@ Thanks for your interest in contributing to HOPS! This document covers the guide
 
 ### Prerequisites
 
-- Go 1.25+
+- Go 1.27.3+ (the `go` line in `backend/go.mod`)
 - Node.js 24+
 - npm
 - SQLite3

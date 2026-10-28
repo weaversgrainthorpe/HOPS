@@ -240,7 +240,7 @@
               <Icon icon="mdi:radar" width="24" />
               <div>
                 <strong>Network Discovery</strong>
-                <p>Point HOPS at your home network and let it find what's already running. Tell it which addresses to look at (a range, a CIDR, or individual IPs, in any mix), pick how thorough to be, and it comes back with a draft of everything it spotted. Tick through what you actually want and HOPS adds them to your dashboard, grouped sensibly. Open <strong>Settings › Discovery</strong>. It's a head start, not magic — what it finds depends on your network and what's blocking it, so expect a few misses and a few false matches. Nothing lands on your dashboard until you accept it.</p>
+                <p>Point HOPS at your home network and let it find what's already running. Tell it which addresses to look at (a range, a CIDR, or individual IPs, in any mix), pick how thorough to be, and it comes back with a draft of everything it spotted. Tick through what you actually want and HOPS adds them to your dashboard, in sensible folders. Open <strong>Settings › Discovery</strong>. It's a head start, not magic — what it finds depends on your network and what's blocking it, so expect a few misses and a few false matches. Nothing lands on your dashboard until you accept it.</p>
                 <p><em>Running HOPS in Docker? By default, Docker containers can't "see" the kinds of broadcasts smart TVs, Sonos, and AirPlay use to announce themselves — that's a Docker quirk, not a HOPS one. Port scanning and subdomain lookups still work fine. For full coverage on Linux, run with <code>network_mode: host</code>. The User Guide → Network Discovery chapter has the full picture.</em></p>
               </div>
             </div>

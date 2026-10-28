@@ -64,7 +64,8 @@ references files it doesn't contain; a "first run" that downloads assets.
 **Principle.** From a Raspberry Pi Zero 2 W to a full server, on the OS you
 already have.
 
-**In practice.** Linux, macOS, and Windows; x86-64 and ARM64. Pure Go, `CGO_ENABLED=0`,
+**In practice.** Linux and macOS on x86-64 and ARM64, Windows on x86-64; 64-bit
+only (the smallest Pi is a Zero 2 W with a 64-bit OS). Pure Go, `CGO_ENABLED=0`,
 statically linked — no glibc dependency, no platform-specific runtime. Modest
 footprint (runs in 256 MB RAM).
 
@@ -76,7 +77,7 @@ that excludes small boards.
 
 **Principle.** Nothing changes until you commit it.
 
-**In practice.** Every edit — tiles, groups, tabs, settings — is applied only on
+**In practice.** Every edit — tiles, folders, tabs, settings — is applied only on
 an explicit Create/Save. Cancelling or navigating away leaves state exactly as it
 was. No autosave surprises, no partial writes.
 

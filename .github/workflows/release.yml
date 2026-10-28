@@ -10,8 +10,94 @@ permissions:
   packages: write
 
 jobs:
+  meta:
+    name: Release metadata
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      prerelease: ${{ steps.meta.outputs.prerelease }}
+      label: ${{ steps.meta.outputs.label }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Parse and check the tag
+        id: meta
+        # vX.Y.Z is a normal release; vX.Y.Z-<label> (e.g. v3.0.0-rc1) is a
+        # pre-release. X.Y.Z must equal the VERSION file, and the label must
+        # be the form scripts/build-rc.sh accepts. Anything else fails here,
+        # before anything is built or published.
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          if [[ ! "$tag" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)(-([A-Za-z0-9][A-Za-z0-9.]*))?$ ]]; then
+            echo "::error::tag '$tag' is not vX.Y.Z or vX.Y.Z-<label> (label: letters, digits, dots)"
+            exit 1
+          fi
+          base="${BASH_REMATCH[1]}"
+          label="${BASH_REMATCH[3]}"
+          file_version=$(tr -d '[:space:]' < VERSION)
+          if [[ "$base" != "$file_version" ]]; then
+            echo "::error::tag '$tag' is for $base but VERSION says $file_version"
+            exit 1
+          fi
+          if [[ -n "$label" ]]; then prerelease=true; else prerelease=false; fi
+          {
+            echo "version=${tag#v}"
+            echo "label=$label"
+            echo "prerelease=$prerelease"
+          } >> "$GITHUB_OUTPUT"
+          echo "version=${tag#v} label='${label}' prerelease=$prerelease"
+
+  test:
+    name: Test (gate for every build and publish)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check VERSION / version.go / package.json / docs agree
+        run: ./scripts/check-versions.sh
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27'
+          cache-dependency-path: backend/go.sum
+
+      - name: Backend vet
+        working-directory: backend
+        env:
+          CGO_ENABLED: '0'
+        run: go vet ./...
+
+      - name: Backend tests
+        working-directory: backend
+        env:
+          CGO_ENABLED: '0'
+        run: go test ./...
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Frontend install
+        working-directory: frontend
+        run: npm ci
+
+      - name: Frontend tests
+        working-directory: frontend
+        run: npx vitest run
+
+      - name: Frontend type check
+        working-directory: frontend
+        run: npm run check
+
+      - name: Frontend build
+        working-directory: frontend
+        run: npm run build
+
   build-frontend:
     name: Build Frontend
+    needs: [test]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -42,7 +128,7 @@ jobs:
     # The UI is embedded into the binary via //go:embed, so the frontend build
     # must exist before `go build`. Reuse the single build-frontend artifact
     # across the matrix rather than rebuilding the SPA five times.
-    needs: build-frontend
+    needs: [meta, test, build-frontend]
     strategy:
       matrix:
         include:
@@ -85,7 +171,10 @@ jobs:
           GOOS: ${{ matrix.os }}
           GOARCH: ${{ matrix.arch }}
           CGO_ENABLED: '0'
-        run: go build -trimpath -ldflags="-s -w" -o ../hops-${{ matrix.os }}-${{ matrix.name || matrix.arch }}${{ matrix.ext }} ./cmd/hops
+          # Same stamp as scripts/build-rc.sh: a pre-release binary reports
+          # e.g. 3.0.0-rc1 on /api/health and in About. Empty for vX.Y.Z.
+          PRERELEASE: ${{ needs.meta.outputs.label }}
+        run: go build -trimpath -ldflags="-s -w -X github.com/weaversgrainthorpe/HOPS/internal/version.Prerelease=${PRERELEASE}" -o ../hops-${{ matrix.os }}-${{ matrix.name || matrix.arch }}${{ matrix.ext }} ./cmd/hops
 
       - uses: actions/upload-artifact@v4
         with:
@@ -94,13 +183,28 @@ jobs:
 
   docker-publish:
     name: Publish Docker image to GHCR
+    needs: [meta, test]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Extract version from tag
+      - name: Work out image tags
         id: version
-        run: echo "version=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
+        # A pre-release (vX.Y.Z-<label>) pushes only its own version tags;
+        # only a plain vX.Y.Z moves :latest.
+        env:
+          VERSION: ${{ needs.meta.outputs.version }}
+          PRERELEASE: ${{ needs.meta.outputs.prerelease }}
+          IMAGE: ghcr.io/${{ github.repository_owner }}/hops
+        run: |
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          {
+            echo "tags<<EOF"
+            echo "$IMAGE:$VERSION"
+            echo "$IMAGE:v$VERSION"
+            if [[ "$PRERELEASE" != "true" ]]; then echo "$IMAGE:latest"; fi
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -121,10 +225,7 @@ jobs:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: |
-            ghcr.io/${{ github.repository_owner }}/hops:latest
-            ghcr.io/${{ github.repository_owner }}/hops:${{ steps.version.outputs.version }}
-            ghcr.io/${{ github.repository_owner }}/hops:v${{ steps.version.outputs.version }}
+          tags: ${{ steps.version.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           labels: |
@@ -135,7 +236,7 @@ jobs:
 
   release:
     name: Create Release
-    needs: [build]
+    needs: [meta, test, build]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -179,4 +280,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
+          # vX.Y.Z-<label> is a GitHub pre-release and never "latest", so
+          # install.sh's releases/latest/download keeps serving the last
+          # normal release.
+          prerelease: ${{ needs.meta.outputs.prerelease == 'true' }}
+          make_latest: ${{ needs.meta.outputs.prerelease == 'true' && 'false' || 'true' }}
           files: packages/*

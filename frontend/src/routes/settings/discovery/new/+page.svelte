@@ -397,24 +397,25 @@
           <input type="radio" bind:group={intensity} value="passive" />
           <div class="card-title"><Icon icon="mdi:ear-hearing" width="18" /> Passive only</div>
           <div class="card-body">
-            mDNS, NetBIOS, and ARP cache only — no outbound probes.
-            Finds things that broadcast themselves; misses everything
-            else.
+            mDNS, UPnP, the ARP cache, DNS names and an SNMP query only —
+            no web-port probes. Finds things that announce themselves;
+            misses everything else.
           </div>
         </label>
         <label class="intensity-card" class:active={intensity === 'light'}>
           <input type="radio" bind:group={intensity} value="light" />
           <div class="card-title"><Icon icon="mdi:radar" width="18" /> Light active</div>
           <div class="card-body">
-            Passive plus TCP-connect + HTTP fingerprint on ~30 well-known
-            homelab ports. The default — fast and finds most things.
+            Passive plus TCP-connect + HTTP fingerprint on about 65 ports
+            (well-known homelab ports plus every port a detector knows).
+            The default — fast and finds most things.
           </div>
         </label>
         <label class="intensity-card" class:active={intensity === 'full'}>
           <input type="radio" bind:group={intensity} value="full" />
           <div class="card-title"><Icon icon="mdi:radar" width="18" /> Full active</div>
           <div class="card-body">
-            Light plus a wider port sweep + banner grabs. Slower and
+            A wider sweep of about 115 ports + banner grabs. Slower and
             noisier; can spook IoT firmware. Use when you suspect there's
             something on a non-standard port.
           </div>

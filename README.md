@@ -36,7 +36,7 @@ Already using Homer, Dashy, or Heimdall? HOPS can import your existing configura
     </td>
     <td width="33%" valign="top">
       <a href="docs/screenshots/edit-mode.png"><img src="docs/screenshots/edit-mode.png" alt="Edit mode — drag-and-drop, no YAML" /></a>
-      <p align="center"><sub><b>Edit mode</b> — drag-and-drop tiles, groups, and tabs; no YAML</sub></p>
+      <p align="center"><sub><b>Edit mode</b> — drag-and-drop tiles, folders, and tabs; no YAML</sub></p>
     </td>
   </tr>
   <tr>
@@ -95,21 +95,20 @@ For full deployment options (systemd, reverse proxy, backups), see the **[Instal
 ### Core
 - **GUI-First**: Full visual editor — no YAML, no config files, no CLI required
 - **Single Binary**: One executable + SQLite database, no runtime dependencies
-- **Multi-Platform**: Linux, macOS, Windows — x86-64 and ARM64
+- **Multi-Platform**: Linux and macOS on x86-64 and ARM64, Windows on x86-64 (64-bit only; the smallest Pi is a Zero 2 W with a 64-bit OS)
 - **Docker Support**: Dockerfile and docker-compose.yml included
 - **No Login for Viewers**: Just share a URL, it works
-- **Admin Mode**: Separate login for editing
+- **Sign in to edit**: one admin login for editing and Settings; viewers never need it
 - **Built-in Help**: Context-sensitive help system in edit mode
 
 ### Navigation
 - Multiple dashboards (e.g., /home, /network, /media)
 - Tabs within each dashboard
-- Collapsible groups within tabs
-- Per-group row width (full / half / third) — multi-column group layouts
-- Drag-and-drop for tabs, groups, and tiles
-- Cross-group drag & drop for tiles
-- Copy/cut/paste for tiles between groups and tabs
-- Global search — press `/` to jump to any tile by name, URL, or description
+- Tiles and folders on a grid on each tab; folders can hold folders, page when full, and can start minimised
+- Drag-and-drop for tabs, folders, and tiles (drop a tile on another and hold to make a folder)
+- Copy/cut/paste and **Move or copy to…** for tiles and folders, across tabs and dashboards
+- Undo / redo while editing; nothing is kept until you click Save
+- Search — press `/` to find a tile or folder on the dashboard you're viewing, by name, URL, or description
 - Arrow-key navigation between tiles (browse mode)
 - Right-click context menu
 
@@ -118,12 +117,12 @@ For full deployment options (systemd, reverse proxy, backups), see the **[Instal
 - Background slideshow with 18 transition effects (crossfade, slide, zoom, Ken Burns, and more)
 - Configurable background overlay opacity and blur
 - Upload custom background images or choose from ~90 curated presets
-- Theme hierarchy: Dashboard → Tab → Group → Tile (colour and opacity cascade)
+- Layout: Dashboard → Tab → tiles and folders (folders nest)
 - ~2,300 bundled app/service icons (homarr-labs/dashboard-icons), plus access to 200,000+ Iconify icons by name (the ones the UI uses are embedded for offline use; an uncommon name you type is fetched on demand), plus custom icon uploads
 - "My Uploads" and "Recently Used" icon categories
 - Multiple tile sizes (small, medium, large)
 - 8 theme presets with light/dark/auto modes
-- Custom colours and opacity at every level
+- Custom colours and opacity on tiles and folders (*None* falls back to the theme)
 
 ### Entries/Tiles
 - Two tile types: **link** (default — opens a URL) and **note** (text-only, name + description, no click action)
@@ -132,16 +131,15 @@ For full deployment options (systemd, reverse proxy, backups), see the **[Instal
 - HTTP status monitoring with response time
 - Subtitles/descriptions on tiles
 - Custom tile colours and opacity
-- Cross-group drag & drop
 - Right-click context menu
 
-### Network Discovery (v2.0)
+### Network Discovery
 - **Scan your network** — give it an IP range (`172.16.0.0/24`, `172.16.0.1-50`, individual addresses, or any mix). Skip the things you don't want scanned with a `!` prefix
-- **Recognises ~70 common homelab services out of the box** — Pi-hole, Plex, Proxmox, Home Assistant, every *arr, NPM, UniFi, OPNsense/pfSense, Frigate, TrueNAS/QNAP/Synology, Vaultwarden, Immich, Audiobookshelf, Grafana, Traefik, MinIO, pgAdmin/phpMyAdmin/Adminer, Guacamole, Netdata, and many more
-- **Three intensities** — *Passive* listens for services that announce themselves (mDNS, UPnP, etc.) without touching any ports. *Light* (default) adds a quick check of ~40 well-known homelab ports. *Full* sweeps ~60. Start with Light
-- **Finds things without scanning too** — picks up mDNS announcements (smart TVs, AirPlay, Sonos), router neighbour tables, your network's DNS, and SNMP from printers/switches/UPSes
+- **Recognises 90+ common homelab services out of the box** — Pi-hole, Plex, Proxmox, Home Assistant, every *arr, NPM, UniFi, OPNsense/pfSense, Frigate, TrueNAS/QNAP/Synology, Vaultwarden, Immich, Audiobookshelf, Grafana, Traefik, MinIO, pgAdmin/phpMyAdmin/Adminer, Guacamole, Netdata, and many more
+- **Three intensities** — *Passive* listens for services that announce themselves (mDNS, UPnP) and asks your DNS, the ARP cache and SNMP, without probing any web ports. *Light* (default) adds a quick check of about 65 ports: well-known homelab ports plus every port a detector knows about. *Full* sweeps about 115. Start with Light
+- **Finds things without scanning too** — picks up mDNS announcements (smart TVs, AirPlay, Sonos), router neighbour tables (when HOPS runs on Linux), your network's DNS, and SNMP from printers/switches/UPSes
 - **Knows about subdomains** — give it your internal domain (the one your reverse proxy serves under) and it'll try common names like `sonarr.yourdomain` so services hidden behind a reverse proxy aren't missed
-- **Review before adding** — every scan produces a draft you tick through. Confidence indicators on each row, edit the name / URL / icon inline, bulk-select, and tiles automatically slot into sensible groups when you accept (Sonarr → *Downloads*, Pi-hole → *Network*)
+- **Review before adding** — every scan produces a draft you tick through. Confidence indicators on each row, edit the name / URL / icon inline, bulk-select, and tiles automatically slot into sensible folders when you accept (Sonarr → *Downloads*, Pi-hole → *Network*)
 - **Add or tweak the recognisers yourself** — through the admin UI, no config files. Customise any built-in recogniser; if you change your mind, one click puts it back
 - **Find what didn't match** — a Diagnostics view shows every service HOPS spotted but couldn't put a name to. One click bootstraps a new detector with everything HOPS already knows about it
 
@@ -156,14 +154,14 @@ For full deployment options (systemd, reverse proxy, backups), see the **[Instal
 > view turns *"HOPS missed this"* into a working detector in two
 > clicks. Coverage keeps improving with each release.
 
-### Admin Panel
+### Settings (signed in)
 - Create, rename, and delete dashboards
 - **QR codes** — generate scannable codes for any dashboard URL (open the dashboard on a phone/tablet without typing)
 - Self-contained export/import with embedded assets
 - Single-dashboard export
 - Import from Homer, Dashy, and Heimdall
 - Automatic database backups on startup (async — doesn't block boot)
-- Backup management (restore and delete) with auto-restart after restore
+- Backup management (download, upload, restore and delete). A restore restarts HOPS, which needs a service manager to start it again (install.sh, the Proxmox script, Docker and NSSM set this up; a binary run by hand just stops and you start it again)
 - Forced password change on first login (no more accidentally leaving the default `admin/admin` in production)
 
 ### Mobile
@@ -184,7 +182,7 @@ For full deployment options (systemd, reverse proxy, backups), see the **[Instal
 - **Backend**: Go (single binary, pure Go, no CGO)
 - **Database**: SQLite (pure Go implementation via modernc.org/sqlite)
 - **Icons**: ~2,300 bundled SVGs (homarr-labs/dashboard-icons) + Iconify (200,000+ by name; the icons the UI uses are embedded for offline rendering, uncommon names fetched on demand)
-- **Drag & Drop**: svelte-dnd-action
+- **Drag & Drop**: HOPS's own (no drag-and-drop library)
 
 ## Keyboard Shortcuts
 
@@ -194,9 +192,12 @@ For full deployment options (systemd, reverse proxy, backups), see the **[Instal
 | `↑ ↓ ← →`      | Move focus between tiles                    | Browse     |
 | `Enter`        | Activate focused tile                       | Browse     |
 | `Escape`       | Close modal / cancel edit / close search    | Anywhere   |
-| `Ctrl+C`       | Copy selected tile                          | Edit       |
-| `Ctrl+X`       | Cut selected tile                           | Edit       |
-| `Ctrl+V`       | Paste tile into focused group               | Edit       |
+| `Ctrl+S`       | Save the draft                              | Edit       |
+| `Ctrl+Z` / `Ctrl+Shift+Z` or `Ctrl+Y` | Undo / redo          | Edit       |
+| `Ctrl+C`       | Copy selected items                         | Edit       |
+| `Ctrl+X`       | Cut selected items                          | Edit       |
+| `Ctrl+V`       | Paste copied/cut items                      | Edit       |
+| `Delete`       | Delete selected items (asks first)          | Edit       |
 | `Ctrl+Enter`   | Save and close modal                        | Edit       |
 
 ## Roadmap
@@ -209,7 +210,7 @@ CHANGELOG records what actually ships.
 ## Documentation
 
 - **[Zero to Dashboard Hero](QUICKSTART.md)** — Get up and running in 5 minutes
-- **[User Guide](USER_GUIDE.md)** — Full feature reference
+- **[User Guide](USER_GUIDE.md)** — Full feature reference (still mostly describes HOPS 2; QUICKSTART covers v3)
 - **[Installation & Deployment Guide](DEPLOY.md)** — Reverse proxy, systemd, backups
 - **[Roadmap](ROADMAP.md)** — Future improvements under consideration
 

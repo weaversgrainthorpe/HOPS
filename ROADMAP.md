@@ -47,13 +47,12 @@ Bigger, but each one is self-contained.
   - **Pattern matching** instead of literal text matching, so a
     detector keeps working when a service's wording drifts between
     versions.
-  - **TLS certificate names.** HOPS already reads the certificate when
-    it probes an HTTPS service, so the name on it is an obvious extra
-    signal.
+  - **TLS certificate names as a match.** HOPS already reads the
+    certificate when it probes an HTTPS service, but only uses the name
+    to label a service it couldn't recognise. Letting a detector match
+    on it would be an extra signal.
   - **Manage the bundled favicon list**, plus bulk-import of favicon
     fingerprints.
-  - **mDNS / UPnP listening.** Find web pages that announce themselves
-    (printers, NAS boxes) and that port scanning misses.
 - **Scheduled and off-site backups.** HOPS already backs up before every
   change and on start-up, keeps them under retention rules, and lets you
   download them. Next: a schedule, and an automatic off-site copy
