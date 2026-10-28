@@ -40,6 +40,12 @@ type EmittedHit struct {
 	SuggestedURL   string
 	SuggestedDesc  string
 	RawFingerprint map[string]interface{}
+	// AlsoPorts are other ports on the host where the same detector
+	// matched — the same app over its other port or scheme (Portainer on
+	// 9000 and 9443, Pi-hole on 80 and 443). One result is emitted; these
+	// ports are claimed with it so the fallback doesn't list them again
+	// as an unidentified web service.
+	AlsoPorts []int
 }
 
 // Registry holds the bundled detectors and a reference to the store so
@@ -238,35 +244,56 @@ func (d httpFingerprintDetector) Name() string     { return d.name }
 func (d httpFingerprintDetector) IsFallback() bool { return false }
 
 func (d httpFingerprintDetector) Run(ctx context.Context, p *Probe) []EmittedHit {
+	var hit *EmittedHit
 	for _, port := range d.ports {
-		snap := p.HTTPResponses[port]
-		if snap != nil && d.matches(snap) {
-			return []EmittedHit{d.emit(p, port, snap)}
+		snap := d.matchPort(ctx, p, port)
+		if snap == nil {
+			continue
 		}
-		// Many apps answer / with a bare redirect to their real first
-		// page — a fresh Home Assistant to /onboarding.html, AdGuard
-		// Home's setup wizard to /install.html. Match on that page too
-		// (fetched once per probe and shared by every detector).
-		if s := followRootRedirect(ctx, p, port, snap); s != nil && d.matches(s) {
-			return []EmittedHit{d.emit(p, port, s)}
+		if hit == nil {
+			h := d.emit(p, port, snap)
+			hit = &h
+		} else {
+			hit.AlsoPorts = append(hit.AlsoPorts, port)
 		}
-		// Fall through to per-detector additional paths.
-		for _, path := range d.paths {
-			s, err := p.HTTP(ctx, port, path)
-			if err != nil || s == nil {
-				continue
-			}
-			// Reject path-based matches on 4xx (except auth-required
-			// 401/403) — many web servers echo the requested URL in
-			// their 404 body, which would make any verbose 404 page
-			// match a detector whose path mentions the app name
-			// (TP-Link Deco vs core/minio /minio/health/live, etc.).
-			if s.Status >= 400 && s.Status != 401 && s.Status != 403 {
-				continue
-			}
-			if d.matches(s) {
-				return []EmittedHit{d.emit(p, port, s)}
-			}
+	}
+	if hit == nil {
+		return nil
+	}
+	return []EmittedHit{*hit}
+}
+
+// matchPort returns the response on port that this detector matched, or
+// nil: the pre-fetched GET /, then the page a root redirect points at,
+// then the detector's extra paths.
+func (d httpFingerprintDetector) matchPort(ctx context.Context, p *Probe, port int) *HTTPSnapshot {
+	snap := p.HTTPResponses[port]
+	if snap != nil && d.matches(snap) {
+		return snap
+	}
+	// Many apps answer / with a bare redirect to their real first
+	// page — a fresh Home Assistant to /onboarding.html, AdGuard
+	// Home's setup wizard to /install.html. Match on that page too
+	// (fetched once per probe and shared by every detector).
+	if s := followRootRedirect(ctx, p, port, snap); s != nil && d.matches(s) {
+		return s
+	}
+	// Fall through to per-detector additional paths.
+	for _, path := range d.paths {
+		s, err := p.HTTP(ctx, port, path)
+		if err != nil || s == nil {
+			continue
+		}
+		// Reject path-based matches on 4xx (except auth-required
+		// 401/403) — many web servers echo the requested URL in
+		// their 404 body, which would make any verbose 404 page
+		// match a detector whose path mentions the app name
+		// (TP-Link Deco vs core/minio /minio/health/live, etc.).
+		if s.Status >= 400 && s.Status != 401 && s.Status != 403 {
+			continue
+		}
+		if d.matches(s) {
+			return s
 		}
 	}
 	return nil

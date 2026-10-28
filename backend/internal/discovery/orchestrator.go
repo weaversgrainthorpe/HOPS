@@ -755,6 +755,9 @@ func (o *Orchestrator) probeHost(ctx context.Context, scanID, host string, ports
 		}
 		for _, hit := range det.Run(ctx, probe) {
 			claimedPorts[hit.Port] = true
+			for _, also := range hit.AlsoPorts {
+				claimedPorts[also] = true
+			}
 			persistHit(det, hit)
 			anyEmit = true
 		}

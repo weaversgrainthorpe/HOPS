@@ -169,3 +169,38 @@ func TestRealAppCaptureFaviconHashes(t *testing.T) {
 		}
 	}
 }
+
+// An app answering on two of its detector's ports (Portainer on 9000 and
+// 9443, captured separately from one container) is ONE result that
+// claims both ports — before this, the scan listed 9443 again as an
+// unidentified "HTTP service" titled Portainer.
+func TestRealAppTwoPortsOneResult(t *testing.T) {
+	byApp := map[string]realCapture{}
+	for _, c := range loadRealCaptures(t) {
+		byApp[c.App] = c
+	}
+	httpCap, tlsCap := byApp["portainer-http"], byApp["portainer"]
+	p := &Probe{Host: fxHost, OpenPorts: []int{httpCap.Port, tlsCap.Port}, HTTPResponses: map[int]*HTTPSnapshot{}}
+	for _, c := range []realCapture{httpCap, tlsCap} {
+		root, err := c.snap(t, "/")
+		if err != nil {
+			t.Fatal(err)
+		}
+		p.HTTPResponses[c.Port] = root
+	}
+	p.HTTP = func(_ context.Context, port int, path string) (*HTTPSnapshot, error) {
+		if port == tlsCap.Port {
+			return tlsCap.snap(t, path)
+		}
+		return httpCap.snap(t, path)
+	}
+	var hits []EmittedHit
+	for _, d := range coreDetectors() {
+		if d.ID() == "core/portainer" {
+			hits = d.Run(context.Background(), p)
+		}
+	}
+	if len(hits) != 1 || hits[0].Port != 9000 || len(hits[0].AlsoPorts) != 1 || hits[0].AlsoPorts[0] != 9443 {
+		t.Fatalf("hits = %+v, want one on 9000 also claiming 9443", hits)
+	}
+}
