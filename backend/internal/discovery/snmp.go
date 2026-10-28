@@ -55,20 +55,29 @@ type snmpResult struct {
 	SysLocation string
 }
 
+// dialUDP opens the per-host SNMP socket (a var so tests can make it fail).
+var dialUDP = net.DialUDP
+
 // snmpProbeHosts runs an SNMPv2c GET against every host in `hosts`,
 // concurrently up to a small parallelism cap. Hosts that don't answer
-// within snmpPerHostTimeout are silently skipped. Returns one result
-// per responding host.
-func snmpProbeHosts(ctx context.Context, hosts []string) []snmpResult {
-	const parallel = 16
+// within snmpPerHostTimeout have no SNMP (a real answer) and are skipped.
+// Returns one result per responding host, plus an error when the sweep
+// couldn't ask every host: some were never reached before the context
+// ended, or a request couldn't be sent from this side.
+func snmpProbeHosts(ctx context.Context, hosts []string) ([]snmpResult, error) {
+	const parallel = 64
 	sem := make(chan struct{}, parallel)
 	var (
-		wg  sync.WaitGroup
-		mu  sync.Mutex
-		out []snmpResult
+		wg       sync.WaitGroup
+		mu       sync.Mutex
+		out      []snmpResult
+		sendErrs int
+		firstErr error
 	)
-	for _, h := range hosts {
+	notProbed := 0
+	for i, h := range hosts {
 		if ctx.Err() != nil {
+			notProbed = len(hosts) - i
 			break
 		}
 		wg.Add(1)
@@ -76,34 +85,51 @@ func snmpProbeHosts(ctx context.Context, hosts []string) []snmpResult {
 		go func(host string) {
 			defer wg.Done()
 			defer func() { <-sem }()
-			r, ok := snmpGetSysInfo(ctx, host)
+			r, ok, err := snmpGetSysInfo(ctx, host)
+			mu.Lock()
+			defer mu.Unlock()
+			if err != nil {
+				sendErrs++
+				if firstErr == nil {
+					firstErr = err
+				}
+				return
+			}
 			if !ok {
 				return
 			}
 			r.Host = host
-			mu.Lock()
 			out = append(out, r)
-			mu.Unlock()
 		}(h)
 	}
 	wg.Wait()
-	return out
+	switch {
+	case notProbed > 0 && sendErrs > 0:
+		return out, fmt.Errorf("%d of %d hosts not asked (ran out of time) and %d couldn't be sent to: %v", notProbed, len(hosts), sendErrs, firstErr)
+	case notProbed > 0:
+		return out, fmt.Errorf("%d of %d hosts not asked (ran out of time)", notProbed, len(hosts))
+	case sendErrs > 0:
+		return out, fmt.Errorf("%d of %d hosts couldn't be sent to: %v", sendErrs, len(hosts), firstErr)
+	}
+	return out, nil
 }
 
 // snmpGetSysInfo issues a single SNMP GetRequest for sysDescr + sysName
-// + sysLocation and parses the response. Returns ok=false on any error
-// (timeout, no response, malformed reply, non-string value).
-func snmpGetSysInfo(ctx context.Context, host string) (snmpResult, bool) {
+// + sysLocation and parses the response. Returns ok=false when the host
+// gives no usable answer (timeout, no response, malformed reply,
+// non-string value) — that's "no SNMP here". Returns an error only when the
+// request couldn't be sent from this side (socket or write failure).
+func snmpGetSysInfo(ctx context.Context, host string) (snmpResult, bool, error) {
 	// Refuse to dial blocked targets — mirrors the SSRF policy used
 	// for TCP probes.
 	a, ok := netguard.ParseIP(host)
 	if !ok || !a.Is4() || netguard.Blocked(a) {
-		return snmpResult{}, false
+		return snmpResult{}, false, nil
 	}
 	addr := &net.UDPAddr{IP: net.IP(a.AsSlice()), Port: snmpPort}
-	conn, err := net.DialUDP("udp4", nil, addr)
+	conn, err := dialUDP("udp4", nil, addr)
 	if err != nil {
-		return snmpResult{}, false
+		return snmpResult{}, false, err
 	}
 	defer conn.Close()
 
@@ -121,20 +147,20 @@ func snmpGetSysInfo(ctx context.Context, host string) (snmpResult, bool) {
 	reqID := int32(randUint32() & 0x7fffffff)
 	req, err := buildSNMPGetRequest(reqID, snmpCommunity, oids)
 	if err != nil {
-		return snmpResult{}, false
+		return snmpResult{}, false, nil
 	}
 	if _, err := conn.Write(req); err != nil {
-		return snmpResult{}, false
+		return snmpResult{}, false, err
 	}
 
 	buf := make([]byte, snmpMaxResponseLen)
 	n, err := conn.Read(buf)
 	if err != nil {
-		return snmpResult{}, false
+		return snmpResult{}, false, nil
 	}
 	vals, err := parseSNMPResponse(buf[:n], reqID)
 	if err != nil || len(vals) < 1 {
-		return snmpResult{}, false
+		return snmpResult{}, false, nil
 	}
 	out := snmpResult{}
 	if len(vals) > 0 {
@@ -150,7 +176,7 @@ func snmpGetSysInfo(ctx context.Context, host string) (snmpResult, bool) {
 	out.SysDescr = clipString(out.SysDescr, 200)
 	out.SysName = clipString(out.SysName, 80)
 	out.SysLocation = clipString(out.SysLocation, 80)
-	return out, true
+	return out, true, nil
 }
 
 // snmpSuggest maps an SNMP sysDescr string to a tile suggestion. The

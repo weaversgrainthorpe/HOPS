@@ -3,6 +3,7 @@ package discovery
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"strings"
 	"time"
@@ -104,17 +105,21 @@ func browseMDNSForHosts(ctx context.Context, allow hostAllowlist) ([]mdnsInstanc
 	for ctx.Err() == nil {
 		n, _, err := conn.ReadFromUDP(buf)
 		if err != nil {
-			// Read deadline hit, or socket closed — exit normally.
-			var nerr net.Error
-			if errors.As(err, &nerr) && nerr.Timeout() {
-				break
+			// The listen window ending is normal; any other socket error
+			// is reported with what arrived before it.
+			if rerr := listenReadErr(ctx, err); rerr != nil {
+				return collectMDNS(byKey, allow), fmt.Errorf("listening for answers: %w", rerr)
 			}
 			break
 		}
 		parseMDNSMessage(buf[:n], byKey)
 	}
 
-	// Resolve target hostnames against A records collected by key.
+	return collectMDNS(byKey, allow), nil
+}
+
+// collectMDNS keeps the in-scope instances gathered so far.
+func collectMDNS(byKey map[string]*mdnsInstance, allow hostAllowlist) []mdnsInstance {
 	out := make([]mdnsInstance, 0, len(byKey))
 	for _, inst := range byKey {
 		if inst.Host == "" || !allow.contains(inst.Host) {
@@ -122,7 +127,21 @@ func browseMDNSForHosts(ctx context.Context, allow hostAllowlist) ([]mdnsInstanc
 		}
 		out = append(out, *inst)
 	}
-	return out, nil
+	return out
+}
+
+// listenReadErr classifies a read error in an mDNS / SSDP listen loop: the
+// read deadline (the listen window) or a finished context ends the listen
+// normally (nil); anything else is a real failure, returned as is.
+func listenReadErr(ctx context.Context, err error) error {
+	var nerr net.Error
+	if errors.As(err, &nerr) && nerr.Timeout() {
+		return nil
+	}
+	if ctx.Err() != nil {
+		return nil
+	}
+	return err
 }
 
 func sendMDNSQuery(conn *net.UDPConn, dst *net.UDPAddr, name string, qtype dnsmessage.Type) error {

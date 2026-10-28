@@ -2,8 +2,10 @@ package discovery
 
 import (
 	"bufio"
+	"errors"
 	"net"
 	"os"
+	"runtime"
 	"strings"
 	"sync"
 )
@@ -211,17 +213,32 @@ func (p *PassiveHints) AllIPs() []string {
 	return out
 }
 
+// arpTablePath / arpSupported are the ARP source; vars so tests can stand in
+// another platform or an unreadable table.
+var (
+	arpTablePath = "/proc/net/arp"
+	arpSupported = runtime.GOOS == "linux"
+)
+
+// errARPUnavailable means this system has no ARP table HOPS can read (not
+// Linux, or no /proc/net/arp). It is reported as a scan notice, never passed
+// off as "the ARP table was empty".
+var errARPUnavailable = errors.New("ARP isn't available on this system")
+
 // readARPTableForHosts parses /proc/net/arp on Linux and returns the
 // IP→MAC entries that fall inside the scan's allowed host set. Hosts in
 // the ARP cache are guaranteed to be (or have recently been) live, so
 // using these to bias probe order and skip dead-host short-circuits is
-// a free speedup. Returns empty (not an error) on non-Linux hosts where
-// the file doesn't exist — passive ARP enrichment is just unavailable.
+// a free speedup. On a system without the table it returns
+// errARPUnavailable; a table that exists but can't be read is an error.
 func readARPTableForHosts(allow hostAllowlist) ([]arpEntry, error) {
-	f, err := os.Open("/proc/net/arp")
+	if !arpSupported {
+		return nil, errARPUnavailable
+	}
+	f, err := os.Open(arpTablePath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, nil
+			return nil, errARPUnavailable
 		}
 		return nil, err
 	}
@@ -253,7 +270,10 @@ func readARPTableForHosts(allow hostAllowlist) ([]arpEntry, error) {
 		}
 		out = append(out, arpEntry{IP: ip.String(), MAC: fields[3]})
 	}
-	return out, sc.Err()
+	if err := sc.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 type arpEntry struct {

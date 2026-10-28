@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/xml"
-	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -87,8 +86,17 @@ func browseSSDPForHosts(ctx context.Context, allow hostAllowlist) ([]ssdpDevice,
 
 	// Fire one M-SEARCH per target. Many devices only answer the
 	// specific search target their handler subscribes to.
+	var sendErr error
+	sent := 0
 	for _, st := range ssdpSearchTargets {
-		_ = sendSSDPMSearch(conn, addr, st)
+		if err := sendSSDPMSearch(conn, addr, st); err != nil {
+			sendErr = err
+			continue
+		}
+		sent++
+	}
+	if sent == 0 {
+		return nil, fmt.Errorf("sending M-SEARCH: %w", sendErr)
 	}
 
 	deadline := time.Now().Add(ssdpListenWindow)
@@ -100,20 +108,16 @@ func browseSSDPForHosts(ctx context.Context, allow hostAllowlist) ([]ssdpDevice,
 	// Dedupe by LOCATION URL: many devices announce themselves under
 	// multiple search targets and we don't want to fetch the same XML
 	// five times.
-	type pendingLocation struct {
-		ip     string
-		server string
-	}
 	pending := map[string]pendingLocation{}
 
+	var listenErr error
 	buf := make([]byte, 4096)
 	for ctx.Err() == nil {
 		n, src, err := conn.ReadFromUDP(buf)
 		if err != nil {
-			var nerr net.Error
-			if errors.As(err, &nerr) && nerr.Timeout() {
-				break
-			}
+			// The listen window ending is normal; any other socket error
+			// is reported, with the devices heard before it still fetched.
+			listenErr = listenReadErr(ctx, err)
 			break
 		}
 		ip := src.IP.String()
@@ -133,16 +137,40 @@ func browseSSDPForHosts(ctx context.Context, allow hostAllowlist) ([]ssdpDevice,
 		}
 	}
 
+	out, fetchErr := fetchSSDPDevices(ctx, pending)
+	if listenErr != nil {
+		return out, fmt.Errorf("listening for answers: %w", listenErr)
+	}
+	return out, fetchErr
+}
+
+// pendingLocation is one SSDP responder whose device description is still
+// to be fetched.
+type pendingLocation struct {
+	ip     string
+	server string
+}
+
+// fetchSSDPDevices fetches each responder's device description. Devices
+// that answered but whose description couldn't be read are counted and
+// reported (they won't be listed), never silently dropped.
+func fetchSSDPDevices(ctx context.Context, pending map[string]pendingLocation) ([]ssdpDevice, error) {
 	out := make([]ssdpDevice, 0, len(pending))
+	failed := 0
 	for loc, p := range pending {
 		if ctx.Err() != nil {
+			failed += len(pending) - len(out) - failed
 			break
 		}
 		dev, ok := fetchSSDPDeviceDescription(ctx, loc, p.ip, p.server)
 		if !ok {
+			failed++
 			continue
 		}
 		out = append(out, dev)
+	}
+	if failed > 0 {
+		return out, fmt.Errorf("%d of %d UPnP devices answered but their description couldn't be read, so they aren't listed", failed, len(pending))
 	}
 	return out, nil
 }
@@ -217,6 +245,9 @@ func fetchSSDPDeviceDescription(ctx context.Context, location, expectedIP, serve
 		return ssdpDevice{}, false
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return ssdpDevice{}, false
+	}
 
 	// Cap the XML at 64 KB — device-description docs are normally
 	// 1-4 KB; anything larger is either pathological or a trap.

@@ -864,8 +864,8 @@ func (o *Orchestrator) probeHost(ctx context.Context, scanID, host string, ports
 }
 
 // runPassivePrelude collects passive-discovery hints scoped to the
-// scan's target set. Each source is best-effort — failures are logged
-// and the other sources continue. Returns a non-nil PassiveHints even
+// scan's target set. Each source is best-effort — a failure becomes a
+// scan warning (shown on the Discovery page) and the other sources continue. Returns a non-nil PassiveHints even
 // on total failure (so callers can iterate without nil checks).
 //
 // internalDomain is the optional zone the admin typed when starting the
@@ -874,36 +874,26 @@ func (o *Orchestrator) runPassivePrelude(ctx context.Context, scanID string, all
 	hints := newPassiveHints()
 
 	// ARP — cheap, no network I/O, no goroutine needed.
-	if entries, err := readARPTableForHosts(allow); err != nil {
-		slog.Debug("discovery: ARP table read failed",
-			"component", "discovery", "error", err)
-		o.addWarning(scanID, "ARP table read failed: "+err.Error())
-	} else {
-		for _, e := range entries {
-			if e.MAC != "" {
-				hints.putHostname(e.IP, "")
-			}
-		}
-		_ = entries
-	}
+	o.collectARP(scanID, allow, hints)
 
 	// mDNS — UDP multicast, ~3 sec listen window. Runs in its own
 	// short-context to bound the prelude even if the parent context is
 	// huge.
 	mctx, mcancel := context.WithTimeout(ctx, mdnsListenWindow+500*time.Millisecond)
 	defer mcancel()
-	if entries, err := browseMDNSForHosts(mctx, allow); err != nil {
+	entries, err := browseMDNSForHosts(mctx, allow)
+	if err != nil {
 		slog.Debug("discovery: mDNS browse failed",
 			"component", "discovery", "error", err)
-		o.addWarning(scanID, "mDNS browse failed (broadcast services like HomeKit / AirPlay won't be detected): "+err.Error())
-	} else {
-		for _, e := range entries {
-			if e.Host != "" && e.Instance != "" {
-				hints.putHostname(e.Host, e.Instance)
-			}
-			if e.Host != "" {
-				hints.putMDNS(e.Host, e)
-			}
+		o.addWarning(scanID, "mDNS browse failed (broadcast services like HomeKit / AirPlay may be missed): "+err.Error())
+	}
+	// Whatever arrived before a failure is still real.
+	for _, e := range entries {
+		if e.Host != "" && e.Instance != "" {
+			hints.putHostname(e.Host, e.Instance)
+		}
+		if e.Host != "" {
+			hints.putMDNS(e.Host, e)
 		}
 	}
 
@@ -911,7 +901,9 @@ func (o *Orchestrator) runPassivePrelude(ctx context.Context, scanID string, all
 	// never emit Results. Bounded by a 4s child ctx so a stalled DNS
 	// server can't drag out the prelude.
 	dctx, dcancel := context.WithTimeout(ctx, 4*time.Second)
-	enrichDNSForHosts(dctx, allow, hints, internalDomain)
+	for _, w := range enrichDNSForHosts(dctx, allow, hints, internalDomain) {
+		o.addWarning(scanID, w)
+	}
 	dcancel()
 
 	// SSDP / UPnP — multicast M-SEARCH plus a follow-up XML fetch
@@ -920,28 +912,33 @@ func (o *Orchestrator) runPassivePrelude(ctx context.Context, scanID string, all
 	// known port and would otherwise be invisible to the active loop.
 	// Bounded by a 6s child ctx (listen window + fetch round-trips).
 	sctx, scancel := context.WithTimeout(ctx, ssdpListenWindow+3*time.Second)
-	if devs, err := browseSSDPForHosts(sctx, allow); err != nil {
+	devs, err := browseSSDPForHosts(sctx, allow)
+	if err != nil {
 		slog.Debug("discovery: SSDP browse failed",
 			"component", "discovery", "error", err)
-		o.addWarning(scanID, "SSDP / UPnP browse failed (smart TVs / media renderers / IGD routers won't be detected): "+err.Error())
-	} else {
-		for _, d := range devs {
-			hints.putSSDP(d.Host, d)
-		}
+		o.addWarning(scanID, "SSDP / UPnP browse failed (smart TVs / media renderers / IGD routers may be missed): "+err.Error())
+	}
+	for _, d := range devs {
+		hints.putSSDP(d.Host, d)
 	}
 	scancel()
 
 	// SNMP v2c with "public" — best-effort sweep of every target IP.
 	// Catches printers, managed switches, UPS units, server BMCs that
 	// don't speak HTTP. Hosts with SNMP off or a non-default community
-	// return nothing — silent. Bounded by snmpPerHostTimeout per host,
+	// return nothing (a real answer); hosts the sweep never reached and
+	// local send errors are reported as a warning. Bounded by snmpPerHostTimeout per host,
 	// capped by an outer 8s budget across the whole sweep.
 	snctx, sncancel := context.WithTimeout(ctx, 8*time.Second)
 	allowedIPs := make([]string, 0, len(allow))
 	for ip := range allow {
 		allowedIPs = append(allowedIPs, ip)
 	}
-	for _, r := range snmpProbeHosts(snctx, allowedIPs) {
+	snmpResults, err := snmpProbeHosts(snctx, allowedIPs)
+	if err != nil {
+		o.addWarning(scanID, "SNMP sweep incomplete (printers / switches / UPS units may be missed): "+err.Error())
+	}
+	for _, r := range snmpResults {
 		hints.putSNMP(r.Host, r)
 	}
 	sncancel()
@@ -951,6 +948,27 @@ func (o *Orchestrator) runPassivePrelude(ctx context.Context, scanID string, all
 		"target_hosts", len(allow),
 		"discovered_hosts", len(hints.AllIPs()))
 	return hints
+}
+
+// collectARP reads the ARP table into hints. A system without one, or a
+// table that can't be read, becomes a scan notice: the scan still runs, but
+// the admin is told devices that answer only to ARP may be missed.
+func (o *Orchestrator) collectARP(scanID string, allow hostAllowlist, hints *PassiveHints) {
+	entries, err := readARPTableForHosts(allow)
+	switch {
+	case errors.Is(err, errARPUnavailable):
+		o.addWarning(scanID, "ARP isn't available on this system, so devices that answer only to ARP may be missed.")
+		return
+	case err != nil:
+		slog.Warn("discovery: ARP table read failed", "component", "discovery", "error", err)
+		o.addWarning(scanID, "ARP table couldn't be read ("+err.Error()+"), so devices that answer only to ARP may be missed.")
+		return
+	}
+	for _, e := range entries {
+		if e.MAC != "" {
+			hints.putHostname(e.IP, "")
+		}
+	}
 }
 
 // hostAllowlist is the set of IPs (dotted-quad strings) that belong to
