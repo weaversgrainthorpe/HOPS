@@ -9,7 +9,7 @@
       "path": "/sample",
       "revision": 1,
       "settings": {
-        "statusChecksEnabled": null,
+        "statusChecksEnabled": false,
         "statusCheckIntervalMinutes": null,
         "statusCheckTimeoutSeconds": null,
         "editIdleTimeoutMinutes": null,

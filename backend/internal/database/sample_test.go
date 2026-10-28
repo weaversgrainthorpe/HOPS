@@ -10,6 +10,7 @@ import (
 
 	"github.com/weaversgrainthorpe/HOPS/internal/assets"
 	"github.com/weaversgrainthorpe/HOPS/internal/configdoc"
+	"github.com/weaversgrainthorpe/HOPS/internal/settings"
 )
 
 // A fresh, empty data dir is seeded with the native v3 Sample: the stored
@@ -226,3 +227,47 @@ func TestSample_IconsAndPicturesArePackaged(t *testing.T) {
 }
 
 var imageExt = regexp.MustCompile(`(?i)\.(jpe?g|png|gif|webp|svg|avif|bmp|ico)$`)
+
+// The Sample points at *.example.lan, so it must never be status-checked: its
+// dashboard turns checks off, and under the rc5 rule (a tile with no setting
+// inherits) no tile may resolve On even with the global setting On (its
+// default). Otherwise every fresh install would show the whole Sample Offline
+// and look up made-up hosts every few minutes.
+func TestSample_NeverStatusChecked(t *testing.T) {
+	db, err := Initialize(filepath.Join(t.TempDir(), "sc.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	svc, err := settings.New(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.Set(settings.KeyStatusChecksEnabled, "true"); err != nil {
+		t.Fatal(err)
+	}
+	doc, err := SampleDoc()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range doc["dashboards"].([]any) {
+		s, _ := d.(map[string]any)["settings"].(map[string]any)
+		if s["statusChecksEnabled"] != false {
+			t.Errorf("dashboard %v: settings.statusChecksEnabled is %v, want false", d.(map[string]any)["id"], s["statusChecksEnabled"])
+		}
+	}
+	tiles := 0
+	configdoc.Walk(doc, func(dash, tab configdoc.Obj, path []configdoc.Obj, n configdoc.Obj) bool {
+		if n["kind"] != "tile" {
+			return true
+		}
+		tiles++
+		if on, src, _ := configdoc.EffectiveStatusChecks(svc, dash, tab, path, n); on {
+			t.Errorf("Sample tile %v resolves On (from %s) under global On", n["id"], src)
+		}
+		return true
+	})
+	if tiles == 0 {
+		t.Fatal("the Sample has no tiles")
+	}
+}
