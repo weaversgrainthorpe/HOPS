@@ -41,7 +41,7 @@ exit 0'
 stub pvesm '
 case "$*" in
   "status -content vztmpl")
-    printf "Name Type Status Total Used Available %%\nlocal dir active 1 1 1 1%%\n" ;;
+    printf "Name Type Status Total Used Available %%\n${STUB_VZTMPL:-local dir active 1 1 1 1%%}\n" ;;
   "status -content rootdir")
     printf "Name Type Status Total Used Available %%\nlocal-lvm lvmthin active 1 1 1 1%%\nslow dir disabled 0 0 0 0%%\n" ;;
 esac'
@@ -84,7 +84,7 @@ runit() {
   local rc=0
   env PATH="$stubs:$PATH" STUB_LOG="$work/$name.log" STUB_DIR="$work" \
     STUB_FAIL="${STUB_FAIL:-}" STUB_INSTALL_RC="${STUB_INSTALL_RC:-0}" STUB_TAMPER="${STUB_TAMPER:-}" \
-    STUB_EMPTY_INDEX="${STUB_EMPTY_INDEX:-}" \
+    STUB_EMPTY_INDEX="${STUB_EMPTY_INDEX:-}" STUB_VZTMPL="${STUB_VZTMPL:-}" \
     bash "$SCRIPT" "$@" < /dev/null > "$work/$name.out" 2>&1 || rc=$?
   if [[ $rc != "$want" ]]; then
     bad "$name: exit $rc, wanted $want"; sed 's/^/    /' "$work/$name.out"; return 1
@@ -174,6 +174,36 @@ runit notty 1 --url http://172.16.0.50:8099 && has notty out 'no terminal' && ok
 runit badtype 1 --yes --type vm && has badtype out "unknown option '--type'" && ok "--type (VM path) is gone"
 runit badstore 1 --yes --storage slow --url http://172.16.0.50:8099 && has badstore out "storage 'slow' does not exist, is not active" && hasnt badstore log '^pct create' && ok "inactive storage refused before creation"
 
+# Template storage not called "local" (a real host had only "Data"): picked automatically.
+if STUB_VZTMPL="Data dir active 1 1 1 1%%" runit tstore_auto 0 --yes --url http://172.16.0.50:8099; then
+  has tstore_auto log '^pveam download Data ' && has tstore_auto out 'templates on Data' && ok "template storage picked automatically when there is no 'local'"
+fi
+if STUB_VZTMPL="local dir disabled 0 0 0 0%%" runit tstore_none 1 --yes --url http://172.16.0.50:8099; then
+  has tstore_none out 'no active storage allows container templates' && hasnt tstore_none log '^pveam (update|download)' && ok "no template storage refused before pveam"
+fi
+# A dry run that stops early says so; it never claims an install failed.
+if STUB_VZTMPL="local dir disabled 0 0 0 0%%" runit dry_stop 1 --dry-run --url http://172.16.0.50:8099; then
+  has dry_stop out 'dry run stopped; nothing was changed' && hasnt dry_stop out 'NOT installed' && ok "dry-run failure wording"
+fi
+# A terminal but no whiptail (a real Proxmox host lacked it): a plain y/N question.
+if command -v script >/dev/null; then
+  mkdir -p "$work/nowt"
+  for f in /usr/bin/* /bin/*; do
+    b=$(basename "$f"); [[ $b == whiptail || -e $work/nowt/$b ]] || ln -s "$f" "$work/nowt/$b"
+  done
+  asktty() { # asktty <name> <answer>
+    : > "$work/$1.log"
+    printf '%s\n' "$2" | env PATH="$stubs:$work/nowt" STUB_LOG="$work/$1.log" STUB_DIR="$work" \
+      script -qec "bash '$SCRIPT' --url http://172.16.0.50:8099" /dev/null > "$work/$1.out" 2>&1 || true
+  }
+  asktty ask_no n
+  has ask_no out 'whiptail is not installed' && has ask_no out 'Templates on: local' && has ask_no out 'cancelled; nothing was changed' \
+    && hasnt ask_no log '^pct create' && ok "no whiptail: answering n changes nothing"
+  asktty ask_yes y
+  has ask_yes log '^pct create' && has ask_yes out 'HOPS installed and healthy' && ok "no whiptail: answering y installs"
+else
+  bad "script(1) not installed; the no-whiptail question is untested"
+fi
 runit badtstore 1 --yes --template-storage nope --url http://172.16.0.50:8099 && has badtstore out "template storage 'nope' does not exist" && hasnt badtstore log '^pveam (update|download)' && ok "bad template storage refused before pveam update"
 
 echo "== dry-run with an empty template index (pveam update is skipped)"

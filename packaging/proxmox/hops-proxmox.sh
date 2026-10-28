@@ -4,7 +4,7 @@
 #
 # Run as root in the Proxmox host shell:
 #
-#   bash hops-proxmox.sh                       # menus (whiptail)
+#   bash hops-proxmox.sh                       # menus (whiptail), else a y/N question
 #   bash hops-proxmox.sh --url http://172.16.0.50:8099 --yes
 #
 # Options (install options only; HOPS settings live in its own GUI):
@@ -26,7 +26,8 @@
 #                       password is set; `pct enter <id>` on this host
 #                       always gives a root shell.
 #   --template-storage <name>  Where the Debian 12 template is kept.
-#                       Default: local.
+#                       Default: local if it allows templates, else the
+#                       first active storage that does.
 #   --yes               Do not ask; use the flags and defaults as given.
 #                       Needed when there is no terminal.
 #   --dry-run           Print every pct/pveam/pvesm/pvesh command that
@@ -67,7 +68,11 @@ fail() {
     echo "hops-proxmox: container $id WAS CREATED and is left as it is for inspection (root shell: pct enter $id)." >&2
     echo "hops-proxmox: to remove it:  pct destroy $id --purge --force" >&2
   fi
-  echo "hops-proxmox: HOPS was NOT installed successfully." >&2
+  if (( ${dry:-0} )); then
+    echo "hops-proxmox: dry run stopped; nothing was changed." >&2
+  else
+    echo "hops-proxmox: HOPS was NOT installed successfully." >&2
+  fi
   exit 1
 }
 
@@ -84,7 +89,7 @@ usage() {
 HOPS on Proxmox VE: creates an unprivileged Debian 12 LXC container and
 installs HOPS in it with install.sh. Run as root in the Proxmox host shell.
 
-  bash hops-proxmox.sh                                   # menus (whiptail)
+  bash hops-proxmox.sh                                   # menus (whiptail), else a y/N question
   bash hops-proxmox.sh --url http://172.16.0.50:8099 --yes
 
 Options:
@@ -101,7 +106,8 @@ Options:
   --version <x.y.z>         Require this HOPS version on /api/health
   --ssh-key <file>          Public key for root SSH (no password is set;
                             `pct enter <id>` always gives a shell)
-  --template-storage <name> Where the Debian 12 template is kept (default: local)
+  --template-storage <name> Where the Debian 12 template is kept (default:
+                            local, else the first storage allowing templates)
   --yes                     No questions; use flags and defaults
   --dry-run                 Print the commands that would run; change nothing
   -h, --help                This help
@@ -110,6 +116,7 @@ EOF
 
 # ct_storages — active storages that can hold container disks.
 ct_storages() { pvesm status -content rootdir 2>/dev/null | awk 'NR>1 && $3=="active" {print $1}'; }
+tmpl_storages() { pvesm status -content vztmpl 2>/dev/null | awk 'NR>1 && $3=="active" {print $1}'; }
 
 need() { [[ $# -ge 2 ]] || fail "$1 needs a value" "see --help"; }
 
@@ -117,7 +124,7 @@ main() {
 # ---- options ---------------------------------------------------------------
 
 hostname="hops" cores="1" memory="256" disk="2" storage="" bridge="vmbr0"
-url="" version="" ssh_key="" tstore="local" yes=0 dry=0
+url="" version="" ssh_key="" tstore="" yes=0 dry=0
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -195,13 +202,18 @@ fi
 [[ $(uname -m) == x86_64 ]] || fail "this host is $(uname -m); the script supports x86_64 Proxmox VE only"
 (( dry )) || command -v curl >/dev/null 2>&1 || fail "curl is not installed on this host" "apt install curl"
 
+# interactive: 0 = no questions (--yes / --dry-run), 1 = whiptail menus,
+# 2 = a plain y/N question (a terminal but no whiptail).
 interactive=0
-if (( ! yes && ! dry )) && [[ -t 0 && -t 1 ]] && command -v whiptail >/dev/null 2>&1; then
-  interactive=1
-fi
-if (( ! yes && ! dry && ! interactive )); then
-  fail "no terminal for menus (or whiptail missing), and --yes not given" \
-    "re-run with --yes plus any options you want (see --help)"
+if (( ! yes && ! dry )); then
+  if ! [[ -t 0 && -t 1 ]]; then
+    fail "no terminal to ask on, and --yes not given" \
+      "re-run with --yes plus any options you want (see --help)"
+  elif command -v whiptail >/dev/null 2>&1; then
+    interactive=1
+  else
+    interactive=2
+  fi
 fi
 
 # ---- choices ---------------------------------------------------------------
@@ -224,13 +236,32 @@ if [[ -z $storage ]]; then
     storage="<storage>"
   fi
 fi
+if [[ -z $tstore ]]; then
+  if (( is_pve )); then
+    local tlist
+    tlist=$(tmpl_storages) || tlist=""
+    if grep -qx local <<<"$tlist"; then tstore=local; else tstore=$(head -n1 <<<"$tlist"); fi
+    [[ -n $tstore ]] || fail "no active storage allows container templates" \
+      "allow 'Container template' content on a storage (Datacenter > Storage > Edit > Content), or pass --template-storage (see: pvesm status -content vztmpl)"
+  else
+    tstore="<template-storage>"
+  fi
+fi
 url=${url%/}
 
 if (( interactive )); then
   summary() {
-    printf 'Container ID: %s\nHostname: %s\nCores: %s\nMemory: %s MB\nDisk: %s GB on %s\nNetwork: DHCP on %s\nDownload from: %s\n' \
-      "$id" "$hostname" "$cores" "$memory" "$disk" "$storage" "$bridge" "${url:-GitHub release}"
+    printf 'Container ID: %s\nHostname: %s\nCores: %s\nMemory: %s MB\nDisk: %s GB on %s\nTemplates on: %s\nNetwork: DHCP on %s\nDownload from: %s\n' \
+      "$id" "$hostname" "$cores" "$memory" "$disk" "$storage" "$tstore" "$bridge" "${url:-GitHub release}"
   }
+fi
+if (( interactive == 2 )); then
+  echo "hops-proxmox: whiptail is not installed, so no menus. These settings will be used:"
+  summary | sed 's/^/  /'
+  echo "  (to change any of them, answer n and re-run with options; see --help)"
+  read -r -p "Install HOPS with these settings? [y/N] " answer || answer=""
+  [[ $answer =~ ^[Yy] ]] || cancelled
+elif (( interactive == 1 )); then
   if ! wt --title "Settings" --yes-button "Install" --no-button "Change" --yesno "$(summary)" 18 70; then
     id=$(wt --inputbox "Container ID" 8 60 "$id") || cancelled
     hostname=$(wt --inputbox "Hostname" 8 60 "$hostname") || cancelled
@@ -238,6 +269,7 @@ if (( interactive )); then
     memory=$(wt --inputbox "Memory (MB)" 8 60 "$memory") || cancelled
     disk=$(wt --inputbox "Disk (GB)" 8 60 "$disk") || cancelled
     storage=$(wt --inputbox "Disk storage" 8 60 "$storage") || cancelled
+    tstore=$(wt --inputbox "Template storage" 8 60 "$tstore") || cancelled
     bridge=$(wt --inputbox "Network bridge (DHCP)" 8 60 "$bridge") || cancelled
     url=$(wt --inputbox "Download address (empty = GitHub release)" 8 70 "$url") || cancelled
     url=${url%/}
@@ -277,14 +309,14 @@ if (( is_pve )); then
   if [[ $id != "<next-free-id>" ]]; then
     pvesh get /cluster/nextid --vmid "$id" >/dev/null 2>&1 || fail "ID $id is already in use" "choose another --id, or leave it out for the next free one"
   fi
-  pvesm status -content vztmpl 2>/dev/null | awk 'NR>1 && $3=="active" {print $1}' | grep -qx -- "$tstore" \
+  tmpl_storages | grep -qx -- "$tstore" \
     || fail "template storage '$tstore' does not exist, is not active, or does not allow container templates" "see: pvesm status -content vztmpl; pass --template-storage"
   ct_storages | grep -qx -- "$storage" \
     || fail "storage '$storage' does not exist, is not active, or does not allow container disks" "see: pvesm status -content rootdir; pass --storage"
   ip link show "$bridge" >/dev/null 2>&1 || fail "network bridge '$bridge' does not exist on this host" "see: ip link (or Datacenter > node > Network); pass --bridge"
 fi
 
-log "plan: CT $id '$hostname', $cores core(s), ${memory} MB, ${disk} GB on $storage, DHCP on $bridge"
+log "plan: CT $id '$hostname', $cores core(s), ${memory} MB, ${disk} GB on $storage, templates on $tstore, DHCP on $bridge"
 log "HOPS download: $url${version:+ (version $version)}"
 (( dry )) && log "DRY RUN — the commands below are printed, not run."
 
