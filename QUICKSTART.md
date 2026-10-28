@@ -507,8 +507,7 @@ more). Enter the **Targets to scan** (e.g. `192.168.1.0/24`), choose a
 **Scan intensity** (*Light active* is the default), and click
 **Start scan**. Each scan is a draft: you tick the results you want and add
 them to a dashboard. Nothing is added without you. Results depend on your
-network, so expect a few misses and a few false finds. See the
-[User Guide](USER_GUIDE.md#network-discovery) for more.
+network, so expect a few misses and a few false finds.
 
 ### Import from Homer, Dashy or Heimdall
 
@@ -517,10 +516,14 @@ Coming from another dashboard? On **Settings › Dashboards**, click
 
 - **Homer YAML**: `config.yml` from Homer.
 - **Dashy YAML**: `conf.yml` from Dashy.
-- **Heimdall JSON**: an export from Heimdall.
+- **Heimdall JSON**: Heimdall's list of apps. Signed in to Heimdall, open
+  `http://<your-heimdall>/api/item` in your browser and save the page as a
+  `.json` file. Each Heimdall tag becomes a folder.
 - **HOPS JSON**: an export from HOPS itself.
 
 **Auto-match icons** (ticked by default) finds icons from the tile names.
+Anything HOPS can't bring across (an icon it can't draw, a Dashy widget) is
+listed when the import finishes, so you know what to tidy up.
 Click **Import**. Imported dashboards are added next to yours, never over
 them: if the path is taken, the new one gets a suffix (`/home` becomes
 `/home-1`). If only part of a file could be imported, HOPS says what was
@@ -662,6 +665,5 @@ and [Rolling back from 3.x to 2.2.1](DEPLOY.md#rolling-back-from-3x-to-221).
 
 ## Where next
 
-- **[User Guide](USER_GUIDE.md)**: everything HOPS does, in detail.
 - **[Installation & Deployment Guide](DEPLOY.md)**: services, reverse
   proxies, HTTPS, backups and security.
