@@ -25,9 +25,10 @@ container), one script installs HOPS as a service, and re-running it upgrades:
 curl -fsSL https://github.com/weaversgrainthorpe/HOPS/releases/latest/download/install.sh | sudo bash
 ```
 
-- It picks the binary for your **userland** (so 32-bit Raspberry Pi OS on a
-  64-bit kernel counts as 32-bit), downloads it with `SHA256SUMS` and
-  refuses to install on a checksum mismatch.
+- It checks your **userland**, not just the kernel (so 32-bit Raspberry Pi
+  OS on a 64-bit kernel counts as 32-bit and is refused; see below),
+  downloads the binary with `SHA256SUMS` and refuses to install on a
+  checksum mismatch.
 - Binary: `/opt/hops/hops`. Data: `/var/lib/hops`. Service: `hops.service`,
   run as the `hops` system user with systemd hardening.
 - It finishes only when `/api/health` answers, then prints the address.
@@ -78,7 +79,7 @@ curl -fsSL https://github.com/weaversgrainthorpe/HOPS/releases/latest/download/i
 ### Upgrading from v2 with install.sh
 
 install.sh refuses to touch a `hops.service` it did not write. A v2 install
-set up with `scripts/install-service.sh`, or with the manual unit below, is
+set up with `scripts/install-service.sh`, or with a hand-written unit, is
 stopped with an error that names that unit. Nothing is changed.
 
 To upgrade a v2 install, upgrade it **in place** first: stop it, replace its
@@ -104,7 +105,7 @@ the Proxmox web UI, or SSH to the host). It refuses to run anywhere else.
 
 ```bash
 curl -fsSLO https://github.com/weaversgrainthorpe/HOPS/releases/latest/download/hops-proxmox.sh
-bash hops-proxmox.sh            # asks with menus
+bash hops-proxmox.sh            # asks: menus, or a y/N question without whiptail
 bash hops-proxmox.sh --yes      # no questions: flags and defaults
 bash hops-proxmox.sh --dry-run  # print what it would do, change nothing
 ```
@@ -127,11 +128,11 @@ from the host. It prints that address and the container ID.
 | `--disk <GB>` | 2 |
 | `--storage <name>` | `local-lvm` if present, else the first active storage that can hold containers |
 | `--bridge <name>` | `vmbr0` (DHCP) |
-| `--template-storage <name>` | `local` (where the Debian 12 template is kept) |
+| `--template-storage <name>` | `local` if it allows container templates, else the first storage that does (where the Debian 12 template is kept) |
 | `--url <base>` | the latest GitHub release (passed through to install.sh) |
 | `--version <x.y.z>` | none; when given, HOPS must report this version |
 | `--ssh-key <file>` | none; a public key to allow root SSH into the container |
-| `--yes` | ask with menus (needed when there is no terminal) |
+| `--yes` | off: it asks (menus, or y/N without whiptail). Needed when there is no terminal |
 | `--dry-run` | off; prints every `pct`/`pveam`/`pvesm`/`pvesh` command instead |
 
 - **No root password** is set in the container. Get a shell with
@@ -283,11 +284,11 @@ installed and is the same artifact built here. Build from source only if you spe
 need to:
 
 - **Run unreleased changes** — a fix or feature on `main` that hasn't shipped in a tagged release yet.
-- **Target a platform or architecture not in [Releases](https://github.com/weaversgrainthorpe/HOPS/releases)** — the prebuilt binaries cover Linux, macOS, and Windows on x86-64 and ARM64; anything else (other OSes/arches) you build yourself.
+- **Target a platform or architecture not in [Releases](https://github.com/weaversgrainthorpe/HOPS/releases)** — the prebuilt binaries cover Linux and macOS on x86-64 and ARM64, and Windows on x86-64; anything else (Windows on ARM64, other OSes/arches) you build yourself.
 - **Apply your own modifications** — a fork or a local patch.
 - **Compile it yourself** rather than trust a prebuilt binary, as a supply-chain / audit preference.
 
-Requires Go 1.25+ and Node.js 24+ (with npm).
+Requires Go 1.27.3 or later (the `go` line in `backend/go.mod`) and Node.js 24+ (with npm).
 
 ```bash
 git clone https://github.com/weaversgrainthorpe/HOPS.git
@@ -319,8 +320,8 @@ GUI — see [Runtime Configuration](#runtime-configuration) below.
 
 ## Runtime Configuration
 
-All other configuration is set through the GUI. Sign in to the admin
-panel and click **Settings** (top right) — `http://<host>:8080/settings`.
+All other configuration is set through the GUI. Sign in and click the
+**gear** (Settings) in the top bar — `http://<host>:8080/settings`.
 Each setting carries inline help, its default value, validation
 constraints, and (where applicable) a **Restart required** badge.
 
@@ -346,36 +347,21 @@ typical homelab deployment.
 
 ### Systemd (Linux)
 
-HOPS includes an install script:
+Use the [Linux install script](#linux-install-script-installsh). It creates
+`hops.service` (binary `/opt/hops/hops`, data `/var/lib/hops`, the `hops`
+system user, `Restart=on-failure`, systemd hardening), starts it, and waits
+until HOPS answers. Re-running it upgrades HOPS. Put local changes in a
+drop-in (`sudo systemctl edit hops`), as described there.
+
+If you write your own unit instead, install.sh will not manage it later: it
+refuses to touch a `hops.service` it did not write (see
+[Upgrading from v2 with install.sh](#upgrading-from-v2-with-installsh)). A
+hand-written unit needs `Restart=on-failure` (or `always`), because
+restoring a backup restarts HOPS by exiting with code 75.
+
+Check the service:
 
 ```bash
-sudo ./scripts/install-service.sh
-```
-
-Or create the service file manually at `/etc/systemd/system/hops.service`:
-
-```ini
-[Unit]
-Description=HOPS - Home Operations Portal System
-After=network.target
-
-[Service]
-Type=simple
-User=hops
-WorkingDirectory=/opt/hops
-ExecStart=/opt/hops/hops-linux-amd64 --data /opt/hops/data
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Enable and start:
-
-```bash
-sudo systemctl enable hops
-sudo systemctl start hops
 sudo systemctl status hops
 ```
 
@@ -491,7 +477,7 @@ A backup that fails is never silent: Settings shows a warning (with the time and
 - **Also keep backups newer than (days)** (default 0 = off).
 - **Most backups kept** (default 100): a ceiling that protects the disk. If there are still more automatic backups than this, the oldest are deleted even if they are within the days above (never the newest ones), and Settings shows a notice saying so.
 
-Cleanup runs after every backup, once a day, and from **Clean up now** in the Backups dialog, which first lists exactly what it would delete, and why.
+Cleanup runs after every backup, once a day, and from **Clean up now** on the Backups page, which first lists exactly what it would delete, and why.
 
 Backups you **create** or **upload**, and the **pre-v3-migration** backup (`hops-backup-<date>_pre-v3-migration.db`), are never deleted automatically and don't count toward these numbers. The pre-v3-migration backup is taken just before HOPS 3 converts a 2.x configuration; it is the only way back to 2.x.
 
@@ -507,13 +493,13 @@ Changes made under 3.x are not carried back. Don't restore this backup from the 
 
 ### Managing Backups
 
-From the Admin panel, click **Backups** to:
+In **Settings › Backups** you can:
 - View all available backups
-- Restore a previous backup (a safety backup of the current data is taken first; HOPS then restarts and applies the restore before it opens the database, so the service must be set to restart automatically, e.g. `Restart=on-failure`. Changes made in the few seconds before the restart are not included. If the restore can't be applied, HOPS keeps running on its current data, keeps the staged file as `hops.db.restore-failed` and says so in Settings; a restore that is waiting for a restart can be discarded from the Backups dialog)
+- Restore a previous backup (a safety backup of the current data is taken first; HOPS then restarts and applies the restore before it opens the database, so the service must be set to restart automatically, e.g. `Restart=on-failure`. Changes made in the few seconds before the restart are not included. If the restore can't be applied, HOPS keeps running on its current data, keeps the staged file as `hops.db.restore-failed` and says so in Settings; a restore that is waiting for a restart can be discarded from the Backups page)
 
 If HOPS is stopped part-way through applying a restore, the next start finishes it or undoes it (Settings says which). In the rare case where it can't tell which files are safe to keep, HOPS doesn't open its database at all (it would otherwise create an empty one). Instead, on the port it last used, it serves a page saying it can't start safely: it lists the files present and the exact steps to put your data back, and nothing is deleted. Every address, including `/api/health`, answers 503 until the files are fixed and HOPS is restarted. HOPS keeps that port in `data/.last-port` for this purpose.
-- Download a backup (a `.db` file)
-- Upload a backup file: it is checked (it must be a HOPS database) and listed as `…_uploaded.db`; it is not restored until you restore it
+- Download a backup: a `.zip` holding the database, the uploaded images it uses, and a manifest with each file's SHA-256
+- Upload a backup file: a HOPS backup `.zip` (or an older plain `.db`, accepted with a warning). It is checked and listed as `…_uploaded`; it is not restored until you restore it
 - Delete old backups
 
 ### Manual Backup
@@ -532,7 +518,7 @@ HOPS supports self-contained exports that bundle your configuration with all upl
 - Sharing a dashboard setup
 - Creating a portable backup
 
-Export from the Admin panel or from Edit Mode (click the download icon in the header for single-dashboard export).
+Export one dashboard from **Settings › Dashboards** (the Export button next to it), or in edit mode click the export icon in the top bar to export all dashboards or one.
 
 
 ---

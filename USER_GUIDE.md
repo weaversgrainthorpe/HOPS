@@ -1,5 +1,7 @@
 # HOPS User Guide (v3.0.0)
 
+> **Out of date:** most of this guide still describes HOPS 2 (groups, row widths). For HOPS 3 (tabs, tiles and nested folders) follow [Zero to Dashboard Hero](QUICKSTART.md) until this guide is rewritten.
+
 Welcome to HOPS (Home Operations Portal System)! This guide will help you get started and make the most of your dashboard.
 
 ## Table of Contents

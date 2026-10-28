@@ -239,7 +239,7 @@
           </div>
           <div class="why-card">
             <h3>Status checks</h3>
-            <p>HOPS can ping your tiles to show up/down indicators, so you can see at a glance which services are reachable.</p>
+            <p>HOPS can check your tiles now and then and show an up/down badge on each, so you can see at a glance which services are answering.</p>
           </div>
           <div class="why-card">
             <h3>Import your existing dashboard</h3>
@@ -247,19 +247,19 @@
           </div>
           <div class="why-card">
             <h3>Search and keyboard nav</h3>
-            <p>Press <code>/</code> anywhere to search every tile across every dashboard. Arrow keys move focus between tiles, <code>Enter</code> opens them — no mouse required.</p>
+            <p>Press <code>/</code> to search the tiles and folders on the dashboard you're viewing, at any depth. Arrow keys move focus between tiles, <code>Enter</code> opens them — no mouse required.</p>
           </div>
           <div class="why-card">
             <h3>Flexible layouts</h3>
-            <p>Mix full-, half- and third-width groups in any tab for true multi-column dashboards. Add note tiles for headings or scratchpad text alongside your links.</p>
+            <p>Place tiles and folders anywhere on each tab's grid, in three sizes. Folders can hold folders, page when they're full, and can start minimised. Add note tiles for headings or scratchpad text alongside your links.</p>
           </div>
           <div class="why-card">
-            <h3>Network discovery <span class="badge" style="font-size:0.65rem">v2.0</span></h3>
-            <p>Point HOPS at your home network and it finds what's already running. Pi-hole, Proxmox, Plex, the *arr stack, NAS UIs and ~70 other common services recognised out of the box. You review what was found, tick what you want, and HOPS adds them to your dashboard grouped sensibly. It's a head start, not magic — results depend on your network and what's blocking it — so nothing lands on your dashboard until you accept it.</p>
+            <h3>Network discovery</h3>
+            <p>Point HOPS at your home network and it finds what's already running. Over 90 common services are recognised out of the box, including Pi-hole, Proxmox, Plex, the *arr stack and NAS UIs. You review what was found, tick what you want, and HOPS adds them to your dashboard in sensible folders. It's a head start, not magic — results depend on your network and what's blocking it — so nothing lands on your dashboard until you accept it.</p>
           </div>
           <div class="why-card">
-            <h3>Install on a phone or tablet <span class="badge" style="font-size:0.65rem">v2.1</span></h3>
-            <p>Use your browser's "Add to Home Screen" and HOPS opens like a real app — full screen, no browser tabs or address bar in the way. Handy for a wall-mounted tablet. If Wi-Fi blips, the dashboard stays visible with an "offline" banner, and tile colours hold their last-known state rather than turning everything red.</p>
+            <h3>Install on a phone or tablet</h3>
+            <p>Use your browser's "Add to Home Screen" for a shortcut to your dashboard, handy for a wall-mounted tablet. Served over HTTPS (for example behind a reverse proxy), HOPS installs like a real app: full screen, no browser tabs or address bar in the way. On plain <code>http://</code>, browsers allow only a shortcut. If the connection drops, the open dashboard stays on screen and a status dot in the top bar shows that HOPS can't be reached.</p>
           </div>
         </div>
       </div>
@@ -280,7 +280,7 @@
           </div>
           <div class="shot">
             <img src="screenshots/edit-mode.png" alt="Edit mode — drag-and-drop" />
-            <div class="shot-caption"><b>Edit mode</b><span>Drag-and-drop tiles, groups, and tabs</span></div>
+            <div class="shot-caption"><b>Edit mode</b><span>Drag-and-drop tiles, folders, and tabs</span></div>
           </div>
           <div class="shot">
             <img src="screenshots/edit-tile.png" alt="Tile editor with all options" />
@@ -317,7 +317,7 @@
     <section id="install">
       <div class="container">
         <h2>Install</h2>
-        <p class="section-lede">HOPS runs on Linux, macOS, and Windows — x86-64 and ARM64 (Raspberry Pi 3B+/4/5/Zero 2 W). No dependencies.</p>
+        <p class="section-lede">HOPS runs on Linux and macOS (x86-64 and ARM64, including Raspberry Pi 3B+/4/5/Zero 2 W with a 64-bit OS) and Windows (x86-64). No dependencies.</p>
         <div class="install-grid">
           <div class="install-card">
             <h3>📦 Binary</h3>
