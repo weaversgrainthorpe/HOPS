@@ -1,7 +1,7 @@
 <script lang="ts">
   // Settings › Dashboards: tiles whose status check has failed without a break for longer than
   // Global settings › Status checks › "Treat a link as dead after", so they can be fixed or removed.
-  // Never a bare empty list: it says when checks are off, when nothing is checked, and how far back
+  // Never a bare empty list: it says when checks are off everywhere, when nothing is checked, and how far back
   // the failure history goes.
   import { onMount } from 'svelte';
   import { getDeadLinks, type DeadLinksReport, type DeadLink } from '$lib/utils/api';
@@ -66,10 +66,14 @@
       <strong>{formatHours(report.thresholdHours)}</strong>
       (<a href="/settings/global#status-checks">change</a>).
     </p>
-    {#if !report.checksEnabled}
+    {#if !report.checksEnabled && report.checkedTiles === 0}
+      <!-- Global Off is only the default: a dashboard, tab, folder or tile set to On is still
+           checked, so "turned off" is said only when nothing is checked at all. -->
       <p class="state" role="status" data-state="checks-off">
-        Status checks are turned off for all dashboards, so HOPS isn't watching for dead links.
-        Turn them on in <a href="/settings/global#status-checks">Global settings › Status checks</a>.
+        Status checks are turned off in Global settings, and no dashboard, tab, folder or tile turns
+        them on, so HOPS isn't watching for dead links. Turn them on in
+        <a href="/settings/global#status-checks">Global settings › Status checks</a>, or set a
+        dashboard, tab, folder or tile to On.
       </p>
     {:else if report.checkedTiles === 0}
       <p class="state" role="status" data-state="none-checked">
@@ -101,7 +105,7 @@
         {/each}
       </ul>
     {/if}
-    {#if report.checksEnabled && report.historyStartedAt}
+    {#if (report.checksEnabled || report.checkedTiles > 0) && report.historyStartedAt}
       <p class="muted" data-state="history">
         Failure history started on {fmtDay(report.historyStartedAt)}, so a failure older than that may be longer than shown.
       </p>

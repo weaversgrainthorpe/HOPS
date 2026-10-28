@@ -134,9 +134,9 @@ var Definitions = []Definition{
 	},
 	{
 		Key: KeyStatusChecksEnabled, Type: "bool", Default: "true",
-		Description: "Master switch for tile status checks. When on, HOPS checks only the tiles that have " +
-			"\"Enable Status Check\" ticked — tiles without it ticked are never contacted. " +
-			"When off, HOPS checks nothing at all and every status badge shows that checks are turned off.",
+		Description: "The default for status checks. Every dashboard, tab, folder and tile set to Inherit follows it; " +
+			"one set to On or Off decides for itself and the tiles inside it, whatever this says (the nearest setting wins). " +
+			"Settings › Dashboards › Status check overrides lists every place that sets its own.",
 	},
 	{
 		Key: KeyStatusCheckIntervalMinutes, Type: "duration_minutes", Default: "5",
