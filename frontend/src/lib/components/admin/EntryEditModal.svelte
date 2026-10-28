@@ -152,13 +152,13 @@
       editedEntry.type = 'link';
       editedEntry.url = buildSshUrl({ host: sshHost, port: sshPort, user: sshUser });
       if (sshAwayHost.trim()) editedEntry.awayUrl = buildSshUrl({ host: sshAwayHost, port: sshAwayPort, user: sshUser });
-      else delete editedEntry.awayUrl;
+      else editedEntry.awayUrl = undefined; // undefined = removed on save
     } else if (!isNote) {
       awayShowError = true;
       if (awayError) return;
       // Optional: a blank away address is absent, never an empty string.
       if (awayUrlText.trim()) editedEntry.awayUrl = awayUrlText.trim();
-      else delete editedEntry.awayUrl;
+      else editedEntry.awayUrl = undefined; // undefined = removed on save
     }
     if (sshLike && (editedEntry.openMode === 'iframe' || editedEntry.openMode === 'popup')) {
       editedEntry.openMode = 'sametab';
@@ -174,7 +174,7 @@
     // behind from a previous link form).
     if (isNote) {
       editedEntry.url = '';
-      delete editedEntry.awayUrl;
+      editedEntry.awayUrl = undefined;
       editedEntry.icon = '';
       editedEntry.iconUrl = '';
       editedEntry.openMode = 'newtab';

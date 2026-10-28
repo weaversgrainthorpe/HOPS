@@ -19,9 +19,11 @@ const ABOUT_FEATURES = [
   'Text size controls',
   'Folders (nested, paged)',
   'Network Discovery',
+  'Add to HOPS from any web page',
+  'Home & away addresses',
   'Search & keyboard navigation',
   'Undo / redo while editing',
-  'Install on phone or tablet',
+  "Add to your phone's home screen",
   'Animations (optional)'
 ];
 

@@ -284,6 +284,32 @@ export function addNode(node: LayoutNode, to: ContainerRef, cell?: Cell): string
 const LOCKED = ['id', 'kind', 'placement', 'content'];
 
 /**
+ * A dialog's fields as a patch: a field set to undefined is REMOVED from the node (e.g. "no
+ * colour"), a field not given is left as it is. plain() alone would drop the undefined ones, so
+ * the old value stayed (found in the rc1 trials).
+ */
+function toPatch(fields: Record<string, unknown>): { patch: Record<string, unknown>; cleared: string[] } {
+  const patch: Record<string, unknown> = {};
+  const cleared: string[] = [];
+  for (const [k, v] of Object.entries(fields)) {
+    if (LOCKED.includes(k)) continue;
+    if (v === undefined) cleared.push(k);
+    else patch[k] = plain(v);
+  }
+  return { patch, cleared };
+}
+
+/** Node `id` with the `cleared` fields removed. */
+function withoutFields(d: LayoutDashboard, id: string, cleared: string[]): LayoutDashboard {
+  if (cleared.length === 0) return d;
+  return mapNode(d, id, (n) => {
+    const c = { ...n } as Record<string, unknown>;
+    for (const k of cleared) delete c[k];
+    return c as unknown as LayoutNode;
+  });
+}
+
+/**
  * Update a node's own fields from a dialog (id/kind/placement/content are never patched here).
  * `opts.size` (a tile's Size picked in the dialog, spec §8) also sets its span, pushing grid
  * neighbours aside — in the SAME undo step. A refused size changes nothing and says why.
@@ -303,10 +329,9 @@ export function editNode(id: string, edited: Partial<LayoutNode>, opts: { size?:
       return false;
     }
   }
-  const patch: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(plain(edited))) if (!LOCKED.includes(k)) patch[k] = v;
+  const { patch, cleared } = toPatch(edited as Record<string, unknown>);
   return apply(node.kind === 'tile' ? 'Edit tile' : 'Edit folder', (dd) => {
-    const next = updateNode(dd, id, patch as Partial<LayoutNode>);
+    const next = withoutFields(updateNode(dd, id, patch as Partial<LayoutNode>), id, cleared);
     if (node.kind !== 'tile' || opts.size === undefined) return next;
     const t = sizeTarget(next, id, opts.size);
     if (t.kind === 'invalid') throw new TreeOpError(t.reason);
@@ -324,15 +349,15 @@ export function editFolder(
 ): boolean {
   // background: undefined = unchanged, null = removed (a picker choice staged in the dialog).
   // statusChecksEnabled: undefined = unchanged, null = inherit (the key is removed), true/false = set.
-  const { background, statusChecksEnabled, ...others } = plain(fields) as {
-    background?: Background | null; statusChecksEnabled?: boolean | null
+  const { background: rawBackground, statusChecksEnabled, display: rawDisplay, ...rest } = fields as {
+    background?: Background | null; statusChecksEnabled?: boolean | null; display?: FolderNode['display']
   } & Record<string, unknown>;
-  const { display, ...rest } = others as Partial<FolderNode>;
-  const patch: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(rest)) if (!LOCKED.includes(k)) patch[k] = v;
+  const background = plain(rawBackground);
+  const display = plain(rawDisplay);
+  const { patch, cleared } = toPatch(rest);
   return apply('Edit folder', (dd) => {
     assertFolderLook(patch);
-    let next = updateNode(dd, id, patch as Partial<LayoutNode>);
+    let next = withoutFields(updateNode(dd, id, patch as Partial<LayoutNode>), id, cleared);
     if (display !== undefined) next = setFolderDisplay(next, id, display);
     if (background !== undefined) next = folderWithBackground(next, id, background ?? undefined);
     if (statusChecksEnabled !== undefined) {

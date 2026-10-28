@@ -179,4 +179,30 @@ describe('editorActions', () => {
     expect(nodeIn(draft(), 'f1')!.name).toBe('F1');
     expect(nodeIn(draft(), 'f1')).not.toHaveProperty('background');
   });
+
+  // Found in the rc1 trials: picking "no colour" and saving kept the old colour, because the
+  // dialog's undefined was lost on the way to the draft.
+  it('editFolder with a field set to undefined removes it (no colour clears the colour)', () => {
+    expect(editFolder('f1', { color: '#ec4899', iconBgColor: '#123456' })).toBe(true);
+    expect(nodeIn(draft(), 'f1')).toMatchObject({ color: '#ec4899', iconBgColor: '#123456' });
+    expect(editFolder('f1', { name: 'F1', color: undefined, iconBgColor: undefined })).toBe(true);
+    expect(nodeIn(draft(), 'f1')).not.toHaveProperty('color');
+    expect(nodeIn(draft(), 'f1')).not.toHaveProperty('iconBgColor');
+    undo();
+    expect(nodeIn(draft(), 'f1')).toMatchObject({ color: '#ec4899', iconBgColor: '#123456' });
+  });
+
+  it('editFolder leaves a field it was not given untouched', () => {
+    expect(editFolder('f1', { color: '#ec4899' })).toBe(true);
+    expect(editFolder('f1', { name: 'Renamed' })).toBe(true);
+    expect(nodeIn(draft(), 'f1')).toMatchObject({ name: 'Renamed', color: '#ec4899' });
+  });
+
+  it('editNode with a tile field set to undefined removes it', () => {
+    expect(editNode('a', { iconBgColor: '#123456', description: 'd' } as never)).toBe(true);
+    expect(nodeIn(draft(), 'a')).toMatchObject({ iconBgColor: '#123456', description: 'd' });
+    expect(editNode('a', { iconBgColor: undefined, description: undefined } as never)).toBe(true);
+    expect(nodeIn(draft(), 'a')).not.toHaveProperty('iconBgColor');
+    expect(nodeIn(draft(), 'a')).not.toHaveProperty('description');
+  });
 });
