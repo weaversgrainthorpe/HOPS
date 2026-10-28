@@ -71,7 +71,7 @@ Already using Homer, Dashy, or Heimdall? HOPS can import your existing configura
 
 ## Quick Start
 
-HOPS runs on **Linux**, **macOS**, and **Windows** with no dependencies. It works on anything from a Raspberry Pi to a full server.
+HOPS runs on **Linux**, **macOS**, and **Windows** with no dependencies. It's built to run on anything from a Raspberry Pi to a full server.
 
 **Binary** — download one file, run it (the web UI is built in):
 ```bash
@@ -95,7 +95,7 @@ For full deployment options (systemd, reverse proxy, backups), see the **[Instal
 ### Core
 - **GUI-First**: Full visual editor — no YAML, no config files, no CLI required
 - **Single Binary**: One executable + SQLite database, no runtime dependencies
-- **Multi-Platform**: Linux and macOS on x86-64 and ARM64, Windows on x86-64 (64-bit only; the smallest Pi is a Zero 2 W with a 64-bit OS)
+- **Multi-Platform**: Linux and macOS on x86-64 and ARM64, Windows on x86-64 (64-bit only; the smallest Pi is a Zero 2 W with a 64-bit OS). The Raspberry Pi / ARM64 and macOS builds haven't yet been tried on real hardware (ARM64 has been run under emulation); reports welcome
 - **Docker Support**: Dockerfile and docker-compose.yml included
 - **No Login for Viewers**: Just share a URL, it works
 - **Sign in to edit**: one admin login for editing and Settings; viewers never need it

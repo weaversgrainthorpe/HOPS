@@ -25,6 +25,13 @@ HOPS needs a **64-bit** OS. Not sure which Pi OS you have? Run
 the 64-bit Raspberry Pi OS first. The original Pi Zero / Zero W can't run a
 64-bit OS, so it isn't supported.
 
+**Not yet tried on real hardware:** the Raspberry Pi / ARM64 build and the
+two macOS builds. They are built from the same code as the Linux (x86-64) and
+Windows builds, which have been tested on real machines, and the ARM64 build
+has been run under emulation with a Pi Zero 2 W's 512 MB of memory. But
+nobody has run them on a real Pi or Mac yet. If you do, please
+[tell us how it went](https://github.com/weaversgrainthorpe/HOPS/issues).
+
 ## Step 1: Install HOPS
 
 Pick one.
