@@ -179,6 +179,23 @@ describe('StatusOverrides: preview and saving', () => {
     expect(api.saveDashboardV3).not.toHaveBeenCalled();
   });
 
+  it('the preview names every ticked row, including one the filter hides', async () => {
+    setConfig(home(), media());
+    render(StatusOverrides);
+    await ready('d1:tile:a');
+    await fireEvent.click(within(row('d1:tile:a')!).getByRole('checkbox'));
+    const filter = within(screen.getByTestId('so-filter'));
+    await fireEvent.click(filter.getByRole('radio', { name: /^No effect/ }));
+    expect(row('d1:tile:a')).toBeNull(); // hidden by the filter, still ticked
+    await fireEvent.click(within(row('d2:tile:m')!).getByRole('checkbox'));
+    await fireEvent.click(screen.getByRole('button', { name: 'Restore inheritance for 2 selected' }));
+    const prev = screen.getByTestId('so-preview');
+    expect(prev).toHaveTextContent('Restoring 2 settings');
+    const hidden = prev.querySelector('[data-so-picked="d1:tile:a"]');
+    expect(hidden).toHaveTextContent('Home: Main › A (tile): On (set here) (not shown under this filter)');
+    expect(prev.querySelector('[data-so-picked="d2:tile:m"]')).toHaveTextContent('Media: Main › M (tile): On (set here)');
+  });
+
   it('a conflict on the second dashboard refuses visibly, naming the first one saved', async () => {
     bases.d2 = { override: null, effective: true };
     setConfig(home(), dash('d2', 'Media', [tile('m', true)]));

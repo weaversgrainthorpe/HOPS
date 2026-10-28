@@ -135,6 +135,13 @@
   const dashName = (id: string) => dashboards.find((d) => d.id === id)?.name || '(no name)';
   const rowPath = (r: OverrideRow) => (r.level === 'dashboard' ? dashName(r.dashboardId) : r.path.map((p) => p || '(no name)').join(' › '));
   const refPath = (t: TileRef) => t.path.map((p) => p || '(no name)').join(' › ');
+  // The preview names every ticked row, including ticks the current filter hides.
+  const pickedRows = $derived(rows.filter((r) => selected.includes(r.key)));
+  const pickedManyDashboards = $derived(new Set(pickedRows.map((r) => r.dashboardId)).size > 1);
+  const pickedLabel = (r: OverrideRow, manyDashboards: boolean) =>
+    r.level === 'dashboard'
+      ? `${dashName(r.dashboardId)}: the dashboard's own setting`
+      : `${manyDashboards ? `${dashName(r.dashboardId)}: ` : ''}${rowPath(r)} (${r.level})`;
 
   function fromText(res: Resolution): string {
     if (res.source === 'invalid') return `→ Off, invalid setting on ${levelNameIn(dashboards, res.source, res.sourceId)}`;
@@ -315,6 +322,13 @@
           <p>
             <strong>Restoring {selected.length} setting{selected.length === 1 ? '' : 's'} will start checking {tiles(preview.start.length)} and stop checking {tiles(preview.stop.length)}.</strong>
           </p>
+          <ul class="picked">
+            {#each pickedRows as r (r.key)}
+              <li data-so-picked={r.key}>
+                {pickedLabel(r, pickedManyDashboards)}: {NOW[r.now]}{#if !shown.some((x) => x.key === r.key)}{' '}<span class="muted">(not shown under this filter)</span>{/if}
+              </li>
+            {/each}
+          </ul>
           {#each [{ label: 'Starts checking', list: preview.start }, { label: 'Stops checking', list: preview.stop }] as part (part.label)}
             {#if part.list.length}
               <p class="muted">
@@ -357,6 +371,7 @@
   .link:hover, .what a:hover { text-decoration: underline; }
   .small { padding: 0.1rem 0.6rem; font-size: 0.85rem; }
   .preview { margin-top: 0.5rem; padding: 0.6rem 0.8rem; border: 1px solid var(--accent); border-radius: 0.4rem; }
+  .picked { margin: 0.3rem 0; padding-left: 1.2rem; overflow-wrap: anywhere; }
   .btns { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.6rem; }
   /* Phone: the path, then Now → If inherited, then the effect, under the checkbox. */
   @media (max-width: 480px) {
