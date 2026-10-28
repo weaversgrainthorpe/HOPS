@@ -442,25 +442,26 @@ main() {
   fi
 
   # Architecture of the userland (what systemd and the OS are built for),
-  # not the kernel: 32-bit Raspberry Pi OS on a 64-bit kernel needs armv6.
+  # not the kernel: 32-bit Raspberry Pi OS on a 64-bit kernel is still 32-bit.
+  # HOPS ships 64-bit builds only.
+  local no32="this system runs a 32-bit OS, and HOPS needs a 64-bit one. On a Raspberry Pi 3, 4, 5 or Zero 2 W, install the 64-bit Raspberry Pi OS. The original Pi Zero / Zero W can't run a 64-bit OS, so it isn't supported."
   local arch="" native=yes how dpkg_arch bits
   if command -v dpkg >/dev/null 2>&1 && dpkg_arch=$(dpkg --print-architecture 2>/dev/null); then
     how="dpkg: $dpkg_arch"
     case $dpkg_arch in
       amd64) arch=amd64 ;;
       arm64) arch=arm64 ;;
-      armhf) arch=armv6 ;;
-      armel) die "this system's userland is armel (ARMv5/soft-float). HOPS needs ARMv6 with VFP (armhf) or newer; it will not run here." ;;
-      *) die "unsupported architecture '$dpkg_arch' (supported: amd64, arm64, armhf)" ;;
+      armhf|armel|i386) die "$no32" ;;
+      *) die "unsupported architecture '$dpkg_arch' (supported: amd64, arm64)" ;;
     esac
   else
     bits=$(getconf LONG_BIT 2>/dev/null) || bits=""
     how="uname -m: $(uname -m), userland bits: ${bits:-unknown}"
     case $(uname -m) in
-      x86_64|amd64) [[ $bits == 32 ]] && die "32-bit x86 userland on a 64-bit kernel is not supported"; arch=amd64 ;;
-      aarch64|arm64) if [[ $bits == 32 ]]; then arch=armv6; else arch=arm64; fi ;;
-      armv6l|armv7l|armv8l) arch=armv6 ;;
-      *) die "unsupported CPU architecture '$(uname -m)' (supported: x86_64, aarch64, armv6l/armv7l)" ;;
+      x86_64|amd64) [[ $bits == 32 ]] && die "$no32"; arch=amd64 ;;
+      aarch64|arm64) [[ $bits == 32 ]] && die "$no32"; arch=arm64 ;;
+      armv6l|armv7l|armv8l|i?86) die "$no32" ;;
+      *) die "unsupported CPU architecture '$(uname -m)' (supported: x86_64, aarch64)" ;;
     esac
     # Unsure whether the userland matches the binary → no syscall-arch filter.
     [[ -n $bits ]] || native=no

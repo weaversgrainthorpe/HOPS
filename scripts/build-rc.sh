@@ -46,7 +46,6 @@ ldflags="-s -w -X github.com/weaversgrainthorpe/HOPS/internal/version.Prerelease
 targets=(
   "linux-amd64   linux   amd64 -"
   "linux-arm64   linux   arm64 -"
-  "linux-armv6   linux   arm   6"
   "darwin-amd64  darwin  amd64 -"
   "darwin-arm64  darwin  arm64 -"
   "windows-amd64 windows amd64 -"

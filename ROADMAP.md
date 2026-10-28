@@ -19,7 +19,7 @@ What has already shipped is in the [CHANGELOG](CHANGELOG.md).
 HOPS is a fast, good-looking **launcher**. It's a menu of links that get
 you to your tools' own web pages quickly. Everything is set up through
 HOPS's own screens, and it runs happily on something as small as a
-Raspberry Pi Zero. Ideas are judged against that. See
+Raspberry Pi Zero 2 W. Ideas are judged against that. See
 [Not planned](#not-planned-and-why) at the bottom for things that would
 turn HOPS into something else.
 

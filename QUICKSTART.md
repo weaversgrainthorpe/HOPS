@@ -16,14 +16,14 @@ interface built in, so there is nothing else to install.
 |----------|----------|
 | Linux on a normal PC or server (x86-64) | `hops-linux-amd64` |
 | 64-bit ARM: Raspberry Pi 3, 4, 5 or Zero 2 W with a **64-bit** OS, and other ARM64 boards | `hops-linux-arm64` |
-| 32-bit ARM: the original Pi Zero / Zero W, or any Pi running **32-bit** Raspberry Pi OS | `hops-linux-armv6` |
 | macOS (Intel) | `hops-darwin-amd64` |
 | macOS (Apple Silicon) | `hops-darwin-arm64` |
 | Windows (x86-64) | `hops-windows-amd64.exe` |
 
-Not sure which Pi OS you have? Run `getconf LONG_BIT` on the Pi: `64` means
-arm64, `32` means armv6. (The one-line installer below works this out for
-you.)
+HOPS needs a **64-bit** OS. Not sure which Pi OS you have? Run
+`getconf LONG_BIT` on the Pi: `64` is fine; `32` means you need to install
+the 64-bit Raspberry Pi OS first. The original Pi Zero / Zero W can't run a
+64-bit OS, so it isn't supported.
 
 ## Step 1: Install HOPS
 

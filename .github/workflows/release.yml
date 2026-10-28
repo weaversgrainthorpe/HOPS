@@ -52,13 +52,6 @@ jobs:
           - os: linux
             arch: arm64
             ext: ''
-          # 32-bit ARM (original Pi Zero / Zero W; also 32-bit Pi OS on
-          # Pi 2/3). Published as hops-linux-armv6.
-          - os: linux
-            arch: arm
-            goarm: '6'
-            name: armv6
-            ext: ''
           - os: darwin
             arch: amd64
             ext: ''
@@ -91,7 +84,6 @@ jobs:
         env:
           GOOS: ${{ matrix.os }}
           GOARCH: ${{ matrix.arch }}
-          GOARM: ${{ matrix.goarm }}
           CGO_ENABLED: '0'
         run: go build -trimpath -ldflags="-s -w" -o ../hops-${{ matrix.os }}-${{ matrix.name || matrix.arch }}${{ matrix.ext }} ./cmd/hops
 

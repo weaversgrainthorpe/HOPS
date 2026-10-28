@@ -26,7 +26,7 @@ curl -fsSL https://github.com/weaversgrainthorpe/HOPS/releases/latest/download/i
 ```
 
 - It picks the binary for your **userland** (so 32-bit Raspberry Pi OS on a
-  64-bit kernel gets `hops-linux-armv6`), downloads it with `SHA256SUMS` and
+  64-bit kernel counts as 32-bit), downloads it with `SHA256SUMS` and
   refuses to install on a checksum mismatch.
 - Binary: `/opt/hops/hops`. Data: `/var/lib/hops`. Service: `hops.service`,
   run as the `hops` system user with systemd hardening.
@@ -34,8 +34,8 @@ curl -fsSL https://github.com/weaversgrainthorpe/HOPS/releases/latest/download/i
   A new install listens on port 8080; change the port in HOPS under
   Settings.
 - It needs root, `curl` or `wget`, `sha256sum` and systemd. It works out the
-  architecture as `amd64`, `arm64` or `armv6` (any 32-bit ARM userland,
-  armv6l/armv7l included). It refuses armel (ARMv5) and 32-bit x86.
+  architecture as `amd64` or `arm64`. HOPS needs a 64-bit OS: it refuses
+  any 32-bit system, and says so.
 - Options go after `bash -s --`, for example
   `curl -fsSL <url>/install.sh | sudo bash -s -- --version 3.0.0`:
 
@@ -154,7 +154,6 @@ Go to the [Releases](https://github.com/weaversgrainthorpe/HOPS/releases) page a
 
 - `hops-linux-amd64` — Linux x86-64
 - `hops-linux-arm64` — Linux ARM64 (Raspberry Pi 3B+/4/5/Zero 2 W running a 64-bit OS)
-- `hops-linux-armv6` — Linux 32-bit ARM (original Raspberry Pi Zero / Zero W, and any Pi running 32-bit Raspberry Pi OS)
 - `hops-darwin-amd64` — macOS Intel
 - `hops-darwin-arm64` — macOS Apple Silicon
 - `hops-windows-amd64.exe` — Windows x86-64

@@ -38,17 +38,6 @@ jobs:
           CGO_ENABLED: '0'
         run: go build -o hops.exe ./cmd/hops
 
-      - name: Build + vet (linux/arm GOARM=6, 32-bit)
-        working-directory: backend
-        env:
-          GOOS: linux
-          GOARCH: arm
-          GOARM: '6'
-          CGO_ENABLED: '0'
-        run: |
-          go build ./...
-          go vet ./...
-
       - name: Test
         working-directory: backend
         run: CGO_ENABLED=0 go test ./...
