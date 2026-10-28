@@ -1,0 +1,62 @@
+{
+  "app": "uptime-kuma",
+  "image": "louislam/uptime-kuma:1@sha256:70233f4acb51",
+  "captured": "2026-10-28",
+  "port": 3001,
+  "want": "core/uptime-kuma",
+  "faviconMmh3": 1866999254,
+  "responses": {
+    "/": {
+      "status": 302,
+      "headers": {
+        "connection": "keep-alive",
+        "content-length": "32",
+        "content-type": "text/plain; charset=utf-8",
+        "keep-alive": "timeout=5",
+        "location": "/dashboard",
+        "vary": "Accept",
+        "x-frame-options": "SAMEORIGIN"
+      },
+      "body": "277f5ce23976"
+    },
+    "/api/badge": {
+      "status": 200,
+      "headers": {
+        "connection": "keep-alive",
+        "content-length": "2493",
+        "content-type": "text/html; charset=utf-8",
+        "etag": "W/\"9bd-o+u1qAJaX55AlM3ua5ybw1NrD9E\"",
+        "keep-alive": "timeout=5",
+        "x-frame-options": "SAMEORIGIN"
+      },
+      "body": "b5015db432a4"
+    },
+    "/dashboard": {
+      "status": 200,
+      "headers": {
+        "connection": "keep-alive",
+        "content-length": "2493",
+        "content-type": "text/html; charset=utf-8",
+        "etag": "W/\"9bd-o+u1qAJaX55AlM3ua5ybw1NrD9E\"",
+        "keep-alive": "timeout=5",
+        "x-frame-options": "SAMEORIGIN"
+      },
+      "body": "b5015db432a4"
+    },
+    "/favicon.ico": {
+      "status": 200,
+      "headers": {
+        "accept-ranges": "bytes",
+        "cache-control": "public, max-age=0",
+        "connection": "keep-alive",
+        "content-length": "15086",
+        "content-type": "image/x-icon",
+        "etag": "W/\"3aee-18d1374df78\"",
+        "keep-alive": "timeout=5",
+        "last-modified": "Tue, 16 Jan 2024 18:07:23 GMT",
+        "x-frame-options": "SAMEORIGIN"
+      },
+      "body": "2ee8099edcb2"
+    }
+  }
+}

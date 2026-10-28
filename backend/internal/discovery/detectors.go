@@ -317,7 +317,7 @@ func headerSignatureMatches(headers map[string]string, sig string) bool {
 
 func (d httpFingerprintDetector) emit(p *Probe, port int, snap *HTTPSnapshot) EmittedHit {
 	scheme := "http"
-	if isTLSExpectedPort(port) {
+	if p.tlsFor(port) {
 		scheme = "https"
 	}
 	urlPath := d.urlPath
@@ -402,7 +402,7 @@ func (d httpFallbackDetector) Run(ctx context.Context, p *Probe) []EmittedHit {
 			continue
 		}
 
-		tlsOn := isTLSExpectedPort(port)
+		tlsOn := p.tlsFor(port)
 		confidence := ConfidenceMedium
 		if snap.Status < 200 || snap.Status >= 400 {
 			confidence = ConfidenceLow

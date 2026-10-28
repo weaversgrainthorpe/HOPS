@@ -1,0 +1,71 @@
+{
+  "app": "prometheus",
+  "image": "prom/prometheus:latest@sha256:fa3302279710",
+  "captured": "2026-10-28",
+  "port": 9090,
+  "want": "core/prometheus",
+  "notes": "Default config; / 302s to /query",
+  "responses": {
+    "/": {
+      "status": 302,
+      "headers": {
+        "content-length": "29",
+        "content-type": "text/html; charset=utf-8",
+        "location": "/query"
+      },
+      "body": "ebdf542dc140"
+    },
+    "/-/healthy": {
+      "status": 200,
+      "headers": {
+        "content-length": "30",
+        "content-type": "text/plain; charset=utf-8"
+      },
+      "body": "522e2898ab35"
+    },
+    "/api/health": {
+      "status": 404,
+      "headers": {
+        "content-length": "19",
+        "content-type": "text/plain; charset=utf-8",
+        "x-content-type-options": "nosniff"
+      },
+      "body": "b16e15764b8b"
+    },
+    "/favicon.ico": {
+      "status": 404,
+      "headers": {
+        "content-length": "19",
+        "content-type": "text/plain; charset=utf-8",
+        "x-content-type-options": "nosniff"
+      },
+      "body": "b16e15764b8b"
+    },
+    "/graph": {
+      "status": 302,
+      "headers": {
+        "content-length": "30",
+        "content-type": "text/html; charset=utf-8",
+        "location": "/query?"
+      },
+      "body": "2b96320b7482"
+    },
+    "/login/": {
+      "status": 404,
+      "headers": {
+        "content-length": "19",
+        "content-type": "text/plain; charset=utf-8",
+        "x-content-type-options": "nosniff"
+      },
+      "body": "b16e15764b8b"
+    },
+    "/query": {
+      "status": 200,
+      "headers": {
+        "content-length": "1752",
+        "content-type": "text/html; charset=utf-8"
+      },
+      "body": "4712f2458163"
+    }
+  }
+}

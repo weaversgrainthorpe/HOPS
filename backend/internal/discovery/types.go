@@ -106,6 +106,9 @@ type Probe struct {
 	OpenPorts     []int
 	HTTPResponses map[int]*HTTPSnapshot
 	HTTP          func(ctx context.Context, port int, path string) (*HTTPSnapshot, error)
+	// plainHTTP marks TLS-expected ports whose root fetch only answered
+	// over plain HTTP (see tlsFor).
+	plainHTTP map[int]bool
 }
 
 // HTTPSnapshot is a frozen view of an HTTP response — status code, headers

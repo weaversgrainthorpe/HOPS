@@ -1,0 +1,36 @@
+{
+  "app": "node-red",
+  "image": "nodered/node-red:latest@sha256:e085d4a06591",
+  "captured": "2026-10-28",
+  "port": 1880,
+  "want": "core/node-red",
+  "notes": "Fresh install",
+  "faviconMmh3": 321591353,
+  "responses": {
+    "/": {
+      "status": 200,
+      "headers": {
+        "connection": "keep-alive",
+        "content-length": "1731",
+        "content-type": "text/html; charset=utf-8",
+        "etag": "W/\"6c3-z6ToTFzdNw0yOBAHQ916tV/f4Kk\"",
+        "keep-alive": "timeout=5"
+      },
+      "body": "6865cbe1d333"
+    },
+    "/favicon.ico": {
+      "status": 200,
+      "headers": {
+        "accept-ranges": "bytes",
+        "cache-control": "public, max-age=0",
+        "connection": "keep-alive",
+        "content-length": "16958",
+        "content-type": "image/x-icon",
+        "etag": "W/\"423e-1a15f2a9a70\"",
+        "keep-alive": "timeout=5",
+        "last-modified": "Wed, 21 Oct 2026 15:53:10 GMT"
+      },
+      "body": "303e35293994"
+    }
+  }
+}

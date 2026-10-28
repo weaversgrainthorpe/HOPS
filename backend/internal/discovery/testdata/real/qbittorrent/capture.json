@@ -1,0 +1,41 @@
+{
+  "app": "qbittorrent",
+  "image": "lscr.io/linuxserver/qbittorrent:latest@sha256:75ecbb1c89ab",
+  "version": "5.3.0_v2.1.2-ls485Linuxserver.io version:- 5.3.0_v2.1.2-ls485 Build-date:- 2026-10-25T12:05:03+00:00",
+  "captured": "2026-10-28",
+  "port": 8090,
+  "want": "core/qbittorrent",
+  "notes": "WEBUI_PORT=8090 (8080 is taken on the capture box; 8090 is the detector's alt port)",
+  "responses": {
+    "/": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-store",
+        "connection": "keep-alive",
+        "content-security-policy": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; script-src 'self' 'unsafe-inline'; object-src 'none'; form-action 'self'; frame-src 'self' blob:; frame-ancestors 'self';",
+        "content-type": "text/html",
+        "cross-origin-opener-policy": "same-origin",
+        "referrer-policy": "same-origin",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "3c8cb65664f3"
+    },
+    "/favicon.ico": {
+      "status": 404,
+      "headers": {
+        "connection": "keep-alive",
+        "content-length": "9",
+        "content-security-policy": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; script-src 'self' 'unsafe-inline'; object-src 'none'; form-action 'self'; frame-src 'self' blob:; frame-ancestors 'self';",
+        "content-type": "text/plain; charset=UTF-8",
+        "cross-origin-opener-policy": "same-origin",
+        "referrer-policy": "same-origin",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "0019dfc4b32d"
+    }
+  }
+}

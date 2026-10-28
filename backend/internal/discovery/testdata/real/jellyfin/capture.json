@@ -1,0 +1,54 @@
+{
+  "app": "jellyfin",
+  "image": "jellyfin/jellyfin:latest@sha256:fea863d0cd9e",
+  "version": "12.4",
+  "captured": "2026-10-28",
+  "port": 8096,
+  "want": "core/jellyfin",
+  "notes": "Fresh install (setup wizard not run)",
+  "responses": {
+    "/": {
+      "status": 302,
+      "headers": {
+        "content-length": "0",
+        "location": "web/",
+        "server": "Kestrel"
+      }
+    },
+    "/System/Info/Public": {
+      "status": 200,
+      "headers": {
+        "content-language": "en-US",
+        "content-type": "application/json; charset=utf-8",
+        "server": "Kestrel",
+        "vary": "Accept-Encoding",
+        "x-response-time-ms": "1431.4295"
+      },
+      "body": "fb54f4a7757c"
+    },
+    "/favicon.ico": {
+      "status": 404,
+      "headers": {
+        "content-language": "en-US",
+        "content-length": "0",
+        "server": "Kestrel",
+        "x-response-time-ms": "10.7783"
+      }
+    },
+    "/web/index.html": {
+      "status": 200,
+      "headers": {
+        "accept-ranges": "bytes",
+        "cache-control": "no-cache",
+        "content-language": "en-US",
+        "content-type": "text/html",
+        "etag": "\"1dd658fb311d8c1\"",
+        "last-modified": "Mon, 26 Oct 2026 21:19:35 GMT",
+        "server": "Kestrel",
+        "vary": "Accept-Encoding",
+        "x-response-time-ms": "24.906"
+      },
+      "body": "f8d7c4eb88b7"
+    }
+  }
+}

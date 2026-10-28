@@ -1,0 +1,42 @@
+{
+  "app": "syncthing",
+  "image": "syncthing/syncthing:latest@sha256:2b71da7c0d0a",
+  "version": "v2.1.7",
+  "captured": "2026-10-28",
+  "port": 8384,
+  "want": "core/syncthing",
+  "notes": "Fresh install",
+  "responses": {
+    "/": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "etag": "\"6ae19e31\"",
+        "last-modified": "Wed, 28 Oct 2026 07:03:13 GMT",
+        "set-cookie": "CSRF-Token-ATQR7DR=REDACTED",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-syncthing-id": "ATQR7DR-VCP3C4K-QJWEYD5-ILWS7KC-QACVD3Z-OZHABWV-UYZFQAY-QJSGSAW",
+        "x-syncthing-version": "v2.1.7",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "fcd406b2e0ea"
+    },
+    "/favicon.ico": {
+      "status": 404,
+      "headers": {
+        "cache-control": "no-cache, must-revalidate",
+        "content-length": "19",
+        "content-type": "text/plain; charset=utf-8",
+        "set-cookie": "CSRF-Token-ATQR7DR=REDACTED",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-syncthing-id": "ATQR7DR-VCP3C4K-QJWEYD5-ILWS7KC-QACVD3Z-OZHABWV-UYZFQAY-QJSGSAW",
+        "x-syncthing-version": "v2.1.7",
+        "x-xss-protection": "1; mode=block"
+      },
+      "body": "b16e15764b8b"
+    }
+  }
+}

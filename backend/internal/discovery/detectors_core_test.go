@@ -541,7 +541,7 @@ func TestProbeHTTPCacheOneFetchPerPath(t *testing.T) {
 		OpenPorts: []int{8096},
 		HTTPResponses: map[int]*HTTPSnapshot{8096: {Status: 302,
 			Headers: map[string]string{"location": "/web/index.html"}}},
-		HTTP: cachedProbeHTTP(cf.fetch),
+		HTTP: cachedProbeHTTP(cf.fetch, isTLSExpectedPort),
 	}
 	for _, d := range coreDetectors() {
 		if d.ID() == "core/emby" || d.ID() == "core/jellyfin" {
@@ -557,7 +557,7 @@ func TestProbeHTTPCacheOneFetchPerPath(t *testing.T) {
 // and isn't retried within the same probe.
 func TestProbeHTTPCacheKeepsFailure(t *testing.T) {
 	cf := &countingFetch{calls: map[string]int{}, fail: true}
-	get := cachedProbeHTTP(cf.fetch)
+	get := cachedProbeHTTP(cf.fetch, isTLSExpectedPort)
 	for i := 0; i < 2; i++ {
 		snap, err := get(context.Background(), 8096, "/x")
 		if err == nil || snap != nil {
@@ -574,7 +574,7 @@ func TestProbeHTTPCacheKeepsFailure(t *testing.T) {
 		t.Fatalf("calls = %v", cf.calls)
 	}
 	// A fresh probe (new cache) fetches again.
-	_, _ = cachedProbeHTTP(cf.fetch)(context.Background(), 8096, "/x")
+	_, _ = cachedProbeHTTP(cf.fetch, isTLSExpectedPort)(context.Background(), 8096, "/x")
 	if cf.calls["/x"] != 3 {
 		t.Fatalf("a new probe should not see the old probe's failure: %v", cf.calls)
 	}

@@ -97,7 +97,10 @@ var lightActivePorts = []int{
 
 // tlsExpectedPorts is the set of ports that speak HTTPS by default
 // (not just self-signed: services that flat-out refuse plain HTTP on
-// this port — Proxmox 8006 returns 301, Plex 32400 errors, …).
+// this port — Proxmox 8006 returns 301, …). The root fetch still falls
+// back to plain HTTP when the TLS handshake fails (an unclaimed Plex on
+// 32400 has no certificate yet), and that port then stays http:// for
+// the rest of the host probe.
 // Adding a port here makes the active probe, favicon fetch, and
 // detector URL emission all use https:// uniformly. Don't add a port
 // where plain HTTP also works — the probe would lose the option to
@@ -114,6 +117,14 @@ var tlsExpectedPorts = map[int]bool{
 }
 
 func isTLSExpectedPort(p int) bool { return tlsExpectedPorts[p] }
+
+// tlsFor reports whether this probe talks HTTPS to port: the port's TLS
+// expectation, unless the root fetch found that the port only speaks
+// plain HTTP. Real case: a fresh (unclaimed) Plex has no certificate yet
+// and only answers http:// on 32400, so HTTPS-only probing never saw it.
+func (p *Probe) tlsFor(port int) bool {
+	return isTLSExpectedPort(port) && !p.plainHTTP[port]
+}
 
 // fullActivePorts widens the sweep to catch services that no bundled
 // detector covers but where the generic HTTP fallback might still
@@ -356,7 +367,7 @@ func httpGetProbe(ctx context.Context, host string, port int, path string, tlsOn
 // A failed fetch is cached as that same failure (error, nil snapshot) —
 // never as an empty success — so every detector asking for the path
 // sees the failure, and nothing outlives the probe.
-func cachedProbeHTTP(fetch func(ctx context.Context, port int, path string, tlsOn bool) (*HTTPSnapshot, error)) func(ctx context.Context, port int, path string) (*HTTPSnapshot, error) {
+func cachedProbeHTTP(fetch func(ctx context.Context, port int, path string, tlsOn bool) (*HTTPSnapshot, error), tlsFor func(port int) bool) func(ctx context.Context, port int, path string) (*HTTPSnapshot, error) {
 	type entry struct {
 		once sync.Once
 		snap *HTTPSnapshot
@@ -365,7 +376,7 @@ func cachedProbeHTTP(fetch func(ctx context.Context, port int, path string, tlsO
 	var mu sync.Mutex
 	cache := map[string]*entry{}
 	return func(ctx context.Context, port int, path string) (*HTTPSnapshot, error) {
-		tlsOn := isTLSExpectedPort(port)
+		tlsOn := tlsFor(port)
 		scheme := "http"
 		if tlsOn {
 			scheme = "https"

@@ -1,0 +1,62 @@
+{
+  "app": "navidrome",
+  "image": "deluan/navidrome:latest@sha256:38dc2727bfcf",
+  "version": "0.64.2",
+  "captured": "2026-10-28",
+  "port": 4533,
+  "want": "core/navidrome",
+  "notes": "Fresh install; / 302s to /app/",
+  "responses": {
+    "/": {
+      "status": 302,
+      "headers": {
+        "content-type": "text/html; charset=utf-8",
+        "location": "/app/",
+        "permissions-policy": "autoplay=(), camera=(), microphone=(), usb=()",
+        "referrer-policy": "same-origin",
+        "vary": "Origin",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY"
+      },
+      "body": "c8084f93a54d"
+    },
+    "/api/ping": {
+      "status": 404,
+      "headers": {
+        "content-type": "text/plain; charset=utf-8",
+        "permissions-policy": "autoplay=(), camera=(), microphone=(), usb=()",
+        "referrer-policy": "same-origin",
+        "vary": "Origin",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY"
+      },
+      "body": "b16e15764b8b"
+    },
+    "/app/": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-store, no-cache, must-revalidate",
+        "content-type": "text/html",
+        "permissions-policy": "autoplay=(), camera=(), microphone=(), usb=()",
+        "referrer-policy": "same-origin",
+        "vary": "Origin",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY"
+      },
+      "body": "866eaca36817"
+    },
+    "/favicon.ico": {
+      "status": 302,
+      "headers": {
+        "content-type": "text/html; charset=utf-8",
+        "location": "/app/",
+        "permissions-policy": "autoplay=(), camera=(), microphone=(), usb=()",
+        "referrer-policy": "same-origin",
+        "vary": "Origin",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY"
+      },
+      "body": "c8084f93a54d"
+    }
+  }
+}

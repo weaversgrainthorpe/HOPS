@@ -66,13 +66,16 @@ func faviconFetch(ctx context.Context, host string, port int, tlsOn bool, timeou
 	}
 
 	b64 := base64.StdEncoding.EncodeToString(body)
-	// Shodan's MMH3 input is the base64 string with newlines every 76
-	// chars (Python's `base64.encodebytes` default). Match that so our
-	// hashes line up with the published Shodan corpus.
-	wrapped := wrapBase64ForShodan(b64)
-	hash := murmur3_32([]byte(wrapped), 0)
+	return fmt.Sprintf("data:%s;base64,%s", contentType, b64), faviconHashOf(body), true
+}
 
-	return fmt.Sprintf("data:%s;base64,%s", contentType, b64), hash, true
+// faviconHashOf is the Shodan-convention MMH3 hash of favicon bytes:
+// Shodan's MMH3 input is the base64 string with newlines every 76 chars
+// (Python's `base64.encodebytes` default). Matching that lines our
+// hashes up with the published Shodan corpus.
+func faviconHashOf(body []byte) int32 {
+	wrapped := wrapBase64ForShodan(base64.StdEncoding.EncodeToString(body))
+	return murmur3_32([]byte(wrapped), 0)
 }
 
 // wrapBase64ForShodan inserts a "\n" every 76 chars and one at the end —

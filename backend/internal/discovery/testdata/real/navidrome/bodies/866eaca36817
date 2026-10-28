@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+            name="description"
+            content="Navidrome Music Server - v0.64.2 (10114574)"
+    />
+    <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="./android-chrome-192x192.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="./favicon-16x16.png">
+    <link rel="mask-icon" href="./safari-pinned-tab.svg" color="#5b5fd5">
+    <meta name="msapplication-TileColor" content="#da532c">
+    <meta name="theme-color" content="#ffffff">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <meta property="og:site_name" content="Navidrome">
+    <meta property="og:url" content="">
+    <meta property="og:title" content="">
+    <meta property="og:image" content="">
+    <meta property="og:image:width" content="300">
+    <meta property="og:image:height" content="300">
+    <title>Navidrome</title>
+    <script>
+      
+      window.process = { env: {} };
+    </script>
+    <script>
+      window.__APP_CONFIG__ = "{\"baseURL\":\"\",\"defaultDownloadableShare\":false,\"defaultDownsamplingFormat\":\"opus\",\"defaultLanguage\":\"\",\"defaultTheme\":\"Dark\",\"defaultUIVolume\":100,\"devActivityPanel\":true,\"devNewEventStream\":true,\"devShowArtistPage\":true,\"devSidebarPlaylists\":true,\"devUIShowConfig\":true,\"enableArtworkUpload\":true,\"enableCoverAnimation\":true,\"enableDownloads\":true,\"enableExternalServices\":true,\"enableFavourites\":true,\"enableInspect\":true,\"enableNowPlaying\":true,\"enableQuickConnect\":false,\"enableReplayGain\":true,\"enableSharing\":true,\"enableStarRating\":true,\"enableTranscodingConfig\":false,\"enableUserEditing\":true,\"extAuthLogoutURL\":\"\",\"firstTime\":true,\"gaTrackingId\":\"\",\"lastFMEnabled\":true,\"listenBrainzEnabled\":true,\"loginBackgroundURL\":\"/backgrounds\",\"losslessFormats\":\"FLAC,ALAC,APE,SHN,DSF,WV,WVP,TAK,WAV\",\"maxSidebarPlaylists\":100,\"playbackReportIntervalMs\":60000,\"pluginsEnabled\":true,\"separator\":\"/\",\"shareURL\":\"\",\"uiCoverArtSize\":300,\"uiSearchDebounceMs\":200,\"variousArtistsId\":\"63sqASlAfjbGMuLP4JhnZU\",\"version\":\"0.64.2 (10114574)\",\"welcomeMessage\":\"\"}"
+    </script>
+    <script>
+      window.__SHARE_INFO__ =  null 
+    </script>
+    <script type="module" crossorigin src="./assets/index-7wbOXZOY.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-uCXnEN-G.css">
+  <link rel="manifest" href="./manifest.webmanifest"></head>
+  <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root"></div>
+    
+  </body>
+</html>

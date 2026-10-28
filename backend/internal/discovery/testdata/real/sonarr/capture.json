@@ -1,0 +1,57 @@
+{
+  "app": "sonarr",
+  "image": "lscr.io/linuxserver/sonarr:latest@sha256:48e36b608b46",
+  "version": "4.0.20.3014-ls1Linuxserver.io version:- 4.0.20.3014-ls1 Build-date:- 2026-10-24T01:45:43+00:00",
+  "captured": "2026-10-28",
+  "port": 8989,
+  "want": "core/sonarr",
+  "notes": "Fresh install",
+  "faviconMmh3": -783485946,
+  "responses": {
+    "/": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache, no-store",
+        "content-type": "text/html",
+        "expires": "-1",
+        "pragma": "no-cache",
+        "server": "Kestrel",
+        "vary": "Accept-Encoding"
+      },
+      "body": "52d596eea36a"
+    },
+    "/favicon.ico": {
+      "status": 200,
+      "headers": {
+        "cache-control": "max-age=31536000, public",
+        "content-length": "15086",
+        "content-type": "image/x-icon",
+        "last-modified": "Wed, 16 Sep 2026 16:37:39 GMT",
+        "server": "Kestrel"
+      },
+      "body": "04a3ab2c724f"
+    },
+    "/initialize.js": {
+      "status": 404,
+      "headers": {
+        "cache-control": "max-age=31536000, public",
+        "content-type": "application/problem+json; charset=utf-8",
+        "last-modified": "Wed, 16 Sep 2026 16:37:39 GMT",
+        "server": "Kestrel"
+      },
+      "body": "296b000e12b5"
+    },
+    "/login": {
+      "status": 200,
+      "headers": {
+        "cache-control": "no-cache, no-store",
+        "content-type": "text/html",
+        "expires": "-1",
+        "pragma": "no-cache",
+        "server": "Kestrel",
+        "vary": "Accept-Encoding"
+      },
+      "body": "9338b1012ef6"
+    }
+  }
+}
