@@ -1,10 +1,12 @@
 name: CI
 
 on:
+  # Every branch push (main, v3, feature branches) and every PR into main
+  # or v3. Tags are covered by release.yml, which runs its own test gate.
   push:
-    branches: [main]
+    branches: ['**']
   pull_request:
-    branches: [main]
+    branches: [main, v3]
 
 jobs:
   versions:
@@ -37,6 +39,10 @@ jobs:
           GOARCH: amd64
           CGO_ENABLED: '0'
         run: go build -o hops.exe ./cmd/hops
+
+      - name: Vet
+        working-directory: backend
+        run: CGO_ENABLED=0 go vet ./...
 
       - name: Test
         working-directory: backend
