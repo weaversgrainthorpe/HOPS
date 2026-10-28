@@ -4,8 +4,26 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 )
+
+// inContainer reports whether HOPS runs in a Docker or Podman container, where the port is set
+// by the container's port mapping rather than in Settings. A variable so tests can set it.
+var inContainer = func() bool { return detectContainerIn("/") }
+
+// detectContainerIn looks for the marker file Docker (/.dockerenv) or Podman
+// (/run/.containerenv) puts in a container's root. A Proxmox LXC container has neither, and
+// changing the port there works as on any host.
+func detectContainerIn(root string) bool {
+	for _, marker := range []string{".dockerenv", "run/.containerenv"} {
+		if _, err := os.Stat(filepath.Join(root, marker)); err == nil {
+			return true
+		}
+	}
+	return false
+}
 
 // settingDTO is what the API returns for each setting — the definition plus
 // the current value. Keeps the frontend from having to merge two arrays.
@@ -51,7 +69,7 @@ func (r *Router) handleSettingsList(w http.ResponseWriter, req *http.Request) {
 			AdjustedFrom:    adjusted[d.Key],
 		})
 	}
-	writeJSON(w, map[string]any{"settings": out})
+	writeJSON(w, map[string]any{"settings": out, "runtime": map[string]any{"container": inContainer()}})
 }
 
 // handleSettingUpdate updates one setting by key. The URL is

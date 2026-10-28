@@ -965,7 +965,7 @@ export interface SettingDef {
   adjustedFrom?: string;
 }
 
-export async function listSettings(): Promise<{ settings: SettingDef[] }> {
+export async function listSettings(): Promise<{ settings: SettingDef[]; runtime?: { container?: boolean } }> {
   return fetchAPI('/settings');
 }
 

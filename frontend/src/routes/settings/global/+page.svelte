@@ -27,6 +27,8 @@
   // settings as soon as it opens.
 
   let settings = $state<SettingDef[]>([]);
+  // HOPS runs in a Docker/Podman container: its port is set by the container's port mapping.
+  let inContainer = $state(false);
   let drafts = $state<Record<string, string>>({});
   let savingKey = $state<string | null>(null);
   let perKeyError = $state<Record<string, string>>({});
@@ -108,8 +110,9 @@
     loading = true;
     loadError = '';
     try {
-      const { settings: list } = await listSettings();
+      const { settings: list, runtime } = await listSettings();
       settings = list;
+      inContainer = runtime?.container === true;
       drafts = Object.fromEntries(list.map((s) => [s.key, shown(s, s.value)]));
       units = Object.fromEntries(list.filter(isHoursDays).map((s) => [s.key, splitHours(s.value, allowsOff(s)).unit]));
     } catch (e) {
@@ -162,6 +165,8 @@
   const optionLabels: Record<string, Record<string, string>> = {
     'display.animations': { on: 'On', off: 'Off', always: 'Always' },
   };
+  const CONTAINER_PORT_NOTE =
+    'HOPS is running in a Docker container. To use another port, change the port mapping in your docker-compose.yml (for example "3000:8080") and leave this at 8080: changing it here moves HOPS inside the container, where the mapping no longer reaches it.';
   const REDUCED_MOTION_NOTE = 'Your device asks for reduced motion — animations are off on this device';
   let reducedMotion = $state(false);
   onMount(() => {
@@ -382,6 +387,11 @@
                 {/if}
               </label>
               <div class="desc">{s.description}</div>
+              {#if s.key === 'server.port' && inContainer}
+                <p class="motion-note" role="note" data-testid="container-port-note">
+                  <Icon icon="mdi:docker" width="16" /> {CONTAINER_PORT_NOTE}
+                </p>
+              {/if}
               {#if s.key === 'display.animations' && drafts[s.key] === 'on' && reducedMotion}
                 <p class="motion-note" role="status">
                   <Icon icon="mdi:information-outline" width="16" /> {REDUCED_MOTION_NOTE}

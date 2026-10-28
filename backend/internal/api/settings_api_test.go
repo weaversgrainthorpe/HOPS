@@ -1,6 +1,7 @@
 package api
 
 import (
+	"os"
 	"bytes"
 	"encoding/json"
 	"net/http"
@@ -288,5 +289,54 @@ func TestSetRateLimitUpdatesLimiterLive(t *testing.T) {
 	// Fourth attempt should now be 429 (rate-limited).
 	if code := hitLogin(); code != http.StatusTooManyRequests {
 		t.Errorf("4th attempt with limit=3: expected 429, got %d", code)
+	}
+}
+
+// Changing the port inside a Docker container breaks the compose port mapping, so the settings
+// list says whether HOPS runs in one (the UI warns on the port setting; found in the rc trials).
+func TestSettingsListReportsContainer(t *testing.T) {
+	for _, want := range []bool{true, false} {
+		old := inContainer
+		inContainer = func() bool { return want }
+		router, _ := setupTestRouter(t)
+		sessionToken, csrfToken := loginTestUserWithCSRF(t, router)
+		req := authedRequest("GET", "/api/settings", nil, sessionToken, csrfToken)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		inContainer = old
+		var resp struct {
+			Runtime struct {
+				Container *bool `json:"container"`
+			} `json:"runtime"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil || resp.Runtime.Container == nil {
+			t.Fatalf("runtime.container missing: %v %s", err, w.Body.String())
+		}
+		if *resp.Runtime.Container != want {
+			t.Errorf("container = %v, want %v", *resp.Runtime.Container, want)
+		}
+	}
+}
+
+func TestDetectContainer(t *testing.T) {
+	dir := t.TempDir()
+	if detectContainerIn(dir) {
+		t.Error("no marker file: not a container")
+	}
+	if err := os.WriteFile(dir+"/.dockerenv", nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if !detectContainerIn(dir) {
+		t.Error("/.dockerenv: Docker")
+	}
+	dir2 := t.TempDir()
+	if err := os.MkdirAll(dir2+"/run", 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(dir2+"/run/.containerenv", nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if !detectContainerIn(dir2) {
+		t.Error("/run/.containerenv: Podman")
 	}
 }

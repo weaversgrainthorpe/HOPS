@@ -44,6 +44,19 @@ describe('/settings/global', () => {
 		expect((screen.getByLabelText(/Log level/) as HTMLSelectElement).value).toBe('info');
 	});
 
+	it('in a Docker container the port row says to change the port mapping instead', async () => {
+		listSettings.mockResolvedValue({ settings: [LOG, PORT], runtime: { container: true } });
+		render(Page);
+		const note = await screen.findByTestId('container-port-note');
+		expect(note.textContent).toMatch(/change the port mapping in your docker-compose\.yml/);
+	});
+
+	it('outside a container there is no port-mapping note', async () => {
+		render(Page);
+		await screen.findByLabelText(/Port/);
+		expect(screen.queryByTestId('container-port-note')).toBeNull();
+	});
+
 	it('a failed load says so (never an empty page as if there were no settings)', async () => {
 		listSettings.mockRejectedValueOnce(new Error('server unreachable'));
 		render(Page);
