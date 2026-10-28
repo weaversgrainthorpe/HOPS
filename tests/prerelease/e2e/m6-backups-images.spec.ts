@@ -86,16 +86,22 @@ test.describe('M6 §12 backups keep their images', () => {
 		else await expect(backupsDialog().getByRole('button', { name: 'Create Backup' })).toBeEnabled();
 	}
 
-	/** Restore through the dialog; the server exits for its service manager, and is started again. */
+	/** Restore through the dialog; HOPS starts itself again (same process, no service manager). */
 	async function restoreViaUI(name: string) {
-		const exited = new Promise<number | null>((r) => child!.once('exit', (code) => r(code)));
+		const before = (await (await page.request.get('/api/health')).json()).uptime as number;
 		await openBackups();
 		await backupsDialog().getByRole('button', { name: `Restore ${name}` }).click();
 		await page.locator('[aria-labelledby="confirm-title"]').getByRole('button', { name: 'Restore', exact: true }).click();
 		await expect(page.locator('.toast', { hasText: 'restarting to apply it' })).toBeVisible();
-		expect(await exited).toBe(75);
-		child = null;
-		await startServer();
+		// Back by itself: a fresh start (uptime reset) while the very same process is still running.
+		await expect.poll(async () => {
+			try {
+				return ((await (await page.request.get('/api/health')).json()).uptime as number) < before;
+			} catch {
+				return false;
+			}
+		}, { timeout: 20000 }).toBe(true);
+		expect(child!.exitCode, 'HOPS restarted in place, never exited').toBeNull();
 	}
 
 	async function dashboard() {

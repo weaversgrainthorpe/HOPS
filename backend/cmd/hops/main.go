@@ -44,6 +44,23 @@ func setLogLevel(name string) {
 }
 
 func main() {
+	if !run() {
+		return
+	}
+	// A backup restore asked for a restart: HOPS starts itself again once everything above has
+	// closed (database, listeners, background work), so it never depends on a service manager.
+	exitAfter, err := restartSelf()
+	if err == nil && exitAfter {
+		os.Exit(0)
+	}
+	// Exit non-zero so a service manager (systemd Restart=on-failure, Docker, NSSM) restarts us.
+	// 75 = EX_TEMPFAIL, "transient failure, please retry".
+	slog.Warn("could not restart HOPS in place; exiting for the service manager to restart it", "error", err)
+	os.Exit(75)
+}
+
+// run is HOPS from start to a clean shutdown; true means a restart was requested.
+func run() bool {
 	// Start with INFO; the level is reset to the persisted value once the
 	// settings service has loaded (a few lines below).
 	setLogLevel("info")
@@ -98,7 +115,7 @@ func main() {
 		slog.Error("refusing to start", "component", "backup", "error", err)
 		fmt.Fprintln(os.Stderr, err.Error())
 		runSafeMode(cfg, unsafe)
-		return
+		return false
 	case err != nil:
 		slog.Error("the staged restore could not be applied; running on the current data", "component", "backup", "error", err)
 		backupManager.RecordRestoreFailure(err)
@@ -267,7 +284,7 @@ func main() {
 		slog.Info("received shutdown signal", "signal", sig.String())
 	case <-apiRouter.ShutdownRequested():
 		restartRequested = true
-		slog.Info("API requested shutdown — exiting so the service manager can restart us")
+		slog.Info("API requested a restart — shutting down, then starting again")
 	}
 
 	// Graceful shutdown: stop accepting new requests, wait up to 30s for in-flight requests
@@ -279,22 +296,7 @@ func main() {
 		slog.Info("server shut down cleanly")
 	}
 
-	// Exit with a non-zero code when the shutdown came from an API
-	// restart request, so that systemd units with either Restart=always
-	// or the more conservative Restart=on-failure both bring us back.
-	// 75 = EX_TEMPFAIL — the Unix convention for "transient failure,
-	// please retry".
-	//
-	// os.Exit skips the deferred statusChecker.Stop() / discoveryOrch.Stop()
-	// calls. That's acceptable: the discovery orchestrator's Start()
-	// runs MarkOrphanedRunning() on every boot, which transitions any
-	// leftover "running" scans to "failed" with an explanatory message.
-	// The status checker is stateless mid-cycle and resumes cleanly on
-	// the next boot. SIGTERM still gets full graceful cleanup via the
-	// normal main-return path.
-	if restartRequested {
-		os.Exit(75)
-	}
+	return restartRequested
 }
 
 // runSafeMode serves the "HOPS can't start safely" page on the last port

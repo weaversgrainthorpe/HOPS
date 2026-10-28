@@ -17,6 +17,8 @@ RUN npm run build
 FROM --platform=$BUILDPLATFORM golang:1.27-alpine AS backend-builder
 ARG TARGETOS
 ARG TARGETARCH
+# A pre-release label ("rc1") from the release workflow; empty for a release.
+ARG PRERELEASE=""
 WORKDIR /app/backend
 COPY backend/go.mod backend/go.sum ./
 RUN go mod download
@@ -24,7 +26,7 @@ COPY backend/ ./
 # Embed the compiled SPA into the binary. //go:embed can't reach outside the
 # Go module, so stage the build inside the backend tree before compiling.
 COPY --from=frontend-builder /app/frontend/build ./internal/web/build
-RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build -ldflags="-s -w" -o hops ./cmd/hops
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build -ldflags="-s -w -X github.com/weaversgrainthorpe/HOPS/internal/version.Prerelease=${PRERELEASE}" -o hops ./cmd/hops
 
 # Stage 3: Runtime — just the self-contained binary.
 FROM alpine:3.21

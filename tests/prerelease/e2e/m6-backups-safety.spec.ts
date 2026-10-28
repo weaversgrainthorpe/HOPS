@@ -172,16 +172,22 @@ c.commit()
 		const del = await page.request.delete(`/api/dashboards/${dash.id}?revision=${dash.revision}`, { headers: { 'X-CSRF-Token': csrf } });
 		expect(del.ok()).toBe(true);
 		const manual = backupFiles().filter((n) => n.endsWith('_manual.db')).sort().pop()!;
-		const exited = new Promise<number | null>((r) => child!.once('exit', (code) => r(code)));
+		const upBefore = (await (await page.request.get('/api/health')).json()).uptime as number;
 		await page.goto('/settings/backups');
 		const modal = page.locator('#backups');
 		await modal.getByRole('button', { name: `Restore ${manual}` }).click();
 		await page.locator('[aria-labelledby="confirm-title"]').getByRole('button', { name: 'Restore', exact: true }).click();
 		await expect(page.locator('.toast', { hasText: 'restarting to apply it' })).toBeVisible();
-		expect(await exited, 'the server exits for its service manager to restart it').toBe(75);
-		child = null;
+		// HOPS starts itself again (same process): no service manager needed.
+		await expect.poll(async () => {
+			try {
+				return ((await (await page.request.get('/api/health')).json()).uptime as number) < upBefore;
+			} catch {
+				return false;
+			}
+		}, { timeout: 20000 }).toBe(true);
+		expect(child!.exitCode, 'HOPS restarted in place, never exited').toBeNull();
 		expect(backupFiles().some((n) => n.endsWith('_pre-restore.db')), 'the safety backup was taken').toBe(true);
-		await startServer();
 		expect(fs.existsSync(path.join(dataDir, 'hops.db.restore-pending')), 'the staged restore was applied').toBe(false);
 		const after = await (await page.request.get('/api/config')).json();
 		expect(after.dashboards.some((d: { name: string }) => d.name === 'Backup safety'), 'the restored data is live').toBe(true);

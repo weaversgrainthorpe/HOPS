@@ -1,5 +1,6 @@
 # Backend
-hops
+/hops
+backend/cmd/hops/hops
 hops-linux-*
 hops-darwin-*
 hops-windows-*
