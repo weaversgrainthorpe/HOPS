@@ -12,6 +12,8 @@ export interface ImportResult {
   foldersEnlarged?: string[] | null;
   /** The pre-import backup failed (the import went through anyway). */
   warning?: string;
+  /** What another dashboard's file had that HOPS couldn't bring in (one line per kind). */
+  notCarried?: string[] | null;
 }
 
 /**
@@ -34,6 +36,7 @@ export function importProblems(r: ImportResult): string[] {
   }
   // Changed from the file, so shown (never a self-closing success).
   for (const line of r.foldersEnlarged ?? []) out.push(line);
+  for (const line of r.notCarried ?? []) out.push(line);
   if (r.warning) {
     out.push(r.warning);
   }

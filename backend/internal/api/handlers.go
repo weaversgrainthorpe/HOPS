@@ -1415,6 +1415,7 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 
 	var importedConfig configdoc.Obj // top level of the imported data (theme, settings, assets)
 	var importFormat string
+	var notCarried []string // what another dashboard's file had that HOPS couldn't bring in
 
 	if format == "hops-v3" {
 		importedConfig, err = decodeEnvelopeConfig(fileData)
@@ -1431,7 +1432,7 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 			configJSON = fileData
 			importFormat = "HOPS JSON"
 		case "homer":
-			configJSON, err = converters.ConvertFromHomer(fileData)
+			configJSON, notCarried, err = converters.ConvertFromHomer(fileData)
 			if err != nil {
 				slog.Warn("import: Homer conversion failed", "component", "import", "error", err)
 				writeJSONError(w, "Could not convert the Homer config — the file may be malformed.", http.StatusBadRequest)
@@ -1439,7 +1440,7 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 			}
 			importFormat = "Homer YAML"
 		case "dashy":
-			configJSON, err = converters.ConvertFromDashy(fileData)
+			configJSON, notCarried, err = converters.ConvertFromDashy(fileData)
 			if err != nil {
 				slog.Warn("import: Dashy conversion failed", "component", "import", "error", err)
 				writeJSONError(w, "Could not convert the Dashy config — the file may be malformed.", http.StatusBadRequest)
@@ -1447,7 +1448,7 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 			}
 			importFormat = "Dashy YAML"
 		case "heimdall":
-			configJSON, err = converters.ConvertFromHeimdall(fileData)
+			configJSON, notCarried, err = converters.ConvertFromHeimdall(fileData)
 			if err != nil {
 				slog.Warn("import: Heimdall conversion failed", "component", "import", "error", err)
 				writeJSONError(w, "Could not convert the Heimdall config — the file may be malformed.", http.StatusBadRequest)
@@ -1689,6 +1690,9 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 		if len(skipped) > 0 {
 			message += fmt.Sprintf(". Skipped %d item(s): %s", len(skipped), strings.Join(skipped, "; "))
 		}
+		if len(notCarried) > 0 {
+			message += fmt.Sprintf(". %d thing(s) couldn't be carried over (listed separately)", len(notCarried))
+		}
 		if iconMatchCount > 0 {
 			message += fmt.Sprintf(", matched %d icon(s)", iconMatchCount)
 		}
@@ -1715,6 +1719,7 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 			"iconsMatched":    iconMatchCount,
 			"assetsRestored":  assetsRestored,
 			"renamed":         allRenames,
+			"notCarried":      notCarried,
 		}
 		if iconErr != nil {
 			resp["iconMatchError"] = iconErr.Error()

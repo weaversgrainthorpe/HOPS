@@ -943,3 +943,40 @@ func TestImport_ReportsRenamesAndUnrestoredImages(t *testing.T) {
 		t.Errorf("folders %d, want 2", n)
 	}
 }
+
+// The sample configs of the other dashboards (converters/testdata) import end to end, and what
+// couldn't be carried over is returned for the dialog (found in the rc1 trials).
+func TestImport_OtherDashboardSamples(t *testing.T) {
+	cases := map[string]string{
+		"homer-upstream.yml":   "Font Awesome",
+		"homer-homelab.yml":    "Font Awesome",
+		"dashy-upstream.yml":   "widgets",
+		"dashy-homelab.yml":    "new tab",
+		"heimdall-export.json": "first tag",
+	}
+	for f, want := range cases {
+		data, err := os.ReadFile("../converters/testdata/" + f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		router, db := setupTestRouter(t)
+		c := newClient(t, router)
+		code, resp := c.importFile(data)
+		if code != 200 {
+			t.Fatalf("%s: %d %v", f, code, resp)
+		}
+		notes, _ := resp["notCarried"].([]interface{})
+		joined := fmt.Sprint(notes)
+		if !strings.Contains(joined, want) {
+			t.Errorf("%s: notCarried lacks %q: %s", f, want, joined)
+		}
+		if !strings.Contains(resp["message"].(string), "couldn't be carried over") {
+			t.Errorf("%s: message doesn't mention it: %v", f, resp["message"])
+		}
+		ds := dashList(storedDoc(t, db))
+		if _, folders, tiles := counts(ds[len(ds)-1]); folders == 0 || tiles == 0 {
+			t.Errorf("%s: imported %d folders, %d tiles", f, folders, tiles)
+		}
+		assertUniqueIDs(t, storedDoc(t, db))
+	}
+}

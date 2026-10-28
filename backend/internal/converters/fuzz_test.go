@@ -37,13 +37,13 @@ func FuzzImport(f *testing.F) {
 		format, err := DetectFormat(data)
 		// Every converter must cope with any input, whatever it was detected as.
 		outs := map[string][]byte{}
-		if b, err := ConvertFromHomer(data); err == nil {
+		if b, _, err := ConvertFromHomer(data); err == nil {
 			outs["homer"] = b
 		}
-		if b, err := ConvertFromDashy(data); err == nil {
+		if b, _, err := ConvertFromDashy(data); err == nil {
 			outs["dashy"] = b
 		}
-		if b, err := ConvertFromHeimdall(data); err == nil {
+		if b, _, err := ConvertFromHeimdall(data); err == nil {
 			outs["heimdall"] = b
 		}
 		if err != nil {
@@ -122,13 +122,13 @@ func TestImportLimits(t *testing.T) {
 			t.Errorf("%s: DetectFormat: want ErrImportTooLarge, got %v", name, err)
 		}
 	}
-	if _, err := ConvertFromHomer([]byte(laughs.String())); !errors.Is(err, ErrImportTooLarge) {
+	if _, _, err := ConvertFromHomer([]byte(laughs.String())); !errors.Is(err, ErrImportTooLarge) {
 		t.Errorf("Homer alias bomb: %v", err)
 	}
-	if _, err := ConvertFromDashy([]byte(strings.Replace(laughs.String(), "services:", "sections:", 1))); !errors.Is(err, ErrImportTooLarge) {
+	if _, _, err := ConvertFromDashy([]byte(strings.Replace(laughs.String(), "services:", "sections:", 1))); !errors.Is(err, ErrImportTooLarge) {
 		t.Errorf("Dashy alias bomb: %v", err)
 	}
-	if _, err := ConvertFromHeimdall([]byte(deepJSON)); !errors.Is(err, ErrImportTooLarge) {
+	if _, _, err := ConvertFromHeimdall([]byte(deepJSON)); !errors.Is(err, ErrImportTooLarge) {
 		t.Errorf("Heimdall deep: %v", err)
 	}
 	// Within the caps, and every synthetic testdata file, passes.

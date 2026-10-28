@@ -27,6 +27,11 @@ describe('importProblems', () => {
     expect(importProblems({ success: true, message: 'ok', foldersEnlarged: [line] })).toEqual([line]);
   });
 
+  it('lists what another dashboard\'s file had that could not be carried over', () => {
+    const line = '2 icon(s) couldn\'t be carried over (Font Awesome, …): Radarr, Router';
+    expect(importProblems({ success: true, message: 'ok', notCarried: [line] })).toEqual([line]);
+  });
+
   it('tolerates null/absent optional fields', () => {
     expect(importProblems({ success: true, message: 'ok', skipped: null })).toEqual([]);
   });

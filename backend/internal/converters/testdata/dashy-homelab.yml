@@ -1,0 +1,47 @@
+# A homelab-style Dashy config written for HOPS's import tests: every icon form
+# Dashy supports (Font Awesome, simple-icons si-, homelab-icons hl-, mdi-,
+# favicon, image URL, emoji), item targets, and a multi-page navLinks.
+pageInfo:
+  title: Homelab
+  description: Everything at home
+  navLinks:
+    - title: Docs
+      path: https://dashy.to/docs
+appConfig:
+  theme: nord
+sections:
+  - name: Media
+    icon: fas fa-film
+    items:
+      - title: Plex
+        description: Media server
+        icon: hl-plex
+        url: http://plex.example.lan:32400/web
+        target: newtab
+      - title: Sonarr
+        icon: favicon
+        url: http://sonarr.example.lan:8989
+      - title: Radarr
+        icon: https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/svg/radarr.svg
+        url: http://radarr.example.lan:7878
+        target: sametab
+  - name: Network
+    icon: mdi-lan
+    items:
+      - title: Pi-hole
+        icon: si-pihole
+        url: http://pihole.example.lan/admin
+        statusCheck: true
+      - title: Router
+        icon: fas fa-network-wired
+        url: http://192.168.1.1
+        target: modal
+      - title: Home Assistant
+        icon: mdi-home-assistant
+        url: http://ha.example.lan:8123
+        target: workspace
+  - name: Fun
+    items:
+      - title: Snake
+        icon: 🐍
+        url: https://example.com/snake
