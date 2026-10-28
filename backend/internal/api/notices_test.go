@@ -405,12 +405,52 @@ func TestGetStatus_InvalidValueIsSurfaced(t *testing.T) {
 	}
 }
 
-// Only the layered-status notice points at a page; the others carry no link.
+// Only the layered-status notice points at a page: the real backup, upload-
+// defaults and tile-size notices carry no link.
 func TestNotices_OnlyLayeredStatusNoticeHasALink(t *testing.T) {
-	for _, n := range []notice{{ID: "x", Text: "t"}} {
-		b, _ := json.Marshal(n)
-		if strings.Contains(string(b), "link") {
-			t.Errorf("a notice without a link serialized one: %s", b)
+	router, _ := setupTestRouterSeeded(t, layeredStatusFixture(t))
+	c := newClient(t, router)
+
+	// A real sticky backup notice next to the layered one: a refused restore.
+	_, bm, name := backupsOf(t, c)
+	bm.SetFailureHooks(failReason("pre-restore"))
+	if code, resp := c.do("POST", "/api/backups/"+name, nil); code != http.StatusInternalServerError {
+		t.Fatalf("restore: %d %v", code, resp)
+	}
+	ns := noticesOf(t, getView(t, c))
+	linked, backups := 0, 0
+	for _, n := range ns {
+		id, _ := n["id"].(string)
+		_, has := n["link"]
+		switch {
+		case id == layeredNoticeID:
+			if !has {
+				t.Errorf("layered notice lost its link: %v", n)
+			}
+			linked++
+		case strings.HasPrefix(id, "backup-"):
+			backups++
+			if has {
+				t.Errorf("backup notice has a link: %v", n)
+			}
+		default:
+			if has {
+				t.Errorf("notice %q has a link: %v", id, n)
+			}
 		}
+	}
+	if linked != 1 || backups != 1 {
+		t.Fatalf("want the layered and one backup notice, got %v", ns)
+	}
+
+	// The other builders, directly.
+	up, ok := uploadDefaultsNotice([]settings.DefaultMove{{Key: settings.KeyUploadMaxBytesIcon, From: settings.MB, To: 2 * settings.MB}})
+	if !ok || up.Link != nil {
+		t.Errorf("upload-defaults notice: ok=%v link=%v", ok, up.Link)
+	}
+	var sz sizeNoteState
+	sz.add("Tile A")
+	if n, ok := sz.notice(); !ok || n.Link != nil {
+		t.Errorf("tile-size notice: ok=%v link=%v", ok, n.Link)
 	}
 }
