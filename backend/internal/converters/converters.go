@@ -124,6 +124,11 @@ func iconNote(lost []string) []string {
 	return []string{fmt.Sprintf("%d icon(s) couldn't be carried over (Font Awesome, emoji, \"favicon\", or an image stored on the old dashboard's own server); those tiles got an icon matched by name, or the generic one: %s", len(lost), noteList(lost))}
 }
 
+// inherit is an imported tile's status-check setting: {"enabled": null}, so
+// the tile follows its folder, tab or dashboard. The v2->v3 conversion keeps
+// an explicit null (it pins only tiles without one Off, v2's behaviour).
+func inherit() *models.StatusCheck { return &models.StatusCheck{} }
+
 // ConvertFromHomer converts Homer config to HOPS format
 func ConvertFromHomer(yamlData []byte) ([]byte, []string, error) {
 	if err := CheckImportLimits(yamlData); err != nil {
@@ -170,6 +175,7 @@ func ConvertFromHomer(yamlData []byte) ([]byte, []string, error) {
 			group.Entries = append(group.Entries, models.Entry{
 				ID: fmt.Sprintf("entry-%d-%d", i, j), Name: item.Name, Description: item.Subtitle,
 				URL: item.URL, Icon: icon, IconURL: iconURL, OpenMode: openMode, Size: "medium", Order: j,
+				StatusCheck: inherit(),
 			})
 		}
 		tab.Groups = append(tab.Groups, group)
@@ -221,6 +227,7 @@ func ConvertFromDashy(yamlData []byte) ([]byte, []string, error) {
 			group.Entries = append(group.Entries, models.Entry{
 				ID: fmt.Sprintf("entry-%d-%d", i, j), Name: item.Title, Description: item.Description,
 				URL: item.URL, Icon: icon, IconURL: iconURL, OpenMode: openMode, Size: "medium", Order: j,
+				StatusCheck: inherit(),
 			})
 		}
 		tab.Groups = append(tab.Groups, group)
@@ -304,6 +311,7 @@ func ConvertFromHeimdall(jsonData []byte) ([]byte, []string, error) {
 		g.Entries = append(g.Entries, models.Entry{
 			ID: fmt.Sprintf("entry-%d", i), Name: item.Title, Description: description, URL: item.URL,
 			Icon: genericIcon, Color: color, OpenMode: "newtab", Size: "medium", Order: len(g.Entries),
+			StatusCheck: inherit(),
 		})
 	}
 	dashboard.Tabs = append(dashboard.Tabs, tab)

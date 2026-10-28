@@ -94,11 +94,13 @@ type Background struct {
 	OverlayBlur        *float64 `json:"overlayBlur,omitempty"`        // 0-20, blur in px
 }
 
-// StatusCheck configuration
+// StatusCheck configuration. Enabled is true, false or nil (inherit: the
+// tile follows its folders, tab or dashboard); it is always written, so a
+// zero StatusCheck is {"enabled": null}.
 type StatusCheck struct {
-	Type     string `json:"type"` // http
-	Enabled  bool   `json:"enabled"`
-	Interval int    `json:"interval"` // seconds
+	Type     string `json:"type,omitempty"` // http
+	Enabled  *bool  `json:"enabled"`
+	Interval int    `json:"interval,omitempty"` // seconds
 }
 
 // StatusResult represents the result of a status check

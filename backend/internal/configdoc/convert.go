@@ -280,6 +280,7 @@ func convertGroup(g Obj, p [4]int, path string) (Obj, []SizeChange, error) {
 				TileID: id, TileName: name, OldSize: em["size"]})
 			em["size"] = "medium"
 		}
+		pinStatusCheck(em)
 		tiles = append(tiles, em)
 	}
 	g["kind"] = "folder"
@@ -307,6 +308,29 @@ func convertGroup(g Obj, p [4]int, path string) (Obj, []SizeChange, error) {
 	g["placement"] = placement(p[0], p[1], p[2], p[3])
 	g["content"] = Obj{"children": tiles}
 	return g, changed, nil
+}
+
+// pinStatusCheck keeps v2's status-check behaviour across the upgrade (spec
+// Part A). v2.2.1 checked a tile only when its own statusCheck.enabled was
+// true; in v3 a tile with no setting inherits, which would switch on checks
+// the user never asked for. So every tile not explicitly on is pinned Off,
+// keeping its other statusCheck fields. An explicit null is kept: the
+// Homer/Dashy/Heimdall converters write it so their tiles inherit. A
+// wrong-typed statusCheck is left for verify to report.
+func pinStatusCheck(tile Obj) {
+	sc, present := tile["statusCheck"]
+	if !present || sc == nil {
+		tile["statusCheck"] = Obj{"enabled": false}
+		return
+	}
+	scm, ok := sc.(Obj)
+	if !ok {
+		return
+	}
+	if en, has := scm["enabled"]; has && (en == true || en == nil) {
+		return
+	}
+	scm["enabled"] = false
 }
 
 // packRowMajor shelf-packs (w,h) sizes left to right into columns, starting a

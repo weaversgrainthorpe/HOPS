@@ -164,7 +164,19 @@ func cachedIDs(t *testing.T, db *sql.DB) map[string]bool {
 // note tile is never probed, even when ticked.
 func TestCheckAllEntries_ProbesEffectivelyOnTilesOnly(t *testing.T) {
 	h := newHitCounter(t)
-	c, db, _ := newTestChecker(t, configWith(h.srv.URL))
+	var v2 configdoc.Obj
+	if err := json.Unmarshal([]byte(configWith(h.srv.URL)), &v2); err != nil {
+		t.Fatal(err)
+	}
+	doc, err := configdoc.MigrateV2(v2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The v2 conversion pins "none" Off (v2's behaviour); a v3 tile with no
+	// setting is what this test is about, so take the setting away again.
+	_, none, _ := configdoc.FindTile(doc, "none")
+	delete(none, "statusCheck")
+	c, db, _ := newTestCheckerDoc(t, doc)
 
 	c.checkAllEntries()
 
@@ -486,12 +498,10 @@ func TestCheckAllEntries_ConfigLoadFailureKeepsCacheAndLogsError(t *testing.T) {
 	}
 }
 
-// Real data: Jonathan's own config (39 tiles with no setting, 1 ticked) under
-// a global that is on. A tile with no setting inherits, so every non-note tile
-// with a URL is probed unless it is explicitly off. NOTE: the v2->v3 converter
-// does not yet write enabled:false for v2's "not ticked" tiles (spec Part A,
-// "Upgrades from v2 keep v2's behaviour"); when it does, this test goes back
-// to pinning "exactly the explicitly enabled tiles".
+// Real data: Jonathan's own config (39 unticked tiles, 1 ticked) under a
+// global that is on. The upgrade pins v2's unticked tiles Off (spec Part A,
+// "Upgrades from v2 keep v2's behaviour"), so exactly the tiles explicitly
+// switched on in v2 are probed: no mass enablement.
 func TestGetEntries_RealWeaversProbesOnlyExplicitlyEnabledTiles(t *testing.T) {
 	raw, err := os.ReadFile("../configdoc/testdata/real_weavers.json")
 	if err != nil {
@@ -516,13 +526,15 @@ func TestGetEntries_RealWeaversProbesOnlyExplicitlyEnabledTiles(t *testing.T) {
 			return true
 		}
 		sc, _ := n["statusCheck"].(configdoc.Obj)
-		if u, _ := n["url"].(string); u != "" && sc["enabled"] != false {
+		if u, _ := n["url"].(string); u != "" && sc["enabled"] == true {
 			want[n["id"].(string)] = true
 		}
 		return true
 	})
-	if len(want) == 0 || tiles < len(want) {
-		t.Fatalf("fixture no longer exercises the case: %d tiles, %d probed", tiles, len(want))
+	// Both cases must be present: some ticked tiles to probe, and more
+	// unticked v2 tiles that must stay unprobed after the upgrade.
+	if len(want) == 0 || tiles <= len(want) {
+		t.Fatalf("fixture no longer exercises the case: %d tiles, %d enabled", tiles, len(want))
 	}
 	c, _, _ := newTestCheckerDoc(t, doc)
 	entries, err := c.getEntriesFromConfig()
@@ -534,7 +546,7 @@ func TestGetEntries_RealWeaversProbesOnlyExplicitlyEnabledTiles(t *testing.T) {
 		got[e.ID] = true
 	}
 	if len(got) != len(want) {
-		t.Fatalf("probed %d tiles %v, want exactly the %d inheriting or enabled %v", len(got), got, len(want), want)
+		t.Fatalf("probed %d tiles %v, want exactly the %d explicitly enabled %v", len(got), got, len(want), want)
 	}
 	for id := range want {
 		if !got[id] {

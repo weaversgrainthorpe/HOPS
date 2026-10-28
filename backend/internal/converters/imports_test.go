@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/weaversgrainthorpe/HOPS/internal/configdoc"
 	"github.com/weaversgrainthorpe/HOPS/internal/models"
 )
 
@@ -182,4 +183,72 @@ func TestHeimdallExport(t *testing.T) {
 	tileNamed(t, infra, "Pi-hole") // its first tag
 	tileNamed(t, folderNamed(t, d, "Services"), "Wiki")
 	notesContain(t, notes, "Pi-hole")
+}
+
+// Spec Part A: an imported dashboard's tiles inherit (statusCheck.enabled is
+// an explicit null), and keep inheriting through the v2->v3 conversion, which
+// pins only tiles without that null to Off.
+func TestImportedTilesInherit(t *testing.T) {
+	cases := map[string]func([]byte) ([]byte, []string, error){
+		"homer-upstream.yml":   ConvertFromHomer,
+		"homer-homelab.yml":    ConvertFromHomer,
+		"dashy-upstream.yml":   ConvertFromDashy,
+		"dashy-homelab.yml":    ConvertFromDashy,
+		"heimdall-export.json": ConvertFromHeimdall,
+	}
+	inherits := func(sc any) bool {
+		m, ok := sc.(map[string]any)
+		v, has := m["enabled"]
+		return ok && len(m) == 1 && has && v == nil
+	}
+	for name, conv := range cases {
+		t.Run(name, func(t *testing.T) {
+			data, err := os.ReadFile("testdata/" + name)
+			if err != nil {
+				t.Fatal(err)
+			}
+			out, _, err := conv(data)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var cfg struct {
+				Dashboards []configdoc.Obj `json:"dashboards"`
+			}
+			if err := json.Unmarshal(out, &cfg); err != nil {
+				t.Fatal(err)
+			}
+			tiles := 0
+			for _, tb := range cfg.Dashboards[0]["tabs"].([]any) {
+				for _, g := range tb.(map[string]any)["groups"].([]any) {
+					for _, e := range g.(map[string]any)["entries"].([]any) {
+						tiles++
+						em := e.(map[string]any)
+						if !inherits(em["statusCheck"]) {
+							t.Errorf("converted tile %v: statusCheck %v, want {enabled: null}", em["id"], em["statusCheck"])
+						}
+					}
+				}
+			}
+			if tiles == 0 {
+				t.Fatal("sample has no tiles")
+			}
+			v3, _, err := configdoc.ConvertDashboardV2Full(cfg.Dashboards[0])
+			if err != nil {
+				t.Fatal(err)
+			}
+			seen := 0
+			configdoc.Walk(configdoc.Obj{"dashboards": []any{v3}}, func(_, _ configdoc.Obj, _ []configdoc.Obj, n configdoc.Obj) bool {
+				if n["kind"] == "tile" {
+					seen++
+					if !inherits(n["statusCheck"]) {
+						t.Errorf("v3 tile %v: statusCheck %v, want {enabled: null}", n["id"], n["statusCheck"])
+					}
+				}
+				return true
+			})
+			if seen != tiles {
+				t.Errorf("v3 has %d tiles, want %d", seen, tiles)
+			}
+		})
+	}
 }

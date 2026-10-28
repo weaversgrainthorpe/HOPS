@@ -361,8 +361,9 @@ func (v *verifier) compareTabs(dashID, dashPath string, a, b Obj) {
 			}
 			v.compareLevel("entry", "group "+gid, gpath+".entries", v2e, v3e, "tile", func(ea, eb Obj, eid, epath string) {
 				sc, normalised := v.sizes[epath]
+				v.compareStatusCheck(eid, ea, eb)
 				if !normalised {
-					v.compareKeys("entry "+eid, ea, eb)
+					v.compareKeys("entry "+eid, ea, eb, "statusCheck")
 					if _, had := ea["size"]; !had {
 						if _, has := eb["size"]; has {
 							v.add("entry %s: key \"size\" was added (%s) without a reported size change", eid, trunc(show(eb["size"])))
@@ -373,7 +374,7 @@ func (v *verifier) compareTabs(dashID, dashPath string, a, b Obj) {
 				// Ruling 3: exactly this reported tile's unknown size became
 				// Medium; everything else about it is unchanged.
 				v.usedSizes[epath] = true
-				v.compareKeys("entry "+eid, ea, eb, "size")
+				v.compareKeys("entry "+eid, ea, eb, "size", "statusCheck")
 				if _, known := SizeSpan(ea["size"]); known || show(ea["size"]) != show(sc.OldSize) {
 					v.add("size change %s: v2 size is %s, reported %s (only an unknown size may be normalised)", epath, trunc(show(ea["size"])), trunc(show(sc.OldSize)))
 				}
@@ -386,6 +387,45 @@ func (v *verifier) compareTabs(dashID, dashPath string, a, b Obj) {
 			})
 		})
 	})
+}
+
+// compareStatusCheck holds the conversion's status-check pin (pinStatusCheck)
+// to its rule: the v3 tile is on exactly when the v2 tile was, inherits
+// (null) exactly when the v2 tile said null, is otherwise false, and keeps
+// every other statusCheck field unchanged. A wrong-typed v2 statusCheck is
+// not pinned, so it must be carried over unchanged.
+func (v *verifier) compareStatusCheck(eid string, ea, eb Obj) {
+	av, had := ea["statusCheck"]
+	bv, has := eb["statusCheck"]
+	am, aObj := av.(Obj)
+	if had && av != nil && !aObj {
+		if !has || show(av) != show(bv) {
+			v.add("entry %s: key \"statusCheck\" changed (v2 %s, v3 %s)", eid, trunc(show(av)), trunc(show(bv)))
+		}
+		return
+	}
+	bm, bObj := bv.(Obj)
+	if !bObj {
+		v.add("entry %s: statusCheck is %s, want an object (v2 %s)", eid, trunc(show(bv)), trunc(show(av)))
+		return
+	}
+	aEn, aHasEn := am["enabled"]
+	var want any = false
+	switch {
+	case aEn == true:
+		want = true
+	case aHasEn && aEn == nil:
+		want = nil
+	}
+	if bEn, ok := bm["enabled"]; !ok || bEn != want {
+		v.add("entry %s: statusCheck.enabled is %s, want %s (v2 %s)", eid, trunc(show(bm["enabled"])), show(want), trunc(show(aEn)))
+	}
+	for k := range bm {
+		if _, ok := am[k]; !ok && k != "enabled" {
+			v.add("entry %s: statusCheck key %q was added", eid, k)
+		}
+	}
+	v.compareKeys("entry "+eid+" statusCheck", am, bm, "enabled")
 }
 
 func (v *verifier) checkOwned(id string, d Obj) {

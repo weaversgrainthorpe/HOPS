@@ -456,3 +456,46 @@ func TestMigrateV2_RealExports(t *testing.T) {
 		})
 	}
 }
+
+// Spec Part A, "Upgrades from v2 keep v2's behaviour": v2.2.1 checked a tile
+// only when its own statusCheck.enabled was true. A v3 tile with no setting
+// inherits, so the conversion pins every other v2 tile Off (keeping its other
+// statusCheck fields); an explicit null (from a Homer/Dashy/Heimdall import)
+// stays null, so those tiles inherit.
+func TestConvertPinsV2StatusChecks(t *testing.T) {
+	var v2 Obj
+	if err := json.Unmarshal([]byte(`{"dashboards": [{"id": "d1", "name": "Home", "path": "/home", "tabs": [
+		{"id": "t1", "name": "Main", "groups": [{"id": "g1", "name": "G", "entries": [
+			{"id": "none", "name": "None", "url": "http://a"},
+			{"id": "off", "name": "Off", "url": "http://b", "statusCheck": {"type": "http", "enabled": false, "interval": 60}},
+			{"id": "on", "name": "On", "url": "http://c", "statusCheck": {"type": "http", "enabled": true, "interval": 60}},
+			{"id": "inh", "name": "Inherit", "url": "http://d", "statusCheck": {"enabled": null}}
+		]}]}]}]}`), &v2); err != nil {
+		t.Fatal(err)
+	}
+	v3, renames, sizes, err := MigrateV2Full(v2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]any{
+		"none": Obj{"enabled": false},
+		"off":  Obj{"type": "http", "enabled": false, "interval": 60},
+		"on":   Obj{"type": "http", "enabled": true, "interval": 60},
+		"inh":  Obj{"enabled": nil},
+	}
+	seen := 0
+	Walk(v3, func(_, _ Obj, _ []Obj, n Obj) bool {
+		if n["kind"] == "tile" {
+			seen++
+			id := n["id"].(string)
+			eq(t, n["statusCheck"], want[id], "tile "+id+" statusCheck")
+		}
+		return true
+	})
+	if seen != len(want) {
+		t.Fatalf("saw %d tiles, want %d", seen, len(want))
+	}
+	if err := VerifyMigrationFull(v2, v3, renames, sizes); err != nil {
+		t.Fatalf("verify rejects the pinned conversion: %v", err)
+	}
+}

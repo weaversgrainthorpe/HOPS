@@ -522,6 +522,47 @@ func TestImport_V3ShapeChecks(t *testing.T) {
 	}
 }
 
+// Spec Part A: only a v2 conversion pins status checks. A hops-v3 import is
+// stored as it is, so a tile with no setting keeps none (and so inherits).
+func TestHopsV3ImportNotPinned(t *testing.T) {
+	router, db := setupTestRouter(t)
+	c := newClient(t, router)
+	seed(t, db)
+	var env map[string]interface{}
+	if err := json.Unmarshal(c.export(""), &env); err != nil {
+		t.Fatal(err)
+	}
+	cfg := env["config"].(map[string]interface{})
+	stripped := 0
+	configdoc.Walk(cfg, func(_, _ configdoc.Obj, _ []configdoc.Obj, n configdoc.Obj) bool {
+		if n["kind"] == "tile" {
+			delete(n, "statusCheck")
+			stripped++
+		}
+		return true
+	})
+	if stripped == 0 {
+		t.Fatal("seeded export has no tiles")
+	}
+	if code, resp := c.importFile(v3ExportOf(t, cfg)); code != 200 {
+		t.Fatalf("import: %d %v", code, resp)
+	}
+	ds := dashList(storedDoc(t, db))
+	seen := 0
+	configdoc.Walk(configdoc.Obj{"dashboards": []any{ds[len(ds)-1]}}, func(_, _ configdoc.Obj, _ []configdoc.Obj, n configdoc.Obj) bool {
+		if n["kind"] == "tile" {
+			seen++
+			if sc, has := n["statusCheck"]; has {
+				t.Errorf("tile %v: stored statusCheck %v, want none", n["id"], sc)
+			}
+		}
+		return true
+	})
+	if seen != stripped {
+		t.Errorf("imported %d tiles, want %d", seen, stripped)
+	}
+}
+
 func dashOf(cfg map[string]interface{}) map[string]interface{} {
 	return cfg["dashboards"].([]interface{})[0].(map[string]interface{})
 }
