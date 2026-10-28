@@ -12,6 +12,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"golang.org/x/net/dns/dnsmessage"
@@ -33,7 +34,6 @@ const (
 	ptrPerHostTimeout      = 500 * time.Millisecond
 	ptrConcurrency         = 32
 	axfrTimeout            = 2 * time.Second
-	axfrPort               = "53"
 	axfrMaxBytes           = 4 * 1024 * 1024
 	axfrMaxRecords         = 10_000
 	forwardEnumPerQueryTO  = 500 * time.Millisecond
@@ -45,39 +45,78 @@ const (
 	forwardEnumOverallBudget = 60 * time.Second
 )
 
-// enrichDNSForHosts runs the two enrichment sources. Errors are logged
+// axfrPort is the resolver's zone-transfer port (a var so tests can point it
+// at a local listener).
+var axfrPort = "53"
+
+// resolvConfPath is where the resolver and search domain are read from.
+var resolvConfPath = "/etc/resolv.conf"
+
+// lookupAddr is the reverse lookup used by the PTR sweep (a var for tests).
+var lookupAddr = func(ctx context.Context, host string) ([]string, error) {
+	return (&net.Resolver{}).LookupAddr(ctx, host)
+}
+
+// axfrDialError marks an AXFR attempt that never connected to the resolver.
+type axfrDialError struct{ err error }
+
+func (e *axfrDialError) Error() string { return "dial: " + e.err.Error() }
+func (e *axfrDialError) Unwrap() error { return e.err }
+
+// axfrWarning is the scan warning for a failed zone transfer, or "" when
+// there is nothing to report. A refusal by policy is already nil (a real
+// answer). A resolver that won't even take a TCP connection is only worth a
+// warning when the admin named the zone; for the zone HOPS guessed from
+// resolv.conf that is just "no AXFR here". A transfer that started and then
+// failed is always reported: names it would have given are missing.
+func axfrWarning(zone string, adminNamed bool, err error) string {
+	if err == nil {
+		return ""
+	}
+	var dialErr *axfrDialError
+	if errors.As(err, &dialErr) && !adminNamed {
+		return ""
+	}
+	return "DNS zone transfer of " + zone + " failed (host names from it may be missing): " + err.Error()
+}
+
+// enrichDNSForHosts runs the two enrichment sources and returns the scan
+// warnings for anything that failed. Errors are also logged
 // at debug and swallowed — passive sources never fail a scan.
 //
 // internalDomain is the optional zone the admin typed when starting the
 // scan; if non-empty it's used as the preferred AXFR target. Otherwise
 // the first `search` directive in /etc/resolv.conf is tried. If neither
 // is available, AXFR silently skips.
-func enrichDNSForHosts(ctx context.Context, allow hostAllowlist, hints *PassiveHints, internalDomain string) {
+func enrichDNSForHosts(ctx context.Context, allow hostAllowlist, hints *PassiveHints, internalDomain string) []string {
 	if hints == nil || len(allow) == 0 {
-		return
+		return nil
 	}
+	var warnings []string
 
 	// PTR sweep first — fast and reliable for any host with a reverse
 	// DNS record. Runs concurrently across the host list.
-	bulkReverseDNS(ctx, allowHostList(allow), hints)
+	if failed, total, firstErr := bulkReverseDNS(ctx, allowHostList(allow), hints); failed > 0 {
+		warnings = append(warnings, fmt.Sprintf(
+			"Reverse DNS failed for %d of %d hosts (those show without a DNS name): %v", failed, total, firstErr))
+	}
 
 	// AXFR is opportunistic. Pick a resolver IP + a candidate zone; if
 	// either is unavailable, skip.
 	resolverIP, err := resolverFromResolvConf()
 	if err != nil {
-		slog.Debug("discovery: no usable resolver for AXFR",
-			"component", "discovery", "error", err)
-		return
+		return append(warnings, "Couldn't read "+resolvConfPath+" for a DNS zone transfer: "+err.Error())
 	}
 	if resolverIP == "" {
-		return
+		return warnings
 	}
 	zone := strings.TrimSpace(internalDomain)
+	adminNamed := zone != ""
 	if zone == "" {
 		zone = axfrCandidateZone()
 	}
 	if zone == "" {
-		return
+		return warnings
 	}
 	actx, acancel := context.WithTimeout(ctx, axfrTimeout)
 	defer acancel()
@@ -85,7 +124,11 @@ func enrichDNSForHosts(ctx context.Context, allow hostAllowlist, hints *PassiveH
 		slog.Debug("discovery: AXFR attempt failed",
 			"component", "discovery", "resolver", resolverIP, "zone", zone,
 			"error", err)
+		if w := axfrWarning(zone, adminNamed, err); w != "" {
+			warnings = append(warnings, w)
+		}
 	}
+	return warnings
 }
 
 // bulkReverseDNS resolves every IP in hosts to a hostname via the
@@ -93,14 +136,27 @@ func enrichDNSForHosts(ctx context.Context, allow hostAllowlist, hints *PassiveH
 // runs through the OS so /etc/resolv.conf + systemd-resolved routing
 // domains "just work". Results land in hints via putHostname (which
 // sanitises annotation noise like "name [mac]").
-func bulkReverseDNS(ctx context.Context, hosts []string, hints *PassiveHints) {
+func bulkReverseDNS(ctx context.Context, hosts []string, hints *PassiveHints) (failed, total int, firstErr error) {
 	if len(hosts) == 0 {
-		return
+		return 0, 0, nil
+	}
+	var mu sync.Mutex
+	fail := func(err error) {
+		mu.Lock()
+		failed++
+		if firstErr == nil {
+			firstErr = err
+		}
+		mu.Unlock()
 	}
 	sem := make(chan struct{}, ptrConcurrency)
 	var wg sync.WaitGroup
-	for _, h := range hosts {
+	for i, h := range hosts {
 		if ctx.Err() != nil {
+			// Out of time: the rest were never looked up.
+			for range hosts[i:] {
+				fail(fmt.Errorf("ran out of time: %w", ctx.Err()))
+			}
 			break
 		}
 		wg.Add(1)
@@ -110,14 +166,24 @@ func bulkReverseDNS(ctx context.Context, hosts []string, hints *PassiveHints) {
 			defer func() { <-sem }()
 			rctx, rcancel := context.WithTimeout(ctx, ptrPerHostTimeout)
 			defer rcancel()
-			names, err := (&net.Resolver{}).LookupAddr(rctx, host)
-			if err != nil || len(names) == 0 {
+			names, err := lookupAddr(rctx, host)
+			if err != nil {
+				// "No such name" is a real answer: the host has no PTR.
+				var dnsErr *net.DNSError
+				if errors.As(err, &dnsErr) && dnsErr.IsNotFound {
+					return
+				}
+				fail(err)
+				return
+			}
+			if len(names) == 0 {
 				return
 			}
 			hints.putHostname(host, names[0])
 		}(h)
 	}
 	wg.Wait()
+	return failed, len(hosts), firstErr
 }
 
 // attemptAXFR opens a TCP connection to resolverIP:53 (via the SSRF-
@@ -126,14 +192,15 @@ func bulkReverseDNS(ctx context.Context, hosts []string, hints *PassiveHints) {
 // allowlist get stashed in hints. Out-of-allowlist records are silently
 // dropped; we never expose hostnames for IPs the scan didn't ask about.
 //
-// Returns nil on any "AXFR was refused" outcome (most resolvers refuse
-// by policy) — the caller logs at debug. Errors only for genuine
-// programming issues like dial failures from SSRF guard.
+// Returns nil when the resolver refuses (closes the connection, or answers
+// REFUSED with no records — most resolvers refuse by policy). Returns an
+// *axfrDialError when it can't connect, and an error when a transfer started
+// and then failed (cut off, malformed, out of range).
 func attemptAXFR(ctx context.Context, resolverIP, zone string, allow hostAllowlist, hints *PassiveHints) error {
 	d := dialer(axfrTimeout)
 	conn, err := d.DialContext(ctx, "tcp", net.JoinHostPort(resolverIP, axfrPort))
 	if err != nil {
-		return fmt.Errorf("dial: %w", err)
+		return &axfrDialError{err: err}
 	}
 	defer conn.Close()
 	_ = conn.SetDeadline(time.Now().Add(axfrTimeout))
@@ -166,27 +233,35 @@ func attemptAXFR(ctx context.Context, resolverIP, zone string, allow hostAllowli
 	}
 
 	reader := io.LimitReader(conn, axfrMaxBytes)
-	records := 0
+	records, soas, msgs := 0, 0, 0
 	for records < axfrMaxRecords {
 		// Read the 2-byte length prefix for each TCP DNS message.
 		var lenBuf [2]byte
 		if _, err := io.ReadFull(reader, lenBuf[:]); err != nil {
-			if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
-				return nil // clean end of stream
+			if errors.Is(err, io.EOF) {
+				return nil // clean end of stream (or a refusal by closing)
 			}
-			return nil // treat any read error as "AXFR done / refused"
+			if msgs == 0 && errors.Is(err, syscall.ECONNRESET) {
+				return nil // dropped the connection before answering: a refusal
+			}
+			return fmt.Errorf("reading the transfer: %w", err)
 		}
 		msgLen := int(lenBuf[0])<<8 | int(lenBuf[1])
 		if msgLen == 0 || msgLen > axfrMaxBytes {
-			return nil
+			return fmt.Errorf("transfer message of %d bytes is out of range", msgLen)
 		}
 		buf := make([]byte, msgLen)
 		if _, err := io.ReadFull(reader, buf); err != nil {
-			return nil
+			return fmt.Errorf("transfer cut off mid-message: %w", err)
 		}
+		msgs++
 		var p dnsmessage.Parser
-		if _, err := p.Start(buf); err != nil {
-			return nil
+		hdr, err := p.Start(buf)
+		if err != nil {
+			return fmt.Errorf("malformed transfer message: %w", err)
+		}
+		if hdr.RCode != dnsmessage.RCodeSuccess {
+			return nil // REFUSED / NOTAUTH / …: the resolver said no
 		}
 		_ = p.SkipAllQuestions()
 
@@ -200,6 +275,13 @@ func attemptAXFR(ctx context.Context, resolverIP, zone string, allow hostAllowli
 			}
 			records++
 			switch hdr.Type {
+			case dnsmessage.TypeSOA:
+				// The transfer opens and closes with the zone's SOA.
+				soas++
+				if soas == 2 {
+					return nil
+				}
+				_ = p.SkipAnswer()
 			case dnsmessage.TypeA:
 				r, err := p.AResource()
 				if err != nil {
@@ -230,10 +312,10 @@ func attemptAXFR(ctx context.Context, resolverIP, zone string, allow hostAllowli
 // upstream; the operator would have to configure HOPS with a direct
 // resolver IP to make AXFR work in that environment.
 func resolverFromResolvConf() (string, error) {
-	f, err := os.Open("/etc/resolv.conf")
+	f, err := os.Open(resolvConfPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return "", nil // non-Unix or container with no resolv.conf — silently skip
+			return "", nil // non-Unix or container with no resolv.conf: no resolver to ask
 		}
 		return "", err
 	}
@@ -274,9 +356,9 @@ func resolverFromResolvConf() (string, error) {
 // enrichDNSForHosts); otherwise the first `search` directive in
 // /etc/resolv.conf. Returns "" when no candidate is available.
 func axfrCandidateZone() string {
-	f, err := os.Open("/etc/resolv.conf")
+	f, err := os.Open(resolvConfPath)
 	if err != nil {
-		return ""
+		return "" // resolverFromResolvConf already read (or reported) this file
 	}
 	defer f.Close()
 	sc := bufio.NewScanner(io.LimitReader(f, 16*1024))

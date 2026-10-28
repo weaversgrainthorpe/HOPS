@@ -65,7 +65,7 @@ func TestDiscoveryFetchesNeverReachMetadata(t *testing.T) {
 		if tcpConnectProbe(ctx, h, 80, time.Second) {
 			t.Errorf("tcpConnectProbe %s connected", h)
 		}
-		if _, ok := snmpGetSysInfo(ctx, h); ok {
+		if _, ok, _ := snmpGetSysInfo(ctx, h); ok {
 			t.Errorf("snmp %s answered", h)
 		}
 		u := "http://" + net.JoinHostPort(h, "80") + "/"

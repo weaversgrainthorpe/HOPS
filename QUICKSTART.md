@@ -326,6 +326,13 @@ A status check asks the service now and then whether it is up, and shows a
 small badge on the tile. Hover over it for *Online* (with the response
 time), *Offline* or *Error*.
 
+The check asks whether the service is reachable and answering, not whether
+its certificate is trusted, so self-signed HTTPS (Proxmox, UniFi, TrueNAS
+and the like) counts. A service that answers with a login prompt (HTTP 401
+or 403) is *Online*. *Error* means it answered with another 4xx code such as
+404 (often a wrong path); *Offline* means it couldn't be reached or answered
+with a 5xx server error.
+
 Each tile, folder and tab has a **Status checks** row with **Inherit**,
 **On** and **Off**. In plain words:
 
