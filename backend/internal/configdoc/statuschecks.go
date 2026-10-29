@@ -79,6 +79,22 @@ func IsCheckableTile(tile Obj) bool {
 	return u != ""
 }
 
+// TileSetsOff reports whether a checkable tile sets its own status check
+// Off (statusCheck.enabled false), as the v2 conversion pins unticked tiles.
+func TileSetsOff(tile Obj) bool {
+	return IsCheckableTile(tile) && tileTri(tile) == triOff
+}
+
+// HasTileSetOff reports whether any tile in doc sets its own status check Off.
+func HasTileSetOff(doc Obj) bool {
+	found := false
+	Walk(doc, func(_, _ Obj, _ []Obj, n Obj) bool {
+		found = n["kind"] == "tile" && TileSetsOff(n)
+		return !found
+	})
+	return found
+}
+
 // invalidWarned de-duplicates the invalid-value WARN: once per (tile, level)
 // per process, not on every checker pass or status request.
 var invalidWarned sync.Map

@@ -358,7 +358,10 @@ Each tile, folder and tab has a **Status checks** row with **Inherit**,
 
 **Settings › Dashboards › Status check overrides** lists every dashboard, tab,
 folder and tile that sets its own On or Off, shows what restoring inheritance
-would change, and lets you restore several at once.
+would change, and lets you restore several at once. After an upgrade or
+import from v2, tiles that didn't have status checks ticked are set to **Off**,
+so the same tiles are checked as before; a notice links here so you can let
+them inherit instead.
 
 The line under the choices always says what is in effect and where it comes
 from, for example *Inherited from the tab: on*. **Reset to inherit** puts a

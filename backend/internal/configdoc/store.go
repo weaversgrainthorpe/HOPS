@@ -123,6 +123,13 @@ func MigrateOnStartup(db *sql.DB) (MigrationResult, error) {
 	if err := Save(tx, v3); err != nil {
 		return MigrationResult{}, err
 	}
+	// In the same transaction, so tiles are never set Off without the notice
+	// saying so.
+	if HasTileSetOff(v3) {
+		if err := ArmNotice(tx, NoticeV2StatusOff); err != nil {
+			return MigrationResult{}, err
+		}
+	}
 	if err := tx.Commit(); err != nil {
 		return MigrationResult{}, fmt.Errorf("configdoc: commit migration: %w", err)
 	}
@@ -136,6 +143,23 @@ func MigrateOnStartup(db *sql.DB) (MigrationResult, error) {
 			"dashboard", sc.DashboardID, "tile", sc.TileID, "name", sc.TileName, "old_size", show(sc.OldSize), "path", sc.Path)
 	}
 	return MigrationResult{Migrated: true, Renames: renames, SizeChanges: sizes}, nil
+}
+
+// NoticeV2StatusOff is the one-time notice armed when a v2 conversion (the
+// startup upgrade or a v2 import) sets tiles' status checks Off
+// (pinStatusCheck), pointing at the page that lets them inherit instead.
+const NoticeV2StatusOff = "v2-status-checks-off"
+
+// ArmNotice records that the one-time notice id applies again: it is armed,
+// and any earlier dismissal of it is cleared.
+func ArmNotice(e Execer, id string) error {
+	if _, err := e.Exec(`INSERT OR REPLACE INTO armed_notices (id) VALUES (?)`, id); err != nil {
+		return fmt.Errorf("configdoc: arm notice %q: %w", id, err)
+	}
+	if _, err := e.Exec(`DELETE FROM dismissed_notices WHERE id = ?`, id); err != nil {
+		return fmt.Errorf("configdoc: clear dismissal of notice %q: %w", id, err)
+	}
+	return nil
 }
 
 func failed(detail string) MigrationResult {

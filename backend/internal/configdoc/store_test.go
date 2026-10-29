@@ -24,6 +24,8 @@ func newStoreDB(t *testing.T) *sql.DB {
 		`CREATE TABLE config (id INTEGER PRIMARY KEY CHECK (id = 1), data TEXT NOT NULL, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
 		`CREATE TABLE config_archive (id INTEGER PRIMARY KEY AUTOINCREMENT, schema INTEGER NOT NULL, data TEXT NOT NULL, archived_at DATETIME DEFAULT CURRENT_TIMESTAMP, notes TEXT)`,
 		`CREATE TABLE status_cache (entry_id TEXT PRIMARY KEY, status TEXT NOT NULL, response_time INTEGER, last_checked DATETIME DEFAULT CURRENT_TIMESTAMP)`,
+		`CREATE TABLE armed_notices (id TEXT PRIMARY KEY, armed_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
+		`CREATE TABLE dismissed_notices (id TEXT PRIMARY KEY, dismissed_at DATETIME DEFAULT CURRENT_TIMESTAMP)`,
 	} {
 		if _, err := db.Exec(q); err != nil {
 			t.Fatal(err)

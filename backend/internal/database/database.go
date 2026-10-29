@@ -244,6 +244,14 @@ func runMigrations(db *sql.DB) error {
 			dismissed_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
 
+		// One-time notices armed by an event (e.g. a v2 conversion setting
+		// tiles' status checks Off): shown while their condition holds,
+		// until dismissed. Arming again clears an earlier dismissal.
+		`CREATE TABLE IF NOT EXISTS armed_notices (
+			id       TEXT PRIMARY KEY,
+			armed_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+
 		// Server-side secrets generated once per install, never set by env
 		// or by hand (e.g. csrf_hmac: the key that binds a CSRF token to its
 		// session, pentest L3). Created on first use.
