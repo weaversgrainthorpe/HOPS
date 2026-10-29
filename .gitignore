@@ -73,5 +73,6 @@ test-results/
 # superpowers scratch (brainstorm mockups, SDD ledgers)
 /.superpowers/
 data.moved-*/
-design/feedback/
+# Specs, plans, trial notes and feedback: kept local, never published (Jonathan, 2026-10-29).
+/design/
 dist/
