@@ -29,24 +29,24 @@ try {
   await page.goto(BASE + '/sample');
   await node('sample-ff').waitFor();
   await page.mouse.move(640, 360);
-  await beat(2500);
+  await beat(1800);
 
   // 2. Into a folder within a folder, and back up.
   await p.click(node('sample-f-large-sub'), 400);
-  await beat(1600);
+  await beat(1300);
   const up = page.locator('[data-crumb="sample-f-large"]').first();
   await p.click(up, 400);
   await beat(1200);
 
   // 3. Another tab: folder shapes.
   await p.click(page.getByRole('tab', { name: /Shapes/ }), 300);
-  await beat(2200);
+  await beat(1700);
   await p.click(page.getByRole('tab', { name: /Home/ }), 300);
   await beat(900);
 
   // 4. Edit mode: drag one tile onto another to make a folder.
   await p.click(page.getByRole('button', { name: 'Enter Edit Mode' }), 300);
-  await beat(1200);
+  await beat(800);
   await p.drag(tileNamed('Backups'), tileNamed('Containers'), { settle: 900 });
   const folderDlg = page.getByRole('dialog');
   await folderDlg.locator('#folder-name').waitFor({ timeout: 8000 });
@@ -55,7 +55,7 @@ try {
   await beat(300);
   await p.click(folderDlg.getByRole('button', { name: /^Save/ }), 300);
   await folderDlg.waitFor({ state: 'detached' });
-  await beat(1400);
+  await beat(1000);
 
   // 5. Add a tile: name, address, away address, icon.
   await p.click(page.getByRole('button', { name: 'Add tile' }), 300);
@@ -63,8 +63,8 @@ try {
   await dlg.locator('input#name').waitFor();
   await beat(400);
   await p.type(dlg.locator('input#name'), 'NAS');
-  await p.type(dlg.locator('input#url'), 'http://192.168.1.20:5000');
-  await p.type(dlg.locator('input#away-url'), 'https://nas.example.lan');
+  await p.type(dlg.locator('input#url'), 'http://192.168.1.20:5000', 40);
+  await p.type(dlg.locator('input#away-url'), 'https://nas.example.lan', 40);
   await beat(600);
   await p.click(dlg.getByRole('button', { name: 'Edit icon' }), 300);
   const iconDlg = page.getByRole('dialog', { name: 'Edit icon' });
@@ -80,13 +80,13 @@ try {
   await iconDlg.waitFor({ state: 'detached' });
   await beat(500);
   await p.click(dlg.getByRole('button', { name: /^(Create|Save)$/ }), 300);
-  await beat(1500);
+  await beat(1100);
 
   // 6. Save the dashboard and leave edit mode.
   await p.click(page.getByRole('button', { name: 'Save', exact: true }), 400);
-  await beat(1800);
+  await beat(1300);
   await p.click(page.getByRole('button', { name: 'Exit Edit Mode' }), 300);
-  await beat(1200);
+  await beat(800);
 
   // 7. Home / Away: the button appears once a tile has an away address.
   const away = page.getByRole('button', { name: /Switch to Away/ });
@@ -97,7 +97,7 @@ try {
   // 8. Search finds a tile two folders deep.
   await p.click(page.getByRole('button', { name: 'Search' }), 300);
   await page.keyboard.type('audio', { delay: 110 });
-  await beat(2500);
+  await beat(2000);
   await page.keyboard.press('Escape');
   await beat(1000);
 } catch (e) {

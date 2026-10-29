@@ -17,6 +17,17 @@ import (
 
 const migrationBackupHint = "HOPS saved a complete copy of your HOPS 2 data before upgrading (backups folder, name ending pre-v3-migration.db); HOPS 2.2.1 can restore it"
 
+// migrationHint is what will help for each kind of failed migration.
+func migrationHint(kind string) string {
+	switch kind {
+	case configdoc.MigrationFailBackup:
+		return "HOPS could not save a copy of your HOPS 2 data first, so it converted nothing; the data is untouched and HOPS 2.2.1 opens it as before"
+	case configdoc.MigrationFailLayout:
+		return "this is data from a pre-release HOPS 3 build, which has no update path; see the detail"
+	}
+	return migrationBackupHint
+}
+
 // apiError is an error that carries the HTTP status and JSON body to send.
 type apiError struct {
 	status int
@@ -84,8 +95,9 @@ func (r *Router) migrationGuard(w http.ResponseWriter) bool {
 	writeAPIError(w, &apiError{status: http.StatusServiceUnavailable, body: map[string]interface{}{
 		"error":      "migration_failed",
 		"status":     http.StatusServiceUnavailable,
+		"kind":       r.migration.Kind,
 		"detail":     r.migration.Detail,
-		"backupHint": migrationBackupHint,
+		"backupHint": migrationHint(r.migration.Kind),
 	}})
 	return false
 }

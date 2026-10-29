@@ -10,7 +10,7 @@ import {
   applySavedLayout,
   loadConfig,
   configError,
-  migrationFailure,
+  noteMigrationFailure,
   setSettingsSavedHook,
   config,
   layoutFormProblem,
@@ -347,7 +347,7 @@ async function doSave(): Promise<'saved' | 'conflict' | 'error'> {
       return 'conflict';
     }
     if (error instanceof MigrationFailedError) {
-      migrationFailure.set(error.detail);
+      noteMigrationFailure(error);
     }
     if (error instanceof Error && error.message === 'SESSION_EXPIRED') {
       toast.error(

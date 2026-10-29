@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { migrationFailure } from '$lib/stores/config';
+  import { migrationFailure, migrationFailureKind } from '$lib/stores/config';
   import Icon from '@iconify/svelte';
 
   interface Props {
@@ -25,11 +25,24 @@
   {#if $migrationFailure}
     <pre class="detail">{$migrationFailure}</pre>
   {/if}
-  <p>
-    To keep using HOPS meanwhile, go back to HOPS 2.2.1. Before upgrading, HOPS saved a
-    complete copy of your HOPS 2 data in its backups folder (the file whose name ends in
-    <code>pre-v3-migration.db</code>), and HOPS 2.2.1 can restore it.
-  </p>
+  {#if $migrationFailureKind === 'backup'}
+    <p>
+      HOPS could not save a copy of your HOPS 2 data first, so it converted nothing. Your data is
+      untouched, and HOPS 2.2.1 opens it as before. Fix the cause in the message above (often disk
+      space, or HOPS not being allowed to write to its backups folder), then start HOPS 3 again.
+    </p>
+  {:else if $migrationFailureKind === 'layout'}
+    <p>
+      This data is from a pre-release build of HOPS 3, which has no update path. The message above
+      says what to do.
+    </p>
+  {:else}
+    <p>
+      To keep using HOPS meanwhile, go back to HOPS 2.2.1. Before upgrading, HOPS saved a
+      complete copy of your HOPS 2 data in its backups folder (the file whose name ends in
+      <code>pre-v3-migration.db</code>), and HOPS 2.2.1 can restore it.
+    </p>
+  {/if}
   <p>
     Please report the problem, with the message above, at
     <a href="https://github.com/weaversgrainthorpe/HOPS/issues" rel="noopener noreferrer" target="_blank">github.com/weaversgrainthorpe/HOPS/issues</a>.

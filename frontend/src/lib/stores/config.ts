@@ -118,6 +118,14 @@ export const saveConflict = writable<{ dashboardId: string } | null>(null);
 // Set (to the server's detail text) while the stored config failed to
 // migrate to v3 and the server refuses config-touching requests (HTTP 503).
 export const migrationFailure = writable<string | null>(null);
+/** Why the migration failed (MigrationFailedError.kind), so the page gives advice that helps. */
+export const migrationFailureKind = writable<string>('');
+
+/** Show the migration-failed page for `error`. */
+export function noteMigrationFailure(error: MigrationFailedError) {
+  migrationFailureKind.set(error.kind);
+  migrationFailure.set(error.detail);
+}
 
 // The admin dismissed the "ids were renamed during migration" notice. Kept in
 // memory only, so it reappears on the next visit while the server still
@@ -161,7 +169,7 @@ function noteSaveFailure(error: unknown) {
   if (error instanceof ConflictError) {
     saveConflict.set({ dashboardId: error.dashboardId });
   } else if (error instanceof MigrationFailedError) {
-    migrationFailure.set(error.detail);
+    noteMigrationFailure(error);
   }
 }
 
@@ -200,7 +208,7 @@ export async function loadConfig(opts: { background?: boolean } = {}) {
     if (error instanceof MigrationFailedError) {
       // Never keep showing an old config as if it were current.
       config.set(null);
-      migrationFailure.set(error.detail);
+      noteMigrationFailure(error);
     }
     logError('Config load', error);
     configError.set(error instanceof Error ? error.message : 'Failed to load configuration');

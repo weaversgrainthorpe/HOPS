@@ -64,10 +64,13 @@ export class ConflictError extends Error {
 /** 503 migration_failed: the stored config could not be migrated to v3. */
 export class MigrationFailedError extends Error {
   detail: string;
-  constructor(detail: string) {
+  /** Why: 'convert' (v2 data untouched, pre-v3 backup saved), 'backup' (no backup, nothing converted), 'layout' (pre-release v3 data); '' if not said. */
+  kind: string;
+  constructor(detail: string, kind = '') {
     super(detail || 'Configuration migration failed');
     this.name = 'MigrationFailedError';
     this.detail = detail;
+    this.kind = kind;
   }
 }
 
@@ -165,7 +168,7 @@ async function fetchAPI(endpoint: string, options: RequestInit = {}) {
       throw new CategoryNotEmptyError(serverMsg || 'This category still has icons.', parsedBody.iconCount);
     }
     if (response.status === 503 && parsedBody?.error === 'migration_failed') {
-      throw new MigrationFailedError(typeof parsedBody.detail === 'string' ? parsedBody.detail : '');
+      throw new MigrationFailedError(typeof parsedBody.detail === 'string' ? parsedBody.detail : '', typeof parsedBody.kind === 'string' ? parsedBody.kind : '');
     }
     if (serverMsg) throw new Error(serverMsg);
     if (response.status === 403) throw new Error("You don't have permission to do that.");

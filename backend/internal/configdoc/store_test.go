@@ -223,7 +223,8 @@ func TestMigrateWithBackup_BackupFailureBlocksMigration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !res.Failed || backedUp || !strings.Contains(res.Detail, "backup") || !strings.Contains(res.Detail, "disk full") {
+	// Kind "backup" makes the page say no copy was saved (it must never claim one was).
+	if !res.Failed || backedUp || res.Kind != MigrationFailBackup || !strings.Contains(res.Detail, "backup") || !strings.Contains(res.Detail, "disk full") {
 		t.Fatalf("res=%+v backedUp=%v", res, backedUp)
 	}
 	if rawRow(t, db) != orig || archiveCount(t, db) != 0 {

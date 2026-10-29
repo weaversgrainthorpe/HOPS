@@ -53,12 +53,26 @@ func Save(e Execer, doc Obj) error {
 type MigrationResult struct {
 	Migrated bool     // true if a v2 doc was converted this start
 	Failed   bool     // true if the stored doc could not be migrated
+	Kind     string   // why it failed: one of the MigrationFail* kinds
 	Detail   string   // human-readable failure reason
 	Renames  []Rename // duplicate ids renamed by this start's migration
 	// SizeChanges are v2 tiles whose unknown size this start set to Medium
 	// (Ruling 3); the router shows them as a one-time notice.
 	SizeChanges []SizeChange
 }
+
+// Why a migration failed, so the page can say what will actually help.
+const (
+	// MigrationFailConvert: the v2 data could not be converted; it is untouched
+	// and the pre-v3 backup holds a full copy of it.
+	MigrationFailConvert = "convert"
+	// MigrationFailBackup: the pre-v3 backup could not be taken, so nothing was
+	// converted; the v2 data is untouched but there is no new copy of it.
+	MigrationFailBackup = "backup"
+	// MigrationFailLayout: the stored data is pre-release v3, which has no
+	// update path.
+	MigrationFailLayout = "layout"
+)
 
 // MigrateOnStartup converts a stored v2 document to v3. If the stored
 // document is already v3 it does nothing. Otherwise, in one transaction, it
@@ -81,7 +95,7 @@ func MigrateOnStartup(db *sql.DB) (MigrationResult, error) {
 
 	var v2 Obj
 	if err := json.Unmarshal([]byte(raw), &v2); err != nil {
-		return failed(fmt.Sprintf("stored config is not valid JSON: %v", err)), nil
+		return failed(MigrationFailConvert, fmt.Sprintf("stored config is not valid JSON: %v", err)), nil
 	}
 	if IsV3(v2) {
 		return MigrationResult{}, nil
@@ -89,10 +103,10 @@ func MigrateOnStartup(db *sql.DB) (MigrationResult, error) {
 
 	v3, renames, sizes, err := MigrateV2Full(v2)
 	if err != nil {
-		return failed(fmt.Sprintf("conversion failed: %v", err)), nil
+		return failed(MigrationFailConvert, fmt.Sprintf("conversion failed: %v", err)), nil
 	}
 	if err := VerifyMigrationFull(v2, v3, renames, sizes); err != nil {
-		return failed(fmt.Sprintf("verification failed: %v", err)), nil
+		return failed(MigrationFailConvert, fmt.Sprintf("verification failed: %v", err)), nil
 	}
 
 	// The archive row carries the renames so the change is traceable later.
@@ -162,9 +176,9 @@ func ArmNotice(e Execer, id string) error {
 	return nil
 }
 
-func failed(detail string) MigrationResult {
+func failed(kind, detail string) MigrationResult {
 	slog.Error("config v2→v3 migration FAILED; stored config left untouched", "component", "configdoc", "detail", detail)
-	return MigrationResult{Failed: true, Detail: detail}
+	return MigrationResult{Failed: true, Kind: kind, Detail: detail}
 }
 
 // MigrateWithBackup runs MigrateOnStartup, but when the stored document is
@@ -180,7 +194,7 @@ func failed(detail string) MigrationResult {
 func MigrateWithBackup(db *sql.DB, backup func() error) (res MigrationResult, backedUp bool, err error) {
 	if _, lerr := Load(db); errors.Is(lerr, ErrNotV3) {
 		if berr := backup(); berr != nil {
-			return failed(fmt.Sprintf("pre-migration backup failed: %v", berr)), false, nil
+			return failed(MigrationFailBackup, fmt.Sprintf("pre-migration backup failed: %v", berr)), false, nil
 		}
 		backedUp = true
 	}
@@ -196,7 +210,7 @@ func MigrateWithBackup(db *sql.DB, backup func() error) (res MigrationResult, ba
 		detail := "stored config is not in this build's layout form: " + verr.Error() +
 			". Pre-release v3 data has no update path; move the database aside and import a v2 export instead."
 		slog.Error("stored config layout version mismatch; stored config left untouched", "component", "configdoc", "detail", detail)
-		return MigrationResult{Failed: true, Detail: detail}, backedUp, nil
+		return MigrationResult{Failed: true, Kind: MigrationFailLayout, Detail: detail}, backedUp, nil
 	}
 	return res, backedUp, nil
 }
