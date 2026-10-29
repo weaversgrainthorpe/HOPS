@@ -124,7 +124,7 @@ describe('EntryEditModal Size', () => {
 });
 
 describe('EntryEditModal URL check', () => {
-  const urlInput = () => screen.getByLabelText(/^URL/) as HTMLInputElement;
+  const urlInput = () => screen.getByLabelText(/^Address/) as HTMLInputElement;
 
   it('a mistyped URL is named in the dialog on leaving the field, and Save does not go through', async () => {
     const onSave = vi.fn();

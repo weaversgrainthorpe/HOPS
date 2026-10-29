@@ -262,8 +262,9 @@ away: it asks Save, Discard or Keep editing, and waits.
 1. Click **Add tile**.
 2. Leave **Tile type** on **Link** (the other types, **SSH** and **Note**,
    are in Step 5).
-3. Fill in **Name** (e.g. `Router`) and **URL** (e.g. `http://192.168.1.1`).
-   Those are the only required fields. If the address isn't one HOPS can
+3. Fill in **Name** (e.g. `Router`) and **Address** (e.g. `http://192.168.1.1`).
+   Those are the only required fields. Greyed italic text in an empty field
+   is only an example, not a value. If the address isn't one HOPS can
    open (a typo such as `http:\\192.168.1.1`, say), the dialog says so
    under the field.
 4. Optional: a **Subtitle/Description**, an **Icon** (click **Edit icon**
@@ -415,7 +416,7 @@ settings › Status checks (**Check every (minutes)**, 5 by default).
 At home you might open your NAS at `http://192.168.1.10`; away from home,
 through Tailscale, a VPN or a public address. A tile can hold both:
 
-- **URL** is the home address. **Away address (optional)** is the other one.
+- **Address** is the home address. **Away address (optional)** is the other one.
   SSH tiles have **Away host (optional)** and **Away port**.
 - Once a dashboard has a tile with an away address, a **Home** / **Away**
   button appears in the top bar. Click it to switch which address tiles
@@ -517,6 +518,14 @@ For pictures, **Image Fit** chooses *Cover*, *Contain* or *Fill*, and
 **Overlay Darkness** and **Overlay Blur** darken and soften the picture so
 tiles stay easy to read. **Background opacity** fades the background
 itself. Click **Save** in the dialog.
+
+**A word of caution.** Pictures can go on the dashboard, on every tab and
+in every folder, each with its own opacity, darkness and blur, and
+slideshows can play in several places at once. That's a lot of freedom,
+and it's easy to end up with a busy, hard-to-read screen. HOPS gives you
+the options; what works is up to you. A good start is one picture behind
+the dashboard, with plain colours on tabs and folders, and pictures added
+only where they help you find things.
 
 **Tab background.** Open the tab's dialog and click **Configure Tab
 Background**. Choose **Same as the dashboard** or **Its own background**

@@ -224,9 +224,11 @@ button[aria-disabled="true"] {
   cursor: not-allowed;
 }
 
+/* Italic, so an example in an empty field never reads as a value someone typed. */
 ::placeholder {
   color: var(--placeholder);
   opacity: 1;
+  font-style: italic;
 }
 
 /* Every text field's edge is >= 3:1 against what is around it (WCAG 1.4.11). Focus and error

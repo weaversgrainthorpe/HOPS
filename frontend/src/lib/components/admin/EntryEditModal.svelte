@@ -239,7 +239,7 @@
           type="text"
           bind:value={editedEntry.name}
           required
-          placeholder={isNote ? 'Note heading' : 'Tile name'}
+          placeholder={isNote ? 'Note heading' : 'e.g. Router'}
         />
       </div>
 
@@ -265,7 +265,7 @@
       {#if isSsh}
         <div class="form-group">
           <label for="ssh-host">Host *</label>
-          <input id="ssh-host" type="text" bind:value={sshHost} placeholder="nas.lan, 192.168.1.10 or [fd00::1]"
+          <input id="ssh-host" type="text" bind:value={sshHost} placeholder="e.g. nas.lan, 192.168.1.10 or [fd00::1]"
             autocomplete="off" spellcheck="false" onblur={() => sshShowErrors = true}
             aria-invalid={sshShowErrors && sshErrors.host ? 'true' : undefined}
             aria-describedby={sshShowErrors && sshErrors.host ? 'ssh-host-error' : undefined} />
@@ -275,7 +275,7 @@
         </div>
         <div class="form-group">
           <label for="ssh-port">Port</label>
-          <input id="ssh-port" type="text" inputmode="numeric" bind:value={sshPort} placeholder="22"
+          <input id="ssh-port" type="text" inputmode="numeric" bind:value={sshPort} placeholder="22 if left blank"
             onblur={() => sshShowErrors = true}
             aria-invalid={sshShowErrors && sshErrors.port ? 'true' : undefined}
             aria-describedby={sshShowErrors && sshErrors.port ? 'ssh-port-error' : undefined} />
@@ -298,7 +298,7 @@
         </div>
         <div class="form-group">
           <label for="ssh-away-host">Away host (optional)</label>
-          <input id="ssh-away-host" type="text" bind:value={sshAwayHost} placeholder="nas.your-tailnet.ts.net"
+          <input id="ssh-away-host" type="text" bind:value={sshAwayHost} placeholder="e.g. nas.your-tailnet.ts.net"
             autocomplete="off" spellcheck="false" onblur={() => sshShowErrors = true}
             aria-invalid={sshShowErrors && sshAwayErrors.host ? 'true' : undefined}
             aria-describedby={sshShowErrors && sshAwayErrors.host ? 'ssh-away-host-error' : 'away-hint'} />
@@ -308,7 +308,7 @@
         </div>
         <div class="form-group">
           <label for="ssh-away-port">Away port</label>
-          <input id="ssh-away-port" type="text" inputmode="numeric" bind:value={sshAwayPort} placeholder="22"
+          <input id="ssh-away-port" type="text" inputmode="numeric" bind:value={sshAwayPort} placeholder="22 if left blank"
             onblur={() => sshShowErrors = true}
             aria-invalid={sshShowErrors && sshAwayErrors.port ? 'true' : undefined}
             aria-describedby={sshShowErrors && sshAwayErrors.port ? 'ssh-away-port-error' : undefined} />
@@ -321,20 +321,21 @@
         </div>
       {:else if !isNote}
         <div class="form-group full-width">
-          <label for="url">URL *</label>
+          <label for="url">Address *</label>
           <input
             id="url"
             type="url"
             bind:value={editedEntry.url}
             required
-            placeholder="https://example.com"
+            placeholder="e.g. http://192.168.1.1"
             onblur={() => urlShowError = true}
             aria-invalid={urlShowError && urlError ? 'true' : undefined}
-            aria-describedby={urlShowError && urlError ? 'url-error' : undefined}
+            aria-describedby={urlShowError && urlError ? 'url-error url-hint' : 'url-hint'}
           />
           {#if urlShowError && urlError}
             <p id="url-error" class="field-error" role="alert">{urlError}</p>
           {/if}
+          <small id="url-hint">Opened at home, and away too unless the tile has an away address.</small>
         </div>
         <div class="form-group full-width">
           <label for="away-url">Away address (optional)</label>
@@ -342,7 +343,7 @@
             id="away-url"
             type="url"
             bind:value={awayUrlText}
-            placeholder="https://nas.your-tailnet.ts.net"
+            placeholder="e.g. https://nas.your-tailnet.ts.net"
             onblur={() => awayShowError = true}
             aria-invalid={awayShowError && awayError ? 'true' : undefined}
             aria-describedby={awayShowError && awayError ? 'away-url-error away-hint' : 'away-hint'}
@@ -729,6 +730,7 @@
   textarea::placeholder {
     color: var(--text-secondary);
     opacity: 1;
+    font-style: italic;
   }
 </style>
 

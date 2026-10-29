@@ -236,7 +236,7 @@ describe('EditorDialogs (the dialogs edit the draft only)', () => {
   it('tile dialog refuses a javascript: URL inline and leaves the draft alone', async () => {
     await show({ kind: 'tile', id: 'a' });
     const before = draft();
-    await fireEvent.input(screen.getByLabelText(/^URL/), { target: { value: 'javascript:alert(1)' } });
+    await fireEvent.input(screen.getByLabelText(/^Address/), { target: { value: 'javascript:alert(1)' } });
     await fireEvent.submit(document.getElementById('entry-edit-form')!);
     expect(document.getElementById('url-error')?.textContent).toMatch(/valid address/);
     expect(draft()).toBe(before);
@@ -245,7 +245,7 @@ describe('EditorDialogs (the dialogs edit the draft only)', () => {
   it('Add tile at a right-clicked free cell lands there', async () => {
     await show({ kind: 'tile', to: { tabId: 't1' }, cell: { x: 18, y: 0 } });
     await fireEvent.input(screen.getByLabelText(/^Name/), { target: { value: 'New one' } });
-    await fireEvent.input(screen.getByLabelText(/^URL/), { target: { value: 'https://new.test' } });
+    await fireEvent.input(screen.getByLabelText(/^Address/), { target: { value: 'https://new.test' } });
     await fireEvent.click(screen.getByRole('button', { name: /^Create/ }));
     const root = draft().tabs[0].root.children;
     expect(root[root.length - 1]).toMatchObject({ kind: 'tile', name: 'New one', placement: p(18, 0) });
