@@ -1,19 +1,19 @@
-// Convert ./output/demo.webm to demo.mp4 (for landing page) and demo.gif
+// Convert demo.webm to demo.mp4 (for landing page) and demo.gif
 // (for README). Uses ffmpeg-static (bundled binary, no system install).
 import ffmpegPath from 'ffmpeg-static';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs';
-import { fileURLToPath } from 'node:url';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const OUTDIR = path.join(__dirname, 'output');
+// Usage: node convert.mjs <dir with demo.webm> <dest dir for demo.mp4 + demo.gif>
+const [OUTDIR, DEST] = process.argv.slice(2);
+if (!OUTDIR || !DEST) { console.error('Usage: node convert.mjs <src-dir> <dest-dir>'); process.exit(2); }
 const SRC = path.join(OUTDIR, 'demo.webm');
-const MP4 = path.join(OUTDIR, 'demo.mp4');
-const GIF = path.join(OUTDIR, 'demo.gif');
+const MP4 = path.join(DEST, 'demo.mp4');
+const GIF = path.join(DEST, 'demo.gif');
 
 if (!fs.existsSync(SRC)) {
-  console.error('No demo.webm in output/. Run record.mjs first.');
+  console.error(`No demo.webm in ${OUTDIR}. Run record.mjs first.`);
   process.exit(1);
 }
 

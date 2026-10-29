@@ -342,7 +342,7 @@
       logError('Background delete', error);
       const message = (error as Error).message;
       if (message.includes('401')) {
-        uploadError = 'Session expired. Please log in again at /admin';
+        uploadError = 'You have been signed out. Sign in again (the pencil or the gear in the top bar) and try again.';
       } else {
         uploadError = `Failed to delete: ${message}`;
       }

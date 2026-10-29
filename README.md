@@ -1,232 +1,380 @@
 # HOPS - Home Operations Portal System
 
-**Version 3.0.0** · **[hops.weaversgrainthorpe.github.io →](https://weaversgrainthorpe.github.io/HOPS/)**
+**Version 3.0.0** · **[weaversgrainthorpe.github.io/HOPS →](https://weaversgrainthorpe.github.io/HOPS/)**
 
-A modern, self-hosted homepage dashboard for the homelab community.
+HOPS is a self-hosted homepage dashboard for your homelab: one page (or
+several) of tiles that open your router, NAS, Proxmox, media server and
+everything else you run. You build it by clicking and dragging in the
+browser. There are no config files to write.
 
-![HOPS demo — 45-second walkthrough](docs/screenshots/demo.gif)
+It's one program with its own database (SQLite) and web interface built in.
+Download it, run it, open it in a browser. It runs on a Raspberry Pi, a spare
+PC, a VM or container, Docker, or Windows.
 
-## Why Another Dashboard?
+![HOPS demo](docs/screenshots/demo.gif)
 
-Yes, there are already plenty of homelab dashboard and bookmark applications out there: Homer, Dashy, Heimdall, Homepage, Organizr, Homarr, and more. If you're using one and happy with it, stick with it. Seriously.
+**New to HOPS?** Follow **[Zero to Dashboard Hero](QUICKSTART.md)**: install,
+sign in, tour the Sample dashboard and build your first one in about 10
+minutes.
 
-I created HOPS because none of the existing options matched what I wanted:
+## Why another dashboard?
 
-- **100% GUI-based editing** - I wanted to click, drag, and configure everything visually. No YAML files. No JSON editing. No "simple" configuration files that inevitably become not-so-simple. If you enjoy hand-crafting configuration files, HOPS isn't for you. Close this tab. Now.
+Yes, there are already plenty of homelab dashboards: Homer, Dashy, Heimdall,
+Homepage, Organizr, Homarr, and more. If you're using one and happy with it,
+stick with it. Seriously.
 
-- **Native installation** - HOPS is a single binary with a SQLite database. Download, run, done. Docker is available too if that's your thing.
+I created HOPS because none of them matched what I wanted:
 
-- **Power features without complexity** - Drag-and-drop everything. Multiple dashboards. Tabs. Groups. Background slideshows. Theme customization. Status monitoring. Network discovery that scans your LAN and bulk-adds tiles for the services you already run. All configurable through the UI.
+- **100% GUI editing.** Click, drag, and configure everything in the
+  browser. No YAML. No JSON. No "simple" config files that inevitably become
+  not-so-simple. Even the server settings (port, log level, backups, rate
+  limits) are set on the Settings page. If you enjoy hand-crafting config
+  files, HOPS isn't for you.
+- **One file.** A single binary plus a SQLite database. No runtime, no
+  dependencies. Docker works too if that's your thing.
+- **Power without complexity.** Multiple dashboards, tabs, folders inside
+  folders, backgrounds, themes, status checks, and a network scan that adds
+  the services you already run. All through the UI.
 
-HOPS won't be for everyone. That's fine. But if you've been frustrated editing YAML indentation at 11pm, or wished you could just *click* to add a new bookmark, maybe give it a try.
+HOPS won't be for everyone. That's fine. But if you've been frustrated
+editing YAML indentation at 11pm, or wished you could just *click* to add a
+new bookmark, give it a try. Already on Homer, Dashy or Heimdall? HOPS can
+import your existing setup, so trying it doesn't mean starting over.
 
-Already using Homer, Dashy, or Heimdall? HOPS can import your existing configuration, so you can try it without starting from scratch.
+## What's new in v3
+
+HOPS 3 is a big rework of how dashboards are laid out and edited.
+
+- **Folders, and folders inside folders.** Tiles and folders sit anywhere on
+  each tab's grid, in three sizes. A folder can hold tiles, other folders,
+  or both. Folders page when they're full, can start minimised, and come in
+  seven **Look**s: Rounded box, Simple tab, and five folder shapes, with the
+  tab on the left, centre or right.
+- **A new drag-and-drop editor.** Drag tiles and folders around, drop a
+  tile on another and hold to make a folder, or drag onto a tab's name to
+  move it there. Ctrl-click to select several. Right-click for **Edit**,
+  **Duplicate**, **Cut**, **Copy**, **Move/Copy to…** and more, and paste
+  across tabs and dashboards. **Undo** and **Redo** step back through every
+  change, and nothing is kept until you click **Save**.
+- **Home and away addresses.** A tile can have an **Away address** for when
+  you're out (Tailscale, VPN or a public address). A **Home** / **Away**
+  button in the top bar picks which one tiles open, per browser.
+- **Your view, your browser.** Minimised folders, folder pages, Home/Away,
+  theme, text size and the optional **Recently used** row are remembered
+  by each browser, so your phone and your desktop can differ, and nobody
+  else's view changes.
+- **Status checks you can control at every level.** Each tile, folder and
+  tab can be **Inherit**, **On** or **Off**, and the nearest setting wins
+  (tile, folder, tab, dashboard, then the global default). Checks accept
+  self-signed HTTPS and count a login prompt as up. **Settings › Dashboards ›
+  Status check overrides** lists everything that sets its own value and
+  restores inheritance in bulk.
+- **Add to HOPS.** Drag a bookmark to your browser's bar. On any service's
+  page, click it, and HOPS opens with the address, name and icon filled in.
+- **Dead links and duplicates.** One page lists tiles whose status check has
+  been failing for a while; another finds tiles that point at the same
+  address and merges them on your say-so.
+- **Network Discovery** finds 90+ common homelab services, now including
+  AI tools, and a re-scan shows what's new, changed and gone since the last
+  one.
+- **Backgrounds everywhere.** A picture, colour or slideshow behind the
+  dashboard, behind each tab, or inside a folder.
+- **SSH tiles.** Give a host, port and user. Clicking opens your computer's
+  SSH app, and the status check is a TCP connect.
+- **Note tiles** for headings, reminders and scratchpad text.
+- **Imports** from Dashy, Homer and Heimdall, with a list of anything HOPS
+  couldn't bring across.
+- **Backups with retention.** HOPS backs itself up when it starts, before
+  every save, and before a restore, reset or upgrade. You choose how many to
+  keep. A backup download includes its images. Restoring takes a safety
+  backup first, then HOPS restarts itself.
+- **Automatic upgrade from v2.** See [Upgrading from HOPS 2](#upgrading-from-hops-2).
+- **New ways to install:** a one-line Linux installer and a Proxmox VE
+  container script.
 
 ## Screenshots
 
 <table>
   <tr>
     <td width="33%" valign="top">
-      <a href="docs/screenshots/admin.png"><img src="docs/screenshots/admin.png" alt="Admin page — manage multiple dashboards" /></a>
-      <p align="center"><sub><b>Admin page</b> — manage multiple dashboards from one place</sub></p>
+      <a href="docs/screenshots/dashboard-hero.png"><img src="docs/screenshots/dashboard-hero.png" alt="The Sample dashboard on a desktop" /></a>
+      <p align="center"><sub><b>Dashboard</b>: tiles and folders on a tab, with a background picture</sub></p>
     </td>
     <td width="33%" valign="top">
-      <a href="docs/screenshots/admin1.png"><img src="docs/screenshots/admin1.png" alt="QR code modal for any dashboard" /></a>
-      <p align="center"><sub><b>QR codes</b> — share any dashboard with a phone, no typing</sub></p>
+      <a href="docs/screenshots/folders.png"><img src="docs/screenshots/folders.png" alt="Open folders, folders inside folders, and folder shapes" /></a>
+      <p align="center"><sub><b>Folders</b>: open, nested, and in seven looks</sub></p>
     </td>
     <td width="33%" valign="top">
-      <a href="docs/screenshots/edit-mode.png"><img src="docs/screenshots/edit-mode.png" alt="Edit mode — drag-and-drop, no YAML" /></a>
-      <p align="center"><sub><b>Edit mode</b> — drag-and-drop tiles, folders, and tabs; no YAML</sub></p>
-    </td>
-  </tr>
-  <tr>
-    <td width="33%" valign="top">
-      <a href="docs/screenshots/edit-tile.png"><img src="docs/screenshots/edit-tile.png" alt="Tile edit modal" /></a>
-      <p align="center"><sub><b>Tile editor</b> — every option in one modal; nothing hidden in config files</sub></p>
-    </td>
-    <td width="33%" valign="top">
-      <a href="docs/screenshots/icon-picker.png"><img src="docs/screenshots/icon-picker.png" alt="Icon picker — thousands of icons" /></a>
-      <p align="center"><sub><b>Icon picker</b> — search thousands of bundled icons, or upload your own</sub></p>
-    </td>
-    <td width="33%" valign="top">
-      <a href="docs/screenshots/mobile.png"><img src="docs/screenshots/mobile.png" alt="Responsive mobile layout" /></a>
-      <p align="center"><sub><b>Mobile</b> — responsive layout works on phones and tablets</sub></p>
+      <a href="docs/screenshots/edit-mode.png"><img src="docs/screenshots/edit-mode.png" alt="Edit mode with the editing toolbar and a selection" /></a>
+      <p align="center"><sub><b>Edit mode</b>: drag and drop, undo and redo, save when you're done</sub></p>
     </td>
   </tr>
   <tr>
     <td width="33%" valign="top">
-      <a href="docs/screenshots/admin-discovery.png"><img src="docs/screenshots/admin-discovery.png" alt="Network Discovery — list of scans" /></a>
-      <p align="center"><sub><b>Network Discovery</b> — scan your network for services already running</sub></p>
+      <a href="docs/screenshots/edit-tile.png"><img src="docs/screenshots/edit-tile.png" alt="The tile dialog" /></a>
+      <p align="center"><sub><b>Tile dialog</b>: every option in one place, nothing hidden in config files</sub></p>
     </td>
     <td width="33%" valign="top">
-      <a href="docs/screenshots/admin-discovery-draft.png"><img src="docs/screenshots/admin-discovery-draft.png" alt="Curate scan results before promoting to dashboard" /></a>
-      <p align="center"><sub><b>Curate before promoting</b> — review what was found, tick the ones you want</sub></p>
+      <a href="docs/screenshots/icon-picker.png"><img src="docs/screenshots/icon-picker.png" alt="Icon picker" /></a>
+      <p align="center"><sub><b>Icon picker</b>: thousands of icons that work offline, or upload your own</sub></p>
     </td>
     <td width="33%" valign="top">
-      <a href="docs/screenshots/admin-discovery-detectors.png"><img src="docs/screenshots/admin-discovery-detectors.png" alt="Discovery detectors — bundled and custom" /></a>
-      <p align="center"><sub><b>Detectors</b> — 90+ services recognised out of the box, tweak any of them</sub></p>
+      <a href="docs/screenshots/mobile.png"><img src="docs/screenshots/mobile.png" alt="A dashboard on a phone" /></a>
+      <p align="center"><sub><b>Phone</b>: the same dashboard, sized for a small screen</sub></p>
+    </td>
+  </tr>
+  <tr>
+    <td width="33%" valign="top">
+      <a href="docs/screenshots/settings.png"><img src="docs/screenshots/settings.png" alt="The Settings page" /></a>
+      <p align="center"><sub><b>Settings</b>: dashboards, backups and every server setting, in the GUI</sub></p>
+    </td>
+    <td width="33%" valign="top">
+      <a href="docs/screenshots/qr.png"><img src="docs/screenshots/qr.png" alt="A dashboard's QR code" /></a>
+      <p align="center"><sub><b>QR codes</b>: open any dashboard on a phone, no typing</sub></p>
+    </td>
+    <td width="33%" valign="top">
+      <a href="docs/screenshots/discovery.png"><img src="docs/screenshots/discovery.png" alt="Network Discovery results" /></a>
+      <p align="center"><sub><b>Network Discovery</b>: find what's already running, tick what you want</sub></p>
     </td>
   </tr>
 </table>
 
-## Quick Start
+## Install
 
-HOPS runs on **Linux**, **macOS**, and **Windows** with no dependencies. It's built to run on anything from a Raspberry Pi to a full server.
+Pick one. **[Zero to Dashboard Hero](QUICKSTART.md)** walks through each
+option step by step, and the
+**[Installation & Deployment Guide](DEPLOY.md)** has every detail.
 
-**Binary** — download one file, run it (the web UI is built in):
+**One-line installer** (Linux with systemd: Debian, Ubuntu, Raspberry Pi OS,
+a Proxmox container). Installs HOPS as a service that starts on boot. Run it
+again to upgrade; if the new version doesn't start, it puts the old one back.
+
 ```bash
-chmod +x hops-linux-amd64
-./hops-linux-amd64 --data ./data
+curl -fsSL https://github.com/weaversgrainthorpe/HOPS/releases/latest/download/install.sh | sudo bash
 ```
 
-**Docker** — if you'd rather, or already run a Compose stack:
+**Proxmox VE container.** In the Proxmox host shell, this creates a small
+Debian 12 container and installs HOPS in it:
+
+```bash
+curl -fsSLO https://github.com/weaversgrainthorpe/HOPS/releases/latest/download/hops-proxmox.sh
+bash hops-proxmox.sh
+```
+
+**Docker** (x86-64 and 64-bit ARM). Use the
+[`docker-compose.yml`](docker-compose.yml) in this repo, or the one in the
+Quick Start, then:
+
 ```bash
 docker compose up -d
 ```
 
-Default login: `admin` / `admin` — change this immediately after first login.
+**Single binary** (Linux, macOS). Download one file and run it:
 
-**New to HOPS?** Follow the **[Zero to Dashboard Hero](QUICKSTART.md)** guide for a complete walkthrough from installation to your first dashboard.
+```bash
+curl -LO https://github.com/weaversgrainthorpe/HOPS/releases/latest/download/hops-linux-amd64
+chmod +x hops-linux-amd64
+mkdir -p data
+./hops-linux-amd64 --data ./data
+```
 
-For full deployment options (systemd, reverse proxy, backups), see the **[Installation & Deployment Guide](DEPLOY.md)**.
+**Windows** (PowerShell). The same single file; to run it as a service, see
+[Windows (NSSM)](DEPLOY.md#windows-nssm).
+
+```powershell
+curl.exe -LO https://github.com/weaversgrainthorpe/HOPS/releases/latest/download/hops-windows-amd64.exe
+mkdir data
+.\hops-windows-amd64.exe --data .\data
+```
+
+Then open `http://<your-server>:8080` and sign in with `admin` / `admin`.
+HOPS makes you choose a new password straight away.
+
+### Platforms
+
+| You have | Download |
+|----------|----------|
+| Linux, x86-64 | `hops-linux-amd64` |
+| 64-bit ARM: Raspberry Pi 3, 4, 5 or Zero 2 W with a **64-bit** OS, and other ARM64 boards | `hops-linux-arm64` |
+| macOS (Intel / Apple Silicon) | `hops-darwin-amd64` / `hops-darwin-arm64` |
+| Windows, x86-64 | `hops-windows-amd64.exe` |
+
+- HOPS needs a **64-bit** OS. 32-bit systems aren't supported, and the
+  installer refuses them. The original Pi Zero / Zero W can't run a 64-bit
+  OS; the smallest Pi HOPS runs on is a Zero 2 W with 64-bit Raspberry Pi OS.
+- Linux (x86-64) and Windows are tested on real machines.
+- **Not yet tried on real hardware:** the Raspberry Pi / ARM64 build (run
+  under emulation only) and the macOS builds. If you try one, please
+  [tell us how it went](https://github.com/weaversgrainthorpe/HOPS/issues).
+
+### Upgrading from HOPS 2
+
+It's automatic. Install v3 over v2 with the same data folder and start it.
+On its first start, HOPS 3 takes a protected backup of the whole v2 database
+(`hops-backup-<date>_pre-v3-migration.db`) before it converts anything. If
+that backup fails, it doesn't convert. The backup is never deleted
+automatically, and it's your way back to 2.2.1. Tiles keep the status checks
+they had in v2, and a one-time notice points you to the overrides page if
+you'd rather they inherit.
+
+You don't need to export and import. See [Upgrading](QUICKSTART.md#upgrading),
+[Upgrading from v2 with install.sh](DEPLOY.md#upgrading-from-v2-with-installsh)
+and [Rolling back from 3.x to 2.2.1](DEPLOY.md#rolling-back-from-3x-to-221).
 
 ## Features
 
-### Core
-- **GUI-First**: Full visual editor — no YAML, no config files, no CLI required
-- **Single Binary**: One executable + SQLite database, no runtime dependencies
-- **Multi-Platform**: Linux and macOS on x86-64 and ARM64, Windows on x86-64 (64-bit only; the smallest Pi is a Zero 2 W with a 64-bit OS). The Raspberry Pi / ARM64 and macOS builds haven't yet been tried on real hardware (ARM64 has been run under emulation); reports welcome
-- **Docker Support**: Dockerfile and docker-compose.yml included
-- **No Login for Viewers**: Just share a URL, it works
-- **Sign in to edit**: one admin login for editing and Settings; viewers never need it
-- **Built-in Help**: Context-sensitive help system in edit mode
+### Layout and editing
+- Multiple dashboards, each at its own address (`/home`, `/network`,
+  `/media`); a new dashboard's path follows its name
+- Tabs on each dashboard; tiles and folders on each tab's grid, in Small,
+  Medium and Large
+- Folders inside folders (up to 12 levels), paging when full, minimisable,
+  in seven looks with their own colours, text colour and **Contents size**
+- Drag and drop for tabs, folders and tiles; hold a tile over another to make
+  a folder; resize folders by their edges
+- Select several with Ctrl-click; copy, cut and paste, and **Move or copy
+  to…** any dashboard, tab or folder
+- Right-click menus on tiles, folders, tabs and the empty space inside them
+- Undo / redo; edits are a draft until you click **Save**
+- Edit mode switches itself off after a while with no activity, and never
+  throws away unsaved changes
+- Search (`/`) finds tiles and folders at any depth on the dashboard you're
+  viewing, and can show you where each one lives
+- Arrow-key navigation between tiles
 
-### Navigation
-- Multiple dashboards (e.g., /home, /network, /media)
-- Tabs within each dashboard
-- Tiles and folders on a grid on each tab; folders can hold folders, page when full, and can start minimised
-- Drag-and-drop for tabs, folders, and tiles (drop a tile on another and hold to make a folder)
-- Copy/cut/paste and **Move or copy to…** for tiles and folders, across tabs and dashboards
-- Undo / redo while editing; nothing is kept until you click Save
-- Search — press `/` to find a tile or folder on the dashboard you're viewing, by name, URL, or description
-- Arrow-key navigation between tiles (browse mode)
-- Right-click context menu
+### Tiles
+- **Link** (opens a URL), **SSH** (opens your SSH app) and **Note** (text
+  only) tile types
+- Open modes: New Tab, Same Tab, iFrame Modal, Popup Modal
+- **Address** and optional **Away address**, with a per-browser Home / Away
+  switch
+- Status badge with response time; Inherit / On / Off at every level
+- Subtitles, custom colours, and separate background, text and icon opacity
 
-### Visual Customization
-- Per-dashboard and per-tab backgrounds
-- Background slideshow with 18 transition effects (crossfade, slide, zoom, Ken Burns, and more)
-- Configurable background overlay opacity and blur
-- Upload custom background images or choose from ~90 curated presets
-- Layout: Dashboard → Tab → tiles and folders (folders nest)
-- ~2,300 bundled app/service icons (homarr-labs/dashboard-icons), plus access to 200,000+ Iconify icons by name (the ones the UI uses are embedded for offline use; an uncommon name you type is fetched on demand), plus custom icon uploads
-- "My Uploads" and "Recently Used" icon categories
-- Multiple tile sizes (small, medium, large)
-- 8 theme presets with light/dark/auto modes
-- Custom colours and opacity on tiles and folders (*None* falls back to the theme)
-
-### Entries/Tiles
-- Two tile types: **link** (default — opens a URL) and **note** (text-only, name + description, no click action)
-- **SSH** preset: Host, Port and User build an `ssh://` link that opens your computer's SSH app in place (Windows needs one set up, e.g. PuTTY or Windows Terminal); its status dot is a TCP connect to host:port
-- Open modes: iframe, new tab, same tab, popup modal
-- HTTP status monitoring with response time
-- Subtitles/descriptions on tiles
-- Custom tile colours and opacity
-- Right-click context menu
+### Look
+- 8 theme presets with Dark, Light and Auto modes, and four text sizes, chosen
+  per browser
+- Backgrounds on the dashboard, each tab and each folder: a colour, a
+  picture, or a slideshow with 18 transition effects
+- About 90 built-in background pictures that work offline, or upload your own
+- About 2,300 bundled service icons (Dashboard Icons), Iconify icons by name,
+  and your own uploads; **Settings › Icons** shows where each upload is used
+- Optional animations for drops and folder moves (On / Always / Off)
+- Header with your own text and title
 
 ### Network Discovery
-- **Scan your network** — give it an IP range (`172.16.0.0/24`, `172.16.0.1-50`, individual addresses, or any mix). Skip the things you don't want scanned with a `!` prefix
-- **Recognises 90+ common homelab services out of the box** — Pi-hole, Plex, Proxmox, Home Assistant, every *arr, NPM, UniFi, OPNsense/pfSense, Frigate, TrueNAS/QNAP/Synology, Vaultwarden, Immich, Audiobookshelf, Grafana, Traefik, MinIO, pgAdmin/phpMyAdmin/Adminer, Guacamole, Netdata, and many more
-- **Three intensities** — *Passive* listens for services that announce themselves (mDNS, UPnP) and asks your DNS, the ARP cache and SNMP, without probing any web ports. *Light* (default) adds a quick check of about 65 ports: well-known homelab ports plus every port a detector knows about. *Full* sweeps about 115. Start with Light
-- **Finds things without scanning too** — picks up mDNS announcements (smart TVs, AirPlay, Sonos), router neighbour tables (when HOPS runs on Linux), your network's DNS, and SNMP from printers/switches/UPSes
-- **Knows about subdomains** — give it your internal domain (the one your reverse proxy serves under) and it'll try common names like `sonarr.yourdomain` so services hidden behind a reverse proxy aren't missed
-- **Review before adding** — every scan produces a draft you tick through. Confidence indicators on each row, edit the name / URL / icon inline, bulk-select, and tiles automatically slot into sensible folders when you accept (Sonarr → *Downloads*, Pi-hole → *Network*)
-- **Add or tweak the recognisers yourself** — through the admin UI, no config files. Customise any built-in recogniser; if you change your mind, one click puts it back
-- **Find what didn't match** — a Diagnostics view shows every service HOPS spotted but couldn't put a name to. One click bootstraps a new detector with everything HOPS already knows about it
+- **Scan your network**: an IP range (`192.168.1.0/24`, `192.168.1.1-50`,
+  single addresses, or a mix). Skip anything with a `!` prefix
+- **Recognises 90+ common homelab services** out of the box: Pi-hole, Plex,
+  Proxmox, Home Assistant, the *arr apps, UniFi, OPNsense/pfSense, TrueNAS,
+  Synology, Vaultwarden, Immich, Grafana, Traefik, AI tools such as Open
+  WebUI and ComfyUI, and many more
+- **Three intensities**: *Passive only* listens for services that announce
+  themselves (mDNS, UPnP) and asks your DNS, the ARP cache and SNMP without
+  probing web ports. *Light active* (the default) checks about 65 ports.
+  *Full active* sweeps about 115
+- **Knows about subdomains**: give it your internal domain and it tries
+  common names, so services behind a reverse proxy aren't missed
+- **Review before adding**: every scan is a draft. Tick what you want, edit
+  names, addresses and icons, and HOPS files them into sensible folders
+- **Re-scans show the difference**: what's new, changed and gone since last
+  time
+- **Add or tweak the recognisers yourself**, in the GUI. **Diagnostics**
+  lists what HOPS saw but couldn't name, and turns one into a new detector
 
-> **A reality check.** Discovery is a head start, not magic. What it
-> finds depends on your network (Wi-Fi vs wired, guest networks that
-> isolate devices), what's blocking it (firewalls, antivirus software,
-> services that only answer on localhost), and whether each service
-> answers polite "are you there?" questions to begin with. So expect a
-> few false matches and a few things it just doesn't catch. That's why
-> every scan is a **draft** — you tick through what's actually wanted
-> before anything lands on your dashboard — and why the Diagnostics
-> view turns *"HOPS missed this"* into a working detector in two
-> clicks. Coverage keeps improving with each release.
+> **A reality check.** Discovery is a head start, not magic. What it finds
+> depends on your network (Wi-Fi vs wired, guest networks that isolate
+> devices), what's blocking it (firewalls, antivirus, services that only
+> answer on localhost), and whether each service answers polite "are you
+> there?" questions at all. Expect a few false matches and a few misses.
+> That's why every scan is a **draft**, and nothing lands on your dashboard
+> until you accept it. It also sees less from inside Docker; see
+> [Network Discovery on Docker](DEPLOY.md#network-discovery-on-docker--important).
 
 ### Settings (signed in)
-- Create, rename, and delete dashboards
-- **QR codes** — generate scannable codes for any dashboard URL (open the dashboard on a phone/tablet without typing)
-- Self-contained export/import with embedded assets
-- Single-dashboard export
-- Import from Homer, Dashy, and Heimdall
-- Automatic database backups on startup (async — doesn't block boot)
-- Backup management (download, upload, restore and delete). A restore restarts HOPS, which needs a service manager to start it again (install.sh, the Proxmox script, Docker and NSSM set this up; a binary run by hand just stops and you start it again)
-- Forced password change on first login (no more accidentally leaving the default `admin/admin` in production)
+- Create, reorder, rename, export and delete dashboards; a **QR code** for
+  each
+- **Add to HOPS** bookmark, **Dead links**, **Duplicates** and **Status check
+  overrides**
+- Import from Homer, Dashy, Heimdall and HOPS exports; exports carry their
+  uploaded icons and backgrounds
+- **Backups**: create, download, upload, restore and clean up, with
+  retention rules. A failed backup shows a warning until one succeeds
+- **Global settings**: every server setting, grouped, each with its default
+- **Logs**, **Password** and **Factory reset** (which backs up first)
 
-### Mobile
-- Dashboards are mobile-friendly with responsive layouts (480px / 768px / 1024px breakpoints)
-- Editing is **disabled on phones** (touchscreen drag-and-drop is awkward) — manage your dashboards from desktop/tablet, view them anywhere
+### Phones and tablets
+- Responsive layout for phones and tablets
+- Add HOPS to your phone's home screen; over HTTPS it opens full screen like
+  an app
+- Editing is hidden on phones (480 pixels wide or less). Tablets can edit,
+  though a mouse is easier
 
 ### Security
-- Bcrypt password hashing with forced first-login password change
-- HttpOnly session cookies + CSRF protection (double-submit cookie pattern)
-- Per-IP rate limiting on login (20/min/IP)
-- Path-traversal hardening on backup/restore operations
-- SQLite foreign-key enforcement and cascading deletes
-- All admin endpoints behind authentication + CSRF middleware
+- No login to view; one admin login to edit and change settings
+- Bcrypt password hashing, forced change of the default password on first
+  sign-in
+- HttpOnly session cookies and CSRF protection
+- Login rate limiting per IP (20 a minute by default)
+- Browser security headers, checked uploads, and hardened outbound requests
+  for status checks and discovery
 
-## Tech Stack
+See [SECURITY.md](SECURITY.md) to report a vulnerability.
 
-- **Frontend**: SvelteKit 2 + Svelte 5 + TypeScript
-- **Backend**: Go (single binary, pure Go, no CGO)
-- **Database**: SQLite (pure Go implementation via modernc.org/sqlite)
-- **Icons**: ~2,300 bundled SVGs (homarr-labs/dashboard-icons) + Iconify (200,000+ by name; the icons the UI uses are embedded for offline rendering, uncommon names fetched on demand)
-- **Drag & Drop**: HOPS's own (no drag-and-drop library)
+## Keyboard shortcuts
 
-## Keyboard Shortcuts
+| Shortcut | Action | Mode |
+|----------|--------|------|
+| `/` | Search this dashboard | Viewing |
+| `↑ ↓ ← →` | Move between tiles | Viewing |
+| `Enter` | Open the highlighted tile | Viewing |
+| `Escape` | Close a dialog or search | Anywhere |
+| `Ctrl+S` | Save the draft | Edit |
+| `Ctrl+Z` / `Ctrl+Shift+Z` or `Ctrl+Y` | Undo / redo | Edit |
+| `Ctrl+C` / `Ctrl+X` / `Ctrl+V` | Copy / cut / paste | Edit |
+| `Delete` | Delete what's selected (asks first) | Edit |
+| `Shift+Arrow` | Resize the selected folder | Edit |
+| `Ctrl+Enter` | Save and close a dialog | Edit |
 
-| Shortcut       | Action                                      | Mode       |
-|----------------|---------------------------------------------|------------|
-| `/`            | Open global search                          | Anywhere   |
-| `↑ ↓ ← →`      | Move focus between tiles                    | Browse     |
-| `Enter`        | Activate focused tile                       | Browse     |
-| `Escape`       | Close modal / cancel edit / close search    | Anywhere   |
-| `Ctrl+S`       | Save the draft                              | Edit       |
-| `Ctrl+Z` / `Ctrl+Shift+Z` or `Ctrl+Y` | Undo / redo          | Edit       |
-| `Ctrl+C`       | Copy selected items                         | Edit       |
-| `Ctrl+X`       | Cut selected items                          | Edit       |
-| `Ctrl+V`       | Paste copied/cut items                      | Edit       |
-| `Delete`       | Delete selected items (asks first)          | Edit       |
-| `Ctrl+Enter`   | Save and close modal                        | Edit       |
+## Tech stack
 
-## Roadmap
-
-Future improvements are tracked in **[ROADMAP.md](ROADMAP.md)** — a tiered
-wishlist (quick wins → architectural shifts) with effort/risk notes. Nothing
-on the list is committed work; HOPS is maintained in spare time and the
-CHANGELOG records what actually ships.
+- **Frontend**: SvelteKit 2 + Svelte 5 + TypeScript, built into the binary
+- **Backend**: Go (pure Go, no CGO)
+- **Database**: SQLite (modernc.org/sqlite)
+- **Icons**: Dashboard Icons (homarr-labs) and Iconify; the icons the UI uses
+  are bundled for offline use
+- **Drag and drop**: HOPS's own
 
 ## Documentation
 
-- **[Zero to Dashboard Hero](QUICKSTART.md)** — Get up and running in 5 minutes
-- **[User Guide](USER_GUIDE.md)** — Full feature reference (still mostly describes HOPS 2; QUICKSTART covers v3)
-- **[Installation & Deployment Guide](DEPLOY.md)** — Reverse proxy, systemd, backups
-- **[Roadmap](ROADMAP.md)** — Future improvements under consideration
+- **[Zero to Dashboard Hero](QUICKSTART.md)**: install and build your first
+  dashboard
+- **[User Guide](USER_GUIDE.md)**: full feature reference
+- **[Installation & Deployment Guide](DEPLOY.md)**: services, reverse
+  proxies, HTTPS, backups and security
+- **[Changelog](CHANGELOG.md)**: what changed in each release
+- **[Roadmap](ROADMAP.md)**: ideas under consideration. Nothing on it is
+  promised; HOPS is maintained in spare time
 
 ## Tips
 
-- Click the **?** icon in the navbar (when logged in) for help
-- Triple-click the HOPS logo when editing for a surprise
+- Signed in, **Help** in the top bar lists the keyboard shortcuts
+- Triple-click the HOPS logo while editing for a surprise
 - The classics never go out of style: try the Konami code
 
 ## Contributing
 
-Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and guidelines.
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for
+development setup and guidelines.
 
-**Found a bug or have an idea?** Please report issues, bugs, or suggestions for improvements via [GitHub Issues](https://github.com/weaversgrainthorpe/HOPS/issues). I maintain this project in my limited spare time, so while I'll do my best to review and consider all feedback, I can't guarantee when (or if) I'll be able to address them. Your patience is appreciated!
+**Found a bug or have an idea?** Please report it via
+[GitHub Issues](https://github.com/weaversgrainthorpe/HOPS/issues). I
+maintain this project in my limited spare time, so while I'll do my best to
+review all feedback, I can't promise when (or if) I'll get to it. Your
+patience is appreciated!
 
-**Security issues?** Please see [SECURITY.md](SECURITY.md) for responsible disclosure instructions. Do not open public issues for vulnerabilities.
+**Security issues?** See [SECURITY.md](SECURITY.md) for responsible
+disclosure. Please don't open public issues for vulnerabilities.
 
 ## License
 

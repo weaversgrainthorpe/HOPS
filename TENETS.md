@@ -23,7 +23,8 @@ UI. No YAML, no JSON, no TOML, no env-var soup.
 rate limits, timeouts, upload caps, session lifetime — live on the Settings page
 and persist in SQLite. The only command-line inputs are the bootstrap paths that
 must exist *before* the database is open: `--data` (and `--host` as an operator
-security choice; `--frontend` exists only in `-tags dev` builds).
+security choice). Developer-only flags such as `--frontend` exist only in
+`-tags dev` builds and are absent from release binaries.
 
 **Violated by.** Introducing a config file users are expected to edit; requiring
 an env var to enable a feature; adding a setting that can *only* be changed via
@@ -51,8 +52,9 @@ user must keep together; depending on an external service to boot.
 
 **Principle.** What HOPS needs to run ships *inside* HOPS.
 
-**In practice.** The web UI, the ~2,300 dashboard icons, and the background
-presets are all embedded in the binary. Config exports are self-contained too —
+**In practice.** The web UI, the ~2,300 Dashboard Icons, the offline Iconify
+icon bundle, the background presets and the Sample dashboard are all embedded
+in the binary. Config exports are self-contained too —
 uploaded icons and backgrounds are inlined as base64 so an export imports cleanly
 on a different host.
 
@@ -77,9 +79,12 @@ that excludes small boards.
 
 **Principle.** Nothing changes until you commit it.
 
-**In practice.** Every edit — tiles, folders, tabs, settings — is applied only on
-an explicit Create/Save. Cancelling or navigating away leaves state exactly as it
-was. No autosave surprises, no partial writes.
+**In practice.** Dashboard edits (tiles, folders, tabs, backgrounds) go into a
+draft that only you see; nothing is stored until **Save** in the editing
+toolbar, and **Discard** or Undo backs out. A dialog's **Cancel** throws away
+just that dialog's changes, and each setting is stored only by its own
+**Save**. Leaving edit mode with unsaved changes asks first. No autosave
+surprises, no partial writes.
 
 **Violated by.** An editor that mutates persisted state before the user confirms;
 a "live" setting that takes effect mid-edit; losing the ability to back out of a
@@ -123,12 +128,16 @@ that only works against a hosted backend; relicensing away from open source.
 across it.
 
 **In practice.** Replace the binary and restart — no migration dance, no
-config-format breakage. Schema migrations run automatically on startup, and a
-database backup is taken automatically at startup before anything touches the DB.
+manual steps. Migrations run automatically on startup, and HOPS backs up its
+database every time it starts. A change of configuration format (2.x → 3.x)
+is converted automatically, all-or-nothing, after a protected backup of the
+old database that is never rotated away; if that backup fails, the
+conversion is refused rather than attempted.
 
 **Violated by.** An upgrade that requires manual migration steps or hand-editing
 data; a release that breaks an existing config/DB without an automatic path
-forward; removing or weakening the startup backup.
+forward; converting data without a backup taken first; removing or weakening
+the startup backup.
 
 ## 10. No telemetry, fully offline-capable
 

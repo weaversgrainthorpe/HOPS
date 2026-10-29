@@ -1,746 +1,1447 @@
-# HOPS User Guide (v3.0.0)
+# HOPS User Guide
+
+This is the reference for HOPS 3: what every part of HOPS does, where to
+find it, and what the defaults are. New to HOPS? Start with
+[Zero to Dashboard Hero](QUICKSTART.md), a guided tour from install to your
+first dashboard. Come back here when you want to look something up.
+
+For installing, running as a service, reverse proxies and HTTPS, see the
+[Installation & Deployment Guide](DEPLOY.md).
+
+![The Sample dashboard](docs/screenshots/dashboard-hero.png)
+
+## Contents
+
+1. [Addresses and signing in](#addresses-and-signing-in)
+2. [Dashboards](#dashboards)
+3. [Tabs](#tabs)
+4. [Folders](#folders)
+5. [Tiles](#tiles)
+6. [The editor](#the-editor)
+7. [Backgrounds](#backgrounds)
+8. [Header](#header)
+9. [Home and away](#home-and-away)
+10. [Status checks](#status-checks)
+11. [Search](#search)
+12. [QR codes](#qr-codes)
+13. [Add to HOPS bookmark](#add-to-hops-bookmark)
+14. [Dead links and duplicates](#dead-links-and-duplicates)
+15. [Network Discovery](#network-discovery)
+16. [Import and export](#import-and-export)
+17. [Backups](#backups)
+18. [Settings](#settings)
+19. [Password and sessions](#password-and-sessions)
+20. [Per-browser preferences](#per-browser-preferences)
+21. [Phones, tablets and touch](#phones-tablets-and-touch)
+22. [Upgrading from HOPS 2](#upgrading-from-hops-2)
+23. [Troubleshooting](#troubleshooting)
+
+---
+
+## Addresses and signing in
+
+| Address | What it shows | Sign-in needed? |
+|---------|---------------|-----------------|
+| `http://<server>:8080/` | Your first dashboard (the top one in **Settings › Dashboards**) | No |
+| `http://<server>:8080/<path>` | The dashboard with that path, e.g. `/home` | No |
+| `http://<server>:8080/settings` | Settings (opens on **Dashboards**) | Yes |
+| `http://<server>:8080/add` | The **Add to HOPS** page (see [Add to HOPS bookmark](#add-to-hops-bookmark)) | Yes, to add |
+
+Anyone who can reach HOPS can view its dashboards. You only sign in to
+change things. That makes it easy to pin a dashboard on a wall tablet or
+share a link with the household.
+
+**Signing in.** Click the **pencil** in the top bar (*Sign in to edit this
+dashboard*) or the **gear** (**Settings**). The first sign-in is `admin` /
+`admin`, and HOPS makes you set a new password straight away; see
+[Step 2: Sign in](QUICKSTART.md#step-2-sign-in). Once signed in, a **Log
+out** button sits at the right of the top bar.
+
+Old addresses from HOPS 2 still work where it makes sense: anything under
+`/admin/discovery` goes to the matching page under
+`/settings/discovery`.
+
+The port is 8080 unless you changed it under **Settings › Global settings ›
+Server › Port** (see [Change the port](QUICKSTART.md#change-the-port)).
+
+---
+
+## Dashboards
+
+A dashboard is one page with its own path. Each dashboard has one or more
+[tabs](#tabs); each tab holds [tiles](#tiles) and [folders](#folders).
+
+```
+Dashboard        one page with its own path, e.g. /home
+└── Tab          the row of tabs across the top
+    ├── Tile     a link, an SSH shortcut or a note
+    └── Folder   a box with a title, holding tiles, other folders, or both
+        └── Tile / Folder ...
+```
+
+### Managing dashboards
+
+Everything about the list of dashboards is on **Settings › Dashboards**:
+
+- **New Dashboard**: type a **Name**; the **URL Path** fills itself in from
+  the name (`Home` becomes `/home`) and you can change it. Click **Save**.
+  A new dashboard starts with one empty tab called *Home*. With no
+  dashboards at all, the page shows **Create Your First Dashboard**
+  instead.
+- **Import**: see [Import and export](#import-and-export).
+- Each dashboard in the list has these buttons:
+  - **Move up** / **Move down**: the order of the list. The top dashboard
+    is the one `/` opens.
+  - **Rename**: change the **Name** and the **URL Path**.
+  - **Export**: download that dashboard as a HOPS JSON file.
+  - **Show QR code (scan with phone)**: see [QR codes](#qr-codes).
+  - **Open in new tab**.
+  - **Delete**: asks first. There is no undo, but HOPS takes a backup
+    before the change, so restoring that backup brings the dashboard back
+    (see [Backups](#backups)).
+- Click a dashboard's name to open it.
 
-> **Out of date:** most of this guide still describes HOPS 2 (groups, row widths). For HOPS 3 (tabs, tiles and nested folders) follow [Zero to Dashboard Hero](QUICKSTART.md) until this guide is rewritten.
+Under the list is the [Add to HOPS bookmark](#add-to-hops-bookmark). The
+**Dead links**, **Duplicates** and **Status check overrides** pages are
+listed under **Dashboards** in the Settings sidebar (on a phone, as chips
+at the top of the page).
 
-Welcome to HOPS (Home Operations Portal System)! This guide will help you get started and make the most of your dashboard.
+**Path rules.** A path can't start or end with a space, can't contain a
+backslash or control characters, and can't begin with a name HOPS uses for
+its own pages: `/add`, `/admin`, `/settings`, `/api`, `/icons`,
+`/backgrounds`, `/presets` or `/_app`.
 
-## Table of Contents
+### The Sample
 
-1. [Getting Started](#getting-started)
-2. [Navigation](#navigation)
-3. [Mobile Experience](#mobile-experience)
-4. [Edit Mode](#edit-mode)
-5. [Working with Dashboards](#working-with-dashboards)
-6. [QR Codes (open on phone/tablet)](#qr-codes)
-7. [Working with Tabs](#working-with-tabs)
-8. [Working with Groups](#working-with-groups)
-9. [Working with Tiles](#working-with-tiles)
-10. [Theming and Customization](#theming-and-customization)
-11. [Keyboard Shortcuts](#keyboard-shortcuts)
-12. [Server Settings](#server-settings)
-13. [Import/Export](#importexport)
-14. [Network Discovery](#network-discovery)
+A fresh install opens on the **Sample** dashboard. It shows tiles in all
+three sizes, nested folders, every folder look and a background picture.
+Its addresses are made up (`*.example.lan`), so its tiles don't go anywhere.
+Delete it from **Settings › Dashboards** when you're done with it. A
+[factory reset](#factory-reset) brings it back.
 
-## Getting Started
+### Switching dashboards
 
-### First Time Setup
+- Signed in, the dashboard's name in the middle of the top bar is a menu
+  of all your dashboards.
+- For everyone, the left of the top bar links to your dashboards (unless
+  the [header](#header) shows custom text there).
+- Or go straight to the address, such as `http://<server>:8080/media`.
 
-1. Navigate to `/` (the root URL) to access the admin panel
-2. Login with default credentials:
-   - Username: `admin`
-   - Password: `admin`
-3. **HOPS will force you to change your password** before doing anything else — a non-dismissible modal appears immediately after the first login with the default credentials. Set a new password to continue.
+### A dashboard's own settings
 
-### Interface Overview
+In [edit mode](#the-editor), the **Dashboard** button in the toolbar opens
+**Edit Dashboard**, in three parts:
 
-- **Header**: Contains navigation, theme settings, and admin controls
-- **Dashboard Area**: Displays your tabs, groups, and tiles
-- **Edit Mode Toggle**: Click the pencil icon (when authenticated) to enter edit mode
+- **Header**: see [Header](#header).
+- **Background**: see [Backgrounds](#backgrounds).
+- **Settings**: per-dashboard versions of a few global settings. Each row
+  shows the global value (*Inherited: …*) until you tick **Override for
+  this dashboard**; **Reset to inherit** puts it back.
 
-## Navigation
+  | Row | Global setting it overrides |
+  |-----|-----------------------------|
+  | **Status checks** | Global settings › Status checks › **Status checks** |
+  | **Check interval (minutes)** | Global settings › Status checks › **Check every (minutes)** |
+  | **Check timeout (seconds)** | Global settings › Status checks › **Give up after (seconds)** |
+  | **Edit mode idle timeout (minutes)** | Global settings › Editing › **Edit mode times out after (minutes)** |
+  | **Animated folder backgrounds** | Global settings › Look & motion › **Animated folder backgrounds** |
 
-### URL structure
+---
 
-HOPS exposes two kinds of URL on the same port:
+## Tabs
 
-| URL                                   | Shows                          | Login required?                          |
-|---------------------------------------|--------------------------------|------------------------------------------|
-| `http://<host>:8080/`                 | Admin page                     | **Yes** — admin login                    |
-| `http://<host>:8080/<dashboard-path>` | A dashboard                    | **No** — public to anyone on the network |
+Tabs run across the top of a dashboard. Click one to switch to it.
 
-You define `<dashboard-path>` when you create the dashboard (e.g. `/home`, `/network`, `/media`). Because dashboard URLs are unauthenticated, you can:
+In edit mode:
 
-- Pin a dashboard URL on a wall-mounted tablet
-- Share a dashboard link with family or housemates
-- Use [QR Codes](#qr-codes) to open a dashboard on a phone without typing the URL
+- **Add tab** (toolbar) opens **New Tab**.
+- To change a tab, click the pencil next to its name, or right-click it.
+  The menu has **Edit**, **Duplicate** and **Delete**.
+- Drag a tab's name to reorder the tabs.
 
-The admin page (`/`) only needs to be reached when you're creating or changing things — day-to-day use goes straight to a dashboard URL.
+The tab dialog has:
 
-### Multiple Dashboards
+| Field | Notes |
+|-------|-------|
+| **Tab Name** | Required. |
+| **Icon (optional)** | **Edit icon** opens the icon editor (see [Icons](#icons)). |
+| **Background Color** and **Opacity** | The tab's own colour. *None* uses the theme's. |
+| **Status checks** | **Inherit**, **On** or **Off** for every tile on the tab that is set to Inherit. See [Status checks](#status-checks). |
+| **Configure Tab Background** | **Same as the dashboard** or **Its own background**. See [Backgrounds](#backgrounds). |
 
-HOPS supports multiple dashboards, each with their own URL path. Examples:
-- `/home` — Your home dashboard
-- `/network` — Network services dashboard
-- `/media` — Media services dashboard
-- etc.
+The dialog's footer has **Delete** and **Duplicate** for an existing tab.
 
-### Tabs
+A dashboard holds at most 200 tabs.
 
-Each dashboard can have multiple tabs to organize your content. Click on a tab name to switch between them.
+Tabs and folders are both ways to organise. Some people give each area its
+own tab; others keep one tab and use folders; many mix the two.
 
-### Groups
+---
 
-Within each tab, content is organized into collapsible groups. Click a group header to expand/collapse it.
+## Folders
 
-## Mobile Experience
+A folder is a box on a tab with a title bar, holding tiles, other folders
+or both.
 
-HOPS is mobile-friendly with responsive layouts that adapt at three breakpoints:
+![Open folders, nesting and folder looks](docs/screenshots/folders.png)
 
-- **Desktop / large tablet (≥1024px)**: full layout with all controls
-- **Tablet portrait / mobile landscape (768–1024px)**: tighter spacing; the per-dashboard nav links collapse but everything else remains
-- **Mobile portrait (≤480px)**: compact icons; editing is **disabled**
+### Making folders
 
-### Why no editing on phones?
+- **Add folder** in the toolbar, or **Add folder here** when you right-click
+  inside a folder or on a tab's empty space.
+- Drag one tile onto the middle of another and hold: the cue says *Hold to
+  make a folder*, then *Make a folder*. Let go, and the new folder's
+  dialog opens.
 
-Editing involves drag-and-drop, dense modals, and small targets — all of which are awkward on a touchscreen. To avoid frustration, the **Edit** and **Export** buttons are hidden on phones. You can still:
+Step by step: [Add folders](QUICKSTART.md#add-folders).
 
-- Browse any dashboard
-- Click/tap tiles to open services
-- Switch between dashboards via the tabs
-- Reach the admin panel (the gear icon stays visible)
+### The folder dialog
 
-To edit dashboards, switch to a tablet or desktop browser. The forced-password-change modal works on mobile.
+**Edit Folder** (or **New Folder**) has these parts:
 
-### Sharing a dashboard URL with a phone
+| Part | Field | Choices and defaults |
+|------|-------|----------------------|
+| | **Folder name** | Required. |
+| | **Icon (optional)** | **Edit icon**; see [Icons](#icons). |
+| **Look** | (the shape) | *Rounded box*, *Simple tab*, *Folder (flat)*, *Folder with paper*, *Folder (outlined)*, *Folder (cartoon)*, *Folder (open flap)*. Each has a live preview. A folder you make with **Add folder** starts as *Folder (flat)*. |
+| | **Tab position** | *Left*, *Centre*, *Right*. Every look except Rounded box has a tab. |
+| **Colour** | **Folder colour** | A swatch, **Custom** (any colour), or *None* for the theme's colour. |
+| | **Opacity** | How see-through the folder is. |
+| | **Text colour** | *Auto* (default), *Light*, *Dark*. HOPS warns when the text would be hard to read on the colour. |
+| **Display** | **Starts** | *Expanded* or *Collapsed*: how the folder looks to anyone who hasn't minimised or opened it themselves. |
+| | **Contents size** | *Small*, *Medium*, *Large*. Every tile and folder inside is shown at this size. |
+| | **Size when minimised** | *Small*, *Medium*, *Large*: the size of its folder tile when minimised. |
+| | **Show title bar** | Untick for a box without a name bar. |
+| | **Status checks** | **Inherit**, **On** or **Off** for the tiles inside. See [Status checks](#status-checks). |
+| **Background** | **Background…** | A picture or slideshow inside the folder. See [Folder backgrounds](#folder-backgrounds). |
+| **Move or copy** | **Move or copy to…** | See [Move/Copy to…](#movecopy-to). |
 
-See [QR Codes](#qr-codes) below — the admin panel can generate a scannable QR for any dashboard URL, so users don't have to type it.
+The footer has **Delete** and **Duplicate** for an existing folder.
 
-## Edit Mode
+### Open and minimised
 
-Edit Mode allows you to modify your dashboards. To enter Edit Mode:
-1. Ensure you're logged in (visit `/`, the admin page)
-2. Navigate to any dashboard on **desktop or tablet** (editing is hidden on phones)
-3. Click the **pencil icon** in the header
+A folder on a tab is either open (a box showing its contents) or minimised
+(a single folder tile).
 
-### What You Can Do in Edit Mode
+- The **minimise** button on the title bar shrinks it to a folder tile.
+  Click the folder tile to open it again.
+- This is the **viewer's** choice. Each browser remembers what it
+  minimised or opened, so minimising on your phone doesn't change anyone
+  else's view. To change how a folder starts for everyone, set **Starts**
+  in its dialog.
+- In edit mode you see the saved layout. There, **Minimise** and **Open**
+  in a folder's right-click menu change its saved **Starts** setting (and
+  can be undone).
 
-- Add, edit, and delete tabs
-- Add, edit, and delete groups
-- Add, edit, and delete tiles
-- Drag and drop to reorder items
-- Copy, cut, and paste tiles
-- Configure backgrounds and themes
+### Folders inside folders
 
-## Working with Dashboards
+A folder inside a folder always shows as its folder tile. Click it and it
+opens in place, inside its parent. The title bar shows the path (*Media ›
+Streaming*); click a parent's name to go back up. In edit mode, a
+sub-folder's right-click menu has **Open** (or **Close** once you are in
+it).
 
-### Creating a Dashboard
+Folders nest up to 12 levels deep. Every level is one more click to reach
+a tile, so we suggest no more than three; [Search](#search) finds things at
+any depth.
 
-1. Go to `/` (the admin page)
-2. Click "Create New Dashboard"
-3. Enter a name and URL path
-4. Click "Save"
+### Size and pages
 
-### Dashboard Settings
+An open folder takes a box on the tab's grid. Make it bigger or smaller by
+dragging its edges in edit mode, or select it and press **Shift**+arrow
+keys (see [Resizing](#resizing)). A folder is never smaller than its title
+bar, one item and its page bar.
 
-- **Name**: Display name shown in navigation
-- **Path**: URL path (e.g., `/home`)
-- **Background**: Set dashboard-wide background (image, slideshow, or color)
-- **Header Configuration**: Customize header text and visibility
+When a folder holds more than fits, it shows one page at a time with a page
+bar at the bottom: **«** **‹** the page numbers **›** **»**. A bigger
+folder shows more on each page. Each browser remembers which page each
+folder was on.
 
-## QR Codes
+---
 
-You can share any dashboard with a phone or tablet by generating a QR code — useful when you don't want to type the URL on a small keyboard.
+## Tiles
 
-### How to generate a QR code
+A tile is one item on a tab or in a folder.
 
-1. Go to the Admin page (`/`)
-2. Find the dashboard you want to share
-3. Click the **QR icon** (next to the export and "open in new tab" buttons on that dashboard's row)
-4. A modal opens showing:
-   - The QR code itself (scannable with any phone camera)
-   - The full URL as text (with a **copy** button)
-   - A **Download SVG** button to save it for printing or embedding elsewhere
-
-### How it works
-
-The QR encodes `<current site URL>` + the dashboard's path. Because it uses your browser's current URL, it works correctly for any deployment topology — local IP, mDNS hostname (`hops.local`), reverse proxy (`hops.example.com`), port-forwarding — without any configuration. Whatever URL the admin is using is the URL the phone needs.
-
-### Tips
-
-- Generate the QR from the SAME network the phone will use. A QR generated while you're connected to your home WiFi will encode the LAN URL — your phone needs to be on the same network for it to resolve.
-- Print or download the SVG and stick it on a fridge/wall for guests to scan.
-
-## Working with Tabs
-
-### Adding a Tab
-
-1. Enter Edit Mode
-2. Click the **+ Add Tab** button at the end of the tab bar.
-   - On a brand-new dashboard with no tabs yet, a centred **"Add Your First Tab"** button appears instead — same flow.
-3. The **New Tab** modal opens. Fill in:
-   - **Name** *(required)*
-   - **Icon** *(optional)* — type an Iconify name or click **Browse**
-   - **Background Color** + **Opacity** slider *(optional)*
-4. Click **Create**.
-
-The tab is only created when you click Create — cancelling leaves nothing behind.
-
-### Editing a Tab
-
-1. Enter Edit Mode
-2. Click on the tab you want to edit
-3. Edit the following:
-   - **Name**: Tab display name
-   - **Icon**: Optional icon shown next to the tab name
-   - **Color**: Custom background color (optional)
-   - **Opacity**: Background opacity (optional)
-   - **Background**: Tab-specific background image (only when **per-tab backgrounds** is enabled on the dashboard)
-4. Click **Save**.
-
-### Reordering Tabs
-
-1. Enter Edit Mode
-2. Drag the tab by the drag handle icon
-3. Drop it in the desired position
-
-### Deleting a Tab
-
-1. Enter Edit Mode
-2. Click the tab to edit it
-3. Click the "Delete" button in the edit modal
-
-## Working with Groups
-
-### Adding a Group
-
-1. Enter Edit Mode
-2. Click **Add Group** at the bottom of the tab
-3. The **New Group** modal opens. Fill in:
-   - **Name** *(required)*
-   - **Icon** *(optional)* — type an Iconify name or click **Browse**
-   - **Background Color** + **Opacity** slider *(optional)*
-   - **Text Color**: Auto (recommended), Light, or Dark
-   - **Display Style**: Full Header (default) or Folder Tab
-   - **Row Width**: Full (default), Half, or Third — see [Multi-column group layouts](#multi-column-group-layouts) below
-4. Click **Create**.
-
-All of these can be changed later from the group's edit modal.
-
-### Editing a Group
-
-1. Enter Edit Mode
-2. Click the "Edit Group" button on the group header
-3. Edit the following:
-   - **Name**: Group display name
-   - **Icon**: Optional icon for the group header
-   - **Color**: Custom color (optional)
-   - **Opacity**: Background opacity (optional)
-   - **Text Color**: Choose Auto (smart contrast), Light, or Dark
-     - **Auto** (recommended): Automatically determines light or dark text based on background color for optimal readability
-     - **Light**: Force white text
-     - **Dark**: Force black text
-   - **Display Style**: Choose how the group header appears
-     - **Full Header** (default): Full-width header bar spanning the entire group width
-     - **Folder Tab**: Compact folder-style tab at the top-left, similar to file folder tabs
-   - **Row Width**: how much of the row this group takes up — see below
-
-### Multi-column group layouts
-
-By default a group spans the full tab width. Set **Row Width** to **Half** or
-**Third** to put multiple groups side by side on the same row:
-
-- **Full** — the group spans the whole row (default).
-- **Half** — the group takes half a row. Two Half groups in a row sit
-  side-by-side.
-- **Third** — the group takes a third of a row. Up to three Third groups
-  fit in a single row.
-
-Groups flow left-to-right in their existing order, so to get a "Half + Half"
-row, put two Half groups consecutively. A row that doesn't fill cleanly
-(e.g., Half + Full) wraps the oversized group onto its own row.
-
-Width is a manual setting — drag-and-drop only reorders groups; it doesn't
-change widths. To rearrange a multi-column tab, set each group's width
-explicitly via its edit modal.
-
-On narrow screens (phones; width below ~768px), all groups collapse to full
-width regardless of setting, to keep the layout readable.
-
-### Reordering Groups
-
-1. Enter Edit Mode
-2. Drag the group by its header
-3. Drop it in the desired position
-
-### Moving or Copying a Group to Another Tab
-
-For across-tab moves (which can't be done by drag), open the group editor:
-1. Enter Edit Mode → click the group's pencil to open its editor
-2. Expand **"Move or Copy to Another Tab"**
-3. Pick a target tab
-4. Click **Move Group** (relocates everything, original gone) or **Copy Group** (deep-clones the group and all its tiles with fresh IDs; original stays)
-
-### Deleting a Group
-
-1. Enter Edit Mode
-2. Click "Edit Group"
-3. Click "Delete Group"
-
-**Note**: You can only delete empty groups. Remove all tiles first.
-
-## Working with Tiles
+![The tile dialog](docs/screenshots/edit-tile.png)
 
 ### Tile types
 
-HOPS supports two kinds of tile, set via the **Tile type** dropdown at the
-top of the tile edit modal:
-
-- **Link** (default) — the classic HOPS tile. Opens a URL when clicked,
-  shows an icon, and can run status checks.
-- **Note** — a text-only tile. Renders a name and an optional longer
-  description, doesn't open anything when clicked, and doesn't run status
-  checks. Useful as a section header, a stand-in for a service you haven't
-  set up yet, or a small inline note.
-
-The fields shown in the edit modal change to match the tile type — Notes
-hide the URL, icon, open-mode and status-check sections, since none of
-those apply.
-
-### Adding a Tile
-
-1. Enter Edit Mode
-2. Click **Add Tile** in the group
-3. The **New Tile** modal opens. Fill in:
-   - **Tile type**: **Link** (default) or **Note** — see above
-   - **Name** *(required)*: Display name
-   - **Subtitle/Description** *(optional)*: small text under the name (for
-     Notes, this is the body text and renders as a larger paragraph)
-   - **URL** *(required for Link, hidden for Note)*: Target URL
-   - **Icon** *(Link only)*: Choose an icon
-     - Type an Iconify icon name directly (e.g., `mdi:docker`, `simple-icons:plex`) — loaded on demand from iconify.design (~200,000 icons available)
-     - OR click **Browse** to open the **Icon Picker** with ~2,300 bundled app/service icons (search by name or browse by category — Containers, Media, Monitoring, etc.)
-     - OR click **Upload** to use your own image file
-     - **My Uploads**: previously uploaded custom icons appear here for easy reuse
-     - **Recently Used**: your last 20 selected icons are tracked for quick access
-   - **Background Color** + **Opacity** slider *(optional — leave blank to inherit the group's colour)*
-   - **Size**: Small, Medium, or Large
-   - **Open Mode** *(Link only)*: how the link opens (New Tab, Same Tab, iFrame, Modal)
-   - **Enable Status Check** *(Link only, optional)*: HOPS will ping the URL and show an up/down indicator on the tile
-4. Click **Create**.
-
-For Link tiles, only **Name** and **URL** are required. For Note tiles,
-only **Name** is required. Everything else can be added or changed later
-via the tile's edit modal.
-
-### Editing a Tile
-
-1. Enter Edit Mode
-2. Click on the tile
-3. Make your changes
-4. Click "Save"
-
-### Moving Tiles
-
-#### Within a Group (Reorder)
-1. Enter Edit Mode
-2. Drag the tile
-3. Drop it in the desired position
-
-#### Between Groups (Cross-Group Drag & Drop)
-1. Enter Edit Mode
-2. Drag a tile from one group
-3. Drop it into another group
-
-#### Between Tabs (Move or Copy via the Tile editor)
-For moves across tabs (which can't be done by drag), open the tile editor:
-1. Enter Edit Mode → click the tile to open its editor
-2. Expand **"Move or Copy to Different Tab/Group"**
-3. Pick a target tab, then a target group
-4. Click **Move** (relocates the tile) or **Copy** (duplicates the tile, original stays)
-
-#### Copy, Cut, and Paste
-1. Enter Edit Mode
-2. Right-click on a tile
-3. Select "Copy" or "Cut"
-4. Click on the target group to focus it
-5. Press Ctrl+V (or Cmd+V on Mac) to paste
-
-Alternatively:
-- **Copy**: Right-click → Copy (or Ctrl+C / Cmd+C)
-- **Cut**: Right-click → Cut (or Ctrl+X / Cmd+X)
-- **Paste**: Click target group, then Ctrl+V / Cmd+V
-
-### Deleting a Tile
-
-Method 1: Edit Modal
-1. Enter Edit Mode
-2. Click the tile
-3. Click "Delete"
-
-Method 2: Quick Delete
-1. Enter Edit Mode
-2. Hover over the tile
-3. Click the red X button that appears
-
-Method 3: Context Menu
-1. Enter Edit Mode
-2. Right-click on the tile
-3. Select "Delete"
-
-## Theming and Customization
-
-### Global Theme
-
-Click the **theme icon** in the header to open theme settings:
-
-- **8 Theme Presets**: Default (Blue), Metallic, Modern (Indigo), Subtle, Cyberpunk, Sunset, Ocean, Forest
-- **Light/Dark Mode**: Each theme has light and dark variants
-- **Auto Mode**: Automatically follows your system theme preference
-- **Gradient themes**: Sunset, Ocean, and Forest use animated CSS gradients
+**Tile type** is at the top of the tile dialog:
+
+| Type | What a click does | Needs |
+|------|-------------------|-------|
+| **Link — opens a URL when clicked** | Opens the **Address** (see [Open modes](#open-modes)). | **Name**, **Address** |
+| **SSH — opens your computer's SSH app** | Opens an `ssh://` link, which your computer hands to its SSH app. | **Name**, **Host** |
+| **Note — text only, no link** | Nothing. A heading and some **Body text**. | **Name** |
+
+On Windows you may need to set up an SSH app first (for example PuTTY or
+Windows Terminal) before SSH tiles open anything.
+
+### The tile dialog
+
+| Field | Types | Notes |
+|-------|-------|-------|
+| **Name** | all | Required. For a Note, the heading. |
+| **Subtitle/Description** | Link, SSH | Small text under the name. For a Note this field is **Body text**. |
+| **Address** | Link | The home address, e.g. `http://192.168.1.1`. HOPS says under the field if it can't open what you typed. |
+| **Away address (optional)** | Link | See [Home and away](#home-and-away). |
+| **Host**, **Port**, **User** | SSH | **Port** is 22 if left blank; **User** is optional. |
+| **Away host (optional)**, **Away port** | SSH | See [Home and away](#home-and-away). |
+| **Icon** | Link, SSH | **Edit icon**; see [Icons](#icons). |
+| **Background Color** | all | A swatch, **Custom**, or *None* for the theme's colour. |
+| **Background opacity** | all | Fades the tile's background only. |
+| **Text opacity** | all | Fades the text. |
+| **Icon opacity** | Link, SSH | Fades the icon. The status badge is never faded. |
+| **Size** | all | *Small*, *Medium* (default), *Large*. |
+| **Open Mode** | Link | See [Open modes](#open-modes). SSH tiles always open in place. |
+| **Status checks** | Link, SSH | **Inherit**, **On** or **Off**. See [Status checks](#status-checks). |
+| **Move or copy to…** | all | See [Move/Copy to…](#movecopy-to). |
+
+Greyed italic text in an empty field is only an example, not a value.
+
+The footer has **Delete**, **Cancel**, and **Create** (new tile) or
+**Save**.
+
+### Sizes and the grid
+
+Each tab is a grid 24 columns wide. On a tab, a tile takes the space of its
+**Size**: *Small* is 1 × 1 cells, *Medium* 2 × 2 and *Large* 4 × 4. To make
+a tile bigger or smaller, change its **Size**; tiles have no resize
+handles. Inside a folder, every item is shown at the folder's **Contents
+size** instead.
+
+Items never overlap. Dropping or resizing something where others already
+are pushes them aside.
+
+### Open modes
+
+**Open Mode** decides what clicking a Link tile does:
+
+- **New Tab** (default): opens the address in a new browser tab.
+- **Same Tab**: replaces HOPS with the service.
+- **iFrame Modal**: shows the service in a window on top of HOPS. Some
+  sites refuse to be shown inside another page; use New Tab for those.
+- **Popup Modal**: asks first, with **Open in New Tab** and **Open in Same
+  Tab**.
+
+### Icons
+
+**Edit icon** opens the icon editor:
+
+- Type a name for suggestions (↑/↓ to move, Tab or Enter to accept), for
+  example `mdi:server`. Any icon name from
+  [iconify.design](https://iconify.design) works.
+- **Browse** opens **Choose an Icon**, the icon library, with categories,
+  your uploads and your recently used icons.
+- **Upload** adds your own image (PNG, JPG, GIF, WebP or SVG; up to 2 MB
+  by default, set under **Settings › Global settings › Uploads › Largest
+  icon upload**).
+- **Icon background** puts a colour behind the icon.
+- Click **Done**.
+
+![The icon picker](docs/screenshots/icon-picker.png)
+
+**Offline icons.** HOPS ships thousands of icons that work with no internet
+connection: the Dashboard Icons set (logos for homelab apps, some with
+light and dark versions) and an offline bundle of Material Design and
+Simple Icons. Uploaded icons are stored on your HOPS server. Any other
+Iconify name is fetched from the internet the first time it is used.
+**Settings › Icons › Offline and limits** shows the counts.
+
+**Settings › Icons** also manages your uploads: **Search icons**, filter by
+**Show category**, **Upload icons** (one or several at a time) into a
+category, rename or recategorise an icon, delete one that isn't in use, and
+add your own categories under **Your categories**.
+
+---
+
+## The editor
+
+![Edit mode, with the toolbar and a selection](docs/screenshots/edit-mode.png)
+
+Click the **pencil** in the top bar (*Enter Edit Mode*) to start editing the
+dashboard you're on. It turns into an **Editing** badge; click it again to
+leave edit mode. Step-by-step introduction: [Edit
+mode](QUICKSTART.md#edit-mode).
+
+### The toolbar
+
+Pinned to the bottom of the screen while you edit:
+
+| Button | What it does |
+|--------|--------------|
+| **Save** (Ctrl+S) | Stores your draft. A *Changes saved* message confirms it. |
+| **Discard** | Throws away everything since the last save. Asks first (*Discard changes?*); **Keep editing** backs out. |
+| **Undo** (Ctrl+Z) / **Redo** (Ctrl+Shift+Z or Ctrl+Y) | One step at a time: a drag, a resize, a delete, or everything changed in one dialog. |
+| *Unsaved changes* | Shows while your draft differs from what is saved. |
+| **Add tile**, **Add folder**, **Add tab** | Adds to the tab (or the open folder) you're looking at. |
+| **Dashboard** | The dashboard's **Header**, **Background** and **Settings**. |
+
+On a Mac, use Cmd where this guide says Ctrl.
 
-### Text Size
+While editing, an **Export Dashboard** button also appears in the top bar
+(see [Export](#export)).
 
-Adjust the text size using the **A buttons** in the navbar:
-- **A↑** - Increase text size
-- **A↓** - Decrease text size
-- Text size preference is saved in your browser
-
-### Theme Hierarchy
-
-HOPS uses a cascading theme system:
-
-**Dashboard** → **Tab** → **Group** → **Tile**
-
-Each level can define:
-- **Color**: Background/accent color
-- **Opacity**: Background transparency
-
-Child levels inherit parent colors/opacity unless overridden.
-
-### Setting Backgrounds
-
-#### Dashboard Background
-1. Enter Edit Mode
-2. Click "Background" button in the dashboard header
-3. Choose type:
-   - **None**: Use default theme background
-   - **Color**: Solid color background
-   - **Image**: Single background image
-   - **Slideshow**: Multiple rotating images
-
-For slideshows:
-- Add multiple images from the **~90 curated backgrounds** across 12 categories (Network, Servers, Docker, Homelab, Smart Home, Apps, Multimedia, Weather, Storage, Tech, Space, Minimal)
-- OR upload your own images (they appear in a "My Uploads" category for reuse)
-- OR add custom image URLs
-- Set rotation interval (seconds) — default is 30s
-- Choose fit mode (Cover, Contain, Fill)
-- **Overlay**: Adjust overlay opacity and blur to improve text readability over busy backgrounds
-- **Preview**: Live animated preview shows smooth crossfade transition (1.5s professional fade)
-
-#### Tab Background
-1. Enter Edit Mode
-2. Click "Tab Background" button in the tab
-3. Configure like dashboard background
-
-Tab backgrounds override dashboard backgrounds when set.
-
-### Customizing Colors
-
-You can set custom colors at multiple levels:
-
-- **Dashboard**: Set via dashboard background settings
-- **Tab**: Edit tab → Set color and opacity
-- **Group**: Edit group → Set color and opacity
-- **Tile**: Edit tile → Set color and opacity
-
-Colors cascade down the hierarchy!
-
-## Keyboard Shortcuts
-
-### Global Shortcuts (any mode)
-- **/** - Open global search. Type to filter tiles across every dashboard by
-  name, URL, or description. Arrow keys to move through results, **Enter**
-  to open the highlighted tile, **Esc** to close. The hotkey doesn't fire
-  while you're typing into an input or textarea (so a literal `/` in your
-  data still works).
-- **Esc** - Close modals, dialogs, and the search modal
-
-### Browse-mode Tile Navigation
-- **↑ ↓ ← →** - Move focus between tiles. Navigation is spatial: it picks
-  the nearest tile in the direction you press, weighting off-axis distance
-  so up/down picks the tile above/below and left/right picks the row
-  neighbour. The focused tile gets a blue halo.
-- **Enter** - Activate the focused tile (open the link, or trigger the
-  tile's default action)
-
-Arrow-key navigation is disabled in Edit Mode so it doesn't interfere with
-selection and drag operations.
-
-### Edit Mode Shortcuts
-- **Ctrl+C** / **Cmd+C** - Copy selected tile
-- **Ctrl+X** / **Cmd+X** - Cut selected tile
-- **Ctrl+V** / **Cmd+V** - Paste tile into focused group
-- **Ctrl+Enter** / **Cmd+Enter** - Save in modals
-- **Esc** - Cancel/close modals
-
-### Mouse Shortcuts
-- **Right-click** on tile (in Edit Mode) - Open context menu
-- **Click** on group - Focus group for paste operation
-
-## Server Settings
-
-Everything HOPS does at runtime — the port it listens on, how chatty the logs are, how quickly it status-checks tiles, how big an upload it will accept, how long a login session lasts — is configured in one place: the **Settings** page in the admin panel. There are no config files to edit and (as of v1.6.0) no environment variables to set.
-
-### Opening Settings
-
-From the Admin page (`/`), click the **Settings** button in the header (next to **Backups**). You can also navigate directly to `/settings`. The page is admin-only — you must be logged in.
-
-### What's there
-
-Settings are grouped into seven sections, each with inline help on every entry — there's no need to memorise the list below:
-
-- **Server** — TCP port HOPS listens on
-- **Logging** — log verbosity (debug / info / warn / error)
-- **Reverse proxy** — trusted-proxy IP ranges if HOPS sits behind nginx, Caddy, Traefik, etc.
-- **Authentication** — login rate limit per IP per minute; session lifetime
-- **Status checks** — how often tiles are pinged and the per-request timeout
-- **Uploads** — maximum file size for config import, background images, icons
-- **HTTP server timeouts** — read / write / idle timeouts on the underlying server
-
-Every entry shows its current value, default, valid range (where applicable), and a short description of what it does.
-
-### Live changes vs Restart required
-
-Most settings apply **immediately** — change them, hit Save, the running server picks up the new value on the next request. Things like log level, status-check interval, and rate limits work this way.
-
-A few are marked with an orange **Restart** pill next to their name. These (server port, reverse-proxy trusted ranges, HTTP server timeouts) are bound when HOPS first starts and can't be changed mid-flight. Saving them persists the value, but the change takes effect only when you restart HOPS — `sudo systemctl restart hops` on the prod box, or stop/start your container.
-
-### Editing a setting
-
-1. Find the setting you want to change.
-2. Type the new value (or pick from the dropdown for log level).
-3. Click **Save**. You'll see a green confirmation toast.
-
-The **Revert** button next to Save discards your unsaved change. **Reset to default** (visible when the current value isn't the default) restores HOPS's out-of-the-box setting for that entry.
-
-If you enter something invalid (out of range, malformed JSON for the trusted-proxy list, an unknown log level), Save will reject it with a specific error message; the running value is unchanged until validation passes.
-
-### Common things you might want to change
-
-- **Increase log verbosity to diagnose an issue** — set `log.level` to `debug` (live; no restart). Remember to set it back to `info` afterwards or your `journalctl` will get noisy.
-- **Run HOPS behind a reverse proxy** — set `proxy.trusted_cidrs` to a JSON array of CIDRs, e.g. `["10.0.0.0/8"]` or `["192.168.1.5/32"]`. Restart required. This lets HOPS honour `X-Forwarded-For` (so login rate limiting keys on the real client) and `X-Forwarded-Proto` (so cookies are marked Secure over HTTPS).
-- **Change the port** — set `server.port`. Restart required, and remember to update any reverse-proxy / firewall / port-forward that targets the old port.
-- **Allow larger background images** — bump `upload.max_bytes_background`. Live.
-- **Make the status checker more aggressive** — drop `status.check_interval_minutes` from 5 to 1. Live.
-
-### Defaults are sensible
-
-You should not need to touch the Settings page for a typical homelab install. The defaults are tuned for that. Open the page if you have a specific need — debugging, a reverse proxy in front, very large backgrounds, etc. — otherwise, leave it alone.
-
-## Import/Export
-
-### Exporting Configuration
-
-Exports are **self-contained** — all uploaded assets (icons, backgrounds) are embedded in the export file as base64 data. This means you can import on a different server without losing any custom images.
-
-**Export everything (from the Admin Page):**
-1. Go to the Admin page (`/`)
-2. Find the dashboard you want to export
-3. Click the **download icon** next to that dashboard
-4. Your configuration downloads as a JSON file with embedded assets
-
-**Export a single dashboard (from Edit Mode):**
-1. Enter Edit Mode on any dashboard
-2. Click the **download icon** in the header
-3. Only that dashboard's configuration and assets are exported
-
-### Importing Configuration
-
-Import is done from the Admin page:
-
-1. Go to the Admin page (`/`)
-2. Click the **Import** button next to "New Dashboard"
-3. Select your configuration file
-4. Click "Import Configuration"
-
-#### Supported Formats
-- **HOPS JSON** - Native format (exported from HOPS)
-- **Homer YAML** - config.yml from Homer dashboard
-- **Dashy YAML** - conf.yml from Dashy dashboard
-- **Heimdall JSON** - Export from Heimdall dashboard
-
-### Import Notes
-
-- **Merges with existing**: Imported dashboards are added alongside your existing ones
-- **Path conflicts**: If a dashboard path already exists, the imported one gets a suffix (e.g., /home becomes /home-1)
-- **Backup first**: Always export your current config before importing
-- **Authentication required**: Import/Export requires admin login
-- **Format conversion**: Import from other tools is best-effort
+### Selection
+
+- Click a tile or folder to select it.
+- Ctrl-click (Cmd-click on a Mac) adds an item to the selection, or takes
+  it out.
+- **Escape** clears the selection.
+
+Copy, cut, delete, **Move/Copy to…** and **Shift**+arrow resizing work on
+the selection.
+
+### Drag and drop
+
+- Drag a tile or folder to move it around the grid. Others move aside to
+  make room.
+- Drop it on a folder to put it inside (the cue says *Into "…"*). Drop it
+  on an open folder's title bar to put it at the end of that folder.
+- Hold a dragged tile over the middle of another tile to make a new folder
+  of the two (see [Making folders](#making-folders)).
+- Hold a dragged item over another tab's name to switch to that tab, and
+  drop it there.
+- Drag a tab's name to reorder the tabs.
+- **Escape** while dragging cancels the drag and leaves everything as it
+  was.
+
+Every drop can be undone.
+
+### Context menus
+
+Right-click in edit mode (on a touch screen, press and hold; see [Touch
+editing](#touch-editing)):
+
+| On | Menu |
+|----|------|
+| A tile | **Edit**, **Duplicate**, **Cut**, **Copy**, **Paste here** (beside it), **Move/Copy to…**, **Delete** |
+| A folder | **Edit**, **Open** (if minimised or nested) or **Close**, **Duplicate**, **Cut**, **Copy**, **Paste here** (into it), **Move/Copy to…**, **Minimise** (if open on a tab), **Delete** |
+| Several selected items | **Cut**, **Copy**, **Paste here**, **Move/Copy to…**, **Delete *n* items** |
+| Empty space on a tab, or inside an open folder | **Add tile here**, **Add folder here**, **Paste here** |
+| A tab's name | **Edit**, **Duplicate**, **Delete** |
+
+Every item also has a small **pencil** that opens its dialog.
+
+### Cut, copy and paste
+
+- **Ctrl+C** / **Copy** copies the selected items. **Ctrl+X** / **Cut**
+  cuts them. A copy is a snapshot: changing the originals later doesn't
+  change what you paste.
+- **Ctrl+V** pastes into the open folder (or the tab). **Paste here** in a
+  menu pastes exactly where you right-clicked.
+- Pasting a copy makes new items (with everything inside a folder). Pasting
+  a cut moves the originals.
+- The clipboard lasts while the page is open, so you can paste on another
+  dashboard. Pasting on a different dashboard is saved straight away, so
+  HOPS asks you to save or discard your changes first.
+- If text is selected on the page, Ctrl+C copies the text instead.
+
+### Move/Copy to…
+
+**Move/Copy to…** (right-click menu, or **Move or copy to…** in a tile or
+folder dialog) opens a tree of every dashboard, tab and folder. Pick the
+destination and click **Copy** or **Move**.
+
+- On the same dashboard, it's an ordinary edit: part of your draft, and one
+  undo step.
+- To another dashboard, it is saved straight away, so it is only allowed
+  while you have no unsaved changes (*Save or discard your changes first*).
+- A place the items can't go is marked, for example *Already here (copy
+  only)*.
+
+### Resizing
+
+Only open folders on a tab have resize handles. Drag the right edge, the
+bottom edge or the corner, or select the folder and press **Shift**+arrow
+keys to grow or shrink it one cell at a time. Tiles take the space of
+their **Size**; a minimised folder is opened first. Resizing needs a wider
+screen: it isn't available in the one-column phone layout.
+
+### Deleting
+
+**Delete** in a menu or dialog, or press **Delete** (or Backspace) with
+items selected. HOPS asks first. A deleted folder takes everything inside
+it with it. Undo brings it back until you leave edit mode.
+
+### Limits
+
+Each dashboard holds at most:
+
+- **200 tabs**;
+- **5,000 items** (tiles and folders, at any depth);
+- **12 levels** of folders inside folders.
+
+HOPS refuses a change that would go past a limit when you make it, and says
+why, rather than when you click Save.
+
+### Saving and drafts
+
+While you edit, you are changing a **draft** of one dashboard. Nobody else
+sees it, and nothing is stored until you click **Save**.
+
+- In a dialog, **Create** or **Save** puts that dialog's changes into your
+  draft; **Cancel** throws away just that dialog's changes.
+- Leaving edit mode with unsaved changes asks **Save**, **Discard** or
+  **Keep editing**. Closing or reloading the page makes the browser ask
+  before you lose them.
+- **Idle timeout.** Edit mode switches itself off after 15 minutes without
+  activity (**Settings › Global settings › Editing › Edit mode times out
+  after (minutes)**; 0 turns it off; a dashboard can override it). With
+  unsaved changes it never throws them away: it asks **Save**, **Discard**
+  or **Keep editing**, and waits.
+- **Changed elsewhere.** If the dashboard was saved from another browser or
+  tab while you were editing, your save is refused and a banner says *This
+  dashboard was changed somewhere else, so your changes were not saved*.
+  Choose **Reload (lose my draft)** or **Keep editing**.
+- **Signed out while editing.** Unsaved changes are kept while the page
+  stays open. A banner says so; sign in, open that dashboard and click Edit
+  to get them back, or click **Discard them**.
+- HOPS takes a backup before every save (see [Backups](#backups)).
+
+### Keyboard shortcuts
+
+**Help** in the top bar (once signed in) lists these too.
+
+| Keys | Where | Does |
+|------|-------|------|
+| `/` | anywhere | Opens [Search](#search). |
+| Arrow keys | viewing | Move between tiles; the focused tile has a blue halo. |
+| Enter | viewing | Opens the focused tile. |
+| Ctrl+S | editing | Save. |
+| Ctrl+Z | editing | Undo. |
+| Ctrl+Shift+Z or Ctrl+Y | editing | Redo. |
+| Ctrl+C / Ctrl+X / Ctrl+V | editing | Copy / cut / paste. |
+| Delete or Backspace | editing | Delete the selection (asks first). |
+| Shift+arrow keys | editing | Resize the selected open folder by one cell. |
+| Escape | editing | Clear the selection; cancel a drag; close a dialog. |
+| Ctrl+Enter | in a dialog | Save and close the dialog. |
+
+### Animations
+
+In edit mode, a tile dropped into a folder flies into it, and two tiles
+merged into a folder are drawn together. **Settings › Global settings ›
+Look & motion › Animations** is *On* (the default: plays them unless your
+device asks for reduced motion), *Always* or *Off*. They never delay your
+change.
+
+---
+
+## Backgrounds
+
+A background can go behind the whole dashboard, behind one tab, or inside
+one folder. Each is part of your draft like any other change: save the
+dialog, then click **Save** in the toolbar. Step by step:
+[Backgrounds](QUICKSTART.md#backgrounds).
+
+| Level | Where | First choice |
+|-------|-------|--------------|
+| Dashboard | **Dashboard › Background** | **Show background picture** on or off |
+| Tab | Tab dialog › **Configure Tab Background** | **Same as the dashboard** or **Its own background** |
+| Folder | Folder dialog › **Background…** | **No picture of its own — show what's behind** or **Its own picture** |
+
+Turning a background off keeps its settings, so you can turn it on again
+later.
+
+### Background types
+
+**Background Type** (for a folder: **Picture type**):
+
+- **None**: no background (dashboard and tab).
+- **Color**: one plain colour (dashboard and tab; a folder's colour is
+  set in the folder dialog).
+- **Image**: one picture.
+- **Slideshow**: several pictures in turn.
+
+For pictures:
+
+- **Image Gallery**: pictures that come with HOPS, in categories such as
+  Network, Servers, Homelab and Space. They work with no internet
+  connection.
+- **Upload**: your own JPEG, PNG, GIF or WebP, up to 25 MB by default
+  (**Settings › Global settings › Uploads › Largest background upload**).
+  Uploads appear in the gallery for reuse.
+- **Image URL**: a picture on another site.
+- **Image Fit**: *Cover* (fills the area, may crop), *Contain* (whole
+  picture visible, may leave bars) or *Fill* (stretches).
+- **Overlay Darkness** and **Overlay Blur**: darken and soften the picture
+  so tiles stay readable.
+- **Background opacity**: fades the background itself.
+
+For a slideshow, click pictures to add them to **Selected Images**, then
+set:
+
+- **Rotation Interval (seconds, 5–3600)**;
+- **Transition Effect**: Crossfade, Slide, Slide Up, Slide Down, Zoom In,
+  Zoom Out, Fade Black, Blur, Flip, Swirl, Wipe, Curtain, Circle, Diamond,
+  Dissolve, Flash, Glitch, Ken Burns, none, or Random;
+- **Transition Duration**.
+
+Click **Save Background**.
+
+### Folder backgrounds
+
+A folder's colour and opacity are set in the folder dialog under
+**Colour**; **Background…** is for pictures only. A folder slideshow plays
+only while **Animated folder backgrounds** is on (the default; **Settings ›
+Global settings › Look & motion**, or per dashboard in **Dashboard ›
+Settings**). At most four folders animate at once, the ones taking up most
+of the screen. On a device that asks for reduced motion, slideshows show
+their first picture, still.
+
+A folder from HOPS 2 may have a *colour background*. The dialog offers
+**Use as folder colour** to move it to the folder colour.
+
+### A word of caution
+
+Pictures can go on the dashboard, every tab and every folder, each with its
+own opacity, darkness and blur, and slideshows can play in several places
+at once. It's easy to end up with a busy, hard-to-read screen. A good start
+is one picture behind the dashboard, plain colours on tabs and folders, and
+pictures only where they help you find things.
+
+If a background picture can't be loaded, the edit toolbar says so for the
+dashboard or the tab.
+
+---
+
+## Header
+
+**Dashboard › Header** controls the top bar's left and centre:
+
+- **Show left section**, with **Custom Text (optional)**. Empty shows the
+  HOPS logo and links to your dashboards.
+- **Show center title**, with **Custom Title (optional)**. Empty shows the
+  dashboard's name.
+
+The right of the top bar is always there. From left to right it can hold:
+
+| Button | Shown | Does |
+|--------|-------|------|
+| **Home** / **Away** | when the dashboard has a tile with an away address | See [Home and away](#home-and-away). |
+| **Search** | always | See [Search](#search). |
+| **Decrease text size** / **Increase text size** (the two **A** buttons) | on dashboards | *Small*, *Medium*, *Large*, *Extra Large*. Kept in this browser. |
+| **Theme Settings** | always | **Brightness Mode** (*Dark*, *Light*, *Auto*), **Theme Preset** (Default, Metallic, Modern, Subtle, Cyberpunk, Sunset, Ocean, Forest), **Show recently used** and **Clear history**. Click **Apply Theme**. Kept in this browser. |
+| **Export Dashboard** | while editing | See [Export](#export). |
+| **pencil** / **Editing** | on dashboards, not on phones | Sign in, or enter and leave edit mode. |
+| **Help** | signed in | Keyboard shortcuts and features. |
+| **About HOPS** | signed in | The version and what HOPS can do. |
+| **Settings** (gear) | always | Settings (asks you to sign in). |
+| **Log out** | signed in | Signs this browser out. |
+
+**Show recently used** adds a row above the tabs with the tiles you open
+most on that dashboard, in this browser.
+
+---
+
+## Home and away
+
+At home you might open your NAS at `http://192.168.1.10`; away from home,
+through Tailscale, a VPN or a public address. A tile can hold both:
+
+- Link tiles: **Address** (home) and **Away address (optional)**.
+- SSH tiles: **Host** and **Port** (home), and **Away host (optional)** and
+  **Away port**.
+
+Once a dashboard has at least one tile with an away address, a **Home** /
+**Away** button appears in the top bar. Click it to switch which address
+tiles open.
+
+- The choice is kept in **this browser only**, signed in or not. Your
+  phone can be on Away while your desktop stays on Home. It starts on Home.
+- On Away, a tile without an away address opens its home address.
+- [Status checks](#status-checks) always use the home address (HOPS runs
+  them from the server, which is at home).
+- [Search](#search) opens the same address a click would.
+
+---
+
+## Status checks
+
+A status check asks a tile's service, every few minutes, whether it is up,
+and shows a small badge on the tile. Hover over it for *Online* (with the
+response time), *Offline* or *Error*.
+
+- **What counts as up.** The check asks whether the service is reachable
+  and answering. Self-signed HTTPS certificates (Proxmox, UniFi, TrueNAS and
+  the like) are fine. A service that answers with a login prompt (HTTP 401
+  or 403) is *Online*. *Error* means another 4xx answer such as 404 (often
+  a wrong path). *Offline* means it couldn't be reached, or answered with a
+  5xx server error.
+- **SSH tiles** get a connection check on their host and port.
+- **Note tiles** have no status checks.
+- Checks run from the HOPS server and always use the tile's home address.
+- A tile that keeps failing is checked less often, so it doesn't slow the
+  others down. As soon as it answers again it goes back to normal.
+
+### On, Off and Inherit
+
+Each tile, folder and tab has a **Status checks** row with **Inherit**,
+**On** and **Off**:
+
+- A new tile starts on **Inherit**: it follows its folder, tab or
+  dashboard.
+- **On** or **Off** decides for that item, and for everything inside it
+  that is set to **Inherit**.
+- The nearest setting wins: the tile's own, then each folder above it,
+  then the tab, then the dashboard, then the global setting.
+- The dashboard's setting is in **Dashboard › Settings › Status checks**
+  (tick **Override for this dashboard**).
+- The global setting is **Settings › Global settings › Status checks ›
+  Status checks** (on by default). It is only the default: turn it off and
+  everything set to **Inherit** stops being checked, but anything set to
+  **On** is still checked.
+
+The line under the choices says what is in effect and where it comes from,
+for example *Inherited from the tab: on*. **Reset to inherit** puts a row
+back to Inherit.
+
+Timing is under **Settings › Global settings › Status checks**: **Check
+every (minutes)** (default 5) and **Give up after (seconds)** (default 10).
+A dashboard can override both.
+
+### The overrides page
+
+**Settings › Dashboards › Status check overrides** lists every dashboard,
+tab, folder and tile that sets its own **On** or **Off**, and what would
+change if it inherited instead.
+
+- **Show**: *Would change something* (default), *No effect* or *All*.
+- Tick rows (or **Select all shown**), then **Restore inheritance for *n*
+  selected**. A preview lists which tiles would start checking and which
+  would stop. Click **Confirm**.
+- Restoring is saved as a normal edit of each dashboard, after the usual
+  backup.
+
+After an upgrade or import from HOPS 2, tiles that didn't have status checks
+ticked are set to **Off**, so the same tiles are checked as before. A notice
+links to this page so you can let them inherit instead.
+
+---
+
+## Search
+
+Click **Search** or press `/`.
+
+- On a dashboard, it searches that dashboard; anywhere else, all
+  dashboards.
+- It finds tiles and folders at any depth, by name, description, address
+  or host name.
+- ↑ and ↓ move through the results. **Enter** opens the tile (as a click
+  would, including [Home/Away](#home-and-away)). **Shift**+**Enter** (or
+  Shift-click or Ctrl-click) shows where it lives instead: HOPS switches
+  to its tab and opens the folders around it. **Esc** closes search.
+
+---
+
+## QR codes
+
+On **Settings › Dashboards**, click a dashboard's QR button (*Show QR code
+(scan with phone)*). The **QR Code** dialog shows:
+
+- a code to scan with a phone's camera;
+- the full address, with **Copy URL**;
+- **Download SVG**: the code with the dashboard's name above it, for
+  printing.
+
+![A dashboard's QR code](docs/screenshots/qr.png)
+
+The code holds the address you are using HOPS on right now plus the
+dashboard's path. So it works whether you reach HOPS by IP address, a
+`.local` name or a reverse proxy, but make the code from an address the
+phone can reach too: an address on your home network only works on your
+home network.
+
+---
+
+## Add to HOPS bookmark
+
+A bookmark that adds the page you're on to HOPS as a tile.
+
+1. On **Settings › Dashboards**, under **Add to HOPS bookmark**, drag the
+   **Add to HOPS** button to your browser's bookmarks bar. If your browser
+   won't let you drag it, make a new bookmark and paste the code from the
+   box below it (**Copy**).
+2. On any service's web page, click the bookmark. HOPS opens its **Add to
+   HOPS** page with the page's **Name**, **Address** and **Icon image
+   address (optional)** filled in. If one of HOPS's built-in icons matches
+   the name or host, HOPS uses it.
+3. Choose the **Dashboard**, **Tab** and **Folder (optional)** (*None:
+   straight on the tab*). It starts on the dashboard you used last.
+4. Click **Add**.
+
+Nothing is added until you click **Add**, and you must be signed in. If that
+dashboard is open in edit mode, the tile goes into your draft there (save
+it in that tab to keep it). Otherwise it is saved straight away.
+
+It works in desktop browsers. A few sites block bookmarks like this.
+
+---
+
+## Dead links and duplicates
+
+Both pages are under **Settings › Dashboards**.
+
+### Dead links
+
+Lists tiles whose status check has failed without a break for longer than
+**Treat a link as dead after** (**Settings › Global settings › Status
+checks**; default 1 week). Each has **Show it** (takes you to the tile) and
+**Open address**.
+
+It only watches tiles that have status checks on, and says so when none
+do.
+
+### Duplicates
+
+Lists tiles that point at the same address. Addresses are compared without
+case in the scheme and host, without a default port and without a trailing
+slash; away addresses are ignored.
+
+- **Show**: *All* (across all dashboards), *Dashboard*, *Tab* or *Folder*
+  (within the same one).
+- **Show it** takes you to each copy.
+- Pick the tile to keep and click **Merge, keeping the selected tile…**. It
+  shows exactly what it would keep and delete before you confirm.
+
+---
 
 ## Network Discovery
 
-*(new in v2.0)* HOPS can scan your LAN for services and bulk-add the ones you want as dashboard tiles. Open **Admin → Network Discovery** from the navbar.
+HOPS can scan your network for services with a web page and add the ones
+you pick as tiles. Open **Settings › Discovery**. It has three pages:
+**Scan**, **Diagnostics** and **Manage detectors**.
+
+![Network Discovery](docs/screenshots/discovery.png)
+
+Discovery only lists things you can open in a browser. It is a head start,
+not magic.
 
 ### What to expect first
 
-Discovery is **a head start, not magic**. What it finds in practice depends on a few things:
+What it finds depends on:
 
-- **What your network looks like** — Wi-Fi vs wired, guest networks that isolate devices, gear that blocks certain kinds of traffic
-- **What's blocking it** — firewalls and antivirus software (Windows Defender, ufw, Norton, AVAST, etc.) can silently shut probes out
-- **How your services are set up** — apps that only answer on `localhost` can't be reached from another machine; apps behind a reverse proxy look like the proxy until you tell HOPS about your internal domain
-- **Whether each service answers polite "are you there?" questions at all** — some services slam the door (`401 Unauthorized`) before HOPS sees enough to identify them
-- **Where HOPS itself is running** — see the Docker note below
+- **Your network**: Wi-Fi or wired, guest networks that keep devices
+  apart, gear that blocks some kinds of traffic.
+- **What's blocking it**: firewalls and security software (Windows
+  Defender, ufw and the like) can quietly shut probes out.
+- **How your services are set up**: an app that only answers on
+  `localhost` can't be reached from another machine; an app behind a
+  reverse proxy looks like the proxy until you tell HOPS your internal
+  domain.
+- **Whether each service answers polite "are you there?" questions**: some
+  slam the door (`401 Unauthorized`) before HOPS sees enough to identify
+  them.
+- **Where HOPS runs**: see the Docker note below.
 
-You'll likely run into:
-- **A few false matches** — HOPS thought it spotted Plex but it was actually something else with a similar response
-- **A few missing services** — apps on unusual ports, apps that don't speak HTTP, or apps that aggressively rate-limit anything that pokes them
-- **A few generic "Web service on …" rows** — HOPS saw a webpage but doesn't yet know which app it is
+You will likely see:
 
-That's exactly why every scan is a **draft you review before anything lands on your dashboard**, and why the **Diagnostics** view exists to turn *"HOPS missed this"* into a working detector in two clicks. Coverage keeps growing with each release.
+- a few **false matches** (HOPS thought it saw Plex, but it was something
+  with a similar answer);
+- a few **missed services** (unusual ports, apps that don't speak HTTP,
+  apps that rate-limit anything that pokes them);
+- a few generic **"Web service on …"** rows (a web page HOPS can't name
+  yet).
+
+That's why every scan is a **draft you review**: nothing is added to a
+dashboard until you choose it. The **Diagnostics** page helps you turn
+"HOPS missed this" into a working detector.
 
 ### Running HOPS in Docker?
 
-**This is a Docker quirk, not a HOPS limitation, and it's beyond our control.** Worth knowing about so you're not surprised when a scan from inside a container comes back thinner than you expected.
+By default Docker puts each container on its own private network. The
+container can talk to your home network, but it doesn't *see* it the way
+your other machines do: the broadcasts that smart TVs, speakers and
+AirPlay devices use to announce themselves don't reach it. This is how
+Docker works, not something HOPS can change.
 
-By default, Docker puts each container on its own private virtual network. The container can talk to your real home network, but it doesn't *see* it the same way your other machines do — the kinds of broadcasts that smart TVs, Sonos speakers, and AirPlay receivers use to announce themselves don't reach the container at all.
+| Source | Works in a default container? | Why |
+|--------|-------------------------------|-----|
+| Port scanning | Mostly | Normal connections work through Docker's network. |
+| Recognising web services | Yes | Normal connections. |
+| Subdomain lookups | Yes | DNS works as usual. |
+| SNMP (printers, switches, UPSes) | Yes | Normal connection. |
+| **mDNS** (AirPlay, Chromecast, HomeKit) | No | Broadcasts don't cross Docker's network boundary. |
+| **UPnP / SSDP** (smart TVs, Sonos, Roku, routers) | No | Same broadcast limit. |
+| **Neighbour-table sweep** | No (empty) | The container's address book is its own private network. |
 
-Here's what works and what doesn't from inside a default Docker container:
+When a passive source comes back empty, the draft shows a warning so you
+can see what fell short.
 
-| Source | Works? | Why |
-| --- | --- | --- |
-| Port scanning | ✅ Mostly | Normal connections work through Docker's network just fine |
-| Recognising web services | ✅ Yes | Same — these are normal connections |
-| Subdomain lookups | ✅ Yes | DNS lookups work as usual |
-| SNMP (printers, switches, UPSes) | ✅ Yes | Normal connection |
-| **mDNS** (AirPlay, Chromecast, HomeKit) | ❌ Won't see them | These rely on broadcasts that don't cross Docker's network boundary |
-| **UPnP / SSDP** (smart TVs, Sonos, Roku, routers) | ❌ Won't see them | Same broadcast limitation |
-| **Neighbour-table sweep** | ❌ Empty | The container's address book is its own private network, not your home LAN |
+For full coverage, either:
 
-If a passive source comes back empty, HOPS will flag it in a warning panel on the draft so you can see *what* fell short — but the underlying reason is Docker, not HOPS.
+1. **Use host networking** (Linux only): in `docker-compose.yml`, add
+   `network_mode: host` to the `hops` service and remove its `ports:`
+   block. The container then sits directly on your home network. Docker
+   Desktop on macOS and Windows runs containers inside a VM, so "host" there
+   isn't really your machine, and results vary. See [Network Discovery on
+   Docker](DEPLOY.md#network-discovery-on-docker--important).
+2. **Run HOPS without Docker**: it's a single file with no dependencies.
 
-**Two options if you want full coverage**:
+If your homelab is mostly things like Pi-hole, the *arr apps, a NAS and
+Proxmox, a default Docker setup finds them without trouble. What you'd miss
+are the broadcast-discovered ones (TVs, speakers, some smart-home devices).
 
-1. **Switch to host networking** (Linux only). Edit your `docker-compose.yml`:
-   ```yaml
-   services:
-     hops:
-       image: ghcr.io/weaversgrainthorpe/hops:latest
-       network_mode: host
-       # Remove the `ports:` block — host mode doesn't use it.
-   ```
-   This puts the container directly on your home network, so it sees broadcasts and your real LAN exactly like any other machine. Docker Desktop on Mac and Windows technically supports `network_mode: host` but the Mac version runs Docker inside a VM, so "host" isn't really your machine — results vary.
+### Starting a scan
 
-2. **Run HOPS without Docker**. The binary is a single file with no dependencies; on Linux it's a `systemctl start hops` job. Simplest path if you care about full discovery coverage and you're not committed to Docker.
+**Settings › Discovery › New Scan** opens **New Discovery Scan**:
 
-If your homelab is mostly things like Pi-hole, the *arr stack, a NAS UI, and Proxmox — the default Docker setup will find all of those without trouble. The things you'd miss are the broadcast-discovered ones (TVs, speakers, some IoT).
+- **Targets to scan**: add one or more of:
+  - **CIDRs**: `192.168.1.0/24` (anything from /16 to /32);
+  - **ranges**: `192.168.1.1-50` (last-octet shorthand) or
+    `192.168.1.1-192.168.1.50`;
+  - **single IPs**: `192.168.1.5`;
+  - **exclusions**: put `!` or `NOT ` in front of any of the above to skip
+    those addresses, e.g. `!192.168.1.50`. Useful for a printer that hangs
+    when probed. You need at least one target that isn't an exclusion.
 
-### Running a scan
+  HOPS suggests your own network. The **Start scan** button shows how many
+  hosts the scan will check, after exclusions.
+- **Label (optional)**: a note to tell drafts apart later.
+- **Internal domain (optional)**: if you run your own DNS at home (Pi-hole,
+  Nginx Proxy Manager, Traefik), enter its domain, e.g. `home.arpa`. HOPS
+  then tries well-known names such as `sonarr.home.arpa`, so services behind
+  a reverse proxy are found. This step gives up after about a minute, so a
+  wildcard DNS record can't stall a scan.
+- **Scan intensity**:
+  - **Passive only**: mDNS, UPnP, the ARP cache, DNS names and an SNMP
+    query. No web-port probes. Finds things that announce themselves.
+  - **Light active** (default): passive plus a check of about 65 ports
+    (well-known homelab ports plus every port a detector knows). Fast, and
+    finds most things.
+  - **Full active**: a wider sweep of about 115 ports. Slower and noisier,
+    and it can upset some IoT devices. Use it when you suspect something is
+    on an unusual port.
 
-1. **Admin → Network Discovery → New Scan**
-2. Specify your scan targets. HOPS suggests a CIDR based on your network interface; you can override. Targets can be any combination of:
-   - **CIDRs** — `172.16.0.0/24`, `192.168.1.0/24` (anything /16 to /32)
-   - **Ranges** — `172.16.0.1-50` (octet shorthand) or `172.16.0.1-172.16.0.50` (full pair)
-   - **Single IPs** — `172.16.0.5`
-   - **Exclusions** — prefix any of the above with `!` or `NOT ` to skip those addresses, e.g. `172.16.0.0/24, !172.16.0.50`. Useful for skipping a printer that hangs on probes, a known-flaky IoT device, or anything you don't want scanned.
-   - The form shows the **effective host count** live (post-exclusion) so you can see what the scan will actually probe before clicking Start
-3. Optional: enter an **Internal domain** (e.g. `home.arpa`) if you run internal DNS — HOPS will probe ~80 common subdomains (`sonarr.home.arpa`, `plex.home.arpa`, …) to catch services behind reverse proxies
-4. Pick an **intensity**:
-   - **Passive** — no port probes at all. ARP / mDNS / DNS / UPnP / SNMP only. Quiet and quick; finds broadcast services, misses everything else
-   - **Light** (default) — passive plus active probes on ~40 well-known homelab ports. The right choice for most users
-   - **Full** — light plus a wider port sweep (~60 ports). Slower and noisier; may spook IoT firmware
-5. Click **Start scan**
+Click **Start scan**.
 
-### Watching it run
+Scan speed and limits are under **Settings › Global settings › Discovery**:
+**Parallel probes** (default 128), **Time per host (seconds)** (default 1;
+try 2 or 3 on slow Wi-Fi) and **Longest scan (minutes)** (default 30). A
+scan that reaches the longest time stops, keeps what it found, and is
+marked as stopped early.
 
-The progress bar shows what HOPS is doing right now: *Listening for announcements → Checking X hosts → Looking up subdomains → Finishing up*. The addresses currently being checked scroll below.
+### The scan list
 
-If a passive source fails (a common one: mDNS being blocked by a managed switch, or SSDP filtered by a Wi-Fi access point), you'll see an **amber warning panel** at the top of the draft once the scan finishes. The active port-checking part still ran fine — you just won't have any of the broadcast-discovered services in this particular scan.
+**Settings › Discovery** lists your scans with **Created**, **Targets**,
+**State** (*Running*, *Pending*, *Complete*, *Promoted*, *Cancelled*,
+*Failed*), **Progress**, **Since previous** (new, gone and changed
+counts), **Label** and buttons to open, cancel or delete each draft.
 
-### Curating results
+### Reviewing a draft
 
-Each row shows: confidence (high / medium / low), category, suggested name, suggested URL. The favicon thumbnail comes from the discovered service itself. Inline-edit any name, URL, or category before promoting.
+While a scan runs, the draft shows what HOPS is doing and which addresses
+it is checking. If a passive source failed (mDNS blocked by a managed
+switch, or SSDP filtered by a Wi-Fi access point), the draft lists the
+warnings. The active part still ran.
 
-**Bulk actions** at the top:
-- **Select all** / **Select none**
-- **Select all high-confidence** — usually the right starting point
-- **Promote N to dashboard** — opens the promote modal
+Each row shows the **Host**, **Port**, **Since last scan**,
+**Confidence** (high or medium), **Category** and **Name**, with the
+service's own icon where it has one. You can change any name, address or
+category before adding it.
 
-In the promote modal, pick an existing dashboard or create a new one on the fly. Tiles distribute into groups by their category — Sonarr lands in *Downloads*, Pi-hole in *Network*, and so on. No manual group-picking required.
+- **Select all**, **Select none** and **Select all high-confidence** (a
+  good start).
+- Compare with the previous scan of the same range: **New only**, **All**
+  or **Gone**. A gone service that was a tile on a dashboard is flagged:
+  that tile may be dead.
+- A service that is already a tile on one of your dashboards is marked and
+  won't be added again.
+- Each row can copy its address or open it in a new tab.
 
-### The Diagnostics view
+Click **Promote *n* to dashboard**. **Where should the tiles go?**
 
-**Admin → Network Discovery → Diagnostics** shows every HTTP service across all your past scans that no specific detector matched, deduplicated by `(host, port)`. Plus a **detection summary** counting how many results each detector produced.
+- **A tab or folder**: pick it under **Destination**;
+- **A new tab on an existing dashboard**: pick the **Dashboard** and type a
+  **New tab name**;
+- **A new dashboard**: type a **New dashboard name** (the path is made from
+  it) and a **New tab name**.
 
-Click **+ Create detector** on any unidentified row — the detector form opens pre-populated with the port, title, server header, and favicon hash. Adjust signatures (the body or title string that uniquely identifies the service), save, and re-scan. The next scan recognises it natively.
+Into a tab, each category becomes a folder (an existing top-level folder
+with the same name is reused). Into a folder, all the tiles go into it.
+Click **Promote**.
 
-### Custom and customized detectors
+At the top of a draft: **Re-scan** runs the same scan again; **Edit &
+re-scan** opens **New Scan** filled in with this draft's targets,
+intensity, domain and label, so you can add an exclusion or change the
+intensity first. **Cancel scan** stops a running scan; **Delete** removes
+the draft.
 
-**Admin → Network Discovery → Manage detectors** lists every detector — both bundled (shipped with HOPS) and your own.
+### Diagnostics
 
-- **Bundled detectors are customizable.** Click the tune icon on any bundled row to open its definition pre-filled. Save your edits — they create an **override** that supersedes the bundled definition on the next scan. The row gets a "modified" badge. Click **Reset to bundled defaults** to drop the override; the shipped definition takes over again. There's also a header button to **Reset all customizations** in bulk.
-- **Add your own detectors** with the **+ Add detector** button. There are four ways to recognise a service, and you can use any one or any mix:
-  - **Body contains** — a snippet that appears in the page's HTML and is unique to that service (case-sensitive, at least 4 characters)
-  - **Title contains** — text from the page's browser-tab title (case-insensitive, at least 3 characters)
-  - **Header keys** — a response header that's distinctive on its own (e.g. some services advertise themselves in custom `X-…` headers)
-  - **Favicon hashes** — the number that identifies the page's favicon (the little browser-tab icon). The most reliable signal because favicons rarely change between versions
+**Settings › Discovery › Diagnostics** has two parts:
 
-A detector whose only signature is a favicon number is perfectly valid.
+- **Detection summary**: for each detector, how many times it matched,
+  on how many hosts, and when it last did.
+- **Unidentified services**: every web service from your past scans that
+  no detector recognised, one row per host and port, with its title,
+  server header, HTTP status and favicon hash.
 
-### Re-scanning with tweaks
+Click **Create detector** on a row: the detector form opens filled in with
+the port, title, server and favicon hash. Adjust the signatures, save, and
+scan again: the next scan recognises it.
 
-On any past draft, **Re-scan** clones the targets and runs fresh; **Edit & re-scan** opens the New Scan form pre-filled with the old targets so you can add an exclusion (for that printer that hangs on probes, etc.) or change intensity before launching again.
+### Manage detectors
 
-### Upgrading from older versions
+**Settings › Discovery › Manage detectors** lists every detector, filtered
+by **All**, **Bundled** (shipped with HOPS) or **User** (yours).
 
-Discovery is brand-new in v2.0. Existing v1.x installs upgrade seamlessly — the new tables (`scans`, `scan_results`, `user_detectors`) are created on first boot of the v2.0 binary. No data migration steps, no scan history loss (there was none), no impact on your existing dashboards.
+- **Bundled detectors can be changed.** Click a bundled detector's tune
+  button to open it. Saving creates your own version, which replaces the
+  shipped one from the next scan, and the row is marked *modified*. **Reset
+  to bundled defaults** drops your version. **Reset all customizations**
+  resets every one.
+- **Add detector** makes your own. A detector has a **Name**, an optional
+  **Description**, a **Category**, an **Icon**, its **Ports**, a **Landing
+  path**, optional **Probe paths (one per line)**, a **Confidence** (*High*
+  results are ticked automatically in a draft; *Medium* are not) and
+  **Enabled**.
+- It recognises a service by any one or more **Match signatures**:
+  - **Body contains (one per line)**: text in the page that is unique to
+    that service (case-sensitive);
+  - **Title contains (one per line)**: text in the page's title (not
+    case-sensitive, at least 3 characters);
+  - **Header keys (one per line)**: a response header that gives the
+    service away (for example a custom `X-…` header);
+  - **Favicon hashes (one per line)**: the number that identifies the
+    page's favicon. Often the most reliable, as favicons rarely change
+    between versions. A detector with only a favicon hash is fine.
 
-## Tips and Tricks
+Changes apply to the next scan you start.
 
-### Organizing Content
+---
 
-1. **Use Tabs for Categories**: Create tabs like "Media", "Network", "Home Automation"
-2. **Use Groups for Services**: Group related services together (e.g., "*arr Stack", "Home Assistant", "Monitoring")
-3. **Use Tile Sizes**: Make frequently-used services Large, less-used Small
+## Import and export
 
-### Working Efficiently
+### Import
 
-1. **Copy Template Tiles**: Create a template tile with the right size/color, then copy and edit
-2. **Use Keyboard Shortcuts**: Ctrl+C, Ctrl+X, Ctrl+V are faster than right-click menus
-3. **Focus Groups**: Click on a group before pasting to control where tiles go
-4. **Batch Operations**: Copy multiple tiles from one group to another
+On **Settings › Dashboards**, click **Import**, then **Select File**. The
+**Import Configuration** dialog reads:
 
-### Visual Design
+| Format | File | How it comes in |
+|--------|------|-----------------|
+| **HOPS JSON** (HOPS 3) | An export from HOPS 3 | As it was. |
+| **HOPS JSON** (HOPS 2) | An export from HOPS 2 | Converted: each group becomes a folder (see [What changes](#what-changes)). |
+| **Homer YAML** | Homer's `config.yml` | One dashboard; each Homer service group becomes a folder. |
+| **Dashy YAML** | Dashy's `conf.yml` | One dashboard; each section becomes a folder. |
+| **Heimdall JSON** | Heimdall's list of apps (signed in to Heimdall, open `http://<your-heimdall>/api/item` and save the page as a `.json` file) | A dashboard called *Heimdall Import*; each tag becomes a folder; untagged apps go in *Services*. |
 
-1. **Theme Consistency**: Set colors at the Group or Tab level for consistent look
-2. **Slideshow Backgrounds**: Use slow rotation (60-120s) for subtle ambiance with smooth crossfade transitions
-3. **Opacity Layering**: Reduce tile opacity slightly to let background show through
-4. **Icon Variety**: Use the Icon Picker to browse ~2,300 bundled app/service icons, or type any Iconify icon name (~200,000 available on demand via iconify.design)
-5. **Text Readability**: Use Auto text color mode on group headers for optimal contrast on any background color
-6. **Background Library**: Explore the ~90 curated backgrounds across 12 categories for quick setup
+HOPS works out the format by itself.
+
+- **Auto-match icons** (ticked by default) finds icons from the tile names
+  for tiles whose icon HOPS can't use.
+- Imported dashboards are **added next to yours, never over them**. If a
+  path is taken, the new one gets a suffix (`/home` becomes `/home-1`).
+- Anything that couldn't come across is listed when the import finishes,
+  so nothing is lost silently. For example:
+  - icons HOPS can't draw (Font Awesome, emoji, an image on the old
+    dashboard's own server) get a generic icon (or a matched one);
+  - Dashy widgets are left out (a section with only widgets is not
+    imported), and items that opened another way in Dashy open in a new
+    tab;
+  - Dashy pages kept in other files must be imported one by one;
+  - Heimdall apps with several tags go into their first tag's folder;
+  - Heimdall "enhanced app" settings (which can hold API keys) are never
+    imported.
+- If only part of a file could be imported, HOPS says *Imported, but not
+  everything succeeded* and what was left out.
+- Imported tiles' status checks are set to **Inherit**, except HOPS 2 tiles
+  that didn't have checks ticked, which are set to **Off** (see [The
+  overrides page](#the-overrides-page)).
+- Files up to 50 MB are accepted by default (**Settings › Global settings ›
+  Uploads › Largest import**). Very deeply nested files, or files with an
+  enormous number of entries, are refused with a reason.
+
+Import is **not** the way to upgrade from HOPS 2: see [Upgrading from HOPS
+2](#upgrading-from-hops-2).
+
+### Export
+
+- **Export** next to a dashboard on **Settings › Dashboards** downloads that
+  dashboard.
+- **Export Dashboard** in the top bar while editing opens **Export
+  Configuration**, with **Export All Dashboards** and **Export Individual
+  Dashboard**.
+
+An export is a HOPS JSON file that carries your uploaded icons and
+background pictures with it, so it can be imported into another HOPS.
+Import it with **Import** above.
+
+An export is not a backup. It holds dashboards only, not your settings,
+password, scans or backups. For those, see [Backups](#backups).
+
+---
+
+## Backups
+
+A backup is a copy of HOPS's whole database: dashboards, settings, the
+password, Discovery scans and detectors.
+
+![Settings](docs/screenshots/settings.png)
+
+### When HOPS makes one
+
+Automatically:
+
+- when it starts;
+- before every save;
+- before a restore;
+- before a factory reset;
+- before it converts a HOPS 2 database (see [Upgrading from HOPS
+  2](#upgrading-from-hops-2)).
+
+A save goes ahead even if its backup fails, and the warning says so. A
+restore, a factory reset and the HOPS 2 conversion **don't**: if their
+backup fails, nothing is changed.
+
+### Settings › Backups
+
+- **Create Backup**: make one now.
+- Each backup has **Download**, **Restore** and **Delete**.
+- **Download** gives a file that includes the images (icons and
+  backgrounds) the backup uses. Keep a copy somewhere other than the HOPS
+  machine.
+- **Upload a backup**: a `.zip` downloaded from HOPS (or an older plain
+  `.db` file, accepted with a warning). It is checked and added to the
+  list; nothing is restored until you click **Restore**.
+- **Restore**: asks first. HOPS takes a safety backup of the current data
+  (if that fails, nothing is restored), then restarts to apply the restore.
+  Changes made in the next few seconds won't be included. If HOPS is
+  stopped before it restarts, the page says a restore is waiting, with
+  **Discard staged restore**.
+- **Clean up now**: deletes automatic backups the retention rules no longer
+  keep. It shows exactly what it would delete, and why, first. (Cleanup
+  also runs by itself after every backup and once a day.)
+
+When you delete an icon or a background, HOPS keeps the file for as long as
+an older backup still uses it, so restoring that backup brings the picture
+back. The page says how many such files are kept and how much space they
+take. Files it can't match to a name are listed with **Clean up unknown
+images**, which also shows what it would delete first.
+
+If a backup ever fails, HOPS shows a warning in Settings until one
+succeeds.
+
+### Retention
+
+Click **Change** on the Backups page, or go to **Settings › Global
+settings › Server**:
+
+| Setting | Default | Range | What it does |
+|---------|---------|-------|--------------|
+| **Keep the newest backups** | 10 | 3–100 | The newest this-many automatic backups are always kept. |
+| **Also keep backups newer than (days)** | 0 (off) | 0–3650 | Also keep every automatic backup newer than this. |
+| **Most backups kept** | 100 | 3–1000 | A ceiling that protects the disk. Never below **Keep the newest backups**. |
+
+Backups you create or upload, and the one taken before the HOPS 2
+conversion, are **protected**: they are never deleted automatically and
+don't count towards these numbers.
+
+---
+
+## Settings
+
+The **gear** in the top bar opens Settings. Signed out, any Settings page
+asks for the password first. On a phone, the sections show as a row of
+chips at the top of the page.
+
+| Section | Address |
+|---------|---------|
+| **Dashboards** (with **Dead links**, **Duplicates**, **Status check overrides**) | `/settings/dashboards` |
+| **Icons** | `/settings/icons` |
+| **Global settings** | `/settings/global` |
+| **Discovery** (with **Scan**, **Diagnostics**, **Manage detectors**) | `/settings/discovery` |
+| **Backups** | `/settings/backups` |
+| **Logs** | `/settings/logs` |
+| **Password** | `/settings/password` |
+| **Factory reset** | `/settings/reset` |
+
+Notices (for example after an upgrade, or a failed backup) appear at the
+top of Settings until you deal with them.
+
+**Dashboards**: see [Managing dashboards](#managing-dashboards), [Add to
+HOPS bookmark](#add-to-hops-bookmark), [Dead links and
+duplicates](#dead-links-and-duplicates) and [The overrides
+page](#the-overrides-page).
+
+**Icons**: see [Icons](#icons).
+
+**Discovery**: see [Network Discovery](#network-discovery).
+
+**Backups**: see [Backups](#backups).
+
+**Password**: see [Password and sessions](#password-and-sessions).
+
+### Global settings
+
+Every server setting, on one page, in groups. The settings sidebar (or the
+chips on a phone) jumps to each group. Each setting shows its default and
+its allowed range. Most apply as soon as you save; the few marked
+**Restart required** take effect the next time HOPS starts, and a banner
+lists any that are waiting.
+
+To change one: type the new value, click **Save**. **Revert** drops an
+unsaved change; **Reset to default** puts the default back. An invalid
+value is refused with a reason and the running value stays as it was.
+
+| Group | Setting | Default | Notes |
+|-------|---------|---------|-------|
+| **Server** | **Port** | 8080 | 1–65535. **Restart required.** See [Change the port](QUICKSTART.md#change-the-port). |
+| | **Log level** | info | debug, info, warn, error. |
+| | **Wait for request headers (seconds)** | 10 | **Restart required.** |
+| | **Wait for a whole request (seconds)** | 60 | **Restart required.** |
+| | **Time to send a response (seconds)** | 120 | **Restart required.** |
+| | **Keep idle connections open for (seconds)** | 120 | **Restart required.** |
+| | **Keep the newest backups**, **Also keep backups newer than (days)**, **Most backups kept** | 10, 0, 100 | See [Retention](#retention). |
+| **Sign-in & security** | **Stay signed in for (hours)** | 8760 (one year) | How long a sign-in lasts. |
+| | **Sign out after being idle for** | Off | Hours or days. Only things you do count, such as saving; viewing pages and background refreshes don't. |
+| | **Failed sign-ins allowed per minute** | 20 | Per address. |
+| | **Trusted proxy ranges (CIDR)** | none | The addresses of a reverse proxy in front of HOPS, e.g. `192.168.1.5/32`. HOPS then uses the proxy's `X-Forwarded-For` and `X-Forwarded-Proto` headers. Leave empty without a proxy. **Restart required.** See [Reverse Proxy](DEPLOY.md#reverse-proxy). |
+| **Uploads** | **Largest background upload** | 25 MB | Up to 100 MB. |
+| | **Largest icon upload** | 2 MB | Up to 10 MB. |
+| | **Largest import** | 50 MB | Up to 200 MB. |
+| **Editing** | **Edit mode times out after (minutes)** | 15 | 0 turns it off. |
+| **Look & motion** | **Animations** | On | On, Always, Off. See [Animations](#animations). |
+| | **Animated folder backgrounds** | On | See [Folder backgrounds](#folder-backgrounds). |
+| **Status checks** | **Status checks** | On | The default for everything set to Inherit. |
+| | **Check every (minutes)** | 5 | |
+| | **Give up after (seconds)** | 10 | |
+| | **Treat a link as dead after** | 168 hours (1 week) | Hours or days. See [Dead links](#dead-links). |
+| **Discovery** | **Parallel probes** | 128 | 64–256 is sensible for a home network. |
+| | **Time per host (seconds)** | 1 | |
+| | **Longest scan (minutes)** | 30 | |
+
+Each row also shows the setting's internal key (for example
+`server.port`).
+
+### Logs
+
+**Settings › Logs** shows what HOPS has been doing, newest last. Choose how
+many **Lines** and the lowest **Level** to show, then **Refresh**, or tick
+**Auto-refresh (5 s)** (paused while the page is hidden). **Copy** and
+**Download .txt** are for when you ask for help. For more detail, set
+**Global settings › Server › Log level** to *debug* for a while, then back
+to *info*.
+
+### Factory reset
+
+**Settings › Factory reset** deletes every dashboard, tab, folder and tile,
+and puts the [Sample](#the-sample) back. It asks first (**Reset
+Everything**). A safety backup is taken first; if that fails, nothing is
+reset. Your password, Global settings, uploaded icons and backups are not
+touched.
+
+---
+
+## Password and sessions
+
+**First sign-in.** The username is `admin` and the first password is
+`admin`. HOPS asks you to **Set a New Password** straight away, and you
+can't do anything else until you do.
+
+**Changing the password.** **Settings › Password**: **Current Password**,
+**New Password** and **Confirm New Password**. The new one must be 8 to 72
+characters and different from the current one. Changing it signs out
+every other browser that was signed in.
+
+**Sessions.**
+
+- A sign-in lasts until you click **Log out**, or until **Stay signed in
+  for (hours)** runs out (one year by default).
+- **Sign out after being idle for** (off by default) signs out a browser
+  you haven't used for that long.
+- **Failed sign-ins allowed per minute** (20 by default) slows down
+  password guessing.
+- Signing out while editing keeps your unsaved changes while the page stays
+  open (see [Saving and drafts](#saving-and-drafts)).
+
+HOPS has one admin account. There are no other user accounts or roles:
+anyone on your network can view dashboards; only the admin can change them.
+
+For HTTPS and other security advice, see the
+[Installation & Deployment Guide](DEPLOY.md#security).
+
+---
+
+## Per-browser preferences
+
+These are kept in each browser, not on the server. Each person and each
+device can choose their own, signed in or not, and they never change what
+anyone else sees:
+
+- theme (**Brightness Mode** and **Theme Preset**);
+- text size;
+- **Home** / **Away**;
+- **Show recently used**, and the recently used tiles themselves (**Clear
+  history** empties them);
+- which folders are minimised or open, which page each folder shows, and
+  which sub-folders are open;
+- your recently used icons in the icon picker.
+
+Clearing the browser's site data resets them. In a private window they
+last only until it is closed.
+
+---
+
+## Phones, tablets and touch
+
+![HOPS on a phone](docs/screenshots/mobile.png)
+
+### Layouts
+
+- Narrower than 768 pixels, each tab shows its items in one column instead
+  of the grid.
+- At 480 pixels wide or narrower (phones), the edit button is hidden:
+  phones are for viewing. The gear (Settings) is still there, so you can
+  manage backups, the password and everything else.
+
+### Open HOPS like an app
+
+Open HOPS in the phone's browser and use the browser's *Add to Home
+Screen* (on iPhone, under the Share button). HOPS then opens from its own
+icon. A [QR code](#qr-codes) saves typing the address.
+
+### Touch editing
+
+On tablets and other touch screens wider than a phone, editing works, but
+dragging and the bigger dialogs are fiddly, so a computer with a mouse is
+recommended.
+
+- **Press and hold** an item for a moment until it is ready, then move
+  your finger to drag it.
+- Press and hold, then let go without moving, to open the item's menu.
+- Press and hold empty space on a tab or in a folder for its menu (**Add
+  tile here**, **Add folder here**, **Paste here**).
+- Each item's pencil is always shown on touch screens.
+- In the one-column layout, resizing isn't available (*Resizing needs a
+  wider screen*).
+
+---
+
+## Upgrading from HOPS 2
+
+HOPS 3 converts your HOPS 2 dashboards **automatically** the first time it
+starts with your existing data folder. You don't need to export or import
+anything.
+
+1. Before it converts anything, HOPS takes a **protected backup** of the
+   whole HOPS 2 database, named
+   `hops-backup-<date>_pre-v3-migration.db`. It is never deleted
+   automatically, and it is your way back to HOPS 2.
+2. If that backup fails, HOPS **refuses to convert**. Your HOPS 2 data is
+   left exactly as it was, and HOPS shows *HOPS couldn't migrate your
+   configuration* with the reason and a link to **Backups**.
+3. If the conversion itself fails, nothing is changed either, and the same
+   page explains it.
+
+How to upgrade depends on how you installed HOPS; see
+[Upgrading](QUICKSTART.md#upgrading),
+[Upgrading from v2 with install.sh](DEPLOY.md#upgrading-from-v2-with-installsh)
+and [Rolling back from 3.x to 2.2.1](DEPLOY.md#rolling-back-from-3x-to-221).
+
+### What changes
+
+- **Groups become folders.** Each HOPS 2 group becomes an open folder on
+  its tab, with its tiles in the same order. Groups that sat side by side
+  still do. A group drawn as a folder tab becomes a *Folder (flat)*; the
+  others become a *Rounded box*.
+- **Row widths** (Full, Half, Third) are gone: a folder's box on the grid
+  sets its size.
+- **Tiles** keep their name, address, icon, colour, size and open mode. A
+  tile size HOPS doesn't recognise becomes *Medium*, and you are told which.
+- **Status checks**: tiles that had status checks ticked keep them; tiles
+  that didn't are set to **Off**. A notice links to [the overrides
+  page](#the-overrides-page) if you'd rather let them inherit.
+- **Settings** (port, log level, uploads and so on) carry over. Upload
+  limits still at the old HOPS 2 defaults move to the new ones (25 MB for
+  backgrounds, 2 MB for icons), and a notice tells you.
+- **The admin pages** moved into **Settings** (the gear). Discovery is at
+  **Settings › Discovery**.
+
+---
 
 ## Troubleshooting
 
-### Can't Enter Edit Mode
-- Ensure you're logged in (visit `/`, the admin page)
-- Check you're on a dashboard page (not the admin page at `/`)
-- Click the pencil icon in the header
+**I can't see the edit button.**
+Sign in first (the pencil asks you to). On a phone (480 pixels wide or
+less) editing is hidden; use a tablet or computer.
 
-### Tiles Not Opening
-- Check the URL is correct in tile settings
-- Verify the service is running and accessible
-- Try different open modes (New Tab, iFrame, etc.)
+**My changes disappeared.**
+Changes are a draft until you click **Save** in the toolbar. A dialog's
+**Save** or **Create** only puts the change into your draft. If edit mode
+timed out, HOPS asked before leaving and kept your changes until you
+chose.
 
-### Import Failed
-- Verify the format matches (HOPS JSON, Homer YAML, Dashy YAML)
-- Check the file/paste content is valid JSON or YAML
-- Try exporting first to see the expected format
+**"This dashboard was changed somewhere else".**
+It was saved from another browser or tab while you edited. **Reload (lose
+my draft)** to start from the saved version, or **Keep editing** to look
+first. To avoid it, edit a dashboard in one place at a time.
 
-### Background Images Not Loading
-- Verify image URLs are accessible
-- Check image URLs use https:// (http:// may be blocked)
-- Try a different image URL or use the preset library
+**A change is refused with "Too deep" or "at most".**
+You hit a [limit](#limits): 12 levels of folders, 5,000 items, or 200
+tabs per dashboard.
 
-## Getting Help
+**A tile doesn't open, or opens a blank window.**
+Check the **Address**. If **Open Mode** is **iFrame Modal**, the site may
+refuse to be shown inside another page; use **New Tab**. If you're away
+from home, check the **Home** / **Away** button.
 
-- **Quick Start**: See [Zero to Dashboard Hero](QUICKSTART.md) for first-time setup
-- **Deployment**: See [Installation & Deployment Guide](DEPLOY.md) for setup and configuration
+**A status badge says Offline or Error, but the service works.**
+*Error* usually means the address answers with 404: check the path.
+*Offline* means the HOPS server couldn't reach it: HOPS checks from the
+server, using the home address, so the server must be able to reach that
+address. For a slow service, raise **Give up after (seconds)**.
 
-## Quick Reference
+**Status checks stopped.**
+Check **Settings › Global settings › Status checks › Status checks**, the
+dashboard's **Settings**, and **Settings › Dashboards › Status check
+overrides**.
 
-| Action | Shortcut |
-|--------|----------|
-| Enter Edit Mode | Click pencil icon (must be logged in) |
-| Copy Tile | Right-click → Copy OR Ctrl+C |
-| Cut Tile | Right-click → Cut OR Ctrl+X |
-| Paste Tile | Click group, then Ctrl+V |
-| Delete Tile | Right-click → Delete OR hover X button |
-| Reorder Tiles | Drag and drop (in Edit Mode) |
-| Move Between Groups | Drag to other group (in Edit Mode) |
-| Add Tab | Click "+ Add Tab" (in Edit Mode) |
-| Add Group | Click "+ Add Group" (in Edit Mode) |
-| Add Tile | Click "Add Tile" (in Edit Mode) |
-| Change Theme | Click theme icon in header |
-| Export Dashboard | Click download icon in header (Edit Mode) |
-| Import Config | Click Import button on Admin page |
-| Generate QR code | Click QR icon next to a dashboard on Admin page |
+**A background picture doesn't show.**
+The edit toolbar says when one can't be loaded. Check an **Image URL** in
+a browser; a page served over HTTPS may refuse an `http://` picture. An
+uploaded or gallery picture always works offline.
 
+**An icon is missing without internet.**
+Only the Dashboard Icons, the offline bundle and your uploads work offline.
+Another Iconify name is fetched from the internet the first time. Pick one
+from **Browse**, or upload your own.
+
+**An import failed.**
+Check the file is one of the [formats HOPS reads](#import). A file larger
+than **Largest import** (50 MB by default) is refused. If part of a file was
+imported, HOPS lists what was left out.
+
+**Discovery finds little or nothing.**
+See [What to expect first](#what-to-expect-first) and [Running HOPS in
+Docker?](#running-hops-in-docker). Try **Full active**, raise **Time per
+host (seconds)** on Wi-Fi, and use **Diagnostics** to create detectors for
+what it missed.
+
+**A setting didn't take effect.**
+Settings marked **Restart required** apply the next time HOPS starts.
+
+**"HOPS couldn't migrate your configuration".**
+See [Upgrading from HOPS 2](#upgrading-from-hops-2). Your data was not
+changed. **Open Backups** to restore from a backup, and check **Settings ›
+Logs** for the reason.
+
+**I've lost the password.**
+HOPS has no password-reset feature. Keep the password somewhere safe. If
+you have a copy of the whole data folder from a time you knew the password,
+you can put it back as described in [Manual backup](DEPLOY.md#manual-backup)
+(you lose changes made since that copy).
+
+**HOPS won't start, or the page won't load.**
+See [Troubleshooting](DEPLOY.md#troubleshooting) in the deployment guide.
+**Settings › Logs**, or the terminal or service log, says why.
+
+### Getting help
+
+- [Zero to Dashboard Hero](QUICKSTART.md): the guided tour.
+- [Installation & Deployment Guide](DEPLOY.md): installing, services,
+  reverse proxies, HTTPS, backups and security.
+- [Issues on GitHub](https://github.com/weaversgrainthorpe/HOPS/issues):
+  report a problem or ask a question. **Settings › Logs › Download .txt**
+  helps.

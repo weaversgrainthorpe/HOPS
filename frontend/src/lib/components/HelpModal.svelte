@@ -59,21 +59,59 @@
     <div class="modal-body">
       {#if activeTab === 'shortcuts'}
         <div class="help-section">
-          <h3>Keyboard Shortcuts</h3>
-          <p class="section-desc">These shortcuts work when edit mode is enabled.</p>
+          <h3>Viewing</h3>
+          <p class="section-desc">These work on any dashboard.</p>
 
           <div class="shortcut-list">
+            <div class="shortcut">
+              <div class="keys">
+                <kbd>/</kbd>
+              </div>
+              <div class="desc">Search this dashboard's tiles and folders</div>
+            </div>
+            <div class="shortcut">
+              <div class="keys">
+                <kbd>↑</kbd> <kbd>↓</kbd> <kbd>←</kbd> <kbd>→</kbd>
+              </div>
+              <div class="desc">Move between tiles</div>
+            </div>
+            <div class="shortcut">
+              <div class="keys">
+                <kbd>Enter</kbd>
+              </div>
+              <div class="desc">Open the highlighted tile</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="help-section">
+          <h3>Editing</h3>
+          <p class="section-desc">These work in edit mode. On a Mac, use Cmd instead of Ctrl.</p>
+
+          <div class="shortcut-list">
+            <div class="shortcut">
+              <div class="keys">
+                <kbd>Ctrl</kbd> + <kbd>S</kbd>
+              </div>
+              <div class="desc">Save your changes</div>
+            </div>
+            <div class="shortcut">
+              <div class="keys">
+                <kbd>Ctrl</kbd> + <kbd>Z</kbd>
+              </div>
+              <div class="desc">Undo</div>
+            </div>
+            <div class="shortcut">
+              <div class="keys">
+                <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Z</kbd> or <kbd>Ctrl</kbd> + <kbd>Y</kbd>
+              </div>
+              <div class="desc">Redo</div>
+            </div>
             <div class="shortcut">
               <div class="keys">
                 <kbd>Ctrl</kbd> + <kbd>C</kbd>
               </div>
               <div class="desc">Copy the selected tiles and folders</div>
-            </div>
-            <div class="shortcut">
-              <div class="keys">
-                <kbd>Ctrl</kbd> + <kbd>V</kbd>
-              </div>
-              <div class="desc">Paste into the open folder (or the tab)</div>
             </div>
             <div class="shortcut">
               <div class="keys">
@@ -83,15 +121,39 @@
             </div>
             <div class="shortcut">
               <div class="keys">
+                <kbd>Ctrl</kbd> + <kbd>V</kbd>
+              </div>
+              <div class="desc">Paste into the open folder (or the tab)</div>
+            </div>
+            <div class="shortcut">
+              <div class="keys">
+                <kbd>Delete</kbd>
+              </div>
+              <div class="desc">Delete what is selected (asks first)</div>
+            </div>
+            <div class="shortcut">
+              <div class="keys">
+                <kbd>Shift</kbd> + <kbd>↑</kbd> <kbd>↓</kbd> <kbd>←</kbd> <kbd>→</kbd>
+              </div>
+              <div class="desc">Resize the selected tile or folder</div>
+            </div>
+            <div class="shortcut">
+              <div class="keys">
+                <kbd>Alt</kbd> + <kbd>←</kbd> <kbd>→</kbd>
+              </div>
+              <div class="desc">Move the focused tab left or right</div>
+            </div>
+            <div class="shortcut">
+              <div class="keys">
                 <kbd>Escape</kbd>
               </div>
-              <div class="desc">Close modal / Cancel edit</div>
+              <div class="desc">Close a dialog, or clear the selection</div>
             </div>
             <div class="shortcut">
               <div class="keys">
                 <kbd>Ctrl</kbd> + <kbd>Enter</kbd>
               </div>
-              <div class="desc">Save and close modal</div>
+              <div class="desc">Save and close a dialog</div>
             </div>
           </div>
         </div>
@@ -99,28 +161,35 @@
       {:else if activeTab === 'editing'}
         <div class="help-section">
           <h3>Edit Mode</h3>
-          <p class="section-desc">Click the edit button in the navbar to enable edit mode.</p>
+          <p class="section-desc">Click the pencil in the top bar to start editing. Your changes are a draft until you click Save in the toolbar at the bottom of the screen.</p>
 
           <div class="feature-list">
             <div class="feature">
               <Icon icon="mdi:drag" width="24" />
               <div>
                 <strong>Drag & Drop</strong>
-                <p>Drag tiles and folders anywhere (into folders, onto other tabs), reorder tabs, and reorganize your dashboard.</p>
+                <p>Drag tiles and folders anywhere: into folders, out of them, or onto another tab's name. Hold a tile over another tile to make a folder of the two. Drag tabs to reorder them.</p>
               </div>
             </div>
             <div class="feature">
               <Icon icon="mdi:plus-circle" width="24" />
               <div>
                 <strong>Add Items</strong>
-                <p>Use the toolbar or right-click to add new tabs, folders, or tiles.</p>
+                <p>Use Add tile, Add folder and Add tab in the toolbar, or right-click inside a folder or tab.</p>
               </div>
             </div>
             <div class="feature">
               <Icon icon="mdi:pencil" width="24" />
               <div>
                 <strong>Edit Items</strong>
-                <p>Click the pencil icon on any item to edit its properties.</p>
+                <p>Click an item's pencil, double-click it, or right-click it and choose Edit.</p>
+              </div>
+            </div>
+            <div class="feature">
+              <Icon icon="mdi:folder-move" width="24" />
+              <div>
+                <strong>Move or Copy</strong>
+                <p>Right-click › Move/Copy to… sends tiles and folders to any dashboard, tab or folder.</p>
               </div>
             </div>
             <div class="feature">
@@ -135,6 +204,13 @@
               <div>
                 <strong>Copy/Paste Tiles</strong>
                 <p>Select tiles or folders and use Ctrl+C/V to copy them into another folder, tab or dashboard.</p>
+              </div>
+            </div>
+            <div class="feature">
+              <Icon icon="mdi:undo" width="24" />
+              <div>
+                <strong>Undo, Save and Discard</strong>
+                <p>Undo and Redo step through your changes one at a time. Save stores them; Discard throws away everything since the last save. Leaving edit mode with unsaved changes asks first.</p>
               </div>
             </div>
           </div>
@@ -155,14 +231,21 @@
               <Icon icon="mdi:opacity" width="24" />
               <div>
                 <strong>Opacity</strong>
-                <p>Adjust transparency of tabs, folders, and tiles.</p>
+                <p>Adjust transparency of tabs, folders, and tiles. A tile's background, text and icon each have their own.</p>
               </div>
             </div>
             <div class="feature">
               <Icon icon="mdi:resize" width="24" />
               <div>
                 <strong>Tile Sizes</strong>
-                <p>Choose from small, medium, or large tile sizes.</p>
+                <p>Choose Small, Medium or Large. Inside a folder, tiles are shown at the folder's Contents size.</p>
+              </div>
+            </div>
+            <div class="feature">
+              <Icon icon="mdi:folder-multiple" width="24" />
+              <div>
+                <strong>Folders</strong>
+                <p>Folders can hold tiles and other folders. Pick a Look (a rounded box, a simple tab or a folder style), put its tab on the left, centre or right, and choose whether it starts expanded or minimised. A full folder shows its contents a page at a time.</p>
               </div>
             </div>
           </div>
@@ -177,7 +260,7 @@
               <Icon icon="mdi:image" width="24" />
               <div>
                 <strong>Single Image</strong>
-                <p>Set a static background image from presets or upload your own.</p>
+                <p>Pick a picture from the built-in gallery or upload your own. A background can go behind the whole dashboard, behind one tab, or inside one folder.</p>
               </div>
             </div>
             <div class="feature">
@@ -191,7 +274,7 @@
               <Icon icon="mdi:movie" width="24" />
               <div>
                 <strong>Transitions</strong>
-                <p>Choose from crossfade, slide, zoom, blur, flip, Ken Burns, and more.</p>
+                <p>Choose from crossfade, slide, zoom, blur, flip, Ken Burns, random, and more.</p>
               </div>
             </div>
             <div class="feature">
@@ -209,6 +292,13 @@
 
           <div class="feature-list">
             <div class="feature">
+              <Icon icon="mdi:console" width="24" />
+              <div>
+                <strong>Tile Types</strong>
+                <p>A Link opens an address. An SSH tile opens your computer's SSH app. A Note is text only, with no link.</p>
+              </div>
+            </div>
+            <div class="feature">
               <Icon icon="mdi:link-variant" width="24" />
               <div>
                 <strong>Open Modes</strong>
@@ -216,67 +306,95 @@
               </div>
             </div>
             <div class="feature">
+              <Icon icon="mdi:home-export-outline" width="24" />
+              <div>
+                <strong>Home & Away Addresses</strong>
+                <p>Give a tile an Away address (for example through a VPN) and a Home / Away button appears in the top bar. Each browser chooses which address its tiles open.</p>
+              </div>
+            </div>
+            <div class="feature">
               <Icon icon="mdi:heart-pulse" width="24" />
               <div>
                 <strong>Status Checks</strong>
-                <p>Optional HTTP monitoring shows up/down status and response time next to each tile. Set them per dashboard, tab, folder or tile; Settings › Dashboards › Status check overrides lists every place that doesn't follow the level above.</p>
+                <p>Optional checks show a badge on a tile: Online (with the response time), Offline or Error. Set them per dashboard, tab, folder or tile; the nearest setting wins. Settings › Dashboards › Status check overrides lists every place that doesn't follow the level above.</p>
               </div>
             </div>
             <div class="feature">
               <Icon icon="mdi:apps" width="24" />
               <div>
                 <strong>Thousands of icons</strong>
-                <p>~2,300 bundled app/service icons (homarr-labs) plus access to 200,000+ icons by name via Iconify (the ones HOPS uses are embedded for offline rendering; an uncommon name you type is fetched on demand), plus your own uploads.</p>
+                <p>~2,300 bundled app/service icons (homarr-labs) plus access to 200,000+ icons by name via Iconify (the ones HOPS uses are embedded for offline rendering; an uncommon name you type is fetched on demand), plus your own uploads. Manage them in Settings › Icons.</p>
               </div>
             </div>
           </div>
         </div>
 
         <div class="help-section">
-          <h3>Admin Features</h3>
+          <h3>In Settings</h3>
 
           <div class="feature-list">
             <div class="feature">
               <Icon icon="mdi:radar" width="24" />
               <div>
                 <strong>Network Discovery</strong>
-                <p>Point HOPS at your home network and let it find what's already running. Tell it which addresses to look at (a range, a CIDR, or individual IPs, in any mix), pick how thorough to be, and it comes back with a draft of everything it spotted. Tick through what you actually want and HOPS adds them to your dashboard, in sensible folders. Open <strong>Settings › Discovery</strong>. It's a head start, not magic — what it finds depends on your network and what's blocking it, so expect a few misses and a few false matches. Nothing lands on your dashboard until you accept it.</p>
-                <p><em>Running HOPS in Docker? By default, Docker containers can't "see" the kinds of broadcasts smart TVs, Sonos, and AirPlay use to announce themselves — that's a Docker quirk, not a HOPS one. Port scanning and subdomain lookups still work fine. For full coverage on Linux, run with <code>network_mode: host</code>. The User Guide → Network Discovery chapter has the full picture.</em></p>
+                <p>Point HOPS at your home network and let it find what's already running. Tell it which addresses to look at (a range, a CIDR, or individual IPs, in any mix), pick how thorough to be, and it comes back with a draft of everything it spotted. Tick through what you actually want and HOPS adds them to your dashboard, in sensible folders. Scan again later to see what's new, changed or gone. Open <strong>Settings › Discovery</strong>. It's a head start, not magic — what it finds depends on your network and what's blocking it, so expect a few misses and a few false matches. Nothing lands on your dashboard until you accept it.</p>
+                <p><em>Running HOPS in Docker? By default, Docker containers can't "see" the kinds of broadcasts smart TVs, Sonos, and AirPlay use to announce themselves — that's a Docker quirk, not a HOPS one. Port scanning and subdomain lookups still work fine. For full coverage on Linux, run with <code>network_mode: host</code>. The Installation &amp; Deployment Guide has the full picture.</em></p>
+              </div>
+            </div>
+            <div class="feature">
+              <Icon icon="mdi:bookmark-plus-outline" width="24" />
+              <div>
+                <strong>Add to HOPS bookmark</strong>
+                <p>Drag the Add to HOPS button from Settings › Dashboards to your bookmarks bar. Click it on any service's page and HOPS opens with a new tile filled in.</p>
               </div>
             </div>
             <div class="feature">
               <Icon icon="mdi:qrcode" width="24" />
               <div>
                 <strong>QR Codes</strong>
-                <p>Generate a scannable QR for any dashboard from Settings → Dashboards — open it on a phone or tablet without typing the URL.</p>
+                <p>Generate a scannable QR for any dashboard from Settings › Dashboards — open it on a phone or tablet without typing the URL.</p>
+              </div>
+            </div>
+            <div class="feature">
+              <Icon icon="mdi:link" width="24" />
+              <div>
+                <strong>Dead Links & Duplicates</strong>
+                <p>Settings › Dashboards › Dead links lists tiles whose status check has kept failing (for a week, by default). Duplicates lists tiles that point at the same address and can merge them, showing what it would keep first.</p>
               </div>
             </div>
             <div class="feature">
               <Icon icon="mdi:backup-restore" width="24" />
               <div>
                 <strong>Automatic Backups</strong>
-                <p>HOPS backs up the database on startup and before config changes. Restore or delete from Settings → Backups.</p>
+                <p>HOPS backs up its database when it starts, before every save, before a restore or factory reset, and before an upgrade. Create, download, upload and restore backups from Settings › Backups.</p>
               </div>
             </div>
             <div class="feature">
               <Icon icon="mdi:import" width="24" />
               <div>
                 <strong>Import / Export</strong>
-                <p>Self-contained export bundles all uploaded icons and backgrounds. Import from HOPS, Homer, Dashy, or Heimdall configs.</p>
+                <p>Self-contained export bundles all uploaded icons and backgrounds. Import from HOPS, Homer, Dashy, or Heimdall configs; anything that can't be brought across is listed.</p>
+              </div>
+            </div>
+            <div class="feature">
+              <Icon icon="mdi:text-box-search-outline" width="24" />
+              <div>
+                <strong>Logs</strong>
+                <p>Settings › Logs shows what HOPS has been doing, with Copy and Download .txt for when you ask for help.</p>
               </div>
             </div>
             <div class="feature">
               <Icon icon="mdi:shield-key" width="24" />
               <div>
                 <strong>Security</strong>
-                <p>Bcrypt password hashing, HttpOnly session cookies, CSRF protection, and forced password change on first login.</p>
+                <p>Bcrypt password hashing, HttpOnly session cookies, CSRF protection, and forced password change on first login. Signing out or changing the password ends the session.</p>
               </div>
             </div>
             <div class="feature">
               <Icon icon="mdi:theme-light-dark" width="24" />
               <div>
                 <strong>Themes</strong>
-                <p>8 presets with dark, light, and auto modes — including animated gradient themes.</p>
+                <p>8 presets with dark, light, and auto modes — including gradient themes. Each browser keeps its own choice.</p>
               </div>
             </div>
             <div class="feature">
@@ -284,6 +402,13 @@
               <div>
                 <strong>Text Size</strong>
                 <p>Adjust text size with navbar controls (persists in browser).</p>
+              </div>
+            </div>
+            <div class="feature">
+              <Icon icon="mdi:history" width="24" />
+              <div>
+                <strong>Recently Used</strong>
+                <p>Turn on Show recently used in Theme Settings for a row of the tiles you open most. It is kept in this browser only.</p>
               </div>
             </div>
           </div>
@@ -297,14 +422,14 @@
               <Icon icon="mdi:cellphone" width="24" />
               <div>
                 <strong>View only on phones</strong>
-                <p>Dashboards work great on phones, but editing is hidden — drag-and-drop and dense modals are awkward on touchscreens. Use a tablet or desktop to edit. The gear (Settings) stays available so you can still reach Backups and Change Password.</p>
+                <p>Dashboards work great on phones, but editing is hidden on screens 480 pixels wide or narrower. Tablets can edit, though a computer with a mouse is easier. The gear (Settings) stays available so you can still reach Backups and Password.</p>
               </div>
             </div>
             <div class="feature">
               <Icon icon="mdi:qrcode-scan" width="24" />
               <div>
                 <strong>Quick mobile access</strong>
-                <p>Use the QR code feature in Settings → Dashboards to open any dashboard on your phone — no URL typing required.</p>
+                <p>Use the QR code feature in Settings › Dashboards to open any dashboard on your phone — no URL typing required. Then use your browser's Add to Home Screen to open HOPS from its own icon.</p>
               </div>
             </div>
           </div>

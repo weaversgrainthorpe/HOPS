@@ -13,91 +13,156 @@ Thanks for your interest in contributing to HOPS! This document covers the guide
 ### Prerequisites
 
 - Go 1.27.3+ (the `go` line in `backend/go.mod`)
-- Node.js 24+
-- npm
-- SQLite3
+- Node.js 24+ with npm
 
-### Getting Started
+SQLite is built into HOPS (pure Go, `CGO_ENABLED=0`); there is nothing else
+to install.
 
-1. Fork and clone the repository
-2. Start the backend:
-   ```bash
-   cd backend
-   go run -tags dev cmd/hops/main.go --data ../data --frontend ../frontend/build
-   ```
-3. Start the frontend:
-   ```bash
-   cd frontend
-   npm install
-   npm run dev
-   ```
-4. Open http://localhost:5173 (default credentials: `admin` / `admin`)
+### Running HOPS while you work
+
+```bash
+./scripts/dev.sh
+```
+
+This builds a `dev` backend, starts it on port 8080 with its data in `./data`
+(not checked in), and starts the Vite dev server on port 5173, which proxies
+the API to the backend. Open http://localhost:5173 and sign in with
+`admin` / `admin` (you'll be asked to set a new password). Ctrl+C stops both.
+
+To run the two halves yourself:
+
+```bash
+# Backend (dev build; serves the UI from frontend/build on disk)
+cd frontend && npm install && npm run build && cd ..
+cd backend
+go build -tags dev -o hops ./cmd/hops
+./hops --data ../data --frontend ../frontend/build
+
+# Frontend with hot reload, in another terminal
+cd frontend
+npm run dev
+```
+
+Use a data folder of its own for development, never the data of a HOPS you
+actually use.
+
+### The `dev` build tag
+
+Code that only helps development is behind the `dev` build tag and is left
+out of release binaries entirely (CI checks this). Today that is:
+
+- `--frontend <folder>`: serve the web UI from a folder on disk instead of
+  the copy embedded in the binary;
+- `--no-lan-multicast`: Network Discovery sends no mDNS/SSDP onto the LAN
+  (used by the test suite).
+
+Build with `go build -tags dev ./cmd/hops` to get them. A release build
+(`scripts/build.sh`, or `go build ./cmd/hops`) rejects them as unknown flags.
+New dev-only code belongs in a `//go:build dev` file with a release
+counterpart, the way `backend/cmd/hops/dev_flags.go` and
+`dev_flags_release.go` do it.
+
+### Building a release binary
+
+```bash
+./scripts/build.sh
+```
+
+This builds the frontend (including the offline icon bundle), copies it into
+`backend/internal/web/build` so it can be embedded, and compiles
+`backend/hops` with the UI inside. That one file is all HOPS needs; run it
+with `./backend/hops --data ./data`.
+
+If you add an icon to the UI, regenerate the offline icon bundle with
+`npm run icons:bundle` in `frontend/` (the build does this too) and commit
+the result. `npm run icons:check` fails if the bundle is out of date.
 
 ### Project Structure
 
 ```
 hops/
 ├── backend/
-│   ├── cmd/
-│   │   └── hops/              # Main application entry point
-│   ├── internal/
-│   │   ├── api/               # HTTP handlers and routing
-│   │   ├── auth/              # Authentication service
-│   │   ├── config/            # Configuration management
-│   │   ├── converters/        # Format converters (Homer, Dashy, etc.)
-│   │   ├── database/          # SQLite setup, migrations, backups
-│   │   ├── models/            # Data models
-│   │   ├── status/            # Status checking (HTTP)
-│   │   └── version/           # Version information
-│   └── go.mod
+│   ├── cmd/hops/              # Main program, flags, data-folder default
+│   └── internal/
+│       ├── api/               # HTTP handlers, routing, CSP and CSRF
+│       ├── assets/            # Embedded Dashboard Icons and background presets
+│       ├── auth/              # Sign-in and sessions
+│       ├── configdoc/         # The dashboard document: v3 format, v2→v3 conversion
+│       ├── converters/        # Imports from Homer, Dashy, Heimdall
+│       ├── database/          # SQLite, backups, restore, retention
+│       ├── discovery/         # Network Discovery
+│       ├── netguard/          # The outbound-connection (SSRF) guard
+│       ├── safemode/          # The "can't start safely" recovery page
+│       ├── settings/          # Global settings (defaults, limits)
+│       ├── status/            # Status checks
+│       └── web/               # The embedded web UI
 ├── frontend/
-│   ├── src/
-│   │   ├── lib/
-│   │   │   ├── components/    # Svelte components
-│   │   │   ├── stores/        # Svelte stores (state management)
-│   │   │   ├── types/         # TypeScript type definitions
-│   │   │   └── utils/         # Utility functions (API client, etc.)
-│   │   └── routes/
-│   │       ├── admin/         # Admin panel route
-│   │       └── [dashboard]/   # Dynamic dashboard routes
-│   └── package.json
-├── scripts/                   # Build, dev, and deployment scripts
-├── data/                      # Runtime data directory (not checked in)
+│   └── src/
+│       ├── lib/               # Components, editor, layout, stores, icons, utils
+│       └── routes/            # Dashboards, Settings pages
+├── packaging/                 # install.sh and the Proxmox script
+├── scripts/                   # Build, dev, test and check scripts
+├── tests/prerelease/          # Playwright end-to-end and API suite
 ├── Dockerfile
 └── docker-compose.yml
 ```
 
 ## Pull Request Guidelines
 
-1. **One concern per PR** — Keep changes focused. A bug fix and a new feature should be separate PRs.
-2. **Test your changes** — Make sure the app builds and runs correctly with your changes.
-3. **Follow existing patterns** — Match the code style and conventions already in the project.
-4. **Update documentation** — If your change affects user-facing behavior, update the relevant docs (README, USER_GUIDE, DEPLOY, etc.).
-5. **Write clear commit messages** — Describe *what* changed and *why*.
+1. **One concern per PR.** Keep changes focused. A bug fix and a new feature should be separate PRs.
+2. **Test your changes.** Run the tests below, and try the change in a running HOPS.
+3. **Check the [tenets](TENETS.md).** `./scripts/check-tenets.sh` runs the mechanical checks; the rest is judgement.
+4. **Follow existing patterns.** Match the code style and conventions already in the project.
+5. **Update documentation.** If your change affects user-facing behaviour, update the relevant docs (README, QUICKSTART, USER_GUIDE, DEPLOY, etc.).
+6. **Write clear commit messages.** Describe *what* changed and *why*.
 
 ### Running Tests
 
 ```bash
-# Backend
+# Backend (Go)
 cd backend
-go test ./...
+CGO_ENABLED=0 go test ./...
+go vet ./...
 
-# Frontend
+# Frontend type check (svelte-check)
 cd frontend
+npm run check
+
+# Frontend unit tests (vitest)
 npm test
 ```
 
-### Building for Production
+CI runs these on every push, plus the icon-bundle and tenet checks.
+
+#### The Playwright suite
+
+`tests/prerelease` holds the end-to-end and API tests. They start a fresh
+HOPS (a throwaway data folder, port 18080, listening on 127.0.0.1 only) and
+drive it in Chromium. To run everything, from version checks through Go,
+svelte-check and vitest to Playwright:
 
 ```bash
-# Backend
-cd backend
-go build -o hops ./cmd/hops
-
-# Frontend
-cd frontend
-npm run build
+./scripts/test-prerelease.sh
 ```
+
+Or just the Playwright suite:
+
+```bash
+cd tests/prerelease
+npm install
+npx playwright install chromium   # first time only
+npx playwright test               # add e.g. e2e/tiles.spec.ts to run one file
+```
+
+By default the suite uses a `dev` build (`backend/hops-testdev`) serving
+`frontend/build`. `HOPS_TEST_BUILD=release npx playwright test` runs it
+against the real release binary from `scripts/build.sh` instead. See
+[tests/prerelease/README.md](tests/prerelease/README.md) for more.
+
+### Git hooks
+
+`git config core.hooksPath scripts/hooks` enables a pre-push check (version
+numbers agree, the Go build works, CSS lint).
 
 ## Code Style
 

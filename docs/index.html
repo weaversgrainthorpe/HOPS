@@ -4,11 +4,13 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>HOPS — Home Operations Portal System</title>
-  <meta name="description" content="A modern, self-hosted homepage dashboard for the homelab community. GUI-first, single binary, network discovery built in. No YAML, no complexity. Free and open source." />
+  <meta name="description" content="A self-hosted homepage dashboard for your homelab. Build it by clicking and dragging: folders inside folders, home and away addresses, status checks, network discovery. One file, no YAML. Free and open source." />
   <meta property="og:title" content="HOPS — Home Operations Portal System" />
-  <meta property="og:description" content="A modern, self-hosted homepage dashboard for the homelab community. GUI-first, single binary, network discovery built in. No YAML, no complexity. Free and open source." />
+  <meta property="og:description" content="A self-hosted homepage dashboard for your homelab. Build it by clicking and dragging: folders inside folders, home and away addresses, status checks, network discovery. One file, no YAML. Free and open source." />
   <meta property="og:image" content="https://weaversgrainthorpe.github.io/HOPS/screenshots/dashboard-hero.png" />
   <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://weaversgrainthorpe.github.io/HOPS/" />
+  <meta name="twitter:card" content="summary_large_image" />
   <meta name="theme-color" content="#0f172a" />
   <link rel="icon" href="https://github.githubassets.com/favicons/favicon-dark.png" />
   <style>
@@ -75,7 +77,7 @@
     .nav { display: flex; align-items: center; justify-content: space-between; padding: 0.85rem 0; }
     .brand { display: flex; align-items: center; gap: 0.6rem; font-weight: 700; font-size: 1.15rem; letter-spacing: 0.02em; }
     .brand .badge { background: var(--accent-soft); color: var(--accent); padding: 0.1rem 0.5rem; border-radius: 999px; font-size: 0.72rem; font-weight: 600; }
-    .nav-links { display: flex; gap: 1.4rem; align-items: center; }
+    .nav-links { display: flex; flex-wrap: wrap; gap: 0.6rem 1.4rem; align-items: center; justify-content: flex-end; }
     .nav-links a { color: var(--text-muted); font-size: 0.95rem; }
     .nav-links a:hover { color: var(--text); text-decoration: none; }
 
@@ -150,13 +152,13 @@
     }
 
     /* ----- Why grid ----- */
-    .why-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.2rem; }
+    .why-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); gap: 1.2rem; }
     .why-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 1.4rem 1.4rem; }
     .why-card h3 { margin: 0 0 0.4rem; font-size: 1.1rem; color: var(--accent); }
     .why-card p { margin: 0; color: var(--text-muted); font-size: 0.96rem; }
 
     /* ----- Screenshots grid ----- */
-    .shots { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.2rem; }
+    .shots { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); gap: 1.2rem; }
     .shot { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; }
     .shot img { width: 100%; display: block; }
     .shot .shot-caption { padding: 0.9rem 1.1rem; }
@@ -164,10 +166,14 @@
     .shot .shot-caption span { color: var(--text-muted); font-size: 0.92rem; }
 
     /* ----- Install ----- */
-    .install-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.2rem; }
+    .install-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); gap: 1.2rem; }
     .install-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 1.4rem; }
     .install-card h3 { margin: 0 0 0.8rem; font-size: 1.05rem; display: flex; align-items: center; gap: 0.5rem; }
     .install-card .login { color: var(--text-muted); font-size: 0.9rem; margin-top: 0.8rem; }
+    .install-card .hint { color: var(--text-muted); font-size: 0.9rem; margin: 0 0 0.8rem; }
+    .notes { color: var(--text-muted); font-size: 0.95rem; margin: 2rem 0 0; padding-left: 1.2rem; }
+    .notes li { margin: 0.35rem 0; }
+    .notes b { color: var(--text); }
 
     /* ----- Footer ----- */
     footer {
@@ -189,7 +195,8 @@
     <div class="container nav">
       <div class="brand">HOPS <span class="badge">v3.0.0</span></div>
       <nav class="nav-links">
-        <a href="#features">Features</a>
+        <a href="#features">Why HOPS</a>
+        <a href="#new">What's new</a>
         <a href="#screenshots">Screenshots</a>
         <a href="#install">Install</a>
         <a href="https://github.com/weaversgrainthorpe/HOPS">GitHub</a>
@@ -202,7 +209,7 @@
       <div class="container">
         <div class="eyebrow">HOPS — Home Operations Portal System</div>
         <h1>A homelab dashboard without the complexity.</h1>
-        <p class="lede">A self-hosted homepage dashboard for your homelab. Drag-and-drop tiles, multiple dashboards, QR codes for phones, and a network scanner that bulk-adds the services you already run — all configured through the UI, never through a config file.</p>
+        <p class="lede">HOPS is a self-hosted homepage for your homelab: tiles that open your router, NAS, Proxmox, media server and everything else you run. You build it by clicking and dragging in the browser, never in a config file. One program, its own database, nothing else to install.</p>
         <div class="cta-row">
           <a class="btn btn-primary" href="https://github.com/weaversgrainthorpe/HOPS/blob/main/QUICKSTART.md">Quick Start →</a>
           <a class="btn btn-ghost" href="https://github.com/weaversgrainthorpe/HOPS">View on GitHub</a>
@@ -219,47 +226,88 @@
     <section id="features">
       <div class="container">
         <h2>Why HOPS?</h2>
-        <p class="section-lede">There are already plenty of homelab dashboards out there. HOPS exists because none of them quite matched what I wanted: full GUI configuration, a single binary, multiple dashboards, and (as of v2.0) a network scanner that gets a new install useful in minutes instead of an evening.</p>
+        <p class="section-lede">There are already plenty of homelab dashboards out there. If you're happy with yours, stick with it. HOPS exists because none of them quite matched what I wanted: everything set in the GUI, a single file to install, and enough power to organise a big homelab without a config file in sight.</p>
         <div class="why-grid">
           <div class="why-card">
             <h3>100% GUI configuration</h3>
-            <p>Click, drag, configure. No YAML files. No JSON editing. No "simple" config files that inevitably become not-so-simple. Even the runtime settings — log level, rate limits, proxy trust — live in the admin GUI, not in env vars or flags.</p>
+            <p>Click, drag, configure. No YAML files. No JSON editing. No "simple" config files that inevitably become not-so-simple. Even the server settings (port, log level, backups, rate limits) live on the Settings page, not in env vars or flags.</p>
           </div>
           <div class="why-card">
             <h3>Single binary</h3>
-            <p>One executable plus a SQLite database. No runtime dependencies. Download, run, done. Docker works too.</p>
+            <p>One executable plus a SQLite database, with the web interface built in. No runtime dependencies. Download, run, done. There's a one-line Linux installer, a Proxmox container script and Docker too.</p>
           </div>
           <div class="why-card">
             <h3>Multiple dashboards</h3>
-            <p>One install can host many dashboards at different URLs — <code>/home</code>, <code>/network</code>, <code>/media</code>. Each fully customisable.</p>
+            <p>One install can host many dashboards at different addresses: <code>/home</code>, <code>/network</code>, <code>/media</code>. Each has its own tabs, background and look.</p>
           </div>
           <div class="why-card">
-            <h3>Built-in QR codes</h3>
-            <p>Generate a scannable QR for any dashboard. Point your phone camera at it to open the dashboard — no typing URLs.</p>
-          </div>
-          <div class="why-card">
-            <h3>Status checks</h3>
-            <p>HOPS can check your tiles now and then and show an up/down badge on each, so you can see at a glance which services are answering.</p>
+            <h3>No login to view</h3>
+            <p>Anyone on your network can open a dashboard. You sign in only to change things. Scan a dashboard's QR code to open it on a phone, or add it to the home screen.</p>
           </div>
           <div class="why-card">
             <h3>Import your existing dashboard</h3>
-            <p>Already on Homer, Dashy, or Heimdall? HOPS imports your existing config, so trying it doesn't mean starting over.</p>
+            <p>Already on Homer, Dashy, or Heimdall? HOPS imports your existing setup and lists anything it couldn't bring across, so trying it doesn't mean starting over.</p>
           </div>
           <div class="why-card">
             <h3>Search and keyboard nav</h3>
-            <p>Press <code>/</code> to search the tiles and folders on the dashboard you're viewing, at any depth. Arrow keys move focus between tiles, <code>Enter</code> opens them — no mouse required.</p>
+            <p>Press <code>/</code> to search the dashboard you're viewing, inside every folder, and see where a tile lives. Arrow keys move between tiles and <code>Enter</code> opens them.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="new">
+      <div class="container">
+        <h2>What's new in v3</h2>
+        <p class="section-lede">HOPS 3 is a big rework of how dashboards are laid out and edited. Upgrading from v2 is automatic.</p>
+        <div class="why-grid">
+          <div class="why-card">
+            <h3>Folders inside folders</h3>
+            <p>Place tiles and folders anywhere on each tab's grid, in three sizes. A folder can hold tiles, other folders, or both. Folders page when they're full, can start minimised, and come in seven looks, from a rounded box to a cartoon folder, with the tab on the left, centre or right.</p>
           </div>
           <div class="why-card">
-            <h3>Flexible layouts</h3>
-            <p>Place tiles and folders anywhere on each tab's grid, in three sizes. Folders can hold folders, page when they're full, and can start minimised. Add note tiles for headings or scratchpad text alongside your links.</p>
+            <h3>A new drag-and-drop editor</h3>
+            <p>Drag things around, drop a tile on another to make a folder, Ctrl-click to select several, and right-click for Edit, Duplicate, Cut, Copy and Move/Copy to. Undo and redo every step. Nothing is kept until you click Save.</p>
+          </div>
+          <div class="why-card">
+            <h3>Home and away addresses</h3>
+            <p>Give a tile an away address for Tailscale, a VPN or a public address. A Home / Away button in the top bar picks which one tiles open, in each browser on its own.</p>
+          </div>
+          <div class="why-card">
+            <h3>Your view, your browser</h3>
+            <p>Minimised folders, folder pages, Home/Away, theme, text size and the optional Recently used row are remembered by each browser. Your phone and your desktop can differ, and nobody else's view changes.</p>
+          </div>
+          <div class="why-card">
+            <h3>Status checks, inherited</h3>
+            <p>An up/down badge on each tile. Set checks to Inherit, On or Off on any tile, folder, tab or dashboard; the nearest setting wins. Self-signed HTTPS and login prompts count as up. One page lists every override and restores inheritance in bulk.</p>
+          </div>
+          <div class="why-card">
+            <h3>Add to HOPS</h3>
+            <p>Drag the Add to HOPS bookmark to your browser's bar. On any service's page, click it, and HOPS opens with the address, name and icon filled in. Pick where it goes and click Add.</p>
+          </div>
+          <div class="why-card">
+            <h3>Dead links and duplicates</h3>
+            <p>One page lists tiles whose status check has been failing for a while, with where they live. Another finds tiles that point at the same address and merges them on your say-so, showing exactly what it would keep and delete.</p>
           </div>
           <div class="why-card">
             <h3>Network discovery</h3>
-            <p>Point HOPS at your home network and it finds what's already running. Over 90 common services are recognised out of the box, including Pi-hole, Proxmox, Plex, the *arr stack and NAS UIs. You review what was found, tick what you want, and HOPS adds them to your dashboard in sensible folders. It's a head start, not magic — results depend on your network and what's blocking it — so nothing lands on your dashboard until you accept it.</p>
+            <p>Point HOPS at your network and it finds what's already running: 90+ common services, including Pi-hole, Proxmox, Plex, the *arr apps, NAS UIs and AI tools. Each scan is a draft you tick through, and a re-scan shows what's new, changed and gone. It's a head start, not magic, so nothing lands on your dashboard until you accept it.</p>
           </div>
           <div class="why-card">
-            <h3>Install on a phone or tablet</h3>
-            <p>Use your browser's "Add to Home Screen" for a shortcut to your dashboard, handy for a wall-mounted tablet. Served over HTTPS (for example behind a reverse proxy), HOPS installs like a real app: full screen, no browser tabs or address bar in the way. On plain <code>http://</code>, browsers allow only a shortcut. If the connection drops, the open dashboard stays on screen and a status dot in the top bar shows that HOPS can't be reached.</p>
+            <h3>Backgrounds everywhere</h3>
+            <p>A colour, a picture or a slideshow behind the dashboard, behind each tab, or inside a folder. About 90 built-in pictures work offline, or upload your own.</p>
+          </div>
+          <div class="why-card">
+            <h3>SSH and note tiles</h3>
+            <p>An SSH tile opens your computer's SSH app at a host, port and user, and checks it with a TCP connect. A note tile holds a heading or a reminder, with no link.</p>
+          </div>
+          <div class="why-card">
+            <h3>Backups with retention</h3>
+            <p>HOPS backs itself up when it starts, before every save, and before a restore, reset or upgrade. Choose how many to keep. Downloads include their images, a restore takes a safety backup first, and a failed backup always shows a warning.</p>
+          </div>
+          <div class="why-card">
+            <h3>Automatic upgrade from v2</h3>
+            <p>On its first start, HOPS 3 takes a protected backup of your whole v2 database, then converts your dashboards. If the backup fails, it doesn't convert. The backup is never deleted automatically: it's your way back to 2.2.1.</p>
           </div>
         </div>
       </div>
@@ -268,47 +316,43 @@
     <section id="screenshots">
       <div class="container">
         <h2>Screenshots</h2>
-        <p class="section-lede">A few of the interfaces you'll actually spend time in.</p>
+        <p class="section-lede">All taken from the Sample dashboard that comes with every new install.</p>
         <div class="shots">
           <div class="shot">
-            <img src="screenshots/admin.png" alt="Admin page — manage multiple dashboards" />
-            <div class="shot-caption"><b>Admin page</b><span>Manage multiple dashboards from one place</span></div>
+            <img src="screenshots/dashboard-hero.png" alt="The Sample dashboard on a desktop" loading="lazy" />
+            <div class="shot-caption"><b>Dashboard</b><span>Tiles and folders on a tab, with a background picture</span></div>
           </div>
           <div class="shot">
-            <img src="screenshots/admin1.png" alt="QR code modal for any dashboard" />
-            <div class="shot-caption"><b>QR codes</b><span>Share any dashboard with a phone, no typing</span></div>
+            <img src="screenshots/folders.png" alt="Open folders, folders inside folders, and folder shapes" loading="lazy" />
+            <div class="shot-caption"><b>Folders</b><span>Open, nested, and in seven looks</span></div>
           </div>
           <div class="shot">
-            <img src="screenshots/edit-mode.png" alt="Edit mode — drag-and-drop" />
-            <div class="shot-caption"><b>Edit mode</b><span>Drag-and-drop tiles, folders, and tabs</span></div>
+            <img src="screenshots/edit-mode.png" alt="Edit mode with the editing toolbar and a selection" loading="lazy" />
+            <div class="shot-caption"><b>Edit mode</b><span>Drag and drop, undo and redo, save when you're done</span></div>
           </div>
           <div class="shot">
-            <img src="screenshots/edit-tile.png" alt="Tile editor with all options" />
-            <div class="shot-caption"><b>Tile editor</b><span>Every option in one modal — nothing hidden in config files</span></div>
+            <img src="screenshots/edit-tile.png" alt="The tile dialog" loading="lazy" />
+            <div class="shot-caption"><b>Tile dialog</b><span>Every option in one place, nothing hidden in config files</span></div>
           </div>
           <div class="shot">
-            <img src="screenshots/icon-picker.png" alt="Icon picker — thousands of icons" />
-            <div class="shot-caption"><b>Icon picker</b><span>Search thousands of bundled icons, or upload your own</span></div>
+            <img src="screenshots/icon-picker.png" alt="Icon picker" loading="lazy" />
+            <div class="shot-caption"><b>Icon picker</b><span>Thousands of icons that work offline, or upload your own</span></div>
           </div>
           <div class="shot">
-            <img src="screenshots/mobile.png" alt="Responsive mobile layout" />
-            <div class="shot-caption"><b>Mobile</b><span>Responsive layout works on phones and tablets</span></div>
+            <img src="screenshots/mobile.png" alt="A dashboard on a phone" loading="lazy" />
+            <div class="shot-caption"><b>Phone</b><span>The same dashboard, sized for a small screen</span></div>
           </div>
           <div class="shot">
-            <img src="screenshots/admin-discovery.png" alt="Network Discovery — list of scans" />
-            <div class="shot-caption"><b>Network Discovery</b><span>Scan your network for services already running</span></div>
+            <img src="screenshots/settings.png" alt="The Settings page" loading="lazy" />
+            <div class="shot-caption"><b>Settings</b><span>Dashboards, backups and every server setting, in the GUI</span></div>
           </div>
           <div class="shot">
-            <img src="screenshots/admin-discovery-draft.png" alt="Curate scan results before promoting" />
-            <div class="shot-caption"><b>Curate before promoting</b><span>Review what was found, tick the ones you want</span></div>
+            <img src="screenshots/qr.png" alt="A dashboard's QR code" loading="lazy" />
+            <div class="shot-caption"><b>QR codes</b><span>Open any dashboard on a phone, no typing</span></div>
           </div>
           <div class="shot">
-            <img src="screenshots/admin-discovery-detectors.png" alt="Discovery detectors — bundled and custom" />
-            <div class="shot-caption"><b>Detectors</b><span>90+ services recognised out of the box, tweak any of them</span></div>
-          </div>
-          <div class="shot">
-            <img src="screenshots/admin-discovery-diagnostics.png" alt="Diagnostics — find what wasn't recognised" />
-            <div class="shot-caption"><b>Diagnostics</b><span>Find what HOPS missed and turn it into a detector in two clicks</span></div>
+            <img src="screenshots/discovery.png" alt="Network Discovery results" loading="lazy" />
+            <div class="shot-caption"><b>Network Discovery</b><span>Find what's already running, tick what you want</span></div>
           </div>
         </div>
       </div>
@@ -317,33 +361,57 @@
     <section id="install">
       <div class="container">
         <h2>Install</h2>
-        <p class="section-lede">HOPS runs on Linux and macOS (x86-64 and ARM64, including Raspberry Pi 3B+/4/5/Zero 2 W with a 64-bit OS) and Windows (x86-64). No dependencies.</p>
+        <p class="section-lede">Pick one. Then open <code>http://&lt;your-server&gt;:8080</code> and sign in with <code>admin</code> / <code>admin</code>; HOPS makes you choose a new password straight away. The <a href="https://github.com/weaversgrainthorpe/HOPS/blob/main/QUICKSTART.md"><b>Quick Start guide</b></a> walks through each option step by step.</p>
         <div class="install-grid">
           <div class="install-card">
-            <h3>📦 Binary</h3>
-<pre><code># Download the single binary for your platform from Releases
-curl -LO https://github.com/weaversgrainthorpe/HOPS/releases/latest/download/hops-linux-amd64
-chmod +x hops-linux-amd64
-mkdir -p data
-./hops-linux-amd64 --data ./data</code></pre>
-            <p class="login">Default login: <code>admin</code> / <code>admin</code> (you'll be forced to change it on first login).</p>
+            <h3>One-line installer</h3>
+            <p class="hint">Linux with systemd: Debian, Ubuntu, Raspberry Pi OS, a Proxmox container. Installs a service that starts on boot. Run it again to upgrade.</p>
+<pre><code>curl -fsSL https://github.com/weaversgrainthorpe/HOPS/releases/latest/download/install.sh | sudo bash</code></pre>
           </div>
           <div class="install-card">
-            <h3>🐳 Docker <span style="color: var(--text-muted); font-weight: 400; font-size: 0.85em;">— alternative</span></h3>
+            <h3>Proxmox VE container</h3>
+            <p class="hint">In the Proxmox host shell. Creates a small Debian 12 container (1 core, 256 MB RAM, 2 GB disk by default) with HOPS in it.</p>
+<pre><code>curl -fsSLO https://github.com/weaversgrainthorpe/HOPS/releases/latest/download/hops-proxmox.sh
+bash hops-proxmox.sh</code></pre>
+          </div>
+          <div class="install-card">
+            <h3>Docker</h3>
+            <p class="hint">x86-64 and 64-bit ARM. Save as <code>docker-compose.yml</code>, then run <code>docker compose up -d</code>.</p>
 <pre><code>services:
   hops:
     image: ghcr.io/weaversgrainthorpe/hops:latest
+    container_name: hops
     ports:
       - "8080:8080"
     volumes:
       - hops-data:/app/data
     restart: unless-stopped
+
 volumes:
   hops-data:</code></pre>
-            <p class="login">Then <code>docker compose up -d</code> and open <code>http://localhost:8080</code>.</p>
+          </div>
+          <div class="install-card">
+            <h3>Single binary</h3>
+            <p class="hint">Linux and macOS. Download the file for your machine from Releases and run it.</p>
+<pre><code>curl -LO https://github.com/weaversgrainthorpe/HOPS/releases/latest/download/hops-linux-amd64
+chmod +x hops-linux-amd64
+mkdir -p data
+./hops-linux-amd64 --data ./data</code></pre>
+          </div>
+          <div class="install-card">
+            <h3>Windows</h3>
+            <p class="hint">PowerShell. The same single file; the Deployment guide shows how to run it as a service with NSSM.</p>
+<pre><code>curl.exe -LO https://github.com/weaversgrainthorpe/HOPS/releases/latest/download/hops-windows-amd64.exe
+mkdir data
+.\hops-windows-amd64.exe --data .\data</code></pre>
           </div>
         </div>
-        <p style="margin-top: 2rem; color: var(--text-muted);">For the full walkthrough see the <a href="https://github.com/weaversgrainthorpe/HOPS/blob/main/QUICKSTART.md"><b>Quick Start guide</b></a>, or jump to the <a href="https://github.com/weaversgrainthorpe/HOPS/blob/main/DEPLOY.md"><b>Deployment guide</b></a> for systemd, reverse proxies, and backups.</p>
+        <ul class="notes">
+          <li><b>64-bit only.</b> 32-bit systems aren't supported, and the installer refuses them. The smallest Raspberry Pi HOPS runs on is a Zero 2 W with 64-bit Raspberry Pi OS; the original Pi Zero can't run a 64-bit OS.</li>
+          <li><b>Tested on real machines:</b> Linux (x86-64) and Windows. <b>Not yet tried on real hardware:</b> the Raspberry Pi / ARM64 build (run under emulation only) and the macOS builds. If you try one, please <a href="https://github.com/weaversgrainthorpe/HOPS/issues">tell us how it went</a>.</li>
+          <li><b>Upgrading from HOPS 2?</b> Start v3 with your existing data. It backs up your v2 database, then converts it. You don't need to export and import.</li>
+        </ul>
+        <p style="margin-top: 2rem; color: var(--text-muted);">For services, reverse proxies, HTTPS, backups and rolling back, see the <a href="https://github.com/weaversgrainthorpe/HOPS/blob/main/DEPLOY.md"><b>Deployment guide</b></a>.</p>
       </div>
     </section>
   </main>
@@ -353,6 +421,7 @@ volumes:
       <div>HOPS is free and open source under the <a href="https://github.com/weaversgrainthorpe/HOPS/blob/main/LICENSE">MIT License</a>.</div>
       <div class="footer-links">
         <a href="https://github.com/weaversgrainthorpe/HOPS">GitHub</a>
+        <a href="https://github.com/weaversgrainthorpe/HOPS/blob/main/QUICKSTART.md">Quick Start</a>
         <a href="https://github.com/weaversgrainthorpe/HOPS/blob/main/USER_GUIDE.md">User Guide</a>
         <a href="https://github.com/weaversgrainthorpe/HOPS/blob/main/CHANGELOG.md">Changelog</a>
         <a href="https://github.com/weaversgrainthorpe/HOPS/discussions">Discussions</a>

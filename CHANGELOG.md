@@ -5,6 +5,189 @@ All notable changes to HOPS (Home Operations Portal System) will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0] - 2026-10-30 — Folders inside folders, a new editor, and Settings in one place
+
+HOPS 3 is the biggest change since HOPS began. The way dashboards are laid out
+has been rebuilt: folders can now hold other folders, every item edits the
+same way, and nothing you change is kept until you click **Save**. The admin
+page has become **Settings**, with a page for each job. Backups, status checks,
+imports and Network Discovery have all been reworked so that when something
+fails, HOPS tells you instead of carrying on quietly.
+
+Upgrading from 2.x is automatic. HOPS takes a protected backup of your whole
+v2 database first, and refuses to convert anything if that backup fails. See
+**Upgrading from v2** below before you upgrade.
+
+### Highlights
+- **Folders inside folders.** A folder can hold tiles, other folders, or both,
+  shown a page at a time when it's full. Open a sub-folder in place and climb
+  back out with the path in its title bar. Seven folder **Look**s, from a
+  plain rounded box to a cartoon folder with its tab on the left, centre or
+  right.
+- **A new editor.** Your changes are a draft until you click **Save**, with
+  **Undo** / **Redo** for every drag, resize, delete and dialog. Drag items
+  into folders, out of them, onto another tab, or hold one tile over another
+  to make a folder. Right-click for a menu, **Move/Copy to…** any dashboard,
+  tab or folder, and copy and paste with Ctrl+C / Ctrl+V.
+- **Settings is the admin home.** The gear opens **Settings**, with separate
+  pages for Dashboards, Icons, Global settings, Discovery, Backups, Logs,
+  Password and Factory reset. `/` now opens your first dashboard.
+- **Status checks you can set at any level.** **Inherit**, **On** or **Off**
+  on each dashboard, tab, folder and tile; the nearest setting wins, and each
+  dialog says what is in effect and why.
+- **Home and away addresses.** A tile can have an **Away address** (a VPN,
+  Tailscale or public address). A **Home** / **Away** button in the top bar
+  picks which one tiles open, separately in each browser.
+- **Backups you can rely on.** Downloadable backups now include the images
+  they use, you can upload one and restore it, and HOPS refuses a restore or
+  factory reset it can't back up first.
+- **A one-line installer for Linux and a Proxmox container script.**
+
+### New
+- **Sample dashboard** on a fresh install: three tabs that show tile sizes,
+  nested and minimised folders, and every folder look. Its addresses are
+  made-up `*.example.lan` names. Delete it whenever you like.
+- **Tile types:** **SSH** tiles open your computer's SSH app (with a
+  TCP status check), alongside **Link** and **Note** tiles.
+- **Folder options:** **Contents size**, **Starts** expanded or collapsed,
+  **Size when minimised**, **Show title bar**, a folder colour with opacity and
+  **Text colour**, and a warning when text would be hard to read.
+- **Minimise and open folders while viewing.** Each browser remembers what its
+  viewer minimised and which page a folder was on.
+- **Backgrounds at every level:** behind the dashboard, behind one tab, or
+  inside one folder, each with its own opacity, darkness and blur. Folder
+  slideshows follow the **Animated folder backgrounds** setting.
+- **Animations** when tiles drop into folders, merge, open and close
+  (Settings › Global settings › Look & motion: *On*, *Always* or *Off*). They
+  respect your device's reduced-motion setting and never delay a change.
+- **Add to HOPS bookmark:** drag it to your bookmarks bar, click it on any
+  service's page, and HOPS opens with the tile filled in.
+- **Dead links** (tiles whose status check has failed for more than a week,
+  by default) and **Duplicates** (tiles with the same address, merged only
+  when you confirm) under Settings › Dashboards.
+- **Status check overrides** page: lists everything that sets its own On or
+  Off, shows what restoring inheritance would change, and restores several at
+  once.
+- **Search** reaches every folder at any depth on the dashboard you're on,
+  shows where each result lives, and **Shift**+**Enter** takes you to it.
+- **Show recently used** (Theme Settings): a row of the tiles you open most,
+  kept in that browser only.
+- **Settings › Icons:** browse and search the packaged icons, manage your
+  uploads and categories, and see where each icon is used.
+- **Settings › Logs:** recent log lines with **Copy** and **Download .txt**,
+  with secrets left out.
+- **Settings › Backups:** create, download, upload and restore backups, set
+  how many to keep, and **Clean up now** with a preview of what it deletes.
+  After a restore HOPS restarts itself.
+- **Network Discovery:** more detectors (including an AI category), re-scans
+  that show what's new, changed and gone since the last scan, and a clear
+  message when ARP or another source couldn't run instead of an empty result.
+- **QR codes** carry the HOPS bunny and the dashboard's name on the download.
+- **Optional idle sign-out** (Settings › Global settings › Sign-in &
+  security: **Sign out after being idle for**; off by default).
+- **Mismatch banner:** a red banner when the page and the server are
+  different versions.
+- **Installers:** `install.sh` installs or upgrades HOPS as a systemd service,
+  checks the download against `SHA256SUMS`, and puts the previous version back
+  if the new one doesn't start. `hops-proxmox.sh` creates a small Debian
+  container on a Proxmox VE host and installs HOPS in it. See
+  [QUICKSTART.md](QUICKSTART.md) and [DEPLOY.md](DEPLOY.md).
+
+### Changed
+- **Layout:** a finer 24-column grid. Small, Medium and Large are clearly
+  different sizes, and a folder grows to fit its contents instead of
+  squashing them. Phones show items in reading order.
+- **Edit mode keeps the view layout:** the toolbar floats at the bottom of the
+  screen, so nothing moves when you start editing. Signing in from the pencil
+  happens in place.
+- **One dialog per dashboard** (**Header**, **Background**, **Settings**)
+  replaces the separate header and background dialogs.
+- **A new dashboard's URL path follows its name** as you type, skipping paths
+  already taken and the ones HOPS uses itself (`/settings`, `/api`, …).
+- **Global settings** are grouped (Server, Sign-in & security, Uploads,
+  Editing, Look & motion, Status checks, Discovery), each showing its default.
+- **Status checks** count self-signed HTTPS and a login prompt (401/403) as
+  *Online*, retry with GET when an app refuses HEAD, and treat a 5xx or a
+  proxy's 502/503/504 as *Offline*.
+- The global **Status checks** setting (2.2.1's **Checks Enabled**) is now the
+  default for everything set to **Inherit**, not a master switch: a
+  dashboard, tab, folder or tile set to **On** is checked even when it is off.
+- **Upload limits** are set in MB, with ceilings safe for small machines.
+  Defaults: 25 MB for backgrounds, 2 MB for icons, 50 MB for imports.
+- **Imports** from Homer, Dashy and Heimdall have been tested on real files.
+  Anything HOPS can't bring across is listed, and imported dashboards are
+  always added beside yours (a taken path gets a suffix).
+- **Exports** use a new format that 2.x can't import.
+- **Password** and **Backups** are pages in Settings, not pop-ups.
+- **Default data folder:** without `--data`, HOPS now uses a `data` folder
+  next to the program. 2.x used `../data`, relative to wherever it was started.
+- **Security:** browser security headers (a Content Security Policy and
+  friends), tile addresses checked on the server, sessions ended on logout and
+  password change, checks against image bombs in uploads, and tighter limits
+  on what Discovery and status checks will connect to.
+- New app icon and logo: three hop cones on a vine.
+
+### Removed
+- **The admin page at `/`.** Everything it did is in Settings. Old
+  `/admin/discovery` links go to **Settings › Discovery**.
+- **The `--frontend` flag.** The web UI has been built into the program since
+  2.2.0; release builds no longer accept the flag at all.
+- The dashboard's switch for per-tab backgrounds. Each tab now chooses
+  **Same as the dashboard** or **Its own background**.
+
+### Upgrading from v2
+- **It's automatic.** Replace the program (or run the installer) and start
+  HOPS with the same data folder. On first start, before converting anything,
+  HOPS backs up the whole v2 database as
+  `hops-backup-<date>_pre-v3-migration.db`. That backup is protected: it is
+  never deleted automatically. **If the backup fails, HOPS doesn't convert
+  anything** and shows a page saying why. The conversion itself is all or
+  nothing: if any part of it fails, your data is left exactly as it was.
+- **Status checks behave as before.** Tiles that didn't have **Enable Status
+  Check** ticked in 2.x are set to **Off**, so the same tiles are checked. A
+  one-time notice says so and links to **Settings › Dashboards › Status check
+  overrides**, where you can let them inherit instead.
+- **If you had Checks Enabled turned off in 2.2.1**, note that tiles you had
+  ticked are now checked: a tile's own **On** wins over the global setting. A
+  notice lists the dashboards this affects; set those tiles (or their
+  dashboard) to **Off** if you don't want them contacted.
+- **The admin page is now Settings.** The gear opens it at `/settings`, and
+  `/` opens your first dashboard. Change your password under **Settings ›
+  Password**.
+- **Check your layout.** Tiles and folders keep their order, but each
+  dashboard is laid out again on the new grid, so it may not look exactly the
+  same. A tile whose size HOPS doesn't recognise becomes Medium, and any
+  clashing ids are renamed; a notice lists both.
+- **Upload limits** still at the old defaults (50 MB for backgrounds, 8 MB for
+  icons) move to the new ones, with a one-time notice. Limits you had changed
+  are kept, unless they are above the new maximum (200 MB for imports, 100 MB
+  for backgrounds, 10 MB for icons): then HOPS uses the maximum, and
+  **Settings › Global settings** says so until you save that setting.
+- **Started 2.x without `--data`?** Start 3.0 with `--data` pointing at the
+  folder that holds your `hops.db`, or it will start empty with the Sample.
+- **Still have `--frontend` in your service unit?** Remove it: 3.0 won't
+  start with it.
+- **Installed 2.x as a service yourself?** `install.sh` won't take over a unit
+  it didn't write. Upgrade in place first; see
+  [Upgrading from v2 with install.sh](DEPLOY.md#upgrading-from-v2-with-installsh).
+- **Export/import is not the upgrade path**, and a 3.x export can't be
+  imported into 2.x. To go back to 2.2.1, see
+  [Rolling back from 3.x to 2.2.1](DEPLOY.md#rolling-back-from-3x-to-221).
+- The checksum file is now `SHA256SUMS` (it was `SHA256SUMS.txt`).
+
+### Known limitations
+- The Raspberry Pi (Linux ARM64) and macOS builds are provided but have not
+  been tried on real hardware. ARM64 has only been run under emulation. The
+  Linux (x86-64) and Windows builds have been tested on real machines. If you
+  run HOPS on a Pi or a Mac, please
+  [tell us how it went](https://github.com/weaversgrainthorpe/HOPS/issues).
+- 32-bit operating systems are not supported. `install.sh` refuses them, and
+  the original Pi Zero / Zero W can't run HOPS. The smallest target is a Pi
+  Zero 2 W on 64-bit Raspberry Pi OS.
+- Network Discovery sees less from inside Docker unless the container uses
+  host networking.
+- Phones are for viewing: at 480 pixels wide or narrower, editing is hidden.
+
 ## [2.2.1] - 2026-10-17 — Status checks only go where you asked them to
 
 A tile's **Enable Status Check** box did not do what it said. The tick decided

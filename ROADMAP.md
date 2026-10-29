@@ -31,8 +31,9 @@ A few days of work each. Quality-of-life improvements that don't change
 what HOPS is.
 
 - **Smarter status checks:**
-  - configurable "up" status codes, so a login page that returns 401
-    reads as up;
+  - configurable "up" status codes, for services that answer in an
+    unusual way (a login page that returns 401 or 403 already counts as
+    up);
   - per-tile timeouts;
   - an optional "the page must contain this text" check.
 - **Automatic Home/Away.** Pick Home or Away from the address you used

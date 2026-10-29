@@ -337,7 +337,7 @@
         ranges (<code>10.0.0.1-50</code> or <code>10.0.0.1-10.0.1.255</code>),
         and single IPs (<code>10.0.0.5</code>). Press Enter or comma to add.
         Prefix any target with <code>!</code> (or <code>NOT&nbsp;</code>) to
-        exclude it — e.g. <code>!172.16.0.8-12</code> skips those addresses.
+        exclude it — e.g. <code>!10.0.0.8-12</code> skips those addresses.
         Max 65 536 hosts total across all targets.
         {#if draftError}<span class="err">{draftError}</span>{/if}
       </div>

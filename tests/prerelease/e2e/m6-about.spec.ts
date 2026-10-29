@@ -5,10 +5,10 @@ import { test, expect } from '@playwright/test';
 
 const FEATURES = [
   'Multiple dashboards', 'Tabbed organization', 'Drag-and-drop editing', 'Backgrounds & slideshows',
-  '8 theme presets', 'Status checks per tile', 'Custom icon uploads', 'Homer / Dashy / Heimdall import',
+  '8 theme presets', 'Status checks, on or off at any level', 'Custom icon uploads', 'Homer / Dashy / Heimdall import',
   'Dashboard QR codes', 'Automatic safety backups', 'CSRF + bcrypt security', 'Text size controls',
   'Folders (nested, paged)', 'Network Discovery', 'Add to HOPS from any web page', 'Home & away addresses',
-  'Search & keyboard navigation', 'Undo / redo while editing',
+  'SSH and note tiles', 'Dead link & duplicate finder', 'Search & keyboard navigation', 'Undo / redo while editing',
   "Add to your phone's home screen", 'Animations (optional)'
 ];
 

@@ -66,7 +66,7 @@
         <li><Icon icon="mdi:drag" width="18" /> Drag-and-drop editing</li>
         <li><Icon icon="mdi:image" width="18" /> Backgrounds & slideshows</li>
         <li><Icon icon="mdi:palette" width="18" /> 8 theme presets</li>
-        <li><Icon icon="mdi:heart-pulse" width="18" /> Status checks per tile</li>
+        <li><Icon icon="mdi:heart-pulse" width="18" /> Status checks, on or off at any level</li>
         <li><Icon icon="mdi:upload" width="18" /> Custom icon uploads</li>
         <li><Icon icon="mdi:import" width="18" /> Homer / Dashy / Heimdall import</li>
         <li><Icon icon="mdi:qrcode" width="18" /> Dashboard QR codes</li>
@@ -77,6 +77,8 @@
         <li><Icon icon="mdi:radar" width="18" /> Network Discovery</li>
         <li><Icon icon="mdi:bookmark-plus-outline" width="18" /> Add to HOPS from any web page</li>
         <li><Icon icon="mdi:home-export-outline" width="18" /> Home & away addresses</li>
+        <li><Icon icon="mdi:console" width="18" /> SSH and note tiles</li>
+        <li><Icon icon="mdi:link" width="18" /> Dead link & duplicate finder</li>
         <li><Icon icon="mdi:keyboard" width="18" /> Search & keyboard navigation</li>
         <li><Icon icon="mdi:undo-variant" width="18" /> Undo / redo while editing</li>
         <li><Icon icon="mdi:cellphone-arrow-down" width="18" /> Add to your phone's home screen</li>
