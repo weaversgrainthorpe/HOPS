@@ -203,9 +203,8 @@ func (s *noticeState) load(db *sql.DB) bool {
 	for id := range s.dismissed { // dismissed meanwhile in this process
 		ids[id] = true
 	}
-	for id := range s.armed { // armed meanwhile in this process
+	for id := range s.armed { // armed meanwhile (its stored dismissal was cleared then)
 		armed[id] = true
-		delete(ids, id)
 	}
 	s.dismissed, s.armed, s.loaded, s.loadErr = ids, armed, true, false
 	return true
