@@ -11,7 +11,7 @@
   import { tileSetting, type LevelSetting, type StatusContext } from '$lib/editor/statusChecks';
   import { tileSizeOf, type TileSize } from '$lib/editor/editorActions';
   import { isSshUrl, parseSshUrl, buildSshUrl, validateSsh, SSH_DEFAULT_PORT } from '$lib/utils/ssh';
-  import { awayUrlProblem } from '$lib/utils/tileUrl';
+  import { awayUrlProblem, linkUrlProblem } from '$lib/utils/tileUrl';
 
   interface Props {
     entry: Entry;
@@ -104,6 +104,9 @@
   // svelte-ignore state_referenced_locally
   let awayUrlText = $state(entry.awayUrl ?? '');
   const awayError = $derived(awayUrlProblem(awayUrlText));
+  // A link tile's URL: checked here as a save would, so a typo is caught in the dialog.
+  let urlShowError = $state(false);
+  const urlError = $derived(linkUrlProblem(editedEntry.url));
   const isSsh = $derived(kind === 'ssh');
   // ssh:// can't be framed: the iframe and popup modes are unavailable for it.
   const sshLike = $derived(isSsh || (kind === 'link' && isSshUrl(editedEntry.url)));
@@ -154,8 +157,9 @@
       if (sshAwayHost.trim()) editedEntry.awayUrl = buildSshUrl({ host: sshAwayHost, port: sshAwayPort, user: sshUser });
       else editedEntry.awayUrl = undefined; // undefined = removed on save
     } else if (!isNote) {
+      urlShowError = true;
       awayShowError = true;
-      if (awayError) return;
+      if (urlError || awayError) return;
       // Optional: a blank away address is absent, never an empty string.
       if (awayUrlText.trim()) editedEntry.awayUrl = awayUrlText.trim();
       else editedEntry.awayUrl = undefined; // undefined = removed on save
@@ -324,7 +328,13 @@
             bind:value={editedEntry.url}
             required
             placeholder="https://example.com"
+            onblur={() => urlShowError = true}
+            aria-invalid={urlShowError && urlError ? 'true' : undefined}
+            aria-describedby={urlShowError && urlError ? 'url-error' : undefined}
           />
+          {#if urlShowError && urlError}
+            <p id="url-error" class="field-error" role="alert">{urlError}</p>
+          {/if}
         </div>
         <div class="form-group full-width">
           <label for="away-url">Away address (optional)</label>

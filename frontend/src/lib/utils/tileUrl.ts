@@ -39,5 +39,17 @@ export function dashboardHasAway(d: LayoutDashboard | null | undefined): boolean
 /** The tile dialog's check of an away address: null when blank (optional) or valid. */
 export function awayUrlProblem(u: string | undefined): string | null {
 	if (!u || u.trim() === '') return null;
-	return isValidUrl(u.trim()) ? null : 'Enter a valid address (http, https, ftp, ssh or mailto), e.g. https://nas.your-tailnet.ts.net';
+	return addressProblem(u, 'https://nas.your-tailnet.ts.net');
+}
+
+/** The tile dialog's check of a link tile's URL (required): null when valid. */
+export function linkUrlProblem(u: string | undefined): string | null {
+	if (!u || u.trim() === '') return 'Enter an address, e.g. http://192.168.1.1';
+	return addressProblem(u, 'http://192.168.1.1');
+}
+
+function addressProblem(u: string, example: string): string | null {
+	if (isValidUrl(u.trim())) return null;
+	if (u.includes('\\')) return `Use forward slashes (/), not backslashes (\\), e.g. ${example}`;
+	return `Enter a valid address (http, https, ftp, ssh or mailto), e.g. ${example}`;
 }

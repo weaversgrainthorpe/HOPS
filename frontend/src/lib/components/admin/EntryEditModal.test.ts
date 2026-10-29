@@ -122,3 +122,32 @@ describe('EntryEditModal Size', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('no room');
   });
 });
+
+describe('EntryEditModal URL check', () => {
+  const urlInput = () => screen.getByLabelText(/^URL/) as HTMLInputElement;
+
+  it('a mistyped URL is named in the dialog on leaving the field, and Save does not go through', async () => {
+    const onSave = vi.fn();
+    render(EntryEditModal, { entry: { ...entry, url: 'https://ok.example' } as Entry, onSave, onCancel: vi.fn() });
+    await fireEvent.input(urlInput(), { target: { value: 'http:\\\\172.16.0.1' } });
+    await fireEvent.blur(urlInput());
+    expect(screen.getByRole('alert').textContent).toMatch(/forward slashes/);
+    expect(urlInput().getAttribute('aria-invalid')).toBe('true');
+    await save();
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it('a refused scheme is named too, and a fixed URL saves', async () => {
+    const onSave = vi.fn();
+    render(EntryEditModal, { entry: { ...entry, url: 'https://ok.example' } as Entry, onSave, onCancel: vi.fn() });
+    await fireEvent.input(urlInput(), { target: { value: 'file:///etc/passwd' } });
+    await save();
+    expect(onSave).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert').textContent).toMatch(/valid address/);
+    await fireEvent.input(urlInput(), { target: { value: 'http://172.16.0.1' } });
+    expect(screen.queryByRole('alert')).toBeNull();
+    await save();
+    expect(onSave).toHaveBeenCalledOnce();
+    expect(onSave.mock.calls[0][0].url).toBe('http://172.16.0.1');
+  });
+});

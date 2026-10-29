@@ -1,0 +1,149 @@
+{
+  "_comment": "Tile address cases shared by configdoc.ValidTileURL (Go) and isValidUrl (frontend/src/lib/utils/url.ts): both must give each url the same verdict, so the tile dialog refuses exactly what a save would.",
+  "cases": [
+    {
+      "url": "https://example.com",
+      "valid": true
+    },
+    {
+      "url": "http://192.168.1.1",
+      "valid": true
+    },
+    {
+      "url": "http://172.16.0.1:8080/x?y=1#z",
+      "valid": true
+    },
+    {
+      "url": "HTTPS://EXAMPLE.COM",
+      "valid": true
+    },
+    {
+      "url": "ftp://files.lan",
+      "valid": true
+    },
+    {
+      "url": "ftps://files.lan",
+      "valid": true
+    },
+    {
+      "url": "ssh://admin@nas.lan:22",
+      "valid": true
+    },
+    {
+      "url": "mailto:me@example.com",
+      "valid": true
+    },
+    {
+      "url": "//example.com",
+      "valid": true
+    },
+    {
+      "url": "/admin",
+      "valid": true
+    },
+    {
+      "url": "example.com",
+      "valid": true
+    },
+    {
+      "url": "nas.lan:5000",
+      "valid": true
+    },
+    {
+      "url": "localhost:8080",
+      "valid": true
+    },
+    {
+      "url": "192.168.1.1",
+      "valid": true
+    },
+    {
+      "url": "router",
+      "valid": true
+    },
+    {
+      "url": "localhost",
+      "valid": true
+    },
+    {
+      "url": "javascript:alert(1)",
+      "valid": false
+    },
+    {
+      "url": "JavaScript:alert(1)",
+      "valid": false
+    },
+    {
+      "url": "data:text/html,x",
+      "valid": false
+    },
+    {
+      "url": "vbscript:x",
+      "valid": false
+    },
+    {
+      "url": "file:///etc/passwd",
+      "valid": false
+    },
+    {
+      "url": "chrome://settings",
+      "valid": false
+    },
+    {
+      "url": "http:\\\\172.16.0.1",
+      "valid": false
+    },
+    {
+      "url": "http:\\172.16.0.1",
+      "valid": false
+    },
+    {
+      "url": "https:\\\\example.com",
+      "valid": false
+    },
+    {
+      "url": "http:/172.16.0.1",
+      "valid": false
+    },
+    {
+      "url": "http//172.16.0.1",
+      "valid": true
+    },
+    {
+      "url": "https:example.com",
+      "valid": false
+    },
+    {
+      "url": "",
+      "valid": false
+    },
+    {
+      "url": "   ",
+      "valid": false
+    },
+    {
+      "url": "https://[not-valid",
+      "valid": false
+    },
+    {
+      "url": "http://",
+      "valid": false
+    },
+    {
+      "url": "localhost:abc",
+      "valid": false
+    },
+    {
+      "url": " https://example.com ",
+      "valid": true
+    },
+    {
+      "url": "https://",
+      "valid": false
+    },
+    {
+      "url": "ssh://",
+      "valid": false
+    }
+  ]
+}

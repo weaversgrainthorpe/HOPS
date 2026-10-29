@@ -31,8 +31,9 @@ func ValidTileURL(u string) bool {
 	}
 	for _, p := range tileSafeSchemes {
 		if strings.HasPrefix(lower, p) {
-			_, err := url.Parse(s)
-			return err == nil
+			u, err := url.Parse(s)
+			// "http://" with no host can never open (the browser refuses it too).
+			return err == nil && (!strings.HasSuffix(p, "://") || u.Host != "")
 		}
 	}
 	if strings.HasPrefix(s, "//") {

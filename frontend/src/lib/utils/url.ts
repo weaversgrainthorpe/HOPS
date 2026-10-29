@@ -27,8 +27,8 @@ export function isValidUrl(url: string): boolean {
   const safeProtocols = ['http://', 'https://', 'ftp://', 'ftps://', 'ssh://', 'mailto:'];
   if (safeProtocols.some(protocol => lowerUrl.startsWith(protocol))) {
     try {
-      new URL(trimmedUrl);
-      return true;
+      // "http://" or "ssh://" with no host can never open.
+      return new URL(trimmedUrl).host !== '' || lowerUrl.startsWith('mailto:');
     } catch {
       return false;
     }
@@ -49,13 +49,27 @@ export function isValidUrl(url: string): boolean {
     return true;
   }
 
-  // If no protocol specified, try to validate as a potential URL with https
+  // A bare host (opened as https). Anything that already carries some other
+  // scheme (file:, chrome:, or a typo such as http:\\host) is refused; only
+  // "host:port" may have a colon before any "." or "/". Mirrors
+  // configdoc.ValidTileURL (shared cases: tile_url_cases.json).
+  const colon = trimmedUrl.indexOf(':');
+  if (colon > 0 && !/[./]/.test(trimmedUrl.slice(0, colon)) && !looksLikeHostPort(trimmedUrl)) {
+    return false;
+  }
   try {
-    new URL('https://' + trimmedUrl);
-    return true;
+    return new URL('https://' + trimmedUrl).host !== '';
   } catch {
     return false;
   }
+}
+
+/** True for "host:8080" style input: digits only between the colon and any "/", "?" or "#". */
+function looksLikeHostPort(s: string): boolean {
+  let rest = s.slice(s.indexOf(':') + 1);
+  const j = rest.search(/[/?#]/);
+  if (j >= 0) rest = rest.slice(0, j);
+  return /^[0-9]+$/.test(rest);
 }
 
 /**

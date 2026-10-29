@@ -234,13 +234,12 @@ describe('EditorDialogs (the dialogs edit the draft only)', () => {
     expect([...sel.options].map((o) => o.value)).toEqual(['small', 'medium', 'large']);
   });
 
-  it('tile dialog refuses a javascript: URL with a toast and leaves the draft alone', async () => {
-    const err = vi.spyOn(toast, 'error');
+  it('tile dialog refuses a javascript: URL inline and leaves the draft alone', async () => {
     await show({ kind: 'tile', id: 'a' });
     const before = draft();
     await fireEvent.input(screen.getByLabelText(/^URL/), { target: { value: 'javascript:alert(1)' } });
     await fireEvent.submit(document.getElementById('entry-edit-form')!);
-    expect(err).toHaveBeenCalledWith(expect.stringMatching(/URL/));
+    expect(document.getElementById('url-error')?.textContent).toMatch(/valid address/);
     expect(draft()).toBe(before);
   });
 

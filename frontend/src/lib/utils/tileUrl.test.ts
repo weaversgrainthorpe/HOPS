@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { tileOpenUrl, hasAwayUrl, dashboardHasAway, awayUrlProblem } from './tileUrl';
+import { tileOpenUrl, hasAwayUrl, dashboardHasAway, awayUrlProblem, linkUrlProblem } from './tileUrl';
 import type { LayoutDashboard } from '$lib/types/layout';
 
 const tile = (url: string, awayUrl?: string) => ({ url, ...(awayUrl === undefined ? {} : { awayUrl }) });
@@ -51,5 +51,21 @@ describe('awayUrlProblem (dialog validation)', () => {
 		for (const u of ['javascript:alert(1)', 'data:text/html,x', 'https://exa mple.com']) {
 			expect(awayUrlProblem(u)).toMatch(/address/i);
 		}
+	});
+});
+
+describe('linkUrlProblem (dialog validation of a link tile URL)', () => {
+	it('blank is refused (required)', () => {
+		expect(linkUrlProblem('')).toMatch(/Enter an address/);
+		expect(linkUrlProblem('   ')).toMatch(/Enter an address/);
+	});
+	it('backslashes get their own hint', () => {
+		expect(linkUrlProblem('http:\\\\172.16.0.1')).toMatch(/forward slashes/);
+	});
+	it('other refused addresses name the allowed schemes', () => {
+		expect(linkUrlProblem('chrome://settings')).toMatch(/http, https, ftp, ssh or mailto/);
+	});
+	it('a good address passes', () => {
+		expect(linkUrlProblem('http://192.168.1.1')).toBeNull();
 	});
 });
