@@ -71,6 +71,14 @@ echo "==> Adding install.sh and hops-proxmox.sh"
 cp packaging/install.sh "$out/install.sh" || die "could not copy packaging/install.sh"
 cp packaging/proxmox/hops-proxmox.sh "$out/hops-proxmox.sh" || die "could not copy packaging/proxmox/hops-proxmox.sh"
 
+echo "==> Adding QUICKSTART and the import samples the guide uses"
+cp QUICKSTART.md "$out/QUICKSTART.md" || die "could not copy QUICKSTART.md"
+cp QUICKSTART.md "$out/QUICKSTART.txt" || die "could not copy QUICKSTART.md as .txt"
+mkdir -p "$out/import-samples" || die "could not create import-samples"
+for f in dashy-homelab.yml dashy-upstream.yml heimdall-export.json homer-homelab.yml homer-upstream.yml; do
+  cp "backend/internal/converters/testdata/$f" "$out/import-samples/$f" || die "could not copy import sample $f"
+done
+
 echo "==> Writing BUILD-INFO"
 commit=$(git rev-parse HEAD) || die "could not read the git commit"
 dirty=no
