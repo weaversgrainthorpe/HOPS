@@ -715,8 +715,9 @@ change if it inherited instead.
   backup.
 
 After an upgrade or import from HOPS 2, tiles that didn't have status checks
-ticked are set to **Off**, so the same tiles are checked as before. A notice
-links to this page so you can let them inherit instead.
+ticked are set to **Off**, and ticked tiles are set to **Inherit**, so the same
+tiles are checked as before (none, if checks were switched off). A notice
+links to this page so you can let the Off tiles inherit instead.
 
 ---
 

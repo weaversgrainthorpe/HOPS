@@ -394,8 +394,8 @@ func (v *verifier) compareTabs(dashID, dashPath string, a, b Obj) {
 }
 
 // compareStatusCheck holds the conversion's status-check pin (pinStatusCheck)
-// to its rule: the v3 tile is on exactly when the v2 tile was, inherits
-// (null) exactly when the v2 tile said null, is otherwise false, and keeps
+// to its rule: the v3 tile inherits (null) exactly when the v2 tile was on or
+// said null, is otherwise false, and keeps
 // every other statusCheck field unchanged. A wrong-typed v2 statusCheck is
 // not pinned, and nor is a note tile's (notes are never checked), so those
 // must be carried over unchanged.
@@ -423,9 +423,7 @@ func (v *verifier) compareStatusCheck(eid string, ea, eb Obj) {
 	aEn, aHasEn := am["enabled"]
 	var want any = false
 	switch {
-	case aEn == true:
-		want = true
-	case aHasEn && aEn == nil:
+	case aEn == true, aHasEn && aEn == nil:
 		want = nil
 	}
 	if bEn, ok := bm["enabled"]; !ok || bEn != want {

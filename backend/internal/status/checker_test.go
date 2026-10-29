@@ -34,7 +34,43 @@ func newTestChecker(t *testing.T, configJSON string) (*Checker, *sql.DB, *settin
 	if err != nil {
 		t.Fatalf("MigrateV2: %v", err)
 	}
+	keepExplicitOn(v2, v3)
 	return newTestCheckerDoc(t, v3)
+}
+
+// keepExplicitOn sets statusCheck.enabled back to true on every tile whose
+// v2 fixture said true. The fixtures describe v3 tile states (on, off, none,
+// inherit); the v2 conversion turns a ticked tile into "inherit", which would
+// make an explicitly-on tile indistinguishable from an inheriting one here.
+func keepExplicitOn(v2, v3 configdoc.Obj) {
+	on := map[string]bool{}
+	var find func(any)
+	find = func(v any) {
+		switch x := v.(type) {
+		case map[string]any:
+			if sc, ok := x["statusCheck"].(map[string]any); ok && sc["enabled"] == true {
+				if id, ok := x["id"].(string); ok {
+					on[id] = true
+				}
+			}
+			for _, c := range x {
+				find(c)
+			}
+		case []any:
+			for _, c := range x {
+				find(c)
+			}
+		}
+	}
+	find(map[string]any(v2))
+	configdoc.Walk(v3, func(_, _ configdoc.Obj, _ []configdoc.Obj, n configdoc.Obj) bool {
+		if id, _ := n["id"].(string); n["kind"] == "tile" && on[id] {
+			if sc, ok := n["statusCheck"].(configdoc.Obj); ok {
+				sc["enabled"] = true
+			}
+		}
+		return true
+	})
 }
 
 func newTestCheckerDoc(t *testing.T, doc configdoc.Obj) (*Checker, *sql.DB, *settings.Service) {
@@ -289,6 +325,7 @@ func TestCheckAllEntries_FolderOffBeatsDashboardOn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	keepExplicitOn(v2, doc)
 	dash := doc["dashboards"].([]any)[0].(configdoc.Obj)
 	dash["settings"].(configdoc.Obj)["statusChecksEnabled"] = true
 	tab := dash["tabs"].([]any)[0].(configdoc.Obj)
@@ -501,7 +538,8 @@ func TestCheckAllEntries_ConfigLoadFailureKeepsCacheAndLogsError(t *testing.T) {
 // Real data: Jonathan's own config (39 unticked tiles, 1 ticked) under a
 // global that is on. The upgrade pins v2's unticked tiles Off (spec Part A,
 // "Upgrades from v2 keep v2's behaviour"), so exactly the tiles explicitly
-// switched on in v2 are probed: no mass enablement.
+// switched on in v2 are probed (no mass enablement), and none at all when checks
+// are switched off globally, as in v2.
 func TestGetEntries_RealWeaversProbesOnlyExplicitlyEnabledTiles(t *testing.T) {
 	raw, err := os.ReadFile("../configdoc/testdata/real_weavers.json")
 	if err != nil {
@@ -525,8 +563,10 @@ func TestGetEntries_RealWeaversProbesOnlyExplicitlyEnabledTiles(t *testing.T) {
 		if typ, _ := n["type"].(string); typ == "note" {
 			return true
 		}
+		// A tile ticked in v2 converts to "inherit" (enabled null); an unticked
+		// one is pinned off.
 		sc, _ := n["statusCheck"].(configdoc.Obj)
-		if u, _ := n["url"].(string); u != "" && sc["enabled"] == true {
+		if en, has := sc["enabled"]; u(n) != "" && has && en == nil {
 			want[n["id"].(string)] = true
 		}
 		return true
@@ -536,7 +576,7 @@ func TestGetEntries_RealWeaversProbesOnlyExplicitlyEnabledTiles(t *testing.T) {
 	if len(want) == 0 || tiles <= len(want) {
 		t.Fatalf("fixture no longer exercises the case: %d tiles, %d enabled", tiles, len(want))
 	}
-	c, _, _ := newTestCheckerDoc(t, doc)
+	c, _, svc := newTestCheckerDoc(t, doc)
 	entries, err := c.getEntriesFromConfig()
 	if err != nil {
 		t.Fatal(err)
@@ -553,7 +593,22 @@ func TestGetEntries_RealWeaversProbesOnlyExplicitlyEnabledTiles(t *testing.T) {
 			t.Errorf("tile %s should be probed but was not", id)
 		}
 	}
+
+	// v2.2.1's Checks Enabled off meant HOPS contacted nothing: after the
+	// upgrade, with the global switch off, not even the ticked tiles are probed.
+	if err := svc.Set(settings.KeyStatusChecksEnabled, "false"); err != nil {
+		t.Fatal(err)
+	}
+	entries, err = c.getEntriesFromConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Errorf("checks switched off globally, but %d converted tiles would still be probed", len(entries))
+	}
 }
+
+func u(n configdoc.Obj) string { s, _ := n["url"].(string); return s }
 
 // Ruling 13: a wrong-typed stored value on a tile's path (here its folder)
 // makes the tile off (source "invalid"), even when the tile is switched on.

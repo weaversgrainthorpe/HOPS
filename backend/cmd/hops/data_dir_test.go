@@ -39,3 +39,55 @@ func TestDataDirBeside(t *testing.T) {
 		t.Error("a program that isn't there should be an error, not a guessed folder")
 	}
 }
+
+func TestV2DataElsewhere(t *testing.T) {
+	root := t.TempDir()
+	if r, err := filepath.EvalSymlinks(root); err == nil {
+		root = r
+	}
+	// HOPS 2's usual layout: the program in backend/, started from backend/, data in ../data.
+	backend := filepath.Join(root, "HOPS", "backend")
+	prog := filepath.Join(backend, "hops")
+	v2data := filepath.Join(root, "HOPS", "data")
+	for _, d := range []string{backend, v2data} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(prog, nil, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	def := filepath.Join(backend, "data")
+
+	if got := v2DataElsewhere(def, backend, prog); got != "" {
+		t.Errorf("no database anywhere: got %q, want none", got)
+	}
+	if err := os.WriteFile(filepath.Join(v2data, "hops.db"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := v2DataElsewhere(def, backend, prog); got != v2data {
+		t.Errorf("v2 data at ../data from the start folder: got %q, want %q", got, v2data)
+	}
+	// Started from elsewhere: ../data beside the program still finds it.
+	if got := v2DataElsewhere(def, root, prog); got != v2data {
+		t.Errorf("v2 data at ../data beside the program: got %q, want %q", got, v2data)
+	}
+	// The default folder already has a database: that one is used, nothing is flagged.
+	if err := os.MkdirAll(def, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(def, "hops.db"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := v2DataElsewhere(def, backend, prog); got != "" {
+		t.Errorf("default folder has a database: got %q, want none", got)
+	}
+	// A folder called hops.db is not a database.
+	other := filepath.Join(root, "x", "backend")
+	if err := os.MkdirAll(filepath.Join(root, "x", "data", "hops.db"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if got := v2DataElsewhere(filepath.Join(other, "data"), other, filepath.Join(other, "hops")); got != "" {
+		t.Errorf("a directory named hops.db: got %q, want none", got)
+	}
+}

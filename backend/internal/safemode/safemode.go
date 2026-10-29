@@ -1,6 +1,7 @@
 // Package safemode serves the page HOPS shows instead of starting when an
 // interrupted restore left the data files in a state it can't resolve with
-// certainty (database.UnsafeStartError). It never opens or creates the
+// certainty, or when starting would hide existing data behind a new, empty
+// database (database.UnsafeStartError). It never opens or creates the
 // database: every route answers 503 with the same actionable message, and
 // /api/health answers 503 with a JSON reason. The process stays up so a
 // service manager doesn't restart-loop it.
@@ -63,7 +64,7 @@ li{margin:.35rem 0}
 </style></head>
 <body><main>
 <h1>HOPS can't start safely</h1>
-<p>A restore was interrupted and {{.What}}.</p>
+{{if .Lead}}<p>{{.Lead}}</p>{{else}}<p>A restore was interrupted and {{.What}}.</p>{{end}}
 <p class="ok"><strong>Nothing was deleted.</strong> HOPS has not opened its database, so nothing has changed since it stopped.</p>
 <h2>Files present</h2>
 <ul>{{range .Files}}<li><code>{{.}}</code></li>{{end}}</ul>
@@ -109,7 +110,7 @@ func Handler(e *database.UnsafeStartError) http.Handler {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'")
 		w.WriteHeader(http.StatusServiceUnavailable)
-		if err := page.Execute(w, map[string]interface{}{"What": e.What, "Files": e.Files, "Steps": steps}); err != nil {
+		if err := page.Execute(w, map[string]interface{}{"Lead": e.Lead, "What": e.What, "Files": e.Files, "Steps": steps}); err != nil {
 			slog.Warn("safe-mode: cannot render the help page", "component", "safemode", "error", err)
 		}
 	})

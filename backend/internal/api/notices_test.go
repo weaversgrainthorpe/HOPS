@@ -44,18 +44,22 @@ func statusDash(p, name string, sc map[string]interface{}, typ string) map[strin
 // statusDoc migrates the v2 dashboards and applies each dashboard's
 // statusChecksEnabled override (nil = inherit), returning the stored JSON. A
 // tile built with no statusCheck has none in the stored v3 document either
-// (so it inherits), undoing the v2 conversion's Off pin.
+// (so it inherits), undoing the v2 conversion's Off pin, and a tile built on is
+// stored explicitly on (the conversion would make it inherit).
 func statusDoc(t *testing.T, dashes []map[string]interface{}, overrides map[string]interface{}) string {
 	t.Helper()
 	list := make([]any, len(dashes))
-	unset := map[string]bool{}
+	unset, on := map[string]bool{}, map[string]bool{}
 	for i, d := range dashes {
 		list[i] = d
 		for _, tb := range d["tabs"].([]interface{}) {
 			for _, g := range tb.(map[string]interface{})["groups"].([]interface{}) {
 				for _, e := range g.(map[string]interface{})["entries"].([]interface{}) {
-					if em := e.(map[string]interface{}); em["statusCheck"] == nil {
+					em := e.(map[string]interface{})
+					if em["statusCheck"] == nil {
 						unset[em["id"].(string)] = true
+					} else if sc, _ := em["statusCheck"].(map[string]interface{}); sc["enabled"] == true {
+						on[em["id"].(string)] = true
 					}
 				}
 			}
@@ -66,8 +70,14 @@ func statusDoc(t *testing.T, dashes []map[string]interface{}, overrides map[stri
 		t.Fatal(err)
 	}
 	configdoc.Walk(doc, func(_, _ configdoc.Obj, _ []configdoc.Obj, n configdoc.Obj) bool {
-		if id, _ := n["id"].(string); n["kind"] == "tile" && unset[id] {
+		id, _ := n["id"].(string)
+		if n["kind"] != "tile" {
+			return true
+		}
+		if unset[id] {
 			delete(n, "statusCheck")
+		} else if on[id] {
+			n["statusCheck"].(configdoc.Obj)["enabled"] = true // the conversion makes a ticked tile inherit
 		}
 		return true
 	})

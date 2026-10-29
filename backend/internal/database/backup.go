@@ -695,6 +695,7 @@ type restoreJournal struct {
 // data); the message names the files and what to do.
 type UnsafeStartError struct {
 	Msg   string
+	Lead  string   // the recovery page's opening sentence; empty means an interrupted restore (What)
 	What  string   // what went wrong
 	Files []string // the files present (full paths)
 	Steps []string // numbered recovery steps for exactly those files

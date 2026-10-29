@@ -312,12 +312,18 @@ func convertGroup(g Obj, p [4]int, path string) (Obj, []SizeChange, error) {
 
 // pinStatusCheck keeps v2's status-check behaviour across the upgrade (spec
 // Part A). v2.2.1 checked a tile only when its own statusCheck.enabled was
-// true; in v3 a tile with no setting inherits, which would switch on checks
-// the user never asked for. So every tile not explicitly on is pinned Off,
-// keeping its other statusCheck fields. An explicit null is kept: the
-// Homer/Dashy/Heimdall converters write it so their tiles inherit. A
-// wrong-typed statusCheck is left for verify to report. A note tile is never
-// checked whatever it says, so it is left exactly as it was.
+// true AND checks were on for it (the global Checks Enabled switch, or its
+// dashboard's setting); Off meant HOPS contacted nothing. In v3 a tile with no
+// setting inherits from its folder, tab, dashboard and then global, so:
+//   - a ticked tile inherits (enabled null). v2 had no folder or tab settings,
+//     so it follows its dashboard and global exactly as v2 did. Pinning it On
+//     would contact it even with checks switched off, breaking that promise.
+//   - every other tile is pinned Off, keeping its other statusCheck fields, so
+//     switching checks on never reaches a tile the user left unticked.
+//
+// An explicit null is kept: the Homer/Dashy/Heimdall converters write it so
+// their tiles inherit. A wrong-typed statusCheck is left for verify to report.
+// A note tile is never checked whatever it says, so it is left exactly as it was.
 func pinStatusCheck(tile Obj) {
 	if t, _ := tile["type"].(string); t == "note" {
 		return
@@ -332,6 +338,7 @@ func pinStatusCheck(tile Obj) {
 		return
 	}
 	if en, has := scm["enabled"]; has && (en == true || en == nil) {
+		scm["enabled"] = nil
 		return
 	}
 	scm["enabled"] = false

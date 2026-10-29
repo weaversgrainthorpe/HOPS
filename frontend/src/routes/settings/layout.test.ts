@@ -151,8 +151,9 @@ describe('settings shell, logged out', () => {
 		migrationFailure.set('could not migrate');
 		renderShell();
 		const notice = screen.getByRole('alert');
-		expect(notice.textContent).toContain('Sign in, then open Backups on this page.');
-		expect(within(notice).queryByRole('link')).toBeNull();
+		expect(notice.textContent).toContain('Signed in, your backups are listed under Backups on this page.');
+		const links = within(notice).queryAllByRole('link').map((a) => a.getAttribute('href'));
+		expect(links.filter((h) => h?.startsWith('/settings'))).toEqual([]);
 	});
 
 	it('a sign-in that must change the password shows nothing until the password is changed', async () => {
@@ -241,14 +242,16 @@ describe('settings shell, signed in', () => {
 		expect(notice.compareDocumentPosition(pageEl) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 	});
 
-	it('a failed migration: MigrationFailed on top with an Open Backups link to /settings/backups, on any page', () => {
+	it('a failed migration: MigrationFailed on top, pointing to HOPS 2.2.1, a report and a link to /settings/backups, on any page', () => {
 		at('/settings/password');
 		migrationFailure.set('could not migrate');
 		config.set(null);
 		renderShell();
 		const notice = screen.getByRole('alert');
 		expect(within(notice).getByRole('heading', { name: /couldn't migrate your configuration/ })).toBeTruthy();
-		expect(within(notice).getByRole('link', { name: 'Open Backups' }).getAttribute('href')).toBe('/settings/backups');
+		expect(within(notice).getByRole('link', { name: 'Settings › Backups' }).getAttribute('href')).toBe('/settings/backups');
+		expect(within(notice).getByText(/go back to HOPS 2\.2\.1/)).toBeTruthy();
+		expect(within(notice).getByRole('link', { name: /HOPS\/issues/ })).toBeTruthy();
 		expect(screen.queryByRole('dialog', { name: /Backup/ })).toBeNull();
 	});
 
@@ -257,7 +260,7 @@ describe('settings shell, signed in', () => {
 		renderShell();
 		isAuthenticated.set(false);
 		expect(await screen.findByRole('dialog', { name: 'Sign in' })).toBeTruthy();
-		expect(screen.queryByRole('link', { name: 'Open Backups' })).toBeNull();
+		expect(screen.queryByRole('link', { name: 'Settings › Backups' })).toBeNull();
 		expect(childShown()).toBe(false);
 	});
 

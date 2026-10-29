@@ -84,6 +84,23 @@ func run() bool {
 			os.Exit(1)
 		}
 		*dataDir = d
+		// Never hide existing data behind a new, empty database: if the
+		// default folder has none but HOPS 2's default place does, say where
+		// it is and wait, creating nothing.
+		cwd, _ := os.Getwd()
+		exe, _ := os.Executable()
+		if old := v2DataElsewhere(d, cwd, exe); old != "" {
+			msg := fmt.Sprintf("no HOPS database in %s (the default data folder), but there is one in %s, where HOPS 2 kept it; start HOPS with --data %s to use it", d, old, old)
+			slog.Error("refusing to start with a new, empty database", "error", msg)
+			fmt.Fprintln(os.Stderr, msg)
+			runSafeMode(&config.Config{BindHost: *host, DataDir: d}, &database.UnsafeStartError{
+				Msg:   msg,
+				Lead:  "HOPS 3 keeps its data in a \"data\" folder next to the program, and there is no database there. There is one where HOPS 2 kept it, so HOPS has not started with a new, empty one.",
+				Files: []string{filepath.Join(old, "hops.db")},
+				Steps: []string{"1. Start HOPS with --data " + old + " (for a service, add it to the command line in the service file)."},
+			})
+			return false
+		}
 	}
 
 	// Initialize configuration

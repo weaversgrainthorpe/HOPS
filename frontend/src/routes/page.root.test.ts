@@ -96,14 +96,15 @@ describe('/ (the home page)', () => {
 		expect(screen.getByRole('alert').textContent).toContain('boom');
 	});
 
-	it('a failed migration shows MigrationFailed (pointing at Settings → Backups), no redirect', async () => {
+	it('a failed migration shows MigrationFailed (pointing at HOPS 2.2.1 and Settings › Backups), no redirect', async () => {
 		configLoading.set(false);
 		configError.set('migration failed');
 		migrationFailure.set('could not migrate: bad tile');
 		render(Page);
 		expect(screen.getByRole('heading', { name: /couldn't migrate your configuration/ })).toBeTruthy();
 		expect(screen.getByText('could not migrate: bad tile')).toBeTruthy();
-		const link = screen.getByRole('link', { name: /Settings → Backups/ });
+		expect(screen.getByText(/go back to HOPS 2\.2\.1/)).toBeTruthy();
+		const link = screen.getByRole('link', { name: /Settings › Backups/ });
 		expect(link.getAttribute('href')).toBe('/settings');
 		expect(screen.queryByText('No dashboards yet')).toBeNull();
 		expect(gotoMock).not.toHaveBeenCalled();

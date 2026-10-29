@@ -13,7 +13,8 @@
 
 <!-- Full-page notice shown instead of the app while the stored config could
      not be migrated to v3. The server refuses config requests in this state;
-     the automatic pre-v3-migration / startup backups are the remedy (Settings → Backups). -->
+     restoring the pre-v3-migration backup in v3 would only be migrated again, so the remedy is
+     HOPS 2.2.1 (with that backup) and a report. -->
 <main class="migration-failed" role="alert">
   <Icon icon="mdi:database-alert-outline" width="48" />
   <h1>HOPS couldn't migrate your configuration</h1>
@@ -25,13 +26,19 @@
     <pre class="detail">{$migrationFailure}</pre>
   {/if}
   <p>
-    Settings → Backups holds the automatic pre-v3-migration and startup backups.
+    To keep using HOPS meanwhile, go back to HOPS 2.2.1. Before upgrading, HOPS saved a
+    complete copy of your HOPS 2 data in its backups folder (the file whose name ends in
+    <code>pre-v3-migration.db</code>), and HOPS 2.2.1 can restore it.
+  </p>
+  <p>
+    Please report the problem, with the message above, at
+    <a href="https://github.com/weaversgrainthorpe/HOPS/issues" rel="noopener noreferrer" target="_blank">github.com/weaversgrainthorpe/HOPS/issues</a>.
     {#if signedIn}
-      <a class="open-backups" href="/settings/backups">Open Backups</a>
+      Your backups are also listed in <a class="open-backups" href="/settings/backups">Settings › Backups</a>.
     {:else if onSettingsPage}
-      Sign in, then open Backups on this page.
+      Signed in, your backups are listed under Backups on this page.
     {:else}
-      Sign in and restore it from <a href="/settings">Settings → Backups</a>.
+      Signed in, your backups are listed in <a href="/settings">Settings › Backups</a>.
     {/if}
   </p>
 </main>

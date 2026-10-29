@@ -15,7 +15,7 @@ import (
 	"github.com/weaversgrainthorpe/HOPS/internal/settings"
 )
 
-const migrationBackupHint = "Admin → Backups holds the automatic pre-v3-migration and startup backups"
+const migrationBackupHint = "HOPS saved a complete copy of your HOPS 2 data before upgrading (backups folder, name ending pre-v3-migration.db); HOPS 2.2.1 can restore it"
 
 // apiError is an error that carries the HTTP status and JSON body to send.
 type apiError struct {

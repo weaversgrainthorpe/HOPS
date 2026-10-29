@@ -5,7 +5,7 @@
 # Run as root in the Proxmox host shell:
 #
 #   bash hops-proxmox.sh                       # menus (whiptail), else a y/N question
-#   bash hops-proxmox.sh --url http://172.16.0.50:8099 --yes
+#   bash hops-proxmox.sh --url http://192.168.1.50:8099 --yes
 #
 # Options (install options only; HOPS settings live in its own GUI):
 #   --id <n>            Container ID. Default: the next free ID.
@@ -90,7 +90,7 @@ HOPS on Proxmox VE: creates an unprivileged Debian 12 LXC container and
 installs HOPS in it with install.sh. Run as root in the Proxmox host shell.
 
   bash hops-proxmox.sh                                   # menus (whiptail), else a y/N question
-  bash hops-proxmox.sh --url http://172.16.0.50:8099 --yes
+  bash hops-proxmox.sh --url http://192.168.1.50:8099 --yes
 
 Options:
   --id <n>                  Container ID (default: next free)

@@ -121,6 +121,8 @@ v2 database first, and refuses to convert anything if that backup fails. See
 - **Password** and **Backups** are pages in Settings, not pop-ups.
 - **Default data folder:** without `--data`, HOPS now uses a `data` folder
   next to the program. 2.x used `../data`, relative to wherever it was started.
+  If that leaves an existing HOPS database behind, HOPS 3 says where it is
+  instead of starting empty.
 - **Security:** browser security headers (a Content Security Policy and
   friends), tile addresses checked on the server, sessions ended on logout and
   password change, checks against image bombs in uploads, and tighter limits
@@ -144,13 +146,12 @@ v2 database first, and refuses to convert anything if that backup fails. See
   anything** and shows a page saying why. The conversion itself is all or
   nothing: if any part of it fails, your data is left exactly as it was.
 - **Status checks behave as before.** Tiles that didn't have **Enable Status
-  Check** ticked in 2.x are set to **Off**, so the same tiles are checked. A
-  one-time notice says so and links to **Settings › Dashboards › Status check
-  overrides**, where you can let them inherit instead.
-- **If you had Checks Enabled turned off in 2.2.1**, note that tiles you had
-  ticked are now checked: a tile's own **On** wins over the global setting. A
-  notice lists the dashboards this affects; set those tiles (or their
-  dashboard) to **Off** if you don't want them contacted.
+  Check** ticked in 2.x are set to **Off**; ticked tiles are set to
+  **Inherit**, so they follow the global **Status checks** setting exactly as
+  they followed **Checks Enabled**. If you had checks turned off in 2.2.1,
+  HOPS still contacts nothing. A one-time notice explains the Off tiles and
+  links to **Settings › Dashboards › Status check overrides**, where you can
+  let them inherit instead.
 - **The admin page is now Settings.** The gear opens it at `/settings`, and
   `/` opens your first dashboard. Change your password under **Settings ›
   Password**.
@@ -164,7 +165,10 @@ v2 database first, and refuses to convert anything if that backup fails. See
   for backgrounds, 10 MB for icons): then HOPS uses the maximum, and
   **Settings › Global settings** says so until you save that setting.
 - **Started 2.x without `--data`?** Start 3.0 with `--data` pointing at the
-  folder that holds your `hops.db`, or it will start empty with the Sample.
+  folder that holds your `hops.db`. If you forget, and HOPS 3 finds no
+  database in its own default folder but finds one where HOPS 2 kept it, it
+  doesn't start with an empty one: it shows a page with the exact `--data` to
+  use, and creates nothing.
 - **Still have `--frontend` in your service unit?** Remove it: 3.0 won't
   start with it.
 - **Installed 2.x as a service yourself?** `install.sh` won't take over a unit

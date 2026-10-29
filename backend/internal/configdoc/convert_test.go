@@ -93,8 +93,21 @@ func assertKeysPreserved(t *testing.T, orig, got Obj, what string, skip ...strin
 		if s, isStr := v.(string); isStr && (k == "url" || k == AwayURLKey) {
 			v = strings.TrimSpace(s) // the conversion trims tile addresses
 		}
+		if sc, isObj := v.(Obj); isObj && k == "statusCheck" && sc["enabled"] == true && got["type"] != "note" {
+			v = withEnabled(sc, nil) // pinStatusCheck: a ticked tile inherits
+		}
 		eq(t, gv, v, what+"."+k)
 	}
+}
+
+// withEnabled is a copy of sc with enabled set to en.
+func withEnabled(sc Obj, en any) Obj {
+	out := Obj{}
+	for k, v := range sc {
+		out[k] = v
+	}
+	out["enabled"] = en
+	return out
 }
 
 func TestPackRowMajor(t *testing.T) {
@@ -485,8 +498,10 @@ func TestConvertPinsV2StatusChecks(t *testing.T) {
 	want := map[string]any{
 		"none": Obj{"enabled": false},
 		"off":  Obj{"type": "http", "enabled": false, "interval": 60},
-		"on":   Obj{"type": "http", "enabled": true, "interval": 60},
-		"inh":  Obj{"enabled": nil},
+		// Ticked in v2: inherits, so it follows its dashboard and the global
+		// switch exactly as v2 did (Off there meant nothing was contacted).
+		"on":  Obj{"type": "http", "enabled": nil, "interval": 60},
+		"inh": Obj{"enabled": nil},
 		// statusCheck null is no setting, so it is pinned like an absent one.
 		"nul": Obj{"enabled": false},
 		// A non-bool enabled was not true, so v2 never checked it: Off, type kept.

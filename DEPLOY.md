@@ -614,8 +614,9 @@ Before you start, check these, depending on how you ran 2.x:
 - **Keep the same data folder.** HOPS 2 used `../data` (relative to the
   folder it was started from) when `--data` was not given; HOPS 3 uses a
   `data` folder next to the program. If your 2.x start command or service
-  had no `--data`, add one that points at your existing data folder, or HOPS
-  3 will start with a new, empty one.
+  had no `--data`, add one that points at your existing data folder. (If you
+  forget and HOPS 3 finds your HOPS 2 database at `../data`, it won't start
+  empty: it shows a page with the `--data` to use and creates nothing.)
 - **Remove `--frontend`.** Releases before 2.2.0 needed
   `--frontend <folder>`. HOPS 3 doesn't have that option and won't start
   with it; remove it from your service file or start command.

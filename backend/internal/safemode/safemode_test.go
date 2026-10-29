@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -105,5 +106,22 @@ func TestPortRemembered(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, LastPortFile), []byte("junk"), 0o644)
 	if Port(dir) != DefaultPort {
 		t.Fatal("junk accepted")
+	}
+}
+
+// A refusal that isn't about a restore says so in its own words, not "A restore was interrupted".
+func TestHandlerUsesTheLeadWhenGiven(t *testing.T) {
+	u := &database.UnsafeStartError{
+		Msg:   "there is a database elsewhere",
+		Lead:  "HOPS found its data somewhere else.",
+		Files: []string{"/srv/old/data/hops.db"},
+		Steps: []string{"1. Start HOPS with --data /srv/old/data."},
+	}
+	rec := httptest.NewRecorder()
+	Handler(u).ServeHTTP(rec, httptest.NewRequest("GET", "/", nil))
+	page := rec.Body.String()
+	if rec.Code != 503 || !strings.Contains(page, "HOPS found its data somewhere else.") ||
+		strings.Contains(page, "A restore was interrupted") || !strings.Contains(page, "--data /srv/old/data") {
+		t.Errorf("status %d, page:\n%s", rec.Code, page)
 	}
 }

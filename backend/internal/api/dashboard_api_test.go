@@ -111,7 +111,7 @@ func TestGetConfig_MigrationFailed503(t *testing.T) {
 	} {
 		code, resp := c.do(tc.m, tc.p, map[string]interface{}{"dashboards": []interface{}{}})
 		if code != 503 || resp["error"] != "migration_failed" || resp["detail"] != "boom" ||
-			resp["backupHint"] != "Admin → Backups holds the automatic pre-v3-migration and startup backups" {
+			resp["backupHint"] != migrationBackupHint {
 			t.Fatalf("%s %s: %d %v", tc.m, tc.p, code, resp)
 		}
 	}
