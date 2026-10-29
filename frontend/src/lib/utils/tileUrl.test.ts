@@ -69,3 +69,10 @@ describe('linkUrlProblem (dialog validation of a link tile URL)', () => {
 		expect(linkUrlProblem('http://192.168.1.1')).toBeNull();
 	});
 });
+
+describe('linkUrlProblem: a missing colon', () => {
+	it('says the colon is missing', () => {
+		expect(linkUrlProblem('http//172.16.0.1')).toMatch(/colon is missing/);
+		expect(linkUrlProblem('HTTPS//nas.lan')).toMatch(/colon is missing/);
+	});
+});

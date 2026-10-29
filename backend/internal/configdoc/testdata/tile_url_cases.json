@@ -107,7 +107,7 @@
     },
     {
       "url": "http//172.16.0.1",
-      "valid": true
+      "valid": false
     },
     {
       "url": "https:example.com",
@@ -144,6 +144,26 @@
     {
       "url": "ssh://",
       "valid": false
+    },
+    {
+      "url": "https//example.com",
+      "valid": false
+    },
+    {
+      "url": "ssh//nas.lan",
+      "valid": false
+    },
+    {
+      "url": "ftp//files.lan",
+      "valid": false
+    },
+    {
+      "url": "httpbin.org",
+      "valid": true
+    },
+    {
+      "url": "http.example.com",
+      "valid": true
     }
   ]
 }

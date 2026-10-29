@@ -34,6 +34,11 @@ export function isValidUrl(url: string): boolean {
     }
   }
 
+  // A scheme with its colon missing ("http//host") is a typo, not a host called "http".
+  if (/^(https?|ftps?|ssh)\/\//.test(lowerUrl)) {
+    return false;
+  }
+
   // Allow protocol-relative URLs (//example.com)
   if (trimmedUrl.startsWith('//')) {
     try {

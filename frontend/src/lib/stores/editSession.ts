@@ -2,6 +2,7 @@ import { writable, derived, get, type Readable } from 'svelte/store';
 import type { LayoutDashboard, LayoutDoc } from '$lib/types/layout';
 import { saveDashboardV3, ConflictError, MigrationFailedError } from '$lib/utils/api';
 import { TreeOpError } from '$lib/editor/treeOps';
+import { boundsProblem } from '$lib/editor/bounds';
 import {
   layoutDoc,
   layoutStale,
@@ -185,6 +186,12 @@ export function apply(label: string, op: (d: LayoutDashboard) => LayoutDashboard
     return false;
   }
   if (next === s.draft) return true; // nothing changed: no undo step
+  // A change that a save would refuse (too deep, too many items or tabs) is refused now, saying why.
+  const tooBig = boundsProblem(s.draft, next);
+  if (tooBig) {
+    toast.error(tooBig);
+    return false;
+  }
   state.set({
     ...s,
     draft: next,

@@ -169,6 +169,10 @@ func VerifyDashboard(d Obj) error {
 	return VerifyImportedDashboard(d)
 }
 
+// BoundsProblem is boundsProblem for callers outside the package: an import
+// checks it, so a dashboard is never brought in that could not be saved.
+func BoundsProblem(d Obj) string { return boundsProblem(d) }
+
 // boundsProblem returns why d's tree is too big or too deep, or "". It stops
 // walking as soon as a limit is crossed.
 func boundsProblem(d Obj) string {

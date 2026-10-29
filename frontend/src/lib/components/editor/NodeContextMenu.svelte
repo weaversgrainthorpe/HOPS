@@ -15,6 +15,7 @@
   import { get } from 'svelte/store';
   import { portal } from '$lib/utils/portal';
   import { toast } from '$lib/stores/toast';
+  import { childLevel, MAX_NESTING_DEPTH, tooDeepMessage } from '$lib/editor/bounds';
 
   interface Props {
     request: MenuRequest;
@@ -59,9 +60,16 @@
   const items = $derived.by((): Item[] => {
     const t = request.target;
     if (t.kind === 'container') {
+      // At the deepest level nothing more fits: say so now, before a dialog is filled in.
+      const full = () => {
+        const level = draft ? childLevel(draft, t.ref.folderId) : 1;
+        if (level <= MAX_NESTING_DEPTH) return false;
+        toast.error(tooDeepMessage(level));
+        return true;
+      };
       return [
-        { label: 'Add tile here', icon: 'mdi:plus-box', run: () => openDialog({ kind: 'tile', to: t.ref, ...(t.cell ? { cell: t.cell } : {}) }) },
-        { label: 'Add folder here', icon: 'mdi:folder-plus', run: () => openDialog({ kind: 'folder', to: t.ref, ...(t.cell ? { cell: t.cell } : {}) }) },
+        { label: 'Add tile here', icon: 'mdi:plus-box', run: () => full() || openDialog({ kind: 'tile', to: t.ref, ...(t.cell ? { cell: t.cell } : {}) }) },
+        { label: 'Add folder here', icon: 'mdi:folder-plus', run: () => full() || openDialog({ kind: 'folder', to: t.ref, ...(t.cell ? { cell: t.cell } : {}) }) },
         { label: 'Paste here', icon: 'mdi:content-paste', disabled: !canPaste, run: () => pasteInto(t.ref, t.cell) }
       ];
     }

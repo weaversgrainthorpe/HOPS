@@ -50,6 +50,7 @@ import { canvasStacked, editorDialog, editorMenu, openDialog, ownsTarget } from 
 import { commitResize, resizeBlocked, resizeTarget, type ResizeEdge, type ResizeTarget } from '../resize';
 import { readingIds, stackPlans } from './stacked';
 import { apply, session, undo } from '$lib/stores/editSession';
+import { childLevel, landingProblem } from '../bounds';
 import { toast } from '$lib/stores/toast';
 import { clearSelection, selectionInDraft, toggleNode } from '$lib/stores/nodeSelection';
 import { hitTest as domHitTest, type HitResult } from './hitTest';
@@ -258,7 +259,8 @@ function checkIds(draft: LayoutDashboard, ids: string[], intoFolder?: string): D
     }
     if (intoFolder !== undefined && (intoFolder === id || isDescendant(draft, id, intoFolder))) return invalid(SELF);
   }
-  return null;
+  const deep = landingProblem(nodesOf(draft, ids), childLevel(draft, intoFolder));
+  return deep ? invalid(deep) : null;
 }
 
 /**
@@ -308,6 +310,10 @@ function resolveTabAppend(state: DragState, tabId: string, draft: LayoutDashboar
 
 function resolveMerge(state: DragState, tileId: string, draft: LayoutDashboard): DropTarget {
   if (state.copy) return invalid("Release Ctrl/Cmd to make a folder — copying onto a tile isn't available.");
+  // The new folder takes the tile's place; the tile and the dragged items go one level below it.
+  const loc = locate(draft, tileId);
+  const deep = loc ? landingProblem(nodesOf(draft, state.ids), loc.folderChain.length + 2) : null;
+  if (deep) return invalid(deep);
   return memoised(JSON.stringify(['merge', state.ids, tileId]), draft, () => {
     try {
       mergeDrop(draft, state.ids, tileId, documentIds());

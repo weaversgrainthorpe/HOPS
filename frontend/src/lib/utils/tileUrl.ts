@@ -50,6 +50,7 @@ export function linkUrlProblem(u: string | undefined): string | null {
 
 function addressProblem(u: string, example: string): string | null {
 	if (isValidUrl(u.trim())) return null;
+	if (/^\s*(https?|ftps?|ssh)\/\//i.test(u)) return `A colon is missing after the scheme, e.g. ${example}`;
 	if (u.includes('\\')) return `Use forward slashes (/), not backslashes (\\), e.g. ${example}`;
 	return `Enter a valid address (http, https, ftp, ssh or mailto), e.g. ${example}`;
 }

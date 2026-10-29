@@ -1514,6 +1514,11 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 			if g := configdoc.GrowFolderMinimums(d); len(g) > 0 {
 				grownFolders = append(grownFolders, importedGrowth{dash: d, grown: g})
 			}
+			// Size limits first, as a save does, so a huge tree is refused before it is walked.
+			if msg := configdoc.BoundsProblem(d); msg != "" {
+				writeJSONError(w, fmt.Sprintf("Import refused — dashboard %q: %s", dashboardLabel(d), msg), http.StatusBadRequest)
+				return
+			}
 			if verr := configdoc.VerifyImportedDashboard(d); verr != nil {
 				writeJSONError(w, fmt.Sprintf("Import refused — dashboard %q is malformed: %s", dashboardLabel(d), verifyProblems(verr)), http.StatusBadRequest)
 				return
@@ -1553,6 +1558,15 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 		}
 		if len(sizes) > 0 {
 			sizeChanges = append(sizeChanges, importedSizes{dash: v3, changes: sizes})
+		}
+	}
+	// A dashboard the editor could never save (too deep, too many items or
+	// tabs) is refused now, not after the user has started editing it. The
+	// v3 ones were checked above; this covers the converted formats.
+	for _, d := range imported {
+		if msg := configdoc.BoundsProblem(d); msg != "" {
+			writeJSONError(w, fmt.Sprintf("Import refused — dashboard %q: %s", dashboardLabel(d), msg), http.StatusBadRequest)
+			return
 		}
 	}
 	if len(imported) == 0 {

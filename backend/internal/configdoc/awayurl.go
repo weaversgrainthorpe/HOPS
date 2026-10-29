@@ -36,6 +36,13 @@ func ValidTileURL(u string) bool {
 			return err == nil && (!strings.HasSuffix(p, "://") || u.Host != "")
 		}
 	}
+	// A scheme with its colon missing ("http//host") is a typo, not a host
+	// called "http".
+	for _, p := range tileSafeSchemes {
+		if name, ok := strings.CutSuffix(p, "://"); ok && strings.HasPrefix(lower, name+"//") {
+			return false
+		}
+	}
 	if strings.HasPrefix(s, "//") {
 		_, err := url.Parse("https:" + s)
 		return err == nil

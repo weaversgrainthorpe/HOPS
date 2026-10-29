@@ -1021,3 +1021,30 @@ func TestImport_OtherDashboardSamples(t *testing.T) {
 		assertUniqueIDs(t, storedDoc(t, db))
 	}
 }
+
+// An imported dashboard nested deeper than a save allows is refused at
+// import, naming the limit, rather than accepted and then unsaveable.
+func TestImport_TooDeepIsRefusedAtImport(t *testing.T) {
+	router, _ := setupTestRouter(t)
+	c := newClient(t, router)
+	leaf := map[string]interface{}{"kind": "tile", "id": "deep-tile", "name": "Deep", "url": "https://deep.example", "size": "medium"}
+	node := leaf
+	for i := configdoc.MaxNestingDepth; i >= 1; i-- {
+		node = map[string]interface{}{"kind": "folder", "id": fmt.Sprintf("deep-f%d", i), "name": "F", "size": "medium",
+			"contentSize": "medium", "display": "expanded", "shape": "rounded", "showTitle": true,
+			"content": map[string]interface{}{"children": []interface{}{node}}}
+	}
+	node["placement"] = map[string]interface{}{"x": 0, "y": 0, "w": 8, "h": 8}
+	cfg := map[string]interface{}{
+		"schemaVersion": configdoc.SchemaVersion, configdoc.LayoutVersionKey: configdoc.LayoutVersion,
+		"dashboards": []interface{}{map[string]interface{}{
+			"id": "deep", "name": "Deep", "path": "/deep",
+			"tabs": []interface{}{map[string]interface{}{"id": "deep-t", "name": "T",
+				"root": map[string]interface{}{"columns": configdoc.RootColumns, "children": []interface{}{node}}}},
+		}},
+	}
+	code, resp := c.importFile(v3ExportOf(t, cfg))
+	if code != 400 || !strings.Contains(fmt.Sprint(resp["error"]), "nested deeper than 12 levels") {
+		t.Fatalf("import of a %d-deep dashboard: %d %v", configdoc.MaxNestingDepth+1, code, resp)
+	}
+}
