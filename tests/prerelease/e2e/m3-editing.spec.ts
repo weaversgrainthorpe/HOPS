@@ -265,6 +265,31 @@ test.describe('M3 editor in a real browser', () => {
     expect(errors).toEqual([]);
   });
 
+  test('right-click anywhere in an open folder\'s body (below its items too) is its contents menu; its bar is the folder\'s', async ({ page, context }) => {
+    const f = await importFixture(page, context);
+    const errors = await openEditing(page, f);
+    const fe = await box(page, f.id('fe'));
+
+    // Empty space near the bottom of the body, well below the one row of items.
+    await page.mouse.click(fe.x + fe.width / 2, fe.y + fe.height - 20, { button: 'right' });
+    await expect(page.getByRole('menuitem', { name: 'Add tile here' })).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: 'Edit' })).toHaveCount(0);
+    await page.getByRole('menuitem', { name: 'Add tile here' }).click();
+    const dlg = page.getByRole('dialog');
+    await dlg.locator('input#name').fill('Body tile');
+    await dlg.locator('input#url').fill('https://body.example.lan/');
+    await dlg.getByRole('button', { name: /^Create|^Save$/ }).click();
+    await expect(dlg).toBeHidden();
+    await expect(node(page, f.id('fe'))).toContainText('Body tile');
+
+    // The bar is still the folder's own menu.
+    await page.mouse.click(fe.x + fe.width / 2, fe.y + 10, { button: 'right' });
+    await expect(page.getByRole('menuitem', { name: 'Edit' })).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: 'Add tile here' })).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    expect(errors).toEqual([]);
+  });
+
   test('context menu Move/Copy to… and Delete work for a tile and a folder', async ({ page, context }) => {
     const f = await importFixture(page, context);
     const errors = await openEditing(page, f);

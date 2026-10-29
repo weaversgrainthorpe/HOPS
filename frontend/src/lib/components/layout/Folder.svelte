@@ -39,7 +39,7 @@
     setFolderDrill, setFolderPage, setFolderView, takePageReveal, type FolderViewContext
   } from '$lib/stores/folderView';
   import { selectedNodes, toggleNode } from '$lib/stores/nodeSelection';
-  import { editorMenu, openDialog, openMenu, menuPointFor } from '$lib/editor/editorUi';
+  import { editorMenu, openDialog, openMenu, menuPointFor, type MenuTarget } from '$lib/editor/editorUi';
   import { get } from 'svelte/store';
   import { makeFolderBigEnough, setDisplay } from '$lib/editor/editorActions';
   import { playDrill, playFolderToggle, playPageSlide } from '$lib/editor/drag/flourishes';
@@ -80,16 +80,27 @@
     e.stopPropagation(); // an enclosing folder must not select itself too
     toggleNode(folder.id, e.ctrlKey || e.metaKey);
   }
+  /**
+   * The menu for a press at `at`: anywhere in an open folder's body (empty space below its items too)
+   * is the shown folder's contents, so it gets the same Add tile / Add folder / Paste menu as the
+   * space between its items; the folder's bar and frame get the folder's own menu.
+   */
+  function menuTarget(at: EventTarget | Element | null): MenuTarget {
+    const body = !minimised && at instanceof Element ? at.closest('.folder-body') : null;
+    return body
+      ? { kind: 'container', ref: { tabId: tab.id, folderId: current.id } }
+      : { kind: 'node', id: folder.id };
+  }
   function menu(e: MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
     cancelPendingOpen(); // the menu is the answer to this press, never also an open
-    openMenu({ ...menuPointFor(e, e.currentTarget as Element), target: { kind: 'node', id: folder.id } });
+    openMenu({ ...menuPointFor(e, e.currentTarget as Element), target: menuTarget(e.target) });
   }
-  /** Touch long-press released without moving (Ruling 18(1)): the folder's menu. */
+  /** Touch long-press released without moving (Ruling 18(1)): the same menu as a right-click there. */
   const pressed = (x: number, y: number) => {
     cancelPendingOpen();
-    openMenu({ x, y, target: { kind: 'node', id: folder.id } });
+    openMenu({ x, y, target: menuTarget(document.elementFromPoint(x, y)) });
   };
   /** Every item edits the same way (§4B): the handle and a double-click open the folder dialog. */
   const edit = () => openDialog({ kind: 'folder', id: folder.id });
