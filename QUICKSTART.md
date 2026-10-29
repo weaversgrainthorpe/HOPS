@@ -176,21 +176,32 @@ shows the version and a list of features. Step 8 covers these in more
 detail.
 
 Done with the Sample? Delete it from **Settings › Dashboards**, or keep it
-to look back at.
+to look back at. Step 4 explains how dashboards, tabs, folders and tiles fit
+together, then has you build your own.
 
 ## Step 4: Build your first dashboard
 
 ### How HOPS is organised
 
 ```
-Dashboard        one page with its own address, e.g. /home
+Dashboard        one page with its own path, e.g. /home
 └── Tab          the row of tabs across the top
     ├── Tile     a link to one of your services (Small, Medium or Large)
-    └── Folder   a box of tiles (and other folders) with a title
+    └── Folder   a box with a title, holding tiles, other folders, or both
         └── Tile / Folder ...
 ```
 
-Tiles and folders sit on a grid on each tab. Folders can hold folders.
+A dashboard's address is your HOPS address from Step 2 plus its path: the
+`/home` dashboard opens at **http://\<your-server-address\>:8080/home**.
+
+Tiles and folders sit on a grid on each tab. A folder can hold tiles,
+sub-folders, or a mix of both.
+
+A word of caution about folders inside folders. HOPS allows up to 12 levels,
+but every level is one more click to reach a tile, and things get hard to
+find (Search, Step 8, always finds them). We suggest no more than three
+levels; the Sample's deepest, *Projects › Lab › Dashboards*, is three. In
+the end it's your dashboard: organise it the way that suits you.
 
 ### Create the dashboard
 
@@ -210,14 +221,16 @@ Tiles and folders sit on a grid on each tab. Folders can hold folders.
 
 ### Edit mode
 
-Click the **pencil** in the top bar. It turns into an **Editing** badge and
-a toolbar appears, pinned to the bottom of the screen:
+If you aren't in edit mode already, click the **pencil** in the top bar.
+It turns into an **Editing** badge and a toolbar appears, pinned to the
+bottom of the screen:
 
 - **Save** (Ctrl+S) and **Discard**.
 - **Undo** (Ctrl+Z) and **Redo** (Ctrl+Shift+Z or Ctrl+Y).
 - **Add tile**, **Add folder**, **Add tab**.
 - **Dashboard**: the dashboard's own settings, in three parts: **Header**,
-  **Background** and **Settings**.
+  **Background** and **Settings**. Step 6 covers the header and
+  background; status checks (in **Settings**) are in Step 5.
 
 Click **Editing** again to leave edit mode.
 
@@ -244,31 +257,55 @@ under Settings › Global settings › Editing: **Edit mode times out after
 (minutes)**; 0 turns it off). With unsaved changes it never throws them
 away: it asks Save, Discard or Keep editing, and waits.
 
-### Add a tile
+### Add some tiles
 
 1. Click **Add tile**.
-2. Fill in **Name** (e.g. `Router`) and **URL** (e.g. `http://192.168.1.1`).
-   Those are the only required fields.
-3. Optional: a **Subtitle/Description**, an **Icon** (click **Edit icon**
+2. Leave **Tile type** on **Link** (the other types, **SSH** and **Note**,
+   are in Step 5).
+3. Fill in **Name** (e.g. `Router`) and **URL** (e.g. `http://192.168.1.1`).
+   Those are the only required fields. If the address isn't one HOPS can
+   open (a typo such as `http:\\192.168.1.1`, say), the dialog says so
+   under the field.
+4. Optional: a **Subtitle/Description**, an **Icon** (click **Edit icon**
    to search the built-in icons or upload your own), and the **Size**.
-   Step 5 covers the rest.
-4. Click **Create**, then **Save**.
+5. Leave everything else as it is for now: how the tile opens, its colours,
+   status checks and away address are all in Step 5.
+6. Click **Create**.
 
-### Add a folder
+Add three more the same way, so you have something to arrange: for
+example `Switch` (`http://192.168.1.2`), `NAS` (`http://192.168.1.10`) and
+`Plex` (`http://192.168.1.10:32400`). The addresses don't need to work yet.
+Then click **Save** in the toolbar.
 
-1. Click **Add folder**, type a **Folder name** (e.g. `Media`).
-2. Choose a **Look** (*Folder (flat)* is the default) and a colour.
-3. Click **Create**, then **Save**.
+### Add folders
 
-To put things in a folder, drag them onto it. To make a new folder from two
-tiles, drag one onto the middle of the other and hold it there: the cue
-says *Hold to make a folder*, then *Make a folder*. Let go, and the new
-folder's settings open. Hold a dragged item over
-another tab's name to switch to that tab and drop it there. Right-click inside a folder
-(or a tab) for **Add tile here**, **Add folder here** and **Paste here**.
-Right-click a tile or folder for **Edit**, **Duplicate**, **Cut**, **Copy**,
-**Move/Copy to…**, **Minimise** and **Delete**. Every item also has a small
-pencil button that opens its settings.
+Try each way of making a folder with your four tiles:
+
+1. **From two tiles.** Drag *Switch* onto the middle of *Router* and hold
+   it there: the cue says *Hold to make a folder*, then *Make a folder*.
+   Let go. The new folder's settings open: name it `Network` and click the
+   dialog's **Save**.
+2. **With the button.** Click **Add folder**, type a **Folder name**
+   (`Media`), and click **Create**. **Look** (*Folder (flat)* is the
+   default) and the colour are optional; Step 5 shows every look.
+3. **Drag things in.** Drag *NAS* and then *Plex* onto the *Media* folder.
+4. **A folder inside a folder.** Right-click inside *Media* and choose
+   **Add folder here**; call it `Streaming`, then drag *Plex* into it.
+   Inside *Media*, *Streaming* shows as a folder tile: click it to open it.
+   The title bar shows the path, *Media › Streaming*; click *Media* to go
+   back up.
+5. Click **Save** in the toolbar. Anything that went wrong can be undone
+   (Ctrl+Z) before you save.
+
+Other ways to move things:
+
+- Hold a dragged item over another tab's name to switch to that tab and
+  drop it there.
+- Right-click inside a folder (or a tab) for **Add tile here**, **Add
+  folder here** and **Paste here**.
+- Right-click a tile or folder for **Edit**, **Duplicate**, **Cut**,
+  **Copy**, **Move/Copy to…**, **Minimise** and **Delete**.
+- Every item also has a small pencil button that opens its settings.
 
 Resize a folder by dragging its edges (or select it and press
 Shift+Arrow keys). Drag items to move them around the grid. Every move
@@ -280,6 +317,11 @@ Click **Add tab**, give it a **Tab Name** (and an icon or colour if you
 like), and click **Create**. Drag tabs to reorder them. To change a tab
 later, click the pencil next to its name (or right-click it): the **Edit
 Tab** dialog also has **Duplicate** and **Delete**.
+
+Tabs and folders are both ways to organise, and you can use either or both.
+Some people give each area its own tab (*Network*, *Media*, *Home
+automation*); others keep one tab and use folders; many mix the two. There
+is no right answer.
 
 ### Editing on phones and tablets
 

@@ -8,7 +8,6 @@ import FolderEditModal from './FolderEditModal.svelte';
 import { editorDialog, editorMenu } from '$lib/editor/editorUi';
 import { editMode } from '$lib/stores/editMode';
 import { dirty, session, undo } from '$lib/stores/editSession';
-import { toast } from '$lib/stores/toast';
 import { setLayout, resetEditor, startSession, draft, nodeIn, home, answerConfirm, p, noRequestsButSettingsRead, folder, tile } from './editorTestKit';
 import type { FolderNode, TileNode } from '$lib/types/layout';
 import { resetStatusBaseCache } from '$lib/stores/statusCheckBase';
