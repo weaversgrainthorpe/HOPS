@@ -64,7 +64,7 @@ describe('validateSsh', () => {
 		}
 	});
 	it('user is a safe charset', () => {
-		expect(validateSsh({ ...ok, user: 'jonathan.w-1_x' })).toEqual({});
+		expect(validateSsh({ ...ok, user: 'alice.w-1_x' })).toEqual({});
 		for (const user of ['a b', 'a@b', 'a:b', 'a/b', 'a;b', '%20']) {
 			expect(validateSsh({ ...ok, user }).user, user).toBeTruthy();
 		}

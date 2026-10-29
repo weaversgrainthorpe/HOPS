@@ -76,3 +76,9 @@ data.moved-*/
 # Specs, plans, trial notes and feedback: kept local, never published (Jonathan, 2026-10-29).
 /design/
 dist/
+# Private, local only (no real hosts, IPs or user ids in the public repo; 2026-10-29):
+/.claude/
+/node_modules/
+/local/
+scripts/deploy-local.conf
+scripts/hops-dev.service

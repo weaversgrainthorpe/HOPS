@@ -1,0 +1,5 @@
+# Copy to scripts/deploy-local.conf (gitignored) and fill in your own hosts.
+PROD_HOST="user@prod-host"
+PROD_DIR="/home/user/HOPS"
+MIRROR_HOST="user@dev-host"   # "" disables the dev update
+DEV_DIR="/home/user/hops-dev"

@@ -2,10 +2,10 @@
 # Deploy the locally-built HOPS without going through GitHub Releases.
 #
 # Two separate modes — a run does exactly one:
-#   1. (default, main branch only) PROD_HOST (172.16.0.9) — build backend +
+#   1. (default, main branch only) PROD_HOST — build backend +
 #      frontend, SCP artifacts, swap binary, restart hops, health-check.
 #   2. --dev-only — build the latest COMMIT in a clean checkout, install it
-#      into DEV_DIR on MIRROR_HOST (172.16.0.50) and restart the persistent
+#      into DEV_DIR on MIRROR_HOST and restart the persistent
 #      hops-dev service (scripts/hops-dev.service), against dev's OWN data dir
 #      (never prod's). A prod deploy never touches dev.
 #
@@ -13,16 +13,19 @@
 # Re-enable the workflow and use ~/deploy-hops.sh <tag> on prod for proper releases.
 set -euo pipefail
 
-# Hardcoded targets — no env-var overrides (family convention: picking the wrong
-# host should be an explicit edit here, not a shell knob).
-PROD_HOST="user@172.16.0.9"
-PROD_DIR="/home/user/HOPS"
-MIRROR_HOST="user@172.16.0.50"      # dev box; set "" to disable the dev update
-# hops-dev runs from its OWN install dir, never from the working tree: the
-# working tree is where builds and tests happen, so serving dev from it let
-# unreviewed builds go live (2026-10-21/23). Only this script writes DEV_DIR.
-DEV_DIR="/home/user/hops-dev"
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+# Targets come from scripts/deploy-local.conf (gitignored: real hosts never go in
+# the public repo), not from env vars. It sets PROD_HOST, PROD_DIR, MIRROR_HOST
+# (the dev box; "" disables the dev update) and DEV_DIR (dev's OWN install dir,
+# never the working tree; only this script writes it). See deploy-local.conf.example.
+CONF="$REPO_DIR/scripts/deploy-local.conf"
+[[ -f "$CONF" ]] || { echo "✗ $CONF is missing: copy deploy-local.conf.example and fill in your hosts" >&2; exit 2; }
+# shellcheck source=/dev/null
+source "$CONF"
+for v in PROD_HOST PROD_DIR DEV_DIR; do
+  [[ -n "${!v:-}" ]] || { echo "✗ $v is not set in $CONF" >&2; exit 2; }
+done
+MIRROR_HOST="${MIRROR_HOST-}"
 
 cd "$REPO_DIR"
 
@@ -131,7 +134,7 @@ else
 fi
 fi  # end prod-only section (skipped by --dev-only)
 
-# --- Dev box (172.16.0.50): install into DEV_DIR + restart hops-dev ----------
+# --- Dev box (MIRROR_HOST): install into DEV_DIR + restart hops-dev ----------
 # hops-dev runs $DEV_DIR/hops (UI embedded) against $DEV_DIR/data — dev's OWN
 # data, never prod's. Nothing else writes DEV_DIR, so tests and builds in the
 # working tree can never change what dev serves.
