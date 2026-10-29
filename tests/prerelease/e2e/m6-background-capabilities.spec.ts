@@ -250,7 +250,7 @@ test.describe('M6 §8.2 background dialog driven by the capability table', () =>
     await page.goto(f.path);
     await enterEdit(page);
     const { dlg, picker } = await openFolderPicker(page, f.id('f'));
-    await picker.getByRole('button', { name: 'Contain' }).click(); // a real change elsewhere
+    await picker.getByRole('button', { name: 'Contain', exact: true }).click(); // a real change elsewhere
     await picker.getByRole('button', { name: /^Save Background/ }).click();
     await expect(picker).toHaveCount(0);
     await dlg.getByRole('button', { name: /^Save/ }).click();
