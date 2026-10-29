@@ -147,7 +147,8 @@ host. For all the options, see [Proxmox container](DEPLOY.md#proxmox-container-h
    new one twice (8 to 72 characters), and click **Set Password**.
 
 You can change the password later under **Settings › Password**. A
-**Log out** button sits at the right of the top bar.
+**Log out** button sits at the right of the top bar (on a phone, it's in
+Settings instead).
 
 ## Step 3: Look around the Sample
 
@@ -407,8 +408,8 @@ and ticked ones to **Inherit**, so the same tiles are checked as before; a
 notice links here so you can let the Off tiles inherit instead.
 
 The line under the choices always says what is in effect and where it comes
-from, for example *Inherited from the tab: on*. **Reset to inherit** puts a
-row back to Inherit. How often checks run is under Settings › Global
+from, for example *Inherited from Media: on* (the folder, tab or dashboard
+it comes from). **Reset to inherit** puts a row back to Inherit. How often checks run is under Settings › Global
 settings › Status checks (**Check every (minutes)**, 5 by default).
 
 ### Home and away addresses
@@ -726,8 +727,13 @@ health check looks in the right place:
 **From HOPS 2.x:** HOPS 3 converts your 2.x dashboards automatically the
 first time it starts. Just before it does, it takes a protected backup
 (`hops-backup-<date>_pre-v3-migration.db`) that is never deleted
-automatically; it is your way back to 2.x. If you installed 2.x as a service
-yourself, the installer will not take it over; see
+automatically; it is your way back to 2.x. Tiles that had status checks
+ticked are set to **Inherit** and unticked ones to **Off**, so the same tiles
+are checked as before. HOPS 2 kept its data in `../data` when started without
+`--data`, but HOPS 3 uses a `data` folder next to the program: if HOPS 3
+finds no database there but finds HOPS 2's at `../data`, it shows a *HOPS
+can't start safely* page giving the `--data` to use, and creates nothing. If
+you installed 2.x as a service yourself, the installer will not take it over; see
 [Upgrading from v2 with install.sh](DEPLOY.md#upgrading-from-v2-with-installsh)
 and [Rolling back from 3.x to 2.2.1](DEPLOY.md#rolling-back-from-3x-to-221).
 

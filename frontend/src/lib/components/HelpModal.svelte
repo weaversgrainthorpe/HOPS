@@ -135,7 +135,7 @@
               <div class="keys">
                 <kbd>Shift</kbd> + <kbd>↑</kbd> <kbd>↓</kbd> <kbd>←</kbd> <kbd>→</kbd>
               </div>
-              <div class="desc">Resize the selected tile or folder</div>
+              <div class="desc">Resize the selected open folder</div>
             </div>
             <div class="shortcut">
               <div class="keys">

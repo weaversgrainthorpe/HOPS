@@ -32,9 +32,6 @@ Before capturing:
 | `qr.png` | The QR code dialog for the Sample (**Settings › Dashboards**, the dashboard's QR button), with the dashboard name above the code and **Copy URL**. | About 4:3 | 900–1200px |
 | `discovery.png` | Network Discovery results for a scan: the draft list with confidence, names and icons, ideally with the new / changed / gone counts from a re-scan. Scan only a test network of made-up or documentation addresses (192.168.1.x), and check no real hostname shows. | 16:9 landscape | 1400–1600px |
 
-`admin.png`, `admin1.png` and the `admin-discovery*.png` files belong to
-HOPS 2 and are no longer used. Delete them when the new set is added.
-
 ## How to capture
 
 ### Desktop shots
@@ -73,8 +70,9 @@ Both are the same recording, from the Sample.
    folder. Press Ctrl+Z to undo it, then Ctrl+Shift+Z to redo.
 3. **15–25s**: **Add tile**: type a name and address, click **Edit icon**,
    search "proxmox", pick one, **Create**, then **Save** in the toolbar.
-4. **25–35s**: switch to the **Shapes** tab; flip **Home** / **Away** if a
-   tile has an away address.
+4. **25–35s**: switch to the **Shapes** tab; flip **Home** / **Away** (the
+   Sample has no away addresses, so give one tile an **Away address
+   (optional)** before recording).
 5. **35–45s**: narrow the window to phone width, then open
    **Settings › Dashboards** and show the QR code.
 

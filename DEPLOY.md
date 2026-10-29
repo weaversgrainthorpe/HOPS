@@ -223,7 +223,10 @@ Everything HOPS keeps (dashboards, settings, backups, uploads) lives in one
 folder, the **data folder**. Pass it with `--data`. If you leave `--data`
 out, HOPS uses a folder called `data` **next to the HOPS program** (not the
 folder you started it from), so the same data is found however you start it.
-Giving `--data` explicitly is still the clearest choice for a service.
+If that folder has no database but HOPS 2's default place (`../data`) does,
+HOPS shows a *HOPS can't start safely* page with the `--data` to use, and
+creates nothing. Giving `--data` explicitly is still the clearest choice for
+a service.
 
 ```
 data/
@@ -599,12 +602,22 @@ can't be made, HOPS does not convert anything.
 
 - The conversion is all-or-nothing. If it can't convert or check the
   result, nothing is changed: HOPS shows *HOPS couldn't migrate your
-  configuration* with the reason, instead of your dashboards, and points you
-  to **Settings › Backups**.
+  configuration* with the reason, instead of your dashboards. The advice
+  depends on what failed:
+  - **The conversion:** go back to 2.2.1 using the pre-v3-migration backup
+    (see [Rolling back from 3.x to 2.2.1](#rolling-back-from-3x-to-221)),
+    and report the problem with the message shown.
+  - **The pre-v3 backup:** no copy was saved and nothing was converted. The
+    data is untouched and 2.2.1 opens it as before. Fix the cause in the
+    message (often disk space, or permission to write to `backups/`), then
+    start HOPS 3 again.
+  - **Data from a pre-release build of HOPS 3:** it has no update path; the
+    message says what to do.
 - The pre-v3-migration backup is never deleted automatically. It is your
   way back to 2.x (see [Rolling back from 3.x to 2.2.1](#rolling-back-from-3x-to-221)).
 - After the upgrade, tiles that didn't have status checks ticked in 2.x are
-  set to **Off**, so the same tiles are checked as before. A notice links to
+  set to **Off** and ticked ones to **Inherit**, so the same tiles are
+  checked as before. A notice links to
   **Settings › Dashboards › Status check overrides** if you'd rather let them
   inherit.
 - You don't need to export and import. An export is not the upgrade path.
@@ -804,7 +817,9 @@ On Windows with NSSM, first run `nssm stop HOPS` and
 
 HOPS is probably looking at a different data folder. The startup log line
 `server starting ... data_dir=...` shows which one. Start it with `--data`
-pointing at your real data folder.
+pointing at your real data folder. If you upgraded from HOPS 2 without
+`--data` and HOPS finds your old database at `../data`, it doesn't start
+empty: it shows a *HOPS can't start safely* page naming the `--data` to use.
 
 ### Can't reach the web interface
 

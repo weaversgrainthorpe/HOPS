@@ -422,7 +422,8 @@ editing](#touch-editing)):
 | Empty space on a tab, or inside an open folder | **Add tile here**, **Add folder here**, **Paste here** |
 | A tab's name | **Edit**, **Duplicate**, **Delete** |
 
-Every item also has a small **pencil** that opens its dialog.
+Every item also has a small **pencil** that opens its dialog, or you can
+double-click it.
 
 ### Cut, copy and paste
 
@@ -515,6 +516,7 @@ sees it, and nothing is stored until you click **Save**.
 | Ctrl+C / Ctrl+X / Ctrl+V | editing | Copy / cut / paste. |
 | Delete or Backspace | editing | Delete the selection (asks first). |
 | Shift+arrow keys | editing | Resize the selected open folder by one cell. |
+| Alt+← / Alt+→ | editing | Move the focused tab left or right. |
 | Escape | editing | Clear the selection; cancel a drag; close a dialog. |
 | Ctrl+Enter | in a dialog | Save and close the dialog. |
 
@@ -575,7 +577,7 @@ set:
 - **Rotation Interval (seconds, 5–3600)**;
 - **Transition Effect**: Crossfade, Slide, Slide Up, Slide Down, Zoom In,
   Zoom Out, Fade Black, Blur, Flip, Swirl, Wipe, Curtain, Circle, Diamond,
-  Dissolve, Flash, Glitch, Ken Burns, none, or Random;
+  Dissolve, Flash, Glitch, Ken Burns, Instant, or Random;
 - **Transition Duration**.
 
 Click **Save Background**.
@@ -628,7 +630,7 @@ The right of the top bar is always there. From left to right it can hold:
 | **Help** | signed in | Keyboard shortcuts and features. |
 | **About HOPS** | signed in | The version and what HOPS can do. |
 | **Settings** (gear) | always | Settings (asks you to sign in). |
-| **Log out** | signed in | Signs this browser out. |
+| **Log out** | signed in (on a phone, in Settings) | Signs this browser out. |
 
 **Show recently used** adds a row above the tabs with the tiles you open
 most on that dashboard, in this browser.
@@ -694,7 +696,8 @@ Each tile, folder and tab has a **Status checks** row with **Inherit**,
   **On** is still checked.
 
 The line under the choices says what is in effect and where it comes from,
-for example *Inherited from the tab: on*. **Reset to inherit** puts a row
+for example *Inherited from Media: on* (the folder, tab or dashboard it
+comes from). **Reset to inherit** puts a row
 back to Inherit.
 
 Timing is under **Settings › Global settings › Status checks**: **Check
@@ -1047,9 +1050,10 @@ HOPS works out the format by itself.
     imported.
 - If only part of a file could be imported, HOPS says *Imported, but not
   everything succeeded* and what was left out.
-- Imported tiles' status checks are set to **Inherit**, except HOPS 2 tiles
-  that didn't have checks ticked, which are set to **Off** (see [The
-  overrides page](#the-overrides-page)).
+- Tiles imported from Homer, Dashy, Heimdall and HOPS 2 have their status
+  checks set to **Inherit**, except HOPS 2 tiles that didn't have checks
+  ticked, which are set to **Off** (see [The overrides
+  page](#the-overrides-page)). A HOPS 3 export keeps its own settings.
 - Files up to 50 MB are accepted by default (**Settings › Global settings ›
   Uploads › Largest import**). Very deeply nested files, or files with an
   enormous number of entries, are refused with a reason.
@@ -1332,9 +1336,21 @@ anything.
    automatically, and it is your way back to HOPS 2.
 2. If that backup fails, HOPS **refuses to convert**. Your HOPS 2 data is
    left exactly as it was, and HOPS shows *HOPS couldn't migrate your
-   configuration* with the reason and a link to **Backups**.
-3. If the conversion itself fails, nothing is changed either, and the same
-   page explains it.
+   configuration* with the reason. No copy was saved and nothing was
+   converted, so HOPS 2.2.1 opens the data as before. Fix the cause shown
+   (often disk space, or HOPS not being allowed to write to its backups
+   folder), then start HOPS 3 again.
+3. If the conversion itself fails, nothing is changed either. The same page
+   shows the reason and tells you to go back to HOPS 2.2.1 using the
+   pre-v3-migration backup (see [Rolling back from 3.x to
+   2.2.1](DEPLOY.md#rolling-back-from-3x-to-221)), and to report the
+   problem with the message shown.
+4. **Started HOPS 2 without `--data`?** HOPS 2 kept its data in `../data`
+   (from the folder it was started in); HOPS 3 uses a `data` folder next to
+   the program. If HOPS 3 finds no database in its own data folder but finds
+   HOPS 2's at `../data`, it does not start with a new, empty one. It shows a
+   *HOPS can't start safely* page giving the `--data` to start it with, and
+   creates nothing.
 
 How to upgrade depends on how you installed HOPS; see
 [Upgrading](QUICKSTART.md#upgrading),
@@ -1351,9 +1367,10 @@ and [Rolling back from 3.x to 2.2.1](DEPLOY.md#rolling-back-from-3x-to-221).
   sets its size.
 - **Tiles** keep their name, address, icon, colour, size and open mode. A
   tile size HOPS doesn't recognise becomes *Medium*, and you are told which.
-- **Status checks**: tiles that had status checks ticked keep them; tiles
-  that didn't are set to **Off**. A notice links to [the overrides
-  page](#the-overrides-page) if you'd rather let them inherit.
+- **Status checks**: ticked tiles are set to **Inherit** (they follow the
+  dashboard and global setting, as in 2.x); unticked tiles are set to
+  **Off**. A notice links to [the overrides page](#the-overrides-page) if
+  you'd rather the Off tiles inherit.
 - **Settings** (port, log level, uploads and so on) carry over. Upload
   limits still at the old HOPS 2 defaults move to the new ones (25 MB for
   backgrounds, 2 MB for icons), and a notice tells you.
@@ -1425,8 +1442,19 @@ Settings marked **Restart required** apply the next time HOPS starts.
 
 **"HOPS couldn't migrate your configuration".**
 See [Upgrading from HOPS 2](#upgrading-from-hops-2). Your data was not
-changed. **Open Backups** to restore from a backup, and check **Settings ›
-Logs** for the reason.
+changed. What the page advises depends on why it failed:
+
+- **The conversion failed:** to keep using HOPS meanwhile, go back to HOPS
+  2.2.1 with the `pre-v3-migration.db` backup (see [Rolling back from 3.x to
+  2.2.1](DEPLOY.md#rolling-back-from-3x-to-221)), and report the problem
+  with the message shown.
+- **The pre-v3 backup failed:** no copy was saved and nothing was
+  converted. Your data is untouched and HOPS 2.2.1 opens it as before. Fix
+  the cause in the message, then start HOPS 3 again.
+- **The data is from a pre-release build of HOPS 3:** that data has no
+  update path; the message says what to do.
+
+**Settings › Logs** has the details.
 
 **I've lost the password.**
 HOPS has no password-reset feature. Keep the password somewhere safe. If

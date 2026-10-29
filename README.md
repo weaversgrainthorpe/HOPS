@@ -213,9 +213,13 @@ It's automatic. Install v3 over v2 with the same data folder and start it.
 On its first start, HOPS 3 takes a protected backup of the whole v2 database
 (`hops-backup-<date>_pre-v3-migration.db`) before it converts anything. If
 that backup fails, it doesn't convert. The backup is never deleted
-automatically, and it's your way back to 2.2.1. Tiles keep the status checks
-they had in v2, and a one-time notice points you to the overrides page if
-you'd rather they inherit.
+automatically, and it's your way back to 2.2.1. Ticked tiles inherit and
+unticked ones are set to Off, so the same tiles are checked as before; a
+one-time notice points you to the overrides page if you'd rather the Off
+tiles inherit. If you started HOPS 2 without `--data`, its data is in
+`../data`, while HOPS 3 looks in a `data` folder next to the program. When
+HOPS 3 finds HOPS 2's database there instead of its own, it shows a page
+with the `--data` to use and creates nothing.
 
 You don't need to export and import. See [Upgrading](QUICKSTART.md#upgrading),
 [Upgrading from v2 with install.sh](DEPLOY.md#upgrading-from-v2-with-installsh)
@@ -325,7 +329,7 @@ See [SECURITY.md](SECURITY.md) to report a vulnerability.
 
 | Shortcut | Action | Mode |
 |----------|--------|------|
-| `/` | Search this dashboard | Viewing |
+| `/` | Search this dashboard | Anywhere |
 | `↑ ↓ ← →` | Move between tiles | Viewing |
 | `Enter` | Open the highlighted tile | Viewing |
 | `Escape` | Close a dialog or search | Anywhere |
@@ -333,7 +337,8 @@ See [SECURITY.md](SECURITY.md) to report a vulnerability.
 | `Ctrl+Z` / `Ctrl+Shift+Z` or `Ctrl+Y` | Undo / redo | Edit |
 | `Ctrl+C` / `Ctrl+X` / `Ctrl+V` | Copy / cut / paste | Edit |
 | `Delete` | Delete what's selected (asks first) | Edit |
-| `Shift+Arrow` | Resize the selected folder | Edit |
+| `Shift+Arrow` | Resize the selected open folder | Edit |
+| `Alt+←` / `Alt+→` | Move the focused tab | Edit |
 | `Ctrl+Enter` | Save and close a dialog | Edit |
 
 ## Tech stack
