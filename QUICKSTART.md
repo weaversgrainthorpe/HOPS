@@ -146,7 +146,10 @@ host. For all the options, see [Proxmox container](DEPLOY.md#proxmox-container-h
    carry on until you do. Type `admin` as the current password, then your
    new one twice (8 to 72 characters), and click **Set Password**.
 
-You can change the password later under **Settings › Password**. A
+You can change the password later under **Settings › Password**. If you
+ever forget it, run the program with `reset-password` on the computer that
+runs HOPS (for example `sudo /opt/hops/hops reset-password`); the sign-in
+dialog's **Forgot password?** shows the command for each kind of install. A
 **Log out** button sits at the right of the top bar (on a phone, it's in
 Settings instead).
 

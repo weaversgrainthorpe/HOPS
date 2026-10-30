@@ -387,7 +387,7 @@
               <Icon icon="mdi:shield-key" width="24" />
               <div>
                 <strong>Security</strong>
-                <p>Bcrypt password hashing, HttpOnly session cookies, CSRF protection, and forced password change on first login. Signing out or changing the password ends the session.</p>
+                <p>Bcrypt password hashing, HttpOnly session cookies, CSRF protection, and forced password change on first login. Signing out or changing the password ends the session. Forgotten the password? Run the HOPS program with <code>reset-password</code> on the computer that runs it (see Forgot password? when signing in).</p>
               </div>
             </div>
             <div class="feature">

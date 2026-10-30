@@ -316,6 +316,7 @@ and [Rolling back from 3.x to 2.2.1](DEPLOY.md#rolling-back-from-3x-to-221).
 - No login to view; one admin login to edit and change settings
 - Bcrypt password hashing, forced change of the default password on first
   sign-in
+- Forgotten password: `hops reset-password`, run on the HOPS computer itself
 - HttpOnly session cookies and CSRF protection
 - Login rate limiting per IP (20 a minute by default)
 - Browser security headers, checked uploads, and hardened outbound requests

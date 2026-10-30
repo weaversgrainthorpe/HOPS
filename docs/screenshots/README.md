@@ -28,7 +28,7 @@ Before capturing:
 | `edit-tile.png` | The tile dialog open over the dashboard: **Tile type**, **Name**, **Address**, **Away address (optional)**, **Size**, **Open Mode** and the **Status checks** row visible. | Portrait-ish (dialog) | 600–900px |
 | `icon-picker.png` | The icon picker open from **Edit icon**, with a search typed (e.g. "prox") and a grid of matches. | About 3:2 | 900–1200px |
 | `mobile.png` | The Sample on a phone (≤ 480px wide): use browser DevTools device emulation (iPhone 12 Pro or Pixel 5). | 9:19 portrait | 390–600px |
-| `settings.png` | The Settings page, **Dashboards** open, showing the dashboard list with its buttons and the settings menu (Dashboards with Dead links, Duplicates and Status check overrides; Icons, Global settings, Discovery, Backups, Logs, Password, Factory reset). | 16:9 landscape | 1400–1600px |
+| `settings.png` | The Settings page, **Dashboards** open, showing the dashboard list with its buttons and the settings menu (Dashboards with Dead links, Duplicates and Blocked status checks; Icons, Global settings, Discovery, Backups, Logs, Password, Factory reset). | 16:9 landscape | 1400–1600px |
 | `qr.png` | The QR code dialog for the Sample (**Settings › Dashboards**, the dashboard's QR button), with the dashboard name above the code and **Copy URL**. | About 4:3 | 900–1200px |
 | `discovery.png` | Network Discovery results for a scan: the draft list with confidence, names and icons, ideally with the new / changed / gone counts from a re-scan. Scan only a test network of made-up or documentation addresses (192.168.1.x), and check no real hostname shows. | 16:9 landscape | 1400–1600px |
 
