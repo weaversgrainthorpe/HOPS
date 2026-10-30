@@ -69,8 +69,8 @@ func tileTri(tile Obj) tri {
 
 // IsCheckableTile reports whether a tile could ever be probed: not a note,
 // and with a non-empty URL. The checker skips every other tile whatever its
-// setting, so counts of what a setting changes (the notices, and the
-// frontend's isCheckableTile twin on the overrides page) skip them too.
+// setting, so the frontend's isCheckableTile twin (the Blocked status checks
+// report) skips them too.
 func IsCheckableTile(tile Obj) bool {
 	if t, _ := tile["type"].(string); t == "note" {
 		return false
@@ -137,9 +137,12 @@ func EffectiveStatusChecks(svc *settings.Service, dash, tab Obj, folderChain []O
 			}
 		case nil:
 		default:
-			// A wrong type here is logged by Resolve and read as Enabled; the
-			// global gate above has already been applied.
-			Resolve(svc, dash)
+			// A wrong type here reads as Enabled, as for every dashboard
+			// setting; logged once per dashboard, not on every pass.
+			if _, seen := invalidWarned.LoadOrStore("\x00dashboard\x00"+idOf(dash), true); !seen {
+				slog.Warn("dashboard status-check gate has the wrong type; read as Enabled",
+					"component", "configdoc", "dashboard", idOf(dash), "value", fmt.Sprintf("%v", ov["statusChecksEnabled"]))
+			}
 		}
 	}
 	if containerTri(tab["statusChecksEnabled"]) == triOff {

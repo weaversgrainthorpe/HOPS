@@ -706,7 +706,9 @@ A dashboard can override both.
 **Settings › Dashboards › Blocked status checks** lists tiles that are **On**
 but stopped by a **Disabled** gate: the tile, where it lives (dashboard ›
 tab › folder), what blocks it (the outermost Disabled gate, with *+n more*
-if there are others), and a link to open that dashboard. It changes
+if there are others), and a link to open that dashboard. A tile whose
+setting is damaged (for example by a hand-edited import) is listed too,
+as *invalid setting on this tile*: it is never checked. It changes
 nothing; fix a tile by enabling the gate in its editor. If the global
 setting is Disabled, the page says only *Status monitoring is disabled in
 Settings, so nothing is checked.* with a link to that setting. When nothing
@@ -1252,7 +1254,9 @@ hops reset-password
 
 Add `--data <folder>` if HOPS is started with one. For the Linux service
 from `install.sh`, run it as the service's user with its data folder:
-`sudo -u hops /opt/hops/hops reset-password --data /var/lib/hops`.
+`sudo -u hops /opt/hops/hops reset-password --data /var/lib/hops`. In
+Docker: `docker exec hops ./hops reset-password --data /app/data` (use your
+container's name if it isn't `hops`).
 
 It prints the username and a temporary password, and signs out every
 browser. Sign in with the temporary password and HOPS asks you to **Set a

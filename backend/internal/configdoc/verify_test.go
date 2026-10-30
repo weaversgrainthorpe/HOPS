@@ -393,7 +393,7 @@ func TestVerify_StatusCheckPin(t *testing.T) {
 		note       bool // the v2 entry (e3) is a note tile, which is never pinned
 	}{
 		{"absent turned on", "e2", nil, func(tl Obj) { tl["statusCheck"] = Obj{"enabled": true} }, "enabled", false},
-		{"absent left inheriting", "e2", nil, func(tl Obj) { tl["statusCheck"] = Obj{"enabled": nil} }, "enabled", false},
+		{"absent left null (reads Off)", "e2", nil, func(tl Obj) { tl["statusCheck"] = Obj{"enabled": nil} }, "enabled", false},
 		{"absent left absent", "e2", nil, func(tl Obj) { delete(tl, "statusCheck") }, "statusCheck", false},
 		{"absent gains a field", "e2", nil, func(tl Obj) { tl["statusCheck"] = Obj{"enabled": false, "interval": 5} }, "interval", false},
 		{"absent pinned to a non-bool", "e2", nil, func(tl Obj) { tl["statusCheck"] = Obj{"enabled": "no"} }, "enabled", false},
@@ -402,11 +402,11 @@ func TestVerify_StatusCheckPin(t *testing.T) {
 		{"on changes its type", "e1", nil, func(tl Obj) { tl["statusCheck"].(Obj)["type"] = "ping" }, "type", false},
 		{"null turned on", "e3", Obj{"enabled": nil}, func(tl Obj) { tl["statusCheck"].(Obj)["enabled"] = true }, "enabled", false},
 		{"null left null", "e3", Obj{"enabled": nil}, func(tl Obj) { tl["statusCheck"].(Obj)["enabled"] = nil }, "enabled", false},
-		{"on left inheriting", "e1", nil, func(tl Obj) { tl["statusCheck"].(Obj)["enabled"] = nil }, "enabled", false},
+		{"on left null (reads Off)", "e1", nil, func(tl Obj) { tl["statusCheck"].(Obj)["enabled"] = nil }, "enabled", false},
 		{"no enabled turned on", "e3", Obj{"type": "http"}, func(tl Obj) { tl["statusCheck"].(Obj)["enabled"] = true }, "enabled", false},
 		{"wrong type changed", "e3", "yes", func(tl Obj) { tl["statusCheck"] = "no" }, "statusCheck", false},
 		{"statusCheck null turned on", "e3", nullSC{}, func(tl Obj) { tl["statusCheck"].(Obj)["enabled"] = true }, "enabled", false},
-		{"statusCheck null left inheriting", "e3", nullSC{}, func(tl Obj) { tl["statusCheck"].(Obj)["enabled"] = nil }, "enabled", false},
+		{"statusCheck null left null (reads Off)", "e3", nullSC{}, func(tl Obj) { tl["statusCheck"].(Obj)["enabled"] = nil }, "enabled", false},
 		{"non-bool enabled kept", "e3", Obj{"type": "http", "enabled": "yes"}, func(tl Obj) { tl["statusCheck"].(Obj)["enabled"] = "yes" }, "enabled", false},
 		{"non-bool enabled loses its type", "e3", Obj{"type": "http", "enabled": "yes"}, func(tl Obj) { delete(tl["statusCheck"].(Obj), "type") }, "type", false},
 		{"note pinned off", "e3", nil, func(tl Obj) { tl["statusCheck"] = Obj{"enabled": false} }, "statusCheck", true},

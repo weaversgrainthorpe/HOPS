@@ -441,9 +441,9 @@ func (r *Router) handleGetStatus(w http.ResponseWriter, req *http.Request) {
 
 	// Checks switched off for the tile: say so explicitly rather than
 	// "unknown", so the badge shows "checks off", not "something's wrong".
-	// On/off follows the same layered rule as the checker (the most
-	// specific level that sets it wins) and the response names that level
-	// (source, sourceId). The config must be readable to know that; if it
+	// On/off follows the same rule as the checker (the tile On and every
+	// gate above it Enabled) and the response names what decided it
+	// (source, sourceId): the tile, or the outermost Disabled gate. The config must be readable to know that; if it
 	// isn't, say so instead of guessing.
 	doc, err := configdoc.Load(r.db)
 	if err != nil {

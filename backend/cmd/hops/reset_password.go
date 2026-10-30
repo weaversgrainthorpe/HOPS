@@ -7,11 +7,11 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"net/url"
 	"os"
 	"path/filepath"
 
 	"github.com/weaversgrainthorpe/HOPS/internal/auth"
+	"github.com/weaversgrainthorpe/HOPS/internal/database"
 
 	_ "modernc.org/sqlite"
 )
@@ -63,7 +63,13 @@ func runResetPassword(dataDir string, args []string, stdout, stderr io.Writer) i
 
 	// mode=rw never creates a file; the immediate transaction takes the
 	// write lock up front so a running server's writes only make it wait.
-	dsn := (&url.URL{Scheme: "file", Opaque: filepath.ToSlash(dbPath), RawQuery: "mode=rw&_txlock=immediate"}).String()
+	// The path is escaped (a #, ? or % in a folder name would otherwise end
+	// it early and open a different, new file).
+	dsn, err := database.SQLiteFileURI(dbPath, "mode=rw&_txlock=immediate")
+	if err != nil {
+		fmt.Fprintf(stderr, "cannot open %s: %v\n", dbPath, err)
+		return 1
+	}
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		fmt.Fprintf(stderr, "cannot open %s: %v\n", dbPath, err)

@@ -93,6 +93,31 @@ func TestResetPasswordFlagBeforeAndAfter(t *testing.T) {
 	}
 }
 
+// A #, ? or % in the folder name must not cut the path short: the reset
+// changes this folder's database and creates no file anywhere else.
+func TestResetPasswordOddFolderName(t *testing.T) {
+	parent := t.TempDir()
+	dir := filepath.Join(parent, "data #1 50%")
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	makeResetDB(t, dir, true)
+	var out, errb bytes.Buffer
+	if code := runResetPassword("", []string{"--data", dir}, &out, &errb); code != 0 {
+		t.Fatalf("exit %d: %s", code, errb.String())
+	}
+	entries, _ := os.ReadDir(parent)
+	if len(entries) != 1 || entries[0].Name() != "data #1 50%" {
+		t.Errorf("files next to the data folder: %v (want only the folder)", entries)
+	}
+	var must int
+	db, _ := sql.Open("sqlite", filepath.Join(dir, "hops.db"))
+	defer db.Close()
+	if err := db.QueryRow("SELECT must_change_password FROM users").Scan(&must); err != nil || must != 1 {
+		t.Errorf("must=%d err=%v", must, err)
+	}
+}
+
 func TestResetPasswordRejectsExtraArgs(t *testing.T) {
 	var out, errb bytes.Buffer
 	if code := runResetPassword("", []string{"bogus"}, &out, &errb); code != 2 {

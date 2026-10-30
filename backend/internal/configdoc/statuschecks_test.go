@@ -179,6 +179,25 @@ func TestEffectiveStatusChecks_InvalidIsOffAndWarnsOnce(t *testing.T) {
 	}
 }
 
+// A wrong-typed dashboard gate reads as Enabled and is logged once per
+// dashboard, not once per tile on every checker pass.
+func TestEffectiveStatusChecks_WrongTypedDashboardGateWarnsOnce(t *testing.T) {
+	buf := captureLogs(t)
+	svc := newSvc(t)
+	dash := Obj{"id": "warn-once-dash", "settings": Obj{"statusChecksEnabled": "yes"}}
+	for i := 0; i < 3; i++ {
+		for _, tid := range []string{"a", "b"} {
+			on, src, _ := EffectiveStatusChecks(svc, dash, Obj{"id": "t"}, nil, Obj{"id": tid, "statusCheck": Obj{"enabled": true}})
+			if !on || src != SourceTile {
+				t.Fatalf("got (%v, %q), want checked by the tile", on, src)
+			}
+		}
+	}
+	if n := strings.Count(buf.String(), "level=WARN"); n != 1 {
+		t.Errorf("want 1 WARN line, got %d: %q", n, buf.String())
+	}
+}
+
 func TestVerifyDashboard_StatusChecksValues(t *testing.T) {
 	mk := func(tabV, folderV, tileSC any) Obj {
 		tile := Obj{"kind": "tile", "id": "x"}

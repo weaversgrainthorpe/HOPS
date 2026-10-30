@@ -45,4 +45,10 @@ describe('findBlocked', () => {
     const rows = findBlocked([dash('d', [folder('f', [tile('a', true)], 'yes')])]);
     expect(rows[0].blockedBy).toMatchObject({ source: 'invalid', sourceId: 'f', name: 'F' });
   });
+
+  it('a tile whose own setting is wrong-typed is listed, even under open gates', () => {
+    const rows = findBlocked([dash('d', [tile('a', 'yes'), tile('b', false), tile('c', true)])]);
+    expect(rows.map((r) => r.tileId)).toEqual(['a']);
+    expect(rows[0].blockedBy).toMatchObject({ source: 'invalid', sourceId: 'a', name: 'this tile' });
+  });
 });

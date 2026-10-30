@@ -1,7 +1,7 @@
 /**
  * Blocked status checks across the dashboards: the tiles whose own status check is On but which
  * are not checked because a Disabled gate (the dashboard, a tab or a folder) or a wrong-typed one
- * stops them. Pure: the page supplies the layouts and runs this only while the global setting is
+ * stops them, and the tiles whose own setting is wrong-typed (never checked either). Pure: the page supplies the layouts and runs this only while the global setting is
  * Enabled (when it is Disabled nothing is checked and the page says only that). All resolution
  * goes through gatesAbove, so this can never drift from the dialogs or the checker.
  */
@@ -47,14 +47,17 @@ export function findBlocked(dashboards: LayoutDashboard[]): BlockedRow[] {
           continue;
         }
         if (!isCheckableTile(n as { type?: unknown; url?: unknown })) continue;
-        if (tileSetting(n as { statusCheck?: unknown }) !== 'on') continue;
+        const own = tileSetting(n as { statusCheck?: unknown });
+        if (own === 'off') continue;
+        const row = { key: `${d.id}:${n.id}`, dashboardId: d.id, tileId: n.id, tabId: tab.id, folderIds: folders.map((f) => f.id), path: p };
+        // A wrong-typed setting on the tile itself is never checked either: list it, never hide it.
+        if (own === 'invalid') {
+          rows.push({ ...row, blockedBy: { source: 'invalid', sourceId: n.id, more: 0, name: 'this tile' } });
+          continue;
+        }
         const b = gatesAbove(base, tab, folders);
         if (!b) continue;
-        rows.push({
-          key: `${d.id}:${n.id}`, dashboardId: d.id, tileId: n.id, tabId: tab.id,
-          folderIds: folders.map((f) => f.id), path: p,
-          blockedBy: { ...b, name: levelNameIn([d], b.source, b.sourceId) }
-        });
+        rows.push({ ...row, blockedBy: { ...b, name: levelNameIn([d], b.source, b.sourceId) } });
       }
     };
     for (const tab of Array.isArray(d.tabs) ? d.tabs : []) visit(kids(tab.root), tab, [], [nameOf(tab)]);

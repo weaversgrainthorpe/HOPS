@@ -211,6 +211,9 @@ func sqliteFileURI(path, query string) (string, error) {
 	return sqliteURI(filepath.ToSlash(abs), query), nil
 }
 
+// SQLiteFileURI is sqliteFileURI for callers outside this package.
+func SQLiteFileURI(path, query string) (string, error) { return sqliteFileURI(path, query) }
+
 func openReadOnly(path string) (*sql.DB, error) {
 	uri, err := sqliteFileURI(path, "mode=ro&immutable=1")
 	if err != nil {

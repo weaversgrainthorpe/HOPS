@@ -572,7 +572,7 @@ export interface TabFields {
   opacity?: number;
   /** A background picked in the dialog: undefined = unchanged, null = removed. */
   background?: Background | null;
-  /** Status checks: undefined = unchanged, null = inherit (key removed), true/false = set. */
+  /** Status-check gate: undefined = unchanged, false = Disabled, null or true = Enabled (key removed). */
   statusChecksEnabled?: boolean | null;
 }
 

@@ -5,7 +5,7 @@ import { getCsrfToken } from '../helpers';
 // IntersectionObserver; jsdom has none of them).
 //
 // Not repeated here (already covered elsewhere):
-// - layered-status.spec.ts: a tile on under an off dashboard — badge, dialog text, notice, stored Dismiss.
+// - status-gates.spec.ts: a tile On under a Disabled dashboard — badge and dialog text.
 // - backgrounds.spec.ts: the folder picker (preset at 50% saved, reloaded, drawn), Inherit,
 //   the failed-image badge for a missing (404) picture in edit mode, the maximised backdrop and
 //   the corner controls.
