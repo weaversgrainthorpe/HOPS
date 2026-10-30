@@ -55,6 +55,11 @@ export interface HitResult {
   /** The scrollable panel (`data-drag-scroll`) holding the container, for auto-scroll. */
   scroller?: Element;
   /**
+   * The one-row tab rail (`data-drag-tabrail`) under the pointer: a tab, the bar, or its scroll
+   * arrows. Held near either end, the drag scrolls its strip (the `data-drag-tabbar` inside it).
+   */
+  tabRail?: Element;
+  /**
    * open folders (Folder.svelte), never one being dragged. Its title bar (`data-folder-bar`: the
    * folder it shows, the drilled-into one when drilled): a drop there goes in at the end.
    */
@@ -120,7 +125,14 @@ export function hitTest(x: number, y: number, dragged: ReadonlySet<string>, env:
   // Navigation targets outside any container: a breadcrumb crumb, a tab button, the tab bar.
   const crumbEl = start.closest('[data-drag-crumb]');
   if (crumbEl) return { ...NO_HIT, crumb: crumbEl.getAttribute('data-drag-crumb') ?? '' };
-  const bar = start.closest('[data-drag-tabbar]');
+  // The tab rail: the bar (its scrolling strip) plus the scroll arrows beside it. An arrow, or the
+  // rail's own gap, is the tab bar too: only the visible part of the row counts there, so a tab
+  // dropped on an arrow goes to the visible end of the row beside it, never next to a hidden tab.
+  const rail = start.closest('[data-drag-tabrail]') ?? undefined;
+  const inBar = start.closest('[data-drag-tabbar]');
+  const bar = inBar ?? rail?.querySelector('[data-drag-tabbar]') ?? null;
+  const visible = !inBar && bar ? env.rectOf(bar) : null;
+  const railOf = (): Pick<HitResult, 'tabRail'> => (rail ? { tabRail: rail } : {});
   // A tab is its whole box (`data-drag-tabbox`: the button plus its controls and padding), so a
   // control drawn over the button never hides the tab from a drop (real-browser bug).
   const tabBox = start.closest('[data-drag-tabbox]');
@@ -129,9 +141,14 @@ export function hitTest(x: number, y: number, dragged: ReadonlySet<string>, env:
   const boxes = (): Pick<HitResult, 'tabBoxes'> => {
     if (!bar) return {};
     return {
-      tabBoxes: Array.from(bar.querySelectorAll('[data-drag-tabbox]')).map((b) => {
+      tabBoxes: Array.from(bar.querySelectorAll('[data-drag-tabbox]')).flatMap((b) => {
         const r = env.rectOf(b);
-        return { id: b.getAttribute('data-drag-tabbox') ?? '', left: r.left, top: r.top, width: r.width ?? 0, height: r.height ?? 0 };
+        const box = { id: b.getAttribute('data-drag-tabbox') ?? '', left: r.left, top: r.top, width: r.width ?? 0, height: r.height ?? 0 };
+        if (!visible) return [box];
+        // Clipped to the strip's visible box; a tab scrolled out of view is no target.
+        const left = Math.max(box.left, visible.left);
+        const right = Math.min(box.left + box.width, visible.left + (visible.width ?? 0));
+        return right > left ? [{ ...box, left, width: right - left }] : [];
       })
     };
   };
@@ -141,10 +158,11 @@ export function hitTest(x: number, y: number, dragged: ReadonlySet<string>, env:
       ...NO_HIT,
       tabId: tabEl.getAttribute('data-drag-tab') ?? '',
       tabRect: { left: r.left, top: r.top, width: r.width ?? 0, height: r.height ?? 0 },
-      ...boxes()
+      ...boxes(),
+      ...railOf()
     };
   }
-  if (bar) return { ...NO_HIT, tabBar: true, ...boxes() };
+  if (bar) return { ...NO_HIT, tabBar: true, ...boxes(), ...railOf() };
   // Climb out of the outermost dragged node: a dragged folder never targets its own content.
   for (let e: Element | null = start; e; e = e.parentElement) {
     const id = e.getAttribute('data-node-id');

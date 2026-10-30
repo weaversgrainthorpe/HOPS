@@ -55,6 +55,7 @@ import { toast } from '$lib/stores/toast';
 import { clearSelection, selectionInDraft, toggleNode } from '$lib/stores/nodeSelection';
 import { hitTest as domHitTest, type HitResult } from './hitTest';
 import { crumbDwellKey, dwellArgs, flowIndex, flowMarker, pageDwellKey } from './targets';
+import { railState, type RailMetrics } from '$lib/components/tabbar/tabRail';
 import { drillUpTo, setFolderPage } from '$lib/stores/folderView';
 import {
   cancelDropAnimations, claimFlourish, outStarts, playDropAnimation, playOutOfFolders, sayAnimationFailure,
@@ -143,6 +144,10 @@ export interface DragEnv {
   scrollBy(dx: number, dy: number): void;
   /** Scroll a panel (an overlay body) by dy px. */
   scrollElBy(el: Element, dy: number): void;
+  /** Scroll a sideways scroller (the tab rail's strip) by dx px. */
+  scrollElByX(el: Element, dx: number): void;
+  /** A sideways scroller's offset, view width and content width. */
+  scrollMetrics(el: Element): RailMetrics;
   /** The page's scroll offset (no layout read). */
   scroll(): { x: number; y: number };
 }
@@ -157,6 +162,10 @@ const domEnv: DragEnv = {
   scrollElBy: (el, dy) => {
     (el as HTMLElement).scrollTop += dy;
   },
+  scrollElByX: (el, dx) => {
+    (el as HTMLElement).scrollLeft += dx;
+  },
+  scrollMetrics: (el) => ({ scrollLeft: el.scrollLeft, clientWidth: el.clientWidth, scrollWidth: el.scrollWidth }),
   scroll: () => ({ x: window.scrollX || 0, y: window.scrollY || 0 })
 };
 let env: DragEnv = domEnv;
@@ -1096,7 +1105,7 @@ function frame() {
     ? { left: slot.after ? slot.box.left + slot.box.width : slot.box.left, top: slot.box.top, height: slot.box.height }
     : next.target.kind === 'place' ? next.target.marker : undefined;
   setState(next);
-  autoScroll(at.x, at.y, hit.scroller);
+  autoScroll(at.x, at.y, hit.scroller, hit.tabRail);
 }
 
 /**
@@ -1185,8 +1194,41 @@ function overFor(s: DragState, t: DropTarget, hit: HitResult): Box | undefined {
   return undefined;
 }
 
-/** Near an edge, scroll (and keep scrolling while held there): the panel under the pointer first, else the page. */
-function autoScroll(x: number, y: number, scroller?: Element) {
+/**
+ * The px to scroll the tab rail's strip by, with the pointer at viewport x over the rail (its viewport
+ * box): the same ramp as the vertical edge scroll, within EDGE_PX of either end of the rail. 0 in the
+ * middle, and 0 at an end the strip can't scroll any further towards.
+ */
+export function railEdgeStep(x: number, rail: { left: number; width: number }, strip: RailMetrics): number {
+  if (!(rail.width > 2 * EDGE_PX)) return 0;
+  const { atStart, atEnd } = railState(strip);
+  const right = rail.left + rail.width;
+  let dx = 0;
+  if (x < rail.left + EDGE_PX) dx = atStart ? 0 : -Math.ceil(((rail.left + EDGE_PX - x) / EDGE_PX) * MAX_SCROLL_PX);
+  else if (x > right - EDGE_PX) dx = atEnd ? 0 : Math.ceil(((x - (right - EDGE_PX)) / EDGE_PX) * MAX_SCROLL_PX);
+  return Math.max(-MAX_SCROLL_PX, Math.min(MAX_SCROLL_PX, dx));
+}
+
+/** The tab rail's strip and how far to scroll it with the pointer at x; dx 0 = not edge-scrolling. */
+function railEdge(x: number, rail: Element): { strip: Element; dx: number } | null {
+  const strip = rail.querySelector('[data-drag-tabbar]');
+  return strip ? { strip, dx: railEdgeStep(x, env.measure(rail), env.scrollMetrics(strip)) } : null;
+}
+
+/**
+ * Near an edge, scroll (and keep scrolling while held there): the tab rail sideways when the pointer
+ * is at either end of it, else the panel under the pointer, else the page.
+ */
+function autoScroll(x: number, y: number, scroller?: Element, rail?: Element) {
+  if (rail) {
+    const edge = railEdge(x, rail);
+    if (edge && edge.dx !== 0) {
+      env.scrollElByX(edge.strip, edge.dx);
+      pending = { x, y };
+      schedule();
+      return;
+    }
+  }
   const step = (pos: number, top: number, bottom: number): number => {
     if (pos < top + EDGE_PX) return -Math.ceil(((top + EDGE_PX - pos) / EDGE_PX) * MAX_SCROLL_PX);
     if (pos > bottom - EDGE_PX) return Math.ceil(((pos - (bottom - EDGE_PX)) / EDGE_PX) * MAX_SCROLL_PX);
@@ -1217,6 +1259,8 @@ function autoScroll(x: number, y: number, scroller?: Element) {
 function dwellKey(s: DragState, hit: HitResult, d: LayoutDashboard): { key: string; ms: number } | null {
   if (s.tab !== undefined) return null;
   if (hit.crumb !== undefined) return crumbAction(hit.crumb) ? { key: `crumb:${hit.crumb}`, ms: OPEN_DWELL_MS } : null;
+  // While the tab rail edge-scrolls, the tabs move under a still pointer: no hover-to-switch then.
+  if (hit.tabRail && (railEdge(s.pointer.x, hit.tabRail)?.dx ?? 0) !== 0) return null;
   if (hit.tabId !== undefined) return hit.tabId !== activeTab ? { key: `tab:${hit.tabId}`, ms: OPEN_DWELL_MS } : null;
   // An open folder's page bar: ‹ / › flips the page (none at that end); an outer box's title goes back up.
   if (hit.pageBar) {

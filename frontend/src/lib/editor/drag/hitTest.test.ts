@@ -152,6 +152,52 @@ describe('hitTest', () => {
     expect(hitTest(0, 0, new Set(), env(bar)).tabBar).toBe(true);
   });
 
+  it('a hit inside the tab rail reports the rail', () => {
+    const arrow = document.createElement('button');
+    arrow.setAttribute('data-rail-arrow', 'prev');
+    const tab = el({ 'data-drag-tab': 't2' }, el({}));
+    const tabbox = el({ 'data-drag-tabbox': 't2' }, tab);
+    const bar = el({ 'data-drag-tabbar': '' }, tabbox);
+    const rail = el({ 'data-drag-tabrail': '' }, arrow, bar);
+    document.body.append(rail);
+    const onArrow = hitTest(0, 0, new Set(), env(arrow));
+    expect(onArrow.tabRail).toBe(rail);
+    expect(onArrow.tabBar).toBe(true);
+    const onTab = hitTest(0, 0, new Set(), env(tab.firstElementChild));
+    expect(onTab.tabRail).toBe(rail);
+    expect(onTab.tabId).toBe('t2');
+    expect(hitTest(0, 0, new Set(), env(bar)).tabRail).toBe(rail);
+    // A tab bar outside any rail has none.
+    const lone = el({ 'data-drag-tabbar': '' });
+    document.body.append(lone);
+    expect(hitTest(0, 0, new Set(), env(lone)).tabRail).toBeUndefined();
+  });
+
+  it('on a rail arrow, only the visible part of the row is a tab target', () => {
+    const next = document.createElement('button');
+    next.setAttribute('data-rail-arrow', 'next');
+    const box = (id: string) => el({ 'data-drag-tabbox': id }, el({ 'data-drag-tab': id }));
+    const [a, b, c] = [box('a'), box('b'), box('c')];
+    const bar = el({ 'data-drag-tabbar': '' }, a, b, c);
+    const rail = el({ 'data-drag-tabrail': '' }, bar, next);
+    document.body.append(rail);
+    // The strip shows x 0–250: a fully, b in part, c not at all (scrolled out of view, under the arrow).
+    const rects = new Map<Element, { left: number; top: number; width: number; height: number }>([
+      [bar, { left: 0, top: 0, width: 250, height: 40 }],
+      [a, { left: 0, top: 0, width: 150, height: 40 }],
+      [b, { left: 150, top: 0, width: 150, height: 40 }],
+      [c, { left: 300, top: 0, width: 150, height: 40 }]
+    ]);
+    const envAt = (under: Element): HitEnv => ({ elementFromPoint: () => under, rectOf: (e) => rects.get(e) ?? { left: 0, top: 0 } });
+    const h = hitTest(320, 20, new Set(), envAt(next));
+    expect(h.tabBoxes).toEqual([
+      { id: 'a', left: 0, top: 0, width: 150, height: 40 },
+      { id: 'b', left: 150, top: 0, width: 100, height: 40 }
+    ]);
+    // Inside the strip itself every box counts, as before.
+    expect(hitTest(100, 20, new Set(), envAt(bar)).tabBoxes?.map((x) => x.id)).toEqual(['a', 'b', 'c']);
+  });
+
   it('reports the scrollable panel holding the container', () => {
     const root = el({ 'data-container-id': 'c1' });
     const body = el({ 'data-drag-scroll': '' }, root);

@@ -119,6 +119,67 @@ test.describe('one-row tab bar', () => {
     const [sw, iw] = await page.evaluate(() => [document.documentElement.scrollWidth, window.innerWidth]);
     expect(sw).toBeLessThanOrEqual(iw);
   });
+  test('drag a tab past the visible part of the row', async ({ page, context }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    const many = await seed(page, context, 60);
+    const dashId = made.at(-1)!;
+    await page.goto(many);
+    await expect(tab(page, 1)).toBeVisible();
+    await page.locator('[aria-label="Enter Edit Mode"]').click();
+    await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
+    const strip = page.locator('[data-drag-tabbar]');
+    await expect(strip).toHaveCount(1);
+    const atEnd = () => strip.evaluate((el) => el.scrollLeft + el.clientWidth >= el.scrollWidth - 1);
+    expect(await atEnd()).toBe(false);
+
+    // Grab Tab 2 and travel, in small steps as a person does, to 20 px inside the rail's right end.
+    const from = (await tab(page, 2).boundingBox())!;
+    const r = (await rail(page).boundingBox())!;
+    const x0 = from.x + from.width / 2;
+    const y = from.y + from.height / 2;
+    const x1 = r.x + r.width - 20;
+    await page.mouse.move(x0, y);
+    await page.mouse.down();
+    for (let i = 1; i <= 20; i++) {
+      await page.mouse.move(x0 + ((x1 - x0) * i) / 20, y);
+      await page.waitForTimeout(16);
+    }
+    // Held there, the row scrolls on by itself until its end: Tab 60 comes into view. 20 px inside
+    // the end scrolls 12 px a frame; ~5000 px of hidden tabs take about 8-9 s, so allow 15 s.
+    await expect.poll(atEnd, { timeout: 15_000 }).toBe(true);
+    await expect(tab(page, 60)).toBeInViewport({ ratio: 1 });
+    // Edge-scrolling never switched the open tab.
+    await expect(tab(page, 1)).toHaveAttribute('aria-selected', 'true');
+
+    const to = (await tab(page, 60).boundingBox())!;
+    for (let i = 1; i <= 10; i++) {
+      await page.mouse.move(x1 + (to.x + to.width / 2 - x1) * (i / 10), y);
+      await page.waitForTimeout(16);
+    }
+    await expect(page.locator('.drag-layer .reason')).toHaveCount(0);
+    await page.mouse.up();
+
+    const save = page.getByRole('toolbar', { name: 'Editing' }).getByRole('button', { name: /Save/ });
+    await expect(save).toBeEnabled();
+    const saved = page.waitForResponse((res) => res.request().method() === 'PUT' && /\/api\/dashboards\//.test(res.url()));
+    await save.click();
+    const res = await saved;
+    expect(res.status(), await res.text()).toBe(200);
+
+    const cfg = await (await page.request.get('/api/config')).json();
+    const d = cfg.dashboards.find((x: { id: string }) => x.id === dashId);
+    // The saved tab order is the array's order.
+    const names: string[] = d.tabs.map((t: { name: string }) => t.name);
+    const at = names.indexOf('Tab 2');
+    expect([58, 59]).toContain(at);
+    expect(Math.abs(at - names.indexOf('Tab 60'))).toBe(1);
+    // Every other tab keeps its order.
+    const others = Array.from({ length: 60 }, (_, i) => `Tab ${i + 1}`).filter((n) => n !== 'Tab 2');
+    expect(names.filter((n) => n !== 'Tab 2')).toEqual(others);
+    expect(errors).toEqual([]);
+  });
+
   test('the open tab stands out (style D)', async ({ page, context }) => {
     const plain = await seed(page, context, 3);
     await page.goto(plain);

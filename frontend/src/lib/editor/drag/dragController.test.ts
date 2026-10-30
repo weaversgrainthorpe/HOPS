@@ -19,7 +19,8 @@ import { tick } from 'svelte';
 import TabCanvas from '$lib/components/layout/TabCanvas.svelte';
 import DragLayer from './DragLayer.svelte';
 import {
-  drag, dragSource, resizeSource, tabSource, resolveDrop, setDragEnv, resetDragForTests, setActiveTab, switchTabWithinDrag, type DragState
+  drag, dragSource, resizeSource, tabSource, resolveDrop, setDragEnv, resetDragForTests, setActiveTab, switchTabWithinDrag, railEdgeStep,
+  type DragState
 } from './dragController';
 import * as api from '$lib/utils/api';
 import { save } from '$lib/stores/editSession';
@@ -604,5 +605,93 @@ describe('the drag refusal reason is announced', () => {
     await tick();
     expect(live()!.textContent!.trim()).toBe('');
     drop(350, 60);
+  });
+});
+
+describe('the tab rail scrolls sideways during a drag', () => {
+  const RAIL = { left: 0, top: 0, width: 500, height: 40 };
+  /** A rail whose strip shows 500 of 3000 px, and a stub that puts the pointer over a tab in it. */
+  function railEnv(scrollLeft: number) {
+    const strip = document.createElement('div');
+    strip.setAttribute('data-drag-tabbar', '');
+    const rail = document.createElement('div');
+    rail.setAttribute('data-drag-tabrail', '');
+    rail.appendChild(strip);
+    document.body.appendChild(rail);
+    const scrollElByX = vi.fn();
+    setDragEnv({
+      hitTest: (x) => ({
+        container: null, dx: 0, dy: 0, tabId: 't2', tabRect: { left: x - 20, top: 0, width: 80, height: 40 }, tabRail: rail
+      }),
+      raf: (cb) => {
+        frames.push(cb);
+        return frames.length;
+      },
+      cancelRaf: () => {
+        frames = [];
+      },
+      measure: (e) => (e === rail ? RAIL : sourceRect),
+      viewport: () => ({ width: 2000, height: 2000 }),
+      scrollBy: () => {},
+      scrollElByX,
+      scrollMetrics: () => ({ scrollLeft, clientWidth: 500, scrollWidth: 3000 })
+    });
+    return { strip, scrollElByX };
+  }
+
+  it('railEdgeStep', () => {
+    const m = (scrollLeft: number) => ({ scrollLeft, clientWidth: 500, scrollWidth: 3000 });
+    const left = railEdgeStep(10, RAIL, m(500));
+    expect(left).toBeLessThan(0);
+    expect(left).toBeGreaterThanOrEqual(-20);
+    expect(railEdgeStep(10, RAIL, m(0))).toBe(0); // already at the start
+    expect(railEdgeStep(250, RAIL, m(500))).toBe(0); // mid-rail
+    expect(railEdgeStep(495, RAIL, m(500))).toBeGreaterThan(0);
+    expect(railEdgeStep(495, RAIL, m(2500))).toBe(0); // already at the end
+    expect(railEdgeStep(495, RAIL, { scrollLeft: 0, clientWidth: 500, scrollWidth: 500 })).toBe(0); // no overflow
+  });
+
+  it('the rail edge-scrolls during a drag', () => {
+    const { strip, scrollElByX } = railEnv(500);
+    setActiveTab('t1');
+    const el = document.createElement('button');
+    document.body.appendChild(el);
+    const t = tabSource(el, { tabId: 't1', enabled: true });
+    startMouseDrag(el, 100, 20);
+    moveTo(490, 20);
+    flush();
+    expect(get(drag)?.tab).toBe('t1');
+    expect(scrollElByX).toHaveBeenCalled();
+    const [onEl, dx] = scrollElByX.mock.calls.at(-1)!;
+    expect(onEl).toBe(strip);
+    expect(dx).toBeGreaterThan(0);
+    // Held still, it keeps scrolling (the next frame is already asked for).
+    const n = scrollElByX.mock.calls.length;
+    flush();
+    expect(scrollElByX.mock.calls.length).toBeGreaterThan(n);
+    t.destroy();
+  });
+
+  it('no tab dwell while the rail edge-scrolls; the dwell works there once it is at its end', () => {
+    setActiveTab('t1');
+    const { scrollElByX } = railEnv(500);
+    const { el } = source('a');
+    startMouseDrag(el, 100, 20);
+    moveTo(490, 20);
+    flush();
+    expect(scrollElByX).toHaveBeenCalled();
+    expect(get(drag)?.dwell).toBeUndefined();
+    drop(490, 20);
+    // At the end the strip can't scroll right: holding over the tab there opens it.
+    resetDragForTests();
+    env();
+    setActiveTab('t1');
+    const { scrollElByX: still } = railEnv(2500);
+    const { el: el2 } = source('b');
+    startMouseDrag(el2, 100, 20);
+    moveTo(490, 20);
+    flush();
+    expect(still).not.toHaveBeenCalled();
+    expect(get(drag)?.dwell?.key).toBe('tab:t2');
   });
 });
