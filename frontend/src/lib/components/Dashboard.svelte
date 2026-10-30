@@ -468,7 +468,7 @@
                   {/if}
                 </span>
               {/if}
-              <span class="tab-name">{tab.name}</span>
+              <span class="tab-name" data-text={tab.name}>{tab.name}</span>
             </div>
             {#if editing}
               <!-- The shared edit handle, inside the tab's box: a drop on it counts as the tab. -->
@@ -728,14 +728,23 @@
     opacity: 1;
   }
 
+  /* The open tab's outline: the accent lightened (dark themes); darkened towards the text colour on
+     light themes, where lightening would vanish against the page (>= 3:1). */
+  .tab {
+    --tab-outline: color-mix(in srgb, var(--accent-solid) 70%, white);
+  }
+  :global(:root[data-theme='light']) .tab {
+    --tab-outline: color-mix(in srgb, var(--accent-solid) 75%, var(--text-primary));
+  }
+
   .tab.active {
     color: var(--text-primary);
     font-weight: 700;
-    border-color: color-mix(in srgb, var(--accent) 70%, white);
+    border-color: var(--tab-outline);
     border-width: 2px;
     border-bottom: 2px solid var(--bg-primary);
     margin-bottom: -1px;
-    box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 55%, transparent);
+    box-shadow: 0 0 12px color-mix(in srgb, var(--accent-solid) 55%, transparent);
     z-index: 2;
   }
 
@@ -778,6 +787,17 @@
 
   .tab-name {
     display: block;
+  }
+
+  /* The open tab is bold, which is wider. An invisible bold copy of the name reserves that width in
+     every tab, so opening a tab never changes the row's width (no arrows appearing or tabs shifting). */
+  .tab-name::after {
+    content: attr(data-text);
+    display: block;
+    height: 0;
+    overflow: hidden;
+    visibility: hidden;
+    font-weight: 700;
   }
 
   .tab-icon-img {

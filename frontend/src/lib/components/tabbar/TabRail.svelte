@@ -57,8 +57,7 @@
       if (!ro) return;
       ro.disconnect();
       ro.observe(s);
-      if (s.firstElementChild) ro.observe(s.firstElementChild);
-      if (s.lastElementChild) ro.observe(s.lastElementChild);
+      for (const c of s.children) ro.observe(c);
     };
     // Tabs added, removed or reordered change the content width without resizing the strip.
     const mo = new MutationObserver(() => {
@@ -136,6 +135,8 @@
     scrollbar-width: none;
     padding-top: 4px;
     margin-top: -4px;
+    /* Tab widths are fractional but the scroll range is whole pixels: 1px of slack keeps the last tab fully reachable. */
+    padding-right: 1px;
     overscroll-behavior-x: contain;
   }
   .tab-rail :global(.tabs)::-webkit-scrollbar {
