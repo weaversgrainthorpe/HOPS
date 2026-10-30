@@ -160,7 +160,7 @@
     /* ----- Screenshots grid ----- */
     .shots { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); gap: 1.2rem; }
     .shot { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; }
-    .shot img { width: 100%; display: block; }
+    .shot img { width: 100%; display: block; aspect-ratio: 16 / 10; object-fit: cover; object-position: top; }
     .shot .shot-caption { padding: 0.9rem 1.1rem; }
     .shot .shot-caption b { display: block; margin-bottom: 0.2rem; }
     .shot .shot-caption span { color: var(--text-muted); font-size: 0.92rem; }
