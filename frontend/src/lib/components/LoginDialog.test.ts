@@ -144,7 +144,7 @@ describe('LoginDialog', () => {
 		const forgot = screen.getByText('Forgot password?');
 		const text = (forgot.closest('details')?.textContent ?? '').replace(/\s+/g, ' ');
 		expect(text).toContain(
-			'On the computer that runs HOPS, run the HOPS program with reset-password — for example sudo /opt/hops/hops reset-password on Linux, docker exec hops ./hops reset-password in Docker, or hops-windows-amd64.exe reset-password from the HOPS folder on Windows (as Administrator). It finds your data, prints a temporary password and signs out every browser; sign in with it and choose a new password.'
+			'On the computer that runs HOPS, run the HOPS program with reset-password — for example sudo /opt/hops/hops reset-password on Linux, docker exec hops ./hops reset-password in Docker, or .\\hops-windows-amd64.exe reset-password from the HOPS folder on Windows (as Administrator). It finds your data, prints a temporary password and signs out every browser; sign in with it and choose a new password.'
 		);
 		expect(text).not.toContain('--data');
 	});

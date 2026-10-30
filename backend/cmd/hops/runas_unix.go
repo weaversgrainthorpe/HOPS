@@ -12,27 +12,42 @@ import (
 // defaultAccountOps are the real user lookups and switch for Linux and macOS.
 func defaultAccountOps() accountOps {
 	return accountOps{
-		euid: os.Geteuid,
-		owner: func(path string) (int, int, bool) {
-			st, err := os.Stat(path)
-			if err != nil {
-				return 0, 0, false
-			}
-			sys, ok := st.Sys().(*syscall.Stat_t)
-			if !ok {
-				return 0, 0, false
-			}
-			return int(sys.Uid), int(sys.Gid), true
-		},
-		userName: func(uid int) string {
-			if u, err := user.LookupId(strconv.Itoa(uid)); err == nil && u.Username != "" {
-				return u.Username
-			}
-			return ""
-		},
-		switchTo: switchUser,
-		writable: func(path string) bool { return syscall.Access(path, 2) == nil }, // 2 = W_OK
+		euid:       os.Geteuid,
+		stat:       statFile,
+		lookupUser: lookupUser,
+		switchTo:   switchUser,
+		writable:   func(path string) bool { return syscall.Access(path, 2) == nil }, // 2 = W_OK
 	}
+}
+
+// statFile is os.Stat (follow) or os.Lstat with the owner and identity.
+func statFile(path string, follow bool) (fileInfo, error) {
+	st, err := os.Lstat(path)
+	if follow {
+		st, err = os.Stat(path)
+	}
+	if err != nil {
+		return fileInfo{}, err
+	}
+	fi := fileInfo{symlink: st.Mode()&os.ModeSymlink != 0, regular: st.Mode().IsRegular()}
+	if sys, ok := st.Sys().(*syscall.Stat_t); ok {
+		fi.uid, fi.gid = int(sys.Uid), int(sys.Gid)
+		fi.dev, fi.ino = uint64(sys.Dev), uint64(sys.Ino) // #nosec G115 -- device numbers are not negative
+	}
+	return fi, nil
+}
+
+// lookupUser is the account's name and primary group.
+func lookupUser(uid int) (string, int, error) {
+	u, err := user.LookupId(strconv.Itoa(uid))
+	if err != nil {
+		return "", 0, err
+	}
+	gid, err := strconv.Atoi(u.Gid)
+	if err != nil {
+		return "", 0, err
+	}
+	return u.Username, gid, nil
 }
 
 // switchUser makes this process run as uid: its groups, then gid, then uid

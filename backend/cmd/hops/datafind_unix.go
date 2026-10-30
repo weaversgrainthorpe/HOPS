@@ -24,7 +24,14 @@ func defaultDataSearch() dataSearch {
 	switch runtime.GOOS {
 	case "linux":
 		s.procDir = "/proc"
-		s.unitDirs = []string{"/etc/systemd/system", "/lib/systemd/system", "/usr/lib/systemd/system"}
+		s.unitDirs = []string{"/etc/systemd/system", "/run/systemd/system", "/lib/systemd/system", "/usr/lib/systemd/system"}
+		if path, err := exec.LookPath("systemctl"); err == nil {
+			s.systemctl = func(args ...string) ([]byte, error) {
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				return exec.CommandContext(ctx, path, args...).Output() // #nosec G204 -- fixed arguments and unit names found on disk
+			}
+		}
 	case "darwin":
 		s.ps = func() ([]byte, error) {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

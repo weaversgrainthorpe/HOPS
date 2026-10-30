@@ -412,10 +412,12 @@ To reset a forgotten admin password, run the program with
 `sudo /opt/hops/hops reset-password`, or
 `docker exec hops ./hops reset-password`). It finds the data folder
 itself: next to the program, the `--data` of a running HOPS (Linux and
-macOS), a systemd unit or NSSM service that runs HOPS, then `/var/lib/hops`
-and `/app/data`. If it finds exactly one, it prints `Data folder:` and the
-folder, then a temporary password, and signs out every browser. If it
-finds several or none it changes nothing and lists them, or where it
+macOS), a systemd unit (with any `systemctl edit` override) or NSSM
+service that runs HOPS, then `/var/lib/hops` and `/app/data`. If it finds
+exactly one, it prints `Data folder:`, the folder and how it found it, then
+a temporary password, and signs out every browser. If it finds several or
+none, or there is a folder it isn't allowed to look inside (run it with
+`sudo` then), it changes nothing and lists what it found and where it
 looked; then give the folder with `hops reset-password --data <folder>`.
 Run as root on Linux or macOS, it makes the change as the user that owns
 `hops.db`.

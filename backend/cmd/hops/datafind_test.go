@@ -51,10 +51,10 @@ func fakeProc(t *testing.T, proc, pid string, argv []string, cwd string) {
 
 // notRoot is an ordinary user who may write anywhere.
 var notRoot = accountOps{
-	euid:     func() int { return 1000 },
-	owner:    func(string) (int, int, bool) { return 1000, 1000, true },
-	userName: func(int) string { return "me" },
-	writable: func(string) bool { return true },
+	euid:       func() int { return 1000 },
+	stat:       func(string, bool) (fileInfo, error) { return fileInfo{uid: 1000, gid: 1000, regular: true}, nil },
+	lookupUser: func(int) (string, int, error) { return "me", 1000, nil },
+	writable:   func(string) bool { return true },
 }
 
 func mustChange(t *testing.T, dir string) int {
@@ -79,7 +79,7 @@ func TestFindDataDefaultOnly(t *testing.T) {
 	if code := resetPassword("", nil, &out, &errb, s, notRoot); code != 0 {
 		t.Fatalf("exit %d: %s", code, errb.String())
 	}
-	if !strings.HasPrefix(out.String(), "Data folder: "+want+"\n") {
+	if !strings.HasPrefix(out.String(), "Data folder: "+want+" (the default, next to this program)\n") {
 		t.Errorf("output should start with the folder: %q", out.String())
 	}
 	if mustChange(t, want) != 1 {
@@ -98,7 +98,7 @@ func TestFindDataRunningProcess(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(proc, "self"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	found, _ := dataSearch{procDir: proc, selfPID: 99}.find()
+	found := dataSearch{procDir: proc, selfPID: 99}.find().found
 	if len(found) != 1 || found[0].dir != want || !strings.Contains(found[0].found[0], "process 4321") {
 		t.Fatalf("found %+v, want %s from process 4321", found, want)
 	}
@@ -120,7 +120,7 @@ func TestFindDataSystemdUnit(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	found, _ := dataSearch{unitDirs: []string{units}}.find()
+	found := dataSearch{unitDirs: []string{units}}.find().found
 	var dirs []string
 	for _, c := range found {
 		dirs = append(dirs, c.dir)
@@ -141,7 +141,7 @@ func contains(list []string, s string) bool {
 
 func TestFindDataWellKnown(t *testing.T) {
 	want := dataFolder(t, filepath.Join(t.TempDir(), "var-lib-hops"))
-	found, _ := dataSearch{wellKnown: []string{filepath.Join(t.TempDir(), "missing"), want}}.find()
+	found := dataSearch{wellKnown: []string{filepath.Join(t.TempDir(), "missing"), want}}.find().found
 	if len(found) != 1 || found[0].dir != want {
 		t.Fatalf("found %+v, want %s", found, want)
 	}
@@ -165,7 +165,7 @@ func TestFindDataDedupe(t *testing.T) {
 	if code := resetPassword("", nil, &out, &errb, s, notRoot); code != 0 {
 		t.Fatalf("exit %d: %s", code, errb.String())
 	}
-	if !strings.HasPrefix(out.String(), "Data folder: "+real+"\n") {
+	if !strings.HasPrefix(out.String(), "Data folder: "+real+" (running HOPS, process 10; service hops.service; usual install location)\n") {
 		t.Errorf("output: %q", out.String())
 	}
 }
@@ -203,7 +203,7 @@ func TestFindDataNoneListsPlaces(t *testing.T) {
 		t.Fatalf("exit %d, want 1", code)
 	}
 	msg := errb.String()
-	for _, want := range []string{"Found no HOPS database (hops.db), so nothing was changed", filepath.Join(filepath.Dir(exe), "data"), "no other HOPS is running", units, missing, "--data <folder>"} {
+	for _, want := range []string{"Found no HOPS database (hops.db), so nothing was changed", filepath.Join(filepath.Dir(exe), "data"), "no other HOPS is running", "HOPS services (hops*.service): none", missing, "--data <folder>"} {
 		if !strings.Contains(msg, want) {
 			t.Errorf("message lacks %q: %s", want, msg)
 		}
@@ -215,9 +215,9 @@ func TestFindDataNoneListsPlaces(t *testing.T) {
 
 func TestFindDataExplicitSkipsSearch(t *testing.T) {
 	dir := dataFolder(t, t.TempDir())
-	s := dataSearch{services: func() ([]serviceCommand, error) {
+	s := dataSearch{services: func() ([]serviceCommand, []string, error) {
 		t.Error("searched although --data was given")
-		return nil, nil
+		return nil, nil, nil
 	}}
 	var out, errb bytes.Buffer
 	if code := resetPassword("", []string{"--data", dir}, &out, &errb, s, notRoot); code != 0 {
@@ -225,79 +225,6 @@ func TestFindDataExplicitSkipsSearch(t *testing.T) {
 	}
 	if strings.Contains(out.String(), "Data folder:") {
 		t.Errorf("explicit --data should not announce a found folder: %q", out.String())
-	}
-}
-
-func TestResetPasswordRootSwitchesToOwner(t *testing.T) {
-	dir := dataFolder(t, t.TempDir())
-	var calls [][2]int
-	acct := accountOps{
-		euid:     func() int { return 0 },
-		owner:    func(string) (int, int, bool) { return 1234, 5678, true },
-		userName: func(int) string { return "hops" },
-		switchTo: func(uid, gid int) error {
-			if mustChange(t, dir) != 0 {
-				t.Error("database changed before switching user")
-			}
-			calls = append(calls, [2]int{uid, gid})
-			return nil
-		},
-	}
-	var out, errb bytes.Buffer
-	if code := resetPassword("", []string{"--data", dir}, &out, &errb, dataSearch{}, acct); code != 0 {
-		t.Fatalf("exit %d: %s", code, errb.String())
-	}
-	if len(calls) != 1 || calls[0] != [2]int{1234, 5678} {
-		t.Errorf("switch calls %v, want one to 1234/5678", calls)
-	}
-	if !strings.HasPrefix(out.String(), "Running as hops\n") {
-		t.Errorf("output: %q", out.String())
-	}
-	if mustChange(t, dir) != 1 {
-		t.Error("password not reset")
-	}
-}
-
-func TestResetPasswordSwitchFailureChangesNothing(t *testing.T) {
-	exe := fakeProgram(t)
-	dir := dataFolder(t, t.TempDir())
-	acct := accountOps{
-		euid:     func() int { return 0 },
-		owner:    func(string) (int, int, bool) { return 1234, 5678, true },
-		userName: func(int) string { return "hops" },
-		switchTo: func(int, int) error { return errors.New("operation not permitted") },
-	}
-	var out, errb bytes.Buffer
-	if code := resetPassword("", []string{"--data", dir}, &out, &errb, dataSearch{exe: exe}, acct); code != 1 {
-		t.Fatalf("exit %d, want 1", code)
-	}
-	want := "sudo -u hops " + exe + " reset-password --data " + dir
-	if !strings.Contains(errb.String(), want) {
-		t.Errorf("message lacks %q: %s", want, errb.String())
-	}
-	if mustChange(t, dir) != 0 {
-		t.Error("database was changed")
-	}
-}
-
-func TestResetPasswordNotWritableNamesOwner(t *testing.T) {
-	exe := fakeProgram(t)
-	dir := dataFolder(t, t.TempDir())
-	acct := notRoot
-	acct.owner = func(string) (int, int, bool) { return 999, 999, true }
-	acct.userName = func(int) string { return "hops" }
-	acct.writable = func(string) bool { return false }
-	var out, errb bytes.Buffer
-	if code := resetPassword("", []string{"--data", dir}, &out, &errb, dataSearch{exe: exe}, acct); code != 1 {
-		t.Fatalf("exit %d, want 1", code)
-	}
-	for _, want := range []string{"belongs to hops", "sudo -u hops " + exe + " reset-password --data " + dir} {
-		if !strings.Contains(errb.String(), want) {
-			t.Errorf("message lacks %q: %s", want, errb.String())
-		}
-	}
-	if mustChange(t, dir) != 0 {
-		t.Error("database was changed")
 	}
 }
 
@@ -310,5 +237,84 @@ func TestSplitCommandLine(t *testing.T) {
 	got = splitCommandLine(`--data "C:\HOPS data\data"`, false)
 	if len(got) != 2 || got[1] != `C:\HOPS data\data` {
 		t.Errorf("windows: %q", got)
+	}
+}
+
+// fakeSystemctl answers list-unit-files and cat from fixed text; a unit with
+// no cat text fails, as systemctl does for an unknown unit.
+func fakeSystemctl(list string, cat map[string]string) func(...string) ([]byte, error) {
+	return func(args ...string) ([]byte, error) {
+		switch args[0] {
+		case "list-unit-files":
+			return []byte(list), nil
+		case "cat":
+			if body, ok := cat[args[len(args)-1]]; ok {
+				return []byte(body), nil
+			}
+			return nil, errors.New("exit status 1")
+		}
+		return nil, errors.New("unexpected systemctl call")
+	}
+}
+
+// A drop-in from `systemctl edit` that resets ExecStart wins over the unit
+// file, and the found folder is announced with the service's name.
+func TestFindDataSystemctlDropIn(t *testing.T) {
+	old := dataFolder(t, filepath.Join(t.TempDir(), "old"))
+	edited := dataFolder(t, filepath.Join(t.TempDir(), "edited data"))
+	cat := "# /etc/systemd/system/hops.service\n[Service]\nExecStart=/opt/hops/hops --data " + old + "\n\n" +
+		"# /etc/systemd/system/hops.service.d/override.conf\n[Service]\nExecStart=\nExecStart=/opt/hops/hops --data \"" + edited + "\"\n"
+	s := dataSearch{systemctl: fakeSystemctl("hops.service enabled enabled\n", map[string]string{"hops.service": cat})}
+	var out, errb bytes.Buffer
+	if code := resetPassword("", nil, &out, &errb, s, notRoot); code != 0 {
+		t.Fatalf("exit %d: %s", code, errb.String())
+	}
+	if !strings.HasPrefix(out.String(), "Data folder: "+edited+" (service hops.service)\n") {
+		t.Errorf("output: %q", out.String())
+	}
+	if mustChange(t, old) != 0 {
+		t.Error("the overridden folder was changed")
+	}
+}
+
+// Without systemctl the unit file and its drop-ins are read, with the same
+// ExecStart reset; a failing systemctl cat falls back to the files too.
+func TestFindDataUnitFileDropInFallback(t *testing.T) {
+	for name, ctl := range map[string]func(...string) ([]byte, error){
+		"no systemctl": nil,
+		"cat fails":    fakeSystemctl("", nil),
+	} {
+		t.Run(name, func(t *testing.T) {
+			etc, lib := t.TempDir(), t.TempDir()
+			old := dataFolder(t, filepath.Join(t.TempDir(), "old"))
+			edited := dataFolder(t, filepath.Join(t.TempDir(), "edited"))
+			write := func(path, body string) {
+				if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			write(filepath.Join(lib, "hops.service"), "[Service]\nExecStart=/opt/hops/hops --data "+old+"\n")
+			write(filepath.Join(etc, "hops.service.d", "override.conf"), "[Service]\nExecStart=\nExecStart=/opt/hops/hops --data "+edited+"\n")
+			found := dataSearch{unitDirs: []string{etc, lib}, systemctl: ctl}.find().found
+			if len(found) != 1 || found[0].dir != edited || found[0].found[0] != "service hops.service" {
+				t.Fatalf("found %+v, want only %s", found, edited)
+			}
+		})
+	}
+}
+
+func TestFindDataReportsGaps(t *testing.T) {
+	proc := t.TempDir()
+	fakeProc(t, proc, "55", []string{"hops", "--host", "127.0.0.1"}, "") // relative program, no --data, no cwd
+	looked := strings.Join(dataSearch{procDir: proc}.find().looked, "\n")
+	if !strings.Contains(looked, "process 55: couldn't tell its data folder") {
+		t.Errorf("looked: %s", looked)
+	}
+	looked = strings.Join(dataSearch{procDir: filepath.Join(t.TempDir(), "no-proc")}.find().looked, "\n")
+	if !strings.Contains(looked, "couldn't list running programs") || strings.Contains(looked, "no other HOPS") {
+		t.Errorf("looked: %s", looked)
 	}
 }

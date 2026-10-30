@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -30,11 +31,18 @@ func usage() {
 // in for root. euid is -1 where users are not switched (Windows); a nil
 // writable skips the check.
 type accountOps struct {
-	euid     func() int
-	owner    func(path string) (uid, gid int, ok bool)
-	userName func(uid int) string
-	switchTo func(uid, gid int) error
-	writable func(path string) bool
+	euid       func() int
+	stat       func(path string, follow bool) (fileInfo, error)
+	lookupUser func(uid int) (name string, gid int, err error)
+	switchTo   func(uid, gid int) error
+	writable   func(path string) bool
+}
+
+// fileInfo is a file's owner and identity.
+type fileInfo struct {
+	uid, gid         int
+	dev, ino         uint64
+	symlink, regular bool
 }
 
 // runResetPassword is `hops reset-password`: args are what follows the
@@ -46,17 +54,17 @@ func runResetPassword(dataDir string, args []string, stdout, stderr io.Writer) i
 }
 
 func resetPassword(dataDir string, args []string, stdout, stderr io.Writer, search dataSearch, acct accountOps) int {
-	fs := flag.NewFlagSet("hops "+resetPasswordCommand, flag.ContinueOnError)
-	fs.SetOutput(stderr)
-	data := fs.String("data", "", "Data folder holding hops.db (default: found automatically)")
-	if err := fs.Parse(args); err != nil {
+	flags := flag.NewFlagSet("hops "+resetPasswordCommand, flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	data := flags.String("data", "", "Data folder holding hops.db (default: found automatically)")
+	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
 		}
 		return 2
 	}
-	if fs.NArg() > 0 {
-		fmt.Fprintf(stderr, "unexpected argument %q\nusage: hops %s [--data <folder>]\n", fs.Arg(0), resetPasswordCommand)
+	if flags.NArg() > 0 {
+		fmt.Fprintf(stderr, "unexpected argument %q\nusage: hops %s [--data <folder>]\n", flags.Arg(0), resetPasswordCommand)
 		return 2
 	}
 	if *data != "" {
@@ -71,22 +79,37 @@ func resetPassword(dataDir string, args []string, stdout, stderr io.Writer, sear
 	}
 
 	if dataDir == "" {
-		found, looked := search.find()
-		switch len(found) {
-		case 0:
-			fmt.Fprintf(stderr, "Found no HOPS database (hops.db), so nothing was changed. Looked at:\n")
-			for _, l := range looked {
+		res := search.find()
+		switch {
+		case len(res.found) == 0 || (res.blocked > 0 && len(res.found) == 1):
+			if len(res.found) == 0 && res.blocked == 0 {
+				fmt.Fprintf(stderr, "Found no HOPS database (hops.db), so nothing was changed. Looked at:\n")
+			} else {
+				fmt.Fprintf(stderr, "Could not look inside %d folder(s), so it cannot tell where your data is and nothing was changed. Run it with sudo. Looked at:\n", res.blocked)
+			}
+			for _, c := range res.found {
+				fmt.Fprintf(stderr, "  %s (%s): has hops.db\n", c.dir, strings.Join(c.found, "; "))
+			}
+			for _, l := range res.looked {
 				fmt.Fprintf(stderr, "  %s\n", l)
 			}
 			fmt.Fprintf(stderr, "If your data is in another folder, run it again with --data <folder>:\n  %s %s --data <folder>\n", shellQuote(program), resetPasswordCommand)
 			return 1
-		case 1:
-			dataDir = found[0].dir
-			fmt.Fprintf(stdout, "Data folder: %s\n", dataDir)
+		case len(res.found) == 1:
+			dataDir = res.found[0].dir
+			fmt.Fprintf(stdout, "Data folder: %s (%s)\n", dataDir, strings.Join(res.found[0].found, "; "))
 		default:
-			fmt.Fprintf(stderr, "Found HOPS data in %d folders, so nothing was changed:\n", len(found))
-			for _, c := range found {
+			fmt.Fprintf(stderr, "Found HOPS data in %d folders, so nothing was changed:\n", len(res.found))
+			for _, c := range res.found {
 				fmt.Fprintf(stderr, "  %s (%s)\n", c.dir, strings.Join(c.found, "; "))
+			}
+			if res.blocked > 0 {
+				fmt.Fprintf(stderr, "and could not look inside %d more (run it with sudo to see them):\n", res.blocked)
+				for _, l := range res.looked {
+					if strings.Contains(l, "cannot look inside") {
+						fmt.Fprintf(stderr, "  %s\n", l)
+					}
+				}
 			}
 			fmt.Fprintf(stderr, "Choose one and run it again with that folder:\n  %s %s --data <folder>\n", shellQuote(program), resetPasswordCommand)
 			return 1
@@ -94,12 +117,32 @@ func resetPassword(dataDir string, args []string, stdout, stderr io.Writer, sear
 	}
 
 	dbPath := filepath.Join(dataDir, "hops.db")
-	if st, err := os.Stat(dbPath); err != nil || !st.Mode().IsRegular() {
+	if st, err := os.Stat(dbPath); errors.Is(err, fs.ErrNotExist) || (err == nil && !st.Mode().IsRegular()) {
 		fmt.Fprintf(stderr, "no HOPS database (hops.db) in %s, so nothing was changed.\nIf your data is in another folder, run it again with --data <folder>.\n", dataDir)
+		return 1
+	} else if err != nil {
+		fmt.Fprintf(stderr, "cannot look inside %s (%s), so nothing was changed.\nRun it with sudo:\n  sudo %s %s --data %s\n", dataDir, errReason(err), shellQuote(program), resetPasswordCommand, shellQuote(dataDir))
 		return 1
 	}
 
-	if !runAsOwner(dbPath, dataDir, program, acct, stdout, stderr) {
+	first, verify, ok := runAsOwner(dbPath, dataDir, program, acct, stdout, stderr)
+	if !ok {
+		return 1
+	}
+	// As root, the file opened must be the one checked: not swapped for a
+	// link or another file in between.
+	same := func() bool {
+		if !verify {
+			return true
+		}
+		fi, err := acct.stat(dbPath, false)
+		if err == nil && !fi.symlink && fi.dev == first.dev && fi.ino == first.ino && fi.uid == first.uid {
+			return true
+		}
+		fmt.Fprintf(stderr, "%s changed while it was being checked, so nothing was changed.\n", dbPath)
+		return false
+	}
+	if !same() {
 		return 1
 	}
 
@@ -124,6 +167,9 @@ func resetPassword(dataDir string, args []string, stdout, stderr io.Writer, sear
 		fmt.Fprintf(stderr, "cannot open %s: %v\n", dbPath, err)
 		return 1
 	}
+	if !same() {
+		return 1
+	}
 
 	username, temp, users, err := auth.ResetPassword(db)
 	if err != nil {
@@ -146,45 +192,77 @@ func resetPassword(dataDir string, args []string, stdout, stderr io.Writer, sear
 // runAsOwner makes sure the database can be changed by this process and
 // that any file SQLite creates beside it belongs to its owner: as root it
 // becomes the database's owner; as anyone else it checks it may write there.
-// When it cannot, it says which command to run instead and returns false,
-// having changed nothing.
-func runAsOwner(dbPath, dataDir, program string, acct accountOps, stdout, stderr io.Writer) bool {
-	if acct.euid == nil || acct.owner == nil {
-		return true
+// When it cannot, it says why (and which command to run instead) and returns
+// ok=false, having changed nothing. As root it returns the file it checked
+// and verify=true, so the caller can make sure it opens that same file.
+func runAsOwner(dbPath, dataDir, program string, acct accountOps, stdout, stderr io.Writer) (first fileInfo, verify, ok bool) {
+	if acct.euid == nil || acct.stat == nil {
+		return fileInfo{}, false, true
 	}
 	euid := acct.euid()
 	if euid < 0 {
-		return true
+		return fileInfo{}, false, true
 	}
-	uid, gid, ok := acct.owner(dbPath)
-	if !ok {
-		return true
+	fi, err := acct.stat(dbPath, euid != 0)
+	if err != nil {
+		fmt.Fprintf(stderr, "cannot check %s (%v), so nothing was changed.\n", dbPath, err)
+		return fileInfo{}, false, false
 	}
-	name := ""
-	if acct.userName != nil {
-		name = acct.userName(uid)
+	name, gid, lookupErr := "", 0, error(nil)
+	if acct.lookupUser != nil {
+		name, gid, lookupErr = acct.lookupUser(fi.uid)
+	} else {
+		lookupErr = errors.New("no user lookup")
 	}
 	sudoUser := name
-	if sudoUser == "" {
-		name = fmt.Sprintf("user id %d", uid)
-		sudoUser = fmt.Sprintf("#%d", uid)
+	if lookupErr != nil || name == "" {
+		name = fmt.Sprintf("user id %d", fi.uid)
+		sudoUser = fmt.Sprintf("#%d", fi.uid)
 	}
 	command := fmt.Sprintf("sudo -u %s %s %s --data %s", shellQuote(sudoUser), shellQuote(program), resetPasswordCommand, shellQuote(dataDir))
 
-	if euid == 0 {
-		if uid == 0 {
-			return true
+	if euid != 0 {
+		if acct.writable == nil || (acct.writable(dbPath) && acct.writable(dataDir)) {
+			return fileInfo{}, false, true
 		}
-		if err := acct.switchTo(uid, gid); err != nil {
-			fmt.Fprintf(stderr, "%s belongs to %s, and could not switch to that user (%v), so nothing was changed.\nRun this instead:\n  %s\n", dbPath, name, err, command)
-			return false
+		fmt.Fprintf(stderr, "%s belongs to %s, and this user cannot change it, so nothing was changed.\nRun this instead:\n  %s\n", dbPath, name, command)
+		return fileInfo{}, false, false
+	}
+
+	if fi.symlink {
+		fmt.Fprintf(stderr, "%s is a symbolic link, which is not followed when run as root, so nothing was changed.\nRun it with --data on the folder that really holds hops.db.\n", dbPath)
+		return fileInfo{}, false, false
+	}
+	if !fi.regular {
+		fmt.Fprintf(stderr, "%s is not a regular file, so nothing was changed.\n", dbPath)
+		return fileInfo{}, false, false
+	}
+	if fi.uid == 0 {
+		di, err := acct.stat(dataDir, true)
+		if err != nil {
+			fmt.Fprintf(stderr, "cannot check %s (%v), so nothing was changed.\n", dataDir, err)
+			return fileInfo{}, false, false
 		}
-		fmt.Fprintf(stdout, "Running as %s\n", name)
-		return true
+		if di.uid != 0 {
+			owner := fmt.Sprintf("user id %d", di.uid)
+			if acct.lookupUser != nil {
+				if n, _, err := acct.lookupUser(di.uid); err == nil && n != "" {
+					owner = n
+				}
+			}
+			fmt.Fprintf(stderr, "%s belongs to root, but its folder %s belongs to %s, so nothing was changed.\nHOPS normally runs as the folder's owner; give hops.db back to that user (for example sudo chown %s %s) and run it again.\n", dbPath, dataDir, owner, shellQuote(owner), shellQuote(dbPath))
+			return fileInfo{}, false, false
+		}
+		return fi, true, true
 	}
-	if acct.writable == nil || (acct.writable(dbPath) && acct.writable(dataDir)) {
-		return true
+	if lookupErr != nil {
+		fmt.Fprintf(stderr, "%s belongs to %s, and that account could not be looked up (%v), so nothing was changed.\nRun this instead:\n  %s\n", dbPath, name, lookupErr, command)
+		return fileInfo{}, false, false
 	}
-	fmt.Fprintf(stderr, "%s belongs to %s, and this user cannot change it, so nothing was changed.\nRun this instead:\n  %s\n", dbPath, name, command)
-	return false
+	if err := acct.switchTo(fi.uid, gid); err != nil {
+		fmt.Fprintf(stderr, "%s belongs to %s, and could not switch to that user (%v), so nothing was changed.\nRun this instead:\n  %s\n", dbPath, name, err, command)
+		return fileInfo{}, false, false
+	}
+	fmt.Fprintf(stdout, "Running as %s\n", name)
+	return fi, true, true
 }

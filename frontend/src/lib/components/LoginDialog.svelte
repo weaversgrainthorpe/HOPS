@@ -106,7 +106,7 @@
       On the computer that runs HOPS, run the HOPS program with <code>reset-password</code> — for
       example <code>sudo /opt/hops/hops reset-password</code> on Linux,
       <code>docker exec hops ./hops reset-password</code> in Docker, or
-      <code>hops-windows-amd64.exe reset-password</code> from the HOPS folder on Windows (as
+      <code>.\hops-windows-amd64.exe reset-password</code> from the HOPS folder on Windows (as
       Administrator). It finds your data, prints a temporary password and signs out every browser;
       sign in with it and choose a new password.
     </p>

@@ -1254,7 +1254,7 @@ program with `reset-password`:
 | Linux install script, Raspberry Pi | `sudo /opt/hops/hops reset-password` |
 | Proxmox container | inside the container: `/opt/hops/hops reset-password`; or from the Proxmox host shell: `pct exec <id> -- /opt/hops/hops reset-password` |
 | Docker | `docker exec hops ./hops reset-password` (use your container's name if it isn't `hops`) |
-| Windows | `hops-windows-amd64.exe reset-password` in the HOPS folder, from an Administrator PowerShell or Command Prompt |
+| Windows | `.\hops-windows-amd64.exe reset-password` in the HOPS folder, from an Administrator PowerShell |
 | macOS, or a program you started yourself | the same program with `reset-password`, for example `./hops-darwin-arm64 reset-password` |
 
 It finds the data folder itself (next to the program, a running HOPS, a
@@ -1265,8 +1265,9 @@ database. Sign in with the temporary password and HOPS asks you to **Set a
 New Password**, as on first sign-in. HOPS can keep running while you do
 this.
 
-If it finds HOPS data in more than one folder, or in none, it changes
-nothing and lists what it found or where it looked; run it again with
+If it finds HOPS data in more than one folder, or in none, or can't look
+inside a folder (then run it with `sudo`), it changes nothing and lists
+what it found and where it looked; run it again with
 `--data <folder>` to say which folder. **About HOPS** (the ⓘ button, signed
 in) shows the data folder of the HOPS you are using. The sign-in dialog's
 **Forgot password?** link shows the same steps.
