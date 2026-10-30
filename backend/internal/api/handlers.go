@@ -1485,7 +1485,6 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 	var imported []configdoc.Obj
 	var sizeChanges []importedSizes   // tiles whose unknown size became Medium
 	var grownFolders []importedGrowth // folders stored below their minimum, enlarged (never silent)
-	var pinnedOff bool                // a v2 dashboard had tiles set Off (configdoc.NoticeV2StatusOff)
 	var skipped []string
 	for i, raw := range rawDashboards {
 		d, ok := raw.(configdoc.Obj)
@@ -1553,9 +1552,6 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 		imported = append(imported, v3)
-		if configdoc.HasTileSetOff(configdoc.Obj{"dashboards": []any{v3}}) {
-			pinnedOff = true
-		}
 		if len(sizes) > 0 {
 			sizeChanges = append(sizeChanges, importedSizes{dash: v3, changes: sizes})
 		}
@@ -1749,9 +1745,6 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 	}, func() {
 		// Committed: the one-time notice lists these tiles until dismissed.
 		r.sizeNotes.add(sizeItems...)
-		if pinnedOff {
-			r.armNotice(configdoc.NoticeV2StatusOff)
-		}
 	})
 }
 

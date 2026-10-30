@@ -34,43 +34,7 @@ func newTestChecker(t *testing.T, configJSON string) (*Checker, *sql.DB, *settin
 	if err != nil {
 		t.Fatalf("MigrateV2: %v", err)
 	}
-	keepExplicitOn(v2, v3)
 	return newTestCheckerDoc(t, v3)
-}
-
-// keepExplicitOn sets statusCheck.enabled back to true on every tile whose
-// v2 fixture said true. The fixtures describe v3 tile states (on, off, none,
-// inherit); the v2 conversion turns a ticked tile into "inherit", which would
-// make an explicitly-on tile indistinguishable from an inheriting one here.
-func keepExplicitOn(v2, v3 configdoc.Obj) {
-	on := map[string]bool{}
-	var find func(any)
-	find = func(v any) {
-		switch x := v.(type) {
-		case map[string]any:
-			if sc, ok := x["statusCheck"].(map[string]any); ok && sc["enabled"] == true {
-				if id, ok := x["id"].(string); ok {
-					on[id] = true
-				}
-			}
-			for _, c := range x {
-				find(c)
-			}
-		case []any:
-			for _, c := range x {
-				find(c)
-			}
-		}
-	}
-	find(map[string]any(v2))
-	configdoc.Walk(v3, func(_, _ configdoc.Obj, _ []configdoc.Obj, n configdoc.Obj) bool {
-		if id, _ := n["id"].(string); n["kind"] == "tile" && on[id] {
-			if sc, ok := n["statusCheck"].(configdoc.Obj); ok {
-				sc["enabled"] = true
-			}
-		}
-		return true
-	})
 }
 
 func newTestCheckerDoc(t *testing.T, doc configdoc.Obj) (*Checker, *sql.DB, *settings.Service) {
@@ -145,8 +109,7 @@ func configWith(base string) string {
 	]}]}]}]}`
 }
 
-// newTwoDash builds two dashboards (tiles a1, b1 explicitly inheriting the
-// status-check switch: enabled null) through MigrateV2 and then sets d2's
+// newTwoDash builds two dashboards (tiles a1, b1 both ticked, so On) through MigrateV2 and then sets d2's
 // per-dashboard overrides (MigrateV2 resets settings to all-null).
 func newTwoDash(t *testing.T, base, d2Settings string) (*Checker, *sql.DB, *settings.Service) {
 	t.Helper()
@@ -169,9 +132,9 @@ func newTwoDash(t *testing.T, base, d2Settings string) (*Checker, *sql.DB, *sett
 func twoDashConfig(base string) string {
 	return `{"dashboards":[
 	 {"id":"d1","name":"A","path":"/a","tabs":[{"id":"t1","groups":[{"id":"g1","entries":[
-	  {"id":"a1","url":"` + base + `/a1","statusCheck":{"enabled":null}}]}]}]},
+	  {"id":"a1","url":"` + base + `/a1","statusCheck":{"enabled":true}}]}]}]},
 	 {"id":"d2","name":"B","path":"/b","tabs":[{"id":"t2","groups":[{"id":"g2","entries":[
-	  {"id":"b1","url":"` + base + `/b1","statusCheck":{"enabled":null}}]}]}]}
+	  {"id":"b1","url":"` + base + `/b1","statusCheck":{"enabled":true}}]}]}]}
 	]}`
 }
 
@@ -193,41 +156,25 @@ func cachedIDs(t *testing.T, db *sql.DB) map[string]bool {
 	return out
 }
 
-// Layered status checks: a tile is probed iff its
-// effective setting (most specific level that sets it) is on. "on" is
-// explicitly on, "inh" inherits explicitly (enabled: null) the global (on),
-// "none" has no setting and so inherits it too, "off" is explicitly off; a
-// note tile is never probed, even when ticked.
-func TestCheckAllEntries_ProbesEffectivelyOnTilesOnly(t *testing.T) {
+// A tile is probed iff it is On and every gate above it is Enabled. "on" is
+// ticked; "off", "none" (no setting) and "inh" (enabled null) are Off; a note
+// tile is never probed, even when ticked.
+func TestCheckAllEntries_ProbesOnlyOnTiles(t *testing.T) {
 	h := newHitCounter(t)
-	var v2 configdoc.Obj
-	if err := json.Unmarshal([]byte(configWith(h.srv.URL)), &v2); err != nil {
-		t.Fatal(err)
-	}
-	doc, err := configdoc.MigrateV2(v2)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// The v2 conversion pins "none" Off (v2's behaviour); a v3 tile with no
-	// setting is what this test is about, so take the setting away again.
-	_, none, _ := configdoc.FindTile(doc, "none")
-	delete(none, "statusCheck")
-	c, db, _ := newTestCheckerDoc(t, doc)
+	c, db, _ := newTestChecker(t, configWith(h.srv.URL))
 
 	c.checkAllEntries()
 
-	for _, p := range []string{"/on", "/inh", "/none"} {
-		if got := h.count(p); got != 1 {
-			t.Errorf("tile %s is effectively on: want 1 request, got %d", p, got)
-		}
+	if got := h.count("/on"); got != 1 {
+		t.Errorf("tile /on is On: want 1 request, got %d", got)
 	}
-	for _, p := range []string{"/off", "/note"} {
+	for _, p := range []string{"/off", "/none", "/inh", "/note"} {
 		if got := h.count(p); got != 0 {
-			t.Errorf("tile %s is off or a note but was probed %d time(s)", p, got)
+			t.Errorf("tile %s is Off or a note but was probed %d time(s)", p, got)
 		}
 	}
-	if ids := cachedIDs(t, db); !ids["on"] || !ids["inh"] || !ids["none"] || len(ids) != 3 {
-		t.Errorf("status_cache should hold only the effectively-on tiles, got %v", ids)
+	if ids := cachedIDs(t, db); !ids["on"] || len(ids) != 1 {
+		t.Errorf("status_cache should hold only the On tile, got %v", ids)
 	}
 }
 
@@ -247,13 +194,12 @@ func TestCheckAllEntries_DropsCacheRowsForTilesNoLongerChecked(t *testing.T) {
 	}
 }
 
-// The global switch off turns off every tile that inherits it; a tile
-// explicitly on is more specific and still probed. Stale rows of tiles now
-// off are pruned.
-func TestCheckAllEntries_GlobalSwitchOffChecksOnlyExplicitlyOnTiles(t *testing.T) {
+// The global switch Disabled checks nothing, whatever the tiles say; stale
+// rows of every tile are pruned.
+func TestCheckAllEntries_GlobalDisabledChecksNothing(t *testing.T) {
 	h := newHitCounter(t)
 	c, db, svc := newTestChecker(t, configWith(h.srv.URL))
-	if _, err := db.Exec(`INSERT INTO status_cache (entry_id, status) VALUES ('inh','up')`); err != nil {
+	if _, err := db.Exec(`INSERT INTO status_cache (entry_id, status) VALUES ('on','up'), ('inh','up')`); err != nil {
 		t.Fatal(err)
 	}
 	if err := svc.Set(settings.KeyStatusChecksEnabled, "false"); err != nil {
@@ -262,60 +208,37 @@ func TestCheckAllEntries_GlobalSwitchOffChecksOnlyExplicitlyOnTiles(t *testing.T
 
 	c.checkAllEntries()
 
-	if got := h.count("/inh"); got != 0 {
-		t.Errorf("global checks off but inheriting tile was probed %d time(s)", got)
+	for _, p := range []string{"/on", "/inh", "/off", "/none"} {
+		if got := h.count(p); got != 0 {
+			t.Errorf("global checks Disabled but tile %s was probed %d time(s)", p, got)
+		}
 	}
-	if got := h.count("/on"); got != 1 {
-		t.Errorf("explicitly-on tile: want 1 request, got %d", got)
-	}
-	if ids := cachedIDs(t, db); !ids["on"] || len(ids) != 1 {
-		t.Errorf("status_cache should hold only the explicitly-on tile, got %v", ids)
+	if ids := cachedIDs(t, db); len(ids) != 0 {
+		t.Errorf("status_cache should be empty, got %v", ids)
 	}
 }
 
-// A tile switched on under a dashboard whose checks are off is probed (the
-// tile is more specific), with the dashboard's interval and timeout.
-func TestCheckAllEntries_TileOnUnderDashboardOffIsProbed(t *testing.T) {
+// A tile that is On under a dashboard whose checks are Disabled is not probed.
+func TestCheckAllEntries_TileOnUnderDashboardDisabledIsNotProbed(t *testing.T) {
 	h := newHitCounter(t)
 	c, _, _ := newTwoDash(t, h.srv.URL, `{"statusChecksEnabled":false,"statusCheckIntervalMinutes":7,"statusCheckTimeoutSeconds":3}`)
-	doc, err := configdoc.Load(c.db)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, tile, ok := configdoc.FindTile(doc, "b1")
-	if !ok {
-		t.Fatal("b1 missing")
-	}
-	tile["statusCheck"] = configdoc.Obj{"type": "http", "enabled": true}
-	if err := configdoc.Save(c.db, doc); err != nil {
-		t.Fatal(err)
-	}
 	entries, err := c.getEntriesFromConfig()
 	if err != nil {
 		t.Fatal(err)
 	}
-	var b1 *Entry
-	for i := range entries {
-		if entries[i].ID == "b1" {
-			b1 = &entries[i]
+	for _, e := range entries {
+		if e.ID == "b1" {
+			t.Fatalf("b1 (tile On, dashboard Disabled) scheduled: %+v", entries)
 		}
 	}
-	if b1 == nil {
-		t.Fatalf("b1 (tile on, dashboard off) not scheduled: %+v", entries)
-	}
-	if b1.IntervalMinutes != 7 || b1.TimeoutSeconds != 3 {
-		t.Errorf("b1 interval/timeout = %d/%d, want the dashboard's 7/3", b1.IntervalMinutes, b1.TimeoutSeconds)
-	}
 	c.checkAllEntries()
-	if h.count("/b1") != 1 {
-		t.Errorf("b1 probed %d time(s), want 1", h.count("/b1"))
+	if h.count("/b1") != 0 || h.count("/a1") != 1 {
+		t.Errorf("probes a1=%d b1=%d, want a1=1 b1=0", h.count("/a1"), h.count("/b1"))
 	}
 }
 
-// A folder switched off turns off the inheriting tiles inside it (at any
-// depth) even when the dashboard is on; a tile explicitly on inside it is
-// still probed.
-func TestCheckAllEntries_FolderOffBeatsDashboardOn(t *testing.T) {
+// A tab Disabled stops its On tiles.
+func TestCheckAllEntries_TabDisabledStopsOnTiles(t *testing.T) {
 	h := newHitCounter(t)
 	var v2 configdoc.Obj
 	if err := json.Unmarshal([]byte(configWith(h.srv.URL)), &v2); err != nil {
@@ -325,7 +248,29 @@ func TestCheckAllEntries_FolderOffBeatsDashboardOn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	keepExplicitOn(v2, doc)
+	tab := doc["dashboards"].([]any)[0].(configdoc.Obj)["tabs"].([]any)[0].(configdoc.Obj)
+	tab["statusChecksEnabled"] = false
+	c, _, _ := newTestCheckerDoc(t, doc)
+
+	c.checkAllEntries()
+
+	if got := h.count("/on"); got != 0 {
+		t.Errorf("On tile under a Disabled tab probed %d time(s)", got)
+	}
+}
+
+// A folder Disabled stops the On tiles inside it, at any depth, even when the
+// dashboard is Enabled.
+func TestCheckAllEntries_FolderDisabledStopsOnTiles(t *testing.T) {
+	h := newHitCounter(t)
+	var v2 configdoc.Obj
+	if err := json.Unmarshal([]byte(configWith(h.srv.URL)), &v2); err != nil {
+		t.Fatal(err)
+	}
+	doc, err := configdoc.MigrateV2(v2)
+	if err != nil {
+		t.Fatal(err)
+	}
 	dash := doc["dashboards"].([]any)[0].(configdoc.Obj)
 	dash["settings"].(configdoc.Obj)["statusChecksEnabled"] = true
 	tab := dash["tabs"].([]any)[0].(configdoc.Obj)
@@ -339,11 +284,8 @@ func TestCheckAllEntries_FolderOffBeatsDashboardOn(t *testing.T) {
 
 	c.checkAllEntries()
 
-	if got := h.count("/inh"); got != 0 {
-		t.Errorf("inheriting tile under an off folder probed %d time(s)", got)
-	}
-	if got := h.count("/on"); got != 1 {
-		t.Errorf("explicitly-on tile under an off folder: want 1 request, got %d", got)
+	if got := h.count("/on"); got != 0 {
+		t.Errorf("On tile under a Disabled folder probed %d time(s)", got)
 	}
 }
 
@@ -400,8 +342,8 @@ func TestCheckAllEntries_DashboardOverrideOffChecksNothingThere(t *testing.T) {
 	}
 }
 
-// A dashboard override can also turn checks ON while the global is off.
-func TestCheckAllEntries_DashboardOverrideOnBeatsGlobalOff(t *testing.T) {
+// An Enabled dashboard does not reopen a Disabled global switch.
+func TestCheckAllEntries_GlobalDisabledBeatsDashboardEnabled(t *testing.T) {
 	h := newHitCounter(t)
 	c, _, svc := newTwoDash(t, h.srv.URL, `{"statusChecksEnabled":true}`)
 	if err := svc.Set(settings.KeyStatusChecksEnabled, "false"); err != nil {
@@ -410,8 +352,8 @@ func TestCheckAllEntries_DashboardOverrideOnBeatsGlobalOff(t *testing.T) {
 
 	c.checkAllEntries()
 
-	if h.count("/a1") != 0 || h.count("/b1") != 1 {
-		t.Errorf("want only b1 probed, got a1=%d b1=%d", h.count("/a1"), h.count("/b1"))
+	if h.count("/a1") != 0 || h.count("/b1") != 0 {
+		t.Errorf("want nothing probed, got a1=%d b1=%d", h.count("/a1"), h.count("/b1"))
 	}
 }
 
@@ -535,12 +477,11 @@ func TestCheckAllEntries_ConfigLoadFailureKeepsCacheAndLogsError(t *testing.T) {
 	}
 }
 
-// Real data: a real config (39 unticked tiles, 1 ticked) under a
-// global that is on. The upgrade pins v2's unticked tiles Off
-// ("Upgrades from v2 keep v2's behaviour"), so exactly the tiles explicitly
-// switched on in v2 are probed (no mass enablement), and none at all when checks
-// are switched off globally, as in v2.
-func TestGetEntries_RealWeaversProbesOnlyExplicitlyEnabledTiles(t *testing.T) {
+// Real data: a real config (39 unticked tiles, 1 ticked) under a global that
+// is on. The upgrade pins v2's unticked tiles Off and the ticked one On, so
+// exactly the tiles ticked in v2 are probed (no mass enablement), and none at
+// all when checks are switched off globally, as in v2.
+func TestGetEntries_RealWeaversProbesOnlyTickedTiles(t *testing.T) {
 	raw, err := os.ReadFile("../configdoc/testdata/real_weavers.json")
 	if err != nil {
 		t.Fatal(err)
@@ -563,10 +504,9 @@ func TestGetEntries_RealWeaversProbesOnlyExplicitlyEnabledTiles(t *testing.T) {
 		if typ, _ := n["type"].(string); typ == "note" {
 			return true
 		}
-		// A tile ticked in v2 converts to "inherit" (enabled null); an unticked
-		// one is pinned off.
+		// A tile ticked in v2 converts to On; an unticked one is pinned Off.
 		sc, _ := n["statusCheck"].(configdoc.Obj)
-		if en, has := sc["enabled"]; u(n) != "" && has && en == nil {
+		if u(n) != "" && sc["enabled"] == true {
 			want[n["id"].(string)] = true
 		}
 		return true
@@ -586,7 +526,7 @@ func TestGetEntries_RealWeaversProbesOnlyExplicitlyEnabledTiles(t *testing.T) {
 		got[e.ID] = true
 	}
 	if len(got) != len(want) {
-		t.Fatalf("probed %d tiles %v, want exactly the %d explicitly enabled %v", len(got), got, len(want), want)
+		t.Fatalf("probed %d tiles %v, want exactly the %d ticked %v", len(got), got, len(want), want)
 	}
 	for id := range want {
 		if !got[id] {

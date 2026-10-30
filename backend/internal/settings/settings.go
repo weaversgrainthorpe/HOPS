@@ -134,9 +134,9 @@ var Definitions = []Definition{
 	},
 	{
 		Key: KeyStatusChecksEnabled, Type: "bool", Default: "true",
-		Description: "The default for status checks. Every dashboard, tab, folder and tile set to Inherit follows it; " +
-			"one set to On or Off decides for itself and the tiles inside it, whatever this says (the nearest setting wins). " +
-			"Settings › Dashboards › Status check overrides lists every place that sets its own.",
+		Description: "Status monitoring. Disabled: HOPS checks nothing, on any dashboard, whatever the dashboards, " +
+			"tabs, folders and tiles say. Enabled: a tile is checked when its own status check is On and its " +
+			"dashboard, tab and folders allow it.",
 	},
 	{
 		Key: KeyStatusCheckIntervalMinutes, Type: "duration_minutes", Default: "5",

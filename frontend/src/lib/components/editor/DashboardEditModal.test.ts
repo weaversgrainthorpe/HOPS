@@ -9,6 +9,7 @@ vi.mock('$lib/utils/api', async () => {
 		MigrationFailedError: actual.MigrationFailedError,
 		getDashboardSettings: vi.fn(),
 		saveDashboardSettings: vi.fn(),
+		listSettings: vi.fn(),
 		getBackgrounds: vi.fn(() => Promise.resolve({ categories: [], images: [] }))
 	};
 });
@@ -18,6 +19,7 @@ import DashboardEditModal from './DashboardEditModal.svelte';
 import { config, migrationFailure, saveConflict } from '$lib/stores/config';
 import { session, undo, redo, dirty, resetEditSessionForTests } from '$lib/stores/editSession';
 import { startSession } from './editorTestKit';
+import { resetStatusBaseCache } from '$lib/stores/statusCheckBase';
 import type { LayoutDashboard } from '$lib/types/layout';
 
 const allNull = {
@@ -76,7 +78,13 @@ beforeEach(() => {
 	config.set({ schemaVersion: 3, dashboards: [dash(4)] } as never);
 	startSession('d1');
 	vi.mocked(api.getDashboardSettings).mockResolvedValue(serverSettings());
+	globalIs('true');
+	resetStatusBaseCache();
 });
+
+function globalIs(v: string) {
+	vi.mocked(api.listSettings).mockResolvedValue({ settings: [{ key: 'status.checks_enabled', value: v }] } as never);
+}
 
 describe('DashboardEditModal: one dialog, one Save, one Cancel', () => {
 	it('has three sections: Header, Background and Settings', async () => {
@@ -234,7 +242,7 @@ describe('DashboardEditModal: one dialog, one Save, one Cancel', () => {
 		await screen.findByText('Check timeout (seconds)');
 		await fireEvent.input(screen.getByLabelText(/Custom Title/), { target: { value: 'By Ctrl' } });
 		await section('Settings');
-		await fireEvent.keyDown(screen.getByLabelText('Override for this dashboard: Status checks'), { key: 'Enter', ctrlKey: true });
+		await fireEvent.keyDown(screen.getByLabelText('Override for this dashboard: Check timeout (seconds)'), { key: 'Enter', ctrlKey: true });
 		await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
 		expect((draft().header as { centerTitle?: string }).centerTitle).toBe('By Ctrl');
 	});
@@ -281,6 +289,31 @@ describe('DashboardEditModal Settings section', () => {
 		await waitFor(() => expect(api.saveDashboardSettings).toHaveBeenCalled());
 		expect(api.saveDashboardSettings).toHaveBeenCalledWith('d1', { editIdleTimeoutMinutes: 30 }, 4);
 		await waitFor(() => expect(onClose).toHaveBeenCalled());
+	});
+
+	it('the status-check gate: Enabled / Disabled, Disabled saved as false, Enabled as null (key removed)', async () => {
+		vi.mocked(api.saveDashboardSettings).mockResolvedValue(saved(5, { statusChecksEnabled: false }));
+		await openSettings();
+		const group = await screen.findByRole('group', { name: 'Status checks for tiles in this dashboard' });
+		expect(screen.queryByLabelText('Override for this dashboard: Status checks')).toBeNull();
+		expect((within(group).getByRole('radio', { name: 'Enabled' }) as HTMLInputElement).checked).toBe(true);
+		await fireEvent.click(within(group).getByRole('radio', { name: 'Disabled' }));
+		expect(within(group).getByText('No tile in this dashboard is checked, whatever its own setting.')).toBeInTheDocument();
+		await save();
+		await waitFor(() => expect(api.saveDashboardSettings).toHaveBeenCalledWith('d1', { statusChecksEnabled: false }, 4));
+	});
+
+	it('a Disabled dashboard switched to Enabled removes the key; global Disabled is said to make it have no effect', async () => {
+		vi.mocked(api.getDashboardSettings).mockResolvedValue(serverSettings({ statusChecksEnabled: false }, { ...effective, statusChecksEnabled: false }));
+		vi.mocked(api.saveDashboardSettings).mockResolvedValue(saved(5, { statusChecksEnabled: null }));
+		globalIs('false');
+		await openSettings();
+		const group = await screen.findByRole('group', { name: 'Status checks for tiles in this dashboard' });
+		expect((within(group).getByRole('radio', { name: 'Disabled' }) as HTMLInputElement).checked).toBe(true);
+		expect(await within(group).findByText('Status monitoring is disabled in Settings, so this setting has no effect')).toBeInTheDocument();
+		await fireEvent.click(within(group).getByRole('radio', { name: 'Enabled' }));
+		await save();
+		await waitFor(() => expect(api.saveDashboardSettings).toHaveBeenCalledWith('d1', { statusChecksEnabled: null }, 4));
 	});
 
 	it('reset to inherit sends an explicit null', async () => {

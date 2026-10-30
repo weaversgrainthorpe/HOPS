@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import fixture from '../../../../backend/internal/configdoc/testdata/status_checks_cases.json';
 import {
-  dashboardBase, isCheckableTile, resolveStatusChecks, statusRowText, tileSetting, containerSetting, levelNameIn, disabledTooltip,
-  type Resolution
+  dashboardBase, isCheckableTile, resolveStatusChecks, tileSetting, gateSetting, gatesAbove, gatePlace, levelNameIn,
+  disabledTooltip, tileMayBeChecked
 } from './statusChecks';
 import type { LayoutDashboard } from '$lib/types/layout';
 
@@ -20,6 +20,7 @@ interface Case {
 }
 
 const cases = fixture as unknown as Case[];
+const on = { id: 'x', statusCheck: { type: 'http', enabled: true } };
 
 function level(o: Record<string, unknown>, v: boolean | null | 'invalid') {
   if (v === 'invalid') o.statusChecksEnabled = 'yes';
@@ -54,75 +55,71 @@ describe('resolveStatusChecks: the shared fixture (same cases as the Go resolver
   }
 });
 
-describe('resolveStatusChecks without the dashboard base', () => {
-  it('answers when a nearer level decides', () => {
-    expect(resolveStatusChecks(null, { id: 't', statusChecksEnabled: false }, [], null)).toEqual({
-      on: false, source: 'tab', sourceId: 't'
-    });
+describe('resolveStatusChecks without the top gates', () => {
+  it('even a tile that is Off waits for the base (a Disabled gate above would be named instead)', () => {
+    expect(resolveStatusChecks(null, { id: 't' }, [], { id: 'x', statusCheck: { enabled: false } })).toBeNull();
   });
   it('answers an invalid level before the base is needed', () => {
-    expect(resolveStatusChecks(null, { id: 't' }, [{ id: 'f0', statusChecksEnabled: 1 }], null)).toEqual({
+    expect(resolveStatusChecks(null, { id: 't' }, [{ id: 'f0', statusChecksEnabled: 1 }], on)).toEqual({
       on: false, source: 'invalid', sourceId: 'f0'
     });
   });
-  it('returns null (unknown — never a guess) when only the base could decide', () => {
-    expect(resolveStatusChecks(null, { id: 't' }, [{ id: 'f0' }], null)).toBeNull();
+  it('returns null (unknown — never a guess) for an On tile until the base is known', () => {
+    expect(resolveStatusChecks(null, { id: 't', statusChecksEnabled: false }, [{ id: 'f0' }], on)).toBeNull();
   });
-  it('a wrong-typed dashboard override falls back to the global value (as Resolve does)', () => {
-    expect(dashboardBase('d', 'yes', true)).toEqual({ on: true, source: 'global', dashboardId: 'd' });
+  it('a wrong-typed dashboard override is ignored (as Resolve does): the dashboard stays Enabled', () => {
+    expect(dashboardBase('d', 'yes', true)).toEqual({ dashboardId: 'd', global: true, dashboard: true });
+    expect(dashboardBase('d', true, false)).toEqual({ dashboardId: 'd', global: false, dashboard: true });
+    expect(dashboardBase('d', false, true)).toEqual({ dashboardId: 'd', global: true, dashboard: false });
+  });
+});
+
+describe('gatesAbove', () => {
+  const base = (global: boolean, dashboard: boolean) => ({ dashboardId: 'd', global, dashboard });
+  it('all Enabled: null (allowed)', () => {
+    expect(gatesAbove(base(true, true), { id: 't', statusChecksEnabled: true }, [{ id: 'f0', statusChecksEnabled: null }])).toBeNull();
+  });
+  it('names the outermost Disabled gate and counts the rest', () => {
+    expect(gatesAbove(base(false, false), { id: 't', statusChecksEnabled: false }, [{ id: 'f0', statusChecksEnabled: false }])).toEqual({
+      source: 'global', sourceId: '', more: 3
+    });
+    expect(gatesAbove(base(true, true), { id: 't' }, [{ id: 'f0', statusChecksEnabled: false }, { id: 'f1', statusChecksEnabled: false }])).toEqual({
+      source: 'folder', sourceId: 'f0', more: 1
+    });
+  });
+  it('the dashboard dialog leaves its own gate out', () => {
+    expect(gatesAbove(base(true, false), null, [], true)).toBeNull();
+    expect(gatesAbove(base(false, false), null, [], true)).toEqual({ source: 'global', sourceId: '', more: 0 });
+  });
+  it('unknown base: undefined, unless an invalid gate already decides', () => {
+    expect(gatesAbove(null, { id: 't' }, [])).toBeUndefined();
+    expect(gatesAbove(null, { id: 't', statusChecksEnabled: 'no' }, [])).toEqual({ source: 'invalid', sourceId: 't', more: 0 });
   });
 });
 
 describe('the settings as the dialogs see them', () => {
-  it('tile: on / off / inherit (including absent) / invalid', () => {
+  it('tile: On only for enabled true; null, false and absent are Off', () => {
     expect(tileSetting({ statusCheck: { type: 'http', enabled: true } })).toBe('on');
     expect(tileSetting({ statusCheck: { type: 'http', enabled: false } })).toBe('off');
-    expect(tileSetting({ statusCheck: { type: 'http', enabled: null } })).toBe('inherit');
-    expect(tileSetting({})).toBe('inherit');
-    expect(tileSetting({ statusCheck: null })).toBe('inherit');
-    expect(tileSetting({ statusCheck: { type: 'http' } })).toBe('inherit');
+    expect(tileSetting({ statusCheck: { type: 'http', enabled: null } })).toBe('off');
+    expect(tileSetting({})).toBe('off');
+    expect(tileSetting({ statusCheck: null })).toBe('off');
+    expect(tileSetting({ statusCheck: { type: 'http' } })).toBe('off');
     expect(tileSetting({ statusCheck: { type: 'http', enabled: 'yes' } })).toBe('invalid');
+    expect(tileSetting({ statusCheck: 'on' })).toBe('invalid');
   });
-  it('tab/folder: absent = inherit', () => {
-    expect(containerSetting(undefined)).toBe('inherit');
-    expect(containerSetting(true)).toBe('on');
-    expect(containerSetting(false)).toBe('off');
-    expect(containerSetting('yes')).toBe('invalid');
+  it('gate: only false is Disabled', () => {
+    expect(gateSetting(undefined)).toBe('enabled');
+    expect(gateSetting(null)).toBe('enabled');
+    expect(gateSetting(true)).toBe('enabled');
+    expect(gateSetting(false)).toBe('disabled');
+    expect(gateSetting('yes')).toBe('invalid');
   });
-});
-
-describe('statusRowText', () => {
-  const names = (r: Resolution) =>
-    r.source === 'global' ? 'Settings' : ({ d: 'Home', t: 'Main', f0: 'Media' } as Record<string, string>)[r.sourceId];
-  const dashOff: Resolution = { on: false, source: 'dashboard', sourceId: 'd' };
-  const dashOn: Resolution = { on: true, source: 'dashboard', sourceId: 'd' };
-  const folderOn: Resolution = { on: true, source: 'folder', sourceId: 'f0' };
-  const globalOff: Resolution = { on: false, source: 'global', sourceId: '' };
-
-  it('inheriting names the level and the value', () => {
-    expect(statusRowText('inherit', dashOff, names).text).toBe('Inherited from Home: off');
-    expect(statusRowText('inherit', folderOn, names).text).toBe('Inherited from Media: on');
-    expect(statusRowText('inherit', globalOff, names).text).toBe('Inherited from Settings: off');
-  });
-  it('set here says what it overrides', () => {
-    expect(statusRowText('on', dashOff, names).text).toBe('Overridden here: on (the dashboard is off)');
-    expect(statusRowText('off', folderOn, names).text).toBe('Overridden here: off (the folder is on)');
-    expect(statusRowText('on', globalOff, names).text).toBe('Overridden here: on (the global setting is off)');
-    expect(statusRowText('on', dashOn, names).text).toBe('Overridden here: on (the dashboard is on too)');
-  });
-  it('unknown parent (base still loading) is pending, never a guess', () => {
-    expect(statusRowText('inherit', null, names)).toEqual({ text: 'Checking…', tone: 'pending' });
-    expect(statusRowText('on', null, names)).toEqual({ text: 'Checking…', tone: 'pending' });
-  });
-  it('an invalid value above wins and is named', () => {
-    const r = statusRowText('on', { on: false, source: 'invalid', sourceId: 'f0' }, names);
-    expect(r.tone).toBe('warn');
-    expect(r.text).toBe('Off: invalid setting on Media (open it and choose Inherit, On or Off)');
-  });
-  it('an invalid value here is said so', () => {
-    const r = statusRowText('invalid', dashOn, names);
-    expect(r.tone).toBe('warn');
-    expect(r.text).toMatch(/^Invalid setting here: treated as off/);
+  it('tileMayBeChecked: On or invalid (the badge says why), never Off', () => {
+    expect(tileMayBeChecked({ statusCheck: { enabled: true } })).toBe(true);
+    expect(tileMayBeChecked({ statusCheck: { enabled: 'yes' } })).toBe(true);
+    expect(tileMayBeChecked({ statusCheck: { enabled: null } })).toBe(false);
+    expect(tileMayBeChecked({})).toBe(false);
   });
 });
 
@@ -145,13 +142,18 @@ describe('level names and the badge tooltip', () => {
   it('an id it cannot find is still named (by id), never blank', () => {
     expect(levelNameIn([dash], 'folder', 'gone')).toBe('folder gone');
   });
+  it('gatePlace', () => {
+    expect(gatePlace('global', undefined)).toBe('in Settings');
+    expect(gatePlace('tab', 'Main')).toBe('on tab Main');
+    expect(gatePlace('folder', '  ')).toBe('on an untitled folder');
+  });
   it('tooltip from the source', () => {
-    expect(disabledTooltip([dash], 'dashboard', 'd')).toBe('Status checks are off for this tile (set on Home)');
-    expect(disabledTooltip([dash], 'global', '')).toBe('Status checks are off for this tile (Settings)');
-    expect(disabledTooltip([dash], 'invalid', 'f0')).toBe(
-      'Status checks are off for this tile: invalid setting on Media'
-    );
-    expect(disabledTooltip([dash], undefined, undefined)).toBe('Status checks are off for this tile');
+    expect(disabledTooltip([dash], 'dashboard', 'd')).toBe('Not checked: status monitoring is disabled on dashboard Home');
+    expect(disabledTooltip([dash], 'folder', 'f0')).toBe('Not checked: status monitoring is disabled on folder Media');
+    expect(disabledTooltip([dash], 'global', '')).toBe('Not checked: status monitoring is disabled in Settings');
+    expect(disabledTooltip([dash], 'invalid', 'f0')).toBe('Not checked: invalid status-check setting on Media');
+    expect(disabledTooltip([dash], 'tile', 'x')).toBe('Status check is Off for this tile');
+    expect(disabledTooltip([dash], undefined, undefined)).toBe('Status check is Off for this tile');
   });
 });
 

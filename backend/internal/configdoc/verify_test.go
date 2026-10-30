@@ -381,9 +381,9 @@ func TestVerify_BackgroundFinalForm(t *testing.T) {
 // "statusCheck": null (nil there means the key is absent).
 type nullSC struct{}
 
-// Spec Part A: the migration check holds the status-check pin to its rule. A
-// v3 tile is on exactly when the v2 tile was, inherits (null) exactly when
-// the v2 tile said null, is otherwise false, and keeps every other field.
+// The migration check holds the status-check pin to its rule. A v3 tile is On
+// (true) exactly when the v2 tile was ticked, is otherwise false, and keeps
+// every other field.
 func TestVerify_StatusCheckPin(t *testing.T) {
 	cases := []struct {
 		name, tile string
@@ -400,7 +400,9 @@ func TestVerify_StatusCheckPin(t *testing.T) {
 		{"on turned off", "e1", nil, func(tl Obj) { tl["statusCheck"].(Obj)["enabled"] = false }, "enabled", false},
 		{"on loses its interval", "e1", nil, func(tl Obj) { delete(tl["statusCheck"].(Obj), "interval") }, "interval", false},
 		{"on changes its type", "e1", nil, func(tl Obj) { tl["statusCheck"].(Obj)["type"] = "ping" }, "type", false},
-		{"null pinned off", "e3", Obj{"enabled": nil}, func(tl Obj) { tl["statusCheck"].(Obj)["enabled"] = false }, "enabled", false},
+		{"null turned on", "e3", Obj{"enabled": nil}, func(tl Obj) { tl["statusCheck"].(Obj)["enabled"] = true }, "enabled", false},
+		{"null left null", "e3", Obj{"enabled": nil}, func(tl Obj) { tl["statusCheck"].(Obj)["enabled"] = nil }, "enabled", false},
+		{"on left inheriting", "e1", nil, func(tl Obj) { tl["statusCheck"].(Obj)["enabled"] = nil }, "enabled", false},
 		{"no enabled turned on", "e3", Obj{"type": "http"}, func(tl Obj) { tl["statusCheck"].(Obj)["enabled"] = true }, "enabled", false},
 		{"wrong type changed", "e3", "yes", func(tl Obj) { tl["statusCheck"] = "no" }, "statusCheck", false},
 		{"statusCheck null turned on", "e3", nullSC{}, func(tl Obj) { tl["statusCheck"].(Obj)["enabled"] = true }, "enabled", false},

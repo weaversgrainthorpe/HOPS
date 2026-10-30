@@ -422,9 +422,9 @@ describe('settings shell, Dashboards pages', () => {
 		['/settings/dashboards', 'Dashboards'],
 		['/settings/dashboards/dead-links', 'Dead links'],
 		['/settings/dashboards/duplicates', 'Duplicates'],
-		['/settings/dashboards/status-overrides', 'Status check overrides']
+		['/settings/dashboards/blocked-status-checks', 'Blocked status checks']
 	];
-	const labels = ['Dashboards', 'Dead links', 'Duplicates', 'Status check overrides'];
+	const labels = ['Dashboards', 'Dead links', 'Duplicates', 'Blocked status checks'];
 
 	for (const [path, current] of cases) {
 		it(`${path}: the four pages are listed under Dashboards, ${current} marked`, () => {
@@ -438,7 +438,7 @@ describe('settings shell, Dashboards pages', () => {
 				['Dashboards', '/settings/dashboards'],
 				['Dead links', '/settings/dashboards/dead-links'],
 				['Duplicates', '/settings/dashboards/duplicates'],
-				['Status check overrides', '/settings/dashboards/status-overrides']
+				['Blocked status checks', '/settings/dashboards/blocked-status-checks']
 			]);
 			expect(links.filter((a) => a.getAttribute('aria-current') === 'location').map((a) => a.textContent?.trim())).toEqual([current]);
 			const chips = within(chipRow()!).getAllByRole('link');

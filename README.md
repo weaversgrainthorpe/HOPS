@@ -63,12 +63,12 @@ HOPS 3 is a big rework of how dashboards are laid out and edited.
   theme, text size and the optional **Recently used** row are remembered
   by each browser, so your phone and your desktop can differ, and nobody
   else's view changes.
-- **Status checks you can control at every level.** Each tile, folder and
-  tab can be **Inherit**, **On** or **Off**, and the nearest setting wins
-  (tile, folder, tab, dashboard, then the global default). Checks accept
-  self-signed HTTPS and count a login prompt as up. **Settings › Dashboards ›
-  Status check overrides** lists everything that sets its own value and
-  restores inheritance in bulk.
+- **Status checks that stay quiet.** A tile's check is **On** or **Off**
+  (Off by default). The global setting, dashboards, tabs and folders are
+  gates that can be **Enabled** or **Disabled**, and one Disabled gate stops
+  every check beneath it. Checks accept self-signed HTTPS and count a login
+  prompt as up. **Settings › Dashboards › Blocked status checks** lists
+  tiles that are On but stopped by a gate.
 - **Add to HOPS.** Drag a bookmark to your browser's bar. On any service's
   page, click it, and HOPS opens with the address, name and icon filled in.
 - **Dead links and duplicates.** One page lists tiles whose status check has
@@ -213,10 +213,8 @@ It's automatic. Install v3 over v2 with the same data folder and start it.
 On its first start, HOPS 3 takes a protected backup of the whole v2 database
 (`hops-backup-<date>_pre-v3-migration.db`) before it converts anything. If
 that backup fails, it doesn't convert. The backup is never deleted
-automatically, and it's your way back to 2.2.1. Ticked tiles inherit and
-unticked ones are set to Off, so the same tiles are checked as before; a
-one-time notice points you to the overrides page if you'd rather the Off
-tiles inherit. If you started HOPS 2 without `--data`, its data is in
+automatically, and it's your way back to 2.2.1. Ticked tiles are set to On and
+unticked ones to Off, so exactly the tiles 2.2.1 checked are checked now. If you started HOPS 2 without `--data`, its data is in
 `../data`, while HOPS 3 looks in a `data` folder next to the program. When
 HOPS 3 finds HOPS 2's database there instead of its own, it shows a page
 with the `--data` to use and creates nothing.
@@ -252,7 +250,7 @@ and [Rolling back from 3.x to 2.2.1](DEPLOY.md#rolling-back-from-3x-to-221).
 - Open modes: New Tab, Same Tab, iFrame Modal, Popup Modal
 - **Address** and optional **Away address**, with a per-browser Home / Away
   switch
-- Status badge with response time; Inherit / On / Off at every level
+- Status badge with response time; tiles On / Off; dashboard, tab, folder and global gates
 - Subtitles, custom colours, and separate background, text and icon opacity
 
 ### Look
@@ -298,8 +296,8 @@ and [Rolling back from 3.x to 2.2.1](DEPLOY.md#rolling-back-from-3x-to-221).
 ### Settings (signed in)
 - Create, reorder, rename, export and delete dashboards; a **QR code** for
   each
-- **Add to HOPS** bookmark, **Dead links**, **Duplicates** and **Status check
-  overrides**
+- **Add to HOPS** bookmark, **Dead links**, **Duplicates** and **Blocked status
+  checks**
 - Import from Homer, Dashy, Heimdall and HOPS exports; exports carry their
   uploaded icons and backgrounds
 - **Backups**: create, download, upload, restore and clean up, with

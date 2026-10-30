@@ -352,3 +352,86 @@ func (s *Service) StartCleanupRoutine(interval time.Duration, stop <-chan struct
 	}()
 	return func() { <-done }
 }
+
+// ErrNoUser means the users table has no user to reset.
+var ErrNoUser = errors.New("there is no user in the database")
+
+// tempPasswordAlphabet leaves out characters that are easy to misread
+// (0/O, 1/l/I) so a password read off a screen can be typed back.
+const (
+	tempPasswordAlphabet = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789"
+	tempPasswordLength   = 16
+)
+
+func generateTempPassword() (string, error) {
+	n := len(tempPasswordAlphabet)
+	// Reject bytes past the largest multiple of n so every character is equally likely.
+	limit := 256 - 256%n
+	out := make([]byte, 0, tempPasswordLength)
+	buf := make([]byte, 32)
+	for len(out) < tempPasswordLength {
+		if _, err := rand.Read(buf); err != nil {
+			return "", fmt.Errorf("failed to generate a password: %w", err)
+		}
+		for _, b := range buf {
+			if int(b) >= limit {
+				continue
+			}
+			out = append(out, tempPasswordAlphabet[int(b)%n])
+			if len(out) == tempPasswordLength {
+				break
+			}
+		}
+	}
+	return string(out), nil
+}
+
+// ResetPassword is the forgotten-password recovery: it gives the admin user a
+// new random temporary password (hashed like any password), requires a new
+// one at the next sign-in, and ends every session. The admin user is the one
+// named "admin", else the oldest; users is how many user rows there are
+// (more than one is unexpected). It touches only the database, so it also
+// works while the server runs: sessions are checked against the database on
+// every request, so none survives the delete.
+func ResetPassword(db *sql.DB) (username, temp string, users int, err error) {
+	tx, err := db.Begin()
+	if err != nil {
+		return "", "", 0, fmt.Errorf("failed to start the reset: %w", err)
+	}
+	defer tx.Rollback() // #nosec G104 -- no-op after Commit; on an error path the primary error is returned
+
+	if err := tx.QueryRow("SELECT COUNT(*) FROM users").Scan(&users); err != nil {
+		return "", "", 0, fmt.Errorf("failed to read the users: %w", err)
+	}
+	if users == 0 {
+		return "", "", 0, ErrNoUser
+	}
+	var id int
+	if err := tx.QueryRow(
+		"SELECT id, username FROM users ORDER BY (username = 'admin') DESC, id LIMIT 1",
+	).Scan(&id, &username); err != nil {
+		return "", "", 0, fmt.Errorf("failed to read the user: %w", err)
+	}
+
+	temp, err = generateTempPassword()
+	if err != nil {
+		return "", "", 0, err
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(temp), passwordHashingCost)
+	if err != nil {
+		return "", "", 0, fmt.Errorf("failed to hash the password: %w", err)
+	}
+	if _, err := tx.Exec(
+		"UPDATE users SET password_hash = ?, must_change_password = 1 WHERE id = ?",
+		string(hash), id,
+	); err != nil {
+		return "", "", 0, fmt.Errorf("failed to set the password: %w", err)
+	}
+	if _, err := tx.Exec("DELETE FROM sessions"); err != nil {
+		return "", "", 0, fmt.Errorf("failed to end the sessions: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return "", "", 0, fmt.Errorf("failed to save the reset: %w", err)
+	}
+	return username, temp, users, nil
+}

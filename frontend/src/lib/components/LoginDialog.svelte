@@ -100,6 +100,15 @@
     {/if}
   </form>
 
+  <details class="forgot">
+    <summary>Forgot password?</summary>
+    <p>
+      On the computer that runs HOPS, run <code>hops reset-password</code> (add
+      <code>--data &lt;folder&gt;</code> if HOPS is started with one). It prints a temporary password
+      and signs out every browser; sign in with it and choose a new password.
+    </p>
+  </details>
+
   {#snippet footer()}
     <div class="modal-actions">
       <button type="button" class="btn-secondary" onclick={cancel} disabled={$isLoggingIn}>Cancel</button>
@@ -168,6 +177,26 @@
     color: var(--color-error-text);
     border-radius: 0.375rem;
     font-size: 0.875rem;
+  }
+
+  .forgot {
+    margin-top: 1rem;
+    font-size: 0.8125rem;
+    color: var(--text-secondary);
+  }
+
+  .forgot summary {
+    cursor: pointer;
+    width: fit-content;
+  }
+
+  .forgot p {
+    margin: 0.5rem 0 0 0;
+    line-height: 1.5;
+  }
+
+  .forgot code {
+    font-size: 0.8125rem;
   }
 
   .modal-actions {

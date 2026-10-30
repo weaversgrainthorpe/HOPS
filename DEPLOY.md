@@ -418,7 +418,7 @@ The groups are:
   **Largest import**.
 - **Editing:** **Edit mode times out after (minutes)**.
 - **Look & motion:** **Animations**, **Animated folder backgrounds**.
-- **Status checks:** **Status checks** (the global default), **Check every
+- **Status checks:** **Status monitoring** (Enabled or Disabled; Disabled checks nothing), **Check every
   (minutes)**, **Give up after (seconds)**, **Treat a link as dead after**.
 - **Discovery:** **Parallel probes**, **Time per host (seconds)**,
   **Longest scan (minutes)**.
@@ -615,11 +615,9 @@ can't be made, HOPS does not convert anything.
     message says what to do.
 - The pre-v3-migration backup is never deleted automatically. It is your
   way back to 2.x (see [Rolling back from 3.x to 2.2.1](#rolling-back-from-3x-to-221)).
-- After the upgrade, tiles that didn't have status checks ticked in 2.x are
-  set to **Off** and ticked ones to **Inherit**, so the same tiles are
-  checked as before. A notice links to
-  **Settings › Dashboards › Status check overrides** if you'd rather let them
-  inherit.
+- After the upgrade, tiles that had status checks ticked in 2.x are set to
+  **On** and the rest to **Off**, so exactly the tiles 2.2.1 checked are
+  checked now.
 - You don't need to export and import. An export is not the upgrade path.
 
 Before you start, check these, depending on how you ran 2.x:

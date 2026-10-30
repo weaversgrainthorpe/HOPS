@@ -116,14 +116,14 @@ export class FakeRO {
 }
 
 /**
- * The dialogs edit the draft only: no request at all, except the status-check row's read of the
- * dashboard's settings (GET), and a tile badge's status read (GET): a tile
- * with no setting inherits, so it asks the server what it resolves to.
+ * The dialogs edit the draft only: no request at all, except the status-check row's reads of the
+ * gates above (GET: the dashboard's settings and the global settings), and a tile badge's status
+ * read (GET).
  */
 export function noRequestsButSettingsRead(spy: ReturnType<typeof vi.fn>): void {
   const other = spy.mock.calls.filter(([url, init]) => {
     const method = ((init as RequestInit | undefined)?.method ?? 'GET').toUpperCase();
-    return !(method === 'GET' && /\/api\/(dashboards\/[^/]+\/settings|status\/[^/]+)$/.test(String(url)));
+    return !(method === 'GET' && /\/api\/(settings|dashboards\/[^/]+\/settings|status\/[^/]+)$/.test(String(url)));
   });
   expect(other).toEqual([]);
 }

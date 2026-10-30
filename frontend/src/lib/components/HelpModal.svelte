@@ -316,7 +316,7 @@
               <Icon icon="mdi:heart-pulse" width="24" />
               <div>
                 <strong>Status Checks</strong>
-                <p>Optional checks show a badge on a tile: Online (with the response time), Offline or Error. Set them per dashboard, tab, folder or tile; the nearest setting wins. Settings › Dashboards › Status check overrides lists every place that doesn't follow the level above.</p>
+                <p>Turn a tile's status check On and it shows a badge: Online (with the response time), Offline or Error. New tiles start Off. Dashboards, tabs and folders can disable status checks for every tile inside them, and Settings can disable status monitoring everywhere; one Disabled level stops every check beneath it. Settings › Dashboards › Blocked status checks lists tiles that are On but stopped that way.</p>
               </div>
             </div>
             <div class="feature">

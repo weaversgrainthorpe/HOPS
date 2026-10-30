@@ -58,7 +58,7 @@ func TestEffectiveStatusChecks_SharedMatrix(t *testing.T) {
 				dash["settings"].(Obj)["statusChecksEnabled"] = *c.DashboardOverride
 			}
 			// container sets a tab/folder level: true/false, null = absent
-			// (inherit), "invalid" = the wrong-typed value "yes".
+			// (Enabled), "invalid" = the wrong-typed value "yes".
 			container := func(o Obj, raw json.RawMessage) {
 				switch strings.TrimSpace(string(raw)) {
 				case "null", "":
@@ -118,30 +118,41 @@ func TestEffectiveStatusChecks_SharedMatrix(t *testing.T) {
 	}
 }
 
-// Every "absent" form of a tile (no statusCheck, null, no enabled) inherits,
-// like an explicit statusCheck.enabled: null. A nil tile (no tile level, e.g.
-// an id not in the config) inherits.
+// Every "absent" form of a tile (no statusCheck, null, no enabled, enabled
+// null or false) is Off, under open gates as under Disabled ones. A tile is On
+// only with enabled true. A nil tile (no tile level, e.g. an id not in the
+// config) consults the gates alone.
 func TestEffectiveStatusChecks_TileForms(t *testing.T) {
 	svc := newSvc(t)
 	dash := Obj{"id": "d", "settings": Obj{"statusChecksEnabled": true}}
+	folders := []Obj{{"id": "f0", "statusChecksEnabled": true}}
 	for i, tile := range []Obj{
 		{"id": "x"},
 		{"id": "x", "statusCheck": nil},
 		{"id": "x", "statusCheck": Obj{"type": "http"}},
+		{"id": "x", "statusCheck": Obj{"enabled": nil}},
+		{"id": "x", "statusCheck": Obj{"enabled": false}},
 	} {
-		on, src, id := EffectiveStatusChecks(svc, dash, Obj{"id": "t"}, []Obj{{"id": "f0", "statusChecksEnabled": true}}, tile)
-		if !on || src != SourceFolder || id != "f0" {
-			t.Errorf("absent form %d: got (%v, %q, %q), want on/folder f0", i, on, src, id)
+		on, src, id := EffectiveStatusChecks(svc, dash, Obj{"id": "t"}, folders, tile)
+		if on || src != SourceTile || id != "x" {
+			t.Errorf("off form %d: got (%v, %q, %q), want off/tile x", i, on, src, id)
 		}
 	}
-	on, src, id := EffectiveStatusChecks(svc, dash, Obj{"id": "t", "statusChecksEnabled": nil}, []Obj{{"id": "f0"}},
-		Obj{"id": "x", "statusCheck": Obj{"enabled": nil}})
-	if !on || src != SourceDashboard || id != "d" {
-		t.Errorf("explicit null: got (%v, %q, %q), want dashboard on", on, src, id)
+	on, src, id := EffectiveStatusChecks(svc, dash, Obj{"id": "t", "statusChecksEnabled": nil}, folders,
+		Obj{"id": "x", "statusCheck": Obj{"enabled": true}})
+	if !on || src != SourceTile || id != "x" {
+		t.Errorf("tile on: got (%v, %q, %q), want on/tile x", on, src, id)
 	}
 	on, src, id = EffectiveStatusChecks(svc, nil, nil, nil, nil)
 	if !on || src != SourceGlobal || id != "" {
-		t.Errorf("all nil: got (%v, %q, %q), want global on", on, src, id)
+		t.Errorf("all nil: got (%v, %q, %q), want open gates", on, src, id)
+	}
+	if err := svc.Set(settings.KeyStatusChecksEnabled, "false"); err != nil {
+		t.Fatal(err)
+	}
+	on, src, id = EffectiveStatusChecks(svc, nil, nil, nil, nil)
+	if on || src != SourceGlobal || id != "" {
+		t.Errorf("global disabled, nil tile: got (%v, %q, %q)", on, src, id)
 	}
 }
 
@@ -168,7 +179,7 @@ func TestEffectiveStatusChecks_InvalidIsOffAndWarnsOnce(t *testing.T) {
 	}
 }
 
-func TestVerifyDashboard_StatusChecksTriState(t *testing.T) {
+func TestVerifyDashboard_StatusChecksValues(t *testing.T) {
 	mk := func(tabV, folderV, tileSC any) Obj {
 		tile := Obj{"kind": "tile", "id": "x"}
 		if tileSC != "absent" {
@@ -194,6 +205,7 @@ func TestVerifyDashboard_StatusChecksTriState(t *testing.T) {
 		mk(false, true, Obj{"type": "http"}),
 		mk(nil, nil, nil),
 		mk("absent", "absent", Obj{"enabled": nil}),
+		mk("absent", "absent", Obj{"enabled": false}),
 	} {
 		if err := VerifyDashboard(ok); err != nil {
 			t.Errorf("valid tri-state rejected: %v", err)
@@ -245,7 +257,7 @@ func TestFindTileWithAncestors(t *testing.T) {
 }
 
 // IsCheckableTile is the one "could this tile ever be probed" rule (the
-// checker, the notices and the frontend's overrides page agree on it): a note
+// checker, the dead-link report and the blocked report agree on it): a note
 // is never checked, and nor is a tile with no URL.
 func TestIsCheckableTile(t *testing.T) {
 	cases := []struct {

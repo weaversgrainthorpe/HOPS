@@ -1,35 +1,35 @@
 <script lang="ts">
-  // The "Status checks" row of the tile, folder and tab dialogs: Inherit / On /
-  // Off, plus one line saying where the effective value comes from and what this level does to
-  // it. The value is the dialog's own state (draft-only: it is saved with the dialog, one undo
-  // step; Cancel discards it).
+  // The status-check row of the tile, folder, tab and dashboard dialogs. A tile is On or Off; a
+  // dashboard, tab or folder is a gate, Enabled or Disabled, for every tile inside it. The row
+  // says when a Disabled gate above stops this one (or the tile) having any effect. The value is
+  // the dialog's own state (saved with the dialog; Cancel discards it).
   import {
-    contextNameOf, resolveStatusChecks, statusRowText, type LevelSetting, type StatusContext
+    contextGateName, gatePlace, gatesAbove, type Block, type GateSetting, type StatusContext, type TileSetting
   } from '$lib/editor/statusChecks';
   import { statusBaseFor, refreshStatusBase, type BaseState } from '$lib/stores/statusCheckBase';
 
   interface Props {
-    level: 'tile' | 'folder' | 'tab';
-    /** This level's setting. A tile with no setting is 'inherit', like a folder. */
-    value: LevelSetting;
-    /** The levels above; without it the row can only say it cannot tell. */
+    level: 'tile' | 'folder' | 'tab' | 'dashboard';
+    /** A tile's On / Off, or a gate's Enabled / Disabled ('invalid': a wrong-typed stored value). */
+    value: TileSetting | GateSetting;
+    /** The levels above; without it the row can't say whether a gate above stops this one. */
     context?: StatusContext;
   }
   let { level, value = $bindable(), context }: Props = $props();
 
   const uid = `status-checks-${Math.random().toString(36).slice(2, 9)}`;
-  const choice = $derived(value === 'invalid' ? null : value);
-
-  function pick(v: 'inherit' | 'on' | 'off') {
-    value = v;
-  }
-
-  // What this level would get by inheriting, without the dashboard level first.
-  const local = $derived(
-    context ? resolveStatusChecks(null, context.tab, context.folders, null) : null
+  const isTile = $derived(level === 'tile');
+  const choices = $derived<[string, string][]>(
+    isTile ? [['on', 'On'], ['off', 'Off']] : [['enabled', 'Enabled'], ['disabled', 'Disabled']]
   );
-  const needsParent = $derived(value === 'inherit' || value === 'on' || value === 'off');
-  const needsBase = $derived(!!context && needsParent && local === null);
+  const legend = $derived(isTile ? 'Status check' : `Status checks for tiles in this ${level}`);
+
+  // The tile row only needs the gates above while it is On; a gate row always says what is above it.
+  const needsGates = $derived(!isTile || value === 'on');
+  const local = $derived(
+    context && needsGates ? gatesAbove(null, context.tab, context.folders, level === 'dashboard') : undefined
+  );
+  const needsBase = $derived(!!context && needsGates && local === undefined);
 
   let baseState = $state<BaseState | null>(null);
   $effect(() => {
@@ -40,54 +40,69 @@
     return statusBaseFor(context.dashboardId).subscribe((s) => (baseState = s));
   });
 
-  const parent = $derived.by(() => {
-    if (!context) return null;
-    if (local) return local;
-    return baseState?.state === 'ok' ? resolveStatusChecks(baseState.base, context.tab, context.folders, null) : null;
+  /** The gate above that stops this level: null = none, undefined = not known yet. */
+  const block = $derived.by<Block | null | undefined>(() => {
+    if (!context || !needsGates) return undefined;
+    if (local !== undefined) return local;
+    if (baseState?.state !== 'ok') return undefined;
+    return gatesAbove(baseState.base, context.tab, context.folders, level === 'dashboard');
   });
-  const row = $derived(
-    !context && needsParent
-      ? { text: "Can't tell what this inherits here.", tone: 'warn' as const }
-      : statusRowText(value, parent, context ? contextNameOf(context) : () => '')
-  );
+
+  function blockText(b: Block): string {
+    const name = context ? contextGateName(context, b) : undefined;
+    if (b.source === 'invalid') {
+      const where = name ?? 'a level above';
+      return isTile
+        ? `Not checked: invalid status-check setting on ${where}. Open it and choose Enabled or Disabled.`
+        : `Invalid status-check setting on ${where}, so this setting has no effect. Open it and choose Enabled or Disabled.`;
+    }
+    const place = gatePlace(b.source, name);
+    return isTile
+      ? `Not checked: status monitoring is disabled ${place}`
+      : `Status monitoring is disabled ${place}, so this setting has no effect`;
+  }
+
   const baseError = $derived(needsBase && baseState?.state === 'error' ? baseState.message : null);
+  const pending = $derived(!!context && needsGates && block === undefined && !baseError);
 </script>
 
 <fieldset class="status-checks" data-level={level}>
-  <legend>Status checks</legend>
+  <legend>{legend}</legend>
   <div class="choices">
-    {#each [['inherit', 'Inherit'], ['on', 'On'], ['off', 'Off']] as [v, label] (v)}
+    {#each choices as [v, label] (v)}
       <label class="choice">
-        <input
-          type="radio"
-          name={uid}
-          value={v}
-          checked={choice === v}
-          onchange={() => pick(v as 'inherit' | 'on' | 'off')}
-        />
+        <input type="radio" name={uid} value={v} checked={value === v} onchange={() => (value = v as typeof value)} />
         {label}
       </label>
     {/each}
-    <button
-      type="button"
-      class="reset-btn"
-      disabled={value === 'inherit'}
-      onclick={() => pick('inherit')}
-    >
-      Reset to inherit
-    </button>
   </div>
+  {#if value === 'invalid'}
+    <p class="row-text warn" role="alert">
+      {#if isTile}
+        Invalid setting here: this tile is not checked. Choose On or Off to fix it.
+      {:else if level === 'dashboard'}
+        Invalid setting here: it is ignored (treated as Enabled). Choose Enabled or Disabled to fix it.
+      {:else}
+        Invalid setting here: no tile in this {level} is checked. Choose Enabled or Disabled to fix it.
+      {/if}
+    </p>
+  {/if}
+  {#if !isTile && value === 'disabled'}
+    <p class="row-text" data-testid="status-gate-hint">No tile in this {level} is checked, whatever its own setting.</p>
+  {/if}
   {#if baseError}
     <p class="row-text warn" role="alert">
-      Couldn't check this dashboard's status-check setting: {baseError}
+      Couldn't check whether status monitoring is enabled above this {level}: {baseError}
       <button type="button" class="retry-btn" onclick={() => context && refreshStatusBase(context.dashboardId)}>
         Retry
       </button>
     </p>
-  {:else}
-    <p class="row-text" class:warn={row.tone === 'warn'} class:pending={row.tone === 'pending'} aria-live="polite">
-      {row.text}
-    </p>
+  {:else if pending}
+    <p class="row-text pending" aria-live="polite">Checking…</p>
+  {:else if block}
+    <p class="row-text warn" aria-live="polite" data-testid="status-blocked">{blockText(block)}</p>
+  {:else if !context && needsGates}
+    <p class="row-text warn">Can't tell whether status monitoring is enabled above this {level}.</p>
   {/if}
 </fieldset>
 
@@ -121,9 +136,8 @@
     color: var(--text-primary);
     cursor: pointer;
   }
-  .reset-btn,
   .retry-btn {
-    margin-left: auto;
+    margin-left: 0.5rem;
     background: none;
     border: 1px solid var(--border);
     color: var(--text-secondary);
@@ -131,15 +145,6 @@
     padding: 0.25rem 0.6rem;
     font-size: 0.8rem;
     cursor: pointer;
-  }
-  .retry-btn {
-    margin-left: 0.5rem;
-  }
-  /* Disabled stays readable (text >= 4.5:1): no fading — a dashed edge says it is off. */
-  .reset-btn:disabled {
-    opacity: 1;
-    border-style: dashed;
-    cursor: default;
   }
   .row-text {
     margin: 0;

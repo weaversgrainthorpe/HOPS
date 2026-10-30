@@ -109,11 +109,10 @@ func (v *verifier) checkFolderMinimums(d Obj) {
 	}
 }
 
-// checkStatusChecks requires every layered status-check setting below the
-// dashboard to be on, off or inherit: a tab's or folder's statusChecksEnabled
-// is true, false or absent/null (inherit), and a tile's statusCheck is an
-// object (or absent/null: off) whose enabled is true, false, null (inherit)
-// or absent (off). Run on saves and
+// checkStatusChecks requires every status-check setting below the dashboard
+// to be well-typed: a tab's or folder's statusChecksEnabled is true, false or
+// absent/null (Enabled), and a tile's statusCheck is an object (or absent/null:
+// Off) whose enabled is true, false, null or absent (Off). Run on saves and
 // imports only (not on the whole stored document), so legacy stored data
 // never blocks unrelated writes.
 func (v *verifier) checkStatusChecks(d Obj) {
@@ -122,14 +121,14 @@ func (v *verifier) checkStatusChecks(d Obj) {
 	for j, t := range tabs {
 		tm, _ := t.(Obj)
 		if tm != nil && !triOK(tm["statusChecksEnabled"]) {
-			v.add("tab[%d] %s: statusChecksEnabled is %s, want true or false (or absent to inherit)", j, show(tm["id"]), trunc(show(tm["statusChecksEnabled"])))
+			v.add("tab[%d] %s: statusChecksEnabled is %s, want true or false (or absent for Enabled)", j, show(tm["id"]), trunc(show(tm["statusChecksEnabled"])))
 		}
 	}
 	Walk(Obj{"dashboards": []any{d}}, func(_, _ Obj, _ []Obj, n Obj) bool {
 		switch n["kind"] {
 		case "folder":
 			if !triOK(n["statusChecksEnabled"]) {
-				v.add("folder %s: statusChecksEnabled is %s, want true or false (or absent to inherit)", show(n["id"]), trunc(show(n["statusChecksEnabled"])))
+				v.add("folder %s: statusChecksEnabled is %s, want true or false (or absent for Enabled)", show(n["id"]), trunc(show(n["statusChecksEnabled"])))
 			}
 		case "tile":
 			sc := n["statusCheck"]
@@ -140,7 +139,7 @@ func (v *verifier) checkStatusChecks(d Obj) {
 			if !ok {
 				v.add("tile %s: statusCheck is %s, want an object whose enabled is true, false or null", show(n["id"]), trunc(show(sc)))
 			} else if !triOK(scm["enabled"]) {
-				v.add("tile %s: statusCheck.enabled is %s, want true, false or null (null inherits)", show(n["id"]), trunc(show(scm["enabled"])))
+				v.add("tile %s: statusCheck.enabled is %s, want true, false or null (null reads as Off)", show(n["id"]), trunc(show(scm["enabled"])))
 			}
 		}
 		return true
@@ -394,9 +393,8 @@ func (v *verifier) compareTabs(dashID, dashPath string, a, b Obj) {
 }
 
 // compareStatusCheck holds the conversion's status-check pin (pinStatusCheck)
-// to its rule: the v3 tile inherits (null) exactly when the v2 tile was on or
-// said null, is otherwise false, and keeps
-// every other statusCheck field unchanged. A wrong-typed v2 statusCheck is
+// to its rule: the v3 tile is On (true) exactly when the v2 tile was ticked,
+// is otherwise false, and keeps every other statusCheck field unchanged. A wrong-typed v2 statusCheck is
 // not pinned, and nor is a note tile's (notes are never checked), so those
 // must be carried over unchanged.
 func (v *verifier) compareStatusCheck(eid string, ea, eb Obj) {
@@ -420,12 +418,8 @@ func (v *verifier) compareStatusCheck(eid string, ea, eb Obj) {
 		v.add("entry %s: statusCheck is %s, want an object (v2 %s)", eid, trunc(show(bv)), trunc(show(av)))
 		return
 	}
-	aEn, aHasEn := am["enabled"]
-	var want any = false
-	switch {
-	case aEn == true, aHasEn && aEn == nil:
-		want = nil
-	}
+	aEn := am["enabled"]
+	want := aEn == true
 	if bEn, ok := bm["enabled"]; !ok || bEn != want {
 		v.add("entry %s: statusCheck.enabled is %s, want %s (v2 %s)", eid, trunc(show(bm["enabled"])), show(want), trunc(show(aEn)))
 	}

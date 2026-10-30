@@ -94,7 +94,7 @@
     const { background, statusChecksEnabled, ...rest } = fields;
     const node = {
       ...blankFolder(), ...rest, ...(background ? { background } : {}),
-      ...(typeof statusChecksEnabled === 'boolean' ? { statusChecksEnabled } : {})
+      ...(statusChecksEnabled === false ? { statusChecksEnabled } : {})
     } as FolderNode;
     if (addNode(node, dlg.to ?? { tabId }, dlg.cell)) close();
   }

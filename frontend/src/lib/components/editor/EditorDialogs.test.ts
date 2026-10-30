@@ -356,8 +356,8 @@ describe('FolderEditModal background', () => {
   }
   const noWrites = () => {
     for (const [url, init] of fetchSpy.mock.calls) {
-      // Reads only: the backgrounds list, and the status-check row's read of the dashboard's settings.
-      expect(String(url)).toMatch(/\/api\/(backgrounds|dashboards\/[^/]+\/settings)$/);
+      // Reads only: the backgrounds list, and the status-check row's reads of the gates above.
+      expect(String(url)).toMatch(/\/api\/(backgrounds|settings|dashboards\/[^/]+\/settings)$/);
       expect((init as RequestInit | undefined)?.method ?? 'GET').toBe('GET');
     }
   };

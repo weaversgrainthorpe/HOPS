@@ -6,7 +6,7 @@ import { getCsrfToken } from '../helpers';
 //  1. the look (picker + tab position) sits between Icon and the colour / Background;
 //  2. every look preview sits on a light card and keeps >= 3:1 against it, for dark and light folders;
 //  3. no text in the Edit Folder or Edit Tile dialog is below 4.5:1 (3:1 large), in the dark and light
-//     theme — disabled buttons such as "Reset to inherit" included;
+//     theme — the status-check hints included;
 //  4. Look, Status checks, Background and Move or copy are separate sections: the status-check text
 //     never sits against the Background button;
 //  5. the folder background is pictures only; a stored colour background keeps rendering, is shown
@@ -214,8 +214,10 @@ test.describe('the folder dialog order and sections', () => {
     for (let i = 1; i < ys.length; i++) expect(ys[i], `order step ${i}`).toBeGreaterThan(ys[i - 1]);
     for (const h of ['Look', 'Colour', 'Background', 'Move or copy']) await expect(dlg.getByRole('heading', { name: h, level: 3 })).toBeVisible();
 
-    // The status-check text and the Background button: separate sections, with clear space between.
-    const status = dlg.locator('.status-checks .row-text');
+    // The status-check row (with its Disabled hint) and the Background button: separate sections,
+    // with clear space between.
+    await dlg.getByRole('group', { name: 'Status checks for tiles in this folder' }).getByRole('radio', { name: 'Disabled' }).check();
+    const status = dlg.locator('.status-checks');
     await bgBtn.scrollIntoViewIfNeeded();
     const s = await boxOf(status);
     const b = await boxOf(bgBtn);
@@ -313,7 +315,7 @@ async function saveButtonContrast(dlg: Locator) {
 
 test.describe('text contrast in the Edit Folder and Edit Tile dialogs', () => {
   for (const preset of PRESETS) for (const theme of ['dark', 'light'] as const) {
-    test(`${preset} preset, ${theme} theme: no text below 4.5:1 (disabled "Reset to inherit" included)`, async ({ page, context }) => {
+    test(`${preset} preset, ${theme} theme: no text below 4.5:1 (the status-check hints included)`, async ({ page, context }) => {
       await page.addInitScript(([t, p]) => {
         localStorage.setItem('hops_theme', t);
         localStorage.setItem('hops_theme_preset', p);
@@ -324,8 +326,9 @@ test.describe('text contrast in the Edit Folder and Edit Tile dialogs', () => {
       await enterEdit(page);
 
       const folderDlg = await openEdit(page, f.id('f'), 'Edit Folder');
-      // "Reset to inherit" is disabled while Inherit is chosen (the folder inherits): still readable.
-      await expect(folderDlg.getByRole('button', { name: 'Reset to inherit' })).toBeDisabled();
+      // Disabled shows the folder's status-check hint: it is checked for contrast too.
+      await folderDlg.getByRole('radio', { name: 'Disabled' }).check();
+      await expect(folderDlg.getByTestId('status-gate-hint')).toBeVisible();
       // A shape that warns: the contrast warning text is itself readable.
       await folderDlg.getByRole('radio', { name: 'Dark', exact: true }).check();
       await expect(folderDlg.locator('[data-contrast-warning]')).toBeVisible();
@@ -340,7 +343,7 @@ test.describe('text contrast in the Edit Folder and Edit Tile dialogs', () => {
       await expect(folderDlg).toHaveCount(0);
 
       const tileDlg = await openEdit(page, f.id('t'), 'Edit Tile');
-      await expect(tileDlg.getByRole('button', { name: 'Reset to inherit' })).toBeVisible();
+      await expect(tileDlg.getByRole('group', { name: 'Status check' }).getByRole('radio', { name: 'Off' })).toBeChecked();
       const b = await lowContrastText(tileDlg);
       expect(b.checked, 'texts checked in Edit Tile').toBeGreaterThan(15);
       expect(b.bad, 'Edit Tile text below AA').toEqual([]);

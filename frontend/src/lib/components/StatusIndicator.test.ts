@@ -14,8 +14,8 @@ import { statusStore, type StatusInfo } from '$lib/stores/status';
 import { FOLDER_VIEW_CONTEXT } from '$lib/stores/folderView';
 import { setAnimationEnv } from '$lib/editor/drag/dropAnimation';
 
-// The badge follows the RESOLVED setting (status response), not just an explicit
-// tile flag; a 'disabled' tile says which level switched it off.
+// Only a tile that is On (or holds an invalid value) asks for its status; a 'disabled' answer
+// says whether the tile is Off or which Disabled gate stops it.
 
 const base: EntryType = {
   id: 'e1', name: 'Plex', url: 'http://x.test', icon: '', openMode: 'newtab', size: 'medium', order: 0
@@ -40,41 +40,43 @@ beforeEach(() => {
 const badge = (c: HTMLElement) => c.querySelector('.status-badge [role="img"]') as HTMLElement | null;
 
 describe('status badge and tooltip', () => {
-  it('a tile with no setting inherits: it asks the server, and shows no badge when that resolves off', async () => {
-    vi.mocked(getStatus).mockResolvedValue({ status: 'disabled', source: 'dashboard', sourceId: 'd1' });
-    const { container } = render(Entry, { entry: base });
-    await waitFor(() => expect(getStatus).toHaveBeenCalled());
-    await new Promise((r) => setTimeout(r, 0));
-    expect(badge(container)).toBeNull();
+  it('a tile that is Off (no setting, or enabled null / false) never asks the server and shows no badge', async () => {
+    for (const e of [base, withCheck(null), withCheck(false)]) {
+      const { container, unmount } = render(Entry, { entry: e, editorSelected: false });
+      await new Promise((r) => setTimeout(r, 0));
+      expect(badge(container)).toBeNull();
+      unmount();
+    }
+    expect(getStatus).not.toHaveBeenCalled();
   });
 
-  it('an inheriting tile that resolves on shows its badge', async () => {
-    vi.mocked(getStatus).mockResolvedValue({ status: 'up', source: 'folder', sourceId: 'f1' });
-    const { container } = render(Entry, { entry: withCheck(null) });
+  it('a tile that is On shows its badge', async () => {
+    vi.mocked(getStatus).mockResolvedValue({ status: 'up', source: 'tile', sourceId: 'e1' });
+    const { container } = render(Entry, { entry: withCheck(true) });
     await waitFor(() => expect(badge(container)?.getAttribute('title')).toBe('Online'));
   });
 
-  it('a resolved-off tile shows no badge in view mode', async () => {
+  it('a blocked tile shows no badge in view mode', async () => {
     vi.mocked(getStatus).mockResolvedValue({ status: 'disabled', source: 'dashboard', sourceId: 'd1' });
-    const { container } = render(Entry, { entry: withCheck(null) });
+    const { container } = render(Entry, { entry: withCheck(true) });
     await waitFor(() => expect(getStatus).toHaveBeenCalled());
     await new Promise((r) => setTimeout(r, 0));
     expect(badge(container)).toBeNull();
   });
 
-  it('in the editor the off state shows, naming the level that set it', async () => {
-    vi.mocked(getStatus).mockResolvedValue({ status: 'disabled', source: 'dashboard', sourceId: 'd1' });
-    const { container } = render(Entry, { entry: withCheck(null), editorSelected: false });
+  it('in the editor a blocked tile shows it, naming the Disabled gate', async () => {
+    vi.mocked(getStatus).mockResolvedValue({ status: 'disabled', source: 'folder', sourceId: 'f1' });
+    const { container } = render(Entry, { entry: withCheck(true), editorSelected: false });
     await waitFor(() =>
-      expect(badge(container)?.getAttribute('title')).toBe('Status checks are off for this tile (set on Home)')
+      expect(badge(container)?.getAttribute('title')).toBe('Not checked: status monitoring is disabled on folder Media')
     );
   });
 
-  it('global source says (Settings)', async () => {
+  it('the global gate says "in Settings"', async () => {
     vi.mocked(getStatus).mockResolvedValue({ status: 'disabled', source: 'global', sourceId: '' });
-    const { container } = render(Entry, { entry: withCheck(null), editorSelected: false });
+    const { container } = render(Entry, { entry: withCheck(true), editorSelected: false });
     await waitFor(() =>
-      expect(badge(container)?.getAttribute('title')).toBe('Status checks are off for this tile (Settings)')
+      expect(badge(container)?.getAttribute('title')).toBe('Not checked: status monitoring is disabled in Settings')
     );
   });
 
@@ -82,9 +84,7 @@ describe('status badge and tooltip', () => {
     vi.mocked(getStatus).mockResolvedValue({ status: 'disabled', source: 'invalid', sourceId: 'f1' });
     const { container } = render(Entry, { entry: withCheck(true), editorSelected: false });
     await waitFor(() =>
-      expect(badge(container)?.getAttribute('title')).toBe(
-        'Status checks are off for this tile: invalid setting on Media'
-      )
+      expect(badge(container)?.getAttribute('title')).toBe('Not checked: invalid status-check setting on Media')
     );
     expect(badge(container)!.classList.contains('invalid')).toBe(true);
   });

@@ -11,7 +11,7 @@
     | 'tabPosition' | 'size' | 'contentSize'
   > & {
     background?: Background | null;
-    /** Status checks: true/false = set here, null = inherit (key removed), absent = unchanged. */
+    /** Status-check gate: false = Disabled, null = Enabled (key removed), absent = unchanged. */
     statusChecksEnabled?: boolean | null;
   };
 </script>
@@ -29,7 +29,7 @@
   import { folderColourFromBackground, isLegacyFolderColour } from '../background/legacyFolderColour';
   import Modal from '../shared/Modal.svelte';
   import StatusCheckSetting from './StatusCheckSetting.svelte';
-  import { containerSetting, type LevelSetting, type StatusContext } from '$lib/editor/statusChecks';
+  import { gateSetting, type GateSetting, type StatusContext } from '$lib/editor/statusChecks';
   import { FOLDER_SHAPES, TAB_POSITIONS, hasTab, isFolderShape, sizeOf } from '$lib/layout/geometry';
   import { MIN_TEXT_CONTRAST, deriveFolderColours } from '$lib/layout/folderColours';
   import LookPreview from './LookPreview.svelte';
@@ -44,7 +44,7 @@
     onDelete?: () => void;
     onDuplicate?: () => void;
     onMoveCopy?: () => void;
-    /** The levels above the folder, for the status-check row's "inherited from" text. */
+    /** The levels above the folder, so the status-check row can say when a gate above stops this one. */
     statusContext?: StatusContext;
     /** Why this contents size can't be used here (no room for its smallest open box), or null. */
     checkContentSize?: (size: ItemSize) => string | null;
@@ -120,8 +120,8 @@
     'folder-outline': 'Folder (outlined)', 'folder-cartoon': 'Folder (cartoon)', 'folder-open': 'Folder (open flap)'
   };
   // svelte-ignore state_referenced_locally
-  const initialStatus = containerSetting(folder.statusChecksEnabled);
-  let statusSetting = $state<LevelSetting>(initialStatus);
+  const initialStatus = gateSetting(folder.statusChecksEnabled);
+  let statusSetting = $state<GateSetting>(initialStatus);
   let showIconEditor = $state(false);
   let problem = $state('');
   /** A contents size refused here (shown in the dialog; Save is refused while it stands). */
@@ -188,7 +188,7 @@
       ...(stagedBackground ? { background: stagedBackground.value ?? null } : {}),
       // Only a changed choice is written (an untouched invalid value stays as stored).
       ...(statusSetting !== initialStatus && statusSetting !== 'invalid'
-        ? { statusChecksEnabled: statusSetting === 'inherit' ? null : statusSetting === 'on' }
+        ? { statusChecksEnabled: statusSetting === 'disabled' ? false : null }
         : {})
     });
   }

@@ -1,11 +1,12 @@
 /**
- * The dashboard level of the layered status checks, for the editing dialogs: from
- * GET /api/dashboards/{id}/settings (protected — the dialogs only open while editing), fetched
- * once per dashboard per page session and refreshed after a dashboard-settings save. While it
- * loads the dialogs say "Checking…"; a failure is a visible error with Retry, never a guess.
+ * The two gates above every tab, for the editing dialogs and the blocked-checks report: the
+ * dashboard's own (GET /api/dashboards/{id}/settings) and the global setting (GET /api/settings),
+ * both protected — the dialogs only open while editing. Fetched once per dashboard per page
+ * session and refreshed after a dashboard-settings or global save. While it loads the dialogs say
+ * "Checking…"; a failure is a visible error with Retry, never a guess.
  */
 import { writable, type Readable, type Writable } from 'svelte/store';
-import { getDashboardSettings, MigrationFailedError } from '$lib/utils/api';
+import { getDashboardSettings, listSettings, MigrationFailedError } from '$lib/utils/api';
 import { dashboardBase, type DashboardBase } from '$lib/editor/statusChecks';
 import { logError } from '$lib/utils/errors';
 
@@ -22,10 +23,10 @@ async function fetchInto(id: string, store: Writable<BaseState>): Promise<void> 
   if (running) return running;
   const p = (async () => {
     try {
-      const resp = await getDashboardSettings(id);
-      const eff = resp.effective?.statusChecksEnabled;
-      if (typeof eff !== 'boolean') throw new Error('The server did not say whether status checks are on.');
-      store.set({ state: 'ok', base: dashboardBase(id, resp.overrides?.statusChecksEnabled, eff) });
+      const [resp, list] = await Promise.all([getDashboardSettings(id), listSettings()]);
+      const g = list?.settings?.find((x) => x.key === 'status.checks_enabled')?.value;
+      if (g !== 'true' && g !== 'false') throw new Error('The server did not say whether status monitoring is enabled.');
+      store.set({ state: 'ok', base: dashboardBase(id, resp.overrides?.statusChecksEnabled, g === 'true') });
     } catch (e) {
       logError('Dashboard status-check setting', e);
       const msg =
@@ -65,7 +66,7 @@ export function refreshStatusBase(dashboardId: string): Promise<void> {
   });
 }
 
-/** Re-read every dashboard level held (after a global Settings save: they inherit from it). */
+/** Re-read every base held (after a global Settings save: each holds the global gate). */
 export function refreshAllStatusBases(): Promise<void> {
   return Promise.all([...cache.keys()].map((id) => refreshStatusBase(id))).then(() => undefined);
 }

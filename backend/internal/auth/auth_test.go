@@ -494,3 +494,75 @@ func TestIdleLegacyRow(t *testing.T) {
 		t.Fatalf("legacy row never idles: %v", err)
 	}
 }
+
+func TestResetPassword(t *testing.T) {
+	db := setupTestDB(t)
+	svc := NewService(db)
+	old, err := svc.Login("admin", "testpass", 24)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	user, temp, n, err := ResetPassword(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if user != "admin" || n != 1 || len(temp) != tempPasswordLength {
+		t.Fatalf("got user=%q users=%d temp=%q", user, n, temp)
+	}
+	for _, c := range temp {
+		if !strings.ContainsRune(tempPasswordAlphabet, c) {
+			t.Fatalf("temp password has %q outside the alphabet", c)
+		}
+	}
+	var hash string
+	var must int
+	if err := db.QueryRow("SELECT password_hash, must_change_password FROM users WHERE username = 'admin'").Scan(&hash, &must); err != nil {
+		t.Fatal(err)
+	}
+	if bcrypt.CompareHashAndPassword([]byte(hash), []byte(temp)) != nil {
+		t.Error("temporary password does not verify")
+	}
+	if cost, _ := bcrypt.Cost([]byte(hash)); cost != passwordHashingCost {
+		t.Errorf("cost = %d, want %d", cost, passwordHashingCost)
+	}
+	if must != 1 {
+		t.Error("must_change_password not set")
+	}
+	if _, err := svc.ValidateSession(old.SessionID); err == nil {
+		t.Error("old session still valid")
+	}
+	res, err := svc.Login("admin", temp, 24)
+	if err != nil || !res.MustChangePassword {
+		t.Errorf("login with temp password: %+v, %v", res, err)
+	}
+	if _, err := svc.Login("admin", "testpass", 24); err == nil {
+		t.Error("old password still works")
+	}
+}
+
+func TestResetPasswordPicksAdminAmongSeveral(t *testing.T) {
+	db := setupTestDB(t)
+	if _, err := db.Exec("DELETE FROM users"); err != nil {
+		t.Fatal(err)
+	}
+	for _, u := range []string{"zed", "admin", "amy"} {
+		if _, err := db.Exec("INSERT INTO users (username, password_hash) VALUES (?, 'x')", u); err != nil {
+			t.Fatal(err)
+		}
+	}
+	user, _, n, err := ResetPassword(db)
+	if err != nil || user != "admin" || n != 3 {
+		t.Fatalf("user=%q users=%d err=%v", user, n, err)
+	}
+}
+
+func TestResetPasswordNoUser(t *testing.T) {
+	db := setupTestDB(t)
+	if _, err := db.Exec("DELETE FROM users"); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, err := ResetPassword(db); !errors.Is(err, ErrNoUser) {
+		t.Fatalf("err = %v, want ErrNoUser", err)
+	}
+}

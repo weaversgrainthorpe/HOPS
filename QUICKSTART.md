@@ -384,33 +384,24 @@ or 403) is *Online*. *Error* means it answered with another 4xx code such as
 404 (often a wrong path); *Offline* means it couldn't be reached or answered
 with a 5xx server error.
 
-Each tile, folder and tab has a **Status checks** row with **Inherit**,
-**On** and **Off**. In plain words:
+HOPS is not a monitoring tool, so checks are off until you ask. In plain words:
 
-- A new tile starts on **Inherit**: it follows the folder, tab or dashboard it
-  is in.
-- Choose **On** or **Off** to decide for that tile alone.
-- A folder or tab set to **On** or **Off** decides for every tile inside
-  it that is set to **Inherit**. The nearest setting wins: the tile's own,
-  then its folder, then the tab, then the dashboard.
-- The dashboard's setting is in **Dashboard › Settings**: tick **Override
-  for this dashboard** to set it, or leave it to follow the global
-  **Status checks** setting (Settings › Global settings › Status checks).
-  That global setting is on by default. It is only the default: turn it
-  off and anything set to **Inherit** stops being checked, but a dashboard,
-  tab, folder or tile set to **On** is still checked.
+- A tile's **Status check** is **On** or **Off**. A new tile starts **Off**.
+- A dashboard, tab or folder has **Status checks for tiles in this
+  dashboard** (or tab, or folder): **Enabled** or **Disabled**. Disabled
+  stops every check beneath it, whatever the tiles say.
+- The global **Status monitoring** setting (Settings › Global settings ›
+  Status checks) is the top gate. It is Enabled by default; Disabled means
+  nothing is checked anywhere.
+- A tile is checked only when it is **On** and every gate above it is
+  **Enabled**. The tile's editor tells you when a gate is blocking it.
 
-**Settings › Dashboards › Status check overrides** lists every dashboard, tab,
-folder and tile that sets its own On or Off, shows what restoring inheritance
-would change, and lets you restore several at once. After an upgrade or
-import from v2, tiles that didn't have status checks ticked are set to **Off**
-and ticked ones to **Inherit**, so the same tiles are checked as before; a
-notice links here so you can let the Off tiles inherit instead.
-
-The line under the choices always says what is in effect and where it comes
-from, for example *Inherited from Media: on* (the folder, tab or dashboard
-it comes from). **Reset to inherit** puts a row back to Inherit. How often checks run is under Settings › Global
-settings › Status checks (**Check every (minutes)**, 5 by default).
+**Settings › Dashboards › Blocked status checks** lists tiles that are On
+but stopped by a Disabled gate, and where. After an upgrade or import from
+v2, tiles that had status checks ticked are **On** and the rest **Off**, so
+exactly the tiles 2.2.1 checked are checked now. How often checks run is
+under Settings › Global settings › Status checks (**Check every (minutes)**,
+5 by default).
 
 ### Home and away addresses
 
@@ -728,7 +719,7 @@ health check looks in the right place:
 first time it starts. Just before it does, it takes a protected backup
 (`hops-backup-<date>_pre-v3-migration.db`) that is never deleted
 automatically; it is your way back to 2.x. Tiles that had status checks
-ticked are set to **Inherit** and unticked ones to **Off**, so the same tiles
+ticked are set to **On** and unticked ones to **Off**, so the same tiles
 are checked as before. HOPS 2 kept its data in `../data` when started without
 `--data`, but HOPS 3 uses a `data` folder next to the program: if HOPS 3
 finds no database there but finds HOPS 2's at `../data`, it shows a *HOPS

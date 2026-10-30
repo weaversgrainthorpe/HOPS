@@ -72,7 +72,7 @@ export const SETTING_LABELS: Readonly<Record<string, string>> = {
 	'editmode.idle_timeout_minutes': 'Edit mode times out after (minutes)',
 	'display.animations': 'Animations',
 	'folders.animated_backgrounds': 'Animated folder backgrounds',
-	'status.checks_enabled': 'Status checks',
+	'status.checks_enabled': 'Status monitoring',
 	'status.check_interval_minutes': 'Check every (minutes)',
 	'status.check_timeout_seconds': 'Give up after (seconds)',
 	'status.dead_after_hours': 'Treat a link as dead after',

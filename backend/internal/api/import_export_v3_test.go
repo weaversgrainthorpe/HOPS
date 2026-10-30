@@ -522,8 +522,8 @@ func TestImport_V3ShapeChecks(t *testing.T) {
 	}
 }
 
-// Spec Part A: only a v2 conversion pins status checks. A hops-v3 import is
-// stored as it is, so a tile with no setting keeps none (and so inherits).
+// Only a v2 conversion pins status checks. A hops-v3 import is stored as it
+// is, so a tile with no setting keeps none (and so reads as Off).
 func TestHopsV3ImportNotPinned(t *testing.T) {
 	router, db := setupTestRouter(t)
 	c := newClient(t, router)
@@ -825,8 +825,8 @@ func TestImport_V3Showcase(t *testing.T) {
 		}
 	}
 
-	// Layered status checks: a folder with checks off still checks its tile
-	// that is explicitly on; a tile with no setting inherits.
+	// Status-check gates: a Disabled folder stops its tile even though that
+	// tile is On; a tile with no setting is Off.
 	scSvc, err := settings.New(db)
 	if err != nil {
 		t.Fatal(err)
@@ -837,19 +837,24 @@ func TestImport_V3Showcase(t *testing.T) {
 		t.Fatalf("sc-f-off should be a folder with statusChecksEnabled false: %v", offFolder)
 	}
 	on, src, by := configdoc.EffectiveStatusChecks(scSvc, dash, gridTab, []configdoc.Obj{offFolder}, byID["sc-off-on"])
-	if !on || src != configdoc.SourceTile || by != "sc-off-on" {
-		t.Errorf("sc-off-on resolves to %v/%s/%s, want true/tile/sc-off-on", on, src, by)
+	if on || src != configdoc.SourceFolder || by != "sc-f-off" {
+		t.Errorf("sc-off-on resolves to %v/%s/%s, want false/folder/sc-f-off", on, src, by)
 	}
-	on, src, _ = configdoc.EffectiveStatusChecks(scSvc, dash, gridTab, []configdoc.Obj{offFolder}, byID["sc-off-plain"])
-	if on || src != configdoc.SourceFolder {
-		t.Errorf("sc-off-plain resolves to %v/%s, want false/folder (a tile with no setting inherits its folder)", on, src)
+	on, src, by = configdoc.EffectiveStatusChecks(scSvc, dash, gridTab, []configdoc.Obj{offFolder}, byID["sc-off-plain"])
+	if on || src != configdoc.SourceFolder || by != "sc-f-off" {
+		t.Errorf("sc-off-plain resolves to %v/%s/%s, want false/folder/sc-f-off", on, src, by)
 	}
-	// Tiles with no statusCheck inherit; with nothing above them set, that is the global.
+	// Tiles with no statusCheck are Off; the same tile set On is checked when
+	// nothing above it is Disabled.
 	for _, id := range []string{"sc-r1", "sc-r2", "sc-r3", "sc-l1-t1"} {
 		on, src, _ := configdoc.EffectiveStatusChecks(scSvc, dash, gridTab, nil, byID[id])
-		if !on || src != configdoc.SourceGlobal {
-			t.Errorf("%s resolves to %v/%s, want true/global", id, on, src)
+		if on || src != configdoc.SourceTile {
+			t.Errorf("%s resolves to %v/%s, want false/tile", id, on, src)
 		}
+	}
+	byID["sc-r1"]["statusCheck"] = configdoc.Obj{"enabled": true}
+	if on, src, _ := configdoc.EffectiveStatusChecks(scSvc, dash, gridTab, nil, byID["sc-r1"]); !on || src != configdoc.SourceTile {
+		t.Errorf("sc-r1 set On resolves to %v/%s, want true/tile", on, src)
 	}
 
 	// Every icon is in the offline bundle.

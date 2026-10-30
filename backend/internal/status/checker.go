@@ -62,8 +62,8 @@ type StatusResult struct {
 
 // Checker handles HTTP status checks for entries. Interval and timeout are
 // resolved per dashboard (configdoc.Resolve): a dashboard's own override
-// wins, otherwise the global status.* setting applies. The on/off switch is
-// layered down to the tile (configdoc.EffectiveStatusChecks).
+// wins, otherwise the global status.* setting applies. A tile is checked when
+// it is On and every gate above it is Enabled (configdoc.EffectiveStatusChecks).
 type Checker struct {
 	db       *sql.DB
 	settings *settings.Service
@@ -111,10 +111,9 @@ func NewChecker(db *sql.DB, settingsSvc *settings.Service) *Checker {
 	}
 	c.client = c.buildClient()
 
-	// Global default for every tile that inherits it. Run a pass
-	// straight away so turning checks off prunes cached results of the
-	// tiles that inherit it (no stale badges) and turning them on
-	// doesn't leave every tile "unknown" for a whole interval.
+	// Global gate over every tile. Run a pass straight away so turning checks
+	// off prunes the cached results of every tile (no stale badges) and
+	// turning them on doesn't leave every On tile "unknown" for a whole interval.
 	settingsSvc.Subscribe(settings.KeyStatusChecksEnabled, func(string) {
 		slog.Info("status checks toggled", "component", "status",
 			"enabled", settingsSvc.GetBool(settings.KeyStatusChecksEnabled))
@@ -204,10 +203,10 @@ func (c *Checker) runLoop() {
 
 // getEntriesFromConfig extracts the entries that should be status-checked:
 // link tiles (at any folder depth, never note tiles) with a URL whose
-// effective status-check setting is on — the most specific level that sets
-// it wins (configdoc.EffectiveStatusChecks: tile, folders, tab, dashboard,
-// global), the same rule GET /api/status uses for the badge. Interval and
-// timeout are the owning dashboard's effective settings. It returns an error
+// own status check is On and whose global, dashboard, tab and folder gates are
+// all Enabled (configdoc.EffectiveStatusChecks), the same rule GET /api/status
+// uses for the badge. Interval and timeout are the owning dashboard's
+// effective settings. It returns an error
 // if the stored config cannot be loaded as a v3 document.
 func (c *Checker) getEntriesFromConfig() ([]Entry, error) {
 	doc, err := configdoc.Load(c.db)

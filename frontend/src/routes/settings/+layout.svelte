@@ -49,7 +49,7 @@
     { href: '/settings/dashboards', label: 'Dashboards' },
     { href: '/settings/dashboards/dead-links', label: 'Dead links' },
     { href: '/settings/dashboards/duplicates', label: 'Duplicates' },
-    { href: '/settings/dashboards/status-overrides', label: 'Status check overrides' },
+    { href: '/settings/dashboards/blocked-status-checks', label: 'Blocked status checks' },
   ];
   let onDashboards = $derived(isCurrent('/settings/dashboards'));
   // The page in view: the longest address that matches, else the section's first page.

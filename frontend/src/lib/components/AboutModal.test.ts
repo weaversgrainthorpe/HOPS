@@ -10,7 +10,7 @@ const ABOUT_FEATURES = [
   'Drag-and-drop editing',
   'Backgrounds & slideshows',
   '8 theme presets',
-  'Status checks, on or off at any level',
+  'Status checks, per tile, with on/off switches above',
   'Custom icon uploads',
   'Homer / Dashy / Heimdall import',
   'Dashboard QR codes',

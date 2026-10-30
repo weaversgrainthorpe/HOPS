@@ -8,7 +8,7 @@
   import Modal from '../shared/Modal.svelte';
   import { editMode } from '$lib/stores/editMode';
   import StatusCheckSetting from '../editor/StatusCheckSetting.svelte';
-  import { tileSetting, type LevelSetting, type StatusContext } from '$lib/editor/statusChecks';
+  import { tileSetting, type TileSetting, type StatusContext } from '$lib/editor/statusChecks';
   import { tileSizeOf, type TileSize } from '$lib/editor/editorActions';
   import { isSshUrl, parseSshUrl, buildSshUrl, validateSsh, SSH_DEFAULT_PORT } from '$lib/utils/ssh';
   import { awayUrlProblem, linkUrlProblem } from '$lib/utils/tileUrl';
@@ -25,7 +25,7 @@
      * editor never patches those).
      */
     onMoveCopy?: () => void;
-    /** The levels above the tile, for the status-check row's "inherited from" text. */
+    /** The levels above the tile, so the status-check row can say when a gate above stops it. */
     statusContext?: StatusContext;
     /** Trial-runs a picked size; returns why it can't be done (shown inline), or null. */
     checkSize?: (size: TileSize) => string | null;
@@ -51,10 +51,10 @@
   // svelte-ignore state_referenced_locally
   let editedEntry = $state<Entry>({ ...entry });
   let showIconEditor = $state(false);
-  // Status checks: Inherit / On / Off (a tile with no setting is Inherit). Saved with the dialog.
+  // Status check: On / Off (a tile with no setting is Off). Saved with the dialog.
   // svelte-ignore state_referenced_locally
   const initialStatus = tileSetting(entry);
-  let statusSetting = $state<LevelSetting>(initialStatus);
+  let statusSetting = $state<TileSetting>(initialStatus);
 
   // Update editedEntry when entry prop changes. Normalise `type` to
   // 'link' when the incoming entry has no value, so the Tile type
@@ -191,7 +191,7 @@
       editedEntry.statusCheck = {
         ...(prev ?? { interval: 60 }),
         type: 'http',
-        enabled: statusSetting === 'inherit' ? null : statusSetting === 'on'
+        enabled: statusSetting === 'on'
       } as Entry['statusCheck'];
     }
     onSave(editedEntry, sizePicked ? { size: sizeValue as TileSize } : {});

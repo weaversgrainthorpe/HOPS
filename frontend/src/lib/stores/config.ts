@@ -314,8 +314,8 @@ async function refreshNotices(): Promise<void> {
 
 /**
  * Save one global setting (the Settings page). Afterwards everything derived from the global
- * values is re-read, so nothing shows the old value as current: the editing dialogs' dashboard
- * levels (status checks inherit the global value), the notices, each dashboard's computed
+ * values is re-read, so nothing shows the old value as current: the status-check gates the
+ * editing dialogs hold (the global one is among them), the notices, each dashboard's computed
  * `display` block (animated folder backgrounds inherit the global value) and the mounted tiles'
  * status.
  */
@@ -471,7 +471,7 @@ export async function saveDashboardSettingsChanges(
     try {
       const resp = await saveDashboardSettings(id, changes, d.revision);
       applySavedLayout(resp);
-      // The editing dialogs' "inherited from" text uses this dashboard's settings.
+      // The editing dialogs and the blocked-checks report read this dashboard's status-check gate.
       void refreshStatusBase(id);
       const merged = { ...((d.settings as DashboardSettings | undefined) ?? {}), ...changes } as DashboardSettings;
       settingsSavedHook?.(id, d.revision, resp.revision, merged);

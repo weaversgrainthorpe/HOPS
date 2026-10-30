@@ -6,7 +6,7 @@
 
   // Two kinds of notice:
   // - the startup migration's id renames (`migrationNotices`): dismissed for this session only;
-  // - the server's one-time notices (`notices`, e.g. the layered status checks change):
+  // - the server's one-time notices (`notices`, e.g. a backup problem):
   //   Dismiss is stored on the server (POST), so the notice hides only once that succeeded.
   let renames = $derived($config?.migrationNotices ?? []);
   let serverNotices = $derived($config?.notices ?? []);

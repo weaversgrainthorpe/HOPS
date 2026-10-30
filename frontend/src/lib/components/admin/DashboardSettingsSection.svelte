@@ -13,6 +13,8 @@
     type EffectiveDashboardSettings
   } from '$lib/utils/api';
   import { saveDashboardSettingsChanges, migrationFailure } from '$lib/stores/config';
+  import StatusCheckSetting from '../editor/StatusCheckSetting.svelte';
+  import { contextForTab, gateSetting, type GateSetting } from '$lib/editor/statusChecks';
 
   interface Props {
     dashboardId: string;
@@ -24,12 +26,11 @@
 
   let { dashboardId, invalid = $bindable(false), loadFailed = $bindable(false) }: Props = $props();
 
-  type Key = keyof DashboardSettings;
+  type Key = Exclude<keyof DashboardSettings, 'statusChecksEnabled'>;
   type Value = string | number | boolean;
   type Kind = 'bool' | 'int';
 
   const ROWS: { key: Key; label: string; kind: Kind; min?: number }[] = [
-    { key: 'statusChecksEnabled', label: 'Status checks', kind: 'bool' },
     { key: 'statusCheckIntervalMinutes', label: 'Check interval (minutes)', kind: 'int', min: 1 },
     { key: 'statusCheckTimeoutSeconds', label: 'Check timeout (seconds)', kind: 'int', min: 1 },
     { key: 'editIdleTimeoutMinutes', label: 'Edit mode idle timeout (minutes)', kind: 'int', min: 0 },
@@ -45,6 +46,10 @@
   let effective = $state<EffectiveDashboardSettings | null>(null);
   let enabled = $state<Record<string, boolean>>({});
   let values = $state<Record<string, Value>>({});
+  // The dashboard's status-check gate: Enabled / Disabled, not an override of the global setting.
+  let gate = $state<GateSetting>('enabled');
+  let originalGate: GateSetting = 'enabled';
+  const gateContext = $derived(contextForTab({ id: dashboardId, name: '' }));
 
   function normalize(kind: Kind, v: unknown): Value {
     if (kind === 'bool') return v === true || v === 'true';
@@ -68,6 +73,8 @@
       }
       enabled = en;
       values = vals;
+      originalGate = gateSetting(resp.overrides.statusChecksEnabled);
+      gate = originalGate;
     } catch (e) {
       if (e instanceof MigrationFailedError) migrationFailure.set(e.detail);
       loadError = e instanceof Error ? e.message : 'Failed to load dashboard settings';
@@ -110,9 +117,11 @@
 
   // Only changed keys: a value for a newly-set/edited override, an explicit
   // null for a reset. Untouched keys are absent (server merge semantics).
-  function buildChanges(): Partial<Record<Key, Value | null>> {
-    const changes: Partial<Record<Key, Value | null>> = {};
+  function buildChanges(): Partial<Record<keyof DashboardSettings, Value | null>> {
+    const changes: Partial<Record<keyof DashboardSettings, Value | null>> = {};
     if (!original) return changes;
+    // Disabled is stored as false; Enabled removes the override. An unchanged (or invalid) value is kept.
+    if (gate !== originalGate && gate !== 'invalid') changes.statusChecksEnabled = gate === 'disabled' ? false : null;
     for (const r of ROWS) {
       const before = original[r.key];
       const wasSet = before !== null && before !== undefined;
@@ -146,6 +155,10 @@
       // Saved: this is the new baseline, so a retried dialog Save never resends it.
       const next = { ...original };
       for (const r of ROWS) (next as Record<string, unknown>)[r.key] = enabled[r.key] ? values[r.key] : null;
+      if ('statusChecksEnabled' in changes) {
+        next.statusChecksEnabled = changes.statusChecksEnabled as boolean | null;
+        originalGate = gate;
+      }
       original = next;
       return true;
     } catch (e) {
@@ -173,7 +186,10 @@
     <button type="button" class="btn-secondary" onclick={load}>Retry</button>
   </div>
 {:else if effective}
-  <p class="hint">Each setting inherits the global value unless you override it for this dashboard.</p>
+  <div class="row gate-row">
+    <StatusCheckSetting level="dashboard" bind:value={gate} context={gateContext} />
+  </div>
+  <p class="hint">Each setting below inherits the global value unless you override it for this dashboard.</p>
   {#each ROWS as row (row.key)}
     <div class="row">
       <div class="row-head">
@@ -230,7 +246,8 @@
 {/if}
 
 <style>
-  .hint { color: var(--text-secondary); font-size: 0.875rem; margin: 0 0 1rem; }
+  .hint { color: var(--text-secondary); font-size: 0.875rem; margin: 1rem 0 0.25rem; }
+  .gate-row { padding-top: 0; }
   .row { padding: 0.75rem 0; border-bottom: 1px solid var(--border); }
   .row-head { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
   .row-label { font-weight: 500; color: var(--text-primary); }

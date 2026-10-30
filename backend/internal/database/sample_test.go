@@ -229,9 +229,8 @@ func TestSample_IconsAndPicturesArePackaged(t *testing.T) {
 var imageExt = regexp.MustCompile(`(?i)\.(jpe?g|png|gif|webp|svg|avif|bmp|ico)$`)
 
 // The Sample points at *.example.lan, so it must never be status-checked: its
-// dashboard turns checks off, and under the current rule (a tile with no setting
-// inherits) no tile may resolve On even with the global setting On (its
-// default). Otherwise every fresh install would show the whole Sample Offline
+// dashboard is Disabled, so no tile may resolve On even with the global
+// setting Enabled (its default). Otherwise every fresh install would show the whole Sample Offline
 // and look up made-up hosts every few minutes.
 func TestSample_NeverStatusChecked(t *testing.T) {
 	db, err := Initialize(filepath.Join(t.TempDir(), "sc.db"))

@@ -32,9 +32,11 @@ v2 database first, and refuses to convert anything if that backup fails. See
 - **Settings is the admin home.** The gear opens **Settings**, with separate
   pages for Dashboards, Icons, Global settings, Discovery, Backups, Logs,
   Password and Factory reset. `/` now opens your first dashboard.
-- **Status checks you can set at any level.** **Inherit**, **On** or **Off**
-  on each dashboard, tab, folder and tile; the nearest setting wins, and each
-  dialog says what is in effect and why.
+- **Status checks that stay quiet.** A tile's check is **On** or **Off** (Off
+  by default). The global setting, dashboards, tabs and folders are gates,
+  **Enabled** or **Disabled**; a tile is checked only when it is On and every
+  gate above it is Enabled, so one Disabled gate stops every check beneath it.
+  Each editor says when a gate is blocking a tile.
 - **Home and away addresses.** A tile can have an **Away address** (a VPN,
   Tailscale or public address). A **Home** / **Away** button in the top bar
   picks which one tiles open, separately in each browser.
@@ -47,6 +49,10 @@ v2 database first, and refuses to convert anything if that backup fails. See
 - **Sample dashboard** on a fresh install: three tabs that show tile sizes,
   nested and minimised folders, and every folder look. Its addresses are
   made-up `*.example.lan` names. Delete it whenever you like.
+- **Forgotten password:** run `hops reset-password` on the computer that runs
+  HOPS. It prints a temporary password, signs out every browser and asks for
+  a new password at the next sign-in. The sign-in dialog's **Forgot
+  password?** link shows the steps.
 - **Tile types:** **SSH** tiles open your computer's SSH app (with a
   TCP status check), alongside **Link** and **Note** tiles.
 - **Folder options:** **Contents size**, **Starts** expanded or collapsed,
@@ -65,9 +71,8 @@ v2 database first, and refuses to convert anything if that backup fails. See
 - **Dead links** (tiles whose status check has failed for more than a week,
   by default) and **Duplicates** (tiles with the same address, merged only
   when you confirm) under Settings › Dashboards.
-- **Status check overrides** page: lists everything that sets its own On or
-  Off, shows what restoring inheritance would change, and restores several at
-  once.
+- **Blocked status checks** page: lists tiles that are On but stopped by a
+  Disabled gate, which gate it is, and a link to open the dashboard.
 - **Search** reaches every folder at any depth on the dashboard you're on,
   shows where each result lives, and **Shift**+**Enter** takes you to it.
 - **Show recently used** (Theme Settings): a row of the tiles you open most,
@@ -109,9 +114,9 @@ v2 database first, and refuses to convert anything if that backup fails. See
 - **Status checks** count self-signed HTTPS and a login prompt (401/403) as
   *Online*, retry with GET when an app refuses HEAD, and treat a 5xx or a
   proxy's 502/503/504 as *Offline*.
-- The global **Status checks** setting (2.2.1's **Checks Enabled**) is now the
-  default for everything set to **Inherit**, not a master switch: a
-  dashboard, tab, folder or tile set to **On** is checked even when it is off.
+- The global **Status checks** setting (2.2.1's **Checks Enabled**) is now
+  **Status monitoring**, **Enabled** or **Disabled**. Disabled still means
+  nothing is checked anywhere.
 - **Upload limits** are set in MB, with ceilings safe for small machines.
   Defaults: 25 MB for backgrounds, 2 MB for icons, 50 MB for imports.
 - **Imports** from Homer, Dashy and Heimdall have been tested on real files.
@@ -145,13 +150,10 @@ v2 database first, and refuses to convert anything if that backup fails. See
   never deleted automatically. **If the backup fails, HOPS doesn't convert
   anything** and shows a page saying why. The conversion itself is all or
   nothing: if any part of it fails, your data is left exactly as it was.
-- **Status checks behave as before.** Tiles that didn't have **Enable Status
-  Check** ticked in 2.x are set to **Off**; ticked tiles are set to
-  **Inherit**, so they follow the global **Status checks** setting exactly as
-  they followed **Checks Enabled**. If you had checks turned off in 2.2.1,
-  HOPS still contacts nothing. A one-time notice explains the Off tiles and
-  links to **Settings › Dashboards › Status check overrides**, where you can
-  let them inherit instead.
+- **Status checks behave as before.** Tiles that had **Enable Status Check**
+  ticked in 2.x are set to **On**; all others are set to **Off**, so exactly
+  the tiles 2.2.1 checked are checked now. If you had checks turned off in
+  2.2.1, HOPS still contacts nothing.
 - **The admin page is now Settings.** The gear opens it at `/settings`, and
   `/` opens your first dashboard. Change your password under **Settings ›
   Password**.

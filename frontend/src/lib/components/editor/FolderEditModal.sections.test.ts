@@ -33,7 +33,7 @@ describe('the dialog order and sections', () => {
     const titles = Array.from(document.querySelectorAll('section.dialog-section')).map(
       (sec) => sec.querySelector('h3, legend')?.textContent?.trim()
     );
-    for (const t of ['Look', 'Status checks', 'Background', 'Move or copy']) expect(titles).toContain(t);
+    for (const t of ['Look', 'Status checks for tiles in this folder', 'Background', 'Move or copy']) expect(titles).toContain(t);
     // The status-check text and the Background button are in different sections.
     const statusText = document.querySelector('.status-checks .row-text')!;
     const bgBtn = screen.getByRole('button', { name: /^Background/ });

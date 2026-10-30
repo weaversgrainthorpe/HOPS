@@ -75,7 +75,14 @@ func run() bool {
 	// Dev-only flags (--frontend) exist only in `-tags dev` builds.
 	applyDevFlags := registerDevFlags()
 	host := flag.String("host", "", "Interface to bind to (e.g. 127.0.0.1 for loopback-only). Empty (default) binds all interfaces.")
+	flag.Usage = usage
 	flag.Parse()
+
+	// `hops reset-password` is a one-shot command on the data folder; --data
+	// may come before it or after it.
+	if flag.Arg(0) == resetPasswordCommand {
+		os.Exit(runResetPassword(*dataDir, flag.Args()[1:], os.Stdout, os.Stderr))
+	}
 
 	if *dataDir == "" {
 		d, err := defaultDataDir()

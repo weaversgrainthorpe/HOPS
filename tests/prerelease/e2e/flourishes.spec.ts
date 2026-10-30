@@ -25,8 +25,8 @@ const made: string[] = [];
 type Child = Record<string, unknown>;
 type AnyNode = { id: string; kind: string; content?: { children: AnyNode[] } };
 
-// Every tile's status check is Off unless it says otherwise: a tile with no setting inherits,
-// and under the global On it would be checked too. Only Stat has a dot, so the status flourish
+// Every tile's status check is Off unless it says otherwise (written out, though a tile with no
+// setting is Off too). Only Stat has a dot, so the status flourish
 // measured below is Stat's alone.
 const kid = (id: string, name: string, extra: Child = {}): Child => ({
   id, kind: 'tile', type: 'link', name, url: `https://${name.toLowerCase()}.example.lan/`, icon: 'mdi:lan',

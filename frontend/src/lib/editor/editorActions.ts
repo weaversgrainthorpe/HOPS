@@ -348,7 +348,7 @@ export function editFolder(
   id: string, fields: Omit<Partial<FolderNode>, 'background'> & { background?: Background | null }
 ): boolean {
   // background: undefined = unchanged, null = removed (a picker choice staged in the dialog).
-  // statusChecksEnabled: undefined = unchanged, null = inherit (the key is removed), true/false = set.
+  // statusChecksEnabled: undefined = unchanged, false = Disabled, null or true = Enabled (the key is removed).
   const { background: rawBackground, statusChecksEnabled, display: rawDisplay, ...rest } = fields as {
     background?: Background | null; statusChecksEnabled?: boolean | null; display?: FolderNode['display']
   } & Record<string, unknown>;
@@ -583,11 +583,11 @@ function tabPatch(f: TabFields): Partial<LayoutTab> {
   return patch;
 }
 
-/** A tab or folder with its status-check setting: null removes the key (inherit). */
+/** A tab or folder with its status-check gate: Disabled is stored as false; Enabled removes the key. */
 function withStatusChecks<T extends object>(o: T, v: boolean | null): T {
   const next = { ...o } as Record<string, unknown>;
-  if (v === null) delete next.statusChecksEnabled;
-  else next.statusChecksEnabled = v;
+  if (v === false) next.statusChecksEnabled = false;
+  else delete next.statusChecksEnabled;
   return next as T;
 }
 

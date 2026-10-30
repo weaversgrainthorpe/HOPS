@@ -139,6 +139,11 @@ describe('LoginDialog', () => {
 		render(LoginDialog, { props: { onSuccess: vi.fn(), onCancel: vi.fn(), intro: 'Sign in to open Settings.' } });
 		expect(screen.getByRole('dialog', { name: 'Sign in' }).textContent).toContain('Sign in to open Settings.');
 	});
+	it('Forgot password? explains the reset command', () => {
+		open();
+		const forgot = screen.getByText('Forgot password?');
+		expect(forgot.closest('details')?.textContent).toContain('hops reset-password');
+	});
 	it('two instances never share element ids; each Sign in button names its own form', () => {
 		render(LoginDialog, { onSuccess: vi.fn(), onCancel: vi.fn() });
 		render(LoginDialog, { onSuccess: vi.fn(), onCancel: vi.fn() });

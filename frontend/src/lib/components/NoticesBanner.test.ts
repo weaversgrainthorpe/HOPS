@@ -63,12 +63,12 @@ describe('NoticesBanner: rename notices', () => {
 
 describe('NoticesBanner: server notices', () => {
   const text =
-    'Status checks now follow the most specific setting. These dashboards have tiles switched on while the dashboard is off, so those tiles are now checked: <b>Home</b>.';
+    'Some leftover icons were found and can be tidied up: <b>Home</b>.';
   beforeEach(() => {
     vi.mocked(dismissNotice).mockReset();
     migrationNoticesDismissed.set(false);
     noticesStale.set(null);
-    config.set({ schemaVersion: 3, dashboards: [], notices: [{ id: 'layered-status-checks', text }] });
+    config.set({ schemaVersion: 3, dashboards: [], notices: [{ id: 'example-notice', text }] });
   });
 
   it('shows the notice text as text (never markup)', () => {
@@ -82,7 +82,7 @@ describe('NoticesBanner: server notices', () => {
     vi.mocked(dismissNotice).mockReturnValue(new Promise<void>((r) => (done = r)));
     render(NoticesBanner);
     await fireEvent.click(screen.getByRole('button', { name: /dismiss/i }));
-    expect(dismissNotice).toHaveBeenCalledWith('layered-status-checks');
+    expect(dismissNotice).toHaveBeenCalledWith('example-notice');
     expect(screen.getByText(text)).toBeInTheDocument(); // not hidden before the server agreed
     done();
     await new Promise((r) => setTimeout(r, 0));
@@ -142,7 +142,7 @@ describe('NoticesBanner: sticky warnings (backup problems)', () => {
       dashboards: [],
       notices: [
         { id: 'backup-backup-failed-1', text: 'The automatic backup taken when HOPS started failed at 25 Oct 2026 10:00:00 UTC: disk full.', level: 'warning', sticky: true },
-        { id: 'layered-status-checks-v4', text: 'Status checks now follow the most specific setting.' }
+        { id: 'example-notice', text: 'Something changed that is worth a look.' }
       ]
     });
     render(NoticesBanner);
@@ -154,17 +154,17 @@ describe('NoticesBanner: sticky warnings (backup problems)', () => {
 });
 
 describe('NoticesBanner: notice link', () => {
-  const base = { id: 'layered-status-checks-v4', text: 'Status checks now follow the most specific setting.' };
+  const base = { id: 'example-notice', text: 'Something changed that is worth a look.' };
 
   it('renders the link after the text', () => {
     config.set({
       schemaVersion: 3,
       dashboards: [],
-      notices: [{ ...base, link: { href: '/settings/dashboards/status-overrides', label: 'Review status check overrides' } }]
+      notices: [{ ...base, link: { href: '/settings/dashboards/dead-links', label: 'Review dead links' } }]
     });
     render(NoticesBanner);
-    const a = screen.getByRole('link', { name: 'Review status check overrides' });
-    expect(a).toHaveAttribute('href', '/settings/dashboards/status-overrides');
+    const a = screen.getByRole('link', { name: 'Review dead links' });
+    expect(a).toHaveAttribute('href', '/settings/dashboards/dead-links');
   });
 
   it('does not render a link whose href is outside /settings/', () => {

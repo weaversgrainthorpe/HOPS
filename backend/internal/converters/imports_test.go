@@ -185,10 +185,9 @@ func TestHeimdallExport(t *testing.T) {
 	notesContain(t, notes, "Pi-hole")
 }
 
-// Spec Part A: an imported dashboard's tiles inherit (statusCheck.enabled is
-// an explicit null), and keep inheriting through the v2->v3 conversion, which
-// pins only tiles without that null to Off.
-func TestImportedTilesInherit(t *testing.T) {
+// An imported dashboard's tiles arrive Off (statusCheck.enabled false), and
+// stay Off through the v2->v3 conversion.
+func TestImportedTilesAreOff(t *testing.T) {
 	cases := map[string]func([]byte) ([]byte, []string, error){
 		"homer-upstream.yml":   ConvertFromHomer,
 		"homer-homelab.yml":    ConvertFromHomer,
@@ -196,10 +195,10 @@ func TestImportedTilesInherit(t *testing.T) {
 		"dashy-homelab.yml":    ConvertFromDashy,
 		"heimdall-export.json": ConvertFromHeimdall,
 	}
-	inherits := func(sc any) bool {
+	isOff := func(sc any) bool {
 		m, ok := sc.(map[string]any)
 		v, has := m["enabled"]
-		return ok && len(m) == 1 && has && v == nil
+		return ok && len(m) == 1 && has && v == false
 	}
 	for name, conv := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -223,8 +222,8 @@ func TestImportedTilesInherit(t *testing.T) {
 					for _, e := range g.(map[string]any)["entries"].([]any) {
 						tiles++
 						em := e.(map[string]any)
-						if !inherits(em["statusCheck"]) {
-							t.Errorf("converted tile %v: statusCheck %v, want {enabled: null}", em["id"], em["statusCheck"])
+						if !isOff(em["statusCheck"]) {
+							t.Errorf("converted tile %v: statusCheck %v, want {enabled: false}", em["id"], em["statusCheck"])
 						}
 					}
 				}
@@ -240,8 +239,8 @@ func TestImportedTilesInherit(t *testing.T) {
 			configdoc.Walk(configdoc.Obj{"dashboards": []any{v3}}, func(_, _ configdoc.Obj, _ []configdoc.Obj, n configdoc.Obj) bool {
 				if n["kind"] == "tile" {
 					seen++
-					if !inherits(n["statusCheck"]) {
-						t.Errorf("v3 tile %v: statusCheck %v, want {enabled: null}", n["id"], n["statusCheck"])
+					if !isOff(n["statusCheck"]) {
+						t.Errorf("v3 tile %v: statusCheck %v, want {enabled: false}", n["id"], n["statusCheck"])
 					}
 				}
 				return true

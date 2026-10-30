@@ -66,7 +66,7 @@
         <li><Icon icon="mdi:drag" width="18" /> Drag-and-drop editing</li>
         <li><Icon icon="mdi:image" width="18" /> Backgrounds & slideshows</li>
         <li><Icon icon="mdi:palette" width="18" /> 8 theme presets</li>
-        <li><Icon icon="mdi:heart-pulse" width="18" /> Status checks, on or off at any level</li>
+        <li><Icon icon="mdi:heart-pulse" width="18" /> Status checks, per tile, with on/off switches above</li>
         <li><Icon icon="mdi:upload" width="18" /> Custom icon uploads</li>
         <li><Icon icon="mdi:import" width="18" /> Homer / Dashy / Heimdall import</li>
         <li><Icon icon="mdi:qrcode" width="18" /> Dashboard QR codes</li>

@@ -102,7 +102,7 @@ Everything about the list of dashboards is on **Settings › Dashboards**:
 - Click a dashboard's name to open it.
 
 Under the list is the [Add to HOPS bookmark](#add-to-hops-bookmark). The
-**Dead links**, **Duplicates** and **Status check overrides** pages are
+**Dead links**, **Duplicates** and **Blocked status checks** pages are
 listed under **Dashboards** in the Settings sidebar (on a phone, as chips
 at the top of the page).
 
@@ -136,11 +136,12 @@ In [edit mode](#the-editor), the **Dashboard** button in the toolbar opens
 - **Background**: see [Backgrounds](#backgrounds).
 - **Settings**: per-dashboard versions of a few global settings. Each row
   shows the global value (*Inherited: …*) until you tick **Override for
-  this dashboard**; **Reset to inherit** puts it back.
+  this dashboard**; **Reset to inherit** puts it back. (**Status checks for
+  tiles in this dashboard** is different: it is an **Enabled** / **Disabled**
+  gate, described under [Status checks](#status-checks).)
 
   | Row | Global setting it overrides |
   |-----|-----------------------------|
-  | **Status checks** | Global settings › Status checks › **Status checks** |
   | **Check interval (minutes)** | Global settings › Status checks › **Check every (minutes)** |
   | **Check timeout (seconds)** | Global settings › Status checks › **Give up after (seconds)** |
   | **Edit mode idle timeout (minutes)** | Global settings › Editing › **Edit mode times out after (minutes)** |
@@ -166,7 +167,7 @@ The tab dialog has:
 | **Tab Name** | Required. |
 | **Icon (optional)** | **Edit icon** opens the icon editor (see [Icons](#icons)). |
 | **Background Color** and **Opacity** | The tab's own colour. *None* uses the theme's. |
-| **Status checks** | **Inherit**, **On** or **Off** for every tile on the tab that is set to Inherit. See [Status checks](#status-checks). |
+| **Status checks for tiles in this tab** | **Enabled** or **Disabled**. Disabled stops every check on the tab. See [Status checks](#status-checks). |
 | **Configure Tab Background** | **Same as the dashboard** or **Its own background**. See [Backgrounds](#backgrounds). |
 
 The dialog's footer has **Delete** and **Duplicate** for an existing tab.
@@ -212,7 +213,7 @@ Step by step: [Add folders](QUICKSTART.md#add-folders).
 | | **Contents size** | *Small*, *Medium*, *Large*. Every tile and folder inside is shown at this size. |
 | | **Size when minimised** | *Small*, *Medium*, *Large*: the size of its folder tile when minimised. |
 | | **Show title bar** | Untick for a box without a name bar. |
-| | **Status checks** | **Inherit**, **On** or **Off** for the tiles inside. See [Status checks](#status-checks). |
+| | **Status checks for tiles in this folder** | **Enabled** or **Disabled**. Disabled stops every check inside. See [Status checks](#status-checks). |
 | **Background** | **Background…** | A picture or slideshow inside the folder. See [Folder backgrounds](#folder-backgrounds). |
 | **Move or copy** | **Move or copy to…** | See [Move/Copy to…](#movecopy-to). |
 
@@ -295,7 +296,7 @@ Windows Terminal) before SSH tiles open anything.
 | **Icon opacity** | Link, SSH | Fades the icon. The status badge is never faded. |
 | **Size** | all | *Small*, *Medium* (default), *Large*. |
 | **Open Mode** | Link | See [Open modes](#open-modes). SSH tiles always open in place. |
-| **Status checks** | Link, SSH | **Inherit**, **On** or **Off**. See [Status checks](#status-checks). |
+| **Status check** | Link, SSH | **On** or **Off** (Off by default). See [Status checks](#status-checks). |
 | **Move or copy to…** | all | See [Move/Copy to…](#movecopy-to). |
 
 Greyed italic text in an empty field is only an example, not a value.
@@ -677,50 +678,43 @@ response time), *Offline* or *Error*.
 - A tile that keeps failing is checked less often, so it doesn't slow the
   others down. As soon as it answers again it goes back to normal.
 
-### On, Off and Inherit
+### Tiles and gates
 
-Each tile, folder and tab has a **Status checks** row with **Inherit**,
-**On** and **Off**:
+HOPS is not a monitoring tool, so checks are quiet by default. Only tiles
+are checked, and everything above a tile is a gate:
 
-- A new tile starts on **Inherit**: it follows its folder, tab or
-  dashboard.
-- **On** or **Off** decides for that item, and for everything inside it
-  that is set to **Inherit**.
-- The nearest setting wins: the tile's own, then each folder above it,
-  then the tab, then the dashboard, then the global setting.
-- The dashboard's setting is in **Dashboard › Settings › Status checks**
-  (tick **Override for this dashboard**).
+- A tile's **Status check** is **On** or **Off**. A new tile is **Off**.
+- A dashboard, tab or folder has **Status checks for tiles in this
+  dashboard** (or tab, or folder): **Enabled** or **Disabled**. New ones
+  are Enabled. The dashboard's is in **Dashboard › Settings**.
 - The global setting is **Settings › Global settings › Status checks ›
-  Status checks** (on by default). It is only the default: turn it off and
-  everything set to **Inherit** stops being checked, but anything set to
-  **On** is still checked.
+  Status monitoring** (**Enabled** by default). Disabled means HOPS checks
+  nothing, on any dashboard.
+- A tile is checked only when it is **On** and every gate above it (global,
+  dashboard, tab, then each folder) is **Enabled**. One **Disabled** gate
+  stops every check beneath it, whatever the tiles say.
 
-The line under the choices says what is in effect and where it comes from,
-for example *Inherited from Media: on* (the folder, tab or dashboard it
-comes from). **Reset to inherit** puts a row
-back to Inherit.
+An editor says so when a gate above blocks it, for example *Not checked:
+status monitoring is disabled on tab Media*.
 
 Timing is under **Settings › Global settings › Status checks**: **Check
 every (minutes)** (default 5) and **Give up after (seconds)** (default 10).
 A dashboard can override both.
 
-### The overrides page
+### Blocked status checks
 
-**Settings › Dashboards › Status check overrides** lists every dashboard,
-tab, folder and tile that sets its own **On** or **Off**, and what would
-change if it inherited instead.
+**Settings › Dashboards › Blocked status checks** lists tiles that are **On**
+but stopped by a **Disabled** gate: the tile, where it lives (dashboard ›
+tab › folder), what blocks it (the outermost Disabled gate, with *+n more*
+if there are others), and a link to open that dashboard. It changes
+nothing; fix a tile by enabling the gate in its editor. If the global
+setting is Disabled, the page says only *Status monitoring is disabled in
+Settings, so nothing is checked.* with a link to that setting. When nothing
+is blocked it says *No blocked status checks.*
 
-- **Show**: *Would change something* (default), *No effect* or *All*.
-- Tick rows (or **Select all shown**), then **Restore inheritance for *n*
-  selected**. A preview lists which tiles would start checking and which
-  would stop. Click **Confirm**.
-- Restoring is saved as a normal edit of each dashboard, after the usual
-  backup.
-
-After an upgrade or import from HOPS 2, tiles that didn't have status checks
-ticked are set to **Off**, and ticked tiles are set to **Inherit**, so the same
-tiles are checked as before (none, if checks were switched off). A notice
-links to this page so you can let the Off tiles inherit instead.
+After an upgrade or import from HOPS 2, tiles that had status checks ticked
+are **On** and all other tiles are **Off**, so exactly the tiles 2.2.1 checked
+are checked now (none, if checks were switched off).
 
 ---
 
@@ -1050,10 +1044,10 @@ HOPS works out the format by itself.
     imported.
 - If only part of a file could be imported, HOPS says *Imported, but not
   everything succeeded* and what was left out.
-- Tiles imported from Homer, Dashy, Heimdall and HOPS 2 have their status
-  checks set to **Inherit**, except HOPS 2 tiles that didn't have checks
-  ticked, which are set to **Off** (see [The overrides
-  page](#the-overrides-page)). A HOPS 3 export keeps its own settings.
+- Tiles imported from Homer, Dashy and Heimdall arrive with status checks
+  **Off**. HOPS 2 tiles that had checks ticked are **On**, the rest **Off**
+  (see [Blocked status checks](#blocked-status-checks)). A HOPS 3 export
+  keeps its own settings.
 - Files up to 50 MB are accepted by default (**Settings › Global settings ›
   Uploads › Largest import**). Very deeply nested files, or files with an
   enormous number of entries, are refused with a reason.
@@ -1153,7 +1147,7 @@ chips at the top of the page.
 
 | Section | Address |
 |---------|---------|
-| **Dashboards** (with **Dead links**, **Duplicates**, **Status check overrides**) | `/settings/dashboards` |
+| **Dashboards** (with **Dead links**, **Duplicates**, **Blocked status checks**) | `/settings/dashboards` |
 | **Icons** | `/settings/icons` |
 | **Global settings** | `/settings/global` |
 | **Discovery** (with **Scan**, **Diagnostics**, **Manage detectors**) | `/settings/discovery` |
@@ -1167,8 +1161,8 @@ top of Settings until you deal with them.
 
 **Dashboards**: see [Managing dashboards](#managing-dashboards), [Add to
 HOPS bookmark](#add-to-hops-bookmark), [Dead links and
-duplicates](#dead-links-and-duplicates) and [The overrides
-page](#the-overrides-page).
+duplicates](#dead-links-and-duplicates) and [Blocked status
+checks](#blocked-status-checks).
 
 **Icons**: see [Icons](#icons).
 
@@ -1209,7 +1203,7 @@ value is refused with a reason and the running value stays as it was.
 | **Editing** | **Edit mode times out after (minutes)** | 15 | 0 turns it off. |
 | **Look & motion** | **Animations** | On | On, Always, Off. See [Animations](#animations). |
 | | **Animated folder backgrounds** | On | See [Folder backgrounds](#folder-backgrounds). |
-| **Status checks** | **Status checks** | On | The default for everything set to Inherit. |
+| **Status checks** | **Status monitoring** | Enabled | Disabled: nothing is checked, whatever the dashboards, tabs, folders and tiles say. |
 | | **Check every (minutes)** | 5 | |
 | | **Give up after (seconds)** | 10 | |
 | | **Treat a link as dead after** | 168 hours (1 week) | Hours or days. See [Dead links](#dead-links). |
@@ -1249,6 +1243,23 @@ can't do anything else until you do.
 **New Password** and **Confirm New Password**. The new one must be 8 to 72
 characters and different from the current one. Changing it signs out
 every other browser that was signed in.
+
+**Forgotten password.** On the computer that runs HOPS, run:
+
+```
+hops reset-password
+```
+
+Add `--data <folder>` if HOPS is started with one. For the Linux service
+from `install.sh`, run it as the service's user with its data folder:
+`sudo -u hops /opt/hops/hops reset-password --data /var/lib/hops`.
+
+It prints the username and a temporary password, and signs out every
+browser. Sign in with the temporary password and HOPS asks you to **Set a
+New Password**, as on first sign-in. HOPS can keep running while you do
+this. If the command can't find the database, it says which folder it
+looked in and changes nothing. The sign-in dialog's **Forgot password?**
+link shows the same steps.
 
 **Sessions.**
 
@@ -1367,10 +1378,9 @@ and [Rolling back from 3.x to 2.2.1](DEPLOY.md#rolling-back-from-3x-to-221).
   sets its size.
 - **Tiles** keep their name, address, icon, colour, size and open mode. A
   tile size HOPS doesn't recognise becomes *Medium*, and you are told which.
-- **Status checks**: ticked tiles are set to **Inherit** (they follow the
-  dashboard and global setting, as in 2.x); unticked tiles are set to
-  **Off**. A notice links to [the overrides page](#the-overrides-page) if
-  you'd rather the Off tiles inherit.
+- **Status checks**: ticked tiles are set to **On** and unticked tiles to
+  **Off**, so exactly what 2.2.1 checked is still checked. The global
+  setting carries over.
 - **Settings** (port, log level, uploads and so on) carry over. Upload
   limits still at the old HOPS 2 defaults move to the new ones (25 MB for
   backgrounds, 2 MB for icons), and a notice tells you.
@@ -1412,9 +1422,10 @@ server, using the home address, so the server must be able to reach that
 address. For a slow service, raise **Give up after (seconds)**.
 
 **Status checks stopped.**
-Check **Settings › Global settings › Status checks › Status checks**, the
-dashboard's **Settings**, and **Settings › Dashboards › Status check
-overrides**.
+Check that the tile's **Status check** is **On**, that **Settings › Global
+settings › Status checks › Status monitoring** is **Enabled**, and that the
+dashboard, tab and folders are **Enabled**. **Settings › Dashboards ›
+Blocked status checks** lists tiles that are On but blocked.
 
 **A background picture doesn't show.**
 The edit toolbar says when one can't be loaded. Check an **Image URL** in
@@ -1457,10 +1468,8 @@ changed. What the page advises depends on why it failed:
 **Settings › Logs** has the details.
 
 **I've lost the password.**
-HOPS has no password-reset feature. Keep the password somewhere safe. If
-you have a copy of the whole data folder from a time you knew the password,
-you can put it back as described in [Manual backup](DEPLOY.md#manual-backup)
-(you lose changes made since that copy).
+Reset it from the computer that runs HOPS; see
+[Password and sessions](#password-and-sessions).
 
 **HOPS won't start, or the page won't load.**
 See [Troubleshooting](DEPLOY.md#troubleshooting) in the deployment guide.

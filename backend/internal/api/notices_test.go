@@ -42,47 +42,20 @@ func statusDash(p, name string, sc map[string]interface{}, typ string) map[strin
 }
 
 // statusDoc migrates the v2 dashboards and applies each dashboard's
-// statusChecksEnabled override (nil = inherit), returning the stored JSON. A
-// tile built with no statusCheck has none in the stored v3 document either
-// (so it inherits), undoing the v2 conversion's Off pin, and a tile built on is
-// stored explicitly on (the conversion would make it inherit).
-func statusDoc(t *testing.T, dashes []map[string]interface{}, overrides map[string]interface{}) string {
+// statusChecksEnabled gate (nil = Enabled), returning the stored JSON. As in
+// the conversion, a ticked tile is On and every other tile Off.
+func statusDoc(t *testing.T, dashes []map[string]interface{}, gates map[string]interface{}) string {
 	t.Helper()
 	list := make([]any, len(dashes))
-	unset, on := map[string]bool{}, map[string]bool{}
 	for i, d := range dashes {
 		list[i] = d
-		for _, tb := range d["tabs"].([]interface{}) {
-			for _, g := range tb.(map[string]interface{})["groups"].([]interface{}) {
-				for _, e := range g.(map[string]interface{})["entries"].([]interface{}) {
-					em := e.(map[string]interface{})
-					if em["statusCheck"] == nil {
-						unset[em["id"].(string)] = true
-					} else if sc, _ := em["statusCheck"].(map[string]interface{}); sc["enabled"] == true {
-						on[em["id"].(string)] = true
-					}
-				}
-			}
-		}
 	}
 	doc, err := configdoc.MigrateV2(configdoc.Obj{"dashboards": list})
 	if err != nil {
 		t.Fatal(err)
 	}
-	configdoc.Walk(doc, func(_, _ configdoc.Obj, _ []configdoc.Obj, n configdoc.Obj) bool {
-		id, _ := n["id"].(string)
-		if n["kind"] != "tile" {
-			return true
-		}
-		if unset[id] {
-			delete(n, "statusCheck")
-		} else if on[id] {
-			n["statusCheck"].(configdoc.Obj)["enabled"] = true // the conversion makes a ticked tile inherit
-		}
-		return true
-	})
 	for id, d := range storedDashboards(doc) {
-		if v, ok := overrides[id]; ok {
+		if v, ok := gates[id]; ok {
 			d["settings"].(configdoc.Obj)["statusChecksEnabled"] = v
 		}
 	}
@@ -127,37 +100,46 @@ func noticesOf(t *testing.T, v map[string]interface{}) []map[string]interface{} 
 	return out
 }
 
-const layeredNoticeID = "layered-status-checks-v4"
+const uploadNoticeID = "upload-defaults-moved-v3"
 
-func layeredStatusFixture(t *testing.T) string {
-	on := map[string]interface{}{"type": "http", "enabled": true}
-	inherit := map[string]interface{}{"type": "http", "enabled": nil}
-	return statusDoc(t, []map[string]interface{}{
-		statusDash("da", "Alpha", on, ""),     // off + tile on: listed
-		statusDash("db", "Beta", inherit, ""), // off + tile inherits: not listed
-		statusDash("df", "Zeta", nil, ""),     // on + tile with no setting (inherits): not listed
-		statusDash("dc", "Gamma", on, ""),     // on + tile on: not listed
-		statusDash("dd", "Delta", on, "note"), // off + note tile ticked: notes are never checked
-		statusDash("de", "Epsilon", on, ""),   // off + tile on: listed
-	}, map[string]interface{}{"da": false, "db": false, "df": true, "dc": true, "dd": false, "de": false})
+// oldUploadDefaults are upload limits still at the defaults an older build
+// seeded, which the settings service moves to the new defaults at startup and
+// reports as a one-time notice.
+func oldUploadDefaults() map[string]string {
+	return map[string]string{
+		settings.KeyUploadMaxBytesBackground: fmt.Sprint(50 * settings.MB),
+		settings.KeyUploadMaxBytesIcon:       fmt.Sprint(8 * settings.MB),
+	}
 }
 
-func TestNotices_LayeredStatusChecksListsDashboardsAndDismissPersists(t *testing.T) {
-	router, db := setupTestRouterSeeded(t, layeredStatusFixture(t))
+// statusFixture: Alpha is Disabled with its tile On; Beta is Enabled with its
+// tile Off; Gamma is Enabled with its tile On; Zeta is Enabled and its tile has
+// no setting (Off).
+func statusFixture(t *testing.T) string {
+	on := map[string]interface{}{"type": "http", "enabled": true}
+	off := map[string]interface{}{"type": "http", "enabled": false}
+	return statusDoc(t, []map[string]interface{}{
+		statusDash("da", "Alpha", on, ""),
+		statusDash("db", "Beta", off, ""),
+		statusDash("dc", "Gamma", on, ""),
+		statusDash("df", "Zeta", nil, ""),
+	}, map[string]interface{}{"da": false})
+}
+
+// noticeRouter is a router over statusFixture whose upload limits sit at the
+// old defaults, so the one-time upload notice is shown.
+func noticeRouter(t *testing.T) (http.Handler, *sql.DB) {
+	t.Helper()
+	return setupTestRouterWithSettingsRows(t, statusFixture(t), nil, oldUploadDefaults())
+}
+
+func TestNotices_DismissPersists(t *testing.T) {
+	router, db := noticeRouter(t)
 	c := newClient(t, router)
 
 	ns := noticesOf(t, getView(t, c))
-	if len(ns) != 1 || ns[0]["id"] != layeredNoticeID {
-		t.Fatalf("notices = %v, want the one layered-status-checks notice", ns)
-	}
-	want := "Status checks now follow the most specific setting. These dashboards have tiles switched on while the dashboard is off, so those tiles are now checked: Alpha, Epsilon."
-	if ns[0]["text"] != want {
-		t.Errorf("text = %q\nwant  %q", ns[0]["text"], want)
-	}
-
-	link, _ := ns[0]["link"].(map[string]interface{})
-	if link["href"] != "/settings/dashboards/status-overrides" || link["label"] != "Review status check overrides" {
-		t.Errorf("link = %v, want the status-overrides page", ns[0]["link"])
+	if len(ns) != 1 || ns[0]["id"] != uploadNoticeID {
+		t.Fatalf("notices = %v, want the one upload-defaults notice", ns)
 	}
 
 	// Anonymous viewers see it too (GET /api/config is public).
@@ -170,7 +152,7 @@ func TestNotices_LayeredStatusChecksListsDashboardsAndDismissPersists(t *testing
 		t.Errorf("anonymous GET /api/config: notices %v", anon["notices"])
 	}
 
-	code, resp := c.do("POST", "/api/notices/"+layeredNoticeID+"/dismiss", nil)
+	code, resp := c.do("POST", "/api/notices/"+uploadNoticeID+"/dismiss", nil)
 	if code != 200 {
 		t.Fatalf("dismiss: %d %v", code, resp)
 	}
@@ -178,70 +160,49 @@ func TestNotices_LayeredStatusChecksListsDashboardsAndDismissPersists(t *testing
 		t.Errorf("after dismiss: %v", ns)
 	}
 	var n int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM dismissed_notices WHERE id = ?`, layeredNoticeID).Scan(&n); err != nil || n != 1 {
+	if err := db.QueryRow(`SELECT COUNT(*) FROM dismissed_notices WHERE id = ?`, uploadNoticeID).Scan(&n); err != nil || n != 1 {
 		t.Fatalf("dismissal not stored: n=%d err=%v", n, err)
 	}
 	// Dismissing again is harmless.
-	if code, resp := c.do("POST", "/api/notices/"+layeredNoticeID+"/dismiss", nil); code != 200 {
+	if code, resp := c.do("POST", "/api/notices/"+uploadNoticeID+"/dismiss", nil); code != 200 {
 		t.Errorf("second dismiss: %d %v", code, resp)
 	}
 
-	// After a restart it stays gone, though the condition still holds.
-	router2 := restartRouter(t, db)
-	c2 := newClient(t, router2)
+	// After a restart it stays gone.
+	c2 := newClient(t, restartRouter(t, db))
 	if ns := noticesOf(t, getView(t, c2)); len(ns) != 0 {
 		t.Errorf("after restart: %v", ns)
 	}
 }
 
-func TestNotices_AbsentWhenNoTileIsOnUnderAnOffDashboard(t *testing.T) {
-	on := map[string]interface{}{"type": "http", "enabled": true}
-	stored := statusDoc(t, []map[string]interface{}{
-		statusDash("da", "Alpha", on, ""),
-		statusDash("db", "Beta", nil, ""),
-		statusDash("dd", "Delta", on, "note"),
-	}, map[string]interface{}{"da": nil, "db": false, "dd": false})
-	router, _ := setupTestRouterSeeded(t, stored)
+// Status checks raise no notice, whatever the gates and tiles say: the
+// model needs no announcement and a blocked tile is reported on the settings
+// page instead.
+func TestNotices_NoStatusCheckNotice(t *testing.T) {
+	router, _ := setupTestRouterSeeded(t, statusFixture(t))
 	c := newClient(t, router)
 	if ns := noticesOf(t, getView(t, c)); len(ns) != 0 {
 		t.Errorf("notices = %v, want none", ns)
 	}
 }
 
-// The global switch off makes an inheriting dashboard off too.
-func TestNotices_GlobalOffCountsAsDashboardOff(t *testing.T) {
-	on := map[string]interface{}{"type": "http", "enabled": true}
-	stored := statusDoc(t, []map[string]interface{}{statusDash("da", "Alpha", on, "")}, nil)
-	_, db := setupTestRouterSeeded(t, stored)
-	svc, err := settings.New(db)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := svc.Set(settings.KeyStatusChecksEnabled, "false"); err != nil {
-		t.Fatal(err)
-	}
-	c := newClient(t, restartRouter(t, db))
-	ns := noticesOf(t, getView(t, c))
-	if len(ns) != 1 || !strings.HasSuffix(ns[0]["text"].(string), ": Alpha.") {
-		t.Errorf("notices = %v", ns)
-	}
-}
-
 func TestNotices_DismissRejectsUnknownAndMalformedIDs(t *testing.T) {
-	router, _ := setupTestRouterSeeded(t, layeredStatusFixture(t))
+	router, _ := noticeRouter(t)
 	c := newClient(t, router)
 	for path, want := range map[string]int{
 		"/api/notices/no-such-notice/dismiss":                  404,
+		"/api/notices/layered-status-checks-v4/dismiss":        404,
+		"/api/notices/v2-status-checks-off/dismiss":            404,
 		"/api/notices/" + strings.Repeat("a", 65) + "/dismiss": 400,
 		"/api/notices/Bad_ID/dismiss":                          400,
-		"/api/notices/" + layeredNoticeID:                      404,
-		"/api/notices/" + layeredNoticeID + "/dismiss/x":       404,
+		"/api/notices/" + uploadNoticeID:                       404,
+		"/api/notices/" + uploadNoticeID + "/dismiss/x":        404,
 	} {
 		if code, resp := c.do("POST", path, nil); code != want {
 			t.Errorf("POST %s: %d %v, want %d", path, code, resp, want)
 		}
 	}
-	if code, _ := c.do("GET", "/api/notices/"+layeredNoticeID+"/dismiss", nil); code != 405 {
+	if code, _ := c.do("GET", "/api/notices/"+uploadNoticeID+"/dismiss", nil); code != 405 {
 		t.Errorf("GET dismiss: %d, want 405", code)
 	}
 	// Nothing was dismissed by the rejected requests.
@@ -252,9 +213,9 @@ func TestNotices_DismissRejectsUnknownAndMalformedIDs(t *testing.T) {
 
 // Route classification: the dismiss route needs a session and a CSRF token.
 func TestNotices_DismissNeedsAuthAndCSRF(t *testing.T) {
-	router, _ := setupTestRouterSeeded(t, layeredStatusFixture(t))
+	router, _ := noticeRouter(t)
 	c := newClient(t, router)
-	path := "/api/notices/" + layeredNoticeID + "/dismiss"
+	path := "/api/notices/" + uploadNoticeID + "/dismiss"
 	req := httptest.NewRequest("POST", path, nil)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
@@ -273,10 +234,10 @@ func TestNotices_DismissNeedsAuthAndCSRF(t *testing.T) {
 	}
 }
 
-// GET /api/status/{id} resolves with the same layered rule as the checker
-// and says which level decided.
-func TestGetStatus_LayeredSource(t *testing.T) {
-	router, db := setupTestRouterSeeded(t, layeredStatusFixture(t))
+// GET /api/status/{id} resolves with the same gate rule as the checker and
+// says which level decided: the tile itself, or the outermost Disabled gate.
+func TestGetStatus_GateSource(t *testing.T) {
+	router, db := setupTestRouterSeeded(t, statusFixture(t))
 	if _, err := db.Exec(`INSERT INTO status_cache (entry_id, status, response_time) VALUES ('da-e', 'up', 12)`); err != nil {
 		t.Fatal(err)
 	}
@@ -292,10 +253,10 @@ func TestGetStatus_LayeredSource(t *testing.T) {
 		return out
 	}
 	for id, want := range map[string][3]string{
-		"da-e": {"up", "tile", "da-e"},          // tile on under dashboard off
-		"db-e": {"disabled", "dashboard", "db"}, // inherits the off dashboard
-		"dc-e": {"unknown", "tile", "dc-e"},     // tile on under dashboard on, no result yet
-		"df-e": {"unknown", "dashboard", "df"},  // tile with no setting under dashboard on: inherits, no result yet
+		"da-e": {"disabled", "dashboard", "da"}, // tile On under a Disabled dashboard: blocked, the cached result is not shown
+		"db-e": {"disabled", "tile", "db-e"},    // tile Off
+		"dc-e": {"unknown", "tile", "dc-e"},     // tile On under an Enabled dashboard, no result yet
+		"df-e": {"disabled", "tile", "df-e"},    // tile with no setting is Off
 	} {
 		got := get(id)
 		if fmt.Sprint(got["status"]) != want[0] || got["source"] != want[1] || got["sourceId"] != want[2] {
@@ -304,10 +265,8 @@ func TestGetStatus_LayeredSource(t *testing.T) {
 	}
 }
 
-// inheritTileCheck sets tile id's statusCheck.enabled to null (explicit
-// inherit) in the stored document, so its checks follow the dashboard. A tile
-// with no setting does the same; this just makes it explicit.
-func inheritTileCheck(t *testing.T, db *sql.DB, id string) {
+// setTileCheck sets tile id's statusCheck.enabled in the stored document.
+func setTileCheck(t *testing.T, db *sql.DB, id string, on bool) {
 	t.Helper()
 	doc, err := configdoc.Load(db)
 	if err != nil {
@@ -317,46 +276,16 @@ func inheritTileCheck(t *testing.T, db *sql.DB, id string) {
 	if !ok {
 		t.Fatalf("tile %s not found", id)
 	}
-	tile["statusCheck"] = configdoc.Obj{"type": "http", "enabled": nil}
+	tile["statusCheck"] = configdoc.Obj{"type": "http", "enabled": on}
 	if err := configdoc.Save(db, doc); err != nil {
 		t.Fatal(err)
-	}
-}
-
-// The notice reflects the current config on every GET. Turning the
-// dashboard on removes it; turning another one off (with a tile switched on)
-// brings it back, naming that dashboard.
-func TestNotices_FollowTheCurrentConfig(t *testing.T) {
-	router, _ := setupTestRouterSeeded(t, layeredStatusFixture(t))
-	c := newClient(t, router)
-	setOverride := func(id string, v interface{}) {
-		t.Helper()
-		code, resp := c.do("GET", "/api/dashboards/"+id+"/settings", nil)
-		if code != 200 {
-			t.Fatalf("get settings %s: %d %v", id, code, resp)
-		}
-		code, resp = c.do("PUT", "/api/dashboards/"+id+"/settings", map[string]interface{}{
-			"overrides": map[string]interface{}{"statusChecksEnabled": v}, "revision": resp["revision"]})
-		if code != 200 {
-			t.Fatalf("put settings %s: %d %v", id, code, resp)
-		}
-	}
-	setOverride("da", true)
-	setOverride("de", true)
-	if ns := noticesOf(t, getView(t, c)); len(ns) != 0 {
-		t.Fatalf("after turning Alpha and Epsilon on: %v", ns)
-	}
-	setOverride("dc", false) // Gamma: tile switched on
-	ns := noticesOf(t, getView(t, c))
-	if len(ns) != 1 || !strings.HasSuffix(ns[0]["text"].(string), "now checked: Gamma.") {
-		t.Fatalf("after turning Gamma off: %v", ns)
 	}
 }
 
 // If dismissed_notices can't be read at startup, notices are shown (never
 // silently hidden) and the read is retried on each GET until it works.
 func TestNotices_DismissedReadFailureShowsThenRetries(t *testing.T) {
-	_, db := setupTestRouterSeeded(t, layeredStatusFixture(t))
+	_, db := noticeRouter(t)
 	if _, err := db.Exec(`DROP TABLE dismissed_notices`); err != nil {
 		t.Fatal(err)
 	}
@@ -372,7 +301,7 @@ func TestNotices_DismissedReadFailureShowsThenRetries(t *testing.T) {
 	if _, err := db.Exec(`CREATE TABLE dismissed_notices (id TEXT PRIMARY KEY, dismissed_at DATETIME DEFAULT CURRENT_TIMESTAMP)`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec(`INSERT INTO dismissed_notices (id) VALUES (?)`, layeredNoticeID); err != nil {
+	if _, err := db.Exec(`INSERT INTO dismissed_notices (id) VALUES (?)`, uploadNoticeID); err != nil {
 		t.Fatal(err)
 	}
 	if ns := noticesOf(t, getView(t, c)); len(ns) != 0 {
@@ -393,7 +322,7 @@ func captureSlog(t *testing.T) *bytes.Buffer {
 // GET /api/status names a wrong-typed stored value: the tile is off with
 // source "invalid" and the offending level's id.
 func TestGetStatus_InvalidValueIsSurfaced(t *testing.T) {
-	router, db := setupTestRouterSeeded(t, layeredStatusFixture(t))
+	router, db := setupTestRouterSeeded(t, statusFixture(t))
 	doc, err := configdoc.Load(db)
 	if err != nil {
 		t.Fatal(err)
@@ -415,49 +344,33 @@ func TestGetStatus_InvalidValueIsSurfaced(t *testing.T) {
 	}
 }
 
-// Only the layered-status notice points at a page: the real backup, upload-
-// defaults and tile-size notices carry no link.
-func TestNotices_OnlyLayeredStatusNoticeHasALink(t *testing.T) {
-	router, _ := setupTestRouterSeeded(t, layeredStatusFixture(t))
+// No notice points at a page: the backup, upload-defaults and tile-size
+// notices carry no link.
+func TestNotices_NoneHasALink(t *testing.T) {
+	router, _ := noticeRouter(t)
 	c := newClient(t, router)
 
-	// A real sticky backup notice next to the layered one: a refused restore.
+	// A real sticky backup notice next to the upload one: a refused restore.
 	_, bm, name := backupsOf(t, c)
 	bm.SetFailureHooks(failReason("pre-restore"))
 	if code, resp := c.do("POST", "/api/backups/"+name, nil); code != http.StatusInternalServerError {
 		t.Fatalf("restore: %d %v", code, resp)
 	}
 	ns := noticesOf(t, getView(t, c))
-	linked, backups := 0, 0
+	backups := 0
 	for _, n := range ns {
 		id, _ := n["id"].(string)
-		_, has := n["link"]
-		switch {
-		case id == layeredNoticeID:
-			if !has {
-				t.Errorf("layered notice lost its link: %v", n)
-			}
-			linked++
-		case strings.HasPrefix(id, "backup-"):
+		if _, has := n["link"]; has {
+			t.Errorf("notice %q has a link: %v", id, n)
+		}
+		if strings.HasPrefix(id, "backup-") {
 			backups++
-			if has {
-				t.Errorf("backup notice has a link: %v", n)
-			}
-		default:
-			if has {
-				t.Errorf("notice %q has a link: %v", id, n)
-			}
 		}
 	}
-	if linked != 1 || backups != 1 {
-		t.Fatalf("want the layered and one backup notice, got %v", ns)
+	if len(ns) != 2 || backups != 1 {
+		t.Fatalf("want the upload and one backup notice, got %v", ns)
 	}
 
-	// The other builders, directly.
-	up, ok := uploadDefaultsNotice([]settings.DefaultMove{{Key: settings.KeyUploadMaxBytesIcon, From: settings.MB, To: 2 * settings.MB}})
-	if !ok || up.Link != nil {
-		t.Errorf("upload-defaults notice: ok=%v link=%v", ok, up.Link)
-	}
 	var sz sizeNoteState
 	sz.add("Tile A")
 	if n, ok := sz.notice(); !ok || n.Link != nil {

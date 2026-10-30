@@ -12,9 +12,9 @@
   interface Props {
     entryId: string;
     /**
-     * Show the "checks are off" state too (the editor). In view mode a tile whose checks
-     * resolve off shows no badge at all; the indicator stays mounted (and polling) so the
-     * badge appears when a level switches the checks on.
+     * Show the "not checked" state too (the editor). In view mode a tile that is not checked
+     * shows no badge at all; the indicator stays mounted (and polling) so the badge appears
+     * when the gate that stops it is enabled again.
      */
     showOff?: boolean;
   }

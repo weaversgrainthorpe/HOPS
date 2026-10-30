@@ -11,7 +11,7 @@
   import { backgroundSummary } from '../background/backgroundSummary';
   import { reducedMotion } from '$lib/stores/backgroundAnimation';
   import StatusCheckSetting from '../editor/StatusCheckSetting.svelte';
-  import { containerSetting, type LevelSetting, type StatusContext } from '$lib/editor/statusChecks';
+  import { gateSetting, type GateSetting, type StatusContext } from '$lib/editor/statusChecks';
 
   // Close modal when edit mode is turned off
   $effect(() => {
@@ -32,15 +32,15 @@
       name: string, icon?: string, iconUrl?: string, iconBgColor?: string, color?: string, opacity?: number,
       /** A background picked in this dialog: undefined = unchanged, null = removed. */
       background?: Background | null,
-      /** Status checks: undefined = unchanged, null = inherit (key removed), true/false = set here. */
+      /** Status-check gate: undefined = unchanged, false = Disabled, null = Enabled (key removed). */
       statusChecksEnabled?: boolean | null
     ) => void;
     onCancel: () => void;
     onDelete?: () => void;
     onDuplicate?: () => void;
-    /** The tab's stored status-check setting (missing = inherit). */
+    /** The tab's stored status-check gate (missing = Enabled). */
     tabStatusChecks?: unknown;
-    /** The dashboard, for the status-check row's "inherited from" text. */
+    /** The dashboard, so the status-check row can say when a gate above stops this one. */
     statusContext?: StatusContext;
   }
 
@@ -59,8 +59,8 @@
   // svelte-ignore state_referenced_locally
   let opacity = $state(tabOpacity);
   // svelte-ignore state_referenced_locally
-  const initialStatus = containerSetting(tabStatusChecks);
-  let statusSetting = $state<LevelSetting>(initialStatus);
+  const initialStatus = gateSetting(tabStatusChecks);
+  let statusSetting = $state<GateSetting>(initialStatus);
   let showBackgroundConfig = $state(false);
 
   // A picked background is staged here and saved with the dialog (one undo step);
@@ -87,7 +87,7 @@
     // Only a changed choice is written (an untouched invalid value stays as stored).
     const sc =
       statusSetting !== initialStatus && statusSetting !== 'invalid'
-        ? statusSetting === 'inherit' ? null : statusSetting === 'on'
+        ? statusSetting === 'disabled' ? false : null
         : undefined;
     onSave(name.trim(), icon || undefined, iconUrl || undefined, iconBgColor, color, opacity, bg, sc);
   }

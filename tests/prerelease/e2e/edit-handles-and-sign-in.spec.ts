@@ -881,7 +881,7 @@ test.describe('Settings is the admin home; / shows a dashboard', () => {
       await expect(side.locator('a.side-item')).toHaveText(sections);
       // Each section's accessible name is exactly its label (the icon adds nothing to it).
       for (const name of sections) await expect(side.locator('a.side-item').and(anon.getByRole('link', { name, exact: true }))).toHaveCount(1);
-      await expect(side.getByRole('list', { name: 'Dashboards pages' }).getByRole('link')).toHaveText(['Dashboards', 'Dead links', 'Duplicates', 'Status check overrides']);
+      await expect(side.getByRole('list', { name: 'Dashboards pages' }).getByRole('link')).toHaveText(['Dashboards', 'Dead links', 'Duplicates', 'Blocked status checks']);
       await expect(side.getByRole('button', { name: 'Log out' })).toBeVisible();
       await expect(anon.getByRole('heading', { name: 'Dashboards', level: 2, exact: true })).toBeVisible();
       await expect(anon.getByRole('heading', { name: `walkthrough ${f.path.slice(1)}`, level: 3 })).toBeVisible();

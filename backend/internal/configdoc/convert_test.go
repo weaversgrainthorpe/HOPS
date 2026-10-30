@@ -93,8 +93,8 @@ func assertKeysPreserved(t *testing.T, orig, got Obj, what string, skip ...strin
 		if s, isStr := v.(string); isStr && (k == "url" || k == AwayURLKey) {
 			v = strings.TrimSpace(s) // the conversion trims tile addresses
 		}
-		if sc, isObj := v.(Obj); isObj && k == "statusCheck" && sc["enabled"] == true && got["type"] != "note" {
-			v = withEnabled(sc, nil) // pinStatusCheck: a ticked tile inherits
+		if sc, isObj := v.(Obj); isObj && k == "statusCheck" && got["type"] != "note" {
+			v = withEnabled(sc, sc["enabled"] == true) // pinStatusCheck: only a ticked tile is On
 		}
 		eq(t, gv, v, what+"."+k)
 	}
@@ -470,11 +470,9 @@ func TestMigrateV2_RealExports(t *testing.T) {
 	}
 }
 
-// Spec Part A, "Upgrades from v2 keep v2's behaviour": v2.2.1 checked a tile
-// only when its own statusCheck.enabled was true. A v3 tile with no setting
-// inherits, so the conversion pins every other v2 tile Off (keeping its other
-// statusCheck fields); an explicit null (from a Homer/Dashy/Heimdall import)
-// stays null, so those tiles inherit.
+// Upgrades from v2 keep v2's behaviour: v2.2.1 checked a tile only when its
+// own statusCheck.enabled was true. The conversion pins a ticked tile On and
+// every other v2 tile Off (keeping its other statusCheck fields).
 func TestConvertPinsV2StatusChecks(t *testing.T) {
 	var v2 Obj
 	if err := json.Unmarshal([]byte(`{"dashboards": [{"id": "d1", "name": "Home", "path": "/home", "tabs": [
@@ -498,10 +496,11 @@ func TestConvertPinsV2StatusChecks(t *testing.T) {
 	want := map[string]any{
 		"none": Obj{"enabled": false},
 		"off":  Obj{"type": "http", "enabled": false, "interval": 60},
-		// Ticked in v2: inherits, so it follows its dashboard and the global
-		// switch exactly as v2 did (Off there meant nothing was contacted).
-		"on":  Obj{"type": "http", "enabled": nil, "interval": 60},
-		"inh": Obj{"enabled": nil},
+		// Ticked in v2: On. The dashboard and global gates are left Enabled, so
+		// it is checked exactly as v2 checked it.
+		"on": Obj{"type": "http", "enabled": true, "interval": 60},
+		// An explicit null is not ticked: Off.
+		"inh": Obj{"enabled": false},
 		// statusCheck null is no setting, so it is pinned like an absent one.
 		"nul": Obj{"enabled": false},
 		// A non-bool enabled was not true, so v2 never checked it: Off, type kept.

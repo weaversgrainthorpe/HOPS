@@ -37,11 +37,6 @@ type noticeLink struct {
 	Label string `json:"label"`
 }
 
-// noticeLayeredStatusChecks announces the change to status checks: the
-// most specific level now wins, so tiles switched on under a dashboard whose
-// checks are off start being checked.
-const noticeLayeredStatusChecks = "layered-status-checks-v4"
-
 // noticeUploadDefaultsMoved announces that upload limits still at the
 // old defaults were moved to the new ones at startup (settings.DefaultMoves).
 const noticeUploadDefaultsMoved = "upload-defaults-moved-v3"
@@ -49,7 +44,7 @@ const noticeUploadDefaultsMoved = "upload-defaults-moved-v3"
 // knownNotices is every notice id this build can show; dismissing any other
 // id is a 404.
 var knownNotices = map[string]bool{
-	noticeLayeredStatusChecks: true, noticeUploadDefaultsMoved: true, configdoc.NoticeV2StatusOff: true,
+	noticeUploadDefaultsMoved: true,
 }
 
 // uploadLimitLabels names each moved setting as the settings page does.
@@ -162,19 +157,17 @@ func sizeNoteItems(changes []configdoc.SizeChange, doc configdoc.Obj) []string {
 // noticeIDPattern bounds a notice id taken from a URL.
 var noticeIDPattern = regexp.MustCompile(`^[a-z0-9-]{1,64}$`)
 
-// noticeState holds the dismissed and armed notice ids for this process:
-// loaded from dismissed_notices and armed_notices at startup and kept current
-// by dismissals and arming. The notices themselves are computed per GET
+// noticeState holds the dismissed notice ids for this process: loaded from
+// dismissed_notices at startup and kept current by dismissals. The notices themselves are computed per GET
 // /api/config from the current config, so they never go stale.
 type noticeState struct {
 	mu        sync.Mutex
-	loaded    bool // false until both tables have been read successfully
+	loaded    bool // false until the table has been read successfully
 	dismissed map[string]bool
-	armed     map[string]bool
 	loadErr   bool // a load failure was already logged (log once, retry quietly)
 }
 
-// load reads dismissed_notices and armed_notices into memory. It reports
+// load reads dismissed_notices into memory. It reports
 // whether they are loaded; while they aren't, every notice is shown (an extra
 // notice is visible and harmless; a hidden one is silent) and the next GET
 // retries.
@@ -185,28 +178,21 @@ func (s *noticeState) load(db *sql.DB) bool {
 		return true
 	}
 	ids, err := readIDs(db, `SELECT id FROM dismissed_notices`)
-	var armed map[string]bool
-	if err == nil {
-		armed, err = readIDs(db, `SELECT id FROM armed_notices`)
-	}
 	if err != nil {
 		if !s.loadErr {
-			slog.Error("notices: cannot read dismissed or armed notices; showing all until it succeeds",
+			slog.Error("notices: cannot read dismissed notices; showing all until it succeeds",
 				"component", "api", "error", err)
 			s.loadErr = true
 		}
 		return false
 	}
 	if s.loadErr {
-		slog.Info("notices: dismissed and armed notices read", "component", "api")
+		slog.Info("notices: dismissed notices read", "component", "api")
 	}
 	for id := range s.dismissed { // dismissed meanwhile in this process
 		ids[id] = true
 	}
-	for id := range s.armed { // armed meanwhile (its stored dismissal was cleared then)
-		armed[id] = true
-	}
-	s.dismissed, s.armed, s.loaded, s.loadErr = ids, armed, true, false
+	s.dismissed, s.loaded, s.loadErr = ids, true, false
 	return true
 }
 
@@ -233,25 +219,6 @@ func (s *noticeState) isDismissed(id string) bool {
 	return s.dismissed[id]
 }
 
-// isArmed reports whether id is armed. Until the tables are read, every
-// notice counts as armed, so none is hidden by a failed read.
-func (s *noticeState) isArmed(id string) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return !s.loaded || s.armed[id]
-}
-
-// arm marks id armed in this process and clears its dismissal here.
-func (s *noticeState) arm(id string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.armed == nil {
-		s.armed = map[string]bool{}
-	}
-	s.armed[id] = true
-	delete(s.dismissed, id)
-}
-
 func (s *noticeState) dismiss(id string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -274,18 +241,7 @@ func (r *Router) currentNotices(stored configdoc.Obj) []notice {
 	if n, ok := r.sizeNotes.notice(); ok {
 		out = append(out, n)
 	}
-	if names := dashboardsWithTilesOnUnderOff(r, stored); len(names) > 0 {
-		out = append(out, notice{
-			ID: noticeLayeredStatusChecks,
-			Text: "Status checks now follow the most specific setting. These dashboards have tiles switched on " +
-				"while the dashboard is off, so those tiles are now checked: " + strings.Join(names, ", ") + ".",
-			Link: &noticeLink{Href: "/settings/dashboards/status-overrides", Label: "Review status check overrides"},
-		})
-	}
 	r.notices.load(r.db) // retries if the startup read failed
-	if n, ok := r.v2StatusOffNotice(stored); ok {
-		out = append(out, n)
-	}
 	if len(out) == 0 {
 		return out
 	}
@@ -296,92 +252,6 @@ func (r *Router) currentNotices(stored configdoc.Obj) []notice {
 		}
 	}
 	return kept
-}
-
-// v2StatusOffNotice says, once a v2 conversion has set tiles Off
-// (configdoc.NoticeV2StatusOff armed), which dashboards still hold tiles set
-// Off on their own; it goes when none are left, or when dismissed.
-func (r *Router) v2StatusOffNotice(doc configdoc.Obj) (notice, bool) {
-	if !r.notices.isArmed(configdoc.NoticeV2StatusOff) {
-		return notice{}, false
-	}
-	var names []string
-	count := 0
-	counted := map[string]bool{}
-	configdoc.Walk(doc, func(dash, _ configdoc.Obj, _ []configdoc.Obj, n configdoc.Obj) bool {
-		if n["kind"] != "tile" || !configdoc.TileSetsOff(n) {
-			return true
-		}
-		count++
-		if id, _ := dash["id"].(string); !counted[id] {
-			counted[id] = true
-			names = append(names, dashboardLabel(dash))
-		}
-		return true
-	})
-	if count == 0 {
-		return notice{}, false
-	}
-	tiles := "1 tile is still set to Off on its own"
-	if count != 1 {
-		tiles = fmt.Sprintf("%d tiles are still set to Off on their own", count)
-	}
-	return notice{
-		ID: configdoc.NoticeV2StatusOff,
-		Text: "Converted from v2: tiles that did not have status checks ticked were set to Off, so the same " +
-			"tiles are checked as before. " + tiles + ", in: " + strings.Join(names, ", ") +
-			". To let them follow their folder, tab or dashboard instead, restore inheritance for them.",
-		Link: &noticeLink{Href: "/settings/dashboards/status-overrides", Label: "Review status check overrides"},
-	}, true
-}
-
-// armNotice arms a one-time notice after a committed change (a v2 import).
-// If it cannot be stored the failure is logged and the notice is still shown
-// in this process, never dropped.
-func (r *Router) armNotice(id string) {
-	r.notices.arm(id)
-	if err := configdoc.ArmNotice(r.db, id); err != nil {
-		slog.Error("notices: cannot store an armed notice; it is shown until restart", "component", "api", "notice", id, "error", err)
-	}
-}
-
-// dashboardsWithTilesOnUnderOff names, in document order, the dashboards
-// whose checks are off (their effective setting) holding a link tile (with
-// an id and a URL) that is checked because it is itself switched on — the
-// tiles the previous build did not check and this one does.
-func dashboardsWithTilesOnUnderOff(r *Router, doc configdoc.Obj) []string {
-	var names []string
-	listed := map[string]bool{}
-	offCache := map[string]bool{}
-	configdoc.Walk(doc, func(dash, tab configdoc.Obj, path []configdoc.Obj, n configdoc.Obj) bool {
-		if n["kind"] != "tile" {
-			return true
-		}
-		if !configdoc.IsCheckableTile(n) {
-			return true
-		}
-		if id, _ := n["id"].(string); id == "" {
-			return true
-		}
-		dashID, _ := dash["id"].(string)
-		if listed[dashID] {
-			return true
-		}
-		if on, src, _ := configdoc.EffectiveStatusChecks(r.settings, dash, tab, path, n); !on || src != configdoc.SourceTile {
-			return true
-		}
-		off, ok := offCache[dashID]
-		if !ok {
-			off = !configdoc.Resolve(r.settings, dash).StatusChecksEnabled
-			offCache[dashID] = off
-		}
-		if off {
-			listed[dashID] = true
-			names = append(names, dashboardLabel(dash))
-		}
-		return true
-	})
-	return names
 }
 
 // handleNotices serves POST /api/notices/{id}/dismiss (protected: auth +

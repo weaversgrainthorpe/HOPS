@@ -94,9 +94,8 @@ type Background struct {
 	OverlayBlur        *float64 `json:"overlayBlur,omitempty"`        // 0-20, blur in px
 }
 
-// StatusCheck configuration. Enabled is true, false or nil (inherit: the
-// tile follows its folders, tab or dashboard); it is always written, so a
-// zero StatusCheck is {"enabled": null}.
+// StatusCheck configuration. Enabled true is On; false or nil is Off. It is
+// always written, so a zero StatusCheck is {"enabled": null} (Off).
 type StatusCheck struct {
 	Type     string `json:"type,omitempty"` // http
 	Enabled  *bool  `json:"enabled"`

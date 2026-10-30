@@ -8,7 +8,8 @@ import (
 	"github.com/weaversgrainthorpe/HOPS/internal/settings"
 )
 
-// CheckSource names the level whose setting decided a tile's status checks.
+// CheckSource names the level that decided a tile's status checks: the
+// outermost Disabled gate when one stops the tile, otherwise the tile itself.
 type CheckSource string
 
 const (
@@ -24,11 +25,11 @@ const (
 	SourceInvalid CheckSource = "invalid"
 )
 
-// tri is a decoded layered on/off setting.
+// tri is a decoded on/off value; triInvalid is a wrong type.
 type tri int
 
 const (
-	triInherit tri = iota
+	triAbsent tri = iota
 	triOn
 	triOff
 	triInvalid
@@ -37,7 +38,7 @@ const (
 func containerTri(v any) tri {
 	switch b := v.(type) {
 	case nil:
-		return triInherit
+		return triAbsent
 	case bool:
 		if b {
 			return triOn
@@ -47,14 +48,13 @@ func containerTri(v any) tri {
 	return triInvalid
 }
 
-// tileTri is the tile's own setting: statusCheck.enabled true/false is
-// on/off; absent or null inherits (no statusCheck, statusCheck null, no
-// enabled, or enabled null: the tile follows its folders, tab and dashboard);
+// tileTri is the tile's own setting: statusCheck.enabled true is On; false,
+// null or absent (no statusCheck, statusCheck null, no enabled) is Off;
 // anything else is invalid.
 func tileTri(tile Obj) tri {
 	raw, has := tile["statusCheck"]
 	if !has || raw == nil {
-		return triInherit
+		return triAbsent
 	}
 	sc, ok := raw.(Obj)
 	if !ok {
@@ -62,7 +62,7 @@ func tileTri(tile Obj) tri {
 	}
 	v, has := sc["enabled"]
 	if !has {
-		return triInherit
+		return triAbsent
 	}
 	return containerTri(v)
 }
@@ -79,22 +79,6 @@ func IsCheckableTile(tile Obj) bool {
 	return u != ""
 }
 
-// TileSetsOff reports whether a checkable tile sets its own status check
-// Off (statusCheck.enabled false), as the v2 conversion pins unticked tiles.
-func TileSetsOff(tile Obj) bool {
-	return IsCheckableTile(tile) && tileTri(tile) == triOff
-}
-
-// HasTileSetOff reports whether any tile in doc sets its own status check Off.
-func HasTileSetOff(doc Obj) bool {
-	found := false
-	Walk(doc, func(_, _ Obj, _ []Obj, n Obj) bool {
-		found = n["kind"] == "tile" && TileSetsOff(n)
-		return !found
-	})
-	return found
-}
-
 // invalidWarned de-duplicates the invalid-value WARN: once per (tile, level)
 // per process, not on every checker pass or status request.
 var invalidWarned sync.Map
@@ -107,15 +91,20 @@ func warnInvalid(tileID, level, levelID string, v any) {
 		"component", "configdoc", "tile", tileID, "level", level, "id", levelID, "value", fmt.Sprintf("%v", v))
 }
 
-// EffectiveStatusChecks resolves whether tile is status-checked: the most
-// specific level that sets it wins — the tile, then its folders from the
-// innermost out (folderChain is outermost first, as Walk's path), then the
-// tab, then the dashboard's override, then the global setting. A tile with
-// no setting (absent or null) inherits from the levels above it. If the tile, a folder or the tab holds a wrong-typed value, the tile is
-// off with SourceInvalid and that level's id (WARN logged once). It returns
-// the deciding level and that level's id ("" for the global). dash, tab and
-// folderChain may be nil (that level inherits); a nil tile means "no tile
-// level" (e.g. an id not in the config).
+// EffectiveStatusChecks resolves whether tile is status-checked: only when
+// the tile itself is On and every gate on its path is Enabled — the global
+// setting, the dashboard, the tab and the folders (folderChain is outermost
+// first, as Walk's path). A gate is Disabled only by an explicit false; null
+// or absent is Enabled. A tile is On only by statusCheck.enabled true.
+//
+// When a gate stops the tile it returns false with the OUTERMOST Disabled gate
+// (global, dashboard, tab, then folders outermost first) and that gate's id
+// ("" for the global). Otherwise it returns the tile's own state with
+// SourceTile and the tile's id. If the tile, a folder or the tab holds a
+// wrong-typed value, the tile is off with SourceInvalid and that level's id
+// (WARN logged once). dash, tab and folderChain may be nil (an Enabled level);
+// a nil tile means "no tile level" (e.g. an id not in the config): only the
+// gates are consulted and an open path reports true with SourceGlobal.
 func EffectiveStatusChecks(svc *settings.Service, dash, tab Obj, folderChain []Obj, tile Obj) (bool, CheckSource, string) {
 	idOf := func(o Obj) string { s, _ := o["id"].(string); return s }
 	tileID := idOf(tile)
@@ -136,38 +125,33 @@ func EffectiveStatusChecks(svc *settings.Service, dash, tab Obj, folderChain []O
 		return false, SourceInvalid, idOf(tab)
 	}
 
-	if tile != nil {
-		switch tileTri(tile) {
-		case triOn:
-			return true, SourceTile, tileID
-		case triOff:
-			return false, SourceTile, tileID
-		}
+	// Gates, outermost first.
+	if !svc.GetBool(settings.KeyStatusChecksEnabled) {
+		return false, SourceGlobal, ""
 	}
-	for i := len(folderChain) - 1; i >= 0; i-- {
-		switch containerTri(folderChain[i]["statusChecksEnabled"]) {
-		case triOn:
-			return true, SourceFolder, idOf(folderChain[i])
-		case triOff:
-			return false, SourceFolder, idOf(folderChain[i])
-		}
-	}
-	switch containerTri(tab["statusChecksEnabled"]) {
-	case triOn:
-		return true, SourceTab, idOf(tab)
-	case triOff:
-		return false, SourceTab, idOf(tab)
-	}
-	// The dashboard override keeps Resolve's handling (a wrong type there
-	// falls back to the global with a WARN, as for every dashboard setting).
 	if ov, ok := dash["settings"].(Obj); ok {
 		switch ov["statusChecksEnabled"].(type) {
 		case bool:
-			return ov["statusChecksEnabled"].(bool), SourceDashboard, idOf(dash)
+			if !ov["statusChecksEnabled"].(bool) {
+				return false, SourceDashboard, idOf(dash)
+			}
 		case nil:
 		default:
-			return Resolve(svc, dash).StatusChecksEnabled, SourceGlobal, ""
+			// A wrong type here is logged by Resolve and read as Enabled; the
+			// global gate above has already been applied.
+			Resolve(svc, dash)
 		}
 	}
-	return svc.GetBool(settings.KeyStatusChecksEnabled), SourceGlobal, ""
+	if containerTri(tab["statusChecksEnabled"]) == triOff {
+		return false, SourceTab, idOf(tab)
+	}
+	for _, f := range folderChain {
+		if containerTri(f["statusChecksEnabled"]) == triOff {
+			return false, SourceFolder, idOf(f)
+		}
+	}
+	if tile == nil {
+		return true, SourceGlobal, ""
+	}
+	return tileTri(tile) == triOn, SourceTile, tileID
 }
