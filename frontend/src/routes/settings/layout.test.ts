@@ -447,6 +447,13 @@ describe('settings shell, Dashboards pages', () => {
 		});
 	}
 
+	it('the Tab order page marks the Dashboards section current', () => {
+		at('/settings/dashboards/tab-order/x');
+		renderShell();
+		const item = within(sidebar()).getAllByRole('link').find((a) => a.classList.contains('side-item') && a.textContent?.trim() === 'Dashboards')!;
+		expect(item.getAttribute('aria-current')).toBe('page');
+	});
+
 	it('the Duplicates page marks the Dashboards section current', () => {
 		at('/settings/dashboards/duplicates');
 		renderShell();

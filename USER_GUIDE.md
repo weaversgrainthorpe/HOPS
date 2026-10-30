@@ -93,6 +93,7 @@ Everything about the list of dashboards is on **Settings › Dashboards**:
   - **Move up** / **Move down**: the order of the list. The top dashboard
     is the one `/` opens.
   - **Rename**: change the **Name** and the **URL Path**.
+  - **Tab order**: a page for reordering that dashboard's tabs; see [Tab order](#tab-order).
   - **Export**: download that dashboard as a HOPS JSON file.
   - **Show QR code (scan with phone)**: see [QR codes](#qr-codes).
   - **Open in new tab**.
@@ -110,6 +111,34 @@ at the top of the page).
 backslash or control characters, and can't begin with a name HOPS uses for
 its own pages: `/add`, `/admin`, `/settings`, `/api`, `/icons`,
 `/backgrounds`, `/presets` or `/_app`.
+
+### Tab order
+
+For moving a tab a long way, or rearranging many, use **Tab order** on the
+dashboard's row in **Settings › Dashboards** (dragging tabs on the dashboard
+is still the quick way for a small move). It lists every tab with its
+position, and nothing changes on the dashboard until you **Save order**.
+
+- **Move a tab**: drag a row by its handle, or use the buttons on the row:
+  **↑** and **↓** move it one place, **⤒** and **⤓** send it to the top or
+  the bottom. The **Find a tab** box narrows the list; the numbers still
+  show each tab's real position.
+- **Move several together**: tick their boxes, then **Move ticked to top**,
+  **Move ticked to bottom**, or type a position and click **Move**. Dragging
+  any ticked row moves all the ticked rows. They keep their order relative
+  to each other.
+- **Sort A→Z** puts every tab in name order (capitals ignored, "Tab 2"
+  before "Tab 10").
+- **Undo** takes back the last move (a sort is one step). **Discard
+  changes** goes back to the saved order. **Save order** saves it.
+
+Saving is refused, with the reason, while that dashboard is open for
+editing or has unsaved changes kept from a sign-out: save or discard those
+first. If the dashboard was changed somewhere else in the meantime, nothing
+is saved; HOPS keeps your order, applies it to the latest version (new tabs
+go at the end, tabs deleted elsewhere drop out, and both are named) and asks
+you to check it and Save again. A dashboard with one tab has nothing to
+reorder.
 
 ### The Sample
 

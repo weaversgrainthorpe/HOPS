@@ -278,6 +278,9 @@
               <button onclick={() => startEdit(dashboard)} class="btn-secondary" aria-label="Rename {dashboard.name}" title="Rename">
                 <Icon icon="mdi:pencil" width="20" />
               </button>
+              <a href="/settings/dashboards/tab-order/{encodeURIComponent(dashboard.id)}" class="btn-secondary" aria-label="Tab order for {dashboard.name}" title="Tab order">
+                <Icon icon="mdi:sort" width="20" />
+              </a>
               <button onclick={() => handleExport(dashboard)} class="btn-secondary" aria-label="Export {dashboard.name}" title="Export" disabled={exportingId === dashboard.id}>
                 {#if exportingId === dashboard.id}
                   <Icon icon="mdi:loading" width="20" class="spin" />
