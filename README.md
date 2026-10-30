@@ -96,45 +96,51 @@ HOPS 3 is a big rework of how dashboards are laid out and edited.
 
 <table>
   <tr>
-    <td width="33%" valign="top">
+    <td width="33%" valign="top" align="center">
       <a href="docs/screenshots/dashboard-hero.png"><img src="docs/screenshots/dashboard-hero.png" alt="The Sample dashboard on a desktop" /></a>
       <p align="center"><sub><b>Dashboard</b>: tiles and folders on a tab, with a background picture</sub></p>
     </td>
-    <td width="33%" valign="top">
+    <td width="33%" valign="top" align="center">
       <a href="docs/screenshots/folders.png"><img src="docs/screenshots/folders.png" alt="Open folders, folders inside folders, and folder shapes" /></a>
       <p align="center"><sub><b>Folders</b>: open, nested, and in seven looks</sub></p>
     </td>
-    <td width="33%" valign="top">
+    <td width="33%" valign="top" align="center">
       <a href="docs/screenshots/edit-mode.png"><img src="docs/screenshots/edit-mode.png" alt="Edit mode with the editing toolbar and a selection" /></a>
       <p align="center"><sub><b>Edit mode</b>: drag and drop, undo and redo, save when you're done</sub></p>
     </td>
   </tr>
+</table>
+
+<table>
   <tr>
-    <td width="33%" valign="top">
-      <a href="docs/screenshots/edit-tile.png"><img src="docs/screenshots/edit-tile.png" alt="The tile dialog" /></a>
-      <p align="center"><sub><b>Tile dialog</b>: every option in one place, nothing hidden in config files</sub></p>
-    </td>
-    <td width="33%" valign="top">
+    <td width="25%" valign="top" align="center">
       <a href="docs/screenshots/icon-picker.png"><img src="docs/screenshots/icon-picker.png" alt="Icon picker" /></a>
       <p align="center"><sub><b>Icon picker</b>: thousands of icons that work offline, or upload your own</sub></p>
     </td>
-    <td width="33%" valign="top">
-      <a href="docs/screenshots/mobile.png"><img src="docs/screenshots/mobile.png" alt="A dashboard on a phone" /></a>
-      <p align="center"><sub><b>Phone</b>: the same dashboard, sized for a small screen</sub></p>
-    </td>
-  </tr>
-  <tr>
-    <td width="33%" valign="top">
+    <td width="25%" valign="top" align="center">
       <a href="docs/screenshots/settings.png"><img src="docs/screenshots/settings.png" alt="The Settings page" /></a>
       <p align="center"><sub><b>Settings</b>: dashboards, backups and every server setting, in the GUI</sub></p>
     </td>
-    <td width="33%" valign="top">
+    <td width="25%" valign="top" align="center">
       <a href="docs/screenshots/qr.png"><img src="docs/screenshots/qr.png" alt="A dashboard's QR code" /></a>
       <p align="center"><sub><b>QR codes</b>: open any dashboard on a phone, no typing</sub></p>
     </td>
-    <td width="33%" valign="top">
+    <td width="25%" valign="top" align="center">
       <a href="docs/screenshots/discovery.png"><img src="docs/screenshots/discovery.png" alt="Network Discovery results" /></a>
       <p align="center"><sub><b>Network Discovery</b>: find what's already running, tick what you want</sub></p>
+    </td>
+  </tr>
+</table>
+
+<table>
+  <tr>
+    <td width="50%" valign="top" align="center">
+      <a href="docs/screenshots/edit-tile.png"><img src="docs/screenshots/edit-tile.png" alt="The tile dialog" /></a>
+      <p align="center"><sub><b>Tile dialog</b>: every option in one place, nothing hidden in config files</sub></p>
+    </td>
+    <td width="50%" valign="top" align="center">
+      <a href="docs/screenshots/mobile.png"><img width="65%" src="docs/screenshots/mobile.png" alt="A dashboard on a phone" /></a>
+      <p align="center"><sub><b>Phone</b>: the same dashboard, sized for a small screen</sub></p>
     </td>
   </tr>
 </table>
