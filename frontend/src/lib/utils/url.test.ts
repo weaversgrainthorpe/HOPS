@@ -118,7 +118,7 @@ describe('safeOpenUrl', () => {
 
 // Pentest L1: every open helper refuses javascript: and data:; the iframe and
 // popup helper allows only http(s).
-describe('open helpers refuse unsafe schemes (L1)', () => {
+describe('open helpers refuse unsafe schemes', () => {
 	const unsafe = ['javascript:alert(document.domain)', ' JaVaScRiPt:alert(1)', 'data:text/html,<script>alert(1)</script>', 'vbscript:x'];
 
 	it('safeFrameUrl allows only http(s)', () => {

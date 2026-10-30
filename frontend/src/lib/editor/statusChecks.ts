@@ -1,8 +1,8 @@
 /**
- * Layered status checks (M4 design §4b, Ruling 12): the TypeScript twin of the backend's
+ * Layered status checks: the TypeScript twin of the backend's
  * configdoc.EffectiveStatusChecks, so the dialogs can show the source and the effect of a
  * setting while it is still a draft. Both resolvers run every case of the shared fixture
- * backend/internal/configdoc/testdata/status_checks_cases.json (Ruling 2).
+ * backend/internal/configdoc/testdata/status_checks_cases.json.
  *
  * The most specific level that sets it wins: the tile, its folders (innermost first), the
  * tab, the dashboard's override, then the global setting. A tile with no setting of its own

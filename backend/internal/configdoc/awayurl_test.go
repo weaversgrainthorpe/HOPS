@@ -37,7 +37,7 @@ func TestValidTileURL(t *testing.T) {
 	}
 }
 
-// Pentest L1: a tile's url is checked with the same allow-list as awayUrl on
+// A tile's url is checked with the same allow-list as awayUrl on
 // saves, imports and transfers. Absent or blank is a tile with nothing to open.
 func TestVerifyDashboard_TileURL(t *testing.T) {
 	withURL := func(v any) Obj {

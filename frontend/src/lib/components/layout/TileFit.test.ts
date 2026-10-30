@@ -6,7 +6,7 @@ import Entry from '../Entry.svelte';
 import { COMPACT_TILE_PX, containerMetrics, sizeSpan } from '$lib/layout/geometry';
 import type { LayoutDashboard, LayoutTab } from '$lib/types/layout';
 
-// Ruling 22 (I1): inside the layout renderer a tile fills its grid cell exactly
+// Inside the layout renderer a tile fills its grid cell exactly
 // (no v2 min-height spilling into the next row); a cell under ~110 px renders a
 // compact tile (icon + name, no description). jsdom has no layout engine and
 // component CSS is not injected, so the fit is asserted on what decides it:
@@ -27,7 +27,7 @@ class FakeRO {
 function tile(id: string, size: 'small' | 'medium' | 'large', x: number, y: number, w = 1, h = 1): any {
   return { kind: 'tile', id, name: 'N-' + id, description: 'Desc ' + id, url: 'http://x.test', icon: 'mdi:home', openMode: 'newtab', size, order: 0, placement: { x, y, w, h } };
 }
-/** A folder's child (M5: no placement). */
+/** A folder's child (no placement). */
 function kid(id: string, size: 'small' | 'medium' | 'large'): any {
   const t = tile(id, size, 0, 0);
   delete t.placement;
@@ -45,11 +45,11 @@ const px = (s: string, prop: string) => {
 beforeEach(() => vi.stubGlobal('ResizeObserver', FakeRO));
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
-describe('tiles fit their grid cell (Ruling 22)', () => {
+describe('tiles fit their grid cell', () => {
   for (const w of [1440, 1024, 800]) {
     it(`at a ${w}px canvas no tile's box exceeds its cell`, async () => {
       width = w;
-      // M5: on the tab every tile is exactly its Size's span (Small 1 x 1, Medium 2 x 2, Large 4 x 4);
+      // On the tab every tile is exactly its Size's span (Small 1 x 1, Medium 2 x 2, Large 4 x 4);
       // inside a folder every item shows the folder's contents size (here Medium), in order.
       const { dash, tab } = mk([
         tile('r-s', 'small', 0, 0, 1, 1), tile('r-m', 'medium', 2, 0, 2, 2), tile('r-big', 'large', 6, 0, 4, 4),
@@ -83,15 +83,15 @@ describe('tiles fit their grid cell (Ruling 22)', () => {
         // Nothing between the tile and the grid track can grow it.
         expect(cell.style.minHeight === '' || cell.style.minHeight === '0px').toBe(true);
         // Compact exactly when the cell is too small for the full tile, or the tile is one cell
-        // (Small: always compact, spec §9).
+        // (Small: always compact).
         const oneCell = inFolder ? sizeSpan('medium') === 1 : spanW === 1 && span === 1;
         const compact = oneCell || Math.min(cellW, cellH) < COMPACT_TILE_PX;
         expect(btn.classList.contains('compact')).toBe(compact);
         expect(btn.classList.contains('fill')).toBe(true);
-        // Spec §10: one arrangement at every fit; the description is never dropped from a compact tile.
+        // One arrangement at every fit; the description is never dropped from a compact tile.
         expect(cell.querySelector('.subtitle'), `${id} keeps its description`).not.toBeNull();
       }
-      // Consistent sizes (M5 §2): a Medium in a Medium folder is the same box as a Medium on the tab.
+      // Consistent sizes: a Medium in a Medium folder is the same box as a Medium on the tab.
       const rootRow = px((container.querySelector('.container-grid') as HTMLElement).getAttribute('style') ?? '', 'grid-auto-rows');
       const flowRow = px((container.querySelector('.container-flow') as HTMLElement).getAttribute('style') ?? '', 'grid-auto-rows');
       expect(flowRow).toBeCloseTo(2 * rootRow, 1); // both are rounded to 0.01 px

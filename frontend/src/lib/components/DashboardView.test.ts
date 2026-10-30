@@ -44,7 +44,7 @@ const entry = (id: string, name: string) => ({ id, name, url: 'http://x.test', i
 const tile = (id: string, name: string, x = 0, y = 0): any => ({ kind: 'tile', ...entry(id, name), placement: { x, y, w: 2, h: 2 } });
 const folder = (id: string, name: string, children: any[], display = 'expanded'): any => ({
   kind: 'folder', id, name, display, size: 'medium', contentSize: 'medium', placement: { x: 0, y: 2, w: 8, h: 6 },
-  content: { children: children.map(({ placement: _p, ...c }) => c) } // M5: folder contents have no placements
+  content: { children: children.map(({ placement: _p, ...c }) => c) } // folder contents have no placements
 });
 
 const layoutD1: LayoutDashboard = {
@@ -55,7 +55,7 @@ const layoutD1: LayoutDashboard = {
   ]
 };
 const legacy = layoutD1; // the dashboard the route hands Dashboard (v3, like every dashboard)
-// The Showcase: once "view-only (v3)", now editable like any other (M5: a grid tab like every tab).
+// The Showcase: once "view-only (v3)", now editable like any other (a grid tab like every tab).
 const v3d: LayoutDashboard = {
   id: 'v3d', name: 'Fancy', path: '/fancy', revision: 4,
   header: { centerTitle: 'Fancy Header' },
@@ -132,7 +132,7 @@ describe('Dashboard view/edit rendering', () => {
     expect(container.querySelector('.tab-canvas')).toBeNull();
   });
 
-  it('a minimised folder opens in place: nothing pops over (M5: no overlay)', async () => {
+  it('a minimised folder opens in place: nothing pops over (no overlay)', async () => {
     const { container } = render(Dashboard, { dashboard: legacy });
     await tick();
     await fireEvent.click(screen.getByRole('button', { name: 'Box, folder with 1 item' }));
@@ -171,14 +171,14 @@ describe('the Showcase (free layout) is editable like every dashboard', () => {
     expect(get(session)?.dashboardId).toBe('v3d');
     expect(container.querySelector('.tab-canvas.editing[data-tab-id="vt"]')).not.toBeNull();
     expect(screen.getByRole('toolbar', { name: 'Editing' })).toBeInTheDocument();
-    // §7.2: every editing control is in the one floating toolbar; the tab row and the page above the
+    // Every editing control is in the one floating toolbar; the tab row and the page above the
     // canvas are as in view mode (no Dashboard row, no Add Tab in the tab row, no failed-background row).
     const bar = screen.getByRole('toolbar', { name: 'Editing' });
     expect(within(bar).getByRole('button', { name: /^Add tab/ })).toBeInTheDocument();
     expect(screen.queryByText('Add Tab')).toBeNull();
     expect(container.querySelector('[data-dashboard-tabs] button:not([data-edit-handle])')).toBeNull();
     expect(container.querySelector('.header-actions, .bg-failed-row, .add-tab-btn, .editor-shell')).toBeNull();
-    // One labelled "Dashboard" pencil (walkthrough §4C) replaces Background, Header and Settings.
+    // One labelled "Dashboard" pencil replaces Background, Header and Settings.
     expect(within(bar).getByRole('button', { name: 'Edit Dashboard' })).toHaveTextContent('Dashboard');
     for (const t of ['Configure Background', 'Configure Header', 'Dashboard settings']) expect(screen.queryByTitle(t)).toBeNull();
   });
@@ -219,7 +219,7 @@ describe('route resolution and reveal lifetime', () => {
     expect(container.querySelector('.tab-canvas[data-tab-id="t1"]')).not.toBeNull();
   });
 
-  it('a stale reload keeps the active tab id and the folder open in place (M3 Task 1)', async () => {
+  it('a stale reload keeps the active tab id and the folder open in place', async () => {
     const { container, rerender } = render(Dashboard, { dashboard: legacy });
     await tick();
     expect(container.querySelector('.tab-canvas[data-tab-id="t1"]')).not.toBeNull();
@@ -254,7 +254,7 @@ describe('route resolution and reveal lifetime', () => {
     const { container } = render(Dashboard, { dashboard: deep });
     await tick();
     requestReveal({ dashboardId: 'd1', tabId: 't2', folderIds: ['box2', 'sb'], tileId: 'k12' });
-    // An 8 x 6 box at 60 px cells: 462 x 302 content; Sub's inset box inside it (M5 §7) 444 x 256 → 3 a
+    // An 8 x 6 box at 60 px cells: 462 x 302 content; Sub's inset box inside it 444 x 256 → 3 a
     // row; overfull, so the page bar leaves 1 row (3) a page: k12 is on page 4.
     await waitFor(() => expect(container.querySelector('.tab-canvas [data-node-id="k12"]')).not.toBeNull());
     expect(get(folderViewFor('d1'))).toEqual({ box2: 'expanded' });
@@ -267,7 +267,7 @@ describe('route resolution and reveal lifetime', () => {
   });
 });
 
-describe('Dashboard edit mode (M3 Task 6: the v3 editor shell)', () => {
+describe('Dashboard edit mode (the editor shell)', () => {
   let fetchSpy: ReturnType<typeof vi.fn>;
   beforeEach(() => {
     fetchSpy = vi.fn(() => Promise.reject(new Error('no network in tests')));
@@ -328,7 +328,7 @@ describe('Dashboard edit mode (M3 Task 6: the v3 editor shell)', () => {
     render(Dashboard, { dashboard: legacy });
     enterEdit();
     await tick();
-    // The tab's shared edit handle (§4B) opens the tab dialog.
+    // The tab's shared edit handle opens the tab dialog.
     await fireEvent.click(screen.getByRole('button', { name: 'Edit Main tab' }));
     await tick();
     const name = screen.getByLabelText(/Tab Name/) as HTMLInputElement;
@@ -379,7 +379,7 @@ describe('Dashboard edit mode (M3 Task 6: the v3 editor shell)', () => {
     noRequestsButSettingsRead(fetchSpy);
   });
 
-  // Tab reorder by drag (the editor's drag engine, Task 8) is covered in editor/TabReorder.test.ts.
+  // Tab reorder by drag (the editor's drag engine) is covered in editor/TabReorder.test.ts.
 
   it('the Dashboard dialog does not come back by itself after edit mode ends with it open (idle timeout)', async () => {
     render(Dashboard, { dashboard: legacy });
@@ -411,7 +411,7 @@ describe('Dashboard edit mode (M3 Task 6: the v3 editor shell)', () => {
   });
 });
 
-describe('one editing flow (walkthrough §4B): handle, double-click and menu for every item', () => {
+describe('one editing flow: handle, double-click and menu for every item', () => {
   let fetchSpy: ReturnType<typeof vi.fn>;
   beforeEach(() => {
     fetchSpy = vi.fn(() => Promise.reject(new Error('no network in tests')));
@@ -492,7 +492,7 @@ describe('one editing flow (walkthrough §4B): handle, double-click and menu for
     expect(cellOf(container, 'box').classList.contains('collapsed')).toBe(false);
   });
 
-  it('edit mode search reveal (Ruling 6): a saved-minimised folder opens like the menu\'s Open — an undoable draft change, never an error', async () => {
+  it('edit mode search reveal: a saved-minimised folder opens like the menu\'s Open — an undoable draft change, never an error', async () => {
     const { container } = render(Dashboard, { dashboard: legacy });
     enterEdit();
     await tick();

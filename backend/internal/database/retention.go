@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// Backup retention (M6 §11, Jonathan 2026-10-25). When the rules conflict the
+// Backup retention. When the rules conflict the
 // SAFEST reading wins: never delete what might be the last good copy, and
 // never complain about having fewer backups than the target.
 //

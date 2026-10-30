@@ -140,7 +140,7 @@ describe('BackgroundLayer', () => {
     expect(vi.getTimerCount()).toBe(1);
   });
 
-  it('clamps slideshow timing (Ruling 14): a 0.1 s or negative interval ticks every 5 s, never faster', async () => {
+  it('clamps slideshow timing: a 0.1 s or negative interval ticks every 5 s, never faster', async () => {
     for (const interval of [0.1, -5]) {
       FakeImage.all = [];
       const r = render(BackgroundLayer, {
@@ -161,7 +161,7 @@ describe('BackgroundLayer', () => {
     }
   });
 
-  it('clamps slideshow timing (Ruling 14): a huge transitionDuration reaches the styles and the curtain timeout as 5 s', async () => {
+  it('clamps slideshow timing: a huge transitionDuration reaches the styles and the curtain timeout as 5 s', async () => {
     const r = render(BackgroundLayer, {
       background: slideshow(['/backgrounds/a.jpg', '/backgrounds/b.jpg'], { transition: 'curtain', transitionDuration: 1e9 }),
       scope: 'viewport',

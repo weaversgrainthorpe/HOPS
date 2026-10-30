@@ -1,7 +1,7 @@
 <script lang="ts" module>
   import { contrastRatio, deriveFolderColours } from '$lib/layout/folderColours';
 
-  /** The light, neutral card every look preview sits on (M6 §7.2), in both themes. */
+  /** The light, neutral card every look preview sits on, in both themes. */
   export const PREVIEW_CARD = '#eef2f7';
   /** The edge drawn round a preview whose colours are too close to the card (9.7:1 on the card). */
   export const PREVIEW_EDGE = '#334155';
@@ -22,7 +22,7 @@
 
 <script lang="ts">
   /**
-   * One look's preview in the folder dialog's picker (M6 §7.2): the shape in the folder's colour and tab
+   * One look's preview in the folder dialog's picker: the shape in the folder's colour and tab
    * position, on a light neutral card so every look is readable whatever the folder colour (a dark folder
    * on the dark dialog was not). A colour too close to the card gets a dark edge, so the preview keeps
    * 3:1 against its card. The preview is drawn opaque: it shows the look, and the opacity has its own

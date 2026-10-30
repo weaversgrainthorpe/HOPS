@@ -1,19 +1,19 @@
 <script lang="ts">
   /**
-   * THE folder (M5 §2, plan Task 3): one component draws every folder, everywhere, in view and edit
+   * THE folder : one component draws every folder, everywhere, in view and edit
    * mode, on the tab and on a phone.
    * - minimised: a tile of the folder's own size (on a tab, at the top-left of the space it keeps;
    *   inside a folder, at that folder's contents size) with its name and up to four child icons;
    * - open: a box with a title bar (name or breadcrumb, edit handle in edit mode, minimise), ONE page
    *   of its items at its contents size (only the current page is drawn, Tenet 4) and a page bar
    *   only when there is more than one page;
-   * - drilled (M5 §7): a folder inside a folder — every opened sub-folder level is an inset box inside
+   * - drilled: a folder inside a folder — every opened sub-folder level is an inset box inside
    *   the last (its own colour), and only the innermost box holds a page. Every box's title bar is the
-   *   top folder's (Ruling 15): its name on the left, the same minimise on the right (on an inset box it
+   *   top folder's: its name on the left, the same minimise on the right (on an inset box it
    *   returns it to its tile in the parent: up one level). An outer box's title goes back up to that level.
    * Click, Enter, the menu's "Open" and Restore all open a folder in place: nothing pops over.
    * Page and drill-down are this browser's memory (folderView), never saved to the layout.
-   * The drag (hitTest, Task 4) reads data-folder-id / data-folder-page / data-folder-per-page (the
+   * The drag (hitTest) reads data-folder-id / data-folder-page / data-folder-per-page (the
    * page shown: a drop goes at the pointer's place in it), data-folder-bar (the title bar: a drop
    * goes at the end of the folder shown), data-page-bar ("prev" / "next": held, it flips the page)
    * and data-crumb (the folder id an outer box's title bar goes back to: held, it goes up; a
@@ -66,7 +66,7 @@
     item?: boolean;
     /** Edit mode: a click selects (a minimised folder: and opens), double-click / the handle edits, right-click = item menu. */
     editing?: boolean;
-    /** M6 §13: rows this folder is drawn taller on this screen outside edit mode (render-only, never saved; 0 = as stored). */
+    /** Rows this folder is drawn taller on this screen outside edit mode (render-only, never saved; 0 = as stored). */
     screenExtraRows?: number;
   }
   let { folder, style = '', plan, dashboard, tab, folderChain, parent, item = false, editing = false, screenExtraRows = 0 }: Props = $props();
@@ -97,12 +97,12 @@
     cancelPendingOpen(); // the menu is the answer to this press, never also an open
     openMenu({ ...menuPointFor(e, e.currentTarget as Element), target: menuTarget(e.target) });
   }
-  /** Touch long-press released without moving (Ruling 18(1)): the same menu as a right-click there. */
+  /** Touch long-press released without moving: the same menu as a right-click there. */
   const pressed = (x: number, y: number) => {
     cancelPendingOpen();
     openMenu({ x, y, target: menuTarget(document.elementFromPoint(x, y)) });
   };
-  /** Every item edits the same way (§4B): the handle and a double-click open the folder dialog. */
+  /** Every item edits the same way: the handle and a double-click open the folder dialog. */
   const edit = () => openDialog({ kind: 'folder', id: folder.id });
   const dragging = $derived(editing && ($drag?.ids.includes(folder.id) ?? false));
   /** In edit mode a control's click (and double-click) is its own: it never also selects or edits the folder. */
@@ -131,19 +131,19 @@
    */
   function open() {
     if (item) {
-      // §9: the inner box zooms forward from this tile; the open folder holding it recedes slightly.
+      // The inner box zooms forward from this tile; the open folder holding it recedes slightly.
       if (folderChain[0]) playDrill(dashboard.id, folder.id, folderChain[0].id, 'in');
       drillTo(dashboard.id, [...folderChain.map((f) => f.id), folder.id]);
       return;
     }
-    playFolderToggle(dashboard.id, folder.id, 'open'); // §9: it grows from its tile into its box
+    playFolderToggle(dashboard.id, folder.id, 'open'); // it grows from its tile into its box
     if (editing) setDisplay(folder.id, 'expanded');
     else setFolderView(dashboard.id, folder.id, 'expanded');
     void thenFocus();
   }
   function minimise(e: Event) {
     own(e);
-    playFolderToggle(dashboard.id, folder.id, 'minimise'); // §9: it shrinks back into its tile
+    playFolderToggle(dashboard.id, folder.id, 'minimise'); // it shrinks back into its tile
     if (editing) setDisplay(folder.id, 'collapsed');
     else setFolderView(dashboard.id, folder.id, 'collapsed');
     void thenFocus();
@@ -155,8 +155,8 @@
     void thenFocus();
   }
   /**
-   * A click on the minimised tile opens it (M5 §3a.8: click, Enter, the menu's Open — in edit mode
-   * too, walkthrough 1). In edit mode a double-click edits it instead (§4B), so the open waits out the
+   * A click on the minimised tile opens it (click, Enter, the menu's Open — in edit mode
+   * too). In edit mode a double-click edits it instead, so the open waits out the
    * double-click: the dblclick cancels it, and a double-click never also opens. Edit mode also
    * selects a folder on the tab at once (its outline shows; it is then the open box); a sub-folder on
    * a page drills in and is not selected (it would be a selection nobody can see). Ctrl/Cmd/Shift
@@ -183,7 +183,7 @@
     if (e.detail > 1) return; // the second click of a double-click: its dblclick edits
     // A menu is open: this click is the release of the long-press (or right-press) that opened it —
     // a tablet sends one after the long-press. A real new tap first presses outside the menu, which
-    // closes it. So it neither opens nor selects (walkthrough 1 D).
+    // closes it. So it neither opens nor selects.
     if (get(editorMenu) !== null) return;
     if (!item) toggleNode(folder.id, false);
     cancelPendingOpen();
@@ -199,13 +199,13 @@
     }
   }
 
-  // ---- look (M6): the folder's shape is drawn by FolderShape behind its content, in every state. Its
+  // ---- look: the folder's shape is drawn by FolderShape behind its content, in every state. Its
   // colour look applies to the SHAPE only, never to the tiles inside.
   const showTitle = $derived(folder.showTitle !== false);
-  /** Tab shapes put the name on the tab and the controls at the top-right of the body (§3a.2). */
+  /** Tab shapes put the name on the tab and the controls at the top-right of the body. */
   const tabbed = $derived(hasTab(folder.shape));
   const tabPos = $derived(folder.tabPosition === 'centre' || folder.tabPosition === 'right' ? folder.tabPosition : 'left');
-  /** The text colour on a look: Rounded keeps M5's; a tab shape uses its contrast-safe colour (§3a.7). */
+  /** The text colour on a look: Rounded keeps the plain title bar; a tab shape uses its contrast-safe colour. */
   function lookText(f: FolderNode): string | undefined {
     if (!hasTab(f.shape)) return f.color ? getTextColorValue(f.textColor || 'auto', f.color) : undefined;
     if (shapeOf(f.shape) === 'folder-outline') return undefined; // see-through: the text of what shows through
@@ -213,7 +213,7 @@
     return c.text === 'inherit' ? undefined : c.text;
   }
   const textColor = $derived(lookText(folder) ?? 'inherit');
-  /** Never silent (§3.9): a stored look or colour that can't be drawn says so in edit mode. */
+  /** Never silent: a stored look or colour that can't be drawn says so in edit mode. */
   function lookProblems(f: FolderNode): { unknownShape: string | null; unreadableColour: boolean } {
     return {
       unknownShape: f.shape !== undefined && !isFolderShape(f.shape) ? String(f.shape) : null,
@@ -241,7 +241,7 @@
   // ---- minimised tile: a compact version of its shape (measured: its size depends on where it is)
   let tileW = $state(0);
   let tileH = $state(0);
-  /** The Small silhouette (§3a.6): too small for a 12 px name, so only the shape and its icons. */
+  /** The Small silhouette: too small for a 12 px name, so only the shape and its icons. */
   const silhouette = $derived(tabbed && tileH > 0 && tileH < MINI_NAME_MIN_TILE_PX);
   /** A tab shape's tile lays its name and icons out on the front panel, below the tab. */
   const miniFrontPx = $derived(
@@ -277,7 +277,7 @@
   const stacked = $derived(plan.kind === 'stacked' || !folder.placement);
   const phoneCanvasPx = $derived(plan.kind === 'stacked' ? (plan.widthPx ?? 0) : 0);
   // The open box: its content inset is its shape's (shapeInset), so a tab shape's page is the tab
-  // allowance shorter than Rounded's (M6 §3a.4).
+  // allowance shorter than Rounded's.
   const openBoxWidthPx = $derived(stacked ? phoneCanvasPx : nodeBox(folder.placement!, parent).widthPx);
   const contentWidthPx = $derived(
     stacked
@@ -293,7 +293,7 @@
     const widthPx = Math.max(0, contentWidthPx - (k - 1) * NESTED_CHROME.padXPx);
     return folderTabRect(f.shape, f.tabPosition, { widthPx, heightPx: 0 }, wantOf(f, true));
   }
-  // The innermost box's content width: one inset box (NESTED_CHROME) comes off each level (M5 §7).
+  // The innermost box's content width: one inset box (NESTED_CHROME) comes off each level.
   const innerWidthPx = $derived(Math.max(0, contentWidthPx - levels * NESTED_CHROME.padXPx));
   const asked = $derived($nav.page[current.id] ?? 0);
   const phone = $derived(
@@ -331,25 +331,25 @@
     const p = Math.min(Math.max(0, n), paging.pages - 1);
     const from = paging.page;
     setFolderPage(dashboard.id, current.id, p);
-    // §9: the new page slides in from the side it comes from (next from the right); a jump slides once.
+    // The new page slides in from the side it comes from (next from the right); a jump slides once.
     if (p !== from) playPageSlide(dashboard.id, current.id, p > from ? 1 : -1);
   }
   /** Back up to that level (0 = this folder itself): an inset box's minimise, or an outer box's title. */
   function goUp(e: Event, level: number) {
     own(e);
-    // §9: the box left shrinks back into its tile in the level above; the folder comes forward again.
+    // The box left shrinks back into its tile in the level above; the folder comes forward again.
     const leaving = drilled[level];
     if (leaving) playDrill(dashboard.id, leaving.id, folder.id, 'up');
     setFolderDrill(dashboard.id, folder.id, drilled.slice(0, level).map((f) => f.id));
   }
-  /** An inset box's bar is that sub-folder (Ruling 14): its right-click / long-press menu is the sub-folder's. */
+  /** An inset box's bar is that sub-folder: its right-click / long-press menu is the sub-folder's. */
   function subMenu(e: MouseEvent, id: string) {
     e.preventDefault();
     e.stopPropagation();
     openMenu({ ...menuPointFor(e, e.currentTarget as Element), target: { kind: 'node', id } });
   }
   /**
-   * An inset box's bar grabbed (Ruling 14): the sub-folder is dragged as the tile it is on its parent's
+   * An inset box's bar grabbed: the sub-folder is dragged as the tile it is on its parent's
    * page — that parent's item size (a phone tab column there), centred on the pointer — never as the
    * wide bar, so the ghost and the drop it aims are the sub-folder's own.
    */
@@ -358,7 +358,7 @@
     return { left: x - side / 2, top: y - side / 2, width: side, height: side };
   }
   /**
-   * An inset box's minimise (Ruling 15): it returns to its tile in the parent — up one level, this
+   * An inset box's minimise: it returns to its tile in the parent — up one level, this
    * browser's memory (in edit mode too, never the draft). Focus goes to that tile (or, when it is on
    * another page of the parent, to the folder's own control).
    */
@@ -376,7 +376,7 @@
   function noDrag(e: PointerEvent) {
     if (editing) e.stopPropagation();
   }
-  /** An inset box's edit handle / double-click edits THAT sub-folder (M5 §7.6). */
+  /** An inset box's edit handle / double-click edits THAT sub-folder. */
   function editSub(e: Event | null, id: string) {
     if (e) {
       e.stopPropagation();
@@ -385,7 +385,7 @@
     openDialog({ kind: 'folder', id });
   }
 
-  // Search reveal (M5 §3a.5): the folder holding the item flips to the item's page once it is shown.
+  // Search reveal: the folder holding the item flips to the item's page once it is shown.
   $effect(() => {
     const r = $pageReveal;
     const id = current.id;
@@ -401,8 +401,8 @@
   });
 </script>
 
-<!-- Every box's controls (Ruling 15): the top folder's bar and each inset box's bar draw the same
-     minimise, last in the bar. `label` names the box ("Minimise <its name>", every box alike — I2), so
+<!-- Every box's controls: the top folder's bar and each inset box's bar draw the same
+     minimise, last in the bar. `label` names the box ("Minimise <its name>", every box alike), so
      no two folders' controls share a name. The top folder's controls carry a data- hook for
      focusFolderControl (never found by label). -->
 {#snippet controls(label: string, title: string, onMinimise: (e: Event) => void, inset: boolean)}
@@ -426,7 +426,7 @@
   </span>
 {/snippet}
 
-<!-- Edit mode only: a look that can't be drawn as stored says so (M6 §3.9) — never a silent swap. -->
+<!-- Edit mode only: a look that can't be drawn as stored says so — never a silent swap. -->
 {#snippet lookNotes(f: FolderNode, cls: string)}
   {#if editing}
     {@const p = lookProblems(f)}
@@ -456,13 +456,13 @@
 
 {#snippet pageArea()}
   {#if paging.tooSmall && levels === 0 && editing && screenExtraRows > 0 && !belowMin}
-    <!-- M6 §13 (option A): edit mode draws the SAVED box so drag/drop geometry is exact; outside edit
+    <!-- (option A): edit mode draws the SAVED box so drag/drop geometry is exact; outside edit
          mode this screen draws it taller (screenGrowth). Said in place of its contents, never clipped. -->
     <p class="too-small taller-here" role="status" data-folder-too-small data-folder-taller-here={folder.id}>
       Taller on this screen — shown at its saved size while editing. Edit on a wider screen, or make it bigger.
     </p>
   {:else if paging.tooSmall && levels === 0}
-    <!-- Never a silent clip (Important 2): a box below its minimum says so, and how to fix it. -->
+    <!-- Never a silent clip: a box below its minimum says so, and how to fix it. -->
     <p class="too-small" role="status" data-folder-too-small>
       Too small to show its contents — resize it{editing ? '' : ' in edit mode'}.
     </p>
@@ -526,8 +526,8 @@
   {/if}
 {/snippet}
 
-<!-- One drilled level (M5 §7): sub-folder drilled[k - 1] as an inset box in the level above, with its
-     own bar — the top folder's (Ruling 15): its name, its edit handle, the same minimise (back to its
+<!-- One drilled level: sub-folder drilled[k - 1] as an inset box in the level above, with its
+     own bar — the top folder's: its name, its edit handle, the same minimise (back to its
      tile, up one level) — and its own colour; it holds the next level, or (the innermost) the page.
      Not an item: no data-node-id. -->
 {#snippet level(k: number)}
@@ -541,7 +541,7 @@
   {@const subTab = subTabbed ? nestedTab(sub, k) : null}
   {@const subPos = sub.tabPosition === 'centre' || sub.tabPosition === 'right' ? sub.tabPosition : 'left'}
   <!-- A tab shape's tab fills the level's tab allowance; a Rounded box keeps it as spare room in its
-       body (one minimum for every shape, §3a.4) — never an empty band above the box (Ruling 1). -->
+       body (one minimum for every shape) — never an empty band above the box. -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
     class="nested-box"
@@ -554,7 +554,7 @@
     {#if subTabbed || ownLook}
       <FolderShape look={sub} variant="nested" dashboardId={dashboard.id} tabRect={subTab} />
     {/if}
-    <!-- The bar IS the sub-folder (Ruling 14): it drags that sub-folder and its menu is the sub-folder's.
+    <!-- The bar IS the sub-folder: it drags that sub-folder and its menu is the sub-folder's.
          On a tab shape the name is on its tab (part of the bar), the controls at the bar's right. -->
     <div
       class="nested-header"
@@ -656,7 +656,7 @@
       onclick={onTileClick}
       ondblclick={editing
         ? (e) => {
-            // Edit mode: double-click edits, like every item (§4B) — and cancels the click's open.
+            // Edit mode: double-click edits, like every item — and cancels the click's open.
             e.stopPropagation();
             cancelPendingOpen();
             edit();
@@ -665,7 +665,7 @@
       onkeydown={onTileKey}
     >
       <!-- Its shape, compact (the first image, still, on its front); the name and icons on the front.
-           The Small silhouette shows only the icons: the name stays its accessible name (§3a.6). -->
+           The Small silhouette shows only the icons: the name stays its accessible name. -->
       <FolderShape
         look={folder}
         variant="minimised"
@@ -743,10 +743,10 @@
     style:color={textColor}
   >
     <FolderShape look={folder} variant="open" dashboardId={dashboard.id} tabRect={topTab} />
-    <!-- Every open folder has its bar (M5 §3a.7): an untitled one shows only its controls. Its title
-         is never replaced (M5 §7): drilled in, the title (Rounded: the whole bar; a tab shape: its tab)
+    <!-- Every open folder has its bar: an untitled one shows only its controls. Its title
+         is never replaced: drilled in, the title (Rounded: the whole bar; a tab shape: its tab)
          is the go-up target and the name goes up. A tab shape's bar is its tab (the name) plus the
-         body's controls row (the minimise control and edit handle at its top-right, §3a.2). -->
+         body's controls row (the minimise control and edit handle at its top-right). -->
     <div
       class="folder-header"
       class:holding={!tabbed && levels > 0 && holdingKey === crumbDwellKey(folder.id, folder.id)}
@@ -807,7 +807,7 @@
       {#if editing}
         <!-- A zero-width slot at the end of the title: the handle hangs from it over the title's end
              (never over the failed-background warning, the controls or an inner item, and taking no
-             layout space — §7.2). -->
+             layout space). -->
         <span class="handle-slot">
           <EditHandle name={folder.name} onEdit={edit} placement="inline" />
         </span>
@@ -831,14 +831,14 @@
       <div class="folder-body" data-drop-area={editing ? '' : undefined} data-folder-id={current.id}>
         {@render level(1)}
         {#if paging.noRoom && !paging.noRoomInside}
-          <!-- Never a silent clip (M5 §7.2): so deep that the inset bars themselves run out of room, the
+          <!-- Never a silent clip: so deep that the inset bars themselves run out of room, the
                note is drawn over this folder's own body, where it is always seen. -->
           <p class="too-small" role="status" data-folder-no-room>Not enough room — make the folder bigger.</p>
         {/if}
       </div>
     {/if}
     {#if editing && plan.kind !== 'stacked' && folder.placement}
-      <!-- Handles on the rendered (open) box on a tab; a minimised folder has none (Ruling 13). -->
+      <!-- Handles on the rendered (open) box on a tab; a minimised folder has none. -->
       <ResizeHandles id={folder.id} name={folder.name} metrics={parent} />
     {/if}
     {@render minNote()}
@@ -893,7 +893,7 @@
     padding: 0.3rem;
     border-radius: 0.35rem;
   }
-  /* Drilled in, an outer title goes back up to its level (M5 §7): a plain-looking button. */
+  /* Drilled in, an outer title goes back up to its level: a plain-looking button. */
   .title-button {
     background: none;
     border: none;
@@ -912,9 +912,9 @@
   .title-button:focus-visible {
     text-decoration: underline;
   }
-  /* geometry.NESTED_CHROME: one inset box a drilled level — the 24px tab allowance (M6 §3a.4), a 1px
-     border, a 28px bar, 8px body padding; it fills the body of the level above (M5 §7). Rounded: the
-     M5 box, its tab allowance spare room at the bottom of its body (no band above it, Ruling 1); a tab
+  /* geometry.NESTED_CHROME: one inset box a drilled level — the 24px tab allowance, a 1px
+     border, a 28px bar, 8px body padding; it fills the body of the level above. Rounded: the
+     plain box, its tab allowance spare room at the bottom of its body (no band above it); a tab
      shape: its tab fills the allowance (.tabbed). */
   .nested-box {
     position: relative;
@@ -927,7 +927,7 @@
     border: 1px solid color-mix(in srgb, currentColor 45%, transparent);
     border-radius: 0.5rem;
   }
-  /* The same bar as .folder-header (Ruling 15) — name, handle and minimise in the same places — only
+  /* The same bar as .folder-header — name, handle and minimise in the same places — only
      compact (28px, NESTED_CHROME.titlePx). */
   .nested-header {
     display: flex;
@@ -939,7 +939,7 @@
     flex: none;
     min-width: 0;
   }
-  /* M6 tab shapes (geometry.shapeInset): the shape is drawn by FolderShape, so no CSS border; the tab
+  /* Tab shapes (geometry.shapeInset): the shape is drawn by FolderShape, so no CSS border; the tab
      allowance (24px) plus the 1px edge on top, the 1px edge on the other sides — the same content
      inset as the drawn shape, and the same totals as FOLDER_CHROME / NESTED_CHROME. */
   .folder.open.tabbed,
@@ -1256,7 +1256,7 @@
   }
   .folder:hover:not(:has([data-node-id]:hover, .nested-box:hover)) > .folder-header > .handle-slot > :global(.edit-handle),
   .folder:focus-within:not(:has([data-node-id]:focus-within, .nested-box:focus-within)) > .folder-header > .handle-slot > :global(.edit-handle),
-  /* An inset box's own handle (M5 §7.6): on its hover or focus, never while a deeper box or an item is. */
+  /* An inset box's own handle: on its hover or focus, never while a deeper box or an item is. */
   .nested-box:hover:not(:has([data-node-id]:hover, .nested-box:hover)) > .nested-header > .handle-slot > :global(.edit-handle),
   .nested-box:focus-within:not(:has([data-node-id]:focus-within, .nested-box:focus-within)) > .nested-header > .handle-slot > :global(.edit-handle) {
     opacity: 1;

@@ -67,7 +67,7 @@
     iconSearch = icon || '';
   });
 
-  // ── Type-ahead (M6 §7.7, fix round 1) ───────────────────────────────
+  // ── Type-ahead ───────────────────────────────
   // Suggestions search, with no internet: the bundled Iconify set (registered by
   // $lib/icons/offline-bundle at start-up), every name in the full mdi and simple-icons sets
   // (a names-only list in its own lazily loaded chunk, $lib/icons/iconNames) and the imported
@@ -128,7 +128,7 @@
 
   const statusVisible = $derived(listShown || dashboardState === 'failed' || dashboardState === 'empty' || namesState === 'failed');
 
-  // ── Suggestion pictures (walkthrough fix) ───────────────────────────
+  // ── Suggestion pictures ───────────────────────────
   // Most suggestions come from the names-only list, so their pictures are not in memory. Once the
   // list has been stable for a pause in typing, the visible ones are loaded in ONE batched call
   // (loadIcons batches per prefix) — only whole names from the list, never the half-typed text,
@@ -160,7 +160,7 @@
     return suggestionPictures.state(name);
   }
 
-  // ── Live preview (fix round 1) ──────────────────────────────────────
+  // ── Live preview ──────────────────────────────────────
   // Never a fetch per keystroke, never a fetch for a name that does not exist:
   //  - a name already in memory (the offline bundle, or fetched earlier) draws at once;
   //  - any other name is fetched only after a PREVIEW_PAUSE_MS pause in typing, and only if
@@ -328,7 +328,7 @@
       return;
     }
     // The size limit is the admin's upload.max_bytes_icon setting; uploadIconImage refuses an
-    // oversize file before sending it, naming the limit and the file's size (M5 §10).
+    // oversize file before sending it, naming the limit and the file's size.
 
     isUploadingIcon = true;
     uploadError = '';
@@ -597,7 +597,7 @@
     font-size: 0.9rem;
   }
 
-  /* M6 §7.6: the placeholder is readable — the theme's secondary text colour at full
+  /* The placeholder is readable — the theme's secondary text colour at full
      opacity (≥ 8:1 on --bg-secondary in both themes; the browser default was ~2:1). */
   .icon-input input::placeholder {
     color: var(--text-secondary);

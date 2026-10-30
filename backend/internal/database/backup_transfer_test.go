@@ -55,7 +55,7 @@ func TestStoreUploadedBackup(t *testing.T) {
 	}
 }
 
-// M4: the upload's final name is taken exclusively: an existing file is never replaced.
+// The upload's final name is taken exclusively: an existing file is never replaced.
 func TestPlaceExclusiveNeverReplaces(t *testing.T) {
 	dir := t.TempDir()
 	src := filepath.Join(dir, "src")
@@ -80,7 +80,7 @@ func TestPlaceExclusiveNeverReplaces(t *testing.T) {
 	}
 }
 
-// Fix round 2: without hard links, placing falls back to an exclusive copy.
+// Without hard links, placing falls back to an exclusive copy.
 func TestPlaceExclusiveWithoutHardLinks(t *testing.T) {
 	linkFile = func(string, string) error {
 		return &os.LinkError{Op: "link", Err: errors.New("operation not supported")}

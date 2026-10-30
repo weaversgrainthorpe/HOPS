@@ -323,7 +323,7 @@ func inheritTileCheck(t *testing.T, db *sql.DB, id string) {
 	}
 }
 
-// Ruling 13: the notice reflects the current config on every GET. Turning the
+// The notice reflects the current config on every GET. Turning the
 // dashboard on removes it; turning another one off (with a tile switched on)
 // brings it back, naming that dashboard.
 func TestNotices_FollowTheCurrentConfig(t *testing.T) {
@@ -391,7 +391,7 @@ func captureSlog(t *testing.T) *bytes.Buffer {
 }
 
 // GET /api/status names a wrong-typed stored value: the tile is off with
-// source "invalid" and the offending level's id (Ruling 13).
+// source "invalid" and the offending level's id.
 func TestGetStatus_InvalidValueIsSurfaced(t *testing.T) {
 	router, db := setupTestRouterSeeded(t, layeredStatusFixture(t))
 	doc, err := configdoc.Load(db)

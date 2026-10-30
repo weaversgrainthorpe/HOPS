@@ -1,6 +1,6 @@
-// M6 Task 3: ONE FolderShape draws every folder state — minimised, open and nested — in each of the
-// seven looks (spec §2, §3a.2, §3a.6, §3a.10). Tab shapes put the name on the tab and the minimise
-// control and edit handle at the top-right of the body; Rounded keeps the M5 title bar. An unknown
+// ONE FolderShape draws every folder state — minimised, open and nested — in each of the
+// seven looks. Tab shapes put the name on the tab and the minimise
+// control and edit handle at the top-right of the body; Rounded keeps the plain title bar. An unknown
 // shape draws as Rounded with a visible note in edit mode. The shape is decoration (aria-hidden).
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/svelte';
@@ -92,7 +92,7 @@ describe('every shape at every state draws through FolderShape', () => {
         await tick();
         const nested = open.querySelector('[data-nested-folder="s"]') as HTMLElement;
         const ns = nested.querySelector(':scope > [data-folder-shape]');
-        if (shape === 'rounded') expect(ns).toBeNull(); // M5's plain inset box (no colour of its own)
+        if (shape === 'rounded') expect(ns).toBeNull(); // the plain inset box (no colour of its own)
         else expect(ns!.getAttribute('data-shape-state')).toBe('nested');
         r.unmount();
         resetFolderViewsForTests();
@@ -111,7 +111,7 @@ describe('every shape at every state draws through FolderShape', () => {
   });
 });
 
-describe('tab shapes: the name on the tab, the controls at the top-right of the body (§3a.2)', () => {
+describe('tab shapes: the name on the tab, the controls at the top-right of the body', () => {
   for (const shape of TAB_SHAPES) {
     it(`${shape}: name on the tab; minimise and edit handle in the body's controls row`, async () => {
       const { container } = await renderEditing([folder('o', kids(2), { shape, name: 'Media' })]);
@@ -126,7 +126,7 @@ describe('tab shapes: the name on the tab, the controls at the top-right of the 
       expect(header.querySelector('h3')).toBeNull(); // the name is not repeated in the body
     });
   }
-  it('Rounded keeps the M5 title bar: name, handle and minimise in one bar; no tab', async () => {
+  it('Rounded keeps the plain title bar: name, handle and minimise in one bar; no tab', async () => {
     const { container } = await renderEditing([folder('o', kids(2), { shape: 'rounded', name: 'Media' })]);
     const box = el(container, 'o');
     expect(box.querySelector('[data-folder-tab]')).toBeNull();
@@ -164,7 +164,7 @@ describe('tab shapes: the name on the tab, the controls at the top-right of the 
     expect(nested.classList.contains('tabbed')).toBe(true);
     expect((nested.querySelector('[data-folder-tab]') as HTMLElement).textContent).toContain('Inner');
   });
-  it('a nested Rounded box has no tab and no blank band above it (Ruling 1)', async () => {
+  it('a nested Rounded box has no tab and no blank band above it', async () => {
     const { container } = await renderTab([folder('o', [sub('s', kids(2), { shape: 'rounded' })], { shape: 'folder-flat', placement: { x: 0, y: 0, w: 12, h: 10 } })]);
     setFolderDrill('d1', 'o', ['s']);
     await tick();
@@ -196,7 +196,7 @@ describe('minimised', () => {
   });
 });
 
-describe('unknown shape: drawn Rounded with a visible note in edit mode (§3.9)', () => {
+describe('unknown shape: drawn Rounded with a visible note in edit mode', () => {
   it('view mode: Rounded, no note; edit mode: the note names the value', async () => {
     const tree = [folder('o', kids(2), { shape: 'folder-tab' }), folder('m', kids(1), { shape: 'blob', display: 'collapsed', placement: { x: 12, y: 0, w: 6, h: 8 } })];
     const r = await renderTab(tree);
@@ -216,7 +216,7 @@ describe('unknown shape: drawn Rounded with a visible note in edit mode (§3.9)'
 });
 
 describe('FolderShape alone (the picker previews use it too)', () => {
-  it('Rounded with no background draws the M5 surface; a tab shape draws paths in the folder colour', () => {
+  it('Rounded with no background draws the plain surface; a tab shape draws paths in the folder colour', () => {
     const r = render(FolderShape, { look: { shape: 'rounded', color: '#2563eb' }, variant: 'open', dashboardId: 'd1' });
     expect(r.container.querySelector('[data-folder-shape="rounded"] svg')).toBeNull();
     r.unmount();
@@ -224,7 +224,7 @@ describe('FolderShape alone (the picker previews use it too)', () => {
     const paths = t.container.querySelectorAll('[data-folder-shape="folder-flat"] path');
     expect(paths.length).toBeGreaterThanOrEqual(2);
   });
-  it('opacity applies to the whole shape (§3a.10)', () => {
+  it('opacity applies to the whole shape', () => {
     const r = render(FolderShape, { look: { shape: 'folder-flat', color: '#2563eb', opacity: 0.4 }, variant: 'open', dashboardId: 'd1' });
     expect((r.container.querySelector('[data-shape-paint]') as HTMLElement).style.opacity).toBe('0.4');
     // The focus ring is outside the faded layer (WCAG 2.4.7): nothing between it and the shape is faded.

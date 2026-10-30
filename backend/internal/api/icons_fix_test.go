@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-// Icons fix round 1: every create path validated, a built-in Uploads
+// Every create path validated, a built-in Uploads
 // category, no stale or silent leftovers.
 
 func TestUploadsCategoryIsSeededBuiltIn(t *testing.T) {

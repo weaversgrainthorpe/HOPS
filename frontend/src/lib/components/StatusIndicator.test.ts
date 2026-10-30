@@ -14,7 +14,7 @@ import { statusStore, type StatusInfo } from '$lib/stores/status';
 import { FOLDER_VIEW_CONTEXT } from '$lib/stores/folderView';
 import { setAnimationEnv } from '$lib/editor/drag/dropAnimation';
 
-// M4 Task 7: the badge follows the RESOLVED setting (status response), not just an explicit
+// The badge follows the RESOLVED setting (status response), not just an explicit
 // tile flag; a 'disabled' tile says which level switched it off.
 
 const base: EntryType = {
@@ -90,7 +90,7 @@ describe('status badge and tooltip', () => {
   });
 });
 
-describe('§9 status change pulse', () => {
+describe('status change pulse', () => {
   const pulses: Element[] = [];
   const ctx = () => new Map<string, unknown>([[FOLDER_VIEW_CONTEXT, { dashboardId: 'd1', remembered: () => undefined, saved: () => undefined }]]);
   beforeEach(() => {

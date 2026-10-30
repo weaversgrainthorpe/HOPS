@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { get } from 'svelte/store';
 
-// A search result's request to show one tile (moved from the removed pop-over store, M5 Task 3).
+// A search result's request to show one tile (moved from the removed pop-over store).
 describe('reveal request lifetime', () => {
   it('expires after a short TTL with one visible notice', async () => {
     const { vi } = await import('vitest');

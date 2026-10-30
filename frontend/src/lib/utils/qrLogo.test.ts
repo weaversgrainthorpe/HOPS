@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import QRCode from 'qrcode';
 import { buildQrSvg, withNameLabel, QR_ERROR_CORRECTION, LOGO_FRACTION, BACKING_FRACTION, BACKING_COLOUR } from './qrLogo';
 
-// M5 §12: the dashboard QR code carries a small HOPS bunny in its centre, on a white rounded
+// The dashboard QR code carries a small HOPS bunny in its centre, on a white rounded
 // square, inside the generated SVG (so the download has it), at error-correction level H.
 
 const URL_ = 'http://172.16.0.50:8080/d/home-lab';
@@ -95,7 +95,7 @@ describe('buildQrSvg', () => {
 	});
 });
 
-// Walkthrough: a downloaded (printed) code is labelled with its dashboard's name above it.
+// A downloaded (printed) code is labelled with its dashboard's name above it.
 describe('withNameLabel', () => {
 	it('puts the name above the code on white, the code itself unchanged below it', async () => {
 		const qr = await buildQrSvg(URL_);

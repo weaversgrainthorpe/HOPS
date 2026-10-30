@@ -18,7 +18,7 @@ func wantURLRefused(t *testing.T, what string, code int, resp map[string]interfa
 	}
 }
 
-// Pentest L1: a tile url outside the allow-list is refused on save.
+// A tile url outside the allow-list is refused on save.
 func TestTileURL_RefusedOnSave(t *testing.T) {
 	router, db := setupTestRouter(t)
 	c := newClient(t, router)

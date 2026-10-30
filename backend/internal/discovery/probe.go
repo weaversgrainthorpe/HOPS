@@ -193,7 +193,7 @@ func httpClient(timeout time.Duration) *http.Client {
 // tcpConnectProbe attempts a single TCP connection to host:port within
 // the configured timeout. Returns true if the dial completed without
 // error. Used as the "is anything listening here?" check that replaces a
-// dedicated ICMP ping (see plan §10 for rationale).
+// dedicated ICMP ping.
 func tcpConnectProbe(ctx context.Context, host string, port int, timeout time.Duration) bool {
 	d := dialer(timeout)
 	conn, err := d.DialContext(ctx, "tcp", net.JoinHostPort(host, fmt.Sprintf("%d", port)))

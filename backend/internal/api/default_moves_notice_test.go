@@ -7,7 +7,7 @@ import (
 	"github.com/weaversgrainthorpe/HOPS/internal/settings"
 )
 
-// Ruling 21: an install whose upload limits were still at the old defaults
+// An install whose upload limits were still at the old defaults
 // (a v2.2.1 settings table) gets the new defaults and a one-time notice that
 // says so, which stays until dismissed — across restarts — and then is gone.
 func TestNotices_UploadDefaultsMovedShowsUntilDismissed(t *testing.T) {

@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-// §3 security pass: the backup upload reader (StoreUpload: archive or legacy
+// Security pass: the backup upload reader (StoreUpload: archive or legacy
 // .db) is fuzzed. Any input must give a stored backup or an error, never a
 // panic. Seeds are synthetic archives built here. Run as a normal test, the
 // seeds are checked; `go test -fuzz=FuzzStoreUpload` explores further.

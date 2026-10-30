@@ -1,4 +1,4 @@
-// M3 Task 11: the legacy (v2-shaped) editor and view are retired. No shipped
+// The legacy (v2-shaped) editor and view are retired. No shipped
 // frontend code references them, and the drag library they used is gone.
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';

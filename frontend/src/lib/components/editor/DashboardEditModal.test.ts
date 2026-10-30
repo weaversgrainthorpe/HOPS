@@ -78,7 +78,7 @@ beforeEach(() => {
 	vi.mocked(api.getDashboardSettings).mockResolvedValue(serverSettings());
 });
 
-describe('DashboardEditModal (walkthrough §4C): one dialog, one Save, one Cancel', () => {
+describe('DashboardEditModal: one dialog, one Save, one Cancel', () => {
 	it('has three sections: Header, Background and Settings', async () => {
 		open();
 		const dlg = screen.getByRole('dialog', { name: 'Edit Dashboard' });
@@ -263,7 +263,7 @@ describe('DashboardEditModal Settings section', () => {
 		expect(await screen.findByText('Inherited: 15')).toBeInTheDocument();
 		expect(screen.getByText('Inherited: 5')).toBeInTheDocument();
 		expect(screen.getByText('Edit mode idle timeout (minutes)')).toBeInTheDocument();
-		// M5: free layout is gone, and with it the dashboard's default layout setting (Ruling 4).
+		// Free layout is gone, and with it the dashboard's default layout setting.
 		expect(screen.queryByText('Default layout for new tabs')).toBeNull();
 	});
 
@@ -324,7 +324,7 @@ describe('DashboardEditModal Settings section', () => {
 		expect(get(config)!.dashboards[0].revision).toBe(4);
 	});
 
-	it('sends the store revision, not the freshly fetched one (C1)', async () => {
+	it('sends the store revision, not the freshly fetched one', async () => {
 		vi.mocked(api.getDashboardSettings).mockResolvedValue({ ...serverSettings(), revision: 6 });
 		vi.mocked(api.saveDashboardSettings).mockRejectedValue(new api.ConflictError('d1', 6));
 		const onClose = vi.fn();

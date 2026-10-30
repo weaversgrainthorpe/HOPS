@@ -23,7 +23,7 @@ type verifier struct {
 	// Set by VerifyMigration only.
 	renames     map[string]Rename // by v2 path
 	usedRenames map[string]bool
-	sizes       map[string]SizeChange // by v2 entry path (Ruling 3)
+	sizes       map[string]SizeChange // by v2 entry path
 	usedSizes   map[string]bool
 	first       map[string]string // v2 id -> path of its first occurrence
 }
@@ -72,7 +72,7 @@ func VerifyImportedDashboard(d Obj) error {
 }
 
 // checkFolderMinimums refuses a tab-level folder whose open box is below its
-// minimum, FolderMinCellsOf (Ruling 7, Ruling 9): such a box would clip its
+// minimum, FolderMinCellsOf: such a box would clip its
 // item or its page bar, a silent failure. It is refused, never silently
 // grown, naming the folder and both sizes. Run on saves, imports and the
 // converter's output (not on the whole stored document), like
@@ -147,7 +147,7 @@ func (v *verifier) checkStatusChecks(d Obj) {
 	})
 }
 
-// Bounds on one natively saved dashboard (Task 5): the editor and renderer
+// Bounds on one natively saved dashboard: the editor and renderer
 // stay responsive, and a request cannot make the server walk an unbounded tree.
 const (
 	MaxDashboardNodes = 5000
@@ -239,7 +239,7 @@ func VerifyMigration(v2, v3 Obj, renames []Rename) error {
 //     the current layout form (see layout.go);
 //   - v3 carries this build's layoutVersion;
 //   - a v2 entry's size differs only where sizes reports it: an unknown
-//     size, now "medium" (Ruling 3); every reported change happened.
+//     size, now "medium"; every reported change happened.
 //
 // It returns a *VerifyError listing up to 20 problems.
 func VerifyMigrationFull(v2, v3 Obj, renames []Rename, sizes []SizeChange) error {
@@ -289,7 +289,7 @@ func VerifyMigrationFull(v2, v3 Obj, renames []Rename, sizes []SizeChange) error
 	default:
 		v.compareLevel("dashboard", "document", "dashboards", v2d, v3d, "", func(a, b Obj, id, path string) {
 			// revision and settings are converter-owned: ConvertDashboardV2
-			// deliberately overwrites any v2 value (Ruling 4), so skip the
+			// deliberately overwrites any v2 value, so skip the
 			// equality check but still require them well-formed. A v2
 			// defaultLayout is dropped (every tab is a grid tab; checkIDs
 			// requires it gone).
@@ -344,7 +344,7 @@ func (v *verifier) compareTabs(dashID, dashPath string, a, b Obj) {
 			return // reported by checkIDs
 		}
 		v.compareLevel("group", "tab "+tid, tpath+".groups", v2g, v3g, "folder", func(ga, gb Obj, gid, gpath string) {
-			// A folder has no layout of its own (M5; checkIDs requires it gone).
+			// A folder has no layout of its own (checkIDs requires it gone).
 			// width, displayStyle and collapsed are mapped to placement, shape and
 			// display by the converter and must be gone: a stale second copy
 			// could disagree with the v3 field.
@@ -375,7 +375,7 @@ func (v *verifier) compareTabs(dashID, dashPath string, a, b Obj) {
 					}
 					return
 				}
-				// Ruling 3: exactly this reported tile's unknown size became
+				// Exactly this reported tile's unknown size became
 				// Medium; everything else about it is unchanged.
 				v.usedSizes[epath] = true
 				v.compareKeys("entry "+eid, ea, eb, "size", "statusCheck")
@@ -640,8 +640,8 @@ func (v *verifier) checkIDs(doc Obj) {
 }
 
 // noKeys reports each of keys that o carries: settings of the removed free
-// layout and per-container grids (M5) and the retired per-tab background
-// switches (M4), which the current form never has.
+// layout and per-container grids and the retired per-tab background
+// switches, which the current form never has.
 func (v *verifier) noKeys(where string, o Obj, keys ...string) {
 	for _, k := range keys {
 		if _, has := o[k]; has {
@@ -707,7 +707,7 @@ func (v *verifier) checkContainer(owner string, c Obj, note func(string, Obj) st
 
 // checkFolderShape requires a folder's shape, when present, to be one of
 // FolderShapes and its tabPosition, when present, one of FolderTabPositions
-// (M6 §3a.8). Anything else (a retired name such as "folder-tab", a typo, a
+//. Anything else (a retired name such as "folder-tab", a typo, a
 // non-string, markup) is refused with a message naming the field, the value
 // and the allowed names: the renderer's "unknown shape" note is only a
 // backstop, never the first line.
@@ -749,7 +749,7 @@ type placedBox struct {
 }
 
 // checkTabPlacement requires a tab-level item's placement to be whole cells
-// inside the RootColumns grid (Ruling 24: the editor and renderer position by
+// inside the RootColumns grid (the editor and renderer position by
 // it), and a tile's span to be exactly its size's: Small 1×1, Medium 2×2 or
 // Large 4×4 (a missing size is Medium). It returns the box when it is usable
 // for the overlap check.

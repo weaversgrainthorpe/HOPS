@@ -10,7 +10,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Imported documents are untrusted (§3 security pass): before any import
+// Imported documents are untrusted: before any import
 // decodes a file into Go values, its shape is checked against these caps so a
 // deeply nested file, one with millions of tiny values, or a YAML alias bomb
 // ("billion laughs") is refused with a clear reason instead of exhausting a

@@ -1,4 +1,4 @@
-// Type-ahead suggestions for the icon-name field (M6 §7.7).
+// Type-ahead suggestions for the icon-name field.
 //
 // The names come only from icons HOPS has offline: the bundled Iconify set (registered by
 // $lib/icons/offline-bundle, listed with listIcons) and the imported dashboard-icons (served

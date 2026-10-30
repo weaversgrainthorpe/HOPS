@@ -291,7 +291,7 @@
     border-color: var(--accent);
     box-shadow: 0 0 0 2px rgba(79, 140, 255, 0.25);
   }
-  /* Readable placeholder (>= 4.5:1, M6 §7.3); the browser default grey is 3.2–4.2:1. */
+  /* Readable placeholder (>= 4.5:1); the browser default grey is 3.2–4.2:1. */
   .hex-input::placeholder {
     color: var(--text-secondary);
     opacity: 1;

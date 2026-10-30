@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
 
-// /settings/global (M5 §9): the global settings, on their own page. The shell only shows a page
+// /settings/global: the global settings, on their own page. The shell only shows a page
 // once signed in (with no pending password change), so the page loads its settings when it opens.
 vi.mock('$app/navigation', () => ({ goto: vi.fn(async () => {}), replaceState: vi.fn(), beforeNavigate: vi.fn(), afterNavigate: vi.fn() }));
 vi.mock('$lib/utils/api', async () => ({
@@ -37,7 +37,7 @@ describe('/settings/global', () => {
 	it('loads the settings once and shows them grouped', async () => {
 		render(Page);
 		expect(screen.getByRole('heading', { name: 'Global settings', level: 2 })).toBeTruthy();
-		// M6 §10: log level and port are both in "Server".
+		// Log level and port are both in "Server".
 		expect(await screen.findByRole('heading', { name: 'Server', level: 3 })).toBeTruthy();
 		expect(screen.getAllByRole('heading', { level: 3 })).toHaveLength(1);
 		expect(listSettings).toHaveBeenCalledTimes(1);
@@ -101,7 +101,7 @@ describe('/settings/global', () => {
 	});
 });
 
-describe('/settings/global upload limits (M5 §10)', () => {
+describe('/settings/global upload limits', () => {
 	const MB = 1048576;
 	const IMPORT = { key: 'upload.max_bytes_import', value: String(50 * MB), default: String(50 * MB), type: 'bytes', min: MB, max: 200 * MB, description: 'Imports bigger than this are refused.', restartRequired: false };
 	const ICON = { key: 'upload.max_bytes_icon', value: String(10 * MB), default: String(2 * MB), type: 'bytes', min: MB, max: 10 * MB, description: 'Icon uploads bigger than this are refused.', restartRequired: false, adjustedFrom: String(1024 * MB) };
@@ -155,7 +155,7 @@ describe('/settings/global upload limits (M5 §10)', () => {
 	});
 });
 
-describe('/settings/global Animations (M6 §7.13, Ruling 5)', () => {
+describe('/settings/global Animations', () => {
 	const ANIM = {
 		key: 'display.animations', value: 'on', default: 'on', type: 'enum', enum: ['on', 'off', 'always'],
 		description: 'Animations in the editor.', restartRequired: false
@@ -205,8 +205,8 @@ describe('/settings/global Animations (M6 §7.13, Ruling 5)', () => {
 	});
 });
 
-// M6 §10: the settings in logical groups (one table), each a section the sidebar / chips jump to.
-describe('/settings/global groups (M6 §10)', () => {
+// The settings in logical groups (one table), each a section the sidebar / chips jump to.
+describe('/settings/global groups', () => {
 	const ANIM = { key: 'display.animations', value: 'off', default: 'on', type: 'enum', enum: ['on', 'off', 'always'], description: 'Animations.', restartRequired: false };
 	const IDLE = { key: 'editmode.idle_timeout_minutes', value: '15', default: '15', type: 'duration_minutes', min: 0, max: 1440, description: 'Idle.', restartRequired: false };
 	const NEW = { key: 'brand.new_thing', value: '3', default: '3', type: 'int', min: 1, max: 9, description: 'A setting the table does not know yet.', restartRequired: false };

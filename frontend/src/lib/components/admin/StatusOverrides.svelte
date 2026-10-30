@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Settings › Dashboards › Status check overrides (rc5 Part B): every dashboard, tab, folder and
+  // Settings › Dashboards › Status check overrides: every dashboard, tab, folder and
   // tile that sets status checks itself (On, Off or an invalid value), what it would get if it
   // inherited, and a bulk "Restore inheritance". It saves the way Duplicates' merge does: refused
   // while a dashboard is being edited, one revision-checked save at a time, and a failure part-way

@@ -2,7 +2,7 @@
   import { onMount, onDestroy } from 'svelte';
   import { backendStatus } from '$lib/stores/backendStatus';
 
-  // A small status dot for the page header (M6 §7.12): green online, red offline (can't reach it),
+  // A small status dot for the page header: green online, red offline (can't reach it),
   // amber degraded (reached, but it answered with an error), grey while checking. The version and
   // round-trip time live in a tooltip that hover, keyboard focus or a tap opens. Colour is never the
   // only signal (ruling 2): a glyph inside the dot (tick / ! / cross) and the button's accessible

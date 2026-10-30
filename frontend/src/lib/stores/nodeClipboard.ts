@@ -70,7 +70,7 @@ export function cutSelection(): boolean {
 }
 
 /**
- * Where pasted items go in a folder (M5: an ordered list): right after `after` when it is in that
+ * Where pasted items go in a folder (an ordered list): right after `after` when it is in that
  * folder (the item the paste was asked on), else right after the copied source when it is there,
  * else at the end.
  */
@@ -129,7 +129,7 @@ export async function pasteInto(to: ContainerRef, cell?: Cell, after?: string): 
   });
   if (ok) {
     state.set(null);
-    forgetMovedOutFolders(s.draft, ids, to); // M5 §3a.3: a sub-folder pasted onto a tab is minimised
+    forgetMovedOutFolders(s.draft, ids, to); // a sub-folder pasted onto a tab is minimised
     selectOnly(ids);
   }
   return ok;

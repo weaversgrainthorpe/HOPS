@@ -121,7 +121,7 @@
 </svelte:head>
 
 <div class="page">
-  <!-- M6 §7.9: the way back to the Discovery list, at the top. -->
+  <!-- The way back to the Discovery list, at the top. -->
   <a class="back-link" href="/settings/discovery"><span class="chevron" aria-hidden="true">‹</span> Discovery</a>
   <header class="section-header">
     <h2 class="section-title">Discovery diagnostics</h2>
@@ -262,7 +262,7 @@
 {/if}
 
 <style>
-  /* Width, title and header layout come from the settings shell (M5 §11). */
+  /* Width, title and header layout come from the settings shell. */
   .page { color: var(--text-primary); }
   /* .lede ships from app.css */
   .muted { color: var(--text-secondary); }

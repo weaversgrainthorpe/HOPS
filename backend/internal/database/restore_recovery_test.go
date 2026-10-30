@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-// Fix round 2: an interrupted or half-failed restore never serves an empty
+// An interrupted or half-failed restore never serves an empty
 // database and never deletes the originals unless the restored file is
 // provably in place. Every outcome is visible.
 
@@ -251,7 +251,7 @@ func TestRecoveryOutcomeNotice(t *testing.T) {
 	}
 }
 
-// Fix round 2 items 3 + 4: notices-file problems.
+// Notices-file problems.
 func TestNoticesFileProblems(t *testing.T) {
 	bm, dbPath := setupBackupTest(t)
 	os.MkdirAll(bm.backupDir, 0o755)
@@ -304,7 +304,7 @@ func TestNoticesFileProblems(t *testing.T) {
 	}
 }
 
-// Fix round 3: the journal that couldn't be removed is reported, and removed
+// The journal that couldn't be removed is reported, and removed
 // before the next restore is staged.
 func TestJournalLeftReportedAndRetriedBeforeNextRestore(t *testing.T) {
 	dbPath := restoreFixture(t)
@@ -352,7 +352,7 @@ func TestJournalLeftReportedAndRetriedBeforeNextRestore(t *testing.T) {
 	}
 }
 
-// Fix round 3: on the undone path, a stage that can't be set aside is in the notice detail.
+// On the undone path, a stage that can't be set aside is in the notice detail.
 func TestUndoneStageSetAsideFailureInDetail(t *testing.T) {
 	dbPath := restoreFixture(t)
 	crashAfter = func(step string) bool { return step == "aside" }
@@ -378,7 +378,7 @@ func TestUndoneStageSetAsideFailureInDetail(t *testing.T) {
 	}
 }
 
-// Fix round 3: the refuse-to-start steps are tailored to the files present.
+// The refuse-to-start steps are tailored to the files present.
 func TestUnsafeStartStepsTailored(t *testing.T) {
 	dbPath := restoreFixture(t)
 	renameFile = func(from, to string) error {

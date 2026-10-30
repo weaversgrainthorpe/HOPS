@@ -406,7 +406,7 @@ func (r *Router) handleDeleteIcon(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// The file goes too, unless another icon row shares it. It MOVES to the
-	// attic (M6 §12: a backup may still refer to it) before the row is
+	// attic (a backup may still refer to it) before the row is
 	// deleted, and comes back if the row can't be deleted, so a failure never
 	// leaves a row whose file is gone.
 	file := ""

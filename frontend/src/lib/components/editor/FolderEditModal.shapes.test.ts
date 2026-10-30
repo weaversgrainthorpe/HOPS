@@ -1,5 +1,5 @@
-// M6 Task 3: the folder dialog's shape picker (spec §2 "each folder picks its shape in its own
-// dialog", §3.2, §3a.3, §3a.7): live previews of the seven looks in the folder's colour, the tab
+// The folder dialog's shape picker ("each folder picks its shape in its own
+// dialog"): live previews of the seven looks in the folder's colour, the tab
 // position (not for Rounded), the contrast warning, and the "needs more room" trial run.
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/svelte';
@@ -72,7 +72,7 @@ describe('the shape picker', () => {
   });
 });
 
-describe('the contrast warning (§3a.7)', () => {
+describe('the contrast warning', () => {
   it('an explicit text colour that fails on the folder panels is warned about; Auto never is', async () => {
     render(FolderEditModal, { folder: f({ shape: 'folder-flat', color: '#fde68a', textColor: 'auto' }), onSave: vi.fn(), onCancel: vi.fn() });
     expect(screen.queryByText(/hard to read/i)).toBeNull();

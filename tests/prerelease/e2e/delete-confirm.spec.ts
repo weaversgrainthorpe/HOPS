@@ -1,4 +1,4 @@
-// Walkthrough: deleting a tile from its Edit Tile dialog asked twice (the dialog's own confirm, with
+// Reported: deleting a tile from its Edit Tile dialog asked twice (the dialog's own confirm, with
 // stale "undo only by re-creating it" wording, then the editor's), while right-click › Delete asked
 // once. Every delete now asks exactly once, with the same words, and is undoable until saved.
 import { test, expect, type Page, type BrowserContext } from '@playwright/test';

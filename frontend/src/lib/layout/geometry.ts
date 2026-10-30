@@ -3,14 +3,14 @@ import type {
 } from '../types/layout';
 
 /**
- * A tab's grid: 24 columns (spec §9). Every tab is a grid tab (M5: free layout is removed).
+ * A tab's grid: 24 columns. Every tab is a grid tab (free layout is removed).
  * Tiles on a tab are exactly Small (1 x 1 cell), Medium (2 x 2) or Large (4 x 4) — sizeSpan.
  */
 export const ROOT_COLUMNS = 24;
 /**
- * The stored layout format this build reads and writes (M5 §2a). Every placement-carrying write
+ * The stored layout format this build reads and writes. Every placement-carrying write
  * sends it; the server refuses a mismatch (409). Bumped whenever the stored layout format changes.
- * 2 (M6 §3a.4): the open-folder minimum counts the tab allowance (configdoc.LayoutVersion).
+ * 2: the open-folder minimum counts the tab allowance (configdoc.LayoutVersion).
  */
 export const LAYOUT_VERSION = 2;
 /** Cells a Medium item spans each way. */
@@ -114,7 +114,7 @@ export function containerColumns(container: Container | undefined): number {
 }
 
 /**
- * A tile box narrower or shorter than this is marked compact. Ruling 22. A Medium 2 x 2 tile at the
+ * A tile box narrower or shorter than this is marked compact. A Medium 2 x 2 tile at the
  * usual cell is above it; only a note tile drops its body when compact.
  */
 export const COMPACT_TILE_PX = 110;
@@ -128,8 +128,8 @@ export function tileFit(wPx: number, hPx: number): TileFit {
 
 /**
  * How an item `span` cells square fits at `cellPx` per cell: a Small item (1 cell) is always compact,
- * so it is clearly smaller than Medium at any width (spec §9); otherwise tileFit on its box.
- * The same rule on a tab and in a folder (M5: consistent sizes).
+ * so it is clearly smaller than Medium at any width; otherwise tileFit on its box.
+ * The same rule on a tab and in a folder (consistent sizes).
  */
 export function spanFit(span: number, cellPx: number): TileFit {
   if (span <= 1) return 'compact';
@@ -146,7 +146,7 @@ export function nodeFit(p: Placement, m: ContainerMetrics): TileFit {
 
 /**
  * A stacked (phone) plan carries the canvas width and the viewport (window) size: an open folder there
- * is the canvas wide, its items are the phone tab's tiles, and a page fits the viewport (M5).
+ * is the canvas wide, its items are the phone tab's tiles, and a page fits the viewport.
  */
 export type CanvasPlan =
   | { kind: 'grid'; cellPx: number }
@@ -182,7 +182,7 @@ export interface ContainerMetrics {
   /** Width in px of the container's content box. */
   innerWidthPx: number;
   /**
-   * A folder's content (M5): no placements; items flow in order, each `span` cells square
+   * A folder's content: no placements; items flow in order, each `span` cells square
    * (its contents size), `perRow` to a row. Absent for a tab root.
    */
   flow?: { span: number; perRow: number; phone?: { colPx: number; gapPx: number } };
@@ -218,9 +218,9 @@ export function pointToCell(m: ContainerMetrics, dxPx: number, dyPx: number): { 
 
 /**
  * An open folder's own chrome (Folder.svelte's CSS, global border-box): a 1px border, a 40px bar
- * (titled or not, it holds the minimise control and the breadcrumb, M5 §3a.7; on a tab shape it is
- * the body's controls row, the name being on the tab, M6 §3a.2) and 8px body padding. `tabPx` is the
- * tab-height allowance (M6 §3a.4): ONE constant for every shape, Rounded too, so the minimum has no
+ * (titled or not, it holds the minimise control and the breadcrumb; on a tab shape it is
+ * the body's controls row, the name being on the tab) and 8px body padding. `tabPx` is the
+ * tab-height allowance: ONE constant for every shape, Rounded too, so the minimum has no
  * shape parameter. Twin of configdoc.FolderTitlePx / FolderTabPx / FolderPadPx.
  */
 const FOLDER_BORDER_PX = 1;
@@ -232,7 +232,7 @@ export const FOLDER_CHROME = {
  * The page bar (« ‹ 1 2 3 › »), shown only when a folder has more than one page. FOLDER_CHROME,
  * PAGE_BAR_PX and MIN_GRID_CELL_PX have a Go twin (configdoc/layout.go: FolderTitlePx, FolderPadPx,
  * PageBarPx, MinGridCellPx); the shared table backend/internal/configdoc/testdata/folder_min_cases.json
- * is run by both suites (Ruling 9).
+ * is run by both suites.
  */
 export const PAGE_BAR_PX = 32;
 /**
@@ -241,14 +241,14 @@ export const PAGE_BAR_PX = 32;
  */
 export const MIN_GRID_CELL_PX = PHONE_BREAKPOINT_PX / ROOT_COLUMNS;
 /**
- * M6 §13 rule 1: the desktop cell the minimum is counted at. A 1920 px screen's tab canvas is 1856 px
+ * rule 1: the desktop cell the minimum is counted at. A 1920 px screen's tab canvas is 1856 px
  * (the page's 32 px gutters), so 1856 / 24 = 77.3, floored. Twin of configdoc.ReferenceCellPx.
  */
 export const REFERENCE_CELL_PX = 77;
 /**
- * The smallest open folder on a tab (M5 §3.5), in whole cells: its bar, the tab allowance (M6 §3a.4),
+ * The smallest open folder on a tab, in whole cells: its bar, the tab allowance,
  * border and padding, ONE item at its contents size and the page bar. Counted at the desktop reference
- * cell (REFERENCE_CELL_PX, M6 §13): Small 2×3, Medium 3×4, Large 5×6. On a narrower grid a box at its
+ * cell (REFERENCE_CELL_PX): Small 2×3, Medium 3×4, Large 5×6. On a narrower grid a box at its
  * minimum may be too short; it is then drawn taller there (screenGrowth), never clipped or squashed.
  */
 export function minOpenFolderCells(contentSize: unknown): { w: number; h: number } {
@@ -261,7 +261,7 @@ export function minOpenFolderCells(contentSize: unknown): { w: number; h: number
 /**
  * The largest contents size of `folder` and every folder inside it, however deep. A drilled-into
  * sub-folder's page is drawn in the same open box at ITS contents size, so the box must fit one of
- * the largest (fix round 1).
+ * the largest.
  */
 export function largestContentSize(folder: FolderNode): ItemSize {
   let best = sizeOf(folder.contentSize);
@@ -284,7 +284,7 @@ export function folderMinCells(folder: FolderNode): { w: number; h: number } {
 
 /**
  * The content box inside an open folder's box: shapeInset's size. With no shape it is Rounded's (the
- * M5 bar, border and padding taken off), which is what the renderer draws until it draws shapes.
+ * bar, border and padding taken off), which is what the renderer draws until it draws shapes.
  */
 export function openFolderContentBox(
   box: { widthPx: number; heightPx: number }, shape: unknown = 'rounded', tabPosition?: unknown
@@ -293,15 +293,15 @@ export function openFolderContentBox(
   return { widthPx: r.widthPx, heightPx: r.heightPx };
 }
 
-// ---------------------------------------------------------------- folder shapes (M6)
+// ---------------------------------------------------------------- folder shapes
 
-/** The folder looks, in spec order (M6 §3.9). Twin of configdoc.FolderShapes. */
+/** The folder looks, in spec order. Twin of configdoc.FolderShapes. */
 export const FOLDER_SHAPES: readonly FolderShape[] = [
   'rounded', 'simple-tab', 'folder-flat', 'folder-paper', 'folder-outline', 'folder-cartoon', 'folder-open'
 ];
-/** Where a tab shape's tab can sit (M6 §3.2). Twin of configdoc.FolderTabPositions. */
+/** Where a tab shape's tab can sit. Twin of configdoc.FolderTabPositions. */
 export const TAB_POSITIONS: readonly TabPosition[] = ['left', 'centre', 'right'];
-/** The look of a folder made in HOPS — new, merge, Discovery promote (M6 §3a.5). Twin of configdoc.ShapeCreated. */
+/** The look of a folder made in HOPS — new, merge, Discovery promote. Twin of configdoc.ShapeCreated. */
 export const SHAPE_CREATED: FolderShape = 'folder-flat';
 
 export function isFolderShape(v: unknown): v is FolderShape {
@@ -317,19 +317,19 @@ export function isTabPosition(v: unknown): v is TabPosition {
 export function shapeOf(v: unknown): FolderShape {
   return isFolderShape(v) ? v : 'rounded';
 }
-/** A tab's position: its own, or left when missing or unknown (M6 §3.2). */
+/** A tab's position: its own, or left when missing or unknown. */
 export function tabPositionOf(v: unknown): TabPosition {
   return isTabPosition(v) ? v : 'left';
 }
-/** Every shape but Rounded draws a tab above its body (the name sits on it, §3a.2). */
+/** Every shape but Rounded draws a tab above its body (the name sits on it). */
 export function hasTab(shape: unknown): boolean {
   return shapeOf(shape) !== 'rounded';
 }
 
 /**
  * Open flap (folder-open): how far in the flap's top edge tilts, each side. The tilt lives in the body
- * padding (<= 8 px), so tiles sit in the flap's upright area, never skewed (§3a.9), and the one
- * minimum still holds (§3a.4).
+ * padding (<= 8 px), so tiles sit in the flap's upright area, never skewed, and the one
+ * minimum still holds.
  */
 export const FLAP_TILT_PX = 8;
 /** A tab's width: an untitled tab is TAB_MIN_PX; a name grows it up to TAB_MAX_PX (then ellipsised). */
@@ -344,11 +344,11 @@ export interface InsetRect { leftPx: number; topPx: number; widthPx: number; hei
 
 /**
  * THE rectangular content area of a folder drawn as `shape` in `box` (px from the box's top-left), the
- * same open, nested or in the dialog preview (M6 §3a.2, §3a.9):
- *  - Rounded: the M5 look — 1 px border, the 40 px title bar, 8 px padding. The tab allowance it does
- *    not draw is spare room at the bottom (the minimum counts it for every shape, §3a.4).
+ * same open, nested or in the dialog preview:
+ *  - Rounded: the plain look — 1 px border, the 40 px title bar, 8 px padding. The tab allowance it does
+ *    not draw is spare room at the bottom (the minimum counts it for every shape).
  *  - Tab shapes: the tab (FOLDER_CHROME.tabPx) above the body; in the body the border, the controls
- *    row (the minimise control and edit handle at its top-right, §3a.2) and padding.
+ *    row (the minimise control and edit handle at its top-right) and padding.
  *  - Open flap: as the tab shapes, inset by at least the flap's tilt each side (its upright area).
  * The tab position moves only the tab. An unknown shape insets as Rounded (it draws Rounded).
  */
@@ -372,7 +372,7 @@ export function shapeInset(shape: unknown, _tabPosition: unknown, box: { widthPx
  * unknown shape, which draws Rounded). It is the tab allowance high, at the top. `wantPx` is the width
  * its name asks for (measured by the component; missing = an untitled tab): at least TAB_MIN_PX, at
  * most TAB_MAX_PX and TAB_MAX_SHARE of the box, and never wider than fits between the edges.
- * Left / right sit TAB_EDGE_PX in from that side; centre is centred (§3.2).
+ * Left / right sit TAB_EDGE_PX in from that side; centre is centred.
  */
 export function folderTabRect(
   shape: unknown, tabPosition: unknown, box: { widthPx: number; heightPx: number }, wantPx?: number
@@ -389,9 +389,9 @@ export function folderTabRect(
 }
 
 /**
- * A drilled-in sub-folder's inset box (M5 §7: a folder inside a folder, one box a level). Folder.svelte's
- * .nested-box CSS: the tab allowance above it (M6 §3a.4: a nested level draws its shape's tab there),
- * a 1px border, a compact 28px title bar (its name and minimise, Ruling 15), 8px body padding. It fills
+ * A drilled-in sub-folder's inset box (a folder inside a folder, one box a level). Folder.svelte's
+ * .nested-box CSS: the tab allowance above it (a nested level draws its shape's tab there),
+ * a 1px border, a compact 28px title bar (its name and minimise), 8px body padding. It fills
  * the body of the level above it.
  */
 export const NESTED_CHROME = {
@@ -434,7 +434,7 @@ export function nestedPaging(
   return { ...g, noRoom, noRoomInside: noRoom && bodyPx + eps >= NO_ROOM_NOTE_PX };
 }
 
-/** One page of an open folder (M5 §2): which items show, and whether there is a page bar. */
+/** One page of an open folder: which items show, and whether there is a page bar. */
 export interface FolderPaging {
   /** Cells each item spans each way (its contents size) and its side in px. */
   span: number;
@@ -452,7 +452,7 @@ export interface FolderPaging {
   end: number;
   /**
    * The box cannot show one item, or the page bar its items need (a box below its minimum, which the
-   * server refuses — Important 2's backstop). The folder then says so visibly; it never clips silently.
+   * server refuses). The folder then says so visibly; it never clips silently.
    */
   tooSmall: boolean;
 }
@@ -489,7 +489,7 @@ function pageOf(n: number, perPage: number, page: number): { pages: number; page
   return { pages, page: p, start, end: Math.min(n, start + perPage) };
 }
 
-// ---- phones (stacked): a folder's items are the phone tab's tiles (M5: one size everywhere)
+// ---- phones (stacked): a folder's items are the phone tab's tiles (one size everywhere)
 
 /** A phone tab tile's height by size: the unfitted tile's own minimum (Entry.svelte .small/.medium/.large). */
 export const PHONE_TILE_MIN_PX: Record<ItemSize, number> = { small: 100, medium: 120, large: 160 };
@@ -514,7 +514,7 @@ export function phoneColumnPx(canvasWidthPx: number, track: { minPx: number; gap
 /**
  * THE page model of an open folder on a phone. Items are the phone tab's tiles: a tab column wide
  * (phoneColumnPx of the canvas) and their size's height (PHONE_TILE_MIN_PX), as many a row as fit the
- * folder's content width. Never paged (M6 §13 rule 4): the folder grows to show every item, nested
+ * folder's content width. Never paged: the folder grows to show every item, nested
  * levels too, so one page holds them all. Only the viewport's width is read (its track); its height is not.
  */
 export function phonePaging(
@@ -527,7 +527,7 @@ export function phonePaging(
   const perRow = col > 0 ? Math.max(1, Math.floor((nonNeg(contentWidthPx) + gap) / (col + gap) + 1e-9)) : 1;
   const rowPx = PHONE_TILE_MIN_PX[sizeOf(contentSize)];
   const n = isNum(count) && count > 0 ? Math.floor(count) : 0;
-  // M6 §13 rule 4: on a phone an open folder grows to show every item; it never pages.
+  // rule 4: on a phone an open folder grows to show every item; it never pages.
   const rowsPerPage = Math.max(1, Math.ceil(n / perRow));
   const perPage = perRow * rowsPerPage;
   return {
@@ -569,7 +569,7 @@ function validPlacement(p: unknown): p is Placement {
  * SHALLOW check: validates this node only (and that a folder's content.children is an array).
  * Contract: the renderer calls it on every child at every container level.
  * True only for nodes the renderer can draw; false => show a visible placeholder.
- * Folder contents have no placements (M5): a tab-level node must also pass isPlaced.
+ * Folder contents have no placements: a tab-level node must also pass isPlaced.
  */
 export function isRenderable(n: unknown): n is LayoutNode {
   if (!n || typeof n !== 'object') return false;
@@ -590,7 +590,7 @@ export function isPlaced(n: unknown): n is PlacedNode {
 /**
  * Placement of a folder minimised on a tab (per-browser view or saved): a tile of its own size
  * (sizeSpan) at the top-left of the space it keeps, clamped to that space so it never draws over a
- * neighbour (M5 §3a.2).
+ * neighbour.
  */
 export function minimisedPlacement(p: Placement, size: unknown): Placement {
   const span = sizeSpan(size);
@@ -603,9 +603,9 @@ export function minimisedPlacement(p: Placement, size: unknown): Placement {
 }
 
 /**
- * The default open box of a folder that has none (M5 §3a.3): its size in cells x 3 wide, x 2 high —
+ * The default open box of a folder that has none: its size in cells x 3 wide, x 2 high —
  * raised, each way, to its smallest open box at its largest contents size (folderMinCells), since an
- * open folder box is never below its minimum (Ruling 7a). Medium with Medium contents: 6 x 5.
+ * open folder box is never below its minimum. Medium with Medium contents: 6 x 5.
  */
 export function defaultFolderBox(folder: Pick<FolderNode, 'size' | 'contentSize'> & { content?: FolderNode['content'] }): {
   w: number; h: number;
@@ -631,10 +631,10 @@ export function tabSpan(
   return defaultFolderBox(n as FolderNode);
 }
 
-// ---------------------------------------------------------------- render-only growth (spike §13 rule 3)
+// ---------------------------------------------------------------- render-only growth 
 
 /**
- * M6 §13 rule 3: an open folder on a tab whose STORED box is too short at THIS screen's cell (its
+ * rule 3: an open folder on a tab whose STORED box is too short at THIS screen's cell (its
  * page cannot show one row, or one row plus the page bar it needs) is drawn taller, row by row, until
  * it can; everything below it in the columns it covers moves down by the same amount, transitively
  * (an item is pushed by the most any item above it in an overlapping column was pushed or grew).

@@ -1265,7 +1265,7 @@ func TestMethodNotAllowed(t *testing.T) {
 		{"DELETE", "/api/health"},
 		{"POST", "/api/version"},
 		{"DELETE", "/api/config"},
-		{"PUT", "/api/config"}, // no whole-config write (M3 Task 11)
+		{"PUT", "/api/config"}, // no whole-config write
 		{"POST", "/api/config"},
 	}
 

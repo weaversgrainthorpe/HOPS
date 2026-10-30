@@ -1,4 +1,4 @@
-// M6 Task 3: the static SVG geometry of each folder shape (spec §2, §3a.2, §3a.6, §3a.9, §3a.10).
+// The static SVG geometry of each folder shape.
 // FolderShape.svelte draws exactly these parts; the content inset (shapeInset) must sit on the body.
 import { describe, it, expect } from 'vitest';
 import { FOLDER_CHROME, FOLDER_SHAPES, TAB_POSITIONS, folderTabRect, shapeInset } from './geometry';
@@ -11,7 +11,7 @@ const BOXES = { minimised: { widthPx: 120, heightPx: 120 }, open: { widthPx: 640
 const NUM_PATH = /^[MLQZHV0-9.\-\s,]+$/;
 
 describe('shapeParts: every shape, every state, every tab position', () => {
-  it('Rounded draws no SVG parts (it is the M5 box) and has no tab', () => {
+  it('Rounded draws no SVG parts (it is the plain box) and has no tab', () => {
     for (const st of STATES) {
       const p = shapeParts('rounded', 'left', st, BOXES[st]);
       expect(p.shape).toBe('rounded');
@@ -63,7 +63,7 @@ describe('shapeParts: every shape, every state, every tab position', () => {
     expect(miniTabPx(400)).toBeLessThanOrEqual(FOLDER_CHROME.tabPx);
     expect(shapeParts('folder-flat', 'left', 'minimised', { widthPx: 120, heightPx: 120 }).tab!.heightPx).toBe(miniTabPx(120));
   });
-  it('the paper peeks out on the tab side (§3.2)', () => {
+  it('the paper peeks out on the tab side', () => {
     const left = shapeParts('folder-paper', 'left', 'open', BOXES.open).paper!;
     const right = shapeParts('folder-paper', 'right', 'open', BOXES.open).paper!;
     expect(left.leftPx + left.widthPx / 2).toBeLessThan(BOXES.open.widthPx / 2);
@@ -78,7 +78,7 @@ describe('shapeParts: every shape, every state, every tab position', () => {
   });
 });
 
-describe('the content inset sits on the body (decoration on a rectangle, §2)', () => {
+describe('the content inset sits on the body (decoration on a rectangle)', () => {
   for (const shape of TAB_SHAPES) {
     for (const st of ['open', 'nested'] as const) {
       it(`${shape} ${st}: every tile row is below the tab and on the front panel`, () => {
@@ -102,7 +102,7 @@ describe('tab label width', () => {
     expect(tabWantPx('Media', true)).toBeGreaterThan(tabWantPx('Media', false));
     expect(tabWantPx('', false)).toBe(0);
   });
-  it('the minimised name floor is 12 px (§3a.6)', () => {
+  it('the minimised name floor is 12 px', () => {
     expect(MINI_NAME_FLOOR_PX).toBe(12);
   });
 });

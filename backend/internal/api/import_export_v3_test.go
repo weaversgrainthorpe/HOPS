@@ -643,7 +643,7 @@ func TestImport_V3Showcase(t *testing.T) {
 			t.Errorf("tab %d id = %v, want %s", i, tabs[i].(configdoc.Obj)["id"], id)
 		}
 	}
-	assertM5Dashboard(t, dash)
+	assertCurrentDashboard(t, dash)
 
 	// Depth 3 under the Grid tab, iframe tile inside the collapsed level-3 folder.
 	byID := map[string]configdoc.Obj{}
@@ -681,7 +681,7 @@ func TestImport_V3Showcase(t *testing.T) {
 	if l4 == nil || l4["display"] != "collapsed" || len(childIDs(l4)) != 2 {
 		t.Errorf("sc-f-l4 should be a collapsed folder with 2 tiles: %v", l4)
 	}
-	// M6 cases (Shapes tab): an open folder in every look, all three tab
+	// Cases (Shapes tab): an open folder in every look, all three tab
 	// positions, looks nested 2 deep, and a Small minimised folder in a tab look.
 	shapesTab := tabs[3].(configdoc.Obj)["root"].(configdoc.Obj)["children"].([]any)
 	looksOpen, positions := map[string]bool{}, map[string]bool{}
@@ -731,7 +731,7 @@ func TestImport_V3Showcase(t *testing.T) {
 		t.Error("no iframe tile under the collapsed level-3 folder")
 	}
 
-	// M5 cases: overfull folders (more items than one page of their box
+	// Cases: overfull folders (more items than one page of their box
 	// holds, at any width: the box is in cells, and so are the items),
 	// sub-folders 2+ deep with differing contents sizes, Small- and
 	// Large-contents folders, a minimised folder of each own size, and every
@@ -773,9 +773,9 @@ func TestImport_V3Showcase(t *testing.T) {
 				}
 				continue
 			}
-			// An open folder box is never below its minimum (Ruling 7): one item
+			// An open folder box is never below its minimum: one item
 			// at its largest contents size, the bar, padding and the page bar.
-			// THE table: configdoc.FolderMinCellsOf (Ruling 9).
+			// THE table: configdoc.FolderMinCellsOf.
 			mw, mh := configdoc.FolderMinCellsOf(n)
 			if p["w"].(float64) < float64(mw) || p["h"].(float64) < float64(mh) {
 				t.Errorf("folder %v box %vx%v is below its minimum %dx%d", n["id"], p["w"], p["h"], mw, mh)
@@ -786,7 +786,7 @@ func TestImport_V3Showcase(t *testing.T) {
 		t.Errorf("tab tiles of every size: saw %v", sizesSeen)
 	}
 
-	// Layered backgrounds (M4): every shape verifies, the M4 update is a no-op
+	// Layered backgrounds: every shape verifies, the update is a no-op
 	// on them, and only bundled preset pictures are used.
 	if bg, _ := dash["background"].(configdoc.Obj); bg == nil || bg["type"] != "image" {
 		t.Errorf("dashboard background = %v, want an image", dash["background"])
@@ -869,7 +869,7 @@ func TestImport_V3Showcase(t *testing.T) {
 	}
 }
 
-// The retired per-tab background switches (M4) are not part of the current
+// The retired per-tab background switches are not part of the current
 // form: an export carrying them is refused visibly, never imported with an
 // inactive tab picture shown as active.
 func TestImport_LegacyTabBackgroundSwitchRefused(t *testing.T) {
@@ -986,7 +986,7 @@ func TestImport_ReportsRenamesAndUnrestoredImages(t *testing.T) {
 }
 
 // The sample configs of the other dashboards (converters/testdata) import end to end, and what
-// couldn't be carried over is returned for the dialog (found in the rc1 trials).
+// couldn't be carried over is returned for the dialog.
 func TestImport_OtherDashboardSamples(t *testing.T) {
 	cases := map[string]string{
 		"homer-upstream.yml":   "Font Awesome",

@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-// Fix round 1: a restore never loses its target or the current data, a
+// A restore never loses its target or the current data, a
 // broken stage doesn't retry forever, and dismissible backup notices
 // survive a restart.
 
@@ -168,7 +168,7 @@ func TestApplyRecoversInterruptedAside(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Files moved aside with no journal: ambiguous, so HOPS refuses to
-	// start and deletes nothing (fix round 2).
+	// start and deletes nothing.
 	_, err := ApplyPendingRestore(dbPath)
 	var u *UnsafeStartError
 	if !errors.As(err, &u) {
@@ -268,7 +268,7 @@ func TestDismissibleNoticesPersist(t *testing.T) {
 	}
 }
 
-// M2: stale temp files from an interrupted stage or upload are swept at startup.
+// Stale temp files from an interrupted stage or upload are swept at startup.
 func TestSweepStaleTempFiles(t *testing.T) {
 	bm, dbPath := setupBackupTest(t)
 	os.MkdirAll(bm.backupDir, 0o755)

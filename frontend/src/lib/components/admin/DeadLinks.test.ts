@@ -9,7 +9,7 @@ vi.mock('$lib/utils/api', async () => {
 import * as api from '$lib/utils/api';
 import DeadLinks from './DeadLinks.svelte';
 
-// Status checks are layered (rc5): with the global setting Off, a dashboard, tab, folder or tile
+// Status checks are layered: with the global setting Off, a dashboard, tab, folder or tile
 // set to On is still checked. "Turned off" may only be said when nothing is checked at all.
 const report = (checksEnabled: boolean, checkedTiles: number): api.DeadLinksReport => ({
   checksEnabled, thresholdHours: 168, historyStartedAt: '2026-09-01T00:00:00Z', checkedTiles, links: []

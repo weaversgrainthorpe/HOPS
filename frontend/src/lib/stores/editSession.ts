@@ -20,7 +20,7 @@ import { confirm, confirmChoice } from './confirmModal';
 import { toast } from './toast';
 import { logError } from '$lib/utils/errors';
 
-// Edit session (Tenet 5, parent spec §7.1).
+// Edit session (Tenet 5).
 //
 // Entering edit mode starts a session: a local DRAFT of one dashboard, taken
 // from the stored v3 layout (layoutDoc — never the per-browser folder view).
@@ -305,7 +305,7 @@ async function doSave(): Promise<'saved' | 'conflict' | 'error'> {
   if (!isDirty(s)) return 'saved';
   const formProblem = layoutFormProblem(get(config));
   if (formProblem) {
-    // M5 §2a: never write this layout form into a document of another version. The draft is kept.
+    // Never write this layout form into a document of another version. The draft is kept.
     toast.error(formProblem);
     return 'error';
   }
@@ -370,7 +370,7 @@ async function doSave(): Promise<'saved' | 'conflict' | 'error'> {
  */
 export async function discard(opts: { confirm?: boolean } = {}): Promise<boolean> {
   // A save in flight settles first: discarding under it would toast "Changes
-  // saved" right after the user chose Discard (final review Minor 2).
+  // saved" right after the user chose Discard.
   if (inFlight && (await settleSave())) return true;
   const s = get(state);
   if (!s) return true;
@@ -584,7 +584,7 @@ export function guardUnload(e: BeforeUnloadEvent): void {
 }
 
 /**
- * The per-dashboard Settings dialog saved while this session is open (Ruling 19). That save
+ * The per-dashboard Settings dialog saved while this session is open. That save
  * bumps the server revision; the session absorbs it so the next Save does not falsely conflict:
  * the base revision becomes the new one and the new settings go into saved, the draft and the
  * undo/redo states (the settings are not part of the draft's edits). Only when the settings save

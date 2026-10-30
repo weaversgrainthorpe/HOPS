@@ -30,7 +30,7 @@ describe('navigateTiles', () => {
 		expect(document.activeElement).toBe(f);
 	});
 
-	it('with a modal dialog open (an About box with no stopped keys), never steals focus to a tile (M2 carry-over)', () => {
+	it('with a modal dialog open (an About box with no stopped keys), never steals focus to a tile (regression)', () => {
 		const a = mk('entry', 0, 0, page, 'a');
 		mk('entry', 50, 0, page, 'b');
 		const dlg = document.createElement('div');

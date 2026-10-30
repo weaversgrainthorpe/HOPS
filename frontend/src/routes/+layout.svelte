@@ -43,7 +43,7 @@
 		const cfg = get(config);
 		const r = seg && cfg ? resolveDashboardRoute(seg, cfg) : undefined;
 		if (guardNavigation(nav, (href) => goto(href), r?.id ?? null)) return;
-		cancelDropAnimations(); // §8.1: no drop animation outlives the page it was drawn on
+		cancelDropAnimations(); // no drop animation outlives the page it was drawn on
 		revealNavigation(r ? r.id : null);
 	});
 
@@ -130,7 +130,7 @@
 <svelte:window onkeydown={handleKeyDown} onbeforeunload={guardUnload} />
 
 <!-- A column at least as tall as the screen: the page area takes what the navbar and the
-     banners leave, so a dashboard's tab panel can fill the rest (walkthrough §3). -->
+     banners leave, so a dashboard's tab panel can fill the rest. -->
 <div class="app-root">
 <Navbar onSearch={() => (showSearch = true)} />
 <OfflineBanner />

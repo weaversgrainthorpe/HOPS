@@ -50,7 +50,7 @@ type LoginResult struct {
 
 // Password policy for a new password. The minimum is a length floor, not a
 // complexity rule: HOPS has one admin and is meant for a LAN or behind an
-// auth-aware proxy (design/security/v3-security-assurance.md §2). The maximum
+// auth-aware proxy. The maximum
 // is bcrypt's: it ignores (and x/crypto rejects) input past 72 bytes.
 const (
 	MinPasswordLength   = 8

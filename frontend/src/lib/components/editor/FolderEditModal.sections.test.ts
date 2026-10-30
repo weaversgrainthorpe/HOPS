@@ -1,4 +1,4 @@
-// M6 §7.1–7.5 (walkthrough fixes): the folder dialog's order and sections, the look previews on a light
+// The folder dialog's order and sections, the look previews on a light
 // card, and a stored colour background (pictures only at folder level, never dropped silently).
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/svelte';
@@ -14,7 +14,7 @@ const f = (extra: Partial<FolderNode> = {}): FolderNode => ({
 });
 const follows = (a: Element, b: Element) => !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
 
-describe('the dialog order and sections (§7.1, §7.4)', () => {
+describe('the dialog order and sections', () => {
   it('the look (picker and tab position) sits between Icon and the colour and Background', () => {
     render(FolderEditModal, { folder: f({ shape: 'folder-flat' }), onSave: vi.fn(), onCancel: vi.fn(), onMoveCopy: vi.fn() });
     const icon = screen.getByRole('button', { name: /Edit icon/ });
@@ -42,7 +42,7 @@ describe('the dialog order and sections (§7.1, §7.4)', () => {
   });
 });
 
-describe('look previews on a light card (§7.2)', () => {
+describe('look previews on a light card', () => {
   it('every look sits on the light neutral card, drawn opaque in the folder colour', () => {
     render(FolderEditModal, { folder: f({ shape: 'folder-flat', color: '#0f172a', opacity: 0.2 }), onSave: vi.fn(), onCancel: vi.fn() });
     const cards = document.querySelectorAll('.shape-picker [data-preview-card]');
@@ -77,7 +77,7 @@ describe('look previews on a light card (§7.2)', () => {
   });
 });
 
-describe('the Background section at folder level (§7.5)', () => {
+describe('the Background section at folder level', () => {
   it('no picture of its own says so in the new words', () => {
     render(FolderEditModal, { folder: f(), onSave: vi.fn(), onCancel: vi.fn() });
     expect(screen.getByText(/No picture of its own — shows what's behind/)).toBeInTheDocument();

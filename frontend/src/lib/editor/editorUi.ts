@@ -21,7 +21,7 @@ export const editorDialog = writable<EditorDialog | null>(null);
 export type MenuTarget =
   | { kind: 'node'; id: string }
   | { kind: 'container'; ref: ContainerRef; cell?: Cell }
-  /** A tab in the tab bar: Edit, Duplicate, Delete (the same menu, §4B). */
+  /** A tab in the tab bar: Edit, Duplicate, Delete (the same menu). */
   | { kind: 'tab'; id: string };
 
 export interface MenuRequest {
@@ -54,7 +54,7 @@ export function openMenu(m: MenuRequest): void {
 export const showTabRequest = writable<string | null>(null);
 
 /**
- * Where an add or paste without a target goes: the tab root (M5: folders open in place on the
+ * Where an add or paste without a target goes: the tab root (folders open in place on the
  * tab, so there is no "top" folder to prefer; the menu's "Add here" names a folder explicitly).
  */
 export function currentContainer(tabId: string): ContainerRef {

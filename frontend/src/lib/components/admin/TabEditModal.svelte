@@ -64,7 +64,7 @@
   let showBackgroundConfig = $state(false);
 
   // A picked background is staged here and saved with the dialog (one undo step);
-  // Cancel discards it (Ruling 11(5)).
+  // Cancel discards it.
   let stagedBackground = $state<{ value: Background | undefined } | null>(null);
   const shownBackground = $derived(stagedBackground ? stagedBackground.value : tabBackground);
   let showIconEditor = $state(false);

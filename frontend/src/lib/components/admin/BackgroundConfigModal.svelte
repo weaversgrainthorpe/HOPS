@@ -1,8 +1,8 @@
 <script lang="ts">
   /**
-   * The tab and folder background picker (design §4a), nested over their edit dialogs: the
+   * The tab and folder background picker, nested over their edit dialogs: the
    * BackgroundSection form in its own dialog with Save / Cancel. (The dashboard's background is
-   * the dashboard dialog's Background section, walkthrough §4C.)
+   * the dashboard dialog's Background section.)
    */
   import type { Background } from '$lib/types';
   import Icon from '@iconify/svelte';
@@ -16,13 +16,13 @@
     background?: Background;
     onSave: (background: Background | undefined) => void;
     onCancel: () => void;
-    /** Which level this picker edits (design §4a); what it offers comes from backgroundCapabilities. */
+    /** Which level this picker edits; what it offers comes from backgroundCapabilities. */
     level: 'dashboard' | 'tab' | 'folder';
-    /** The capability table's runtime conditions (M6 §8.2), from the host. */
+    /** The capability table's runtime conditions, from the host. */
     runtime: BackgroundContext;
     /** Opens the dashboard's settings (the folder-animations note's link). */
     onOpenDashboardSettings?: () => void;
-    /** Folder level, a stored colour background: hand it to the folder dialog as the folder's colour (M6 §7.5). */
+    /** Folder level, a stored colour background: hand it to the folder dialog as the folder's colour. */
     onUseAsFolderColour?: () => void;
   }
 

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { isRedirect } from '@sveltejs/kit';
 import { load } from './+page';
 
-// M5 §9: /settings is not a page of its own any more: it goes to its first section, so the gear,
+// /settings is not a page of its own any more: it goes to its first section, so the gear,
 // old bookmarks and every "Open Settings" link keep working.
 describe('/settings', () => {
 	it('redirects to /settings/dashboards', () => {

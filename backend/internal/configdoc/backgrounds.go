@@ -5,7 +5,7 @@ import (
 	"math"
 )
 
-// M4 background form (design §3, §4a call 5). A dashboard, tab or folder
+// Background form. A dashboard, tab or folder
 // "background" is absent (inherit), or an object that is either a picture
 // ({type: image|slideshow|color, …}) or the inherit form ({inherit: true,
 // …stored picture fields}), which keeps a switched-off picture so it is never
@@ -23,7 +23,7 @@ const (
 var backgroundTypes = map[string]bool{"image": true, "slideshow": true, "color": true}
 
 // tabBackgroundsActive reports whether the legacy dashboard d showed its tabs'
-// own backgrounds. The M1–M3 renderer read only the dashboard switch, so that
+// own backgrounds. The earlier renderer read only the dashboard switch, so that
 // is what decides — a stale tab mirror never does (nothing changes visually).
 func tabBackgroundsActive(d Obj) bool {
 	on, _ := d[legacyPerTabKey].(bool)
@@ -88,7 +88,7 @@ func (v *verifier) checkBackgroundKept(what string, before, after Obj, inactive 
 // array of at most MaxBackgroundImages strings.
 //
 // A slideshow's interval and transitionDuration are deliberately NOT checked
-// (Ruling 14): the renderer and the picker clamp them where they are used, and
+//: the renderer and the picker clamp them where they are used, and
 // rejecting an odd timing value here would block an import or prod's v2→v3
 // migration over a cosmetic number. They are kept exactly as stored.
 func (v *verifier) checkBackground(where string, o Obj) {

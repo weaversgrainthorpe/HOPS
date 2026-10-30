@@ -27,7 +27,7 @@
   // Regenerate the QR code whenever the URL changes (rare, but handles the
   // case where this modal is reused for different dashboards via key prop).
   $effect(() => {
-    // Level H with the HOPS bunny in the centre (M5 §12); the bunny is in the SVG, so the
+    // Level H with the HOPS bunny in the centre; the bunny is in the SVG, so the
     // download has it too.
     buildQrSvg(fullUrl)
       .then((svg) => {
@@ -142,7 +142,7 @@
     padding: 0.5rem 0;
   }
 
-  /* The dashboard name labels the code (walkthrough: "a little bigger"): large and in the
+  /* The dashboard name labels the code ("a little bigger"): large and in the
      primary text colour, wrapping rather than truncating a long name. */
   .dashboard-name {
     margin: 0;

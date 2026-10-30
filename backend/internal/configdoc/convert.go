@@ -20,7 +20,7 @@ func deepCopy(o Obj) (Obj, error) {
 
 // SizeChange records one v2 tile whose size HOPS does not recognise (not
 // small, medium or large, nor missing/empty), which the converter set to
-// Medium (Ruling 3: a cosmetic value must not block the release migration,
+// Medium (a cosmetic value must not block the release migration,
 // but the change is reported, never silent). Path is the tile's v2 path.
 type SizeChange struct {
 	Path        string `json:"path"`
@@ -116,7 +116,7 @@ func ConvertDashboardV2Full(d Obj) (Obj, []SizeChange, error) {
 
 // convertDashboard converts an already-copied dashboard in place.
 func convertDashboard(d Obj, path string) (Obj, []SizeChange, error) {
-	// v2's perTabBackgrounds switch is written straight into the M4 form:
+	// v2's perTabBackgrounds switch is written straight into the background form:
 	// when it was off, each tab background becomes {inherit: true, …picture}
 	// (kept, not shown); the switch itself is dropped.
 	perTab := tabBackgroundsActive(d)
@@ -150,7 +150,7 @@ func convertDashboard(d Obj, path string) (Obj, []SizeChange, error) {
 		settings[k] = nil
 	}
 	d["settings"] = settings
-	// Every tab is a grid tab (M5): no dashboard default layout.
+	// Every tab is a grid tab: no dashboard default layout.
 	delete(d, "defaultLayout")
 	trimTileURLs(d)
 	return d, sizes, nil
@@ -204,7 +204,7 @@ func convertTab(t Obj, perTab bool, path string) (Obj, []SizeChange, error) {
 		if es, ok := gm["entries"].([]any); ok {
 			n = len(es)
 		}
-		// The folder's open box on the tab (Ruling 9): v2's footprint, perRow
+		// The folder's open box on the tab: v2's footprint, perRow
 		// Medium tiles wide, so groups that sat side by side in v2 still do,
 		// and tall enough that every entry shows on page 1 at every grid width
 		// (the padding takes a column, so a full v2 row wraps to a second
@@ -222,7 +222,7 @@ func convertTab(t Obj, perTab bool, path string) (Obj, []SizeChange, error) {
 		children = append(children, f)
 		changed = append(changed, sc...)
 	}
-	// Every tab is a grid tab (M5): no per-tab layout or design width.
+	// Every tab is a grid tab: no per-tab layout or design width.
 	delete(t, "layout")
 	delete(t, "designWidth")
 	delete(t, legacyEnabledKey)
@@ -254,11 +254,11 @@ func placement(x, y, w, h int) Obj {
 	return Obj{"x": x, "y": y, "w": w, "h": h}
 }
 
-// convertGroup turns a v2 group into an M5 folder placed at p: Medium on the
+// convertGroup turns a v2 group into a folder placed at p: Medium on the
 // tab, Medium contents, and its entries as an ordered list of tiles with no
 // placements, in v2 entry order (array order; v2 `order` is carried, never
 // used to re-sort). A tile size HOPS does not recognise becomes Medium and is
-// reported (Ruling 3).
+// reported.
 func convertGroup(g Obj, p [4]int, path string) (Obj, []SizeChange, error) {
 	entries, err := listOf(g, "entries")
 	if err != nil {
@@ -292,7 +292,7 @@ func convertGroup(g Obj, p [4]int, path string) (Obj, []SizeChange, error) {
 	} else {
 		g["display"] = "expanded"
 	}
-	// M6 §3a.1, §3a.5: a v2 folder-style group is Flat; every other
+	// A v2 folder-style group is Flat; every other
 	// converted folder (v2 header groups, Homer, Dashy, Heimdall) Rounded.
 	if g["displayStyle"] == "folder" {
 		g["shape"] = ShapeCreated

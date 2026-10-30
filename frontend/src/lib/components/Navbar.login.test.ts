@@ -186,7 +186,7 @@ describe('Navbar after a sign-in that must change the password', () => {
 	});
 });
 
-describe('Navbar gear and Log out (spec §4D)', () => {
+describe('Navbar gear and Log out', () => {
 	beforeEach(() => {
 		navigateTo('/d');
 		(goto as unknown as ReturnType<typeof vi.fn>).mockClear();

@@ -91,7 +91,7 @@ describe('the store is the v3 document', () => {
   });
 });
 
-describe('server notices across writes (M4 Task 7)', () => {
+describe('server notices across writes', () => {
   it('a write keeps the notices and re-reads them, since a write can change what they list', async () => {
     config.set({ ...makeConfig(), notices: [{ id: 'n', text: 'old' }] });
     vi.mocked(api.getConfig).mockResolvedValue({ ...makeConfig(dash('a', 4)), notices: [{ id: 'n', text: 'new' }] });
@@ -184,7 +184,7 @@ describe('server notices across writes (M4 Task 7)', () => {
   });
 });
 
-describe('global Settings save (M4 Task 7 fix round 1)', () => {
+describe('global Settings save', () => {
   it('saves, then re-reads every cached dashboard status-check base and the notices', async () => {
     vi.mocked(api.updateSetting).mockResolvedValue(undefined);
     vi.mocked(api.getConfig).mockResolvedValue({ ...makeConfig(), notices: [{ id: 'g', text: 'fresh' }] });
@@ -237,7 +237,7 @@ describe('loadConfig', () => {
   });
 });
 
-describe('loadConfig while the layout is stale (M3 Task 1)', () => {
+describe('loadConfig while the layout is stale', () => {
   it('reloads in the background: never shows the global loading screen', async () => {
     configLoading.set(false);
     layoutStale.set(true);
@@ -280,7 +280,7 @@ describe('showMigrationFailedPage', () => {
   it('is false on /settings (the admin home: sign-in and Backups, the remedy)', () => {
     expect(showMigrationFailedPage('/settings', 'bad')).toBe(false);
   });
-  it('is false on every settings page (M5 §9): each shows the notice on top, with Backups reachable', () => {
+  it('is false on every settings page: each shows the notice on top, with Backups reachable', () => {
     for (const p of ['/settings/dashboards', '/settings/global', '/settings/backups', '/settings/password', '/settings/reset']) {
       expect(showMigrationFailedPage(p, 'bad')).toBe(false);
     }
@@ -296,7 +296,7 @@ describe('showMigrationFailedPage', () => {
 
 describe('write responses refresh the document', () => {
   it('a session save (applySavedLayout) takes the response document and does NOT reload the whole config', async () => {
-    // The follow-up GET only refreshes the notices (fix round 1); its document is never taken.
+    // The follow-up GET only refreshes the notices; its document is never taken.
     vi.mocked(api.getConfig).mockResolvedValue(makeConfig(dash('a', 9, { name: 'from GET' })));
     applySavedLayout({ layout: doc(dash('a', 4, { name: 'fresh' })) });
     expect(findLayoutDashboard('a', get(layoutDoc))?.name).toBe('fresh');

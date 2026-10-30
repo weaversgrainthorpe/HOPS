@@ -24,7 +24,7 @@ describe('folderView store', () => {
     expect(JSON.parse(localStorage.getItem(KEY)!)).toEqual({ f1: s });
     expect(get(folderViewFor('d1'))).toEqual({ f1: s });
   });
-  it('two states only (M5 §2): a stored "maximised" (older build) reads as expanded (open)', () => {
+  it('two states only: a stored "maximised" (older build) reads as expanded (open)', () => {
     localStorage.setItem(KEY, JSON.stringify({ a: 'maximised', b: 'maximised', c: 'collapsed' }));
     expect(get(folderViewFor('d1'))).toEqual({ a: 'expanded', b: 'expanded', c: 'collapsed' });
   });
@@ -91,7 +91,7 @@ describe('applyFolderViews', () => {
     expect(a.content).toBe((d.tabs[0].root.children[0] as any).content); // its contents are untouched
     expect(b).toBe(d.tabs[0].root.children[1]);
   });
-  it('a minimised folder is a tile of its own size (M5 §3a.2)', () => {
+  it('a minimised folder is a tile of its own size', () => {
     const d = dash([f('a', { size: 'large', placement: { x: 10, y: 20, w: 8, h: 6 } })]);
     const t = applyFolderViews(d, d.tabs[0], { a: 'collapsed' });
     expect((t.root.children[0] as any).placement).toEqual({ x: 10, y: 20, w: 4, h: 4 });
@@ -116,7 +116,7 @@ describe('applyFolderViews', () => {
   });
 });
 
-// ---- M5 Task 3: per-browser page and drill-down memory (viewer conveniences, never saved to the layout).
+// Per-browser page and drill-down memory (viewer conveniences, never saved to the layout).
 const NAV = 'hops.folderNav.d1';
 const sub = (id: string, children: any[] = []): any => ({
   kind: 'folder', id, name: id, display: 'expanded', size: 'medium', contentSize: 'medium', content: { children }
@@ -219,8 +219,8 @@ describe('revealInFolders: search opens the chain in place, drills down and asks
   });
 });
 
-// M5 Task 4: the drag's breadcrumb dwell goes up a level; a sub-folder dragged out to the tab forgets
-// this browser's memory of it, so it draws minimised (§3a.3).
+// The drag's breadcrumb dwell goes up a level; a sub-folder dragged out to the tab forgets
+// this browser's memory of it, so it draws minimised.
 describe('drillUpTo (breadcrumb dwell)', () => {
   it('goes back up to a crumb of the open folder\'s path, or to the folder itself', () => {
     setFolderDrill('d1', 'top', ['a', 'b', 'c']);
@@ -257,7 +257,7 @@ describe('forgetFolderMemory', () => {
   });
 });
 
-describe('closeDrilledInto: a drilled-into folder that moves away closes (Ruling 14)', () => {
+describe('closeDrilledInto: a drilled-into folder that moves away closes', () => {
   it('cuts every drill path at the first moved folder, and forgets the moved folders\' own page and drill', () => {
     setFolderDrill('d1', 'top', ['s', 's2']);
     setFolderDrill('d1', 'other', ['x']);

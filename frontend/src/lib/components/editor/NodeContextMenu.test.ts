@@ -77,7 +77,7 @@ describe('NodeContextMenu — structure and keyboard', () => {
     expect(ev.defaultPrevented).toBe(true);
   });
 
-  it('a tile offers the v2 actions and no z-order (items never overlap: M5 has no free layout)', async () => {
+  it('a tile offers the v2 actions and no z-order (items never overlap; there is no free layout)', async () => {
     const r = open({ kind: 'node', id: 'a' });
     for (const n of ['Edit', 'Duplicate', 'Cut', 'Copy', 'Paste here', 'Move/Copy to…', 'Delete']) expect(item(n)).toBeInTheDocument();
     expect(screen.queryByRole('menuitem', { name: 'Bring forward' })).toBeNull();
@@ -213,7 +213,7 @@ describe('NodeContextMenu — each action calls the right op', () => {
     expect(get(session)!.undo).toHaveLength(0);
   });
 
-  it('a sub-folder shown as an inset box (drilled into): Close goes back up to its parent level, no Open (Ruling 14)', async () => {
+  it('a sub-folder shown as an inset box (drilled into): Close goes back up to its parent level, no Open', async () => {
     const d = home();
     (d.tabs[0].root.children[2] as FolderNode).content.children.push(folder('s', undefined, [folder('s2', undefined, [tile('z')])]));
     setLayout([d]);

@@ -17,7 +17,7 @@ export function clearBackgroundErrors(): void {
 }
 
 /**
- * A URL that failed earlier has now loaded (Ruling 7): drop it, so the
+ * A URL that failed earlier has now loaded: drop it, so the
  * edit-mode indicator never shows a stale failure.
  */
 export function markBackgroundLoaded(url: string): void {
@@ -33,7 +33,7 @@ export function backgroundUrlsOf(bg: Background | undefined): string[] {
   return [];
 }
 
-/** The failed URLs that this level still references (Ruling 7). */
+/** The failed URLs that this level still references. */
 export function failedFor(bg: Background | undefined, failed: readonly string[]): string[] {
   const mine = backgroundUrlsOf(bg);
   return failed.filter((u) => mine.includes(u));

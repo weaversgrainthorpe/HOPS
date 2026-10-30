@@ -1,4 +1,4 @@
-// M6 batch-review I1/I2 (rulings 1 and 2): every theme preset, in light AND dark, carries solid colour
+// every theme preset, in light AND dark, carries solid colour
 // tokens that pass WCAG contrast — so no button, link, error or status dot is wired to the default
 // preset's colours or to a gradient that cannot be a text background.
 import { describe, it, expect } from 'vitest';

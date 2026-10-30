@@ -152,7 +152,7 @@ type BackupManager struct {
 	noticesSaveErr *BackupProblem
 	journalErr     *BackupProblem // the restore journal couldn't be removed (retried before the next restore)
 
-	// Uploaded images (M6 §12): the attic sweep's notices, and the restore's
+	// Uploaded images: the attic sweep's notices, and the restore's
 	// image report (dismissible, kept across restarts).
 	atticBlocked  *BackupProblem
 	atticFailed   *BackupProblem
@@ -490,7 +490,7 @@ func (bm *BackupManager) createBackup(reason string, db *sql.DB) (string, error)
 		return "", fmt.Errorf("failed to copy database: %w", err)
 	}
 
-	// Which version of each image it uses (M6 §12): part of the backup.
+	// Which version of each image it uses: part of the backup.
 	if err := bm.recordBackup(backupName, backupPath); err != nil {
 		os.Remove(backupPath) // #nosec G104 -- best-effort cleanup on an error path; the primary error is returned (logged), a leftover temp is swept at start
 		os.Remove(bm.recordPath(backupName)) // #nosec G104 -- best-effort cleanup on an error path; the primary error is returned (logged), a leftover temp is swept at start

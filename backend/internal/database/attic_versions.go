@@ -17,7 +17,7 @@ import (
 	"time"
 )
 
-// Exact image versions (M6 §12, fix round 1). A name like /icons/x.png can
+// Exact image versions. A name like /icons/x.png can
 // mean different files over time (delete x.png, upload another x.png), so:
 //
 //   - the attic is keyed by CONTENT: <data>/attic/<kind>/<sha256>, with an

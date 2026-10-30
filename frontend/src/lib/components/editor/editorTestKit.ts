@@ -13,16 +13,16 @@ import { LAYOUT_VERSION } from '$lib/layout/geometry';
 import type { Config } from '$lib/types';
 import type { FolderNode, LayoutDashboard, LayoutNode, Placement } from '$lib/types/layout';
 
-/** A placement; w and h default to a Medium tile's span (2 x 2 on the finer grid, spec §9). */
+/** A placement; w and h default to a Medium tile's span (2 x 2 on the finer grid). */
 export const p = (x: number, y: number, w = 2, h = 2, z?: number): Placement =>
   z === undefined ? { x, y, w, h } : { x, y, w, h, z };
-/** A tile; `pl` only on a tab (M5: a tile inside a folder has no placement). */
+/** A tile; `pl` only on a tab (a tile inside a folder has no placement). */
 export const tile = (id: string, pl?: Placement, extra: Record<string, unknown> = {}): LayoutNode =>
   ({
     kind: 'tile', id, name: id.toUpperCase(), url: 'http://x.test', icon: '', openMode: 'newtab', size: 'medium',
     order: 0, ...(pl ? { placement: pl } : {}), ...extra
   }) as unknown as LayoutNode;
-/** A folder (M5: Medium, Medium contents, ordered children); `pl` only on a tab. */
+/** A folder (Medium, Medium contents, ordered children); `pl` only on a tab. */
 export const folder = (id: string, pl: Placement | undefined, children: LayoutNode[], over: Partial<FolderNode> = {}): FolderNode => ({
   kind: 'folder', id, name: id.toUpperCase(), display: 'expanded', size: 'medium', contentSize: 'medium',
   ...(pl ? { placement: pl } : {}), content: { children },
@@ -30,7 +30,7 @@ export const folder = (id: string, pl: Placement | undefined, children: LayoutNo
 });
 
 /**
- * d1 (M5 form, 24 columns, Medium tiles 2 x 2): tab t1 (a, b, folder f1 [x], minimised folder
+ * d1 (24 columns, Medium tiles 2 x 2): tab t1 (a, b, folder f1 [x], minimised folder
  * c1 [y]) and tab t2 (fa, fb).
  */
 export function home(): LayoutDashboard {
@@ -117,7 +117,7 @@ export class FakeRO {
 
 /**
  * The dialogs edit the draft only: no request at all, except the status-check row's read of the
- * dashboard's settings (GET, M4 Task 7 / Ruling 3), and a tile badge's status read (GET): a tile
+ * dashboard's settings (GET), and a tile badge's status read (GET): a tile
  * with no setting inherits, so it asks the server what it resolves to.
  */
 export function noRequestsButSettingsRead(spy: ReturnType<typeof vi.fn>): void {

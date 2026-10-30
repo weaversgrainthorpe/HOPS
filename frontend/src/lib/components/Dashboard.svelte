@@ -146,7 +146,7 @@
     await tick(); // let the canvas switch tab first
     // Open the folder chain in place, drill down and flip to the tile's page (this browser's memory).
     // Edit mode shows the saved layout, so a folder saved minimised there is opened exactly as its
-    // menu's "Open" does: an undoable draft change (Ruling 6), never a dead end.
+    // menu's "Open" does: an undoable draft change, never a dead end.
     if (editing && draft && req.folderIds.length > 0) {
       const top = findIn(draft, req.folderIds[0]);
       if (top?.kind === 'folder' && top.display === 'collapsed') setDisplay(top.id, 'expanded');
@@ -189,11 +189,11 @@
     setTimeout(() => el.removeAttribute('data-search-hit'), HIT_MS);
   }
   // The tab being edited: one editor dialog request ({kind:'tab'}), opened by the tab's handle,
-  // a double-click or its menu's Edit — the same flow as every item (§4B).
+  // a double-click or its menu's Edit — the same flow as every item.
   const editingTabId = $derived($editorDialog?.kind === 'tab' ? $editorDialog.id : null);
   const closeTabDialog = () => editorDialog.set(null);
 
-  // ---- §7.2 room for the floating toolbar. The panel's bottom padding (the same in both modes) is
+  // --- room for the floating toolbar. The panel's bottom padding (the same in both modes) is
   // the baseline; when the toolbar reaches higher than that (it wrapped, a warning or the hint shows),
   // an edit-only spacer BELOW all content makes up the rest, so the last row can always be scrolled
   // clear of it. Space below the last row moves nothing, so view and edit positions still match.
@@ -205,10 +205,10 @@
     toolbarSpacerPx = Math.max(0, Math.ceil(reach + TOOLBAR_GAP_PX - pad));
   }
   let showAddTabModal = $state(false);
-  /** The one dashboard dialog (Header, Background, Settings — walkthrough §4C). */
+  /** The one dashboard dialog (Header, Background, Settings). */
   let showDashboardEdit = $state(false);
   /**
-   * How it opens: from the toolbar at Header; from a folder background picker's note (M6 §8.2) at
+   * How it opens: from the toolbar at Header; from a folder background picker's note at
    * Settings with the named setting shown, above that picker.
    */
   let dashboardEditFrom = $state<{ section: 'header' | 'settings'; focusSetting?: string; raised: boolean }>({
@@ -223,7 +223,7 @@
     if (!editing) untrack(() => (showDashboardEdit = false));
   });
 
-  // ---- background layers (M4 Task 4, design §4a calls 1–4) ----
+  // ---- background layers ----
   // The dashboard's layer, then the active tab's own layer above it (at its
   // opacity). The inherit form (or none) draws no layer at that level.
   /** A level's own background, or undefined for none / the inherit form (a bare {inherit:true} included). */
@@ -258,7 +258,7 @@
   });
 
   // Clicking a tab always switches to it — even in edit mode. Editing the tab
-  // itself is its handle, a double-click or its menu (§4B).
+  // itself is its handle, a double-click or its menu.
   function handleTabClick(index: number) {
     activeTabIndex = index;
   }
@@ -369,7 +369,7 @@
     }
   }
 
-  // The tab dialog's status-check row inherits from the dashboard (M4 §4b).
+  // The tab dialog's status-check row inherits from the dashboard.
   const tabStatusContext = $derived(contextForTab(draft ?? dashboard));
 </script>
 
@@ -396,7 +396,7 @@
   <PartyMode />
   <HopAnimation />
 
-  <!-- §7.2: the header and tab row are identical in both modes. Every editing control (the Dashboard
+  <!-- The header and tab row are identical in both modes. Every editing control (the Dashboard
        pencil and Add tab included) is in the floating EditToolbar, which takes no layout space. -->
   <!-- Recently used: above the tabs because it spans every tab; stays (dimmed, inert) in edit mode so nothing jumps; never in the layout. -->
   {#if $recentOn}
@@ -576,7 +576,7 @@
     50% { outline-offset: 8px; outline-color: transparent; }
   }
   /* A column filling the page area below the navbar (the layout's .app-page), so the
-     tab panel can take the rest of the screen (walkthrough §3). */
+     tab panel can take the rest of the screen. */
   .dashboard {
     flex: 1 0 auto;
     display: flex;
@@ -586,7 +586,7 @@
     background-attachment: fixed;
   }
 
-  /* Room below the last row for the floating edit toolbar (§7.2). The same in BOTH modes, so every
+  /* Room below the last row for the floating edit toolbar. The same in BOTH modes, so every
      item sits at exactly the same place in view and edit mode; the user can scroll the last row
      clear of the toolbar. Phones: the toolbar's button row scrolls sideways and stays one row. */
   .dashboard {
@@ -788,10 +788,10 @@
     border-radius: 0.3rem;
   }
 
-  /* The tab's edit handle takes no layout space (§7.2: the tab row is identical in both modes). It sits
+  /* The tab's edit handle takes no layout space (the tab row is identical in both modes). It sits
      inside the tab's own right padding (1.5rem), so it never covers the tab's icon or name, and it
      is inside the tab box, so a drop on it counts as the tab. It takes pointer events only while
-     shown, and never during a drag (EditHandle) — hidden, it never swallows a tab click (Ruling 29). */
+     shown, and never during a drag (EditHandle) — hidden, it never swallows a tab click. */
   .tab-container > :global(.edit-handle) {
     position: absolute;
     top: 50%;

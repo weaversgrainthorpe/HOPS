@@ -3,7 +3,7 @@
  * LayoutDashboard (or Container) and returns a NEW value; inputs are never
  * mutated. Invalid operations throw TreeOpError with a user-facing message.
  *
- * Two kinds of container (M5, one folder model):
+ * Two kinds of container (one folder model):
  * - a TAB's root: a 24-column grid of placed items. Gaps persist: moving or deleting never shifts
  *   any other node; only pushAside (an explicit reflow for a drop target) relocates displaced
  *   nodes. A tile on a tab always takes its Size's span (S 1 x 1, M 2 x 2, L 4 x 4).
@@ -180,7 +180,7 @@ function removeIds(d: LayoutDashboard, ids: Set<string>): LayoutDashboard {
 
 // ---------------------------------------------------------------- shapes per level
 
-/** A node as it sits in a folder: no placement (M5). Its own size is kept. */
+/** A node as it sits in a folder: no placement. Its own size is kept. */
 function unplaced(n: LayoutNode): LayoutNode {
   if (!('placement' in n)) return n;
   const out = { ...n } as Record<string, unknown>;
@@ -190,9 +190,9 @@ function unplaced(n: LayoutNode): LayoutNode {
 
 /**
  * A node as it sits on a tab at `at`: validated inside the columns; a tile must be asked at exactly
- * its Size's span (its size is the truth, M5 §2) — any other footprint is REFUSED, never silently
+ * its Size's span (its size is the truth) — any other footprint is REFUSED, never silently
  * resized, so a preview can never show one footprint and commit another; a folder arriving from
- * inside a folder is minimised (M5 §3a.3).
+ * inside a folder is minimised.
  */
 function placedOnTab(n: LayoutNode, at: Placement, cols: number, fromFolder: boolean): LayoutNode {
   finitePlacement(at);
@@ -215,7 +215,7 @@ function placedOnTab(n: LayoutNode, at: Placement, cols: number, fromFolder: boo
   }
   if (n.kind === 'folder' && fromFolder) {
     // Out of a folder it has no box of its own: it is given its default box (tabSpan), never one below
-    // its minimum (Ruling 7a) — a smaller one is refused, never silently grown.
+    // its minimum — a smaller one is refused, never silently grown.
     const min = folderMinCells(n);
     if (p.w < min.w || p.h < min.h) {
       throw new TreeOpError(
@@ -241,7 +241,7 @@ function checkIndex(i: unknown): number {
 
 const END = Number.MAX_SAFE_INTEGER;
 
-// ---------------------------------------------------------------- grid overlap contract (Ruling 11)
+// ---------------------------------------------------------------- grid overlap contract
 
 const overlaps = (a: Placement, b: Placement): boolean =>
   a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
@@ -264,7 +264,7 @@ export function assertGridNoOverlap(c: Container, only?: Set<string>): void {
 
 /**
  * True when `p` can go on tab root `c` as it is: inside the columns and clear of every sibling's
- * STORED footprint (a minimised folder's reserved cells count, Ruling 13).
+ * STORED footprint (a minimised folder's reserved cells count).
  */
 export function cellIsFree(c: Container, p: Placement): boolean {
   if (![p.x, p.y, p.w, p.h].every((v) => typeof v === 'number' && Number.isFinite(v))) return false;
@@ -475,7 +475,7 @@ export function duplicateNode(
  * Merge `draggedIds` and the target tile into a new minimised folder in the target's place:
  * `{ size: 'medium', contentSize: 'medium', content: { children: [target, ...dragged] } }`, the
  * children in that order with no placements. On a tab the folder keeps the default open box
- * (defaultFolderBox: 6 x 5 for Medium contents, raised to its minimum, Ruling 7a) at the target's top-left (shifted left at the right edge);
+ * (defaultFolderBox: 6 x 5 for Medium contents, raised to its minimum) at the target's top-left (shifted left at the right edge);
  * nodes it now overlaps are pushed aside (pushAside), so the result never overlaps. Inside a folder
  * it takes the target's index. `allIds` is every id in the document; the new folder id avoids it.
  */
@@ -500,7 +500,7 @@ export function mergeIntoNewFolder(
   const ref = refOf(locate(d, targetTileId)!);
   const folderId = uniqueId('folder', new Set(allIds));
   // Inside a folder the new sub-folder is one of its items: it is drawn at — and its own size and
-  // contents size are — the parent's contents size (walkthrough 1, Ruling 11). On the tab: Medium.
+  // contents size are — the parent's contents size. On the tab: Medium.
   const parent = ref.folderId !== undefined ? findNode(d, ref.folderId) : undefined;
   const size: FolderNode['contentSize'] = parent?.kind === 'folder' ? (parent.contentSize ?? 'medium') : 'medium';
   const folder: FolderNode = {
@@ -575,7 +575,7 @@ function onTab(d: LayoutDashboard, id: string, what: string): { node: LayoutNode
 /**
  * The placement resizeNode would give folder `id` on a tab for a requested w x h: clamped to the
  * columns, and never smaller than its bar, padding, one item at its LARGEST contents size (its own or
- * any sub-folder's) and the page bar (geometry.folderMinCells; M5 §3.5: the folder pages its contents instead of growing to fit
+ * any sub-folder's) and the page bar (geometry.folderMinCells; the folder pages its contents instead of growing to fit
  * them). Pure; the resize preview uses it so the
  * highlight shows exactly what the commit stores.
  */
@@ -593,8 +593,8 @@ export function resizedPlacement(d: LayoutDashboard, id: string, w: number, h: n
 
 /**
  * The tab-level folder holding `id` (or `id` itself) grown to its smallest open box when it is below
- * it — after its contents size (or a sub-folder's) went up (fix round 1, §3.5). Its neighbours are
- * pushed aside by the M3 rules (pushAside). Already big enough, or not on a tab: the same dashboard.
+ * it — after its contents size (or a sub-folder's) went up. Its neighbours are
+ * pushed aside by the push-aside rules (pushAside). Already big enough, or not on a tab: the same dashboard.
  * No room across the tab: TreeOpError with the reason, nothing changed.
  */
 export function fitFolderMinimum(d: LayoutDashboard, id: string): LayoutDashboard {
@@ -622,7 +622,7 @@ export function fitFolderMinimum(d: LayoutDashboard, id: string): LayoutDashboar
 }
 
 /**
- * A folder look from a dialog (M6 §3a.8): `shape` one of the seven names and `tabPosition` left /
+ * A folder look from a dialog: `shape` one of the seven names and `tabPosition` left /
  * centre / right, when given (undefined = unchanged / absent). Anything else is a TreeOpError with the
  * reason — the server would refuse it on save, so it is refused here, visibly, before it gets there.
  */
@@ -636,9 +636,9 @@ export function assertFolderLook(patch: { shape?: unknown; tabPosition?: unknown
 }
 
 /**
- * Ruling 7b: after items went into folder `folderId` (`before` → `after`), the tab-level open box
+ * After items went into folder `folderId` (`before` → `after`), the tab-level open box
  * holding it grows to its new minimum when the largest contents size inside it went UP (a folder whose
- * subtree has a larger contents size came in) — fitFolderMinimum, pushing neighbours by the M3 rules,
+ * subtree has a larger contents size came in) — fitFolderMinimum, pushing neighbours by the push-aside rules,
  * in the same operation (so the same undo step); no room is a TreeOpError with the reason. A move that
  * does not raise the minimum leaves the box exactly as it was.
  */
@@ -661,7 +661,7 @@ export function resizeNode(
 
 /**
  * Put `id` at `at` (position and size) on its tab, applying `push` to its siblings (pushAside,
- * Ruling 11). Used when a tile's Size sets its span (spec §8), which may also shift it left at
+ * the push map). Used when a tile's Size sets its span, which may also shift it left at
  * the right edge. Validated and never overlapping (else TreeOpError).
  */
 export function placeNode(

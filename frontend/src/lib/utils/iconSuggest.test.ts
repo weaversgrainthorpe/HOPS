@@ -1,4 +1,4 @@
-// M6 §7.7: type-ahead suggestions in the icon-name field. The ranking is a pure
+// Type-ahead suggestions in the icon-name field. The ranking is a pure
 // function over the names HOPS has offline (the bundled Iconify set plus the imported
 // dashboard-icons), so it is tested here without a browser.
 import { describe, it, expect } from 'vitest';

@@ -8,8 +8,8 @@ import (
 	"time"
 )
 
-// PlanRetention is THE retention rule (M6 §11). Table tests, including
-// Jonathan's own examples.
+// PlanRetention is THE retention rule. Table tests, including
+// the owner's own examples.
 
 var now = time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
 
@@ -60,8 +60,8 @@ func TestPlanRetention(t *testing.T) {
 		wantDeleted []BackupInfo
 		wantCeiling int
 	}{
-		{"Jonathan: 4 backups, keep 5 — nothing happens", series(4, 0, 1), RetentionPolicy{5, 0, 100}, nil, 0},
-		{"Jonathan: keep 5 / 60 days after 90 quiet days — all 5 stay", quiet, RetentionPolicy{5, 60, 100}, nil, 0},
+		{"4 backups, keep 5 — nothing happens", series(4, 0, 1), RetentionPolicy{5, 0, 100}, nil, 0},
+		{"keep 5 / 60 days after 90 quiet days — all 5 stay", quiet, RetentionPolicy{5, 60, 100}, nil, 0},
 		{"empty", nil, RetentionPolicy{10, 0, 100}, nil, 0},
 		{"exactly keep_count", s10, RetentionPolicy{10, 0, 100}, nil, 0},
 		{"keep_days off: everything beyond the newest N goes", s20, RetentionPolicy{10, 0, 100}, s20[10:], 0},

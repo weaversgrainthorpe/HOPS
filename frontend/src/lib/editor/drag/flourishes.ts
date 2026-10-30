@@ -1,5 +1,5 @@
 /**
- * Visual flourishes (M6 §9). They are decoration only, like the drop animations in dropAnimation.ts,
+ * Visual flourishes. They are decoration only, like the drop animations in dropAnimation.ts,
  * and run on the same engine:
  *
  * - The same gating. The global "Animations" setting (display.animations) is On / Off / Always. On

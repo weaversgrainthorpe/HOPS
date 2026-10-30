@@ -152,7 +152,7 @@ async function fetchAPI(endpoint: string, options: RequestInit = {}) {
         typeof parsedBody.detail === 'string' ? parsedBody.detail : undefined
       );
     }
-    // M5 §2a: a placement-carrying write at another layoutVersion (this page predates the server's
+    // A placement-carrying write at another layoutVersion (this page predates the server's
     // layout) is refused; never a revision conflict, and always says to reload.
     if (response.status === 409 && parsedBody?.error === 'layout_version_mismatch') {
       throw new Error(typeof parsedBody.detail === 'string' && parsedBody.detail ? parsedBody.detail : LAYOUT_VERSION_REFUSED);
@@ -231,7 +231,7 @@ export async function getConfig(): Promise<Config> {
     throw new Error('The server sent a configuration this version of HOPS cannot read (expected schema 3 dashboards). Reload the page; if it persists, check the server.');
   }
   const out: Config = { schemaVersion: 3, dashboards: resp.dashboards };
-  // The layout version (M5 §2a) is passed through as sent: the editor refuses to save into a
+  // The layout version is passed through as sent: the editor refuses to save into a
   // document at another version, so it must never be dropped (or invented) here.
   if (resp.layoutVersion !== undefined) out.layoutVersion = resp.layoutVersion;
   if (Array.isArray(resp.migrationNotices)) out.migrationNotices = resp.migrationNotices;
@@ -391,7 +391,7 @@ export async function saveDashboardV3(
   const resp = await fetchAPI(`/dashboards/${encodeURIComponent(id)}`, {
     method: 'PUT',
     // layoutVersion: the layout form this page's placements are in. The server refuses a write at
-    // another version (M5 §2a), so a page loaded before a layout change can never store an old form.
+    // another version, so a page loaded before a layout change can never store an old form.
     body: JSON.stringify({ schema: 3, dashboard, revision, layoutVersion: LAYOUT_VERSION }),
   });
   if (!resp || typeof resp.revision !== 'number') {
@@ -422,7 +422,7 @@ export async function transferNodes(
 ): Promise<{ sourceRevision: number; targetRevision: number; warning?: string } & FreshLayout> {
   const body: TransferRequest = { ...req, target: { tabId: req.target.tabId } };
   if (req.target.folderId) body.target.folderId = req.target.folderId;
-  // layoutVersion: see saveDashboardV3 (M5 §2a).
+  // layoutVersion: see saveDashboardV3.
   const resp = await fetchAPI('/dashboards/transfer', {
     method: 'POST',
     body: JSON.stringify({ ...body, layoutVersion: LAYOUT_VERSION }),
@@ -509,7 +509,7 @@ export async function exportConfig(format: 'json' | 'yaml' = 'json', dashboardId
 }
 
 export async function importConfig(file: File, options?: { autoMatchIcons?: boolean }): Promise<ImportResult> {
-  // M5 §10: a file over the import limit is refused before it is sent, naming the limit and its size.
+  // A file over the import limit is refused before it is sent, naming the limit and its size.
   const refusal = await checkUploadSize('import', file);
   if (refusal) throw new Error(refusal);
   const formData = new FormData();
@@ -771,7 +771,7 @@ export interface BackupInfo {
   protected?: boolean;
 }
 
-/** The retention settings (M6 §11) as the server applies them. */
+/** The retention settings as the server applies them. */
 export interface BackupRetention {
   keepCount: number;
   keepDays: number;
@@ -795,7 +795,7 @@ export interface BackupProblem {
   reason: string;
 }
 
-/** Deleted images kept because older backups still refer to them (M6 §12). */
+/** Deleted images kept because older backups still refer to them. */
 export interface AtticUsage {
   files: number;
   bytes: number;
@@ -964,7 +964,7 @@ export interface SettingDef {
   min?: number;
   max?: number;
   enum?: string[];
-  /** The out-of-range value that was stored, when the server clamped it on load (M5 §10). */
+  /** The out-of-range value that was stored, when the server clamped it on load. */
   adjustedFrom?: string;
 }
 

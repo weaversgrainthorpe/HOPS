@@ -44,7 +44,7 @@
     return unsub;
   });
 
-  // §9: when the status changes (online to offline, or back) the dot pulses twice, then settles; never
+  // When the status changes (online to offline, or back) the dot pulses twice, then settles; never
   // on first load (the first result after "checking" is not a change), in view and edit mode alike.
   // The dashboard's Animations setting decides; a tile drawn outside a dashboard canvas never pulses.
   const canvas = getContext<FolderViewContext | undefined>(FOLDER_VIEW_CONTEXT);

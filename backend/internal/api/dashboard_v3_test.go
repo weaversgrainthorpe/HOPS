@@ -33,7 +33,7 @@ func v3Put(c *apiClient, id string, d map[string]interface{}, rev interface{}) (
 	return c.do("PUT", "/api/dashboards/"+id, map[string]interface{}{"schema": 3, "dashboard": d, "revision": rev, "layoutVersion": configdoc.LayoutVersion})
 }
 
-// inFolder strips n's placement: folder contents are an ordered list (M5).
+// inFolder strips n's placement: folder contents are an ordered list.
 func inFolder(n map[string]interface{}) map[string]interface{} {
 	delete(n, "placement")
 	return n
@@ -211,7 +211,7 @@ func TestCreateDashboard(t *testing.T) {
 	if d == nil || d["name"] != "Fresh" || d["path"] != "/fresh" {
 		t.Fatalf("stored: %v", d)
 	}
-	assertM5Dashboard(t, d)
+	assertCurrentDashboard(t, d)
 	tabs := d["tabs"].([]any)
 	tab := tabs[0].(configdoc.Obj)
 	if len(tabs) != 1 || tab["name"] != "Home" {
@@ -497,8 +497,6 @@ func merge(a, b map[string]interface{}) map[string]interface{} {
 	return out
 }
 
-// ---- fix round 1 ----
-
 func TestReservedIDs_ImportRenames(t *testing.T) {
 	router, db := setupTestRouter(t)
 	c := newClient(t, router)
@@ -637,7 +635,7 @@ func TestTransfer_TabSpanFromSize(t *testing.T) {
 	if z := findNode(d2, "big")[0]["placement"].(configdoc.Obj)["z"]; z != float64(5) {
 		t.Errorf("z lost: %v", z)
 	}
-	assertM5Dashboard(t, d2)
+	assertCurrentDashboard(t, d2)
 }
 
 func TestV3Put_ClashChecksOnlyWhenPathChanged(t *testing.T) {

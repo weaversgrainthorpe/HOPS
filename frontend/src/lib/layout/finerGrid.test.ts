@@ -1,6 +1,6 @@
-// The 24-column grid (spec §9) as it stands in M5: Small 1 x 1, Medium 2 x 2, Large 4 x 4 on every
-// tab. The v3→v3 doubling, free mode and folder-interior placements are gone (M5 §2a, §3.8); the
-// span table and folder-page maths are in geometry.m5.test.ts.
+// The 24-column grid as it stands in Small 1 x 1, Medium 2 x 2, Large 4 x 4 on every
+// tab. The v3→v3 doubling, free mode and folder-interior placements are gone; the
+// span table and folder-page maths are in geometry.folders.test.ts.
 import { describe, it, expect } from 'vitest';
 import { ROOT_COLUMNS, containerMetrics, minimisedPlacement, nodeFit, nodeBox } from './geometry';
 import { blankFolder, blankTile } from '$lib/editor/editorActions';
@@ -23,7 +23,7 @@ describe('new items', () => {
     expect(blankTile().size).toBe('medium');
     expect('placement' in blankTile()).toBe(false);
   });
-  it('a new folder is Medium with Medium contents and the default open box (6 x 4: size x 3 by size x 2, above the M6 §13 Medium minimum 3 x 4, Ruling 7a), Flat', () => {
+  it('a new folder is Medium with Medium contents and the default open box (6 x 4: size x 3 by size x 2, above the Medium minimum 3 x 4), Flat', () => {
     expect(blankFolder()).toMatchObject({ size: 'medium', contentSize: 'medium', placement: { x: 0, y: 0, w: 6, h: 4 }, shape: 'folder-flat' });
     expect(blankFolder().content).toEqual({ children: [] });
   });
@@ -40,7 +40,7 @@ describe('minimised folder', () => {
     expect(minimisedPlacement({ x: 5, y: 0, w: 1, h: 6 }, 'medium')).toEqual({ x: 5, y: 0, w: 1, h: 2 });
     expect(minimisedPlacement({ x: 5, y: 0, w: 6, h: 1, z: 3 }, 'medium')).toEqual({ x: 5, y: 0, w: 2, h: 1, z: 3 });
   });
-  it('a non-finite w or h gives its size in that direction, never NaN (final review Minor 5)', () => {
+  it('a non-finite w or h gives its size in that direction, never NaN', () => {
     expect(minimisedPlacement({ x: 1, y: 2, w: NaN, h: 1 }, 'medium')).toEqual({ x: 1, y: 2, w: 2, h: 1 });
     expect(minimisedPlacement({ x: 1, y: 2, w: 1, h: Infinity }, 'medium')).toEqual({ x: 1, y: 2, w: 1, h: 2 });
     expect(minimisedPlacement({ x: 1, y: 2, w: 'x', h: undefined } as never, 'medium')).toEqual({ x: 1, y: 2, w: 2, h: 2 });

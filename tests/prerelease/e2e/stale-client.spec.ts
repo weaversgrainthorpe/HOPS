@@ -1,7 +1,7 @@
 import { test, expect, type Page, type BrowserContext } from '@playwright/test';
 import { getCsrfToken } from '../helpers';
 
-// M5 §2a (one layout version), in a REAL browser against a real server. A page loaded before a
+// One layout version), in a REAL browser against a real server. A page loaded before a
 // layout-format update runs the old code: it holds another form's placements and sends no (or
 // another) layoutVersion. The server must refuse every placement-carrying write from it with a
 // visible 409 ("HOPS was updated… Reload") and leave the stored document exactly as it was; the
@@ -18,7 +18,7 @@ function tile(id: string, name: string, x: number) {
   };
 }
 
-/** Import one small dashboard (in the M6 stored form, layoutVersion 2); returns its ids. */
+/** Import one small dashboard (in the stored form, layoutVersion 2); returns its ids. */
 async function importDash(page: Page, context: BrowserContext) {
   const p = `stale${Date.now().toString(36)}${(seq++).toString(36)}`;
   const id = (s: string) => `${p}-${s}`;
@@ -84,7 +84,7 @@ test.describe('a stale (pre-update) client cannot write an old layout form', () 
       { what: 'rename', method: 'put', url: `/api/dashboards/${a.id('dash')}`,
         body: { schema: 3, dashboard: { ...d, name: 'Renamed by a stale page' }, revision: d.revision } },
       { what: 'save, the retired gridUnit 2', method: 'put', url: `/api/dashboards/${a.id('dash')}`, body: { schema: 3, dashboard: d, revision: d.revision, gridUnit: 2 } },
-      { what: 'save, the M5 layoutVersion 1', method: 'put', url: `/api/dashboards/${a.id('dash')}`, body: { schema: 3, dashboard: d, revision: d.revision, layoutVersion: 1 } },
+      { what: 'save, layoutVersion 1', method: 'put', url: `/api/dashboards/${a.id('dash')}`, body: { schema: 3, dashboard: d, revision: d.revision, layoutVersion: 1 } },
       { what: 'save, layoutVersion 3', method: 'put', url: `/api/dashboards/${a.id('dash')}`, body: { schema: 3, dashboard: d, revision: d.revision, layoutVersion: 3 } },
       ...(['move', 'copy'] as const).map((mode) => ({
         what: mode, method: 'post' as const, url: '/api/dashboards/transfer',

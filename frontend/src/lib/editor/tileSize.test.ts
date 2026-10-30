@@ -1,4 +1,4 @@
-// A tile's Small/Medium/Large (spec §8, M5 §2): on a tab it sets the space the tile takes (Small 1 x 1,
+// A tile's Small/Medium/Large: on a tab it sets the space the tile takes (Small 1 x 1,
 // Medium 2 x 2, Large 4 x 4 of the 24-column grid); inside a folder the tile shows the folder's
 // contents size, and its own size is kept for when it goes back to a tab. There is no "Custom".
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -39,7 +39,7 @@ describe('the dialog shows the tile\'s own size', () => {
 });
 
 describe('sizeTarget (push, right-edge shift; inside a folder nothing moves)', () => {
-  it('Large pushes the overlapped neighbours aside (the M3 push), never overlapping', () => {
+  it('Large pushes the overlapped neighbours aside (the push-aside), never overlapping', () => {
     const t = sizeTarget(draft(), 'a', 'large');
     expect(t.kind).toBe('size');
     if (t.kind !== 'size') return;
@@ -144,10 +144,10 @@ describe('a tile keeps its own size everywhere', () => {
   });
 });
 
-// Jonathan's walkthrough on dev (Sample's Services folder): the sizes looked "linked". Each tile's
-// size is its own; in M5 every item in a folder shows the folder's contents size, and the folder
+// In the Sample dashboard's Services folder: the sizes looked "linked". Each tile's
+// size is its own; every item in a folder shows the folder's contents size, and the folder
 // never grows to fit its contents (it pages them).
-describe("the Services walkthrough: each tile's size is its own", () => {
+describe("the Services folder: each tile's size is its own", () => {
   function services(): void {
     withRoot([
       asNode(folder('svc', p(0, 0, 24, 4), [tile('google'), tile('github'), tile('youtube')])),

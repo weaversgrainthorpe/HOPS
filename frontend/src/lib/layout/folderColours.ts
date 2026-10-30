@@ -1,5 +1,5 @@
 /**
- * A folder's colours (M6 §3.3, §3a.7, §3a.10). The folder's ONE stored colour drives its look: the back
+ * A folder's colours. The folder's ONE stored colour drives its look: the back
  * panel and tab drawn darker, the front lighter, one gradient (front → the colour; Tenet 4: no filter
  * heavier than one gradient) and an outline. Text is contrast-safe: `auto` (or missing) picks light or
  * dark text that reaches MIN_TEXT_CONTRAST on BOTH panels; an explicit light/dark choice still wins,
@@ -28,7 +28,7 @@ export interface FolderColours {
   base: string;
   /** The back panel and the tab. */
   back: string;
-  /** The front panel (the body; a background picture fills it, §3a.10). */
+  /** The front panel (the body; a background picture fills it). */
   front: string;
   /** The one gradient a look may use, front → base. */
   gradient: { from: string; to: string };
@@ -38,7 +38,7 @@ export interface FolderColours {
   text: string;
   /** The lowest contrast of `text` on the back and front panels (NaN when themed). */
   contrast: number;
-  /** An explicit light/dark text choice fails MIN_TEXT_CONTRAST on a panel (§3a.7). */
+  /** An explicit light/dark text choice fails MIN_TEXT_CONTRAST on a panel. */
   contrastWarning: boolean;
   /** No colour of its own (or an unreadable one): the theme's surface. */
   themed: boolean;

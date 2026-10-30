@@ -13,8 +13,8 @@ import { resetStatusBaseCache, refreshStatusBase } from '$lib/stores/statusCheck
 import { setLayout, resetEditor, startSession, draft, nodeIn, home, folder, tile, p } from './editorTestKit';
 import type { FolderNode, TileNode } from '$lib/types/layout';
 
-// M4 Task 7: every level's status-check setting is Inherit / On / Off and the dialog says where
-// the effective value comes from (design §4b, Ruling 12, Ruling 3).
+// Every level's status-check setting is Inherit / On / Off and the dialog says where
+// the effective value comes from.
 
 type Base = { override: boolean | null; effective: boolean } | 'fail';
 let base: Base;

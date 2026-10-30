@@ -50,7 +50,7 @@ describe('Entry', () => {
     expect(btn.hasAttribute('aria-pressed')).toBe(false);
   });
 
-  // Walkthrough §2: opacity fades the tile's background only; text and icon have their own.
+  // Opacity fades the tile's background only; text and icon have their own.
   describe('opacity', () => {
     const layer = (c: HTMLElement) => c.querySelector('button.entry > .entry-bg') as HTMLElement;
     const btnOf = (c: HTMLElement) => c.querySelector('button.entry') as HTMLElement;
@@ -122,7 +122,7 @@ describe('Entry', () => {
   });
 });
 
-// Spec §8: the size class follows the tile, so a changed Size shows at once (no reload).
+// The size class follows the tile, so a changed Size shows at once (no reload).
 describe('Entry size class', () => {
   it('is reactive: medium, then small, then large, on the same rendered tile', async () => {
     const { container, rerender } = render(Entry, { entry, fit: 'fill' });
@@ -137,10 +137,10 @@ describe('Entry size class', () => {
   });
 });
 
-// Spec §10: one arrangement at every size and fit — name, icon, description, kept together and
+// One arrangement at every size and fit — name, icon, description, kept together and
 // centred — and the content scales with the tile. jsdom has no layout and component CSS is not
 // injected, so the structure is checked on the DOM and the rules on the component's own source.
-describe('Entry content layout (spec §10)', () => {
+describe('Entry content layout', () => {
   const withDesc = { ...entry, description: 'Search Engine' } as EntryType;
   const parts = (c: HTMLElement) =>
     [...c.querySelector('button.entry')!.children]
@@ -186,7 +186,7 @@ describe('Entry content layout (spec §10)', () => {
     it('the fitted tile is a size container; icon and text use cqmin-based values with floors (max())', () => {
       expect(rule('.entry-container.sized')).toMatch(/container:\s*tile\s*\/\s*size/);
       // The ratios are cqmin custom properties (the size class sets them); max() adds the floors
-      // (walkthrough 1, Ruling 10: no caps).
+      // (no caps).
       const scaled = (v: string) => new RegExp(`max\\([^;]*var\\(--${v}-r\\)`);
       for (const v of ['icon', 'name', 'desc']) expect(rule('.entry.fill')).toMatch(new RegExp(`--${v}-r:\\s*[\\d.]+cqmin`));
       expect(css).toMatch(/\.fill \.icon :global\(svg\)[^{]*\{[^}]*max\([^;]*var\(--icon-r\)/);
@@ -198,7 +198,7 @@ describe('Entry content layout (spec §10)', () => {
       expect(css).toMatch(/@container tile \(max-height:[^)]*\)\s*\{[^}]*\.subtitle[^}]*\{[^}]*display:\s*none/);
     });
 
-    // Fix round 1 (binding): readable floors; hide, don't shrink. Walkthrough 1, Ruling 10: no caps —
+    // Readable floors; hide, don't shrink. No caps —
     // the content scales with the tile at every size (Large is a scaled-up Medium).
     it('a fitted name is never under 12px and a description never under 11px; neither (nor the icon) has a cap', () => {
       expect(css.slice(css.indexOf('.entry.fill .title {'))).toMatch(/^[^}]*font-size:\s*max\(12px,\s*var\(--name-r\)\)/);
@@ -209,7 +209,7 @@ describe('Entry content layout (spec §10)', () => {
       expect(rule('.small .subtitle')).toMatch(/font-size:\s*(0\.6875rem|11px)/);
     });
 
-    // Walkthrough 1, Ruling 10: one rule (the cqmin ratios above) for every size; the size class only
+    // One rule (the cqmin ratios above) for every size; the size class only
     // sets the ratios. Medium keeps its ratios (it looks as before); Large is a scaled-up Medium with
     // its icon about 45% of the tile's shorter side; Small keeps its floors-driven ratios.
     it('the ratios: Medium 34 / 10.5 / 9, Large the same text with a 45cqmin icon, Small 28 / 9 / 8', () => {
@@ -220,7 +220,7 @@ describe('Entry content layout (spec §10)', () => {
       expect([r('.entry.fill.small', 'icon'), r('.entry.fill.small', 'name'), r('.entry.fill.small', 'desc')]).toEqual(['28', '9', '8']);
     });
 
-    // Review round (walkthrough 1 D): Large's description scales with the tile like the rest, but has
+    // Large's description scales with the tile like the rest, but has
     // an upper bound (at 1920 it reached about 28px, larger than the navbar title): 1.25rem at most.
     it('Large\'s description has an upper bound (1.25rem), its floor still 11px; the name and icon stay uncapped', () => {
       expect(rule('.entry.fill.large .subtitle')).toMatch(/font-size:\s*clamp\(11px,\s*var\(--desc-r\),\s*1\.25rem\)/);

@@ -1,4 +1,4 @@
-// M6 §3.3, §3a.7, §3a.10: one folder colour drives the look — back panel (and tab) darker, front
+// One folder colour drives the look — back panel (and tab) darker, front
 // lighter, a gradient and an outline — with contrast-safe text, and a visible warning when an
 // explicit light/dark text choice fails 4.5:1 on the panels it sits on.
 import { describe, it, expect } from 'vitest';
@@ -64,7 +64,7 @@ describe('deriveFolderColours', () => {
     expect(deriveFolderColours('#fde047', 'auto').text).toBe('#000000');
   });
 
-  it('an explicit choice still wins (§3a.7) — and warns when it fails 4.5:1', () => {
+  it('an explicit choice still wins — and warns when it fails 4.5:1', () => {
     const lightOnYellow = deriveFolderColours('#fde047', 'light');
     expect(lightOnYellow.text).toBe('#ffffff');
     expect(lightOnYellow.contrastWarning).toBe(true);

@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// §1 items 1 and 6 at the API: forbidden or oversized targets are 400
+// At the API: forbidden or oversized targets are 400
 // server-side, and a second scan while one holds the slot is 409.
 func TestCreateScan_RefusesForbiddenTargetsAndConcurrentScans(t *testing.T) {
 	r, router, db := setupTestRouterInDir(t, t.TempDir())

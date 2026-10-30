@@ -22,7 +22,7 @@
   import { groupSettings, settingLabel } from '$lib/settings/globalGroups';
   import { globalNav, jumpToGroup, onGroupLinkClick, watchGroups } from '$lib/settings/globalNav';
 
-  // Settings → Global settings (M5 §9). The settings shell shows this page only once signed in
+  // Settings → Global settings. The settings shell shows this page only once signed in
   // with no pending password change (the server refuses the rest until then), so it loads the
   // settings as soon as it opens.
 
@@ -35,7 +35,7 @@
   let loadError = $state('');
   let loading = $state(true);
 
-  // The settings in their logical groups (M6 §10): ONE table, in globalGroups.ts. A key the table
+  // The settings in their logical groups: ONE table, in globalGroups.ts. A key the table
   // doesn't know yet is shown in "Other", last — never hidden.
   let grouped = $derived(groupSettings(settings));
 
@@ -122,7 +122,7 @@
     }
   }
 
-  // --- byte-size settings (M5 §10): stored in bytes, shown and typed in MB ---
+  // --- byte-size settings: stored in bytes, shown and typed in MB ---
 
   // What the input shows for a stored value: MB for byte sizes, the value itself otherwise.
   function shown(s: SettingDef, value: string): string {
@@ -160,7 +160,7 @@
       : `Raised from ${formatMB(from)} to the new minimum ${formatMB(to)}.`;
   }
 
-  // Ruling 5: the "Animations" setting's choices, and whether this device asks for reduced motion
+  // The "Animations" setting's choices, and whether this device asks for reduced motion
   // (so On is visibly off here, never a silent no-op).
   const optionLabels: Record<string, Record<string, string>> = {
     'display.animations': { on: 'On', off: 'Off', always: 'Always' },
@@ -319,7 +319,7 @@
 
 <h2 class="section-title">Global settings</h2>
 {#if !loading && !loadError && grouped.length > 0}
-  <!-- Phones (M6 §10): the groups as a chip row at the top of the page; wider, the sidebar lists them. -->
+  <!-- Phones: the groups as a chip row at the top of the page; wider, the sidebar lists them. -->
   <nav class="group-chips" aria-label="Setting groups" bind:this={chipsEl} style:--chips-top={navbarH ? `${navbarH}px` : undefined}>
     {#each grouped as g (g.id)}
       <a
@@ -561,7 +561,7 @@
     gap: 0.75rem;
   }
 
-  /* Ruling 4: two columns — the description (at most 75ch of its 0.92rem text, i.e. 69ch of the
+  /* Two columns — the description (at most 75ch of its 0.92rem text, i.e. 69ch of the
      row's font) with its control right beside it; the card still spans the column, so at 1920 the
      spare room is at the row's end, never between a description and its control. */
   .row {
@@ -593,7 +593,7 @@
     margin: 0.25rem 0 0.5rem;
   }
 
-  /* Ruling 5: On, but this device asks for reduced motion — said where the setting is. */
+  /* On, but this device asks for reduced motion — said where the setting is. */
   .motion-note {
     display: flex;
     align-items: center;
@@ -822,7 +822,7 @@
     color: var(--text-secondary);
   }
 
-  /* Phones (M6 §10): the chip row's look is the settings shell's; the groups clear it when jumped to. */
+  /* Phones: the chip row's look is the settings shell's; the groups clear it when jumped to. */
   @media (max-width: 640px) {
     .group {
       scroll-margin-top: calc(var(--chips-top, 60px) + 3.5rem);

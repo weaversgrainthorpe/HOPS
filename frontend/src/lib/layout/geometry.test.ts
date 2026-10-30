@@ -7,7 +7,7 @@ import type { Container } from '../types/layout';
 import type { FolderNode, LayoutNode, LayoutTab, Placement } from '../types/layout';
 
 const p = (x: number, y: number, w = 1, h = 1): Placement => ({ x, y, w, h });
-/** A tile; `pl` only on a tab (M5: folder contents have no placements). */
+/** A tile; `pl` only on a tab (folder contents have no placements). */
 const tile = (id: string, pl?: Placement): LayoutNode =>
   ({ kind: 'tile', id, name: id, url: 'http://x', ...(pl ? { placement: pl } : {}) }) as unknown as LayoutNode;
 const folder = (children: LayoutNode[] = []): FolderNode => ({
@@ -161,14 +161,14 @@ describe('nodeBox', () => {
   });
 });
 
-describe('FOLDER_CHROME (M5: one look; every open folder has its bar)', () => {
+describe('FOLDER_CHROME (one look; every open folder has its bar)', () => {
   it('openFolderContentBox subtracts the bar, border and padding, whatever the shape or title', () => {
     const box = { widthPx: 600, heightPx: 400 };
     expect(openFolderContentBox(box)).toEqual({ widthPx: 600 - FOLDER_CHROME.padXPx, heightPx: 400 - FOLDER_CHROME.titlePx - FOLDER_CHROME.padYPx });
   });
 });
 
-describe("an open folder's page (M5: in order, at its contents size, in the tab's cell)", () => {
+describe("an open folder's page (in order, at its contents size, in the tab's cell)", () => {
   const gp = containerMetrics({ columns: 24, children: [] }, 1440); // 60 px cells
   const pageOf = (w: number) => {
     const c = openFolderContentBox(nodeBox(p(0, 0, w, 6), gp));
@@ -186,7 +186,7 @@ describe("an open folder's page (M5: in order, at its contents size, in the tab'
   });
 });
 
-describe('pointToCell (M3 Task 6: right-clicked cell)', () => {
+describe('pointToCell (right-clicked cell)', () => {
   it('maps a point inside the container to the cell under it, from the metrics', () => {
     const m = containerMetrics({ columns: 12, children: [] }, 1200);
     expect(pointToCell(m, 0, 0)).toEqual({ x: 0, y: 0 });

@@ -1,7 +1,7 @@
 import { test, expect, type Page, type BrowserContext, type Browser } from '@playwright/test';
 import { getCsrfToken, deleteDashboardsNamed, setSetting, signInDialog } from '../helpers';
 
-// rc5 Part B in a real browser: Settings › Dashboards › Status check overrides lists every level
+// In a real browser: Settings › Dashboards › Status check overrides lists every level
 // that sets status checks itself, says what restoring it to Inherit would change, and restores in
 // bulk through the ordinary revision-checked saves. Synthetic dashboards only, deleted afterwards;
 // the global setting is set On explicitly and put back.

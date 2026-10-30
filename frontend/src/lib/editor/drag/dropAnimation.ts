@@ -1,11 +1,11 @@
 /**
- * Drop and merge animations (M6 §7.13, Ruling 5). Decoration only:
+ * Drop and merge animations. Decoration only:
  *
  * - The drop's change is applied to the draft BEFORE anything here runs (commitDrop calls this after
  *   apply succeeded), so an animation can never delay, block or lose an edit, and Undo works at any
  *   moment. Everything drawn here is a detached ghost in its own layer on <body> (or a transform on
  *   the folder's own element); the draft is never read back from it.
- * - Clearly visible, about 500 ms (Ruling 5; the first version's 240–300 ms shrink in place, started
+ * - Clearly visible, about 500 ms (the first version's 240–300 ms shrink in place, started
  *   where the drop already was, was hardly seen). Transforms and opacity only, run through the Web
  *   Animations API (composited: no layout thrash and no filters, Tenet 4).
  *   - Into a folder: the dropped tile flies along a curve into the folder (a hop up and in, so it
@@ -13,7 +13,7 @@
  *     tile, or a drilled-in inner box) then gulps (scale 1 → 0.94 → 1).
  *   - Merge: the dragged tile and the target tile part a little, then are drawn together onto the new
  *     folder, which pops in (scale 0.6 → 1.05 → 1). The folder dialog opens when it has ended.
- *   - Out of a folder (§8.1: to the tab, another folder or an outer box, by drag or menu Move/Copy):
+ *   - Out of a folder (to the tab, another folder or an outer box, by drag or menu Move/Copy):
  *     the source folder (or box) puffs (a small scale-up, capped like the gulp) as the item rises out
  *     of where it was, then hops on a curve to its new spot, where the item is revealed as it lands;
  *     into a folder where it isn't drawn, it shrinks into that folder, which gulps. When the source is
@@ -46,7 +46,7 @@ export function gulpScale(width: number, height: number): number {
   return Math.max(0.94, 1 - (2 * GULP_MAX_EDGE_PX) / Math.max(1, width, height));
 }
 export const INTO_TOTAL_MS = Math.max(DROP_MS, GULP_DELAY_MS + GULP_MS);
-/** Out of a folder (§8.1): the item's rise and hop… */
+/** Out of a folder: the item's rise and hop… */
 export const OUT_MS = 480;
 /** …the source's release puff, at once… */
 export const RELEASE_MS = 200;
@@ -65,7 +65,7 @@ export const POP_DELAY_MS = 260;
 export const POP_MS = 260;
 export const MERGE_TOTAL_MS = Math.max(GATHER_MS, POP_DELAY_MS + POP_MS);
 /**
- * Ruling 3: after a merge the folder dialog opens when the animation ends. This is the latest it
+ * After a merge the folder dialog opens when the animation ends. This is the latest it
  * waits if the browser never reports that end (the animation plus a frame-timing margin): the merge's
  * safety net (see safetyNet), counted from when the animation starts.
  */
@@ -115,7 +115,7 @@ export function safetyNet(anims: readonly Animation[], ms: number, margin: numbe
   return () => clearTimeout(timer);
 }
 
-/** The "Animations" setting (Ruling 5). */
+/** The "Animations" setting. */
 export type AnimationsMode = 'on' | 'off' | 'always';
 
 export type Box = { left: number; top: number; width: number; height: number };
@@ -139,11 +139,11 @@ export interface AnimationEnv {
    */
   findTabButton(tabId: string): HTMLElement | null;
   /**
-   * §9: every item drawn on the page now (data-node-id, not inside a dialog or an inert copy), in
+   * Every item drawn on the page now (data-node-id, not inside a dialog or an inert copy), in
    * document order: the edit glide measures them once before an edit is drawn and once after.
    */
   drawnNodes(): HTMLElement[];
-  /** §9: the page a folder shows (data-folder-page-content), when it is drawn. */
+  /** The page a folder shows (data-folder-page-content), when it is drawn. */
   findPage(folderId: string): HTMLElement | null;
 }
 
@@ -182,19 +182,19 @@ const live = new Set<(why: Ended) => void>();
 export type Ended = 'finished' | 'safety-net' | 'failed' | 'interrupted' | 'setting';
 
 /**
- * §9: the one engine. The visual flourishes (flourishes.ts) share this module's environment, its
+ * The one engine. The visual flourishes (flourishes.ts) share this module's environment, its
  * gating (animationsAllowed) and its cancel registry, so cancelDropAnimations() stops them too.
  */
 export function animationEnv(): AnimationEnv {
   return env;
 }
-/** §9: register a running flourish's stop; cancelDropAnimations() calls it. Returns its unregister. */
+/** Register a running flourish's stop; cancelDropAnimations() calls it. Returns its unregister. */
 export function trackAnimation(stop: (why: Ended) => void): () => void {
   live.add(stop);
   return () => live.delete(stop);
 }
 /**
- * §9 "don't double-animate": items that already have their own animation for the edit being drawn
+ * "Don't double-animate": items that already have their own animation for the edit being drawn
  * (the dropped or merged item, the folder that gulps or pops, a folder opening) are claimed; the
  * edit glide and pop-in skip them. A claim lasts until the frame after the next one: the glide that
  * reads it runs on the next frame, after the change has been drawn.
@@ -373,7 +373,7 @@ const towards = (a: Box, b: Box) => ({
 });
 
 /**
- * Out of a folder (§8.1), from (0, 0): it rises `rise` px out of the source (growing to full size),
+ * Out of a folder, from (0, 0): it rises `rise` px out of the source (growing to full size),
  * then hops on an eased quadratic curve to (dx, dy), ending at scale (sx, sy). `land`: 'spot' fades
  * only at the very end (the item is revealed under it), 'into' shrinks and fades into a folder, 'away'
  * fades out over the second half (nowhere on screen to land).
@@ -408,7 +408,7 @@ const tf2 = (x: number, y: number, sx: number, sy: number) =>
   Math.abs(sx - sy) < 1e-9 ? tf(x, y, sx) : `translate(${n(x)}px, ${n(y)}px) scale(${n(sx)}, ${n(sy)})`;
 
 /**
- * Out of a folder with nothing of the source drawn (§8.1, arrive 'drop'): the item, drawn at its new
+ * Out of a folder with nothing of the source drawn (arrive 'drop'): the item, drawn at its new
  * spot, drops in from (x0, y0) at scale s0, overshoots by SETTLE_PX along its path and settles there;
  * it fades only at the very end (the item is revealed under it).
  */
@@ -434,7 +434,7 @@ export const OUT_MAX_ITEMS = 12;
 export type OutStart = { id: string; sourceId: string; tabId?: string; from: Box | null };
 
 /**
- * Out of a folder (§8.1): measure where each leaving item starts (at most OUT_MAX_ITEMS), BEFORE the
+ * Out of a folder: measure where each leaving item starts (at most OUT_MAX_ITEMS), BEFORE the
  * change is drawn. Empty when animations won't play (no layout reads for nothing).
  */
 export function outStarts(dashboardId: string, leaving: { id: string; sourceId: string; tabId?: string }[]): OutStart[] {
@@ -514,7 +514,7 @@ export function playDropAnimation(dashboardId: string, a: DropAnimation): boolea
   // Only the drop-in may start without a box (it is drawn at the spot it lands on).
   if (!ok(a.from) && !(a.kind === 'out' && a.arrive === 'drop')) return false;
   if (a.kind === 'merge' && !ok(a.to)) return false;
-  // §9: the edit glide leaves alone what this animation draws.
+  // The edit glide leaves alone what this animation draws.
   claimFlourish(a.kind === 'out' ? [a.sourceId, a.landedId, a.intoId] : [a.folderId]);
   const made: HTMLElement[] = [];
   const cleanups: (() => void)[] = [];
@@ -780,7 +780,7 @@ export function playDropAnimation(dashboardId: string, a: DropAnimation): boolea
           { transform: 'scale(1.05)', opacity: 1, offset: 0.6 },
           { transform: 'scale(1)', opacity: 1 }
         ], POP_MS, POP_DELAY_MS, 'backwards');
-        // Ruling 3: the folder dialog opens at this end (onEnd), so its cap is this net.
+        // The folder dialog opens at this end (onEnd), so its cap is this net.
         armNet(MERGE_DIALOG_CAP_MS, MERGE_DIALOG_CAP_MS - MERGE_TOTAL_MS);
       } catch (e) {
         fail(e);

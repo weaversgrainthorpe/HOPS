@@ -8,7 +8,7 @@ import {
 } from '$lib/components/background/backgroundCapabilities';
 import type { Background } from '$lib/types';
 
-// M6 §8.2: the dialog renders ONLY from the capability table. For every level x context x form
+// The dialog renders ONLY from the capability table. For every level x context x form
 // state the controls on screen are exactly the ones the table lists — no control without an
 // effect. (The table's own values are pinned by hand in backgroundCapabilities.test.ts; a few are
 // also written out by hand below.)
@@ -36,7 +36,7 @@ function typeButtons(): string[] {
 
 beforeEach(() => vi.clearAllMocks());
 
-describe('BackgroundSection renders exactly the capability table (M6 §8.2)', () => {
+describe('BackgroundSection renders exactly the capability table', () => {
   for (const c of BACKGROUND_CASES) {
     {
       it(name(c), () => {
@@ -133,7 +133,7 @@ describe('BackgroundSection renders exactly the capability table (M6 §8.2)', ()
       if (!caps.interval) expect(screen.queryByText(/is outside/)).toBeNull();
       const r = (component as unknown as { build(): { ok: boolean; value?: Background } }).build();
       if (caps.interval) {
-        // Visible timing is clamped (Ruling 14); only the hidden overlay is checked here.
+        // Visible timing is clamped; only the hidden overlay is checked here.
         expect(r.value, name(c)).toMatchObject({ overlayOpacity: 0.3, overlayBlur: 4 });
       } else {
         expect(r, name(c)).toEqual({ ok: true, value: bg });

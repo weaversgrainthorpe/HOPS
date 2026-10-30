@@ -1,4 +1,4 @@
-// M6 §7.7 fix round 1: suggestions cover every icon name in the full mdi and simple-icons
+// Suggestions cover every icon name in the full mdi and simple-icons
 // sets. The generator writes a names-only list (no SVG bodies) into its own lazily loaded
 // module; these tests read it as the icon editor does.
 import { describe, it, expect } from 'vitest';

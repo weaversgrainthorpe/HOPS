@@ -15,7 +15,7 @@ import (
 	"github.com/weaversgrainthorpe/HOPS/internal/netguard"
 )
 
-// §1 item 1: oversized, whole-internet, reserved, multicast, broadcast and
+// Oversized, whole-internet, reserved, multicast, broadcast and
 // link-local targets are refused server-side.
 func TestExpandTargets_RefusesOversizedAndForbiddenRanges(t *testing.T) {
 	bad := []string{
@@ -51,7 +51,7 @@ func TestExpandTargets_RefusesOversizedAndForbiddenRanges(t *testing.T) {
 	}
 }
 
-// §1 items 2 and 5: no discovery fetch path (probe GET, detector redirect
+// No discovery fetch path (probe GET, detector redirect
 // follow, favicon, TCP connect, SSDP description, SNMP) reaches metadata.
 func TestDiscoveryFetchesNeverReachMetadata(t *testing.T) {
 	ctx := context.Background()
@@ -75,7 +75,7 @@ func TestDiscoveryFetchesNeverReachMetadata(t *testing.T) {
 	}
 }
 
-// §1 item 4: detector redirect-following stays on the same host, is bounded,
+// Detector redirect-following stays on the same host, is bounded,
 // and a redirect to metadata is never fetched.
 func TestHTTPFollowRedirects_BoundedAndSameHost(t *testing.T) {
 	var hits atomic.Int32

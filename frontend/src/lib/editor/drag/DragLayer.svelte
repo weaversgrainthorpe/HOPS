@@ -4,9 +4,9 @@
    * draws state.target (the one resolver's result): the target cells, the neighbours' pushed
    * positions (exactly the push map the drop will apply) and, for an invalid target, the reason.
    * Every size comes from geometry.nodeBox with the target container's rendered metrics; a pushed
-   * collapsed folder is drawn as the tile of its size it renders as (Ruling 13). Task 8: the merge /
+   * collapsed folder is drawn as the tile of its size it renders as. The merge /
    * into-folder / tab-append cue on the item or tab under the pointer, the
-   * tab-reorder marker, and the DragBreadcrumb. Task 9: a resize shows the resulting box and any
+   * tab-reorder marker, and the DragBreadcrumb. A resize shows the resulting box and any
    * push (no ghost); a stacked (phone) drop shows its reading-order insertion marker.
    */
   import { drag, setActiveTab, setTabSwitcher, MERGE_DWELL_MS } from './dragController';
@@ -24,7 +24,7 @@
   $effect(() => setActiveTab(tabId));
   // The editor's canvas going away (leaving edit mode or the dashboard) stops any drop animation.
   $effect(() => () => cancelDropAnimations());
-  // §9: every edit while the editor is open glides, pops in or fades out (decoration only).
+  // Every edit while the editor is open glides, pops in or fades out (decoration only).
   $effect(() => watchEdits());
   $effect(() => {
     setTabSwitcher(onSwitchTab ?? null);
@@ -85,7 +85,7 @@
 <DragBreadcrumb />
 
 <!-- The layer below is aria-hidden (pure visuals); this always-mounted polite region announces
-     why a drop is not allowed while the pointer is over such a target (final review Minor 10). -->
+     why a drop is not allowed while the pointer is over such a target. -->
 <div class="sr-only" role="status" aria-live="polite" data-testid="drag-announce">
   {invalid !== null ? `Not allowed: ${invalid}` : ''}
 </div>

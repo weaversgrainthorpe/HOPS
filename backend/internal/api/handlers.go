@@ -750,8 +750,8 @@ func (r *Router) restoreAssets(importedConfig map[string]interface{}) (int, []st
 			fail(urlPath, "not an icon or background path, so it was not restored", nil)
 			continue
 		}
-		// The same checks as a normal upload of its kind (pentest 2026-10-27
-		// M1): a safe name, an allowed type, the size cap, the header and
+		// The same checks as a normal upload of its kind:
+		// a safe name, an allowed type, the size cap, the header and
 		// dimension check, the type matching the name, an icon PNG
 		// re-encoded. Anything refused is listed, never written.
 		if !database.ValidImageName(name) {
@@ -1381,7 +1381,7 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// Cap the upload at the upload.max_bytes_import admin setting; an
-	// oversize file is refused naming the limit and its size (M5 §10).
+	// oversize file is refused naming the limit and its size.
 	file, _, ok := r.readLimitedUpload(w, req, uploadImport)
 	if !ok {
 		return
@@ -1471,8 +1471,8 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// A v3 export is imported only in this build's layout form (M5 spec
-	// §2a): there is no conversion of other v3 forms, so any other
+	// A v3 export is imported only in this build's layout form:
+	// there is no conversion of other v3 forms, so any other
 	// layoutVersion (or none: a pre-release export) is refused, naming both.
 	if format == "hops-v3" {
 		if lerr := configdoc.CheckLayoutVersion(importedConfig); lerr != nil {
@@ -1483,7 +1483,7 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 
 	// Bring every imported dashboard to the v3 shape.
 	var imported []configdoc.Obj
-	var sizeChanges []importedSizes   // tiles whose unknown size became Medium (Ruling 3)
+	var sizeChanges []importedSizes   // tiles whose unknown size became Medium
 	var grownFolders []importedGrowth // folders stored below their minimum, enlarged (never silent)
 	var pinnedOff bool                // a v2 dashboard had tiles set Off (configdoc.NoticeV2StatusOff)
 	var skipped []string
@@ -1536,7 +1536,7 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 		}
 		// The converter writes the current layout form directly, so the
 		// converted dashboard is checked as part of a marked document.
-		// A tile size HOPS does not recognise became Medium (Ruling 3): the
+		// A tile size HOPS does not recognise became Medium: the
 		// verifier accepts exactly those reported changes.
 		verr := configdoc.VerifyMigrationFull(
 			configdoc.Obj{"dashboards": []any{d}},
@@ -2028,7 +2028,7 @@ func (r *Router) handleUploadBackground(w http.ResponseWriter, req *http.Request
 	}
 
 	// Cap the upload at the upload.max_bytes_background admin setting; an
-	// oversize file is refused naming the limit and its size (M5 §10).
+	// oversize file is refused naming the limit and its size.
 	file, header, ok := r.readLimitedUpload(w, req, uploadBackground)
 	if !ok {
 		return
@@ -2075,7 +2075,7 @@ func (r *Router) handleUploadBackground(w http.ResponseWriter, req *http.Request
 
 	// Read the (size-capped) upload and check its header before it is kept:
 	// a decompression bomb (a small file claiming huge dimensions) or a file
-	// that isn't the image its type says is refused with the reason (§3).
+	// that isn't the image its type says is refused with the reason.
 	fileData, err := io.ReadAll(file)
 	if err != nil {
 		writeJSONError(w, "Failed to read file", http.StatusInternalServerError)
@@ -2150,7 +2150,7 @@ func (r *Router) handleUploadIcon(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// Cap the upload at the upload.max_bytes_icon admin setting; an
-	// oversize file is refused naming the limit and its size (M5 §10).
+	// oversize file is refused naming the limit and its size.
 	file, header, ok := r.readLimitedUpload(w, req, uploadIcon)
 	if !ok {
 		return
@@ -2241,7 +2241,7 @@ func (r *Router) handleUploadIcon(w http.ResponseWriter, req *http.Request) {
 		}
 	} else {
 		// Check the header first: a decompression bomb (a small file
-		// claiming huge dimensions) is refused before the full decode (§3).
+		// claiming huge dimensions) is refused before the full decode.
 		if _, err := checkIconHeader(fileData); err != nil {
 			slog.Warn("icon upload refused", "component", "icons", "error", err)
 			writeJSONError(w, "This image can't be used: "+err.Error(), http.StatusBadRequest)
@@ -2466,7 +2466,7 @@ func (r *Router) handleDeleteBackground(w http.ResponseWriter, req *http.Request
 	}
 
 	// If not in metadata, check for orphan file on disk (file exists but not
-	// tracked). Deleted files MOVE to the attic (M6 §12: a backup may still
+	// tracked). Deleted files MOVE to the attic (a backup may still
 	// refer to them); a failure refuses the delete, visibly.
 	if imageToDelete == nil {
 		backgroundsDir := filepath.Join(r.config.DataDir, "backgrounds")

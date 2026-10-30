@@ -5,14 +5,14 @@ import (
 	"math"
 )
 
-// The stored layout form (M5 spec §2a). One integer, layoutVersion, at the
+// The stored layout form. One integer, layoutVersion, at the
 // top of the document marks the form the stored layout is in; it is bumped
 // whenever that form changes. There is no v3→v3 update: v3 was never
 // released, so the only data that is ever converted is v2 (and Homer, Dashy
 // and Heimdall imports), and the converter writes the current form directly.
 // Anything at another layoutVersion is refused visibly, never guessed at.
 //
-// The current form (layoutVersion 2: M5's one folder model, with M6's
+// The current form (layoutVersion 2: the one folder model, with the
 // tab-aware folder minimum and fixed shape list):
 //   - every tab is a grid tab: its root has RootColumns columns and no
 //     `layout` or `designWidth`; a dashboard has no `defaultLayout`;
@@ -23,9 +23,9 @@ import (
 //     `layout`, and its content has no `columns`: its children are an
 //     ordered list with no placements;
 //   - a folder's `shape`, when present, is one of FolderShapes and its
-//     `tabPosition`, when present, one of FolderTabPositions (M6 §3a.8);
+//     `tabPosition`, when present, one of FolderTabPositions;
 //   - a tab-level folder's open box is at least FolderMinCellsOf, which
-//     counts a tab-height allowance for every shape (M6 §3a.4).
+//     counts a tab-height allowance for every shape.
 //
 // In an export envelope the marker travels inside "config" (the document, or
 // {dashboards: [one]} for a single-dashboard export).
@@ -39,11 +39,11 @@ const (
 // The open folder's chrome, the narrowest grid cell and the reference cell,
 // in px: the exact twin of frontend/src/lib/layout/geometry.ts (FOLDER_CHROME,
 // PAGE_BAR_PX, MIN_GRID_CELL_PX, REFERENCE_CELL_PX). testdata/folder_min_cases.json is run by both suites
-// (Ruling 9), so the two minimum tables cannot drift.
+// so the two minimum tables cannot drift.
 const (
 	// FolderTitlePx is an open folder's title bar.
 	FolderTitlePx = 40
-	// FolderTabPx is the tab-height allowance (M6 §3a.4): a tab shape draws
+	// FolderTabPx is the tab-height allowance: a tab shape draws
 	// its tab above the body. ONE constant for every shape (Rounded too), so
 	// the minimum has no shape parameter and a shape change never needs a
 	// different minimum table. Twin of geometry.ts FOLDER_CHROME.tabPx.
@@ -56,12 +56,12 @@ const (
 	PhoneBreakpointPx = 768
 	// MinGridCellPx is the narrowest a tab's grid cell gets.
 	MinGridCellPx = PhoneBreakpointPx / RootColumns
-	// ReferenceCellPx (M6 §13 rule 1) is the desktop cell the minimum and
+	// ReferenceCellPx is the desktop cell the minimum and
 	// the converter are counted at: a 1920 px screen's tab canvas is 1856 px
 	// (32 px page gutter each side), so a cell is 1856/24 = 77.3, floored.
 	// Every cell from 57 to 113 px gives the same minimum table, so 77 sits
 	// mid-band. Narrower grids draw a too-short folder taller (render-only,
-	// geometry.ts screenGrowth); phones never page (§13 rule 4).
+	// geometry.ts screenGrowth); phones never page.
 	ReferenceCellPx = 77
 )
 
@@ -81,9 +81,9 @@ func ceilCells(px int) int { return (px + ReferenceCellPx - 1) / ReferenceCellPx
 const folderChromeYPx = FolderTitlePx + FolderTabPx + FolderPadPx
 
 // FolderMinCells is THE smallest open folder box on a tab, in cells, for
-// items of contentSize (M5 §3.5, Ruling 7; M6 §3a.4): its bar, the tab
+// items of contentSize: its bar, the tab
 // allowance, border and padding, ONE item and the page bar, counted at the
-// desktop reference cell (ReferenceCellPx, M6 §13). Small 2×3, Medium 3×4,
+// desktop reference cell (ReferenceCellPx). Small 2×3, Medium 3×4,
 // Large 5×6, for every shape. Twin of geometry.ts minOpenFolderCells.
 func FolderMinCells(contentSize any) (w, h int) {
 	span := sizeSpans[sizeOf(contentSize)]
@@ -127,7 +127,7 @@ func FolderWidthFor(contentSize any, perRow int) int {
 }
 
 // FolderBoxFor is the open box, in cells, of folder holding its n items all on
-// page 1 at the reference cell (M6 §13 rule 2), given a wanted width w: w is
+// page 1 at the reference cell, given a wanted width w: w is
 // raised to the minimum and capped at RootColumns, the items fill it row by
 // row, and the height takes as many rows as they need plus the chrome rows (no
 // page bar: they are all on one page). Never below FolderMinCellsOf(folder).
@@ -137,24 +137,24 @@ func FolderBoxFor(folder Obj, n, w int) (int, int) {
 	w = min(RootColumns, max(w, mw))
 	fit := max(1, (w*ReferenceCellPx-FolderPadPx)/(span*ReferenceCellPx))
 	rows := max(1, (n+fit-1)/fit)
-	// All n on one page at the reference, so no page bar (M6 §13 rule 2).
+	// All n on one page at the reference, so no page bar.
 	h := rows*span + ceilCells(folderChromeYPx)
 	return w, max(h, mh)
 }
 
-// FolderShapes is the fixed list of folder shapes (M6 §2, §3.9): Rounded,
+// FolderShapes is the fixed list of folder shapes: Rounded,
 // Simple tab and the five real-folder looks. A shape is only ever one of
 // these names, never user-supplied markup; anything else is refused on save
-// and import (§3a.8). Twin of the frontend's FolderShape union.
+// and import. Twin of the frontend's FolderShape union.
 var FolderShapes = []string{"rounded", "simple-tab", "folder-flat", "folder-paper", "folder-outline", "folder-cartoon", "folder-open"}
 
-// FolderTabPositions is where a tab shape's tab sits (M6 §3.2). Absent means
+// FolderTabPositions is where a tab shape's tab sits. Absent means
 // left.
 var FolderTabPositions = []string{"left", "centre", "right"}
 
-// Default shapes (M6 §3a.5): folders made in HOPS (new, merge, Discovery
+// Default shapes: folders made in HOPS (new, merge, Discovery
 // promote) start Flat; converted folders (v2, Homer, Dashy, Heimdall) are
-// Rounded, except v2 folder-style groups, which are Flat (§3a.1).
+// Rounded, except v2 folder-style groups, which are Flat.
 const (
 	ShapeCreated   = "folder-flat"
 	ShapeConverted = "rounded"

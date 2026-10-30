@@ -10,7 +10,7 @@ import {
   DURATION_DEFAULT
 } from './backgroundTiming';
 
-// Ruling 14: slideshow timing is clamped where it is used, never rejected.
+// Slideshow timing is clamped where it is used, never rejected.
 describe('backgroundTiming', () => {
   it('has sane bounds around the v2 defaults', () => {
     expect([INTERVAL_MIN, INTERVAL_DEFAULT, INTERVAL_MAX]).toEqual([5, 30, 3600]);

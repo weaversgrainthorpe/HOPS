@@ -1,4 +1,4 @@
-// Walkthrough fix (M6 §7.7): type-ahead suggestions draw their pictures after a pause in
+// Type-ahead suggestions draw their pictures after a pause in
 // typing, in one batched load, and show "unavailable" — never a blank — when that fails.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { namesToFetch, SuggestionPreviewLoader, type BatchLoad } from './suggestionPreview';

@@ -25,7 +25,7 @@ import * as api from '$lib/utils/api';
 import { save } from '$lib/stores/editSession';
 import { setLayout, resetEditor, startSession, draft, nodeIn, home, other, folder, p, FakeRO } from '$lib/components/editor/editorTestKit';
 
-// t1's root: 24 columns of 50 px (square rows; a Medium tile is 100 px). A folder's content flows (M5):
+// t1's root: 24 columns of 50 px (square rows; a Medium tile is 100 px). A folder's content flows:
 // Medium items (2 cells of 50 px), 3 to a row.
 const GRID = containerMetrics({ columns: 24, children: [] }, 1200);
 const FLOW: ContainerMetrics = { columns: 6, unitPx: 50, rowPx: 50, innerWidthPx: 300, flow: { span: 2, perRow: 3 } };
@@ -150,7 +150,7 @@ describe('drag engine — starting', () => {
     expect(onMenu).not.toHaveBeenCalled();
   });
 
-  it('a touch long-press released without moving opens the item menu (Ruling 18(1))', () => {
+  it('a touch long-press released without moving opens the item menu', () => {
     vi.useFakeTimers();
     const { el, onMenu } = source('a');
     el.dispatchEvent(pe('pointerdown', 50, 50, { pointerType: 'touch' }));
@@ -255,7 +255,7 @@ describe('drag engine — dropping', () => {
     expect(nodeIn(draft(), 'b')!.placement).toEqual(pushedTo);
   });
 
-  it('a collapsed folder\'s stored footprint is occupied: a drop there pushes it rather than overlapping (Ruling 13)', () => {
+  it('a collapsed folder\'s stored footprint is occupied: a drop there pushes it rather than overlapping', () => {
     const { el } = source('a');
     startMouseDrag(el, 50, 50);
     moveTo(650, 250); // (12, 4): inside c1's stored 4 x 4 at (10, 2), though c1 renders as one Medium tile
@@ -282,7 +282,7 @@ describe('drag engine — dropping', () => {
 
   it('across containers on the same tab: a tile dragged into a folder joins its order (at the pointer), unplaced', () => {
     where = { ref: { tabId: 't1', folderId: 'f1' }, metrics: FLOW, layout: 'flow' };
-    // The folder's page as hitTest reports it (M5 Task 4): x drawn at its top-left.
+    // The folder's page as hitTest reports it: x drawn at its top-left.
     flowPage = { folderId: 'f1', page: 0, perPage: 4, count: 1, boxes: [{ id: 'x', left: 0, top: 0, width: 100, height: 100 }] };
     const { el } = source('a');
     startMouseDrag(el, 50, 50);
@@ -404,7 +404,7 @@ describe('drag engine — through the real renderer', () => {
   });
 });
 
-describe('fix round 1', () => {
+describe('touch handling', () => {
   it('each enabled item has a non-passive touchmove listener that blocks scrolling only when drag-ready or dragging', () => {
     vi.useFakeTimers();
     const el = document.createElement('div');
@@ -482,7 +482,7 @@ describe('fix round 1', () => {
     expect(nodeIn(draft(), 'a')!.placement).toEqual(p(0, 0));
   });
 
-  it('final fix Minor 1: a save landing mid-drag (nothing edited meanwhile) does not cancel the drag', async () => {
+  it('a save landing mid-drag (nothing edited meanwhile) does not cancel the drag', async () => {
     const { apply } = await import('$lib/stores/editSession');
     apply('Rename', (d: LayoutDashboard) => ({ ...d, name: 'Renamed' }));
     const sent = draft();
@@ -519,7 +519,7 @@ describe('fix round 1', () => {
   });
 });
 
-describe('final fix I2: the non-passive touchmove guard exists only while editing', () => {
+describe('the non-passive touchmove guard exists only while editing', () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
@@ -580,7 +580,7 @@ describe('final fix I2: the non-passive touchmove guard exists only while editin
   });
 });
 
-describe('final fix Minor 10: the drag refusal reason is announced', () => {
+describe('the drag refusal reason is announced', () => {
   it('a polite live region outside the aria-hidden layer carries "not allowed: <reason>" while it applies', async () => {
     render(DragLayer);
     await tick();

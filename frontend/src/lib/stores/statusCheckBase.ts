@@ -1,5 +1,5 @@
 /**
- * The dashboard level of the layered status checks, for the editing dialogs (Ruling 3): from
+ * The dashboard level of the layered status checks, for the editing dialogs: from
  * GET /api/dashboards/{id}/settings (protected — the dialogs only open while editing), fetched
  * once per dashboard per page session and refreshed after a dashboard-settings save. While it
  * loads the dialogs say "Checking…"; a failure is a visible error with Retry, never a guess.

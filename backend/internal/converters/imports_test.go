@@ -12,7 +12,7 @@ import (
 
 // The sample files in testdata/ are Homer's and Dashy's own published example configs, a
 // homelab-style config for each written in the forms their users actually have, and a Heimdall
-// export in the shape Heimdall's own API produces (found missing from the tests in the rc1 trials).
+// export in the shape Heimdall's own API produces.
 
 func convertFixture(t *testing.T, name string, conv func([]byte) ([]byte, []string, error)) (models.Dashboard, []string) {
 	t.Helper()

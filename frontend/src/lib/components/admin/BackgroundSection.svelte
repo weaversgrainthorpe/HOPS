@@ -1,5 +1,5 @@
 <script lang="ts" module>
-  /** Per-level wording (design §4a, §7.1). The dialog title lives here; the on/off wording is in the markup. */
+  /** Per-level wording. The dialog title lives here; the on/off wording is in the markup. */
   export const LEVEL_TEXT = {
     dashboard: { title: 'Dashboard background' },
     tab: { title: 'Tab background' },
@@ -9,9 +9,9 @@
 
 <script lang="ts">
   /**
-   * The background picker's form (design §4a): inherit, type, fit, opacity, overlay, slideshow and
+   * The background picker's form: inherit, type, fit, opacity, overlay, slideshow and
    * the image gallery. Hosted by BackgroundConfigModal (tab and folder levels) and by the dashboard
-   * dialog's Background section (walkthrough §4C); the host reads the result with `build()`.
+   * dialog's Background section; the host reads the result with `build()`.
    */
   import type { Background } from '$lib/types';
   import Icon from '@iconify/svelte';
@@ -39,17 +39,17 @@
 
   interface Props {
     background?: Background;
-    /** Which level this picker edits (design §4a). What it offers there comes from backgroundCapabilities. */
+    /** Which level this picker edits. What it offers there comes from backgroundCapabilities. */
     level: 'dashboard' | 'tab' | 'folder';
     /**
-     * Runtime conditions the capability table reads (M6 §8.2), from the host: the dashboard's
+     * Runtime conditions the capability table reads, from the host: the dashboard's
      * "Animated folder backgrounds" and this device's reduced-motion preference.
      */
     runtime: BackgroundContext;
     /** Opens the dashboard's settings (the folder-animations note's link). Without it the link is not offered. */
     onOpenDashboardSettings?: () => void;
     /**
-     * Folder level, a stored colour background (M6 §7.5): "Use as folder colour" hands it to the folder
+     * Folder level, a stored colour background: "Use as folder colour" hands it to the folder
      * dialog, which owns the folder's colour. Without it the button is not offered.
      */
     onUseAsFolderColour?: () => void;
@@ -60,7 +60,7 @@
   /** The slideshow limit the server's document rules enforce. */
   const MAX_IMAGES = 200;
   /*
-   * Everything this dialog shows comes from the one capability table (M6 §8.2): no level checks
+   * Everything this dialog shows comes from the one capability table: no level checks
    * below. `caps` (after the form state it reads) follows the context and the form live; `openCaps`
    * is the table at open, for the level-only rows the form's initial state is built from.
    */
@@ -75,7 +75,7 @@
   /** The level picks a picture or shows what's behind (folders); its picture controls follow that choice. */
   // svelte-ignore state_referenced_locally
   const pictureOrBehind = openCaps.inherit.kind === 'picture-or-behind';
-  // M6 §7.5: a stored type this level no longer offers (a folder's colour background) keeps
+  // A stored type this level no longer offers (a folder's colour background) keeps
   // rendering and is shown as its own choice — never dropped silently.
   // svelte-ignore state_referenced_locally
   const legacyColour = pictureOrBehind && background?.type === 'color' && !openCaps.pictureTypes.includes('color');
@@ -156,7 +156,7 @@
   let effectiveTransition = $derived(transitionEffect === 'random' ? currentRandomTransition : transitionEffect);
   // svelte-ignore state_referenced_locally
   let transitionDuration = $state(clampDuration(background?.transitionDuration));
-  // Ruling 14: a stored timing outside the bounds is shown clamped and saved clamped — and the
+  // A stored timing outside the bounds is shown clamped and saved clamped — and the
   // picker says so (never a silent change).
   // svelte-ignore state_referenced_locally
   const intervalNormalised =
@@ -261,7 +261,7 @@
     isLoading = false;
   }
 
-  // Filter images by category; each picture (URL) appears once per view (walkthrough §1)
+  // Filter images by category; each picture (URL) appears once per view
   let filteredImages = $derived(galleryImages(allImages, selectedCategory));
 
   // Categories with "All" option
@@ -478,8 +478,8 @@
       const imagesChanged =
         slideshowImages.length !== initial.images.length || slideshowImages.some((u, i) => u !== initial.images[i]);
       if (owns(imagesChanged)) out.images = [...slideshowImages];
-      // Clamped (Ruling 14); written when changed, or when the stored value needed clamping.
-      // A control that isn't shown (M6 §8.2) never writes: its stored value is kept exactly.
+      // Clamped; written when changed, or when the stored value needed clamping.
+      // A control that isn't shown never writes: its stored value is kept exactly.
       slideshowInterval = clampInterval(Number(slideshowInterval));
       transitionDuration = clampDuration(Number(transitionDuration));
       if (caps.interval && (owns(slideshowInterval !== initial.interval) || intervalNormalised !== null)) {
@@ -582,7 +582,7 @@
   });
 </script>
 
-<!-- On/off, in plain words per level (§7.1). Off but kept (call 5): the picture below stays stored
+<!-- On/off, in plain words per level. Off but kept (call 5): the picture below stays stored
      while the parent's shows. Data: { inherit: true, …picture }. -->
 <div class="form-group toggle-group">
   {#if caps.inherit.kind === 'switch'}
@@ -605,7 +605,7 @@
       {inheritOn ? caps.inherit.inheritHint : caps.inherit.ownHint}
     </p>
   {:else if caps.inherit.kind === 'picture-or-behind'}
-    <!-- M6 §7.5: pictures only. The folder's colour and opacity are set in Edit Folder. -->
+    <!-- Pictures only. The folder's colour and opacity are set in Edit Folder. -->
     <div class="inherit-radios" role="radiogroup" aria-label={caps.inherit.groupLabel}>
       {#if legacyColour}
         <label class="inherit-radio">
@@ -787,7 +787,7 @@
 <!-- Slideshow Configuration -->
 {#if backgroundType === 'slideshow'}
   {#if caps.motionNotes.length > 0}
-    <!-- M6 §8.2: the motion controls would have no effect here; say why, and keep their stored values. -->
+    <!-- The motion controls would have no effect here; say why, and keep their stored values. -->
     <div class="motion-notes" data-motion-notes>
       {#each caps.motionNotes as note (note)}
         <p class="motion-note" role="note">
@@ -1376,7 +1376,7 @@
     border-color: var(--accent);
   }
 
-  /* M6 §8.2: in place of the slideshow motion controls where they would have no effect. */
+  /* In place of the slideshow motion controls where they would have no effect. */
   .motion-notes {
     margin: 0 0 1.25rem;
     padding: 0.75rem 1rem;
@@ -1463,7 +1463,7 @@
   :global(:root) {
     --bgsec-field-bg: var(--bg-primary);
     --bgsec-field-text: var(--text-primary);
-    --bgsec-field-placeholder: var(--text-secondary); /* as in Edit Folder (§7.3): >= 4.5:1 */
+    --bgsec-field-placeholder: var(--text-secondary); /* as in Edit Folder: >= 4.5:1 */
     --bgsec-field-border: color-mix(in srgb, var(--text-secondary) 70%, transparent);
     --bgsec-field-focus: var(--accent-solid);
     --bgsec-error-text: var(--color-error-text);

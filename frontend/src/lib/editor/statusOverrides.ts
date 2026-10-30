@@ -1,7 +1,7 @@
 /**
- * Status-check overrides across the dashboards (rc5 design, "The page"): which levels set an
+ * Status-check overrides across the dashboards ("The page"): which levels set an
  * explicit On/Off/invalid value, and what restoring them to Inherit would change. Pure: the page
- * (Task 5) supplies the layouts and the dashboard bases. All resolution goes through
+ * Supplies the layouts and the dashboard bases. All resolution goes through
  * resolveStatusChecks, so this can never drift from the dialogs or the checker.
  */
 import type { FolderNode, LayoutDashboard, LayoutNode, LayoutTab } from '$lib/types/layout';

@@ -21,7 +21,7 @@ beforeEach(() => {
 });
 
 describe('editorActions', () => {
-  it('documentIds covers every dashboard in the stored layout plus the draft (Ruling 2)', () => {
+  it('documentIds covers every dashboard in the stored layout plus the draft', () => {
     addNode({ ...blankTile(), name: 'N', url: 'https://n.test' }, { tabId: 't1' });
     const ids = documentIds();
     for (const id of ['a', 'f1', 'x', 'c1', 'y', 'fa', 't1', 't2', 'o1', 'ot']) expect(ids.has(id)).toBe(true);
@@ -35,7 +35,7 @@ describe('editorActions', () => {
     expect(['o1', 'ot', 'a']).not.toContain(newId);
   });
 
-  it('Header and Background edit the draft (parent spec §7.1) — no request, undoable', () => {
+  it('Header and Background edit the draft — no request, undoable', () => {
     setLook({ centerTitle: 'Draft' }, { type: 'color', value: '#123456' });
     expect(draft().header).toEqual({ centerTitle: 'Draft' });
     expect(draft().background).toEqual({ type: 'color', value: '#123456' });
@@ -45,7 +45,7 @@ describe('editorActions', () => {
     expect(get(dirty)).toBe(false);
   });
 
-  it('setLook applies header and background as ONE undo step (walkthrough §4C); unchanged adds none', () => {
+  it('setLook applies header and background as ONE undo step; unchanged adds none', () => {
     const before = draft();
     expect(setLook({ centerTitle: 'Saved title' }, undefined)).toBe(true);
     expect(draft()).toBe(before); // nothing changed: no undo step
@@ -74,7 +74,7 @@ describe('editorActions', () => {
     expect('placement' in kids[1]).toBe(false);
   });
 
-  it('a new folder on a tab takes its default box (Medium: 6 x 4 at the M6 §13 reference cell, Ruling 7a) at the first free cell, Medium with Medium contents', () => {
+  it('a new folder on a tab takes its default box (Medium: 6 x 4 at the reference cell) at the first free cell, Medium with Medium contents', () => {
     const id = addNode({ ...blankFolder(), name: 'G' }, { tabId: 't1' })!;
     const f = nodeIn(draft(), id) as FolderNode;
     expect(f.placement).toEqual(p(14, 0, 6, 4));
@@ -129,7 +129,7 @@ describe('editorActions', () => {
     expect(get(session)!.undo).toHaveLength(1);
   });
 
-  it('setFolderBackground is one undoable draft edit; undefined clears it (M4 Task 5)', () => {
+  it('setFolderBackground is one undoable draft edit; undefined clears it', () => {
     const bg = { inherit: true, type: 'image' as const, value: '/backgrounds/a.jpg', opacity: 0.5 };
     expect(setFolderBackground('f1', bg)).toBe(true);
     expect((nodeIn(draft(), 'f1') as FolderNode).background).toEqual(bg);
@@ -155,7 +155,7 @@ describe('editorActions', () => {
     expect(err).toHaveBeenCalledTimes(2);
   });
 
-  it('editTab with a background is ONE undo step; null removes it; undefined leaves it (Ruling 11(5))', () => {
+  it('editTab with a background is ONE undo step; null removes it; undefined leaves it', () => {
     expect(editTab('t1', { name: 'Main 2', background: { type: 'color', value: '#123456', opacity: 0.5 } })).toBe(true);
     expect(draft().tabs[0]).toMatchObject({ name: 'Main 2', background: { type: 'color', value: '#123456', opacity: 0.5 } });
     expect(get(session)!.undo).toHaveLength(1);
@@ -180,7 +180,7 @@ describe('editorActions', () => {
     expect(nodeIn(draft(), 'f1')).not.toHaveProperty('background');
   });
 
-  // Found in the rc1 trials: picking "no colour" and saving kept the old colour, because the
+  // Picking "no colour" and saving kept the old colour, because the
   // dialog's undefined was lost on the way to the draft.
   it('editFolder with a field set to undefined removes it (no colour clears the colour)', () => {
     expect(editFolder('f1', { color: '#ec4899', iconBgColor: '#123456' })).toBe(true);

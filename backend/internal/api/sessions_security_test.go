@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-// Sessions, cookie flags and proxy trust (design/security/v3-security-assurance.md §2).
+// Sessions, cookie flags and proxy trust.
 
 const trustedProxyNet = `["10.9.0.0/16"]`
 

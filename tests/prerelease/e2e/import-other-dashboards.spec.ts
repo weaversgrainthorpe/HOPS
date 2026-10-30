@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { deleteDashboardsNamed } from '../helpers';
 
-// Found in the rc1 trials: importing a real Homer config left Font Awesome icon names HOPS can't
+// Found in install trials: importing a real Homer config left Font Awesome icon names HOPS can't
 // draw (broken icons), Heimdall's tags were ignored, and nothing said what was lost. These import
 // the sample configs (backend/internal/converters/testdata) through the dialog, as a user would.
 

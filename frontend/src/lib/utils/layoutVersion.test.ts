@@ -1,4 +1,4 @@
-// M5 §2a: one layout version replaces the gridUnit marker. Every placement-carrying write says
+// One layout version replaces the gridUnit marker. Every placement-carrying write says
 // which layout version its placements are in; the server refuses a mismatch with a 409.
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { saveDashboardV3, transferNodes, getConfig, ConflictError } from './api';
@@ -50,10 +50,10 @@ describe('GET /api/config keeps the marker as sent', () => {
 });
 
 describe('layoutFormProblem', () => {
-  it('is null only for a document at layoutVersion 2 (M6)', () => {
+  it('is null only for a document at layoutVersion 2', () => {
     expect(layoutFormProblem({ schemaVersion: 3, layoutVersion: 2, dashboards: [] })).toBeNull();
     expect(layoutFormProblem({ schemaVersion: 3, dashboards: [] })).toBe(OLD_LAYOUT_FORM);
-    // The M5 form (1) and any other version are another form (M6 §3a.4: the minimum changed).
+    // The older form (1) and any other version are another form (the minimum changed).
     expect(layoutFormProblem({ schemaVersion: 3, layoutVersion: 1, dashboards: [] })).toBe(OLD_LAYOUT_FORM);
     expect(layoutFormProblem({ schemaVersion: 3, layoutVersion: 3, dashboards: [] })).toBe(OLD_LAYOUT_FORM);
     expect(layoutFormProblem({ schemaVersion: 3, gridUnit: 2, dashboards: [] } as never)).toBe(OLD_LAYOUT_FORM);

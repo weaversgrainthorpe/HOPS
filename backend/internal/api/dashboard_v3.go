@@ -83,7 +83,7 @@ func verifyErr(err error) *apiError {
 // response (or the document) that a client may echo back inside a dashboard;
 // they are never dashboard content and are dropped rather than stored. The
 // last two were keys of the retired legacy view: a cached old client may still
-// echo them (Ruling 17). `display` is computed per GET (Ruling 9); `notices`
+// echo them. `display` is computed per GET; `notices`
 // is this process's one-time notices (notices.go). They are spelled in pieces so the retired-names scan
 // (TestNoLegacyReferencesInBackend) keeps guarding real uses.
 var transientDashboardKeys = map[string]bool{
@@ -277,7 +277,7 @@ type transferRequest struct {
 	NodeIDs        []string `json:"nodeIds"`
 	TargetID       string   `json:"targetId"`
 	TargetRevision any      `json:"targetRevision"`
-	LayoutVersion  any      `json:"layoutVersion"` // must be configdoc.LayoutVersion (M5 §2a)
+	LayoutVersion  any      `json:"layoutVersion"` // must be configdoc.LayoutVersion
 	Target         struct {
 		TabID    string `json:"tabId"`
 		FolderID string `json:"folderId"`
@@ -379,7 +379,7 @@ func (r *Router) handleTransferNodes(w http.ResponseWriter, req *http.Request) {
 			container["children"] = append(kids, n)
 		}
 		if !tabLevel {
-			// Into a folder: its tab-level box grows to a raised minimum (Ruling 7b).
+			// Into a folder: its tab-level box grows to a raised minimum.
 			if ae := growToMinimum(findTab(dst, body.Target.TabID)["root"].(configdoc.Obj), body.Target.FolderID); ae != nil {
 				return nil, nil, ae
 			}
@@ -534,8 +534,8 @@ func resolveTarget(d configdoc.Obj, tabID, folderID string) (container configdoc
 
 // tabSpan is the w×h cells node n takes on a tab: a tile its size's standard
 // span (Small 1×1, Medium 2×2, Large 4×4); a folder its kept box when it has
-// one, else (coming out of a folder, M5 §3a.3) its size × 3 wide, × 2 high,
-// raised each way to its open-folder minimum (Ruling 7a, Ruling 9) — the twin
+// one, else (coming out of a folder) its size × 3 wide, × 2 high,
+// raised each way to its open-folder minimum — the twin
 // of geometry.ts defaultFolderBox. A kept box below the minimum is left for
 // VerifyDashboard to refuse, never silently grown.
 func tabSpan(n configdoc.Obj) (w, h float64, ae *apiError) {
@@ -555,7 +555,7 @@ func tabSpan(n configdoc.Obj) (w, h float64, ae *apiError) {
 
 // growToMinimum grows the tab-level folder of tab root `root` that holds
 // folderID (or is it) to its open-folder minimum when items moved into it
-// raised that minimum (Ruling 7b): wider (shifted left at the right edge)
+// raised that minimum: wider (shifted left at the right edge)
 // and/or taller, in the same write. There is no push on the server: when the
 // grown box would overlap a neighbour, the transfer is refused (409) naming
 // the folder and both sizes, never stored undersized or clipped.

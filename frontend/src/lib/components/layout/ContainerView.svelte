@@ -76,12 +76,12 @@
 
   const columns = $derived(metrics.columns);
   const kids = $derived(Array.isArray(container?.children) ? container.children : []);
-  // A folder's content is an ordered list (M5); a tab's children are drawn in reading order,
+  // A folder's content is an ordered list; a tab's children are drawn in reading order,
   // followed by unplaceable ones (readingOrder never throws).
   const isFolder = $derived(!!parent);
   const ordered = $derived((isFolder ? kids : readingOrder(kids)) as unknown[]);
 
-  // A folder's page flows in order everywhere, on a phone too (M5: the same component); a tab is its
+  // A folder's page flows in order everywhere, on a phone too (the same component); a tab is its
   // grid, or stacked on a phone.
   const effective = $derived<'grid' | 'flow' | 'stacked'>(
     metrics.flow ? 'flow' : plan.kind === 'stacked' ? 'stacked' : 'grid'
@@ -91,7 +91,7 @@
   // Column tracks round DOWN so N tracks never overflow the container by a rounding hair.
   const trackPx = (v: number) => `${Math.floor(v * 100) / 100}px`;
 
-  // One page of a folder (M5: Folder.svelte pages it, so only that page is here): in order, row by
+  // One page of a folder (Folder.svelte pages it, so only that page is here): in order, row by
   // row, every item at the folder's contents size in the tab's cell (the same box as a tab tile of
   // that size at this width).
   const flowItemPx = $derived(metrics.flow ? metrics.flow.span * metrics.unitPx : 0);
@@ -111,7 +111,7 @@
       `grid-auto-rows:${px(metrics.rowPx)};`
   );
 
-  // M6 §13 rule 3: render-only growth on a tab grid. View mode draws it; edit mode draws the SAVED
+  // rule 3: render-only growth on a tab grid. View mode draws it; edit mode draws the SAVED
   // boxes (drag/drop geometry stays exact) and a folder that would grow says so in place (option A).
   const growth = $derived(!isFolder && effective === 'grid' ? screenGrowth(ordered, metrics) : new Map());
   const drawGrowth = $derived(!editing);
@@ -130,22 +130,22 @@
       (p.z !== undefined ? ` z-index: ${p.z};` : '');
   }
 
-  /** How a tile fits its box (Ruling 22): the box is the tile's cell span, in px. */
+  /** How a tile fits its box: the box is the tile's cell span, in px. */
   function fitOf(n: LayoutNode): 'fill' | 'compact' | undefined {
     if (metrics.flow?.phone) return undefined; // a phone tab tile: unfitted, as on the phone's tab
     if (metrics.flow) return spanFit(metrics.flow.span, metrics.unitPx); // the folder's contents size
     if (effective === 'stacked') return undefined; // phone stacking keeps the v2 tile sizes
-    return nodeFit(n.placement as Placement, metrics); // Small (1 x 1) is always compact (spec §9)
+    return nodeFit(n.placement as Placement, metrics); // Small (1 x 1) is always compact
   }
   /**
-   * The tile as it is drawn here (M5 §2): on a tab at its own size; inside a folder at the folder's
+   * The tile as it is drawn here: on a tab at its own size; inside a folder at the folder's
    * contents size. Its stored size is never changed by this.
    */
   function shownEntry(n: LayoutNode): LayoutNode {
     const size = displaySize(n, isFolder ? parent : undefined);
     return n.kind === 'tile' && n.size !== size ? ({ ...n, size } as LayoutNode) : n;
   }
-  /** Can this child be drawn here? On a tab it needs a placement; in a folder it has none (M5). */
+  /** Can this child be drawn here? On a tab it needs a placement; in a folder it has none. */
   const drawable = (n: unknown): n is LayoutNode => (isFolder ? isRenderable(n) : isPlaced(n));
 
   // Placeholders (unrenderable nodes, m3): one that has a position keeps it, drawn
@@ -205,7 +205,7 @@
           {/if}
         </div>
       {:else}
-        <!-- A sub-folder on a folder's page is an item: its minimised tile (M5 §2); opening it drills in. -->
+        <!-- A sub-folder on a folder's page is an item: its minimised tile; opening it drills in. -->
         <Folder
           folder={grownNode(node)}
           screenExtraRows={growth.get(node.id)?.extra ?? 0}

@@ -41,7 +41,7 @@ export function currentDraft(): LayoutDashboard | null {
   return get(session)?.draft ?? null;
 }
 
-/** Every id in the document: all dashboards in the stored layout plus the draft (Ruling 2). */
+/** Every id in the document: all dashboards in the stored layout plus the draft. */
 export function documentIds(): Set<string> {
   const out = new Set<string>();
   const walk = (c: Container | undefined) => {
@@ -72,12 +72,12 @@ export function sizeFor(n: Pick<LayoutNode, 'kind' | 'placement'> & { size?: unk
   return tabSpan(n);
 }
 
-// ---------------------------------------------------------------- sizes (M5 §2)
+// ---------------------------------------------------------------- sizes
 
 export type TileSize = ItemSize;
 
 /**
- * The size an item SHOWS at (M5 §2): on a tab (`parent` undefined) its own size; inside a folder
+ * The size an item SHOWS at: on a tab (`parent` undefined) its own size; inside a folder
  * the folder's contents size, for tiles and sub-folders alike. The item's own size never changes
  * by being in a folder. Missing or unknown = Medium.
  */
@@ -97,8 +97,8 @@ export type SizeResult =
 
 /**
  * Where tile `id` goes when its Size is set to `size`. On a tab: the span (sizeSpan) at its own
- * top-left, shifted left when it would pass the right edge, with neighbours pushed aside by the M3
- * push (pushAside, as drag and resize). Inside a folder nothing moves: the tile keeps its place in
+ * top-left, shifted left when it would pass the right edge, with neighbours pushed aside
+ * (pushAside, as drag and resize). Inside a folder nothing moves: the tile keeps its place in
  * the order and shows the folder's contents size. Trial-run, so a returned target never throws on
  * commit. Pure.
  */
@@ -151,8 +151,8 @@ export function nodesOf(d: LayoutDashboard, ids: string[]): LayoutNode[] {
 /**
  * Placements for `nodes` going onto tab `to`, none overlapping each other or what is there. The
  * first goes at `cell` when it is free there; the rest (or all, without a usable cell) at
- * firstFreeCell — never a fake push (Ruling 11). Stored footprints count, so a minimised folder's
- * reserved cells are taken (Ruling 13). A folder target is ordered: no placements ([]).
+ * firstFreeCell — never a fake push. Stored footprints count, so a minimised folder's
+ * reserved cells are taken. A folder target is ordered: no placements ([]).
  */
 export function placementsFor(
   d: LayoutDashboard, to: ContainerRef, nodes: (Pick<LayoutNode, 'kind' | 'placement'> & { size?: unknown })[], cell?: Cell
@@ -266,11 +266,11 @@ export function addNode(node: LayoutNode, to: ContainerRef, cell?: Cell): string
   if (placed.kind === 'folder') {
     placed.content = { ...placed.content, children: [] };
     // A new folder's box is its default box for the size and contents size picked in the dialog,
-    // never below its minimum (Ruling 7a).
+    // never below its minimum.
     if (to.folderId === undefined) placed.placement = { ...(placed.placement ?? { x: 0, y: 0 }), ...defaultFolderBox(placed) } as Placement;
   }
   const ok = apply(node.kind === 'tile' ? 'Add tile' : 'Add folder', (dd) => {
-    // A new tile takes the span of its Size on a tab (spec §8); too narrow a tab refuses, saying why.
+    // A new tile takes the span of its Size on a tab; too narrow a tab refuses, saying why.
     // In a folder it goes at the end of the order (no placement).
     return insertNew(dd, placed, to, cell);
   });
@@ -286,7 +286,7 @@ const LOCKED = ['id', 'kind', 'placement', 'content'];
 /**
  * A dialog's fields as a patch: a field set to undefined is REMOVED from the node (e.g. "no
  * colour"), a field not given is left as it is. plain() alone would drop the undefined ones, so
- * the old value stayed (found in the rc1 trials).
+ * the old value stayed.
  */
 function toPatch(fields: Record<string, unknown>): { patch: Record<string, unknown>; cleared: string[] } {
   const patch: Record<string, unknown> = {};
@@ -311,7 +311,7 @@ function withoutFields(d: LayoutDashboard, id: string, cleared: string[]): Layou
 
 /**
  * Update a node's own fields from a dialog (id/kind/placement/content are never patched here).
- * `opts.size` (a tile's Size picked in the dialog, spec §8) also sets its span, pushing grid
+ * `opts.size` (a tile's Size picked in the dialog) also sets its span, pushing grid
  * neighbours aside — in the SAME undo step. A refused size changes nothing and says why.
  */
 export function editNode(id: string, edited: Partial<LayoutNode>, opts: { size?: TileSize } = {}): boolean {
@@ -363,9 +363,9 @@ export function editFolder(
     if (statusChecksEnabled !== undefined) {
       next = mapNode(next, id, (f) => withStatusChecks(f, statusChecksEnabled) as LayoutNode);
     }
-    // A larger contents size needs a larger smallest open box (§3.5), and a shape change needs room
-    // for its tab (M6 §3a.3: a box below the tab-aware minimum): grown here, neighbours pushed, in this
-    // same undo step — or the whole Save is refused with the reason (TreeOpError → toast, Ruling 7).
+    // A larger contents size needs a larger smallest open box, and a shape change needs room
+    // for its tab (a box below the tab-aware minimum): grown here, neighbours pushed, in this
+    // same undo step — or the whole Save is refused with the reason (TreeOpError → toast).
     return LOOK_KEYS.some((k) => k in patch) ? fitFolderMinimum(next, id) : next;
   });
 }
@@ -375,7 +375,7 @@ const LOOK_KEYS = ['contentSize', 'shape', 'tabPosition'];
 
 /**
  * Why folder `id` can't take look `shape` (and `tabPosition`), or null: an unknown name, or its open
- * box can't grow to the minimum on its tab. The trial run of the very op editFolder runs (M6 §3a.3);
+ * box can't grow to the minimum on its tab. The trial run of the very op editFolder runs;
  * the dialog shows it.
  */
 export function shapeProblem(d: LayoutDashboard, id: string, shape: unknown, tabPosition?: unknown): string | null {
@@ -419,14 +419,13 @@ export function containerOfNode(d: LayoutDashboard, id: string): ContainerRef | 
 }
 
 /**
- * After `ids` were MOVED to `to`: a drilled-into folder among them closes (closeDrilledInto, Ruling
- * 14), and each folder among them that came out of a folder onto a tab is a
- * minimised folder there (M5 §3a.3, treeOps.placedOnTab), so this browser forgets its open / page /
+ * After `ids` were MOVED to `to`: a drilled-into folder among them closes (closeDrilledInto, * 14), and each folder among them that came out of a folder onto a tab is a
+ * minimised folder there (treeOps.placedOnTab), so this browser forgets its open / page /
  * drill memory — an "open" remembered from before must not draw it open. `before` is the draft the
  * move was made from.
  */
 export function forgetMovedOutFolders(before: LayoutDashboard, ids: string[], to: ContainerRef): void {
-  // A folder this browser is drilled into (an inset box, M5 §7) closes when it moves, wherever to.
+  // A folder this browser is drilled into (an inset box) closes when it moves, wherever to.
   const folders = ids.filter((id) => findIn(before, id)?.kind === 'folder');
   if (folders.length > 0) closeDrilledInto(before.id, folders);
   if (to.folderId !== undefined) return;
@@ -482,7 +481,7 @@ export function setDisplay(id: string, display: FolderNode['display']): boolean 
 
 /**
  * "Make it big enough": a folder stored below its smallest open box (imported, converted, or saved
- * before the minimum) grown to it, neighbours pushed aside by the M3 rules — one undo step, the same
+ * before the minimum) grown to it, neighbours pushed aside by the push-aside rules — one undo step, the same
  * growth path as a contents-size change (fitFolderMinimum); no room: toasted with the reason.
  */
 export function makeFolderBigEnough(id: string): boolean {
@@ -500,7 +499,7 @@ export function zOrder(id: string, dir: 'forward' | 'back'): boolean {
 }
 
 /**
- * Ctrl+] / Ctrl+[ on the selection. Every tab is a grid (M5: free layout is removed), where items
+ * Ctrl+] / Ctrl+[ on the selection. Every tab is a grid (free layout is removed), where items
  * never overlap, so this changes nothing and says why — never a silent no-op.
  */
 export function zOrderSelection(ids: string[], _dir: 'forward' | 'back'): boolean {
@@ -518,7 +517,7 @@ export function zOrderSelection(ids: string[], _dir: 'forward' | 'back'): boolea
 export function moveOrCopyTo(ids: string[], to: ContainerRef, mode: 'move' | 'copy'): boolean {
   const d = currentDraft();
   if (!d || ids.length === 0) return false;
-  // §8.1: each item leaving a folder pops out of where it was (measured now, before the change is drawn).
+  // Each item leaving a folder pops out of where it was (measured now, before the change is drawn).
   // Each with its tab: when the source isn't drawn (it is on another tab), it starts from that tab's button.
   const leaving: { id: string; sourceId: string; tabId: string }[] = [];
   for (const id of ids) {
@@ -552,7 +551,7 @@ export function moveOrCopyTo(ids: string[], to: ContainerRef, mode: 'move' | 'co
   return ok;
 }
 
-/** Decoration after a change is made (§8.1): a throw is said once, never undoing or hiding the change. */
+/** Decoration after a change is made: a throw is said once, never undoing or hiding the change. */
 function safely<T>(fn: () => T): T | null {
   try {
     return fn();
@@ -573,7 +572,7 @@ export interface TabFields {
   opacity?: number;
   /** A background picked in the dialog: undefined = unchanged, null = removed. */
   background?: Background | null;
-  /** Status checks (M4 §4b): undefined = unchanged, null = inherit (key removed), true/false = set. */
+  /** Status checks: undefined = unchanged, null = inherit (key removed), true/false = set. */
   statusChecksEnabled?: boolean | null;
 }
 
@@ -654,7 +653,7 @@ export async function deleteTabWithConfirm(tabId: string): Promise<boolean> {
 }
 
 /**
- * A folder's background (M4): one undoable draft edit. `undefined` removes the
+ * A folder's background: one undoable draft edit. `undefined` removes the
  * key (no background of its own); the inherit form keeps its stored picture.
  * A missing id or a non-folder is refused (apply toasts the TreeOpError).
  */
@@ -689,7 +688,7 @@ function mapNode(d: LayoutDashboard, id: string, fn: (n: LayoutNode) => LayoutNo
   return { ...d, tabs: d.tabs.map((t) => ({ ...t, root: walk(t.root) })) };
 }
 
-// ---------------------------------------------------------------- dashboard-level (draft, parent spec §7.1)
+// ---------------------------------------------------------------- dashboard-level (draft)
 
 /** JSON with object keys sorted: equal values compare equal whatever their key order. */
 function canonical(v: unknown): string {
@@ -701,7 +700,7 @@ function canonical(v: unknown): string {
 }
 
 /**
- * The dashboard dialog's Header and Background (walkthrough §4C), applied as ONE undo step.
+ * The dashboard dialog's Header and Background, applied as ONE undo step.
  * Nothing changed (whatever the key order): no undo step.
  */
 export function setLook(header: HeaderConfig | undefined, background: Background | undefined): boolean {
@@ -729,7 +728,7 @@ export async function transferAndRebase(req: TransferRequest, success: string, f
   const sessionId = get(session)?.dashboardId ?? '';
   const formProblem = layoutFormProblem(get(config));
   if (formProblem) {
-    toast.error(formProblem); // M5 §2a: never write this layout form into a document of another
+    toast.error(formProblem); // never write this layout form into a document of another
     return false;
   }
   try {

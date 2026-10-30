@@ -1,6 +1,6 @@
 <script lang="ts">
   /**
-   * The one edit handle (walkthrough §4B): a small pencil button on every editable item — tile,
+   * The one edit handle: a small pencil button on every editable item — tile,
    * folder (expanded or collapsed), tab and the dashboard. It is a real button ("Edit <name>"),
    * reachable by keyboard; hosts show it on hover or keyboard focus and it is always shown on
    * touch (hover: none). Its pointerdown is left alone so a press on it still drags the item;
@@ -13,11 +13,11 @@
     /** The item's name, for the accessible label "Edit <name>". */
     name: string;
     onEdit: () => void;
-    /** Optional visible text beside the pencil (Task 6's "Dashboard" handle). */
+    /** Optional visible text beside the pencil (the "Dashboard" handle). */
     label?: string;
     /**
      * corner: pinned inside the host's top-right (the host is positioned); inline: in the flow
-     * (an open folder's title bar, which every open folder has — M5 §3a.7).
+     * (an open folder's title bar, which every open folder has —).
      */
     placement?: 'corner' | 'inline';
   }
@@ -25,7 +25,7 @@
 
   /**
    * A corner handle is sized to its host, inside its top-right corner and never over the host's
-   * centre (walkthrough 1 C and D, handleFit): a click or tap in an item's middle always reaches the
+   * centre (handleFit): a click or tap in an item's middle always reaches the
    * item, and the handle never overhangs a neighbour (on touch it is always shown, so a hung handle
    * took the neighbour's taps). Measured on the host (the handle's parent) whenever it resizes.
    * Without ResizeObserver (test DOMs) the CSS default holds.

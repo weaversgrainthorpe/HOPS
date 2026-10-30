@@ -18,9 +18,9 @@
     /** The active tab: adds and pastes without a target go to its root (a folder's menu adds into it). */
     tabId: string;
     onAddTab: () => void;
-    /** The labelled "Dashboard" pencil (§4C) opens the one dashboard dialog. */
+    /** The labelled "Dashboard" pencil opens the one dashboard dialog. */
     onEditDashboard?: () => void;
-    /** The dashboard's and the active tab's own backgrounds: a failed image shows a compact warning here (Ruling 7). */
+    /** The dashboard's and the active tab's own backgrounds: a failed image shows a compact warning here. */
     dashboardBackground?: Background;
     tabBackground?: Background;
     /**
@@ -58,7 +58,7 @@
     const dashboardId = $session?.dashboardId;
     const wasDirty = get(dirty);
     try {
-      // §9: the tick shows only after a save that really wrote something; a failure keeps its error.
+      // The tick shows only after a save that really wrote something; a failure keeps its error.
       if ((await save()) === 'saved' && wasDirty) playSavedTick(dashboardId, tickEl);
     } finally {
       saving = false;
@@ -141,7 +141,7 @@
 
 <svelte:window onkeydown={onKey} />
 
-<!-- §7.2: one floating toolbar pinned to the bottom of the screen. It sits over the page and takes no
+<!-- One floating toolbar pinned to the bottom of the screen. It sits over the page and takes no
      layout space, so every tile, folder and tab stays where view mode puts it. Below every dialog:
      it never covers one. -->
 <div class="edit-toolbar" role="toolbar" aria-label="Editing" bind:this={barEl}>
@@ -151,7 +151,7 @@
         <button type="button" class="tb primary" onclick={doSave} disabled={!$dirty || saving} title="Save (Ctrl+S)">
           <Icon icon="mdi:content-save" width="18" /> Save
         </button>
-        <!-- §9: drawn only while its flourish plays (invisible otherwise); the toast says "Changes saved" either way. -->
+        <!-- Drawn only while its flourish plays (invisible otherwise); the toast says "Changes saved" either way. -->
         <span class="saved-tick" data-saved-tick aria-hidden="true" bind:this={tickEl}><Icon icon="mdi:check-circle" width="20" /></span>
       </span>
       <button type="button" class="tb" onclick={() => discard()} disabled={!$dirty || saving} title="Discard all unsaved changes">
@@ -185,12 +185,12 @@
     </div>
     {#if onEditDashboard}
       <div class="group">
-        <!-- The dashboard's own edit handle (§4C): one labelled pencil, always shown while editing. -->
+        <!-- The dashboard's own edit handle: one labelled pencil, always shown while editing. -->
         <EditHandle name="Dashboard" label="Dashboard" placement="inline" onEdit={onEditDashboard} />
       </div>
     {/if}
   </div>
-  <!-- A failed background image per level (Ruling 7): compact, inside the toolbar, never moving the page. -->
+  <!-- A failed background image per level: compact, inside the toolbar, never moving the page. -->
   <div class="notes">
     <BackgroundFailedBadge background={dashboardBackground} editing level="dashboard" placement="inline" label="(dashboard)" />
     <BackgroundFailedBadge background={tabBackground} editing level="tab" placement="inline" label="(this tab)" />

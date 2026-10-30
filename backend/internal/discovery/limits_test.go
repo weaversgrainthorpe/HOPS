@@ -34,7 +34,7 @@ func newLimitsOrchestrator(t *testing.T) (*Orchestrator, *Store, *settings.Servi
 	return o, store, svc
 }
 
-// §1 item 6: the limits are GUI settings (registered definitions with sane
+// The limits are GUI settings (registered definitions with sane
 // defaults and bounds), and they are enforced.
 func TestScanLimitsAreSettingsWithSaneDefaults(t *testing.T) {
 	want := map[string][3]int{ // default, min, max

@@ -226,7 +226,7 @@ describe('EditToolbar', () => {
   });
 });
 
-describe('§9 saved tick', () => {
+describe('saved tick', () => {
   const animated: { el: Element; kind: string | null }[] = [];
   beforeEach(async () => {
     animated.length = 0;

@@ -6,8 +6,8 @@
   import { resetConfig } from '$lib/utils/api';
   import { loadConfig, configError, refreshServerNotices } from '$lib/stores/config';
 
-  // Settings → Factory reset (M5 §9): on its own page, never next to everyday settings.
-  // M6 §7.11: the button is an emergency stop — a round red mushroom cap on a yellow housing, drawn
+  // Settings → Factory reset: on its own page, never next to everyday settings.
+  // The button is an emergency stop — a round red mushroom cap on a yellow housing, drawn
   // with CSS and inline SVG only. The look never makes a reset easier: pressing it only opens the
   // same confirmation as before.
 

@@ -1,4 +1,4 @@
-// Shared animation controller for folder backgrounds (Milestone 4, Task 3).
+// Shared animation controller for folder backgrounds.
 //
 // One IntersectionObserver serves every registered folder background. At most
 // MAX_ANIMATED_FOLDERS of the visible ones animate, chosen by largest visible

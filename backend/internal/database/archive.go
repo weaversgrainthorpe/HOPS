@@ -22,7 +22,7 @@ import (
 	"github.com/weaversgrainthorpe/HOPS/internal/version"
 )
 
-// Backup archives (M6 §12): a downloaded backup is one .zip holding the
+// Backup archives: a downloaded backup is one .zip holding the
 // database, every uploaded image it refers to (from the live folders, the
 // attic, or the backup's own staged images) and a manifest with each file's
 // SHA-256. An uploaded archive is validated strictly before anything is kept.

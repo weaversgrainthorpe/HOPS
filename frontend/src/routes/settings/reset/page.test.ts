@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
 import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
 
-// /settings/reset (M5 §9): Factory reset lives on its own page, never next to everyday settings.
+// /settings/reset: Factory reset lives on its own page, never next to everyday settings.
 vi.mock('$app/navigation', () => ({ goto: vi.fn(async () => {}), beforeNavigate: vi.fn(), afterNavigate: vi.fn() }));
 vi.mock('$lib/utils/api', async () => ({
 	...(await vi.importActual<object>('$lib/utils/api')),
@@ -39,7 +39,7 @@ describe('/settings/reset', () => {
 		expect(screen.getByRole('button', { name: 'Factory reset' })).toBe(buttons[0]);
 	});
 
-	it('is an emergency-stop button drawn with CSS/SVG only (M6 §7.11)', () => {
+	it('is an emergency-stop button drawn with CSS/SVG only', () => {
 		const { container } = render(Page);
 		const btn = screen.getByRole('button', { name: 'Factory reset' });
 		expect(btn.classList.contains('estop')).toBe(true);

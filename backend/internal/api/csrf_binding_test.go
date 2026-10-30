@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// Pentest L3: the CSRF token is bound to its session (HMAC of the session id
+// The CSRF token is bound to its session (HMAC of the session id
 // under a per-install key kept in the database).
 
 // A token from session A, sent as both cookie and header, is refused with

@@ -103,7 +103,7 @@ describe('hitTest', () => {
     expect(hitTest(0, 0, new Set(), env(stray)).container).toBeNull();
   });
 
-  it('reports the rendered box of the node under the pointer, relative to the container (Task 8 zones)', () => {
+  it('reports the rendered box of the node under the pointer, relative to the container (zones)', () => {
     const cell = el({ 'data-node-id': 'b' });
     const root = el({ 'data-container-id': 't1' }, cell);
     document.body.appendChild(root);
@@ -117,8 +117,8 @@ describe('hitTest', () => {
   });
 
   it('a tab\'s edit handle and padding count as the tab: it is resolved through its [data-drag-tabbox]', () => {
-    // Real-browser bug (M3): controls beside the tab button were hit by elementFromPoint (not inside
-    // [data-drag-tab]) and no tab was hit. The tab's edit handle (§4B) sits in the same box.
+    // Real-browser bug: controls beside the tab button were hit by elementFromPoint (not inside
+    // [data-drag-tab]) and no tab was hit. The tab's edit handle sits in the same box.
     const icon = el({ class: 'svg' });
     const dup = el({ class: 'edit-handle inline', 'data-edit-handle': '' }, icon);
     const controls = el({ class: 'tab-handle-slot' }, dup);
@@ -170,7 +170,7 @@ describe('hitTest', () => {
       [b1, { left: 0, top: 0, width: 150, height: 40 }],
       [b2, { left: 160, top: 0, width: 150, height: 40 }]
     ]);
-    // Ruling 29: a tab's edit handle counts as that tab (through its tabbox), and the boxes are still reported.
+    // A tab's edit handle counts as that tab (through its tabbox), and the boxes are still reported.
     const h = hitTest(300, 10, new Set(), { elementFromPoint: () => ctl, rectOf: (e) => rects.get(e) ?? { left: 0, top: 0 } });
     expect(h.tabId).toBe('t2');
     // Between the tabs (the bar itself), it is the tab bar.
@@ -178,9 +178,9 @@ describe('hitTest', () => {
     expect(h.tabBoxes?.map((b) => [b.id, b.left])).toEqual([['t1', 0], ['t2', 160]]);
   });
 
-  // M5 Task 4: an open folder (Folder.svelte) exposes its title bar, its breadcrumb's crumbs, its page
+  // An open folder (Folder.svelte) exposes its title bar, its breadcrumb's crumbs, its page
   // bar and the page it shows; the drag reads them here (the only layout reads).
-  describe('an open folder (M5)', () => {
+  describe('an open folder', () => {
     const flowMetrics = { columns: 8, unitPx: 50, rowPx: 50, innerWidthPx: 400, flow: { span: 2, perRow: 4 } };
     function openFolder(opts: { empty?: boolean; prevDisabled?: boolean } = {}) {
       const items = ['k5', 'k6', 'k7'].map((id) => el({ 'data-node-id': id }, el({ class: 'face' })));
@@ -230,8 +230,8 @@ describe('hitTest', () => {
       expect(h.folderCrumb).toEqual({ folderId: 'f1', to: 'f1', rect: { left: 20, top: 55, width: 60, height: 30 } });
     });
 
-    // M5 §7: drilled in, every level is an inset box (Folder.svelte's DOM): the outer bars are go-up
-    // targets of the TOP folder (inset boxes carry no data-node-id); each box's minimise (Ruling 15) is
+    // Drilled in, every level is an inset box (Folder.svelte's DOM): the outer bars are go-up
+    // targets of the TOP folder (inset boxes carry no data-node-id); each box's minimise is
     // part of its bar, never a target of its own; the page, and the outer body's padding, are the
     // innermost box's.
     it('nested boxes: outer bars go up (for the top folder); a drop anywhere in the body is the innermost', () => {
@@ -290,7 +290,7 @@ describe('hitTest', () => {
     it('an empty open folder\'s body is that folder (never the canvas under it)', () => {
       const f = openFolder({ empty: true });
       const h = f.at(f.body);
-      // With its rect: the "Into" cue is drawn on the body (fix round 1: never a cue-less target).
+      // With its rect: the "Into" cue is drawn on the body (never a cue-less target).
       expect(h.emptyFolder).toEqual({ folderId: 's1', rect: { left: 15, top: 95, width: 390, height: 300 } });
       expect(h.container).toBeNull();
     });

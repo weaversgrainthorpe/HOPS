@@ -216,7 +216,7 @@ describe('sessionExpiredRedirect (where an expired session sends the page)', () 
 		const { sessionExpiredRedirect } = await import('./auth');
 		expect(sessionExpiredRedirect('/settings')).toBeNull();
 	});
-	it('every settings page stays too (M5 §9: each section is its own page; never bounced to /settings)', async () => {
+	it('every settings page stays too (each section is its own page; never bounced to /settings)', async () => {
 		const { sessionExpiredRedirect } = await import('./auth');
 		for (const p of ['/settings/dashboards', '/settings/global', '/settings/backups', '/settings/password', '/settings/reset']) {
 			expect(sessionExpiredRedirect(p)).toBeNull();

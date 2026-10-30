@@ -12,7 +12,7 @@
   import NoticesBanner from '$lib/components/NoticesBanner.svelte';
   import { globalNav, onGroupLinkClick } from '$lib/settings/globalNav';
 
-  // Settings is the one admin home (spec §4D), one page per section (M5 §9): this shell is shared
+  // Settings is the one admin home, one page per section: this shell is shared
   // by all of them. It holds what every settings page needs: the sidebar, the MigrationFailed and
   // notices on top, and the sign-in. Logged out, ANY settings address asks for the password in
   // place (the same dialog as the dashboard pencil) and then shows that same page; Cancel goes
@@ -21,7 +21,7 @@
   let { children } = $props();
 
   // The sections, in order (Icons after Dashboards: approved by Jonathan); Log out is an action (below). Discovery is a section like the others
-  // (M5 §11): its sub-pages (/settings/discovery/new, /[id], …) keep it highlighted.
+  //: its sub-pages (/settings/discovery/new, /[id], …) keep it highlighted.
   const sections = [
     { href: '/settings/dashboards', label: 'Dashboards', icon: 'mdi:view-dashboard-outline' },
     { href: '/settings/icons', label: 'Icons', icon: 'mdi:image-multiple-outline' },
@@ -164,7 +164,7 @@
                   <span>{sec.label}</span>
                 </a>
                 {#if sec.href === '/settings/global' && isCurrent(sec.href) && $globalNav.groups.length > 0}
-                  <!-- M6 §10: Global settings' groups, only while on it; each jumps to its section. -->
+                  <!-- Global settings' groups, only while on it; each jumps to its section. -->
                   {@render subList(
                     'Global settings groups',
                     $globalNav.groups.map((g) => ({ id: g.id, label: g.label, href: `/settings/global#${g.id}`, onclick: (e: MouseEvent) => onGroupLinkClick(e, g.id) })),
@@ -258,7 +258,7 @@
 
 <style>
   /* The sidebar is always light-on-dark, whatever the theme, with its own fixed colours so its
-     contrast is known (M5 §9, WCAG AA, checked by the settings-sidebar e2e):
+     contrast is known (WCAG AA, checked by the settings-sidebar e2e):
        item text   #e2e8f0 on #0b1220 ≈ 15:1
        current     #ffffff on #1d4ed8 ≈ 6.7:1 (plus a light bar on the left)
        hover       #ffffff on #1e293b ≈ 14:1
@@ -344,7 +344,7 @@
     flex-shrink: 0;
   }
 
-  /* Global settings' groups (M6 §10): indented under it. The group in view gets the light bar and
+  /* Global settings' groups: indented under it. The group in view gets the light bar and
      white bold text on the hover colour (#ffffff on #1e293b ≈ 14:1); the others #e2e8f0 ≈ 15:1. */
   .sidebar .sub-list {
     gap: 0.1rem;
@@ -392,7 +392,7 @@
     border-top: 1px solid var(--sb-hover-bg);
   }
 
-  /* The content fills ALL the space to the right of the sidebar (M6 §7.8–7.10), starting right
+  /* The content fills ALL the space to the right of the sidebar (.8–7.10), starting right
      beside it: no capped or centred column leaving an empty band. */
   .settings-main {
     flex: 1 1 auto;
@@ -404,7 +404,7 @@
     min-width: 0;
   }
 
-  /* THE width rule for every settings page (M6 §7.10), one place for all of them: text and boxes
+  /* THE width rule for every settings page, one place for all of them: text and boxes
      alike use the full width. There is no reading-measure cap on prose (Jonathan's ruling: intro
      and heading text must not bunch into the first third of a wide screen).
      The empty-state box is a box, so it spans the width too; its sentence stays centred. */
@@ -416,7 +416,7 @@
     margin-inline: auto;
   }
 
-  /* "‹ Discovery" (M6 §7.9): the way back from a Discovery sub-page, above its title. */
+  /* "‹ Discovery": the way back from a Discovery sub-page, above its title. */
   .settings-content :global(.back-link) {
     display: inline-flex;
     align-items: center;

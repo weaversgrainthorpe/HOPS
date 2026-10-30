@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-// M5 form throughout: tabs are 24-column grids of placed items; folder contents are ordered lists
-// with no placements (the ordered operations themselves are in treeOps.m5.test.ts).
+// tabs are 24-column grids of placed items; folder contents are ordered lists
+// with no placements (the ordered operations themselves are in treeOps.folders.test.ts).
 import {
   TreeOpError, newNodeId, locate, isDescendant, moveNodes, copyNodes, mergeIntoNewFolder, insertNode,
   updateNode, deleteNodes, duplicateNode, resizeNode, setZ, reorderTabs, addTab, updateTab, deleteTab,
@@ -9,7 +9,7 @@ import {
 import type { Container, FolderNode, LayoutDashboard, LayoutNode, Placement } from '../types/layout';
 
 const p = (x: number, y: number, w = 1, h = 1, z?: number): Placement => (z === undefined ? { x, y, w, h } : { x, y, w, h, z });
-/** A Medium tile's span on the finer grid (spec §9: 24 columns, Medium 2 x 2). */
+/** A Medium tile's span on the finer grid (24 columns, Medium 2 x 2). */
 const M = (x: number, y: number): Placement => p(x, y, 2, 2);
 /** A tile (Medium unless `size`); `pl` only on a tab. */
 const tile = (id: string, pl?: Placement, size?: string): LayoutNode =>
@@ -157,7 +157,7 @@ describe('mergeIntoNewFolder', () => {
     expect(rootOf(r.dashboard).some((n) => n.id === 'c')).toBe(false);
     expect(byId(rootOf(r.dashboard), 'f1').placement).toEqual(p(0, 6, 8, 6));
   });
-  it('any number of members: the same box (the folder pages its contents, M5)', () => {
+  it('any number of members: the same box (the folder pages its contents)', () => {
     const d = dash();
     const r = mergeIntoNewFolder(d, ['a', 'b', 'x', 'z', 'y'], 'c', new Set(allNodeIds(d)));
     const f = byId(rootOf(r.dashboard), r.folderId) as FolderNode;
@@ -172,7 +172,7 @@ describe('mergeIntoNewFolder', () => {
     expect(() => mergeIntoNewFolder(d, ['f1'], 'y', ALL)).toThrow(TreeOpError);
     expect(() => mergeIntoNewFolder(d, ['nope'], 'c', ALL)).toThrow(TreeOpError);
   });
-  it('each member keeps its own size inside (it shows the contents size, M5 §2)', () => {
+  it('each member keeps its own size inside (it shows the contents size)', () => {
     const d = deepFreeze({
       id: 'd', name: 'D', path: '/d', revision: 1,
       tabs: [{ id: 't', name: 'T', root: { columns: 24, children: [tile('a', p(10, 10, 4, 4), 'large'), tile('b', p(0, 0, 1, 1), 'small')] } }]
@@ -288,7 +288,7 @@ describe('resizeNode', () => {
   it('a folder clamps to the columns and never shrinks below its bar, padding, one item and the page bar', () => {
     const d = dash();
     const r = resizeNode(d, 'f1', 8, 1);
-    expect(byId(rootOf(r), 'f1').placement).toMatchObject({ w: 8, h: 4 }); // geometry.minOpenFolderCells (Medium, with the M6 tab allowance, at the §13 reference cell)
+    expect(byId(rootOf(r), 'f1').placement).toMatchObject({ w: 8, h: 4 }); // geometry.minOpenFolderCells (Medium, with the tab allowance, at the reference cell)
     expect(byId(rootOf(resizeNode(d, 'f1', 1, 8)), 'f1').placement).toMatchObject({ w: 3, h: 8 }); // a Medium + padding
     const r2 = resizeNode(d, 'f1', 10, 12);
     expect(byId(rootOf(r2), 'f1').placement).toMatchObject({ w: 10, h: 12 });
@@ -454,7 +454,7 @@ describe('purity', () => {
   });
 });
 
-// ---------------------------------------------------------------- M3 Task 6 additions
+// ---------------------------------------------------------------- additions
 
 describe('setFolderDisplay', () => {
   it("sets a folder's saved display and leaves everything else alone", () => {

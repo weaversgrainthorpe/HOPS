@@ -21,7 +21,7 @@ func displayOf(t *testing.T, view map[string]interface{}, id string) map[string]
 	return nil
 }
 
-// Ruling 9: GET /api/config carries each dashboard's effective
+// GET /api/config carries each dashboard's effective
 // animatedFolderBackgrounds (read-only, computed), and a save never stores it.
 func TestGetConfig_DisplayAnimatedFolderBackgrounds(t *testing.T) {
 	router, db := setupTestRouter(t)
@@ -71,7 +71,7 @@ func TestGetConfig_DisplayAnimatedFolderBackgrounds(t *testing.T) {
 	}
 }
 
-// Fix round 1 (Minor 2): a hops-v3 import that carries the computed `display`
+// A hops-v3 import that carries the computed `display`
 // block (or any other transient key) stores none of them.
 func TestImport_DropsDisplay(t *testing.T) {
 	router, db := setupTestRouter(t)
@@ -103,7 +103,7 @@ func TestImport_DropsDisplay(t *testing.T) {
 	}
 }
 
-// M6 §7.13: each dashboard's display block carries the global "Animations"
+// Each dashboard's display block carries the global "Animations"
 // setting (display.animations), so the editor can read it; a Settings save
 // changes it for every dashboard. It has no per-dashboard override.
 func TestGetConfig_DisplayAnimationsFollowsTheGlobalSetting(t *testing.T) {
@@ -113,7 +113,7 @@ func TestGetConfig_DisplayAnimationsFollowsTheGlobalSetting(t *testing.T) {
 	if got := displayOf(t, getView(t, c), "d1")["animations"]; got != "on" {
 		t.Fatalf("default: animations = %v, want on", got)
 	}
-	// Ruling 5: On / Off / Always, carried as the setting's own value.
+	// On / Off / Always, carried as the setting's own value.
 	for _, v := range []string{"off", "always", "on"} {
 		if w := putSetting(t, router, c.token, c.csrf, "display.animations", v); w.Code != 200 {
 			t.Fatalf("put setting %s: %d %s", v, w.Code, w.Body.String())

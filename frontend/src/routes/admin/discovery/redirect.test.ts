@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { isRedirect } from '@sveltejs/kit';
 import { load, _discoveryRedirect } from './[...rest]/+page';
 
-// M5 §11: Discovery moved to /settings/discovery…; every old /admin/discovery… address goes to
+// Discovery moved to /settings/discovery…; every old /admin/discovery… address goes to
 // the matching new page (bookmarks keep working), with its query string.
 function redirectOf(rest: string, href: string): { status: number; location: string } {
 	let thrown: unknown;

@@ -19,7 +19,7 @@
     entry: Entry;
     /**
      * The tile fills its cell exactly (no min-height of its own) and scales its
-     * content with the cell (spec §10: a size container). 'compact' marks a small
+     * content with the cell (a size container). 'compact' marks a small
      * cell but draws the same arrangement; only a note tile drops its body there.
      */
     fit?: 'fill' | 'compact';
@@ -111,7 +111,7 @@
       : entry.description || entry.name
   );
 
-  // Walkthrough §2: opacity fades the tile's BACKGROUND only (a separate layer, as in
+  // Opacity fades the tile's BACKGROUND only (a separate layer, as in
   // FolderSurface); the text and the icon have their own; the status badge never fades.
   // All three are clamped to 0–1 before they reach a style.
   const clamp01 = (n: unknown, d: number) =>
@@ -120,7 +120,7 @@
   const textOpacity = $derived(String(clamp01(entry.textOpacity, 1)));
   const iconOpacity = $derived(String(clamp01(entry.iconOpacity, 1)));
 
-  // The size class follows the tile (spec §8: a changed Size shows at once, no reload).
+  // The size class follows the tile (a changed Size shows at once, no reload).
   const sizeClass = $derived(entry.size === 'small' || entry.size === 'large' ? entry.size : 'medium');
 </script>
 
@@ -194,13 +194,13 @@
         </div>
       </div>
 
-      <!-- Spec §10: one arrangement at every size and fit. The description is hidden only by a
+      <!-- One arrangement at every size and fit. The description is hidden only by a
            container height query, when the tile is too short to fit it. -->
       {#if entry.description}
         <div class="subtitle" style:opacity={textOpacity}>{entry.description}</div>
       {/if}
 
-      <!-- Layered status checks (M4 §4b): a tile switched on or set to inherit asks the
+      <!-- Layered status checks: a tile switched on or set to inherit asks the
            server, which resolves the levels; a switched-off tile is never checked. -->
       {#if inEditor && urlProblem}
         <span class="url-problem" data-testid="tile-url-problem" role="note">{urlProblemText}</span>
@@ -299,7 +299,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    /* Spec §10: name, icon and description kept together as one group, centred in the tile. */
+    /* Name, icon and description kept together as one group, centred in the tile. */
     justify-content: center;
     gap: 0.5rem;
     padding: 1rem 1.5rem;
@@ -463,7 +463,7 @@
   }
 
   .small .subtitle {
-    font-size: 0.6875rem; /* 11px: the description's readable floor (spec §10 fix round 1) */
+    font-size: 0.6875rem; /* 11px: the description's readable floor */
   }
 
   .medium {
@@ -498,13 +498,13 @@
     font-size: 0.875rem;
   }
 
-  /* Layout renderer fit (Ruling 22, spec §10): the cell sets the tile's size (inline height and
+  /* Layout renderer fit: the cell sets the tile's size (inline height and
      min-height) and the tile is a size container, so its content scales with it: 1cqmin is 1% of
-     the tile's shorter side. ONE rule at every size (walkthrough 1, Ruling 10): icon, name,
+     the tile's shorter side. ONE rule at every size: icon, name,
      description, padding and gaps are a share of the tile, with no caps, so a bigger tile is the same
      tile scaled up; the size class only sets the shares. Medium: icon 34%, name 10.5%, description 9%.
-     Large is a scaled-up Medium with its icon about 45% of the tile (Ruling 10). Small keeps its
-     smaller shares, so it is driven by the floors. Text has readable floors (fix round 1): a name is
+     Large is a scaled-up Medium with its icon about 45% of the tile. Small keeps its
+     smaller shares, so it is driven by the floors. Text has readable floors: a name is
      never under 12px, a description never under 11px. A description that cannot fit at its floor is
      hidden, not shrunk. */
   .entry-container.sized {
@@ -535,7 +535,7 @@
   .entry.fill .subtitle {
     font-size: max(11px, var(--desc-r));
   }
-  /* Large's description scales too, but never past 1.25rem (review round, walkthrough 1 D: at 1920 it
+  /* Large's description scales too, but never past 1.25rem (at 1920 it
      reached about 28px, bigger than the navbar title). A smaller description only needs less room. */
   .entry.fill.large .subtitle {
     font-size: clamp(11px, var(--desc-r), 1.25rem);

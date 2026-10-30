@@ -1,5 +1,5 @@
 /**
- * Where an item's corner edit handle goes (M5 walkthrough 1 C; review round D): INSIDE the item's
+ * Where an item's corner edit handle goes: INSIDE the item's
  * top-right corner, sized to the item, and NEVER over its centre, so a click or tap in the middle
  * always reaches the item (opens a minimised folder, selects a tile) and never opens the Edit dialog
  * by accident. It never hangs outside the item: there it covered a neighbour's corner, and on touch

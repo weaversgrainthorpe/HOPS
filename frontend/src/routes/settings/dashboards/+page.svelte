@@ -4,7 +4,7 @@
   import DashboardList from '$lib/components/admin/DashboardList.svelte';
   import AddToHopsBookmark from '$lib/components/admin/AddToHopsBookmark.svelte';
 
-  // Settings → Dashboards (spec §4D, M5 §9): add, rename, reorder, delete, import and export.
+  // Settings → Dashboards: add, rename, reorder, delete, import and export.
 </script>
 
 {#if $migrationFailure}

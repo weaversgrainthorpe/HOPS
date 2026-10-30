@@ -97,12 +97,12 @@
     const ids = [...targetIds];
     const out: Item[] = [];
     if (!many) out.push({ label: 'Edit', icon: 'mdi:pencil', run: () => openDialog({ kind, id }) });
-    // Folders open in place (M5 §3a.8): a sub-folder drills in (this browser's memory); a folder on
+    // Folders open in place: a sub-folder drills in (this browser's memory); a folder on
     // the tab opens into the space it kept — in edit mode, as its saved default (undoable).
     const chain = locate(d, id)?.folderChain ?? [];
     const nested = chain.length > 0;
-    // A sub-folder this browser is drilled into is open already, as an inset box (M5 §7): its menu
-    // closes it (back up to the level above), never Open (Ruling 14).
+    // A sub-folder this browser is drilled into is open already, as an inset box: its menu
+    // closes it (back up to the level above), never Open.
     const drilledBy = nested
       ? Object.entries(get(folderNavFor(d.id)).drill).find(([, path]) => path.includes(id))
       : undefined;

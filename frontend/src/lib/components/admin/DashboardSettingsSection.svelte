@@ -1,7 +1,7 @@
 <script lang="ts">
   /**
    * The dashboard's own settings (overrides of the global ones), the dashboard dialog's Settings
-   * section (walkthrough §4C). They save to the server, not the draft: the dialog calls `save()`
+   * section. They save to the server, not the draft: the dialog calls `save()`
    * first on its Save, and only a changed setting is sent.
    */
   import { onMount } from 'svelte';
@@ -141,7 +141,7 @@
       // Revision-checked against the store's revision (not the one fetched
       // above), so a stale page gets a 409 instead of being fast-forwarded.
       // The store raises the conflict banner / migration page itself, and
-      // refreshes the status-check base after a save (M4 Task 7).
+      // refreshes the status-check base after a save.
       await saveDashboardSettingsChanges(dashboardId, changes);
       // Saved: this is the new baseline, so a retried dialog Save never resends it.
       const next = { ...original };

@@ -11,7 +11,7 @@ import (
 )
 
 // Images inside an uploaded backup archive get the same treatment as a
-// normal upload of their kind (M6 §12 fix round 1):
+// normal upload of their kind:
 //   - an icon PNG is decoded, resized to fit 128×128 and re-encoded, exactly
 //     as handleUploadIcon does;
 //   - any other raster image (an icon .jpg/.gif/.webp, every background) has
@@ -108,7 +108,7 @@ func formatMatchesExt(format, ext string) bool {
 // checkImageHeader reads only the image header (image.DecodeConfig) and
 // refuses a decompression bomb — a small file claiming huge dimensions —
 // before anything is fully decoded. Used by the archive path and by the
-// normal icon and background uploads (§3 security pass), so both apply the
+// normal icon and background uploads, so both apply the
 // same caps. It returns the decoded format name ("png", "jpeg", ...).
 func checkImageHeader(data []byte) (string, error) {
 	return checkImageHeaderMax(data, maxArchiveImageSide, maxArchiveImagePixels)

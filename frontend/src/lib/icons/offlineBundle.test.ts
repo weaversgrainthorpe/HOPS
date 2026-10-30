@@ -1,5 +1,5 @@
 // The offline icon bundle must keep icons that stored content uses even when no
-// frontend source file mentions them (final review I1: a regeneration dropped
+// frontend source file mentions them (a regeneration dropped
 // mdi:home because the only reference had been a code comment).
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';

@@ -1,17 +1,17 @@
 /**
- * Resizing (M3 §5.6, plan Task 9): the one resolver and commit shared by the resize handles
+ * Resizing : the one resolver and commit shared by the resize handles
  * (a pointer drag through the drag engine) and the keyboard (Shift+Arrow on the selection).
  *
  * - Only open folders on a tab resize. A tile's span is set by its Size in the tile dialog
  *   (Small 1 x 1, Medium 2 x 2, Large 4 x 4); a minimised folder renders as a tile of its size,
- *   so it has no handles (Ruling 13) — it is opened first; items inside a folder take its contents
- *   size and order (M5).
+ *   so it has no handles — it is opened first; items inside a folder take its contents
+ *   size and order.
  * - The phone (stacked) layout has no resizing.
- * - A resize that would overlap pushes the neighbours aside (Ruling 11); the push is part of the
+ * - A resize that would overlap pushes the neighbours aside; the push is part of the
  *   target and trial-run here, so what the preview shows is exactly what the commit stores.
- * - Handles snap to whole cells (free resize is gone with free layout, M5). An open folder is never
+ * - Handles snap to whole cells (free resize is gone with free layout). An open folder is never
  *   smaller than its bar, padding, one item and the page bar (treeOps.resizedPlacement clamps to
- *   geometry.minOpenFolderCells); it pages its contents instead of growing to fit them (M5).
+ *   geometry.minOpenFolderCells); it pages its contents instead of growing to fit them.
  */
 import { get } from 'svelte/store';
 import type { Placement } from '$lib/types/layout';
@@ -31,7 +31,7 @@ export interface ResizeTarget {
   to: ContainerRef;
   /** The node's placement after the resize (clamped exactly as the commit will). */
   at: Placement;
-  /** Neighbours pushed aside (Ruling 11). */
+  /** Neighbours pushed aside. */
   push: Map<string, Placement>;
   /** Set when the asked-for size was clamped (the folder's minimum, the tab's width): shown, never silent. */
   limit?: string;

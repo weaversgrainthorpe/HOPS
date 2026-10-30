@@ -12,7 +12,7 @@ import (
 	"testing"
 )
 
-// Pentest 2026-10-27 M1: an imported config's assets get the same checks as
+// An imported config's assets get the same checks as
 // an upload of their kind; anything refused is listed with its reason and
 // never written.
 func TestRestoreAssetsAppliesTheUploadChecks(t *testing.T) {
@@ -89,7 +89,7 @@ func TestRestoreAssetsAppliesTheUploadChecks(t *testing.T) {
 }
 
 // Files already on disk that aren't images are never served (e.g. planted
-// by an import before the M1 fix).
+// by an import before this check existed).
 func TestAssetRoutesServeOnlyImages(t *testing.T) {
 	dir := t.TempDir()
 	_, h, _ := setupTestRouterInDir(t, dir)
@@ -112,7 +112,7 @@ func TestAssetRoutesServeOnlyImages(t *testing.T) {
 	}
 }
 
-// Pentest 2026-10-27 L2: a raster icon over the icon cap is refused with a
+// A raster icon over the icon cap is refused with a
 // clear 400 from its header alone, before any decode.
 func TestIconUploadOverCapRefusedBeforeDecode(t *testing.T) {
 	dir := t.TempDir()

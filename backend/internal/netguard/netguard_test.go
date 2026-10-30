@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-// §1 item 5: every spelling of the metadata address normalises to it and is
+// Every spelling of the metadata address normalises to it and is
 // refused; private and loopback stay allowed.
 func TestParseIPNormalisesEdgeForms(t *testing.T) {
 	cases := map[string]string{
@@ -81,7 +81,7 @@ func TestBlockedPolicy(t *testing.T) {
 	}
 }
 
-// §1 item 3: DNS rebinding. The resolver answers "safe" first and the
+// DNS rebinding. The resolver answers "safe" first and the
 // metadata address next; the second dial is refused because the address
 // checked is the one dialled. A mixed answer (one safe, one blocked) is
 // refused outright rather than round-robined.

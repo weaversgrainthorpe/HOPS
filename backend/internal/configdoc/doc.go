@@ -12,7 +12,7 @@ const (
 	// SchemaVersion is the document schema version produced by this package.
 	SchemaVersion = 3
 	// RootColumns is the column count of every tab root: every tab is a
-	// 24-column grid (spec §9; layout.go).
+	// 24-column grid (layout.go).
 	RootColumns = 24
 )
 

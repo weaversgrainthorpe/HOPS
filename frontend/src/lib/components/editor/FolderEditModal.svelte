@@ -11,7 +11,7 @@
     | 'tabPosition' | 'size' | 'contentSize'
   > & {
     background?: Background | null;
-    /** Status checks (M4 §4b): true/false = set here, null = inherit (key removed), absent = unchanged. */
+    /** Status checks: true/false = set here, null = inherit (key removed), absent = unchanged. */
     statusChecksEnabled?: boolean | null;
   };
 </script>
@@ -52,7 +52,7 @@
     checkShape?: (shape: string, tabPosition: TabPosition) => string | null;
     /**
      * The dashboard the folder is on: its "Animated folder backgrounds" decides what the background
-     * picker offers (M6 §8.2).
+     * picker offers.
      */
     dashboardId?: string;
     /** Opens the one Dashboard dialog at its Settings (the picker's folder-animations note). */
@@ -68,10 +68,10 @@
   // svelte-ignore state_referenced_locally
   const folderAnimations = animatedFolderBackgroundsFor(dashboardId ?? '');
   // A picked background is staged here and saved with the dialog (one undo step);
-  // Cancel discards it (Ruling 11(5)).
+  // Cancel discards it.
   let stagedBackground = $state<{ value: Background | undefined } | null>(null);
   const shownBackground = $derived(stagedBackground ? stagedBackground.value : folder.background);
-  // M6 §7.5: a colour background stored before folders took their colour from this dialog. It keeps
+  // A colour background stored before folders took their colour from this dialog. It keeps
   // rendering and is shown here with a one-click "Use as folder colour" — never dropped silently.
   const legacyColour = $derived(isLegacyFolderColour(shownBackground));
   const legacyColourUse = $derived(legacyColour ? folderColourFromBackground(shownBackground) : null);
@@ -97,7 +97,7 @@
   let display = $state<'expanded' | 'collapsed'>(folder.display === 'collapsed' ? 'collapsed' : 'expanded');
   // svelte-ignore state_referenced_locally
   let showTitle = $state(folder.showTitle !== false);
-  // M5: the size of every item inside (tiles and sub-folders) and of its minimised tile on a tab.
+  // The size of every item inside (tiles and sub-folders) and of its minimised tile on a tab.
   // Staged here; saved with the dialog as one undo step.
   // svelte-ignore state_referenced_locally
   let contentSize = $state<ItemSize>(sizeOf(folder.contentSize));
@@ -106,12 +106,12 @@
   const SIZES: [ItemSize, string][] = [['small', 'Small'], ['medium', 'Medium'], ['large', 'Large']];
   // svelte-ignore state_referenced_locally
   // An unknown stored look (e.g. the retired folder-tab) is kept, shown as unknown and refused on Save
-  // with the reason (editFolder, M6 §3a.8) — never silently swapped for another look.
+  // with the reason (editFolder) — never silently swapped for another look.
   let shape = $state<string>(folder.shape ?? 'rounded');
   // svelte-ignore state_referenced_locally
   let tabPosition = $state<TabPosition>(folder.tabPosition === 'centre' || folder.tabPosition === 'right' ? folder.tabPosition : 'left');
   const TAB_POSITION_LABELS: Record<TabPosition, string> = { left: 'Left', centre: 'Centre', right: 'Right' };
-  /** The look's colours as drawn (M6 §3a.7): an explicit text colour that fails is warned about here. */
+  /** The look's colours as drawn: an explicit text colour that fails is warned about here. */
   const colours = $derived(deriveFolderColours(color, textColor));
   /** A look refused here (shown under the picker; Save is refused while it stands). */
   const shapeError = $derived(checkShape ? checkShape(shape, tabPosition) : null);
@@ -128,7 +128,7 @@
   const contentSizeError = $derived(checkContentSize ? checkContentSize(contentSize) : null);
   let nameEl = $state<HTMLInputElement | null>(null);
 
-  // A merge creates "New folder" and opens this dialog with the name selected for editing (Task 8).
+  // A merge creates "New folder" and opens this dialog with the name selected for editing.
   $effect(() => {
     if (nameEl) {
       nameEl.focus();
@@ -227,14 +227,14 @@
       </button>
     </div>
 
-    <!-- M6 §7.1: the look sits right under the icon, before the colour and the background. -->
+    <!-- The look sits right under the icon, before the colour and the background. -->
     <section class="dialog-section" aria-labelledby="folder-look-heading">
       <h3 id="folder-look-heading" class="part-title">Look</h3>
       {#if !isFolderShape(shape)}
         <p class="problem" role="status">Unknown look ({shape}) — it draws as a rounded box. Pick one below.</p>
       {/if}
-      <!-- Live previews of every look in this folder's colour and tab position, each on a light card
-           (§7.2). The previews are decoration; each radio is named by its label. -->
+      <!-- Live previews of every look in this folder's colour and tab position, each on a light card.
+           The previews are decoration; each radio is named by its label. -->
       <div class="shape-picker" role="radiogroup" aria-labelledby="folder-look-heading">
         {#each FOLDER_SHAPES as s (s)}
           <label class="shape-choice" class:chosen={shape === s}>
@@ -323,7 +323,7 @@
       </label>
     </section>
 
-    <!-- §7.4: each part its own section, so the status-check text never sits against the Background button. -->
+    <!-- Each part its own section, so the status-check text never sits against the Background button. -->
     <section class="dialog-section status-section">
       <StatusCheckSetting level="folder" bind:value={statusSetting} context={statusContext} />
     </section>
@@ -452,7 +452,7 @@
   small {
     color: var(--text-secondary);
   }
-  /* §7.3: text in this dialog reaches 4.5:1 on every preset, light and dark (theme tokens; the plain error and accent colours don't). */
+  /* Text in this dialog reaches 4.5:1 on every preset, light and dark (theme tokens; the plain error and accent colours don't). */
   .problem {
     margin: 0;
     color: var(--color-error-text);
@@ -554,7 +554,7 @@
     color: var(--accent-text);
     font-size: 0.875rem;
   }
-  /* §7.4: each part of the dialog is its own section, with a heading and room around it. */
+  /* Each part of the dialog is its own section, with a heading and room around it. */
   .dialog-section {
     margin: 1.5rem 0 0;
     padding-top: 1.25rem;
@@ -634,7 +634,7 @@
     align-items: center;
     gap: 0.5rem;
   }
-  /* Placeholders readable (>= 4.5:1 on every preset, M6 §7.3); the browser default grey is 3.2–4.2:1. */
+  /* Placeholders readable (>= 4.5:1 on every preset); the browser default grey is 3.2–4.2:1. */
   input::placeholder {
     color: var(--text-secondary);
     opacity: 1;

@@ -1,4 +1,4 @@
-// M5 spec §2: on a tab an item shows its own size; inside a folder it shows the folder's contents size.
+// On a tab an item shows its own size; inside a folder it shows the folder's contents size.
 // Its own size is never changed by being in a folder.
 import { describe, it, expect } from 'vitest';
 import { displaySize, tileSizeOf } from './editorActions';

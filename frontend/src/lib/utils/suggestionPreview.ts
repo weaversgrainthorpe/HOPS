@@ -1,4 +1,4 @@
-// Pictures for the icon-name field's type-ahead suggestions (M6 §7.7, walkthrough fix).
+// Pictures for the icon-name field's type-ahead suggestions.
 //
 // Most suggestions come from the full mdi / simple-icons NAME list, whose pictures are not in
 // memory. Rather than show an empty box, the visible suggestions are fetched — but only once

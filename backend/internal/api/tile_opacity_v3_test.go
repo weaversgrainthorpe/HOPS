@@ -6,7 +6,7 @@ import (
 	"github.com/weaversgrainthorpe/HOPS/internal/configdoc"
 )
 
-// M4 walkthrough §2: a tile's opacity, textOpacity and iconOpacity survive a dashboard
+// A tile's opacity, textOpacity and iconOpacity survive a dashboard
 // save, export (JSON and YAML) and import unchanged; out-of-range values are kept (the
 // renderer clamps them) and never make a document be refused.
 func TestTileOpacityFields_SaveExportImportRoundTrip(t *testing.T) {

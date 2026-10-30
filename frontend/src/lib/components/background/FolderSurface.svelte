@@ -1,5 +1,5 @@
 <script lang="ts">
-  // A folder's SURFACE (Milestone 4, Task 4): the colour look and, when the
+  // A folder's SURFACE: the colour look and, when the
   // folder has a background of its own, that background drawn in the folder's
   // box. It sits behind the folder's content (z-index -1 inside the folder's
   // stacking context), so the folder's colour/opacity and the picture's

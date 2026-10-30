@@ -11,7 +11,7 @@ import (
 	"github.com/weaversgrainthorpe/HOPS/internal/settings"
 )
 
-// uploadKind names one of the three size-limited uploads (M5 §10).
+// uploadKind names one of the three size-limited uploads.
 type uploadKind struct {
 	key     string // the settings key holding the limit in bytes
 	largest string // completes "the largest … is N MB"

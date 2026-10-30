@@ -359,7 +359,7 @@ func TestBoolSetting(t *testing.T) {
 
 func TestEnumSetting(t *testing.T) {
 	// No current setting is an enum (layout.default_mode was the only one,
-	// removed in M5); the type is still checked exactly.
+	// removed); the type is still checked exactly.
 	def := Definition{Key: "test.enum", Type: "enum", Default: "a", Enum: []string{"a", "b"}}
 	for _, bad := range []string{"a ", "c", "", "A"} {
 		if err := validate(def, bad); err == nil {
@@ -375,7 +375,7 @@ func TestEnumSetting(t *testing.T) {
 	}
 }
 
-// Ruling 4: free layout is gone, so is the layout.default_mode setting.
+// Free layout is gone, so is the layout.default_mode setting.
 func TestLayoutDefaultModeRemoved(t *testing.T) {
 	s := newTestService(t)
 	if _, ok := s.Definition("layout.default_mode"); ok {
@@ -383,7 +383,7 @@ func TestLayoutDefaultModeRemoved(t *testing.T) {
 	}
 }
 
-// --- upload limits (M5 §10) ---
+// --- upload limits ---
 
 func TestUploadLimitBoundsAndDefaults(t *testing.T) {
 	const mb = 1 << 20
@@ -488,7 +488,7 @@ func TestClampedValueStaysVisibleUntilSaved(t *testing.T) {
 	}
 }
 
-// --- Ruling 21: a setting still at its previous default moves to the new default ---
+// --- A setting still at its previous default moves to the new default ---
 
 // v221Rows is the upload part of a v2.2.1 app_settings table left at its
 // defaults (v2.2.1 seeded every key), plus a few other v2.2.1 rows.
@@ -616,7 +616,7 @@ func equalMoves(a, b []DefaultMove) bool {
 	return true
 }
 
-// M6 §7.13 / Ruling 5: "Animations" is a global On / Off / Always setting, On
+// "Animations" is a global On / Off / Always setting, On
 // by default (Always plays even when the device asks for reduced motion). It is
 // GUI-set (Settings → Global settings) and stored like every other setting.
 func TestAnimationsSettingIsOnOffAlwaysDefaultOn(t *testing.T) {
@@ -653,7 +653,7 @@ func TestAnimationsSettingIsOnOffAlwaysDefaultOn(t *testing.T) {
 	}
 }
 
-// Ruling 5: the old boolean value is migrated on start — true → on, false → off —
+// The old boolean value is migrated on start — true → on, false → off —
 // so a saved choice is kept, and the stored row (not just the cache) is rewritten.
 func TestAnimationsOldBooleanIsMigrated(t *testing.T) {
 	for old, want := range map[string]string{"true": "on", "false": "off", "always": "always", "off": "off"} {

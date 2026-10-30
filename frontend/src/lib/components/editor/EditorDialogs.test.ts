@@ -45,7 +45,7 @@ describe('FolderEditModal', () => {
     expect(name.value).toBe('F1');
     await fireEvent.input(name, { target: { value: 'Media' } });
     await fireEvent.click(screen.getByRole('radio', { name: 'Collapsed' }));
-    expect(screen.queryByLabelText('Layout')).toBeNull(); // M5: folders always flow; no layout
+    expect(screen.queryByLabelText('Layout')).toBeNull(); // folders always flow; no layout
     await fireEvent.click(screen.getByLabelText('Show title bar'));
     await fireEvent.click(screen.getByRole('radio', { name: 'Folder with paper' }));
     await fireEvent.click(screen.getByRole('button', { name: /^Save/ }));
@@ -84,7 +84,7 @@ describe('EditorDialogs (the dialogs edit the draft only)', () => {
     expect(get(editorDialog)).toBeNull();
   });
 
-  it('folder dialog "Contents size" and "Size when minimised" (M5): staged until Save, then ONE undo step', async () => {
+  it('folder dialog "Contents size" and "Size when minimised": staged until Save, then ONE undo step', async () => {
     await show({ kind: 'folder', id: 'f1' });
     const contents = screen.getByLabelText('Contents size') as HTMLSelectElement;
     const minimised = screen.getByLabelText('Size when minimised') as HTMLSelectElement;
@@ -104,11 +104,11 @@ describe('EditorDialogs (the dialogs edit the draft only)', () => {
     expect(draft()).toEqual(before);
   });
 
-  // Fix round 1 (§3.5): a larger contents size needs a larger smallest box. A box that can no longer fit
+  // a larger contents size needs a larger smallest box. A box that can no longer fit
   // one item grows to the new minimum, pushing its neighbours, in the same undo step as the Save.
   it('raising Contents size grows a box too small for one item (neighbours pushed) — ONE undo step with the Save', async () => {
     const d = home();
-    // f1 at its Medium minimum (8 x 4 at the M6 §13 reference cell); Large contents need 6 high.
+    // f1 at its Medium minimum (8 x 4 at the reference cell); Large contents need 6 high.
     d.tabs[0].root.children.find((n) => n.id === 'f1')!.placement = p(0, 2, 8, 4);
     d.tabs[0].root.children.push(tile('under', p(0, 6)));
     resetEditor();
@@ -121,8 +121,8 @@ describe('EditorDialogs (the dialogs edit the draft only)', () => {
     await fireEvent.click(screen.getByRole('button', { name: /^Save/ }));
     expect(get(editorDialog)).toBeNull();
     const f = nodeIn(draft(), 'f1') as FolderNode;
-    expect(f).toMatchObject({ contentSize: 'large', placement: p(0, 2, 8, 6) }); // Large minimum is 5 x 6 (M6 §13)
-    const u = nodeIn(draft(), 'under')!.placement!; // pushed aside (M3 rules), clear of the grown box
+    expect(f).toMatchObject({ contentSize: 'large', placement: p(0, 2, 8, 6) }); // Large minimum is 5 x 6
+    const u = nodeIn(draft(), 'under')!.placement!; // pushed aside, clear of the grown box
     expect(u).not.toEqual(p(0, 6));
     expect(u.x >= 8 || u.y >= 8 || u.y + u.h <= 2).toBe(true);
     expect(get(session)!.undo).toHaveLength(1);
@@ -191,7 +191,7 @@ describe('EditorDialogs (the dialogs edit the draft only)', () => {
     noRequestsButSettingsRead(fetchSpy);
   });
 
-  it('tile dialog Size (spec §8/§9): Large saves a 4 x 4 span with neighbours pushed, as ONE undo step', async () => {
+  it('tile dialog Size: Large saves a 4 x 4 span with neighbours pushed, as ONE undo step', async () => {
     await show({ kind: 'tile', id: 'a' });
     const sel = screen.getByLabelText(/^Size/) as HTMLSelectElement;
     expect(sel.value).toBe('medium');
@@ -336,7 +336,7 @@ describe('EditorDialogs (the dialogs edit the draft only)', () => {
   });
 });
 
-describe('FolderEditModal background (M4 Task 5, Ruling 11(5))', () => {
+describe('FolderEditModal background', () => {
   beforeEach(() => {
     fetchSpy.mockImplementation(() =>
       Promise.resolve(new Response(JSON.stringify({ categories: [], images: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
@@ -428,7 +428,7 @@ describe('FolderEditModal background (M4 Task 5, Ruling 11(5))', () => {
     expect(f.background).toMatchObject({ type: 'image', opacity: 0.5 });
   });
 
-  // M6 §7.5: a colour background stored before §7.5 is never dropped silently; one click moves it
+  // A colour background stored before folders took their colour from this dialog is never dropped silently; one click moves it
   // to the folder colour, saved with the dialog as ONE undo step.
   describe('a stored colour background', () => {
     async function withColourBackground(bg: FolderNode['background']) {

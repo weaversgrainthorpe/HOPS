@@ -161,7 +161,7 @@ func run() bool {
 	}
 
 	// After a restore: install the uploaded backup's own images and bring
-	// back from the attic what the restored data uses (M6 §12); anything
+	// back from the attic what the restored data uses; anything
 	// still missing is a visible notice. Without a restore this only clears
 	// the restore's marker. Before the database is opened (read-only here).
 	backupManager.AfterRestore(res.Outcome == database.OutcomeApplied || res.Outcome == database.OutcomeRecoveredApplied)

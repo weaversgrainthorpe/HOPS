@@ -9,7 +9,7 @@ import (
 	"github.com/weaversgrainthorpe/HOPS/internal/configdoc"
 )
 
-// unplacedDash is an M5 dashboard whose tab-level tile has no placement: the
+// unplacedDash is a current-form dashboard whose tab-level tile has no placement: the
 // reviewer's I3 probe (folder contents are unplaced by design; a tab-level
 // node never is).
 const unplacedDash = `{"id": "pz", "name": "Probe", "path": "/pz", "revision": 1,
@@ -20,7 +20,7 @@ const unplacedDash = `{"id": "pz", "name": "Probe", "path": "/pz", "revision": 1
 		 "placement": {"x": 0, "y": 0, "w": 4, "h": 2}, "content": {"children": []}},
 		{"id": "pz-a", "kind": "tile", "name": "A", "url": "http://a"}]}}]}`
 
-// Ruling 24: importing it is a 400 naming the node, and nothing is written.
+// Importing it is a 400 naming the node, and nothing is written.
 func TestImport_V3NodeWithoutPlacementIs400(t *testing.T) {
 	router, db := setupTestRouter(t)
 	c := newClient(t, router)
@@ -46,7 +46,7 @@ func TestImport_V3NodeWithoutPlacementIs400(t *testing.T) {
 	}
 }
 
-// Ruling 24: a stored document already holding such a dashboard (written
+// A stored document already holding such a dashboard (written
 // before the check existed) still serves GET /api/config: every dashboard is
 // served as stored, the unplaced tile included (the renderer shows it as a
 // visible placeholder, never silently drops it).

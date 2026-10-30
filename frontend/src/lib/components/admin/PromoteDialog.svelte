@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Discovery "Promote to tiles": where the new tiles land (spec §11). Pick a
+  // Discovery "Promote to tiles": where the new tiles land. Pick a
   // tab (one folder per category is created there, an existing top-level
   // folder with that category's name is reused) or any existing folder at
   // any depth (every tile goes into it), from the same tree as Move/Copy; or

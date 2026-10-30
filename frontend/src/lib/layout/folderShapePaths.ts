@@ -1,13 +1,13 @@
 /**
- * The static SVG geometry of each folder shape (M6 §2, §3.7, §3a.2, §3a.6, §3a.9, §3a.10). One pure
+ * The static SVG geometry of each folder shape. One pure
  * function, `shapeParts`, gives FolderShape.svelte everything it draws for a box of a given size:
  *  - the silhouette (back panel + tab as ONE path: the outline, the focus ring and Simple tab);
  *  - the back panel, the front panel (the body), and the paper that peeks out on the tab side;
- *  - the front panel's rectangle, which a background picture fills, clipped to the shape (§3a.10).
- * Only path data built from numbers here — never user markup (§3.8). No filters; Paper is the one look
+ *  - the front panel's rectangle, which a background picture fills, clipped to the shape.
+ * Only path data built from numbers here — never user markup. No filters; Paper is the one look
  * that uses the one gradient (Tenet 4).
  *
- * Shapes are decoration on a rectangle (§2): content lays out in shapeInset (geometry.ts), which sits
+ * Shapes are decoration on a rectangle: content lays out in shapeInset (geometry.ts), which sits
  * below the tab and inside the front panel (for the open flap, inside its upright part).
  */
 import type { FolderShape } from '$lib/types/layout';
@@ -15,11 +15,11 @@ import { FLAP_TILT_PX, FOLDER_CHROME, folderTabRect, shapeOf, type InsetRect } f
 
 export type ShapeState = 'minimised' | 'open' | 'nested';
 
-/** A minimised folder's name is hidden below this font size (§3a.6); its accessible name stays. */
+/** A minimised folder's name is hidden below this font size; its accessible name stays. */
 export const MINI_NAME_FLOOR_PX = 12;
 /**
  * The smallest minimised tile that shows its name on the front: the mini tab, a 12 px name, the icons
- * and padding. Below it the tile is the Small silhouette with its icons (§3a.6).
+ * and padding. Below it the tile is the Small silhouette with its icons.
  */
 export const MINI_NAME_MIN_TILE_PX = 84;
 
@@ -108,7 +108,7 @@ function silhouettePath(W: number, H: number, T: number, tab: InsetRect, pos: st
   return p.join(' ');
 }
 
-/** The open flap: full width at its top edge, FLAP_TILT in at the bottom (it tilts forward, §3a.9). */
+/** The open flap: full width at its top edge, FLAP_TILT in at the bottom (it tilts forward). */
 function flapPath(W: number, H: number, top: number, tilt: number, r: number, i: number): string {
   const x0 = i, x1 = W - i, y1 = H - i;
   return [

@@ -21,7 +21,7 @@ import {
   FOLDER_TOGGLE_MS, DRILL_MS, RECEDE_SCALE, PAGE_MS, GLIDE_MS, DELETE_MS, POP_IN_MS, SAVED_MS, PULSE_MS, MAX_ANIMATED
 } from './flourishes';
 
-// M6 §9: visual flourishes on the drop animations' engine. Decoration only: the change is made first,
+// Visual flourishes on the drop animations' engine. Decoration only: the change is made first,
 // the flourish is transform/opacity on what is already drawn. On / Off / Always + reduced motion gate
 // them all; the shared cancel stops them all.
 

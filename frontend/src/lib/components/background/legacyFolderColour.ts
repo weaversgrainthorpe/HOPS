@@ -1,7 +1,7 @@
 import type { Background } from '$lib/types';
 
 /**
- * A folder background of type `color` (M6 §7.5). Folders take their colour from the Edit Folder
+ * A folder background of type `color`. Folders take their colour from the Edit Folder
  * dialog now, so the folder background picker offers pictures only — but a stored colour background
  * still renders and is never dropped silently: the dialogs show it and offer "Use as folder colour".
  */

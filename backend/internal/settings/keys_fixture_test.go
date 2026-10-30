@@ -11,7 +11,7 @@ import (
 var updateKeysFixture = flag.Bool("update", false, "rewrite testdata/setting_keys.json from Definitions")
 
 // keysFixture is testdata/setting_keys.json: every key in Definitions, in order. The frontend's
-// global settings grouping table (M6 §10) is checked against it, so a new setting can never be
+// global settings grouping table is checked against it, so a new setting can never be
 // left out of the table unnoticed. See testdata/setting_keys.README.md.
 type keysFixture struct {
 	Keys []string `json:"keys"`

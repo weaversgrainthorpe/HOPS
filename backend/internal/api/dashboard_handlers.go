@@ -50,7 +50,7 @@ func conflictError(dashboardID string, current int) *apiError {
 
 // layoutVersionError is the 409 layout_version_mismatch for a
 // placement-carrying write whose layoutVersion is not
-// configdoc.LayoutVersion, or nil when it is (M5 spec §2a). A page loaded
+// configdoc.LayoutVersion, or nil when it is. A page loaded
 // before HOPS was updated runs older code that holds the old layout form;
 // storing it would put a layout the server no longer reads behind a "saved"
 // toast. The request is refused before the document is read, so nothing
@@ -240,7 +240,7 @@ type docAfterFn func(tx *sql.Tx) error
 // and the dashboards, nothing else from the stored document.
 //
 // Each dashboard also carries a read-only `display` block computed from its
-// effective settings (Ruling 9): what every viewer, signed in or not, needs to
+// effective settings: what every viewer, signed in or not, needs to
 // render it (animatedFolderBackgrounds, and the global animations switch). It is never stored: a write
 // drops it (transientDashboardKeys).
 func (r *Router) publicDoc(stored configdoc.Obj) map[string]interface{} {
@@ -259,8 +259,8 @@ func (r *Router) publicDoc(stored configdoc.Obj) map[string]interface{} {
 		eff := configdoc.Resolve(r.settings, dm)
 		out["display"] = map[string]interface{}{
 			"animatedFolderBackgrounds": eff.AnimatedFolderBackgrounds,
-			// The global "Animations" setting (M6 §7.13); no per-dashboard override.
-			"animations": r.settings.Get(settings.KeyDisplayAnimations), // "on" | "off" | "always" (Ruling 5)
+			// The global "Animations" setting; no per-dashboard override.
+			"animations": r.settings.Get(settings.KeyDisplayAnimations), // "on" | "off" | "always"
 		}
 		dashes = append(dashes, out)
 	}

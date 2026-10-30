@@ -20,7 +20,7 @@ import (
 	"time"
 )
 
-// M6 §12 (Option B): deleted uploaded images move to the attic; the attic is
+// Deleted uploaded images move to the attic; the attic is
 // swept only of what no backup, staged restore or the live DB refers to; a
 // restore brings attic images back; downloads are archives with the images;
 // uploads are validated strictly. Synthetic data only.
@@ -1007,7 +1007,7 @@ func TestUploadedImagesGoThroughTheUploadProcessing(t *testing.T) {
 	}
 }
 
-// Fix round 2 (I1): a lost or damaged attic index is never read as "empty":
+// A lost or damaged attic index is never read as "empty":
 // it is rebuilt from the backups' records; versions it can't match to a name
 // are kept, and that is a visible notice.
 func TestLostAtticIndexIsRebuiltAndNothingIsLost(t *testing.T) {
@@ -1065,7 +1065,7 @@ func TestLostAtticIndexIsRebuiltAndNothingIsLost(t *testing.T) {
 	}
 }
 
-// Fix round 2 (I2): an uploaded backup's staged images are the only copy;
+// An uploaded backup's staged images are the only copy;
 // deleting the backup moves them into the attic, so a restore staged before
 // the delete still gets them.
 func TestStagedImagesSurviveTheirBackup(t *testing.T) {
@@ -1102,8 +1102,8 @@ func TestStagedImagesSurviveTheirBackup(t *testing.T) {
 	}
 }
 
-// M1: a name the record couldn't pin down, with a file in place, is reported
-// as ambiguous, never kept silently. M3: the attic's only version isn't
+// A name the record couldn't pin down, with a file in place, is reported
+// as ambiguous, never kept silently. The attic's only version isn't
 // recorded as fact.
 func TestUnresolvedNamesAreReportedAsAmbiguous(t *testing.T) {
 	bm, dbPath := setupBackupTest(t)
@@ -1159,7 +1159,7 @@ func TestRecordHashesFresh(t *testing.T) {
 	}
 }
 
-// Fix round 3 (1): hashes are cached again, keyed on the file's full
+// Hashes are cached again, keyed on the file's full
 // fingerprint (device, inode, size, mtime and ctime in ns); a change with the
 // same size and a reset mtime still re-hashes (ctime moves).
 func TestHashCacheDetectsSameSizeChangeWithResetMtime(t *testing.T) {
@@ -1197,7 +1197,7 @@ func TestHashCacheDetectsSameSizeChangeWithResetMtime(t *testing.T) {
 	}
 }
 
-// Fix round 3 (2): an unknown attic version is dropped automatically only
+// An unknown attic version is dropped automatically only
 // when nothing could still need it: every backup has a record, no staged
 // restore names it, and every image the live data uses is in place.
 func TestUnknownVersionsClearOnlyWhenSafe(t *testing.T) {
@@ -1279,7 +1279,7 @@ func TestCleanUpUnknownImagesPreviewThenConfirm(t *testing.T) {
 	}
 }
 
-// Fix round 3 (3): restoring a backup without a record after an index
+// Restoring a backup without a record after an index
 // rebuild: an unknown version of that kind may be the one it used, so the
 // name is ambiguous, not silently the live version.
 func TestRecordlessRestoreAfterIndexRebuildIsAmbiguous(t *testing.T) {

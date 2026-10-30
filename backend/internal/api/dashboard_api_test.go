@@ -168,7 +168,7 @@ func TestPutDashboard_StaleRevisionConflicts(t *testing.T) {
 	if code != 409 || resp["error"] != "conflict" || resp["dashboardId"] != "d1" || resp["currentRevision"] != float64(2) {
 		t.Fatalf("%d %v", code, resp)
 	}
-	// Absent and non-numeric revisions conflict too (Ruling 12).
+	// Absent and non-numeric revisions conflict too.
 	for _, rev := range []interface{}{nil, "2"} {
 		if code, resp = v3Put(c, "d1", second, rev); code != 409 {
 			t.Fatalf("revision %v: want 409, got %d %v", rev, code, resp)
@@ -191,7 +191,7 @@ func TestDashboardSettings_RoundTripAndValidation(t *testing.T) {
 	if code != 200 || len(ov) != 5 || len(eff) != 5 || resp["revision"] != float64(1) {
 		t.Fatalf("%d %v", code, resp)
 	}
-	if _, has := eff["defaultLayout"]; has { // Ruling 4: free layout and its setting are gone
+	if _, has := eff["defaultLayout"]; has { // free layout and its setting are gone
 		t.Fatalf("effective still serves defaultLayout: %v", eff)
 	}
 	if _, ok := eff["statusCheckIntervalMinutes"].(float64); !ok {

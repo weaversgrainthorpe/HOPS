@@ -1,6 +1,6 @@
 <script lang="ts">
   /**
-   * The dashboard header's form (the dashboard dialog's Header section, walkthrough §4C).
+   * The dashboard header's form (the dashboard dialog's Header section).
    * The parent reads the result with `value()` on Save.
    */
   import Icon from '@iconify/svelte';

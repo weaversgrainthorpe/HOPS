@@ -237,7 +237,7 @@ func NewRouter(db *sql.DB, authService *auth.Service, cfg *config.Config, settin
 		}
 	})
 
-	// The attic sweep reads what the running app references (M6 §12).
+	// The attic sweep reads what the running app references.
 	backupManager.SetLiveDB(db)
 
 	r := &Router{
@@ -283,7 +283,7 @@ func NewRouter(db *sql.DB, authService *auth.Service, cfg *config.Config, settin
 	}
 
 	// Retention also runs once a day, so keep_days takes effect even when no
-	// new backup is taken (M6 §11). A failure is recorded as a notice.
+	// new backup is taken. A failure is recorded as a notice.
 	go r.dailyBackupCleanup(24*time.Hour, r.cleanupStop)
 
 	r.setupRoutes()
@@ -483,7 +483,7 @@ func (r *Router) serveBackgrounds(w http.ResponseWriter, req *http.Request) {
 	backgroundsDir := filepath.Join(r.config.DataDir, "backgrounds")
 	filePath := filepath.Join(backgroundsDir, filename)
 	// Only image files are served: anything else on disk (e.g. planted by an
-	// older import, pentest 2026-10-27 M1) is never served as text/html.
+	// older import) is never served as text/html.
 	if !database.AllowedImageExt("backgrounds", strings.ToLower(filepath.Ext(filename))) {
 		http.NotFound(w, req)
 		return
@@ -515,7 +515,7 @@ func (r *Router) serveIcons(w http.ResponseWriter, req *http.Request) {
 	iconsDir := filepath.Join(r.config.DataDir, "icons")
 	filePath := filepath.Join(iconsDir, filename)
 	// Only image files are served: anything else on disk (e.g. planted by an
-	// older import, pentest 2026-10-27 M1) is never served as text/html.
+	// older import) is never served as text/html.
 	if !database.AllowedImageExt("icons", strings.ToLower(filepath.Ext(filename))) {
 		http.NotFound(w, req)
 		return

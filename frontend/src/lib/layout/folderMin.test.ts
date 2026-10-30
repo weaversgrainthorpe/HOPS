@@ -4,7 +4,7 @@ import { folderMinCells, largestContentSize, minOpenFolderCells } from './geomet
 import type { FolderNode } from '$lib/types/layout';
 
 // THE open-folder minimum table, shared with the Go twin (configdoc.FolderMinCells,
-// LargestContentSize, FolderMinCellsOf) — Ruling 9. Conventions:
+// LargestContentSize, FolderMinCellsOf). Conventions:
 // backend/internal/configdoc/testdata/folder_min_cases.README.md.
 describe('folder minimum (shared Go/TS cases)', () => {
   it('has cases', () => {

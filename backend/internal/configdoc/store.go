@@ -57,7 +57,7 @@ type MigrationResult struct {
 	Detail   string   // human-readable failure reason
 	Renames  []Rename // duplicate ids renamed by this start's migration
 	// SizeChanges are v2 tiles whose unknown size this start set to Medium
-	// (Ruling 3); the router shows them as a one-time notice.
+	//; the router shows them as a one-time notice.
 	SizeChanges []SizeChange
 }
 
@@ -187,7 +187,7 @@ func failed(kind, detail string) MigrationResult {
 // a Failed result is returned. backedUp reports whether backup was called
 // (and succeeded); when false the caller may take its backup asynchronously.
 //
-// v2→v3 is the only conversion (M5 spec §2a): the converter writes the
+// v2→v3 is the only conversion: the converter writes the
 // current layout form directly. A stored v3 document at any other
 // layoutVersion (a pre-release v3 build's data) is never served as if it were
 // current: the result is Failed, naming the versions, and nothing is written.

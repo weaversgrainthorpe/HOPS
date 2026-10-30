@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
 
-// "/" shows a dashboard (spec §4D): it redirects to the first one; with none it says so and
+// "/" shows a dashboard: it redirects to the first one; with none it says so and
 // offers Settings; a failed load or migration is shown as such, never as "no dashboards".
 vi.mock('$app/navigation', () => ({ goto: vi.fn(async () => {}), beforeNavigate: vi.fn(), afterNavigate: vi.fn() }));
 vi.mock('$lib/utils/api', async () => ({

@@ -22,7 +22,7 @@ describe('resizeTarget limits', () => {
     const t = resizeTarget(dash(p(0, 0, 8, 8)), 'f', 8, 2);
     expect(t.kind).toBe('resize');
     if (t.kind !== 'resize') return;
-    expect(t.at.h).toBe(4); // the Medium minimum at the M6 §13 reference cell
+    expect(t.at.h).toBe(4); // the Medium minimum at the reference cell
     expect(t.limit).toMatch(/can't be any shorter/i);
   });
   it('below the minimum width: clamped, and the limit is told', () => {

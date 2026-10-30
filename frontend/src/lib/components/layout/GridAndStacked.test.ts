@@ -33,7 +33,7 @@ async function resizeTo(w: number) {
 function tile(id: string, name: string, p: any): any {
   return { kind: 'tile', id, name, url: 'http://x.test', icon: 'mdi:home', openMode: 'newtab', size: 'medium', order: 0, placement: p };
 }
-/** A folder's child (M5: no placement). */
+/** A folder's child (no placement). */
 function kid(id: string, name: string): any {
   return { kind: 'tile', id, name, url: 'http://x.test', icon: 'mdi:home', openMode: 'newtab', size: 'medium', order: 0 };
 }
@@ -43,7 +43,7 @@ function folder(id: string, name: string, p: any, children: any[], extra: any = 
     ...(p ? { placement: p } : {}), content: { children }, ...extra
   };
 }
-/** M5: every tab is a 24-column grid. `legacy` adds the retired free-layout keys, which are ignored. */
+/** Every tab is a 24-column grid. `legacy` adds the retired free-layout keys, which are ignored. */
 function mk(children: any[], legacy = false) {
   const tab: LayoutTab = { id: 't1', name: 'Main', ...(legacy ? { layout: 'free', designWidth: 1280 } : {}), root: { columns: 24, children } } as any;
   const dash: LayoutDashboard = { id: 'd1', name: 'Home', path: '/home', revision: 1, tabs: [tab] };
@@ -60,7 +60,7 @@ beforeEach(() => {
 });
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
-describe('free layout is gone (M5)', () => {
+describe('free layout is gone', () => {
   it('a tab still carrying the retired free-layout keys renders as the 24-column grid', async () => {
     width = 1200;
     const { dash, tab } = mk([tile('a', 'Alpha', { x: 2, y: 1, w: 2, h: 2 })], true);
@@ -81,7 +81,7 @@ describe('free layout is gone (M5)', () => {
   });
 });
 
-describe('fix round 1', () => {
+describe('nested folders', () => {
   it('constructs exactly one ResizeObserver for nested folders', async () => {
     const { dash, tab } = mk([
       folder('g', 'G', { x: 0, y: 0, w: 8, h: 6 }, [kid('a', 'A')]),
@@ -138,7 +138,7 @@ describe('phone stacking', () => {
     const style = (id: string) => (container.querySelector(`[data-node-id="${id}"]`) as HTMLElement).getAttribute('style') ?? '';
     expect(style('exp')).toContain('grid-column: 1 / -1');
     expect(style('col')).not.toContain('grid-column');
-    // The open folder is the same component at full width: its page flows in order (M5).
+    // The open folder is the same component at full width: its page flows in order.
     expect(container.querySelector('[data-node-id="exp"] .container-flow')).not.toBeNull();
   });
 

@@ -570,7 +570,7 @@ func promoteInto(stored configdoc.Obj, t *promoteTarget, results []*discovery.Re
 	}
 	if t.FolderID != "" {
 		// Into the picked folder: appended to its ordered list. Folders page
-		// their contents (M5), so nothing is resized or moved.
+		// their contents, so nothing is resized or moved.
 		container, tabLevel, ae := resolveTarget(dash, tabID, t.FolderID)
 		if ae != nil || tabLevel {
 			return nil, nil, bad("Folder %q not found in that tab. Reload and try again.", t.FolderID)
@@ -654,7 +654,7 @@ func rootFolderNamed(root configdoc.Obj, name string) configdoc.Obj {
 }
 
 // addTiles appends one tile per result to a folder's content, in result
-// order. Folder contents are an ordered list with no placements (M5).
+// order. Folder contents are an ordered list with no placements.
 func addTiles(content configdoc.Obj, results []*discovery.Result) *apiError {
 	for _, res := range results {
 		tile, ae := resultToTile(res)
@@ -686,14 +686,14 @@ func newCategoryFolder(info discovery.CategoryInfo, results []*discovery.Result)
 		return nil, ae
 	}
 	// Its open box holds promoteTilesPerRow Medium tiles a row and every
-	// tile on page 1, never below the open-folder minimum (Ruling 9).
+	// tile on page 1, never below the open-folder minimum.
 	bw, bh := configdoc.FolderBoxFor(configdoc.Obj{"contentSize": "medium"}, len(results),
 		configdoc.FolderWidthFor("medium", promoteTilesPerRow))
 	w, h := float64(bw), float64(bh)
 	return configdoc.Obj{
 		"id": id, "kind": "folder", "name": info.DisplayName, "icon": info.Icon,
 		"size": "medium", "contentSize": "medium",
-		"display": "expanded", "shape": configdoc.ShapeCreated, "showTitle": true, // made in HOPS: Flat (M6 §3a.5)
+		"display": "expanded", "shape": configdoc.ShapeCreated, "showTitle": true, // made in HOPS: Flat
 		"placement": configdoc.Obj{"x": 0, "y": 0, "w": w, "h": h},
 		"content":   content,
 	}, nil

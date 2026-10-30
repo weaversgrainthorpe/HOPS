@@ -1,9 +1,9 @@
 /**
- * The editor's one drag engine (M3 §5, plan Task 7).
+ * The editor's one drag engine .
  *
  * - Pointer events only. A mouse (or pen) drag starts after 4 px of movement. A touch press becomes
  *   drag-ready after 400 ms held within 8 px; moving then starts the drag, and releasing without
- *   moving opens the item menu (Ruling 18(1)) — the single long-press mechanism for the editor.
+ *   moving opens the item menu — the single long-press mechanism for the editor.
  * - pointermove only records the pointer and asks for a frame. Once per animation frame the
  *   controller hit-tests (the only layout reads) and calls resolveDrop — the ONE drop resolver — and
  *   the highlight shows that target. A drop commits exactly the last highlighted target
@@ -11,27 +11,27 @@
  *   the draft unchanged.
  * - Commits go through editSession.apply (undoable) and are announced in a toast with Undo.
  *
- * Task 7 resolves `place` (the tab's grid, with pushAside) and `invalid`. Task 8 adds:
+ * It resolves `place` (the tab's grid, with pushAside) and `invalid`. Also:
  * - `merge`: the dragged item's VISUAL centre (the ghost's centre: pointer − grab offset + half the
  *   ghost) held in a tile's centre zone (the inner 50% of its RENDERED box) for MERGE_DWELL_MS; the
  *   drop makes a new folder of both and opens its dialog. The edge zone places. Users aim with the
- *   ghost, not the cursor (Ruling 29), and a "hold to make a folder" cue with progress shows from the
+ *   ghost, not the cursor, and a "hold to make a folder" cue with progress shows from the
  *   moment the centre enters the zone until the dwell ripens.
- * - `into-folder`: the centre zone of a folder → the end of its order. (M5: folders open in place;
- *   holding over a minimised folder no longer opens a pop-over, §3a.4.)
- * M5 Task 4 (ordered, paged folders; targets.ts): a drop on an open folder's page goes in at the
+ * - `into-folder`: the centre zone of a folder → the end of its order. (folders open in place;
+ *   holding over a minimised folder no longer opens a pop-over)
+ * Ordered, paged folders; targets.ts): a drop on an open folder's page goes in at the
  * pointer's place in its order (`place` with an index and an insertion marker); its title bar, a
- * go-up target (an outer box's title bar, M5 §7) or an empty open folder → `into-folder` (the end). Holding over the page
+ * go-up target (an outer box's title bar) or an empty open folder → `into-folder` (the end). Holding over the page
  * bar's ‹ › flips the page, and over a crumb goes back up to it (this browser's memory); the drag
  * goes on there. A sub-folder dropped on the tab is minimised there and this browser forgets its
- * open / page / drill memory (§3a.3).
+ * open / page / drill memory.
  * - `tab-append`: a drop on a tab button; held there for OPEN_DWELL_MS, the tab switches and the
  *   drag continues there. The DragBreadcrumb's tab crumbs return to the tab the drag started on the
  *   same way.
  * - tab reorder (`tab-order`, from `tabSource`) through this same engine.
  * Dwell timers live here (the frame computes the dwell key; the timer ripens it and performs the
  * navigation); resolveDrop stays pure and only reads `state.dwell`.
- * Task 9: resize drags (resizeSource on a handle → `resize`, resolved by resolveResize through
+ * Resize drags (resizeSource on a handle → `resize`, resolved by resolveResize through
  * resize.ts) and the phone (stacked) layout, where a drop goes at a place in the reading order
  * (resolveStacked + stacked.ts) shown by an insertion marker; merge, into-folder and tabs as above.
  */
@@ -76,7 +76,7 @@ export type DropTarget =
       kind: 'place'; to: ContainerRef; at: Placement[]; push: Map<string, Placement>;
       /** Stacked (phone) layout: where in the reading order it goes. */
       marker?: Marker;
-      /** Into a folder (ordered, M5): the index in its order; `at` is then empty. */
+      /** Into a folder (ordered): the index in its order; `at` is then empty. */
       index?: number;
     }
   | ResizeTarget
@@ -125,7 +125,7 @@ export interface DragState {
   ghost?: { widthPx: number; heightPx: number; label: string };
   /**
    * The ghost's size as drawn now, when it differs from `ghost`: over an open folder's page it is
-   * that folder's item size — what the item would be there (walkthrough 1, Ruling 11) — still held
+   * that folder's item size — what the item would be there — still held
    * at the same fraction (`grab`). The visual centre (merge zone) follows it. Absent = `ghost`'s size.
    */
   ghostShown?: { widthPx: number; heightPx: number };
@@ -364,13 +364,13 @@ function resolveTabOrder(state: DragState, hit: HitResult, draft: LayoutDashboar
 
 /**
  * THE drop resolver: pure, used for the highlight every frame and (through state.target) for the
- * commit. On a tab: the cells under the ghost, neighbours pushed aside (Ruling 11: the push map is
+ * commit. On a tab: the cells under the ghost, neighbours pushed aside (the push map is
  * part of the target and the op is trial-run here, so a highlighted target never throws on commit);
- * stored footprints count, so a minimised folder's reserved cells are occupied (Ruling 13). Items
+ * stored footprints count, so a minimised folder's reserved cells are occupied. Items
  * keep their relative offsets when they come from one tab; otherwise the others take the first free
- * cells. On a folder's page (ordered, M5): the pointer's place in its order (resolveFlow); on its
+ * cells. On a folder's page (ordered): the pointer's place in its order (resolveFlow); on its
  * title bar, a crumb or an empty open folder: the end of its order. Zones and hit boxes are RENDERED
- * geometry (Ruling 13); a tile's centre zone becomes a merge only once state.dwell has ripened on it;
+ * geometry; a tile's centre zone becomes a merge only once state.dwell has ripened on it;
  * a folder's centre zone is into-folder; tab buttons are tab-append; the drag breadcrumb is
  * navigation only.
  */
@@ -378,7 +378,7 @@ export function resolveDrop(state: DragState, hit: HitResult, draft: LayoutDashb
   if (state.tab !== undefined) return resolveTabOrder(state, hit, draft);
   if (hit.crumb !== undefined) return invalid('Dropping on the path changes nothing — hold over a crumb to go back to that level.');
   if (hit.tabId !== undefined) return resolveTabAppend(state, hit.tabId, draft);
-  // An open folder's own targets (M5 §3.4, §3a.4, §7): a go-up target (outer box title), its innermost title bar, its empty body.
+  // An open folder's own targets: a go-up target (outer box title), its innermost title bar, its empty body.
   if (hit.folderCrumb) return resolveIntoFolder(state, hit.folderCrumb.to, draft);
   if (hit.folderBar) return resolveIntoFolder(state, hit.folderBar.folderId, draft);
   if (hit.emptyFolder !== undefined) return resolveIntoFolder(state, hit.emptyFolder.folderId, draft);
@@ -480,7 +480,7 @@ export function resolveDrop(state: DragState, hit: HitResult, draft: LayoutDashb
       slot(i, t);
     });
 
-    // Trial-run the very op the commit will run (Ruling 11): a highlighted target never throws.
+    // Trial-run the very op the commit will run: a highlighted target never throws.
     const target: DropTarget = { kind: 'place', to, at, push };
     try {
       if (state.copy) copyNodes(draft, ids, to, at, documentIds(), push); // the same id set as the commit
@@ -493,9 +493,9 @@ export function resolveDrop(state: DragState, hit: HitResult, draft: LayoutDashb
 }
 
 /**
- * A drop on an open folder's page (M5 §3.4): at the pointer's place in the folder's order
+ * A drop on an open folder's page: at the pointer's place in the folder's order
  * (targets.flowIndex: before the item under the pointer, or at the end of the page shown), shown by
- * an insertion marker. Trial-run through the very op the commit runs (Ruling 11). A page whose
+ * an insertion marker. Trial-run through the very op the commit runs. A page whose
  * position can't be read is refused with a reason, never guessed.
  */
 function resolveFlow(state: DragState, hit: HitResult, draft: LayoutDashboard, to: ContainerRef): DropTarget {
@@ -586,7 +586,7 @@ function resolveStacked(state: DragState, hit: HitResult, draft: LayoutDashboard
   const index = slot ? others.indexOf(slot.id) + (slot.after ? 1 : 0) : others.length;
   const marker = stackMarker(slot, hit.container ?? { left: 0, top: 0 });
   if (r.kind === 'folder') {
-    // A folder is ordered (M5): the index is the drop, nothing is placed.
+    // A folder is ordered: the index is the drop, nothing is placed.
     const t = memoised(JSON.stringify(['stack-folder', ids, state.copy, to, index]), draft, () => {
       try {
         if (state.copy) copyNodes(draft, ids, to, index, documentIds());
@@ -710,7 +710,7 @@ export function commitDrop(state: DragState): void {
     return;
   }
   const before = d;
-  // §9: the dropped (or resized, or merged) items keep their own landing; the edit glide moves only
+  // The dropped (or resized, or merged) items keep their own landing; the edit glide moves only
   // the neighbours the drop pushed or reflowed.
   claimFlourish(t.kind === 'resize' ? [t.id] : t.kind === 'merge' ? [...state.ids, t.targetTileId] : state.ids);
 
@@ -740,7 +740,7 @@ export function commitDrop(state: DragState): void {
     clearSelection();
     announce(label, before);
     // Name it straight away: the dialog opens with "New folder" selected; Cancel keeps that name.
-    // Ruling 3: when the merge animates, the dialog opens as the animation ends (~500 ms; its onEnd,
+    // When the merge animates, the dialog opens as the animation ends (~500 ms; its onEnd,
     // which always runs: finished, interrupted, failed, or at its safety net, MERGE_DIALOG_CAP_MS after
     // it starts when the browser never reports the end), so the pop is not hidden behind it; at once
     // otherwise. Only the dialog waits, never the edit. Undone meanwhile (the folder is gone), or
@@ -791,7 +791,7 @@ export function commitDrop(state: DragState): void {
     at = t.at;
   }
   const label = `${state.copy ? 'Copied' : 'Moved'} ${describe(d, state.ids)} to ${destName(d, to)}`;
-  // §8.1: the items leaving a folder (for the tab, another folder or an outer box) — where each was
+  // The items leaving a folder (for the tab, another folder or an outer box) — where each was
   // is measured now, before the change is drawn, so each can pop out of there.
   const leaving = leavingFolders(d, state.ids, to);
   let starts: OutStart[] = [];
@@ -809,7 +809,7 @@ export function commitDrop(state: DragState): void {
     clearSelection();
     newIds.forEach((id) => toggleNode(id, true));
   } else {
-    forgetMovedOutFolders(before, state.ids, to); // §3a.3: drawn minimised on the tab
+    forgetMovedOutFolders(before, state.ids, to); // drawn minimised on the tab
   }
   announce(label, before);
   if (leaving.length) {
@@ -822,7 +822,7 @@ export function commitDrop(state: DragState): void {
       fallbackFrom: (id) => (id === state.ids[0] ? ghostBox(state) : null)
     }));
   }
-  // M6 §7.13 / Ruling 5: into a folder (a minimised one, an open one's bar or page, a sub-folder tile,
+  // Into a folder (a minimised one, an open one's bar or page, a sub-folder tile,
   // a drilled-in inner box) the dropped item flies into it and the folder gulps. A reorder inside the same folder is not a drop "into", so it is not animated.
   else if (to.folderId !== undefined && (state.copy || !state.ids.every((id) => sameRef(containerOfNode(before, id), to)))) {
     const folderId = to.folderId;
@@ -839,7 +839,7 @@ export function commitDrop(state: DragState): void {
       });
     });
   }
-  // Ruling 24: the first phone (stacked) reorder of a session says what else it changes. A folder's
+  // The first phone (stacked) reorder of a session says what else it changes. A folder's
   // order (an index) is the same at every width, so it changes nothing else.
   if (t.kind === 'place' && t.marker && t.index === undefined && !phoneNoticeShown) {
     phoneNoticeShown = true;
@@ -848,7 +848,7 @@ export function commitDrop(state: DragState): void {
 }
 
 /**
- * Run a drop's decoration (M6 §7.13) after its change is already in the draft. Nothing it does can
+ * Run a drop's decoration after its change is already in the draft. Nothing it does can
  * undo or delay that change: a throw here is caught (playDropAnimation itself never throws and says
  * a failure once; this guard covers building its arguments).
  */
@@ -856,11 +856,11 @@ function decorate(fn: () => void): void {
   try {
     fn();
   } catch (e) {
-    sayAnimationFailure(e); // said once per page with a toast, not only logged (review M1)
+    sayAnimationFailure(e); // said once per page with a toast, not only logged
   }
 }
 
-/** §8.1: the moved items that leave a folder for somewhere else, each with the folder it leaves. */
+/** The moved items that leave a folder for somewhere else, each with the folder it leaves. */
 function leavingFolders(d: LayoutDashboard, ids: string[], to: ContainerRef): { id: string; sourceId: string; tabId: string }[] {
   const out: { id: string; sourceId: string; tabId: string }[] = [];
   for (const id of ids) {
@@ -889,7 +889,7 @@ function boxOfNode(id: string | undefined): AnimBox | null {
   return r.width > 0 && r.height > 0 ? { left: r.left, top: r.top, width: r.width, height: r.height } : null;
 }
 
-/** Shown once per edit session, on its first stacked (phone) reorder (Ruling 24). */
+/** Shown once per edit session, on its first stacked (phone) reorder. */
 export const PHONE_REORDER_NOTICE = 'Reordering on a narrow screen also moves these items in the wide layout';
 let phoneNoticeShown = false;
 let phoneNoticeSession: string | null = null;
@@ -996,7 +996,7 @@ function startTabDrag(p: Press, x: number, y: number) {
 
 /**
  * A resize drag: the same press, frame loop, cancel and commit as an item drag. The preview is
- * drawn in the node's container from the box measured on press (rendered geometry, Ruling 13).
+ * drawn in the node's container from the box measured on press (rendered geometry).
  */
 function startResize(p: Press, x: number, y: number) {
   const spec = p.resize!;
@@ -1100,7 +1100,7 @@ function frame() {
 }
 
 /**
- * The ghost's size over `hit`: what the dragged item would be there (Ruling 11, both ways).
+ * The ghost's size over `hit`: what the dragged item would be there (both ways).
  * - On an open folder's page: the size its items are drawn at (the rendered box of one, else its
  *   contents size in cells).
  * - On a tab's grid, for an item that comes from a folder (`ownCells`: its own span on a tab, as the
@@ -1129,8 +1129,8 @@ export function ghostOver(
 /**
  * The dragged items' own span on a tab (what the drop there places, resolveDrop's sizes), when any
  * of them comes from inside a folder — there they are drawn at the folder's item size, not their own.
- * For a group (multi-select) it is the GROUP's: its largest item's span (review round, walkthrough 1
- * D), never just the first item's; the grabbed item lands at the ghost's top-left. Undefined when
+ * For a group (multi-select) it is the GROUP's: its largest item's span,
+ * never just the first item's; the grabbed item lands at the ghost's top-left. Undefined when
  * every item is already on a tab (the rendered box is the grabbed item's own size).
  */
 function ownTabCells(s: DragState, d: LayoutDashboard | null = currentDraft()): { w: number; h: number } | undefined {
@@ -1400,7 +1400,7 @@ function onUp(e: PointerEvent) {
     const copy = e.ctrlKey || e.metaKey;
     // Ctrl/Cmd changed without a key event we saw: re-resolve against the last hit (same resolver,
     // no layout read). The cells are the same, but the push and any overflow can differ from the
-    // highlight, since a copy leaves the originals in place (Ruling 21).
+    // highlight, since a copy leaves the originals in place.
     if (copy !== current.copy) reresolve(copy);
     const s = current;
     stopDrag();
@@ -1564,7 +1564,7 @@ export interface DragSourceParams {
   onMenu?: (x: number, y: number) => void;
   /**
    * The grabbed item's box at a press at (x, y), when the element pressed is not the item's own box
-   * (an inset box's title bar is its sub-folder, Ruling 14: it is grabbed as that sub-folder's tile).
+   * (an inset box's title bar is its sub-folder: it is grabbed as that sub-folder's tile).
    * Default: the element's rendered box.
    */
   measure?: (x: number, y: number) => { left: number; top: number; width: number; height: number };
@@ -1646,7 +1646,7 @@ export interface PressMenuParams {
 
 /**
  * Svelte action for a container's empty space: a touch long-press (400 ms, held still) released
- * without moving opens the container menu. The same press mechanism as dragSource (Ruling 18(1)).
+ * without moving opens the container menu. The same press mechanism as dragSource.
  */
 export function pressMenu(el: HTMLElement, params: PressMenuParams) {
   let prm = params;
@@ -1744,7 +1744,7 @@ function switchDragTab(tabId: string): void {
   if (ok === false && activeTab !== tabId) allowedTab = null;
 }
 
-/** For a tab switch the drag itself asks for (Task 8's tab dwell): the drag continues. */
+/** For a tab switch the drag itself asks for (the tab dwell): the drag continues. */
 export function switchTabWithinDrag(fn: () => void): void {
   deliberateSwitch = true;
   try {

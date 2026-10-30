@@ -8,7 +8,7 @@
   import MigrationFailed from '$lib/components/MigrationFailed.svelte';
   import Button from '$lib/components/shared/Button.svelte';
 
-  // "/" shows a dashboard (spec §4D): it forwards to the first one, in display order. The admin
+  // "/" shows a dashboard: it forwards to the first one, in display order. The admin
   // home is Settings (the gear). Every other state says what it is — a load that failed is never
   // shown as "no dashboards", and an old document held after a failed reload is never followed.
   let first = $derived(

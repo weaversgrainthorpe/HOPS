@@ -100,7 +100,6 @@ describe('LoginDialog', () => {
 		}
 	});
 
-	// Task 4 review follow-ups (Ruling 3).
 	it('a failure is shown once, in the dialog: no duplicate error toast', async () => {
 		apiLogin.mockRejectedValue(new LoginError('unauthorized', 'Sign-in failed — check your username and password.'));
 		const seen: string[] = [];

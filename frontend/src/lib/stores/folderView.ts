@@ -3,13 +3,13 @@ import type { Container, FolderNode, LayoutDashboard, LayoutNode, LayoutTab } fr
 import { minimisedPlacement } from '$lib/layout/geometry';
 
 /**
- * This browser's memory of how each folder is viewed (M3 §4, M5 §3.2). Nothing here is ever sent to
+ * This browser's memory of how each folder is viewed. Nothing here is ever sent to
  * the server or saved to the layout:
  * - the view: a folder minimised or open (absent = follow the saved `display`; edit mode shows the
  *   saved layout, so it ignores this);
  * - the page each folder shows, and the sub-folders an open folder is drilled into (both apply in
  *   edit mode too: they are how its contents are reached).
- * Two states only (M5 §2): a "maximised" written by an older build reads as open.
+ * Two states only: a "maximised" written by an older build reads as open.
  */
 export type FolderViewState = 'collapsed' | 'expanded';
 type Views = Record<string, FolderViewState>;
@@ -58,7 +58,7 @@ function loadViews(dashboardId: string): Views {
   const out: Views = {};
   for (const [id, v] of Object.entries(parsed)) {
     if (v === 'collapsed' || v === 'expanded') out[id] = v;
-    else if (v === 'maximised') out[id] = 'expanded'; // M5: maximise is gone; it was open
+    else if (v === 'maximised') out[id] = 'expanded'; // maximise is gone; it was open
   }
   return out;
 }
@@ -156,7 +156,7 @@ export function drillTo(dashboardId: string, chain: string[]): void {
 
 /**
  * Back up open folder `folderId` to level `to` (the folder itself, or a sub-folder
- * on its remembered path): the drag's crumb dwell (M5 §3a.4). False, with nothing changed, when `to`
+ * on its remembered path): the drag's crumb dwell. False, with nothing changed, when `to`
  * is not on the path (the crumb is stale) — the caller says so.
  */
 export function drillUpTo(dashboardId: string, folderId: string, to: string): boolean {
@@ -173,7 +173,7 @@ export function drillUpTo(dashboardId: string, folderId: string, to: string): bo
 
 /**
  * Forget this browser's memory of `folderIds` — open/minimised, page and drill path. A sub-folder
- * moved out to the tab is a minimised folder there (M5 §3a.3), so an "open" remembered from before
+ * moved out to the tab is a minimised folder there, so an "open" remembered from before
  * must not draw it open. No memory of them: nothing is written.
  */
 export function forgetFolderMemory(dashboardId: string, folderIds: string[]): void {
@@ -198,7 +198,7 @@ export function forgetFolderMemory(dashboardId: string, folderIds: string[]): vo
 }
 
 /**
- * Folders `folderIds` moved away (a drag, cut/paste or Move to, Ruling 14): an open folder drilled
+ * Folders `folderIds` moved away (a drag, cut/paste or Move to): an open folder drilled
  * into one of them goes back up to the level above it, and the levels cut off — the moved folder and
  * any below it — forget their page and drill memory. Done with the move, so it is never mistaken for
  * "changed elsewhere". Returns the open folders whose path was cut; nothing remembered → no write.
@@ -298,7 +298,7 @@ export function clearPageReveal(): void {
 }
 
 /**
- * Search reveal (M5 §3a.5): open the folder chain (outermost first, ending with the folder that holds
+ * Search reveal: open the folder chain (outermost first, ending with the folder that holds
  * the item) in place, drill down to the last, and ask that folder to flip to the item's page — all
  * written to this browser's memory, as if the user had done it. `view: false` (edit mode) leaves the
  * open/minimised view alone.
@@ -345,7 +345,7 @@ export function findFolderChain(c: Container | undefined, id: string): FolderNod
  * folder on the tab (saved or minimised) shrinks to a tile of its own size
  * (geometry.minimisedPlacement) in the space it keeps; nothing else moves. Folders inside a
  * folder have no placement: only their display changes (and inside a folder every sub-folder is
- * drawn as its minimised tile anyway, M5 §2).
+ * drawn as its minimised tile anyway).
  * Ids with no folder in the tab are ignored silently (a deleted folder's memory).
  * Render-only: the input is never modified. Returns the SAME tab object only when the
  * tab has no effectively collapsed folder and no remembered view changes a display;

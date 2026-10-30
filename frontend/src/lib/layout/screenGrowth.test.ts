@@ -1,4 +1,4 @@
-// M6 §13 rule 3: between the phone breakpoint and the reference width, an open folder whose stored
+// rule 3: between the phone breakpoint and the reference width, an open folder whose stored
 // box is too short at THIS cell is drawn taller, and what is below it in its columns moves down.
 // Render-only: the stored placements are never changed.
 import { describe, it, expect } from 'vitest';
@@ -14,7 +14,7 @@ const folder = (id: string, pl: Placement, n = 12, extra: Record<string, unknown
 });
 const tile = (id: string, pl: Placement) => ({ kind: 'tile', id, name: id, size: 'medium', placement: pl });
 
-describe('screenGrowth (render-only growth, M6 §13 rule 3)', () => {
+describe('screenGrowth (render-only growth)', () => {
   it('at the reference cell and wider, a folder at its minimum is not grown: nothing moves', () => {
     const min = minOpenFolderCells('medium');
     const list = [folder('f', p(0, 0, 24, min.h)), tile('t', p(0, min.h, 2, 2))];

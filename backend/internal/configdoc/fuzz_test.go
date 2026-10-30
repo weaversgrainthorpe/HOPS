@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// §3 security pass: the v2→v3 migration and the verifiers are fuzzed with
+// Security pass: the v2→v3 migration and the verifiers are fuzzed with
 // arbitrary JSON documents. Any input must give a document or an error,
 // never a panic. Seeds are the synthetic testdata documents (never real
 // exports). Run as a normal test, the seeds are checked.

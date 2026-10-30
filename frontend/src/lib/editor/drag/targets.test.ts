@@ -25,7 +25,7 @@ import { setLayout, resetEditor, startSession, draft, nodeIn, home, other, folde
 
 // t1's root: 24 columns of 50 px (square rows): a Medium tile (2 x 2) is a 100 px box.
 const GRID = containerMetrics({ columns: 24, children: [] }, 1200);
-/** A folder's content (M5): Medium items of 2 x 50 px, flowing 2 to a row. */
+/** A folder's content: Medium items of 2 x 50 px, flowing 2 to a row. */
 const FLOW: ContainerMetrics = { columns: 4, unitPx: 50, rowPx: 50, innerWidthPx: 200, flow: { span: 2, perRow: 2 } };
 
 type Box = { left: number; top: number; width: number; height: number };
@@ -185,7 +185,7 @@ describe('merge', () => {
   });
 });
 
-// Real-browser bug (Ruling 29): users aim with the dragged tile (the ghost), not the cursor. The
+// Real-browser bug: users aim with the dragged tile (the ghost), not the cursor. The
 // merge zone is tested at the ghost's VISUAL centre (pointer − grab offset + half the ghost).
 describe('merge by the dragged tile\'s visual centre', () => {
   it('grabbed off-centre: the ghost centred on b merges although the pointer is in b\'s edge zone', () => {
@@ -253,7 +253,7 @@ describe('into folders', () => {
     expect(get(toast).at(-1)?.message).toBe('Moved "A" to C1');
   });
 
-  it('holding over a minimised folder opens nothing (no pop-over, M5 §3a.4); the drop lands inside, at the end', () => {
+  it('holding over a minimised folder opens nothing (no pop-over); the drop lands inside, at the end', () => {
     startMouseDrag(source('a'), 50, 50);
     moveTo(550, 150);
     flush();

@@ -3,7 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
 import BackgroundConfigModal from './BackgroundConfigModal.svelte';
 import type { Background } from '$lib/types';
 
-// M4 Task 5: one picker at every level (design §4a calls 1, 2, 5).
+// One picker at every level.
 const getBackgrounds = vi.fn();
 vi.mock('$lib/utils/api', () => ({
   getBackgrounds: (...a: unknown[]) => getBackgrounds(...a),
@@ -18,7 +18,7 @@ beforeEach(() => {
 });
 
 type Level = 'dashboard' | 'tab' | 'folder';
-/** Slideshows animate here (M6 §8.2): every control the level has is shown. */
+/** Slideshows animate here: every control the level has is shown. */
 const MOVING = { folderAnimationsOn: true, reducedMotion: false };
 function open(level: Level, background?: Background) {
   const onSave = vi.fn();
@@ -27,12 +27,12 @@ function open(level: Level, background?: Background) {
   return { onSave, onCancel };
 }
 const save = () => fireEvent.click(screen.getByRole('button', { name: /^Save Background/ }));
-// Plain wording per level (§7.1): the dashboard has a switch "Show background picture"
+// Plain wording per level: the dashboard has a switch "Show background picture"
 // (on = not inherit); tab and folder have a two-choice radio group.
 const sameOption = () => screen.getByRole('radio', { name: /^Same as / }) as HTMLInputElement;
 const ownOption = () => screen.getByRole('radio', { name: 'Its own background' }) as HTMLInputElement;
 const showSwitch = () => screen.getByRole('switch', { name: 'Show background picture' }) as HTMLInputElement;
-// Folder level (M6 §7.5): pictures only — "No picture of its own — show what's behind" / "Its own picture".
+// Folder level: pictures only — "No picture of its own — show what's behind" / "Its own picture".
 const behindOption = () => screen.getByRole('radio', { name: "No picture of its own — show what's behind" }) as HTMLInputElement;
 const pictureOption = () => screen.getByRole('radio', { name: 'Its own picture' }) as HTMLInputElement;
 /** Is "inherit" currently on, whichever control this level has? */
@@ -87,7 +87,7 @@ describe('BackgroundConfigModal at every level', () => {
     expect(out).not.toHaveProperty('overlayBlur');
   });
 
-  it('picking a picture listed under several names selects exactly one card (walkthrough 1)', async () => {
+  it('picking a picture listed under several names selects exactly one card', async () => {
     open('dashboard', { type: 'image', value: '/presets/dark-gradient.jpg' });
     const card = await screen.findByTitle('Network Grid');
     await fireEvent.click(card);
@@ -95,7 +95,7 @@ describe('BackgroundConfigModal at every level', () => {
     expect(document.querySelectorAll('.image-card img[src="/presets/network-grid.jpg"]')).toHaveLength(1);
   });
 
-  describe('plain on/off wording per level (§7.1)', () => {
+  describe('plain on/off wording per level', () => {
     const pic: Background = { type: 'image', value: '/presets/network-grid.jpg' };
     const kept = { inherit: true, ...pic } as Background;
 
@@ -123,7 +123,7 @@ describe('BackgroundConfigModal at every level', () => {
       expect(sameOption().checked).toBe(true);
       expect(screen.getByText("This tab's own picture is kept for when you switch back.")).toBeInTheDocument();
     });
-    it('folder: "No picture of its own — show what\'s behind" / "Its own picture" (M6 §7.5)', () => {
+    it('folder: "No picture of its own — show what\'s behind" / "Its own picture"', () => {
       open('folder', kept);
       expect(screen.getByRole('radiogroup', { name: /folder background/i })).toBeInTheDocument();
       expect(behindOption().checked).toBe(true);
@@ -157,7 +157,7 @@ describe('BackgroundConfigModal at every level', () => {
     });
   });
 
-  describe('exact round trip (Ruling 11)', () => {
+  describe('exact round trip', () => {
     const cases: [Level, Background][] = [
       ['dashboard', { type: 'slideshow', images: ['/presets/network-grid.jpg'], interval: 40, transition: 'kenburns', transitionDuration: 2, overlayOpacity: 0.4, overlayBlur: 3 }],
       ['tab', { type: 'image', value: '/backgrounds/a.jpg' }],
@@ -320,7 +320,7 @@ describe('BackgroundConfigModal at every level', () => {
     await waitFor(() => expect(screen.getByText(/couldn't load your uploaded images/i)).toBeInTheDocument());
   });
 
-  describe('slideshow timing is bounded (Ruling 14)', () => {
+  describe('slideshow timing is bounded', () => {
     const imgs = ['/presets/network-grid.jpg', '/presets/dark-gradient.jpg'];
     const interval = () => screen.getByLabelText(/^Rotation Interval/) as HTMLInputElement;
     const duration = () => screen.getByLabelText(/^Transition Duration/) as HTMLInputElement;
@@ -369,9 +369,9 @@ describe('BackgroundConfigModal at every level', () => {
   });
 });
 
-// M6 §7.5: the folder background is pictures only. Edit Folder owns the folder's colour; the
+// The folder background is pictures only. Edit Folder owns the folder's colour; the
 // dashboard and tab levels keep every option; a stored folder colour background is never dropped.
-describe('folder background: pictures only (M6 §7.5)', () => {
+describe('folder background: pictures only', () => {
   const typeButtons = () =>
     Array.from(document.querySelectorAll('[aria-labelledby="bg-type-label"] button')).map((b) => b.textContent?.trim());
 
@@ -414,7 +414,7 @@ describe('folder background: pictures only (M6 §7.5)', () => {
     expect(onSave).toHaveBeenCalledWith(undefined);
   });
 
-  describe('a stored colour background (from before §7.5)', () => {
+  describe('a stored colour background (from before folders took their colour from Edit Folder)', () => {
     const colourBg: Background = { type: 'color', value: '#123456', opacity: 0.6 };
     const legacyOption = () => screen.getByRole('radio', { name: /^Colour background \(set the folder colour instead\)/ }) as HTMLInputElement;
 

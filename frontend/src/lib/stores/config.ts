@@ -22,7 +22,7 @@ import { refreshAllStatuses } from './status';
 import { LAYOUT_VERSION } from '$lib/layout/geometry';
 
 /**
- * M5 §2a: this build writes the layout form of LAYOUT_VERSION, so it never saves into a document
+ * This build writes the layout form of LAYOUT_VERSION, so it never saves into a document
  * marked with another `layoutVersion` (or none: one served by another HOPS): the write is refused
  * with this visible message instead of mixing forms.
  */
@@ -82,7 +82,7 @@ export function findLayoutDashboard(id: string, doc: LayoutDoc | null): LayoutDa
 /**
  * The dashboard's effective "animated folder backgrounds" setting, as the
  * server computed it into GET /api/config's read-only `display` block
- * (Ruling 9) — readable by every viewer. Until it is known it is false: a
+ * — readable by every viewer. Until it is known it is false: a
  * folder shows its first image still, never a guessed animation.
  */
 const animatedSettingCache = new Map<string, Readable<boolean>>();
@@ -238,7 +238,7 @@ export function applySavedLayout(fresh: FreshLayout | undefined): void {
       ...(serverNotices ? { notices: serverNotices } : {}),
       ...(held?.noticesUnreadable ? { noticesUnreadable: held.noticesUnreadable } : {})
     });
-    // Server notices are computed per GET from the document (Ruling 13), so any write can
+    // Server notices are computed per GET from the document, so any write can
     // change them (a listed dashboard switched on or deleted, or a new one): read them again.
     void refreshNotices();
     // Tile badges follow the saved levels: re-read the mounted tiles' status now, not in 30 s.
@@ -252,7 +252,7 @@ export function applySavedLayout(fresh: FreshLayout | undefined): void {
 /**
  * Re-read the server-computed parts of the document after a write: the notices and each
  * dashboard's read-only `display` block (computed from the global values when a dashboard has no
- * override, Ruling 9 -- so a global Settings save changes it). The rest of the document came with
+ * override -- so a global Settings save changes it). The rest of the document came with
  * the write and is not taken. A failed read is visible: a toast, and the held notices are marked
  * "may be out of date" (noticesStale) until a later read succeeds.
  *
@@ -471,7 +471,7 @@ export async function saveDashboardSettingsChanges(
     try {
       const resp = await saveDashboardSettings(id, changes, d.revision);
       applySavedLayout(resp);
-      // The editing dialogs' "inherited from" text uses this dashboard's settings (Ruling 3).
+      // The editing dialogs' "inherited from" text uses this dashboard's settings.
       void refreshStatusBase(id);
       const merged = { ...((d.settings as DashboardSettings | undefined) ?? {}), ...changes } as DashboardSettings;
       settingsSavedHook?.(id, d.revision, resp.revision, merged);

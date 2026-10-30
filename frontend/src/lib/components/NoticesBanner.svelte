@@ -4,7 +4,7 @@
   import { logError } from '$lib/utils/errors';
   import Icon from '@iconify/svelte';
 
-  // Two kinds of notice (M4 Task 7):
+  // Two kinds of notice:
   // - the startup migration's id renames (`migrationNotices`): dismissed for this session only;
   // - the server's one-time notices (`notices`, e.g. the layered status checks change):
   //   Dismiss is stored on the server (POST), so the notice hides only once that succeeded.

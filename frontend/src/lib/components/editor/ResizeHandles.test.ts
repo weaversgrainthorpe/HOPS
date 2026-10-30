@@ -150,7 +150,7 @@ describe('resize handles', () => {
     const t = get(drag)?.target;
     expect(t?.kind).toBe('resize');
     if (t?.kind !== 'resize') throw new Error('not a resize');
-    expect(t.at.h).toBe(4); // geometry.minOpenFolderCells('medium').h (M6: with the tab allowance, at the §13 reference cell)
+    expect(t.at.h).toBe(4); // geometry.minOpenFolderCells('medium').h (with the tab allowance, at the reference cell)
     document.body.dispatchEvent(pe('pointerup', 240, -122));
     expect(nodeIn(draft(), 'f1')!.placement).toMatchObject({ w: 8, h: 4 });
   });
@@ -176,7 +176,7 @@ describe('resize handles', () => {
   });
 });
 
-describe('resize follow-ups (fix round 1)', () => {
+describe('resize scrolling', () => {
   it('scrolling during a resize counts as travel, and the preview origin follows the content', async () => {
     const { container } = canvas();
     await tick();
@@ -278,7 +278,7 @@ describe('keyboard resize and z-order', () => {
     expect(ev.defaultPrevented).toBe(false);
   });
 
-  it('Ctrl+] / Ctrl+[ change nothing and say why (items never overlap; M5 has no free layout); ignored while typing', async () => {
+  it('Ctrl+] / Ctrl+[ change nothing and say why (items never overlap; there is no free layout); ignored while typing', async () => {
     render(EditToolbar, { tabId: 't1', onAddTab: () => {} });
     const spy = vi.spyOn(toast, 'info');
     toggleNode('a', false);

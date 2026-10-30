@@ -18,7 +18,7 @@ function open(e: Entry = entry) {
 const slider = (name: RegExp) => screen.getByRole('slider', { name }) as HTMLInputElement;
 const save = () => fireEvent.click(screen.getByRole('button', { name: /^Save/ }));
 
-// Walkthrough §2: three opacity sliders, saved with the dialog (staged until Save).
+// Three opacity sliders, saved with the dialog (staged until Save).
 describe('EntryEditModal opacity sliders', () => {
   beforeEach(() => editMode.set(true));
   afterEach(() => editMode.set(false));
@@ -65,7 +65,7 @@ describe('EntryEditModal opacity sliders', () => {
   });
 });
 
-// Spec §8, M5: Size sets the space the tile takes on a tab; the dialog shows the tile's own size,
+// Size sets the space the tile takes on a tab; the dialog shows the tile's own size,
 // Small, Medium or Large only (no "Custom").
 describe('EntryEditModal Size', () => {
   beforeEach(() => editMode.set(true));

@@ -23,7 +23,7 @@
   interface Props {
     /** The active tab (for context only; targets come with each request). */
     tabId: string;
-    /** Opens the one Dashboard dialog at its Settings, over the folder dialog (M6 §8.2). */
+    /** Opens the one Dashboard dialog at its Settings, over the folder dialog. */
     onOpenDashboardSettings?: () => void;
   }
   let { tabId, onOpenDashboardSettings }: Props = $props();
@@ -55,7 +55,7 @@
 
   const close = () => editorDialog.set(null);
 
-  // The levels above the edited (or new) item, for the status-check row (M4 §4b).
+  // The levels above the edited (or new) item, for the status-check row.
   const statusContext = $derived.by(() => {
     if (!dlg || !draft || (dlg.kind !== 'tile' && dlg.kind !== 'folder')) return undefined;
     return dlg.id ? contextForNode(draft, dlg.id) : contextForContainer(draft, dlg.to ?? { tabId });
@@ -65,7 +65,7 @@
   const newTile = $derived(dlg && dlg.kind === 'tile' && !dlg.id ? blankTile() : null);
   const newFolder = $derived(dlg && dlg.kind === 'folder' && !dlg.id ? blankFolder() : null);
 
-  // Size = the space a tile takes on a tab (spec §8): the trial run of a picked size against the
+  // Size = the space a tile takes on a tab: the trial run of a picked size against the
   // draft (a refusal is shown in the dialog).
   function checkSize(size: TileSize): string | null {
     if (!dlg || dlg.kind !== 'tile' || !draft) return 'Not editing: click Edit first.';

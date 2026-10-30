@@ -25,7 +25,7 @@
     /** true: load nothing and stop every timer (a fully opaque layer covers this one); resumes where it was. */
     paused?: boolean;
     onError?: (url: string) => void;
-    /** An image was shown (loaded); used to clear an earlier failure (Ruling 7). */
+    /** An image was shown (loaded); used to clear an earlier failure. */
     onLoad?: (url: string) => void;
     fallbackColor?: string;
     /** Which level this layer draws (data-bg-level), for styling hooks and tests. */
@@ -79,7 +79,7 @@
     !animate || kind !== 'slideshow' ? 'none'
       : configuredTransition === 'random' ? currentRandomTransition : configuredTransition
   );
-  // Clamped (Ruling 14): stored timing is never rejected, so it is bounded here before it
+  // Clamped: stored timing is never rejected, so it is bounded here before it
   // reaches a timer or a style.
   const transitionDuration = $derived(slideshowTransitionDuration(background?.transitionDuration));
   const intervalMs = $derived(slideshowInterval(background?.interval) * 1000);

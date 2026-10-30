@@ -1,4 +1,4 @@
-// Upload limits (M5 §10). The three limits are stored in bytes but shown and typed in MB, and
+// Upload limits. The three limits are stored in bytes but shown and typed in MB, and
 // an upload over a limit is refused with a message that names the limit and the file's size.
 // The server enforces the limits too (and words its refusal the same way); checking here first
 // means a big file is refused at once instead of being sent and cut off mid-transfer.
@@ -92,7 +92,7 @@ export async function uploadErrorMessage(response: Response, fallback: string): 
 /**
  * Sends an upload. The server may refuse an oversize body before reading it (a limit changed since
  * the pre-check, or the limits could not be read), and the browser then reports only a dropped
- * connection; that is named here rather than surfacing a bare "Failed to fetch" (batch review Minor 4).
+ * connection; that is named here rather than surfacing a bare "Failed to fetch".
  */
 export async function sendUpload(url: string, init: RequestInit): Promise<Response> {
 	try {

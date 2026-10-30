@@ -265,7 +265,7 @@ func TestCleanupExpiredSessions(t *testing.T) {
 	}
 }
 
-// §2: a password change ends every session of the user, the caller's too, and
+// A password change ends every session of the user, the caller's too, and
 // hands back one fresh session (the caller's id is rotated, not kept).
 func TestChangePasswordEndsAllSessionsAndRotates(t *testing.T) {
 	db := setupTestDB(t)
@@ -334,7 +334,7 @@ func TestPasswordHashCost(t *testing.T) {
 	}
 }
 
-// §2: login always mints a new id and ends the session presented with it, so
+// Login always mints a new id and ends the session presented with it, so
 // no pre-login session id survives (no fixation).
 func TestLoginReplacingEndsPriorSession(t *testing.T) {
 	db := setupTestDB(t)
@@ -359,7 +359,7 @@ func TestLoginReplacingEndsPriorSession(t *testing.T) {
 	}
 }
 
-// §2 absolute expiry: the row's expires_at is login time + lifetime, and a
+// Absolute expiry: the row's expires_at is login time + lifetime, and a
 // session past it is refused (and deleted) server-side, whatever the cookie.
 func TestAbsoluteExpiry(t *testing.T) {
 	db := setupTestDB(t)

@@ -180,7 +180,7 @@ func TestVerifyIDs(t *testing.T) {
 	}
 }
 
-// The v3 tree holds any mix of tiles and folders at any depth (spec); only
+// The v3 tree holds any mix of tiles and folders at any depth; only
 // an unknown kind or a malformed node is a problem.
 func TestVerifyIDs_AcceptsAnyDepth(t *testing.T) {
 	doc := migrated(t, loadJSON(t, "testdata/v2_basic.json"))
@@ -205,7 +205,7 @@ func TestVerifyIDs_AcceptsAnyDepth(t *testing.T) {
 	wantProblem(t, VerifyIDs(doc), `duplicate id "e1"`, `"w1": kind is "widget"`, `"nf2": content is string`)
 }
 
-// Every tab-level node needs a finite numeric placement {x,y,w,h} (Ruling 24),
+// Every tab-level node needs a finite numeric placement {x,y,w,h},
 // so no writer or import can store a node the renderer cannot place.
 func TestVerifyIDs_RequiresPlacement(t *testing.T) {
 	cases := map[string]func(n Obj){
@@ -336,7 +336,7 @@ func showcaseDash(t *testing.T, id string) Obj {
 	return norm(t, d).(Obj)
 }
 
-// The converter writes the M4 background form; Verify checks it exactly
+// The converter writes the background form; Verify checks it exactly
 // (the picture kept, inherit iff perTabBackgrounds was off, no legacy keys).
 func TestVerify_BackgroundFinalForm(t *testing.T) {
 	cases := map[string]struct {

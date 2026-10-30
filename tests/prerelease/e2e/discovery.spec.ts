@@ -8,8 +8,8 @@ import { getCsrfToken, openDiscovery, startScan } from '../helpers';
 //   - creating a scan against 127.0.0.1/32 returns a scan id
 //   - the detector list loads and the bundled detector count is sane
 
-// M5 §11: Discovery is a Settings section at /settings/discovery… (the old /admin/discovery…
-// addresses redirect; m5-discovery-settings.spec.ts covers the layout and the redirects).
+// Discovery is a Settings section at /settings/discovery… (the old /admin/discovery…
+// addresses redirect; discovery-settings.spec.ts covers the layout and the redirects).
 
 test('discovery index page loads', async ({ page }) => {
   await openDiscovery(page);

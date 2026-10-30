@@ -4,7 +4,7 @@ import EditHandle from './EditHandle.svelte';
 
 afterEach(() => cleanup());
 
-describe('EditHandle (one editing flow, §4B)', () => {
+describe('EditHandle (one editing flow)', () => {
   it('is a real button named "Edit <name>" that calls onEdit', async () => {
     const onEdit = vi.fn();
     render(EditHandle, { name: 'Router', onEdit });
@@ -27,7 +27,7 @@ describe('EditHandle (one editing flow, §4B)', () => {
     expect(btn.getAttribute('tabindex')).not.toBe('-1');
     btn.focus();
     expect(document.activeElement).toBe(btn);
-    // A native button turns Enter into a click; jsdom does not, so the real Enter is in m4b-walkthrough.
+    // A native button turns Enter into a click; jsdom does not, so the real Enter is in the end-to-end suite.
     await fireEvent.click(btn);
     expect(onEdit).toHaveBeenCalled();
   });
@@ -67,7 +67,7 @@ describe('EditHandle (one editing flow, §4B)', () => {
     host.remove();
   });
 
-  it('without a label it is icon-only; with one (Task 6: "Dashboard") the label is visible text', () => {
+  it('without a label it is icon-only; with one ("Dashboard") the label is visible text', () => {
     const { unmount } = render(EditHandle, { name: 'Box', onEdit: () => {} });
     expect(screen.getByRole('button', { name: 'Edit Box' }).textContent?.trim()).toBe('');
     unmount();

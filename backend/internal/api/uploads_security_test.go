@@ -12,7 +12,7 @@ import (
 	"testing"
 )
 
-// §3 security pass: normal icon and background uploads refuse decompression
+// Security pass: normal icon and background uploads refuse decompression
 // bombs from the header alone (before any full decode), with a 4xx naming the
 // reason; SVG icons are served as image/svg+xml with the sandbox CSP and
 // nosniff. Synthetic data only.

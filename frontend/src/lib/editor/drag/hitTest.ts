@@ -12,7 +12,7 @@ import type { ContainerRef } from '../treeOps';
 
 export interface ContainerInfo {
   ref: ContainerRef;
-  /** The metrics the container was RENDERED with (Ruling 13: hit-testing uses rendered geometry). */
+  /** The metrics the container was RENDERED with (hit-testing uses rendered geometry). */
   metrics: ContainerMetrics;
   /** How it is drawn right now: a tab's grid, a folder's ordered flow, or phone stacking. */
   layout: 'grid' | 'flow' | 'stacked';
@@ -24,14 +24,14 @@ export interface HitResult {
   /** Pointer offset in px from the container's content-box origin. */
   dx: number;
   dy: number;
-  /** The (non-dragged) node directly under the pointer inside that container, if any (Task 8: merge). */
+  /** The (non-dragged) node directly under the pointer inside that container, if any (merge). */
   nodeId?: string;
-  /** That node's RENDERED box in px from the container's content origin (Ruling 13: a collapsed folder = one Medium tile). */
+  /** That node's RENDERED box in px from the container's content origin (a collapsed folder = one Medium tile). */
   node?: { id: string; left: number; top: number; width: number; height: number };
   /**
    * Item drags only (set by the drag controller's frame, not by hitTest): the item under the dragged
    * item's VISUAL centre (the ghost's centre), viewport px; null = none there. Absent = the centre is
-   * the pointer, so `node` is that item. The merge / into-folder zone is judged by this (Ruling 29).
+   * the pointer, so `node` is that item. The merge / into-folder zone is judged by this.
    */
   centreNode?: { id: string; left: number; top: number; width: number; height: number } | null;
   /** A tab under the pointer (its `data-drag-tab` button, or anything in its `data-drag-tabbox`), with the button's viewport box. */
@@ -55,12 +55,12 @@ export interface HitResult {
   /** The scrollable panel (`data-drag-scroll`) holding the container, for auto-scroll. */
   scroller?: Element;
   /**
-   * M5 open folders (Folder.svelte), never one being dragged. Its title bar (`data-folder-bar`: the
+   * open folders (Folder.svelte), never one being dragged. Its title bar (`data-folder-bar`: the
    * folder it shows, the drilled-into one when drilled): a drop there goes in at the end.
    */
   folderBar?: { folderId: string; rect: Box };
   /**
-   * A go-up target of a drilled-in open folder (`data-crumb`, M5 §7: an outer box's title bar):
+   * A go-up target of a drilled-in open folder (`data-crumb`, an outer box's title bar):
    * the open folder (the nearest `data-node-id`; inset boxes have none) and the level it goes back to.
    */
   folderCrumb?: { folderId: string; to: string; rect: Box };
@@ -122,7 +122,7 @@ export function hitTest(x: number, y: number, dragged: ReadonlySet<string>, env:
   if (crumbEl) return { ...NO_HIT, crumb: crumbEl.getAttribute('data-drag-crumb') ?? '' };
   const bar = start.closest('[data-drag-tabbar]');
   // A tab is its whole box (`data-drag-tabbox`: the button plus its controls and padding), so a
-  // control drawn over the button never hides the tab from a drop (real-browser bug, Ruling 29).
+  // control drawn over the button never hides the tab from a drop (real-browser bug).
   const tabBox = start.closest('[data-drag-tabbox]');
   const tabEl =
     start.closest('[data-drag-tab]') ?? (tabBox?.getAttribute('data-drag-tabbox') ? tabBox.querySelector('[data-drag-tab]') : null);
@@ -155,7 +155,7 @@ export function hitTest(x: number, y: number, dragged: ReadonlySet<string>, env:
     const r = env.rectOf(el);
     return { left: r.left, top: r.top, width: r.width ?? 0, height: r.height ?? 0 };
   };
-  // An open folder's own targets (M5): its go-up targets (outer box titles), its innermost title bar, its page bar.
+  // An open folder's own targets: its go-up targets (outer box titles), its innermost title bar, its page bar.
   const nav: Pick<HitResult, 'folderBar' | 'folderCrumb' | 'pageBar'> = {};
   const crumb = start.closest('[data-crumb]');
   const open = crumb?.closest('[data-node-id]');

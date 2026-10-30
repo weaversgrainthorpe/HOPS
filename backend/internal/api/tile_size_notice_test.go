@@ -9,7 +9,7 @@ import (
 	"github.com/weaversgrainthorpe/HOPS/internal/configdoc"
 )
 
-// Ruling 3: a v2 tile whose size HOPS does not recognise ("custom", a
+// A v2 tile whose size HOPS does not recognise ("custom", a
 // number, …) becomes Medium. It never blocks start-up or an import, and it is
 // never silent: a one-time notice lists the tiles until dismissed.
 
@@ -93,7 +93,7 @@ func TestImport_UnknownTileSizeIsMediumWithNotice(t *testing.T) {
 	}
 	ds := dashList(storedDoc(t, db))
 	imp := ds[len(ds)-1]
-	assertM5Dashboard(t, imp)
+	assertCurrentDashboard(t, imp)
 	for _, name := range []string{"A", "D"} {
 		found := false
 		configdoc.Walk(configdoc.Obj{"dashboards": []any{imp}}, func(_, _ configdoc.Obj, _ []configdoc.Obj, n configdoc.Obj) bool {

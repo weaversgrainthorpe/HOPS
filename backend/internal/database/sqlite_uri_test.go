@@ -2,7 +2,7 @@ package database
 
 import "testing"
 
-// Found in rc2 trial F: on Windows every backup failed with "out of memory",
+// Found on Windows: every backup failed with "out of memory",
 // because C:\… became file://C:%5C… and SQLite couldn't open it.
 func TestSqliteURI(t *testing.T) {
 	cases := []struct{ in, want string }{

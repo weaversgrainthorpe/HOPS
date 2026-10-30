@@ -1,7 +1,7 @@
-// M5 walkthrough 1 (C, then the review round D): an item's edit handle sits INSIDE its top-right
+// an item's edit handle sits INSIDE its top-right
 // corner, sized to the item, and never covers the item's centre — so a click or tap in the middle
 // always reaches the item (opens a minimised folder, selects a tile), never the Edit dialog. It never
-// hangs outside the item (review round: on touch a hung handle covered a neighbour's corner and took
+// hangs outside the item (on touch a hung handle covered a neighbour's corner and took
 // its taps), with a mouse or on touch alike.
 import { describe, it, expect } from 'vitest';
 import { cornerHandleFit, HANDLE_MIN_PX, HANDLE_MAX_PX } from './handleFit';

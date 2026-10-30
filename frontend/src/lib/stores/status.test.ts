@@ -24,7 +24,7 @@ describe('fetchStatus', () => {
     expect(isStatusStale(r)).toBe(true);
   });
 
-  it('keeps the server-reported check interval so a 60-minute dashboard is not falsely stale (I3)', async () => {
+  it('keeps the server-reported check interval so a 60-minute dashboard is not falsely stale', async () => {
     vi.mocked(apiGetStatus).mockResolvedValue({ status: 'up', lastChecked: '2026-10-19T11:00:00Z', intervalMinutes: 60 });
     const r = await fetchStatus('e1');
     expect(r.intervalMinutes).toBe(60);
@@ -92,7 +92,7 @@ describe('now tick store', () => {
   });
 });
 
-describe('refreshAllStatuses (M4 Task 7 fix round 1: no 30 s badge lag after a save)', () => {
+describe('refreshAllStatuses (no 30 s badge lag after a save)', () => {
   it('re-reads every subscribed tile now, so a changed level shows at once', async () => {
     const { subscribeToStatus, refreshAllStatuses, getStatus } = await import('./status');
     vi.mocked(apiGetStatus).mockResolvedValue({ status: 'disabled', source: 'dashboard', sourceId: 'd' });

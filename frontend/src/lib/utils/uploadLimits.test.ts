@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { bytesToMBText, formatMB, parseMBInput, uploadTooLargeMessage, checkUploadSize, uploadErrorMessage, sendUpload, MB } from './uploadLimits';
 
-// M5 §10: upload limits are shown and typed in MB, and an oversize file is refused with a
+// Upload limits are shown and typed in MB, and an oversize file is refused with a
 // message naming the limit and the file's size.
 
 afterEach(() => vi.unstubAllGlobals());
@@ -68,7 +68,7 @@ describe('oversize uploads', () => {
 	});
 });
 
-// Batch review Minor 4: the server may refuse an oversize body before reading it, and the browser
+// The server may refuse an oversize body before reading it, and the browser
 // then reports a dropped connection, not the server's message. Say what that likely means.
 describe('sendUpload: a dropped upload is named, never a bare "Failed to fetch"', () => {
 	afterEach(() => vi.unstubAllGlobals());

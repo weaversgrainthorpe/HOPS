@@ -37,12 +37,12 @@ type noticeLink struct {
 	Label string `json:"label"`
 }
 
-// noticeLayeredStatusChecks announces the M4 change to status checks: the
+// noticeLayeredStatusChecks announces the change to status checks: the
 // most specific level now wins, so tiles switched on under a dashboard whose
 // checks are off start being checked.
 const noticeLayeredStatusChecks = "layered-status-checks-v4"
 
-// noticeUploadDefaultsMoved announces Ruling 21: upload limits still at the
+// noticeUploadDefaultsMoved announces that upload limits still at the
 // old defaults were moved to the new ones at startup (settings.DefaultMoves).
 const noticeUploadDefaultsMoved = "upload-defaults-moved-v3"
 
@@ -88,7 +88,7 @@ func mbText(b int) string {
 	return fmt.Sprintf("%.1f MB", float64(b)/float64(settings.MB))
 }
 
-// noticeTileSizesPrefix starts the id of the tile-size notice (Ruling 3). The
+// noticeTileSizesPrefix starts the id of the tile-size notice. The
 // rest is a hash of its text, so a later import's tiles get a fresh notice
 // even after an earlier one was dismissed.
 const noticeTileSizesPrefix = "tile-sizes-medium-"

@@ -23,7 +23,7 @@ beforeEach(() => {
 });
 
 describe('ImportModal', () => {
-  it('a partial failure shows a warning state, reloads, and stays open until closed (I6)', async () => {
+  it('a partial failure shows a warning state, reloads, and stays open until closed', async () => {
     vi.mocked(api.importConfig).mockResolvedValue({
       success: true,
       message: 'Imported 1 dashboard(s)',

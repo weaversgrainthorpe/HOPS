@@ -36,7 +36,7 @@ func (r *Router) handleBackups(w http.ResponseWriter, req *http.Request) {
 			// A restore staged but not yet applied (the server hasn't restarted).
 			"pendingRestore": r.backupManager.PendingRestore(),
 		}
-		// Deleted images kept for older backups (M6 §12); an unreadable attic
+		// Deleted images kept for older backups; an unreadable attic
 		// is said, never shown as empty.
 		if u, err := r.backupManager.AtticUsage(); err != nil {
 			resp["atticError"] = "Couldn't read the attic (" + r.backupManager.AtticDir() + "): " + err.Error()
@@ -213,7 +213,7 @@ func (r *Router) handleRestoreBackup(w http.ResponseWriter, backupName string) {
 	}()
 }
 
-// handleDownloadBackup serves a backup as one archive (M6 §12): the
+// handleDownloadBackup serves a backup as one archive: the
 // database, every uploaded image it refers to, and a manifest with SHA-256s.
 // The archive is built completely before anything is sent. The name is
 // strictly validated (no separators, no "..", regular files only), so the
@@ -345,7 +345,7 @@ func (r *Router) handleBackupCleanup(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-// handleAtticUnknown serves "Clean up unknown images" (M6 §12 fix round 3):
+// handleAtticUnknown serves "Clean up unknown images":
 // GET lists the attic versions no name could be matched to (after an index
 // rebuild) and why HOPS keeps them by itself; POST {"ids": [...]} deletes
 // those of the confirmed ids that are still unknown (re-checked; a version a

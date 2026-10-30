@@ -6,7 +6,7 @@ import {
   type BackgroundLevel
 } from './backgroundCapabilities';
 
-// M6 §8.2: one table says what the background dialog shows, per level, runtime context and form
+// One table says what the background dialog shows, per level, runtime context and form
 // state. This file is the authority: every expectation below is written out by hand.
 
 const motion = (l: BackgroundLevel, runtime: Parameters<typeof backgroundCapabilities>[1], form = {}) => {
@@ -16,7 +16,7 @@ const motion = (l: BackgroundLevel, runtime: Parameters<typeof backgroundCapabil
 const ON = [true, true, true, true];
 const OFF = [false, false, false, false];
 
-describe('backgroundCapabilities (M6 §8.2)', () => {
+describe('backgroundCapabilities', () => {
   it('walks every case: dashboard and tab x reduced motion x see-through; folder also x folder animations', () => {
     expect(BACKGROUND_LEVELS).toEqual(['dashboard', 'tab', 'folder']);
     const count = (l: BackgroundLevel) => BACKGROUND_CASES.filter((c) => c.level === l).length;

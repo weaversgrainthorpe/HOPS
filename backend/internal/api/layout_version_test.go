@@ -11,18 +11,18 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// M5 spec §2a: one layoutVersion marks the stored layout form. Every write
+// One layoutVersion marks the stored layout form. Every write
 // that carries placements must carry the current one (a 409 otherwise); GET
 // and every export carry it; an import of a v3 export at another version is
 // refused naming both versions. v2, Homer, Dashy and Heimdall imports go
 // through the v2→v3 converter and come out in the current form.
 
-// assertM5Dashboard checks d is in the current layout form: it verifies, and
+// assertCurrentDashboard checks d is in the current layout form: it verifies, and
 // every folder child is placement-free in an ordered list.
-func assertM5Dashboard(t *testing.T, d configdoc.Obj) {
+func assertCurrentDashboard(t *testing.T, d configdoc.Obj) {
 	t.Helper()
 	if err := configdoc.VerifyDashboard(d); err != nil {
-		t.Fatalf("dashboard %v is not in the M5 form: %v", d["id"], err)
+		t.Fatalf("dashboard %v is not in the current layout form: %v", d["id"], err)
 	}
 	for _, k := range []string{"defaultLayout"} {
 		if _, has := d[k]; has {
@@ -67,15 +67,15 @@ func TestLayoutVersionGuard_RefusesMismatchedWrites(t *testing.T) {
 		body               map[string]interface{}
 	}{
 		{"save, no layoutVersion", "PUT", "/api/dashboards/d1", without(saveBody())},
-		{"save, pre-M5 gridUnit only", "PUT", "/api/dashboards/d1", with(saveBody(), "gridUnit", 2)},
+		{"save, old gridUnit only", "PUT", "/api/dashboards/d1", with(saveBody(), "gridUnit", 2)},
 		{"save, layoutVersion 0", "PUT", "/api/dashboards/d1", with(saveBody(), "layoutVersion", 0)},
-		{"save, M5 layoutVersion 1", "PUT", "/api/dashboards/d1", with(saveBody(), "layoutVersion", 1)},
+		{"save, layoutVersion 1", "PUT", "/api/dashboards/d1", with(saveBody(), "layoutVersion", 1)},
 		{"save, newer layoutVersion", "PUT", "/api/dashboards/d1", with(saveBody(), "layoutVersion", configdoc.LayoutVersion+1)},
 		{"save, layoutVersion as a string", "PUT", "/api/dashboards/d1", with(saveBody(), "layoutVersion", fmt.Sprint(configdoc.LayoutVersion))},
 		{"save, layoutVersion null", "PUT", "/api/dashboards/d1", with(saveBody(), "layoutVersion", nil)},
 		{"copy, no layoutVersion", "POST", "/api/dashboards/transfer", without(transferBody(map[string]interface{}{"target": target}))},
 		{"move, gridUnit only", "POST", "/api/dashboards/transfer", with(transferBody(map[string]interface{}{"mode": "move", "target": target}), "gridUnit", 2)},
-		{"move, M5 layoutVersion 1", "POST", "/api/dashboards/transfer", with(transferBody(map[string]interface{}{"mode": "move", "target": target}), "layoutVersion", 1)},
+		{"move, layoutVersion 1", "POST", "/api/dashboards/transfer", with(transferBody(map[string]interface{}{"mode": "move", "target": target}), "layoutVersion", 1)},
 	}
 	before := storedRaw(db)
 	backups := backupCount(t, c)
@@ -161,12 +161,12 @@ func TestImport_CurrentV3ExportRoundTrips(t *testing.T) {
 				t.Fatalf("import: %d %v", code, resp)
 			}
 			ds := dashList(storedDoc(t, db))
-			assertM5Dashboard(t, ds[len(ds)-1])
+			assertCurrentDashboard(t, ds[len(ds)-1])
 		})
 	}
 }
 
-// Old (pre-M5) v3 exports and exports from a newer layout form are refused
+// Old v3 exports and exports from a newer layout form are refused
 // visibly, naming both versions, and nothing is written.
 func TestImport_OtherLayoutVersionRefused(t *testing.T) {
 	cur := fmt.Sprintf("layout version %d", configdoc.LayoutVersion)
@@ -174,13 +174,13 @@ func TestImport_OtherLayoutVersionRefused(t *testing.T) {
 		set  func(cfg map[string]any)
 		want []string
 	}{
-		"pre-M5 (gridUnit, no layoutVersion)": {func(cfg map[string]any) {
+		"old layout (gridUnit, no layoutVersion)": {func(cfg map[string]any) {
 			delete(cfg, "layoutVersion")
 			cfg["gridUnit"] = 2
 		}, []string{cur, "pre-release"}},
-		"no marker at all":             {func(cfg map[string]any) { delete(cfg, "layoutVersion") }, []string{cur}},
-		"M5 export (layout version 1)": {func(cfg map[string]any) { cfg["layoutVersion"] = 1 }, []string{"layout version 1", cur}},
-		"newer":                        {func(cfg map[string]any) { cfg["layoutVersion"] = configdoc.LayoutVersion + 1 }, []string{fmt.Sprintf("layout version %d", configdoc.LayoutVersion+1), cur}},
+		"no marker at all":        {func(cfg map[string]any) { delete(cfg, "layoutVersion") }, []string{cur}},
+		"layout version 1 export": {func(cfg map[string]any) { cfg["layoutVersion"] = 1 }, []string{"layout version 1", cur}},
+		"newer":                   {func(cfg map[string]any) { cfg["layoutVersion"] = configdoc.LayoutVersion + 1 }, []string{fmt.Sprintf("layout version %d", configdoc.LayoutVersion+1), cur}},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -211,9 +211,9 @@ func TestImport_OtherLayoutVersionRefused(t *testing.T) {
 	}
 }
 
-// The Showcase without its layoutVersion (as a pre-M5 v3 build exported it)
+// The Showcase without its layoutVersion (as an older v3 build exported it)
 // is refused visibly, naming the version this build reads; nothing changes.
-func TestImport_PreM5ShowcaseRefused(t *testing.T) {
+func TestImport_OldLayoutShowcaseRefused(t *testing.T) {
 	data, err := os.ReadFile("../configdoc/testdata/v3_showcase_export.json")
 	if err != nil {
 		t.Fatal(err)
@@ -243,8 +243,8 @@ func TestImport_PreM5ShowcaseRefused(t *testing.T) {
 	}
 }
 
-// Review Focus 2: every release source lands in the M5 form.
-func TestImport_ReleaseSourcesWriteM5Form(t *testing.T) {
+// Every release source lands in the current form.
+func TestImport_ReleaseSourcesWriteCurrentForm(t *testing.T) {
 	sample, err := os.ReadFile("../configdoc/testdata/real_sample.json")
 	if err != nil {
 		t.Fatal(err)
@@ -273,7 +273,7 @@ func TestImport_ReleaseSourcesWriteM5Form(t *testing.T) {
 			}
 			ds := dashList(doc)
 			imp := ds[len(ds)-1]
-			assertM5Dashboard(t, imp)
+			assertCurrentDashboard(t, imp)
 			// Folder children keep the source's entry order.
 			f := imp["tabs"].([]any)[0].(configdoc.Obj)["root"].(configdoc.Obj)["children"].([]any)[0].(configdoc.Obj)
 			var got []string
@@ -312,7 +312,7 @@ func firstGroupNames(t *testing.T, source string, data []byte) []string {
 	return out
 }
 
-func TestNewDashboard_IsM5Form(t *testing.T) {
+func TestNewDashboard_IsCurrentForm(t *testing.T) {
 	router, db := setupTestRouter(t)
 	c := newClient(t, router)
 	code, resp := c.do("POST", "/api/dashboards", map[string]interface{}{"name": "New", "path": "/new"})
@@ -320,7 +320,7 @@ func TestNewDashboard_IsM5Form(t *testing.T) {
 		t.Fatalf("create: %d %v", code, resp)
 	}
 	d := storedDash(t, db, resp["id"].(string))
-	assertM5Dashboard(t, d)
+	assertCurrentDashboard(t, d)
 	tab := d["tabs"].([]any)[0].(configdoc.Obj)
 	if _, has := tab["layout"]; has {
 		t.Error("new tab has a layout")
@@ -330,7 +330,7 @@ func TestNewDashboard_IsM5Form(t *testing.T) {
 // A transfer onto a tab places each item at the first free cells at its
 // standard span; into a folder it appends, with no placement; a folder child
 // moved onto a tab gets its size's span.
-func TestTransfer_M5Placement(t *testing.T) {
+func TestTransfer_FolderPlacement(t *testing.T) {
 	router, db := setupTestRouter(t)
 	c := newClient(t, router)
 	seed(t, db)
@@ -346,7 +346,7 @@ func TestTransfer_M5Placement(t *testing.T) {
 		t.Fatalf("copy to tab: %d %v", code, resp)
 	}
 	dst := storedDash(t, db, "d2")
-	assertM5Dashboard(t, dst)
+	assertCurrentDashboard(t, dst)
 	kids := dst["tabs"].([]any)[0].(configdoc.Obj)["root"].(configdoc.Obj)["children"].([]any)
 	last := kids[len(kids)-1].(configdoc.Obj)
 	p := last["placement"].(configdoc.Obj)
@@ -362,7 +362,7 @@ func TestTransfer_M5Placement(t *testing.T) {
 		t.Fatalf("copy into folder: %d %v", code, resp)
 	}
 	dst = storedDash(t, db, "d2")
-	assertM5Dashboard(t, dst)
+	assertCurrentDashboard(t, dst)
 	f := findOne(dst, folderID)
 	fk := contentKids(f)
 	lastIn := fk[len(fk)-1].(configdoc.Obj)

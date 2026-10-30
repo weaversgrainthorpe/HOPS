@@ -35,7 +35,7 @@ const freshAt = (revision: number, settings: Record<string, unknown> = { editIdl
   layout: { schemaVersion: 3 as const, layoutVersion: 2, dashboards: [{ ...layoutD(), revision, settings }] }
 });
 
-describe('Settings saved during an edit session (Ruling 19)', () => {
+describe('Settings saved during an edit session', () => {
   it('the session absorbs it: the next Save is checked against the new revision — no false conflict', async () => {
     begin('d');
     apply('Rename', (d) => updateNode(d, 'a', { name: 'Renamed' } as Partial<LayoutNode>));
@@ -66,7 +66,7 @@ describe('Settings saved during an edit session (Ruling 19)', () => {
 
   it('not absorbed when the settings save was checked against a different revision (a real change elsewhere)', async () => {
     begin('d');
-    // Dirty: a CLEAN session would follow the newer layout at once (final review Minor 6).
+    // Dirty: a CLEAN session would follow the newer layout at once.
     apply('edit', (d) => updateNode(d, 'a', { name: 'mine' } as Partial<LayoutNode>));
     const cfg = get(config)!;
     config.set({ ...cfg, dashboards: [{ ...cfg.dashboards[0], revision: 11 }] } as Config);

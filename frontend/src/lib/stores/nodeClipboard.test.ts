@@ -19,7 +19,7 @@ import { folderNavFor, folderViewFor, resetFolderViewsForTests, setFolderDrill, 
 import type { Config } from '$lib/types';
 import type { FolderNode, LayoutDashboard, LayoutDoc, LayoutNode, Placement } from '$lib/types/layout';
 
-// M5 form: 24 columns, a Medium tile 2 x 2; folder contents are ordered, with no placements.
+// 24 columns, a Medium tile 2 x 2; folder contents are ordered, with no placements.
 const p = (x: number, y: number, w = 2, h = 2): Placement => ({ x, y, w, h });
 const tile = (id: string, pl?: Placement): LayoutNode =>
   ({ kind: 'tile', id, name: id, url: 'http://x', size: 'medium', ...(pl ? { placement: pl } : {}) }) as unknown as LayoutNode;
@@ -147,7 +147,7 @@ describe('copy then paste', () => {
     expect(k2[k2.length - 1].placement).toEqual(p(4, 0));
   });
 
-  it('a collapsed folder\'s reserved footprint counts as taken (Ruling 13)', async () => {
+  it('a collapsed folder\'s reserved footprint counts as taken', async () => {
     config.set({ schemaVersion: 3, layoutVersion: 2, dashboards: [{
       ...home(), tabs: [{ id: 't1', name: 'One', root: { columns: 4, children: [
         { ...folder('c', p(0, 0, 4, 4), []), display: 'collapsed' }, tile('a', p(0, 4))
@@ -174,7 +174,7 @@ describe('cut then paste', () => {
     expect(api.transferNodes).not.toHaveBeenCalled();
   });
 
-  // M5 §3a.3 (Task 4 fix round 1): a sub-folder cut out of a folder and pasted onto a tab is minimised
+  // A sub-folder cut out of a folder and pasted onto a tab is minimised
   // there, and this browser forgets that it had it open, its page and its drill path.
   it('a sub-folder pasted onto a tab forgets this browser\'s open / page / drill memory of it', async () => {
     localStorage.clear();
@@ -291,7 +291,7 @@ describe('paste across dashboards: conflict reporting (shared transfer path)', (
   });
 });
 
-describe('paste of a copy uses the snapshot taken at Copy time (Ruling 18(6))', () => {
+describe('paste of a copy uses the snapshot taken at Copy time', () => {
   it('copy → delete the original → paste still works (fresh ids, deep)', async () => {
     begin('d');
     toggleNode('src', false);

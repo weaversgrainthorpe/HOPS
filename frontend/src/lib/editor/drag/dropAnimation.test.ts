@@ -25,7 +25,7 @@ import { toggleNode } from '$lib/stores/nodeSelection';
 import { editorDialog } from '../editorUi';
 import { setLayout, resetEditor, startSession, draft, nodeIn, home, other } from '$lib/components/editor/editorTestKit';
 
-// M6 §7.13 + Ruling 5: drop and merge animations. Decoration only: the draft changes at once. Clearly
+// Drop and merge animations. Decoration only: the draft changes at once. Clearly
 // visible (~500 ms): a drop flies along a curve into the folder, which gulps; a merge draws both tiles
 // together, then the new folder pops. Transforms and opacity only. The setting is On / Off / Always:
 // On never plays under reduced motion, Always does, Off never does.
@@ -480,7 +480,7 @@ describe('a drop never waits for its animation', () => {
     expect(layerEls()).toHaveLength(2);
   });
 
-  // Ruling 3: the folder dialog opens when the merge animation ends (<= 300 ms); at once when off.
+  // The folder dialog opens when the merge animation ends (<= 300 ms); at once when off.
   function mergeDrop(on: boolean) {
     start(on);
     dragOnto('a', [50, 50], [150, 50]);
@@ -589,9 +589,9 @@ describe('gulpScale (a big folder never wobbles)', () => {
   });
 });
 
-// ------------------------------------------------------------------ §8.1: out of a folder
+// -----------------------------------------------------------------: out of a folder
 
-describe('out of a folder (§8.1)', () => {
+describe('out of a folder', () => {
   const src = { left: 100, top: 300, width: 100, height: 100 }; // where the item was, in its folder
   const spot = { left: 700, top: 50, width: 120, height: 120 }; // where it is drawn now
   /** Elements for findNode, each with its own measured box. */
@@ -870,7 +870,7 @@ describe('items leaving a folder animate out, and the draft changes at once', ()
   }
 });
 
-describe('cleanup never leaves a real element animated (§8.1 fix round 1)', () => {
+describe('cleanup never leaves a real element animated', () => {
   const src = { left: 100, top: 300, width: 100, height: 100 };
   const spot = { left: 700, top: 50, width: 120, height: 120 };
   type Live = FakeAnim & { cancelled?: boolean };
@@ -978,7 +978,7 @@ describe('cleanup never leaves a real element animated (§8.1 fix round 1)', () 
   });
 });
 
-describe('multi-select out of folders (§8.1 fix round 1)', () => {
+describe('multi-select out of folders', () => {
   function startMany(n: number, mode: AnimationsMode = 'on') {
     const d = home();
     const f1 = d.tabs[0].root.children.find((x) => x.id === 'f1') as FolderNode;
@@ -1039,7 +1039,7 @@ describe('multi-select out of folders (§8.1 fix round 1)', () => {
   });
 });
 
-describe('out of a folder to another tab: the source is not drawn (walkthrough fix)', () => {
+describe('out of a folder to another tab: the source is not drawn', () => {
   // The bug: a drag that dwelt on a tab button switched the tab, so at the drop neither the item nor
   // its folder was drawn and the hop started at the release point — already the destination — so only
   // the landing showed. Now it starts from the source tab's BUTTON, which puffs; with no button drawn

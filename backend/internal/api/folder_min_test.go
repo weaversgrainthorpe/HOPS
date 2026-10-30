@@ -10,7 +10,7 @@ import (
 
 // putFolderWithLargeSub saves into d1 a tab-level folder "Outer" holding a
 // Small folder "Sub" whose contents are Large, so Outer's box is at Large's
-// minimum (5×6 at the reference cell, M6 §13, with the M6 tab allowance).
+// minimum (5×6 at the reference cell, with the tab allowance).
 func putFolderWithLargeSub(t *testing.T, c *apiClient) {
 	t.Helper()
 	d := v3Body(t, c, "d1")
@@ -27,7 +27,7 @@ func putFolderWithLargeSub(t *testing.T, c *apiClient) {
 }
 
 // A folder that comes out of a folder onto another dashboard's tab gets a box
-// at least its minimum (Ruling 7a, Ruling 9): Small with Large contents is
+// at least its minimum: Small with Large contents is
 // 5×6, not size×3 by size×2 (3×2).
 func TestTransfer_FolderOutOfFolderGetsMinimumBox(t *testing.T) {
 	router, db := setupTestRouter(t)
@@ -56,7 +56,7 @@ func TestTransfer_FolderOutOfFolderGetsMinimumBox(t *testing.T) {
 }
 
 // Into a folder on another dashboard: the receiving tab-level box grows to its
-// new minimum when there is room (Ruling 7b), in the same write.
+// new minimum when there is room, in the same write.
 func TestTransfer_IntoFolderGrowsReceivingBox(t *testing.T) {
 	router, db := setupTestRouter(t)
 	c := newClient(t, router)

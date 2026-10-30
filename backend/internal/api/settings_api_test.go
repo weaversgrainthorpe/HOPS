@@ -293,7 +293,7 @@ func TestSetRateLimitUpdatesLimiterLive(t *testing.T) {
 }
 
 // Changing the port inside a Docker container breaks the compose port mapping, so the settings
-// list says whether HOPS runs in one (the UI warns on the port setting; found in the rc trials).
+// list says whether HOPS runs in one (the UI warns on the port setting).
 func TestSettingsListReportsContainer(t *testing.T) {
 	for _, want := range []bool{true, false} {
 		old := inContainer

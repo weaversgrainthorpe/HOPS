@@ -77,7 +77,7 @@ func TestVerifyIDs_BackgroundShape(t *testing.T) {
 	}
 }
 
-// Ruling 14: a slideshow's interval and transitionDuration are clamped where they are used (the
+// A slideshow's interval and transitionDuration are clamped where they are used (the
 // renderer and the picker), never rejected by verification, import or migration — an odd timing
 // value must not block prod's v2→v3 migration or an import. The values are kept as stored.
 var oddTimings = map[string]any{

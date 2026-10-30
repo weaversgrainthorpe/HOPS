@@ -1,7 +1,7 @@
-// M5 Task 3: ONE Folder component draws every folder, everywhere — minimised (a tile of its size with
+// ONE Folder component draws every folder, everywhere — minimised (a tile of its size with
 // its name and up to four icons), open (a box with a title bar, one page of items at its contents
 // size, and a page bar only when there is more than one page) and drilled into a sub-folder (a folder
-// inside a folder: an inset box a level, M5 §7). No pop-over and no maximise.
+// inside a folder: an inset box a level). No pop-over and no maximise.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/svelte';
 import { tick } from 'svelte';
@@ -202,12 +202,12 @@ describe('pages: only the current page renders', () => {
   });
 });
 
-// M5 §7 (walkthrough 2): a drilled-in sub-folder is a folder inside a folder — every level is an inset
-// box inside the last, with its own title bar — identical to a top folder's (Ruling 15): its name on the
+// A drilled-in sub-folder is a folder inside a folder — every level is an inset
+// box inside the last, with its own title bar — identical to a top folder's: its name on the
 // left, the same minimise (–) on the right. The top folder's title stays its own. There is no ‹.
 const nested = (c: ParentNode, id: string) => c.querySelector(`.nested-box[data-nested-folder="${id}"]`) as HTMLElement;
 const barName = (c: ParentNode) => (c.querySelector('.folder-header h3, .folder-header .title-button') as HTMLElement | null)?.textContent?.trim();
-describe('drilling into a sub-folder: a folder inside a folder, one inset box a level (M5 §7)', () => {
+describe('drilling into a sub-folder: a folder inside a folder, one inset box a level', () => {
   const tree = () => [folder('f', [kid('a'), sub('s', [kid('deep'), sub('s2', [kid('deeper')])], { display: 'expanded' })])];
   it('a sub-folder shows in the page as its minimised tile, whatever its saved display', async () => {
     const { container } = await renderTab(tree());
@@ -225,7 +225,7 @@ describe('drilling into a sub-folder: a folder inside a folder, one inset box a 
     expect(box).not.toBeNull();
     expect(el(container, 'f').querySelector('.folder-body')!.contains(box)).toBe(true);
     const head = box.querySelector(':scope > .nested-header') as HTMLElement;
-    // Ruling 15: the same controls as the top folder's bar, last in the bar; no ‹ back control.
+    // The same controls as the top folder's bar, last in the bar; no ‹ back control.
     expect(within(head).queryByRole('button', { name: /^Back to/ })).toBeNull();
     expect(head.textContent).not.toContain('‹');
     expect(within(head).getByText('s')).toBeInTheDocument();
@@ -322,7 +322,7 @@ describe('drilling into a sub-folder: a folder inside a folder, one inset box a 
   });
   it('not enough room: a deep level in a small folder says so visibly, and draws no clipped items', async () => {
     setFolderDrill('d1', 'f', ['s', 's2']);
-    // 4 x 5 at 60 px cells: content 222 x 242; a level takes 70 px (M6: 24 tab allowance + 28 bar + 18):
+    // 4 x 5 at 60 px cells: content 222 x 242; a level takes 70 px (24 tab allowance + 28 bar + 18):
     // s 204 x 172 (fits a 120 px item); s2 186 x 102 (does not).
     const { container } = await renderTab([folder('f', [sub('s', [sub('s2', [kid('deeper')])])], { placement: { x: 0, y: 0, w: 4, h: 5 } })]);
     const note = el(container, 'f').querySelector('[data-folder-no-room]') as HTMLElement;
@@ -330,16 +330,16 @@ describe('drilling into a sub-folder: a folder inside a folder, one inset box a 
     expect(note.textContent).toMatch(/Not enough room — make the folder bigger/);
     expect(note.getAttribute('role')).toBe('status');
     expect(container.querySelector('[data-node-id="deeper"]')).toBeNull();
-    // s2's body (102 + 16 px) holds the note: it is drawn inside the innermost box (review minor 3).
+    // s2's body (102 + 16 px) holds the note: it is drawn inside the innermost box.
     expect(nested(container, 's2').querySelector(':scope > .nested-body > [data-folder-no-room]')).toBe(note);
     // One level up there is room: no note.
     await fireEvent.click(within(nested(container, 's2')).getByRole('button', { name: 'Minimise s2' }));
     expect(el(container, 'f').querySelector('[data-folder-no-room]')).toBeNull();
     expect(shownIds(container)).toEqual(['s2']);
   });
-  it('room for one item but not for the page bar its items need: "Not enough room", nothing clipped (review Important 1)', async () => {
+  it('room for one item but not for the page bar its items need: "Not enough room", nothing clipped', async () => {
     setFolderDrill('d1', 'f', ['a', 'b', 'c', 's']);
-    // 4 x 8 at 60 px: content 222 x 422; four levels in (70 px each, M6) s's box is 150 x 142: it holds
+    // 4 x 8 at 60 px: content 222 x 422; four levels in (70 px each) s's box is 150 x 142: it holds
     // one 120 px item, but 3 items need a page bar (142 - 32 < 120).
     const deep = sub('a', [sub('b', [sub('c', [sub('s', kids(3, 'x'))])])]);
     const { container } = await renderTab([folder('f', [deep], { placement: { x: 0, y: 0, w: 4, h: 8 } })]);
@@ -347,9 +347,9 @@ describe('drilling into a sub-folder: a folder inside a folder, one inset box a 
     expect(container.querySelector('[data-node-id="x1"]')).toBeNull();
     expect(container.querySelector('[data-page-bar]')).toBeNull();
   });
-  it('so deep the inset bars run out of room: the note is on the folder\'s own body, always seen (review minor 4)', async () => {
+  it('so deep the inset bars run out of room: the note is on the folder\'s own body, always seen', async () => {
     setFolderDrill('d1', 'f', ['a', 'b', 'c', 'd']);
-    // 4 x 4 at 60 px: content 182 px high; four inset levels need 4 x 70 = 280 px of tabs, bars and padding (M6).
+    // 4 x 4 at 60 px: content 182 px high; four inset levels need 4 x 70 = 280 px of tabs, bars and padding.
     const deep = sub('a', [sub('b', [sub('c', [sub('d', [kid('z')])])])]);
     const { container } = await renderTab([folder('f', [deep], { placement: { x: 0, y: 0, w: 4, h: 4 } })]);
     const note = el(container, 'f').querySelector(':scope > .folder-body > [data-folder-no-room]');
@@ -367,7 +367,7 @@ describe('drilling into a sub-folder: a folder inside a folder, one inset box a 
     expect(get(folderNavFor('d1')).drill).toEqual({ f: ['s'] });
     const inner = nested(container, 's').querySelector(':scope > .nested-header') as HTMLElement;
     expect(within(inner).getByText('Untitled folder').classList.contains('muted')).toBe(true);
-    // Its minimise is still a labelled button (Ruling 15).
+    // Its minimise is still a labelled button.
     expect(within(inner).getByRole('button', { name: 'Minimise Untitled folder' })).toBeInTheDocument();
   });
   it('a sub-folder deleted elsewhere closes, saying so', async () => {
@@ -383,7 +383,7 @@ describe('drilling into a sub-folder: a folder inside a folder, one inset box a 
   });
 });
 
-describe('every box\'s controls are named for their box (I2, Ruling 15): no two controls share a name', () => {
+describe('every box\'s controls are named for their box: no two controls share a name', () => {
   const names = (c: ParentNode) =>
     Array.from(c.querySelectorAll('button')).map((b) => b.getAttribute('aria-label') ?? b.textContent?.trim() ?? '');
   it('two open folders and a drilled inset box: "Minimise <name>" each, every button name unique', async () => {
@@ -427,20 +427,20 @@ describe('untitled folders (showTitle: false): the bar shows only the controls, 
     const { container } = await renderTab([folder('f', [sub('s', [kid('deep')])], { showTitle: false, name: 'Hidden' })]);
     const bar = el(container, 'f').querySelector('.folder-header') as HTMLElement;
     expect(within(bar).queryByText('Hidden')).toBeNull();
-    // Named as an inset box is (I2): a hidden title reads "Untitled folder", as it does there.
+    // Named as an inset box is: a hidden title reads "Untitled folder", as it does there.
     expect(within(bar).getByRole('button', { name: 'Minimise Untitled folder' })).toBeInTheDocument();
     await fireEvent.click(screen.getByRole('button', { name: /^s, folder with/ }));
     expect(within(bar).queryByText('Hidden')).toBeNull(); // never a breadcrumb in its bar
     expect(bar.getAttribute('data-crumb')).toBe('f'); // still the drag's go-up target
     expect(within(nested(container, 's')).getByRole('button', { name: 'Minimise s' })).toBeInTheDocument();
   });
-  it('until M6 Task 3 draws shapes, a "folder-paper" folder draws the same rounded box', async () => {
+  it('while shapes are not drawn, a "folder-paper" folder draws the same rounded box', async () => {
     const { container } = await renderTab([folder('f', kids(1), { shape: 'folder-paper' })]);
     expect(el(container, 'f').classList.contains('folder-style')).toBe(false);
   });
 });
 
-describe('edit mode looks the same (§7.2 WYSIWYG), plus handles', () => {
+describe('edit mode looks the same (WYSIWYG), plus handles', () => {
   it('the page bar and nested boxes are the same; Minimise sets the draft\'s saved default (one undo step)', async () => {
     setFolderDrill('d1', 'f', ['s']);
     const { container } = await renderEditing([folder('f', [kid('a'), sub('s', kids(12, 'x'))])]);
@@ -456,7 +456,7 @@ describe('edit mode looks the same (§7.2 WYSIWYG), plus handles', () => {
     expect(get(folderViewFor('d1'))).toEqual({});
     expect(get(selectedNodes).has('f')).toBe(false);
   });
-  it('right-click on an inset box\'s bar opens THAT sub-folder\'s menu (Ruling 14)', async () => {
+  it('right-click on an inset box\'s bar opens THAT sub-folder\'s menu', async () => {
     setFolderDrill('d1', 'f', ['s']);
     const { container } = await renderEditing([folder('f', [kid('a'), sub('s', kids(2, 'x'))])]);
     const head = nested(container, 's').querySelector(':scope > .nested-header') as HTMLElement;
@@ -490,8 +490,8 @@ describe('edit mode looks the same (§7.2 WYSIWYG), plus handles', () => {
       editorDialog.set(null);
     }
   });
-  // Walkthrough 1 (M5 §3a.8): click, Enter and the menu's Open ALL open a minimised folder, in edit
-  // mode too — the draft's saved default, one undo step. A double-click still only edits (§4B).
+  // Click, Enter and the menu's Open ALL open a minimised folder, in edit
+  // mode too — the draft's saved default, one undo step. A double-click still only edits.
   const displayOf = () => (get(session)!.draft.tabs[0].root.children[0] as any).display;
   it('a click on a minimised folder opens it (the draft, one undo step) and selects it', async () => {
     vi.useFakeTimers();
@@ -565,7 +565,7 @@ describe('edit mode looks the same (§7.2 WYSIWYG), plus handles', () => {
 });
 
 describe('phone (stacked): the same component at full width', () => {
-  it('an open folder spans the row and shows ALL its items, never paged (M6 §13 rule 4); a minimised one is a tile', async () => {
+  it('an open folder spans the row and shows ALL its items, never paged; a minimised one is a tile', async () => {
     width = 500;
     const { container } = await renderTab([folder('f', kids(30)), folder('m', kids(2), { display: 'collapsed', placement: { x: 0, y: 6, w: 6, h: 4 } })]);
     expect(el(container, 'f').getAttribute('style')).toContain('grid-column: 1 / -1');
@@ -591,9 +591,9 @@ describe('the pop-over and maximise are gone', () => {
   });
 });
 
-// M5 Task 4: the drag reads the folder's own targets from the DOM (hitTest), and holding a crumb
+// The drag reads the folder's own targets from the DOM (hitTest), and holding a crumb
 // or a page arrow during a drag shows which one is being held.
-describe('drag targets on an open folder (M5 Task 4)', () => {
+describe('drag targets on an open folder', () => {
   it('the innermost title bar names the folder it shows: itself, or the sub-folder drilled into', async () => {
     const { container } = await renderTab([folder('f', [kid('a'), sub('s', [kid('deep')])])]);
     expect(container.querySelector('.folder-header')!.getAttribute('data-folder-bar')).toBe('f');
@@ -607,10 +607,10 @@ describe('drag targets on an open folder (M5 Task 4)', () => {
   });
 });
 
-// M5 final review, Important 2 (backstop): a box below its minimum — which the server refuses, so
+// Backstop: a box below its minimum — which the server refuses, so
 // only reachable by a bug — says so visibly instead of clipping its item or page bar.
 describe('an undersized open box is flagged, never clipped silently', () => {
-  // A 24 x 4 box (the Medium minimum at the M6 §13 reference cell) at 1024 px: cells of 42.7 px,
+  // A 24 x 4 box (the Medium minimum at the reference cell) at 1024 px: cells of 42.7 px,
   // content 106 px high, the page bar a full row needs leaves 74 px < one 85 px item.
   it('view mode: a 24 x 4 box at 1024 px with a full row is drawn taller on this screen (render-only), never "too small"', async () => {
     width = 1024;

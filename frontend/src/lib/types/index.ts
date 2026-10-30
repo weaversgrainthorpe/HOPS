@@ -51,7 +51,7 @@ export interface Entry {
 }
 
 /**
- * A dashboard, tab or folder background (M4). Missing, or `inherit: true`,
+ * A dashboard, tab or folder background. Missing, or `inherit: true`,
  * means the level inherits its parent's background; the inherit form keeps
  * any stored picture fields (an "off but kept" picture). Otherwise `type`
  * names the picture kind. The backend verifies this shape on every save.
@@ -76,7 +76,7 @@ export interface Background {
 export interface StatusCheck {
   type: 'http';
   /**
-   * Layered (M4 §4b, Ruling 12): true = on, false = off, null = inherit (follow the folder, tab,
+   * Layered: true = on, false = off, null = inherit (follow the folder, tab,
    * dashboard or global setting). Missing = null: inherit.
    */
   enabled?: boolean | null;
@@ -87,7 +87,7 @@ export interface StatusCheck {
 export interface Config extends LayoutDoc {
   /** Ids the startup v2→v3 migration renamed (from GET only; never stored). */
   migrationNotices?: string[];
-  /** One-time notices the server computes per GET (M4 Task 6/7); dismissed via POST. Never stored. */
+  /** One-time notices the server computes per GET; dismissed via POST. Never stored. */
   notices?: ServerNotice[];
   /** How many notices the server sent that this build could not read (shown, never dropped silently). */
   noticesUnreadable?: number;

@@ -9,7 +9,7 @@ import (
 )
 
 // folderMinCases is testdata/folder_min_cases.json, THE open-folder minimum
-// table shared with the frontend's geometry test (Ruling 9).
+// table shared with the frontend's geometry test.
 type folderMinCases struct {
 	MinOpen []struct {
 		ContentSize any            `json:"contentSize"`
@@ -53,14 +53,14 @@ func TestFolderMinCells_SharedCases(t *testing.T) {
 }
 
 // itemsPerRow is how many items of span cells fit across a w-cell open box
-// at the reference cell (M6 §13): the content width less the padding.
+// at the reference cell: the content width less the padding.
 func itemsPerRow(w, span int) int {
 	return (w*ReferenceCellPx - FolderPadPx) / (span * ReferenceCellPx)
 }
 
 // Every folder the v2 converter writes from the real exports is at least its
 // minimum, and holds all its v2 entries on page 1 (no page bar) at the
-// reference cell (M6 §13 rule 2; narrower grids grow it on screen).
+// reference cell (narrower grids grow it on screen).
 func TestConvert_RealFoldersMeetMinimumAndFitPageOne(t *testing.T) {
 	for _, f := range []string{"testdata/real_weavers.json", "testdata/real_sample.json"} {
 		t.Run(f, func(t *testing.T) {
@@ -139,7 +139,7 @@ func TestVerifyDashboard_RefusesUndersizedFolderBox(t *testing.T) {
 	}
 }
 
-// M6 §13 rule 2 (synthetic, the prod shape): an 11-entry full-width v2 group
+// Rule 2 (synthetic, the prod shape): an 11-entry full-width v2 group
 // and a one-entry one convert to 24×4 — one Medium row at the 77 px reference
 // cell, all on page 1 with no page bar — never the old 6 rows.
 func TestConvert_FullWidthGroupsSizedAtReference(t *testing.T) {

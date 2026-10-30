@@ -38,7 +38,7 @@ type settingDTO struct {
 	Max             int      `json:"max,omitempty"`
 	Enum            []string `json:"enum,omitempty"`
 	// AdjustedFrom is the out-of-range value that was stored when the setting
-	// was clamped on load (M5 §10); empty otherwise. The admin UI shows it
+	// was clamped on load; empty otherwise. The admin UI shows it
 	// as a notice until the setting is saved.
 	AdjustedFrom string `json:"adjustedFrom,omitempty"`
 }

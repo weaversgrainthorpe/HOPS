@@ -193,7 +193,7 @@
 </div>
 
 <style>
-  /* Width, title and header-action layout come from the settings shell (M5 §11). */
+  /* Width, title and header-action layout come from the settings shell. */
   .page { color: var(--text-primary); }
   /* .lede and .lede-aside ship from app.css */
   .muted { color: var(--text-secondary); }

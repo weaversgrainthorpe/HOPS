@@ -208,7 +208,7 @@ const themePresets: Record<string, ThemePreset> = {
 };
 
 /**
- * Tokens shared by every preset in one mode (M6 batch-review rulings 1 and 2). Each is checked in
+ * Tokens shared by every preset in one mode. Each is checked in
  * theme.test.ts against every preset's page and surface colours:
  *  --on-accent          text/icons on --accent-solid (>= 4.5:1);
  *  --accent-text        accent-coloured link text (>= 4.5:1 on the page and surface);

@@ -62,7 +62,7 @@ export async function signInDialog(page: Page, username = ADMIN_USERNAME, passwo
   await expect(dlg).toHaveCount(0);
 }
 
-/** Settings → Dashboards (the dashboard list, M5 §9), signed in: wait for the list. */
+/** Settings → Dashboards (the dashboard list), signed in: wait for the list. */
 export async function openSettings(page: Page) {
   await page.goto('/settings/dashboards');
   await expect(page.getByRole('navigation', { name: 'Settings sections' })).toBeVisible();
@@ -71,7 +71,7 @@ export async function openSettings(page: Page) {
 }
 
 /**
- * Settings → Discovery (M5 §11: a normal Settings section at /settings/discovery), signed in:
+ * Settings → Discovery (a normal Settings section at /settings/discovery), signed in:
  * wait for the sidebar with Discovery current, the section title and its New Scan action.
  */
 export async function openDiscovery(page: Page) {
@@ -141,7 +141,7 @@ export async function deleteDashboardsNamed(page: Page, names: string[]) {
 export async function login(page: Page, username = ADMIN_USERNAME, password = ADMIN_TEST_PASSWORD) {
   await page.goto('/settings');
   await signInDialog(page, username, password);
-  // /settings opens its first page, Dashboards, signed in (M5 §9).
+  // /settings opens its first page, Dashboards, signed in.
   await expect(page).toHaveURL(/\/settings\/dashboards$/);
   await expect(page.getByRole('navigation', { name: 'Settings sections' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Dashboards', level: 2 })).toBeVisible();
@@ -185,7 +185,7 @@ export async function longPress(page: Page, target: Locator, ms = 650, at: { fx:
 }
 
 /**
- * M6 §9: wait until no visual flourish is playing (a folder opening, a drill, a page slide, an edit's
+ * Wait until no visual flourish is playing (a folder opening, a drill, a page slide, an edit's
  * glide / pop-in / delete copy). Geometry checks measure the boxes at rest, never mid-animation.
  */
 export async function flourishesDone(page: Page): Promise<void> {

@@ -6,7 +6,7 @@ import { editMode } from '$lib/stores/editMode';
 beforeEach(() => editMode.set(true));
 afterEach(() => editMode.set(false));
 
-describe('TabEditModal has no layout (M5: every tab is a grid)', () => {
+describe('TabEditModal has no layout (every tab is a grid)', () => {
   it('offers no Layout or Design width, and Save passes no layout', async () => {
     const onSave = vi.fn();
     render(TabEditModal, { tabName: 'Media', onSave, onCancel: vi.fn() });
@@ -19,7 +19,7 @@ describe('TabEditModal has no layout (M5: every tab is a grid)', () => {
   });
 });
 
-describe('TabEditModal background (M4 Task 5, Ruling 11(5))', () => {
+describe('TabEditModal background', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn(() =>
       Promise.resolve(new Response(JSON.stringify({ categories: [], images: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } }))

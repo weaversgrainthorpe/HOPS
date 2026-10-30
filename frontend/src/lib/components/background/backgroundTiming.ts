@@ -1,4 +1,4 @@
-// Slideshow timing bounds (Ruling 14). Stored values are never rejected (an odd value must not
+// Slideshow timing bounds. Stored values are never rejected (an odd value must not
 // block an import or prod's v2→v3 migration); they are clamped here, where they are used — the
 // renderer's timers and styles, and the picker, which shows the clamped value.
 //

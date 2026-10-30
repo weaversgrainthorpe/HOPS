@@ -1,14 +1,14 @@
 <script lang="ts">
   /**
-   * THE folder shape (M6 Task 3): one component draws every folder's look — minimised, open and nested
+   * THE folder shape: one component draws every folder's look — minimised, open and nested
    * (and the dialog's previews) — behind the folder's real content (z-index -1 in the folder's
    * stacking context). It is decoration only: aria-hidden; the name and controls are real text and
    * buttons drawn by Folder.svelte.
-   *  - Rounded (and a missing or unknown shape): the M5 box surface (FolderSurface), unchanged.
+   *  - Rounded (and a missing or unknown shape): the plain box surface (FolderSurface), unchanged.
    *  - Tab shapes: static SVG paths from folderShapePaths.shapeParts, sized to the measured box —
    *    no filters, at most one gradient (Paper), no animation (Tenet 4). The folder's colour drives
    *    the panels (deriveFolderColours). A background of its own fills the front panel, clipped to it;
-   *    the back panel and tab stay the folder colour; the opacity applies to the whole shape (§3a.10).
+   *    the back panel and tab stay the folder colour; the opacity applies to the whole shape.
    *  - The silhouette is also the focus ring: shown while the folder's tile has keyboard focus, so the
    *    focus outline follows the shape.
    */
@@ -32,7 +32,7 @@
     /** A given size (the dialog's previews); on a canvas the shape is measured instead. */
     widthPx?: number;
     heightPx?: number;
-    /** Told the measured size (a minimised tile lays its name out on the front panel, §3a.6). */
+    /** Told the measured size (a minimised tile lays its name out on the front panel). */
     onSize?: (widthPx: number, heightPx: number) => void;
   }
   let { look, variant, dashboardId, tabRect = null, mode = variant === 'minimised' ? 'still' : 'animated', widthPx, heightPx, onSize }: Props = $props();
@@ -70,7 +70,7 @@
 </script>
 
 {#if parts.shape === 'rounded'}
-  <!-- Rounded: the M5 surface, its colour at the folder's opacity (the M5 rule). -->
+  <!-- Rounded: the plain surface, its colour at the folder's opacity. -->
   <div class="folder-shape rounded" aria-hidden="true" data-folder-shape="rounded" data-shape-state={variant}>
     <FolderSurface background={look.background} color={look.color || 'var(--bg-secondary)'} colorOpacity={opacity} {mode} {dashboardId} />
   </div>
@@ -83,7 +83,7 @@
     data-tab-position={pos}
     use:measured
   >
-    <!-- The folder's opacity fades the painted shape only (§3a.10) — never the focus ring below. -->
+    <!-- The folder's opacity fades the painted shape only — never the focus ring below. -->
     <div class="shape-paint" data-shape-paint style:opacity={String(opacity)}>
     <svg class="shape-svg" width="100%" height="100%" viewBox="0 0 {box.widthPx} {box.heightPx}" preserveAspectRatio="none" focusable="false">
       {#if parts.gradient}
@@ -127,7 +127,7 @@
       {/if}
     </svg>
     {#if ownBackground}
-      <!-- The picture fills the front panel, clipped to it (§3a.10). -->
+      <!-- The picture fills the front panel, clipped to it. -->
       <div
         class="shape-front"
         data-shape-front

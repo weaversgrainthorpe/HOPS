@@ -14,7 +14,7 @@ import (
 	"github.com/weaversgrainthorpe/HOPS/internal/discovery"
 )
 
-// M3 Task 11: the legacy (v2-shaped) view and editor are retired. Everything
+// The legacy (v2-shaped) view and editor are retired. Everything
 // reads and writes the v3 document.
 
 // GET /api/config is the v3 document: exactly schemaVersion and dashboards
@@ -48,7 +48,7 @@ func TestGetConfig_IsTheV3Document(t *testing.T) {
 		t.Fatalf("every dashboard (Showcase included) is served: %v", ids)
 	}
 	// Exactly the stored dashboards (nothing added or left out), apart from
-	// the computed read-only `display` block (Ruling 9), which every served
+	// the computed read-only `display` block, which every served
 	// dashboard carries.
 	stored, _ := json.Marshal(storedDoc(t, db)["dashboards"])
 	for _, d := range v["dashboards"].([]interface{}) {
@@ -157,7 +157,7 @@ func contentKids(f configdoc.Obj) []any {
 
 // Promote into an existing folder two levels deep: every tile lands there,
 // appended in result order to its ordered list (no placements), the target's
-// revision is bumped, nothing is resized or moved (folders page, M5), and no
+// revision is bumped, nothing is resized or moved (folders page), and no
 // other dashboard changes.
 func TestPromote_IntoExistingFolderAtDepth2(t *testing.T) {
 	router, db := setupTestRouter(t)
@@ -206,7 +206,7 @@ func TestPromote_IntoExistingFolderAtDepth2(t *testing.T) {
 	if d1["revision"] != float64(2) {
 		t.Fatalf("d1 revision = %v, want 2", d1["revision"])
 	}
-	assertM5Dashboard(t, d1)
+	assertCurrentDashboard(t, d1)
 	kids := contentKids(findOne(d1, "g2"))
 	var names []string
 	for _, k := range kids {
@@ -369,7 +369,7 @@ func TestPromote_NewDashboardIsV3(t *testing.T) {
 	if nd == nil || nd["revision"] != float64(1) {
 		t.Fatalf("new dashboard: %v", nd)
 	}
-	assertM5Dashboard(t, nd)
+	assertCurrentDashboard(t, nd)
 	tab := nd["tabs"].([]any)[0].(configdoc.Obj)
 	if tab["name"] != "Services" || tab["root"] == nil {
 		t.Fatalf("new tab: %v", tab)

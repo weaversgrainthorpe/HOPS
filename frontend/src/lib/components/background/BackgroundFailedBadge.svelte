@@ -1,6 +1,6 @@
 <script lang="ts">
   // Edit-mode indicator for a level whose background image(s) failed to load
-  // (Ruling 7 / Ruling 10.2). It lists only URLs the level still references,
+  //. It lists only URLs the level still references,
   // and is never drawn over the level's content: `inline` sits in a header
   // bar; `corner` is a small tab just OUTSIDE the box's top-left edge (the
   // parent must be positioned).

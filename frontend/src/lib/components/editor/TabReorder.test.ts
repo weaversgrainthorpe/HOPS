@@ -155,7 +155,7 @@ describe('tab reorder with the drag engine', () => {
     render(Dashboard, { dashboard: legacy });
     await tick();
     layoutTabs();
-    // §7.2: the tab row has no Add Tab button in edit mode (new tabs come from the toolbar).
+    // The tab row has no Add Tab button in edit mode (new tabs come from the toolbar).
     expect(screen.queryByRole('button', { name: 'Add new tab to dashboard' })).toBeNull();
     const shown = dragTab('Main', 560, bar());
     expect(shown.target).toEqual({ kind: 'tab-order', tabIds: ['t2', 't3', 't1'] });

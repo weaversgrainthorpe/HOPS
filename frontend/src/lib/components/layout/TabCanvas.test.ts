@@ -20,7 +20,7 @@ class FakeRO {
 function tile(id: string, name: string, x: number, y: number, w = 1, h = 1): any {
   return { kind: 'tile', id, name, url: 'http://x.test', icon: '', openMode: 'newtab', size: 'medium', order: 0, placement: { x, y, w, h } };
 }
-/** A folder's child (M5: no placement). */
+/** A folder's child (no placement). */
 function kid(id: string, name: string, extra: any = {}): any {
   return { kind: 'tile', id, name, url: 'http://x.test', icon: '', openMode: 'newtab', size: 'medium', order: 0, ...extra };
 }
@@ -70,7 +70,7 @@ describe('TabCanvas', () => {
     expect(el.getAttribute('style')).toContain('grid-row: 3 / span 2');
   });
 
-  it('a sub-folder shows in its parent as its minimised tile (M5 §2), whatever its saved display', async () => {
+  it('a sub-folder shows in its parent as its minimised tile, whatever its saved display', async () => {
     const { dash, tab } = mk([
       folder('f1', 'Level1', 0, 0, 24, 16, [
         sub('f2', 'Level2', [sub('f3', 'Level3', [kid('deep', 'DeepTile')])])
@@ -151,7 +151,7 @@ describe('TabCanvas', () => {
     expect(container.querySelector('[data-page-bar="next"]')).not.toBeNull();
   });
 
-  it('a tile inside a folder is drawn at the contents size; its own size is kept (M5 §2)', async () => {
+  it('a tile inside a folder is drawn at the contents size; its own size is kept', async () => {
     const { dash, tab } = mk([
       tile('top', 'Top', 0, 0, 4, 4),
       folder('f1', 'F', 0, 4, 12, 6, [kid('big', 'Big', { size: 'large' })], { contentSize: 'small' })
@@ -166,7 +166,7 @@ describe('TabCanvas', () => {
     expect((tab.root.children[1] as any).content.children[0].size).toBe('large');
   });
 
-  it('a Medium item in a folder is the same size as a Medium tile on the tab (M5 consistent sizes)', async () => {
+  it('a Medium item in a folder is the same size as a Medium tile on the tab (consistent sizes)', async () => {
     const { dash, tab } = mk([tile('top', 'Top', 0, 0, 2, 2), folder('f1', 'F', 0, 2, 24, 8, [kid('in', 'In')])]);
     const { container } = render(TabCanvas, { dashboard: dash, tab });
     await tick();

@@ -6,7 +6,7 @@ import {
 } from './statusChecks';
 import type { LayoutDashboard } from '$lib/types/layout';
 
-// The resolver matrix shared with the Go test (Ruling 2): every case must pass here too, so the
+// The resolver matrix shared with the Go test: every case must pass here too, so the
 // dialogs' "effect" text can never drift from what the checker does.
 // Conventions: backend/internal/configdoc/testdata/status_checks_cases.README.md.
 interface Case {

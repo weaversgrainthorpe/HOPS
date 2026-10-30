@@ -10,7 +10,7 @@ export interface StatusInfo {
   intervalMinutes?: number;
   /** Set when the last status fetch failed: the values above are old data. */
   fetchError?: string;
-  /** The level whose setting decided on/off (M4 §4b): global | dashboard | tab | folder | tile | invalid. */
+  /** The level whose setting decided on/off: global | dashboard | tab | folder | tile | invalid. */
   source?: string;
   /** That level's id ("" for global). */
   sourceId?: string;

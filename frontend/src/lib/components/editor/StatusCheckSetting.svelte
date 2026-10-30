@@ -1,5 +1,5 @@
 <script lang="ts">
-  // The "Status checks" row of the tile, folder and tab dialogs (M4 design §4b): Inherit / On /
+  // The "Status checks" row of the tile, folder and tab dialogs: Inherit / On /
   // Off, plus one line saying where the effective value comes from and what this level does to
   // it. The value is the dialog's own state (draft-only: it is saved with the dialog, one undo
   // step; Cancel discards it).
@@ -135,7 +135,7 @@
   .retry-btn {
     margin-left: 0.5rem;
   }
-  /* Disabled stays readable (M6 §7.3: text >= 4.5:1): no fading — a dashed edge says it is off. */
+  /* Disabled stays readable (text >= 4.5:1): no fading — a dashed edge says it is off. */
   .reset-btn:disabled {
     opacity: 1;
     border-style: dashed;

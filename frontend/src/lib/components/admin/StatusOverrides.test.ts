@@ -20,7 +20,7 @@ import { resetStatusBaseCache } from '$lib/stores/statusCheckBase';
 import type { Config } from '$lib/types';
 import type { LayoutDashboard } from '$lib/types/layout';
 
-// rc5 Part B: every explicit status-check setting below the global one, what restoring it to
+// Every explicit status-check setting below the global one, what restoring it to
 // Inherit would change, and a bulk restore that saves through the revision-checked paths.
 
 const tile = (id: string, enabled?: unknown) => ({

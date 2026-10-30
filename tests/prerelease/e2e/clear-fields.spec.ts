@@ -1,7 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { uniqueName, createDashboardViaUI, deleteDashboardsNamed } from '../helpers';
 
-// Found in the rc1 trials: a folder's colour set back to "None" and saved stayed coloured, because
+// Found in install trials: a folder's colour set back to "None" and saved stayed coloured, because
 // the cleared field was lost on the way to the draft. Clearing a tile's away address had the same
 // flaw. Each test clears a field in its dialog, saves, reloads, and checks it is really gone.
 

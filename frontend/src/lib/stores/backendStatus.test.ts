@@ -1,4 +1,4 @@
-// Ruling 2 / the no-silent-failure rule: "can't reach the backend" (offline) and "reached it, but it
+// The no-silent-failure rule: "can't reach the backend" (offline) and "reached it, but it
 // answered with an error or no version" (degraded, shown as status 'error') are different states.
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { get } from 'svelte/store';

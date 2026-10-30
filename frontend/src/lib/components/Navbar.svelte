@@ -112,7 +112,7 @@
   // Every dashboard for the switcher, in display (Settings) order.
   let navDashboards = $derived($dashboards.map((d) => ({ id: d.id, name: d.name, path: dashboardHref(d.path) })));
 
-  // ---- the dashboard switcher (Ruling 16, M5 §8): signed in, the title is a menu button listing every
+  // ---- the dashboard switcher: signed in, the title is a menu button listing every
   // dashboard, the current one marked; choosing one navigates (a plain link, so the unsaved-changes
   // guard in +layout applies). Enter, Space or ArrowDown opens it on the current dashboard (ArrowUp on
   // the last); the arrows, Home and End move (wrapping); Escape closes it and focus returns to the title;
@@ -224,16 +224,16 @@
   let showCenter = $derived(headerConfig?.showCenter !== false); // Default true
   let leftText = $derived(headerConfig?.leftText);
   let centerTitle = $derived(headerConfig?.centerTitle);
-  /** The title: the header's own, else the dashboard's name — centred in the bar (M5 §8). */
+  /** The title: the header's own, else the dashboard's name — centred in the bar. */
   let titleText = $derived(showCenter ? centerTitle || pageDashboard?.name || '' : '');
-  /** Signed in, on a dashboard, the title is the switcher (Ruling 16); signed out it is plain text.
+  /** Signed in, on a dashboard, the title is the switcher; signed out it is plain text.
    *  With the title hidden (the header's showCenter off), an admin still gets the switcher — a compact
-   *  "Dashboards ▾" in the title's place (Ruling 20); signed out, nothing is there. */
+   *  "Dashboards ▾" in the title's place; signed out, nothing is there. */
   let showSwitcher = $derived($isAuthenticated && isDashboardPage);
   $effect(() => {
     if (!showSwitcher) untrack(() => closeSwitcher());
   });
-  // ---- the bar never outgrows the screen, and the title stays centred (M5 §8): the lowest level of
+  // ---- the bar never outgrows the screen, and the title stays centred: the lowest level of
   // compaction (CSS .c1–.c7) at which the bar fits, the title is whole and it sits in the bar's centre.
   // When no level centres it (a long title on a phone), the lowest level at which the bar fits with the
   // title whole — the title then sits as near the centre as the wider side allows, never overlapping
@@ -261,7 +261,7 @@
     const bar = navContentEl;
     if (!bar) return { fits: true, centred: true, spills: false };
     let spills = bar.scrollWidth > bar.clientWidth + 0.5;
-    // The compact "Dashboards ▾" (Ruling 20) never shrinks: squeezed, it spills out of the centre box.
+    // The compact "Dashboards ▾" never shrinks: squeezed, it spills out of the centre box.
     const center = bar.querySelector<HTMLElement>('.nav-center');
     if (center && center.scrollWidth > center.clientWidth + 0.5) spills = true;
     let fits = !spills;
@@ -418,12 +418,12 @@
           </a>
         {/if}
       {/if}
-      <!-- The backend status dot (M6 §7.12) sits next to the logo, and stays even when the logo is hidden. -->
+      <!-- The backend status dot sits next to the logo, and stays even when the logo is hidden. -->
       <BackendStatus />
     </div>
 
-    <!-- The title, centred (M5 §8). Signed in, it is the dashboard switcher (Ruling 16); with the title
-         hidden, a compact "Dashboards ▾" switcher takes its place (Ruling 20). -->
+    <!-- The title, centred. Signed in, it is the dashboard switcher; with the title
+         hidden, a compact "Dashboards ▾" switcher takes its place. -->
     {#snippet switcherButton(label: string, compactLabel: boolean)}
       <button
         type="button"
@@ -660,7 +660,7 @@
        lines up with the first tab and the controls with the canvas's right edge. Match the navbar
        safe-area on the sides too, so the brand/actions don't sit under the rounded screen corners. */
     padding: 0 max(2rem, env(safe-area-inset-left, 0)) 0 max(2rem, env(safe-area-inset-right, 0));
-    /* M5 §8: the logo, the title, the right-hand controls. The two sides share the spare width
+    /* The logo, the title, the right-hand controls. The two sides share the spare width
        equally (flex: 1 1 0), so the title sits in the bar's centre; a side never shrinks below its
        own content, so when one is too wide the title moves over rather than overlap it, and fitBar
        compacts the controls until it is centred again (or the levels run out). */
@@ -725,7 +725,7 @@
     transition: background 0.2s;
   }
 
-  /* The title hidden (Ruling 20): a compact "Dashboards ▾", smaller than a title, never shrinking. */
+  /* The title hidden: a compact "Dashboards ▾", smaller than a title, never shrinking. */
   .switcher-compact {
     display: flex;
     flex: none;
@@ -1166,7 +1166,7 @@
       display: none;
     }
   }
-  /* The bar never outgrows the screen (walkthrough 1: the page never scrolls sideways), at any width
+  /* The bar never outgrows the screen (the page never scrolls sideways), at any width
      or text size: while it would, it steps down one level at a time (fitBar), least useful first —
      tighter gaps, no wordmark, no "Editing" label, smaller buttons and Log out as an icon, no
      Help/About (still in Settings' reach for an admin), smaller text-size buttons (a phone keeps them
@@ -1287,7 +1287,7 @@
       font-size: 0.9375rem;
     }
 
-    /* The compact "Dashboards ▾" (Ruling 20) never shrinks, so at the last level it becomes an icon. */
+    /* The compact "Dashboards ▾" never shrinks, so at the last level it becomes an icon. */
     .c7 .switcher-compact-text {
       display: none;
     }

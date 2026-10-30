@@ -1,5 +1,5 @@
 /**
- * Global settings groups (M6 §10): THE one table that says which group each global setting is
+ * Global settings groups: THE one table that says which group each global setting is
  * in, and in what order. Global settings stays one long page; these groups are its sections, and
  * the settings sidebar (phones: a chip row on the page) links to each one.
  *
@@ -15,7 +15,7 @@ export interface SettingGroupDef {
 	keys: readonly string[];
 }
 
-// The order was set by Jonathan (spec §10).
+// The order was set by Jonathan.
 export const GLOBAL_SETTING_GROUPS: readonly SettingGroupDef[] = [
 	{
 		id: 'server',

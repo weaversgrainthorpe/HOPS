@@ -1,10 +1,10 @@
 <script lang="ts">
   /**
-   * Resize handles for one node in the editing renderer (M3 §5.6): the right edge, the bottom edge
-   * and the bottom-right corner of its RENDERED box (Ruling 13). Dragging one is a drag of the
+   * Resize handles for one node in the editing renderer: the right edge, the bottom edge
+   * and the bottom-right corner of its RENDERED box. Dragging one is a drag of the
    * drag engine (dragController.resizeSource): snapped to whole cells, pushes grid neighbours aside
    * as previewed, Escape cancels, each resize is one undo step. The parent renders these only where
-   * resizing applies: open folders on a tab (M5) — never tiles, minimised folders, items inside a
+   * resizing applies: open folders on a tab — never tiles, minimised folders, items inside a
    * folder or the phone (stacked) layout.
    * Keyboard: select the item and press Shift+Arrow keys (EditToolbar).
    */

@@ -1,7 +1,7 @@
 import type { BackgroundImage } from '$lib/constants/backgrounds';
 
 /**
- * Each URL once, keeping its first entry (walkthrough §1). The catalogue lists some files
+ * Each URL once, keeping its first entry. The catalogue lists some files
  * under several names and categories, and selection is by URL, so duplicates would all
  * show as selected.
  */

@@ -1,4 +1,4 @@
-// Milestone 4 Task 4: layered backgrounds — dashboard, tab, folder, overlay, failures.
+// Layered backgrounds — dashboard, tab, folder, overlay, failures.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/svelte';
 import { tick } from 'svelte';
@@ -67,7 +67,7 @@ const tile = (id: string, name: string, x = 0, y = 0): any => ({
 });
 const folder = (id: string, name: string, children: any[], extra: any = {}): any => ({
   kind: 'folder', id, name, display: 'expanded', size: 'medium', contentSize: 'medium', placement: { x: 0, y: 2, w: 8, h: 6 },
-  content: { children: children.map(({ placement: _p, ...c }) => c) }, ...extra // M5: folder contents have no placements
+  content: { children: children.map(({ placement: _p, ...c }) => c) }, ...extra // folder contents have no placements
 });
 const image = (value: string, extra: Partial<Background> = {}): Background => ({ type: 'image', value, ...extra });
 const slideshow = (images: string[], extra: Partial<Background> = {}): Background => ({
@@ -262,7 +262,7 @@ describe('dashboard and tab layers', () => {
     expect(layer(container, 'dashboard')?.querySelector('.background-fallback')).not.toBeNull();
     const badge = container.querySelector('[data-bg-failed="dashboard"]');
     expect(badge?.textContent).toContain("Background image couldn't be loaded");
-    // §7.2: the warning sits in the floating editing toolbar, never in a row that moves the page.
+    // The warning sits in the floating editing toolbar, never in a row that moves the page.
     expect(badge?.closest('[role="toolbar"]')).not.toBeNull();
     expect(console.error).toHaveBeenCalledWith('Background image could not be shown', '/backgrounds/broken.jpg');
   });
@@ -394,7 +394,7 @@ describe('folder layers', () => {
     expect(get(failedBackgroundUrls)).toEqual(['/backgrounds/missing.jpg']);
     unmount();
 
-    // Ruling 7: a later successful load removes the entry.
+    // A later successful load removes the entry.
     const again = render(TabCanvas, { dashboard: d, tab, editing: true });
     await settle();
     img('/backgrounds/missing.jpg').onload?.();
@@ -437,7 +437,7 @@ describe('folder layers', () => {
     expect(titled.closest('.folder-header')).not.toBeNull();
     expect(titled.closest('.folder-body')).toBeNull();
 
-    // M5 §3a.7: every open folder has its bar, an untitled one too.
+    // Every open folder has its bar, an untitled one too.
     const untitled = node(container, 'fu').querySelector('[data-bg-failed="folder"]')!;
     expect(untitled.closest('.folder-header')).not.toBeNull();
     expect(untitled.closest('.folder-body')).toBeNull();
@@ -461,7 +461,7 @@ describe('folder layers', () => {
   });
 });
 
-// ---- lazy loading through the shared controller (Ruling 10.5) ----------------
+// ---- lazy loading through the shared controller ----------------
 
 type IOCb = (entries: Partial<IntersectionObserverEntry>[]) => void;
 class FakeIO {
@@ -515,7 +515,7 @@ describe('folder lazy loading', () => {
     expect(node(container, 'fi').querySelector<HTMLElement>('.background-root')?.dataset.animate).toBe('false');
   });
 
-  it('nested inset boxes (M5 §7) share the cap: of 5 animated slideshows drilled one inside another, 4 animate', async () => {
+  it('nested inset boxes share the cap: of 5 animated slideshows drilled one inside another, 4 animate', async () => {
     const show = (id: string) => slideshow([`/backgrounds/${id}-1.jpg`, `/backgrounds/${id}-2.jpg`]);
     const sub = (id: string, children: any[]) => ({ ...folder(id, id.toUpperCase(), children, { background: show(id) }), placement: undefined });
     const chain = sub('n1', [sub('n2', [sub('n3', [sub('n4', [tile('z', 'Z')])])])]);

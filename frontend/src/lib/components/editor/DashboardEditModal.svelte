@@ -1,6 +1,6 @@
 <script lang="ts">
   /**
-   * The one dashboard dialog (walkthrough §4C): Header, Background and Settings, with one Save and
+   * The one dashboard dialog: Header, Background and Settings, with one Save and
    * one Cancel. Save runs the settings save first (server; only when a setting changed): if it
    * fails, the dialog stays open with the error and the draft is not touched. Then the header and
    * background go to the draft as ONE undo step. Cancel (or Escape) discards everything.
@@ -25,7 +25,7 @@
     initialSection?: SectionId;
     /** A setting (DashboardSettingsSection key) to bring into view and mark once the settings load. */
     focusSetting?: string;
-    /** Opened from a background picker (M6 §8.2): shown above it, below confirm dialogs. */
+    /** Opened from a background picker: shown above it, below confirm dialogs. */
     raised?: boolean;
   }
 

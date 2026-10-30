@@ -44,7 +44,7 @@ export async function waitForAuthChecked(): Promise<void> {
 let authCheckedValue = false;
 authChecked.subscribe((v) => { authCheckedValue = v; });
 
-/** Settings, the admin home: /settings and each of its pages (M5 §9). */
+/** Settings, the admin home: /settings and each of its pages. */
 export function isSettingsPath(path: string): boolean {
   return path === '/settings' || path.startsWith('/settings/');
 }

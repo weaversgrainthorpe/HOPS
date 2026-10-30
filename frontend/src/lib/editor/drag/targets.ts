@@ -1,7 +1,7 @@
 /**
- * The M5 folder drop and dwell targets (spec §3.4, §3a.4), pure: no DOM, no stores. The drag
+ * The folder drop and dwell targets, pure: no DOM, no stores. The drag
  * controller's one resolver (resolveDrop) and its dwell timers use these; hitTest supplies the
- * rendered boxes they read (Ruling 13: rendered geometry).
+ * rendered boxes they read (rendered geometry).
  */
 import type { HitResult } from './hitTest';
 
@@ -10,7 +10,7 @@ type Box = { left: number; top: number; width: number; height: number };
 
 /**
  * Where a drop on an open folder's page goes in the folder's order, from the pointer (px from the
- * page's content origin). Each item is split into halves (fix round 1):
+ * page's content origin). Each item is split into halves:
  * - over an item: its left half is before it, its right half after it — so "after the last item of a
  *   full page" is reachable;
  * - in a row of items but over none of them (a column gap): the nearest item in that row, by the same

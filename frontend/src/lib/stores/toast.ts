@@ -5,7 +5,7 @@ export interface Toast {
   type: 'success' | 'error' | 'warning' | 'info';
   message: string;
   duration?: number;
-  /** Optional button in the toast (Ruling 3), e.g. Undo after a drop. Clicking runs it and dismisses the toast. */
+  /** Optional button in the toast, e.g. Undo after a drop. Clicking runs it and dismisses the toast. */
   action?: { label: string; onClick: () => void };
 }
 

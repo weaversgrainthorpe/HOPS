@@ -118,7 +118,7 @@ function dragTo(id: string, from: [number, number], to: [number, number]) {
 const drop = (x: number, y: number) => document.body.dispatchEvent(pe('pointerup', x, y));
 const drop2 = (x: number, y: number) => document.body.dispatchEvent(pe('pointerup', x, y, { ctrlKey: true }));
 
-/** Ids in a container's order as the stacked layout shows it: a tab's reading order, a folder's own order (M5). */
+/** Ids in a container's order as the stacked layout shows it: a tab's reading order, a folder's own order. */
 function orderOf(d: LayoutDashboard, tabId: string, folderId?: string): string[] {
   const tab = d.tabs.find((t) => t.id === tabId)!;
   if (folderId) return (nodeIn(d, folderId) as { content: { children: LayoutNode[] } }).content.children.map((n) => n.id);

@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-// Browser security headers (design/security/v3-security-assurance.md §4).
+// Browser security headers.
 //
 // The Content-Security-Policy for the app's own pages and API responses. Each
 // directive is a deliberate decision:

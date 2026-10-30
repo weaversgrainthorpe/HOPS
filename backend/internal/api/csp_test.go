@@ -12,7 +12,7 @@ import (
 	"testing"
 )
 
-// Browser security headers (v3-security-assurance.md §4).
+// Browser security headers.
 
 var wantSecurityHeaders = map[string]string{
 	"X-Content-Type-Options": "nosniff",

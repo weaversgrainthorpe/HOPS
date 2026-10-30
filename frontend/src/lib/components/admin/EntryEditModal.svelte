@@ -33,7 +33,7 @@
 
   let { entry, onSave, onCancel, onDelete, onMoveCopy, statusContext, checkSize }: Props = $props();
 
-  // Size (M5: Small, Medium or Large only): picking one stages it (checked at once, refusals shown
+  // Size (Small, Medium or Large only): picking one stages it (checked at once, refusals shown
   // inline); Save passes it as `{ size }` so the editor sets the span on a tab. Not picking passes
   // nothing. Inside a folder the tile shows the folder's contents size; this is its own size.
   // svelte-ignore state_referenced_locally
@@ -398,7 +398,7 @@
         />
       </div>
 
-      <!-- Walkthrough §2: the tile's opacity fades its background only; the text and
+      <!-- The tile's opacity fades its background only; the text and
            the icon have their own (the status badge is never faded). -->
       <div class="form-group full-width">
         <OpacitySlider
@@ -725,7 +725,7 @@
     color: var(--accent-text);
   }
 
-  /* Placeholders readable (>= 4.5:1 on every preset, M6 §7.3); the browser default grey is 3.2–4.2:1. */
+  /* Placeholders readable (>= 4.5:1 on every preset); the browser default grey is 3.2–4.2:1. */
   input::placeholder,
   textarea::placeholder {
     color: var(--text-secondary);

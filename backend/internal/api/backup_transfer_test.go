@@ -17,7 +17,7 @@ import (
 	"github.com/weaversgrainthorpe/HOPS/internal/database"
 )
 
-// Download, upload, retention settings and "Clean up now" (M6 §11 and the
+// Download, upload, retention settings and "Clean up now" (and the
 // backups additions). All admin-only; POSTs need CSRF.
 
 func (c *apiClient) rawReq(method, path string, body []byte, contentType string) *httptest.ResponseRecorder {
@@ -57,7 +57,7 @@ func TestDownloadBackup(t *testing.T) {
 	if cd := w.Header().Get("Content-Disposition"); cd != `attachment; filename="`+database.ArchiveName(name)+`"` {
 		t.Fatalf("Content-Disposition %q", cd)
 	}
-	// M6 §12: a download is one archive (the DB, its images, a manifest).
+	// A download is one archive (the DB, its images, a manifest).
 	if !bytes.HasPrefix(w.Body.Bytes(), []byte("PK\x03\x04")) || w.Header().Get("Content-Type") != "application/zip" {
 		t.Fatal("download is not the backup archive")
 	}
@@ -325,7 +325,7 @@ func tempBackupDB(t *testing.T) (*sql.DB, string) {
 	return db, p
 }
 
-// Fix round 1, M1: a GET /api/config carrying admin notices is never cached.
+// A GET /api/config carrying admin notices is never cached.
 func TestConfigWithAdminNoticesNotCached(t *testing.T) {
 	router, db := setupTestRouter(t)
 	seed(t, db)
@@ -343,7 +343,7 @@ func TestConfigWithAdminNoticesNotCached(t *testing.T) {
 	}
 }
 
-// Fix round 1, I2: a staged restore can be discarded; a restore-failed notice can be dismissed.
+// A staged restore can be discarded; a restore-failed notice can be dismissed.
 func TestDiscardStagedRestoreAndDismissRestoreFailed(t *testing.T) {
 	router, db := setupTestRouter(t)
 	seed(t, db)
@@ -379,7 +379,7 @@ func TestDiscardStagedRestoreAndDismissRestoreFailed(t *testing.T) {
 	}
 }
 
-// Fix round 2: what startup did with an interrupted restore is a visible, dismissible notice.
+// What startup did with an interrupted restore is a visible, dismissible notice.
 func TestRestoreRecoveryNotice(t *testing.T) {
 	router, db := setupTestRouter(t)
 	seed(t, db)
@@ -398,7 +398,7 @@ func TestRestoreRecoveryNotice(t *testing.T) {
 	}
 }
 
-// Fix round 3: a restore journal that couldn't be removed is a sticky notice.
+// A restore journal that couldn't be removed is a sticky notice.
 func TestJournalLeftNotice(t *testing.T) {
 	router, db := setupTestRouter(t)
 	seed(t, db)

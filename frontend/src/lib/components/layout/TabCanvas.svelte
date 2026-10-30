@@ -24,7 +24,7 @@
   let width = $state(0);
 
   // One ResizeObserver per canvas; geometry is derived once per width change. The same observer
-  // measures every folder shape on the canvas (M6: FolderShape draws at its real size, Tenet 4).
+  // measures every folder shape on the canvas (FolderShape draws at its real size, Tenet 4).
   let ro: ResizeObserver | null = null;
   const shapeSizes = new Map<Element, (w: number, h: number) => void>();
   const num = (n: unknown) => (typeof n === 'number' && Number.isFinite(n) ? n : 0);

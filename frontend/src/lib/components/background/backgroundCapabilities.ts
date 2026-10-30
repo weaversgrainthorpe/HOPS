@@ -1,10 +1,10 @@
 /**
- * What the background dialog offers, per level, runtime context and form state (M6 §8.2): one
+ * What the background dialog offers, per level, runtime context and form state: one
  * table, so the one BackgroundSection component shows a control only where it has an effect.
  *
  * Why each row is what it is (the renderers are the source of truth):
- * - Folders are pictures only (§7.5): Edit Folder owns the folder's colour, so no Color / None.
- * - Folders have no overlay darkness or blur of their own: the canvas has one overlay (design call 1).
+ * - Folders are pictures only: Edit Folder owns the folder's colour, so no Color / None.
+ * - Folders have no overlay darkness or blur of their own: the canvas has one overlay.
  * - Slideshow motion (interval, transition, duration, Ken Burns) only plays when the layer animates:
  *   BackgroundLayer with animate=false shows the current (first) image still, with no timer. That is
  *   the case under prefers-reduced-motion at every level (Dashboard.svelte), and for folders when the

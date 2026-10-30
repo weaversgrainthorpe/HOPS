@@ -5,8 +5,7 @@
 | Version | Supported |
 |---------|-----------|
 | 3.x     | Yes: security fixes go into the latest 3.x release |
-| 2.2.x   | Security fixes only, until 30 April 2027 |
-| < 2.2   | No. Please upgrade (see [Upgrading from 2.x](DEPLOY.md#upgrading-from-2x)) |
+| < 3.0   | No. HOPS 2 gets no further fixes; please upgrade (see [Upgrading from 2.x](DEPLOY.md#upgrading-from-2x)) |
 
 ## Reporting a vulnerability
 

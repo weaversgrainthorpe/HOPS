@@ -84,7 +84,7 @@ describe('Toast component', () => {
 		expect(screen.queryByText('drop')).toBeNull();
 	});
 
-	it('renders an optional action as a button; clicking it runs the action and dismisses the toast (Ruling 3)', async () => {
+	it('renders an optional action as a button; clicking it runs the action and dismisses the toast', async () => {
 		render(Toast);
 		let ran = 0;
 		toast.add({ type: 'success', message: 'Moved "A" to Main', action: { label: 'Undo', onClick: () => ran++ } });

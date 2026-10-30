@@ -15,7 +15,7 @@ import (
 	"github.com/weaversgrainthorpe/HOPS/internal/settings"
 )
 
-// M5 §10: upload limits read plainly and an oversize upload is refused with a
+// Upload limits read plainly and an oversize upload is refused with a
 // message that names both the limit and the file's size.
 
 func multipartFile(t *testing.T, field, filename, contentType string, data []byte) (*bytes.Buffer, string) {
@@ -91,7 +91,7 @@ func TestUploadJustUnderTheLimitIsAccepted(t *testing.T) {
 	if w := putSetting(t, router, tok, csrf, settings.KeyUploadMaxBytesBackground, strconv.Itoa(1<<20)); w.Code != http.StatusOK {
 		t.Fatal(w.Body.String())
 	}
-	// A real PNG header (uploads are now checked as images, §3) padded to
+	// A real PNG header (uploads are now checked as images) padded to
 	// exactly the limit.
 	img := pngBytes(t)
 	img = append(img, bytes.Repeat([]byte("x"), 1<<20-len(img))...)

@@ -2,7 +2,7 @@
  * Phone (stacked) drops: the stacked layout shows a container's items in READING ORDER (top-left
  * by row, then column), so a drop there means "put it at this place in the order". The stored
  * layout (what desktops show) still needs positions, so this module turns "insert at index k"
- * into placements, changing as little of the desktop layout as it can (M3 §5.6, §7.4).
+ * into placements, changing as little of the desktop layout as it can.
  *
  * Plans, tried in order (the caller trial-runs each through the real op and keeps the first whose
  * result has exactly the wanted reading order, so a drop never lands anywhere but the marker):
@@ -18,7 +18,7 @@ import { clampPlacement, isPlaced, isRenderable, readingOrder } from '$lib/layou
 export interface StackPlan {
   /** Placements for the incoming items, in their order. */
   at: Placement[];
-  /** Existing items in the container that move (Ruling 11's push map). */
+  /** Existing items in the container that move (the push map). */
   push: Map<string, Placement>;
 }
 

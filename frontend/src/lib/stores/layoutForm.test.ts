@@ -1,5 +1,5 @@
-// M5 §2a: a document not at `layoutVersion: 2` is in another layout form (or was served by another
-// backend). This build writes the M5 form, so it must REFUSE to save into it — visibly — rather than
+// A document not at `layoutVersion: 2` is in another layout form (or was served by another
+// backend). This build writes the current form, so it must REFUSE to save into it — visibly — rather than
 // mix forms. Never silent: a toast says why and what to do.
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { get } from 'svelte/store';
@@ -44,10 +44,10 @@ beforeEach(() => {
 });
 
 describe('layoutFormProblem', () => {
-  it('is null only for a document at layoutVersion 2 (M6)', () => {
+  it('is null only for a document at layoutVersion 2', () => {
     expect(layoutFormProblem({ schemaVersion: 3, layoutVersion: 2, dashboards: [] })).toBeNull();
     expect(layoutFormProblem({ schemaVersion: 3, dashboards: [] })).toBe(OLD_LAYOUT_FORM);
-    // The M5 form (1) and any other version are another form (M6 §3a.4: the minimum changed).
+    // The older form (1) and any other version are another form (the minimum changed).
     expect(layoutFormProblem({ schemaVersion: 3, layoutVersion: 1, dashboards: [] })).toBe(OLD_LAYOUT_FORM);
     expect(layoutFormProblem({ schemaVersion: 3, layoutVersion: 3, dashboards: [] })).toBe(OLD_LAYOUT_FORM);
     expect(layoutFormProblem(null)).toBe(OLD_LAYOUT_FORM);
@@ -100,7 +100,7 @@ describe('the editor refuses to save into a document at another layout version',
   });
 });
 
-// Ruling 5: the server refuses a write without layoutVersion: 2 (a page loaded before the update).
+// The server refuses a write without layoutVersion: 2 (a page loaded before the update).
 // The user sees the reason, and nothing is lost: the draft stays exactly as it was, still dirty.
 describe('the server refuses a write (409 layout_version_mismatch)', () => {
   const REFUSED = 'HOPS was updated since this page was loaded, so this change was not saved. Reload the page, then make the change again.';

@@ -55,7 +55,7 @@ type Definition struct {
 	Enum []string
 }
 
-// The values of the "Animations" setting (Ruling 5).
+// The values of the "Animations" setting.
 const (
 	AnimationsOn     = "on"
 	AnimationsOff    = "off"
@@ -156,7 +156,7 @@ var Definitions = []Definition{
 			"as a dead link in Settings › Dashboards, so you can fix or remove it. Stored in hours; set it in hours or days.",
 		Min:         1, Max: 24 * 365,
 	},
-	// Upload limits (M5 §10): the largest file each upload accepts. Shown and
+	// Upload limits: the largest file each upload accepts. Shown and
 	// typed in MB in the admin UI. The ceilings are sized for the Pi Zero
 	// tenet, because import reads the whole file into memory; the floor is
 	// 1 MB. A stored value outside the bounds is clamped on load (see
@@ -176,7 +176,7 @@ var Definitions = []Definition{
 		Description: "Icon uploads bigger than this are refused.",
 		Min:         1 * MB, Max: 10 * MB,
 	},
-	// Backup retention (M6 §11). The bounds match database.RetentionPolicy;
+	// Backup retention. The bounds match database.RetentionPolicy;
 	// max_count may never be below keep_count (crossCheck). Protected
 	// backups (before an upgrade, manual, uploaded) are never deleted
 	// automatically and count toward neither.
@@ -240,7 +240,7 @@ var Definitions = []Definition{
 		Key: KeyFoldersAnimatedBackgrounds, Type: "bool", Default: "true",
 		Description: "Whether folders may show animated (video/GIF) backgrounds. Individual dashboards can override this.",
 	},
-	// M6 §7.13 / Ruling 5: the editor's drop and merge animations. Read live
+	// The editor's drop and merge animations. Read live
 	// by the editor through each dashboard's computed display block.
 	{
 		Key: KeyDisplayAnimations, Type: "enum", Default: AnimationsOn,
@@ -272,14 +272,14 @@ type Service struct {
 	// setting clamped on load. The clamp is not written back, so the admin is
 	// told (Adjustments) until they save the setting themselves.
 	adjusted map[string]string
-	// moves is what the one-time default move (Ruling 21) changed, read
+	// moves is what the one-time default move changed, read
 	// back from settings_once on every start so the notice can be shown
 	// until it is dismissed.
 	moves []DefaultMove
 }
 
 // DefaultMove is a setting that was still at its previous default and was
-// moved to the new one (Ruling 21). From and To are byte counts.
+// moved to the new one. From and To are byte counts.
 type DefaultMove struct {
 	Key  string `json:"key"`
 	From int    `json:"from"`
@@ -288,7 +288,7 @@ type DefaultMove struct {
 
 // previousDefaults lists, per setting, the default an older build seeded
 // (v2.2.1 and earlier v3 builds). A stored value exactly equal to it has
-// never been changed, so it moves to the new default once (Ruling 21).
+// never been changed, so it moves to the new default once.
 // Import stays 50 MB, so it is not listed.
 var previousDefaults = []struct {
 	Key  string
@@ -325,7 +325,7 @@ func (s *Service) seedAndLoad() error {
 	if err := s.moveOldDefaults(); err != nil {
 		return fmt.Errorf("move old defaults: %w", err)
 	}
-	// Ruling 5: "Animations" was a bool; keep the saved choice (true → on,
+	// "Animations" was a bool; keep the saved choice (true → on,
 	// false → off). Idempotent, so it runs on every start.
 	for from, to := range map[string]string{"true": AnimationsOn, "false": AnimationsOff} {
 		if _, err := s.db.Exec(
@@ -360,7 +360,7 @@ func (s *Service) seedAndLoad() error {
 	return rows.Err()
 }
 
-// moveOldDefaults runs the one-time Ruling 21 move: each setting in
+// moveOldDefaults runs the one-time default move: each setting in
 // previousDefaults whose stored value is exactly its previous default goes to
 // the current default. The changed values and the record of what moved (for
 // the notice) are written in one transaction, so a move is never made

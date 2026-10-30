@@ -50,7 +50,7 @@ async function importDash(page: Page, context: BrowserContext) {
   return { path: `/${p}`, id };
 }
 
-/** Serve the stored folder `folderId` as if saved at 2×4 (narrower than Medium's 3×4, M6 §13). */
+/** Serve the stored folder `folderId` as if saved at 2×4 (narrower than Medium's 3×4). */
 async function storedTooSmall(page: Page, folderId: string) {
   await page.route('**/api/config', async (route) => {
     if (route.request().method() !== 'GET') return route.continue();
@@ -111,7 +111,7 @@ test('edit mode: the warning names the sizes; "Make it big enough" fixes it, und
   await bar.getByRole('button', { name: /Redo/ }).click();
   await expect(note).toHaveCount(0);
 
-  // Saved: the server takes the enlarged box (3×4, M6 §13).
+  // Saved: the server takes the enlarged box (3×4).
   const saved = page.waitForResponse((r) => r.request().method() === 'PUT' && /\/api\/dashboards\//.test(r.url()));
   await bar.getByRole('button', { name: /Save/ }).click();
   const r = await saved;

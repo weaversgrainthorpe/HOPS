@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/svelte';
 
-// /settings/dashboards (M5 §9): the dashboard list, its own page under the settings shell.
+// /settings/dashboards: the dashboard list, its own page under the settings shell.
 vi.mock('$app/navigation', () => ({ goto: vi.fn(async () => {}), beforeNavigate: vi.fn(), afterNavigate: vi.fn() }));
 
 import { config, migrationFailure } from '$lib/stores/config';

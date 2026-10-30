@@ -25,7 +25,7 @@ import (
 	"github.com/weaversgrainthorpe/HOPS/internal/database"
 )
 
-// M6 §12 (Option B) through the API: deletes move images to the attic,
+// Through the API: deletes move images to the attic,
 // downloads are archives with the images, uploads are validated archives (or
 // a legacy .db with a warning). Admin-only; POST/DELETE need CSRF (covered by
 // the route audit and TestUploadBackup). Synthetic data only.

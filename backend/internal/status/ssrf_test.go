@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-// §1 items 2, 4, 5: status checks (HTTP and TCP) never reach metadata or
+// Status checks (HTTP and TCP) never reach metadata or
 // other refused addresses, in any spelling, directly or via a redirect.
 func TestCheckEntry_RefusesMetadataInEveryForm(t *testing.T) {
 	c := newBareChecker(t)

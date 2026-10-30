@@ -3,7 +3,7 @@ import QRCode from 'qrcode';
 import { HOPS_DARK_BLUE } from '$lib/stores/theme';
 import logoSource from '../../../static/logo.svg?raw';
 
-// M5 §12: dashboard QR codes carry a small HOPS bunny in their centre. Level H recovers ~30% of
+// Dashboard QR codes carry a small HOPS bunny in their centre. Level H recovers ~30% of
 // the code; the bunny's dark backing hides at most 20% x 20% of the width (4% of the area), so
 // the code still scans. The bunny is part of the SVG itself, so the download has it too.
 

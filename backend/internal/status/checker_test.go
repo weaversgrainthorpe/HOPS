@@ -193,7 +193,7 @@ func cachedIDs(t *testing.T, db *sql.DB) map[string]bool {
 	return out
 }
 
-// Layered status checks (M4 §4b, Ruling 12): a tile is probed iff its
+// Layered status checks: a tile is probed iff its
 // effective setting (most specific level that sets it) is on. "on" is
 // explicitly on, "inh" inherits explicitly (enabled: null) the global (on),
 // "none" has no setting and so inherits it too, "off" is explicitly off; a
@@ -535,9 +535,9 @@ func TestCheckAllEntries_ConfigLoadFailureKeepsCacheAndLogsError(t *testing.T) {
 	}
 }
 
-// Real data: Jonathan's own config (39 unticked tiles, 1 ticked) under a
-// global that is on. The upgrade pins v2's unticked tiles Off (spec Part A,
-// "Upgrades from v2 keep v2's behaviour"), so exactly the tiles explicitly
+// Real data: a real config (39 unticked tiles, 1 ticked) under a
+// global that is on. The upgrade pins v2's unticked tiles Off
+// ("Upgrades from v2 keep v2's behaviour"), so exactly the tiles explicitly
 // switched on in v2 are probed (no mass enablement), and none at all when checks
 // are switched off globally, as in v2.
 func TestGetEntries_RealWeaversProbesOnlyExplicitlyEnabledTiles(t *testing.T) {
@@ -610,7 +610,7 @@ func TestGetEntries_RealWeaversProbesOnlyExplicitlyEnabledTiles(t *testing.T) {
 
 func u(n configdoc.Obj) string { s, _ := n["url"].(string); return s }
 
-// Ruling 13: a wrong-typed stored value on a tile's path (here its folder)
+// A wrong-typed stored value on a tile's path (here its folder)
 // makes the tile off (source "invalid"), even when the tile is switched on.
 func TestCheckAllEntries_InvalidValueOnPathIsNotProbed(t *testing.T) {
 	h := newHitCounter(t)

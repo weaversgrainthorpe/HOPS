@@ -2,11 +2,11 @@ import { describe, it, expect } from 'vitest';
 import registry from '../../../../backend/internal/settings/testdata/setting_keys.json';
 import { GLOBAL_SETTING_GROUPS, OTHER_GROUP, SETTING_LABELS, groupSettings, jumpBehaviour, settingLabel } from './globalGroups';
 
-// M6 §10: THE grouping table for Global settings (group → ordered keys). The server registry's key
+// THE grouping table for Global settings (group → ordered keys). The server registry's key
 // list is shared with the Go suite through backend/internal/settings/testdata/setting_keys.json
 // (conventions in setting_keys.README.md), so a new server setting fails here until it is placed.
 describe('global settings grouping table', () => {
-	it('is the spec §10 table, in order', () => {
+	it('is the settings table, in order', () => {
 		expect(GLOBAL_SETTING_GROUPS.map((g) => [g.id, g.label])).toEqual([
 			['server', 'Server'],
 			['sign-in-security', 'Sign-in & security'],
@@ -32,7 +32,7 @@ describe('global settings grouping table', () => {
 		const server = keysOf('server');
 		expect(server.slice(0, 2)).toEqual(['server.port', 'log.level']);
 		expect(server.slice(2, 6).every((k) => k.startsWith('http.') && k.endsWith('timeout_seconds'))).toBe(true);
-		// M6 §11: backup retention, in the Server group.
+		// Backup retention, in the Server group.
 		expect(server.slice(6)).toEqual(['backup.keep_count', 'backup.keep_days', 'backup.max_count']);
 	});
 

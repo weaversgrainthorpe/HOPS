@@ -1,5 +1,5 @@
 /**
- * Global settings quick-jump links (M6 §10). The Global settings page tells the settings sidebar
+ * Global settings quick-jump links. The Global settings page tells the settings sidebar
  * (and its own phone chip row) which groups it is showing; the links move the page to a group.
  *
  * - The group in view is highlighted as you scroll: one IntersectionObserver over the group

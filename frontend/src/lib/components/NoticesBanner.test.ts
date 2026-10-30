@@ -61,7 +61,7 @@ describe('NoticesBanner: rename notices', () => {
   });
 });
 
-describe('NoticesBanner: server notices (M4 Task 7)', () => {
+describe('NoticesBanner: server notices', () => {
   const text =
     'Status checks now follow the most specific setting. These dashboards have tiles switched on while the dashboard is off, so those tiles are now checked: <b>Home</b>.';
   beforeEach(() => {
@@ -111,7 +111,7 @@ describe('NoticesBanner: server notices (M4 Task 7)', () => {
   });
 });
 
-describe('NoticesBanner: never presents doubtful notices as fresh (fix round 1)', () => {
+describe('NoticesBanner: never presents doubtful notices as fresh', () => {
   beforeEach(() => {
     noticesStale.set(null);
     migrationNoticesDismissed.set(false);

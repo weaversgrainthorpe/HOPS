@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-// Uploaded images and backups (M6 §12, Option B, Jonathan 2026-10-26).
+// Uploaded images and backups.
 //
 // Uploaded images live in <data>/icons and <data>/backgrounds. Local backups
 // are database-only, but no image a backup refers to is destroyed while that
@@ -193,7 +193,7 @@ func scanTableRefs(db *sql.DB, table string, refs map[string]bool) error {
 // sqliteURI is a SQLite "file:" URI for an absolute path (slashes as
 // filepath.ToSlash gives them). A Windows path needs the leading slash
 // (file:///C:/…): without it "C:" was read as a host, SQLite couldn't open
-// the file, and every backup failed on Windows (rc2 trial F).
+// the file, and every backup failed on Windows.
 func sqliteURI(slashPath, query string) string {
 	if !strings.HasPrefix(slashPath, "/") {
 		slashPath = "/" + slashPath

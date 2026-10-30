@@ -12,7 +12,7 @@ import (
 	"testing"
 )
 
-// Route audit (design/security/v3-security-assurance.md §2): the regression
+// The regression
 // guard for every future route. Every pattern registered through Router.handle
 // must be classified below, with a reason. The test fails when
 //

@@ -57,7 +57,7 @@ describe('GET /api/config', () => {
     expect(await getConfig()).toEqual({ ...doc, migrationNotices: ['n'] });
   });
 
-  it('returns the server notices (M4 Task 7); a malformed notice is dropped visibly, never failing the load', async () => {
+  it('returns the server notices; a malformed notice is dropped visibly, never failing the load', async () => {
     respond(200, { ...doc, notices: [{ id: 'n1', text: 'Hello' }] });
     expect(await getConfig()).toEqual({ ...doc, notices: [{ id: 'n1', text: 'Hello' }] });
     // A malformed entry is dropped and COUNTED (the banner says so); the dashboards still load.
@@ -72,7 +72,7 @@ describe('GET /api/config', () => {
     expect(await getConfig()).toEqual({ ...doc, notices: [{ id: 'backup-x', text: 'Backup failed', level: 'warning', sticky: true }, { id: 'n', text: 't' }] });
   });
 
-  it('keeps the layout version (M5 §2a) so the editor can tell the form; absent stays absent', async () => {
+  it('keeps the layout version so the editor can tell the form; absent stays absent', async () => {
     respond(200, { ...doc, layoutVersion: 2 });
     expect(await getConfig()).toEqual({ ...doc, layoutVersion: 2 });
     respond(200, doc);
@@ -95,7 +95,7 @@ describe('GET /api/config', () => {
   });
 });
 
-describe('M5 §2a: every placement-carrying write says which layout version it is in', () => {
+describe('every placement-carrying write says which layout version it is in', () => {
   const req = {
     mode: 'move' as const, sourceId: 'a', sourceRevision: 3, nodeIds: ['n'], targetId: 'b', targetRevision: 1,
     target: { tabId: 't' }

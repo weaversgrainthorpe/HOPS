@@ -149,11 +149,11 @@ func TestMigrateV2_Basic(t *testing.T) {
 	d := dashes[0]
 	assertKeysPreserved(t, v2d, d, "dashboard", "tabs", "perTabBackgrounds")
 	if _, has := d["perTabBackgrounds"]; has {
-		t.Error("converter kept perTabBackgrounds; M4 writes the final background form")
+		t.Error("converter kept perTabBackgrounds; the converter writes the final background form")
 	}
 	eq(t, d["revision"], 1, "revision")
 	if _, has := d["defaultLayout"]; has {
-		t.Error("defaultLayout written; every tab is a grid tab (M5)")
+		t.Error("defaultLayout written; every tab is a grid tab")
 	}
 	settings := d["settings"].(Obj)
 	if len(settings) != len(settingsKeys) {
@@ -177,7 +177,7 @@ func TestMigrateV2_Basic(t *testing.T) {
 			t.Error("tab still has groups")
 		}
 		if _, has := tab["layout"]; has {
-			t.Error("tab.layout written; every tab is a grid tab (M5)")
+			t.Error("tab.layout written; every tab is a grid tab")
 		}
 		root := tab["root"].(Obj)
 		eq(t, root["columns"], 24, "root.columns")
@@ -185,7 +185,7 @@ func TestMigrateV2_Basic(t *testing.T) {
 	// perTabBackgrounds was on: the tab background stays active, unchanged.
 	for i, tab := range tabs {
 		if _, has := tab["backgroundEnabled"]; has {
-			t.Errorf("tab %d got backgroundEnabled; M4 writes the final background form", i)
+			t.Errorf("tab %d got backgroundEnabled; the converter writes the final background form", i)
 		}
 	}
 	eq(t, tabs[0]["background"], v2tabs[0]["background"], "active tab background")
@@ -197,8 +197,8 @@ func TestMigrateV2_Basic(t *testing.T) {
 		t.Fatalf("folders = %d", len(folders))
 	}
 	wantPl := []Obj{
-		// Finer grid (spec §9): 2×2 tiles, a 2-cell title row, 24 columns.
-		// M6 §13: counted at the reference cell (77 px), all on page 1, so no page bar.
+		// Finer grid: 2×2 tiles, a 2-cell title row, 24 columns.
+		// Counted at the reference cell (77 px), all on page 1, so no page bar.
 		{"x": 0, "y": 0, "w": 24, "h": 4}, // 3 entries, 11 a row: 1 tile row (2) + chrome (2: bar, tab allowance, padding)
 		{"x": 0, "y": 4, "w": 12, "h": 4},
 		{"x": 12, "y": 4, "w": 12, "h": 4},
@@ -212,7 +212,7 @@ func TestMigrateV2_Basic(t *testing.T) {
 		}
 		eq(t, f["kind"], "folder", "kind")
 		if _, has := f["layout"]; has {
-			t.Error("folder.layout written (M5: folders always flow)")
+			t.Error("folder.layout written (folders always flow)")
 		}
 		eq(t, f["size"], "medium", "folder.size")
 		eq(t, f["contentSize"], "medium", "folder.contentSize")
@@ -223,7 +223,7 @@ func TestMigrateV2_Basic(t *testing.T) {
 	}
 	for _, f := range folders {
 		if _, has := f["content"].(Obj)["columns"]; has {
-			t.Errorf("folder %v content has columns (M5: contents flow)", f["id"])
+			t.Errorf("folder %v content has columns (contents flow)", f["id"])
 		}
 	}
 
@@ -236,7 +236,7 @@ func TestMigrateV2_Basic(t *testing.T) {
 		assertKeysPreserved(t, v2entries[i], tile, "tile")
 		eq(t, tile["kind"], "tile", "tile.kind")
 		if _, has := tile["placement"]; has {
-			t.Errorf("folder child %v has a placement (M5: an ordered list)", tile["id"])
+			t.Errorf("folder child %v has a placement (an ordered list)", tile["id"])
 		}
 	}
 	// array order, not `order`, drives display: ids e1,e2,e3 despite order 2,1,0.
@@ -250,8 +250,8 @@ func TestMigrateV2_Basic(t *testing.T) {
 	// Tab 2: collapsed folder-style third with 5 entries.
 	f := children(t, tabs[1]["root"].(Obj))[0]
 	eq(t, f["display"], "collapsed", "display")
-	eq(t, f["shape"], "folder-flat", "shape")                               // M6 §3a.1: v2 folder style is Flat
-	eq(t, f["placement"], Obj{"x": 0, "y": 0, "w": 8, "h": 6}, "placement") // 3 a row (padding takes a column): 2 tile rows ×2, +2 chrome at the reference cell (M6 §13)
+	eq(t, f["shape"], "folder-flat", "shape")                               // v2 folder style is Flat
+	eq(t, f["placement"], Obj{"x": 0, "y": 0, "w": 8, "h": 6}, "placement") // 3 a row (padding takes a column): 2 tile rows ×2, +2 chrome at the reference cell
 	var order []string
 	for _, tile := range children(t, f["content"].(Obj)) {
 		order = append(order, tile["id"].(string))

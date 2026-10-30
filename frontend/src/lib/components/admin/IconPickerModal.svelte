@@ -169,7 +169,7 @@
     }
 
     // The size limit is the admin's upload.max_bytes_icon setting; uploadIconImage refuses an
-    // oversize file before sending it, naming the limit and the file's size (M5 §10).
+    // oversize file before sending it, naming the limit and the file's size.
 
     try {
       uploadingIcon = true;

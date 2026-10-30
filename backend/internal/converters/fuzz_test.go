@@ -11,7 +11,7 @@ import (
 	"github.com/weaversgrainthorpe/HOPS/internal/configdoc"
 )
 
-// §3 security pass: config import (HOPS v2/v3 JSON or YAML, Homer, Dashy,
+// Security pass: config import (HOPS v2/v3 JSON or YAML, Homer, Dashy,
 // Heimdall) is fuzzed through the same steps as POST /api/config/import:
 // limits, format detection, conversion, then the configdoc conversion and
 // verification of every dashboard. Any input must give a result or an error,

@@ -139,7 +139,7 @@ describe('QRCodeModal', () => {
 	});
 });
 
-describe('QRCodeModal bunny (M5 §12)', () => {
+describe('QRCodeModal bunny', () => {
 	it('shows the bunny in the centre of the QR code', async () => {
 		render(QRCodeModal, { props: { dashboard, onClose: () => {} } });
 		await waitFor(() => {

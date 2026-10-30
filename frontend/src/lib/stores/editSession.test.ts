@@ -40,7 +40,7 @@ import ParkedDraftBanner from '$lib/components/ParkedDraftBanner.svelte';
 import type { Config } from '$lib/types';
 import type { LayoutDashboard, LayoutDoc, LayoutNode, Placement } from '$lib/types/layout';
 
-// M5 form: 24 columns, p() defaults to a Medium tile's 2 x 2; folder contents have no placements.
+// 24 columns, p() defaults to a Medium tile's 2 x 2; folder contents have no placements.
 const p = (x: number, y: number, w = 2, h = 2): Placement => ({ x, y, w, h });
 const tile = (id: string, pl?: Placement): LayoutNode =>
 	({ kind: 'tile', id, name: id, url: 'http://x', ...(pl ? { placement: pl } : {}) }) as unknown as LayoutNode;
@@ -265,7 +265,7 @@ describe('save', () => {
 		const sent = draft();
 		const fresh: LayoutDoc = { schemaVersion: 3, layoutVersion: 2, dashboards: [{ ...sent, revision: 8 }] };
 		vi.mocked(api.saveDashboardV3).mockResolvedValue({ revision: 8, layout: fresh });
-		// A follow-up GET refreshes only the notices (M4 Task 7); its document is never taken.
+		// A follow-up GET refreshes only the notices; its document is never taken.
 		vi.mocked(api.getConfig).mockResolvedValue({ schemaVersion: 3, layoutVersion: 2, dashboards: [{ ...sent, name: 'from GET', revision: 99 }] });
 		expect(await save()).toBe('saved');
 		expect(api.saveDashboardV3).toHaveBeenCalledWith('d', sent, 7);
@@ -624,7 +624,7 @@ describe('idle timeout', () => {
 	});
 });
 
-describe('final fix wave', () => {
+describe('save races', () => {
 	function deferred<T>() {
 		let resolve!: (v: T) => void;
 		let reject!: (e: unknown) => void;
@@ -635,7 +635,7 @@ describe('final fix wave', () => {
 		return { promise, resolve, reject };
 	}
 
-	it('Minor 1: a save of an unchanged-meanwhile draft keeps the SAME draft object', async () => {
+	it('a save of an unchanged-meanwhile draft keeps the SAME draft object', async () => {
 		begin('d');
 		apply('1', setName('one'));
 		const sent = draft();
@@ -650,7 +650,7 @@ describe('final fix wave', () => {
 		expect(get(dirty)).toBe(false);
 	});
 
-	it('Minor 1: a server copy that differs from what was sent still replaces the draft', async () => {
+	it('a server copy that differs from what was sent still replaces the draft', async () => {
 		begin('d');
 		apply('1', setName('one'));
 		const sent = draft();
@@ -661,7 +661,7 @@ describe('final fix wave', () => {
 		expect(draft().name).toBe('normalised');
 	});
 
-	it('Minor 2: leaving edit mode while a save is in flight waits for it; no Discard prompt after it saved', async () => {
+	it('leaving edit mode while a save is in flight waits for it; no Discard prompt after it saved', async () => {
 		enableEditMode();
 		apply('1', setName('mine'));
 		const sent = draft();
@@ -679,7 +679,7 @@ describe('final fix wave', () => {
 		expect(get(toast).map((t) => t.message)).toContain('Changes saved');
 	});
 
-	it('Minor 2: Discard pressed while a save is in flight says the changes were already saved', async () => {
+	it('Discard pressed while a save is in flight says the changes were already saved', async () => {
 		begin('d');
 		apply('1', setName('mine'));
 		const sent = draft();
@@ -698,7 +698,7 @@ describe('final fix wave', () => {
 		expect(get(dirty)).toBe(false);
 	});
 
-	it('Minor 2: Discard chosen in the leave prompt while a save started meanwhile reports it truthfully', async () => {
+	it('Discard chosen in the leave prompt while a save started meanwhile reports it truthfully', async () => {
 		enableEditMode();
 		apply('1', setName('mine'));
 		const sent = draft();
@@ -717,7 +717,7 @@ describe('final fix wave', () => {
 		expect(get(toast).at(-1)?.message).toMatch(/already saved/);
 	});
 
-	it('Minor 6: a newer layout revision rebases a CLEAN session, visibly', async () => {
+	it('a newer layout revision rebases a CLEAN session, visibly', async () => {
 		begin('d');
 		const theirs = { ...dash(), revision: 9, name: 'theirs' };
 		config.set({ schemaVersion: 3, layoutVersion: 2, dashboards: [theirs] } as unknown as Config);
@@ -730,7 +730,7 @@ describe('final fix wave', () => {
 		expect(get(toast).at(-1)?.message).toMatch(/changed somewhere else/);
 	});
 
-	it('Minor 6: a dirty session is left alone (its save will conflict)', async () => {
+	it('a dirty session is left alone (its save will conflict)', async () => {
 		begin('d');
 		apply('1', setName('mine'));
 		const mine = draft();
@@ -740,7 +740,7 @@ describe('final fix wave', () => {
 		expect(get(session)!.baseRevision).toBe(7);
 	});
 
-	it('Minor 6: our own save does not trigger a rebase toast', async () => {
+	it('our own save does not trigger a rebase toast', async () => {
 		begin('d');
 		apply('1', setName('one'));
 		const sent = draft();

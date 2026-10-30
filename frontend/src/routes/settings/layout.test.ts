@@ -3,7 +3,7 @@ import { get, writable } from 'svelte/store';
 import { createRawSnippet } from 'svelte';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/svelte';
 
-// The Settings shell (spec §4D + M5 §9): every settings page shares this layout. Logged out it
+// The Settings shell: every settings page shares this layout. Logged out it
 // asks for the password in place (the same LoginDialog as the pencil) on ANY settings address;
 // signed in it shows the sidebar (Dashboards, Icons, Global settings, Discovery, Backups, Logs, Password,
 // Factory reset, Log out) beside the page, with MigrationFailed / notices on top.
@@ -186,7 +186,7 @@ describe('settings shell, logged out', () => {
 });
 
 describe('settings shell, signed in', () => {
-	it('the sidebar lists the sections in order, with their own addresses (Discovery at /settings/discovery, M5 §11)', () => {
+	it('the sidebar lists the sections in order, with their own addresses (Discovery at /settings/discovery)', () => {
 		renderShell();
 		const items = within(sidebar()).getAllByRole('link').filter((a) => a.classList.contains('side-item')).map((a) => [a.textContent?.trim(), a.getAttribute('href')]);
 		expect(items).toEqual([
@@ -314,7 +314,7 @@ describe('settings shell, signed in', () => {
 	});
 });
 
-// M6 §10: Global settings' groups are a sub-list under "Global settings", only while on that page.
+// Global settings' groups are a sub-list under "Global settings", only while on that page.
 describe('settings shell, Global settings groups', () => {
 	const groups = [
 		{ id: 'server', label: 'Server' },
