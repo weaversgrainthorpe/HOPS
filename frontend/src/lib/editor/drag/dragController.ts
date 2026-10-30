@@ -55,7 +55,7 @@ import { toast } from '$lib/stores/toast';
 import { clearSelection, selectionInDraft, toggleNode } from '$lib/stores/nodeSelection';
 import { hitTest as domHitTest, type HitResult } from './hitTest';
 import { crumbDwellKey, dwellArgs, flowIndex, flowMarker, pageDwellKey } from './targets';
-import { railState, type RailMetrics } from '$lib/components/tabbar/tabRail';
+import { railState, revealScrollLeft, type RailMetrics } from '$lib/components/tabbar/tabRail';
 import { drillUpTo, setFolderPage } from '$lib/stores/folderView';
 import {
   cancelDropAnimations, claimFlourish, outStarts, playDropAnimation, playOutOfFolders, sayAnimationFailure,
@@ -1216,6 +1216,18 @@ function railEdge(x: number, rail: Element): { strip: Element; dx: number } | nu
 }
 
 /**
+ * Whether opening the tab drawn at `tab` (viewport px) would scroll the rail's strip: the same sum
+ * TabRail's reveal does (revealScrollLeft), with the tab's place measured inside the strip's content.
+ */
+function switchWouldScroll(rail: Element, tab: { left: number; width: number }): boolean {
+  const strip = rail.querySelector('[data-drag-tabbar]');
+  if (!strip) return false;
+  const m = env.scrollMetrics(strip);
+  const to = revealScrollLeft({ left: tab.left - env.measure(strip).left + m.scrollLeft, width: tab.width }, m);
+  return to !== null && Math.abs(to - m.scrollLeft) > 1;
+}
+
+/**
  * Near an edge, scroll (and keep scrolling while held there): the tab rail sideways when the pointer
  * is at either end of it, else the panel under the pointer, else the page.
  */
@@ -1261,7 +1273,13 @@ function dwellKey(s: DragState, hit: HitResult, d: LayoutDashboard): { key: stri
   if (hit.crumb !== undefined) return crumbAction(hit.crumb) ? { key: `crumb:${hit.crumb}`, ms: OPEN_DWELL_MS } : null;
   // While the tab rail edge-scrolls, the tabs move under a still pointer: no hover-to-switch then.
   if (hit.tabRail && (railEdge(s.pointer.x, hit.tabRail)?.dx ?? 0) !== 0) return null;
-  if (hit.tabId !== undefined) return hit.tabId !== activeTab ? { key: `tab:${hit.tabId}`, ms: OPEN_DWELL_MS } : null;
+  if (hit.tabId !== undefined) {
+    if (hit.tabId === activeTab) return null;
+    // Switching reveals the new open tab (TabRail scrolls it fully into view). A tab that reveal
+    // would scroll could walk the open tab along the row under a still pointer: no hold there.
+    if (hit.tabRail && hit.tabRect && switchWouldScroll(hit.tabRail, hit.tabRect)) return null;
+    return { key: `tab:${hit.tabId}`, ms: OPEN_DWELL_MS };
+  }
   // An open folder's page bar: ‹ / › flips the page (none at that end); an outer box's title goes back up.
   if (hit.pageBar) {
     const b = hit.pageBar;

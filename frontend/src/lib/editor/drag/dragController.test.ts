@@ -610,8 +610,11 @@ describe('the drag refusal reason is announced', () => {
 
 describe('the tab rail scrolls sideways during a drag', () => {
   const RAIL = { left: 0, top: 0, width: 500, height: 40 };
-  /** A rail whose strip shows 500 of 3000 px, and a stub that puts the pointer over a tab in it. */
-  function railEnv(scrollLeft: number) {
+  /**
+   * A rail whose strip shows 500 of 3000 px, and a stub that puts the pointer over a tab in it (by
+   * default 80 px wide, 20 px left of the pointer; `tabAt` places it otherwise).
+   */
+  function railEnv(scrollLeft: number, tabAt: (x: number) => { left: number; width: number } = (x) => ({ left: x - 20, width: 80 })) {
     const strip = document.createElement('div');
     strip.setAttribute('data-drag-tabbar', '');
     const rail = document.createElement('div');
@@ -621,7 +624,7 @@ describe('the tab rail scrolls sideways during a drag', () => {
     const scrollElByX = vi.fn();
     setDragEnv({
       hitTest: (x) => ({
-        container: null, dx: 0, dy: 0, tabId: 't2', tabRect: { left: x - 20, top: 0, width: 80, height: 40 }, tabRail: rail
+        container: null, dx: 0, dy: 0, tabId: 't2', tabRect: { ...tabAt(x), top: 0, height: 40 }, tabRail: rail
       }),
       raf: (cb) => {
         frames.push(cb);
@@ -630,7 +633,7 @@ describe('the tab rail scrolls sideways during a drag', () => {
       cancelRaf: () => {
         frames = [];
       },
-      measure: (e) => (e === rail ? RAIL : sourceRect),
+      measure: (e) => (e === rail || e === strip ? RAIL : sourceRect),
       viewport: () => ({ width: 2000, height: 2000 }),
       scrollBy: () => {},
       scrollElByX,
@@ -692,6 +695,29 @@ describe('the tab rail scrolls sideways during a drag', () => {
     moveTo(490, 20);
     flush();
     expect(still).not.toHaveBeenCalled();
+    expect(get(drag)?.dwell?.key).toBe('tab:t2');
+  });
+
+  it('no tab dwell on a tab that opening would scroll into view (the open tab never walks under a still pointer)', () => {
+    setActiveTab('t1');
+    // Mid-rail (no edge-scroll), but the tab's right end is 4 px from the strip's: opening it would
+    // scroll the row, putting another tab under the pointer.
+    railEnv(1000, () => ({ left: 380, width: 100 }));
+    const { el } = source('a');
+    startMouseDrag(el, 100, 20);
+    moveTo(400, 20);
+    flush();
+    expect(get(drag)?.dwell).toBeUndefined();
+    drop(400, 20);
+    // The same tab well inside the strip: holding there opens it as before.
+    resetDragForTests();
+    env();
+    setActiveTab('t1');
+    railEnv(1000, () => ({ left: 200, width: 100 }));
+    const { el: el2 } = source('b');
+    startMouseDrag(el2, 100, 20);
+    moveTo(250, 20);
+    flush();
     expect(get(drag)?.dwell?.key).toBe('tab:t2');
   });
 });
