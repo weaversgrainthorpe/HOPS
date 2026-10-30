@@ -8,6 +8,7 @@
   import { layoutStale, loadConfig } from '$lib/stores/config';
   import { revealRequest, takeReveal, type RevealRequest } from '$lib/stores/reveal';
   import { animationsAllowed } from '$lib/editor/drag/dropAnimation';
+  import TabRail, { revealTab } from './tabbar/TabRail.svelte';
   import { clearPageReveal, revealInFolders } from '$lib/stores/folderView';
   import { editMode } from '$lib/stores/editMode';
   import { session, apply } from '$lib/stores/editSession';
@@ -345,11 +346,33 @@
     return true;
   }
 
+  /** Arrow/Home/End on a tab: select that tab, focus it and scroll it into view. */
+  function selectTabByKey(to: number) {
+    const id = barTabs[to]?.id;
+    if (!id) return;
+    activeTabIndex = to;
+    void tick().then(() => {
+      const btn = document.querySelector<HTMLElement>(`[data-tab-button="${CSS.escape(id)}"]`);
+      btn?.focus({ preventScroll: true });
+      const strip = btn?.closest<HTMLElement>('[role="tablist"]');
+      if (strip) revealTab(strip, id, animationsAllowed(dashboard.id));
+    });
+  }
+
   /** Keyboard tab reorder (edit mode): Alt+Left / Alt+Right moves the focused tab one place. */
   function handleTabKey(e: KeyboardEvent, index: number) {
     if (e.key === 'Enter' || e.key === ' ') {
       handleTabClick(index);
       return;
+    }
+    if (!e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+      const to = e.key === 'ArrowLeft' ? index - 1 : e.key === 'ArrowRight' ? index + 1
+        : e.key === 'Home' ? 0 : e.key === 'End' ? barTabs.length - 1 : -1;
+      if (to >= 0) {
+        e.preventDefault();
+        if (to < barTabs.length && to !== index) selectTabByKey(to);
+        return;
+      }
     }
     if (!editing || !e.altKey || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight')) return;
     e.preventDefault();
@@ -404,6 +427,7 @@
   {/if}
   <div class="dashboard-header">
     {#if barTabs.length >= 1}
+      <TabRail activeTabId={activeTabId ?? null} animate={animationsAllowed(dashboard.id)}>
       <div
         class="tabs"
         data-dashboard-tabs
@@ -453,6 +477,7 @@
           </div>
         {/each}
       </div>
+      </TabRail>
     {/if}
   </div>
 
@@ -648,29 +673,13 @@
   .tabs {
     display: flex;
     gap: 0.25rem;
-    flex-wrap: wrap;
     position: relative;
     z-index: 1;
   }
 
-  /* On phones, stop wrapping tabs to multiple rows (which can push
-     the whole dashboard below the fold). Scroll them horizontally
-     instead — the tab strip becomes a single row the user can swipe
-     through. */
-  @media (max-width: 768px) {
-    .tabs {
-      flex-wrap: nowrap;
-      overflow-x: auto;
-      -webkit-overflow-scrolling: touch;
-      scrollbar-width: thin;
-    }
-    .tab-container {
-      flex-shrink: 0;
-    }
-  }
-
   .tab-container {
     position: relative;
+    flex-shrink: 0;
     display: flex;
     align-items: center;
   }

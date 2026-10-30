@@ -153,6 +153,13 @@ In [edit mode](#the-editor), the **Dashboard** button in the toolbar opens
 
 Tabs run across the top of a dashboard. Click one to switch to it.
 
+The tabs always stay on one row. When they don't all fit, the row scrolls
+sideways and four arrows appear at its ends: **«** and **»** jump to the
+first and last tab, **‹** and **›** move about one screenful. The arrows only
+scroll the row; they never change the open tab. You can also scroll with the
+mouse wheel or by swiping, and the open tab is always scrolled into view.
+Keyboard: with a tab focused, Left/Right and Home/End move to another tab.
+
 In edit mode:
 
 - **Add tab** (toolbar) opens **New Tab**.
