@@ -20,12 +20,13 @@
     exporting = true;
 
     try {
-      const { blob, missing } = await exportConfig('json');
+      const { blob, missing, importWarning } = await exportConfig('json');
       downloadBlob(blob, `hops-all-dashboards-${new Date().toISOString().split('T')[0]}.json`);
-      // Pictures left out are said, and stay on screen until dismissed.
+      // Pictures left out, or a file too big to import back, are said and stay on screen until dismissed.
       const warning = missingAssetsWarning(missing);
       if (warning) toast.warning(warning, 0);
-      else toast.success('All dashboards exported');
+      if (importWarning) toast.warning(importWarning, 0);
+      if (!warning && !importWarning) toast.success('All dashboards exported');
       onClose();
     } catch (err) {
       toast.error('Export failed');
@@ -38,12 +39,13 @@
     exportingId = dashboardId;
 
     try {
-      const { blob, missing } = await exportConfig('json', dashboardId);
+      const { blob, missing, importWarning } = await exportConfig('json', dashboardId);
       const safeName = dashboardName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
       downloadBlob(blob, `hops-${safeName}-${new Date().toISOString().split('T')[0]}.json`);
       const warning = missingAssetsWarning(missing);
       if (warning) toast.warning(warning, 0);
-      else toast.success(`Exported "${dashboardName}"`);
+      if (importWarning) toast.warning(importWarning, 0);
+      if (!warning && !importWarning) toast.success(`Exported "${dashboardName}"`);
     } catch (err) {
       toast.error('Export failed');
     } finally {

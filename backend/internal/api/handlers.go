@@ -153,6 +153,7 @@ func (r *Router) handleGetConfig(w http.ResponseWriter, req *http.Request) {
 		if n, ok := r.iconLeftoverNotice(); ok {
 			adminNotices = append(adminNotices, n)
 		}
+		adminNotices = append(adminNotices, r.statusNotices(time.Now())...)
 	}
 	if len(adminNotices) > 0 {
 		// Admin-only content: never stored by a shared cache or the service
@@ -716,6 +717,32 @@ type MissingAsset struct {
 // asked for the download: a URL-escaped JSON array of MissingAsset.
 const MissingAssetsHeader = "X-HOPS-Missing-Assets"
 
+// ImportWarningHeader carries, URL-escaped, why an export couldn't be
+// imported back as it is (too big for the import limits). The download can't
+// say so itself, so the page reads the header.
+const ImportWarningHeader = "X-HOPS-Import-Warning"
+
+// moveWithBackups is the way to move a setup of any size between HOPS installs.
+const moveWithBackups = "To move a setup this big to another HOPS, use Settings › Backups: download a backup here and upload it there."
+
+// setImportWarning sets ImportWarningHeader when data is over the import
+// limits. The limits stay as they are: importing 101 dashboards of 1,000
+// tiles took 358 MB of memory on a 512 MB Pi-class machine.
+func (r *Router) setImportWarning(w http.ResponseWriter, data []byte) {
+	var why string
+	if limit := r.settings.GetInt(uploadImport.key); limit > 0 && len(data) > limit {
+		why = fmt.Sprintf("This export is %s, bigger than the largest file HOPS imports (%s, set in Settings › Global settings).",
+			formatMB(int64(len(data))), formatMB(int64(limit)))
+	} else if len(data) > 2*converters.MaxImportNodes { // a smaller file can't hold that many entries
+		if err := converters.CheckImportLimits(data); err != nil {
+			why = "This export can't be imported back into HOPS as it is: " + strings.TrimPrefix(err.Error(), converters.ErrImportTooLarge.Error()+": ") + "."
+		}
+	}
+	if why != "" {
+		w.Header().Set(ImportWarningHeader, url.PathEscape(why+" "+moveWithBackups))
+	}
+}
+
 // missingAssetsKey is the config key listing an export's missing assets.
 const missingAssetsKey = "missingAssets"
 
@@ -991,11 +1018,13 @@ func (r *Router) handleExportConfig(w http.ResponseWriter, req *http.Request) {
 			writeJSONError(w, "Failed to convert config to YAML", http.StatusInternalServerError)
 			return
 		}
+		r.setImportWarning(w, yamlBytes)
 		w.Header().Set("Content-Type", "application/x-yaml")
 		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s.yaml", filename))
 		w.Write(yamlBytes) // #nosec G104 -- response write: a client that hung up cannot be told, nothing to recover
 	} else {
 		w.Header().Set("Content-Type", "application/json")
+		r.setImportWarning(w, exportData)
 		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s.json", filename))
 		w.Write(exportData) // #nosec G104 -- response write: a client that hung up cannot be told, nothing to recover
 	}
@@ -1502,7 +1531,7 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 	// Depth and entry caps (and YAML alias bombs) first, with the reason.
 	if err := converters.CheckImportLimits(fileData); err != nil {
 		slog.Warn("import refused: document limits", "component", "import", "error", err)
-		writeJSONError(w, "Import refused — "+err.Error()+".", http.StatusBadRequest)
+		writeJSONError(w, "Import refused — "+err.Error()+". "+moveWithBackups, http.StatusBadRequest)
 		return
 	}
 

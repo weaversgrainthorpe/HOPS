@@ -137,7 +137,7 @@
     exportingId = dashboard.id;
     try {
       // Export only this specific dashboard
-      const { blob, missing } = await exportConfig('json', dashboard.id);
+      const { blob, missing, importWarning } = await exportConfig('json', dashboard.id);
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -150,7 +150,8 @@
       // Pictures left out are said, and stay on screen until dismissed.
       const warning = missingAssetsWarning(missing);
       if (warning) toast.warning(warning, 0);
-      else toast.success(`Exported "${dashboard.name}"`);
+      if (importWarning) toast.warning(importWarning, 0);
+      if (!warning && !importWarning) toast.success(`Exported "${dashboard.name}"`);
     } catch (err) {
       toast.error(err instanceof Error && err.message ? `Export failed: ${err.message}` : 'Export failed');
     } finally {

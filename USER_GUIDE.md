@@ -1072,6 +1072,12 @@ Import it with **Import** above.
 An export is not a backup. It holds dashboards only, not your settings,
 password, scans or backups. For those, see [Backups](#backups).
 
+A very large setup (more than about 12,000 tiles in all, or bigger than
+**Largest import**) can't be imported back as one file, so that a small
+machine such as a Pi Zero isn't run out of memory. The export still
+downloads, and HOPS says so. To move a setup that big to another HOPS, use
+[Backups](#backups): they move a setup of any size.
+
 ---
 
 ## Backups

@@ -97,6 +97,9 @@ type Checker struct {
 	// success.
 	backoffMu sync.Mutex
 	backoff   map[string]*entryBackoff
+
+	// health is what the checker reports about itself (health.go).
+	health healthState
 }
 
 // NewChecker creates a new status checker driven by the settings service.
@@ -317,44 +320,87 @@ func (c *Checker) checkAllEntries() {
 
 	slog.Debug("checking status for entries", "component", "status", "count", len(entries))
 	c.forget(entries)
-
-	// Collect results from concurrent HTTP checks
-	results := make([]statusCheckResult, len(entries))
-
-	// Use a semaphore to limit concurrent requests
-	sem := make(chan struct{}, 5)
-	var wg sync.WaitGroup
+	ids := make([]string, len(entries))
+	for i, e := range entries {
+		ids[i] = e.ID
+	}
+	c.noteSave(c.pruneResults(ids))
 
 	now := c.now()
-	for i, entry := range entries {
-		// Not due yet: keep the cached row, make no request.
-		if !c.isDue(entry, now) {
-			results[i] = statusCheckResult{entryID: entry.ID, skipped: true}
+	var due []Entry
+	shortest := 0
+	for _, entry := range entries {
+		// Not due yet, or inside its backoff window: keep the cached row,
+		// make no request.
+		if !c.isDue(entry, now) || c.shouldSkip(entry.ID, now) {
 			continue
 		}
-		// Honour the per-entry backoff window — if a previous check
-		// failed enough times in a row, we wait before retrying.
-		if c.shouldSkip(entry.ID, now) {
-			results[i] = statusCheckResult{entryID: entry.ID, skipped: true}
-			continue
+		due = append(due, entry)
+		if shortest == 0 || entry.IntervalMinutes < shortest {
+			shortest = entry.IntervalMinutes
 		}
-		wg.Add(1)
-		go func(idx int, e Entry) {
-			defer wg.Done()
-			sem <- struct{}{}        // acquire
-			defer func() { <-sem }() // release
-
-			res := c.checkEntry(e)
-			c.markChecked(e.ID, now)
-			c.recordOutcome(e, res.status, now)
-			results[idx] = res
-		}(i, entry)
 	}
+	if len(due) == 0 {
+		return
+	}
+	c.beginPass(len(due), shortest)
 
-	wg.Wait()
+	// A fixed pool of workers: 16,000 due tiles cost checkWorkers
+	// goroutines, not 16,000 (each holding its stack until its turn).
+	jobs := make(chan Entry)
+	out := make(chan statusCheckResult, checkWorkers)
+	var wg sync.WaitGroup
+	for i := 0; i < checkWorkers && i < len(due); i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for e := range jobs {
+				res := c.checkEntry(e)
+				c.markChecked(e.ID, now)
+				c.recordOutcome(e, res.status, now)
+				out <- res
+			}
+		}()
+	}
+	go func() {
+		for _, e := range due {
+			jobs <- e
+		}
+		close(jobs)
+		wg.Wait()
+		close(out)
+	}()
 
-	// Batch write all results in a single transaction to avoid contention
-	c.saveResults(results, now)
+	// Results are saved in batches as they arrive, so a long pass fills the
+	// badges in as it goes instead of leaving every one "unknown" until the
+	// last (unreachable) tile has timed out.
+	batch := make([]statusCheckResult, 0, saveBatch)
+	flush := func() {
+		if len(batch) > 0 {
+			c.noteSave(c.saveBatch(batch, now))
+			c.passProgress(len(batch))
+			batch = batch[:0]
+		}
+	}
+	tick := time.NewTicker(saveEvery)
+	defer tick.Stop()
+	for open := true; open; {
+		select {
+		case r, ok := <-out:
+			if !ok {
+				open = false
+				break
+			}
+			batch = append(batch, r)
+			if len(batch) >= saveBatch {
+				flush()
+			}
+		case <-tick.C:
+			flush()
+		}
+	}
+	flush()
+	c.endPass()
 }
 
 // isDue reports whether the entry has never been probed or its own interval
@@ -601,43 +647,65 @@ func errText(err error) string {
 	return s
 }
 
-// saveResults writes all status check results in a single transaction, and
-// keeps the failing-since clock (status_failing) in the same transaction.
+// saveResults prunes the cache to the given results' tiles and saves the
+// results that were probed (skipped ones keep their rows).
 func (c *Checker) saveResults(results []statusCheckResult, now time.Time) {
-	tx, err := c.db.Begin()
-	if err != nil {
-		slog.Error("failed to begin status cache transaction", "component", "status", "error", err)
-		return
-	}
-
-	// Drop rows for tiles that are no longer checked (check switched off,
-	// tile deleted) so their last result can't resurface as current.
-	// Backoff-skipped entries are still in results, so they keep theirs.
-	ids := make([]any, len(results))
+	ids := make([]string, len(results))
 	for i, r := range results {
 		ids[i] = r.entryID
 	}
+	c.noteSave(c.pruneResults(ids))
+	var probed []statusCheckResult
+	for _, r := range results {
+		if !r.skipped {
+			probed = append(probed, r)
+		}
+	}
+	c.noteSave(c.saveBatch(probed, now))
+}
+
+// pruneResults drops cached rows, and failing-since rows, for tiles that are
+// no longer checked (check switched off, tile deleted) so their last result
+// can't resurface as current. Tiles still checked (due or not) keep theirs.
+func (c *Checker) pruneResults(ids []string) error {
+	tx, err := c.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin: %w", err)
+	}
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
 	prune := "DELETE FROM status_cache"
-	if len(ids) > 0 {
-		prune += " WHERE entry_id NOT IN (?" + strings.Repeat(",?", len(ids)-1) + ")" // #nosec G202 -- only ? placeholder lists or a fixed/quote-escaped table name, never user input
+	if len(args) > 0 {
+		prune += " WHERE entry_id NOT IN (?" + strings.Repeat(",?", len(args)-1) + ")" // #nosec G202 -- only ? placeholder lists or a fixed/quote-escaped table name, never user input
 	}
-	if _, err := tx.Exec(prune, ids...); err != nil {
-		tx.Rollback() // #nosec G104 -- Rollback on an error path; the original error is already logged
-		slog.Error("failed to prune status cache", "component", "status", "error", err)
-		return
+	if _, err := tx.Exec(prune, args...); err != nil {
+		tx.Rollback() // #nosec G104 -- Rollback on an error path; the original error is returned
+		return fmt.Errorf("prune status cache: %w", err)
 	}
-	// The same for the failing clock: a tile whose checks are off, or that
-	// is gone, isn't tracked.
-	if _, err := tx.Exec(strings.Replace(prune, "status_cache", "status_failing", 1), ids...); err != nil {
-		tx.Rollback() // #nosec G104 -- Rollback on an error path; the original error is already logged
-		slog.Error("failed to prune failing-since rows", "component", "status", "error", err)
-		return
+	if _, err := tx.Exec(strings.Replace(prune, "status_cache", "status_failing", 1), args...); err != nil {
+		tx.Rollback() // #nosec G104 -- Rollback on an error path; the original error is returned
+		return fmt.Errorf("prune failing-since rows: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit prune: %w", err)
+	}
+	return nil
+}
+
+// saveBatch writes probed results in one transaction, and keeps the
+// failing-since clock (status_failing) in the same transaction.
+func (c *Checker) saveBatch(results []statusCheckResult, now time.Time) error {
+	if len(results) == 0 {
+		return nil
+	}
+	tx, err := c.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin: %w", err)
 	}
 	at := now.UTC().Format(time.RFC3339)
 	for _, r := range results {
-		if r.skipped {
-			continue
-		}
 		var err error
 		switch {
 		case r.status == "up":
@@ -648,36 +716,27 @@ func (c *Checker) saveResults(results []statusCheckResult, now time.Time) {
 				r.entryID, at, r.detail, at)
 		}
 		if err != nil {
-			tx.Rollback() // #nosec G104 -- Rollback on an error path; the original error is already logged
-			slog.Error("failed to update failing-since row", "component", "status", "entry_id", r.entryID, "error", err)
-			return
+			tx.Rollback() // #nosec G104 -- Rollback on an error path; the original error is returned
+			return fmt.Errorf("update failing-since row for %s: %w", r.entryID, err)
 		}
 	}
-
 	stmt, err := tx.Prepare(`
 		INSERT OR REPLACE INTO status_cache (entry_id, status, response_time, last_checked)
 		VALUES (?, ?, ?, datetime('now'))
 	`)
 	if err != nil {
-		tx.Rollback() // #nosec G104 -- Rollback on an error path; the original error is already logged
-		slog.Error("failed to prepare status cache statement", "component", "status", "error", err)
-		return
+		tx.Rollback() // #nosec G104 -- Rollback on an error path; the original error is returned
+		return fmt.Errorf("prepare: %w", err)
 	}
 	defer stmt.Close()
-
 	for _, r := range results {
-		// Backoff-skipped entries: leave the stale row in place. The
-		// dashboard keeps showing the last known status until the
-		// cooldown ends and a fresh check runs.
-		if r.skipped {
-			continue
-		}
 		if _, err := stmt.Exec(r.entryID, r.status, r.responseTime); err != nil {
-			slog.Error("failed to update status cache", "component", "status", "entry_id", r.entryID, "error", err)
+			tx.Rollback() // #nosec G104 -- Rollback on an error path; the original error is returned
+			return fmt.Errorf("save result for %s: %w", r.entryID, err)
 		}
 	}
-
 	if err := tx.Commit(); err != nil {
-		slog.Error("failed to commit status cache transaction", "component", "status", "error", err)
+		return fmt.Errorf("commit: %w", err)
 	}
+	return nil
 }

@@ -22,6 +22,7 @@ import (
 	"github.com/weaversgrainthorpe/HOPS/internal/database"
 	"github.com/weaversgrainthorpe/HOPS/internal/discovery"
 	"github.com/weaversgrainthorpe/HOPS/internal/settings"
+	"github.com/weaversgrainthorpe/HOPS/internal/status"
 	"github.com/weaversgrainthorpe/HOPS/internal/web"
 )
 
@@ -64,6 +65,7 @@ type Router struct {
 	cleanupStop    chan struct{} // stops the daily backup cleanup
 	sizeNotes      sizeNoteState // tiles whose unknown size became Medium (notices.go)
 	iconLeftovers  leftoverState // deleted icon files that couldn't be removed (icons_manage.go)
+	statusHealth   func() status.Health // the status checker's own state (status_notices.go); nil until SetStatusHealth
 	csrfKeyMu      sync.Mutex    // guards csrfKey
 	csrfKey        []byte        // the HMAC key binding CSRF tokens to sessions, loaded once (csrf.go)
 }
@@ -288,7 +290,7 @@ func NewRouter(db *sql.DB, authService *auth.Service, cfg *config.Config, settin
 
 	r.setupRoutes()
 	r.appCSP = appContentSecurityPolicy(r.spaIndexHTML())
-	return r, r.securityHeadersMiddleware(r.corsMiddleware(r.recoverMiddleware(r.loggingMiddleware(r.mux))))
+	return r, r.securityHeadersMiddleware(r.corsMiddleware(r.recoverMiddleware(r.loggingMiddleware(gzipMiddleware(r.mux)))))
 }
 
 // parseTrustedProxyCIDRs converts validated CIDR strings into IPNets. The

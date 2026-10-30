@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { missingAssetsFromHeader, missingAssetsWarning, MISSING_ASSETS_HEADER } from './exportResult';
+import { missingAssetsFromHeader, missingAssetsWarning, MISSING_ASSETS_HEADER, IMPORT_WARNING_HEADER, importWarningFromHeader } from './exportResult';
 import { exportConfig } from './api';
 
 const header = (list: unknown) => encodeURIComponent(JSON.stringify(list));
@@ -37,5 +37,17 @@ describe('exportConfig reads the missing-pictures header', () => {
     const { blob, missing } = await exportConfig('json');
     expect(await blob.text()).toBe('{}');
     expect(missing).toEqual([{ path: '/icons/gone.png', reason: 'could not be read' }]);
+  });
+
+  it('returns why the file could not be imported back, or null when it can', async () => {
+    const why = 'This export is 60 MB, bigger than the largest file HOPS imports (50 MB). Use Settings › Backups.';
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 200, headers: { [IMPORT_WARNING_HEADER]: encodeURIComponent(why) } })));
+    expect((await exportConfig('json')).importWarning).toBe(why);
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 200 })));
+    expect((await exportConfig('json')).importWarning).toBeNull();
+  });
+
+  it('a garbled import warning still warns', () => {
+    expect(importWarningFromHeader('%E0%A4%A')).toMatch(/may not be able to import this file back/);
   });
 });

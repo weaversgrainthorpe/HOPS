@@ -267,6 +267,7 @@ func run() bool {
 	// Initialize API router
 	startTime := time.Now()
 	apiRouter, router := api.NewRouter(db, authService, cfg, settingsSvc, startTime, discoveryStore, discoveryOrch, migration)
+	apiRouter.SetStatusHealth(statusChecker.Health)
 	defer apiRouter.Stop()
 
 	if !backedUp {

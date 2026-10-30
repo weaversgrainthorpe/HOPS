@@ -37,3 +37,18 @@ export function missingAssetsWarning(missing: MissingAsset[]): string | null {
   const more = n > 5 ? `; and ${n - 5} more` : '';
   return `Exported, but ${n} ${n === 1 ? "picture couldn't be read and is" : "pictures couldn't be read and are"} not in the file: ${names}${more}.`;
 }
+
+export const IMPORT_WARNING_HEADER = 'X-HOPS-Import-Warning';
+
+/**
+ * Why the export couldn't be imported back as it is (too big for the import limits), from the
+ * URL-escaped header, or null when it can. A header that can't be read still warns.
+ */
+export function importWarningFromHeader(header: string | null): string | null {
+  if (!header) return null;
+  try {
+    return decodeURIComponent(header);
+  } catch {
+    return "Exported, but HOPS may not be able to import this file back (the server's warning couldn't be read).";
+  }
+}
