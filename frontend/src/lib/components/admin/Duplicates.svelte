@@ -3,6 +3,7 @@
   // with a merge that keeps one and deletes the others. A merge is a normal layout edit: one
   // revision-checked save per dashboard, never silent (a preview and a confirmation first), and
   // refused visibly when a dashboard is being edited or has changed elsewhere.
+  import { onMount } from 'svelte';
   import { get } from 'svelte/store';
   import Icon from '@iconify/svelte';
   import { config, applySavedLayout, showSaveWarning, loadConfig, findLayoutDashboard } from '$lib/stores/config';
@@ -12,7 +13,19 @@
   import { showOnDashboard } from '$lib/utils/showIt';
   import { toast } from '$lib/stores/toast';
 
-  const report = $derived(findDuplicates($config));
+  // The heading and "Finding duplicates…" paint first; the search (seconds over ~100,000 tiles)
+  // runs after, so the page never sits blank and unresponsive with no sign of work.
+  let started = $state(false);
+  onMount(() => {
+    const raf = requestAnimationFrame(() => setTimeout(() => (started = true), 0));
+    return () => cancelAnimationFrame(raf);
+  });
+  const report = $derived(started ? findDuplicates($config) : null);
+
+  // A page of groups at a time: drawing thousands at once froze the browser (and queued every
+  // click made meanwhile, silently).
+  const PAGE = 50;
+  let limit = $state(PAGE);
 
   const SCOPE_KEY = 'hops.duplicates.scope';
   function loadScope(): DupScope {
@@ -26,9 +39,11 @@
   }
   let scope = $state<DupScope>(loadScope());
   const scopeInfo = $derived(DUP_SCOPES.find((x) => x.id === scope)!);
-  const shown = $derived(scopeGroups(report.groups, scope));
+  const shown = $derived(report ? scopeGroups(report.groups, scope) : []);
+  const visible = $derived(shown.slice(0, limit));
   function setScope(s: DupScope) {
     scope = s;
+    limit = PAGE;
     merging = null;
     refusal = '';
     try {
@@ -141,13 +156,15 @@
         </label>
       {/each}
     </div>
-    {#if shown.length === 0}
+    {#if !report}
+      <p class="muted" role="status" aria-busy="true" data-state="working">Finding duplicates…</p>
+    {:else if shown.length === 0}
       <p class="state ok" role="status" data-state="none">
         {scope === 'all' ? `No duplicate addresses across ${tileCount(report.totalTiles)}` : `No duplicates ${scopeInfo.within}`}
       </p>
     {:else}
       <p class="muted" role="status" data-dup-count>{shown.length} group{shown.length === 1 ? '' : 's'} {scopeInfo.within}</p>
-      {#each shown as g (g.key)}
+      {#each visible as g (g.key)}
         <div class="group" data-dup-group={g.address}>
           <div class="addr"><code>{g.address}</code> <span class="muted">{g.tiles.length} tiles</span></div>
           <ul class="rows">
@@ -200,6 +217,12 @@
           {#if refusal && merging === g.key}<p class="error" role="alert" data-merge-refusal>{refusal}</p>{/if}
         </div>
       {/each}
+      {#if shown.length > visible.length}
+        <p class="more" data-dup-more>
+          <span class="muted">Showing {visible.length} of {shown.length} groups.</span>
+          <button type="button" class="btn-secondary" onclick={() => (limit += PAGE)}>Show {Math.min(PAGE, shown.length - visible.length)} more</button>
+        </p>
+      {/if}
     {/if}
   {/if}
 </section>
@@ -225,5 +248,6 @@
   .name { font-weight: 600; }
   .path, .diff { color: var(--text-secondary); font-size: 0.85rem; overflow-wrap: anywhere; }
   .preview { margin-top: 0.5rem; padding: 0.6rem 0.8rem; border: 1px solid var(--color-error, #ef4444); border-radius: 0.4rem; }
+  .more { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; }
   .btns { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.4rem; }
 </style>

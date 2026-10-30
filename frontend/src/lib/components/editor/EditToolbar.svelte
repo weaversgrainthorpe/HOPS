@@ -1,6 +1,6 @@
 <script lang="ts">
   import Icon from '@iconify/svelte';
-  import { session, dirty, save, discard, undo, redo } from '$lib/stores/editSession';
+  import { session, dirty, save, discard, undo, redo, UNDO_CAP } from '$lib/stores/editSession';
   import { selectedNodes, clearSelection, selectionInDraft } from '$lib/stores/nodeSelection';
   import { copySelection, cutSelection, pasteInto } from '$lib/stores/nodeClipboard';
   import { openDialog, currentContainer, canvasStacked } from '$lib/editor/editorUi';
@@ -148,8 +148,18 @@
   <div class="controls">
     <div class="group">
       <span class="save-slot">
-        <button type="button" class="tb primary" onclick={doSave} disabled={!$dirty || saving} title="Save (Ctrl+S)">
-          <Icon icon="mdi:content-save" width="18" /> Save
+        <!-- While a save is in flight it says so (a big dashboard on a small server takes seconds). Both
+             labels share one cell, so the button keeps its width and nothing beside it moves. -->
+        <button type="button" class="tb primary" class:saving onclick={doSave} disabled={!$dirty || saving} aria-busy={saving} title="Save (Ctrl+S)">
+          {#if saving}
+            <Icon icon="mdi:loading" width="18" class="spin" />
+          {:else}
+            <Icon icon="mdi:content-save" width="18" />
+          {/if}
+          <span class="label-stack">
+            <span class:shown={!saving} aria-hidden={saving}>Save</span>
+            <span class:shown={saving} aria-hidden={!saving}>Saving…</span>
+          </span>
         </button>
         <!-- Drawn only while its flourish plays (invisible otherwise); the toast says "Changes saved" either way. -->
         <span class="saved-tick" data-saved-tick aria-hidden="true" bind:this={tickEl}><Icon icon="mdi:check-circle" width="20" /></span>
@@ -157,7 +167,8 @@
       <button type="button" class="tb" onclick={() => discard()} disabled={!$dirty || saving} title="Discard all unsaved changes">
         <Icon icon="mdi:close-circle-outline" width="18" /> Discard
       </button>
-      <button type="button" class="tb" onclick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)">
+      <button type="button" class="tb" onclick={undo} disabled={!canUndo}
+        title={!canUndo && $session?.undoDropped ? `Nothing more to undo: Undo keeps your last ${UNDO_CAP} changes` : 'Undo (Ctrl+Z)'}>
         <Icon icon="mdi:undo" width="18" /> Undo
       </button>
       <button type="button" class="tb" onclick={redo} disabled={!canRedo} title="Redo (Ctrl+Shift+Z or Ctrl+Y)">
@@ -291,6 +302,23 @@
   .tb:disabled {
     opacity: 0.45;
     cursor: default;
+  }
+  .tb.primary.saving {
+    opacity: 1;
+    background: var(--accent-solid);
+    border-color: var(--accent-solid);
+    color: var(--on-accent);
+    cursor: progress;
+  }
+  .label-stack {
+    display: inline-grid;
+  }
+  .label-stack > span {
+    grid-area: 1 / 1;
+    visibility: hidden;
+  }
+  .label-stack > span.shown {
+    visibility: visible;
   }
   .tb.primary:not(:disabled) {
     background: var(--accent-solid);

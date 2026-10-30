@@ -98,15 +98,18 @@ function score(r: SearchItem, q: string): number {
   return -1;
 }
 
-/** Matches best first (stable within a rank, so layout order breaks ties), at most `cap`. */
-export function rankSearch(index: SearchItem[], query: string, cap: number): SearchItem[] {
+/**
+ * Matches best first (stable within a rank, so layout order breaks ties), at most `cap`, and how
+ * many matched in all — so a capped list can say it is capped.
+ */
+export function rankSearch(index: SearchItem[], query: string, cap: number): { items: SearchItem[]; total: number } {
   const q = query.trim().toLowerCase();
-  if (!q) return [];
+  if (!q) return { items: [], total: 0 };
   const hits: Array<[number, number, SearchItem]> = [];
   for (let i = 0; i < index.length; i++) {
     const s = score(index[i], q);
     if (s >= 0) hits.push([s, i, index[i]]);
   }
   hits.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
-  return hits.slice(0, cap).map((h) => h[2]);
+  return { items: hits.slice(0, cap).map((h) => h[2]), total: hits.length };
 }

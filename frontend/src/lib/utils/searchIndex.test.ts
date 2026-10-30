@@ -69,9 +69,9 @@ describe('hostOf', () => {
 describe('rankSearch', () => {
   const idx = () => buildSearchIndex(doc(), 'd1');
   it('matches name, description and URL host', () => {
-    expect(rankSearch(idx(), 'sonarr', 50).map((r) => r.id)).toContain('sonarr');
-    expect(rankSearch(idx(), 'first one', 50).map((r) => r.id)).toEqual(['a']);
-    expect(rankSearch(idx(), 'example.org', 50).map((r) => r.id)).toEqual(['sonarr']);
+    expect(rankSearch(idx(), 'sonarr', 50).items.map((r) => r.id)).toContain('sonarr');
+    expect(rankSearch(idx(), 'first one', 50).items.map((r) => r.id)).toEqual(['a']);
+    expect(rankSearch(idx(), 'example.org', 50).items.map((r) => r.id)).toEqual(['sonarr']);
   });
   it('ranks exact name, then prefix, then contains, then host/description', () => {
     const items = buildSearchIndex({
@@ -80,10 +80,12 @@ describe('rankSearch', () => {
         tile('5', 'Z', { url: 'http://plex.lan/' })
       ] } }] }]
     } as unknown as LayoutDoc);
-    expect(rankSearch(items, 'plex', 50).map((r) => r.id)).toEqual(['4', '3', '1', '5', '2']);
+    expect(rankSearch(items, 'plex', 50).items.map((r) => r.id)).toEqual(['4', '3', '1', '5', '2']);
   });
   it('caps the results and ignores an empty query', () => {
-    expect(rankSearch(idx(), 'filler', 5)).toHaveLength(5);
-    expect(rankSearch(idx(), '  ', 5)).toEqual([]);
+    const capped = rankSearch(idx(), 'filler', 5);
+    expect(capped.items).toHaveLength(5);
+    expect(capped.total).toBe(30);
+    expect(rankSearch(idx(), '  ', 5)).toEqual({ items: [], total: 0 });
   });
 });

@@ -52,6 +52,7 @@ var uploadLimitLabels = map[string]string{
 	settings.KeyUploadMaxBytesImport:     "Largest import",
 	settings.KeyUploadMaxBytesBackground: "Largest background upload",
 	settings.KeyUploadMaxBytesIcon:       "Largest icon upload",
+	settings.KeyUploadMaxBytesBackup:     "Largest backup upload",
 }
 
 // uploadDefaultsNotice describes the one-time default move, or false when

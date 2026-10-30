@@ -21,6 +21,7 @@ var (
 	uploadImport     = uploadKind{settings.KeyUploadMaxBytesImport, "file you can import"}
 	uploadBackground = uploadKind{settings.KeyUploadMaxBytesBackground, "background image allowed"}
 	uploadIcon       = uploadKind{settings.KeyUploadMaxBytesIcon, "icon file allowed"}
+	uploadBackup     = uploadKind{settings.KeyUploadMaxBytesBackup, "backup you can upload"}
 )
 
 // multipartOverhead is the room allowed for the multipart envelope (boundaries,
@@ -92,7 +93,7 @@ func (r *Router) readLimitedUpload(w http.ResponseWriter, req *http.Request, kin
 	return file, header, true
 }
 
-// handleUploadLimits returns the three upload limits in bytes so the UI can
+// handleUploadLimits returns the upload limits in bytes so the UI can
 // refuse an oversize file before sending it (the server still enforces them).
 func (r *Router) handleUploadLimits(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodGet {
@@ -103,5 +104,6 @@ func (r *Router) handleUploadLimits(w http.ResponseWriter, req *http.Request) {
 		"import":     r.settings.GetInt(settings.KeyUploadMaxBytesImport),
 		"background": r.settings.GetInt(settings.KeyUploadMaxBytesBackground),
 		"icon":       r.settings.GetInt(settings.KeyUploadMaxBytesIcon),
+		"backup":     r.settings.GetInt(settings.KeyUploadMaxBytesBackup),
 	})
 }

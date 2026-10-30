@@ -177,6 +177,21 @@ describe('SearchModal scope', () => {
     expect(screen.getByRole('button', { name: /Top Tile/ })).toHaveTextContent('Home');
   });
 
+  it('more than 50 matches: says how many it is showing of how many', async () => {
+    const many = Array.from({ length: 73 }, (_, i) => tile(`m${i}`, `Many ${i}`));
+    config.set({ schemaVersion: 3, dashboards: [{ ...layoutD1, tabs: [{ id: 't1', name: 'Main', root: { columns: 24, children: many } }] }] } as Config);
+    render(SearchModal, { onClose: vi.fn() });
+    await tick();
+    const input = screen.getByRole('textbox', { name: /search tiles/i });
+    await fireEvent.input(input, { target: { value: 'many' } });
+    await tick();
+    expect(screen.getAllByRole('button', { name: /Many \d+/ })).toHaveLength(50);
+    expect(screen.getByRole('status')).toHaveTextContent('Showing the first 50 of 73 matches');
+    await fireEvent.input(input, { target: { value: 'many 7' } });
+    await tick();
+    expect(screen.queryByText(/Showing the first/)).toBeNull();
+  });
+
   it('with no document loaded (failed load) the visible alert shows, not "no matches"', async () => {
     config.set(null);
     setPage({ dashboard: 'home' });

@@ -89,6 +89,22 @@ describe('EditToolbar', () => {
     expect(get(dirty)).toBe(false);
   });
 
+  it('says "Saving…" (busy) while a save is in flight, then "Save" again', async () => {
+    let finish!: (v: { revision: number }) => void;
+    vi.mocked(api.saveDashboardV3).mockReturnValue(new Promise((r) => (finish = r)) as never);
+    render(EditToolbar, { tabId: 't1', onAddTab: vi.fn() });
+    rename('a', 'Changed');
+    await tick();
+    const btn = screen.getByRole('button', { name: 'Save' });
+    await fireEvent.click(btn);
+    await tick();
+    expect(btn).toHaveAttribute('aria-busy', 'true');
+    expect(btn).toHaveAccessibleName('Saving…');
+    finish({ revision: 6 });
+    await vi.waitFor(() => expect(btn).toHaveAttribute('aria-busy', 'false'));
+    expect(btn).toHaveAccessibleName('Save');
+  });
+
   it('shortcuts are ignored while typing in a field', async () => {
     render(EditToolbar, { tabId: 't1', onAddTab: vi.fn() });
     rename('a', 'Changed');

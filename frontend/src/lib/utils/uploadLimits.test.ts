@@ -55,6 +55,15 @@ describe('oversize uploads', () => {
 		expect(await checkUploadSize('background', big)).toBeNull();
 	});
 
+	it('a backup is checked against its own limit, not the import limit', async () => {
+		vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ import: 50 * MB, background: 25 * MB, icon: 2 * MB, backup: 500 * MB }), { status: 200 })));
+		expect(await checkUploadSize('backup', { size: 79 * MB } as File)).toBeNull();
+		expect(await checkUploadSize('import', { size: 79 * MB } as File)).toMatch(/79 MB.*50 MB/);
+		expect(await checkUploadSize('backup', { size: 600 * MB } as File)).toBe(
+			'This file is 600 MB, but the largest backup you can upload is 500 MB. Choose a smaller file, or raise the limit in Settings → Global settings.'
+		);
+	});
+
 	it('checkUploadSize lets the server decide when the limits cannot be read', async () => {
 		vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('offline'); }));
 		expect(await checkUploadSize('icon', { size: 100 * MB } as File)).toBeNull();

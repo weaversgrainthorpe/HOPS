@@ -926,7 +926,7 @@ export function backupArchiveName(name: string): string {
  * automatically. It shares the import size limit, refused before sending when over it.
  */
 export async function uploadBackup(file: File): Promise<{ name: string; message: string; warning?: string }> {
-  const refusal = await checkUploadSize('import', file);
+  const refusal = await checkUploadSize('backup', file);
   if (refusal) throw new Error(refusal);
   const formData = new FormData();
   formData.append('file', file);

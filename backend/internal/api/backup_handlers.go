@@ -257,16 +257,13 @@ func (r *Router) handleDownloadBackup(w http.ResponseWriter, req *http.Request, 
 	http.ServeContent(w, req, archive, fi.ModTime(), f)
 }
 
-// uploadBackupKind: an uploaded backup shares the import size limit.
-var uploadBackupKind = uploadKind{uploadImport.key, "backup you can upload (it shares the import limit)"}
-
 // handleUploadBackup stores an uploaded backup as a new "…_uploaded" backup:
 // a HOPS backup archive (.zip: manifest, paths, sizes and SHA-256s checked,
 // images staged with it) or a legacy plain database (accepted with a
 // warning). It is validated (SQLite, HOPS tables) and never restored here:
 // the admin restores it like any other backup.
 func (r *Router) handleUploadBackup(w http.ResponseWriter, req *http.Request) {
-	file, _, ok := r.readLimitedUpload(w, req, uploadBackupKind)
+	file, _, ok := r.readLimitedUpload(w, req, uploadBackup)
 	if !ok {
 		return
 	}
@@ -276,7 +273,7 @@ func (r *Router) handleUploadBackup(w http.ResponseWriter, req *http.Request) {
 		perImage = n
 	}
 	res, err := r.backupManager.StoreUpload(file, database.UploadCaps{
-		Total:    int64(r.settings.GetInt(uploadBackupKind.key)),
+		Total:    int64(r.settings.GetInt(uploadBackup.key)),
 		PerImage: perImage,
 		Process:  processArchiveImage,
 	})

@@ -14,6 +14,7 @@
     "upload.max_bytes_import",
     "upload.max_bytes_background",
     "upload.max_bytes_icon",
+    "upload.max_bytes_backup",
     "backup.keep_count",
     "backup.keep_days",
     "backup.max_count",

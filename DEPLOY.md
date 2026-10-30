@@ -441,7 +441,7 @@ The groups are:
   being idle for**, **Failed sign-ins allowed per minute**, and **Trusted
   proxy ranges (CIDR)** (restart required; see [Reverse proxy](#reverse-proxy)).
 - **Uploads:** **Largest background upload**, **Largest icon upload**,
-  **Largest import**.
+  **Largest import**, **Largest backup upload**.
 - **Editing:** **Edit mode times out after (minutes)**.
 - **Look & motion:** **Animations**, **Animated folder backgrounds**.
 - **Status checks:** **Status monitoring** (Enabled or Disabled; Disabled checks nothing), **Check every

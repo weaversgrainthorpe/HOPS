@@ -81,6 +81,7 @@ const (
 	KeyUploadMaxBytesImport         = "upload.max_bytes_import"
 	KeyUploadMaxBytesBackground     = "upload.max_bytes_background"
 	KeyUploadMaxBytesIcon           = "upload.max_bytes_icon"
+	KeyUploadMaxBytesBackup         = "upload.max_bytes_backup"
 	KeyHTTPReadHeaderTimeoutSeconds = "http.read_header_timeout_seconds"
 	KeyHTTPReadTimeoutSeconds       = "http.read_timeout_seconds"
 	KeyHTTPWriteTimeoutSeconds      = "http.write_timeout_seconds" // #nosec G101 -- settings key name, not a credential
@@ -175,6 +176,15 @@ var Definitions = []Definition{
 		Key: KeyUploadMaxBytesIcon, Type: "bytes", Default: strconv.Itoa(2 * MB),
 		Description: "Icon uploads bigger than this are refused.",
 		Min:         1 * MB, Max: 10 * MB,
+	},
+	// An uploaded backup is streamed to a temp file, never held in memory,
+	// so its limit can be far above the import's: HOPS's own backup with
+	// its pictures is often over 50 MB. The ceiling stays inside a 32-bit
+	// int (Pi Zero builds).
+	{
+		Key: KeyUploadMaxBytesBackup, Type: "bytes", Default: strconv.Itoa(500 * MB),
+		Description: "Backup uploads bigger than this are refused.",
+		Min:         1 * MB, Max: 1024 * MB,
 	},
 	// Backup retention. The bounds match database.RetentionPolicy;
 	// max_count may never be below keep_count (crossCheck). Protected

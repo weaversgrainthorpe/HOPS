@@ -142,6 +142,26 @@ describe('BackgroundSection renders exactly the capability table', () => {
     }
   });
 
+  it('an unknown stored transition ("fade") is shown as Crossfade, said so, and saved as crossfade', async () => {
+    const bg: Background = { ...slideshow(), transition: 'fade' as Background['transition'] };
+    const { component } = render(BackgroundSection, {
+      level: 'dashboard', runtime: { folderAnimationsOn: true, reducedMotion: false }, background: structuredClone(bg)
+    });
+    expect(screen.getByRole('button', { name: 'Crossfade' }).classList.contains('active')).toBe(true);
+    expect(screen.getByText(/The stored transition \("fade"\) isn't one HOPS knows/)).toBeTruthy();
+    const r = (component as unknown as { build(): { ok: boolean; value?: Background } }).build();
+    expect(r.value).toMatchObject({ transition: 'crossfade' });
+  });
+
+  it('a known stored transition shows no note and saves unchanged', () => {
+    const { component } = render(BackgroundSection, {
+      level: 'dashboard', runtime: { folderAnimationsOn: true, reducedMotion: false }, background: slideshow()
+    });
+    expect(screen.queryByText(/isn't one HOPS knows/)).toBeNull();
+    const r = (component as unknown as { build(): { ok: boolean; value?: Background } }).build();
+    expect(r.value).toMatchObject({ transition: 'kenburns' });
+  });
+
   it('switching Image -> Slideshow with motion hidden keeps the stored timing fields', async () => {
     const bg: Background = { type: 'image', value: IMGS[0], interval: 77, transition: 'flip', transitionDuration: 3 };
     const { component } = render(BackgroundSection, {

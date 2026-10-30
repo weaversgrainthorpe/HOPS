@@ -122,6 +122,19 @@ describe('BackgroundLayer', () => {
     expect(FakeImage.all.map((i) => i.src)).toEqual(['/backgrounds/a.jpg']);
   });
 
+  it('an unknown transition name (3.0.0 Sample\'s "fade") renders as crossfade, never invisible', async () => {
+    const { container } = render(BackgroundLayer, {
+      background: slideshow(['/backgrounds/a.jpg', '/backgrounds/b.jpg'], { transition: 'fade' as Background['transition'] }),
+      scope: 'box',
+      animate: true
+    });
+    await settle();
+    for (const l of container.querySelectorAll('.background-layer')) {
+      expect(l.classList.contains('transition-crossfade')).toBe(true);
+      expect(l.classList.contains('transition-fade')).toBe(false);
+    }
+  });
+
   it('animate=true advances through the slides with one interval', async () => {
     const { container } = render(BackgroundLayer, {
       background: slideshow(['/backgrounds/a.jpg', '/backgrounds/b.jpg']),

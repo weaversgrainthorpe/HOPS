@@ -22,6 +22,7 @@
   import { logError } from '$lib/utils/errors';
   import { isSafeBackgroundUrl, cssUrl } from '$lib/components/background/backgroundUrl';
   import { galleryImages } from '$lib/components/background/galleryImages';
+  import { isKnownTransition, randomTransition, slideshowTransition, type TransitionName } from '$lib/components/background/backgroundTransitions';
   import { folderColourFromBackground } from '$lib/components/background/legacyFolderColour';
   import {
     slideshowInterval as clampInterval,
@@ -141,15 +142,14 @@
   // svelte-ignore state_referenced_locally
   let slideshowInterval = $state(clampInterval(background?.interval));
   // svelte-ignore state_referenced_locally
-  let transitionEffect = $state<'crossfade' | 'slide' | 'slide-up' | 'slide-down' | 'zoom' | 'zoom-out' | 'fade-black' | 'blur' | 'flip' | 'swirl' | 'wipe' | 'curtain' | 'circle' | 'diamond' | 'dissolve' | 'flash' | 'glitch' | 'kenburns' | 'random' | 'none'>(background?.transition || 'crossfade');
+  let transitionEffect = $state<TransitionName>(slideshowTransition(background?.transition));
+  // A stored name HOPS can't draw (3.0.0's Sample stored "fade") is shown as Crossfade and saved
+  // that way — and the picker says so.
+  // svelte-ignore state_referenced_locally
+  const transitionNormalised =
+    background?.type === 'slideshow' && !isKnownTransition(background.transition) ? String(background.transition) : null;
 
-  // Same pool used by BackgroundLayer when 'random' is selected.
-  const availableTransitions = [
-    'crossfade', 'slide', 'slide-up', 'slide-down', 'zoom', 'zoom-out',
-    'fade-black', 'blur', 'flip', 'kenburns', 'wipe', 'swirl',
-    'dissolve', 'flash', 'glitch', 'curtain', 'circle', 'diamond'
-  ];
-  let currentRandomTransition = $state(availableTransitions[Math.floor(Math.random() * availableTransitions.length)]);
+  let currentRandomTransition = $state(randomTransition());
   // Resolves 'random' to a concrete transition for the preview render.
   // Without this the preview was applying class transition-random, which
   // has no CSS rule, so nothing animated.
@@ -485,7 +485,9 @@
       if (caps.interval && (owns(slideshowInterval !== initial.interval) || intervalNormalised !== null)) {
         out.interval = slideshowInterval;
       }
-      if (caps.transitionPicker && owns(transitionEffect !== initial.transition)) out.transition = transitionEffect;
+      if (caps.transitionPicker && (owns(transitionEffect !== initial.transition) || transitionNormalised !== null)) {
+        out.transition = transitionEffect;
+      }
       if (caps.duration && (owns(transitionDuration !== initial.transitionDuration) || durationNormalised !== null)) {
         out.transitionDuration = transitionDuration;
       }
@@ -543,7 +545,7 @@
         // Must do this BEFORE checking effectiveTransition below so the curtain
         // detection picks up the freshly-rolled value.
         if (transitionEffect === 'random') {
-          currentRandomTransition = availableTransitions[Math.floor(Math.random() * availableTransitions.length)];
+          currentRandomTransition = randomTransition();
         }
 
         previewIndex = (previewIndex + 1) % slideshowImages.length;
@@ -917,6 +919,11 @@
         <span>Random</span>
       </button>
     </div>
+    {#if transitionNormalised !== null}
+      <p class="field-note" role="status">
+        The stored transition ("{transitionNormalised}") isn't one HOPS knows; it is used as Crossfade and saved that way.
+      </p>
+    {/if}
   </div>
   {/if}
 

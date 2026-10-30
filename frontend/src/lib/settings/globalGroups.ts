@@ -36,7 +36,7 @@ export const GLOBAL_SETTING_GROUPS: readonly SettingGroupDef[] = [
 		label: 'Sign-in & security',
 		keys: ['auth.session_lifetime_hours', 'auth.session_idle_hours', 'auth.login_rate_limit_per_min', 'proxy.trusted_cidrs']
 	},
-	{ id: 'uploads', label: 'Uploads', keys: ['upload.max_bytes_background', 'upload.max_bytes_icon', 'upload.max_bytes_import'] },
+	{ id: 'uploads', label: 'Uploads', keys: ['upload.max_bytes_background', 'upload.max_bytes_icon', 'upload.max_bytes_import', 'upload.max_bytes_backup'] },
 	{ id: 'editing', label: 'Editing', keys: ['editmode.idle_timeout_minutes'] },
 	{ id: 'look-motion', label: 'Look & motion', keys: ['display.animations', 'folders.animated_backgrounds'] },
 	{
@@ -68,6 +68,7 @@ export const SETTING_LABELS: Readonly<Record<string, string>> = {
 	'upload.max_bytes_background': 'Largest background upload',
 	'upload.max_bytes_icon': 'Largest icon upload',
 	'upload.max_bytes_import': 'Largest import',
+	'upload.max_bytes_backup': 'Largest backup upload',
 	'editmode.idle_timeout_minutes': 'Edit mode times out after (minutes)',
 	'display.animations': 'Animations',
 	'folders.animated_backgrounds': 'Animated folder backgrounds',

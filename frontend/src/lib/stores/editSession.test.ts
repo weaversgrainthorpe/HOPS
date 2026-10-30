@@ -219,6 +219,20 @@ describe('apply / undo / redo', () => {
 		expect(draft().tabs[0].root.children[0].name).toBe('n19');
 	});
 
+	it('says once, when the 101st change drops the oldest undo step', () => {
+		begin('d');
+		const info = vi.spyOn(toast, 'info');
+		for (let i = 0; i < 100; i++) apply(`op${i}`, setName(`n${i}`));
+		expect(info).not.toHaveBeenCalled();
+		expect(get(session)!.undoDropped).toBeFalsy();
+		apply('op100', setName('n100'));
+		expect(info).toHaveBeenCalledTimes(1);
+		expect(info.mock.calls[0][0]).toMatch(/Undo keeps your last 100 changes/);
+		expect(get(session)!.undoDropped).toBe(true);
+		for (let i = 101; i < 130; i++) apply(`op${i}`, setName(`n${i}`));
+		expect(info).toHaveBeenCalledTimes(1);
+	});
+
 	it('dirty is false after undoing back to saved', () => {
 		begin('d');
 		apply('1', setName('one'));

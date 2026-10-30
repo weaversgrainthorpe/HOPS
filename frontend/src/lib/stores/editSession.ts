@@ -36,9 +36,12 @@ export interface EditSession {
   undo: LayoutDashboard[];
   redo: LayoutDashboard[];
   lastLabel?: string;
+  /** The undo history has reached UNDO_CAP and dropped its oldest step (said once, in a toast). */
+  undoDropped?: boolean;
 }
 
-const UNDO_CAP = 100;
+/** How many changes Undo can step back. Older ones are dropped, and the user is told. */
+export const UNDO_CAP = 100;
 
 const state = writable<EditSession | null>(null);
 export const session: Readable<EditSession | null> = { subscribe: state.subscribe };
@@ -192,12 +195,17 @@ export function apply(label: string, op: (d: LayoutDashboard) => LayoutDashboard
     toast.error(tooBig);
     return false;
   }
+  const drops = s.undo.length >= UNDO_CAP;
+  if (drops && !s.undoDropped) {
+    toast.info(`Undo keeps your last ${UNDO_CAP} changes, so your earliest changes can no longer be undone. They stay in the draft; Discard still restores the saved dashboard.`);
+  }
   state.set({
     ...s,
     draft: next,
     undo: [...s.undo, s.draft].slice(-UNDO_CAP),
     redo: [],
-    lastLabel: label
+    lastLabel: label,
+    undoDropped: s.undoDropped || drops
   });
   return true;
 }

@@ -36,7 +36,8 @@
   const layoutMissing =
     !$layoutDoc || (scoped && !($layoutDoc.dashboards ?? []).some((d) => d.id === scopedId));
 
-  let results = $derived(rankSearch(index, query, RESULT_CAP));
+  let ranked = $derived(rankSearch(index, query, RESULT_CAP));
+  let results = $derived(ranked.items);
 
   // Clamp the selection cursor whenever the result set shrinks.
   $effect(() => {
@@ -161,6 +162,9 @@
           </li>
         {/each}
       </ul>
+      {#if ranked.total > results.length}
+        <div class="search-capped" role="status">Showing the first {results.length} of {ranked.total} matches — type more to narrow them down.</div>
+      {/if}
     {/if}
   </div>
 </div>
@@ -226,6 +230,13 @@
   }
   .search-no-results code {
     color: var(--text-primary);
+  }
+
+  .search-capped {
+    padding: 0.6rem 1.1rem;
+    border-top: 1px solid var(--border);
+    color: var(--text-secondary);
+    font-size: 0.85rem;
   }
 
   .search-results {

@@ -1,4 +1,4 @@
-// Upload limits. The three limits are stored in bytes but shown and typed in MB, and
+// Upload limits. The limits are stored in bytes but shown and typed in MB, and
 // an upload over a limit is refused with a message that names the limit and the file's size.
 // The server enforces the limits too (and words its refusal the same way); checking here first
 // means a big file is refused at once instead of being sent and cut off mid-transfer.
@@ -8,12 +8,13 @@ const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 /** One megabyte as HOPS shows it: 1,048,576 bytes (matches the server). */
 export const MB = 1048576;
 
-export type UploadKind = 'import' | 'background' | 'icon';
+export type UploadKind = 'import' | 'background' | 'icon' | 'backup';
 
 const LARGEST: Record<UploadKind, string> = {
 	import: 'file you can import',
 	background: 'background image allowed',
-	icon: 'icon file allowed'
+	icon: 'icon file allowed',
+	backup: 'backup you can upload'
 };
 
 /** Bytes (as stored) → the MB text shown in the input: up to 2 decimals, no trailing zeros. */

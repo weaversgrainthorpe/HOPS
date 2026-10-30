@@ -46,7 +46,7 @@ func TestEveryKeyHasADefinition(t *testing.T) {
 		KeyAuthLoginRateLimitPerMin, KeyAuthSessionLifetimeHours, KeyAuthSessionIdleHours,
 		KeyEditModeIdleTimeoutMinutes,
 		KeyStatusChecksEnabled, KeyStatusCheckIntervalMinutes, KeyStatusCheckTimeoutSeconds, KeyStatusDeadAfterHours,
-		KeyUploadMaxBytesImport, KeyUploadMaxBytesBackground, KeyUploadMaxBytesIcon,
+		KeyUploadMaxBytesImport, KeyUploadMaxBytesBackground, KeyUploadMaxBytesIcon, KeyUploadMaxBytesBackup,
 		KeyHTTPReadHeaderTimeoutSeconds, KeyHTTPReadTimeoutSeconds,
 		KeyHTTPWriteTimeoutSeconds, KeyHTTPIdleTimeoutSeconds,
 		KeyDiscoveryMaxParallelProbes, KeyDiscoveryPerHostTimeoutSecs, KeyDiscoveryMaxScanMinutes,
@@ -394,6 +394,8 @@ func TestUploadLimitBoundsAndDefaults(t *testing.T) {
 		{KeyUploadMaxBytesImport, 50 * mb, 1 * mb, 200 * mb},
 		{KeyUploadMaxBytesBackground, 25 * mb, 1 * mb, 100 * mb},
 		{KeyUploadMaxBytesIcon, 2 * mb, 1 * mb, 10 * mb},
+		// A backup with its pictures is often bigger than an import; it streams to disk, never memory.
+		{KeyUploadMaxBytesBackup, 500 * mb, 1 * mb, 1024 * mb},
 	}
 	for _, c := range cases {
 		d := defByKey[c.key]

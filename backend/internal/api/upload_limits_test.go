@@ -114,7 +114,7 @@ func TestUploadLimitsEndpoint(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
 		t.Fatal(err)
 	}
-	want := map[string]int{"import": 50 << 20, "background": 25 << 20, "icon": 2 << 20}
+	want := map[string]int{"import": 50 << 20, "background": 25 << 20, "icon": 2 << 20, "backup": 500 << 20}
 	for k, v := range want {
 		if got[k] != v {
 			t.Errorf("%s = %d, want %d", k, got[k], v)

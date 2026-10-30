@@ -12,6 +12,7 @@
   // the fallback colour is drawn instead of a blank.
   import type { Background } from '$lib/types';
   import { slideshowInterval, slideshowTransitionDuration } from './backgroundTiming';
+  import { slideshowTransition, randomTransition } from './backgroundTransitions';
   import { untrack } from 'svelte';
   import { isSafeBackgroundUrl, cssUrl } from './backgroundUrl';
 
@@ -44,14 +45,6 @@
     level
   }: Props = $props();
 
-  // Available transitions for random selection (excluding 'random' and 'none').
-  const availableTransitions = [
-    'crossfade', 'slide', 'slide-up', 'slide-down', 'zoom', 'zoom-out',
-    'fade-black', 'blur', 'flip', 'kenburns', 'wipe', 'swirl',
-    'dissolve', 'flash', 'glitch', 'curtain', 'circle', 'diamond'
-  ];
-  const randomTransition = () => availableTransitions[Math.floor(Math.random() * availableTransitions.length)];
-
   // Dual-layer system for smooth transitions.
   let layer1Visible = $state(true);
   let layer1Image = $state('');
@@ -74,7 +67,8 @@
     return [];
   });
 
-  const configuredTransition = $derived(background?.transition || 'crossfade');
+  // An unknown name is drawn as crossfade (it would otherwise leave both layers invisible).
+  const configuredTransition = $derived(slideshowTransition(background?.transition));
   const transitionEffect = $derived(
     !animate || kind !== 'slideshow' ? 'none'
       : configuredTransition === 'random' ? currentRandomTransition : configuredTransition

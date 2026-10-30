@@ -1105,7 +1105,8 @@ backup fails, nothing is changed.
   machine.
 - **Upload a backup**: a `.zip` downloaded from HOPS (or an older plain
   `.db` file, accepted with a warning). It is checked and added to the
-  list; nothing is restored until you click **Restore**.
+  list; nothing is restored until you click **Restore**. Files bigger than
+  **Largest backup upload** (500 MB by default) are refused.
 - **Restore**: asks first. HOPS takes a safety backup of the current data
   (if that fails, nothing is restored), then restarts to apply the restore.
   Changes made in the next few seconds won't be included. If HOPS is
@@ -1202,6 +1203,7 @@ value is refused with a reason and the running value stays as it was.
 | **Uploads** | **Largest background upload** | 25 MB | Up to 100 MB. |
 | | **Largest icon upload** | 2 MB | Up to 10 MB. |
 | | **Largest import** | 50 MB | Up to 200 MB. |
+| | **Largest backup upload** | 500 MB | Up to 1024 MB. A backup with its pictures is often bigger than an import. |
 | **Editing** | **Edit mode times out after (minutes)** | 15 | 0 turns it off. |
 | **Look & motion** | **Animations** | On | On, Always, Off. See [Animations](#animations). |
 | | **Animated folder backgrounds** | On | See [Folder backgrounds](#folder-backgrounds). |

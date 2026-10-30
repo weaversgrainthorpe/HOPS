@@ -139,12 +139,21 @@ func TestUploadBackup(t *testing.T) {
 		t.Fatal("an invalid upload was listed")
 	}
 
-	// Too big: refused with 413, naming the limit.
+	// Backups have their own limit: a small import limit doesn't refuse a bigger backup.
 	if code, r := c.do("PUT", "/api/settings/upload.max_bytes_import", map[string]string{"value": "1048576"}); code != 200 {
-		t.Fatalf("set limit: %d %v", code, r)
+		t.Fatalf("set import limit: %d %v", code, r)
 	}
 	big, ct := backupMultipart(t, "big.db", append(good, make([]byte, 2<<20)...))
-	if w := c.rawReq("POST", "/api/backups/upload", big, ct); w.Code != http.StatusRequestEntityTooLarge || !strings.Contains(w.Body.String(), "backup you can upload") {
+	if w := c.rawReq("POST", "/api/backups/upload", big, ct); w.Code == http.StatusRequestEntityTooLarge {
+		t.Fatalf("a backup was refused by the import limit: %s", w.Body.String())
+	}
+
+	// Too big for the backup limit: refused with 413, naming the limit.
+	if code, r := c.do("PUT", "/api/settings/upload.max_bytes_backup", map[string]string{"value": "1048576"}); code != 200 {
+		t.Fatalf("set backup limit: %d %v", code, r)
+	}
+	big, ct = backupMultipart(t, "big.db", append(good, make([]byte, 2<<20)...))
+	if w := c.rawReq("POST", "/api/backups/upload", big, ct); w.Code != http.StatusRequestEntityTooLarge || !strings.Contains(w.Body.String(), "backup you can upload is 1 MB") {
 		t.Fatalf("oversize: %d %s", w.Code, w.Body.String())
 	}
 
