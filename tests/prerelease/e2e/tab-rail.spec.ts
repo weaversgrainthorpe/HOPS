@@ -7,14 +7,14 @@ import { getCsrfToken } from '../helpers';
 let seq = 0;
 const made: string[] = [];
 
-async function seed(page: Page, context: BrowserContext, tabCount: number, firstColor?: string) {
+async function seed(page: Page, context: BrowserContext, tabCount: number, firstColor?: string, tileTab = 44) {
   const p = `rail${Date.now().toString(36)}${(seq++).toString(36)}`;
   const tabs = Array.from({ length: tabCount }, (_, i) => ({
     id: `${p}-t${i + 1}`, name: `Tab ${i + 1}`, order: i,
     ...(i === 0 && firstColor ? { color: firstColor } : {}),
     root: {
       columns: 24,
-      children: i === 44
+      children: i === tileTab
         ? [{ id: `${p}-far`, kind: 'tile', type: 'link', name: 'Faraway', url: 'https://faraway.example.lan/', icon: 'mdi:lan', openMode: 'newtab', size: 'medium', order: 0, placement: { x: 0, y: 0, w: 2, h: 2 } }]
         : []
     }
@@ -109,6 +109,40 @@ test.describe('one-row tab bar', () => {
     await expect(tab(page, 60)).toBeInViewport();
     await page.keyboard.press('ArrowLeft');
     await expect(tab(page, 59)).toHaveAttribute('aria-selected', 'true');
+  });
+
+  test('keyboard: arrows at either end keep focus on the tab row (never jump to the tiles)', async ({ page, context }) => {
+    // A tile on the last tab: the tiles' arrow navigation has something it could wrongly focus.
+    const few = await seed(page, context, 3, undefined, 2);
+    await page.goto(few);
+    await tab(page, 3).click();
+    await expect(page.getByText('Faraway', { exact: true }).first()).toBeVisible();
+    await tab(page, 3).focus();
+    await page.keyboard.press('ArrowRight');
+    await expect(tab(page, 3)).toBeFocused();
+    await expect(tab(page, 3)).toHaveAttribute('aria-selected', 'true');
+    await page.keyboard.press('ArrowLeft');
+    await expect(tab(page, 2)).toBeFocused();
+    await expect(tab(page, 2)).toHaveAttribute('aria-selected', 'true');
+    await page.keyboard.press('Home');
+    await expect(tab(page, 1)).toBeFocused();
+    await page.keyboard.press('ArrowLeft');
+    await expect(tab(page, 1)).toBeFocused();
+    await expect(tab(page, 1)).toHaveAttribute('aria-selected', 'true');
+    await page.keyboard.press('End');
+    await expect(tab(page, 3)).toBeFocused();
+    await expect(tab(page, 3)).toHaveAttribute('aria-selected', 'true');
+  });
+
+  test('an arrow that reaches its end keeps keyboard focus', async ({ page, context }) => {
+    const many = await seed(page, context, 60);
+    await page.goto(many);
+    const last = page.getByRole('button', { name: 'Scroll to the last tab' });
+    await last.focus();
+    await page.keyboard.press('Enter');
+    await expect(last).toHaveAttribute('aria-disabled', 'true');
+    await expect(last).toBeFocused();
+    await expect(tab(page, 60)).toBeInViewport();
   });
 
   test('the page never scrolls sideways on a phone with 60 tabs', async ({ page, context }) => {

@@ -346,31 +346,43 @@
     return true;
   }
 
-  /** Arrow/Home/End on a tab: select that tab, focus it and scroll it into view. */
-  function selectTabByKey(to: number) {
+  /** Arrow/Home/End on a tab: select that tab, focus it and scroll it into view (within this tab row). */
+  function selectTabByKey(strip: HTMLElement | null, to: number) {
     const id = barTabs[to]?.id;
-    if (!id) return;
+    if (!id || !strip) return;
     activeTabIndex = to;
     void tick().then(() => {
-      const btn = document.querySelector<HTMLElement>(`[data-tab-button="${CSS.escape(id)}"]`);
-      btn?.focus({ preventScroll: true });
-      const strip = btn?.closest<HTMLElement>('[role="tablist"]');
-      if (strip) revealTab(strip, id, animationsAllowed(dashboard.id));
+      strip.querySelector<HTMLElement>(`[data-tab-button="${CSS.escape(id)}"]`)?.focus({ preventScroll: true });
+      revealTab(strip, id, animationsAllowed(dashboard.id));
     });
   }
 
-  /** Keyboard tab reorder (edit mode): Alt+Left / Alt+Right moves the focused tab one place. */
+  /** Where a plain Left/Right/Home/End on tab `index` goes, held at the row's ends; null = not such a key. */
+  function tabKeyTarget(key: string, index: number): number | null {
+    switch (key) {
+      case 'ArrowLeft': return Math.max(0, index - 1);
+      case 'ArrowRight': return Math.min(barTabs.length - 1, index + 1);
+      case 'Home': return 0;
+      case 'End': return barTabs.length - 1;
+      default: return null;
+    }
+  }
+
+  /** Keys on a tab: Enter/Space open it, Left/Right/Home/End move along the row, and in edit mode
+   *  Alt+Left / Alt+Right moves the focused tab one place. */
   function handleTabKey(e: KeyboardEvent, index: number) {
     if (e.key === 'Enter' || e.key === ' ') {
       handleTabClick(index);
       return;
     }
     if (!e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
-      const to = e.key === 'ArrowLeft' ? index - 1 : e.key === 'ArrowRight' ? index + 1
-        : e.key === 'Home' ? 0 : e.key === 'End' ? barTabs.length - 1 : -1;
-      if (to >= 0) {
+      const to = tabKeyTarget(e.key, index);
+      if (to !== null) {
+        // The tab row owns these keys, at either end too: the tiles' arrow navigation (the layout's
+        // window handler) must not also take them and pull focus out of the row.
         e.preventDefault();
-        if (to < barTabs.length && to !== index) selectTabByKey(to);
+        e.stopPropagation();
+        if (to !== index) selectTabByKey((e.currentTarget as HTMLElement).closest<HTMLElement>('[role="tablist"]'), to);
         return;
       }
     }
