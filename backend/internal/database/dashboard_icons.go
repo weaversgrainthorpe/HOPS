@@ -142,16 +142,18 @@ func ImportDashboardIcons(db *sql.DB, iconsFS fs.FS) error {
 	for rows.Next() {
 		var id string
 		if err := rows.Scan(&id); err != nil {
-			rows.Close()
+			_ = rows.Close()
 			return fmt.Errorf("failed to check dashboard icons: %w", err)
 		}
 		have[id] = true
 	}
 	if err := rows.Err(); err != nil {
-		rows.Close()
+		_ = rows.Close()
 		return fmt.Errorf("failed to check dashboard icons: %w", err)
 	}
-	rows.Close()
+	if err := rows.Close(); err != nil {
+		return fmt.Errorf("failed to check dashboard icons: %w", err)
+	}
 
 	// Read all SVG files from the filesystem
 	entries, err := fs.ReadDir(iconsFS, ".")

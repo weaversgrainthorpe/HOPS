@@ -22,3 +22,9 @@ paths = [
 description = "GETTING_STARTED.md curl example: 'Authorization: Bearer YOUR_SESSION_TOKEN' is a documentation placeholder, not a credential"
 commits = ["2c1da05338d637096db0945801d73e69a17a4dcf"]
 paths = ['''GETTING_STARTED\.md$''']
+
+[[allowlists]]
+description = "auth.go tempPasswordAlphabet: the characters a reset's temporary password is drawn from (the password itself is random per reset and never stored in plain), not a credential"
+regexTarget = "line"
+regexes = ['''tempPasswordAlphabet\s*=''']
+paths = ['''backend/internal/auth/auth\.go$''']
