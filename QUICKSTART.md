@@ -79,7 +79,7 @@ mkdir data
 
 Always give `--data`: it is the folder that holds your dashboards, backups
 and uploads. HOPS prints a line like
-`msg="server starting" version="HOPS v3.0.0" addr=:8080` when it is ready.
+`msg="server starting" version="HOPS v3.0.1" addr=:8080` when it is ready.
 
 > On macOS, a file downloaded with a web browser may be blocked as "from an
 > unidentified developer". Downloading with `curl` as above avoids that.

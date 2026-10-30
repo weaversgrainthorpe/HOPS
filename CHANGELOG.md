@@ -5,6 +5,78 @@ All notable changes to HOPS (Home Operations Portal System) will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.1] - 2026-10-30 — One row of tabs, and big setups that stay quick
+
+After 3.0.0 shipped, we stress-tested it at its limits: 5,000 tiles on one
+dashboard, 200 tabs, 100 dashboards, and folders 12 deep. It held up, with no
+crashes and no lost data, but some things were slow or quiet when they should
+have spoken up. This release fixes those and gives dashboards with many tabs a
+tab bar that stays out of the way.
+
+### Added
+- **One row of tabs.** The tab bar never wraps any more. However many tabs a
+  dashboard has, they sit on one row that scrolls sideways. `«` `‹` `›` `»`
+  appear at the ends only when the tabs don't fit: `‹` `›` scroll the row, and
+  `«` `»` jump to the first or last tab. None of them changes the open tab;
+  clicking a tab does. Swipe the row on a touch screen. The open tab is always
+  scrolled into view, and Left, Right, Home and End move between tabs.
+- **The open tab stands out more:** bold, with a brighter outline, a thicker
+  line along the top and a soft glow. A tab's own colour still shows.
+- **Settings › Dashboards › Tab order.** A list of a dashboard's tabs for big
+  rearrangements: drag rows, use ↑ ↓ ⤒ ⤓, type a position, tick several tabs
+  to move them together, or **Sort A→Z**. Nothing changes until you click
+  **Save order**. If the dashboard was changed somewhere else meanwhile, your
+  order is kept and applied to the latest version, and HOPS says what changed.
+- **Dragging along the tab row.** In edit mode, holding a dragged tab, tile or
+  folder over the arrows scrolls the row, so you can drop it on a tab that was
+  out of sight.
+- **Largest backup upload** (Settings › Global settings › Uploads, 500 MB by
+  default, up to 1024 MB). Backups no longer share the 50 MB import limit.
+  A backup with its pictures is often bigger than that.
+
+### Changed
+- **Big setups load much faster.** HOPS now compresses what it sends to the
+  browser. With 100 dashboards, each page view downloads 1.3 MB instead of
+  18 MB; on a phone over mobile data, the first tile appears in about 3 s
+  instead of 18 s.
+- **Status checks keep up better.** Checks run 16 at a time, with the memory
+  they use staying fixed. Results are saved as they come in, so badges fill in
+  during a long round instead of all staying "unknown" until the end. When
+  you're signed in, HOPS warns you if a round of checks takes longer than the
+  check interval, or if results can't be saved. Both used to go only to the log.
+- **Settings › Dashboards › Duplicates** shows "Finding duplicates…" while it
+  works, then 50 groups at a time with **Show more**. Thousands of groups used
+  to freeze the browser.
+
+### Fixed
+- **A slideshow could be invisible.** A transition name HOPS doesn't know
+  (3.0.0's own Sample used "fade") left both pictures hidden. Unknown names now
+  play as Crossfade; the background editor shows them that way, says so, and
+  saves them that way. The Sample is fixed.
+- **Search said nothing when it cut the list short.** It now says "Showing the
+  first 50 of N matches".
+- **Saving gave no sign of progress.** The Save button now says "Saving…" while
+  a save is under way. On a small server, a big dashboard takes a few seconds.
+- **Undo forgot old changes silently.** Undo keeps your last 100 changes; HOPS
+  now says so the first time an older one drops off.
+- **Exports too big to import back.** An export over the import limits
+  (roughly 12,000 tiles in all, or bigger than **Largest import**) now says so
+  when you download it, and points you to Backups, which move a setup of any
+  size. The import limits stay as they are: importing 101,000 tiles needed
+  358 MB of memory on a Pi-class machine.
+
+### Internal
+- npm dependencies updated within their ranges, and sharp to 0.35. There were
+  16 advisories; the 7 left are low and need SvelteKit 3, a separate upgrade.
+  `@iconify/svelte` is pinned at 5.1.0, because 5.2.3 drops the backup icon
+  servers HOPS uses when the main one can't be reached.
+- `tests/prerelease/stress/` holds the generators and scripts used for the
+  stress test, to run by hand against a throwaway copy.
+
+### Upgrading from 3.0.0
+Replace the binary (or pull the new image) and restart. Nothing is converted.
+The new **Largest backup upload** setting appears with its default.
+
 ## [3.0.0] - 2026-10-30 — Folders inside folders, a new editor, and Settings in one place
 
 HOPS 3 is the biggest change since HOPS began. The way dashboards are laid out

@@ -1,4 +1,4 @@
-# Icons in HOPS (v3.0.0)
+# Icons in HOPS (v3.0.1)
 
 Every tile, folder and tab can have an icon. HOPS comes with thousands of
 icons that work with no internet connection, and you can upload your own.

@@ -1,6 +1,6 @@
 # HOPS - Home Operations Portal System
 
-**Version 3.0.0** · **[weaversgrainthorpe.github.io/HOPS →](https://weaversgrainthorpe.github.io/HOPS/)**
+**Version 3.0.1** · **[weaversgrainthorpe.github.io/HOPS →](https://weaversgrainthorpe.github.io/HOPS/)**
 
 HOPS is a self-hosted homepage dashboard for your homelab: one page (or
 several) of tiles that open your router, NAS, Proxmox, media server and

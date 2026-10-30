@@ -7,7 +7,7 @@ package version
 const (
 	Major = 3
 	Minor = 0
-	Patch = 0
+	Patch = 1
 )
 
 // Prerelease is an optional pre-release label (e.g. "rc1") stamped at build
@@ -17,7 +17,7 @@ var Prerelease = ""
 
 // String returns the version as a semantic version string
 func String() string {
-	return withPrerelease("3.0.0")
+	return withPrerelease("3.0.1")
 }
 
 // Full returns the full version string with build info

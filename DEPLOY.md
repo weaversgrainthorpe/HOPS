@@ -1,6 +1,6 @@
 # HOPS Installation & Deployment Guide
 
-**Version 3.0.0**
+**Version 3.0.1**
 
 This guide covers installing HOPS, running it as a service, upgrading it,
 backing it up and removing it. For a step-by-step first install, see
@@ -69,7 +69,7 @@ curl -fsSL https://github.com/weaversgrainthorpe/HOPS/releases/latest/download/i
   undone (the service is removed and the binary moved aside), so a re-run
   starts clean.
 - Options go after `bash -s --`, for example
-  `curl -fsSL <url>/install.sh | sudo bash -s -- --version 3.0.0`:
+  `curl -fsSL <url>/install.sh | sudo bash -s -- --version 3.0.1`:
 
   | Option | Meaning |
   |--------|---------|
@@ -210,7 +210,7 @@ mkdir data
 ```
 
 HOPS prints a line like
-`msg="server starting" version="HOPS v3.0.0" addr=:8080 data_dir=...` when
+`msg="server starting" version="HOPS v3.0.1" addr=:8080 data_dir=...` when
 it is ready. Open **http://localhost:8080**, sign in with `admin` / `admin`,
 and set a new password when asked.
 
@@ -279,7 +279,7 @@ volumes:
 ```
 
 Each release is also tagged with its version (for example
-`ghcr.io/weaversgrainthorpe/hops:3.0.0`) if you'd rather pin one and upgrade
+`ghcr.io/weaversgrainthorpe/hops:3.0.1`) if you'd rather pin one and upgrade
 on your own schedule. To build the image from source instead, replace the
 `image:` line with `build: .` in a clone of the repository.
 

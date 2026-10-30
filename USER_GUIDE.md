@@ -1,4 +1,4 @@
-# HOPS User Guide (v3.0.0)
+# HOPS User Guide (v3.0.1)
 
 This is the reference for HOPS 3: what every part of HOPS does, where to
 find it, and what the defaults are. New to HOPS? Start with
