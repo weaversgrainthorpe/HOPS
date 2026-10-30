@@ -1,8 +1,12 @@
 import { describe, it, expect, vi } from 'vitest';
 
-vi.mock('$lib/utils/api', () => ({ getBackendVersion: vi.fn(async () => ({ version: '3.0.0' })) }));
+vi.mock('$lib/utils/api', () => ({
+  getBackendVersion: vi.fn(async () => ({ version: '3.0.0' })),
+  getAbout: vi.fn(async () => ({ dataDir: '/var/lib/hops' }))
+}));
 import { render, screen, within } from '@testing-library/svelte';
 import AboutModal from './AboutModal.svelte';
+import { getAbout } from '$lib/utils/api';
 
 const ABOUT_FEATURES = [
   'Multiple dashboards',
@@ -36,5 +40,19 @@ describe('AboutModal features', () => {
     const items = within(list).getAllByRole('listitem');
     expect(items.map((li) => li.textContent?.trim())).toEqual(ABOUT_FEATURES);
     expect(list.textContent).not.toMatch(/shape|v2|upgrade|migrat/i);
+  });
+});
+
+describe('AboutModal data folder', () => {
+  it('shows the data folder the server reports', async () => {
+    render(AboutModal, { onClose: () => {} });
+    expect(await screen.findByText('/var/lib/hops')).toBeTruthy();
+    expect(screen.getByText(/Data folder:/)).toBeTruthy();
+  });
+
+  it('says plainly when the data folder could not be fetched', async () => {
+    vi.mocked(getAbout).mockRejectedValueOnce(new Error('SESSION_EXPIRED'));
+    render(AboutModal, { onClose: () => {} });
+    expect(await screen.findByText(/Not known: SESSION_EXPIRED/)).toBeTruthy();
   });
 });

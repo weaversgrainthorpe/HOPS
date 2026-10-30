@@ -220,6 +220,15 @@ export async function getBackendVersion(): Promise<{ version?: string }> {
   }
 }
 
+/** GET /api/about (signed in only): the server's data folder, for the About window. */
+export async function getAbout(): Promise<{ dataDir: string }> {
+  const resp = await fetchAPI('/about');
+  if (!resp || typeof resp.dataDir !== 'string' || !resp.dataDir) {
+    throw new Error('The server did not say where its data folder is.');
+  }
+  return { dataDir: resp.dataDir };
+}
+
 /**
  * GET /api/config: the stored v3 document. Anything that is not a schema-3
  * document with a dashboards list is a visible error, never shown as an

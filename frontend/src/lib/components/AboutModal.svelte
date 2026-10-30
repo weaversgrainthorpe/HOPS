@@ -2,7 +2,7 @@
   import Icon from '@iconify/svelte';
   import { onMount } from 'svelte';
   import { focusTrap } from '$lib/utils/focusTrap';
-  import { getBackendVersion } from '$lib/utils/api';
+  import { getAbout, getBackendVersion } from '$lib/utils/api';
 
   interface Props {
     onClose: () => void;
@@ -11,6 +11,7 @@
   let { onClose }: Props = $props();
 
   let backendVersion = $state('...');
+  let dataDir = $state('...');
   const frontendVersion = __APP_VERSION__;
 
   onMount(async () => {
@@ -19,6 +20,14 @@
       backendVersion = data.version || 'Unknown (the server sent no version)';
     } catch (e) {
       backendVersion = 'Error';
+    }
+  });
+
+  onMount(async () => {
+    try {
+      dataDir = (await getAbout()).dataDir;
+    } catch (e) {
+      dataDir = `Not known: ${e instanceof Error ? e.message : String(e)}`;
     }
   });
 
@@ -57,6 +66,8 @@
         <span class="value">{backendVersion}</span>
       </div>
     </div>
+
+    <p class="data-dir">Data folder: <code>{dataDir}</code></p>
 
     <div class="features">
       <h2>Features</h2>
@@ -208,6 +219,18 @@
     font-weight: 600;
     font-family: monospace;
     color: var(--accent-text);
+  }
+
+  .data-dir {
+    margin: -0.75rem 0 1.5rem 0;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    text-align: center;
+    overflow-wrap: anywhere;
+  }
+
+  .data-dir code {
+    color: var(--text-primary);
   }
 
   .features {

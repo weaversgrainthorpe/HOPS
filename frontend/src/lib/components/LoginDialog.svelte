@@ -103,9 +103,12 @@
   <details class="forgot">
     <summary>Forgot password?</summary>
     <p>
-      On the computer that runs HOPS, run <code>hops reset-password</code> (add
-      <code>--data &lt;folder&gt;</code> if HOPS is started with one). It prints a temporary password
-      and signs out every browser; sign in with it and choose a new password.
+      On the computer that runs HOPS, run the HOPS program with <code>reset-password</code> — for
+      example <code>sudo /opt/hops/hops reset-password</code> on Linux,
+      <code>docker exec hops ./hops reset-password</code> in Docker, or
+      <code>hops-windows-amd64.exe reset-password</code> from the HOPS folder on Windows (as
+      Administrator). It finds your data, prints a temporary password and signs out every browser;
+      sign in with it and choose a new password.
     </p>
   </details>
 

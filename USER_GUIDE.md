@@ -629,7 +629,7 @@ The right of the top bar is always there. From left to right it can hold:
 | **Export Dashboard** | while editing | See [Export](#export). |
 | **pencil** / **Editing** | on dashboards, not on phones | Sign in, or enter and leave edit mode. |
 | **Help** | signed in | Keyboard shortcuts and features. |
-| **About HOPS** | signed in | The version and what HOPS can do. |
+| **About HOPS** | signed in | The version, the data folder and what HOPS can do. |
 | **Settings** (gear) | always | Settings (asks you to sign in). |
 | **Log out** | signed in (on a phone, in Settings) | Signs this browser out. |
 
@@ -1246,24 +1246,30 @@ can't do anything else until you do.
 characters and different from the current one. Changing it signs out
 every other browser that was signed in.
 
-**Forgotten password.** On the computer that runs HOPS, run:
+**Forgotten password.** On the computer that runs HOPS, run the HOPS
+program with `reset-password`:
 
-```
-hops reset-password
-```
+| HOPS installed with | Run |
+|---------------------|-----|
+| Linux install script, Raspberry Pi | `sudo /opt/hops/hops reset-password` |
+| Proxmox container | inside the container: `/opt/hops/hops reset-password`; or from the Proxmox host shell: `pct exec <id> -- /opt/hops/hops reset-password` |
+| Docker | `docker exec hops ./hops reset-password` (use your container's name if it isn't `hops`) |
+| Windows | `hops-windows-amd64.exe reset-password` in the HOPS folder, from an Administrator PowerShell or Command Prompt |
+| macOS, or a program you started yourself | the same program with `reset-password`, for example `./hops-darwin-arm64 reset-password` |
 
-Add `--data <folder>` if HOPS is started with one. For the Linux service
-from `install.sh`, run it as the service's user with its data folder:
-`sudo -u hops /opt/hops/hops reset-password --data /var/lib/hops`. In
-Docker: `docker exec hops ./hops reset-password --data /app/data` (use your
-container's name if it isn't `hops`).
-
-It prints the username and a temporary password, and signs out every
-browser. Sign in with the temporary password and HOPS asks you to **Set a
+It finds the data folder itself (next to the program, a running HOPS, a
+service, or where the installer puts it), prints `Data folder:` and the
+folder, then the username and a temporary password, and signs out every
+browser. Run as root, it does the change as the user that owns the
+database. Sign in with the temporary password and HOPS asks you to **Set a
 New Password**, as on first sign-in. HOPS can keep running while you do
-this. If the command can't find the database, it says which folder it
-looked in and changes nothing. The sign-in dialog's **Forgot password?**
-link shows the same steps.
+this.
+
+If it finds HOPS data in more than one folder, or in none, it changes
+nothing and lists what it found or where it looked; run it again with
+`--data <folder>` to say which folder. **About HOPS** (the ⓘ button, signed
+in) shows the data folder of the HOPS you are using. The sign-in dialog's
+**Forgot password?** link shows the same steps.
 
 **Sessions.**
 

@@ -382,6 +382,7 @@ func (r *Router) setupRoutes() {
 	// App settings routes (admin-only). GET lists every setting with its
 	// definition + current value; PUT /api/settings/{key} updates one.
 	r.handle("/api/settings", r.protected(r.handleSettingsList))
+	r.handle("/api/about", r.protected(r.handleGetAbout))
 	r.handle("/api/upload-limits", r.protected(r.handleUploadLimits))
 	r.handle("/api/settings/", r.protected(r.handleSettingUpdate))
 

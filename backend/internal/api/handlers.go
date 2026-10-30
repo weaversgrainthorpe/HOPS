@@ -67,6 +67,21 @@ func (r *Router) handleGetVersion(w http.ResponseWriter, req *http.Request) {
 	})
 }
 
+// handleGetAbout serves GET /api/about (admin-only): what the About window
+// shows beyond the version, which is the data folder. It is never public:
+// a folder path says something about the server.
+func (r *Router) handleGetAbout(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	dir := r.config.DataDir
+	if abs, err := filepath.Abs(dir); err == nil {
+		dir = abs
+	}
+	writeJSON(w, map[string]interface{}{"dataDir": dir})
+}
+
 // handleGetHealth returns application health status
 func (r *Router) handleGetHealth(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodGet {

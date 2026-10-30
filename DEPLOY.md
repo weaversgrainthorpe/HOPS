@@ -228,6 +228,17 @@ HOPS shows a *HOPS can't start safely* page with the `--data` to use, and
 creates nothing. Giving `--data` explicitly is still the clearest choice for
 a service.
 
+**Where is my data folder?**
+
+| Installed with | Data folder |
+|----------------|-------------|
+| Linux install script (`install.sh`), Proxmox container | `/var/lib/hops` |
+| Docker | `/app/data` inside the container, kept in the `hops-data` volume |
+| Binary download (Linux, Windows, macOS) | `data` next to the program, unless it was started with `--data` |
+
+Signed in, **About HOPS** (the ⓘ button) shows the data folder of the HOPS
+you are using.
+
 ```
 data/
 ├── hops.db          # the SQLite database (with hops.db-wal / hops.db-shm while running)
@@ -395,6 +406,19 @@ flags. Everything else, the port included, is set in HOPS under
 `hops --help` lists them. Any other flag is an error and HOPS will not
 start. (In particular, `--frontend` from HOPS 2.1 and earlier no longer
 exists; remove it from old service files.)
+
+To reset a forgotten admin password, run the program with
+`reset-password` on the computer that runs HOPS (for example
+`sudo /opt/hops/hops reset-password`, or
+`docker exec hops ./hops reset-password`). It finds the data folder
+itself: next to the program, the `--data` of a running HOPS (Linux and
+macOS), a systemd unit or NSSM service that runs HOPS, then `/var/lib/hops`
+and `/app/data`. If it finds exactly one, it prints `Data folder:` and the
+folder, then a temporary password, and signs out every browser. If it
+finds several or none it changes nothing and lists them, or where it
+looked; then give the folder with `hops reset-password --data <folder>`.
+Run as root on Linux or macOS, it makes the change as the user that owns
+`hops.db`.
 
 ---
 

@@ -49,10 +49,13 @@ v2 database first, and refuses to convert anything if that backup fails. See
 - **Sample dashboard** on a fresh install: three tabs that show tile sizes,
   nested and minimised folders, and every folder look. Its addresses are
   made-up `*.example.lan` names. Delete it whenever you like.
-- **Forgotten password:** run `hops reset-password` on the computer that runs
-  HOPS. It prints a temporary password, signs out every browser and asks for
-  a new password at the next sign-in. The sign-in dialog's **Forgot
-  password?** link shows the steps.
+- **Forgotten password:** run the HOPS program with `reset-password` on the
+  computer that runs HOPS. It finds the data folder itself (next to the
+  program, a running HOPS, a service or the usual install places), and, run
+  as root, makes the change as the database's owner. It prints a temporary
+  password, signs out every browser and asks for a new password at the next
+  sign-in. The sign-in dialog's **Forgot password?** link shows the steps,
+  and **About HOPS** shows the data folder.
 - **Tile types:** **SSH** tiles open your computer's SSH app (with a
   TCP status check), alongside **Link** and **Note** tiles.
 - **Folder options:** **Contents size**, **Starts** expanded or collapsed,
