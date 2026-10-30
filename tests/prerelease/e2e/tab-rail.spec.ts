@@ -7,10 +7,11 @@ import { getCsrfToken } from '../helpers';
 let seq = 0;
 const made: string[] = [];
 
-async function seed(page: Page, context: BrowserContext, tabCount: number) {
+async function seed(page: Page, context: BrowserContext, tabCount: number, firstColor?: string) {
   const p = `rail${Date.now().toString(36)}${(seq++).toString(36)}`;
   const tabs = Array.from({ length: tabCount }, (_, i) => ({
     id: `${p}-t${i + 1}`, name: `Tab ${i + 1}`, order: i,
+    ...(i === 0 && firstColor ? { color: firstColor } : {}),
     root: {
       columns: 24,
       children: i === 44
@@ -117,5 +118,26 @@ test.describe('one-row tab bar', () => {
     await expect(rightArrow(page)).toBeVisible();
     const [sw, iw] = await page.evaluate(() => [document.documentElement.scrollWidth, window.innerWidth]);
     expect(sw).toBeLessThanOrEqual(iw);
+  });
+  test('the open tab stands out (style D)', async ({ page, context }) => {
+    const plain = await seed(page, context, 3);
+    await page.goto(plain);
+    await expect(tab(page, 1)).toHaveAttribute('aria-selected', 'true');
+    const open = tab(page, 1);
+    const style = await open.evaluate((el) => ({
+      weight: Number(getComputedStyle(el).fontWeight),
+      topLine: getComputedStyle(el, '::after').height,
+      glow: getComputedStyle(el).boxShadow
+    }));
+    expect(style.weight).toBeGreaterThanOrEqual(700);
+    expect(style.topLine).toBe('4px');
+    expect(style.glow).toContain('rgb');
+
+    // A tab with its own colour keeps it: the open tab's fill is not the accent.
+    const coloured = await seed(page, context, 3, '#7c3aed');
+    await page.goto(coloured);
+    await expect(tab(page, 1)).toHaveAttribute('aria-selected', 'true');
+    const fill = await tab(page, 1).evaluate((el) => getComputedStyle(el, '::before').backgroundColor);
+    expect(fill).toBe('rgb(124, 58, 237)');
   });
 });

@@ -730,10 +730,12 @@
 
   .tab.active {
     color: var(--text-primary);
-    border-color: var(--accent);
+    font-weight: 700;
+    border-color: color-mix(in srgb, var(--accent) 70%, white);
     border-width: 2px;
     border-bottom: 2px solid var(--bg-primary);
     margin-bottom: -1px;
+    box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 55%, transparent);
     z-index: 2;
   }
 
@@ -748,7 +750,7 @@
     top: -2px;
     left: 0;
     right: 0;
-    height: 3px;
+    height: 4px;
     background: var(--accent);
     border-radius: 0.25rem 0.25rem 0 0;
   }
