@@ -193,6 +193,69 @@ describe('Tab order page', () => {
     expect(btn('Save order').disabled).toBe(false);
   });
 
+  it('a downward drag shows the line under the row it will land after, an upward one above', async () => {
+    render(TabOrder, { dashboardId: 'd1' });
+    const row = (id: string) => document.querySelector(`[data-tab-row="${id}"]`)!;
+    await fireEvent.dragStart(row('t2'));
+    await fireEvent.dragOver(row('t5'));
+    expect(row('t5').classList.contains('over-after')).toBe(true);
+    expect(row('t5').classList.contains('over')).toBe(false);
+    await fireEvent.dragOver(row('t1'));
+    expect(row('t1').classList.contains('over')).toBe(true);
+    expect(row('t1').classList.contains('over-after')).toBe(false);
+  });
+
+  it('dropping downward lands after the target', async () => {
+    render(TabOrder, { dashboardId: 'd1' });
+    const row = (id: string) => document.querySelector(`[data-tab-row="${id}"]`)!;
+    await fireEvent.dragStart(row('t2'));
+    await fireEvent.dragOver(row('t5'));
+    await fireEvent.drop(row('t5'));
+    expect(rows()).toEqual(['t1', 't3', 't4', 't5', 't2', 't6']);
+  });
+
+  it('Move to position is off with an empty or fractional box, and says why', async () => {
+    render(TabOrder, { dashboardId: 'd1' });
+    await tickRow('t1');
+    const box = screen.getByRole('spinbutton');
+    await fireEvent.input(box, { target: { value: '' } });
+    expect(btn('Move').disabled).toBe(true);
+    expect(screen.getByText('Type a whole number from 1 to 6.')).toBeTruthy();
+    await fireEvent.input(box, { target: { value: '2.5' } });
+    expect(btn('Move').disabled).toBe(true);
+    expect(rows()).toEqual(SIX);
+  });
+
+  it('an out-of-range position is clamped and the box shows where the block went', async () => {
+    render(TabOrder, { dashboardId: 'd1' });
+    await tickRow('t1');
+    await tickRow('t2');
+    const box = screen.getByRole('spinbutton') as HTMLInputElement;
+    await fireEvent.input(box, { target: { value: '99' } });
+    await fireEvent.click(btn('Move'));
+    expect(rows()).toEqual(['t3', 't4', 't5', 't6', 't1', 't2']);
+    expect(box.value).toBe('5');
+  });
+
+  it('config changed elsewhere while open: Save sends nothing, merges onto the latest, second Save uses the new revision', async () => {
+    render(TabOrder, { dashboardId: 'd1' });
+    await fireEvent.click(btn('Move t6 to the top'));
+    setLayout([dash(['t1', 't2', 't4', 't5', 't6', 't7'], 9)]);
+    await fireEvent.click(btn('Save order'));
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('changed somewhere else'));
+    expect(save).not.toHaveBeenCalled();
+    expect(rows()).toEqual(['t6', 't1', 't2', 't4', 't5', 't7']);
+    const msg = screen.getByRole('alert').textContent!;
+    expect(msg).toContain('new tabs added at the end: t7');
+    expect(msg).toContain('tabs no longer there: t3');
+    save.mockResolvedValue({ revision: 10, layout: { layoutVersion: 2, dashboards: [dash(['t6', 't1', 't2', 't4', 't5', 't7'], 10)] } });
+    await fireEvent.click(btn('Save order'));
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    const [, d, rev] = save.mock.calls[0];
+    expect(rev).toBe(9);
+    expect(d.tabs.map((t: { id: string }) => t.id)).toEqual(['t6', 't1', 't2', 't4', 't5', 't7']);
+  });
+
   it('says so for an unknown id', () => {
     render(TabOrder, { dashboardId: 'nope' });
     expect(screen.getByText('There is no dashboard with that id. It may have been deleted.')).toBeTruthy();

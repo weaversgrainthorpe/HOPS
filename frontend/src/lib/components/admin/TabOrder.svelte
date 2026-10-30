@@ -25,10 +25,12 @@
   let history = $state<string[][]>([]);
   let ticked = $state(new Set<string>());
   let filter = $state('');
-  let position = $state(1);
+  let position = $state<number | null>(1);
   let busy = $state(false);
   let problem = $state('');
   let ready = $state(false);
+  /** The revision and tabs the working copy started from (or was last merged onto). */
+  let base = $state<{ revision: number; tabs: { id: string; name: string }[] }>({ revision: 0, tabs: [] });
 
   // Take the dashboard's order once it is known; later config changes (a save, a reload) are
   // handled by the save itself, so a background refresh never throws the user's arrangement away.
@@ -37,6 +39,7 @@
       const ids = dash.tabs.map((t) => t.id);
       order = ids;
       saved = ids;
+      base = { revision: dash.revision, tabs: dash.tabs.map((t) => ({ id: t.id, name: t.name })) };
       ready = true;
     }
   });
@@ -72,9 +75,12 @@
     if (!ticked.size) return;
     moveIds(new Set(ticked), to);
   }
+  const positionOk = $derived(typeof position === 'number' && Number.isInteger(position) && position >= 1);
   function moveToPosition() {
-    const n = Math.floor(Number(position));
-    moveTicked((Number.isFinite(n) && n >= 1 ? n : 1) - 1);
+    if (!positionOk || !ticked.size) return;
+    // The block lands within the list; show where it actually went.
+    position = Math.min(position as number, order.length - ticked.size + 1);
+    moveTicked(position - 1);
   }
   function sortAz() {
     commit(sortByName(order.map((id) => ({ id, name: nameOf.get(id) ?? id }))));
@@ -93,6 +99,12 @@
   // Drag and drop. Dragging a ticked row moves every ticked row.
   let dragId = $state<string | null>(null);
   let overId = $state<string | null>(null);
+  /** True while the dragged block starts above the row it is over, so it will land after that row. */
+  const overAfter = $derived.by(() => {
+    if (!dragId || !overId) return false;
+    const ids = ticked.has(dragId) ? ticked : new Set([dragId]);
+    return order.findIndex((x) => ids.has(x)) < order.indexOf(overId);
+  });
   let listEl: HTMLElement | undefined = $state();
   function dragOver(e: DragEvent, id: string) {
     if (!dragId) return;
@@ -126,43 +138,59 @@
       problem = `Not saved: "${dash.name}" is being edited (an edit session or unsaved draft is open). Save or discard that first, then save the tab order.`;
       return;
     }
-    busy = true;
     const d = dash;
+    // The page was loaded from another revision than the one the store holds now: the dashboard
+    // changed under the user's arrangement. Never send it with the newer revision (that would
+    // overwrite what was set elsewhere); merge onto the latest and ask for a check.
+    if (d.revision !== base.revision) {
+      applyMerge(d, 'Not saved: this dashboard was changed somewhere else');
+      return;
+    }
+    busy = true;
     const attempt = order;
     try {
       const resp = await saveDashboardV3(d.id, reorderTabs(d, attempt), d.revision);
       applySavedLayout(resp);
       if (resp.warning) showSaveWarning(resp.warning);
       saved = attempt;
+      const now = findLayoutDashboard(dashboardId, get(config));
+      base = { revision: resp.revision, tabs: (now?.tabs ?? d.tabs).map((t) => ({ id: t.id, name: t.name })) };
       history = [];
       ticked = new Set();
       toast.success('Tab order saved');
     } catch (e) {
-      if (e instanceof ConflictError) await afterConflict(d);
+      if (e instanceof ConflictError) await afterConflict();
       else problem = `Not saved: ${e instanceof Error ? e.message : 'the request failed'}. Your order is kept.`;
     } finally {
       busy = false;
     }
   }
 
-  /** Reload the dashboard and re-apply the user's arrangement to it; nothing is sent until Save is clicked again. */
-  async function afterConflict(old: NonNullable<typeof dash>) {
-    const userTabs = order.map((id) => ({ id, name: old.tabs.find((t) => t.id === id)?.name ?? id }));
+  /** After a 409: reload the dashboard, then re-apply the user's arrangement to it. */
+  async function afterConflict() {
+    const oldRevision = base.revision;
     await loadConfig();
     const fresh = findLayoutDashboard(dashboardId, get(config));
-    if (get(configError) || !fresh || fresh.revision === old.revision) {
+    if (get(configError) || !fresh || fresh.revision === oldRevision) {
       problem = fresh && !get(configError)
         ? 'Not saved: this dashboard was changed somewhere else, but its latest version could not be read. Your order is kept. Try Save again.'
         : `Not saved: this dashboard was changed somewhere else, and its latest version could not be read${get(configError) ? ` (${get(configError)})` : ''}. Your order is kept. Reload the page before trying again.`;
       return;
     }
+    applyMerge(fresh, 'Not saved: this dashboard was changed somewhere else');
+  }
+
+  /** Re-apply the user's order to `fresh`; nothing is sent until Save is clicked again. */
+  function applyMerge(fresh: NonNullable<typeof dash>, lead: string) {
+    const userTabs = order.map((id) => ({ id, name: base.tabs.find((t) => t.id === id)?.name ?? id }));
     const m = mergeAfterConflict(userTabs, fresh.tabs);
     saved = fresh.tabs.map((t) => t.id);
+    base = { revision: fresh.revision, tabs: fresh.tabs.map((t) => ({ id: t.id, name: t.name })) };
     order = m.order;
     history = [];
     ticked = new Set([...ticked].filter((id) => m.order.includes(id)));
     problem =
-      'Not saved: this dashboard was changed somewhere else. Your order is kept and applied to the latest version' +
+      `${lead}. Your order is kept and applied to the latest version` +
       (m.added.length ? ` — new tabs added at the end: ${m.added.join(', ')}` : '') +
       (m.removed.length ? ` — tabs no longer there: ${m.removed.join(', ')}` : '') +
       '. Check it and Save again.';
@@ -191,7 +219,8 @@
       <label class="pos">Move ticked to position
         <input type="number" min="1" max={order.length} bind:value={position} disabled={!ticked.size} />
       </label>
-      <button type="button" class="btn-secondary" disabled={!ticked.size} onclick={moveToPosition}>Move</button>
+      <button type="button" class="btn-secondary" disabled={!ticked.size || !positionOk} onclick={moveToPosition}>Move</button>
+      {#if ticked.size && !positionOk}<span class="error" role="status">Type a whole number from 1 to {order.length}.</span>{/if}
       <button type="button" class="btn-secondary" onclick={sortAz}>Sort A→Z</button>
     </div>
 
@@ -200,7 +229,8 @@
         <li
           class="row"
           class:sel={ticked.has(r.id)}
-          class:over={overId === r.id && dragId !== r.id}
+          class:over={overId === r.id && dragId !== r.id && !overAfter}
+          class:over-after={overId === r.id && dragId !== r.id && overAfter}
           data-tab-row={r.id}
           draggable="true"
           ondragstart={(e) => { dragId = r.id; if (e.dataTransfer) { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', r.id); } }}
@@ -247,6 +277,7 @@
   .row { display: flex; align-items: center; gap: 0.6rem; padding: 0.35rem 0.6rem; border-bottom: 1px solid var(--border); }
   .row.sel { background: color-mix(in srgb, var(--accent-solid) 14%, transparent); }
   .row.over { box-shadow: inset 0 3px 0 var(--accent-solid); }
+  .row.over-after { box-shadow: inset 0 -3px 0 var(--accent-solid); }
   .grip { cursor: grab; background: none; border: none; color: var(--text-secondary); padding: 0.1rem; display: inline-flex; }
   .num { min-width: 2.2rem; text-align: right; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
   .name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
