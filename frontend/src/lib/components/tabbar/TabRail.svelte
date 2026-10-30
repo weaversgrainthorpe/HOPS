@@ -95,25 +95,27 @@
     });
   });
 
+  /** « » jump straight to an end; ‹ › page smoothly when animations are allowed. An arrow at its end does nothing. */
   function go(kind: 'first' | 'prev' | 'next' | 'last') {
     if (!strip) return;
-    const b = behavior();
-    if (kind === 'first') strip.scrollTo({ left: 0, behavior: b });
-    else if (kind === 'last') strip.scrollTo({ left: strip.scrollWidth - strip.clientWidth, behavior: b });
-    else strip.scrollBy({ left: (kind === 'next' ? 1 : -1) * pageStep(strip.clientWidth), behavior: b });
+    if ((kind === 'first' || kind === 'prev') && atStart) return;
+    if ((kind === 'next' || kind === 'last') && atEnd) return;
+    if (kind === 'first') strip.scrollTo({ left: 0, behavior: 'auto' });
+    else if (kind === 'last') strip.scrollTo({ left: strip.scrollWidth - strip.clientWidth, behavior: 'auto' });
+    else strip.scrollBy({ left: (kind === 'next' ? 1 : -1) * pageStep(strip.clientWidth), behavior: behavior() });
     update();
   }
 </script>
 
 <div class="tab-rail" data-drag-tabrail bind:this={railEl}>
   {#if overflow}
-    <button type="button" class="rail-arrow" data-rail-arrow="first" aria-label="Scroll to the first tab" title="Scroll to the first tab" disabled={atStart} onclick={() => go('first')}>«</button>
-    <button type="button" class="rail-arrow" data-rail-arrow="prev" aria-label="Scroll tabs left" title="Scroll tabs left" disabled={atStart} onclick={() => go('prev')}>‹</button>
+    <button type="button" class="rail-arrow" data-rail-arrow="first" aria-label="Scroll to the first tab" title="Scroll to the first tab" aria-disabled={atStart} onclick={() => go('first')}>«</button>
+    <button type="button" class="rail-arrow" data-rail-arrow="prev" aria-label="Scroll tabs left" title="Scroll tabs left" aria-disabled={atStart} onclick={() => go('prev')}>‹</button>
   {/if}
   {@render children()}
   {#if overflow}
-    <button type="button" class="rail-arrow" data-rail-arrow="next" aria-label="Scroll tabs right" title="Scroll tabs right" disabled={atEnd} onclick={() => go('next')}>›</button>
-    <button type="button" class="rail-arrow" data-rail-arrow="last" aria-label="Scroll to the last tab" title="Scroll to the last tab" disabled={atEnd} onclick={() => go('last')}>»</button>
+    <button type="button" class="rail-arrow" data-rail-arrow="next" aria-label="Scroll tabs right" title="Scroll tabs right" aria-disabled={atEnd} onclick={() => go('next')}>›</button>
+    <button type="button" class="rail-arrow" data-rail-arrow="last" aria-label="Scroll to the last tab" title="Scroll to the last tab" aria-disabled={atEnd} onclick={() => go('last')}>»</button>
   {/if}
 </div>
 
@@ -157,10 +159,11 @@
     line-height: 1;
     cursor: pointer;
   }
-  .rail-arrow:hover:not(:disabled) {
-    border-color: var(--accent);
+  .rail-arrow:hover:not([aria-disabled='true']) {
+    border-color: var(--accent-solid);
   }
-  .rail-arrow:disabled {
+  /* aria-disabled, not disabled: an arrow that reaches its end keeps keyboard focus. */
+  .rail-arrow[aria-disabled='true'] {
     opacity: 0.3;
     cursor: default;
   }

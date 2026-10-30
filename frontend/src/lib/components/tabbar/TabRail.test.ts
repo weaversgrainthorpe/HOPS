@@ -13,6 +13,8 @@ const stub = (name: string, desc: PropertyDescriptor) => {
 };
 
 let roCallbacks: ResizeObserverCallback[] = [];
+/** Every scrollTo/scrollBy call; a smooth one does not move the stub (it would land later). */
+let scrollCalls: ScrollToOptions[] = [];
 class FakeRO {
   constructor(cb: ResizeObserverCallback) { roCallbacks.push(cb); }
   observe() {}
@@ -21,6 +23,8 @@ class FakeRO {
 }
 
 const strip = () => screen.getByRole('tablist');
+/** An arrow at its end is aria-disabled (never `disabled`, which would drop keyboard focus). */
+const off = (name: string) => screen.getByRole('button', { name }).getAttribute('aria-disabled') === 'true';
 const tabs = (n = 3) =>
   createRawSnippet(() => ({
     render: () =>
@@ -32,14 +36,15 @@ const tabs = (n = 3) =>
 beforeEach(() => {
   Object.assign(m, { scrollLeft: 0, clientWidth: 500, scrollWidth: 500 });
   roCallbacks = [];
+  scrollCalls = [];
   vi.stubGlobal('ResizeObserver', FakeRO);
   stub('scrollLeft', { get: () => m.scrollLeft, set: (v: number) => { m.scrollLeft = v; } });
   stub('clientWidth', { get: () => m.clientWidth });
   stub('scrollWidth', { get: () => m.scrollWidth });
   stub('offsetLeft', { get(this: HTMLElement) { return Number(this.dataset.left ?? 0); } });
   stub('offsetWidth', { get(this: HTMLElement) { return Number(this.dataset.width ?? 0); } });
-  stub('scrollTo', { value(o: ScrollToOptions) { m.scrollLeft = o.left ?? 0; } });
-  stub('scrollBy', { value(o: ScrollToOptions) { m.scrollLeft += o.left ?? 0; } });
+  stub('scrollTo', { value(o: ScrollToOptions) { scrollCalls.push(o); if (o.behavior !== 'smooth') m.scrollLeft = o.left ?? 0; } });
+  stub('scrollBy', { value(o: ScrollToOptions) { scrollCalls.push(o); if (o.behavior !== 'smooth') m.scrollLeft += o.left ?? 0; } });
 });
 afterEach(() => {
   cleanup();
@@ -67,10 +72,10 @@ describe('TabRail', () => {
     for (const n of ['Scroll to the first tab', 'Scroll tabs left', 'Scroll tabs right', 'Scroll to the last tab']) {
       expect(screen.getByRole('button', { name: n })).toBeTruthy();
     }
-    expect((screen.getByRole('button', { name: 'Scroll to the first tab' }) as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByRole('button', { name: 'Scroll tabs left' }) as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByRole('button', { name: 'Scroll tabs right' }) as HTMLButtonElement).disabled).toBe(false);
-    expect((screen.getByRole('button', { name: 'Scroll to the last tab' }) as HTMLButtonElement).disabled).toBe(false);
+    expect(off('Scroll to the first tab')).toBe(true);
+    expect(off('Scroll tabs left')).toBe(true);
+    expect(off('Scroll tabs right')).toBe(false);
+    expect(off('Scroll to the last tab')).toBe(false);
   });
 
   it('› scrolls by 0.8 of the width and never changes the open tab', async () => {
@@ -90,9 +95,9 @@ describe('TabRail', () => {
     await tick();
     await fireEvent.click(screen.getByRole('button', { name: 'Scroll to the last tab' }));
     expect(strip().scrollLeft).toBe(2500);
-    expect((screen.getByRole('button', { name: 'Scroll tabs right' }) as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByRole('button', { name: 'Scroll to the last tab' }) as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByRole('button', { name: 'Scroll tabs left' }) as HTMLButtonElement).disabled).toBe(false);
+    expect(off('Scroll tabs right')).toBe(true);
+    expect(off('Scroll to the last tab')).toBe(true);
+    expect(off('Scroll tabs left')).toBe(false);
   });
 
   it('arrows follow overflow when the size changes', async () => {
@@ -120,5 +125,38 @@ describe('TabRail', () => {
     open({ activeTabId: 't2' });
     await tick();
     expect(strip().scrollLeft).toBe(1624);
+  });
+
+  it('« and » jump at once even when animations are on; ‹ › scroll smoothly then', async () => {
+    m.scrollWidth = 3000;
+    open({ animate: true });
+    await tick();
+    await fireEvent.click(screen.getByRole('button', { name: 'Scroll to the last tab' }));
+    // Synchronously at the end: no smooth scroll still under way.
+    expect(strip().scrollLeft).toBe(2500);
+    expect(scrollCalls.at(-1)?.behavior).toBe('auto');
+    expect(off('Scroll to the last tab')).toBe(true);
+    await fireEvent.click(screen.getByRole('button', { name: 'Scroll tabs left' }));
+    expect(scrollCalls.at(-1)?.behavior).toBe('smooth');
+    await fireEvent.click(screen.getByRole('button', { name: 'Scroll to the first tab' }));
+    expect(strip().scrollLeft).toBe(0);
+    expect(scrollCalls.at(-1)?.behavior).toBe('auto');
+  });
+
+  it('an arrow that reaches its end keeps keyboard focus and then does nothing', async () => {
+    m.scrollWidth = 3000;
+    open();
+    await tick();
+    const last = screen.getByRole('button', { name: 'Scroll to the last tab' }) as HTMLButtonElement;
+    last.focus();
+    await fireEvent.click(last);
+    expect(off('Scroll to the last tab')).toBe(true);
+    expect(last.disabled).toBe(false);
+    expect(document.activeElement).toBe(last);
+    const n = scrollCalls.length;
+    await fireEvent.click(last);
+    await fireEvent.click(screen.getByRole('button', { name: 'Scroll tabs right' }));
+    expect(scrollCalls.length).toBe(n);
+    expect(strip().scrollLeft).toBe(2500);
   });
 });
