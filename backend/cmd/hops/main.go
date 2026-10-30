@@ -83,6 +83,13 @@ func run() bool {
 	if flag.Arg(0) == resetPasswordCommand {
 		os.Exit(runResetPassword(*dataDir, flag.Args()[1:], os.Stdout, os.Stderr))
 	}
+	// Anything else left over is a mistake (a mistyped command): say so
+	// rather than start a second server.
+	if flag.NArg() > 0 {
+		fmt.Fprintf(os.Stderr, "unknown command %q\n\n", flag.Arg(0))
+		flag.Usage()
+		os.Exit(2)
+	}
 
 	if *dataDir == "" {
 		d, err := defaultDataDir()
