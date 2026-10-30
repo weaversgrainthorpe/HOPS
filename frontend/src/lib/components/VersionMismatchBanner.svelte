@@ -5,17 +5,17 @@
   const uiVersion = __APP_VERSION__;
 </script>
 
-<!-- The UI bundle and the server disagree on version: either the page is
-     an old cached copy (a reload fixes it) or the server is serving a stale
-     on-disk build via --frontend. Never let that pass silently. -->
+<!-- The UI bundle and the server disagree on version: the page is an old
+     copy (a reload or a cleared cache fixes it). In a dev build it can also be
+     a stale on-disk UI. Never let that pass silently. -->
 {#if $uiVersionMismatch}
   <div class="version-banner" role="alert">
     <Icon icon="mdi:alert-outline" width="20" />
     <span class="text">
       This page is HOPS <strong>v{uiVersion}</strong> but the server is
-      <strong>v{$uiVersionMismatch}</strong>. Reload the page. If this persists, the
-      server is serving an old UI from disk — remove the <code>--frontend</code>
-      argument from its startup command (e.g. the systemd unit) and restart.
+      <strong>v{$uiVersionMismatch}</strong>. Reload the page. If this stays, a cache
+      is keeping an old copy (the browser's, or a proxy in front of HOPS): clear it
+      for this site, then reload.
     </span>
   </div>
 {/if}
