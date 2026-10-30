@@ -86,7 +86,8 @@ test.describe('tab order page', () => {
     const d = await seed(page, context);
     await openTabOrder(page, d.name);
     const target = page.locator('[data-tab-row]', { has: page.getByRole('checkbox', { name: 'Tab 1', exact: true }) });
-    await page.getByRole('button', { name: 'Drag Tab 3', exact: true }).dragTo(target);
+    const row3 = page.locator('[data-tab-row]', { has: page.getByRole('checkbox', { name: 'Tab 3', exact: true }) });
+    await row3.locator('.grip').dragTo(target);
     await expect(page.getByText('Unsaved changes')).toBeVisible();
     await page.getByRole('button', { name: 'Save order' }).click();
     await expect(page.getByText('Tab order saved')).toBeVisible();

@@ -7,12 +7,15 @@
   import { tick } from 'svelte';
   import { get } from 'svelte/store';
   import Icon from '@iconify/svelte';
+  import { beforeNavigate, goto } from '$app/navigation';
   import { config, configError, applySavedLayout, showSaveWarning, loadConfig, findLayoutDashboard } from '$lib/stores/config';
   import { session, parkedDraft } from '$lib/stores/editSession';
   import { saveDashboardV3, ConflictError } from '$lib/utils/api';
   import { reorderTabs } from '$lib/editor/treeOps';
   import { moveBlock, sortByName, mergeAfterConflict } from '$lib/editor/tabOrder';
   import { toast } from '$lib/stores/toast';
+  import { confirm } from '$lib/stores/confirmModal';
+  import { logError } from '$lib/utils/errors';
 
   let { dashboardId }: { dashboardId: string } = $props();
 
@@ -96,6 +99,44 @@
     problem = '';
   }
 
+  // An unsaved arrangement: ask before leaving the page (leaving anyway discards it), as the editor
+  // does for an edit session. A page unload is cancelled, which makes the browser ask instead.
+  let leaving = false;
+  beforeNavigate((nav) => {
+    if (!dirty || leaving) return;
+    nav.cancel();
+    if (nav.willUnload || !nav.to) return;
+    const url = nav.to.url;
+    const href = url.pathname + url.search + url.hash;
+    void confirm({
+      title: 'Leave without saving?',
+      message: 'You have changed the tab order and not saved it. If you leave now, the new order will be discarded.',
+      confirmText: 'Leave',
+      cancelText: 'Stay',
+      confirmStyle: 'danger'
+    }).then(async (leave) => {
+      if (!leave) return;
+      leaving = true;
+      try {
+        // Back/forward: repeat the same history step rather than pushing a new entry.
+        if (nav.type === 'popstate' && typeof nav.delta === 'number' && nav.delta !== 0) {
+          window.history.go(nav.delta);
+          return;
+        }
+        await goto(href);
+      } catch (e) {
+        leaving = false;
+        logError('Navigation', e);
+        toast.error('Could not open that page.');
+      }
+    });
+  });
+  function guardUnload(e: BeforeUnloadEvent) {
+    if (!dirty || leaving) return;
+    e.preventDefault();
+    e.returnValue = '';
+  }
+
   // Drag and drop. Dragging a ticked row moves every ticked row.
   let dragId = $state<string | null>(null);
   let overId = $state<string | null>(null);
@@ -160,7 +201,7 @@
       toast.success('Tab order saved');
     } catch (e) {
       if (e instanceof ConflictError) await afterConflict();
-      else problem = `Not saved: ${e instanceof Error ? e.message : 'the request failed'}. Your order is kept.`;
+      else problem = `Not saved: ${e instanceof Error ? e.message.trim().replace(/\.+$/, '') : 'the request failed'}. Your order is kept.`;
     } finally {
       busy = false;
     }
@@ -189,16 +230,27 @@
     order = m.order;
     history = [];
     ticked = new Set([...ticked].filter((id) => m.order.includes(id)));
-    problem =
-      `${lead}. Your order is kept and applied to the latest version` +
+    const changes =
       (m.added.length ? ` — new tabs added at the end: ${m.added.join(', ')}` : '') +
-      (m.removed.length ? ` — tabs no longer there: ${m.removed.join(', ')}` : '') +
-      '. Check it and Save again.';
+      (m.removed.length ? ` — tabs no longer there: ${m.removed.join(', ')}` : '');
+    // The latest version may already be in the user's order: then Save is off, so don't ask for it.
+    const same = m.order.length === saved.length && m.order.every((id, i) => id === saved[i]);
+    problem = same
+      ? `${lead}. Its tabs are already in your order, so there is nothing to save${changes}.`
+      : `${lead}. Your order is kept and applied to the latest version${changes}. Check it and Save again.`;
   }
 </script>
 
+<svelte:window onbeforeunload={guardUnload} />
+
 <section class="tab-order">
-  {#if !dash && !$config}
+  {#if !dash && $configError}
+    <!-- Never "Loading…" forever: the configuration could not be read. -->
+    <div class="error" role="alert">
+      <p>The dashboards could not be loaded: {$configError}</p>
+      <button type="button" class="btn-secondary" onclick={() => loadConfig()}>Retry</button>
+    </div>
+  {:else if !dash && !$config}
     <p class="muted" role="status">Loading…</p>
   {:else if !dash}
     <p>There is no dashboard with that id. It may have been deleted.</p>
@@ -239,7 +291,8 @@
           ondrop={(e) => drop(e, r.id)}
           ondragend={() => { dragId = overId = null; }}
         >
-          <button type="button" class="grip" aria-label="Drag {r.name}" title="Drag"><Icon icon="mdi:drag" width="20" /></button>
+          <!-- Pointer-only: the ↑ ↓ ⤒ ⤓ buttons are the keyboard path, so the handle is no tab stop. -->
+          <span class="grip" aria-hidden="true" title="Drag"><Icon icon="mdi:drag" width="20" /></span>
           <input type="checkbox" aria-label={r.name} checked={ticked.has(r.id)} onchange={(e) => toggle(r.id, e.currentTarget.checked)} />
           <span class="num">{r.pos}</span>
           <span class="name">{r.name}</span>

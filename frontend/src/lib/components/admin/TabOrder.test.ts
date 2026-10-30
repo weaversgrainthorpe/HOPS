@@ -5,13 +5,27 @@ vi.mock('$lib/utils/api', async () => ({
   ...(await vi.importActual<object>('$lib/utils/api')),
   saveDashboardV3: vi.fn()
 }));
+// The page's leave guard: keep the callback it registers so a test can play a navigation through it.
+const nav = vi.hoisted(() => ({ guard: null as null | ((n: unknown) => void), goto: vi.fn(async () => {}) }));
+vi.mock('$app/navigation', () => ({
+  goto: nav.goto,
+  beforeNavigate: (cb: (n: unknown) => void) => {
+    nav.guard = cb;
+  },
+  afterNavigate: () => {}
+}));
+vi.mock('$lib/stores/confirmModal', async () => ({
+  ...(await vi.importActual<object>('$lib/stores/confirmModal')),
+  confirm: vi.fn()
+}));
 vi.mock('$lib/stores/config', async () => ({
   ...(await vi.importActual<object>('$lib/stores/config')),
   loadConfig: vi.fn()
 }));
 
 import * as api from '$lib/utils/api';
-import { loadConfig } from '$lib/stores/config';
+import { loadConfig, config, configError } from '$lib/stores/config';
+import { confirm } from '$lib/stores/confirmModal';
 import { toast } from '$lib/stores/toast';
 import { setLayout, resetEditor, startSession } from '$lib/components/editor/editorTestKit';
 import TabOrder from './TabOrder.svelte';
@@ -19,6 +33,7 @@ import type { LayoutDashboard } from '$lib/types/layout';
 
 const save = api.saveDashboardV3 as unknown as ReturnType<typeof vi.fn>;
 const load = loadConfig as unknown as ReturnType<typeof vi.fn>;
+const ask = confirm as unknown as ReturnType<typeof vi.fn>;
 
 const tab = (id: string) => ({ id, name: id, root: { columns: 24, children: [] } });
 const dash = (ids: string[], revision = 4): LayoutDashboard => ({ id: 'd1', name: 'Home', path: '/home', revision, tabs: ids.map(tab) });
@@ -33,6 +48,10 @@ beforeEach(() => {
   resetEditor();
   save.mockReset();
   load.mockReset();
+  ask.mockReset();
+  nav.goto.mockClear();
+  nav.guard = null;
+  configError.set(null);
   setLayout([dash(SIX)]);
 });
 
@@ -266,5 +285,95 @@ describe('Tab order page', () => {
     setLayout([dash(['t1'])]);
     render(TabOrder, { dashboardId: 'd1' });
     expect(screen.getByText('This dashboard has only one tab, so there is nothing to reorder.')).toBeTruthy();
+  });
+
+  it('a failed config load shows the error and a Retry, never Loading… forever', async () => {
+    config.set(null);
+    configError.set('Server error (500)');
+    render(TabOrder, { dashboardId: 'd1' });
+    expect(screen.queryByText('Loading…')).toBeNull();
+    expect(screen.getByRole('alert').textContent).toContain('The dashboards could not be loaded: Server error (500)');
+    await fireEvent.click(btn('Retry'));
+    expect(load).toHaveBeenCalledTimes(1);
+  });
+
+  it('a save error ending in a full stop is not doubled', async () => {
+    save.mockRejectedValue(new Error('The tab order is not valid.'));
+    render(TabOrder, { dashboardId: 'd1' });
+    await fireEvent.click(btn('Move t6 to the top'));
+    await fireEvent.click(btn('Save order'));
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toBe('Not saved: The tab order is not valid. Your order is kept.'));
+  });
+
+  it('the drag handle is no keyboard stop (the move buttons are the keyboard path)', () => {
+    render(TabOrder, { dashboardId: 'd1' });
+    expect(screen.queryByRole('button', { name: 'Drag t1' })).toBeNull();
+    const grip = document.querySelector('[data-tab-row="t1"] .grip') as HTMLElement;
+    expect(grip.tagName).toBe('SPAN');
+    expect(grip.getAttribute('aria-hidden')).toBe('true');
+    expect(grip.tabIndex).toBe(-1);
+  });
+
+  it("a 409 whose latest version is already in the user's order says there is nothing to save", async () => {
+    save.mockRejectedValue(new api.ConflictError('d1', 9));
+    // Elsewhere the same move was saved, and t7 was added.
+    load.mockImplementation(async () => {
+      setLayout([dash(['t6', 't1', 't2', 't3', 't4', 't5', 't7'], 9)]);
+    });
+    render(TabOrder, { dashboardId: 'd1' });
+    await fireEvent.click(btn('Move t6 to the top'));
+    await fireEvent.click(btn('Save order'));
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('changed somewhere else'));
+    expect(screen.getByRole('alert').textContent).toBe(
+      'Not saved: this dashboard was changed somewhere else. Its tabs are already in your order, so there is nothing to save — new tabs added at the end: t7.'
+    );
+    expect(btn('Save order').disabled).toBe(true);
+  });
+
+  describe('leaving with unsaved changes', () => {
+    const navTo = (path: string, extra: object = {}) => {
+      const cancel = vi.fn();
+      nav.guard!({ willUnload: false, to: { url: new URL(`http://hops.test${path}`) }, cancel, type: 'link', ...extra });
+      return cancel;
+    };
+
+    it('lets a navigation go with nothing unsaved', () => {
+      render(TabOrder, { dashboardId: 'd1' });
+      expect(navTo('/settings').mock.calls.length).toBe(0);
+      expect(ask).not.toHaveBeenCalled();
+    });
+
+    it('asks first; Stay keeps the page and the order', async () => {
+      ask.mockResolvedValue(false);
+      render(TabOrder, { dashboardId: 'd1' });
+      await fireEvent.click(btn('Move t1 down'));
+      expect(navTo('/settings').mock.calls.length).toBe(1);
+      await waitFor(() => expect(ask).toHaveBeenCalledTimes(1));
+      expect(ask.mock.calls[0][0].title).toBe('Leave without saving?');
+      await Promise.resolve();
+      expect(nav.goto).not.toHaveBeenCalled();
+      expect(rows()[0]).toBe('t2');
+    });
+
+    it('Leave goes on to where the user was going, without asking again', async () => {
+      ask.mockResolvedValue(true);
+      render(TabOrder, { dashboardId: 'd1' });
+      await fireEvent.click(btn('Move t1 down'));
+      navTo('/settings/global?x=1');
+      await waitFor(() => expect(nav.goto).toHaveBeenCalledWith('/settings/global?x=1'));
+      expect(navTo('/settings').mock.calls.length).toBe(0);
+    });
+
+    it('a page unload is held back while the order is unsaved', async () => {
+      render(TabOrder, { dashboardId: 'd1' });
+      const unload = () => {
+        const e = new Event('beforeunload', { cancelable: true });
+        window.dispatchEvent(e);
+        return e.defaultPrevented;
+      };
+      expect(unload()).toBe(false);
+      await fireEvent.click(btn('Move t1 down'));
+      expect(unload()).toBe(true);
+    });
   });
 });
