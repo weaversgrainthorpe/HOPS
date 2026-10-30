@@ -6,6 +6,7 @@ import { checkUploadSize, uploadErrorMessage, sendUpload } from './uploadLimits'
 import { parseLogsResponse, type LogsResponse, type LogLevel, type LineLimit } from '$lib/logs/logView';
 import { parseUsageResponse, type IconUsage, type IconUse } from '$lib/icons/iconManage';
 import { parsePackagedResponse, type PackagedInfo } from '$lib/icons/packagedIcons';
+import { missingAssetsFromHeader, MISSING_ASSETS_HEADER, type MissingAsset } from './exportResult';
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 
@@ -500,7 +501,14 @@ export async function saveDashboardSettings(
   return { revision: resp.revision, ...freshOf(resp) };
 }
 
-export async function exportConfig(format: 'json' | 'yaml' = 'json', dashboardId?: string): Promise<Blob> {
+/**
+ * GET /api/config/export as a file, with the uploaded pictures the server couldn't read and so
+ * left out (missingAssetsWarning says so to the user).
+ */
+export async function exportConfig(
+  format: 'json' | 'yaml' = 'json',
+  dashboardId?: string
+): Promise<{ blob: Blob; missing: MissingAsset[] }> {
   let url = `${API_BASE}/config/export?format=${format}`;
   if (dashboardId) {
     url += `&dashboardId=${encodeURIComponent(dashboardId)}`;
@@ -514,7 +522,8 @@ export async function exportConfig(format: 'json' | 'yaml' = 'json', dashboardId
     throw new Error(`Export failed: ${response.statusText}`);
   }
 
-  return response.blob();
+  const missing = missingAssetsFromHeader(response.headers.get(MISSING_ASSETS_HEADER));
+  return { blob: await response.blob(), missing };
 }
 
 export async function importConfig(file: File, options?: { autoMatchIcons?: boolean }): Promise<ImportResult> {

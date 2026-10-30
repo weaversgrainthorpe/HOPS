@@ -231,6 +231,24 @@ func TestMigrateWithBackup_BackupFailureBlocksMigration(t *testing.T) {
 	}
 }
 
+// A stored config that is not valid JSON is not known to be v2, so no pre-v3
+// backup is taken; Kind "corrupt" keeps the page from claiming one exists.
+func TestMigrateWithBackup_CorruptConfig(t *testing.T) {
+	db := newStoreDB(t)
+	seed(t, db, "{not json")
+	called := false
+	res, backedUp, err := MigrateWithBackup(db, func() error { called = true; return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.Failed || res.Kind != MigrationFailCorrupt || backedUp || called || !strings.Contains(res.Detail, "not valid JSON") {
+		t.Fatalf("res=%+v backedUp=%v backupCalled=%v", res, backedUp, called)
+	}
+	if rawRow(t, db) != "{not json" || archiveCount(t, db) != 0 {
+		t.Fatal("corrupt config was changed")
+	}
+}
+
 func TestMigrateWithBackup_V3NoSyncBackup(t *testing.T) {
 	db := newStoreDB(t)
 	if err := Save(db, Obj{LayoutVersionKey: LayoutVersion, "dashboards": []any{}}); err != nil {

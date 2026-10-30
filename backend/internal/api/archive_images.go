@@ -28,8 +28,8 @@ const (
 	maxArchiveImagePixels = 40_000_000
 
 	// Raster icons are fully decoded (then shrunk to 128×128), so they get a
-	// much smaller cap than backgrounds, which are never decoded (pentest
-	// 2026-10-27 L2). 2048×2048 is 16× the 128 px the icon is stored at, more
+	// much smaller cap than backgrounds, which are never decoded. 2048×2048
+	// is 16× the 128 px the icon is stored at, more
 	// than any real icon source needs, and its worst-case decode (16-bit
 	// RGBA, 8 bytes/pixel) is 32 MiB, which a Pi Zero (512 MB) can afford;
 	// the old 40 MP cap allowed about 320 MB.

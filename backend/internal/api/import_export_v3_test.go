@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"mime/multipart"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
@@ -913,7 +914,6 @@ func contains(list []string, s string) bool {
 	return false
 }
 
-
 // A synthetic v2 export: ids and path collide with the built-in sample, one
 // asset has an unrecognised path. Every rename and the unrestored image must be
 // in the result, and converted folders carry only v3 keys.
@@ -1051,5 +1051,106 @@ func TestImport_TooDeepIsRefusedAtImport(t *testing.T) {
 	code, resp := c.importFile(v3ExportOf(t, cfg))
 	if code != 400 || !strings.Contains(fmt.Sprint(resp["error"]), "nested deeper than 12 levels") {
 		t.Fatalf("import of a %d-deep dashboard: %d %v", configdoc.MaxNestingDepth+1, code, resp)
+	}
+}
+
+// Pictures packaged in HOPS (background presets, dashboard icons) are not
+// exported as assets, and re-importing HOPS's own export reports no failed
+// assets; a built-in picture this version lacks and a broken upload still are.
+func TestExportImport_BundledPicturesAreNotFailedAssets(t *testing.T) {
+	const preset, dashIcon = "/presets/abstract-network.jpg", "/api/icons/dashboard/13ft.svg"
+	router, db := setupTestRouter(t)
+	c := newClient(t, router)
+	seed(t, db)
+	doc := storedDoc(t, db)
+	d := dashList(doc)[0]
+	d["background"] = map[string]interface{}{"type": "image", "value": preset}
+	configdoc.Walk(doc, func(_, _ configdoc.Obj, _ []configdoc.Obj, n configdoc.Obj) bool {
+		if n["id"] == "e1" {
+			n["iconUrl"] = dashIcon
+		}
+		return true
+	})
+	if err := configdoc.Save(db, doc); err != nil {
+		t.Fatal(err)
+	}
+	exported := c.export("")
+	var env map[string]interface{}
+	if err := json.Unmarshal(exported, &env); err != nil {
+		t.Fatal(err)
+	}
+	cfg := env["config"].(map[string]interface{})
+	if a, _ := cfg["assets"].(map[string]interface{}); a[preset] != nil || a[dashIcon] != nil {
+		t.Errorf("built-in pictures exported as assets: %v", a)
+	}
+	if !strings.Contains(string(exported), preset) || !strings.Contains(string(exported), dashIcon) {
+		t.Fatal("the references themselves must still be exported")
+	}
+
+	fresh, freshDB := setupTestRouter(t)
+	fc := newClient(t, fresh)
+	seed(t, freshDB)
+	code, resp := fc.importFile(exported)
+	if failed, _ := resp["assetsFailed"].([]interface{}); code != 200 || len(failed) != 0 {
+		t.Fatalf("own export re-imported: %d, failed assets %v", code, resp["assetsFailed"])
+	}
+
+	// An older export carrying the pictures as assets: the packaged one is no
+	// failure; a preset this version doesn't ship and a broken upload are.
+	cfg["assets"] = map[string]interface{}{
+		preset:                 map[string]interface{}{"contentType": "image/jpeg", "data": "AAAA"},
+		"/presets/gone.jpg":    map[string]interface{}{"contentType": "image/jpeg", "data": "AAAA"},
+		"/backgrounds/bad.png": map[string]interface{}{"contentType": "image/png", "data": "!!!not base64!!!"},
+	}
+	code, resp = fc.importFile(v3ExportOf(t, cfg))
+	failed, _ := resp["assetsFailed"].([]interface{})
+	joined := fmt.Sprint(failed)
+	if code != 200 || len(failed) != 2 || !strings.Contains(joined, "gone.jpg") || !strings.Contains(joined, "bad.png") {
+		t.Fatalf("got %d, failed assets %v; want gone.jpg and bad.png only", code, failed)
+	}
+}
+
+// An uploaded picture the export can't read is not dropped silently: the
+// export still succeeds, lists it in config.missingAssets and the
+// X-HOPS-Missing-Assets header, and an import of that file reports it.
+func TestExport_UnreadableUploadIsListedAsMissing(t *testing.T) {
+	router, db := setupTestRouter(t)
+	c := newClient(t, router)
+	seed(t, db)
+	doc := storedDoc(t, db)
+	configdoc.Walk(doc, func(_, _ configdoc.Obj, _ []configdoc.Obj, n configdoc.Obj) bool {
+		if n["id"] == "e1" {
+			n["iconUrl"] = "/icons/vanished.png" // never written to the data folder
+		}
+		return true
+	})
+	if err := configdoc.Save(db, doc); err != nil {
+		t.Fatal(err)
+	}
+	code, body := c.raw("GET", "/api/config/export", nil, "")
+	if code != 200 {
+		t.Fatalf("export: %d %s", code, body)
+	}
+	var env map[string]interface{}
+	if err := json.Unmarshal(body, &env); err != nil {
+		t.Fatal(err)
+	}
+	missing, _ := env["config"].(map[string]interface{})["missingAssets"].([]interface{})
+	if len(missing) != 1 || missing[0].(map[string]interface{})["path"] != "/icons/vanished.png" ||
+		!strings.Contains(fmt.Sprint(missing[0]), "missing from the data folder") {
+		t.Fatalf("missingAssets = %v", missing)
+	}
+	w := c.rawReq("GET", "/api/config/export", nil, "")
+	hdr, err := url.PathUnescape(w.Header().Get(MissingAssetsHeader))
+	if err != nil || !strings.Contains(hdr, `"path":"/icons/vanished.png"`) {
+		t.Errorf("header %s = %q (%v)", MissingAssetsHeader, hdr, err)
+	}
+
+	fresh, freshDB := setupTestRouter(t)
+	seed(t, freshDB)
+	code, resp := newClient(t, fresh).importFile(body)
+	failed, _ := resp["assetsFailed"].([]interface{})
+	if code != 200 || len(failed) != 1 || !strings.Contains(fmt.Sprint(failed[0]), "vanished.png (not in the export file") {
+		t.Fatalf("import: %d, failed assets %v", code, failed)
 	}
 }

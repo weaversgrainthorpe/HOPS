@@ -54,6 +54,27 @@ func TestResolve_InheritAndOverride(t *testing.T) {
 	}
 }
 
+// statusChecksEnabled is a gate: the dashboard can stop checks (false) but
+// never turn them on against the global; null or absent follows the global.
+func TestResolve_StatusChecksGate(t *testing.T) {
+	svc := newSvc(t)
+	dash := func(v any) Obj { return Obj{"id": "d1", "settings": Obj{"statusChecksEnabled": v}} }
+	if !Resolve(svc, dash(true)).StatusChecksEnabled || !Resolve(svc, dash(nil)).StatusChecksEnabled {
+		t.Error("global on: true or null should be enabled")
+	}
+	if Resolve(svc, dash(false)).StatusChecksEnabled {
+		t.Error("global on, dashboard false: should be disabled")
+	}
+	if err := svc.Set(settings.KeyStatusChecksEnabled, "false"); err != nil {
+		t.Fatal(err)
+	}
+	for _, v := range []any{true, nil, false} {
+		if Resolve(svc, dash(v)).StatusChecksEnabled {
+			t.Errorf("global off, dashboard %v: should be disabled", v)
+		}
+	}
+}
+
 func TestResolve_BadStoredValueFallsBackToGlobal(t *testing.T) {
 	svc := newSvc(t)
 	e := Resolve(svc, Obj{"id": "d1", "settings": Obj{

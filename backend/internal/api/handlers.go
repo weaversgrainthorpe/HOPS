@@ -12,10 +12,13 @@ import (
 	"fmt"
 	"image"
 	"io"
+	"io/fs"
 	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -533,42 +536,47 @@ func isLocalAssetRef(url string) bool {
 	return strings.HasPrefix(url, "/")
 }
 
-// readAsset reads the bytes of an asset referenced by URL path. Bundled assets
-// (dashboard icons, background presets) come from the embedded filesystem; user
-// uploads (icons, backgrounds) come from disk under dataDir.
-// Returns (nil, "", false) if the URL pattern is not recognized.
-func readAsset(urlPath string, dataDir string) ([]byte, string, bool) {
-	filename := filepath.Base(urlPath)
+// bundledAsset reports whether urlPath names a picture packaged inside HOPS
+// (a dashboard icon or a background preset), and whether this build has it.
+// Such a picture is never exported as an asset or restored from one: every
+// HOPS serves it from its own binary.
+func bundledAsset(urlPath string) (bundled, present bool) {
+	filename := path.Base(urlPath)
 	switch {
 	case strings.HasPrefix(urlPath, "/api/icons/dashboard/"):
-		data, err := assets.DashboardIcons.ReadFile("dashboard-icons/" + filename)
-		if err != nil {
-			return nil, "", false
-		}
-		return data, contentTypeFromPath(filename), true
+		_, err := fs.Stat(assets.DashboardIcons, "dashboard-icons/"+filename)
+		return true, err == nil && "/api/icons/dashboard/"+filename == urlPath
 	case strings.HasPrefix(urlPath, "/presets/"):
-		data, err := assets.Presets.ReadFile("presets/" + filename)
-		if err != nil {
-			return nil, "", false
-		}
-		return data, contentTypeFromPath(filename), true
-	case strings.HasPrefix(urlPath, "/icons/"):
-		path := filepath.Join(dataDir, "icons", filename)
-		data, err := os.ReadFile(path) // #nosec G304 -- path is built from a validated name under the data dir or a server-chosen temp/backup path, never raw user input
-		if err != nil {
-			return nil, "", false
-		}
-		return data, contentTypeFromPath(path), true
-	case strings.HasPrefix(urlPath, "/backgrounds/"):
-		path := filepath.Join(dataDir, "backgrounds", filename)
-		data, err := os.ReadFile(path) // #nosec G304 -- path is built from a validated name under the data dir or a server-chosen temp/backup path, never raw user input
-		if err != nil {
-			return nil, "", false
-		}
-		return data, contentTypeFromPath(path), true
-	default:
-		return nil, "", false
+		_, err := fs.Stat(assets.Presets, "presets/"+filename)
+		return true, err == nil && "/presets/"+filename == urlPath
 	}
+	return false, false
+}
+
+// errNotUpload: an asset path that is not a user-uploaded icon or background
+// (a root-relative link to somewhere else); it is left as a reference only.
+var errNotUpload = errors.New("not an uploaded icon or background")
+
+// readAsset reads the bytes of a user upload (icon or background) referenced
+// by URL path, from disk under dataDir. Bundled pictures are not read here
+// (bundledAsset). Any other path returns errNotUpload.
+func readAsset(urlPath string, dataDir string) ([]byte, string, error) {
+	filename := filepath.Base(urlPath)
+	var kind string
+	switch {
+	case strings.HasPrefix(urlPath, "/icons/"):
+		kind = "icons"
+	case strings.HasPrefix(urlPath, "/backgrounds/"):
+		kind = "backgrounds"
+	default:
+		return nil, "", errNotUpload
+	}
+	path := filepath.Join(dataDir, kind, filename)
+	data, err := os.ReadFile(path) // #nosec G304 -- path is built from a validated name under the data dir or a server-chosen temp/backup path, never raw user input
+	if err != nil {
+		return nil, "", err
+	}
+	return data, contentTypeFromPath(path), nil
 }
 
 // userAssetKindName splits an imported asset path into its kind ("icons" or
@@ -695,19 +703,46 @@ func collectLocalAssetRefs(cfg map[string]interface{}) []string {
 	return result
 }
 
-// embedAssets reads local files referenced in the config and adds them as base64 data
-// to the cfg["assets"] map. Returns the number of assets embedded.
-func (r *Router) embedAssets(cfg map[string]interface{}) int {
-	refs := collectLocalAssetRefs(cfg)
-	if len(refs) == 0 {
-		return 0
-	}
+// MissingAsset is an uploaded picture the config refers to that an export
+// could not read, so it is not in the file. The export lists these under
+// config.missingAssets, the response carries them in MissingAssetsHeader, and
+// an import of the file reports each one as not restored.
+type MissingAsset struct {
+	Path   string `json:"path"`
+	Reason string `json:"reason"`
+}
 
+// MissingAssetsHeader carries an export's missing assets to the page that
+// asked for the download: a URL-escaped JSON array of MissingAsset.
+const MissingAssetsHeader = "X-HOPS-Missing-Assets"
+
+// missingAssetsKey is the config key listing an export's missing assets.
+const missingAssetsKey = "missingAssets"
+
+// embedAssets reads local files referenced in the config and adds them as base64 data
+// to the cfg["assets"] map. It returns the number embedded and every uploaded
+// picture that could not be read (also listed in cfg["missingAssets"]), so the
+// export says what it left out instead of only logging it.
+func (r *Router) embedAssets(cfg map[string]interface{}) (int, []MissingAsset) {
+	refs := collectLocalAssetRefs(cfg)
+	sort.Strings(refs)
 	embedded := make(map[string]EmbeddedAsset)
+	var missing []MissingAsset
 	for _, urlPath := range refs {
-		data, contentType, ok := readAsset(urlPath, r.config.DataDir)
-		if !ok {
-			slog.Warn("could not read asset for export", "component", "export", "path", urlPath)
+		if bundled, _ := bundledAsset(urlPath); bundled {
+			continue // packaged in every HOPS; never an asset of the export
+		}
+		data, contentType, err := readAsset(urlPath, r.config.DataDir)
+		if errors.Is(err, errNotUpload) {
+			continue // a link elsewhere, not a file HOPS holds
+		}
+		if err != nil {
+			reason := "could not be read"
+			if errors.Is(err, fs.ErrNotExist) {
+				reason = "the file is missing from the data folder"
+			}
+			slog.Warn("could not read asset for export; listed as missing in the file", "component", "export", "path", urlPath, "error", err)
+			missing = append(missing, MissingAsset{Path: urlPath, Reason: reason})
 			continue
 		}
 		embedded[urlPath] = EmbeddedAsset{
@@ -719,23 +754,60 @@ func (r *Router) embedAssets(cfg map[string]interface{}) int {
 	if len(embedded) > 0 {
 		cfg["assets"] = embedded
 	}
-	return len(embedded)
+	if len(missing) > 0 {
+		cfg[missingAssetsKey] = missing
+	}
+	return len(embedded), missing
+}
+
+// missingFromExport lists the pictures the exporting HOPS could not read
+// (config.missingAssets) as not restored, unless this HOPS already has the
+// file. Anything malformed in the list is listed too, never ignored.
+func (r *Router) missingFromExport(importedConfig map[string]interface{}) []string {
+	raw, has := importedConfig[missingAssetsKey]
+	if !has || raw == nil {
+		return nil
+	}
+	list, ok := raw.([]interface{})
+	if !ok {
+		return []string{missingAssetsKey + ": field is not a list"}
+	}
+	var out []string
+	for _, item := range list {
+		m, _ := item.(map[string]interface{})
+		p, _ := m["path"].(string)
+		reason, _ := m["reason"].(string)
+		if p == "" {
+			out = append(out, missingAssetsKey+": an entry has no path")
+			continue
+		}
+		if kind, name, ok := userAssetKindName(p); ok && database.ValidImageName(name) {
+			if _, err := os.Stat(filepath.Join(r.config.DataDir, kind, name)); err == nil {
+				continue // already here
+			}
+		}
+		if reason == "" {
+			reason = "could not be read"
+		}
+		out = append(out, p+" (not in the export file: "+reason+")")
+	}
+	return out
 }
 
 // restoreAssets extracts embedded assets from an imported config and writes them to disk.
 // Returns the number of assets restored.
 func (r *Router) restoreAssets(importedConfig map[string]interface{}) (int, []string) {
+	failed := r.missingFromExport(importedConfig)
 	assetsRaw, ok := importedConfig["assets"]
 	if !ok {
-		return 0, nil
+		return 0, failed
 	}
 	assetsMap, ok := assetsRaw.(map[string]interface{})
 	if !ok {
-		return 0, []string{"assets: field is not an object, no assets restored"}
+		return 0, append(failed, "assets: field is not an object, no assets restored")
 	}
 
 	restored := 0
-	var failed []string
 	fail := func(urlPath, reason string, err error) {
 		slog.Warn("failed to restore asset", "component", "import", "path", urlPath, "reason", reason, "error", err)
 		if err != nil {
@@ -749,6 +821,14 @@ func (r *Router) restoreAssets(importedConfig map[string]interface{}) (int, []st
 	}
 	sort.Strings(keys)
 	for _, urlPath := range keys {
+		// A packaged picture (an older export may carry one) is already here: not a
+		// failure. One this version doesn't ship is, since the reference won't show.
+		if bundled, present := bundledAsset(urlPath); bundled {
+			if !present {
+				fail(urlPath, "a built-in picture this version of HOPS doesn't include", nil)
+			}
+			continue
+		}
 		assetMap, ok := assetsMap[urlPath].(map[string]interface{})
 		if !ok {
 			fail(urlPath, "entry is not an object", nil)
@@ -874,9 +954,15 @@ func (r *Router) handleExportConfig(w http.ResponseWriter, req *http.Request) {
 	cfg[configdoc.LayoutVersionKey] = configdoc.LayoutVersion
 
 	// Embed local asset files (icons, backgrounds) as base64 for portability
-	assetCount := r.embedAssets(cfg)
+	assetCount, missing := r.embedAssets(cfg)
 	if assetCount > 0 {
 		slog.Info("embedded assets in export", "component", "export", "count", assetCount)
+	}
+	if len(missing) > 0 {
+		// The download itself can't show a warning: the page reads this header.
+		if b, err := json.Marshal(missing); err == nil {
+			w.Header().Set(MissingAssetsHeader, url.PathEscape(string(b)))
+		}
 	}
 
 	envelope := map[string]interface{}{

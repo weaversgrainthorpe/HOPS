@@ -20,7 +20,7 @@
 
   let { children } = $props();
 
-  // The sections, in order (Icons after Dashboards: approved by Jonathan); Log out is an action (below). Discovery is a section like the others
+  // The sections, in order (Icons after Dashboards); Log out is an action (below). Discovery is a section like the others
   //: its sub-pages (/settings/discovery/new, /[id], …) keep it highlighted.
   const sections = [
     { href: '/settings/dashboards', label: 'Dashboards', icon: 'mdi:view-dashboard-outline' },
@@ -405,7 +405,7 @@
   }
 
   /* THE width rule for every settings page, one place for all of them: text and boxes
-     alike use the full width. There is no reading-measure cap on prose (Jonathan's ruling: intro
+     alike use the full width. There is no reading-measure cap on prose (intro
      and heading text must not bunch into the first third of a wide screen).
      The empty-state box is a box, so it spans the width too; its sentence stays centred. */
   .page-body :global(.empty-state) {

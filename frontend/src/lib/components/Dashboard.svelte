@@ -369,7 +369,7 @@
     }
   }
 
-  // The tab dialog's status-check row inherits from the dashboard.
+  // The tab dialog's status-check row names the gates above the tab (global, dashboard).
   const tabStatusContext = $derived(contextForTab(draft ?? dashboard));
 </script>
 

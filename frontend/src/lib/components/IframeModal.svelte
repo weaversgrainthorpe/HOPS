@@ -11,7 +11,7 @@
   }
 
   let { url, title, onClose }: Props = $props();
-  // Only an http(s) address is ever framed (pentest L1): javascript:, data:,
+  // Only an http(s) address is ever framed: javascript:, data:,
   // ssh:, ftp: and the rest are refused here, whatever the caller passed.
   const frameSrc = $derived(safeFrameUrl(url));
 

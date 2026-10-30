@@ -36,20 +36,37 @@ export function dashboardHasAway(d: LayoutDashboard | null | undefined): boolean
 	return d.tabs.some((t) => walk(t?.root?.children));
 }
 
-/** The tile dialog's check of an away address: null when blank (optional) or valid. */
-export function awayUrlProblem(u: string | undefined): string | null {
+/**
+ * The tile dialog's check of an away address: null when blank (optional) or valid. `stored` is the
+ * tile's saved away address: one HOPS doesn't open (a v2 rdp: tile, say) gets its own message.
+ */
+export function awayUrlProblem(u: string | undefined, stored?: string): string | null {
 	if (!u || u.trim() === '') return null;
-	return addressProblem(u, 'https://nas.your-tailnet.ts.net');
+	return addressProblem(u, 'https://nas.your-tailnet.ts.net', stored);
 }
 
-/** The tile dialog's check of a link tile's URL (required): null when valid. */
-export function linkUrlProblem(u: string | undefined): string | null {
+/** The tile dialog's check of a link tile's URL (required): null when valid. `stored` as above. */
+export function linkUrlProblem(u: string | undefined, stored?: string): string | null {
 	if (!u || u.trim() === '') return 'Enter an address, e.g. http://192.168.1.1';
-	return addressProblem(u, 'http://192.168.1.1');
+	return addressProblem(u, 'http://192.168.1.1', stored);
 }
 
-function addressProblem(u: string, example: string): string | null {
+/**
+ * The message for a saved address whose scheme HOPS doesn't open (rdp:, vnc:, smb: … kept from v2):
+ * the tile can't be saved with it, but it stays as it is until the user changes it or cancels.
+ */
+export function keptAddressMessage(u: string): string | null {
+	const m = /^\s*([a-z][a-z0-9+.-]*):/i.exec(u);
+	if (!m || isValidUrl(u.trim())) return null;
+	return `This address uses ${m[1].toLowerCase()}:, which HOPS doesn't open. Change it or leave the tile as it is.`;
+}
+
+function addressProblem(u: string, example: string, stored?: string): string | null {
 	if (isValidUrl(u.trim())) return null;
+	if (stored !== undefined && u.trim() === stored.trim()) {
+		const kept = keptAddressMessage(u);
+		if (kept) return kept;
+	}
 	if (/^\s*(https?|ftps?|ssh)\/\//i.test(u)) return `A colon is missing after the scheme, e.g. ${example}`;
 	if (u.includes('\\')) return `Use forward slashes (/), not backslashes (\\), e.g. ${example}`;
 	return `Enter a valid address (http, https, ftp, ssh or mailto), e.g. ${example}`;

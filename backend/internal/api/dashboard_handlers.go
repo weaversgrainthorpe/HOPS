@@ -24,6 +24,8 @@ func migrationHint(kind string) string {
 		return "HOPS could not save a copy of your HOPS 2 data first, so it converted nothing; the data is untouched and HOPS 2.2.1 opens it as before"
 	case configdoc.MigrationFailLayout:
 		return "this is data from a pre-release HOPS 3 build, which has no update path; see the detail"
+	case configdoc.MigrationFailCorrupt:
+		return "the stored configuration can't be read; restore a recent backup (Settings › Backups, or a hops-backup-*.db file from the backups folder)"
 	}
 	return migrationBackupHint
 }

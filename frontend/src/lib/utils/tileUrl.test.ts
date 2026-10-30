@@ -76,3 +76,18 @@ describe('linkUrlProblem: a missing colon', () => {
 		expect(linkUrlProblem('HTTPS//nas.lan')).toMatch(/colon is missing/);
 	});
 });
+
+describe('a saved address HOPS does not open (kept from v2)', () => {
+	const kept = "This address uses rdp:, which HOPS doesn't open. Change it or leave the tile as it is.";
+	it('unchanged, the dialog says why it cannot be saved', () => {
+		expect(linkUrlProblem('rdp://pc.lan', 'rdp://pc.lan')).toBe(kept);
+		expect(awayUrlProblem('VNC://pc', 'VNC://pc')).toMatch(/uses vnc:, which HOPS doesn't open/);
+	});
+	it('changed (or with nothing saved), the usual message', () => {
+		expect(linkUrlProblem('rdp://other', 'rdp://pc.lan')).toMatch(/http, https, ftp, ssh or mailto/);
+		expect(linkUrlProblem('rdp://pc.lan')).toMatch(/http, https, ftp, ssh or mailto/);
+	});
+	it('a saved address that is fine needs no message', () => {
+		expect(linkUrlProblem('http://pc.lan', 'http://pc.lan')).toBeNull();
+	});
+});

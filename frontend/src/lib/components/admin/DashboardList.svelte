@@ -6,6 +6,7 @@
   import { toast } from '$lib/stores/toast';
   import { goto } from '$app/navigation';
   import { exportConfig } from '$lib/utils/api';
+  import { missingAssetsWarning } from '$lib/utils/exportResult';
   import type { LayoutDashboard } from '$lib/types/layout';
   import { tick } from 'svelte';
   import Icon from '@iconify/svelte';
@@ -136,7 +137,7 @@
     exportingId = dashboard.id;
     try {
       // Export only this specific dashboard
-      const blob = await exportConfig('json', dashboard.id);
+      const { blob, missing } = await exportConfig('json', dashboard.id);
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -146,7 +147,10 @@
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-      toast.success(`Exported "${dashboard.name}"`);
+      // Pictures left out are said, and stay on screen until dismissed.
+      const warning = missingAssetsWarning(missing);
+      if (warning) toast.warning(warning, 0);
+      else toast.success(`Exported "${dashboard.name}"`);
     } catch (err) {
       toast.error(err instanceof Error && err.message ? `Export failed: ${err.message}` : 'Export failed');
     } finally {

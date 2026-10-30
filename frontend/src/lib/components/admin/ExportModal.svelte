@@ -4,6 +4,7 @@
   import { exportConfig } from '$lib/utils/api';
   import { dashboards } from '$lib/stores/config';
   import { toast } from '$lib/stores/toast';
+  import { missingAssetsWarning } from '$lib/utils/exportResult';
 
   interface Props {
     onClose: () => void;
@@ -19,9 +20,12 @@
     exporting = true;
 
     try {
-      const blob = await exportConfig('json');
+      const { blob, missing } = await exportConfig('json');
       downloadBlob(blob, `hops-all-dashboards-${new Date().toISOString().split('T')[0]}.json`);
-      toast.success('All dashboards exported');
+      // Pictures left out are said, and stay on screen until dismissed.
+      const warning = missingAssetsWarning(missing);
+      if (warning) toast.warning(warning, 0);
+      else toast.success('All dashboards exported');
       onClose();
     } catch (err) {
       toast.error('Export failed');
@@ -34,10 +38,12 @@
     exportingId = dashboardId;
 
     try {
-      const blob = await exportConfig('json', dashboardId);
+      const { blob, missing } = await exportConfig('json', dashboardId);
       const safeName = dashboardName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
       downloadBlob(blob, `hops-${safeName}-${new Date().toISOString().split('T')[0]}.json`);
-      toast.success(`Exported "${dashboardName}"`);
+      const warning = missingAssetsWarning(missing);
+      if (warning) toast.warning(warning, 0);
+      else toast.success(`Exported "${dashboardName}"`);
     } catch (err) {
       toast.error('Export failed');
     } finally {

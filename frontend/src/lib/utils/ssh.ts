@@ -103,7 +103,7 @@ export function parseSshUrl(url: string): SshFields | null {
  * frame-src allows only http(s).
  */
 export function openSshInPlace(url: string): boolean {
-	// Only an allow-listed ssh:// address ever reaches location (pentest L1).
+	// Only an allow-listed ssh:// address ever reaches location.
 	if (!isSshUrl(url) || !isValidUrl(url)) return false;
 	window.location.href = url.trim();
 	return true;

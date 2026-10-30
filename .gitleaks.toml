@@ -7,8 +7,8 @@ useDefault = true
 [[allowlists]]
 description = "Paths that are never scanned"
 paths = [
-  '''(^|/)tests/prerelease/hopsexport/''',  # Jonathan's real exports: never scanned or printed
-  '''(^|/)design/feedback/''',               # raw user feedback
+  '''(^|/)tests/prerelease/hopsexport/''',  # local private folder (never committed): never scanned or printed
+  '''(^|/)design/feedback/''',               # local private folder (never committed)
   '''(^|/)node_modules/''',
   '''(^|/)data/''',                          # runtime data dirs
   '''(^|/)\.git/''',

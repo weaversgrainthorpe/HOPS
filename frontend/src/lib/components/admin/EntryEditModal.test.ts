@@ -150,4 +150,21 @@ describe('EntryEditModal URL check', () => {
     expect(onSave).toHaveBeenCalledOnce();
     expect(onSave.mock.calls[0][0].url).toBe('http://172.16.0.1');
   });
+
+  it('a saved address HOPS does not open (kept from v2) says why at once; Save waits, Cancel leaves it', async () => {
+    const onSave = vi.fn();
+    const onCancel = vi.fn();
+    editMode.set(true);
+    render(EntryEditModal, { entry: { ...entry, url: 'rdp://pc.lan' } as Entry, onSave, onCancel });
+    await tick();
+    expect(screen.getByRole('alert').textContent).toBe(
+      "This address uses rdp:, which HOPS doesn't open. Change it or leave the tile as it is."
+    );
+    await save();
+    expect(onSave).not.toHaveBeenCalled();
+    expect(onCancel).not.toHaveBeenCalled();
+    await fireEvent.click(screen.getByRole('button', { name: /^Cancel/ }));
+    expect(onCancel).toHaveBeenCalled();
+    editMode.set(false);
+  });
 });

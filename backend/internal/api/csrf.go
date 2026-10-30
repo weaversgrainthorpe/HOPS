@@ -22,7 +22,7 @@ const csrfCookieName = "hops_csrf"
 const csrfHeaderName = "X-CSRF-Token"
 
 // csrfSecretName is the server_secrets row holding the HMAC key that binds a
-// CSRF token to its session (pentest L3). It is generated once per install and
+// CSRF token to its session. It is generated once per install and
 // kept in the database: never an environment variable, never hand-set.
 const csrfSecretName = "csrf_hmac" // #nosec G101 -- a row name, not a secret; the key itself is random per install
 
@@ -106,7 +106,7 @@ func clearCSRFCookie(w http.ResponseWriter, secure bool) {
 }
 
 // csrfMiddleware enforces the double-submit cookie pattern for state-changing
-// requests, with the token bound to the session (pentest L3). Safe methods
+// requests, with the token bound to the session. Safe methods
 // (GET, HEAD, OPTIONS) bypass the check. For mutation methods (POST, PUT,
 // PATCH, DELETE), the X-CSRF-Token header must equal (constant-time) both the
 // hops_csrf cookie and the token derived from the request's session cookie,

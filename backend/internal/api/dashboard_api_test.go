@@ -117,6 +117,23 @@ func TestGetConfig_MigrationFailed503(t *testing.T) {
 	}
 }
 
+// Each kind of failure gets its own advice; a corrupt config never claims a
+// pre-v3 copy exists or points back to 2.2.1.
+func TestMigrationHint_Kinds(t *testing.T) {
+	corrupt := migrationHint(configdoc.MigrationFailCorrupt)
+	if !strings.Contains(corrupt, "Settings › Backups") || strings.Contains(corrupt, "pre-v3") || strings.Contains(corrupt, "2.2.1") {
+		t.Errorf("corrupt hint = %q", corrupt)
+	}
+	if migrationHint(configdoc.MigrationFailConvert) != migrationBackupHint {
+		t.Error("convert should keep the pre-v3 backup hint")
+	}
+	router, _ := setupTestRouterWithMigration(t, &configdoc.MigrationResult{Failed: true, Kind: configdoc.MigrationFailCorrupt, Detail: "stored config is not valid JSON"})
+	code, resp := newClient(t, router).do("GET", "/api/config", nil)
+	if code != 503 || resp["kind"] != "corrupt" || resp["backupHint"] != corrupt {
+		t.Fatalf("GET /api/config: %d %v", code, resp)
+	}
+}
+
 func TestPutDashboard_MigrationFailedLeavesRowUntouched(t *testing.T) {
 	router, db := setupTestRouterWithMigration(t, &configdoc.MigrationResult{Failed: true, Detail: "boom"})
 	var before string

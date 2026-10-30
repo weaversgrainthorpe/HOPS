@@ -18,7 +18,7 @@
   // scheme even if the onclick handler somehow doesn't fire (right-click
   // open-in-new-tab, ctrl-click, prefetch, etc.). The visible URL text in
   // the modal still shows whatever the admin typed.
-  // The popup offers only http(s) addresses (pentest L1).
+  // The popup offers only http(s) addresses.
   let webUrl = $derived(safeFrameUrl(url));
   let safeHref = $derived(webUrl ?? '#');
 

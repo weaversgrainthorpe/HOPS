@@ -4,8 +4,8 @@
 # network for their advisory databases; they FAIL, not skip, if unreachable).
 # Usage: scripts/security-check.sh [--quick]   (--quick skips the history secret scan)
 # A missing tool is a FAILED check with install instructions, never a silent skip.
-# NEVER scans or prints tests/prerelease/hopsexport/ (real user data),
-# node_modules, data dirs or design/feedback/.
+# NEVER scans or prints local private folders (never committed: tests/prerelease/hopsexport/,
+# design/feedback/), node_modules or data dirs.
 set -u
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT" || exit 2

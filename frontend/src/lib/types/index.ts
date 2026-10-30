@@ -2,7 +2,10 @@ import type { LayoutDoc } from './layout';
 // Type definitions matching the backend models. Dashboards themselves are the
 // v3 tree (types/layout.ts); the types here are the shared leaf shapes.
 
-/** Per-dashboard overrides; null = inherit the global setting. */
+/**
+ * Per-dashboard overrides; null = use the global setting. statusChecksEnabled is a gate instead:
+ * false stops checks on the dashboard, true or null leaves the global setting to decide.
+ */
 export interface DashboardSettings {
   statusChecksEnabled: string | boolean | null;
   statusCheckIntervalMinutes: string | number | null;
@@ -76,8 +79,8 @@ export interface Background {
 export interface StatusCheck {
   type: 'http';
   /**
-   * Layered: true = on, false = off, null = inherit (follow the folder, tab,
-   * dashboard or global setting). Missing = null: inherit.
+   * The tile's own switch: true = On, anything else (false, null or missing) = Off. It is
+   * checked only when On and every gate above it (global, dashboard, tab, folders) is Enabled.
    */
   enabled?: boolean | null;
   interval: number;

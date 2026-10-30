@@ -246,7 +246,7 @@ func runMigrations(db *sql.DB) error {
 
 		// Server-side secrets generated once per install, never set by env
 		// or by hand (e.g. csrf_hmac: the key that binds a CSRF token to its
-		// session, pentest L3). Created on first use.
+		// session). Created on first use.
 		`CREATE TABLE IF NOT EXISTS server_secrets (
 			name       TEXT PRIMARY KEY,
 			value      BLOB NOT NULL,

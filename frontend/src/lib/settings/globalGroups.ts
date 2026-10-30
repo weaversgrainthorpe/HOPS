@@ -15,7 +15,6 @@ export interface SettingGroupDef {
 	keys: readonly string[];
 }
 
-// The order was set by Jonathan.
 export const GLOBAL_SETTING_GROUPS: readonly SettingGroupDef[] = [
 	{
 		id: 'server',

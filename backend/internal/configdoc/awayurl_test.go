@@ -66,3 +66,51 @@ func TestConvertDashboardV2_RefusesUnsafeURL(t *testing.T) {
 		t.Errorf("startup migration should keep the tile, got %v", err)
 	}
 }
+
+// A save keeps a stored tile address v3 refuses (a v2 rdp: tile) while it is
+// unchanged, so its dashboard stays saveable; a new or changed one is refused,
+// and a new javascript: address is never accepted.
+func TestVerifyDashboardKeeping(t *testing.T) {
+	stored := tileNode("old")
+	stored["url"] = "rdp://pc.lan"
+	stored[AwayURLKey] = "vnc://pc.example"
+	keep := StoredTileURLs(v3Dash([]any{stored}))
+	withTiles := func(ns ...Obj) Obj {
+		kids := []any{}
+		for i, n := range ns {
+			n["placement"] = Obj{"x": i, "y": 0, "w": 1, "h": 1}
+			kids = append(kids, n)
+		}
+		return v3Dash(kids)
+	}
+	same := func() Obj {
+		n := tileNode("old")
+		n["url"] = "rdp://pc.lan"
+		n[AwayURLKey] = "vnc://pc.example"
+		return n
+	}
+
+	if err := VerifyDashboardKeeping(withTiles(same()), keep); err != nil {
+		t.Errorf("unchanged stored rdp: tile should stay saveable: %v", err)
+	}
+	if err := VerifyDashboard(withTiles(same())); err == nil {
+		t.Error("VerifyDashboard (no stored copy) should still refuse rdp:")
+	}
+	changed := same()
+	changed["url"] = "rdp://other.lan"
+	wantProblem(t, VerifyDashboardKeeping(withTiles(changed), keep), `"old" (`, "url is", "rdp://other.lan")
+	changedAway := same()
+	changedAway[AwayURLKey] = "vnc://other"
+	wantProblem(t, VerifyDashboardKeeping(withTiles(changedAway), keep), "awayUrl is")
+	fresh := tileNode("new")
+	fresh["url"] = "rdp://pc.lan" // same address, but a different (new) tile
+	wantProblem(t, VerifyDashboardKeeping(withTiles(same(), fresh), keep), `"new" (`, "url is")
+	for _, bad := range []string{"javascript:alert(1)", "data:text/html,x", "vbscript:x", "file:///etc/passwd"} {
+		js := same()
+		js["url"] = bad
+		wantProblem(t, VerifyDashboardKeeping(withTiles(js), keep), "url is")
+		jsAway := same()
+		jsAway[AwayURLKey] = bad
+		wantProblem(t, VerifyDashboardKeeping(withTiles(jsAway), keep), "awayUrl is")
+	}
+}

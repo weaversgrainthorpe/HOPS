@@ -12,6 +12,9 @@ import (
 
 // Effective is a dashboard's settings after inheritance from the globals.
 type Effective struct {
+	// StatusChecksEnabled is the gate: true only when the global setting is on
+	// and the dashboard is not Disabled (explicit false). A dashboard can stop
+	// checks but never turn them on against the global (EffectiveStatusChecks).
 	StatusChecksEnabled        bool
 	StatusCheckIntervalMinutes int
 	StatusCheckTimeoutSeconds  int
@@ -72,7 +75,8 @@ func overrideString(svc *settings.Service, jsonKey string, v any) (string, bool)
 }
 
 // Resolve returns the dashboard's effective settings: each non-null override
-// wins, otherwise the global value. Writes are gated by ValidateOverrides, so a
+// wins, otherwise the global value; statusChecksEnabled is the gate instead
+// (global on and the dashboard not Disabled). Writes are gated by ValidateOverrides, so a
 // stored override that is the wrong type or out of range is unexpected; it
 // falls back to the global and is logged at WARN (never silently coerced).
 func Resolve(svc *settings.Service, dash Obj) Effective {
@@ -114,8 +118,9 @@ func Resolve(svc *settings.Service, dash Obj) Effective {
 		}
 		return svc.GetInt(gk)
 	}
+	gateOpen, _, _ := EffectiveStatusChecks(svc, dash, nil, nil, nil)
 	return Effective{
-		StatusChecksEnabled:        pick("statusChecksEnabled") == "true",
+		StatusChecksEnabled:        gateOpen,
 		StatusCheckIntervalMinutes: toInt(pick("statusCheckIntervalMinutes"), settings.KeyStatusCheckIntervalMinutes),
 		StatusCheckTimeoutSeconds:  toInt(pick("statusCheckTimeoutSeconds"), settings.KeyStatusCheckTimeoutSeconds),
 		EditIdleTimeoutMinutes:     toInt(pick("editIdleTimeoutMinutes"), settings.KeyEditModeIdleTimeoutMinutes),

@@ -136,7 +136,8 @@ func (r *Router) handlePutDashboardV3(w http.ResponseWriter, id string, in confi
 		if ne := nameBoundsError(nd); ne != nil {
 			return nil, nil, ne
 		}
-		if err := configdoc.VerifyDashboard(nd); err != nil {
+		// A stored tile address v3 refuses (a v2 rdp: tile, say) is kept while unchanged.
+		if err := configdoc.VerifyDashboardKeeping(nd, configdoc.StoredTileURLs(prev)); err != nil {
 			return nil, nil, verifyErr(err)
 		}
 		return replaceDashboard(stored, id, nd), map[string]interface{}{"revision": cur + 1}, nil
@@ -342,6 +343,9 @@ func (r *Router) handleTransferNodes(w http.ResponseWriter, req *http.Request) {
 		if ce := checkRevision(body.TargetID, dst, body.TargetRevision); ce != nil {
 			return nil, nil, ce
 		}
+		// Before anything moves: a moved tile keeps its id and its stored address; a copy is a
+		// new tile, so its address is checked as new.
+		keep := configdoc.StoredTileURLs(src, dst)
 		found, ae := collectNodes(src, want)
 		if ae != nil {
 			return nil, nil, ae
@@ -400,7 +404,7 @@ func (r *Router) handleTransferNodes(w http.ResponseWriter, req *http.Request) {
 			src["revision"] = srcRev + 1
 			srcRev++
 		}
-		if err := configdoc.VerifyDashboard(dst); err != nil {
+		if err := configdoc.VerifyDashboardKeeping(dst, keep); err != nil {
 			return nil, nil, verifyErr(err)
 		}
 		return stored, map[string]interface{}{"sourceRevision": srcRev, "targetRevision": dstRev + 1}, nil

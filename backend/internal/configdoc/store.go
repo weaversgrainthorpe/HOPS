@@ -72,6 +72,9 @@ const (
 	// MigrationFailLayout: the stored data is pre-release v3, which has no
 	// update path.
 	MigrationFailLayout = "layout"
+	// MigrationFailCorrupt: the stored config can't be read at all (not valid
+	// JSON), so it is not known to be v2 and no pre-v3 backup was taken.
+	MigrationFailCorrupt = "corrupt"
 )
 
 // MigrateOnStartup converts a stored v2 document to v3. If the stored
@@ -95,7 +98,7 @@ func MigrateOnStartup(db *sql.DB) (MigrationResult, error) {
 
 	var v2 Obj
 	if err := json.Unmarshal([]byte(raw), &v2); err != nil {
-		return failed(MigrationFailConvert, fmt.Sprintf("stored config is not valid JSON: %v", err)), nil
+		return failed(MigrationFailCorrupt, fmt.Sprintf("stored config is not valid JSON: %v", err)), nil
 	}
 	if IsV3(v2) {
 		return MigrationResult{}, nil

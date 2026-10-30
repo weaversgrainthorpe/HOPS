@@ -35,4 +35,13 @@ describe('MigrationFailed advice', () => {
     expect(screen.getByText(/pre-release build of HOPS 3/)).toBeTruthy();
     expect(screen.queryByText(/go back to HOPS 2\.2\.1/)).toBeNull();
   });
+
+  it('an unreadable stored config: restore a recent backup; no 2.2.1 or pre-v3 advice', () => {
+    migrationFailure.set('stored config is not valid JSON: invalid character');
+    migrationFailureKind.set('corrupt');
+    render(MigrationFailed, { signedIn: true });
+    expect(screen.getByText(/The stored configuration can't be read\. Restore a recent backup \(Settings › Backups\)/)).toBeTruthy();
+    expect(screen.queryByText(/2\.2\.1/)).toBeNull();
+    expect(screen.queryByText(/pre-v3-migration\.db/)).toBeNull();
+  });
 });

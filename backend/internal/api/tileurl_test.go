@@ -94,3 +94,81 @@ func TestTileURL_RefusedOnTransfer(t *testing.T) {
 		t.Error("stored unsafe tile was dropped from GET /api/config; it must be shown (as unsafe), not hidden")
 	}
 }
+
+// setTileURL sets the url of tile id wherever it is in d (a document or one dashboard).
+func setTileURL(d configdoc.Obj, id, u string) {
+	if _, isDoc := d["dashboards"]; !isDoc {
+		d = configdoc.Obj{"dashboards": []any{d}}
+	}
+	configdoc.Walk(d, func(_, _ configdoc.Obj, _ []configdoc.Obj, n configdoc.Obj) bool {
+		if n["id"] == id {
+			n["url"] = u
+		}
+		return true
+	})
+}
+
+// A v2 tile whose address v3 refuses (rdp:) does not make its dashboard
+// unsaveable: unchanged it is kept; a changed or new refused address, and any
+// javascript: one, is still refused.
+func TestTileURL_StoredLegacyURLKeptOnSave(t *testing.T) {
+	router, db := setupTestRouter(t)
+	c := newClient(t, router)
+	seed(t, db)
+	doc := storedDoc(t, db)
+	setTileURL(doc, "e1", "rdp://pc.lan")
+	if err := configdoc.Save(db, doc); err != nil {
+		t.Fatal(err)
+	}
+
+	d := v3Body(t, c, "d1")
+	d["name"] = "Renamed"
+	if code, resp := v3Put(c, "d1", d, 1); code != 200 {
+		t.Fatalf("save with the unchanged rdp: tile: got %d %v, want 200", code, resp)
+	}
+	if !strings.Contains(storedRaw(db), "rdp://pc.lan") {
+		t.Error("the stored rdp: address was not kept")
+	}
+
+	d = v3Body(t, c, "d1")
+	setTileURL(d, "e1", "rdp://other.lan")
+	code, resp := v3Put(c, "d1", d, 2)
+	wantURLRefused(t, "changed to another rdp: address", code, resp)
+
+	d = v3Body(t, c, "d1")
+	setTileURL(d, "e1", badTileURL)
+	code, resp = v3Put(c, "d1", d, 2)
+	wantURLRefused(t, "changed to javascript:", code, resp)
+
+	d = v3Body(t, c, "d1")
+	n := tileJSON("fresh", 0, 9)
+	n["url"] = "rdp://pc.lan"
+	rootOf(d)["children"] = append(rootOf(d)["children"].([]interface{}), n)
+	code, resp = v3Put(c, "d1", d, 2)
+	wantURLRefused(t, "new rdp: tile", code, resp)
+	if !strings.Contains(fmt.Sprint(resp["error"]), "fresh") {
+		t.Errorf("refusal should name the tile: %v", resp["error"])
+	}
+}
+
+// Moving a stored legacy tile keeps it (same tile); copying it makes a new
+// tile, whose address is checked as new.
+func TestTileURL_StoredLegacyURLOnTransfer(t *testing.T) {
+	router, db := setupTestRouter(t)
+	c := newClient(t, router)
+	seed(t, db)
+	addD2(t, db)
+	doc := storedDoc(t, db)
+	setTileURL(doc, "e1", "vnc://pc.lan")
+	if err := configdoc.Save(db, doc); err != nil {
+		t.Fatal(err)
+	}
+	tabID := v3Body(t, c, "d2")["tabs"].([]interface{})[0].(map[string]interface{})["id"].(string)
+	target := map[string]interface{}{"tabId": tabID}
+	code, resp := c.do("POST", "/api/dashboards/transfer", transferBody(map[string]interface{}{"target": target}))
+	wantURLRefused(t, "copy", code, resp)
+	code, resp = c.do("POST", "/api/dashboards/transfer", transferBody(map[string]interface{}{"mode": "move", "target": target}))
+	if code != 200 {
+		t.Fatalf("move of the unchanged vnc: tile: got %d %v, want 200", code, resp)
+	}
+}

@@ -73,7 +73,7 @@ test-results/
 # superpowers scratch (brainstorm mockups, SDD ledgers)
 /.superpowers/
 data.moved-*/
-# Specs, plans, trial notes and feedback: kept local, never published (Jonathan, 2026-10-29).
+# Specs, plans, trial notes and feedback: kept local, never published.
 /design/
 dist/
 # Private, local only (no real hosts, IPs or user ids in the public repo; 2026-10-29):
@@ -82,3 +82,6 @@ dist/
 /local/
 scripts/deploy-local.conf
 scripts/hops-dev.service
+
+# Local private test data: never committed.
+/tests/prerelease/hopsexport/

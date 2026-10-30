@@ -51,8 +51,8 @@
   // Home/Away (per browser): the address this tile opens now, the same for every way of opening it.
   const openUrl = $derived(tileOpenUrl(entry, $awayMode));
   const usingAway = $derived($awayMode && hasAwayUrl(entry));
-  // Pentest L1: an address outside the allow-list (javascript:, data:, …; the
-  // server refuses new ones, but stored data may predate that) is never opened.
+  // An address outside the allow-list (javascript:, data:, rdp: …; the server
+  // refuses new ones, but stored data may predate that) is never opened.
   // The tile stays visible, says so in edit mode, and a click explains why.
   const urlProblem = $derived(isNote ? null : tileUrlProblem(openUrl));
   const urlProblemText = $derived(
@@ -200,8 +200,8 @@
         <div class="subtitle" style:opacity={textOpacity}>{entry.description}</div>
       {/if}
 
-      <!-- Layered status checks: a tile switched on or set to inherit asks the
-           server, which resolves the levels; a switched-off tile is never checked. -->
+      <!-- Status checks: a tile switched On (or holding a setting HOPS can't read, shown as
+           such) asks the server, which applies the gates above it; an Off tile is never checked. -->
       {#if inEditor && urlProblem}
         <span class="url-problem" data-testid="tile-url-problem" role="note">{urlProblemText}</span>
       {/if}

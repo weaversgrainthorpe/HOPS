@@ -135,7 +135,7 @@ export function safeOpenUrl(url: string, target: '_blank' | '_self' = '_blank'):
  * The http(s) address a tile may show inside HOPS (iframe mode) or offer from
  * its popup, or null. Only http and https (and protocol-relative, root-relative
  * or bare-host forms, which open as https or on this origin) are allowed:
- * never javascript:, data:, ftp:, ssh:, mailto: or anything else (pentest L1).
+ * never javascript:, data:, ftp:, ssh:, mailto: or anything else.
  */
 export function safeFrameUrl(url: string | undefined | null): string | null {
   if (typeof url !== 'string' || !isValidUrl(url)) return null;

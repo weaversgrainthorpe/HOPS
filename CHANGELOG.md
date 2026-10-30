@@ -164,6 +164,10 @@ v2 database first, and refuses to convert anything if that backup fails. See
   dashboard is laid out again on the new grid, so it may not look exactly the
   same. A tile whose size HOPS doesn't recognise becomes Medium, and any
   clashing ids are renamed; a notice lists both.
+- **Tiles whose address uses a scheme HOPS 3 doesn't open** (`rdp:`, `vnc:`,
+  `smb:` …) are kept as they are, and the rest of their dashboard can still
+  be edited and saved. They can't be opened from HOPS until their address is
+  changed; in edit mode such a tile says so.
 - **Upload limits** still at the old defaults (50 MB for backgrounds, 8 MB for
   icons) move to the new ones, with a one-time notice. Limits you had changed
   are kept, unless they are above the new maximum (200 MB for imports, 100 MB

@@ -14,7 +14,8 @@
 <!-- Full-page notice shown instead of the app while the stored config could
      not be migrated to v3. The server refuses config requests in this state;
      restoring the pre-v3-migration backup in v3 would only be migrated again, so the remedy is
-     HOPS 2.2.1 (with that backup) and a report. -->
+     HOPS 2.2.1 (with that backup) and a report. A stored config that can't be read at all is
+     not known to be HOPS 2 data, so no pre-v3 copy exists: a recent backup is the remedy. -->
 <main class="migration-failed" role="alert">
   <Icon icon="mdi:database-alert-outline" width="48" />
   <h1>HOPS couldn't migrate your configuration</h1>
@@ -30,6 +31,12 @@
       HOPS could not save a copy of your HOPS 2 data first, so it converted nothing. Your data is
       untouched, and HOPS 2.2.1 opens it as before. Fix the cause in the message above (often disk
       space, or HOPS not being allowed to write to its backups folder), then start HOPS 3 again.
+    </p>
+  {:else if $migrationFailureKind === 'corrupt'}
+    <p>
+      The stored configuration can't be read. Restore a recent backup (Settings › Backups); HOPS
+      takes one before every change, in its backups folder. HOPS has not converted or replaced
+      anything.
     </p>
   {:else if $migrationFailureKind === 'layout'}
     <p>

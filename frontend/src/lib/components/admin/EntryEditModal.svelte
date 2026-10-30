@@ -100,13 +100,17 @@
     sshAwayHost.trim() ? validateSsh({ host: sshAwayHost, port: sshAwayPort, user: sshUser }) : {}
   );
   // A link tile's away address: optional, checked like any tile address.
-  let awayShowError = $state(false);
+  // A saved address HOPS doesn't open (rdp:, vnc: … kept from v2) says so as soon as the dialog
+  // opens: the tile can't be saved with it, and Cancel leaves it as it is.
+  // svelte-ignore state_referenced_locally
+  let awayShowError = $state(!!entry.awayUrl && awayUrlProblem(entry.awayUrl, entry.awayUrl) !== null);
   // svelte-ignore state_referenced_locally
   let awayUrlText = $state(entry.awayUrl ?? '');
-  const awayError = $derived(awayUrlProblem(awayUrlText));
+  const awayError = $derived(awayUrlProblem(awayUrlText, entry.awayUrl));
   // A link tile's URL: checked here as a save would, so a typo is caught in the dialog.
-  let urlShowError = $state(false);
-  const urlError = $derived(linkUrlProblem(editedEntry.url));
+  // svelte-ignore state_referenced_locally
+  let urlShowError = $state(entry.type !== 'note' && !!entry.url && linkUrlProblem(entry.url, entry.url) !== null);
+  const urlError = $derived(linkUrlProblem(editedEntry.url, entry.url));
   const isSsh = $derived(kind === 'ssh');
   // ssh:// can't be framed: the iframe and popup modes are unavailable for it.
   const sshLike = $derived(isSsh || (kind === 'link' && isSshUrl(editedEntry.url)));

@@ -26,6 +26,8 @@ type verifier struct {
 	sizes       map[string]SizeChange // by v2 entry path
 	usedSizes   map[string]bool
 	first       map[string]string // v2 id -> path of its first occurrence
+	// Set by VerifyDashboardKeeping only.
+	keep *KeptURLs
 }
 
 func (v *verifier) add(format string, args ...any) {
@@ -53,8 +55,10 @@ func VerifyIDs(doc Obj) error {
 // its own: non-empty string path, the converter-owned keys (revision, the six
 // settings keys) and a well-formed tree in the current layout form whose ids are non-empty
 // and unique within the dashboard. It returns a *VerifyError.
-func VerifyImportedDashboard(d Obj) error {
-	v := &verifier{}
+func VerifyImportedDashboard(d Obj) error { return verifyDashboard(d, nil) }
+
+func verifyDashboard(d Obj, keep *KeptURLs) error {
+	v := &verifier{keep: keep}
 	id, _ := d["id"].(string)
 	if p, ok := d["path"].(string); !ok || p == "" {
 		v.add("dashboard %q: path is %s, want a non-empty string", id, show(d["path"]))
@@ -166,6 +170,17 @@ func VerifyDashboard(d Obj) error {
 		return &VerifyError{Problems: []string{msg}}
 	}
 	return VerifyImportedDashboard(d)
+}
+
+// VerifyDashboardKeeping is VerifyDashboard for a save of stored data: a tile
+// url or awayUrl that ValidTileURL refuses passes only when it is the stored
+// address of that same tile, unchanged (KeptURLs). A new or changed one is
+// refused as VerifyDashboard refuses it.
+func VerifyDashboardKeeping(d Obj, keep KeptURLs) error {
+	if msg := boundsProblem(d); msg != "" {
+		return &VerifyError{Problems: []string{msg}}
+	}
+	return verifyDashboard(d, &keep)
 }
 
 // BoundsProblem is boundsProblem for callers outside the package: an import
@@ -700,9 +715,9 @@ func (v *verifier) checkContainer(owner string, c Obj, note func(string, Obj) st
 }
 
 // checkFolderShape requires a folder's shape, when present, to be one of
-// FolderShapes and its tabPosition, when present, one of FolderTabPositions
-//. Anything else (a retired name such as "folder-tab", a typo, a
-// non-string, markup) is refused with a message naming the field, the value
+// FolderShapes and its tabPosition, when present, one of FolderTabPositions.
+// Anything else (a retired name such as "folder-tab", a typo, a non-string,
+// markup) is refused with a message naming the field, the value
 // and the allowed names: the renderer's "unknown shape" note is only a
 // backstop, never the first line.
 func (v *verifier) checkFolderShape(n string, f Obj) {
