@@ -219,8 +219,9 @@ func TestFindDataPermissionDeniedIsNotAMiss(t *testing.T) {
 	}
 	msg := errb.String()
 	if strings.Contains(msg, "Found no HOPS database") || strings.Contains(msg, "no hops.db") ||
-		!strings.Contains(msg, blocked+" (usual install location): cannot look inside (permission denied) — run it with sudo") ||
-		!strings.Contains(msg, "Run it with sudo") {
+		!strings.Contains(msg, "isn't allowed to look inside") ||
+		!strings.Contains(msg, "  "+blocked+" (usual install location)\n") ||
+		!strings.Contains(msg, "Run it with sudo:\n  sudo ") {
 		t.Errorf("message: %s", msg)
 	}
 

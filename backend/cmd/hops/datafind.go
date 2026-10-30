@@ -50,6 +50,9 @@ type dataSearchResult struct {
 	found   []dataCandidate
 	looked  []string
 	blocked int
+	// blockedDirs names each folder it could not look inside, with how it
+	// was found.
+	blockedDirs []string
 }
 
 // find returns every folder with a hops.db, in search order and each once,
@@ -83,6 +86,7 @@ func (s dataSearch) find() dataSearchResult {
 			note("%s (%s): no hops.db", abs, how)
 		case err != nil:
 			res.blocked++
+			res.blockedDirs = append(res.blockedDirs, fmt.Sprintf("%s (%s)", abs, how))
 			note("%s (%s): cannot look inside (%s) — run it with sudo", abs, how, errReason(err))
 		case !st.Mode().IsRegular():
 			note("%s (%s): hops.db is not a regular file", abs, how)

@@ -80,12 +80,26 @@ func resetPassword(dataDir string, args []string, stdout, stderr io.Writer, sear
 
 	if dataDir == "" {
 		res := search.find()
+		// Not allowed to look where the data is: say only that, and the
+		// exact command to run instead.
+		notRoot := acct.euid != nil && acct.euid() > 0
+		if res.blocked > 0 && len(res.found) <= 1 && notRoot {
+			fmt.Fprintf(stderr, "This user isn't allowed to look inside the folder HOPS keeps its data in:\n")
+			for _, d := range res.blockedDirs {
+				fmt.Fprintf(stderr, "  %s\n", d)
+			}
+			for _, c := range res.found {
+				fmt.Fprintf(stderr, "(It also found HOPS data in %s, so it can't tell which is yours.)\n", c.dir)
+			}
+			fmt.Fprintf(stderr, "Nothing was changed. Run it with sudo:\n  sudo %s %s\n", shellQuote(program), resetPasswordCommand)
+			return 1
+		}
 		switch {
 		case len(res.found) == 0 || (res.blocked > 0 && len(res.found) == 1):
 			if len(res.found) == 0 && res.blocked == 0 {
 				fmt.Fprintf(stderr, "Found no HOPS database (hops.db), so nothing was changed. Looked at:\n")
 			} else {
-				fmt.Fprintf(stderr, "Could not look inside %d folder(s), so it cannot tell where your data is and nothing was changed. Run it with sudo. Looked at:\n", res.blocked)
+				fmt.Fprintf(stderr, "Couldn't look inside every folder that might hold your data, so nothing was changed. Looked at:\n")
 			}
 			for _, c := range res.found {
 				fmt.Fprintf(stderr, "  %s (%s): has hops.db\n", c.dir, strings.Join(c.found, "; "))
