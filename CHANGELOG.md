@@ -5,6 +5,46 @@ All notable changes to HOPS (Home Operations Portal System) will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **"When minimised, show" for folders.** In a folder's dialog, choose
+  **Icons inside** (as before) or **Its own icon**. With its own icon, a
+  minimised folder shows the icon you gave it instead of a preview of what is
+  inside. If the folder has no icon yet, it keeps showing the icons inside, and
+  the dialog says so.
+
+### Changed
+- **Opening a folder inside a folder makes room for all its items.** Before,
+  a sub-folder that didn't fit its outer box said "Not enough room", and a
+  viewer couldn't fix that. Now the outer box is drawn taller, up to about one
+  screen, and whatever is below moves down. Past that, the page bar pages the
+  rest. Only what you see changes: the saved layout stays as it is. An empty
+  sub-folder now says "Empty folder".
+- **Opening a dashboard loads only that dashboard.** The others arrive in the
+  background, and HOPS shows that they are still loading, and says if they
+  can't be loaded, with **Retry**. On the stress-test set of 100 dashboards
+  with 1,000 items each, the first tile now appears about 52% sooner on a
+  mobile connection (1.2 s instead of 2.5 s), with 74% less downloaded before
+  it. A setup with one dashboard, or a handful, loads in the same time as
+  before. Editing, exporting and the pencil wait until every dashboard has
+  loaded, and say so.
+- **Search closes with Esc wherever focus is,** and the **Esc** hint in the
+  search box is now a button you can click or tap.
+- **Tab bar:** the `«` `‹` `›` `»` arrows are bigger (44 px) and easier to hit
+  on a touch screen, and the Tab key stops once on the row of tabs, then Left,
+  Right, Home and End move between them, in edit mode as well.
+- **Tab order** (Settings) says what it did when you move tabs, for screen
+  readers, warns about unsaved changes once when you leave, and checks the
+  result when you save.
+
+### Fixed
+- **A folder opened inside another folder lost its icon.** It now shows its
+  icon in its title bar, and the icon fits the bar.
+- **A white line along the tab bar in the light theme** is gone.
+- **A `?` in the data folder's path stopped HOPS starting.** It starts, and
+  keeps its database there.
+
 ## [3.0.1] - 2026-10-30 — One row of tabs, and big setups that stay quick
 
 After 3.0.0 shipped, we stress-tested it at its limits: 5,000 tiles on one

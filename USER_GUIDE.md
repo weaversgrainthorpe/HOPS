@@ -240,6 +240,7 @@ Step by step: [Add folders](QUICKSTART.md#add-folders).
 |------|-------|----------------------|
 | | **Folder name** | Required. |
 | | **Icon (optional)** | **Edit icon**; see [Icons](#icons). |
+| | **When minimised, show** | *Icons inside* (default): the folder tile previews the items inside. *Its own icon*: it shows the icon above instead. With no icon set, it keeps showing the icons inside, and the dialog says so. |
 | **Look** | (the shape) | *Rounded box*, *Simple tab*, *Folder (flat)*, *Folder with paper*, *Folder (outlined)*, *Folder (cartoon)*, *Folder (open flap)*. Each has a live preview. A folder you make with **Add folder** starts as *Folder (flat)*. |
 | | **Tab position** | *Left*, *Centre*, *Right*. Every look except Rounded box has a tab. |
 | **Colour** | **Folder colour** | A swatch, **Custom** (any colour), or *None* for the theme's colour. |
@@ -277,6 +278,13 @@ opens in place, inside its parent. The title bar shows the path (*Media ›
 Streaming*); click a parent's name to go back up. In edit mode, a
 sub-folder's right-click menu has **Open** (or **Close** once you are in
 it).
+
+If the sub-folder holds more than fits in its parent's box, the box grows
+taller on your screen, up to about one screen, and whatever is below moves
+down to make room. This is only how it is drawn: the saved layout does not
+change, and the box goes back when you close the sub-folder. Past one
+screen, the page bar pages the rest. An empty sub-folder says *Empty
+folder*.
 
 Folders nest up to 12 levels deep. Every level is one more click to reach
 a tile, so we suggest no more than three; [Search](#search) finds things at
