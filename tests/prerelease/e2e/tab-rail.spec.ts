@@ -274,6 +274,22 @@ test.describe('one-row tab bar', () => {
     expect(isWhite(colours.top), `border-top ${colours.top}`).toBe(false);
     expect(isWhite(colours.left), `border-left ${colours.left}`).toBe(false);
     expect(isWhite(colours.strip), `top strip ${colours.strip}`).toBe(false);
+    // And the pixels: 1px below the open tab's top edge, across its middle, none are white.
+    const box = (await open.boundingBox())!;
+    const png = await page.screenshot({ clip: { x: box.x + box.width / 4, y: box.y + 1, width: box.width / 2, height: 1 } });
+    const px = await page.evaluate(async (b64) => {
+      const img = new Image();
+      img.src = 'data:image/png;base64,' + b64;
+      await img.decode();
+      const c = document.createElement('canvas');
+      c.width = img.width; c.height = img.height;
+      const g = c.getContext('2d')!;
+      g.drawImage(img, 0, 0);
+      return Array.from(g.getImageData(0, 0, img.width, 1).data);
+    }, png.toString('base64'));
+    for (let i = 0; i < px.length; i += 4) {
+      expect(px[i] >= 247 && px[i + 1] >= 247 && px[i + 2] >= 247, `white pixel at ${i / 4}: ${px.slice(i, i + 3)}`).toBe(false);
+    }
   });
 
   test('the tab row is one Tab stop', async ({ page, context }) => {
@@ -313,5 +329,28 @@ test.describe('one-row tab bar', () => {
     await page.keyboard.press('Tab');
     await expect(tab(page, 200)).toBeFocused();
     await expect(tab(page, 200)).toBeInViewport();
+  });
+
+  test('edit mode: the row is still one Tab stop, handle included', async ({ page, context }) => {
+    const forty = await seed(page, context, 40);
+    await page.goto(forty);
+    await expect(tab(page, 1)).toBeVisible();
+    await page.locator('[aria-label="Enter Edit Mode"]').click();
+    await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
+    const handle = (n: number) => page.getByRole('button', { name: `Edit Tab ${n} tab` });
+    await expect(page.locator('[data-tab-button][tabindex="0"]')).toHaveCount(1);
+    await expect(page.locator('.tab-container [data-edit-handle][tabindex="0"]')).toHaveCount(1);
+    await page.getByRole('button', { name: 'Scroll tabs left' }).focus();
+    await page.keyboard.press('Tab');
+    await expect(tab(page, 1)).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(handle(1)).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(page.locator('[data-tab-button]:focus, .tab-container [data-edit-handle]:focus')).toHaveCount(0);
+    await tab(page, 1).focus();
+    await page.keyboard.press('ArrowRight');
+    await expect(tab(page, 2)).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(handle(2)).toBeFocused();
   });
 });

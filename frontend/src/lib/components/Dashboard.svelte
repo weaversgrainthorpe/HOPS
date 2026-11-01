@@ -346,6 +346,15 @@
     return true;
   }
 
+  /** The tab row (the tablist) a tab event happened in. */
+  const tablistOf = (e: Event) => (e.currentTarget as HTMLElement).closest<HTMLElement>('[role="tablist"]');
+
+  /** A tab got focus (Tab into the row, or a key move): scroll it into view if it is off-screen. */
+  function revealFocusedTab(e: FocusEvent, tabId: string) {
+    const strip = tablistOf(e);
+    if (strip) revealTab(strip, tabId, false);
+  }
+
   /** Arrow/Home/End on a tab: select that tab, focus it and scroll it into view (within this tab row). */
   function selectTabByKey(strip: HTMLElement | null, to: number) {
     const id = barTabs[to]?.id;
@@ -382,7 +391,7 @@
         // window handler) must not also take them and pull focus out of the row.
         e.preventDefault();
         e.stopPropagation();
-        if (to !== index) selectTabByKey((e.currentTarget as HTMLElement).closest<HTMLElement>('[role="tablist"]'), to);
+        if (to !== index) selectTabByKey(tablistOf(e), to);
         return;
       }
     }
@@ -468,7 +477,7 @@
               ondblclick={editing ? () => editTabAt(tab.id) : undefined}
               oncontextmenu={editing ? (e) => tabMenu(e, tab.id) : undefined}
               onkeydown={(e) => handleTabKey(e, index)}
-              onfocus={(e) => { const strip = e.currentTarget.closest<HTMLElement>('[role="tablist"]'); if (strip) revealTab(strip, tab.id, false); }}
+              onfocus={(e) => revealFocusedTab(e, tab.id)}
             >
               {#if tab.iconUrl || tab.icon}
                 <span class="tab-icon-backing"
@@ -485,7 +494,7 @@
             </div>
             {#if editing}
               <!-- The shared edit handle, inside the tab's box: a drop on it counts as the tab. -->
-              <EditHandle name="{tab.name} tab" placement="inline" onEdit={() => editTabAt(tab.id)} />
+              <EditHandle name="{tab.name} tab" placement="inline" tabindex={activeTabIndex === index ? 0 : -1} onEdit={() => editTabAt(tab.id)} />
             {/if}
           </div>
         {/each}

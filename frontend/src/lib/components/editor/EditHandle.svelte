@@ -20,8 +20,10 @@
      * (an open folder's title bar, which every open folder has —).
      */
     placement?: 'corner' | 'inline';
+    /** Tab order: 0 (default) is a Tab stop; -1 for a roving group's other members. */
+    tabindex?: 0 | -1;
   }
-  let { name, onEdit, label, placement = 'corner' }: Props = $props();
+  let { name, onEdit, label, placement = 'corner', tabindex = 0 }: Props = $props();
 
   /**
    * A corner handle is sized to its host, inside its top-right corner and never over the host's
@@ -85,6 +87,7 @@
   class="edit-handle {placement}"
   class:labelled={!!label}
   data-edit-handle
+  {tabindex}
   aria-label={aria}
   title={aria}
   use:ownEvents
