@@ -4,6 +4,8 @@ import type { LayoutDoc, LayoutDashboard } from '$lib/types/layout';
 import type { FreshLayout } from '$lib/utils/api';
 import {
   getConfig,
+  getConfigFor,
+  getDashboard,
   dismissNotice,
   updateSetting,
   saveDashboardV3,
@@ -184,6 +186,56 @@ function toastWriteFailure(what: string, error: unknown) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Partial loading (viewer pages). The first load of "/" or a dashboard page fetches the index of
+// every dashboard plus the open one in full (GET /api/config?dashboard=); the other dashboards
+// then arrive in the background (GET /api/config). Until they have, the store holds index entries
+// (`partial: true`): consumers that need every dashboard check hasPartialDashboards() and show
+// `otherDashboards` (loading / failed, with Retry) instead of a partial set. Settings, the editor,
+// reports, export and anything that writes call ensureFullConfig() first.
+// ---------------------------------------------------------------------------
+
+/** Whether the background load of the other dashboards is in flight, done, or failed (and why). */
+export type OtherDashboardsState = 'loading' | 'ready' | { error: string };
+export const otherDashboards = writable<OtherDashboardsState>('loading');
+
+/** True while `c` holds index entries (dashboards whose content has not arrived). */
+export function hasPartialDashboards(c: LayoutDoc | null | undefined): boolean {
+  return !!c && (c.dashboards ?? []).some((d) => d?.partial === true);
+}
+
+/** Per dashboard id: the one-dashboard read the route started for an index entry, while it runs or after it failed. */
+export const dashboardFetches = writable<Record<string, 'loading' | { error: string }>>({});
+
+// Every loadConfig takes a new number; an answer that comes back after a newer load started is
+// dropped (the newer one owns the store), so answers from two loads are never mixed.
+let loadSeq = 0;
+let loadInFlight: number | null = null;
+// Once something needs every dashboard (Settings, the editor, a write), every later load is a
+// whole-config load.
+let fullWanted = false;
+// configRevision of the held index (null when the store holds the whole document).
+let heldConfigRevision: string | null = null;
+let rest: { seq: number; promise: Promise<void> } | null = null;
+
+/** Test hook: forget the partial-loading state between tests. */
+export function resetPartialLoadingForTests(): void {
+  loadSeq++;
+  loadInFlight = null;
+  fullWanted = false;
+  heldConfigRevision = null;
+  rest = null;
+  otherDashboards.set('loading');
+  dashboardFetches.set({});
+}
+
+const message = (e: unknown, fallback: string) => (e instanceof Error && e.message ? e.message : fallback);
+
+/** The route's dashboard segment ("" on "/"): what a reload of the index asks for. */
+function viewerKey(): string {
+  return ((get(page)?.params ?? {}) as Record<string, string | undefined>).dashboard ?? '';
+}
+
 // Load configuration from API. A reload of a held-but-stale layout runs in the
 // background: the dashboard stays mounted, and the canvas (TabCanvas) shows
 // "Refreshing layout" instead of the old tree. The active tab id and this
@@ -192,19 +244,39 @@ function toastWriteFailure(what: string, error: unknown) {
 // drill-down paths). Only a first load (or a reload
 // with no held config) shows the global loading screen. A failure is surfaced
 // either way (configError).
-export async function loadConfig(opts: { background?: boolean } = {}) {
+//
+// `dashboard` (a viewer page's route segment, "" for "/") loads only that dashboard in full plus
+// the index of the rest, then the rest in the background (see above). Without it, or once the
+// whole config is wanted, the whole document is loaded.
+export async function loadConfig(opts: { background?: boolean; dashboard?: string; afterMismatch?: boolean } = {}) {
+  const seq = ++loadSeq;
+  loadInFlight = seq;
+  rest = null;
+  dashboardFetches.set({});
   const background = (opts.background === true || get(layoutStale)) && get(config) !== null;
   if (!background) configLoading.set(true);
   configError.set(null);
+  // Held index entries: the other dashboards are on their way again (this load brings them, or
+  // starts their background load).
+  if (hasPartialDashboards(get(config))) otherDashboards.set('loading');
 
   try {
-    const data = await getConfig();
-    config.set(withoutDismissed(data));
-    noticesStale.set(null);
-    layoutStale.set(false);
-    migrationFailure.set(null);
-    saveConflict.set(null);
+    if (opts.dashboard !== undefined && !fullWanted) {
+      const answer = await getConfigFor(opts.dashboard);
+      if (seq !== loadSeq) return; // superseded: a newer load owns the store
+      adoptLoaded(answer.config);
+      heldConfigRevision = answer.configRevision;
+      if (hasPartialDashboards(answer.config)) void startRest(seq, opts.afterMismatch === true).catch(() => undefined);
+      else otherDashboards.set('ready');
+    } else {
+      const data = await getConfig();
+      if (seq !== loadSeq) return;
+      adoptLoaded(data);
+      heldConfigRevision = null;
+      otherDashboards.set('ready');
+    }
   } catch (error) {
+    if (seq !== loadSeq) return;
     if (error instanceof MigrationFailedError) {
       // Never keep showing an old config as if it were current.
       config.set(null);
@@ -212,8 +284,140 @@ export async function loadConfig(opts: { background?: boolean } = {}) {
     }
     logError('Config load', error);
     configError.set(error instanceof Error ? error.message : 'Failed to load configuration');
+    // A held index whose reload failed: the other dashboards are not coming either.
+    if (hasPartialDashboards(get(config))) otherDashboards.set({ error: message(error, 'the request failed') });
   } finally {
-    configLoading.set(false);
+    if (seq === loadSeq) {
+      configLoading.set(false);
+      loadInFlight = null;
+    }
+  }
+}
+
+function adoptLoaded(data: Config): void {
+  config.set(withoutDismissed(data));
+  noticesStale.set(null);
+  layoutStale.set(false);
+  migrationFailure.set(null);
+  saveConflict.set(null);
+}
+
+/** The background load of the other dashboards for load `seq` (one at a time; joined if running). */
+function startRest(seq: number, afterMismatch = false): Promise<void> {
+  if (rest && rest.seq === seq) return rest.promise;
+  otherDashboards.set('loading');
+  const promise = loadRest(seq, afterMismatch);
+  rest = { seq, promise };
+  const clear = () => {
+    if (rest?.promise === promise) rest = null;
+  };
+  promise.then(clear, clear);
+  return promise;
+}
+
+/**
+ * Whether a dashboard the page holds in full (one it shows) is at another revision in `full`, or
+ * gone from it. Index entries do not count: nothing of theirs but index fields was shown.
+ */
+function shownDashboardChanged(held: Config, full: Config): boolean {
+  const byId = new Map(full.dashboards.map((d) => [d.id, d] as const));
+  return held.dashboards.some((d) => d.partial !== true && byId.get(d.id)?.revision !== d.revision);
+}
+
+async function loadRest(seq: number, afterMismatch: boolean): Promise<void> {
+  let full: Config;
+  try {
+    full = await getConfig();
+  } catch (error) {
+    if (seq === loadSeq) {
+      logError('Other dashboards load', error);
+      otherDashboards.set({ error: message(error, 'the request failed') });
+    }
+    throw error;
+  }
+  if (seq !== loadSeq) return; // superseded: the newer load fetches its own
+  const held = get(config);
+  if (!held) return;
+  if (!afterMismatch && shownDashboardChanged(held, full)) {
+    // The dashboard on screen changed since the index was read: never show it next to the newer
+    // others. Reload index + open + rest at the new state, through the stale-layout path.
+    layoutStale.set(true);
+    await loadConfig({ background: true, dashboard: viewerKey(), afterMismatch: true });
+    return;
+  }
+  // Index and contents at one state (or, after one reload, the whole document as it now is: still
+  // a single state, never mixed). The index view is replaced in one step.
+  adoptLoaded(full);
+  configError.set(null);
+  heldConfigRevision = null;
+  otherDashboards.set('ready');
+}
+
+/** Retry the background load of the other dashboards (its outcome shows in `otherDashboards`). */
+export async function retryOtherDashboards(): Promise<void> {
+  if (!hasPartialDashboards(get(config))) return;
+  try {
+    await startRest(loadSeq);
+  } catch {
+    // Shown through otherDashboards ({error}) by loadRest.
+  }
+}
+
+/**
+ * Resolve once the store holds every dashboard in full (Settings, the editor, reports, export,
+ * writes). Rejects, with the reason, when they could not be loaded; the failure is also visible
+ * through `otherDashboards` / `configError`. From now on every reload loads the whole config.
+ */
+export async function ensureFullConfig(): Promise<void> {
+  fullWanted = true;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const held = get(config);
+    if (held && !hasPartialDashboards(held) && loadInFlight === null) return;
+    if (!held || loadInFlight !== null) {
+      // Nothing held, or a load in flight (it may be a light one): load the whole config now.
+      await loadConfig({ background: true });
+      const err = get(configError);
+      if (err) throw new Error(err);
+      continue;
+    }
+    await startRest(loadSeq);
+  }
+  if (hasPartialDashboards(get(config)) || !get(config)) {
+    throw new Error('The dashboards kept changing while loading. Try again.');
+  }
+}
+
+/**
+ * Fetch one dashboard the store holds only as an index entry (the route opened it before the
+ * background load arrived). Taken only when it matches the held index (same configRevision);
+ * otherwise the page reloads index + open dashboard + rest at the new state. A failure is kept in
+ * dashboardFetches for the route to show, with Retry.
+ */
+export async function fetchDashboard(id: string): Promise<void> {
+  const seq = loadSeq;
+  if (get(dashboardFetches)[id] === 'loading') return;
+  dashboardFetches.update((m) => ({ ...m, [id]: 'loading' }));
+  const settle = (state?: { error: string }) =>
+    dashboardFetches.update((m) => {
+      const { [id]: _old, ...others } = m;
+      return state ? { ...others, [id]: state } : others;
+    });
+  try {
+    const answer = await getDashboard(id);
+    if (seq !== loadSeq) return; // a newer load owns the store (and reset dashboardFetches)
+    settle();
+    const held = get(config);
+    const entry = held?.dashboards.find((d) => d.id === id);
+    if (!held || !entry || entry.partial !== true) return; // the background copy arrived meanwhile
+    if (answer.configRevision !== heldConfigRevision || answer.revision !== entry.revision) {
+      void loadConfig({ background: true, dashboard: viewerKey() });
+      return;
+    }
+    config.set({ ...held, dashboards: held.dashboards.map((d) => (d.id === id ? answer.dashboard : d)) });
+  } catch (error) {
+    if (seq !== loadSeq) return;
+    logError('Dashboard load', error);
+    settle({ error: message(error, 'the request failed') });
   }
 }
 

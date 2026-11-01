@@ -1,6 +1,6 @@
 import { writable, get } from 'svelte/store';
 import { isAuthenticated } from './auth';
-import { currentRoute } from './config';
+import { currentRoute, ensureFullConfig } from './config';
 import { begin, end, abandon, park, session, setSessionLostHandler, isAddPage } from './editSession';
 import { page } from '$app/stores';
 import { toast } from './toast';
@@ -21,13 +21,31 @@ export async function toggleEditMode(): Promise<boolean> {
   return enableEditMode();
 }
 
-export function enableEditMode(): boolean {
+/**
+ * Enter edit mode on the route's dashboard. The editor works on the whole config (moves and copies
+ * reach other dashboards), so it is loaded first; if it can't be, editing does not start and the
+ * reason is shown.
+ */
+export async function enableEditMode(): Promise<boolean> {
   // Only allow enabling if authenticated
   if (!get(isAuthenticated)) {
     logWarn('Edit mode requires authentication');
     editMode.set(false);
     return false;
   }
+  if (get(editMode) && get(session)) return true;
+  if (!routeDashboardId()) {
+    toast.error("There's no dashboard here to edit.");
+    return false;
+  }
+  try {
+    await ensureFullConfig();
+  } catch (e) {
+    toast.error(`Couldn't load all your dashboards, so editing can't start: ${e instanceof Error && e.message ? e.message : 'the request failed'}`);
+    return false;
+  }
+  // The load may have taken a moment: edit the dashboard the user is on now, if still signed in.
+  if (!get(isAuthenticated)) return false;
   if (get(editMode) && get(session)) return true;
   const id = routeDashboardId();
   if (!id) {

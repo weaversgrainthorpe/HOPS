@@ -236,7 +236,64 @@ export async function getAbout(): Promise<{ dataDir: string }> {
  * empty or partial dashboard set.
  */
 export async function getConfig(): Promise<Config> {
-  const resp = await fetchAPI('/config');
+  const out = readConfigDocument(await fetchAPI('/config'), 'GET /api/config');
+  // The whole document: an index entry here would be a dashboard with no content.
+  if (out.dashboards.some((d) => d?.partial === true)) {
+    throw new Error('The server sent an incomplete configuration (a dashboard without its content). Reload the page; if it persists, check the server.');
+  }
+  return out;
+}
+
+/** GET /api/config?dashboard=…: the index of every dashboard plus the requested one in full. */
+export interface IndexPlusOne {
+  config: Config;
+  /** Identifies the set of dashboards and their revisions this answer was made from ('' when it holds them all in full). */
+  configRevision: string;
+  /** Set when no dashboard matches the request (every entry is then an index entry). */
+  missing?: string;
+}
+
+/**
+ * GET /api/config?dashboard=<path-or-id> ("" = the dashboard "/" opens): the same document as
+ * GET /api/config, but only that dashboard in full; the others are index entries marked
+ * `partial: true`. Every entry must be either an index entry or a whole dashboard, and index
+ * entries must come with the revision of the set: anything else is a visible error.
+ */
+export async function getConfigFor(dashboard: string): Promise<IndexPlusOne> {
+  const resp = await fetchAPI(`/config?dashboard=${encodeURIComponent(dashboard)}`);
+  const config = readConfigDocument(resp, 'GET /api/config?dashboard');
+  const bad = config.dashboards.some(
+    (d) => !d || typeof d.id !== 'string' || (d.partial !== true && !Array.isArray(d.tabs))
+  );
+  // The revision says which state index entries belong to, so they need one. Every dashboard in
+  // full is a valid answer without it: the whole config the service worker serves offline.
+  const revision = typeof resp.configRevision === 'string' ? resp.configRevision : '';
+  if (bad || (!revision && config.dashboards.some((d) => d.partial === true))) {
+    throw new Error('The server sent a dashboard list this version of HOPS cannot read. Reload the page; if it persists, check the server.');
+  }
+  return {
+    config,
+    configRevision: revision,
+    ...(typeof resp.missing === 'string' ? { missing: resp.missing } : {})
+  };
+}
+
+/**
+ * GET /api/config/dashboard/<id>: one dashboard in full, with its revision and the revision of the
+ * whole set. A different dashboard, or one without its content, is a visible error.
+ */
+export async function getDashboard(id: string): Promise<{ dashboard: LayoutDashboard; revision: number; configRevision: string }> {
+  const resp = await fetchAPI(`/config/dashboard/${encodeURIComponent(id)}`);
+  const d = resp?.dashboard;
+  if (!d || typeof d !== 'object' || d.id !== id || !Array.isArray(d.tabs) || d.partial === true ||
+      typeof resp.revision !== 'number' || typeof resp.configRevision !== 'string' || !resp.configRevision) {
+    throw new Error('The server sent a dashboard this version of HOPS cannot read. Reload the page; if it persists, check the server.');
+  }
+  return { dashboard: d as LayoutDashboard, revision: resp.revision, configRevision: resp.configRevision };
+}
+
+/** The schema-3 document both config reads share (dashboards, layout version, notices). */
+function readConfigDocument(resp: any, what: string): Config {
   if (!resp || typeof resp !== 'object' || resp.schemaVersion !== 3 || !Array.isArray(resp.dashboards)) {
     throw new Error('The server sent a configuration this version of HOPS cannot read (expected schema 3 dashboards). Reload the page; if it persists, check the server.');
   }
@@ -265,7 +322,7 @@ export async function getConfig(): Promise<Config> {
     const bad = list.length - good.length;
     if (!Array.isArray(resp.notices) || bad > 0) {
       out.noticesUnreadable = Array.isArray(resp.notices) ? bad : 1;
-      console.error('GET /api/config: unreadable notices', resp.notices);
+      console.error(`${what}: unreadable notices`, resp.notices);
     }
   }
   return out;

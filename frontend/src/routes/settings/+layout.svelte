@@ -6,7 +6,8 @@
   import { toast } from '$lib/stores/toast';
   import { isAuthenticated, authChecked, mustChangePassword, logout, isAdminOnlyPath } from '$lib/stores/auth';
   import { isBackendOffline, backendStatus } from '$lib/stores/backendStatus';
-  import { migrationFailure, refreshServerNotices } from '$lib/stores/config';
+  import { config, migrationFailure, refreshServerNotices, hasPartialDashboards, ensureFullConfig } from '$lib/stores/config';
+  import OtherDashboardsStatus from '$lib/components/OtherDashboardsStatus.svelte';
   import LoginDialog from '$lib/components/LoginDialog.svelte';
   import MigrationFailed from '$lib/components/MigrationFailed.svelte';
   import NoticesBanner from '$lib/components/NoticesBanner.svelte';
@@ -97,6 +98,18 @@
   // signed in (the page may have loaded signed out). A failed read says so (refreshNotices).
   $effect(() => {
     if (ready) void refreshServerNotices();
+  });
+
+  // Settings works on every dashboard: arriving from a dashboard page that holds only the index of
+  // the others, the whole config is loaded first and the page waits for it (Loading… / Couldn't
+  // load…, with Retry), never showing reports or lists made from part of it.
+  let partialHeld = $derived(hasPartialDashboards($config));
+  function loadAll() {
+    // A failure is shown by OtherDashboardsStatus (otherDashboards), not here.
+    return ensureFullConfig().catch(() => undefined);
+  }
+  $effect(() => {
+    if (ready && partialHeld) void loadAll();
   });
 
   async function handleLogout() {
@@ -243,9 +256,13 @@
           {@render chipRow('Dashboards pages', dashboardPages, dashboardsCurrent)}
         {/if}
 
-        <div class="page-body" class:greyed-out={$isBackendOffline}>
-          {@render children()}
-        </div>
+        {#if partialHeld}
+          <OtherDashboardsStatus onRetry={loadAll} />
+        {:else}
+          <div class="page-body" class:greyed-out={$isBackendOffline}>
+            {@render children()}
+          </div>
+        {/if}
 
       {/if}
     </div>

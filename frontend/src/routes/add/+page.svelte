@@ -19,8 +19,10 @@
   import { isAuthenticated, authChecked, mustChangePassword } from '$lib/stores/auth';
   import {
     config, configError, configLoading, layoutStale, sortedDashboards, findLayoutDashboard, layoutDoc,
-    applySavedLayout, loadConfig, layoutFormProblem, showSaveWarning, dashboardHref
+    applySavedLayout, loadConfig, layoutFormProblem, showSaveWarning, dashboardHref,
+    hasPartialDashboards, ensureFullConfig
   } from '$lib/stores/config';
+  import OtherDashboardsStatus from '$lib/components/OtherDashboardsStatus.svelte';
   import { saveDashboardV3, getPackagedIcons, ConflictError } from '$lib/utils/api';
   import { blankTile, withNewTile } from '$lib/editor/editorActions';
   import { showTabRequest } from '$lib/editor/editorUi';
@@ -128,9 +130,15 @@
     handoffFailed = false;
   });
 
+  // Add writes into any dashboard: opened from a dashboard page that holds only the index of the
+  // others, the whole config is loaded first (the form waits; a failure shows with Retry).
+  const loadAll = () => ensureFullConfig().catch(() => undefined); // failure shown by OtherDashboardsStatus
+  let partialHeld = $derived(hasPartialDashboards($config));
+
   onMount(() => {
     // The layout loads the config; a stale one is reloaded so Add starts from the current layout.
     if ($layoutStale) void loadConfig({ background: true });
+    else if (hasPartialDashboards($config)) void loadAll();
     watch = watchPresence((p) => (presence = p));
     if (!watch) {
       presence = null;
@@ -354,6 +362,8 @@
       <button type="button" class="btn-secondary" onclick={() => loadConfig()}>Try again</button>
     {:else if !$config || $configLoading}
       <p class="muted" role="status">Loading your dashboards…</p>
+    {:else if partialHeld}
+      <OtherDashboardsStatus onRetry={loadAll} />
     {:else if list.length === 0}
       <p class="error" role="alert">You have no dashboards yet. Create one in Settings › Dashboards, then use the bookmark again.</p>
     {:else}

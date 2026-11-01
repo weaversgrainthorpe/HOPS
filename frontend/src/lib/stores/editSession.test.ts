@@ -342,7 +342,7 @@ describe('save', () => {
 	it('reload ends the session and edit mode when the reload fails', async () => {
 		vi.spyOn(console, 'error').mockImplementation(() => {});
 		const err = vi.spyOn(toast, 'error');
-		enableEditMode();
+		await enableEditMode();
 		apply('1', setName('mine'));
 		vi.mocked(api.saveDashboardV3).mockRejectedValue(new ConflictError('d', 9));
 		await save();
@@ -354,7 +354,7 @@ describe('save', () => {
 	});
 
 	it('reload turns edit mode off when the session cannot restart', async () => {
-		enableEditMode();
+		await enableEditMode();
 		apply('1', setName('mine'));
 		vi.mocked(api.saveDashboardV3).mockRejectedValue(new ConflictError('d', 9));
 		await save();
@@ -403,7 +403,7 @@ describe('save', () => {
 
 describe('end and edit mode', () => {
 	it('enableEditMode begins a session for the route dashboard; a clean end is silent', async () => {
-		expect(enableEditMode()).toBe(true);
+		expect(await enableEditMode()).toBe(true);
 		expect(get(session)?.dashboardId).toBe('d');
 		expect(await disableEditMode()).toBe(true);
 		expect(get(editMode)).toBe(false);
@@ -411,14 +411,14 @@ describe('end and edit mode', () => {
 		expect(get(confirmModalState).isOpen).toBe(false);
 	});
 
-	it('enableEditMode refuses when the session cannot begin', () => {
+	it('enableEditMode refuses when the session cannot begin', async () => {
 		layoutStale.set(true);
-		expect(enableEditMode()).toBe(false);
+		expect(await enableEditMode()).toBe(false);
 		expect(get(editMode)).toBe(false);
 	});
 
 	it('turning edit mode off while dirty offers Save / Discard / Keep editing', async () => {
-		enableEditMode();
+		await enableEditMode();
 		apply('1', setName('mine'));
 		const off = disableEditMode();
 		const st = get(confirmModalState);
@@ -440,7 +440,7 @@ describe('end and edit mode', () => {
 	});
 
 	it('choosing Save ends only when the save succeeds', async () => {
-		enableEditMode();
+		await enableEditMode();
 		apply('1', setName('mine'));
 		vi.mocked(api.saveDashboardV3).mockRejectedValue(new ConflictError('d', 9));
 		const off = end();
@@ -517,7 +517,7 @@ describe('end and edit mode', () => {
 
 describe('sign-out', () => {
 	it('a 401 during save parks the draft; signing in and editing restores it', async () => {
-		enableEditMode();
+		await enableEditMode();
 		apply('1', setName('mine'));
 		apply('2', (d) => resizeNode(d, 'f1', 10, 6));
 		const mine = draft();
@@ -537,7 +537,7 @@ describe('sign-out', () => {
 
 		isAuthenticated.set(true);
 		expect(get(parkedDraft)).not.toBeNull(); // kept until edit mode is entered
-		expect(enableEditMode()).toBe(true);
+		expect(await enableEditMode()).toBe(true);
 		const s = get(session)!;
 		expect(s.draft).toBe(mine);
 		expect(s.baseRevision).toBe(7);
@@ -548,7 +548,7 @@ describe('sign-out', () => {
 		expect(screen.queryByRole('alert')).toBeNull();
 	});
 
-	it('the unload guard prompts while a draft is parked, and not when nothing is dirty or parked', () => {
+	it('the unload guard prompts while a draft is parked, and not when nothing is dirty or parked', async () => {
 		const evt = () => {
 			const e = new Event('beforeunload', { cancelable: true }) as BeforeUnloadEvent;
 			const pd = vi.spyOn(e, 'preventDefault');
@@ -560,7 +560,7 @@ describe('sign-out', () => {
 		guardUnload(a.e);
 		expect(a.pd).not.toHaveBeenCalled();
 		// Dirty live session: prompt.
-		enableEditMode();
+		await enableEditMode();
 		apply('1', setName('mine'));
 		const b = evt();
 		guardUnload(b.e);
@@ -574,15 +574,15 @@ describe('sign-out', () => {
 		expect(c.pd).toHaveBeenCalled();
 	});
 
-	it('a clean session ends silently on sign-out', () => {
-		enableEditMode();
+	it('a clean session ends silently on sign-out', async () => {
+		await enableEditMode();
 		isAuthenticated.set(false);
 		expect(get(session)).toBeNull();
 		expect(get(parkedDraft)).toBeNull();
 	});
 
 	it('logout with unsaved changes asks first; Keep editing stays signed in', async () => {
-		enableEditMode();
+		await enableEditMode();
 		apply('1', setName('mine'));
 		const out = logout();
 		await flush();
@@ -613,7 +613,7 @@ describe('idle timeout', () => {
 			overrides: {}, revision: 1, effective: { editIdleTimeoutMinutes: 1 }
 		} as never);
 		initEditModeIdleWatcher();
-		enableEditMode();
+		await enableEditMode();
 		apply('1', setName('mine'));
 		await vi.advanceTimersByTimeAsync(61_000);
 		const st = get(confirmModalState);
@@ -676,7 +676,7 @@ describe('save races', () => {
 	});
 
 	it('leaving edit mode while a save is in flight waits for it; no Discard prompt after it saved', async () => {
-		enableEditMode();
+		await enableEditMode();
 		apply('1', setName('mine'));
 		const sent = draft();
 		const d = deferred<{ revision: number; layout: LayoutDoc }>();
@@ -713,7 +713,7 @@ describe('save races', () => {
 	});
 
 	it('Discard chosen in the leave prompt while a save started meanwhile reports it truthfully', async () => {
-		enableEditMode();
+		await enableEditMode();
 		apply('1', setName('mine'));
 		const sent = draft();
 		const off = disableEditMode();

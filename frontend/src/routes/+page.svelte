@@ -45,7 +45,7 @@
         <p class="muted">The HOPS server was reached but answered with an error. Check its logs.</p>
       {/if}
       <div class="actions">
-        <Button variant="primary" icon="mdi:refresh" onclick={() => { backendStatus.check(); void loadConfig(); }}>
+        <Button variant="primary" icon="mdi:refresh" onclick={() => { backendStatus.check(); void loadConfig({ dashboard: '' }); }}>
           Retry
         </Button>
       </div>

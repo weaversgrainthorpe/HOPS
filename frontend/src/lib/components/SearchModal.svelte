@@ -2,7 +2,8 @@
   import { onMount, tick } from 'svelte';
   import { get } from 'svelte/store';
   import Icon from '@iconify/svelte';
-  import { layoutDoc, currentRoute } from '$lib/stores/config';
+  import { layoutDoc, currentRoute, hasPartialDashboards } from '$lib/stores/config';
+  import OtherDashboardsStatus from './OtherDashboardsStatus.svelte';
   import { showOnDashboard } from '$lib/utils/showIt';
   import { portal } from '$lib/utils/portal';
   import { safeOpenUrl, isValidUrl } from '$lib/utils/url';
@@ -28,13 +29,23 @@
   // search only that dashboard; anywhere else search them all.
   const scopedId = get(currentRoute)?.id;
   const scoped = scopedId !== undefined;
-  // Indexed once per open (tiles AND folders, at any depth); each keystroke only filters it.
-  const index = buildSearchIndex($layoutDoc, scopedId);
+  // Indexed per open, and again when the document changes (the other dashboards arriving): tiles
+  // AND folders, at any depth; each keystroke only filters it. Index entries are never searched.
+  let index = $derived(buildSearchIndex($layoutDoc, scopedId));
   const RESULT_CAP = 50;
   // No layout held, or the current dashboard's layout is absent from it
   // (failed load / stale): say so instead of "no matches".
-  const layoutMissing =
-    !$layoutDoc || (scoped && !($layoutDoc.dashboards ?? []).some((d) => d.id === scopedId));
+  let layoutMissing = $derived(
+    !$layoutDoc || (scoped && !($layoutDoc.dashboards ?? []).some((d) => d.id === scopedId))
+  );
+  // This dashboard is held only as an index entry (its content is on its way).
+  let scopedLoading = $derived(scoped && ($layoutDoc?.dashboards ?? []).some((d) => d.id === scopedId && d.partial === true));
+  // Searching all dashboards while some have not arrived: only the loaded ones are searched, and
+  // the results say so (never presented as all results).
+  let partial = $derived(!scoped && hasPartialDashboards($layoutDoc));
+  let loadedNames = $derived(
+    ($layoutDoc?.dashboards ?? []).filter((d) => d.partial !== true).map((d) => d.name || 'an untitled dashboard').join(', ')
+  );
 
   let ranked = $derived(rankSearch(index, query, RESULT_CAP));
   let results = $derived(ranked.items);
@@ -129,13 +140,24 @@
 
     {#if layoutMissing}
       <div class="search-no-results" role="alert">Search unavailable: the dashboard layout hasn't loaded — reload the page.</div>
-    {:else if !query.trim()}
+    {:else if scopedLoading}
+      <div class="search-no-results" role="status">Loading this dashboard…</div>
+    {:else}
+    {#if partial}
+      <OtherDashboardsStatus />
+    {/if}
+    {#if !query.trim()}
       <div class="search-empty-hint">
         Start typing to search {scoped ? 'this dashboard' : 'across all dashboards'}. <kbd>↑</kbd><kbd>↓</kbd> to navigate, <kbd>Enter</kbd> to open, <kbd>Shift</kbd>+<kbd>Enter</kbd> (or Shift/Ctrl-click) to show where it lives.
       </div>
+    {:else if partial && !loadedNames}
+      <!-- Nothing loaded in full yet (an unknown address): nothing to search meanwhile. -->
     {:else if results.length === 0}
-      <div class="search-no-results">No tiles or folders match <code>{query}</code></div>
+      <div class="search-no-results">No tiles or folders {#if partial}on {loadedNames} {/if}match <code>{query}</code></div>
     {:else}
+      {#if partial}
+        <div class="search-partial-note">Showing matches from {loadedNames} only.</div>
+      {/if}
       <ul class="search-results">
         {#each results as r, i (r.dashboardId + '·' + r.tabId + '·' + r.kind + '·' + r.id)}
           <li class:selected={i === selectedIndex}>
@@ -165,6 +187,7 @@
       {#if ranked.total > results.length}
         <div class="search-capped" role="status">Showing the first {results.length} of {ranked.total} matches — type more to narrow them down.</div>
       {/if}
+    {/if}
     {/if}
   </div>
 </div>
@@ -228,6 +251,12 @@
     color: var(--text-secondary);
     font-size: 0.92rem;
   }
+  .search-partial-note {
+    padding: 0.5rem 1.1rem 0;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+  }
+
   .search-no-results code {
     color: var(--text-primary);
   }

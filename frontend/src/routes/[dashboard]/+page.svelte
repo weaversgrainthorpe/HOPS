@@ -1,6 +1,9 @@
 <script lang="ts">
   import { page } from '$app/stores';
-  import { config, configLoading, configError, resolveDashboardRoute } from '$lib/stores/config';
+  import { get } from 'svelte/store';
+  import {
+    config, configLoading, configError, resolveDashboardRoute, loadConfig, dashboardFetches, fetchDashboard
+  } from '$lib/stores/config';
   import Dashboard from '$lib/components/Dashboard.svelte';
   import DashboardSkeleton from '$lib/components/DashboardSkeleton.svelte';
 
@@ -8,15 +11,34 @@
   let resolved = $derived(
     $config && $page.params.dashboard ? resolveDashboardRoute($page.params.dashboard, $config) : undefined
   );
+  // Held only as an index entry (opened before the other dashboards arrived): fetch it on its own.
+  // Never rendered meanwhile; a failure shows here, with Retry.
+  let fetchFailed = $derived(resolved?.partial === true ? $dashboardFetches[resolved.id] : undefined);
+  $effect(() => {
+    const d = resolved;
+    if (d?.partial === true && !$configLoading && get(dashboardFetches)[d.id] === undefined) void fetchDashboard(d.id);
+  });
 </script>
 
 {#if $configLoading}
   <DashboardSkeleton />
 {:else if $configError}
-  <div class="error">
+  <div class="error" role="alert">
     <h1>Error</h1>
     <p>{$configError}</p>
+    <button type="button" onclick={() => loadConfig({ dashboard: $page.params.dashboard ?? '' })}>Retry</button>
   </div>
+{:else if resolved?.partial === true}
+  {#if typeof fetchFailed === 'object'}
+    <div class="error" role="alert">
+      <h1>Couldn't load {resolved.name}</h1>
+      <p>{fetchFailed.error}</p>
+      <!-- Index and dashboard again: the failure may be that the dashboard has gone since the index. -->
+      <button type="button" onclick={() => loadConfig({ background: true, dashboard: $page.params.dashboard ?? '' })}>Retry</button>
+    </div>
+  {:else}
+    <DashboardSkeleton />
+  {/if}
 {:else if resolved}
   <Dashboard dashboard={resolved} />
 {:else}
@@ -43,6 +65,7 @@
     color: var(--color-error-text);
   }
 
+  .error button,
   .not-found a {
     margin-top: 1rem;
     padding: 0.75rem 1.5rem;
@@ -52,6 +75,14 @@
     text-decoration: none;
   }
 
+  .error button {
+    min-height: 44px;
+    border: none;
+    font: inherit;
+    cursor: pointer;
+  }
+
+  .error button:hover,
   .not-found a:hover {
     background: var(--accent-solid-hover);
   }

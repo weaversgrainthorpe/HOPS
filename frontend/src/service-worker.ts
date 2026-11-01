@@ -4,15 +4,17 @@
 /// <reference lib="webworker" />
 
 import { build, files, version } from '$service-worker';
-import { swMayCache } from '$lib/utils/swCache';
+import { swMayCache, isCacheableApiPath, offlineFallbackFor } from '$lib/utils/swCache';
 
 // HOPS PWA service worker.
 //
 // What we cache:
 //   - The SvelteKit build output (JS, CSS, fonts) — the SPA shell.
 //   - Static files (favicons, icons, backgrounds) referenced from /static.
-//   - /api/config — the dashboard data. When offline, the last-seen
-//     dashboard layout still renders.
+//   - /api/config, its ?dashboard= form and /api/config/dashboard/… — the
+//     dashboard data. When offline, the last-seen dashboard layout still
+//     renders (an index-plus-one read with no copy falls back to the whole
+//     config's copy).
 //   - /api/version + the dashboard's tile icons — so tiles look right
 //     offline rather than going blank.
 //
@@ -56,17 +58,6 @@ sw.addEventListener('activate', (event) => {
     })(),
   );
 });
-
-function isCacheableApiPath(pathname: string): boolean {
-  return (
-    pathname === '/api/config' ||
-    pathname === '/api/version' ||
-    pathname.startsWith('/api/icons/dashboard/') ||
-    pathname.startsWith('/api/icons/uploaded/') ||
-    pathname.startsWith('/icons/') ||
-    pathname.startsWith('/backgrounds/')
-  );
-}
 
 sw.addEventListener('fetch', (event) => {
   const { request } = event;
@@ -114,6 +105,9 @@ sw.addEventListener('fetch', (event) => {
         } catch {
           const cached = await caches.match(request);
           if (cached) return cached;
+          const fallback = offlineFallbackFor(url);
+          const kept = fallback ? await caches.match(fallback) : undefined;
+          if (kept) return kept;
           return new Response(JSON.stringify({ error: 'offline' }), {
             status: 503,
             headers: { 'Content-Type': 'application/json' },

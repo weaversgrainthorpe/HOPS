@@ -95,6 +95,12 @@ export interface LayoutDashboard {
     animations?: 'on' | 'off' | 'always';
   };
   tabs: LayoutTab[];
+  /**
+   * An index entry from GET /api/config?dashboard= (id, name, path, order, revision, display and
+   * settings only; no tabs). Never rendered, searched or edited: the store fetches the whole
+   * dashboard first. Absent on a whole dashboard.
+   */
+  partial?: true;
   [k: string]: unknown;
 }
 

@@ -96,7 +96,7 @@
       cancelPendingEdit = null;
       // Only the dashboard the pencil was pressed on: a forced password change may have
       // taken long enough for the user to go elsewhere.
-      if (currentPath === signedInOn) enableEditMode();
+      if (currentPath === signedInOn) void enableEditMode();
     });
   }
   $effect(() => () => cancelPendingEdit?.());

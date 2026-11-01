@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { get, writable } from 'svelte/store';
 import { createRawSnippet } from 'svelte';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/svelte';
@@ -34,7 +34,7 @@ import { goto } from '$app/navigation';
 import { page } from '$app/stores';
 import { toast } from '$lib/stores/toast';
 import { isAuthenticated, authChecked, mustChangePassword, clearMustChangePassword } from '$lib/stores/auth';
-import { config, migrationFailure } from '$lib/stores/config';
+import { config, migrationFailure, otherDashboards, resetPartialLoadingForTests } from '$lib/stores/config';
 import { confirmModalState, closeConfirmModal } from '$lib/stores/confirmModal';
 import { begin, apply, resetEditSessionForTests, dirty } from '$lib/stores/editSession';
 import { updateNode } from '$lib/editor/treeOps';
@@ -459,5 +459,49 @@ describe('settings shell, Dashboards pages', () => {
 		renderShell();
 		const item = within(sidebar()).getAllByRole('link').find((a) => a.classList.contains('side-item') && a.textContent?.trim() === 'Dashboards')!;
 		expect(item.getAttribute('aria-current')).toBe('page');
+	});
+});
+
+describe('settings shell, arriving with only the index of the other dashboards', () => {
+	const partialDoc = () => {
+		const d = doc();
+		return { ...d, dashboards: [...d.dashboards, { id: 'e', name: 'E', path: '/e', revision: 2, partial: true }] } as Config;
+	};
+	const fullDoc = () => {
+		const d = doc();
+		return { ...d, dashboards: [...d.dashboards, { id: 'e', name: 'E', path: '/e', revision: 2, tabs: [] }] } as Config;
+	};
+
+	beforeEach(() => {
+		resetPartialLoadingForTests();
+		authChecked.set(true);
+		isAuthenticated.set(true);
+		config.set(partialDoc());
+	});
+	afterEach(() => {
+		vi.mocked(api.getConfig).mockImplementation(() => new Promise(() => {}));
+		resetPartialLoadingForTests();
+		config.set(null);
+	});
+
+	it('the page waits for them, and says so: no page made from part of the config', async () => {
+		vi.mocked(api.getConfig).mockImplementation(() => new Promise(() => {}));
+		renderShell();
+		await flush();
+		expect(screen.getByRole('status')).toHaveTextContent('Loading the other dashboards…');
+		expect(childShown()).toBe(false);
+	});
+
+	it('a failure shows with Retry instead of the page, and Retry opens the page', async () => {
+		vi.mocked(api.getConfig).mockImplementation(async () => { throw new Error('HOPS hit an error'); });
+		renderShell();
+		const alert = await screen.findByRole('alert');
+		expect(alert).toHaveTextContent("Couldn't load the other dashboards");
+		expect(childShown()).toBe(false);
+
+		vi.mocked(api.getConfig).mockImplementation(async () => fullDoc());
+		await fireEvent.click(within(alert).getByRole('button', { name: 'Retry' }));
+		await waitFor(() => expect(childShown()).toBe(true));
+		expect(get(otherDashboards)).toBe('ready');
 	});
 });

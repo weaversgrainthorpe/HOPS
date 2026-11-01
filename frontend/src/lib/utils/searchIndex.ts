@@ -54,6 +54,7 @@ export function buildSearchIndex(doc: LayoutDoc | null, onlyDashboardId?: string
   const out: SearchItem[] = [];
   for (const d of doc.dashboards ?? []) {
     if (onlyDashboardId !== undefined && d.id !== onlyDashboardId) continue;
+    if (d.partial === true) continue; // an index entry: its content has not arrived
     for (const t of d.tabs ?? []) {
       const base = { dashboardId: d.id, dashboardPath: d.path, dashboardName: d.name, tabId: t.id };
       const walk = (c: Container | undefined, chain: FolderNode[]) => {

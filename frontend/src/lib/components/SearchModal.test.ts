@@ -14,12 +14,14 @@ vi.mock('$app/stores', async () => {
 const setPage = (params: Record<string, string>) =>
   pageStore.set!({ url: new URL('http://localhost/'), params, route: { id: '/' }, status: 200, error: null, data: {}, form: undefined });
 
+vi.mock('$lib/utils/api', async (orig) => ({ ...(await orig<typeof import('$lib/utils/api')>()), getConfig: vi.fn() }));
 vi.mock('$lib/utils/url', async (orig) => ({ ...(await orig<typeof import('$lib/utils/url')>()), safeOpenUrl: vi.fn() }));
 import { safeOpenUrl } from '$lib/utils/url';
 import { goto } from '$app/navigation';
 import SearchModal from './SearchModal.svelte';
 import Dashboard from './Dashboard.svelte';
-import { config } from '$lib/stores/config';
+import { config, otherDashboards, resetPartialLoadingForTests } from '$lib/stores/config';
+import * as api from '$lib/utils/api';
 import { editMode } from '$lib/stores/editMode';
 import { revealRequest } from '$lib/stores/reveal';
 import { folderViewFor, folderNavFor, resetFolderViewsForTests } from '$lib/stores/folderView';
@@ -248,5 +250,62 @@ describe('SearchModal open vs show', () => {
     await key({ key: 'ArrowDown' });
     const selected = document.querySelector('.search-results li.selected');
     expect(selected).toBe(document.querySelectorAll('.search-results li')[1]);
+  });
+});
+
+describe('SearchModal while the other dashboards are still arriving', () => {
+  // The page holds the open dashboard (Home) in full and Lab only as an index entry.
+  const labIndex = { id: 'd2', name: 'Lab', path: '/lab', revision: 1, partial: true } as unknown as LayoutDashboard;
+  const labFull: LayoutDashboard = {
+    id: 'd2', name: 'Lab', path: '/lab', revision: 1,
+    tabs: [{ id: 'u1', name: 'Bench', root: { columns: 24, children: [tile('other', 'Other Dash Tile')] } }]
+  };
+  const type = async (v: string) => {
+    await fireEvent.input(screen.getByRole('textbox', { name: /search/i }), { target: { value: v } });
+    await tick();
+  };
+  beforeEach(() => {
+    resetPartialLoadingForTests();
+    config.set({ schemaVersion: 3, dashboards: [layoutD1, labIndex] } as Config);
+  });
+
+  it('while loading: says so, searches the open dashboard meanwhile and labels the results as from it only', async () => {
+    otherDashboards.set('loading');
+    render(SearchModal, { onClose: () => {} });
+    await tick();
+    expect(screen.getByRole('status')).toHaveTextContent('Loading the other dashboards…');
+    await type('t');
+    expect(screen.getByRole('button', { name: /Top Tile/ })).toBeInTheDocument();
+    expect(screen.getByText(/Showing matches from Home only/)).toBeInTheDocument();
+    // Never the unlabelled all-dashboards list.
+    expect(document.querySelector('.search-results')?.closest('.search-panel')?.textContent).toContain('Home only');
+  });
+
+  it('when the other dashboards could not be loaded: says so with Retry, and Retry recovers', async () => {
+    otherDashboards.set({ error: 'HOPS hit an error' });
+    vi.mocked(api.getConfig).mockResolvedValueOnce({ schemaVersion: 3, dashboards: [layoutD1, labFull] } as Config);
+    render(SearchModal, { onClose: () => {} });
+    await tick();
+    expect(screen.getByRole('alert')).toHaveTextContent("Couldn't load the other dashboards");
+    await type('tile');
+    expect(screen.getByRole('button', { name: /Top Tile/ })).toBeInTheDocument();
+    expect(screen.getByText(/Showing matches from Home only/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Other Dash Tile/ })).toBeNull();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    await vi.waitFor(() => expect(get(otherDashboards)).toBe('ready'));
+    await tick();
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.queryByText(/only/)).toBeNull();
+    expect(screen.getByRole('button', { name: /Other Dash Tile/ })).toHaveTextContent('Lab');
+  });
+
+  it('on a dashboard page held only as an index entry, scoped search says it is loading, not "no matches"', async () => {
+    setPage({ dashboard: 'lab' });
+    render(SearchModal, { onClose: () => {} });
+    await tick();
+    await type('other');
+    expect(screen.getByRole('status')).toHaveTextContent(/Loading this dashboard/);
+    expect(screen.queryByText(/No tiles or folders match/)).toBeNull();
   });
 });

@@ -72,7 +72,12 @@
 		};
 		const stopPresence = initEditPresence();
 		initAuth();
-		loadConfig();
+		// A viewer page ("/" or a dashboard) loads only the dashboard it opens, plus the index of
+		// the rest; the rest follow in the background. Every other page loads the whole config.
+		const here = get(page);
+		if (here.route.id === '/') loadConfig({ dashboard: '' });
+		else if (here.route.id === '/[dashboard]') loadConfig({ dashboard: here.params.dashboard ?? '' });
+		else loadConfig();
 		initNetworkWatcher();
 		initEditModeIdleWatcher();
 		return stopPresence;

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
-  saveDashboardV3, transferNodes, getConfig, dismissNotice, createDashboard, reorderDashboards, promoteScan, ConflictError, MigrationFailedError
+  saveDashboardV3, transferNodes, getConfig, getConfigFor, getDashboard, dismissNotice, createDashboard, reorderDashboards, promoteScan, ConflictError, MigrationFailedError
 } from './api';
 import type { LayoutDashboard } from '$lib/types/layout';
 
@@ -159,5 +159,42 @@ describe('dashboard writes', () => {
     expect(r).toEqual({ promoted: 2, dashboardPath: '/a', warning: 'Folder "X" may need resizing to show all its tiles.', layout: doc });
     const [, init] = vi.mocked(fetch).mock.calls[0] as [string, RequestInit];
     expect(JSON.parse(init.body as string)).toEqual({ target: { dashboardId: 'a', tabId: 't', folderId: 'f' }, resultIds: ['r1', 'r2'] });
+  });
+});
+
+describe('index-plus-one and one-dashboard reads', () => {
+  const ok = (body: unknown) => vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(body), { status: 200 })));
+  const whole = { id: 'a', name: 'A', path: '/a', revision: 1, tabs: [] };
+  const entry = { id: 'b', name: 'B', path: '/b', revision: 2, partial: true };
+
+  it('getConfigFor asks for the dashboard (encoded) and returns the document and its revision', async () => {
+    ok({ schemaVersion: 3, dashboards: [whole, entry], configRevision: 'abc' });
+    const got = await getConfigFor('my dash');
+    expect(vi.mocked(fetch).mock.calls[0][0]).toContain('/config?dashboard=my%20dash');
+    expect(got.configRevision).toBe('abc');
+    expect(got.config.dashboards).toHaveLength(2);
+    ok({ schemaVersion: 3, dashboards: [entry], configRevision: 'abc', missing: 'nope' });
+    expect((await getConfigFor('nope')).missing).toBe('nope');
+  });
+  it('getConfigFor: index entries without a revision, or a dashboard with neither tabs nor the mark, are a visible error', async () => {
+    ok({ schemaVersion: 3, dashboards: [whole, entry] });
+    await expect(getConfigFor('a')).rejects.toThrow(/cannot read/);
+    ok({ schemaVersion: 3, dashboards: [{ id: 'c', name: 'C', path: '/c', revision: 1 }], configRevision: 'abc' });
+    await expect(getConfigFor('c')).rejects.toThrow(/cannot read/);
+  });
+  it('getConfigFor accepts the whole config (the offline copy): nothing partial, no revision', async () => {
+    ok({ schemaVersion: 3, dashboards: [whole] });
+    expect((await getConfigFor('a')).configRevision).toBe('');
+  });
+  it('getConfig refuses a document holding index entries', async () => {
+    ok({ schemaVersion: 3, dashboards: [whole, entry] });
+    await expect(getConfig()).rejects.toThrow(/incomplete/);
+  });
+  it('getDashboard refuses another dashboard or one without content', async () => {
+    ok({ dashboard: whole, revision: 1, configRevision: 'abc' });
+    expect((await getDashboard('a')).revision).toBe(1);
+    await expect(getDashboard('z')).rejects.toThrow(/cannot read/);
+    ok({ dashboard: entry, revision: 2, configRevision: 'abc' });
+    await expect(getDashboard('b')).rejects.toThrow(/cannot read/);
   });
 });
