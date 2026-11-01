@@ -8,7 +8,7 @@
   export type FolderFields = Pick<
     FolderNode,
     | 'name' | 'icon' | 'iconUrl' | 'iconBgColor' | 'color' | 'opacity' | 'textColor' | 'display' | 'showTitle' | 'shape'
-    | 'tabPosition' | 'size' | 'contentSize'
+    | 'tabPosition' | 'size' | 'contentSize' | 'minimisedIcon'
   > & {
     background?: Background | null;
     /** Status-check gate: false = Disabled, null = Enabled (key removed), absent = unchanged. */
@@ -97,6 +97,9 @@
   let display = $state<'expanded' | 'collapsed'>(folder.display === 'collapsed' ? 'collapsed' : 'expanded');
   // svelte-ignore state_referenced_locally
   let showTitle = $state(folder.showTitle !== false);
+  // What a minimised folder shows: the icons of its items (the default, key absent) or its own icon.
+  // svelte-ignore state_referenced_locally
+  let minimisedIcon = $state<'contents' | 'own'>(folder.minimisedIcon === 'own' ? 'own' : 'contents');
   // The size of every item inside (tiles and sub-folders) and of its minimised tile on a tab.
   // Staged here; saved with the dialog as one undo step.
   // svelte-ignore state_referenced_locally
@@ -180,6 +183,8 @@
       textColor,
       display,
       showTitle,
+      // "Icons inside" removes the field (absent = the default); an unset key is cleared by editFolder.
+      minimisedIcon: minimisedIcon === 'own' ? 'own' : undefined,
       shape: shape as FolderShape,
       // The tab position is written for a tab shape (or kept when one was stored).
       ...(hasTab(shape) || folder.tabPosition !== undefined ? { tabPosition } : {}),
@@ -225,6 +230,20 @@
         </span>
         <span class="edit-cta"><Icon icon="mdi:pencil" width="16" /> Edit icon</span>
       </button>
+      <div class="choice-row" role="radiogroup" aria-labelledby="folder-min-icon-legend">
+        <span id="folder-min-icon-legend" class="label">When minimised, show:</span>
+        <label class="choice">
+          <input type="radio" name="folder-minimised-icon" value="contents" bind:group={minimisedIcon} />
+          Icons inside
+        </label>
+        <label class="choice">
+          <input type="radio" name="folder-minimised-icon" value="own" bind:group={minimisedIcon} />
+          Its own icon
+        </label>
+      </div>
+      {#if minimisedIcon === 'own' && !icon && !iconUrl}
+        <p class="hint" role="status" data-own-icon-hint>No icon set, so it shows the icons inside.</p>
+      {/if}
     </div>
 
     <!-- The look sits right under the icon, before the colour and the background. -->
@@ -457,6 +476,11 @@
     margin: 0;
     color: var(--color-error-text);
     font-size: 0.875rem;
+  }
+  .hint {
+    margin: 0.25rem 0 0;
+    font-size: 0.875rem;
+    opacity: 0.85;
   }
   .choice-row {
     display: flex;

@@ -1,7 +1,7 @@
 // The folder dialog's order and sections, the look previews on a light
 // card, and a stored colour background (pictures only at folder level, never dropped silently).
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/svelte';
+import { render, screen, fireEvent, within } from '@testing-library/svelte';
 import FolderEditModal from './FolderEditModal.svelte';
 import LookPreview, { PREVIEW_CARD, previewNeedsEdge, MIN_NON_TEXT_CONTRAST } from './LookPreview.svelte';
 import type { FolderNode } from '$lib/types/layout';
@@ -105,5 +105,37 @@ describe('the Background section at folder level', () => {
     render(FolderEditModal, { folder: f({ background: { type: 'color', value: 'rebeccapurple' } }), onSave: vi.fn(), onCancel: vi.fn() });
     expect(screen.queryByRole('button', { name: 'Use as folder colour' })).toBeNull();
     expect(screen.getByText(/rebeccapurple.*can't be used as the folder colour/)).toBeInTheDocument();
+  });
+});
+
+describe('minimised icon choice', () => {
+  const save = () => fireEvent.click(screen.getByRole('button', { name: /^Save/ }));
+  it('"When minimised, show:" offers Icons inside (checked when absent) and Its own icon', () => {
+    render(FolderEditModal, { folder: f(), onSave: vi.fn(), onCancel: vi.fn() });
+    const g = screen.getByRole('radiogroup', { name: 'When minimised, show:' });
+    expect(within(g).getByRole('radio', { name: 'Icons inside' })).toBeChecked();
+    expect(within(g).getByRole('radio', { name: 'Its own icon' })).not.toBeChecked();
+    expect(follows(screen.getByRole('button', { name: /Edit icon/ }), g)).toBe(true);
+  });
+  it('choosing Its own icon and saving yields minimisedIcon: own', async () => {
+    const onSave = vi.fn();
+    render(FolderEditModal, { folder: f({ iconUrl: '/i.png' }), onSave, onCancel: vi.fn() });
+    await fireEvent.click(screen.getByRole('radio', { name: 'Its own icon' }));
+    await save();
+    expect(onSave.mock.calls[0][0].minimisedIcon).toBe('own');
+  });
+  it('choosing Icons inside on a folder that had own removes the field', async () => {
+    const onSave = vi.fn();
+    render(FolderEditModal, { folder: f({ minimisedIcon: 'own', iconUrl: '/i.png' }), onSave, onCancel: vi.fn() });
+    expect(screen.getByRole('radio', { name: 'Its own icon' })).toBeChecked();
+    await fireEvent.click(screen.getByRole('radio', { name: 'Icons inside' }));
+    await save();
+    expect(onSave.mock.calls[0][0].minimisedIcon).toBeUndefined();
+  });
+  it('Its own icon with no icon set says the icons inside show instead', async () => {
+    render(FolderEditModal, { folder: f(), onSave: vi.fn(), onCancel: vi.fn() });
+    expect(screen.queryByText('No icon set, so it shows the icons inside.')).toBeNull();
+    await fireEvent.click(screen.getByRole('radio', { name: 'Its own icon' }));
+    expect(screen.getByText('No icon set, so it shows the icons inside.')).toBeInTheDocument();
   });
 });

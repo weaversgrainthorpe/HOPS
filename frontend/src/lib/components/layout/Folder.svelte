@@ -30,6 +30,7 @@
   import { deriveFolderColours } from '$lib/layout/folderColours';
   import { MINI_NAME_MIN_TILE_PX, shapeParts, tabWantPx } from '$lib/layout/folderShapePaths';
   import FolderShape from './FolderShape.svelte';
+  import { minimisedShowsOwnIcon } from '$lib/layout/folderIcon';
   import { getTextColorValue } from '$lib/utils/colorContrast';
   import Icon from '@iconify/svelte';
   import ColoredIcon from '../ColoredIcon.svelte';
@@ -255,6 +256,12 @@
     tabbed && tileH > 0 ? Math.max(12, Math.min(64, tileH - miniFrontPx - 2 - 8 - (silhouette ? 0 : 22))) : undefined
   );
   const previews = $derived(previewChildren(folder));
+  /** A minimised folder set to "Its own icon" (and with one) shows it large instead of its items' icons. */
+  const ownIcon = $derived(minimisedShowsOwnIcon(folder));
+  /** The own icon's uploaded image that failed to load: a folder glyph stands in (never an empty face). */
+  let ownIconFailed = $state<string | null>(null);
+  /** Edit mode: "Its own icon" chosen but none set — the icons inside show instead, and it says so. */
+  const noOwnIcon = $derived(folder.minimisedIcon === 'own' && !ownIcon);
   const itemCount = $derived(Array.isArray(folder.content?.children) ? folder.content.children.length : 0);
   // Children exist but none can be drawn: say so, never "Empty folder" (no silent failures).
   const unreadable = $derived(previews.length === 0 && itemCount > 0);
@@ -447,6 +454,27 @@
       </span>
     {/if}
   {/if}
+{/snippet}
+
+<!-- A minimised folder's one large icon (its own, not its items'), in the same box as the previews grid.
+     The optional backing colour applies; an uploaded image that won't load shows a folder glyph. -->
+{#snippet minimisedOwnIcon(f: FolderNode)}
+  <span
+    class="own-icon folder-icon-backing"
+    class:has-bg={f.iconBgColor}
+    style:background-color={f.iconBgColor}
+    style:max-width={miniGridPx !== undefined ? `${miniGridPx}px` : undefined}
+    data-own-icon
+    data-own-icon-fallback={f.iconUrl && ownIconFailed === f.iconUrl ? '' : undefined}
+  >
+    {#if f.iconUrl && ownIconFailed !== f.iconUrl}
+      <img src={f.iconUrl} alt="" onerror={() => (ownIconFailed = f.iconUrl ?? null)} />
+    {:else if f.icon && !f.iconUrl}
+      <ColoredIcon icon={f.icon} width="100%" />
+    {:else}
+      <ColoredIcon icon="mdi:folder" width="100%" />
+    {/if}
+  </span>
 {/snippet}
 
 {#snippet lookNotes(f: FolderNode, cls: string)}
@@ -704,6 +732,8 @@
       {#if !silhouette}<span class="collapsed-name">{folder.name}</span>{/if}
       {#if unreadable}
         <span class="empty-note unreadable">Can't display this folder's contents</span>
+      {:else if ownIcon}
+        {@render minimisedOwnIcon(folder)}
       {:else if previews.length === 0}
         <span class="empty-note">Empty folder</span>
       {:else}
@@ -725,8 +755,13 @@
     <!-- Edit mode: a failed background image, flagged on a tab outside the tile (never on its content). -->
     <BackgroundFailedBadge background={folder.background} {editing} level="folder" placement="corner" />
     {@render minNote()}
-    {#if editing && (problems.unknownShape !== null || problems.unreadableColour)}
-      <span class="tile-notes">{@render lookNotes(folder, 'tile-note')}</span>
+    {#if editing && (problems.unknownShape !== null || problems.unreadableColour || noOwnIcon)}
+      <span class="tile-notes">
+        {@render lookNotes(folder, 'tile-note')}
+        {#if noOwnIcon}
+          <span class="look-note tile-note" role="status" data-own-icon-missing={folder.id}>No icon set, so it shows the icons inside.</span>
+        {/if}
+      </span>
     {/if}
     {#if editing}
       {#if !item}
@@ -982,7 +1017,8 @@
   .folder.tile-face.tabbed:focus-visible {
     outline: none;
   }
-  .folder.tile-face.silhouette .preview-grid {
+  .folder.tile-face.silhouette .preview-grid,
+  .folder.tile-face.silhouette .own-icon {
     width: 70%;
   }
   /* The tab: the tab allowance high, at its rect (geometry.folderTabRect); the name is real text. */
@@ -1222,6 +1258,18 @@
     width: 60%;
     max-width: 64px;
     min-height: 0;
+  }
+  .own-icon {
+    width: 60%;
+    max-width: 64px;
+    min-height: 0;
+    aspect-ratio: 1;
+    box-sizing: border-box;
+  }
+  .own-icon img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
   }
   .preview-cell {
     display: flex;

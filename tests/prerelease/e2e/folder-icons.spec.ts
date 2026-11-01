@@ -109,3 +109,37 @@ test.describe('a nested folder header shows its icon', () => {
     expect(backing.y + backing.height, 'backing bottom inside bar').toBeLessThanOrEqual(b.y + b.height + 0.5);
   });
 });
+
+test.describe('a minimised folder shows its own icon', () => {
+  test.use({ viewport: { width: 1280, height: 900 } });
+  const mini = (id: string, name: string, x: number, extra: Child = {}) =>
+    folder(id, name, { x, y: 0, w: 4, h: 4 }, [kid(`${id}-k`, 'K')], { display: 'collapsed', size: 'large', ...extra });
+
+  test('own icon replaces the previews; an unloadable image still shows the name and a glyph; reload keeps it', async ({ page, context }) => {
+    const f = await importDash(page, context, (id) => [
+      mini(id('ok'), 'Okay', 0, { minimisedIcon: 'own', iconUrl: ICON }),
+      mini(id('bad'), 'Broken', 4, { minimisedIcon: 'own', iconUrl: '/api/icons/dashboard/does-not-exist-404.svg' }),
+      mini(id('plain'), 'Plain', 8, { iconUrl: ICON })
+    ]);
+    await page.goto(f.path);
+    const tileOf = (k: string) => node(page, f.id(k)).locator('.folder-collapsed-tile');
+
+    const ok = tileOf('ok');
+    await expect(ok.locator('[data-own-icon] img')).toBeVisible();
+    await expect(ok.locator('.preview-grid')).toHaveCount(0);
+    await expect(tileOf('plain').locator('.preview-grid')).toBeVisible();
+    await expect(tileOf('plain').locator('[data-own-icon]')).toHaveCount(0);
+
+    // A 404 icon: the name stays, and a visible glyph stands in (never an empty face).
+    const bad = tileOf('bad');
+    await expect(bad.locator('.collapsed-name')).toHaveText('Broken');
+    await expect(bad.locator('[data-own-icon][data-own-icon-fallback] svg')).toBeVisible();
+    const box = (await bad.locator('[data-own-icon]').boundingBox())!;
+    expect(box.width).toBeGreaterThan(16);
+    expect(box.height).toBeGreaterThan(16);
+
+    await page.reload();
+    await expect(tileOf('ok').locator('[data-own-icon] img')).toBeVisible();
+    await expect(tileOf('bad').locator('.collapsed-name')).toHaveText('Broken');
+  });
+});

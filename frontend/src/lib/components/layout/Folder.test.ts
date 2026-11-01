@@ -441,6 +441,80 @@ describe('untitled folders (showTitle: false): the bar shows only the controls, 
   });
 });
 
+describe('a minimised folder can show its own icon', () => {
+  addIcon('mdi:home', { body: '<path d="M0 0h24v24H0z"/>', width: 24, height: 24 }); // offline: no fetch
+  addIcon('mdi:folder', { body: '<path d="M0 0h24v24H0z"/>', width: 24, height: 24 });
+  const min = (extra: any = {}, children: any[] = kids(3)) => folder('f', children, { display: 'collapsed', ...extra });
+  const tileOf = (c: ParentNode) => el(c, 'f').querySelector('.folder-collapsed-tile') as HTMLElement;
+  it('own icon replaces the previews', async () => {
+    const { container } = await renderTab([min({ minimisedIcon: 'own', iconUrl: '/icons/f.png' })]);
+    const own = tileOf(container).querySelector('[data-own-icon]')!;
+    expect(own.querySelector('img')!.getAttribute('src')).toBe('/icons/f.png');
+    expect(tileOf(container).querySelector('.preview-grid')).toBeNull();
+    expect(within(tileOf(container)).getByText('f')).toBeInTheDocument();
+  });
+  it('an iconify icon is drawn too, on its backing colour', async () => {
+    const { container } = await renderTab([min({ minimisedIcon: 'own', icon: 'mdi:home', iconBgColor: '#336699' })]);
+    const own = tileOf(container).querySelector('[data-own-icon]') as HTMLElement;
+    expect(own.querySelector('svg')).not.toBeNull();
+    expect(own.style.backgroundColor).toBe('rgb(51, 102, 153)');
+    expect(own.classList.contains('has-bg')).toBe(true);
+  });
+  it('own without an icon falls back to the previews, and in edit mode says so', async () => {
+    const { container, unmount } = await renderTab([min({ minimisedIcon: 'own' })]);
+    expect(tileOf(container).querySelector('.preview-grid')).not.toBeNull();
+    expect(tileOf(container).querySelector('[data-own-icon]')).toBeNull();
+    expect(container.querySelector('[data-own-icon-missing]')).toBeNull(); // not in view mode
+    unmount();
+    const r = await renderEditing([min({ minimisedIcon: 'own' })]);
+    expect(tileOf(r.container).querySelector('.preview-grid')).not.toBeNull();
+    expect(within(el(r.container, 'f')).getByText('No icon set, so it shows the icons inside.')).toBeInTheDocument();
+  });
+  it('contents or absent keeps the previews', async () => {
+    for (const extra of [{}, { minimisedIcon: 'contents' }]) {
+      const { container, unmount } = await renderTab([min({ ...extra, iconUrl: '/icons/f.png' })]);
+      expect(tileOf(container).querySelector('.preview-grid')).not.toBeNull();
+      expect(tileOf(container).querySelector('[data-own-icon]')).toBeNull();
+      unmount();
+    }
+  });
+  it('the Small silhouette shows the own icon (and still no visible name)', async () => {
+    const { container } = await renderTab([min({ minimisedIcon: 'own', iconUrl: '/icons/f.png', size: 'small' })]);
+    expect(tileOf(container).querySelector('[data-own-icon]')).not.toBeNull();
+    expect(tileOf(container).querySelector('.preview-grid')).toBeNull();
+  });
+  it('a tab look shows it on the front panel, under the name', async () => {
+    const { container } = await renderTab([min({ minimisedIcon: 'own', iconUrl: '/icons/f.png', shape: 'folder-paper' })]);
+    const t = tileOf(container);
+    expect(t.classList.contains('tabbed')).toBe(true);
+    expect(t.querySelector('.collapsed-name')!.compareDocumentPosition(t.querySelector('[data-own-icon]')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+  it('untitled with own still shows its icon', async () => {
+    const { container } = await renderTab([min({ minimisedIcon: 'own', iconUrl: '/icons/f.png', showTitle: false })]);
+    expect(tileOf(container).querySelector('[data-own-icon]')).not.toBeNull();
+  });
+  it('an empty folder with an own icon shows the icon, not "Empty folder"', async () => {
+    const { container } = await renderTab([min({ minimisedIcon: 'own', iconUrl: '/icons/f.png' }, [])]);
+    expect(tileOf(container).querySelector('[data-own-icon]')).not.toBeNull();
+    expect(within(tileOf(container)).queryByText('Empty folder')).toBeNull();
+  });
+  it('an uploaded image that will not load shows a folder glyph, never an empty face', async () => {
+    const { container } = await renderTab([min({ minimisedIcon: 'own', iconUrl: '/icons/gone.png' })]);
+    const img = tileOf(container).querySelector('[data-own-icon] img') as HTMLImageElement;
+    await fireEvent.error(img);
+    await tick();
+    const own = tileOf(container).querySelector('[data-own-icon]')!;
+    expect(own.querySelector('img')).toBeNull();
+    expect(own.querySelector('svg')).not.toBeNull();
+    expect(own.hasAttribute('data-own-icon-fallback')).toBe(true);
+    expect(within(tileOf(container)).getByText('f')).toBeInTheDocument();
+  });
+  it('a folder inside a folder shows its own icon on its minimised tile', async () => {
+    const { container } = await renderTab([folder('f', [sub('s', [kid('deep')], { minimisedIcon: 'own', iconUrl: '/icons/s.png' })])]);
+    expect(el(container, 's').querySelector('.folder-collapsed-tile [data-own-icon] img')).not.toBeNull();
+  });
+});
+
 describe('a folder opened inside another shows its icon', () => {
   const drill = async () => fireEvent.click(screen.getByRole('button', { name: /^s, folder with/ }));
   it('nested folder header shows its icon (rounded)', async () => {

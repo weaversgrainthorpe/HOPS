@@ -84,6 +84,19 @@ describe('EditorDialogs (the dialogs edit the draft only)', () => {
     expect(get(editorDialog)).toBeNull();
   });
 
+  it('Its own icon survives the real save path into the draft; Icons inside removes the field', async () => {
+    await show({ kind: 'folder', id: 'f1' });
+    await fireEvent.click(screen.getByRole('radio', { name: 'Its own icon' }));
+    await fireEvent.click(screen.getByRole('button', { name: /^Save/ }));
+    expect((nodeIn(draft(), 'f1') as FolderNode).minimisedIcon).toBe('own');
+    editorDialog.set({ kind: 'folder', id: 'f1' });
+    await tick();
+    expect(screen.getByRole('radio', { name: 'Its own icon' })).toBeChecked();
+    await fireEvent.click(screen.getByRole('radio', { name: 'Icons inside' }));
+    await fireEvent.click(screen.getByRole('button', { name: /^Save/ }));
+    expect(nodeIn(draft(), 'f1') as FolderNode).not.toHaveProperty('minimisedIcon');
+  });
+
   it('folder dialog "Contents size" and "Size when minimised": staged until Save, then ONE undo step', async () => {
     await show({ kind: 'folder', id: 'f1' });
     const contents = screen.getByLabelText('Contents size') as HTMLSelectElement;
