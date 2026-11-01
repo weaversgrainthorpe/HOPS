@@ -236,12 +236,23 @@ export async function getAbout(): Promise<{ dataDir: string }> {
  * empty or partial dashboard set.
  */
 export async function getConfig(opts: { timeoutMs?: number } = {}): Promise<Config> {
+  // AbortController and a timer, not AbortSignal.timeout: older iPads and kiosk WebViews lack it.
+  const abort = new AbortController();
+  let timedOut = false;
+  const timer = opts.timeoutMs
+    ? setTimeout(() => {
+        timedOut = true;
+        abort.abort();
+      }, opts.timeoutMs)
+    : undefined;
   let resp;
   try {
-    resp = await fetchAPI('/config', opts.timeoutMs ? { signal: AbortSignal.timeout(opts.timeoutMs) } : {});
+    resp = await fetchAPI('/config', opts.timeoutMs ? { signal: abort.signal } : {});
   } catch (e) {
-    if (e instanceof Error && e.name === 'TimeoutError') throw new Error('Loading took too long. Check the connection and try again.');
+    if (timedOut) throw new Error('Loading took too long. Check the connection and try again.');
     throw e;
+  } finally {
+    clearTimeout(timer);
   }
   const out = readConfigDocument(resp, 'GET /api/config');
   // The whole document: an index entry here would be a dashboard with no content.

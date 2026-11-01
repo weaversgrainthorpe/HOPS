@@ -1665,6 +1665,12 @@ func (r *Router) handleImportConfig(w http.ResponseWriter, req *http.Request) {
 			skipped = append(skipped, fmt.Sprintf("dashboards[%d] is not an object", i))
 			continue
 		}
+		// An index entry is never content, in any format: the converters keep
+		// keys they don't know, and stored it would be served as a dashboard.
+		if _, has := d["partial"]; has {
+			writeJSONError(w, fmt.Sprintf("Import refused — dashboard %q is marked partial (an index entry, not a whole dashboard)", dashboardLabel(d)), http.StatusBadRequest)
+			return
+		}
 		if p, ok := d["path"].(string); ok {
 			// A reserved first segment is not refused on import: the dashboard is moved to the
 			// next free path when it is merged, and the result says so.

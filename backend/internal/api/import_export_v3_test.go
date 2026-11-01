@@ -1181,6 +1181,11 @@ func TestImport_RefusesLessThanAWholeDashboard(t *testing.T) {
 			t.Errorf("%s: got %d %v", name, code, resp)
 		}
 	}
+	// The v2 branch keeps unknown keys, so the marker is refused there too.
+	code, resp := c.importFile([]byte(`{"dashboards":[{"id":"imp5","name":"Bare","path":"/bare5","order":0,"partial":true}]}`))
+	if code != 400 || !strings.Contains(fmt.Sprint(resp["error"]), "not a whole dashboard") {
+		t.Errorf("v2 marked partial: got %d %v", code, resp)
+	}
 	var after string
 	db.QueryRow("SELECT data FROM config WHERE id = 1").Scan(&after)
 	if before != after {

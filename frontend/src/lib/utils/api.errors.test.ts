@@ -209,6 +209,26 @@ describe('index-plus-one and one-dashboard reads', () => {
     vi.stubGlobal('fetch', vi.fn((_u: string, o: RequestInit) => new Promise((_res, rej) => {
       o.signal?.addEventListener('abort', () => rej(o.signal?.reason));
     })));
-    await expect(getConfig({ timeoutMs: 5 })).rejects.toThrow(/took too long/);
+    // Browsers without AbortSignal.timeout (older iPads, kiosk WebViews) too.
+    const native = AbortSignal.timeout;
+    (AbortSignal as unknown as { timeout?: unknown }).timeout = undefined;
+    try {
+      await expect(getConfig({ timeoutMs: 5 })).rejects.toThrow(/took too long/);
+    } finally {
+      AbortSignal.timeout = native;
+    }
+  });
+  it('getConfig clears its timer once answered, and a failure that is not the timeout stays itself', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ schemaVersion: 3, dashboards: [] }), { status: 200 })));
+      await getConfig({ timeoutMs: 60_000 });
+      expect(vi.getTimerCount()).toBe(0);
+      vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('Failed to fetch'); }));
+      await expect(getConfig({ timeoutMs: 60_000 })).rejects.toThrow('Failed to fetch');
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
