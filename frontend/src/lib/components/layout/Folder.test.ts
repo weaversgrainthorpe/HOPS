@@ -5,6 +5,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/svelte';
 import { tick } from 'svelte';
+import { addIcon } from '@iconify/svelte';
 import { get } from 'svelte/store';
 import TabCanvas from './TabCanvas.svelte';
 import { config } from '$lib/stores/config';
@@ -441,22 +442,28 @@ describe('untitled folders (showTitle: false): the bar shows only the controls, 
 });
 
 describe('a folder opened inside another shows its icon', () => {
-  const drill = async (c: ParentNode) => fireEvent.click(screen.getByRole('button', { name: /^s, folder with/ }));
+  const drill = async () => fireEvent.click(screen.getByRole('button', { name: /^s, folder with/ }));
   it('nested folder header shows its icon (rounded)', async () => {
     const { container } = await renderTab([folder('f', [sub('s', [kid('deep')], { iconUrl: '/icons/s.png' })])]);
-    await drill(container);
+    await drill();
     const img = nested(container, 's').querySelector(':scope > .nested-header img.folder-icon-img') as HTMLImageElement;
     expect(img).not.toBeNull();
     expect(img.getAttribute('src')).toBe('/icons/s.png');
   });
   it('nested folder header shows its icon (folder-paper tab)', async () => {
     const { container } = await renderTab([folder('f', [sub('s', [kid('deep')], { iconUrl: '/icons/s.png', shape: 'folder-paper' })], { shape: 'folder-paper' })]);
-    await drill(container);
+    await drill();
     expect(container.querySelector('[data-folder-tab="s"] img.tab-icon')).not.toBeNull();
+  });
+  it('nested folder-paper tab shows an iconify icon', async () => {
+    addIcon('mdi:home', { body: '<path d="M0 0h24v24H0z"/>', width: 24, height: 24 }); // offline: no fetch
+    const { container } = await renderTab([folder('f', [sub('s', [kid('deep')], { icon: 'mdi:home', shape: 'folder-paper' })], { shape: 'folder-paper' })]);
+    await drill();
+    expect(container.querySelector('[data-folder-tab="s"] .tab-icon')).not.toBeNull();
   });
   it('untitled nested folder shows no icon', async () => {
     const { container } = await renderTab([folder('f', [sub('s', [kid('deep')], { iconUrl: '/icons/s.png', showTitle: false })])]);
-    await drill(container);
+    await drill();
     expect(nested(container, 's').querySelector(':scope > .nested-header img')).toBeNull();
   });
 });

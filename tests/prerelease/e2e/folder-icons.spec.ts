@@ -1,14 +1,8 @@
 import { test, expect, type Page, type BrowserContext, type Locator } from '@playwright/test';
 import { getCsrfToken, flourishesDone } from '../helpers';
 
-// A folder opened inside another shows its own icon in its header (tab and rounded looks), and a very
-// long name still ellipsises inside the tab with the icon in view. Synthetic data.
-// A drilled-in
-// sub-folder is a folder inside a folder. The top folder keeps its own title; every opened sub-folder
-// level is an inset box inside the last, with its own bar — identical to a top folder's:
-// its name on the left, the same minimise (–) on the right — holding, the innermost, one page of its
-// contents. Minimise on a box, or an outer box's title, goes back up. In a REAL browser: layout, drag
-// and search need Chromium.
+// A folder opened inside another shows its own icon in its header (tab and rounded looks); a very long
+// name still ellipsises inside the tab with the icon in view. Synthetic data; needs real layout.
 
 let seq = 0;
 const made: string[] = [];
@@ -94,18 +88,24 @@ test.describe('a nested folder header shows its icon', () => {
     expect(await name.evaluate((e) => getComputedStyle(e).textOverflow)).toBe('ellipsis');
     const n = (await name.boundingBox())!;
     expect(n.x + n.width, 'name right edge within tab').toBeLessThanOrEqual(t.x + t.width + 0.5);
+    expect(await name.evaluate((e) => e.scrollWidth > e.clientWidth), 'name is actually truncated').toBe(true);
   });
 
   test('rounded: the icon shows beside the name in the nested bar', async ({ page, context }) => {
     const f = await importDash(page, context, (id) => [
       folder(id('top'), 'Top', { x: 0, y: 0, w: 18, h: 9 }, [
         kid(id('a'), 'A'),
-        folder(id('sub'), 'Sub', null, [kid(id('b'), 'B')], { iconUrl: ICON })
+        folder(id('sub'), 'Sub', null, [kid(id('b'), 'B')], { iconUrl: ICON, iconBgColor: '#334455' })
       ])
     ]);
     await page.goto(f.path);
     await page.getByRole('button', { name: /^Sub, folder with 1 item/ }).click();
     const bar = node(page, f.id('top')).locator(`.nested-box[data-nested-folder="${f.id('sub')}"] > .nested-header`);
     await expect(bar.locator('img.folder-icon-img')).toBeVisible();
+    await flourishesDone(page);
+    const backing = (await bar.locator('.folder-icon-backing.has-bg').boundingBox())!;
+    const b = (await bar.boundingBox())!;
+    expect(backing.y, 'backing top inside bar').toBeGreaterThanOrEqual(b.y - 0.5);
+    expect(backing.y + backing.height, 'backing bottom inside bar').toBeLessThanOrEqual(b.y + b.height + 0.5);
   });
 });

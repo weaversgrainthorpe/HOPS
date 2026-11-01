@@ -429,7 +429,7 @@
 <!-- Edit mode only: a look that can't be drawn as stored says so — never a silent swap. -->
 <!-- A folder's own icon: on a tab shape a small icon on the tab, else the (optionally backed) icon beside the
      name. Nothing for an untitled folder or one with no icon. Reused wherever a folder draws its icon. -->
-{#snippet headerIcon(f: FolderNode, tab: boolean)}
+{#snippet headerIcon(f: FolderNode, tab: boolean, compact = false)}
   {#if f.showTitle !== false && (f.iconUrl || f.icon)}
     {#if tab}
       {#if f.iconUrl}
@@ -442,7 +442,7 @@
         {#if f.iconUrl}
           <img src={f.iconUrl} alt="" class="folder-icon-img" />
         {:else if f.icon}
-          <Icon icon={f.icon} width="24" />
+          <Icon icon={f.icon} width={compact ? '18' : '24'} />
         {/if}
       </span>
     {/if}
@@ -618,10 +618,10 @@
         </div>
         <span class="title-space"></span>
       {:else if innermost}
-        {@render headerIcon(sub, false)}
+        {@render headerIcon(sub, false, true)}
         <span class="nested-name" class:muted={untitled} aria-current="page">{shownName}</span>
       {:else}
-        {@render headerIcon(sub, false)}
+        {@render headerIcon(sub, false, true)}
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <button
           type="button"
@@ -952,6 +952,18 @@
     box-sizing: border-box;
     flex: none;
     min-width: 0;
+  }
+  /* The nested bar is 28px high: a compact icon (and backing) so it never overflows the bar. */
+  .nested-header :global(.folder-icon-img) {
+    width: 18px;
+    height: 18px;
+  }
+  .nested-header :global(.folder-icon-backing) {
+    flex: none;
+  }
+  .nested-header :global(.folder-icon-backing.has-bg) {
+    padding: 0.15rem;
+    border-radius: 0.3rem;
   }
   /* Tab shapes (geometry.shapeInset): the shape is drawn by FolderShape, so no CSS border; the tab
      allowance (24px) plus the 1px edge on top, the 1px edge on the other sides — the same content
