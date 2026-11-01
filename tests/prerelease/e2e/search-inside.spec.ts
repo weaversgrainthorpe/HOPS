@@ -19,7 +19,7 @@ const folder = (id: string, name: string, box: Child | null, children: Child[], 
 });
 
 // Tab "Main": a plain tile. Tab "Media": Downloads (minimised) > Archive > Sonarr, with enough
-// fillers that Sonarr sits on a later page of Archive.
+// fillers that Sonarr sits on a later page of Archive even after the folder grows to show its items.
 async function setup(page: Page, context: BrowserContext) {
   const p = `srch${Date.now().toString(36)}${(seq++).toString(36)}`;
   const id = (s: string) => `${p}-${s}`;
@@ -33,7 +33,7 @@ async function setup(page: Page, context: BrowserContext) {
         root: { columns: 24, children: [
           folder(id('dl'), 'Downloads', { x: 0, y: 0, w: 12, h: 9 }, [
             folder(id('arch'), 'Archive', null, [
-              ...Array.from({ length: 15 }, (_, i) => kid(id(`f${i}`), `Filler${i}`)),
+              ...Array.from({ length: 100 }, (_, i) => kid(id(`f${i}`), `Filler${i}`)),
               kid(id('sonarr'), 'Sonarr')
             ])
           ], { display: 'collapsed' })
