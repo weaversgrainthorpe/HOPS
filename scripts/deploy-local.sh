@@ -29,6 +29,9 @@ MIRROR_HOST="${MIRROR_HOST-}"
 
 cd "$REPO_DIR"
 
+# shellcheck source=lib/node.sh
+source "$REPO_DIR/scripts/lib/node.sh" || exit 1
+
 # --- Arguments --------------------------------------------------------------
 # --dev-only: build HEAD, then update ONLY the dev box (DEV_DIR + hops-dev).
 # Never touches PROD_HOST. This is the only mode allowed off the main branch.

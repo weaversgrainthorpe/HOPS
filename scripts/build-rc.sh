@@ -19,6 +19,7 @@ label=$1
 
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_DIR"
+source "$REPO_DIR/scripts/lib/node.sh" || exit 1
 
 "$REPO_DIR/scripts/check-versions.sh" || die "version sources disagree (see above)"
 version=$(tr -d '[:space:]' < VERSION)

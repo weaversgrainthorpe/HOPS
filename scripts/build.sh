@@ -1,6 +1,8 @@
 #!/bin/bash
 set -e
 
+source "$(dirname "$0")/lib/node.sh" || exit 1
+
 echo "Building HOPS..."
 
 # Build frontend

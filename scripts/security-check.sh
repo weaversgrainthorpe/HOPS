@@ -9,6 +9,7 @@
 set -u
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT" || exit 2
+source "$ROOT/scripts/lib/node.sh" || exit 2
 export PATH="$PATH:$HOME/go/bin:$(go env GOPATH 2>/dev/null)/bin"
 QUICK=0; [ "${1:-}" = "--quick" ] && QUICK=1
 # Scan output goes to a fresh temp dir OUTSIDE the repo (override: SECURITY_CHECK_OUT=dir; wiped first).

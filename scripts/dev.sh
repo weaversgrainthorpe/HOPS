@@ -3,6 +3,7 @@
 # Start development servers
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HOPS_DIR="$(dirname "$SCRIPT_DIR")"
+source "$SCRIPT_DIR/lib/node.sh" || exit 1
 
 echo "Starting HOPS development servers..."
 echo "Directory: $HOPS_DIR"

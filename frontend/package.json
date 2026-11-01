@@ -41,5 +41,8 @@
 	},
 	"dependencies": {
 		"qrcode": "^1.5.4"
+	},
+	"engines": {
+		"node": ">=22.17"
 	}
 }
