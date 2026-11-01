@@ -134,6 +134,17 @@ test.describe('tab order page', () => {
     }
   });
 
+  test('announces a move to a screen reader', async ({ page, context }) => {
+    const d = await seed(page, context, 12);
+    await openTabOrder(page, d.name);
+    const live = page.locator('[aria-live="polite"][data-testid="tab-order-announce"]');
+    await page.getByRole('button', { name: 'Move Tab 2 down' }).click();
+    await expect(live).toHaveText('Tab 2 moved to position 3 of 12.');
+    const row3 = page.locator('[data-tab-row]', { has: page.getByRole('checkbox', { name: 'Tab 4', exact: true }) });
+    await row3.locator('.grip').dragTo(page.locator('[data-tab-row]', { has: page.getByRole('checkbox', { name: 'Tab 1', exact: true }) }));
+    await expect(live).toHaveText('Tab 4 moved to position 1 of 12.');
+  });
+
   test('the dashboard shows the new order', async ({ page, context }) => {
     const d = await seed(page, context, 6);
     await openTabOrder(page, d.name);

@@ -77,6 +77,13 @@ function isDirty(s: EditSession | null): boolean {
 export const dirty: Readable<boolean> = derived(state, isDirty);
 
 /**
+ * True while a page other than the editor holds unsaved changes (the Tab order page). It is
+ * part of the same leave decision as the edit session: one dialog, one answer, so the user is
+ * never asked twice. The page keeps this up to date; leaving anyway clears it.
+ */
+export const pageUnsaved = writable(false);
+
+/**
  * Set when a session save was refused because the dashboard changed somewhere
  * else (HTTP 409). The draft is untouched. ConflictBanner shows it with
  * "Reload (lose my draft)" and "Keep editing".
@@ -545,10 +552,12 @@ export function guardNavigation(
   go: (href: string) => Promise<void>,
   toDashboardId?: string | null
 ): boolean {
-  if (!get(dirty)) return false;
+  const page = get(pageUnsaved);
+  if (!get(dirty) && !page) return false;
   // A navigation the session survives needs no asking: to "Add to HOPS" (/add, which adds into
   // this draft) and back to this session's own dashboard (followRoute keeps the session there).
-  if (!nav.willUnload && nav.to && (isAddPage(nav.to.url) || (!!toDashboardId && toDashboardId === get(state)?.dashboardId))) {
+  // Never when a page also holds unsaved changes: those would be lost by any navigation.
+  if (!page && !nav.willUnload && nav.to && (isAddPage(nav.to.url) || (!!toDashboardId && toDashboardId === get(state)?.dashboardId))) {
     return false;
   }
   nav.cancel();
@@ -557,13 +566,14 @@ export function guardNavigation(
   const href = url.pathname + url.search + url.hash;
   void confirm({
     title: 'Leave without saving?',
-    message: 'You have unsaved changes to this dashboard. If you leave now, they will be discarded.',
+    message: 'You have unsaved changes. If you leave now, they will be lost.',
     confirmText: 'Leave',
     cancelText: 'Stay',
     confirmStyle: 'danger'
   }).then(async (leave) => {
     if (!leave) return;
     abandon();
+    pageUnsaved.set(false);
     try {
       // Back/forward: repeat the same history step rather than pushing a new
       // entry (goto would turn [A, B] + Back into [A, B, A]).
@@ -573,6 +583,8 @@ export function guardNavigation(
       }
       await go(href);
     } catch (e) {
+      // The page is still open with its changes: guard it again.
+      pageUnsaved.set(page);
       logError('Navigation', e);
       toast.error('Could not open that page.');
     }
@@ -586,7 +598,7 @@ export function guardNavigation(
  * lose either, since drafts live only in memory.
  */
 export function guardUnload(e: BeforeUnloadEvent): void {
-  if (!get(dirty) && !get(parkedState)) return;
+  if (!get(dirty) && !get(parkedState) && !get(pageUnsaved)) return;
   e.preventDefault();
   e.returnValue = '';
 }
@@ -621,4 +633,5 @@ export function resetEditSessionForTests(): void {
   externalSave = null;
   close();
   parkedState.set(null);
+  pageUnsaved.set(false);
 }

@@ -48,6 +48,15 @@ describe('tabRail', () => {
       expect(revealScrollLeft({ left: 100, width: 100 }, { scrollLeft: 800, clientWidth: 500, scrollWidth: 3000 })).toBe(76);
     });
 
+    it('a tab wider than the view aligns its left edge (minus the margin) and counts as visible once it is', () => {
+      const m = { scrollLeft: 0, clientWidth: 300, scrollWidth: 3000 };
+      expect(revealScrollLeft({ left: 1000, width: 500 }, m)).toBe(976); // scrolled so its start shows
+      expect(revealScrollLeft({ left: 1000, width: 500 }, { ...m, scrollLeft: 976 })).toBeNull();
+      expect(revealScrollLeft({ left: 1000, width: 500 }, { ...m, scrollLeft: 1100 })).toBe(976); // its start is off the left
+      expect(revealScrollLeft({ left: 1000, width: 500 }, { ...m, scrollLeft: 1200 })).toBe(976);
+      expect(revealScrollLeft({ left: 2900, width: 500 }, m)).toBe(2700); // clamped to the maximum scroll
+    });
+
     it('never goes below 0 or above the maximum scroll', () => {
       expect(revealScrollLeft({ left: 0, width: 10 }, { scrollLeft: 300, clientWidth: 500, scrollWidth: 3000 })).toBe(0);
       expect(revealScrollLeft({ left: 2990, width: 10 }, { scrollLeft: 0, clientWidth: 500, scrollWidth: 3000 })).toBe(2500);

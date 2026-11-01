@@ -4,18 +4,15 @@
   // revision-checked save of that dashboard with only the tab order changed (the same operation the
   // editor uses). It is refused visibly while that dashboard is being edited, and when the
   // dashboard changed elsewhere the user's arrangement is kept and re-applied to the latest version.
-  import { tick } from 'svelte';
+  import { tick, onDestroy } from 'svelte';
   import { get } from 'svelte/store';
   import Icon from '@iconify/svelte';
-  import { beforeNavigate, goto } from '$app/navigation';
-  import { config, configError, applySavedLayout, showSaveWarning, loadConfig, findLayoutDashboard } from '$lib/stores/config';
-  import { session, parkedDraft } from '$lib/stores/editSession';
-  import { saveDashboardV3, ConflictError } from '$lib/utils/api';
+  import { config, configError, layoutFormProblem, noteMigrationFailure, applySavedLayout, showSaveWarning, loadConfig, findLayoutDashboard } from '$lib/stores/config';
+  import { session, parkedDraft, pageUnsaved } from '$lib/stores/editSession';
+  import { saveDashboardV3, ConflictError, MigrationFailedError } from '$lib/utils/api';
   import { reorderTabs } from '$lib/editor/treeOps';
   import { moveBlock, sortByName, mergeAfterConflict } from '$lib/editor/tabOrder';
   import { toast } from '$lib/stores/toast';
-  import { confirm } from '$lib/stores/confirmModal';
-  import { logError } from '$lib/utils/errors';
 
   let { dashboardId }: { dashboardId: string } = $props();
 
@@ -61,6 +58,7 @@
   }
   function moveIds(ids: Set<string>, to: number) {
     commit(moveBlock(order, ids, to));
+    announce(ids);
   }
   /** Moves one row by a button, then puts keyboard focus back on the same control. */
   async function moveRow(id: string, to: number, control: string) {
@@ -99,42 +97,21 @@
     problem = '';
   }
 
-  // An unsaved arrangement: ask before leaving the page (leaving anyway discards it), as the editor
-  // does for an edit session. A page unload is cancelled, which makes the browser ask instead.
-  let leaving = false;
-  beforeNavigate((nav) => {
-    if (!dirty || leaving) return;
-    nav.cancel();
-    if (nav.willUnload || !nav.to) return;
-    const url = nav.to.url;
-    const href = url.pathname + url.search + url.hash;
-    void confirm({
-      title: 'Leave without saving?',
-      message: 'You have changed the tab order and not saved it. If you leave now, the new order will be discarded.',
-      confirmText: 'Leave',
-      cancelText: 'Stay',
-      confirmStyle: 'danger'
-    }).then(async (leave) => {
-      if (!leave) return;
-      leaving = true;
-      try {
-        // Back/forward: repeat the same history step rather than pushing a new entry.
-        if (nav.type === 'popstate' && typeof nav.delta === 'number' && nav.delta !== 0) {
-          window.history.go(nav.delta);
-          return;
-        }
-        await goto(href);
-      } catch (e) {
-        leaving = false;
-        logError('Navigation', e);
-        toast.error('Could not open that page.');
-      }
-    });
+  // An unsaved arrangement joins the editor's leave guard (the layout's beforeNavigate and
+  // beforeunload handlers), so a user with both this page and an edit session unsaved is asked once.
+  $effect(() => {
+    pageUnsaved.set(dirty);
   });
-  function guardUnload(e: BeforeUnloadEvent) {
-    if (!dirty || leaving) return;
-    e.preventDefault();
-    e.returnValue = '';
+  onDestroy(() => pageUnsaved.set(false));
+
+  /** What a screen reader hears after a move: where the tab(s) went. */
+  let announcement = $state('');
+  function announce(ids: Set<string>) {
+    const total = order.length;
+    const first = order.findIndex((x) => ids.has(x)) + 1;
+    announcement = ids.size === 1
+      ? `${nameOf.get([...ids][0]) ?? [...ids][0]} moved to position ${first} of ${total}.`
+      : `${ids.size} tabs moved to position ${first} of ${total}.`;
   }
 
   // Drag and drop. Dragging a ticked row moves every ticked row.
@@ -179,6 +156,12 @@
       problem = `Not saved: "${dash.name}" is being edited (an edit session or unsaved draft is open). Save or discard that first, then save the tab order.`;
       return;
     }
+    // Never write this layout form into a document of another version.
+    const formProblem = layoutFormProblem(get(config));
+    if (formProblem) {
+      problem = formProblem;
+      return;
+    }
     const d = dash;
     // The page was loaded from another revision than the one the store holds now: the dashboard
     // changed under the user's arrangement. Never send it with the newer revision (that would
@@ -201,7 +184,10 @@
       toast.success('Tab order saved');
     } catch (e) {
       if (e instanceof ConflictError) await afterConflict();
-      else problem = `Not saved: ${e instanceof Error ? e.message.trim().replace(/\.+$/, '') : 'the request failed'}. Your order is kept.`;
+      else if (e instanceof MigrationFailedError) {
+        noteMigrationFailure(e);
+        problem = 'Not saved: HOPS could not read its stored configuration. Your order is kept.';
+      } else problem = `Not saved: ${e instanceof Error ? e.message.trim().replace(/\.+$/, '') : 'the request failed'}. Your order is kept.`;
     } finally {
       busy = false;
     }
@@ -241,9 +227,8 @@
   }
 </script>
 
-<svelte:window onbeforeunload={guardUnload} />
-
 <section class="tab-order">
+  <div class="sr-only" aria-live="polite" data-testid="tab-order-announce">{announcement}</div>
   {#if !dash && $configError}
     <!-- Never "Loading…" forever: the configuration could not be read. -->
     <div class="error" role="alert">

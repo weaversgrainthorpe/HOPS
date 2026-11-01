@@ -22,6 +22,30 @@ describe('tabOrder', () => {
       expect(moveBlock(order, new Set(['c']), -5)).toEqual(['c', 'a', 'b', 'd', 'e']);
     });
 
+    it('moves the first to the very end and the last to the very start', () => {
+      expect(moveBlock(order, new Set(['a']), 99)).toEqual(['b', 'c', 'd', 'e', 'a']);
+      expect(moveBlock(order, new Set(['e']), 0)).toEqual(['e', 'a', 'b', 'c', 'd']);
+    });
+
+    it('leaves the first at the start and the last at the end when asked to go further that way', () => {
+      expect(moveBlock(order, new Set(['a']), -1)).toEqual(order);
+      expect(moveBlock(order, new Set(['e']), 99)).toEqual(order);
+    });
+
+    it('handles an empty list and a single tab', () => {
+      expect(moveBlock([], new Set(['a']), 3)).toEqual([]);
+      expect(moveBlock([], new Set(), 0)).toEqual([]);
+      expect(moveBlock(['a'], new Set(['a']), 5)).toEqual(['a']);
+    });
+
+    it('moving every tab keeps the order', () => {
+      expect(moveBlock(order, new Set(order), 2)).toEqual(order);
+    });
+
+    it('ignores ids that are not in the list', () => {
+      expect(moveBlock(order, new Set(['zz']), 2)).toEqual(order);
+    });
+
     it('returns the order unchanged for an empty set', () => {
       expect(moveBlock(order, new Set(), 2)).toEqual(order);
     });

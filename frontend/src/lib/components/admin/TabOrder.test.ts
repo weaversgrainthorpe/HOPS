@@ -5,15 +5,9 @@ vi.mock('$lib/utils/api', async () => ({
   ...(await vi.importActual<object>('$lib/utils/api')),
   saveDashboardV3: vi.fn()
 }));
-// The page's leave guard: keep the callback it registers so a test can play a navigation through it.
-const nav = vi.hoisted(() => ({ guard: null as null | ((n: unknown) => void), goto: vi.fn(async () => {}) }));
-vi.mock('$app/navigation', () => ({
-  goto: nav.goto,
-  beforeNavigate: (cb: (n: unknown) => void) => {
-    nav.guard = cb;
-  },
-  afterNavigate: () => {}
-}));
+// The leave guard lives in the layout (editSession's guardNavigation); tests play navigations through it.
+const nav = vi.hoisted(() => ({ goto: vi.fn(async (_h?: string) => {}) }));
+vi.mock('$app/navigation', () => ({ goto: nav.goto, beforeNavigate: () => {}, afterNavigate: () => {} }));
 vi.mock('$lib/stores/confirmModal', async () => ({
   ...(await vi.importActual<object>('$lib/stores/confirmModal')),
   confirm: vi.fn()
@@ -24,7 +18,9 @@ vi.mock('$lib/stores/config', async () => ({
 }));
 
 import * as api from '$lib/utils/api';
-import { loadConfig, config, configError } from '$lib/stores/config';
+import { get } from 'svelte/store';
+import { loadConfig, config, configError, OLD_LAYOUT_FORM, migrationFailure, migrationFailureKind } from '$lib/stores/config';
+import { guardNavigation, guardUnload, pageUnsaved, dirty, apply } from '$lib/stores/editSession';
 import { confirm } from '$lib/stores/confirmModal';
 import { toast } from '$lib/stores/toast';
 import { setLayout, resetEditor, startSession } from '$lib/components/editor/editorTestKit';
@@ -50,7 +46,6 @@ beforeEach(() => {
   load.mockReset();
   ask.mockReset();
   nav.goto.mockClear();
-  nav.guard = null;
   configError.set(null);
   setLayout([dash(SIX)]);
 });
@@ -333,14 +328,30 @@ describe('Tab order page', () => {
   describe('leaving with unsaved changes', () => {
     const navTo = (path: string, extra: object = {}) => {
       const cancel = vi.fn();
-      nav.guard!({ willUnload: false, to: { url: new URL(`http://hops.test${path}`) }, cancel, type: 'link', ...extra });
+      guardNavigation({ willUnload: false, to: { url: new URL(`http://hops.test${path}`) }, cancel, type: 'link', ...extra }, async (h) => { await nav.goto(h as never); });
       return cancel;
+    };
+    const dirtyEdit = () => {
+      startSession('d1');
+      apply('rename', (d) => ({ ...d, name: 'Renamed' }));
     };
 
     it('lets a navigation go with nothing unsaved', () => {
       render(TabOrder, { dashboardId: 'd1' });
       expect(navTo('/settings').mock.calls.length).toBe(0);
       expect(ask).not.toHaveBeenCalled();
+    });
+
+    it('an unsaved order is flagged to the shared leave guard, and cleared when it is saved or the page closes', async () => {
+      const { unmount } = render(TabOrder, { dashboardId: 'd1' });
+      expect(get(pageUnsaved)).toBe(false);
+      await fireEvent.click(btn('Move t1 down'));
+      await waitFor(() => expect(get(pageUnsaved)).toBe(true));
+      await fireEvent.click(btn('Discard changes'));
+      await waitFor(() => expect(get(pageUnsaved)).toBe(false));
+      await fireEvent.click(btn('Move t1 down'));
+      unmount();
+      expect(get(pageUnsaved)).toBe(false);
     });
 
     it('asks first; Stay keeps the page and the order', async () => {
@@ -350,9 +361,11 @@ describe('Tab order page', () => {
       expect(navTo('/settings').mock.calls.length).toBe(1);
       await waitFor(() => expect(ask).toHaveBeenCalledTimes(1));
       expect(ask.mock.calls[0][0].title).toBe('Leave without saving?');
+      expect(ask.mock.calls[0][0].message).toContain('unsaved changes');
       await Promise.resolve();
       expect(nav.goto).not.toHaveBeenCalled();
       expect(rows()[0]).toBe('t2');
+      expect(get(pageUnsaved)).toBe(true);
     });
 
     it('Leave goes on to where the user was going, without asking again', async () => {
@@ -364,16 +377,96 @@ describe('Tab order page', () => {
       expect(navTo('/settings').mock.calls.length).toBe(0);
     });
 
+    it('with this page AND an edit session unsaved, one dialog asks once; Stay keeps both', async () => {
+      ask.mockResolvedValue(false);
+      render(TabOrder, { dashboardId: 'd1' });
+      await fireEvent.click(btn('Move t1 down'));
+      dirtyEdit();
+      expect(get(dirty)).toBe(true);
+      navTo('/settings');
+      await waitFor(() => expect(ask).toHaveBeenCalledTimes(1));
+      await Promise.resolve();
+      expect(ask).toHaveBeenCalledTimes(1);
+      expect(get(dirty)).toBe(true);
+      expect(get(pageUnsaved)).toBe(true);
+      expect(rows()[0]).toBe('t2');
+    });
+
+    it('with both unsaved, Leave discards both and goes on', async () => {
+      ask.mockResolvedValue(true);
+      render(TabOrder, { dashboardId: 'd1' });
+      await fireEvent.click(btn('Move t1 down'));
+      dirtyEdit();
+      navTo('/settings');
+      await waitFor(() => expect(nav.goto).toHaveBeenCalledWith('/settings'));
+      expect(ask).toHaveBeenCalledTimes(1);
+      expect(get(dirty)).toBe(false);
+      expect(get(pageUnsaved)).toBe(false);
+    });
+
+    it("going back to the edit session's own dashboard still asks while the order is unsaved", async () => {
+      ask.mockResolvedValue(false);
+      render(TabOrder, { dashboardId: 'd1' });
+      await fireEvent.click(btn('Move t1 down'));
+      dirtyEdit();
+      const cancel = vi.fn();
+      guardNavigation({ willUnload: false, to: { url: new URL('http://hops.test/home') }, cancel }, async (h) => { await nav.goto(h as never); }, 'd1');
+      expect(cancel).toHaveBeenCalled();
+      await waitFor(() => expect(ask).toHaveBeenCalledTimes(1));
+    });
+
     it('a page unload is held back while the order is unsaved', async () => {
       render(TabOrder, { dashboardId: 'd1' });
-      const unload = () => {
-        const e = new Event('beforeunload', { cancelable: true });
-        window.dispatchEvent(e);
-        return e.defaultPrevented;
-      };
-      expect(unload()).toBe(false);
+      const e = new Event('beforeunload', { cancelable: true });
+      guardUnload(e as BeforeUnloadEvent);
+      expect(e.defaultPrevented).toBe(false);
       await fireEvent.click(btn('Move t1 down'));
-      expect(unload()).toBe(true);
+      const e2 = new Event('beforeunload', { cancelable: true });
+      guardUnload(e2 as BeforeUnloadEvent);
+      expect(e2.defaultPrevented).toBe(true);
+    });
+  });
+
+  describe('announcing a move', () => {
+    const said = () => document.querySelector('[aria-live="polite"][data-testid="tab-order-announce"]')!.textContent;
+
+    it('says where a tab went after a button move, a drop and a ticked block', async () => {
+      render(TabOrder, { dashboardId: 'd1' });
+      expect(said()).toBe('');
+      await fireEvent.click(btn('Move t2 down'));
+      expect(said()).toBe('t2 moved to position 3 of 6.');
+      const row = (id: string) => document.querySelector(`[data-tab-row="${id}"]`)!;
+      await fireEvent.dragStart(row('t6'));
+      await fireEvent.dragOver(row('t1'));
+      await fireEvent.drop(row('t1'));
+      expect(said()).toBe('t6 moved to position 1 of 6.');
+      await tickRow('t3');
+      await tickRow('t4');
+      await fireEvent.click(btn('Move ticked to bottom'));
+      expect(said()).toBe('2 tabs moved to position 5 of 6.');
+    });
+  });
+
+  describe('saving checks', () => {
+    it('an old layout form is shown and nothing is sent', async () => {
+      render(TabOrder, { dashboardId: 'd1' });
+      await fireEvent.click(btn('Move t1 down'));
+      config.update((c) => ({ ...c!, layoutVersion: 1 }));
+      await fireEvent.click(btn('Save order'));
+      expect(screen.getByRole('alert').textContent).toBe(OLD_LAYOUT_FORM);
+      expect(save).not.toHaveBeenCalled();
+      expect(rows()[0]).toBe('t2');
+    });
+
+    it('a failed migration shows the migration-failed page state and keeps the order', async () => {
+      save.mockRejectedValue(new api.MigrationFailedError('bad config', 'corrupt'));
+      render(TabOrder, { dashboardId: 'd1' });
+      await fireEvent.click(btn('Move t1 down'));
+      await fireEvent.click(btn('Save order'));
+      await waitFor(() => expect(get(migrationFailure)).toBe('bad config'));
+      expect(get(migrationFailureKind)).toBe('corrupt');
+      expect(screen.getByRole('alert').textContent).toContain('Your order is kept');
+      expect(rows()[0]).toBe('t2');
     });
   });
 });
