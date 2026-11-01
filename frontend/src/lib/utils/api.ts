@@ -6,6 +6,7 @@ import { checkUploadSize, uploadErrorMessage, sendUpload } from './uploadLimits'
 import { parseLogsResponse, type LogsResponse, type LogLevel, type LineLimit } from '$lib/logs/logView';
 import { parseUsageResponse, type IconUsage, type IconUse } from '$lib/icons/iconManage';
 import { parsePackagedResponse, type PackagedInfo } from '$lib/icons/packagedIcons';
+import { KEPT_HEADER, isKept, noteKept } from './swCache';
 import { missingAssetsFromHeader, MISSING_ASSETS_HEADER, importWarningFromHeader, IMPORT_WARNING_HEADER, type MissingAsset } from './exportResult';
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api';
@@ -190,7 +191,8 @@ async function fetchAPI(endpoint: string, options: RequestInit = {}) {
   const text = await response.text();
   if (!text) return null;
   try {
-    return JSON.parse(text);
+    const answer = JSON.parse(text);
+    return response.headers?.get(KEPT_HEADER) ? noteKept(answer) : answer;
   } catch {
     return null;
   }
@@ -264,7 +266,7 @@ export async function getConfig(opts: { timeoutMs?: number } = {}): Promise<Conf
   if (out.dashboards.some((d) => d?.partial === true)) {
     throw new Error('The server sent an incomplete configuration (a dashboard without its content). Reload the page; if it persists, check the server.');
   }
-  return out;
+  return isKept(resp) ? noteKept(out) : out;
 }
 
 /** GET /api/config?dashboard=…: the index of every dashboard plus the requested one in full. */
@@ -294,6 +296,7 @@ export async function getConfigFor(dashboard: string): Promise<IndexPlusOne> {
   if (bad || (!revision && config.dashboards.some((d) => d.partial === true))) {
     throw new Error('The server sent a dashboard list this version of HOPS cannot read. Reload the page; if it persists, check the server.');
   }
+  if (isKept(resp)) noteKept(config);
   return {
     config,
     configRevision: revision,
@@ -313,7 +316,8 @@ export async function getDashboard(id: string): Promise<{ dashboard: LayoutDashb
       typeof resp.revision !== 'number' || typeof resp.configRevision !== 'string' || !resp.configRevision) {
     throw new Error('The server sent a dashboard this version of HOPS cannot read. Reload the page; if it persists, check the server.');
   }
-  return { dashboard: d as LayoutDashboard, revision: resp.revision, configRevision: resp.configRevision };
+  const answer = { dashboard: d as LayoutDashboard, revision: resp.revision, configRevision: resp.configRevision };
+  return isKept(resp) ? noteKept(answer) : answer;
 }
 
 /** The schema-3 document both config reads share (dashboards, layout version, notices). */
@@ -366,6 +370,8 @@ export async function getStatus(entryId: string) {
 export interface AuthStatus {
   authenticated: boolean;
   mustChangePassword: boolean;
+  /** No answer about the session (can't reach the server, or it failed): not the same as signed out. */
+  unknown?: boolean;
 }
 
 export async function checkAuth(): Promise<AuthStatus> {
@@ -375,8 +381,10 @@ export async function checkAuth(): Promise<AuthStatus> {
       authenticated: resp.authenticated === true,
       mustChangePassword: resp.mustChangePassword === true,
     };
-  } catch {
-    return { authenticated: false, mustChangePassword: false };
+  } catch (e) {
+    // A 401 is the server's answer: signed out. Anything else says nothing about the session.
+    const signedOut = e instanceof Error && e.message === 'SESSION_EXPIRED';
+    return { authenticated: false, mustChangePassword: false, ...(signedOut ? {} : { unknown: true }) };
   }
 }
 

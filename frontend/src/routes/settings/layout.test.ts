@@ -33,7 +33,7 @@ import * as api from '$lib/utils/api';
 import { goto } from '$app/navigation';
 import { page } from '$app/stores';
 import { toast } from '$lib/stores/toast';
-import { isAuthenticated, authChecked, mustChangePassword, clearMustChangePassword } from '$lib/stores/auth';
+import { isAuthenticated, authChecked, authUnknown, mustChangePassword, clearMustChangePassword } from '$lib/stores/auth';
 import { config, migrationFailure, otherDashboards, resetPartialLoadingForTests } from '$lib/stores/config';
 import { confirmModalState, closeConfirmModal } from '$lib/stores/confirmModal';
 import { begin, apply, resetEditSessionForTests, dirty } from '$lib/stores/editSession';
@@ -90,6 +90,48 @@ beforeEach(() => {
 	authChecked.set(true);
 	isAuthenticated.set(true);
 	resetGlobalNavForTests();
+});
+
+describe("settings shell, can't reach the server", () => {
+	beforeEach(() => {
+		isAuthenticated.set(false);
+		authUnknown.set(true);
+	});
+	afterEach(() => authUnknown.set(false));
+
+	it('says so, and asks nobody to sign in', async () => {
+		renderShell();
+		const alert = await screen.findByRole('alert');
+		expect(alert.textContent).toContain("Can't reach the server");
+		expect(screen.queryByRole('dialog', { name: 'Sign in' })).toBeNull();
+		expect(childShown()).toBe(false);
+	});
+
+	it('an answer ends it: a session shows Settings, none shows the sign-in', async () => {
+		renderShell();
+		await screen.findByRole('alert');
+		authUnknown.set(false);
+		await screen.findByRole('dialog', { name: 'Sign in' });
+
+		authUnknown.set(true);
+		await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Sign in' })).toBeNull());
+		isAuthenticated.set(true);
+		authUnknown.set(false);
+		await waitFor(() => expect(childShown()).toBe(true));
+	});
+
+	it('Retry checks again', async () => {
+		const fetchMock = vi.fn(async (_url: string) => new Response(JSON.stringify({ authenticated: true }), { status: 200 }));
+		vi.stubGlobal('fetch', fetchMock);
+		try {
+			renderShell();
+			await fireEvent.click(await screen.findByRole('button', { name: 'Retry' }));
+			await waitFor(() => expect(childShown()).toBe(true));
+			expect(fetchMock.mock.calls.some(([u]) => String(u).endsWith('/auth/check'))).toBe(true);
+		} finally {
+			vi.unstubAllGlobals();
+		}
+	});
 });
 
 describe('settings shell, logged out', () => {

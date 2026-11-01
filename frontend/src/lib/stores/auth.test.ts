@@ -25,6 +25,8 @@ vi.mock('$lib/utils/api', () => ({
 
 import {
 	isAuthenticated,
+	authChecked,
+	authUnknown,
 	isLoggingIn,
 	mustChangePassword,
 	initAuth,
@@ -53,6 +55,35 @@ describe('auth store', () => {
 	});
 
 	describe('initAuth', () => {
+		const noAnswer = { authenticated: false, mustChangePassword: false, unknown: true };
+
+		it('no answer: unknown, the check is done, and nobody is called signed out', async () => {
+			authUnknown.set(false);
+			isAuthenticated.set(true);
+			mockApi.checkAuth.mockResolvedValue(noAnswer);
+			await initAuth();
+			expect(get(authUnknown)).toBe(true);
+			expect(get(authChecked)).toBe(true);
+			expect(get(isAuthenticated)).toBe(true);
+		});
+
+		it('a real answer after no answer ends the unknown state, either way', async () => {
+			for (const authenticated of [true, false]) {
+				authUnknown.set(true);
+				mockApi.checkAuth.mockResolvedValue({ authenticated, mustChangePassword: false });
+				await initAuth();
+				expect(get(authUnknown)).toBe(false);
+				expect(get(isAuthenticated)).toBe(authenticated);
+			}
+		});
+
+		it('signing in ends the unknown state', async () => {
+			authUnknown.set(true);
+			mockApi.login.mockResolvedValue({ mustChangePassword: false });
+			await login('admin', 'pw');
+			expect(get(authUnknown)).toBe(false);
+		});
+
 		it('sets isAuthenticated from checkAuth result', async () => {
 			mockApi.checkAuth.mockResolvedValue({
 				authenticated: true,

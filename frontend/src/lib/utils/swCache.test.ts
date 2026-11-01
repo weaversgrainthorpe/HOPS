@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { swMayCache, isCacheableApiPath, offlineFallbackFor, precacheList, SHELL_PATH } from './swCache';
+import { swMayCache, isCacheableApiPath, offlineFallbackFor, precacheList, SHELL_PATH, KEPT_HEADER, markKept, noteKept, isKept } from './swCache';
 
 const res = (ok: boolean, cc?: string) => ({ ok, headers: new Headers(cc ? { 'Cache-Control': cc } : {}) });
 
@@ -45,5 +45,23 @@ describe('precacheList', () => {
   it('takes the page from the server, never an old copy in the browser cache', () => {
     // An old page names old chunks, which this version does not keep.
     expect(shell[0].cache).toBe('reload');
+  });
+});
+
+describe('kept answers', () => {
+  it('a marked answer keeps its body, status and headers', async () => {
+    const res = markKept(new Response('{"a":1}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    expect(res.headers.get(KEPT_HEADER)).toBe('1');
+    expect(res.headers.get('Content-Type')).toBe('application/json');
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ a: 1 });
+  });
+  it('the note sits beside the answer, never in it', () => {
+    const answer = noteKept({ dashboards: [] });
+    expect(isKept(answer)).toBe(true);
+    expect(JSON.stringify(answer)).toBe('{"dashboards":[]}');
+    expect(isKept({ dashboards: [] })).toBe(false);
+    expect(isKept(null)).toBe(false);
+    expect(noteKept(null)).toBeNull();
   });
 });

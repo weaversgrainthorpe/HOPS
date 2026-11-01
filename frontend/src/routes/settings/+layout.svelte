@@ -4,7 +4,7 @@
   import { page } from '$app/stores';
   import Icon from '@iconify/svelte';
   import { toast } from '$lib/stores/toast';
-  import { isAuthenticated, authChecked, mustChangePassword, logout, isAdminOnlyPath } from '$lib/stores/auth';
+  import { isAuthenticated, authChecked, authUnknown, mustChangePassword, logout, isAdminOnlyPath, initAuth } from '$lib/stores/auth';
   import { isBackendOffline, backendStatus } from '$lib/stores/backendStatus';
   import { config, migrationFailure, refreshServerNotices, hasPartialDashboards, ensureFullConfig } from '$lib/stores/config';
   import OtherDashboardsStatus from '$lib/components/OtherDashboardsStatus.svelte';
@@ -82,8 +82,11 @@
   // Set while Log out runs: the page is being left, so neither the admin content nor a sign-in
   // dialog shows meanwhile.
   let leaving = $state(false);
-  // Logged out (once the first auth check has answered — never on a guess): sign in here.
-  let needsLogin = $derived($authChecked && !$isAuthenticated);
+  // Logged out (once the first auth check has answered — never on a guess, and "can't reach the
+  // server" is no answer): sign in here.
+  let needsLogin = $derived($authChecked && !$isAuthenticated && !$authUnknown);
+  // No answer about the session: neither a sign-in nor the admin pages, until there is one.
+  let sessionUnknown = $derived($authChecked && !$isAuthenticated && $authUnknown);
   // The admin content needs a session and no pending forced password change (its dialog can't
   // be dismissed, and the server refuses the rest until it is done).
   let ready = $derived($authChecked && $isAuthenticated && !$mustChangePassword);
@@ -241,6 +244,18 @@
         <p class="muted" role="status">Signing out…</p>
       {:else if !$authChecked}
         <p class="muted" role="status">Checking sign-in…</p>
+      {:else if sessionUnknown}
+        <div class="offline-banner" role="alert">
+          <Icon icon="mdi:cloud-off-outline" width="24" />
+          <div class="offline-content">
+            <strong>Can't reach the server</strong>
+            <span>Settings will open once HOPS can reach it. You don't need to sign in again.</span>
+          </div>
+          <button class="retry-btn" onclick={() => initAuth()}>
+            <Icon icon="mdi:refresh" width="18" />
+            Retry
+          </button>
+        </div>
       {:else if needsLogin}
         <p class="muted">Sign in to manage HOPS.</p>
       {:else if $mustChangePassword}

@@ -46,3 +46,27 @@ export const SHELL_PATH = '/';
 export function precacheList(build: string[], files: string[], origin: string): (string | Request)[] {
   return [...build, ...files, new Request(new URL(SHELL_PATH, origin), { cache: 'reload' })];
 }
+
+/** Set by the service worker on an answer it gave from a kept copy, not from the server. */
+export const KEPT_HEADER = 'X-HOPS-Kept-Copy';
+
+/** A kept answer, marked so the app knows it isn't the server's. */
+export function markKept(res: Response): Response {
+  const headers = new Headers(res.headers);
+  headers.set(KEPT_HEADER, '1');
+  return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
+}
+
+// The answers that came from a kept copy. Beside the data, not in it: a config can be saved back
+// or exported, and the mark must never go with it.
+const keptAnswers = new WeakSet<object>();
+
+/** Note `answer` as read from a kept copy. Returns it. */
+export function noteKept<T>(answer: T): T {
+  if (typeof answer === 'object' && answer !== null) keptAnswers.add(answer);
+  return answer;
+}
+
+export function isKept(answer: unknown): boolean {
+  return typeof answer === 'object' && answer !== null && keptAnswers.has(answer);
+}

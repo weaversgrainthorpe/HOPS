@@ -28,10 +28,13 @@ vi.mock('$lib/utils/api', async () => {
 });
 
 import * as api from '$lib/utils/api';
+import { noteKept } from '$lib/utils/swCache';
 import {
   config,
   configError,
   layoutStale,
+  showingKept,
+  applySavedLayout,
   loadConfig,
   otherDashboards,
   retryOtherDashboards,
@@ -479,5 +482,69 @@ describe('ensureFullConfig', () => {
     vi.mocked(api.getConfig).mockRejectedValueOnce(new Error('offline'));
     await expect(ensureFullConfig()).rejects.toThrow('offline');
     expect(get(configError)).toBe('offline');
+  });
+});
+
+describe('showing a kept copy', () => {
+  const getConfig = vi.mocked(api.getConfig);
+  const getConfigFor = vi.mocked(api.getConfigFor);
+  const getDashboard = vi.mocked(api.getDashboard);
+
+  beforeEach(() => {
+    resetPartialLoadingForTests();
+    getConfig.mockReset();
+    getConfigFor.mockReset();
+    getDashboard.mockReset();
+    config.set(null);
+    showingKept.set(false);
+  });
+
+  const keptWhole = () => noteKept(doc(full('a', 1)));
+
+  it('a kept answer is held as kept, even with the probe still saying online', async () => {
+    getConfigFor.mockResolvedValue({ config: keptWhole(), configRevision: '' });
+    await loadConfig({ dashboard: 'a' });
+    expect(get(showingKept)).toBe(true);
+  });
+
+  it('a kept whole config in the background turns it on over a fresh index', async () => {
+    getConfigFor.mockResolvedValue(idx('r1', full('a', 1), index('b', 1)));
+    getConfig.mockResolvedValue(noteKept(doc(full('a', 1), full('b', 1))));
+    await loadConfig({ dashboard: 'a' });
+    await flush();
+    expect(get(showingKept)).toBe(true);
+  });
+
+  it('a kept dashboard joining a fresh index turns it on', async () => {
+    getConfigFor.mockResolvedValue(idx('r1', full('a', 1), index('b', 1)));
+    getConfig.mockImplementation(() => new Promise(() => {}));
+    await loadConfig({ dashboard: 'a' });
+    expect(get(showingKept)).toBe(false);
+    getDashboard.mockResolvedValue(noteKept({ dashboard: full('b', 1), revision: 1, configRevision: 'r1' }));
+    await fetchDashboard('b');
+    expect(get(showingKept)).toBe(true);
+  });
+
+  it('stays on through a failed read, and only a read from the server ends it', async () => {
+    getConfig.mockResolvedValue(keptWhole());
+    await loadConfig();
+    getConfig.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    await loadConfig({ background: true });
+    expect(get(showingKept)).toBe(true);
+    expect(get(configError)).toBeTruthy();
+    getConfig.mockResolvedValue(keptWhole());
+    await loadConfig({ background: true });
+    expect(get(showingKept)).toBe(true);
+    getConfig.mockResolvedValue(doc(full('a', 2)));
+    await loadConfig({ background: true });
+    expect(get(showingKept)).toBe(false);
+    expect(get(config)?.dashboards[0].revision).toBe(2);
+  });
+
+  it("a write's answer is the server's document: it ends it", async () => {
+    getConfig.mockResolvedValue(keptWhole());
+    await loadConfig();
+    applySavedLayout({ layout: { dashboards: [full('a', 2)] } } as never);
+    expect(get(showingKept)).toBe(false);
   });
 });

@@ -2,11 +2,16 @@ import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('$lib/utils/api', () => ({
   getBackendVersion: vi.fn(async () => ({ version: '3.0.0' })),
-  getAbout: vi.fn(async () => ({ dataDir: '/var/lib/hops' }))
+  getAbout: vi.fn(async () => ({ dataDir: '/var/lib/hops' })),
+  HttpStatusError: class HttpStatusError extends Error {
+    constructor(message: string, public readonly status: number) {
+      super(message);
+    }
+  }
 }));
 import { render, screen, within } from '@testing-library/svelte';
 import AboutModal from './AboutModal.svelte';
-import { getAbout } from '$lib/utils/api';
+import { getAbout, getBackendVersion, HttpStatusError } from '$lib/utils/api';
 
 const ABOUT_FEATURES = [
   'Multiple dashboards',
@@ -54,5 +59,23 @@ describe('AboutModal data folder', () => {
     vi.mocked(getAbout).mockRejectedValueOnce(new Error('SESSION_EXPIRED'));
     render(AboutModal, { onClose: () => {} });
     expect(await screen.findByText(/Not known: SESSION_EXPIRED/)).toBeTruthy();
+  });
+});
+
+describe('AboutModal backend version', () => {
+  it("says it can't reach the server, not a bare Error", async () => {
+    vi.mocked(getBackendVersion).mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    render(AboutModal, { onClose: () => {} });
+    expect(await screen.findByText("Can't reach the server")).toBeTruthy();
+  });
+  it('a proxy with the backend down is the same', async () => {
+    vi.mocked(getBackendVersion).mockRejectedValueOnce(new HttpStatusError('down', 502));
+    render(AboutModal, { onClose: () => {} });
+    expect(await screen.findByText("Can't reach the server")).toBeTruthy();
+  });
+  it('a server that answers with an error stays an error', async () => {
+    vi.mocked(getBackendVersion).mockRejectedValueOnce(new HttpStatusError('broken', 500));
+    render(AboutModal, { onClose: () => {} });
+    expect(await screen.findByText('Error')).toBeTruthy();
   });
 });

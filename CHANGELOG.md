@@ -39,11 +39,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   result when you save.
 
 ### Fixed
-- **Opening HOPS while the server is down now shows the app.** Before, a page
+- **Opening HOPS when it can't be reached now shows the app.** Before, a page
   that wasn't already in the browser's cache was a bare white "Offline". Now
-  it shows your dashboards as last seen, with the offline banner. The banner
-  also comes up now when the server is down but your own network is fine:
-  before, HOPS could show old data with no warning.
+  it shows your dashboards as last seen, with a banner saying so. When HOPS is
+  back the page updates by itself, unless you are editing. The banner also
+  comes up when HOPS can't be reached but your own network is fine: before,
+  old data could show with no warning. Settings no longer asks you to sign in
+  because the server can't be reached.
 - **A folder opened inside another folder lost its icon.** It now shows its
   icon in its title bar, and the icon fits the bar.
 - **A white line along the tab bar in the light theme** is gone.

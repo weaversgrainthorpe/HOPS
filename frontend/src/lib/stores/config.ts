@@ -1,3 +1,4 @@
+import { isKept } from '$lib/utils/swCache';
 import { writable, derived, get, type Readable } from 'svelte/store';
 import type { Config, DashboardSettings } from '$lib/types';
 import type { LayoutDoc, LayoutDashboard } from '$lib/types/layout';
@@ -105,6 +106,10 @@ export function animatedFolderBackgroundsFor(dashboardId: string): Readable<bool
 // flight or failed. The renderer shows a refreshing state instead of the old
 // tree; loadConfig clears it once a fresh config has landed.
 export const layoutStale = writable(false);
+
+// True while the held document came from the service worker's kept copy, of any age, not from the
+// server. Stays on until a read from the server lands; the page says so meanwhile (OfflineBanner).
+export const showingKept = writable(false);
 
 // Loading state
 export const configLoading = writable(true);
@@ -328,8 +333,19 @@ async function runLoad(seq: number, light: boolean, opts: { background?: boolean
   }
 }
 
+/**
+ * Read again what this page needs, keeping what it shows until the answer lands: a viewer page its
+ * dashboard (plus the rest in the background), any other page the whole config.
+ */
+export function reloadForPage(): Promise<void> {
+  const id = (get(page) as { route?: { id?: string | null } } | undefined)?.route?.id;
+  const viewer = id === '/' || id === '/[dashboard]';
+  return loadConfig(viewer ? { background: true, dashboard: viewerKey() } : { background: true });
+}
+
 function adoptLoaded(data: Config): void {
   config.set(withoutDismissed(data));
+  showingKept.set(isKept(data));
   noticesStale.set(null);
   layoutStale.set(false);
   migrationFailure.set(null);
@@ -462,6 +478,7 @@ export async function fetchDashboard(id: string): Promise<void> {
     }
     settle();
     config.set({ ...held, dashboards: held.dashboards.map((d) => (d.id === id ? answer.dashboard : d)) });
+    if (isKept(answer)) showingKept.set(true);
   } catch (error) {
     if (seq !== loadSeq) return;
     logError('Dashboard load', error);
@@ -490,6 +507,7 @@ export function applySavedLayout(fresh: FreshLayout | undefined): void {
       ...(serverNotices ? { notices: serverNotices } : {}),
       ...(held?.noticesUnreadable ? { noticesUnreadable: held.noticesUnreadable } : {})
     });
+    showingKept.set(false); // the write's own answer: the server's document
     // Server notices are computed per GET from the document, so any write can
     // change them (a listed dashboard switched on or deleted, or a new one): read them again.
     void refreshNotices();
@@ -536,6 +554,7 @@ async function refreshNotices(): Promise<void> {
   try {
     const fresh = await getConfig();
     if (mine !== refreshSeq) return; // superseded: a newer read owns the result
+    if (isKept(fresh)) showingKept.set(true);
     const freshDisplay = new Map((fresh.dashboards ?? []).map((d) => [d.id, d.display] as const));
     config.update((c) => {
       if (!c) return c;

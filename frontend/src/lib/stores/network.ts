@@ -39,6 +39,7 @@ export const uiVersionMismatch = derived(serverVersion, ($v) =>
 );
 
 let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+let onReachable: (() => void) | null = null;
 
 async function probeServer(): Promise<boolean> {
   try {
@@ -79,14 +80,23 @@ async function heartbeat() {
     return;
   }
   const reachable = await probeServer();
-  if (reachable) setOnline();
-  else setOffline();
+  if (reachable) {
+    setOnline();
+    onReachable?.();
+  } else {
+    setOffline();
+  }
 }
 
-/** Start the heartbeat + wire up the browser online/offline events. Call once. */
-export function initNetworkWatcher() {
+/**
+ * Start the heartbeat + wire up the browser online/offline events. Call once. `reachable` runs after
+ * every probe the server answered, not only on the way back from offline: a read can fail, and a
+ * kept copy be shown, with no outage the heartbeat saw.
+ */
+export function initNetworkWatcher(reachable?: () => void) {
   if (!browser) return;
   if (heartbeatTimer) return; // idempotent
+  onReachable = reachable ?? null;
 
   // Initial state from the browser
   if (!navigator.onLine) setOffline();

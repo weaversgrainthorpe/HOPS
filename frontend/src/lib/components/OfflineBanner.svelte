@@ -1,5 +1,6 @@
 <script lang="ts">
   import { isOffline, offlineSinceLabel } from '$lib/stores/network';
+  import { showingKept } from '$lib/stores/config';
   import Icon from '@iconify/svelte';
 </script>
 
@@ -13,6 +14,12 @@
       {/if}
       Tiles below show their last known status.
     </span>
+  </div>
+{:else if $showingKept}
+  <!-- The server answers (or hasn't failed a probe yet), but this page is still a saved copy. -->
+  <div class="offline-banner" role="status" aria-live="polite">
+    <Icon icon="mdi:cloud-off-outline" width="20" />
+    <span class="text">This is a saved copy, and may be out of date. HOPS will update it when it can.</span>
   </div>
 {/if}
 

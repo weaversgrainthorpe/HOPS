@@ -15,6 +15,7 @@
 	import { initAuth, mustChangePassword } from '$lib/stores/auth';
 	import { initEditModeIdleWatcher } from '$lib/stores/editModeIdleWatcher';
 	import { initNetworkWatcher } from '$lib/stores/network';
+	import { recoverFromOutage } from '$lib/stores/outageRecovery';
 	import Navbar from '$lib/components/Navbar.svelte';
 	import OfflineBanner from '$lib/components/OfflineBanner.svelte';
 	import VersionMismatchBanner from '$lib/components/VersionMismatchBanner.svelte';
@@ -79,7 +80,7 @@
 		if (here.route.id === '/') loadConfig({ dashboard: '' });
 		else if (here.route.id === '/[dashboard]') loadConfig({ dashboard: here.params.dashboard ?? '' });
 		else loadConfig();
-		initNetworkWatcher();
+		initNetworkWatcher(recoverFromOutage);
 		initEditModeIdleWatcher();
 		return stopPresence;
 	});

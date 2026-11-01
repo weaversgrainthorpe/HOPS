@@ -16,7 +16,7 @@
   import { page } from '$app/stores';
   import { goto, afterNavigate } from '$app/navigation';
   import LoginDialog from '$lib/components/LoginDialog.svelte';
-  import { isAuthenticated, authChecked, mustChangePassword } from '$lib/stores/auth';
+  import { isAuthenticated, authChecked, authUnknown, mustChangePassword } from '$lib/stores/auth';
   import {
     config, configError, configLoading, layoutStale, sortedDashboards, findLayoutDashboard, layoutDoc,
     applySavedLayout, loadConfig, layoutFormProblem, showSaveWarning, dashboardHref,
@@ -340,6 +340,8 @@
 
     {#if !$authChecked}
       <p class="muted" role="status">Checking sign-in…</p>
+    {:else if !$isAuthenticated && $authUnknown}
+      <p class="muted" role="alert">Can't reach the server. This page will carry on once HOPS can reach it.</p>
     {:else if !$isAuthenticated}
       <p class="muted">Sign in to add this page as a tile.</p>
     {:else if $mustChangePassword}
@@ -425,7 +427,7 @@
   </section>
 </main>
 
-{#if $authChecked && !$isAuthenticated}
+{#if $authChecked && !$isAuthenticated && !$authUnknown}
   <LoginDialog intro="Sign in to add this page to HOPS." onSuccess={() => {}} onCancel={leave} />
 {/if}
 

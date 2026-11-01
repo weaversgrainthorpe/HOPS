@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { isServerDown } from '$lib/stores/backendStatus';
   import Icon from '@iconify/svelte';
   import { onMount } from 'svelte';
   import { focusTrap } from '$lib/utils/focusTrap';
@@ -19,7 +20,7 @@
       const data = await getBackendVersion();
       backendVersion = data.version || 'Unknown (the server sent no version)';
     } catch (e) {
-      backendVersion = 'Error';
+      backendVersion = isServerDown(e) ? "Can't reach the server" : 'Error';
     }
   });
 

@@ -10,6 +10,15 @@ interface BackendState {
   lastCheck: Date | null;
 }
 
+/**
+ * Whether a failed probe means the server can't be reached: fetch rejects with a TypeError, or a
+ * proxy in front answers 502/503/504 (the backend behind it is down). Any other error means the
+ * backend answered, with an error (degraded). The two are shown differently.
+ */
+export function isServerDown(e: unknown): boolean {
+  return e instanceof TypeError || (e instanceof HttpStatusError && [502, 503, 504].includes(e.status));
+}
+
 const initialState: BackendState = {
   status: 'checking',
   version: null,
@@ -38,13 +47,9 @@ function createBackendStatusStore() {
         lastCheck: new Date()
       }));
     } catch (e) {
-      // Offline: fetch rejects with a TypeError (the server can't be reached at all), or a proxy in
-      // front answers 502/503/504 (the backend behind it is down). Any other error means the backend
-      // answered, with an error (degraded). The two are shown differently.
-      const down = e instanceof TypeError || (e instanceof HttpStatusError && [502, 503, 504].includes(e.status));
       update(state => ({
         ...state,
-        status: down ? 'offline' : 'error',
+        status: isServerDown(e) ? 'offline' : 'error',
         version: null,
         responseTime: null,
         lastCheck: new Date()

@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { getCSRFToken, withCSRFHeader } from './api';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { getCSRFToken, withCSRFHeader, checkAuth, getConfig, getConfigFor, getDashboard } from './api';
+import { KEPT_HEADER, isKept } from './swCache';
 
 describe('getCSRFToken', () => {
 	beforeEach(() => {
@@ -103,5 +104,53 @@ describe('withCSRFHeader', () => {
 		document.cookie = 'hops_csrf=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
 		const headers = withCSRFHeader({}, 'POST');
 		expect(headers['X-CSRF-Token']).toBeUndefined();
+	});
+});
+
+describe('checkAuth', () => {
+	afterEach(() => vi.unstubAllGlobals());
+	const answer = (status: number, body: unknown) =>
+		vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(body), { status })));
+
+	it("can't reach the server: unknown, not signed out", async () => {
+		vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('Failed to fetch'); }));
+		expect(await checkAuth()).toEqual({ authenticated: false, mustChangePassword: false, unknown: true });
+	});
+	it('a failed answer (a proxy with the backend down, say): unknown', async () => {
+		answer(502, {});
+		expect((await checkAuth()).unknown).toBe(true);
+	});
+	it('the server says signed out: signed out', async () => {
+		answer(200, { authenticated: false });
+		expect(await checkAuth()).toEqual({ authenticated: false, mustChangePassword: false });
+	});
+	it('a real 401: signed out', async () => {
+		answer(401, { error: 'unauthorized' });
+		expect(await checkAuth()).toEqual({ authenticated: false, mustChangePassword: false });
+	});
+	it('signed in', async () => {
+		answer(200, { authenticated: true, mustChangePassword: true });
+		expect(await checkAuth()).toEqual({ authenticated: true, mustChangePassword: true });
+	});
+});
+
+describe('kept answers from the service worker', () => {
+	afterEach(() => vi.unstubAllGlobals());
+	const serve = (body: unknown, kept: boolean) =>
+		vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(body), { status: 200, headers: kept ? { [KEPT_HEADER]: '1' } : {} })));
+	const dash = { id: 'a', name: 'A', tabs: [] };
+	const doc = { schemaVersion: 3, layoutVersion: 2, dashboards: [dash] };
+
+	it('every config read says so', async () => {
+		serve(doc, true);
+		expect(isKept(await getConfig())).toBe(true);
+		expect(isKept((await getConfigFor('a')).config)).toBe(true);
+		serve({ dashboard: dash, revision: 1, configRevision: 'r' }, true);
+		expect(isKept(await getDashboard('a'))).toBe(true);
+	});
+	it("the server's own answers are not kept", async () => {
+		serve(doc, false);
+		expect(isKept(await getConfig())).toBe(false);
+		expect(isKept((await getConfigFor('a')).config)).toBe(false);
 	});
 });

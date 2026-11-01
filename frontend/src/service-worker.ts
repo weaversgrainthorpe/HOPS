@@ -4,7 +4,7 @@
 /// <reference lib="webworker" />
 
 import { build, files, version } from '$service-worker';
-import { swMayCache, isCacheableApiPath, offlineFallbackFor, precacheList, SHELL_PATH } from '$lib/utils/swCache';
+import { swMayCache, isCacheableApiPath, offlineFallbackFor, precacheList, markKept, SHELL_PATH } from '$lib/utils/swCache';
 
 // HOPS PWA service worker.
 //
@@ -14,7 +14,8 @@ import { swMayCache, isCacheableApiPath, offlineFallbackFor, precacheList, SHELL
 //   - /api/config, its ?dashboard= form and /api/config/dashboard/… — the
 //     dashboard data. When offline, the last-seen dashboard layout still
 //     renders (an index-plus-one read with no copy falls back to the whole
-//     config's copy).
+//     config's copy). A kept answer is marked (KEPT_HEADER), so the app can
+//     say what it is showing and read again once the server answers.
 //   - The dashboard's tile icons — so tiles look right offline rather than
 //     going blank.
 //
@@ -104,10 +105,10 @@ sw.addEventListener('fetch', (event) => {
           return fresh;
         } catch {
           const cached = await caches.match(request);
-          if (cached) return cached;
+          if (cached) return markKept(cached);
           const fallback = offlineFallbackFor(url);
           const kept = fallback ? await caches.match(fallback) : undefined;
-          if (kept) return kept;
+          if (kept) return markKept(kept);
           return new Response(JSON.stringify({ error: 'offline' }), {
             status: 503,
             headers: { 'Content-Type': 'application/json' },

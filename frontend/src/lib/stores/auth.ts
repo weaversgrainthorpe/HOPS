@@ -17,6 +17,9 @@ export const mustChangePassword = writable(false);
 // wait for this before deciding to redirect on !isAuthenticated — otherwise
 // they race the initial /api/auth/check call and bounce the user back to / .
 export const authChecked = writable(false);
+// True while the last check got no answer (usually the server can't be reached). That says nothing
+// about the session, so nobody is asked to sign in because of it; see initAuth.
+export const authUnknown = writable(false);
 
 /**
  * Block until initAuth() has resolved. Protected pages call this at the
@@ -72,6 +75,7 @@ export function sessionExpiredRedirect(path: string): string | null {
 // Fires when any fetchAPI call hits 401 — clears auth state, toasts
 // once, and leaves only a page that can't work signed out.
 setSessionExpiredHandler(() => {
+  authUnknown.set(false);
   isAuthenticated.set(false);
   mustChangePassword.set(false);
   toast.info('You’ve been signed out — dashboards are still browseable. Click Sign in when you want to make changes.');
@@ -87,6 +91,8 @@ setSessionExpiredHandler(() => {
 export async function initAuth() {
   try {
     const status = await checkAuth();
+    authUnknown.set(status.unknown === true);
+    if (status.unknown) return; // what was known stays; recovery from the outage checks again
     isAuthenticated.set(status.authenticated);
     mustChangePassword.set(status.mustChangePassword);
   } finally {
@@ -133,6 +139,7 @@ export async function login(username: string, password: string, opts: { quietErr
 
   try {
     const result = await apiLogin(username, password);
+    authUnknown.set(false);
     isAuthenticated.set(true);
     mustChangePassword.set(result.mustChangePassword);
     if (result.mustChangePassword) {
