@@ -203,6 +203,45 @@ describe('SearchModal scope', () => {
   });
 });
 
+describe('SearchModal closing', () => {
+  it('the Esc hint is a Close search button', async () => {
+    const onClose = vi.fn();
+    render(SearchModal, { onClose });
+    await tick();
+    await fireEvent.click(screen.getByRole('button', { name: 'Close search' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('Escape closes from a non-input element in the panel, once', async () => {
+    const onClose = vi.fn();
+    render(SearchModal, { onClose });
+    await tick();
+    await fireEvent.keyDown(screen.getByRole('button', { name: 'Close search' }), { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('Escape with focus outside the panel closes it', async () => {
+    const onClose = vi.fn();
+    render(SearchModal, { onClose });
+    await tick();
+    await fireEvent.keyDown(document.body, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('Escape does not close search under a dialog opened on top of it', async () => {
+    const onClose = vi.fn();
+    render(SearchModal, { onClose });
+    const top = document.createElement('div');
+    top.setAttribute('role', 'dialog');
+    top.setAttribute('aria-modal', 'true');
+    document.body.appendChild(top);
+    await tick();
+    await fireEvent.keyDown(document.body, { key: 'Escape' });
+    expect(onClose).not.toHaveBeenCalled();
+    top.remove();
+  });
+});
+
 describe('SearchModal open vs show', () => {
   const type = async (v: string) => {
     await fireEvent.input(screen.getByRole('textbox', { name: /search/i }), { target: { value: v } });

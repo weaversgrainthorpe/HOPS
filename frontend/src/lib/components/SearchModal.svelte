@@ -12,6 +12,7 @@
   import { tileOpenUrl } from '$lib/utils/tileUrl';
   import { awayMode } from '$lib/stores/awayMode';
   import { recordTileOpen } from '$lib/utils/recentTiles';
+  import { dialogContentKeydown, dialogWindowEscape } from '$lib/utils/dialogKeys';
 
   interface Props {
     onClose: () => void;
@@ -24,6 +25,7 @@
   let query = $state('');
   let selectedIndex = $state(0);
   let inputEl: HTMLInputElement | undefined = $state();
+  let panelEl: HTMLElement | undefined = $state();
 
   // On a dashboard page (resolved by the same route resolver the page uses)
   // search only that dashboard; anywhere else search them all.
@@ -115,6 +117,9 @@
   }
 </script>
 
+<!-- Escape from focus outside the panel (on the page behind): only the topmost dialog closes. -->
+<svelte:window onkeydown={(e) => dialogWindowEscape(e, panelEl, onClose)} />
+
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
   use:portal
@@ -123,12 +128,13 @@
   onkeydown={handleKeydown}
 >
   <div
+    bind:this={panelEl}
     class="search-panel"
     role="dialog"
     aria-modal="true"
     aria-label="Global search"
     onclick={(e) => e.stopPropagation()}
-    onkeydown={(e) => e.stopPropagation()}
+    onkeydown={(e) => dialogContentKeydown(e, onClose)}
   >
     <div class="search-input-row">
       <Icon icon="mdi:magnify" width="20" />
@@ -140,7 +146,7 @@
         aria-label={scoped ? 'Search tiles on this dashboard by name, URL, or description' : 'Search tiles on all dashboards by name, URL, or description'}
         onkeydown={handleKeydown}
       />
-      <kbd>Esc</kbd>
+      <button type="button" class="esc-hint" aria-label="Close search" onclick={onClose}><kbd>Esc</kbd></button>
     </div>
 
     {#if layoutMissing}
@@ -250,6 +256,17 @@
     border-radius: 0.25rem;
     padding: 0.1rem 0.4rem;
     color: var(--text-secondary);
+  }
+
+  .esc-hint {
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    display: inline-flex;
+  }
+  .esc-hint:focus-visible kbd {
+    outline: 2px solid var(--accent-solid);
   }
 
   .search-empty-hint,
