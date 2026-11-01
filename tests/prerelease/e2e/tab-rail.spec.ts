@@ -256,6 +256,68 @@ test.describe('one-row tab bar', () => {
     expect((await rail(page).boundingBox())!.height).toBeLessThanOrEqual(hFew + 6);
   });
 
+  test('the focus ring hugs the visible box, on a working arrow and on one at its end', async ({ page, context }) => {
+    const many = await seed(page, context, 60);
+    await page.goto(many);
+    await expect(rightArrow(page)).toBeVisible();
+
+    const ring = (arrow: ReturnType<Page['getByRole']>) =>
+      arrow.evaluate((el) => {
+        const btn = getComputedStyle(el);
+        const box = getComputedStyle(el, '::before');
+        const r = getComputedStyle(el, '::after');
+        const inset = (s: CSSStyleDeclaration) => [s.top, s.right, s.bottom, s.left];
+        return {
+          buttonOutline: btn.outlineStyle,
+          buttonOpacity: btn.opacity,
+          ring: r.outlineStyle,
+          reach: parseFloat(r.outlineWidth) + parseFloat(r.outlineOffset),
+          ringWidth: parseFloat(r.outlineWidth),
+          ringColor: r.outlineColor,
+          sameBox: JSON.stringify(inset(r)) === JSON.stringify(inset(box)),
+          accent: (() => {
+            const probe = document.createElement('i');
+            probe.style.color = 'var(--accent-solid)';
+            document.body.append(probe);
+            const c = getComputedStyle(probe).color;
+            probe.remove();
+            return c;
+          })()
+        };
+      });
+    const byKeyboard = async (arrow: ReturnType<Page['getByRole']>) => {
+      await arrow.focus();
+      await page.keyboard.press('Shift+Tab');
+      await page.keyboard.press('Tab');
+      await expect(arrow).toBeFocused();
+    };
+
+    // The rail's own outlines are gone, so the only ring is the one on the visible box.
+    const start = page.getByRole('button', { name: 'Scroll to the first tab' });
+    await expect(start).toHaveAttribute('aria-disabled', 'true');
+    for (const arrow of [rightArrow(page), start]) {
+      await byKeyboard(arrow);
+      const r = await ring(arrow);
+      expect(r.buttonOutline).toBe('none');
+      expect(r.ring).toBe('solid');
+      expect(r.sameBox).toBe(true);
+      expect(r.reach).toBeLessThanOrEqual(3);
+      expect(r.ringWidth).toBe(2);
+      expect(r.ringColor).toBe(r.accent);
+      expect(r.buttonOpacity).toBe('1'); // nothing dims the ring, even on an arrow at its end
+    }
+
+    // Unfocused, an arrow at its end still looks disabled, with no ring on the hit area.
+    await rightArrow(page).focus();
+    const rest = await start.evaluate((el) => ({
+      outline: getComputedStyle(el).outlineStyle,
+      box: getComputedStyle(el, '::before').opacity,
+      edge: getComputedStyle(el, '::before').borderTopStyle,
+      ring: getComputedStyle(el, '::after').content
+    }));
+    expect(rest).toEqual({ outline: 'none', box: '0.3', edge: 'dashed', ring: 'none' });
+  });
+
   test('light theme: no white line on a coloured open tab', async ({ page, context }) => {
     await page.addInitScript(() => localStorage.setItem('hops_theme', 'light'));
     const coloured = await seed(page, context, 3, '#7c3aed');

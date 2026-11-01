@@ -146,8 +146,10 @@
   }
 
   /* The button is the 44px touch target; the visible box (and glyph) is the ::before, inset so the
-     arrows look and lay out as before. */
+     arrows look and lay out as before. The outline is off here and drawn on that box instead: on
+     the button it would float around the touch target. */
   .rail-arrow {
+    outline: none;
     position: relative;
     isolation: isolate;
     flex: 0 0 auto;
@@ -174,10 +176,24 @@
   .rail-arrow:hover:not([aria-disabled='true'])::before {
     border-color: var(--accent-solid);
   }
-  /* aria-disabled, not disabled: an arrow that reaches its end keeps keyboard focus. */
+  /* The ring is its own layer so the dimming below never dims it. */
+  .rail-arrow:focus-visible::after {
+    content: '';
+    position: absolute;
+    inset: 4px var(--arrow-inset-x);
+    border-radius: 0.375rem;
+    outline: 2px solid var(--accent-solid);
+    outline-offset: 1px;
+  }
+  /* aria-disabled, not disabled: an arrow that reaches its end keeps keyboard focus. The box and
+     the glyph are dimmed one by one, not the button, so that focus stays readable. */
   .rail-arrow[aria-disabled='true'] {
-    opacity: 0.3;
+    color: color-mix(in srgb, var(--text-primary) 30%, transparent);
     cursor: default;
+  }
+  .rail-arrow[aria-disabled='true']::before {
+    opacity: 0.3;
+    border-style: dashed;
   }
   @media (pointer: coarse) {
     .rail-arrow {
