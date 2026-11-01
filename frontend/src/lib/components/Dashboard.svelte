@@ -457,7 +457,7 @@
               style:--tab-bg={tab.color || 'var(--bg-secondary)'}
               style:--tab-opacity={tab.opacity !== undefined ? tab.opacity : 0.95}
               role="tab"
-              tabindex="0"
+              tabindex={activeTabIndex === index ? 0 : -1}
               aria-selected={activeTabIndex === index}
               aria-label={`Switch to ${tab.name} tab`}
               title={editing ? 'Drag to reorder (or Alt+Left / Alt+Right); drop items here to move them to this tab' : undefined}
@@ -468,6 +468,7 @@
               ondblclick={editing ? () => editTabAt(tab.id) : undefined}
               oncontextmenu={editing ? (e) => tabMenu(e, tab.id) : undefined}
               onkeydown={(e) => handleTabKey(e, index)}
+              onfocus={(e) => { const strip = e.currentTarget.closest<HTMLElement>('[role="tablist"]'); if (strip) revealTab(strip, tab.id, false); }}
             >
               {#if tab.iconUrl || tab.icon}
                 <span class="tab-icon-backing"
@@ -795,6 +796,15 @@
 
   .tab.custom-color.active::after {
     background: white;
+  }
+  /* Light theme: the white border and top strip made a white line along a coloured open tab, against
+     a light page. The accent outline takes their place. */
+  :global(:root[data-theme='light']) .tab.custom-color.active {
+    border-color: var(--tab-outline);
+    border-bottom-color: var(--bg-primary);
+  }
+  :global(:root[data-theme='light']) .tab.custom-color.active::after {
+    background: var(--tab-outline);
   }
 
   .tab-name {

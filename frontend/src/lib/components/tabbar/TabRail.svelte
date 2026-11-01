@@ -145,21 +145,33 @@
     display: none;
   }
 
+  /* The button is the 44px touch target; the visible box (and glyph) is the ::before, inset so the
+     arrows look and lay out as before. */
   .rail-arrow {
+    position: relative;
+    isolation: isolate;
     flex: 0 0 auto;
-    width: 34px;
-    height: 36px;
-    margin-bottom: 4px;
+    width: 44px;
+    height: 44px;
     padding: 0;
-    border: 1px solid var(--border);
-    border-radius: 0.375rem;
-    background: var(--bg-secondary);
+    border: none;
+    background: transparent;
     color: var(--text-primary);
     font-size: 1rem;
     line-height: 1;
     cursor: pointer;
+    --arrow-inset-x: 5px;
   }
-  .rail-arrow:hover:not([aria-disabled='true']) {
+  .rail-arrow::before {
+    content: '';
+    position: absolute;
+    inset: 4px var(--arrow-inset-x);
+    border: 1px solid var(--border);
+    border-radius: 0.375rem;
+    background: var(--bg-secondary);
+    z-index: -1;
+  }
+  .rail-arrow:hover:not([aria-disabled='true'])::before {
     border-color: var(--accent-solid);
   }
   /* aria-disabled, not disabled: an arrow that reaches its end keeps keyboard focus. */
@@ -169,8 +181,7 @@
   }
   @media (pointer: coarse) {
     .rail-arrow {
-      width: 40px;
-      min-width: 40px;
+      --arrow-inset-x: 2px;
     }
   }
 </style>

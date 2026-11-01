@@ -235,4 +235,83 @@ test.describe('one-row tab bar', () => {
     const fill = await tab(page, 1).evaluate((el) => getComputedStyle(el, '::before').backgroundColor);
     expect(fill).toBe('rgb(124, 58, 237)');
   });
+
+  test('arrows have a 44px hit area and the row does not grow', async ({ page, context }) => {
+    const few = await seed(page, context, 3);
+    const many = await seed(page, context, 60);
+    await page.goto(few);
+    await expect(tab(page, 1)).toBeVisible();
+    const hFew = (await page.locator('[data-dashboard-tabs]').boundingBox())!.height;
+    await page.goto(many);
+    await expect(rightArrow(page)).toBeVisible();
+    const hMany = (await page.locator('[data-dashboard-tabs]').boundingBox())!.height;
+    expect(Math.abs(hMany - hFew)).toBeLessThanOrEqual(1);
+    const arrows = page.locator('[data-rail-arrow]');
+    await expect(arrows).toHaveCount(4);
+    for (let i = 0; i < 4; i++) {
+      const b = (await arrows.nth(i).boundingBox())!;
+      expect(b.width).toBeGreaterThanOrEqual(44);
+      expect(b.height).toBeGreaterThanOrEqual(44);
+    }
+    expect((await rail(page).boundingBox())!.height).toBeLessThanOrEqual(hFew + 6);
+  });
+
+  test('light theme: no white line on a coloured open tab', async ({ page, context }) => {
+    await page.addInitScript(() => localStorage.setItem('hops_theme', 'light'));
+    const coloured = await seed(page, context, 3, '#7c3aed');
+    await page.goto(coloured);
+    await expect(tab(page, 1)).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+    const open = tab(page, 1);
+    const colours = await open.evaluate((el) => {
+      const cs = getComputedStyle(el);
+      return { top: cs.borderTopColor, left: cs.borderLeftColor, strip: getComputedStyle(el, '::after').backgroundColor };
+    });
+    const isWhite = (c: string) => {
+      const m = c.match(/\d+(\.\d+)?/g)!.map(Number);
+      return m[0] >= 247 && m[1] >= 247 && m[2] >= 247 && (m[3] ?? 1) > 0.5;
+    };
+    expect(isWhite(colours.top), `border-top ${colours.top}`).toBe(false);
+    expect(isWhite(colours.left), `border-left ${colours.left}`).toBe(false);
+    expect(isWhite(colours.strip), `top strip ${colours.strip}`).toBe(false);
+  });
+
+  test('the tab row is one Tab stop', async ({ page, context }) => {
+    const forty = await seed(page, context, 40);
+    await page.goto(forty);
+    await expect(tab(page, 1)).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('[data-tab-button][tabindex="0"]')).toHaveCount(1);
+    await expect(tab(page, 1)).toHaveAttribute('tabindex', '0');
+    await expect(tab(page, 2)).toHaveAttribute('tabindex', '-1');
+    const before = page.getByRole('button', { name: 'Scroll tabs left' });
+    await before.focus(); // the arrow just before the row
+    await page.keyboard.press('Tab');
+    await expect(tab(page, 1)).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(page.locator('[data-tab-button]:focus')).toHaveCount(0);
+    // After moving along the row, Tab still leaves it at once, and the new open tab is the stop.
+    await tab(page, 1).focus();
+    await page.keyboard.press('ArrowRight');
+    await expect(tab(page, 2)).toBeFocused();
+    await expect(tab(page, 2)).toHaveAttribute('tabindex', '0');
+    await expect(tab(page, 1)).toHaveAttribute('tabindex', '-1');
+    await page.keyboard.press('Tab');
+    await expect(page.locator('[data-tab-button]:focus')).toHaveCount(0);
+  });
+
+  test('Tab lands on an open tab that is scrolled off, and shows it (200 tabs)', async ({ page, context }) => {
+    const many = await seed(page, context, 200);
+    await page.goto(many);
+    await expect(tab(page, 1)).toBeVisible();
+    await page.locator('[data-dashboard-tabs]').evaluate((el) => (el.scrollLeft = 0));
+    await tab(page, 1).focus();
+    await page.keyboard.press('End');
+    await expect(tab(page, 200)).toHaveAttribute('aria-selected', 'true');
+    await page.getByRole('button', { name: 'Scroll to the first tab' }).click();
+    await expect(tab(page, 200)).not.toBeInViewport();
+    await page.getByRole('button', { name: 'Scroll tabs left' }).focus();
+    await page.keyboard.press('Tab');
+    await expect(tab(page, 200)).toBeFocused();
+    await expect(tab(page, 200)).toBeInViewport();
+  });
 });
