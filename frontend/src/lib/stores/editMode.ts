@@ -1,6 +1,6 @@
 import { writable, get } from 'svelte/store';
 import { isAuthenticated } from './auth';
-import { currentRoute, ensureFullConfig } from './config';
+import { config, currentRoute, ensureFullConfig, hasPartialDashboards } from './config';
 import { begin, end, abandon, park, session, setSessionLostHandler, isAddPage } from './editSession';
 import { page } from '$app/stores';
 import { toast } from './toast';
@@ -10,6 +10,12 @@ import { logWarn } from '$lib/utils/errors';
 // turning it on begins a session on the route's dashboard; turning it off
 // ends the session (asking Save / Discard / Keep editing when dirty).
 export const editMode = writable(false);
+
+/**
+ * The pencil was pressed and the other dashboards are not all here: `busy` while they load (the
+ * pencil is disabled), still set after a failure so the page shows it with Retry. Null otherwise.
+ */
+export const editEntry = writable<{ dashboardId: string; busy: boolean } | null>(null);
 
 /** The current route's dashboard id (null off a dashboard page). */
 export function routeDashboardId(): string | null {
@@ -34,24 +40,25 @@ export async function enableEditMode(): Promise<boolean> {
     return false;
   }
   if (get(editMode) && get(session)) return true;
-  if (!routeDashboardId()) {
-    toast.error("There's no dashboard here to edit.");
-    return false;
-  }
-  try {
-    await ensureFullConfig();
-  } catch (e) {
-    toast.error(`Couldn't load all your dashboards, so editing can't start: ${e instanceof Error && e.message ? e.message : 'the request failed'}`);
-    return false;
-  }
-  // The load may have taken a moment: edit the dashboard the user is on now, if still signed in.
-  if (!get(isAuthenticated)) return false;
-  if (get(editMode) && get(session)) return true;
   const id = routeDashboardId();
   if (!id) {
     toast.error("There's no dashboard here to edit.");
     return false;
   }
+  if (get(editEntry)?.busy) return false;
+  const waiting = hasPartialDashboards(get(config));
+  if (waiting) editEntry.set({ dashboardId: id, busy: true });
+  try {
+    await ensureFullConfig();
+  } catch (e) {
+    if (waiting) editEntry.set({ dashboardId: id, busy: false });
+    toast.error(`Couldn't load all your dashboards, so editing can't start: ${e instanceof Error && e.message ? e.message : 'the request failed'}`);
+    return false;
+  }
+  editEntry.set(null);
+  // The load may have taken a moment: signed out or moved on meanwhile, the press no longer applies.
+  if (!get(isAuthenticated) || routeDashboardId() !== id) return false;
+  if (get(editMode) && get(session)) return true;
   begin(id); // refuses visibly (toast) when it can't start
   if (get(session)?.dashboardId !== id) return false;
   editMode.set(true);

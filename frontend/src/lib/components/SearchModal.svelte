@@ -2,7 +2,7 @@
   import { onMount, tick } from 'svelte';
   import { get } from 'svelte/store';
   import Icon from '@iconify/svelte';
-  import { layoutDoc, currentRoute, hasPartialDashboards } from '$lib/stores/config';
+  import { layoutDoc, currentRoute, hasPartialDashboards, dashboardFetches } from '$lib/stores/config';
   import OtherDashboardsStatus from './OtherDashboardsStatus.svelte';
   import { showOnDashboard } from '$lib/utils/showIt';
   import { portal } from '$lib/utils/portal';
@@ -40,6 +40,11 @@
   );
   // This dashboard is held only as an index entry (its content is on its way).
   let scopedLoading = $derived(scoped && ($layoutDoc?.dashboards ?? []).some((d) => d.id === scopedId && d.partial === true));
+  // The one-dashboard read for it failed (the page shows the same, with Retry).
+  let scopedFailed = $derived.by(() => {
+    const f = scopedLoading && scopedId !== undefined ? $dashboardFetches[scopedId] : undefined;
+    return typeof f === 'object' ? f.error : null;
+  });
   // Searching all dashboards while some have not arrived: only the loaded ones are searched, and
   // the results say so (never presented as all results).
   let partial = $derived(!scoped && hasPartialDashboards($layoutDoc));
@@ -140,6 +145,8 @@
 
     {#if layoutMissing}
       <div class="search-no-results" role="alert">Search unavailable: the dashboard layout hasn't loaded — reload the page.</div>
+    {:else if scopedFailed}
+      <div class="search-no-results" role="alert">Couldn't load this dashboard: {scopedFailed}</div>
     {:else if scopedLoading}
       <div class="search-no-results" role="status">Loading this dashboard…</div>
     {:else}

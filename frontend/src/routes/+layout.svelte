@@ -27,7 +27,8 @@
 	import { navigateTiles } from '$lib/utils/tileNav';
 	import { safeOpenUrl } from '$lib/utils/url';
 	import SearchModal from '$lib/components/SearchModal.svelte';
-	import { editMode, followRoute } from '$lib/stores/editMode';
+	import { editMode, editEntry, enableEditMode, followRoute } from '$lib/stores/editMode';
+	import OtherDashboardsStatus from '$lib/components/OtherDashboardsStatus.svelte';
 	import { initEditPresence } from '$lib/utils/editPresence';
 	import '../app.css';
 
@@ -142,6 +143,10 @@
 <VersionMismatchBanner />
 <ConflictBanner />
 <ParkedDraftBanner />
+{#if $editEntry && $editEntry.dashboardId === $currentRoute?.id}
+	<!-- The pencil waits for every dashboard: the same Loading / Couldn't load + Retry as search. -->
+	<div class="edit-entry-status"><OtherDashboardsStatus onRetry={enableEditMode} /></div>
+{/if}
 
 <!-- dashboard-route: the same column layout as :has() below, for browsers without :has()
      (Firefox < 121, older kiosk WebViews), where the panel would otherwise stop short. -->
@@ -174,6 +179,10 @@
 		flex-direction: column;
 		min-height: 100vh;
 		min-height: 100dvh;
+	}
+	.edit-entry-status {
+		background: var(--bg-secondary);
+		border-bottom: 1px solid var(--border);
 	}
 	/* Grows into the space left below the navbar and banners. Other pages lay out as blocks,
 	   as before; a dashboard page becomes a column so its panel can fill the rest. */

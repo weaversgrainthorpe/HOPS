@@ -12,6 +12,8 @@ import {
   configError,
   noteMigrationFailure,
   setSettingsSavedHook,
+  noteWholeConfigNeeded,
+  hasPartialDashboards,
   config,
   layoutFormProblem,
   showSaveWarning
@@ -133,6 +135,7 @@ export function begin(dashboardId: string): void {
   }
   const parked = get(parkedState);
   if (parked && parked.dashboardId === dashboardId) {
+    noteWholeConfigNeeded();
     parkedState.set(null);
     sessionConflict.set(null);
     state.set(parked);
@@ -148,6 +151,11 @@ export function begin(dashboardId: string): void {
     toast.error("The dashboard layout hasn't loaded, so editing can't start. Reload the page.");
     return;
   }
+  // Index entries have no content to edit, and the editor reads every dashboard.
+  if (hasPartialDashboards(doc)) {
+    toast.error("The other dashboards haven't loaded, so editing can't start. Reload the page.");
+    return;
+  }
   const d = findLayoutDashboard(dashboardId, doc);
   if (!d) {
     toast.error("This dashboard is missing from the stored layout, so editing can't start. Reload the page.");
@@ -157,6 +165,7 @@ export function begin(dashboardId: string): void {
     toast.error("This dashboard has no known revision, so editing can't start. Reload the page.");
     return;
   }
+  noteWholeConfigNeeded();
   sessionConflict.set(null);
   // draft starts as the same object as saved: operations are pure, so an
   // unchanged subtree stays the same reference and the dirty check skips it.

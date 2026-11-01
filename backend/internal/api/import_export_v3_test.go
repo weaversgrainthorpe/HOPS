@@ -1154,3 +1154,51 @@ func TestExport_UnreadableUploadIsListedAsMissing(t *testing.T) {
 		t.Fatalf("import: %d, failed assets %v", code, failed)
 	}
 }
+
+// An imported v3 dashboard must be whole too: no tabs, or an index entry, is
+// refused and nothing is written. An empty one, and a v2 dashboard with no tabs
+// key (the converter writes tabs: []), still import.
+func TestImport_RefusesLessThanAWholeDashboard(t *testing.T) {
+	router, db := setupTestRouter(t)
+	c := newClient(t, router)
+	settings := map[string]interface{}{"statusChecksEnabled": nil, "statusCheckIntervalMinutes": nil, "statusCheckTimeoutSeconds": nil,
+		"editIdleTimeoutMinutes": nil, "animatedFolderBackgrounds": nil}
+	dash := func(id string, extra map[string]interface{}) map[string]interface{} {
+		d := map[string]interface{}{"id": id, "name": id, "path": "/" + id, "revision": 1, "settings": settings}
+		for k, v := range extra {
+			d[k] = v
+		}
+		return d
+	}
+	var before string
+	db.QueryRow("SELECT data FROM config WHERE id = 1").Scan(&before)
+	for name, d := range map[string]map[string]interface{}{
+		"no tabs": dash("imp1", nil),
+		"partial": dash("imp2", map[string]interface{}{"partial": true, "tabs": []interface{}{}}),
+	} {
+		code, resp := c.importFile(v3ExportOf(t, map[string]interface{}{"layoutVersion": configdoc.LayoutVersion, "dashboards": []interface{}{d}}))
+		if code != 400 || !strings.Contains(fmt.Sprint(resp["error"]), "not a whole dashboard") {
+			t.Errorf("%s: got %d %v", name, code, resp)
+		}
+	}
+	var after string
+	db.QueryRow("SELECT data FROM config WHERE id = 1").Scan(&after)
+	if before != after {
+		t.Error("config row changed")
+	}
+
+	empty := dash("imp3", map[string]interface{}{"tabs": []interface{}{}})
+	if code, resp := c.importFile(v3ExportOf(t, map[string]interface{}{"layoutVersion": configdoc.LayoutVersion, "dashboards": []interface{}{empty}})); code != 200 {
+		t.Fatalf("empty v3 dashboard refused: %d %v", code, resp)
+	}
+	if code, resp := c.importFile([]byte(`{"dashboards":[{"id":"imp4","name":"Bare","path":"/bare","order":0}]}`)); code != 200 {
+		t.Fatalf("v2 dashboard with no tabs key refused: %d %v", code, resp)
+	}
+	for _, d := range dashList(storedDoc(t, db)) {
+		if id := d["id"]; id == "imp3" || id == "imp4" {
+			if tabs, ok := d["tabs"].([]interface{}); !ok || len(tabs) != 0 {
+				t.Errorf("%v: tabs = %v, want []", id, d["tabs"])
+			}
+		}
+	}
+}

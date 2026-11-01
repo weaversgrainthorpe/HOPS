@@ -24,12 +24,14 @@ import (
 //	                gates (animatedFolderBackgroundsFor, dropAnimation)
 //	settings        dashboard settings the status-check tooltips name
 //	                (disabledTooltip / levelNameIn)
+//	header          the navbar's title and text while a dashboard opened
+//	                before the rest arrived is fetched
 //	partial: true   this entry has no tabs; the client must fetch it before use
 //
 // Nothing else is in an entry: tabs, background and the rest only matter once
 // a dashboard is open. Tile-level reads (Home/Away URLs, Recently used) work on
 // the open dashboard only.
-var indexKeys = []string{"id", "name", "path", "order", "revision", "display", "settings"}
+var indexKeys = []string{"id", "name", "path", "order", "revision", "display", "settings", "header"}
 
 // shapeIndexPlusOne rewrites view["dashboards"] in place: the dashboard that
 // `key` selects stays full; the rest become index entries. key is resolved as

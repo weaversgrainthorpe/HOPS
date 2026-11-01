@@ -20,7 +20,7 @@ import { safeOpenUrl } from '$lib/utils/url';
 import { goto } from '$app/navigation';
 import SearchModal from './SearchModal.svelte';
 import Dashboard from './Dashboard.svelte';
-import { config, otherDashboards, resetPartialLoadingForTests } from '$lib/stores/config';
+import { config, otherDashboards, dashboardFetches, resetPartialLoadingForTests } from '$lib/stores/config';
 import * as api from '$lib/utils/api';
 import { editMode } from '$lib/stores/editMode';
 import { revealRequest } from '$lib/stores/reveal';
@@ -298,6 +298,15 @@ describe('SearchModal while the other dashboards are still arriving', () => {
     expect(screen.queryByRole('alert')).toBeNull();
     expect(screen.queryByText(/only/)).toBeNull();
     expect(screen.getByRole('button', { name: /Other Dash Tile/ })).toHaveTextContent('Lab');
+  });
+
+  it('after the fetch of the dashboard being opened failed, scoped search says so, not "Loading…"', async () => {
+    setPage({ dashboard: 'lab' });
+    dashboardFetches.set({ d2: { error: 'HOPS hit an error' } });
+    render(SearchModal, { onClose: () => {} });
+    await tick();
+    expect(screen.getByRole('alert')).toHaveTextContent("Couldn't load this dashboard: HOPS hit an error");
+    expect(screen.queryByText(/Loading this dashboard/)).toBeNull();
   });
 
   it('on a dashboard page held only as an index entry, scoped search says it is loading, not "no matches"', async () => {

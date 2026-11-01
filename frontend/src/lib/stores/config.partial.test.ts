@@ -39,11 +39,12 @@ import {
   hasPartialDashboards,
   fetchDashboard,
   dashboardFetches,
+  WHOLE_LOAD_TIMEOUT_MS,
   resetPartialLoadingForTests
 } from './config';
 import { isAuthenticated } from './auth';
-import { editMode, enableEditMode } from './editMode';
-import { session, resetEditSessionForTests } from './editSession';
+import { editMode, editEntry, enableEditMode } from './editMode';
+import { session, begin, resetEditSessionForTests } from './editSession';
 import { toast } from './toast';
 
 const tab = (id: string) => ({ id: `t-${id}`, name: 'Main', root: { columns: 24, children: [] } });
@@ -90,6 +91,7 @@ beforeEach(() => {
   configError.set(null);
   layoutStale.set(false);
   editMode.set(false);
+  editEntry.set(null);
   isAuthenticated.set(false);
   pageStore.set!({ url: new URL('http://localhost/a'), params: { dashboard: 'a' }, route: { id: '/[dashboard]' } });
 });
@@ -276,6 +278,49 @@ describe('consistency', () => {
   });
 });
 
+describe('a held whole document is never downgraded', () => {
+  it('loadConfig({dashboard}) with the whole document held reads the whole document', async () => {
+    config.set(doc(full('a', 3), full('b', 7)));
+    vi.mocked(api.getConfig).mockResolvedValue(doc(full('a', 3), full('b', 7)));
+    await loadConfig({ dashboard: 'a' });
+    expect(api.getConfigFor).not.toHaveBeenCalled();
+    expect(hasPartialDashboards(get(config))).toBe(false);
+  });
+
+  it('nor while an edit session exists, even after the config went away (a failed reload)', async () => {
+    config.set(doc(full('a', 3), full('b', 7)));
+    begin('a');
+    expect(get(session)?.dashboardId).toBe('a');
+    config.set(null);
+    vi.mocked(api.getConfig).mockResolvedValue(doc(full('a', 3), full('b', 7)));
+    await loadConfig({ dashboard: 'a' });
+    expect(api.getConfigFor).not.toHaveBeenCalled();
+  });
+
+  it('a light answer landing after a whole document does not replace it', async () => {
+    config.set(doc(full('a', 3), index('b', 7)));
+    const light = deferred<ReturnType<typeof idx>>();
+    vi.mocked(api.getConfigFor).mockImplementationOnce(() => light.promise);
+    const load = loadConfig({ dashboard: 'a' });
+    config.set(doc(full('a', 4), full('b', 7))); // a write's response
+    light.resolve(idx('r1', full('a', 3), index('b', 7)));
+    await load;
+    expect(hasPartialDashboards(get(config))).toBe(false);
+    expect(get(config)!.dashboards[0].revision).toBe(4);
+  });
+
+  it('begin refuses visibly while the store holds index entries, on the entry itself or another dashboard', () => {
+    const err = vi.spyOn(toast, 'error');
+    config.set(doc(full('a', 3), index('b', 7)));
+    begin('b');
+    expect(get(session)).toBeNull();
+    begin('a');
+    expect(get(session)).toBeNull();
+    expect(err).toHaveBeenCalledTimes(2);
+    expect(err).toHaveBeenCalledWith(expect.stringContaining("editing can't start"));
+  });
+});
+
 describe('ensureFullConfig', () => {
   it('editor entry awaits ensureFullConfig', async () => {
     isAuthenticated.set(true);
@@ -335,6 +380,68 @@ describe('ensureFullConfig', () => {
     await loadConfig({ dashboard: 'a' });
     expect(api.getConfigFor).not.toHaveBeenCalled();
     expect(hasPartialDashboards(get(config))).toBe(false);
+  });
+
+  it('while waiting the pencil is busy and the wait is named; a failure stays shown, and Retry starts editing', async () => {
+    isAuthenticated.set(true);
+    vi.mocked(api.getConfigFor).mockResolvedValueOnce(idx('r1', full('a', 3), index('b', 7)));
+    const rest = deferred<Config>();
+    vi.mocked(api.getConfig).mockImplementationOnce(() => rest.promise);
+    await loadConfig({ dashboard: 'a' });
+
+    const first = enableEditMode();
+    await flush();
+    expect(get(editEntry)).toEqual({ dashboardId: 'a', busy: true });
+    expect(await enableEditMode()).toBe(false); // a second press while busy does nothing
+    rest.reject(new Error('Loading took too long. Check the connection and try again.'));
+    expect(await first).toBe(false);
+    expect(get(editEntry)).toEqual({ dashboardId: 'a', busy: false });
+    expect(get(otherDashboards)).toEqual({ error: 'Loading took too long. Check the connection and try again.' });
+
+    vi.mocked(api.getConfig).mockResolvedValueOnce(doc(full('a', 3), full('b', 7)));
+    expect(await enableEditMode()).toBe(true);
+    expect(get(editEntry)).toBeNull();
+    expect(get(session)?.dashboardId).toBe('a');
+  });
+
+  it('waiting for the rest is bounded: the reads carry the timeout', async () => {
+    vi.mocked(api.getConfigFor).mockResolvedValueOnce(idx('r1', full('a', 3), index('b', 7)));
+    vi.mocked(api.getConfig).mockResolvedValue(doc(full('a', 3), full('b', 7)));
+    await loadConfig({ dashboard: 'a' });
+    await flush();
+    expect(api.getConfig).toHaveBeenCalledWith({ timeoutMs: WHOLE_LOAD_TIMEOUT_MS });
+  });
+
+  it('moved to another dashboard while it loaded: editing silently does not start', async () => {
+    isAuthenticated.set(true);
+    const err = vi.spyOn(toast, 'error');
+    vi.mocked(api.getConfigFor).mockResolvedValueOnce(idx('r1', full('a', 3), index('b', 7)));
+    const rest = deferred<Config>();
+    vi.mocked(api.getConfig).mockImplementationOnce(() => rest.promise);
+    await loadConfig({ dashboard: 'a' });
+    const entering = enableEditMode();
+    await flush();
+    pageStore.set!({ url: new URL('http://localhost/b'), params: { dashboard: 'b' }, route: { id: '/[dashboard]' } });
+    rest.resolve(doc(full('a', 3), full('b', 7)));
+    expect(await entering).toBe(false);
+    expect(get(session)).toBeNull();
+    expect(get(editEntry)).toBeNull();
+    expect(err).not.toHaveBeenCalled();
+  });
+
+  it('a rest that fails after a newer load took over is not reported', async () => {
+    vi.mocked(api.getConfigFor).mockResolvedValueOnce(idx('r1', full('a', 3), index('b', 7)));
+    const rest = deferred<Config>();
+    vi.mocked(api.getConfig).mockImplementationOnce(() => rest.promise);
+    await loadConfig({ dashboard: 'a' });
+    const waiting = ensureFullConfig();
+    await flush();
+    vi.mocked(api.getConfig).mockResolvedValueOnce(doc(full('a', 3), full('b', 7)));
+    const newer = loadConfig();
+    await newer;
+    rest.reject(new Error('aborted'));
+    await expect(waiting).resolves.toBeUndefined();
+    expect(get(otherDashboards)).toBe('ready');
   });
 
   it('with nothing held it loads the whole config, and rejects visibly on failure', async () => {

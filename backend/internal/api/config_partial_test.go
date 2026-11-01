@@ -80,7 +80,7 @@ func TestConfigPartial_IndexPlusOne(t *testing.T) {
 	if _, p := pd["d1"]["partial"]; p {
 		t.Fatal("the requested dashboard must not be partial")
 	}
-	allowed := map[string]bool{"id": true, "name": true, "path": true, "order": true, "revision": true, "display": true, "settings": true, "partial": true}
+	allowed := map[string]bool{"id": true, "name": true, "path": true, "order": true, "revision": true, "display": true, "settings": true, "header": true, "partial": true}
 	for id, d := range pd {
 		if id == "d1" {
 			continue
@@ -220,5 +220,24 @@ func TestConfigPartial_MigrationGuard(t *testing.T) {
 		if code != 503 || v["error"] != "migration_failed" || v["detail"] != "boom" {
 			t.Fatalf("%s: %d %v", p, code, v)
 		}
+	}
+}
+
+// The navbar reads a dashboard's header while it is fetched on its own, so an
+// index entry carries it, unchanged.
+func TestConfigIndex_CarriesHeader(t *testing.T) {
+	router, db := setupTestRouter(t)
+	seedTwo(t, db)
+	c := newClient(t, router)
+	d := v3Body(t, c, "d2")
+	d["header"] = map[string]interface{}{"centerTitle": "Lab bench", "showLeft": false}
+	if code, resp := v3Put(c, "d2", d, 1); code != 200 {
+		t.Fatalf("%d %v", code, resp)
+	}
+	_, full := anonJSON(t, router, "/api/config")
+	_, part := anonJSON(t, router, "/api/config?dashboard=/first")
+	got := dashByID(part)["d2"]
+	if got["partial"] != true || !reflect.DeepEqual(got["header"], dashByID(full)["d2"]["header"]) {
+		t.Fatalf("index entry header: %v", got)
 	}
 }

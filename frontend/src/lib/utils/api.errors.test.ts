@@ -197,4 +197,18 @@ describe('index-plus-one and one-dashboard reads', () => {
     ok({ dashboard: entry, revision: 2, configRevision: 'abc' });
     await expect(getDashboard('b')).rejects.toThrow(/cannot read/);
   });
+  it('saveDashboardV3 refuses an index entry or a dashboard without tabs, before any request', async () => {
+    ok({ revision: 2 });
+    await expect(saveDashboardV3('b', entry as never, 2)).rejects.toThrow(/not the whole dashboard/);
+    await expect(saveDashboardV3('c', { id: 'c', name: 'C', path: '/c', revision: 1 } as never, 1)).rejects.toThrow(/not the whole dashboard/);
+    await expect(saveDashboardV3('p', { ...whole, partial: true } as never, 1)).rejects.toThrow(/not the whole dashboard/);
+    expect(fetch).not.toHaveBeenCalled();
+    expect((await saveDashboardV3('a', whole as never, 1)).revision).toBe(2);
+  });
+  it('getConfig with a timeout ends in a plain failure when the server never answers', async () => {
+    vi.stubGlobal('fetch', vi.fn((_u: string, o: RequestInit) => new Promise((_res, rej) => {
+      o.signal?.addEventListener('abort', () => rej(o.signal?.reason));
+    })));
+    await expect(getConfig({ timeoutMs: 5 })).rejects.toThrow(/took too long/);
+  });
 });

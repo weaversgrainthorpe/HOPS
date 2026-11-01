@@ -143,6 +143,51 @@ test.describe('viewer loads only the open dashboard', () => {
     await expect(failed).toHaveCount(0);
   });
 
+  test('the pencil waits for every dashboard: busy and named, a failure shows with Retry, and Retry starts editing', async ({ page, context }) => {
+    const f = await setup(page, context);
+    let mode: 'hold' | 'fail' | 'pass' = 'hold';
+    let held: (() => void)[] = [];
+    await page.route((u) => isWholeConfig(u.toString()), async (route) => {
+      if (mode === 'hold') await new Promise<void>((res) => held.push(res));
+      await (mode === 'fail' ? route.abort() : route.continue());
+    });
+    await page.goto(f.a.path);
+    await expect(node(page, f.a.tabs[0].root.children[0].id)).toBeVisible();
+    const pencil = page.locator('[aria-label="Enter Edit Mode"]');
+    await pencil.click();
+    await expect(pencil).toBeDisabled();
+    await expect(page.getByRole('status').filter({ hasText: 'Loading the other dashboards…' })).toBeVisible();
+    await expect(page.getByRole('toolbar', { name: 'Editing' })).toHaveCount(0);
+
+    mode = 'fail';
+    held.forEach((res) => res());
+    held = [];
+    const failed = page.getByRole('alert').filter({ hasText: "Couldn't load the other dashboards" });
+    await expect(failed).toBeVisible();
+    await expect(pencil).toBeEnabled();
+
+    mode = 'pass';
+    await failed.getByRole('button', { name: 'Retry' }).click();
+    await expect(page.getByRole('toolbar', { name: 'Editing' })).toBeVisible();
+    await expect(failed).toHaveCount(0);
+    await expect(page.locator('[aria-label="Exit Edit Mode"]')).toBeEnabled();
+  });
+
+  test('Add to HOPS opened from a dashboard loads every dashboard before its form', async ({ page, context }) => {
+    const f = await setup(page, context);
+    let fail = true;
+    await page.route((u) => isWholeConfig(u.toString()), (route) => (fail ? route.abort() : route.continue()));
+    await page.goto(f.a.path);
+    await expect(node(page, f.a.tabs[0].root.children[0].id)).toBeVisible();
+    await clientNavigate(page, '/add?url=https%3A%2F%2Fnew.example.lan%2F&name=New');
+    const failed = page.getByRole('alert').filter({ hasText: "Couldn't load the other dashboards" });
+    await expect(failed).toBeVisible();
+    await expect(page.getByRole('form', { name: 'Add to HOPS' })).toHaveCount(0);
+    fail = false;
+    await failed.getByRole('button', { name: 'Retry' }).click();
+    await expect(page.getByRole('form', { name: 'Add to HOPS' })).toBeVisible();
+  });
+
   test('editing loads every dashboard first, saves, and a conflicting save is still refused visibly', async ({ page, context }) => {
     const f = await setup(page, context);
     await page.goto(f.a.path);

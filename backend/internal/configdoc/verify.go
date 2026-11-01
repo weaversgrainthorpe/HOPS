@@ -63,6 +63,7 @@ func verifyDashboard(d Obj, keep *KeptURLs) error {
 	if p, ok := d["path"].(string); !ok || p == "" {
 		v.add("dashboard %q: path is %s, want a non-empty string", id, show(d["path"]))
 	}
+	v.checkWhole(id, d)
 	v.checkOwned(id, d)
 	v.checkIDs(Obj{"dashboards": []any{d}})
 	v.checkStatusChecks(d)
@@ -73,6 +74,19 @@ func verifyDashboard(d Obj, keep *KeptURLs) error {
 		return &VerifyError{Problems: v.problems}
 	}
 	return nil
+}
+
+// checkWhole refuses a write of anything less than a whole dashboard: without a
+// tabs array (an empty one is fine: the converter and every create write
+// tabs: []), or an index entry of GET /api/config?dashboard= (marked partial).
+// Stored, either would replace the dashboard's content with nothing.
+func (v *verifier) checkWhole(id string, d Obj) {
+	if _, ok := d["tabs"].([]any); !ok {
+		v.add("dashboard %q: tabs is %s, want an array: this is not a whole dashboard, so it was not saved", id, trunc(show(d["tabs"])))
+	}
+	if _, has := d["partial"]; has {
+		v.add("dashboard %q: it is marked partial (an index entry, not a whole dashboard), so it was not saved", id)
+	}
 }
 
 // checkFolderMinimums refuses a tab-level folder whose open box is below its

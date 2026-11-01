@@ -210,18 +210,25 @@ export const dashboardFetches = writable<Record<string, 'loading' | { error: str
 // Every loadConfig takes a new number; an answer that comes back after a newer load started is
 // dropped (the newer one owns the store), so answers from two loads are never mixed.
 let loadSeq = 0;
-let loadInFlight: number | null = null;
+let inFlight: { seq: number; light: boolean; promise: Promise<void> } | null = null;
 // Once something needs every dashboard (Settings, the editor, a write), every later load is a
 // whole-config load.
 let fullWanted = false;
+/** How long waiting for every dashboard may take before it is a visible failure, with Retry. */
+export const WHOLE_LOAD_TIMEOUT_MS = 60_000;
 // configRevision of the held index (null when the store holds the whole document).
 let heldConfigRevision: string | null = null;
 let rest: { seq: number; promise: Promise<void> } | null = null;
 
+/** An edit session holds a draft of the whole document: from now on nothing may load less. */
+export function noteWholeConfigNeeded(): void {
+  fullWanted = true;
+}
+
 /** Test hook: forget the partial-loading state between tests. */
 export function resetPartialLoadingForTests(): void {
   loadSeq++;
-  loadInFlight = null;
+  inFlight = null;
   fullWanted = false;
   heldConfigRevision = null;
   rest = null;
@@ -248,28 +255,49 @@ function viewerKey(): string {
 // `dashboard` (a viewer page's route segment, "" for "/") loads only that dashboard in full plus
 // the index of the rest, then the rest in the background (see above). Without it, or once the
 // whole config is wanted, the whole document is loaded.
-export async function loadConfig(opts: { background?: boolean; dashboard?: string; afterMismatch?: boolean } = {}) {
+export function loadConfig(opts: { background?: boolean; dashboard?: string; afterMismatch?: boolean } = {}): Promise<void> {
   const seq = ++loadSeq;
-  loadInFlight = seq;
+  // The light read only ever replaces nothing or another index: once the store holds every
+  // dashboard (or something needs them, an edit session included) it is never downgraded.
+  const held = get(config);
+  const light = opts.dashboard !== undefined && !fullWanted && (held === null || hasPartialDashboards(held));
+  const promise = runLoad(seq, light, opts);
+  const load = { seq, light, promise };
+  inFlight = load;
+  const clear = () => {
+    if (inFlight === load) inFlight = null;
+  };
+  promise.then(clear, clear);
+  return promise;
+}
+
+async function runLoad(seq: number, light: boolean, opts: { background?: boolean; dashboard?: string; afterMismatch?: boolean }) {
   rest = null;
   dashboardFetches.set({});
   const background = (opts.background === true || get(layoutStale)) && get(config) !== null;
   if (!background) configLoading.set(true);
   configError.set(null);
   // Held index entries: the other dashboards are on their way again (this load brings them, or
-  // starts their background load).
-  if (hasPartialDashboards(get(config))) otherDashboards.set('loading');
+  // starts their background load). Waiting on them is bounded, so it always ends visibly.
+  const partialHeld = hasPartialDashboards(get(config));
+  if (partialHeld) otherDashboards.set('loading');
 
   try {
-    if (opts.dashboard !== undefined && !fullWanted) {
-      const answer = await getConfigFor(opts.dashboard);
+    if (light) {
+      const answer = await getConfigFor(opts.dashboard as string);
       if (seq !== loadSeq) return; // superseded: a newer load owns the store
+      const held = get(config);
+      if (held !== null && !hasPartialDashboards(held)) {
+        // A write's whole document landed meanwhile: never replaced by an index.
+        otherDashboards.set('ready');
+        return;
+      }
       adoptLoaded(answer.config);
       heldConfigRevision = answer.configRevision;
       if (hasPartialDashboards(answer.config)) void startRest(seq, opts.afterMismatch === true).catch(() => undefined);
       else otherDashboards.set('ready');
     } else {
-      const data = await getConfig();
+      const data = await (partialHeld ? getConfig({ timeoutMs: WHOLE_LOAD_TIMEOUT_MS }) : getConfig());
       if (seq !== loadSeq) return;
       adoptLoaded(data);
       heldConfigRevision = null;
@@ -287,10 +315,7 @@ export async function loadConfig(opts: { background?: boolean; dashboard?: strin
     // A held index whose reload failed: the other dashboards are not coming either.
     if (hasPartialDashboards(get(config))) otherDashboards.set({ error: message(error, 'the request failed') });
   } finally {
-    if (seq === loadSeq) {
-      configLoading.set(false);
-      loadInFlight = null;
-    }
+    if (seq === loadSeq) configLoading.set(false);
   }
 }
 
@@ -327,12 +352,11 @@ function shownDashboardChanged(held: Config, full: Config): boolean {
 async function loadRest(seq: number, afterMismatch: boolean): Promise<void> {
   let full: Config;
   try {
-    full = await getConfig();
+    full = await getConfig({ timeoutMs: WHOLE_LOAD_TIMEOUT_MS });
   } catch (error) {
-    if (seq === loadSeq) {
-      logError('Other dashboards load', error);
-      otherDashboards.set({ error: message(error, 'the request failed') });
-    }
+    if (seq !== loadSeq) return; // superseded: the newer load reports its own outcome
+    logError('Other dashboards load', error);
+    otherDashboards.set({ error: message(error, 'the request failed') });
     throw error;
   }
   if (seq !== loadSeq) return; // superseded: the newer load fetches its own
@@ -372,19 +396,24 @@ export async function ensureFullConfig(): Promise<void> {
   fullWanted = true;
   for (let attempt = 0; attempt < 3; attempt++) {
     const held = get(config);
-    if (held && !hasPartialDashboards(held) && loadInFlight === null) return;
-    if (!held || loadInFlight !== null) {
-      // Nothing held, or a load in flight (it may be a light one): load the whole config now.
+    if (held && !hasPartialDashboards(held)) return;
+    if (inFlight && !inFlight.light) {
+      await inFlight.promise; // a whole-config load already running: join it
+    } else if (!held || inFlight) {
+      // Nothing held, or a light load in flight: load the whole config now (it supersedes that).
       await loadConfig({ background: true });
-      const err = get(configError);
-      if (err) throw new Error(err);
+    } else {
+      await startRest(loadSeq);
       continue;
     }
-    await startRest(loadSeq);
+    const err = get(configError);
+    if (err) throw new Error(err);
   }
-  if (hasPartialDashboards(get(config)) || !get(config)) {
-    throw new Error('The dashboards kept changing while loading. Try again.');
-  }
+  const held = get(config);
+  if (held && !hasPartialDashboards(held)) return;
+  const why = 'The dashboards kept changing while loading. Try again.';
+  otherDashboards.set({ error: why });
+  throw new Error(why);
 }
 
 /**

@@ -235,8 +235,15 @@ export async function getAbout(): Promise<{ dataDir: string }> {
  * document with a dashboards list is a visible error, never shown as an
  * empty or partial dashboard set.
  */
-export async function getConfig(): Promise<Config> {
-  const out = readConfigDocument(await fetchAPI('/config'), 'GET /api/config');
+export async function getConfig(opts: { timeoutMs?: number } = {}): Promise<Config> {
+  let resp;
+  try {
+    resp = await fetchAPI('/config', opts.timeoutMs ? { signal: AbortSignal.timeout(opts.timeoutMs) } : {});
+  } catch (e) {
+    if (e instanceof Error && e.name === 'TimeoutError') throw new Error('Loading took too long. Check the connection and try again.');
+    throw e;
+  }
+  const out = readConfigDocument(resp, 'GET /api/config');
   // The whole document: an index entry here would be a dashboard with no content.
   if (out.dashboards.some((d) => d?.partial === true)) {
     throw new Error('The server sent an incomplete configuration (a dashboard without its content). Reload the page; if it persists, check the server.');
@@ -455,6 +462,10 @@ export async function saveDashboardV3(
   dashboard: LayoutDashboard,
   revision: number
 ): Promise<{ revision: number; warning?: string } & FreshLayout> {
+  // Never an index entry or anything else without its content: it would replace the real one.
+  if (dashboard?.partial === true || !Array.isArray(dashboard?.tabs)) {
+    throw new Error('Not saved: this is not the whole dashboard. Reload the page, then make your change again.');
+  }
   const resp = await fetchAPI(`/dashboards/${encodeURIComponent(id)}`, {
     method: 'PUT',
     // layoutVersion: the layout form this page's placements are in. The server refuses a write at

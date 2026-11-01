@@ -134,11 +134,14 @@
   // others, the whole config is loaded first (the form waits; a failure shows with Retry).
   const loadAll = () => ensureFullConfig().catch(() => undefined); // failure shown by OtherDashboardsStatus
   let partialHeld = $derived(hasPartialDashboards($config));
+  // Once anything is held (and before the form can start a session): every dashboard, for good.
+  $effect(() => {
+    if ($config) void loadAll();
+  });
 
   onMount(() => {
     // The layout loads the config; a stale one is reloaded so Add starts from the current layout.
     if ($layoutStale) void loadConfig({ background: true });
-    else if (hasPartialDashboards($config)) void loadAll();
     watch = watchPresence((p) => (presence = p));
     if (!watch) {
       presence = null;

@@ -17,12 +17,14 @@
   const allDashboards = $derived($dashboards);
 
   // Export, like Settings, works from the whole config: loaded first if the page holds only the
-  // index of the other dashboards. Throws (shown as the export failure) when it can't be.
-  async function loadAll() {
+  // index of the other dashboards. False (said in a toast) when it can't be.
+  async function loadAll(): Promise<boolean> {
     try {
       await ensureFullConfig();
+      return true;
     } catch (e) {
-      throw new Error(`Couldn't load all your dashboards: ${e instanceof Error && e.message ? e.message : 'the request failed'}`);
+      toast.error(`Export failed: couldn't load all your dashboards: ${e instanceof Error && e.message ? e.message : 'the request failed'}`);
+      return false;
     }
   }
 
@@ -30,7 +32,7 @@
     exporting = true;
 
     try {
-      await loadAll();
+      if (!(await loadAll())) return;
       const { blob, missing, importWarning } = await exportConfig('json');
       downloadBlob(blob, `hops-all-dashboards-${new Date().toISOString().split('T')[0]}.json`);
       // Pictures left out, or a file too big to import back, are said and stay on screen until dismissed.
@@ -40,7 +42,7 @@
       if (!warning && !importWarning) toast.success('All dashboards exported');
       onClose();
     } catch (err) {
-      toast.error(err instanceof Error && err.message.startsWith("Couldn't load") ? `Export failed: ${err.message}` : 'Export failed');
+      toast.error('Export failed');
     } finally {
       exporting = false;
     }
@@ -50,7 +52,7 @@
     exportingId = dashboardId;
 
     try {
-      await loadAll();
+      if (!(await loadAll())) return;
       const { blob, missing, importWarning } = await exportConfig('json', dashboardId);
       const safeName = dashboardName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
       downloadBlob(blob, `hops-${safeName}-${new Date().toISOString().split('T')[0]}.json`);
@@ -59,7 +61,7 @@
       if (importWarning) toast.warning(importWarning, 0);
       if (!warning && !importWarning) toast.success(`Exported "${dashboardName}"`);
     } catch (err) {
-      toast.error(err instanceof Error && err.message.startsWith("Couldn't load") ? `Export failed: ${err.message}` : 'Export failed');
+      toast.error('Export failed');
     } finally {
       exportingId = null;
     }

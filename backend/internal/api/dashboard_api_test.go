@@ -386,3 +386,39 @@ func TestPutDashboard_BoundsDashboardAndTabNames(t *testing.T) {
 		t.Fatalf("names at the limit: %d %v", code, resp)
 	}
 }
+
+// A body that is not a whole dashboard is refused with the reason, and the
+// stored dashboard is untouched: an index entry saved over it would replace
+// its content with nothing.
+func TestPutDashboard_RefusesLessThanAWholeDashboard(t *testing.T) {
+	router, db := setupTestRouter(t)
+	c := newClient(t, router)
+	seed(t, db)
+	var before string
+	db.QueryRow("SELECT data FROM config WHERE id = 1").Scan(&before)
+
+	noTabs := v3Body(t, c, "d1")
+	delete(noTabs, "tabs")
+	nullTabs := v3Body(t, c, "d1")
+	nullTabs["tabs"] = nil
+	marked := v3Body(t, c, "d1")
+	marked["partial"] = true
+	for name, body := range map[string]map[string]interface{}{"no tabs": noTabs, "null tabs": nullTabs, "partial": marked} {
+		code, resp := v3Put(c, "d1", body, 1)
+		if code != 400 || !strings.Contains(fmt.Sprint(resp), "not a whole dashboard") {
+			t.Errorf("%s: got %d %v", name, code, resp)
+		}
+	}
+	var after string
+	db.QueryRow("SELECT data FROM config WHERE id = 1").Scan(&after)
+	if before != after {
+		t.Error("config row changed")
+	}
+
+	// An empty dashboard is a whole dashboard.
+	empty := v3Body(t, c, "d1")
+	empty["tabs"] = []interface{}{}
+	if code, resp := v3Put(c, "d1", empty, 1); code != 200 {
+		t.Fatalf("tabs: [] refused: %d %v", code, resp)
+	}
+}

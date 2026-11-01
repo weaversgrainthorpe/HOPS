@@ -6,7 +6,7 @@
   import { isAuthenticated, logout, whenPasswordSettled } from '$lib/stores/auth';
   import { goto } from '$app/navigation';
   import { theme, toggleTheme } from '$lib/stores/theme';
-  import { editMode, toggleEditMode, enableEditMode } from '$lib/stores/editMode';
+  import { editMode, editEntry, toggleEditMode, enableEditMode } from '$lib/stores/editMode';
   import { session } from '$lib/stores/editSession';
   import { textSize, increaseTextSize, decreaseTextSize, canIncrease, canDecrease, textSizeConfigs } from '$lib/stores/textSize';
   import { triggerHopAnimation } from '$lib/stores/easterEggs';
@@ -578,10 +578,16 @@
           onclick={handlePencil}
           class="edit-toggle"
           class:active={$editMode}
-          title={$editMode ? "Exit Edit Mode" : $isAuthenticated ? "Enter Edit Mode" : "Sign in to edit this dashboard"}
+          disabled={$editEntry?.busy === true}
+          aria-busy={$editEntry?.busy === true}
+          title={$editEntry?.busy ? "Loading the other dashboards…" : $editMode ? "Exit Edit Mode" : $isAuthenticated ? "Enter Edit Mode" : "Sign in to edit this dashboard"}
           aria-label={$editMode ? "Exit Edit Mode" : "Enter Edit Mode"}
         >
-          <Icon icon={$editMode ? 'mdi:pencil-off' : 'mdi:pencil'} width="32" height="32" />
+          {#if $editEntry?.busy}
+            <Icon icon="mdi:loading" width="32" height="32" class="spin" />
+          {:else}
+            <Icon icon={$editMode ? 'mdi:pencil-off' : 'mdi:pencil'} width="32" height="32" />
+          {/if}
           {#if $editMode}
             <span class="edit-label">Editing</span>
           {/if}
@@ -891,6 +897,11 @@
     width: auto;
     padding: 0 1rem;
     border-radius: 2rem;
+  }
+
+  .edit-toggle:disabled {
+    opacity: 0.7;
+    cursor: progress;
   }
 
   .edit-toggle.active {
