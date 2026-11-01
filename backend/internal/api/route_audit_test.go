@@ -58,6 +58,7 @@ var routeClasses = map[string]routeRule{
 	"/api/health":           {class: classPublic, reason: "liveness probe for the container/monitoring; no data"},
 	"/api/version":          {class: classPublic, reason: "build version shown on the login page and in the footer"},
 	"/api/config":           {class: classPublic, reason: "dashboards are public to view (SECURITY.md); serves dashboard content only, GET only"},
+	"/api/config/dashboard/": {class: classPublic, reason: "one dashboard of the public config, same visibility as GET /api/config; GET only"},
 	"/api/status/":          {class: classPublic, reason: "tile status dots for viewers on public dashboards; keyed by random entry ids"},
 	"/api/auth/check":       {class: classPublic, reason: "tells the SPA whether the caller holds a session; reveals nothing else"},
 	"/api/icon-categories":  {class: classPublic, reason: "icon picker data for public rendering; POST (create) goes through protected via publicRead", protectedMethods: []string{"POST"}},

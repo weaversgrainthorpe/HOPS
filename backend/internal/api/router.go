@@ -351,6 +351,7 @@ func (r *Router) setupRoutes() {
 	r.handle("/api/health", r.handleGetHealth)
 	r.handle("/api/version", r.handleGetVersion)
 	r.handle("/api/config", r.handleConfig)
+	r.handle("/api/config/dashboard/", r.handleConfigDashboard)
 	r.handle("/api/dashboards", r.protected(r.handleDashboardsRoot))
 	r.handle("/api/dashboards/", r.protected(r.handleDashboards))
 	// Intentionally public — the SPA polls this for tile colour indicators

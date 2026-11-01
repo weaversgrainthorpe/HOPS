@@ -128,21 +128,43 @@ func (r *Router) handleConfig(w http.ResponseWriter, req *http.Request) {
 // client saves against it, so an unreadable one is a visible 500, never a
 // silent 0.
 func (r *Router) handleGetConfig(w http.ResponseWriter, req *http.Request) {
-	if !r.migrationGuard(w) {
+	stored, view, ok := r.loadPublicView(w)
+	if !ok {
 		return
+	}
+	r.attachNotices(w, req, stored, view)
+	if q, has := req.URL.Query()["dashboard"]; has {
+		shapeIndexPlusOne(view, q[0])
+	}
+	writeJSON(w, view)
+}
+
+// loadPublicView is the one pipeline behind every public config read
+// (GET /api/config, its ?dashboard= form, and GET /api/config/dashboard/{id}):
+// the migration guard, the stored document, a readable revision on every
+// dashboard, and publicDoc's public shape. On failure it has already written
+// the error and returns ok=false.
+func (r *Router) loadPublicView(w http.ResponseWriter) (stored configdoc.Obj, view map[string]interface{}, ok bool) {
+	if !r.migrationGuard(w) {
+		return nil, nil, false
 	}
 	stored, err := configdoc.Load(r.db)
 	if err != nil {
 		writeAPIError(w, loadErr(err))
-		return
+		return nil, nil, false
 	}
 	for id, d := range storedDashboards(stored) {
 		if _, rerr := storedRevision(id, d); rerr != nil {
 			writeAPIError(w, rerr)
-			return
+			return nil, nil, false
 		}
 	}
-	view := r.publicDoc(stored)
+	return stored, r.publicDoc(stored), true
+}
+
+// attachNotices adds migrationNotices and notices to a config view, and
+// marks the response private when it carries admin-only notices.
+func (r *Router) attachNotices(w http.ResponseWriter, req *http.Request, stored configdoc.Obj, view map[string]interface{}) {
 	if len(r.migration.Renames) > 0 {
 		view["migrationNotices"] = migrationNotices(r.migration.Renames, stored)
 	}
@@ -164,7 +186,28 @@ func (r *Router) handleGetConfig(w http.ResponseWriter, req *http.Request) {
 	if ns := append(adminNotices, r.currentNotices(stored)...); len(ns) > 0 {
 		view["notices"] = ns
 	}
-	writeJSON(w, view)
+}
+
+// handleConfigDashboard serves GET /api/config/dashboard/{id} (public): one
+// dashboard in full, from the same pipeline and with the same visibility as
+// GET /api/config. {id} is matched like the frontend matches a URL segment
+// (see findDashboardForRoute). Unknown: a JSON 404.
+func (r *Router) handleConfigDashboard(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	_, view, ok := r.loadPublicView(w)
+	if !ok {
+		return
+	}
+	key := strings.TrimPrefix(req.URL.Path, "/api/config/dashboard/")
+	d := findDashboardForRoute(view, key)
+	if d == nil {
+		writeJSONError(w, "Dashboard not found", http.StatusNotFound)
+		return
+	}
+	writeJSON(w, map[string]interface{}{"dashboard": d, "revision": d["revision"], "configRevision": configRevision(view)})
 }
 
 // handleLogin authenticates a user with rate limiting
