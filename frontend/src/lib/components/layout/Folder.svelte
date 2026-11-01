@@ -235,7 +235,7 @@
   });
   /** The width a tab's label asks for: its name (and icon); an untitled tab asks for none. */
   function wantOf(f: FolderNode, compact = false): number {
-    return f.showTitle === false ? 0 : tabWantPx(f.name ?? '', !compact && !!(f.iconUrl || f.icon), compact);
+    return f.showTitle === false ? 0 : tabWantPx(f.name ?? '', !!(f.iconUrl || f.icon), compact);
   }
 
   // ---- minimised tile: a compact version of its shape (measured: its size depends on where it is)
@@ -427,6 +427,28 @@
 {/snippet}
 
 <!-- Edit mode only: a look that can't be drawn as stored says so — never a silent swap. -->
+<!-- A folder's own icon: on a tab shape a small icon on the tab, else the (optionally backed) icon beside the
+     name. Nothing for an untitled folder or one with no icon. Reused wherever a folder draws its icon. -->
+{#snippet headerIcon(f: FolderNode, tab: boolean)}
+  {#if f.showTitle !== false && (f.iconUrl || f.icon)}
+    {#if tab}
+      {#if f.iconUrl}
+        <img src={f.iconUrl} alt="" class="tab-icon" />
+      {:else if f.icon}
+        <Icon icon={f.icon} width="16" class="tab-icon" />
+      {/if}
+    {:else}
+      <span class="folder-icon-backing" class:has-bg={f.iconBgColor} style:background-color={f.iconBgColor}>
+        {#if f.iconUrl}
+          <img src={f.iconUrl} alt="" class="folder-icon-img" />
+        {:else if f.icon}
+          <Icon icon={f.icon} width="24" />
+        {/if}
+      </span>
+    {/if}
+  {/if}
+{/snippet}
+
 {#snippet lookNotes(f: FolderNode, cls: string)}
   {#if editing}
     {@const p = lookProblems(f)}
@@ -586,16 +608,20 @@
               <button type="button" class="title-button tab-fill" aria-label="Back to {shownName}" title="Back to {shownName}" onclick={(e) => goUp(e, k)} ondblclick={own}></button>
             {/if}
           {:else if innermost}
+            {@render headerIcon(sub, true)}
             <span class="tab-name" aria-current="page">{shownName}</span>
           {:else}
+            {@render headerIcon(sub, true)}
             <!-- svelte-ignore a11y_no_static_element_interactions -->
             <button type="button" class="title-button tab-name" title="Back to {shownName}" onclick={(e) => goUp(e, k)} ondblclick={own}>{shownName}</button>
           {/if}
         </div>
         <span class="title-space"></span>
       {:else if innermost}
+        {@render headerIcon(sub, false)}
         <span class="nested-name" class:muted={untitled} aria-current="page">{shownName}</span>
       {:else}
+        {@render headerIcon(sub, false)}
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <button
           type="button"
@@ -764,11 +790,7 @@
           style:width="{topTab.widthPx}px"
         >
           {#if showTitle}
-            {#if folder.iconUrl}
-              <img src={folder.iconUrl} alt="" class="tab-icon" />
-            {:else if folder.icon}
-              <Icon icon={folder.icon} width="16" class="tab-icon" />
-            {/if}
+            {@render headerIcon(folder, true)}
             {#if levels > 0}
               <!-- svelte-ignore a11y_no_static_element_interactions -->
               <button type="button" class="title-button tab-name" title="Back to {folder.name}" onclick={(e) => goUp(e, 0)} ondblclick={own}>{folder.name}</button>
@@ -781,15 +803,7 @@
         </div>
         <span class="title-space"></span>
       {:else if showTitle}
-        {#if folder.iconUrl || folder.icon}
-          <span class="folder-icon-backing" class:has-bg={folder.iconBgColor} style:background-color={folder.iconBgColor}>
-            {#if folder.iconUrl}
-              <img src={folder.iconUrl} alt="" class="folder-icon-img" />
-            {:else if folder.icon}
-              <Icon icon={folder.icon} width="24" />
-            {/if}
-          </span>
-        {/if}
+        {@render headerIcon(folder, false)}
         <h3>
           {#if levels > 0}
             <!-- svelte-ignore a11y_no_static_element_interactions -->
