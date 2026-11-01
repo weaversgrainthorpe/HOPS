@@ -121,6 +121,8 @@ Mutation methods (POST/PUT/PATCH/DELETE) on protected routes require both:
 | `GET` | `/api/health` | Health check + version + uptime + DB connectivity |
 | `GET` | `/api/version` | Version info |
 | `GET` | `/api/config` | The dashboards (v3 document): `{schemaVersion, dashboards, migrationNotices?}` |
+| `GET` | `/api/config?dashboard={pathOrId}` | The same document with only that dashboard in full (path first, then id; empty = the first in display order). The others are index entries (`partial: true`, no tabs); adds `configRevision`, and `missing` when nothing matches |
+| `GET` | `/api/config/dashboard/{id}` | One dashboard in full, by id only: `{dashboard, revision, configRevision}`. 404 when unknown |
 | `GET` | `/api/status/{entryId}` | Cached status check result for one tile |
 | `POST` | `/api/auth/login` | Admin login (rate-limited 20/min/IP). Sets `hops_session` + `hops_csrf` cookies. |
 | `GET` | `/api/auth/check` | Returns `{authenticated, mustChangePassword}`. Also re-issues a CSRF cookie if missing (handles upgrade path for old sessions). |

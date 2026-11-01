@@ -22,7 +22,8 @@ vi.mock('$lib/utils/api', async (orig) => ({
 }));
 
 import * as api from '$lib/utils/api';
-import { config, configLoading, configError, loadConfig, resetPartialLoadingForTests } from '$lib/stores/config';
+import { config, configLoading, configError, loadConfig, otherDashboards, resetPartialLoadingForTests } from '$lib/stores/config';
+import { editEntry } from '$lib/stores/editMode';
 import Page from './+page.svelte';
 import type { LayoutDashboard } from '$lib/types/layout';
 
@@ -57,6 +58,7 @@ beforeEach(() => {
   config.set(null);
   configError.set(null);
   configLoading.set(true);
+  editEntry.set(null);
   goTo('a');
   // The other dashboards never arrive in these tests (they are still loading).
   vi.mocked(api.getConfig).mockImplementation(() => new Promise(() => {}));
@@ -126,6 +128,86 @@ describe('dashboard page with partial loading', () => {
     await tick();
     expect(screen.getByText('Dashboard Not Found')).toBeInTheDocument();
     expect(api.getDashboard).not.toHaveBeenCalled();
+  });
+
+  it('a one-dashboard read that keeps disagreeing with the index ends in the error with Retry, after a bounded number of reads', async () => {
+    vi.mocked(api.getConfigFor).mockImplementation(async () => ({
+      config: { schemaVersion: 3, layoutVersion: 2, dashboards: [full('a', 'Alpha', 1, 'Alpha Tile'), index('b', 'Beta', 5)] },
+      configRevision: 'r2'
+    }));
+    vi.mocked(api.getDashboard).mockResolvedValue({ dashboard: full('b', 'Beta', 4, 'Old Beta'), revision: 4, configRevision: 'r1' });
+    goTo('b');
+    await loadConfig({ dashboard: 'b' });
+    const { container } = render(Page);
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent("Couldn't load Beta");
+    for (let i = 0; i < 50; i++) await tick();
+    expect(api.getDashboard).toHaveBeenCalledTimes(2);
+    expect(api.getConfigFor).toHaveBeenCalledTimes(2);
+
+    // Retry starts fresh, and recovers once the copies agree.
+    vi.mocked(api.getDashboard).mockResolvedValue({ dashboard: full('b', 'Beta', 5, 'Beta Tile'), revision: 5, configRevision: 'r2' });
+    await fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    await vi.waitFor(() => expect(container.querySelector('[data-node-id="n-b"]')).not.toBeNull());
+  });
+
+  it('a failed background load shows a small bar with Retry; the open dashboard stays usable', async () => {
+    vi.mocked(api.getConfigFor).mockResolvedValueOnce({
+      config: { schemaVersion: 3, layoutVersion: 2, dashboards: [full('a', 'Alpha', 1, 'Alpha Tile'), index('b', 'Beta', 5)] },
+      configRevision: 'r1'
+    });
+    vi.mocked(api.getConfig).mockRejectedValueOnce(new Error('HOPS hit an error'));
+    await loadConfig({ dashboard: 'a' });
+    const { container } = render(Page);
+    const bar = await screen.findByRole('alert');
+    expect(bar).toHaveTextContent("Couldn't load the other dashboards");
+    expect(container.querySelector('[data-node-id="n-a"]')).not.toBeNull();
+
+    vi.mocked(api.getConfig).mockResolvedValueOnce({
+      schemaVersion: 3, layoutVersion: 2, dashboards: [full('a', 'Alpha', 1, 'Alpha Tile'), full('b', 'Beta', 5, 'Beta Tile')]
+    });
+    await fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    await vi.waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
+    expect(container.querySelector('[data-node-id="n-a"]')).not.toBeNull();
+  });
+
+  it('no bar while the other dashboards are loading, or on a single-dashboard setup', async () => {
+    vi.mocked(api.getConfigFor).mockResolvedValueOnce({
+      config: { schemaVersion: 3, layoutVersion: 2, dashboards: [full('a', 'Alpha', 1, 'Alpha Tile'), index('b', 'Beta', 5)] },
+      configRevision: 'r1'
+    });
+    await loadConfig({ dashboard: 'a' });
+    render(Page);
+    await tick();
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.queryByText(/other dashboards/)).toBeNull();
+    cleanup();
+
+    config.set({ schemaVersion: 3, layoutVersion: 2, dashboards: [full('a', 'Alpha', 1, 'Alpha Tile')] });
+    otherDashboards.set({ error: 'left over' });
+    render(Page);
+    await tick();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('one bar at a time: the pencil is already showing this failure, or the page shows a config error', async () => {
+    vi.mocked(api.getConfigFor).mockResolvedValueOnce({
+      config: { schemaVersion: 3, layoutVersion: 2, dashboards: [full('a', 'Alpha', 1, 'Alpha Tile'), index('b', 'Beta', 5)] },
+      configRevision: 'r1'
+    });
+    await loadConfig({ dashboard: 'a' });
+    otherDashboards.set({ error: 'HOPS hit an error' });
+    editEntry.set({ dashboardId: 'a', busy: false });
+    render(Page);
+    await tick();
+    expect(screen.queryByRole('alert')).toBeNull();
+    editEntry.set(null);
+    await tick();
+    expect(screen.getByRole('alert')).toHaveTextContent("Couldn't load the other dashboards");
+    configError.set('offline');
+    await tick();
+    expect(screen.getByRole('alert')).toHaveTextContent('offline');
   });
 
   it('a failed first load is the config error with Retry, never an empty page', async () => {

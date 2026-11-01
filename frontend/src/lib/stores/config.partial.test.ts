@@ -39,6 +39,7 @@ import {
   hasPartialDashboards,
   fetchDashboard,
   dashboardFetches,
+  DASHBOARD_MISMATCH,
   WHOLE_LOAD_TIMEOUT_MS,
   resetPartialLoadingForTests
 } from './config';
@@ -265,6 +266,36 @@ describe('consistency', () => {
     expect(api.getConfigFor).toHaveBeenLastCalledWith('b');
     for (const shown of seen) expect(shown.a === 3 && shown.b === 8).toBe(false);
     expect(get(config)!.dashboards.find((d) => d.id === 'b')!.revision).toBe(8);
+  });
+
+  it('a one-dashboard read that keeps disagreeing with the index: one reload, then the visible error, and Retry starts fresh', async () => {
+    // Kept copies offline: this copy of B is older than every index the page can get.
+    vi.mocked(api.getConfigFor).mockResolvedValue(idx('r2', full('a', 3), index('b', 7)));
+    vi.mocked(api.getConfig).mockImplementation(() => new Promise(() => {}));
+    vi.mocked(api.getDashboard).mockResolvedValue({ dashboard: full('b', 6), revision: 6, configRevision: 'r1' });
+    await loadConfig({ dashboard: 'a' });
+    pageStore.set!({ url: new URL('http://localhost/b'), params: { dashboard: 'b' }, route: { id: '/[dashboard]' } });
+
+    await fetchDashboard('b');
+    await flush();
+    expect(api.getConfigFor).toHaveBeenCalledTimes(2); // the one reload
+    expect(get(dashboardFetches)).toEqual({});
+
+    await fetchDashboard('b');
+    await flush();
+    expect(api.getConfigFor).toHaveBeenCalledTimes(2); // no second reload: the failure is shown
+    expect(get(dashboardFetches)).toEqual({ b: { error: DASHBOARD_MISMATCH } });
+
+    // The route's Retry: a fresh start, with its own one reload.
+    await loadConfig({ background: true, dashboard: 'b' });
+    expect(get(dashboardFetches)).toEqual({});
+    await fetchDashboard('b');
+    await flush();
+    expect(api.getConfigFor).toHaveBeenCalledTimes(4);
+    await fetchDashboard('b');
+    await flush();
+    expect(api.getConfigFor).toHaveBeenCalledTimes(4);
+    expect(get(dashboardFetches)).toEqual({ b: { error: DASHBOARD_MISMATCH } });
   });
 
   it('a failed one-dashboard fetch is kept for the page to show, with Retry', async () => {

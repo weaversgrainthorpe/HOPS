@@ -110,6 +110,22 @@ test.describe('viewer loads only the open dashboard', () => {
     await expect(page.getByText('Loading the other dashboards…')).toHaveCount(0);
   });
 
+  test('when the background load fails, an ordinary dashboard page shows a small bar with Retry and stays usable', async ({ page, context }) => {
+    const f = await setup(page, context);
+    let fail = true;
+    await page.route((u) => isWholeConfig(u.toString()), (route) => (fail ? route.abort() : route.continue()));
+    await page.goto(f.a.path);
+    const tileA = node(page, f.a.tabs[0].root.children[0].id);
+    await expect(tileA).toBeVisible();
+    const bar = page.getByRole('alert').filter({ hasText: "Couldn't load the other dashboards" });
+    await expect(bar).toBeVisible();
+    await expect(tileA).toBeVisible();
+    fail = false;
+    await bar.getByRole('button', { name: 'Retry' }).click();
+    await expect(bar).toHaveCount(0);
+    await expect(tileA).toBeVisible();
+  });
+
   test('when the background load fails, search says so with Retry, and Retry recovers', async ({ page, context }) => {
     const f = await setup(page, context);
     let fail = true;
@@ -118,7 +134,7 @@ test.describe('viewer loads only the open dashboard', () => {
     await expect(page.getByRole('heading', { name: 'Dashboard Not Found' })).toBeVisible();
     const input = await openSearch(page);
     await input.fill(`Tileb${f.p}`);
-    const failed = page.getByRole('alert').filter({ hasText: "Couldn't load the other dashboards" });
+    const failed = page.locator('.search-panel').getByRole('alert').filter({ hasText: "Couldn't load the other dashboards" });
     await expect(failed).toBeVisible();
     await expect(page.getByRole('button', { name: new RegExp(`Tileb${f.p}`) })).toHaveCount(0);
     fail = false;
@@ -134,6 +150,7 @@ test.describe('viewer loads only the open dashboard', () => {
     await page.goto(f.a.path);
     await expect(node(page, f.a.tabs[0].root.children[0].id)).toBeVisible();
     await clientNavigate(page, '/settings/dashboards');
+    await page.waitForURL('**/settings/dashboards'); // the dashboard page's own bar has gone
     const failed = page.getByRole('alert').filter({ hasText: "Couldn't load the other dashboards" });
     await expect(failed).toBeVisible();
     await expect(page.getByRole('button', { name: 'New Dashboard' })).toHaveCount(0);
@@ -180,6 +197,7 @@ test.describe('viewer loads only the open dashboard', () => {
     await page.goto(f.a.path);
     await expect(node(page, f.a.tabs[0].root.children[0].id)).toBeVisible();
     await clientNavigate(page, '/add?url=https%3A%2F%2Fnew.example.lan%2F&name=New');
+    await page.waitForURL('**/add?*'); // the dashboard page's own bar has gone
     const failed = page.getByRole('alert').filter({ hasText: "Couldn't load the other dashboards" });
     await expect(failed).toBeVisible();
     await expect(page.getByRole('form', { name: 'Add to HOPS' })).toHaveCount(0);

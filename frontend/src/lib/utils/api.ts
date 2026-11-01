@@ -198,6 +198,28 @@ async function fetchAPI(endpoint: string, options: RequestInit = {}) {
 
 // Public API calls
 
+/** How long a read of one dashboard (with or without the index) may take before it is a visible failure. */
+export const LIGHT_READ_TIMEOUT_MS = 60_000;
+
+/** A GET that gives up after `timeoutMs` with a plain failure, body included. */
+async function fetchWithin(endpoint: string, timeoutMs: number) {
+  // AbortController and a timer, not AbortSignal.timeout: older iPads and kiosk WebViews lack it.
+  const abort = new AbortController();
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    abort.abort();
+  }, timeoutMs);
+  try {
+    return await fetchAPI(endpoint, { signal: abort.signal });
+  } catch (e) {
+    if (timedOut) throw new Error('Loading took too long. Check the connection and try again.');
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /** An HTTP error answer, carrying its status (the status probe tells a down proxy from a backend error). */
 export class HttpStatusError extends Error {
   constructor(message: string, public readonly status: number) {
@@ -236,24 +258,7 @@ export async function getAbout(): Promise<{ dataDir: string }> {
  * empty or partial dashboard set.
  */
 export async function getConfig(opts: { timeoutMs?: number } = {}): Promise<Config> {
-  // AbortController and a timer, not AbortSignal.timeout: older iPads and kiosk WebViews lack it.
-  const abort = new AbortController();
-  let timedOut = false;
-  const timer = opts.timeoutMs
-    ? setTimeout(() => {
-        timedOut = true;
-        abort.abort();
-      }, opts.timeoutMs)
-    : undefined;
-  let resp;
-  try {
-    resp = await fetchAPI('/config', opts.timeoutMs ? { signal: abort.signal } : {});
-  } catch (e) {
-    if (timedOut) throw new Error('Loading took too long. Check the connection and try again.');
-    throw e;
-  } finally {
-    clearTimeout(timer);
-  }
+  const resp = opts.timeoutMs ? await fetchWithin('/config', opts.timeoutMs) : await fetchAPI('/config');
   const out = readConfigDocument(resp, 'GET /api/config');
   // The whole document: an index entry here would be a dashboard with no content.
   if (out.dashboards.some((d) => d?.partial === true)) {
@@ -278,7 +283,7 @@ export interface IndexPlusOne {
  * entries must come with the revision of the set: anything else is a visible error.
  */
 export async function getConfigFor(dashboard: string): Promise<IndexPlusOne> {
-  const resp = await fetchAPI(`/config?dashboard=${encodeURIComponent(dashboard)}`);
+  const resp = await fetchWithin(`/config?dashboard=${encodeURIComponent(dashboard)}`, LIGHT_READ_TIMEOUT_MS);
   const config = readConfigDocument(resp, 'GET /api/config?dashboard');
   const bad = config.dashboards.some(
     (d) => !d || typeof d.id !== 'string' || (d.partial !== true && !Array.isArray(d.tabs))
@@ -297,11 +302,12 @@ export async function getConfigFor(dashboard: string): Promise<IndexPlusOne> {
 }
 
 /**
- * GET /api/config/dashboard/<id>: one dashboard in full, with its revision and the revision of the
- * whole set. A different dashboard, or one without its content, is a visible error.
+ * GET /api/config/dashboard/<id> (by id only, never a path): one dashboard in full, with its
+ * revision and the revision of the whole set. A different dashboard, or one without its content,
+ * is a visible error.
  */
 export async function getDashboard(id: string): Promise<{ dashboard: LayoutDashboard; revision: number; configRevision: string }> {
-  const resp = await fetchAPI(`/config/dashboard/${encodeURIComponent(id)}`);
+  const resp = await fetchWithin(`/config/dashboard/${encodeURIComponent(id)}`, LIGHT_READ_TIMEOUT_MS);
   const d = resp?.dashboard;
   if (!d || typeof d !== 'object' || d.id !== id || !Array.isArray(d.tabs) || d.partial === true ||
       typeof resp.revision !== 'number' || typeof resp.configRevision !== 'string' || !resp.configRevision) {

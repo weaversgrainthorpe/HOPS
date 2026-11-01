@@ -2,10 +2,13 @@
   import { page } from '$app/stores';
   import { get } from 'svelte/store';
   import {
-    config, configLoading, configError, resolveDashboardRoute, loadConfig, dashboardFetches, fetchDashboard
+    config, configLoading, configError, resolveDashboardRoute, loadConfig, dashboardFetches, fetchDashboard,
+    hasPartialDashboards, otherDashboards
   } from '$lib/stores/config';
+  import { editEntry } from '$lib/stores/editMode';
   import Dashboard from '$lib/components/Dashboard.svelte';
   import DashboardSkeleton from '$lib/components/DashboardSkeleton.svelte';
+  import OtherDashboardsStatus from '$lib/components/OtherDashboardsStatus.svelte';
 
   // Path first, then id.
   let resolved = $derived(
@@ -18,7 +21,17 @@
     const d = resolved;
     if (d?.partial === true && !$configLoading && get(dashboardFetches)[d.id] === undefined) void fetchDashboard(d.id);
   });
+  // A failed background load never vanishes: a small bar, the open dashboard stays usable. Not
+  // while a whole-page error says more, nor when the pencil's own status (+layout) already shows it.
+  let backgroundFailed = $derived(
+    typeof $otherDashboards === 'object' && hasPartialDashboards($config) && !$configError &&
+      !($editEntry && $editEntry.dashboardId === resolved?.id)
+  );
 </script>
+
+{#if backgroundFailed}
+  <div class="background-failure"><OtherDashboardsStatus /></div>
+{/if}
 
 {#if $configLoading}
   <DashboardSkeleton />
@@ -50,6 +63,11 @@
 {/if}
 
 <style>
+  .background-failure {
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+  }
+
   .error,
   .not-found {
     display: flex;

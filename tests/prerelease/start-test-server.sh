@@ -45,6 +45,7 @@ fi
 FRONTEND_BUILD="$REPO_DIR/frontend/build"
 if [[ ! -f "$FRONTEND_BUILD/index.html" ]]; then
   log "Building frontend"
+  source "$REPO_DIR/scripts/lib/node.sh" || exit 1
   (cd "$REPO_DIR/frontend" && npm run build) >&2
 fi
 FRONTEND_ARGS=(--frontend "$FRONTEND_BUILD" --no-lan-multicast)  # dev build: Discovery sends nothing onto the real LAN

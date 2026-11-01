@@ -35,7 +35,7 @@ import { isAuthenticated, mustChangePassword, clearMustChangePassword } from '$l
 import { goto } from '$app/navigation';
 import { page } from '$app/stores';
 import type { Writable } from 'svelte/store';
-import { editMode } from '$lib/stores/editMode';
+import { editMode, editEntry } from '$lib/stores/editMode';
 import { session, resetEditSessionForTests } from '$lib/stores/editSession';
 import Navbar from './Navbar.svelte';
 import type { Config } from '$lib/types';
@@ -135,6 +135,28 @@ describe('Navbar pencil when logged out', () => {
 		await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Sign in' })).toBeNull());
 		expect(apiLogin).not.toHaveBeenCalled();
 		expect(get(editMode)).toBe(false);
+	});
+
+	it('while it waits for every dashboard the pencil keeps keyboard focus, and pressing it does nothing', async () => {
+		isAuthenticated.set(true);
+		editEntry.set({ dashboardId: 'd', busy: true });
+		try {
+			render(Navbar, {});
+			const pencil = screen.getByRole('button', { name: 'Enter Edit Mode' }) as HTMLButtonElement;
+			pencil.focus();
+			expect(document.activeElement).toBe(pencil);
+			expect(pencil.disabled).toBe(false);
+			expect(pencil.getAttribute('aria-disabled')).toBe('true');
+			expect(pencil.getAttribute('aria-busy')).toBe('true');
+			await fireEvent.click(pencil);
+			await tick();
+			expect(get(editMode)).toBe(false);
+			expect(get(session)).toBeNull();
+			expect(screen.queryByRole('dialog', { name: 'Sign in' })).toBeNull();
+			expect(document.activeElement).toBe(pencil);
+		} finally {
+			editEntry.set(null);
+		}
 	});
 
 	it('logged in, the pencil enters edit mode directly (no dialog)', async () => {

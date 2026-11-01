@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
-  saveDashboardV3, transferNodes, getConfig, getConfigFor, getDashboard, dismissNotice, createDashboard, reorderDashboards, promoteScan, ConflictError, MigrationFailedError
+  saveDashboardV3, transferNodes, LIGHT_READ_TIMEOUT_MS, getConfig, getConfigFor, getDashboard, dismissNotice, createDashboard, reorderDashboards, promoteScan, ConflictError, MigrationFailedError
 } from './api';
 import type { LayoutDashboard } from '$lib/types/layout';
 
@@ -216,6 +216,24 @@ describe('index-plus-one and one-dashboard reads', () => {
       await expect(getConfig({ timeoutMs: 5 })).rejects.toThrow(/took too long/);
     } finally {
       AbortSignal.timeout = native;
+    }
+  });
+  it('the light reads are bounded: a server that never answers ends in a plain failure, and the timer is cleared on an answer', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.stubGlobal('fetch', vi.fn((_u: string, o: RequestInit) => new Promise((_res, rej) => {
+        o.signal?.addEventListener('abort', () => rej(o.signal?.reason));
+      })));
+      for (const read of [() => getDashboard('a'), () => getConfigFor('a')]) {
+        const failed = expect(read()).rejects.toThrow(/took too long/);
+        await vi.advanceTimersByTimeAsync(LIGHT_READ_TIMEOUT_MS);
+        await failed;
+      }
+      vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ schemaVersion: 3, dashboards: [] }), { status: 200 })));
+      await getConfigFor('a');
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
     }
   });
   it('getConfig clears its timer once answered, and a failure that is not the timeout stays itself', async () => {

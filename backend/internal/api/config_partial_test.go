@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"reflect"
 	"testing"
 
@@ -191,6 +192,85 @@ func TestConfigDashboard_One(t *testing.T) {
 	router.ServeHTTP(w, httptest.NewRequest("POST", "/api/config/dashboard/d1", nil))
 	if w.Code < 400 {
 		t.Fatalf("POST allowed: %d", w.Code)
+	}
+}
+
+// The client always asks for an id, so a dashboard whose path equals another's
+// id must not answer for it: /api/config/dashboard/<id> matches ids only, while
+// ?dashboard= stays path-or-id (path first). An empty key is 404, not the first.
+func TestConfigDashboard_MatchesIDNotPath(t *testing.T) {
+	router, db := setupTestRouter(t)
+	moved, taker := legacyDashWithID("sample", "Moved"), legacyDashWithID("other", "Taker")
+	moved["path"], taker["path"] = "/elsewhere", "/sample"
+	doc, err := configdoc.MigrateV2(configdoc.Obj{"dashboards": []any{moved, taker}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := configdoc.Save(db, doc); err != nil {
+		t.Fatal(err)
+	}
+	code, one := anonJSON(t, router, "/api/config/dashboard/sample")
+	if code != 200 {
+		t.Fatalf("by id: %d", code)
+	}
+	if got := one["dashboard"].(map[string]interface{})["id"]; got != "sample" {
+		t.Fatalf("by id: got dashboard %v", got)
+	}
+	for _, p := range []string{"/api/config/dashboard/elsewhere", "/api/config/dashboard/"} {
+		if code, v := anonJSON(t, router, p); code != 404 || v["error"] == nil {
+			t.Fatalf("%s: %d %v", p, code, v)
+		}
+	}
+	_, light := anonJSON(t, router, "/api/config?dashboard=sample")
+	if dashByID(light)["other"]["partial"] == true {
+		t.Fatal("?dashboard= must keep path first: /sample is the dashboard called other")
+	}
+	if dashByID(light)["sample"]["partial"] != true {
+		t.Fatal("?dashboard= by path: the id match must not also be full")
+	}
+	_, light = anonJSON(t, router, "/api/config?dashboard=other")
+	if dashByID(light)["other"]["partial"] == true {
+		t.Fatal("?dashboard= must still match an id")
+	}
+}
+
+// Spec section 3, visibility: a signed-out viewer sees the same dashboards, with
+// the same names, through the light reads as through /api/config.
+func TestConfigPartial_SignedOutSeesTheSameDashboards(t *testing.T) {
+	router, db := setupTestRouter(t)
+	seedTwo(t, db)
+	code, whole := anonJSON(t, router, "/api/config")
+	if code != 200 {
+		t.Fatalf("/api/config: %d", code)
+	}
+	all := dashByID(whole)
+	if len(all) < 2 {
+		t.Fatalf("expected the seeded dashboards, got %d", len(all))
+	}
+	for id, d := range all {
+		code, index := anonJSON(t, router, "/api/config?dashboard="+url.QueryEscape(id))
+		if code != 200 {
+			t.Fatalf("index for %s: %d", id, code)
+		}
+		light := dashByID(index)
+		if len(light) != len(all) {
+			t.Fatalf("index for %s: %d dashboards, /api/config has %d", id, len(light), len(all))
+		}
+		for other, e := range all {
+			if light[other] == nil || light[other]["name"] != e["name"] {
+				t.Fatalf("index for %s: %s is %v, /api/config has %v", id, other, light[other], e["name"])
+			}
+		}
+		if !reflect.DeepEqual(light[id], d) {
+			t.Fatalf("index for %s: the open dashboard differs from its /api/config copy", id)
+		}
+		code, one := anonJSON(t, router, "/api/config/dashboard/"+url.PathEscape(id))
+		if code != 200 {
+			t.Fatalf("one dashboard %s: %d", id, code)
+		}
+		if !reflect.DeepEqual(one["dashboard"], d) {
+			t.Fatalf("one dashboard %s differs from its /api/config copy", id)
+		}
 	}
 }
 

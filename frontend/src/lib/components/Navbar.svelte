@@ -78,6 +78,7 @@
   // The pencil is on every dashboard page. Logged out, it signs in first, in
   // place (no trip to the admin page), then starts editing this dashboard.
   function handlePencil() {
+    if ($editEntry?.busy) return;
     if ($isAuthenticated) {
       void toggleEditMode();
       return;
@@ -578,7 +579,7 @@
           onclick={handlePencil}
           class="edit-toggle"
           class:active={$editMode}
-          disabled={$editEntry?.busy === true}
+          aria-disabled={$editEntry?.busy === true}
           aria-busy={$editEntry?.busy === true}
           title={$editEntry?.busy ? "Loading the other dashboards…" : $editMode ? "Exit Edit Mode" : $isAuthenticated ? "Enter Edit Mode" : "Sign in to edit this dashboard"}
           aria-label={$editMode ? "Exit Edit Mode" : "Enter Edit Mode"}
@@ -899,7 +900,8 @@
     border-radius: 2rem;
   }
 
-  .edit-toggle:disabled {
+  /* aria-disabled, not disabled: the busy pencil keeps keyboard focus. */
+  .edit-toggle[aria-disabled='true'] {
     opacity: 0.7;
     cursor: progress;
   }

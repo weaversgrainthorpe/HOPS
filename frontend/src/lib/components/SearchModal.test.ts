@@ -339,6 +339,22 @@ describe('SearchModal while the other dashboards are still arriving', () => {
     expect(screen.getByRole('button', { name: /Other Dash Tile/ })).toHaveTextContent('Lab');
   });
 
+  it('never promises "all dashboards" while it has only some: the hint names what is searched', async () => {
+    for (const state of ['loading', { error: 'HOPS hit an error' }] as const) {
+      otherDashboards.set(state);
+      render(SearchModal, { onClose: () => {} });
+      await tick();
+      expect(screen.queryByText(/across all dashboards/)).toBeNull();
+      expect(document.querySelector('.search-empty-hint')).toHaveTextContent('Start typing to search Home.');
+      cleanup();
+    }
+    // Nothing held in full (an unknown address): no hint, the status says it all.
+    config.set({ schemaVersion: 3, dashboards: [labIndex] } as Config);
+    render(SearchModal, { onClose: () => {} });
+    await tick();
+    expect(document.querySelector('.search-empty-hint')).toBeNull();
+  });
+
   it('after the fetch of the dashboard being opened failed, scoped search says so, not "Loading…"', async () => {
     setPage({ dashboard: 'lab' });
     dashboardFetches.set({ d2: { error: 'HOPS hit an error' } });

@@ -159,12 +159,12 @@
     {#if partial}
       <OtherDashboardsStatus />
     {/if}
-    {#if !query.trim()}
-      <div class="search-empty-hint">
-        Start typing to search {scoped ? 'this dashboard' : 'across all dashboards'}. <kbd>↑</kbd><kbd>↓</kbd> to navigate, <kbd>Enter</kbd> to open, <kbd>Shift</kbd>+<kbd>Enter</kbd> (or Shift/Ctrl-click) to show where it lives.
-      </div>
-    {:else if partial && !loadedNames}
+    {#if partial && !loadedNames}
       <!-- Nothing loaded in full yet (an unknown address): nothing to search meanwhile. -->
+    {:else if !query.trim()}
+      <div class="search-empty-hint">
+        Start typing to search {scoped ? 'this dashboard' : partial ? loadedNames : 'across all dashboards'}. <kbd>↑</kbd><kbd>↓</kbd> to navigate, <kbd>Enter</kbd> to open, <kbd>Shift</kbd>+<kbd>Enter</kbd> (or Shift/Ctrl-click) to show where it lives.
+      </div>
     {:else if results.length === 0}
       <div class="search-no-results">No tiles or folders {#if partial}on {loadedNames} {/if}match <code>{query}</code></div>
     {:else}

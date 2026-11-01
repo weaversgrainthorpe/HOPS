@@ -190,8 +190,8 @@ func (r *Router) attachNotices(w http.ResponseWriter, req *http.Request, stored 
 
 // handleConfigDashboard serves GET /api/config/dashboard/{id} (public): one
 // dashboard in full, from the same pipeline and with the same visibility as
-// GET /api/config. {id} is matched like the frontend matches a URL segment
-// (see findDashboardForRoute). Unknown: a JSON 404.
+// GET /api/config. {id} is a dashboard id, never a path: the client asks by id,
+// and a path can equal another dashboard's id. Unknown or empty: a JSON 404.
 func (r *Router) handleConfigDashboard(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodGet {
 		writeJSONError(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -201,8 +201,7 @@ func (r *Router) handleConfigDashboard(w http.ResponseWriter, req *http.Request)
 	if !ok {
 		return
 	}
-	key := strings.TrimPrefix(req.URL.Path, "/api/config/dashboard/")
-	d := findDashboardForRoute(view, key)
+	d := findDashboardByID(view, strings.TrimPrefix(req.URL.Path, "/api/config/dashboard/"))
 	if d == nil {
 		writeJSONError(w, "Dashboard not found", http.StatusNotFound)
 		return

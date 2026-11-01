@@ -219,6 +219,13 @@ export const WHOLE_LOAD_TIMEOUT_MS = 60_000;
 // configRevision of the held index (null when the store holds the whole document).
 let heldConfigRevision: string | null = null;
 let rest: { seq: number; promise: Promise<void> } | null = null;
+// Dashboards whose one-dashboard read disagreed with the index and already had their one reload.
+// Only a load that does not come from a mismatch (a Retry, say) forgets them.
+const mismatchReloaded = new Set<string>();
+
+/** The failure when a dashboard's own read still disagrees with the index after one reload. */
+export const DASHBOARD_MISMATCH =
+  "This dashboard doesn't match the dashboard list, even after reloading. Check the connection and try again.";
 
 /** An edit session holds a draft of the whole document: from now on nothing may load less. */
 export function noteWholeConfigNeeded(): void {
@@ -232,6 +239,7 @@ export function resetPartialLoadingForTests(): void {
   fullWanted = false;
   heldConfigRevision = null;
   rest = null;
+  mismatchReloaded.clear();
   otherDashboards.set('loading');
   dashboardFetches.set({});
 }
@@ -274,6 +282,7 @@ export function loadConfig(opts: { background?: boolean; dashboard?: string; aft
 async function runLoad(seq: number, light: boolean, opts: { background?: boolean; dashboard?: string; afterMismatch?: boolean }) {
   rest = null;
   dashboardFetches.set({});
+  if (!opts.afterMismatch) mismatchReloaded.clear();
   const background = (opts.background === true || get(layoutStale)) && get(config) !== null;
   if (!background) configLoading.set(true);
   configError.set(null);
@@ -419,8 +428,9 @@ export async function ensureFullConfig(): Promise<void> {
 /**
  * Fetch one dashboard the store holds only as an index entry (the route opened it before the
  * background load arrived). Taken only when it matches the held index (same configRevision);
- * otherwise the page reloads index + open dashboard + rest at the new state. A failure is kept in
- * dashboardFetches for the route to show, with Retry.
+ * otherwise the page reloads index + open dashboard + rest at the new state, once: copies that
+ * still disagree (kept copies offline never converge) are a failure. A failure is kept in
+ * dashboardFetches for the route to show, with Retry, which starts afresh.
  */
 export async function fetchDashboard(id: string): Promise<void> {
   const seq = loadSeq;
@@ -434,14 +444,23 @@ export async function fetchDashboard(id: string): Promise<void> {
   try {
     const answer = await getDashboard(id);
     if (seq !== loadSeq) return; // a newer load owns the store (and reset dashboardFetches)
-    settle();
     const held = get(config);
     const entry = held?.dashboards.find((d) => d.id === id);
-    if (!held || !entry || entry.partial !== true) return; // the background copy arrived meanwhile
-    if (answer.configRevision !== heldConfigRevision || answer.revision !== entry.revision) {
-      void loadConfig({ background: true, dashboard: viewerKey() });
+    if (!held || !entry || entry.partial !== true) {
+      settle(); // the background copy arrived meanwhile
       return;
     }
+    if (answer.configRevision !== heldConfigRevision || answer.revision !== entry.revision) {
+      if (mismatchReloaded.has(id)) {
+        settle({ error: DASHBOARD_MISMATCH });
+        return;
+      }
+      mismatchReloaded.add(id);
+      settle();
+      void loadConfig({ background: true, dashboard: viewerKey(), afterMismatch: true });
+      return;
+    }
+    settle();
     config.set({ ...held, dashboards: held.dashboards.map((d) => (d.id === id ? answer.dashboard : d)) });
   } catch (error) {
     if (seq !== loadSeq) return;

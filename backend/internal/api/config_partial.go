@@ -101,6 +101,20 @@ func findDashboardForRoute(view map[string]interface{}, key string) configdoc.Ob
 	return nil
 }
 
+// findDashboardByID is the dashboard with exactly this id; "" matches nothing.
+func findDashboardByID(view map[string]interface{}, id string) configdoc.Obj {
+	if id == "" {
+		return nil
+	}
+	list, _ := view["dashboards"].([]any)
+	for _, d := range list {
+		if dm, ok := d.(configdoc.Obj); ok && dm["id"] == id {
+			return dm
+		}
+	}
+	return nil
+}
+
 // orderKey is the frontend's sort key: a finite numeric `order`, else last.
 func orderKey(d configdoc.Obj) float64 {
 	if f, ok := d["order"].(float64); ok && !math.IsInf(f, 0) && !math.IsNaN(f) {
